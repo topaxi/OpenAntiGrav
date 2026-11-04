@@ -1313,6 +1313,17 @@ blender-fixtures *ARGS:
 gen-status:
     python3 scripts/gen-re-coverage.py
 
+# A drive lead's merge: --no-ff with MESSAGE, then status.md regenerated and
+# committed if the merge changed it. MESSAGE carries the attribution trailer.
+merge-lane BRANCH MESSAGE:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    git merge --no-ff -m "$2" "$1"
+    python3 scripts/gen-re-coverage.py
+    if ! git diff --quiet -- docs/overview/status.md; then
+        git commit -m "status: regenerated" -m "$(git log -1 --format=%B | grep '^Co-Authored-By:' || true)" -- docs/overview/status.md
+    fi
+
 # docs/ghidra/captures/ is what a Ghidra database held that names.tsv does not:
 # labels, plate comments, and the structs and prototypes that turned out not to
 # exist. Offline, like check-names - it also catches a captured comment citing a
