@@ -144,6 +144,59 @@ fn pair() -> (f32, f32) {
     pair_ahead(&race(&[]))
 }
 
+/// The camera through the pair, against the road's own numbers: the fixture's straight runs along
+/// +x, so the view stands as far behind the exit as the player's stands behind the entrance,
+/// looks the same way and keeps its offset. A view facing back from past the exit fails here,
+/// and only here: the frame ground truth takes its reference camera from the view's own log.
+#[test]
+fn the_view_stands_behind_the_exit_and_looks_down_the_road() {
+    let (entrance, exit) = pair();
+    let race = race(&[]);
+    let request = crate::extensions::PortalRequest {
+        entrance,
+        exit,
+        radius: 8.0,
+        update: ViewUpdate::Continuous,
+        generation: 0,
+    };
+    let projection = race.projection(1.0, 2000.0, Fov::AUTHORED);
+    let shot = race.portal_shot(&request, projection).expect("in the view");
+    let course = race.sim.course.as_ref().unwrap();
+    let at = |progress| {
+        let index = course.index_at_progress(progress).unwrap();
+        course.position(index).unwrap()
+    };
+    let main = race.view().inverse();
+    let camera = shot.view.inverse();
+    let moved = at(exit) - at(entrance);
+    assert!(
+        moved.x > 10.0,
+        "the fixture's pair is along the straight: {moved}"
+    );
+    let eye = camera.w_axis.truncate();
+    let expected = main.w_axis.truncate() + moved;
+    assert!(eye.distance(expected) < 0.01, "{eye} against {expected}");
+    let forward = -camera.z_axis.truncate();
+    assert!(
+        forward.distance(-main.z_axis.truncate()) < 1e-3,
+        "{forward}"
+    );
+    assert!(camera.y_axis.truncate().distance(main.y_axis.truncate()) < 1e-3);
+    assert!(
+        shot.exit_plane.w < 0.0,
+        "the eye is behind the exit's plane"
+    );
+    let main_clip = projection * race.view();
+    let engine = shot.engine_view_projection.to_cols_array();
+    assert!(
+        engine
+            .iter()
+            .zip(main_clip.to_cols_array())
+            .all(|(a, b)| (a - b).abs() < 1e-3),
+        "a point of the surface reads the texel it covers on the screen"
+    );
+}
+
 /// Acceptance: a race with a loaded shader that asks for no view renders no extra scene and
 /// builds no target.
 #[test]
