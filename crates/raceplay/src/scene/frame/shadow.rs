@@ -110,9 +110,9 @@ impl super::super::Scene {
             shadow_maps: w.shadow_maps + 1,
             ..w
         });
-        self.render_shadow_map(queue, encoder, race, shadows);
         // The frame's work serves every view of a split, and `frustum` is this view's alone.
         let frustum = frustum.filter(|_| self.layer.get() == Layer::Whole);
+        self.render_shadow_map(queue, encoder, race, shadows, frustum);
         self.render_sun_occlusion(queue, encoder, race, shadows, frustum);
     }
 
@@ -312,6 +312,7 @@ impl super::super::Scene {
         encoder: &mut wgpu::CommandEncoder,
         race: &Race,
         shadows: oag_display::display::Shadows,
+        frustum: Option<&Frustum>,
     ) -> usize {
         let mut map = self.shadow_map.borrow_mut();
         if shadows == oag_display::display::Shadows::Mapped {
@@ -352,12 +353,14 @@ impl super::super::Scene {
             .enumerate()
             .filter_map(|(rank, (slot, _))| {
                 let model = models.iter().find(|(held, _)| held == slot)?.1;
+                // The box the sun-occlusion map uses, which the original
+                // shares between a ship's maps, around the craft alone.
+                let fit = craft_fit(model, &self.light);
                 Some(oag_render::shadow::map::CraftCaster {
                     slot: *slot,
                     rank,
-                    // The box the sun-occlusion map uses, which the original
-                    // shares between a ship's maps, around the craft alone.
-                    fit: craft_fit(model, &self.light),
+                    seen: craft_shadow_seen(frustum, fit.centre),
+                    fit,
                     caster: self.ships[*slot].caster(model),
                 })
             })
@@ -422,6 +425,15 @@ fn rank_by_distance(
 /// around the craft, along the circuit's own sun - which HD authors in its
 /// `.envsettings` and this renderer already lights through, not a direction of
 /// this module's own.
+/// Whether a surface in the view `frustum` culls by can read the craft at `centre`'s square of
+/// the atlas: the receiver reads a square only within `CRAFT_CULL_RADIUS` of its craft, so a
+/// sphere clear of the frustum is one no pixel reaches. A tenth wider for the camera's jitter,
+/// which the frustum leaves out (**chosen, not measured**). Always `true` without a frustum.
+fn craft_shadow_seen(frustum: Option<&Frustum>, centre: Vec3) -> bool {
+    let reach = oag_render::shadow::map::CRAFT_CULL_RADIUS * 1.1;
+    frustum.is_none_or(|frustum| frustum.intersects_sphere(centre, reach))
+}
+
 fn craft_fit(model: Mat4, light: &oag_mesh::mesh_render::Light) -> oag_render::shadow::map::Fit {
     oag_render::shadow::map::Fit::craft(
         model.transform_point3(Vec3::ZERO),
@@ -935,10 +947,11 @@ mod tests {
     use oag_core::math::Mat4;
 
     use super::{
-        MAPPED_AHEAD, MAPPED_DEPTH_BIAS, far_depth_bias, mapped_centre, mapped_far_fit, mapped_fit,
-        mapped_light,
+        MAPPED_AHEAD, MAPPED_DEPTH_BIAS, craft_shadow_seen, far_depth_bias, mapped_centre,
+        mapped_far_fit, mapped_fit, mapped_light,
     };
     use oag_core::math::Vec3;
+    use oag_core::math::frustum::Frustum;
 
     /// [`super::rank_by_distance`]'s slots alone.
     fn rank_by_distance(
@@ -948,6 +961,22 @@ mod tests {
         let mut ranked = Vec::new();
         super::rank_by_distance(craft, references, &mut ranked);
         ranked.into_iter().map(|(slot, _)| slot).collect()
+    }
+
+    /// The test takes the receiver's own reach: a craft just outside the picture still shadows
+    /// the road inside it, and one a whole reach away reads nothing.
+    #[test]
+    fn a_craft_shadow_counts_as_seen_up_to_the_receivers_reach() {
+        let projection = Mat4::orthographic_rh(-10.0, 10.0, -10.0, 10.0, 0.1, 1000.0);
+        let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, Vec3::Y);
+        let frustum = Frustum::from_view_projection(projection * view);
+        assert!(craft_shadow_seen(None, Vec3::splat(1.0e6)));
+        assert!(craft_shadow_seen(Some(&frustum), Vec3::ZERO));
+        assert!(craft_shadow_seen(Some(&frustum), Vec3::new(60.0, 0.0, 0.0)));
+        assert!(!craft_shadow_seen(
+            Some(&frustum),
+            Vec3::new(80.0, 0.0, 0.0)
+        ));
     }
 
     /// The rank is by squared distance to the nearest reference point, nearest

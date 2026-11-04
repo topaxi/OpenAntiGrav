@@ -123,6 +123,7 @@ fn a_craft_covers_the_middle_of_its_square_and_leaves_the_rest_of_the_atlas_clea
             slot: 3,
             rank: 0,
             fit,
+            seen: true,
             caster: Caster {
                 vertices: &vertex_buffer,
                 indices: &index_buffer,
@@ -199,6 +200,47 @@ fn a_craft_covers_the_middle_of_its_square_and_leaves_the_rest_of_the_atlas_clea
 
 /// The depth map keeps one clear on the frame it stops drawing, skips the empty
 /// passes after it, and records again the moment a caster arrives.
+/// A craft no surface in the picture can read keeps its record, so its rank and every other
+/// craft's square stay as they were, and only its draw goes.
+#[test]
+fn a_craft_out_of_view_keeps_its_record_and_draws_nothing() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let mut map = Map::new(&device);
+    let (vertex_buffer, index_buffer, index_count) = quad_buffers(&device, &queue);
+    let fit = Fit {
+        centre: Vec3::ZERO,
+        radius: 2.0,
+        towards_light: Vec3::Y,
+    };
+    let whole = 0..index_count;
+    let ranges = std::slice::from_ref(&whole);
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    map.render(
+        &queue,
+        &mut encoder,
+        &[CraftCaster {
+            slot: 3,
+            rank: 0,
+            fit,
+            seen: false,
+            caster: Caster {
+                vertices: &vertex_buffer,
+                indices: &index_buffer,
+                ranges,
+                model: Mat4::IDENTITY,
+            },
+        }],
+    );
+    queue.submit([encoder.finish()]);
+    let texels = map.read_back(&device, &queue);
+    assert_eq!(map.casters(), 1);
+    let (x0, y0, side) = square_of(&map, 3);
+    assert_eq!((x0, y0, side), (0, 0, RANK_SIDES[0]));
+    assert!(texels.iter().all(|&texel| texel == 0));
+}
+
 #[test]
 fn an_empty_depth_pass_over_a_clear_map_is_skipped_and_a_caster_still_draws() {
     let Some((device, queue)) = device() else {
@@ -274,6 +316,7 @@ fn craft_far_apart_each_draw_into_the_square_of_their_own_rank() {
                 radius: 2.0,
                 towards_light: Vec3::Y,
             },
+            seen: true,
             caster: Caster {
                 vertices: &vertex_buffer,
                 indices: &index_buffer,
@@ -473,6 +516,7 @@ fn the_receivers_lookup_reads_the_row_the_caster_landed_in() {
             slot: 0,
             rank: 1,
             fit,
+            seen: true,
             caster,
         }],
     );
@@ -593,6 +637,7 @@ fn a_caster_with_nothing_to_draw_is_skipped_rather_than_panicking() {
             slot: 0,
             rank: 0,
             fit,
+            seen: true,
             caster,
         }],
     );
