@@ -1097,3 +1097,72 @@ previous entry's picture is still up, as designed.
 models, a Zone hull) may still compile on the frame thread once; the Pure chain's art player and
 HD's campaign screens read the disc on the frame thread from their own archives (not measured:
 only Pulse's campaign was walked).
+
+## Per-frame allocations: five removed from the shadow, pad and advert paths (2026-11-04, `alloc-batch1`)
+
+A read-only scout ranked the frame path's heap allocations; its first five items are fixed here,
+one commit each, every picture byte-identical. The instrument is `perf-probe` (Rust allocations
+only, through `oag_gpu::perfprobe::Counting`): `cargo build --release -p oag-game --features
+perf-probe`, then `OAG_RENDER_BENCH=50 OAG_RENDER_PERF=1 oag-game <image> --race --mode
+single_race --seed 1 --autopilot --no-audio --ticks 300 --screenshot x.png`, one view or `--players
+2 --split-cut vertical`. The numbers are the median over the split bench's frames
+(`render_viewports`: record, finish, submit), so a split's two views are one frame. "Tick" is
+`OAG_RENDER_BENCH_FRAMES_PER_TICK=1` (every frame a new tick, the shadow hull gather redone), "hit"
+is `=1000`. Pulse is Talon's Junction, Pure Vineta K, HD its default circuit, eight craft.
+
+| Rust allocs / KiB per frame | before | after |
+| --- | --- | --- |
+| Pulse, one view, tick | 618 / 1289 | 376 / 576 |
+| Pulse, one view, hit | 430 / 780 | 375 / 576 |
+| Pulse, split, tick | 945 / 1924 | 671 / 1017 |
+| Pure, one view | 288 / 559 | 247 / 365 |
+| Pure, split | 607 / 1168 | 525 / 779 |
+| HD, one view | 1000 / 1265 | 867 / 1039 |
+| HD, split | 1575 / 2205 | 1441 / 1787 |
+
+What each item took off (allocs / KiB per frame, the probe's stage marks):
+
+1. **Shadow upload's vertex list** (`oag_render::shadow::Pipeline::upload`): a
+   `Vec::with_capacity(MAX_VERTICES)`, 1968 vertices or 192 KiB, per view per frame on every
+   title, now kept on the pipeline. 192 KiB a view, one allocation.
+2. **The `original` tier's hull gather** (`HullGather::at_tick`, `hull_triangles`,
+   `conform_to_floor`, `Occluder::outline`): about 187 allocations and 509 KiB a tick on Pulse,
+   now worked in lists the hull cache keeps (`HullScratch`, `OutlineScratch`, the dropped gather's
+   lists). The tick frame now costs what a cache-hit frame does. Pure's default tier runs no hull
+   gather, so it is unchanged there.
+3. **HD's sun-occlusion and self-shadow layers**: a queue write per craft per pass (sixteen a
+   frame on a full grid) and a `Vec` of near draws per craft, now one write per buffer
+   (`occlusion::Maps::write_uniforms`) and a single walk. 112 allocations a frame on HD (697 to
+   584 at the mark that holds the passes).
+4. **Weapon-pad tint** (`Drawable::recolour_nodes`): a queue write per pad per view, now one per
+   run of pads built back to back, which is all of them. 33 a view on Pulse, 41 on Pure.
+5. **Advert cards' uniforms** (`adverts::Cards::render`): a constant matrix written per card per
+   frame, now once. 21 a frame on Pulse and HD (Pure draws no card on Vineta K).
+
+**Dropped: skipping an advert card's pass when its clock has not moved.** The scenery clock is
+blended by the draw alpha between ticks (`Race::clock_seconds`), so every frame of a race draws
+every card at a new time, and every card on Talon's Junction (PSP and PS2) and HD's default
+circuit changes its pixels between any two of four clock readings (0, 1.3, 2.5 and 7.1 s, the
+card read-back tests with `OAG_ADVERT_TIMES` and `OAG_ADVERT_DUMP`). Only the render bench,
+which pins the alpha at 1.0, would ever see the skip fire.
+
+**Counting every `malloc`, not only Rust's** (heaptrack, `OAG_RENDER_BENCH=300` against `=1`, the
+difference over the 628 frames the two bench loops draw, Pulse and HD one view, twice for Pulse):
+Pulse 620 and 621 to 361 and 356 a frame (-42 percent), HD 1190 to 1057 (-11 percent). The rest
+of HD's is wgpu's own encoder and pass recording.
+
+**CPU on the notebook (Core Ultra 7 265H, NVIDIA dGPU, powersave governor): below the noise.**
+`render_viewports CPU` median from `OAG_RENDER_BENCH=300`, pinned with `taskset -c 4`, six
+interleaved base and branch pairs a configuration, load 1.4 to 2.4. Single runs are bimodal
+(Pulse one view reads about 720 or about 1000 us), so the means move with which mode a run
+landed in:
+
+| us, mean of the six medians (median of them) | base | branch | pairs faster |
+| --- | --- | --- | --- |
+| Pulse, one view | 852 (836) | 765 (731) | 3 of 6 |
+| Pulse, split | 1224 (1155) | 1336 (1106) | 5 of 6 |
+| Pure, one view | 510 (515) | 474 (466) | 4 of 6 |
+| HD, one view | 2083 (2113) | 2062 (2061) | 3 of 6 |
+
+The spread inside one binary (Pulse one view 718 to 1001 us) is larger than any difference, so
+the CPU claim here is none. The allocation counts and bytes are the result.
