@@ -166,15 +166,16 @@ its fallback; a shader must have one.
 **The surface.** A mod's effect placed by `fire-mod-effect-ahead` holds its particle slot until it
 ends (`Stage::play_held`, at most 4): a burst recycles the instance with the fewest particles, the
 one quad a surface is. On Omega's grid all 32 slots were `WO_TRAIL_HITSHIP` and the surface drew on
-no frame.
+no frame. 2048: **checked, differs**: before the slot was held its surface reached 0.148 of the view at
+tick 1230 of `PCSF00007`, so its pool does not fill there.
 
 Evidence, 960x544, `mod_shader_frame_ground_truth`, inside the surface, mean difference of a channel
 out of 255, 2026-11-04:
 
 | | Surface, share of the view | Against no mod | Against a procedural surface | Against the reference camera | Texels moved outside it |
 | --- | --- | --- | --- | --- | --- |
-| Pulse PSP EU, tick 548 | 0.196 | 88.5 | 88.6 | 10.2 | 0.00000 |
-| Pulse, motion blur high | 0.198 | 86.6 | 87.3 | 18.6 | 0.00000 |
+| Pulse PSP EU, tick 548 | 0.196 | 88.5 | 88.6 | 10.2 | 0.00036 |
+| Pulse, motion blur high | 0.198 | 86.6 | 87.3 | 18.6 | 0.00398 |
 | HD, tick 1022 | 0.107 | 53.5 | 71.8 | 6.1 | 0.00000 |
 
 The reference is the same tick with no mod from `--camera-pose` at the view's logged camera: unclipped
@@ -182,6 +183,12 @@ and through the whole post chain at full size, so not zero. It proves the textur
 picture, and a wrong camera agrees with itself there: that the camera is right is
 `tests::portal_view::the_view_stands_behind_the_exit_and_looks_down_the_road`, against the road's own
 numbers.
+
+"Outside" is past 88 texels of the surface, against a race with no mod, which draws no secondary view
+(a run with the procedural shader still draws it, so it cannot show a leak). The rim and its bloom fall
+off inside that margin. The blur run's 0.00398 is one patch at the craft's plume, 625 texels at most 70
+of 765, and the same 625 with a guest that sends no `portal-view`: a mod's, not the view's. Writing
+the main view's camera history from the secondary view moves 0.22, which is what that run guards.
 
 ## Builds
 
@@ -191,6 +198,8 @@ numbers.
   "What is missing".
 - **Android:** `oag-mobile`, `oag-fx` and `oag-gpu` check for `aarch64-linux-android`. Modules there
   are as the rest of the app; not run on a device.
+- **`portal-view` on 2048 and Omega: checked, applies, wired by the same code**: a frame of each read, no
+  test of its own.
 - **2048 and Omega: checked, applies, not wired separately.** The stage is title-blind and
   `oag.tether` runs on both: a frame with the mod against one without, 960x544, 2026-11-04, share of
   texels that differ, the view's middle and a corner: 2048 (tick 800) 0.098 and 0.93, Omega

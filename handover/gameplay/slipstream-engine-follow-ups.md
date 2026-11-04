@@ -135,7 +135,8 @@ are `docs/architecture/wasm-extensions/mod-shaders.md`, "The engine texture". Fo
 Open from it, each small:
 
 1. **Omega's particle pool is full of `WO_TRAIL_HITSHIP`** on the grid: all 32 instances at tick 480,
-   with `oag.window` on and nothing else. Mod surfaces now hold a slot (`Stage::play_held`), the
+   with `oag.window` on and nothing else (2048 differs: its surface drew before the fix, 0.148 of the
+   view at tick 1230). Mod surfaces now hold a slot (`Stage::play_held`), the
    trigger's rate was not looked at, and it evicts title effects too. It may
    explain the high middle-of-view figure the mod shader page gives for Omega. Size S (40).
 2. **A wall between the camera and the portal does not skip the view**: only the frustum and the
@@ -148,6 +149,8 @@ Open from it, each small:
 5. **The texture is a fixed 960x540** at every window size; a configurable rate and size are later
    if a player needs them (spec, "reduced resolution allowed").
 6. **Only Pulse and HD have a frame test.** 2048, Omega, PS2 and Pure were read off screenshots.
+7. **A snapshot was never looked at.** `ViewUpdate::Once` has pass counts, and `--screenshot` draws a
+   single frame, so no frame shows one held on the surface as the craft closes. Lane C sees it first.
 
 ## Next Steps
 

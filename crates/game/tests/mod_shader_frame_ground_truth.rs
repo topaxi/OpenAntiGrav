@@ -15,8 +15,8 @@
 //!
 //! The second half is a portal: `oag.window` asks for `portal-view`, and its shader shows the
 //! engine's view of the road further on inside a round surface. Five runs a title at one tick:
-//! the mod, no mod, its shader drawing a procedural surface instead (the Low quality of a portal
-//! mod), a flat shader that gives the surface's exact texels, and no surface at all from the
+//! the mod, no mod (no secondary view, so the one the texels outside the surface are held to),
+//! its shader drawing a procedural surface instead (the Low quality of a portal mod), a flat shader that gives the surface's exact texels, and no surface at all from the
 //! camera the portal view was drawn from (`--camera-pose`, off the debug log).
 //!
 //! What fails that half: a texture other than the view from that camera, an empty or undecoded
@@ -268,7 +268,7 @@ fn surface(flat: &[u8], plain: &[u8]) -> Vec<bool> {
         .collect()
 }
 
-/// `mask` grown by `by` texels: the mod's rim and the bloom reach past the flat surface.
+/// `mask` grown by `by` texels: the mod's rim and its bloom reach past the flat surface.
 fn grown(mask: &[bool], by: i32) -> Vec<bool> {
     let (width, height) = (WIDTH as i32, HEIGHT as i32);
     let mut out = vec![false; mask.len()];
@@ -316,7 +316,9 @@ fn logged_pose(log: &str) -> String {
         .replace(['[', ']', ' '], "")
 }
 
-fn check_portal(image: &str, ticks: u32, graphics: &str) {
+/// `outside` is the most of the texels away from the surface that may differ from a race with no
+/// mod, which draws no secondary view.
+fn check_portal(image: &str, ticks: u32, graphics: &str, outside: f32) {
     let Some(image) = oag_testdata::image(image) else {
         return;
     };
@@ -353,16 +355,16 @@ fn check_portal(image: &str, ticks: u32, graphics: &str) {
     let (reference, _) = frame(&off, &[pose.as_str()]);
 
     let inside = surface(&flat_frame, &without);
-    let near = grown(&inside, 48);
+    let near = grown(&inside, 88);
     let share = inside.iter().filter(|hit| **hit).count() as f32 / inside.len() as f32;
     let (off_share, off_mean) = gap(&with, &without, |at| inside[at]);
     let (low_share, low_mean) = gap(&with, &low_frame, |at| inside[at]);
     let (reference_share, reference_mean) = gap(&with, &reference, |at| inside[at]);
-    let (outside_share, outside_mean) = gap(&with, &low_frame, |at| !near[at]);
+    let (outside_share, outside_mean) = gap(&with, &without, |at| !near[at]);
     eprintln!(
         "surface {share:.4}; inside against no mod {off_share:.3} (mean {off_mean:.1}), against \
          the procedural frame {low_share:.3} (mean {low_mean:.1}), against the reference camera \
-         {reference_share:.3} (mean {reference_mean:.1}); outside against the procedural frame \
+         {reference_share:.3} (mean {reference_mean:.1}); outside against no mod \
          {outside_share:.5} (mean {outside_mean:.2})"
     );
     assert!(share > 0.03, "the surface is on the screen: {share}");
@@ -376,7 +378,7 @@ fn check_portal(image: &str, ticks: u32, graphics: &str) {
         "the view is not the exit's: {reference_mean} from the exit camera, {off_mean} from none"
     );
     assert!(
-        outside_share < 0.0005,
+        outside_share < outside,
         "the secondary view reached the main picture: {outside_share}"
     );
     let _ = std::fs::remove_dir_all(&scratch);
@@ -385,10 +387,12 @@ fn check_portal(image: &str, ticks: u32, graphics: &str) {
 #[test]
 #[ignore = "needs a disc image and the examples submodule"]
 fn pulse_shows_the_road_further_on_through_a_portal() {
-    check_portal("data/images/pulse-psp-eu.chd", 548, "");
+    check_portal("data/images/pulse-psp-eu.chd", 548, "", 0.0005);
 }
 
-/// A frame reading the velocity buffer: the secondary view must leave the main view's history be.
+/// A frame reading the velocity buffer: a view that writes the main view's camera history moves
+/// 0.22 of the texels outside the surface. The bound stands off a patch at the craft's plume, the
+/// same texels with a guest that asks for no view at all: the mod's, not the secondary view's.
 #[test]
 #[ignore = "needs a disc image and the examples submodule"]
 fn the_portal_leaves_the_motion_blur_alone() {
@@ -396,6 +400,7 @@ fn the_portal_leaves_the_motion_blur_alone() {
         "data/images/pulse-psp-eu.chd",
         548,
         "motion_blur = \"high\"",
+        0.006,
     );
 }
 
@@ -403,5 +408,5 @@ fn the_portal_leaves_the_motion_blur_alone() {
 #[test]
 #[ignore = "needs a disc image and the examples submodule"]
 fn hd_shows_the_road_further_on_in_its_float_target() {
-    check_portal("data/images/hdfury-ps3-eu-dec.iso", 1022, "");
+    check_portal("data/images/hdfury-ps3-eu-dec.iso", 1022, "", 0.0005);
 }
