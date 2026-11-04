@@ -1,7 +1,7 @@
 
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
-use log::warn;
+use log::{info, warn};
 use oag_game::{launcher, loading, settings};
 use oag_raceplay as race;
 use oag_source::source;
@@ -263,6 +263,10 @@ fn run(cli: Cli) -> Result<()> {
     // seconds of intro later.
     let mut settings = settings::load()?;
     attach_log_file(&cli, &settings);
+    if cli.probe_pad {
+        info!("--probe-pad: printing pad events until stopped; no window opens");
+        return oag_input::probe::run(&mut std::io::stdout(), || false).map_err(anyhow::Error::msg);
+    }
     #[cfg(feature = "dev-cli")]
     if let Some(pattern) = &cli.dev.rumble_pattern {
         return oag_game::rumble::probe(&oag_game::rumble::Probe {

@@ -405,6 +405,7 @@ impl App {
         // The keyboard's own live table - a rebind changes it again, and
         // persists it, through `Session::rebind`.
         controls.set_bindings(crate::args::resolve_bindings(&self.settings));
+        controls.set_music_bindings(crate::args::resolve_music_bindings(&self.settings));
         for name in controls.pad().names() {
             info!("gamepad: {name}");
         }
