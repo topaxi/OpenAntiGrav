@@ -22,6 +22,10 @@ pub struct Levels {
     pub autopilot: bool,
     /// A Leech beam is fastened to the ship.
     pub leech_beam: bool,
+    /// The wrong-way warning is up.
+    pub wrong_way: bool,
+    /// The ship is blowing up.
+    pub exploding: bool,
 }
 
 impl Levels {
@@ -30,6 +34,8 @@ impl Levels {
             Level::MagStrip => self.mag_strip,
             Level::Autopilot => self.autopilot,
             Level::LeechBeam => self.leech_beam,
+            Level::WrongWay => self.wrong_way,
+            Level::Exploding => self.exploding,
         }
     }
 }
