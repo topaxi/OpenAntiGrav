@@ -1,0 +1,16 @@
+# Wipeout Pulse and Pure rumble: the player's craft blows up: full for half a second, then a long fall.
+# Read through the fallback asset layer; a disc pattern of the same name wins, and a file
+# in overrides/<title>/Data/XML/Rumble/ replaces this one.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/rumble.tosd"
+version = "1.0.0"
+
+[pattern]
+type = "OneShot"
+class = "UI"
+priority = "High"
+
+[tracks]
+large = [255, 255, 255, 255, 255, 255, 255, 250, 240, 235, 255, 255, 225, 215, 205, 255, 195, 185, 175, 168, 160, 152, 145, 138, 130, 124, 118, 112, 106, 100, 94, 88, 82, 76, 70, 64, 58, 52, 46, 40, 34, 28, 22, 16, 10, 5]
+small = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0]

@@ -98,3 +98,16 @@ fn every_schema_is_used_by_a_shipped_document_and_declares_the_language_version(
         );
     }
 }
+
+#[test]
+fn every_fallback_rumble_pattern_validates_against_the_rumble_schema() {
+    let dir = root().join("assets/fallback/Data/XML/Rumble");
+    let mut seen = 0;
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        let text = std::fs::read_to_string(&path).unwrap();
+        accepts("rumble", 1, &text).unwrap_or_else(|e| panic!("{}: {e:#?}", path.display()));
+        seen += 1;
+    }
+    assert!(seen >= 20);
+}

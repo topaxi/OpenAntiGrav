@@ -1,0 +1,17 @@
+# Wipeout Pulse and Pure rumble: riding a mag strip: a steady rumble; releasing it plays out the tail.
+# Read through the fallback asset layer; a disc pattern of the same name wins, and a file
+# in overrides/<title>/Data/XML/Rumble/ replaces this one.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/rumble.tosd"
+version = "1.0.0"
+
+[pattern]
+type = "Looping"
+class = "Game"
+priority = "Low"
+loop = [6, 20]
+
+[tracks]
+large = [60, 80, 100, 90, 70, 55, 75, 95, 85, 65, 50, 70, 90, 80, 60, 45, 65, 85, 75, 55, 40, 30, 20, 10]
+small = [0]

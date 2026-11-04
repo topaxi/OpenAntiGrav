@@ -326,3 +326,46 @@ a panic hook (`oag_input::pad::silence_on_panic`).
 plays one pattern at 60 Hz through the same player and backend, prints each level
 it sends and silences the motors. A looping pattern is held for `--rumble-hold`
 seconds (default 2), then finished.
+
+## Our own patterns (Pulse PSP, Pulse PS2, Pure)
+
+None of these titles ships a pattern, and the disc's cannot be committed, so the three
+rumble from 33 TOML patterns of ours in the fallback layer
+([ADR-0061](../architecture/adr/0061-two-asset-layers-around-the-disc.md)):
+`assets/fallback/Data/XML/Rumble/<name>.toml`, embedded by `oag_source::layers`, validated
+by `just check-schemas` against `schemas/v1/rumble.tosd`. The names are the disc's
+(lower case), so on HD and Omega, where the disc answers the same name, the disc's pattern
+is the one played: the fallback answers only a name nothing else holds. Pulse PSP and
+Pulse PS2 read the same files, Pure the same again (its events are the same cues); the PS2
+build's own level-and-timer law stays unplayed. `Original` is not offered on these three.
+
+**Authored by hand.** One-shots run 6 to 46 frames at 60 Hz, held loops 20 to 24 (the
+mag-strip, Autopilot and Leech loops), and the seven wall-contact loops only 4 to 12: the
+selector restarts them with every contact, so they stay short. The default `RUMBLE` value is `PS4`, whose small motor is near silent, so the large
+track carries each pattern and the small track is an accent. The explosion is the longest
+and strongest, full for about 0.1 s then a long fall.
+
+**Loading** (`oag_game::rumble_library::load`): per name the order is a player's override
+(`<name>.xml` or `.toml`), the disc's `<name>.xml`, then the fallback. A name nothing holds
+is left out and listed in the loader report; a title with no pattern at all plays nothing
+and the report says so ("rumble: no pattern found for this title, so the pad stays still").
+
+| Pattern | Plays on | Feel |
+| --- | --- | --- |
+| `pad_speed` | speed pad | firm kick, fades |
+| `wrong_way` | wrong-way warning shown | two insistent knocks |
+| `absorb_any_pickup_rumble` | weapon absorbed | two soft pulses |
+| `lockon_rumble` | reticle locks | one tick |
+| `rockets_fired_rumble`, `missile_fired_rumble`, `cannon_fired_rumble`, `mine_fired_rumble`, `shuriken_fired_rumble`, `repulser_fired_rumble` | the weapon leaves | short thump, hardest recoil for the cannon |
+| `plasma_fired_rumble`, `quake_fired_rumble`, `leech_fired_rumble` | fired | long swell, heavy roll, rising hum |
+| `plasma_hits_wall`, `rocket_hits_wall`, `missile_rebound_wall_rumble` | wall hit, positional | burst fading with distance |
+| `enter_mag_rumble`, `exit_mag_rumble` | mag strip edges | clunk |
+| `travel_mag_rumble` | over a mag strip, held | steady rumble |
+| `autopilot_active_rumble` | Autopilot, held | slow throb |
+| `leeching_energy_rumble` | Leech beam on the ship, held | pulsing drag, stops at once |
+| `collision_heavy_looping`, `collision_{right,left}_{med,light,very_light}_looping` | wall contact, held, by size and side | ragged full scrape down to a brush |
+| `landing_heavy`, `landing_med`, `landing_light`, `landing_very_light` | touchdown by speed | deep long thud down to a touch |
+| `ship_exploding_player_rumble` | the player's craft blows up | full, then a long fall |
+
+Not authored (no event of ours yet, `oag_input::rumble::map::UNFIRED`): weapon impacts on
+a victim, mine and bomb explosions, side shift, barrel roll. Mods override any of them by name.

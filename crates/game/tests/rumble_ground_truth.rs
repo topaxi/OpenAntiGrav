@@ -141,3 +141,170 @@ fn omega_and_2048_resolve_every_mapped_pattern_through_the_same_loader() {
         println!("{image}: all mapped patterns resolve");
     }
 }
+
+mod library {
+    use oag_input::rumble::map::pattern_names;
+
+    fn open(image: &str) -> Option<oag_assets::Archives> {
+        let image = oag_testdata::image(image)?;
+        Some(
+            oag_source::title::open_source(&image.to_string_lossy(), Vec::new(), Vec::new())
+                .expect("the title opens")
+                .archives,
+        )
+    }
+
+    fn distinct() -> usize {
+        pattern_names().count()
+    }
+
+    fn load(image: &str) -> Option<(oag_tables::rumble::Library, Vec<String>)> {
+        let mut archives = open(image)?;
+        let mut report = Vec::new();
+        let library = oag_raceplay::rumble_library::load(&mut archives, &mut report);
+        Some((library, report))
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pulse-psp-eu.chd"]
+    fn pulse_plays_every_mapped_pattern_from_our_own_fallback() {
+        let Some((library, report)) = load("pulse-psp-eu.chd") else {
+            return;
+        };
+        assert_eq!(library.len(), distinct(), "{report:?}");
+        assert!(report[0].contains(&format!(
+            "patterns {} from this project's own fallback",
+            distinct()
+        )));
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pure-psp-eu.chd"]
+    fn pure_plays_every_mapped_pattern_from_our_own_fallback() {
+        let Some((library, report)) = load("pure-psp-eu.chd") else {
+            return;
+        };
+        assert_eq!(library.len(), distinct(), "{report:?}");
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pulse-ps2-eu.chd"]
+    fn pulse_ps2_has_the_same_library_as_the_psp() {
+        let Some((ps2, _)) = load("pulse-ps2-eu.chd") else {
+            return;
+        };
+        let Some((psp, _)) = load("pulse-psp-eu.chd") else {
+            return;
+        };
+        assert_eq!(ps2, psp);
+    }
+
+    /// The fallback answers only a name the disc lacks: on HD every mapped name is the disc's.
+    #[test]
+    #[ignore = "needs data/images/hdfury-ps3-eu.iso"]
+    fn hd_keeps_its_own_patterns_over_ours() {
+        let Some((_, report)) = load("hdfury-ps3-eu.iso") else {
+            return;
+        };
+        assert!(report[0].contains("from the disc"), "{report:?}");
+        assert!(!report[0].contains("overrides"), "{report:?}");
+    }
+}
+
+mod race {
+    use oag_gameplay::PlayerInputs;
+    use oag_input::rumble::{MotorOutput, Motors};
+
+    #[derive(Default)]
+    struct Recorder {
+        sent: Vec<Motors>,
+        silenced: u32,
+    }
+
+    impl MotorOutput for Recorder {
+        fn set(&mut self, _seat: usize, motors: Motors) {
+            self.sent.push(motors);
+        }
+        fn silence(&mut self) {
+            self.silenced += 1;
+        }
+    }
+
+    type Fired = Vec<(&'static str, u32)>;
+
+    /// A lone craft on the autopilot for `ticks`, its pad recorded under `token`.
+    fn fly(
+        image: &str,
+        title: &oag_title::Title,
+        token: &str,
+        ticks: usize,
+    ) -> Option<(Fired, Recorder)> {
+        let image = oag_testdata::image(image)?;
+        let loaded = oag_raceplay::load(&oag_raceplay::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::TimeTrial,
+            seed: Some(1),
+            ..oag_raceplay::Options::default()
+        })
+        .expect("the race loads");
+        let mut race = oag_raceplay::Race::start(loaded.setup);
+        race.set_autopilot(true);
+        let mut out = Recorder::default();
+        let rumbler = oag_game::rumble::Rumbler::new(&race, token, title.rumble);
+        if matches!(token, "none" | "original") {
+            assert!(rumbler.is_none(), "{token} plays nothing");
+            return None;
+        }
+        let mut rumbler = rumbler
+            .unwrap_or_else(|| panic!("{} arms rumble from our fallback patterns", title.name));
+        for _ in 0..ticks {
+            race.tick(&PlayerInputs::none());
+            rumbler.tick(&race, false, &mut out);
+            race.drain_cues();
+        }
+        let fired = rumbler.fired();
+        rumbler.stop(&mut out);
+        Some((fired, out))
+    }
+
+    fn assert_rumbles(image: &str, title: &oag_title::Title) {
+        let Some((fired, out)) = fly(image, title, "ps4", 3000) else {
+            return;
+        };
+        assert!(!fired.is_empty(), "no pattern fired in 3000 ticks");
+        assert!(out.sent.iter().any(|m| m.large > 0), "{fired:?}");
+        assert_eq!(out.silenced, 1, "the race's end silences the pad");
+        eprintln!("{} fired {fired:?}", title.name);
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pulse-psp-eu.chd"]
+    fn a_pulse_race_rumbles_from_our_own_patterns() {
+        assert_rumbles("pulse-psp-eu.chd", oag_pulse::TITLE);
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pulse-ps2-eu.chd"]
+    fn a_pulse_ps2_race_rumbles_from_our_own_patterns() {
+        assert_rumbles("pulse-ps2-eu.chd", oag_pulse::TITLE);
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pure-psp-eu.chd"]
+    fn a_pure_race_rumbles_from_our_own_patterns() {
+        assert_rumbles("pure-psp-eu.chd", oag_pure::TITLE);
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pulse-psp-eu.chd"]
+    fn the_none_setting_and_original_play_nothing_on_pulse() {
+        for token in ["none", "original"] {
+            assert!(
+                fly("pulse-psp-eu.chd", oag_pulse::TITLE, token, 10).is_none()
+                    || oag_testdata::image("pulse-psp-eu.chd").is_none(),
+                "{token}"
+            );
+        }
+    }
+}

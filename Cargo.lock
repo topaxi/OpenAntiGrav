@@ -3283,6 +3283,7 @@ dependencies = [
  "log",
  "oag-core",
  "oag-gameplay",
+ "oag-mod",
  "oag-tables",
  "winit",
 ]

@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-04
-summary: "Player, backend, RUMBLE row and the HD/Omega/2048 event map landed; feel test owed on a real pad; Pulse and Pure patterns, then mods with Slipstream."
+summary: "Player, backend, RUMBLE row, event map and Pulse/Pure patterns landed; feel test owed on a real pad; mods with Slipstream."
 categories: [tooling]
 size: L (60)
 difficulty: medium (50)
@@ -307,6 +307,10 @@ Each is one lane, in order.
    explosion 59, bombs and mines, `heartbeat`'s counter. **Owed: the maintainer's feel
    test of a whole HD race**, and a landing seen on real data (no jump in the flown
    passes; the selector is unit-tested).
-4. **Pulse and Pure** (M, 50): own TOML patterns in the fallback layer, Pulse PS2
-   the same as Pulse PSP.
+4. ~~**Pulse and Pure**~~ landed on `rumble-pulse-pure`: 33 own TOML patterns in
+   `assets/fallback/Data/XML/Rumble/`, one set for Pulse PSP, Pulse PS2 and Pure, loaded by
+   `oag_raceplay::rumble_library::load` (override, disc, fallback; a loader-report line).
+   See `docs/gameplay/rumble.md`, "Our own patterns". **Owed: the maintainer's feel test of
+   the set on an 8BitDo.** Not authored for want of an event: weapon impacts on a victim,
+   mine and bomb explosions, side shift, barrel roll, a rival's explosion.
 5. **Mods** (S, 60): override and remap, then the ABI record and the skill.
