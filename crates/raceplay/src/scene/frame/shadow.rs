@@ -327,21 +327,30 @@ impl super::super::Scene {
             return 0;
         }
         let drawn = usize::from(race.ship_count());
-        let references = self.rank_references(race);
-        let models: Vec<(usize, Mat4)> = (0..drawn.min(self.ships.len()))
-            .filter(|&slot| race.ship_active(slot))
-            .map(|slot| (slot, race.ship_model_matrix_of(slot)))
-            .collect();
-        let ranked = rank_by_distance(
+        let mut lists = self.shadow_rank.borrow_mut();
+        let ShadowRank {
+            references,
+            models,
+            ranked,
+        } = &mut *lists;
+        self.rank_references(race, references);
+        models.clear();
+        models.extend(
+            (0..drawn.min(self.ships.len()))
+                .filter(|&slot| race.ship_active(slot))
+                .map(|slot| (slot, race.ship_model_matrix_of(slot))),
+        );
+        rank_by_distance(
             models
                 .iter()
                 .map(|&(slot, model)| (slot, model.transform_point3(Vec3::ZERO))),
-            &references,
+            references,
+            ranked,
         );
         let crafts: Vec<_> = ranked
             .iter()
             .enumerate()
-            .filter_map(|(rank, slot)| {
+            .filter_map(|(rank, (slot, _))| {
                 let model = models.iter().find(|(held, _)| held == slot)?.1;
                 Some(oag_render::shadow::map::CraftCaster {
                     slot: *slot,
@@ -367,8 +376,9 @@ impl super::super::Scene {
     /// is therefore the nearest of this view's eye and every person's craft, so
     /// that each seat's own craft takes one of the two 512 squares. **Chosen,
     /// not measured**: the original has one camera.
-    fn rank_references(&self, race: &Race) -> Vec<Vec3> {
-        let mut points = vec![race.camera_position()];
+    fn rank_references(&self, race: &Race, points: &mut Vec<Vec3>) {
+        points.clear();
+        points.push(race.camera_position());
         if race.people() > 1 {
             points.extend(
                 race.sim
@@ -377,30 +387,35 @@ impl super::super::Scene {
                     .map(|slot| race.ship_model_matrix_of(slot).transform_point3(Vec3::ZERO)),
             );
         }
-        points
     }
 }
 
-/// The slots of `craft`, nearest first by squared distance to the nearest of
-/// `references`, as `Ship_RankAndAssignMapSlots` sorts them; the slot breaks a
-/// tie, so two equidistant craft keep their order frame to frame instead of
-/// trading squares.
+/// What the craft shadow map's ranking works in, kept from frame to frame.
+#[derive(Debug, Default)]
+pub(in crate::scene) struct ShadowRank {
+    references: Vec<Vec3>,
+    models: Vec<(usize, Mat4)>,
+    ranked: Vec<(usize, f32)>,
+}
+
+/// The slots of `craft` with their distances, into `ranked` (emptied first), nearest first
+/// by squared distance to the nearest of `references`, as `Ship_RankAndAssignMapSlots` sorts
+/// them; the slot breaks a tie, so two equidistant craft keep their order frame to frame
+/// instead of trading squares.
 fn rank_by_distance(
     craft: impl IntoIterator<Item = (usize, Vec3)>,
     references: &[Vec3],
-) -> Vec<usize> {
-    let mut ranked: Vec<(usize, f32)> = craft
-        .into_iter()
-        .map(|(slot, at)| {
-            let nearest = references
-                .iter()
-                .map(|point| (at - *point).length_squared())
-                .fold(f32::INFINITY, f32::min);
-            (slot, nearest)
-        })
-        .collect();
+    ranked: &mut Vec<(usize, f32)>,
+) {
+    ranked.clear();
+    ranked.extend(craft.into_iter().map(|(slot, at)| {
+        let nearest = references
+            .iter()
+            .map(|point| (at - *point).length_squared())
+            .fold(f32::INFINITY, f32::min);
+        (slot, nearest)
+    }));
     ranked.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
-    ranked.into_iter().map(|(slot, _)| slot).collect()
 }
 
 /// The box a craft's shadow maps are fitted to: [`oag_render::shadow::map::Fit::craft`]
@@ -921,9 +936,19 @@ mod tests {
 
     use super::{
         MAPPED_AHEAD, MAPPED_DEPTH_BIAS, far_depth_bias, mapped_centre, mapped_far_fit, mapped_fit,
-        mapped_light, rank_by_distance,
+        mapped_light,
     };
     use oag_core::math::Vec3;
+
+    /// [`super::rank_by_distance`]'s slots alone.
+    fn rank_by_distance(
+        craft: impl IntoIterator<Item = (usize, Vec3)>,
+        references: &[Vec3],
+    ) -> Vec<usize> {
+        let mut ranked = Vec::new();
+        super::rank_by_distance(craft, references, &mut ranked);
+        ranked.into_iter().map(|(slot, _)| slot).collect()
+    }
 
     /// The rank is by squared distance to the nearest reference point, nearest
     /// first, and a tie goes to the lower slot.

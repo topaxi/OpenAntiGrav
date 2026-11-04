@@ -562,17 +562,12 @@ impl Race {
     /// [`Race::ship`], which is `ships[0]`, and a `CameraOverride` pose is
     /// still that player's view, so slot 0 is skipped under one too.
     #[must_use]
-    pub fn hd_sprite_quad(
-        &self,
-        slot: usize,
-        right: Vec3,
-        up: Vec3,
-    ) -> Vec<oag_mesh::mesh::GpuVertex> {
+    pub fn hd_sprite_quad(&self, slot: usize, right: Vec3, up: Vec3) -> SpriteQuad {
         if !self.view.hd_trail_active || slot == FOLLOWED_SLOT {
-            return Vec::new();
+            return SpriteQuad::default();
         }
         let Some(nozzle) = self.nozzle_of(slot) else {
-            return Vec::new();
+            return SpriteQuad::default();
         };
         // The camera's forward and position, both read out of the view
         // matrix: `right` and `up` are its rows 0 and 1, and for an
@@ -588,7 +583,7 @@ impl Race {
             (nozzle - eye).length(),
             exhaust::hd::sprite_view_dot(forward, nozzle_axis),
         ) else {
-            return Vec::new();
+            return SpriteQuad::default();
         };
         // The half-height is in the tuning file's model space, as `Flare
         // Radius` is - `nozzle` already carries the craft's 0.75 global scale
@@ -602,7 +597,7 @@ impl Race {
             sprite.half_height(fade) * exhaust::CRAFT_ROW_SCALE,
             fade,
         )
-        .to_vec()
+        .into()
     }
 
     /// Advances every craft's shield shell, and starts the fade on the tick its
@@ -1114,4 +1109,22 @@ pub(super) const FOLLOWED_SLOT: usize = 0;
 /// LCG would need a stride instead.
 pub(super) fn exhaust_seed(slot: usize) -> u64 {
     EXHAUST_SEED + slot as u64
+}
+
+/// [`Race::hd_sprite_quad`]'s six vertices, or none, held in place and read as a slice.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SpriteQuad(Option<[oag_mesh::mesh::GpuVertex; 6]>);
+
+impl From<[oag_mesh::mesh::GpuVertex; 6]> for SpriteQuad {
+    fn from(quad: [oag_mesh::mesh::GpuVertex; 6]) -> Self {
+        Self(Some(quad))
+    }
+}
+
+impl std::ops::Deref for SpriteQuad {
+    type Target = [oag_mesh::mesh::GpuVertex];
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref().map_or(&[], |quad| &quad[..])
+    }
 }

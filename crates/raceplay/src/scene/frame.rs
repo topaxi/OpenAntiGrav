@@ -112,7 +112,7 @@ impl Scene {
         oag_gpu::split_finish::split(device, encoder);
         oag_gpu::perfprobe::mark("scene-pass");
         let blur_lens = pass.blur_lens;
-        drop(pass);
+        self.keep_view_lists(pass);
         let (hd_bloom_encoded, blur_encoded) = self.finish_view(
             device,
             queue,
@@ -974,7 +974,7 @@ impl Scene {
             // HD's sprite flare - Engine_Flare_Rich.gtf, enabled by the
             // disc's own tuning file - is the bright core the exhaust's
             // "solidity" comes from; the flare texture slot holds it on HD.
-            vertices.extend(race.hd_sprite_quad(slot, right, up));
+            vertices.extend_from_slice(&race.hd_sprite_quad(slot, right, up));
             // Wipeout HD draws its own measured tube - three fins over a
             // 54-sample ring, extruded in the craft's frame rather than the
             // camera's - and every other source the PSP preset's ribbon.
@@ -1205,7 +1205,8 @@ impl Scene {
         // depth-tested-not-written geometry, so they follow right after for the
         // same reason.
         draws.push(Draw::Effects);
-        let mut shadow_runs = Vec::new();
+        let lists = self.take_view_lists();
+        let mut shadow_runs = lists.shadow_runs;
         self.shadow_runs(&mut shadow_runs);
         ViewPass {
             layer: self.layer.get(),
@@ -1227,6 +1228,7 @@ impl Scene {
             effects: self.effects_drawn(),
             ribbon_first,
             shadow_runs,
+            opaque_order: std::cell::Cell::new(lists.opaque_order),
             ghost: self.ghost_draw(race, lod_eye),
             stats: behind_glass,
             blur_lens,
@@ -1244,4 +1246,4 @@ mod road;
 mod shadow;
 pub(super) use attachments::{depth_texture, msaa_color_texture};
 pub(super) use hull_cache::HullCache;
-pub(super) use shadow::ShadowGathered;
+pub(super) use shadow::{ShadowGathered, ShadowRank};

@@ -324,6 +324,11 @@ pub struct Scene {
     /// The last two ticks' projected hulls, so the `original` tier gathers once
     /// per tick rather than once per drawn frame. See `frame/hull_cache.rs`.
     hull_cache: std::cell::RefCell<frame::HullCache>,
+    /// The lists a view's pass carries, kept from frame to frame: see
+    /// `Scene::keep_view_lists`.
+    view_lists: std::cell::RefCell<record::ViewLists>,
+    /// What the craft shadow map's ranking works in, kept from frame to frame.
+    shadow_rank: std::cell::RefCell<frame::ShadowRank>,
     /// The `original` tier's two per-craft maps on Wipeout HD: the track
     /// under the craft drawn from the sun as its own baked sun-occlusion mask,
     /// and the craft's own depth from the sun, which together gate the hull's
@@ -1140,6 +1145,8 @@ impl Scene {
             generated_silhouettes_said: std::cell::Cell::new(false),
             shadow_gathered: Default::default(),
             hull_cache: Default::default(),
+            view_lists: Default::default(),
+            shadow_rank: Default::default(),
             frame_work: Default::default(),
             reuse_frame_work: std::cell::Cell::new(false),
             sun_occlusion: std::cell::RefCell::new(sun_occlusion),
