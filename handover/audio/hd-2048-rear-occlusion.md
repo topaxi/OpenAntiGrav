@@ -16,7 +16,7 @@ measured effect on HD's real voices (a trim, not a thinned mix). Pulse, Pure and
 ## What landed
 
 - ~~Data, not a const~~: `Title::rear_occlusion` (HD `Stereo`, `None` elsewhere), the value from `GlobalAudioConfig.xml` through
-  `oag_tables::audio_config` and `hd_mix::Maps`; every on-disc copy of the file carries 14,000.
+  `oag_tables::audio_config` and `hd_mix::Maps`; both on-disc copies (`DATA00`, `DATA01`) carry 14,000; no HD extras pack is under `data/dlc`, so none beyond the disc was checked.
 - ~~The law and the mixer branch~~: `Mixer::set_rear_occlusion`, `spatial::rear_occlusion_cutoff`; the Pulse path is the existing
   `original_ignores_where_a_voice_is_along_the_forward_axis` and `without_the_law_original_stays_bit_identical_front_and_back`.
 - ~~Doc comments~~ on `rear_cue`, `Play::front`, `Listener::forward`, `SpatialMode::Original`.
@@ -26,9 +26,11 @@ measured effect on HD's real voices (a trim, not a thinned mix). Pulse, Pure and
 
 - **2048.** Same law at 10,000 Hz, but one voice kind's filter setter is an empty stub and the other reaches `FUN_8134bde4`'s flags,
   unread. Read the flags, then set `oag_2048::TITLE.rear_occlusion` to `Some(Sourced::measured(...))` and check its
-  `GlobalAudioConfig.xml` has a `Stereo` child (the 2048 file may spell it differently). Checked, applies, not wired.
+  `GlobalAudioConfig.xml` has a `Stereo` child: Omega's copy is self-closing with `max_frequency` on `<RearOcclusion>` itself, and
+  `audio_config::rear_occlusion_max_frequency` would then scan to the end of the file for `<Stereo `, so 2048's own spelling needs a look. Checked, applies, not wired.
 - **The filter's order and shape.** HD's result goes to `FUN_003146e8`, sub-voice `+0x48..+0x54`; the consumer is unread (about an
-  hour). The one-pole is **chosen, not measured**.
+  hour). The one-pole is **chosen, not measured** and cuts at most 2.8 dB (Nyquist), so how hard the original bites is unknown until this
+  is read; it also decides `auto`'s default below. Do this one first.
 - **The axis.** That the angle's `+Z` is the camera's forward is inferred, not traced (recipe: the writer of `*(0x008b4aa4) + 0x50..0x7c`
   on HD). If it were backward the law would flip.
 - **The rate.** The `0.05/0.95` smoothing runs once per tick here (**chosen**); the original runs it per emitter update on a frame

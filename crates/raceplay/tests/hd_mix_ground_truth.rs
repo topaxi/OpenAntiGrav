@@ -100,6 +100,7 @@ fn every_copy_of_the_file_carries_the_same_rear_value() {
         .read_every_name(r"Data\sound\GlobalAudioConfig.xml");
     assert!(copies.len() >= 2, "{} copies", copies.len());
     for (label, blob) in copies {
+        println!("rear occlusion copy in {label}");
         let rear = Maps::parse(&String::from_utf8_lossy(&blob)).rear();
         assert_eq!(rear.get("Stereo"), Some(14_000.0), "{label}");
     }

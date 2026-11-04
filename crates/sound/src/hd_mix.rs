@@ -323,7 +323,7 @@ impl Audio {
 
     /// Installs HD's mix, read off the frame thread by [`read_maps`]. The
     /// first one read wins, as the per-source read always did.
-    pub(crate) fn set_hd_mix(&mut self, maps: Maps) {
+    pub fn set_hd_mix(&mut self, maps: Maps) {
         if self.hd.live.is_none() {
             self.hd.rear = maps.rear();
             self.hd.live = Some(Live::new(maps));
@@ -346,6 +346,12 @@ impl Audio {
     pub fn set_circuit_low_pass_off(&mut self, off: bool) {
         self.hd.circuit_low_pass_off = off;
         self.apply_rear_occlusion();
+    }
+
+    /// The rear low-pass's `max_frequency` now on the mixer, or `None` where it is off.
+    #[must_use]
+    pub fn rear_low_pass(&self) -> Option<f32> {
+        self.output.with_mixer(|mixer| mixer.rear_occlusion())
     }
 
     /// The mixer's rear low-pass: the title's layout, read from the file, unless

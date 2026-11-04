@@ -324,14 +324,15 @@ fn rear_occlusion_wav_pair() {
                 }
                 seen.push(std::sync::Arc::clone(sound));
                 *rates.entry(sound.sample_rate()).or_default() += 1;
-                // Nothing above half the source rate to cut.
-                if sound.sample_rate() < 2 * cutoff as u32 {
+                // A source that reaches well past the cutoff, so the band holds its own content
+                // and not the resampler's imaging.
+                if sound.sample_rate() < 44_000 {
                     continue;
                 }
                 let (high, all) = band_energy(&render_voice(sound, 1.0, None), cutoff);
-                let share = high / all.max(1e-12);
-                if all > 1e-3 && best.as_ref().is_none_or(|(b, ..)| share > *b) {
-                    best = Some((share, (*env).to_string(), std::sync::Arc::clone(sound)));
+                // The voice with the most energy above the cutoff, in absolute terms.
+                if all > 1e-3 && best.as_ref().is_none_or(|(b, ..)| high > *b) {
+                    best = Some((high, (*env).to_string(), std::sync::Arc::clone(sound)));
                 }
             }
         }

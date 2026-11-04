@@ -991,9 +991,12 @@ impl Session {
         // so this should now read near-instant rather than the 2.83s a cold
         // PS2 track measured before the worker existed.
         self.hold_race_song();
-        if let Stage::Race(stage) = &self.stage {
-            self.audio
-                .set_circuit_low_pass_off(stage.race.track_emitters().low_pass_off);
+        if let (Stage::Race(stage), Some(title)) = (&self.stage, self.title_raced()) {
+            oag_game::sound::arm_rear_low_pass(
+                &mut self.audio,
+                title,
+                stage.race.track_emitters(),
+            );
         }
         let music_start = web_time::Instant::now();
         match music {
