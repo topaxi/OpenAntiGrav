@@ -228,7 +228,9 @@ fn omega_composite(
         env.scalar(VIGNETTE_INNER_RADIUS),
         env.scalar(VIGNETTE_OUTER_INTENSITY),
     ) else {
-        report.push(format!("{name}: no Vignette block; the composite draws no vignette"));
+        report.push(format!(
+            "{name}: no Vignette block; the composite draws no vignette"
+        ));
         return oag_post::omega_tonemap::Composite::NONE;
     };
     report.push(format!(

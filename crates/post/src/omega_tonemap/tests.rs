@@ -392,14 +392,26 @@ fn the_composite_is_colour_scale_times_vignette_plus_tint() {
     // vignette = 1 + b * 0.25 with b = -0.5 / 0.25 = -2, so 0.5 at an edge middle.
     let uv = [1.0, 0.5];
     close(probe.vignette(uv), 0.5, "vignette");
-    close(probe.apply(0, 0.4, uv), 0.5 * 0.4 + 0.1, "patch: tint outside");
-    close(0.5 * (0.4 + 0.1), 0.25, "base: tint inside, which is not drawn");
+    close(
+        probe.apply(0, 0.4, uv),
+        0.5 * 0.4 + 0.1,
+        "patch: tint outside",
+    );
+    close(
+        0.5 * (0.4 + 0.1),
+        0.25,
+        "base: tint inside, which is not drawn",
+    );
     // ColorScale multiplies the picture, not the tint.
     let scaled = Composite {
         color_scale: [0.5; 3],
         ..probe
     };
-    close(scaled.apply(0, 0.4, uv), 0.5 * 0.5 * 0.4 + 0.1, "ColorScale");
+    close(
+        scaled.apply(0, 0.4, uv),
+        0.5 * 0.5 * 0.4 + 0.1,
+        "ColorScale",
+    );
     // The rest composite changes nothing.
     close(Composite::NONE.apply(1, 0.37, [0.0, 1.0]), 0.37, "rest");
 }
@@ -463,7 +475,15 @@ fn the_chain_draws_the_composite_after_the_curve() {
         occlusion_query_set: None,
         multiview_mask: None,
     });
-    chain.run(&device, &queue, &mut encoder, &out_view, (0.0, 0.0), size, None);
+    chain.run(
+        &device,
+        &queue,
+        &mut encoder,
+        &out_view,
+        (0.0, 0.0),
+        size,
+        None,
+    );
     queue.submit([encoder.finish()]);
     let luma: f32 = colour.iter().zip(law::LUMA).map(|(c, w)| c * w).sum();
     let curve = Curve::fit(&p, luma);
