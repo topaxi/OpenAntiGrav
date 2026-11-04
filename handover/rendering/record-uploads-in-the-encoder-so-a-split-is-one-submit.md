@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-04
-summary: "A split submits per view; one submit with the finish overlapped has a ceiling of 1.6 to 2.4 ms a frame on the Deck (Pure)"
+summary: "A split submits per view; one submit with the finish overlapped has a CPU ceiling of 1.3 to 4.0 ms a frame on the Deck (Pure, HD)"
 categories: [rendering]
 size: L
 difficulty: hard
@@ -44,15 +44,14 @@ submits on top of that.
 
 ## Next Steps
 
-1. **The ceiling is already measured, by accident.** The build before the split-finish fix (commit
-   `ca91c9c5b`'s parent chain, `0fb333c97`) overlapped every view's finish with recording the next
-   view, which is what one submission with the finish on the worker would do, at the price of a
-   wrong picture (the post work ran ahead of its scene pass; GPU time is not comparable, CPU is).
-   Deck, two-player Pure, frame-thread `total` ms, 800p window drawn at 1920x1200 / 1080p / 4K (render
-   scale 100 on the last two): that build 6.06 / 5.69 / 7.71,
-   the fixed interleaved path 7.65 / 7.47 / 10.10, `OAG_SPLIT_FINISH=0` 7.40 / 7.20 / 10.10
-   (`docs/rendering/split-screen.md`). So the ceiling is 1.3 to 1.6 ms at 800p, 1.5 to 1.8 at 1080p
-   and 2.4 at 4K, about a fifth of the frame thread. HD is not measured: the same A/B on HD
-   Anulpha needs that build again.
+1. **The ceiling is measured, by accident, on Pure and HD.** The build before the split-finish fix
+   (`0fb333c97`) overlapped every view's finish with recording the next view, which is what one
+   submission with the finish on the worker would do, at the price of a wrong picture (CPU is
+   comparable, GPU order was not). Deck, two-player, `--render-scale 100`, frame-thread `total` ms:
+   Pure 800p 5.33 against the fixed 6.62 (-1.29), HD Anulpha 800p 10.40 against 12.83 (-2.43, 91
+   against 76.5 fps), 1080p 11.93 against 14.91 (-2.98), 4K 14.60 against 18.63 (-4.03): about a
+   fifth of the frame thread. `docs/rendering/split-screen.md`, "Rerun at a true render size".
+   Threaded recording (a lane is making it the default on uniform cores) gets 40 to 50% of that gap
+   with the write log and per-view submits left in; this thread is the remaining half.
 2. The ceiling is worth it:  one view's uploads as one staged buffer plus copies, byte-identical pictures
    against the interleaved path, the batched modes on top. Perf work goes to an Opus lane.

@@ -2052,3 +2052,30 @@ before the fix 5.69, after 7.47 (7.27 and 7.68), `OAG_SPLIT_FINISH=0` 7.20, `thr
 and 7.86, noisy). 4K: before 7.71, after 10.10, `OAG_SPLIT_FINISH=0` 10.10, `threaded` 9.52.
 So the split finish costs 0.25 ms at 800p, 0.27 ms at 1080p and nothing at 4K under an
 interleaved split, and `threaded` saves 0.6 to 0.7 ms at 800p and 4K. Pure only.
+
+**Rerun at a true render size, and HD (2026-11-04).** The "800p" rows above drew at 1920x1200; these
+rerun every size with `--render-scale 100` so the render is the window (1280x800, 1920x1080,
+3840x2160), same Deck and setup, `--players 2 --split-cut vertical`, `total` ms and fps, mean of the
+rounds. "Before" is the build ahead of the fix (wrong picture, finish overlapped across views: a CPU
+upper bound only, its GPU order was wrong).
+
+| Two-player | before the fix (ceiling) | fixed, interleaved | `OAG_SPLIT_FINISH=0` | threaded |
+| --- | --- | --- | --- | --- |
+| Pure 800p | 5.33 (178 fps) | 6.62 (146 fps) | 5.84 (165 fps) | 5.73 (168 fps) |
+| Pure 1080p | 5.69 | 7.34 | 7.20 | 6.97 |
+| HD Anulpha 800p | 10.40 (91 fps) | 12.83 (76.5 fps) | 12.25 (79.8 fps) | 11.56 (84.4 fps) |
+| HD Anulpha 1080p | 11.93 | 14.91 | 14.50 | 13.59 |
+| HD Anulpha 4K | 14.60 | 18.63 | 17.51 | 16.90 |
+
+HD p99 ms (fixed / split finish off / threaded): 800p 16.5 / 15.8 / 15.6, 1080p 20.5 / 23.9 / 20.8,
+4K 54.1 / 53.8 / 53.7. Pure 800p p99: 7.8 / 7.4 / 7.4. At 4K the frame is GPU-bound (26 fps). What
+follows from it:
+- The fix costs HD two-player at 800p about 14 fps (91 to 76.5), below the Deck's 90 Hz target.
+- Turning the split finish off recovers 0.4 to 1.1 ms on HD but its p99 at 1080p is 3.4 ms worse than
+  with it on: not a policy to ship alone.
+- Threaded recording is lower than the fixed path at every size on both titles with p99 equal or
+  better: HD -1.17 / -1.42 / -1.54 ms (800p / 1080p / 4K), Pure -0.89 ms at 800p and -0.37 ms at
+  1080p (three rounds). It gets about 40 to 50% of the gap to the ceiling.
+- The ceiling is 1.3 ms on Pure at 800p and 2.4 / 3.0 / 4.0 ms on HD: about a fifth of the frame
+  thread, which is what one submission with the finish overlapped could recover (uploads recorded in
+  the encoder instead of `queue.write_buffer`, so a view's data no longer depends on its submit).
