@@ -201,6 +201,7 @@ impl Drawable {
             shine_pose: std::sync::Mutex::default(),
             emissive,
             zone_vis: self.zone_vis.clone(),
+            zone_vis_written: std::sync::Mutex::new(None),
             zone_rebind: self.zone_rebind.clone(),
             opaque_ranges: self.opaque_ranges.clone(),
             moving: self.moving.clone(),

@@ -122,6 +122,9 @@ pub(super) struct Drawable {
     /// All-black until [`Self::write_zone_vis`] is called, which
     /// `race::Scene::render` does once a frame alongside [`Self::fog`].
     zone_vis: wgpu::Texture,
+    /// The texels [`Self::zone_vis`] was last given, so a frame that would write the same
+    /// ones (every frame outside a Zone race) writes nothing. `None`: never written.
+    zone_vis_written: std::sync::Mutex<Option<mesh_render::zone::VisTexels>>,
     /// What [`Self::fog_bind`] needs besides [`Self::fog`] and the showing
     /// stage's own four textures to be rebuilt - see
     /// [`mesh_render::zone::RebindResources`] and [`Self::rebind_zone`].
@@ -407,6 +410,7 @@ impl Drawable {
             shine_pose: std::sync::Mutex::default(),
             emissive: emissive_buffer,
             zone_vis: zone_vis_texture,
+            zone_vis_written: std::sync::Mutex::new(None),
             zone_rebind: std::sync::Arc::new(zone_rebind),
             ripple: std::sync::Mutex::new(None),
             pad_glow: std::sync::Mutex::default(),
@@ -528,6 +532,12 @@ impl Drawable {
     ) {
         self.fog_bind =
             mesh_render::zone::rebind(device, queue, &self.fog, &self.zone_rebind, stage);
+        // The next `write_zone_vis` writes whatever it is given, so the lookup cannot
+        // depend on what the texture held across a stage change.
+        *self
+            .zone_vis_written
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
     /// Tells a gated drawable whether this frame's draws write the velocity buffer:
@@ -624,15 +634,24 @@ impl Drawable {
 
     /// Rewrites the Zone visualiser's lookup from `bands` levels, tinted by
     /// `tint` - or blanks it when `tint` is `None`, which is what a stage
-    /// with no authored `EQ colour tint` gets. See
-    /// `oag_mesh::mesh_render::zone::write_vis`, which this forwards to.
+    /// with no authored `EQ colour tint` gets. Writes nothing when the texels
+    /// are the ones it last wrote. See
+    /// `oag_mesh::mesh_render::zone::write_vis_changed`, which this forwards to.
+    ///
+    /// Safe to skip because every view's writes land in the order the views were
+    /// prepared (`oag_gpu::writes`): the texture holds the last texels written.
+    /// Returns whether it wrote.
     pub(super) fn write_zone_vis(
         &self,
         queue: &dyn oag_gpu::writes::Writes,
         bands: &[f32],
         tint: Option<[u8; 3]>,
-    ) {
-        mesh_render::zone::write_vis(queue, &self.zone_vis, bands, tint);
+    ) -> bool {
+        let mut last = self
+            .zone_vis_written
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        mesh_render::zone::write_vis_changed(queue, &self.zone_vis, bands, tint, &mut last)
     }
 
     /// `prev_mvp` is the previous simulation tick's `view_projection * model`,

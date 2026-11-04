@@ -477,10 +477,11 @@ impl Scene {
         .into_iter()
         .flatten()
         {
-            // Written for every drawable on this list regardless of whether a
+            // Called for every drawable on this list regardless of whether a
             // Zone race is running: it blanks the lookup with no spectrum or
             // no tint, and `scene.zone.enabled` already gates the glow off
-            // outside a Zone race, so this is cheap and never wrong to call.
+            // outside a Zone race. It writes only texels that changed, so a
+            // race with no Zone writes the blank lookup once.
             drawable.write_zone_vis(queue, zone_spectrum, zone_tint);
         }
         // **The craft get the same scene with the Zone half switched off**,
