@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-04
-summary: "oag.slipstream and mod shaders landed; open: mesh portal, route and island exits, Distance::Trigger test, bounded shader loops, .wesl imports."
+summary: "oag.slipstream, mod shaders and portal-view landed; open: mesh portal, route/island exits, Trigger test, Omega's spark pool, wall occlusion, loops."
 categories: [tooling, frontend]
 size: L (50)
 difficulty: medium (50)
@@ -101,12 +101,6 @@ found, for the engine:
 landed; the contract, refusals and what a hung GPU is still open to are
 `docs/architecture/wasm-extensions/mod-shaders.md`. For the next two lanes:
 
-- **portal-view (B):** fill the slot with `oag_fx::mod_shader::Stage::set_engine_texture(device,
-  Some((view, view_projection)))` (rebuilds the bind groups) and
-  `set_engine_view_projection` per frame; a shader reads `engine_texture(input.screen_uv)` or
-  `engine_texture(engine_uv(input.world))` and `engine_texture_bound()`. The stage lives in
-  `Scene::mod_shaders`. **One matrix per stage**: a split screen with a portal in two views needs
-  that written per view beside the rest of `Stage::upload`.
 - **slipstream-portal (C):** `shader = "<name>"` on the portal's emitter, its PNG moved to the
   shader's `texture` header; a sprite is centred on its point, as today. The mod's quality row
   reaches the shader as a `set_shader_param` scalar.
@@ -125,6 +119,35 @@ Open from it, each small:
    there). Whether mist or the lens flare ever run on a chain's float target was not checked.
 5. **`docs/architecture/wasm-extensions/README.md` still lists no shader in its section 2 sketch**;
    its "And a mod's own shaders" points at the page.
+
+## portal-view, the portal's lane B (lane portal-view, 2026-11-04)
+
+`portal-view` (command 36), the secondary view and `oag.window` landed; the contract and the numbers
+are `docs/architecture/wasm-extensions/mod-shaders.md`, "The engine texture". For lane C:
+
+- **slipstream-portal (C):** `reply.portal_view(&craft, (entrance, exit), radius, update, generation)`
+  each tick the portal stands. Medium is `ViewUpdate::Once`, High `ViewUpdate::Continuous`, Low sends
+  none and draws the shader's fallback. Read `engine_texture(engine_uv(input.world))`, gated on
+  `engine_texture_bound()`: the second seat of a split always takes the fallback. A progress is
+  `Craft::progress()` plus the units ahead, wrapped by the course length, never below zero. Check the
+  exit: on Pulse's `16_Track` one lands upside down at the top of the loop.
+
+Open from it, each small:
+
+1. **Omega's particle pool is full of `WO_TRAIL_HITSHIP`** on the grid: all 32 instances at tick 480,
+   with `oag.window` on and nothing else. Mod surfaces now hold a slot (`Stage::play_held`), the
+   trigger's rate was not looked at, and it evicts title effects too. It may
+   explain the high middle-of-view figure the mod shader page gives for Omega. Size S (40).
+2. **A wall between the camera and the portal does not skip the view**: only the frustum and the
+   face do. Testing the entrance's section against the main view's PVS is the cheap answer. Size S (50).
+3. **`Stage::orient` is a no-op on an effect from `play` or `play_held`**: it goes through `get_mut`,
+   which wants an attached instance, so `Fired::OwnAt`'s `up` never lands. An effect with `axis = "up"`
+   on a banked road is square to world up, not the road's. Size XS (60).
+4. **A float target's values above 1 clamp in `engine_texture`**: `fs_main` clamps a shader's output,
+   so HD's and Omega's brightest highlights in a portal stop at white. Size S (40).
+5. **The texture is a fixed 960x540** at every window size; a configurable rate and size are later
+   if a player needs them (spec, "reduced resolution allowed").
+6. **Only Pulse and HD have a frame test.** 2048, Omega, PS2 and Pure were read off screenshots.
 
 ## Next Steps
 
