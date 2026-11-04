@@ -28,13 +28,18 @@ Listed from each PSARC's manifest with entries resolved by path digest
 | 2048 v1.04, DLC | `data1`, `data2`, `dlc1`, `dlc2` | 0 | - | - |
 | Omega base | `data00.psarc` (`Data/xml/rumble/`) | 69 | 69 of 69 | 64 |
 | Omega patch | `data05`, `07`, `08`, `09` | 0 | - | - |
-| Pulse PSP USA, EU | WADs | see below | - | 0 |
-| Pulse PS2 EU | WADs | see below | - | 0 |
-| Pure PSP USA, EU | WADs | see below | - | 0 |
+| Pulse PSP USA, EU | `BEData`, `Data`, `FE`, `FEData` | 0 of 69 | - | 0 |
+| Pulse PS2 EU | `PRERACE`, `PS2MUSIC`, `WADS2`, `WADSP` | 0 of 69 | - | 0 |
+| Pure PSP USA, EU | `Data`, `FE`, `FEData` | 0 of 69 | - | 0 |
 
 "Same data" compares the serialised `<RumbleData>` element, so the editor block
 and the leading line ending do not count. HD's files are one byte shorter than
 Omega's and 2048's; `<RumbleData>` is identical in all 69.
+
+A WAD holds only name hashes, so the WAD rows look up `hash_name` of
+`Data/XML/Rumble/<name>.xml` for all 69 names in every WAD's directory (18 WADs,
+2026-11-04, `oag-wad list`): no hit. That proves these names absent, not a differently
+named pattern; the executables' lack of any rumble string covers that.
 
 `omega data04.psarc` also names four `Road_A_rumblestrip_*` textures, and 2048 the
 same four: road art, not vibration. Pure's `rumble`, in `ship.bnk`, is a **sound
