@@ -393,6 +393,9 @@ pub fn build_with(
     // fresh module this always created.
     let shader = pipeline_cache::shared_shader_module(device, bindless);
     let shader = &shader;
+    // The prepassed shade half's per-draw-material twin, where it is drawn indirect.
+    let indirect_shader = (prepass && bindless && indirect::colour(device))
+        .then(|| pipeline_cache::shared_indirect_material_module(device));
     // The target format is the statement about colour space - see
     // [`is_linear_target`] - and it reaches the shader as a pipeline
     // constant, so every pipeline built here answers for the target it was
@@ -701,6 +704,7 @@ pub fn build_with(
             prepass::pipelines(&prepass::Shared {
                 device,
                 shader,
+                indirect_shader: indirect_shader.as_ref(),
                 layout: &pipeline_layout,
                 vertex_buffers: &vertex_buffers,
                 constants,

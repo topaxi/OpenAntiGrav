@@ -13,6 +13,9 @@ pub(crate) struct Prepared {
     pub(super) stats: SceneStats,
     /// The view's indirect list, `None` when none was written.
     pub(super) indirect: Option<IndirectRuns>,
+    /// The view's colour list for the shaded half, in draw order, `None` when none was
+    /// written (`Drawable::prepare_colour`).
+    pub(super) colour: Option<Vec<ColourRun>>,
 }
 
 /// How one view's indirect list splits: `plain` two-sided draws first, then `culled`
@@ -25,6 +28,31 @@ pub(super) struct IndirectRuns {
 
 thread_local! {
     static PACKED: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// A drawable's per-view indirect lists: the prepass depth half's where the device takes the
+/// path (`mesh_render::indirect::wanted`), and the shaded half's under `OAG_INDIRECT=colour`
+/// where the per-draw-material pipelines were built (`mesh_render::indirect::colour`).
+pub(super) fn indirect_lists(
+    device: &wgpu::Device,
+    model: &oag_mesh::mesh::Model,
+    prepass: Option<&mesh_render::Prepass>,
+    bindless: bool,
+) -> (
+    Option<mesh_render::indirect::Args>,
+    Option<mesh_render::indirect::Args>,
+) {
+    let list = |label: &str, half: &str| {
+        log::info!("{}: prepass {half} as indirect multi-draws", model.label);
+        mesh_render::indirect::Args::new(device, label, SceneBlocks::VIEWS, model.draws.len())
+    };
+    let depth = prepass
+        .filter(|_| mesh_render::indirect::wanted(device))
+        .map(|_| list("prepass depth draws", "depth half"));
+    let colour = prepass
+        .filter(|p| depth.is_some() && bindless && p.shade_indirect.is_some())
+        .map(|_| list("prepass shade draws", "shade half, material per draw,"));
+    (depth, colour)
 }
 
 impl Drawable {
@@ -134,6 +162,73 @@ impl Drawable {
         });
         // A list the buffer could not hold whole is drawn the per-draw way.
         prepared.indirect = ((runs.plain + runs.culled) as usize == depth.len()).then_some(runs);
+        prepared.colour = self.prepare_colour(writes, view, &prepared.shown.natural);
         Some(prepared)
     }
+
+    /// Writes the prepass's shaded half as `view`'s colour list, where this drawable draws it
+    /// indirect (`mesh_render::indirect::colour`): `shown` backwards, by triangle as well
+    /// (`reversed_indices`), each draw's material slot as its first instance. Split into
+    /// runs only where the cull mode changes, so the order, which decides every coplanar
+    /// tie under `LessEqual`, is the per-draw path's.
+    fn prepare_colour(
+        &self,
+        writes: &dyn oag_gpu::writes::Writes,
+        view: ViewBlock,
+        shown: &[u32],
+    ) -> Option<Vec<ColourRun>> {
+        let args = self.indirect_colour.as_ref()?;
+        let bindless = self.bindless.as_ref()?;
+        let draws = &self.model.draws;
+        let index_count = self.model.indices.len() as u32;
+        let reversed = self.reversed_indices.is_some();
+        let last_slot = self.textures.len().saturating_sub(1);
+        let mut runs: Vec<ColourRun> = Vec::new();
+        for &index in shown.iter().rev() {
+            let culled = self.wants_cull(&draws[index as usize]);
+            match runs.last_mut() {
+                Some(run) if run.culled == culled => run.count += 1,
+                _ => runs.push(ColourRun {
+                    culled,
+                    first: runs.last().map_or(0, |run| run.first + run.count),
+                    count: 1,
+                }),
+            }
+        }
+        // Every cull mode a run needs must have its per-draw-material pipeline.
+        if runs.iter().any(|run| {
+            self.solid(run.culled)
+                .1
+                .is_none_or(|prepass| prepass.shade_indirect.is_none())
+        }) {
+            return None;
+        }
+        let count = PACKED.with_borrow_mut(|bytes| {
+            bytes.clear();
+            let count = args.pack_with(
+                shown.iter().rev().map(|&index| {
+                    let draw = &draws[index as usize];
+                    let range = if reversed {
+                        index_count - draw.range.end..index_count - draw.range.start
+                    } else {
+                        draw.range.clone()
+                    };
+                    let slot = draw.texture.map_or(0, |t| t + 1).min(last_slot);
+                    (range, bindless.row_index(slot))
+                }),
+                bytes,
+            );
+            args.write(writes, view.index(), bytes);
+            count
+        });
+        (count as usize == shown.len()).then_some(runs)
+    }
+}
+
+/// One run of a view's colour list under one cull mode: `count` draws from entry `first`.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ColourRun {
+    pub(super) culled: bool,
+    pub(super) first: u32,
+    pub(super) count: u32,
 }

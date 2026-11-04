@@ -25,12 +25,18 @@ pub struct Prepass {
     /// The opaque pipeline's own shading, `LessEqual` against the prepass's
     /// depth, depth not written.
     pub shade: wgpu::RenderPipeline,
+    /// [`Self::shade`] from the `indirect_material` variant, which reads each draw's
+    /// material slot from its first instance, so the half can go out as indirect
+    /// multi-draws (`super::indirect::colour`). `None` elsewhere.
+    pub shade_indirect: Option<wgpu::RenderPipeline>,
 }
 
 /// What [`pipelines`] shares with the opaque pipeline `build` has made.
 pub(super) struct Shared<'a> {
     pub device: &'a wgpu::Device,
     pub shader: &'a wgpu::ShaderModule,
+    /// The `indirect_material` variant, where [`Prepass::shade_indirect`] is wanted.
+    pub indirect_shader: Option<&'a wgpu::ShaderModule>,
     pub layout: &'a wgpu::PipelineLayout,
     pub vertex_buffers: &'a [Option<wgpu::VertexBufferLayout<'a>>],
     pub constants: &'a [(&'static str, f64)],
@@ -60,12 +66,13 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Prepass {
             })
         })
         .collect();
-    let make = |label: &str,
+    let make = |shader: &wgpu::ShaderModule,
+                label: &str,
                 entry: &'static str,
                 targets: &[Option<wgpu::ColorTargetState>],
                 depth: wgpu::DepthStencilState| {
         pipeline_cache::cached_pipeline(
-            shared.shader,
+            shader,
             "vs_main",
             shared.vertex_buffers,
             entry,
@@ -81,13 +88,13 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Prepass {
                         label: Some(label),
                         layout: Some(shared.layout),
                         vertex: wgpu::VertexState {
-                            module: shared.shader,
+                            module: shader,
                             entry_point: Some("vs_main"),
                             buffers: shared.vertex_buffers,
                             compilation_options: Default::default(),
                         },
                         fragment: Some(wgpu::FragmentState {
-                            module: shared.shader,
+                            module: shader,
                             entry_point: Some(entry),
                             targets,
                             compilation_options: wgpu::PipelineCompilationOptions {
@@ -104,8 +111,13 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Prepass {
             },
         )
     };
+    // Only the two opaque entries load the draw's row (`mesh.wesl`).
+    let indirect_shader = shared
+        .indirect_shader
+        .filter(|_| matches!(shared.fragment_entry, "fs_main" | "fs_main_velocity"));
     Prepass {
         depth: make(
+            shared.shader,
             "mesh depth prepass",
             shared
                 .velocity
@@ -114,10 +126,20 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Prepass {
             depth_state(true, wgpu::CompareFunction::Less),
         ),
         shade: make(
+            shared.shader,
             "mesh prepassed shade",
             shared.fragment_entry,
             shared.targets,
             depth_state(false, wgpu::CompareFunction::LessEqual),
         ),
+        shade_indirect: indirect_shader.map(|shader| {
+            make(
+                shader,
+                "mesh prepassed shade, per-draw material",
+                shared.fragment_entry,
+                shared.targets,
+                depth_state(false, wgpu::CompareFunction::LessEqual),
+            )
+        }),
     }
 }

@@ -54,7 +54,16 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
     sixth_map: u32,
 }
 
-@if(bindless) var<immediate> material: MaterialSlot;
+@if(bindless && !indirect_material) var<immediate> material: MaterialSlot;
+
+// The `indirect_material` variant (`mesh_render::indirect`): a multi-draw cannot change an
+// immediate between its draws, so each draw names its slot as its first instance and the
+// fragment entry loads the slot's row from here into `material` before anything reads it.
+// The index is no longer uniform, so every array read through it takes the non-uniform
+// path.
+@if(indirect_material) @group(1) @binding(2) var<storage, read> material_rows: array<MaterialSlot>;
+
+@if(indirect_material) var<private> material: MaterialSlot;
 
 @group(2) @binding(0) var<uniform> scene: Scene;
 

@@ -43,6 +43,42 @@ pub fn wanted(device: &wgpu::Device) -> bool {
     )
 }
 
+/// What the `indirect_material` variant needs of a device besides [`super::bindless::FEATURES`]:
+/// a draw's slot as its first instance, and texture-array reads indexed by it.
+pub const COLOUR_FEATURES: wgpu::Features = wgpu::Features::INDIRECT_FIRST_INSTANCE
+    .union(wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING);
+
+/// Whether `OAG_INDIRECT=colour` asks for the prepassed shade half as indirect multi-draws
+/// too, with the material slot read per draw (the `indirect_material` shader variant). A
+/// measurement switch: the index is non-uniform, which costs GPU time on some drivers.
+#[must_use]
+pub fn colour_asked() -> bool {
+    static ASKED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ASKED.get_or_init(|| std::env::var("OAG_INDIRECT").as_deref() == Ok("colour"))
+}
+
+/// The features [`colour_asked`] adds to a device request on `adapter`: all of
+/// [`COLOUR_FEATURES`] where the adapter has them, none otherwise.
+#[must_use]
+pub fn colour_features(adapter: &wgpu::Adapter) -> wgpu::Features {
+    if colour_asked() && adapter.features().contains(COLOUR_FEATURES) {
+        COLOUR_FEATURES
+    } else {
+        wgpu::Features::empty()
+    }
+}
+
+/// Whether `device` draws the colour half indirect: asked for, on the indirect path, with
+/// [`COLOUR_FEATURES`] and the bindless arrays.
+#[must_use]
+pub fn colour(device: &wgpu::Device) -> bool {
+    colour_asked()
+        && wanted(device)
+        && device
+            .features()
+            .contains(COLOUR_FEATURES | super::bindless::FEATURES)
+}
+
 /// One argument list per view: `views` regions of `draws` entries each, so two views of a
 /// frame never write the same bytes (a queue write lands before every command of the
 /// submission it joins).
@@ -80,15 +116,25 @@ impl Args {
         ranges: impl Iterator<Item = std::ops::Range<u32>>,
         bytes: &mut Vec<u8>,
     ) -> u32 {
+        self.pack_with(ranges.map(|range| (range, 0)), bytes)
+    }
+
+    /// [`Self::pack`] with each draw's first instance, which the `indirect_material`
+    /// variant reads as the draw's material slot.
+    pub fn pack_with(
+        &self,
+        draws: impl Iterator<Item = (std::ops::Range<u32>, u32)>,
+        bytes: &mut Vec<u8>,
+    ) -> u32 {
         let packed = bytes.len() / ARGS_SIZE as usize;
         let mut count = 0;
-        for range in ranges.take(self.draws.saturating_sub(packed)) {
+        for (range, first_instance) in draws.take(self.draws.saturating_sub(packed)) {
             let args = wgpu::util::DrawIndexedIndirectArgs {
                 index_count: range.end - range.start,
                 instance_count: 1,
                 first_index: range.start,
                 base_vertex: 0,
-                first_instance: 0,
+                first_instance,
             };
             bytes.extend_from_slice(args.as_bytes());
             count += 1;

@@ -63,6 +63,7 @@ pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
             | wgpu::Features::SHADER_F16
             | probe)
         | arrays
+        | super::indirect::colour_features(adapter)
 }
 
 /// The device descriptor every `request_device` in this workspace uses.

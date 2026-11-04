@@ -181,6 +181,7 @@ impl Drawable {
             hidden: std::sync::Mutex::default(),
             reversed_indices: self.reversed_indices.clone(),
             indirect: None,
+            indirect_colour: None,
             vertices: self.vertices.clone(),
             texcoords: self.texcoords.clone(),
             indices: self.indices.clone(),

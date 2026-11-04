@@ -312,6 +312,11 @@ fn capabilities(source: &str) -> Capabilities {
     let mut capabilities = Capabilities::empty();
     if source.contains("enable wgpu_binding_array;") {
         capabilities |= Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY | Capabilities::IMMEDIATES;
+        // `oag_mesh`'s `mesh_indirect_material` alone reads its slot per draw on
+        // purpose (`material_rows`), so it alone may index non-uniformly.
+        if source.contains("material_rows") {
+            capabilities |= Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING;
+        }
     }
     if source.contains("enable f16;") {
         capabilities |= Capabilities::SHADER_FLOAT16;

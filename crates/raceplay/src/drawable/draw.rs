@@ -239,12 +239,17 @@ impl Drawable {
         let shows = self.shows(block);
         // The draws this frame shows, gathered first because a prepass walks them twice -
         // the second time backwards: what `prepared` already holds, or gathered here.
-        let (lists, mut stats, indirect) = match prepared.filter(|_| solid) {
-            Some(prepared) => (&prepared.shown, prepared.stats, prepared.indirect),
+        let (lists, mut stats, indirect, colour) = match prepared.filter(|_| solid) {
+            Some(prepared) => (
+                &prepared.shown,
+                prepared.stats,
+                prepared.indirect,
+                prepared.colour.as_deref(),
+            ),
             None => {
                 let culling = (sections, set, chunks, frustum);
                 let stats = self.gather_opaque(&shows, culling, order, solid, shown);
-                (&*shown, stats, None)
+                (&*shown, stats, None, None)
             }
         };
         oag_gpu::perfprobe::pipeline_set();
@@ -382,8 +387,30 @@ impl Drawable {
                 if let Some(reversed) = reversed {
                     pass.set_index_buffer(reversed.slice(..), wgpu::IndexFormat::Uint32);
                 }
-                for &index in shown.iter().rev() {
-                    draw_one(pass, index, reversed.is_some(), true, &mut culling);
+                match (&self.indirect_colour, colour) {
+                    // The same draws in the same order from the list `prepare_colour` wrote,
+                    // one multi-draw per cull-mode run, each draw's slot its first instance.
+                    // The immediates stay as they were, and `last_bound` with them.
+                    (Some(args), Some(runs)) => {
+                        let start = args.offset(block.index());
+                        for run in runs {
+                            let (_, twin, ..) = self.solid(run.culled);
+                            if let Some(pipeline) = twin.and_then(|t| t.shade_indirect.as_ref()) {
+                                pass.set_pipeline(pipeline);
+                            }
+                            oag_gpu::perfprobe::indirect_draws(run.count);
+                            pass.multi_draw_indexed_indirect(
+                                args.buffer(),
+                                start + u64::from(run.first) * mesh_render::indirect::ARGS_SIZE,
+                                run.count,
+                            );
+                        }
+                    }
+                    _ => {
+                        for &index in shown.iter().rev() {
+                            draw_one(pass, index, reversed.is_some(), true, &mut culling);
+                        }
+                    }
                 }
                 if reversed.is_some() {
                     pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);

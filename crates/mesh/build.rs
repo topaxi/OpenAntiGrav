@@ -10,5 +10,13 @@ fn main() {
     // The same shader with group 1 as binding arrays, for a device with
     // `mesh_render::BINDLESS_FEATURES` - see `shaders/bindings.wesl`.
     oag_shader_check::link("shaders", "mesh_bindless", "package::mesh", &["bindless"]);
+    // The bindless shader with the slot's row read per draw, for the prepassed shade
+    // half drawn as indirect multi-draws - see `mesh_render::indirect`.
+    oag_shader_check::link(
+        "shaders",
+        "mesh_indirect_material",
+        "package::mesh",
+        &["bindless", "indirect_material"],
+    );
     println!("cargo::rerun-if-changed=build.rs");
 }

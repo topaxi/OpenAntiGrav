@@ -196,26 +196,44 @@ impl Material {
 /// The variant's group 1 layout: the texture array and the sampler array.
 #[must_use]
 pub fn layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    // Binding 2, every slot's row, for the `indirect_material` variant
+    // (`super::indirect::colour`); one layout for every drawable either way, since
+    // `super::pipeline_cache` keys no layout.
+    let rows = wgpu::BindGroupLayoutEntry {
+        binding: 2,
+        visibility: wgpu::ShaderStages::FRAGMENT,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only: true },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    };
+    let rows = super::indirect::colour(device).then_some(rows);
+    let entries: Vec<wgpu::BindGroupLayoutEntry> = [
+        wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: std::num::NonZeroU32::new(CAPACITY),
+        },
+        wgpu::BindGroupLayoutEntry {
+            binding: 1,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+            count: std::num::NonZeroU32::new(SAMPLERS),
+        },
+    ]
+    .into_iter()
+    .chain(rows)
+    .collect();
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("material arrays"),
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: std::num::NonZeroU32::new(CAPACITY),
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                count: std::num::NonZeroU32::new(SAMPLERS),
-            },
-        ],
+        entries: &entries,
     })
 }
 
@@ -259,6 +277,17 @@ impl Bindless {
     pub fn group(&self) -> &wgpu::BindGroup {
         oag_gpu::perfprobe::array_bind(self.elements);
         &self.group
+    }
+
+    /// Which row of the `indirect_material` variant's row buffer slot `slot` reads: its
+    /// own, or slot 0's past the end, as [`Self::row`] falls back.
+    #[must_use]
+    pub fn row_index(&self, slot: usize) -> u32 {
+        if slot < self.rows.len() {
+            slot as u32
+        } else {
+            0
+        }
     }
 
     /// Slot `slot`'s row as the immediates a draw of it pushes, at offset 0. Callers
@@ -391,19 +420,35 @@ fn group(
         white.get_or_insert(row);
         rows.push(row);
     }
+    // Every slot's row for the `indirect_material` variant, rebuilt with the group.
+    let row_buffer = super::indirect::colour(device).then(|| {
+        use wgpu::util::DeviceExt;
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("material rows"),
+            contents: bytemuck::cast_slice(&rows),
+            usage: wgpu::BufferUsages::STORAGE,
+        })
+    });
+    let mut entries = vec![
+        wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::TextureViewArray(&views),
+        },
+        wgpu::BindGroupEntry {
+            binding: 1,
+            resource: wgpu::BindingResource::SamplerArray(&samplers),
+        },
+    ];
+    if let Some(buffer) = &row_buffer {
+        entries.push(wgpu::BindGroupEntry {
+            binding: 2,
+            resource: buffer.as_entire_binding(),
+        });
+    }
     let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("material arrays"),
         layout: &layout(device),
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureViewArray(&views),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::SamplerArray(&samplers),
-            },
-        ],
+        entries: &entries,
     });
     Some((group, rows, views.len() + samplers.len()))
 }

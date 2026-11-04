@@ -7,6 +7,7 @@
 
 import package::alpha_test::{alpha_test_ref};
 import package::bindings::{anims, emissives, node_anims, scene, uniforms};
+@if(indirect_material) import package::bindings::{material, material_rows};
 import package::fog::{fogged};
 import package::glow::{stamp_discards, stamp_value, stamped_alpha};
 import package::quake::{quake_lifted};
@@ -136,11 +137,19 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.cur_clip = out.clip;
     out.prev_clip = uniforms.prev_mvp * placed;
     out.spu_light = spu_light_sum(out.world, out.normal);
+    @if(indirect_material) {
+        out.material_slot = in.material_slot;
+    }
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    // The `indirect_material` variant draws only through this entry and
+    // `fs_main_velocity`, so only they load the draw's row (`bindings.wesl`).
+    @if(indirect_material) {
+        material = material_rows[in.material_slot];
+    }
     let shaded = lit_texel(in);
     // This pipeline is opaque (`blend: None`), so the alpha channel is never
     // blended with - but it is still written to whatever render target is
@@ -235,6 +244,9 @@ fn fs_main_stamp_velocity(in: VertexOutput) -> MrtOutput {
 // the opt-in for a model attached to a craft.
 @fragment
 fn fs_main_velocity(in: VertexOutput) -> MrtOutput {
+    @if(indirect_material) {
+        material = material_rows[in.material_slot];
+    }
     let shaded = lit_texel(in);
     return MrtOutput(
         vec4<f32>(target_out(opaque_colour(in, shaded)), stamped_alpha(in, shaded.a)),

@@ -325,6 +325,9 @@ struct VertexInput {
     // `xyz` is `2b - 1`, `w` the factor on the binormal; all zero where the
     // material reads no normal map.
     @location(14) tangent: vec4<f32>,
+    // The `indirect_material` variant's material slot: the draw's first instance
+    // (`mesh_render::indirect`), one instance a draw.
+    @if(indirect_material) @builtin(instance_index) material_slot: u32,
 };
 
 struct VertexOutput {
@@ -365,6 +368,8 @@ struct VertexOutput {
     // The hull's tangent in world space in `xyz` (zero where the material has
     // none) and the binormal's factor in `w` - see `shade.wesl`'s `hull_normal`.
     @location(14) tangent: vec4<f32>,
+    // `VertexInput::material_slot`, flat: a draw's whole.
+    @if(indirect_material) @location(15) @interpolate(flat) material_slot: u32,
 };
 
 // Colour and screen-space velocity together, for the pipelines built against
