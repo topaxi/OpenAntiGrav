@@ -245,8 +245,6 @@ mod mag_floor_fx;
 #[cfg(feature = "view")]
 mod magstrip_wake;
 #[cfg(feature = "view")]
-pub mod rumble_library;
-#[cfg(feature = "view")]
 mod missile_blast;
 #[cfg(feature = "view")]
 mod models;
@@ -273,6 +271,8 @@ pub mod rocket_smoke;
 #[cfg(feature = "view")]
 mod roll_payout;
 mod routes;
+#[cfg(feature = "view")]
+pub mod rumble_library;
 #[cfg(feature = "view")]
 mod scene;
 #[cfg(feature = "view")]

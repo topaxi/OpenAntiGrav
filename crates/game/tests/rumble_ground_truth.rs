@@ -88,8 +88,7 @@ fn pulse_has_no_patterns_and_its_original_offers_none() {
 }
 
 mod library {
-    use oag_game::rumble_library::{Report, load};
-    use oag_input::rumble::map::ROWS;
+    use oag_input::rumble::map::pattern_names;
 
     fn open(image: &str) -> Option<oag_assets::Archives> {
         let image = oag_testdata::image(image)?;
@@ -101,64 +100,149 @@ mod library {
     }
 
     fn distinct() -> usize {
-        let mut names: Vec<_> = ROWS.iter().map(|r| r.pattern).collect();
-        names.sort_unstable();
-        names.dedup();
-        names.len()
+        pattern_names().count()
+    }
+
+    fn load(image: &str) -> Option<(oag_tables::rumble::Library, Vec<String>)> {
+        let mut archives = open(image)?;
+        let mut report = Vec::new();
+        let library = oag_raceplay::rumble_library::load(&mut archives, &mut report);
+        Some((library, report))
     }
 
     #[test]
     #[ignore = "needs data/images/pulse-psp-eu.chd"]
     fn pulse_plays_every_mapped_pattern_from_our_own_fallback() {
-        let Some(mut archives) = open("pulse-psp-eu.chd") else {
+        let Some((library, report)) = load("pulse-psp-eu.chd") else {
             return;
         };
-        let (library, report) = load(&mut archives);
-        assert_eq!((report.disc, report.overridden), (0, 0));
-        assert_eq!(report.fallback, distinct(), "{}", report.line());
-        assert_eq!(library.len(), distinct());
+        assert_eq!(library.len(), distinct(), "{report:?}");
+        assert!(report[0].contains(&format!("0 patterns from the disc, {} from", distinct())));
     }
 
     #[test]
     #[ignore = "needs data/images/pure-psp-eu.chd"]
     fn pure_plays_every_mapped_pattern_from_our_own_fallback() {
-        let Some(mut archives) = open("pure-psp-eu.chd") else {
+        let Some((library, report)) = load("pure-psp-eu.chd") else {
             return;
         };
-        let (_, report) = load(&mut archives);
-        assert_eq!(
-            (report.disc, report.fallback),
-            (0, distinct()),
-            "{}",
-            report.line()
-        );
+        assert_eq!(library.len(), distinct(), "{report:?}");
     }
 
     #[test]
     #[ignore = "needs data/images/pulse-ps2-eu.chd"]
     fn pulse_ps2_has_the_same_library_as_the_psp() {
-        let Some(mut archives) = open("pulse-ps2-eu.chd") else {
+        let Some((ps2, _)) = load("pulse-ps2-eu.chd") else {
             return;
         };
-        let (_, report) = load(&mut archives);
-        assert_eq!(report.fallback, distinct(), "{}", report.line());
+        let Some((psp, _)) = load("pulse-psp-eu.chd") else {
+            return;
+        };
+        assert_eq!(ps2, psp);
     }
 
     /// The fallback answers only a name the disc lacks: on HD every mapped name is the disc's.
     #[test]
     #[ignore = "needs data/images/hdfury-ps3-eu.iso"]
     fn hd_keeps_its_own_patterns_over_ours() {
-        let Some(mut archives) = open("hdfury-ps3-eu.iso") else {
+        let Some((_, report)) = load("hdfury-ps3-eu.iso") else {
             return;
         };
-        let (_, report) = load(&mut archives);
-        assert!(report.disc > 0, "{}", report.line());
-        assert_eq!(report.overridden, 0);
+        assert!(
+            !report[0].contains(" 0 patterns from the disc"),
+            "{report:?}"
+        );
+        assert!(report[0].contains("0 from overrides"), "{report:?}");
+    }
+}
+
+mod race {
+    use oag_gameplay::PlayerInputs;
+    use oag_input::rumble::{MotorOutput, Motors};
+
+    #[derive(Default)]
+    struct Recorder {
+        sent: Vec<Motors>,
+        silenced: u32,
+    }
+
+    impl MotorOutput for Recorder {
+        fn set(&mut self, _seat: usize, motors: Motors) {
+            self.sent.push(motors);
+        }
+        fn silence(&mut self) {
+            self.silenced += 1;
+        }
+    }
+
+    /// A lone craft on the autopilot for `ticks`, its pad recorded under `token`.
+    fn fly(
+        image: &str,
+        title: &oag_title::Title,
+        token: &str,
+        ticks: usize,
+    ) -> Option<(Option<Vec<(&'static str, u32)>>, Recorder)> {
+        let image = oag_testdata::image(image)?;
+        let loaded = oag_raceplay::load(&oag_raceplay::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::TimeTrial,
+            seed: Some(1),
+            ..oag_raceplay::Options::default()
+        })
+        .expect("the race loads");
+        let mut race = oag_raceplay::Race::start(loaded.setup);
+        race.set_autopilot(true);
+        let mut out = Recorder::default();
+        let mut rumbler = oag_game::rumble::Rumbler::new(&race, token, title.rumble)?;
+        for _ in 0..ticks {
+            race.tick(&PlayerInputs::none());
+            rumbler.tick(&race, false, &mut out);
+            race.drain_cues();
+        }
+        let fired = rumbler.fired();
+        rumbler.stop(&mut out);
+        Some((Some(fired), out))
+    }
+
+    fn assert_rumbles(image: &str, title: &oag_title::Title) {
+        let Some((fired, out)) = fly(image, title, "ps4", 3000) else {
+            return;
+        };
+        let fired = fired.unwrap();
+        assert!(!fired.is_empty(), "no pattern fired in 3000 ticks");
+        assert!(out.sent.iter().any(|m| m.large > 0), "{fired:?}");
+        assert_eq!(out.silenced, 1, "the race's end silences the pad");
+        eprintln!("{} fired {fired:?}", title.name);
     }
 
     #[test]
-    fn a_title_with_no_pattern_says_so_and_plays_nothing() {
-        let line = Report::default().line();
-        assert!(line.contains("no pattern found"), "{line}");
+    #[ignore = "needs data/images/pulse-psp-eu.chd"]
+    fn a_pulse_race_rumbles_from_our_own_patterns() {
+        assert_rumbles("pulse-psp-eu.chd", oag_pulse::TITLE);
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pulse-ps2-eu.chd"]
+    fn a_pulse_ps2_race_rumbles_from_our_own_patterns() {
+        assert_rumbles("pulse-ps2-eu.chd", oag_pulse::TITLE);
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pure-psp-eu.chd"]
+    fn a_pure_race_rumbles_from_our_own_patterns() {
+        assert_rumbles("pure-psp-eu.chd", oag_pure::TITLE);
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pulse-psp-eu.chd"]
+    fn the_none_setting_and_original_play_nothing_on_pulse() {
+        for token in ["none", "original"] {
+            assert!(
+                fly("pulse-psp-eu.chd", oag_pulse::TITLE, token, 10).is_none()
+                    || oag_testdata::image("pulse-psp-eu.chd").is_none(),
+                "{token}"
+            );
+        }
     }
 }

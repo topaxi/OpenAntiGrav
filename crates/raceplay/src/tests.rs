@@ -356,6 +356,7 @@ fn setup(handling: Handling) -> Setup {
         // Same path: no title data, so no ladder, so nothing decodes.
         announcer: oag_sound::sfx::Announcer::default(),
         class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
+        rumble: oag_tables::rumble::Library::default(),
         // No title data here either, so no zone-to-stage ladder to fire the
         // class announcer against - the same "not this title" reason `zone`
         // above is `None`.

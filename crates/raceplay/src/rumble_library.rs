@@ -5,6 +5,7 @@
 
 use anyhow::{Result, bail};
 use oag_assets::Archives;
+use oag_assets::layers::Kind as LayerKind;
 use oag_tables::rumble::{Library, Pattern};
 
 /// Spellings of the pattern directory across the titles' archives
@@ -36,27 +37,78 @@ pub fn disc_pattern(archives: &mut Archives, name: &str) -> Result<Pattern> {
     bail!("no rumble pattern called {name:?} on this disc")
 }
 
-/// Every pattern the map fires that the archive has. A title with none gets an
-/// empty library and one report line; a pattern the reader refuses is named in
-/// `report` and left out, so its rows play nothing.
-pub(crate) fn load(archives: &mut Archives, report: &mut Vec<String>) -> Library {
-    let mut library = Library::new();
-    let mut missing = 0usize;
-    for name in oag_input::rumble::map::pattern_names() {
-        match disc_pattern(archives, name) {
-            Ok(pattern) => {
-                library.insert(name, pattern);
-            }
-            Err(e) if e.to_string().starts_with("no rumble pattern") => missing += 1,
-            Err(e) => report.push(format!("rumble: {e}")),
+/// Where the override and fallback layers keep a TOML pattern.
+fn toml_entry(name: &str) -> String {
+    format!("Data\\XML\\Rumble\\{name}.toml")
+}
+
+/// A TOML pattern out of the override or fallback layer, `None` when no layer
+/// holds it or it will not read (named in `report`).
+fn layer_pattern(archives: &mut Archives, name: &str, report: &mut Vec<String>) -> Option<Pattern> {
+    let entry = toml_entry(name);
+    archives.layer_of(&entry)?;
+    let read = archives.read_name(&entry).ok()?;
+    let text = String::from_utf8_lossy(&read);
+    match oag_mod::rumble::parse(&text) {
+        Ok(pattern) => Some(pattern),
+        Err(e) => {
+            report.push(format!("rumble: {entry}: refused: {e}"));
+            None
         }
     }
-    if library.is_empty() {
-        report.push("rumble: this title ships no pad patterns".to_string());
-    } else if missing > 0 {
-        report.push(format!(
-            "rumble: {missing} of the mapped patterns are not in this title's archive"
-        ));
+}
+
+/// Every pattern the map fires, each from the first layer that holds it: a
+/// player's override (`.xml` or `.toml`), the disc's `.xml`, then this project's
+/// own `.toml` in the fallback layer (ADR-0061), which answers only a name the
+/// disc lacks. A pattern the reader refuses is named in `report` and left out,
+/// so its rows play nothing; a title with no pattern at all plays nothing and
+/// the report says so.
+pub fn load(archives: &mut Archives, report: &mut Vec<String>) -> Library {
+    let mut library = Library::new();
+    let (mut disc, mut fallback, mut overridden) = (0usize, 0usize, 0usize);
+    let mut missing = Vec::new();
+    for name in oag_input::rumble::map::pattern_names() {
+        let over = archives.layer_of(&toml_entry(name)) == Some(LayerKind::Override);
+        let pattern = if over {
+            layer_pattern(archives, name, report).inspect(|_| overridden += 1)
+        } else {
+            None
+        }
+        .or_else(|| match disc_pattern(archives, name) {
+            Ok(pattern) => {
+                disc += 1;
+                Some(pattern)
+            }
+            Err(e) => {
+                if !e.to_string().starts_with("no rumble pattern") {
+                    report.push(format!("rumble: {e}"));
+                }
+                None
+            }
+        })
+        .or_else(|| layer_pattern(archives, name, report).inspect(|_| fallback += 1));
+        match pattern {
+            Some(pattern) => {
+                library.insert(name, pattern);
+            }
+            None => missing.push(name),
+        }
     }
+    report.push(summary(disc, fallback, overridden, &missing));
     library
+}
+
+/// The loader-report line for a library.
+fn summary(disc: usize, fallback: usize, overridden: usize, missing: &[&str]) -> String {
+    if disc + fallback + overridden == 0 {
+        return "rumble: no pattern found for this title, so the pad stays still".to_string();
+    }
+    let mut line = format!(
+        "rumble: {disc} patterns from the disc, {fallback} from this project's own fallback, {overridden} from overrides"
+    );
+    if !missing.is_empty() {
+        line.push_str(&format!("; none for {}", missing.join(", ")));
+    }
+    line
 }

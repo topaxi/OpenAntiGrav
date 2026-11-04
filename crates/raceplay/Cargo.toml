@@ -34,6 +34,7 @@ oag-gpu = { workspace = true, optional = true }
 oag-hd.workspace = true
 oag-hud = { workspace = true, optional = true }
 oag-input = { workspace = true, optional = true }
+oag-mod = { workspace = true, optional = true }
 oag-livery = { workspace = true, optional = true }
 oag-mesh = { workspace = true, optional = true }
 oag-ext-abi.workspace = true
@@ -88,6 +89,7 @@ view = [
     "dep:oag-hud",
     "dep:oag-input",
     "dep:oag-livery",
+    "dep:oag-mod",
     "dep:oag-mesh",
     "dep:oag-post",
     "dep:oag-present",
@@ -117,8 +119,6 @@ workspace = true
 
 [dev-dependencies]
 oag-audio.workspace = true
-# `wall_penalty_ground_truth` reads the example mod as the game does.
-oag-mod.workspace = true
 oag-omega.workspace = true
 oag-schema = { workspace = true, features = ["validate"] }
 oag-testdata.workspace = true
