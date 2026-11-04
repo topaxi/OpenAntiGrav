@@ -184,6 +184,15 @@ pub const ROWS: &[Row] = &[
     held(Level::LeechBeam, "leeching_energy_rumble", End::Stop),
 ];
 
+/// The name of every pattern a row fires, once each: what a title's loader
+/// reads from its archive.
+pub fn pattern_names() -> impl Iterator<Item = &'static str> {
+    ROWS.iter()
+        .enumerate()
+        .filter(|(i, row)| ROWS[..*i].iter().all(|r| r.pattern != row.pattern))
+        .map(|(_, row)| row.pattern)
+}
+
 /// Patterns the disc loads and no row fires yet, each with the reason.
 /// Together with [`ROWS`] they name every one of the 64 ids
 /// (`docs/gameplay/rumble.md`, "Wired and unwired").

@@ -17,27 +17,45 @@ pub enum SmallMotor {
     Sum,
 }
 
+/// Which call sites a title's original has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Triggers {
+    /// HD/Fury's: no weapon impacts, no explosions.
+    Hd,
+    /// Omega's: HD's plus weapon impacts and explosions.
+    Omega,
+}
+
 /// What a title's original does with the pad's motors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Rumble {
     /// The original plays no pattern rumble, so the setting has no `original`.
     Absent,
-    /// The original plays the patterns with this small-motor law.
-    Patterns(SmallMotor),
+    /// The original plays the patterns with this small-motor law and these call sites.
+    Patterns(SmallMotor, Triggers),
 }
 
 impl Rumble {
     /// Whether the setting offers `original` on this title.
     #[must_use]
     pub const fn is_played(self) -> bool {
-        matches!(self, Self::Patterns(_))
+        matches!(self, Self::Patterns(..))
+    }
+
+    /// The call sites `original` fires, if it plays patterns.
+    #[must_use]
+    pub const fn triggers(self) -> Option<Triggers> {
+        match self {
+            Self::Patterns(_, triggers) => Some(triggers),
+            Self::Absent => None,
+        }
     }
 
     /// The small-motor law `original` plays, if there is one.
     #[must_use]
     pub const fn small_motor(self) -> Option<SmallMotor> {
         match self {
-            Self::Patterns(law) => Some(law),
+            Self::Patterns(law, _) => Some(law),
             Self::Absent => None,
         }
     }

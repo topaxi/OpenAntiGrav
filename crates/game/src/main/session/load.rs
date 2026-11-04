@@ -1001,6 +1001,7 @@ impl Session {
                 stage.race.track_emitters(),
             );
         }
+        self.arm_rumble();
         let music_start = web_time::Instant::now();
         match music {
             Some(worker) => self.audio.finish_race_music(

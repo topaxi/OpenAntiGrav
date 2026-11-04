@@ -396,6 +396,8 @@ pub struct RaceView {
     /// Zone mode's speed-class announcer, straight out of
     /// [`Setup::class_announcer`].
     pub(super) class_announcer: oag_sound::sfx::ClassAnnouncer,
+    /// [`Setup::rumble`].
+    pub(super) rumble: oag_tables::rumble::Library,
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///
     /// Render-only state, on `Race` rather than in `World` for the same reason

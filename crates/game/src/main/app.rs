@@ -511,6 +511,7 @@ impl App {
             stalled: true,
             stutter: Default::default(),
             pause: oag_game::pause::State::Running,
+            rumbler: None,
             wall: 0.0,
             go_at: None,
             wall_origin: web_time::Instant::now(),
