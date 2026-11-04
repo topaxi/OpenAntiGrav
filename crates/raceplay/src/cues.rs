@@ -52,6 +52,31 @@ impl Race {
         ));
     }
 
+    /// Records `slot`'s wall contact for the pad: its size and which side the
+    /// wall is on. **Chosen, not measured**: the original's contact measure
+    /// (`ship+0x5f78` on HD, `+0x64d4` on Omega) is unread, so this stands in
+    /// with the impulse the response applied
+    /// (`docs/gameplay/rumble.md`, "Contact and landing").
+    pub(crate) fn note_wall_contact(&mut self, slot: usize, wall: &oag_physics::wall::WallResponse) {
+        let Some(reading) = self.sim.wall_contact.get_mut(slot) else {
+            return;
+        };
+        *reading = wall.resolved.map(|contact| {
+            let ship = &self.sim.world.ships[slot].physics.body;
+            let wall_on_left = contact.normal.dot(ship.right()) > 0.0;
+            crate::sim::WallContactReading {
+                size: wall.impulse_sum,
+                side: if wall_on_left { -1.0 } else { 1.0 },
+            }
+        });
+    }
+
+    /// `slot`'s wall contact this tick, for the pad.
+    #[must_use]
+    pub fn wall_contact_of(&self, slot: usize) -> Option<crate::sim::WallContactReading> {
+        self.sim.wall_contact.get(slot).copied().flatten()
+    }
+
     /// Takes the one-shot sound cues this tick raised, leaving the queue empty.
     ///
     /// The seam ADR-0018 asks for: cues are a per-tick *output*, so the caller
