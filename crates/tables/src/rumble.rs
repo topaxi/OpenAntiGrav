@@ -418,6 +418,21 @@ impl Library {
             .map(|(_, p)| p)
     }
 
+    /// The place of the pattern called `name`, the id [`Self::at`] reads it by.
+    /// An override by name keeps its place.
+    #[must_use]
+    pub fn index_of(&self, name: &str) -> Option<usize> {
+        self.entries
+            .iter()
+            .position(|(n, _)| n.eq_ignore_ascii_case(name))
+    }
+
+    /// The pattern at `index`, as [`Self::index_of`] numbers them.
+    #[must_use]
+    pub fn at(&self, index: usize) -> Option<&Pattern> {
+        self.entries.get(index).map(|(_, p)| p)
+    }
+
     /// Every pattern with its lower-cased name, in insertion order.
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Pattern)> {
         self.entries.iter().map(|(n, p)| (n.as_str(), p))

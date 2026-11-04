@@ -376,7 +376,7 @@ optional = true
 type = "string"
 optional = true
 
-# [controls]: scheme, triggers, touch and key bindings.
+# [controls]: scheme, triggers, rumble, touch and key bindings.
 [types.controls]
 type = "table"
 
@@ -385,6 +385,10 @@ type = "string"
 optional = true
 
 [types.controls.triggers]
+type = "string"
+optional = true
+
+[types.controls.rumble]
 type = "string"
 optional = true
 

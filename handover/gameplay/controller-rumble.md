@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-04
-summary: "Reader landed, nothing plays yet; one pattern player, RUMBLE None, Original, PS3, PS4; lanes 2-4 next, mods with Slipstream."
+summary: "Player, gilrs backend, RUMBLE row landed; feel test owed on a real pad; lanes 3-4 wire the race; mods with Slipstream."
 categories: [tooling]
 size: L (60)
 difficulty: medium (50)
@@ -291,8 +291,13 @@ Each is one lane, in order.
    `oag_mod::rumble` (TOML, `schemas/v1/rumble.tosd`), ground truth over HD disc and PSN, 2048
    and Omega, see `docs/formats/rumble-xml.md`, "Reader". `from_forms` is the seam for the
    both-forms refusal; mod loading is lane 5.
-2. **Player and device** (M, 60): `Player`, `MotorOutput`, gilrs backend, settings
-   row with string ids and pointer support; a debug way to play a pattern by id.
+2. ~~**Player and device**~~ landed on `rumble-player`: `oag_input::rumble` (`Player`,
+   `MotorOutput`, `Mode`), the `gilrs` backend on `Pad`, `controls.rumble`, `oag-game
+   --rumble-pattern`, silence on pause, exit, focus loss, disconnect, teardown and panic;
+   see `docs/gameplay/rumble.md`, "Player and device". **Owed: the maintainer's feel test
+   on a real pad.** The gilrs server ticks at 50 ms (20 Hz measured on a virtual pad); if
+   one-frame small-motor blips read wrong, move the backend to `gilrs-core` direct or SDL3
+   behind `MotorOutput`.
 3. **Wire HD, carry to Omega and 2048** (L, 50): the edge map, then held levels, then
    the contact and landing selector. 2048 by inheritance; check against Omega in the
    same change.

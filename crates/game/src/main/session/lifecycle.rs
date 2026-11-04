@@ -78,6 +78,7 @@ impl Session {
             self.shell.is_some(),
         );
         debug!("window away ({away:?}): {pause:?}");
+        self.controls.silence_motors();
         match pause {
             Pause::Nothing => {}
             Pause::Menu => self.back(),

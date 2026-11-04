@@ -132,6 +132,7 @@ use crate::pose::{
 fn init_logging() {
     oag_log::install("warn,oag=info,calloop=error", oag_log::tool::FILE_FILTER);
     oag_log::install_panic_hook();
+    oag_input::pad::silence_on_panic();
 }
 
 /// Opens the log file once the command line and the settings file are known,
@@ -262,6 +263,15 @@ fn run(cli: Cli) -> Result<()> {
     // seconds of intro later.
     let mut settings = settings::load()?;
     attach_log_file(&cli, &settings);
+    #[cfg(feature = "dev-cli")]
+    if let Some(pattern) = &cli.dev.rumble_pattern {
+        return oag_game::rumble::probe(&oag_game::rumble::Probe {
+            pattern,
+            source: cli.source.as_deref().or(settings.source.image.as_deref()),
+            token: &settings.controls.rumble,
+            hold: cli.dev.rumble_hold,
+        });
+    }
     let anisotropy = cli.anisotropy.unwrap_or(settings.graphics.anisotropy);
     // A CLI render-profile flag overrides *every* title's entry for this run
     // only - never persisted, the same footing `anisotropy` above is already

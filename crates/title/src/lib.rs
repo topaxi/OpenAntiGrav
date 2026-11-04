@@ -58,6 +58,7 @@ pub mod prompts;
 pub mod race;
 pub mod race_song;
 pub mod recovery;
+pub mod rumble;
 pub mod shadow;
 pub mod speed;
 pub mod team;
@@ -265,6 +266,9 @@ pub struct Title {
     /// Whether a circuit's rain and snow are played, and so whether the weather
     /// setting is offered. See [`weather::Weather`].
     pub weather: weather::Weather,
+    /// Whether the original plays pad patterns, and so whether the RUMBLE
+    /// setting offers `original`. See [`rumble::Rumble`].
+    pub rumble: rumble::Rumble,
 }
 
 /// Where a title keeps the music its front end and its races play.

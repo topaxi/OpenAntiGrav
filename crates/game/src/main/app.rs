@@ -1052,6 +1052,7 @@ impl ApplicationHandler for App {
         // Every way out of the run ends here (window close, a menu's quit, a
         // quit from the race), so the playlist's place is saved once, whichever.
         if let Some(session) = self.state.as_mut() {
+            session.controls.silence_motors();
             session.save_race_music();
             session.keep_campaign_position();
         }

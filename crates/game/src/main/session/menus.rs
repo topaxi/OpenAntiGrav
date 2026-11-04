@@ -290,6 +290,8 @@ impl Session {
         // through a binding instead of being dropped in place: a race that had
         // not finished is parked below rather than lost. See
         // `Session::suspended_race`.
+        // A race left for the menus (escape, quit, results) stops its motors with it.
+        self.controls.silence_motors();
         let outgoing = std::mem::replace(
             &mut self.stage,
             Stage::Menu(Box::new(MenuStage {
