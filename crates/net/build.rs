@@ -2,6 +2,13 @@
 //! `env!("OAG_VERSION_SUFFIX")`, which [`crate::BUILD_VERSION`] spells and every binary that
 //! reports a build reads (`oag-game`, `oag-server`, the ghost header, the launcher).
 //!
+//! It also embeds the commit's date as `env!("OAG_BUILD_DATE")` (`YYYY-MM-DD`, empty when
+//! unknown), for display only: it is not part of [`crate::BUILD_VERSION`] and nothing a
+//! handshake, ghost or replay header compares. `OAG_BUILD_DATE` wins when set, even empty
+//! (`just test-data` sets it empty, like the hash, so a commit does not rebuild every test
+//! binary); then `SOURCE_DATE_EPOCH` (reproducible release builds); then `git log -1 --format=%cs`.
+//! Never the wall clock.
+//!
 //! Lives in `oag-net` because the server and the client compare their builds and both link
 //! this crate; `oag-game` takes the strings from here rather than computing them again.
 //!
@@ -26,11 +33,54 @@ fn main() {
         .or_else(git_hash)
         .unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=OAG_GIT_HASH={hash}");
+    println!("cargo:rerun-if-env-changed=OAG_BUILD_DATE");
+    println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
+    let date = build_date().unwrap_or_default();
+    println!("cargo:rustc-env=OAG_BUILD_DATE={date}");
     // The nightly workflow passes `-nightly`, so `oag-game --version` reads
     // `0.1.0-nightly (abc1234)`. Unset, it is empty and a release is unchanged.
     println!("cargo:rerun-if-env-changed=OAG_VERSION_SUFFIX");
     let suffix = std::env::var("OAG_VERSION_SUFFIX").unwrap_or_default();
     println!("cargo:rustc-env=OAG_VERSION_SUFFIX={suffix}");
+}
+
+/// The date to show beside the hash, or `None` for no date at all.
+fn build_date() -> Option<String> {
+    if let Ok(date) = std::env::var("OAG_BUILD_DATE") {
+        return Some(date.trim().to_string());
+    }
+    if let Some(epoch) = std::env::var("SOURCE_DATE_EPOCH")
+        .ok()
+        .and_then(|epoch| epoch.trim().parse::<i64>().ok())
+    {
+        return Some(iso_date(epoch));
+    }
+    let manifest_dir = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR")?);
+    let output = Command::new("git")
+        .args(["log", "-1", "--format=%cs", "HEAD"])
+        .current_dir(manifest_dir)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let date = String::from_utf8(output.stdout).ok()?;
+    let date = date.trim();
+    (!date.is_empty()).then(|| date.to_string())
+}
+
+/// `YYYY-MM-DD` (UTC) of a Unix timestamp, by the civil-from-days algorithm.
+fn iso_date(epoch: i64) -> String {
+    let z = epoch.div_euclid(86_400) + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}")
 }
 
 /// The short commit hash of whatever `HEAD` is in the workspace this crate is

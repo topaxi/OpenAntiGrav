@@ -1,7 +1,7 @@
 ---
 status: blocked-maintainer
 titles: [all]
-updated: 2026-11-03
+updated: 2026-11-04
 summary: "SPATIAL AUDIO built (auto default, Linux via PipeWire); open: macOS, Android, iOS detection, a listening judgement, S24 cost, elevation"
 ---
 
@@ -185,7 +185,7 @@ below the table.
 | 3 | Cheap rear cue (low-pass plus slight attenuation behind) | ours | none | n/a | yes | yes | yes | **E**: one biquad per voice, under 0.01 % of a core (a few multiply-adds per sample) | per-sample, no block, state-free except 1 filter state | works on both; a weak cue, front/back confusion remains | S: filter state in `Voice`, cutoff and gain from `dot(dir, forward)` |
 | 4 | Ambisonics (1st or 2nd order) + binaural decode (Resonance Audio style) | Resonance Audio Apache-2.0 but **archived 2023-11-11**; own implementation is ours; SADIE II decoder data Apache-2.0 | none for a hand-written encoder, or a C++ library for Resonance | Resonance dead; own code is ours | yes (own code) | yes | yes | **E**: encode is a few multiply-adds per voice (4 gains at 1st order, 9 at 2nd), decode is one fixed convolution for all voices | per-voice no block; the decoder runs on a bus once | headphones via HRTF decode; **speakers via a loudspeaker decoder** | L: encoder plus bus plus decoder, rotation by head yaw is free |
 | 5 | Real multichannel through cpal (5.1, 7.1) | cpal 0.18.2 Apache-2.0 (already a dependency) | none | active | Not today: the ring and the worklet are stereo (a worklet can output more channels if the destination allows; not tried) | phones are stereo | Deck is stereo | **E**: a panner per voice, cheaper than 1 | per-sample | **Speakers and home theatre only**; headphone users get nothing | L: `spread` today puts silence in extra channels; needs a channel layout, a multichannel ring, a downmix for the rest |
-| 6 | Omega's own 3D audio (patch 1.03) | game data | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | **Pending**: unread; lane `omega-3d-audio-read` owns it. Its answer may be the `original` value for Omega and could change the ranking. |
+| 6 | Omega's own 3D audio (patch 1.03) | game data | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | **Read**: audio objects are VR's; a flat race is a 7.1 bed panned by Wwise, with authored pass-by front/back and no HRTF. It changes no ranking ([audio-3d.md](../../docs/ghidra/functions/ps4-omega-eu/audio-3d.md)). |
 
 Rule 6 (`just check-deps`), all options: `cargo tree -p oag-net -e normal`
 matches neither `oag-audio` nor `oag-sound` (checked 2026-11-03, no output),
@@ -316,9 +316,10 @@ Recommended shape, for the maintainer to accept or change:
    wasm one is unverified.
 4. Steam Audio's WebAssembly support: not found in the README, the guide or a
    search. Unknown, not "no".
-5. Omega's patch-1.03 3D audio is unread (`omega-3d-audio-read`). If it is a
-   binaural or object-based path, it defines the `original` value for Omega
-   and may favour one option.
+5. ~~Omega's patch-1.03 3D audio is unread.~~ Read
+   ([audio-3d.md](../../docs/ghidra/functions/ps4-omega-eu/audio-3d.md), "SPATIAL AUDIO against
+   the originals"): object-based for VR only, nothing for this table. It did find that HD and
+   2048's `original` is short a measured rear low-pass: [hd-2048-rear-occlusion.md](hd-2048-rear-occlusion.md).
 6. **Deck cost is measured** (`docs/ghidra/functions/psp-pulse-usa/positional-audio.md`,
    "Cost on a Steam Deck"): a headphone voice is about 41 us per 512 frames (0.38 %
    of a core), 32 voices 8.6 %, a real Pulse race 1.11 % (`original`) against

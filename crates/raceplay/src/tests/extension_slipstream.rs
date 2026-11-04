@@ -358,7 +358,7 @@ fn a_race_hands_its_module_the_picks_its_source_carries() {
 }
 
 /// The real module's commands for the first `ticks` after a fire by a person at 360 km/h on
-/// a 4000 unit lap at progress 3900, with the QUALITY pick `option`.
+/// a 4000 unit lap from progress 3900, flying on, with the QUALITY pick `option`.
 fn portal_commands(module: &Module, option: u8, ticks: usize) -> Vec<Command> {
     let crafts: Vec<Craft> = (0..8)
         .map(|slot| Craft {
@@ -374,15 +374,16 @@ fn portal_commands(module: &Module, option: u8, ticks: usize) -> Vec<Command> {
         })
         .collect();
     let slot = Slot::new(0).unwrap();
-    let tracking: Vec<oag_ext_abi::Tracking> = (0..8)
-        .map(|s| oag_ext_abi::Tracking {
-            progress: (s == 0).then_some(3900.0),
-            place: u8::from(s == 0),
-        })
-        .collect();
     let mut state = vec![0; module.limits().state_bytes as usize];
     let mut all = Vec::new();
     for tick in 0..ticks {
+        // Five units a tick, so the craft reaches the entrance at 3930 on the sixth.
+        let tracking: Vec<oag_ext_abi::Tracking> = (0..8)
+            .map(|s| oag_ext_abi::Tracking {
+                progress: (s == 0).then_some(3900.0 + 5.0 * tick as f32),
+                place: u8::from(s == 0),
+            })
+            .collect();
         let events = if tick == 0 {
             vec![
                 Event::PickupFire { slot },
@@ -455,8 +456,8 @@ fn the_real_module_draws_each_quality_as_specified_and_plays_the_same_race() {
             })
             .collect()
     };
-    assert!(kinds(&medium).len() >= 28 && kinds(&medium).iter().all(|u| *u == ViewUpdate::Once));
-    assert!(kinds(&high).len() >= 28 && kinds(&high).iter().all(|u| *u == ViewUpdate::Continuous));
+    assert!(kinds(&medium).len() >= 24 && kinds(&medium).iter().all(|u| *u == ViewUpdate::Once));
+    assert!(kinds(&high).len() >= 24 && kinds(&high).iter().all(|u| *u == ViewUpdate::Continuous));
     // The same generation every tick, so a held snapshot is taken once per portal.
     let generations: std::collections::BTreeSet<u8> = views(&medium)
         .iter()

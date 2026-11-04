@@ -810,12 +810,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let extents = pulse_psp::is_pulse_psp(title, &archives);
     #[cfg(feature = "view")]
     let particle_laws = title.looks.particle_laws.applies(archives.layout.platform);
-    // The launch boost is measured on Pulse PSP only; Pulse PS2 and HD author the
-    // same element and are left without it, not applied by extension.
-    let start_boost = start_boost.filter(|_| extents);
-    if !extents {
-        report.push("<StartBoost>: not applied, only measured on Pulse PSP".to_string());
-    }
+    // The authored `<StartBoost>` is flown where the craft's title carries the rule, and the
+    // report names whose law it is.
+    let start_boost_origin = craft_title
+        .looks
+        .start_boost_origin(archives.layout.platform);
+    let start_boost = start_boost.filter(|_| start_boost_origin.is_some());
+    code_laws::report_start_boost(start_boost_origin, start_boost.is_some(), &mut report);
     // A title that compiles its launch in (Pure) flies its own, measured on its own disc.
     let code_start_boost = craft_title
         .race

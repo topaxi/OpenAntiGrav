@@ -164,6 +164,12 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
+    // The launch boost: HD authors `<StartBoost>`; the grading law is Pulse PSP's, unmeasured on
+    // HD (`docs/physics/launch-boost.md`).
+    start_boost: Rule {
+        on: Platforms::Any,
+        origin: Origin::InheritedFrom("Wipeout Pulse (PSP)"),
+    },
     ..Looks::unread(SHIELD)
 };
 

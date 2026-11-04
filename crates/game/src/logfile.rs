@@ -40,10 +40,15 @@ pub fn header(
     };
     vec![
         format!(
-            "oag-game {}{} ({profile} build, git {}) on {} {}",
+            "oag-game {}{} ({profile} build, git {}{}) on {} {}",
             env!("CARGO_PKG_VERSION"),
             oag_net::VERSION_SUFFIX,
             oag_net::GIT_HASH,
+            if oag_net::BUILD_DATE.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", oag_net::BUILD_DATE)
+            },
             std::env::consts::OS,
             std::env::consts::ARCH
         ),

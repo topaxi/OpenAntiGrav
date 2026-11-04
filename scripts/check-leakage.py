@@ -113,9 +113,26 @@ def directory_leaks(root: Path) -> list[str]:
         if not path.is_file() and not path.is_symlink():
             continue
         rel = path.relative_to(root).as_posix()
-        if pattern.search(rel) and rel not in ARTIFACT_ALLOWED:
+        if pattern.search(rel) and rel not in ARTIFACT_ALLOWED and not mod_readme_shot(path):
             leaks.append(rel)
     return leaks
+
+
+def mod_readme_shot(path: Path) -> bool:
+    """Whether `path` is a screenshot a packaged mod's README shows.
+
+    The one content exception the mod repositories make (official-mods' README,
+    "No game content"): a mod's README may show frames of the game running. Such
+    a `.png` sits beside the mod's `oag-mod.toml` and `README.md`, and the README
+    names it; anything else under a mod folder still fails.
+    """
+    if path.suffix.lower() != ".png":
+        return False
+    folder = path.parent
+    readme = folder / "README.md"
+    if not (folder / "oag-mod.toml").is_file() or not readme.is_file():
+        return False
+    return path.name in readme.read_text(errors="replace")
 
 
 def gitignore_gaps() -> list[str]:

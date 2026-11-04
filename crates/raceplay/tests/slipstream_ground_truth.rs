@@ -234,11 +234,31 @@ fn a_fire_is_a_second_out_of_the_world_and_two_seconds_on_at_a_slower_speed() {
         return;
     };
     fire_at(&mut race, 400);
-    race.tick(&throttle());
+    let pressed = race.sim.world.tick;
+    let pressed_at = progress(&race);
+    assert_eq!(ship(&race).transit, None, "not on the press tick");
+    // The craft keeps flying, in the world, until it reaches the portal 30 units ahead.
+    let mut flying = 0;
+    while ship(&race).transit.is_none() {
+        assert!(ship(&race).in_world(), "still flying at {flying}");
+        assert!(race.ship_active(0), "still drawn at {flying}");
+        race.tick(&throttle());
+        flying += 1;
+        assert!(flying < 60, "never reached the portal");
+    }
     let entry = ship(&race).physics.body.position;
     let before = progress(&race);
     let speed = kmh(&race);
-    assert!(ship(&race).transit.is_some(), "out of the world");
+    println!(
+        "pressed at tick {pressed} progress {pressed_at:.1}; transit began tick {} progress {before:.1}",
+        race.sim.world.tick
+    );
+    assert!(race.sim.world.tick > pressed + 3, "later than the press");
+    assert!(
+        before - pressed_at >= 30.0 && before - pressed_at < 30.0 + 2.0 * speed / 216.0,
+        "began at the entrance: {} units on",
+        before - pressed_at
+    );
     assert_eq!(race.ship_pickup(), None, "spent");
     let mut out = 1;
     while ship(&race).transit.is_some() {
@@ -288,7 +308,7 @@ fn a_fire_over_the_line_is_a_lap_and_on_the_last_lap_a_finish_on_the_exit_tick()
     let lap = ship(&race).standing.lap;
     race.tick(&press_fire());
     let mut exit = None;
-    for _ in 0..80 {
+    for _ in 0..120 {
         race.tick(&throttle());
         if ship(&race).standing.lap > lap {
             exit = Some(race.sim.world.tick);
