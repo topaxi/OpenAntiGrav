@@ -172,7 +172,10 @@ mod library {
             return;
         };
         assert_eq!(library.len(), distinct(), "{report:?}");
-        assert!(report[0].contains(&format!("0 patterns from the disc, {} from", distinct())));
+        assert!(report[0].contains(&format!(
+            "patterns {} from this project's own fallback",
+            distinct()
+        )));
     }
 
     #[test]
@@ -203,11 +206,8 @@ mod library {
         let Some((_, report)) = load("hdfury-ps3-eu.iso") else {
             return;
         };
-        assert!(
-            !report[0].contains(" 0 patterns from the disc"),
-            "{report:?}"
-        );
-        assert!(report[0].contains("0 from overrides"), "{report:?}");
+        assert!(report[0].contains("from the disc"), "{report:?}");
+        assert!(!report[0].contains("overrides"), "{report:?}");
     }
 }
 
@@ -251,7 +251,13 @@ mod race {
         let mut race = oag_raceplay::Race::start(loaded.setup);
         race.set_autopilot(true);
         let mut out = Recorder::default();
-        let mut rumbler = oag_game::rumble::Rumbler::new(&race, token, title.rumble)?;
+        let rumbler = oag_game::rumble::Rumbler::new(&race, token, title.rumble);
+        if matches!(token, "none" | "original") {
+            assert!(rumbler.is_none(), "{token} plays nothing");
+            return None;
+        }
+        let mut rumbler = rumbler
+            .unwrap_or_else(|| panic!("{} arms rumble from our fallback patterns", title.name));
         for _ in 0..ticks {
             race.tick(&PlayerInputs::none());
             rumbler.tick(&race, false, &mut out);

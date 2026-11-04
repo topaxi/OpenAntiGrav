@@ -276,8 +276,9 @@ is the one played: the fallback answers only a name nothing else holds. Pulse PS
 Pulse PS2 read the same files, Pure the same again (its events are the same cues); the PS2
 build's own level-and-timer law stays unplayed. `Original` is not offered on these three.
 
-**Authored by hand, not measured.** One-shots run 5 to 46 frames at 60 Hz, held loops 18
-to 24. The default `RUMBLE` value is `PS4`, whose small motor is near silent, so the large
+**Authored by hand.** One-shots run 6 to 46 frames at 60 Hz, held loops 20 to 24 (the
+mag-strip, Autopilot and Leech loops), and the seven wall-contact loops only 4 to 12: the
+selector restarts them with every contact, so they stay short. The default `RUMBLE` value is `PS4`, whose small motor is near silent, so the large
 track carries each pattern and the small track is an accent. The explosion is the longest
 and strongest, full for about 0.1 s then a long fall.
 

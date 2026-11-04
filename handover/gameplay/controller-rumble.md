@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-04
-summary: "Player, gilrs backend, RUMBLE row landed; feel test owed on a real pad; lanes 3-4 wire the race; mods with Slipstream."
+summary: "Player, gilrs backend, RUMBLE row, race wiring on HD and Pulse/Pure own patterns landed; feel test owed on a real pad; mods with Slipstream."
 categories: [tooling]
 size: L (60)
 difficulty: medium (50)

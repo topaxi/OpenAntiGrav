@@ -12,5 +12,5 @@ class = "Game"
 priority = "Medium"
 
 [tracks]
-large = [255, 190, 110, 50, 15]
+large = [255, 220, 160, 110, 65, 30, 10]
 small = [1, 0]

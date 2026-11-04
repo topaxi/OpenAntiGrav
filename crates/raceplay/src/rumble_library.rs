@@ -104,9 +104,17 @@ fn summary(disc: usize, fallback: usize, overridden: usize, missing: &[&str]) ->
     if disc + fallback + overridden == 0 {
         return "rumble: no pattern found for this title, so the pad stays still".to_string();
     }
-    let mut line = format!(
-        "rumble: {disc} patterns from the disc, {fallback} from this project's own fallback, {overridden} from overrides"
-    );
+    let mut parts = Vec::new();
+    if disc > 0 {
+        parts.push(format!("{disc} from the disc"));
+    }
+    if fallback > 0 {
+        parts.push(format!("{fallback} from this project's own fallback"));
+    }
+    if overridden > 0 {
+        parts.push(format!("{overridden} from overrides"));
+    }
+    let mut line = format!("rumble: patterns {}", parts.join(", "));
     if !missing.is_empty() {
         line.push_str(&format!("; none for {}", missing.join(", ")));
     }
@@ -123,11 +131,16 @@ mod tests {
     }
 
     #[test]
+    fn a_title_that_needs_no_fallback_does_not_name_it() {
+        assert!(!summary(64, 0, 0, &[]).contains("fallback"));
+    }
+
+    #[test]
     fn the_report_counts_each_layer_and_names_what_is_missing() {
         let line = summary(2, 3, 1, &["x", "y"]);
-        assert!(line.contains(
-            "2 patterns from the disc, 3 from this project's own fallback, 1 from overrides"
-        ));
+        assert!(
+            line.contains("2 from the disc, 3 from this project's own fallback, 1 from overrides")
+        );
         assert!(line.ends_with("none for x, y"));
     }
 }
