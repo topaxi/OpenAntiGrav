@@ -10,13 +10,14 @@ is capped at 84.
 
 **The headline, four lines:**
 
-1. **The 3D-audio path is VR's.** The object panner sits on 12 `VR_*` busses only, and sound reaches them through
-   `Game_VR` switch containers, cockpit camera states and VR-only events, all driven by the headset flag. A flat-screen
-   race reaches no audio object. (72)
+1. **The 3D-audio path is VR's.** The object panner sits on 12 `VR_*` busses only; no node routed to one sits on the
+   `No` branch of a `Game_VR` switch, and the rest are cockpit and VR-named events. A flat-screen race reaches no audio
+   object. (72)
 2. **On a flat screen the patch changes the output device, not the positioning.** Everything goes to a 7.1 bed
    through `libSceAudio3d`, despite the device's name; a sound is still panned by Wwise relative to the camera. (80)
 3. **Omega has no rear low-pass in code, and no HRTF of its own.** `RearOcclusion` is parsed and never read on both
-   builds. Its front/back design is authored Wwise data: pass-by switches on the built-in Azimuth. (78)
+   builds. Its front/back is authored Wwise data: pass-by samples switched on the built-in Azimuth, and one NPC engine
+   layer whose volume falls towards the back. (78)
 4. **HD and 2048 do have a rear low-pass**, a measured law on two binaries that agree, and ours does not play it.
    That is the ready-to-wire result: [Cross-title](#cross-title). (80)
 
@@ -64,7 +65,7 @@ surround of a headset). That is firmware, not this executable.
 
 ## The object panner, VR only (confidence 72)
 
-`SceAudio3dMixer_Execute` (`0x011f1a80`; patch `0x011ed460`) is the plugin `0x950006`, a Wwise mixer attached to a bus. Per
+`SceAudio3dMixer_Execute` (`0x011f1a80`; patch `0x011ed460`) is plugin `0x950006`, a Wwise mixer attached to a bus. Per
 input voice, when the context says it is 3D (`+0x40` true and `+0x50 == 1`, vtable calls, meaning unread) and an object
 could be reserved (patch `0x011ed1a0`):
 
@@ -90,17 +91,17 @@ other, by exact id over `Init.bnk`:
 
 **How a sound gets there.** `SoundManager_Update` (`0x01731b50`; patch `0x01780190`, from `0x017801e7`) posts
 `Set_State__GAME_VR__YES` or `__No` when the headset flag `0x02212d2b` changes, and the headset code (patch `0x017fa100`,
-`sceHmd*`) owns that flag. A byte scan of the patch's `Ship_NGP` and `Weapons_NGP` (ancestors followed through container
-child lists) finds **46 nodes naming a panner bus**:
+`sceHmd*`) owns that flag. Each `Game_VR` switch container's tail maps `No` and `YES` to one child each. Walking the real
+parent field (`oag_formats::wwise::hirc::parent`'s layout) up from every node of the patch's `Ship_NGP` and `Weapons_NGP` whose
+override bus is a panner bus gives **46 nodes, and none on a `No` branch**:
 
-| Bank | Nodes | Under a `Game_VR` switch container | The rest |
+| Bank | Nodes | On a `YES` branch | Other |
 | --- | --- | --- | --- |
-| `Weapons_NGP` | 34 | 34 (33 such containers) | none |
-| `Ship_NGP` | 12 | 4 (3 such containers) | 8: every one under `Gameplay_CAMERA_VR` containers and reached by `_Cockpit_Amb_Loop_*`, `VR_Ship_*` or `Flip_VR__*` events |
+| `Weapons_NGP` | 34 | 32 (33 switch containers) | 2, on neither branch: `115986374`, `1027048861`, not followed |
+| `Ship_NGP` | 12 | 3 (3 switch containers) | 4 below a `Gameplay_CAMERA_VR` reference, 5 on neither, among them the `_Cockpit_Amb_Loop_*`, `VR_Ship_*` and `Flip_VR__*` trees |
 
-That the eight stay silent flat rests on `Gameplay_CAMERA_VR` sitting at `None` outside VR and on those events' names; no post
-of them was traced. **The switch-to-child tables were not read**, only which containers sit above which node, which is what holds
-this at 72. Which sounds: weapons, explosions, power-ups, the Quake, engines, pass-bys, cockpit ambience, the in-race HUD's. In
+That those nine stay silent flat rests on `Gameplay_CAMERA_VR` sitting at `None` outside VR and on the events' names; no post of
+them was traced, which is what holds this at 72. Which sounds: weapons, explosions, power-ups, the Quake, engines, pass-bys, cockpit ambience, the in-race HUD's. In
 which space: listener-relative, per voice. It goes no further because VR is not planned.
 
 ## What positions a sound on a flat screen (confidence 78)
@@ -139,13 +140,28 @@ appears in no `CONTROLLERID_*`). So the engine computes them from the listener a
 | `Passby_DopplerThreshold`, `_AmbShips` | `CONTROLLERID_DOPPLER` | -300 FastEnough, -75 Off, 90 Off |
 
 `Ship_NGP.bnk` selects on them through switch containers (14 on the two FrontBack groups, 8 on the two Gate groups), so
-**a pass-by sample is chosen by front or back, not filtered**. Beside the switches, the built-in Azimuth is
-named directly in 6 `Ship_NGP` objects (3 switch, 1 actor-mixer, 2 layer) and Distance in 6 `Weapons_NGP` objects
-(a byte scan for the id in each HIRC body: what the binding does on each was not read). `Passby_Gate`'s parameter
+**a pass-by sample is chosen by front or back, not filtered**. `Passby_Gate`'s parameter
 `3301119579` and `Passby_NPC_Gate`'s `2916017607` are named in no listing here; both run -48 Open, -30 Close, a shape
 of a level in dB, so a hypothesis only: a sidechain.
 
-Those containers are **data**, shared by both modes: VR adds a bus, not the pass-by logic. Omega's race cues beyond the
+The built-in Azimuth is also a direct RTPC in six `Ship_NGP` nodes: a record `{id, 00, 01, property 00, curve id, 02, u16
+points}` and 12-byte points `{f32 x, f32 y, u32}`, x running -180..180, which is how the id was confirmed. All six are property
+0, and all six are in a VR tree or a VR-named sound but one:
+
+| Node | Where | Azimuth curve (x, y) |
+| --- | --- | --- |
+| `23728337`, layer container | **`No` branch**, `NEW_ENGINE_NPC`, bus `SHIPS_Engines_NPC`, `Engine_Layer_Rocket_Fire_Loop_01__HEAVY` | ±180 -0.97, ±100 -0.65, ±45 0, 0 +0.21 |
+| `869927029`, layer container | its `YES` twin, the same sample | the same |
+| `279985918`, switch container | the `YES` engine tree, 30 samples | ±180 -0.37, ±100 -0.2, ±30 0, 0 +0.11 |
+| `71812637`, `241707764`, switch | cockpit bootup | ±180 -0.21, 0 0 |
+| `212657003`, actor-mixer | VR structure loops | +0.16 within ±7 degrees of ahead |
+
+So **one flat-screen rear cue is authored**: one layer of an NPC engine falls away behind the listener. It is one sample, on
+one layer, not a law over the mix. Property 0 as volume is the SDK's enum from memory (confidence 70), and the y unit is
+unresolved: scaling byte 2 reads as dB, which would make y a dB/20 and the rear -19 dB, a hypothesis, confidence 40. The six
+`Weapons_NGP` Distance bindings are flat at 0 from 0 to 5,000, so they do nothing.
+
+The switch containers are **data**, shared by both modes: VR adds a bus, not the pass-by logic. Omega's race cues beyond the
 countdown are silent in the port ([wwise-sound.md](wwise-sound.md)), so none of this plays yet.
 
 ## `RearOcclusion` is dead on Omega (confidence 78)
@@ -156,7 +172,7 @@ patch `0x01786a60`) parses it with `sscanf` into `0x019467a0` (patch `0x019b7fa0
 build, the parser's**, and the words at `+4` and `+8` have none; the word at `-4` is an unrelated
 option global (`0x0194679c`, read and written by the front end). The HD law below reads through a getter, and Omega has no twin:
 no `CONTROLLERID`, no RTPC and no filter takes it. A struct-relative load cannot show in an xref list, which is why this is
-78 and not more; two builds agreeing is what it stands on.
+78 and not more; two builds agreeing is what it stands on. A rear cue on Omega is not code but the Azimuth data above.
 
 The cue request's `+0x0c` 23999.0 ([wwise-sound.md](wwise-sound.md), "Emitter groups") is the same number as the HD law's
 open cutoff below, which reads as a leftover field; that the request's value does anything on Omega is unread.
@@ -184,7 +200,7 @@ What the music's `INSTRU_Front`, `_Back`, `_Surround`, `_Spread` stems do with i
 **2048 against Omega (the standing check): checked, differs.** Same XML, same value, opposite outcome: 2048 uses it,
 Omega parses and drops it. Evidence below; Omega's half above.
 
-### The rear low-pass (HD and 2048, confidence 80)
+### The rear low-pass (HD 80, 2048 70)
 
 Two binaries, same law, one decompile each:
 
@@ -202,25 +218,40 @@ out = min(fc, 23999.0)
 ```
 
 - HD reads the value through `FUN_00304600` (one caller, this function; global `0x008c273c`), 2048 through `FUN_81265430`
-  (one caller, its twin). `AudioConfig_Load` (HD `0x0030d0b0`) picks `<Stereo>` or `<Surround>` on the output layout byte
+  (one caller, its twin). The law is reached on both: HD from `FUN_002fdc00`, 2048 from `FUN_81261e9c` (four sites), each
+  emitter's update, the 2048 one called from `FUN_81260fd4`. `AudioConfig_Load` (HD `0x0030d0b0`) picks `<Stereo>` or `<Surround>` on the output layout byte
   `+0xe8`, as the mix does ([audio-mix.md](../ps3-hdfury-eu/audio-mix.md)).
 - **Values, from the shipped `GlobalAudioConfig.xml`:** HD 14,000 Hz stereo and 24,000 Hz surround (above 23,999, so off); 2048 10,000 Hz.
   No track `AudioConfig.xml` overrides it (no `RearOcclusion` in any of 81 extracted copies across the titles).
 - **DistanceFilter is open on circuits:** near and far are both 23,999 on 16 of 18 HD files, 28 of 30 2048, so only the
-  rear term acts. The rest carry `near_cutoff="0.0" far_cutoff="999.0" low_pass="0"`, not traced.
+  rear term acts. The rest are all Moa Therma (`environments/03_track`, its 2048 DLC copy, Omega's), with `near_cutoff="0.0"
+  far_cutoff="999.0" low_pass="0"`, which reads as a high-pass and is not traced: `min(fc, rear)` there does not mean a low-pass.
+  `GlobalAudioConfig.xml` has no `DistanceFilter`, so a track with no block falls to `g_sound_system + 0xf8`, a default unread.
+- **Smoothing runs per emitter update**, and `FUN_002fdc00` updates only on a frame counter modulo the divisor behind TOC slot
+  `0x008b4af0` (`0x008c2710`, 1 in the file, 2048 `0x81521234`). The runtime value is unread, and it is what turns 0.05/0.95
+  into a time constant.
 - **The angle is a full circle:** HD `FUN_002fc5f0` transforms the emitter into listener space, normalises it, and at
   `0x002fc8c8` takes `acosf(dot(dir, (0,0,1)))` in degrees, then `360 - angle` when the cross product's component is
   negative, wrapped to 0..360. So unlike Pulse's right-axis angle, it keeps front from back; the disassembly was hand-decoded
-  because the decompiler stops at `0x002fc7f8` (bad instruction data). That `+Z` of this space is the camera's forward is
-  inferred from the XML comment and the 90..270 band, not traced to the camera. The 2048 angle source was not read.
+  because the decompiler stops at `0x002fc7f8` (bad instruction data). The law only uses the distance from 180, so the left/right
+  branch never changes the cutoff. That `+Z` of this space is the camera's forward is inferred from the XML comment and
+  the 90..270 band, not traced: the recipe is the writer of `*(0x008b4aa4) + 0x50..0x7c`. 2048 takes the angle from the
+  emitter's `+0xa4`, the same field by position, and its writer was not read.
 - **Pulse and Pure:** no `RearOcclusion` string in either executable. The Pulse law's angle loses front from back
   ([positional-audio.md](../psp-pulse-usa/positional-audio.md)).
 
-**One link unread.** HD's `FUN_002fdc00` passes the 16-byte result to `FUN_003146e8`, which copies it to every sub-voice at
-`+0x48`..`+0x54` and sets the dirty byte `+2`. The final consumer, and so the filter's order and shape, is unread. Recipe:
-in the HD program, list `lfs` of `+0x50` on the sub-voice array `*(DAT_008b5064 + 0x18)` in `0x00314000`..`0x00316000`
-and follow to the `cellMSCore` call. Until then a one-pole is a choice. A second path (`param_2[0x14] != 1`) passes the
-same struct in a request; it agrees in shape.
+**Where the result goes, and one link unread.** Each title has two paths, on a voice-kind word (`param_2[0x14]`, 2048
+`param_2[0xf]`):
+
+| | Kind 1 | Other kinds |
+| --- | --- | --- |
+| HD | `FUN_003146e8` copies the 16 bytes to every sub-voice at `+0x48`..`+0x54` and sets dirty byte `+2` | in a request struct (`auStack_124`), passed on through the voice calls |
+| 2048 | `FUN_8125ee5a`, **an empty stub**: nothing happens | in the request at `auStack_4c`, flags `0xe`, to `FUN_8134bde4` |
+
+So on 2048 the kind-1 voices get no filter at all, and the rest only as far as `FUN_8134bde4` honours those flags, unread; hence
+70. HD's final consumer, and so the filter's order and shape, is unread. Recipe: in the HD program, list `lfs` of `+0x50`
+on the sub-voice array `*(DAT_008b5064 + 0x18)` in `0x00314000`..`0x00316000` and follow to the `cellMSCore` call. Until
+then a one-pole is a choice.
 
 ## SPATIAL AUDIO against the originals
 
@@ -229,12 +260,13 @@ same struct in a request; it agrees in shape.
 | Value | Ours | Omega | HD, 2048 | Pulse, Pure |
 | --- | --- | --- | --- | --- |
 | `original` | Pulse's equal-power pan, no front/back, on every title | **Differs.** 7.1 bed, Wwise's panner, authored pass-by swaps; what a stereo system output does with the bed is firmware, unread | **Differs.** Pan plus the rear low-pass above, which ours does not play | **Same** (bit-identical) |
-| `rear_cue` | 2.5 kHz one-pole, gain 0.8, linear over the whole rear half; **chosen** | No equivalent. `RearOcclusion` parsed, unused | Closest thing we have, far stronger than HD's 14 kHz or 2048's 10 kHz, over a 20 degree ramp, with no gain drop | No equivalent |
+| `rear_cue` | 2.5 kHz one-pole, gain 0.8, linear over the whole rear half; **chosen** | No equivalent in code. `RearOcclusion` parsed, unused. Data: one NPC engine layer's volume falls behind, pass-by samples swap | Closest thing we have, far stronger than HD's 14 kHz or 2048's 10 kHz, over a 20 degree ramp, with no gain drop | No equivalent |
 | `headphones` | SADIE II HRTF per voice; **ours** | **No equivalent outside VR.** In VR, objects to the PS4 system. "Headphones" in its menu is a dynamics preset | None | None |
 | `auto` | Headphones on a detected headphone route, else rear cue; **ours** | No such thing: channel count to `SURROUND_STATE` only, never headphones | None | None |
 
 So: the label `original` is accurate on Pulse and Pure only. On Omega, `original` cannot be Omega's until its Wwise pan and
-pass-by data play; today it is a stand-in, and it inherits Pulse's law by lineage with no front/back at all, where Omega has some.
+pass-by data play; today Pulse's pan on Omega is a stand-in, not an inheritance (Omega's lineage is HD), and it has no front/back at all,
+where Omega has some.
 On HD and 2048 it should carry the rear low-pass, which is open as a ready-to-wire thread. The `rear_cue` code comment in `oag_audio::mixer` says "the original cannot tell
 front from back", which is true of Pulse alone; that comment is left for the same wiring, as this lane changes no `.rs`.
 
@@ -246,7 +278,7 @@ front from back", which is true of Pulse alone; that comment is left for the sam
 | `0x01779510` | `Sound_SyncSurroundState` | 82 | port state channel byte to three state names |
 | `0x017783e0` | `Sound_PostSetState` | 75 | builds and posts the name, `SetState fail reason` printf; many callers |
 | `0x01731b50` | `SoundManager_Update` | 80 | listeners, emitters, Doppler, sends, per frame |
-| `0x01738090` | `AudioConfig_Load` | 85 | the XML path and every element name |
+| `0x01738090` | `AudioConfig_Load` | 84 | the XML path and every element name |
 | `0x011f3130` | `SceAudio3dSink_Init` | 82 | `sceAudio3dPortOpen`, channel config, its own failure strings, thread name |
 | `0x011f1a80` | `SceAudio3dMixer_Execute` | 75 | object attributes from azimuth, elevation and distance per voice |
 | `0x010976a0` | `Wwise_RegisterGameObj` | 80 | id, name, mask; `EXTERNAL_MUSIC`, `GLOBAL_2D`, `SoundGroup_Create` |
@@ -273,8 +305,10 @@ front from back", which is true of Pulse alone; that comment is left for the sam
 
 ## Open
 
-* **HD's filter consumer**, recipe above: the only unread value the wiring needs.
-* **The `Game_VR` switch-to-child tables** and the object panner's scale `0x01a72894`: only worth reading if VR opens.
+* **HD's filter consumer**, recipe above: the one unread value the wiring would otherwise have to choose.
+* **The object panner's scale `0x01a72894`** and the nine panner nodes on no `Game_VR` branch: only worth reading if VR opens.
+* **The Azimuth curves' y unit** (scaling byte 2), for whoever plays Omega's NPC engines.
+* **HD's listener axis** and the update divisor, recipes above.
 * **Live:** every claim here is static. A `wipeout_pc` run could log the sink's `sceAudio3dPortOpen` and the absence of
   object reservations in a flat race (`sceAudio3dObjectReserve`, patch import `0x01801050`), which would lift the VR-only
   claim past 84. That launch is the maintainer's.
