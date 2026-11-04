@@ -1054,10 +1054,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
                         .is_ok()
                         .then(|| super::view_pass::split(std::mem::take(&mut commands)).1);
                     commands.clear();
-                    match drawn {
-                        Some(drawn) => (super::view_pass::split(acted).0, Some(drawn)),
-                        None => (acted, None),
-                    }
+                    (acted, drawn)
                 } else {
                     (acted, None)
                 };
@@ -1085,16 +1082,21 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
             release(sim, index);
             continue;
         }
+        // `refusal` saw the simulation call's whole list whatever this device picked, so
+        // whether the module faults never depends on a view pick. The view call's outputs
+        // stand in for the simulation call's own; a refused one draws nothing.
+        let commands = match drawn {
+            Some(drawn) => {
+                let mut kept = super::view_pass::split(commands).0;
+                if refusal(&sim.extensions.on, index, &drawn).is_none() {
+                    kept.extend(drawn);
+                }
+                kept
+            }
+            None => commands,
+        };
         for command in commands {
             apply(sim, index, command);
-        }
-        // A refused view call draws nothing; it never faults the module.
-        if let Some(drawn) = drawn
-            && refusal(&sim.extensions.on, index, &drawn).is_none()
-        {
-            for command in drawn {
-                apply(sim, index, command);
-            }
         }
     }
 }

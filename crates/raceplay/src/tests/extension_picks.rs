@@ -120,3 +120,58 @@ fn a_view_calls_fault_never_faults_the_module() {
     }
     assert!(race.extension_reports()[0].faulted.is_none());
 }
+
+/// An option-blind module: only the pick's own contribution to the tick-0 state hash, which
+/// is what `oag_net::race::fingerprint` compares in the handshake, can tell two runs apart.
+fn blind(picks: Picks) -> u64 {
+    let mut source = scripted("test.blind", "", &[], &[]);
+    source.options = picks;
+    grid(prepared(&[source])).sim.state_hash()
+}
+
+#[test]
+fn the_tick_zero_hash_carries_a_sim_pick_and_not_a_view_pick() {
+    assert_ne!(
+        blind(Picks::all_sim([1, 0, 0, 0])),
+        blind(Picks::all_sim([0; 4]))
+    );
+    assert_eq!(blind(view_row(1)), blind(view_row(0)));
+}
+
+#[test]
+fn whether_a_module_faults_does_not_depend_on_a_view_pick() {
+    // Emits on a channel it does not publish, but only when its option is 0: the simulation
+    // call (which reads a view row's default 0) is the one refused, and it is refused whether
+    // or not this device's view call ran.
+    let bad = Command::Emit {
+        slot: Slot::new(0).unwrap(),
+        channel: 0xdead_beef,
+        value: 1.0,
+    };
+    let run = |pick: u8| {
+        let mut source = scripted(
+            "test.refused",
+            &format!(
+                "(if (i32.load8_u (i32.const {option})) (then (return (i32.const 0))))",
+                option = 1024 + oag_ext_abi::OPTIONS_AT,
+            ),
+            &[bad],
+            &[],
+        );
+        source.options = view_row(pick);
+        let mut race = grid(prepared(&[source]));
+        for _ in 0..3 {
+            race.tick(&PlayerInputs::none());
+        }
+        (
+            race.extension_reports()[0].faulted.is_some(),
+            race.sim.state_hash(),
+        )
+    };
+    let (faulted, hash) = run(0);
+    assert!(
+        faulted,
+        "the simulation call's refusable command is refused"
+    );
+    assert_eq!(run(1), (faulted, hash));
+}
