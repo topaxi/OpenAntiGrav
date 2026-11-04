@@ -2042,3 +2042,10 @@ other than this CPU time paces the frame), so these are CPU headroom numbers. Th
 modes, same setup, `total`: `serial` 7.40, `overlapped` 7.73, **`threaded` 6.94** (6.78 to 7.18),
 against 7.65 for the interleaved default. `threaded` is the lead on this machine, the notebook
 that measured it slower being a hybrid part (`split_record`); not made the default here.
+
+Other sizes, same setup with `--render-scale 100` (2 rounds each, `total` ms; at 4K the frame
+is GPU-bound, fps 28.5 and p99 38 ms in every arm, so only the CPU headroom differs). 1080p:
+before the fix 5.69, after 7.47 (7.27 and 7.68), `OAG_SPLIT_FINISH=0` 7.20, `threaded` 7.33 (6.81
+and 7.86, noisy). 4K: before 7.71, after 10.10, `OAG_SPLIT_FINISH=0` 10.10, `threaded` 9.52.
+So the split finish costs 0.25 ms at 800p, 0.27 ms at 1080p and nothing at 4K under an
+interleaved split, and `threaded` saves 0.6 to 0.7 ms at 800p and 4K. Pure only.

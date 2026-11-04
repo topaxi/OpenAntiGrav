@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [all]
-updated: 2026-10-27
+updated: 2026-11-04
 summary: "Split finish now only on uniform cores (S24 flyby -1 ms); probe reads Linux sysfs only, hybrid Windows/macOS unprobed"
 categories: [rendering, tooling]
 size: S (40)
@@ -23,7 +23,15 @@ on 2026-10-27: the threaded encoder finish adds about 1 ms of `scene` on the pho
    `frame-phases` `scene` and `submit` phases) before deciding their default.
 2. An Intel hybrid part on Linux reports `cpu_capacity` only on kernels with asymmetric capacity
    support; unreadable means the split stays on.
-3. The parked indirect depth prepass (`park/indirect-depth-prepass`) slightly regressed together
+3. **Under an interleaved split the split finish gains nothing on the Deck** (measured 2026-11-04,
+   two-player Pure, frame-thread `total` ms, split finish on / off: 800p 7.65 / 7.40, 1080p 7.47 /
+   7.20, 4K 10.10 / 10.10; one view it helps, 4.27 / 4.86 at 800p). The fix that made the picture
+   right (`submit_with_closed`) put the finish back on the critical path. Candidates, each an
+   Opus perf lane: no split frame when more than one view is drawn (recovers 0.25 ms at 800p and
+   1080p), or `OAG_SPLIT_RECORDING=threaded` as the default on uniform cores (800p 6.94 against
+   7.65, 4K 9.52 against 10.10, 1080p 6.81 and 7.86 in two rounds, so noisy); the notebook measured
+   it slower (`split_record.rs`). Details: `docs/rendering/split-screen.md`.
+4. The parked indirect depth prepass (`park/indirect-depth-prepass`) slightly regressed together
    with the split (maintainer); re-measure per platform if either changes.
 
 ## Next Steps
