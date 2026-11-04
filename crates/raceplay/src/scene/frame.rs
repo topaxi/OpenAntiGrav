@@ -28,6 +28,20 @@ pub(super) struct ViewSettings<'a> {
     pub(super) shadows: oag_display::display::Shadows,
     pub(super) camera_jitter: Option<u32>,
     pub(super) zone_spectrum: &'a [f32],
+    /// `Some` for the secondary view (`scene::portal_view`).
+    pub(super) portal: Option<PortalPass>,
+}
+
+/// What a view drawn through a portal takes from the view it stands in for.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct PortalPass {
+    /// The aspect of that view, not of the texture: a point of the surface lands on the same
+    /// texture coordinate as on the screen.
+    pub(super) aspect: f32,
+    /// That view's projection.
+    pub(super) projection: Mat4,
+    /// The exit's plane in eye space: nothing behind it is drawn.
+    pub(super) exit_plane: oag_core::math::Vec4,
 }
 
 impl Scene {
@@ -81,6 +95,21 @@ impl Scene {
         blur_timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
         hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
     ) -> SceneStats {
+        let settings = ViewSettings {
+            fov,
+            cull,
+            pvs_cull,
+            anim_seconds,
+            shadows,
+            camera_jitter,
+            zone_spectrum,
+            portal: None,
+        };
+        // A view of a split asks before its first view (`Scene::render_slots`).
+        if matches!(self.layer.get(), Layer::Whole | Layer::Window) && self.does_frame_work() {
+            let drawn = [(race.viewed_slot(), viewport)];
+            self.draw_portal_view(device, queue, race, &drawn, &settings);
+        }
         // Every drawable's matrices of this view are staged here and written once, in runs,
         // before the scene pass (`UniformBlocks`); anything else goes through to the queue.
         // Before anything draws: whether this frame has a reader of the velocity buffer
@@ -92,15 +121,6 @@ impl Scene {
             SceneBlocks::view(race.viewed_slot()),
             std::mem::take(&mut *self.upload_staging.borrow_mut()),
         );
-        let settings = ViewSettings {
-            fov,
-            cull,
-            pvs_cull,
-            anim_seconds,
-            shadows,
-            camera_jitter,
-            zone_spectrum,
-        };
         let pass = self.prepare_view(
             &uploads, encoder, view, race, viewport, &settings, timestamps,
         );
@@ -274,12 +294,16 @@ impl Scene {
             shadows,
             camera_jitter,
             zone_spectrum,
+            portal,
         } = *settings;
         // The scene blocks of the view being drawn: the craft it follows names them, so two
         // views of a frame never read or write the same one (`SceneBlocks`).
-        let block = SceneBlocks::view(race.viewed_slot());
+        let block = match portal {
+            Some(_) => SceneBlocks::portal(),
+            None => SceneBlocks::view(race.viewed_slot()),
+        };
         let queue = uploads;
-        let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
+        let aspect = portal.map_or(viewport.2.max(1.0) / viewport.3.max(1.0), |p| p.aspect);
         let projection = race.projection(aspect, self.far, fov);
         let view_projection = projection * race.view();
         // The previous tick's camera and model matrices, promoted from the
@@ -321,6 +345,11 @@ impl Scene {
         // frustum and the snapshot are above deliberately - see the call.
         let (view_projection, prev_vp) =
             self.jittered(camera_jitter, viewport, view_projection, prev_vp);
+        // Swung onto the exit, what stands behind it clipped. The frustum and the section test
+        // keep the plain matrix: the swing tilts the far plane.
+        let view_projection = portal
+            .and_then(|p| oag_render::camera::portal::oblique_near(p.projection, p.exit_plane))
+            .map_or(view_projection, |oblique| oblique * race.view());
         // Tier one, built once a frame. Both sections come from the authored
         // spline rather than from the section boxes: a control point's
         // `section_id` is what the artists wrote, while a point-in-box test is
@@ -614,7 +643,12 @@ impl Scene {
         if let Some(sky) = &self.sky {
             sky.write_hull(
                 queue,
-                view_projection,
+                // The sky rides on the eye, behind the portal's near plane.
+                if portal.is_some() {
+                    section_view
+                } else {
+                    view_projection
+                },
                 Mat4::from_translation(race.camera_position()),
                 // The previous camera's *translation* cancels against the
                 // previous view-projection exactly as this frame's does
@@ -1021,7 +1055,9 @@ impl Scene {
         self.upload_cannon_quads(queue, &vp, cannon_bolt, cannon_flash);
         self.upload_beam(race, queue, &vp);
         self.upload_ribbons(race, queue, &vp);
-        self.upload_mod_shaders(race, queue, &vp);
+        if portal.is_none() {
+            self.upload_mod_shaders(race, queue, &vp);
+        }
 
         // Both shadow tiers' geometry - its own file, see `frame/shadow.rs`.
         self.upload_shadow_geometry(queue, &vp, race, shadows);
@@ -1031,7 +1067,10 @@ impl Scene {
         // Under the HD chain the whole scene draws into its linear float
         // target instead of the caller's view; the chain's own encode pass is
         // what reaches `view`, after the read bloom. See `Self::hd`.
-        let target = self.linear_scene_view().unwrap_or(view);
+        let target = match portal {
+            Some(_) => view,
+            None => self.linear_scene_view().unwrap_or(view),
+        };
         uploads.flush();
         // What the pass draws, in its order. The sky draws inside the track, between the
         // circuit's solid and blended lists - see `Recorder::draw_track` for why there.

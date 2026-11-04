@@ -58,6 +58,8 @@ pub struct Frame<'a> {
     pub time: f32,
     /// [`crate::psys`]'s draw alpha.
     pub draw_alpha: f32,
+    /// What `engine_uv` projects with in this view; `None` is no picture for this view.
+    pub engine_view_projection: Option<[[f32; 4]; 4]>,
     /// The view's fill.
     pub fill: Option<Fill>,
     /// Triangles per shader.
@@ -132,8 +134,6 @@ pub struct Stage {
     sampler: wgpu::Sampler,
     /// The 1x1 transparent black an engine texture slot holds with nothing bound.
     fallback: wgpu::TextureView,
-    engine_bound: bool,
-    engine_view_projection: [[f32; 4]; 4],
     drawn: Drawn,
     failures: Vec<String>,
 }
@@ -395,8 +395,6 @@ impl Stage {
             layout,
             sampler,
             fallback,
-            engine_bound: false,
-            engine_view_projection: IDENTITY,
             drawn: Drawn::default(),
             failures,
         }
@@ -408,28 +406,16 @@ impl Stage {
         &self.failures
     }
 
-    /// Fills every shader's engine texture slot with `view`, drawn through `view_projection`
-    /// (what `engine_uv` projects with); `None` empties it. Rebuilds the bind groups, so it
-    /// belongs at a change of target, not in every frame. Any filterable colour format will do.
-    pub fn set_engine_texture(
-        &mut self,
-        device: &wgpu::Device,
-        view: Option<(&wgpu::TextureView, [[f32; 4]; 4])>,
-    ) {
-        self.engine_bound = view.is_some();
-        self.engine_view_projection = view.map_or(IDENTITY, |(_, matrix)| matrix);
-        let engine = view.map_or(&self.fallback, |(view, _)| view);
+    /// Fills every shader's engine texture slot with `view`, a texture of the scene's format;
+    /// `None` empties it. Rebuilds the bind groups, so it belongs at a change of target, not in
+    /// every frame: which views have a picture in it is [`Frame::engine_view_projection`].
+    pub fn set_engine_texture(&mut self, device: &wgpu::Device, view: Option<&wgpu::TextureView>) {
+        let engine = view.unwrap_or(&self.fallback);
         for (built, slot) in self.drawer.built.iter_mut().zip(&self.slots) {
             if let (Some(built), Some(slot)) = (built, slot) {
                 built.bind_group = bind(device, &self.layout, &self.sampler, slot, engine);
             }
         }
-    }
-
-    /// The camera the engine texture was drawn through: `engine_uv`'s matrix, per frame, where
-    /// the target stays bound and the camera moves.
-    pub fn set_engine_view_projection(&mut self, matrix: [[f32; 4]; 4]) {
-        self.engine_view_projection = matrix;
     }
 
     /// Writes one view's draws. A shader that draws nothing this view writes nothing.
@@ -459,12 +445,12 @@ impl Stage {
             let sent = frame.params.get(place).copied().unwrap_or_default();
             let uniforms = Uniforms {
                 view_projection: frame.view_projection,
-                engine_view_projection: self.engine_view_projection,
+                engine_view_projection: frame.engine_view_projection.unwrap_or(IDENTITY),
                 fill: colour,
                 params: std::array::from_fn(|i| sent[i].unwrap_or(slot.defaults[i])),
                 time: frame.time,
                 between: frame.draw_alpha - 1.0,
-                engine_bound: f32::from(u8::from(self.engine_bound)),
+                engine_bound: f32::from(u8::from(frame.engine_view_projection.is_some())),
                 pad: 0.0,
             };
             queue.write_buffer(&slot.uniforms, 0, bytemuck::bytes_of(&uniforms));

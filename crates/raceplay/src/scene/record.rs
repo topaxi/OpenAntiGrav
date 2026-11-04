@@ -139,6 +139,15 @@ pub(super) struct ViewPass<'a> {
     pub(super) blur_lens: Mat4,
 }
 
+impl ViewPass<'_> {
+    /// The pass without what belongs to a screen: a mod's shaded surfaces and the lens mist.
+    pub(super) fn without_view_surfaces(mut self) -> Self {
+        self.effects.mod_shaders = None;
+        self.effects.mist = None;
+        self
+    }
+}
+
 impl Scene {
     /// The strip pipelines, in [`BEAMS`]' order; `None` where the title builds none.
     fn beams(&self) -> [Option<&std::cell::RefCell<oag_fx::beam::Pipeline>>; BEAMS] {
@@ -211,7 +220,15 @@ pub(super) struct Recorder<'a> {
     attachments: &'a motion::Attachments,
 }
 
-impl Recorder<'_> {
+impl<'a> Recorder<'a> {
+    /// The recorder, drawing into `attachments`: a target of a size of its own.
+    pub(super) fn into_attachments(self, attachments: &'a motion::Attachments) -> Self {
+        Self {
+            attachments,
+            ..self
+        }
+    }
+
     /// Records `pass`'s scene pass into `encoder`, and returns what it drew.
     pub(super) fn record(
         &self,

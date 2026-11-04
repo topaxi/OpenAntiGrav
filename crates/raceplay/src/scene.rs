@@ -25,6 +25,7 @@ mod mist;
 mod mod_shaders;
 mod motion;
 mod per_slot;
+mod portal_view;
 mod queries;
 mod record;
 #[cfg(test)]
@@ -64,6 +65,8 @@ pub(crate) struct FrameWork {
     /// the composites [`Scene::composite_bloom`] added for them.
     pub(crate) bloom_views_prepared: u32,
     pub(crate) bloom_views_composited: u32,
+    /// Scenes drawn for a `portal-view` (`scene::portal_view`).
+    pub(crate) portal_views: u32,
     /// How many of the track's draws the latest `mapped` near layer recorded: the
     /// animated nodes whose bound reaches that layer's box, and never a static one.
     #[cfg(test)]
@@ -283,6 +286,10 @@ pub struct Scene {
     /// The race's mod shaders, once [`Scene::attach_mod_shaders`] built them; `None` in a
     /// race with no mod.
     mod_shaders: std::cell::RefCell<Option<oag_fx::mod_shader::Stage>>,
+    /// The secondary view's target, once a mod asked for one.
+    portal: std::cell::RefCell<Option<portal_view::Target>>,
+    /// The slot whose view reads this frame's secondary view, and `engine_uv`'s matrix.
+    portal_engine: std::cell::Cell<Option<(usize, Mat4)>>,
     /// Pure's sun lens flare, once [`Scene::attach_lens_flare`] built it.
     lens_flare: std::cell::RefCell<Option<oag_fx::lens_flare::pipeline::Pipeline>>,
     /// The LeachBeam's own ribbon, `None` on an undecoded texture - see `beam`.
@@ -1141,6 +1148,8 @@ impl Scene {
             mist: std::cell::RefCell::new(None),
             pass_format: format,
             mod_shaders: std::cell::RefCell::new(None),
+            portal: std::cell::RefCell::new(None),
+            portal_engine: std::cell::Cell::new(None),
             lens_flare: std::cell::RefCell::new(None),
             beam,
             ribbons,

@@ -37,7 +37,10 @@ pub(super) const MAX_HISTORIES: usize = 8;
 /// How many histories a scene holds: the windows' and then one per seat of a split, so a view
 /// of a split (or of a window cut into several) has a camera history of its own that no window's
 /// can alias.
-pub(super) const HISTORY_COUNT: usize = 2 * MAX_HISTORIES;
+pub(super) const HISTORY_COUNT: usize = 2 * MAX_HISTORIES + 1;
+
+/// The secondary view's history: it never reads one, and no seat's may take its writes.
+pub(super) const PORTAL_HISTORY: usize = HISTORY_COUNT - 1;
 
 /// The history of the split-screen view that follows `slot`: seats are unique across a race, so
 /// the views of one window and the views of a plain split never share one.

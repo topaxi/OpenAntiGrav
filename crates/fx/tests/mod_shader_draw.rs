@@ -148,6 +148,7 @@ fn frame<'a>(
         view_projection: IDENTITY,
         time: 2.0,
         draw_alpha: 1.0,
+        engine_view_projection: None,
         fill,
         surfaces,
         params,
@@ -276,7 +277,61 @@ fn the_engine_texture_slot_is_empty_until_the_engine_fills_it() {
         picture.size(),
     );
     let view = picture.create_view(&Default::default());
-    stage.set_engine_texture(&gpu.device, Some((&view, IDENTITY)));
+    stage.set_engine_texture(&gpu.device, Some(&view));
+    // A view with no picture of its own stays empty, whatever the slot holds.
     let texels = render(&gpu, &mut stage, &frame(None, &surfaces, &[]));
+    assert_eq!(at(&texels, 32, 32), [0, 0, 255, 255]);
+    let viewed = Frame {
+        engine_view_projection: Some(IDENTITY),
+        ..frame(None, &surfaces, &[])
+    };
+    let texels = render(&gpu, &mut stage, &viewed);
     assert_eq!(at(&texels, 32, 32), [9, 200, 40, 255]);
+}
+
+/// A render target's row 0 is the top of the picture and `engine_uv` is y down: the upper half
+/// of the view reads the texture's upper half. A flipped `v` draws the portal upside down.
+/// A picture's own alpha, the bloom's glow mask in a scene target, never reaches the shader.
+#[test]
+fn engine_uv_reads_the_top_of_the_picture_at_the_top_of_the_view() {
+    let Some(gpu) = gpu() else { return };
+    let text = "fn mod_fragment(input: ModInput) -> vec4<f32> {
+    return engine_texture(engine_uv(input.world));
+}\n";
+    let mut stage = stage(&gpu, &[shader(text)]);
+    let surfaces = [(0, quad([1.0; 4]))];
+    let picture = gpu.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 1,
+            height: 2,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: FORMAT,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    gpu.queue.write_texture(
+        picture.as_image_copy(),
+        &[255, 0, 0, 0, 0, 255, 0, 0],
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4),
+            rows_per_image: None,
+        },
+        picture.size(),
+    );
+    let view = picture.create_view(&Default::default());
+    stage.set_engine_texture(&gpu.device, Some(&view));
+    let viewed = Frame {
+        engine_view_projection: Some(IDENTITY),
+        ..frame(None, &surfaces, &[])
+    };
+    let texels = render(&gpu, &mut stage, &viewed);
+    let (top, bottom) = (at(&texels, 32, 18), at(&texels, 32, 45));
+    assert!(top[0] > 200 && top[1] < 50 && top[3] == 255, "{top:?}");
+    assert!(bottom[1] > 200 && bottom[0] < 50, "{bottom:?}");
 }

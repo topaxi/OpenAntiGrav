@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 33] {
+fn every_command() -> [Command; 34] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -166,6 +166,14 @@ fn every_command() -> [Command; 33] {
             shader: 3,
             index: MAX_SHADER_PARAMS - 1,
             value: -0.25,
+        },
+        Command::PortalView {
+            slot: slot(11),
+            entrance: 1234.5,
+            exit: 0.0,
+            radius: 255,
+            update: crate::ViewUpdate::Once,
+            generation: crate::MAX_VIEW_GENERATION - 1,
         },
     ]
 }
@@ -410,7 +418,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0x039e_cf95_c7c7_4ff9);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0x6033_185c_4f5c_4d2a);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -1162,6 +1170,30 @@ fn a_scene_command_out_of_its_ranges_is_malformed() {
             shader: 0,
             index: 0,
             value: f32::INFINITY,
+        },
+        Command::PortalView {
+            slot: slot(1),
+            entrance: f32::NAN,
+            exit: 10.0,
+            radius: 8,
+            update: crate::ViewUpdate::Continuous,
+            generation: 0,
+        },
+        Command::PortalView {
+            slot: slot(1),
+            entrance: 10.0,
+            exit: -1.0,
+            radius: 8,
+            update: crate::ViewUpdate::Continuous,
+            generation: 0,
+        },
+        Command::PortalView {
+            slot: slot(1),
+            entrance: 10.0,
+            exit: 20.0,
+            radius: 0,
+            update: crate::ViewUpdate::Continuous,
+            generation: 0,
         },
     ];
     for command in bad {

@@ -3,7 +3,7 @@
 // the mod's own, and renames `mod_fragment` below out of the way; this one is what a draw with
 // no shader of its own runs. `docs/architecture/wasm-extensions/mod-shaders.md` is the contract.
 
-import oag_shaders::target::{linear_out, gamma_to_target, target_out};
+import oag_shaders::target::{linear_out, gamma_to_target, target_in, target_out, target_to_gamma};
 
 // What a mod's `mod_fragment` is handed.
 struct ModInput {
@@ -30,7 +30,7 @@ struct ModFrame {
     time: f32,
     // The draw alpha minus one, as `psys.wesl` carries it.
     between: f32,
-    // 1.0 once the engine has bound a texture of its own.
+    // 1.0 where the engine texture holds a picture for this view.
     engine_bound: f32,
     pad: f32,
 };
@@ -45,9 +45,15 @@ fn mod_texture(uv: vec2<f32>) -> vec4<f32> {
     return textureSampleLevel(oag_mod_texture, oag_sampler, uv, 0.0);
 }
 
-// The texture the engine provides; transparent black until one is bound.
+// The picture the engine provides, gamma-authored and opaque whatever the scene target stores
+// (its alpha is the bloom's glow mask, not coverage), so a shader that returns it writes back
+// what the scene holds; transparent black with no picture for this view.
 fn engine_texture(uv: vec2<f32>) -> vec4<f32> {
-    return textureSampleLevel(oag_engine_texture, oag_sampler, uv, 0.0);
+    if !engine_texture_bound() {
+        return vec4<f32>(0.0);
+    }
+    let stored = textureSampleLevel(oag_engine_texture, oag_sampler, uv, 0.0).rgb;
+    return vec4<f32>(target_to_gamma(target_in(stored), linear_out), 1.0);
 }
 
 // Whether `engine_texture` holds a picture.

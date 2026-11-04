@@ -548,6 +548,9 @@ The mod pickup's fire path for a person is unchanged. Proof: `oag_raceplay`'s
 raises nothing, a module reads the course length and the HUD's place), `oag_ext_abi`'s
 tracking round trip (title key included) and the recorded fold.
 
+**A second camera for a portal:** `portal-view` (command 36), the scene through a portal pair in the
+texture a mod shader reads: [`mod-shaders.md`](mod-shaders.md), "The engine texture".
+
 **View outputs for a portal (outputs, never hashed).** Three commands draw into a view; each
 is re-sent every tick it should hold, and a slot with no craft is a fault.
 

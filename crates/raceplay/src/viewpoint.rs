@@ -68,6 +68,9 @@ pub(super) struct Viewpoints {
     /// The extra slot the scene is being drawn for right now, `None` for the
     /// player's own view. Set by the draw through `&Race`, so a [`Cell`].
     drawing: Cell<Option<u8>>,
+    /// The camera through a portal pair while the secondary view draws, over every other
+    /// camera. Set through `&Race`, so a [`Cell`].
+    portal: Cell<Option<Mat4>>,
     /// Indexed by slot. Slot 0 stays `None`: the player's camera is
     /// `RaceView::camera`.
     cams: [Option<Cam>; MAX_SHIPS],
@@ -92,6 +95,11 @@ pub struct WindowViews {
 }
 
 impl Viewpoints {
+    /// See [`Race::set_portal_camera`](crate::Race::set_portal_camera).
+    pub(super) fn set_portal(&self, view: Option<Mat4>) {
+        self.portal.set(view);
+    }
+
     /// The shake on extra slot `slot`'s camera, `None` for a slot with no view.
     pub(super) fn shake_of(&self, slot: usize) -> Option<&oag_render::camera::shake::Shake> {
         self.contact.get(slot)?.as_ref().map(|fx| &fx.shake)
@@ -409,6 +417,9 @@ impl Race {
     /// own. The shake is the seat's state this tick, turned about the blended view as the
     /// player's is ([`oag_render::camera::shake::Shake::apply`]).
     pub(super) fn extra_view(&self) -> Option<Mat4> {
+        if let Some(view) = self.view.viewpoints.portal.get() {
+            return Some(view);
+        }
         let slot = self.extra_viewpoint()?;
         let base = self.view.viewpoints.view(slot, self.draw_alpha());
         Some(match self.view.viewpoints.shake_of(slot) {
@@ -419,6 +430,9 @@ impl Race {
 
     /// [`Self::extra_view`] without the shake: where the seat's camera is really pointed.
     pub(super) fn extra_view_unshaken(&self) -> Option<Mat4> {
+        if let Some(view) = self.view.viewpoints.portal.get() {
+            return Some(view);
+        }
         self.extra_viewpoint()
             .map(|slot| self.view.viewpoints.view(slot, self.draw_alpha()))
     }

@@ -1,6 +1,6 @@
 //! The commands that draw into a view: `screen-fill`, `fov-offset`,
-//! `fire-mod-effect-ahead`, `draw-beam` and `set-shader-param`. Outputs only: re-sent each tick they should hold, never
-//! hashed, never read by the simulation.
+//! `fire-mod-effect-ahead`, `draw-beam`, `set-shader-param` and `portal-view`. Outputs only:
+//! re-sent each tick they should hold, never hashed, never read by the simulation.
 
 use crate::{Command, Distance, Malformed, Rgba, Slot};
 
@@ -18,6 +18,37 @@ pub const MAX_SHADER_PARAMS: u8 = 4;
 
 /// The last place in a mod's `[shaders]` a draw can name.
 pub const MAX_SHADER_INDEX: u16 = 254;
+
+/// The generations of a `portal-view` snapshot: six bits of `arg`.
+pub const MAX_VIEW_GENERATION: u8 = 64;
+
+/// When a `portal-view` is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ViewUpdate {
+    /// One snapshot, drawn the first frame the portal is in the view, and again when
+    /// `generation` changes.
+    Once,
+    /// Every frame the portal is in the view.
+    #[default]
+    Continuous,
+}
+
+impl ViewUpdate {
+    const fn code(self) -> u16 {
+        match self {
+            Self::Once => 1,
+            Self::Continuous => 2,
+        }
+    }
+
+    const fn from_code(code: u16) -> Option<Self> {
+        match code {
+            1 => Some(Self::Once),
+            2 => Some(Self::Continuous),
+            _ => None,
+        }
+    }
+}
 
 /// A shader in the byte `screen-fill` and `draw-beam` carry it in: 0 for none, else its
 /// place plus one.
@@ -57,13 +88,26 @@ pub(crate) fn encode(command: &Command) -> Option<(u16, u32, u32)> {
             value,
             ..
         } => (shader, value.to_bits(), u32::from(index)),
+        Command::PortalView {
+            entrance,
+            exit,
+            radius,
+            update,
+            generation,
+            ..
+        } => (
+            update.code() | u16::from(generation) << 2 | u16::from(radius) << 8,
+            entrance.to_bits(),
+            exit.to_bits(),
+        ),
         _ => return None,
     })
 }
 
 /// The command of one of this module's kinds: an offset in `[-MAX_FOV_OFFSET_DEG,
 /// MAX_FOV_OFFSET_DEG]` (a number), a distance of a known kind with an amount above zero,
-/// a shader byte, a beam to another slot of a width in range, a scalar that exists.
+/// a shader byte, a beam to another slot of a width in range, a scalar that exists, a portal
+/// with two progresses that are numbers and not below zero, a known update and a radius.
 pub(crate) fn decode(
     kind: crate::CommandKind,
     slot: Slot,
@@ -113,6 +157,25 @@ pub(crate) fn decode(
                 shader: arg,
                 index,
                 value,
+            })
+        }
+        crate::CommandKind::PortalView => {
+            let exit = f32::from_bits(word);
+            let on_a_lap = |progress: f32| progress.is_finite() && progress >= 0.0;
+            let radius = (arg >> 8) as u8;
+            let update = ViewUpdate::from_code(arg & 3);
+            let (Some(update), true, true) =
+                (update, on_a_lap(value) && on_a_lap(exit), radius > 0)
+            else {
+                return Err(bad);
+            };
+            Ok(Command::PortalView {
+                slot,
+                entrance: value,
+                exit,
+                radius,
+                update,
+                generation: (arg >> 2 & 0x3f) as u8,
             })
         }
         crate::CommandKind::FovOffset => {

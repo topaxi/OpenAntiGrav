@@ -237,7 +237,7 @@ mod view {
                 return;
             };
             if let Fired::OwnAt { at, up, .. } = fired {
-                if let Some(playing) = self.view.stage.play(&effect, *at, 1.0) {
+                if let Some(playing) = self.view.stage.play_held(&effect, *at, 1.0) {
                     self.view.stage.orient(playing, *up);
                 }
                 return;

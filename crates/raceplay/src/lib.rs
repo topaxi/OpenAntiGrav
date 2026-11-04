@@ -263,6 +263,8 @@ mod perfect_start;
 mod pilot_assist;
 pub mod pilots;
 pub mod player_step;
+#[cfg(feature = "view")]
+mod portal_view;
 mod reconcile;
 #[cfg(feature = "view")]
 mod replay;

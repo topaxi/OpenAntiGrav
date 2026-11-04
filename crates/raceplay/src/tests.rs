@@ -80,6 +80,8 @@ mod multiplayer_time_trial;
 mod pads;
 mod people_grid;
 mod perfect_start;
+#[cfg(feature = "extensions")]
+mod portal_view;
 mod quake_armed;
 mod quake_lift;
 mod reconcile;
