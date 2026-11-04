@@ -610,8 +610,11 @@ display clamp is logged once per change at `debug` (`display refresh in force`).
 **Where the display rate comes from** ([ADR-0084](../architecture/adr/0084-the-target-is-held-to-what-the-display-shows.md),
 `oag_present::refresh`):
 
-- *The report*: the current monitor's `refresh_rate_millihertz`, asked again once a
-  second so a window moved between monitors follows. Believed, gamescope's included; below
+- *The report*: the output's refresh, asked again once a second. On X11 (Game Mode
+  included) that is RandR, read on a thread of its own, because winit's monitor report
+  freezes after window creation there; elsewhere the current monitor's
+  `refresh_rate_millihertz`. A dock, an undock or a mode change follows within about two
+  seconds. Believed, gamescope's included; below
   20 Hz after rounding it is no report. Measured here: Xvfb reports none; a nested headless
   `gamescope -r 60` reports 59855 mHz and names its monitor `gamescope`; a Steam Deck
   docked to a 4K TV in Game Mode reports 59980 mHz, and DRM, gamescope's own mode

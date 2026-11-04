@@ -336,6 +336,9 @@ pub(crate) struct Session {
     /// The present mode the current race's display frames were taken under, or `None` outside a
     /// race; a change drops the measurement.
     pub(crate) display_mode: Option<wgpu::PresentMode>,
+    /// The surface's configure count the display frames were taken under; a rebuilt swapchain
+    /// (a resize, an outdated or lost surface) drops the measurement.
+    pub(crate) display_configures: u64,
     /// Where each window frame's input sample sat against its swapchain
     /// acquire, summed a second at a time and logged at `debug`. See
     /// [`frame_timing`].
@@ -1205,7 +1208,6 @@ impl Session {
         self.gpu.output.config.width = width;
         self.gpu.output.config.height = height;
         self.gpu.output.configure(&self.gpu.device);
-        self.display.reset();
         // The depth attachment follows the *framebuffer*, not the window, and
         // `frame` resizes both together - so a resize only has to invalidate,
         // which configuring the surface above already did.

@@ -3,11 +3,12 @@
 //! A reported refresh can be missing (X11 under Xvfb), and a wall-clock interval alone cannot tell
 //! a slow display from a slow GPU. [`Output`] accepts an interval as evidence of the display only
 //! when the present mode holds frames back to the refresh **and** the busy work (the loop's own
-//! plus the GPU's timed cost, the rest being the swapchain wait) would have fit in under half of
-//! it: a loop that is busy for more can miss every second vblank and read as a
-//! display at half the rate. A frame that fails a test says nothing; no accepted frames means no
-//! answer, and no answer means no clamp (`docs/rendering/dynamic-resolution.md`, "The target is
-//! held to what is shown").
+//! plus the GPU's timed cost, the rest being the swapchain wait) would have fit in well under half
+//! of it: a loop that is busy for more can miss every second vblank and read as a display at half
+//! the rate. With no report to floor it, the gate is tighter ([`NO_REPORT_BUSY_SHARE`]). A frame
+//! that fails a test says nothing; no accepted frames means no answer, and no answer means no
+//! clamp (`docs/rendering/dynamic-resolution.md`, "The target is held to the frame limiter and to
+//! the display").
 
 /// Gated frames one estimate is drawn from: one and a half seconds at 60 Hz.
 pub const WINDOW: usize = 90;
@@ -22,6 +23,11 @@ pub const WITHDRAW_AFTER: usize = 2 * WINDOW;
 /// one; the margin below a half is for GPU work the timer does not see. It also means the frame
 /// spent over half of it waiting, and the GPU was not the long pole.
 pub const MAX_BUSY_SHARE: f32 = 0.4;
+/// The same share where the platform reports no rate at all (Android). A report floors the answer
+/// (a measurement only raises it), so a half-rate read is harmless beside one; without it a
+/// half-rate read would be the answer. A quarter leaves the busy work half the period of slack at
+/// half rate for what the timers do not see.
+pub const NO_REPORT_BUSY_SHARE: f32 = 0.25;
 /// Below this an interval is not a refresh any display has: a stalled frame.
 const MIN_HZ: f32 = 20.0;
 
@@ -40,7 +46,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    fn proves_the_output(self) -> bool {
+    fn proves_the_output(self, max_busy_share: f32) -> bool {
         let finite = self.interval.is_finite() && self.wait.is_finite() && self.gpu.is_finite();
         finite
             && self.held_to_refresh
@@ -48,7 +54,7 @@ impl Frame {
             && self.interval < 1.0 / MIN_HZ
             && self.wait >= 0.0
             && self.gpu >= 0.0
-            && (self.interval - self.wait) + self.gpu <= self.interval * MAX_BUSY_SHARE
+            && (self.interval - self.wait) + self.gpu <= self.interval * max_busy_share
     }
 }
 
@@ -94,7 +100,11 @@ impl Output {
     /// would let the target climb and the evidence return, forever. [`Output::reset`] is what
     /// ends a rate, when the state it was measured in changes.
     pub fn observe(&mut self, frame: Frame) -> Option<Option<u32>> {
-        if !frame.proves_the_output() {
+        self.observe_within(frame, MAX_BUSY_SHARE)
+    }
+
+    fn observe_within(&mut self, frame: Frame, max_busy_share: f32) -> Option<Option<u32>> {
+        if !frame.proves_the_output(max_busy_share) {
             return None;
         }
         self.ring[self.next] = frame.interval;
@@ -155,7 +165,8 @@ impl Display {
     /// has (a driver's 0 or 1 for "hardware default") is no report. Any change of the report
     /// drops the measurement: it was taken on another output or mode.
     pub fn report(&mut self, millihertz: Option<u32>) {
-        let plausible = millihertz.filter(|mhz| ((mhz + 500) / 1000) as f32 >= MIN_HZ);
+        let plausible =
+            millihertz.filter(|mhz| ((mhz.saturating_add(500)) / 1000) as f32 >= MIN_HZ);
         if plausible != self.reported_millihertz {
             self.reported_millihertz = plausible;
             self.measured.reset();
@@ -169,7 +180,12 @@ impl Display {
 
     /// Feeds the measurement; see [`Output::observe`].
     pub fn observe(&mut self, frame: Frame) -> Option<Option<u32>> {
-        self.measured.observe(frame)
+        let share = if self.reported_millihertz.is_some() {
+            MAX_BUSY_SHARE
+        } else {
+            NO_REPORT_BUSY_SHARE
+        };
+        self.measured.observe_within(frame, share)
     }
 
     /// The most the display can show, or `None` when nothing says.
@@ -177,7 +193,8 @@ impl Display {
     /// The report is a floor the measurement may raise but not lower: a measurement below a
     /// report is a loop that missed vblanks or a limiter outside the game, and believing it would
     /// hold a faster output to the lower rate for the session. A wrong high report costs what an
-    /// unclamped target costs today; a wrong low clamp costs pixels.
+    /// unclamped target costs today; a wrong low clamp costs frames, because a low target loosens the resolution budget and the
+    /// scale rises until the loop fills it.
     #[must_use]
     pub fn hz(&self) -> Option<u32> {
         let reported = self.reported_millihertz.map(|mhz| (mhz + 500) / 1000);
@@ -223,10 +240,10 @@ mod tests {
         }
     }
 
-    /// A loop the output holds back: most of the interval waiting, a quarter busy.
+    /// A loop the output holds back: most of the interval waiting, about a quarter busy.
     fn held(hz: f32) -> Frame {
         let interval = 1.0 / hz;
-        frame(interval, interval * 0.8, interval * 0.15)
+        frame(interval, interval * 0.8, interval * 0.04)
     }
 
     fn feed(display: &mut Display, frame: Frame, n: usize) {
@@ -351,6 +368,45 @@ mod tests {
         lower.report(Some(90_000));
         feed(&mut lower, held(60.0), WINDOW);
         assert_eq!(lower.hz(), Some(90));
+    }
+
+    #[test]
+    fn busy_work_past_the_share_is_no_evidence() {
+        // 45 % of the interval busy: past 0.4, so it could be a doubled interval.
+        let interval = 1.0 / 60.0;
+        let mut display = Display::new();
+        display.report(Some(25_000));
+        feed(
+            &mut display,
+            frame(interval, interval * 0.55, 0.0),
+            2 * WINDOW,
+        );
+        assert_eq!(display.hz(), Some(25));
+    }
+
+    #[test]
+    fn with_no_report_the_gate_is_tighter() {
+        // 30 % busy passes beside a report and not without one.
+        let interval = 1.0 / 144.0;
+        let borderline = frame(interval, interval * 0.7, 0.0);
+        let mut none = Display::new();
+        feed(&mut none, borderline, 2 * WINDOW);
+        assert_eq!(none.hz(), None);
+        let mut reported = Display::new();
+        reported.report(Some(100_000));
+        feed(&mut reported, borderline, 2 * WINDOW);
+        assert_eq!(reported.hz(), Some(144));
+        feed(&mut none, frame(interval, interval * 0.8, 0.0), WINDOW);
+        assert_eq!(none.hz(), Some(144));
+    }
+
+    #[test]
+    fn a_reset_drops_the_frames_not_only_the_rate() {
+        let mut display = Display::new();
+        feed(&mut display, held(60.0), WINDOW - 1);
+        display.reset();
+        feed(&mut display, held(60.0), 1);
+        assert_eq!(display.hz(), None);
     }
 
     #[test]

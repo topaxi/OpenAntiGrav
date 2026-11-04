@@ -505,6 +505,7 @@ impl App {
             logged_display_hz: None,
             display_polled: None,
             display_mode: None,
+            display_configures: 0,
             frame_timing: Default::default(),
             phases: crate::session::phases::PhaseClock::new(self.dev.frame_log),
             drs_unreachable_said: false,

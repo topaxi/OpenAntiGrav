@@ -121,16 +121,16 @@ impl Session {
             .is_none_or(|at| now.duration_since(at) >= REPORT_EVERY)
         {
             self.display_polled = Some(now);
-            let monitor = self.gpu.output.window.current_monitor();
-            let reported = monitor.as_ref().and_then(|m| m.refresh_rate_millihertz());
-            self.display.report(reported);
+            self.display.report(self.gpu.output.window.refresh_millihertz());
         }
         let racing = matches!(self.stage, Stage::Race(_));
         let mode = self.gpu.output.config.present_mode;
-        if !racing || self.display_mode != Some(mode) {
+        let configures = self.gpu.output.configures;
+        if display_evidence_is_stale(racing, (self.display_mode, self.display_configures), (mode, configures)) {
             // A new race, or a new present mode: the old frames are another state's evidence.
             self.display.reset();
             self.display_mode = racing.then_some(mode);
+            self.display_configures = configures;
         }
         if racing
             && let (Some(interval), Some(gpu)) = (frame_seconds, self.governor_gpu_fresh())
@@ -187,5 +187,34 @@ impl Session {
         if self.next_frame < now || self.next_frame > now + period {
             self.next_frame = now + period;
         }
+    }
+}
+
+/// Whether the frames kept about the output no longer describe it: outside a race there are none
+/// worth keeping, and a changed present mode or a rebuilt swapchain is another state.
+fn display_evidence_is_stale(
+    racing: bool,
+    kept: (Option<wgpu::PresentMode>, u64),
+    now: (wgpu::PresentMode, u64),
+) -> bool {
+    !racing || kept != (Some(now.0), now.1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wgpu::PresentMode::{Fifo, Immediate};
+
+    #[test]
+    fn evidence_holds_only_in_the_race_it_was_taken_in() {
+        assert!(!display_evidence_is_stale(true, (Some(Fifo), 3), (Fifo, 3)));
+        assert!(display_evidence_is_stale(false, (Some(Fifo), 3), (Fifo, 3)));
+        assert!(display_evidence_is_stale(true, (None, 3), (Fifo, 3)));
+    }
+
+    #[test]
+    fn a_new_present_mode_or_a_rebuilt_swapchain_ends_it() {
+        assert!(display_evidence_is_stale(true, (Some(Fifo), 3), (Immediate, 3)));
+        assert!(display_evidence_is_stale(true, (Some(Fifo), 3), (Fifo, 4)));
     }
 }

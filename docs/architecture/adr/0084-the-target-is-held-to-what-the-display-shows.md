@@ -18,21 +18,31 @@ output forbids. The CPU governor's budget (`Sample::period`) had the same blind 
 
 ## Decision
 
-1. **The monitor's report is the rate, gamescope's included.** `winit`
-   `MonitorHandle::refresh_rate_millihertz`, asked again once a second (a clock check in
-   `Session::feed_display`) so a moved window follows. Measured on a Steam Deck docked to a
+1. **The monitor's report is the rate, gamescope's included.** Asked again once a second
+   (a clock check in `Session::feed_display`) through `Host::refresh_millihertz`. **On X11
+   (a Deck in Game Mode included) it is the X server's own answer**, read through RandR by a
+   thread of its own (`x11_refresh`: its own connection, the CRTC under most of the window,
+   `dot_clock / (htotal * vtotal)`, once a second, published in an atomic), because winit's
+   report freezes after window creation there: `current_monitor()` changes only on a
+   synthetic `ConfigureNotify`, gamescope sends none, and no RandR event reached winit in any
+   run. Everywhere else, and before the first answer, it is winit's
+   `MonitorHandle::refresh_rate_millihertz` (Wayland: read from the compositor's `wl_output`
+   current mode, live by reading winit's source; a mode change under a Wayland compositor was
+   not run). Measured on a Steam Deck docked to a
    4K LG TV in Game Mode: DRM `card0-DP-3` 3840x2160 (EDID preferred timing 594 MHz pixel clock,
    60.000 Hz), gamescope's mode save file `3840x2160@60`, its log `Updating mode for xwayland
    server #1: 3840x2160@60` and the WSI layer's `Swapchain received new refresh cycle:
    16.67ms`, `xrandr` 59.98 Hz on both Xwaylands, and winit 59980 mHz. The report agrees
    with the output. A report below 20 Hz after rounding (a driver's 0 or 1 for "hardware
    default") is no report. Not measured: the Deck's own panel undocked (Steam's 45-90 Hz
-   slider; the report is expected to follow the chosen rate, and a change of report resets
-   the measurement), and a Quick Access frame limit (gamescope limits below the report;
+   slider; RandR carries the mode Xwayland is given, which a change of the slider is
+   expected to change; a change of report resets the measurement), and a Quick Access frame limit (gamescope limits below the report;
    the clamp stays at the output rate, as a wrong high clamp only keeps today's behaviour).
 2. **A measurement may raise the report but never lower it** (`hz = max(report,
    measured)`). A measurement below a report is a loop that missed vblanks or a limiter outside
-   the game, and a wrong low clamp costs pixels for the session. The old measurement did exactly
+   the game, and a wrong low clamp costs frames for the session (a low target loosens the resolution
+   budget, so the scale rises until the loop fills it; a target that is too high is what costs
+   pixels). The old measurement did exactly
    that on the docked Deck: with `vsync = off` (the default; `Immediate`, which gamescope's
    WSI still blocks in for about 15-20 ms a frame) it read 37-52 Hz on the 60 Hz TV.
 3. **Measurement is evidence only where the mode can prove it.** A frame counts only under
@@ -43,8 +53,8 @@ output forbids. The CPU governor's budget (`Sample::period`) had the same blind 
    doubled one. 90 such intervals within 8 % spread (`(p90 - p10) / median`, i.e. plus or
    minus 4 %) give the rate. Jitter (variable refresh) and no evidence both give no answer,
    and no answer means no clamp. With no report (Xvfb, Android, web) this is the only source.
-4. **The measurement is dropped when its state changes**: a change of the report, a surface
-   reconfigure, a vsync change, a change of present mode and the start of every race (and any
+4. **The measurement is dropped when its state changes**: a change of the report, every surface
+   configure (the output counts them: a resize, an outdated or lost surface), a vsync change, a change of present mode and the start of every race (and any
    frame outside a race). A rate measured under a clamp cannot recover on its own (the clamp
    fills the GPU and removes its own evidence), so a lifted external limit with no report to
    floor it stays measured until the race ends: bounded by the race, accepted.
@@ -66,8 +76,13 @@ output forbids. The CPU governor's budget (`Sample::period`) had the same blind 
   inert (it had no period); its budget is the display's period.
 - The measurement needs a GPU timestamp reading and a fresh one (at most four frames old); an
   adapter without one relies on the report alone.
-- X11 serves the rate captured at the last configure event, so a mode switch with no window
-  move can leave a stale report until the next one. Under the `max` rule a stale low report is
-  corrected by `Fifo` evidence and a stale high one only keeps today's behaviour.
+- **What covers a wrong report.** The report is a floor, and the only thing that lifts a wrong
+  low one is a measurement, which needs `Fifo` and busy work at most 40 % of the true period
+  (4.4 ms at 90 Hz) in the frames it sees. That is a light scene: a clamped controller fills its
+  budget, and every pause and race start drops the evidence. So a wrong low report is in
+  practice not corrected; the cost is frames, bounded by the report being wrong, and the
+  sources are the platform's own (RandR, `wl_output`, DRM through the OS). A wrong high report
+  keeps today's behaviour. Where no report exists (Android) a half-rate read would be the
+  answer, so the gate is tighter there (busy at most 25 %, `NO_REPORT_BUSY_SHARE`).
 - The settings menu's `warn_when` reads settings only and cannot see a runtime refresh,
   so the row does not warn about the display pairing; the clamp is logged at `debug`.
