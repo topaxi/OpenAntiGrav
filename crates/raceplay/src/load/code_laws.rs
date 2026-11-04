@@ -151,3 +151,28 @@ mod tests {
         assert_eq!(handling.airbrake.sideshift, 200.0);
     }
 }
+
+/// Names in the loader report whose law the authored `<StartBoost>` flies, if any.
+pub(super) fn report_start_boost(
+    origin: Option<oag_title::Origin>,
+    flown: bool,
+    report: &mut Vec<String>,
+) {
+    match (origin, flown) {
+        (Some(oag_title::Origin::Measured), true) => {
+            report.push("<StartBoost>: the launch law is measured on this title".to_string());
+        }
+        (Some(oag_title::Origin::InheritedFrom(from)), true) => {
+            report.push(format!(
+                "<StartBoost>: the launch law is inherited from {from}, not measured on this title"
+            ));
+        }
+        (Some(oag_title::Origin::Chosen), true) => {
+            report.push("<StartBoost>: the launch law is chosen, not measured".to_string());
+        }
+        (None, _) => {
+            report.push("<StartBoost>: this title flies no authored launch boost".to_string());
+        }
+        (Some(_), false) => {}
+    }
+}

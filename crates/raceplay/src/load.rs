@@ -816,23 +816,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         .looks
         .start_boost_origin(archives.layout.platform);
     let start_boost = start_boost.filter(|_| start_boost_origin.is_some());
-    match (start_boost_origin, &start_boost) {
-        (Some(oag_title::Origin::Measured), Some(_)) => {
-            report.push("<StartBoost>: the launch law is measured on this title".to_string());
-        }
-        (Some(oag_title::Origin::InheritedFrom(from)), Some(_)) => {
-            report.push(format!(
-                "<StartBoost>: the launch law is inherited from {from}, not measured on this title"
-            ));
-        }
-        (Some(oag_title::Origin::Chosen), Some(_)) => {
-            report.push("<StartBoost>: the launch law is chosen, not measured".to_string());
-        }
-        (None, _) => {
-            report.push("<StartBoost>: this title flies no authored launch boost".to_string());
-        }
-        (Some(_), None) => {}
-    }
+    code_laws::report_start_boost(start_boost_origin, start_boost.is_some(), &mut report);
     // A title that compiles its launch in (Pure) flies its own, measured on its own disc.
     let code_start_boost = craft_title
         .race
