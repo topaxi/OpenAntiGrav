@@ -112,3 +112,22 @@ fn summary(disc: usize, fallback: usize, overridden: usize, missing: &[&str]) ->
     }
     line
 }
+
+#[cfg(test)]
+mod tests {
+    use super::summary;
+
+    #[test]
+    fn a_title_with_no_pattern_says_so() {
+        assert!(summary(0, 0, 0, &["a"]).contains("no pattern found"));
+    }
+
+    #[test]
+    fn the_report_counts_each_layer_and_names_what_is_missing() {
+        let line = summary(2, 3, 1, &["x", "y"]);
+        assert!(line.contains(
+            "2 patterns from the disc, 3 from this project's own fallback, 1 from overrides"
+        ));
+        assert!(line.ends_with("none for x, y"));
+    }
+}
