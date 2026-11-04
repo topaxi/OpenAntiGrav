@@ -432,7 +432,12 @@ impl Scene {
         for &slot in slots {
             self.keep_split_seat(slot);
         }
-        let recording = self.split_recording();
+        // One view is drawn as one view always was, whatever a split would record with.
+        let recording = if slots.len() > 1 {
+            self.split_recording()
+        } else {
+            super::Recording::Interleaved
+        };
         if recording == super::Recording::Interleaved {
             for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
                 self.enter_view(race, index, slot);

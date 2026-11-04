@@ -11,18 +11,25 @@
 //! What lands before each submission is what landed when the views were drawn one after
 //! another, so the picture is the same; `oag-game`'s `split_recording_ground_truth` compares them.
 //!
-//! **The default is [`Recording::Interleaved`], one view after another, on every target.**
-//! Measured on an Intel Core Ultra 7 265H notebook (NVIDIA RTX PRO 2000, `powersave` governor,
-//! pinned to the P-cores, minimum of three interleaved rounds), threaded recording
-//! cost 10 to 100% more CPU a frame than interleaved: Pulse two views 1,527 against 2,025 us, HD
+//! **The default is [`Recording::Interleaved`]; equal cores may take [`Recording::Threaded`].**
+//! [`Recording::default_for_target`] picks threads only on positive evidence of equal cores:
+//! native Linux, at least two cores, every `cpu_capacity` readable and the same (the Steam Deck
+//! and a desktop Zen report 1024 on each), and only while `THREADS_ON_EQUAL_CORES` is set, which
+//! it is not until a production-default run on the Deck confirms it. Interleaved stays
+//! everywhere else: capacities that differ (a hybrid Intel part, a phone's big.LITTLE),
+//! capacities that cannot be read, one core, Android, Windows, macOS and the web. On the Deck
+//! threads lowered the frame thread by 0.4 to 5.5 ms a frame at two to four views in HD and
+//! Pure, except Pure's three views, where they changed nothing
+//! (`docs/rendering/split-screen.md`, "Threaded recording on equal cores").
+//! On an Intel Core Ultra 7 265H notebook (a hybrid part, `powersave` governor, pinned to the
+//! P-cores) they cost 10 to 100% more CPU a frame: Pulse two views 1,527 against 2,025 us, HD
 //! two views 2,093 against 2,521, HD four 3,633 against 4,033, Pure two views 593 against 1,192
-//! (`docs/tools/render-bench.md`, "Threaded views"). The loss is the second core, not contention:
-//! one view at a time on a second thread is as slow as both at once, threads pinned to one core
-//! match serial, and an empty scoped spawn and join between frames costs about 200 us there (a
-//! parked worker gains nothing on a 2 x 250 us split, a spinning one halves it). Each view's
-//! recording is a burst of 0.2 to 0.4 ms once a frame, which a sleeping core does not wake and
-//! clock up for. **[`Recording::Threaded`] stays selectable** (`OAG_SPLIT_RECORDING=threaded`,
-//! [`Scene::set_split_recording`]) for a machine where it measures faster, the Steam Deck first.
+//! (`docs/tools/render-bench.md`, "Threaded views"). The loss there is the second core, not
+//! contention: one view at a time on a second thread is as slow as both at once, threads pinned
+//! to one core match serial, and an empty scoped spawn and join between frames costs about
+//! 200 us. Each view's recording is a burst of 0.2 to 0.4 ms once a frame, which a sleeping
+//! core does not wake and clock up for. `OAG_SPLIT_RECORDING` or [`Scene::set_split_recording`]
+//! picks either on any machine. One view is drawn as one view whatever the choice.
 //!
 //! **[`Recording::Overlapped`]** records view `k` on a worker while view `k + 1` is
 //! prepared. It lost more than threads did on the same notebook (Pulse two views 1,272 against
@@ -52,7 +59,7 @@ pub enum Recording {
     /// [`Recording::Interleaved`] shows.
     Reversed,
     /// Every view prepared, then recorded at once, a thread each (the first on the calling
-    /// thread). Slower on the notebook it was measured on: see the module doc.
+    /// thread). Faster on the Steam Deck, slower on a hybrid notebook: see the module doc.
     Threaded,
     /// View `k` recorded on a worker while view `k + 1` is prepared on the calling thread, and
     /// each view submitted as soon as it is recorded; the last view is recorded on the calling
@@ -62,21 +69,72 @@ pub enum Recording {
 }
 
 impl Recording {
-    /// What a split records with when nothing chose: one view after another (see the module doc
-    /// for why not threads).
+    /// What a split records with when nothing chose: [`Recording::Threaded`] on a native Linux
+    /// machine whose cores all report the same capacity, once [`THREADS_ON_EQUAL_CORES`] is
+    /// set, and [`Recording::Interleaved`] everywhere else (see the module doc).
     /// `OAG_SPLIT_RECORDING` (`interleaved`, `serial`, `reversed`, `threaded`, `overlapped`)
-    /// overrides it, for
-    /// a comparison or a bench.
+    /// overrides it, for a comparison or a bench.
     pub fn default_for_target() -> Self {
         static CHOSEN: std::sync::OnceLock<Recording> = std::sync::OnceLock::new();
-        *CHOSEN.get_or_init(|| match std::env::var("OAG_SPLIT_RECORDING").as_deref() {
-            Ok("interleaved") => Self::Interleaved,
-            Ok("serial") => Self::Serial,
-            Ok("reversed") => Self::Reversed,
-            Ok("threaded") => Self::Threaded,
-            Ok("overlapped") => Self::Overlapped,
-            _ => Self::Interleaved,
+        *CHOSEN.get_or_init(|| {
+            let over = std::env::var("OAG_SPLIT_RECORDING").ok();
+            let capacities = native_core_capacities();
+            let chosen = Self::select(over.as_deref(), &capacities, THREADS_ON_EQUAL_CORES);
+            log::info!(
+                "split recording: {chosen:?} ({}, core capacities {capacities:?})",
+                if over.as_deref().and_then(Self::named).is_some() {
+                    "OAG_SPLIT_RECORDING"
+                } else {
+                    "probe"
+                }
+            );
+            chosen
         })
+    }
+
+    /// The recording `over` names, else [`Recording::Threaded`] when `threads_on_equal_cores`
+    /// and `capacities` shows at least two cores and every one the same, else
+    /// [`Recording::Interleaved`]. An empty list is a machine that does not say, and stays
+    /// interleaved.
+    fn select(over: Option<&str>, capacities: &[u32], threads_on_equal_cores: bool) -> Self {
+        if let Some(named) = over.and_then(Self::named) {
+            return named;
+        }
+        let uniform = capacities.len() > 1 && capacities.windows(2).all(|pair| pair[0] == pair[1]);
+        if threads_on_equal_cores && uniform {
+            Self::Threaded
+        } else {
+            Self::Interleaved
+        }
+    }
+
+    fn named(name: &str) -> Option<Self> {
+        match name {
+            "interleaved" => Some(Self::Interleaved),
+            "serial" => Some(Self::Serial),
+            "reversed" => Some(Self::Reversed),
+            "threaded" => Some(Self::Threaded),
+            "overlapped" => Some(Self::Overlapped),
+            _ => None,
+        }
+    }
+}
+
+/// Whether a machine with equal cores records a split with threads by default. Off until the
+/// Steam Deck's production-default run confirms it (`docs/rendering/split-screen.md`,
+/// "Threaded recording on equal cores").
+const THREADS_ON_EQUAL_CORES: bool = false;
+
+/// This machine's core capacities where threads may record a split by default: desktop Linux,
+/// the Steam Deck. Android (phones are big.LITTLE), the web and every other OS read as empty.
+fn native_core_capacities() -> Vec<u32> {
+    #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
+    {
+        oag_gpu::split_finish::core_capacities()
+    }
+    #[cfg(not(all(target_os = "linux", not(target_arch = "wasm32"))))]
+    {
+        Vec::new()
     }
 }
 
@@ -489,4 +547,74 @@ fn threaded<'a>(
     one: impl Fn(Prepared<'a>) -> Recorded,
 ) -> Vec<Recorded> {
     prepared.into_iter().map(one).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Recording, THREADS_ON_EQUAL_CORES};
+
+    const DECK: [u32; 8] = [1024; 8];
+    /// An Intel Core Ultra 7 265H, a hybrid part, as the probe reads it (core order).
+    const CORE_ULTRA_265H: [u32; 16] = [
+        1024, 1024, 1024, 1024, 1024, 1024, 758, 758, 758, 758, 758, 758, 758, 758, 301, 301,
+    ];
+    const GALAXY_S24: [u32; 10] = [253, 253, 253, 253, 653, 653, 653, 730, 730, 1024];
+
+    /// Only a readable list of two or more equal cores records with threads, and only once
+    /// the rule is on.
+    #[test]
+    fn only_equal_cores_that_say_so_record_with_threads() {
+        assert_eq!(Recording::select(None, &DECK, true), Recording::Threaded);
+        for capacities in [&CORE_ULTRA_265H[..], &GALAXY_S24, &[], &[1024]] {
+            assert_eq!(
+                Recording::select(None, capacities, true),
+                Recording::Interleaved,
+                "{capacities:?}"
+            );
+        }
+        assert_eq!(
+            Recording::select(None, &DECK, false),
+            Recording::Interleaved
+        );
+    }
+
+    /// Whatever the rule, a machine with differing or unreadable capacities keeps interleaved.
+    #[test]
+    fn this_notebook_and_a_phone_keep_interleaved_by_default() {
+        for capacities in [&CORE_ULTRA_265H[..], &GALAXY_S24, &[]] {
+            assert_eq!(
+                Recording::select(None, capacities, THREADS_ON_EQUAL_CORES),
+                Recording::Interleaved
+            );
+        }
+    }
+
+    /// `OAG_SPLIT_RECORDING` wins over the probe both ways; a name it does not know is ignored.
+    #[test]
+    fn the_variable_overrides_the_probe_both_ways() {
+        assert_eq!(
+            Recording::select(Some("interleaved"), &DECK, true),
+            Recording::Interleaved
+        );
+        for capacities in [&CORE_ULTRA_265H[..], &GALAXY_S24, &[]] {
+            for rule in [false, true] {
+                assert_eq!(
+                    Recording::select(Some("threaded"), capacities, rule),
+                    Recording::Threaded
+                );
+            }
+        }
+        assert_eq!(
+            Recording::select(Some("overlapped"), &DECK, true),
+            Recording::Overlapped
+        );
+        assert_eq!(
+            Recording::select(Some("fast"), &DECK, true),
+            Recording::Threaded
+        );
+        assert_eq!(
+            Recording::select(Some("fast"), &CORE_ULTRA_265H, true),
+            Recording::Interleaved
+        );
+    }
 }
