@@ -2006,3 +2006,39 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
 - Not a 2048 or Omega finding: the viewport and camera code is title-agnostic, but
   only Pulse's frames were looked at, so Pure, Pulse PS2, HD, 2048 and Omega are
   unchecked under a split.
+
+## Split finish under an interleaved split (2026-11-04)
+
+With `oag_gpu::split_finish` on (the default where every core reports the same capacity: the
+Steam Deck, a desktop Zen; `OAG_SPLIT_FINISH=1` forces it), each view's scene pass is split
+off the view's encoder and held for the frame's own submit. The interleaved loop in
+`Scene::render_slots` submits each view as it is recorded, so what followed the scene pass in
+the view (the sun flare, the glow's bright pass, the zoom, the timer resolve) went to the
+queue ahead of the pass it reads, and the passes ran after every view's tail. A two-player
+Pure race on Vineta K at the grid showed it: the first view's sun flare and the washed-out
+glow around it were missing with `OAG_SPLIT_FINISH=1` and present with `=0`, on a binary built
+before the flare's buffer change as well. The windowed run is the only place it shows (the
+split frame opens only in the window's draw loop, never in `--screenshot`), with the screen
+filter, motion blur, MSAA and reconstruction forced off so the post chain does not hide it.
+
+`oag_gpu::split_finish::submit_with_closed` submits a view's buffer behind whatever the open
+frame has split off so far, and the loop uses it. Test:
+`tests::split_finish::a_split_drawn_in_an_open_frame_is_the_picture_it_is_without_one` draws
+a blurred split with and without an open frame and compares each view's rows (red with the
+plain `queue.submit`, green with the helper); `split_finish::tests` covers the helper's order.
+The batched recordings (`Serial`, `Reversed`, `Threaded`, `Overlapped`) never call
+`Scene::render`, so they split nothing.
+
+**On the Steam Deck (2026-11-04).** Two-player Pure on Vineta K, vertical split, 1280x800 in a
+headless gamescope, `vsync = "off"`, `frame_limit = "unlimited"`, `target_fps = "off"`, dist
+build with znver2 in the Debian container, mean of the phase line after the first six seconds,
+the Deck's lock held, arms interleaved, 4 rounds (3 for the modes). Frame-thread ms a frame
+(`scene` / `submit` / `total`): before the fix, split finish on, 4.4 / 0.83 / 6.06 (the picture
+was wrong); after the fix, split finish on, 6.3 / 0.47 / 7.65; after, `OAG_SPLIT_FINISH=0`,
+6.1 / 0.45 / 7.40. So the fix costs 1.5 ms against the build with the bug, which skipped the
+wait on the finishing thread, and 0.25 ms against no split at all: under an interleaved split
+the finish is on the critical path again and the split gains nothing there. fps was 102.6 in every arm (something
+other than this CPU time paces the frame), so these are CPU headroom numbers. The recording
+modes, same setup, `total`: `serial` 7.40, `overlapped` 7.73, **`threaded` 6.94** (6.78 to 7.18),
+against 7.65 for the interleaved default. `threaded` is the lead on this machine, the notebook
+that measured it slower being a hybrid part (`split_record`); not made the default here.

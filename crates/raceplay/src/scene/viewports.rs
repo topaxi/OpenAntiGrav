@@ -469,7 +469,9 @@ impl Scene {
                 }
                 let commands = encoder.finish();
                 oag_gpu::perfprobe::mark("encoder-finish");
-                queue.submit(Some(commands));
+                // Behind the view's own scene pass, which an open frame split off: the flare,
+                // the glow and the blur that follow read what that pass drew.
+                oag_gpu::split_finish::submit_with_closed(queue, commands);
                 oag_gpu::perfprobe::mark("submit");
             }
         } else {
