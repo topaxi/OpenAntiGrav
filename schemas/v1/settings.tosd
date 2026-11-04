@@ -422,6 +422,11 @@ optional = true
 oneof = ["string", "boolean"]
 optional = true
 
+# Race music action to a pad control: a button name or raw:CODE.
+[types.controls.music]
+type = "types.string-map"
+optional = true
+
 # [ai]: what the opponents are like.
 [types.ai]
 type = "table"

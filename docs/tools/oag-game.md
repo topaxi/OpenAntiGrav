@@ -160,6 +160,7 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 | `--trace-out <file.csv>` | Simulation only, no window: write our per-tick state to a CSV in the capture's own columns, for `oag-trace compare` against one from `scripts/psp-trace.py`. Refused together with `--screenshot`. |
 | `--input-script <file.inputs>` | With `--screenshot` or `--trace-out`: drive the run from a committed `.inputs` file instead of `--hold`/`--press` - see [the verification protocol](../reverse-engineering/verification-protocol.md). |
 | `--dry-run` | Report what was loaded and exit. |
+| `--probe-pad` | Print every connected pad's button presses and releases with the value `[controls.music]` takes for them (a button name or `raw:CODE`), until Ctrl-C. Opens no window and no audio; refused with `--race`, `--screenshot`, `--dry-run`, `--trace-out`, `--launcher` and `--drive`. See "Music controls in a race". |
 | `--drive <steps>` / `--drive-file <file>` | Run our own menus with no window, driven by a script, and exit non-zero when a step times out or a row is not there. See [Driving the menus with no window](#driving-the-menus-with-no-window). |
 | `--state-log <file>` | With `--drive`, write the game's state as one JSON line per change to this file (stderr when absent). |
 
@@ -795,14 +796,28 @@ through it.
 Six pad actions steer the race music while a race is running and not paused (`oag_input::music::MusicAction`,
 glued by `oag_game::music_pad`). Output only: they never reach `World`, the state hash or a replay, and
 the keyboard has no route. A press made in a menu or in pause is spent there and does nothing on resume.
-Each action is a row of `oag_input::music::MUSIC_BINDINGS`, the one place a pad control is chosen
-(a control the backend names, or a raw event code for a back paddle the kernel only numbers); a control
-that is also a game button is refused by a test. **The table is empty today**: the back paddles of the
-maintainer's 8BitDo Ultimate (2dc8:3109 dongle, 2dc8:3106 wired) send no event the kernel or `gilrs` reports
-(probed with `gilrs` and evdev; the dongle's hidraw node is a vendor channel that is silent at rest), and
-the stick clicks (`gilrs` `LeftThumb`/`RightThumb`) were ruled out as clicks players use. A row is added once
-the remapped paddle's event is seen, e.g. `(PadControl::Raw(code), MusicAction::MusicUp)`. A pad without these
-controls has the actions unbound.
+Nothing is bound by default. A player binds an action in `settings.toml`, no rebuild:
+
+```toml
+[controls.music]
+music_up = "RightThumb"       # right stick click
+music_down = "LeftThumb"      # left stick click
+next_song = "raw:300"         # a control only a code names, e.g. a back paddle
+```
+
+Keys: `show_song`, `restart_song`, `next_song`, `previous_song`, `music_up`, `music_down`. A value is a
+button name (`South`, `East`, `North`, `West`, `C`, `Z`, `LeftTrigger`, `LeftTrigger2`, `RightTrigger`,
+`RightTrigger2`, `Select`, `Start`, `Mode`, `LeftThumb`, `RightThumb`, `DPadUp`, `DPadDown`, `DPadLeft`,
+`DPadRight`; any case) or `raw:CODE` (decimal or `0x` hex). An unreadable value, an unknown key, or a
+control that is also a game button logs one `warn` naming the key and leaves that action unbound; an
+action never bound is not written to a fresh file. The table is `oag_input::music::MusicBindings`, read
+by `oag_game::settings::Controls::music_bindings`.
+
+To find a control's value, run `oag-game --probe-pad --no-audio` and press it: each press and release of
+every connected pad prints as `NAME: pressed RightThumb (code 318)` (or `raw:CODE` for an unnamed control, and
+a note when it is a game button and cannot be bound). It opens no window and no audio; stop it with Ctrl-C.
+The back paddles of the maintainer's 8BitDo Ultimate (2dc8:3109 dongle, 2dc8:3106 wired) sent no event the
+kernel or `gilrs` reported when probed, so they stay unreachable until a remap makes one appear.
 
 | Action | Gesture | Does |
 | --- | --- | --- |
