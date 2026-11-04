@@ -157,7 +157,7 @@ pub(super) fn load_hud(
     style: Option<&str>,
     add_on_campaign: Option<&str>,
     views: SplitViews,
-    mod_icons: &[oag_hud::sprite::DecodedImage],
+    mod_icons: &crate::extensions::ModIcons,
     report: &mut Vec<String>,
 ) -> oag_hud::Assets {
     let (hud, skin) = hud_roots(title, style, add_on_campaign, report);
@@ -220,9 +220,23 @@ pub(super) fn load_hud(
                 every.sprites.extend(authored.sprites.iter().cloned());
                 every.models.extend(authored.models.iter().cloned());
             }
-            load_atlases(archives, title, Some(&every), entry, mod_icons, report)
+            load_atlases(
+                archives,
+                title,
+                Some(&every),
+                entry,
+                &mod_icons.raster,
+                report,
+            )
         }
-        _ => load_atlases(archives, title, layout.as_ref(), entry, mod_icons, report),
+        _ => load_atlases(
+            archives,
+            title,
+            layout.as_ref(),
+            entry,
+            &mod_icons.raster,
+            report,
+        ),
     };
 
     // The HUD's captions are `idstring` keys - `IG_HUD_LAP` on Pulse,
@@ -340,7 +354,7 @@ pub(super) fn load_hud(
         report,
     );
 
-    oag_hud::Assets {
+    let mut assets = oag_hud::Assets {
         layout,
         sheet,
         font,
@@ -358,7 +372,13 @@ pub(super) fn load_hud(
         split,
         split_columns,
         split_hud,
-    }
+        vector_icons: mod_icons.vector.clone(),
+        vector_base: None,
+    };
+    // One pixel per layout unit until the host knows the size it draws at and rasterises
+    // again (`oag_hud::Assets::rasterise_vector_icons`).
+    assets.rasterise_vector_icons(1.0, report);
+    assets
 }
 
 /// This project's split-screen layout file for a race of `views` views, cut for

@@ -46,7 +46,11 @@ pub fn sources_with<'a>(
                     .manifest
                     .icons
                     .iter()
-                    .map(|(name, path)| (name.clone(), reader(m, path)))
+                    .map(|(name, path)| oag_raceplay::extensions::IconSource {
+                        name: name.clone(),
+                        path: path.clone(),
+                        read: reader(m, path),
+                    })
                     .collect(),
                 effects: m
                     .manifest
@@ -299,8 +303,8 @@ badge = "ui/badge.png"
         );
         assert_eq!(text(Some("german"), "nope"), None);
         assert_eq!(found[0].icons.len(), 1);
-        assert_eq!(found[0].icons[0].0, "badge");
-        assert_eq!((found[0].icons[0].1)().unwrap(), b"png bytes");
+        assert_eq!(found[0].icons[0].name, "badge");
+        assert_eq!((found[0].icons[0].read)().unwrap(), b"png bytes");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

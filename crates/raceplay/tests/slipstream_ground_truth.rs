@@ -56,9 +56,13 @@ pub(crate) fn source_of(dir: &str) -> Option<race::extensions::Source> {
         .iter()
         .map(|(name, path)| {
             let files = files.clone();
-            let path = path.clone();
-            let reader: race::extensions::Reader = Arc::new(move || files(&path));
-            (name.clone(), reader)
+            let file = path.clone();
+            let reader: race::extensions::Reader = Arc::new(move || files(&file));
+            race::extensions::IconSource {
+                name: name.clone(),
+                path: path.clone(),
+                read: reader,
+            }
         })
         .collect();
     Some(race::extensions::Source {

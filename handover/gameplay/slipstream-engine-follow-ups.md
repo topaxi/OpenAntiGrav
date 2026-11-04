@@ -172,6 +172,25 @@ guest as `Observation::option` (new ABI bytes, `mod-shaders.md` "A mod's quality
    decided, so the portal lanes are mostly seen by other people. Holding the transit until the craft reaches
    the entrance would show it, and changes the timing of the weapon.
 
+## SVG icons (lane svg-assets, 2026-11-04)
+
+A mod's `[icons]` accepts `.svg` beside `.png` (`oag_hud::svg`, `Assets::rasterise_vector_icons`,
+`oag_game::hud_overlay`). `oag_raceplay::extensions::mod_icons` parses an SVG at load (a torn
+one is named by file and parser error, draws nothing); the pickup slot's size in layout units
+comes from the same fit `mod_icon_draw` uses (`oag_hud::mod_icon_size`), times the pixels per
+layout unit the renderer measures; the raster is stored in the HUD sheet with its texel density
+and drawn one texel to one pixel. The race load rasterises at one pixel per unit; the overlay
+rasterises again on a worker thread (`oag_thread::Task`) when its measured size or Safe Area
+changes and swaps the sheet in; `--screenshot` rasterises synchronously. `resvg` is built
+without `text` and `raster-images`: `<text>` draws nothing, `<image>` is never read. Example:
+`oag.energy-turbo`'s `icons/energy.svg`. Open: a split-screen window rasterises for the whole
+viewport, so a view scaled down samples a larger raster; windows of different sizes sharing
+one overlay never start a raster (a change must be asked for in two draws running);
+under `hud_scale = "integer"` at a non-integer factor (1280x800 Pulse) the title's backdrop
+snaps down to a whole factor while the icon keeps its exact measured size, so it sits low and
+right in the smaller hex (the raster itself stays one texel to one pixel; a PNG was not compared); the fallback-layer HUD art
+(`assets/`) does not use SVG; `oag.slipstream` keeps its PNGs on purpose.
+
 ## Next Steps
 
 1. Open items 2, 3 and 5: a route exit, an island exit, a `Distance::Trigger` test on a

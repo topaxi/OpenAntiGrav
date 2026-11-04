@@ -46,6 +46,35 @@ pub use track::{Track, TrackProps};
 pub const MAX_SIM_MODS: usize = 4;
 
 /// Reads a module's bytes, on the load thread.
+/// One of a mod's `[icons]`: its name, its path in the mod (a report names the file) and a
+/// reader for its bytes, a PNG or an SVG by the path's extension.
+#[derive(Clone)]
+pub struct IconSource {
+    /// The key in `[icons]`.
+    pub name: String,
+    /// The file's path inside the mod.
+    pub path: String,
+    /// Reads the file.
+    pub read: Reader,
+}
+
+impl std::fmt::Debug for IconSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IconSource")
+            .field("name", &self.name)
+            .field("path", &self.path)
+            .finish_non_exhaustive()
+    }
+}
+
+impl IconSource {
+    /// Whether the file is a vector drawing.
+    #[must_use]
+    pub fn is_svg(&self) -> bool {
+        self.path.to_ascii_lowercase().ends_with(".svg")
+    }
+}
+
 pub type Reader = Arc<dyn Fn() -> Result<Vec<u8>, String> + Send + Sync>;
 
 /// Where a [`Source`] runs.
@@ -103,8 +132,8 @@ pub struct Source {
     /// The mod's own text for a language: its `strings/<language>.toml` over its
     /// `strings/english.toml`, by string id (the same files its menu rows use).
     pub strings: StringsReader,
-    /// The mod's `[icons]`: name and a reader for the PNG.
-    pub icons: Vec<(String, Reader)>,
+    /// The mod's `[icons]`.
+    pub icons: Vec<IconSource>,
     /// The mod's `[effects]`, in name order: name and the TOML's path in the mod. A
     /// module's `fire-mod-effect` names one by its place in this list.
     pub effects: Vec<(String, String)>,
@@ -436,10 +465,22 @@ pub fn prepare(
     }
 }
 
-/// The PNGs of the `[icons]` of every mod that is on for this race (`title`, and
-/// `foreign_track` for a track module), decoded for the HUD's sheet under the keys
-/// [`mod_icon_src`] gives. Read on the load thread with the rest of the load. One that
-/// is missing or does not decode draws nothing, and `report` names it.
+/// The icons of the mods that are on for a race.
+#[cfg(feature = "view")]
+#[derive(Debug, Default, Clone)]
+pub struct ModIcons {
+    /// The PNGs, decoded.
+    pub raster: Vec<oag_hud::sprite::DecodedImage>,
+    /// The SVGs, parsed; rasterised once the HUD knows the size of the slot they draw in
+    /// ([`oag_hud::Assets::rasterise_vector_icons`]).
+    pub vector: Vec<oag_hud::svg::VectorIcon>,
+}
+
+/// The `[icons]` of every mod that is on for this race (`title`, and `foreign_track` for
+/// a track module), under the keys [`mod_icon_src`] gives: a PNG decoded for the HUD's
+/// sheet, an SVG parsed. Read on the load thread with the rest of the load. One that is
+/// missing or does not decode or parse draws nothing, and `report` names the file and
+/// the reader's error.
 #[cfg(feature = "view")]
 #[must_use]
 pub fn mod_icons(
@@ -447,29 +488,45 @@ pub fn mod_icons(
     title: &str,
     foreign_track: Option<&std::path::Path>,
     report: &mut Vec<String>,
-) -> Vec<oag_hud::sprite::DecodedImage> {
+) -> ModIcons {
     #[cfg(not(feature = "extensions"))]
     {
         let _ = (sources, title, foreign_track, report);
-        Vec::new()
+        ModIcons::default()
     }
     #[cfg(feature = "extensions")]
     {
         let mut seen = std::collections::BTreeSet::new();
-        let mut out = Vec::new();
+        let mut out = ModIcons::default();
         for source in for_race(sources, title, foreign_track) {
             if !seen.insert(source.mod_id.clone()) {
                 continue;
             }
-            for (name, read) in &source.icons {
-                let label = format!("mod {}: icon {name}", source.mod_id);
-                match read().and_then(|bytes| decode_png(&bytes)) {
+            for icon in &source.icons {
+                let (name, path) = (&icon.name, &icon.path);
+                let label = format!("mod {}: icon {name} ({path})", source.mod_id);
+                let src = mod_icon_src(&source.mod_id, name);
+                let bytes = match (icon.read)() {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        push(report, format!("{label} left out: {e}; draws nothing"));
+                        continue;
+                    }
+                };
+                if icon.is_svg() {
+                    match oag_hud::svg::VectorIcon::parse(src, &bytes) {
+                        Ok(vector) => out.vector.push(vector),
+                        Err(e) => push(report, format!("{label} left out: {e}; draws nothing")),
+                    }
+                    continue;
+                }
+                match decode_png(&bytes) {
                     Ok((width, height, rgba)) => {
                         // Where the art is on the canvas, for the pickup's slot
                         // (`oag_hud::pickup::mod_icon_draw`); `hud-icon` ignores it.
                         let art = art_box(width, height, &rgba);
-                        out.push(oag_hud::sprite::DecodedImage {
-                            src: mod_icon_src(&source.mod_id, name),
+                        out.raster.push(oag_hud::sprite::DecodedImage {
+                            src,
                             width,
                             height,
                             rgba,
