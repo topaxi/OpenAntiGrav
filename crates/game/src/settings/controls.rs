@@ -316,7 +316,7 @@ fn default_triggers() -> String {
     TriggerMode::default().name().to_string()
 }
 
-/// `ps4`: the newest law (Omega's), by the maintainer's decision.
+/// `ps4`: the newest law (Omega's).
 fn default_rumble() -> String {
     oag_input::rumble::Mode::default().name().to_string()
 }

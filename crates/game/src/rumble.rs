@@ -1,7 +1,7 @@
 //! Playing a rumble pattern on a real pad outside a race: the `--rumble-pattern`
 //! probe, and the RUMBLE setting's mapping to a player's law.
 //!
-//! The probe is a feel test for a maintainer and a wiring proof for a test:
+//! The probe is a feel test and a wiring proof for a test:
 //! it opens the pad subsystem with no window, plays one pattern through
 //! [`oag_input::rumble::Player`] and the `gilrs` backend, logs every level it
 //! sent, and exits with the motors silent.
