@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use oag_input::bindings::Bindings;
+use oag_input::music::MusicBindings;
 use oag_input::pad::TriggerMode;
 use oag_input::prompt::PromptStyle;
 use oag_physics::pilot_assist::Level;
@@ -125,6 +126,13 @@ pub struct Controls {
     /// choice changes meaning. A token this build does not know reads as the default.
     #[serde(default = "default_pilot_assist", with = "pilot_assist_level")]
     pub pilot_assist: Level,
+    /// Which pad control does each race music action, by action key (`show_song`,
+    /// `restart_song`, `next_song`, `previous_song`, `music_up`, `music_down`): a button name
+    /// such as `RightThumb`, or `raw:CODE` for a control only a code names (`--probe-pad`
+    /// prints both). Absent means unbound, and nothing is written for an action never bound.
+    /// Config only, no menu row. See `oag_input::music::MusicBindings`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub music: BTreeMap<String, String>,
 }
 
 fn default_pilot_assist() -> Level {
@@ -172,6 +180,12 @@ mod pilot_assist_level {
 }
 
 impl Controls {
+    /// [`Self::music`] as a table, and one message per entry it dropped.
+    #[must_use]
+    pub fn music_bindings(&self) -> (MusicBindings, Vec<String>) {
+        MusicBindings::from_pairs(self.music.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+    }
+
     /// [`Self::prompt_style`] as a value, `auto` for a token this build does
     /// not know. Silent; `main::args::resolve_prompt_style` is the one that
     /// reports it.
@@ -364,6 +378,7 @@ impl Default for Controls {
             bindings: default_bindings(),
             prompt_style: default_prompt_style(),
             pilot_assist: default_pilot_assist(),
+            music: BTreeMap::new(),
         }
     }
 }
@@ -395,6 +410,31 @@ mod tests {
         }
         assert_eq!(parsed("pilot_assist = \"wild\""), default_pilot_assist());
         assert_eq!(parsed(""), default_pilot_assist());
+    }
+
+    #[test]
+    fn music_keys_are_read_from_settings_and_absent_ones_are_not_written() {
+        use oag_input::music::{MusicAction, PadControl};
+        let controls: Controls = toml::from_str(
+            "[music]\nnext_song = \"RightThumb\"\nmusic_up = \"raw:300\"\nrestart_song = \"South\"\n",
+        )
+        .unwrap();
+        let (table, problems) = controls.music_bindings();
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].starts_with("restart_song"), "{problems:?}");
+        assert!(table.rows().contains(&(
+            PadControl::parse("RightThumb").unwrap(),
+            MusicAction::NextSong
+        )));
+        assert!(
+            table
+                .rows()
+                .contains(&(PadControl::Raw(300), MusicAction::MusicUp))
+        );
+
+        let fresh = toml::to_string(&Controls::default()).unwrap();
+        assert!(!fresh.contains("music"), "{fresh}");
+        assert!(Controls::default().music_bindings().0.rows().is_empty());
     }
 
     #[test]

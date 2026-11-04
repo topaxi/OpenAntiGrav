@@ -17,6 +17,7 @@ pub mod keys;
 pub mod lobby;
 pub mod music;
 pub mod pad;
+pub mod probe;
 pub mod prompt;
 pub mod rumble;
 pub mod touch;
@@ -718,6 +719,11 @@ impl Controls {
     /// the presses; call once a frame in a race, and not at all elsewhere.
     pub fn take_music(&mut self) -> music::MusicInput {
         self.pad.take_music()
+    }
+
+    /// Binds the pad's music controls. See [`Pad::set_music_bindings`].
+    pub fn set_music_bindings(&mut self, bindings: music::MusicBindings) {
+        self.pad.set_music_bindings(bindings);
     }
 
     /// The pad, to drive its motors.

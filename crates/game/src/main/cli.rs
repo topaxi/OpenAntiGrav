@@ -447,6 +447,12 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) dry_run: bool,
 
+    /// Print each connected pad's button presses with the value `[controls.music]` takes for them
+    /// (a button name, or `raw:CODE`), until stopped with Ctrl-C. Opens no window and no audio.
+    /// See docs/tools/oag-game.md, "Music controls in a race".
+    #[arg(long, conflicts_with_all = ["race", "screenshot", "dry_run", "trace_out", "launcher", "drive", "drive_file"])]
+    pub(crate) probe_pad: bool,
+
     /// Skip the front end and go straight to a ship on a track.
     ///
     /// Arrow keys steer, X or Return thrusts, Q and E are the airbrakes. The

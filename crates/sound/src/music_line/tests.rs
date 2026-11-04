@@ -132,3 +132,25 @@ fn the_trim_reaches_what_the_mixer_renders() {
         "{full} {half}"
     );
 }
+
+#[test]
+fn leaving_a_race_and_starting_the_next_both_start_at_the_players_settings() {
+    use crate::{Audio, MusicDiscs, MusicSource, settings::Settings};
+    let settings = Settings::default();
+    let mut audio = Audio::open(&settings, None, None, oag_audio::MIN_BUFFER, false);
+    let discs = MusicDiscs::default();
+    let cache = std::path::Path::new("unused");
+
+    audio.step_music_line(SWEEP_TICKS + 40, Volume::FULL);
+    audio.pause_race_music();
+    assert_eq!(audio.music_line_ticks(), 0, "leaving the race");
+
+    audio.step_music_line(-60, Volume::FULL);
+    assert_ne!(audio.music_line_ticks(), 0);
+    audio.start_race_music(&discs, MusicSource::Auto, cache);
+    assert_eq!(audio.music_line_ticks(), 0, "the next race");
+    audio.output().with_mixer(|mixer| {
+        assert_eq!(mixer.bus_trim(Bus::Music), 1.0);
+        assert_eq!(mixer.bus_trim(Bus::Sfx), 1.0);
+    });
+}

@@ -729,6 +729,8 @@ pub struct Pad {
     rumble: rumble::Effects,
     /// The music controls, read off the same events and kept out of the abstract buttons.
     music: crate::music::Tracker,
+    /// Which control does which music action. Empty until [`Self::set_music_bindings`].
+    music_bindings: crate::music::MusicBindings,
 }
 
 impl std::fmt::Debug for Pad {
@@ -760,6 +762,7 @@ impl Pad {
                 presses: Vec::new(),
                 rumble: rumble::Effects::default(),
                 music: crate::music::Tracker::default(),
+                music_bindings: crate::music::MusicBindings::default(),
             },
             Err(e) => {
                 warn!("no gamepad support ({e}); keyboard only");
@@ -772,6 +775,7 @@ impl Pad {
                     presses: Vec::new(),
                     rumble: rumble::Effects::default(),
                     music: crate::music::Tracker::default(),
+                    music_bindings: crate::music::MusicBindings::default(),
                 }
             }
         }
@@ -794,6 +798,7 @@ impl Pad {
             presses: Vec::new(),
             rumble: rumble::Effects::default(),
             music: crate::music::Tracker::default(),
+            music_bindings: crate::music::MusicBindings::default(),
         }
     }
 
@@ -907,7 +912,7 @@ impl Pad {
                     match event.event {
                         gilrs::EventType::ButtonPressed(button, code) => {
                             self.music.note(
-                                crate::music::MUSIC_BINDINGS,
+                                self.music_bindings.rows(),
                                 button,
                                 code.into_u32(),
                                 true,
@@ -915,7 +920,7 @@ impl Pad {
                         }
                         gilrs::EventType::ButtonReleased(button, code) => {
                             self.music.note(
-                                crate::music::MUSIC_BINDINGS,
+                                self.music_bindings.rows(),
                                 button,
                                 code.into_u32(),
                                 false,
@@ -981,6 +986,12 @@ impl Pad {
     /// confirm, and before anyone has joined every pad is merged into slot 0.
     pub fn take_presses(&mut self) -> Vec<(gilrs::GamepadId, u32)> {
         std::mem::take(&mut self.presses)
+    }
+
+    /// Replaces the table the music controls are read through.
+    pub fn set_music_bindings(&mut self, bindings: crate::music::MusicBindings) {
+        self.music.release_all();
+        self.music_bindings = bindings;
     }
 
     /// What the music controls did since the last call (see [`crate::music`]).
@@ -1071,7 +1082,7 @@ fn pad_caps(pad: &gilrs::Gamepad<'_>) -> crate::prompt::PadCaps {
 /// Whether the OS's joystick is a gamepad at all, for the controls and the
 /// prompts alike. A keyboard's system-control interface is listed as a
 /// joystick and is neither.
-fn is_real_pad(pad: &gilrs::Gamepad<'_>) -> bool {
+pub(crate) fn is_real_pad(pad: &gilrs::Gamepad<'_>) -> bool {
     crate::prompt::is_gamepad(&pad_info(pad), pad_caps(pad))
 }
 

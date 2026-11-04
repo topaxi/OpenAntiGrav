@@ -728,7 +728,7 @@ fn the_2048_borrows_hds_display_and_names_its_own_songs() {
 #[ignore = "needs data/images/pulse-psp-eu.chd"]
 fn pulse_pad_music_controls_move_the_song_and_leave_the_simulation_alone() {
     use oag_gameplay::PlayerInputs;
-    use oag_input::music::{MusicAction, MusicInput};
+    use oag_input::music::{MusicAction, Tracker};
 
     struct Outcome {
         hash: u64,
@@ -736,7 +736,27 @@ fn pulse_pad_music_controls_move_the_song_and_leave_the_simulation_alone() {
         playhead_after_restart: Option<f64>,
         line_after_hold: i32,
         line_at_end: i32,
+        line_after_race_end: i32,
+        line_after_restart: i32,
     }
+
+    // The pad's controls come from `[controls.music]`, as a player writes them.
+    let controls: oag_game::settings::Controls = toml::from_str(
+        "[music]\nrestart_song = \"raw:300\"\nnext_song = \"RightThumb\"\n\
+         previous_song = \"LeftThumb\"\nshow_song = \"raw:301\"\n\
+         music_up = \"raw:302\"\nmusic_down = \"raw:303\"\n",
+    )
+    .expect("settings");
+    let (bindings, problems) = controls.music_bindings();
+    assert!(problems.is_empty(), "{problems:?}");
+    let control = |action: MusicAction| {
+        bindings
+            .rows()
+            .iter()
+            .find(|&&(_, a)| a == action)
+            .map(|&(control, _)| control)
+            .expect("bound")
+    };
 
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
@@ -766,7 +786,10 @@ fn pulse_pad_music_controls_move_the_song_and_leave_the_simulation_alone() {
             playhead_after_restart: None,
             line_after_hold: 0,
             line_at_end: 0,
+            line_after_race_end: -1,
+            line_after_restart: -1,
         };
+        let mut pad = Tracker::default();
         let go = oag_race::COUNTDOWN_TICKS as usize;
         let name = |audio: &oag_sound::Audio| {
             audio
@@ -774,21 +797,29 @@ fn pulse_pad_music_controls_move_the_song_and_leave_the_simulation_alone() {
                 .and_then(|song| song.name)
                 .map_or_else(String::new, |name| name.text(" - "))
         };
-        let press = |action: MusicAction| MusicInput::new(&[action], &[]);
-        let hold = |action: MusicAction| MusicInput::new(&[], &[action]);
         for tick in 0..go + 900 {
             race.tick(&PlayerInputs::none());
             oag_game::sound::race_tick(&mut audio, &mut race);
-            let input = match (paddles, tick.checked_sub(go)) {
-                (true, Some(0)) => MusicInput::default(),
-                (true, Some(300)) => press(MusicAction::RestartSong),
-                (true, Some(320)) => press(MusicAction::NextSong),
-                (true, Some(330)) => press(MusicAction::ShowSong),
-                (true, Some(400)) => press(MusicAction::PreviousSong),
-                (true, Some(500..700)) => hold(MusicAction::MusicUp),
-                (true, Some(700..900)) => hold(MusicAction::MusicDown),
-                _ => MusicInput::default(),
-            };
+            if paddles {
+                // A press is a down and an up the same tick; a hold is a down and, later, an up.
+                let tap = |pad: &mut Tracker, action: MusicAction| {
+                    pad.note_control(&bindings, control(action), true);
+                    pad.note_control(&bindings, control(action), false);
+                };
+                match tick.checked_sub(go) {
+                    Some(300) => tap(&mut pad, MusicAction::RestartSong),
+                    Some(320) => tap(&mut pad, MusicAction::NextSong),
+                    Some(330) => tap(&mut pad, MusicAction::ShowSong),
+                    Some(400) => tap(&mut pad, MusicAction::PreviousSong),
+                    Some(500) => pad.note_control(&bindings, control(MusicAction::MusicUp), true),
+                    Some(700) => {
+                        pad.note_control(&bindings, control(MusicAction::MusicUp), false);
+                        pad.note_control(&bindings, control(MusicAction::MusicDown), true);
+                    }
+                    _ => {}
+                }
+            }
+            let input = pad.take();
             oag_game::music_pad::drive(&mut audio, &mut race, settings.music_volume, input);
             audio.settle_music();
             audio.tick();
@@ -800,6 +831,19 @@ fn pulse_pad_music_controls_move_the_song_and_leave_the_simulation_alone() {
             }
         }
         out.line_at_end = audio.music_line_ticks();
+        // The next race starts at the player's settings: raise the line, then end the race
+        // and start another.
+        audio.step_music_line(60, settings.music_volume);
+        assert_ne!(
+            audio.music_line_ticks(),
+            0,
+            "raised before the race is left"
+        );
+        audio.pause_race_music();
+        out.line_after_race_end = audio.music_line_ticks();
+        audio.step_music_line(60, settings.music_volume);
+        audio.start_race_music(&discs, oag_sound::MusicSource::Auto, &cache);
+        out.line_after_restart = audio.music_line_ticks();
         out.hash = race.sim.state_hash();
         out
     };
@@ -820,4 +864,12 @@ fn pulse_pad_music_controls_move_the_song_and_leave_the_simulation_alone() {
     assert_eq!(previous, before, "previous goes back");
     assert!(with.line_after_hold > 0, "the volume line moved up");
     assert_eq!(with.line_at_end, 0, "down walked it back exactly");
+    assert_eq!(
+        with.line_after_race_end, 0,
+        "leaving the race resets the line"
+    );
+    assert_eq!(
+        with.line_after_restart, 0,
+        "the next race starts at the settings"
+    );
 }
