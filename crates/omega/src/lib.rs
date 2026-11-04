@@ -52,6 +52,7 @@ pub mod campaign;
 pub mod frontend;
 pub mod hud;
 pub mod main_menu;
+pub mod prompts;
 pub mod race;
 pub mod weapons;
 
@@ -122,8 +123,8 @@ pub const TITLE: &Title = &Title {
     // `Data\Plugins\Frontend\Definition.xml`. `plugin_definition` names the
     // team one, the same reasoning `oag_2048::names::TEAM_PLUGIN_DEFINITION`
     // states: a race needs a roster before it needs a circuit list.
-    // No prompt glyph of this title's has been read; the disc's own draw unchanged.
-    prompts: &oag_title::prompts::Prompts::UNREAD,
+    // Measured: the six glyphs of `PS_BUTTONS.fnt` - see `prompts`.
+    prompts: prompts::PROMPTS,
     // Omega's own recovery is unread; HD's, which runs Pulse's.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout HD"),
     // Omega's authored mix owns the buses.

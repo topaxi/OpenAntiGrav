@@ -746,14 +746,79 @@ non-finite substituted vertices 520 of 27.3 million (was ~21%).
 **The `2x9` float pair is decoded**, as two little-endian `f32`s, on the same terms as the
 half pair: 2,291 base submeshes (349,627 triangles), 356 in DLC1, 289 in DLC2, 36 in `data1`,
 527 in `data2`. Rendered through Empire Climb's float-pair submeshes it draws textured.
-**Omega: 0 float-pair diffuse sets in any archive.** Omega's one analogue is 23 `data02`
-submeshes (164,838 triangles, stride 40) whose named `Uv1` is type nibble `0`, a PS4 `f32`
-pair, read as a half pair as before; left unchanged here (Omega's pinned counts and renders
-depend on it) and named in the thread as a one-line follow-up.
+**Omega: 0 float-pair diffuse sets in any archive but one family.** Omega's one analogue is 23
+`data02` submeshes (164,838 triangles, stride 40) whose named `Uv1` is type nibble `0`, a PS4
+`f32` pair. The reader took them as a half pair until the "Omega `Uv1` of type 0" section
+below.
 
 **Lineage, 2048 and Omega: ported.** Omega already read the record's own pointer (0
 disagreements of 239,108); 2048 now does too, through the same `Declarations::of_record`, and
 every Omega pin is unchanged by the wiring.
+
+## What `bind_textures` leaves without a picture, by exit
+
+Counted by `oag_mesh::mesh::rcs::psp2::Report::unbound`, summed per circuit by
+`omega_transparency_ground_truth.rs` (the existing pass over these archives; `oag-rcs` cannot
+reach the binder, so the counts live beside the Omega ones), one `trace` line per material
+(`RUST_LOG=oag_mesh::mesh::rcs::psp2=trace`), the breakdown on the circuit's loader line.
+An unbound draw samples the shared white texel. Exits: placeholder (`fc01_dummy`), Zone colour,
+**names no texture** (no sampler or `.gxt` of its own, a lightmap aside), **names a texture, none
+diffuse**, tunnel glass, lighting-only without a colour, archive miss, decode refused.
+
+**Result.** On every 2048 circuit (base, `dlc1`, `dlc2`) and every Omega circuit, the only
+draws left unbound are materials that name no texture of their own (`fc05_simplecolouremissive`,
+`fc05_colour_lambert`, `fc05_colour_phong`, `fc01_colour_emissive`, `cf_constantcolourglow`,
+`dc_metallic_noref`, a lightmap aside), which draw flat by design: the test asserts "names a
+texture, none diffuse", archive miss and decode refused are 0. Two causes were ours:
+
+| Cause | Where | Draws, before | after |
+| --- | --- | ---: | ---: |
+| Truncated path in the Vita texture scan outranked the lighting-only fallback (`fc15_effects_vscroll_water`, `ata/art/.../brick_win emissivea.gxt`) | 2048 `square` | 4 | 0 |
+| Micro-tiled BC1 refused (`grass_terrain_bc1.gnf` and the four `grass_patch_*_terrain_bc1.gnf`; `gnf.md`, "BC1 under `TileMode(13)`") | Omega `park` 61, `arena` 42, `square` 32, `tower` 25 | 160 | 0 |
+
+Square's water is four draws at the edge of a frame: of five frames of 2048 Square read before and
+after (grid, and the autopilot at 500, 1,000, 1,600 and 2,300 ticks) four are pixel-identical and
+one (1,600) differs by a faint global shift, so no frame shows the water as a surface that changed.
+
+The Vita scan took any word that holds an address inside a longer path as a texture; it now
+requires a string to start where the pointer says (the PS4 scan already did).
+
+Unresolved draws per circuit (before; after, all by design). 2048: altima 19, arena 9, bridge
+30, cathedral 41, mall 29, park 4, sol 27, square 17 then 13, subway 25, tower 22; DLC
+Anulpha Pass 10, Metropia 85, Moa Therma 147, Sebenco Climb 6 (28 reversed), Ubermall 91,
+Vineta K 38, amphiseum 223, talons 2, tech de ra 2, zone_1 to zone_4 118, 79, 296, 154.
+Omega (`track.final`): altima 449, amphiseum 1,032, arena 367 then 325, chenghou 320, mall 174,
+metropia 661, moa therma 120, park 395 then 334, sebenco 588, square 362 then 330, subway 289,
+talons 4, tower 218 then 193, ubermall 1,004, vineta k 796 (3 of them pictureless glass), the
+rest 0. Omega's counts are higher than 2048's on the same circuits because the circuits are
+re-cooked into 3 to 14 times the submeshes while the same few colour-only materials stay.
+
+Open question, not this change's: those colour-only materials draw the white texel although they
+author a colour parameter (`fc05_simplecolouremissive` carries one four-float parameter). A draw
+that names no texture is flat on the disc's own terms, but whether its colour is the parameter
+or the vertex colour is unmeasured.
+
+### Omega `Uv1` of type 0
+
+The 23 submeshes are in the Omega Zone circuits' `Data/environments/zone_1` to `zone_4`
+`track.rcsmodel` (4, 5, 7 and 7); no `.final` model exists for them, so a race loads exactly these
+(`zone_2`: 115 submeshes, 84 of them "name no texture"). Their material is
+`tracktexture_with_normal`. **No frame I could produce moves**: `zone_2` before against after is
+pixel-identical (0 of 2,073,600) on the grid in `single_race` and `zone` mode, and in `zone` mode
+with the autopilot at 600 and 1,500 ticks. Not shown, only suspected: the draws that carry these
+coordinates sample no diffuse picture (the material names none), so the coordinate is read by
+nothing the frame shows. The census pins the reader: one that takes the pair as halves disagrees
+with its own declaration on exactly these 23. Lineage, 2048 against Omega: **checked, differs**
+(the Vita pair is type `9`, already decoded).
+
+### Lineage of the exit counts (2048 and Omega)
+
+- The exit census itself: **ported**. Both titles are counted by the same `Report::unbound` and
+  asserted by the same `only_by_design`, 2048 on base, `dlc1`, `dlc2` and the patch archives, Omega
+  on every circuit of the five base archives.
+- The string-start check in the Vita texture scan: **checked, differs**. The PS4 scan already
+  required a NUL before the string; only the Vita one lacked it.
+- Micro-tiled BC1: **checked, differs**. 2048's textures are `.gxt`; none refuses on a 2048 circuit.
 
 ## What is not decoded
 

@@ -134,6 +134,8 @@ pub struct Report {
     /// archive or would not decode - the honest count of what is still
     /// missing, kept apart from a submesh that simply has no material.
     pub unresolved_draws: usize,
+    /// [`Self::unresolved_draws`] by the exit that left each one.
+    pub unbound: UnboundDraws,
     /// Materials that draw an additive glow layer off their own
     /// `Emissive_UV_Offset`/`Scale` - see `glow`'s module doc.
     pub glow_layers: usize,
@@ -234,8 +236,12 @@ impl Report {
         let texture = match (&self.diffuse_texture, self.materials) {
             (Some(path), n) => format!(
                 "{}/{} draw(s) textured from {} of {n} material(s) (e.g. {path}), \
-                 {} unresolved",
-                self.textured_draws, self.submeshes, self.textures, self.unresolved_draws
+                 {} unresolved{}",
+                self.textured_draws,
+                self.submeshes,
+                self.textures,
+                self.unresolved_draws,
+                self.unbound.describe()
             ),
             (None, 0) => "untextured, no material table".to_string(),
             (None, n) => format!("untextured, {n} material(s), none of whose textures resolved"),
@@ -497,7 +503,7 @@ fn decode_texture_form(path: &str, blob: &[u8]) -> Option<(ModelTexture, Option<
 
 /// A diffuse decoded once per path, and the form to count again on each
 /// material that shares it, so the report reads as it did per material.
-type Decoded = Option<(std::sync::Arc<ModelTexture>, Option<GnfForm>)>;
+type Decoded = (std::sync::Arc<ModelTexture>, Option<GnfForm>);
 
 /// Builds every submesh of a 2048 `.rcsmodel` into one model.
 ///
@@ -943,7 +949,7 @@ fn bind_textures(
     // and a misbound draw would paint a submesh with its neighbour's texture,
     // the one outcome `psp2::parse` already refuses to allow.
     debug_assert_eq!(model.draws.len(), decoded.submeshes.len());
-    let mut cache: Vec<Option<Option<usize>>> = vec![None; decoded.materials.len()];
+    let mut cache: Vec<Option<Result<usize, Unbound>>> = vec![None; decoded.materials.len()];
     // A material file's programs say which of its samplers feed only the
     // lighting; read once per distinct file.
     let mut rules: std::collections::HashMap<&str, Option<LightingRule>> =
@@ -955,7 +961,8 @@ fn bind_textures(
     // Materials share a `.gxt` between them as well: Altima's track resolves
     // 523 material slots to 164 distinct files. Each slot still gets its own
     // entry, so a lightmap stays positionally beside its diffuse.
-    let mut diffuses: std::collections::HashMap<&str, Decoded> = std::collections::HashMap::new();
+    let mut diffuses: std::collections::HashMap<&str, Result<Decoded, Unbound>> =
+        std::collections::HashMap::new();
     // One alpha-times-constant picture per (map, constant).
     type AlphaKey<'p> = (&'p str, [u32; 3]);
     let mut alpha_pictures: std::collections::HashMap<
@@ -1005,19 +1012,34 @@ fn bind_textures(
             report.alpha_product_materials += usize::from(alpha.is_some());
             let (texture, form) = match (alpha, path) {
                 (Some(picture), _) => (picture, None),
-                (None, Some(path)) => diffuses
-                    .entry(path)
-                    .or_insert_with(|| {
-                        let blob = textures(path)?;
-                        let (texture, form) = decode_texture_form(path, &blob)?;
+                (None, Some(path)) => {
+                    let entry = diffuses.entry(path).or_insert_with(|| {
+                        let blob = textures(path).ok_or(Unbound::ArchiveMiss)?;
+                        let (texture, form) =
+                            decode_texture_form(path, &blob).ok_or(Unbound::DecodeRefused)?;
                         let texture = crate::mesh_render::offer_to_texture_sink(texture);
-                        Some((std::sync::Arc::new(texture), form))
-                    })
-                    .clone()?,
+                        Ok((std::sync::Arc::new(texture), form))
+                    });
+                    match entry.clone() {
+                        Ok(found) => found,
+                        Err(why) => {
+                            log::trace!(
+                                "psp2 material {index} ({}) unbound ({why:?}): {path}",
+                                material.name
+                            );
+                            return Err(why);
+                        }
+                    }
+                }
                 (None, None) => {
-                    let colour = refused_here
+                    let Some(colour) = refused_here
                         .then(|| constant_colour(material, rule.as_ref()?.colour?))
-                        .flatten()?;
+                        .flatten()
+                    else {
+                        let why = unbound_without_picture(material, refused_here);
+                        log::trace!("psp2 material {index} unbound ({why:?}): {}", material.name);
+                        return Err(why);
+                    };
                     report.constant_colour_materials += 1;
                     report.inherited_lighting_only +=
                         usize::from(rule.as_ref().is_some_and(|r| r.inherited));
@@ -1084,15 +1106,134 @@ fn bind_textures(
                 report.diffuse_texture = Some(path.to_string());
             }
             report.textures += 1;
-            Some(at)
+            Ok(at)
         });
         match resolved {
-            Some(at) => {
+            Ok(at) => {
                 draw.texture = Some(at);
                 report.textured_draws += 1;
             }
-            None => report.unresolved_draws += 1,
+            Err(why) => {
+                report.unresolved_draws += 1;
+                report.unbound.count(why);
+            }
         }
+    }
+}
+
+/// Why `bind_textures` left a material's draws without a picture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Unbound {
+    /// A `fc01_dummy` placeholder: its program outputs the fog colour.
+    Placeholder,
+    /// A `Zone_ColourN` material: drawn unlit in that colour.
+    ZoneColour,
+    /// The material names no texture of its own (a lightmap aside): flat by design.
+    NamesNoTexture,
+    /// The material names a texture of its own, and none of them is a diffuse sampler.
+    NoDiffusePath,
+    /// Tunnel glass whose program takes the lit term untextured.
+    PicturelessGlass,
+    /// A lighting-only material whose unlit program names no colour value.
+    NoConstantColour,
+    /// The named `.gxt` is not in the archive set the loader reads.
+    ArchiveMiss,
+    /// The `.gxt` is there and its format would not decode.
+    DecodeRefused,
+}
+
+/// Draws left without a picture, by the exit of `bind_textures` that left them;
+/// together they are [`Report::unresolved_draws`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UnboundDraws {
+    /// On a `fc01_dummy` placeholder.
+    pub placeholder: usize,
+    /// On a `Zone_ColourN` material.
+    pub zone_colour: usize,
+    /// On a material that names no texture of its own.
+    pub names_no_texture: usize,
+    /// On a material that names a texture of its own, none of them a diffuse sampler.
+    pub no_diffuse_path: usize,
+    /// Tunnel glass drawn without a picture.
+    pub pictureless_glass: usize,
+    /// Lighting-only material with no constant colour.
+    pub no_constant_colour: usize,
+    /// Named `.gxt` absent from the archive set.
+    pub archive_miss: usize,
+    /// Named `.gxt` present but not decodable.
+    pub decode_refused: usize,
+}
+
+impl UnboundDraws {
+    /// Adds another model's counts.
+    pub fn add(&mut self, other: &Self) {
+        self.placeholder += other.placeholder;
+        self.zone_colour += other.zone_colour;
+        self.names_no_texture += other.names_no_texture;
+        self.no_diffuse_path += other.no_diffuse_path;
+        self.pictureless_glass += other.pictureless_glass;
+        self.no_constant_colour += other.no_constant_colour;
+        self.archive_miss += other.archive_miss;
+        self.decode_refused += other.decode_refused;
+    }
+
+    /// The non-zero exits, as ` (n no diffuse path, ...)`; empty when there are none.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        let parts: Vec<String> = [
+            (self.placeholder, "placeholder"),
+            (self.zone_colour, "Zone colour"),
+            (self.names_no_texture, "name no texture"),
+            (self.no_diffuse_path, "name a texture, none diffuse"),
+            (self.pictureless_glass, "pictureless glass"),
+            (self.no_constant_colour, "lighting-only without a colour"),
+            (self.archive_miss, "texture not in the archive set"),
+            (self.decode_refused, "texture would not decode"),
+        ]
+        .into_iter()
+        .filter(|(n, _)| *n > 0)
+        .map(|(n, what)| format!("{n} {what}"))
+        .collect();
+        if parts.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", parts.join(", "))
+        }
+    }
+
+    fn count(&mut self, why: Unbound) {
+        match why {
+            Unbound::Placeholder => self.placeholder += 1,
+            Unbound::ZoneColour => self.zone_colour += 1,
+            Unbound::NamesNoTexture => self.names_no_texture += 1,
+            Unbound::NoDiffusePath => self.no_diffuse_path += 1,
+            Unbound::PicturelessGlass => self.pictureless_glass += 1,
+            Unbound::NoConstantColour => self.no_constant_colour += 1,
+            Unbound::ArchiveMiss => self.archive_miss += 1,
+            Unbound::DecodeRefused => self.decode_refused += 1,
+        }
+    }
+}
+
+/// Which of the picture-less exits a material that bound no picture and no colour took.
+fn unbound_without_picture(material: &psp2::material::Material, lighting_only: bool) -> Unbound {
+    if lighting_only {
+        Unbound::NoConstantColour
+    } else if refraction::is_pictureless(material) {
+        Unbound::PicturelessGlass
+    } else if material.is_placeholder() {
+        Unbound::Placeholder
+    } else if material.zone_colour().is_some() {
+        Unbound::ZoneColour
+    } else if material
+        .textures
+        .iter()
+        .chain(material.samplers.iter().map(|(_, path)| path))
+        .all(|t| Some(t) == material.lightmap.as_ref())
+    {
+        Unbound::NamesNoTexture
+    } else {
+        Unbound::NoDiffusePath
     }
 }
 

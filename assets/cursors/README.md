@@ -16,7 +16,9 @@ the original.
 | `2048.svg` | Wipeout 2048's placeholder screen | its flat orange-on-white front end, `#F26522` and `#111111` |
 | `omega.svg` | Wipeout: Omega Collection's front end | `DesignColor` `#5FDBF6` and `MenuHighLightArrowColor` `#ED4796`, both read off Omega's own `skin.xml` |
 
-All six share one geometry: a 24x32 box with the hotspot at the top-left
+All six share one geometry: a 24x32 box, the same arrow head (its top edge
+about 42 degrees off the vertical's far side, a mitred tip that stays inside
+the box), and the hotspot at the top-left
 corner `(0, 0)`, which is where `oag_game::cursor` anchors the sprite. They
 are rasterised at boot through the same `resvg` path the window icon takes,
 and drawn as a sprite by the frame loop rather than handed to the window

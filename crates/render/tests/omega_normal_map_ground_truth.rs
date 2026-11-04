@@ -153,7 +153,7 @@ fn omega_circuits_bind_the_normal_map_their_programs_decode() {
             total.third_taken,
             total.unresolved_samples
         ),
-        (24590, 25977, 771, 413, 203, 0, 0),
+        (24793, 25977, 771, 413, 0, 0, 0),
         "{}",
         total.describe()
     );

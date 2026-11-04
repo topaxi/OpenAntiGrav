@@ -813,23 +813,19 @@ fn one(
     };
     let mut texcoords = Vec::new();
     let mut non_finite_texcoords = 0usize;
-    // The record's own declaration, on both containers. An attribute of a type this reader
-    // does not decode (neither a half pair nor an `f32` pair) draws nothing rather than noise.
+    // The record's own declaration, on both containers. A PS4 attribute of a type other than
+    // an `f32` pair is read as a half pair whatever its type, as it always was.
+    let float_type = if ps4 {
+        vertex_decl::PS4_FLOAT2
+    } else {
+        vertex_decl::FLOAT2
+    };
     let diffuse = own
         .and_then(|decl| decl.own_diffuse_texcoord(half_type))
-        .filter(|attr| {
-            // A PS4 `Uv1` is read as a half pair whatever its type, as it always was: 23
-            // submeshes of `data02` declare it type `0` (an `f32` pair on that container),
-            // which this lane did not touch and Omega's pinned renders depend on.
-            ps4 || attr.gxm_type == half_type || attr.gxm_type == vertex_decl::FLOAT2
-        });
+        .filter(|attr| ps4 || attr.gxm_type == half_type || attr.gxm_type == float_type);
     if let Some(attr) = diffuse {
         let off = usize::from(attr.offset);
-        let width = if !ps4 && attr.gxm_type == vertex_decl::FLOAT2 {
-            8
-        } else {
-            4
-        };
+        let width = if attr.gxm_type == float_type { 8 } else { 4 };
         if stride >= off + width {
             texcoords.reserve_exact(vertex_count);
             for v in 0..vertex_count {

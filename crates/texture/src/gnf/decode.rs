@@ -1,6 +1,6 @@
 //! Pixel decoding for a linear `.gnf` surface, and a micro-tiled
-//! (`TileMode(13)`, `Thin_1DThin`) BC7 one whose base level carries no
-//! invalid-mode block.
+//! (`TileMode(13)`, `Thin_1DThin`) BC1 or BC7 one; a BC7 one only while its base level
+//! carries no invalid-mode block.
 //!
 //! Every sampled `.gnf` declares `TileMode(13)`, `Thin_1DThin` (GFD-Studio's
 //! `TileMode.cs`), micro-tiled. AMD's micro-tile-only address formula
@@ -78,17 +78,19 @@ fn micro_tile_pixel_index(bx: u32, by: u32) -> u32 {
     x0 | (y0 << 1) | (x1 << 2) | (y1 << 3) | (x2 << 4) | (y2 << 5)
 }
 
-/// Bytes one micro tile (8x8 BC7 blocks, one block being one 128-bit
-/// element) occupies on disk.
-const MICRO_TILE_BYTES: u64 = 64 * 16;
+/// Bytes one micro tile (8x8 blocks, one block being one element of `block_bytes`) occupies
+/// on disk.
+const fn micro_tile_bytes(block_bytes: usize) -> u64 {
+    64 * block_bytes as u64
+}
 
-/// Byte offset of BC7 block `(bx, by)`, tile-row width `tiles_x` tiles,
-/// from [`Texture::data_offset`].
-fn micro_tiled_block_offset(bx: u32, by: u32, tiles_x: u32) -> u64 {
+/// Byte offset of block `(bx, by)`, tile-row width `tiles_x` tiles, from
+/// [`Texture::data_offset`].
+fn micro_tiled_block_offset(bx: u32, by: u32, tiles_x: u32, block_bytes: usize) -> u64 {
     let tile_index = u64::from((by / 8) * tiles_x + (bx / 8));
     let pixel_index = micro_tile_pixel_index(bx % 8, by % 8);
-    let element_offset = u64::from(pixel_index) * 16;
-    tile_index * MICRO_TILE_BYTES + element_offset
+    let element_offset = u64::from(pixel_index) * block_bytes as u64;
+    tile_index * micro_tile_bytes(block_bytes) + element_offset
 }
 
 /// The base mip level's block grid: the descriptor's `width` x `height` are the
@@ -120,42 +122,56 @@ fn untile_level(
     texture: &Texture,
     blob: &[u8],
     offset: usize,
-    width_blocks: u32,
-    height_blocks: u32,
-    tiles_x: u32,
+    (width_blocks, height_blocks, tiles_x): (u32, u32, u32),
+    block_bytes: usize,
 ) -> Result<(Vec<u8>, usize)> {
-    let mut out = Vec::with_capacity((width_blocks * height_blocks) as usize * 16);
+    let bc7 = texture.surface_format == SurfaceFormat::Bc7;
+    let mut out = Vec::with_capacity((width_blocks * height_blocks) as usize * block_bytes);
     let mut corrupt = 0usize;
     for by in 0..height_blocks {
         for bx in 0..width_blocks {
-            let start =
-                texture.data_offset + offset + micro_tiled_block_offset(bx, by, tiles_x) as usize;
-            let block = blob.get(start..start + 16).ok_or(Error::DataOutOfBounds {
-                need: start + 16,
-                got: blob.len(),
-            })?;
-            corrupt += usize::from(!has_valid_bc7_mode(block[0]));
+            let start = texture.data_offset
+                + offset
+                + micro_tiled_block_offset(bx, by, tiles_x, block_bytes) as usize;
+            let block = blob
+                .get(start..start + block_bytes)
+                .ok_or(Error::DataOutOfBounds {
+                    need: start + block_bytes,
+                    got: blob.len(),
+                })?;
+            corrupt += usize::from(bc7 && !has_valid_bc7_mode(block[0]));
             out.extend_from_slice(block);
         }
     }
     Ok((out, corrupt))
 }
 
-fn require_micro_tiled_bc7(texture: &Texture) -> Result<()> {
-    if texture.surface_format != SurfaceFormat::Bc7 {
-        return Err(Error::UnsupportedFormat {
-            format: texture.surface_format,
-        });
+/// Bytes per block of a surface this module untiles: BC1 (8) and BC7 (16).
+fn micro_tiled_block_bytes(texture: &Texture) -> Result<usize> {
+    match texture.surface_format {
+        SurfaceFormat::Bc1 => Ok(8),
+        SurfaceFormat::Bc7 => Ok(16),
+        format => Err(Error::UnsupportedFormat { format }),
     }
-    Ok(())
 }
 
 fn decode_micro_tiled(texture: &Texture, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
-    require_micro_tiled_bc7(texture)?;
+    let block_bytes = micro_tiled_block_bytes(texture)?;
     let (width_blocks, height_blocks, tiles_x, _tiles_y) = base_level_tile_grid(texture);
-    let (blocks, corrupt) = untile_level(texture, blob, 0, width_blocks, height_blocks, tiles_x)?;
+    let (blocks, corrupt) = untile_level(
+        texture,
+        blob,
+        0,
+        (width_blocks, height_blocks, tiles_x),
+        block_bytes,
+    )?;
     if corrupt > 0 {
         return Err(Error::CorruptBlocks { count: corrupt });
+    }
+    if texture.surface_format == SurfaceFormat::Bc1 {
+        return row_major_blocks(&blocks, texture.width, texture.height, 8, |b| {
+            crate::bcn::dxt1(b.try_into().expect("checked length"))
+        });
     }
     row_major_blocks(&blocks, texture.width, texture.height, 16, |b| {
         crate::bcn::bc7(b.try_into().expect("checked length"))
@@ -176,7 +192,7 @@ pub(super) fn bc7_level(blocks: &[u8], width: u32, height: u32) -> Option<Vec<[u
 /// accounts for every byte past the header of 15,413 of the 15,4xx BC7 `.gnf`
 /// files on disc - see `docs/formats/gnf.md`.
 pub(super) fn block_levels(texture: &Texture, blob: &[u8]) -> Result<Vec<Vec<u8>>> {
-    require_micro_tiled_bc7(texture)?;
+    let block_bytes = micro_tiled_block_bytes(texture)?;
     if texture.tile_mode.0 != super::TileMode::THIN_1D_THIN {
         return Err(Error::Tiled {
             tile_mode: texture.tile_mode.0,
@@ -200,7 +216,7 @@ pub(super) fn block_levels(texture: &Texture, blob: &[u8]) -> Result<Vec<Vec<u8>
         .collect();
     let expected: usize = grids
         .iter()
-        .map(|(_, _, tx, ty)| (tx * ty) as usize * MICRO_TILE_BYTES as usize)
+        .map(|(_, _, tx, ty)| (tx * ty) as usize * micro_tile_bytes(block_bytes) as usize)
         .sum();
     // Exact, not "at least": a cubemap or array carries more than one chain, and
     // reading its first as the only one would be a wrong picture.
@@ -212,11 +228,16 @@ pub(super) fn block_levels(texture: &Texture, blob: &[u8]) -> Result<Vec<Vec<u8>
     let mut offset = 0usize;
     let mut corrupt = 0usize;
     for (width_blocks, height_blocks, tiles_x, tiles_y) in grids {
-        let (blocks, bad) =
-            untile_level(texture, blob, offset, width_blocks, height_blocks, tiles_x)?;
+        let (blocks, bad) = untile_level(
+            texture,
+            blob,
+            offset,
+            (width_blocks, height_blocks, tiles_x),
+            block_bytes,
+        )?;
         corrupt += bad;
         levels.push(blocks);
-        offset += (tiles_x * tiles_y) as usize * MICRO_TILE_BYTES as usize;
+        offset += (tiles_x * tiles_y) as usize * micro_tile_bytes(block_bytes) as usize;
     }
     if corrupt > 0 {
         return Err(Error::CorruptBlocks { count: corrupt });

@@ -226,7 +226,7 @@ pub const PICKUP_COLOURS: [Option<u32>; 14] = {
     ]
 };
 
-/// The pickup fade's timer rate. HD's `Hud_UpdatePickupBar` (`0x0008df30`) scales `dt` by the float at `0x008a776c`, `0x3fc00000` = `1.5` (static read, confidence 80); the cap `0.5`, the `x3` and `pi` it shares with Pulse's law, and the bump's `-25.0` sits at `0x008a780c`. The hold threshold and the fade-out branch's constants are **inherited from Pulse**, not read.
+/// The pickup fade's timer rate. HD's `Hud_UpdatePickupBar` (`0x0008df30`) scales `dt` by the float at `0x008a776c`, `0x3fc00000` = `1.5`; the cap `0.5`, the icon gate `0.4`, the hold threshold `0.1` and the fade-out's `(2 - 2T) * 1.5` are read in the executable and followed live on RPCS3 (`docs/ghidra/functions/ps3-hdfury-eu/hd-pickup-table.md`, "The fade constants").
 pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 
 /// How HD's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]
@@ -309,7 +309,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // whole pulse is the executable's `Hud_UpdatePickupBar` tail, not a substitution of a
     // colour the layout lacks.
     pickup_colours: Some(PICKUP_COLOURS),
-    // No size pulse: HD's store of it is unread.
+    // No size pulse: the update touches the backdrop image only through its vertex colours.
     pickup_fade: Some(oag_title::hud::PickupFade {
         rate_percent: PICKUP_FADE_RATE_PERCENT,
         size_pulse: false,

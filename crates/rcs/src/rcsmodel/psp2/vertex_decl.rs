@@ -104,6 +104,10 @@ pub const PS4_HALF2: u8 = 1;
 /// and (four of them) `barsUV_blendUV`.
 pub const VITA_HALF2: u8 = 8;
 
+/// The type nibble of a two-component `f32` attribute on the PS4: a diffuse coordinate that is a
+/// float pair (23 submeshes of Omega's `data02` name their `Uv1` this way).
+pub const PS4_FLOAT2: u8 = 0;
+
 /// The type nibble of an `f32` attribute on the Vita (the position's `3x9`; a diffuse
 /// coordinate declared `2x9` is a float pair, 2,291 base submeshes).
 pub const FLOAT2: u8 = 9;
