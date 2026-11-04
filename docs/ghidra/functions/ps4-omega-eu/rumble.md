@@ -62,8 +62,8 @@ named. `Class`: `strcmp(text, "UI")` at `0x0183a3f6`, stored `2 - (equal)`.
 
 **Halving at load.** If `DAT_01f999e8 > 1`, both tracks are rebuilt at half length,
 each output `(a + b + c) / 3` over overlapping triples. That global is
-`*(char *)(member + 0x128) + 1` at `0x0160c305` and is reset to 1 at five other
-writes, so it reads as a session member count. The parser only runs from the
+`*(char *)(member + 0x128) + 1` at `0x0160c305`, is reset to 1 at five other writes,
+and gates split screen, so it reads as the local player count. The parser only runs from the
 constructor, so at boot it is 0 or 1 and this path looks dead. Confidence 60;
 reading when `FUN_017497c0` runs after a session starts would settle it.
 
@@ -74,9 +74,11 @@ for a free voice, up to 20 tries, and **drops the request when none is free**. I
 sets active, release flag 1, frame -1, and stores the voice in the pattern's
 `+0x990`. `pad == -1` picks the first pad that reports connected and enabled.
 
-`Rumble_PlayOnLocalPads(mgr, id, position)`, 18 call sites: outside two-player
-split, one voice on the active pad; in it (`DAT_02037d00`), one on pad 0 and one on
-pad 1. `position` is copied to the voice.
+`Rumble_PlayOnLocalPads(mgr, id, position)`, 18 call sites: in two-player split
+(`DAT_02037d00`, `1 < DAT_01f999e8` at `FUN_012993b0`), one voice on pad 0 and one on
+pad 1, with `position` copied to each. Outside it, one voice on the active pad and
+**`position` is ignored** (the `param_3` copies are at the two split branches only),
+so the voice's `+0x20` stays zero.
 
 Every other site inlines the same ring walk. Finding them needs the byte pattern
 `C0 07 00 00` (the ring end): 60 hits across the binary, of which the 13 functions

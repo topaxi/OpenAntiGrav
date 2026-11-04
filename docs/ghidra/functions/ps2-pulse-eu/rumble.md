@@ -63,7 +63,10 @@ RPC, 84 on the rest.
 | `0x0015718c` | `Ship_Destroy_q`, beside `Camera_ArmShake(0.3, 0.4, 3)` | 0.5 s, so 2.0 s | 255 | human craft |
 | `0x0018a14c` | Options, on a change of `VibOnOff` | 0.1 s, so 0.4 s | 255 | front end |
 
-`Ship_Damage` returns first for craft states 2, 4, 5, 6 and flag `0x1000`. The
+`Ship_Damage` here matches the PSP's (`0x088439ac`,
+[shield.md](../psp-pulse-usa/shield.md)) by its five arguments, the amount first, its
+state returns and the difficulty halving. It returns first for craft states 2, 4,
+5, 6 and flag `0x1000`. The
 damage argument's unit is unread at this call: with energy on a 0..100 scale nearly
 every hit would clamp to 255, and on a 0..1 scale only a hit over 0.133 reaches
 240. **Open**, and the first thing to measure on PCSX2. The call sits before
@@ -74,7 +77,8 @@ every hit would clamp to 255, and on a 0..1 scale only a hit over 0.133 reaches
 `Options_ReadVibration_q` runs on the `Controls`, `InGame Settings` and
 `InGame Settings TT` screens, reads the menu value `VibOnOff`, and stores
 `g_settings+0x2c4 = (value == "FE_OFF")`. Changing it fires the preview above.
-`DAT_0027f0a0` holds the previous value.
+`DAT_0027f0a0` holds the previous value. The trigger returns when the option is off,
+so only switching it on is felt.
 
 `Input_DisableVibration` and `Input_EnableVibration` set the per-player flags, from
 the front-end functions `FUN_001c2390`, `FUN_001c2618` and `FUN_001c2698`; when

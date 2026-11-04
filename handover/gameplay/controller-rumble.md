@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-04
-summary: "No rumble exists. RE done for HD, Omega, PS2; proposal: one 20-voice pattern player, cues in, motors out; six decisions for the maintainer."
+summary: "No rumble exists. RE done for HD, Omega, PS2; proposal: one 20-voice pattern player, cues in, motors out; seven decisions for the maintainer."
 categories: [tooling]
 size: L (60)
 difficulty: medium (50)
@@ -40,7 +40,12 @@ Decisions, each with a recommendation. The first two change what gets built.
    (lineage rule), labelled inherited.
 5. **Device layer.** See "Device output". Recommend a thin own backend trait with
    gilrs first, because it needs no new dependency.
-6. **Remote and bot craft.** The originals rumble the local player only. Keep that.
+6. **Positional patterns in one player.** The original drops the position outside
+   split screen, so wall hits and explosions (48, 49, 50, 51, 53) are near silent on
+   the large motor ([the law](../../docs/gameplay/rumble.md#playback-law)). Recommend
+   the evident intent under `FULL` (pass the position), the measured silence under
+   `ORIGINAL`.
+7. **Remote and bot craft.** The originals rumble the local player only. Keep that.
    Positional patterns measure from each local pad's own ship; the original uses
    one active ship (chosen for split screen).
 
@@ -53,6 +58,9 @@ RE left open, none blocking (the first two need an emulator, off for this pass):
 - `m` in the contact law: `ship+0x64d4` (Omega), `ship+0x5f78` (HD), its unit and
   who writes it. Map it to our contact response; a value in the bands' 2 to 55 range
   should come from the wall contact's impact measure.
+- Omega `*(race + 0x19b20) == 2` gates impacts and side shifts: decides whether
+  they fire in a normal race.
+- Landing `v`: its sign and unit.
 - HD's positional gain: the decompiler truncates it (`0x00340a88`). Omega's law
   stands, inherited.
 - Omega `FUN_012ff700`: which case fires 59 and which 60.
@@ -120,8 +128,9 @@ named paths resolve.
 Rumble is an output, never `World` state.
 
 **Edges reuse `CueEvent`.** `oag_gameplay::cue` already raises most of the triggers:
-weapon fired, plasma and rocket wall hits, absorbs, pads. `drain_cues` hands them to
-the sound side; a rumble side reads the same list. That is the reason not to add a
+weapon fired, plasma and rocket wall hits, absorbs, pads. `drain_cues` is a
+`mem::take`, so the composition root drains once and fans the list out to sound and
+rumble. That is the reason not to add a
 second event stream. New `Cue` variants cover only what has no sound: side shift
 if unvoiced, landing band, wrong-way edge. Check each against `Cue` first.
 

@@ -66,8 +66,17 @@ lowest priority of the five, even when it is lower itself. Then:
 
 **Local player only.** Every ship site tests `ship+0x628c == 0` (HD) or
 `ship+0x68fc == 0` (Omega) and goes to that ship's pad. Explosions and wall hits use
-`Rumble_PlayOnLocalPads`, one voice on the active pad, or on each of the two pads
-in split screen, with a world position.
+`Rumble_PlayOnLocalPads`: one voice on the active pad, or one on each of the two
+pads in split screen.
+
+**A one-player race drops the position.** `Rumble_PlayOnLocalPads` copies the world
+position to the voice only in its two-player branch (Omega: `DAT_02037d00`, set to
+`1 < DAT_01f999e8`, the local player count; HD: `g_PhysicsHalfStep` clear takes the
+same no-position path, `0x0033fee8`). With one player a positional voice keeps a
+zero position, so the gain measures the ship's distance from the **world origin**:
+ids 48, 49, 50, 51 and 53 give no large motor away from it, on most of a circuit.
+The small track is not scaled by the gain. Confidence 78, static. Id 59 is the
+exception: its site writes the position itself after queueing (`0x013009c7`).
 
 **No master setting** in HD or Omega: none in the executable's strings or in the
 front-end files searched; the console's own setting applies. Confidence 70. PS2
@@ -130,7 +139,7 @@ local player. "Omega" names the function holding the site.
 | 59 | `Ship_Exploding_Rumble` | ship explodes | **none** | `0x0130097e` | 65 |
 | 60 | `Ship_Exploding_Player_Rumble` | player ship explodes | **none** | `FUN_012ff700`, 4 sites | 70 |
 | 62, 63 | `side_shift_left`, `_right` | side shift | `0x000daeb8`, `0x000daef0` | `0x012f5f84`, `0x012f604c` | 78 |
-| 64 | `heartbeat` | three beats of a counter in `FUN_00055848`, all pads | `0x000558dc` and 2 more | **none** | 60 |
+| 64 | `heartbeat` | three beats of a counter in `FUN_00055848`, via `Rumble_PlayOnLocalPads` | `0x000558dc` and 2 more | **none** | 60 |
 
 **Loaded and never fired, in either binary**, from every call site of the four
 entry points (HD, confidence 75) and the ring walk (Omega, 70): 16
@@ -139,8 +148,10 @@ entry points (HD, confidence 75) and the ring walk (Omega, 70): 16
 `repulser_out_of_range`, 55 `Shuriken_Hits_wall`, 57 `Lock_on_Warning`, 58
 `Weapon_Impact_Shield_Rumble`, 61 `photo_click`.
 
-Two more Omega reads are open: which case of `FUN_012ff700` fires 59 and which 60,
-and whether the shield, Quake-incoming and energy patterns were reached by a route
+Omega's impacts (37..44) and side shifts sit behind `*(race + 0x19b20) == 2`
+(`0x012f5f62`); what that value means is unread, and it decides whether they fire in
+a normal race. Two more Omega reads are open: which case of `FUN_012ff700` fires 59
+and which 60, and whether the shield, Quake-incoming and energy patterns were reached by a route
 the sweep cannot see. A live watch on the five voices settles both.
 
 ### Contact and landing
@@ -159,10 +170,11 @@ One function, `Ship_UpdateContactRumble`, same constants in both binaries
 | 2 to 10 | 3 right very light, or 6 left very light |
 | 2 or less | nothing |
 
-Left when the side argument is negative. While in contact, a new held voice
-replaces the old one when more than 0.3 s has passed since the last one or the band
-changed. After 1.5 s of continuous contact the voice stops. With `m` at 0, after
-0.1 s the voice stops, and after 0.4 s the contact timer clears.
+Left when the side argument is negative. The gap timer clears on every update in
+contact. So in sustained contact the held voice is replaced **only when the band
+changes**, and a new contact after more than 0.3 s of gap replaces it too. After
+1.5 s of continuous contact the voice stops. With `m` at 0, after 0.1 s the voice
+stops, and after 0.4 s the contact timer clears.
 
 A pattern is held only if its `LoopStart < LoopEnd`.
 
@@ -176,9 +188,10 @@ A pattern is held only if its `LoopStart < LoopEnd`.
 | 3 to 3.5 | 10 very light |
 | 3 or less | 11, no pattern |
 
-A landing plays only if it is stronger than the one armed (a lower id); the armed
-value resets to 11 every 1.0 s. A stronger landing finishes the previous voice.
-Id 11 is why that slot has no file.
+A landing plays only if it is stronger than the one armed (a lower id). Playing one
+clears a timer, and 1.0 s later the armed value returns to 11. A stronger landing
+finishes the previous voice. Id 11 is why that slot has no file. The sign and unit of
+`v` are unread: if down is negative the table reads the other way.
 
 ## PS2 Pulse
 
@@ -190,4 +203,5 @@ A different system: one level, one timer, and two motors. Full reading on
 - **Strength 240 or more** also runs the small motor, and for 4 times as long.
 - **Triggers**: `Ship_Damage`, 0.1 s at `damage * 1800`, human craft; ship destroyed,
   0.5 s at 255, so 2.0 s; the `VibOnOff` option changing, 0.1 s at 255, so 0.4 s.
-- **Master**: `VibOnOff`, `FE_OFF` disables.
+- **Master**: `VibOnOff`, `FE_OFF` disables. So the preview is felt only when the
+  option is switched on: the off value makes the trigger return.

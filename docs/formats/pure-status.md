@@ -1441,7 +1441,8 @@ was load-bearing:
   per waveform rather than collapsed to the cue - a play site that assumed the
   cue was uniform would loop a one-shot on about half the draws.
 - Pure's `ship.bnk` has **six** cues to Pulse's nine, and carries `~AMBIENCE`
-  and `rumble`, which Pulse has not got.
+  and `rumble`, which Pulse has not got. (A sound cue, not vibration:
+  [rumble-xml.md](rumble-xml.md#census).)
 - Pure names its circuit banks in full - `SEBCLIM`, `CITTANU`, `VINETTA`,
   `MODESTO`, `CHENGOU` - where Pulse abbreviates.
 

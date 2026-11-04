@@ -29,6 +29,10 @@ stubs at `0x00677xxx` (`std r2`, `addis r2,r2,1`, `subi r2,r2,0x114`, `b target`
 `0x00677518` to `Rumble_QueueOnPad`, `0x00677048` to `Rumble_PlayOnLocalPads`,
 `0x006778d8` to `Rumble_QueueOneShot`, `0x00677908` to `Rumble_QueueHeld`.
 
+`Rumble_PlayOnLocalPads` with `g_PhysicsHalfStep` clear queues on one pad with no
+position, as on Omega; the voice takes the default vector at `*0x008b5914`, in
+uninitialised memory in the image, so zero at start.
+
 Four entry points, 42 call sites, listed with what each fires on
 [gameplay/rumble.md](../../../gameplay/rumble.md#triggers). A stub has one target,
 so that enumeration is complete unless a site loads the target by address; that
