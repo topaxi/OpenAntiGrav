@@ -421,10 +421,6 @@ fn rank_by_distance(
     ranked.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
 }
 
-/// The box a craft's shadow maps are fitted to: [`oag_render::shadow::map::Fit::craft`]
-/// around the craft, along the circuit's own sun - which HD authors in its
-/// `.envsettings` and this renderer already lights through, not a direction of
-/// this module's own.
 /// Whether a surface in the view `frustum` culls by can read the craft at `centre`'s square of
 /// the atlas: the receiver reads a square only within `CRAFT_CULL_RADIUS` of its craft, so a
 /// sphere clear of the frustum is one no pixel reaches. A tenth wider for the camera's jitter,
@@ -434,6 +430,10 @@ fn craft_shadow_seen(frustum: Option<&Frustum>, centre: Vec3) -> bool {
     frustum.is_none_or(|frustum| frustum.intersects_sphere(centre, reach))
 }
 
+/// The box a craft's shadow maps are fitted to: [`oag_render::shadow::map::Fit::craft`]
+/// around the craft, along the circuit's own sun - which HD authors in its
+/// `.envsettings` and this renderer already lights through, not a direction of
+/// this module's own.
 fn craft_fit(model: Mat4, light: &oag_mesh::mesh_render::Light) -> oag_render::shadow::map::Fit {
     oag_render::shadow::map::Fit::craft(
         model.transform_point3(Vec3::ZERO),
