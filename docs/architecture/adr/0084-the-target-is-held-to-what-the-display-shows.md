@@ -25,7 +25,10 @@ output forbids. The CPU governor's budget (`Sample::period`) had the same blind 
    `dot_clock / (htotal * vtotal)`, once a second, published in an atomic), because winit's
    report freezes after window creation there: `current_monitor()` changes only on a
    synthetic `ConfigureNotify`, gamescope sends none, and no RandR event reached winit in any
-   run. Everywhere else, and before the first answer, it is winit's
+   run. Under headless gamescope (1280x800 to 1920x1080) winit stayed at 89887 mHz while the
+   thread read 89887 then 89926; on Xvfb, with modes of 59975 and 90023 mHz switched by
+   RandR, the log changed 60, 90, 60 Hz within 0.97, 0.99 and 1.04 s of each switch (thread
+   poll plus session poll, at most about 2 s). Everywhere else, and before the first answer, it is winit's
    `MonitorHandle::refresh_rate_millihertz` (Wayland: read from the compositor's `wl_output`
    current mode, live by reading winit's source; a mode change under a Wayland compositor was
    not run). Measured on a Steam Deck docked to a

@@ -50,7 +50,9 @@ impl LiveRefresh {
             .spawn(move || {
                 loop {
                     let rate = read(&connection, root, id).unwrap_or(UNKNOWN);
-                    shared.store(rate, Ordering::Relaxed);
+                    if shared.swap(rate, Ordering::Relaxed) != rate {
+                        log::debug!("X server reports {rate} mHz for the window's output (0: none)");
+                    }
                     if wake.recv_timeout(POLL_EVERY) != Err(RecvTimeoutError::Timeout) {
                         return;
                     }
