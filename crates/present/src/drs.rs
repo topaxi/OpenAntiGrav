@@ -242,9 +242,8 @@ impl Target {
     ///
     /// `None` means nothing bounds the rate and the target stands. That covers
     /// [`crate::perf::FrameLimit::UNLIMITED`], and it also covers
-    /// [`crate::perf::Vsync::On`], where the *display* is the bound and this
-    /// build cannot ask a surface what its refresh is. Guessing the
-    /// simulation's 60 there - which is what `Session::presentation_hz` falls
+    /// a display whose refresh nothing reports or proves (`crate::refresh`).
+    /// Guessing the simulation's 60 there - which is what `Session::presentation_hz` falls
     /// back to for the overlay's graph scale, and says so - would silently cap
     /// a 144 Hz panel's target at 60. A wrong clamp is worse than none,
     /// because the menu says the target it was given.

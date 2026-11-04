@@ -90,10 +90,7 @@ impl Session {
             // would drop the resolution permanently to buy frames that are
             // never presented. The menu warns about the limiter pairing; this
             // is what stops either costing anything.
-            profile
-                .target_fps
-                .at_most(self.limiter_hz())
-                .at_most(self.display.hz()),
+            oag_present::refresh::held_target(profile.target_fps, self.limiter_hz(), &self.display),
         )
         // The blur rung's ceiling is the player's gather resolution, and
         // there is nothing to shed with the blur off (ADR-0075).

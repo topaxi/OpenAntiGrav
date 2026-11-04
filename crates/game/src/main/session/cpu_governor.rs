@@ -105,7 +105,7 @@ impl Session {
         let steps = steps(&profile, self.authored_shadows());
         let sample = Sample {
             cpu: cpu_seconds,
-            gpu: self.governor_gpu,
+            gpu: self.governor_gpu_fresh(),
             period: self.held_hz().map(|hz| 1.0 / hz as f32),
         };
         let Some(change) = self.governor.record(sample, steps.len()) else {

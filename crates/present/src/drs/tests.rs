@@ -405,8 +405,8 @@ fn a_target_above_the_frame_limit_is_held_to_it() {
 /// A limiter at or above the target changes nothing, and neither does none.
 ///
 /// `None` covers two different situations that must behave the same way:
-/// `FrameLimit::UNLIMITED`, and `Vsync::On` where the display is the bound and
-/// this build cannot ask a surface what its refresh is. **Guessing there would
+/// `FrameLimit::UNLIMITED`, and a display whose refresh nothing reports or proves.
+/// **Guessing there would
 /// be worse than not clamping**: the fallback available is the simulation's
 /// 60, which would silently cap a 144 Hz panel's target at 60 while the menu
 /// row still said 144.
