@@ -219,9 +219,9 @@ Built on `oag_input::rumble` (`Player`, `MotorOutput`, `Mode`) and
 - **The ring walk starts at index 0.** Voices are mixed in ring order; a new voice
   takes the first free slot of the five, else overwrites the first of the lowest
   priority.
-- **A held voice wraps only over a real loop range** (`LoopStart < LoopEnd` on a
-  `Looping` pattern). Taken literally, a held `OneShot` (0 to 0) would sit on frame 0
-  for ever, a stuck motor; here it plays through once.
+- **A held voice wraps over a real loop range** (`LoopStart < LoopEnd`), by the release
+  flag and not by `Type`. Taken literally, a held `OneShot` (0 to 0) would sit on frame 0
+  for ever, a stuck motor; with an empty range it plays through once.
 - **The small motor is a byte.** `PS3` (HD): full on if any mixed voice is non-zero.
   `PS4` (Omega): the sum of the mixed bytes clamped to 255, 1..5 of 255 with the
   shipped 0/1 tracks.

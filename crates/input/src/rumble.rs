@@ -9,7 +9,7 @@
 //! A pattern is played by id: its place in the [`Library`] the player owns
 //! ([`Library::index_of`]).
 
-use oag_tables::rumble::{Class, Kind, Library, Pattern, Priority};
+use oag_tables::rumble::{Class, Library, Pattern, Priority};
 
 /// How the small motor reads the mixed voices' small tracks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -298,10 +298,11 @@ impl Player {
     }
 }
 
-/// A held voice wraps only over a real loop range. A held one-shot (0 to 0)
-/// would otherwise sit on frame 0 for ever, a stuck motor.
+/// A held voice wraps over a real loop range, whatever the pattern's `Type`.
+/// An empty range (a one-shot's 0 to 0) would otherwise sit on frame 0 for
+/// ever, a stuck motor.
 fn wraps(pattern: &Pattern) -> bool {
-    pattern.kind == Kind::Looping && pattern.loop_start < pattern.loop_end
+    pattern.loop_start < pattern.loop_end
 }
 
 /// Five slots: a voice takes an empty one, else overwrites the lowest

@@ -187,6 +187,17 @@ fn a_held_one_shot_does_not_stick_on_frame_zero() {
 }
 
 #[test]
+fn looping_follows_the_release_flag_and_the_range_not_the_type() {
+    let mut odd = pattern(&[1, 2, 3, 4], &[]);
+    odd.loop_start = 1;
+    odd.loop_end = 3;
+    assert_eq!(odd.kind, Kind::OneShot);
+    let mut p = player(vec![odd], SmallMotor::OnOff);
+    p.hold(0);
+    assert_eq!(large(&run(&mut p, RACE, 6)), [1, 2, 3, 2, 3, 2]);
+}
+
+#[test]
 fn stop_is_silent_at_once_and_a_stale_handle_cannot_stop_a_reused_voice() {
     let mut p = player(vec![looping(&[9, 9], 0, 2)], SmallMotor::OnOff);
     let handle = p.hold(0).unwrap();
