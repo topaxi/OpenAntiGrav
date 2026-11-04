@@ -374,12 +374,6 @@ fn portal_commands(module: &Module, option: u8, ticks: usize) -> Vec<Command> {
         })
         .collect();
     let slot = Slot::new(0).unwrap();
-    let tracking: Vec<oag_ext_abi::Tracking> = (0..8)
-        .map(|s| oag_ext_abi::Tracking {
-            progress: (s == 0).then_some(3900.0),
-            place: u8::from(s == 0),
-        })
-        .collect();
     let mut state = vec![0; module.limits().state_bytes as usize];
     let mut all = Vec::new();
     for tick in 0..ticks {
