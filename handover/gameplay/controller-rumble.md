@@ -31,6 +31,12 @@ byte sum). Pulse PS2 takes the same rumble as Pulse PSP, our own authored patter
 the fallback layer; the PS2 build's own level and timer law stays documented and is not
 played, so the `Ship_Damage` unit below no longer blocks anything.
 
+Pattern files, maintainer, 2026-11-04: both formats load into one `Pattern`. The disc's
+XML, and our own TOML (`<name>.toml`, schema under `schemas/v1/`, ADR-0064), which is
+what our fallback patterns are written in. A TOML pattern overrides a disc pattern by
+name. A mod that ships both `<name>.xml` and `<name>.toml` is refused by name in the
+load report, as any other mod fault; if that proves harder than it looks, TOML wins.
+
 Open under it: whether the row keeps `Original` where it equals a named value (HD and
 `PS3`, Omega and `PS4`).
 
@@ -239,8 +245,8 @@ labelled borrowed, the wording split screen uses.
 HD's 69 cannot simply be copied to Pulse, and a title run with no HD disc has none.
 Three routes:
 
-1. **Own authored patterns in the fallback layer** (ADR-0061): our own XML, in the
-   same format, with the same 64 ids, written from the event table and not copied.
+1. **Own authored patterns in the fallback layer** (ADR-0061): our own TOML, with the
+   same 64 ids, written from the event table and not copied.
    Works for every player, fits "own art, fallback layer". Costs authoring, about a
    day for a useful 25. **Recommended.** Same files on PSP and PS2 pressings, one
    definition.
@@ -261,7 +267,7 @@ makes it moot.
 
 ## Extra patterns for mods
 
-- **Override**: a mod's `Data/XML/Rumble/<name>.xml` overrides by the override layer
+- **Override**: a mod's `Data/XML/Rumble/<name>.xml` or `<name>.toml` overrides by the override layer
   (ADR-0061), so a mod changes a feel with no code.
 - **New**: a mod declares a pattern by name in `oag-mod.toml` or by path, and gets a
   `PatternId` above 64. The library is a `Vec`, not a fixed 65.
@@ -289,6 +295,6 @@ Each is one lane, in order.
 3. **Wire HD, carry to Omega and 2048** (L, 50): the edge map, then held levels, then
    the contact and landing selector. 2048 by inheritance; check against Omega in the
    same change.
-4. **Pulse and Pure** (M, 50): own patterns in the fallback layer, the PS2 law as
-   `ORIGINAL`. Measure the damage unit first.
+4. **Pulse and Pure** (M, 50): own TOML patterns in the fallback layer, Pulse PS2
+   the same as Pulse PSP.
 5. **Mods** (S, 60): override and remap, then the ABI record and the skill.
