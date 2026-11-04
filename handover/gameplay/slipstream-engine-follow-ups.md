@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-04
-summary: "oag.slipstream wired; mod shaders and draw-beam landed; open: mesh portal, route and island exits, Distance::Trigger on a real track, bounded shader loops, .wesl imports."
+summary: "oag.slipstream and mod shaders landed; open: mesh portal, route and island exits, Distance::Trigger test, bounded shader loops, .wesl imports."
 categories: [tooling, frontend]
 size: L (50)
 difficulty: medium (50)
