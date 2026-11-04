@@ -406,7 +406,13 @@ executable registers (`FUN_015c1f20`) and this crate now reads:
 - `"Tonemap.*"` and `"TonemapHDR.*"` - ten keys each (exposure
   minimum/maximum/response/time, luminance and source-colour end a/b
   coefficients, start and end angle), read whole by `EnvSettings::tonemap`.
-  **Nothing consumes them yet**: the consumer is not located.
+  Consumer and law: [tonemap](../ghidra/functions/ps4-omega-eu/tonemap.md).
+- `"Bloom.*"`, with `"BloomHDR.*"` and, in the patch, `"BloomVR.*"` - the bright pass
+  (threshold, offset, scale, power, alpha scale) and `Blend factors`, four numbers
+  (three under `BloomHDR`), read by `EnvSettings::bright_pass`. Not HD's
+  `HDR and Bloom.*`, which Omega's files also carry and its executable ignores.
+  Every circuit file authors `Bloom.*` whole; drawn by `oag_post::omega_tonemap`
+  ([tonemap](../ghidra/functions/ps4-omega-eu/tonemap.md), "The bloom chain").
 
 ## See also
 

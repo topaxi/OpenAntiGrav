@@ -264,16 +264,91 @@ base's order differs only in where a nonzero tint would sit, and no code path dr
 `the_chain_draws_the_composite_after_the_curve` (a real device; red when the shader drops the term) and
 `omega_lightmap_ground_truth` (Tech De Ra's keys reach the composite).
 
-**Not drawn, open: `Bloom` and `LowResAdditive`.** The disc authors the bloom (`Bloom.Bright-pass threshold/scale/offset/
-power/alpha scale`, `Blend factors`; the `BloomHDR` twins), but these are **not HD's `HDR and Bloom` keys** and `hd_bloom`'s
-FunkLayerBloom law does not apply by name. The chain that builds `BloomTexture` is `FUN_0177fbc0` (reads the level array
-`DAT_01fc7848`), whose targets `FUN_016247c0` creates; neither is read. Recipe: decompile `FUN_0177fbc0` and `FUN_016247c0`,
-find the bright-pass program by its reflection names (`oag_rcs::gcn`), then the blur and per-level blend, then the level
-count and sizes; the `Bloom.*` parameters are already authored per circuit. The loader report names the gap.
+**`Bloom` is drawn since 2026-11-04 (next section); `LowResAdditive` is not.**
 **2048:** checked, differs: its composite is `wo_composite` with its own vignette output and `vignetteTint`
 (`oag_post::wo_composite`), no `Vignette.*` keys were found in the extracted Vita files, and the
 Omega composite is gated to the PS4 geometry. **HD:** checked, differs: `hd_bloom` is its composite; a Fury frame is
 byte-identical before and after this change.
+
+## The bloom chain (2026-11-04, `omega-bloom-read`)
+
+Static, read twice: base `eboot.bin` (`/omega/eboot-ps4-omega-eu.bin`) and patch 1.07 (`/omega/eboot-ps4-omega-eu-v107.bin`, which is
+what runs). No live readout, so every score is capped at 84. The law, in the order the frame runs it:
+
+```text
+source = the frame the composite reads, past the curve            (puVar18 in FUN_01625750)
+level 0..3: 960x540, 480x270, 240x135, 120x67                     (4 on a base PS4, 3 on checkerboard)
+A[0]   = bright(source)
+each level i:
+  B[i] = horizontal blur of (i == 0 ? A[0] : A[i-1])               (halving for i > 0)
+  A[i] = vertical blur of B[i]
+for i = 3, 2, 1:  A[i-1] += f[i] * A[i]                            (blend one + one, coarse to fine)
+BloomTexture = A[0], BloomScale = f[0]                             (x 1.075 on checkerboard)
+out = ColorScale * vignette * (Frame + LowResAdditive + BloomScale * Bloom) + ScreenTint
+
+bright(c): L = (c.r + c.g + c.b) / 3
+           p = max(L - Threshold, 0) ^ Power
+           w = Scale * p / (Offset + p) + AlphaScale * mask.a
+           out.rgb = c * w
+```
+
+`Threshold`, `Offset`, `Scale`, `Power`, `AlphaScale` and `f[0..3]` are `Bloom.Bright-pass threshold/offset/scale/power/alpha scale`
+and `Bloom.Blend factors`, per circuit.
+
+| Claim | Evidence | Confidence |
+| --- | --- | --- |
+| The order above | `Bloom_RunChain` (`FUN_0177fbc0`): the bright pass into `level[0]+8`; a loop over `DAT_01fc7820` levels calling `Bloom_BlurHorizontal` (`FUN_01785290`) with target `level[i]+0x50`, source `level[i-1]+0x98` (level 0 its own), and `Bloom_BlurVertical` (`FUN_017856f0`) with target `level[i]+8`, source `level[i]+0xd0`; a second loop from the last level to 1 calling `Bloom_AddLevel` (`FUN_0177e1e0`) | 80 |
+| Level array layout | Stride `0x108`: `+0` factor, `+8` target A, `+0x50` target B, `+0x98` view of A, `+0xd0` view of B (`Bloom_CreateLevels`, `FUN_0177e870`) | 80 |
+| Four levels from 960x540 | `Bloom_CreateTargets` (`FUN_016247c0`) gets `0x3c0`, `0x21c` (`FUN_016134d0` at boot, `FUN_01620d80` on a mode change); the level count is `3` under `DAT_02133c49` (checkerboard) else `4`, and the size halves per level. Base counts the positive entries of `0x0183e240` (`0.25 0.95 0.9 0.85`); the patch's `FUN_0165d1b0` writes `(DAT_02212c39 == 0) + 3` directly and its table (`0x0185ef10`) starts `0.001`. The first entry is a placeholder: `Environment_ApplyBloomVignette` overwrites every level's factor. Both binaries agree on size and count | 82 |
+| Split screen halves one axis | `FUN_01620d80` under its two-player mode: `0x1e0` by `0x21c`, or `0x3c0` by `0x10e`. Disassembly at `0x01620f6e` loads all six arguments the decompiler dropped; the patch's `FUN_0164b470` reads the same | 75 |
+| Level format | Base: the scanout's format misses every case of `FUN_016247c0`'s switch, so `FUN_0177e870` takes its default `0x3ac706`, `R11G11B10F` by this page's field split. The patch's level loop creates `0x3ac706` first | 65 |
+| The bright pass | `Shdr` `0x95fe54` (blob `0x1961d40`, 38 instructions): `image_sample` of slot 0, `image_sample` of slot 1 with `dmask:0x8` (alpha alone), `v_mul_f32 s4` / `v_mac_f32 s5` / `v_mac_f32 s6` (`cBrightness`), `v_subrev_f32 s0` (threshold), `v_max_f32 0`, `v_log_f32`, `v_mul_f32 s3` (power), `v_exp_f32`, `v_add_f32 s1` (offset), `v_rcp_f32`, `v_mul_f32 s2` (scale), `v_mac_f32 s7, mask.a` (boost), then `rgb * w`. The constants' order is the reflection name `Threshold_Offset_Scale_Power`, `cBrightness_BoostScale`. This reflection's header word refuses `oag_rcs::gcn`'s parser, so the names were read as strings at file `0x9600ea`, inside the blob | 84 |
+| Which bright program | `Bloom_RunChain`: `level0.width * 2 < source.width` picks the four-tap twin `Shdr` `0x95f444` (blob `0x1961330`): the same arithmetic on the mean of `image_sample_o` at `(+-1, +-1)`. So 1920 wide takes the one tap, 3840 the four | 82 |
+| `cBrightness` is a third each | `Bloom_CreatePrograms` (`FUN_0177f510`) writes `0x3eaaaaab` three times and the default boost `0.25`; `Environment_ApplyBloomVignette` (`FUN_01625490`) overwrites dwords 0-3 and 7 only. The patch's `FUN_017cfc40` and `FUN_01660030` read the same (`+0x27c`, with `BloomHDR` `+0x2a0` and the new `BloomVR` `+0x2c4` the other two picks) | 82 |
+| Same-size blur | `Shdr` `0x961894` (`Offsets`, `Weights`, horizontal; `0x961ea4` its vertical twin): seven bilinear taps. `Bloom_CreateBlurPrograms` (`FUN_01784570`): offsets `0, 1.3846154, 3.2307692, 5.0769229` texels, weights `0.2255859, 0.3142090, 0.0698242, 0.0031738`, which are row 12 of Pascal's triangle over 4096 folded into pairs: an exact invariant, asserted | 84 |
+| Halving blur | Source width differing from the target's selects `Shdr` `0x962534` (`aWeights`): eleven `image_sample_lz_o` taps at whole offsets `0, +-1..+-5` along x, weights `0.2256961, 0.1934538, 0.1209087, 0.0537372, 0.0161212, 0.0029311` (sum 1) | 82 |
+| The add | `Bloom_AddLevel` binds the `Scale` program (`Shdr` `0x95fa14`, `rgba * Scale`) with the blend state `DAT_0212a154`, set by `FUN_0177def0` through `FUN_012091a0(.., 1, 0, 1)`: one + one. `FUN_0177e670` sets its sibling `(4, 0, 5)`, source alpha and its inverse, through the same call, and Gnm's `BlendMultiplier` numbers those so | 80 |
+| Composite reads level 0's A | `FUN_01625750` binds `DAT_01fc7848 + 0x98` to the composite's slot 3, `BloomTexture` by reflection. All three of frame, additive layer and bloom are read at the distorted coordinate (`image_sample_lz` at `v0`, patch `Shdr` `0x9c9f94`) | 80 |
+| The source is the composite's own `FrameTexture` | `FUN_01625750` passes `puVar18` to the chain (`0x01628bc5`) and then binds the same variable as the composite's slot 0. It is the curve resolve's output view `DAT_01fc63e0` or, when the accumulated motion blur ran, `DAT_01fc7920`. So the thresholds act on the curve's `[0, 1]`, and Sol 2's `1.252` never fires on the frame term | 76 |
+
+**Every bloom program is identical in the patch**, compared line by line through `gcn_dump` (the disassembly text, not bytes: headers and
+reflection addresses differ). Base `Shdr` to patch: `0x95fe54` to `0x9d6444`, `0x95f444` to `0x9d5a34`, `0x95fa14` to `0x9d6004`, `0x961894` to
+`0x9d7e84`, `0x961ea4` to `0x9d8494`, `0x962534` to `0x9d8b24`, `0x969574` to `0x9dfb04`, `0x969764` to `0x9dfcf4`, `0x9699a4` to `0x9dff34`. The
+same-size blur's immediates in the patch's `FUN_0141efe0` are the same numbers; the halving blur's `aWeights` were read in the base only.
+
+**The census.** 38 circuit files (`track` and `track_reversed` of twelve HD-lineage circuits, four Zones, ten of 2048's) through the race's
+reader, all whole: `omega_lightmap_ground_truth`. All 38 live in the patch's `data08`. The numbers differ by circuit and are not a family: `Threshold`
+`0.35` to `1.252`, `Scale` `0.2` to `10`, `Power` `0.1` to `3.619`, `AlphaScale` `0.237` to `6`, `f[0]` `0.05` to `1.596`. `data/visual_effects/detonator.envsettings`,
+`zone.envsettings` and `zone2048.envsettings` author blocks of their own; what selects them is unread.
+
+**The mask, not drawn: one term unread, here is its recipe.** The second texture of the bright pass is `DAT_01fc6568`, a view of `DAT_01fc61e8`, a 960x540
+8-bit target. The scene's `PostTarget_Create` call (`FUN_0178a160`, from `FUN_01621650`) passes `DAT_01fc61a0` as a second destination, and the programs
+`0x969574`, `0x969764` and `0x9699a4` write it, one tap, two taps or four by the size ratio. Their outputs are named `main.m_Distance` (mrt0, `R16F`,
+`DAT_01fc61a0`) and `main.m_Alpha` (mrt1, alpha of `DAT_01fc61e8`), out of channels `.x` and `.y` of a full-size `0x22c705` target the scene draws
+as its second colour output. So the mask is half-size **per-material output alpha**, confidence 72. On the two tails read, an additive `cf_startbeam_glow`
+writes the diffuse texture's alpha there (`exp mrt1 v0, v2 compr`, `v0 = pack(v4, v8)`, `v8` the sample's fourth channel), and an opaque
+`diffuse_specular_V01_2` writes zero (`v_mov_b32_sdwa v1, 0 dst_sel:WORD_1`). Two programs out of 1.78 million: 60 that this is the rule.
+
+`AlphaScale` is not small: `0.237` to `6`, against a `Scale` of the same order. So **a material the mask would light blooms too little here**, most on
+Amphiseum (6), Chenghou Project (1.4) and Anulpha Pass (1.314); this is not compensated. To draw it: read `exp mrt1`'s second half off each material's
+programs (a `Program` method in `oag_rcs::gcn`, the census over `gcn_ground_truth`'s pass), carry it to `GpuVertex::glow` on the `psp2` path (which hard-codes
+0), write it to a scene channel, and add `AlphaScale * mask` in `fs_bright`. `Bloom::bright_weight` already takes the mask.
+
+**Also not the original's.** The accumulated motion blur's target is not the source here, because this renderer has none. `LowResAdditive`
+(slot 1, view `DAT_01fc6a50` of `DAT_01fc6a08`) stays undrawn: the particles draw into the scene and so pass through the curve. Drawing it needs
+those draws moved to a half-size target past the curve, depth-tested against the `m_Distance` target, and which draws go there is unread.
+
+**Drawn** (`oag_post::omega_tonemap::bloom`, `omega_tonemap.wesl` `fs_bright`, `omega_bloom.wesl`). Chosen, not measured: level 0 keeps height 540 and
+takes its width from the frame's shape, because the executable only draws 16:9; the levels are `Rgba16Float`, since `R11G11B10F` is not renderable on every
+device. The bright pass reads the four pixels a level 0 texel covers and curves each, which is the one-tap program's bilinear read at 1920 wide and the
+four-tap's at 3840, with no extra full-size target. A split view runs the chain alone, in the corner of each level; the original's two-player
+sizes come out of that. No setting: the 2026-10-02 ruling (bloom has none, only the original's). Pinned by `a_flat_frame_blooms_by_the_nested_sum`,
+`bloom_bleeds_past_an_edge_and_only_with_a_block`, `a_split_view_blooms_alone` (red with the term dropped from `fs_apply`, or the add), and the law's tests.
+
+**2048:** checked, differs. No `Threshold_Offset_Scale_Power` in its `eboot.elf`; 50 `.envsettings` carry no `Bright-pass` key (base, patch, both DLC). It has
+`Lighting.BloomFactor` and `BloomGate`, and `oag_post::wo_composite` draws that chain ([vita-2048-eu-v104/exposure.md](../vita-2048-eu-v104/exposure.md)).
+**HD:** checked, differs. No such program in `EBOOT.elf`, none of 33 files carries the key; `hd_bloom`'s `FunkLayerBloom` is another chain: a gate on luminance and
+alpha, nine-tap blurs and an adapted composite under the curve. Omega's own 2048-lineage circuits author `Bloom.*` and run this chain, which is why the census has them.
 
 ## Not live, recorded so nobody chases them
 
@@ -302,6 +377,16 @@ texels the emulated coefficient shader produced.
 ## Names
 
 [`names.tsv`](names.tsv) rows added by this page:
+
+- `0x0177fbc0` `Bloom_RunChain` - 80.
+- `0x016247c0` `Bloom_CreateTargets` - 76. Builds the levels, the motion-blur and related targets beside them.
+- `0x0177e870` `Bloom_CreateLevels` - 80.
+- `0x0177f510` `Bloom_CreatePrograms` - 80.
+- `0x01784570` `Bloom_CreateBlurPrograms` - 82.
+- `0x01785290` `Bloom_BlurHorizontal` - 80.
+- `0x017856f0` `Bloom_BlurVertical` - 80.
+- `0x0177e1e0` `Bloom_AddLevel` - 76. Also the one-step composite of `FUN_01625750`'s first branch.
+- `0x01625490` `Environment_ApplyBloomVignette` - 82. Two independent sites: the registrar's offsets and the level array's consumers.
 
 - `0x01620980` `ToneMap_ApplyEnvSettings` - 80. Reads the ten `Tonemap.*`
   fields (or `TonemapHDR.*`) through the environment object and writes them,

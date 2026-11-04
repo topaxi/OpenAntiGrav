@@ -1287,7 +1287,8 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   `LAvg` stepped toward it by at most `response / 60` a frame, an exposure
   `clamp((a + b LAvg) / LAvg, min, max)`, and a **cubic Hermite curve** from `(0, 0)`
   to `(t1, 1)` with end slopes set by the two angles, applied **per colour channel**
-  inside the 4x MSAA resolve. Bloom is added after it. Evidence, scores and what is
+  inside the 4x MSAA resolve. Bloom is added after it, from a four-level chain over the
+  curved frame, built from the circuit's `Bloom.*` keys and drawn since 2026-11-04 (its per-material mask is not). Evidence, scores and what is
   not read: [`ps4-omega-eu/tonemap.md`](../ghidra/functions/ps4-omega-eu/tonemap.md).
   The answer to "does Omega render differently by console" is: only in where the
   curve runs (the 4x MSAA resolve on a base PS4; a compute resolve with the same

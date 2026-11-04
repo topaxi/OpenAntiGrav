@@ -2,7 +2,7 @@
 status: re-first
 titles: [omega]
 updated: 2026-11-04
-summary: "Omega 1.07 composite: vignette, ColorScale, tint wired; open: the bloom chain behind BloomTexture, tint and ColorScale triggers"
+summary: "Omega 1.07 composite: vignette, ColorScale, tint and bloom wired; open: bloom's m_Alpha mask, LowResAdditive, tint and ColorScale triggers"
 difficulty: medium (40)
 ---
 
@@ -28,11 +28,10 @@ difficulty: medium (40)
 3. **PARTLY DONE 2026-11-04 (`omega-composite`)** - **The 1.07 composite.** Wired: `ColorScale = (1, 1, 1)`, the circuit's
    `Vignette.*` keys as the vignette and the tint (0 at rest) outside it, between the curve and the scanout encode
    (`oag_post::omega_tonemap::law::Composite`; evidence [tonemap.md](../../docs/ghidra/functions/ps4-omega-eu/tonemap.md),
-   "The composite's constants"). **Left open: `Bloom` and `LowResAdditive`.** The disc authors `Bloom.*` (bright-pass,
-   `Blend factors`) but the chain behind `BloomTexture` is unread: read `FUN_0177fbc0` (the chain) and `FUN_016247c0` (its
-   targets), the bright-pass program by reflection names, the blur and per-level blend, level count and sizes. `BloomScale`
-   is level 0's `Blend factors` entry. Also open: what triggers `ScreenTint` above zero (the `s^5` flash writers) and the
-   `ColorScale` fade ([colorscale.md](../../docs/ghidra/functions/ps4-omega-eu/colorscale.md)).
+   "The composite's constants"). **DONE 2026-11-04 (`omega-bloom-read`)**: the bloom chain, read and drawn ("The bloom chain"). **Left open:**
+   the bright pass's mask (per-material `m_Alpha`, recipe on that page; `AlphaScale` runs to 6, so a lit material blooms too little until it lands),
+   `LowResAdditive`, what selects the Zone and detonator `.envsettings` bloom blocks, what triggers `ScreenTint` above zero (the `s^5` flash writers)
+   and the `ColorScale` fade ([colorscale.md](../../docs/ghidra/functions/ps4-omega-eu/colorscale.md)).
 
 ## Later
 

@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [2048, omega]
-updated: 2026-10-27
-summary: "2048 and Omega run no bloom that reads a glow mask, so stamping one changes nothing; a psp2 bloom comes first, then the mask"
+updated: 2026-11-04
+summary: "Omega's bloom draws since 2026-11-04 with its mask absent; the mask is per-material m_Alpha; 2048's wo_* bloom reads none"
 categories: [rendering]
 ---
 
@@ -32,6 +32,13 @@ psp2 path stamps no glow mask, so the start-grid laser
   HD's laser is one of the 5 stamping blended draws is unread.
 - **Setting `glow_from_program` on psp2 models** (`psp2.rs` hard-codes `GpuVertex::glow: 0.0`)
   also moves the cutout targets and every opaque draw's alpha: shared-HD-adjacent, so not done.
+
+## Update 2026-11-04, `omega-bloom-read`
+
+Omega now runs its own chain (`oag_post::omega_tonemap::bloom`), so this thread's option A is done for Omega, and its `Tonemap.*` guess is replaced: the keys are
+`Bloom.*`. Omega's bright pass does read a mask, a half-size copy of the scene's second target's `m_Alpha`, so option B is now real for Omega: without it, stamping
+stays unread, and the start laser is a material whose program writes its texture alpha there. Recipe: `docs/ghidra/functions/ps4-omega-eu/tonemap.md`, "The bloom chain".
+2048's `wo_*` chain has a gate and two blurs, no mask (checked, differs).
 
 ## Open
 
