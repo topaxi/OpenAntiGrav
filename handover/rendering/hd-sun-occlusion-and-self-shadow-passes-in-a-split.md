@@ -28,6 +28,10 @@ per craft (`crates/render/src/shadow/occlusion.rs`, `self_shadow.rs`).
   negative result on a desktop part that is not tiled.
 - The scout counted 344 allocations a frame in these passes on HD, about 120 removable by fewer
   writes per craft (alloc scout item 3): separate from the passes themselves.
+- **Each pass has a GPU span now** (`sun occlusion (xN)`, `self shadow (xN)`, `between passes`;
+  `docs/tools/render-bench.md`). HD on the Intel iGPU, tick 2,500, one view: 2 of each, 290 to 393
+  and 83 to 117 us. The craft atlas skips craft out of view in one view (`CraftCaster::seen`,
+  `docs/rendering/shadows.md`), 466 to 57 us; a split draws them all, the same gap as `hull_seen`.
 
 ## Next Steps
 
