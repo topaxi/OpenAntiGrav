@@ -24,15 +24,15 @@ titles, with implementation detail and alternatives.
 ## Decided
 
 Maintainer, 2026-11-04, replacing decisions 1 to 3 below: a `RUMBLE` setting with the
-values `None`, `Original`, `PS2`, `PS3`, `PS4`. The default is the newest law, `PS4`;
-titles whose original has a law of their own keep it where the row says `Original`.
-A title whose original has no rumble (Pulse PSP, Pure, 2048) does not show `Original`.
-`PS3` is HD's small motor (any non-zero is full on), `PS4` is Omega's (the byte sum).
-Our patterns for Pulse and Pure stay own authored, in the fallback layer.
+values `None`, `Original`, `PS3`, `PS4`. The default is the newest law, `PS4`. A title
+whose original has no pattern rumble (Pulse PSP, Pulse PS2, Pure, 2048) does not show
+`Original`. `PS3` is HD's small motor (any non-zero is full on), `PS4` is Omega's (the
+byte sum). Pulse PS2 takes the same rumble as Pulse PSP, our own authored patterns in
+the fallback layer; the PS2 build's own level and timer law stays documented and is not
+played, so the `Ship_Damage` unit below no longer blocks anything.
 
-Open under it: what `PS2` means on a title with patterns (the PS2 build has a level and
-a timer, no pattern table), and whether the row keeps `Original` where it equals a
-named value (HD and `PS3`, Omega and `PS4`, Pulse PS2 and `PS2`).
+Open under it: whether the row keeps `Original` where it equals a named value (HD and
+`PS3`, Omega and `PS4`).
 
 ## Open
 
