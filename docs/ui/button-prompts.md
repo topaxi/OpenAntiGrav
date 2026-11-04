@@ -143,6 +143,14 @@ found stand-ins only in front-end prompts (`FE_PRESS_TO_*`, `FE_*_BUTTON`,
 already wired), Pure's confirm dialogs, HD's `BOOT_PRESS_X` (no reader) and
 the PS2's controller-unplugged messages (not drawn). No `IG_HUD_*` caption
 carries one, and a Pulse race frame under `--prompt-style xbox` shows none.
+
+**Pulse PS2 shares Pulse's table but not its faces.** `Pulse_14.fnt` (21x21) and
+`Pulse_20.fnt` (24x24) carry the six at their own sizes, and on this pressing `Λ Ν`
+are lettered `L1` and `R1`; `pulse_text.fnt`, `PulseHud.fnt` and `small.fnt` carry
+none. Its race frames under `--prompt-style xbox` and `original` are byte-identical.
+Its menu face is outlined, and an outlined face takes opacity from the body mask
+alone (`crates/game/shaders/ui.wesl`), so an added cell's mask has to follow its ink
+(`Atlas::push_glyph`); a solid mask draws a filled box.
 The HUD's own atlases are built without the stand-in cells
 (`oag_raceplay::hud::hud_font`), so a HUD string that did carry one would
 need `with_prompts` there and a fan-out on `hud_overlay::Overlay` first.

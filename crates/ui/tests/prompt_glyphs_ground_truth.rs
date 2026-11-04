@@ -15,8 +15,8 @@
 
 use oag_title::prompts::{Prompt, Prompts};
 
-/// The cells whose pictures were read: `Pulse_20.fnt`, `PS_BUTTONS.fnt` (HD and
-/// Omega) and Pure's `FX300ANG.fnt`,
+/// The cells whose pictures were read: `Pulse_20.fnt`, the PS2's `Pulse_14.fnt` and
+/// `Pulse_20.fnt`, `PS_BUTTONS.fnt` (HD and Omega) and Pure's `FX300ANG.fnt`,
 /// `ε` the circled cross, `γ` circle, `δ` square, `β` triangle, `Λ`/`Ν` the
 /// L and R boxes. (face, codepoint, FNV-1a of the cell's alpha.)
 const READ: &[(&str, char, u64)] = &[
@@ -26,6 +26,18 @@ const READ: &[(&str, char, u64)] = &[
     ("Pulse_20", 'β', 0x0a18_686c_832d_b108),
     ("Pulse_20", 'Λ', 0xdd58_0cf5_2689_c56e),
     ("Pulse_20", 'Ν', 0x8437_305b_ac1b_0612),
+    ("ps2 Pulse_14", 'ε', 0xc6e0_902d_7627_c9f5),
+    ("ps2 Pulse_14", 'γ', 0xf666_3d34_8536_afd1),
+    ("ps2 Pulse_14", 'δ', 0x3eae_21e3_2233_6a2d),
+    ("ps2 Pulse_14", 'β', 0x4426_417a_10f9_bb1e),
+    ("ps2 Pulse_14", 'Λ', 0x167a_adf5_fa2e_3030),
+    ("ps2 Pulse_14", 'Ν', 0x294b_baf1_6cfb_a392),
+    ("ps2 Pulse_20", 'ε', 0x7984_0edc_f2e9_e33d),
+    ("ps2 Pulse_20", 'γ', 0x533b_9c3a_d161_c097),
+    ("ps2 Pulse_20", 'δ', 0x7ed6_dbdc_3535_62f1),
+    ("ps2 Pulse_20", 'β', 0xab76_8d4f_d7c7_c398),
+    ("ps2 Pulse_20", 'Λ', 0x6020_f9e5_0f07_3b21),
+    ("ps2 Pulse_20", 'Ν', 0x6af5_959e_76ac_de2d),
     ("PS_BUTTONS", 'ε', 0x8667_ec82_e0ec_2715),
     ("PS_BUTTONS", 'γ', 0x2dac_ff1c_2c39_a4c9),
     ("PS_BUTTONS", 'δ', 0x3442_bf52_a954_b7f0),
@@ -84,6 +96,23 @@ fn pulses_six_stand_ins_are_six_different_buttons() {
             return;
         };
         check(&font, oag_pulse::prompts::PROMPTS, face);
+    }
+}
+
+/// The PS2 pressing shares Pulse's table, and its faces are not the PSP's: `Pulse_14` and
+/// `Pulse_20` carry the six at their own sizes, `pulse_text` and the HUD faces none.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2s_six_stand_ins_are_six_different_buttons() {
+    for face in ["Pulse_14", "Pulse_20"] {
+        let Some(font) = read(
+            "pulse-ps2-eu.chd",
+            oag_pulse::TITLE,
+            &format!(r"Data\FE\Fonts\{face}.fnt"),
+        ) else {
+            return;
+        };
+        check(&font, oag_pulse::prompts::PROMPTS, &format!("ps2 {face}"));
     }
 }
 
