@@ -35,7 +35,7 @@ pub fn safe_area_frame(frame: Frame, scale: f32, size: (f32, f32)) -> Frame {
         offset: [(1.0 - scale) * size.0 * 0.5, (1.0 - scale) * size.1 * 0.5],
         clip: [-1.0e9, -1.0e9, 2.0e9, 2.0e9],
     };
-    frame.placed(&placement)
+    frame.into_placed(&placement)
 }
 
 /// One view of a split screen: the layout it draws from, the slot's readout and
@@ -79,7 +79,7 @@ pub fn views_frame(views: &[ViewDraw<'_>]) -> Frame {
         if let Some(grid) = view.items {
             let mut mine = Frame::default();
             oag_hud::ext_draws::append(&mut mine, &view.cx, &view.readout.ext, grid);
-            let mut mine = mine.placed(&view.placement);
+            let mut mine = mine.into_placed(&view.placement);
             mine.spans.clear();
             mine.spans.push(Span {
                 clip: view.placement.clip,
@@ -101,14 +101,13 @@ pub fn views_frame(views: &[ViewDraw<'_>]) -> Frame {
             continue;
         }
         let Some(sight_at) = &view.sight else {
-            frame.extend(draw_list(&view.cx, &view.readout).placed(&view.placement));
+            frame.extend(draw_list(&view.cx, &view.readout).into_placed(&view.placement));
             continue;
         };
-        let mut readout = view.readout.clone();
-        let sight = readout.sight.take();
-        let mut mine = draw_list(&view.cx, &readout).placed(&view.placement);
-        if let Some(sight) = sight {
-            mine.sprites.extend(sight_draws(&sight, sight_at));
+        let mut mine =
+            oag_hud::draw_list_without_sight(&view.cx, &view.readout).into_placed(&view.placement);
+        if let Some(sight) = &view.readout.sight {
+            mine.sprites.extend(sight_draws(sight, sight_at));
         }
         frame.extend(mine);
     }
