@@ -225,7 +225,8 @@ pub const PICKUP_COLOURS: [Option<u32>; 14] = {
     ]
 };
 
-/// The pickup fade's timer rate. **Inherited from HD** (`1.5`): Omega's HUD update `FUN_0125e9b0` was not read for it, and Omega's front end and HUD are HD's lineage.
+/// The pickup fade's timer rate: `FUN_0125e9b0` steps the timer by `param_1 * 1.5`, as HD does
+/// (`docs/ghidra/functions/ps4-omega-eu/omega-pickup-table.md`, "The fade").
 pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 
 /// How Omega's HUD sprites reach the screen, [`oag_title::Title::hud_art`].
