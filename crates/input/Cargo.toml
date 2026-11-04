@@ -17,5 +17,8 @@ oag-gameplay.workspace = true
 oag-tables.workspace = true
 winit.workspace = true
 
+[dev-dependencies]
+oag-mod.workspace = true
+
 [lints]
 workspace = true

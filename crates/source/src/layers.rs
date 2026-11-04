@@ -74,6 +74,41 @@ pub fn override_layer_in(bases: &[PathBuf], title: &Title) -> Option<Layer> {
         .find_map(|base| Layer::from_dir(Kind::Override, &base.join(&slug)))
 }
 
+/// Our own rumble patterns (`assets/fallback/Data/XML/Rumble/`), by name.
+macro_rules! rumble_patterns {
+    ($($name:literal),* $(,)?) => {
+        &[$((
+            concat!("Data\\XML\\Rumble\\", $name, ".toml"),
+            include_bytes!(concat!("../../../assets/fallback/Data/XML/Rumble/", $name, ".toml")) as &[u8],
+        )),*]
+    };
+}
+
+/// Every pattern the fallback layer carries; the disc's own of the same name wins.
+pub const RUMBLE_PATTERNS: &[(&str, &[u8])] = rumble_patterns![
+    "absorb_any_pickup_rumble",
+    "autopilot_active_rumble",
+    "cannon_fired_rumble",
+    "enter_mag_rumble",
+    "exit_mag_rumble",
+    "leech_fired_rumble",
+    "leeching_energy_rumble",
+    "lockon_rumble",
+    "mine_fired_rumble",
+    "missile_fired_rumble",
+    "missile_rebound_wall_rumble",
+    "pad_speed",
+    "plasma_fired_rumble",
+    "plasma_hits_wall",
+    "quake_fired_rumble",
+    "repulser_fired_rumble",
+    "rocket_hits_wall",
+    "rockets_fired_rumble",
+    "ship_exploding_player_rumble",
+    "shuriken_fired_rumble",
+    "travel_mag_rumble",
+];
+
 /// This project's own substitutes, carried in the binary.
 ///
 /// Every entry is **art or layout this project drew**, named for the entry a
@@ -122,6 +157,9 @@ pub fn fallback_layer() -> Layer {
         "Data\\Psys\\Tex\\OAGSplash.oagmask",
         include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGSplash.oagmask"),
     );
+    for (name, bytes) in RUMBLE_PATTERNS {
+        layer.insert_bytes(name, bytes);
+    }
     layer
 }
 

@@ -1,0 +1,20 @@
+# Wipeout Pulse and Pure rumble: a rocket strikes a wall: a sharp burst.
+# Read through the fallback asset layer; a disc pattern of the same name wins, and a file
+# in overrides/<title>/Data/XML/Rumble/ replaces this one.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/rumble.tosd"
+version = "1.0.0"
+
+[pattern]
+type = "OneShot"
+class = "Game"
+priority = "Medium"
+
+[pattern.positional]
+fall_off_inner = 20
+fall_off_outer = 10
+
+[tracks]
+large = [230, 255, 215, 170, 125, 90, 62, 40, 22, 10]
+small = [1, 0, 0, 1]

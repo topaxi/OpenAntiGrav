@@ -1,0 +1,17 @@
+# Wipeout Pulse and Pure rumble: the Leech drains the ship: a pulsing drag that stops at once.
+# Read through the fallback asset layer; a disc pattern of the same name wins, and a file
+# in overrides/<title>/Data/XML/Rumble/ replaces this one.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/rumble.tosd"
+version = "1.0.0"
+
+[pattern]
+type = "Looping"
+class = "Game"
+priority = "Medium"
+loop = [0, 17]
+
+[tracks]
+large = [150, 175, 190, 175, 150, 130, 150, 175, 190, 175, 150, 130, 150, 175, 190, 175, 150, 130]
+small = [0]
