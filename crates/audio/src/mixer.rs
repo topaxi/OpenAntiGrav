@@ -311,8 +311,12 @@ struct Voice {
     pan: Option<f32>,
     /// See [`Play::front`].
     front: f32,
-    /// One-pole low-pass state per ear for [`SpatialMode::RearCue`].
+    /// One-pole low-pass state per ear for [`SpatialMode::RearCue`] and
+    /// [`Mixer::set_rear_occlusion`].
     rear_state: [f32; CHANNELS],
+    /// The smoothed rear-occlusion cutoff in hertz, or `None` until the first
+    /// [`Mixer::set_front`] of a voice that has one.
+    occlusion_hz: Option<f32>,
     /// The voice's place in the shared convolver, while it is a headphone
     /// voice.
     hrtf: Option<Box<VoiceState>>,
@@ -349,6 +353,7 @@ impl Default for Voice {
             pan: None,
             front: 1.0,
             rear_state: [0.0; CHANNELS],
+            occlusion_hz: None,
             hrtf: None,
             hrtf_wanted: false,
             hrtf_weight: 1.0,
@@ -404,8 +409,8 @@ pub struct Play {
     /// be. A voice whose position was never recovered is left alone.
     pub pan: Option<f32>,
     /// How far ahead of the listener the voice is: `+1.0` dead ahead, `-1.0`
-    /// dead behind. Read only for a voice with a [`Self::pan`], and only when
-    /// the mixer's [`SpatialMode`] is not `Original`.
+    /// dead behind. Read only for a voice with a [`Self::pan`], and under
+    /// `Original` only by [`Mixer::set_rear_occlusion`]'s law.
     pub front: f32,
     /// Whether to restart at the end instead of stopping.
     pub looping: bool,
@@ -453,6 +458,9 @@ pub struct Mixer {
     master_trim: f32,
     sample_rate: u32,
     spatial: SpatialMode,
+    /// `max_frequency` of the original's rear low-pass, or `None` where the
+    /// title has none. See [`Self::set_rear_occlusion`].
+    rear_occlusion: Option<f32>,
     /// The shared HRTF convolver, once built. See [`Self::set_binaural`].
     binaural: Option<Binaural>,
     binaural_requested: bool,
@@ -496,6 +504,7 @@ impl Mixer {
             master_trim: 1.0,
             sample_rate: sample_rate.max(1),
             spatial: SpatialMode::Original,
+            rear_occlusion: None,
             binaural: None,
             binaural_requested: false,
             hrtf_cap: HRTF_VOICES,
@@ -651,6 +660,7 @@ impl Mixer {
             pan: play.pan,
             front: play.front,
             rear_state: [0.0; CHANNELS],
+            occlusion_hz: None,
             hrtf: None,
             hrtf_wanted: false,
             hrtf_weight: 1.0,
@@ -746,9 +756,38 @@ impl Mixer {
     /// Where a live voice is along the listener's forward axis. See
     /// [`Play::front`].
     pub fn set_front(&mut self, id: VoiceId, front: f32) {
+        let max = self.rear_occlusion;
         if let Some(voice) = self.voice_mut(id) {
             voice.front = front;
+            if let Some(max) = max {
+                let target = crate::spatial::rear_occlusion_cutoff(front, max);
+                voice.occlusion_hz = Some(voice.occlusion_hz.map_or(target, |previous| {
+                    crate::spatial::smooth_occlusion(previous, target)
+                }));
+            }
         }
+    }
+
+    /// Turns on the original's rear low-pass under [`SpatialMode::Original`]:
+    /// a placed voice behind the listener is low-passed by
+    /// [`crate::spatial::rear_occlusion_cutoff`] with this `max_frequency`
+    /// (the title's own `GlobalAudioConfig.xml` value). `None` is off, which is
+    /// bit-identical to a mixer without it, and what a title or circuit whose
+    /// original has no such filter asks for. The cutoff steps once per
+    /// [`Self::set_front`], the call every voice makes each tick.
+    pub fn set_rear_occlusion(&mut self, max_frequency: Option<f32>) {
+        if self.rear_occlusion != max_frequency {
+            self.rear_occlusion = max_frequency;
+            for voice in &mut self.voices {
+                voice.occlusion_hz = None;
+            }
+        }
+    }
+
+    /// The rear low-pass's `max_frequency`, or `None` where it is off.
+    #[must_use]
+    pub fn rear_occlusion(&self) -> Option<f32> {
+        self.rear_occlusion
     }
 
     /// Chooses how placed voices are rendered. See [`SpatialMode`].
@@ -946,6 +985,7 @@ impl Mixer {
         let bus_gain = self.bus_gain;
         let rate = f64::from(self.sample_rate);
         let spatial = self.spatial;
+        let rear_occlusion = self.rear_occlusion;
         if spatial == SpatialMode::Headphones && self.binaural.is_some() {
             self.rank_hrtf_voices();
         } else {
@@ -1001,6 +1041,16 @@ impl Mixer {
                 && (voice.hrtf.is_none() || hrtf_weight < 1.0 || !want_hrtf);
             let (rear_coeff, rear_gain) = if rear_active {
                 rear_cue(voice.front, self.sample_rate)
+            } else if let (SpatialMode::Original, Some(max), true) =
+                (spatial, rear_occlusion, voice.pan.is_some())
+            {
+                let hz = voice
+                    .occlusion_hz
+                    .unwrap_or_else(|| crate::spatial::rear_occlusion_cutoff(voice.front, max));
+                (
+                    crate::spatial::low_pass_coefficient(hz, self.sample_rate),
+                    1.0,
+                )
             } else {
                 (1.0, 1.0)
             };
@@ -1200,9 +1250,10 @@ impl Mixer {
 /// [`SpatialMode::RearCue`]: `(1.0, 1.0)` ahead (the filter is then a bit-exact
 /// pass), easing to the rear values dead behind.
 ///
-/// **Chosen, not measured**: the original cannot tell front from back
+/// **Chosen, not measured**: Pulse's original cannot tell front from back
 /// (`docs/ghidra/functions/psp-pulse-usa/positional-audio.md`, "The angle loses
-/// front from back"). Dead behind: one pole at [`REAR_CUTOFF_HZ`] and
+/// front from back"); HD's can, and plays its own law under
+/// [`SpatialMode::Original`] ([`Mixer::set_rear_occlusion`]). Dead behind: one pole at [`REAR_CUTOFF_HZ`] and
 /// [`REAR_GAIN`], both eased linearly in the rear half only.
 fn rear_cue(front: f32, sample_rate: u32) -> (f32, f32) {
     let behind = (-front).clamp(0.0, 1.0);

@@ -166,6 +166,12 @@ pub struct Title {
     /// mix is authored for a 16-bit clamp and sums to about twice full scale in a busy race; HD's
     /// authored mix has headroom and reads `0.0`.
     pub master_trim_db: pre_race::Sourced<f32>,
+    /// The child of `GlobalAudioConfig.xml`'s `<RearOcclusion>` this title's original reads to
+    /// low-pass a voice behind the listener (`Stereo` here: ours is a stereo mix), or `None` when
+    /// it does not. The frequency is the file's, never ours. Only a title that sets this plays
+    /// the law, even where its file carries the element: Omega ships one nothing reads
+    /// (`docs/ghidra/functions/ps4-omega-eu/audio-3d.md`, "`RearOcclusion` is dead on Omega").
+    pub rear_occlusion: Option<pre_race::Sourced<&'static str>>,
     /// Which codepoints in this title's strings are controller-button glyphs,
     /// and which control each depicts. See [`prompts::Prompts`].
     pub prompts: &'static prompts::Prompts,

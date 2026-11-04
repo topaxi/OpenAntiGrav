@@ -141,6 +141,13 @@ fn check(index: usize) {
         "{env}"
     );
 
+    // Moa Therma's `AudioConfig.xml` alone has `<DistanceFilter low_pass="0">`.
+    assert_eq!(
+        loaded.low_pass_off,
+        env == "03_track",
+        "{env}: the circuit's low-pass switch"
+    );
+
     let dangled: Vec<&String> = loaded
         .report
         .iter()
@@ -237,4 +244,119 @@ fn the_shared_banks_are_what_resolve_the_voppler_and_crowd_nodes() {
         27,
         "only the circuit's own bank resolves without the shared list"
     );
+}
+
+fn render_voice(
+    sound: &std::sync::Arc<oag_audio::Sound>,
+    front: f32,
+    law: Option<f32>,
+) -> Vec<f32> {
+    use oag_audio::{Bus, Mixer, Play, SpatialMode};
+    let mut mixer = Mixer::new(48_000);
+    mixer.set_limiting(false);
+    mixer.set_spatial_mode(SpatialMode::Original);
+    mixer.set_rear_occlusion(law);
+    let id = mixer
+        .play(Play {
+            pan: Some(0.0),
+            front,
+            ..Play::looping(std::sync::Arc::clone(sound), Bus::Sfx)
+        })
+        .expect("voice");
+    // Two seconds of ticks, so the cutoff has eased to where it is going.
+    for _ in 0..120 {
+        mixer.set_front(id, front);
+    }
+    let mut out = vec![0.0; 2 * 48_000];
+    mixer.render(&mut out);
+    out
+}
+
+/// Energy above `above_hz` over a 4096-frame window of the left channel, and the window's total.
+fn band_energy(out: &[f32], above_hz: f32) -> (f32, f32) {
+    const N: usize = 4096;
+    let left: Vec<f32> = out.chunks(2).skip(24_000).take(N).map(|f| f[0]).collect();
+    let hann = |i: usize| 0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / N as f32).cos();
+    let first = (above_hz / 48_000.0 * N as f32).ceil() as usize;
+    let (mut high, mut all) = (0.0_f32, 0.0_f32);
+    for k in 1..N / 2 {
+        let (mut re, mut im) = (0.0_f32, 0.0_f32);
+        for (i, x) in left.iter().enumerate() {
+            let a = std::f32::consts::TAU * (k * i % N) as f32 / N as f32;
+            re += x * hann(i) * a.cos();
+            im -= x * hann(i) * a.sin();
+        }
+        let power = re * re + im * im;
+        all += power;
+        if k >= first {
+            high += power;
+        }
+    }
+    (high, all)
+}
+
+/// Scratch sweep, not a claim: renders one HD circuit voice in front of and behind the listener
+/// under `original` with the file's `RearOcclusion`, writes the two WAVs into `OAG_SWEEP`'s
+/// directory and prints the energy above the cutoff in each.
+#[test]
+#[ignore = "scratch sweep: set OAG_SWEEP to an output directory"]
+fn rear_occlusion_wav_pair() {
+    let Some(dir) = std::env::var_os("OAG_SWEEP") else {
+        return;
+    };
+    let Some(opened) = open() else {
+        return;
+    };
+    let cutoff = 14_000.0_f32;
+    let mut archives = opened.archives;
+    let mut rates = std::collections::BTreeMap::<u32, usize>::new();
+    let mut best: Option<(f32, String, std::sync::Arc<oag_audio::Sound>)> = None;
+    let mut seen = Vec::new();
+    for (env, ..) in CIRCUITS.iter().filter(|c| c.1 > 0) {
+        let track = oag_hd::names::track(env);
+        let blob = archives.read_name(&track).expect("the circuit");
+        let loaded = TrackEmitters::load(&mut archives, opened.title.race.sounds, &track, &blob);
+        for node in loaded.omni.iter().chain(&loaded.directional) {
+            let Some(cue) = &node.sound else { continue };
+            for (sound, _) in &cue.waveforms {
+                if seen.iter().any(|s| std::sync::Arc::ptr_eq(s, sound)) {
+                    continue;
+                }
+                seen.push(std::sync::Arc::clone(sound));
+                *rates.entry(sound.sample_rate()).or_default() += 1;
+                // Nothing above half the source rate to cut.
+                if sound.sample_rate() < 2 * cutoff as u32 {
+                    continue;
+                }
+                let (high, all) = band_energy(&render_voice(sound, 1.0, None), cutoff);
+                let share = high / all.max(1e-12);
+                if all > 1e-3 && best.as_ref().is_none_or(|(b, ..)| share > *b) {
+                    best = Some((share, (*env).to_string(), std::sync::Arc::clone(sound)));
+                }
+            }
+        }
+    }
+    println!("source rates of HD's circuit voices: {rates:?}");
+    let (_, env, sound) = best.expect("a voice whose source reaches the cutoff");
+    let dir = std::path::Path::new(&dir);
+    std::fs::create_dir_all(dir).expect("dir");
+    for (name, front, law) in [
+        ("front", 1.0, Some(cutoff)),
+        ("behind", -1.0, Some(cutoff)),
+        ("behind_without_law", -1.0, None),
+    ] {
+        let out = render_voice(&sound, front, law);
+        let (high, all) = band_energy(&out, cutoff);
+        println!(
+            "{env} {name}: {:.1} s, source rate {} Hz, energy above {cutoff} Hz {high:.4e} of {all:.4e} ({:.3}%)",
+            sound.seconds(),
+            sound.sample_rate(),
+            100.0 * high / all.max(1e-12)
+        );
+        std::fs::write(
+            dir.join(format!("hd_{env}_{name}.wav")),
+            oag_audio::wav::from_samples(&out, 48_000),
+        )
+        .expect("write");
+    }
 }

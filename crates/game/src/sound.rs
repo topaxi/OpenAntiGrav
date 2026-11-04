@@ -131,13 +131,14 @@ pub fn play_nav(
 /// [`race_tick`] sees the race leave its countdown. Called before every fresh race starts its
 /// music, whichever way it was reached; a resume mid-race does not call it. Also sets the title's
 /// effects and speech volume laws ([`Audio::set_effects_volume_law`],
-/// [`Audio::set_speech_volume_law`], [`Audio::set_speech_follows_effects`]) and its master trim ([`Audio::set_master_trim_db`]) for that race.
+/// [`Audio::set_speech_volume_law`], [`Audio::set_speech_follows_effects`]) its master trim ([`Audio::set_master_trim_db`]) and its rear low-pass ([`Audio::set_rear_occlusion_layout`]) for that race.
 pub fn hold_race_song(audio: &mut Audio, title: &oag_title::Title) {
     audio.hold_race_song(title.music.is_some_and(oag_title::Music::song_waits_for_go));
     audio.set_effects_volume_law(title.effects_volume_law.value);
     audio.set_speech_volume_law(title.speech_volume_law.value);
     audio.set_speech_follows_effects(title.speech_follows_effects.value);
     audio.set_master_trim_db(title.master_trim_db.value);
+    audio.set_rear_occlusion_layout(title.rear_occlusion.map(|layout| layout.value));
 }
 
 /// Starts decoding `race`'s flyby voice-over, where it has one, off this thread: the clip is ready

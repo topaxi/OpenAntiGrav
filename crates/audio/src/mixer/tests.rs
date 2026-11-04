@@ -834,3 +834,121 @@ fn the_limiter_keeps_a_saturated_sum_under_the_ceiling_without_clamping() {
     assert!(mixer.limited() > 0);
     assert!(mixer.deepest_limit() < 0.2);
 }
+
+fn rendered_occluded(max: Option<f32>, pan: Option<f32>, front: f32) -> Vec<f32> {
+    let mut mixer = bare(44_100);
+    mixer.set_spatial_mode(SpatialMode::Original);
+    mixer.set_rear_occlusion(max);
+    let id = mixer
+        .play(Play {
+            pan,
+            front: 1.0,
+            ..Play::looping(buzz(), Bus::Sfx)
+        })
+        .expect("voice");
+    mixer.set_front(id, front);
+    let mut out = vec![0.0; 2 * 512];
+    mixer.render(&mut out);
+    out
+}
+
+fn bits(out: &[f32]) -> Vec<u32> {
+    out.iter().map(|s| s.to_bits()).collect()
+}
+
+#[test]
+fn rear_occlusion_low_passes_a_voice_behind_the_listener_under_original() {
+    let ahead = rendered_occluded(Some(14_000.0), Some(0.0), 1.0);
+    let behind = rendered_occluded(Some(14_000.0), Some(0.0), -1.0);
+    assert!(
+        energy(&behind) < energy(&ahead) * 0.8,
+        "a Nyquist buzz behind is cut: {} vs {}",
+        energy(&behind),
+        energy(&ahead)
+    );
+}
+
+#[test]
+fn rear_occlusion_leaves_a_voice_ahead_bit_identical_to_no_law() {
+    for front in [1.0, 0.5, 0.0] {
+        let plain = rendered_occluded(None, Some(-0.4), front);
+        let law = rendered_occluded(Some(14_000.0), Some(-0.4), front);
+        assert_eq!(bits(&plain), bits(&law), "front = {front}");
+    }
+}
+
+#[test]
+fn without_the_law_original_stays_bit_identical_front_and_back() {
+    let ahead = rendered_occluded(None, Some(0.3), 1.0);
+    let behind = rendered_occluded(None, Some(0.3), -1.0);
+    assert_eq!(bits(&ahead), bits(&behind));
+    assert_eq!(
+        bits(&behind),
+        bits(&rendered(SpatialMode::Original, Some(0.3), -1.0))
+    );
+}
+
+#[test]
+fn rear_occlusion_leaves_an_unplaced_voice_alone() {
+    let plain = rendered_occluded(None, None, -1.0);
+    let law = rendered_occluded(Some(14_000.0), None, -1.0);
+    assert_eq!(bits(&plain), bits(&law));
+}
+
+#[test]
+fn the_cutoff_eases_in_over_ticks_not_at_once() {
+    let mut mixer = bare(44_100);
+    mixer.set_rear_occlusion(Some(2_000.0));
+    let id = mixer
+        .play(Play {
+            pan: Some(0.0),
+            ..Play::looping(buzz(), Bus::Sfx)
+        })
+        .expect("voice");
+    mixer.set_front(id, 1.0);
+    let mut last = 23_999.0;
+    for _ in 0..5 {
+        mixer.set_front(id, -1.0);
+        let hz = mixer.voices[0].occlusion_hz.expect("cutoff");
+        assert!(hz < last && hz > 2_000.0, "{hz}");
+        last = hz;
+    }
+}
+
+/// Scratch sweep: what the rear low-pass costs per voice, 32 placed voices all behind the listener
+/// (the worst case: every voice filters). Prints; asserts nothing. Run with `--release`.
+#[test]
+#[ignore = "scratch sweep: set OAG_SWEEP"]
+fn rear_occlusion_cost_per_voice() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    for (name, law) in [("no law", None), ("law, all behind", Some(14_000.0))] {
+        let mut mixer = Mixer::new(48_000);
+        mixer.set_rear_occlusion(law);
+        for i in 0..32 {
+            mixer
+                .play(Play {
+                    pan: Some((i as f32 * 0.37).sin()),
+                    front: -1.0,
+                    ..Play::looping(buzz(), Bus::Sfx)
+                })
+                .expect("voice");
+        }
+        let mut out = vec![0.0; 2 * 512];
+        for _ in 0..16 {
+            mixer.render(&mut out);
+        }
+        let blocks = 2000;
+        let start = std::time::Instant::now();
+        for _ in 0..blocks {
+            mixer.render(&mut out);
+        }
+        let per_block = start.elapsed() / blocks;
+        println!(
+            "original, {name}, 32 voices: {per_block:?} per 512 frames, {:.2} % of one core, {:?} per voice",
+            per_block.as_secs_f64() / (512.0 / 48_000.0) * 100.0,
+            per_block / 32
+        );
+    }
+}

@@ -722,6 +722,7 @@ impl Audio {
     /// carried-over [`SfxVoices`] would hold a `VoiceId` into a reused pool and
     /// an engine past its rising-edge snap.
     pub fn stop_race_sfx(&mut self) {
+        self.set_circuit_low_pass_off(false);
         // The flyby's voice-over is a race voice too: quitting from the pause menu mid-flyby
         // must not leave it over the front end.
         self.stop_pre_race_voice();

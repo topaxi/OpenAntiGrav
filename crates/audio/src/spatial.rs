@@ -104,8 +104,8 @@ pub struct Listener {
     /// from the rendering side.
     pub right: [f32; 3],
     /// The camera's world-space **forward** axis (the way it looks), expected
-    /// normalised. Read only by the front/back cue ([`SpatialMode`]); the
-    /// original's law never uses it.
+    /// normalised. Read by the front/back cue ([`SpatialMode`]) and the rear
+    /// low-pass of a title whose original has one; Pulse's pan never uses it.
     pub forward: [f32; 3],
 }
 
@@ -123,12 +123,57 @@ impl Listener {
     }
 }
 
+/// The open end of the original's rear low-pass, in hertz: a voice at this
+/// cutoff is not filtered.
+pub const OCCLUSION_OPEN_HZ: f32 = 23_999.0;
+
+/// The cutoff of the original's rear low-pass for a voice `front` of the
+/// listener (`cos` of its angle from forward), given the title's
+/// `RearOcclusion` `max_frequency` (`docs/ghidra/functions/ps4-omega-eu/audio-3d.md`,
+/// "The rear low-pass"):
+///
+/// ```text
+/// r    = clamp((angle - 90) * 0.05, 0, 1)      angle in degrees, 90..110 ramps
+/// rear = r * max + (1 - r) * 23999
+/// ```
+///
+/// The original's angle runs a full circle and ramps again over 250..270; folded
+/// onto `0..=180` from forward that is the same ramp.
+#[must_use]
+pub fn rear_occlusion_cutoff(front: f32, max_frequency: f32) -> f32 {
+    let angle = front.clamp(-1.0, 1.0).acos().to_degrees();
+    let r = ((angle - 90.0) * 0.05).clamp(0.0, 1.0);
+    (r * max_frequency + (1.0 - r) * OCCLUSION_OPEN_HZ).min(OCCLUSION_OPEN_HZ)
+}
+
+/// One update of the original's cutoff smoothing, `0.05 * target + 0.95 *
+/// previous`. The original runs it per emitter update; one update per
+/// simulation tick is **chosen, not measured** (the divisor behind the update
+/// counter is 1 in the file and unread at run time).
+#[must_use]
+pub fn smooth_occlusion(previous: f32, target: f32) -> f32 {
+    0.05 * target + 0.95 * previous
+}
+
+/// One-pole coefficient for a low-pass at `hz`: exactly `1.0` (a bit-exact
+/// pass) at the open end, within a hertz of it. The filter's order and shape
+/// are unread in the original, so a one-pole is **chosen, not measured**.
+#[must_use]
+pub fn low_pass_coefficient(hz: f32, sample_rate: u32) -> f32 {
+    if hz >= OCCLUSION_OPEN_HZ - 1.0 {
+        return 1.0;
+    }
+    1.0 - (-std::f32::consts::TAU * hz / sample_rate as f32).exp()
+}
+
 /// How a placed voice is rendered into the two ears.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SpatialMode {
-    /// The original's law: equal-power pan only, so a source ahead and a
-    /// source behind sound the same.
+    /// The original's law: equal-power pan, so on Pulse and Pure a source ahead
+    /// and a source behind sound the same. A title whose original low-passes a
+    /// voice behind the listener (HD) adds that through
+    /// [`crate::Mixer::set_rear_occlusion`].
     Original,
     /// A source behind the listener is low-passed and slightly lowered. Cheap,
     /// safe on speakers and headphones.

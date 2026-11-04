@@ -175,6 +175,7 @@ pub const TITLE: &Title = &Title {
     ),
     speech_follows_effects: oag_title::pre_race::Sourced::chosen(false),
     master_trim_db: oag_title::pre_race::Sourced::chosen(0.0),
+    rear_occlusion: Some(oag_title::pre_race::Sourced::measured("Stereo")),
     plugin_definition: names::FRONT_END_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),
