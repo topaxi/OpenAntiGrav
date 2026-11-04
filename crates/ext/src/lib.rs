@@ -228,6 +228,14 @@ impl<'a> Observation<'a> {
         Sections::title(self.records)
     }
 
+    /// The player's `n`-th pick among the mod's own choice rows, as the index in that
+    /// row's list (0 for the first value, for a row with none and past the fourth). Use it
+    /// for what is drawn only: it is not simulation input.
+    #[must_use]
+    pub fn option(&self, n: usize) -> u8 {
+        Sections::option(self.records, n)
+    }
+
     /// The world tick.
     #[must_use]
     pub fn tick(&self) -> u64 {

@@ -332,3 +332,149 @@ fn its_three_sounds_load_through_the_engines_loader_in_name_order() {
         );
     }
 }
+
+/// A module that stores the first option byte, as the host writes it, in its state.
+fn option_reader() -> crate::extensions::Source {
+    module(
+        "test.option",
+        &format!(
+            "(i32.store8 (i32.const {state}) (i32.load8_u (i32.const {option})))
+             i32.const 0",
+            state = super::extensions::on::STATE,
+            option = 1024 + oag_ext_abi::OPTIONS_AT,
+        ),
+    )
+}
+
+#[test]
+fn a_race_hands_its_module_the_picks_its_source_carries() {
+    for pick in [0u8, 1, 2] {
+        let mut source = option_reader();
+        source.options = [pick, 0, 0, 0];
+        let mut race = super::extensions::grid(prepared_for("wipeout-pulse", &[source]));
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        assert_eq!(race.sim.extensions.blob_for_tests(0)[0], pick);
+    }
+}
+
+/// The real module's commands for the first `ticks` after a fire by a person at 360 km/h on
+/// a 4000 unit lap at progress 3900, with the QUALITY pick `option`.
+fn portal_commands(module: &Module, option: u8, ticks: usize) -> Vec<Command> {
+    let crafts: Vec<Craft> = (0..8)
+        .map(|slot| Craft {
+            pickup: if slot == 0 {
+                Pickup::Ours
+            } else {
+                Pickup::None
+            },
+            person: slot == 0,
+            racing: true,
+            speed_kmh: 360.0,
+            ..Craft::default()
+        })
+        .collect();
+    let slot = Slot::new(0).unwrap();
+    let tracking: Vec<oag_ext_abi::Tracking> = (0..8)
+        .map(|s| oag_ext_abi::Tracking {
+            progress: (s == 0).then_some(3900.0),
+            place: u8::from(s == 0),
+        })
+        .collect();
+    let mut state = vec![0; module.limits().state_bytes as usize];
+    let mut all = Vec::new();
+    for tick in 0..ticks {
+        let events = if tick == 0 {
+            vec![
+                Event::PickupFire { slot },
+                Event::Clearance {
+                    slot,
+                    fits: true,
+                    ahead: 30.0,
+                },
+            ]
+        } else {
+            Vec::new()
+        };
+        let observation = Observation {
+            tick: tick as u64,
+            active: 0xff,
+            events: &events,
+            crafts: &crafts,
+            course: oag_ext_abi::Course {
+                length: 4000.0,
+                tracking: &tracking,
+                options: [option, 0, 0, 0],
+                ..Default::default()
+            },
+            track: &[],
+            speed_pads: 0,
+            routes: 0,
+        };
+        let mut commands = Vec::new();
+        module
+            .tick(&observation, &mut state, &mut commands)
+            .expect("no fault");
+        all.extend(commands);
+    }
+    all
+}
+
+#[test]
+fn the_real_module_draws_each_quality_as_specified_and_plays_the_same_race() {
+    use oag_ext_abi::ViewUpdate;
+    let Some(slipstream) = open() else { return };
+    let module = compiled(&slipstream);
+    let by = |option| portal_commands(&module, option, 30);
+    let views = |commands: &[Command]| -> Vec<Command> {
+        commands
+            .iter()
+            .filter(|c| matches!(c, Command::PortalView { .. }))
+            .copied()
+            .collect()
+    };
+    let rest = |commands: &[Command]| -> Vec<Command> {
+        commands
+            .iter()
+            .filter(|c| {
+                !matches!(
+                    c,
+                    Command::PortalView { .. } | Command::SetShaderParam { .. }
+                )
+            })
+            .copied()
+            .collect()
+    };
+    let (low, medium, high) = (by(0), by(1), by(2));
+    assert!(views(&low).is_empty(), "Low asks for no scene");
+    let kinds = |commands: &[Command]| -> Vec<ViewUpdate> {
+        views(commands)
+            .iter()
+            .filter_map(|c| match c {
+                Command::PortalView { update, .. } => Some(*update),
+                _ => None,
+            })
+            .collect()
+    };
+    assert!(kinds(&medium).len() >= 28 && kinds(&medium).iter().all(|u| *u == ViewUpdate::Once));
+    assert!(kinds(&high).len() >= 28 && kinds(&high).iter().all(|u| *u == ViewUpdate::Continuous));
+    // The same generation every tick, so a held snapshot is taken once per portal.
+    let generations: std::collections::BTreeSet<u8> = views(&medium)
+        .iter()
+        .filter_map(|c| match c {
+            Command::PortalView { generation, .. } => Some(*generation),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(generations.len(), 1);
+    assert_eq!(
+        rest(&low),
+        rest(&medium),
+        "transit, fill, FOV, sounds: unchanged"
+    );
+    assert_eq!(rest(&medium), rest(&high));
+    assert!(
+        rest(&high)
+            .iter()
+            .any(|c| matches!(c, Command::Transit { .. }))
+    );
+}

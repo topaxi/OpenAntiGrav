@@ -55,6 +55,7 @@ fn source(id: &str, body: &str) -> Source {
         pickup: Some(crate::extension_pickup::a_look()),
         pickup_titles: Vec::new(),
         pickup_odds: Vec::new(),
+        options: [0; crate::extensions::OPTIONS],
         channels: crate::extensions::Declared::default(),
     }
 }

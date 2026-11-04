@@ -123,9 +123,15 @@ pub struct Source {
     pub pickup_titles: Vec<(String, oag_tables::pickup_look::PickupLook)>,
     /// The mod's `[[pickup.odds]]`: the weapon pads draw its pickup with these.
     pub pickup_odds: Vec<oag_tables::pickup_look::OddsRow>,
+    /// The player's picks on the mod's own choice rows, as indices
+    /// (`oag_ext_abi::OPTIONS_AT`): a drawn choice, read by `Observation::option`.
+    pub options: [u8; OPTIONS],
     /// The mod's `[channels]`.
     pub channels: Declared,
 }
+
+/// How many choice rows' picks a module is given ([`Source::options`]).
+pub const OPTIONS: usize = oag_ext_abi::OPTIONS_LEN;
 
 /// A `draw-beam` of this tick: an output, never hashed.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -254,6 +260,9 @@ pub struct Prepared {
     /// Each module's mod's `[channels]` publishes, in module order.
     #[cfg(feature = "extensions")]
     publishes: Vec<Vec<(u32, String)>>,
+    /// Each module's [`Source::options`], in module order.
+    #[cfg(feature = "extensions")]
+    options: Vec<[u8; oag_ext_abi::OPTIONS_LEN]>,
     /// Each module whose mod declares `[[pickup.odds]]` (the weapon pads draw its pickup
     /// with them), in module order, with its rows and the race's title.
     #[cfg(feature = "extensions")]
@@ -341,6 +350,7 @@ pub fn prepare(
         let mut pickups = Vec::new();
         let mut drives_ai = Vec::new();
         let mut publishes = Vec::new();
+        let mut options = Vec::new();
         let mut odds = Vec::new();
         let mut pickup_mods = 0;
         let mut track_module = false;
@@ -405,6 +415,7 @@ pub fn prepare(
                     pickups.push(source.look_for(title));
                     drives_ai.push(source.drives_ai_pickup);
                     publishes.push(channel::publishes(&source.channels));
+                    options.push(source.options);
                 }
                 Err(e) => push(report, format!("{label} left out: {e}")),
             }
@@ -417,6 +428,7 @@ pub fn prepare(
             pickups,
             drives_ai,
             publishes,
+            options,
             odds,
             title: oag_ext_abi::channel_key(&title.to_ascii_lowercase()),
             beacons,
@@ -704,7 +716,8 @@ impl Extensions {
                     prepared.publishes,
                     prepared.odds,
                 )
-                .with_title(prepared.title),
+                .with_title(prepared.title)
+                .with_options(&prepared.options),
                 beacons: prepared.beacons,
                 fired: Vec::new(),
             }

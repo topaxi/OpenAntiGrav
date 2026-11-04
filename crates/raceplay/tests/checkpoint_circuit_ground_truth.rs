@@ -60,6 +60,7 @@ fn checkpoint_circuit() -> Option<(race::extensions::Source, std::path::PathBuf)
         pickup: module.manifest.pickup.clone(),
         pickup_titles: Vec::new(),
         pickup_odds: module.manifest.pickup_odds.clone(),
+        options: [0; race::extensions::OPTIONS],
         channels: race::extensions::Declared {
             publishes: module.manifest.channels.publishes.clone(),
             listens: module.manifest.channels.listens.clone(),
@@ -445,6 +446,7 @@ fn preferring(slot: Option<u8>) -> race::extensions::Source {
         pickup: None,
         pickup_titles: Vec::new(),
         pickup_odds: Vec::new(),
+        options: [0; race::extensions::OPTIONS],
         channels: race::extensions::Declared::default(),
     }
 }

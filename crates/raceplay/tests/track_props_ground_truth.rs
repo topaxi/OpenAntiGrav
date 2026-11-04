@@ -98,6 +98,7 @@ fn module(id: &str, body: &str) -> race::extensions::Source {
         pickup: None,
         pickup_titles: Vec::new(),
         pickup_odds: Vec::new(),
+        options: [0; race::extensions::OPTIONS],
         channels: race::extensions::Declared::default(),
     }
 }

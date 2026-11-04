@@ -76,6 +76,7 @@ pub struct Race<E: Extension> {
     tracking: [oag_ext_abi::Tracking; MAX_CRAFTS],
     course_length: f32,
     title: u32,
+    options: [u8; oag_ext_abi::OPTIONS_LEN],
     aiming: oag_ext_abi::Aiming,
     events: Vec<Event>,
     state: Vec<u8>,
@@ -99,6 +100,7 @@ impl<E: Extension> Race<E> {
             tracking: [oag_ext_abi::Tracking::default(); MAX_CRAFTS],
             course_length: 0.0,
             title: 0,
+            options: [0; oag_ext_abi::OPTIONS_LEN],
             aiming: oag_ext_abi::Aiming::default(),
             events: Vec::new(),
             state: vec![0; E::State::BYTES],
@@ -143,6 +145,13 @@ impl<E: Extension> Race<E> {
             target.index(),
             oag_ext_abi::Aim::from_offset(forward, right, up),
         );
+        self
+    }
+
+    /// The player's picks the module reads with `Observation::option`.
+    #[must_use]
+    pub fn with_options(mut self, options: [u8; oag_ext_abi::OPTIONS_LEN]) -> Self {
+        self.options = options;
         self
     }
 
@@ -224,6 +233,7 @@ impl<E: Extension> Race<E> {
                 tracking: &self.tracking,
                 title: self.title,
                 aiming: Some(&self.aiming),
+                options: self.options,
             },
             &self.state,
         );

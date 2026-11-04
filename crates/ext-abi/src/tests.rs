@@ -622,6 +622,7 @@ fn the_observation_reads_back_through_the_guest_sections() {
             tracking: &[Tracking::default(), a_tracking()],
             title: channel_key("wipeout-hd"),
             aiming: None,
+            options: [3, 2, 1, 0],
         },
         &[9, 8, 7],
     );
@@ -638,6 +639,10 @@ fn the_observation_reads_back_through_the_guest_sections() {
     assert_eq!(craft, Some(a_craft()));
     assert_eq!(Sections::course_length(sections.head), 5120.0);
     assert_eq!(Sections::title(sections.crafts), channel_key("wipeout-hd"));
+    assert_eq!(
+        [0, 1, 2, 3, 4].map(|n| Sections::option(sections.crafts, n)),
+        [3, 2, 1, 0, 0]
+    );
     let tracking = |s| Sections::tracking_record(sections.crafts, slot(s)).map(Tracking::decode);
     assert_eq!(tracking(1), Some(a_tracking()));
     assert_eq!(tracking(0), Some(Tracking::default()), "no fix, no place");

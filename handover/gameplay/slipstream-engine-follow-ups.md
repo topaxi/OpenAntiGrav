@@ -149,8 +149,21 @@ Open from it, each small:
 5. **The texture is a fixed 960x540** at every window size; a configurable rate and size are later
    if a player needs them (spec, "reduced resolution allowed").
 6. **Only Pulse and HD have a frame test.** 2048, Omega, PS2 and Pure were read off screenshots.
-7. **A snapshot was never looked at.** `ViewUpdate::Once` has pass counts, and `--screenshot` draws a
-   single frame, so no frame shows one held on the surface as the craft closes. Lane C sees it first.
+7. ~~A snapshot was never looked at~~: looked at (lane C, below).
+
+## slipstream-portal, lane C (done)
+
+`oag.slipstream` draws a window (`fx/portal.wgsl`) with a QUALITY row under OPTIONS; the pick reaches the
+guest as `Observation::option` (new ABI bytes, `mod-shaders.md` "A mod's quality row"). Open from it:
+
+1. **The firer barely sees the window.** `transit` starts on the fire tick with the camera still, so the
+   entrance 30 units ahead shows its view for about 10 ticks under the fill ramp. Another person's
+   portal (split screen, first seat only) or a scratch variant with no transit shows it properly; Medium and
+   High then differ by under 1 % of texels at the closest approach (a held snapshot stays on the surface).
+2. **A queued fire whose clearance fails at its turn is dropped** (the pickup is kept), where a Quake's armed
+   press stays armed. Chosen, kept.
+3. **Online a server's guest has no pick**: settings are not read there; only drawn outputs depend on it.
+4. 2048 and HD windows look like a continuation of the scene (the exit is two seconds on, same scenery).
 
 ## Next Steps
 

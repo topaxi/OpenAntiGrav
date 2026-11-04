@@ -534,7 +534,7 @@ fn run(cli: Cli) -> Result<()> {
         #[cfg(feature = "extensions")]
         {
             let vanilla = net.is_some() || cli.wreck.campaign_cell.is_some() || cli.event.is_some();
-            oag_game::mod_extensions::attach(&mut options, &settings.mods, vanilla);
+            oag_game::mod_extensions::attach(&mut options, &settings.mods, &settings.mod_settings, vanilla);
         }
         let options = match &net {
             Some(net) => net.race_options(options)?,
