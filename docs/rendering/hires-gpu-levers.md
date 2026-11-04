@@ -24,7 +24,9 @@ container, run offscreen over ssh with no gamescope). GPU timestamps, median of 
 tick-2,500 frame, then the median of **3 separate processes**. HD is Talon's Junction, Pulse is PSP
 EU's default circuit. Devices: `MESA_VK_DEVICE_SELECT=1002:747e` (RADV NAVI32) and `1002:164e`
 (RADV RAPHAEL_MENDOCINO), each confirmed in the log's `bench split:` line; Deck `RADV VANGOGH`.
-"Deck profile" is `--msaa 4x --motion-blur high`. The "present composite" row is the same run
+"Deck profile" is a heavy case chosen for this page, `--msaa 4x --motion-blur high`; it is no
+default of the game on the Deck or anywhere else: MSAA and the blur are off in every fresh
+profile. The "present composite" row is the same run
 with `--presented` and `OAG_RESOLVE_BENCH=60` (no upscaler, scale 100; it is serialised CPU plus
 GPU wall time, so it carries about 60 us of submit and wait floor on the dGPU). "Rest of
 `Scene::render`" is `Scene::render GPU` minus the race pass, the blur chain and the bloom: the shadow
@@ -109,6 +111,19 @@ reconstruct is 85 to 92 % of the chain on every device and scales 2.8x (Deck) to
 | `--shadows off` (race pass, whole `Scene::render`) | 9.51 (-0.91), 14.1 from 16.7 (-2.6) | 4.78 (-0.02), 6.8 from 7.4 (-0.55) | shadows cost HD 3.5 ms in all |
 | blur high, full gather (the chain) | 6.56 | 6.26 | |
 | blur high, `--motion-blur-resolution half` | 3.24 (-3.3) | 3.19 (-3.1) | the DRS rung, [half rung](motion-blur-half-rung.md) |
+
+**Anti-aliasing with MSAA off (the default, 2026-11-04).** `msaa` is `off` and `reconstruction` is
+`off` in every fresh profile, on every title and device, pinned by
+`settings::tests::a_fresh_profile_has_msaa_off_on_every_title`; a file that says `4x` keeps it, so a
+player who chose it is untouched. With both off a player sees stair-stepped geometry edges and no
+softening. The cheapest anti-aliasing the engine has is `--reconstruction fxaa`, one fullscreen
+pass. HD at 1920x1080 on
+the Intel iGPU, 2 rounds at load 21 to 25 (relative only, not a Deck number; the Deck is not
+measured): present resolve median 499 to 730 us with `off`, 1,073 to 1,363 with `fxaa`, 1,470 to
+1,479 with `smaa` (three passes), against `--msaa 4x` adding 2,611 us to the race pass and 597 us
+between passes. So FXAA costs roughly a fifth of what MSAA 4x does here. The default stays `off`:
+FXAA softens the picture ([ADR-0013](../architecture/adr/0013-anti-aliasing-architecture.md)), and
+it is a player's choice like the others on that row.
 
 `Scene::render GPU` after `--shadows off` still left 3.7 ms (HD) and 2.0 ms (Pulse) that no span
 named. Every pass of the frame has a span now
