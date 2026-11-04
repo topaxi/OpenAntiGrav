@@ -235,7 +235,8 @@ fn the_road_under_the_craft_writes_its_own_mask_and_the_far_road_is_culled() {
         towards_light: Vec3::Y,
     };
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    let drawn = maps.render(&queue, &mut encoder, 3, &fit, &track);
+    let drawn = maps.render(&mut encoder, 3, &fit, &track);
+    maps.write_uniforms(&queue);
     queue.submit([encoder.finish()]);
     assert_eq!(drawn, 3, "the three roads in reach, not the far one");
     assert_eq!(maps.drawn(3), 3);

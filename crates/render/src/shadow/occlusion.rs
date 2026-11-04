@@ -49,6 +49,7 @@
 
 use oag_core::math::{Mat4, Vec3};
 
+use super::layer_uniforms::LayerUniforms;
 use super::map::{Caster, Fit};
 use super::self_shadow;
 use oag_mesh::mesh::{DrawCall, GpuVertex};
@@ -123,6 +124,8 @@ pub struct Maps {
     pipeline: wgpu::RenderPipeline,
     uniforms: wgpu::Buffer,
     binds: Vec<wgpu::BindGroup>,
+    /// Each layer's matrix, staged for [`Self::write_uniforms`].
+    staged: LayerUniforms,
     /// The projection each layer was last rendered with, for the receiver.
     matrices: [Mat4; OCCLUSION_LAYERS as usize],
     /// How many draw calls each layer's last pass drew - a cleared layer and
@@ -276,6 +279,7 @@ impl Maps {
             pipeline,
             uniforms,
             binds,
+            staged: LayerUniforms::new(UNIFORM_STRIDE, OCCLUSION_LAYERS),
             matrices: [Mat4::IDENTITY; OCCLUSION_LAYERS as usize],
             drawn: [0; OCCLUSION_LAYERS as usize],
             self_shadow: self_shadow::Maps::new(device),
@@ -292,9 +296,11 @@ impl Maps {
     ///
     /// **Black, every frame.** The original clears per ship per frame; a
     /// stale layer would drag last frame's road under a craft that has moved.
+    ///
+    /// The layer's matrix is staged, not written: [`Self::write_uniforms`] writes the
+    /// frame's layers in one go, before the submission that draws them.
     pub fn render(
         &mut self,
-        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         layer: usize,
         fit: &Fit,
@@ -305,21 +311,8 @@ impl Maps {
         };
         let matrix = fit.craft_matrix();
         self.matrices[layer] = matrix;
-        let mvp = matrix * track.model;
-        queue.write_buffer(
-            &self.uniforms,
-            UNIFORM_STRIDE * layer as u64,
-            bytemuck::cast_slice(&mvp.to_cols_array()),
-        );
+        self.staged.stage(layer, matrix * track.model);
         let sun = fit.towards_light.normalize_or_zero();
-        let near: Vec<&DrawCall> = track
-            .draws
-            .iter()
-            .chain(track.cutouts)
-            .chain(track.transparent)
-            .filter(|draw| within(draw, fit.centre, sun))
-            .collect();
-        self.drawn[layer] = near.len();
 
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("sun occlusion map"),
@@ -337,15 +330,23 @@ impl Maps {
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        if near.is_empty() {
-            // The pass still ran, so the clear landed.
-            return 0;
-        }
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &self.binds[layer], &[]);
-        pass.set_vertex_buffer(0, track.vertices.slice(..));
-        pass.set_index_buffer(track.indices.slice(..), wgpu::IndexFormat::Uint32);
-        for draw in &near {
+        // The pass runs whatever is near, so the clear lands; the pipeline and buffers
+        // are set on the first draw within reach, as a pass with none sets nothing.
+        let mut near = 0;
+        for draw in track
+            .draws
+            .iter()
+            .chain(track.cutouts)
+            .chain(track.transparent)
+            .filter(|draw| within(draw, fit.centre, sun))
+        {
+            if near == 0 {
+                pass.set_pipeline(&self.pipeline);
+                pass.set_bind_group(0, &self.binds[layer], &[]);
+                pass.set_vertex_buffer(0, track.vertices.slice(..));
+                pass.set_index_buffer(track.indices.slice(..), wgpu::IndexFormat::Uint32);
+            }
+            near += 1;
             let slot = draw.texture.map_or(0, |index| index + 1);
             let Some(material) = track.materials.get(slot) else {
                 continue;
@@ -353,7 +354,9 @@ impl Maps {
             pass.set_bind_group(1, material, &[]);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
-        near.len()
+        drop(pass);
+        self.drawn[layer] = near;
+        near
     }
 
     /// Renders `caster` - the craft itself, its opaque ranges - into
@@ -367,14 +370,21 @@ impl Maps {
     /// Returns how many index ranges it drew.
     pub fn render_self_shadow(
         &mut self,
-        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         layer: usize,
         caster: &Caster<'_>,
     ) -> usize {
         let matrix = self.matrix(layer);
-        self.self_shadow
-            .render(queue, encoder, layer, matrix, caster)
+        self.self_shadow.render(encoder, layer, matrix, caster)
+    }
+
+    /// Writes the matrices every [`Self::render`] and [`Self::render_self_shadow`] staged
+    /// since the last call: one write for each buffer, however many craft drew. Call it
+    /// once the frame's layers are recorded and before their submission; a layer drawn
+    /// without it reads the matrix of the last frame that wrote one.
+    pub fn write_uniforms(&mut self, queue: &dyn oag_gpu::writes::Writes) {
+        self.staged.write(queue, &self.uniforms);
+        self.self_shadow.write_uniforms(queue);
     }
 
     /// Clears `layer` to black without drawing, so a craft that is not

@@ -388,6 +388,8 @@ pub struct Map {
     depth_clear: [bool; DEPTH_LAYERS as usize],
     /// Passes recorded over both targets, so a test can tell a skipped clear from a recorded one.
     passes: u64,
+    /// A depth layer's caster slots, staged for its one write and kept between frames.
+    layer_bytes: Vec<u8>,
 }
 
 /// The most casters one pass holds: a full grid.
@@ -638,6 +640,7 @@ impl Map {
             atlas_clear: false,
             depth_clear: [false; DEPTH_LAYERS as usize],
             passes: 0,
+            layer_bytes: Vec::new(),
         }
     }
 
@@ -736,15 +739,18 @@ impl Map {
         // Past the cap the rest are dropped; the caller sizes its list to it.
         let casters = &casters[..casters.len().min(MAX_DEPTH_CASTERS)];
         let first = MAX_CASTERS + layer * MAX_DEPTH_CASTERS;
-        // One write for the layer: a slot per caster, each padded to the stride.
+        // One write for the layer: a slot per caster, each padded to the stride, staged
+        // in a list the map keeps.
         if !casters.is_empty() {
-            let mut bytes = vec![0u8; UNIFORM_STRIDE as usize * casters.len()];
+            let bytes = &mut self.layer_bytes;
+            bytes.clear();
+            bytes.resize(UNIFORM_STRIDE as usize * casters.len(), 0);
             for (slot, caster) in casters.iter().enumerate() {
                 let mvp = (matrix * caster.model).to_cols_array();
                 let at = UNIFORM_STRIDE as usize * slot;
                 bytes[at..at + 64].copy_from_slice(bytemuck::cast_slice(&mvp));
             }
-            queue.write_buffer(&self.uniforms, UNIFORM_STRIDE * first as u64, &bytes);
+            queue.write_buffer(&self.uniforms, UNIFORM_STRIDE * first as u64, bytes);
         }
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("shadow depth map"),

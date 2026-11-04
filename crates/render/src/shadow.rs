@@ -1050,6 +1050,7 @@ impl Drawer {
     }
 }
 
+mod layer_uniforms;
 pub mod map;
 pub mod occlusion;
 pub mod self_shadow;

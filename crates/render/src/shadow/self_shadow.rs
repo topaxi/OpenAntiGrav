@@ -39,6 +39,7 @@
 
 use oag_core::math::Mat4;
 
+use super::layer_uniforms::LayerUniforms;
 use super::map::Caster;
 use oag_mesh::mesh::GpuVertex;
 use oag_mesh::mesh_render::{OCCLUSION_LAYERS, SELF_SHADOW_FORMAT};
@@ -67,6 +68,8 @@ pub struct Maps {
     pipeline: wgpu::RenderPipeline,
     uniforms: wgpu::Buffer,
     binds: Vec<wgpu::BindGroup>,
+    /// Each layer's matrix, staged for [`Self::write_uniforms`].
+    staged: LayerUniforms,
     /// How many index ranges each layer's last pass drew - a cleared layer
     /// and a never-rendered one look identical otherwise.
     drawn: [usize; OCCLUSION_LAYERS as usize],
@@ -217,6 +220,7 @@ impl Maps {
             pipeline,
             uniforms,
             binds,
+            staged: LayerUniforms::new(UNIFORM_STRIDE, OCCLUSION_LAYERS),
             drawn: [0; OCCLUSION_LAYERS as usize],
         }
     }
@@ -229,9 +233,11 @@ impl Maps {
     /// **Far, every frame**, for the reason the occlusion layer clears black:
     /// a stale depth is last frame's silhouette shadowing a craft that has
     /// turned since.
+    ///
+    /// The layer's matrix is staged, not written: [`Self::write_uniforms`] writes the
+    /// frame's layers in one go, before the submission that draws them.
     pub fn render(
         &mut self,
-        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         layer: usize,
         matrix: Mat4,
@@ -240,12 +246,7 @@ impl Maps {
         let Some(view) = self.layer_views.get(layer) else {
             return 0;
         };
-        let mvp = matrix * caster.model;
-        queue.write_buffer(
-            &self.uniforms,
-            UNIFORM_STRIDE * layer as u64,
-            bytemuck::cast_slice(&mvp.to_cols_array()),
-        );
+        self.staged.stage(layer, matrix * caster.model);
         self.drawn[layer] = caster.ranges.len();
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("self shadow map"),
@@ -273,6 +274,11 @@ impl Maps {
             pass.draw_indexed(range.clone(), 0, 0..1);
         }
         caster.ranges.len()
+    }
+
+    /// Writes every layer [`Self::render`] staged since the last call, in one write.
+    pub fn write_uniforms(&mut self, queue: &dyn oag_gpu::writes::Writes) {
+        self.staged.write(queue, &self.uniforms);
     }
 
     /// Clears `layer` to the far plane without drawing.
