@@ -16,6 +16,8 @@ pub(super) struct Slot {
     publishes: Vec<(u32, String)>,
     /// `[extension] drives_ai_pickup`.
     drives_ai_pickup: bool,
+    /// The player's picks on the mod's choice rows (`Source::options`).
+    options: [u8; oag_ext_abi::OPTIONS_LEN],
     module: Module,
     pub(super) blob: Vec<u8>,
     faulted: Option<(u64, String)>,
@@ -271,6 +273,14 @@ impl On {
         })
     }
 
+    /// Each module's options, in module order, for its observations.
+    pub(super) fn with_options(mut self, options: &[[u8; oag_ext_abi::OPTIONS_LEN]]) -> Self {
+        for (slot, options) in self.slots.iter_mut().zip(options) {
+            slot.options = *options;
+        }
+        self
+    }
+
     /// The race's title key, for every observation.
     pub(super) fn with_title(mut self, title: u32) -> Self {
         self.title = title;
@@ -313,6 +323,7 @@ impl On {
                     sender: oag_ext_abi::channel_key(&mod_id),
                     publishes,
                     drives_ai_pickup,
+                    options: [0; oag_ext_abi::OPTIONS_LEN],
                     mod_id,
                     module,
                     faulted: None,
@@ -1009,6 +1020,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
                 tracking: &tracking,
                 title,
                 aiming: Some(&aiming),
+                options: slot.options,
             },
             track: &region.bytes,
             speed_pads: region.speed_pads,

@@ -27,6 +27,7 @@
 //! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
 //! | [`TRACKING_AT`] | [`TRACKING_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Tracking`]): progress `f32`, place `u8`, flags `u8` (bit 0: progress is a fix), 2 bytes unused |
 //! | [`TITLE_AT`] | 4 | the title's key: `channel_key` of its lowercased hyphenated name (0: none) |
+//! | [`OPTIONS_AT`] | [`OPTIONS_LEN`] | the module's options, one byte each: the index of the player's pick on the mod's own choice rows |
 //! | [`AIM_AT`] | [`AIM_TOTAL`] | [`AIM_SLOTS`] observers x [`AIM_SLOTS`] targets ([`Aim`]): where the target sits ahead of, right of and above the observer, three `i8` in [`AIM_STEP`] units |
 //!
 //! The track region is a second buffer, written by the host before each call when the
@@ -67,8 +68,8 @@ pub use scene::{
 };
 pub use sound::SoundMode;
 pub use tracking::{
-    COURSE_LENGTH_AT, Course, TITLE_AT, TRACKING_AT, TRACKING_FIXED, TRACKING_FLAGS, TRACKING_LEN,
-    TRACKING_PLACE, TRACKING_PROGRESS, Tracking,
+    COURSE_LENGTH_AT, Course, OPTIONS_AT, OPTIONS_LEN, TITLE_AT, TRACKING_AT, TRACKING_FIXED,
+    TRACKING_FLAGS, TRACKING_LEN, TRACKING_PLACE, TRACKING_PROGRESS, Tracking,
 };
 
 /// The ABI major. A manifest's `[extension] api` names it.
@@ -1174,6 +1175,7 @@ pub fn write_observation(
     if let Some(aiming) = course.aiming {
         aiming.write(io);
     }
+    io[OPTIONS_AT..OPTIONS_AT + OPTIONS_LEN].copy_from_slice(&course.options);
 }
 
 /// The reply's command count.
@@ -1270,6 +1272,16 @@ impl<'a> Sections<'a> {
     pub fn tracking_record(crafts: &[u8], slot: Slot) -> Option<&[u8; TRACKING_LEN]> {
         let at = (TRACKING_AT - CRAFTS_AT) + slot.index() * TRACKING_LEN;
         crafts.get(at..at + TRACKING_LEN)?.try_into().ok()
+    }
+
+    /// The module's `n`-th option ([`OPTIONS_AT`]); `crafts` is [`Self::crafts`], which
+    /// starts at [`CRAFTS_AT`]. 0 past [`OPTIONS_LEN`].
+    #[must_use]
+    pub fn option(crafts: &[u8], n: usize) -> u8 {
+        if n >= OPTIONS_LEN {
+            return 0;
+        }
+        crafts.get(OPTIONS_AT - CRAFTS_AT + n).copied().unwrap_or(0)
     }
 
     /// The title's key; `crafts` is [`Self::crafts`], which starts at [`CRAFTS_AT`].

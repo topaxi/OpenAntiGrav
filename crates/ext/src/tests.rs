@@ -164,6 +164,7 @@ fn the_observation_lists_active_crafts_and_skips_unknown_events() {
             ],
             title: crate::channel_key("wipeout-pulse"),
             aiming: None,
+            options: [2, 0, 1, 0],
         },
         &[],
     );
@@ -177,6 +178,7 @@ fn the_observation_lists_active_crafts_and_skips_unknown_events() {
     assert!(obs.craft(slot(1)).is_none());
     assert_eq!(obs.course_length(), 4000.0);
     assert_eq!(obs.title(), crate::title!("wipeout-pulse"));
+    assert_eq!([0, 1, 2, 3, 4].map(|n| obs.option(n)), [2, 0, 1, 0, 0]);
     let tracked: Vec<_> = obs.crafts().map(|c| (c.progress(), c.place())).collect();
     assert_eq!(tracked, [(Some(-30.0), 2), (Some(1500.0), 1)]);
     let seen: Vec<_> = obs.events().collect();

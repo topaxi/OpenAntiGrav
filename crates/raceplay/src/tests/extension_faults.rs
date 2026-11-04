@@ -58,6 +58,7 @@ pub(super) fn scripted(id: &str, guard: &str, commands: &[Command], publishes: &
         pickup: Some(crate::extension_pickup::a_look()),
         pickup_titles: Vec::new(),
         pickup_odds: Vec::new(),
+        options: [0; crate::extensions::OPTIONS],
         channels: Declared {
             publishes: publishes.iter().map(|s| (*s).to_string()).collect(),
             listens: Vec::new(),

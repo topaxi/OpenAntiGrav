@@ -28,6 +28,18 @@ pub const TITLE_AT: usize = TRACKING_AT + TRACKING_LEN * MAX_CRAFTS;
 
 const _: () = assert!(TITLE_AT + 4 <= crate::IO_LEN);
 
+/// How many options a module is given.
+pub const OPTIONS_LEN: usize = 4;
+
+/// Where the module's options are written, after the aiming matrix: one byte each, the
+/// index of the player's pick on the mod's own choice rows (a mod page's `choice` row whose
+/// `setting` is `mod.<id>.<key>`, in the order the manifest's menu lists them), 0 for a row
+/// that has none and for a race the host reads no settings for. A drawn choice only: a module
+/// that let one steer the simulation would make a setting race-changing.
+pub const OPTIONS_AT: usize = crate::AIM_AT + crate::AIM_TOTAL;
+
+const _: () = assert!(OPTIONS_AT + OPTIONS_LEN <= crate::IO_LEN);
+
 /// What a tick tells a guest about the course: its length, each slot's [`Tracking`]
 /// in slot order, and the title raced.
 #[derive(Debug, Clone, Copy, Default)]
@@ -40,6 +52,8 @@ pub struct Course<'a> {
     pub title: u32,
     /// Where each craft sits in each other's frame; zero when the host does not say.
     pub aiming: Option<&'a crate::Aiming>,
+    /// The module's options ([`OPTIONS_AT`]).
+    pub options: [u8; OPTIONS_LEN],
 }
 
 /// One slot's place on the course.

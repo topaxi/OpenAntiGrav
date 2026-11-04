@@ -95,6 +95,7 @@ pub(crate) fn source_of(dir: &str) -> Option<race::extensions::Source> {
         pickup: module.manifest.pickup.clone(),
         pickup_titles: module.manifest.pickup_titles.clone(),
         pickup_odds: module.manifest.pickup_odds.clone(),
+        options: [0; race::extensions::OPTIONS],
         channels: race::extensions::Declared {
             publishes: module.manifest.channels.publishes.clone(),
             listens: module.manifest.channels.listens.clone(),
