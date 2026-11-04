@@ -324,6 +324,11 @@ pub struct Scene {
     /// The last two ticks' projected hulls, so the `original` tier gathers once
     /// per tick rather than once per drawn frame. See `frame/hull_cache.rs`.
     hull_cache: std::cell::RefCell<frame::HullCache>,
+    /// The texels the track's, the collision overlay's, the pads' and the weapon pads' Zone
+    /// lookups were last given, in that order, so a frame writes only texels that changed
+    /// (`Drawable::write_zone_vis`). Here rather than on each drawable, which every view
+    /// walks, to keep a kilobyte each out of them; reset by [`Self::rebind_zone_art`].
+    zone_vis_written: std::cell::RefCell<[Option<oag_mesh::mesh_render::zone::VisTexels>; 4]>,
     /// The lists a view's pass carries, kept from frame to frame: see
     /// `Scene::keep_view_lists`.
     view_lists: std::cell::RefCell<record::ViewLists>,
@@ -1145,6 +1150,7 @@ impl Scene {
             generated_silhouettes_said: std::cell::Cell::new(false),
             shadow_gathered: Default::default(),
             hull_cache: Default::default(),
+            zone_vis_written: Default::default(),
             view_lists: Default::default(),
             shadow_rank: Default::default(),
             frame_work: Default::default(),

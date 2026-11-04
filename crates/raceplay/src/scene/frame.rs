@@ -468,22 +468,25 @@ impl Scene {
             recoloured,
         } = &mut *scratch;
 
-        for drawable in [
+        let mut written = self.zone_vis_written.borrow_mut();
+        for (drawable, last) in [
             Some(&self.track),
             self.collision.as_ref(),
             self.pads.as_ref(),
             self.weapon_pads.as_ref(),
         ]
         .into_iter()
-        .flatten()
+        .zip(written.iter_mut())
+        .filter_map(|(drawable, last)| Some((drawable?, last)))
         {
             // Called for every drawable on this list regardless of whether a
             // Zone race is running: it blanks the lookup with no spectrum or
             // no tint, and `scene.zone.enabled` already gates the glow off
             // outside a Zone race. It writes only texels that changed, so a
             // race with no Zone writes the blank lookup once.
-            drawable.write_zone_vis(queue, zone_spectrum, zone_tint);
+            drawable.write_zone_vis(queue, zone_spectrum, zone_tint, last);
         }
+        drop(written);
         // **The craft get the same scene with the Zone half switched off**,
         // because the disc says they are not in it. The twelve
         // `data/materials/ships/*.rcsmaterial` in `DATA03.PSARC` carry no Zone
