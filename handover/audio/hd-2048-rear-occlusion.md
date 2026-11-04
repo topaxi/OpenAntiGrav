@@ -2,9 +2,9 @@
 status: ready-to-wire
 titles: [hd, 2048]
 size: S (65)
-difficulty: low (60)
+difficulty: easy (60)
 updated: 2026-11-04
-summary: "HD and 2048 low-pass a voice behind the listener (14 kHz, 10 kHz, read off two binaries); SPATIAL AUDIO's `original` plays none of it; filter shape unread"
+summary: "HD and 2048 low-pass a voice behind the listener (14 kHz, 10 kHz, read off two binaries); `original` plays none of it; filter shape unread"
 ---
 
 # HD and 2048's rear low-pass under `original`

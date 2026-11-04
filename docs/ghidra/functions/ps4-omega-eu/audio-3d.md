@@ -235,7 +235,7 @@ same struct in a request; it agrees in shape.
 
 So: the label `original` is accurate on Pulse and Pure only. On Omega, `original` cannot be Omega's until its Wwise pan and
 pass-by data play; today it is a stand-in, and it inherits Pulse's law by lineage with no front/back at all, where Omega has some.
-On HD and 2048 it should carry the rear low-pass, which is open as a ready-to-wire thread under `handover/audio/`. The `rear_cue` code comment in `oag_audio::mixer` says "the original cannot tell
+On HD and 2048 it should carry the rear low-pass, which is open as a ready-to-wire thread. The `rear_cue` code comment in `oag_audio::mixer` says "the original cannot tell
 front from back", which is true of Pulse alone; that comment is left for the same wiring, as this lane changes no `.rs`.
 
 ## Names
