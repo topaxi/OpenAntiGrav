@@ -33,6 +33,9 @@ use crate::extensions::PortalRequest;
 /// The texture's size, whatever the window's: a portal is a small part of the picture.
 const SIZE: (u32, u32) = (960, 540);
 
+/// A view of the frame: the slot it follows and its rectangle.
+pub(super) type SeatView = (usize, (f32, f32, f32, f32));
+
 /// The snapshot a [`ViewUpdate::Once`] holds.
 #[derive(Debug)]
 struct Snapshot {
@@ -87,7 +90,7 @@ impl Scene {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         race: &Race,
-        views: &[(usize, (f32, f32, f32, f32))],
+        views: &[SeatView],
         settings: &ViewSettings<'_>,
     ) {
         self.portal_engine.set(None);
@@ -105,13 +108,18 @@ impl Scene {
             let aspect = rect.2.max(1.0) / rect.3.max(1.0);
             let projection = race.projection(aspect, self.far, settings.fov);
             let shot = race.portal_shot(&request, projection)?;
-            Some((slot, request, shot, aspect, projection))
+            let pass = PortalPass {
+                aspect,
+                projection,
+                exit_plane: shot.exit_plane,
+            };
+            Some((slot, request, shot, pass))
         });
         if self.portal_engine.get().is_none()
-            && let Some((slot, request, shot, aspect, projection)) = wanted
+            && let Some((slot, request, shot, pass)) = wanted
         {
             race.set_viewpoint(slot);
-            self.encode_portal_view(device, queue, race, &shot, aspect, projection, settings);
+            self.encode_portal_view(device, queue, race, &shot, pass, settings);
             self.portal_engine
                 .set(Some((slot, shot.engine_view_projection)));
             if let Some(target) = self.portal.borrow_mut().as_mut() {
@@ -141,8 +149,7 @@ impl Scene {
         queue: &wgpu::Queue,
         race: &Race,
         shot: &crate::portal_view::PortalShot,
-        aspect: f32,
-        projection: Mat4,
+        pass: PortalPass,
         settings: &ViewSettings<'_>,
     ) {
         let camera = shot.view.inverse();
@@ -181,15 +188,11 @@ impl Scene {
             pvs_cull: false,
             shadows: oag_display::display::Shadows::Off,
             camera_jitter: None,
-            portal: Some(PortalPass {
-                aspect,
-                projection,
-                exit_plane: shot.exit_plane,
-            }),
+            portal: Some(pass),
             ..*settings
         };
         let rect = (0.0, 0.0, SIZE.0 as f32, SIZE.1 as f32);
-        let pass = self
+        let view_pass = self
             .prepare_view(
                 &uploads,
                 &mut encoder,
@@ -202,8 +205,8 @@ impl Scene {
             .without_view_surfaces();
         self.recorder()
             .into_attachments(&target.attachments)
-            .record(&pass, &mut encoder);
-        drop(pass);
+            .record(&view_pass, &mut encoder);
+        drop(view_pass);
         race.set_portal_camera(None);
         self.layer.set(layer);
         self.reuse_frame_work.set(reuse);
