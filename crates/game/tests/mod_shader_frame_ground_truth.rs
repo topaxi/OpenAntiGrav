@@ -101,13 +101,13 @@ fn rgb(png: &[u8]) -> Vec<u8> {
             break;
         }
     }
-    raw.chunks_exact(1 + WIDTH as usize * 4)
-        .flat_map(|row| {
-            row[1..]
-                .chunks_exact(4)
-                .flat_map(|px| [px[0], px[1], px[2]])
-        })
-        .collect()
+    let mut out = Vec::new();
+    for row in raw.chunks(1 + WIDTH as usize * 4) {
+        for px in row[1..].as_chunks::<4>().0 {
+            out.extend_from_slice(&px[..3]);
+        }
+    }
+    out
 }
 
 /// The share of the texels in a box that two frames disagree on by more than a rounding.
