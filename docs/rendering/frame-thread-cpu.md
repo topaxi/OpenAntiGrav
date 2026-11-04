@@ -1141,10 +1141,11 @@ What each item took off (allocs / KiB per frame, the probe's stage marks):
 
 **Dropped: skipping an advert card's pass when its clock has not moved.** The scenery clock is
 blended by the draw alpha between ticks (`Race::clock_seconds`), so every frame of a race draws
-every card at a new time, and every card on Talon's Junction (PSP and PS2) and HD's default
-circuit changes its pixels between any two of four clock readings (0, 1.3, 2.5 and 7.1 s, the
-card read-back tests with `OAG_ADVERT_TIMES` and `OAG_ADVERT_DUMP`). Only the render bench,
-which pins the alpha at 1.0, would ever see the skip fire.
+every card at a new time, and no card on Talon's Junction (PSP and PS2) or HD's default circuit
+shows one picture at four clock readings (0, 1.3, 2.5 and 7.1 s, the card read-back tests with
+`OAG_ADVERT_TIMES` and `OAG_ADVERT_DUMP`): each changes between consecutive readings, and slot 1
+on PSP and PS2 returns to its 0 s picture at 7.1 s, a loop. Only the render bench, which pins
+the alpha at 1.0, would ever see the skip fire.
 
 **Counting every `malloc`, not only Rust's** (heaptrack, `OAG_RENDER_BENCH=300` against `=1`, the
 difference over the 628 frames the two bench loops draw, Pulse and HD one view, twice for Pulse):
@@ -1166,3 +1167,52 @@ landed in:
 
 The spread inside one binary (Pulse one view 718 to 1001 us) is larger than any difference, so
 the CPU claim here is none. The allocation counts and bytes are the result.
+
+**On the Steam Deck: no measurable change at 800p or 4K; at 1080p one configuration, Pure split,
+reads 0.25 ms slower, with the CPU clocked lower rather than more work done.** Both binaries built in the
+Debian container (`cargo build --profile dist -p oag-game --no-default-features --features
+extensions,dev-cli`, `RUSTFLAGS="-C target-cpu=znver2"`), one race each per configuration:
+
+```sh
+ENABLE_GAMESCOPE_WSI=0 gamescope --backend headless -W $W -H $H -w $W -h $H -r 90 -- \
+  ./oag-game <image> [--track 'Data\Environments\15_Anulpha_Pass\track.vex'] \
+  --race --mode single_race --seed 1 --autopilot --no-audio --no-intro --frame-log \
+  --render-scale 100 --script "26:quit" [--players 2 --split-cut vertical]
+```
+
+with the profile's `vsync = "off"` and `frame_limit = "unlimited"`, every run under `flock -o
+~/.cache/oag/deck.lock`, a short warm-up race per binary, title and view count first. The figure is
+the mean of the `frame-phases` lines' `total` (ms of frame-thread CPU) after the first six
+seconds, then the mean over three rounds, the range across rounds in brackets. Base ran before
+branch in every pair. Pure is Vineta K, Pulse Talon's Junction, HD Anulpha Pass.
+
+| ms `total` | 800p base | 800p branch | 1080p base | 1080p branch | 4K base | 4K branch |
+| --- | --- | --- | --- | --- | --- | --- |
+| Pure, one view | 3.31 (3.28-3.33) | 3.32 (3.29-3.35) | 4.33 (4.29-4.37) | 4.28 (4.19-4.36) | 5.34 (5.29-5.43) | 5.30 (5.25-5.36) |
+| Pure, split | 6.52 (6.50-6.54) | 6.52 (6.50-6.54) | 7.41 (7.36-7.45) | 7.54 (7.43-7.62) | 10.35 (10.29-10.43) | 10.27 (10.21-10.32) |
+| Pulse, one view | 4.42 (4.41-4.44) | 4.40 (4.40-4.40) | 6.05 (5.98-6.10) | 6.01 (5.98-6.04) | 7.02 (6.97-7.06) | 7.00 (6.94-7.04) |
+| Pulse, split | 8.16 (8.10-8.26) | 8.36 (8.33-8.41) | 9.62 (9.52-9.70) | 9.79 (9.76-9.81) | 13.63 (13.62-13.65) | 13.61 (13.56-13.65) |
+| HD Anulpha, one view | 7.15 (7.08-7.23) | 7.09 (7.02-7.16) | 8.20 (8.15-8.23) | 8.03 (7.89-8.11) | 11.15 (10.86-11.70) | 11.14 (11.09-11.18) |
+| HD Anulpha, split | 12.91 (12.81-12.96) | 12.75 (12.63-12.93) | 15.00 (14.95-15.04) | 14.91 (14.88-14.95) | 18.77 (18.29-19.02) | 18.38 (17.83-18.99) |
+
+Every cell is within 2.5 percent, most within 1. The frame rate is not paced here: one view at
+800p runs at 210 to 245 fps, the splits at 76 to 148, and 4K is GPU-bound at 26 to 30 fps
+whatever the CPU does, so `total` is the CPU signal. The allocator time removed is a few
+microseconds a frame against 3 to 19 ms, so this is the size of change to expect.
+
+Base always ran first above, so the two splits that read slower were run again with the branch
+first (three rounds) and Pure split at 1080p a third time in ABBA order (branch, base, base,
+branch, twice):
+
+- **Pulse split was the order**: branch first, 800p 8.33 to 8.28 ms and 1080p 9.86 to 9.64 ms.
+- **Pure split at 1080p is not**: 7.35 to 7.75 ms branch first, 7.40 to 7.65 ms in ABBA order,
+  slower in 9 of 10 pairs whatever ran first. fps does not move (106, the GPU's limit at that
+  size) and neither does the same configuration at 800p (6.52 against 6.52, CPU-bound at 148
+  fps) or 4K. Every phase of the `frame-phases` line stretches by the same few percent, compose,
+  overlay and present included, which this batch does not touch, and the profile's settings read
+  the same in both logs (`governor=0`, `render=surface=1920x1080`). The CPU clock sampled during
+  four more runs (`/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq`, every 0.5 s, the
+  `powersave` governor) reads 2084 and 1849 MHz on the branch's runs against 2132 and 2146 MHz on
+  the base's. A GPU-bound frame with less CPU work in it lets the governor clock down, and the
+  same work then takes longer. That fits, but it is not proven, and it is not attributed to one
+  item: Vineta K runs only the shadow upload (item 1) and the pad tint (item 4) of the five.
