@@ -133,16 +133,38 @@ read from a live Steam. First check on a Deck: launch through Steam with
 ## Where it applies
 
 Every screen drawn through the front end's renderer: the menus, the campaign
-footers and the language picker (menu stage and boot sequence), and a finished
-race's EndRace screens. **Not yet**: the in-race HUD's own text, a race's pause
-overlay and the race-start prompts, which draw through other renderers.
+footers and the language picker (menu stage and boot sequence), a finished
+race's EndRace screens, and the pause menu (a `Stage::Menu` over the parked
+race). **The in-race HUD, the resume countdown line and the race loading
+screen draw no stand-in at all**, so there is nothing for them to swap:
+a string census over the English tables of Pulse PSP and PS2, Pure and HD
+found stand-ins only in front-end prompts (`FE_PRESS_TO_*`, `FE_*_BUTTON`,
+`MAN_*`, `MSC_*`, `ONL_FILT_MSG`), the end-race photo screen (`ER_PHOTO_*`,
+already wired), Pure's confirm dialogs, HD's `BOOT_PRESS_X` (no reader) and
+the PS2's controller-unplugged messages (not drawn). No `IG_HUD_*` caption
+carries one, and a Pulse race frame under `--prompt-style xbox` shows none.
+The HUD's own atlases are built without the stand-in cells
+(`oag_raceplay::hud::hud_font`), so a HUD string that did carry one would
+need `with_prompts` there and a fan-out on `hud_overlay::Overlay` first.
 
 ## Other titles
 
-- **Pure**: not read (`Prompts::UNREAD`); its glyphs draw as the disc draws
-  them. The table is the same shape as Pulse's and would be a probe run.
-- **Omega**: `PS_BUTTONS.fnt` is HD's at twice the pixel size
-  (`oag_ui::font::Atlas::with_texel_scale`), so HD's table likely applies;
-  *checked, applies, not wired*: the PS4 art was not rendered and read, and a
-  stand-in table must be measured before it is claimed.
-- **2048**: a touch front end with its own icons; out of scope, `UNREAD`.
+- **Pure**: `ε γ δ β Λ Ν` in `FX300ANG.fnt` and `LTe50325.fnt` are the same
+  six pictures as Pulse's (14x17 face buttons, 25x17 and 26x17 shoulder
+  boxes), **measured**, table in `oag_pure::prompts`, pinned by hash in
+  `prompt_glyphs_ground_truth`. The Pure front end's own footer glyph is a
+  sprite, not a stand-in, so the menus do not change under a forced family
+  today; the table serves the strings that carry the codepoints
+  (`Press ε to Continue`, `Press β to Cancel`).
+- **Omega**: `PS_BUTTONS.fnt` is HD's face at twice the size: `ε γ δ β` are
+  96x107 circled cross, circle, square and triangle, `Λ Ν` 168x109 boxes
+  lettered `L2` and `R2`. **Measured**, table in `oag_omega::prompts`
+  (`Scope::ButtonsFace`), pinned by hash. A forced `xbox` footer draws the `A`
+  disc where the disc draws the cross (read as a picture).
+- **HD**: the same probe found `β Λ Ν` in `PS_BUTTONS.fnt` beside `ε γ δ`
+  (the table listed three); all six are now in `oag_hd::prompts`. `Λ Ν` are
+  drawn as `L2`/`R2` and map to the shoulder stand-ins (**chosen**).
+  Omega's six are HD's six at twice the size (**ported**).
+- **2048**: **checked, differs.** None of its five language faces
+  (`NEOSANS*.fnt`, `2048_hud.fnt`) holds a stand-in cell and there is no
+  `PS_BUTTONS.fnt`: a touch front end with its own icons, `UNREAD`.
