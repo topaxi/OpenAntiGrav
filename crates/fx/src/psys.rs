@@ -1390,6 +1390,7 @@ use direction::{direction_for, signed_unit};
 use sample::{channel_sample, random_range};
 mod frame;
 mod pipeline;
+pub(crate) use pipeline::SURFACE_ATTRIBUTES;
 pub use pipeline::{BLEND, BLEND_ALPHA_OVER, Drawer, Drawn, MAX_VERTICES, Pipeline};
 
 mod between_ticks;

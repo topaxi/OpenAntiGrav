@@ -24,6 +24,7 @@ pub mod deferred_upload;
 pub mod formats;
 pub mod init_buffer;
 pub mod perfprobe;
+pub mod shader_file;
 pub mod split_finish;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod test_adapter;

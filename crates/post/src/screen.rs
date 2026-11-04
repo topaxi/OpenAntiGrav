@@ -126,7 +126,7 @@ impl Preset {
     /// identifier or is declared twice, or a default outside its own
     /// `min..=max`.
     pub fn parse(id: &str, source: &str) -> Result<Self> {
-        let (header, body) = split_header(source);
+        let (header, body) = oag_gpu::shader_file::split_header(source);
         let header: Header = if header.trim().is_empty() {
             Header::default()
         } else {
@@ -140,7 +140,7 @@ impl Preset {
         );
         for (index, param) in header.param.iter().enumerate() {
             ensure!(
-                is_identifier(&param.name),
+                oag_gpu::shader_file::is_identifier(&param.name),
                 "screen filter {id:?}: tunable {:?} is not a WGSL identifier",
                 param.name
             );
@@ -174,14 +174,10 @@ impl Preset {
         let mut out = String::with_capacity(PRELUDE.len() + self.body.len() + 512);
         out.push_str(PRELUDE);
         out.push_str("\n// Generated from the preset's header.\n");
-        for (index, param) in self.params.iter().enumerate() {
-            out.push_str(&format!(
-                "fn param_{}() -> f32 {{ return screen.params[{}u][{}u]; }}\n",
-                param.name,
-                index / 4,
-                index % 4
-            ));
-        }
+        out.push_str(&oag_gpu::shader_file::param_accessors(
+            "screen.params",
+            self.params.iter().map(|param| param.name.as_str()),
+        ));
         out.push_str("\n// The preset.\n");
         out.push_str(&self.body);
         out.push('\n');
@@ -206,64 +202,15 @@ impl Preset {
     /// for a module that does not parse or does not validate, and a plain
     /// message for a body that defines no `screen_filter`.
     pub fn validate(&self) -> Result<()> {
-        // Textual, and before the parse: the parse's own report for a missing
-        // `screen_filter` points at the prelude's call site, which is the one
-        // line of the module the author did not write.
         ensure!(
-            self.body
-                .split_whitespace()
-                .collect::<Vec<_>>()
-                .join(" ")
-                .contains("fn screen_filter("),
+            oag_gpu::shader_file::defines(&self.body, "screen_filter"),
             "screen filter {:?} defines no `fn screen_filter(uv: vec2<f32>, pixel: vec2<f32>) -> vec3<f32>`",
             self.id
         );
-        let source = self.wgsl();
-        let module = naga::front::wgsl::parse_str(&source)
-            .map_err(|error| anyhow!("{}", error.emit_to_string_with_path(&source, &self.id)))?;
-        naga::valid::Validator::new(
-            naga::valid::ValidationFlags::all(),
-            naga::valid::Capabilities::default(),
-        )
-        .validate(&module)
-        .map_err(|error| anyhow!("{}", error.emit_to_string_with_path(&source, &self.id)))?;
+        oag_gpu::shader_file::validate(&self.wgsl(), &self.id)
+            .map_err(|report| anyhow!("{report}"))?;
         Ok(())
     }
-}
-
-/// Splits a file into its `//!` header, with the markers stripped, and the rest.
-///
-/// The header is the run of lines at the top that start with `//!`; blank
-/// lines inside it are kept, being TOML's own paragraph breaks. The first line
-/// that is neither ends it.
-fn split_header(source: &str) -> (String, &str) {
-    let mut header = String::new();
-    let mut consumed = 0;
-    for line in source.split_inclusive('\n') {
-        let trimmed = line.trim_start();
-        if let Some(rest) = trimmed.strip_prefix("//!") {
-            header.push_str(rest.strip_prefix(' ').unwrap_or(rest));
-            if !rest.ends_with('\n') {
-                header.push('\n');
-            }
-            consumed += line.len();
-        } else if trimmed.trim().is_empty() && !header.is_empty() {
-            // A blank line inside the header is a TOML paragraph break. The
-            // one that ends the header is swallowed too, which costs the body
-            // a blank line and nothing else.
-            header.push('\n');
-            consumed += line.len();
-        } else {
-            break;
-        }
-    }
-    (header, &source[consumed..])
-}
-
-fn is_identifier(name: &str) -> bool {
-    let mut chars = name.chars();
-    matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// The uniform, field for field as `screen.wgsl` declares it.
