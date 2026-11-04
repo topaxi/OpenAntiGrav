@@ -267,7 +267,7 @@ seconds (default 2), then finished.
 ## Our own patterns (Pulse PSP, Pulse PS2, Pure)
 
 None of these titles ships a pattern, and the disc's cannot be committed, so the three
-rumble from 21 TOML patterns of ours in the fallback layer
+rumble from 32 TOML patterns of ours in the fallback layer
 ([ADR-0061](../architecture/adr/0061-two-asset-layers-around-the-disc.md)):
 `assets/fallback/Data/XML/Rumble/<name>.toml`, embedded by `oag_source::layers`, validated
 by `just check-schemas` against `schemas/v1/rumble.tosd`. The names are the disc's
@@ -298,8 +298,9 @@ and the report says so ("rumble: no pattern found for this title, so the pad sta
 | `travel_mag_rumble` | over a mag strip, held | steady rumble |
 | `autopilot_active_rumble` | Autopilot, held | slow throb |
 | `leeching_energy_rumble` | Leech beam on the ship, held | pulsing drag, stops at once |
+| `collision_heavy_looping`, `collision_{right,left}_{med,light,very_light}_looping` | wall contact, held, by size and side | ragged full scrape down to a brush |
+| `landing_heavy`, `landing_med`, `landing_light`, `landing_very_light` | touchdown by speed | deep long thud down to a touch |
 | `ship_exploding_player_rumble` | the player's craft blows up | full, then a long fall |
 
 Not authored (no event of ours yet, `oag_input::rumble::map::UNFIRED`): weapon impacts on
-a victim, mine and bomb explosions, wall contact and landing bands, side shift, barrel
-roll. Mods override any of them by name.
+a victim, mine and bomb explosions, side shift, barrel roll. Mods override any of them by name.

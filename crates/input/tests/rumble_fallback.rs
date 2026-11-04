@@ -1,7 +1,7 @@
 //! Our own rumble patterns (`assets/fallback/Data/XML/Rumble/`) read, and cover
 //! every pattern the event map names.
 
-use oag_input::rumble::map::{ROWS, UNFIRED};
+use oag_input::rumble::map::{ROWS, UNFIRED, pattern_names};
 use oag_tables::rumble::Library;
 
 const DIR: &str = concat!(
@@ -30,8 +30,8 @@ fn every_file_reads() {
 #[test]
 fn every_row_of_the_map_has_a_pattern() {
     let library = library();
-    for row in ROWS {
-        assert!(library.index_of(row.pattern).is_some(), "{}", row.pattern);
+    for name in pattern_names() {
+        assert!(library.index_of(name).is_some(), "{name}");
     }
 }
 
@@ -170,6 +170,43 @@ mod feed {
                 feed.drive(RACE, 0, &mut after);
             }
             assert_eq!(after.0.last().unwrap().large, 0, "{name} released");
+        }
+    }
+
+    /// Every size of wall contact, on either side, rumbles from our own patterns
+    /// while it lasts and falls silent after it.
+    #[test]
+    fn every_wall_band_rumbles_and_lets_go() {
+        for (m, side) in [
+            (70.0, 1.0),
+            (40.0, 1.0),
+            (20.0, 1.0),
+            (5.0, 1.0),
+            (40.0, -1.0),
+            (20.0, -1.0),
+            (5.0, -1.0),
+        ] {
+            let mut feed = feed();
+            let mut out = Recorder::default();
+            for _ in 0..30 {
+                feed.wall(Some((m, side)), 1.0 / 60.0);
+                feed.drive(RACE, 0, &mut out);
+            }
+            assert!(out.0.last().unwrap().large > 0, "contact {m} on {side}");
+            for _ in 0..30 {
+                feed.wall(None, 1.0 / 60.0);
+                feed.drive(RACE, 0, &mut out);
+            }
+            assert_eq!(out.0.last().unwrap().large, 0, "released {m} on {side}");
+        }
+    }
+
+    #[test]
+    fn every_landing_band_rumbles() {
+        for v in [8.0, 5.5, 4.0, 3.2] {
+            let mut feed = feed();
+            feed.touchdown(v, 1.0 / 60.0);
+            assert!(peak_after(&mut feed, 40) > 0, "landing at {v}");
         }
     }
 }

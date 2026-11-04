@@ -57,7 +57,11 @@ impl Race {
     /// (`ship+0x5f78` on HD, `+0x64d4` on Omega) is unread, so this stands in
     /// with the impulse the response applied
     /// (`docs/gameplay/rumble.md`, "Contact and landing").
-    pub(crate) fn note_wall_contact(&mut self, slot: usize, wall: &oag_physics::wall::WallResponse) {
+    pub(crate) fn note_wall_contact(
+        &mut self,
+        slot: usize,
+        wall: &oag_physics::wall::WallResponse,
+    ) {
         let Some(reading) = self.sim.wall_contact.get_mut(slot) else {
             return;
         };
