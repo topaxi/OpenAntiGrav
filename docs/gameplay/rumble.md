@@ -242,6 +242,17 @@ that reads as authored on a real motor is a feel test; the way out is `gilrs-cor
 direct or SDL3 behind the same `MotorOutput`. The effects run only while a motor is
 on, since a running one is re-sent every 50 ms level or not.
 
+Reproduce without hardware (needs `/dev/uinput` writable; `uv` fetches `evdev`). The
+virtual pad reports `Xbox 360 Controller` with rumble and prints each request:
+
+```sh
+uv run --with evdev python3 -I scripts/virtual-ff-pad.py 30 &
+oag-game --no-audio --rumble-pattern heartbeat data/images/hdfury-ps3-eu.iso
+```
+
+Read the `UPLOAD ... strong= weak=` and `EV_FF` lines: one pair per 50 ms while a motor is
+on, then `EV_FF value=0` and `ERASE` once the probe has silenced it.
+
 **Silence** (`Pad::silence`, via `Controls::silence_motors`) runs on a pause, a
 window losing focus or hiding, leaving a race or the front end, exit
 (`ApplicationHandler::exiting`), a pad disconnect (its effects are forgotten) and in
