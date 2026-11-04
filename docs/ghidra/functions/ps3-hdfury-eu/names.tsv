@@ -835,3 +835,16 @@
 0x000fa140	function	WeaponAi_BiasAbsorbByDistance	55	weapon-ai-fire.md
 0x00125690	function	ShipShield_BindColourParam	90	shield.md
 0x000d5610	function	Craft_ActivateShield	82	shield.md
+0x00342598	function	Rumble_LoadLibrary	84	rumble.md
+0x00341de0	function	Rumble_ParsePatternXml	84	rumble.md
+0x00342418	function	Rumble_QueueOneShot	84	rumble.md
+0x00342290	function	Rumble_QueueHeld	80	rumble.md
+0x0033fa28	function	Rumble_QueueOnPad	84	rumble.md
+0x0033fee8	function	Rumble_PlayOnLocalPads	80	rumble.md
+0x00340a88	function	Rumble_StepVoice	84	rumble.md
+0x003417e8	function	Rumble_ChooseVoices	84	rumble.md
+0x00340080	function	Rumble_MixSmallMotor	84	rumble.md
+0x00340158	function	Rumble_MixLargeMotor	84	rumble.md
+0x00340588	function	Rumble_TypeName	80	rumble.md
+0x0033e460	function	Pad_Update	78	rumble.md
+0x000d10c8	function	Ship_UpdateContactRumble	82	rumble.md

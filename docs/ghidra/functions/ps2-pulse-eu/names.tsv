@@ -264,3 +264,16 @@
 0x00199940	function	Mode3D_LeaveView	70	mode3d.md
 0x001993a8	function	Mode3D_SetOriginMapping	75	mode3d.md
 0x0027f0f4	data	g_mode3d_origin_enabled	75	mode3d.md
+0x00150cc0	function	Rumble_TriggerForPlayer	80	rumble.md
+0x00202850	function	Input_SetVibration	84	rumble.md
+0x00202928	function	Input_UpdateVibration	84	rumble.md
+0x002028e8	function	Input_StopVibration	84	rumble.md
+0x002020e0	function	Input_DisableVibration	84	rumble.md
+0x002020c0	function	Input_EnableVibration	84	rumble.md
+0x0010af40	function	Pad_SetMotors	84	rumble.md
+0x00212c08	function	Pad_SetSmallMotor	80	rumble.md
+0x00212c30	function	Pad_SetLargeMotor	80	rumble.md
+0x00242270	function	Pad2_SendActuator	60	rumble.md
+0x00156ec8	function	Ship_Destroy	65	rumble.md
+0x001545c8	function	Ship_Damage	80	rumble.md
+0x0018a080	function	Options_ReadVibration	68	rumble.md
