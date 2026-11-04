@@ -164,6 +164,13 @@ guest as `Observation::option` (new ABI bytes, `mod-shaders.md` "A mod's quality
    press stays armed. Chosen, kept.
 3. **Online a server's guest has no pick**: settings are not read there; only drawn outputs depend on it.
 4. 2048 and HD windows look like a continuation of the scene (the exit is two seconds on, same scenery).
+5. **`Observation::option` is not part of a race's identity.** A pick that changed the simulation would
+   split a replay, a LAN race or a server from the player's own run. Slipstream reads it for drawn outputs
+   only; the contract says nothing yet. Either state it on `hooks.md` or carry the picks with the replay and
+   the handshake.
+6. **Question for the maintainer:** should the firer see the window? Transit keeps its fill and FOV jump as
+   decided, so the portal lanes are mostly seen by other people. Holding the transit until the craft reaches
+   the entrance would show it, and changes the timing of the weapon.
 
 ## Next Steps
 
