@@ -15,6 +15,68 @@ Evidence: [Omega](../ghidra/functions/ps4-omega-eu/rumble.md),
 it with no element or attribute left over. No runtime trace; the emulators stayed
 off in this pass.
 
+## Reader
+
+**Built.** `oag_tables::rumble::parse` reads one file into a `Pattern` (fields
+named as the table below: `kind`, `loop_start`, `loop_end`, `class`, `priority`,
+`positional`, `large`, `small`); `Library` holds patterns by name (a `Vec`, case-folded names, an
+insert by name replaces, so an override is an insert); `pattern_name` takes the name
+out of an archive path. `oag_mod::rumble::parse` reads our TOML form into the same
+`Pattern`, and `oag_mod::rumble::from_forms` refuses a name shipped as both `.xml` and
+`.toml` (`Error::BothForms`). The TOML reader sits in `oag-mod` because that crate
+already owns `toml`, `serde` and `oag-schema` next to `oag-tables`, which has no
+dependencies. Nothing plays a pattern yet.
+
+The XML reader **decodes or refuses by name**, stricter than the original: an element
+inside `RumbleData` it does not know, a `Type`, `Class`, `Priority` or `Behaviour` word
+outside the lists above (the original reads any other `Priority` text as High), an
+`FPS` other than 60, a track token that is not a byte, `FallOff*` on a `Global`
+pattern, `LoopStart` or `LoopEnd` on a `OneShot`, a duplicate element. None of that occurs
+on a disc. It tokenises tracks on white space, so the trailing space is not needed and
+a track without it keeps its last value. Absent `Class` and `Priority` stay `None`
+in the struct; `effective_class` and `effective_priority` apply the defaults above.
+
+Ground truth (`crates/tables/tests/rumble_ground_truth.rs`, called from the
+`ai_stats_lineage_ground_truth` archive walk so each archive opens once): HD disc
+`DATA02`, HD PSN `data02`, 2048 EU base `data.psarc` and Omega `data00` each parse all
+69 files with no refusal, and the census above holds on each: `OneShot` 57 and
+`Looping` 12, `Positional` 7, `Game` 62, `UI` 3 and no `Class` 4, `High` 25,
+`Medium` 25, `Low` 15 and no `Priority` 4, 24 files with unequal tracks, small motor
+only 0 or 1 (476 ones, 1,085 zeros), 1 to 106 frames. One digest over all 69
+patterns' parsed fields is the same on the four archives, which is the "same data"
+row below, now measured on the parsed form and not only on the serialised element.
+Confidence 90 (unchanged: the layout is from the parser; this adds the full census
+through a second reader).
+
+### Our own TOML form
+
+`<name>.toml`, schema `schemas/v1/rumble.tosd` ([ADR-0064](../architecture/adr/0064-project-toml-files-declare-a-toml-schema.md)),
+the maintainer's shape (2026-11-04). Words are the XML's, so a pattern converts by eye.
+
+```toml
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/rumble.tosd"
+version = "1.0.0"
+
+[pattern]
+type = "Looping"        # "OneShot" | "Looping"
+class = "Game"          # optional, "Game" | "UI"
+priority = "High"       # optional, "Low" | "Medium" | "High"
+loop = [1, 3]           # optional, [start, end], Looping only
+
+[pattern.positional]    # optional; its presence is the Positional behaviour
+fall_off_inner = 30
+fall_off_outer = 20
+
+[tracks]
+large = [255, 200, 0]   # bytes 0..255, one per frame
+small = [1, 0]
+```
+
+Unknown keys are refused. A `positional` table with no distances reads 0 and 0, as the
+XML does. A unit test reads one invented pattern in both forms and asserts the `Pattern`s equal;
+another proves the schema and the loader agree on 11 examples.
+
 ## Census
 
 Listed from each PSARC's manifest with entries resolved by path digest
@@ -200,7 +262,10 @@ Ids 0 to 64 span 65 slots with 64 files.
 
 ## 2048 and Omega
 
-**Ported**: both ship the same 69 patterns byte for byte in `<RumbleData>`. Omega
+**Ported, and read** (the reader above runs on both, with its ground truth): all 69
+files of 2048's base `data.psarc` and Omega's `data00.psarc` parse, with the same census and the
+same digest as HD, so the 69 patterns are equal in `<RumbleData>` on all of them. 2048's v1.04
+DLC archives and Omega's patch archives hold none. Omega
 reads them with the same parser, slot numbering and voice law as HD. **Checked,
 differs**: 2048 ships them and has no reader, so its rumble is nothing on the
 original; see the provenance table on [gameplay/rumble.md](../gameplay/rumble.md#provenance-per-title).

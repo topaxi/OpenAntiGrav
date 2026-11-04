@@ -128,9 +128,7 @@ become two player settings: `max_voices` (20, or 1) and `min_gap` (0, or 18 tick
 
 ### Reader
 
-`oag_tables::rumble` (zero dependencies, fits the crate): `Pattern { large, small,
-looping, loop_start, loop_end, class, priority, positional, inner, outer }`, parsed
-with the crate's XML reader. Tokenise plainly, so a missing trailing space costs no
+Built (see Next Steps 1). `oag_tables::rumble` (zero dependencies, fits the crate): `Pattern { kind, loop_start, loop_end, class, priority, positional, large, small }`. Tokenise plainly, so a missing trailing space costs no
 digit. Do not read `FPS`, or read it only to refuse a value other than 60 in a mod.
 
 `PatternId` is an enum over 0..=64 with id 11 absent, or a `u8` with named consts.
@@ -289,7 +287,10 @@ exists. Do not hold the engine lane for it.
 
 Each is one lane, in order.
 
-1. **Reader and census** (S, 80): `oag_tables::rumble`, ground truth. No behaviour.
+1. ~~**Reader and census**~~ landed on `rumble-reader`: `oag_tables::rumble` (XML) and
+   `oag_mod::rumble` (TOML, `schemas/v1/rumble.tosd`), ground truth over HD disc and PSN, 2048
+   and Omega, see `docs/formats/rumble-xml.md`, "Reader". `from_forms` is the seam for the
+   both-forms refusal; mod loading is lane 5.
 2. **Player and device** (M, 60): `Player`, `MotorOutput`, gilrs backend, settings
    row with string ids and pointer support; a debug way to play a pattern by id.
 3. **Wire HD, carry to Omega and 2048** (L, 50): the edge map, then held levels, then
