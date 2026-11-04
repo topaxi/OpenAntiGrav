@@ -16,7 +16,11 @@
 //!    luma, `LAvg` stepped toward it by at most `response / 60`, the Hermite
 //!    cubic and the exposure;
 //! 3. per pixel and per channel, `y = cubic(clamp(exposure * c, 0, t1))`;
-//! 4. the display's encode of `y`: the piecewise sRGB curve
+//! 4. the race composite's terms that follow the curve
+//!    ([`law::Composite`]): `ColorScale * vignette * curved + ScreenTint`, the
+//!    vignette from the circuit's `Vignette.*` keys, `ColorScale` at its rest
+//!    `(1, 1, 1)` and the tint at its rest zero;
+//! 5. the display's encode of `y`: the piecewise sRGB curve
 //!    ([`law::scanout_encode`]). The executable scans out an `A2R10G10B10`
 //!    UNORM buffer (`0x88060000`, gamma 1.0) filled by a plain copy, so the
 //!    video out encodes; shadPS4 0.20, which captured the reference frames,
@@ -36,9 +40,10 @@
 //!   from earlier frames; this keeps the history on the GPU and includes the
 //!   current frame.
 //! - **Bloom and the low-resolution additive layer** the original adds after
-//!   the curve are not drawn here: this title's bloom chain is off in this
-//!   renderer, and its particles draw into the scene, so they pass through
-//!   the curve.
+//!   the curve are not drawn here: the bloom chain behind `BloomTexture` is
+//!   unread (`FUN_0177fbc0` and the bright-pass programs; the disc authors
+//!   its `Bloom.*` keys), and the particles draw into the scene, so they pass
+//!   through the curve.
 //! - **Brightness** stays at the executable's middle setting, 1.0; this port
 //!   grades brightness after the frame.
 //!
@@ -51,7 +56,7 @@
 
 pub mod law;
 
-pub use law::{Curve, Params};
+pub use law::{Composite, Curve, Params};
 
 use anyhow::Result;
 
@@ -114,6 +119,11 @@ struct Uniform {
     /// not be at the corner. `(0, 0)` for a whole picture, which then reads the bits it
     /// always did.
     uv_offset: [f32; 2],
+    /// The composite's vignette `(a, b)`.
+    vignette: [f32; 2],
+    _pad: [f32; 2],
+    color_scale: [f32; 4],
+    screen_tint: [f32; 4],
 }
 
 impl Uniform {
@@ -135,6 +145,20 @@ impl Uniform {
             uv_max,
             distortion: [DISTORT_SCALE * DISTORT_ASPECT, DISTORT_SCALE],
             uv_offset,
+            vignette: p.composite.vignette_ab(),
+            _pad: [0.0; 2],
+            color_scale: [
+                p.composite.color_scale[0],
+                p.composite.color_scale[1],
+                p.composite.color_scale[2],
+                1.0,
+            ],
+            screen_tint: [
+                p.composite.screen_tint[0],
+                p.composite.screen_tint[1],
+                p.composite.screen_tint[2],
+                0.0,
+            ],
         }
     }
 }

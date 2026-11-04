@@ -2,7 +2,7 @@
 //! own microcode produced, and the chain drawn on a real device against the
 //! law.
 
-use super::law::{Curve, Params, adapt, scanout_encode};
+use super::law::{Composite, Curve, Params, adapt, scanout_encode};
 use super::*;
 
 fn params() -> Params {
@@ -17,6 +17,7 @@ fn params() -> Params {
         source_end_b: 0.5,
         start_angle: 10.0,
         end_angle: -20.0,
+        composite: Composite::NONE,
     }
 }
 
@@ -359,5 +360,133 @@ fn the_composite_moves_the_scene_sample_by_the_offset_texture() {
     assert!(
         moved[1] > moved[0],
         "with (1, 0) the seam's left texel reads the right half's green: {moved:?}"
+    );
+}
+
+fn composite() -> Composite {
+    Composite {
+        vignette_inner_radius: 0.375,
+        vignette_outer_intensity: 0.8,
+        color_scale: [0.5, 0.75, 1.0],
+        screen_tint: [0.1, 0.05, 0.0],
+    }
+}
+
+/// The vignette is `1` at the inner radius and the authored intensity half a
+/// screen out, and the composite's order is the patch's: `ColorScale` multiplies,
+/// the tint is added **outside** the vignette (the base program added it inside,
+/// which reads 0.25 here against the patch's 0.30).
+#[test]
+fn the_composite_is_colour_scale_times_vignette_plus_tint() {
+    let c = composite();
+    close(c.vignette([0.5 + 0.375, 0.5]), 1.0, "at the inner radius");
+    close(c.vignette([1.0, 0.5]), 0.8, "at the middle of an edge");
+    close(c.vignette([0.5, 0.5]), 1.0, "at the centre, saturated");
+    // Frame 0.4, vignette 0.5, tint 0.1, ColorScale 1.
+    let probe = Composite {
+        vignette_inner_radius: 0.0,
+        vignette_outer_intensity: 0.5,
+        color_scale: [1.0; 3],
+        screen_tint: [0.1; 3],
+    };
+    // vignette = 1 + b * 0.25 with b = -0.5 / 0.25 = -2, so 0.5 at an edge middle.
+    let uv = [1.0, 0.5];
+    close(probe.vignette(uv), 0.5, "vignette");
+    close(probe.apply(0, 0.4, uv), 0.5 * 0.4 + 0.1, "patch: tint outside");
+    close(0.5 * (0.4 + 0.1), 0.25, "base: tint inside, which is not drawn");
+    // ColorScale multiplies the picture, not the tint.
+    let scaled = Composite {
+        color_scale: [0.5; 3],
+        ..probe
+    };
+    close(scaled.apply(0, 0.4, uv), 0.5 * 0.5 * 0.4 + 0.1, "ColorScale");
+    // The rest composite changes nothing.
+    close(Composite::NONE.apply(1, 0.37, [0.0, 1.0]), 0.37, "rest");
+}
+
+/// The composite on a real device: a flat scene read at the middle of the
+/// frame and at its corner, held to [`Composite::apply`] in the curve's output
+/// range and then the scanout encode. Dropping the composite from the shader
+/// leaves the corner as bright as the middle. **Skips when there is no adapter.**
+#[test]
+fn the_chain_draws_the_composite_after_the_curve() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let size = (8, 8);
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let p = Params {
+        composite: composite(),
+        ..params()
+    };
+    let chain = Chain::new(&device, format, size, p).expect("the chain builds");
+    let out = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("out"),
+        size: wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let out_view = out.create_view(&Default::default());
+    let colour = [0.5_f32, 0.25, 0.3];
+    let mut encoder = device.create_command_encoder(&Default::default());
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("scene"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: chain.scene_view(),
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color {
+                    r: f64::from(colour[0]),
+                    g: f64::from(colour[1]),
+                    b: f64::from(colour[2]),
+                    a: 1.0,
+                }),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    chain.run(&device, &queue, &mut encoder, &out_view, (0.0, 0.0), size, None);
+    queue.submit([encoder.finish()]);
+    let luma: f32 = colour.iter().zip(law::LUMA).map(|(c, w)| c * w).sum();
+    let curve = Curve::fit(&p, luma);
+    let c = composite();
+    let mut seen = Vec::new();
+    for (x, y) in [(3_u32, 3_u32), (0, 0)] {
+        let encoder = device.create_command_encoder(&Default::default());
+        let pixel = read_pixel(&device, &queue, encoder, &out, (x, y));
+        let uv = [(x as f32 + 0.5) / 8.0, (y as f32 + 0.5) / 8.0];
+        for (channel, v) in colour.iter().enumerate() {
+            let want = (scanout_encode(c.apply(channel, curve.map(*v), uv)) * 255.0).round() as i32;
+            let got = i32::from(pixel[channel]);
+            assert!(
+                (got - want).abs() <= 2,
+                "pixel ({x}, {y}) channel {channel}: drew {got}, the law says {want}"
+            );
+        }
+        seen.push(pixel);
+    }
+    assert!(
+        seen[0][0] > seen[1][0] + 10,
+        "the corner {} is not darker than the middle {}",
+        seen[1][0],
+        seen[0][0]
     );
 }

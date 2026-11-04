@@ -37,6 +37,7 @@ fn omega_params() -> oag_post::omega_tonemap::Params {
         source_end_b: 0.5,
         start_angle: 10.0,
         end_angle: -20.0,
+        composite: oag_post::omega_tonemap::Composite::NONE,
     }
 }
 
