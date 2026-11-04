@@ -248,6 +248,19 @@ translation may fill a gap, as `ID = { text = "...", human = false }`; `human`
 is `true` only when a human wrote or approved it (convention in
 `english.toml`'s doc comment).
 
+### Logging
+
+Full table and how to get lines back: [`docs/architecture/logging.md`](docs/architecture/logging.md).
+The default filter shows `info` from our crates, so **every `info!` is a line each
+player reads on every launch**. Sort a line by what a player loses or wants to know:
+
+- `error`: the player loses something. `warn`: degraded but working, including every absence.
+- `info`: a lifecycle line a user wants: the disc, the renderer, a race starting, a flag they passed being acknowledged, a capture's result.
+- `debug`: what a load or a subsystem did: counts, timings, loader reports, end-of-race summaries, a subsystem arming.
+- `trace`: one line per item: per cue, pattern, ship, frame or tick.
+
+**Default a new line to `debug`.** `info` needs a reason a player cares. Statistics, "armed" or "ready" lines, and anything that repeats during play (each race, pause, pickup) are `debug` or lower, even when a line is useful while building the feature. Prefer no line over a line nothing reads. The simulation crates log nothing. Before moving an existing line, grep `crates/*/tests` and `scripts/` for its text: some tests parse them.
+
 ### Determinism
 
 Bit-identical simulation across Linux/Windows/macOS, x86-64/AArch64, debug and

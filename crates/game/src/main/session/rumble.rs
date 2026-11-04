@@ -16,7 +16,7 @@ impl Session {
             &self.settings.controls.rumble,
             title.rumble,
         );
-        log::info!(
+        log::debug!(
             "rumble: {} on {} ({} patterns): {}",
             self.settings.controls.rumble,
             title.name,
@@ -37,7 +37,7 @@ impl Session {
                 .iter()
                 .map(|(name, count)| format!("{name} x{count}"))
                 .collect();
-            log::info!("rumble: voices fired: [{}]", fired.join(", "));
+            log::debug!("rumble: voices fired: [{}]", fired.join(", "));
             rumbler.stop(self.controls.pad_mut());
         }
     }

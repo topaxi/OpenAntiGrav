@@ -98,7 +98,7 @@ impl Feed {
         match self.fired.iter_mut().find(|(n, _)| *n == name) {
             Some((_, count)) => *count += 1,
             None => {
-                log::info!("rumble: first voice of {name}");
+                log::trace!("rumble: first voice of {name}");
                 self.fired.push((name, 1));
             }
         }
