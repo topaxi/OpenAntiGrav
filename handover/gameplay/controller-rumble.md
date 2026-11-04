@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-04
-summary: "No rumble exists. RE done for HD, Omega, PS2; proposal: one 20-voice pattern player, cues in, motors out; seven decisions for the maintainer."
+summary: "Nothing plays yet. Reader landed; design decided: one 20-voice pattern player, cues in, motors out, RUMBLE None, Original, PS3, PS4; lanes 2-4 next, mods with Slipstream."
 categories: [tooling]
 size: L (60)
 difficulty: medium (50)
