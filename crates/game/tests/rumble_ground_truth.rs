@@ -83,3 +83,79 @@ fn pulse_has_no_patterns_and_its_original_offers_none() {
         None
     );
 }
+
+mod library {
+    use oag_game::rumble_library::{Report, load};
+    use oag_input::rumble::map::ROWS;
+
+    fn open(image: &str) -> Option<oag_assets::Archives> {
+        let image = oag_testdata::image(image)?;
+        Some(
+            oag_source::title::open_source(&image.to_string_lossy(), Vec::new(), Vec::new())
+                .expect("the title opens")
+                .archives,
+        )
+    }
+
+    fn distinct() -> usize {
+        let mut names: Vec<_> = ROWS.iter().map(|r| r.pattern).collect();
+        names.sort_unstable();
+        names.dedup();
+        names.len()
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pulse-psp-eu.chd"]
+    fn pulse_plays_every_mapped_pattern_from_our_own_fallback() {
+        let Some(mut archives) = open("pulse-psp-eu.chd") else {
+            return;
+        };
+        let (library, report) = load(&mut archives);
+        assert_eq!((report.disc, report.overridden), (0, 0));
+        assert_eq!(report.fallback, distinct(), "{}", report.line());
+        assert_eq!(library.len(), distinct());
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pure-psp-eu.chd"]
+    fn pure_plays_every_mapped_pattern_from_our_own_fallback() {
+        let Some(mut archives) = open("pure-psp-eu.chd") else {
+            return;
+        };
+        let (_, report) = load(&mut archives);
+        assert_eq!(
+            (report.disc, report.fallback),
+            (0, distinct()),
+            "{}",
+            report.line()
+        );
+    }
+
+    #[test]
+    #[ignore = "needs data/images/pulse-ps2-eu.chd"]
+    fn pulse_ps2_has_the_same_library_as_the_psp() {
+        let Some(mut archives) = open("pulse-ps2-eu.chd") else {
+            return;
+        };
+        let (_, report) = load(&mut archives);
+        assert_eq!(report.fallback, distinct(), "{}", report.line());
+    }
+
+    /// The fallback answers only a name the disc lacks: on HD every mapped name is the disc's.
+    #[test]
+    #[ignore = "needs data/images/hdfury-ps3-eu.iso"]
+    fn hd_keeps_its_own_patterns_over_ours() {
+        let Some(mut archives) = open("hdfury-ps3-eu.iso") else {
+            return;
+        };
+        let (_, report) = load(&mut archives);
+        assert!(report.disc > 0, "{}", report.line());
+        assert_eq!(report.overridden, 0);
+    }
+
+    #[test]
+    fn a_title_with_no_pattern_says_so_and_plays_nothing() {
+        let line = Report::default().line();
+        assert!(line.contains("no pattern found"), "{line}");
+    }
+}

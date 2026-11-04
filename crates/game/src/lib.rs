@@ -83,6 +83,7 @@ pub mod remix;
 pub mod render;
 pub mod results_tables;
 pub mod rumble;
+pub mod rumble_library;
 pub mod scoreboard;
 pub mod screen;
 pub mod settings;
