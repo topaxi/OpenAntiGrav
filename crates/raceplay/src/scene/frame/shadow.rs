@@ -463,7 +463,7 @@ impl super::super::Scene {
             // hull, and a box that size is a map of the neighbourhood rather
             // than of the craft.
             let fit = craft_fit(model, &self.light);
-            maps.render(queue, encoder, slot, &fit, &track);
+            maps.render(encoder, slot, &fit, &track);
             // The craft's own depth map from the same box: its opaque ranges
             // and nothing else, so a wing shadows the fuselage and no other
             // craft shadows either. See `oag_render::shadow::self_shadow`.
@@ -476,7 +476,7 @@ impl super::super::Scene {
             } else {
                 ship.caster(model)
             };
-            maps.render_self_shadow(queue, encoder, slot, &caster);
+            maps.render_self_shadow(encoder, slot, &caster);
             if slot == 0 && std::env::var_os(DUMP_VAR).is_some() {
                 log::info!(
                     "sun occlusion layer 0: craft at {:?}, radius {:.1}, sun {:?}",
@@ -492,6 +492,9 @@ impl super::super::Scene {
                 }
             }
         }
+        // The layers' matrices, staged by the passes above: one write each for the
+        // occlusion and self-shadow buffers, ahead of the submission that draws them.
+        maps.write_uniforms(queue);
     }
 
     /// Writes every active craft's model uniform for this frame, naming the

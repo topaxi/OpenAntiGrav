@@ -14,7 +14,7 @@ use oag_vex::shadow_occluder::Occluder;
 use crate::Race;
 
 /// One tick's projected hulls.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct HullGather {
     /// [`Race::pose_generations`] `.current` the gather was taken at.
     pub generation: u64,
@@ -26,24 +26,66 @@ pub struct HullGather {
     pub vertices: Vec<GpuVertex>,
 }
 
+/// What [`HullGather::at_tick_with`] works in, kept from tick to tick so a gather
+/// allocates nothing once warm: the projection's lists, and the lists of a gather
+/// the cache has let go of, refilled as the next one.
+#[derive(Debug, Default)]
+pub struct GatherScratch {
+    hull: oag_render::shadow::HullScratch,
+    spare: Option<HullGather>,
+}
+
+impl GatherScratch {
+    /// Keeps `gather`'s lists for the next [`HullGather::at_tick_with`] to fill.
+    pub fn recycle(&mut self, gather: HullGather) {
+        self.spare = Some(gather);
+    }
+}
+
 impl HullGather {
     /// The hulls projected from this tick's poses exactly: what a draw at alpha
     /// `1.0` shows.
     #[must_use]
     pub fn at_tick(race: &Race, hulls: &[Option<Occluder>], axis: Vec3) -> Self {
-        let (vertices, slots) = if hulls.iter().any(Option::is_some) {
+        Self::at_tick_with(race, hulls, axis, &mut GatherScratch::default())
+    }
+
+    /// [`Self::at_tick`], working in `scratch` and filling its spare gather's lists.
+    #[must_use]
+    pub fn at_tick_with(
+        race: &Race,
+        hulls: &[Option<Occluder>],
+        axis: Vec3,
+        scratch: &mut GatherScratch,
+    ) -> Self {
+        let Self {
+            mut models,
+            mut slots,
+            mut vertices,
+            ..
+        } = scratch.spare.take().unwrap_or_default();
+        models.clear();
+        slots.clear();
+        vertices.clear();
+        if hulls.iter().any(Option::is_some) {
             let placements = race.shadow_placements_of(|slot| race.ship_tick_body(slot));
-            project(race, hulls, axis, &placements, |slot| {
-                race.ship_tick_model(slot)
-            })
-        } else {
-            (Vec::new(), Vec::new())
-        };
+            project(
+                race,
+                hulls,
+                axis,
+                &placements,
+                |slot| race.ship_tick_model(slot),
+                Gathered {
+                    vertices: &mut vertices,
+                    slots: &mut slots,
+                    scratch: &mut scratch.hull,
+                },
+            );
+        }
+        models.extend((0..usize::from(race.ship_count())).map(|slot| race.ship_tick_model(slot)));
         Self {
             generation: race.pose_generations().current,
-            models: (0..usize::from(race.ship_count()))
-                .map(|slot| race.ship_tick_model(slot))
-                .collect(),
+            models,
             slots,
             vertices,
         }
@@ -57,10 +99,20 @@ impl HullGather {
             return Vec::new();
         }
         let placements = race.shadow_placements();
-        project(race, hulls, axis, &placements, |slot| {
-            race.ship_model_matrix_of(slot)
-        })
-        .0
+        let mut vertices = Vec::new();
+        project(
+            race,
+            hulls,
+            axis,
+            &placements,
+            |slot| race.ship_model_matrix_of(slot),
+            Gathered {
+                vertices: &mut vertices,
+                slots: &mut Vec::new(),
+                scratch: &mut oag_render::shadow::HullScratch::default(),
+            },
+        );
+        vertices
     }
 
     /// The two ticks' hulls blended by `alpha`, or `None` where they cannot be
@@ -109,9 +161,17 @@ fn lerp(a: &GpuVertex, b: &GpuVertex, alpha: f32) -> GpuVertex {
     }
 }
 
+/// Where [`project`] appends: the vertices, which slot owns which range of them,
+/// and the lists it works in.
+struct Gathered<'a> {
+    vertices: &'a mut Vec<GpuVertex>,
+    slots: &'a mut Vec<(usize, Range<usize>)>,
+    scratch: &'a mut oag_render::shadow::HullScratch,
+}
+
 /// Projects each placed craft's authored hull onto the surface under it, with the
-/// craft at `model(slot)`, and returns the vertices with which slot owns which
-/// range.
+/// craft at `model(slot)`, appending the vertices and which slot owns which range
+/// to `into`.
 ///
 /// A slot whose model authors no hull contributes nothing rather than falling
 /// back to a blob: a tier that silently becomes another tier is how a missing
@@ -122,15 +182,19 @@ fn project(
     axis: Vec3,
     placements: &[oag_render::shadow::Placement],
     model: impl Fn(usize) -> Mat4,
-) -> (Vec<GpuVertex>, Vec<(usize, Range<usize>)>) {
-    let mut vertices = Vec::new();
-    let mut slots = Vec::new();
+    into: Gathered<'_>,
+) {
+    let Gathered {
+        vertices,
+        slots,
+        scratch,
+    } = into;
     for placement in placements {
         let Some(Some(hull)) = hulls.get(placement.silhouette) else {
             continue;
         };
         let first = vertices.len();
-        oag_render::shadow::hull_triangles(
+        oag_render::shadow::hull_triangles_with(
             &oag_render::shadow::Cast {
                 hull,
                 model: model(placement.silhouette),
@@ -139,14 +203,17 @@ fn project(
                 normal: placement.normal,
                 strength: placement.strength,
             },
-            &mut vertices,
+            vertices,
+            scratch,
         );
-        oag_render::shadow::conform_to_floor(&mut vertices, first, |at, normal| {
-            race.floor_above(at, normal)
-        });
+        oag_render::shadow::conform_to_floor_with(
+            vertices,
+            first,
+            |at, normal| race.floor_above(at, normal),
+            scratch,
+        );
         slots.push((placement.silhouette, first..vertices.len()));
     }
-    (vertices, slots)
 }
 
 #[cfg(test)]

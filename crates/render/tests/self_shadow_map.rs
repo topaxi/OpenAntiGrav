@@ -157,8 +157,9 @@ fn a_wing_shadows_the_fuselage_under_it_and_the_rest_of_the_hull_is_lit() {
         model: Mat4::IDENTITY,
     };
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    assert_eq!(maps.render(&queue, &mut encoder, 2, &fit, &track), 0);
-    let drawn = maps.render_self_shadow(&queue, &mut encoder, 2, &caster);
+    assert_eq!(maps.render(&mut encoder, 2, &fit, &track), 0);
+    let drawn = maps.render_self_shadow(&mut encoder, 2, &caster);
+    maps.write_uniforms(&queue);
     queue.submit([encoder.finish()]);
     assert_eq!(drawn, 1);
     assert_eq!(maps.self_shadow().drawn(2), 1);

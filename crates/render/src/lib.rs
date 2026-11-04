@@ -37,6 +37,8 @@
 //!   `ShipState::roll_phase` and the rotation built from it, read by both the
 //!   ship's own transform and the internal camera's up vector.
 
+#[cfg(test)]
+mod alloc_count;
 pub mod camera;
 pub mod collision;
 pub mod gantry;
