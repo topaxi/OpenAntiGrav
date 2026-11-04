@@ -817,6 +817,53 @@ for, and prints `bench presentation resolve (serialised: CPU + GPU)`. The single
 leaves the resolve out. First use: FSR 3 per split view, numbers in
 [split-screen.md](../rendering/split-screen.md), "Per-view FSR 3".
 
+## Every pass of one frame by name
+
+`OAG_RENDER_GPU_BENCH=N` on a `--features perf-probe` build (`--race --screenshot`, one view, no
+window) re-draws the captured tick `N` times and prints one `bench   span / <label>` row per pass,
+and inside the race pass per group. Every render and compute pass `Scene::render` records marks its
+start and closes its end (`oag_gpu::perfprobe::marks`), so no span runs across a pass nothing named.
+
+- **A label taken more than once a frame is summed within the run** and printed with its count
+  (`sun occlusion (x8)`): the row is what the frame paid for all of them.
+- **`between passes (xN)`** is everything from a pass's last command to the next pass's first mark:
+  stores, MSAA resolves, load-op clears, barriers, copies. An empty compute pass at each end of the
+  encoder brings what comes before the first pass and after the last into it.
+- **`track solid`** is the depth prepass on a circuit built with one (it writes no colour) and
+  **`track solid, shaded`** the shading and the cutouts. Their sum is what `track solid` alone
+  meant before the split, and what the tables in
+  [hires-gpu-levers.md](../rendering/hires-gpu-levers.md) quote.
+- **`sum of spans`** is the rows added up per run. **`bench unattributed`** is the median
+  `Scene::render GPU` (a wall clock, submit to idle) less that sum, less the `queue.submit` call's
+  own CPU time (printed under `Scene::render GPU`) and less `submit floor`, the same wall clock on an
+  empty command buffer. What is left is what no encoder timestamp can see: wgpu's staged
+  `write_buffer` copies, which run ahead of the encoder, and the time before the first command and
+  after the last one. `bench marks dropped` appears if a frame takes more marks than the query set
+  holds (512), and then the spans are short.
+- The HUD and the present composite are not in `Scene::render` and so not in this sum.
+  `OAG_RESOLVE_BENCH` times the resolve.
+
+The marks cost something themselves (Pulse's race pass read 3,177 us with them and 2,914 us in the
+same process's split bench without; HD's two sat inside its noise): compare spans with spans, not
+with a run that has no marks. **No timestamp is written in a normal run**: a build without
+`perf-probe` never asks the device for
+`TIMESTAMP_QUERY_INSIDE_PASSES` (`mesh_render::device::probe_features`, pinned by its test), `mark`
+returns at a `cfg!`, and a `perf-probe` build writes none until a bench holds a `Marks`.
+
+HD and Pulse at 1920x1080 on the Intel iGPU, tick 2,500, 60 redraws, load 12 to 14 (names and
+structure, not magnitudes: this GPU is the wrong shape for them):
+
+| us, medians | HD | Pulse |
+|---|---:|---:|
+| `Scene::render GPU` | 13,537 | 5,571 |
+| sum of spans | 11,425 | 3,993 |
+| `queue.submit` call, CPU | 603 | 457 |
+| empty submit floor | 148 | 220 |
+| unattributed | 1,361 | 902 |
+
+`--motion-blur high --msaa 4x` on HD, Omega, 2048, Pulse PS2 and Pure ran the same way with no
+validation error. The Deck's numbers are not taken.
+
 ## On the Steam Deck (the maintainer runs this)
 
 Not run by this lane. On the Deck, in desktop mode, with the repository checked out and the

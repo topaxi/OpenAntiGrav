@@ -263,16 +263,17 @@ impl Maps {
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        if caster.ranges.is_empty() {
-            return 0;
+        oag_gpu::perfprobe::marks::mark(&mut pass, "self shadow");
+        if !caster.ranges.is_empty() {
+            pass.set_pipeline(&self.pipeline);
+            pass.set_bind_group(0, &self.binds[layer], &[]);
+            pass.set_vertex_buffer(0, caster.vertices.slice(..));
+            pass.set_index_buffer(caster.indices.slice(..), wgpu::IndexFormat::Uint32);
+            for range in caster.ranges {
+                pass.draw_indexed(range.clone(), 0, 0..1);
+            }
         }
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &self.binds[layer], &[]);
-        pass.set_vertex_buffer(0, caster.vertices.slice(..));
-        pass.set_index_buffer(caster.indices.slice(..), wgpu::IndexFormat::Uint32);
-        for range in caster.ranges {
-            pass.draw_indexed(range.clone(), 0, 0..1);
-        }
+        oag_gpu::perfprobe::marks::close(&mut pass);
         caster.ranges.len()
     }
 
@@ -287,7 +288,7 @@ impl Maps {
             return;
         };
         self.drawn[layer] = 0;
-        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("self shadow map clear"),
             color_attachments: &[],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -302,6 +303,8 @@ impl Maps {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "self shadow clear");
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     /// The array view the hull pipelines compare against, through the scene

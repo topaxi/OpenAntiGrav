@@ -484,8 +484,10 @@ impl Cards {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            oag_gpu::perfprobe::marks::mark(&mut pass, "advert card");
             card.drawable
                 .draw(&mut pass, ViewBlock::NONE, None, None, None, None);
+            oag_gpu::perfprobe::marks::close(&mut pass);
         }
     }
 }

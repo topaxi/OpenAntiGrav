@@ -751,11 +751,13 @@ impl Zoom {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "hd zoom history");
         pass.set_pipeline(&self.history_pipeline);
         pass.set_viewport(0.0, 0.0, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
         let bound = group.as_ref().unwrap_or_else(|| &self.history_groups[next]);
         pass.set_bind_group(0, bound, &[]);
         pass.draw(0..3, 0..1);
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     /// The ring, over the scene, while a pulse runs; nothing otherwise.
@@ -816,6 +818,7 @@ impl Zoom {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "hd zoom ring");
         pass.set_pipeline(&self.ring_pipeline);
         pass.set_viewport(
             origin.0 as f32,
@@ -832,6 +835,7 @@ impl Zoom {
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint16);
         pass.draw_indexed(0..self.index_count, 0, 0..1);
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     fn write_constants(

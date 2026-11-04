@@ -330,6 +330,7 @@ impl Maps {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "sun occlusion");
         // The pass runs whatever is near, so the clear lands; the pipeline and buffers
         // are set on the first draw within reach, as a pass with none sets nothing.
         let mut near = 0;
@@ -354,6 +355,7 @@ impl Maps {
             pass.set_bind_group(1, material, &[]);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
+        oag_gpu::perfprobe::marks::close(&mut pass);
         drop(pass);
         self.drawn[layer] = near;
         near
@@ -403,7 +405,7 @@ impl Maps {
         self.drawn[layer] = 0;
         self.matrices[layer] = Mat4::IDENTITY;
         self.self_shadow.clear(encoder, layer);
-        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("sun occlusion map clear"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
@@ -419,6 +421,8 @@ impl Maps {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "sun occlusion clear");
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     /// The array view the hull pipelines sample, through the scene group.

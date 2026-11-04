@@ -363,6 +363,7 @@ impl Drawable {
                     }
                     pass.draw_indexed(draw.range.clone(), 0, 0..1);
                 }
+                oag_gpu::perfprobe::marks::mark(pass, "track solid, shaded");
                 pass.set_pipeline(&prepass.shade);
                 let mut culling = false;
                 let reversed = self.reversed_indices.as_ref();

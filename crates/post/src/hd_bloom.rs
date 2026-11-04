@@ -835,7 +835,7 @@ impl Chain {
         // with its draw left off rather than a second copy of the descriptor.
         let pass =
             |encoder: &mut wgpu::CommandEncoder,
-             label: &str,
+             label: &'static str,
              pipeline: Option<&wgpu::RenderPipeline>,
              stage: &Pass,
              target: Option<&wgpu::TextureView>,
@@ -864,11 +864,14 @@ impl Chain {
                     occlusion_query_set: None,
                     multiview_mask: None,
                 });
-                let Some(pipeline) = pipeline else { return };
-                pass.set_pipeline(pipeline);
-                pass.set_viewport(origin.0, origin.1, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
-                pass.set_bind_group(0, &stage.group, &[]);
-                pass.draw(0..3, 0..1);
+                oag_gpu::perfprobe::marks::mark(&mut pass, label);
+                if let Some(pipeline) = pipeline {
+                    pass.set_pipeline(pipeline);
+                    pass.set_viewport(origin.0, origin.1, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
+                    pass.set_bind_group(0, &stage.group, &[]);
+                    pass.draw(0..3, 0..1);
+                }
+                oag_gpu::perfprobe::marks::close(&mut pass);
             };
         let clear = wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT);
         // `self.sized.downsamples` always has at least two entries - see its

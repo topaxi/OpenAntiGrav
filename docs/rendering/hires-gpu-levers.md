@@ -110,8 +110,10 @@ reconstruct is 85 to 92 % of the chain on every device and scales 2.8x (Deck) to
 | blur high, full gather (the chain) | 6.56 | 6.26 | |
 | blur high, `--motion-blur-resolution half` | 3.24 (-3.3) | 3.19 (-3.1) | the DRS rung, [half rung](motion-blur-half-rung.md) |
 
-`Scene::render GPU` after `--shadows off` still leaves 3.7 ms (HD) and 2.0 ms (Pulse) that no span
-names: open.
+`Scene::render GPU` after `--shadows off` still left 3.7 ms (HD) and 2.0 ms (Pulse) that no span
+named. Every pass of the frame has a span now
+([render-bench.md](../tools/render-bench.md), "Every pass of one frame by name"); the rows that
+split those two numbers on the Deck are not taken yet.
 
 ## The presented 4K output on the Deck (headless gamescope, 3840x2160)
 
@@ -162,8 +164,9 @@ levers; lever 3 is one we can pull. Estimates are **estimates, not measurements*
 
 Passes the brief named that this tooling cannot separate or that are small: **fog** has no span (it is shaded inside track solid); **MSAA resolve** lands inside the race pass span (the +2.8 ms HD at 1080p is in the pass, while the rest of `Scene::render` does not grow with it); **glass and transparent overdraw** is the `track blended` span, +0.4 ms 4K-1080p on the Deck HD, small; **render-target formats and bandwidth** are not measured directly, the iGPU's bloom and composite growing faster than the dGPU's is the indirect evidence.
 
-Also open, not top three: the 2.0 to 3.7 ms of `Scene::render` no span names on the Deck, MSAA 4x
-(+2.8 ms HD at 1080p), and the iGPU's bandwidth-shaped bloom and composite (+3.6 and +2.0 ms at 4K).
+Also open, not top three: the Deck's split of the 2.0 to 3.7 ms of `Scene::render` outside the
+spans above (every pass is named now, the Deck has not run it), MSAA 4x (+2.8 ms HD at 1080p), and
+the iGPU's bandwidth-shaped bloom and composite (+3.6 and +2.0 ms at 4K).
 
 ## The three levers measured (2026-10-31, `hires-track-and-present`)
 

@@ -790,10 +790,12 @@ impl Chain {
                 label: Some("omega tonemap coefficients"),
                 timestamp_writes: None,
             });
+            oag_gpu::perfprobe::marks::mark_compute(&mut pass, "omega tonemap coefficients");
             pass.set_pipeline(&self.coefficients);
             pass.set_bind_group(0, &self.coefficients_in, &[]);
             pass.set_bind_group(1, &seat.coefficients, &[]);
             pass.dispatch_workgroups(1, 1, 1);
+            oag_gpu::perfprobe::marks::close_compute(&mut pass);
         }
         if let Some(levels) = &self.levels {
             draw(
@@ -860,7 +862,7 @@ impl Chain {
         let share = [w as f32 / scene.0 as f32, h as f32 / scene.1 as f32].map(|s| s.min(1.0));
         if run.first {
             // A pass that clears and draws nothing: the apply pass loads.
-            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("omega tonemap clear"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
@@ -876,6 +878,8 @@ impl Chain {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            oag_gpu::perfprobe::marks::mark(&mut pass, "omega tonemap clear");
+            oag_gpu::perfprobe::marks::close(&mut pass);
         }
         self.run_placed(
             device,
@@ -919,7 +923,7 @@ impl Chain {
 /// One full-screen pass with no blending, loading what is there.
 fn draw(
     encoder: &mut wgpu::CommandEncoder,
-    label: &str,
+    label: &'static str,
     pipeline: &wgpu::RenderPipeline,
     groups: &[&wgpu::BindGroup],
     target: &wgpu::TextureView,
@@ -942,12 +946,14 @@ fn draw(
         occlusion_query_set: None,
         multiview_mask: None,
     });
+    oag_gpu::perfprobe::marks::mark(&mut pass, label);
     pass.set_pipeline(pipeline);
     pass.set_viewport(origin.0, origin.1, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
     for (index, group) in groups.iter().enumerate() {
         pass.set_bind_group(index as u32, *group, &[]);
     }
     pass.draw(0..3, 0..1);
+    oag_gpu::perfprobe::marks::close(&mut pass);
 }
 
 #[cfg(test)]

@@ -233,12 +233,14 @@ impl Pipeline {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "lens flare");
         let [x, y, w, h] = placement.viewport;
         pass.set_viewport(x, y, w, h, 0.0, 1.0);
         pass.set_scissor_rect(x as u32, y as u32, w as u32, h as u32);
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, bind_group, &[]);
         pass.draw(0..(RINGS * 6) as u32, 0..1);
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     fn make_slot(&self, device: &wgpu::Device, depth: &wgpu::TextureView) -> Slot {
