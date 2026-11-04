@@ -214,6 +214,14 @@ pub const BLOOM_GATE: &str = "Lighting.BloomGate";
 /// see `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`.
 pub const BLOOM_ADAPTION_RATE: &str = "HDR and Bloom.Bloom adaption rate";
 
+/// `"Vignette.Inner radius"` (Omega). One number, a uv distance from the centre.
+/// `Environment_ApplyBloomVignette` (`FUN_01625490`) reads it at object `+0x278`.
+pub const VIGNETTE_INNER_RADIUS: &str = "Vignette.Inner radius";
+
+/// `"Vignette.Outer radius intensity"` (Omega). One number, the factor the
+/// picture reaches half a screen from the centre (object `+0x27c`).
+pub const VIGNETTE_OUTER_INTENSITY: &str = "Vignette.Outer radius intensity";
+
 /// `"HDR and Bloom.Bloom adaption boost"`. One number: scales adapted luminance
 /// in the gate's fade, `1 - min(adapted * boost * 0.25, 1)` (`0.25` an inline
 /// constant).

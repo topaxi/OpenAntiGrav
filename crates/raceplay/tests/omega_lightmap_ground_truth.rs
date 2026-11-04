@@ -95,6 +95,31 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
         .omega_tonemap
         .expect("Tech De Ra's Tonemap block is applied");
     assert!(tonemap.exposure_maximum >= tonemap.exposure_minimum);
+    // The circuit's own `Vignette` keys reach the composite, and the rest values
+    // of the other two terms (`colorscale.md`) are what it draws with them.
+    let composite = tonemap.composite;
+    assert_eq!(
+        env.scalar("Vignette.Inner radius"),
+        Some(composite.vignette_inner_radius)
+    );
+    assert_eq!(
+        env.scalar("Vignette.Outer radius intensity"),
+        Some(composite.vignette_outer_intensity)
+    );
+    assert!(
+        (0.0..1.0).contains(&composite.vignette_outer_intensity),
+        "a vignette darkens: {composite:?}"
+    );
+    assert_eq!(composite.color_scale, [1.0; 3]);
+    assert_eq!(composite.screen_tint, [0.0; 3]);
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|l| l.contains("composite vignette inner radius")),
+        "{:#?}",
+        loaded.report
+    );
     // Omega registers 2048's `wo_*` programs and binds none: it ends in
     // `Tonemap`, so it never builds 2048's composite (checked, differs).
     assert!(loaded.wo_composite.is_none());
