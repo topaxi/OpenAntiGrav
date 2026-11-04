@@ -135,7 +135,11 @@ pub fn uniform_cores(capacities: &[u32]) -> bool {
 
 /// Each core's scheduler capacity (`/sys/devices/system/cpu/cpu<N>/cpu_capacity`, 1024 for the
 /// fastest), in core order; empty where the kernel does not report it or on another OS.
-fn core_capacities() -> Vec<u32> {
+///
+/// Empty means unreadable, not uniform: [`uniform_cores`] counts it as uniform for the split,
+/// and a caller that needs positive evidence of equal cores checks the list is not empty.
+#[must_use]
+pub fn core_capacities() -> Vec<u32> {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         (0..)

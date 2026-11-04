@@ -38,9 +38,12 @@ submits on top of that.
 - **Costs to weigh**: the copies are encoder commands (`finish` counts commands), the staging buffer
   is more memory per view, and the 51 `write_buffer` calls a frame already cost 0.63 ms on the
   frame thread, so the copy path has to beat wgpu's own staging, not just match it.
-- `Recording::Threaded` measured 0.6 to 0.7 ms below the interleaved default on the Deck at 800p and
-  4K (`split-screen.md`), +10 to 100% on the hybrid notebook: the part of that gap that is the write
-  log is unknown.
+- `Recording::Threaded` is the base this builds on: on equal cores it is the default once
+  `THREADS_ON_EQUAL_CORES` is released (`split_record.rs`; Deck, 2.3 to 5.5 ms off the frame thread at
+  three and four views, 0.4 to 1.5 at two; `split-screen.md`, "Threaded recording on equal cores"),
+  +10 to 100% on the hybrid notebook, which keeps interleaved. It removes the per-view wait on the
+  split finish but still prepares every view serially, replays a write log per later view and
+  submits per view; the part of its gap that is the write log is unknown.
 
 ## Next Steps
 
