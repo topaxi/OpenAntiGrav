@@ -26,6 +26,8 @@ pub struct Levels {
     pub wrong_way: bool,
     /// The ship is blowing up.
     pub exploding: bool,
+    /// The weapon reticle has taken its lock.
+    pub locked_on: bool,
 }
 
 impl Levels {
@@ -36,6 +38,7 @@ impl Levels {
             Level::LeechBeam => self.leech_beam,
             Level::WrongWay => self.wrong_way,
             Level::Exploding => self.exploding,
+            Level::LockedOn => self.locked_on,
         }
     }
 }
@@ -94,7 +97,10 @@ impl Feed {
     fn note(&mut self, name: &'static str) {
         match self.fired.iter_mut().find(|(n, _)| *n == name) {
             Some((_, count)) => *count += 1,
-            None => self.fired.push((name, 1)),
+            None => {
+                log::info!("rumble: first voice of {name}");
+                self.fired.push((name, 1));
+            }
         }
     }
 

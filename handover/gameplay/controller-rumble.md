@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-04
-summary: "Player, gilrs backend, RUMBLE row landed; feel test owed on a real pad; lanes 3-4 wire the race; mods with Slipstream."
+summary: "Player, backend, RUMBLE row and the HD/Omega/2048 event map landed; feel test owed on a real pad; Pulse and Pure patterns, then mods with Slipstream."
 categories: [tooling]
 size: L (60)
 difficulty: medium (50)
@@ -45,9 +45,9 @@ Open under it: whether the row keeps `Original` where it equals a named value (H
 Decisions, each with a recommendation. The first two change what gets built.
 
 1. **Small motor on Omega.** HD: any non-zero means full on. Omega: sums to 1..5 of
-   255, close to nothing. Recommend HD's law everywhere, Omega labelled as a
-   departure: the patterns were authored for an on/off motor, and a measured
-   near-silence helps nobody. Alternative: keep Omega's `Sum` as the `original`
+   255, so the small motor alone is faint (the large motor carries the feel, and the
+   maintainer's 8BitDo feel test liked it). Decided: `PS3` is HD's law and `PS4`
+   Omega's, as setting values. Alternative: keep Omega's `Sum` as the `original`
    setting value.
 2. **What Pulse and Pure get.** See "Backporting" below. Recommend own authored
    patterns, default on, with PS2's law as the `original` value on Pulse PS2.
@@ -298,9 +298,15 @@ Each is one lane, in order.
    on a real pad.** The gilrs server ticks at 50 ms (20 Hz measured on a virtual pad); if
    one-frame small-motor blips read wrong, move the backend to `gilrs-core` direct or SDL3
    behind `MotorOutput`.
-3. **Wire HD, carry to Omega and 2048** (L, 50): the edge map, then held levels, then
-   the contact and landing selector. 2048 by inheritance; check against Omega in the
-   same change.
+3. ~~**Wire HD, carry to Omega and 2048**~~ landed on `rumble-wire-hd`:
+   `oag_input::rumble::{map, feed, contact}`, `oag_game::rumble::Rumbler`,
+   `oag_raceplay::rumble_library`; see `docs/gameplay/rumble.md`, "Wired and unwired" for
+   what fires and the unfired list with reasons. Still open there: the barrel-roll,
+   side-shift, weapon-pad, boost and afterburner edges (the gestures arm timers, no
+   single event is exposed), weapon impacts 37..44 (a hit cue names no victim), a rival's
+   explosion 59, bombs and mines, `heartbeat`'s counter. **Owed: the maintainer's feel
+   test of a whole HD race**, and a landing seen on real data (no jump in the flown
+   passes; the selector is unit-tested).
 4. **Pulse and Pure** (M, 50): own TOML patterns in the fallback layer, Pulse PS2
    the same as Pulse PSP.
 5. **Mods** (S, 60): override and remap, then the ABI record and the skill.

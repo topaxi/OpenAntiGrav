@@ -11,13 +11,33 @@ impl Session {
         let (Stage::Race(stage), Some(title)) = (&self.stage, self.title_raced()) else {
             return;
         };
-        self.rumbler =
-            oag_game::rumble::Rumbler::new(&stage.race, &self.settings.controls.rumble, title.rumble);
+        self.rumbler = oag_game::rumble::Rumbler::new(
+            &stage.race,
+            &self.settings.controls.rumble,
+            title.rumble,
+        );
+        log::info!(
+            "rumble: {} on {} ({} patterns): {}",
+            self.settings.controls.rumble,
+            title.name,
+            stage.race.rumble_library().len(),
+            if self.rumbler.is_some() {
+                "armed"
+            } else {
+                "plays nothing"
+            }
+        );
     }
 
     /// Ends the race's voices and silences every pad.
     pub(crate) fn stop_rumble(&mut self) {
         if let Some(mut rumbler) = self.rumbler.take() {
+            let fired: Vec<String> = rumbler
+                .fired()
+                .iter()
+                .map(|(name, count)| format!("{name} x{count}"))
+                .collect();
+            log::info!("rumble: voices fired: [{}]", fired.join(", "));
             rumbler.stop(self.controls.pad_mut());
         }
     }

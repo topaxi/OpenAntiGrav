@@ -61,6 +61,8 @@ pub enum Level {
     WrongWay,
     /// The ship is blowing up.
     Exploding,
+    /// The weapon reticle has taken its lock.
+    LockedOn,
 }
 
 /// Which side of a condition a row watches.
@@ -148,7 +150,11 @@ pub const ROWS: &[Row] = &[
         "absorb_any_pickup_rumble",
         Set::Ps3,
     ),
-    own(Trigger::Cue(Cue::LockOn), "lockon_rumble", Set::Ps3),
+    own(
+        Trigger::Edge(Level::LockedOn, Edge::Rise),
+        "lockon_rumble",
+        Set::Ps3,
+    ),
     own(Trigger::Cue(Cue::Rocket), "rockets_fired_rumble", Set::Ps3),
     own(Trigger::Cue(Cue::Missile), "missile_fired_rumble", Set::Ps3),
     own(Trigger::Cue(Cue::Cannon), "cannon_fired_rumble", Set::Ps3),

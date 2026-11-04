@@ -2,8 +2,10 @@
 
 What the originals do with the controller's motors, per title. A wire lane should
 need nothing else. Built so far: the player and the device backend, the RUMBLE
-setting and a feel-test probe ([Player and device](#player-and-device)). **No race
-event fires a pattern yet.**
+setting and a feel-test probe ([Player and device](#player-and-device)), and the
+**event map** that fires patterns in an HD, Omega or 2048 race
+([Wired and unwired](#wired-and-unwired)). Pulse and Pure have no patterns of
+their own yet.
 
 Read 2026-11-04 from the executables and the assets, emulators off, so **nothing
 here has a runtime trace** and every score caps at 84. Where HD and Omega agree the
@@ -63,8 +65,10 @@ lowest priority of the five, even when it is lower itself. Then:
 
 - large motor: sum of the five, clamped to 255.
 - small motor, HD: **on if any of the five is non-zero**.
-- small motor, Omega: the sum, as bytes (1..5 of 255). Close to nothing on a
-  DualShock 4. **Differs from HD.**
+- small motor, Omega: the sum, as bytes (1..5 of 255), so the small motor alone
+  is faint on a DualShock 4. **Differs from HD.** The large motor carries the feel
+  (an explosion's large track is the whole rumble, and it feels good on an
+  8BitDo); the whole rumble is not near silent.
 
 **Local player only.** Every ship site tests `ship+0x628c == 0` (HD) or
 `ship+0x68fc == 0` (Omega) and goes to that ship's pad. Explosions and wall hits use
@@ -141,7 +145,7 @@ local player. "Omega" names the function holding the site.
 | 59 | `Ship_Exploding_Rumble` | ship explodes | **none** | `0x0130097e` | 65 |
 | 60 | `Ship_Exploding_Player_Rumble` | player ship explodes | **none** | `FUN_012ff700`, 4 sites | 70 |
 | 62, 63 | `side_shift_left`, `_right` | side shift | `0x000daeb8`, `0x000daef0` | `0x012f5f84`, `0x012f604c` | 78 |
-| 64 | `heartbeat` | three beats of a counter in `FUN_00055848`, via `Rumble_PlayOnLocalPads` | `0x000558dc` and 2 more | **none** | 60 |
+| 64 | `heartbeat` | one 14-frame pattern, fired three times by `FUN_00055848` off a counter, via `Rumble_PlayOnLocalPads` | `0x000558dc` and 2 more | **none** | 60 |
 
 **Loaded and never fired, in either binary**, from every call site of the four
 entry points (HD, confidence 75) and the ring walk (Omega, 70): 16
@@ -195,6 +199,64 @@ clears a timer, and 1.0 s later the armed value returns to 11. A stronger landin
 finishes the previous voice. Id 11 is why that slot has no file. The sign and unit of
 `v` are unread: if down is negative the table reads the other way.
 
+## Wired and unwired
+
+`oag_input::rumble::map` is the map, keyed by **our events** and by pattern
+**name**, never by title or id (`ROWS`, `UNFIRED`, the selectors in
+`oag_input::rumble::contact`). `oag_input::rumble::feed::Feed` turns a race's
+output into voices on one pad's `Player`; `oag_game::rumble::Rumbler` runs one
+per local person and writes each to the pad assigned to that person's slot. It
+reads the tick's cues **before** the sound drains them (`Race::pending_cues`),
+so one queue serves both, and it runs on every arm that ticks sound: racing,
+paused (patterns advance, output is zero) and finished.
+
+**The trigger sets.** `RUMBLE` = `PS3` fires HD's call sites, `PS4` adds Omega's
+(`Set::Ps4`: missile wall rebound 49, own-ship explosion 60). `Original` is the
+title's own (`oag_title::rumble::Triggers`) and drops a world event's position
+with one local person, so a wall hit or explosion measures from the world origin
+as the original's does; `PS3` and `PS4` pass the real position. A rival's
+event reaches no motor: craft cues test the cue's slot against the pad's ship;
+world cues (a point) reach every local pad, positioned from that pad's own ship.
+
+| Trigger class | Rows | Our event |
+| --- | --- | --- |
+| Edge, own ship | 12, 23, 28..36 | the `Cue` the sound already uses (27, the bomb, has none) |
+| Edge, world point | 49, 51, 53 | `PlasmaHitWall`, `RocketHitWall`, `MissileHitWall` at their impact point |
+| Level edge | 17, 20, 22, 56, 60 | wrong-way, mag strip rise and fall, the reticle taking its lock (the primary seat's `sight_state`), own explosion |
+| Held level | 21, 25, 47 | over a mag strip (finished on exit), Autopilot timer (finished), Leech beam on the ship (stopped) |
+| Selector | 0..6, 7..10 | the wall response's impulse and side; the downward speed at touchdown |
+
+**Chosen, not measured** (the originals' inputs are unread): the contact measure
+`m` is the wall response's `impulse_sum` (a head-on press reads about 100, a
+glancing scrape decays from 50 through the 2 to 55 bands, on HD's Talon's
+Junction); the side is which side of the craft the wall is on (left is negative);
+the landing `v` is the downward speed of the last airborne tick, fired on the
+tick the craft becomes grounded; `Plasma_Fired` rides the press (`Cue::Plasma`),
+not the release; the Leech row holds for either end of a locked beam; the wrong-way
+edge is the telemetry predicate's, not the HUD warning's own delay. A hold the
+ring has no voice for is retried each tick while its level stays up.
+
+**Unfired, with the reason** (`map::UNFIRED`; the original never fires 16, 26, 45,
+46, 52, 54, 55, 57, 58, 61):
+
+| Pattern | Reason |
+| --- | --- |
+| `heartbeat` 64 | HD's counter in `FUN_00055848` is unread |
+| `pad_weapon` 13 | collecting a weapon pad raises no event |
+| `rlr_`/`lrl_barrell_roll` 14, 15 | the roll gesture arms timers; no single edge says which way |
+| `side_shift_left`/`_right` 62, 63 | same: no single edge says a shift started |
+| `turbo_start_rumble` 18, `turbo_fired_rumble` 24 | `Cue::Turbo` also fires for the perfect start, a speed pad and a roll payout, and the boost-start event is unread |
+| `fire_engine` 19 | no afterburner-ignition event |
+| `bomb_fired_rumble` 27, `bomb_explosion_rumble` 50, `mine_explosion_rumble` 48 | no bomb or mine-explosion cue |
+| `*_impact_rumble` 37..44 | a hit cue names the impact point and no victim, and the rows belong to the ship that was hit |
+| `ship_exploding_rumble` 59 | a rival's explosion needs a per-craft edge; only the local ship's is read |
+
+**2048 against Omega: ported.** 2048's own `<RumbleData>` files are byte-equal to
+Omega's and resolve through the same loader
+(`rumble_ground_truth::omega_and_2048_resolve_every_mapped_pattern_through_the_same_loader`);
+2048 reads none of them in the original, so it plays the default (`PS4`) set over
+its own files, **inherited from Omega**.
+
 ## PS2 Pulse
 
 A different system: one level, one timer, and two motors. Full reading on
@@ -232,7 +294,8 @@ Built on `oag_input::rumble` (`Player`, `MotorOutput`, `Mode`) and
 `ps4`. `original` is the booted title's own law (`oag_title::rumble::Rumble`: HD
 `OnOff`, Omega `Sum`) and is dropped from the row on Pulse, Pure and 2048
 (`Definition::drop_unavailable_rumble_original`). A title whose library is empty
-plays nothing at any value; nothing loads a library into a race yet.
+plays nothing at any value; a race loads the patterns the map fires from its
+archive (`oag_raceplay::rumble_library`, reported in the loader log).
 
 **Device limit, measured.** `gilrs` runs its force-feedback effects on a server
 thread that ticks every 50 ms. On a virtual `uinput` pad (Linux 7.2, `gilrs` 0.11.2)

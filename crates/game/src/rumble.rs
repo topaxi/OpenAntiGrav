@@ -285,5 +285,7 @@ fn levels_of(race: &Race, slot: usize) -> Levels {
         leech_beam: race.leach_beam_on(slot),
         wrong_way: race.wrong_way_for(slot),
         exploding: race.craft_destroyed(slot),
+        locked_on: slot == race.player_slot()
+            && race.sight_state() == oag_race::sight::State::Locked,
     }
 }
