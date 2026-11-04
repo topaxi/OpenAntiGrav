@@ -285,6 +285,28 @@ fn a_manifest_carries_icons_that_are_pngs_in_the_mod() {
 }
 
 #[test]
+fn a_manifest_carries_shaders_that_are_wgsl_or_wesl_in_the_mod() {
+    let text =
+        format!("{MANIFEST_TEXT}\n[shaders]\nglow = \"fx/glow.wgsl\"\nrim = \"fx/rim.wesl\"\n");
+    let parsed = Manifest::parse(&text, &|_| true).unwrap();
+    assert_eq!(parsed.shaders["glow"], "fx/glow.wgsl");
+    assert_eq!(parsed.shaders["rim"], "fx/rim.wesl");
+    let missing = Manifest::parse(&text, &|_| false).unwrap_err().to_string();
+    assert!(
+        missing.contains("not a .wgsl or .wesl in the mod"),
+        "{missing}"
+    );
+    let wrong = text.replace("glow.wgsl", "glow.png");
+    assert!(Manifest::parse(&wrong, &|_| true).is_err(), "only a shader");
+    assert!(
+        Manifest::parse(MANIFEST_TEXT, &|_| true)
+            .unwrap()
+            .shaders
+            .is_empty()
+    );
+}
+
+#[test]
 fn a_manifest_carries_effects_that_are_tomls_in_the_mod() {
     let text = format!("{MANIFEST_TEXT}\n[effects]\nspark = \"fx/spark.toml\"\n");
     let parsed = Manifest::parse(&text, &|path| path == "fx/spark.toml").unwrap();

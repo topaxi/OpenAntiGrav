@@ -99,6 +99,7 @@ pub(super) struct EffectsDrawn {
     clouds: Option<(oag_fx::cloud::Drawer, oag_fx::cloud::Drawn)>,
     weapon_quads: (oag_fx::weapon_quads::Drawer, oag_fx::weapon_quads::Drawn),
     mist: Option<(oag_fx::mist::Drawer, oag_fx::mist::Drawn)>,
+    mod_shaders: Option<(oag_fx::mod_shader::Drawer, oag_fx::mod_shader::Drawn)>,
     shadow: oag_render::shadow::Drawer,
 }
 
@@ -171,6 +172,11 @@ impl Scene {
                 .borrow()
                 .as_ref()
                 .map(|mist| (mist.drawer().clone(), mist.drawn())),
+            mod_shaders: self
+                .mod_shaders
+                .borrow()
+                .as_ref()
+                .map(|stage| (stage.drawer().clone(), stage.drawn())),
             shadow: self.shadow.borrow().drawer().clone(),
         }
     }
@@ -481,6 +487,9 @@ impl Recorder<'_> {
         for (beam, drawn) in effects.beams.iter().flatten() {
             beam.draw(render, *drawn);
         }
+        if let Some((stage, drawn)) = &effects.mod_shaders {
+            stage.draw_surfaces(render, drawn);
+        }
         if let Some((clouds, drawn)) = &effects.clouds {
             clouds.draw(render, *drawn);
         }
@@ -495,6 +504,9 @@ impl Recorder<'_> {
             mist.draw(render, *drawn);
         }
         effects.sparks.0.draw_flash(render, effects.sparks.1);
+        if let Some((stage, drawn)) = &effects.mod_shaders {
+            stage.draw_fill(render, drawn);
+        }
         oag_gpu::perfprobe::marks::mark(render, "end");
     }
 }

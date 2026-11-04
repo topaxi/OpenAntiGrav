@@ -60,7 +60,10 @@ pub use kind::CommandKind;
 pub use malformed::Malformed;
 pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS};
 pub use pickup::{Colour, Icon, ModIcon};
-pub use scene::MAX_FOV_OFFSET_DEG;
+pub use scene::{
+    MAX_BEAM_HALF_WIDTH, MAX_BEAMS_PER_TICK, MAX_FOV_OFFSET_DEG, MAX_SHADER_INDEX,
+    MAX_SHADER_PARAMS,
+};
 pub use sound::SoundMode;
 pub use tracking::{
     COURSE_LENGTH_AT, Course, TITLE_AT, TRACKING_AT, TRACKING_FIXED, TRACKING_FLAGS, TRACKING_LEN,
@@ -850,12 +853,16 @@ pub enum Command {
     },
     /// This tick, wash the slot's view with `rgba` over the whole picture (the alpha is
     /// the strength). Re-sent each tick it should hold; never hashed. The slot's own
-    /// view: a split-screen seat flown by that slot wears it, no other.
+    /// view: a split-screen seat flown by that slot wears it, no other. With a `shader`
+    /// the sending mod's shader draws the fill, handed `rgba` as its colour, in place of
+    /// the additive wash; one that did not load draws nothing.
     ScreenFill {
         /// The grid slot whose view is filled.
         slot: Slot,
         /// The colour, straight alpha.
         rgba: Rgba,
+        /// The shader, by its place in the mod's `[shaders]`, at most [`MAX_SHADER_INDEX`].
+        shader: Option<u16>,
     },
     /// This tick, widen (positive) or narrow (negative) the vertical field of view of the
     /// slot's view by `degrees`, in `[-MAX_FOV_OFFSET_DEG, MAX_FOV_OFFSET_DEG]`, before the
@@ -878,6 +885,35 @@ pub enum Command {
         index: u16,
         /// How far ahead along the circuit.
         distance: Distance,
+    },
+    /// This tick, draw a ribbon facing the camera from the craft in `slot` to the craft in
+    /// `to`, flat `rgba` or through the sending mod's shader. Re-sent each tick it should
+    /// hold; draws nothing while either craft is out of the world, or with a shader that
+    /// did not load. Never hashed. At most [`MAX_BEAMS_PER_TICK`].
+    DrawBeam {
+        /// The craft it starts at.
+        slot: Slot,
+        /// The craft it ends at, never `slot`.
+        to: Slot,
+        /// The colour, straight alpha.
+        rgba: Rgba,
+        /// Half its width in world units, above 0 and at most [`MAX_BEAM_HALF_WIDTH`].
+        half_width: f32,
+        /// The shader, by its place in the mod's `[shaders]`, at most [`MAX_SHADER_INDEX`].
+        shader: Option<u16>,
+    },
+    /// This tick, scalar `index` (its place in the shader's header, under
+    /// [`MAX_SHADER_PARAMS`]) of the sending mod's shader, as the view of `slot` draws it.
+    /// Re-sent each tick it should hold; unset, the header's default. Never hashed.
+    SetShaderParam {
+        /// The grid slot whose view reads it.
+        slot: Slot,
+        /// The shader, by its place in the mod's `[shaders]`.
+        shader: u16,
+        /// The scalar.
+        index: u8,
+        /// Its value, finite.
+        value: f32,
     },
     /// Play the sending mod's own sound number `index` (its place in `[sounds]`, name
     /// order) from the craft, placed like a title cue (positioned, HRTF and rear cue
@@ -938,6 +974,8 @@ impl Command {
             Self::ScreenFill { .. } => CommandKind::ScreenFill,
             Self::FovOffset { .. } => CommandKind::FovOffset,
             Self::FireModEffectAhead { .. } => CommandKind::FireModEffectAhead,
+            Self::DrawBeam { .. } => CommandKind::DrawBeam,
+            Self::SetShaderParam { .. } => CommandKind::SetShaderParam,
             Self::PlayModSound { .. } => CommandKind::PlayModSound,
         }
     }
@@ -971,6 +1009,8 @@ impl Command {
             | Self::ScreenFill { slot, .. }
             | Self::FovOffset { slot, .. }
             | Self::FireModEffectAhead { slot, .. }
+            | Self::DrawBeam { slot, .. }
+            | Self::SetShaderParam { slot, .. }
             | Self::PlayModSound { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
@@ -1048,9 +1088,11 @@ impl Command {
             Self::Transit { .. } | Self::ScaleSpeed { .. } | Self::ProbeClearance { .. } => {
                 motion::encode(self).unwrap_or_default()
             }
-            Self::ScreenFill { .. } | Self::FovOffset { .. } | Self::FireModEffectAhead { .. } => {
-                scene::encode(self).unwrap_or_default()
-            }
+            Self::ScreenFill { .. }
+            | Self::FovOffset { .. }
+            | Self::FireModEffectAhead { .. }
+            | Self::DrawBeam { .. }
+            | Self::SetShaderParam { .. } => scene::encode(self).unwrap_or_default(),
             Self::PlayModSound { .. } => sound::encode(self).unwrap_or_default(),
         };
         let mut record = [0; COMMAND_LEN];
@@ -1276,7 +1318,11 @@ impl Command {
             CommandKind::Transit | CommandKind::ScaleSpeed | CommandKind::ProbeClearance => {
                 return motion::decode(kind, slot, (arg, value, word));
             }
-            CommandKind::ScreenFill | CommandKind::FovOffset | CommandKind::FireModEffectAhead => {
+            CommandKind::ScreenFill
+            | CommandKind::FovOffset
+            | CommandKind::FireModEffectAhead
+            | CommandKind::DrawBeam
+            | CommandKind::SetShaderParam => {
                 return scene::decode(kind, slot, (arg, value, word));
             }
             CommandKind::PlayModSound => return sound::decode(slot, arg, word),

@@ -96,6 +96,7 @@ pub(super) mod on {
             strings: Arc::new(|_| Default::default()),
             icons: Vec::new(),
             effects: Vec::new(),
+            shaders: Vec::new(),
             sounds: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
@@ -814,6 +815,7 @@ colour = "#ff2010"
             &[source.clone()],
             "wipeout-pulse",
             None,
+            &Default::default(),
             &mut library,
             &mut |entry, name| match (entry, name) {
                 ("Track.vex", "spark.tga") => Ok(oag_fx::psys::sprite::Sprite {
@@ -863,6 +865,7 @@ colour = "#ff2010"
             &[other],
             "wipeout-pure",
             None,
+            &Default::default(),
             &mut oag_fx::psys::Library::new(),
             &mut |_, _| Err("none".to_string()),
             &mut Vec::new(),
@@ -1071,6 +1074,7 @@ mod triggers {
             strings: Arc::new(|_| Default::default()),
             icons: Vec::new(),
             effects: Vec::new(),
+            shaders: Vec::new(),
             sounds: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),

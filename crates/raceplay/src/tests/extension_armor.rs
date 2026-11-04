@@ -49,6 +49,7 @@ fn source(id: &str, body: &str) -> Source {
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
         effects: Vec::new(),
+        shaders: Vec::new(),
         sounds: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: Some(crate::extension_pickup::a_look()),

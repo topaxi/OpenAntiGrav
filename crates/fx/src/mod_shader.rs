@@ -16,8 +16,10 @@
 
 mod check;
 mod pipeline;
+mod ribbon;
 
 pub use pipeline::{Drawer, Drawn, Fill, Frame, Shader, Stage};
+pub use ribbon::ribbon;
 
 use serde::Deserialize;
 

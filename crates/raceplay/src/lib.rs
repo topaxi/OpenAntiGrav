@@ -209,6 +209,8 @@ pub mod extension_effects;
 #[cfg(feature = "extensions")]
 mod extension_pickup;
 #[cfg(feature = "view")]
+pub mod extension_shaders;
+#[cfg(feature = "view")]
 pub mod extension_sounds;
 pub mod extensions;
 mod field;

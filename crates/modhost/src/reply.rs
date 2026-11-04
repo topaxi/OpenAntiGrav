@@ -20,6 +20,7 @@ pub(crate) fn read(
     let mut route_seen = 0_u32;
     // One of each motion command a slot a tick (`transit`, `scale-speed`, `probe-clearance`).
     let mut motion_seen = [0_u32; 3];
+    let mut beams_seen = 0;
     let mut effects_seen = 0_usize;
     let mut hud_items = [0_usize; oag_ext_abi::MAX_CRAFTS];
     let mut commands = Vec::with_capacity(count);
@@ -150,6 +151,15 @@ pub(crate) fn read(
                     )));
                 }
             }
+            Command::DrawBeam { .. } => {
+                beams_seen += 1;
+                if beams_seen > oag_ext_abi::MAX_BEAMS_PER_TICK {
+                    return Err(Fault::Reply(format!(
+                        "more than {} draw-beam commands in one tick",
+                        oag_ext_abi::MAX_BEAMS_PER_TICK
+                    )));
+                }
+            }
             Command::Transit { slot, .. }
             | Command::ScaleSpeed { slot, .. }
             | Command::ProbeClearance { slot, .. } => {
@@ -188,6 +198,7 @@ pub(crate) fn read(
             | Command::GradeSky { .. }
             | Command::ScreenFill { .. }
             | Command::FovOffset { .. }
+            | Command::SetShaderParam { .. }
             | Command::Emit { .. } => {}
         }
         commands.push(command);

@@ -131,11 +131,8 @@ fn render(gpu: &Gpu, stage: &mut Stage, frame: &Frame<'_>) -> Vec<[u8; 4]> {
     gpu.device
         .poll(wgpu::PollType::wait_indefinitely())
         .unwrap();
-    let mapped = readback.slice(..).get_mapped_range();
-    mapped
-        .chunks_exact(4)
-        .map(|c| [c[0], c[1], c[2], c[3]])
-        .collect()
+    let mapped = readback.slice(..).get_mapped_range().unwrap();
+    mapped.as_chunks::<4>().0.to_vec()
 }
 
 fn at(texels: &[[u8; 4]], x: u32, y: u32) -> [u8; 4] {
