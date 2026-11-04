@@ -179,13 +179,49 @@ fn a_flat_frame_blooms_by_the_nested_sum() {
     let bright = GENEROUS.bright_pass([curved; 3])[0];
     assert!(bright > 0.01, "the fixture must clear the threshold");
     let bloom = GENEROUS.blend_up([bright; 4]);
-    let want = chain.params().composite.apply_with_bloom(0, curved, bloom, [0.5, 0.5]);
+    let want = chain
+        .params()
+        .composite
+        .apply_with_bloom(0, curved, bloom, [0.5, 0.5]);
     let want = (scanout_encode(want) * 255.0).round() as i32;
     let encoder = device.create_command_encoder(&Default::default());
     let got = i32::from(read_pixel(&device, &queue, encoder, &out, (8, 4))[0]);
     assert!((got - want).abs() <= 2, "drew {got}, the law says {want}");
     let plain = (scanout_encode(curved) * 255.0).round() as i32;
-    assert!(want > plain + 8, "the fixture must show the term: {want} against {plain}");
+    assert!(
+        want > plain + 8,
+        "the fixture must show the term: {want} against {plain}"
+    );
+}
+
+/// A resize to another shape rebuilds the levels and the composite reads the new ones: a
+/// flat frame still blooms by the same sum.
+#[test]
+fn a_resize_to_another_shape_keeps_the_bloom() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let mut chain = chain(&device, (16, 9), Some(GENEROUS));
+    let size = (16, 10);
+    chain.resize(&device, size);
+    assert!(chain.levels.as_ref().is_some_and(|l| l.fits(size)));
+    let out = output(&device, size);
+    let view = out.create_view(&Default::default());
+    let colour = 0.3_f32;
+    paint(&queue, &chain, size.0, colour, colour);
+    let mut encoder = device.create_command_encoder(&Default::default());
+    chain.run(&device, &queue, &mut encoder, &view, (0.0, 0.0), size, None);
+    queue.submit([encoder.finish()]);
+    let curved = Curve::fit(&chain.params(), colour).map(colour);
+    let bloom = GENEROUS.blend_up([GENEROUS.bright_pass([curved; 3])[0]; 4]);
+    let want = chain
+        .params()
+        .composite
+        .apply_with_bloom(0, curved, bloom, [0.5, 0.5]);
+    let want = (scanout_encode(want) * 255.0).round() as i32;
+    let encoder = device.create_command_encoder(&Default::default());
+    let got = i32::from(read_pixel(&device, &queue, encoder, &out, (8, 5))[0]);
+    assert!((got - want).abs() <= 2, "drew {got}, the law says {want}");
 }
 
 /// Bright pixels bleed over an edge into black, falling away from it; with no `Bloom`
@@ -253,6 +289,10 @@ fn a_split_view_blooms_alone() {
         let encoder = device.create_command_encoder(&Default::default());
         read_pixel(&device, &queue, encoder, &out, (x, 18))[0]
     };
-    assert_eq!(read(half + 1), 0, "the dark view reads none of its neighbour");
+    assert_eq!(
+        read(half + 1),
+        0,
+        "the dark view reads none of its neighbour"
+    );
     assert!(read(half / 2) > 0, "the bright view draws");
 }

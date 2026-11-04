@@ -161,7 +161,7 @@ impl Levels {
                 device,
                 "omega bloom pass",
                 wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                bytemuck::bytes_of(&StepUniform::zeroed_for_layout()),
+                bytemuck::bytes_of(&<StepUniform as bytemuck::Zeroable>::zeroed()),
             );
             let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("omega bloom pass"),
@@ -301,11 +301,5 @@ impl Levels {
                 rect,
             );
         }
-    }
-}
-
-impl StepUniform {
-    fn zeroed_for_layout() -> Self {
-        bytemuck::Zeroable::zeroed()
     }
 }

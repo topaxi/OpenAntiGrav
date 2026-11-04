@@ -410,7 +410,7 @@ executable registers (`FUN_015c1f20`) and this crate now reads:
 - `"Bloom.*"`, with `"BloomHDR.*"` and, in the patch, `"BloomVR.*"` - the bright pass
   (threshold, offset, scale, power, alpha scale) and `Blend factors`, four numbers
   (three under `BloomHDR`), read by `EnvSettings::bright_pass`. Not HD's
-  `HDR and Bloom.*`, which Omega's files also carry and its executable ignores.
+  `HDR and Bloom.*`, which Omega's registrar never names.
   Every circuit file authors `Bloom.*` whole; drawn by `oag_post::omega_tonemap`
   ([tonemap](../ghidra/functions/ps4-omega-eu/tonemap.md), "The bloom chain").
 

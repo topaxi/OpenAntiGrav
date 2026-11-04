@@ -191,9 +191,10 @@ impl Uniform {
                 p.composite.screen_tint[2],
                 0.0,
             ],
-            bright: p.composite.bloom.map_or([0.0; 4], |b| {
-                [b.threshold, b.offset, b.scale, b.power]
-            }),
+            bright: p
+                .composite
+                .bloom
+                .map_or([0.0; 4], |b| [b.threshold, b.offset, b.scale, b.power]),
             bloom_tap: [0.25 / view.rect.0 as f32, 0.25 / view.rect.1 as f32],
             bloom_uv: view.uv,
             bloom_scale: p.composite.bloom.map_or(0.0, |b| b.blend_factors[0]),

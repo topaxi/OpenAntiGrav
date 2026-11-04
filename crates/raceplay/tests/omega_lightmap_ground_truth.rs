@@ -80,7 +80,9 @@ fn every_circuit_authors_a_whole_bloom_block(archives: &mut oag_assets::Archives
     assert_eq!(names.len(), 38);
     let mut thresholds = Vec::new();
     for name in &names {
-        let bytes = archives.read_name(name).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let bytes = archives
+            .read_name(name)
+            .unwrap_or_else(|e| panic!("{name}: {e}"));
         let text = String::from_utf8(bytes).expect("text");
         let env = EnvSettings::parse(&text).expect("parses");
         let block = env
