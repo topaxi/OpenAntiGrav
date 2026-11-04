@@ -464,7 +464,7 @@ impl App {
             }
         );
 
-        Ok(Some(Session {
+        let mut session = Session {
             gpu,
             framebuffer,
             stage,
@@ -511,6 +511,7 @@ impl App {
             stalled: true,
             stutter: Default::default(),
             pause: oag_game::pause::State::Running,
+            rumbler: None,
             wall: 0.0,
             go_at: None,
             wall_origin: web_time::Instant::now(),
@@ -637,7 +638,10 @@ impl App {
                 error!("could not load pilots: {e:#}");
                 pilots::Roster::built_in()
             }),
-        }))
+        };
+        // A direct `--race` lands in a race without the load hand-over that arms it.
+        session.arm_rumble();
+        Ok(Some(session))
     }
 
     /// Waits for a conversion the window has outlived.
@@ -1052,6 +1056,7 @@ impl ApplicationHandler for App {
         // Every way out of the run ends here (window close, a menu's quit, a
         // quit from the race), so the playlist's place is saved once, whichever.
         if let Some(session) = self.state.as_mut() {
+            session.stop_rumble();
             session.controls.silence_motors();
             session.save_race_music();
             session.keep_campaign_position();

@@ -272,6 +272,8 @@ pub mod rocket_smoke;
 mod roll_payout;
 mod routes;
 #[cfg(feature = "view")]
+pub mod rumble_library;
+#[cfg(feature = "view")]
 mod scene;
 #[cfg(feature = "view")]
 pub mod scenery_fx;

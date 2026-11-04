@@ -96,6 +96,7 @@ impl Session {
         // menus - see `Session::launch_race`, which resets this for the same
         // reason on a fresh race.
         self.pause = oag_game::pause::State::Running;
+        self.arm_rumble();
         // The playlist's own resume: `pause_race_music` (called on the way
         // into the menus) saved the position and left `race_index` alone, so
         // this continues the same track rather than starting a new one - see

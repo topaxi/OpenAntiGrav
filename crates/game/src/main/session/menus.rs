@@ -143,6 +143,7 @@ impl Session {
     /// a rectangle. A stage that is not the front end leaves the menus where
     /// they are, which is what makes this safe to call from the frame loop.
     pub(crate) fn open_menus(&mut self) -> Result<()> {
+        self.stop_rumble();
         self.restore_campaign_home();
         let shell = self
             .shell

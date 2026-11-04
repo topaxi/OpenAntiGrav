@@ -3281,6 +3281,7 @@ version = "0.1.0"
 dependencies = [
  "gilrs",
  "log",
+ "oag-core",
  "oag-gameplay",
  "oag-tables",
  "winit",

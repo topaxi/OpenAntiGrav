@@ -942,6 +942,17 @@ impl Race {
         self.ship().physics.craft_state == oag_physics::CraftState::Destroyed
     }
 
+    /// Whether `slot`'s craft is blowing up: the level the pad's explosion
+    /// pattern rises on.
+    #[must_use]
+    pub fn craft_destroyed(&self, slot: usize) -> bool {
+        self.sim
+            .world
+            .ships
+            .get(slot)
+            .is_some_and(|ship| ship.physics.craft_state == oag_physics::CraftState::Destroyed)
+    }
+
     /// Whether an Autopilot pickup is currently active under a person this
     /// machine's speakers are for ([`Self::heard_here`]).
     ///

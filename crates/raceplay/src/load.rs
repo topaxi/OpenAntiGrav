@@ -894,6 +894,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     #[cfg(feature = "view")]
+    let rumble = crate::rumble_library::load(&mut archives, &mut report);
+    #[cfg(feature = "view")]
     let track_emitters = audio::track_emitters(
         &mut archives,
         title.race.sounds,
@@ -1259,6 +1261,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             announcer,
             #[cfg(feature = "view")]
             class_announcer,
+            #[cfg(feature = "view")]
+            rumble,
             zone_stages: title.race.zone_stages,
             countdown_voice: title.race.countdown_voice.is_some(),
             countdown_beat: title

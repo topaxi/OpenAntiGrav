@@ -719,6 +719,7 @@ impl Session {
                 Some(mode) => {
                     self.settings.controls.rumble = mode.name().to_string();
                     self.controls.silence_motors();
+                    self.arm_rumble();
                 }
                 None => {
                     warn!("ignoring {setting} = {text:?}: not none, original, ps3 or ps4");

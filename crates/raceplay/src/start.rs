@@ -86,6 +86,8 @@ impl Race {
             announcer,
             #[cfg(feature = "view")]
             class_announcer,
+            #[cfg(feature = "view")]
+            rumble,
             zone_stages,
             countdown_voice,
             countdown_beat,
@@ -770,6 +772,7 @@ impl Race {
                 announcements: Vec::new(),
                 class_announcements: Vec::new(),
                 contact_cue_cooldown: [0.0; oag_gameplay::MAX_SHIPS],
+                wall_contact: [None; oag_gameplay::MAX_SHIPS],
                 // Every pad starts due for a real test. `Pad_Bind` zeroes the same
                 // cache at load, so the first tick measures rather than trusting a
                 // distance nothing has computed yet.
@@ -901,6 +904,7 @@ impl Race {
                 track_emitters,
                 announcer,
                 class_announcer,
+                rumble,
                 stage: psys::Stage::new(),
                 scenery_fx: super::scenery_fx::SceneryFx::new(scenery_fx),
                 engine_flare: [None; MAX_SHIPS],

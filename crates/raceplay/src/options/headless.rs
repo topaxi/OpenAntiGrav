@@ -196,6 +196,8 @@ impl Setup {
             announcer: oag_sound::sfx::Announcer::default(),
             #[cfg(feature = "view")]
             class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
+            #[cfg(feature = "view")]
+            rumble: oag_tables::rumble::Library::default(),
             zone_stages: None,
             countdown_voice: false,
             countdown_beat: false,

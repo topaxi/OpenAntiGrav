@@ -528,6 +528,20 @@ pub struct RaceSim {
     /// never re-arm. Render-side state, and out of the hash for the same
     /// reason. See [`Race::tick`], where the two are set side by side.
     pub(super) contact_cue_cooldown: [f32; oag_gameplay::MAX_SHIPS],
+    /// This tick's wall contact per craft, for the pad: the contact's size and
+    /// its side, `None` with no contact. A per-tick output beside
+    /// [`Self::cues`], out of the hash; see [`Race::wall_contact_of`].
+    pub(super) wall_contact: [Option<WallContactReading>; oag_gameplay::MAX_SHIPS],
+}
+
+/// One craft's wall contact this tick, as the pad reads it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WallContactReading {
+    /// The contact's size: the impulse the wall response applied
+    /// (`WallResponse::impulse_sum`).
+    pub size: f32,
+    /// Negative when the wall is on the craft's left.
+    pub side: f32,
 }
 
 impl RaceSim {
