@@ -350,7 +350,7 @@ fn option_reader() -> crate::extensions::Source {
 fn a_race_hands_its_module_the_picks_its_source_carries() {
     for pick in [0u8, 1, 2] {
         let mut source = option_reader();
-        source.options = [pick, 0, 0, 0];
+        source.options = crate::extensions::Picks::all_sim([pick, 0, 0, 0]);
         let mut race = super::extensions::grid(prepared_for("wipeout-pulse", &[source]));
         race.tick(&oag_gameplay::PlayerInputs::none());
         assert_eq!(race.sim.extensions.blob_for_tests(0)[0], pick);

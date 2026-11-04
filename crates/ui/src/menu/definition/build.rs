@@ -393,6 +393,7 @@ impl Definition {
             values: Vec::new(),
             values_from: None,
             default: None,
+            scope: None,
             button: None,
             disabled_by: None,
             pinned: None,

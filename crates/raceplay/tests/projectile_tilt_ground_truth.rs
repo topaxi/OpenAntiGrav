@@ -85,7 +85,10 @@ fn start(image: &str, track: &str) -> Option<race::Race> {
     })
     .expect("loading the race");
     // The ride law is judged on the line the shots were measured on; the launch boost, which
-    // every title that authors it now flies, moves where the autopilot fires.
+    // every title that authors it now flies, moves where the autopilot fires. With it
+    // on, HD's Plasma reads 2.37 against 2.0: a reattach ripple over a dip in the road
+    // that falls outside the settling window (`docs/gameplay/projectile-floor.md`,
+    // "HD Plasma, launch boost on").
     loaded.setup.start_boost = None;
     Some(race::Race::start(loaded.setup))
 }

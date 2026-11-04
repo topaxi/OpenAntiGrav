@@ -194,12 +194,16 @@ the main view's camera history from the secondary view moves 0.22, which is what
 
 A mod's own choice row reaches its guest as `Observation::option(n)` (`oag_ext_abi::OPTIONS_AT`, four
 bytes after the aiming matrix): the index of the pick in the row's `values`, rows in the order of the
-mod's `menu.toml` (`oag_game::mod_extensions::options_of`, `Source::options`). It is a drawn choice: a
-guest must not let it steer the rules. `oag.slipstream` reads it as Low (no view, the shader's own
-surface), Medium (`ViewUpdate::Once`, one generation a portal) or High (`Continuous`), default High, and
-sends the same transit, fill and sounds at all three (`tests::extension_slipstream`). Online, a server's
-guest sees no client's pick (no settings are read there); the view is drawn client-side only, so nothing
-simulated differs.
+mod's `menu.toml` (`oag_game::mod_extensions::options_of`, `Source::options`, a `Picks`). It is a drawn choice: a
+guest must not let it steer the rules: the row is declared `scope = "view"` (`hooks.md`, "Picks: sim and
+view"), so the simulation call reads the row's default (High) on every device and only a second,
+outputs-only call reads this device's pick. `oag.slipstream` reads it as Low (no view, the shader's own
+surface), Medium (`ViewUpdate::Once`, one generation a portal) or High (`Continuous`) and sends the same
+transit, fill and sounds at all three (`tests::extension_slipstream`). The guest's own read
+(`Quality::of(obs.option(0))`) did not move: the `generation` it sends is state, not a function of the
+pick. A server's guest reads High and no device draws there. Frames on Pulse PSP EU `16_Track`, tick 534 after
+a fire at 520, low / medium / high differ and High shows the road through the window
+(`tests::extension_picks`).
 
 ## Builds
 

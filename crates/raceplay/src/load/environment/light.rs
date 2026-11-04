@@ -193,6 +193,7 @@ pub(in crate::load) fn envsettings_tonemap(
         source_end_b: t.source_colour_end_b,
         start_angle: t.start_angle,
         end_angle: t.end_angle,
+        composite: omega_composite(&env, &name, report),
     };
     report.push(format!(
         "{name}: Tonemap applied - exposure ({:.3} + {:.3} LAvg) / LAvg in {:.2}..{:.2}, \
@@ -211,4 +212,29 @@ pub(in crate::load) fn envsettings_tonemap(
         params.end_angle,
     ));
     Some(params)
+}
+
+/// The composite's disc-authored terms: the `Vignette.*` keys. `ColorScale`
+/// and `ScreenTint` rest at `(1, 1, 1)` and zero (`colorscale.md`). A file with
+/// no vignette draws none, and says so. `Bloom.*` is authored too and is not
+/// drawn: its chain is unread (`tonemap.md`, "Open").
+fn omega_composite(
+    env: &EnvSettings,
+    name: &str,
+    report: &mut Vec<String>,
+) -> oag_post::omega_tonemap::Composite {
+    use oag_tables::envsettings::{VIGNETTE_INNER_RADIUS, VIGNETTE_OUTER_INTENSITY};
+    let (Some(inner), Some(outer)) = (
+        env.scalar(VIGNETTE_INNER_RADIUS),
+        env.scalar(VIGNETTE_OUTER_INTENSITY),
+    ) else {
+        report.push(format!(
+            "{name}: no Vignette block; the composite draws no vignette"
+        ));
+        return oag_post::omega_tonemap::Composite::NONE;
+    };
+    report.push(format!(
+        "{name}: composite vignette inner radius {inner:.3}, edge intensity {outer:.3};          bloom and the low-resolution additive layer not drawn (the bloom chain is unread)"
+    ));
+    oag_post::omega_tonemap::Composite::at_rest(inner, outer)
 }

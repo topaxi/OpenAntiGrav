@@ -160,12 +160,9 @@ guest as `Observation::option` (new ABI bytes, `mod-shaders.md` "A mod's quality
    progress reaches the entrance (see item 6).
 2. **A queued fire whose clearance fails at its turn is dropped** (the pickup is kept), where a Quake's armed
    press stays armed. Chosen, kept.
-3. **Online a server's guest has no pick**: settings are not read there; only drawn outputs depend on it.
+3. ~~Online a server's guest has no pick~~: a `view` row reads its default there by construction; a `sim` pick has no receiver yet, as no network race runs a guest (`hooks.md`, "Picks: sim and view").
 4. 2048 and HD windows look like a continuation of the scene (the exit is two seconds on, same scenery).
-5. **`Observation::option` is not part of a race's identity.** A pick that changed the simulation would
-   split a replay, a LAN race or a server from the player's own run. Slipstream reads it for drawn outputs
-   only; the contract says nothing yet. Either state it on `hooks.md` or carry the picks with the replay and
-   the handshake.
+5. ~~`Observation::option` is not part of a race's identity~~: a menu row declares `scope = "sim"` or `"view"`; sim picks are in the state hash and the LAN fingerprint, view picks reach only a second, outputs-only call (`tests::extension_picks`). Open from it: carry sim picks in `RaceParams` once a network race loads modules; a MODDED race records no replay.
 6. ~~Question: should the firer see the window?~~ Done, the guest's approach phase. The portal and
    its sound open at the press, the craft keeps flying and goes through when its progress reaches
    the entrance (about 13 ticks at 500 km/h on Pulse's `16_Track`); the pickup is spent there, and the

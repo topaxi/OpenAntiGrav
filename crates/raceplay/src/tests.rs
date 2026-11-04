@@ -50,6 +50,8 @@ mod extension_faults;
 mod extension_odds;
 
 #[cfg(feature = "extensions")]
+mod extension_picks;
+#[cfg(feature = "extensions")]
 mod extension_pickup_kinds;
 #[cfg(feature = "extensions")]
 mod extension_shaders;

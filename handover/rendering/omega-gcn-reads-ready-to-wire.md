@@ -1,12 +1,12 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [omega]
-updated: 2026-11-02
-summary: "Omega GCN reads: tangent w is ±1 raw, hologram is HD law without /2, 1.07 composite adds ColorScale; three wiring lanes"
+updated: 2026-11-04
+summary: "Omega 1.07 composite: vignette, ColorScale, tint wired; open: the bloom chain behind BloomTexture, tint and ColorScale triggers"
 difficulty: medium (40)
 ---
 
-# Omega's shader reads are in; three are ready to wire
+# Omega's shader reads: two wired, the composite's bloom open
 
 2026-10-27, `gcn-operand-decoder`. `oag_rcs::gcn` decodes every GCN program Omega ships
 ([gcn.md](../../docs/formats/gcn.md); `cargo run -p oag-rcs --example gcn_dump`). Three HD findings that sat as
@@ -25,14 +25,14 @@ difficulty: medium (40)
    `output_scale` (0.5 only where `lit_output_halved` applies, unread on Omega, so its scale is 1.0). Pinned by
    `psp2_static_hologram_ground_truth` and `hd_static_hologram_lit_path` (both scales). No Omega Amphiseum reference frame
    exists. Evidence: hd-track-tone.md, "The Amphiseum hologram board", Omega paragraph.
-3. **The 1.07 composite** (post, `oag_post::omega_tonemap`). **Ready to wire with `ColorScale = (1, 1, 1)`** (the
-   patch's source global is initialised `(1,1,1,1)` and rests there; confidence 65; only a fade drives it lower, gate and
-   trigger unread). The patch moves `ScreenTint` outside the vignette and multiplies `ColorScale` in. Evidence:
-   [colorscale.md](../../docs/ghidra/functions/ps4-omega-eu/colorscale.md),
-   [tonemap.md](../../docs/ghidra/functions/ps4-omega-eu/tonemap.md), "Read with the decoder". **Not wireable yet:** `oag_post::omega_tonemap`
-   draws only the tone curve and the heat-haze offset; bloom, `ScreenTint` and the vignette are not drawn on Omega (its module
-   doc, "Bloom and the low-resolution additive layer ... not drawn here"), so `ColorScale = (1, 1, 1)` has nothing to scale.
-   Wire it with the composite's bloom, tint and vignette.
+3. **PARTLY DONE 2026-11-04 (`omega-composite`)** - **The 1.07 composite.** Wired: `ColorScale = (1, 1, 1)`, the circuit's
+   `Vignette.*` keys as the vignette and the tint (0 at rest) outside it, between the curve and the scanout encode
+   (`oag_post::omega_tonemap::law::Composite`; evidence [tonemap.md](../../docs/ghidra/functions/ps4-omega-eu/tonemap.md),
+   "The composite's constants"). **Left open: `Bloom` and `LowResAdditive`.** The disc authors `Bloom.*` (bright-pass,
+   `Blend factors`) but the chain behind `BloomTexture` is unread: read `FUN_0177fbc0` (the chain) and `FUN_016247c0` (its
+   targets), the bright-pass program by reflection names, the blur and per-level blend, level count and sizes. `BloomScale`
+   is level 0's `Blend factors` entry. Also open: what triggers `ScreenTint` above zero (the `s^5` flash writers) and the
+   `ColorScale` fade ([colorscale.md](../../docs/ghidra/functions/ps4-omega-eu/colorscale.md)).
 
 ## Later
 

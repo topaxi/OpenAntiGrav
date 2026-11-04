@@ -135,7 +135,7 @@ mod with_modules {
             pickup: None,
             pickup_titles: Vec::new(),
             pickup_odds: Vec::new(),
-            options: [0; crate::extensions::OPTIONS],
+            options: Default::default(),
             channels: Declared {
                 publishes: publishes.iter().map(|s| (*s).to_string()).collect(),
                 listens: Vec::new(),
