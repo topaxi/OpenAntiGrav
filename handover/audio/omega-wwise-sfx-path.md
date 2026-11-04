@@ -3,7 +3,7 @@ status: re-first
 titles: [omega]
 size: M (55)
 difficulty: medium (50)
-updated: 2026-11-02
+updated: 2026-11-04
 summary: "Omega start plays Wwise events; random/switch containers are read and the missile launch loads; the cue table and the player _PC event are next"
 ---
 
@@ -53,6 +53,8 @@ cue still goes through the `SBlk` loader and is silent. The start is audible: `c
   request carries 23999.0, 0.0005 and 0.4 at `+0x0c`, `+0x10`, `+0x1c` (23999.0 matches `AudioConfig.xml`'s
   `DistanceFilter near_cutoff`, a hypothesis); each sound's 3D and bus parameters are in the unread part of the
   node's base parameters. Pan the countdown as 2D until read.
+- **Pass-bys and one NPC engine layer pick by the built-in Azimuth and Distance** (a switch or an RTPC; the engine computes them from the
+  listener): [audio-3d.md](../../docs/ghidra/functions/ps4-omega-eu/audio-3d.md), "Front and back are authored". Their playback needs these.
 - **The patch's countdown group** (race manager `+0x1aff0`) has an unread player byte; harmless, the `_PC` twin
   relays to the same event.
 - **1,450 dangling `Play` targets** ([wwise.md](../../docs/formats/wwise.md#where-the-references-go)) are not

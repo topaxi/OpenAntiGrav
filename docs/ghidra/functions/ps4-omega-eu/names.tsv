@@ -170,3 +170,13 @@
 0x01a15700	data	g_shipshield_activation_colour	85	shield.md
 0x01a15710	data	g_shipshield_hit_colour	85	shield.md
 0x012d8e30	function	HandlingStats_ParseXml	75	weapon-counts.md
+0x01777a10	function	SoundMastering_ApplyPreset	82	audio-3d.md
+0x01779510	function	Sound_SyncSurroundState	82	audio-3d.md
+0x017783e0	function	Sound_PostSetState	75	audio-3d.md
+0x01731b50	function	SoundManager_Update	80	audio-3d.md
+0x01738090	function	AudioConfig_Load	84	audio-3d.md
+0x011f3130	function	SceAudio3dSink_Init	82	audio-3d.md
+0x011f1a80	function	SceAudio3dMixer_Execute	75	audio-3d.md
+0x010976a0	function	Wwise_RegisterGameObj	80	audio-3d.md
+0x01092890	function	Wwise_SetListenerPosition	80	audio-3d.md
+0x01092460	function	Wwise_SetPosition	78	audio-3d.md

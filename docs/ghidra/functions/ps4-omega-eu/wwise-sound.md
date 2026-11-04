@@ -248,5 +248,5 @@ at tick 91 and Go at 271) rises at 1.50 s, then 2.0, 2.9 and 3.6 s (the VO's thr
 * **Seek and Stop layouts are fitted** on the countdown's two seeks and one stop (`hirc::Seek`, `prop`):
   confidence 65. `0x1204` (`SetState`) in `Go_NGP` sets a state nothing here reads.
 * **Positioning.** The request's 23999.0, 0.0005 and 0.4, and each sound's 3D parameters (unread base
-  parameters), decide pan and attenuation. The countdown plays on the speech manager's group, which no code
+  parameters), decide pan and attenuation. What runs per frame, and what the patch's 3D audio is: [audio-3d.md](audio-3d.md). The countdown plays on the speech manager's group, which no code
   read here positions.
