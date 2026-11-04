@@ -73,6 +73,7 @@ impl Scene {
     pub(super) fn encode_lens_flare(
         &self,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
     ) {
@@ -82,6 +83,7 @@ impl Scene {
         if let Some(pipeline) = self.lens_flare.borrow().as_ref() {
             pipeline.encode(
                 device,
+                queue,
                 encoder,
                 view,
                 &self.attachment_views.depth,

@@ -150,7 +150,7 @@ impl Scene {
     ) -> (bool, bool) {
         let mut hd_bloom_encoded = false;
         // The sun flare draws over the resolved scene, ahead of every post pass and the HUD.
-        self.encode_lens_flare(device, encoder, view);
+        self.encode_lens_flare(device, queue, encoder, view);
         let depth_view = &self.attachment_views.depth;
         let velocity_view = &self.attachment_views.velocity;
 
