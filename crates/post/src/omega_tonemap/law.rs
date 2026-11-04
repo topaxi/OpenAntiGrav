@@ -210,7 +210,7 @@ impl Composite {
     }
 
     /// The shader's `(a, b)` in `sat(a + b * |uv - 0.5|^2)`, as
-    /// `Environment_ApplyBloomVignette` (`FUN_01625490`) writes them to
+    /// `FUN_01625490` writes them to
     /// `DAT_01fc7c30`: `b = (intensity - 1) / (0.25 - r^2)`, `a = 1 - b r^2`.
     /// A radius of 0.5 or more would divide by zero or flip the sign; the
     /// executable has no guard and no circuit authors one, so it draws no
