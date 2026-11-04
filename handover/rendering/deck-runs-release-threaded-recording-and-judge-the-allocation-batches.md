@@ -22,7 +22,7 @@ run there (glibc): build in the `oag-appimage-build:bookworm` container with
 `--no-default-features --features extensions,dev-cli`. fps paces near 102 (split) and 120 (one view)
 and 4K is GPU-bound, so judge CPU by mean `total` from `frame-phases`, and say when fps is pacing.
 
-The harnesses and full commands are on the lead's notebook, gitignored, under `data/scratch/lf/`:
+The harnesses and full commands are on the lead's notebook, gitignored, in its scratch directory `lf`:
 `split-threaded-plan.md` ("Ready-to-run Deck block"), `batch2-plan.md` ("Steam Deck"),
 `gpu-report.md` ("Deck block", once that lane reports). On the Deck: `~/oag-perf/split-threaded/`
 (`cell.sh`, `run.sh`, `avg.sh`, `xdg/`) and `~/oag-perf/batch1/` (`all.sh`, `abba.sh`, `freq.sh`).
