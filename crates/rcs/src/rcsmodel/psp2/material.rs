@@ -518,6 +518,13 @@ fn u32_at(cpu: &[u8], at: usize) -> Option<u32> {
         .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
 }
 
+/// Whether a string starts at `at`: the byte before it is `0`, or it is the section's first.
+/// A word that merely holds an address inside a longer path would otherwise read back as a
+/// truncated path no material names.
+fn starts_a_string(cpu: &[u8], at: usize) -> bool {
+    at == 0 || at.checked_sub(1).and_then(|i| cpu.get(i)) == Some(&0)
+}
+
 /// Every distinct `.gxt` path a word-aligned pointer inside `[from, to)`
 /// resolves to, in ascending address order - see the module doc.
 fn textures_in(cpu: &[u8], from: usize, to: usize) -> Vec<String> {
@@ -526,6 +533,7 @@ fn textures_in(cpu: &[u8], from: usize, to: usize) -> Vec<String> {
     let mut at = from;
     while at + 4 <= to {
         if let Some(target) = u32_at(cpu, at)
+            && starts_a_string(cpu, target as usize)
             && let Some(path) = cstr_at(cpu, target as usize)
             && ends_with_ci(&path, ".gxt")
             && !out.contains(&path)
