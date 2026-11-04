@@ -11,6 +11,8 @@
 
 use oag_tables::rumble::{Class, Library, Pattern, Priority};
 
+pub mod map;
+
 /// How the small motor reads the mixed voices' small tracks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SmallMotor {
