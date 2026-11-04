@@ -579,6 +579,7 @@ impl Scene {
         let crate::adverts::Billboards { gantry, adverts } = billboards;
         let cache_scope = mesh_render::BuildCacheScope::open();
         cache_scope.lit_by(&light);
+        cache_scope.zoned(zone_grade.is_some());
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or
         // waste the depth range on empty space.

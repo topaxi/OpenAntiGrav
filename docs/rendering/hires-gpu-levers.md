@@ -312,6 +312,30 @@ binary's gap between the Intel and NVIDIA GPUs is 0.008 rmse in the mean and up 
 which this split should lower for the plain half; the win there is **an estimate** until the Deck
 block (`RADV_DEBUG=shaderstats` and the span bench) has run.
 
+#### The rig and the Zone recolour fold where the race has neither (2026-11-04, `lf`)
+
+`scene.light.enabled` is 0 for a whole race on every circuit with no `.envsettings` (Pulse, Pure),
+and `scene.zone.enabled` is 0 for every race with no Zone grade, but both are uniforms, so every
+pipeline kept both paths' registers and fetches. `BuildCacheScope` pins two overrides to 0, as it
+does `nova_prelit`: `light_rig` from `lit_by` and `zone_race` from `zoned`, and `lit_texel` reads a
+constant zero for them. Neither moves mid-race: `ZoneGrade::light` hands a stand-in back untouched
+and nothing else writes the scene's light; a race with no grade writes a zero `Zone`.
+
+| Intel ARL iGPU, us, medians, 1080p, 3 rounds, load 2 to 5 | before | after | from before this lane's folds |
+|---|---:|---:|---:|
+| Pulse `track solid, shaded` | 1,350 | 887 (-34 %) | 1,707 to 887 (-48 %) |
+| Pulse race pass | 2,614 | 1,944 (-26 %) | 3,177 to 1,944 (-39 %) |
+| Pulse `Scene::render GPU` | 4,955 | 4,224 (-15 %) | 5,563 to 4,224 (-24 %) |
+| HD `track solid, shaded` | 3,815 | 3,048 (-20 %) | 7,260 to 3,048 (-58 %) |
+| HD race pass | 6,187 | 5,340 (-14 %) | 9,702 to 5,340 (-45 %) |
+| HD `Scene::render GPU` | 11,570 | 10,667 (-8 %) | 15,655 to 10,667 (-32 %) |
+
+`INTEL_DEBUG=fs`: Pulse's largest fragment shader 1,858 to 1,431 instructions, and all 67 shaders
+now have a SIMD16 build (49 before; 29 before the emissive fold); HD's largest 4,849 to 4,343,
+spills 111 to 80. Picture: `cmp` equal against the commit before on the same nine shots, and on HD
+and Pulse Zone races (`--mode zone`, tick 2,400) against the binary from before this lane, which
+is the case the fold must not touch. Deck: not run, Deck unavailable.
+
 ### Lever 3, our 4K present against a 1080p gamescope window: dropped
 
 The Deck has no 4K display (`DP-1` disconnected), so the real output path was not measured. Per

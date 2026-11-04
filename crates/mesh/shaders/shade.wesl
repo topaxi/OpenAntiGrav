@@ -10,7 +10,7 @@ import package::holo::{holo_billboard};
 import package::hull_normal::{hull_normal};
 import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encoded_out, linear_out, square_decode};
-import package::shading_modes::{colour_is_light, nova_prelit};
+import package::shading_modes::{colour_is_light, light_rig, nova_prelit, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, sample_at_slope_level, texlod_bias, texlod_slope};
 import package::types::{VertexOutput};
@@ -68,6 +68,8 @@ override slots_present: u32 = 4294967295u;
 fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     var in = raw;
     in.slots = raw.slots & slots_present;
+    let rig_on = select(0.0, scene.light.enabled, light_rig != 0.0);
+    let zone_on = select(0.0, scene.zone.enabled, zone_race != 0.0);
     // The `bindless` variant: this draw's slot of each group 1 array, under the
     // names the per-draw variant binds them by - see `bindings.wesl`.
     @if(bindless) {
@@ -189,7 +191,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     var sun_light = vec3<f32>(0.0);
     var mask = 0.0;
     var emissive = false;
-    if scene.light.enabled != 0.0 {
+    if rig_on != 0.0 {
         let atlas = material_sample(MATERIAL_LIGHTMAP, in.lightmap_texcoord.xy);
         let baked = select(
             vec4<f32>(0.0, 0.0, 0.0, 1.0),
@@ -813,7 +815,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // combine below, stay off. The condition is a branch and not a mix so the
     // Time Trial picture is untouched to the byte.
     var mag_glow = decode(cell_picture);
-    if (in.slots & 131072u) != 0u && !is_cell && scene.zone.enabled == 0.0 {
+    if (in.slots & 131072u) != 0u && !is_cell && zone_on == 0.0 {
         let e = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         let w = material_sample(MATERIAL_WAVE_MAP, in.texcoord * glow_scale.x + vec2<f32>(scene.time.x * glow_scale.y),
         );
@@ -835,7 +837,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // **Not in a Zone race**: every Zone variant of `cf_chevron_pulse` (blocks #15-#34, #45-#64,
     // #75-#93) declares neither the emask nor the wave, as the magstrips' do not (`mag_glow`).
     let chevron = (in.slots & 2147483648u) != 0u && glow_program > 2.5 && glow_program < 3.5
-        && scene.zone.enabled == 0.0;
+        && zone_on == 0.0;
     var chevron_surface = vec3<f32>(0.0);
     var chevron_glow = vec3<f32>(0.0);
     if chevron {
@@ -865,14 +867,14 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // mix weights and not to the `enabled` branch below, which has to stay uniform.
     let zone_entry = (in.slots >> 24u) & 127u;
     let zone_weight = select(
-        scene.zone.enabled,
+        zone_on,
         0.0,
         zone_entry != 0u && row_scale.y > 3.5 && row_scale.y < 7.5,
     );
     var zone_linear = vec3<f32>(0.0);
     var zone_gamma = vec3<f32>(0.0);
     var zone_glow_term = vec3<f32>(0.0);
-    if scene.zone.enabled != 0.0 {
+    if zone_on != 0.0 {
         let zone_to_eye = normalize(scene.fog.camera - in.world);
         let zone_colours = zone_set(in.slots, in.world);
         let zone_base = zone_base_term(1.0 - dot(n, zone_to_eye), zone_colours);
@@ -905,7 +907,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     var authored_rgb = vec3<f32>(0.0);
     // What the sun adds to `authored_rgb`, in its output space.
     var sun_removed = vec3<f32>(0.0);
-    if scene.light.enabled != 0.0 {
+    if rig_on != 0.0 {
         let half_vector = to_eye + scene.light.direction;
         let ndh = clamp(
             dot(half_vector, n_lit) / max(length(half_vector), 1e-6),
@@ -957,7 +959,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         }
         let specular = scene.light.sun
             * (pow(ndh, specular_exponent) * ndl_spec * mask * specular_mask * scene.light.specular_scale
-                * scene.light.enabled * in.lit * select(1.0, 0.0, emissive))
+                * rig_on * in.lit * select(1.0, 0.0, emissive))
             * specular_tint
             * select(vec3<f32>(1.0), in.colour.rgb, colour_factor)
             * select(1.0, 0.0, no_specular);
@@ -1222,7 +1224,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     }
 
     let shaded = vec4<f32>(
-        mix(plain_rgb, authored_rgb, scene.light.enabled * in.lit),
+        mix(plain_rgb, authored_rgb, rig_on * in.lit),
         texel.a * in.colour.a,
     );
     // **The facing-ramp combine replaces the generic rig entirely**, the
@@ -1238,7 +1240,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // is the glow entry's `offset`. Left out, named: the paraboloid
     // reflection term, which this renderer has no probe for.
     var mag_floor = shaded_or_sheen;
-    if (in.slots & 262144u) != 0u && scene.zone.enabled == 0.0 {
+    if (in.slots & 262144u) != 0u && zone_on == 0.0 {
         let grid = textureSample(albedo, albedo_sampler, in.texcoord).r;
         let ramp = textureSample(lightmap, albedo_sampler, ramp_uv).rgb;
         let loop_light = in.colour.rgb;
@@ -1520,7 +1522,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     shadow_exempt = select(
         0.0,
         1.0,
-        ramp_sheen || ((in.slots & 262144u) != 0u && scene.zone.enabled == 0.0),
+        ramp_sheen || ((in.slots & 262144u) != 0u && zone_on == 0.0),
     );
     if !(rim_glow_on || rim_edge_on) {
         // **Only where the colour returned is still the generic combine's**, which is
@@ -1531,12 +1533,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // `shadowed` falls back to its multiply for them. Their own `ShadowToAlpha`
         // programs are unread.
         let generic_combine = !ramp_sheen
-            && !((in.slots & 262144u) != 0u && scene.zone.enabled == 0.0)
+            && !((in.slots & 262144u) != 0u && zone_on == 0.0)
             && (in.slots & 524288u) == 0u
             && flame_shading == 0.0
             && absorb_shading == 0.0;
-        if generic_combine && scene.light.enabled != 0.0 {
-            sun_delta = scene.light.enabled * in.lit * sun_removed;
+        if generic_combine && rig_on != 0.0 {
+            sun_delta = rig_on * in.lit * sun_removed;
             sun_known = 1.0;
         }
         // `grade-sky`: the sky draw only, and only when a track module asked, so every
