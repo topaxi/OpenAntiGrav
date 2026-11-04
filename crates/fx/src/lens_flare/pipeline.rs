@@ -5,13 +5,24 @@
 //! it is attached. The 16 samples are `textureLoad`s in the vertex stage (sample 0
 //! under MSAA), so nothing is read back to the CPU and the GPU never stalls.
 
+use super::{Atlas, Placement, RINGS};
 use oag_mesh::mesh_render::fragment_options;
 use wgpu::util::DeviceExt;
 
-use super::{Atlas, Placement, RINGS};
-
 /// Bytes of the frame uniform: one `vec4` and ten rings of three `vec4`s.
 const UNIFORM_LEN: usize = 16 + RINGS * 48;
+
+/// The frame uniform and the bind group over it, kept between draws.
+///
+/// The group binds the depth view, so it lives only as long as that view: a resize makes a
+/// new one and the slot is rebuilt on the next draw. Every view of a split submits on its own,
+/// and a queue write lands before its submission's commands, so one buffer serves all of them.
+#[derive(Debug)]
+struct Slot {
+    uniforms: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+    depth: wgpu::TextureView,
+}
 
 /// The flare's pipeline and its atlas.
 #[derive(Debug)]
@@ -20,6 +31,7 @@ pub struct Pipeline {
     layout: wgpu::BindGroupLayout,
     atlas: wgpu::TextureView,
     sampler: wgpu::Sampler,
+    slot: std::cell::RefCell<Option<Slot>>,
 }
 
 impl Pipeline {
@@ -167,61 +179,44 @@ impl Pipeline {
             layout,
             atlas: texture.create_view(&wgpu::TextureViewDescriptor::default()),
             sampler,
+            slot: std::cell::RefCell::new(None),
         })
     }
 
     /// Records the flare of `placement` over `target`, sampling `depth` for the sun's
     /// occlusion. The pass is clipped to the placement's viewport so a split screen's
-    /// flare stays in its own view. A small uniform is made per call: one view's draw
-    /// shares nothing with another's.
+    /// flare stays in its own view. The uniform is written through `queue` into a buffer
+    /// kept between calls: a caller draws one view per submission, as a split does.
     pub fn encode(
         &self,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
         depth: &wgpu::TextureView,
         placement: &Placement,
     ) {
-        let mut words: Vec<f32> = Vec::with_capacity(UNIFORM_LEN / 4);
-        words.extend([
+        let mut words = [0.0_f32; UNIFORM_LEN / 4];
+        words[..4].copy_from_slice(&[
             placement.sun_pixel[0],
             placement.sun_pixel[1],
             placement.pixel_scale,
             0.0,
         ]);
-        for ring in &placement.rings {
-            words.extend(ring.centre);
-            words.extend(ring.half);
-            words.extend(ring.rgba);
-            words.extend([f32::from_bits(u32::from(ring.cell)), 0.0, 0.0, 0.0]);
+        let (rows, _) = words[4..].as_chunks_mut::<12>();
+        for (ring, out) in placement.rings.iter().zip(rows) {
+            out[0..2].copy_from_slice(&ring.centre);
+            out[2..4].copy_from_slice(&ring.half);
+            out[4..8].copy_from_slice(&ring.rgba);
+            out[8] = f32::from_bits(u32::from(ring.cell));
         }
-        let uniforms = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("lens flare"),
-            contents: bytemuck::cast_slice(&words),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("lens flare"),
-            layout: &self.layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniforms.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&self.atlas),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(depth),
-                },
-            ],
-        });
+        let mut slot = self.slot.borrow_mut();
+        if slot.as_ref().is_none_or(|slot| slot.depth != *depth) {
+            *slot = Some(self.make_slot(device, depth));
+        }
+        let slot = slot.as_ref().expect("the slot was just made");
+        queue.write_buffer(&slot.uniforms, 0, bytemuck::cast_slice(&words));
+        let bind_group = &slot.bind_group;
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("lens flare"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -242,7 +237,46 @@ impl Pipeline {
         pass.set_viewport(x, y, w, h, 0.0, 1.0);
         pass.set_scissor_rect(x as u32, y as u32, w as u32, h as u32);
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_bind_group(0, bind_group, &[]);
         pass.draw(0..(RINGS * 6) as u32, 0..1);
+    }
+
+    fn make_slot(&self, device: &wgpu::Device, depth: &wgpu::TextureView) -> Slot {
+        let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("lens flare"),
+            size: UNIFORM_LEN as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let bind_group = oag_gpu::perfprobe::bind_group(
+            device,
+            &wgpu::BindGroupDescriptor {
+                label: Some("lens flare"),
+                layout: &self.layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: uniforms.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&self.atlas),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(depth),
+                    },
+                ],
+            },
+        );
+        Slot {
+            uniforms,
+            bind_group,
+            depth: depth.clone(),
+        }
     }
 }
