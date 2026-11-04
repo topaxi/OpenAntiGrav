@@ -357,6 +357,7 @@ impl Overlay {
         countdown: Option<&str>,
         viewport: (f32, f32, f32, f32),
     ) -> Vec<oag_hud::boost_smear::GlowStamp> {
+        oag_gpu::perfprobe::mark("hud-readout");
         let mut frame = if self.hud_shown {
             let cx = self.context();
             let mut list = draw_list(&cx, readout);
@@ -386,7 +387,9 @@ impl Overlay {
             );
         }
         let glow = frame.glow.clone();
+        oag_gpu::perfprobe::mark("hud-frame");
         self.paint(device, queue, encoder, view, frame, viewport);
+        oag_gpu::perfprobe::mark("hud-paint");
         glow
     }
 
@@ -411,6 +414,7 @@ impl Overlay {
         cut: oag_render::viewport::Cut,
         viewport: (f32, f32, f32, f32),
     ) -> Vec<oag_hud::boost_smear::GlowStamp> {
+        oag_gpu::perfprobe::mark("hud-readout");
         let count = readouts.len();
         let mut frame = if self.hud_shown {
             views_frame(&crate::hud_views::view_draws(
@@ -437,7 +441,9 @@ impl Overlay {
             ));
         }
         let glow = frame.glow.clone();
+        oag_gpu::perfprobe::mark("hud-frame");
         self.paint(device, queue, encoder, view, frame, viewport);
+        oag_gpu::perfprobe::mark("hud-paint");
         glow
     }
 
