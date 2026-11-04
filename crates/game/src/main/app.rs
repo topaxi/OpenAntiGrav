@@ -465,6 +465,7 @@ impl App {
         );
 
         let mut session = Session {
+            idle: Default::default(),
             gpu,
             framebuffer,
             stage,

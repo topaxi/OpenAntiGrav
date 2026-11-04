@@ -331,6 +331,12 @@ impl Session {
             if self.controls.pad_spoke() {
                 self.pointer.other_device();
             }
+            self.idle.update_window(
+                self.gpu.output.window.get(),
+                self.race_running(),
+                self.controls.pad_spoke(),
+                web_time::Instant::now(),
+            );
             // And the pointer's, on the same latch terms: one take per tick,
             // in window pixels until a stage says which grid it draws in.
             let pointer = self.pointer.take();
