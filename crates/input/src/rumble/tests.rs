@@ -68,11 +68,12 @@ fn large(levels: &[Motors]) -> Vec<u8> {
 #[test]
 fn the_ring_holds_twenty_voices_and_drops_the_twenty_first() {
     let mut p = player(vec![pattern(&[1; 10], &[])], SmallMotor::OnOff);
-    for i in 0..VOICES {
+    assert_eq!(VOICES, 20, "docs/gameplay/rumble.md: a ring of 20");
+    for i in 0..20 {
         assert!(p.one_shot(0, None), "voice {i}");
     }
     assert!(!p.one_shot(0, None), "all 20 busy: dropped");
-    assert_eq!(p.active_voices(), VOICES);
+    assert_eq!(p.active_voices(), 20);
     run(&mut p, RACE, 11);
     assert_eq!(p.active_voices(), 0);
     assert!(p.one_shot(0, None), "a free voice takes a request again");
