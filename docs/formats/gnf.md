@@ -514,6 +514,10 @@ a mean 5.5 per channel (BC1 on high-frequency grass), against 20.6 for the same 
 texels off, which a wrong tile order cannot beat; the base level read by eye is a coherent grass
 picture with no tile seams. `from_gnf` keeps the chain as `BlockFormat::Bc1` blocks.
 
+The same decode binds **203 more Omega normal maps** (`omega_normal_map_ground_truth.rs`: 24,590
+of 25,977 tangent-carrying submeshes drew with their normal map, 24,793 now, `unread` 203 to 0):
+those maps are micro-tiled BC1 too.
+
 2048 against Omega: **checked, differs.** 2048's Vita textures are `.gxt`, not `.gnf`; its
 terrain grass is a `.gxt` that already decodes (no `decode_refused` on a 2048 circuit).
 
