@@ -1398,5 +1398,18 @@ round-robin of base and the intermediate binaries put the medians at 417, 421, 4
 at 425 against 493. Vineta K runs items 6, 8, 9 and 11 of these (no hull shadow, no HUD in the
 bench), none of which adds work there; the Steam Deck run is what should settle it.
 
-**The Steam Deck was not measured for this batch** (the Deck was in use): the matrix and the
-harness are batch one's above, with the base at `cb561e9c6`.
+**The Steam Deck (2026-11-05): a small win.** `625d949d9` against `bb97e0a5b`, 3 rounds, Pure, Pulse
+PSP USA and HD Anulpha, one and two views, three sizes, mean `total` of `frame-phases` in a headless
+gamescope, ms:
+
+| | 1v 800p | 1v 1080p | 1v 4K | 2v 800p | 2v 1080p | 2v 4K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pure | 3.32 to 3.26 | 4.35 to 4.25 | 5.29 to 5.22 | 6.57 to 6.45 | 7.51 to 7.24 | 10.37 to 10.15 |
+| Pulse | 4.43 to 4.37 | 6.04 to 5.93 | 7.01 to 6.91 | 8.33 to 7.97 | 9.60 to 9.49 | 13.76 to 13.52 |
+| HD | 7.05 to 7.00 | 7.92 to 7.96 | 11.04 to 10.92 | 12.77 to 12.54 | 14.66 to 14.62 | 18.89 to 18.75 |
+
+Lower in 17 of 18 cells, by 0.04 to 0.37 ms; HD one view at 1080p reads +0.05, inside its rounds.
+Pulse two views at 800p gains 5 fps (117.7 to 123.0); elsewhere fps paces or the GPU holds it. The
+worst p99 is +0.47 ms at HD two views 4K, GPU-bound. Batch one's Pure two views 1080p, +0.27 ms over
+eight ABBA runs, is more than undone here (-0.27 ms). The Pure one view reading above is not a cost
+on the Deck.
