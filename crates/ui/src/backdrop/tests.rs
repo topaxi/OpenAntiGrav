@@ -102,8 +102,11 @@ fn the_frame_carries_the_pages_constants_at_1080_lines() {
         [-3.0, -0.25, -7.0]
     ));
     assert!((frame.fog_factors[3] - 0.3).abs() < 1e-6);
-    // `0.016 * 24 * 0.6` is over the `0.15` ceiling, so the cap is the ceiling.
-    assert_eq!(frame.source_max, [0.15; 3]);
+    assert_eq!(
+        (frame.glow_gain * 255.0).round() as u32,
+        5,
+        "the floor with the bands at zero: the byte RPCS3's stream carries"
+    );
     assert_eq!(frame.feedback, [0.6; 3]);
 }
 

@@ -82,8 +82,8 @@ impl MenuBackdrop {
     }
 
     /// The picture of a captured page: the model run `anim_seconds` in, with
-    /// the page's look fully eased in, sized to `viewport`. One frame, so the
-    /// Fury trail the live picture accumulates is not here.
+    /// the page's look fully eased in, sized to `viewport`. The Fury trail and
+    /// glow are [`Self::settle`]'s: this is the one frame after them.
     #[must_use]
     pub fn still(
         &self,
@@ -95,13 +95,7 @@ impl MenuBackdrop {
         let (_, _, w, h) = viewport;
         match self {
             Self::Fury(assets) => {
-                let mut model =
-                    oag_ui::backdrop::Fury::new(assets.settings.clone(), assets.first, fury::SEED)?;
-                if let Some(path) = fury_path {
-                    model.force_path(path)?;
-                }
-                let frames = (anim_seconds.unwrap_or(0.0).max(0.0)
-                    * oag_ui::backdrop::FRAMES_PER_SECOND) as u32;
+                let (mut model, frames) = assets.at_start(anim_seconds, fury_path)?;
                 for _ in 0..frames {
                     model.tick();
                 }
@@ -125,6 +119,39 @@ impl MenuBackdrop {
                 )))
             }
         }
+    }
+}
+
+impl MenuBackdrop {
+    /// Draws the frames leading up to [`Self::still`]'s, a still of a backdrop
+    /// that feeds back having no other way to come by its history. The scene
+    /// has none.
+    pub fn settle(
+        &self,
+        renderer: &mut Renderer,
+        (device, queue): (&wgpu::Device, &wgpu::Queue),
+        page: &str,
+        viewport: (f32, f32, f32, f32),
+        (anim_seconds, fury_path): (Option<f32>, Option<usize>),
+    ) {
+        let Self::Fury(assets) = self else {
+            return;
+        };
+        let Some((mut model, frames)) = assets.at_start(anim_seconds, fury_path) else {
+            return;
+        };
+        let (_, _, w, h) = viewport;
+        let tint = assets.tints.for_root(page == "main");
+        let history = frames.min(oag_ui::backdrop::FRAMES_TO_SETTLE);
+        for _ in 0..frames - history {
+            model.tick();
+        }
+        let leading_up = (0..history).map(|_| {
+            let frame = model.frame(h, w / h, tint);
+            model.tick();
+            frame
+        });
+        renderer.settle_fury_backdrop(device, queue, leading_up, (w as u32, h as u32));
     }
 }
 

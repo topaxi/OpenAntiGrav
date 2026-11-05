@@ -39,6 +39,24 @@ pub struct FuryAssets {
     pub first: usize,
 }
 
+impl FuryAssets {
+    /// A model on `fury_path`, or the picker's, at its first frame, and how
+    /// many frames `anim_seconds` runs it on. `None` for a path not authored.
+    pub(super) fn at_start(
+        &self,
+        anim_seconds: Option<f32>,
+        fury_path: Option<usize>,
+    ) -> Option<(oag_ui::backdrop::Fury, u32)> {
+        let mut model = oag_ui::backdrop::Fury::new(self.settings.clone(), self.first, SEED)?;
+        if let Some(path) = fury_path {
+            model.force_path(path)?;
+        }
+        let frames =
+            (anim_seconds.unwrap_or(0.0).max(0.0) * oag_ui::backdrop::FRAMES_PER_SECOND) as u32;
+        Some((model, frames))
+    }
+}
+
 /// Reads the settings, twelve clouds and the tints, or says why not.
 ///
 /// `None` with a report line for every reason: the style is HD rather than
