@@ -247,8 +247,17 @@ fn fs_scanlines(in: ClipUv) -> @location(0) vec4<f32> {
     return vec4<f32>(post.scanline.rgb, 0.0);
 }
 
-// The finished field onto the page, as the bytes it holds: the page is
-// gamma-space, and the field's texture is read through a plain view here.
+// What the display gets: the field half a row low, so each row on screen is
+// the mean of two in linear light and a scanline is two half-dark rows
+// (menu-backdrop.md, "The frame, measured").
+@fragment
+fn fs_present(in: ClipUv) -> @location(0) vec4<f32> {
+    let half_row = vec2<f32>(0.0, 0.5 / f32(textureDimensions(source).y));
+    return textureSample(source, trail_sampler, in.uv + half_row);
+}
+
+// The finished picture onto the page, as the bytes it holds: the page is
+// gamma-space, and the target's texture is read through a plain view here.
 @fragment
 fn fs_page(in: ClipUv) -> @location(0) vec4<f32> {
     return textureSample(source, post_sampler, in.uv);

@@ -21,18 +21,19 @@
 //! 6. **Band** - the smear band, which reads the field it writes, so the field
 //!    is copied to a second target first.
 //! 7. **Scanlines** - every fourth row multiplied by a dark blue.
+//! 8. **Present** - the field read half a row low, bilinearly and in linear
+//!    light, which is why a scanline reaches the screen as two half-dark rows.
 //!
 //! Then, inside the page's pass where the draw list's
-//! [`oag_ui::frontend::Draw::FuryBackdrop`] sits, the finished field goes onto
-//! the page.
+//! [`oag_ui::frontend::Draw::FuryBackdrop`] sits, the result goes onto the page.
 //!
 //! The original runs all of this in linear light, decoding on read and
 //! encoding on write. Here that is the targets' sRGB format, with the page
 //! itself left gamma-space (ADR-0020): the last step reads the field through a
 //! plain view, so the page receives the encoded bytes as they stand.
 //!
-//! A pass reads a target nearest but for the half-size glow, which is
-//! bilinear: the filter words on the command stream, not the views'.
+//! A pass reads a target nearest but for the half-size glow and the present,
+//! which are bilinear: the filter words on the command stream, not the views'.
 
 use oag_rcs::points2::PointCloud;
 use oag_ui::backdrop::{self, Frame};
@@ -121,7 +122,9 @@ struct Targets {
     composite: [wgpu::BindGroup; 2],
     /// The field, for the band to read.
     band: wgpu::BindGroup,
-    /// The finished field, undecoded, for the page.
+    /// The finished field, for the present to read.
+    present: wgpu::BindGroup,
+    /// What the present wrote, undecoded, for the page.
     page: wgpu::BindGroup,
 }
 
@@ -135,6 +138,7 @@ pub struct FuryBackdrop {
     composite_pipeline: wgpu::RenderPipeline,
     band_pipeline: wgpu::RenderPipeline,
     scanline_pipeline: wgpu::RenderPipeline,
+    present_pipeline: wgpu::RenderPipeline,
     page_pipeline: wgpu::RenderPipeline,
     point_uniforms: wgpu::Buffer,
     post_uniforms: wgpu::Buffer,
@@ -362,6 +366,7 @@ impl FuryBackdrop {
         };
         let blend_pipeline = opaque("fury blend", "fs_blend");
         let composite_pipeline = opaque("fury composite", "fs_composite");
+        let present_pipeline = opaque("fury present", "fs_present");
         let wave_pipeline = post_pipeline("fury wave", ("vs_wave", "fs_wave"), TARGET_FORMAT, None);
         let band_pipeline = post_pipeline("fury band", ("vs_band", "fs_band"), TARGET_FORMAT, None);
         // `BlendFuncSeparate(CONSTANT_COLOR, ONE, ZERO, ONE)`.
@@ -433,6 +438,7 @@ impl FuryBackdrop {
             composite_pipeline,
             band_pipeline,
             scanline_pipeline,
+            present_pipeline,
             page_pipeline,
             point_uniforms,
             post_uniforms,
@@ -577,10 +583,16 @@ impl FuryBackdrop {
             pass.set_pipeline(&self.scanline_pipeline);
             pass.draw(0..3, 0..1);
         }
+        {
+            let mut pass = full_pass(encoder, "fury present", &targets.field_view, true);
+            pass.set_pipeline(&self.present_pipeline);
+            pass.set_bind_group(0, &targets.present, &[]);
+            pass.draw(0..3, 0..1);
+        }
         self.last = next;
     }
 
-    /// The finished field onto the page, inside the page's own pass.
+    /// The finished picture onto the page, inside the page's own pass.
     ///
     /// Nothing is drawn before the first [`Self::prepare`], there being no
     /// targets to read.
@@ -628,7 +640,7 @@ impl FuryBackdrop {
         ];
         let field_view = view(&field);
         let finished_view = view(&finished);
-        let encoded_view = finished.create_view(&wgpu::TextureViewDescriptor {
+        let encoded_view = field.create_view(&wgpu::TextureViewDescriptor {
             format: Some(ENCODED_FORMAT),
             ..Default::default()
         });
@@ -669,6 +681,7 @@ impl FuryBackdrop {
         let composite =
             by_last(&|_, next| bind("fury composite", &accumulation[next], &half[next]));
         let band = bind("fury band", &field_view, &field_view);
+        let present = bind("fury present", &finished_view, &finished_view);
         let page = bind("fury page", &encoded_view, &encoded_view);
         Targets {
             size,
@@ -683,6 +696,7 @@ impl FuryBackdrop {
             wave,
             composite,
             band,
+            present,
             page,
         }
     }
