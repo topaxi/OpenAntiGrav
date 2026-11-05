@@ -155,6 +155,17 @@ pub(crate) struct MenuArgs {
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_model_seconds: Option<f32>,
 
+    /// With `--menu-page`, the frame of the disc's looping menu backdrop movie
+    /// to draw behind the page, counting from zero; past the end it wraps.
+    ///
+    /// The movie runs from boot and never restarts, so where a reference still
+    /// caught it depends on how long the walk took: the streaks and the craft
+    /// that fly past are bright for about 0.3 s of the nine-second loop.
+    /// `scripts/compare-menu-movie-phase.py` finds the frame a still shows.
+    /// `None` draws frame zero. No effect on a title with no backdrop movie.
+    #[arg(long, value_name = "FRAME")]
+    pub(crate) menu_movie_frame: Option<usize>,
+
     /// With `--menu-page`, draw a modal prompt over it: `rename`,
     /// `rename-note`, `delete`, `delete-built-in` or `binding`.
     ///

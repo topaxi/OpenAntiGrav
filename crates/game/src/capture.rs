@@ -152,6 +152,10 @@ pub struct Options {
     /// own animation time - see the CLI flag's own docs. `None` takes
     /// `menu_picker_seconds`.
     pub menu_model_seconds: Option<f32>,
+    /// With `--menu-page`, the frame of the menu backdrop movie to draw, wrapped
+    /// to the movie's length - see the CLI flag's own docs. `None` draws frame
+    /// zero.
+    pub menu_movie_frame: Option<usize>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
     ///
@@ -563,8 +567,9 @@ pub fn run(
     // showing what a player would see - which is exactly what this module exists
     // not to do.
     //
-    // Frame zero and not a moving one: a capture is one picture, and there is
-    // nothing here for a playhead to be advanced by.
+    // One frame and not a moving one, `--menu-movie-frame`'s or else the first: a
+    // capture is one picture, and there is nothing here for a playhead to be
+    // advanced by.
     // The grid the chosen list's rects are in - the source's, on all three
     // paths. `--menu-page` used to pin `Space::PSP` here on the grounds that
     // this project's menu layout is authored at 480x272; that is still where the
@@ -596,10 +601,12 @@ pub fn run(
             let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
             let frame = showing.map(|movie| oag_ui::menu::Backdrop {
                 rect: oag_display::space::pillarbox_in(space, movie.display_aspect),
-                frame: 0,
-                // Position zero with the frame, there being no playhead here to
-                // have got anywhere: a capture reads the frame straight out of
-                // the `FrameStore` rather than off a `Feed`.
+                frame: movie.frames.as_ref().map_or(0, |frames| {
+                    video::still_frame(options.menu_movie_frame, frames.len)
+                }),
+                // Position zero whatever the frame, there being no playhead here
+                // to have got anywhere: a capture reads the frame straight out
+                // of the `FrameStore` rather than off a `Feed`.
                 position: 0,
             });
             let format = showing.and_then(VideoFormat::of);
