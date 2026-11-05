@@ -4568,6 +4568,42 @@ Not a gap (checked): what looked like an `ELIMINATOR` against `NitroBattle`
 mismatch on The Amphiseum was two different cells (`grid8_3_2` Elimination,
 `grid8_2_1` NitroBattle) reached by dropped presses, not a label bug.
 
+### Fury page content against the original, masked scorer (2026-11-05, `fury-menu-content`)
+
+`scripts/fury-menu-masked-score.py` scores a Fury menu pair with the animated backdrop excluded, because
+`theirs.png` carries RPCS3's 16-bit QUADS wrap (`docs/reverse-engineering/rpcs3-index-wrap.md`) and the
+backdrop there is wrong. Mask: warm pixels (`R - B >= 8`, `G >= 0.30 R`, `R >= 20`) of either frame, dilated
+5 px, frozen from the before pairs (`--freeze`) and reused for the after (`--mask`); covers 9.8 % (track), 13.3 % (ship),
+10.4 % (grid) of the frame; the circuit thumbnail's rectangle is never masked. Mean grey difference, before to after:
+
+| pair | whole frame | masked |
+| --- | --- | --- |
+| `hd/menu-track-select` | 12.67 to 10.49 | 10.61 to 8.20 (-22.7 %) |
+| `hd/menu-ship-select` | 11.04 to 11.04 | 5.28 to 5.28 |
+| `hd/menu-grid-select` | 8.47 to 7.92 | 4.08 to 3.47 (-14.9 %) |
+
+Re-rendering unchanged code reproduces every number to the last digit, so the floor is zero.
+
+- **Grid Selection**: `EventNum` goes through `cell_text::draw` (capitals, bold `Title` face, 150 grey, as Cell Selection
+  already does); `unlockboxbrackets`' `dot.gtf` fill and its `<Bracket>` corner marks draw (the panel round `12 MORE POINTS`);
+  `Flyer Left/Right Arrow` draw (`tilted_arrows.gtf` joined `oag_hd::campaign::OTHER_TEXTURES`, `dot.gtf` too) in
+  `100,100,100` where the screen authors `0xFF8AC0CA` (one frame; the recolouring state is unread).
+- **Track Select records rows**: the rows author `color=HD_LightGrey` (resolved `0x7f646464`) and `textcolor=HD_Grey`.
+  The block fill dropped the colour's own alpha, and the label was always white. `oag_ui::menu::block::draw_fill` now
+  multiplies the colour's alpha into each pass and `BlockWidget::text_color` carries `TextColor`. Fill reads 38 where the
+  frame reads 26: **open**, one pass or one factor is still unread.
+- **Phase, not content**: the grid card art sweeps 2.54 to 3.47 masked over `SETTLED_SECONDS` 0.5..5.5 (period 4 s), so most of
+  the card's remaining error is which moment of its loop the capture caught. The circuit model is a turntable
+  (`TURN_SECONDS`, `YAW0`), same reading. Neither was tuned to one frame.
+- **Needs RE, not done**: Ship Select's hull (the lens 0.41, pitch 0.22, slide are fitted over the authored `RotX=0.4`; the
+  rotation convention is unread), the page `Squares` (an empty `<Item>`, count, art and colours in code), the Track Select
+  thumbnail (`FlyByMovie`, Bink), the NAVIGATION footer's glyph spacing on Grid Selection (ours 50 px wider between
+  entries), the ship hex column's lock states (the frame is a profile with Feisar and one more unlocked; ours unlocks
+  more, and `unlock_everything = false` changed no pixel).
+- **Omega** (HD's front end): **ported**, same code path. `omega/menu-grid-select` 16.54 to 15.82, `omega/menu-track-select`
+  19.30 to 19.10 mean grey, the other Omega menu pairs and `hd/menu-campaign-select`, `menu-cell-select` unchanged
+  to the digit (sibling `.gnf` for the new textures came through `gnf_sibling`).
+
 ### `Cell Selection`'s card, field, icons and brackets (2026-10-08, hd-cell-select)
 
 Measured against `088-cell-settled1.png`

@@ -273,7 +273,19 @@ pub fn hd_grid_draw_list(
         let Some(placed) = sprites(&image.src) else {
             continue;
         };
+        if matches!(
+            image.name.as_deref(),
+            Some("Flyer Left Arrow" | "Flyer Right Arrow")
+        ) {
+            let mut arrow = image.clone();
+            arrow.color = FLYER_ARROW_COLOR;
+            out.push(image_draw(&arrow, placed));
+            continue;
+        }
         out.push(image_draw(image, placed));
+    }
+    if unlock.is_some() {
+        out.extend(cell_brackets::draws(&screen.brackets, sprites));
     }
     let Some(selected) = model.selected() else {
         layers.body = out;
@@ -314,11 +326,20 @@ pub fn hd_grid_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
+        if matches!(name, "EventNum" | "GridNum") {
+            out.push(cell_text::draw(text, &content, layout, true));
+            continue;
+        }
         out.push(text_draw(text, &content, layout));
     }
     layers.body = out;
     layers
 }
+
+/// The flyer arrows' colour in the frame: `100,100,100` at the right arrow's
+/// centre, where the screen authors `0xFF8AC0CA`. Measured on one frame
+/// (`menu-grid-select`); which native state recolours it is unread.
+const FLYER_ARROW_COLOR: u32 = 0xFF64_6464;
 
 /// `"Event {:02}/{:02}"` - `EventNum`'s own template (`"Event 01/08"`) and
 /// `GridNum`'s identical copy on `Cell Selection`, 1-based. Confidence 95:

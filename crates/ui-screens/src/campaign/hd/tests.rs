@@ -9,8 +9,9 @@
 
 use super::*;
 use oag_tables::race_campaign::{DifficultyTargets, MedalTargets, Mode};
+use oag_ui::frontend::Draw;
 use oag_ui::language::StringTable;
-use oag_ui::screen::{Screen, Text};
+use oag_ui::screen::{Screen, Text, argb_to_rgba};
 
 fn cell(mode: Mode, track: Option<&str>) -> Cell {
     Cell {
@@ -734,4 +735,100 @@ fn a_swipe_wraps_past_the_last_grid_as_the_wheel_does() {
     model.step(2);
     gesture(&mut model, &targets, (0.0, -2.0 * SWIPE_STEP_TRAVEL), 4);
     assert_eq!(model.index(), 0);
+}
+
+const FURY_GRID_FIXTURE: &str = r#"
+<Screen>
+  <Screen type="FlyerSelection" name="Grid Selection Fury">
+    <Text name="EventNum"><Values string="Event 01/08" font="Title" x="180" y="170" color="0xFF646464"></Values></Text>
+    <Image name="unlockboxbrackets"><Values x="168" y="708" width="440" height="168" color="0xFFDEDEDE" src="Data\FE\Images\dot.gtf"></Values>
+      <Bracket><Values corner="true" X="160" Y="700" Width="448" Height="176" Colour="0xFF646464"></Values></Bracket>
+    </Image>
+    <Image name="Flyer Right Arrow"><Values x="1700" y="540" width="96" height="64" color="0xFF8AC0CA" src="Data\FE\Images\tilted_arrows.gtf"></Values></Image>
+  </Screen>
+</Screen>
+"#;
+
+fn fury_grid_list(unlock_pending: bool) -> Vec<Draw> {
+    let screens = oag_ui::screen::Screens::from_xml(FURY_GRID_FIXTURE);
+    let layout = Layout {
+        screen: screens.by_name("Grid Selection Fury").unwrap().clone(),
+        scale: [1.0, 1.0],
+        faces: crate::picker::FaceScales::default(),
+    };
+    let grid = |name: &str, required| GridSummary {
+        name: name.to_string(),
+        cell_count: 8,
+        max_points: 21,
+        required_points: required,
+        gold_medals: 0,
+        points_earned: 0,
+        locked: false,
+        flyer_name: Some(format!("0{name}")),
+    };
+    let model = GridSelection::new(vec![
+        grid("a", if unlock_pending { 10 } else { 0 }),
+        grid("b", 0),
+    ]);
+    let skin = oag_ui::menu::Skin::new(
+        oag_pulse::FRONT_END.menu.unwrap(),
+        oag_display::space::Space::HD,
+        22.0,
+    );
+    let any = |_: &str| {
+        Some(Placed {
+            x: 0,
+            y: 0,
+            width: 128,
+            height: 64,
+            quad_extent: None,
+            quad_centre: None,
+            blend: None,
+        })
+    };
+    hd_grid_draw_list(
+        &model,
+        &layout,
+        &skin,
+        &oag_ui::menu::Frame::default(),
+        &StringTable::default(),
+        None,
+        false,
+        &any,
+        &[],
+    )
+    .body
+}
+
+#[test]
+fn the_grid_counter_is_capitals_in_the_title_face() {
+    let list = fury_grid_list(true);
+    assert!(
+        list.iter().any(|draw| matches!(
+            draw,
+            Draw::Text { text, .. } | Draw::FacedText { text, .. } if text == "EVENT 01/02"
+        )),
+        "{list:?}"
+    );
+}
+
+#[test]
+fn the_flyer_arrow_is_the_frames_grey_not_the_authored_blue() {
+    let list = fury_grid_list(true);
+    let arrow = list.iter().find_map(|draw| match draw {
+        Draw::Sprite { rect, color, .. } if rect[0] == 1700.0 => Some(*color),
+        _ => None,
+    });
+    assert_eq!(arrow, Some(argb_to_rgba(FLYER_ARROW_COLOR)), "{list:?}");
+}
+
+#[test]
+fn the_unlock_panel_carries_its_corner_marks_only_while_it_shows() {
+    let corners = |list: &[Draw]| {
+        list.iter()
+            .filter(|draw| matches!(draw, Draw::Sprite { rect, .. } if rect[2] == 16.0 && rect[3] == 16.0))
+            .count()
+    };
+    assert_eq!(corners(&fury_grid_list(true)), 4);
+    assert_eq!(corners(&fury_grid_list(false)), 0);
 }
