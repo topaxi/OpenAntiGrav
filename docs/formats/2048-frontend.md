@@ -1031,8 +1031,10 @@ button that way and `team` its cursor cell, and the map's selection is the disc'
 art in `Orange2048`. The pad focus plays that look: **the tile the pad is on is filled `Orange2048`
 (chosen mapping, not measured)**, from the screen's first frame while the pad or keyboard is the
 device in use (`Frontend::set_pad_driving`, fed from `oag_game`'s pointer window: the mouse or a
-finger speaking clears it, a pad or key press sets it), never under a pointer. Controls whose own
-fill already means something (a slider's value) keep a 4-unit `Orange2048` ring, **chosen**.
+finger speaking clears it, a pad or key press sets it), never under a pointer. On a slider, whose fill is its value, the focused one's value is `Orange2048` and the other's
+`Grey2048`, the palette's inactive colour (**chosen**). On the options panels the hub's button of
+the open panel is `Orange2048`, as the original's. The panels used to draw on black (the hub's base
+fill covered the white ground); they draw on white now.
 The directions, Cross as activate and Circle as back are all **chosen**: the original's grids
 have none of them. `Draw` colours come from the skin's own globals.
 
@@ -1047,11 +1049,11 @@ have none of them. `Draw` colours come from the skin's own globals.
 | `team` | Left/Right/Up/Down on the 5x4 cursor | Cross, Start or Circle press the confirm tick | the tick (`PreviousScreen`) | `Orange2048` cell (authored, `FUN_8110700e`) | `the_team_grid_moves_its_cursor_and_cross_confirms` |
 | `profile`, `profile_stats` | Left/Right cycle the two arrows | Cross: the arrow's `redirect` | Circle: `PreviousScreen` (the arrows are not ticks) | `Orange2048` fill | `the_sub_screens_mark_their_focus_...` |
 | `options` | its four buttons and the tick | Cross: the panel it names | Circle: the tick, to `Home` through `save_2048_options` | `Orange2048` fill | `the_options_panels_mark_...` |
-| `OptionsCamera`, `OptionsControls`, `OptionsPilot` | Left/Right step the list | the step applies it | Circle to `options` | the selected entry filled `Orange2048` | same |
-| `OptionsAudio` | Up/Down pick the slider, Left/Right set it | the step applies it | Circle to `options` | 4-unit `Orange2048` ring on the slider (chosen) | `vita_2048_boot_ground_truth::options_*` |
+| `OptionsCamera`, `OptionsControls`, `OptionsPilot` | Left/Right step the list | the step applies it | Circle to `options` | the selected entry filled `Orange2048`; the hub's button of the open panel too | same |
+| `OptionsAudio` | Up/Down pick the slider, Left/Right set it | the step applies it | Circle to `options` | the focused slider's value `Orange2048`, the other `Grey2048` (chosen) | `vita_2048_boot_ground_truth::options_*` |
 | `communityAdhocCheck`, `2048extras`, `extrasCredits` | tiles and the tick | Cross | Circle: the tick | `Orange2048` fill | `the_sub_screens_mark_their_focus_...` |
 | `manual3D` | the back tile | Cross: `PreviousScreen` | Circle | `Orange2048` fill | same |
-| `RaceSummary`, `ObjectiveSummary` (end of race) | the button strip | Cross | the strip's own buttons | `Orange2048` fill (was a ring) | `vita_2048_endrace_ground_truth` |
+| `RaceSummary`, `ObjectiveSummary` (end of race) | the button strip | Cross | the strip's own buttons | `Orange2048` fill (was a ring) | `the_selected_strip_tile_is_filled_orange_and_the_other_blue` (no screenshot: reaching it needs a finished race) |
 
 **Not drawn, so not reachable**: `OptionsAudio`'s `Music Sequential`/`Music Random` toggles,
 `OptionsControls`' `FE_CTRL_VIEW_CONFIG` tile, `2048extras`' AR Museum (the `<aTouchButton>` typo), `team`'s
@@ -1060,7 +1062,7 @@ have none of them. `Draw` colours come from the skin's own globals.
 **Chosen, not measured, for the maintainer** (every case where the disc authors nothing): the pad
 as a device on touch screens; Up/Down on the grids (nearest tile in that direction, no vertical
 wrap); Cross/Start as activate; Circle as back (the screen's own tick, else the `PreviousScreen`
-stack); Cross on `team` as the confirm tick; the slider's ring. The fill colour itself is the
+stack); Cross on `team` as the confirm tick; the slider's orange-versus-grey value. The fill colour itself is the
 authored pressed colour. `--original-menu` does not hide the pad focus, so a compare pair of a
 route that presses buttons differs from the original by one filled tile (the pair records say so).
 

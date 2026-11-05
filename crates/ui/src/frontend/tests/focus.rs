@@ -132,3 +132,29 @@ fn circle_on_the_mode_grid_after_a_visit_to_the_map_stays_on_the_grid() {
         );
     }
 }
+
+/// A tile beside the focused one that sits a few units lower is not "below" it: the extra tiles
+/// stand in a column left of the grid, and ADHOC-like bottom-row tiles must not jump to them.
+#[test]
+fn down_does_not_jump_sideways_to_a_tile_a_few_units_lower() {
+    let mut frontend = boot(0);
+    frontend.set_extra_tiles(vec![
+        ExtraTile {
+            label: "ONE".into(),
+            launch: Launch::Page("one".into()),
+        },
+        ExtraTile {
+            label: "TWO".into(),
+            launch: Launch::Page("two".into()),
+        },
+    ]);
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Right);
+    assert!(focused(&frontend, 329.0, 190.0), "the second mode tile");
+    press(&mut frontend, &mut input, Button::Down);
+    assert!(
+        focused(&frontend, 329.0, 190.0),
+        "nothing is below it: the extra tile at y 226 is a column away, only 36 units lower"
+    );
+}

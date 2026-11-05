@@ -17,7 +17,7 @@
 //! the hub's own buttons stay at `x` 95-345, and neither overlaps the other.
 //! None of the four carries a header or a back button of its own (contrast
 //! `OptionsControlsConfig`, a true sibling page that does carry both) - so
-//! this module draws the **hub's** own widgets first, for the header and the
+//! `Frontend::draw_list` draws the **hub's** own widgets first, for the header and the
 //! four entry buttons still visibly present, then the panel's own control on
 //! top, and returns to the hub on a Circle press this build supplies:
 //! `NEWGUI` authors no button for it anywhere on these four screens, the same
@@ -320,7 +320,6 @@ impl Frontend {
     /// `options`'s own widgets, then the sub-panel's `Touchlist`/`TouchSlider`
     /// on top - see the module docs for why both draw.
     pub(super) fn draw_options_panel(&self, current: &str, out: &mut Vec<Draw>) {
-        out.extend(self.draw_screen_at(w2048::OPTIONS, self.on_screen_for));
         let Some(screen) = self.screens.by_name(current) else {
             return;
         };
@@ -453,6 +452,8 @@ impl Frontend {
         } else {
             0.0
         };
+        // The value is `Orange2048` on the focused slider and `Grey2048`, the palette's inactive
+        // colour, on the other, so the focus reads whatever the values are.
         out.push(Draw::Fill {
             rect: [
                 slider.x,
@@ -460,11 +461,12 @@ impl Frontend {
                 filled_width.clamp(0.0, slider.width),
                 slider.height,
             ],
-            color: cursor,
+            color: if focused {
+                cursor
+            } else {
+                self.global_colour("Grey2048")
+            },
         });
-        if focused {
-            self.draw_cursor_ring(rect, cursor, out);
-        }
         let label = slider
             .idstring
             .as_deref()

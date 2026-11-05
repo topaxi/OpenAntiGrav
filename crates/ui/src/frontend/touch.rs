@@ -609,6 +609,21 @@ impl Frontend {
     /// The tiles of screen `name`, over its own header widgets already in
     /// `out`.
     pub(super) fn draw_touch(&self, name: &str, out: &mut Vec<Draw>) {
+        self.draw_touch_marking(
+            name,
+            self.touch.pad_cursor.then_some(self.touch.selected),
+            out,
+        );
+    }
+
+    /// [`Self::draw_touch`] with the marked tile given: the pad's, or the one the screen shows
+    /// the state of (`options` marks the button of the panel that is open, as the original's).
+    pub(super) fn draw_touch_marking(
+        &self,
+        name: &str,
+        marked: Option<usize>,
+        out: &mut Vec<Draw>,
+    ) {
         let Some(screen) = self.screens.by_name(name) else {
             return;
         };
@@ -628,7 +643,7 @@ impl Frontend {
                 }
                 _ => tile,
             };
-            let focused = self.touch.pad_cursor && at == self.touch.selected;
+            let focused = marked == Some(at);
             self.draw_tile(drawn, colour, focused, cursor, out);
         }
     }
@@ -811,14 +826,18 @@ impl Frontend {
 /// grids do not wrap vertically.
 fn vertical_neighbour(rects: &[[f32; 4]], from: usize, down: bool) -> Option<usize> {
     let centre = |rect: &[f32; 4]| (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5);
-    let (fx, fy) = centre(rects.get(from)?);
+    let from_rect = rects.get(from)?;
+    let (fx, fy) = centre(from_rect);
     rects
         .iter()
         .enumerate()
         .filter_map(|(at, rect)| {
             let (x, y) = centre(rect);
             let dy = if down { y - fy } else { fy - y };
-            (at != from && dy > 1.0).then_some((at, dy + 2.0 * (x - fx).abs()))
+            // A neighbour in the next row, not a tile beside this one that happens to sit a
+            // few units lower.
+            let row = 0.5 * from_rect[3].min(rect[3]);
+            (at != from && dy >= row).then_some((at, dy + 2.0 * (x - fx).abs()))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|(at, _)| at)

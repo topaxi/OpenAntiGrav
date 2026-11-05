@@ -213,6 +213,11 @@ fn the_sub_screens_mark_their_focus_and_back_out_one_step() {
     on(&frontend, w2048::EXTRAS_CREDITS);
     presses(&mut frontend, &mut input, &[Button::Circle]);
     on(&frontend, w2048::EXTRAS);
+    assert_eq!(
+        focus(&frontend),
+        vec![[86, 190, 140, 140]],
+        "a screen entered by Circle starts on its first tile, not the tick it left by"
+    );
     presses(&mut frontend, &mut input, &[Button::Circle]);
     on(&frontend, w2048::HOME);
     presses(
@@ -273,6 +278,23 @@ fn the_options_panels_mark_the_selected_entry_and_circle_returns_to_the_hub() {
     assert_ne!(focus(&frontend), hub, "Right moves the hub's focus");
     presses(&mut frontend, &mut input, &[Button::Cross]);
     on(&frontend, w2048::OPTIONS_AUDIO);
+    assert!(
+        focus(&frontend).contains(&[250, 145, 95, 95]),
+        "the hub marks the AUDIO button while its panel is open: {:?}",
+        focus(&frontend)
+    );
+    let music = focus(&frontend);
+    presses(&mut frontend, &mut input, &[Button::Down]);
+    assert_ne!(
+        focus(&frontend),
+        music,
+        "the focused slider's value is Orange2048 and the other's grey, so Down moves the mark"
+    );
+    if std::env::var_os("OAG_SWEEP").is_some() {
+        for draw in frontend.draw_list().iter().take(6) {
+            println!("{draw:?}");
+        }
+    }
     presses(&mut frontend, &mut input, &[Button::Circle]);
     on(&frontend, w2048::OPTIONS);
 }

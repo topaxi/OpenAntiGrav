@@ -276,7 +276,18 @@ impl Frontend {
             | w2048::OPTIONS_AUDIO
             | w2048::OPTIONS_CONTROLS
             | w2048::OPTIONS_PILOT => {
-                let mut out = vec![white];
+                let mut out = self.draw_screen_at(w2048::OPTIONS, self.on_screen_for);
+                out.insert(1, white);
+                // The hub's button of the open panel is marked, as on the original.
+                let open = [
+                    w2048::OPTIONS_CAMERA,
+                    w2048::OPTIONS_AUDIO,
+                    w2048::OPTIONS_CONTROLS,
+                    w2048::OPTIONS_PILOT,
+                ]
+                .iter()
+                .position(|panel| *panel == current);
+                self.draw_touch_marking(w2048::OPTIONS, open, &mut out);
                 self.draw_options_panel(current, &mut out);
                 out
             }
