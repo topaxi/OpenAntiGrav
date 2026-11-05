@@ -366,7 +366,10 @@ fn a_chosen_copy_beats_the_served_table() {
         r#"<StringTable><entry id="16_TRACK" string="VINETA K"/>
                         <entry id="32_TRACK" string="VINETA K"/></StringTable>"#,
     );
-    let ids: Vec<String> = tracks.iter().map(|track| track.id.clone()).collect();
+    let ids: Vec<(String, String)> = tracks
+        .iter()
+        .map(|track| (track.id.clone(), track.name_key().to_string()))
+        .collect();
     let names = oag_ui::language::CircuitNames::choose(&[("DATA06".to_string(), chosen)], &ids)
         .expect("that copy names both circuits, case folded");
 
@@ -458,6 +461,7 @@ fn track(id: &str, folder: &str, reversed: bool) -> (Track, String) {
             available_in_zone: false,
             unlock_grid: None,
             sound_register: None,
+            string_id: None,
             foreign: None,
         },
         if reversed {
@@ -509,4 +513,16 @@ fn an_entrys_soundregister_is_what_selects_its_name_voice() {
     // by the value it authors and not by a table kept here.
     assert_eq!(teams(PACK_MANIFEST)[0].sound_register, Some(11));
     assert_eq!(tracks(PACK_MANIFEST)[0].sound_register, Some(30));
+}
+
+/// `StringTableId` is the key a circuit's name is under when it is not the circuit's own id.
+#[test]
+fn a_circuit_reads_the_key_its_name_is_filed_under() {
+    let xml = r#"<Screen name="Top">
+        <PI_Track name="altima"><Values type="Race" StringTableId="Track_Altima_0" location="data\environments2048\altima"></Values></PI_Track>
+        <PI_Track name="01_Track"><Values type="Race" location="Data\Environments\01_Vineta_K"></Values></PI_Track>
+    </Screen>"#;
+    let tracks = tracks(xml);
+    assert_eq!(tracks[0].name_key(), "Track_Altima_0");
+    assert_eq!(tracks[1].name_key(), "01_Track");
 }

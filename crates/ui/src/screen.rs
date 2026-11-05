@@ -498,6 +498,23 @@ pub struct Screens {
 }
 
 impl Screens {
+    /// Whether the global `name` is a dark colour: its red, green and blue sum under
+    /// half. `false` for a global that is absent or not a colour.
+    ///
+    /// What stands in for `FrontEnd_IsFuryStyle` is `HD_BG`'s darkness, since the two
+    /// HD archives clear their front end to black and white respectively; the menus'
+    /// art and the loading screen's style both ask it.
+    #[must_use]
+    pub fn global_is_dark(&self, name: &str) -> bool {
+        self.globals
+            .get(name)
+            .and_then(|value| color::parse_argb(value))
+            .is_some_and(|argb| {
+                let [r, g, b] = [argb >> 16 & 0xff, argb >> 8 & 0xff, argb & 0xff];
+                r + g + b < 3 * 128
+            })
+    }
+
     /// `screen` is the innermost named `Screen` enclosing `node`, which is
     /// what a `DirectEmbed` include's widgets belong to - see [`Include`].
     fn collect_globals(&mut self, node: &Node, screen: Option<&str>) {

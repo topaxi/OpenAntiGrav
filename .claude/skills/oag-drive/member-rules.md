@@ -29,6 +29,7 @@ lanes you must not touch, and the gate baseline. If one is missing, ask
     | xargs -r -n1 -I{} pactl set-sink-input-mute {} 1
   ```
 
+- **`ls` is a shell function here and runs an executable it is given**: `ls target/quick/oag-game` once put a windowed game with sound on the maintainer's desktop for nine minutes. Use `/bin/ls`.
 - **Processes.** Record the PID of everything you start; kill only by PID. Never `pkill -f <pattern>` (it once killed every member's run).
 - **Memory.** Run render loops, bisects and batch scripts sequentially, never as a parallel fan-out. Cap any batch: `systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0 -p TasksMax=64 <cmd>` (986 and 1,588 runaway `python3` processes OOM-killed the lead's session on 2026-10-22). If you see a `python3` count climbing, tell the lead.
 - **Never name a scratch script after a stdlib module** (`bisect.py`, `random.py`, `test.py`, `json.py`, `math.py`): Python puts the script's directory first on `sys.path`, so other scripts import yours (the cause of that OOM, a fork bomb). Use descriptive names (`slot_bisect.py`).

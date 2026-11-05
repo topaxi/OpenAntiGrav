@@ -30,6 +30,8 @@ struct Frame {
     grid: [f32; 2],
     /// The Safe Area's scale: `1.0` draws the whole grid.
     safe: f32,
+    /// The bracketed panels' rectangles `[x0, y0, x1, y1]`, in the grid.
+    panels: Vec<[f32; 4]>,
 }
 
 impl Frame {
@@ -37,7 +39,72 @@ impl Frame {
         Self {
             grid: layout.grid,
             safe,
+            panels: layout
+                .elements
+                .iter()
+                .filter(|element| element.draw == Kind::Corners)
+                .map(|element| element.rect)
+                .collect(),
         }
+    }
+
+    /// The feature picture `at`/`size` showing `uv`, cut to the bracketed panel its top left
+    /// corner is in, as `(at, size, uv)` of the kept part. `None` when nothing of it is inside
+    /// the panel. `ink` is the box of the picture's texels that show against the ground, in sheet pixels.
+    ///
+    /// The picture is drawn at the size the original draws it, which is wider than its panel.
+    /// Its ground is opaque: Fury's is the screen's own black, which shows nothing, and HD's is
+    /// white, which fills the padding and covers the description beside it. Cutting to the
+    /// panel is chosen, not measured: how the original treats the spill is unread. A picture
+    /// whose visible texels are already inside, or that is in no panel, is returned as it came,
+    /// to the bit.
+    fn fit_to_panel(
+        &self,
+        at: [f32; 2],
+        size: [f32; 2],
+        uv: [f32; 4],
+        ink: Option<[f32; 4]>,
+    ) -> Option<([f32; 2], [f32; 2], [f32; 4])> {
+        let whole = Some((at, size, uv));
+        let Some([px0, py0, px1, py1]) = self.panels.iter().copied().find(|panel| {
+            panel[0] <= at[0] && at[0] < panel[2] && panel[1] <= at[1] && at[1] < panel[3]
+        }) else {
+            return whole;
+        };
+        let (x1, y1) = (at[0] + size[0], at[1] + size[1]);
+        let Some(ink) = ink else {
+            return whole;
+        };
+        let (gx, gy) = (size[0] / uv[2], size[1] / uv[3]);
+        let seen = [
+            at[0] + (ink[0].max(uv[0]) - uv[0]) * gx,
+            at[1] + (ink[1].max(uv[1]) - uv[1]) * gy,
+            at[0] + ((ink[0] + ink[2]).min(uv[0] + uv[2]) - uv[0]) * gx,
+            at[1] + ((ink[1] + ink[3]).min(uv[1] + uv[3]) - uv[1]) * gy,
+        ];
+        if seen[0] >= px0 && seen[1] >= py0 && seen[2] <= px1 && seen[3] <= py1 {
+            return whole;
+        }
+        let (cx0, cy0) = (at[0].max(px0), at[1].max(py0));
+        let (cx1, cy1) = (x1.min(px1), y1.min(py1));
+        if (cx0, cy0, cx1, cy1) == (at[0], at[1], x1, y1) {
+            return whole;
+        }
+        if cx1 <= cx0 || cy1 <= cy0 {
+            return None;
+        }
+        // Texels per grid unit stay what they were, so the kept part is the same pixels.
+        let (tx, ty) = (uv[2] / size[0], uv[3] / size[1]);
+        Some((
+            [cx0, cy0],
+            [cx1 - cx0, cy1 - cy0],
+            [
+                uv[0] + (cx0 - at[0]) * tx,
+                uv[1] + (cy0 - at[1]) * ty,
+                (cx1 - cx0) * tx,
+                (cy1 - cy0) * ty,
+            ],
+        ))
     }
 
     /// A grid point in screen space.
@@ -244,13 +311,24 @@ impl Screen {
                 let Some(uv) = element.asset.as_deref().and_then(|role| self.art(role)) else {
                     return;
                 };
-                out.push(Draw::Sprite {
-                    rect: frame.rect(x, y, element.size[0], element.size[1]),
-                    uv: clamped(
+                let feature = element.asset.as_deref() == Some("@feature");
+                let (at, size, uv) = if feature {
+                    let Some(fitted) = frame.fit_to_panel(
+                        element.at,
+                        element.size,
                         cut(uv, element.uv),
-                        [element.size[0] * frame.safe, element.size[1] * frame.safe],
-                    ),
-                    color: if element.asset.as_deref() == Some("@feature") {
+                        self.illustration_ink,
+                    ) else {
+                        return;
+                    };
+                    fitted
+                } else {
+                    (element.at, element.size, cut(uv, element.uv))
+                };
+                out.push(Draw::Sprite {
+                    rect: frame.rect(at[0], at[1], size[0], size[1]),
+                    uv: clamped(uv, [size[0] * frame.safe, size[1] * frame.safe]),
+                    color: if feature {
                         [1.0, 1.0, 1.0, fade]
                     } else {
                         colour

@@ -115,9 +115,11 @@ fn a_screen_that_names_its_buttons_is_not_probed() {
 }
 
 #[test]
-fn a_row_that_is_not_there_fails_with_the_rows_that_are() {
+fn a_row_that_is_not_there_waits_naming_the_rows_that_are() {
     let list = rows(&[("A", Some("a"), None), ("B", None, Some("x.b"))]);
-    let why = Select::new("zzz").next(&screen(0, None, list)).unwrap_err();
+    let Ok(Next::Wait(why)) = Select::new("zzz").next(&screen(0, None, list)) else {
+        panic!("a row a scan may yet add is waited for");
+    };
     assert!(
         why.contains("no row \"zzz\"") && why.contains("\"a\"") && why.contains("\"x.b\""),
         "{why}"

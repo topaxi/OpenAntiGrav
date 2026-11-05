@@ -21,11 +21,12 @@ pub(super) struct CampaignPage {
 /// Which Race Campaign screen a `--menu-page` name asks for, if either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CampaignKind {
-    /// **HD/Fury only.** `Campaign Selection`, ahead of `Grid` - see
+    /// `Campaign Selection`, ahead of `Grid` - see
     /// `crate::campaign_stage::Screen::Selection`'s own doc. Refused on
-    /// every other title, the same way [`campaign_page`] already refuses a
-    /// source with no campaign at all. `selected` is `0` for Fury (the
-    /// default) and `1` for `Wipeout HD`, spelled `campaign-select` and
+    /// a title whose screen file authors none, the same way [`campaign_page`]
+    /// already refuses a source with no campaign at all. `selected` is the
+    /// entry's position in the screen's `campaignList` (`0`, the default, is
+    /// Fury on HD and 2048 on Omega), spelled `campaign-select` and
     /// `campaign-select@1`.
     Selection { selected: usize },
     /// `hd_base` picks HD's base `grid0`..`grid7` over Fury's (the default,
@@ -228,7 +229,7 @@ pub(super) fn campaign_page(
     if let Some(custom) = &custom {
         campaign.grids.clone_from(&custom.grids);
         campaign.selection_layout = None;
-        campaign.grid_layout_fury = None;
+        campaign.chooser = None;
     }
     // No per-session tip rotation, the same gap `circuit_names` below has -
     // see `crate::campaign::static_footer_overlay`. Read before
@@ -326,15 +327,19 @@ pub(super) fn campaign_page(
         kind,
         CampaignKind::Grid { hd_base: true, .. } | CampaignKind::Cell { hd_base: true, .. }
     );
-    let (hd_grids, hd_grid_layout) = match campaign.grid_layout_fury.as_ref().filter(|_| !base_hd) {
+    let wanted = if base_hd { "HD" } else { "Fury" };
+    let entry = campaign.chooser.as_ref().and_then(|chooser| {
+        chooser
+            .entries()
+            .iter()
+            .find(|entry| entry.tag() == Some(wanted))
+    });
+    let (hd_grids, hd_grid_layout) = match entry {
         // A mod campaign pages all of its own grids on the base layout.
         _ if custom.is_some() => (&campaign.grids[..], &campaign.grid_layout),
-        Some(layout) => (
-            campaign
-                .grids
-                .get(oag_hd::campaign::FURY_GRID_RANGE)
-                .unwrap_or(&[]),
-            layout,
+        Some(entry) => (
+            campaign.grids.get(entry.grids.clone()).unwrap_or(&[]),
+            &entry.layout,
         ),
         None => (
             campaign
@@ -357,12 +362,13 @@ pub(super) fn campaign_page(
                         oag_hd::campaign::SCREEN_ENTRY
                     );
                 };
-                let model =
-                    oag_ui_screens::campaign::selection::CampaignSelection::at(if selected == 0 {
-                        oag_ui_screens::campaign::selection::Campaign::Fury
-                    } else {
-                        oag_ui_screens::campaign::selection::Campaign::Hd
-                    });
+                let chooser = campaign.chooser.clone().with_context(|| {
+                    "this source has no Campaign Selection screen to read".to_string()
+                })?;
+                let model = oag_ui_screens::campaign::selection::CampaignSelection::at(
+                    chooser,
+                    oag_ui_screens::campaign::selection::Campaign::new(selected),
+                );
                 selected_campaign = Some(model.selected());
                 // No progress source in a still - `0` earned, the same
                 // fresh-profile reading `GridSelection::new`'s own bare
@@ -371,23 +377,29 @@ pub(super) fn campaign_page(
                 // total cell count never depends on a save file - so it is
                 // summed here the same way `CampaignStage::campaign_gold_medals`
                 // does live.
-                let total = |range: std::ops::Range<usize>| {
-                    campaign
-                        .grids
-                        .get(range)
-                        .unwrap_or(&[])
-                        .iter()
-                        .map(|grid| u32::try_from(grid.cells.len()).unwrap_or(u32::MAX))
-                        .sum::<u32>()
-                };
+                let gold: Vec<(u32, u32)> = model
+                    .chooser()
+                    .entries()
+                    .iter()
+                    .map(|entry| {
+                        let total = campaign
+                            .grids
+                            .get(entry.grids.clone())
+                            .unwrap_or(&[])
+                            .iter()
+                            .map(|grid| u32::try_from(grid.cells.len()).unwrap_or(u32::MAX))
+                            .sum::<u32>();
+                        (0, total)
+                    })
+                    .collect();
                 oag_ui_screens::campaign::selection::draw_list(
                     &model,
                     layout,
                     skin,
                     frame,
                     strings,
-                    (0, total(oag_hd::campaign::FURY_GRID_RANGE)),
-                    (0, total(oag_hd::campaign::HD_GRID_RANGE)),
+                    &gold,
+                    0,
                     backdrop,
                     false,
                     &|src| sprites.get(src),
@@ -465,8 +477,9 @@ pub(super) fn campaign_page(
                         next_flyer: hd_grids
                             .get(tier + 1)
                             .and_then(|grid| grid.flyer_name.as_deref()),
-                        fury: !base_hd && campaign.grid_layout_fury.is_some(),
+                        fury: !base_hd && campaign.chooser.is_some(),
                         track_emblems: &campaign.circuit_emblems,
+                        medal_tier_rows: title.campaign.medal_rows(),
                     },
                     backdrop,
                     false,
@@ -479,7 +492,7 @@ pub(super) fn campaign_page(
         match kind {
             CampaignKind::Selection { .. } => {
                 anyhow::bail!(
-                    "Campaign Selection is Wipeout HD/Fury's own screen - this source has none"
+                    "Campaign Selection is the screen of a title whose CellMode_Definition.xml authors one - this source has none"
                 );
             }
             CampaignKind::Grid { .. } => {

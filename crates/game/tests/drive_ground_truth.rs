@@ -322,7 +322,7 @@ fn a_row_that_does_not_exist_and_a_wait_that_never_ends_fail_with_the_state() {
     let missing = drive(
         &image,
         "no-row",
-        "boot; select racebox; press cross; until page=race; select nonesuch",
+        "boot; select racebox; press cross; until page=race; select nonesuch within 30",
         None,
     );
     assert!(!missing.output.status.success());

@@ -96,6 +96,7 @@ mod tests {
             available_in_zone: false,
             unlock_grid: None,
             sound_register: None,
+            string_id: None,
             foreign: None,
         }
     }

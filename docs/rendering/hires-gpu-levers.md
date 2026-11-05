@@ -160,6 +160,63 @@ plus blur reads faster than no MSAA**, which is the clock, not the work (the blu
 MHz in 85 of 110 samples, the others in 1,040 and 1,600). Repeats within one configuration agree to 0.3 %, so
 the table's spread cannot show it. The race-pass rows at 800p and 1080p are stable to 0.1 to 1 % across rounds (the dGPU's whole-`Scene::render` row is noisier, up to 25 % between its clock states). A 4K Deck row is good to about 15 %.
 
+## The Deck's verdict on the 2026-11-04 work (2026-11-05)
+
+`RADV VANGOGH`, `dist` `znver2` `perf-probe` builds, offscreen, `--msaa off --render-scale 100`, the
+arms interleaved over 3 processes, `OAG_RENDER_BENCH=300 OAG_RENDER_GPU_BENCH=100 OAG_RENDER_PERF=1`.
+Before is `583530a01` (the spans alone), after `4328ffdc4` (the folds, the plain draws and the atlas
+skip). HD, Pulse PSP EU and Pure PSP USA, the method's frame at tick 2,500.
+
+| `Scene::render` GPU, ms | 1280x800 | 1920x1080 | 3840x2160 |
+| --- | ---: | ---: | ---: |
+| HD | 9.79 to 6.91 (-29 %) | 14.14 to 9.63 (-32 %) | 35.94 to 21.62 (-40 %) |
+| Pulse | 3.38 to 2.83 (-16 %) | 4.80 to 3.40 (-29 %) | 11.56 to 7.41 (-36 %) |
+| Pure | 2.68 to 1.53 (-43 %) | 3.74 to 2.54 (-32 %) | 11.10 to 7.41 (-33 %) |
+
+| Pipelined per frame, ms | 1280x800 | 1920x1080 | 3840x2160 |
+| --- | ---: | ---: | ---: |
+| HD | 5.44 to 4.81 (-12 %) | 8.34 to 5.56 (-33 %) | 22.84 to 13.58 (-41 %) |
+| Pulse | 2.70 to 2.68 | 2.79 to 2.73 | 6.52 to 3.75 (-43 %) |
+| Pure | 1.54 to 1.54 | 2.13 to 1.63 (-24 %) | 6.98 to 4.51 (-35 %) |
+
+The second table is the one to plan from. `Scene::render GPU` waits for idle after each frame, and
+HD at 1080p reads 9.63 ms there and 5.56 ms back to back, under even the sum of its spans (7.35 ms).
+So the wait-idle figures run high, most likely the clock falling in the idle gap (inferred, the
+clock was not sampled), and **the unattributed residue (HD 1.7 ms, Pulse 1.0 ms at 1080p) is most
+likely that gap, not work: do not hunt it**. The flat pipelined cells have a lower GPU figure, so
+they are bound by the CPU, not unimproved.
+
+HD's rows at 1080p, ms: track solid shaded 7.13 to 3.46 (-51 %, Pulse -52, Pure -50, against the
+iGPU's -47 to -51), shadow atlas 0.32 to 0.04, advert cards 0.68 to 0.48, craft 0.76 to 0.65,
+depth half, bloom and `between passes` flat. `RADV_DEBUG=shaderstats`, peak VGPRs and heaviest
+shader: HD 168 to 128, 4,315 to 3,886 instructions, 8 subgroups a SIMD at 128; Pulse and Pure 96 to
+48, 3,578 to 1,603 instructions.
+
+**The plain draws cost no CPU**: `render_viewports CPU` moves -8 to +2 % across the nine cells,
+so the fallback to the rich pipeline over short runs is not needed. Pictures on RADV: Pulse and Pure
+byte-identical in all 18 shots; HD differs in all 9, at 1080p by 1 level at most (rmse 0.001).
+
+**Shadows**, HD 1080p, the same environment, 3 processes each: `--shadows off` takes 9.59 to 7.74 ms
+wait-idle and 5.56 to 4.96 ms pipelined, so shadows cost 0.6 ms of throughput, not the 3.5 ms of the
+table above, where the atlas skip has also landed. The named spans hold 0.32 ms of it.
+
+**Two views, on the after binary, recorded interleaved** (`--players 2 --split-cut vertical`, 1 of 3
+processes), ms:
+
+| | `render_viewports` CPU | pipelined |
+| --- | ---: | ---: |
+| HD, 800p / 1080p | 8.17 / 8.16 | 9.29 / 9.61 |
+| Pulse, 800p / 1080p | 4.20 / 4.51 | 4.46 / 4.59 |
+| Pure, 800p / 1080p | 2.69 / 2.91 | 2.87 / 2.82 |
+
+**A split is bound by the CPU**: the pipelined rate sits on the recording cost in every cell. One
+view at 800p is too (HD: `total` 7.0 ms, 3.4 of it submit). The Deck's own screen no longer gains
+from a GPU cut except in battery life; what is left pays at a docked 1080p and 4K.
+
+What stays, in order, for 4K: track solid shaded, 10.5 of HD's 21.6 ms; HD bloom and encode, 4.4 ms.
+Advert cards are not a draw-once: they animate on the scenery clock, and a split already draws them
+with the first view only.
+
 ## Ranked levers
 
 Ranked by what each costs the Deck between 1080p and 4K, then by what it gives back. Craft (+2.9 ms)

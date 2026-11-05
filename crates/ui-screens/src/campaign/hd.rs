@@ -154,7 +154,7 @@ mod tests;
 pub mod cell_brackets;
 pub mod cell_emblems;
 mod cell_text;
-mod medal;
+pub mod medal;
 mod unlock;
 use unlock::{POINTS_GROUP, UnlockKind, unlock_box};
 // `hd_target_title`/`hd_tinted_medal_draw` are called below; `hd_medal_frame`/
@@ -340,6 +340,9 @@ pub struct CellArt<'a> {
     /// A circuit's white emblem by its lowercased id, as the `src` the sheet
     /// holds it under.
     pub track_emblems: &'a std::collections::HashMap<String, String>,
+    /// The stored row of `Hexmedal_HD`'s difficulty block that holds gold, silver and bronze:
+    /// `[0, 1, 2]` is HD's (gold on top), see [`medal::hd_medal_frame`].
+    pub medal_tier_rows: [u8; 3],
 }
 
 /// `Cell Selection`'s draw list: the same 32-position staggered hex grid
@@ -487,7 +490,13 @@ pub fn hd_cell_draw_list(
                 // guess. See [`super::CellSelection::difficulty_at`]'s own
                 // doc for when this triggers.
                 let difficulty = model.difficulty_at(x, y).unwrap_or(Difficulty::Medium);
-                out.push(hd_tinted_medal_draw(image, placed, medal, difficulty));
+                out.push(hd_tinted_medal_draw(
+                    image,
+                    placed,
+                    medal,
+                    difficulty,
+                    art.medal_tier_rows,
+                ));
             }
             continue;
         }
@@ -649,6 +658,7 @@ pub fn hd_cell_draw_list(
                     placed,
                     tier,
                     model.difficulty(),
+                    art.medal_tier_rows,
                 )),
                 // `Target Title Arrow` carries no tier of its own - draws at
                 // its authored crop unchanged.
@@ -752,9 +762,8 @@ fn hd_track_line(cell: &Cell, circuit_names: &CircuitNames, strings: &StringTabl
     let Some(id) = cell.track.as_deref() else {
         return String::new();
     };
-    // Omega's table names 17_TRACK and 18_TRACK (and the Zone and 2048 circuits) but not every
-    // circuit, so `CircuitNames::choose` finds no copy that names all 38 and leaves the list
-    // empty; the cell reads its own circuit off the served table, case folded, as `choose` does.
+    // A source whose copies name no circuit list at all leaves `circuit_names` empty; the cell
+    // then reads its own circuit off the served table, case folded, as `choose` does.
     circuit_names
         .get(id)
         .or_else(|| {

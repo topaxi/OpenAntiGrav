@@ -102,15 +102,16 @@ impl Select {
     ///
     /// # Errors
     ///
-    /// The row is not on the screen, the screen reports no focus, or pressing never moves it
-    /// onto the row - each says what the screen does have.
+    /// The screen reports no focus, or pressing never moves it onto the row - each says what
+    /// the screen does have. A row not on the screen is [`Next::Wait`]: a scan landing adds rows
+    /// a frame from now (the MUSIC row), so it is an error only once the step's budget is gone.
     pub fn next(&mut self, screen: &Screen) -> Result<Next, String> {
         let Some(row) = find(screen, &self.target) else {
-            return Err(format!(
+            return Ok(Next::Wait(format!(
                 "no row {:?}: {}",
                 self.target,
                 rows_listing(screen)
-            ));
+            )));
         };
         let Some(focus) = screen.focus.as_ref().map(|f| f.index) else {
             return Err(format!(

@@ -93,10 +93,18 @@ screenshot.
 **The `_fury` half is a styling, not different content.** `OPT_FE_STYLE` offers
 exactly `HD` and `FURY`, and the disc ships every illustration twice -
 white-and-blue and black-and-red - with the same strings behind both. That is
-the axis `settings.display.front_end_style` offers, defaulting to the base
-game's. Asserted in
+the axis `settings.display.front_end_style` offers. **Unpicked, the styling is the one the menus are drawn in**,
+not the first entry: the menus follow the ground of the archive the source serves (Fury's black and red on
+`DATA00`, which the EU disc serves), so `oag_title::FeatureStyle::dark_ground` names that match, and an empty
+setting resolves to the style whose ground it is (`oag_game::loading::Assets::style` records the choice; the
+OPTIONS row reads the same). A saved name wins. The whole screen follows it: pictures, mode icon's clip and the
+four globals. A change made in OPTIONS reaches the next load without a restart (`apply_setting` re-reads the
+assets from the new setting). The first entry used to be taken, which put HD's white art on Fury's black
+page for every player who never opened OPTIONS. Asserted in
 `every_feature_illustration_is_on_the_disc_in_both_stylings`, which checks all
-ten resolve and that the Fury name is the base name plus a suffix.
+ten resolve and that the Fury name is the base name plus a suffix, and
+`an_unpicked_style_is_the_one_the_menus_are_drawn_in`, which checks the deck, the mode icons and the globals
+against the menus' own ground.
 
 ### The feature is a random draw, and the deck is the race mode's
 
@@ -255,6 +263,17 @@ icon's clip in a 250 px square. Every one of those is the original's number.
 
 Departures, each deliberate:
 
+- **The picture is cut to its panel when its ground would show outside it.** The window is 896x480 at
+  (180, 190), which reaches x 1076 and y 670 against the panel's 160 to 950 by 155 to 655. Both stylings' pictures
+  are opaque to the edge: Fury's ground is the screen's own black, so the overhang shows nothing and the picture
+  is drawn as the layout places it, to the bit; HD's ground is white, and drawn whole it fills the padding and
+  covers the description beside it, at every screen size (the grid is one 1920x1080 drawn under the Safe Area, so
+  the shape of the screen only letterboxes it). `Frame::fit_to_panel` cuts the quad and its texels at the panel's
+  edge when anything that differs from the ground lies outside. **Chosen, not measured**: how the original treats
+  the overhang in the HD styling is unread (no RPCS3 frame of the HD styling's loading screen). Tests:
+  `a_picture_with_a_showing_ground_lies_inside_its_panel_on_every_screen_shape` (1280x800, 1920x1080, 2560x1080
+  and a phone's 20:9) and, on the disc's art, `an_unpicked_style_is_the_one_the_menus_are_drawn_in`. Still open:
+  in the HD styling the white ground also covers the lower half of the feature's name row (y about 190 to 220).
 - **The mode icon plays for one mode only.** The panel plays a Bink clip, and an RPCS3 frame of a
   `GetMode()==3` race matches `single_race_icon_fury.bik` (see "The pair"). Only that mode is mapped
   (`oag_hd::loading::MODE_ICONS_FURY`); every other mode id draws the panel's label and brackets and no icon,
@@ -361,7 +380,9 @@ code layout, and is what 2026-11-01's `hd-loading-layout` replaced:
 bar's phase, which are not locked between the two.)
 
 **Omega:** not checkable here. Omega's front end is HD's, but no Omega loading
-frame exists and shadPS4 race shots are untrusted.
+frame exists and shadPS4 race shots are untrusted. The unpicked-style rule and the panel cut are title data
+(`FeatureStyle::dark_ground`) and a layout rule, so they carry over once Omega has a loading deck of its own
+(checked, applies, not wired: the open follow-up, which is to read what Omega's disc ships for it).
 
 ## Looking at it
 

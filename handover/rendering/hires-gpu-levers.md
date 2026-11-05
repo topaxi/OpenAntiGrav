@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd, pulse]
-updated: 2026-11-04
-summary: "Track shaders folded and every pass spanned on the iGPU; the Deck's verdict, RADV stats and the per-craft pass merge are what is left"
+updated: 2026-11-05
+summary: "The Deck confirmed the track folds; only docked 4K still gains: f16, HD VGPRs, bloom, the per-craft pass merge"
 categories: [rendering, tooling]
 ---
 
@@ -16,17 +16,7 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
 
 ## Open
 
-- **Nothing of 2026-11-04 is measured on the Deck.** The wins are Intel ARL iGPU numbers, where a
-  rich shader falls to SIMD8 with spills, so they are not a forecast. Measure: the span bench and
-  `RADV_DEBUG=shaderstats` before and after, on `RADV VANGOGH`. Size 60, difficulty 20.
-- **What the 2.0 (Pulse) and 3.7 ms (HD) of `Scene::render` the old spans left are on the Deck.**
-  The spans now split them; the iGPU has HD's `between passes` at 1.1 to 1.3 ms and its unattributed
-  residue at 1.3 to 1.4 ms at 1080p and at 320x180 alike, so a fixed cost, not pixels, and not the
-  230 KiB of staged writes a frame. Size 40, difficulty 20.
-- **The plain draws' CPU side**: `pipeline_sets` +48 % on HD. Unresolved on the notebook; the Deck's
-  frame thread is what would feel it. Measure: `OAG_RENDER_BENCH=300` before and after. The
-  fallback is to stay in the rich pipeline over a short run of plain draws.
-- **`between passes` is the largest unnamed thing left** (x28 on HD). Split it by what it holds
+- **`between passes`** (x28 on HD, 0.5 ms on the Deck). Split it by what it holds
   (the race pass's clears and resolve first). Measure: read the span on the Deck, then move a mark.
 - **Advert cards**: five are drawn every frame, 400 to 550 us and 900 k fragments on the iGPU.
   Whether the original redraws them every frame is unread; a lower rate moves pixels.
@@ -48,7 +38,5 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
 
 ## Next Steps
 
-1. The Deck: `OAG_RENDER_GPU_BENCH=100 OAG_RENDER_PERF=1 oag-game <image> --race --mode single_race
-   --seed 1 --autopilot --no-audio --size 1920x1080 --ticks 2500 --screenshot out.png` on the
-   binary before and after the track commits, interleaved, on HD and Pulse, and the same with
-   `RADV_DEBUG=shaderstats MESA_SHADER_CACHE_DISABLE=true` and `--ticks 1` for the VGPR counts.
+1. Only docked 4K still gains from the GPU (`docs/rendering/hires-gpu-levers.md`, "The Deck's verdict"):
+   f16 in `lit_texel`, and fewer than about 104 VGPRs on HD's rich pipelines for more waves than 8.

@@ -270,7 +270,10 @@ impl Driver {
                     self.spend(within)?;
                     self.tap(button, within)?;
                 }
-                Next::Wait(_) => self.wait_frame()?,
+                Next::Wait(reason) => {
+                    self.spend(within).map_err(|e| anyhow!("{e}; {reason}"))?;
+                    self.wait_frame()?;
+                }
             }
         }
     }

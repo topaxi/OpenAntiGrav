@@ -407,3 +407,59 @@ fn the_selector_pulse_resumes_where_the_screen_was_left() {
     let jump = grid.windows(2).filter(|w| w[1] + 100 < w[0]).count();
     assert_eq!(jump, 0, "the Grid clock never fell back to 0: {grid:?}");
 }
+
+/// Omega's RACE CAMPAIGN opens the three-way chooser on its first entry (2048), and each of the
+/// other two entries opens its own grid: HD's `grid0` and Fury's `grid8`, with Back returning to
+/// the entry it came from. 2048's grids are not loaded (`grid_16`..`grid_18` author no
+/// `RequiredPoints`), so confirming it stays on the chooser rather than falling into HD's cell
+/// screen with nothing in it. Dropping the chooser read, the three-way list or the redirect
+/// failing here is what this is for.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omegas_chooser_opens_hd_and_fury_and_keeps_2048_on_the_chooser() {
+    let Some(image) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let profile = Profile::fresh("omega-chooser");
+    let states = profile.drive_on(
+        &image,
+        &format!(
+            "{OPEN}; press right; ticks 5; press cross; ticks 20; press circle; ticks 5; \
+             press right; ticks 5; press cross; ticks 20; press circle; ticks 5; \
+             press left; press left; ticks 5; press cross; ticks 30"
+        ),
+        "a.jsonl",
+    );
+    let mut walked: Vec<(String, String)> = Vec::new();
+    for state in &states {
+        let Some(screen) = state.get("screen").filter(|s| s["kind"] == "campaign") else {
+            continue;
+        };
+        let at = (
+            screen["id"].as_str().unwrap_or_default().to_string(),
+            screen["focus"]["id"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+        );
+        if walked.last() != Some(&at) {
+            walked.push(at);
+        }
+    }
+    let want: Vec<(&str, &str)> = vec![
+        ("selection", "FE_RC"),
+        ("selection", "FE_RC_HD"),
+        ("grid", "grid0"),
+        ("selection", "FE_RC_HD"),
+        ("selection", "FE_RC_FURY"),
+        ("grid", "grid8"),
+        ("selection", "FE_RC_FURY"),
+        ("selection", "FE_RC_HD"),
+        ("selection", "FE_RC"),
+    ];
+    let got: Vec<(&str, &str)> = walked
+        .iter()
+        .map(|(a, b)| (a.as_str(), b.as_str()))
+        .collect();
+    assert_eq!(got, want);
+}
