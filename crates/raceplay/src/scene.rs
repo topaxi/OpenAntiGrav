@@ -57,6 +57,8 @@ pub(crate) struct FrameWork {
     pub(crate) advert_cards: u32,
     /// The craft's texture-animation and node tables (`write_anims`, `write_node_anims`).
     pub(crate) craft_anims: u32,
+    /// The craft shine passes' environment-mapped coordinates (`Scene::write_shine`).
+    pub(crate) shine_maps: u32,
     /// Split-screen views whose glow was prepared ([`Scene::prepare_split_bloom`]), and
     /// the composites [`Scene::composite_bloom`] added for them.
     pub(crate) bloom_views_prepared: u32,

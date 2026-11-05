@@ -338,6 +338,44 @@ fn a_span_of_the_vertices_gets_the_whole_calls_bits_and_nothing_else_moves() {
     }
 }
 
+/// Views that draw different spans of an animated circuit each get the bits of a fresh call,
+/// at each clock value and whichever of them drew a vertex first.
+#[test]
+fn an_animated_vertex_is_current_for_each_view_that_draws_it() {
+    let mut track = circuit();
+    track.vertices[1].xform = 1;
+    track.vertices[3].xform = 1;
+    track.anim_nodes = vec![oag_mesh::mesh::AnimNode {
+        transform: oag_mesh::mesh::Motion::Vex(Box::default()),
+        static_above: oag_vex::vex::IDENTITY,
+        parent: None,
+    }];
+    let mut model = build_track(&track).unwrap().model;
+    skewed(&mut model);
+    let last = model.vertices.len();
+    let mut kept = TrackNormals::default();
+    let mut out = Vec::new();
+    for (yaw, seconds, span) in [
+        (0.3_f32, 1.0_f32, 0..1),
+        (2.1, 1.0, 0..last),
+        (-1.2, 2.0, 1..last),
+        (0.9, 2.0, 0..2),
+        (0.4, 3.0, 2..last),
+    ] {
+        let view = Mat4::from_rotation_y(yaw);
+        let spans = [span.clone()];
+        kept.write_view_spans(&model, &mut out, view, seconds, &spans);
+        let fresh = per_call_view_map(&model, view, seconds);
+        for index in span {
+            assert_eq!(
+                out[index].map(f32::to_bits),
+                fresh[index].map(f32::to_bits),
+                "vertex {index} at yaw {yaw}, seconds {seconds}"
+            );
+        }
+    }
+}
+
 /// Every index a draw reads is inside its span, so the coordinates it reads are written.
 #[test]
 fn a_draws_span_holds_every_vertex_it_indexes() {

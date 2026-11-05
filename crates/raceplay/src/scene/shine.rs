@@ -118,16 +118,17 @@ impl Scene {
             })
     }
 
-    /// Writes the pose and the environment-mapped coordinates of every craft this view draws:
+    /// Writes every drawn craft's pose and the environment-mapped coordinates:
     /// [`oag_render::shine::write`] over the craft's model matrix, never the camera.
     ///
-    /// **A view writes only what it draws, and a craft's coordinates go up once a frame**: they
-    /// are a function of the craft's pose and flaps, whichever camera asks, so
-    /// [`Drawable::write_environment_map`] skips a pose its buffer already holds and the second
-    /// view to see a craft draws what the first left. A later view's write lands before that
-    /// view's own submission. A craft no view sees keeps stale coordinates that no pixel reads,
-    /// and its pose differs when it comes back. The pose uniform carries the view-projection
-    /// and stays per view.
+    /// **The coordinates are the frame's, not the view's**: a craft's pose, its flaps and the
+    /// set of live craft (`Scene::shines` reads the slot, never the viewpoint) are the same
+    /// from every camera, so only the first view of a split uploads them
+    /// ([`Scene::does_frame_work`]) and a later view draws what it left in the vertex
+    /// buffers. That first view maps every craft, not only those it sees: a later view's
+    /// write is copied into its log and again into the queue, which costs a split more than
+    /// mapping a craft no view shows. A race of one view maps what it draws. The pose uniform
+    /// carries the view-projection and stays per view.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn write_shine(
         &self,
@@ -146,9 +147,11 @@ impl Scene {
             track
                 .drawable
                 .write(queue, view_projection, Mat4::IDENTITY, prev_vp);
-            track
-                .drawable
-                .write_node_anims_started(queue, seconds, &|start| race.channel_started(start));
+            if self.does_frame_work() {
+                track
+                    .drawable
+                    .write_node_anims_started(queue, seconds, &|start| race.channel_started(start));
+            }
             let mut shown = track.shown.borrow_mut();
             shown.clear();
             shown.extend(
@@ -170,15 +173,26 @@ impl Scene {
         // The flaps the hull's base draw swings: a person's own (`deflect_airbrakes` runs for
         // every craft a person flies), so a rival's pass stays with its own stowed hull.
         for (slot, shine) in self.shines(race, cull.frustum) {
-            let ship = race.ship_model_matrix_of(slot);
             shine.write(
                 queue,
                 view_projection,
-                ship,
+                race.ship_model_matrix_of(slot),
                 prev_vp * prev.ship(slot, race),
             );
-            let flaps = race.airbrake_flaps_of(slot);
-            shine.write_environment_map(queue, ship, flaps, scratch);
+        }
+        if self.does_frame_work() {
+            let mapped = cull
+                .frustum
+                .filter(|_| self.layer.get() == super::viewports::Layer::Whole);
+            for (slot, shine) in self.shines(race, mapped) {
+                let ship = race.ship_model_matrix_of(slot);
+                let flaps = race.airbrake_flaps_of(slot);
+                shine.write_environment_map(queue, ship, flaps, scratch);
+            }
+            self.frame_work.update(|w| super::FrameWork {
+                shine_maps: w.shine_maps + 1,
+                ..w
+            });
         }
     }
 
