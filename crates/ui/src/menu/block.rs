@@ -205,15 +205,18 @@ pub fn draw_fill(block: &Block, art: &BlockArt, scale: (f32, f32), out: &mut Vec
         return;
     }
     let color = block.color;
+    // The colour's own alpha scales the texel's, as a vertex colour does: an
+    // opaque `Color` is unchanged, `0x7f646464` halves each pass.
+    let swatch = |texel: f32| alpha(color, texel * color[3]);
     // Pass one: the swatch's own alpha, whichever style.
-    fill(block, art, scale, alpha(color, art.fill_alpha), out);
+    fill(block, art, scale, swatch(art.fill_alpha), out);
     // Pass two: the swatch again on Fury, the outline's texel on HD.
     let second = if art.fury {
         art.fill_alpha
     } else {
         art.solid_alpha
     };
-    fill(block, art, scale, alpha(color, second), out);
+    fill(block, art, scale, swatch(second), out);
 }
 
 /// [`draw`]'s border alone: four corner pieces and four edges.
