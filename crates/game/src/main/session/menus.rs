@@ -380,10 +380,16 @@ impl Session {
         for (key, value) in settings::menu_seeds(&self.settings, self.anisotropy, title, platform) {
             // The row reads what the game is drawn at, which under gamescope is not the stored
             // value until the player picks one.
-            let value = if key == "graphics.render_scale" {
-                menu::Value::Text(self.render_scale_for(rect).to_string())
-            } else {
-                value
+            let value = match (key, &value) {
+                ("graphics.render_scale", _) => {
+                    menu::Value::Text(self.render_scale_for(rect).to_string())
+                }
+                // An unpicked style reads as the one the menus and the loading screen are in.
+                ("display.front_end_style", menu::Value::Text(text)) if text.is_empty() => self
+                    .loading_assets
+                    .style
+                    .map_or(value, |style| menu::Value::Text(style.to_string())),
+                _ => value,
             };
             // Rows this platform drops (`prepare.rs`) are not a gap.
             let dropped = if settings::platform::hidden_rows(oag_mobile::MOBILE).contains(&key) {

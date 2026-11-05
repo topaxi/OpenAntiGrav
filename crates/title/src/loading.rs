@@ -31,8 +31,9 @@ pub struct Loading {
     pub wave: Option<Wave>,
     /// The illustrated features this title rotates through, grouped by the
     /// front-end style that selects between them. Empty on both PSP titles; one
-    /// entry per style the disc ships art for, the first being what a source with
-    /// no saved choice gets. See [`FeatureStyle`] and [`Feature`].
+    /// entry per style the disc ships art for. A source with no saved choice gets the
+    /// one matching the served front end's ground ([`FeatureStyle::dark_ground`]).
+    /// See [`FeatureStyle`] and [`Feature`].
     pub features: &'static [FeatureStyle],
     /// The four front-end globals this screen draws with, when the title names
     /// them. **Names, not colours**: looked up in the source's own `FEGlobals`, so a
@@ -235,6 +236,14 @@ pub enum Chrome {
 pub struct FeatureStyle {
     /// What the disc calls this style, and what a settings file stores.
     pub name: &'static str,
+    /// Whether this style is the one a front end served with a dark ground
+    /// (`HD_BG` near black) is in.
+    ///
+    /// The front end's menus have no setting to follow: they are drawn in the
+    /// style of the archive the source serves, so a source with no saved choice
+    /// takes the style whose flag matches that ground, not the first of the
+    /// list. See [`Palette::background`].
+    pub dark_ground: bool,
     /// Its five, in the order the executable names them.
     pub features: &'static [Feature],
     /// The Bink clip the mode icon's panel plays, by the race's mode id (the

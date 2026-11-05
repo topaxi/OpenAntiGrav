@@ -147,8 +147,13 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
         "the caption is `FE_LOADINGDOT` out of the disc's own English table"
     );
 
-    // The default styling is the base game's, and the feature is the one both
-    // observations of the running game showed.
+    // The default styling is the one the menus are drawn in (see
+    // `an_unpicked_style_is_the_one_the_menus_are_drawn_in`), and the feature is the one
+    // both observations of the running game showed.
+    let drawn = oag_hd::loading::FEATURES
+        .iter()
+        .find(|style| Some(style.name) == assets.style)
+        .expect("the style the assets hold is one HD ships");
     // **All five**, because the original draws one per screen and this is read
     // once per disc.
     assert_eq!(assets.features.len(), 5, "HD ships five features");
@@ -158,11 +163,7 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
         5,
         "and five illustrations for them"
     );
-    for (_, entry) in oag_hd::loading::FEATURES[0]
-        .features
-        .iter()
-        .map(|f| ((), f.image))
-    {
+    for entry in drawn.features.iter().map(|f| f.image) {
         assert!(
             art.sheet.get(entry).is_some(),
             "{entry} is in the one sheet the screen draws from"
@@ -316,6 +317,7 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
         "asking for Fury's styling gets Fury's art"
     );
     assert_eq!(fury.features.len(), assets.features.len());
+    assert_eq!(fury.style, Some(oag_hd::loading::STYLE_FURY));
 
     // And the two entries a wave would need really are absent, so this reads as
     // "cut" rather than "not looked for". The running game agrees: its own
@@ -330,6 +332,84 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
             "{entry} is on an HD archive after all; the cut finding needs re-reading"
         );
     }
+}
+
+/// An unpicked style is the style the menus are drawn in, and the whole screen follows it:
+/// the pictures, the mode icon's clip and the four globals.
+///
+/// The menus never read `display.front_end_style`: they are in the style of the archive the
+/// source serves (`oag_game::boot`'s block art). The loading deck used to take HD's first
+/// entry instead, so a player who never touched OPTIONS saw HD's white art on Fury's black
+/// page. Taking the first entry again fails the first assertion.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_unpicked_style_is_the_one_the_menus_are_drawn_in() {
+    let Some(image) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let source = image.display().to_string();
+    let menus_are_fury = super::hd_menu_ground_truth::shell(&image)
+        .frame
+        .blocks
+        .expect("the nine-patch decoded, so the frame carries block art")
+        .fury;
+    let menus = oag_hd::loading::FEATURES
+        .iter()
+        .find(|style| style.dark_ground == menus_are_fury)
+        .expect("HD ships a style for the menus' ground");
+    let (table, entries) = table_and_entries(&image);
+
+    let unpicked = Assets::load(&source, &table, entries.as_deref(), None);
+    assert_eq!(
+        unpicked.style,
+        Some(menus.name),
+        "the deck and the menus agree"
+    );
+    assert_eq!(
+        menus.name,
+        oag_hd::loading::STYLE_FURY,
+        "DATA00 serves Fury"
+    );
+
+    let art = unpicked.art.as_ref().expect("HD ships art");
+    for feature in menus.features {
+        assert!(
+            art.sheet.get(feature.image).is_some(),
+            "{} is in the sheet",
+            feature.image
+        );
+    }
+    let icons: Vec<&str> = unpicked
+        .mode_icons
+        .iter()
+        .map(|i| i.entry.as_str())
+        .collect();
+    let expected: Vec<&str> = menus.mode_icons.iter().map(|(_, entry)| *entry).collect();
+    assert_eq!(
+        icons, expected,
+        "the mode icon's clips are the menus' style's"
+    );
+    let palette = unpicked.palette.expect("HD names four globals");
+    assert!(
+        palette.background[..3].iter().sum::<f32>() < 1.5,
+        "the globals are the served black page's: {:?}",
+        palette.background
+    );
+
+    // The same as asking for it by name, and a different pick is honoured.
+    let named = Assets::load(&source, &table, entries.as_deref(), Some(menus.name));
+    assert_eq!(named.style, unpicked.style);
+    assert_eq!(
+        named.features.len(),
+        unpicked.features.len(),
+        "the same prose behind either"
+    );
+    let other = oag_hd::loading::FEATURES
+        .iter()
+        .find(|style| style.name != menus.name)
+        .expect("HD ships two styles");
+    let picked = Assets::load(&source, &table, entries.as_deref(), Some(other.name));
+    assert_eq!(picked.style, Some(other.name));
 }
 
 /// Pulse still gets exactly what it always got: tips, a real strip, no still.
