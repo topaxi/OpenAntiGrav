@@ -606,7 +606,7 @@ const FE_CANDIDATES: &[(&str, Platform)] = &[("USRDIR/DATA02.PSARC", Platform::P
 /// `data08` from 02.30 on. Listed `data08` first, ahead of every base archive.
 ///
 /// Read off 02.51's loader: everything but `data00`, `data07` and `data08` in
-/// sorted order, then those two with `data00`, then `data08` alone, later loads
+/// sorted order, then `data00` and `data07`, then `data08` alone, later loads
 /// winning. So `data08` beats `data07` and both beat `DATA00`.
 /// `docs/ghidra/functions/ps3-hdfury-eu/update-0251.md`, "Archive load order".
 const PATCH_CANDIDATES: &[(&str, Platform)] = &[

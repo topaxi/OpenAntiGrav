@@ -3,7 +3,9 @@
 Sony's update packages for both HD sources, read directly, and how the engine mounts them. Fury disc
 `BCES00664`: 02.10, 02.30, 02.50, 02.51. PSN `NPEA00057`: 02.01, 02.10, 02.20, 02.30, 02.50, 02.51.
 Addresses and executables: [update-0251.md](../ghidra/functions/ps3-hdfury-eu/update-0251.md).
-Asserted by `crates/hd/tests/hd_update_chain_ground_truth.rs`.
+Asserted by `crates/hd/tests/hd_update_chain_ground_truth.rs` and, through `open_source`,
+`crates/source/tests/hd_update_source_ground_truth.rs`. Package hashes:
+[source-images.md](../reverse-engineering/source-images.md#hd-update-packages).
 
 **Every title loads as base game plus patches** (maintainer, 2026-11-05). With no update present
 HD opens exactly as it did.
@@ -109,7 +111,7 @@ Checked 2026-11-05 on both sources, patched against plain, `--race --track
 109.76, position `[-92.4, 37.8, -97.1]`, 821 draws on all four, and on each source the patched frame
 is the plain one byte for byte. The load reports differ by the strings line and, on PSN, by one effect found (`WO_TRAIL_HITSHIP_RED`,
 `data05`/`06`). Fury's `grid-select`, `cell-select` and `race` pages are identical; the patched PSN `cell-select` gains
-small corner marks on the card. All 16 PSN circuit names are unchanged.
+small corner marks on the card (art from `data05`/`06`, not named). All 16 PSN circuit names are unchanged.
 
 **The mix is the audible change.** `hd_mix` reads `data07`'s `GlobalAudioConfig.xml`. Against `DATA00`,
 Stereo and Surround alike; every other group, map and filter value holds:
@@ -130,7 +132,7 @@ filter does not move.
 (`data08`), and the wording moves with it (`DEATHS`, `DISTANCE TRAVELLED (KM)`). Unique ids: 2,038 on
 `DATA06`, 2,039 on `data07`, 2,041 on `data08`; new ones `ONL_AGE_RESTRICTION`, `3D`, `3D_STRENGTH`,
 one changed value, `BOOT_HEALTH_WARN_2`. The circuit names already came from the Fury-era copy
-(`DATA06`) and now come from `data08`. **`ingame_definition.xml`:** against `DATA00`, the removed `InGame 3D
+(`DATA06`) and now come from `data08`: the 28 circuit ids read the same in all 16 languages. **`ingame_definition.xml`:** against `DATA00`, the removed `InGame 3D
 Settings` screen and a repaired first line, confidence 90. **`additional_definition.xml`:** 3D options
 rewritten, one speaker-test row on `FEGlobals` colours. The chain changes no race HUD. Stereo is not
 planned, so the 3D rows are not read.
