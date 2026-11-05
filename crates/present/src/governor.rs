@@ -25,6 +25,11 @@
 //! - Decisions are taken on smoothed times, and a shed needs [`SHED_SECONDS`] of them over.
 //! - A shed starts a [`COOLDOWN_SECONDS`] in which nothing is decided, and the saving is read
 //!   as the smoothed CPU time before the shed minus after it, per knob.
+//! - A shed whose measured saving is under [`MIN_SAVING`] is undone when its cooldown ends. The
+//!   second weak reading in a row for the same knob also skips it: it is never shed again while
+//!   the governor lives (a reset keeps the skip, so a skip lasts the session). One weak reading
+//!   only undoes, so a load that happened to rise during the cooldown cannot disable a knob that
+//!   helps; an undo is not a restore and does not count towards the relapse backoff.
 //! - A restore needs the CPU, plus the saving that knob measured, to land at or under
 //!   [`RESTORE_FIT`] of the budget for [`RESTORE_SECONDS`] running, and the GPU to be clear.
 //! - A shed within the relapse window of a restore doubles the next restore's patience, up to
@@ -60,8 +65,17 @@ const SMOOTHING_SECONDS: f32 = 0.4;
 /// What a knob is believed to save, as a share of the budget, until a shed has measured it.
 const ASSUMED_SAVING: f32 = 0.1;
 
-/// The most knobs a governor can hold down at once.
+/// The most knobs a governor can hold down at once. A knob's id is below this.
 pub const MAX_LEVEL: usize = 8;
+
+/// A shed that saved less than this many seconds of smoothed CPU time did not help on this
+/// device. Above the 0.1 ms run-to-run noise of the Deck's CPU row only with the second reading
+/// in [`WEAK_READINGS_TO_SKIP`] behind it; `docs/rendering/cpu-governor.md` has the savings
+/// measured per knob.
+pub const MIN_SAVING: f32 = 0.000_2;
+
+/// How many weak readings in a row skip a knob for the rest of the session.
+pub const WEAK_READINGS_TO_SKIP: u8 = 2;
 
 /// One frame's reading.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -75,9 +89,35 @@ pub struct Sample {
     pub period: Option<f32>,
 }
 
+/// What a change of level was.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    /// A knob turned down because the CPU stayed over budget.
+    Shed,
+    /// A knob turned back up because the CPU has headroom to pay for it.
+    Restore,
+    /// A knob turned back up because it saved too little; see [`MIN_SAVING`].
+    Undo,
+    /// Knobs went away (the caller's list shrank, or nothing paces the frame).
+    Drop,
+}
+
+/// What a shed was measured to save, once its cooldown ended.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Reading {
+    /// The knob's id.
+    pub knob: usize,
+    /// The smoothed CPU time it saved, in seconds.
+    pub saving: f32,
+}
+
 /// A change of level, for the one log line each earns.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Change {
+    /// What happened.
+    pub kind: Kind,
+    /// The id of the knob that moved, when one did.
+    pub knob: Option<usize>,
     /// The level before.
     pub from: usize,
     /// The level after.
@@ -101,8 +141,14 @@ pub struct Governor {
     cooldown: u32,
     /// The smoothed CPU time before the shed that set the cooldown, to learn its saving from.
     before: Option<f32>,
-    /// What each level's knob saved, indexed by the level it was shed from.
+    /// What each knob saved, indexed by the knob's id.
     saving: [Option<f32>; MAX_LEVEL],
+    /// Consecutive weak readings per knob id.
+    weak: [u8; MAX_LEVEL],
+    /// Knobs never shed again, by id. Survives [`Governor::reset`].
+    skipped: [bool; MAX_LEVEL],
+    /// The last shed's reading, until the caller takes it.
+    reading: Option<Reading>,
     backoff: u32,
     /// Frames since the last restore, while that restore has not yet proved itself.
     since_restore: Option<u32>,
@@ -127,6 +173,9 @@ impl Governor {
             cooldown: 0,
             before: None,
             saving: [None; MAX_LEVEL],
+            weak: [0; MAX_LEVEL],
+            skipped: [false; MAX_LEVEL],
+            reading: None,
             backoff: 0,
             since_restore: None,
         }
@@ -144,15 +193,33 @@ impl Governor {
         self.cpu
     }
 
-    /// Back to full quality with nothing remembered: a stage change, or the governor switched off.
+    /// Back to full quality with nothing remembered but the skipped knobs: a stage change, or the
+    /// governor switched off.
     pub fn reset(&mut self) {
+        let (skipped, weak) = (self.skipped, self.weak);
         *self = Self::new();
+        self.skipped = skipped;
+        self.weak = weak;
     }
 
-    /// Feeds one frame. `steps` is how many knobs the caller can turn down right now.
+    /// Whether `knob` is skipped for the rest of the session: the caller leaves it out of its
+    /// ordered list when applying a level.
+    #[must_use]
+    pub fn is_skipped(&self, knob: usize) -> bool {
+        self.skipped.get(knob).copied().unwrap_or(false)
+    }
+
+    /// The reading the last cooldown measured, once.
+    pub fn take_reading(&mut self) -> Option<Reading> {
+        self.reading.take()
+    }
+
+    /// Feeds one frame. `knobs` is the ids of the knobs the caller can turn down right now, in
+    /// the order they are taken; a skipped one is passed over, and `level` counts the others.
     /// Returns the change of level this frame caused, if any.
-    pub fn record(&mut self, sample: Sample, steps: usize) -> Option<Change> {
-        let steps = steps.min(MAX_LEVEL);
+    pub fn record(&mut self, sample: Sample, knobs: &[usize]) -> Option<Change> {
+        let knobs = &knobs[..knobs.len().min(MAX_LEVEL)];
+        let steps = knobs.iter().filter(|&&k| !self.is_skipped(k)).count();
         let Some(period) = sample.period.filter(|p| p.is_finite() && *p > 0.0) else {
             return self.fall_to(0, sample.period.unwrap_or(0.0));
         };
@@ -175,8 +242,16 @@ impl Governor {
             if self.cooldown == 0
                 && let Some(before) = self.before.take()
                 && self.level > 0
+                && let Some(knob) = self.knob_at(knobs, self.level - 1)
             {
-                self.saving[self.level - 1] = Some((before - cpu).max(0.0));
+                return self.settle(
+                    knob,
+                    (before - cpu).max(0.0),
+                    cpu,
+                    gpu,
+                    period,
+                    frames(COOLDOWN_SECONDS),
+                );
             }
             return None;
         }
@@ -191,7 +266,8 @@ impl Governor {
             self.fit_frames = 0;
             self.over_frames += 1;
             if self.over_frames >= frames(SHED_SECONDS) && self.level < steps {
-                return self.shed(period, cpu, gpu, frames(COOLDOWN_SECONDS));
+                let knob = self.knob_at(knobs, self.level);
+                return self.shed(knob, period, cpu, gpu, frames(COOLDOWN_SECONDS));
             }
             return None;
         }
@@ -199,11 +275,14 @@ impl Governor {
         if self.level == 0 {
             return None;
         }
-        let saving = self.saving[self.level - 1].unwrap_or(ASSUMED_SAVING * period);
+        let knob = self.knob_at(knobs, self.level - 1);
+        let saving = knob
+            .and_then(|k| self.saving[k])
+            .unwrap_or(ASSUMED_SAVING * period);
         if cpu + saving <= RESTORE_FIT * period {
             self.fit_frames += 1;
             if self.fit_frames >= frames(RESTORE_SECONDS) << self.backoff {
-                return self.restore(period, cpu, gpu, frames(COOLDOWN_SECONDS));
+                return self.restore(knob, period, cpu, gpu, frames(COOLDOWN_SECONDS));
             }
         } else {
             self.fit_frames = 0;
@@ -211,11 +290,28 @@ impl Governor {
         None
     }
 
-    fn shed(&mut self, period: f32, cpu: f32, gpu: Option<f32>, cooldown: u32) -> Option<Change> {
+    /// The id of the `n`th knob of `knobs` that is not skipped.
+    fn knob_at(&self, knobs: &[usize], n: usize) -> Option<usize> {
+        knobs
+            .iter()
+            .copied()
+            .filter(|&k| !self.is_skipped(k))
+            .nth(n)
+            .map(|k| k.min(MAX_LEVEL - 1))
+    }
+
+    fn shed(
+        &mut self,
+        knob: Option<usize>,
+        period: f32,
+        cpu: f32,
+        gpu: Option<f32>,
+        cooldown: u32,
+    ) -> Option<Change> {
         if self.since_restore.take().is_some() {
             self.backoff = (self.backoff + 1).min(MAX_BACKOFF);
         }
-        let change = self.change(self.level + 1, cpu, gpu, period);
+        let change = self.change(Kind::Shed, knob, self.level + 1, cpu, gpu, period);
         self.level += 1;
         self.begin_cooldown(cooldown, Some(cpu));
         Some(change)
@@ -223,14 +319,40 @@ impl Governor {
 
     fn restore(
         &mut self,
+        knob: Option<usize>,
         period: f32,
         cpu: f32,
         gpu: Option<f32>,
         cooldown: u32,
     ) -> Option<Change> {
-        let change = self.change(self.level - 1, cpu, gpu, period);
+        let change = self.change(Kind::Restore, knob, self.level - 1, cpu, gpu, period);
         self.level -= 1;
         self.since_restore = Some(0);
+        self.begin_cooldown(cooldown, None);
+        Some(change)
+    }
+
+    /// The cooldown after a shed ended: keep the knob if it saved something, undo it if not.
+    fn settle(
+        &mut self,
+        knob: usize,
+        saving: f32,
+        cpu: f32,
+        gpu: Option<f32>,
+        period: f32,
+        cooldown: u32,
+    ) -> Option<Change> {
+        self.reading = Some(Reading { knob, saving });
+        if saving >= MIN_SAVING {
+            self.weak[knob] = 0;
+            self.saving[knob] = Some(saving);
+            return None;
+        }
+        self.weak[knob] = self.weak[knob].saturating_add(1);
+        self.saving[knob] = None;
+        self.skipped[knob] = self.weak[knob] >= WEAK_READINGS_TO_SKIP;
+        let change = self.change(Kind::Undo, Some(knob), self.level - 1, cpu, gpu, period);
+        self.level -= 1;
         self.begin_cooldown(cooldown, None);
         Some(change)
     }
@@ -250,7 +372,14 @@ impl Governor {
             }
             return None;
         }
-        let change = self.change(target, self.cpu.unwrap_or(0.0), self.gpu, period);
+        let change = self.change(
+            Kind::Drop,
+            None,
+            target,
+            self.cpu.unwrap_or(0.0),
+            self.gpu,
+            period,
+        );
         let keep = self.saving;
         self.reset();
         self.saving = keep;
@@ -258,8 +387,18 @@ impl Governor {
         Some(change)
     }
 
-    fn change(&self, to: usize, cpu: f32, gpu: Option<f32>, period: f32) -> Change {
+    fn change(
+        &self,
+        kind: Kind,
+        knob: Option<usize>,
+        to: usize,
+        cpu: f32,
+        gpu: Option<f32>,
+        period: f32,
+    ) -> Change {
         Change {
+            kind,
+            knob,
             from: self.level,
             to,
             cpu,

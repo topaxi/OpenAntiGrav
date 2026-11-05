@@ -5,7 +5,8 @@ DRS sheds pixels when the GPU is the slow side. The governor acts when the frame
 (the `CPU` row: frame time minus swapchain waits) is over the frame limiter's period while the
 smoothed GPU time is under 0.9 of it, and it steps down an ordered list of this project's own
 extras. It restores them one at a time, with hysteresis, when the CPU plus that knob's measured
-saving fits in 0.8 of the budget for 6 s. Thresholds are chosen, not measured. It holds when the GPU
+saving fits in 0.8 of the budget for 6 s. A step whose measured saving was under 0.2 ms is undone and,
+on the second weak reading, skipped for the session (see "A step that saved nothing is undone"). Thresholds are chosen, not measured. It holds when the GPU
 is the bound side, when there is no GPU reading, and when nothing paces the frame (vsync `on`, or an
 unlimited loop).
 
@@ -62,7 +63,9 @@ at `dcf5025ff`), the maintainer's settings copy with `vsync off`, extras on (`sh
 **Getting unlocked under gamescope.** With `ENABLE_GAMESCOPE_WSI=1` (the gaming-mode path), `vsync off`
 and `frame_limit unlimited` still held 90.0 fps (a 20 s probe). `ENABLE_GAMESCOPE_WSI=0` (the X11 path
 under the same gamescope) ran 146 fps with the same settings. All unlocked rows use WSI=0; the capped
-check at the end uses WSI=1, the player's path.
+check at the end uses WSI=1, the player's path. (Since the refresh clamp that run reads a 60 Hz display on the
+Deck and the governor's budget is 16.7 ms; "A step that saved nothing is undone" below has the nested-gamescope
+recipe that restores the 165 Hz budget.)
 
 **The budget needs a finite limit.** With `frame_limit unlimited` the governor is inert by design (nothing
 paces the frame), so the runs use `frame_limit 165` (budget 6.06 ms) for HD and 500 (2.0 ms) for Pulse.
@@ -110,10 +113,65 @@ measurement; the same 0.25 ms is 3.7 % of frame time once the cap is gone. The c
 trades the player's own shadow map and model detail tiers for a few percent, which is why a profile without
 extras, and a race at its target, are untouched.
 
-**Does a step that saved nothing get undone? No.** `governor.rs` records each shed's saving but only uses it
-to time a restore. In the HD logs the `model detail original` step came at 6.8 to 6.9 ms CPU after `model
-detail high` at 6.55, and the frame-log lines at level 3 read about the same CPU as level 2, so it bought nothing and
-stayed. Open item in the perf handover thread (lane 6), not implemented here.
+## A step that saved nothing is undone (2026-11-05, `governor-check`)
+
+After a shed's cooldown the governor reads what the step saved (smoothed CPU before the shed minus after
+the cooldown). A reading under `MIN_SAVING` (0.2 ms, chosen, not measured) undoes the step and counts a weak
+reading against that knob; the second weak reading in a row also **skips** the knob: it is never shed again
+while the `Governor` lives, and the next shed jumps over it. A reading at or above the floor clears the knob's
+count. Knobs are identified by a stable id (`Knob::id` in `session/cpu_governor.rs`: shadows 0, model detail
+`high` 1, model detail `original` 2), not by position, so a profile with a different set of steps keeps each
+skip on its own knob.
+
+- **Why 0.2 ms.** The Deck's CPU row repeats to about 0.1 ms run to run. Every reading taken on HD Anulpha
+  (below, plus a probe) falls on one side of 0.2 ms: steps that bought nothing read 0.00, 0.00, 0.00, 0.04, 0.00,
+  0.00 and once 0.15; steps that helped read 0.24, 0.35, 0.36, 0.36, 0.37, 0.39 and 0.53. The floor sits above the
+  largest weak reading and below the smallest real one. The thread's example of 0.05 ms (or 1 % of the period)
+  is under the noise and would have kept the weak step on any reading that happened to come out positive.
+- **One reading cannot disable a knob.** The load can rise during a cooldown (the 0.15 probe reading and the
+  6.5 to 6.6 ms CPU at the undo lines are such moments), so a single low reading only undoes the step. The knob
+  is shed again once the CPU is still over, and only a second weak reading in a row skips it. A good reading in
+  between clears the count. The price of a useless knob is therefore two extra short sheds (about 4 s each) before
+  it is skipped.
+- **An undo is not a restore.** It sets no relapse window and does not double the next restore's patience.
+- **Skips are session-only.** They live in the `Governor` (a `[bool; MAX_LEVEL]`), survive `reset()` (a stage
+  change or the governor switched off and on), and are never written to settings. They also survive a change of
+  title within the session; a knob that is free on one title and costly on another would stay skipped.
+- **Log.** `cpu governor: <knob> saved N ms` after each cooldown, and `undone, it saved too little: <knob>` for an
+  undo (debug level).
+
+### Deck, HD Anulpha, with against without the check (2026-11-05)
+
+`main` at `eb9c2dda2` ("before") against this branch ("after"), release `dist` znver2 builds from plain
+worktrees (`target-lf-before`, `target-lf-batch1-base`), `--no-default-features --features extensions,dev-cli`.
+`settings-gov-on.toml` for both (governor on, `vsync off`, `frame_limit 165`, extras `shadows mapped`,
+`model_detail maximum`), `--render-scale 100 --no-intro --autopilot --seed 1 --no-audio`, 60 s, the first 4 frame-log
+lines dropped, before and after interleaved, three rounds, load 1.9 to 2.3.
+
+**The 2026-10-27 recipe no longer reaches the budget.** Since the refresh clamp the governor's budget is the
+lower of the frame limit and the display's refresh. Under the Deck's gamescope on the X11 path (`ENABLE_GAMESCOPE_WSI=0`)
+the refresh reads 60 Hz, so the budget is 16.7 ms and the CPU (8.2 ms) is never over it: three rounds of
+`ab.sh 3 60 anulpha` at scale 50 logged no governor line in either arm. These runs therefore start the game inside
+a nested `gamescope --backend headless -W 1280 -H 800 -r 165`, which reports 165 Hz (`display refresh in force: 165 Hz`)
+and gives the 6.06 ms budget again. The numbers are not comparable with the 4K ones above. At 4K scale 100 under
+the Deck's own gamescope GPU time was 6.2 ms (over 0.9 of 6.06 ms), so the governor holds there by design.
+
+| Arm | fps | frame_ms | p99 | CPU row | gpu_ms | knobs down at the end |
+| --- | --- | --- | --- | --- | --- | --- |
+| before 1, 2, 3 | 151.6, 151.2, 151.7 | 6.64 | 8.47 | 5.86 | 2.79 | 3, 3, 3 |
+| after 1, 2, 3 | 151.3, 151.0, 151.2 | 6.66 | 8.55 | 5.87 | 2.79 | 2, 2, 2 |
+
+Same fps within noise (151.5 against 151.2; the spread inside a group is 0.5 fps), same CPU row, same p99,
+one knob fewer stepped down. In every "after" run the governor shed `shadows original` (saved 0.24 to 0.37 ms), shed
+`model detail high` (saved 0.00 to 0.04 ms), undid it, shed it again (0.00), undid it and skipped it, then shed
+`model detail original` straight from `maximum` (saved 0.36 to 0.53 ms). So on this device the middle detail rung
+bought nothing and the player keeps it: `model detail high` is the step that no longer happens, and the last step now
+lands on the one that pays. The A/B binary carried a 0.15 ms floor; all fourteen readings above fall on the same side of
+0.2 ms, so the decisions are the same.
+
+Checks against the other titles: the governor is title-agnostic and the knobs are the same on every title (ported;
+Pulse and Pure share this code). Omega and 2048 profiles reach it through the same `steps` list, not measured here
+(not checkable without their own Deck runs).
 
 ## Open
 
