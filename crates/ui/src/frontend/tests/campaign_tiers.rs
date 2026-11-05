@@ -206,7 +206,9 @@ fn the_tile_draws_as_enabled_with_its_package_and_a_network_mode_as_gated() {
     let hd_rect = [500.0, 95.0, 135.0, 135.0];
     let sp_rect = [320.0, 95.0, 140.0, 140.0];
     let mp_rect = [228.0, 320.0, 140.0, 140.0];
-    let (with, _) = on_the_grid(vec![hd()]);
+    let (mut with, _) = on_the_grid(vec![hd()]);
+    // The plain colours: no pad focus on the first tile.
+    with.set_pad_driving(false);
     assert_eq!(
         tile_fill(&with, hd_rect),
         tile_fill(&with, sp_rect),
@@ -286,7 +288,8 @@ fn the_shell_helper_reaches_the_single_player_map_unchanged() {
 /// its own blue whatever the network state (`mode_grid.rs`).
 #[test]
 fn adhoc_is_as_blue_as_single_player_and_multiplayer_is_grey() {
-    let (frontend, _) = on_the_grid(vec![hd()]);
+    let (mut frontend, _) = on_the_grid(vec![hd()]);
+    frontend.set_pad_driving(false);
     let sp = tile_fill(&frontend, [320.0, 95.0, 140.0, 140.0]);
     assert_eq!(tile_fill(&frontend, [410.0, 320.0, 140.0, 140.0]), sp);
     assert_ne!(tile_fill(&frontend, [228.0, 320.0, 140.0, 140.0]), sp);

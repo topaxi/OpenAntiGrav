@@ -158,7 +158,7 @@ pub struct Element {
     /// Text scale; `1.0` is the face at its own size.
     pub scale: f32,
     /// A role the title's art table names (`rule`, `corner`, `dot`, `square`,
-    /// `title-arrow`, `subtitle-arrow`), or `@feature`.
+    /// `title-arrow`, `subtitle-arrow`), `@feature` or `@mode-icon`.
     pub asset: Option<String>,
     /// `[u0, v0, u1, v1]` of the asset, in fractions of it; `None` is all of it.
     pub uv: Option<[f32; 4]>,

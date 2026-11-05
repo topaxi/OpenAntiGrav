@@ -51,6 +51,7 @@ pub(super) const XML: &str = r#"
       </Screen>
       <Screen name="Home" type="Home">
         <TouchButton name="HomeTeamButton"><Values idstring="ER_TEAM" redirect="team" x="86" y="190" width="140" height="140" Src="Data\FE\NewImages\Icon_Team_HomeBut.gtf"></Values></TouchButton>
+        <TouchButton name="HomeLowerButton"><Values idstring="FE_PROFILE" redirect="GameModeChoice" x="86" y="360" width="140" height="140" Src="Data\FE\NewImages\Icon_Team_HomeBut.gtf"></Values></TouchButton>
         <TouchButton><Values redirect="newFEshell" x="822" y="432" width="122" height="96" Src="Data\FE\NewImages\Icon_Tick.gtf"></Values></TouchButton>
       </Screen>
     </Screen>
@@ -452,24 +453,30 @@ fn a_click_on_a_tile_is_the_tap_and_a_click_elsewhere_is_nothing() {
     assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
 }
 
-/// Whether a ring (four fills outset 4 units) is drawn round the tile at `(x, y)`.
-fn ringed(frontend: &Frontend, x: f32, y: f32) -> bool {
+/// Whether the tile at `(x, y)` is filled in `Orange2048`, the tile's own pressed colour.
+pub(super) fn focused(frontend: &Frontend, x: f32, y: f32) -> bool {
     frontend.draw_list().iter().any(|draw| {
         matches!(
             draw,
-            Draw::Fill { rect, .. } if (rect[0] - (x - 4.0)).abs() < 0.01 && (rect[1] - (y - 4.0)).abs() < 0.01
+            Draw::Fill { rect, color }
+                if (rect[0] - x).abs() < 0.01
+                    && (rect[1] - y).abs() < 0.01
+                    && *color == [221.0 / 255.0, 88.0 / 255.0, 11.0 / 255.0, 1.0]
         )
     })
 }
 
-/// The original's grids draw no focus on entry and none under a finger: the ring
-/// is this build's own, for a pad, and shows only once the pad has moved.
+/// The original's grids draw no focus under a finger; the pad's focus is the tile's pressed
+/// colour, there from the first frame once the pad is the device in use.
 #[test]
-fn a_hover_moves_the_cursor_without_choosing_and_the_ring_waits_for_the_pad() {
+fn a_hover_moves_the_cursor_without_choosing_and_the_focus_follows_the_pad() {
     let mut frontend = boot(0);
     let mut input = Input::new();
     reach_the_grid(&mut frontend, &mut input);
-    assert!(!ringed(&frontend, 167.0, 190.0), "no ring on entry");
+    assert!(
+        focused(&frontend, 167.0, 190.0),
+        "the pad's focus is on entry"
+    );
     let hover = Pointer {
         at: Some((400.0, 250.0)),
         moved: true,
@@ -477,10 +484,11 @@ fn a_hover_moves_the_cursor_without_choosing_and_the_ring_waits_for_the_pad() {
     };
     assert!(frontend.pointer(&hover));
     assert_eq!(frontend.chosen_mode(), None);
-    assert!(!ringed(&frontend, 329.0, 190.0), "a hover draws no ring");
+    assert!(!focused(&frontend, 167.0, 190.0), "a hover draws no focus");
+    assert!(!focused(&frontend, 329.0, 190.0), "nor under the pointer");
     // The cursor is on the second tile; a pad step back lands on the first.
     press(&mut frontend, &mut input, Button::Left);
-    assert!(ringed(&frontend, 167.0, 190.0));
+    assert!(focused(&frontend, 167.0, 190.0));
 }
 
 #[test]

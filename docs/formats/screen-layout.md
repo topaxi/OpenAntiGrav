@@ -57,7 +57,8 @@ frame is every number under `x' = 960 + (x - 960) * 0.96` at the save's 96 %).
 | `clip` | `source = "mode-icon"`, `at`, `size` | the mode's video clip, once it has a picture; not while the screen fades |
 
 **Roles, not paths.** `asset` is a role the title's art table names (`rule`, `corner`, `dot`, `square`,
-`title-arrow`, `subtitle-arrow`) or `@feature`, the feature's picture. `colour` is `ink`, `accent`,
+`title-arrow`, `subtitle-arrow`), `@feature`, the feature's picture, or `@mode-icon`, the still of the race's mode
+(Omega). `colour` is `ink`, `accent`,
 `trough` or `ground`, the four `FEGlobals` the original's constructor reads
 (`HD_Grey`, `HD_Blue`, `HD_LightGrey`, `HD_BG`). `source` is what the screen supplies this frame:
 `caption`, `feature.title`, `feature.heading`, `feature.text`, `counts`, `percentage`, `current`, `step`

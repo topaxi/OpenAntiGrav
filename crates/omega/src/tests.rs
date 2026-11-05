@@ -127,3 +127,29 @@ fn omega_culls_by_the_material_state_bit_as_hd_does() {
         oag_title::Origin::InheritedFrom("Wipeout HD")
     );
 }
+
+/// Omega names a loading screen: five features and six marks as `.gnf`, one styling, a still per
+/// mode and no clip. `loading: None` again fails here.
+#[test]
+fn omega_names_a_loading_screen_of_gnf_files() {
+    let loading = TITLE.loading.expect("Omega names a loading screen");
+    assert_eq!(loading.features.len(), 1);
+    let style = &loading.features[0];
+    assert_eq!(style.features.len(), 5);
+    assert!(style.mode_icons.is_empty(), "no .bik ships on Omega");
+    assert!(style.features.iter().all(|f| f.image.ends_with(".gnf")));
+    assert_eq!(loading.chrome.len(), 6);
+    assert!(loading.chrome.iter().all(|(_, e)| e.ends_with(".gnf")));
+    assert!(style.mode_stills.entry(Some(3)).is_some(), "single race");
+    assert_ne!(
+        style.mode_stills.entry(Some(5)),
+        style.mode_stills.entry(Some(8))
+    );
+    assert!(style.mode_stills.entry(Some(0xd)).is_none());
+    assert_eq!(
+        style.mode_stills.entries().count(),
+        6,
+        "five modes and single race"
+    );
+    assert!(loading.layout.is_some());
+}

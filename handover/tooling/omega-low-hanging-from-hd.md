@@ -117,8 +117,8 @@ data proves it.
   Zone is unmeasured on Omega.
 - **Pre-race flyby.** HD's is `Platforms::Only(&[Platform::Ps3])`; about 22
   `start_grid.vex` entries exist in Omega's archives; its timing is unread.
-- **Prompt glyphs** (`Prompts::UNREAD`), **loading screen** (`loading: None`) and
-  **fresh profile variant** (`None`, a product choice).
+- **Prompt glyphs** (`Prompts::UNREAD`) and **fresh profile variant** (`None`, a product
+  choice). The loading screen is wired (`docs/formats/omega-loading.md`).
 
 ## Next Steps
 
