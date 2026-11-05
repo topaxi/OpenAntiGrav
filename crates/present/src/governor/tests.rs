@@ -367,8 +367,8 @@ fn a_weak_reading_is_remembered_with_its_combination() {
     assert!(!g.is_skipped(0));
     g.enter(B);
     g.enter(A);
-    // The strike survived the round trip, so the second weak reading skips the knob.
-    run_model(&mut g, seconds(30.0), 1.4, &[0.0], 1);
+    // The strike survived the round trip, so one more weak reading skips the knob.
+    run_model(&mut g, weak_once, 1.4, &[0.0], 1);
     assert!(g.is_skipped(0));
     // B never saw a strike.
     g.enter(B);
