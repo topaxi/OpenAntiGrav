@@ -1183,7 +1183,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             border: Some(super::messages::fade_border(
                 readout,
                 &label.name,
-                label.border.unwrap_or(cx.default_border),
+                outline_colour(cx, label.border.unwrap_or(cx.default_border)),
             )),
             align: label.align,
             text,
@@ -1209,6 +1209,15 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
     super::sway::slide(&mut frame, super::sway::offset(cx.art, readout));
     super::boost_smear::smear(&mut frame, cx.art, cx.layout, readout, &stamped);
     frame
+}
+
+/// `border` with its alpha replaced by [`oag_title::HudArt::text_outline_alpha`] where the title
+/// has one.
+pub(super) fn outline_colour(cx: &Context<'_>, mut border: [f32; 4]) -> [f32; 4] {
+    if let Some(outline) = cx.art.text_outline_alpha {
+        border[3] = outline.value.alpha();
+    }
+    border
 }
 
 /// `color` with its alpha taken through [`oag_title::HudArt::lit_alpha`]: the original's lit HUD

@@ -619,6 +619,9 @@ pub struct HudArt {
     /// The drop shadow the original draws under every text string: `None` draws none. See
     /// [`TextShadow`].
     pub text_shadow: Option<crate::pre_race::Sourced<TextShadow>>,
+    /// The alpha, over 255, the original's HUD text outline pass draws at where it ignores the
+    /// layout's `BorderColor` alpha: `None` draws the layout's own. See [`TextOutlineAlpha`].
+    pub text_outline_alpha: Option<crate::pre_race::Sourced<TextOutlineAlpha>>,
     /// How the speed and shield bars' fill, marker and label follow the bar's
     /// tip: `None` where unmeasured, which leaves the plain left-anchored crop.
     pub bar_tip: Option<BarTip>,
@@ -703,6 +706,28 @@ impl LitAlpha {
     pub fn apply(self, alpha: f32) -> f32 {
         let authored = (alpha.clamp(0.0, 1.0) * 255.0).round() as u32;
         (authored * u32::from(self.byte) / 255) as f32 / 255.0
+    }
+}
+
+/// The alpha of an outlined HUD font's border pass, replacing the layout's `BorderColor` alpha.
+///
+/// Pure **measured** (`docs/formats/pure-status.md`, "Pure's HUD text outline"): a PPSSPP GE
+/// list of a Time Trial frame draws every HUD string as two `RECTANGLES` prims over one 4-bit
+/// font texture, vertex colour white, the first under a black CLUT whose alpha is the `.fnt`
+/// palette's alpha times `0.40` on all 11 strings of the frame (`0x66`), the second under a white
+/// CLUT carrying the palette's grey as alpha. The layouts author `0x40000000` and `0x30000000`;
+/// neither reaches the first CLUT. Stored as the byte because [`HudArt`] compares by value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextOutlineAlpha {
+    /// The outline's alpha over 255.
+    pub byte: u8,
+}
+
+impl TextOutlineAlpha {
+    /// `byte / 255`.
+    #[must_use]
+    pub fn alpha(self) -> f32 {
+        f32::from(self.byte) / 255.0
     }
 }
 

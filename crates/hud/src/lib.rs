@@ -1064,6 +1064,8 @@ mod curve_bar_tests;
 #[cfg(test)]
 mod ext_draw_tests;
 #[cfg(test)]
+mod outline_tests;
+#[cfg(test)]
 mod pickup_fade_tests;
 #[cfg(test)]
 mod pickup_look_tests;
