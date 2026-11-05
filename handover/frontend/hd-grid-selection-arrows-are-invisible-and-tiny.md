@@ -18,7 +18,7 @@ screen"), so a touch player pages grids. What stays open is the arrows themselve
   `Flyer Left/Right Arrow` images are never drawn on HD, and Omega (whose copy is `tilted_arrows.gnf`)
   reads the same list. `hd_grid_targets` still makes invisible targets of them.
 - Their authored rects (`32x64` at `710,540` and `96x64` at `1700,540` of 1920x1080) are about
-  21x47 px on a 1280x800 screen: too small for a finger.
+  21x43 px on a 1280x800 screen: too small for a finger.
 
 ## Next Steps
 

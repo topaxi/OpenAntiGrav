@@ -4396,7 +4396,7 @@ two arrow rects, and a finger's drag (`Pointer::drag`) was ignored.
   threshold as a drag with no position and no click, and the lift is `released` alone; a tap on
   the card still confirms. Pinned by `oag_ui_screens::campaign::hd::tests` (`a_swipe_*`,
   `one_long_swipe_steps_once_and_only_once`, `the_next_gesture_steps_again`, `a_tap_on_the_card_still_confirms`).
-- **Omega takes the same path.** `Campaign::is_hd` is `CampaignDialect::draws_hd_screens`, true for
+- **Omega takes the same path.** `CampaignStage::is_hd` (`oag_game`'s `main/campaign_stage.rs`) is `CampaignDialect::draws_hd_screens`, true for
   HD and Omega, and `campaign_pointer` hands both to `hd_pointer`: one change, no title branching.
   Checked on the PS4 package: its `Grid Selection` authors the same two arrows at the same rects.
 
@@ -4410,7 +4410,7 @@ package (`CellMode_Definition.xml`):
   `sprites(&image.src)` answers nothing and the widget is skipped (a `--menu-page grid-select`
   capture at 1920x1080 shows no arrow at either place). The target remains, an invisible one. On
   Omega the art is `tilted_arrows.gnf` (two copies on the package pair), and its loader reads the same list.
-- **The rects are fingertip-hostile**: 32x64 units of a 1080-unit-tall page is about 21x47 px on a
+- **The rects are fingertip-hostile**: 32x64 units of a 1080-unit-tall page is about 21x43 px (one scale, 2/3) on a
   1280x800 screen. Neither overlaps the card (the card spans roughly x=770 to 1610 on HD), so the
   card does not shadow them. **Open**: load the art on both titles (a `crates/hd` and `crates/omega`
   texture list change) and, if arrows are to be tapped, give them a hit rect of their own.
