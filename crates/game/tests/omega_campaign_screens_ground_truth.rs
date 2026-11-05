@@ -253,3 +253,138 @@ fn omega_card_materials_read_their_coverage_channels() {
     }
     assert!(atlas_draws >= 32);
 }
+
+/// Mean colour of the opaque texels of one 60x60 crop of the campaign sheet, and the
+/// crop's opaque rows relative to its own top.
+struct Crop {
+    rgb: [f32; 3],
+    rows: std::ops::RangeInclusive<u32>,
+}
+
+fn crop_of(sheet: &oag_hud::sprite::Sheet, placed: oag_ui::frontend::Placed, uv: [f32; 4]) -> Crop {
+    let (mut sum, mut count) = ([0.0f32; 3], 0.0f32);
+    let (mut first, mut last) = (u32::MAX, 0);
+    for row in 0..uv[3] as u32 {
+        for column in 0..uv[2] as u32 {
+            let x = placed.x + uv[0] as u32 + column;
+            let y = placed.y + uv[1] as u32 + row;
+            let at = ((y * sheet.width + x) * 4) as usize;
+            let texel = &sheet.rgba[at..at + 4];
+            if texel[3] >= 128 {
+                for (total, channel) in sum.iter_mut().zip(texel) {
+                    *total += f32::from(*channel);
+                }
+                count += 1.0;
+                first = first.min(row);
+                last = row;
+            }
+        }
+    }
+    Crop {
+        rgb: sum.map(|total| total / count),
+        rows: first..=last,
+    }
+}
+
+/// `Target0/1/2 Medal` author HD's crop on Omega's own `CellMode_Definition.xml` (`v` 0, 61,
+/// 122, 60 px frames), the atlas is HD's 61 px frame grid, and the picture it holds stores each
+/// difficulty block bronze, silver, gold from the top. So the crop a title draws has to come from
+/// its [`oag_title::Campaign::medal_tier_rows`], not from the authored `v` alone: through
+/// each tier's crop, gold reads yellow (green over red high), bronze reads orange (green over
+/// red low) and silver reads grey, in the plain, hook and swirl blocks alike. Dropping
+/// `medal_tier_rows` from Omega draws bronze at gold's slot, the player's report.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_medal_crops_read_gold_silver_bronze_in_every_difficulty_block() {
+    use oag_tables::race_campaign::{Difficulty, Medal};
+    let Some(omega) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&omega.display().to_string()).expect("open omega");
+    let xml = String::from_utf8(
+        archives
+            .read_name(oag_omega::campaign::SCREEN_ENTRY)
+            .expect("CellMode_Definition.xml"),
+    )
+    .expect("utf-8");
+    let screens = oag_ui::screen::Screens::from_xml(&xml);
+    let cell = screens
+        .screens
+        .iter()
+        .find(|screen| screen.name == "Cell Selection")
+        .expect("Cell Selection");
+    for (name, v) in [
+        ("Target0 Medal", 0.0),
+        ("Target1 Medal", 61.0),
+        ("Target2 Medal", 122.0),
+    ] {
+        let image = cell
+            .images
+            .iter()
+            .find(|image| image.name.as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("{name}"));
+        assert_eq!(
+            (image.u, image.v, image.width, image.height),
+            (Some(0.0), Some(v), Some(60.0), Some(60.0)),
+            "{name}: Omega authors HD's crop"
+        );
+    }
+
+    let base = oag_hud::sprite::Sheet::build(&[], &mut Vec::new());
+    let campaign = oag_game::campaign::load(
+        &mut archives,
+        &oag_ui::language::StringTable::default(),
+        oag_ui_screens::picker::FaceScales::default(),
+        [1920.0, 1080.0],
+        &base,
+        &[],
+        oag_omega::TITLE,
+        &[],
+    )
+    .expect("the campaign loads");
+    let atlas = r"Data\FE\Images\Hexmedal_HD.gtf";
+    let placed = campaign
+        .sprites
+        .get(atlas)
+        .expect("the atlas is on the sheet");
+    assert_eq!((placed.width, placed.height), (976, 549), "Omega's atlas");
+
+    let rows = oag_omega::TITLE.campaign.medal_rows();
+    for difficulty in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
+        let mut ratio = Vec::new();
+        for medal in [Medal::Gold, Medal::Silver, Medal::Bronze] {
+            let uv = oag_ui_screens::campaign::hd::medal::hd_medal_frame(medal, difficulty, rows);
+            let crop = crop_of(&campaign.sprites, placed, uv);
+            // The frame is 60 rows with the icon inside it and a clear row under it: the
+            // 61 px pitch and the 183 px block pitch hold on Omega's 976x549.
+            assert!(
+                *crop.rows.start() >= 1 && *crop.rows.end() <= 58,
+                "{medal:?} {difficulty:?}: icon rows {:?} leave the frame",
+                crop.rows
+            );
+            let [r, g, b] = crop.rgb;
+            eprintln!(
+                "{difficulty:?} {medal:?}: rgb {r:.0} {g:.0} {b:.0} g/r {:.3}",
+                g / r
+            );
+            ratio.push((g / r, r - b));
+        }
+        let [
+            (gold, gold_warmth),
+            (_, silver_warmth),
+            (bronze, bronze_warmth),
+        ] = [ratio[0], ratio[1], ratio[2]];
+        assert!(
+            silver_warmth.abs() < 10.0,
+            "{difficulty:?}: silver is the neutral one, red minus blue {silver_warmth:.1}"
+        );
+        assert!(
+            gold_warmth > 30.0 && bronze_warmth > 30.0,
+            "{difficulty:?}: gold and bronze are the warm ones, red minus blue {gold_warmth:.1} and {bronze_warmth:.1}"
+        );
+        assert!(
+            gold > bronze + 0.05,
+            "{difficulty:?}: gold is yellower than bronze: green/red {gold:.3} against {bronze:.3}"
+        );
+    }
+}

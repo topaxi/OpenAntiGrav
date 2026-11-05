@@ -139,6 +139,8 @@ impl CellCursor {
 pub(crate) struct CampaignStage {
     /// Whether this title's front end blooms ([`oag_title::Campaign::frontend_glow`]).
     pub(crate) frontend_glow: bool,
+    /// [`oag_title::Campaign::medal_rows`], for `Cell Selection`'s medal icons.
+    medal_tier_rows: [u8; 3],
     grids: Vec<race_campaign::Grid>,
     grid_layout: oag_ui_screens::campaign::Layout,
     cell_layout: oag_ui_screens::campaign::Layout,
@@ -311,6 +313,7 @@ impl CampaignStage {
         };
         Self {
             frontend_glow: title_ref.campaign.frontend_glow.is_some(),
+            medal_tier_rows: title_ref.campaign.medal_rows(),
             grids,
             grid_layout,
             cell_layout,
@@ -925,6 +928,7 @@ impl CampaignStage {
             next_flyer,
             fury: self.active_campaign == Some(Campaign::Fury),
             track_emblems: &self.circuit_emblems,
+            medal_tier_rows: self.medal_tier_rows,
         }
     }
 

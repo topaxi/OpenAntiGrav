@@ -109,20 +109,26 @@ use super::super::draw::sprite_draw;
 /// one mode (`Race`) - not independently reproduced across a second boot or
 /// a second mode family (e.g. an `Elimination`/`NitroBattle` cell's own
 /// `Novice`/`Skilled`/`Elite`-named target triple).
-pub(super) fn hd_medal_frame(medal: Medal, difficulty: Difficulty) -> [f32; 4] {
+pub fn hd_medal_frame(medal: Medal, difficulty: Difficulty, tier_rows: [u8; 3]) -> [f32; 4] {
     const FRAME: f32 = 60.0;
+    const ROW_PITCH: f32 = 61.0;
     const BLOCK_PITCH: f32 = 183.0;
-    let tier_v = match medal {
-        Medal::Gold => 0.0,
-        Medal::Silver => 61.0,
-        Medal::Bronze => 122.0,
+    let tier_row = match medal {
+        Medal::Gold => tier_rows[0],
+        Medal::Silver => tier_rows[1],
+        Medal::Bronze => tier_rows[2],
     };
     let block = match difficulty {
         Difficulty::Easy => 0.0,
         Difficulty::Medium => 1.0,
         Difficulty::Hard => 2.0,
     };
-    [0.0, block * BLOCK_PITCH + tier_v, FRAME, FRAME]
+    [
+        0.0,
+        block * BLOCK_PITCH + f32::from(tier_row) * ROW_PITCH,
+        FRAME,
+        FRAME,
+    ]
 }
 
 /// `Medal_{x}_{y}`'s own draw: [`hd_medal_frame`]'s crop, drawn at its own
@@ -153,8 +159,9 @@ pub(super) fn hd_tinted_medal_draw(
     placed: Placed,
     medal: Medal,
     difficulty: Difficulty,
+    tier_rows: [u8; 3],
 ) -> Draw {
-    let [u, v, frame_width, frame_height] = hd_medal_frame(medal, difficulty);
+    let [u, v, frame_width, frame_height] = hd_medal_frame(medal, difficulty, tier_rows);
     let cropped = Image {
         width: Some(frame_width),
         height: Some(frame_height),

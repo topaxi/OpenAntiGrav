@@ -242,6 +242,7 @@ pub const TITLE: &Title = &Title {
         grid_archive: None,
         fury_card_gain: None,
         grid_card_pose: None,
+        medal_tier_rows: None,
         frontend_glow: None,
         origin: oag_title::Origin::Measured,
         custom_campaigns: false,

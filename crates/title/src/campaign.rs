@@ -167,6 +167,13 @@ pub struct Campaign {
     /// measured off one shadPS4 frame and chosen, its own camera constants
     /// unread (`docs/ui/campaign-screens.md`).
     pub grid_card_pose: Option<CardPose>,
+    /// Which stored row of `Hexmedal_HD`'s difficulty block (0..3, 61 px apiece) holds gold,
+    /// silver and bronze, where it is not HD's `[0, 1, 2]` (gold on top). Omega's atlas keeps
+    /// HD's blocks in HD's order but stores each block's tiers bronze, silver, gold from the
+    /// top, so the authored `v = 0/61/122` of `Target0/1/2 Medal` lands on bronze, silver, gold
+    /// (`docs/formats/omega-status.md`, "The medal atlas"). `None` is HD's order; Pulse, Pure
+    /// and 2048 draw no such atlas.
+    pub medal_tier_rows: Option<[u8; 3]>,
     /// Whether the front end ends its frame with the race's bloom over a glow mask its widgets
     /// stamp, and how well that is known. Pulse PSP: its Grid and Cell Selection frames end with
     /// `Bloom_Draw` (a GE dump), reading the stencil references the `Selector`, the card title
@@ -182,4 +189,15 @@ pub struct Campaign {
     /// **Chosen**: Pulse, HD/Fury and Omega; Pure draws a list and 2048 has no
     /// hex screens to draw them on yet.
     pub custom_campaigns: bool,
+}
+
+impl Campaign {
+    /// [`Self::medal_tier_rows`] with HD's order where the title does not set one.
+    #[must_use]
+    pub const fn medal_rows(&self) -> [u8; 3] {
+        match self.medal_tier_rows {
+            Some(rows) => rows,
+            None => [0, 1, 2],
+        }
+    }
 }
