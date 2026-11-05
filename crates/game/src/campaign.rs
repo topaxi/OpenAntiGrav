@@ -74,20 +74,15 @@ pub struct Campaign {
     /// "front end's own sheet plus this screen's own art" shape
     /// `oag_ui_screens::picker::slideshow`'s stills already extend it with.
     pub sprites: Sheet,
-    /// **HD/Fury only.** `Campaign Selection`'s own layout, ahead of
-    /// [`Self::grid_layout`] - `None` on every other title, and on an HD
-    /// source whose `DATA06.PSARC` this pass could not read (a base,
-    /// non-Fury pressing, say). See [`load_hd`]'s own doc for where this is
-    /// read from and why it differs from [`Self::grid_layout`]'s own
-    /// archive.
+    /// `Campaign Selection`'s own layout, ahead of [`Self::grid_layout`] -
+    /// `None` on a title whose screen file authors none (Pulse's, HD's
+    /// `DATA02` copy), and on a source whose copy of the screen cannot be read
+    /// whole. See [`load_hd`]'s own doc for where this is read from.
     pub selection_layout: Option<Layout>,
-    /// **HD/Fury only.** `Grid Selection Fury`'s own layout - the screen
-    /// `Campaign Selection`'s `FE_RC_FURY` entry opens, which pages
-    /// `grid8`..`grid15` (`oag_hd::campaign::FURY_GRID_RANGE`). `None` on
-    /// the same terms as [`Self::selection_layout`] - either both are
-    /// `Some` or both are `None`, since they are read off the same archive
-    /// in the same call.
-    pub grid_layout_fury: Option<Layout>,
+    /// What `Campaign Selection` offers, read off the same screen: the
+    /// campaigns in order, where each opens and the grids it pages. `None`
+    /// exactly when [`Self::selection_layout`] is.
+    pub chooser: Option<oag_ui_screens::campaign::selection::Chooser>,
     /// **HD/Fury only.** The flyer cards `Grid Selection` draws behind its
     /// widgets, decoded - see [`crate::flyer`]. `None` on every other title,
     /// and on an HD source whose screen file authors no `<Flyer
@@ -357,7 +352,7 @@ pub fn load(
         ticker,
         sprites,
         selection_layout: None,
-        grid_layout_fury: None,
+        chooser: None,
         flyers: None,
         circuit_emblems: std::collections::HashMap::new(),
         frontend_glow: title.campaign.frontend_glow.is_some(),
@@ -479,18 +474,26 @@ fn load_hd(
         oag_hd::campaign::DEFINITION_ENTRY,
         title.campaign.grid_archive,
     )?;
-    let (selection_layout, grid_layout_fury) =
-        hd_selection_screens(title, &screens, strings, faces, grid);
+    let (selection_layout, chooser) = chooser_screens(
+        title,
+        &xml,
+        &screens,
+        strings,
+        faces,
+        grid,
+        oag_hd::campaign::AUTHORED_GRID,
+    );
     let flyers = load_flyers(
         archives,
         &grids,
         &xml,
         &screens,
-        selection_layout.is_some(),
+        chooser.as_ref(),
         title
             .campaign
             .fury_card_gain
             .unwrap_or(crate::flyer::FURY_GAIN),
+        title.campaign.selection_card_scale.unwrap_or(1.0),
         title.campaign.grid_card_pose,
     );
     // `Cell Selection`'s own `Confirm`/`Back` legend, off the shared
@@ -544,7 +547,7 @@ fn load_hd(
         ticker,
         sprites,
         selection_layout,
-        grid_layout_fury,
+        chooser,
         flyers,
         circuit_emblems,
         frontend_glow: title.campaign.frontend_glow.is_some(),
@@ -602,9 +605,10 @@ pub fn hd_selection_string_overlay(
         &[
             oag_ui_screens::campaign::selection::TITLE_ID,
             oag_ui_screens::campaign::selection::SUBTITLE_ID,
-            oag_ui_screens::campaign::selection::Campaign::Fury.entry_id(),
-            oag_ui_screens::campaign::selection::Campaign::Hd.entry_id(),
-        ],
+        ]
+        .into_iter()
+        .chain(oag_ui_screens::campaign::selection::known_entry_ids())
+        .collect::<Vec<_>>(),
     )
 }
 
@@ -697,8 +701,9 @@ fn load_flyers(
     grids: &[Grid],
     xml: &str,
     screens: &oag_ui::screen::Screens,
-    has_selection: bool,
+    chooser: Option<&oag_ui_screens::campaign::selection::Chooser>,
     fury_gain: f32,
+    campaign_scale: f32,
     grid_pose: Option<oag_title::campaign::CardPose>,
 ) -> Option<crate::flyer::Flyers> {
     // Every card: the base campaign's eight, Fury's eight and the two
@@ -733,29 +738,34 @@ fn load_flyers(
             gain,
         })
     });
-    let campaign_cards = [
-        oag_ui_screens::campaign::flyer::FURY_CAMPAIGN_FLYER,
-        oag_ui_screens::campaign::flyer::HD_CAMPAIGN_FLYER,
-    ]
-    .map(|name| crate::flyer::CardSpec {
-        flyer: name.to_string(),
+    // The `Campaign Selection` cards exist only where that screen does: one per
+    // campaign it offers, by the folder its tag names.
+    let campaigns: Vec<crate::flyer::CampaignCard> = chooser
+        .into_iter()
+        .flat_map(|chooser| chooser.entries())
+        .filter_map(|entry| {
+            Some(crate::flyer::CampaignCard {
+                flyer: entry.card_flyer()?,
+                widget: entry.card_widget()?,
+            })
+        })
+        .collect();
+    let campaign_cards = campaigns.iter().map(|card| crate::flyer::CardSpec {
+        flyer: card.flyer.clone(),
         side: crate::flyer::Side::Front,
         window: crate::flyer::FURY_WINDOW,
         stretch: crate::flyer::CAMPAIGN_STRETCH,
         gain: crate::flyer::CAMPAIGN_GAIN,
     });
-    // The two `Campaign Selection` cards exist only where that screen does.
-    let campaign_cards = has_selection.then_some(campaign_cards);
-    let cards: Vec<crate::flyer::CardSpec> = grid_cards
-        .chain(back_cards)
-        .chain(campaign_cards.into_iter().flatten())
-        .collect();
+    let cards: Vec<crate::flyer::CardSpec> =
+        grid_cards.chain(back_cards).chain(campaign_cards).collect();
     let widgets = oag_ui_screens::campaign::flyer::read(xml, screens);
     let flyers = widgets
         .iter()
         .any(|widget| widget.name == oag_ui_screens::campaign::flyer::GRID_WIDGET)
         .then(|| {
-            let mut flyers = crate::flyer::Flyers::load(archives, widgets, &cards);
+            let mut flyers = crate::flyer::Flyers::load(archives, widgets, &cards)
+                .with_campaigns(campaigns, campaign_scale);
             if let Some(pose) = grid_pose {
                 flyers.grid_pose = crate::flyer::Pose {
                     yaw: pose.yaw,
@@ -776,53 +786,52 @@ fn load_flyers(
     flyers
 }
 
-/// `Campaign Selection`/`Grid Selection Fury`, off the same already-parsed
-/// `DATA06` copy of [`oag_hd::campaign::SCREEN_ENTRY`] [`load_hd`] reads its
-/// base `Grid Selection`/`Cell Selection` from - **one parse serving all
-/// four screens**, so the file is not opened and parsed a second time (see
-/// `oag_ui_screens::campaign::hd`'s own module doc).
+/// `Campaign Selection` and the grid screen of each campaign it offers, off the
+/// same already-parsed copy of `CellMode_Definition.xml` the title's other two
+/// screens come from - **one parse serving all of them**, so the file is not
+/// opened and parsed a second time (see `oag_ui_screens::campaign::hd`'s own
+/// module doc).
 ///
-/// `(None, None)` when this copy's own XML does not carry both screens - a
-/// base, non-Fury HD pressing this project has not seen, say.
-/// [`load_hd`] still returns its own `Campaign` in that case: the base
-/// `Grid Selection`/`Cell Selection` are unaffected, and
+/// `(None, None)` when this copy's own XML does not carry the screen or one of
+/// its targets - a base, non-Fury HD pressing this project has not seen, say.
+/// The caller still returns its own `Campaign` in that case: the base `Grid
+/// Selection`/`Cell Selection` are unaffected, and
 /// `crate::main::session::campaign::open_campaign` falls back to opening
-/// straight on `Grid Selection`, the pre-`Campaign Selection` behaviour,
-/// rather than refusing the whole campaign over one missing screen.
-fn hd_selection_screens(
+/// straight on `Grid Selection`, rather than refusing the whole campaign over
+/// one missing screen.
+fn chooser_screens(
     title: &oag_title::Title,
+    xml: &str,
     screens: &oag_ui::screen::Screens,
     strings: &StringTable,
     faces: FaceScales,
     grid: [f32; 2],
-) -> (Option<Layout>, Option<Layout>) {
+    authored: [f32; 2],
+) -> (
+    Option<Layout>,
+    Option<oag_ui_screens::campaign::selection::Chooser>,
+) {
     let selection = Layout::read_authored(
         screens,
-        oag_hd::campaign::SELECTION_SCREEN,
+        oag_ui_screens::campaign::selection::SCREEN,
         strings,
         faces,
         grid,
-        oag_hd::campaign::AUTHORED_GRID,
+        authored,
     );
-    let fury = Layout::read_authored(
-        screens,
-        oag_hd::campaign::FURY_GRID_SCREEN,
-        strings,
-        faces,
-        grid,
-        oag_hd::campaign::AUTHORED_GRID,
-    );
-    match (selection, fury) {
-        (Some(selection), Some(fury)) => (Some(selection), Some(fury)),
+    let chooser = oag_ui_screens::campaign::selection::Chooser::read(xml, screens, &|name| {
+        Layout::read_authored(screens, name, strings, faces, grid, authored)
+    });
+    match (selection, chooser) {
+        (Some(selection), Some(chooser)) => (Some(selection), Some(chooser)),
         _ => {
             // A title with no `screen_archive` has no chooser to find, which is
             // how its campaign is authored, not a gap worth a warning.
             if let Some(label) = title.campaign.screen_archive {
                 log::warn!(
-                    "{label}'s own copy of {} is missing {} or {} - Campaign Selection stays unmodelled",
+                    "{label}'s own copy of {} does not author a readable {} - it stays unmodelled",
                     oag_hd::campaign::SCREEN_ENTRY,
-                    oag_hd::campaign::SELECTION_SCREEN,
-                    oag_hd::campaign::FURY_GRID_SCREEN,
+                    oag_ui_screens::campaign::selection::SCREEN,
                 );
             }
             (None, None)
@@ -885,12 +894,15 @@ fn load_omega(
         oag_omega::campaign::AUTHORED_GRID,
     )
     .context("Cell Selection is not on this screen")?;
-    // `Grid Selection Fury` is read; `Campaign Selection` is not kept. Omega's chooser lists three
-    // campaigns (2048, HD, Fury) where [`oag_ui_screens::campaign::selection`] models HD's two, so
-    // the live session opens on `Grid Selection` as it did before, and `--menu-page
-    // campaign-select` still refuses here.
-    let (_, grid_layout_fury) = hd_selection_screens(title, &screens, strings, faces, grid);
-    let selection_layout: Option<Layout> = None;
+    let (selection_layout, chooser) = chooser_screens(
+        title,
+        &xml,
+        &screens,
+        strings,
+        faces,
+        grid,
+        oag_omega::campaign::AUTHORED_GRID,
+    );
 
     let grids = read_grids(
         archives,
@@ -902,11 +914,12 @@ fn load_omega(
         &grids,
         &xml,
         &screens,
-        selection_layout.is_some(),
+        chooser.as_ref(),
         title
             .campaign
             .fury_card_gain
             .unwrap_or(crate::flyer::FURY_GAIN),
+        title.campaign.selection_card_scale.unwrap_or(1.0),
         title.campaign.grid_card_pose,
     );
     // See [`load_hd`]'s own identical call - Omega's front end is HD's
@@ -941,6 +954,29 @@ fn load_omega(
             },
         }
     }
+    // The art `Campaign Selection` names itself (2048's rank shield), beside
+    // HD's lists above.
+    for image in selection_layout
+        .iter()
+        .flat_map(|layout| &layout.screen.images)
+    {
+        // `MedalImage*` is never drawn (`oag_ui_screens::campaign::selection::draw_list`).
+        let drawn = !image
+            .name
+            .as_deref()
+            .unwrap_or("")
+            .starts_with("MedalImage");
+        if !drawn || blobs.iter().any(|(name, _)| *name == image.src) {
+            continue;
+        }
+        match read_omega_texture(archives, &image.src) {
+            Ok(blob) => blobs.push((image.src.clone(), blob)),
+            Err(error) => log::warn!(
+                "{}: {error} - the widget it is for draws nothing",
+                image.src
+            ),
+        }
+    }
     let circuit_emblems = push_card_art(archives, &grids, tracks, &mut blobs, &read_omega_texture);
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
@@ -957,7 +993,7 @@ fn load_omega(
         ticker,
         sprites,
         selection_layout,
-        grid_layout_fury,
+        chooser,
         flyers,
         circuit_emblems,
         frontend_glow: title.campaign.frontend_glow.is_some(),

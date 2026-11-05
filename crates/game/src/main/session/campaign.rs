@@ -129,7 +129,7 @@ impl Session {
                     }
                     campaign.grids.clone_from(&custom.grids);
                     campaign.selection_layout = None;
-                    campaign.grid_layout_fury = None;
+                    campaign.chooser = None;
                 }
                 // The extended sheet - `hex_filled.mip`/`hex_outline.mip`,
                 // neither of which `Skin.xml`'s own sheet carries - has to
@@ -144,7 +144,7 @@ impl Session {
                         campaign.grid_layout,
                         campaign.cell_layout,
                         campaign.selection_layout,
-                        campaign.grid_layout_fury,
+                        campaign.chooser,
                         campaign.cell_help,
                         campaign.nav_legend,
                         campaign.ticker,
@@ -259,6 +259,8 @@ impl Session {
         // which cannot start while `stage`/`campaign` still borrow `self.stage`.
         let mut confirmed_cell = None;
         let mut confirmed_difficulty = None;
+        // A campaign the chooser offers whose grids this source does not carry.
+        let mut campaign_unplayable = false;
         {
             let Stage::Menu(stage) = &mut self.stage else {
                 return;
@@ -273,7 +275,7 @@ impl Session {
                 // Selection`. See `crate::campaign_stage`'s own module doc.
                 (Screen::Selection(model), Event::Confirmed) => {
                     let chosen = model.selected();
-                    campaign.open_grid_selection(chosen);
+                    campaign_unplayable = !campaign.open_grid_selection(chosen);
                 }
                 (Screen::Selection(_), Event::Back) => {
                     keep_cursor(&mut self.records, &mut self.selector_phases, campaign);
@@ -353,6 +355,12 @@ impl Session {
                 }
                 (_, Event::DifficultyChanged) => {}
             }
+        }
+        if campaign_unplayable {
+            self.campaign_notice(
+                "OAG_CAMPAIGN_NOT_PLAYABLE",
+                "THIS CAMPAIGN CANNOT BE PLAYED IN THIS BUILD YET",
+            );
         }
         if let Some(cell) = confirmed_cell {
             self.launch_campaign_cell(cell, confirmed_difficulty);

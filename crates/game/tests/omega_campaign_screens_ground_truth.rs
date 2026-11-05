@@ -58,11 +58,9 @@ fn omega_cell_selection_authors_records_and_difficulty_buttons_in_one_place() {
     assert_eq!(at("RecordsButton"), at("DifficultyButton"));
 }
 
-/// Omega's campaign carries Fury's `Grid Selection Fury` and decodes every flyer
-/// card, front and back, through the PS4 scene path: dropping the layout read,
-/// the card loader or the `psp2` dispatch in `flyer` fails this. Its
-/// `Campaign Selection` is deliberately not kept (the chooser lists three
-/// campaigns, 2048 among them).
+/// Omega's campaign carries its three-way `Campaign Selection` (2048, HD, Fury, each opening its
+/// own grid screen) and decodes every flyer card, front and back, through the PS4 scene path:
+/// dropping the chooser read, the card loader or the `psp2` dispatch in `flyer` fails this.
 #[test]
 #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
 fn omegas_campaign_carries_fury_s_layout_and_every_card() {
@@ -82,8 +80,43 @@ fn omegas_campaign_carries_fury_s_layout_and_every_card() {
         &[],
     )
     .expect("the campaign loads");
-    assert!(campaign.grid_layout_fury.is_some());
-    assert!(campaign.selection_layout.is_none());
+    let chooser = campaign
+        .chooser
+        .as_ref()
+        .expect("Omega authors Campaign Selection");
+    assert!(campaign.selection_layout.is_some());
+    // The list's order, where its redirect sends each entry and the grids that screen pages, all
+    // read off the disc's XML: three campaigns, three different grid screens, three ranges.
+    let entries: Vec<_> = chooser
+        .entries()
+        .iter()
+        .map(|entry| {
+            (
+                entry.id.as_str(),
+                entry.screen.as_str(),
+                entry.grids.clone(),
+                entry.layout.screen.name.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        entries,
+        [
+            (
+                "FE_RC",
+                "Grid Selection 2048",
+                16..19,
+                "Grid Selection 2048"
+            ),
+            ("FE_RC_HD", "Grid Selection", 0..8, "Grid Selection"),
+            (
+                "FE_RC_FURY",
+                "Grid Selection Fury",
+                8..16,
+                "Grid Selection Fury"
+            ),
+        ]
+    );
     let flyers = campaign
         .flyers
         .expect("Omega's screen authors the flyer widget");
@@ -99,6 +132,37 @@ fn omegas_campaign_carries_fury_s_layout_and_every_card() {
     let fury = &campaign.grids[oag_hd::campaign::FURY_GRID_RANGE];
     assert_eq!(fury.len(), 8);
     assert_eq!(fury[0].flyer_name.as_deref(), Some("09_Blitzed"));
+    // Each choice opens its own first grid: HD's and Fury's differ, and 2048's three are not loaded
+    // (`grid_16`..`grid_18` author no `RequiredPoints`), which the session turns into a notice.
+    let first = |range: std::ops::Range<usize>| {
+        campaign
+            .grids
+            .get(range)
+            .and_then(|grids| grids.first())
+            .map(|grid| grid.name.clone())
+    };
+    assert_eq!(first(entries[1].2.clone()).as_deref(), Some("grid0"));
+    assert_eq!(first(entries[2].2.clone()).as_deref(), Some("grid8"));
+    assert_eq!(first(entries[0].2.clone()), None);
+    // The three cards of the chooser itself, in list order, each placed (the 2048 one has no
+    // PS3 counterpart: it is `2048_campaign`'s own model).
+    let shows = flyers.selection_shows(oag_ui_screens::campaign::selection::Campaign::new(0));
+    assert_eq!(
+        shows
+            .iter()
+            .map(|show| show.flyer.as_str())
+            .collect::<Vec<_>>(),
+        ["2048_campaign", "hd_campaign", "fury_campaign"]
+    );
+    for show in &shows {
+        assert!(
+            flyers
+                .card_rect(show, oag_display::space::Space::HD)
+                .is_some(),
+            "{} has no rectangle",
+            show.flyer
+        );
+    }
     // The card stands where the shadPS4 frame has it (x 816-1628, y 151-702 of 1920 by 1080,
     // measured off `omega/menu-grid-select`), not at HD's `GRID_POSE` (x 747-1688).
     let show = flyers.grid_show("09_Blitzed");

@@ -1,11 +1,95 @@
-//! `CampaignSelection`'s own stepping/confirm/pointer behaviour, on the same
+//! `CampaignSelection`'s own reading/stepping/confirm/pointer behaviour, on the same
 //! synthetic-fixture terms `crates/ui-screens/src/campaign/tests.rs` already gives
-//! `GridSelection`/`CellSelection`. See the module doc for the RPCS3
-//! measurements this model is built from.
+//! `GridSelection`/`CellSelection`. The screens themselves, read off both discs, are
+//! pinned in `crates/game/tests/omega_campaign_screens_ground_truth.rs` and
+//! `crates/hd/tests/campaign_selection_ground_truth.rs`.
 
 use super::*;
 use oag_gameplay::input::{Button, Input};
 use oag_ui::pointer::Pointer;
+
+/// HD's shape: two entries, Fury first, each target screen paging eight grids.
+const HD_XML: &str = r#"
+<Screen type="CampaignSelection" name="Campaign Selection">
+<Text name="ScreenTitle"><Values idstring="FE_RC_SELECT" x="180" y="80" color="0xffaaaaaa"></Values></Text>
+<List name="campaignList"><Values x="159" y="-500"></Values>
+<Entry String="FE_RC_FURY"></Entry><Entry String="FE_RC_HD"></Entry></List>
+<Redirect>
+<Entry item="campaignList" equals="FE_RC_HD" goto="Grid Selection"></Entry>
+<Entry item="campaignList" equals="FE_RC_FURY" goto="Grid Selection Fury"></Entry>
+<Default goto="To Be Done"></Default></Redirect>
+<MiniText><Values x="160" y="140" idstring="FE_CAMPSEL_MODES" color="0xff646464"></Values></MiniText>
+<Bracket><Values x="160" y="170" Width="1600" Height="780"></Values></Bracket>
+<Image name="MedalImageHD"><Values x="1095" y="750" src="medal.mip"></Values>
+<MiniText name="HDGoldMedalsMiniText"><Values x="1395" y="710" idstring="RC_GM" color="0xff646464"></Values></MiniText>
+<Text name="NumMedalsTextHD"><Values string="b" x="1460" y="770"></Values></Text></Image>
+<Image name="MedalImageFury"><Values x="415" y="750" src="medal.mip"></Values>
+<MiniText name="FuryGoldMedalsMiniText"><Values x="755" y="710" idstring="RC_GM" color="0xff000000"></Values></MiniText>
+<Text name="NumMedalsTextFury"><Values string="a" x="820" y="770"></Values></Text></Image>
+</Screen>
+<Screen name="Wrapper">
+<Screen type="FlyerSelection" name="Grid Selection"><List name="flyerlist">
+<Entry String="grid0"></Entry><Entry String="grid1"></Entry></List></Screen>
+<Screen type="FlyerSelection" name="Grid Selection Fury"><List name="flyerlist">
+<Entry String="grid2"></Entry><Entry String="grid3"></Entry><Entry String="grid4"></Entry></List></Screen>
+</Screen>
+"#;
+
+/// Omega's shape: three entries, 2048 first, with a rank block where the others have a medal count.
+const OMEGA_XML: &str = r#"
+<Screen type="CampaignSelection" name="Campaign Selection">
+<Text name="ScreenTitle"><Values idstring="FE_RC_SELECT" x="180" y="80" color="0xffaaaaaa"></Values></Text>
+<List name="campaignList"><Values x="159" y="-500"></Values>
+<Entry String="FE_RC"></Entry><Entry String="FE_RC_HD"></Entry><Entry String="FE_RC_FURY"></Entry></List>
+<Redirect>
+<Entry item="campaignList" equals="FE_RC_HD" goto="Grid Selection"></Entry>
+<Entry item="campaignList" equals="FE_RC_FURY" goto="Grid Selection Fury"></Entry>
+<Entry item="campaignList" equals="FE_RC" goto="Grid Selection 2048"></Entry>
+<Default goto="To Be Done"></Default></Redirect>
+<MiniText><Values x="160" y="140" idstring="FE_CAMPSEL_MODES" color="0xff646464"></Values></MiniText>
+<Bracket><Values x="160" y="170" Width="1590" Height="780"></Values></Bracket>
+<Image name="MedalImageHD"><Values x="1095" y="750" src="medal.mip"></Values>
+<MiniText name="HDGoldMedalsMiniText"><Values x="1075" y="710" idstring="RC_GM" color="0xff646464"></Values></MiniText>
+<Text name="NumMedalsTextHD"><Values string="b" x="1170" y="760"></Values></Text></Image>
+<Image name="MedalImageFury"><Values x="1415" y="750" src="medal.mip"></Values>
+<MiniText name="FuryGoldMedalsMiniText"><Values x="1395" y="710" idstring="RC_GM" color="0xff000000"></Values></MiniText>
+<Text name="NumMedalsTextFury"><Values string="a" x="1490" y="760"></Values></Text></Image>
+<Image name="RankItem"><MiniText name="2048GoldMedalsMiniText"><Values x="885" y="710" idstring="CO_RANK" color="0xff000000"></Values></MiniText>
+<Text name="RankText"><Values string="99" x="953" y="769"></Values></Text></Image>
+</Screen>
+<Screen name="Wrapper">
+<Screen type="FlyerSelection" name="Grid Selection"><List name="flyerlist">
+<Entry String="grid0"></Entry><Entry String="grid1"></Entry></List></Screen>
+<Screen type="FlyerSelection" name="Grid Selection Fury"><List name="flyerlist">
+<Entry String="grid2"></Entry><Entry String="grid3"></Entry></List></Screen>
+<Screen type="FlyerSelection" name="Grid Selection 2048"><List name="flyerlist">
+<Entry String="grid4"></Entry><Entry String="grid5"></Entry><Entry String="grid6"></Entry></List></Screen>
+</Screen>
+"#;
+
+fn layout_of(xml: &str, name: &str) -> Option<Layout> {
+    Layout::read_authored(
+        &Screens::from_xml(xml),
+        name,
+        &StringTable::default(),
+        crate::picker::FaceScales::default(),
+        [1920.0, 1080.0],
+        [1920.0, 1080.0],
+    )
+}
+
+fn chooser(xml: &str) -> Chooser {
+    Chooser::read(xml, &Screens::from_xml(xml), &|name| layout_of(xml, name))
+        .expect("the fixture authors the screen")
+}
+
+fn hd() -> Chooser {
+    chooser(HD_XML)
+}
+
+fn omega() -> Chooser {
+    chooser(OMEGA_XML)
+}
 
 fn press(input: &mut Input, button: Button) {
     input.begin_frame(0);
@@ -29,51 +113,129 @@ fn click(at: (f32, f32)) -> Pointer {
     }
 }
 
-#[test]
-fn the_default_selection_is_fury_matching_the_measured_default() {
-    let model = CampaignSelection::new();
-    assert_eq!(model.selected(), Campaign::Fury);
-}
-
-#[test]
-fn right_moves_from_fury_to_the_base_hd_campaign() {
-    let mut model = CampaignSelection::new();
+fn step(model: &mut CampaignSelection, button: Button) {
     let mut input = Input::default();
-    press(&mut input, Button::Right);
-    let events = model.update(&mut input);
-    assert_eq!(events, vec![Event::Moved]);
-    assert_eq!(model.selected(), Campaign::Hd);
-}
-
-#[test]
-fn left_at_fury_is_a_no_op_clamped_not_wrapping() {
-    let mut model = CampaignSelection::new();
-    let mut input = Input::default();
-    press(&mut input, Button::Left);
+    press(&mut input, button);
     model.update(&mut input);
+}
+
+#[test]
+fn the_entries_their_targets_and_their_grids_come_off_the_screen() {
+    let ids = |chooser: &Chooser| {
+        chooser
+            .entries()
+            .iter()
+            .map(|entry| (entry.id.clone(), entry.screen.clone(), entry.grids.clone()))
+            .collect::<Vec<_>>()
+    };
     assert_eq!(
-        model.selected(),
-        Campaign::Fury,
-        "left at the list's own first entry must not wrap to Hd - measured on RPCS3"
+        ids(&hd()),
+        [
+            ("FE_RC_FURY".into(), "Grid Selection Fury".into(), 2..5),
+            ("FE_RC_HD".into(), "Grid Selection".into(), 0..2),
+        ]
+    );
+    assert_eq!(
+        ids(&omega()),
+        [
+            ("FE_RC".into(), "Grid Selection 2048".into(), 4..7),
+            ("FE_RC_HD".into(), "Grid Selection".into(), 0..2),
+            ("FE_RC_FURY".into(), "Grid Selection Fury".into(), 2..4),
+        ]
+    );
+    assert_eq!(omega().campaign_of(5), Some(Campaign::new(0)));
+    assert_eq!(omega().campaign_of(3), Some(Campaign::new(2)));
+    assert_eq!(omega().campaign_of(9), None);
+}
+
+/// A screen whose redirect or target grids are not all there reads as no chooser at all, so a
+/// source with a partial copy opens straight on a grid rather than on a chooser that dead-ends.
+#[test]
+fn an_entry_with_no_target_screen_leaves_no_chooser() {
+    let broken = OMEGA_XML.replace(r#"goto="Grid Selection 2048""#, r#"goto="Nowhere""#);
+    assert!(
+        Chooser::read(&broken, &Screens::from_xml(&broken), &|name| layout_of(
+            &broken, name
+        ))
+        .is_none()
+    );
+    let no_list = OMEGA_XML.replace(
+        r#"<List name="flyerlist">
+<Entry String="grid4"></Entry>"#,
+        r#"<List name="other">
+<Entry String="grid4"></Entry>"#,
+    );
+    assert!(
+        Chooser::read(&no_list, &Screens::from_xml(&no_list), &|name| layout_of(
+            &no_list, name
+        ))
+        .is_none()
     );
 }
 
 #[test]
-fn right_at_hd_is_also_clamped() {
-    let mut model = CampaignSelection::new();
-    let mut input = Input::default();
-    press(&mut input, Button::Right);
-    model.update(&mut input);
-    assert_eq!(model.selected(), Campaign::Hd);
-    let mut input = Input::default();
-    press(&mut input, Button::Right);
-    model.update(&mut input);
-    assert_eq!(model.selected(), Campaign::Hd, "no third entry to move to");
+fn an_entry_names_its_card_by_the_tag_its_widgets_use() {
+    let tags: Vec<_> = omega()
+        .entries()
+        .iter()
+        .map(|entry| (entry.card_widget(), entry.card_flyer()))
+        .collect();
+    assert_eq!(
+        tags,
+        [
+            (
+                Some("2048CampaignFlyerModel".to_string()),
+                Some("2048_campaign".to_string())
+            ),
+            (
+                Some("HDCampaignFlyerModel".to_string()),
+                Some("hd_campaign".to_string())
+            ),
+            (
+                Some("FuryCampaignFlyerModel".to_string()),
+                Some("fury_campaign".to_string())
+            ),
+        ]
+    );
+}
+
+#[test]
+fn the_default_selection_is_the_lists_first_entry() {
+    assert_eq!(CampaignSelection::new(hd()).selected(), Campaign::new(0));
+    assert_eq!(CampaignSelection::new(omega()).selected(), Campaign::new(0));
+}
+
+#[test]
+fn right_steps_through_every_entry_and_clamps_at_both_ends() {
+    let mut model = CampaignSelection::new(omega());
+    step(&mut model, Button::Left);
+    assert_eq!(
+        model.selected(),
+        Campaign::new(0),
+        "left at the first entry is clamped"
+    );
+    step(&mut model, Button::Right);
+    assert_eq!(model.selected(), Campaign::new(1));
+    step(&mut model, Button::Right);
+    assert_eq!(model.selected(), Campaign::new(2));
+    step(&mut model, Button::Right);
+    assert_eq!(
+        model.selected(),
+        Campaign::new(2),
+        "right at the last entry is clamped"
+    );
+    step(&mut model, Button::Left);
+    assert_eq!(model.selected(), Campaign::new(1));
+
+    let mut model = CampaignSelection::new(hd());
+    step(&mut model, Button::Right);
+    step(&mut model, Button::Right);
+    assert_eq!(model.selected(), Campaign::new(1), "HD's list has two");
 }
 
 #[test]
 fn cross_confirms_and_circle_backs_out() {
-    let mut model = CampaignSelection::new();
+    let mut model = CampaignSelection::new(omega());
     let mut input = Input::default();
     press(&mut input, Button::Cross);
     assert_eq!(model.update(&mut input), vec![Event::Confirmed]);
@@ -84,35 +246,26 @@ fn cross_confirms_and_circle_backs_out() {
 }
 
 #[test]
-fn each_campaign_grid_range_and_screen_name_matches_the_disc() {
+fn a_click_on_a_column_selects_it_then_confirms_on_a_second_click() {
+    let mut model = CampaignSelection::new(omega());
+    let third = (1500.0, 500.0);
+    assert_eq!(model.pointer(&hover(third)), vec![Event::Moved]);
+    assert_eq!(model.selected(), Campaign::new(2));
+    assert_eq!(model.pointer(&click(third)), vec![Event::Confirmed]);
+}
+
+#[test]
+fn a_click_on_the_already_selected_first_column_confirms_it_directly() {
+    let mut model = CampaignSelection::new(omega());
     assert_eq!(
-        Campaign::Fury.grid_range(),
-        oag_hd::campaign::FURY_GRID_RANGE
+        model.pointer(&click((400.0, 500.0))),
+        vec![Event::Confirmed]
     );
-    assert_eq!(Campaign::Fury.grid_screen_name(), "Grid Selection Fury");
-    assert_eq!(Campaign::Hd.grid_range(), oag_hd::campaign::HD_GRID_RANGE);
-    assert_eq!(Campaign::Hd.grid_screen_name(), "Grid Selection");
-}
-
-#[test]
-fn a_click_on_the_right_half_selects_hd_then_confirms_on_a_second_click() {
-    let mut model = CampaignSelection::new();
-    let right_half = (1500.0, 500.0);
-    assert_eq!(model.pointer(&hover(right_half)), vec![Event::Moved]);
-    assert_eq!(model.selected(), Campaign::Hd);
-    assert_eq!(model.pointer(&click(right_half)), vec![Event::Confirmed]);
-}
-
-#[test]
-fn a_click_on_the_already_selected_left_half_confirms_fury_directly() {
-    let mut model = CampaignSelection::new();
-    let left_half = (400.0, 500.0);
-    assert_eq!(model.pointer(&click(left_half)), vec![Event::Confirmed]);
 }
 
 #[test]
 fn pointer_back_fires_regardless_of_where_the_pointer_is() {
-    let mut model = CampaignSelection::new();
+    let mut model = CampaignSelection::new(omega());
     let back = Pointer {
         back: true,
         ..Pointer::default()
@@ -120,108 +273,62 @@ fn pointer_back_fires_regardless_of_where_the_pointer_is() {
     assert_eq!(model.pointer(&back), vec![Event::Back]);
 }
 
+/// Each entry's outline is one equal column of the bracket, whatever the count.
 #[test]
-fn each_campaign_carries_its_own_disc_entry_id() {
-    assert_eq!(Campaign::Fury.entry_id(), "FE_RC_FURY");
-    assert_eq!(Campaign::Hd.entry_id(), "FE_RC_HD");
-}
-
-/// Pins the bug the advisor caught in the first version of this screen: a
-/// left-aligned entry name at the gold-medal label's own `x` ran past the
-/// Bracket's own midpoint and was cut by [`selector_outline`]'s own border.
-/// Each name is now drawn with [`Align::Centre`] at its own half's centre, so
-/// the anchor itself sitting inside that half is what the render actually
-/// needs - the align makes the drawn extent symmetric about it.
-#[test]
-fn each_entry_names_own_anchor_sits_inside_its_own_half_of_the_bracket() {
-    let [x, _y, width, _height] = BRACKET_RECT;
-    let half = width / 2.0;
-    let (fury_x, _) = FURY_ENTRY_NAME_POSITION;
-    let (hd_x, _) = HD_ENTRY_NAME_POSITION;
-    assert!(
-        fury_x >= x && fury_x <= x + half,
-        "Fury's own entry name anchor must sit inside the Bracket's left half"
-    );
-    assert!(
-        hd_x >= x + half && hd_x <= x + width,
-        "Hd's own entry name anchor must sit inside the Bracket's right half"
-    );
-}
-
-#[test]
-fn the_selector_outline_sits_in_the_left_half_of_the_bracket_for_fury() {
-    let draws = selector_outline(Campaign::Fury);
-    let [x, y, width, height] = BRACKET_RECT;
-    let half = width / 2.0;
-    for draw in &draws {
-        let Draw::Fill { rect, .. } = draw else {
-            panic!("selector_outline must draw plain fills, not {draw:?}");
-        };
-        assert!(
-            rect[0] >= x && rect[0] + rect[2] <= x + half,
-            "Fury's own outline must stay within the Bracket's left half: {rect:?}"
-        );
-        assert!(rect[1] >= y && rect[1] + rect[3] <= y + height);
+fn the_selector_outline_stays_inside_its_own_column_of_the_bracket() {
+    for chooser in [hd(), omega()] {
+        let count = chooser.entries().len();
+        let [x, y, width, height] = chooser.bracket();
+        for index in 0..count {
+            #[allow(clippy::cast_precision_loss, reason = "two or three")]
+            let (low, high) = (
+                x + width * index as f32 / count as f32,
+                x + width * (index + 1) as f32 / count as f32,
+            );
+            for draw in &selector_outline(&chooser, Campaign::new(index)) {
+                let Draw::Fill { rect, .. } = draw else {
+                    panic!("selector_outline must draw plain fills, not {draw:?}");
+                };
+                assert!(
+                    rect[0] >= low - 0.01 && rect[0] + rect[2] <= high + 0.01,
+                    "column {index} of {count}: {rect:?}"
+                );
+                assert!(rect[1] >= y && rect[1] + rect[3] <= y + height);
+            }
+        }
     }
 }
 
-#[test]
-fn the_selector_outline_moves_to_the_right_half_for_hd() {
-    let draws = selector_outline(Campaign::Hd);
-    let [x, _y, width, _height] = BRACKET_RECT;
-    let half = width / 2.0;
-    for draw in &draws {
-        let Draw::Fill { rect, .. } = draw else {
-            panic!("selector_outline must draw plain fills, not {draw:?}");
-        };
-        assert!(
-            rect[0] >= x + half && rect[0] + rect[2] <= x + width,
-            "Hd's own outline must stay within the Bracket's right half: {rect:?}"
-        );
-    }
-}
-
-/// `Campaign Selection` in miniature: the title, and the two medal counters.
-const XML: &str = r#"
-<Screen type="CampaignSelection" name="Campaign Selection">
-<Text name="ScreenTitle"><Values idstring="FE_RC_SELECT" x="180" y="80" color="0xffaaaaaa"></Values></Text>
-<Text name="NumMedalsTextFury"><Values string="a" x="820" y="770"></Values></Text>
-<Text name="NumMedalsTextHD"><Values string="b" x="1460" y="770"></Values></Text>
-</Screen>
-"#;
-
-fn list(selected: Campaign, cards: bool) -> Vec<Draw> {
-    let strings = oag_ui::language::StringTable::from_xml(
+fn strings() -> StringTable {
+    StringTable::from_xml(
         r#"<Strings>
 <Entry ID="FE_RC_SELECT" String="CAMPAIGN SELECT"></Entry>
 <Entry ID="FE_CAMPSEL_MODES" String="CAMPAIGN MODES"></Entry>
 <Entry ID="FE_RC_FURY" String="FURY CAMPAIGN"></Entry>
 <Entry ID="FE_RC_HD" String="HD CAMPAIGN"></Entry>
+<Entry ID="FE_RC" String="CAMPAIGN"></Entry>
 <Entry ID="RC_GM" String="GOLD MEDALS"></Entry>
+<Entry ID="CO_RANK" String="RANK"></Entry>
 </Strings>"#,
-    );
-    let layout = Layout::read_authored(
-        &oag_ui::screen::Screens::from_xml(XML),
-        "Campaign Selection",
-        &strings,
-        crate::picker::FaceScales::default(),
-        [1920.0, 1080.0],
-        [1920.0, 1080.0],
     )
-    .expect("the screen is in the fixture");
+}
+
+fn list(xml: &str, selected: usize, cards: bool) -> Vec<Draw> {
+    let model = CampaignSelection::at(chooser(xml), Campaign::new(selected));
     let skin = Skin::new(
         oag_hd::frontend::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
         22.0,
     );
+    let gold = vec![(0, 80), (0, 87), (0, 53)];
     draw_list(
-        &CampaignSelection::at(selected),
-        &layout,
+        &model,
+        &layout_of(xml, SCREEN).expect("the screen is in the fixture"),
         &skin,
         &Frame::default(),
-        &strings,
-        (0, 80),
-        (0, 87),
+        &strings(),
+        &gold,
+        7,
         None,
         false,
         &|_| None,
@@ -242,10 +349,10 @@ fn texts(draws: &[Draw]) -> Vec<&str> {
 }
 
 /// With no card drawn the screen keeps its stand-ins: the outline round the
-/// selected half, the two campaign names and both medal counters.
+/// selected column, every campaign's name and every counter.
 #[test]
-fn without_cards_the_stand_ins_and_both_counters_draw() {
-    let draws = list(Campaign::Fury, false);
+fn without_cards_the_stand_ins_and_every_counter_draw() {
+    let draws = list(HD_XML, 0, false);
     let words = texts(&draws);
     for want in ["FURY CAMPAIGN", "HD CAMPAIGN", "0 / 80", "0 / 87"] {
         assert!(words.contains(&want), "{want} in {words:?}");
@@ -262,14 +369,11 @@ fn without_cards_the_stand_ins_and_both_counters_draw() {
 
 /// With the cards drawn the outline and the names are gone - the turned card
 /// and the card's own wordmark say the same - and only the selected
-/// campaign's medal counter shows, on both selections.
+/// campaign's counter shows, on every selection.
 #[test]
 fn with_cards_only_the_selected_campaigns_counter_draws() {
-    for (selected, shown, hidden) in [
-        (Campaign::Fury, "0 / 80", "0 / 87"),
-        (Campaign::Hd, "0 / 87", "0 / 80"),
-    ] {
-        let draws = list(selected, true);
+    for (selected, shown, hidden) in [(0, "0 / 80", "0 / 87"), (1, "0 / 87", "0 / 80")] {
+        let draws = list(HD_XML, selected, true);
         let words = texts(&draws);
         assert!(words.contains(&shown), "{shown} in {words:?}");
         assert!(!words.contains(&hidden), "{hidden} in {words:?}");
@@ -284,4 +388,25 @@ fn with_cards_only_the_selected_campaigns_counter_draws() {
             "no outline"
         );
     }
+}
+
+/// Where the second campaign is the player's rank rather than a medal count, the selected 2048
+/// card shows `RANK` and the number and neither medal counter, and the others show their counter
+/// and no rank.
+#[test]
+fn the_2048_entry_draws_a_rank_where_the_others_draw_medals() {
+    let draws = list(OMEGA_XML, 0, true);
+    let words = texts(&draws);
+    assert!(words.contains(&"RANK") && words.contains(&"7"), "{words:?}");
+    assert!(!words.contains(&"GOLD MEDALS"), "{words:?}");
+    assert!(!words.iter().any(|w| w.contains(" / ")), "{words:?}");
+
+    let draws = list(OMEGA_XML, 1, true);
+    let words = texts(&draws);
+    assert!(words.contains(&"0 / 87"), "{words:?}");
+    assert!(words.contains(&"GOLD MEDALS"), "{words:?}");
+    assert!(
+        !words.contains(&"RANK") && !words.contains(&"7"),
+        "{words:?}"
+    );
 }

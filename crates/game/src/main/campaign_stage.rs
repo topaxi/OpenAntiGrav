@@ -142,11 +142,11 @@ pub(crate) struct CampaignStage {
     grids: Vec<race_campaign::Grid>,
     grid_layout: oag_ui_screens::campaign::Layout,
     cell_layout: oag_ui_screens::campaign::Layout,
-    /// **HD only**, both `Some` or both `None` together - see
-    /// `oag_game::campaign::Campaign`'s own field docs for why they can be
-    /// absent even on an HD source.
+    /// `Campaign Selection`'s own layout and what it offers, both `Some` or both
+    /// `None` together - see `oag_game::campaign::Campaign`'s own field docs for
+    /// why they can be absent even on a source whose title authors the screen.
     selection_layout: Option<oag_ui_screens::campaign::Layout>,
-    grid_layout_fury: Option<oag_ui_screens::campaign::Layout>,
+    chooser: Option<oag_ui_screens::campaign::selection::Chooser>,
     /// Which slice of [`Self::grids`] the current [`Screen::Grid`]/
     /// [`Screen::Cell`] pages - `0..grids.len()` (every grid) on every title
     /// but HD once a campaign is chosen, when it narrows to that campaign's
@@ -257,7 +257,7 @@ impl CampaignStage {
         grid_layout: oag_ui_screens::campaign::Layout,
         cell_layout: oag_ui_screens::campaign::Layout,
         selection_layout: Option<oag_ui_screens::campaign::Layout>,
-        grid_layout_fury: Option<oag_ui_screens::campaign::Layout>,
+        chooser: Option<oag_ui_screens::campaign::selection::Chooser>,
         cell_help: Option<oag_ui_screens::campaign::Layout>,
         nav_legend: Option<oag_ui_screens::campaign::footer::NavigationLegend>,
         ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
@@ -285,10 +285,10 @@ impl CampaignStage {
         // title, and an HD source missing `DATA06`'s own copy, opens
         // straight on `Grid Selection` over every grid, the pre-this-pass
         // behaviour.
-        let screen = if selection_layout.is_some() && grid_layout_fury.is_some() {
-            Screen::Selection(match kept_grid {
-                Some(which) => CampaignSelection::at(Self::campaign_of(which)),
-                None => CampaignSelection::new(),
+        let screen = if let (Some(_), Some(chooser)) = (&selection_layout, &chooser) {
+            Screen::Selection(match kept_grid.and_then(|which| chooser.campaign_of(which)) {
+                Some(campaign) => CampaignSelection::at(chooser.clone(), campaign),
+                None => CampaignSelection::new(chooser.clone()),
             })
         } else {
             let model = oag_ui_screens::campaign::GridSelection::new(
@@ -315,7 +315,7 @@ impl CampaignStage {
             grid_layout,
             cell_layout,
             selection_layout,
-            grid_layout_fury,
+            chooser,
             grid_range,
             active_campaign: None,
             cell_help,
@@ -542,7 +542,7 @@ impl CampaignStage {
     /// this is `false` on an otherwise-HD source.
     #[must_use]
     pub(crate) fn has_selection(&self) -> bool {
-        self.selection_layout.is_some() && self.grid_layout_fury.is_some()
+        self.selection_layout.is_some() && self.chooser.is_some()
     }
 
     #[must_use]
@@ -609,9 +609,9 @@ impl CampaignStage {
         }
     }
 
-    /// Each campaign's own `(earned, total)` gold-medal pair, for `Campaign
-    /// Selection`'s own `NumMedalsTextFury`/`NumMedalsTextHD` -
-    /// `(fury, hd)`. `earned` is `0` on a fresh profile, the same
+    /// Each campaign's own `(earned, total)` gold-medal pair, in
+    /// `campaignList` order, for `Campaign Selection`'s own
+    /// `NumMedalsText{HD,Fury}`. `earned` is `0` on a fresh profile, the same
     /// "player-progress source is optional" reading [`Self::grid_summary`]
     /// already gives every other number on these screens. `total` is the
     /// denominator RPCS3's own `Campaign Selection` shows next to it -
@@ -629,38 +629,45 @@ impl CampaignStage {
     /// denominator" section for the full count and the `grid_04.xml` defect
     /// closing it also surfaced and fixed.
     #[must_use]
-    pub(crate) fn campaign_gold_medals(&self) -> ((u32, u32), (u32, u32)) {
-        let pair = |range: std::ops::Range<usize>| -> (u32, u32) {
-            let grids = self.grids.get(range).unwrap_or(&[]);
-            let earned = grids
-                .iter()
-                .map(|grid| Self::grid_summary(grid, &self.campaign_title, &self.records).gold_medals)
-                .sum();
-            let total = grids
-                .iter()
-                .map(|grid| u32::try_from(grid.cells.len()).unwrap_or(u32::MAX))
-                .sum();
-            (earned, total)
+    pub(crate) fn campaign_gold_medals(&self) -> Vec<(u32, u32)> {
+        let Some(chooser) = &self.chooser else {
+            return Vec::new();
         };
-        (
-            pair(oag_hd::campaign::FURY_GRID_RANGE),
-            pair(oag_hd::campaign::HD_GRID_RANGE),
-        )
+        chooser
+            .entries()
+            .iter()
+            .map(|entry| {
+                let grids = self.grids.get(entry.grids.clone()).unwrap_or(&[]);
+                let earned = grids
+                    .iter()
+                    .map(|grid| {
+                        Self::grid_summary(grid, &self.campaign_title, &self.records).gold_medals
+                    })
+                    .sum();
+                let total = grids
+                    .iter()
+                    .map(|grid| u32::try_from(grid.cells.len()).unwrap_or(u32::MAX))
+                    .sum();
+                (earned, total)
+            })
+            .collect()
     }
 
     /// [`Self::grid_layout`]'s own choice between the base layout and
-    /// [`Self::grid_layout_fury`] - the base one whenever
-    /// [`Self::active_campaign`] is not `Fury`, which covers both "no
-    /// campaign chosen yet" (every non-HD title, and `Screen::Selection`
-    /// itself never reads this) and "the base `Wipeout HD` campaign was
-    /// chosen".
+    /// the chosen campaign's own `Grid Selection` layout, or the base one
+    /// when none is chosen yet (every title with no chooser, and
+    /// `Screen::Selection` itself never reads this).
     #[must_use]
     pub(crate) fn grid_layout(&self) -> &oag_ui_screens::campaign::Layout {
-        if self.active_campaign == Some(Campaign::Fury) {
-            self.grid_layout_fury.as_ref().unwrap_or(&self.grid_layout)
-        } else {
-            &self.grid_layout
-        }
+        self.active_entry()
+            .map_or(&self.grid_layout, |entry| &entry.layout)
+    }
+
+    /// The chooser entry [`Self::active_campaign`] names.
+    fn active_entry(&self) -> Option<&oag_ui_screens::campaign::selection::Entry> {
+        self.chooser
+            .as_ref()?
+            .entry(self.active_campaign?)
     }
 
     #[must_use]
@@ -674,7 +681,12 @@ impl CampaignStage {
         match &self.screen {
             Screen::Selection(model) => {
                 let campaign = model.selected();
-                ("selection", usize::from(campaign == Campaign::Fury), format!("{campaign:?}"))
+                let name = model
+                    .chooser()
+                    .entry(campaign)
+                    .map(|entry| entry.id.clone())
+                    .unwrap_or_default();
+                ("selection", campaign.index(), name)
             }
             Screen::Grid(model) => {
                 let name = self
@@ -690,15 +702,6 @@ impl CampaignStage {
                     .and_then(|name| model.cells().iter().position(|cell| &cell.name == name));
                 ("cell", index.unwrap_or(0), name.unwrap_or_default())
             }
-        }
-    }
-
-    /// Which HD campaign the absolute grid index `which` belongs to.
-    fn campaign_of(which: usize) -> Campaign {
-        if oag_hd::campaign::FURY_GRID_RANGE.contains(&which) {
-            Campaign::Fury
-        } else {
-            Campaign::Hd
         }
     }
 
@@ -718,8 +721,19 @@ impl CampaignStage {
     /// **HD only.** Opens `campaign`'s own `Grid Selection`/`Grid Selection
     /// Fury`, narrowing [`Self::grid_range`] to that campaign's own eight
     /// grids - `Campaign Selection`'s own `Event::Confirmed`.
-    pub(crate) fn open_grid_selection(&mut self, campaign: Campaign) {
-        self.grid_range = campaign.grid_range();
+    ///
+    /// `false`, staying on `Campaign Selection`, when none of the campaign's
+    /// grids is loaded: Omega's 2048 grids (`grid_16`..`grid_18`) author no
+    /// `RequiredPoints` and are skipped by the grid reader, and its events live
+    /// in `Campaign2048_Definition.xml`, which is not read.
+    pub(crate) fn open_grid_selection(&mut self, campaign: Campaign) -> bool {
+        let Some(entry) = self.chooser.as_ref().and_then(|chooser| chooser.entry(campaign)) else {
+            return false;
+        };
+        if self.grids.get(entry.grids.clone()).is_none_or(<[_]>::is_empty) {
+            return false;
+        }
+        self.grid_range = entry.grids.clone();
         self.active_campaign = Some(campaign);
         // `with_per_page(1)` - HD/Fury's own `Grid Selection` pages one
         // flyer at a time, not Pulse's four-hex page. See
@@ -739,6 +753,7 @@ impl CampaignStage {
         }
         self.screen = Screen::Grid(model);
         self.apply_selector_phase();
+        true
     }
 
     /// **HD only.** Returns to `Campaign Selection` - `Grid Selection`'s own
@@ -749,9 +764,12 @@ impl CampaignStage {
     /// `Wipeout HD` selected.
     pub(crate) fn open_selection(&mut self) {
         self.note_grid();
+        let Some(chooser) = self.chooser.clone() else {
+            return;
+        };
         let model = match self.active_campaign {
-            Some(campaign) => CampaignSelection::at(campaign),
-            None => CampaignSelection::new(),
+            Some(campaign) => CampaignSelection::at(chooser, campaign),
+            None => CampaignSelection::new(chooser),
         };
         self.screen = Screen::Selection(model);
     }
@@ -786,9 +804,11 @@ impl CampaignStage {
         if grid.cells.is_empty() {
             return false;
         }
-        if self.has_selection() {
-            let campaign = Self::campaign_of(which);
-            self.grid_range = campaign.grid_range();
+        if let Some(chooser) = &self.chooser
+            && let Some(campaign) = chooser.campaign_of(which)
+            && let Some(entry) = chooser.entry(campaign)
+        {
+            self.grid_range = entry.grids.clone();
             self.active_campaign = Some(campaign);
         }
         let mut cells = grid.cells.clone();
@@ -923,7 +943,9 @@ impl CampaignStage {
     ) -> oag_ui_screens::campaign::hd::CellArt<'a> {
         oag_ui_screens::campaign::hd::CellArt {
             next_flyer,
-            fury: self.active_campaign == Some(Campaign::Fury),
+            fury: self
+                .active_entry()
+                .is_some_and(|entry| entry.tag() == Some("Fury")),
             track_emblems: &self.circuit_emblems,
         }
     }

@@ -40,16 +40,6 @@ use oag_ui::screen::{Screens, parse};
 /// `Grid Selection`'s `<Flyer>` widget.
 pub const GRID_WIDGET: &str = "FlyerModel";
 
-/// `Campaign Selection`'s two `<Flyer>` widgets, Fury's on the left.
-pub const FURY_CAMPAIGN_WIDGET: &str = "FuryCampaignFlyerModel";
-pub const HD_CAMPAIGN_WIDGET: &str = "HDCampaignFlyerModel";
-
-/// The two campaign cards' `FlyerName`s: the folders
-/// `Data/FE/Flyers/fury_campaign/` and `Data/FE/Flyers/hd_campaign/`, which no
-/// grid names.
-pub const FURY_CAMPAIGN_FLYER: &str = "fury_campaign";
-pub const HD_CAMPAIGN_FLYER: &str = "hd_campaign";
-
 /// One `<Flyer>` widget's own values. Nothing here is a pixel: `x y z` and
 /// the rotations are the model's pose, `origin` the screen point the camera is
 /// centred on, in the screen's own authored grid.
@@ -70,9 +60,10 @@ pub struct FlyerWidget {
     /// `RotationCentreOffsetX`: where along X the rotation pivots, from the
     /// model's origin.
     pub rotation_centre_offset_x: f32,
-    /// `orthoScale`, authored on the two `Campaign Selection` flyers and not
-    /// on `Grid Selection`'s.
-    pub ortho_scale: Option<f32>,
+    /// `orthoScale`, or `orthoScaleX`/`Y`/`Z`: authored on the `Campaign
+    /// Selection` flyers (one number on HD's, three on Omega's) and not on HD's
+    /// `Grid Selection`'s. `None` when none is.
+    pub ortho_scale: Option<[f32; 3]>,
 }
 
 /// Every `<Flyer>` in `xml`, in document order.
@@ -110,7 +101,7 @@ pub fn read(xml: &str, screens: &Screens) -> Vec<FlyerWidget> {
                 ],
                 rotation: [number("RotX").unwrap_or(0.0), number("RotY").unwrap_or(0.0)],
                 rotation_centre_offset_x: number("RotationCentreOffsetX").unwrap_or(0.0),
-                ortho_scale: number("orthoScale"),
+                ortho_scale: ortho_scale(&number),
             });
             continue;
         }
@@ -118,6 +109,17 @@ pub fn read(xml: &str, screens: &Screens) -> Vec<FlyerWidget> {
         stack.extend(node.children.iter().rev());
     }
     out
+}
+
+/// `orthoScale` for all three axes, or each axis's own `orthoScaleX`/`Y`/`Z`;
+/// an axis that authors neither stays `1.0`.
+fn ortho_scale(number: &dyn Fn(&str) -> Option<f32>) -> Option<[f32; 3]> {
+    let all = number("orthoScale");
+    let axes = ["X", "Y", "Z"].map(|axis| number(&format!("orthoScale{axis}")));
+    if all.is_none() && axes.iter().all(Option::is_none) {
+        return None;
+    }
+    Some(axes.map(|axis| axis.or(all).unwrap_or(1.0)))
 }
 
 /// `Data/FE/Flyers/<name>/` - the executable's own `%s` folder template.
@@ -168,7 +170,7 @@ mod tests {
         assert_eq!(flyers.len(), 2);
         assert_eq!(flyers[0].name, "FuryCampaignFlyerModel");
         assert_eq!(flyers[0].rotation, [0.0, 0.6]);
-        assert_eq!(flyers[0].ortho_scale, Some(0.75));
+        assert_eq!(flyers[0].ortho_scale, Some([0.75; 3]));
         assert_eq!(flyers[1].name, "FlyerModel");
         assert_eq!(flyers[1].position, [80.0, -33.3, -200.0]);
         assert_eq!(flyers[1].origin, [960.0, 540.0]);

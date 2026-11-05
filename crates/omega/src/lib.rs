@@ -239,6 +239,7 @@ pub const TITLE: &Title = &Title {
             yaw: -0.25,
             offset: [29.0, 13.3, -129.0],
         }),
+        selection_card_scale: Some(0.903),
         frontend_glow: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         custom_campaigns: true,

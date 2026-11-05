@@ -50,6 +50,33 @@ fn image() -> Option<PathBuf> {
     oag_testdata::image(PS3_IMAGE)
 }
 
+/// The two cards `Campaign Selection` shows, as the screen's own chooser names them: Fury's, then
+/// HD's (`campaignList`'s order).
+fn campaign_cards(
+    xml: &str,
+    screens: &oag_ui::screen::Screens,
+) -> Vec<oag_game::flyer::CampaignCard> {
+    let chooser = oag_ui_screens::campaign::selection::Chooser::read(xml, screens, &|name| {
+        oag_ui_screens::campaign::Layout::read_authored(
+            screens,
+            name,
+            &oag_ui::language::StringTable::default(),
+            oag_ui_screens::picker::FaceScales::default(),
+            [1920.0, 1080.0],
+            [1920.0, 1080.0],
+        )
+    })
+    .expect("DATA06 authors the chooser");
+    chooser
+        .entries()
+        .iter()
+        .map(|entry| oag_game::flyer::CampaignCard {
+            flyer: entry.card_flyer().expect("a known campaign"),
+            widget: entry.card_widget().expect("a known campaign"),
+        })
+        .collect()
+}
+
 fn archives(image: &std::path::Path) -> oag_assets::Archives {
     oag_assets::Archives::open(&image.to_string_lossy(), oag_hd::TITLE).expect("the archives open")
 }
@@ -194,17 +221,19 @@ fn campaign_selections_cards_land_where_rpcs3_shows_them() {
     let xml = screen_xml(&mut archives);
     let screens = oag_ui::screen::Screens::from_xml(&xml);
     let widgets = flyer::read(&xml, &screens);
-    let cards: Vec<oag_game::flyer::CardSpec> =
-        [flyer::FURY_CAMPAIGN_FLYER, flyer::HD_CAMPAIGN_FLYER]
-            .map(|name| oag_game::flyer::CardSpec {
-                flyer: name.to_string(),
-                side: oag_game::flyer::Side::Front,
-                window: oag_game::flyer::FURY_WINDOW,
-                stretch: oag_game::flyer::CAMPAIGN_STRETCH,
-                gain: oag_game::flyer::CAMPAIGN_GAIN,
-            })
-            .to_vec();
-    let flyers = oag_game::flyer::Flyers::load(&mut archives, widgets, &cards);
+    let campaigns = campaign_cards(&xml, &screens);
+    let cards: Vec<oag_game::flyer::CardSpec> = campaigns
+        .iter()
+        .map(|card| oag_game::flyer::CardSpec {
+            flyer: card.flyer.clone(),
+            side: oag_game::flyer::Side::Front,
+            window: oag_game::flyer::FURY_WINDOW,
+            stretch: oag_game::flyer::CAMPAIGN_STRETCH,
+            gain: oag_game::flyer::CAMPAIGN_GAIN,
+        })
+        .collect();
+    let flyers = oag_game::flyer::Flyers::load(&mut archives, widgets, &cards)
+        .with_campaigns(campaigns, 1.0);
     assert!(flyers.report.is_empty(), "{:?}", flyers.report);
     let rects = |selected| {
         let shows = flyers.selection_shows(selected);
@@ -222,12 +251,13 @@ fn campaign_selections_cards_land_where_rpcs3_shows_them() {
         assert!((got - want).abs() < 40.0, "{what}: {got} against {want}");
     };
     use oag_ui_screens::campaign::selection::Campaign;
-    let [fury, hd] = rects(Campaign::Fury).try_into().expect("two");
+    let (first, second) = (Campaign::new(0), Campaign::new(1));
+    let [fury, hd] = rects(first).try_into().expect("two");
     near(fury[0], 240.0, "Fury's left edge, selected");
     near(fury[0] + fury[2], 1038.0, "Fury's right edge, selected");
     near(fury[1], 212.0, "Fury's top, selected");
     near(hd[0], 1105.0, "HD's left edge, turned");
-    let [_, hd] = rects(Campaign::Hd).try_into().expect("two");
+    let [_, hd] = rects(second).try_into().expect("two");
     near(hd[0], 879.0, "HD's left edge, selected");
 }
 
@@ -242,12 +272,13 @@ fn campaign_selections_unfocused_card_is_dimmed() {
     let xml = screen_xml(&mut archives);
     let screens = oag_ui::screen::Screens::from_xml(&xml);
     let widgets = flyer::read(&xml, &screens);
-    let flyers = oag_game::flyer::Flyers::load(&mut archives, widgets, &[]);
+    let flyers = oag_game::flyer::Flyers::load(&mut archives, widgets, &[])
+        .with_campaigns(campaign_cards(&xml, &screens), 1.0);
     use oag_game::flyer::{FOCUSED_TINT, UNFOCUSED_TINT};
     use oag_ui_screens::campaign::selection::Campaign;
     for (selected, fury, hd) in [
-        (Campaign::Fury, FOCUSED_TINT, UNFOCUSED_TINT),
-        (Campaign::Hd, UNFOCUSED_TINT, FOCUSED_TINT),
+        (Campaign::new(0), FOCUSED_TINT, UNFOCUSED_TINT),
+        (Campaign::new(1), UNFOCUSED_TINT, FOCUSED_TINT),
     ] {
         let tints: Vec<_> = flyers
             .selection_shows(selected)
@@ -257,8 +288,8 @@ fn campaign_selections_unfocused_card_is_dimmed() {
         assert_eq!(
             tints,
             [
-                (flyer::FURY_CAMPAIGN_FLYER.to_string(), fury),
-                (flyer::HD_CAMPAIGN_FLYER.to_string(), hd)
+                ("fury_campaign".to_string(), fury),
+                ("hd_campaign".to_string(), hd)
             ],
             "{selected:?}"
         );

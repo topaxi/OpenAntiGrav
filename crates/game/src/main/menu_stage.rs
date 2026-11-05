@@ -623,7 +623,7 @@ impl MenuStage {
                     crate::campaign_stage::Screen::Selection(model) => {
                         match campaign.selection_layout() {
                             Some(layout) => {
-                                let (fury_gold, hd_gold) = campaign.campaign_gold_medals();
+                                let gold = campaign.campaign_gold_medals();
                                 let footer_overlay =
                                     campaign.nav_legend_draw(&layout.faces);
                                 oag_ui_screens::campaign::selection::draw_list(
@@ -632,8 +632,8 @@ impl MenuStage {
                                     &self.skin,
                                     &self.frame,
                                     &campaign.strings,
-                                    fury_gold,
-                                    hd_gold,
+                                    &gold,
+                                    0,
                                     if frozen_race { None } else { shown },
                                     frozen_race,
                                     &|src| campaign.sprites.get(src),
