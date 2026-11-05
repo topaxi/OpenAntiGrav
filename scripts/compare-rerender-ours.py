@@ -132,6 +132,10 @@ def rerender(pj, binary):
                                              else "no value recorded for this pair: the profile's %d%%" % plat["ours"]["hud_safe_area"])
         shot = tmp / "ours.png"
         env = dict(os.environ, **ce.ours_env(tmp / "profile"))
+        if rec.get("kind") in ("menu", "loading"):
+            # The same rule as `compare_menu.render_ours`: the original's fresh profile holds no downloaded pack.
+            (tmp / "no-dlc").mkdir()
+            env["OAG_DLC"] = str(tmp / "no-dlc")
         done = subprocess.run([str(binary), image] + flags + ["--screenshot", str(shot)], env=env, cwd=ROOT,
                               capture_output=True, text=True, timeout=600)
         if done.returncode != 0 or not shot.exists():

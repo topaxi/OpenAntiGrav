@@ -1059,6 +1059,27 @@ separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `p
 data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
 then `just compare-page`.
 
+### The backdrop movie's phase (2026-11-05, `pulse-track-select-streaks`)
+
+Pulse's menus play a nine-second looping movie that never restarts, so a reference still catches
+whatever frame the walk's length landed on, and a craft's fly-by is bright. `--menu-page` draws
+frame zero unless `--menu-movie-frame N` says otherwise. To line a pair up:
+
+```sh
+python3 scripts/compare-menu-movie-phase.py <pair-dir>...   # records --menu-movie-frame in pair.json
+```
+
+Then re-render that pair with `scripts/compare-rerender-ours.py`. The script scores every frame of
+the movie against `theirs.png` on the pixels of `ours.png` that are bare movie, and keeps frame zero
+unless the best frame beats it by a grey level (`--min-gain`): a dark stretch names no frame. It
+runs no emulator and reads the transcoded movie from `~/.cache/oag/movies/`. A re-capture of a pair
+changes the phase, so run it again after one. `pulse-psp/menu-track` needs 38: mean grey 13.89 -> 4.46
+(`docs/ui/selection-screens.md`, "The teal streaks behind the panel are the backdrop movie").
+
+`compare-rerender-ours.py` now gives a menu or loading pair an empty `$OAG_DLC`, as the pair scripts
+always have: without it a re-render counted the maintainer's DLC packs (Track Select `1 / 11`, not
+`1 / 3`; Ship Select `1 / 12`, not `1 / 8`).
+
 ## Menu pairs: Wipeout Pulse (PS2) front-end screens (2026-10-29, `pulse-ps2-hex-align`)
 
 `scripts/pcsx2-menu-pair.py pairs --slot S --out D` makes Grid Selection and Cell Selection pairs (`menu-grid`, `menu-cell`) from
