@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+check: fmt-check lint check-ballisticng check-extensions test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -198,7 +198,7 @@ test-data *ARGS:
 # `check-status` is left out: a member never commits `status.md`, so a stale table is
 # the lead's to regenerate, and the full `just` checks it.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-weapon-lineage check-schemas
+gate-affected: fmt-check lint check-ballisticng check-extensions test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas
 
 # `just test`, narrowed to what `scripts/affected.py` selects.
 test-affected:
@@ -1287,6 +1287,13 @@ check-status:
 # `Origin`. Text parsing, about 20 ms. What it does not check is on the page.
 check-weapon-lineage:
     python3 -I scripts/check-weapon-lineage.py
+
+# `.config/nextest.toml`'s `gpu-vram` group lists exactly the test modules that
+# spawn the game or capture a frame through the default adapter, so a new one
+# cannot bring the NVIDIA out-of-memory failures back on a loaded run. Text
+# scan, no build, no GPU.
+check-test-groups:
+    python3 -I scripts/check-test-groups.py
 
 # Every shipped TOML validates against the TOML Schema it names (schemas/v1/), the
 # schema and its loader give the same verdict on each example, and the schemas

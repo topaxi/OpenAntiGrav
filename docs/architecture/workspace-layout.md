@@ -291,8 +291,9 @@ of 90 and 25-36). The static build is `scripts/build-server-portable.sh musl`
 
 ## Which GPU the tests use
 
-Every GPU test gets its adapter from `oag_gpu::test_adapter` (`request` for one,
-`ordered` to walk several), never from `request_adapter` with defaults: that
+Every in-process GPU test but the capture ones below gets its adapter from
+`oag_gpu::test_adapter` (`request` for one, `ordered` to walk several), never from
+`request_adapter` with defaults: that
 takes whichever adapter the driver lists first, which on a machine with an
 integrated and a discrete GPU is usually the integrated one that also draws
 the desktop. The helper prefers the discrete GPU, and puts the integrated one
@@ -302,6 +303,103 @@ large HD scene tests. `OAG_TEST_ADAPTER=discrete|integrated|<name substring>`
 overrides the choice. The first caller in a process prints the adapter it got
 to stderr (`--no-capture`). A machine with no adapter still skips each test as
 before.
+
+Two kinds of test do not go through the helper and take the driver's default
+adapter, which on a laptop is the discrete GPU: a test that spawns `oag-game`
+(the binary's `adapter::choose` asks wgpu for its default pick) and a test that
+calls `capture_pixels_from` or `capture_from` in `oag-mesh`. Those are the
+`gpu-vram` test group below.
+
+## Test groups: the `gpu-vram` cap (2026-11-05)
+
+`.config/nextest.toml` puts the tests that open the default GPU in a test group
+`gpu-vram` of 4 threads (`max-threads = 4`). A group caps concurrency inside one
+nextest run and nothing else: it does not see a second run (the `gate.lock`
+covers that) or a game on the desktop.
+
+**Why.** On a machine whose discrete GPU does not spill device memory into system
+memory (this notebook's 8 GiB NVIDIA RTX PRO 2000 on Linux), sixteen test threads
+put a dozen games on the GPU together. A full `test-data` run before the group
+(`OAG_REQUIRE_GAME_DATA=1`, no `VK_ICD_FILENAMES`, per-process memory sampled
+every 0.5 s with `nvidia-smi -q -x`, peak RSS per test from `wait4`) peaked at
+**7,782 MiB of 8,151** with 13 processes on the GPU, and five HD scene tests failed
+with `wgpu error: Out of Memory` (`hd_weapon_scene_ground_truth` two of its five,
+`hd_plasma_ball_ground_truth`, `hd_bomb_blast_ground_truth`,
+`hd_behind_glass_frame_ground_truth`). The window of each failure sat at 7,565 to
+7,782 MiB. The HD tests are alphabetically adjacent, so nextest starts them
+together.
+
+**Per-process peaks** (81 tests held 50 MiB or more, 57 held 300 MiB or more):
+
+| Test | GPU memory |
+| --- | --- |
+| A spawned game on an HD race (14 tests) | 916 MiB (1,045 for the split and flaps ones) |
+| A spawned game on Pulse, Pure or 2048 | 462 to 788 MiB |
+| `split_screen_ground_truth::omega_two_views_each_keep_their_picture` | 2,575 MiB (the only outlier) |
+| In-process `oag-render::it` tests through `capture_pixels_from` | 73 to 713 MiB |
+| In-process tests through `oag_gpu::test_adapter` | up to about 200 MiB (a context is about 2 MiB) |
+
+**The cap.** (8,151 MiB, less the desktop's 160 to 300, less headroom) over the
+1,045 MiB of the largest ordinary member is 7; the outlier at 2,575 MiB plus six
+more would be 8.8 GiB. At 4 the worst case is 2,575 + 3 x 1,045 = 5.7 GiB plus the
+desktop and the few-hundred-MiB in-process tests, which leaves 1.4 GiB. 4 was
+chosen over 5 because it costs nothing measurable (below).
+
+**Result**, the same tree, the same command, back to back under the gate lock,
+both with the measuring wrapper on (so its overhead is equal):
+
+| Run | Wall | Tests | GPU memory peak | Load (mean of 0.5 s samples) |
+| --- | --- | --- | --- | --- |
+| no group | 981 s | 10,903 passed, 6 failed | 7,782 MiB, 13 processes of 100 MiB or more | 26.4 |
+| `gpu-vram` at 4 | 959 s | 10,909 passed | 4,005 MiB, never more than 4 of 300 MiB or more | 25.5 |
+
+The 22 s is inside the noise of a machine whose load swings 13 to 77, so the
+claim is "no cost seen", not "faster". A replay of the first run's per-test
+walls through a 16 slot scheduler with and without the cap agrees (948 s without,
+947 s at 4, 945 s at 2): the group's 156 tests sum to 1,865 s of the suite's
+14,811, so a cap of 4 leaves 466 s of group work spread over a 950 s run, and the
+other twelve threads always have other tests to start. The same replay at 24
+slots (the desktop) gives 640 s without the cap and at 4, 639 s at 3, 938 s at 2;
+at 32 slots 486 s and 485 s at 4, 626 s at 3. The cap would cost wall clock only
+if the group were most of the suite: at 4 the group's 466 s is a floor under the
+run, so a machine fast enough to finish the rest in under that would feel it.
+A third full run on the final tree, without the wrapper: 10,909 passed in 941 s at
+load 15 to 12; its only red is `check-test-budget`'s 450 s ceiling, which this
+machine always trips.
+
+**The sixth failure is not VRAM.** `campaign_cursor_ground_truth::the_2048_map_reopens_on_the_event_last_started`
+exits with `SIGSEGV` (status 139) in the first run with the GPU at 2,700 MiB,
+and alone on the idle NVIDIA GPU at 787 MiB in 3 of 8 runs; it passed 7 of 7 on
+the Intel ICD. The core dump (`coredumpctl`) shows the crash on the game's
+`race-load` thread at an instruction pointer that is not in any mapping
+(`SEGV_ACCERR`), while the main thread sits in `libnvidia-eglcore` inside an
+`ioctl`. It passed in the second full run, which says nothing about it: a cap
+does not touch it. It is open as a bug in the NVIDIA path, not a test-suite
+problem.
+
+**RAM needed no group.** The largest test by peak resident size is
+`extract_ground_truth::omega::first_circuit_reproduces` at 7.5 GiB; the next are
+the other two Omega extraction tests (7.3, 6.7 GiB), two refraction tests
+(5.1, 4.4 GiB) and `ai_roll_ground_truth` (3.7 GiB). `MemAvailable` never fell
+under 35 GiB of the notebook's 62 across either full run, so no `threads-required`
+or RAM group is set. A smaller machine would see the three Omega extraction tests
+(21 GiB together) first.
+
+**Keeping the list exact.** The group is a list of test modules, so
+`scripts/check-test-groups.py` (`just check-test-groups`, in the gate, a text scan
+with no build) fails when a module in `crates/*/tests/` spawns the game or calls
+`capture_pixels_from`/`capture_from` and is not in the group, when a listed
+module no longer does, when such a marker sits where the list cannot name it (a
+crate without `tests/it*.rs` binaries, an in-crate test module), or when a new
+`request_adapter`/`enumerate_adapters` call site appears. A new module is one line
+in the override's regex. A test that opens a GPU some other way is not caught; teach the script its
+marker (`MARKER`, `OPENERS`) when the sampler shows one.
+
+**Measuring it again.** `nextest` wrapper scripts are experimental
+(`experimental = ["wrapper-scripts"]` in the config file, not set in the repository):
+a wrapper that forks the test command, reads `wait4`'s `ru_maxrss` and writes a
+line per test, plus a sampler that walks each `nvidia-smi -q -x` process back to
+its wrapper through `/proc/<pid>/stat`, give the numbers above.
 
 ## Gameplay state
 
@@ -1228,4 +1326,5 @@ Moved out of `CLAUDE.md`, which keeps the rules and the ceilings.
   A `test-data --full` after these changes: 10,506 tests, all passed, 423 s per nextest, load 16 at the start and 13 at the end (24 at the peak); the slowest test fell from 186 s to 93 s. Against the lead's reads of 423 to 458 s at load ~32 this is not a controlled suite comparison; the per-test CPU table above is the evidence.
 
   Not done: a run-time sim-only load would also drop the texture decode of the Omega extraction loads (190 `cfg(feature = "view")` sites in `oag-raceplay::load`); the `ribbon` option reaches only the track-art part and an extraction's file set must stay what the lobby reads, so these loads keep the default.
+- **Throughput-bound, not tail-bound (2026-11-05).** One full run (10,889 tests, load 20 to 30): summed test time 14,394 s over 16 threads is 900 s, against 925 s of wall clock, and the slowest test is 124 s, so priority cannot help and only less work can. 389 tests over 10 s hold 71 % of the time. Families by summed seconds: `omega_gnf` 830, `autopilot_original` 617, `omega_transparency` 591, `ai_clean_lap_gate` 541, `omega_wem` 423, `extract` 363, `vita_2048_original_ai` 347, `trackfile` 329.
 - **Affected gating (2026-10-07).** `scripts/affected.py` selects the packages a branch changed since its merge base with `main` plus their dependents. Each of `oag-game`'s five test binaries links the whole crate, so a lane in `oag-mesh`, `oag-render` or `oag-fx` still selects most of the suite's time; the saving lands on lanes in the format, texture, UI and title crates.
