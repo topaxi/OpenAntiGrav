@@ -28,13 +28,14 @@ fn both_psp_titles_are_ruled_out_and_hds_own_serial_gets_no_verdict() {
 #[test]
 fn all_seven_archives_are_mounted_and_none_twice() {
     let mut named = TITLE.archive_names();
-    // Eight names, seven archives: `DATA03` is also the bulk fallback a PSN
-    // install (which has no `DATA00`) resolves to, and the asset layer mounts it
-    // once. Exactly one archive is named twice, and it is that one.
-    assert_eq!(named.len(), 8, "{named:?}");
+    // Ten names, nine archives: the base's seven and the update chain's two.
+    // `DATA03` is also the bulk fallback a PSN install (which has no `DATA00`)
+    // resolves to, and the asset layer mounts it once. Exactly one archive is
+    // named twice, and it is that one.
+    assert_eq!(named.len(), 10, "{named:?}");
     named.sort();
     named.dedup();
-    assert_eq!(named.len(), 7, "{named:?}");
+    assert_eq!(named.len(), 9, "{named:?}");
     assert_eq!(
         TITLE
             .archive_names()

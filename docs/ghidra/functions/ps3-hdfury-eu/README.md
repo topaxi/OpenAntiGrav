@@ -174,6 +174,7 @@ Two structural facts to expect, both different from every other binary here:
   through its own animated camera into a white target, filtered by `FEBackgroundAnim_fp`'s
   Roberts cross (edge and fill levels) and blurred, the `ScreenSetting` row layout and its
   0.97/0.03 easing, the 60 s clock, the 57.3 degree field of view.
+- [update-0251.md](update-0251.md) - the 02.51 executable against this one: what a third party's function map is worth, which offsets carry over.
 - [menu-backdrop.md](menu-backdrop.md) - `BackgroundAnimFury_Item.cpp`, the
   Fury menu's backdrop: one of nineteen `.points2` ship point clouds (the record
   format, measured on all nineteen), the camera paths and colours in

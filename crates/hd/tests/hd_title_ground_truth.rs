@@ -83,9 +83,11 @@ fn all_seven_archives_open_as_psarcs_off_one_disc() {
     assert_eq!(opened.len(), 7, "{opened:?}");
     opened.sort_unstable();
 
+    // The update chain is on no disc.
     let expected: Vec<String> = TITLE
         .archive_names()
         .iter()
+        .filter(|name| !TITLE.archives.patch.iter().any(|(patch, _)| patch == name))
         .map(|name| {
             format!(
                 "{}:PS3_GAME/{name}",

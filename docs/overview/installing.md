@@ -456,6 +456,21 @@ campaign screens and the menu backdrop are Fury's and are not drawn (hd-psn.md,
 names. Checked 2026-10-07: the install opened as `Wipeout HD`, raced Vineta K
 tick for tick like the disc, and its menu rows drew.
 
+### Updates for Wipeout HD
+
+Sony's update packages are optional: without them HD runs as it did. They change the voice and
+music mix and the menu text ([hd-updates](../formats/hd-updates.md)). Install **every** package of a
+chain in order: the last one carries no game data of its own, and the program warns about a
+partial chain.
+
+1. Install them with RPCS3 as above, one `rpcs3 --headless --installpkg` per package, oldest
+   first, in the same private profile. RPCS3 may abort as it exits; the files land.
+2. **PSN copy:** copy `dev_hdd0/game/NPEA00057` over your folder as in step 3 above.
+   The folder now also holds `data05`-`data08`.
+3. **Fury disc:** copy `dev_hdd0/game/BCES00664` into `data/extracted/ps3/`, or beside your disc image.
+   Nothing else is needed: the folder is matched to the disc by its own `TITLE_ID`, and it is
+   not listed as a game.
+
 ### 2048: a `.vpk`, or a folder
 
 A 2048 `.vpk` (the ZIP a NoNpDrm dump of your own console's install makes) is

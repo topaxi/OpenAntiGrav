@@ -41,6 +41,7 @@ below was re-derived from the render's own use of the field (the attribute slot 
 | `0x00695ef8` | `FuryStaticPath_Fovy` | 80 |
 | `0x00695f00` | `FuryStaticPath_PointSize` | 80 |
 | `0x00695f08` | `FuryStaticPath_EffectMode` | 80 |
+| `0x003b8550` | `FunkLayer_DrawScanBand` | 85 |
 | `0x0025f098` | `PointCloud_ModeNeedsNewCloud` | 78 |
 | `0x0025f1d8` | `PointCloud_Prepare` | 75 |
 | `0x00263aa0` | `PointCloud_Submit` | 78 |
@@ -333,7 +334,8 @@ where `resScale = clamp(0.0015 * height - 0.62, 0, 4)` (`1.0` at 1080 lines),
 `musicPulse = 1 + (mean(eq[3]) - Music Pulse Base) * Music Pulse factor` from three
 equaliser bands at `+0x19c..+0x1a4` that the sound system feeds. RPCS3 reads the
 uploaded `particleColour` between `0.040` and `0.21` over two minutes of menu music
-(`musicPulse` from `0.23` to `1.2`; the disc authors base `0.7`, factor `1.1`).
+(`musicPulse` from `0.23` to `1.2`, and to the law's own `1.33` on a longer sample: see
+"The frame, measured"; the disc authors base `0.7`, factor `1.1`).
 **This build has no equaliser tap and plays no menu music yet**, so it sits the
 bands at zero - `musicPulse = 0.23`, the quietest RPCS3 showed - rather than at
 the base. The ramp's
@@ -366,22 +368,130 @@ decompile's order only (Open). From the three fragment programs and the constant
 - **Blend** (`FEBackgroundAnimFuryBlend`): `out = min(src * srcScale, srcMax) + dst *
   dstScale`, `dstScale = Feedback`, `dst` sampled through `uv0ScaleBias` (`Feedback
   Zoom`, authored `0`, so identity), `src` the fresh particle target and `dst` the
-  previous accumulation - a trail that decays by `0.647` a frame. `srcScale` and
-  `srcMax` are equaliser-driven: `clamp(0.016 * 24 * eq, (0.02, 0.02, 0.023), 0.15)`
-  with the same base-level stand-in as `musicPulse`.
+  previous accumulation - a trail that decays by `0.647` a frame. **`srcScale` is the
+  screen's tint and `srcMax` is 1**, measured below; the page's first reading had them
+  equaliser-driven.
 - **Wave** (`FEBackgroundAnimFuryWave`): `h = tex * colourScale; out = h +
   saturate(h * biasFactor) * colourBias + colourBias` - the accumulation dimmed by
   `0.94`/`0.955` and pulled down by `0.0003` so trails die out rather than settle.
-- **Fury** (`FEBackgroundAnimFury`), to the page: `out = (texture + waveTexture) *
-  (257/256) - 1/257` with `BlendFunc(CONSTANT_COLOR, ONE)` and the blend colour the
-  screen's `tint` byte replicated - so the backdrop is the bright fresh particles plus
-  their softened trail, scaled by the tint, added over the cleared page.
+- **Fury** (`FEBackgroundAnimFury`): `out = (texture + waveTexture) * (257/256) - 1/257`,
+  with blending **off**. The first reading gave it `BlendFunc(CONSTANT_COLOR, ONE)` under
+  the tint; that call belongs to the pass before the wave, and its colour is not the tint.
 
-**Confidence 60 on the pass order and which target feeds which**: the three formulas
-are read from microcode (90), the tint mechanism from the blend-constant call and the
-skin (85), but the ~30 immediate-mode quad vertices `Render` emits for the blend pass
-(a grid, `FUN_00678218` at `0x00185??`) and the target indexing (`+0xfc + 4 * pp`)
-were not followed vertex by vertex. Open below.
+The pass order and which target feeds which were 60 on this page until 2026-11-05; the
+next section replaces that reading with a measured one.
+
+## The frame, measured (2026-11-05)
+
+Lane `fury-0251-verify`, checking a third party's notes from a static recompilation of the
+02.51 update. Everything in this section is **our own capture of 02.00** (the disc,
+`APP_VER=02.00`) on RPCS3 0.0.42-19980: one frame's command stream dumped with
+`HOOK_RING_ONLY=1 HOOK_MIN=30 scripts/hd-draw-dump.py` and listed with
+`scripts/rsx-pass-events.py`, the patched fragment programs read back out of local memory
+at their `SET_SHADER_PROGRAM` offsets and disassembled with `scripts/ps3-fp-live.py`.
+Main Menu at 1280x720, Fury style: **51 draws**, then the next frame. The sender's count and
+their order agree except where this section says so.
+
+| # | Target | Program | Blend | What it does |
+| --- | --- | --- | --- | --- |
+| 1 | particle field, `0x00f50000`, surface `0x3148`, pitch `0x2800` | the mode's | `SRC_ALPHA, ONE` | One `QUADS` draw, four vertices a point (214,296 on this cloud; 220,000 on a 55,000-point one) |
+| 2 | accumulation, 1280x720 | Blend | off | `min(field * tint, 1) + self_last_frame * 0.647` |
+| 3 | half target A, 640x360 | copy (`TEX; MOV`) | `CONSTANT_COLOR, ONE`, colour = glow gain | Adds accumulation times the gain onto A, which holds last frame's wave |
+| 4 | half target B | Wave | off | Four quads meeting at a moving pivot (below); the two half targets swap each frame |
+| 5 | particle field | Fury | off | `(accumulation + B) * 257/256 - 1/257`, overwriting the field |
+| 6 | particle field | band | off | The smear band, reads its own target |
+| 7 | particle field | colour | `ZERO, SRC_COLOR` | Scanlines: multiplies every 4th row by `(0.05, 0.1, 0.25)` |
+| 8 | `0x00cc0000`, plain | copy | off | Resolves the field to a plain target. 720p only; at 1080p the ladder reads the field directly |
+| 9-24 | the shared post ladder down to 160x90 | | | The same chain as a race |
+| 25 | the display buffer | final composite | off | Decode, exposure, bloom; [renderer.md](renderer.md) |
+| 26-51 | the display buffer | UI | `SRC_ALPHA, ONE_MINUS_SRC_ALPHA` | The front end |
+
+**Confidence 90** on the table: read off the stream at every step, twice (two frames per
+dump) and again at 1920x1080. A second build's agreement would not lift it past 94.
+
+- **The whole chain runs in linear light.** Method `0x1fec` is 1 on draws 1 to 25 and 0 on
+  the UI, and every texture those passes bind has the gamma bits `0x00700000` set in its
+  address word (`0x60730303`). That is why
+  [the tint reads the way it does](#the-tint-is-applied-in-linear-light-and-what-a-screen-change-does)
+  and it replaces the guess there about where the encoding happens. **Confidence 80**: the
+  bits are read directly; `0x1fec` as "encode on write" is inferred from its on/off split and
+  the sender's agreement, not from a register document.
+- **The tint reaches the shader as a fragment constant, not as a blend colour.** The
+  constant at slot 2 of the Blend program (`0x00740600` at 720p) is patched per frame.
+  Experiment: three floats written to the current row at `row+0x40`, the program read back
+  half a second later. Main Menu: `1.0` before, `0.37` after writing `0.37`. Campaign
+  Selection (`default` row): `0.12549` before, `0.37` after. Both restored afterwards. The
+  sender's reading is right and this page's was wrong. **Confidence 92.**
+- **The blend colour is not `5/255` as a constant; it is the glow gain.** It read `0x050505`
+  on every Main Menu and Campaign Selection dump but one, and `0x262626` on the other, with
+  no relation to the tint (`0.37` written: `0x26` on one dump, `0x05` on the next). `5` and
+  `38` are the floor and ceiling of the clamp at `0x00184f00`
+  (`0.02 * 255`, `0.15 * 255`): `g+0x4a0`, `g+0x4b0`, gain `g+0x4c0`, `g+0x4d0`, fed by the
+  mean of the second band set `+0x1dc..+0x1e4`, one byte replicated into all four channels
+  for `FUN_00678258`. So `g+0x4a0`'s `0.023` in blue never reaches the screen. The sender's
+  `5/255` is the floor; **confidence 85** on floor and ceiling, **70** on the shape in
+  between, which was seen at only those two values and read from a VMX decompile.
+- **The particle field is antialiased at 720p and plain at 1080p.** Surface format `0x3148`
+  is `A8R8G8B8`, `Z24S8`, antialias 3 (2x1), pitch doubled to `0x2800`. At 1920x1080 the same
+  pass draws to `0x148`, pitch `0x2000`, no antialias, no resolve (draw 8 above is gone).
+  **Confidence 90**, both read off the stream. Particles and passes otherwise match.
+- **The wave's grid is a pinch.** Sixteen vertices, four quads meeting at one point. Corners
+  sample `0.003..0.997` across and `0.005..1.005` down, so the outer edge is pulled in by
+  `0.3` percent and everything drifts by `0.5` percent down the screen; the shared point's
+  uv is its own screen position, so nothing moves there. The point itself wanders
+  (`-0.177, -0.135` and `0.047, 0.036` in two dumps); what drives it is unread. Confidence 85
+  on the vertices, 40 on "what drives it" being the equaliser.
+- **The smear band and scanlines are one shared function**, `FunkLayer_DrawScanBand`
+  (`0x003b8550`), called once, from `Render` at `0x00185a24` through the stub at `0x00678278`.
+  - The band is two quads, each `0.2` clip tall, colour `1` at the outer edges to `0.3`
+    across the middle, `w` running with it. The program samples the target at
+    `x + (1 - w)^10 * -0.01` and multiplies by the colour.
+  - It moves down by `0.01` clip a frame (`0.99381` then `0.9838` on consecutive frames) and
+    wraps on `fmod(.., 2)`, so a 200-frame period. The argument is a double read from a
+    global timer object (`+0x18`), not the clip's frame counter, which agrees with the
+    third party's "not locked to the section clocks".
+  - Scanlines are one quad per fourth row: 180 at 720 lines, 270 at 1080 (1,080 vertices
+    counted). `c[467]` carries the colour for that draw only.
+  **Confidence 90.**
+- **The 40 percent fade is not there.** The sender places a fade with `c[467] = (0, 0, 0,
+  0.4)` between the composite and the band. No such constant appears in any of 20 dumped
+  frames here (ten dumps of two frames: Main Menu, Campaign Selection; static mode `2`, morph
+  `9`, `10`, `11`, at 720p and 1080p; a dynamic path was forced but its mode `5` could not be
+  told apart from static in the dump), nor a draw that could be it, and no `0.4` float is loaded in `Render` or
+  the band function in **either** 02.00 or 02.51 (every `r2`-relative float in both ranges
+  scanned). Confidence 75 that it does not exist on 02.00; 02.51 could not be run far enough
+  to look (see [update-0251.md](update-0251.md)). A `(0,0,0,0.4)` written straight into a
+  constant would escape that scan, which is why this is not higher.
+- **Mode 11's extra draws are real but the count moves.** With the path forced (`g+0x414 =
+  6`, `g+0x418 = 1`): the field copied down `640 -> 320 -> 160 -> 80 -> 40`, pitch `0x1000`,
+  then 250 quads on the field from the 640 level. The sender counts about 500; 250 is one
+  frame of one section. `FUN_00678298`, gated on `*(g+0x16b0)`, is the call. Modes `2`, `9` and
+  `10` add no draws. Confidence 85.
+
+**`musicPulse` peaks at 1.33, by law.** Sampled for 115 s at 24 Hz on Campaign Selection
+(2,786 samples, muted emulator): every band stays on `0..1` and the three-band mean reaches
+exactly `0` and `1`, so the law's own range is `1 + (0 - 0.7) * 1.1 = 0.23` to
+`1 + (1 - 0.7) * 1.1 = 1.33`. The `1.2` above was a short sample, not a ceiling; nothing in
+the code caps at it. **The bank is `+0x19c`**: `particleColour` read out of the ring beside
+both band sets for 25 s fits the law to a mean of `0.11` on `+0x19c..+0x1a4` and `0.37` on
+`+0x1dc..+0x1e4`. Confidence 90 on the range, 85 on the bank (the error left is a frame's
+lag on a moving signal). The sender's percentiles (median `0.856`) are not reproduced: over
+115 s here `+0x19c` gives a median of `0.385`, and their numbers look like the `+0x1dc` set
+(`0.848`). The peak agrees; the distribution is unresolved and depends on the track.
+
+**`OnEnable` does run on Main Menu to Campaign Selection.** The sender says it does not. Block
+`+0x1648`..`+0x1650` read after each of four presses, Campaign, Main, Campaign, Main, Campaign:
+`(12, 0.211 s)`, `(24, 0.403)`, `(27, 0.453)`, `(37, 0.625)`, `(33, 0.563)`. A new random length
+each time, and the only code that writes the seconds field after construction is `OnEnable`
+(`stfs f0, 12(r29)` at `0x0017e8a8`, `r29 = item + 0x1644`; `Render` only reads it at
+`0x001843c0`, the rest are the two constructors and static init). **Confidence 85**, no
+breakpoint. What their
+measurement may have seen instead: the pulse's effect on `particleColour` could not be
+separated from the music here, so the visible amplitude stays open.
+
+**Omega:** checked, differs - no `BackgroundAnimFury` string in the 1.07 `eboot.bin`, only
+`BackgroundAnim_Item.cpp` and `FEBackgroundAnim*`. **2048:** checked, differs - no
+`BackgroundAnim` string at all in the v1.04 executable. None of this section applies to either.
 
 ## What shipped, 2026-09-14
 
@@ -497,7 +607,8 @@ literal scale left it near black. Tint 1 is dimmer than the original's at the sa
 where RPCS3's menu music takes it to 1.2, not a tint law. Test:
 `crates/game/tests/hd_fury_ship_select_ground_truth.rs`.
 
-**`BackgroundAnimFury_OnEnable` fires on every screen change, not on a team step.** Polling
+**`BackgroundAnimFury_OnEnable` fires on every screen change, not on a team step.** (Re-checked
+2026-11-05 against a third party's contrary claim: see "The frame, measured".) Polling
 the item's pulse block (`+0x1648` frame counter, `+0x164c` frames, `+0x1650` seconds, `+0x1654`
 60) at 10 Hz while pressing: `Team Selection` left and right (five presses) change nothing in
 it, and the cloud pointer (`+0x224`) moved once in 16 s, on the clip's own clock; each of
@@ -513,7 +624,7 @@ constant. The trigger is now located; the amplitude is the open half.
 **Omega:** checked, differs - its skin authors only the scene widget (`BackgroundAnim`,
 [menu-backdrop-scene.md](menu-backdrop-scene.md)), no `BackgroundAnimFury`, so none of this
 applies; whether the scene filter's output is encoded the same way is not checkable (no PS4
-emulator in this project). **Below about 414 lines** no Fury cloud draws, before and after this change: `resScale =
+live memory readout on Omega's emulator). **Below about 414 lines** no Fury cloud draws, before and after this change: `resScale =
 clamp(0.0015 * height - 0.62, 0, 4)` is 0 there, and it scales the particle and ramp
 colours (above), so this is the original's own law, not a gap.
 
@@ -531,7 +642,8 @@ colours (above), so this is the original's own law, not a gap.
   camera would smear into wider dots. (3) `FUN_00678268` -> `0x003cd038` is a
   FunkLayer copy: it sets `target[1 + pp]`, binds `view[0]` and draws one quad
   under `BlendFunc(CONSTANT_COLOR, ONE)` with the screen tint as the constant,
-  so the half targets receive the tinted full one, not the particles. (4) The
+  so the half targets receive the tinted full one, not the particles (the colour is the glow
+  gain, not the tint, measured under "The frame, measured"). (4) The
   thirty-vertex grid is drawn after the second set-target and before the
   `texture`/`waveTexture` binds. Which program each of the three quads runs
   is the reading that orders them; the render-target contents cannot be read
@@ -539,7 +651,7 @@ colours (above), so this is the original's own law, not a gap.
 - Modes `5`, `9`, `10`, `11`: the vertex programs are paired and disassemble; their
   `Update` functions and the two extra streams (`targetPosition`, the line/quad
   offsets) are unread.
-- The blend pass's quad grid and the exact target ping-pong.
+- What moves the wave's pivot.
 - The equaliser: what feeds `+0x19c..+0x1a4` and `+0x1dc..+0x1e4`, and whether the
   menu's own music track is what it analyses.
 - `0x00182358`'s purpose: inert here with its two inputs at zero, shaped like a

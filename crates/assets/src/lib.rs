@@ -42,7 +42,7 @@ mod testing;
 
 pub use archive::Archive;
 pub use container::Container;
-pub use source::{Archives, Layout, Platform, read_loose_file};
+pub use source::{Archives, Layout, Platform, UpdateFolder, read_loose_file};
 
 /// Something that went wrong reaching an asset.
 #[derive(Debug, thiserror::Error)]

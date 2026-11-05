@@ -17,10 +17,11 @@ listing.
 | PKG size and items | 1,090,506,976 bytes, 16 items | PKG header |
 | Disc comparison | the Fury disc is `BCES00664`, `VERSION` 01.03, `APP_VER` 02.00, `CATEGORY` `DG` | `PS3_GAME/PARAM.SFO` |
 
-**Not an update.** It is a full package: executable, trophies and four archives. No
-update archive exists to mount ahead of a base, so `ArchiveCandidates::patch` stays
-empty for HD (the 2048 mechanism of `patches.md` has nothing to do here). v3.00 is
-the version the Store serves. Its `VERSION` (03.00) is newer than the Fury disc's (01.03) while
+**Not an update.** It is a full package: executable, trophies and four archives; Sony's
+update chain for `NPEA00057` is six more packages on top of it, patched into the same
+folder and mounted by the 2048 mechanism ([hd-updates.md](hd-updates.md)). This page is
+the base; **a patched install adds `data05` to `data08`** and runs a different executable.
+v3.00 is the version the Store serves. Its `VERSION` (03.00) is newer than the Fury disc's (01.03) while
 its `APP_VER` (01.25) is older than the disc's (02.00): they are different numbering
 schemes, and nothing here says which build is later.
 
@@ -53,7 +54,7 @@ The absent ones are Fury's, by directory: `talons_junction` (396), `modesto_heig
 (657), `amphiseum` (553), `tech_de_ra` (458) - the four Fury environments that have
 no entry in the PSN circuit list - plus `detonator` (168), the `_c1` team variants
 (72 per team, `DATA06`), `data/fe/images` and `data/fe/flyers`. **The PSN package has
-no `DATA00`, `DATA05` or `DATA06`.** Of what it does ship, `data02` is identical to
+no `DATA00`, `DATA05` or `DATA06`** (update 02.01 adds the last two). Of what it does ship, `data02` is identical to
 the disc's `DATA02` on every family except 8 replaced files (a shader, a texture,
 scenery data, five ui files) and `data03` has 24 new ships, 6 new tracks and 5
 replaced ones. That comparison is against a **Fury pressing**, so "replaced" says

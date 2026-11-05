@@ -114,7 +114,16 @@ fn open_unlayered(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Resu
 
     // **HD's refusal is kept for one case.** An encrypted PS3 image is HD's
     // to name; falling through to Pulse would report it as a missing `Data.wad`.
-    let hd_encrypted = match oag_hd::open(source) {
+    //
+    // A server extraction records the source's own bytes: an update folder is not
+    // on the image, and the chain changes no table a race reads
+    // (`docs/formats/hd-updates.md`).
+    let updates = if oag_assets::record::active() {
+        Vec::new()
+    } else {
+        crate::source::ps3_updates(source)
+    };
+    let hd_encrypted = match oag_hd::open_updated(source, &updates) {
         Ok(archives) => {
             let title = oag_hd::title_of(&archives);
             return Ok(Opened { archives, title });

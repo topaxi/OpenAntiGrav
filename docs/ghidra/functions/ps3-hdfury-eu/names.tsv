@@ -848,3 +848,4 @@
 0x00340588	function	Rumble_TypeName	80	rumble.md
 0x0033e460	function	Pad_Update	78	rumble.md
 0x000d10c8	function	Ship_UpdateContactRumble	82	rumble.md
+0x003b8550	function	FunkLayer_DrawScanBand	85	menu-backdrop.md
