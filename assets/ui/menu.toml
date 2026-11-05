@@ -1110,13 +1110,16 @@ values = ["off", "low", "medium", "high"]
 # Where the blur above spends its cost. `half` gathers a quarter of the pixels
 # and blends the smear back by depth: about a third of the chain's cost on an
 # integrated GPU, and a grainier smear, which is why `full` is the default.
-# Applies live, like the strength.
+# Applies live, like the strength. `quarter` gathers a sixteenth and draws at no
+# more than `low` strength; below 2160 render lines it would gather under 540
+# lines, so it draws as `half` at the player's strength and the row keeps saying
+# `quarter`, a ceiling the render extent may not reach.
 [[page.entry]]
 kind = "choice"
 label = "BLUR RESOLUTION"
 string_id = "OAG_GRAPHICS_MOTION_BLUR_RESOLUTION"
 setting = "graphics.motion_blur_resolution"
-values = ["full", "half"]
+values = ["full", "half", "quarter"]
 
 
 # What casts a shadow, and what draws it. **A technique, not a strength** - the

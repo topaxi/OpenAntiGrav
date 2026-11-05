@@ -107,7 +107,10 @@ impl From<MotionBlur> for String {
 /// full-size frame by depth - about a third of the chain's cost on an
 /// integrated GPU, at the price of a grainier smear. Full is the default: a
 /// GPU with the headroom should not pay in picture for a saving it does not
-/// need. See `docs/rendering/motion-blur.md`.
+/// need. `Quarter` gathers a sixteenth of them, only at a render extent where
+/// that is still [`QUARTER_MIN_LINES`] lines, and draws at no more than `low`
+/// strength: see [`Self::for_lines`] and [`Self::shutter_cap`]. See
+/// `docs/rendering/motion-blur.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum BlurResolution {
@@ -116,7 +119,14 @@ pub enum BlurResolution {
     Full,
     /// A quarter of the pixels gathered, blended back at full size.
     Half,
+    /// A sixteenth of the pixels gathered, blended back at full size.
+    Quarter,
 }
+
+/// The fewest lines a quarter gather may have: 3840x2160 gathers 960x540,
+/// which is what half gathers at 1080p, the coarsest gather a player had been
+/// shown when this was chosen. Below it the gather stays at half.
+pub const QUARTER_MIN_LINES: u32 = 540;
 
 impl BlurResolution {
     /// The spelling used in a settings file and on a menu row.
@@ -125,11 +135,37 @@ impl BlurResolution {
         match self {
             Self::Full => "full",
             Self::Half => "half",
+            Self::Quarter => "quarter",
         }
     }
 
     /// Every choice, for the menus and for error messages.
-    pub const ALL: [Self; 2] = [Self::Full, Self::Half];
+    pub const ALL: [Self; 3] = [Self::Full, Self::Half, Self::Quarter];
+
+    /// What this choice gathers at on a render extent `lines` high: `Quarter`
+    /// is held at `Half` where it would fall under [`QUARTER_MIN_LINES`].
+    ///
+    /// The render extent and not the window: an upscaler's or a dynamic
+    /// resolution's lines are the ones the gather divides.
+    #[must_use]
+    pub fn for_lines(self, lines: u32) -> Self {
+        if self == Self::Quarter && lines / 4 < QUARTER_MIN_LINES {
+            Self::Half
+        } else {
+            self
+        }
+    }
+
+    /// The most shutter this gather draws with, whatever strength the player
+    /// chose: `low` at `Quarter`, where a longer smear bleeds across a hull's
+    /// silhouette. A cap and never a floor: a lower strength stays lower.
+    #[must_use]
+    pub fn shutter_cap(self) -> f32 {
+        match self {
+            Self::Full | Self::Half => f32::INFINITY,
+            Self::Quarter => MotionBlur::Low.shutter(),
+        }
+    }
 }
 
 impl std::str::FromStr for BlurResolution {
@@ -139,7 +175,9 @@ impl std::str::FromStr for BlurResolution {
         Self::ALL
             .into_iter()
             .find(|mode| mode.name().eq_ignore_ascii_case(text))
-            .ok_or_else(|| format!("{text:?} is not a motion blur resolution; try full or half"))
+            .ok_or_else(|| {
+                format!("{text:?} is not a motion blur resolution; try full, half or quarter")
+            })
     }
 }
 

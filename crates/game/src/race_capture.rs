@@ -289,7 +289,7 @@ pub struct CaptureOptions {
     /// `oag_post::motion_blur` and `docs/rendering/motion-blur.md`.
     pub motion_blur: oag_display::display::MotionBlur,
     /// The blur's gather resolution - `--motion-blur-resolution`, or the
-    /// profile's. See `Scene::set_blur_resolution`.
+    /// profile's. See `Scene::set_blur_gather`.
     pub motion_blur_resolution: oag_display::display::BlurResolution,
     /// `--touch-overlay`: the on-screen racing controls, drawn in this pose.
     pub touch_demo: Option<crate::touch_controls::Demo>,
@@ -647,7 +647,7 @@ pub fn capture(
         shadow_hulls,
         behind_glass,
     )?;
-    scene.set_blur_resolution(options.motion_blur_resolution);
+    scene.set_blur_gather(options.motion_blur_resolution, None);
     scene.attach_ripples(ripples);
     scene.attach_mist(
         &device,

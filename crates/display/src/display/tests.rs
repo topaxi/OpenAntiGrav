@@ -635,3 +635,24 @@ fn the_enums_own_default_casts_nothing() {
     assert!(!Shadows::default().draws());
     assert!(Shadows::Blob.draws());
 }
+
+#[test]
+fn a_quarter_gather_needs_540_lines_of_its_own() {
+    use BlurResolution::{Full, Half, Quarter};
+    assert_eq!(Quarter.for_lines(2160), Quarter);
+    assert_eq!(Quarter.for_lines(2880), Quarter);
+    assert_eq!(Quarter.for_lines(2159), Half);
+    assert_eq!(Quarter.for_lines(800), Half);
+    assert_eq!(Full.for_lines(800), Full);
+    assert_eq!(Half.for_lines(2160), Half);
+}
+
+#[test]
+fn only_a_quarter_gather_caps_the_shutter_and_only_at_low() {
+    assert_eq!(
+        BlurResolution::Quarter.shutter_cap(),
+        MotionBlur::Low.shutter()
+    );
+    assert!(BlurResolution::Half.shutter_cap() > MotionBlur::High.shutter());
+    assert!(BlurResolution::Full.shutter_cap() > MotionBlur::High.shutter());
+}

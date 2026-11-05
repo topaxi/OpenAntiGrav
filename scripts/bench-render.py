@@ -3,7 +3,7 @@
 
     scripts/bench-render.py run [--out DIR] [--tag NAME] [--profile release|debug]
                                 [--repeat] [--views 1,2h,2v] [--size WxH] [--motion-blur off|low|medium|high]
-                                [--motion-blur-resolution full|half]
+                                [--motion-blur-resolution full|half|quarter]
                                 [--binary PATH] [title ...]
     scripts/bench-render.py compare A B        (two result files, or two run directories)
     scripts/bench-render.py selftest
@@ -330,7 +330,7 @@ def main():
     run.add_argument("--profile", choices=["release", "debug"], default="release")
     run.add_argument("--views", default="1", help="cases to run, comma separated: 1 (one view), 2h (two views cut horizontally), 2v (side by side); default 1")
     run.add_argument("--size", default=DEFAULT_SIZE, help=f"offscreen target WxH (default {DEFAULT_SIZE}; the Steam Deck's panel is 1280x800)")
-    run.add_argument("--motion-blur-resolution", choices=["full", "half"], help="the blur gather resolution for every run (default: the settings default, full); recorded in the result's settings and command")
+    run.add_argument("--motion-blur-resolution", choices=["full", "half", "quarter"], help="the blur gather resolution for every run (default: the settings default, full); recorded in the result's settings and command")
     run.add_argument("--motion-blur", choices=["off", "low", "medium", "high"], help="the blur strength for every run (default: the settings default, which is off); recorded in the result's settings and command")
     run.add_argument("--binary", help="an oag-game to run instead of target/<profile>/oag-game, for a before/after pair built from two commits")
     run.add_argument("--repeat", action="store_true", help="run each title twice and check tick count and final state hash agree")

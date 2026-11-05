@@ -368,7 +368,7 @@ pub(crate) struct BlurArgs {
     #[arg(long)]
     pub(crate) motion_blur: Option<oag_display::display::MotionBlur>,
 
-    /// The blur's gather resolution: full or half.
+    /// The blur's gather resolution: full, half or quarter.
     ///
     /// Overrides `[render_profiles.<title>] motion_blur_resolution` for every
     /// title, for this run only, the way `--motion-blur` does.

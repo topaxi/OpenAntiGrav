@@ -128,7 +128,7 @@ not need the `perf-probe` feature.
 | `draws`, `culled`, `triangles` | what the scene submitted |
 | `lap` | the lap the player was on |
 
-`--motion-blur-resolution full|half` sets `[render_profiles.<title>] motion_blur_resolution`
+`--motion-blur-resolution full|half|quarter` sets `[render_profiles.<title>] motion_blur_resolution`
 for every run, the blur's gather resolution (`half` gathers a quarter of the pixels and blends
 the smear back at full size). It is recorded in `settings.motion_blur_resolution`, so `compare`
 warns when a full-gather result is set beside a half-gather one. A result written

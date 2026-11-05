@@ -473,7 +473,7 @@ impl Session {
                 }
             },
             // Live as well: the frame hands it to the race's blur pass before
-            // every draw - see `race::Scene::set_blur_resolution`.
+            // every draw - see `race::Scene::set_blur_gather`.
             "graphics.motion_blur_resolution" => match text.parse::<display::BlurResolution>() {
                 Ok(resolution) => {
                     if let Some(profile) = self.render_profile_mut() {

@@ -371,9 +371,7 @@ impl Session {
                         .set_texture_detail(render_profile.texture_detail);
                     parked.race.set_trail_order(render_profile.trail_order);
                     parked.race.set_weather(render_profile.weather);
-                    parked
-                        .scene
-                        .set_blur_resolution(blur_resolution);
+                    parked.scene.set_blur_gather(blur_resolution, None);
                     parked.render(
                         &self.gpu,
                         &mut encoder,
@@ -450,7 +448,7 @@ impl Session {
                 }
                 stage
                     .scene
-                    .set_blur_resolution(blur_resolution);
+                    .set_blur_gather(blur_resolution, None);
                 let stats = stage.render(
                     &self.gpu,
                     &mut encoder,
