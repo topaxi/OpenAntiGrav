@@ -291,8 +291,9 @@ of 90 and 25-36). The static build is `scripts/build-server-portable.sh musl`
 
 ## Which GPU the tests use
 
-Every GPU test gets its adapter from `oag_gpu::test_adapter` (`request` for one,
-`ordered` to walk several), never from `request_adapter` with defaults: that
+Every in-process GPU test but the capture ones below gets its adapter from
+`oag_gpu::test_adapter` (`request` for one, `ordered` to walk several), never from
+`request_adapter` with defaults: that
 takes whichever adapter the driver lists first, which on a machine with an
 integrated and a discrete GPU is usually the integrated one that also draws
 the desktop. The helper prefers the discrete GPU, and puts the integrated one
@@ -336,7 +337,7 @@ together.
 | A spawned game on Pulse, Pure or 2048 | 462 to 788 MiB |
 | `split_screen_ground_truth::omega_two_views_each_keep_their_picture` | 2,575 MiB (the only outlier) |
 | In-process `oag-render::it` tests through `capture_pixels_from` | 73 to 713 MiB |
-| In-process tests through `oag_gpu::test_adapter` | 1 to 137 MiB (a context is about 2 MiB) |
+| In-process tests through `oag_gpu::test_adapter` | up to about 200 MiB (a context is about 2 MiB) |
 
 **The cap.** (8,151 MiB, less the desktop's 160 to 300, less headroom) over the
 1,045 MiB of the largest ordinary member is 7; the outlier at 2,575 MiB plus six
@@ -357,8 +358,14 @@ claim is "no cost seen", not "faster". A replay of the first run's per-test
 walls through a 16 slot scheduler with and without the cap agrees (948 s without,
 947 s at 4, 945 s at 2): the group's 156 tests sum to 1,865 s of the suite's
 14,811, so a cap of 4 leaves 466 s of group work spread over a 950 s run, and the
-other twelve threads always have other tests to start. The cap would cost wall
-clock only if the group were most of the suite.
+other twelve threads always have other tests to start. The same replay at 24
+slots (the desktop) gives 640 s without the cap and at 4, 639 s at 3, 938 s at 2;
+at 32 slots 486 s and 485 s at 4, 626 s at 3. The cap would cost wall clock only
+if the group were most of the suite: at 4 the group's 466 s is a floor under the
+run, so a machine fast enough to finish the rest in under that would feel it.
+A third full run on the final tree, without the wrapper: 10,909 passed in 941 s at
+load 15 to 12; its only red is `check-test-budget`'s 450 s ceiling, which this
+machine always trips.
 
 **The sixth failure is not VRAM.** `campaign_cursor_ground_truth::the_2048_map_reopens_on_the_event_last_started`
 exits with `SIGSEGV` (status 139) in the first run with the GPU at 2,700 MiB,
@@ -1319,4 +1326,5 @@ Moved out of `CLAUDE.md`, which keeps the rules and the ceilings.
   A `test-data --full` after these changes: 10,506 tests, all passed, 423 s per nextest, load 16 at the start and 13 at the end (24 at the peak); the slowest test fell from 186 s to 93 s. Against the lead's reads of 423 to 458 s at load ~32 this is not a controlled suite comparison; the per-test CPU table above is the evidence.
 
   Not done: a run-time sim-only load would also drop the texture decode of the Omega extraction loads (190 `cfg(feature = "view")` sites in `oag-raceplay::load`); the `ribbon` option reaches only the track-art part and an extraction's file set must stay what the lobby reads, so these loads keep the default.
+- **Throughput-bound, not tail-bound (2026-11-05).** One full run (10,889 tests, load 20 to 30): summed test time 14,394 s over 16 threads is 900 s, against 925 s of wall clock, and the slowest test is 124 s, so priority cannot help and only less work can. 389 tests over 10 s hold 71 % of the time. Families by summed seconds: `omega_gnf` 830, `autopilot_original` 617, `omega_transparency` 591, `ai_clean_lap_gate` 541, `omega_wem` 423, `extract` 363, `vita_2048_original_ai` 347, `trackfile` 329.
 - **Affected gating (2026-10-07).** `scripts/affected.py` selects the packages a branch changed since its merge base with `main` plus their dependents. Each of `oag-game`'s five test binaries links the whole crate, so a lane in `oag-mesh`, `oag-render` or `oag-fx` still selects most of the suite's time; the saving lands on lanes in the format, texture, UI and title crates.

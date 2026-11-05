@@ -6,7 +6,8 @@
 # slowest single test is 124 s. Every ground-truth test that walks a disc takes
 # tens of seconds; almost every other test takes milliseconds. Priority only
 # orders the queue, so it cannot shorten a run that has work for every thread
-# until the end; less work can (`handover/` has the families by summed seconds).
+# until the end; less work can (`docs/architecture/workspace-layout.md`, "Test-data
+# suite measurements", has the families by summed seconds).
 #
 # It was tail-bound on 2026-09-09, when one 525 s test was the whole tail
 # (62 s of a 587 s run was not overlapped with it): the fix then was splitting
