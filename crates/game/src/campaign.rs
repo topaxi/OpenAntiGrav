@@ -696,6 +696,11 @@ fn read_omega_texture(archives: &mut oag_assets::Archives, path: &str) -> Result
 /// each with the window of its camera's image it shows. `None`, logged, when
 /// the screen's XML authors no `<Flyer name="FlyerModel">`; a card that
 /// will not decode is left out and says so in [`crate::flyer::Flyers::report`].
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the archives, the grids, the screen file and its parse, the chooser, and the three \
+              title facts the cards are posed by"
+)]
 fn load_flyers(
     archives: &mut oag_assets::Archives,
     grids: &[Grid],

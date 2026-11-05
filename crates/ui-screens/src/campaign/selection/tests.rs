@@ -338,6 +338,17 @@ fn list(xml: &str, selected: usize, cards: bool) -> Vec<Draw> {
     .body
 }
 
+/// The four fills of the selected column's outline (the headings' bullets are fills too).
+fn outline_fills(draws: &[Draw]) -> usize {
+    draws
+        .iter()
+        .filter(|draw| {
+            matches!(draw, Draw::Fill { rect, .. }
+                if rect[2] == SELECTOR_BORDER || rect[3] == SELECTOR_BORDER)
+        })
+        .count()
+}
+
 fn texts(draws: &[Draw]) -> Vec<&str> {
     draws
         .iter()
@@ -357,14 +368,7 @@ fn without_cards_the_stand_ins_and_every_counter_draw() {
     for want in ["FURY CAMPAIGN", "HD CAMPAIGN", "0 / 80", "0 / 87"] {
         assert!(words.contains(&want), "{want} in {words:?}");
     }
-    assert_eq!(
-        draws
-            .iter()
-            .filter(|d| matches!(d, Draw::Fill { .. }))
-            .count(),
-        4,
-        "the four sides of the outline"
-    );
+    assert_eq!(outline_fills(&draws), 4, "the four sides of the outline");
 }
 
 /// With the cards drawn the outline and the names are gone - the turned card
@@ -383,10 +387,7 @@ fn with_cards_only_the_selected_campaigns_counter_draws() {
             1,
             "one label: {words:?}"
         );
-        assert!(
-            !draws.iter().any(|d| matches!(d, Draw::Fill { .. })),
-            "no outline"
-        );
+        assert_eq!(outline_fills(&draws), 0, "no outline");
     }
 }
 
