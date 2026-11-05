@@ -189,3 +189,54 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
         ]
     );
 }
+
+const FRENCH: &str = "[strings]\nTEST_GARAGE = { text = \"GARAGE (du mod)\", human = true }\n";
+
+/// The rebuild a MODS switch or a LANGUAGE pick runs, over a search path of `base`: the
+/// main page's labels.
+fn rebuilt_labels(base: &Path, disabled: &[&str], language: Option<&str>) -> Vec<String> {
+    let disabled = disabled.iter().map(|id| (*id).to_string()).collect();
+    let (definition, _, _) = oag_game::menu_tree::rebuilt(
+        &[base.to_path_buf()],
+        &disabled,
+        language,
+        oag_pulse::TITLE,
+        false,
+        &oag_ui::strings::project_table(language),
+    )
+    .unwrap();
+    definition.pages[definition.root]
+        .entries
+        .iter()
+        .map(|e| e.label().to_string())
+        .collect()
+}
+
+#[test]
+fn a_rebuild_without_a_disabled_mod_drops_its_row_and_with_it_restores_the_row() {
+    let dir = scratch("rebuild-switch");
+    folder(&dir.join("garage"), MANIFEST, MENU);
+    let on = rebuilt_labels(&dir, &[], None);
+    assert!(on.iter().any(|l| l == "GARAGE (from the mod)"), "{on:?}");
+    let off = rebuilt_labels(&dir, &["test.garage"], None);
+    assert!(!off.iter().any(|l| l.contains("GARAGE")), "{off:?}");
+    assert_eq!(rebuilt_labels(&dir, &[], None), on);
+}
+
+#[test]
+fn a_rebuild_for_another_language_gives_a_mod_row_that_languages_text() {
+    let dir = scratch("rebuild-language");
+    folder(&dir.join("garage"), MANIFEST, MENU);
+    std::fs::write(dir.join("garage/strings/french.toml"), FRENCH).unwrap();
+    let english = rebuilt_labels(&dir, &[], Some("English"));
+    let french = rebuilt_labels(&dir, &[], Some("French"));
+    assert!(
+        english.iter().any(|l| l == "GARAGE (from the mod)"),
+        "{english:?}"
+    );
+    assert!(french.iter().any(|l| l == "GARAGE (du mod)"), "{french:?}");
+    assert!(
+        !french.iter().any(|l| l == "GARAGE (from the mod)"),
+        "{french:?}"
+    );
+}

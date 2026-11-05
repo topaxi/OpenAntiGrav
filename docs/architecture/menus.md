@@ -2111,7 +2111,7 @@ the string table, the tables built from it and the menu's own faces stayed
 whatever they were at boot, so the switch a player just made showed nowhere
 until the next launch - reported by a maintainer playing Pulse on the PSP,
 alongside a second bug this shares its root with (see below).
-`Session::resupply_language` (`main/session/menus.rs`) is the reload, and it
+`Session::resupply_language` (`main/session/language.rs`) is the reload, and it
 runs the LANGUAGE row's own `apply_setting` arm:
 
 - Re-opens the source through `boot::load_shell` - the same "cheap half of the
@@ -2123,6 +2123,13 @@ runs the LANGUAGE row's own `apply_setting` arm:
   `FrontEndStyles` onto the **already open** `Menu`, rather than building a
   new one - a title's row structure does not depend on which language draws
   its labels, so the player's cursor, page and scroll position are untouched.
+- **Builds the tree again when it has mods** (`oag_game::menu_tree::rebuilt`, the call a
+  MODS switch makes too): the title's own rows, every mod's rows and the MODS page's
+  listing are resolved against the new language, and the menu model is rebuilt on that
+  tree and reopened on the same pages and rows (`Session::reopened_menu`). A `--menu`
+  file has no mods and keeps its tree. A mod's `strings/<language>.toml` therefore
+  shows at once; the extras' own rows follow the project table's languages (English and
+  French).
 - Copies the new `nav_legend`, `ticker`, `frame` and fonts onto the live
   `MenuStage`, and pushes the new faces into the GPU-side atlases through
   `Renderer::set_face_atlas`/`set_buttons_atlas` - the same setters a fresh

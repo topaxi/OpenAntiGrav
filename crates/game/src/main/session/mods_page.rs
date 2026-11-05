@@ -63,36 +63,29 @@ impl Session {
             info!("a --menu file has no mods to rebuild; the switch is saved");
             return;
         };
-        let built = mods::Mods::load(&self.settings.mods.disabled).and_then(|loaded| {
-            crate::prepare::mods_menu(
-                &loaded,
-                self.settings.language.as_deref(),
-                shell.title,
-                rebuild.updated,
-            )
-        });
-        let (mut definition, listing, installed) = match built {
+        let built = oag_game::menu_tree::rebuilt(
+            &oag_mod::mods_search_path(),
+            &self.settings.mods.disabled,
+            self.settings.language.as_deref(),
+            shell.title,
+            rebuild.updated,
+            &shell.strings,
+        );
+        let (definition, listing, installed) = match built {
             Ok(built) => built,
             Err(e) => {
                 error!("could not rebuild the menus for the mods: {e:#}; the switch applies from the next launch");
                 return;
             }
         };
-        crate::prepare::finish_definition(&mut definition, shell.title, &shell.strings);
         self.custom_tracks.set_mod_files(&installed.tracks);
         shell.definition = definition;
         shell.mods = listing;
         shell.custom_campaigns = std::sync::Arc::new(installed);
-        let Stage::Menu(stage) = &self.stage else {
+        let Some(mut model) = self.reopened_menu(&shell) else {
             self.shell = Some(shell);
             return;
         };
-        let trail = stage.menu.trail();
-        let skin = stage.skin;
-        let mut model = self.menu_model(&shell, &skin);
-        if !model.restore_trail(&trail) {
-            error!("the rebuilt menus lack a page the player was on: {trail:?}");
-        }
         model.seed(mods::SELECTED, &menu::Value::Text(id.to_string()));
         mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
         model.settle();
@@ -101,5 +94,20 @@ impl Session {
         }
         self.shell = Some(shell);
         self.stalled = true;
+    }
+
+    /// The menu model built on `shell`'s tree and opened where the open menus stand: the
+    /// same pages, the cursor on the same rows. `None` when no menu is open.
+    pub(crate) fn reopened_menu(&mut self, shell: &super::Shell) -> Option<menu::Menu> {
+        let Stage::Menu(stage) = &self.stage else {
+            return None;
+        };
+        let trail = stage.menu.trail();
+        let skin = stage.skin;
+        let mut model = self.menu_model(shell, &skin);
+        if !model.restore_trail(&trail) {
+            error!("the rebuilt menus lack a page the player was on: {trail:?}");
+        }
+        Some(model)
     }
 }
