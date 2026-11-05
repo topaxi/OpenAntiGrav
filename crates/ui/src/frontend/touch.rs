@@ -88,9 +88,11 @@ use oag_2048::frontend::states as w2048;
 
 /// A slider's focus ring, in grid units. Chosen - see the module docs.
 const CURSOR_RING: f32 = 4.0;
-/// The narrowest button that is a screen's tick rather than an arrow: the
-/// file authors the tick 122 wide and the profile's arrows 64.
-const TICK_MIN_WIDTH: f32 = 100.0;
+/// A screen's tick is authored 122 by 96; the profile's arrows are 64 wide and
+/// the `team` hotspots 428 by 120 and 280 by 40.
+fn is_tick_sized(rect: [f32; 4]) -> bool {
+    (100.0..=130.0).contains(&rect[2]) && (80.0..100.0).contains(&rect[3])
+}
 /// From the tile's bottom edge to the label's cap line. Measured - see the
 /// module docs. The 22 units between a wrapped label's lines is not a
 /// constant here: it is the face's own 37-unit line height at
@@ -397,9 +399,13 @@ impl Frontend {
     /// else the way the screen was entered by (`PreviousScreen`'s stack).
     /// **Chosen, not measured**: the original's grids answer touch only.
     fn go_back(&mut self, current: &str, tiles: &[Tile]) {
+        // The root grid: its own tick is the hidden confirm, and nothing is behind it.
+        if current == w2048::GAME_MODE_CHOICE {
+            return;
+        }
         let tick = tiles.iter().find(|tile| {
             tile.label.is_none()
-                && tile.rect[2] >= TICK_MIN_WIDTH
+                && is_tick_sized(tile.rect)
                 && matches!(tile.action, Action::Redirect(_))
         });
         if let Some(tick) = tick

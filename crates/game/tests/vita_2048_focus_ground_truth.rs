@@ -222,7 +222,13 @@ fn the_sub_screens_mark_their_focus_and_back_out_one_step() {
     );
     on(&frontend, w2048::PROFILE);
     assert_eq!(focus(&frontend), vec![[4, 225, 64, 64]], "the stats arrow");
-    presses(&mut frontend, &mut input, &[Button::Cross]);
+    presses(&mut frontend, &mut input, &[Button::Right]);
+    assert_eq!(
+        focus(&frontend),
+        vec![[892, 225, 64, 64]],
+        "Right moves to the other arrow"
+    );
+    presses(&mut frontend, &mut input, &[Button::Left, Button::Cross]);
     on(&frontend, w2048::PROFILE_STATS);
     presses(&mut frontend, &mut input, &[Button::Circle]);
     on(&frontend, w2048::PROFILE);
@@ -261,7 +267,11 @@ fn the_options_panels_mark_the_selected_entry_and_circle_returns_to_the_hub() {
     assert_ne!(focus(&frontend), before, "the list's mark follows the step");
     presses(&mut frontend, &mut input, &[Button::Circle]);
     on(&frontend, w2048::OPTIONS);
-    presses(&mut frontend, &mut input, &[Button::Right, Button::Cross]);
+    let hub = focus(&frontend);
+    assert_eq!(hub.len(), 1, "the hub marks one button: {hub:?}");
+    presses(&mut frontend, &mut input, &[Button::Right]);
+    assert_ne!(focus(&frontend), hub, "Right moves the hub's focus");
+    presses(&mut frontend, &mut input, &[Button::Cross]);
     on(&frontend, w2048::OPTIONS_AUDIO);
     presses(&mut frontend, &mut input, &[Button::Circle]);
     on(&frontend, w2048::OPTIONS);
@@ -293,4 +303,8 @@ fn the_campaign_map_moves_its_selection_and_leaves_on_circle_and_triangle() {
     assert_ne!(frontend.selected_event().map(|e| e.name.clone()), first);
     presses(&mut frontend, &mut input, &[Button::Circle]);
     on(&frontend, w2048::GAME_MODE_CHOICE);
+    presses(&mut frontend, &mut input, &[Button::Cross]);
+    on(&frontend, w2048::NEW_FE_SHELL);
+    presses(&mut frontend, &mut input, &[Button::Triangle]);
+    on(&frontend, w2048::HOME);
 }

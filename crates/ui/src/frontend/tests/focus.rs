@@ -102,3 +102,33 @@ fn a_pointer_takes_the_focus_away_and_the_pad_gives_it_back() {
         "Right moved the focus off the first tile"
     );
 }
+
+/// Back on the mode grid after the map, Circle must not run the grid's own redirect again or pop
+/// the stack the first confirm left behind.
+#[test]
+fn circle_on_the_mode_grid_after_a_visit_to_the_map_stays_on_the_grid() {
+    let mut frontend = boot(0);
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
+    for _ in 0..2 {
+        press(&mut frontend, &mut input, Button::Circle);
+        assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
+        press(&mut frontend, &mut input, Button::Circle);
+        assert!(
+            frontend.machine().is(w2048::GAME_MODE_CHOICE),
+            "Circle on the root grid does nothing"
+        );
+        press(&mut frontend, &mut input, Button::Cross);
+        assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
+        press(&mut frontend, &mut input, Button::Triangle);
+        assert!(frontend.machine().is(w2048::HOME));
+        press(&mut frontend, &mut input, Button::Circle);
+        assert!(
+            frontend.machine().is(w2048::NEW_FE_SHELL),
+            "Home's tick returns to the map"
+        );
+    }
+}
