@@ -72,7 +72,7 @@ pub const MAX_LEVEL: usize = 8;
 /// device. Above the 0.1 ms run-to-run noise of the Deck's CPU row only with the second reading
 /// in [`WEAK_READINGS_TO_SKIP`] behind it; `docs/rendering/cpu-governor.md` has the savings
 /// measured per knob.
-pub const MIN_SAVING: f32 = 0.000_15;
+pub const MIN_SAVING: f32 = 0.000_2;
 
 /// How many weak readings in a row skip a knob for the rest of the session.
 pub const WEAK_READINGS_TO_SKIP: u8 = 2;
