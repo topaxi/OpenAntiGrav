@@ -11,7 +11,7 @@ grows is never anybody's diff.
 
 **Why a per-test ceiling and not just a total.** `cargo nextest` runs every test
 in its own process and parallelises across *tests*, so a matrix crammed into one
-`#[test]` runs on one core while the other fifteen idle. The suite is tail-bound
+`#[test]` runs on one core while the other fifteen idle. The suite was tail-bound
 to the point that the slowest single test *is* the wall clock: on 2026-09-09
 only 62 s of a 587 s run was not overlapped with `ai_roll`. A total alone tells
 you the suite got slower; the per-test ceiling tells you which test to split,
