@@ -227,9 +227,9 @@ levers; lever 3 is one we can pull. Estimates are **estimates, not measurements*
    MSAA is not the cause, the velocity write is already gated. Lane: bisect the cost into ALU, texture and ROP with
    diagnostic runs, then cut the largest piece. Estimate 5 to 15 % of the track pass.
 2. **The motion blur gather** (+10.2 ms at 4K on the Deck, 5.6 ms at 1080p, 2.8x). Already unrolled
-   and with a half-gather DRS rung; the remaining lever is to skip the taps where the tile's
-   largest velocity is under the blur's minimum. Estimate 1 to 3 ms at 1080p on the Deck, picture
-   identical except where the smear is under a pixel.
+   and with a half-gather DRS rung. The tile skip this lever first named saves nothing (below). A
+   quarter gather, capped at `low`, takes 31 to 33 % off the chain at 4K on the iGPU, most of it
+   the cap ([quarter step](motion-blur-half-rung.md)); it only runs at 2160 render lines or more.
 3. **Our own 4K present** (+1.5 to +3.0 ms of game frame time against a 1080p window scaled by gamescope).
    Lane: measure gamescope's own pass to know whether the work moves or goes away, then decide
    between keeping our composite (sharp HUD) and a 1080p window with the HUD scaled.

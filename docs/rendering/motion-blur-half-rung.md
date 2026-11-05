@@ -202,3 +202,96 @@ never restored, in both runs. Two runs of one build differ by under 0.3 fps. Con
 one 88-second autopilot race per run, and a worse p99 that a player may notice.
 
 Not checked: a player's eye on a flip in motion, on either title.
+
+## The quarter step (2026-11-05, `blur-quarter-rung`)
+
+[ADR-0087](../architecture/adr/0087-the-blur-rung-has-a-quarter-step.md) puts a third gather under
+half: one texel per 4x4 pixels, drawn only at 540 gather lines or more (2160 render lines), at no
+more than `low` strength. Below 2160 lines a profile's `quarter` draws `half` at the player's
+strength. Not on `main`: it waits for the Steam Deck runs below.
+
+### Whole race
+
+Rig F is rig A's GPU (`MESA_VK_DEVICE_SELECT=1002:164e`), `scripts/bench-render.py run --size
+3840x2160 --motion-blur <s> --motion-blur-resolution <r> --binary <bin> <title>`, MSAA off, release
+`perf-probe` build of `c1907f3dc`, 6,836 frames on Pulse, 6,947 on HD, median milliseconds, two
+runs each interleaved (one at full), load 0.2 to 1 except the Pulse rows marked: a test suite had
+just ended, and the bench waits for the gate lock but not for the load to fall.
+
+| Title | Rung | `gpu_blur_us` p50, run 1 / 2 | GPU frame p50 | Against high + half |
+| --- | --- | --- | --- | --- |
+| Pulse | high + full | 80.95 | 93.3 | |
+| Pulse | high + half | 26.08 / 25.96 (load 18 on run 2) | 37.7 | |
+| Pulse | low + half | 20.80 / 20.70 (load 20 on run 1) | 32.3 | -20 % |
+| Pulse | quarter, strength capped at low | 17.42 / 17.62 | 29.1 | **-33 %** |
+| HD | high + full | 82.84 | 126.7 | |
+| HD | high + half | 27.05 / 27.17 | 71.6 | |
+| HD | low + half | 21.95 / 21.74 | 66.5 | -19 % |
+| HD | quarter, strength capped at low | 18.53 / 18.64 | 63.3 | **-31 %** |
+
+Repeats agree to 1 % at this size, unlike the 37 % this rig showed at 1280x800 (see
+[the levers page](hires-gpu-levers.md), lever 2). **Most of the saving is the cap, not the gather**:
+of Pulse's 8.5 ms, `low` at half buys 5.3 ms and the coarser gather 3.2 ms; of HD's 8.5 ms, 5.3 and
+3.2 too. A player already on `low` saves 15 % from the gather step alone.
+
+One hard-turn tick, Pulse, tick 1500, `OAG_RENDER_GPU_BENCH=40 OAG_RENDER_PERF=1`, median
+microseconds, load 0.1 to 0.2:
+
+| Pass | High + half | Quarter, capped |
+| --- | ---: | ---: |
+| prepare | 1,568 | 1,567 |
+| tile-max (x) | 1,693 | 1,671 |
+| reconstruct | 17,911 | 9,262 |
+| composite | 4,875 | 4,669 |
+| copy | 1,085 | 1,085 |
+| chain | 27,228 | 18,349 |
+
+The reconstruct runs a quarter of the fragments for half the time, so each fragment costs about
+twice what it does at half, even with the smear a third as long. Not traced; the tap count is the
+first thing to look at, since one tap per 4 full-size pixels of reach is a gather texel per tap.
+
+### What a player sees
+
+Pulse and HD at 3840x2160, ticks 1500, 1800 and 2500, `high`+`full`, `high`+`half`, `low`+`half` and
+quarter, read as crops of hull edges at native size and at 3x. **No silhouette bleed at the cap**:
+the hull's edges, decals and vents are as sharp as `low`+`half`, and a wing edge against the plume
+at 3x is the same at all four. The background smear is softer than at half, without half's grain:
+the mean absolute Laplacian of the frame, a stand-in for grain, reads 1.79 quarter against 1.82
+`low`+`half` on Pulse, 2.62 against 2.90 on HD. Four consecutive frames show no shimmer in either
+title. The obvious change is the strength: at the cap a `high` player sees `low`'s shorter smear.
+The upsample does widen a smear across its motion by up to one gather texel, 4 px against half's
+2 (`the_quarter_resolution_gather_smears_a_four_pixel_block`). The first 0.25 s at quarter, while the
+cap eases in, draws a longer smear than these stills, and no one has seen a flip in motion.
+
+`cmp` equal on the same binary: `high`+`quarter` and `low`+`quarter` at 4K (the cap); `high`+`quarter`
+and `high`+`half` at 1080p (the line rule keeps the strength); `off`+`quarter` and `off`. Full, half
+and off are byte-identical to the base on ten screenshots, Pulse and HD, so a compare run is
+unchanged. Confidence 75: stills, two titles, one person's reading of the crops.
+
+### In a running race
+
+The method above, on the iGPU at 3840x2160, target 30, `render_scale_chosen = true`, 88 seconds,
+load 0.2 to 0.4, gate lock held. Pure also ran `shadows = "off"`, the lightest race at hand. Base is
+this lane's branch point `59651599e`.
+
+| Title | Build | Median fps | Median p99 ms | Mean pixels | Gather flips |
+| --- | --- | --- | --- | --- | --- |
+| Pulse | base | 31.3 | 40.5 | 4.84 MP | 1 |
+| Pulse | quarter | 31.5 | 41.5 | 4.87 MP | 5 |
+| Pure, 3 runs | base | 30.4 to 31.2 | 38.6 to 38.9 | 4.95 to 5.17 MP | 1 |
+| Pure, 3 runs | quarter | 30.4 to 32.2 | 36.9 to 38.8 | 4.79 to 5.09 MP | 3 |
+
+**On this rig the step changes nothing in a race.** Quarter does not fit at the ceiling here (bench
+GPU frame 29 ms against an estimated budget of about 26), so the extent falls anyway, quarter is gone at the
+first step down, and the race settles on half at 75 to 80 % scale as the base does. The cost is two
+flips on Pure and four on Pulse, which climbed back to the ceiling once and fell again. The step
+pays only where half does not fit at the ceiling and quarter does, a band 8.5 ms wide here. The
+Radeon RX 7800 XT at target 240 is far above the band (0 flips), and nothing at hand sits inside
+it. The Deck on HD at native 4K is the case to read: half settles at 3264x1836 there, above.
+Confidence 60 that the step holds a higher extent inside the band: closed-loop models only
+(`drs::tests::blur`).
+
+### Owed: the Steam Deck
+
+Not run: the maintainer measures this at 1280x800, 1920x1080 and 3840x2160, vsync off and no frame
+limit, before the branch merges. The commands are in the handover thread named for this rung.

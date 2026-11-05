@@ -60,11 +60,17 @@ so they are unchanged. Split screen draws no blur.
 ## Consequences
 
 - With a 2160-line ceiling the fall off quarter is a cliff. The extent's first step down draws
-  half again, so the blur's cost rises as the extent falls, and the extent overshoots by a step or
-  two before it settles. It cannot go round: a fall from the ceiling means quarter read over 0.95
+  half again, so the blur's cost rises as the extent falls, and the extent may fall a step or two further
+  than half alone would have (not visible above run-to-run spread in the sessions). It cannot go round: a fall from the ceiling means quarter read over 0.95
   there, so half does too, and the rise back is refused until half fits at 0.80. A closed-loop
   test holds this at 3 flips across 40 race weights and three swings
   (`no_race_weight_at_a_2160_line_ceiling_goes_round`).
+- **It pays only in a band**: where half does not fit at the ceiling and quarter does. On the iGPU
+  at 4K, target 30, quarter does not fit, so a race lands where it did without the step, with two
+  to four more flips. Inside the band the gain is modelled, not measured; the Deck's HD at native
+  4K is the first real case.
+- Most of the saving is the strength cap (5.3 of 8.5 ms on both titles): a player gives up the
+  smear they chose, and a player already on `low` saves 15 % rather than 33 %.
 - For the same reason a machine can sit below the ceiling on half when quarter at the ceiling
   would just fit, until the scene eases: the rise reads the half gather it draws. It is the cheap
   direction and only ever one race stretch long.
