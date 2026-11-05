@@ -159,6 +159,54 @@ whenever the tick **or the draw alpha** changes (`MotionState`'s `FrameKey`):
   per tick as before, drawing exactly what they drew. A paused race keeps the
   smear of its last promotion, as it did.
 
+**Blur length also follows the frame rate, in a window.** The shutter a live race draws with is the
+player's strength times one factor, 1 at 60 fps and above, falling linearly in fps to 0 at 30
+(`oag_present::drs::ramp`, [ADR-0087](../architecture/adr/0087-the-blur-rung-has-a-quarter-step.md),
+point 8). Both ends are **chosen, not measured**, and the factor does not refer to `low`, `medium`
+or `high`. It has no menu row: like the render scale's controller it never writes a setting, and
+the player's row stays what it says. `--frame-log` prints it as `blur_ramp=`.
+
+- **Where it does not run.** A capture, a compare pair, a bench, a `--drive` session (no surface) and
+  a frozen race draw the strength as chosen, and a target is not needed for it to run. Stills are
+  `cmp` equal against the build before it: Pulse and HD, tick 1500, `high`+`full`, `high`+`half`
+  and `off` at 1080p, `high`+`quarter` at 4K, and a Pulse `--drive` frame at `high`+`half`.
+  With a factor of 1 the shutter is the capture's own `min`, to the bit
+  (`the_shutter_reduces_to_the_capture_rule`), which is what a paused frame draws; no pixel diff of
+  a paused frame was taken (`press start` on a drive script did not pause).
+- **A hitch is not a frame rate.** The smoothing reads the median of seven frames, so a hitch of up
+  to three frames does not move the factor at all
+  (`a_hitch_of_up_to_three_frames_does_not_move_the_factor_at_all`).
+- **Strength is not free.** At 4K on the iGPU `high` to `low` is 5.3 of quarter's 8.5 ms, so every
+  point of the ramp feeds back. The loop gain is `k / (30 T²)`, with `k` the seconds a whole unit of
+  factor costs and `T` the frame time. A chain cannot cost more than its frame, so the gain is at
+  most 2 on any machine. Five frames of delay then bound the smoothing at 0.037, and it is 1/32.
+  `a_fixed_cost_model_settles_at_every_rate` sweeps base rates from 2 to 48 ms, flat chains to 6 ms
+  and slopes to 33 ms: the factor rests within 0.002. With no smoothing the same sweep swings
+  between 0.85 and 1; 1/8 still passes, so the bound is conservative.
+  `the_ramp_and_the_extent_settle_together` runs it with the controller.
+- **At 0 the chain and the velocity it reads are not drawn.** The chain's flat cost is a step the
+  fade cannot hide, so a return is the blur rung's restore: the frame predicted within 0.95 of the
+  30 fps period with the chain's last cost added, for three seconds, doubling on a relapse. It
+  comes back from about 0 and at the gather it left at, because the rung takes no reading while
+  nothing is drawn.
+- **The rung keeps its readings.** It refuses a reading the cap moves under, not one the ramp moves
+  under: the ramp moves at most 12 % of the way to where it is going in the four frames of a
+  cooldown, and the rung's restore would otherwise never run.
+
+Measured on the Raphael iGPU, Pulse, autopilot, `high`, load 0.6 to 0.8, builds before and
+after the ramp, 88 seconds unless noted:
+
+| Setup | Before, no ramp | With the ramp |
+| --- | --- | --- |
+| 3840x2160, target 30 | 15.6 fps, 5.78 MP, smear capped at `low` | 47.8 fps, 8.1 MP (2160 lines), factor 0, one flip, no return |
+| 3840x2160, target 60 | 48.6 fps, 3.01 MP, fps spread 3.58, 1.56 a second | 48.7 fps, 3.19 MP, factor 0.35 to 0.84, median 0.66, fps spread 3.33, 1.47 a second |
+| 1280x800, frame limit 50, 30 s | | factor 0.67, lowest and highest second alike, no flip |
+| 1280x800, frame limit 40, 30 s | | factor 0.33, lowest and highest second alike, no flip |
+| 3840x2160, frame limit 30, 40 or 50, 40 s, no target, `full` | | chain off once and stays off: 80 ms of chain does not fit any of them |
+
+The fps spread at target 60 is no larger with the ramp, so no cycle shows on top of the scene's own
+swing.
+
 **The chain runs after bloom, inside `Scene::render`.** Both halves of that are
 load-bearing and both look wrong at a glance:
 

@@ -73,12 +73,14 @@ use serde::{Deserialize, Serialize};
 
 pub mod blur;
 pub mod policy;
+pub mod ramp;
 pub mod residual;
 
 pub use blur::{CAP_EASE_SECONDS, MAX_BACKOFF, RESTORE_SECONDS, relapse_frames, restore_frames};
 pub use policy::{
     COOLDOWN, Controller, DEADBAND, FALL_STEPS, GRID, RISE_PATIENCE, RISE_STEPS, STEP,
 };
+pub use ramp::{BOTTOM_FPS, Ramp, SMOOTHING, TOP_FPS};
 pub use residual::Residual;
 
 /// The most of a frame that may be reserved for the work nothing times, and

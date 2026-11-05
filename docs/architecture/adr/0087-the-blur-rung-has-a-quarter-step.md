@@ -48,6 +48,18 @@ was built. The numbers are in [the half-gather page](../../rendering/motion-blur
    the ratio is not learned, until the cap has settled: a quarter gather drawn at `high` is not
    the gather a settled one is.
 
+8. **The strength follows the frame rate** (`drs::ramp`, 2026-11-06, the maintainer's decision):
+   the drawn shutter is the player's strength, under the cap above, times one factor, 1 at 60 fps
+   and above, falling linearly in fps to 0 at 30. Both ends are **chosen, not measured**. It is
+   driven by smoothed frame time (the median of seven frames, then an average of 1/32 a frame), in
+   a window, during a running race, with or without a target. At 0 the chain and the velocity it
+   reads are not drawn. It returns on the rung's law: the frame predicted within 0.95 of the 30 fps
+   period with the chain's last measured cost added, for 3 seconds, doubling on a relapse.
+
+   **The cap stays a cap rather than becoming a multiplier.** A multiplier needs the player's
+   strength in `Limits`, and `chosen * (low / chosen)` is not `low` to the bit, which a paused
+   frame must be. `Controller::blur_shutter` folds both into the one number the chain reads.
+
 Compare and capture runs use `--motion-blur off`, or the profile's own gather with no controller,
 so they are unchanged. Split screen draws no blur.
 
@@ -58,6 +70,8 @@ so they are unchanged. Split screen draws no blur.
   which is backwards for a rung that exists to shed before pixels, and the extent falls further
   than it needed to. Built first and measured: Pulse 4.67 to 5.03 MP and 3 to 5 flips against 5.77
   MP and 2.
+- **A ramp on factor steps (`low`, `medium`, `high`).** Rejected by the maintainer: it does not
+  refer to them, and steps would hit the frame rate they are judged on.
 - **A second threshold table for the step.** Rejected: the margins are derived from the deadband,
   not tuned, and nothing measured asks for different ones.
 - **Dropping the composite's depth test at quarter, or a wider footprint.** Not tried: crops at the
@@ -71,6 +85,12 @@ so they are unchanged. Split screen draws no blur.
   2 flips against 3 to 5. The numbers are in the half-gather page. A closed-loop test holds the
   flips at 2 under the same load (`quarter_stays_drawn_as_the_extent_falls_and_settles`), and at 4
   across 40 race weights and three swings (`no_race_weight_at_a_2160_line_ceiling_goes_round`).
+- **Strength is not free, so the ramp is a feedback loop**, and a target at 30 is a blur that is
+  never drawn on a machine that needs the target: on the iGPU at 4K, Pulse, target 30, the chain
+  went off once and the race ran 8.1 MP at 47.8 fps against 5.77 MP at 15.6 to 30 with the chain.
+  The freed cost goes to pixels, the chain's measured cost keeps the return out, and a player who
+  chose `high` sees none. Whether none at 30 is right is the maintainer's to judge on the Deck.
+- A rate just above 30 pays the chain's whole cost for a smear too short to see.
 - Most of the saving is the strength cap (5.3 of 8.5 ms on both titles): a player gives up the
   smear they chose, and a player already on `low` saves 15 % rather than 33 %.
 - `Limits` carries no strength: the cap eases from `high`, the most anyone draws, so a player on

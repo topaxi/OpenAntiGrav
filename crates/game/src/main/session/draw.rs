@@ -252,14 +252,9 @@ impl Session {
         // The controller's second output, the blur's gather resolution
         // (ADR-0075), re-derived every frame the same way and held to the
         // player's own wherever the extent is held.
-        let (blur_resolution, blur_cap) = if windowed && !self.drs_runs() {
-            (self.render_profile().motion_blur_resolution, None)
-        } else {
-            (
-                self.drs.blur_resolution(drs_limits),
-                self.drs.blur_shutter_cap(drs_limits),
-            )
-        };
+        let (blur_resolution, blur_shutter) =
+            self.drawn_blur(drs_limits, windowed && !self.drs_runs());
+        let chain_strength = self.chain_strength(self.render_profile().motion_blur);
 
         // **Two targets, and which one a stage draws into is whether it has a
         // scene**, per [ADR-0038](../../../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md).
@@ -374,7 +369,7 @@ impl Session {
                         .set_texture_detail(render_profile.texture_detail);
                     parked.race.set_trail_order(render_profile.trail_order);
                     parked.race.set_weather(render_profile.weather);
-                    parked.scene.set_blur_gather(blur_resolution, blur_cap);
+                    parked.scene.set_blur_gather(blur_resolution, blur_shutter);
                     parked.render(
                         &self.gpu,
                         &mut encoder,
@@ -449,9 +444,7 @@ impl Session {
                 if let Some(hud) = &mut stage.hud {
                     hud.set_dynamic_hud(self.settings.display.dynamic_hud);
                 }
-                stage
-                    .scene
-                    .set_blur_gather(blur_resolution, blur_cap);
+                stage.scene.set_blur_gather(blur_resolution, blur_shutter);
                 let stats = stage.render(
                     &self.gpu,
                     &mut encoder,
@@ -466,7 +459,7 @@ impl Session {
                     self.settings.graphics.frustum_culling,
                     pvs_culling,
                     self.anim_seconds,
-                    render_profile.motion_blur,
+                    chain_strength,
                     render_profile.shadows,
                     // **Derived from the upscaler, not read from the flag**,
                     // and computed here because this is the one place that

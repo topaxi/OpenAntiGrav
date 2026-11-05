@@ -412,6 +412,21 @@ impl Controller {
         self.rung.shutter_cap(limits)
     }
 
+    /// The shutter to draw with: `chosen`, the player's, under the quarter
+    /// step's cap, times the ramp's factor (`1.0` where no ramp applies). The
+    /// one number that reaches the chain, so nothing else shapes the strength.
+    ///
+    /// A cap and a multiplier rather than two multipliers: `Limits` carries no
+    /// strength for the cap to divide by, and with a factor of `1.0` this is
+    /// exactly the `min` a capture draws with, bit for bit.
+    #[must_use]
+    pub fn blur_shutter(&self, chosen: f32, limits: Limits, factor: f32) -> f32 {
+        let cap = self
+            .blur_shutter_cap(limits)
+            .unwrap_or_else(|| self.blur_resolution(limits).shutter_cap());
+        chosen.min(cap) * factor
+    }
+
     /// Whether the rung holds any step below the player's choice. Not a
     /// resolution to draw at: see [`Self::blur_resolution`].
     #[must_use]

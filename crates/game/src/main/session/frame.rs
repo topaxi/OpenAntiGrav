@@ -257,6 +257,7 @@ impl Session {
             // rather than resetting it - see `drs::Controller::reset` for why
             // snapping back to the ceiling on a load is the wrong move.
             self.drs.reset();
+            self.blur_ramp.reset();
             self.stall_frame = self.frame_index;
             self.stalled = false;
         } else {

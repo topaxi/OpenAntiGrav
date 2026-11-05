@@ -87,7 +87,9 @@
 //! on the player's strength, applied where the chain is drawn, so it never
 //! raises a lower one and never reaches a setting. It eases from `high`, the
 //! most any player draws, so a lower strength stops moving as soon as the cap
-//! meets it.
+//! meets it. Where the chain is handed its strength, the cap is folded with
+//! [`super::ramp`]'s factor into one shutter
+//! ([`super::Controller::blur_shutter`]).
 
 use oag_display::display::{BlurResolution, MotionBlur};
 
@@ -149,6 +151,69 @@ pub fn relapse_frames(period: f32) -> u32 {
 /// prediction from multiplying a noisy reading by more than four.
 const MIN_SAVING_RATIO: f32 = 0.25;
 
+/// What a restore has to earn, and what a restore that did not hold costs:
+/// the run of predicted fits, its patience and its backoff. Shared by the
+/// gather's steps and by the blur's return from zero ([`super::ramp`]).
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct Patience {
+    /// Consecutive frames a restore was predicted to fit.
+    run: u32,
+    /// Frames since the last restore, or since the last relapse window that
+    /// held, while a backoff is still being paid back.
+    since_restore: Option<u32>,
+    /// Doublings of the patience earned by restores that did not hold.
+    backoff: u32,
+    /// The patience at this frame's period, before backoff.
+    frames: u32,
+}
+
+impl Patience {
+    /// Called once per frame at the `period` the patience is counted in.
+    pub(super) fn tick(&mut self, period: f32) {
+        self.frames = restore_frames(period);
+        if let Some(since) = self.since_restore.as_mut() {
+            *since += 1;
+            if *since >= relapse_frames(period) {
+                // A window held: one doubling paid back, and the next window
+                // starts counting.
+                self.backoff = self.backoff.saturating_sub(1);
+                self.since_restore = (self.backoff > 0).then_some(0);
+            }
+        }
+    }
+
+    /// Counts one frame's prediction, and says whether the restore is earned.
+    /// A frame that does not fit breaks the run.
+    pub(super) fn earned(&mut self, fits: bool) -> bool {
+        if !fits {
+            self.run = 0;
+            return false;
+        }
+        self.run += 1;
+        if self.run < self.frames << self.backoff.min(MAX_BACKOFF) {
+            return false;
+        }
+        self.run = 0;
+        self.since_restore = Some(0);
+        true
+    }
+
+    /// The thing a restore gave back was taken again: inside a window that is
+    /// either a restore that did not hold, or one paying back an earlier
+    /// backoff, which did not hold either.
+    pub(super) fn shed(&mut self) {
+        self.run = 0;
+        if self.since_restore.take().is_some() {
+            self.backoff = (self.backoff + 1).min(MAX_BACKOFF);
+        }
+    }
+
+    /// The run is thrown away; the ratio, the backoff and the window stay.
+    pub(super) fn interrupt(&mut self) {
+        self.run = 0;
+    }
+}
+
 /// What one shed step remembers.
 #[derive(Debug, Clone, Copy, Default)]
 struct Shed {
@@ -189,15 +254,8 @@ pub(super) struct Rung {
     depth: usize,
     /// What each step measured; `sheds[depth - 1]` is the one in force.
     sheds: [Shed; STEPS],
-    /// Consecutive frames at the ceiling a restore was predicted to fit.
-    run: u32,
-    /// Frames since the last restore, or since the last relapse window that
-    /// held, while a backoff is still being paid back.
-    since_restore: Option<u32>,
-    /// Doublings of the restore patience earned by restores that did not hold.
-    backoff: u32,
-    /// The restore patience at this frame's target, before backoff.
-    frames: u32,
+    /// What a restore at the ceiling has to earn.
+    patience: Patience,
     /// How far the strength cap has eased in: 0 none, 1 all the way to `low`.
     capped: f32,
 }
@@ -253,11 +311,6 @@ impl Rung {
         self.depth > 0
     }
 
-    /// The restore patience in force, after backoff.
-    fn patience(&self) -> u32 {
-        self.frames << self.backoff.min(MAX_BACKOFF)
-    }
-
     /// Called once per recorded frame, before any decision.
     ///
     /// Ineligible limits put the rung back at the player's choice and forget
@@ -280,16 +333,7 @@ impl Rung {
         while self.depth > 0 && self.held(limits) != self.resolution(limits) {
             self.depth -= 1;
         }
-        self.frames = restore_frames(period);
-        if let Some(since) = self.since_restore.as_mut() {
-            *since += 1;
-            if *since >= relapse_frames(period) {
-                // A window held: one doubling paid back, and the next window
-                // starts counting.
-                self.backoff = self.backoff.saturating_sub(1);
-                self.since_restore = (self.backoff > 0).then_some(0);
-            }
-        }
+        self.patience.tick(period);
         let wanted = f32::from(self.resolution(limits) == BlurResolution::Quarter);
         let step = period / CAP_EASE_SECONDS;
         self.capped = if self.capped < wanted {
@@ -329,12 +373,7 @@ impl Rung {
         }
         self.sheds[self.depth] = Shed { above, ratio: None };
         self.depth += 1;
-        self.run = 0;
-        // Inside a window: either a restore that did not hold, or one paying
-        // back an earlier backoff, which did not hold either.
-        if self.since_restore.take().is_some() {
-            self.backoff = (self.backoff + 1).min(MAX_BACKOFF);
-        }
+        self.patience.shed();
         true
     }
 
@@ -356,31 +395,25 @@ impl Rung {
             return false;
         }
         if self.holds_quarter() && self.capped < 1.0 {
-            self.run = 0;
+            self.patience.interrupt();
             return false;
         }
-        let blur_now = if blur_now.is_finite() && blur_now > 0.0 {
-            blur_now
-        } else {
-            0.0
-        };
+        // No chain drawn, so no gather to judge: the ramp holds it off, and
+        // brings it back at this step on a prediction of its own.
+        if !(blur_now.is_finite() && blur_now > 0.0) {
+            self.patience.interrupt();
+            return false;
+        }
         // Learned on the first frame here whatever the scale, so the ratio is
         // read at the scale the shed was.
         let above = self.sheds[self.depth - 1].above_now(at_ceiling(blur_now, steps));
         let fits = steps == GRID
             && budget > 0.0
             && (scalable - blur_now + above) / budget <= *super::DEADBAND.start();
-        if !fits {
-            self.run = 0;
-            return false;
-        }
-        self.run += 1;
-        if self.run < self.patience() {
+        if !self.patience.earned(fits) {
             return false;
         }
         self.depth -= 1;
-        self.run = 0;
-        self.since_restore = Some(0);
         true
     }
 
@@ -389,7 +422,7 @@ impl Rung {
     /// The ratio stays: like the controller's residual it is a property of the
     /// machine and the scene, and a load is the one moment it cannot be read.
     pub(super) fn reset(&mut self) {
-        self.run = 0;
+        self.patience.interrupt();
     }
 }
 

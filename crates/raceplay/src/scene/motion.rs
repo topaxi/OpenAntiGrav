@@ -559,15 +559,16 @@ impl super::Scene {
     /// every draw rather than once, so the menu row applies live, the way
     /// `Race::set_texture_detail` does.
     ///
-    /// `eased_cap` is dynamic resolution's shutter cap while it runs
-    /// (`drs::Controller::blur_shutter_cap`); `None` takes the drawn gather's
-    /// own cap at once, which is what a capture or a held profile wants.
+    /// `shutter` is what a live window draws with
+    /// (`drs::Controller::blur_shutter`), the strength already shaped; `None`
+    /// takes the drawn gather's own cap at once, which is what a capture or a
+    /// held profile wants.
     pub fn set_blur_gather(
         &self,
         resolution: oag_display::display::BlurResolution,
-        eased_cap: Option<f32>,
+        shutter: Option<f32>,
     ) {
-        self.blur_gather.set((resolution, eased_cap));
+        self.blur_gather.set((resolution, shutter));
     }
 
     /// Encodes the motion blur over the finished frame, `false` when the
@@ -595,9 +596,9 @@ impl super::Scene {
         // Every path to the chain comes through here, so this is where a
         // profile's `quarter` meets the lines the extent may reach: the
         // allocation, which a falling extent does not move.
-        let (resolution, eased_cap) = self.blur_gather.get();
+        let (resolution, shutter) = self.blur_gather.get();
         let resolution = resolution.for_lines(size.height);
-        let strength = strength.min(eased_cap.unwrap_or(resolution.shutter_cap()));
+        let strength = strength.min(shutter.unwrap_or(resolution.shutter_cap()));
         let mut pass = pass.borrow_mut();
         pass.set_gather(match resolution {
             oag_display::display::BlurResolution::Full => oag_post::motion_blur::Gather::Full,

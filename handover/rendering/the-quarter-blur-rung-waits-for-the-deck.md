@@ -1,8 +1,8 @@
 ---
 status: blocked-hardware
 titles: [all]
-updated: 2026-11-05
-summary: "Quarter blur rung built on branch blur-quarter-rung, -31 to -33 % at 4K on the iGPU; the maintainer's Deck runs decide the merge"
+updated: 2026-11-06
+summary: "Quarter blur rung and the blur's frame-rate ramp on branch blur-quarter-rung, -31 to -33 % at 4K on the iGPU; the maintainer's Deck runs decide the merge"
 difficulty: easy (70)
 ---
 
@@ -18,6 +18,12 @@ ADR-0087. The tile skip (the other half of this lane) came out false and landed 
 - **Does the step hold a higher extent on the Deck?** On the iGPU at 4K, target 30, it does since
   the 540 lines moved to the ceiling: 5.77 MP against 4.67 to 5.03, two flips. The Deck on HD at
   native 4K is the case to read: the base rung settles at 3264x1836 there.
+- **Is none at 30 right?** The ramp (ADR-0087, point 8) is 1 at 60, 0 at 30, both chosen. On the
+  iGPU at 4K, target 30, the chain went off once and stayed off: 8.1 MP at 47.8 fps, no blur at
+  `high`. A target of 30 means no blur on any machine that needs it. Judge the ramp's two ends and
+  its fade on a real panel: nobody has watched it. `SMOOTHING` is derived, the ends are not.
+- **Paused frame.** The bit-equality is a unit test; no pixel diff of a paused frame was taken.
+  `press start` on a `--drive` script did not pause.
 - **Quarter at a fallen extent.** Gathers go under 540 lines there: 270 at the default floor, 135
   at 25 %. Nobody has looked at those.
 - **Is the strength cap worth it?** It is 5.3 of the 8.5 ms saved on both titles. The cap on its
@@ -105,6 +111,29 @@ ADR-0087. The tile skip (the other half of this lane) came out false and landed 
    is bound by the CPU), HD at 3840x2160 a higher `render=` than base's 3264x1836. A worse picture
    in motion or no extent gained means do not merge the gather; keep the docs.
 
-4. Decide, and write the result on the page, and in an ADR superseding 0087 if the decision
+4. The ramp, with the same binaries and the same `settings.toml`, `motion_blur_resolution =
+   "half"`, `target_fps = "off"`, at each size, each title, each steady rate (`frame_limit` takes
+   any rate), 40 seconds each. Sessions are vsync off; the limit here is what holds the rate:
+
+   ```sh
+   for size in "1280 800" "1920 1080" "3840 2160"; do for rate in 30 40 50; do
+     set -- $size
+     sed -i "s/^frame_limit = .*/frame_limit = \"$rate\"/" cfg/oag/settings.toml
+     ~/oag-perf/deck-run.sh --wait 3600 -- env RUST_LOG=warn,oag=debug XDG_CONFIG_HOME=$PWD/cfg \
+       XDG_DATA_HOME=$PWD/data XDG_STATE_HOME=$PWD/state ENABLE_GAMESCOPE_WSI=0 \
+       gamescope --backend headless -W $1 -H $2 -w $1 -h $2 -- \
+       ./oag-game-quarter $image --race --autopilot --no-audio --frame-log --seed 1 --script 40:quit \
+       2>&1 | tee out/ramp-$title-$rate-$1.log
+   done; done
+   ```
+
+   Read `blur_ramp=` on the `frame-log` lines: expected 0.00 at 30, 0.33 at 40, 0.67 at 50 where the
+   rate is held, flat from second to second, and `motion blur ramp:` lines counting the flips: one
+   at most. Then, in the same session as step 3 with `frame_limit = "unlimited"` and the target at
+   60, the settled `blur_ramp=` and whether the fps spread grows against `oag-game-base`. Finally
+   sit at a steady 30, 40 and 50 on the Deck's screen and judge the fade and whether none at 30 is
+   right.
+
+5. Decide, and write the result on the page, and in an ADR superseding 0087 if the decision
    changes. A settings key the build rejects logs `ignoring` and keeps its default, so read that
    line before reading a run.

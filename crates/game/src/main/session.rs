@@ -188,6 +188,8 @@ pub(crate) struct Session {
     /// is asked for the ceiling every frame and returns it. See
     /// [`oag_present::drs`], which owns the whole policy and reads nothing.
     pub(crate) drs: drs::Controller,
+    /// The blur's strength against frame rate, in a live window. See [`drs::ramp`].
+    pub(crate) blur_ramp: drs::Ramp,
     /// The timer behind [`Session::scene_cost`], or `None` on a device that
     /// cannot be asked - in which case dynamic resolution has no signal at all
     /// and never moves the extent, whatever the menu row says. The row cannot

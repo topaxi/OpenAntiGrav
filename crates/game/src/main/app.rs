@@ -485,6 +485,7 @@ impl App {
             meter: perf::Meter::new(),
             scene_cost: perf::Meter::new(),
             drs: oag_present::drs::Controller::new(),
+            blur_ramp: oag_present::drs::Ramp::default(),
             pass_timer,
             upscale_cost: perf::ChainCost::new(),
             upscale_timer,

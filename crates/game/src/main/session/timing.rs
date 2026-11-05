@@ -578,6 +578,82 @@ impl Session {
             );
         }
         self.feed_windows(render_profile, frame_seconds, drs_limits);
+        self.feed_blur_ramp(render_profile, frame_seconds);
+    }
+
+    /// Whether this frame is one the blur ramp shapes: a live window's running
+    /// race. A headless session, a capture and a frozen race draw the strength
+    /// as chosen (`drs::ramp`).
+    fn blur_ramped(&self) -> bool {
+        matches!(self.stage, Stage::Race(_)) && !self.gpu.is_headless() && !self.pause.frozen()
+    }
+
+    /// One running frame into the blur ramp. A frame that flips the chain
+    /// moves the scene's cost by the whole chain at once, so the controller
+    /// drops the readings in flight, as it does after a shed.
+    fn feed_blur_ramp(
+        &mut self,
+        render_profile: &settings::RenderProfile,
+        frame_seconds: Option<f32>,
+    ) {
+        if render_profile.motion_blur == oag_display::display::MotionBlur::Off {
+            self.blur_ramp = drs::Ramp::default();
+            return;
+        }
+        if !self.blur_ramped() {
+            return;
+        }
+        if self.blur_ramp.frame(frame_seconds, self.drs.scale()) {
+            self.drs.reset();
+            debug!(
+                "motion blur ramp: chain {} at {:.0}% scale",
+                if self.blur_ramp.is_off() { "off" } else { "back on" },
+                self.drs.scale() * 100.0,
+            );
+        }
+    }
+
+    /// The gather and the shutter to draw with: `held` while the extent is held
+    /// at its ceiling, so no controller's rung is in force.
+    ///
+    /// `None` for the shutter is the profile's strength with the gather's own
+    /// cap, what a capture draws.
+    pub(super) fn drawn_blur(
+        &self,
+        limits: drs::Limits,
+        held: bool,
+    ) -> (oag_display::display::BlurResolution, Option<f32>) {
+        let profile = self.render_profile();
+        let chosen = profile.motion_blur.shutter();
+        let factor = self.blur_factor();
+        if held {
+            let resolution = profile.motion_blur_resolution;
+            let cap = resolution.for_lines(limits.ceiling().1).shutter_cap();
+            return (resolution, (factor < 1.0).then(|| chosen.min(cap) * factor));
+        }
+        (
+            self.drs.blur_resolution(limits),
+            Some(self.drs.blur_shutter(chosen, limits, factor)),
+        )
+    }
+
+    /// The ramp's factor on this frame, 1 where it does not apply.
+    fn blur_factor(&self) -> f32 {
+        if self.blur_ramped() {
+            self.blur_ramp.factor()
+        } else {
+            1.0
+        }
+    }
+
+    /// The strength a scene draws with: the player's, or none while the ramp
+    /// holds the chain off, which closes the velocity gate too.
+    pub(super) fn chain_strength(&self, chosen: oag_display::display::MotionBlur) -> oag_display::display::MotionBlur {
+        if self.blur_factor() > 0.0 {
+            chosen
+        } else {
+            oag_display::display::MotionBlur::Off
+        }
     }
 
     /// One scene reading into the controller, with the other rings' readings
@@ -696,6 +772,7 @@ impl Session {
     ) {
         self.governor_gpu = Some(cost.total());
         self.governor_gpu_at = self.frame_index;
+        self.blur_ramp.chain(cost.blur, self.drs.scale());
         let gather = self.drs.blur_resolution(drs_limits);
         if let Some(extent) = self.drs.record(cost, frame_seconds, drs_limits) {
             // **The reserve is printed beside the costs**, because

@@ -177,6 +177,7 @@ impl Session {
                 surface,
                 render,
                 governor: self.governor.level(),
+                blur_ramp: self.blur_ramp.factor(),
             })
         );
     }

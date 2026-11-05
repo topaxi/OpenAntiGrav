@@ -56,6 +56,7 @@ fn the_line_carries_every_field_and_dashes_what_was_not_read() {
         surface: (3840, 2160),
         render: None,
         governor: 0,
+        blur_ramp: 1.0,
     });
     assert!(line.starts_with("frame-log stage=menu:window-layout fps=59.9"));
     assert!(line.contains("gpu_ms=- "));
