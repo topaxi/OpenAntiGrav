@@ -211,6 +211,9 @@ pub(crate) struct Gpu {
         allow(dead_code)
     )]
     adapter: wgpu::Adapter,
+    /// Reclaims finished submissions off the frame thread, where this machine gains from it.
+    /// Holds a clone of the device; dropped with this struct, it stops its thread.
+    pub(crate) reaper: Option<oag_gpu::reaper::Reaper>,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     /// What the RENDERER row offers. See [`adapter::Chosen::offered`].
@@ -467,6 +470,7 @@ impl Gpu {
         let mut gpu = Self {
             temporal,
             preview_pipelines: std::cell::RefCell::default(),
+            reaper: oag_gpu::reaper::Reaper::begin(&device),
             output: Output {
                 window: Host::window(window),
                 held: None,
@@ -518,6 +522,7 @@ impl Gpu {
         let mut gpu = Self {
             temporal,
             preview_pipelines: std::cell::RefCell::default(),
+            reaper: oag_gpu::reaper::Reaper::begin(&device),
             output: Output {
                 window: Host::headless(size),
                 held: None,

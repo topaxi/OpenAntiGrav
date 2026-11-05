@@ -1020,6 +1020,9 @@ impl Session {
         self.phases.mark(super::phases::Phase::Overlay);
         let submit_start = timing_first_race_frame.then(web_time::Instant::now);
         frame_work.submit(&self.gpu.queue, encoder);
+        if let Some(reaper) = &self.gpu.reaper {
+            reaper.reap();
+        }
         self.phases.mark(super::phases::Phase::Submit);
         // **After the submit**, which is what makes it safe to start a map on
         // the buffer this frame just copied into. What comes back is a frame or
