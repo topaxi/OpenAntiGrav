@@ -85,6 +85,16 @@ fn cross_on_the_team_screen_presses_its_confirm_tick() {
 }
 
 #[test]
+fn a_compare_shot_hides_the_focus_the_pad_would_draw() {
+    let (mut frontend, _input) = on_home();
+    assert!(focused(&frontend, UPPER.0, UPPER.1));
+    frontend.hide_pad_focus();
+    assert!(!focused(&frontend, UPPER.0, UPPER.1));
+    frontend.set_pad_driving(true);
+    assert!(!focused(&frontend, UPPER.0, UPPER.1));
+}
+
+#[test]
 fn a_pointer_takes_the_focus_away_and_the_pad_gives_it_back() {
     let (mut frontend, mut input) = on_home();
     let hover = Pointer {

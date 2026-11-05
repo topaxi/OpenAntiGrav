@@ -161,6 +161,9 @@ pub struct TouchState {
     /// moves or clicks. The original's touch grids draw no focus at all (see
     /// the module docs).
     pub pad_cursor: bool,
+    /// Draw no pad focus whichever device is in use, for a frame compared
+    /// against the original's grids, which have none.
+    pub focus_hidden: bool,
     /// What a confirmed tap asked for, once one has. Read by the
     /// composition root through [`Frontend::launch`].
     pub launch: Option<Launch>,
@@ -250,6 +253,11 @@ impl Frontend {
     #[must_use]
     pub fn chosen_mode(&self) -> Option<&str> {
         self.touch.chosen_mode.as_deref()
+    }
+
+    /// Draws no pad focus from here on - see [`TouchState::focus_hidden`].
+    pub fn hide_pad_focus(&mut self) {
+        self.touch.focus_hidden = true;
     }
 
     /// Gives `GameModeChoice` this build's own tiles - see the module docs.
@@ -611,7 +619,7 @@ impl Frontend {
     pub(super) fn draw_touch(&self, name: &str, out: &mut Vec<Draw>) {
         self.draw_touch_marking(
             name,
-            self.touch.pad_cursor.then_some(self.touch.selected),
+            (self.touch.pad_cursor && !self.touch.focus_hidden).then_some(self.touch.selected),
             out,
         );
     }
