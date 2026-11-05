@@ -733,7 +733,21 @@ impl Scene {
             );
             sphere.tint(queue, state.colour(), recoloured);
         }
-        self.write_absorb_overlays(race, queue, view_projection, prev_vp, &prev, recoloured);
+        self.write_absorb_overlays(
+            race,
+            queue,
+            view_projection,
+            prev_vp,
+            &prev,
+            block,
+            crate::drawable::TrackCull {
+                sections: self.visibility.as_ref().map(|v| &v.sections),
+                set,
+                chunks,
+                frustum: frustum.as_ref(),
+            },
+            recoloured,
+        );
         self.write_absorb_shells(race, queue, view_projection, prev_vp, &prev, recoloured);
         self.write_ghost(race, queue, view_projection, prev_vp);
         oag_gpu::perfprobe::mark("ship+shield-write");
@@ -1204,7 +1218,7 @@ impl Scene {
         {
             draws.mesh(sphere);
         }
-        self.draw_absorb_overlays(race, &mut draws);
+        self.draw_absorb_overlays(race, frustum.as_ref(), &mut draws);
         self.draw_absorb_shells(race, &mut draws);
         if let Some(collision) = &self.collision {
             draws.mesh(collision);

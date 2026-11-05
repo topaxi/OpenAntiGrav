@@ -66,7 +66,6 @@ fn four_views_do_the_shared_work_once() {
             ("scenery clocks", work.scenery_clocks),
             ("advert cards", work.advert_cards),
             ("craft animation tables", work.craft_anims),
-            ("shine maps", work.shine_maps),
         ] {
             assert_eq!(
                 count, frame,

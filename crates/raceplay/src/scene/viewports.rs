@@ -21,10 +21,11 @@
 //! - **What does not depend on the camera is done once, by the first view.** The
 //!   two shadow maps, the shadow geometry's gather (`Scene::upload_shadow_geometry`
 //!   keeps the lists; each view uploads them with its own matrix), the scenery's
-//!   animation clocks, the advert cards and the craft shine passes' environment-mapped
-//!   vertices (`Scene::write_shine`) are functions of the craft and the race
+//!   animation clocks and the advert cards are functions of the craft and the race
 //!   clock, so a later view ([`Layer::Next`]) reads what the first left in the
-//!   buffers and textures. Measured on Pulse, the gather alone was half of a view's
+//!   buffers and textures. The craft shine passes' coordinates are too, and go up once a
+//!   frame by the craft's pose rather than by the view (`Scene::write_shine`), since a view
+//!   writes only the craft it draws. Measured on Pulse, the gather alone was half of a view's
 //!   CPU, and a split is CPU-bound (`docs/rendering/split-screen.md`, "Cost"). The
 //!   picture of every view is byte-identical to drawing it all per view. **One
 //!   exception: the `mapped` tier's depth map is fitted on the craft its view

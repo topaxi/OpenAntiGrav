@@ -1339,6 +1339,7 @@ mod tests {
 pub(super) mod draw;
 mod occlusion;
 mod overlay;
+pub(crate) use overlay::TrackCull;
 mod ripple;
 mod stamp;
 

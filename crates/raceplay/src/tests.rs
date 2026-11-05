@@ -78,6 +78,7 @@ mod scene_build;
 mod seat_view;
 mod second_person;
 mod shield_flash;
+mod shine_writes;
 mod slot_hud;
 mod spawn;
 mod spectator_press;

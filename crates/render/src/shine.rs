@@ -75,6 +75,8 @@
 //! frame. The 3 of those 88 draws whose world matrix is more than a scale are the
 //! rotated nodes, and they are why that step exists.
 
+use std::ops::Range;
+
 use oag_core::math::{Mat4, Vec3};
 
 use crate::texgen;
@@ -229,7 +231,7 @@ pub fn write_view(model: &Model, out: &mut Vec<[f32; 2]>, view: Mat4, seconds: f
 /// bits [`write_view`] always produced.
 #[derive(Debug, Default)]
 pub struct TrackNormals {
-    units: Vec<Vec3>,
+    units: texgen::UnitNormals,
     /// The `seconds` (as bits) `units` is current for; `None` before the first call.
     at: Option<u32>,
     /// Whether the model has no animated node, so `units` holds for any `seconds`.
@@ -297,12 +299,12 @@ impl TrackNormals {
         // `animated` is read off the model once, with the whole list.
         if self.units.len() == model.vertices.len() && self.nodes == nodes.len() {
             for &i in &self.animated {
-                self.units[i as usize] = unit(&model.vertices[i as usize]);
+                self.units
+                    .set(i as usize, unit(&model.vertices[i as usize]));
             }
             return;
         }
-        self.units.clear();
-        self.units.extend(model.vertices.iter().map(unit));
+        self.units.refill(model.vertices.iter().map(unit));
         self.nodes = nodes.len();
         self.animated.clear();
         self.animated.extend(
@@ -321,11 +323,60 @@ impl TrackNormals {
 
     /// [`write_view`] for `model` at `seconds`, reusing the normals if they are current.
     pub fn write_view(&mut self, model: &Model, out: &mut Vec<[f32; 2]>, view: Mat4, seconds: f32) {
+        let all = 0..model.vertices.len();
+        self.write_view_spans(model, out, view, seconds, std::slice::from_ref(&all));
+    }
+
+    /// [`Self::write_view`] over `spans` of the vertices alone, for a view that draws only
+    /// those ([`draw_vertices`]): what `out` holds elsewhere is left as it was. Most of a
+    /// circuit's pass is out of any one view, a tenth of it drawn on Talon's Junction.
+    pub fn write_view_spans(
+        &mut self,
+        model: &Model,
+        out: &mut Vec<[f32; 2]>,
+        view: Mat4,
+        seconds: f32,
+        spans: &[Range<usize>],
+    ) {
         let right = Vec3::new(view.x_axis.x, view.y_axis.x, view.z_axis.x);
         let up = Vec3::new(view.x_axis.y, view.y_axis.y, view.z_axis.y);
         self.refresh(model, seconds);
-        texgen::environment_texcoords_from_units(&self.units, out, right, up);
+        out.resize(model.vertices.len(), [0.0; 2]);
+        texgen::environment_texcoords_from_units(&self.units, spans, out, right, up);
     }
+}
+
+/// For each of `model`'s draws, the span of vertices it indexes: [`build_track`] numbers a
+/// draw's vertices together, so the span is about the draw's own, longer only where it shares
+/// a vertex with an earlier draw.
+#[must_use]
+pub fn draw_vertices(model: &Model) -> Vec<Range<usize>> {
+    model
+        .draws
+        .iter()
+        .map(|draw| {
+            let indices = &model.indices[draw.range.start as usize..draw.range.end as usize];
+            let first = indices.iter().copied().min().unwrap_or(0) as usize;
+            let last = indices.iter().copied().max().map_or(0, |i| i as usize + 1);
+            first..last
+        })
+        .collect()
+}
+
+/// Sorts `spans` and joins the ones that touch, so no vertex is computed twice.
+pub fn merge_spans(spans: &mut Vec<Range<usize>>) {
+    spans.sort_unstable_by_key(|span| span.start);
+    let mut kept = 0;
+    for next in 0..spans.len() {
+        let span = spans[next].clone();
+        if kept > 0 && span.start <= spans[kept - 1].end {
+            spans[kept - 1].end = spans[kept - 1].end.max(span.end);
+        } else {
+            spans[kept] = span;
+            kept += 1;
+        }
+    }
+    spans.truncate(kept);
 }
 
 /// The vertices of `model` (a [`build`] result) with their texture coordinates

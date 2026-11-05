@@ -19,6 +19,7 @@
 
 use super::viewports::Layer;
 use super::*;
+use crate::drawable::TrackCull;
 use crate::drawable::draw::Lists;
 
 /// One thing a view's scene pass draws, in the order the pass draws them.
@@ -442,16 +443,13 @@ impl Recorder<'_> {
                 TrackStage::Shine => {
                     oag_gpu::perfprobe::marks::mark(render, "track shine");
                     if let Some((shine, sources)) = self.track_shine {
-                        stats.add(shine.draw_track_shine(
-                            render,
-                            block,
-                            self.track,
-                            sources,
-                            self.sections,
+                        let cull = TrackCull {
+                            sections: self.sections,
                             set,
                             chunks,
                             frustum,
-                        ));
+                        };
+                        stats.add(shine.draw_track_shine(render, block, self.track, sources, cull));
                     }
                 }
                 TrackStage::Blended => {
