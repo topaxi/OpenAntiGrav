@@ -627,7 +627,7 @@ indexed field whose order differs in the XML, and it is not a vertical flip betw
 - **The XML is HD's, to the digit** (confidence 95, read off `data09`'s `CellMode_Definition.xml`
   by `omega_medal_crops_read_gold_silver_bronze_in_every_difficulty_block`): `Target0/1/2 Medal`
   author `u=0`, `v=0/61/122`, 60x60, `TxtrWidth/TxtrHeight=60`, source `Hexmedal_HD.gtf`.
-  Census of every `.xml` in the five Omega archives for `Hexmedal`: only `cellmode_definition.xml`
+  Census of every `.xml` in the nine Omega archives (base `data00`-`04`, patch `data05`, `07`-`09`) for `Hexmedal`: only `cellmode_definition.xml`
   (the three `Target0/1/2 Medal`, 32 `Medal_x_y` with no crop, `MedalImageFury`/`MedalImageHD`)
   and `endrace_definition.xml` with its `_demo` twin (`Target0/1/2 Image` at `v=0/61/122`, one
   `Single Target Image`) name it.
@@ -635,8 +635,8 @@ indexed field whose order differs in the XML, and it is not a vertical flip betw
   HD's 1024x768, which is 16 columns by 9 rows of HD's 61 px pitch (a 60 px frame and one clear
   row), three difficulty blocks of 183 px. Through every tier and block the icon's opaque rows
   stay inside rows 1..58 of its frame. `Hexmedal_HD.2x.gnf` is the same picture at 1952x1098;
-  both files exist twice (base `data00`, patch `data08`), the four decode to the same texels
-  within BC error.
+  both files exist twice (base `data00`, patch `data08`); all four decode to the same
+  per-tier mean colour in every block (to within a unit or two of 255).
 - **The stored order within a block is bronze, silver, gold from the top** (confidence 95,
   mean colour of the opaque texels, first column frame, plain block: bronze rgb 196 174 135,
   green over red 0.887; silver 204 209 207, red minus blue -3; gold 214 212 168, 0.989; the hook

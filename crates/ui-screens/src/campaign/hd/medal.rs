@@ -1,8 +1,7 @@
-//! The `Hexmedal_HD` atlas crop and the difficulty-rung text it sits beside -
-//! split out of `hd.rs` under the 1,000-line rule
-//! (`scripts/check-file-size.py`). `pub(super)`: every item here is an
-//! internal helper `super::hd_cell_draw_list` calls, not part of this
-//! crate's own public API.
+//! The `Hexmedal_HD` atlas crop and the difficulty-rung text it sits beside,
+//! split out of `hd.rs` for file size. [`hd_medal_frame`] is public so a
+//! disc-backed test can read the crop a draw samples; every other item is an
+//! internal helper `super::hd_cell_draw_list` calls.
 
 use oag_tables::race_campaign::{Cell, Difficulty, Medal, Mode};
 

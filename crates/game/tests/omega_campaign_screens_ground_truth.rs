@@ -254,20 +254,20 @@ fn omega_card_materials_read_their_coverage_channels() {
     assert!(atlas_draws >= 32);
 }
 
-/// Mean colour of the opaque texels of one 60x60 crop of the campaign sheet, and the
-/// crop's opaque rows relative to its own top.
+/// Mean colour of the opaque texels of one crop of the campaign sheet, and the crop's opaque rows
+/// relative to its own top. `uv` is `[x, y, width, height]` in the sheet.
 struct Crop {
     rgb: [f32; 3],
     rows: std::ops::RangeInclusive<u32>,
 }
 
-fn crop_of(sheet: &oag_hud::sprite::Sheet, placed: oag_ui::frontend::Placed, uv: [f32; 4]) -> Crop {
+fn crop_of(sheet: &oag_hud::sprite::Sheet, uv: [f32; 4]) -> Crop {
     let (mut sum, mut count) = ([0.0f32; 3], 0.0f32);
     let (mut first, mut last) = (u32::MAX, 0);
     for row in 0..uv[3] as u32 {
         for column in 0..uv[2] as u32 {
-            let x = placed.x + uv[0] as u32 + column;
-            let y = placed.y + uv[1] as u32 + row;
+            let x = uv[0] as u32 + column;
+            let y = uv[1] as u32 + row;
             let at = ((y * sheet.width + x) * 4) as usize;
             let texel = &sheet.rgba[at..at + 4];
             if texel[3] >= 128 {
@@ -289,14 +289,18 @@ fn crop_of(sheet: &oag_hud::sprite::Sheet, placed: oag_ui::frontend::Placed, uv:
 /// `Target0/1/2 Medal` author HD's crop on Omega's own `CellMode_Definition.xml` (`v` 0, 61,
 /// 122, 60 px frames), the atlas is HD's 61 px frame grid, and the picture it holds stores each
 /// difficulty block bronze, silver, gold from the top. So the crop a title draws has to come from
-/// its [`oag_title::Campaign::medal_tier_rows`], not from the authored `v` alone: through
-/// each tier's crop, gold reads yellow (green over red high), bronze reads orange (green over
-/// red low) and silver reads grey, in the plain, hook and swirl blocks alike. Dropping
-/// `medal_tier_rows` from Omega draws bronze at gold's slot, the player's report.
+/// its [`oag_title::Campaign::medal_tier_rows`], not from the authored `v` alone. Read off the
+/// draw list `Cell Selection` really produces (the three sprites that sample the atlas, in
+/// `Target0`, `1`, `2` order) and sampled from the sheet they sample: gold reads yellow (green
+/// over red high), bronze orange (green over red low) and silver grey, in the plain, hook and
+/// swirl blocks alike. Dropping `medal_tier_rows` from Omega, or `CellArt` ignoring it, draws
+/// bronze at gold's slot, the player's report. The two `oag-game` sites that fill `CellArt`
+/// from the title are covered by the pair render, not by this test.
 #[test]
 #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
 fn omega_medal_crops_read_gold_silver_bronze_in_every_difficulty_block() {
-    use oag_tables::race_campaign::{Difficulty, Medal};
+    use oag_tables::race_campaign::Difficulty;
+    use oag_ui::frontend::Draw;
     let Some(omega) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
@@ -349,22 +353,68 @@ fn omega_medal_crops_read_gold_silver_bronze_in_every_difficulty_block() {
         .expect("the atlas is on the sheet");
     assert_eq!((placed.width, placed.height), (976, 549), "Omega's atlas");
 
-    let rows = oag_omega::TITLE.campaign.medal_rows();
+    let grid = campaign.grids.last().expect("a grid");
+    let skin = oag_ui::menu::Skin::new(
+        oag_omega::frontend::MENU_SKIN,
+        oag_display::space::Space::OMEGA,
+        33.0,
+    );
+    let in_atlas = |uv: &[f32; 4]| {
+        uv[0] >= placed.x as f32
+            && uv[1] >= placed.y as f32
+            && uv[0] < (placed.x + placed.width) as f32
+            && uv[1] < (placed.y + placed.height) as f32
+    };
     for difficulty in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
+        let mut model = oag_ui_screens::campaign::CellSelection::new(grid.cells.clone());
+        model.set_difficulty(difficulty);
+        let layers = oag_ui_screens::campaign::hd::hd_cell_draw_list(
+            &model,
+            &campaign.cell_layout,
+            &skin,
+            &oag_ui::menu::Frame::default(),
+            &oag_ui::language::StringTable::default(),
+            &oag_ui::language::CircuitNames::default(),
+            0,
+            campaign.grids.len(),
+            &oag_ui_screens::campaign::GridSummary::from_grid(grid),
+            &oag_ui_screens::campaign::hd::CellArt {
+                next_flyer: None,
+                fury: false,
+                medal_tier_rows: oag_omega::TITLE.campaign.medal_rows(),
+                track_emblems: &campaign.circuit_emblems,
+            },
+            None,
+            false,
+            &|src| campaign.sprites.get(src),
+            &[],
+        );
+        let crops: Vec<[f32; 4]> = layers
+            .body
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { uv, .. } if in_atlas(uv) => Some(*uv),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            crops.len(),
+            3,
+            "{difficulty:?}: a fresh profile draws the three target icons and no badge"
+        );
         let mut ratio = Vec::new();
-        for medal in [Medal::Gold, Medal::Silver, Medal::Bronze] {
-            let uv = oag_ui_screens::campaign::hd::medal::hd_medal_frame(medal, difficulty, rows);
-            let crop = crop_of(&campaign.sprites, placed, uv);
+        for uv in crops {
+            let crop = crop_of(&campaign.sprites, uv);
             // The frame is 60 rows with the icon inside it and a clear row under it: the
             // 61 px pitch and the 183 px block pitch hold on Omega's 976x549.
             assert!(
                 *crop.rows.start() >= 1 && *crop.rows.end() <= 58,
-                "{medal:?} {difficulty:?}: icon rows {:?} leave the frame",
+                "{difficulty:?}: icon rows {:?} leave the frame",
                 crop.rows
             );
             let [r, g, b] = crop.rgb;
             eprintln!(
-                "{difficulty:?} {medal:?}: rgb {r:.0} {g:.0} {b:.0} g/r {:.3}",
+                "{difficulty:?} {uv:?}: rgb {r:.0} {g:.0} {b:.0} g/r {:.3}",
                 g / r
             );
             ratio.push((g / r, r - b));
