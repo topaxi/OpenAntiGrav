@@ -19,12 +19,12 @@ state must match the original's design language.
 ## Open
 
 - Which screens cannot be used from a controller, and which show no focus.
-- Whether the original's menus answer the d-pad at all. Static reading says little beyond the
-  skin list below; nobody has pressed them on Vita3K.
+- Whether the original's touch screens answer the d-pad: the code below exists, but nobody has
+  pressed them on Vita3K.
 
-### PS TV mode: no separate control path found (2026-11-05, confidence 55)
+### PS TV mode: no separate control path found (2026-11-05, static, confidence 55)
 
-Static only, on the EU v1.04 package; Ghidra was down, so no input code was decompiled.
+Strings and XML on the EU v1.04 package.
 
 - Sony's launch list left 2048 out and a review lists it as not PS TV compatible; a whitelist
   hack was the only route reported.
@@ -41,7 +41,28 @@ Static only, on the EU v1.04 package; Ghidra was down, so no input code was deco
   and `ArrowTouchOnly="true"`, so that list has arrows only under touch and a state without them.
 - The 2048 palette is `Blue2048`, `Orange2048`, `White2048`, `Grey2048` (`FEGlobals`).
 
-So step 4 below is likely the main path, not the exception: expect a chosen focus state.
+### The executable keeps a real pad path (2026-11-05, Ghidra decompile, confidence 60)
+
+This corrects the reading above: the path is in the code, shared on every Vita, not TV-specific.
+
+- `FUN_8122d1e0(pad, action)` is the button query (`FUN_8122cfbe` names the actions: `start`,
+  `select`, `circle`, `cross`, `forward`, `backward`, ...; 0 to 3 read as the d-pad, not proven).
+  66 functions call it, among them option pages, the music list, track select, online lobbies,
+  photo mode and the end-of-race screens.
+- Focus is a per-item flag, `(item + 0x30) & 0x200`, and `FUN_81067b92(screen, -1 or 1)` steps it
+  (`FUN_810818ec`, `FUN_810e5458`). `FUN_810e5458` names the item's state `HasFocus` or
+  `NotHasFocus` at `item + 0x90`.
+- Navigation with sounds: `FUN_81118cfc`, `FUN_8110aa5c`, `FUN_810ddb4c` play `navUp`, `navDown`,
+  `navLeft`, `navRight`. `FUN_81097ed6` moves a `Selector` and `SelectorGlow` over `Outline_%d_%d`
+  cells on a grid.
+- Not settled: `HasFocus`, `Selector` and `Outline_` appear in no 2048 XML, so these may be HD
+  code the touch screens never reach. Whether `TouchButton`, `TouchCampaign*`, `TouchTeamGrid` or
+  `TouchTrackGrid` take the `0x200` flag is unread. `Touchlist` draws its arrows only when
+  `+0x12d` (`ArrowTouchOnly`) is clear (`FUN_810fce98`, parsed in `FUN_810fc48c`), which is
+  arrow geometry, not yet a touch check.
+
+If the touch screens do take the flag, the original's focus state is the thing to play. If not,
+step 4 below is the main path and `Selector`'s glow is the closest authored model to borrow from.
 
 ## Next Steps
 
