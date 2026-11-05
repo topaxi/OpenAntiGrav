@@ -410,6 +410,68 @@ fn an_unpicked_style_is_the_one_the_menus_are_drawn_in() {
         .expect("HD ships two styles");
     let picked = Assets::load(&source, &table, entries.as_deref(), Some(other.name));
     assert_eq!(picked.style, Some(other.name));
+
+    // And the pictures of either style land in their panel on every screen shape.
+    features_lie_inside_their_panel(&unpicked, menus.name);
+    features_lie_inside_their_panel(&picked, other.name);
+}
+
+/// Every feature picture of `assets`, on a 16:10, 16:9, 21:9 and 20:9 screen: what shows of it
+/// (its texels that differ from the screen's ground) is inside the feature panel, 160 to 950 by
+/// 155 to 655 in HD's 1920x1080 grid. A picture cut at the panel's edge passes; so does Fury's,
+/// whose quad overhangs in the screen's own black.
+fn features_lie_inside_their_panel(assets: &Assets, style: &str) {
+    const PANEL: [f32; 4] = [160.0, 155.0, 950.0, 655.0];
+    let art = assets.art.as_ref().expect("HD ships art");
+    let ground = assets.palette.expect("HD names four globals").background;
+    let differs = |texel: [u8; 4]| {
+        texel[3] != 0
+            && (0..3)
+                .any(|channel| (f32::from(texel[channel]) - ground[channel] * 255.0).abs() > 16.0)
+    };
+    let mut shown = 0;
+    for draw in 0..40 {
+        for aspect in [1280.0 / 800.0, 16.0 / 9.0, 2560.0 / 1080.0, 20.0 / 9.0] {
+            let mut screen = oag_game::loading::Screen::for_mode(assets, 33.0, draw, None, Some(8));
+            screen.set_surface_aspect(aspect);
+            let list = screen.draw_list(
+                oag_game::loading::Phase::Prefetch,
+                &oag_game::prefetch::Progress::default(),
+                &oag_ui::font::Atlas::build(),
+            );
+            for item in &list {
+                let oag_ui::frontend::Draw::Sprite { rect, uv, .. } = item else {
+                    continue;
+                };
+                if rect[2] < 200.0 || rect[3] < 200.0 {
+                    continue;
+                }
+                let ink = art
+                    .sheet
+                    .ink_within(*uv, differs)
+                    .expect("a feature picture shows something");
+                let (kx, ky) = (rect[2] / uv[2], rect[3] / uv[3]);
+                let seen = [
+                    rect[0] + (ink[0] - uv[0]) * kx,
+                    rect[1] + (ink[1] - uv[1]) * ky,
+                    rect[0] + (ink[0] + ink[2] - uv[0]) * kx,
+                    rect[1] + (ink[1] + ink[3] - uv[1]) * ky,
+                ];
+                assert!(
+                    seen[0] >= PANEL[0] - 0.5
+                        && seen[1] >= PANEL[1] - 0.5
+                        && seen[2] <= PANEL[2] + 0.5
+                        && seen[3] <= PANEL[3] + 0.5,
+                    "{style}, aspect {aspect:.2}, draw {draw}: shows at {seen:?}, panel {PANEL:?}"
+                );
+                shown += 1;
+            }
+        }
+    }
+    assert!(
+        shown >= 160,
+        "{style}: a picture on every screen, saw {shown}"
+    );
 }
 
 /// Pulse still gets exactly what it always got: tips, a real strip, no still.
