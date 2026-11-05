@@ -1,37 +1,41 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [hd]
 updated: 2026-11-05
-summary: "Fury backdrop's pass graph is wired but shipped level is 15 against the reference's 48; level gap, alpha bloom, equaliser and mode 11 remain"
+summary: "Fury backdrop's level gap was RPCS3's 16-bit quad index wrap; chain and encoded blends wired; equaliser, mode 11 and a fresh-particle residual remain"
 categories: [frontend, rendering]
 ---
 
-# The Fury backdrop's pass graph is wired; what the measured frame still has that ours does not
+# The Fury backdrop's pass graph is wired; what is left is the equaliser, mode 11 and a small residual
 
-The laws and the numbers are on `docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "The frame,
-measured" and "The pass graph, wired". Blend, glow, wave, composite, band, scanlines, the final composite's half
-texel and the linear pipeline landed. On Main Menu, frame 484, as shipped: mean red `2.2` to `15.0` against the
-reference's `48.3`. The structure matches; the level does not yet.
+The laws and the numbers are on `docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`: "The pass graph, wired", "The
+final composite adapts", "The Fury references carry an RPCS3 defect". Read the last one first: **every RPCS3 frame of this
+backdrop draws records `0..16383` three or four times and the rest never**, so no stored pair scores this backdrop. Wrapped
+the same way in a scratch build, ours reads R mean `46.6` against the reference's `48.3` with nothing fitted; as shipped, every
+record once, `13.9` on a silent frame. Do not fit towards the reference. The clean reference is
+`handover/tooling/rpcs3-quads-wrap-at-65536-so-fury-references-are-wrong.md`.
 
 ## Open
 
-1. **The level gap, unexplained.** The paused state read bands at zero, yet the frame reads three times what that
-   gives; forcing a band of `0.95` brings it to `53.0` (fitted, not shipped). About half the difference is
-   dot-fine, so a blur alone cannot be most of it. Find what the state read missed before wiring anything to it:
-   read `particleColour` out of the frame's own ring (`scripts/hd-draw-dump.py`) beside the picture.
-2. **The alpha bloom over the field.** The menu's ladder is live: gate `rgb * a * 0.75`, two blurs, added at `1`
-   by the final composite. Ours keeps the field's alpha through every pass for this. `oag_post::bloom` already
-   runs in `oag_game::render`'s glow path, so reuse that, not a second chain; its gate and blur weights need
-   checking against `0x01111fc0`, `0x01111880`, `0x01111c00`. Its share of item 1 is unmeasured. One oag-wire lane,
-   half a day (confidence 45).
-3. **The equaliser tap** (a separate lane; nothing here stands in for it). Bands `+0x1b4..+0x1f0`, banks `+0x19c`
-   and `+0x1dc`, threshold `g+0x1708`. Shipped silent: pulse `0.23`, glow at its floor, pivot off by `-0.05`.
-4. **Mode 11's mip chain and quads**: only once morph paths draw at all. 250 quads at 720p, 501 at 1080p.
+1. **The equaliser tap** (a separate lane; nothing here stands in for it). Bands `+0x1b4..+0x1f0`, banks `+0x19c`
+   and `+0x1dc`, threshold `g+0x1708`. Shipped silent: pulse `0.23`, glow at its floor, pivot off by `-0.05`. This is now
+   the largest thing between the shipped picture and a player's.
+2. **Mode 11's mip chain and quads**: only once morph paths draw at all. 250 quads at 720p, 501 at 1080p.
+3. **Fresh particles run `14` to `25` percent over**: defect-free slice R mean `7.3` against `6.4`, q99 `107` against `81`;
+   wrapped ladder `21.8` against `17.5`. Unexplained. Ours reads an aspect of `1.7647`, exactly `30 / 17`, the shape of 480x272
+   or 1920x1088, against the ring's 16:9 (`proj x 2.1148` against `2.0993`). `boot/backdrop.rs` passes `w / h` of
+   `oag_display::display::viewport`; check whether that viewport or a PSP-shaped layout space is the source. It moves dots, not level,
+   and may be the `3` pixel sideways residual.
+4. **The half texel sits ahead of the chain** in our present pass, where the original's ladder reads the field directly, so
+   the gate sees two half-dark rows. Move it into the resolve when `handover/rendering/hd-race-final-quad-half-texel-unread.md`
+   settles whether the chain wants it for a race too.
+5. **`[graphics] bloom` does not reach the menu**: the backdrop hard-codes `Glow::Drawn`.
+6. **HD-style (non-Fury) menus end in the same present path** but `oag_game::render::SceneBackdrop` does not run this chain.
+   Not measured; check the scene backdrop's exposure against a reference.
 
 ## Next Steps
 
-1. Settle item 1, wire item 2, and re-run the frame-484 table's method: with `rpcs3_debugger.Debugger`, pause, read the state, grab
-   the frame two seconds later. A shot of the running game lags the clip counter by about 100 frames.
-2. Not to wire: a `40%` fade (20 dumped frames and both builds' float scans find none), the 720p field's 2x1 AA
-   as anything but MSAA shaded once, and RPCS3's `sampleTexture2DMS` bug.
+1. Pick up the equaliser with a clean reference in hand if there is one; it can land without.
+2. Not to wire: the index wrap, a `40%` fade (20 dumped frames and both builds' float scans find none), the 720p field's
+   2x1 AA as anything but MSAA shaded once, and RPCS3's `sampleTexture2DMS` bug.
 3. The `3` pixel sideways residual belongs to the dynamic-width thread.

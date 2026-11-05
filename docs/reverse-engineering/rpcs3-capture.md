@@ -1468,6 +1468,15 @@ changed but the emulator's moment; a second attempt after such a failure then st
 
 ## Sampling HD's antialiased targets
 
+**An emulated primitive past 65,535 vertices wraps, so a frame of one is not a reference.** RPCS3 draws `QUADS`,
+polygons, fans and line loops through a 16-bit index buffer whatever the vertex count (`generate_emulating_index_buffer`,
+`VK_INDEX_TYPE_UINT16`; the `u16*` in `write_index_array_for_non_indexed_non_native_primitive_to_buffer`). Wipeout HD's Fury
+backdrop is one `QUADS` draw of 205,000 to 220,000 vertices, so every frame of it shows records `0..16383` three or four times
+and the rest never, and two lanes read that as a level gap in ours
+([menu-backdrop.md](../ghidra/functions/ps3-hdfury-eu/menu-backdrop.md), "The Fury references carry an RPCS3 defect").
+Confidence 95. Before trusting a frame's brightness, check the ring's vertex counts (`scripts/rsx-pass-events.py`, `cnt`)
+against `0xffff`. Not emulated in ours. Omega and 2048 are not RSX and do not carry it.
+
 **A frame captured at 1280x720 is not a clean reference for a pass that samples an antialiased
 target; one at 1920x1080 is.** The Fury backdrop's particle field is a 2x1 target at 720p and a
 plain one at 1080p ([menu-backdrop.md](../ghidra/functions/ps3-hdfury-eu/menu-backdrop.md), "The

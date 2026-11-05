@@ -332,6 +332,8 @@ pub use hit_sparks::{ContactSeed, HIT_SPARK_SEVERITY};
 pub use hud::{hud_layout, splice_assist_indicator};
 pub use load::authored_length;
 #[cfg(feature = "view")]
+pub use load::hd_bloom_params;
+#[cfg(feature = "view")]
 pub use load::load_event;
 #[cfg(feature = "view")]
 pub use load::ripple::{Ripples, SpanPlaces};

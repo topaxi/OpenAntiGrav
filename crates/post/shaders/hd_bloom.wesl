@@ -5,6 +5,7 @@
 // .envsettings "HDR and Bloom" block; the inline constants are the
 // executable's verbatim.
 
+import oag_shaders::colour::srgb_encode;
 import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
 
 struct Constants {
@@ -314,8 +315,3 @@ fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(srgb_encode(resolved), 1.0);
 }
 
-fn srgb_encode(c: vec3<f32>) -> vec3<f32> {
-    let lo = c * 12.92;
-    let hi = 1.055 * pow(max(c, vec3<f32>(1e-6)), vec3<f32>(1.0 / 2.4)) - vec3<f32>(0.055);
-    return select(hi, lo, c <= vec3<f32>(0.0031308));
-}
