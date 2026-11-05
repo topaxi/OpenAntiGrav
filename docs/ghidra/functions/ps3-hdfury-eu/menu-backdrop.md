@@ -577,7 +577,10 @@ is the noise of two clocks read at different moments. Rising frames, the glow's 
 **Screen level does not follow the pulse in a sampled still**: 90 grabs at 2 Hz off RPCS3 at 720p correlate at most
 `0.25` with the pulse at any lag from `-0.4` to `2.4` s. The camera path and the cloud dominate, a grab lags
 by an unknown 100-odd frames, and every RPCS3 frame of this backdrop carries the index wrap. So the visible
-pulse is proved at the shader constant, not on glass.
+pulse is proved at the shader constant, not on glass. Ours, same clock through the whole chain, 720p, white tint, bands held
+steady (`the_cloud_brightens_with_the_music`): mean red `37.7, 46.5, 52.0, 55.7` at bands `0, 0.35, 0.7, 1`, `musicPulse`
+`0.23, 0.615, 1.0, 1.33`. A six-fold constant is a `1.5`-fold mean because the ramp colour does not scale with the pulse and the
+chain compresses. No original number stands beside that curve.
 
 **Omega:** checked, differs, no `BackgroundAnimFury` (above). **2048:** checked, differs, no `BackgroundAnim` string
 in the executable. Neither gets any of this. The pulse lives on `MenuBackdrop::Fury`, which the Fury

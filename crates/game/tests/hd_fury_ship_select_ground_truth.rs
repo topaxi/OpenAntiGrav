@@ -60,6 +60,17 @@ fn draw(
     seconds: f32,
     tint: impl Fn(u32) -> [f32; 4],
 ) -> Option<Vec<u8>> {
+    draw_to_music(assets, backdrop, seconds, tint, &oag_ui::backdrop::SILENCE)
+}
+
+/// [`draw`] with `bands` as the equaliser on every frame.
+fn draw_to_music(
+    assets: &boot::fury::FuryAssets,
+    backdrop: &std::sync::Arc<boot::backdrop::MenuBackdrop>,
+    seconds: f32,
+    tint: impl Fn(u32) -> [f32; 4],
+    bands: &[f32; oag_ui::backdrop::BANDS],
+) -> Option<Vec<u8>> {
     let (width, height) = (1280u32, 720u32);
     let instance = wgpu::Instance::default();
     let adapter = oag_gpu::test_adapter::request(&instance)?;
@@ -83,12 +94,12 @@ fn draw(
         oag_ui::backdrop::Fury::new(assets.settings.clone(), assets.first, boot::fury::SEED)?;
     let settle = oag_ui::backdrop::FRAMES_TO_SETTLE;
     for _ in 0..(seconds * oag_ui::backdrop::FRAMES_PER_SECOND) as u32 - settle {
-        model.tick(&oag_ui::backdrop::SILENCE);
+        model.tick(bands);
     }
     let aspect = width as f32 / height as f32;
     let leading_up = (0..settle).map(|at| {
         let frame = model.frame(height as f32, aspect, tint(settle - at));
-        model.tick(&oag_ui::backdrop::SILENCE);
+        model.tick(bands);
         frame
     });
     let frames: Vec<_> = leading_up.collect();
@@ -187,6 +198,31 @@ fn mean_red(pixels: &[u8]) -> f64 {
         .flat_map(|(_, row)| row.chunks(4).map(|texel| texel[0]))
         .collect();
     red.iter().map(|&v| f64::from(v)).sum::<f64>() / red.len() as f64
+}
+
+/// The music reaches the picture: the same clock at rising bands, through the
+/// whole chain. `musicPulse` is the law's `0.23` at silence and `1.33` at full.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn the_cloud_brightens_with_the_music() {
+    let Some(image) = image() else {
+        return;
+    };
+    let assets = fury(&image);
+    let backdrop = std::sync::Arc::new(boot::backdrop::MenuBackdrop::Fury(assets.clone()));
+    let mut last = 0.0;
+    for level in [0.0, 0.35, 0.7, 1.0] {
+        let mut bands = oag_ui::backdrop::SILENCE;
+        bands[10..13].fill(level);
+        let Some(pixels) = draw_to_music(&assets, &backdrop, 38.0, |_| [1.0; 4], &bands) else {
+            eprintln!("no GPU adapter: skipping");
+            return;
+        };
+        let red = mean_red(&pixels);
+        eprintln!("bands {level}: mean red {red}");
+        assert!(red > last, "{red} at bands {level}, {last} below it");
+        last = red;
+    }
 }
 
 #[test]
