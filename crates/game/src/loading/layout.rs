@@ -220,6 +220,7 @@ impl Screen {
             "title-arrow" => self.title_arrow,
             "subtitle-arrow" => self.subtitle_arrow,
             "@feature" => self.illustration,
+            "@mode-icon" => self.mode_still,
             _ => None,
         }
     }

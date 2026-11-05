@@ -98,8 +98,6 @@ pub struct ModeIcon {
 /// the id would put `FE_PROG_BAR` on screen.
 #[derive(Debug, Clone, Default)]
 pub struct Labels {
-    /// The brand line over the caption: a literal of the executable's.
-    pub brand: String,
     /// Over the feature illustration.
     pub feature_image: Option<String>,
     /// Over the feature's prose.
@@ -182,6 +180,27 @@ pub struct Art {
     pub dot: Option<[f32; 4]>,
     /// The square bullet before each label.
     pub square: Option<[f32; 4]>,
+    /// The mode icon's pictures, where the title draws stills. See [`ModeStills`].
+    pub mode_stills: Option<ModeStills>,
+}
+
+/// Where each mode's icon still sits in the sheet: `None` for a mode that draws none, or
+/// whose picture did not decode.
+#[derive(Debug)]
+pub struct ModeStills {
+    /// By mode id.
+    pub modes: Vec<(u32, Option<[f32; 4]>)>,
+    /// Every mode not in `modes`.
+    pub otherwise: Option<[f32; 4]>,
+}
+
+impl ModeStills {
+    /// The picture for `mode`, as [`oag_title::loading::ModeStills::entry`] picks it.
+    #[must_use]
+    pub fn get(&self, mode: Option<u32>) -> Option<[f32; 4]> {
+        mode.and_then(|mode| self.modes.iter().find(|(id, _)| *id == mode))
+            .map_or(self.otherwise, |(_, rect)| *rect)
+    }
 }
 
 impl Default for Assets {
@@ -321,10 +340,19 @@ impl Assets {
         // per disc - see `Screen::new`.
         // **The served front end, read first**: with no saved choice the style is the one
         // the menus are drawn in, which is the ground this archive clears to.
+        // Read through the title's own colour template, as its front end is, so the four
+        // globals are the ones the menus resolve (Omega's `WOHD_Colours` overwrites
+        // `HD_Grey`); a title with no template reads the file as it stands.
         let served = loading.palette.and_then(|_| {
-            let blob = archives.read_name(title.front_end?.root).ok()?;
+            let front_end = title.front_end?;
+            let blob = archives.read_name(front_end.root).ok()?;
             let xml = oag_ui::xml::expand(&blob).ok()?;
-            Some(oag_ui::screen::Screens::from_xml(&xml))
+            Some(oag_ui::screen::Screens::from_xml_with_fallbacks(
+                &xml,
+                &[],
+                &[],
+                front_end.boot.colour_template,
+            ))
         });
         let dark_ground = loading
             .palette
@@ -367,8 +395,27 @@ impl Assets {
         // but this one and is what a miss falls back to.
         let prose = prose.as_ref().unwrap_or(strings);
 
+        // A `.gnf` stored in HD's `.gtf` row order is reversed on the way into the sheet, the
+        // way the front end's own sheet does it (`boot::sprites`); empty on every title but
+        // Omega, so every other title's sheet is built as it was.
+        let bottom_up = title
+            .front_end
+            .map_or(&[][..], |front_end| front_end.bottom_up_gnf);
         let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut reversed: Vec<oag_hud::sprite::DecodedImage> = Vec::new();
         let mut read = |entry: &str, notes: &mut Vec<String>| match archives.read_name(entry) {
+            Ok(blob) if crate::boot::sprites::is_bottom_up(entry, bottom_up) => {
+                match crate::boot::sprites::bottom_up_rows(entry, &blob) {
+                    Some(image) => {
+                        reversed.push(image);
+                        true
+                    }
+                    None => {
+                        notes.push(format!("{entry}: .gnf rows would not reverse"));
+                        false
+                    }
+                }
+            }
             Ok(blob) => {
                 blobs.push((entry.to_string(), blob));
                 true
@@ -417,7 +464,17 @@ impl Assets {
         for (_, entry) in loading.chrome {
             read(entry, &mut notes);
         }
+        let mode_stills = chosen.map(|style| style.mode_stills);
+        for entry in mode_stills.iter().flat_map(|stills| stills.entries()) {
+            read(entry, &mut notes);
+        }
         let mut mode_icons = Vec::new();
+        if chosen.is_some_and(|style| style.mode_icons.is_empty()) {
+            notes.push(
+                "loading screen: this style names no mode icon clip; the mode icon panel stays empty"
+                    .to_string(),
+            );
+        }
         for (mode, entry) in chosen.map(|style| style.mode_icons).unwrap_or_default() {
             match archives.read_name(entry) {
                 Ok(blob) => mode_icons.push(ModeIcon {
@@ -429,9 +486,12 @@ impl Assets {
             }
         }
 
-        let art = (!blobs.is_empty()).then(|| {
+        // The features whose picture was read but did not decode into the sheet: they leave
+        // `features` too, so a feature's index stays its illustration's.
+        let mut undecoded: Vec<usize> = Vec::new();
+        let art = (!blobs.is_empty() || !reversed.is_empty()).then(|| {
             let mut sheet_notes = Vec::new();
-            let sheet = oag_hud::sprite::Sheet::build(&blobs, &mut sheet_notes);
+            let sheet = oag_hud::sprite::Sheet::build_with(&blobs, reversed, &mut sheet_notes);
             notes.append(&mut sheet_notes);
             // A sheet that decoded nothing is `Sheet::default` - one
             // transparent texel - and every lookup below misses, which draws
@@ -454,8 +514,23 @@ impl Assets {
                     .and_then(|(_, entry)| at(entry))
             };
             use oag_title::loading::Chrome;
+            let placed: Vec<Option<[f32; 4]>> = illustrated.iter().map(|entry| at(entry)).collect();
+            undecoded = placed
+                .iter()
+                .enumerate()
+                .filter_map(|(at, rect)| rect.is_none().then_some(at))
+                .collect();
+            let still = |entry: Option<&str>| entry.and_then(at);
             Art {
-                illustrations: illustrated.iter().filter_map(|entry| at(entry)).collect(),
+                mode_stills: mode_stills.map(|stills| ModeStills {
+                    modes: stills
+                        .modes
+                        .iter()
+                        .map(|(mode, entry)| (*mode, still(*entry)))
+                        .collect(),
+                    otherwise: still(stills.otherwise),
+                }),
+                illustrations: placed.into_iter().flatten().collect(),
                 title_arrow: mark(Chrome::TitleArrow),
                 subtitle_arrow: mark(Chrome::SubtitleArrow),
                 rule: mark(Chrome::Rule),
@@ -465,6 +540,17 @@ impl Assets {
                 sheet,
             }
         });
+
+        if art.is_none() {
+            undecoded = (0..features.len()).collect();
+        }
+        for at in undecoded.iter().rev() {
+            features.remove(*at);
+            notes.push(format!(
+                "{}: its picture did not decode; the feature is not offered",
+                illustrated[*at]
+            ));
+        }
 
         // **The source's own tint**, read out of the front end it actually
         // ships rather than spelled here: `HD_BG` and its three neighbours are
@@ -512,7 +598,6 @@ impl Assets {
                 found
             };
             Labels {
-                brand: ids.brand.to_string(),
                 feature_image: text(ids.feature_image, &mut notes),
                 feature_description: text(ids.feature_description, &mut notes),
                 progression_bar: text(ids.progression_bar, &mut notes),

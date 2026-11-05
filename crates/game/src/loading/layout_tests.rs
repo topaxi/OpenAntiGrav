@@ -37,6 +37,7 @@ fn art() -> Art {
         corner: Some([0.0, 0.0, 8.0, 8.0]),
         dot: Some([0.0, 0.0, 8.0, 8.0]),
         square: Some([0.0, 0.0, 8.0, 8.0]),
+        mode_stills: None,
     }
 }
 
@@ -540,4 +541,44 @@ fn a_picture_whose_ground_is_the_screens_own_is_left_as_placed() {
             "{shape}: as the layout places it"
         );
     }
+}
+
+const OMEGA_FILE: &str =
+    include_str!("../../../../assets/fallback/Data/XML/LoadingScreen_Omega.toml");
+
+/// The mode icon's still is drawn at the panel from the picture its mode names, in the accent,
+/// and a mode that names none (or a title with no stills) draws nothing there.
+#[test]
+fn a_mode_still_is_drawn_in_the_panel_for_the_mode_that_names_it() {
+    let mut omega = assets(Some(OMEGA_FILE));
+    omega.art.as_mut().unwrap().mode_stills = Some(super::assets::ModeStills {
+        modes: vec![(5, Some([0.0, 0.0, 16.0, 16.0])), (0xd, None)],
+        otherwise: Some([16.0, 0.0, 16.0, 16.0]),
+    });
+    let drawn = |omega: &Assets, mode: Option<u32>| {
+        let screen = Screen::for_mode(omega, AUTHORED_LINE_HEIGHT, 0, None, mode);
+        race(&screen)
+            .into_iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { rect, uv, color } if rect[2] == 230.0 && rect[3] == 234.0 => {
+                    Some((rect, uv, color))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let named = drawn(&omega, Some(5));
+    assert_eq!(named.len(), 1, "{named:?}");
+    assert_eq!((named[0].0[0], named[0].0[1]), (1518.0, 708.0));
+    let other = drawn(&omega, Some(3));
+    assert_eq!(other.len(), 1);
+    assert_ne!(named[0].1, other[0].1, "each takes its own picture");
+    assert!(
+        drawn(&omega, Some(0xd)).is_empty(),
+        "a mode with no picture draws none"
+    );
+    // HD's file has no still and names no `@mode-icon`: the sheet of a title without stills
+    // draws nothing in the panel
+    omega.art.as_mut().unwrap().mode_stills = None;
+    assert!(drawn(&omega, Some(5)).is_empty());
 }
