@@ -72,7 +72,10 @@ fn titles(image: &str) -> Option<Vec<(catalogue::Track, String)>> {
     let strings = english.expect("a language table");
     let names = oag_ui::language::CircuitNames::choose(
         &[("language".to_string(), strings.clone())],
-        &tracks.iter().map(|t| t.id.clone()).collect::<Vec<_>>(),
+        &tracks
+            .iter()
+            .map(|t| (t.id.clone(), t.name_key().to_string()))
+            .collect::<Vec<_>>(),
     )
     .expect("every circuit is named");
     Some(

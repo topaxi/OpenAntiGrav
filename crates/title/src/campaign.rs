@@ -167,6 +167,12 @@ pub struct Campaign {
     /// measured off one shadPS4 frame and chosen, its own camera constants
     /// unread (`docs/ui/campaign-screens.md`).
     pub grid_card_pose: Option<CardPose>,
+    /// The factor `Campaign Selection`'s flyer widgets' placement (their `x y z`
+    /// after `orthoScale`) is multiplied by, where the cards stand nearer than
+    /// those numbers say. `None` is `1.0`. Omega: fitted off one shadPS4 frame
+    /// (the selected card 837 by 717 px where the numbers give 756 by 648), chosen,
+    /// not read.
+    pub selection_card_scale: Option<f32>,
     /// Whether the front end ends its frame with the race's bloom over a glow mask its widgets
     /// stamp, and how well that is known. Pulse PSP: its Grid and Cell Selection frames end with
     /// `Bloom_Draw` (a GE dump), reading the stencil references the `Selector`, the card title
