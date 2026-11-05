@@ -188,6 +188,65 @@ fn the_music_pulse_reads_silence_as_bands_at_zero() {
     );
 }
 
+#[test]
+fn the_glow_gain_is_one_byte_between_its_floor_and_its_ceiling() {
+    assert_eq!((glow_gain(0.0) * 255.0).round() as u32, 5, "the floor");
+    assert_eq!((glow_gain(1.0) * 255.0).round() as u32, 0x26, "the ceiling");
+    let Frame { glow_gain, .. } =
+        Fury::new(settings(), 0, 1)
+            .expect("authored")
+            .frame(1080.0, 16.0 / 9.0, [1.0; 4]);
+    assert_eq!((glow_gain * 255.0).round() as u32, 5, "no bands: the floor");
+}
+
+#[test]
+fn the_band_falls_a_hundredth_a_frame_and_wraps_every_two_hundred() {
+    let mut fury = Fury::new(settings(), 0, 1).expect("authored");
+    let top = |fury: &Fury| fury.frame(1080.0, 16.0 / 9.0, [1.0; 4]).band_top;
+    assert_eq!(top(&fury), 1.0);
+    fury.tick();
+    assert!((top(&fury) - 0.99).abs() < 1e-6);
+    for _ in 1..199 {
+        fury.tick();
+    }
+    assert!((top(&fury) - -0.99).abs() < 1e-5);
+    fury.tick();
+    assert_eq!(
+        top(&fury),
+        1.0,
+        "the wrap, a clock that survives a new clip"
+    );
+}
+
+#[test]
+fn the_wave_pivot_is_the_clouds_centre_on_screen_moved_by_the_bands() {
+    let fury = Fury::new(settings(), 0, 1).expect("authored");
+    let mut frame = fury.frame(1080.0, 16.0 / 9.0, [1.0; 4]);
+    // A view that leaves the point five in front of the eye, and a plain
+    // perspective: `(1, 0.5, -5)` lands at `(0.2, 0.1)`.
+    frame.world_view = std::array::from_fn(|i| std::array::from_fn(|j| f32::from(i == j)));
+    frame.proj = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, -1.0, -1.0],
+        [0.0, 0.0, -0.01, 0.0],
+    ];
+    frame.pivot_offset = [0.0, 0.0];
+    let [x, y] = frame.wave_pivot([1.0, 0.5, -5.0]);
+    assert!((x - 0.2).abs() < 1e-6 && (y - 0.1).abs() < 1e-6, "{x} {y}");
+    frame.pivot_offset = [-0.05, -0.05];
+    let [x, y] = frame.wave_pivot([1.0, 0.5, -5.0]);
+    assert!(
+        (x - 0.15).abs() < 1e-6 && (y - 0.05).abs() < 1e-6,
+        "{x} {y}"
+    );
+    assert_eq!(
+        frame.wave_pivot([50.0, -50.0, -5.0]),
+        [1.0, -1.0],
+        "kept on"
+    );
+}
+
 /// `RadioHead2_vp`'s ramp off a frame's constants, as `backdrop.wgsl`
 /// computes it: `sat(crf2.x * (1 - frac t) * sat(0.4 d) + crf2.y) ^ crf2.z`.
 fn ramp(frame: &Frame, d: f32, one_minus_frac: f32) -> f32 {
