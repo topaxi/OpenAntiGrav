@@ -4415,7 +4415,8 @@ stand about 45 px (HD) and 190 px (Fury) left of the frame's; (3) **2048 does no
 `Grid Selection 2048` redirects to `Cell Selection 2048`, whose events are `Campaign2048_Definition.xml`'s `FE3DCanvas`/`CanvasLabel` map, unread. Confirming the 2048 entry
 leaves the chooser and shows `OAG_CAMPAIGN_NOT_PLAYABLE` above the footer (ours; English and two machine translations, French lags) instead of drawing HD's
 cell screen with nothing in it. HD and Fury each open their own grid (`grid0`, `grid8`), Back returns to the entry (`campaign_cursor_ground_truth::omegas_chooser_opens_hd_and_fury_and_keeps_2048_on_the_chooser`).
-Measured: the pair's grey distance, below. Lineage: **checked, applies** to HD (the same reader serves its `DATA06` chooser; `hd_flyer_ground_truth`, the HD pair
+The turned cards' edge heights in the frame fit a yaw of about 0.7-0.85 rad (the right edge nearer by 1.4x), where the authored `RotY` is `1.3`: `RotY` is not radians here, as on `Grid Selection` (confidence 55, two cards read off one frame); ours turns by the authored 1.3.
+Measured: `omega/menu-campaign-select` (the original frame kept as `gap-campaign-select`, ours at the same size), mean grey distance 52.7 over the whole frame, 78.4 over the chooser's bracket (x 160-1755, y 170-950), 61.6 over its left 880 px and 99.1 over the right 715 (where HD and Fury stand); both images read. Lineage: **checked, applies** to HD (the same reader serves its `DATA06` chooser; `hd_flyer_ground_truth`, the HD pair
 and the old tests hold); 2048 Vita has no `CellMode_Definition.xml` (**checked, differs**).
 
 ## Wipeout HD PSN: the campaign with no chooser, 2026-10-07
