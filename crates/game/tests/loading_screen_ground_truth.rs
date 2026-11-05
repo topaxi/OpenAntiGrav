@@ -809,7 +809,9 @@ fn omega_marks_are_drawn_the_way_up_hd_draws_them() {
             rect_pixels(assets, rect)
                 .chunks_exact(4 * rect[2] as usize)
                 .map(|row| {
-                    row.chunks_exact(4)
+                    row.as_chunks::<4>()
+                        .0
+                        .iter()
                         .map(|px| if px[3] > 127 { '#' } else { '.' })
                         .collect::<String>()
                 })
