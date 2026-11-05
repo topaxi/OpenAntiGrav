@@ -524,3 +524,182 @@ fn with_a_card_drawn_only_the_card_confirms() {
             .is_empty()
     );
 }
+
+fn pager(count: usize) -> GridSelection {
+    GridSelection::new(vec![GridSummary::empty(); count]).with_per_page(1)
+}
+
+fn touch_down() -> Pointer {
+    Pointer {
+        pressed: true,
+        press_at: Some((960.0, 540.0)),
+        ..Pointer::default()
+    }
+}
+
+fn dragged(x: f32, y: f32) -> Pointer {
+    Pointer {
+        drag: (x, y),
+        ..Pointer::default()
+    }
+}
+
+/// A lift as `oag_game::pointer::Window` emits it after a drag: nowhere, no click.
+fn lifted(x: f32, y: f32) -> Pointer {
+    Pointer {
+        drag: (x, y),
+        released: true,
+        ..Pointer::default()
+    }
+}
+
+/// One finger gesture: touch down, `ticks` equal drags totalling `(x, y)`, lift.
+/// Returns every event the screen raised.
+fn gesture(
+    model: &mut GridSelection,
+    targets: &[Target],
+    (x, y): (f32, f32),
+    ticks: u8,
+) -> Vec<Event> {
+    let n = f32::from(ticks);
+    let mut out = model.hd_pointer(&touch_down(), targets);
+    for _ in 0..ticks {
+        out.extend(model.hd_pointer(&dragged(x / n, y / n), targets));
+    }
+    out.extend(model.hd_pointer(&lifted(0.0, 0.0), targets));
+    out
+}
+
+fn card_targets() -> Vec<Target> {
+    hd_grid_targets(
+        &grid_layout_with_no_card_art(),
+        &|_| None,
+        Some([934.0, 304.0, 512.0, 512.0]),
+    )
+}
+
+#[test]
+fn a_swipe_up_steps_to_the_next_grid() {
+    let targets = card_targets();
+    let mut model = pager(8);
+    model.step(3);
+    let events = gesture(&mut model, &targets, (0.0, -2.0 * SWIPE_STEP_TRAVEL), 6);
+    assert_eq!(events, vec![Event::Moved]);
+    assert_eq!(model.index(), 4);
+}
+
+#[test]
+fn a_swipe_down_steps_to_the_previous_grid() {
+    let targets = card_targets();
+    let mut model = pager(8);
+    model.step(3);
+    let events = gesture(&mut model, &targets, (0.0, 2.0 * SWIPE_STEP_TRAVEL), 6);
+    assert_eq!(events, vec![Event::Moved]);
+    assert_eq!(model.index(), 2);
+}
+
+#[test]
+fn one_long_swipe_steps_once_and_only_once() {
+    let targets = card_targets();
+    let mut model = pager(8);
+    model.step(3);
+    gesture(&mut model, &targets, (0.0, -10.0 * SWIPE_STEP_TRAVEL), 40);
+    assert_eq!(model.index(), 4);
+}
+
+#[test]
+fn a_swipe_on_the_lift_tick_alone_still_steps() {
+    let targets = card_targets();
+    let mut model = pager(8);
+    model.step(3);
+    model.hd_pointer(&touch_down(), &targets);
+    let events = model.hd_pointer(&lifted(0.0, -2.0 * SWIPE_STEP_TRAVEL), &targets);
+    assert_eq!(events, vec![Event::Moved]);
+    assert_eq!(model.index(), 4);
+}
+
+#[test]
+fn a_swipe_short_of_the_travel_steps_nothing() {
+    let targets = card_targets();
+    let mut model = pager(8);
+    model.step(3);
+    let events = gesture(&mut model, &targets, (0.0, -0.9 * SWIPE_STEP_TRAVEL), 6);
+    assert!(events.is_empty());
+    assert_eq!(model.index(), 3);
+}
+
+#[test]
+fn the_next_gesture_steps_again() {
+    let targets = card_targets();
+    let mut model = pager(8);
+    model.step(3);
+    gesture(&mut model, &targets, (0.0, -2.0 * SWIPE_STEP_TRAVEL), 4);
+    gesture(&mut model, &targets, (0.0, -2.0 * SWIPE_STEP_TRAVEL), 4);
+    gesture(&mut model, &targets, (0.0, 2.0 * SWIPE_STEP_TRAVEL), 4);
+    assert_eq!(model.index(), 4);
+}
+
+/// The travel of a swipe that fell short is forgotten at the lift, not added to the next one.
+#[test]
+fn travel_does_not_carry_over_from_one_gesture_to_the_next() {
+    let targets = card_targets();
+    let mut model = pager(8);
+    model.step(3);
+    for _ in 0..3 {
+        gesture(&mut model, &targets, (0.0, -0.6 * SWIPE_STEP_TRAVEL), 3);
+    }
+    assert_eq!(model.index(), 3);
+}
+
+#[test]
+fn a_swipe_that_lifts_over_the_card_does_not_confirm_it() {
+    let targets = card_targets();
+    let mut model = pager(8);
+    let mut events = model.hd_pointer(&touch_down(), &targets);
+    events.extend(model.hd_pointer(&dragged(0.0, -2.0 * SWIPE_STEP_TRAVEL), &targets));
+    events.extend(model.hd_pointer(&lifted(0.0, 0.0), &targets));
+    assert!(!events.contains(&Event::Confirmed), "{events:?}");
+}
+
+#[test]
+fn a_tap_on_the_card_still_confirms() {
+    let mut model = pager(8);
+    assert_eq!(
+        model.hd_pointer(&click_at(1100.0, 500.0), &card_targets()),
+        vec![Event::Confirmed]
+    );
+}
+
+/// More travel down the page than across it, but wider than it is tall: a pan, not a swipe.
+#[test]
+fn a_horizontal_drag_steps_nothing() {
+    let targets = card_targets();
+    let mut model = pager(8);
+    model.step(3);
+    let events = gesture(
+        &mut model,
+        &targets,
+        (-4.0 * SWIPE_STEP_TRAVEL, -1.5 * SWIPE_STEP_TRAVEL),
+        8,
+    );
+    assert!(events.is_empty());
+    assert_eq!(model.index(), 3);
+}
+
+#[test]
+fn a_swipe_does_nothing_on_a_page_with_one_grid() {
+    let targets = card_targets();
+    let mut model = pager(1);
+    let events = gesture(&mut model, &targets, (0.0, -2.0 * SWIPE_STEP_TRAVEL), 4);
+    assert!(events.is_empty());
+    assert_eq!(model.index(), 0);
+}
+
+#[test]
+fn a_swipe_wraps_past_the_last_grid_as_the_wheel_does() {
+    let targets = card_targets();
+    let mut model = pager(3);
+    model.step(2);
+    gesture(&mut model, &targets, (0.0, -2.0 * SWIPE_STEP_TRAVEL), 4);
+    assert_eq!(model.index(), 0);
+}
