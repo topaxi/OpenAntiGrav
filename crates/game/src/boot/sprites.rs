@@ -81,14 +81,7 @@ pub(super) fn block_art(
 /// rule and why it stands in for `FrontEnd_IsFuryStyle`. Read by the menu
 /// backdrop's loader too, since it is the same byte both widgets check.
 pub(super) fn fury_style(screens: &Screens) -> bool {
-    screens
-        .globals
-        .get("HD_BG")
-        .and_then(|value| oag_ui::screen::parse_argb(value))
-        .is_some_and(|argb| {
-            let [r, g, b] = [argb >> 16 & 0xff, argb >> 8 & 0xff, argb & 0xff];
-            r + g + b < 3 * 128
-        })
+    screens.global_is_dark("HD_BG")
 }
 
 /// Decodes every image the screens name.

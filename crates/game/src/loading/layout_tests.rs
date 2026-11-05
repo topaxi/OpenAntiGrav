@@ -454,3 +454,90 @@ fn only_a_mapped_mode_has_a_clip() {
     assert!(super::icon::clip(&assets, Some(5)).is_none());
     assert!(super::icon::clip(&assets, None).is_none());
 }
+
+/// The HD screen with its feature picture a 1024x512 sheet of one opaque `ground` colour, the
+/// size and shape of the disc's own illustrations.
+fn hd_screen_with_picture(ground: [u8; 4]) -> Screen {
+    let mut assets = hd_screen_assets();
+    let image = oag_hud::sprite::DecodedImage {
+        src: "feature".to_string(),
+        width: 1024,
+        height: 512,
+        rgba: ground.repeat(1024 * 512),
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+    };
+    let sheet = oag_hud::sprite::Sheet::build_with(&[], vec![image], &mut Vec::new());
+    let placed = sheet.get("feature").expect("the picture is in the sheet");
+    let art = assets.art.as_mut().expect("the fixture has art");
+    art.illustrations = vec![[
+        placed.x as f32,
+        placed.y as f32,
+        placed.width as f32,
+        placed.height as f32,
+    ]];
+    art.sheet = sheet;
+    Screen::new(&assets, AUTHORED_LINE_HEIGHT, 0, None)
+}
+
+/// The feature picture's draw: the one big sprite, `[x0, y0, x1, y1]` in the grid.
+fn picture(screen: &Screen) -> [f32; 4] {
+    let found: Vec<[f32; 4]> = race(screen)
+        .into_iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { rect, .. } if rect[2] >= 200.0 && rect[3] >= 200.0 => {
+                Some([rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3]])
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(found.len(), 1, "one picture: {found:?}");
+    found[0]
+}
+
+/// The screen shapes a player has: a 16:10 Deck, 16:9, 21:9 and a phone's 20:9.
+const SHAPES: [(&str, f32); 4] = [
+    ("1280x800", 1280.0 / 800.0),
+    ("1920x1080", 1920.0 / 1080.0),
+    ("2560x1080", 2560.0 / 1080.0),
+    ("20:9", 20.0 / 9.0),
+];
+
+/// A picture whose ground shows (HD's white) is cut to its panel, 160 to 950 by 155 to 655 in
+/// the grid, on every screen shape: drawn whole it covers the description beside it. Without
+/// the cut the picture reaches x 1076 and y 670.
+#[test]
+fn a_picture_with_a_showing_ground_lies_inside_its_panel_on_every_screen_shape() {
+    let white = [255, 255, 255, 255];
+    for (shape, aspect) in SHAPES {
+        let mut screen = hd_screen_with_picture(white);
+        screen.set_surface_aspect(aspect);
+        let [x0, y0, x1, y1] = picture(&screen);
+        assert!(
+            x0 >= 160.0 && y0 >= 155.0 && x1 <= 950.0 && y1 <= 655.0,
+            "{shape}: the picture is at {x0},{y0} to {x1},{y1}"
+        );
+        assert!(
+            x1 - x0 > 500.0 && y1 - y0 > 300.0,
+            "{shape}: most of it stays, not a sliver: {x0},{y0} to {x1},{y1}"
+        );
+    }
+}
+
+/// A picture whose ground is the screen's own shows nothing outside its panel, so it is drawn
+/// as the layout places it: the cut would change nothing a player sees and would move the
+/// sampling.
+#[test]
+fn a_picture_whose_ground_is_the_screens_own_is_left_as_placed() {
+    let ground = [5, 8, 13, 255];
+    for (shape, aspect) in SHAPES {
+        let mut screen = hd_screen_with_picture(ground);
+        screen.set_surface_aspect(aspect);
+        assert_eq!(
+            picture(&screen),
+            [180.0, 190.0, 1076.0, 670.0],
+            "{shape}: as the layout places it"
+        );
+    }
+}

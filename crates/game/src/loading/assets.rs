@@ -41,6 +41,9 @@ pub struct Assets {
     /// The four colours this source's own front end tints the screen with, when
     /// the title names them. See [`oag_title::loading::Palette`].
     pub palette: Option<Palette>,
+    /// The front-end style whose illustrations, mode icons and prose this holds, by the name
+    /// the disc and the settings file give it. `None` on a title with no styles.
+    pub style: Option<&'static str>,
     /// Every illustrated feature this title teaches, in its own order.
     ///
     /// Empty on a title with none. The screen draws one of them; which is
@@ -201,6 +204,7 @@ impl Default for Assets {
             wave: true,
             art: None,
             palette: None,
+            style: None,
             features: Vec::new(),
             deck: None,
             progression: None,
@@ -225,8 +229,8 @@ impl Assets {
     ///
     /// `style` names which front-end styling to take the illustrations from -
     /// `HD` or `FURY` on Wipeout HD, which ships every one of them twice. An
-    /// unknown or absent name takes the title's first, which is the base game's;
-    /// see [`oag_title::loading::FeatureStyle`].
+    /// unknown name takes the title's first, and an absent one the style of the front end the
+    /// source serves; see [`oag_title::loading::FeatureStyle`].
     ///
     /// Nothing here is worth refusing to boot over: without the strip the wave
     /// has nothing to sample, without the tips there is no tip line, without a
@@ -315,7 +319,18 @@ impl Assets {
         // `Draw::Sprite` indexes it. All five illustrations rather than one,
         // because the original draws a feature per screen and this is read once
         // per disc - see `Screen::new`.
-        let chosen = pick_style(loading.features, style, &mut notes);
+        // **The served front end, read first**: with no saved choice the style is the one
+        // the menus are drawn in, which is the ground this archive clears to.
+        let served = loading.palette.and_then(|_| {
+            let blob = archives.read_name(title.front_end?.root).ok()?;
+            let xml = oag_ui::xml::expand(&blob).ok()?;
+            Some(oag_ui::screen::Screens::from_xml(&xml))
+        });
+        let dark_ground = loading
+            .palette
+            .zip(served.as_ref())
+            .is_some_and(|(names, served)| served.global_is_dark(names.background));
+        let chosen = pick_style(loading.features, style, dark_ground, &mut notes);
         // **The copy that carries every feature's prose, which is not the one
         // the front end is served.** Two of Wipeout HD's five descriptions -
         // `FE_ABSORB_INST` and `FE_FLIP_INST`, the two Fury mechanics - are in
@@ -459,9 +474,7 @@ impl Assets {
         // four names were read out of.
         let palette = loading.palette.and_then(|names| {
             let root = title.front_end?.root;
-            let blob = archives.read_name(root).ok()?;
-            let xml = oag_ui::xml::expand(&blob).ok()?;
-            let globals = oag_ui::screen::Screens::from_xml(&xml).globals;
+            let globals = &served.as_ref()?.globals;
             let colour = |name: &str| {
                 let raw = globals.get(name)?;
                 let hex = raw.trim().trim_start_matches("0x").trim_start_matches("0X");
@@ -525,6 +538,7 @@ impl Assets {
             wave: loading.wave.is_some(),
             art,
             palette,
+            style: chosen.map(|style| style.name),
             features,
             deck: loading.deck,
             progression: loading.progression,
@@ -545,11 +559,15 @@ impl Assets {
 /// ships every illustration twice. Which *feature* is up is drawn per screen by
 /// the original and per screen here too; see [`super::Screen::new`].
 ///
-/// An unknown style name falls back to the title's first and says so, the same
-/// way a saved language this source does not carry falls through.
-fn pick_style<'a>(
+/// No saved name takes the style matching the served front end's ground
+/// (`dark_ground`), so the loading screen is in the style the menus are; a title
+/// with none matching takes its first. An unknown style name falls back to the
+/// title's first and says so, the same way a saved language this source does not
+/// carry falls through.
+pub(super) fn pick_style<'a>(
     styles: &'a [oag_title::loading::FeatureStyle],
     style: Option<&str>,
+    dark_ground: bool,
     notes: &mut Vec<String>,
 ) -> Option<&'a oag_title::loading::FeatureStyle> {
     let chosen = match style {
@@ -564,7 +582,10 @@ fn pick_style<'a>(
                 ));
                 Some(first)
             }),
-        None => styles.first(),
+        None => styles
+            .iter()
+            .find(|style| style.dark_ground == dark_ground)
+            .or_else(|| styles.first()),
     }?;
     notes.push(format!(
         "loading screen: {} style, {} feature(s)",

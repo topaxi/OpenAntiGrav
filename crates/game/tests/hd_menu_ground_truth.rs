@@ -234,7 +234,7 @@ fn the_strips_colour_is_the_widgets_own_and_not_textcolor() {
 ///
 /// The frame tests need it: what is on screen behind a menu is the parsed
 /// screens *and* the sprite sheet built from them, and only a boot has both.
-fn shell(image: &Path) -> oag_game::boot::Shell {
+pub(crate) fn shell(image: &Path) -> oag_game::boot::Shell {
     let options = oag_game::boot::Options {
         language: None,
         source: image.display().to_string(),

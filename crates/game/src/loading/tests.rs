@@ -708,3 +708,27 @@ fn a_title_with_no_wave_draws_no_quads() {
     let mut pulse = screen_with(Vec::new());
     assert!(!pulse.quads().is_empty());
 }
+
+/// With no saved style the deck is the one the served front end is drawn in, and a
+/// saved name still wins. Taking the title's first entry (the old rule) gives HD's white
+/// art on a front end the menus draw in Fury's black and red.
+#[test]
+fn an_unpicked_style_follows_the_served_ground() {
+    use oag_hd::loading::{FEATURES, STYLE_FURY, STYLE_HD};
+    let pick = |style: Option<&str>, dark: bool| {
+        super::assets::pick_style(FEATURES, style, dark, &mut Vec::new()).map(|chosen| chosen.name)
+    };
+    assert_eq!(pick(None, true), Some(STYLE_FURY), "a black page is Fury");
+    assert_eq!(pick(None, false), Some(STYLE_HD), "a white page is HD");
+    assert_eq!(pick(Some(STYLE_HD), true), Some(STYLE_HD), "a pick wins");
+    assert_eq!(
+        pick(Some("fury"), false),
+        Some(STYLE_FURY),
+        "by name, any case"
+    );
+    assert_eq!(
+        pick(Some("nonsense"), true),
+        Some(STYLE_HD),
+        "unknown: the first"
+    );
+}
