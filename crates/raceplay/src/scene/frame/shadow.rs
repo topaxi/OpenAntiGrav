@@ -562,6 +562,7 @@ impl super::super::Scene {
         view_projection: Mat4,
         prev_vp: Mat4,
         prev: &Snapshot,
+        frustum: Option<&Frustum>,
     ) {
         let drawn = usize::from(race.ship_count());
         for slot in 0..drawn {
@@ -570,9 +571,13 @@ impl super::super::Scene {
             }
             if let Some(drawable) = self.ships.get(slot) {
                 // The hull's environment light: the circuit's baked probes blended at the
-                // craft, one array layer per grid slot, where the circuit ships any.
+                // craft, one array layer per grid slot, where the circuit ships any. Blended
+                // only for a hull this view draws ([`Self::hull_seen`]): each view of a split
+                // writes what it draws, ahead of its own submission.
                 let env_layer = self.env_probes.as_ref().map(|probes| {
-                    probes.write(queue, slot, race.ship_probe_position(slot));
+                    if self.hull_seen(race, slot, frustum) {
+                        probes.write(queue, slot, race.ship_probe_position(slot));
+                    }
                     slot
                 });
                 drawable.write_hull(

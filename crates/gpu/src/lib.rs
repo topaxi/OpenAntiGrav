@@ -18,12 +18,14 @@
 //!   screen replays before each view's submission.
 //! - [`split_finish`] closes a frame's encoder part-way and finishes the closed part on
 //!   another thread.
+//! - [`reaper`] reclaims finished submissions on a thread of its own.
 //! - [`test_adapter`] is which adapter a GPU test runs on (native only).
 
 pub mod deferred_upload;
 pub mod formats;
 pub mod init_buffer;
 pub mod perfprobe;
+pub mod reaper;
 pub mod split_finish;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod test_adapter;

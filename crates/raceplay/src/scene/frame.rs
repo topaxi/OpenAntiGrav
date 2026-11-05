@@ -649,7 +649,14 @@ impl Scene {
         // time trial fields one craft.
         oag_gpu::perfprobe::mark("sky+track-write");
         let drawn = usize::from(race.ship_count());
-        self.write_hull_uniforms(queue, race, view_projection, prev_vp, &prev);
+        self.write_hull_uniforms(
+            queue,
+            race,
+            view_projection,
+            prev_vp,
+            &prev,
+            frustum.as_ref(),
+        );
         let lod_eye = race.lod_eye(aspect, fov);
         self.select_lod(block, race, lod_eye);
         // The flaps move in *model* space, before the ship's own matrix, so
