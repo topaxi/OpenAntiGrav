@@ -504,6 +504,9 @@ impl Session {
                     // other screen in the chain waits for a button and
                     // reads a click as one. See `session::pointer`.
                     let grid = pointer::in_grid(pointer, stage.frontend.space(), rect, 1.0);
+                    stage
+                        .frontend
+                        .set_pad_driving(!self.pointer.pointer_spoke_last());
                     if !stage.frontend.pointer(&grid) {
                         pointer::press_for_click(&mut self.controls, &grid);
                     }
