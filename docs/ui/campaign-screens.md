@@ -2817,7 +2817,7 @@ on persist per campaign in `records.toml`, so the rule holds after a relaunch to
   with a populated profile.
 - Tests: `crates/game/tests/campaign_cursor_ground_truth.rs` (real `--drive` sessions, two launches on one profile),
   `records::tests::the_campaign_cursor_is_kept_per_campaign_and_round_trips`, `campaign_stage::tests::the_kept_grid_is_found_by_name_and_a_missing_one_is_the_default`.
-  `--drive` reports a campaign screen as `screen=campaign`, `screen.id=selection|grid|cell`, `focus=<grid or cell name>`,
+  `--drive` reports a campaign screen as `screen=campaign`, `screen.id=selection|grid|cell`, `focus=<grid or cell name>` (on `selection`: the `campaignList` entry id, `FE_RC_FURY`, `FE_RC_HD`, `FE_RC`, and its index in the list; before 2026-11-05 `Fury`/`Hd` and 1/0),
   Pure's chain as `screen=pure-chain`, `screen.id=<step>`, `focus=<row>`.
 - Omega: **ported**, walked through `--drive` on `data/extracted/ps4` (slot `(3, 2)` filed under `wipeout: omega
   collection`, a relaunch reopens `Grid Selection`); HD: walked too (`grid9` kept, a relaunch lands on it; the grid kept
@@ -4396,7 +4396,7 @@ Two smaller mouse dead ends on the same screens, fixed together:
 
 The authored widgets stand for one state: Omega's `HD` card authors `RotY 0` and a pivot of `0`. **Chosen, not measured**: a card that is not
 selected takes the turn and the pivot of the end card on its side (so `HD` beside a selected 2048 turns as Fury does, and stands where Fury's pivot puts it,
-centre about 22 world units right of axis against the frame's +22), the selected one faces the camera on its own pivot, and the swing moves the pivot with the
+centre about 22 world units right of the axis; the frame's is further right, below), the selected one faces the camera on its own pivot, and the swing moves the pivot with the
 yaw at the same `|delta| * 5` rate. Both campaigns' cards on HD are unchanged by this rule (an end card's own turn). The pair frame is the only Omega frame of
 this screen (2048 selected): the other two states are not captured.
 
@@ -4404,7 +4404,7 @@ What draws, and what is chosen or missing (`omega/menu-campaign-select` pair, be
 the pickers' `MiniText` headings (a square bullet and small text; HD's `GOLD MEDALS` label draws the same way now), the rank block when 2048 is selected
 (`RANK`, the shield, the number `0` and an empty experience bar: the rank is the player's, authored `99` is a placeholder, and a fresh profile has none; **chosen**),
 only the selected campaign's counter, the three cards, and the footer. The three `Caption*` widgets author Chinese strings (`反重力赛车2048`) and the frame draws none, so a
-literal the face cannot spell is not drawn (**chosen**, read off that frame). The cards stand where the widgets' numbers put them scaled by `0.903`
+literal the face cannot spell is not drawn (**chosen**, read off that frame; a Chinese-language profile, whose face has the glyphs, would draw them). The cards stand where the widgets' numbers put them scaled by `0.903`
 (`oag_title::Campaign::selection_card_scale`, fitted so the selected 2048 card is 837 by 717 px in the frame: **chosen, not measured**; the frame's 2048 card
 centre is 26 px right of where this puts it).
 **Open, named:** (1) the `2048_campaign` card's art draws wrong: its navy banner and the `2048` wordmark show as striped hexagons and bare text boxes, the ring

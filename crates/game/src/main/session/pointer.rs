@@ -198,16 +198,15 @@ pub(super) fn campaign_pointer(
     // functions, not Pulse's `oag_ui_screens::campaign::pointer`.
     if campaign.is_hd() {
         return match &campaign.screen {
-            // `CampaignSelection::pointer` computes its own two click
-            // targets internally (from the screen's own measured `Bracket`
-            // rect - see `oag_ui_screens::campaign::selection`'s own module doc), so
-            // no external target list is needed - only the same "re-borrow
-            // mutably once matched" step `Grid`/`Cell` also take below.
+            // The drawn cards' rectangles are the click targets, one per campaign;
+            // the same "re-borrow mutably once matched" step `Grid`/`Cell` also
+            // take below.
             crate::campaign_stage::Screen::Selection(_) => {
+                let cards = campaign.selection_card_rects();
                 let crate::campaign_stage::Screen::Selection(model) = &mut campaign.screen else {
                     unreachable!("just matched Screen::Selection above")
                 };
-                model.pointer(pointer)
+                model.pointer(pointer, &cards)
             }
             crate::campaign_stage::Screen::Grid(_) => {
                 let card = campaign.flyer_card_rect();

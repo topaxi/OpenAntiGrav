@@ -445,21 +445,33 @@ impl CampaignSelection {
         out
     }
 
-    /// One click target per entry, the bracket split into equal columns: the
-    /// screen authors no per-flyer clickable rect to ground a target in more
-    /// precisely than that, the same "grounded in a real rect, not
-    /// free-standing" reasoning [`super::hd::hd_grid_targets`] already uses
-    /// for `Grid Selection`'s own confirm region. **Chosen, not measured.**
-    /// Hover selects, a second click on the already-selected column confirms -
+    /// One click target per entry. `cards` are the drawn cards' rectangles, one
+    /// per entry in list order (what `oag_game::flyer::Flyers::card_rect` gives):
+    /// the selected card is tested first, so where a turned card's box overlaps
+    /// it the selected one wins, then the others. Without cards (none loaded, or
+    /// not one per entry) the bracket is split into equal columns: the screen
+    /// authors no per-flyer clickable rect, the same "grounded in a real rect,
+    /// not free-standing" reasoning [`super::hd::hd_grid_targets`] uses for
+    /// `Grid Selection`'s confirm region. **Chosen, not measured.**
+    /// Hover selects, a second click on the already-selected entry confirms -
     /// the same two-tap idiom every other campaign screen in this crate uses.
-    pub fn pointer(&mut self, pointer: &Pointer) -> Vec<Event> {
+    pub fn pointer(&mut self, pointer: &Pointer, cards: &[[f32; 4]]) -> Vec<Event> {
         let mut out = Vec::new();
         if pointer.is_idle() {
             return out;
         }
-        let hit = pointer.at.and_then(|at| {
-            (0..self.chooser.entries.len()).find(|&index| contains(self.chooser.column(index), at))
-        });
+        let count = self.chooser.entries.len();
+        let rect = |index: usize| {
+            if cards.len() == count {
+                cards[index]
+            } else {
+                self.chooser.column(index)
+            }
+        };
+        let order = std::iter::once(self.index).chain((0..count).filter(|&i| i != self.index));
+        let hit = pointer
+            .at
+            .and_then(|at| order.into_iter().find(|&index| contains(rect(index), at)));
         let was = self.index;
         if pointer.moved
             && let Some(index) = hit

@@ -613,7 +613,7 @@ impl MenuStage {
             // same two names - see `oag_ui_screens::campaign::hd`'s own module doc.
             let layers = if campaign.is_hd() {
                 match &campaign.screen {
-                    // **HD only** - `Campaign Selection` ahead of `Grid
+                    // `Campaign Selection` (HD and Omega) ahead of `Grid
                     // Selection`. See `crate::campaign_stage`'s own module
                     // doc. `selection_layout` is `None` only when
                     // `Screen::Selection` itself could never have been

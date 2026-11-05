@@ -21,11 +21,12 @@ pub(super) struct CampaignPage {
 /// Which Race Campaign screen a `--menu-page` name asks for, if either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CampaignKind {
-    /// **HD/Fury only.** `Campaign Selection`, ahead of `Grid` - see
+    /// `Campaign Selection`, ahead of `Grid` - see
     /// `crate::campaign_stage::Screen::Selection`'s own doc. Refused on
-    /// every other title, the same way [`campaign_page`] already refuses a
-    /// source with no campaign at all. `selected` is `0` for Fury (the
-    /// default) and `1` for `Wipeout HD`, spelled `campaign-select` and
+    /// a title whose screen file authors none, the same way [`campaign_page`]
+    /// already refuses a source with no campaign at all. `selected` is the
+    /// entry's position in the screen's `campaignList` (`0`, the default, is
+    /// Fury on HD and 2048 on Omega), spelled `campaign-select` and
     /// `campaign-select@1`.
     Selection { selected: usize },
     /// `hd_base` picks HD's base `grid0`..`grid7` over Fury's (the default,
@@ -490,7 +491,7 @@ pub(super) fn campaign_page(
         match kind {
             CampaignKind::Selection { .. } => {
                 anyhow::bail!(
-                    "Campaign Selection is Wipeout HD/Fury's own screen - this source has none"
+                    "Campaign Selection is the screen of a title whose CellMode_Definition.xml authors one - this source has none"
                 );
             }
             CampaignKind::Grid { .. } => {

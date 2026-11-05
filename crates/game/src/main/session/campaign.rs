@@ -271,7 +271,7 @@ impl Session {
             // A refusal line lasts until the player does anything else.
             campaign.notice = None;
             match (&campaign.screen, event) {
-                // **HD only** - `Campaign Selection` ahead of `Grid
+                // `Campaign Selection` (HD and Omega) ahead of `Grid
                 // Selection`. See `crate::campaign_stage`'s own module doc.
                 (Screen::Selection(model), Event::Confirmed) => {
                     let chosen = model.selected();
@@ -302,7 +302,7 @@ impl Session {
                         warn!("grid {index} has no cells - staying on Grid Selection");
                     }
                 }
-                // **HD only, when `Campaign Selection` was read at all**:
+                // **When `Campaign Selection` was read at all** (HD, Omega):
                 // `Grid Selection`'s own `Back` returns to it rather than
                 // closing the campaign outright. Every other title, and an
                 // HD source missing `DATA06`'s own copy of the screen, keeps

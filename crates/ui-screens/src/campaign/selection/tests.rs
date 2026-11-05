@@ -249,16 +249,16 @@ fn cross_confirms_and_circle_backs_out() {
 fn a_click_on_a_column_selects_it_then_confirms_on_a_second_click() {
     let mut model = CampaignSelection::new(omega());
     let third = (1500.0, 500.0);
-    assert_eq!(model.pointer(&hover(third)), vec![Event::Moved]);
+    assert_eq!(model.pointer(&hover(third), &[]), vec![Event::Moved]);
     assert_eq!(model.selected(), Campaign::new(2));
-    assert_eq!(model.pointer(&click(third)), vec![Event::Confirmed]);
+    assert_eq!(model.pointer(&click(third), &[]), vec![Event::Confirmed]);
 }
 
 #[test]
 fn a_click_on_the_already_selected_first_column_confirms_it_directly() {
     let mut model = CampaignSelection::new(omega());
     assert_eq!(
-        model.pointer(&click((400.0, 500.0))),
+        model.pointer(&click((400.0, 500.0)), &[]),
         vec![Event::Confirmed]
     );
 }
@@ -270,7 +270,7 @@ fn pointer_back_fires_regardless_of_where_the_pointer_is() {
         back: true,
         ..Pointer::default()
     };
-    assert_eq!(model.pointer(&back), vec![Event::Back]);
+    assert_eq!(model.pointer(&back, &[]), vec![Event::Back]);
 }
 
 /// Each entry's outline is one equal column of the bracket, whatever the count.
@@ -409,5 +409,45 @@ fn the_2048_entry_draws_a_rank_where_the_others_draw_medals() {
     assert!(
         !words.contains(&"RANK") && !words.contains(&"7"),
         "{words:?}"
+    );
+}
+
+/// With the cards drawn, the hit follows their rectangles, not equal thirds of the bracket: a wide
+/// selected card keeps a pointer over its right part, and the selected card wins an overlap.
+#[test]
+fn the_pointer_follows_the_drawn_cards_and_the_selected_one_wins_an_overlap() {
+    let cards = [
+        [190.0, 195.0, 805.0, 710.0],
+        [1017.0, 215.0, 245.0, 700.0],
+        [900.0, 215.0, 600.0, 700.0],
+    ];
+    let mut model = CampaignSelection::new(omega());
+    assert_eq!(
+        model.pointer(&hover((800.0, 500.0)), &cards),
+        vec![],
+        "inside the wide 2048 card"
+    );
+    assert_eq!(
+        model.selected(),
+        Campaign::new(0),
+        "the equal-thirds edge at 692 does not select HD"
+    );
+    assert_eq!(
+        model.pointer(&hover((950.0, 500.0)), &cards),
+        vec![],
+        "overlap of 2048 and Fury: 2048 wins"
+    );
+    assert_eq!(
+        model.pointer(&hover((1100.0, 500.0)), &cards),
+        vec![Event::Moved]
+    );
+    assert_eq!(
+        model.selected(),
+        Campaign::new(1),
+        "HD, tested before Fury in list order"
+    );
+    assert_eq!(
+        model.pointer(&click((1100.0, 500.0)), &cards),
+        vec![Event::Confirmed]
     );
 }

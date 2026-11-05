@@ -18,10 +18,10 @@ use oag_ui_screens::campaign::selection::{Campaign, CampaignSelection};
 use oag_game::campaign::with_opening_difficulty;
 use oag_game::unlock::{campaign_medal_of, to_campaign_difficulty, to_campaign_medal};
 
-/// One open campaign screen: `Campaign Selection` (HD only), `Grid
+/// One open campaign screen: `Campaign Selection` (HD and Omega), `Grid
 /// Selection`, or `Cell Selection` over one of its tiers.
 pub(crate) enum Screen {
-    /// **HD only** - see the module doc. Never built for any other title.
+    /// See the module doc. Built only for a title whose screen file authors it (HD, Omega).
     Selection(CampaignSelection),
     Grid(oag_ui_screens::campaign::GridSelection),
     /// `which` is the absolute [`CampaignStage::grids`] index the player
@@ -155,7 +155,7 @@ pub(crate) struct CampaignStage {
     /// whole list only by [`Self::new`] itself - `open_grid_selection` is
     /// the only other writer, and it always narrows.
     grid_range: std::ops::Range<usize>,
-    /// **HD only.** Which campaign [`Self::grid_range`] currently reflects,
+    /// Which campaign [`Self::grid_range`] currently reflects,
     /// for [`Self::grid_layout`]'s own choice between
     /// [`Self::grid_layout_fury`] and [`Self::grid_layout`], and for
     /// [`Self::open_selection`] to restore the right entry on the way back.
@@ -376,6 +376,18 @@ impl CampaignStage {
         self.flyers
             .as_ref()?
             .card_rect(&show, oag_display::space::Space::HD)
+    }
+
+    /// The rectangle of each campaign's card on the HD grid, in list order, for
+    /// the pointer; empty when the cards are not drawn.
+    pub(crate) fn selection_card_rects(&self) -> Vec<[f32; 4]> {
+        let Some(flyers) = &self.flyers else {
+            return Vec::new();
+        };
+        self.flyer_shows()
+            .iter()
+            .filter_map(|show| flyers.card_rect(show, oag_display::space::Space::HD))
+            .collect()
     }
 
     /// Turns `Campaign Selection`'s cards toward the selection, `dt` seconds
@@ -718,7 +730,7 @@ impl CampaignStage {
         }
     }
 
-    /// **HD only.** Opens `campaign`'s own `Grid Selection`/`Grid Selection
+    /// Opens `campaign`'s own `Grid Selection`/`Grid Selection
     /// Fury`, narrowing [`Self::grid_range`] to that campaign's own eight
     /// grids - `Campaign Selection`'s own `Event::Confirmed`.
     ///
@@ -756,7 +768,7 @@ impl CampaignStage {
         true
     }
 
-    /// **HD only.** Returns to `Campaign Selection` - `Grid Selection`'s own
+    /// Returns to `Campaign Selection` - `Grid Selection`'s own
     /// `Event::Back`, when [`Self::has_selection`]. Restores whichever
     /// campaign [`Self::active_campaign`] already names, rather than
     /// resetting to the screen's own default `Fury` entry, so backing out of
