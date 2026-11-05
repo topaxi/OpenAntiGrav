@@ -71,7 +71,7 @@ pub mod race;
 pub const TITLE: &Title = &Title {
     name: "Wipeout HD",
     archives: ArchiveCandidates {
-        patch: &[],
+        patch: PATCH_CANDIDATES,
         data: DATA_CANDIDATES,
         fe: FE_CANDIDATES,
         extra: EXTRA_CANDIDATES,
@@ -602,6 +602,18 @@ const DATA_CANDIDATES: &[(&str, Platform)] = &[
 /// [`EXTRA_CANDIDATES`] and all of them mount.
 const FE_CANDIDATES: &[(&str, Platform)] = &[("USRDIR/DATA02.PSARC", Platform::Ps3)];
 
+/// Sony's update chain, on neither pressing's base: `data07` from 02.10 and
+/// `data08` from 02.30 on. Listed `data08` first, ahead of every base archive.
+///
+/// Read off 02.51's loader: everything but `data00`, `data07` and `data08` in
+/// sorted order, then those two with `data00`, then `data08` alone, later loads
+/// winning. So `data08` beats `data07` and both beat `DATA00`.
+/// `docs/ghidra/functions/ps3-hdfury-eu/update-0251.md`, "Archive load order".
+const PATCH_CANDIDATES: &[(&str, Platform)] = &[
+    ("USRDIR/DATA08.PSARC", Platform::Ps3),
+    ("USRDIR/DATA07.PSARC", Platform::Ps3),
+];
+
 /// The remaining archives, all mounted.
 ///
 /// `DATA03` is here for the disc and is also [`DATA_CANDIDATES`]' fallback for a
@@ -658,6 +670,17 @@ const FOREIGN_SERIALS: &[ForeignSerial] = &[
 /// Propagates [`Archives::open`].
 pub fn open(source: &str) -> Result<Archives> {
     Archives::open(source, TITLE)
+}
+
+/// As [`open`], with the update folder among `updates` that belongs to `source`
+/// mounted over a disc. A PSN install carries its updates in place and [`open`]
+/// finds them there.
+///
+/// # Errors
+///
+/// As [`open`].
+pub fn open_updated(source: &str, updates: &[oag_assets::UpdateFolder]) -> Result<Archives> {
+    Archives::open_updated(source, TITLE, updates)
 }
 
 /// Which of the two HD [`Title`]s `archives` is: [`psn::PSN`] when the bulk

@@ -283,6 +283,7 @@ pub(super) fn mounted(
             platform: Platform::Psp,
             data: spec.clone(),
             patch: Vec::new(),
+            update: None,
             fe: None,
             extra: Vec::new(),
             serial: None,
@@ -774,4 +775,101 @@ fn a_memoised_neighbour_is_read_once() {
     assert!(archives.read_preceding("before.bin").is_err());
     let memo = archives.read_memo.as_ref().expect("asked for");
     assert_eq!((memo.hits, memo.misses), (1, 2));
+}
+
+const UPDATED: &Title = &Title {
+    archives: ArchiveCandidates {
+        patch: &[
+            ("USRDIR/data08.psarc", Platform::Ps3),
+            ("USRDIR/data07.psarc", Platform::Ps3),
+        ],
+        data: &[("USRDIR/data00.psarc", Platform::Ps3)],
+        ..TITLE.archives
+    },
+    ..*TITLE
+};
+
+/// A `PARAM.SFO` holding one `TITLE_ID`.
+fn sfo_naming(title_id: &str) -> Vec<u8> {
+    let (key, value) = (b"TITLE_ID\0", [title_id.as_bytes(), &[0]].concat());
+    let length = u32::try_from(value.len()).unwrap().to_le_bytes();
+    let mut out = b"\0PSF".to_vec();
+    out.extend_from_slice(&0x101_u32.to_le_bytes());
+    out.extend_from_slice(&36_u32.to_le_bytes());
+    out.extend_from_slice(&45_u32.to_le_bytes());
+    out.extend_from_slice(&1_u32.to_le_bytes());
+    out.extend_from_slice(&[0, 0, 4, 2]);
+    out.extend_from_slice(&length);
+    out.extend_from_slice(&length);
+    out.extend_from_slice(&0_u32.to_le_bytes());
+    out.extend_from_slice(key);
+    out.extend_from_slice(&value);
+    out
+}
+
+fn touch(root: &std::path::Path, files: &[&str]) {
+    for file in files {
+        let path = root.join(file);
+        std::fs::create_dir_all(path.parent().expect("a parent")).expect("a directory");
+        std::fs::write(path, b"").expect("a file");
+    }
+}
+
+/// The patch role comes from the update folder of the source's own release and
+/// nothing else does, candidate order held whichever root supplies what.
+#[test]
+fn an_update_folder_of_the_same_release_fills_the_patch_role() {
+    let dir = testing::temp_dir("update-folder");
+    let (source, update) = (dir.join("base"), dir.join("update"));
+    touch(&source, &["USRDIR/data00.psarc", "USRDIR/data07.psarc"]);
+    std::fs::write(source.join("PARAM.SFO"), sfo_naming("BCES00664")).expect("a file");
+    touch(&update, &["USRDIR/data08.psarc", "USRDIR/data07.psarc"]);
+    let source = source.to_str().expect("utf-8");
+    let root = update.to_str().expect("utf-8").to_string();
+
+    let folder = |serial: &str| UpdateFolder {
+        serial: serial.to_string(),
+        root: root.clone(),
+    };
+    let (layout, _) = Layout::resolve_on(source, UPDATED, &[folder("BCES-00664")]).unwrap();
+    assert_eq!(
+        layout.patch,
+        [
+            format!("{root}/USRDIR/data08.psarc"),
+            format!("{root}/USRDIR/data07.psarc"),
+        ]
+    );
+    assert_eq!(layout.update.as_ref(), Some(&root));
+    assert_eq!(layout.update_gap(UPDATED), None);
+
+    let (other, _) = Layout::resolve_on(source, UPDATED, &[folder("NPEA-00057")]).unwrap();
+    assert_eq!(other.patch, [format!("{source}/USRDIR/data07.psarc")]);
+    assert_eq!(other.update, None);
+    assert!(
+        other.update_gap(UPDATED).is_some(),
+        "one of two update archives is a partial chain"
+    );
+}
+
+/// An update folder with no archive is the mistake worth a warning; a source with
+/// no update at all, and a title with no update role, are not.
+#[test]
+fn only_a_partial_update_is_a_gap() {
+    let dir = testing::temp_dir("update-gap");
+    let (source, update) = (dir.join("base"), dir.join("update"));
+    touch(&source, &["USRDIR/data00.psarc"]);
+    std::fs::write(source.join("PARAM.SFO"), sfo_naming("BCES00664")).expect("a file");
+    touch(&update, &["USRDIR/EBOOT.BIN"]);
+    let source = source.to_str().expect("utf-8");
+
+    let plain = Layout::resolve(source, UPDATED).unwrap();
+    assert_eq!(plain.update_gap(UPDATED), None);
+
+    let folder = UpdateFolder {
+        serial: "BCES-00664".to_string(),
+        root: update.to_str().expect("utf-8").to_string(),
+    };
+    let (empty, _) = Layout::resolve_on(source, UPDATED, &[folder]).unwrap();
+    assert!(empty.update_gap(UPDATED).is_some());
+    assert_eq!(empty.update_gap(TITLE), None);
 }

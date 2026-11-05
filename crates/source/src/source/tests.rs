@@ -586,25 +586,40 @@ fn the_not_found_error_names_every_place_and_form() {
     }
 }
 
-/// A `PARAM.SFO` holding one `TITLE_ID`.
-fn sfo_with(title_id: &str) -> Vec<u8> {
-    let key = b"TITLE_ID\0";
-    let value = [title_id.as_bytes(), &[0]].concat();
-    let key_table = 20 + 16;
-    let data_table = key_table + key.len();
+/// A `PARAM.SFO` holding these text fields.
+fn sfo_of(fields: &[(&str, &str)]) -> Vec<u8> {
+    let (mut keys, mut values, mut index) = (Vec::new(), Vec::new(), Vec::new());
+    for (key, value) in fields {
+        index.extend_from_slice(&u16::try_from(keys.len()).unwrap().to_le_bytes());
+        index.extend_from_slice(&0x0204_u16.to_le_bytes());
+        let length = u32::try_from(value.len() + 1).unwrap().to_le_bytes();
+        index.extend_from_slice(&length);
+        index.extend_from_slice(&length);
+        index.extend_from_slice(&u32::try_from(values.len()).unwrap().to_le_bytes());
+        keys.extend_from_slice(key.as_bytes());
+        keys.push(0);
+        values.extend_from_slice(value.as_bytes());
+        values.push(0);
+    }
+    let key_table = 20 + index.len();
+    let data_table = key_table + keys.len();
     let mut out = b"\0PSF".to_vec();
     out.extend_from_slice(&0x101_u32.to_le_bytes());
     out.extend_from_slice(&u32::try_from(key_table).unwrap().to_le_bytes());
     out.extend_from_slice(&u32::try_from(data_table).unwrap().to_le_bytes());
-    out.extend_from_slice(&1_u32.to_le_bytes());
-    out.extend_from_slice(&0_u16.to_le_bytes());
-    out.extend_from_slice(&0x0204_u16.to_le_bytes());
-    out.extend_from_slice(&u32::try_from(value.len()).unwrap().to_le_bytes());
-    out.extend_from_slice(&16_u32.to_le_bytes());
-    out.extend_from_slice(&0_u32.to_le_bytes());
-    out.extend_from_slice(key);
-    out.extend_from_slice(&value);
+    out.extend_from_slice(&u32::try_from(fields.len()).unwrap().to_le_bytes());
+    out.extend_from_slice(&index);
+    out.extend_from_slice(&keys);
+    out.extend_from_slice(&values);
     out
+}
+
+fn sfo_with(title_id: &str) -> Vec<u8> {
+    sfo_of(&[("TITLE_ID", title_id)])
+}
+
+fn sfo_categorised(title_id: &str, category: &str) -> Vec<u8> {
+    sfo_of(&[("TITLE_ID", title_id), ("CATEGORY", category)])
 }
 
 /// A PSN HD install is `PARAM.SFO` beside `USRDIR`, and nothing else is offered:
@@ -629,6 +644,38 @@ fn a_psn_hd_install_is_found_by_its_shape_and_europe_sorts_first() {
     );
     assert_eq!(package_at(&root.join("a-us")), Some(root.join("a-us")));
     assert_eq!(package_at(&root.join("zip-extract")), None);
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// A disc game's update is matched to the image by release, beside it or on the
+/// search path's shape, and is never a game of its own; a PSN install is no update.
+#[test]
+fn a_disc_update_mounts_over_its_release_and_is_not_offered() {
+    let root = temp_dir("ps3-updates");
+    let image = root.join("hd.iso");
+    std::fs::write(&image, b"").unwrap();
+    for (folder, sfo) in [
+        ("BCES00664", sfo_categorised("BCES00664", "GD")),
+        ("psn", sfo_categorised("NPEA00057", "HG")),
+    ] {
+        std::fs::create_dir_all(root.join(folder).join("USRDIR")).unwrap();
+        std::fs::write(root.join(folder).join("PARAM.SFO"), sfo).unwrap();
+    }
+
+    let updates = ps3_updates(image.to_str().unwrap());
+    assert_eq!(
+        updates,
+        [oag_assets::UpdateFolder {
+            serial: "BCES-00664".to_string(),
+            root: root.join("BCES00664").to_string_lossy().into_owned(),
+        }]
+    );
+    assert_eq!(ps3_package_directories_in(&root), [root.join("psn")]);
+    assert_eq!(package_at(&root.join("BCES00664")), None);
+    assert!(
+        ps3_updates(root.join("psn").to_str().unwrap()).is_empty(),
+        "a folder source is patched in place"
+    );
     std::fs::remove_dir_all(&root).unwrap();
 }
 

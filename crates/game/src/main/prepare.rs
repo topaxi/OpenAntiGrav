@@ -351,6 +351,9 @@ impl Pending {
                 .is_some_and(|blocks| blocks.fury),
         );
         oag_raceplay::loader_log::lines(menu_sfx.report());
+        if let Some(gap) = archives.layout.update_gap(title) {
+            log::warn!("{gap}");
+        }
         // Read before the media worker takes the archives: 2048's main menu
         // grows two tiles when its update is mounted.
         let updated = !archives.patch.is_empty();

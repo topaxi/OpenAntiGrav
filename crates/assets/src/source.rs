@@ -85,6 +85,8 @@ pub struct Layout {
     ///
     /// See [`ArchiveCandidates::patch`](oag_title::ArchiveCandidates::patch).
     pub patch: Vec<String>,
+    /// The [`UpdateFolder`] that belongs to this source, when one was handed in.
+    pub update: Option<String>,
     /// The companion archive, when the source has one.
     pub fe: Option<String>,
     /// Every other archive this release ships, all of them, in candidate order.
@@ -124,7 +126,7 @@ impl Layout {
     /// [`Error::NoArchive`] when nothing in the source matches any candidate,
     /// naming every candidate looked for. Reading the source itself propagates.
     pub fn resolve(source: &str, title: &Title) -> Result<Self> {
-        Ok(Self::resolve_on(source, title)?.0)
+        Ok(Self::resolve_on(source, title, &[])?.0)
     }
 
     /// As [`Layout::resolve`], also handing back the disc image it walked so
@@ -137,6 +139,7 @@ impl Layout {
     pub(crate) fn resolve_on(
         source: &str,
         title: &Title,
+        updates: &[UpdateFolder],
     ) -> Result<(Self, Option<Arc<Mutex<DiscImage>>>)> {
         let (mut platform, files, disc, serial) = survey(source, title)?;
 
@@ -145,7 +148,11 @@ impl Layout {
             platform: platform.to_string(),
             looked_for: title.archive_names(),
         })?;
-        let patch = pick_all(source, &files, title.archives.patch);
+        let update = updates
+            .iter()
+            .find(|update| serial.as_deref() == Some(update.serial.as_str()))
+            .map(|update| update.root.clone());
+        let patch = pick_patch(source, &files, update.as_deref(), title.archives.patch);
         let fe = pick(source, &files, title.archives.fe);
         let mut extra = pick_all(source, &files, title.archives.extra);
         // A candidate list may name one archive in two roles (HD's `DATA03` is a
@@ -166,11 +173,31 @@ impl Layout {
                 platform,
                 data: data.0,
                 patch,
+                update,
                 fe: fe.map(|(spec, _)| spec),
                 extra,
                 serial,
             },
             disc,
+        ))
+    }
+
+    /// What is wrong with this source's update, for a warning at boot: `None` for
+    /// a source with no update at all or a complete one.
+    ///
+    /// An update folder with no archive is the likely mistake on HD, where the last
+    /// package of the chain carries none and a complete install needs them all
+    /// (`docs/formats/hd-updates.md`).
+    #[must_use]
+    pub fn update_gap(&self, title: &Title) -> Option<String> {
+        let wanted = title.archives.patch.len();
+        let mounted = self.patch.len();
+        if mounted == wanted || (mounted == 0 && self.update.is_none()) {
+            return None;
+        }
+        Some(format!(
+            "partial update: {mounted} of {wanted} update archives found, \
+             install every update package in order"
         ))
     }
 
@@ -193,6 +220,22 @@ impl Layout {
             n => format!("{head}, and {n} more"),
         }
     }
+}
+
+/// A title update installed outside its source: the folder a console or RPCS3
+/// installs a disc game's updates into, `PARAM.SFO` beside `USRDIR/`.
+///
+/// A disc cannot be patched in place, so its update lives elsewhere and is tied to
+/// the disc by release alone, the way `.vpk` and PS4 `.pkg` patches are tied to
+/// their base. Only [`ArchiveCandidates::patch`](oag_title::ArchiveCandidates::patch)
+/// is looked for here. A package install is patched where it stands and needs none
+/// of this. `oag_source` finds these; this crate only mounts one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdateFolder {
+    /// The release it updates, normalised as [`Layout::serial`] is.
+    pub serial: String,
+    /// The folder.
+    pub root: String,
 }
 
 /// The archives one source carries, opened.
@@ -283,6 +326,16 @@ impl Archives {
         Self::open_with_packs(source, title, Vec::new())
     }
 
+    /// As [`Archives::open`], with the [`UpdateFolder`] among `updates` that belongs
+    /// to `source`, if any, mounted over it.
+    ///
+    /// # Errors
+    ///
+    /// As [`Archives::open`].
+    pub fn open_updated(source: &str, title: &Title, updates: &[UpdateFolder]) -> Result<Self> {
+        Self::open_on_layout(source, title, Vec::new(), updates)
+    }
+
     /// As [`Archives::open`], with downloadable content mounted behind the
     /// source's own archives.
     ///
@@ -318,13 +371,28 @@ impl Archives {
         title: &Title,
         packs: Vec<crate::dlc::Pack>,
     ) -> Result<Self> {
-        let (layout, disc) = Layout::resolve_on(source, title)?;
+        Self::open_on_layout(source, title, packs, &[])
+    }
+
+    fn open_on_layout(
+        source: &str,
+        title: &Title,
+        packs: Vec<crate::dlc::Pack>,
+        updates: &[UpdateFolder],
+    ) -> Result<Self> {
+        let (layout, disc) = Layout::resolve_on(source, title, updates)?;
         // On a disc source every archive is mounted on the one image `survey`
         // already opened and walked; a directory source has no image and each
-        // archive is a file of its own. `mount` is the only difference.
+        // archive is a file of its own, as an update folder's are beside a disc.
         let mount = |spec: &str| match &disc {
-            Some(disc) => Container::open_on(disc, spec),
-            None => Container::open(spec),
+            Some(disc)
+                if spec
+                    .strip_prefix(source)
+                    .is_some_and(|r| r.starts_with(':')) =>
+            {
+                Container::open_on(disc, spec)
+            }
+            _ => Container::open(spec),
         };
         let data = match mount(&layout.data) {
             Err(error) => {
@@ -1003,6 +1071,30 @@ fn pick_all(source: &str, files: &[String], candidates: &[(&str, Platform)]) -> 
                 .iter()
                 .find(|file| names(file, candidate))
                 .map(|file| archive_spec(source, file))
+        })
+        .collect()
+}
+
+/// [`pick_all`] for the update role, each candidate taken from `update` when that
+/// folder holds it and from the source otherwise.
+fn pick_patch(
+    source: &str,
+    files: &[String],
+    update: Option<&str>,
+    candidates: &[(&str, Platform)],
+) -> Vec<String> {
+    let mut installed = Vec::new();
+    if let Some(root) = update {
+        collect(std::path::Path::new(root), "", &mut installed);
+        installed.sort();
+    }
+    candidates
+        .iter()
+        .filter_map(|candidate| {
+            let candidate = std::slice::from_ref(candidate);
+            update
+                .and_then(|root| pick_all(root, &installed, candidate).pop())
+                .or_else(|| pick_all(source, files, candidate).pop())
         })
         .collect()
 }
