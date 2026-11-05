@@ -13,8 +13,9 @@
 //!
 //! A `map_async` callback fires on the thread that polls, so here. They have to be `Send`.
 //!
-//! **Only on cores known to be equal**, as threaded recording is: the work moves to another
-//! core, which pays on the Deck and is not measured on a phone's slower ones.
+//! **Only on cores known to be equal** ([`crate::split_finish::known_equal_cores`], the rule
+//! threaded recording takes): the work moves to another core, which pays on the Deck and is not
+//! measured on a phone's slower ones.
 //! `OAG_REAP_THREAD=0` or `=1` overrides that (an A/B switch for benches, nothing a player sets).
 
 /// How long the thread leaves the GPU between polls. Long enough to miss the present that
@@ -98,30 +99,18 @@ impl Drop for Reaper {
 }
 
 /// Whether to reap on a thread: `OAG_REAP_THREAD` when set (`0` off, anything else on),
-/// otherwise a core list that is readable and the same on every core.
+/// otherwise [`crate::split_finish::known_equal_cores`].
 #[must_use]
 pub fn wanted() -> bool {
     match std::env::var("OAG_REAP_THREAD") {
         Ok(value) => value != "0",
-        Err(_) => equal_cores(&crate::split_finish::core_capacities()),
+        Err(_) => crate::split_finish::known_equal_cores(),
     }
-}
-
-/// Positive evidence only: an unreadable list is not evidence of equal cores.
-fn equal_cores(capacities: &[u32]) -> bool {
-    !capacities.is_empty() && crate::split_finish::uniform_cores(capacities)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn only_a_readable_list_of_equal_cores_gets_a_thread() {
-        assert!(equal_cores(&[1024; 8]));
-        assert!(!equal_cores(&[]));
-        assert!(!equal_cores(&[253, 1024]));
-    }
 
     /// The map's callback fires with no poll from this thread: the reaper's did it. Dropping
     /// the reaper then returns, so its thread stopped.

@@ -1449,7 +1449,7 @@ HD 800p, the base binary, on-CPU samples of the frame thread:
 | --- | ---: | ---: |
 | `prepare_view` | 38.4 % | 27.3 % |
 | `maintain` in a submit, dropping finished encoders | 13.8 % | 13.1 % |
-| of which called from `reset_all`, into `libvulkan_radeon` | 9.3 % | 8.7 % |
+| of which in unresolved shared-library frames | 9.3 % | 8.7 % |
 | record (one view: passes only, the finish is on the worker) | 7.9 % | 24.7 % |
 | last encoder's `finish` on the frame thread | 11.7 % | 1.4 % |
 | post chain's `finish`, split only | | 8.1 % |
@@ -1457,6 +1457,10 @@ HD 800p, the base binary, on-CPU samples of the frame thread:
 | shadow passes | 6.8 % | |
 | particles, adverts, scenery clocks, trail, ribbons | 4.1, 4.0, 3.7, 2.7, 2.6 % | |
 | `spline.nearest` from the magstrip wake's drawing | 2.1 % | |
+
+Those frames are the driver: on the final binary, where the same drop runs on `oag-reap`, 57.8 % of
+that thread's samples sit in `libvulkan_radeon`, under the encoder drop. The walk loses the caller
+there, so `vkResetCommandPool` (wgpu-hal `reset_all`, 4.8 % by name) is the likely one, not a read.
 
 `prepare_view`'s table above still ranks these. On Pulse's split `write_absorb_overlays` is 10.3 % of
 the frame thread. Scenery clocks cannot skip a frame: `Race::clock_seconds` moves with the world
@@ -1478,8 +1482,8 @@ It polls and never waits: `Device::poll` holds the snatch lock for read through 
 `present` takes it for write, so a thread parked in a wait would stall the present. The triage still
 holds the snatch lock and the life lock, so `submit` and `present` can meet it, bounded by what the
 frame thread used to do itself. A `map_async` callback now fires on that thread; ours only store an
-atomic. On readable, equal core capacities only, as threaded recording is; `OAG_REAP_THREAD=0` or
-`=1` overrides it.
+atomic. It runs on `oag_gpu::split_finish::known_equal_cores` (native Linux, at least two cores, all
+the same capacity), the rule threaded recording takes; `OAG_REAP_THREAD=0` or `=1` overrides it.
 
 The same binary, off and on, all other cuts in, 800p, 3 rounds, ms:
 
@@ -1495,15 +1499,20 @@ The same binary, off and on, all other cuts in, 800p, 3 rounds, ms:
 **A split gains most of it. One view gives half back:** on HD one view `submit` falls 0.16 ms and
 `scene` rises 0.20. The reclaiming runs beside `prepare_view`, and something they share slows it. Not
 identified (candidates: Arc counts on the same cache lines, the allocator's lock against
-`write_buffer`'s staging, a sibling hardware thread). It stays on: `total` and p99 are lower in every
-cell, and HD one view's fps is 1 % lower with `total` within 0.04.
+`write_buffer`'s staging, a sibling hardware thread). HD one view's fps is 1 % lower in both A/Bs
+(147.3 to 146.0 here, 137.9 to 137.1 before the other cuts) with `total` within 0.04. That loss is
+outside `total`: `frame-log`'s `present_ms`, which counts the acquire's wait, reads 0.65 off and 0.79
+on. Waiting on the reaper's hold on the snatch lock fits, not proven. It stays on: `total` and p99 are
+lower in every cell, and a split gains 3 to 6 %.
 
 ### A second finishing thread
 
-`oag_gpu::split_finish` sends each closed encoder to the next of two threads. Encoders finish
-independently and the buffers still go to the queue in recording order. `OAG_FINISH_THREADS=1` is the
-old behaviour, for a bench. A split's views do not split their encoders, so this is one view only.
-Same binary, 800p, 3 rounds:
+`oag_gpu::split_finish` sends each closed encoder to the next of two threads where
+`known_equal_cores` holds, and keeps one thread elsewhere. Encoders finish independently and the
+buffers still go to the queue in recording order. `OAG_FINISH_THREADS=1` is the old behaviour, for a
+bench. A threaded split's views do not split their encoders, so on the Deck this is one view only.
+The Deck takes the same path as the measured binaries, which were built before that rule was: two
+threads, reaper on. Same binary, 800p, 3 rounds:
 
 | | `total` one thread | two threads | `submit` | fps | p99 |
 | --- | ---: | ---: | --- | --- | --- |
@@ -1571,7 +1580,8 @@ probes and the wake only:
 
 Only HD reads lower at 800p and 1080p, as it should. The Pulse and Pure cells swing between the known
 slow modes of this bench (Pure two views at 800p reads 613, 960, 648 on base and 957, 617, 956 on the
-tip) and neither path changed there.
+tip) and neither path changed there. HD two views at 4K read +186 us with base always first; four
+ABBA pairs at load 1.0 to 2.5 read 4020 to 3908 us, so that was the order.
 
 **Pictures.** Byte-identical by `cmp`, base against tip: 54 pairs on the notebook's NVIDIA (the three
 titles, one and two views, three sizes, 3 rounds, tick 900), 12 pairs on the Deck's RADV (the same
@@ -1579,8 +1589,9 @@ titles and views, ticks 900 and 1500). Each is one frame of a race; a craft comi
 over a run of frames is covered by the argument above and not by a capture.
 
 **What is left.** The frame thread spends 1.0 ms of system time a frame at one view and 1.6 ms at two,
-nearly all of it unseen by a user-space profile (the Deck's `perf_event_paranoid` is 2, no sudo): most
-likely the command submissions, not read. HD's split post chains (a `finish` and a submit per view,
+unseen by a user-space profile (the Deck's `perf_event_paranoid` is 2, no sudo). It is unattributed:
+the command submissions, futex waits on the finish channels and the scoped thread `split_record`
+spawns per later view per frame are the candidates. HD's split post chains (a `finish` and a submit per view,
 0.9 ms) need each view's writes ahead of its own submit, so they cannot overlap without the write
 log. wgpu was not patched and no PR was tried: our own levers were not exhausted.
 
