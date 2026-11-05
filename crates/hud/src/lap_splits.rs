@@ -188,6 +188,7 @@ mod tests {
         // The row is under test, not HD's drop shadow, which doubles every string.
         let art = oag_title::HudArt {
             text_shadow: None,
+            text_outline_alpha: None,
             ..*oag_hd::hud::ART
         };
         let cx = Context {

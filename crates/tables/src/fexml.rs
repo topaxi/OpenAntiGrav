@@ -380,12 +380,21 @@ pub(crate) fn attributes(body: &str) -> Vec<(String, String)> {
         while at < bytes.len() && bytes[at] != b'=' && !bytes[at].is_ascii_whitespace() {
             at += 1;
         }
-        if key_at == at || at >= bytes.len() || bytes[at] != b'=' {
+        let key_end = at;
+        // XML allows whitespace around the `=`; Pure's HUD layouts write
+        // `BorderColor= "0x40000000"`.
+        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        if key_at == key_end || at >= bytes.len() || bytes[at] != b'=' {
             break;
         }
-        let key = body[key_at..at].to_string();
+        let key = body[key_at..key_end].to_string();
 
         at += 1; // '='
+        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
         if at >= bytes.len() || bytes[at] != b'"' {
             break;
         }

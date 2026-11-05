@@ -111,6 +111,7 @@ const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     lit_alpha: None,
     // Unmeasured on the retro skins (`hd-hud-leftovers` item 3 asks it): no shadow, authored quads.
     text_shadow: None,
+    text_outline_alpha: None,
     half_unit_glyph_quads: false,
     bar_tip: None,
     boost_smear: None,
@@ -256,6 +257,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         oag_title::hud::TextShadow { dx: -1, dy: -1 },
         "hd",
     )),
+    text_outline_alpha: None,
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &[
             "MissileSightBG",

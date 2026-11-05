@@ -926,6 +926,7 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
     // The ladder is under test, not HD's drop shadow, which draws every string twice.
     let art = oag_title::HudArt {
         text_shadow: None,
+        text_outline_alpha: None,
         ..*oag_hd::hud::ART
     };
     let cx = hud::Context {
@@ -1409,6 +1410,7 @@ fn every_lit_text_string_has_a_black_twin_one_unit_up_and_left_drawn_first() {
     let with = draw(oag_hd::hud::ART);
     let without = draw(&oag_title::HudArt {
         text_shadow: None,
+        text_outline_alpha: None,
         ..*oag_hd::hud::ART
     });
 
