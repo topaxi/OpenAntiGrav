@@ -216,6 +216,7 @@
 0x00b6cc90	data	g_sound_system	80	zone-visualiser.md
 0x00304558	function	SoundSystem_GetBandLevel32	84	zone-visualiser.md
 0x00307e78	function	SoundSystem_UpdateBandLevels	86	zone-visualiser.md
+0x00305c20	function	SoundSystem_InitBandAnalysis	72	zone-visualiser.md
 0x00304320	function	SoundSystem_UpdateMeters	76	zone-visualiser.md
 0x00308f00	function	SoundSystem_Shutdown	88	zone-visualiser.md
 0x00309230	function	SoundSystem_AudioThread	86	zone-visualiser.md
@@ -317,6 +318,7 @@
 0x00183c88	function	BackgroundAnimFury_Render	78	menu-backdrop.md
 0x00181348	function	BackgroundAnimFury_AllocateTargets	75	menu-backdrop.md
 0x0017e810	function	BackgroundAnimFury_OnEnable	70	menu-backdrop.md
+0x0017e4e0	function	BackgroundAnimFury_Update	88	menu-backdrop.md
 0x00180a60	function	BackgroundAnimFury_PickPath	82	menu-backdrop.md
 0x0017ea80	function	FurySettings_Construct	82	menu-backdrop.md
 0x001876f8	function	FuryStaticPath_Bind	82	menu-backdrop.md

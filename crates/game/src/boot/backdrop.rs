@@ -57,7 +57,9 @@ impl MenuBackdrop {
     /// way the sprite sheet is.
     pub fn install(&self, renderer: &mut Renderer, device: &wgpu::Device, queue: &wgpu::Queue) {
         match self {
-            Self::Fury(assets) => renderer.set_fury_backdrop(device, queue, &assets.clouds),
+            Self::Fury(assets) => {
+                renderer.set_fury_backdrop(device, queue, &assets.clouds, assets.bloom)
+            }
             Self::Scene(assets) => renderer.set_scene_backdrop(device, queue, assets.model.clone()),
         }
     }
@@ -97,7 +99,7 @@ impl MenuBackdrop {
             Self::Fury(assets) => {
                 let (mut model, frames) = assets.at_start(anim_seconds, fury_path)?;
                 for _ in 0..frames {
-                    model.tick();
+                    model.tick(&oag_ui::backdrop::SILENCE);
                 }
                 Some(Picture::from(model.frame(
                     h,
@@ -144,11 +146,11 @@ impl MenuBackdrop {
         let tint = assets.tints.for_root(page == "main");
         let history = frames.min(oag_ui::backdrop::FRAMES_TO_SETTLE);
         for _ in 0..frames - history {
-            model.tick();
+            model.tick(&oag_ui::backdrop::SILENCE);
         }
         let leading_up = (0..history).map(|_| {
             let frame = model.frame(h, w / h, tint);
-            model.tick();
+            model.tick(&oag_ui::backdrop::SILENCE);
             frame
         });
         renderer.settle_fury_backdrop(device, queue, leading_up, (w as u32, h as u32));
@@ -173,10 +175,11 @@ pub enum Live {
 impl Live {
     /// One frame on, off the same fixed step the movie is: the original counts
     /// its clip up once per rendered frame at sixty. `root` is whether the
-    /// page showing is the menus' root, the disc's `Main Menu`.
-    pub fn tick(&mut self, root: bool) {
+    /// page showing is the menus' root, the disc's `Main Menu`. `bands` is the
+    /// sound system's equaliser this frame, which only the Fury widget reads.
+    pub fn tick(&mut self, root: bool, bands: &[f32; oag_ui::backdrop::BANDS]) {
         match self {
-            Self::Fury { model, .. } => model.tick(),
+            Self::Fury { model, .. } => model.tick(bands),
             Self::Scene { model, .. } => model.tick(root),
         }
     }

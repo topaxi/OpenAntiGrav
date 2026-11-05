@@ -24,18 +24,30 @@
 //! 8. **Present** - the field read half a texel off on both axes, as the
 //!    final composite's own quad does, bilinearly and in linear light, which
 //!    is why a scanline reaches the screen as two half-dark rows.
+//! 9. **The bloom chain** - `oag_post::hd_bloom`, the race's own: the menu runs
+//!    the same ladder, adapted exposure and gate, off the front end's
+//!    `HDR and Bloom` block, and that exposure is most of the picture's level
+//!    on a dark frame.
 //!
 //! Then, inside the page's pass where the draw list's
 //! [`oag_ui::frontend::Draw::FuryBackdrop`] sits, the result goes onto the page.
 //!
-//! The original runs all of this in linear light, decoding on read and
-//! encoding on write. Here that is the targets' sRGB format, with the page
-//! itself left gamma-space (ADR-0020): the last step reads the field through a
-//! plain view, so the page receives the encoded bytes as they stand.
+//! The original computes in linear light but stores encoded: a texture read
+//! decodes, and the output packer encodes a fragment before the blend unit sees
+//! it, so a blended pass combines encoded values
+//! ([hd-track-tone.md](../../../../docs/rendering/hd-track-tone.md), "HD's blends
+//! combine encoded values"). That is what the particles' light depends on, each
+//! sprite adding its own encoded colour. So every target has two views: an sRGB
+//! one to read and a plain one to write, the shader encoding by hand. The page
+//! stays gamma-space (ADR-0020) and reads the plain view, taking the bytes as
+//! they stand.
 //!
 //! A pass reads a target nearest but for the half-size glow and the present,
 //! which are bilinear: the filter words on the command stream, not the views'.
 
+use anyhow::Result;
+use oag_gpu::formats::SCENE_FORMAT;
+use oag_post::hd_bloom;
 use oag_rcs::points2::PointCloud;
 use oag_ui::backdrop::{self, Frame};
 
@@ -89,11 +101,11 @@ const SPRITE_MIPS: u32 = 6;
 /// (mip 0), bright and tight when it is a dot.
 const SPRITE_SHAPE: (f32, f32, f32, f32, f32) = (0.6, 2.0, 0.07, 1.0, 1.0);
 
-/// The offscreen targets' format - see the module docs.
-const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+/// How a pass reads a target: decoded, as the original's texture unit does.
+const READ_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
-/// The same bytes read undecoded, for the page.
-const ENCODED_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+/// How a pass writes one, and the page reads it: the bytes as they stand.
+const STORED_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// One uploaded cloud.
 struct Cloud {
@@ -103,16 +115,21 @@ struct Cloud {
     centre: [f32; 3],
 }
 
+/// A target and its two views - see the module docs.
+struct Target {
+    texture: wgpu::Texture,
+    read: wgpu::TextureView,
+    write: wgpu::TextureView,
+}
+
 /// The targets, rebuilt when the viewport changes. Each pair swaps every
 /// frame; `[last]` holds what the frame before left.
 struct Targets {
     size: (u32, u32),
-    field: wgpu::Texture,
-    field_view: wgpu::TextureView,
-    finished: wgpu::Texture,
-    finished_view: wgpu::TextureView,
-    accumulation: [wgpu::TextureView; 2],
-    half: [wgpu::TextureView; 2],
+    field: Target,
+    finished: Target,
+    accumulation: [Target; 2],
+    half: [Target; 2],
     /// By `last`: `(field, accumulation[last])`.
     blend: [wgpu::BindGroup; 2],
     /// By `last`: the accumulation that frame's blend wrote.
@@ -125,7 +142,7 @@ struct Targets {
     band: wgpu::BindGroup,
     /// The finished field, for the present to read.
     present: wgpu::BindGroup,
-    /// What the present wrote, undecoded, for the page.
+    /// What the chain wrote, undecoded, for the page.
     page: wgpu::BindGroup,
 }
 
@@ -148,6 +165,9 @@ pub struct FuryBackdrop {
     post_sampler: wgpu::Sampler,
     trail_sampler: wgpu::Sampler,
     targets: Option<Targets>,
+    /// The final composite and what feeds it, reading the present's output,
+    /// built off the front end's `HDR and Bloom` block.
+    chain: hd_bloom::Chain,
     /// Which of each pair of targets the frame before left its result in.
     last: usize,
     /// The frame last drawn, so a display faster than the frame rate shows it
@@ -166,12 +186,19 @@ impl std::fmt::Debug for FuryBackdrop {
 impl FuryBackdrop {
     /// Uploads `clouds` and builds the pipelines, the last one's for a page
     /// of `page_format`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates a bloom chain that will not build.
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         page_format: wgpu::TextureFormat,
         clouds: &[PointCloud],
-    ) -> Self {
+        bloom: hd_bloom::Params,
+    ) -> Result<Self> {
+        let chain =
+            hd_bloom::Chain::new(device, STORED_FORMAT, (1, 1), bloom, hd_bloom::Glow::Drawn)?;
         let clouds = clouds
             .iter()
             .map(|cloud| {
@@ -292,7 +319,8 @@ impl FuryBackdrop {
             immediate_size: 0,
         });
 
-        // `BlendFunc(SRC_ALPHA, ONE)`, `FUNC_ADD`, no depth test, no cull.
+        // `BlendFuncSeparate(SRC_ALPHA, ONE, ZERO, ONE)`, `FUNC_ADD`, no depth
+        // test, no cull. The field's alpha stays cleared.
         let additive = wgpu::BlendState {
             color: wgpu::BlendComponent {
                 src_factor: wgpu::BlendFactor::SrcAlpha,
@@ -300,7 +328,7 @@ impl FuryBackdrop {
                 operation: wgpu::BlendOperation::Add,
             },
             alpha: wgpu::BlendComponent {
-                src_factor: wgpu::BlendFactor::SrcAlpha,
+                src_factor: wgpu::BlendFactor::Zero,
                 dst_factor: wgpu::BlendFactor::One,
                 operation: wgpu::BlendOperation::Add,
             },
@@ -322,7 +350,7 @@ impl FuryBackdrop {
                 module: &shader,
                 entry_point: Some("fs_points"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: TARGET_FORMAT,
+                    format: STORED_FORMAT,
                     blend: Some(additive),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -363,13 +391,18 @@ impl FuryBackdrop {
             })
         };
         let opaque = |label: &str, fragment: &str| {
-            post_pipeline(label, ("vs_post", fragment), TARGET_FORMAT, None)
+            post_pipeline(label, ("vs_post", fragment), STORED_FORMAT, None)
         };
         let blend_pipeline = opaque("fury blend", "fs_blend");
         let composite_pipeline = opaque("fury composite", "fs_composite");
-        let present_pipeline = opaque("fury present", "fs_present");
-        let wave_pipeline = post_pipeline("fury wave", ("vs_wave", "fs_wave"), TARGET_FORMAT, None);
-        let band_pipeline = post_pipeline("fury band", ("vs_band", "fs_band"), TARGET_FORMAT, None);
+        let present_pipeline = post_pipeline(
+            "fury present",
+            ("vs_post", "fs_present"),
+            SCENE_FORMAT,
+            None,
+        );
+        let wave_pipeline = post_pipeline("fury wave", ("vs_wave", "fs_wave"), STORED_FORMAT, None);
+        let band_pipeline = post_pipeline("fury band", ("vs_band", "fs_band"), STORED_FORMAT, None);
         // `BlendFuncSeparate(CONSTANT_COLOR, ONE, ZERO, ONE)`.
         let glow = wgpu::BlendState {
             color: wgpu::BlendComponent {
@@ -386,7 +419,7 @@ impl FuryBackdrop {
         let glow_pipeline = post_pipeline(
             "fury glow",
             ("vs_post", "fs_copy"),
-            TARGET_FORMAT,
+            STORED_FORMAT,
             Some(glow),
         );
         // `BlendFuncSeparate(ZERO, SRC_COLOR, ONE, ZERO)`.
@@ -405,7 +438,7 @@ impl FuryBackdrop {
         let scanline_pipeline = post_pipeline(
             "fury scanlines",
             ("vs_post", "fs_scanlines"),
-            TARGET_FORMAT,
+            STORED_FORMAT,
             Some(scanlines),
         );
         // The page keeps what it has and the backdrop is added; its alpha is
@@ -430,7 +463,7 @@ impl FuryBackdrop {
             Some(over_page),
         );
 
-        Self {
+        Ok(Self {
             clouds,
             point_pipeline,
             blend_pipeline,
@@ -448,9 +481,10 @@ impl FuryBackdrop {
             post_sampler,
             trail_sampler,
             targets: None,
+            chain,
             last: 0,
             drawn: None,
-        }
+        })
     }
 
     /// How many clouds are uploaded.
@@ -472,6 +506,7 @@ impl FuryBackdrop {
     ) {
         let size = (viewport.0.max(1), viewport.1.max(1));
         if self.targets.as_ref().is_none_or(|t| t.size != size) {
+            self.chain.resize(device, size);
             self.targets = Some(self.targets_for(device, size));
             self.drawn = None;
         }
@@ -530,20 +565,25 @@ impl FuryBackdrop {
         let last = self.last;
         let next = 1 - last;
         {
-            let mut pass = full_pass(encoder, "fury points", &targets.field_view, true);
+            let mut pass = full_pass(encoder, "fury points", &targets.field.write, true);
             pass.set_pipeline(&self.point_pipeline);
             pass.set_bind_group(0, &self.point_bind_group, &[]);
             pass.set_vertex_buffer(0, cloud.instances.slice(..));
             pass.draw(0..6, 0..cloud.count);
         }
         {
-            let mut pass = full_pass(encoder, "fury blend", &targets.accumulation[next], true);
+            let mut pass = full_pass(
+                encoder,
+                "fury blend",
+                &targets.accumulation[next].write,
+                true,
+            );
             pass.set_pipeline(&self.blend_pipeline);
             pass.set_bind_group(0, &targets.blend[last], &[]);
             pass.draw(0..3, 0..1);
         }
         {
-            let mut pass = full_pass(encoder, "fury glow", &targets.half[last], false);
+            let mut pass = full_pass(encoder, "fury glow", &targets.half[last].write, false);
             let gain = f64::from(frame.glow_gain);
             pass.set_pipeline(&self.glow_pipeline);
             pass.set_blend_constant(wgpu::Color {
@@ -556,20 +596,20 @@ impl FuryBackdrop {
             pass.draw(0..3, 0..1);
         }
         {
-            let mut pass = full_pass(encoder, "fury wave", &targets.half[next], true);
+            let mut pass = full_pass(encoder, "fury wave", &targets.half[next].write, true);
             pass.set_pipeline(&self.wave_pipeline);
             pass.set_bind_group(0, &targets.wave[last], &[]);
             pass.draw(0..24, 0..1);
         }
         {
-            let mut pass = full_pass(encoder, "fury composite", &targets.field_view, true);
+            let mut pass = full_pass(encoder, "fury composite", &targets.field.write, true);
             pass.set_pipeline(&self.composite_pipeline);
             pass.set_bind_group(0, &targets.composite[last], &[]);
             pass.draw(0..3, 0..1);
         }
         encoder.copy_texture_to_texture(
-            targets.field.as_image_copy(),
-            targets.finished.as_image_copy(),
+            targets.field.texture.as_image_copy(),
+            targets.finished.texture.as_image_copy(),
             wgpu::Extent3d {
                 width: size.0,
                 height: size.1,
@@ -577,7 +617,7 @@ impl FuryBackdrop {
             },
         );
         {
-            let mut pass = full_pass(encoder, "fury band", &targets.finished_view, false);
+            let mut pass = full_pass(encoder, "fury band", &targets.finished.write, false);
             pass.set_pipeline(&self.band_pipeline);
             pass.set_bind_group(0, &targets.band, &[]);
             pass.draw(0..12, 0..1);
@@ -585,11 +625,13 @@ impl FuryBackdrop {
             pass.draw(0..3, 0..1);
         }
         {
-            let mut pass = full_pass(encoder, "fury present", &targets.field_view, true);
+            let mut pass = full_pass(encoder, "fury present", self.chain.scene_view(), true);
             pass.set_pipeline(&self.present_pipeline);
             pass.set_bind_group(0, &targets.present, &[]);
             pass.draw(0..3, 0..1);
         }
+        self.chain
+            .run(queue, encoder, &targets.field.write, (0.0, 0.0), size, None);
         self.last = next;
     }
 
@@ -608,7 +650,7 @@ impl FuryBackdrop {
 
     fn targets_for(&self, device: &wgpu::Device, size: (u32, u32)) -> Targets {
         let target = |label: &str, (width, height): (u32, u32)| {
-            device.create_texture(&wgpu::TextureDescriptor {
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(label),
                 size: wgpu::Extent3d {
                     width,
@@ -618,33 +660,36 @@ impl FuryBackdrop {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: TARGET_FORMAT,
+                format: STORED_FORMAT,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC
                     | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[ENCODED_FORMAT],
-            })
+                view_formats: &[READ_FORMAT],
+            });
+            let read = texture.create_view(&wgpu::TextureViewDescriptor {
+                format: Some(READ_FORMAT),
+                ..Default::default()
+            });
+            let write = texture.create_view(&Default::default());
+            Target {
+                texture,
+                read,
+                write,
+            }
         };
-        let view = |texture: &wgpu::Texture| texture.create_view(&Default::default());
         // `AllocateTargets`' half size; the full-size ones are the viewport's.
         let half_size = ((size.0 / 2).max(1), (size.1 / 2).max(1));
         let field = target("fury field", size);
         let finished = target("fury finished field", size);
         let accumulation = [
-            view(&target("fury accumulation", size)),
-            view(&target("fury accumulation", size)),
+            target("fury accumulation", size),
+            target("fury accumulation", size),
         ];
         let half = [
-            view(&target("fury glow", half_size)),
-            view(&target("fury glow", half_size)),
+            target("fury glow", half_size),
+            target("fury glow", half_size),
         ];
-        let field_view = view(&field);
-        let finished_view = view(&finished);
-        let encoded_view = field.create_view(&wgpu::TextureViewDescriptor {
-            format: Some(ENCODED_FORMAT),
-            ..Default::default()
-        });
         let bind = |label: &str, source: &wgpu::TextureView, second: &wgpu::TextureView| {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some(label),
@@ -676,20 +721,21 @@ impl FuryBackdrop {
         // A pass that reads one target binds it twice: the second slot must
         // not be what the pass writes, read or not.
         let by_last = |make: &dyn Fn(usize, usize) -> wgpu::BindGroup| [make(0, 1), make(1, 0)];
-        let blend = by_last(&|last, _| bind("fury blend", &field_view, &accumulation[last]));
-        let glow = by_last(&|_, next| bind("fury glow", &accumulation[next], &accumulation[next]));
-        let wave = by_last(&|last, _| bind("fury wave", &half[last], &half[last]));
+        let blend = by_last(&|last, _| bind("fury blend", &field.read, &accumulation[last].read));
+        let glow = by_last(&|_, next| {
+            let accumulation = &accumulation[next].read;
+            bind("fury glow", accumulation, accumulation)
+        });
+        let wave = by_last(&|last, _| bind("fury wave", &half[last].read, &half[last].read));
         let composite =
-            by_last(&|_, next| bind("fury composite", &accumulation[next], &half[next]));
-        let band = bind("fury band", &field_view, &field_view);
-        let present = bind("fury present", &finished_view, &finished_view);
-        let page = bind("fury page", &encoded_view, &encoded_view);
+            by_last(&|_, next| bind("fury composite", &accumulation[next].read, &half[next].read));
+        let band = bind("fury band", &field.read, &field.read);
+        let present = bind("fury present", &finished.read, &finished.read);
+        let page = bind("fury page", &field.write, &field.write);
         Targets {
             size,
             field,
-            field_view,
             finished,
-            finished_view,
             accumulation,
             half,
             blend,
@@ -707,7 +753,7 @@ fn with_w(rgb: [f32; 3], w: f32) -> [f32; 4] {
     [rgb[0], rgb[1], rgb[2], w]
 }
 
-/// A pass over the whole of `view`, cleared to black or loaded.
+/// A pass over the whole of `view`, cleared to nothing, alpha included, or loaded.
 ///
 /// A fresh glow target starts black either way: a texture is zero at creation.
 fn full_pass<'a>(
@@ -724,7 +770,7 @@ fn full_pass<'a>(
             resolve_target: None,
             ops: wgpu::Operations {
                 load: if clear {
-                    wgpu::LoadOp::Clear(wgpu::Color::BLACK)
+                    wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
                 } else {
                     wgpu::LoadOp::Load
                 },
@@ -803,6 +849,9 @@ fn upload_sprite(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureVie
     texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
 
+#[cfg(test)]
+mod tests;
+
 /// One of the pictures a draw list can put under its quads, in the order the
 /// list puts them. The derived order is the tie-break when two sit at the same
 /// quad: the Fury pass first, then the scene, then the movie.
@@ -823,8 +872,12 @@ impl super::Renderer {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         clouds: &[PointCloud],
+        bloom: oag_post::hd_bloom::Params,
     ) {
-        self.fury = Some(FuryBackdrop::new(device, queue, self.target_format, clouds));
+        match FuryBackdrop::new(device, queue, self.target_format, clouds, bloom) {
+            Ok(fury) => self.fury = Some(fury),
+            Err(error) => log::warn!("menu backdrop: {error:#} - it draws nothing"),
+        }
     }
 
     /// Runs the Fury backdrop's passes over `frames`, a still's history, so the

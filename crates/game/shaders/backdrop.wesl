@@ -9,11 +9,19 @@
 // live. Every constant comes in through `Points`/`Post`, filled from
 // `oag_ui::backdrop::Frame`; nothing is authored here.
 //
-// Every target but the page is an sRGB one: the original decodes on read,
-// blends in linear light and encodes on write through all of these passes, so
-// the arithmetic here is linear and the formats do the rest.
+// The original reads every target decoded and packs every fragment to sRGB
+// before the blend unit sees it, so a program's arithmetic is linear and what
+// it blends with is stored bytes (`docs/rendering/hd-track-tone.md`, "HD's
+// blends combine encoded values"). Here a pass samples a target through an
+// sRGB view, computes in linear light and writes `stored(..)` to a plain one.
 
+import oag_shaders::colour::srgb_encode;
 import oag_shaders::quad::{ClipUv, covering_triangle};
+
+// What a fragment hands the blend unit: its colour packed, alpha as it is.
+fn stored(colour: vec4<f32>) -> vec4<f32> {
+    return vec4<f32>(srgb_encode(saturate(colour.rgb)), colour.a);
+}
 
 struct Points {
     world_view: mat4x4<f32>,
@@ -108,7 +116,7 @@ fn vs_points(@builtin(vertex_index) index: u32, point: Point) -> PointOut {
 
 @fragment
 fn fs_points(in: PointOut) -> @location(0) vec4<f32> {
-    return in.colour * textureSample(sprite, sprite_sampler, in.uv);
+    return stored(in.colour * textureSample(sprite, sprite_sampler, in.uv));
 }
 
 // The post passes: one full-screen triangle over whichever target is bound,
@@ -159,13 +167,13 @@ fn cell_corner(index: u32) -> vec2<u32> {
 fn fs_blend(in: ClipUv) -> @location(0) vec4<f32> {
     let fresh = textureSample(source, post_sampler, in.uv) * post.tint;
     let previous = textureSample(trail, post_sampler, in.uv);
-    return min(fresh, vec4<f32>(1.0)) + previous * vec4<f32>(post.feedback.rgb, 0.0);
+    return stored(min(fresh, vec4<f32>(1.0)) + previous * vec4<f32>(post.feedback.rgb, 0.0));
 }
 
 // Glow's copy: the pass's constant blend colour is what makes it a gain.
 @fragment
 fn fs_copy(in: ClipUv) -> @location(0) vec4<f32> {
-    return textureSample(source, post_sampler, in.uv);
+    return stored(textureSample(source, post_sampler, in.uv));
 }
 
 // The wave's grid, four quads meeting at the pivot. The outer edge samples
@@ -194,7 +202,7 @@ fn vs_wave(@builtin(vertex_index) index: u32) -> ClipUv {
 fn fs_wave(in: ClipUv) -> @location(0) vec4<f32> {
     let h = textureSample(source, trail_sampler, in.uv).rgb * post.wave_scale.rgb;
     let bias = post.wave_bias.x;
-    return vec4<f32>(h + saturate(h * post.wave_bias.y) * bias + bias, 0.0);
+    return stored(vec4<f32>(h + saturate(h * post.wave_bias.y) * bias + bias, 0.0));
 }
 
 // Fury: the accumulation plus the glow, stretched so a full byte reads as one.
@@ -203,7 +211,7 @@ fn fs_wave(in: ClipUv) -> @location(0) vec4<f32> {
 fn fs_composite(in: ClipUv) -> @location(0) vec4<f32> {
     let accumulation = textureSample(source, post_sampler, in.uv);
     let glow = textureSample(trail, trail_sampler, in.uv);
-    return (accumulation + glow) * (257.0 / 256.0) - vec4<f32>(1.0 / 257.0);
+    return stored((accumulation + glow) * (257.0 / 256.0) - vec4<f32>(1.0 / 257.0));
 }
 
 struct BandOut {
@@ -235,7 +243,7 @@ fn fs_band(in: BandOut) -> @location(0) vec4<f32> {
     let bend = pow(1.0 - in.edge, 10.0) * post.scanline.w;
     let dim = mix(post.band.x, 1.0, in.edge);
     let texel = textureSample(source, post_sampler, in.uv + vec2<f32>(bend, 0.0));
-    return vec4<f32>(texel.rgb * dim, texel.a * in.edge);
+    return stored(vec4<f32>(texel.rgb * dim, texel.a * in.edge));
 }
 
 // One row in four, from the top: the other three are left alone.
@@ -244,13 +252,14 @@ fn fs_scanlines(in: ClipUv) -> @location(0) vec4<f32> {
     if (u32(in.clip.y) % 4u) != 0u {
         discard;
     }
-    return vec4<f32>(post.scanline.rgb, 0.0);
+    return stored(vec4<f32>(post.scanline.rgb, 0.0));
 }
 
-// What the display gets: the final composite's quad carries a half-texel offset
-// on both axes and reads bilinearly, so each pixel on screen is the mean of four
-// field texels in linear light and a scanline is two half-dark rows
-// (menu-backdrop.md, "Three more readings").
+// What the final composite reads: its quad carries a half-texel offset on both
+// axes and reads bilinearly, so each pixel on screen is the mean of four field
+// texels in linear light and a scanline is two half-dark rows
+// (menu-backdrop.md, "Three more readings"). Linear, for the bloom chain's float
+// scene target, which is what runs that composite.
 @fragment
 fn fs_present(in: ClipUv) -> @location(0) vec4<f32> {
     let half_texel = 0.5 / vec2<f32>(textureDimensions(source));

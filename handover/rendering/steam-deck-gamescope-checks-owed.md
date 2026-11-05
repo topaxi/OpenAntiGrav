@@ -48,7 +48,9 @@ reports 1016x572 mm and scale 1) still need a run there. Evidence:
 1. Build `just appimage-deck` from main. In a worktree, first replace the
    `data/appimage` symlink with a real directory. Copy it to
    `deck@steamdeck:oag-perf/<lane>/` and run it there with
-   `--appimage-extract`, under `flock -o ~/.cache/oag/deck.lock`, with its own
+   `--appimage-extract`, through `~/oag-perf/deck-run.sh -- COMMAND` (the Deck's
+   own lock; `scripts/deck-run.sh` is its source; refuses with exit 75 while a
+   Steam game runs and 76 while `~/.cache/oag/deck.reserved` exists), with its own
    `XDG_CONFIG_HOME`/`XDG_STATE_HOME` and `pause_on_focus_loss = false`, on
    `DISPLAY=:1` with a Steam-like environment copied from a gamescope child's
    `/proc/<pid>/environ`. Never through Steam and never with virtual input
