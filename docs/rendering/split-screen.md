@@ -2094,9 +2094,8 @@ two cores, every `/sys/devices/system/cpu/cpu<N>/cpu_capacity` readable and the 
 Galaxy S24 (253 x 4, 653 x 3, 730 x 2, 1024), an unreadable list, one core, Android, Windows, macOS
 and the web do not, and keep `interleaved` whatever the rule says. Positive evidence only: an
 unreadable list counts as uniform for the split finish (`oag_gpu::split_finish::uniform_cores`) but
-not here. The rule sits behind `THREADS_ON_EQUAL_CORES` in `scene/split_record.rs`, **false
-for now**: the production default with the rule on has been run on the Deck at three and four
-views, not yet at two views or on Pulse. `OAG_SPLIT_RECORDING` overrides it both ways, the choice
+not here. The rule sits behind `THREADS_ON_EQUAL_CORES` in `scene/split_record.rs`, **true
+since 2026-11-05** (see "Two views, Pulse and the release call" below). `OAG_SPLIT_RECORDING` overrides it both ways, the choice
 is logged once (`split recording: Threaded (probe, core capacities [...])`), and one view is always
 drawn interleaved. Pictures: `split_recording_ground_truth` (Pure two views, Pulse four) passes,
 and two-view `--screenshot`s of HD Anulpha Pass and Pulse at tick 900 are byte-identical threaded
@@ -2137,27 +2136,26 @@ of p99 hides a wider tail. Earlier two-view runs with `OAG_SPLIT_RECORDING=threa
 setup: HD 12.73 to 11.56 at 800p, 15.01 to 13.59 at 1080p, 18.44 to 16.90 at 4K; Pure 6.62 to
 5.73 at 800p, 7.34 to 6.97 at 1080p, p99 equal or lower.
 
-**Not run yet** (the Deck was taken back): the production default against `interleaved` at two
-views (Pure and HD, three sizes) and Pulse at two views (800p and 1080p). The flip is setting
-`THREADS_ON_EQUAL_CORES` to `true`, after those runs; the threads arm needs a binary built with it
-`true` (the `def` arm is the production default only then). Commands, from a directory holding that
-binary as `oag-st` and an `xdg/config` with vsync and the frame limit off; `run.sh` runs
-`gamescope --backend headless -W W -H H -w W -h H -r 90 -- ./oag-st <image> [--track ...] --race
---mode single_race --seed 1 --autopilot --no-audio --no-intro --frame-log --players N --split-cut
-vertical --render-scale 100 --script 26:quit` with `ENABLE_GAMESCOPE_WSI=0`, and `avg.sh` takes the
-mean of the `frame-phases` and `frame-log stage=race` lines after the first six:
+**Two views, Pulse and the release call (2026-11-05).** Same setup, same binary (the rule on, built
+before the merges since; both arms are that binary, so the comparison stands), two rounds, Pure three
+views at 1080p four more. Load 1.3 to 2.3.
 
-```sh
-# run.sh TITLE LABEL BIN WxH PLAYERS [ENV=VAL...]: one 26 s autopilot race, render scale 100
-for round in 1 2; do for c in "pure 2" "hd 2"; do for size in 1280x800 1920x1080 3840x2160; do
-  for arm in def int; do set -- $c; label=$1-$2p-$arm-$size-$round
-    extra=(); [ $arm = int ] && extra=(OAG_SPLIT_RECORDING=interleaved)
-    flock -o ~/.cache/oag/deck.lock ./run.sh $1 $label oag-st $size $2 "${extra[@]}"; ./avg.sh $label
-  done; done; done
-  for size in 1280x800 1920x1080; do for arm in def int; do label=pulse-2p-$arm-$size-$round
-    extra=(); [ $arm = int ] && extra=(OAG_SPLIT_RECORDING=interleaved)
-    flock -o ~/.cache/oag/deck.lock ./run.sh pulse $label oag-st $size 2 "${extra[@]}"; ./avg.sh $label
-  done; done
-done
-```
+| Title, views, size | threads `total` | interleaved `total` | threads p99 | interleaved p99 | fps |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Pure, 2, 1280x800 | 5.66 | 6.64 | 7.18 | 7.86 | 170.1 / 145.4 |
+| Pure, 2, 1920x1080 | 7.02 | 7.19 | 10.41 | 10.23 | 105.7 / 105.9 (paced) |
+| Pure, 2, 3840x2160 | 9.74 | 10.47 | 38.00 | 38.13 | 28.6 / 28.6 (GPU) |
+| HD, 2, 1280x800 | 11.32 | 12.81 | 15.45 | 16.66 | 85.9 / 76.6 |
+| HD, 2, 1920x1080 | 13.35 | 14.74 | 20.00 | 20.76 | 68.2 / 65.8 |
+| HD, 2, 3840x2160 | 16.55 | 18.43 | 54.53 | 54.01 | 26.1 / 26.1 (GPU) |
+| Pulse, 2, 1280x800 | 7.08 | 8.35 | 8.54 | 9.99 | 137.9 / 117.2 |
+| Pulse, 2, 1920x1080 | 8.68 | 9.46 | 12.21 | 12.93 | 95.6 / 95.4 (paced) |
+| Pure, 3, 1920x1080, rounds 5 to 8 | 10.89 | 10.93 | 14.18 | 13.51 | 89.8 / 89.7 |
+
+Threads lower `total` in every cell. p99 is worse in three: **Pure three views at 1080p is a real
+cost**, +0.53 to +0.82 ms in all four new rounds as in the four before, with no gain in `total`;
+Pure two views at 1080p reads +0.14 and +0.21 at a paced rate; HD two views at 4K reads -0.13 and
++1.19, the rounds' spread, GPU-bound. The release criterion written beforehand kept the rule off for
+any worse p99. The maintainer flipped it anyway: 14.2 ms stays inside
+the frame budget at 90 fps, and the gain is up to 1.9 ms of frame thread and 25 fps elsewhere.
 

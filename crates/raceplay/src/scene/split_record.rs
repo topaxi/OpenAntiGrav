@@ -11,12 +11,11 @@
 //! What lands before each submission is what landed when the views were drawn one after
 //! another, so the picture is the same; `oag-game`'s `split_recording_ground_truth` compares them.
 //!
-//! **The default is [`Recording::Interleaved`]; equal cores may take [`Recording::Threaded`].**
+//! **The default is [`Recording::Interleaved`]; equal cores take [`Recording::Threaded`].**
 //! [`Recording::default_for_target`] picks threads only on positive evidence of equal cores:
 //! native Linux, at least two cores, every `cpu_capacity` readable and the same (the Steam Deck
-//! and a desktop Zen report 1024 on each), and only while `THREADS_ON_EQUAL_CORES` is set, which
-//! it is not until a production-default run on the Deck confirms it. Interleaved stays
-//! everywhere else: capacities that differ (a hybrid Intel part, a phone's big.LITTLE),
+//! and a desktop Zen report 1024 on each), while `THREADS_ON_EQUAL_CORES` is set. Interleaved
+//! stays everywhere else: capacities that differ (a hybrid Intel part, a phone's big.LITTLE),
 //! capacities that cannot be read, one core, Android, Windows, macOS and the web. On the Deck
 //! threads lowered the frame thread by 0.4 to 5.5 ms a frame at two to four views in HD and
 //! Pure, except Pure's three views, where they changed nothing
@@ -70,8 +69,8 @@ pub enum Recording {
 
 impl Recording {
     /// What a split records with when nothing chose: [`Recording::Threaded`] on a native Linux
-    /// machine whose cores all report the same capacity, once [`THREADS_ON_EQUAL_CORES`] is
-    /// set, and [`Recording::Interleaved`] everywhere else (see the module doc).
+    /// machine whose cores all report the same capacity, while [`THREADS_ON_EQUAL_CORES`]
+    /// is set, and [`Recording::Interleaved`] everywhere else (see the module doc).
     /// `OAG_SPLIT_RECORDING` (`interleaved`, `serial`, `reversed`, `threaded`, `overlapped`)
     /// overrides it, for a comparison or a bench.
     pub fn default_for_target() -> Self {
@@ -120,10 +119,11 @@ impl Recording {
     }
 }
 
-/// Whether a machine with equal cores records a split with threads by default. Off until the
-/// Steam Deck's production-default run confirms it (`docs/rendering/split-screen.md`,
-/// "Threaded recording on equal cores").
-const THREADS_ON_EQUAL_CORES: bool = false;
+/// Whether a machine with equal cores records a split with threads by default. On: the Steam
+/// Deck's frame thread gains everywhere but Pure's three views at 1080p, whose p99 pays 0.7 ms
+/// inside its frame budget (`docs/rendering/split-screen.md`, "Threaded recording on equal
+/// cores").
+const THREADS_ON_EQUAL_CORES: bool = true;
 
 /// This machine's core capacities where threads may record a split by default: desktop Linux,
 /// the Steam Deck. Android (phones are big.LITTLE), the web and every other OS read as empty.
