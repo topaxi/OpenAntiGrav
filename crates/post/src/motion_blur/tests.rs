@@ -27,6 +27,7 @@ fn the_viewport_rectangle_is_mapped_into_uv_of_the_target() {
         (200, 100),
         0.5,
         8,
+        Gather::Full,
         Mat4::IDENTITY,
     );
     assert_eq!(c.rect_offset, [0.2, 0.0]);
@@ -40,7 +41,14 @@ fn the_viewport_rectangle_is_mapped_into_uv_of_the_target() {
 
 #[test]
 fn a_degenerate_size_cannot_divide_by_zero() {
-    let c = Constants::new((0.0, 0.0, 0.0, 0.0), (0, 0), 0.5, 8, Mat4::IDENTITY);
+    let c = Constants::new(
+        (0.0, 0.0, 0.0, 0.0),
+        (0, 0),
+        0.5,
+        8,
+        Gather::Full,
+        Mat4::IDENTITY,
+    );
     for value in c
         .rect_offset
         .iter()
@@ -361,16 +369,19 @@ fn a_still_surface_over_a_moving_background_keeps_its_colour() {
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .expect("requesting the device");
 
-    // A frame whose tile grid is square and exact, and one whose is not -
-    // at both gather resolutions, the half one being where a plain bilinear
-    // upsample read 201 at the silhouette.
-    for (size, block, half) in [
-        (64u32, (30u32, 30u32), false),
-        (50, (44, 44), false),
-        (64, (30, 30), true),
-        (50, (44, 44), true),
+    // A frame whose tile grid is square and exact, and one whose is not - at
+    // every gather resolution, a reduced one being where a plain bilinear
+    // upsample read 201 at the silhouette. Quarter's block is twice as wide,
+    // as its texel is.
+    for (size, block, edge, gather) in [
+        (64u32, (30u32, 30u32), 4u32, Gather::Full),
+        (50, (44, 44), 4, Gather::Full),
+        (64, (30, 30), 4, Gather::Half),
+        (50, (44, 44), 4, Gather::Half),
+        (64, (28, 28), 8, Gather::Quarter),
+        (50, (40, 40), 8, Gather::Quarter),
     ] {
-        let red = still_block_over_a_moving_background(&device, &queue, size, block, half);
+        let red = still_block_over_a_moving_background(&device, &queue, size, block, edge, gather);
         let at = |x: u32, y: u32| red[(y * size + x) as usize];
         let (bx, by) = block;
         // Both silhouette columns, which are where the background's taps land
@@ -378,10 +389,10 @@ fn a_still_surface_over_a_moving_background_keeps_its_colour() {
         // the fix, 254 after. The same one count of tolerance the test above
         // explains - `cone`'s quarter-pixel floor letting sub-pixel taps graze
         // the edge.
-        for x in [bx, bx + 3] {
+        for x in [bx, bx + edge - 1] {
             assert!(
                 at(x, by + 1) >= 254,
-                "at {size}px (half: {half}) the background bled across the \
+                "at {size}px ({gather:?}) the background bled across the \
                  still block's silhouette at x={x}: {}",
                 at(x, by + 1)
             );
@@ -394,7 +405,7 @@ fn a_still_surface_over_a_moving_background_keeps_its_colour() {
     }
 }
 
-/// Draws a 4x4 still white block at `block` over a black background running
+/// Draws a still white square `edge` pixels wide at `block` over a black background running
 /// `0.1` uv/tick to the right, with the block nearer in depth, and returns the
 /// red channel of the blurred frame.
 ///
@@ -406,7 +417,8 @@ fn still_block_over_a_moving_background(
     queue: &wgpu::Queue,
     size: u32,
     (bx, by): (u32, u32),
-    half: bool,
+    edge: u32,
+    gather: Gather,
 ) -> Vec<u8> {
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let extent = wgpu::Extent3d {
@@ -414,7 +426,7 @@ fn still_block_over_a_moving_background(
         height: size,
         depth_or_array_layers: 1,
     };
-    let block = |x: u32, y: u32| (bx..bx + 4).contains(&x) && (by..by + 4).contains(&y);
+    let block = |x: u32, y: u32| (bx..bx + edge).contains(&x) && (by..by + edge).contains(&y);
 
     let texture = |label, format, usage| {
         device.create_texture(&wgpu::TextureDescriptor {
@@ -485,7 +497,7 @@ fn still_block_over_a_moving_background(
     upload(&depth, &depths);
 
     let mut blur = MotionBlur::new(device, format).expect("building the pipelines");
-    blur.set_half_resolution(half);
+    blur.set_gather(gather);
     let mut encoder = device.create_command_encoder(&Default::default());
     blur.render(
         device,
@@ -730,17 +742,25 @@ fn the_tile_reduction_finds_motion_in_the_tile_it_belongs_to() {
 /// ```
 #[test]
 fn the_multisampled_prepare_variant_reads_sample_zero_and_the_chain_runs() {
-    multisampled_chain(false);
+    multisampled_chain(Gather::Full, 2);
 }
 
 /// The same at half resolution, which is where a two-pixel block once stayed
-/// sharp - see `fs_reconstruct_half`.
+/// sharp - see `fs_reconstruct_reduced`.
 #[test]
 fn the_half_resolution_gather_smears_a_two_pixel_block() {
-    multisampled_chain(true);
+    multisampled_chain(Gather::Half, 2);
 }
 
-fn multisampled_chain(half: bool) {
+/// A block as wide as a quarter gather's texel, the smallest that gather can
+/// be asked to smear rather than to miss.
+#[test]
+fn the_quarter_resolution_gather_smears_a_four_pixel_block() {
+    multisampled_chain(Gather::Quarter, 4);
+}
+
+/// Smears a square block `edge` pixels wide, centred on the 64x64 frame.
+fn multisampled_chain(gather: Gather, edge: u32) {
     let instance = wgpu::Instance::default();
     let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
@@ -778,8 +798,9 @@ fn multisampled_chain(half: bool) {
         view_formats: &[],
     });
     let mut pixels = vec![0u8; (SIZE * SIZE * 4) as usize];
-    for y in 31..33 {
-        for x in 31..33 {
+    let (left, right) = (SIZE / 2 - edge / 2, SIZE / 2 + edge / 2);
+    for y in left..right {
+        for x in left..right {
             let at = ((y * SIZE + x) * 4) as usize;
             pixels[at..at + 4].copy_from_slice(&[255, 255, 255, 255]);
         }
@@ -845,7 +866,7 @@ fn multisampled_chain(half: bool) {
     queue.submit(Some(clear.finish()));
 
     let mut blur = MotionBlur::new(&device, format).expect("building the pipelines");
-    blur.set_half_resolution(half);
+    blur.set_gather(gather);
     let mut encoder = device.create_command_encoder(&Default::default());
     blur.render(
         &device,
@@ -893,14 +914,20 @@ fn multisampled_chain(half: bool) {
     // The velocity that reached the gather came out of a multisampled texture
     // through `fs_prepare_ms`; a zero there would leave the block untouched.
     assert!(
-        red_at(30, 31) > 0 && red_at(33, 31) > 0,
+        red_at(left - 1, 31) > 0 && red_at(right, 31) > 0,
         "the block did not smear, so sample 0 of the multisampled velocity \
          never reached the gather"
     );
     assert!(
-        red_at(31, 31) < 255,
+        red_at(left, 31) < 255,
         "the block kept full brightness, so nothing was gathered"
     );
-    // Purely horizontal motion, exactly as in the single-sampled case.
-    assert_eq!(red_at(31, 28), 0, "the smear leaked vertically");
+    // Purely horizontal motion, exactly as in the single-sampled case. The
+    // upsample reaches one gather texel across the motion, so a block's width
+    // and a half clear of it stays clean at every gather.
+    assert_eq!(
+        red_at(left, left - edge * 3 / 2),
+        0,
+        "the smear leaked vertically"
+    );
 }

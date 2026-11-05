@@ -41,7 +41,8 @@ struct Constants {
     inv_size: vec2<f32>,
     // The tile edge in pixels, as an integer for the reduction loops.
     tile: u32,
-    _pad: f32,
+    // Full-size pixels per gather texel, each way: 2 at half, 4 at quarter.
+    gather: f32,
     // The camera's lens - its impact shake and its field of view - as a
     // clip-space map from a pixel to where the same direction sat a frame ago
     // under the lens alone; identity for none.
@@ -453,25 +454,27 @@ fn fs_reconstruct(in: VertexOutput) -> @location(0) vec4<f32> {
     return found.colour / max(found.weight, 1e-4);
 }
 
-// **At half resolution, and what it writes is a blend.** The pass runs over a
-// target half the scene's size each way, so `position` is scaled to the
-// full-size pixel grid first: a half-size texel centre `i + 0.5` lands on
-// `2i + 1`, the corner four full-size pixels share. What it returns is the
+// **At a reduced resolution, and what it writes is a blend.** The pass runs over
+// a target `constants.gather` times smaller each way, so `position` is scaled to
+// the full-size pixel grid first: a texel centre `i + 0.5` lands on
+// `gather * i + gather / 2`, the corner the middle full-size pixels share. What
+// it returns is the
 // blurred colour premultiplied by `amount` - the share of the result that came
 // from taps other than the centre - with `amount` in alpha, and `fs_composite`
 // blends the scene toward it at full resolution. A neighbourhood that does not
 // move returns zero and keeps every texel of its own detail; a still pixel a
 // fast surface smears across takes the smear, because its taps carry the
-// weight; only the smear itself is resolved at half resolution. A quarter of
-// the gather's fragments - see `docs/rendering/motion-blur.md`.
+// weight; only the smear itself is resolved at the reduced resolution. Half
+// runs a quarter of the gather's fragments, quarter a sixteenth - see
+// `docs/rendering/motion-blur.md`.
 //
-// **Not a difference from the half-size centre**, which was tried first: added
-// back onto the full-size scene, it leaves anything smaller than a half-size
+// **Not a difference from the reduced centre**, which was tried first: added
+// back onto the full-size scene, it leaves anything smaller than a gather
 // texel unsmeared, and `the_multisampled_prepare_variant_reads_sample_zero_
 // and_the_chain_runs`'s two-pixel block stayed sharp.
 @fragment
-fn fs_reconstruct_half(half_res: VertexOutput) -> @location(0) vec4<f32> {
-    let found = gather(vec4<f32>(half_res.position.xy * 2.0, half_res.position.zw));
+fn fs_reconstruct_reduced(reduced: VertexOutput) -> @location(0) vec4<f32> {
+    let found = gather(vec4<f32>(reduced.position.xy * constants.gather, reduced.position.zw));
     if !found.moved {
         return vec4<f32>(0.0);
     }
@@ -480,10 +483,10 @@ fn fs_reconstruct_half(half_res: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>((found.colour / total).rgb * amount, amount);
 }
 
-// The half-size blend `fs_reconstruct` wrote, laid over the scene at full
+// The reduced blend `fs_reconstruct_reduced` wrote, laid over the scene at full
 // resolution into the scratch target `fs_copy` then carries home.
 //
-// **Upsampled by depth as well as by distance.** Each of the four half-size
+// **Upsampled by depth as well as by distance.** Each of the four reduced
 // texels around this pixel is weighted bilinearly *and* by how near the depth
 // of the full-size pixel it was gathered for lies to this pixel's own, on the
 // gather's own `SOFT_Z` scale - so a still surface's edge pixel takes its own
@@ -502,9 +505,10 @@ fn fs_composite(in: VertexOutput) -> @location(0) vec4<f32> {
     let pixel = vec2<i32>(in.position.xy);
     let scene = textureLoad(tile_tex, pixel, 0);
     let depth = textureLoad(prepared_tex, pixel, 0).z;
-    let half_last = vec2<i32>(textureDimensions(colour_tex)) - vec2<i32>(1);
+    let reduced_last = vec2<i32>(textureDimensions(colour_tex)) - vec2<i32>(1);
     let full_last = vec2<i32>(textureDimensions(prepared_tex)) - vec2<i32>(1);
-    let h = in.position.xy * 0.5 - vec2<f32>(0.5);
+    let by = i32(constants.gather);
+    let h = in.position.xy / constants.gather - vec2<f32>(0.5);
     let base = vec2<i32>(floor(h));
     let f = h - floor(h);
     var sum = vec4<f32>(0.0);
@@ -513,8 +517,8 @@ fn fs_composite(in: VertexOutput) -> @location(0) vec4<f32> {
     var nearest_dz = 1.0e9;
     for (var j = 0; j < 2; j += 1) {
         for (var i = 0; i < 2; i += 1) {
-            let texel = clamp(base + vec2<i32>(i, j), vec2<i32>(0), half_last);
-            let gathered_for = min(texel * 2 + vec2<i32>(1), full_last);
+            let texel = clamp(base + vec2<i32>(i, j), vec2<i32>(0), reduced_last);
+            let gathered_for = min(texel * by + vec2<i32>(by / 2), full_last);
             let dz = abs(textureLoad(prepared_tex, gathered_for, 0).z - depth);
             let smear = textureLoad(colour_tex, texel, 0);
             let bilinear = select(1.0 - f.x, f.x, i == 1) * select(1.0 - f.y, f.y, j == 1);

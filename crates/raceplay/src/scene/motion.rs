@@ -586,7 +586,11 @@ impl super::Scene {
         let size = self.depth.size();
         let [scene, velocity, depth] = views;
         let mut pass = pass.borrow_mut();
-        pass.set_half_resolution(self.blur_half.get());
+        pass.set_gather(if self.blur_half.get() {
+            oag_post::motion_blur::Gather::Half
+        } else {
+            oag_post::motion_blur::Gather::Full
+        });
         pass.render(
             device,
             queue,

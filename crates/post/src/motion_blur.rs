@@ -76,7 +76,8 @@ struct Constants {
     max_px: f32,
     inv_size: [f32; 2],
     tile: u32,
-    _pad: f32,
+    /// [`Gather::divisor`]: full-size pixels per gather texel, each way.
+    gather: f32,
     /// [`Frame::lens_motion`], column-major.
     lens: [[f32; 4]; 4],
 }
@@ -91,6 +92,7 @@ impl Constants {
         size: (u32, u32),
         strength: f32,
         tile: u32,
+        gather: Gather,
         lens: Mat4,
     ) -> Self {
         let (w, h) = (size.0.max(1) as f32, size.1.max(1) as f32);
@@ -102,7 +104,7 @@ impl Constants {
             max_px: max_px(viewport),
             inv_size: [1.0 / w, 1.0 / h],
             tile,
-            _pad: 0.0,
+            gather: gather.divisor() as f32,
             lens: lens.to_cols_array_2d(),
         }
     }
@@ -209,18 +211,45 @@ const PREPARED_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// The tile reductions' format: one velocity per tile.
 const TILE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Float;
 
-/// The half-size gather's format: a premultiplied blend over the scene, kept
+/// A reduced gather's format: a premultiplied blend over the scene, kept
 /// float so the smear's colour keeps its range on HD's linear target - see
 /// `fs_reconstruct`.
 const GATHERED_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
-/// The gather target's size for a full-size `size`: half each way, rounded up
-/// so it covers every full-size pixel.
-fn half(size: (u32, u32)) -> (u32, u32) {
-    (size.0.div_ceil(2).max(1), size.1.div_ceil(2).max(1))
+/// How coarsely the chain gathers its smear.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Gather {
+    /// Every pixel, written straight into the scratch target.
+    #[default]
+    Full,
+    /// One texel per 2x2 pixels, blended back over the frame by depth.
+    Half,
+    /// One texel per 4x4 pixels, blended back the same way.
+    Quarter,
 }
 
-/// The seven bind groups the chain binds, and what they were built against.
+impl Gather {
+    /// How many full-size pixels one gather texel spans, each way.
+    #[must_use]
+    pub fn divisor(self) -> u32 {
+        match self {
+            Self::Full => 1,
+            Self::Half => 2,
+            Self::Quarter => 4,
+        }
+    }
+}
+
+/// A gather target's size for a full-size `size`, a texel spanning `divisor`
+/// pixels each way, rounded up so it covers every full-size pixel.
+fn gathered_size(size: (u32, u32), divisor: u32) -> (u32, u32) {
+    (
+        size.0.div_ceil(divisor).max(1),
+        size.1.div_ceil(divisor).max(1),
+    )
+}
+
+/// The bind groups the chain binds, and what they were built against.
 ///
 /// Rebuilt when - and only when - one of the things inside them moves: the
 /// caller's three attachment views (`attachments`), this pass's own scratch
@@ -228,7 +257,7 @@ fn half(size: (u32, u32)) -> (u32, u32) {
 /// (`sample_count`). Everything else the groups name is owned here and
 /// outlives any frame.
 ///
-/// A bind group is a driver object, and the chain needs seven of them;
+/// A bind group is a driver object, and the chain needs nine of them;
 /// building them every frame was 194 heap allocations a frame on its own,
 /// measured on Talon's Junction - about half of everything
 /// `race::Scene::render` allocated.
@@ -249,7 +278,8 @@ struct Groups {
     columns: wgpu::BindGroup,
     spread: wgpu::BindGroup,
     gather: wgpu::BindGroup,
-    merge: wgpu::BindGroup,
+    merge_half: wgpu::BindGroup,
+    merge_quarter: wgpu::BindGroup,
     home: wgpu::BindGroup,
     /// Which prepare pipeline `prepare` was built for; the MSAA variant has
     /// its own layout.
@@ -278,11 +308,10 @@ pub struct MotionBlur {
     tile_max_y: wgpu::RenderPipeline,
     neighbour_max: wgpu::RenderPipeline,
     reconstruct: wgpu::RenderPipeline,
-    reconstruct_half: wgpu::RenderPipeline,
+    reconstruct_reduced: wgpu::RenderPipeline,
     composite: wgpu::RenderPipeline,
-    /// Whether the gather runs at half resolution - see
-    /// [`Self::set_half_resolution`].
-    half: bool,
+    /// How coarsely the chain gathers - see [`Self::set_gather`].
+    gather: Gather,
     copy: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
     prepare_layout: wgpu::BindGroupLayout,
@@ -297,8 +326,10 @@ pub struct MotionBlur {
     tile_rows: Option<Target>,
     tile_a: Option<Target>,
     tile_b: Option<Target>,
-    /// The half-size gather's output - see [`GATHERED_FORMAT`].
-    gathered: Option<Target>,
+    /// The reduced gathers' outputs - see [`GATHERED_FORMAT`]. Both exist at
+    /// every size, so a flip between them allocates nothing.
+    gathered_half: Option<Target>,
+    gathered_quarter: Option<Target>,
     scratch: Option<Target>,
     /// The chain's bind groups, kept across frames - see [`Groups`].
     groups: Option<Groups>,
@@ -459,9 +490,9 @@ impl MotionBlur {
             &chain_layout,
             format,
         );
-        let reconstruct_half = pipeline(
-            "motion blur reconstruct (half)",
-            "fs_reconstruct_half",
+        let reconstruct_reduced = pipeline(
+            "motion blur reconstruct (reduced)",
+            "fs_reconstruct_reduced",
             &chain_layout,
             GATHERED_FORMAT,
         );
@@ -487,9 +518,9 @@ impl MotionBlur {
             tile_max_y,
             neighbour_max,
             reconstruct,
-            reconstruct_half,
+            reconstruct_reduced,
             composite,
-            half: false,
+            gather: Gather::Full,
             copy,
             layout,
             prepare_layout,
@@ -501,7 +532,8 @@ impl MotionBlur {
             tile_rows: None,
             tile_a: None,
             tile_b: None,
-            gathered: None,
+            gathered_half: None,
+            gathered_quarter: None,
             scratch: None,
             groups: None,
             format,
@@ -515,16 +547,16 @@ impl MotionBlur {
     /// Stateless across frames: the velocity buffer already encodes the
     /// previous tick, so unlike the camera-reprojection pass this replaced
     /// there is no camera pair to hold and nothing to reset on a cut.
-    /// Gathers at half resolution from the next [`Self::render`] on, or at
-    /// full resolution again. Full is the default.
+    /// Gathers at `gather` from the next [`Self::render`] on. Full is the
+    /// default.
     ///
-    /// Half gathers a quarter of the pixels and blends the smear back over
-    /// the full-size frame by depth - `fs_reconstruct_half` and
-    /// `fs_composite`. Measured on HD on an integrated GPU, the chain 15.4 ->
-    /// 4.4 ms at 1600x900 and 59.3 -> 19.4 ms at 3200x1800; the smear reads
-    /// grainier, which is why it is a choice rather than the default.
-    pub fn set_half_resolution(&mut self, half: bool) {
-        self.half = half;
+    /// A reduced gather blends the smear back over the full-size frame by
+    /// depth - `fs_reconstruct_reduced` and `fs_composite`. Measured on HD on
+    /// an integrated GPU, half took the chain 15.4 -> 4.4 ms at 1600x900 and
+    /// 59.3 -> 19.4 ms at 3200x1800; the smear reads grainier, which is why it
+    /// is a choice rather than the default.
+    pub fn set_gather(&mut self, gather: Gather) {
+        self.gather = gather;
     }
 
     pub fn render(
@@ -545,14 +577,16 @@ impl MotionBlur {
             Some(tile_rows),
             Some(tile_a),
             Some(tile_b),
-            Some(gathered),
+            Some(gathered_half),
+            Some(gathered_quarter),
             Some(scratch),
         ) = (
             &self.prepared,
             &self.tile_rows,
             &self.tile_a,
             &self.tile_b,
-            &self.gathered,
+            &self.gathered_half,
+            &self.gathered_quarter,
             &self.scratch,
         )
         else {
@@ -564,6 +598,7 @@ impl MotionBlur {
             frame.size,
             frame.strength,
             tile,
+            self.gather,
             frame.lens_motion,
         );
         if self.written != Some(wanted) {
@@ -614,7 +649,6 @@ impl MotionBlur {
         let full_rect = clamped(frame.viewport, frame.size);
         let rows_rect = clamped(reduced(frame.viewport, (t, 1.0)), (tiles.0, frame.size.1));
         let grid_rect = clamped(reduced(frame.viewport, (t, t)), tiles);
-        let half_rect = clamped(reduced(frame.viewport, (2.0, 2.0)), half(frame.size));
 
         let mut pass =
             |label: &'static str,
@@ -713,23 +747,40 @@ impl MotionBlur {
             None,
         );
         // 5: the gather, into scratch.
-        if self.half {
-            pass(
+        let reduced_gather = match self.gather {
+            Gather::Full => None,
+            Gather::Half => Some((
                 "motion blur reconstruct (half)",
-                &self.reconstruct_half,
+                gathered_half,
+                &groups.merge_half,
+            )),
+            Gather::Quarter => Some((
+                "motion blur reconstruct (quarter)",
+                gathered_quarter,
+                &groups.merge_quarter,
+            )),
+        };
+        if let Some((label, gathered, merge)) = reduced_gather {
+            let by = self.gather.divisor();
+            pass(
+                label,
+                &self.reconstruct_reduced,
                 &[&groups.gather],
                 &gathered.view,
-                half_rect,
-                // Cleared: a texel the half rectangle does not reach is still
-                // within the composite's footprint at the rectangle's edge,
-                // and zero is "no smear".
+                clamped(
+                    reduced(frame.viewport, (by as f32, by as f32)),
+                    gathered_size(frame.size, by),
+                ),
+                // Cleared: a texel the reduced rectangle does not reach is
+                // still within the composite's footprint at the rectangle's
+                // edge, and zero is "no smear".
                 wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                 None,
             );
             pass(
                 "motion blur composite",
                 &self.composite,
-                &[&groups.merge],
+                &[merge],
                 &scratch.view,
                 full_rect,
                 wgpu::LoadOp::Load,
@@ -759,7 +810,7 @@ impl MotionBlur {
         true
     }
 
-    /// Builds all seven bind groups for one `key`. See [`Groups`].
+    /// Builds all the bind groups for one `key`. See [`Groups`].
     ///
     /// Group 0 for each pass: only the slots a pass reads matter, but a bound
     /// texture must not also be that pass's render target - usage scopes are
@@ -774,18 +825,20 @@ impl MotionBlur {
     /// | tile-max x    | prepared       | prepared (3)          | tile_rows |
     /// | tile-max y    | tile_rows      | tile (4)              | tile_a    |
     /// | neighbour-max | tile_a         | tile (4)              | tile_b    |
-    /// | reconstruct   | scene, prepared, tile_b | 0, 3, 4      | scratch   |
+    /// | reconstruct   | scene, prepared, tile_b | 0, 3, 4      | scratch or a gathered target |
+    /// | composite     | gathered, prepared, scene | 0, 3, 4    | scratch   |
     /// | copy          | scratch        | colour (0)            | scene     |
     fn build_groups(&self, device: &wgpu::Device, frame: &Frame<'_>, key: Key) -> Groups {
         // Every caller has already checked these, and a `render` that reached
         // here without them would have returned; `expect` rather than a second
         // `let else` so the shape of this function stays one build.
-        let (prepared, tile_rows, tile_a, tile_b, gathered, scratch) = (
+        let (prepared, tile_rows, tile_a, tile_b, gathered_half, gathered_quarter, scratch) = (
             self.prepared.as_ref().expect("resized"),
             self.tile_rows.as_ref().expect("resized"),
             self.tile_a.as_ref().expect("resized"),
             self.tile_b.as_ref().expect("resized"),
-            self.gathered.as_ref().expect("resized"),
+            self.gathered_half.as_ref().expect("resized"),
+            self.gathered_quarter.as_ref().expect("resized"),
             self.scratch.as_ref().expect("resized"),
         );
         let group = |label: &str,
@@ -898,9 +951,15 @@ impl MotionBlur {
             ),
             // The blend, the full-size depths and the scene through the
             // three slots - see `fs_composite`.
-            merge: group(
-                "motion blur composite",
-                &gathered.view,
+            merge_half: group(
+                "motion blur composite (half)",
+                &gathered_half.view,
+                &prepared.view,
+                frame.scene,
+            ),
+            merge_quarter: group(
+                "motion blur composite (quarter)",
+                &gathered_quarter.view,
                 &prepared.view,
                 frame.scene,
             ),
@@ -942,11 +1001,17 @@ impl MotionBlur {
                 self.format,
                 size,
             ));
-            self.gathered = Some(Target::new(
+            self.gathered_half = Some(Target::new(
                 device,
-                "motion blur gathered",
+                "motion blur gathered (half)",
                 GATHERED_FORMAT,
-                half(size),
+                gathered_size(size, Gather::Half.divisor()),
+            ));
+            self.gathered_quarter = Some(Target::new(
+                device,
+                "motion blur gathered (quarter)",
+                GATHERED_FORMAT,
+                gathered_size(size, Gather::Quarter.divisor()),
             ));
         }
         // Reduced across x but not yet across y - the intermediate the
