@@ -20,10 +20,12 @@
 //! [`BANDS`] levels in `0.0..=1.0`. See
 //! `docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`.
 //!
-//! What stays this project's own: the band centre frequencies, the
-//! magnitude-to-level curve, and the analyser's ballistics. The disc says how
-//! many bands there are and what is done with them, not how a band is
-//! measured. See
+//! **The measurement is recovered too**, from the live band records:
+//! a 1024-point spectrum of the music, summed over sixteen authored bin ranges
+//! ([`BINS`]) and read before the music slider. What stays this project's own
+//! is the window, which the capture could not separate from a sine window. See
+//! `docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`, "What a band
+//! measures". See
 //! [ADR-0018](../../../docs/architecture/adr/0018-audio-mixer-architecture.md)
 //! for why this lives here rather than in the mixer's own per-tick output:
 //! a visualiser is analysis *of* the signal, not a cue the simulation
@@ -32,8 +34,8 @@
 //! # Where it runs
 //!
 //! [`Analyzer::process`] is called from [`crate::output::render::Ahead`]'s
-//! render-ahead thread, once per rendered chunk (about 10 ms). It is
-//! deliberately not called from the real-time device callback, which
+//! render-ahead thread, once per rendered chunk, over the mixer's music tap
+//! ([`crate::Mixer::music_tap`]). It is deliberately not called from the real-time device callback, which
 //! allocates nothing and cannot afford a division-heavy loop. The result is
 //! published into a [`Spectrum`], a small fixed-size snapshot behind a
 //! `Mutex` on the same shape [`crate::output::Tap`] and
@@ -54,94 +56,122 @@ use std::sync::Mutex;
 /// ten-texel band stride that writer lays down. See
 /// `docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`.
 ///
-/// **That the sixteen are *frequency* bands is confidence 75, not 86.** The
-/// count and the layout are solid; what the original measures per entry is
-/// read from two consumers drawing them as an equaliser, a 32-entry sibling
-/// array, and the shipped art's sixteen tagged regions - not from the
-/// producer, which is unfound. The source indexes two blocks of eight, and
-/// eight is also this title's speaker count, so a per-channel reading is not
-/// excluded. Same page.
-///
-/// **The band *frequencies* are still this project's own choice** - see
-/// [`band_frequencies`], and permanently rather than pending a read: the
-/// original's per-band magnitudes come from filter records no PPU code in
-/// that executable writes, on an engine (Sony's SCREAM, on MultiStream) whose
-/// own analysis is not in the image. Four sweeps establishing that are in the
-/// same page.
+/// The sixteen are frequency bands: see [`BINS`].
 pub const BANDS: usize = 16;
 
-/// The band centre frequencies, in Hz, geometrically spaced from 80 Hz to
-/// 8,000 Hz - the range a small on-screen equaliser reads as "bass to
-/// treble" without needing sub-bass or ultrasonic bins nothing on a race
-/// soundtrack fills anyway.
-fn band_frequencies() -> [f32; BANDS] {
-    const LOW: f32 = 80.0;
-    const HIGH: f32 = 8_000.0;
-    let ratio = (HIGH / LOW).ln();
-    std::array::from_fn(|i| {
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "BANDS is 16; no precision lost casting a band index"
-        )]
-        let t = i as f32 / (BANDS - 1) as f32;
-        LOW * (ratio * t).exp()
-    })
+/// The transform's length, and the sample rate its bins are authored at.
+const FFT_SIZE: usize = 1024;
+const AUTHORED_RATE: f32 = 48_000.0;
+
+/// How many samples one spectrum moves on by: half the transform, about 94
+/// spectra a second, what the band records' update cadence reads live.
+const HOP: usize = FFT_SIZE / 2;
+
+/// Each band's first and last bin of the 512 a 1024-point spectrum has, read
+/// out of the live band records (`SoundSystem+0x614`). `46.875` Hz a bin, so
+/// bands `10..=12`, the Fury backdrop's pulse, are `4.5` to `10` kHz. A band
+/// is the sum of its bins' magnitudes.
+const BINS: [(u16, u16); BANDS] = [
+    (0, 0),
+    (1, 1),
+    (2, 2),
+    (3, 5),
+    (6, 11),
+    (12, 20),
+    (21, 32),
+    (33, 49),
+    (50, 70),
+    (71, 96),
+    (97, 128),
+    (129, 167),
+    (168, 213),
+    (214, 266),
+    (267, 328),
+    (329, 511),
+];
+
+/// [`BINS`] at `sample_rate`, the same frequencies when the device is not
+/// running at the rate they were authored for.
+fn bins_at(sample_rate: f32) -> [(usize, usize); BANDS] {
+    let scale = if sample_rate > 0.0 {
+        AUTHORED_RATE / sample_rate
+    } else {
+        1.0
+    };
+    let bin = |at: u16| ((f32::from(at) * scale).round() as usize).min(FFT_SIZE / 2 - 1);
+    BINS.map(|(first, last)| (bin(first), bin(last)))
 }
 
-/// One band's magnitude at a target frequency, by the Goertzel algorithm -
-/// a single-frequency DFT term, computed in one pass with no allocation and
-/// no external FFT dependency for what is otherwise a 32-bin transform run a
-/// hundred times a second.
-///
-/// `target_hz` need not land on an exact FFT bin: Goertzel is a resonant
-/// filter tuned to it either way, which is what lets [`band_frequencies`]
-/// space bands geometrically rather than to the block size's own bin grid.
-fn goertzel_magnitude(samples: &[f32], sample_rate: f32, target_hz: f32) -> f32 {
-    if samples.is_empty() || sample_rate <= 0.0 {
-        return 0.0;
-    }
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "a chunk is hundreds of samples, far under f32's exact-integer range"
-    )]
-    let n = samples.len() as f32;
-    let k = (0.5 + n * target_hz / sample_rate).floor();
-    let omega = 2.0 * std::f32::consts::PI * k / n;
-    let coeff = 2.0 * omega.cos();
-    let mut q1 = 0.0f32;
-    let mut q2 = 0.0f32;
-    for &sample in samples {
-        let q0 = coeff * q1 - q2 + sample;
-        q2 = q1;
-        q1 = q0;
-    }
-    (q1 * q1 + q2 * q2 - q1 * q2 * coeff).max(0.0).sqrt()
+/// An in-place radix-2 transform of [`FFT_SIZE`] complex points, tables built
+/// once, nothing allocated per spectrum.
+#[derive(Debug)]
+struct Fft {
+    /// The window over the block. **Hann is chosen, not measured**: it and a
+    /// sine window correlate with the live band records equally well.
+    window: Vec<f32>,
+    /// `e^(-2 pi i k / FFT_SIZE)` for `k` under half the size.
+    twiddles: Vec<(f32, f32)>,
+    /// Each index with its bits reversed.
+    reversed: Vec<u16>,
 }
 
-/// Converts a raw Goertzel magnitude into this band's own amplitude.
-///
-/// **Normalised by chunk size.** A Goertzel term's magnitude at resonance
-/// scales with `samples.len() / 2` for a sinusoid of a given amplitude, so
-/// dividing that out turns "the raw DFT term" into "roughly this band's own
-/// amplitude, 0 to 1 for full scale" - independent of how many samples one
-/// chunk holds, and the step that matters for *contrast* between bands:
-/// skipping it leaves every band's own leakage floor (a rectangular window's
-/// sidelobes decay slowly) sitting within a few dB of a real tone's peak,
-/// which is exactly the failure this file's own tests caught - every band
-/// from a single test tone clipped to `1.0`, tied, and the tie-break picked
-/// the wrong one.
-///
-/// **This used to log-compress against a chosen `-40 dB` floor**, which was
-/// an invention. [`Range`] replaces it with the original's own curve, which
-/// needs an amplitude rather than a decibel: see that type.
-fn band_amplitude(magnitude: f32, samples: usize) -> f32 {
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "a chunk is a few hundred to a few thousand samples"
-    )]
-    let scale = (samples as f32 / 2.0).max(1.0);
-    magnitude / scale
+impl Fft {
+    fn new() -> Self {
+        let turn = 2.0 * std::f32::consts::PI / FFT_SIZE as f32;
+        let bits = FFT_SIZE.trailing_zeros();
+        Self {
+            window: (0..FFT_SIZE)
+                .map(|i| 0.5 - 0.5 * (turn * i as f32).cos())
+                .collect(),
+            twiddles: (0..FFT_SIZE / 2)
+                .map(|k| {
+                    let angle = -turn * k as f32;
+                    (angle.cos(), angle.sin())
+                })
+                .collect(),
+            reversed: (0..FFT_SIZE)
+                .map(|i| (i.reverse_bits() >> (usize::BITS - bits)) as u16)
+                .collect(),
+        }
+    }
+
+    /// The magnitudes of `samples`' first [`HALF`] bins, into `magnitudes`.
+    fn magnitudes(
+        &self,
+        samples: &[f32; FFT_SIZE],
+        real: &mut [f32; FFT_SIZE],
+        imaginary: &mut [f32; FFT_SIZE],
+        magnitudes: &mut [f32; HALF],
+    ) {
+        for (i, &from) in self.reversed.iter().enumerate() {
+            real[i] = samples[usize::from(from)] * self.window[usize::from(from)];
+            imaginary[i] = 0.0;
+        }
+        let mut half = 1;
+        while half < FFT_SIZE {
+            let stride = FFT_SIZE / (half * 2);
+            for start in (0..FFT_SIZE).step_by(half * 2) {
+                for k in 0..half {
+                    let (wr, wi) = self.twiddles[k * stride];
+                    let (a, b) = (start + k, start + k + half);
+                    let tr = real[b] * wr - imaginary[b] * wi;
+                    let ti = real[b] * wi + imaginary[b] * wr;
+                    real[b] = real[a] - tr;
+                    imaginary[b] = imaginary[a] - ti;
+                    real[a] += tr;
+                    imaginary[a] += ti;
+                }
+            }
+            half *= 2;
+        }
+        for (bin, magnitude) in magnitudes.iter_mut().enumerate() {
+            *magnitude = (real[bin] * real[bin] + imaginary[bin] * imaginary[bin]).sqrt();
+        }
+    }
 }
+
+/// The bins a spectrum keeps.
+const HALF: usize = FFT_SIZE / 2;
 
 /// One band's auto-ranging normaliser: where this band's amplitude sits
 /// between its own recent floor and its own recent peak, `0.0..=1.0`.
@@ -205,71 +235,87 @@ impl Range {
     }
 }
 
-/// Runs the per-band Goertzel transform over one rendered chunk and holds a
-/// smoothed level per band, ready to publish into a [`Spectrum`].
+/// Runs the transform over the music as it arrives and holds each band's
+/// range and latest level, ready to publish into a [`Spectrum`].
 ///
-/// Owns its own smoothing state, so it is a small struct on the render-ahead
-/// thread rather than something [`Spectrum`] itself would need a lock to
-/// update incrementally.
+/// Owns its own state, so it is a small struct on the render-ahead thread
+/// rather than something [`Spectrum`] itself would need a lock to update
+/// incrementally.
 #[derive(Debug)]
 pub(crate) struct Analyzer {
-    frequencies: [f32; BANDS],
+    fft: Fft,
     ranges: [Range; BANDS],
+    levels: [f32; BANDS],
+    /// The last [`FFT_SIZE`] samples, oldest first.
+    block: Box<[f32; FFT_SIZE]>,
+    /// Samples taken since the last spectrum.
+    since: usize,
+    real: Box<[f32; FFT_SIZE]>,
+    imaginary: Box<[f32; FFT_SIZE]>,
+    magnitudes: Box<[f32; HALF]>,
 }
 
 impl Analyzer {
     pub(crate) fn new() -> Self {
         Self {
-            frequencies: band_frequencies(),
+            fft: Fft::new(),
             ranges: [Range::default(); BANDS],
+            levels: [0.0; BANDS],
+            block: Box::new([0.0; FFT_SIZE]),
+            since: 0,
+            real: Box::new([0.0; FFT_SIZE]),
+            imaginary: Box::new([0.0; FFT_SIZE]),
+            magnitudes: Box::new([0.0; HALF]),
         }
     }
 
-    /// Folds one chunk of interleaved stereo samples in, and returns this
-    /// chunk's levels.
+    /// Folds `mono` in and returns the latest levels: one spectrum every
+    /// [`HOP`] samples, however the chunks fall.
     ///
-    /// **No decay here.** An earlier version held each band against a `0.75`
-    /// per-chunk fade, on the reasoning that a 512-frame update period would
-    /// otherwise flicker. That was an invention in the wrong place: the
-    /// original's sound system publishes an *instantaneous* normalised level
-    /// (see [`Range`]) and the ballistics live one layer out, in the
-    /// visualiser's own per-frame peak-hold -
-    /// `oag_mesh::mesh_render::zone::Hold`, itself recovered. Holding here
-    /// too would smear the attack the hold is supposed to catch.
-    pub(crate) fn process(&mut self, stereo: &[f32], sample_rate: u32) -> [f32; BANDS] {
+    /// **No decay here.** The original's sound system publishes an
+    /// *instantaneous* normalised level (see [`Range`]) and the ballistics
+    /// live one layer out, in each reader's own per-frame hold:
+    /// `oag_mesh::mesh_render::zone::Hold` and `oag_ui::backdrop::Fury`.
+    pub(crate) fn process(&mut self, mono: &[f32], sample_rate: u32) -> [f32; BANDS] {
         #[expect(
             clippy::cast_precision_loss,
             reason = "an audio sample rate is well under f32's exact-integer range"
         )]
         let rate = sample_rate as f32;
-        // Mono sum: the visualiser is one signal, not a stereo pair of them,
-        // and summing here is one pass rather than one Goertzel run per
-        // channel.
-        let mono: Vec<f32> = stereo
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|frame| (frame[0] + frame[1]) * 0.5)
-            .collect();
-        // How long this chunk covers, which is what the recovered peak and
-        // floor rates are per: the original takes its own `dt` as an
-        // argument. Deriving it here rather than taking it keeps the caller
-        // from having to agree with the mixer about chunk sizes.
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a chunk is a few hundred to a few thousand frames"
-        )]
-        let dt = if rate > 0.0 {
-            mono.len() as f32 / rate
-        } else {
-            0.0
-        };
-        let mut levels = [0.0f32; BANDS];
-        for (band, &frequency) in self.frequencies.iter().enumerate() {
-            let amplitude = band_amplitude(goertzel_magnitude(&mono, rate, frequency), mono.len());
-            levels[band] = self.ranges[band].level(amplitude, dt);
+        let dt = if rate > 0.0 { HOP as f32 / rate } else { 0.0 };
+        let bins = bins_at(rate);
+        for chunk in mono.chunks(HOP) {
+            let take = chunk.len().min(HOP - self.since);
+            let (now, rest) = chunk.split_at(take);
+            self.push(now);
+            if self.since == HOP {
+                self.spectrum(&bins, dt);
+            }
+            self.push(rest);
         }
-        levels
+        self.levels
+    }
+
+    /// Moves `samples` into the block, no more than a hop's worth.
+    fn push(&mut self, samples: &[f32]) {
+        self.block.copy_within(samples.len().., 0);
+        self.block[FFT_SIZE - samples.len()..].copy_from_slice(samples);
+        self.since += samples.len();
+    }
+
+    /// One spectrum of the block, every band's level from it.
+    fn spectrum(&mut self, bins: &[(usize, usize); BANDS], dt: f32) {
+        self.since = 0;
+        self.fft.magnitudes(
+            &self.block,
+            &mut self.real,
+            &mut self.imaginary,
+            &mut self.magnitudes,
+        );
+        for (band, &(first, last)) in bins.iter().enumerate() {
+            let sum: f32 = self.magnitudes[first..=last].iter().sum();
+            self.levels[band] = self.ranges[band].level(sum / FFT_SIZE as f32, dt);
+        }
     }
 }
 
@@ -277,8 +323,8 @@ impl Analyzer {
 /// that computes it and whoever reads it once a frame.
 ///
 /// Silence (`[0.0; BANDS]`) until the first chunk renders, and forever on
-/// [`crate::Output::null`] - the honest state for a machine with nothing
-/// playing: an equaliser with no signal shows nothing, not an invented level.
+/// [`crate::Output::null`]. That is the original's own silent value: its
+/// bands read `0` before the menu's music starts and across the loop's seam.
 #[derive(Debug)]
 pub struct Spectrum {
     levels: Mutex<[f32; BANDS]>,

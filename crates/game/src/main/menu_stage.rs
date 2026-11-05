@@ -247,15 +247,16 @@ impl MenuStage {
     /// Driven from the same fixed `dt` the simulation is, and for the same
     /// reason the front end's movie is: nothing here reads the wall clock. The
     /// player wraps rather than finishing - it is a loop, which is the whole
-    /// difference between this movie and the intro.
-    pub(crate) fn tick(&mut self, dt: f64) {
+    /// difference between this movie and the intro. `bands` is this tick's
+    /// snapshot of the audio analysis; the simulation never sees it.
+    pub(crate) fn tick(&mut self, dt: f64, bands: &[f32; oag_ui::backdrop::BANDS]) {
         if let Some(backdrop) = &mut self.backdrop {
             backdrop.player.update(dt);
         }
         // One clip frame per tick: the original counts its clip up once per
         // rendered frame at sixty, and the stage's step is the same sixty.
         if let Some(styled) = &mut self.styled {
-            styled.tick(self.menu.depth() == 1);
+            styled.tick(self.menu.depth() == 1, bands);
         }
         // The same fixed `dt` the backdrop is stepped with, and for the same
         // reason: nothing on this stage reads the wall clock, so two runs of

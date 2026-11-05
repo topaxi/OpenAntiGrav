@@ -455,6 +455,8 @@ pub struct Mixer {
     bus_gain: [f32; Bus::COUNT],
     /// A second gain per bus that [`Self::set_bus_gain`] never writes; see [`Self::set_bus_trim`].
     bus_trim: [f32; Bus::COUNT],
+    /// See [`Self::music_tap`].
+    music_tap: Vec<f32>,
     master_gain: f32,
     /// A fixed gain a title asks for, ahead of the limiter; see [`Self::set_master_trim`].
     master_trim: f32,
@@ -503,6 +505,7 @@ impl Mixer {
             voices: vec![Voice::default(); MAX_VOICES],
             bus_gain: [1.0; Bus::COUNT],
             bus_trim: [1.0; Bus::COUNT],
+            music_tap: Vec::new(),
             master_gain: 1.0,
             master_trim: 1.0,
             sample_rate: sample_rate.max(1),
@@ -551,6 +554,16 @@ impl Mixer {
     /// Sets one bus's gain, which is what a volume slider moves.
     pub fn set_bus_gain(&mut self, bus: Bus, gain: f32) {
         self.bus_gain[bus.index()] = gain.max(0.0);
+    }
+
+    /// The last [`Self::render`]'s music, mono, before any bus gain, trim or
+    /// the master: what the original's band analysis hears, which goes on
+    /// reading the music with the music slider at zero
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`, "What a band
+    /// measures").
+    #[must_use]
+    pub fn music_tap(&self) -> &[f32] {
+        &self.music_tap
     }
 
     /// Multiplies one bus by `trim` on top of [`Self::set_bus_gain`]. Kept apart from it so a
@@ -997,6 +1010,8 @@ impl Mixer {
     /// what the limiter saw.
     pub fn render(&mut self, out: &mut [f32]) {
         out.fill(0.0);
+        self.music_tap.clear();
+        self.music_tap.resize(out.len() / CHANNELS, 0.0);
         let master = self.master_gain * self.master_trim;
         let bus_gain = self.bus_gain;
         let bus_trim = self.bus_trim;
@@ -1013,6 +1028,7 @@ impl Mixer {
             }
         }
         let binaural = &mut self.binaural;
+        let music_tap = &mut self.music_tap;
 
         for voice in &mut self.voices {
             let Some(sound) = voice.sound.clone() else {
@@ -1087,7 +1103,7 @@ impl Mixer {
             // shorter than the fade is shortened rather than swallowed.
             let closing = (f64::from(RELEASE_FRAMES) * step.abs()).min(frames as f64 / 4.0);
             let mut delay = voice.delay;
-            for chunk in out.as_chunks_mut::<CHANNELS>().0 {
+            for (at, chunk) in out.as_chunks_mut::<CHANNELS>().0.iter_mut().enumerate() {
                 if delay > 0 {
                     delay -= 1;
                     continue;
@@ -1161,6 +1177,9 @@ impl Mixer {
                             voice.rear_state[c] = x;
                             x
                         };
+                    }
+                    if bus == Bus::Music {
+                        music_tap[at] += 0.5 * (raw[0] + raw[1]) * voice.gain * fade * closing_fade;
                     }
                     if let (Some(state), Some(bin)) = (voice.hrtf.as_deref_mut(), binaural.as_mut())
                     {

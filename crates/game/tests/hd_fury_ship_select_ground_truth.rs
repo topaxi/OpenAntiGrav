@@ -83,12 +83,12 @@ fn draw(
         oag_ui::backdrop::Fury::new(assets.settings.clone(), assets.first, boot::fury::SEED)?;
     let settle = oag_ui::backdrop::FRAMES_TO_SETTLE;
     for _ in 0..(seconds * oag_ui::backdrop::FRAMES_PER_SECOND) as u32 - settle {
-        model.tick();
+        model.tick(&oag_ui::backdrop::SILENCE);
     }
     let aspect = width as f32 / height as f32;
     let leading_up = (0..settle).map(|at| {
         let frame = model.frame(height as f32, aspect, tint(settle - at));
-        model.tick();
+        model.tick(&oag_ui::backdrop::SILENCE);
         frame
     });
     let frames: Vec<_> = leading_up.collect();

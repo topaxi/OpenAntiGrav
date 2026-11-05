@@ -331,14 +331,10 @@ where `resScale = clamp(0.0015 * height - 0.62, 0, 4)` (`1.0` at 1080 lines),
 `brightness` is `0.7` at rest (a short random pulse on enable - `OnEnable` seeds four
 `rand() * 2^-29 - 1` values and a `0.2..1.6` s duration, `Render` runs
 `0.65 * lerp + 0.7` through a `(1 - sin(PI * t)) / 2` ease while it lasts), and
-`musicPulse = 1 + (mean(eq[3]) - Music Pulse Base) * Music Pulse factor` from three
-equaliser bands at `+0x19c..+0x1a4` that the sound system feeds. RPCS3 reads the
-uploaded `particleColour` between `0.040` and `0.21` over two minutes of menu music
-(`musicPulse` from `0.23` to `1.2`, and to the law's own `1.33` on a longer sample: see
-"The frame, measured"; the disc authors base `0.7`, factor `1.1`).
-**This build has no equaliser tap and plays no menu music yet**, so it sits the
-bands at zero - `musicPulse = 0.23`, the quietest RPCS3 showed - rather than at
-the base. The ramp's
+`musicPulse = 1 + (mean(eq[3]) - Music Pulse Base) * Music Pulse factor` from
+bands 10, 11, 12 as they came (`+0x19c..+0x1a4`; see ["The equaliser"](#the-equaliser-2026-11-05)).
+RPCS3 reads the uploaded `particleColour` between `0.0401` and `0.2318` at 720 lines, exactly
+`0.1743 * musicPulse` over `0.23..1.33` (the disc authors base `0.7`, factor `1.1`). The ramp's
 `0.2` and `10.0` are `FuryStaticPath_Ramp`'s hard-coded values (`+0x4c`, `+0x48`).
 
 So the visible motion on a static path is the camera's lerp, the sprites growing with
@@ -486,10 +482,12 @@ first).
   looks; the disassembly is the evidence. Wave pinch and drift are `g+0x4d4 = 0.003`, `g+0x4d8 = 0.005`,
   read live. Pivot uv is `(x + 1) / 2`, `(1 - y + 0.005) / 2`, as the vertices show. **Confidence 85**; the
   earlier "40 on the equaliser" line above is this.
-- **The glow gain's shape is a threshold.** `dVar46` is `g+0x4d0` (`24`) only while the band mean is above
-  `g+0x1708`, and `1` otherwise, so `0.016 * 24 * eq` or `0.016 * eq`: with the clamp, nearly always the floor
-  or the ceiling, which is why the dumps show `05` or `26` and nothing between. `g+0x1708` read `0.646`; what
-  moves it is unread. With no equaliser the gain is `5/255`. **Confidence 80.**
+- **The glow gain is an attack detector.** The scale is `g+0x4d0` (`24`) on a frame the held mean of bands 10-12
+  rose, and `1` otherwise, so `0.016 * 24 * eq` or `0.016 * eq`: with the clamp, nearly always the floor
+  or the ceiling, which is why the dumps show `05` or `26` and nothing between. `g+0x1708` is no threshold but
+  last frame's mean: `Render` loads it at `0x0018442c`, stores this frame's at `0x0018448c` and compares at
+  `0x00184e8c` (`fcmpu cr7,f27,f25`). `f27` is `(held10 + held11 + held12) * 1/3`. Silent, the gain is `5/255`.
+  **Confidence 90.**
 - **The field reaches the screen half a texel off, and the game asks for it.** Draw 25's immediate vertices at
   1080p carry uv `(0.00026, 0.000463)` at the top left and `(1.00026, 1.000463)` at the bottom right:
   `0.5 / 1920` and `0.5 / 1080`, on both axes, with unit 0's filter `0x2022000`, linear, and the window's pixel
@@ -506,12 +504,15 @@ first).
 (2,786 samples, muted emulator): every band stays on `0..1` and the three-band mean reaches
 exactly `0` and `1`, so the law's own range is `1 + (0 - 0.7) * 1.1 = 0.23` to
 `1 + (1 - 0.7) * 1.1 = 1.33`. The `1.2` above was a short sample, not a ceiling; nothing in
-the code caps at it. **The bank is `+0x19c`**: `particleColour` read out of the ring beside
+the code caps at it. **"The bank" is band indices**, see ["The equaliser"](#the-equaliser-2026-11-05). **It is `+0x19c`**: `particleColour` read out of the ring beside
 both band sets for 25 s fits the law to a mean of `0.11` on `+0x19c..+0x1a4` and `0.37` on
 `+0x1dc..+0x1e4`. Confidence 90 on the range, 85 on the bank (the error left is a frame's
 lag on a moving signal). The sender's percentiles (median `0.856`) are not reproduced: over
 115 s here `+0x19c` gives a median of `0.385`, and their numbers look like the `+0x1dc` set
-(`0.848`). The peak agrees; the distribution is unresolved and depends on the track.
+(`0.848`). The peak agrees. **Resolved 2026-11-05**: `+0x1dc` is the same three bands held, so their
+percentiles are the wrong array through the right law; over the same 115 s the held set gives
+`0.425, 0.848, 1.28, 1.33` against the sender's `0.422, 0.856, 1.285, 1.330`. Their tap at `+0x1dc` would not
+be what the shader reads: `particleColour` follows the bands as they came, median pulse `0.37`.
 
 **`OnEnable` does run on Main Menu to Campaign Selection.** The sender says it does not. Block
 `+0x1648`..`+0x1650` read after each of four presses, Campaign, Main, Campaign, Main, Campaign:
@@ -528,6 +529,59 @@ separated from the music here, so the visible amplitude stays open.
 `BackgroundAnim` string at all in the v1.04 executable. None of this section applies to either.
 The wiring below reaches only `MenuBackdrop::Fury`, which the Fury style alone selects; the HD-style and
 Omega scene backdrop is untouched and its ground truth passes.
+
+## The equaliser (2026-11-05)
+
+`BackgroundAnimFury_Update` (`0x0017e4e0`) reads all sixteen levels once a frame through
+`SoundSystem_GetBandLevel` (`bl 0x304530`, `0x0017e5d8`). Instruction level, `0x0017e5ac`..`0x0017e628`:
+
+```text
+raw[b]  = level                       ; +0x174 + 4b, 0x0017e5f8
+held[b] = level >= held[b] ? level    ; +0x1b4 + 4b
+        : max(held[b] - g+0x460, 0)   ; Equaliser Damp Speed, 0.02, per call not per second
+```
+
+So the fields earlier sections call banks are one array. `+0x19c..+0x1a4` is `raw[10..12]`, the music
+pulse. `+0x1dc..+0x1e4` is `held[10..12]`, the glow and the `0` coupling of `Equaliser/Feedback
+multiplier` (`0x00184a1c`). `+0x1e8`, `+0x1ec` are `held[13]`, `held[14]`, the pivot's x and y
+(`0x001850b4`). **Confidence 92**: the loop read, and across 2,786 stored samples held stood at or over
+raw on all three bands in 96 percent, the rest a read landing between the two stores. The falls are
+whole steps of `0.02` in RPCS3 reads (`0.48, 0.46, 0.44`), one per frame at this run's 58 Hz.
+
+What feeds the levels is on [zone-visualiser.md](zone-visualiser.md#what-a-band-measures-2026-11-05):
+a 1024-point spectrum of the music before the slider, so bands 10-12 are `4.5` to `10` kHz, hats and
+cymbals. **Silent**: bands read `0` with nothing playing (the loop's seam and before the first bar), and
+`particleColour` reads `0.0401`, the `0.23` law, on the 2,321 samples of a run with all three at zero.
+The `musicPulse = 1` a sender's RPCS3 patch pins is that patch, not the game's silence. Confidence 90.
+
+**Wired.** `oag_audio::spectrum` computes the recovered spectrum from `Mixer::music_tap`, ahead of every
+gain, on the audio's existing render-ahead thread. `MenuStage::tick` hands a copy of the sixteen levels
+to `oag_ui::backdrop::Fury::tick` once per tick, the fixed step `oag-audio` already serves the Zone
+visualiser. `--no-audio` and every capture read `SILENCE`, the original's own silent value. No simulation
+crate sees any of it.
+
+Replaying RPCS3's own dump through `oag_audio::spectrum` and the model's arithmetic, against the same 137 s
+read live:
+
+| | p5 | p50 | p95 | max |
+| --- | ---: | ---: | ---: | ---: |
+| `musicPulse`, original | 0.230 | 0.366 | 1.115 | 1.330 |
+| `musicPulse`, ours | 0.230 | 0.364 | 1.087 | 1.330 |
+| `particleColour.r`, original | 0.0401 | 0.0635 | 0.1935 | 0.2318 |
+| `particleColour.r`, ours | 0.0401 | 0.0635 | 0.1894 | 0.2318 |
+
+Frame by frame `r = 0.81` on the pulse and `0.86` on the held mean; the bands alone reach `0.93`, the rest
+is the noise of two clocks read at different moments. Rising frames, the glow's duty: `13.0` percent against
+`13.6`. Nothing here was fitted.
+
+**Screen level does not follow the pulse in a sampled still**: 90 grabs at 2 Hz off RPCS3 at 720p correlate at most
+`0.25` with the pulse at any lag from `-0.4` to `2.4` s. The camera path and the cloud dominate, a grab lags
+by an unknown 100-odd frames, and every RPCS3 frame of this backdrop carries the index wrap. So the visible
+pulse is proved at the shader constant, not on glass.
+
+**Omega:** checked, differs, no `BackgroundAnimFury` (above). **2048:** checked, differs, no `BackgroundAnim` string
+in the executable. Neither gets any of this. The pulse lives on `MenuBackdrop::Fury`, which the Fury
+style alone selects.
 
 ## The pass graph, wired (2026-11-05)
 
@@ -669,7 +723,7 @@ RPCS3's, so neither title's references carry it. `hd_bloom_params` only moved; t
   pass, then Blend, Wave and the tinted composite into three viewport-sized
   `Rgba8Unorm` targets - where the draw list carries `Draw::FuryBackdrop`.
 - `oag_game::boot::fury` loads twelve clouds and reports; static paths only, morph
-  and dynamic re-rolled, no equaliser, a fixed seed. `--menu-page main` on the Fury
+  and dynamic re-rolled, bands at silence, a fixed seed. `--menu-page main` on the Fury
   disc draws it; `--anim-seconds` runs the clip in.
 
 ## Runtime verification, 2026-09-14
@@ -765,7 +819,7 @@ measured** - it misses the 1/2 and 1/4 points by 0.07-0.09, and a moving cloud a
 top limit the fit. Exact where the page behind the backdrop is black, which it is under every
 Fury page. The practical effect: every page but Main Menu now shows the cloud, where the
 literal scale left it near black. Tint 1 is dimmer than the original's at the same moment
-(red channel of the backdrop pixels, `q90 148` against `247`, over 20 clocks here and 28 frames there): this build sits `musicPulse` at 0.23
+(red channel of the backdrop pixels, `q90 148` against `247`, over 20 clocks here and 28 frames there): a capture sits `musicPulse` at 0.23
 where RPCS3's menu music takes it to 1.2, not a tint law. Test:
 `crates/game/tests/hd_fury_ship_select_ground_truth.rs`.
 
@@ -798,8 +852,7 @@ colours (above), so this is the original's own law, not a gap.
 - Modes `5`, `9`, `10`, `11`: the vertex programs are paired and disassemble; their
   `Update` functions and the two extra streams (`targetPosition`, the line/quad
   offsets) are unread.
-- The equaliser: what feeds the sixteen bands at `+0x1b4` and the banks at `+0x19c` and `+0x1dc`, what moves
-  the glow threshold `g+0x1708`, and whether the menu's own music track is what it analyses.
+- Whether anything but the music feeds the bands (see [zone-visualiser.md](zone-visualiser.md#still-open)).
 - `0x00182358`'s purpose: inert here with its two inputs at zero, shaped like a
   stereo eye offset, unnamed.
 - The HD-style `BackgroundAnim_Item.cpp` (`FEBackgroundAnim_vp`/`_fp`/`Copy_fp`, the
