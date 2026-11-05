@@ -5,7 +5,7 @@
 //! is about half the frame thread on HD's Anulpha Pass (`docs/rendering/frame-thread-cpu.md`).
 //! It runs on one encoder at a time, but two encoders finish independently. So the frame loop
 //! opens a [`Frame`], the scene calls [`split`] where a run of passes is complete, and the
-//! closed encoder is finished by a worker thread while this one records the rest. The buffers
+//! closed encoder is finished by another thread while this one records the rest. The buffers
 //! go to the queue in one submission, in the order they were recorded, so what the GPU runs
 //! and every queue write it sees are what one encoder gave it.
 //!
@@ -156,6 +156,26 @@ pub fn core_capacities() -> Vec<u32> {
     }
 }
 
+/// True on native Linux with at least two cores that all report the same capacity: positive
+/// evidence of equal cores, which what has been measured only on such a machine asks for.
+#[must_use]
+pub fn known_equal_cores() -> bool {
+    #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
+    {
+        equal_cores(&core_capacities())
+    }
+    #[cfg(not(all(target_os = "linux", not(target_arch = "wasm32"))))]
+    {
+        false
+    }
+}
+
+/// A list of at least two capacities, all the same.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn equal_cores(capacities: &[u32]) -> bool {
+    capacities.len() > 1 && uniform_cores(capacities)
+}
+
 /// Closes `encoder` here and goes on in a fresh one, when this thread has an open [`Frame`];
 /// does nothing otherwise. Call it between passes, with none open on `encoder`.
 pub fn split(device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder) {
@@ -179,29 +199,52 @@ fn finish_elsewhere(encoder: wgpu::CommandEncoder) -> Closed {
     Closed::Finished(encoder.finish())
 }
 
-/// Sends `encoder` to the finishing thread, started on first use; finishes it here if the
-/// thread cannot be started.
+/// How many threads finish a frame's closed encoders where [`known_equal_cores`], each encoder
+/// on the next: encoders finish independently, and a frame closes its second while the first is
+/// still finishing, so one thread would queue it and the frame thread would wait for the pair
+/// (`docs/rendering/frame-thread-cpu.md`, "A second finishing thread"). Elsewhere one thread.
+/// `OAG_FINISH_THREADS` overrides it (an A/B switch for benches, nothing a player sets).
+#[cfg(not(target_arch = "wasm32"))]
+const FINISH_THREADS: usize = 2;
+
+/// Sends `encoder` to a finishing thread, started on first use; finishes it here if no thread
+/// can be started.
 #[cfg(not(target_arch = "wasm32"))]
 fn finish_elsewhere(encoder: wgpu::CommandEncoder) -> Closed {
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
     type Job = (wgpu::CommandEncoder, mpsc::Sender<wgpu::CommandBuffer>);
-    static WORKER: std::sync::OnceLock<Option<std::sync::Mutex<mpsc::Sender<Job>>>> =
+    static WORKERS: std::sync::OnceLock<Vec<std::sync::Mutex<mpsc::Sender<Job>>>> =
         std::sync::OnceLock::new();
-    let worker = WORKER.get_or_init(|| {
-        let (jobs, inbox) = mpsc::channel::<Job>();
-        std::thread::Builder::new()
-            .name("oag-finish".into())
-            .spawn(move || {
-                for (encoder, answer) in inbox {
-                    let _ = answer.send(encoder.finish());
-                }
-            })
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let workers = WORKERS.get_or_init(|| {
+        let threads = std::env::var("OAG_FINISH_THREADS")
             .ok()
-            .map(|_| std::sync::Mutex::new(jobs))
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(if known_equal_cores() {
+                FINISH_THREADS
+            } else {
+                1
+            });
+        (0..threads)
+            .filter_map(|_| {
+                let (jobs, inbox) = mpsc::channel::<Job>();
+                std::thread::Builder::new()
+                    .name("oag-finish".into())
+                    .spawn(move || {
+                        for (encoder, answer) in inbox {
+                            let _ = answer.send(encoder.finish());
+                        }
+                    })
+                    .ok()
+                    .map(|_| std::sync::Mutex::new(jobs))
+            })
+            .collect()
     });
-    let Some(jobs) = worker else {
+    if workers.is_empty() {
         return Closed::Finished(encoder.finish());
-    };
+    }
+    let jobs = &workers[NEXT.fetch_add(1, Ordering::Relaxed) % workers.len()];
     let (answer, finished) = mpsc::channel();
     let sent = jobs
         .lock()
@@ -216,6 +259,14 @@ fn finish_elsewhere(encoder: wgpu::CommandEncoder) -> Closed {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn equal_cores_takes_two_or_more_the_same() {
+        assert!(equal_cores(&[1024; 8]));
+        assert!(!equal_cores(&[]));
+        assert!(!equal_cores(&[1024]));
+        assert!(!equal_cores(&[253, 1024]));
+    }
 
     fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
         let instance = wgpu::Instance::default();

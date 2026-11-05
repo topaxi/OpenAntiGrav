@@ -1413,3 +1413,188 @@ Pulse two views at 800p gains 5 fps (117.7 to 123.0); elsewhere fps paces or the
 worst p99 is +0.47 ms at HD two views 4K, GPU-bound. Batch one's Pure two views 1080p, +0.27 ms over
 eight ABBA runs, is more than undone here (-0.27 ms). The Pure one view reading above is not a cost
 on the Deck.
+
+## What is left of the frame thread on the Deck, and three cuts (2026-11-05, `prepare-view`)
+
+Claim: frame-thread CPU falls on the Deck where the frame is CPU-bound, split-screen and one view at
+800p. **True**: HD 800p `total` 6.94 to 6.17 ms at one view (137.5 to 146.3 fps) and 11.27 to 10.48 at
+two (86.4 to 92.8), Pulse two views 6.80 to 6.45 (143.4 to 150.8), Pure two views 5.49 to 5.28 (175.4
+to 182.2). Lower in all 18 cells of the matrix below, with pictures byte-identical. It is mostly not
+`prepare_view`: the largest wins are in `submit`.
+
+**Method.** `dist` `znver2` `perf-probe` container builds, base `65f19b5fa` (threaded split recording
+on by default), headless gamescope, `--race --mode single_race --seed 1 --autopilot --no-audio
+--no-intro --frame-log --render-scale 100 --script 26:quit`, vsync off, frame limit off, Pure and
+Pulse PSP USA default circuits, HD Anulpha Pass, two views `--players 2 --split-cut vertical`. Mean
+of `frame-phases` after the first six lines, 19 lines a run. Arms interleaved, 3 rounds, Deck load
+1.0 to 2.0. Profiles: `-C force-frame-pointers=yes -C debuginfo=line-tables-only`, `perf record -g
+--call-graph fp -D 12000 -F 1999`, one run, charged by thread id.
+
+**Noise.** The same bytes under two file names, 3 rounds at 800p (mean of 3): `total` differs by
+0.00 to 0.04 ms, and one pair of HD two views read +0.23. So a mean move under 0.05 ms is nothing.
+
+**A share of samples is not a share of `total`.** Sampling sees a thread on the CPU in user space.
+Thread times from `/proc/<pid>/task/*/stat` over 8 s of the final binary, HD 800p, per frame:
+
+| ms a frame | frame thread user | frame thread system | frame thread blocked | each `oag-finish` | `oag-reap` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| One view (`total` 6.14) | 4.7 | 1.0 | 0.4 | 1.6 | 0.87 (0.13 system) |
+| Two views (`total` 10.42) | 8.9 | 1.6 | 0 | | 1.56 (0.26 system) |
+
+### Where the frame thread goes, before the cuts
+
+HD 800p, the base binary, on-CPU samples of the frame thread:
+
+| | one view | two views |
+| --- | ---: | ---: |
+| `prepare_view` | 38.4 % | 27.3 % |
+| `maintain` in a submit, dropping finished encoders | 13.8 % | 13.1 % |
+| of which in unresolved shared-library frames | 9.3 % | 8.7 % |
+| record (one view: passes only, the finish is on the worker) | 7.9 % | 24.7 % |
+| last encoder's `finish` on the frame thread | 11.7 % | 1.4 % |
+| post chain's `finish`, split only | | 8.1 % |
+| hull probes (`write_hull_uniforms`) | 7.8 % | |
+| shadow passes | 6.8 % | |
+| particles, adverts, scenery clocks, trail, ribbons | 4.1, 4.0, 3.7, 2.7, 2.6 % | |
+| `spline.nearest` from the magstrip wake's drawing | 2.1 % | |
+
+Those frames are the driver: on the final binary, where the same drop runs on `oag-reap`, 57.8 % of
+that thread's samples sit in `libvulkan_radeon`, under the encoder drop. The walk loses the caller
+there, so `vkResetCommandPool` (wgpu-hal `reset_all`, 4.8 % by name) is the likely one, not a read.
+
+`prepare_view`'s table above still ranks these. On Pulse's split `write_absorb_overlays` is 10.3 % of
+the frame thread. Scenery clocks cannot skip a frame: `Race::clock_seconds` moves with the world
+alpha between ticks, so no two frames sample the same time.
+
+**One view is bound by the finish worker, not by the frame thread.** Cutting probes took 0.12 ms off
+`scene` and put 0.08 ms on `submit`: the frame thread reached `Frame::submit` sooner and waited for
+the same worker. It closes the shadow encoder, then the race pass's a few tenths of a millisecond
+later, and with one thread the second queues behind the first.
+
+### Reaping off the frame thread
+
+`Queue::submit` ends in `maintain`, which reclaims every submission the GPU has finished: the
+encoder drop, the command pool reset, a reference count per resource, staging frees. Known at 0.8 ms
+since the indirect lane; nobody had moved it. `oag_gpu::reaper` is a thread that polls from 1 ms
+after a frame's last submit until the queue is empty, so a submit finds nothing left to reclaim.
+
+It polls and never waits: `Device::poll` holds the snatch lock for read through a fence wait, and
+`present` takes it for write, so a thread parked in a wait would stall the present. The triage still
+holds the snatch lock and the life lock, so `submit` and `present` can meet it, bounded by what the
+frame thread used to do itself. A `map_async` callback now fires on that thread; ours only store an
+atomic. It runs on `oag_gpu::split_finish::known_equal_cores` (native Linux, at least two cores, all
+the same capacity), the rule threaded recording takes; `OAG_REAP_THREAD=0` or `=1` overrides it.
+
+The same binary, off and on, all other cuts in, 800p, 3 rounds, ms:
+
+| | `total` off | `total` on | fps | p99 |
+| --- | ---: | ---: | --- | --- |
+| HD one view | 6.25 | 6.21 | 147.3 to 146.0 | 9.08 to 8.95 |
+| HD two views | 11.14 | 10.47 | 87.4 to 92.9 | 15.13 to 14.39 |
+| Pulse one view | 4.12 | 4.08 | 228.1 to 229.3 | 5.71 to 5.58 |
+| Pulse two views | 6.79 | 6.45 | 143.7 to 150.8 | 8.27 to 7.98 |
+| Pure one view | 3.36 | 3.24 | 268.9 to 269.2 | 5.14 to 4.91 |
+| Pure two views | 5.47 | 5.30 | 176.5 to 181.6 | 6.79 to 6.63 |
+
+**A split gains most of it. One view gives half back:** on HD one view `submit` falls 0.16 ms and
+`scene` rises 0.20. The reclaiming runs beside `prepare_view`, and something they share slows it. Not
+identified (candidates: Arc counts on the same cache lines, the allocator's lock against
+`write_buffer`'s staging, a sibling hardware thread). HD one view's fps is 1 % lower in both A/Bs
+(147.3 to 146.0 here, 137.9 to 137.1 before the other cuts) with `total` within 0.04. That loss is
+outside `total`: `frame-log`'s `present_ms`, which counts the acquire's wait, reads 0.65 off and 0.79
+on. Waiting on the reaper's hold on the snatch lock fits, not proven. It stays on: `total` and p99 are
+lower in every cell, and a split gains 3 to 6 %.
+
+### A second finishing thread
+
+`oag_gpu::split_finish` sends each closed encoder to the next of two threads where
+`known_equal_cores` holds, and keeps one thread elsewhere. Encoders finish independently and the
+buffers still go to the queue in recording order. `OAG_FINISH_THREADS=1` is the old behaviour, for a
+bench. A threaded split's views do not split their encoders, so on the Deck this is one view only.
+The Deck takes the same path as the measured binaries, which were built before that rule was: two
+threads, reaper on. Same binary, 800p, 3 rounds:
+
+| | `total` one thread | two threads | `submit` | fps | p99 |
+| --- | ---: | ---: | --- | --- | --- |
+| HD | 6.78 | 6.17 | 3.48 to 2.63 | 139.7 to 145.8 | 9.19 to 8.87 |
+| Pulse | 4.18 | 4.08 | 1.60 to 1.43 | 225.2 to 229.1 | 5.52 to 5.54 |
+| Pure | 3.22 | 3.26 | 1.15 to 1.17 | 270.0 to 269.1 | 4.92 to 4.89 |
+
+Pure's +0.04 is at the noise floor but all three rounds read that way (+0.02 to +0.05).
+
+### The hull probes
+
+- **Only a hull the view draws is blended.** `write_hull_uniforms` asks `hull_seen`, the hull draw's
+  own test. Each view of a split writes what it draws before its own submission, and a craft that
+  comes back into view differs from `EnvProbes::written`, so it is blended that frame. HD, 3 rounds,
+  with the eviction below: `scene` 2.60 to 2.48 at one view, but `total` only 6.89 to 6.85 (the
+  worker bound it then). Two views 10.58 to 10.60: nothing, not explained.
+- **The decoded cache evicts the oldest probe.** It held 64 of Anulpha's 1,146 and cleared all of
+  them when full, so the field's 32 live probes decoded again at once (decode was 1.1 % of the frame
+  thread). Not measured apart from the item above.
+
+### The magstrip wake's drawing scans no spline
+
+`magstrip_wake_vertices` called `spline.nearest` for each craft each frame, a walk of the whole
+spline, for `with_track` and `lateral`, which only the spawn reads. `Race::wake_pose` is what
+drawing needs, and a craft with no live arc is skipped. `0f95e9633` against `989d39bcf` with
+`OAG_FINISH_THREADS=1`, 800p, 3 rounds: HD 6.88 to 6.80 at one view, 10.66 to 10.44 at two (91.3 to 93.1 fps).
+Pulse does not move: it builds no arcs.
+
+### All of it together
+
+`65f19b5fa` against `8f6f02a09`, interleaved, 3 rounds, Deck load 1.1 to 3.2, mean `total` of
+`frame-phases` in ms:
+
+| | 1v 800p | 1v 1080p | 1v 4K | 2v 800p | 2v 1080p | 2v 4K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pure | 3.34 to 3.24 | 4.39 to 4.13 | 5.27 to 5.04 | 5.49 to 5.28 | 7.67 to 7.52 | 9.92 to 9.26 |
+| Pulse | 4.17 to 4.08 | 5.99 to 5.47 | 7.09 to 6.63 | 6.80 to 6.45 | 8.99 to 8.78 | 12.65 to 12.02 |
+| HD | 6.94 to 6.17 | 8.48 to 7.42 | 12.66 to 10.25 | 11.27 to 10.48 | 13.16 to 12.58 | 21.90 to 20.50 |
+
+| fps | 1v 800p | 1v 1080p | 2v 800p | 2v 1080p |
+| --- | ---: | ---: | ---: | ---: |
+| Pure | 269.4 to 269.7 | 141.6 to 140.8 | 175.4 to 182.2 | 117.5 to 117.5 |
+| Pulse | 225.3 to 228.8 | 132.2 to 131.7 | 143.4 to 150.8 | 105.8 to 106.7 |
+| HD | 137.5 to 146.3 | 99.6 to 99.9 | 86.4 to 92.8 | 72.9 to 74.4 |
+
+`total` is lower in all 18 cells, by 0.1 to 2.4 ms. fps moves only where the CPU binds: at one view
+1080p the rate paces or the GPU holds it, and 4K sits at 29 to 34 fps on the GPU in every cell (its
+`total` still falls, so the frame thread waits longer). Mean p99 is lower in 15 cells and +0.02 to
++0.05 in three (Pure one view 1080p, HD one view 4K, Pulse two views 4K); HD 800p reads 9.68 to 8.82
+at one view and 15.57 to 14.66 at two, HD two views 1080p 22.00 to 20.13.
+
+**Notebook.** `render_viewports CPU` median, `OAG_RENDER_BENCH=300`, `taskset -c 4`, native
+`perf-probe` release builds, tick 900, 3 runs, load 1.3 to 3.9, mean of medians in us. The bench
+redraws one tick, opens no split frame and runs no reaper, and this CPU is hybrid, so it sees the
+probes and the wake only:
+
+| us | 1280x800 | 1920x1080 | 3840x2160 |
+| --- | ---: | ---: | ---: |
+| HD one view | 1662 to 1526 | 1933 to 1915 | 3953 to 3863 |
+| HD two views | 2604 to 2520 | 2685 to 2570 | 4194 to 4380 |
+| Pulse one view | 723 to 657 | 771 to 771 | 1222 to 1262 |
+| Pulse two views | 1292 to 1122 | 1129 to 1130 | 1218 to 1228 |
+| Pure one view | 334 to 326 | 401 to 437 | 851 to 838 |
+| Pure two views | 740 to 843 | 763 to 731 | 703 to 719 |
+
+Only HD reads lower at 800p and 1080p, as it should. The Pulse and Pure cells swing between the known
+slow modes of this bench (Pure two views at 800p reads 613, 960, 648 on base and 957, 617, 956 on the
+tip) and neither path changed there. HD two views at 4K read +186 us with base always first; four
+ABBA pairs at load 1.0 to 2.5 read 4020 to 3908 us, so that was the order.
+
+**Pictures.** Byte-identical by `cmp`, base against tip: 54 pairs on the notebook's NVIDIA (the three
+titles, one and two views, three sizes, 3 rounds, tick 900), 12 pairs on the Deck's RADV (the same
+titles and views, ticks 900 and 1500). Each is one frame of a race; a craft coming back into view
+over a run of frames is covered by the argument above and not by a capture.
+
+**What is left.** The frame thread spends 1.0 ms of system time a frame at one view and 1.6 ms at two,
+unseen by a user-space profile (the Deck's `perf_event_paranoid` is 2, no sudo). It is unattributed:
+the command submissions, futex waits on the finish channels and the scoped thread `split_record`
+spawns per later view per frame are the candidates. HD's split post chains (a `finish` and a submit per view,
+0.9 ms) need each view's writes ahead of its own submit, so they cannot overlap without the write
+log. wgpu was not patched and no PR was tried: our own levers were not exhausted.
+
+Commands: `run.sh` and `avg.sh` as in the batch two section, an arm being `env OAG_REAP_THREAD=0` or
+`OAG_FINISH_THREADS=1` around the same binary. Thread times: `/proc/<pid>/task/<tid>/stat` fields 14
+and 15, read twice 8 s apart in the race, on a run started under the Deck lock.
