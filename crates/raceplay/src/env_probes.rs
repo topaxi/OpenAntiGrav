@@ -96,6 +96,29 @@ struct Kept {
 /// How many decoded probes to keep: 8 crafts blend four each, and 64 probes are 2.5 MB.
 const CACHE_LIMIT: usize = 64;
 
+/// `probe` out of `cache`, decoded if it is not kept, marked used by blend `blend`. A cache at
+/// [`CACHE_LIMIT`] drops the probe used longest ago to make room.
+fn keep(
+    cache: &mut HashMap<usize, Kept>,
+    probe: usize,
+    blend: u64,
+    decode: impl FnOnce() -> Decoded,
+) -> Arc<Decoded> {
+    if cache.len() >= CACHE_LIMIT && !cache.contains_key(&probe) {
+        let oldest = cache
+            .iter()
+            .min_by_key(|(_, kept)| kept.used)
+            .map(|(&probe, _)| probe);
+        oldest.map(|probe| cache.remove(&probe));
+    }
+    let kept = cache.entry(probe).or_insert_with(|| Kept {
+        decoded: Arc::new(decode()),
+        used: blend,
+    });
+    kept.used = blend;
+    Arc::clone(&kept.decoded)
+}
+
 impl EnvProbes {
     /// An array of [`ENV_PROBE_LAYERS`] layers, undefined until a craft writes its own.
     #[must_use]
@@ -136,22 +159,10 @@ impl EnvProbes {
 
     fn decoded(&self, probe: usize) -> Arc<Decoded> {
         let mut cache = self.decoded.borrow_mut();
-        if cache.len() >= CACHE_LIMIT && !cache.contains_key(&probe) {
-            let oldest = cache
-                .iter()
-                .min_by_key(|(_, kept)| kept.used)
-                .map(|(&probe, _)| probe);
-            oldest.map(|probe| cache.remove(&probe));
-        }
-        let kept = cache.entry(probe).or_insert_with(|| Kept {
-            decoded: Arc::new(Decoded {
-                irradiance: self.probes.irradiance(probe),
-                reflection: self.probes.reflection(probe),
-            }),
-            used: 0,
-        });
-        kept.used = self.blends.get();
-        Arc::clone(&kept.decoded)
+        keep(&mut cache, probe, self.blends.get(), || Decoded {
+            irradiance: self.probes.irradiance(probe),
+            reflection: self.probes.reflection(probe),
+        })
     }
 
     /// Blends the probes at `position` into the craft's two layers; `craft` is its grid slot.
@@ -219,5 +230,33 @@ impl EnvProbes {
                 depth_or_array_layers: 1,
             },
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn decoded() -> Decoded {
+        Decoded {
+            irradiance: Vec::new(),
+            reflection: Vec::new(),
+        }
+    }
+
+    /// The field moves onto one new probe: only that one is decoded, and the probes still in
+    /// use survive the eviction.
+    #[test]
+    fn a_full_cache_drops_the_probe_used_longest_ago() {
+        let mut cache = HashMap::new();
+        for probe in 0..CACHE_LIMIT {
+            keep(&mut cache, probe, probe as u64 + 1, decoded);
+        }
+        keep(&mut cache, 0, 100, || panic!("probe 0 is kept"));
+        keep(&mut cache, CACHE_LIMIT, 101, decoded);
+        assert_eq!(cache.len(), CACHE_LIMIT);
+        assert!(cache.contains_key(&0));
+        assert!(!cache.contains_key(&1));
+        assert!(cache.contains_key(&2));
     }
 }
