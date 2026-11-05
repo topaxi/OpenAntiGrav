@@ -253,12 +253,16 @@ first thing to look at, since one tap per 4 full-size pixels of reach is a gathe
 ### What a player sees
 
 Pulse and HD at 3840x2160, ticks 1500, 1800 and 2500, `high`+`full`, `high`+`half`, `low`+`half` and
-quarter, read as crops of hull edges at native size and at 3x. **No silhouette bleed at the cap**:
-the hull's edges, decals and vents are as sharp as `low`+`half`, and a wing edge against the plume
-at 3x is the same at all four. The background smear is softer than at half, without half's grain:
+quarter, read as crops of hull edges at native size and at 3x to 5x, and across four consecutive
+frames. **No background bleeds across a silhouette at the cap**: the hull's edges, decals and vents
+are as sharp as `low`+`half`, and a wing edge against the plume at 3x is the same at all four. One
+flaw: on HD at tick 1501 the dark underside of a thin wing smears outward over the background in a
+faint band about 8 px wide, stair-stepped at the 4 px texel. `low`+`half` has the same band, finer
+and with smaller steps; `high`+`half` barely has it. At native size it takes looking for, and it
+holds still across the four frames rather than flickering. The background smear is softer than at half, without half's grain:
 the mean absolute Laplacian of the frame, a stand-in for grain, reads 1.79 quarter against 1.82
 `low`+`half` on Pulse, 2.62 against 2.90 on HD. Four consecutive frames show no shimmer in either
-title. The obvious change is the strength: at the cap a `high` player sees `low`'s shorter smear.
+title, on the background or along a hull edge. The obvious change is the strength: at the cap a `high` player sees `low`'s shorter smear.
 The upsample does widen a smear across its motion by up to one gather texel, 4 px against half's
 2 (`the_quarter_resolution_gather_smears_a_four_pixel_block`). The first 0.25 s at quarter, while the
 cap eases in, draws a longer smear than these stills, and no one has seen a flip in motion.

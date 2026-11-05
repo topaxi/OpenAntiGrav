@@ -54,8 +54,8 @@ so they are unchanged. Split screen draws no blur.
   first step of a 2160-line ceiling, which is what the rule exists to refuse.
 - **A second threshold table for the step.** Rejected: the margins are derived from the deadband,
   not tuned, and nothing measured asks for different ones.
-- **Dropping the composite's depth test at quarter, or a wider footprint.** Not needed: crops at
-  the cap show no bleed (see the page).
+- **Dropping the composite's depth test at quarter, or a wider footprint.** Not tried: crops at the
+  cap show no background crossing a silhouette, only the stepped fringe under Consequences.
 
 ## Consequences
 
@@ -81,4 +81,6 @@ so they are unchanged. Split screen draws no blur.
 - The Steam Deck at 1280x800 and at its default 4K budget (1906x1080) never reaches 2160 lines, so
   the step is inert there; only a native 4K opt-in sees it.
 - One more target and one more bind group: 960x540 of `Rgba16Float`, about 2 MB at 4K.
+- A dark surface's own smear steps at the 4 px texel: a faint 8 px band under a thin wing on HD,
+  finer at `low`+`half`. It holds still and takes looking for at native size.
 - The strength a player sees drops at quarter. That is the step's price and part of what it saves.
