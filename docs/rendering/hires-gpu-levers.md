@@ -446,3 +446,28 @@ into still tiles). Counted with a marker colour on that branch (diagnostic, not 
 (160 km/h), 600, 1200, 1800 (a full-speed corner), 2500 and 3000, against 75 % on the stationary
 grid at tick 60. In a race every neighbourhood moves, so a skip saves nothing; prediction 0 ms,
 not implemented.
+
+Measured again at the sizes and strength that run did not cover, and with the threshold raised to
+what "under a pixel" allows (2026-11-05, `blur-quarter-rung`): a marker build coloured each pixel by
+its blended reach (at most 0.5, 1, 2, 4 px, or more). Host dGPU, `--msaa off`, seed 1, autopilot,
+Pulse PSP EU and HD, ticks 300, 600, 1200, 1800, 2500 and 3000, `low` and `high`, 1280x800 and
+3840x2160. The percentages include a HUD that reads as the low bands, so each is an upper bound.
+
+| Share of the frame's pixels, % | Already skipped (0.5 px or under) | A 1 px threshold adds |
+| --- | ---: | ---: |
+| 3840x2160, `high`, all ticks | 0.00 to 4.41 (0.01 at the median tick) | 0.00 to 0.13 |
+| 3840x2160, `low`, all ticks | 0.00 to 4.42 | 0.00 to 0.23 |
+| 1280x800, `low`, tick 300, launch off the grid | 0.34 HD, 1.02 Pulse | 1.03 HD, 3.18 Pulse |
+| 1280x800, `low`, other ticks | 0.00 to 4.07 | 0.00 to 1.24 |
+
+The 4.4 % is Pulse at tick 3000, and those pixels already skip. A 1 px threshold was built and timed
+on the iGPU (`MESA_VK_DEVICE_SELECT=1002:164e`, `OAG_RENDER_GPU_BENCH=40`, release `perf-probe`, A B
+interleaved, 3 rounds, load 0.7 to 5, gate lock held). At its best case, Pulse 1280x800 `low` tick
+300, the chain went from 3,304 to 3,327 us to 2,786 to 3,222 us, and that frame then differs from
+the base in 11,753 of 1,024,000 pixels, by up to 26 levels (2,637 by more than 2). At 3840x2160
+`high` tick 1800, where it changes 17 pixels by one level, it read 78,232 to 79,826 against 77,688
+to 78,595 us, which is this rig's noise since 17 pixels cannot save 1 ms. Whole race, Pulse 1280x800
+`low`, `gpu_blur_us` p50, A B A B: base 2,864 and 3,917 us, threshold 1 px 3,567 and 3,017 us, load
+0.5 to 0.7. **Two runs of one binary differ by 37 %**, far more than the 0.1 to 1 % of pixels at
+stake, so no saving is measurable. The skip stays at 0.5 px. Confidence 80: 48 frames by marker, two
+titles, one rig timed.
