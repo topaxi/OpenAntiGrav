@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-27
+updated: 2026-11-05
 summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles/trails/shadow rays; governor landed on by default, self-check open"
 categories: [rendering, tooling]
 size: XL (35)
@@ -99,6 +99,21 @@ frame-thread profile recipe in that section.
    per change; a setting to turn it off; tests on the controller's state machine. Ties into
    `graphics-settings-resolve-from-intent-and-context.md` (blocked on the maintainer) only by not
    pre-empting it: the governor overrides at runtime, never rewrites saved settings.
+
+## Open from `prepare-view` (2026-11-05)
+
+Numbers in `docs/rendering/frame-thread-cpu.md`, "What is left of the frame thread on the Deck".
+
+- **The frame thread's system time**: 1.0 ms a frame at one view, 1.6 ms at two, on HD 800p, invisible
+  to a user-space profile (`perf_event_paranoid` 2, no sudo). Most likely the command submissions. Read
+  it with a kernel profile; if so, a thread that submits needs every write ordered behind it.
+  Measure: `/proc/<pid>/task/<tid>/stat` fields 14 and 15 over 8 s of race.
+- **Why the reaper costs `scene` at one view**: `scene` +0.19 ms against `submit` -0.15 on HD. Try a
+  later first poll or another interval, A/B with `OAG_REAP_THREAD=0`.
+- **HD's split post chains**: a `finish` and a submit per view, 0.9 ms, on the frame thread. They need
+  each view's writes ahead of its own submit, so they wait for the write log or
+  `record-uploads-in-the-encoder-so-a-split-is-one-submit.md`.
+- **Pulse's `write_absorb_overlays`**: 10.3 % of the frame thread in a split (`write_shine`).
 
 ## Also open from the Deck lane (cheap, any time)
 
