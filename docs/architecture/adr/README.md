@@ -93,6 +93,7 @@ out to be wrong.
 | [0082](0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md) | A mod owns pages, settings, queries and one launch action | **Accepted** (2026-11-02); supersedes ADR-0066 decision 4 for declarative content, ADR-0080 stays for wasm screens |
 | [0083](0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md) | Official mods are a public folder, and the fingerprint counts only mods that change a race | **Accepted** (2026-11-02); amends ADR-0078's LAN-fingerprint consequence |
 | [0084](0084-the-target-is-held-to-what-the-display-shows.md) | The resolution target is held to what the display shows | **Accepted** (2026-11-04); replaces ADR-0044's "cannot ask a surface" premise |
+| [0085](0085-comparison-originals-live-in-a-private-repository.md) | Comparison originals live in a private repository | **Accepted** (2026-11-05); extends ADR-0074 |
 
 ## Format
 
