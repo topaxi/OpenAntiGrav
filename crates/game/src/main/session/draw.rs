@@ -1021,7 +1021,11 @@ impl Session {
         let submit_start = timing_first_race_frame.then(web_time::Instant::now);
         frame_work.submit(&self.gpu.queue, encoder);
         if let Some(reaper) = &self.gpu.reaper {
-            reaper.reap();
+            // One view in one window: a split's views and a windowed race's windows, and the
+            // front end, which nobody has measured without it, keep the thread.
+            let one_view = matches!(&self.stage, Stage::Race(stage)
+                if stage.race.viewport_count() <= 1 && !stage.race.windowed());
+            reaper.frame_submitted(one_view);
         }
         self.phases.mark(super::phases::Phase::Submit);
         // **After the submit**, which is what makes it safe to start a map on
