@@ -200,7 +200,7 @@ sends the state lines to a file, stderr otherwise. `--drive` needs one disc imag
 | `boot` | Tap Start and Cross in turn while the disc's own front end is up (logo, language list) until our menus open. Those screens are the disc's and have no rows to select. |
 | `until <key=value ...> [within N]` | Wait until every condition holds. |
 | `expect <key=value ...>` | Fail now unless every condition holds. |
-| `select <row> [within N]` | Move focus to a row by pressing buttons, never by setting it. `<row>` is a row `id`, a setting key (`race.mode`), an action name (`launch_race`, `quit`: the same in every language), a label (case-insensitive) or `#index`; on a picker, an entry id (`03_Track`, `Feisar`). |
+| `select <row> [within N]` | Move focus to a row by pressing buttons, never by setting it. A row not on the screen yet is waited for until the budget is gone (a scan may add it). `<row>` is a row `id`, a setting key (`race.mode`), an action name (`launch_race`, `quit`: the same in every language), a label (case-insensitive) or `#index`; on a picker, an entry id (`03_Track`, `Feisar`). |
 | `set <setting>=<value> [within N]` | `select` the row of that setting, then step it right until it reads the value (its stored value, its label, or for a file the file name). An option the row lists but marks unusable (the custom-track check is still running) is waited for, then the step times out naming why. |
 | `press <button> ...` | Tap each in turn: held one tick, released the next. Waits out a page transition first. |
 | `ticks N` | Let N ticks pass. |
