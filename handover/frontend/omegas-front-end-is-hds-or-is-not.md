@@ -56,7 +56,8 @@ content against `hd-frontend.md`.
   reference is HD on this engine, no PS4 emulator. What is still different
   from HD, drawn from `--menu-page grid-select`/`cell-select` side by side: no flyer card, five hexagons
   where HD draws six (a different authored cluster, unchecked), circuit
-  names as ids, the three medal icons in the wrong order and no `TARGET
+  names as ids, the three medal icons in the wrong order (since fixed,
+  `docs/formats/omega-status.md` "The medal atlas") and no `TARGET
   (NOVICE)` line. Also unverified: the strip's pointer hit regions on the
   new geometry, the `EndRace Menu` option blocks (the old "draws no blocks"
   cause may be this one; `--menu-page endrace-menu` still says the source has

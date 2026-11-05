@@ -240,6 +240,9 @@ pub const TITLE: &Title = &Title {
             offset: [29.0, 13.3, -129.0],
         }),
         selection_card_scale: Some(0.903),
+        // Bronze, silver, gold from the top of each block of the `.gnf`, read off its texels and
+        // the shadPS4 `cell-select` frame (`docs/formats/omega-status.md`, "The medal atlas").
+        medal_tier_rows: Some([2, 1, 0]),
         frontend_glow: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         custom_campaigns: true,

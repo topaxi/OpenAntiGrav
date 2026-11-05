@@ -479,6 +479,7 @@ pub(super) fn campaign_page(
                             .and_then(|grid| grid.flyer_name.as_deref()),
                         fury: !base_hd && campaign.chooser.is_some(),
                         track_emblems: &campaign.circuit_emblems,
+                        medal_tier_rows: title.campaign.medal_rows(),
                     },
                     backdrop,
                     false,

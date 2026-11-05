@@ -179,6 +179,7 @@ const TITLE: &Title = &Title {
         fury_card_gain: None,
         grid_card_pose: None,
         selection_card_scale: None,
+        medal_tier_rows: None,
         frontend_glow: None,
         origin: oag_title::Origin::Chosen,
         custom_campaigns: false,

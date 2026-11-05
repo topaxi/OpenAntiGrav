@@ -168,21 +168,24 @@ fn medal_atlas_placed() -> Placed {
     }
 }
 
+/// HD's own order, gold on the block's top row.
+const HD_TIER_ROWS: [u8; 3] = [0, 1, 2];
+
 /// [`hd_medal_frame`]'s own row table, read off `DATA06`'s own `Target0/1/2
 /// Medal` widgets: gold at `v=0`, silver at `v=61`, bronze at `v=122`, each
 /// a 60x60 frame at `u=0`. See that function's doc for the measurement.
 #[test]
 fn hd_medal_frame_matches_the_discs_own_target_medal_widget_crop() {
     assert_eq!(
-        hd_medal_frame(Medal::Gold, Difficulty::Easy),
+        hd_medal_frame(Medal::Gold, Difficulty::Easy, HD_TIER_ROWS),
         [0.0, 0.0, 60.0, 60.0]
     );
     assert_eq!(
-        hd_medal_frame(Medal::Silver, Difficulty::Easy),
+        hd_medal_frame(Medal::Silver, Difficulty::Easy, HD_TIER_ROWS),
         [0.0, 61.0, 60.0, 60.0]
     );
     assert_eq!(
-        hd_medal_frame(Medal::Bronze, Difficulty::Easy),
+        hd_medal_frame(Medal::Bronze, Difficulty::Easy, HD_TIER_ROWS),
         [0.0, 122.0, 60.0, 60.0]
     );
 }
@@ -193,17 +196,40 @@ fn hd_medal_frame_matches_the_discs_own_target_medal_widget_crop() {
 #[test]
 fn hd_medal_frame_selects_a_block_per_difficulty() {
     assert_eq!(
-        hd_medal_frame(Medal::Gold, Difficulty::Medium),
+        hd_medal_frame(Medal::Gold, Difficulty::Medium, HD_TIER_ROWS),
         [0.0, 183.0, 60.0, 60.0]
     );
     assert_eq!(
-        hd_medal_frame(Medal::Gold, Difficulty::Hard),
+        hd_medal_frame(Medal::Gold, Difficulty::Hard, HD_TIER_ROWS),
         [0.0, 366.0, 60.0, 60.0]
     );
     assert_eq!(
-        hd_medal_frame(Medal::Bronze, Difficulty::Hard),
+        hd_medal_frame(Medal::Bronze, Difficulty::Hard, HD_TIER_ROWS),
         [0.0, 488.0, 60.0, 60.0]
     );
+}
+
+/// A title whose atlas stores each block bronze, silver, gold from the top (Omega's) reaches
+/// gold at the block's last row, in every difficulty block; the block order is untouched.
+#[test]
+fn hd_medal_frame_follows_the_titles_tier_rows() {
+    let omega = [2, 1, 0];
+    for (difficulty, block_v) in [
+        (Difficulty::Easy, 0.0),
+        (Difficulty::Medium, 183.0),
+        (Difficulty::Hard, 366.0),
+    ] {
+        for (medal, row) in [
+            (Medal::Gold, 122.0),
+            (Medal::Silver, 61.0),
+            (Medal::Bronze, 0.0),
+        ] {
+            assert_eq!(
+                hd_medal_frame(medal, difficulty, omega),
+                [0.0, block_v + row, 60.0, 60.0]
+            );
+        }
+    }
 }
 
 /// The regression this pass fixes: `Medal_{x}_{y}` used to draw the whole
@@ -219,7 +245,13 @@ fn hd_medal_frame_selects_a_block_per_difficulty() {
 fn hd_tinted_medal_draw_crops_one_frame_of_the_right_tier_at_its_own_authored_position() {
     let image = medal_image("Medal_0_0");
     let placed = medal_atlas_placed();
-    let draw = hd_tinted_medal_draw(&image, placed, Medal::Silver, Difficulty::Easy);
+    let draw = hd_tinted_medal_draw(
+        &image,
+        placed,
+        Medal::Silver,
+        Difficulty::Easy,
+        HD_TIER_ROWS,
+    );
     let Draw::Sprite { rect, uv, color } = draw else {
         panic!("expected a plain Sprite, not a tiled or rotated one");
     };
