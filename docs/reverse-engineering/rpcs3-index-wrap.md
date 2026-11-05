@@ -29,7 +29,7 @@ new peak, per primitive and draw command (`oag-draw-peak`, `RPCS3.log`), which s
 | every other Fury menu frame on disc | 38 older dumps, two lanes | `QUADS` arrays 208,380 to 220,000 | yes | **yes** |
 | Track Select | same | `TRIANGLES` indexed 49,239 | no | no |
 | Zone, Moa Therma | peak log; two older dumps | `TRIANGLES` indexed 84,687 | no, guest indices | no |
-| 22 race states, one per save in `data/saves/hd-fury/`: all twelve circuits, grids, pack, mid-race weapons | peak log over 22 s of held throttle on a fresh boot per state | `QUADS` arrays 1,536; `TRIANGLES` indexed 11,904; `TRIANGLE_STRIP` 431 | QUADS yes | no, about 40 times under the limit |
+| 21 race states, one per save in `data/saves/hd-fury/`: all twelve circuits, grids, pack, mid-race weapons | peak log over 22 s of held throttle on a fresh boot per state | `QUADS` arrays 1,536; `TRIANGLES` indexed 11,904; `TRIANGLE_STRIP` 431 | QUADS yes | no, about 40 times under the limit |
 | 98 older race dumps | ring walk | `QUADS` arrays 1,648 | yes | no |
 
 No `LINE_LOOP`, `POLYGON`, `TRIANGLE_FAN` or `QUAD_STRIP` appears in any dump or peak log. 31 older dumps walk to no primitive at all (the
@@ -44,7 +44,7 @@ Not walked: the HD-style front end, and a race with a full late-race weapon exch
 
 ## The patch
 
-Local only, deliberately untracked: three diffs against `028d1e8f4` under `data/tools/rpcs3-wide-indices/`, applied and built by `build.sh` beside them. Rebuilding needs that directory; the changes are:
+Local only, deliberately untracked: three diffs against `028d1e8f4` under `data/tools/rpcs3-wide-indices/`, applied and built by `build.sh` beside them, into an empty directory it is given. Rebuilding needs that directory; the changes are:
 
 - `rpcs3-wide-emulated-indices.patch`, the fix: the writer goes through `u32*`, and both backends allocate and bind 32-bit
   indices. 9 lines added, 22 removed, most of them the SSE `iota16` that only `line_loop` used.
@@ -56,7 +56,7 @@ Two traps. This commit does not compile against LLVM 23 (`ConstantFoldInstructio
 libstdc++ 16, so the patches go in before the first configure. With `ccache` the first full build took 11 minutes at `-j 10`.
 
 The built binary is `data/tools/rpcs3-wide-indices/src/build/bin/rpcs3` (Qt and system libraries, LLVM static; it reports `HEAD | local_build`).
-It boots the Fury disc headless with `--no-gui`, and restored all 23 HD save states taken on the stock build. Not for upstream.
+It boots the Fury disc headless with `--no-gui`, and restored all 22 HD save states taken on the stock build. Not for upstream.
 
 ## Taking a reference with it
 
