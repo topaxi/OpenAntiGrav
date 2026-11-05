@@ -21,8 +21,9 @@
 //! 6. **Band** - the smear band, which reads the field it writes, so the field
 //!    is copied to a second target first.
 //! 7. **Scanlines** - every fourth row multiplied by a dark blue.
-//! 8. **Present** - the field read half a row low, bilinearly and in linear
-//!    light, which is why a scanline reaches the screen as two half-dark rows.
+//! 8. **Present** - the field read half a texel off on both axes, as the
+//!    final composite's own quad does, bilinearly and in linear light, which
+//!    is why a scanline reaches the screen as two half-dark rows.
 //!
 //! Then, inside the page's pass where the draw list's
 //! [`oag_ui::frontend::Draw::FuryBackdrop`] sits, the result goes onto the page.

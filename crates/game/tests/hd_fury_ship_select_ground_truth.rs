@@ -268,7 +268,7 @@ fn every_fourth_row_from_the_top_is_a_scanline() {
         rows.flat_map(|row| row.chunks(4).map(|texel| f64::from(texel[0])))
             .sum::<f64>()
     });
-    // The field is read half a row low, so a scanline is the two rows either
+    // The field is read half a texel off, so a scanline is the two rows either
     // side of the fourth's edge: the mean of one and `0.05` in linear light,
     // about `0.7` once encoded. RPCS3, eight frames: `0.68` to `0.77`.
     let similar = |a: f64, b: f64| (a / b - 1.0).abs() < 0.05;

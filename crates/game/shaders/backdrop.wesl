@@ -247,13 +247,14 @@ fn fs_scanlines(in: ClipUv) -> @location(0) vec4<f32> {
     return vec4<f32>(post.scanline.rgb, 0.0);
 }
 
-// What the display gets: the field half a row low, so each row on screen is
-// the mean of two in linear light and a scanline is two half-dark rows
-// (menu-backdrop.md, "The frame, measured").
+// What the display gets: the final composite's quad carries a half-texel offset
+// on both axes and reads bilinearly, so each pixel on screen is the mean of four
+// field texels in linear light and a scanline is two half-dark rows
+// (menu-backdrop.md, "Three more readings").
 @fragment
 fn fs_present(in: ClipUv) -> @location(0) vec4<f32> {
-    let half_row = vec2<f32>(0.0, 0.5 / f32(textureDimensions(source).y));
-    return textureSample(source, trail_sampler, in.uv + half_row);
+    let half_texel = 0.5 / vec2<f32>(textureDimensions(source));
+    return textureSample(source, trail_sampler, in.uv + half_texel);
 }
 
 // The finished picture onto the page, as the bytes it holds: the page is

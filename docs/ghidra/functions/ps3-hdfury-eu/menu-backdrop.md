@@ -403,7 +403,7 @@ their order agree except where this section says so.
 | 7 | particle field | colour | `ZERO, SRC_COLOR` | Scanlines: multiplies every 4th row by `(0.05, 0.1, 0.25)` |
 | 8 | `0x00cc0000`, plain | copy | off | Resolves the field to a plain target. 720p only; at 1080p the ladder reads the field directly |
 | 9-24 | the shared post ladder down to 160x90 | | | The same chain as a race, and on the menu more than a luminance readback: see "Three more readings" below |
-| 25 | the display buffer | final composite | off | Decode, exposure, bloom; [renderer.md](renderer.md). Reads the field half a row low |
+| 25 | the display buffer | final composite | off | Decode, exposure, bloom; [renderer.md](renderer.md). Reads the field half a texel off on both axes |
 | 26-51 | the display buffer | UI | `SRC_ALPHA, ONE_MINUS_SRC_ALPHA` | The front end |
 
 **Confidence 90** on the table: read off the stream at every step, twice (two frames per
@@ -466,8 +466,9 @@ dump) and again at 1920x1080. A second build's agreement would not lift it past 
 - **Mode 11's extra draws are real but the count moves.** With the path forced (`g+0x414 =
   6`, `g+0x418 = 1`): the field copied down `640 -> 320 -> 160 -> 80 -> 40`, pitch `0x1000`,
   then 250 quads on the field from the 640 level. The sender counts about 500; 250 is one
-  frame of one section. `FUN_00678298`, gated on `*(g+0x16b0)`, is the call. Modes `2`, `9` and
-  `10` add no draws. Confidence 85.
+  frame of one section. At 1920x1080 one frame of it draws 501 such quads, chain `960 -> 60`, so the count
+  moves with the resolution too and the sender's "about 500" may be a 1080p figure. `FUN_00678298`, gated on
+  `*(g+0x16b0)`, is the call. Modes `2`, `9` and `10` add no draws. Confidence 85.
 
 **Three more readings, 2026-11-05, lane `fury-backdrop-pass-graph`** (same disc, RPCS3, Main Menu and
 Campaign Selection at 1920x1080 and window 1920x1080; forced static path 6; the game paused through the
@@ -489,18 +490,20 @@ first).
   `g+0x1708`, and `1` otherwise, so `0.016 * 24 * eq` or `0.016 * eq`: with the clamp, nearly always the floor
   or the ceiling, which is why the dumps show `05` or `26` and nothing between. `g+0x1708` read `0.646`; what
   moves it is unread. With no equaliser the gain is `5/255`. **Confidence 80.**
-- **The field reaches the screen half a row low.** Rows by `row % 4` over the backdrop, eight paused frames:
-  `0` and `3` dim and equal, `1` and `2` bright and equal, ratio `0.68` to `0.78`; frame 484 reads `46.7, 67.1,
-  66.9, 46.3`. The mean of one and `0.05` in linear light encodes to `0.7`: each display row is two field rows
-  averaged in linear light, so the final composite samples half a texel off, bilinearly. Whether that is the
-  console or RPCS3's pixel centre is not known; a scanline here is what the reference shows. **Confidence 85**
-  on the picture, unknown on the cause.
+- **The field reaches the screen half a texel off, and the game asks for it.** Draw 25's immediate vertices at
+  1080p carry uv `(0.00026, 0.000463)` at the top left and `(1.00026, 1.000463)` at the bottom right:
+  `0.5 / 1920` and `0.5 / 1080`, on both axes, with unit 0's filter `0x2022000`, linear, and the window's pixel
+  centre word `0`. So this is the game's quad, not an emulator's convention, and each display pixel is four
+  field texels averaged in linear light. On screen, eight paused frames: rows `0` and `3` of every four dim and
+  equal, `1` and `2` bright and equal, ratio `0.68` to `0.77`; frame 484 reads `46.7, 67.1, 66.9, 46.3`. The mean of
+  one and `0.05` in linear light encodes to `0.7`. **Confidence 90.** Every frame that ends in this composite gets
+  it, race frames included if their quad is the same; only the menu's was read.
 - **On the menu the ladder is not a luminance readback alone.** Read live at 1080p: the gate `0x01111fc0` is
   `rgb * a * 0.75` with its from-frame contribution at `0`, so it blooms from the **field's alpha**; the two blurs follow; the final
   composite `0x01113c40` is `field * 1 + bloom * 1 + 0` with the radial mix at `0`. The field's alpha is
   `min(a * tint.a, 1)` through the accumulation, zeroed on scanline rows, times `w` in the band. So the original
-  has a soft alpha bloom over this picture that this build does not draw. **Confidence 80.** It is the leading
-  candidate for the hot spots ours still clips short of (below).
+  has a soft alpha bloom over this picture that this build does not draw. **Confidence 80** on the programs; how much
+  light it adds on this picture is unmeasured.
 
 **`musicPulse` peaks at 1.33, by law.** Sampled for 115 s at 24 Hz on Campaign Selection
 (2,786 samples, muted emulator): every band stays on `0..1` and the three-band mean reaches
@@ -532,40 +535,47 @@ Omega scene backdrop is untouched and its ground truth passes.
 ## The pass graph, wired (2026-11-05)
 
 `oag_game::render::backdrop` runs the table above: points, blend, glow, wave, composite, band, scanlines,
-then a present pass for the half row. **Decision on the linear pipeline: an sRGB format, not by hand.** Every
+then a present pass for the final composite's half texel. **Decision on the linear pipeline: an sRGB format, not by hand.** Every
 target is `Rgba8UnormSrgb`, so decode, encode and linear blending are the format's; the page stays
 gamma-space (ADR-0020) and receives the stored bytes through a plain view, so nothing is decoded and encoded
 twice. `fs_composite`'s hand encode and the chosen sRGB curve are gone. The accumulation and the field read
 themselves in the original, so here the accumulation is a swapped pair and the band reads a copy.
 
-The particle pass was tested both ways, because a dim base colour first read as too bright. Written plain,
-frame 484 of the reference is `R mean 8.4` at a band of `0.8` against the reference's `48.3`; encoded it is
-`44.3`. **So the particle pass is encoded with the rest**, and the extra hull a shot of the running game seemed
-to lack was that shot's lag.
+The particle pass is encoded with the rest: `0x1fec` is `1` on draw 1, and a build that wrote it as plain bytes
+read `R mean 0.4` where the encoded one reads `15.0`, against the reference's `48.3` (bands at zero in both).
 
-Measured on Main Menu, static path 6, `mirage_c1`, clip frame 484, paused, over the backdrop rows and columns
-`230..790, 600..1900`. `after` is this build; the band is fitted to the frame's level because the equaliser is
-not wired (the state read `0.0877` for `particleColour` while the frame on screen carried about band `0.95`, a
-frame's music away):
+Measured on Main Menu, static path 6, `mirage_c1`, clip frame 484, paused, over rows `230..790` and columns
+`600..1900`, against the frame kept at `data/reference/hd-capture/fury-backdrop-pass-graph/paused-02.png`
+(`paused.json` beside it holds the state):
 
 | | R mean | R q90 | R q99 | G mean | RMSE | Rows by `row % 4` |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | reference | 48.3 | 137 | 255 | 3.9 | | 46.7, 67.1, 66.9, 46.3 |
-| before, band `0.95` | 12.6 | 49 | 108 | 0.4 | 40.3 | 14.3, 14.2, 14.2, 14.1 |
-| after, band `0.95` | 52.8 | 117 | 192 | 3.5 | 27.1 | 48.7, 68.0, 67.8, 48.4 |
-| before, bands at zero, as shipped | 2.2 | 8 | 23 | 0.0 | 44.6 | |
-| after, bands at zero, as shipped | 14.9 | 46 | 86 | 0.1 | 35.9 | |
+| before, as shipped, bands at zero | 2.2 | 8 | 23 | 0.0 | 44.6 | |
+| **after, as shipped, bands at zero** | **15.0** | **46** | **85** | **0.1** | **35.5** | |
+| before, level **fitted**, band `0.95` | 12.6 | 49 | 108 | 0.4 | 40.3 | 14.3, 14.2, 14.2, 14.1 |
+| after, level **fitted**, band `0.95` | 53.0 | 117 | 191 | 3.5 | 26.3 | 49.0, 68.3, 68.1, 48.7 |
 
-The dots land on the reference's dots, and **the page's "dots 1.7x wider" is closed**: the first-lag point of
-the two frames' autocorrelation falls to one half at 5 pixels in both. That spread was gamma: a half-maximum
-measured in encoded bytes on a target that had not been encoded. What is left: `R q99` short of `255`, which
-is where the alpha bloom would land; the best integer alignment is `3` pixels sideways with none vertically,
-which looks like the dynamic width's stretch (`docs/formats/hd-updates.md`), not a pass, though it was not
-checked across the frame; and the music. The smear band sits in the reference near row `745` of that frame, about `0.7` of its
-neighbours; ours is `0.63` at its own phase, the band's clock being a global timer and random between the two.
+**As shipped the backdrop is about a third of the reference's level, and that gap is not fully explained.** The
+fitted rows are a scratch build with the band forced to match the level, for comparing shape; nothing ships
+them. The state read at the pause was bands at zero (`particleColour 0.0877`), so the fit contradicts the one
+reading of this frame's music, and no reason is known: `Equaliser Damp Speed` makes a jump within a frame unlikely.
+Split in linear light over the two clean rows of each four, the reference means `0.118`, ours `0.012`, fitted
+`0.084`. The difference from bands at zero keeps `0.45` of its energy under an 8-pixel Gaussian, about what the
+reference's own picture keeps (`0.48`), so it carries the dots' structure and a blur alone cannot be most of it;
+what fitting leaves (`0.034`) keeps `0.22`. Candidates, none tested: the music reaching this frame some way the
+state read missed, the alpha bloom, the glow at its ceiling (`+0x1dc` sat over the threshold on three or four of
+the eight paused frames).
+
+Shape, at the fitted level only: the dots land on the reference's, the best integer alignment is `3` pixels
+sideways and none vertically (not checked across the frame), and the frames' autocorrelation falls to one half at
+`5` pixels in both, `4` as shipped. So the page's "dots 1.7x wider" no longer reproduces at that level, which
+points at the encoding but is not a closed question until the level is. The smear band sits in the reference
+near row `745` of that frame at about `0.7` of its neighbours; ours is `0.63` at its own phase, the band's clock
+being a global timer that differs between the two.
 
 Stored pairs re-rendered from scratch copies, a random cloud and clip on each side: Ship Select mean grey `19.55`
-to `21.62` against `21.55`, RMSE `28.89` to `29.77`; Campaign Select `32.18` to `32.35` against `32.51`, RMSE
+to `21.61` against `21.55`, RMSE `28.89` to `29.76`; Campaign Select `32.18` to `32.35` against `32.51`, RMSE
 `15.58` to `15.78`. The level moves to the reference; RMSE cannot improve on a different cloud. A `--menu-page`
 still now runs `FRAMES_TO_SETTLE` frames of history first, because a picture that feeds back has nothing in it
 after one frame, and with no `--anim-seconds` it stands that many frames into the clip.
@@ -724,7 +734,7 @@ colours (above), so this is the original's own law, not a gap.
   offsets) are unread.
 - The equaliser: what feeds the sixteen bands at `+0x1b4` and the banks at `+0x19c` and `+0x1dc`, what moves
   the glow threshold `g+0x1708`, and whether the menu's own music track is what it analyses.
-- Whether the half row is the console's or RPCS3's.
+- Why the backdrop's level on a paused frame is three times what its own `particleColour` predicts.
 - `0x00182358`'s purpose: inert here with its two inputs at zero, shaped like a
   stereo eye offset, unnamed.
 - The HD-style `BackgroundAnim_Item.cpp` (`FEBackgroundAnim_vp`/`_fp`/`Copy_fp`, the
