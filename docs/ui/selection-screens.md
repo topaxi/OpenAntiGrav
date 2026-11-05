@@ -219,8 +219,9 @@ this build already had changes appearance.
 The bright radial streaks and the blurred craft behind the info panel on the `pulse-psp/menu-track`
 reference are **`Data\Movies\Backdrop.PMF` at a different moment, not a layer this build was
 missing** (confidence 95). The screen authors no streak widget. The movie is the 270-frame loop
-every menu plays over, and one craft flies past in about a second of its nine seconds. The
-reference caught it mid-pass; a `--menu-page` still drew frame zero, a dark stretch.
+every menu plays over. Its right half is bright for frames 34 to 42 (about 0.3 s of nine seconds,
+peak at 35), with two short flashes at 105-106 and 160-163. The reference caught the long pass; a
+`--menu-page` still drew frame zero, a dark stretch.
 
 Scoring every frame against `theirs.png` on the pixels no widget covers:
 
