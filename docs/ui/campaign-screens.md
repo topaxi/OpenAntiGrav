@@ -1257,9 +1257,8 @@ over all 16 grids' fronts and backs (`omega_card_materials_read_their_coverage_c
 The base campaign's own cards on Omega (`--menu-page cell-select-hd`, `grid-select-hd`, the `01_Uplift` card) now draw their
 wordmark, edge stripes and sponsors strip through the same two rules; read once, **not compared with an original frame**: a large
 dark grey hull silhouette crosses the grid card, unverified against HD's own base card.
-**`campaign-select` still refuses on Omega on purpose**: its chooser lists three campaigns (2048,
-HD, Fury), our `CampaignSelection` models HD's two and drew raw widgets, so `load_omega` keeps
-`selection_layout: None` and a live session opens on `Grid Selection` over every grid as before.
+**`campaign-select` draws on Omega since 2026-11-05** (`omega-chooser`, "Omega: `Campaign Selection`" below); until then it refused
+because the chooser lists three campaigns and `CampaignSelection` modelled HD's two.
 HD's own base campaign on Omega (`cell-select-hd`) draws a grey card where the original's would sit and no
 red: the red back is Fury's art. Lineage, 2048's Fury DLC: **checked, differs**. 2048 ships no `CellMode_Definition.xml` and no `FlyerSelection` screen
 (its campaign is the touch map, `docs/formats/2048-frontend.md`); the screen shape here is Omega's own, which keeps HD's. Whether
@@ -2359,7 +2358,7 @@ here; the maintainer sees the dimming animate on the original, which would sit i
 **Omega: checked, applies, not wired.** Omega's executable (`/omega/eboot-ps4-omega-eu.bin`) carries the same
 `HDCampaignFlyerModel`/`FuryCampaignFlyerModel` strings plus `2048CampaignFlyerModel`, and `mov esi, 0xff505050`
 five times in each of `FUN_0151fb60` and `FUN_01520a10` (not decompiled to say which is the screen's update, so
-confidence 55 that it is the same dimming). `campaign-select` still refuses on Omega, so nothing is drawn there.
+confidence 55 that it is the same dimming). Drawn on Omega since 2026-11-05 ("Omega: `Campaign Selection`" below).
 
 `selection_shows` gives both cards to `flyer::render_list`, between the
 backdrop and the widgets, and `--menu-page campaign-select@1` selects `HD`.
@@ -4379,6 +4378,45 @@ Two smaller mouse dead ends on the same screens, fixed together:
   disc lacks) a row above the footer, in the legend's own word face
   (`NavigationLegend::notice`), until the next input. The wording and the row are ours. A
   locked cell still shows nothing beyond its padlock.
+
+## Omega: `Campaign Selection`, 2026-11-05 (`omega-chooser`)
+
+`--menu-page campaign-select` draws on Omega, and RACE CAMPAIGN opens it. **One reader serves HD and Omega**: the screen's
+`campaignList`, `<Redirect>` and the target screens' `flyerlist` are read off the XML by `oag_ui_screens::campaign::selection::Chooser::read`
+(no title is named; `Campaign` is an index into the list), where the chooser used to be an `enum { Fury, Hd }` over `oag_hd` constants.
+`Screens::collect` still has no `<MiniText>` or conditional-`<Redirect>` arm; both are read off the raw tree for this one screen.
+
+| what | Omega's `CellMode_Definition.xml` (`data09`, 69,457 bytes) | HD's `DATA06` copy | confidence |
+| --- | --- | --- | --- |
+| `campaignList` | `FE_RC` (2048), `FE_RC_HD`, `FE_RC_FURY`: **2048 first, the default** (the frame shows its card selected) | `FE_RC_FURY`, `FE_RC_HD` | 90 |
+| redirect | `FE_RC` -> `Grid Selection 2048`, `FE_RC_HD` -> `Grid Selection`, `FE_RC_FURY` -> `Grid Selection Fury`; `<Default goto="To Be Done">` | the same two, no 2048 row | 90 |
+| `flyerlist` of each target | `grid16`..`grid18`, `grid0`..`grid7`, `grid8`..`grid15` | `grid0`..`grid7`, `grid8`..`grid15` | 95 |
+| medal and rank labels | HD counter `(1075, 710)`, Fury `(1395, 710)`, `RankItem` block (`CO_RANK` at `(885, 710)`, shield `Rank_Icon_Endrace.gtf` at `(905, 725)`) | HD `(1395, 710)`, Fury `(755, 710)` | 90 |
+| `<Flyer>` widgets | `2048CampaignFlyerModel` `x -0.55`, `RotY 1.3`, pivot `-0.7`; `HD...` `x -0.2`, `RotY 0`, pivot `0`; `Fury...` `x 0.2`, `RotY -1.3`, pivot `0.7`; all `OriginX 960`, `z -2.0`, `orthoScaleX 0.01443748`, `Y`/`Z` `0.01968749` | `OriginX 640`/`1280`, `z -70`, `orthoScale 0.75` | 95 |
+
+The authored widgets stand for one state: Omega's `HD` card authors `RotY 0` and a pivot of `0`. **Chosen, not measured**: a card that is not
+selected takes the turn and the pivot of the end card on its side (so `HD` beside a selected 2048 turns as Fury does, and stands where Fury's pivot puts it,
+centre about 22 world units right of axis against the frame's +22), the selected one faces the camera on its own pivot, and the swing moves the pivot with the
+yaw at the same `|delta| * 5` rate. Both campaigns' cards on HD are unchanged by this rule (an end card's own turn). The pair frame is the only Omega frame of
+this screen (2048 selected): the other two states are not captured.
+
+What draws, and what is chosen or missing (`omega/menu-campaign-select` pair, below): the title, the `CAMPAIGN MODES` subtitle and the `RANK` label as
+the pickers' `MiniText` headings (a square bullet and small text; HD's `GOLD MEDALS` label draws the same way now), the rank block when 2048 is selected
+(`RANK`, the shield, the number `0` and an empty experience bar: the rank is the player's, authored `99` is a placeholder, and a fresh profile has none; **chosen**),
+only the selected campaign's counter, the three cards, and the footer. The three `Caption*` widgets author Chinese strings (`反重力赛车2048`) and the frame draws none, so a
+literal the face cannot spell is not drawn (**chosen**, read off that frame). The cards stand where the widgets' numbers put them scaled by `0.903`
+(`oag_title::Campaign::selection_card_scale`, fitted so the selected 2048 card is 837 by 717 px in the frame: **chosen, not measured**; the frame's 2048 card
+centre is 26 px right of where this puts it).
+**Open, named:** (1) the `2048_campaign` card's art draws wrong: its navy banner and the `2048` wordmark show as striped hexagons and bare text boxes, the ring
+shows its disc without the fan or its lettering; the card loads and reports no error, the cause was not isolated (its materials are the `2048_*_scroll` and
+`simpletextureandtexturealphauvoffsetscale` family; the PS4 materials' texture curves are unread, `docs/rendering/start-gantry.md`); (2) the unselected cards
+stand about 45 px (HD) and 190 px (Fury) left of the frame's; (3) **2048 does not open a grid**: `grid_16`..`grid_18` are three `PI_Grid` stubs
+(`Campaign="2048"`, `FlyerName="flyer2048"`, no `RequiredPoints`, no cells), the grid reader skips them (`omega_campaign_launch_ground_truth`: sixteen of nineteen parse), and
+`Grid Selection 2048` redirects to `Cell Selection 2048`, whose events are `Campaign2048_Definition.xml`'s `FE3DCanvas`/`CanvasLabel` map, unread. Confirming the 2048 entry
+leaves the chooser and shows `OAG_CAMPAIGN_NOT_PLAYABLE` above the footer (ours; English and two machine translations, French lags) instead of drawing HD's
+cell screen with nothing in it. HD and Fury each open their own grid (`grid0`, `grid8`), Back returns to the entry (`campaign_cursor_ground_truth::omegas_chooser_opens_hd_and_fury_and_keeps_2048_on_the_chooser`).
+Measured: the pair's grey distance, below. Lineage: **checked, applies** to HD (the same reader serves its `DATA06` chooser; `hd_flyer_ground_truth`, the HD pair
+and the old tests hold); 2048 Vita has no `CellMode_Definition.xml` (**checked, differs**).
 
 ## Wipeout HD PSN: the campaign with no chooser, 2026-10-07
 
