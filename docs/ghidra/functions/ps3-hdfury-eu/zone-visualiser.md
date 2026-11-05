@@ -178,9 +178,18 @@ so no effect was heard to test against. What else is routed to `0x00080003` is u
 
 **Silence reads zero.** The Main Menu music is a 44.064 s loop with a gap at its seam. Band sources
 reach `0.0` there and before the music first starts, and the bands read `0`, measured on 2,321 samples
-of a run. Nothing here invents a level.
+of a run. **No output device is not silence**: RPCS3 with `Audio: Renderer: Null` went on reading live
+bands (2,786 samples, band mean reaching `0` and `1`), because the game mixes and analyses regardless.
+`Output::null` reading zero is therefore **chosen, not measured**: a headless run stays reproducible.
 
-Replaying the same dump through `oag_audio::spectrum`, over 142 s: `r = 0.93, 0.92, 0.91` on bands
+**The normaliser's cadence differs and is left.** `+0x24` changes at the frame rate here (58 Hz), the records
+at 85 Hz or more; `Range` runs per spectrum. Stepping it per 60 Hz tick instead, offline, moves bands
+10-12's means to `0.202, 0.230, 0.222` from `0.198, 0.223, 0.207` (original `0.198, 0.254, 0.229`) and costs
+correlation, `0.897` from `0.933`, so it was not taken. The reader-side step stays open.
+
+`Mixer::music_tap` is `Bus::Music`, which here also carries a movie's sound and the pre-race voice.
+
+Replaying the same dump through `oag_audio::spectrum`, over 137 s: `r = 0.93, 0.92, 0.91` on bands
 10, 11, 12 and `0.74` to `0.91` elsewhere, means within `0.03` on those three.
 
 **Omega:** checked, differs: no `cellMS` string, a CRI `ACX Spectrum Meter` beside the same `FFT MUTEX` name, so
@@ -444,6 +453,7 @@ one speaker driven would settle it in one reading.
 
 ## Still open
 
+- **Where `SoundSystem_UpdateBandLevels` steps**, per frame or per spectrum: above.
 - **What `0x006186a0` is and what else reaches bus `0x00080003`**: the DSP behind the records, and
   so whether anything but the music feeds the bands.
 - **What fills the triple-buffered 32-float block** at `+0x494`, behind the

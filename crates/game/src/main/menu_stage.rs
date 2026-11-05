@@ -248,7 +248,8 @@ impl MenuStage {
     /// reason the front end's movie is: nothing here reads the wall clock. The
     /// player wraps rather than finishing - it is a loop, which is the whole
     /// difference between this movie and the intro. `bands` is this tick's
-    /// snapshot of the audio analysis; the simulation never sees it.
+    /// snapshot of the audio analysis, which the simulation never sees, and
+    /// with music playing the only thing here two runs do not share.
     pub(crate) fn tick(&mut self, dt: f64, bands: &[f32; oag_ui::backdrop::BANDS]) {
         if let Some(backdrop) = &mut self.backdrop {
             backdrop.player.update(dt);

@@ -64,7 +64,9 @@ const FFT_SIZE: usize = 1024;
 const AUTHORED_RATE: f32 = 48_000.0;
 
 /// How many samples one spectrum moves on by: half the transform, about 94
-/// spectra a second, what the band records' update cadence reads live.
+/// spectra a second. Inferred from the band records' update cadence
+/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`, "What a band
+/// measures").
 const HOP: usize = FFT_SIZE / 2;
 
 /// Each band's first and last bin of the 512 a 1024-point spectrum has, read
@@ -323,8 +325,10 @@ impl Analyzer {
 /// that computes it and whoever reads it once a frame.
 ///
 /// Silence (`[0.0; BANDS]`) until the first chunk renders, and forever on
-/// [`crate::Output::null`]. That is the original's own silent value: its
-/// bands read `0` before the menu's music starts and across the loop's seam.
+/// [`crate::Output::null`]. The original's bands read `0` with nothing playing;
+/// with no output device they go on following its music, so zero under
+/// [`crate::Output::null`], which keeps a headless run reproducible, is chosen,
+/// not measured.
 #[derive(Debug)]
 pub struct Spectrum {
     levels: Mutex<[f32; BANDS]>,

@@ -553,12 +553,15 @@ a 1024-point spectrum of the music before the slider, so bands 10-12 are `4.5` t
 cymbals. **Silent**: bands read `0` with nothing playing (the loop's seam and before the first bar), and
 `particleColour` reads `0.0401`, the `0.23` law, on the 2,321 samples of a run with all three at zero.
 The `musicPulse = 1` a sender's RPCS3 patch pins is that patch, not the game's silence. Confidence 90.
+**No audio device is a different case**: on RPCS3's `Null` renderer the bands still move, so the original with no
+output pulses with its music.
 
 **Wired.** `oag_audio::spectrum` computes the recovered spectrum from `Mixer::music_tap`, ahead of every
 gain, on the audio's existing render-ahead thread. `MenuStage::tick` hands a copy of the sixteen levels
 to `oag_ui::backdrop::Fury::tick` once per tick, the fixed step `oag-audio` already serves the Zone
-visualiser. `--no-audio` and every capture read `SILENCE`, the original's own silent value. No simulation
-crate sees any of it.
+visualiser. `--no-audio` and every capture read `SILENCE`, which is the original's value with nothing playing;
+that a run with no device reads it is **chosen, not measured**, so a headless picture stays reproducible. No
+simulation crate sees any of it. A voice keeps playing at Music Volume `0`, so ours pulses there as the original does.
 
 Replaying RPCS3's own dump through `oag_audio::spectrum` and the model's arithmetic, against the same 137 s
 read live:
@@ -855,6 +858,8 @@ colours (above), so this is the original's own law, not a gap.
 - Modes `5`, `9`, `10`, `11`: the vertex programs are paired and disassemble; their
   `Update` functions and the two extra streams (`targetPosition`, the line/quad
   offsets) are unread.
+- `Feedback Zoom`: `Render` at `0x00184a1c` takes held mean `* g+0x464 + g+0x468`; both are `0` on the disc and the
+  port applies neither.
 - Whether anything but the music feeds the bands (see [zone-visualiser.md](zone-visualiser.md#still-open)).
 - `0x00182358`'s purpose: inert here with its two inputs at zero, shaped like a
   stereo eye offset, unnamed.
