@@ -10,7 +10,10 @@
 //! in [`Session::governed_profile`], a copy handed to the draw; `settings.render_profiles` is
 //! never written, so a saved row cannot drift.
 
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use log::debug;
+use oag_game::records::Key;
 use oag_display::display::Shadows;
 use oag_mesh::mesh::ModelDetail;
 use oag_present::governor::{Governor, Kind, MAX_LEVEL, Sample};
@@ -89,6 +92,17 @@ pub(super) fn apply(profile: &RenderProfile, down: impl IntoIterator<Item = Knob
     governed
 }
 
+/// The combination the governor learns per: title, track (the circuit's entry name, so a
+/// reversed run is its own) and mode. The speed class is not part of it.
+///
+/// Hashed rather than stored so the per-frame call builds nothing; the hasher's keys are fixed,
+/// so the same race names the same combination for the whole launch.
+pub(super) fn combination(key: &Key) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    (&key.title, &key.track, &key.mode).hash(&mut hasher);
+    hasher.finish()
+}
+
 impl Session {
     /// What the title authors for shadows: `original` where it is built and draws, else `off`.
     fn authored_shadows(&self) -> Shadows {
@@ -118,11 +132,15 @@ impl Session {
     /// One frame's CPU time (without the swapchain waits) into the governor, and one log line
     /// for each change of level.
     pub(super) fn feed_governor(&mut self, cpu_seconds: f32) {
-        let racing = matches!(self.stage, Stage::Race(_));
-        if !racing || !self.settings.graphics.cpu_governor {
+        let Stage::Race(race) = &self.stage else {
+            self.governor.reset();
+            return;
+        };
+        if !self.settings.graphics.cpu_governor {
             self.governor.reset();
             return;
         }
+        self.governor.enter(combination(&race.result_key));
         let profile = self.render_profile();
         let steps = steps(&profile, self.authored_shadows());
         let sample = Sample {
@@ -216,6 +234,30 @@ mod tests {
         assert_eq!(rich.shadows, Shadows::Mapped);
         let same = apply(&rich, []);
         assert_eq!((same.shadows, same.model_detail), (rich.shadows, rich.model_detail));
+    }
+
+    fn key(title: &str, track: &str, mode: &str, class: &str) -> Key {
+        Key::new(title, Some(track), mode, class)
+    }
+
+    #[test]
+    fn title_track_and_mode_each_make_a_new_combination() {
+        let base = combination(&key("pulse", "sagarmatha", "single_race", "venom"));
+        assert_eq!(base, combination(&key("Pulse", "Sagarmatha", "single_race", "venom")));
+        assert_ne!(base, combination(&key("pure", "sagarmatha", "single_race", "venom")));
+        assert_ne!(base, combination(&key("pulse", "vineta", "single_race", "venom")));
+        assert_ne!(
+            base,
+            combination(&key("pulse", "sagarmatha_reversed", "single_race", "venom"))
+        );
+        assert_ne!(base, combination(&key("pulse", "sagarmatha", "time_trial", "venom")));
+    }
+
+    #[test]
+    fn the_speed_class_does_not_make_a_new_combination() {
+        let venom = combination(&key("pulse", "sagarmatha", "single_race", "venom"));
+        let flash = combination(&key("pulse", "sagarmatha", "single_race", "flash"));
+        assert_eq!(venom, flash);
     }
 
     #[test]

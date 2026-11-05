@@ -6,7 +6,7 @@ DRS sheds pixels when the GPU is the slow side. The governor acts when the frame
 smoothed GPU time is under 0.9 of it, and it steps down an ordered list of this project's own
 extras. It restores them one at a time, with hysteresis, when the CPU plus that knob's measured
 saving fits in 0.8 of the budget for 6 s. A step whose measured saving was under 0.2 ms is undone and,
-on the second weak reading, skipped for the session (see "A step that saved nothing is undone"). Thresholds are chosen, not measured. It holds when the GPU
+on the second weak reading, skipped for that title, track and mode until the game quits (see "A step that saved nothing is undone"). Thresholds are chosen, not measured. It holds when the GPU
 is the bound side, when there is no GPU reading, and when nothing paces the frame (vsync `on`, or an
 unlimited loop).
 
@@ -118,7 +118,7 @@ extras, and a race at its target, are untouched.
 After a shed's cooldown the governor reads what the step saved (smoothed CPU before the shed minus after
 the cooldown). A reading under `MIN_SAVING` (0.2 ms, chosen, not measured) undoes the step and counts a weak
 reading against that knob; the second weak reading in a row also **skips** the knob: it is never shed again
-while the `Governor` lives, and the next shed jumps over it. A reading at or above the floor clears the knob's
+for that combination (below), and the next shed jumps over it. A reading at or above the floor clears the knob's
 count. Knobs are identified by a stable id (`Knob::id` in `session/cpu_governor.rs`: shadows 0, model detail
 `high` 1, model detail `original` 2), not by position, so a profile with a different set of steps keeps each
 skip on its own knob.
@@ -134,9 +134,18 @@ skip on its own knob.
   between clears the count. The price of a useless knob is therefore two extra short sheds (about 4 s each) before
   it is skipped.
 - **An undo is not a restore.** It sets no relapse window and does not double the next restore's patience.
-- **Skips are session-only.** They live in the `Governor` (a `[bool; MAX_LEVEL]`), survive `reset()` (a stage
-  change or the governor switched off and on), and are never written to settings. They also survive a change of
-  title within the session; a knob that is free on one title and costly on another would stay skipped.
+- **Skips are per combination, per launch.** What a knob saves depends on what is on screen, so the weak-reading
+  counts and the skips are kept per combination of **title, track and mode** (maintainer decision 2026-11-05).
+  `Session::feed_governor` names the combination with `Governor::enter`, hashed from the race's `result_key`
+  (`session/cpu_governor.rs`, `combination`: title, circuit entry name, mode; a reversed run is its own track, the
+  speed class is not part of it). The generic governor sees only the opaque `u64` and knows no title. A combination
+  seen for the first time starts with nothing skipped and at full quality; going back to one restores its skips and
+  counts without new readings. A stage restart of the same combination, `reset()` and the governor switched off and
+  on keep the current combination's skips, as before. Nothing is written to settings: a new launch learns again.
+  The store is `MAX_COMBINATIONS` (32) combinations that learned something beside the current one; one that learned
+  nothing takes no room, and past the bound the combination entered longest ago is forgotten and learns again
+  from nothing (two short sheds per useless knob). `enter` with the combination already named does nothing, so
+  the per-frame call touches no store and allocates nothing.
 - **Log.** `cpu governor: <knob> saved N ms` after each cooldown, and `undone, it saved too little: <knob>` for an
   undo (debug level).
 

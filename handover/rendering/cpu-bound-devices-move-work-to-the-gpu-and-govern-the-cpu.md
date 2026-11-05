@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-05
-summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles/trails/shadow rays; governor landed on by default and undoes a step that saved nothing"
+summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles and trails; governor is on by default, undoes a useless step, skips per track"
 categories: [rendering, tooling]
 size: XL (35)
 difficulty: medium (30)
@@ -160,5 +160,5 @@ top of `park/indirect-depth-prepass` afterwards.
 
 ## Next Steps
 
-1. Lane 6 (governor) landed, on by default (maintainer, 2026-10-27), and undoes a step that saved nothing ([`cpu-governor.md`](../../docs/rendering/cpu-governor.md)).
+1. Lane 6 (governor) landed, on by default (maintainer, 2026-10-27), and undoes a step that saved nothing and remembers skips per title, track and mode for the launch ([`cpu-governor.md`](../../docs/rendering/cpu-governor.md)).
 2. Lanes 1 to 5 open the next drive in order, each with its Deck before/after.
