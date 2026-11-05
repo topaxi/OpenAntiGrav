@@ -479,8 +479,7 @@ shared with HD:
 Still visible on Omega: circuit names read as ids (`01_Track`: the German
 `entries.xml` names only the four Zone circuits, `25_Track`..`28_Track`, the rest
 live elsewhere or under other ids); the three medal icons under the target row
-are in the wrong order (`Hexmedal_HD` is 976x549 on Omega against HD's 1024x768,
-and the crop is HD's); no flyer and a white backdrop on `grid-select` (`flyers:
+drew bronze, silver, gold (fixed, see "The medal atlas"); no flyer and a white backdrop on `grid-select` (`flyers:
 None`); `Event 01/08` is an English literal on HD too; the Endrace screens still
 dispatch `title == HD` alone. The picker's `Svenska` x4 and `Portugus` are **the
 disc's own**: `definition.xml` really says `ID="Japanese" String="Svenska"` (and
@@ -618,6 +617,59 @@ recovers the same way, previously "no entry at all" for the same manifest
 reason. `StudioLiverpool.bik` remains genuinely absent under that name even
 in the corrected extraction, across all nine archives - not a reading
 artefact. The exact decode results and the full census were a scratch file, not kept.
+
+## The medal atlas (2026-11-05, `omega-medals`)
+
+The player's report: gold and bronze change places on `Cell Selection`'s `Target0/1/2 Medal`,
+silver is right. Neither of the two readings the thread opened with holds exactly: it is not an
+indexed field whose order differs in the XML, and it is not a vertical flip between decoders.
+
+- **The XML is HD's, to the digit** (confidence 95, read off `data09`'s `CellMode_Definition.xml`
+  by `omega_medal_crops_read_gold_silver_bronze_in_every_difficulty_block`): `Target0/1/2 Medal`
+  author `u=0`, `v=0/61/122`, 60x60, `TxtrWidth/TxtrHeight=60`, source `Hexmedal_HD.gtf`.
+  Census of every `.xml` in the five Omega archives for `Hexmedal`: only `cellmode_definition.xml`
+  (the three `Target0/1/2 Medal`, 32 `Medal_x_y` with no crop, `MedalImageFury`/`MedalImageHD`)
+  and `endrace_definition.xml` with its `_demo` twin (`Target0/1/2 Image` at `v=0/61/122`, one
+  `Single Target Image`) name it.
+- **The atlas keeps HD's grid** (confidence 90, measured): `Hexmedal_HD.gnf` is 976x549 against
+  HD's 1024x768, which is 16 columns by 9 rows of HD's 61 px pitch (a 60 px frame and one clear
+  row), three difficulty blocks of 183 px. Through every tier and block the icon's opaque rows
+  stay inside rows 1..58 of its frame. `Hexmedal_HD.2x.gnf` is the same picture at 1952x1098;
+  both files exist twice (base `data00`, patch `data08`), the four decode to the same texels
+  within BC error.
+- **The stored order within a block is bronze, silver, gold from the top** (confidence 95,
+  mean colour of the opaque texels, first column frame, plain block: bronze rgb 196 174 135,
+  green over red 0.887; silver 204 209 207, red minus blue -3; gold 214 212 168, 0.989; the hook
+  and swirl blocks read the same way, see the test's output). **The blocks run plain, hook,
+  swirl from the top**, HD's authored `v` order. HD's `.gtf` sheet is reversed on load, which
+  puts gold at `v=0` there; Omega's `.gnf` is stored the other way round within a block and the
+  sheet leaves a `.gnf` as stored, so `v=0` landed on bronze and `v=122` on gold.
+- **A whole-atlas flip is refuted**: it would put the swirl block at `v=0`, and the shadPS4 frame
+  (`omega/menu-cell-select`, `AI DIFFICULTY (NOVICE)`) draws plain hexes in the target row, gold
+  at `1ST`, silver at `2ND`, bronze at `3RD`. So `Hexmedal_HD` is not an entry for
+  `FrontEnd::bottom_up_gnf` either: that reverses the blocks and the tiers together, putting the
+  swirl at Novice.
+- **The fix is title data** (`oag_title::Campaign::medal_tier_rows`, Omega `[2, 1, 0]`, HD and the
+  rest `None` = `[0, 1, 2]`), carried through `CellArt::medal_tier_rows` into `hd_medal_frame`,
+  the one crop both draws of the atlas use: `Target0/1/2 Medal` and the hex `Medal_x_y` badges.
+  `MedalImageFury`/`MedalImageHD` are not drawn (they author no crop), and `EndRace Results`'
+  `Target0/1/2 Image` never loads the atlas on either title (`oag_hd::endrace::EXTRA_TEXTURES`
+  omits it; Omega's end of race goes through the same `load_hd`), so the target row draws nothing
+  there and there is no third draw to correct.
+- **Measured against the capture**: over the target row's region of `omega/menu-cell-select`
+  (x 750-1690, y 855-925), mean absolute grey difference against the original 4.51 before and
+  2.19 after; per icon (1ST, 2ND, 3RD) 21.7, 1.7, 20.5 before and 1.4, 1.7, 1.1 after. Both
+  frames opened and read by eye: gold, silver, bronze left to right, at 4x on the crop. HD's
+  `menu-cell-select` still frame is byte-identical (same SHA-256) before and after.
+- **What stays unmeasured**: Skilled and Elite on Omega. The atlas keeps HD's block order and
+  Novice is plain on the capture, so hook is Skilled and swirl Elite by HD's capture
+  (`docs/ui/campaign-screens.md`): confidence 70, no Omega frame at those rungs. Whether the
+  original samples the 1x or the 2x file is unread (the `eboot.bin` is in Ghidra, the bridge was
+  down for this lane); both carry the same tier order, so it changes sharpness only.
+- **2048 against this** (census of every `psarc` of both Vita packages, base, patch and DLC:
+  `PCSF00007` and `PCSA00015`): **checked, differs**. 2048 ships no `Hexmedal` file and no hex
+  campaign screen; its medals are separate icons (`NewImages/medals/Icon_*_medal.gxt`,
+  `Post_Race_Medals.gxt`). Nothing of this carries across, and nothing of 2048's is wrong by it.
 
 ## Campaign: confirming a cell starts its race, 2026-09-30
 

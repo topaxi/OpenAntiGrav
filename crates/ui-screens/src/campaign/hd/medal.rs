@@ -109,6 +109,12 @@ use super::super::draw::sprite_draw;
 /// one mode (`Race`) - not independently reproduced across a second boot or
 /// a second mode family (e.g. an `Elimination`/`NitroBattle` cell's own
 /// `Novice`/`Skilled`/`Elite`-named target triple).
+///
+/// **`tier_rows` is the stored row of a block that holds each tier** (`[gold, silver, bronze]`,
+/// 0 the block's top). HD's is `[0, 1, 2]`, the authored `v = 0/61/122`; Omega's `.gnf` keeps
+/// HD's blocks and frame grid but stores bronze, silver, gold from the top, `[2, 1, 0]`
+/// (`oag_title::Campaign::medal_tier_rows`, `docs/formats/omega-status.md`, "The medal atlas").
+/// The block order and `difficulty` mapping are the same on both.
 pub fn hd_medal_frame(medal: Medal, difficulty: Difficulty, tier_rows: [u8; 3]) -> [f32; 4] {
     const FRAME: f32 = 60.0;
     const ROW_PITCH: f32 = 61.0;
