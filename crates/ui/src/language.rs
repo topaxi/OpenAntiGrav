@@ -411,7 +411,10 @@ pub struct CircuitNames {
 }
 
 impl CircuitNames {
-    /// Picks the copy of the table that names every id in `ids`.
+    /// Picks the copy of the table that names every circuit in `circuits`,
+    /// each `(id, key)`: the circuit's own id, and the key its name is filed
+    /// under (the same string for a circuit that authors no other, see
+    /// `oag_raceplay::catalogue::Track::name_key`). The result is asked by id.
     ///
     /// `copies` is `(archive label, table)` in mount order, so a tie - every
     /// copy covering the list, which is what a single-copy source looks like -
@@ -421,15 +424,15 @@ impl CircuitNames {
     /// its id, which is what this build did before the copies were counted: an
     /// honest, visible absence rather than a name it cannot vouch for.
     #[must_use]
-    pub fn choose(copies: &[(String, StringTable)], ids: &[String]) -> Option<Self> {
+    pub fn choose(copies: &[(String, StringTable)], circuits: &[(String, String)]) -> Option<Self> {
         let (source, table) = copies
             .iter()
-            .find(|(_, table)| ids.iter().all(|id| folded(table, id).is_some()))?;
+            .find(|(_, table)| circuits.iter().all(|(_, key)| folded(table, key).is_some()))?;
         Some(Self {
-            by_id: ids
+            by_id: circuits
                 .iter()
-                .filter_map(|id| {
-                    folded(table, id).map(|name| (id.to_lowercase(), name.to_string()))
+                .filter_map(|(id, key)| {
+                    folded(table, key).map(|name| (id.to_lowercase(), name.to_string()))
                 })
                 .collect(),
             source: source.clone(),
@@ -630,5 +633,25 @@ mod tests {
         assert_eq!(language.border_extend("hudsmall"), 3);
         assert_eq!(language.border_extend("Menu"), 0, "authored none");
         assert_eq!(language.border_extend("Absent"), 0);
+    }
+
+    /// A circuit that authors its name's key (`StringTableId`) is asked for under that key and
+    /// still answered by its own id; one the copy does not name leaves no copy chosen.
+    #[test]
+    fn a_circuit_is_named_under_the_key_it_authors() {
+        let copy = StringTable::from_xml(
+            r#"<StringTable><entry id="01_TRACK" string="VINETA K"/>
+                            <entry id="Track_Altima_0" string="ALTIMA"/></StringTable>"#,
+        );
+        let copies = [("DATA09".to_string(), copy)];
+        let circuits = [
+            ("01_Track".to_string(), "01_Track".to_string()),
+            ("altima".to_string(), "Track_Altima_0".to_string()),
+        ];
+        let names = CircuitNames::choose(&copies, &circuits).expect("both are named");
+        assert_eq!(names.get("01_Track"), Some("VINETA K"));
+        assert_eq!(names.get("altima"), Some("ALTIMA"));
+        let bare = [("altima".to_string(), "altima".to_string())];
+        assert!(CircuitNames::choose(&copies, &bare).is_none());
     }
 }

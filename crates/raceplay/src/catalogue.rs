@@ -189,12 +189,24 @@ pub struct Track {
     /// fresh profile lists reached the play call with this value. See
     /// `docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`, "The name voices".
     pub sound_register: Option<u8>,
+    /// The `StringTableId` the entry authors: the key its name is filed under
+    /// in the string table, where that is not the entry's own id. Omega's ten
+    /// circuits of 2048 (`altima`, `arena`, ...) author it (`Track_Altima_0`);
+    /// the twenty-eight numbered ones do not, and are named by their id.
+    pub string_id: Option<String>,
     /// The foreign (Unity) track file this entry stands for, or `None` for a
     /// circuit of the source's own. See [`crate::foreign`].
     pub foreign: Option<std::path::PathBuf>,
 }
 
 impl Track {
+    /// The string table key this circuit's name is under: its authored
+    /// `StringTableId`, else its own id.
+    #[must_use]
+    pub fn name_key(&self) -> &str {
+        self.string_id.as_deref().unwrap_or(&self.id)
+    }
+
     /// The archive entry name of the `.vex` a *race* loads on this circuit.
     ///
     /// The four-file rule from `docs/formats/track.md`: a circuit ships
@@ -1018,6 +1030,7 @@ fn read_track(node: &Node, wanted: Option<&str>) -> Option<Track> {
         sound_register: values
             .attr("soundregister")
             .and_then(|v| v.trim().parse().ok()),
+        string_id: values.attr("StringTableId").map(str::to_string),
         foreign: None,
     })
 }

@@ -752,9 +752,8 @@ fn hd_track_line(cell: &Cell, circuit_names: &CircuitNames, strings: &StringTabl
     let Some(id) = cell.track.as_deref() else {
         return String::new();
     };
-    // Omega's table names 17_TRACK and 18_TRACK (and the Zone and 2048 circuits) but not every
-    // circuit, so `CircuitNames::choose` finds no copy that names all 38 and leaves the list
-    // empty; the cell reads its own circuit off the served table, case folded, as `choose` does.
+    // A source whose copies name no circuit list at all leaves `circuit_names` empty; the cell
+    // then reads its own circuit off the served table, case folded, as `choose` does.
     circuit_names
         .get(id)
         .or_else(|| {
