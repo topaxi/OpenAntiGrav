@@ -1,31 +1,25 @@
 ---
-status: measure
+status: blocked-maintainer
 titles: [hd]
 updated: 2026-11-05
-summary: "RPCS3 indexes emulated QUADS with u16: patch it to 32-bit, re-capture the Fury references, census other HD draws past 65,535 vertices"
+summary: "A wide-index RPCS3 build and re-taken Fury menu pairs exist: adopt them into data/reference, then re-read the tint ratios and footprint"
 categories: [tooling, rendering]
 ---
 
-# RPCS3 wraps emulated primitives at 65,536 vertices, so the Fury references are wrong
+# Fury references without RPCS3's index wrap exist and wait to be adopted
 
-Finding and evidence: `docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "The Fury references carry an RPCS3 defect",
-and `docs/reverse-engineering/rpcs3-capture.md`.
+Census, patch, method and numbers: `docs/reverse-engineering/rpcs3-index-wrap.md`. Only Fury menu pairs carry the wrap; race pairs do not.
+Binary: `data/tools/rpcs3-wide-indices/src/build/bin/rpcs3`, rebuilt by `scripts/build-rpcs3-wide-indices.sh`.
 
 ## Open
 
-1. **No reference without the wrap exists.** Every Fury backdrop pair on the compare page (`menu-*`, Main Menu, Ship Select,
-   Campaign Select) holds the wrapped picture. Size M (50): the patch is two sites, the build is not incremental here
-   (`data/tools/rpcs3-watchpoints/build` holds 282 objects and no binary).
-2. **Census.** Any other HD draw of `QUADS`, `POLYGON`, `TRIANGLE_FAN` or `LINE_LOOP` past `0xffff` vertices carries the same
-   defect in race references. `scripts/rsx-pass-events.py` prints `cnt`; none other is known. Size S (50).
-3. **What was measured through the defect** and needs re-reading: the tint ratios and the footprint on `menu-backdrop.md`.
+1. **The compare page still holds the wrapped pairs.** `menu-campaign-select`, `menu-cell-select`, `menu-grid-select`, `menu-ship-select`, `menu-track-select`,
+   `gap-main`, `gap-options`, `gap-racebox`. Agents do not write `data/reference`. Size XS (80).
+2. **What was measured through the defect** and needs re-reading: the tint ratios and the footprint on `docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`. Size S (50).
+3. Why two stock boots read R mean `19` and `44` at one pinned state. Size S (40).
+4. Upstreaming the fix is the maintainer's call.
 
 ## Next Steps
 
-1. In a private copy of the tree: in `rpcs3/Emu/RSX/Common/BufferUtils.cpp`
-   `write_index_array_for_non_indexed_non_native_primitive_to_buffer`, `iota16` and the callers in `RSXOffload.cpp`, write `u32`;
-   in `VK/VKVertexBuffers.cpp` `generate_emulating_index_buffer` use `sizeof(u32)` and `VK_INDEX_TYPE_UINT32`. Add it to
-   `scripts/patches/` beside the watchpoint patches, and build with `scripts/build-rpcs3-watchpoints.sh`'s recipe.
-2. Check it: on Main Menu with the patched build, the near hull appears and `cnt` past `0xffff` no longer shows the cut at
-   record 16,384. Re-capture frame 484's state on path 6 (`mirage_c1`, paused, bands at zero).
-3. Score ours against that, then re-take the pairs. Upstreaming the fix is the maintainer's call.
+1. Re-take the pairs with `OAG_RPCS3_BIN` set and `scripts/rpcs3-hd-menu-pair.py`, then copy them over the eight directories.
+2. Repeat the tint reads on the wide build, with the rules in the doc's "Taking a reference with it".

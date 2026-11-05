@@ -1,0 +1,25 @@
+diff --git a/rpcs3/Emu/RSX/VK/VKVertexBuffers.cpp b/rpcs3/Emu/RSX/VK/VKVertexBuffers.cpp
+index 35d588d55..f9ade5ed0 100644
+--- a/rpcs3/Emu/RSX/VK/VKVertexBuffers.cpp
++++ b/rpcs3/Emu/RSX/VK/VKVertexBuffers.cpp
+@@ -216,6 +216,20 @@ namespace
+ 
+ vk::vertex_upload_info VKGSRender::upload_vertex_data()
+ {
++	// Census: one log line per new peak, per primitive type and draw command.
++	{
++		static u32 s_peak[16][4]{};
++		const auto& clause = rsx::method_registers.current_draw_clause;
++		const u32 elements = clause.get_elements_count();
++		u32& peak = s_peak[static_cast<u8>(clause.primitive) & 15][static_cast<u8>(clause.command) & 3];
++		if (elements > peak)
++		{
++			peak = elements;
++			rsx_log.warning("oag-draw-peak primitive=%u command=%u elements=%u native=%d",
++				static_cast<u32>(clause.primitive), static_cast<u32>(clause.command), elements, !!vk::is_primitive_native(clause.primitive));
++		}
++	}
++
+ 	draw_command_visitor visitor(m_index_buffer_ring_info, m_vertex_layout);
+ 	auto result = std::visit(visitor, m_draw_processor.get_draw_command(rsx::method_registers));
+ 

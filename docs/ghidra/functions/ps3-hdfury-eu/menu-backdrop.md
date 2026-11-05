@@ -576,6 +576,11 @@ is the check on the law. The live settings store (`*0x008b6fb4`, `+0x52c`..`+0x5
 not match. Wired: `oag_game::boot::fury` reads that file through `oag_raceplay::hd_bloom_params` and the backdrop runs
 `oag_post::hd_bloom::Chain`, with the adaptation per clip frame. **Confidence 90** on the law, **85** on the file.
 
+**A race's final composite is the same quad** (2026-11-05, offline, ring dumps of earlier lanes). The last full-screen immediate `QUADS` of a frame runs fragment program
+`0x01113c41`, unit 0 filter word `0x02022000`, from the scaled scene, with `TEXCOORD0` at the top left `(0.5 / width, 0.5 / height)` of **that source**: 23 of 23 1080p
+frames, 8 of them races on Anulpha Pass, Moa Therma, Talon's Junction and Vineta K at widths `1300`, `1320` and `1660` (`0.000385`, `0.000379`, `0.000301`), `0.000463` on `v`
+in all. So on a race the offset follows the dynamic width, and it is half a texel of the source, not of the display. Confidence 90; a dump's own `1920` frames say the same.
+
 The half texel of "Three more readings" happens in our present pass, ahead of the chain, because the chain has no tap for it;
 the original's ladder reads the field directly. Measured effect: none separated. Open.
 
@@ -633,9 +638,13 @@ Particle Colour at `g+0x430`). Glow at its floor: copy `g+0x4a0` over `g+0x4b0`;
 three floats, as the words after them matter. Off the store at `*0x008b6fb4`: `+0x540..+0x548 = 0, 0, 1` for an exposure of one, `+0x530` and
 `+0x538 = 0` for no bloom. Pause through the stub, wait two seconds, grab, then dump the ring.
 
+**A reference without the defect now exists, and ours matches it** (2026-11-05, [rpcs3-index-wrap.md](../../../reverse-engineering/rpcs3-index-wrap.md)).
+Same commit with 32-bit indices, natural frame 484 of the row above: R mean `13.1` to `14.2`, q90 `45` to `49`, q99 `111` to `118`, against ours `14.0`, `48`, `121`, RMSE
+`13`, where stock is `33` to `36`. The near hull appears. On fresh particles ours reads `11` to `18` percent over, the residual below. Confidence 92.
+
 **So the shipped picture is the faithful draw and it does not match the reference, on purpose.** Like `sampleTexture2DMS`, the
 wrap is not emulated. Shipped, the whole hull shows, dimmer on a silent frame, and its near half carries the ramp's band.
-No compare-page Fury backdrop pair can score this until a reference exists without the defect; **as a fidelity measure the
+No compare-page Fury backdrop pair can score this until those pairs are re-taken on the wide build; **as a fidelity measure the
 shipped rows above mean nothing**. That also answers the two stored pairs, re-rendered from scratch copies with both binaries through
 one metric: Ship Select RMSE `31.21` to `30.38`, mean grey `22.20` to `20.60` against `21.83`; Campaign Select `16.05` to `15.82`,
 `32.01` to `31.75` against `32.12`. They differ in cloud and clip and the references hold the wrapped picture, so neither direction means

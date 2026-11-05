@@ -27,8 +27,8 @@ record once, `13.9` on a silent frame. Do not fit towards the reference. The cle
    `oag_display::display::viewport`; check whether that viewport or a PSP-shaped layout space is the source. It moves dots, not level,
    and may be the `3` pixel sideways residual.
 4. **The half texel sits ahead of the chain** in our present pass, where the original's ladder reads the field directly, so
-   the gate sees two half-dark rows. Move it into the resolve when `handover/rendering/hd-race-final-quad-half-texel-unread.md`
-   settles whether the chain wants it for a race too.
+   the gate sees two half-dark rows. A clean reference now exists (`docs/reverse-engineering/rpcs3-index-wrap.md`), and a race reads the same tap, so
+   move it into the resolve with `handover/rendering/hd-race-final-quad-half-texel-unread.md`.
 5. **`[graphics] bloom` does not reach the menu**: the backdrop hard-codes `Glow::Drawn`.
 6. **HD-style (non-Fury) menus end in the same present path** but `oag_game::render::SceneBackdrop` does not run this chain.
    Not measured; check the scene backdrop's exposure against a reference.
