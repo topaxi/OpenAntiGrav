@@ -409,13 +409,13 @@ their order agree except where this section says so.
 **Confidence 90** on the table: read off the stream at every step, twice (two frames per
 dump) and again at 1920x1080. A second build's agreement would not lift it past 94.
 
-- **The whole chain runs in linear light.** Method `0x1fec` is 1 on draws 1 to 25 and 0 on
-  the UI, and every texture those passes bind has the gamma bits `0x00700000` set in its
-  address word (`0x60730303`). That is why
-  [the tint reads the way it does](#the-tint-is-applied-in-linear-light-and-what-a-screen-change-does)
-  and it replaces the guess there about where the encoding happens. **Confidence 80**: the
-  bits are read directly; `0x1fec` as "encode on write" is inferred from its on/off split and
-  the sender's agreement, not from a register document.
+- **The chain computes in linear light and stores encoded.** Method `0x1fec` (`SET_SHADER_PACKER`) is 1 on
+  draws 1 to 25 and 0 on the UI, and every texture those passes bind has the gamma bits `0x00700000` set in its
+  address word (`0x60730303`). A read decodes; the packer encodes a fragment **before** the blend unit sees it, so
+  the three blended passes (1, 3 and 7) combine encoded values, the law the race already carries
+  ([hd-track-tone.md](../../../rendering/hd-track-tone.md), "HD's blends combine encoded values"). That is why
+  [the tint reads the way it does](#the-tint-is-applied-in-linear-light-and-what-a-screen-change-does).
+  **Confidence 85** for the reference frames; as there, what the console's own G70 does is inferred, not measured.
 - **The tint reaches the shader as a fragment constant, not as a blend colour.** The
   constant at slot 2 of the Blend program (`0x00740600` at 720p) is patched per frame.
   Experiment: three floats written to the current row at `row+0x40`, the program read back
@@ -498,12 +498,9 @@ first).
   equal, `1` and `2` bright and equal, ratio `0.68` to `0.77`; frame 484 reads `46.7, 67.1, 66.9, 46.3`. The mean of
   one and `0.05` in linear light encodes to `0.7`. **Confidence 90.** Every frame that ends in this composite gets
   it, race frames included if their quad is the same; only the menu's was read.
-- **On the menu the ladder is not a luminance readback alone.** Read live at 1080p: the gate `0x01111fc0` is
-  `rgb * a * 0.75` with its from-frame contribution at `0`, so it blooms from the **field's alpha**; the two blurs follow; the final
-  composite `0x01113c40` is `field * 1 + bloom * 1 + 0` with the radial mix at `0`. The field's alpha is
-  `min(a * tint.a, 1)` through the accumulation, zeroed on scanline rows, times `w` in the band. So the original
-  has a soft alpha bloom over this picture that this build does not draw. **Confidence 80** on the programs; how much
-  light it adds on this picture is unmeasured.
+- **On the menu the ladder is the race's whole chain.** See ["The final composite adapts"](#the-final-composite-adapts).
+  This bullet read `rgb * a * 0.75` with the frame term at `0` and the composite at `field * 1 + bloom`; those were
+  one bright frame's values of constants that move with the adaptation.
 
 **`musicPulse` peaks at 1.33, by law.** Sampled for 115 s at 24 Hz on Campaign Selection
 (2,786 samples, muted emulator): every band stays on `0..1` and the three-band mean reaches
@@ -534,58 +531,114 @@ Omega scene backdrop is untouched and its ground truth passes.
 
 ## The pass graph, wired (2026-11-05)
 
-`oag_game::render::backdrop` runs the table above: points, blend, glow, wave, composite, band, scanlines,
-then a present pass for the final composite's half texel. **Decision on the linear pipeline: an sRGB format, not by hand.** Every
-target is `Rgba8UnormSrgb`, so decode, encode and linear blending are the format's; the page stays
-gamma-space (ADR-0020) and receives the stored bytes through a plain view, so nothing is decoded and encoded
-twice. `fs_composite`'s hand encode and the chosen sRGB curve are gone. The accumulation and the field read
+`oag_game::render::backdrop` runs the table above: points, blend, glow, wave, composite, band, scanlines, then the
+final composite through `oag_post::hd_bloom`. Every target has an sRGB view to read and a plain one to write, and the
+shader encodes by hand (`stored` in `backdrop.wesl`, the curve RPCS3's epilogue uses), so a blended pass adds encoded
+values. The page stays gamma-space (ADR-0020) and takes the bytes as they stand. The accumulation and the field read
 themselves in the original, so here the accumulation is a swapped pair and the band reads a copy.
 
-The particle pass is encoded with the rest: `0x1fec` is `1` on draw 1, and a build that wrote it as plain bytes
-read `R mean 0.4` where the encoded one reads `15.0`, against the reference's `48.3` (bands at zero in both).
+The point pass's blend is `BlendFuncSeparate(SRC_ALPHA, ONE, ZERO, ONE)` (`0x314 = 0x00000302`, `0x318 = 0x00010001`),
+and draw 1's target is cleared to `0` with `CLEAR_SURFACE 0xf3` just before it, so **the field's alpha is `0`** through
+every pass up to the ladder and the gate's `rgb * a` term adds nothing on this picture.
 
-Measured on Main Menu, static path 6, `mirage_c1`, clip frame 484, paused, over rows `230..790` and columns
-`600..1900`, against the frame kept at `data/reference/hd-capture/fury-backdrop-pass-graph/paused-02.png`
-(`paused.json` beside it holds the state):
+Ruled out on the way, each read live (`rsx-pass-events`, the ring, local memory):
 
-| | R mean | R q90 | R q99 | G mean | RMSE | Rows by `row % 4` |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| reference | 48.3 | 137 | 255 | 3.9 | | 46.7, 67.1, 66.9, 46.3 |
-| before, as shipped, bands at zero | 2.2 | 8 | 23 | 0.0 | 44.6 | |
-| **after, as shipped, bands at zero** | **15.0** | **46** | **85** | **0.1** | **35.5** | |
-| before, level **fitted**, band `0.95` | 12.6 | 49 | 108 | 0.4 | 40.3 | 14.3, 14.2, 14.2, 14.1 |
-| after, level **fitted**, band `0.95` | 53.0 | 117 | 191 | 3.5 | 26.3 | 49.0, 68.3, 68.1, 48.7 |
+- the sprite: all six mips in local memory match `PointCloud_MakeSprite`'s law to one byte, at the fixed pitch `0x80` per
+  level; the sampler is trilinear (`0x02062000`), bias `0`, LOD `0..15`, and the gamma mask leaves alpha alone;
+- the programs: the live `RadioHead2` vertex program, 50 instructions out of the ring, reads as the listing above, and
+  `MUL H0, f[COL0], R0` is the whole fragment program;
+- the music: frame 210 with the bands at zero, `particleColour` `0.0875` in the ring and the glow at its floor still
+  read `57.5`.
 
-**As shipped the backdrop is about a third of the reference's level, and that gap is not fully explained.** The
-fitted rows are a scratch build with the band forced to match the level, for comparing shape; nothing ships
-them. The state read at the pause was bands at zero (`particleColour 0.0877`), so the fit contradicts the one
-reading of this frame's music, and no reason is known: `Equaliser Damp Speed` makes a jump within a frame unlikely.
-Split in linear light over the two clean rows of each four, the reference means `0.118`, ours `0.012`, fitted
-`0.084`. The difference from bands at zero keeps `0.45` of its energy under an 8-pixel Gaussian, about what the
-reference's own picture keeps (`0.48`), so it carries the dots' structure and a blur alone cannot be most of it;
-what fitting leaves (`0.034`) keeps `0.22`. Candidates, none tested: the music reaching this frame some way the
-state read missed, the alpha bloom, the glow at its ceiling (`+0x1dc` sat over the threshold on three or four of
-the eight paused frames).
-
-Shape, at the fitted level only: the dots land on the reference's, the best integer alignment is `3` pixels
-sideways and none vertically (not checked across the frame), and the frames' autocorrelation falls to one half at
-`5` pixels in both, `4` as shipped. So the page's "dots 1.7x wider" no longer reproduces at that level, which
-points at the encoding but is not a closed question until the level is. The smear band sits in the reference
-near row `745` of that frame at about `0.7` of its neighbours; ours is `0.63` at its own phase, the band's clock
-being a global timer that differs between the two.
-
-Stored pairs re-rendered from scratch copies, a random cloud and clip on each side: Ship Select mean grey `19.55`
-to `21.61` against `21.55`, RMSE `28.89` to `29.76`; Campaign Select `32.18` to `32.35` against `32.51`, RMSE
-`15.58` to `15.78`. The level moves to the reference; RMSE cannot improve on a different cloud. A `--menu-page`
-still now runs `FRAMES_TO_SETTLE` frames of history first, because a picture that feeds back has nothing in it
-after one frame, and with no `--anim-seconds` it stands that many frames into the clip.
-
-Tests: `crates/game/tests/hd_fury_ship_select_ground_truth.rs` fails if the tint moves back to the composite
-(the tint gone for three frames leaves a decaying picture, not black), and pins the two-row scanline.
-`crates/ui/src/backdrop/tests.rs` holds the glow byte, the band's 200-frame wrap across clips and the pivot.
+Tests: `crates/game/src/render/backdrop/tests.rs` on a real device: two stacked sprites store twice one (`1.375` under a
+linear blend, which fails it), the finished field holds no alpha, the chain exposes the picture.
+`crates/game/tests/hd_fury_ship_select_ground_truth.rs` fails if the tint moves back to the composite and pins the
+two-row scanline. `crates/ui/src/backdrop/tests.rs` holds the glow byte, the band's 200-frame wrap and the pivot.
 
 Not wired: the 720p field's 2x1 antialiasing, which changes no dot this build compares (1080p is plain), and
 mode 11's mip chain, which needs morph paths to draw at all. RPCS3's `sampleTexture2DMS` defect is not emulated.
+
+## The final composite adapts
+
+The menu's draw 25 is the race's resolve, `FunkLayer`'s chain run by the same every-frame present path
+([renderer.md](renderer.md), "The exposure is read"), and its constants move with the picture:
+
+```text
+scale  = 4 - min(20 * adapted, 3)                  live 3.22713 at adapted 0.0386
+fade   = 1 - min(adapted * 8.75 * 0.25, 1)         live 0.915467, same adapted; 0.976792 on another frame
+gate   = rgb * a * 0.75 + rgb * dot(rgb, (0.9, 1.77, 0.33)) ^ 2 * 1.0 * fade
+out    = saturate(field * scale + bloom)
+```
+
+Both live numbers come off the patched programs at `0x01113c40` and `0x01111fc0`, and they give the same `adapted`, which
+is the check on the law. The live settings store (`*0x008b6fb4`, `+0x52c`..`+0x548`) reads `0.025, 1, 2, 0.75, 8.75, 20,
+3, 4`, key for key `Data/fe/fe.fury.track.envsettings`; DATA06's `fe.fury.envsettings` (boost 35, frame exponent 0) does
+not match. Wired: `oag_game::boot::fury` reads that file through `oag_raceplay::hd_bloom_params` and the backdrop runs
+`oag_post::hd_bloom::Chain`, with the adaptation per clip frame. **Confidence 90** on the law, **85** on the file.
+
+The half texel of "Three more readings" happens in our present pass, ahead of the chain, because the chain has no tap for it;
+the original's ladder reads the field directly. Measured effect: none separated. Open.
+
+## The Fury references carry an RPCS3 defect: records past 16,383 are never drawn
+
+**Every RPCS3 frame of this backdrop shows the wrong picture, and that is the "level gap".** RPCS3 emulates `QUADS` with a
+16-bit index buffer whatever the count: `generate_emulating_index_buffer` allocates `index_count * sizeof(u16)` and binds
+`VK_INDEX_TYPE_UINT16` (`VKVertexBuffers.cpp`), and `write_index_array_for_non_indexed_non_native_primitive_to_buffer`
+(`BufferUtils.cpp`) writes `4 * i` through a `u16*`. Draw 1 is one such draw: primitive `8`, 205,000 to 220,000 vertices,
+`DRAW_ARRAYS` words running on to first index `0x35700`. So the index wraps at 65,536, and with the vertex fetch dividing
+by four, **records `0..16383` are drawn three or four times and every later record never**. The clouds are sorted by `z`,
+so what is lost is the near half of the hull, and each dot on screen is three or four sprites stacked.
+
+Evidence, three ways. **Confidence 95** that it is the emulator; the console's own draw has no such limit in the method.
+
+1. A cut in the picture, at record 16,384. Frame 120, cloud by box, fresh particles only, the image sampled at each
+   point's projected position: records `0..15k` lit `0.96..0.98`, `15k..20k` `0.55`, after that about `0.3`, which is
+   overlap with lit neighbours. The cut does not follow distance: at frames 120, 300 and 460 it sits at the same `z`.
+2. Drawing the same wrap in ours, with nothing fitted, reproduces the reference (scratch build, never shipped):
+
+   | Main Menu, path 6, `mirage_c1`, frame 484, bands at zero | R mean | R q90 | R q99 | G mean | RMSE | Rows by `row % 4` |
+   | --- | ---: | ---: | ---: | ---: | ---: | --- |
+   | reference, RPCS3 | 48.3 | 137 | 255 | 3.9 | | 46.7, 67.1, 66.9, 46.3 |
+   | ours, **wrapped as RPCS3 wraps** | 46.6 | 136 | 255 | 4.2 | 27.4 | 50.0, 63.7, 63.4, 49.6 |
+   | ours, as shipped, every record once | 13.9 | 48 | 120 | 0.3 | 35.8 | 14.4, 19.4, 19.4, 14.3 |
+   | ours before this section's work | 15.0 | 46 | 85 | 0.1 | 35.5 | |
+
+3. A defect-free slice: `count` poked to 16,384 on the live widget, so the ring reads 65,536 vertices and nothing wraps, against
+   ours drawing the same records once, cloud `qirex_n1`, frame 300, fresh particles only (`pc 0.3788`, music factor poked
+   to `0`, no trail, no glow, exposure 1, no bloom): the same picture, R mean `6.4` against `7.3`, q90 `22` against `27`, q99
+   `81` against `107`.
+
+The five-stage ladder (each stage poked off the live original with the clip frame held, the same stages in ours, wrapped,
+`ag_systems_c1`, frame 300, `pc 0.3788`, glow at its floor; R mean over rows `230..790`, columns `600..1900`):
+
+| Stage | reference | ours, wrapped |
+| --- | ---: | ---: |
+| whole chain | 46.0 | 64.8 |
+| exposure 1 | 30.5 | 47.4 |
+| and no bloom | 24.9 | 39.9 |
+| and no glow | 25.5 | 36.8 |
+| and no trail | 17.5 | 21.8 |
+
+The upper stages are not like for like: the held clip keeps the original's camera still, so its trail lands on itself,
+where ours flew 300 frames to get there. The last row is, and it leaves a residual, `14` to `25` percent over on fresh
+particles, dots a little brighter at the peak. Open.
+
+**So the shipped picture is the faithful draw and it does not match the reference, on purpose.** Like `sampleTexture2DMS`, the
+wrap is not emulated. Shipped, the whole hull shows, dimmer on a silent frame, and its near half carries the ramp's band.
+No compare-page Fury backdrop pair can score this until a reference exists without the defect; **as a fidelity measure the
+shipped rows above mean nothing**. That also answers the two stored pairs: Ship Select's RMSE `29.76` to `30.38` (mean grey `20.60`
+against `21.83`), Campaign Select's `15.78` to `16.05` (`32.01` against `32.12`). The pairs differ in cloud and clip, and the
+references hold the wrapped picture, so these numbers cannot improve and say nothing either way.
+
+Retracted: the fitted rows this page carried (a band forced to `0.95` "matching" the level, which contradicted the
+music reading because the fit stood in for stacked sprites), and the open question of why the level was three times what
+`particleColour` predicts. Measured through the defect and owed a re-check on a clean reference: the tint ratios below, the
+`37` against `13` pixel footprint under "Runtime verification", the `2.26`-style colour census there, and the "best alignment" and
+autocorrelation lines. The same quads wrap on a **morph** path; anything else HD draws as one emulated primitive past 65,535
+vertices would too (none other is known; the census is open).
+
+**Omega:** checked, differs - no `BackgroundAnimFury`, and it is not RSX. **2048:** checked, differs, likewise. The wrap is
+RPCS3's, so neither title's references carry it. `hd_bloom_params` only moved; the wiring reaches `MenuBackdrop::Fury` alone.
 
 ## What shipped, 2026-09-14
 
@@ -728,13 +781,14 @@ colours (above), so this is the original's own law, not a gap.
 
 ## Open
 
-- The alpha bloom over the field ("Three more readings"): wired neither here nor in the front end at all.
+- A reference without the index wrap, and everything above marked as measured through it.
+- Fresh particles `14` to `25` percent over the defect-free slice and the wrapped ladder.
+- The half texel ahead of the chain rather than in its resolve.
 - Modes `5`, `9`, `10`, `11`: the vertex programs are paired and disassemble; their
   `Update` functions and the two extra streams (`targetPosition`, the line/quad
   offsets) are unread.
 - The equaliser: what feeds the sixteen bands at `+0x1b4` and the banks at `+0x19c` and `+0x1dc`, what moves
   the glow threshold `g+0x1708`, and whether the menu's own music track is what it analyses.
-- Why the backdrop's level on a paused frame is three times what its own `particleColour` predicts.
 - `0x00182358`'s purpose: inert here with its two inputs at zero, shaped like a
   stereo eye offset, unnamed.
 - The HD-style `BackgroundAnim_Item.cpp` (`FEBackgroundAnim_vp`/`_fp`/`Copy_fp`, the
