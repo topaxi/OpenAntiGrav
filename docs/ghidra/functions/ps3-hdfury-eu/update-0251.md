@@ -54,6 +54,29 @@ to `0x000a64bc`, a pair the map lacks.
 **Names are not imported.** [names.tsv](names.tsv) is the 02.00 file. Nothing from this map went in,
 below or above 70.
 
+## Archive load order
+
+`FUN_002adeb4` (`0x002adeb4..0x002ae693`) lists the `.psarc` files of the game folder and then of the
+patch location (`scanning the patch location`, TOC `+0x7908`), sorts the list by name (`0x0051fbf4`,
+`+0x790c`), then loads in three passes, each through `0x002ad43c` after printing `PSARC file Loading %s`
+(`+0x7920`). TOC `0x00727408`; the slots hold `data00.psarc` (`+0x7914`), `data07.psarc` (`+0x7918`),
+`data08.psarc` (`+0x791c`).
+
+| Pass | Code | Loads |
+| --- | --- | --- |
+| 1 | `0x002ae3e0..0x002ae41c`, `0x002ae598..0x002ae620` | everything but those three, sorted: `data01`..`data06` |
+| 2 | `0x002ae44c..0x002ae4a4`, `0x002ae648` | anything left but `data08`: `data00`, then `data07`. Only if byte `+1` of `0x00c65254` is set |
+| 3 | `0x002ae4b4..0x002ae564` | `data08` |
+
+Before pass 2, `bl 0x002c5d5c` with that object, a stub here: `stb 1, 1(r3)`, return 1, so the disc build
+always runs pass 2. It has one caller; the object has more readers, unread. A file already loaded
+from the target prints `PSARC file %s already loaded from target - not loading from host` and is
+skipped. With the last-loaded-wins rule measured on 02.00 ([hd-frontend.md](../../../formats/hd-frontend.md)),
+`data08` beats `data07` beats `data00` beats `data01`..`data06`. On 02.00 the TTY log prints
+`data01`..`data06`, `data00`, which pass 1 and pass 2 reproduce. Confidence 85: read statically, 02.51 has
+not run here. A PSN body behind the same call is unread
+([hd-updates.md](../../../formats/hd-updates.md#the-two-sources-after-patching)).
+
 ## The offsets
 
 | Claim | Evidence | Verdict |
