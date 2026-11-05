@@ -420,10 +420,10 @@ impl Frontend {
             } else {
                 [list.x + cell_w * i as f32, list.y, cell_w, list.height]
             };
-            out.push(Draw::Fill { rect, color: tile });
-            if i == selected {
-                self.draw_cursor_ring(rect, cursor, out);
-            }
+            out.push(Draw::Fill {
+                rect,
+                color: if i == selected { cursor } else { tile },
+            });
             out.push(Draw::Text {
                 x: rect[0] + rect[2] * 0.5,
                 y: rect[1] + rect[3] * 0.5 - 8.0,

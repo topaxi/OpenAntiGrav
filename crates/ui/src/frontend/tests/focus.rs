@@ -1,0 +1,104 @@
+//! 2048's grids from a controller alone: the focus is always drawn, every
+//! direction moves it, Cross reaches the focused control and Circle backs out.
+
+use super::wipeout2048::{boot, focused, press, reach_the_grid};
+use super::*;
+use crate::pointer::Pointer;
+use oag_2048::frontend::states as w2048;
+
+const UPPER: (f32, f32) = (86.0, 190.0);
+const LOWER: (f32, f32) = (86.0, 360.0);
+const TICK: (f32, f32) = (822.0, 432.0);
+
+fn on_home() -> (Frontend, Input) {
+    let mut frontend = boot(0);
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Triangle);
+    assert!(frontend.machine().is(w2048::HOME));
+    (frontend, input)
+}
+
+#[test]
+fn a_screen_entered_by_pad_marks_its_first_control_before_any_direction() {
+    let (frontend, _) = on_home();
+    assert!(focused(&frontend, UPPER.0, UPPER.1));
+    assert!(!focused(&frontend, LOWER.0, LOWER.1));
+}
+
+#[test]
+fn down_and_up_move_the_focus_by_layout_and_cross_reaches_the_focused_tile() {
+    let (mut frontend, mut input) = on_home();
+    press(&mut frontend, &mut input, Button::Down);
+    assert!(focused(&frontend, LOWER.0, LOWER.1));
+    assert!(!focused(&frontend, UPPER.0, UPPER.1));
+    press(&mut frontend, &mut input, Button::Down);
+    assert!(
+        focused(&frontend, TICK.0, TICK.1),
+        "the tick sits below the column and is reached by Down"
+    );
+    press(&mut frontend, &mut input, Button::Down);
+    assert!(
+        focused(&frontend, TICK.0, TICK.1),
+        "the bottom is the end: the grid does not wrap vertically"
+    );
+    press(&mut frontend, &mut input, Button::Up);
+    assert!(focused(&frontend, LOWER.0, LOWER.1));
+    press(&mut frontend, &mut input, Button::Up);
+    assert!(focused(&frontend, UPPER.0, UPPER.1));
+    press(&mut frontend, &mut input, Button::Down);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(
+        frontend.machine().is(w2048::GAME_MODE_CHOICE),
+        "the lower tile's own redirect, not the upper one's"
+    );
+}
+
+#[test]
+fn circle_backs_out_of_home_through_its_own_tick() {
+    let (mut frontend, mut input) = on_home();
+    press(&mut frontend, &mut input, Button::Circle);
+    assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
+}
+
+#[test]
+fn circle_on_the_root_grid_stays_put() {
+    let mut frontend = boot(0);
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Circle);
+    assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
+}
+
+#[test]
+fn cross_on_the_team_screen_presses_its_confirm_tick() {
+    let (mut frontend, mut input) = on_home();
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::TEAM));
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(
+        frontend.machine().is(w2048::HOME),
+        "the tick's PreviousScreen, as Circle's"
+    );
+}
+
+#[test]
+fn a_pointer_takes_the_focus_away_and_the_pad_gives_it_back() {
+    let (mut frontend, mut input) = on_home();
+    let hover = Pointer {
+        at: Some((600.0, 100.0)),
+        moved: true,
+        ..Pointer::default()
+    };
+    assert!(frontend.pointer(&hover));
+    assert!(!focused(&frontend, UPPER.0, UPPER.1));
+    frontend.set_pad_driving(true);
+    assert!(focused(&frontend, UPPER.0, UPPER.1));
+    press(&mut frontend, &mut input, Button::Right);
+    assert!(
+        !focused(&frontend, UPPER.0, UPPER.1),
+        "Right moved the focus off the first tile"
+    );
+}

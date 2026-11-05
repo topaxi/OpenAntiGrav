@@ -64,6 +64,9 @@ const BUTTONS: [Button; 5] = [
     Button::Square,
 ];
 
+/// The d-pad, which no 2048 screen's `<Redirect>` names but every grid reads.
+const PAD_DIRECTIONS: [Button; 4] = [Button::Left, Button::Right, Button::Up, Button::Down];
+
 impl Frontend {
     /// Whether the current screen is one of [`STATES`].
     pub(super) fn in_wipeout2048(&self) -> bool {
@@ -77,6 +80,13 @@ impl Frontend {
         let Some(current) = self.machine.current().map(str::to_string) else {
             return;
         };
+        if BUTTONS
+            .iter()
+            .chain(&PAD_DIRECTIONS)
+            .any(|&button| input.is_pressed(button))
+        {
+            self.touch.pad_cursor = true;
+        }
         match current.as_str() {
             // `<UnityConBasic>`: a network check whose `MoveTo` goes to
             // `Boot Studio Logo` on success **and** on failure. This build

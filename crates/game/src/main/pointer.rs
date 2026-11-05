@@ -217,6 +217,13 @@ impl Window {
         self.touch_spoke_last = false;
     }
 
+    /// Whether the mouse or a finger was the last device to speak: the pad
+    /// and the keyboard are the device in use otherwise (also before anything
+    /// has spoken).
+    pub(crate) fn pointer_spoke_last(&self) -> bool {
+        self.mouse_spoke_last || self.touch_spoke_last
+    }
+
     /// Whether a finger was the last device to speak. See the field.
     pub(crate) fn touch_spoke_last(&self) -> bool {
         self.touch_spoke_last
