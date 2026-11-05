@@ -35,6 +35,17 @@
 //! - A shed within the relapse window of a restore doubles the next restore's patience, up to
 //!   [`MAX_BACKOFF`] doublings, and each window that holds pays one doubling back.
 //!
+//! # What it remembers, and for which race
+//!
+//! What a knob saves depends on what is on screen, so the weak-reading counts and the skips are
+//! kept per **combination**, an opaque `u64` the caller names with [`Governor::enter`] (the game
+//! builds it from title, track and mode; this module knows none of them). A combination seen for
+//! the first time starts with nothing skipped; going back to one restores what it learned. A
+//! [`Governor::reset`] (a stage change, the governor switched off) keeps the current combination
+//! and so its skips. The store lives as long as the governor does and is never saved anywhere.
+//! It is bounded by [`MAX_COMBINATIONS`]: a combination that learned nothing takes no room, and
+//! past the bound the combination entered longest ago is forgotten and starts from nothing again.
+//!
 //! All the thresholds are **chosen, not measured**; `docs/rendering/cpu-governor.md` has the
 //! Deck numbers they were checked against.
 
@@ -74,8 +85,12 @@ pub const MAX_LEVEL: usize = 8;
 /// measured per knob.
 pub const MIN_SAVING: f32 = 0.000_2;
 
-/// How many weak readings in a row skip a knob for the rest of the session.
+/// How many weak readings in a row skip a knob for the rest of the combination's visits.
 pub const WEAK_READINGS_TO_SKIP: u8 = 2;
+
+/// The most combinations that have learned something which a governor keeps beside the current
+/// one. A launch visits a few; past this the one entered longest ago is forgotten.
+pub const MAX_COMBINATIONS: usize = 32;
 
 /// One frame's reading.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -130,6 +145,15 @@ pub struct Change {
     pub period: f32,
 }
 
+/// What a combination has taught the governor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct Learned {
+    /// Consecutive weak readings per knob id.
+    weak: [u8; MAX_LEVEL],
+    /// Knobs never shed again, by id.
+    skipped: [bool; MAX_LEVEL],
+}
+
 /// The governor's state.
 #[derive(Debug, Clone)]
 pub struct Governor {
@@ -143,10 +167,12 @@ pub struct Governor {
     before: Option<f32>,
     /// What each knob saved, indexed by the knob's id.
     saving: [Option<f32>; MAX_LEVEL],
-    /// Consecutive weak readings per knob id.
-    weak: [u8; MAX_LEVEL],
-    /// Knobs never shed again, by id. Survives [`Governor::reset`].
-    skipped: [bool; MAX_LEVEL],
+    /// What the current combination has taught; survives [`Governor::reset`].
+    learned: Learned,
+    /// The combination `learned` belongs to, or `None` before [`Governor::enter`] named one.
+    combination: Option<u64>,
+    /// The other combinations that learned something, least recently entered first.
+    shelf: Vec<(u64, Learned)>,
     /// The last shed's reading, until the caller takes it.
     reading: Option<Reading>,
     backoff: u32,
@@ -173,8 +199,9 @@ impl Governor {
             cooldown: 0,
             before: None,
             saving: [None; MAX_LEVEL],
-            weak: [0; MAX_LEVEL],
-            skipped: [false; MAX_LEVEL],
+            learned: Learned::default(),
+            combination: None,
+            shelf: Vec::new(),
             reading: None,
             backoff: 0,
             since_restore: None,
@@ -193,20 +220,51 @@ impl Governor {
         self.cpu
     }
 
-    /// Back to full quality with nothing remembered but the skipped knobs: a stage change, or the
-    /// governor switched off.
+    /// Back to full quality with nothing remembered but what the current combination learned: a
+    /// stage change, or the governor switched off.
     pub fn reset(&mut self) {
-        let (skipped, weak) = (self.skipped, self.weak);
+        let shelf = std::mem::take(&mut self.shelf);
+        let (learned, combination) = (self.learned, self.combination);
         *self = Self::new();
-        self.skipped = skipped;
-        self.weak = weak;
+        self.learned = learned;
+        self.combination = combination;
+        self.shelf = shelf;
     }
 
-    /// Whether `knob` is skipped for the rest of the session: the caller leaves it out of its
+    /// Names the combination the frames that follow belong to. The same one again changes
+    /// nothing, so it is cheap to call every frame. Another one shelves what the current one
+    /// learned, restores what the new one learned before (nothing, the first time) and starts
+    /// from full quality, as a [`Governor::reset`] does.
+    pub fn enter(&mut self, combination: u64) {
+        if self.combination == Some(combination) {
+            return;
+        }
+        let mut shelf = std::mem::take(&mut self.shelf);
+        if let Some(previous) = self.combination
+            && self.learned != Learned::default()
+        {
+            shelf.retain(|(key, _)| *key != previous);
+            shelf.push((previous, self.learned));
+            if shelf.len() > MAX_COMBINATIONS {
+                shelf.remove(0);
+            }
+        }
+        let learned = shelf
+            .iter()
+            .position(|(key, _)| *key == combination)
+            .map(|at| shelf.remove(at).1)
+            .unwrap_or_default();
+        *self = Self::new();
+        self.learned = learned;
+        self.combination = Some(combination);
+        self.shelf = shelf;
+    }
+
+    /// Whether `knob` is skipped for the current combination: the caller leaves it out of its
     /// ordered list when applying a level.
     #[must_use]
     pub fn is_skipped(&self, knob: usize) -> bool {
-        self.skipped.get(knob).copied().unwrap_or(false)
+        self.learned.skipped.get(knob).copied().unwrap_or(false)
     }
 
     /// The reading the last cooldown measured, once.
@@ -344,13 +402,14 @@ impl Governor {
     ) -> Option<Change> {
         self.reading = Some(Reading { knob, saving });
         if saving >= MIN_SAVING {
-            self.weak[knob] = 0;
+            self.learned.weak[knob] = 0;
             self.saving[knob] = Some(saving);
             return None;
         }
-        self.weak[knob] = self.weak[knob].saturating_add(1);
+        let weak = self.learned.weak[knob].saturating_add(1);
+        self.learned.weak[knob] = weak;
         self.saving[knob] = None;
-        self.skipped[knob] = self.weak[knob] >= WEAK_READINGS_TO_SKIP;
+        self.learned.skipped[knob] = weak >= WEAK_READINGS_TO_SKIP;
         let change = self.change(Kind::Undo, Some(knob), self.level - 1, cpu, gpu, period);
         self.level -= 1;
         self.begin_cooldown(cooldown, None);

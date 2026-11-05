@@ -322,3 +322,128 @@ fn an_undo_is_not_a_restore_and_does_not_double_the_next_restore_patience() {
     let restored = run(&mut g, seconds(RESTORE_SECONDS + 1.0), s(0.2, Some(0.3)), 2);
     assert_eq!(kinds(&restored), [(Kind::Restore, Some(1))]);
 }
+
+const A: u64 = 1;
+const B: u64 = 2;
+
+/// Learns that knob 0 saves nothing: two weak readings, so it ends skipped.
+fn learn_knob_zero_is_useless(g: &mut Governor) {
+    run_model(g, seconds(60.0), 1.4, &[0.0], 1);
+    assert!(g.is_skipped(0));
+}
+
+#[test]
+fn a_knob_skipped_on_one_combination_is_shed_on_another() {
+    let mut g = Governor::new();
+    g.enter(A);
+    learn_knob_zero_is_useless(&mut g);
+    g.enter(B);
+    assert!(!g.is_skipped(0));
+    // On B it pays, so it is shed and kept.
+    let changes = run_model(&mut g, seconds(30.0), 1.4, &[0.3], 1);
+    assert_eq!(kinds(&changes), [(Kind::Shed, Some(0))]);
+    assert_eq!(g.level(), 1);
+}
+
+#[test]
+fn returning_to_a_combination_has_its_skip_again_without_new_readings() {
+    let mut g = Governor::new();
+    g.enter(A);
+    learn_knob_zero_is_useless(&mut g);
+    g.enter(B);
+    g.enter(A);
+    assert!(g.is_skipped(0));
+    // No readings are needed: with its only knob skipped there is nothing to shed.
+    assert!(run_model(&mut g, seconds(30.0), 1.4, &[0.0], 1).is_empty());
+    assert_eq!(g.level(), 0);
+}
+
+#[test]
+fn a_weak_reading_is_remembered_with_its_combination() {
+    let mut g = Governor::new();
+    g.enter(A);
+    let weak_once = seconds(SHED_SECONDS) + seconds(COOLDOWN_SECONDS);
+    run_model(&mut g, weak_once, 1.4, &[0.0], 1);
+    assert!(!g.is_skipped(0));
+    g.enter(B);
+    g.enter(A);
+    // The strike survived the round trip, so the second weak reading skips the knob.
+    run_model(&mut g, seconds(30.0), 1.4, &[0.0], 1);
+    assert!(g.is_skipped(0));
+    // B never saw a strike.
+    g.enter(B);
+    run_model(&mut g, weak_once, 1.4, &[0.0], 1);
+    assert!(!g.is_skipped(0));
+}
+
+#[test]
+fn naming_the_same_combination_again_keeps_the_level_and_the_skip() {
+    let mut g = Governor::new();
+    g.enter(A);
+    run_model(&mut g, seconds(30.0), 1.4, &[0.3], 1);
+    assert_eq!(g.level(), 1);
+    g.enter(A);
+    assert_eq!(g.level(), 1);
+}
+
+#[test]
+fn a_new_combination_starts_at_full_quality() {
+    let mut g = Governor::new();
+    g.enter(A);
+    run_model(&mut g, seconds(30.0), 1.4, &[0.3], 1);
+    assert_eq!(g.level(), 1);
+    g.enter(B);
+    assert_eq!(g.level(), 0);
+    assert_eq!(g.cpu(), None);
+}
+
+#[test]
+fn a_stage_restart_of_the_same_combination_keeps_the_skip() {
+    let mut g = Governor::new();
+    g.enter(A);
+    learn_knob_zero_is_useless(&mut g);
+    // The game resets between stages and names the combination again when the race starts.
+    g.reset();
+    g.enter(A);
+    assert!(g.is_skipped(0));
+    assert!(run_model(&mut g, seconds(30.0), 1.4, &[0.0], 1).is_empty());
+}
+
+#[test]
+fn a_reset_keeps_what_the_current_combination_learned_and_what_is_shelved() {
+    let mut g = Governor::new();
+    g.enter(A);
+    learn_knob_zero_is_useless(&mut g);
+    g.enter(B);
+    g.reset();
+    assert!(!g.is_skipped(0));
+    g.enter(A);
+    assert!(g.is_skipped(0));
+    g.reset();
+    assert!(g.is_skipped(0));
+}
+
+#[test]
+fn a_combination_that_learned_nothing_takes_no_room() {
+    let mut g = Governor::new();
+    for key in 0..(MAX_COMBINATIONS as u64 * 3) {
+        g.enter(key);
+    }
+    assert!(g.shelf.is_empty());
+}
+
+#[test]
+fn past_the_bound_the_combination_entered_longest_ago_is_forgotten() {
+    let mut g = Governor::new();
+    let first = 1000;
+    for key in first..first + MAX_COMBINATIONS as u64 + 2 {
+        g.enter(key);
+        learn_knob_zero_is_useless(&mut g);
+    }
+    assert_eq!(g.shelf.len(), MAX_COMBINATIONS);
+    // The first two fell off; the latest still holds.
+    g.enter(first);
+    assert!(!g.is_skipped(0));
+    g.enter(first + MAX_COMBINATIONS as u64 + 1);
+    assert!(g.is_skipped(0));
+}
