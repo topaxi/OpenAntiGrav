@@ -223,6 +223,17 @@ out, so two machines that differ in one still match and can race. The filter is
   CUSTOM title, and it is left out of the LAN content fingerprint (as is any mod that changes no race, below). It stays on the MODS
   page, its ADDS line reading **NOTHING, TURNED OFF**, so it can be turned back on. The gate is
   one place, `oag_game::mods::Mods` (`player()` and `build()`).
+- **A live LANGUAGE pick rebuilds the tree through the same call** (`oag_game::menu_tree::rebuilt`,
+  shared by the switch and `Session::resupply_language`), so a mod row and the MODS page
+  read the new language's `strings/<language>.toml` at once and the menus reopen on the
+  same page and row. A language the mod ships no file for reads its English, as at boot.
+  `crates/game/tests/mods_menu.rs` runs the rebuild for two languages and with a mod on and off;
+  the `Session` wiring itself has no test surface (it needs a GPU), see "Switching language
+  without relaunching" in `docs/architecture/menus.md`.
+- **Wasm extensions follow the switch at the next race load**, not at once: a race looks for
+  its rules modules through `Mods::player()` as it loads (`oag_game::mod_extensions::attach`,
+  called from `Session::launch_race` with the saved set), so an off mod's module is not found,
+  and a race already parked keeps the modules it started with.
 - **It applies at once.** The menus are rebuilt as a boot builds them and reopen on the MODS page
   with BACK leading where it led. A race parked under the menus keeps what it started with.
 - **`oag-extras` cannot be turned off**: it carries OPTIONS, this page's row and QUIT. Its

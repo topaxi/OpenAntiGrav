@@ -64,6 +64,7 @@ pub mod livery_row;
 pub mod loading;
 pub mod logfile;
 pub mod medal_watch;
+pub mod menu_tree;
 pub mod mod_extensions;
 pub mod mods;
 pub mod movie;
