@@ -12,7 +12,7 @@
 //! uniform; the shader reads layer `2 * craft` for the ambient and `2 * craft + 1` for the
 //! reflection of the materials that declare one.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -68,8 +68,12 @@ pub struct EnvProbes {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     /// Decoded probes, by index: a craft blends the same few every frame, and decoding a
-    /// probe costs more than blending it. Cleared when it outgrows [`CACHE_LIMIT`].
-    decoded: RefCell<HashMap<usize, Arc<Decoded>>>,
+    /// probe costs more than blending it. Holds [`CACHE_LIMIT`], the one blended longest ago
+    /// going first: the field keeps moving onto new probes, and clearing the lot would decode
+    /// every probe in use again.
+    decoded: RefCell<HashMap<usize, Kept>>,
+    /// Counts blends, so a kept probe says how recently it was used.
+    blends: Cell<u64>,
     /// What each craft's layers were last written from, so a craft that has not moved
     /// uploads nothing.
     written: RefCell<[Option<Taps>; ENV_PROBE_LAYERS as usize / 2]>,
@@ -80,6 +84,13 @@ pub struct EnvProbes {
 struct Decoded {
     irradiance: Vec<u8>,
     reflection: Vec<u8>,
+}
+
+/// A decoded probe, and the blend that last used it.
+#[derive(Debug)]
+struct Kept {
+    decoded: Arc<Decoded>,
+    used: u64,
 }
 
 /// How many decoded probes to keep: 8 crafts blend four each, and 64 probes are 2.5 MB.
@@ -112,6 +123,7 @@ impl EnvProbes {
             texture,
             view,
             decoded: RefCell::default(),
+            blends: Cell::new(0),
             written: RefCell::new(Default::default()),
         }
     }
@@ -125,14 +137,21 @@ impl EnvProbes {
     fn decoded(&self, probe: usize) -> Arc<Decoded> {
         let mut cache = self.decoded.borrow_mut();
         if cache.len() >= CACHE_LIMIT && !cache.contains_key(&probe) {
-            cache.clear();
+            let oldest = cache
+                .iter()
+                .min_by_key(|(_, kept)| kept.used)
+                .map(|(&probe, _)| probe);
+            oldest.map(|probe| cache.remove(&probe));
         }
-        Arc::clone(cache.entry(probe).or_insert_with(|| {
-            Arc::new(Decoded {
+        let kept = cache.entry(probe).or_insert_with(|| Kept {
+            decoded: Arc::new(Decoded {
                 irradiance: self.probes.irradiance(probe),
                 reflection: self.probes.reflection(probe),
-            })
-        }))
+            }),
+            used: 0,
+        });
+        kept.used = self.blends.get();
+        Arc::clone(&kept.decoded)
     }
 
     /// Blends the probes at `position` into the craft's two layers; `craft` is its grid slot.
@@ -147,6 +166,7 @@ impl EnvProbes {
         if self.written.borrow()[craft].as_ref() == Some(&taps) {
             return;
         }
+        self.blends.set(self.blends.get() + 1);
         let used: Vec<(Arc<Decoded>, f32)> = taps
             .probes
             .iter()
