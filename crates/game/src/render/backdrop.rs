@@ -858,6 +858,9 @@ fn upload_sprite(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureVie
     texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
 
+#[cfg(test)]
+mod tests;
+
 /// One of the pictures a draw list can put under its quads, in the order the
 /// list puts them. The derived order is the tie-break when two sit at the same
 /// quad: the Fury pass first, then the scene, then the movie.
