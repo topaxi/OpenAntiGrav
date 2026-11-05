@@ -895,6 +895,13 @@ pub fn hd_grid_targets(
 /// screen is authored in. Chosen, not measured.
 pub const CONFIRM_BAND: [f32; 4] = [0.0, 100.0, 1920.0, 900.0];
 
+/// How far a finger must travel up or down `Grid Selection`, in this screen's
+/// 1920x1080 grid, before the swipe steps one grid: about a ninth of the
+/// page's height. **Chosen, not measured**: the original is played on a pad.
+/// A swipe up steps to the next grid and a swipe down to the previous one,
+/// once per gesture however far it goes ([`GridSelection::hd_pointer`]).
+pub const SWIPE_STEP_TRAVEL: f32 = 120.0;
+
 /// Where an image is drawn - the same fallback [`super::pointer::grid_targets`]
 /// applies, duplicated rather than exported since [`super::pointer`]'s own
 /// copy is private.
@@ -907,6 +914,37 @@ fn image_rect(image: &Image, sprites: &dyn Fn(&str) -> Option<Placed>) -> Option
         .height
         .or_else(|| placed.map(|placed| placed.height as f32))?;
     Some([image.x, image.y, width, height])
+}
+
+/// One finger gesture on `Grid Selection`, accumulated from [`Pointer::drag`]
+/// until it steps a grid or the finger lifts.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct Swipe {
+    travel: (f32, f32),
+    stepped: bool,
+}
+
+impl Swipe {
+    /// Folds in one tick and returns the step it asks for, if any: `+1` for a
+    /// swipe up, `-1` for a swipe down. A gesture steps at most once and only
+    /// when it travelled further along the page than across it; the lift
+    /// (which carries the last of the drag) forgets it, so the next gesture
+    /// starts afresh.
+    fn feed(&mut self, pointer: &Pointer) -> Option<i32> {
+        if pointer.pressed {
+            *self = Self::default();
+        }
+        self.travel.0 += pointer.drag.0;
+        self.travel.1 += pointer.drag.1;
+        let (across, along) = (self.travel.0.abs(), self.travel.1.abs());
+        let step = (!self.stepped && along >= SWIPE_STEP_TRAVEL && along > across)
+            .then_some(if self.travel.1 < 0.0 { 1 } else { -1 });
+        self.stepped |= step.is_some();
+        if pointer.released {
+            *self = Self::default();
+        }
+        step
+    }
 }
 
 impl GridSelection {
@@ -922,6 +960,11 @@ impl GridSelection {
         }
         if pointer.scroll != 0 {
             out.extend(self.step(pointer.scroll.signum()));
+        }
+        if self.grids.len() > 1
+            && let Some(step) = self.swipe.feed(pointer)
+        {
+            out.extend(self.step(step));
         }
         if pointer.clicked
             && let Some(at) = pointer.at
