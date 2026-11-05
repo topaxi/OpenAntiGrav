@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-05
-summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles/trails/shadow rays; governor landed on by default and undoes a step that saved nothing, skips remembered per title, track and mode"
+summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles and trails; governor is on by default, undoes a useless step, skips per track"
 categories: [rendering, tooling]
 size: XL (35)
 difficulty: medium (30)
