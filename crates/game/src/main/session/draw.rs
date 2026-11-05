@@ -252,10 +252,13 @@ impl Session {
         // The controller's second output, the blur's gather resolution
         // (ADR-0075), re-derived every frame the same way and held to the
         // player's own wherever the extent is held.
-        let blur_resolution = if windowed && !self.drs_runs() {
-            self.render_profile().motion_blur_resolution
+        let (blur_resolution, blur_cap) = if windowed && !self.drs_runs() {
+            (self.render_profile().motion_blur_resolution, None)
         } else {
-            self.drs.blur_resolution(drs_limits)
+            (
+                self.drs.blur_resolution(drs_limits),
+                self.drs.blur_shutter_cap(drs_limits),
+            )
         };
 
         // **Two targets, and which one a stage draws into is whether it has a
@@ -371,7 +374,7 @@ impl Session {
                         .set_texture_detail(render_profile.texture_detail);
                     parked.race.set_trail_order(render_profile.trail_order);
                     parked.race.set_weather(render_profile.weather);
-                    parked.scene.set_blur_gather(blur_resolution, None);
+                    parked.scene.set_blur_gather(blur_resolution, blur_cap);
                     parked.render(
                         &self.gpu,
                         &mut encoder,
@@ -448,7 +451,7 @@ impl Session {
                 }
                 stage
                     .scene
-                    .set_blur_gather(blur_resolution, None);
+                    .set_blur_gather(blur_resolution, blur_cap);
                 let stats = stage.render(
                     &self.gpu,
                     &mut encoder,

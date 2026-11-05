@@ -8,7 +8,7 @@
 //! budget.
 
 use super::*;
-use oag_display::display::BlurResolution;
+use oag_display::display::{BlurResolution, MotionBlur};
 
 const FULL: Option<BlurResolution> = Some(BlurResolution::Full);
 const HALF: Option<BlurResolution> = Some(BlurResolution::Half);
@@ -54,6 +54,7 @@ impl Machine {
         let gather = match resolution {
             BlurResolution::Full => 1.0,
             BlurResolution::Half => 0.25,
+            BlurResolution::Quarter => 0.0625,
         };
         let blur = self.blur_flat + self.blur_pixels * pixels * gather;
         blurred(self.scene_flat + self.scene_pixels * pixels + blur, blur)
@@ -73,6 +74,14 @@ struct Run {
     restores: Vec<(usize, f32)>,
     /// Every frame at which the gather went to half, with the scale then.
     sheds: Vec<(usize, f32)>,
+}
+
+/// `resolution`'s place in the order the rung sheds.
+fn rank(resolution: BlurResolution) -> usize {
+    BlurResolution::ALL
+        .iter()
+        .position(|&step| step == resolution)
+        .expect("listed")
 }
 
 /// Runs `drs` for `frames` frames, each frame's cost from `machine` at
@@ -96,9 +105,10 @@ fn drive(
         let after = drs.blur_resolution(limits);
         if after != before {
             run.flips += 1;
-            match after {
-                BlurResolution::Half => run.sheds.push((frame, drs.scale())),
-                BlurResolution::Full => run.restores.push((frame, drs.scale())),
+            if rank(after) > rank(before) {
+                run.sheds.push((frame, drs.scale()));
+            } else {
+                run.restores.push((frame, drs.scale()));
             }
         }
         run.lowest = run.lowest.min(drs.scale());
@@ -431,6 +441,7 @@ fn a_restore_waits_out_the_scene_s_spikes() {
         let blur = match resolution {
             BlurResolution::Full => 0.3,
             BlurResolution::Half => 0.15,
+            BlurResolution::Quarter => 0.1,
         };
         let cost = blurred((0.47 * spike + blur) * budget, blur * budget);
         drs.record(cost, None, limits);
@@ -440,4 +451,288 @@ fn a_restore_waits_out_the_scene_s_spikes() {
     }
     assert!(flips <= 5, "{flips} flips in 6,000 frames");
     assert!(drs.blur_shed());
+}
+
+const QUARTER: Option<BlurResolution> = Some(BlurResolution::Quarter);
+
+/// The 60 fps limits at 3840x2160, the first ceiling quarter is drawn at.
+fn uhd_limits(blur: Option<BlurResolution>) -> Limits {
+    Limits::new((3840, 2160), (960, 540), Target::OFFERED[2]).with_blur(blur)
+}
+
+/// How many frames the strength cap takes across its whole range at 60.
+fn ease_frames() -> usize {
+    (CAP_EASE_SECONDS / period()).ceil() as usize
+}
+
+/// A race the half gather cannot fit at 3840x2160 and the quarter gather can.
+const UHD: Machine = Machine {
+    scene_flat: 0.001,
+    scene_pixels: 0.008,
+    blur_flat: 0.003,
+    blur_pixels: 0.012,
+};
+
+/// A race not even the quarter gather fits at the ceiling, and the half gather
+/// fits below it: the fall off the quarter gather.
+const UHD_HEAVY: Machine = Machine {
+    scene_flat: 0.001,
+    scene_pixels: 0.012,
+    blur_flat: 0.002,
+    blur_pixels: 0.006,
+};
+
+#[test]
+fn a_2160_line_ceiling_sheds_both_steps_before_the_extent_falls() {
+    let limits = uhd_limits(FULL);
+    let mut drs = Controller::new();
+    let run = drive(&mut drs, 200, limits, |_| UHD);
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Quarter);
+    assert_eq!(run.sheds.len(), 2);
+    assert_eq!(run.steps, 0, "the extent moved before the gather ran out");
+    assert_eq!(drs.scale(), 1.0);
+}
+
+#[test]
+fn under_2160_lines_the_ladder_ends_at_half_and_the_extent_falls_instead() {
+    let limits = blur_limits(FULL);
+    let mut drs = Controller::new();
+    let run = drive(&mut drs, 200, limits, |_| UHD);
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Half);
+    assert_eq!(run.sheds.len(), 1);
+    assert!(drs.scale() < 1.0);
+}
+
+#[test]
+fn a_half_ceiling_sheds_only_the_second_step() {
+    let limits = uhd_limits(HALF);
+    let mut drs = Controller::new();
+    let run = drive(&mut drs, 200, limits, |_| UHD);
+    assert_eq!(run.sheds.len(), 1);
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Quarter);
+
+    let small = blur_limits(HALF);
+    let mut drs = Controller::new();
+    let run = drive(&mut drs, 200, small, |_| UHD);
+    assert_eq!(run.flips, 0, "there is nothing to shed under 2160 lines");
+    assert_eq!(drs.blur_resolution(small), BlurResolution::Half);
+}
+
+#[test]
+fn a_quarter_ceiling_is_inert_and_under_2160_lines_it_draws_half() {
+    let limits = uhd_limits(QUARTER);
+    let mut drs = Controller::new();
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Quarter);
+    let run = drive(&mut drs, 200, limits, |_| UHD);
+    assert_eq!(run.flips, 0);
+    assert!(!drs.blur_shed());
+    assert_eq!(drs.blur_shutter_cap(limits), None);
+
+    let small = blur_limits(QUARTER);
+    assert_eq!(
+        Controller::new().blur_resolution(small),
+        BlurResolution::Half
+    );
+}
+
+#[test]
+fn the_steps_come_back_one_at_a_time_and_only_at_the_ceiling() {
+    let limits = uhd_limits(FULL);
+    let mut drs = Controller::new();
+    let quiet = Machine {
+        scene_flat: 0.001,
+        scene_pixels: 0.001,
+        blur_flat: 0.0005,
+        blur_pixels: 0.001,
+    };
+    // Heavy long enough for both sheds, quiet from then on.
+    let run = drive(&mut drs, 1500, limits, |frame| {
+        if frame < 200 { UHD } else { quiet }
+    });
+    assert_eq!(run.sheds.len(), 2);
+    assert_eq!(run.restores.len(), 2);
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Full);
+    let gap = run.restores[1].0 - run.restores[0].0;
+    assert!(
+        gap >= restore_frames(period()) as usize,
+        "the second step did not wait out its own patience: {gap}"
+    );
+    assert!(run.restores.iter().all(|&(_, scale)| scale == 1.0));
+}
+
+#[test]
+fn a_shed_straight_after_a_shed_still_learns_the_step_above() {
+    let limits = uhd_limits(FULL);
+    let mut drs = Controller::new();
+    let over = budget() * 1.2;
+    // Full gather, 6 of blur: shed. The next reading past the cooldown is the
+    // half gather's 3 and over budget, so it sheds again on that one reading.
+    assert!(
+        drs.record(blurred(over, over * 0.5), None, limits)
+            .is_none()
+    );
+    for _ in 0..COOLDOWN {
+        drs.record(blurred(over, over * 0.25), None, limits);
+    }
+    drs.record(blurred(over, over * 0.25), None, limits);
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Quarter);
+    // Settle the cap, then let a cheap frame restore quarter to half; were the
+    // first step's ratio unread the half gather would predict the shed's cost.
+    let quiet = budget() * 0.3;
+    let mut frames = 0;
+    while drs.blur_resolution(limits) == BlurResolution::Quarter && frames < 2000 {
+        drs.record(blurred(quiet, quiet * 0.1), None, limits);
+        frames += 1;
+    }
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Half);
+    assert!(
+        drs.record(blurred(quiet, quiet * 0.2), None, limits)
+            .is_none()
+    );
+}
+
+#[test]
+fn the_cap_eases_in_and_out_in_no_single_visible_step() {
+    let limits = uhd_limits(FULL);
+    let mut drs = Controller::new();
+    assert_eq!(
+        drs.blur_shutter_cap(limits),
+        Some(MotionBlur::High.shutter())
+    );
+    drive(&mut drs, 40, limits, |_| UHD);
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Quarter);
+
+    let widest = (MotionBlur::High.shutter() - MotionBlur::Low.shutter()) / ease_frames() as f32;
+    let mut drs = Controller::new();
+    let mut last = drs.blur_shutter_cap(limits).expect("running");
+    let mut frames = Vec::new();
+    for frame in 0..300 {
+        let cost = UHD.cost(drs.scale(), drs.blur_resolution(limits));
+        drs.record(cost, None, limits);
+        let cap = drs.blur_shutter_cap(limits).expect("running");
+        assert!(cap <= last, "the cap rose under a held quarter gather");
+        assert!(last - cap <= widest * 1.01, "a step of {}", last - cap);
+        if cap != last {
+            frames.push(frame);
+        }
+        last = cap;
+    }
+    assert_eq!(last, MotionBlur::Low.shutter());
+    assert_eq!(frames.len(), ease_frames());
+}
+
+#[test]
+fn the_cap_is_uncapped_until_a_quarter_gather_is_drawn() {
+    let limits = blur_limits(FULL);
+    let mut drs = Controller::new();
+    drive(&mut drs, 200, limits, |_| UHD);
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Half);
+    assert_eq!(
+        drs.blur_shutter_cap(limits),
+        Some(MotionBlur::High.shutter())
+    );
+}
+
+#[test]
+fn no_restore_is_read_off_a_gather_the_cap_is_still_moving_under() {
+    let limits = uhd_limits(HALF);
+    let mut drs = Controller::new();
+    let over = budget() * 1.2;
+    drs.record(blurred(over, over * 0.5), None, limits);
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Quarter);
+    // A reading cheap enough to restore on from the very first frame: the
+    // patience counts from when the cap settles, not from the shed.
+    let quiet = budget() * 0.1;
+    let mut frames = 0;
+    while drs.blur_shed() {
+        drs.record(blurred(quiet, quiet * 0.2), None, limits);
+        frames += 1;
+    }
+    assert!(
+        frames >= ease_frames() + restore_frames(period()) as usize - 1,
+        "restored after {frames} frames"
+    );
+}
+
+/// With a 2160-line ceiling the extent's first fall leaves quarter behind, so
+/// the blur's cost rises as the extent falls. The fall may overshoot; it must
+/// not climb back and go round.
+#[test]
+fn a_fall_off_the_quarter_gather_settles_at_half_and_does_not_flap() {
+    let limits = uhd_limits(FULL);
+    let mut drs = Controller::new();
+    let run = drive(&mut drs, 3600, limits, |_| UHD_HEAVY);
+    assert!(drs.scale() < 1.0);
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Half);
+    assert!(
+        run.flips <= 4,
+        "{} gather flips, {} extent steps",
+        run.flips,
+        run.steps
+    );
+    assert!(run.steps <= 4, "{} extent steps", run.steps);
+    let settled = drive(&mut drs, 1800, limits, |_| UHD_HEAVY);
+    assert_eq!((settled.flips, settled.steps), (0, 0));
+    // Nothing was written anywhere: the player's choice is still in force the
+    // moment the blur rung is told to forget.
+    assert_eq!(limits.blur(), FULL);
+}
+
+#[test]
+fn a_ceiling_that_can_no_longer_draw_quarter_drops_the_step() {
+    let limits = uhd_limits(FULL);
+    let mut drs = Controller::new();
+    drive(&mut drs, 40, limits, |_| UHD);
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Quarter);
+    // The window shrinks: the ladder ends at half now, for good.
+    let small = blur_limits(FULL);
+    drs.record(blurred(0.001, 0.0001), None, small);
+    assert_eq!(drs.blur_resolution(small), BlurResolution::Half);
+    drs.record(blurred(0.001, 0.0001), None, limits);
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Half);
+}
+
+#[test]
+fn a_changed_ceiling_starts_the_rung_over() {
+    let limits = uhd_limits(FULL);
+    let mut drs = Controller::new();
+    drive(&mut drs, 40, limits, |_| UHD);
+    assert!(drs.blur_shed());
+    let half = uhd_limits(HALF);
+    drs.record(blurred(0.001, 0.0001), None, half);
+    assert!(!drs.blur_shed(), "a depth was reread against a new ceiling");
+    assert_eq!(drs.blur_resolution(half), BlurResolution::Half);
+}
+
+/// Every race weight between "half fits" and "nothing fits", with the scene
+/// swinging every few seconds, the shape that made the first rung flip 21
+/// times in 90 seconds: no weight may go round.
+#[test]
+fn no_race_weight_at_a_2160_line_ceiling_goes_round() {
+    let limits = uhd_limits(FULL);
+    for weight in 0..40 {
+        for swing in [0.0f32, 0.1, 0.25] {
+            let machine = move |frame: usize| {
+                let pulse = if (frame / 150).is_multiple_of(2) {
+                    1.0
+                } else {
+                    1.0 - swing
+                };
+                Machine {
+                    scene_flat: 0.001,
+                    scene_pixels: (0.004 + 0.0003 * weight as f32) * pulse,
+                    blur_flat: 0.0025,
+                    blur_pixels: 0.008 * pulse,
+                }
+            };
+            let mut drs = Controller::new();
+            let run = drive(&mut drs, 5400, limits, machine);
+            assert!(
+                run.flips <= 4 && run.steps <= 4,
+                "weight {weight} swing {swing}: {} flips, {} steps",
+                run.flips,
+                run.steps
+            );
+        }
+    }
 }

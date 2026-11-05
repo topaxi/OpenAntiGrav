@@ -60,8 +60,8 @@
 //! # A second, discrete output
 //!
 //! Since [ADR-0075] the controller also emits the motion blur's gather
-//! resolution, shed to `half` before the extent falls and restored to `full`
-//! after it is back at its ceiling. The same invariant binds it: the player's
+//! resolution, shed down `half` and `quarter` before the extent falls and
+//! restored one step at a time after it is back at its ceiling. The same invariant binds it: the player's
 //! `motion_blur_resolution` reaches it as a ceiling inside [`Limits`], and the
 //! answer is re-derived every frame by [`Controller::blur_resolution`]. See
 //! [`blur`].
@@ -75,7 +75,7 @@ pub mod blur;
 pub mod policy;
 pub mod residual;
 
-pub use blur::{MAX_BACKOFF, RESTORE_SECONDS, relapse_frames, restore_frames};
+pub use blur::{CAP_EASE_SECONDS, MAX_BACKOFF, RESTORE_SECONDS, relapse_frames, restore_frames};
 pub use policy::{
     COOLDOWN, Controller, DEADBAND, FALL_STEPS, GRID, RISE_PATIENCE, RISE_STEPS, STEP,
 };

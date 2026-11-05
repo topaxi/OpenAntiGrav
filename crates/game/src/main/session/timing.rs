@@ -696,7 +696,7 @@ impl Session {
     ) {
         self.governor_gpu = Some(cost.total());
         self.governor_gpu_at = self.frame_index;
-        let shed = self.drs.blur_shed();
+        let gather = self.drs.blur_resolution(drs_limits);
         if let Some(extent) = self.drs.record(cost, frame_seconds, drs_limits) {
             // **The reserve is printed beside the costs**, because
             // since ADR-0044 it is not a constant a reader can look up:
@@ -723,11 +723,11 @@ impl Session {
         }
         // One line per flip of the blur rung (ADR-0075): it moves seldom by
         // construction, and a run that never says it moved cannot show it did.
-        if self.drs.blur_shed() != shed {
+        let drawn = self.drs.blur_resolution(drs_limits);
+        if drawn != gather {
             debug!(
-                "dynamic resolution: motion blur gathers at {} resolution - scalable {:.3} ms, \
+                "dynamic resolution: motion blur gathers at {drawn} resolution - scalable {:.3} ms, \
                  blur {:.3} ms, at {:.0}% of {}x{}",
-                if shed { "full" } else { "half" },
                 cost.scalable * 1000.0,
                 cost.blur * 1000.0,
                 self.drs.scale() * 100.0,

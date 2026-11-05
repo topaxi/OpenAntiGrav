@@ -183,7 +183,7 @@ impl Controller {
     ) -> Option<(u32, u32)> {
         // Before the early return, so a target turned off clears the rung as
         // a blur turned off does.
-        self.rung.begin_frame(limits);
+        self.rung.begin_frame(limits, self.extent(limits).1);
         let period = limits.target().period()?;
         let scalable = cost.scalable;
         if !scalable.is_finite() || scalable <= 0.0 {
@@ -222,11 +222,15 @@ impl Controller {
         } else {
             scalable / budget
         };
-        // **The blur rung first in both directions** (ADR-0075): an overrun
-        // sheds the full gather before the extent falls, and the full gather
-        // comes back only at the extent's ceiling, so a restore is the last
-        // thing the controller gives back.
-        if ratio > *DEADBAND.end() && self.rung.try_shed(cost.blur, self.steps, limits) {
+        // **The blur rung first in both directions** (ADR-0075, ADR-0087): an
+        // overrun sheds a gather step before the extent falls, and a step comes
+        // back only at the extent's ceiling, so a restore is the last thing
+        // the controller gives back.
+        if ratio > *DEADBAND.end()
+            && self
+                .rung
+                .try_shed(cost.blur, self.steps, limits, self.extent(limits).1)
+        {
             self.cooldown = COOLDOWN;
             self.under = 0;
             return None;
@@ -396,15 +400,24 @@ impl Controller {
     /// force now, every frame, like [`Self::extent`].
     ///
     /// The player's own choice whenever the target is off, the blur is off or
-    /// that choice is already `half`; `half` while the rung has shed the full
-    /// gather. Never above the ceiling [`Limits::blur`] carries.
+    /// that choice is already `quarter`; the step the rung holds otherwise.
+    /// Never above the ceiling [`Limits::blur`] carries, and `quarter` only
+    /// where this frame's extent allows it.
     #[must_use]
     pub fn blur_resolution(&self, limits: Limits) -> BlurResolution {
-        self.rung.resolution(limits)
+        self.rung.resolution(limits, self.extent(limits).1)
     }
 
-    /// Whether the rung holds the half gather, for the log line that says it
-    /// moved. Not a resolution to draw at: see [`Self::blur_resolution`].
+    /// The most shutter the blur may draw with this frame, easing while a
+    /// quarter gather comes and goes, or `None` while the rung is not running
+    /// and the drawn gather's own cap applies at once. See [`super::blur`].
+    #[must_use]
+    pub fn blur_shutter_cap(&self, limits: Limits) -> Option<f32> {
+        self.rung.shutter_cap(limits)
+    }
+
+    /// Whether the rung holds any step below the player's choice. Not a
+    /// resolution to draw at: see [`Self::blur_resolution`].
     #[must_use]
     pub fn blur_shed(&self) -> bool {
         self.rung.is_shed()
