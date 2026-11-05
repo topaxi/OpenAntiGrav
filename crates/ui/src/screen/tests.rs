@@ -1081,3 +1081,23 @@ fn a_fills_authored_real_glow_is_its_stamp_as_written() {
     );
     assert_eq!(find("plain").glow_stamp(), None, "no RealGlow, no stamp");
 }
+
+/// A `<Block>` keeps its own `TextColor`, which the track records' rows
+/// author as grey against the header's white.
+#[test]
+fn a_block_keeps_its_text_colour() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen type="Pick" name="Pick">
+    <Block name="Header"><Values width="10" textcolor="0xffffffff"></Values></Block>
+    <Block name="Row"><Values width="10" textcolor="0xFF646464"></Values></Block>
+    <Block name="Plain"><Values width="10"></Values></Block>
+  </Screen>
+</Screen>
+"#,
+    );
+    let screen = screens.by_name("Pick").unwrap();
+    let colours: Vec<Option<u32>> = screen.blocks.iter().map(|b| b.text_color).collect();
+    assert_eq!(colours, vec![Some(0xffff_ffff), Some(0xff64_6464), None]);
+}

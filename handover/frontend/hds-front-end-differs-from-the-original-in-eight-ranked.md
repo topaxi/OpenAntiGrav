@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-10-27
+updated: 2026-11-05
 summary: "HD front end: hull_orbit pose fitted to the classic Feisar only, no _n1 frame, Safe Area 0.904 scale at default unchecked"
 difficulty: medium (30)
 ---
@@ -75,6 +75,11 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   capture of the same circuit over time would fix the rate), the multiplier
   `0x81db67ea`, Zone circuits (`zone_1..4` carry a scene no record names),
   Omega's own table; the moving fly-by picture (Bink)
+- Fury page content (2026-11-05, `fury-menu-content`, `docs/ui/campaign-screens.md`, "Fury page content against the original"):
+  landed the Grid Selection counter, arrows, dotted unlock panel and its corner marks, and the Track Select record rows (fill
+  alpha, `TextColor`). Open, each its own RE: Ship Select hull pose convention (lens, pitch, slide fitted), page `Squares`,
+  the Track Select thumbnail (Bink `FlyByMovie`), the record fill (38 against 26), the Grid footer spacing, the ship
+  column's lock states; the card art and circuit model are loop phase
 - Not reached: a Tournament cell, loading and EndRace pairs, Omega (no capture path)
 
 ## Next Steps

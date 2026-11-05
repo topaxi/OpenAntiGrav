@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-10-27
-summary: "HD gaps by tile: gantry card panels read R+11 to +6 (card is 5-6-5 linear, wired); booth glass wired 2026-10-27, glass_reflect next"
+updated: 2026-11-05
+summary: "HD gaps by tile; 2026-11-05: 16-19% of grid score is the original being softer (unclosable), named closable items under 6 points"
 ---
 
 # HD/Fury render gaps ranked by pixel impact
@@ -316,6 +316,59 @@ dump for the cone's sampler words.
 **Note (lead, at merge):** the band lane above landed `Program::has_dot_power` (no specular where a
 program has no dot-product power). That is lane claim 3's guessed cause for Vineta K's ledge strips, so
 re-measure claim 3 on the merged main before drawing it.
+
+## Grid-family read, 2026-11-05 (lane `hd-grid-family`)
+
+Claim tested: the largest closable cause shared across the HD grid pairs lowers their combined score by at least 8
+with no pair worse by 0.5. **False: the named closable items total under 6 points if every one were closed
+perfectly, about 2 to 3 in practice, and the biggest share is not closable without tuning to the pair.**
+
+Score: the compare page's `mean_grey` (`compare_env.overlap_score`, ImageMagick), 13 race pairs 85.3 summed
+(4.63 chenghou to 9.37 moa-therma), 87.0 with `loading-loading` (1.72). The brief's 88.0 and 5.75 floor do not
+reproduce on the page's own numbers; a plain luma mean abs difference agrees with the page to 0.1 per pair.
+One point of the summed score is 2.07 M of the per-pixel error used above.
+
+**Frequency split (13 race pairs, sigma 7).** Low frequency 3.13 of 6.63 per pair (47%), high frequency the rest.
+Half the family's error is high frequency: edges and fine detail.
+
+**The unclosable share: the original is softer, in both axes.** Ours is 1.17 to 1.50 times sharper by mean luma
+gradient on every pair (x 1.17-1.50, y 1.20-1.45). Crops (moa-therma crowd and hull edge, 6x) show the original's
+silhouettes smeared 1.5 to 2 px, horizontally in stair steps about 1.5 px wide, ours hard-edged and aliased.
+Fitted to the stored frames (sum over 13, 86.1 raw):
+
+| What is applied to ours | Summed grey | Gain |
+| --- | ---: | ---: |
+| Gaussian sigma 0.8 both axes | 76.4 | -9.8 |
+| horizontal round trip through 1300 px, bilinear (best 1200 flat to 1500) | 79.5 | -6.6 |
+| best of 49 shifts of +-3 px per 128 px tile, no blur (optimistic, picks noise) | -7.4 of 88.6 | |
+| blur 0.8 plus the per-tile shift together | 71.9 of 88.6 | -16.7 |
+
+The shift and the blur overlap, so the unclosable total is about 14 to 17 (16 to 19% of the score), not their sum.
+Why it cannot be a lane: the original's scene width is load driven and changes within one boot
+([hd-track-tone.md](../../docs/rendering/hd-track-tone.md), 1300 to 1920, controller unlocated), the fit is flat
+between 1200 and 1500 so no width is identifiable per pair, and the vertical softness is no horizontal upscale at all:
+it is the original's soft silhouettes, uninvestigated since "Texture crispness" (the Laplacian note there).
+Any blur we pick is a chosen value fitted to these frames. The maintainer's `-1.5` texture bias is not revisited.
+**Conflict on that page, not resolved here:** its item (f), "the original is not upscaled", disagrees with the
+2026-11-05 width scan above it and with the x gradient ratios here.
+Open question for a later lane: what makes the original's silhouettes soft in y (RPCS3 final stage, the game's own
+resolve, or a texture or alpha-edge rule).
+
+**Closable items, in score points (M / 2.07, summed over the family).**
+
+| Item | Impact | Points, whole region | Realistic |
+| --- | ---: | ---: | ---: |
+| Gantry cards (panel red, glyph; phase and the original's own pulse are not closable) | 14.0 M | 6.8 | 1 to 3 |
+| `glass_reflect` (unwired) | about 3.0 M | 1.4 | 1 |
+| Amphiseum cone band (+5.7 left) | about 0.6 M | 0.3 | 0.3 |
+| moa-therma pad strip beside the hull (opaque and unlit-independent, marbled texture present in both, patterns differ: a scroll phase) | 1.0 M of its box | 0.5 on Moa only (0.95 for the whole box) | 0 |
+| Opaque scenery elsewhere | 18.8 M | 9.1 | fails the falsifier: many draws |
+
+Ablated for the pad: `OAG_OPAQUE_ONLY=1` moves Moa 9.37 to 16.13 and leaves the strip, so it is opaque geometry;
+the white block under the hull is flat white in ours and striped grey in the original (a reflective or env-mapped
+texture), likely the world clock's phase; not a family item.
+
+Not repeated: HUD digits and the booth glass (landed).
 
 ## Later
 

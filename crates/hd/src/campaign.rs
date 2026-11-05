@@ -261,11 +261,13 @@ pub const HEX_TEXTURES: [(&str, &str); 5] = [
 /// answering `None`, the same silent, honest-absence path a genuinely
 /// missing texture takes) - confirmed on a live capture,
 /// `after-cell-select-2.png`.
-pub const OTHER_TEXTURES: [&str; 4] = [
+pub const OTHER_TEXTURES: [&str; 6] = [
     r"Data\FE\Images\NonSelectable_Arrow_HD.gtf",
     r"Data\FE\Images\Subtitle_Arrow_HD.gtf",
     r"Data\FE\Images\Padlock.gtf",
     r"Data\FE\Images\Hexmedal_HD.gtf",
+    r"Data\FE\Images\tilted_arrows.gtf",
+    r"Data\FE\Images\dot.gtf",
 ];
 
 /// **`Hexmedal_HD.gtf` itself has two disagreeing copies - measured
@@ -314,6 +316,16 @@ mod tests {
     fn entry_names_are_spelled_the_way_definition_xml_spells_them() {
         assert_eq!(entry_name(0), r"Data\Plugins\grids\grid_00.xml");
         assert_eq!(entry_name(15), r"Data\Plugins\grids\grid_15.xml");
+    }
+
+    #[test]
+    fn grid_selection_s_arrows_and_dotted_panel_are_loaded() {
+        for src in [
+            r"Data\FE\Images\tilted_arrows.gtf",
+            r"Data\FE\Images\dot.gtf",
+        ] {
+            assert!(OTHER_TEXTURES.contains(&src), "{src}");
+        }
     }
 
     #[test]

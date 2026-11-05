@@ -516,7 +516,7 @@ fn records(
                 x: block.x + 40.0,
                 y: block.y + 3.0,
                 scale: block.text_scale * layout.faces.default,
-                color: [1.0, 1.0, 1.0, 1.0],
+                color: block.text_color.map_or([1.0, 1.0, 1.0, 1.0], argb_to_rgba),
                 border: None,
                 align: Align::Left,
                 text: label,
