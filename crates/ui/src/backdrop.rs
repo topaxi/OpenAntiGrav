@@ -26,10 +26,11 @@
 //!
 //! # No music
 //!
-//! Three equaliser bands feed the original's music pulse, its feedback gain and
-//! its `musicMultiplier`. This build has no equaliser tap, so the bands sit at
-//! `Music Pulse Base` (`musicPulse = 1`), the blend gain at its base level,
-//! and the multiplier at the `0` `Render` writes anyway.
+//! The equaliser's bands feed the original's music pulse, its glow gain and its
+//! wave pivot's wander. This build has no equaliser tap, so every band reads
+//! zero: `musicPulse = 0.23`, the glow gain at its floor, and the pivot off the
+//! cloud's centre by the bands' `-0.05`. `musicMultiplier` is the `0` `Render`
+//! writes anyway.
 
 use oag_core::rng::Rng;
 use oag_tables::fexml::Node;
@@ -38,6 +39,10 @@ use oag_tables::fury_backdrop::{FuryBackdrop, Path, STATIC_PATHS};
 /// The original counts clip frames at this rate (`PickPath` writes `60.0`
 /// into the clip), and the menu stage ticks at the same fixed step.
 pub const FRAMES_PER_SECOND: f32 = 60.0;
+
+/// How many frames of history a still needs: the accumulation has long settled
+/// by here, and the glow, the slow one at `0.94` a frame, is down to `6e-4`.
+pub const FRAMES_TO_SETTLE: u32 = 120;
 
 /// How many recently played paths the picker refuses to repeat.
 const RECENT: usize = 8;
@@ -68,13 +73,38 @@ pub const WAVE_COLOUR_SCALE: [f32; 3] = [0.94, 0.94, 0.955];
 pub const WAVE_COLOUR_BIAS: f32 = -0.0003;
 pub const WAVE_BIAS_FACTOR: f32 = 8.0;
 
-/// The `Blend` pass's cap on the fresh particles, at the equaliser's base
-/// level: `clamp(0.016 * 24 * eq, floor, 0.15)` with `eq` sitting at `Music
-/// Pulse Base` for want of a tap.
-const BLEND_GAIN: f32 = 0.016;
-const BLEND_GAIN_SCALE: f32 = 24.0;
-const BLEND_FLOOR: [f32; 3] = [0.02, 0.02, 0.023];
-const BLEND_CEILING: f32 = 0.15;
+/// The wave's grid: its outer edge is pulled in by this much across, and
+/// everything drifts by the other down the screen (`g+0x4d4`, `g+0x4d8`).
+pub const WAVE_PINCH: f32 = 0.003;
+pub const WAVE_DRIFT: f32 = 0.005;
+
+/// How far the equaliser moves the wave's pivot off the cloud's centre, in
+/// clip units, either way.
+const PIVOT_WANDER: f32 = 0.05;
+
+/// The glow gain's law: `clamp(0.016 * scale * eq, 0.02, 0.15)`, one byte, with
+/// `scale` at `24` while `eq` is over a threshold that moves and `1` otherwise
+/// (`g+0x4c0`, `g+0x4d0`, `g+0x4a0`, `g+0x4b0`, `g+0x1708`), so in practice the
+/// floor or the ceiling.
+const GLOW_GAIN: f32 = 0.016;
+const GLOW_GAIN_SCALE: f32 = 24.0;
+const GLOW_FLOOR: f32 = 0.02;
+const GLOW_CEILING: f32 = 0.15;
+
+/// `FunkLayer_DrawScanBand`: the band falls `0.6` clip units a second and
+/// wraps every two, half of it `0.2` tall. It runs on a global timer, not the
+/// clip's clock.
+const BAND_SPEED: f32 = 0.6;
+const BAND_WRAP: f32 = 2.0;
+pub const BAND_HALF_HEIGHT: f32 = 0.2;
+
+/// What the band's middle is multiplied by, and how far it bends the picture
+/// sideways there.
+pub const BAND_DIM: f32 = 0.3;
+pub const BAND_BEND: f32 = -0.01;
+
+/// `FunkLayer_DrawScanBand`'s scanlines: what every fourth row is multiplied by.
+pub const SCANLINE_COLOUR: [f32; 3] = [0.05, 0.1, 0.25];
 
 /// One clip: a static path, and how far into it the clock is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,6 +125,9 @@ pub struct Fury {
     cloud: usize,
     recent: Vec<usize>,
     clip: Clip,
+    /// Frames since the backdrop started, which never restarts with a clip:
+    /// the band's clock.
+    clock: u32,
     /// How many rolls landed on a morph or dynamic path and were re-rolled,
     /// for the report.
     rerolled: u32,
@@ -133,10 +166,43 @@ pub struct Frame {
     pub fog_factors: [f32; 4],
     /// The trail's survival per frame.
     pub feedback: [f32; 3],
-    /// The blend pass's cap on the fresh particles.
-    pub source_max: [f32; 3],
-    /// The screen's tint, the constant blend colour the composite is scaled by.
+    /// How much of the accumulation each frame adds to the half-size glow, the
+    /// pass's constant blend colour.
+    pub glow_gain: f32,
+    /// The screen's tint: the fresh particles are multiplied by it in the
+    /// trail blend, before the feedback, so a low tint also shortens what
+    /// accumulates.
     pub tint: [f32; 4],
+    /// What moves the wave's pivot off the cloud's centre, in clip units.
+    pub pivot_offset: [f32; 2],
+    /// The smear band's top edge, in clip `y`.
+    pub band_top: f32,
+    /// Which frame this is: the passes feed back once per frame, however often
+    /// the display asks for a picture.
+    pub clock: u32,
+}
+
+impl Frame {
+    /// The wave grid's pivot, in clip units: the cloud's bounding-box `centre`
+    /// on screen, moved by the equaliser and kept on it.
+    #[must_use]
+    pub fn wave_pivot(&self, centre: [f32; 3]) -> [f32; 2] {
+        let transform = |m: &[[f32; 4]; 4], v: [f32; 4]| -> [f32; 4] {
+            std::array::from_fn(|row| (0..4).map(|column| m[column][row] * v[column]).sum())
+        };
+        let view = transform(&self.world_view, [centre[0], centre[1], centre[2], 1.0]);
+        let clip = transform(&self.proj, view);
+        // Behind the eye `w` is negative and the division is the same one.
+        let w = if clip[3] == 0.0 { 1.0 } else { clip[3] };
+        std::array::from_fn(|axis| (clip[axis] / w + self.pivot_offset[axis]).clamp(-1.0, 1.0))
+    }
+}
+
+/// The glow gain for a band mean of `eq` over the threshold, as the byte the
+/// blend colour holds.
+fn glow_gain(eq: f32) -> f32 {
+    let gain = (GLOW_GAIN * GLOW_GAIN_SCALE * eq).clamp(GLOW_FLOOR, GLOW_CEILING);
+    (gain * 255.0).trunc() / 255.0
 }
 
 impl Fury {
@@ -158,6 +224,7 @@ impl Fury {
                 frame: 0,
                 frames: 0,
             },
+            clock: 0,
             rerolled: 0,
         };
         out.settings.authored_static_paths().next()?;
@@ -221,6 +288,7 @@ impl Fury {
     /// has run its length. `Render` counts the clip up once per frame while
     /// the widget is enabled and the game is not paused.
     pub fn tick(&mut self) {
+        self.clock = self.clock.wrapping_add(1);
         self.clip.frame += 1;
         if self.clip.frame >= self.clip.frames {
             self.pick();
@@ -307,9 +375,9 @@ impl Fury {
             .particle_colour
             .map(|c| c * BRIGHTNESS_AT_REST * music_pulse * res_scale);
         let colour_ramp = self.settings.particle_ramp_colour.map(|c| c * res_scale);
-        let eq = self.settings.music_pulse_base;
-        let source_max = BLEND_FLOOR
-            .map(|floor| (BLEND_GAIN * BLEND_GAIN_SCALE * eq).clamp(floor, BLEND_CEILING));
+        // The band clock in whole periods, so a long session loses no precision.
+        let period = (BAND_WRAP / BAND_SPEED * FRAMES_PER_SECOND).round() as u32;
+        let band_seconds = (self.clock % period) as f32 / FRAMES_PER_SECOND;
         Frame {
             cloud: self.cloud,
             world_view,
@@ -342,8 +410,12 @@ impl Fury {
                 path.fog_exponent,
             ],
             feedback: self.settings.feedback,
-            source_max,
+            glow_gain: glow_gain(0.0),
             tint,
+            // `(2 * band - 1) * 0.05`, every band at zero.
+            pivot_offset: [-PIVOT_WANDER, -PIVOT_WANDER],
+            band_top: 1.0 - band_seconds * BAND_SPEED,
+            clock: self.clock,
         }
     }
 }
@@ -411,7 +483,7 @@ fn normalise(v: [f32; 3]) -> [f32; 3] {
 ///
 /// `<BackgroundAnimFury>`'s `<ScreenSetting name=".." tint="0xAARRGGBB">`
 /// rows out of `skin.xml`, which `BackgroundAnimFury_ParseScreenSetting`
-/// reads and `Render` hands to the composite as its constant blend colour.
+/// reads and `Render` hands to the trail blend as its `srcScale`.
 /// `Main Menu` is white; `default` and most others are `0xFF202020`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Tints {

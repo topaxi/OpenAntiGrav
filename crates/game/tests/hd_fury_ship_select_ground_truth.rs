@@ -7,8 +7,8 @@
 //! that row's tint live gave, as the mean excess brightness over 28 groups of
 //! five frames taken a quarter second apart, `1 : 0.80 : 0.62 : 0.40 : 0.23`
 //! for tints `1, 1/2, 1/4, 1/8, 1/16` - not the `1 : .5 : .25 : .125 : .0625` a
-//! literal scale gives. The tint is applied in linear light and the buffer
-//! encodes it (this build leaves a tint of 1 as it was). See docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md,
+//! literal scale gives. The tint scales the fresh particles in the trail blend,
+//! and that blend runs in linear light. See docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md,
 //! "The tint is applied in linear light".
 
 use std::path::{Path, PathBuf};
@@ -47,14 +47,18 @@ fn fury(image: &Path) -> std::sync::Arc<boot::fury::FuryAssets> {
     }
 }
 
-/// `Draw::FuryBackdrop` on a black page, read back: the RGBA bytes, or `None`
-/// where there is no GPU adapter. At 1280x720: below about 414 lines the
-/// original's `resScale` is zero and no cloud is drawn at all.
+/// `Draw::FuryBackdrop` on a black page after a settled run of frames, read
+/// back: the RGBA bytes, or `None` where there is no GPU adapter. At 1280x720:
+/// below about 414 lines the original's `resScale` is zero and no cloud is
+/// drawn at all.
+///
+/// `tint` gets how many frames are left, so a run can change it part way;
+/// the last frame is the one read back, with `0` left.
 fn draw(
     assets: &boot::fury::FuryAssets,
     backdrop: &std::sync::Arc<boot::backdrop::MenuBackdrop>,
     seconds: f32,
-    tint: [f32; 4],
+    tint: impl Fn(u32) -> [f32; 4],
 ) -> Option<Vec<u8>> {
     let (width, height) = (1280u32, 720u32);
     let instance = wgpu::Instance::default();
@@ -77,10 +81,19 @@ fn draw(
     backdrop.install(&mut renderer, &device, &queue);
     let mut model =
         oag_ui::backdrop::Fury::new(assets.settings.clone(), assets.first, boot::fury::SEED)?;
-    for _ in 0..(seconds * oag_ui::backdrop::FRAMES_PER_SECOND) as u32 {
+    let settle = oag_ui::backdrop::FRAMES_TO_SETTLE;
+    for _ in 0..(seconds * oag_ui::backdrop::FRAMES_PER_SECOND) as u32 - settle {
         model.tick();
     }
-    let frame = model.frame(height as f32, width as f32 / height as f32, tint);
+    let aspect = width as f32 / height as f32;
+    let leading_up = (0..settle).map(|at| {
+        let frame = model.frame(height as f32, aspect, tint(settle - at));
+        model.tick();
+        frame
+    });
+    let frames: Vec<_> = leading_up.collect();
+    renderer.settle_fury_backdrop(&device, &queue, frames.into_iter(), (width, height));
+    let frame = model.frame(height as f32, aspect, tint(0));
     let target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("fury ship select test"),
         size: wgpu::Extent3d {
@@ -142,22 +155,6 @@ fn draw(
     Some(pixels)
 }
 
-fn decode(v: f64) -> f64 {
-    if v <= 0.04045 {
-        v / 12.92
-    } else {
-        ((v + 0.055) / 1.055).powf(2.4)
-    }
-}
-
-fn encode(v: f64) -> f64 {
-    if v <= 0.003_130_8 {
-        12.92 * v
-    } else {
-        1.055 * v.powf(1.0 / 2.4) - 0.055
-    }
-}
-
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn the_selection_screens_carry_the_default_rows_tint() {
@@ -181,38 +178,102 @@ fn the_selection_screens_carry_the_default_rows_tint() {
     assert_eq!(assets.tints.for_screen("Main Menu"), [1.0; 4]);
 }
 
+/// The mean of the red channel over the two rows in four the scanlines leave
+/// alone.
+fn mean_red(pixels: &[u8]) -> f64 {
+    let rows = pixels.chunks(1280 * 4).enumerate();
+    let red: Vec<u8> = rows
+        .filter(|(row, _)| row % 4 == 1 || row % 4 == 2)
+        .flat_map(|(_, row)| row.chunks(4).map(|texel| texel[0]))
+        .collect();
+    red.iter().map(|&v| f64::from(v)).sum::<f64>() / red.len() as f64
+}
+
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
-fn a_tint_of_an_eighth_is_applied_in_linear_light() {
+fn the_tint_reads_as_it_does_because_it_is_applied_in_linear_light() {
     let Some(image) = image() else {
         return;
     };
     let assets = fury(&image);
     let backdrop = std::sync::Arc::new(boot::backdrop::MenuBackdrop::Fury(assets.clone()));
-    // One frame at two tints: only the tint differs, so every pixel is checked
-    // against the law, not a mean against a moving cloud.
-    let Some(full) = draw(&assets, &backdrop, 38.0, [1.0; 4]) else {
+    // The same clock at every tint: only the tint differs, and the ratios are
+    // the table's on menu-backdrop.md, "The tint is applied in linear light".
+    let Some(full) = draw(&assets, &backdrop, 38.0, |_| [1.0; 4]) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
-    let dim = draw(&assets, &backdrop, 38.0, [0.125, 0.125, 0.125, 1.0]).expect("adapter");
-    let mut checked = 0;
-    for (a, b) in full.chunks(4).zip(dim.chunks(4)) {
-        if !(60..250).contains(&a[0]) {
-            continue;
-        }
-        checked += 1;
-        let expected = 255.0 * encode(0.125 * decode(f64::from(a[0]) / 255.0));
+    let full = mean_red(&full);
+    assert!(full > 1.0, "the backdrop drew: {full}");
+    // The table was read with music playing. Silent, the composite's `1/257`
+    // takes more off a dimmer picture, so the ratios sit under the table's;
+    // what cannot move is that they stay well above the literal scale.
+    let mut last = 1.0;
+    for (tint, measured) in [(0.5, 0.80), (0.25, 0.62), (0.125, 0.40), (0.0625, 0.23)] {
+        let dim = draw(&assets, &backdrop, 38.0, |_| [tint, tint, tint, 1.0]).expect("adapter");
+        let ratio = mean_red(&dim) / full;
         assert!(
-            (f64::from(b[0]) - expected).abs() <= 3.0,
-            "{} at tint 1 is {} at tint 1/8, linear light says {expected:.0} and a literal scale {:.0}",
-            a[0],
-            b[0],
-            f64::from(a[0]) * 0.125
+            ratio > f64::from(tint) * 1.2 && ratio < measured + 0.05 && ratio < last,
+            "tint {tint}: {ratio:.2} of tint 1, the original's {measured}, a literal scale's {tint}"
         );
+        last = ratio;
     }
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn a_tint_of_nothing_leaves_the_trail_to_decay() {
+    let Some(image) = image() else {
+        return;
+    };
+    let assets = fury(&image);
+    let backdrop = std::sync::Arc::new(boot::backdrop::MenuBackdrop::Fury(assets.clone()));
+    // The tint goes to zero three frames before the end: it stops new light
+    // entering the accumulation, and what is there keeps decaying on screen.
+    // A tint on the composite would turn the picture black at once.
+    let Some(fading) = draw(&assets, &backdrop, 38.0, |left| {
+        if left > 3 {
+            [1.0; 4]
+        } else {
+            [0.0, 0.0, 0.0, 1.0]
+        }
+    }) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let full = draw(&assets, &backdrop, 38.0, |_| [1.0; 4]).expect("adapter");
+    let dark = draw(&assets, &backdrop, 38.0, |_| [0.0, 0.0, 0.0, 1.0]).expect("adapter");
+    let (fading, full, dark) = (mean_red(&fading), mean_red(&full), mean_red(&dark));
+    assert!(dark < 0.5, "no tint from the start draws nothing: {dark}");
     assert!(
-        checked > 1000,
-        "only {checked} pixels in the middle of the range"
+        fading > full * 0.2 && fading < full * 0.9,
+        "the trail decays through the frames after the tint goes: {fading} against {full}"
     );
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn every_fourth_row_from_the_top_is_a_scanline() {
+    let Some(image) = image() else {
+        return;
+    };
+    let assets = fury(&image);
+    let backdrop = std::sync::Arc::new(boot::backdrop::MenuBackdrop::Fury(assets.clone()));
+    let Some(pixels) = draw(&assets, &backdrop, 38.0, |_| [1.0; 4]) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let by_phase: [f64; 4] = std::array::from_fn(|phase| {
+        let rows = pixels.chunks(1280 * 4).skip(phase).step_by(4);
+        rows.flat_map(|row| row.chunks(4).map(|texel| f64::from(texel[0])))
+            .sum::<f64>()
+    });
+    // The field is read half a texel off, so a scanline is the two rows either
+    // side of the fourth's edge: the mean of one and `0.05` in linear light,
+    // about `0.7` once encoded. RPCS3, eight frames: `0.68` to `0.77`.
+    let similar = |a: f64, b: f64| (a / b - 1.0).abs() < 0.05;
+    assert!(similar(by_phase[0], by_phase[3]), "{by_phase:?}");
+    assert!(similar(by_phase[1], by_phase[2]), "{by_phase:?}");
+    let dip = by_phase[0] / by_phase[1];
+    assert!((0.6..0.8).contains(&dip), "{dip}: {by_phase:?}");
 }

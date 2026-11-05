@@ -1114,6 +1114,15 @@ pub fn run(
     }
     if let Some(assets) = &fury_backdrop {
         assets.install(&mut renderer, &device, &queue);
+        if let Some(page) = &options.menu_page {
+            assets.settle(
+                &mut renderer,
+                (&device, &queue),
+                page,
+                oag_display::display::viewport((width, height), options.settings.display.aspect),
+                (options.anim_seconds, options.fury_path),
+            );
+        }
     }
     // Both glyph slots, as the live window loads them (`boot::fonts::install_faces`),
     // whether or not this run's draw list ever reaches a menu: a menu-page

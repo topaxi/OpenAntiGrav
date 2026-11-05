@@ -402,8 +402,8 @@ their order agree except where this section says so.
 | 6 | particle field | band | off | The smear band, reads its own target |
 | 7 | particle field | colour | `ZERO, SRC_COLOR` | Scanlines: multiplies every 4th row by `(0.05, 0.1, 0.25)` |
 | 8 | `0x00cc0000`, plain | copy | off | Resolves the field to a plain target. 720p only; at 1080p the ladder reads the field directly |
-| 9-24 | the shared post ladder down to 160x90 | | | The same chain as a race |
-| 25 | the display buffer | final composite | off | Decode, exposure, bloom; [renderer.md](renderer.md) |
+| 9-24 | the shared post ladder down to 160x90 | | | The same chain as a race, and on the menu more than a luminance readback: see "Three more readings" below |
+| 25 | the display buffer | final composite | off | Decode, exposure, bloom; [renderer.md](renderer.md). Reads the field half a texel off on both axes |
 | 26-51 | the display buffer | UI | `SRC_ALPHA, ONE_MINUS_SRC_ALPHA` | The front end |
 
 **Confidence 90** on the table: read off the stream at every step, twice (two frames per
@@ -439,10 +439,11 @@ dump) and again at 1920x1080. A second build's agreement would not lift it past 
   sample `0.003..0.997` across and `0.005..1.005` down, so the outer edge is pulled in by
   `0.3` percent and everything drifts by `0.5` percent down the screen; the shared point's
   uv is its own screen position, so nothing moves there. The point itself wanders
-  (`-0.177, -0.135` and `0.047, 0.036` in two dumps); what drives it is unread. Confidence 85
-  on the vertices, 40 on "what drives it" being the equaliser.
+  (`-0.177, -0.135` and `0.047, 0.036` in two dumps). Confidence 85
+  on the vertices; what drives it is under "Three more readings".
 - **The smear band and scanlines are one shared function**, `FunkLayer_DrawScanBand`
-  (`0x003b8550`), called once, from `Render` at `0x00185a24` through the stub at `0x00678278`.
+  (`0x003b8550`), called once, from `Render` at `0x00185a24` through the stub at `0x00678278`. Its statics at `0x008c2bfc`: speed `0.6`, half
+  height `0.2`.
   - The band is two quads, each `0.2` clip tall, colour `1` at the outer edges to `0.3`
     across the middle, `w` running with it. The program samples the target at
     `x + (1 - w)^10 * -0.01` and multiplies by the colour.
@@ -465,8 +466,44 @@ dump) and again at 1920x1080. A second build's agreement would not lift it past 
 - **Mode 11's extra draws are real but the count moves.** With the path forced (`g+0x414 =
   6`, `g+0x418 = 1`): the field copied down `640 -> 320 -> 160 -> 80 -> 40`, pitch `0x1000`,
   then 250 quads on the field from the 640 level. The sender counts about 500; 250 is one
-  frame of one section. `FUN_00678298`, gated on `*(g+0x16b0)`, is the call. Modes `2`, `9` and
-  `10` add no draws. Confidence 85.
+  frame of one section. At 1920x1080 one frame of it draws 501 such quads, chain `960 -> 60`, so the count
+  moves with the resolution too and the sender's "about 500" may be a 1080p figure. `FUN_00678298`, gated on
+  `*(g+0x16b0)`, is the call. Modes `2`, `9` and `10` add no draws. Confidence 85.
+
+**Three more readings, 2026-11-05, lane `fury-backdrop-pass-graph`** (same disc, RPCS3, Main Menu and
+Campaign Selection at 1920x1080 and window 1920x1080; forced static path 6; the game paused through the
+stub, the state read, the display given two seconds, then the frame grabbed. A `import` of the running
+game shows a frame about 100 clip frames older than the counter beside it, which cost a wrong diagnosis
+first).
+
+- **What moves the wave's pivot is the cloud and the bands.** `Render` at `0x00184fc0`..`0x001851bc`:
+  the current cloud's bounding-box centre (`(min + max) * 0.5`, `+0x10`..`+0x24`) through the view and
+  projection, divided by `w`, plus `(2 * band - 1) * 0.05` per axis from `+0x1e8`, `+0x1ec`, then clamped to
+  `-1..1`. The literals are TOC `-4456` (`2.0`), `-4452` (`0.05`), `-4448` (`-1.0`). `+0x1b4..+0x1f0` is
+  sixteen bands, the same sixteen the `equaliser` debug loop at the end of `Render` draws. Checked on 20
+  dumped frames of ten dumps: the pivot stays inside `0.05` of a cloud's projected centre on both
+  axes, largest residual `0.0435`. The check picks the best of nineteen boxes, so it is weaker than it
+  looks; the disassembly is the evidence. Wave pinch and drift are `g+0x4d4 = 0.003`, `g+0x4d8 = 0.005`,
+  read live. Pivot uv is `(x + 1) / 2`, `(1 - y + 0.005) / 2`, as the vertices show. **Confidence 85**; the
+  earlier "40 on the equaliser" line above is this.
+- **The glow gain's shape is a threshold.** `dVar46` is `g+0x4d0` (`24`) only while the band mean is above
+  `g+0x1708`, and `1` otherwise, so `0.016 * 24 * eq` or `0.016 * eq`: with the clamp, nearly always the floor
+  or the ceiling, which is why the dumps show `05` or `26` and nothing between. `g+0x1708` read `0.646`; what
+  moves it is unread. With no equaliser the gain is `5/255`. **Confidence 80.**
+- **The field reaches the screen half a texel off, and the game asks for it.** Draw 25's immediate vertices at
+  1080p carry uv `(0.00026, 0.000463)` at the top left and `(1.00026, 1.000463)` at the bottom right:
+  `0.5 / 1920` and `0.5 / 1080`, on both axes, with unit 0's filter `0x2022000`, linear, and the window's pixel
+  centre word `0`. So this is the game's quad, not an emulator's convention, and each display pixel is four
+  field texels averaged in linear light. On screen, eight paused frames: rows `0` and `3` of every four dim and
+  equal, `1` and `2` bright and equal, ratio `0.68` to `0.77`; frame 484 reads `46.7, 67.1, 66.9, 46.3`. The mean of
+  one and `0.05` in linear light encodes to `0.7`. **Confidence 90.** Every frame that ends in this composite gets
+  it, race frames included if their quad is the same; only the menu's was read.
+- **On the menu the ladder is not a luminance readback alone.** Read live at 1080p: the gate `0x01111fc0` is
+  `rgb * a * 0.75` with its from-frame contribution at `0`, so it blooms from the **field's alpha**; the two blurs follow; the final
+  composite `0x01113c40` is `field * 1 + bloom * 1 + 0` with the radial mix at `0`. The field's alpha is
+  `min(a * tint.a, 1)` through the accumulation, zeroed on scanline rows, times `w` in the band. So the original
+  has a soft alpha bloom over this picture that this build does not draw. **Confidence 80** on the programs; how much
+  light it adds on this picture is unmeasured.
 
 **`musicPulse` peaks at 1.33, by law.** Sampled for 115 s at 24 Hz on Campaign Selection
 (2,786 samples, muted emulator): every band stays on `0..1` and the three-band mean reaches
@@ -492,6 +529,63 @@ separated from the music here, so the visible amplitude stays open.
 **Omega:** checked, differs - no `BackgroundAnimFury` string in the 1.07 `eboot.bin`, only
 `BackgroundAnim_Item.cpp` and `FEBackgroundAnim*`. **2048:** checked, differs - no
 `BackgroundAnim` string at all in the v1.04 executable. None of this section applies to either.
+The wiring below reaches only `MenuBackdrop::Fury`, which the Fury style alone selects; the HD-style and
+Omega scene backdrop is untouched and its ground truth passes.
+
+## The pass graph, wired (2026-11-05)
+
+`oag_game::render::backdrop` runs the table above: points, blend, glow, wave, composite, band, scanlines,
+then a present pass for the final composite's half texel. **Decision on the linear pipeline: an sRGB format, not by hand.** Every
+target is `Rgba8UnormSrgb`, so decode, encode and linear blending are the format's; the page stays
+gamma-space (ADR-0020) and receives the stored bytes through a plain view, so nothing is decoded and encoded
+twice. `fs_composite`'s hand encode and the chosen sRGB curve are gone. The accumulation and the field read
+themselves in the original, so here the accumulation is a swapped pair and the band reads a copy.
+
+The particle pass is encoded with the rest: `0x1fec` is `1` on draw 1, and a build that wrote it as plain bytes
+read `R mean 0.4` where the encoded one reads `15.0`, against the reference's `48.3` (bands at zero in both).
+
+Measured on Main Menu, static path 6, `mirage_c1`, clip frame 484, paused, over rows `230..790` and columns
+`600..1900`, against the frame kept at `data/reference/hd-capture/fury-backdrop-pass-graph/paused-02.png`
+(`paused.json` beside it holds the state):
+
+| | R mean | R q90 | R q99 | G mean | RMSE | Rows by `row % 4` |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| reference | 48.3 | 137 | 255 | 3.9 | | 46.7, 67.1, 66.9, 46.3 |
+| before, as shipped, bands at zero | 2.2 | 8 | 23 | 0.0 | 44.6 | |
+| **after, as shipped, bands at zero** | **15.0** | **46** | **85** | **0.1** | **35.5** | |
+| before, level **fitted**, band `0.95` | 12.6 | 49 | 108 | 0.4 | 40.3 | 14.3, 14.2, 14.2, 14.1 |
+| after, level **fitted**, band `0.95` | 53.0 | 117 | 191 | 3.5 | 26.3 | 49.0, 68.3, 68.1, 48.7 |
+
+**As shipped the backdrop is about a third of the reference's level, and that gap is not fully explained.** The
+fitted rows are a scratch build with the band forced to match the level, for comparing shape; nothing ships
+them. The state read at the pause was bands at zero (`particleColour 0.0877`), so the fit contradicts the one
+reading of this frame's music, and no reason is known: `Equaliser Damp Speed` makes a jump within a frame unlikely.
+Split in linear light over the two clean rows of each four, the reference means `0.118`, ours `0.012`, fitted
+`0.084`. The difference from bands at zero keeps `0.45` of its energy under an 8-pixel Gaussian, about what the
+reference's own picture keeps (`0.48`), so it carries the dots' structure and a blur alone cannot be most of it;
+what fitting leaves (`0.034`) keeps `0.22`. Candidates, none tested: the music reaching this frame some way the
+state read missed, the alpha bloom, the glow at its ceiling (`+0x1dc` sat over the threshold on three or four of
+the eight paused frames).
+
+Shape, at the fitted level only: the dots land on the reference's, the best integer alignment is `3` pixels
+sideways and none vertically (not checked across the frame), and the frames' autocorrelation falls to one half at
+`5` pixels in both, `4` as shipped. So the page's "dots 1.7x wider" no longer reproduces at that level, which
+points at the encoding but is not a closed question until the level is. The smear band sits in the reference
+near row `745` of that frame at about `0.7` of its neighbours; ours is `0.63` at its own phase, the band's clock
+being a global timer that differs between the two.
+
+Stored pairs re-rendered from scratch copies, a random cloud and clip on each side: Ship Select mean grey `19.55`
+to `21.61` against `21.55`, RMSE `28.89` to `29.76`; Campaign Select `32.18` to `32.35` against `32.51`, RMSE
+`15.58` to `15.78`. The level moves to the reference; RMSE cannot improve on a different cloud. A `--menu-page`
+still now runs `FRAMES_TO_SETTLE` frames of history first, because a picture that feeds back has nothing in it
+after one frame, and with no `--anim-seconds` it stands that many frames into the clip.
+
+Tests: `crates/game/tests/hd_fury_ship_select_ground_truth.rs` fails if the tint moves back to the composite
+(the tint gone for three frames leaves a decaying picture, not black), and pins the two-row scanline.
+`crates/ui/src/backdrop/tests.rs` holds the glow byte, the band's 200-frame wrap across clips and the pivot.
+
+Not wired: the 720p field's 2x1 antialiasing, which changes no dot this build compares (1080p is plain), and
+mode 11's mip chain, which needs morph paths to draw at all. RPCS3's `sampleTexture2DMS` defect is not emulated.
 
 ## What shipped, 2026-09-14
 
@@ -542,7 +636,7 @@ hold the numbers. What they settle:
   the `0.4` was the program's own `MUL_SAT ... c[201].x`, and the census it matched
   was against a capture of a different mode at a different resolution.
 
-**What still differs, measured on path 6 at frame 372 against
+**Closed 2026-11-05 by "The pass graph, wired"; kept for the method. What still differs, measured on path 6 at frame 372 against
 `/tmp/hd-fury-backdrop-break3/05.png`** (both 1280x720, the pulse there `1.12`
 against this build's `0.23`, so colour levels are not compared): the hull, its
 framing, the band's place and the red-to-yellow ordering all agree. In a sparse
@@ -579,7 +673,11 @@ captures or live; no change was needed there.
 
 Tool: `scripts/hd-fury-row-poll.py` finds the item and prints the current row.
 
-**The brightness law.** The `default` row's tint was edited live (GDB write of three
+**The brightness law.** The ratios stand; the reading of them does not. The tint is `fc0` of the Blend program,
+in linear light, before the feedback ("The frame, measured"); the two laws this section weighs are both
+retired, and the build carries neither. Silent, this build's own ratios sit under this table (about `0.66` at
+`1/2`, `0.40` at `1/4`) because the composite's `1/257` takes more off a dim picture than the music-lit one this was
+read from. The `default` row's tint was edited live (GDB write of three
 floats at `row+0x40`) and the screen grabbed a quarter second after each write, in groups
 of five tints so a group sees one cloud. Mean excess brightness over 28 groups (red
 channel, 14 with the backdrop in view), as a ratio to tint 1:
@@ -630,30 +728,13 @@ colours (above), so this is the original's own law, not a gap.
 
 ## Open
 
-- The dots' spread: the dots here carry the right light over half the diameter.
-  Four leads from `Render`'s tail, read as far as they go on 2026-09-14 and no
-  further: (1) `PointCloud_DrawRaw` sets no sampler state of its own, and the
-  sprite texture's filter word is `0x0206` (mag linear, min trilinear) from
-  `PointCloud_Construct` - so not the sampler. (2) In the steady-state path the
-  particle submit (before `FUN_006781f8`) comes before any
-  set-target call (`FUN_00677c48` -> `0x005a40f8`: it sets
-  `target[0]`, later `target[1 + pp]`), so the fresh particles may draw onto the
-  page directly and `target[0]` be the full-size accumulation - which a moving
-  camera would smear into wider dots. (3) `FUN_00678268` -> `0x003cd038` is a
-  FunkLayer copy: it sets `target[1 + pp]`, binds `view[0]` and draws one quad
-  under `BlendFunc(CONSTANT_COLOR, ONE)` with the screen tint as the constant,
-  so the half targets receive the tinted full one, not the particles (the colour is the glow
-  gain, not the tint, measured under "The frame, measured"). (4) The
-  thirty-vertex grid is drawn after the second set-target and before the
-  `texture`/`waveTexture` binds. Which program each of the three quads runs
-  is the reading that orders them; the render-target contents cannot be read
-  through the stub (rpcs3-debugger.md), so it is a Ghidra read.
+- The alpha bloom over the field ("Three more readings"): wired neither here nor in the front end at all.
 - Modes `5`, `9`, `10`, `11`: the vertex programs are paired and disassemble; their
   `Update` functions and the two extra streams (`targetPosition`, the line/quad
   offsets) are unread.
-- What moves the wave's pivot.
-- The equaliser: what feeds `+0x19c..+0x1a4` and `+0x1dc..+0x1e4`, and whether the
-  menu's own music track is what it analyses.
+- The equaliser: what feeds the sixteen bands at `+0x1b4` and the banks at `+0x19c` and `+0x1dc`, what moves
+  the glow threshold `g+0x1708`, and whether the menu's own music track is what it analyses.
+- Why the backdrop's level on a paused frame is three times what its own `particleColour` predicts.
 - `0x00182358`'s purpose: inert here with its two inputs at zero, shaped like a
   stereo eye offset, unnamed.
 - The HD-style `BackgroundAnim_Item.cpp` (`FEBackgroundAnim_vp`/`_fp`/`Copy_fp`, the
