@@ -1465,3 +1465,19 @@ Select (`never reached ... Team Selection`); copy a save with Harimau unlocked i
 
 **Flakes seen.** `capture has no camera (2 frame-unique dual-register candidates)` on one Moa Therma attempt and one race attempt, both gone on a rerun with nothing
 changed but the emulator's moment; a second attempt after such a failure then stopped at `Connection refused` (the emulator of the first attempt was gone), so rerun by hand.
+
+## Sampling HD's antialiased targets
+
+**A frame captured at 1280x720 is not a clean reference for a pass that samples an antialiased
+target; one at 1920x1080 is.** The Fury backdrop's particle field is a 2x1 target at 720p and a
+plain one at 1080p ([menu-backdrop.md](../ghidra/functions/ps3-hdfury-eu/menu-backdrop.md), "The
+frame, measured"; a race's scene splits the same way: `0x3148` at 720p, `0x148` at 1080p). A third
+party (a static recompilation matched against RPCS3) reports that RPCS3's `sampleTexture2DMS` reads
+one sample to the right, leaving the trail about 2.5 percent dimmer and, over 110 s, the backdrop
+red -4 and blue -10 to -14 percent. The line they name is in this build's embedded GLSL too:
+`icoords = ivec2(normalized_coords * image_size)` with `fract(normalized_coords.x * image_size.x)`
+as the weight, no half-texel term. Confidence 85 on the line, single-source on the percentages.
+
+What that means here: **our compare page's HD pairs are 1920x1080 and unaffected, so no scoring
+changes.** The 720p backdrop frames (`hd-fury-backdrop-break`, the 2026-09-14 samples on the
+backdrop page) do inherit it, so never tune a colour off them. Never emulate the bug in our renderer.
