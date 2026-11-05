@@ -1063,8 +1063,8 @@ have none of them. `Draw` colours come from the skin's own globals.
 as a device on touch screens; Up/Down on the grids (nearest tile in that direction, no vertical
 wrap); Cross/Start as activate; Circle as back (the screen's own tick, else the `PreviousScreen`
 stack); Cross on `team` as the confirm tick; the slider's orange-versus-grey value. The fill colour itself is the
-authored pressed colour. `--original-menu` does not hide the pad focus, so a compare pair of a
-route that presses buttons differs from the original by one filled tile (the pair records say so).
+authored pressed colour. `--original-menu` hides the pad focus, as it hides this build's own tiles: a compare pair of a route
+that presses buttons draws no filled tile, like the original. A player always has it.
 
 **Omega: checked, applies, not wired**: `TouchButton_Item.cpp`, `Orange2048` and `Blue2048` are
 in Omega's `eboot.bin`, but its front end is HD's `<HorizMenu>`, so no 2048 grid is reached and

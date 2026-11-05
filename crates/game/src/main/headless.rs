@@ -51,6 +51,7 @@ pub(crate) fn run_windowless(
     }
     if cli.original_menu {
         loaded.frontend.set_extra_tiles(Vec::new());
+        loaded.frontend.hide_pad_focus();
     }
     // A language chosen on an earlier run skips the picker. Reported either
     // way: silently not asking is indistinguishable from a broken picker, and

@@ -421,8 +421,8 @@ pub(crate) struct Cli {
     pub(crate) overlay: bool,
 
     /// With `--screenshot`: leave out what this build adds to the disc's own front end
-    /// (2048's RACEBOX, REMIX and MULTIPLAYER tiles on `GameModeChoice`), so a frame can be
-    /// compared against a capture of the original's menu definition. A player always has them.
+    /// (2048's RACEBOX, REMIX and MULTIPLAYER tiles on `GameModeChoice`, and the pad focus
+    /// on its touch grids), so a frame can be compared against a capture of the original's menu definition. A player always has them.
     #[arg(long)]
     pub(crate) original_menu: bool,
 
