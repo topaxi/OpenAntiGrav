@@ -187,6 +187,30 @@ fn the_pool_refuses_rather_than_steals_when_it_is_full() {
 }
 
 #[test]
+fn the_music_tap_hears_the_music_before_its_fader_and_nothing_else() {
+    let mut mixer = Mixer::new(48_000);
+    mixer.play(Play::looping(tone(2048, 2, 48_000), Bus::Music));
+    mixer.play(Play::looping(tone(2048, 2, 48_000), Bus::Sfx));
+    mixer.set_bus_gain(Bus::Music, 0.0);
+    mixer.set_bus_trim(Bus::Music, 0.0);
+    mixer.set_master_gain(0.0);
+    let mut out = [0.0; 64];
+    mixer.render(&mut out);
+    assert_eq!(out, [0.0; 64]);
+    let full_scale = 32_768.0;
+    let tapped = mixer.music_tap();
+    assert_eq!(tapped.len(), 32);
+    for (frame, &sample) in tapped.iter().enumerate() {
+        let left = (frame * 2) as f32 / full_scale;
+        let right = (frame * 2 + 1) as f32 / full_scale;
+        assert!(
+            (sample - (left + right) * 0.5).abs() < 1e-6,
+            "frame {frame}"
+        );
+    }
+}
+
+#[test]
 fn a_bus_gain_only_moves_its_own_bus() {
     let sound = tone(1024, 2, 44_100);
     let mut mixer = bare(44_100);

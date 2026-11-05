@@ -2,11 +2,11 @@
 status: re-first
 titles: [hd]
 updated: 2026-11-05
-summary: "Fury backdrop's level gap was RPCS3's 16-bit quad index wrap; chain and encoded blends wired; equaliser, mode 11 and a fresh-particle residual remain"
+summary: "Fury backdrop's level gap was RPCS3's 16-bit quad index wrap; chain, encoded blends and equaliser wired; mode 11 and a fresh-particle residual remain"
 categories: [frontend, rendering]
 ---
 
-# The Fury backdrop's pass graph is wired; what is left is the equaliser, mode 11 and a small residual
+# The Fury backdrop's pass graph is wired; what is left is mode 11 and a small residual
 
 The laws and the numbers are on `docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`: "The pass graph, wired", "The
 final composite adapts", "The Fury references carry an RPCS3 defect". Read the last one first: **every RPCS3 frame of this
@@ -17,9 +17,8 @@ record once, `13.9` on a silent frame. Do not fit towards the reference. The cle
 
 ## Open
 
-1. **The equaliser tap** (a separate lane; nothing here stands in for it). Bands `+0x1b4..+0x1f0`, banks `+0x19c`
-   and `+0x1dc`, threshold `g+0x1708`. Shipped silent: pulse `0.23`, glow at its floor, pivot off by `-0.05`. This is now
-   the largest thing between the shipped picture and a player's.
+1. **The screen change's `OnEnable` pulse** is unwired: `Fury` has no screen-change signal and its amplitude is unread,
+   and it is what stands on top of `musicPulse` now the tap is in. Page: "`BackgroundAnimFury_OnEnable` fires on every screen change".
 2. **Mode 11's mip chain and quads**: only once morph paths draw at all. 250 quads at 720p, 501 at 1080p.
 3. **Fresh particles run `14` to `25` percent over**: defect-free slice R mean `7.3` against `6.4`, q99 `107` against `81`;
    wrapped ladder `21.8` against `17.5`. Unexplained. Ours reads an aspect of `1.7647`, exactly `30 / 17`, the shape of 480x272
@@ -35,7 +34,8 @@ record once, `13.9` on a silent frame. Do not fit towards the reference. The cle
 
 ## Next Steps
 
-1. Pick up the equaliser with a clean reference in hand if there is one; it can land without.
+1. Whether the bands hear more than music: find what else reaches MultiStream bus `0x00080003` (`zone-visualiser.md`, "Still open"), or
+   fire a menu effect with a sound on RPCS3, compare a loop apart. `Mixer::music_tap` assumes music alone.
 2. Not to wire: the index wrap, a `40%` fade (20 dumped frames and both builds' float scans find none), the 720p field's
    2x1 AA as anything but MSAA shaded once, and RPCS3's `sampleTexture2DMS` bug.
 3. The `3` pixel sideways residual belongs to the dynamic-width thread.

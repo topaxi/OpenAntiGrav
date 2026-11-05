@@ -24,13 +24,17 @@
 //! cloud - `PointCloud_ModeNeedsNewCloud(2)` is false - so the one cloud the
 //! boot picked stays until a mode that does is implemented.
 //!
-//! # No music
+//! # The music
 //!
-//! The equaliser's bands feed the original's music pulse, its glow gain and its
-//! wave pivot's wander. This build has no equaliser tap, so every band reads
-//! zero: `musicPulse = 0.23`, the glow gain at its floor, and the pivot off the
-//! cloud's centre by the bands' `-0.05`. `musicMultiplier` is the `0` `Render`
-//! writes anyway.
+//! [`Fury::tick`] takes the sound system's sixteen band levels once a frame.
+//! `BackgroundAnimFury_Update` keeps them as they came and in a peak-hold that
+//! falls `Equaliser Damp Speed` a frame. Bands `10..=12` as they came are the
+//! music pulse. The same three held make the glow gain, which is high only on
+//! a frame their mean rises. Held bands `13` and `14` move the wave's pivot.
+//! `musicMultiplier` is the `0` `Render` writes anyway. With nothing playing
+//! every band reads zero, as the original's do before its music starts:
+//! `musicPulse = 0.23`, the glow gain at its floor, the pivot off the cloud's
+//! centre by `-0.05`.
 
 use oag_core::rng::Rng;
 use oag_tables::fexml::Node;
@@ -78,14 +82,27 @@ pub const WAVE_BIAS_FACTOR: f32 = 8.0;
 pub const WAVE_PINCH: f32 = 0.003;
 pub const WAVE_DRIFT: f32 = 0.005;
 
+/// How many bands the sound system publishes.
+pub const BANDS: usize = 16;
+
+/// What [`Fury::tick`] reads with nothing playing, and every capture, which
+/// has no music to follow.
+pub const SILENCE: [f32; BANDS] = [0.0; BANDS];
+
+/// The three bands the music pulse and the glow read, `+0x19c` and `+0x1dc`.
+const PULSE_BANDS: std::ops::Range<usize> = 10..13;
+
+/// The held bands that move the pivot across and up, `+0x1e8` and `+0x1ec`.
+const PIVOT_BANDS: [usize; 2] = [13, 14];
+
 /// How far the equaliser moves the wave's pivot off the cloud's centre, in
 /// clip units, either way.
 const PIVOT_WANDER: f32 = 0.05;
 
 /// The glow gain's law: `clamp(0.016 * scale * eq, 0.02, 0.15)`, one byte, with
-/// `scale` at `24` while `eq` is over a threshold that moves and `1` otherwise
-/// (`g+0x4c0`, `g+0x4d0`, `g+0x4a0`, `g+0x4b0`, `g+0x1708`), so in practice the
-/// floor or the ceiling.
+/// `scale` at `24` on a frame `eq` rose past last frame's and `1` otherwise
+/// (`g+0x4c0`, `g+0x4d0`, `g+0x4a0`, `g+0x4b0`, last frame's mean at `g+0x1708`),
+/// so in practice the floor or the ceiling.
 const GLOW_GAIN: f32 = 0.016;
 const GLOW_GAIN_SCALE: f32 = 24.0;
 const GLOW_FLOOR: f32 = 0.02;
@@ -131,6 +148,12 @@ pub struct Fury {
     /// How many rolls landed on a morph or dynamic path and were re-rolled,
     /// for the report.
     rerolled: u32,
+    /// This frame's bands as the sound system published them (`+0x174`).
+    bands: [f32; BANDS],
+    /// The same bands behind a hold that falls the damp speed a frame (`+0x1b4`).
+    held: [f32; BANDS],
+    /// Whether the held mean rose this frame.
+    glow_rising: bool,
 }
 
 /// What the renderer draws one frame with.
@@ -198,11 +221,17 @@ impl Frame {
     }
 }
 
-/// The glow gain for a band mean of `eq` over the threshold, as the byte the
-/// blend colour holds.
-fn glow_gain(eq: f32) -> f32 {
-    let gain = (GLOW_GAIN * GLOW_GAIN_SCALE * eq).clamp(GLOW_FLOOR, GLOW_CEILING);
+/// The glow gain for a held band mean of `eq`, as the byte the blend colour
+/// holds; `rising` is whether `eq` went up this frame.
+fn glow_gain(eq: f32, rising: bool) -> f32 {
+    let scale = if rising { GLOW_GAIN_SCALE } else { 1.0 };
+    let gain = (GLOW_GAIN * scale * eq).clamp(GLOW_FLOOR, GLOW_CEILING);
     (gain * 255.0).trunc() / 255.0
+}
+
+/// The mean of the pulse bands.
+fn pulse_mean(bands: &[f32; BANDS]) -> f32 {
+    bands[PULSE_BANDS].iter().sum::<f32>() / PULSE_BANDS.len() as f32
 }
 
 impl Fury {
@@ -226,6 +255,9 @@ impl Fury {
             },
             clock: 0,
             rerolled: 0,
+            bands: SILENCE,
+            held: SILENCE,
+            glow_rising: false,
         };
         out.settings.authored_static_paths().next()?;
         out.pick();
@@ -285,9 +317,21 @@ impl Fury {
     }
 
     /// Advances the clock by one frame, picking the next path when this one
-    /// has run its length. `Render` counts the clip up once per frame while
-    /// the widget is enabled and the game is not paused.
-    pub fn tick(&mut self) {
+    /// has run its length, and folding this frame's `bands` in. `Render` counts
+    /// the clip up once per frame while the widget is enabled and the game is
+    /// not paused. `BackgroundAnimFury_Update` takes the bands.
+    pub fn tick(&mut self, bands: &[f32; BANDS]) {
+        let held_before = pulse_mean(&self.held);
+        let damp = self.settings.equaliser_damp_speed;
+        for (held, &band) in self.held.iter_mut().zip(bands) {
+            *held = if band >= *held {
+                band
+            } else {
+                (*held - damp).max(0.0)
+            };
+        }
+        self.bands = *bands;
+        self.glow_rising = pulse_mean(&self.held) > held_before;
         self.clock = self.clock.wrapping_add(1);
         self.clip.frame += 1;
         if self.clip.frame >= self.clip.frames {
@@ -365,11 +409,10 @@ impl Fury {
         // `clamp(0.0015 * height - 0.62, 0, 4)`, both `1.0` at 1080 lines.
         let sprite_scale = (2.26 - 0.001_166_7 * height).clamp(0.5, 2.5);
         let res_scale = (0.0015 * height - 0.62).clamp(0.0, 4.0);
-        // `1 + (mean(eq) - base) * factor` over three equaliser bands the
-        // sound system feeds. Nothing feeds them here, and a band nobody
-        // feeds reads zero - the same `0.23` RPCS3 shows between beats.
-        let music_pulse =
-            1.0 + (0.0 - self.settings.music_pulse_base) * self.settings.music_pulse_factor;
+        // `1 + (mean(eq) - base) * factor`, the bands as they came, not held.
+        let music_pulse = 1.0
+            + (pulse_mean(&self.bands) - self.settings.music_pulse_base)
+                * self.settings.music_pulse_factor;
         let particle_colour = self
             .settings
             .particle_colour
@@ -410,10 +453,10 @@ impl Fury {
                 path.fog_exponent,
             ],
             feedback: self.settings.feedback,
-            glow_gain: glow_gain(0.0),
+            glow_gain: glow_gain(pulse_mean(&self.held), self.glow_rising),
             tint,
-            // `(2 * band - 1) * 0.05`, every band at zero.
-            pivot_offset: [-PIVOT_WANDER, -PIVOT_WANDER],
+            // `(2 * band - 1) * 0.05`.
+            pivot_offset: PIVOT_BANDS.map(|band| (2.0 * self.held[band] - 1.0) * PIVOT_WANDER),
             band_top: 1.0 - band_seconds * BAND_SPEED,
             clock: self.clock,
         }
