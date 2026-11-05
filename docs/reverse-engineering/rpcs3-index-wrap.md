@@ -3,7 +3,7 @@
 Measured 2026-11-05 on `hdfury-ps3-eu-dec.iso`, 1920x1080, private profile, lane `rpcs3-quads-index-census`. Base build
 RPCS3 `v0.0.42-19980-028d1e8f`, the packaged binary every HD reference was taken with.
 
-**Only the Fury backdrop is touched: every Fury menu frame carries the wrap, no race frame does. Confidence 92.**
+**Only the Fury backdrop is touched: every Fury menu frame carries the wrap, no race frame does. Confidence 90 on the census.**
 
 ## The defect
 
@@ -38,13 +38,13 @@ Not walked: the HD-style front end, and a race with a full late-race weapon exch
 
 | Compare-page pairs | Verdict |
 | --- | --- |
-| `hd/menu-campaign-select`, `menu-cell-select`, `menu-grid-select`, `menu-ship-select`, `menu-track-select`, `gap-main`, `gap-options`, `gap-racebox` | wrapped, replace |
-| `hd/loading-loading` | PENDING-LOADING |
+| `hd/menu-campaign-select`, `menu-cell-select`, `menu-grid-select`, `menu-ship-select`, `menu-track-select`, `gap-main`, `gap-options`, `gap-racebox` | wrapped. Re-taken on the wide build and held, not adopted into `data/reference` |
+| `hd/loading-loading` | clean: one ring dump 3 s into a Vineta K load, `QUADS` arrays 4, `TRIANGLE_STRIP` 1,415. One frame, seen once |
 | the 13 `hd/<circuit>` pairs, `hd-race/talons-pack` | clean: same circuit in the race census. Inferred from another frame of that circuit, with a margin of about 40 times |
 
 ## The patch
 
-Three diffs against `028d1e8f4` in `scripts/patches/`, applied and built by `scripts/build-rpcs3-wide-indices.sh`:
+Local only, deliberately untracked: three diffs against `028d1e8f4` under `data/tools/rpcs3-wide-indices/`, applied and built by `build.sh` beside them. Rebuilding needs that directory; the changes are:
 
 - `rpcs3-wide-emulated-indices.patch`, the fix: the writer goes through `u32*`, and both backends allocate and bind 32-bit
   indices. 9 lines added, 22 removed, most of them the SSE `iota16` that only `line_loop` used.
@@ -56,7 +56,7 @@ Two traps. This commit does not compile against LLVM 23 (`ConstantFoldInstructio
 libstdc++ 16, so the patches go in before the first configure. With `ccache` the first full build took 11 minutes at `-j 10`.
 
 The built binary is `data/tools/rpcs3-wide-indices/src/build/bin/rpcs3` (Qt and system libraries, LLVM static; it reports `HEAD | local_build`).
-It boots the Fury disc headless with `--no-gui`, and restored all 23 HD save states taken on the stock build. Nothing went upstream.
+It boots the Fury disc headless with `--no-gui`, and restored all 23 HD save states taken on the stock build. Not for upstream.
 
 ## Taking a reference with it
 
@@ -71,7 +71,7 @@ Then `scripts/rpcs3-hd-menu-pair.py` as usual. Rules this needs, each paid for h
 - The Main Menu leaves for the attract demo after an idle minute or so, and a poke or a pause carries on into it. Tap a button
   every 20 s and refuse a frame whose screen is not `Main Menu`.
 - The cloud does not change while `g+0x414` forces a path. Release, wait for the count to change, force again; 19 clouds take
-  minutes, and one boot of three went half an hour without offering `mirage_c1` again.
+  minutes, and one patched boot went four cycles of about nine minutes each without offering `mirage_c1` once.
 
 ## The re-capture
 
@@ -83,9 +83,7 @@ glow at its floor. Ours is the same state through the scratch overrides of cloud
 | stored reference `paused-02.png`, wrapped | 48.3 | 137 | 255 | | |
 | stock, this state, boot A, 2 frames | 43.4, 45.3 | 127, 132 | 255 | 33.3, 34.6 | 13.8, 7.3 |
 | stock, this state, boot B, 3 frames | 18.8 to 20.3 | 73 to 78 | 255 | 33.6 to 35.8 | 51.8 to 53.1 |
-PENDING-STOCK3
 | **patched, 4 frames** | **13.1 to 14.2** | **45 to 49** | **111 to 118** | **13.0 to 13.4** | 31.0 to 32.7 |
-PENDING-PATCHED2
 | ours, as on `main` | 14.0 | 48 | 121 | | |
 
 With everything that carries history removed (exposure 1, no bloom, no glow, no trail, clip frame held, `pc 0.3788`):
@@ -102,11 +100,11 @@ One patched frame 484 read `1.6`, one stock frame `21.2` against `11.8`: a held 
 
 The hull's near half, lower right of the frame (rows `800..1080`, columns `1500..1920`, frame 300): `1.3` percent of pixels past `32` on stock, `13` to `17`
 percent patched. The prediction was that R falls toward ours and the near hull appears, with the premise wrong if R stayed near stock: it came out as predicted.
-**Confidence 92** that the backdrop's level gap was entirely the wrap.
+**Confidence 78** that the backdrop's level gap was entirely the wrap, on one patched boot: `mirage_c1` never came up on the second, so **the patched rows are seen on one boot only**. The wrap's existence stays at 95 from the source; what is lowered is the claim that nothing else is in the gap.
 
 What remains is ours: fresh particles read `11` to `18` percent over the patched frames, the residual the wrapped comparison put at `14` to `25`.
 
-The `R` difference between stock boots A and B at one pinned state is unexplained. `paused-02.png` agrees with A.
+The `R` difference between stock boots A and B at one pinned state is unexplained and not pursued. `paused-02.png` agrees with A. It means a boot-to-boot term of that size could exist on the wide build too, unseen on one boot.
 
 ### Whole-frame pair scores do not show it
 

@@ -638,9 +638,9 @@ Particle Colour at `g+0x430`). Glow at its floor: copy `g+0x4a0` over `g+0x4b0`;
 three floats, as the words after them matter. Off the store at `*0x008b6fb4`: `+0x540..+0x548 = 0, 0, 1` for an exposure of one, `+0x530` and
 `+0x538 = 0` for no bloom. Pause through the stub, wait two seconds, grab, then dump the ring.
 
-**A reference without the defect now exists, and ours matches it** (2026-11-05, [rpcs3-index-wrap.md](../../../reverse-engineering/rpcs3-index-wrap.md)).
+**A reference without the defect now exists, and on one boot ours matches it** (2026-11-05, [rpcs3-index-wrap.md](../../../reverse-engineering/rpcs3-index-wrap.md)).
 Same commit with 32-bit indices, natural frame 484 of the row above: R mean `13.1` to `14.2`, q90 `45` to `49`, q99 `111` to `118`, against ours `14.0`, `48`, `121`, RMSE
-`13`, where stock is `33` to `36`. The near hull appears. On fresh particles ours reads `11` to `18` percent over, the residual below. Confidence 92.
+`13`, where stock is `33` to `36`. The near hull appears. On fresh particles ours reads `11` to `18` percent over, the residual below. Seen on one boot; the repeat missed its cloud. Confidence 78 that the wrap is the whole gap.
 
 **So the shipped picture is the faithful draw and it does not match the reference, on purpose.** Like `sampleTexture2DMS`, the
 wrap is not emulated. Shipped, the whole hull shows, dimmer on a silent frame, and its near half carries the ramp's band.
