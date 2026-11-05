@@ -205,13 +205,18 @@ fn the_tint_reads_as_it_does_because_it_is_applied_in_linear_light() {
     };
     let full = mean_red(&full);
     assert!(full > 1.0, "the backdrop drew: {full}");
+    // The table was read with music playing. Silent, the composite's `1/257`
+    // takes more off a dimmer picture, so the ratios sit under the table's;
+    // what cannot move is that they stay well above the literal scale.
+    let mut last = 1.0;
     for (tint, measured) in [(0.5, 0.80), (0.25, 0.62), (0.125, 0.40), (0.0625, 0.23)] {
         let dim = draw(&assets, &backdrop, 38.0, |_| [tint, tint, tint, 1.0]).expect("adapter");
         let ratio = mean_red(&dim) / full;
         assert!(
-            ratio > measured - 0.16 && ratio < measured + 0.1,
+            ratio > f64::from(tint) * 1.2 && ratio < measured + 0.05 && ratio < last,
             "tint {tint}: {ratio:.2} of tint 1, the original's {measured}, a literal scale's {tint}"
         );
+        last = ratio;
     }
 }
 
@@ -265,7 +270,7 @@ fn every_fourth_row_from_the_top_is_a_scanline() {
     });
     // The field is read half a row low, so a scanline is the two rows either
     // side of the fourth's edge: the mean of one and `0.05` in linear light,
-    // about `0.7` once encoded. RPCS3, eight frames: `0.68` to `0.74`.
+    // about `0.7` once encoded. RPCS3, eight frames: `0.68` to `0.77`.
     let similar = |a: f64, b: f64| (a / b - 1.0).abs() < 0.05;
     assert!(similar(by_phase[0], by_phase[3]), "{by_phase:?}");
     assert!(similar(by_phase[1], by_phase[2]), "{by_phase:?}");

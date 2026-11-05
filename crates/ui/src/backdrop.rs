@@ -82,8 +82,10 @@ pub const WAVE_DRIFT: f32 = 0.005;
 /// clip units, either way.
 const PIVOT_WANDER: f32 = 0.05;
 
-/// The glow gain's law: `clamp(0.016 * 24 * eq, 0.02, 0.15)`, one byte
-/// (`g+0x4c0`, `g+0x4d0`, `g+0x4a0`, `g+0x4b0`).
+/// The glow gain's law: `clamp(0.016 * scale * eq, 0.02, 0.15)`, one byte, with
+/// `scale` at `24` while `eq` is over a threshold that moves and `1` otherwise
+/// (`g+0x4c0`, `g+0x4d0`, `g+0x4a0`, `g+0x4b0`, `g+0x1708`), so in practice the
+/// floor or the ceiling.
 const GLOW_GAIN: f32 = 0.016;
 const GLOW_GAIN_SCALE: f32 = 24.0;
 const GLOW_FLOOR: f32 = 0.02;
@@ -196,7 +198,8 @@ impl Frame {
     }
 }
 
-/// The glow gain for a band mean of `eq`, as the byte the blend colour holds.
+/// The glow gain for a band mean of `eq` over the threshold, as the byte the
+/// blend colour holds.
 fn glow_gain(eq: f32) -> f32 {
     let gain = (GLOW_GAIN * GLOW_GAIN_SCALE * eq).clamp(GLOW_FLOOR, GLOW_CEILING);
     (gain * 255.0).trunc() / 255.0

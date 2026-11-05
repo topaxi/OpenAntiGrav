@@ -41,7 +41,8 @@ pub struct FuryAssets {
 
 impl FuryAssets {
     /// A model on `fury_path`, or the picker's, at its first frame, and how
-    /// many frames `anim_seconds` runs it on. `None` for a path not authored.
+    /// many frames `anim_seconds` runs it on: with none asked for, as many as
+    /// it takes the picture to settle. `None` for a path not authored.
     pub(super) fn at_start(
         &self,
         anim_seconds: Option<f32>,
@@ -51,8 +52,9 @@ impl FuryAssets {
         if let Some(path) = fury_path {
             model.force_path(path)?;
         }
-        let frames =
-            (anim_seconds.unwrap_or(0.0).max(0.0) * oag_ui::backdrop::FRAMES_PER_SECOND) as u32;
+        let frames = anim_seconds.map_or(oag_ui::backdrop::FRAMES_TO_SETTLE, |seconds| {
+            (seconds.max(0.0) * oag_ui::backdrop::FRAMES_PER_SECOND) as u32
+        });
         Some((model, frames))
     }
 }
@@ -140,7 +142,7 @@ pub(super) fn load(
     }
     let authored = settings.authored_static_paths().count();
     report.push(format!(
-        "menu backdrop: Fury point clouds, {} of {} loaded ({} points in the first, {}), {authored} static paths of 8, {} screen tints; morph and dynamic paths re-rolled, no music",
+        "menu backdrop: Fury point clouds, {} of {} loaded ({} points in the first, {}), {authored} static paths of 8, {} screen tints; morph and dynamic paths re-rolled, no music, no bloom",
         clouds.len(),
         FURY_CLOUDS.len(),
         clouds[first].points.len(),
