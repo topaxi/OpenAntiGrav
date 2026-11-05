@@ -1111,9 +1111,10 @@ values = ["off", "low", "medium", "high"]
 # and blends the smear back by depth: about a third of the chain's cost on an
 # integrated GPU, and a grainier smear, which is why `full` is the default.
 # Applies live, like the strength. `quarter` gathers a sixteenth and draws at no
-# more than `low` strength; below 2160 render lines it would gather under 540
-# lines, so it draws as `half` at the player's strength and the row keeps saying
-# `quarter`, a ceiling the render extent may not reach.
+# more than `low` strength; with a render extent ceiling below 2160 lines it
+# would gather under 540 lines, so it draws as `half` at the player's strength
+# and the row keeps saying `quarter`. Dynamic resolution falling below 2160 keeps
+# quarter.
 [[page.entry]]
 kind = "choice"
 label = "BLUR RESOLUTION"

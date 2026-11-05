@@ -637,7 +637,7 @@ fn the_enums_own_default_casts_nothing() {
 }
 
 #[test]
-fn a_quarter_gather_needs_540_lines_of_its_own() {
+fn a_quarter_gather_needs_a_ceiling_of_540_gather_lines() {
     use BlurResolution::{Full, Half, Quarter};
     assert_eq!(Quarter.for_lines(2160), Quarter);
     assert_eq!(Quarter.for_lines(2880), Quarter);

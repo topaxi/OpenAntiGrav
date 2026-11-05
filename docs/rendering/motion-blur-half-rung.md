@@ -206,9 +206,12 @@ Not checked: a player's eye on a flip in motion, on either title.
 ## The quarter step (2026-11-05, `blur-quarter-rung`)
 
 [ADR-0087](../architecture/adr/0087-the-blur-rung-has-a-quarter-step.md) puts a third gather under
-half: one texel per 4x4 pixels, drawn only at 540 gather lines or more (2160 render lines), at no
-more than `low` strength. Below 2160 lines a profile's `quarter` draws `half` at the player's
-strength. Not on `main`: it waits for the Steam Deck runs below.
+half: one texel per 4x4 pixels, available when the extent's ceiling gathers 540 lines or more
+(2160 render lines), at no more than `low` strength. Under such a ceiling a profile's `quarter`
+draws `half` at the player's strength. A dynamic resolution falling beneath 2160 lines keeps
+quarter, so gathers under 540 lines occur at a fallen extent: 513 lines at the first step, 270 at
+the default floor of 50 %, 135 at the lowest, 25 %. Not on `main`: it waits for the Steam Deck runs
+below.
 
 ### Whole race
 
@@ -285,15 +288,29 @@ this lane's branch point `59651599e`.
 | Pure, 3 runs | base | 30.4 to 31.2 | 38.6 to 38.9 | 4.95 to 5.17 MP | 1 |
 | Pure, 3 runs | quarter | 30.4 to 32.2 | 36.9 to 38.8 | 4.79 to 5.09 MP | 3 |
 
-**On this rig the step changes nothing in a race.** Quarter does not fit at the ceiling here (bench
-GPU frame 29 ms against an estimated budget of about 26), so the extent falls anyway, quarter is gone at the
-first step down, and the race settles on half at 75 to 80 % scale as the base does. The cost is two
-flips on Pure and four on Pulse, which climbed back to the ceiling once and fell again. The step
-pays only where half does not fit at the ceiling and quarter does, a band 8.5 ms wide here. The
-Radeon RX 7800 XT at target 240 is far above the band (0 flips), and nothing at hand sits inside
-it. The Deck on HD at native 4K is the case to read: half settles at 3264x1836 there, above.
-Confidence 60 that the step holds a higher extent inside the band: closed-loop models only
-(`drs::tests::blur`).
+That table read the 540 lines on the current extent, so a fall from the ceiling drew half again:
+quarter did not fit at the ceiling here (bench GPU frame 29 ms against an estimated budget of about
+26), the blur got dearer as the extent fell, and the step changed nothing but the flips. Judged on
+the ceiling, quarter stays drawn on the way down, and the same check gains extent. Back to back on
+one build command (`cargo build -p oag-game --features perf-probe`), `shadows = "off"`,
+minimum resolution 25, 88 seconds, load 0.5 to 0.6:
+
+| Title | Reading the 540 lines on | Median fps | Median p99 ms | Mean pixels | Median lines | Gather flips |
+| --- | --- | --- | --- | --- | --- | --- |
+| Pulse, run 1 | the current extent | 30.7 | 41.3 | 5.03 MP | 1620 | 5 |
+| Pulse, run 2 | the current extent | 15.4 | 77.8 | 4.67 MP | 1620 | 3 |
+| Pulse, run 1 | the ceiling | 15.6 | 77.4 | 5.78 MP | 1836 | 2 |
+| Pulse, run 2 | the ceiling | 15.8 | 77.3 | 5.77 MP | 1836 | 2 |
+| Pure | the current extent | 16.0 | 69.5 | 4.67 MP | 1620 | 3 |
+| Pure | the ceiling | 15.8 | 69.4 | 5.99 MP | 1836 | 2 |
+
+**The ceiling reading gains 15 to 28 % of the pixels at the same frame rate, with fewer flips.**
+The 15 against 30 fps is the headless gamescope's presentation, not the cost: `gpu_ms` reads the
+same in both, one run of the current-extent build sat at 30 and four of the others at 15, so compare
+within a rate. The strength the cap takes (`low`) is part of the price here, on all the way down.
+The Radeon RX 7800 XT at target 240 is far above the band (0 flips). The Deck on HD at native 4K
+is the case to read: half settles at 3264x1836 there, above. Confidence 65 that it holds on the
+Deck: one rig, two PSP titles, autopilot.
 
 ### Owed: the Steam Deck
 

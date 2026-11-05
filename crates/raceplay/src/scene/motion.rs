@@ -593,9 +593,10 @@ impl super::Scene {
         let size = self.depth.size();
         let [scene, velocity, depth] = views;
         // Every path to the chain comes through here, so this is where a
-        // profile's `quarter` meets the extent it actually draws at.
+        // profile's `quarter` meets the lines the extent may reach: the
+        // allocation, which a falling extent does not move.
         let (resolution, eased_cap) = self.blur_gather.get();
-        let resolution = resolution.for_lines(viewport.3 as u32);
+        let resolution = resolution.for_lines(size.height);
         let strength = strength.min(eased_cap.unwrap_or(resolution.shutter_cap()));
         let mut pass = pass.borrow_mut();
         pass.set_gather(match resolution {

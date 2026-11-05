@@ -360,9 +360,10 @@ picture changes judged from the captures:
   at both resolutions).
 
 - **BLUR RESOLUTION `quarter`** gathers one texel per 4x4 pixels through the same reduced pass and
-  composite, only while that is 540 lines or more (`BlurResolution::for_lines`, so 2160 render
-  lines; below that it draws `half` at the player's strength), and draws at no more than `low`
-  strength (`BlurResolution::shutter_cap`). Numbers and crops:
+  composite, only where the extent's ceiling gathers 540 lines or more
+  (`BlurResolution::for_lines`, so 2160 render lines; under that it draws `half` at the player's
+  strength, and a dynamic resolution falling beneath it keeps quarter), and draws at no more than
+  `low` strength (`BlurResolution::shutter_cap`). Numbers and crops:
   [the half-gather blur rung](motion-blur-half-rung.md), "The quarter step". Below the half
   gather's two failed shapes, a block as wide as a quarter texel is pinned by
   `the_quarter_resolution_gather_smears_a_four_pixel_block`, and the still-block test runs at all

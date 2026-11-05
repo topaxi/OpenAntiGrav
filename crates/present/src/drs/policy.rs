@@ -183,7 +183,7 @@ impl Controller {
     ) -> Option<(u32, u32)> {
         // Before the early return, so a target turned off clears the rung as
         // a blur turned off does.
-        self.rung.begin_frame(limits, self.extent(limits).1);
+        self.rung.begin_frame(limits);
         let period = limits.target().period()?;
         let scalable = cost.scalable;
         if !scalable.is_finite() || scalable <= 0.0 {
@@ -226,11 +226,7 @@ impl Controller {
         // overrun sheds a gather step before the extent falls, and a step comes
         // back only at the extent's ceiling, so a restore is the last thing
         // the controller gives back.
-        if ratio > *DEADBAND.end()
-            && self
-                .rung
-                .try_shed(cost.blur, self.steps, limits, self.extent(limits).1)
-        {
+        if ratio > *DEADBAND.end() && self.rung.try_shed(cost.blur, self.steps, limits) {
             self.cooldown = COOLDOWN;
             self.under = 0;
             return None;
@@ -402,10 +398,10 @@ impl Controller {
     /// The player's own choice whenever the target is off, the blur is off or
     /// that choice is already `quarter`; the step the rung holds otherwise.
     /// Never above the ceiling [`Limits::blur`] carries, and `quarter` only
-    /// where this frame's extent allows it.
+    /// where the extent's ceiling allows it.
     #[must_use]
     pub fn blur_resolution(&self, limits: Limits) -> BlurResolution {
-        self.rung.resolution(limits, self.extent(limits).1)
+        self.rung.resolution(limits)
     }
 
     /// The most shutter the blur may draw with this frame, easing while a

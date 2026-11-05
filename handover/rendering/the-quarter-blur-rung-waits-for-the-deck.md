@@ -15,10 +15,11 @@ ADR-0087. The tile skip (the other half of this lane) came out false and landed 
 
 ## Open
 
-- **Does the step hold a higher extent inside its band?** Half must miss at the ceiling and quarter
-  fit. On the iGPU at 4K, target 30, quarter does not fit, so a race lands where the base does, with
-  two to four more flips. The Deck on HD at native 4K is the expected band: the base rung settles
-  at 3264x1836 there.
+- **Does the step hold a higher extent on the Deck?** On the iGPU at 4K, target 30, it does since
+  the 540 lines moved to the ceiling: 5.77 MP against 4.67 to 5.03, two flips. The Deck on HD at
+  native 4K is the case to read: the base rung settles at 3264x1836 there.
+- **Quarter at a fallen extent.** Gathers go under 540 lines there: 270 at the default floor, 135
+  at 25 %. Nobody has looked at those.
 - **Is the strength cap worth it?** It is 5.3 of the 8.5 ms saved on both titles. The cap on its
   own at half is most of the win and needs no new gather; if the Deck agrees, a cap with no quarter
   step is the smaller change. Not built.
@@ -29,7 +30,7 @@ ADR-0087. The tile skip (the other half of this lane) came out false and landed 
   ease or a quarter flip in motion. `CAP_EASE_SECONDS` is chosen.
 - **The quarter reconstruct costs twice as much per fragment as half's.** Not traced; a lower tap
   count at quarter is the first thing to try (`motion_blur.wesl`, `TAP_SPACING_PX`).
-- **Row wording.** Under 2160 lines the row says `quarter` and the frame draws `half`, stated only
+- **Row wording.** Under a 2160-line ceiling the row says `quarter` and the frame draws `half`, stated only
   in `menu.toml`'s comment. A player sees no note.
 
 ## Next Steps

@@ -473,8 +473,8 @@ const UHD: Machine = Machine {
     blur_pixels: 0.012,
 };
 
-/// A race not even the quarter gather fits at the ceiling, and the half gather
-/// fits below it: the fall off the quarter gather.
+/// A race not even the quarter gather fits at the ceiling: the extent falls
+/// with quarter still drawn.
 const UHD_HEAVY: Machine = Machine {
     scene_flat: 0.001,
     scene_pixels: 0.012,
@@ -654,22 +654,22 @@ fn no_restore_is_read_off_a_gather_the_cap_is_still_moving_under() {
     );
 }
 
-/// With a 2160-line ceiling the extent's first fall leaves quarter behind, so
-/// the blur's cost rises as the extent falls. The fall may overshoot; it must
-/// not climb back and go round.
+/// Quarter stays drawn while the extent falls beneath 2160 lines: the shed
+/// exists to come before pixels, so a fall never draws a dearer gather.
 #[test]
-fn a_fall_off_the_quarter_gather_settles_at_half_and_does_not_flap() {
+fn quarter_stays_drawn_as_the_extent_falls_and_settles() {
     let limits = uhd_limits(FULL);
     let mut drs = Controller::new();
     let run = drive(&mut drs, 3600, limits, |_| UHD_HEAVY);
     assert!(drs.scale() < 1.0);
-    assert_eq!(drs.blur_resolution(limits), BlurResolution::Half);
-    assert!(
-        run.flips <= 4,
-        "{} gather flips, {} extent steps",
-        run.flips,
-        run.steps
+    assert!(drs.extent(limits).1 / 4 < oag_display::display::QUARTER_MIN_LINES);
+    assert_eq!(drs.blur_resolution(limits), BlurResolution::Quarter);
+    assert_eq!(
+        run.sheds.len(),
+        2,
+        "the gather came back as the extent fell"
     );
+    assert_eq!(run.flips, 2, "{} gather flips", run.flips);
     assert!(run.steps <= 4, "{} extent steps", run.steps);
     let settled = drive(&mut drs, 1800, limits, |_| UHD_HEAVY);
     assert_eq!((settled.flips, settled.steps), (0, 0));

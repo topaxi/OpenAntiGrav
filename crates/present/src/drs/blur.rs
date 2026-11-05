@@ -50,17 +50,10 @@
 //!   doublings, and every window that holds pays one doubling back. A scene
 //!   that keeps fooling the prediction costs a bounded number of flips. The
 //!   patience and the backoff are one, shared by the steps.
-//! - **A fall off the quarter gather cannot climb back into it.** Quarter is
-//!   drawn only at [`oag_display::display::QUARTER_MIN_LINES`], so with a
-//!   2160-line ceiling the extent's first fall takes the drawn gather back to
-//!   half, and the blur's cost rises as the extent falls; the extent loop
-//!   chases that for a step or two, which is the fall overshooting and not a
-//!   flap. The rung keeps its depth, so the drawn gather is a function of the
-//!   extent alone. It holds because a fall from the ceiling means quarter read
-//!   over 0.95 there, so half at the ceiling is over 0.95 too, and the rise
-//!   back up is refused until half fits at 0.80 (the extent loop's own
-//!   refusal, reading the half gather it draws). A climb that lands on the
-//!   ceiling draws quarter, cheaper than the rise was predicted.
+//! - **Quarter stays drawn as the extent falls.** Whether it exists is judged
+//!   on the ceiling ([`oag_display::display::QUARTER_MIN_LINES`]), so a fall
+//!   never draws a dearer gather than the frame it answers, and the extent
+//!   loop reads one cost curve all the way down.
 //!
 //! **The shed side has no patience of its own, deliberately.** The brief this
 //! was built to asked for patience in both directions; a shed that waited
@@ -240,10 +233,10 @@ impl Rung {
         }
     }
 
-    /// The gather resolution to draw at under `limits`, `lines` being the
-    /// render extent's height now.
-    pub(super) fn resolution(&self, limits: Limits, lines: u32) -> BlurResolution {
-        self.held(limits).for_lines(lines)
+    /// The gather resolution to draw at under `limits`: judged on the
+    /// ceiling's lines, so it holds whatever the extent does.
+    pub(super) fn resolution(&self, limits: Limits) -> BlurResolution {
+        self.held(limits).for_lines(limits.ceiling().1)
     }
 
     /// The most shutter the blur may draw with this frame, or `None` when the
@@ -265,14 +258,13 @@ impl Rung {
         self.frames << self.backoff.min(MAX_BACKOFF)
     }
 
-    /// Called once per recorded frame, before any decision. `lines` is the
-    /// render extent's height now.
+    /// Called once per recorded frame, before any decision.
     ///
     /// Ineligible limits put the rung back at the player's choice and forget
     /// everything, so a blur switched back on, or a target turned back on,
     /// starts from a clean state rather than from a remembered cost that
     /// belongs to another scene. So does a change of that choice.
-    pub(super) fn begin_frame(&mut self, limits: Limits, lines: u32) {
+    pub(super) fn begin_frame(&mut self, limits: Limits) {
         let Some(period) = limits.target().period().filter(|_| Self::eligible(limits)) else {
             *self = Self::default();
             return;
@@ -285,8 +277,7 @@ impl Rung {
         }
         // A step the ceiling itself can no longer draw is gone for good, not
         // waiting for the extent to come back.
-        while self.depth > 0 && self.held(limits) != self.held(limits).for_lines(limits.ceiling().1)
-        {
+        while self.depth > 0 && self.held(limits) != self.resolution(limits) {
             self.depth -= 1;
         }
         self.frames = restore_frames(period);
@@ -299,7 +290,7 @@ impl Rung {
                 self.since_restore = (self.backoff > 0).then_some(0);
             }
         }
-        let wanted = f32::from(self.resolution(limits, lines) == BlurResolution::Quarter);
+        let wanted = f32::from(self.resolution(limits) == BlurResolution::Quarter);
         let step = period / CAP_EASE_SECONDS;
         self.capped = if self.capped < wanted {
             (self.capped + step).min(wanted)
@@ -317,13 +308,13 @@ impl Rung {
     /// already skips a frame whose blur ran and was not timed, so a zero here
     /// is a blur that did not run; this keeps the rung safe without that.
     ///
-    /// **Only to a gather the extent allows**, or the shed would buy nothing.
-    pub(super) fn try_shed(&mut self, blur: f32, steps: u32, limits: Limits, lines: u32) -> bool {
+    /// **Only to a gather the ceiling allows**, or the shed would buy nothing.
+    pub(super) fn try_shed(&mut self, blur: f32, steps: u32, limits: Limits) -> bool {
         if !Self::eligible(limits) || !(blur.is_finite() && blur > 0.0) {
             return false;
         }
         let next = rank(self.held(limits)) + 1;
-        if next > STEPS || LADDER[next].for_lines(lines) != LADDER[next] {
+        if next > STEPS || LADDER[next].for_lines(limits.ceiling().1) != LADDER[next] {
             return false;
         }
         // Cost goes as the pixel count, so a gather measured below the
