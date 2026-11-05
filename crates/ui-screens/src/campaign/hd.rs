@@ -938,7 +938,7 @@ impl Swipe {
         self.travel.1 += pointer.drag.1;
         let (across, along) = (self.travel.0.abs(), self.travel.1.abs());
         let step = (!self.stepped && along >= SWIPE_STEP_TRAVEL && along > across)
-            .then(|| if self.travel.1 < 0.0 { 1 } else { -1 });
+            .then_some(if self.travel.1 < 0.0 { 1 } else { -1 });
         self.stepped |= step.is_some();
         if pointer.released {
             *self = Self::default();
