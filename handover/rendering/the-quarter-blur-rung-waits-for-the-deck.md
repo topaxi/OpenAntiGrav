@@ -2,7 +2,7 @@
 status: blocked-hardware
 titles: [all]
 updated: 2026-11-06
-summary: "Quarter blur rung and the blur's frame-rate ramp on branch blur-quarter-rung, -31 to -33 % at 4K on the iGPU; the maintainer's Deck runs decide the merge"
+summary: "Quarter blur rung and the blur's frame-rate ramp on branch blur-quarter-rung; the maintainer's Deck runs decide the merge"
 difficulty: easy (70)
 ---
 
