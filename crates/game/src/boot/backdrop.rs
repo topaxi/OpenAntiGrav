@@ -57,7 +57,9 @@ impl MenuBackdrop {
     /// way the sprite sheet is.
     pub fn install(&self, renderer: &mut Renderer, device: &wgpu::Device, queue: &wgpu::Queue) {
         match self {
-            Self::Fury(assets) => renderer.set_fury_backdrop(device, queue, &assets.clouds),
+            Self::Fury(assets) => {
+                renderer.set_fury_backdrop(device, queue, &assets.clouds, assets.bloom)
+            }
             Self::Scene(assets) => renderer.set_scene_backdrop(device, queue, assets.model.clone()),
         }
     }
