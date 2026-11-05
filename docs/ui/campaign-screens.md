@@ -4380,6 +4380,43 @@ Two smaller mouse dead ends on the same screens, fixed together:
   (`NavigationLegend::notice`), until the next input. The wording and the row are ours. A
   locked cell still shows nothing beyond its padlock.
 
+## HD and Omega `Grid Selection` on a touch screen, 2026-11-05
+
+A touch player could not leave the first grid: the pager's only pointer routes were the wheel and
+two arrow rects, and a finger's drag (`Pointer::drag`) was ignored.
+
+- **A vertical swipe steps between grids.** `GridSelection::hd_pointer` feeds each tick's drag to
+  a per-gesture `hd::Swipe`: swipe up is the next grid, swipe down the previous one, through the
+  same wrapping `step` the wheel and the pad call. It steps **once per gesture** however far the
+  finger goes, only when it travelled further along the page than across it, and forgets the
+  gesture at the lift (the lift tick carries the last of the drag). A page with one grid ignores it.
+  Direction and `hd::SWIPE_STEP_TRAVEL` (120 units of the screen's 1920x1080 grid, a ninth of the
+  page's height) are **chosen, not measured**: the original is played on a pad.
+- **A swipe never confirms the card.** `oag_game::pointer::Window` reports a finger past its tap
+  threshold as a drag with no position and no click, and the lift is `released` alone; a tap on
+  the card still confirms. Pinned by `oag_ui_screens::campaign::hd::tests` (`a_swipe_*`,
+  `one_long_swipe_steps_once_and_only_once`, `the_next_gesture_steps_again`, `a_tap_on_the_card_still_confirms`).
+- **Omega takes the same path.** `Campaign::is_hd` is `CampaignDialect::draws_hd_screens`, true for
+  HD and Omega, and `campaign_pointer` hands both to `hd_pointer`: one change, no title branching.
+  Checked on the PS4 package: its `Grid Selection` authors the same two arrows at the same rects.
+
+**Why the arrows never served a touch player**, read off `hdfury-ps3-eu-dec.iso` and the PS4
+package (`CellMode_Definition.xml`):
+
+- `Flyer Left Arrow` is `x=710 y=540 32x64` and `Flyer Right Arrow` `x=1700 y=540 96x64`
+  (`src=Data\FE\Images\tilted_arrows.gtf`), and `hd_grid_targets` makes a target of each from
+  those authored sizes.
+- **Neither is drawn**: `tilted_arrows` is not in `oag_hd::campaign::OTHER_TEXTURES`, so
+  `sprites(&image.src)` answers nothing and the widget is skipped (a `--menu-page grid-select`
+  capture at 1920x1080 shows no arrow at either place). The target remains, an invisible one. On
+  Omega the art is `tilted_arrows.gnf` (two copies on the package pair), and its loader reads the same list.
+- **The rects are fingertip-hostile**: 32x64 units of a 1080-unit-tall page is about 21x47 px on a
+  1280x800 screen. Neither overlaps the card (the card spans roughly x=770 to 1610 on HD), so the
+  card does not shadow them. **Open**: load the art on both titles (a `crates/hd` and `crates/omega`
+  texture list change) and, if arrows are to be tapped, give them a hit rect of their own.
+- `step` wraps and returns `Moved` even with one grid (the wheel and the arrows share this); the
+  swipe checks the count itself.
+
 ## Wipeout HD PSN: the campaign with no chooser, 2026-10-07
 
 Wipeout HD's PSN download (`NPEA00057` v3.00, no Fury) carries no `DATA06`, so it
