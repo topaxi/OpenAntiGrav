@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-05
-summary: "HD gaps by tile: 2026-11-05 grid-family read: 14-19% of the grid score is the original being softer (not closable without a chosen blur), named closable items total under 6 points; glass_reflect and card red are next"
+summary: "HD gaps by tile; 2026-11-05: 16-19% of grid score is the original being softer (unclosable), named closable items under 6 points"
 ---
 
 # HD/Fury render gaps ranked by pixel impact
