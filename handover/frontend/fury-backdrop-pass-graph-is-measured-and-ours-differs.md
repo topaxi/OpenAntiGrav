@@ -1,5 +1,5 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [hd]
 updated: 2026-11-05
 summary: "Fury backdrop's level gap was RPCS3's 16-bit quad index wrap; chain and encoded blends wired; equaliser, mode 11 and a fresh-particle residual remain"
@@ -22,12 +22,15 @@ record once, `13.9` on a silent frame. Do not fit towards the reference. The cle
    the largest thing between the shipped picture and a player's.
 2. **Mode 11's mip chain and quads**: only once morph paths draw at all. 250 quads at 720p, 501 at 1080p.
 3. **Fresh particles run `14` to `25` percent over**: defect-free slice R mean `7.3` against `6.4`, q99 `107` against `81`;
-   wrapped ladder `21.8` against `17.5`. Unexplained. The `0.7` percent narrower field of view (ours `2.1148` against the ring's
-   `2.0993` in `x`, an aspect of `1.7647`) moves dots but should not move level; check it first.
+   wrapped ladder `21.8` against `17.5`. Unexplained. Ours reads an aspect of `1.7647`, exactly `30 / 17`, the shape of 480x272
+   or 1920x1088, against the ring's 16:9 (`proj x 2.1148` against `2.0993`). `boot/backdrop.rs` passes `w / h` of
+   `oag_display::display::viewport`; check whether that viewport or a PSP-shaped layout space is the source. It moves dots, not level,
+   and may be the `3` pixel sideways residual.
 4. **The half texel sits ahead of the chain** in our present pass, where the original's ladder reads the field directly, so
    the gate sees two half-dark rows. Move it into the resolve when `handover/rendering/hd-race-final-quad-half-texel-unread.md`
    settles whether the chain wants it for a race too.
-5. **HD-style (non-Fury) menus end in the same present path** but `oag_game::render::SceneBackdrop` does not run this chain.
+5. **`[graphics] bloom` does not reach the menu**: the backdrop hard-codes `Glow::Drawn`.
+6. **HD-style (non-Fury) menus end in the same present path** but `oag_game::render::SceneBackdrop` does not run this chain.
    Not measured; check the scene backdrop's exposure against a reference.
 
 ## Next Steps

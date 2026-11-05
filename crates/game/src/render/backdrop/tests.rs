@@ -126,7 +126,8 @@ fn run(count: usize, bloom: hd_bloom::Params) -> Option<(Vec<u8>, Vec<u8>)> {
         wgpu::TextureFormat::Rgba8Unorm,
         &[cloud(count)],
         bloom,
-    );
+    )
+    .expect("the backdrop");
     let mut encoder = device.create_command_encoder(&Default::default());
     fury.prepare(&device, &queue, &mut encoder, &frame(), (SIZE, SIZE));
     queue.submit(Some(encoder.finish()));

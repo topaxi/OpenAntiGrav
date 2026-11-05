@@ -596,6 +596,9 @@ Evidence, three ways. **Confidence 95** that it is the emulator; the console's o
    overlap with lit neighbours. The cut does not follow distance: at frames 120, 300 and 460 it sits at the same `z`.
 2. Drawing the same wrap in ours, with nothing fitted, reproduces the reference (scratch build, never shipped):
 
+   Against `data/reference/hd-capture/fury-backdrop-pass-graph/paused-02.png` (`paused.json` beside it), rows `230..790`, columns
+   `600..1900`:
+
    | Main Menu, path 6, `mirage_c1`, frame 484, bands at zero | R mean | R q90 | R q99 | G mean | RMSE | Rows by `row % 4` |
    | --- | ---: | ---: | ---: | ---: | ---: | --- |
    | reference, RPCS3 | 48.3 | 137 | 255 | 3.9 | | 46.7, 67.1, 66.9, 46.3 |
@@ -623,12 +626,20 @@ The upper stages are not like for like: the held clip keeps the original's camer
 where ours flew 300 frames to get there. The last row is, and it leaves a residual, `14` to `25` percent over on fresh
 particles, dots a little brighter at the peak. Open.
 
+How to repeat these on a live widget, `g = 0x0099f8a0`, the item at `0x3291a100` on this build: `item+0x224` is the cloud
+(`cloud+4` its count, `cloud+0x10` its box, which names the file), `item+0x1640` the clip, whose frame at `clip+8` holds if rewritten
+every few milliseconds; `g+0x414`, `+0x418` force the path and kind. Music off: `g+0x4e0 = 0` (pulse `1`, `pc 0.3788`, or scale
+Particle Colour at `g+0x430`). Glow at its floor: copy `g+0x4a0` over `g+0x4b0`; none: zero `g+0x4a0..0x4df`. Trail: `g+0x450..0x458`, exactly
+three floats, as the words after them matter. Off the store at `*0x008b6fb4`: `+0x540..+0x548 = 0, 0, 1` for an exposure of one, `+0x530` and
+`+0x538 = 0` for no bloom. Pause through the stub, wait two seconds, grab, then dump the ring.
+
 **So the shipped picture is the faithful draw and it does not match the reference, on purpose.** Like `sampleTexture2DMS`, the
 wrap is not emulated. Shipped, the whole hull shows, dimmer on a silent frame, and its near half carries the ramp's band.
 No compare-page Fury backdrop pair can score this until a reference exists without the defect; **as a fidelity measure the
-shipped rows above mean nothing**. That also answers the two stored pairs: Ship Select's RMSE `29.76` to `30.38` (mean grey `20.60`
-against `21.83`), Campaign Select's `15.78` to `16.05` (`32.01` against `32.12`). The pairs differ in cloud and clip, and the
-references hold the wrapped picture, so these numbers cannot improve and say nothing either way.
+shipped rows above mean nothing**. That also answers the two stored pairs, re-rendered from scratch copies with both binaries through
+one metric: Ship Select RMSE `31.21` to `30.38`, mean grey `22.20` to `20.60` against `21.83`; Campaign Select `16.05` to `15.82`,
+`32.01` to `31.75` against `32.12`. They differ in cloud and clip and the references hold the wrapped picture, so neither direction means
+anything; the rise the pass-graph lane reported is the same noise.
 
 Retracted: the fitted rows this page carried (a band forced to `0.95` "matching" the level, which contradicted the
 music reading because the fit stood in for stacked sprites), and the open question of why the level was three times what

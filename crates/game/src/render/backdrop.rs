@@ -130,8 +130,6 @@ struct Targets {
     finished: Target,
     accumulation: [Target; 2],
     half: [Target; 2],
-    /// The final composite and what feeds it, reading the present's output.
-    chain: hd_bloom::Chain,
     /// By `last`: `(field, accumulation[last])`.
     blend: [wgpu::BindGroup; 2],
     /// By `last`: the accumulation that frame's blend wrote.
@@ -167,8 +165,9 @@ pub struct FuryBackdrop {
     post_sampler: wgpu::Sampler,
     trail_sampler: wgpu::Sampler,
     targets: Option<Targets>,
-    /// The front end's `HDR and Bloom` block.
-    bloom: hd_bloom::Params,
+    /// The final composite and what feeds it, reading the present's output,
+    /// built off the front end's `HDR and Bloom` block.
+    chain: hd_bloom::Chain,
     /// Which of each pair of targets the frame before left its result in.
     last: usize,
     /// The frame last drawn, so a display faster than the frame rate shows it
@@ -187,13 +186,19 @@ impl std::fmt::Debug for FuryBackdrop {
 impl FuryBackdrop {
     /// Uploads `clouds` and builds the pipelines, the last one's for a page
     /// of `page_format`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates a bloom chain that will not build.
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         page_format: wgpu::TextureFormat,
         clouds: &[PointCloud],
         bloom: hd_bloom::Params,
-    ) -> Self {
+    ) -> Result<Self> {
+        let chain =
+            hd_bloom::Chain::new(device, STORED_FORMAT, (1, 1), bloom, hd_bloom::Glow::Drawn)?;
         let clouds = clouds
             .iter()
             .map(|cloud| {
@@ -458,7 +463,7 @@ impl FuryBackdrop {
             Some(over_page),
         );
 
-        Self {
+        Ok(Self {
             clouds,
             point_pipeline,
             blend_pipeline,
@@ -476,10 +481,10 @@ impl FuryBackdrop {
             post_sampler,
             trail_sampler,
             targets: None,
-            bloom,
+            chain,
             last: 0,
             drawn: None,
-        }
+        })
     }
 
     /// How many clouds are uploaded.
@@ -501,13 +506,8 @@ impl FuryBackdrop {
     ) {
         let size = (viewport.0.max(1), viewport.1.max(1));
         if self.targets.as_ref().is_none_or(|t| t.size != size) {
-            match self.targets_for(device, size) {
-                Ok(targets) => self.targets = Some(targets),
-                Err(error) => {
-                    log::warn!("menu backdrop: {error:#} - it draws nothing");
-                    return;
-                }
-            }
+            self.chain.resize(device, size);
+            self.targets = Some(self.targets_for(device, size));
             self.drawn = None;
         }
         if self.drawn == Some(frame.clock) {
@@ -625,13 +625,12 @@ impl FuryBackdrop {
             pass.draw(0..3, 0..1);
         }
         {
-            let mut pass = full_pass(encoder, "fury present", targets.chain.scene_view(), true);
+            let mut pass = full_pass(encoder, "fury present", self.chain.scene_view(), true);
             pass.set_pipeline(&self.present_pipeline);
             pass.set_bind_group(0, &targets.present, &[]);
             pass.draw(0..3, 0..1);
         }
-        targets
-            .chain
+        self.chain
             .run(queue, encoder, &targets.field.write, (0.0, 0.0), size, None);
         self.last = next;
     }
@@ -649,7 +648,7 @@ impl FuryBackdrop {
         pass.draw(0..3, 0..1);
     }
 
-    fn targets_for(&self, device: &wgpu::Device, size: (u32, u32)) -> Result<Targets> {
+    fn targets_for(&self, device: &wgpu::Device, size: (u32, u32)) -> Targets {
         let target = |label: &str, (width, height): (u32, u32)| {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(label),
@@ -733,20 +732,12 @@ impl FuryBackdrop {
         let band = bind("fury band", &field.read, &field.read);
         let present = bind("fury present", &finished.read, &finished.read);
         let page = bind("fury page", &field.write, &field.write);
-        let chain = hd_bloom::Chain::new(
-            device,
-            STORED_FORMAT,
-            size,
-            self.bloom,
-            hd_bloom::Glow::Drawn,
-        )?;
-        Ok(Targets {
+        Targets {
             size,
             field,
             finished,
             accumulation,
             half,
-            chain,
             blend,
             glow,
             wave,
@@ -754,7 +745,7 @@ impl FuryBackdrop {
             band,
             present,
             page,
-        })
+        }
     }
 }
 
@@ -883,13 +874,10 @@ impl super::Renderer {
         clouds: &[PointCloud],
         bloom: oag_post::hd_bloom::Params,
     ) {
-        self.fury = Some(FuryBackdrop::new(
-            device,
-            queue,
-            self.target_format,
-            clouds,
-            bloom,
-        ));
+        match FuryBackdrop::new(device, queue, self.target_format, clouds, bloom) {
+            Ok(fury) => self.fury = Some(fury),
+            Err(error) => log::warn!("menu backdrop: {error:#} - it draws nothing"),
+        }
     }
 
     /// Runs the Fury backdrop's passes over `frames`, a still's history, so the
