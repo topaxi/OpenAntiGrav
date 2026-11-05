@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
-titles: [hd, omega]
+titles: [hd, 2048]
 updated: 2026-11-05
-summary: "HD's style and fit landed; Omega draws no loading screen yet"
+summary: "HD's style and fit landed, and Omega draws its loading screen; HD's white ground over the name row and 2048's loading table are open"
 size: S (60)
 difficulty: easy (50)
 ---
@@ -25,10 +25,11 @@ overhanging its panel at every screen size, not a ratio problem: Fury's pictures
 
 - The white ground of the HD styling also covers the lower half of the feature's name row. Draw order or the
   art's own placement; the original's HD loading screen is unread.
-- Omega draws no loading screen (step 5 below).
+- 2048 draws no loading screen: its executable carries HD's string run and `data.psarc` ships the ten
+  illustrations and four of the six marks as `.gxt` (`docs/formats/omega-loading.md`, "Against 2048 and HD"). `oag_2048::TITLE.loading` is
+  `None`; wiring is a `Loading` table of `.gxt` names and a layout, read against 2048's own draw function.
 
 ## Next Steps
 
-5. Follow-up: Omega draws no loading screen, reported from play, and its
-   layout is expected to be close to HD's. Read what Omega's own disc ships before reusing HD's file,
-   check it against 2048 per CLAUDE.md, wire it as `Title` data, then delete this thread.
+1. Read how HD's `LoadingScreen_Draw` orders the name row against the white ground (the original's HD frame).
+2. Wire 2048's `Loading` table once `2048-focus`'s front end lands, off `docs/formats/omega-loading.md`.

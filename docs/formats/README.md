@@ -385,6 +385,12 @@ through `oag-formats`, which has no big-endian path, so no row gained an
 layouts, which is why agreement between the two means something about the
 format rather than about one implementation.
 
+**[Omega loading screen](omega-loading.md)** is HD's, carried forward: the same
+five illustrations, six marks and string ids as `.gnf`, the same layout operands
+(compared in the executable's draw function), one styling, and a still where HD
+plays a clip for the mode icon. Wired as `oag_omega::loading::LOADING`; 2048's
+copy of the same run is checked and not wired.
+
 **[Omega front end](omega-frontend.md)** answers a player's own observation -
 "the Omega menu looks like HD/Fury's" - with a byte-level diff rather than a
 guess: it is not similar, it is the same `Data\Plugins\PI001\GUI\` plugin.

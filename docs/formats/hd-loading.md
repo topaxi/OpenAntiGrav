@@ -379,10 +379,9 @@ code layout, and is what 2026-11-01's `hd-loading-layout` replaced:
 `--loading-draw` picking the original's feature. What remains is glyph rasterisation and the clip's and the
 bar's phase, which are not locked between the two.)
 
-**Omega:** not checkable here. Omega's front end is HD's, but no Omega loading
-frame exists and shadPS4 race shots are untrusted. The unpicked-style rule and the panel cut are title data
-(`FeatureStyle::dark_ground`) and a layout rule, so they carry over once Omega has a loading deck of its own
-(checked, applies, not wired: the open follow-up, which is to read what Omega's disc ships for it).
+**Omega: ported.** Omega's loading screen is this one with `.gnf` files, a still for the mode icon and a string-id brand
+([omega-loading.md](omega-loading.md)); the unpicked-style rule and the panel cut are title data and a layout rule, and
+carry over (Omega has one styling).
 
 ## Looking at it
 

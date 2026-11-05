@@ -51,6 +51,7 @@ use oag_title::{ArchiveCandidates, Platform, Title};
 pub mod campaign;
 pub mod frontend;
 pub mod hud;
+pub mod loading;
 pub mod main_menu;
 pub mod prompts;
 pub mod race;
@@ -139,9 +140,8 @@ pub const TITLE: &Title = &Title {
     rear_occlusion: None,
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
-    // Not read: the loading-screen plugin XML was not opened. `None` is a gap,
-    // not a measurement, on Pure's own terms.
-    loading: None,
+    // HD's screen re-spelt for `.gnf`, off the executable's own string run (`loading`).
+    loading: Some(&loading::LOADING),
     music: Some(MUSIC),
     cursor: include_str!("../../../assets/cursors/omega.svg"),
     // Not tried on Omega: its sun and craft carry-over from HD are unmeasured.

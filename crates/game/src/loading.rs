@@ -154,6 +154,8 @@ pub struct Screen {
     /// The bar's dot, tiled across it, and the bullet before each label.
     dot: Option<[f32; 4]>,
     square: Option<[f32; 4]>,
+    /// The still in the mode icon's panel, for the mode this screen is for. `None` draws none.
+    mode_still: Option<[f32; 4]>,
     /// The four colours this source tints the screen with, when it names them.
     ///
     /// `None` keeps the palette this build chose against a near-black frame,
@@ -298,6 +300,11 @@ impl Screen {
             corner: assets.art.as_ref().and_then(|art| art.corner),
             dot: assets.art.as_ref().and_then(|art| art.dot),
             square: assets.art.as_ref().and_then(|art| art.square),
+            mode_still: assets
+                .art
+                .as_ref()
+                .and_then(|art| art.mode_stills.as_ref())
+                .and_then(|stills| stills.get(mode)),
             palette: assets.palette,
             circuit: None,
             feature_slot: shown
