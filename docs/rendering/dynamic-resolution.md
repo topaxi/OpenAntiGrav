@@ -652,6 +652,10 @@ extent's ceiling, after three seconds of frames predicted to land under the dead
 `drs::Limits`, and it writes no setting either. Measurements and the running-race check
 are in [the half-gather blur rung](motion-blur-half-rung.md).
 
+A second step, `quarter`, sits below `half` at render extents of 2160 lines or more, with the
+blur's strength eased down to `low` while it is drawn
+([ADR-0087](../architecture/adr/0087-the-blur-rung-has-a-quarter-step.md)).
+
 ## Three properties the controller does not break
 
 - **It never writes `settings.graphics.render_scale`**, and cannot: `drs.rs`

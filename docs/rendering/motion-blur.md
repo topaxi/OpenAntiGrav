@@ -359,6 +359,15 @@ picture changes judged from the captures:
   255 (`a_still_surface_over_a_moving_background_keeps_its_colour`, now run
   at both resolutions).
 
+- **BLUR RESOLUTION `quarter`** gathers one texel per 4x4 pixels through the same reduced pass and
+  composite, only while that is 540 lines or more (`BlurResolution::for_lines`, so 2160 render
+  lines; below that it draws `half` at the player's strength), and draws at no more than `low`
+  strength (`BlurResolution::shutter_cap`). Numbers and crops:
+  [the half-gather blur rung](motion-blur-half-rung.md), "The quarter step". Below the half
+  gather's two failed shapes, a block as wide as a quarter texel is pinned by
+  `the_quarter_resolution_gather_smears_a_four_pixel_block`, and the still-block test runs at all
+  three resolutions with its block twice as wide at quarter.
+
 **The setting** follows `AntiAliasing` exactly, because it is the fullest
 worked example in the tree: an enum in `oag_display::display` with `name()`,
 `ALL`, `FromStr`, `Display` and the `TryFrom<String>` / `Into<String>` serde
