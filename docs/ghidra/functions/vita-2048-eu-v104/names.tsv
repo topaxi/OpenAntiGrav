@@ -271,3 +271,10 @@
 0x812087bc	function	ShipShield_DrawShell	70	shield.md
 0x818ae574	data	g_shipshield_activation_colour	85	shield.md
 0x818ae564	data	g_shipshield_hit_colour	85	shield.md
+0x8112e6bc	function	PhotoMode_ScreenEnter	84	photo-mode.md
+0x8112ea02	function	PhotoMode_Update	84	photo-mode.md
+0x813d6048	function	VitaPhoto_Construct	80	photo-mode.md
+0x81146898	function	VitaPhoto_Update	84	photo-mode.md
+0x812ad888	function	RaceManager2048_Construct	78	photo-mode.md
+0x811466a6	function	VitaPhoto_UpdateCamera	84	photo-mode.md
+0x81146552	function	VitaPhoto_CycleShip	84	photo-mode.md
