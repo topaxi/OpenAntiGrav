@@ -257,6 +257,14 @@ pub(super) fn text_for(
         "ObjectiveTxt" => None,
         // The Eliminator's kill column - `PosTag0` to `PosTag7`. See
         // [`super::kill_tags`].
+        "ShipsInFront" => readout
+            .race_line
+            .as_ref()
+            .map(|line| line.in_front().to_string()),
+        "ShipsBehind" => readout
+            .race_line
+            .as_ref()
+            .map(|line| line.behind().to_string()),
         "KillsText" => super::kill_tags::header(readout, label, strings),
         name if name.starts_with("PosTag") => super::kill_tags::text(readout, name, strings),
         "Lap" => (readout.lap > 0).then(|| readout.lap.to_string()),
@@ -1000,6 +1008,14 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             .map(|draw| lit_draw(cx, draw)),
     );
     frame.sprites.extend(super::assist::sprites(cx, readout));
+    if let Some(line) = &readout.race_line {
+        frame.sprites.extend(
+            super::race_line::sprites(cx.layout, line)
+                .iter()
+                .filter_map(|sprite| sprite_draw(sprite, cx.sheet))
+                .map(|draw| lit_draw(cx, draw)),
+        );
+    }
 
     // A title that draws its gauge as models (Pure) puts it where the always-on bars would be.
     frame

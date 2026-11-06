@@ -1374,3 +1374,50 @@ quad over the 14x80 cell, and the lap count `3` (scale 0.6) a 26.8x49.0 quad ove
 inherits HD's HUD engine, unmeasured. Pulse's PSP path does the same on its own flag (`HudArt::raster`); 2048 is
 unmeasured.
 
+
+## HD's Eliminator race line (2026-11-06, `eliminator-hud`)
+
+The maintainer's report: in HD's Eliminator the HUD is missing many elements. Compared on RPCS3
+(HD Fury EU, Racebox Eliminator, Vineta K, weapons on: the intro board, the countdown, 30 s of
+racing with a weapon held; evidence and addresses in
+[`eliminator-hud.md`](../ghidra/functions/ps3-hdfury-eu/eliminator-hud.md)) against
+`oag-game --race --mode eliminator` on the same circuit. **The original draws `DATA00`'s
+`elimination_hud.xml`** (the `HUD_Elim_*` fragments), not `DATA02`'s `KillsText` design: its
+executable has no `KillsText`, and the frames show the widgets only `DATA00` authors.
+
+| Element | Original | Ours before | Ours now |
+| --- | --- | --- | --- |
+| Lap panel `LAP` and the digit | yes | yes | yes |
+| Hexagon round the lap digit (`LapPanel2`) | yes | no | **yes** |
+| Shield hexagon and `100` | yes | yes | yes |
+| Message line (`Machine Gun`, clipped at its left in both) | yes | yes | yes |
+| Race line: bar, two end panels, marker per craft | yes | no | **yes** |
+| `ShipsBehind` / `ShipsInFront` (`0` ... `7` on a grid of eight) | yes | no | **yes** |
+| `TARGET ( 200 )` header | yes | no | **open** |
+| Ranked `NAME ( score )` rows, player's highlighted, rank digit and bracket | yes | no | **open** |
+| `MPWeaponIcon`, `ScoreFeedBack` popups | none seen (no score changed) | no | **open** |
+
+Region metric, the fraction of the original's red HUD pixels (relative redness over 45, within 6 px
+of one of ours) in the race-line band, the countdown frame against ours at tick 60: **0.0 before,
+0.31 after at the HD default safe area of 90 percent, 0.67 at 100 percent**, which is the
+capture's own profile (the original's panels start 52 px in on 1278; ours match at 100 percent).
+The whole frame stays near 0.06 until the rows are drawn. A loose metric (the two worlds differ);
+the side-by-sides are the evidence.
+
+The law is on the page above: each craft's marker at `bar_x + fraction * bar_width`, the fraction
+the distance into the lap wrapped to one lap, the player's the last slot, the counts the markers
+at or past the player's against the rest (`oag_hud::race_line`). The wiring is generic (a layout
+that authors `ShipLinePos0` draws it for a readout that carries a line, `oag_raceplay` fills one
+in every Eliminator) and the guard is `crates/raceplay/tests/hd_eliminator_hud_ground_truth.rs`.
+
+**Open, and why.** The rows print a *score*, `craft+0x6f80`, not kills: HD's Eliminator is "reach
+the target score", with points for damage, for an elimination and for laps, and a loss on being
+eliminated. This build races Pulse's kill-count rule, so there is no number to print and a row of
+invented `( 0 )`s would be a stand-in for data the original has. The scoring law, the `200`
+target (`g_GameState+0x20`) and the row writer `0x0008c6f8` are unread. The marker half turn
+(`craft+0x6ad8`) is unread too. Not captured: a frame after a kill (none was reachable without
+the scoring), the split-screen Eliminator pair (`splitscreen_elimination_hud_{0,1}.xml` author the
+same line and take the same code path, unchecked). Omega: its executable names the same widgets
+and `data00` ships the same `hud_elim_*` fragments (`hud_elim_lap_counters.xml` is 1,482 bytes
+on both), so the race line draws there through the shared path; its `ALWAYS_ON` ("HD's list") does
+not carry `LapPanel2`: **checked, applies, not wired**, not measured on an Omega frame.

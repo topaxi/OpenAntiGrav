@@ -235,6 +235,7 @@ impl Race {
             time_trial_pace: None,
             head_to_head: self.head_to_head(slot),
             kill_tags: self.kill_tags(slot),
+            race_line: self.race_line(slot),
             player_tags: self.player_tags_for(slot),
             kill_target: if self.sim.world.mode() == oag_race::Mode::Eliminator {
                 self.sim.eliminator_kill_target
@@ -382,6 +383,32 @@ impl Race {
                 })
             })
             .collect()
+    }
+
+    #[cfg(feature = "view")]
+    /// The Eliminator's race line: each craft's distance round the lap as a fraction, the
+    /// player's first. `None` outside an Eliminator and on a track with no closed ring.
+    ///
+    /// The fraction is [`oag_race::Standing::distance`] wrapped into one lap, so a craft still
+    /// behind the line on the grid reads just under 1 (`oag_hud::race_line`).
+    fn race_line(&self, player: usize) -> Option<oag_hud::RaceLine> {
+        let world = &self.sim.world;
+        if world.mode() != oag_race::Mode::Eliminator {
+            return None;
+        }
+        let course = self.sim.course.as_ref()?;
+        let length = course.length();
+        let fraction = |slot: usize| {
+            let distance = world.ships[slot].standing.distance(course);
+            (distance / length).rem_euclid(1.0)
+        };
+        Some(oag_hud::RaceLine {
+            player: fraction(player),
+            others: (0..world.ship_count as usize)
+                .filter(|&slot| slot != player && world.ships[slot].active)
+                .map(fraction)
+                .collect(),
+        })
     }
 
     #[cfg(feature = "view")]
