@@ -158,6 +158,7 @@ pub(super) fn menu_page(
     definition.drop_unavailable_weather(title);
     definition.drop_unavailable_rumble_original(title);
     definition.drop_unavailable_dynamic_hud(title);
+    definition.drop_unavailable_ghost_options(title);
     definition.rename_campaign_row(title, strings);
     definition.rename_multiplayer_row(title, strings);
     definition.relabel_choice_from(

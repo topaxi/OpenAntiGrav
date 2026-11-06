@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [pulse, pure, hd, 2048]
-updated: 2026-09-23
-summary: "Ghost never compared with the original (confidence 60); capture a ghost lap on PPSSPP; ghost on/off row unbuilt"
+updated: 2026-11-06
+summary: "Ghost never compared with the original (confidence 60); capture a ghost lap on PPSSPP; Pulse ghost rows landed, HD and others not wired"
 ---
 
 # The ghost is drawn and raced, and not yet compared against the original
@@ -20,8 +20,11 @@ faded through on Pulse and Pure in headless captures (`--ghost`/`--record-ghost`
 - Everything on ghost.md is a static read. No capture of the original's ghost
   exists, so the cross-fade weight, the proximity ramp and the screen-space
   static (confidence 60) are unchecked against a frame.
-- No in-game option to hide the ghost (Pulse's `Ghost Ship Visible`,
-  `options+0x45c`). A new menu row needs a `string_id` and pointer support.
+- ~~No in-game option to hide the ghost~~ Pulse's GHOST SHIPS VISIBLE and AUTO LOAD GHOST rows
+  landed (`docs/ui/menus-original.md`, "Game Options"). HD's `GhostOption` row ("Ghost Ships
+  Visible") is checked, applies, not wired (`oag_title::race::GhostOptions` is the data to flip).
+  The windowed arm path with AUTO LOAD GHOST off was not driven in a window: headless takes an
+  explicit `--ghost`, which ignores the row.
 - Pure, HD and 2048 draw Pulse's recipe, chosen not measured. A lead, not a
   claim: Pure's disc carries `Data\Tex\staticglow.mip` too (the race loader
   reports it, 32x128), which suggests Pure shares `MeshNode_Ghost`. HD's
@@ -36,4 +39,4 @@ faded through on Pulse and Pure in headless captures (`--ghost`/`--record-ghost`
 
 - Capture a second Time Trial lap on PPSSPP with a ghost ahead and compare a
   frame at 10 and 25 units against `oag-game --race --ghost`.
-- Add the ghost on/off row, keyed per title, with its string and pointer support.
+- Offer HD's ghost row by setting `GhostOptions::ship_visible` on its title once its list is read.

@@ -1238,3 +1238,35 @@ fn zone_leaves_the_team_rows_live_and_greys_the_variant_rows() {
         .expect("VARIANT has a condition");
     assert!(condition.values.contains(&zone), "VARIANT greys in Zone");
 }
+
+/// The GHOST SHIPS VISIBLE and AUTO LOAD GHOST rows are offered where the title's own options
+/// list them (Pulse) and dropped on every other title, which behaves as the rows' default.
+#[test]
+fn the_ghost_rows_are_offered_only_where_the_options_list_them() {
+    let rows = |definition: &Definition| {
+        let count = |setting: &str| {
+            definition
+                .pages
+                .iter()
+                .flat_map(|page| page.entries.iter())
+                .filter(|entry| entry.setting() == Some(setting))
+                .count()
+        };
+        (
+            count("display.ghost_ship_visible"),
+            count("display.auto_load_ghost"),
+        )
+    };
+    for (title, offered) in [
+        (oag_pulse::TITLE, (1, 1)),
+        (oag_pure::TITLE, (0, 0)),
+        (oag_hd::TITLE, (0, 0)),
+        (oag_omega::TITLE, (0, 0)),
+        (oag_2048::TITLE, (0, 0)),
+    ] {
+        let mut definition = built_in();
+        assert_eq!(rows(&definition), (1, 1), "the definition ships both rows");
+        definition.drop_unavailable_ghost_options(title);
+        assert_eq!(rows(&definition), offered, "{}", title.name);
+    }
+}

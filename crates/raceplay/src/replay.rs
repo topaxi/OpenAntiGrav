@@ -37,6 +37,9 @@ use super::*;
 pub(super) struct ReplayState {
     recording: Option<Recording>,
     ghost: Option<Ghost>,
+    /// The player's `Ghost Ship Visible` is off: the ghost is still raced and
+    /// recorded, but [`Race::ghost_pose`] draws nothing.
+    ghost_hidden: bool,
 }
 
 /// A recording in progress.
@@ -121,6 +124,14 @@ impl Race {
         self.replay.ghost = Some(ghost);
     }
 
+    /// Whether the ghost ship is drawn (Pulse's `Ghost Ship Visible`). Hidden, it is still
+    /// raced, recorded and replaced by a quicker lap; only [`Self::ghost_pose`] stops
+    /// reporting it, so no drawable and no fade is built. Display state, so the frame
+    /// loop may set it every frame.
+    pub fn set_ghost_visible(&mut self, visible: bool) {
+        self.replay.ghost_hidden = !visible;
+    }
+
     /// The ghost being raced, if any.
     #[must_use]
     pub fn ghost(&self) -> Option<&Ghost> {
@@ -137,7 +148,7 @@ impl Race {
     #[must_use]
     pub fn ghost_pose(&self) -> Option<(Pose, Pose)> {
         let ghost = self.replay.ghost.as_ref()?;
-        if self.finished() {
+        if self.finished() || self.replay.ghost_hidden {
             return None;
         }
         let ticks = self.player_standing().lap_ticks(self.sim.world.tick)?;

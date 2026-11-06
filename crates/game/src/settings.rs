@@ -370,6 +370,22 @@ pub struct Display {
     /// always pause, whatever this says.
     #[serde(default = "default_pause_on_focus_loss")]
     pub pause_on_focus_loss: bool,
+    /// Whether a race draws the ghost ship (Pulse's `Ghost Ship Visible`). **Read only by a title
+    /// whose own options list it** (`oag_title::race::GhostOptions::ship_visible`); the row is
+    /// dropped on every other title and a saved `false` there is ignored. Hiding it hides the
+    /// drawing alone: the ghost is still raced, recorded and replaced. Applies live.
+    #[serde(default = "default_true")]
+    pub ghost_ship_visible: bool,
+    /// Whether a race starts with the stored ghost loaded (Pulse's `Auto Load Ghost`). **Read
+    /// only by a title whose own options list it** (`GhostOptions::auto_load`). Off, a Time
+    /// Trial or Speed Lap races no ghost but still records the run and saves a lap that
+    /// beats the stored one. Read when a race loads.
+    #[serde(default = "default_true")]
+    pub auto_load_ghost: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_canvas_size() -> String {
@@ -381,6 +397,20 @@ fn default_pause_on_focus_loss() -> bool {
 }
 
 impl Display {
+    /// Whether `title`'s races draw the ghost ship: the player's `Ghost Ship Visible` where the
+    /// title's options list it, always elsewhere.
+    #[must_use]
+    pub fn ghost_ship_shown(&self, title: &oag_title::Title) -> bool {
+        !title.race.ghost_options.ship_visible || self.ghost_ship_visible
+    }
+
+    /// Whether `title`'s races load the stored ghost: the player's `Auto Load Ghost` where the
+    /// title's options list it, always elsewhere.
+    #[must_use]
+    pub fn ghost_auto_loads(&self, title: &oag_title::Title) -> bool {
+        !title.race.ghost_options.auto_load || self.auto_load_ghost
+    }
+
     /// The saved `HUD Style` as a name for `race::Options::hud_style`, `None` while empty.
     #[must_use]
     pub fn hud_style_choice(&self) -> Option<String> {
@@ -406,6 +436,8 @@ impl Default for Display {
             brightness: Default::default(),
             gamma: Default::default(),
             pause_on_focus_loss: default_pause_on_focus_loss(),
+            ghost_ship_visible: true,
+            auto_load_ghost: true,
         }
     }
 }
@@ -1151,6 +1183,21 @@ pub fn menu_seeds(
             text(&settings.display.dynamic_hud.to_string()),
         ));
     }
+    // Offered only where the title's options list them; elsewhere the rows are dropped
+    // (`Definition::drop_unavailable_ghost_options`) and nothing seeds them.
+    let on_off = |on: bool| text(if on { "on" } else { "off" });
+    if title.race.ghost_options.ship_visible {
+        out.push((
+            "display.ghost_ship_visible",
+            on_off(settings.display.ghost_ship_visible),
+        ));
+    }
+    if title.race.ghost_options.auto_load {
+        out.push((
+            "display.auto_load_ghost",
+            on_off(settings.display.auto_load_ghost),
+        ));
+    }
     // The web's own row; a desktop file has no such key (see `web::not_on_the_web`).
     if cfg!(target_arch = "wasm32") {
         out.push(("display.canvas_size", text(&settings.display.canvas_size)));
@@ -1187,3 +1234,6 @@ pub fn save(settings: &Settings) -> Result<()> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod ghost_tests;

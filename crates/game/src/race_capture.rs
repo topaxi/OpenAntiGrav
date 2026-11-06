@@ -299,6 +299,9 @@ pub struct CaptureOptions {
     pub hud_safe_area: Option<u8>,
     /// `[display] dynamic_hud`, which only a title with a `Dynamic HUD` option obeys.
     pub dynamic_hud: oag_display::display::DynamicHud,
+    /// `[display] ghost_ship_visible`, resolved for the title
+    /// ([`crate::settings::Display::ghost_ship_shown`]).
+    pub ghost_visible: bool,
     /// What casts a shadow in the captured frame: `--shadows`.
     ///
     /// Honoured the same way [`Self::motion_blur`] is, and here for the same
@@ -503,6 +506,7 @@ pub fn capture(
     race.set_trail_order(options.trail_order);
     race.set_weather(options.weather);
     race.set_dynamic_hud(options.dynamic_hud);
+    race.set_ghost_visible(options.ghost_visible);
     race.set_hull_shake(options.hull_shake);
     race.watch_laps(
         &hud,

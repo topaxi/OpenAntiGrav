@@ -694,10 +694,12 @@ impl Stage {
                 race.set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
             }
         }
+        race.set_ghost_visible(settings.display.ghost_ship_shown(title));
         crate::race_stage::ghost::arm(
             &mut race,
             &result_key,
             mode,
+            settings.display.ghost_auto_loads(title),
             liveries.first().map_or("", |l| l.team.as_str()),
             seed,
             oag_game::ghosts::race_options(

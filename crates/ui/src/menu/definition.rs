@@ -574,6 +574,21 @@ impl Definition {
         }
     }
 
+    /// Drops the GHOST SHIPS VISIBLE and AUTO LOAD GHOST rows a title's own options list
+    /// lacks (`oag_title::race::RaceDefaults::ghost_options`): Pulse's list has the first on both
+    /// pressings and the second on the PSP's, so it offers both. Same once-before-read
+    /// timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_ghost_options(&mut self, title: &oag_title::Title) {
+        let offered = title.race.ghost_options;
+        for page in &mut self.pages {
+            page.retain_rows(|entry| match entry.setting() {
+                Some("display.ghost_ship_visible") => offered.ship_visible,
+                Some("display.auto_load_ghost") => offered.auto_load,
+                _ => true,
+            });
+        }
+    }
+
     /// Drops the TRAIL ORDER row on a title whose engine ribbon is not the PSP
     /// preset (`oag_title::exhaust::Exhaust::is_psp_preset`): HD/Fury's tube keeps
     /// its own order whatever the setting holds, and Omega and 2048 reuse it. Same

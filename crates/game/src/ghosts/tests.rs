@@ -92,3 +92,19 @@ fn only_time_trial_and_speed_lap_race_a_ghost() {
         );
     }
 }
+
+#[test]
+fn auto_load_off_races_no_stored_ghost_and_leaves_the_file_to_be_beaten() {
+    let root = scratch("autoload");
+    let key = key();
+    let path = path_in(&root, &key);
+    assert!(save_to(&path, &key, &replay(&key, 3_000)).expect("writes"));
+    assert!(auto_load_from(&path, &key, true).is_some(), "on: loaded");
+    assert!(
+        auto_load_from(&path, &key, false).is_none(),
+        "off: not loaded"
+    );
+    // The stored lap is still there to be beaten.
+    assert!(save_to(&path, &key, &replay(&key, 2_900)).expect("writes"));
+    assert!(!save_to(&path, &key, &replay(&key, 3_100)).expect("reads"));
+}

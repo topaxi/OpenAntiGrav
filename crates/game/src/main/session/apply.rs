@@ -586,6 +586,25 @@ impl Session {
                     return;
                 }
             },
+            // Applied by the next frame the race draws: the session hands the choice to the race
+            // every frame.
+            "display.ghost_ship_visible" => match text.as_str() {
+                "on" => self.settings.display.ghost_ship_visible = true,
+                "off" => self.settings.display.ghost_ship_visible = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
+            // Read when the next race loads.
+            "display.auto_load_ghost" => match text.as_str() {
+                "on" => self.settings.display.auto_load_ghost = true,
+                "off" => self.settings.display.auto_load_ghost = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
             "display.pause_on_focus_loss" => match text.as_str() {
                 // Read at the next focus event; nothing to apply now.
                 "on" => self.settings.display.pause_on_focus_loss = true,
