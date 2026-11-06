@@ -118,7 +118,8 @@ Numbers in `docs/rendering/frame-thread-cpu.md`, "What is left of the frame thre
   before, because the reaper catches fewer; polling every 250 us read Pulse -0.10, Pure -0.11, HD
   -0.06 at `present` +0.04, not kept. `Log::encode` is 3.3 to 3.6 %: a mapped write with no second
   copy, or the log handed to a finishing thread. A view's scene pass is one `finish` that nothing
-  splits, which is what HD's frame thread still waits for. Measure: two views, 800p, Deck,
+  splits, which is what HD's frame thread still waits for. Pure four views at 1080p lost 1.5 fps with
+  `total` -1.7: a later GPU start is the suspect, not measured. Measure: two views, 800p, Deck,
   `OAG_SPLIT_SUBMIT=views` as the base arm.
 - **Pulse's `write_shine`**: still 10.0 % of the frame thread in a split. Left: the first view's craft
   maps (3.4 %), which upload a whole `GpuVertex` to change eight bytes; a streamed coordinate buffer as

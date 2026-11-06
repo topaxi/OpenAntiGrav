@@ -2207,7 +2207,10 @@ within 0.03.
 **How to read it.** `scene` falls by half and `submit` rises, because the wait for the views moved
 into the frame's submit: compare `total`. At 1080p and 4K a split is GPU-bound, fps holds and the
 time saved is spent in `present`, waiting for the GPU. At 800p the CPU binds and fps rises 6 to 7 %.
-HD's two-view p99 at 800p is the one cell that pays, +0.29 ms, against 0.11 of noise.
+HD's two-view p99 at 800p pays, +0.29 ms against 0.11 of noise, in every round. Pure four views at
+1080p pays in fps, 96.8 to 95.3 in both rounds while `total` falls 1.7 ms; a later start of the GPU in
+a frame that holds its work to one submission would do that, not measured. Pulse one view at 4K
+reads p99 +0.30 at a 39 ms p99 (rounds +0.27, +0.01, +0.61); there is no A/A at 4K.
 
 **Pictures.** Byte-identical by `cmp` on the Deck's RADV, final binary, Pure, Pulse and HD at ticks
 900, 1,500 and 2,400: 18 of 18 against base at one and two views, 9 of 9 two views against
@@ -2250,17 +2253,19 @@ fallback. `overlapped` keeps a submission per view. `OAG_SPLIT_SUBMIT=views` is 
 
 ### What each step gave
 
-Two views, 800p, mean `total`, 2 rounds, one session per row or two, so read a row against its
-neighbour:
+Two views, 800p, change in mean `total` in ms against the arm before it **in the same session**, 2
+rounds. A session's absolutes do not carry to the next, so they are not listed. A/A 0.03.
 
 | Step | Pure | Pulse | HD |
 | --- | ---: | ---: | ---: |
-| per view | 5.24 | 6.36 | 10.45 |
-| fold only, submit at the split's end | 5.24 | 6.33 | 10.68 |
-| to the frame's submit, post encoders on a worker | 5.07 | 6.17 | 10.23 |
-| view encoders on a worker too | 4.90 | 6.00 | 10.19 |
-| three finishing threads, least held | 4.78 | 5.97 | 10.24 |
-| the first view's other passes closed early | 4.76 | 5.93 | 9.38 |
+| fold only, submit at the split's end, against per view | -0.04 | 0.00 | +0.29 |
+| to the frame's submit, post encoders on a worker, against per view | -0.17 | -0.19 | -0.22 |
+| view encoders on a worker too | -0.17 | -0.17 | -0.04 |
+| three finishing threads, least held, no empty post encoder, against two | -0.13 | -0.06 | -0.14 |
+| the first view's other passes closed early | +0.02 | +0.02 | -0.92 |
+
+So HD's split post chains, which waited on the write log, are unblocked at -0.22, and the larger part
+for HD is the first view's shadow maps no longer queueing behind its scene pass.
 
 ### What staging costs, and the belt
 
