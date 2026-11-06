@@ -341,8 +341,8 @@ OAG_PHOTO_FAILED = { text = "FOTO NÃO SALVA", human = false }
 OAG_PHOTO_EFFECTS = { text = "EFEITOS", human = false }
 OAG_PHOTO_EXPOSURE = { text = "EXPOSIÇÃO", human = false }
 OAG_PHOTO_SATURATION = { text = "SATURAÇÃO", human = false }
-OAG_PHOTO_SPEED_BLUR = { text = "DESFOQUE DE VELOCIDADE", human = false }
-OAG_PHOTO_DEPTH = { text = "PROFUNDIDADE DE CAMPO", human = false }
+OAG_PHOTO_SPEED_BLUR = { text = "BORRÃO VELOCIDADE", human = false }
+OAG_PHOTO_DEPTH = { text = "PROF. DE CAMPO", human = false }
 OAG_PHOTO_APERTURE = { text = "ABERTURA", human = false }
 OAG_PHOTO_FOCUS = { text = "FOCO", human = false }
 OAG_PHOTO_PANEL_KEYS = { text = "ANALÓGICO CIMA BAIXO LINHA    ESQUERDA DIREITA ALTERAR", human = false }

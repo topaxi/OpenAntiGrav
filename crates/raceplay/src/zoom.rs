@@ -95,12 +95,9 @@ impl Race {
                     .map(oag_post::hd_zoom::Pulse::tuning)
             })
             .flatten();
-        // Photo mode's speed blur draws the ring on a title that has none up (HD's own is
-        // drawn inside its bloom chain, which `view.zoom` marks).
-        borrowed.or_else(|| {
-            let (tuning, _) = self.view.photo.as_ref()?.speed_blur()?;
-            self.view.zoom.is_none().then_some(tuning)
-        })
+        // Photo mode's speed blur draws the ring wherever no chain of the scene's own does
+        // (`Scene::run_boost_zoom` leaves it to HD's chain when there is one).
+        borrowed.or_else(|| Some(self.view.photo.as_ref()?.speed_blur()?.0))
     }
 
     /// The boost pulse, for a person's own speed pad or Turbo: the player's, or the local seat

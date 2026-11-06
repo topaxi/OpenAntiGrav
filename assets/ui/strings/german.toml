@@ -343,7 +343,7 @@ OAG_PHOTO_FAILED = { text = "FOTO NICHT GESPEICHERT", human = false }
 OAG_PHOTO_EFFECTS = { text = "EFFEKTE", human = false }
 OAG_PHOTO_EXPOSURE = { text = "BELICHTUNG", human = false }
 OAG_PHOTO_SATURATION = { text = "SÄTTIGUNG", human = false }
-OAG_PHOTO_SPEED_BLUR = { text = "GESCHWINDIGKEITSUNSCHÄRFE", human = false }
+OAG_PHOTO_SPEED_BLUR = { text = "SPEED-UNSCHÄRFE", human = false }
 OAG_PHOTO_DEPTH = { text = "TIEFENSCHÄRFE", human = false }
 OAG_PHOTO_APERTURE = { text = "BLENDE", human = false }
 OAG_PHOTO_FOCUS = { text = "FOKUS", human = false }

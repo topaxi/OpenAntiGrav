@@ -237,9 +237,14 @@ opening is the one the mode saved before anything was touched, byte for byte
 (`photo_mode_ground_truth::each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unprocessed_one`,
 which also moves each control and reads the file: exposure up raises the mean luma, saturation 0 leaves no
 colour, the speed blur lands at the edge and not the middle, depth of field softens the far field and
-leaves the craft). The values live on the mode and die with it, so a race that opened the mode and left
-it with every control moved is, after leaving, the picture a visit that moved nothing leaves, at the same
-tick, with the same state hash (`a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without`).
+leaves the craft). The values live on the mode and die with it. After leaving, the picture is **byte-identical to the one
+a visit that moved nothing leaves** (`a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without`
+compares the two, with the same state hash at every tick), and to the one the previous build, which had no
+picture controls, leaves (a `--drive` run of both on Pulse: 0 of 1,175,040 pixels differ). **It is not
+comparable byte for byte with a screenshot taken before entering:** the race keeps running into the pause
+menu, and two screenshots of a race that never opened the mode, a frame apart, already differ in 350,590
+pixels (503,404 across a visit, on the previous build and this one alike). Measured by
+`--drive`, 2026-11-06.
 
 **Chosen, not measured:**
 
@@ -254,6 +259,9 @@ tick, with the same state hash (`a_race_through_photo_mode_hashes_the_same_at_ev
   ([`FUN_00678f18`](../ghidra/functions/ps3-hdfury-eu/photo-mode.md#speed-blur-target-and-depth-of-field-targets), 85); `P`
   tints the streak red, so a photographer's speed blur here leaves it at zero;
 - blur and depth of field are two independent rows (Omega's two lists), because the pass runs both;
+- **HD's ring, in a dark scene, is faint** (a speed blur of 100 on the default race's opening grid: 38% of the
+  pixels differ by more than 10 levels, 22 at the edges and 0.6 in the middle, against Pulse's far
+  brighter streak); the ring is HD's own pass, drawn the way HD draws it;
 - **the ring lives under its own tick** while the mode is open: the race does not step, so the history draw
   steps once per mode tick.
 
