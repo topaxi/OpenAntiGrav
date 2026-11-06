@@ -115,7 +115,7 @@ impl Prompt {
             Model::Keyboard(keyboard) => keyboard.accepts(c),
             Model::TagEntry(_) => match self.purpose {
                 Purpose::PlayerName => crate::settings::player::allowed(c),
-                Purpose::PlayerTag => c.is_ascii_alphanumeric(),
+                Purpose::PlayerTag => crate::settings::player::allowed_in_tag(c),
                 _ => oag_ui_screens::prompt::accepts(c),
             },
             Model::Confirm(_) => oag_ui_screens::prompt::accepts(c),

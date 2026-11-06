@@ -489,6 +489,8 @@ pub(crate) struct Session {
     pub(crate) interactive_launch: bool,
     /// The first-run prompt has been shown this run, answered or not.
     pub(crate) player_asked: bool,
+    /// Whether the phone's soft keyboard is up (`soft_keyboard`).
+    pub(crate) soft_keyboard: bool,
     /// The Wipeout 2048 campaign event the next [`Session::launch_race`]
     /// starts, by its `SP.xml` name - set by the front end's own
     /// `Launch 2048` and taken by that one launch. `None` is an ordinary

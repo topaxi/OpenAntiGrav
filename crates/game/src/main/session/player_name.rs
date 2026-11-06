@@ -10,6 +10,7 @@
 
 use log::{debug, warn};
 
+use oag_ui_screens::campaign::footer::NavigationLegend;
 use oag_ui_screens::{prompt, tag_entry};
 
 use crate::overlay::{Prompt, Purpose};
@@ -17,11 +18,6 @@ use crate::settings::player::{self, Ask};
 use crate::stage::Stage;
 
 use super::Session;
-
-/// The grid's keys for a name: the allowed set in the case the grid can show.
-const NAME_KEYS: &str = "abcdefghijklmnopqrstuvwxyz0123456789-";
-/// The grid's keys for a tag.
-const TAG_KEYS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
 impl Session {
     /// Asks for what a first interactive launch of this title is missing, once per run.
@@ -65,14 +61,14 @@ impl Session {
                 "OAG_PLAYER_NAME_TITLE",
                 "ENTER YOUR NAME",
                 self.settings.player.name.clone(),
-                NAME_KEYS,
+                player::NAME_KEYS,
             ),
             Purpose::PlayerTag => (
                 profile.tag_length,
                 "OAG_PLAYER_TAG_TITLE",
                 "ENTER YOUR TAG",
                 self.settings.player.tag.clone(),
-                TAG_KEYS,
+                player::TAG_KEYS,
             ),
             _ => return,
         };
@@ -98,7 +94,7 @@ impl Session {
         let accepts: fn(char) -> bool = if purpose == Purpose::PlayerName {
             player::allowed
         } else {
-            |c| c.is_ascii_alphanumeric()
+            player::allowed_in_tag
         };
         let prompt = match self.pulse_tag_entry(widget, &initial, entry_labels, accepts) {
             Ok(entry) => {
@@ -147,6 +143,14 @@ impl Session {
         if let Err(e) = crate::settings::save(&self.settings) {
             warn!("cannot remember the player name: {e:#}");
         }
+        if let Stage::Menu(stage) = &mut self.stage {
+            if let Some(legend) = &mut stage.nav_legend {
+                legend.set_tag(&self.settings.player.tag);
+            }
+            if let Some(campaign) = &mut stage.campaign {
+                campaign.set_tag(&self.settings.player.tag);
+            }
+        }
         if *purpose == Purpose::PlayerName
             && self.shell.as_ref().is_some_and(|shell| {
                 shell.title.profile.asks_for_tag() && self.settings.player.tag().is_none()
@@ -155,4 +159,9 @@ impl Session {
             self.open_player_prompt(Purpose::PlayerTag);
         }
     }
+}
+
+/// `legend` with the stored `tag` set, for a stage about to draw it.
+pub(crate) fn tagged(legend: Option<NavigationLegend>, tag: &str) -> Option<NavigationLegend> {
+    legend.map(|legend| legend.with_tag(tag))
 }

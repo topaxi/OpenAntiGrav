@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-06
-summary: "One shared player name, a tag prompted on Pulse and Pure only: decided, not built; Steam prefill follows; no stored name exists yet"
+summary: "Shared name and Pulse/Pure tag are built and stored; Steam persona prefill is open, plus a Deck keyboard call and a phone check"
 size: S (40)
 difficulty: easy (40)
 ---
@@ -33,6 +33,14 @@ titles). A player who launches this port as a non-Steam game from Steam already 
 
 ## Open
 
+- **Built (2026-11-06, `docs/ui/player-name.md`).** `[player] name`/`tag` in settings, `Title::profile`,
+  the first-run prompt (Pulse's `TagInput` row, the grid elsewhere), OPTIONS rows, the footer tag, the
+  lobby default and the desk keyboard. Prefill from Steam is **not** built and stays open below.
+- **Where the prefill hooks in**: `session::player_name::Session::ask_player` opens the name prompt with
+  an empty initial text; a prefill passes `clean_name(persona)` as `initial` in
+  `open_player_prompt`. The charset rule (`settings::player::clean_name`) already drops what a font
+  cannot draw, so a persona name with other characters comes out cut, and an empty result falls
+  through to the empty prompt.
 - **Paths unchecked.** Linux `~/.local/share/Steam/config/loginusers.vdf`, `~/.steam/steam`, Flatpak
   `~/.var/app/com.valvesoftware.Steam/.local/share/Steam`; Windows from the registry's Steam path.
   macOS and the Deck not looked at. Android, iOS and web have no Steam: the prefill is a no-op for Steam.
@@ -41,16 +49,21 @@ titles). A player who launches this port as a non-Steam game from Steam already 
   or a crate. A generic login (`deck`, `root`, `user`, `administrator`) is probably worth skipping.
   Android, iOS and web have no useful OS user name: empty prompt there.
 - **Not seen.** The file's exact format on the maintainer's install has not been read yet.
-- **Where the hook goes** is unlocated: the first-run name entry has not been found in
-  `oag-ui` / `oag-ui-screens`. Per-title name length and charset limits (and which titles ask for a
-  handle) come from the original's own entry, which this thread has not measured. Which titles
-  keep a name and a 3-character tag is in `docs/formats/fexml.md`, "Which titles keep a name and a
-  tag": Pulse and Pure both, HD the name only, 2048 and Omega neither.
-- **Precedent** (Playnite's Steam plugin, SteamTinkerLaunch, Steam ROM Manager read it, from memory)
-  is unverified. The file is undocumented by Valve and may change.
+- **Steam Deck virtual keyboard: not wired.** Whether `steam://open/keyboard` opens it from a non-Steam
+  shortcut is unrun; steps are in `docs/ui/player-name.md`, "Keyboards". The controller path works there.
+- **Phone soft keyboard: written, not driven.** `soft_keyboard::sync_soft_keyboard` (winit
+  `set_ime_allowed`); the Android target could not be built where it was written (no NDK clang).
+- **Desk typing into a name is as typed** (capitals kept); on the grid it folds to the grid's case.
+  Pulse's footer tag colour and face are the file's colour and the ticker's face, unchecked against
+  the original's `AAA`.
+- **Not measured.** Pure's own name and tag entry (no front-end XML on its disc): it takes the grid.
+  Precedent for reading the Steam file (Playnite, SteamTinkerLaunch, Steam ROM Manager, from memory)
+  is unverified; the file is undocumented by Valve and may change.
 
 ## Next Steps
 
-1. Find the first-run name entry and its length/charset limits per title.
-2. Read `loginusers.vdf` on the maintainer's install (redact `AccountName`) to confirm the format.
-3. Add a small reader in the crate that owns profile defaults, with a test over a fixture VDF string.
+1. Read `loginusers.vdf` on the maintainer's install (redact `AccountName`) to confirm the format.
+2. Add a small reader in the crate that owns profile defaults, with a test over a fixture VDF string,
+   and feed it to `open_player_prompt` as the first-run `initial`.
+3. On a Deck, run the `steam://open/keyboard` check from `docs/ui/player-name.md`; on a phone, open
+   PLAYER NAME and see the soft keyboard rise.

@@ -34,6 +34,19 @@ pub fn allowed(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '-'
 }
 
+/// The grid's keys for a name: the allowed set in the case the grid can show.
+pub const NAME_KEYS: &str = "abcdefghijklmnopqrstuvwxyz0123456789-";
+
+/// The grid's keys for a tag.
+pub const TAG_KEYS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+/// Whether `c` may be a character of a tag: letters and digits, either case (a tag is stored in
+/// upper case, [`clean_tag`]).
+#[must_use]
+pub fn allowed_in_tag(c: char) -> bool {
+    c.is_ascii_alphanumeric()
+}
+
 /// `text` as a shared name: disallowed characters dropped, cut to [`MAX_NAME`], trimmed.
 #[must_use]
 pub fn clean_name(text: &str) -> String {

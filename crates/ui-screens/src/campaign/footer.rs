@@ -284,6 +284,20 @@ pub struct NavigationLegend {
     /// The footer tag's glow-mask stamp, where the root authors a `RealGlow` on it: Pulse's
     /// `NewsItemTagText` (`RealGlow="64"`). See [`TagGlow`].
     tag_glow: Option<TagGlow>,
+    /// Where and how the player's tag is written, `<TextInfo type="tag">`.
+    tag_text: Option<TagText>,
+    /// The player's tag, drawn at [`Self::tag_text`]; empty draws nothing.
+    tag: String,
+}
+
+/// The footer tag's authored place: `<TextInfo type="tag" x y scale color>`. The string is the
+/// player's profile tag (`Self::set_tag`), as the original fills it at run time.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct TagText {
+    x: f32,
+    y: f32,
+    scale: f32,
+    color: [f32; 4],
 }
 
 /// The glow-mask stamp of the footer's tag, `<TextInfo type="tag">` over `NewsItemTagText`.
@@ -302,6 +316,22 @@ struct TagGlow {
 /// The measured tag stamp's size and its offset from the authored position.
 const TAG_GLOW_SIZE: [f32; 2] = [28.0, 14.0];
 const TAG_GLOW_OFFSET: [f32; 2] = [-1.0, -1.0];
+
+fn read_tag_text(root: &Node, globals: &HashMap<String, String>) -> Option<TagText> {
+    fn tag_info(node: &Node) -> Option<&Node> {
+        if node.name.eq_ignore_ascii_case("TextInfo") && node.value("type") == Some("tag") {
+            return Some(node);
+        }
+        node.children.iter().find_map(tag_info)
+    }
+    let info = tag_info(root)?;
+    Some(TagText {
+        x: number(globals, info, "x")?,
+        y: number(globals, info, "y")?,
+        scale: number(globals, info, "scale").unwrap_or(1.0),
+        color: color_of(globals, info),
+    })
+}
 
 fn read_tag_glow(root: &Node, globals: &HashMap<String, String>) -> Option<TagGlow> {
     fn tag_info(node: &Node) -> Option<(&Node, &Node)> {
@@ -471,7 +501,35 @@ impl NavigationLegend {
             prompts: prompts.into_iter().map(|(_, prompt)| prompt).collect(),
             caption,
             tag_glow: read_tag_glow(root, globals),
+            tag_text: read_tag_text(root, globals),
+            tag: String::new(),
         })
+    }
+
+    /// Sets the player's tag, the text the footer's `type="tag"` `TextInfo` draws. Empty draws
+    /// nothing. A legend whose root authors no such `TextInfo` (every title but Pulse) ignores it.
+    pub fn set_tag(&mut self, tag: &str) {
+        self.tag = tag.to_string();
+    }
+
+    /// The legend with [`Self::set_tag`] applied.
+    #[must_use]
+    pub fn with_tag(mut self, tag: &str) -> Self {
+        self.set_tag(tag);
+        self
+    }
+
+    fn tag_draw(&self) -> Option<Draw> {
+        let layout = self.tag_text.filter(|_| !self.tag.is_empty())?;
+        Some(Draw::in_role(
+            face_role("default"),
+            layout.x,
+            layout.y,
+            layout.scale,
+            layout.color,
+            Align::Left,
+            self.tag.clone(),
+        ))
     }
 
     /// This legend's own draw list, at its disc-authored position -
@@ -487,6 +545,7 @@ impl NavigationLegend {
             .map(|prompt| Self::draw_prompt(prompt, faces))
             .collect();
         self.draw_caption(&mut out);
+        out.extend(self.tag_draw());
         out.extend(self.tag_stamp());
         out
     }
@@ -523,6 +582,7 @@ impl NavigationLegend {
             .map(|prompt| Self::draw_prompt(prompt, faces))
             .collect();
         self.draw_caption(&mut out);
+        out.extend(self.tag_draw());
         out.extend(self.tag_stamp());
         out
     }
