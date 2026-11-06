@@ -255,6 +255,35 @@ fn the_process_waits_for_a_running_gpu_worker_before_it_exits() {
     }
 }
 
+/// A run that ends on the loading screen waits for the race load: its texture sink is inside the
+/// driver, and exiting under it crashes NVIDIA's Vulkan driver (`docs/tools/web.md`, "Exit and GPU
+/// workers"). On any GPU the line names the worker, so this needs no crash to fail.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_process_waits_for_the_race_load_before_it_exits() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive_with(
+        &image,
+        "exit-in-load",
+        "boot; select racebox; press cross; until page=race; \
+         set race.mode=speed_lap; select launch_race; press cross; \
+         until screen=picker; select 03_Track; press cross; \
+         until screen.id=ship-select; select Feisar; press cross; \
+         until stage=loading within 3000",
+        None,
+        &[],
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    assert!(
+        run.stderr()
+            .contains("waiting for GPU workers before exit: [\"race-load\"]"),
+        "the exit did not wait for the race load:\n{}",
+        run.stderr()
+    );
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn race_remix_launches_a_track_file_from_its_custom_title() {

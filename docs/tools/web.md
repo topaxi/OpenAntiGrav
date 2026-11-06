@@ -580,9 +580,38 @@ a Pulse race run there (2026-10-09). `actionlint` passes on the workflow.
 ### Exit and GPU workers
 
 Natively, `oag_thread::gpu_workers` is the one place the process waits for threads that hold the
-`wgpu` device (EndRace prefetch, race build, a parked race's drop) before `main` returns. The web
-build has nothing to wait for: the race build runs inline, the EndRace prefetch type is
-uninhabited, and closing the page ends every Web Worker with it.
+`wgpu` device (the race load's texture sink, EndRace prefetch, race build, the menus' opened source,
+a parked race's drop) before `main` returns. The web build has nothing to wait for: the race build
+runs inline, the EndRace prefetch type is uninhabited, the race load has no sink there, and closing
+the page ends every Web Worker with it.
+
+**What it prevents, measured on NVIDIA 615.78.08, Linux, 2026-11-06.** The load opens a texture sink,
+so `race-load` is inside the driver for every texture and its result holds their views, and it was
+not registered. A run ending during a load then crashed: 3 of 8 runs of
+`campaign_cursor_ground_truth::the_2048_map_reopens_on_the_event_last_started` alone on an idle GPU,
+none of 7 on Intel's driver. All 15 `oag-game` cores `coredumpctl` still held have the same shape: a
+`SIGSEGV` on `race-load` in a `--drive` script ending at `stage=loading`. In the symbolised one the
+main thread is in libc `exit()`, running `libEGL_nvidia`'s exit handler down into
+`libnvidia-eglcore`, and `race-load` is in `texture_sink::offer` -> `wgpu_hal`'s
+`create_image_without_memory_with_tiling` -> `vkCreateImage`, which jumped from `libnvidia-eglcore`
+to a heap address (`SEGV_ACCERR`, mapped but not executable). That is consistent with an indirect
+call through driver state the exit handler had freed; the driver is closed, so it is not proved.
+Calling Vulkan while the process exits is our bug, not the driver's.
+
+**The `egl` in those names is NVIDIA's Vulkan driver, not a GL path of ours.** `nvidia_icd.json`
+names `libGLX_nvidia.so.0`, which loads `libEGL.so.1`, which loads `libEGL_nvidia.so.0`, which loads
+`libnvidia-eglcore` (`LD_DEBUG=files`). `oag_game::adapter::BACKENDS` never asks for wgpu's GL
+backend.
+
+**A player reaches this too**: `--drive` runs the real session (`crates/game/src/main/drive.rs`), and
+closing the window on the loading screen takes the same route, `event_loop.exit()` to
+`Session::drop` to `main` returning. The wait costs that player the rest of the load: 0.5 s (Pulse),
+3.7 s (2048), 3.9 s (HD) from a launch's first frame in a debug build. The load does not check
+`gpu_workers::stopping()`.
+
+**A guard lasts as long as the thread** (`Guard::hold_to_thread_end`) where the worker returns GPU
+objects. `std` stores a thread's result after the closure has returned and drops it on that thread
+if the handle has gone, so a guard local to the closure ends before the views do.
 
 The browser build is threaded since 2026-10-09, for one job: **the race load.**
 Before it, starting a Wipeout HD race froze the page for the whole load: the
