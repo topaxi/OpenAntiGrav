@@ -159,6 +159,7 @@ pub(super) fn checkpoint() -> Result<(), Stopped> {
 /// finds nothing once the process is exiting: the builder skips each texture it was not given
 /// instead of reading and decoding the rest, and the next [`checkpoint`] ends the load. The
 /// model it returns is never read.
+#[cfg(feature = "view")]
 pub(super) fn reader(
     archives: &mut oag_assets::Archives,
 ) -> impl FnMut(&str) -> Option<Vec<u8>> + '_ {

@@ -442,7 +442,6 @@ fn a_build_ends_between_pipeline_sets_once_the_process_is_exiting() {
         mesh_render::ShadowMaps::NONE,
         mesh_render::ShadowReceiver::Never,
     )
-    .err()
-    .expect("a build in a process that is exiting ends early");
+    .expect_err("a build in a process that is exiting ends early");
     assert!(error.to_string().contains("exiting"), "{error:#}");
 }

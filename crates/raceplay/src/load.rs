@@ -892,8 +892,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     let handles = super::EffectHandles::resolve(craft_title, &effects).with_own(mod_effects);
 
-    #[cfg(feature = "view")]
     stages::checkpoint()?;
+    #[cfg(feature = "view")]
     let (sounds, announcer, class_announcer) = audio::banks_and_announcers(
         &mut archives,
         title.race,
@@ -902,8 +902,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &slot_teams,
         &mut report,
     );
-    #[cfg(feature = "view")]
     stages::checkpoint()?;
+    #[cfg(feature = "view")]
     let rumble = crate::rumble_library::load(&mut archives, &mut report);
     #[cfg(feature = "view")]
     let track_emitters = audio::track_emitters(
