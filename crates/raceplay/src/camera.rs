@@ -8,6 +8,7 @@
 use super::*;
 
 /// The near plane every race projection uses, in world units.
+#[cfg(feature = "view")]
 pub const NEAR_PLANE: f32 = 1.0;
 
 /// Converts the disc's `pos_length` into the one

@@ -439,7 +439,7 @@ impl Photo {
                 return dir != 0;
             }
             *ticks += 1;
-            *ticks >= REPEAT_AFTER && (*ticks - REPEAT_AFTER) % REPEAT_EVERY == 0
+            *ticks >= REPEAT_AFTER && (*ticks - REPEAT_AFTER).is_multiple_of(REPEAT_EVERY)
         };
         if fires(dy, &mut self.held.1, &mut self.held_ticks.1) {
             // Stick up is positive and the list reads downward.

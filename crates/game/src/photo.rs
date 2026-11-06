@@ -220,7 +220,7 @@ pub fn row_at(photo: &Photo, grid: (f32, f32), at: (f32, f32)) -> Option<RowHit>
             let from_right = x + w - at.0;
             let step = if from_right <= ARROW {
                 1
-            } else if from_right >= ARROW + VALUE && from_right < 2.0 * ARROW + VALUE {
+            } else if (ARROW + VALUE..2.0 * ARROW + VALUE).contains(&from_right) {
                 -1
             } else {
                 0

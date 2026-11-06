@@ -190,7 +190,7 @@ impl Effects {
         };
         Params {
             grade: Some(grade),
-            dof: self.depth_of_field.then(|| Dof {
+            dof: self.depth_of_field.then_some(Dof {
                 focus: self.focus as f32 * 0.01,
                 aperture: self.aperture as f32 * 0.01,
             }),
