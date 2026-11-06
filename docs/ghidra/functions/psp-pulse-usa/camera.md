@@ -1716,3 +1716,13 @@ live: the cockpit eye rose along the ship's up by exactly the previous frame's
 eye to `craft+0x7a0`, tripod `craft+0x150`), adds the same `h` to its eye's world
 `y`. The chase rigs (`Ship_UpdateCameraRigs`) never read it. Law, addresses and the
 capture: [cannon-quake-leachbeam.md](cannon-quake-leachbeam.md#2026-10-26-what-a-quake-does-to-the-craft-it-reaches-quake-craft-re-lane).
+
+## 2026-11-06: `cam+0x340`/`+0x344` are photo mode's, not the pause menu's look-around
+
+Lane `photo-read`. The spectator section above calls `FUN_08814014`'s writers "the pause menu's
+look-around" and `yaw += dt * 0.05`. Both are wrong: `FUN_08814014` is `PhotoMode_Update` (EU
+`0x08813f24`), and the argument is `Input_GetAxis`, the stick, not `dt`. `FUN_088808a8` clamps pitch to
+`[-1.0, 0.6]`. Measured live, with the photo camera's distance from the craft and
+the fact that `+0x270` is a field of view:
+[psp-pulse-eu/photo-mode.md](../psp-pulse-eu/photo-mode.md#live-ppsspp-pulse-usa). The section above stays
+as written.

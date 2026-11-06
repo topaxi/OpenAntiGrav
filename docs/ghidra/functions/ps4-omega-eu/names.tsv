@@ -195,3 +195,4 @@
 0x0174a4f0	function	Rumble_PlayOnLocalPads	80	rumble.md
 0x012f8370	function	Ship_UpdateContactRumble	82	rumble.md
 0x012fb780	function	Ship_ReportWeaponHit	75	rumble.md
+0x01561110	function	PhotoMode_ScreenEnter	80	photo-mode.md
