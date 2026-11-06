@@ -329,6 +329,22 @@ impl Session {
                     return;
                 }
             },
+            // Applied on the spot: the menus' inset is set here (the pointer reads it back out
+            // of the same renderer) and a race's HUD takes it from the settings every frame.
+            "graphics.hud_safe_area" => match text.parse::<u8>() {
+                Ok(percent) => {
+                    self.settings.graphics.hud_safe_area = Some(percent);
+                    if let (Some(shell), Stage::Menu(stage)) = (&self.shell, &mut self.stage) {
+                        stage.renderer.set_inset(
+                            shell.title.hud_art.safe_area_scale(Some(percent)),
+                        );
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             // Applied on the spot: the mixer reads the mode on its next block.
             "audio.spatial_audio" => match text.parse::<oag_audio::SpatialChoice>() {
                 Ok(choice) => {

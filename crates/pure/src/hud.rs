@@ -232,7 +232,10 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     bar_tip: None,
     boost_smear: None,
     sway: None,
-    safe_area: None,
+    // The disc authors no `Safe Area Setting` (`docs/formats/pure-frontend.md`); the shared slider.
+    safe_area: Some(oag_title::pre_race::Sourced::chosen(
+        oag_title::hud::SafeArea::SHARED,
+    )),
     // `Options_Definition.xml` lists `Music Volume`, `SFX Volume`, `Camera`, `Language`, `Auto Load
     // Ghost` and `Music Order`: no `Dynamic HUD` (checked on the USA disc, 2026-10-26).
     dynamic_hud: None,

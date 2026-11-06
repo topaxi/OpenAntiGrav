@@ -184,7 +184,10 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     }),
     // Nobody has read a sway in this title's `Hud_Update`: the HUD stays fixed.
     sway: None,
-    safe_area: None,
+    // The disc authors no `Safe Area Setting` (`docs/formats/pulse-frontend.md`); the shared slider.
+    safe_area: Some(oag_title::pre_race::Sourced::chosen(
+        oag_title::hud::SafeArea::SHARED,
+    )),
     // `Additional_Definition.xml`'s `List name="Dynamic HUD" global="Dynamic HUD"
     // Default="FE_DEFAULT"` on the PSP discs (USA and EU), read off the disc; the PS2 executable
     // carries the string and the same menu is assumed (one definition for both pressings). What

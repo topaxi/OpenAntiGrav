@@ -635,8 +635,9 @@ pub struct HudArt {
     /// The whole HUD sliding with the drawn lean: `None` where unmeasured, which leaves the
     /// HUD fixed on the screen. See [`HudSway`].
     pub sway: Option<crate::pre_race::Sourced<HudSway>>,
-    /// The player's `Safe Area Setting`, which draws the whole HUD smaller about the screen's
-    /// centre: `None` where the title has no such option. See [`SafeArea`].
+    /// The player's `Safe Area Setting` (the SCREEN SIZE row), which draws the whole HUD and the
+    /// front end smaller about the screen's centre. HD's is the disc's own; every other title
+    /// carries [`SafeArea::SHARED`], and `None` draws 1:1 with no row. See [`SafeArea`].
     pub safe_area: Option<crate::pre_race::Sourced<SafeArea>>,
     /// The player's `Dynamic HUD` option, which can switch the whole HUD off: `None` where the
     /// title's options have no such list. See [`DynamicHudList`].
@@ -787,6 +788,14 @@ impl HudArt {
     pub fn safe_area_scale(&self, percent: Option<u8>) -> f32 {
         self.safe_area.map_or(1.0, |area| area.value.scale(percent))
     }
+
+    /// The percent the SCREEN SIZE row shows for the player's `percent` (`None`: the title's
+    /// default): held to the slider's range and step. `100` where the title has no option.
+    #[must_use]
+    pub fn safe_area_percent(&self, percent: Option<u8>) -> u8 {
+        self.safe_area
+            .map_or(100, |area| area.value.snapped(percent))
+    }
 }
 
 /// A title's `Safe Area Setting`: a slider in percent whose value is how much of
@@ -813,16 +822,36 @@ pub struct SafeArea {
 }
 
 impl SafeArea {
-    /// The HUD's scale for a player's `percent` (`None` for the title's default): clamped to the
-    /// slider's range and snapped to its step, as a slider would hold it.
+    /// The slider a title gets when its original authors none, so the player can still pull
+    /// the screen in off a rounded corner or an overscanned edge: HD's range and step, and a
+    /// default of `100` because these titles draw 1:1 and look unchanged until it is moved.
+    pub const SHARED: Self = Self {
+        default_percent: 100,
+        min_percent: 80,
+        max_percent: 100,
+        step_percent: 2,
+    };
+
+    /// A player's `percent` (`None` for the title's default) clamped to the slider's range and
+    /// snapped to its step, as a slider would hold it.
     #[must_use]
-    pub fn scale(self, percent: Option<u8>) -> f32 {
+    pub fn snapped(self, percent: Option<u8>) -> u8 {
         let value = percent
             .unwrap_or(self.default_percent)
             .clamp(self.min_percent, self.max_percent);
         let step = self.step_percent.max(1);
-        let snapped = self.min_percent + (value - self.min_percent) / step * step;
-        f32::from(snapped) / 100.0
+        self.min_percent + (value - self.min_percent) / step * step
+    }
+
+    /// The HUD's scale for a player's `percent` (`None` for the title's default).
+    #[must_use]
+    pub fn scale(self, percent: Option<u8>) -> f32 {
+        f32::from(self.snapped(percent)) / 100.0
+    }
+
+    /// Every value the slider offers, lowest first.
+    pub fn values(self) -> impl Iterator<Item = u8> {
+        (self.min_percent..=self.max_percent).step_by(usize::from(self.step_percent.max(1)))
     }
 }
 

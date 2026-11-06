@@ -126,6 +126,19 @@ pub fn hud_style_choices(
         .collect()
 }
 
+/// The values `title`'s SCREEN SIZE slider offers ([`oag_title::hud::SafeArea::values`]), as
+/// percent text. Empty where the title has no such option.
+#[must_use]
+pub fn safe_area_choices(title: &oag_title::Title) -> Vec<Choice> {
+    title
+        .hud_art
+        .safe_area
+        .into_iter()
+        .flat_map(|area| area.value.values())
+        .map(|percent| Choice::plain(percent.to_string()))
+        .collect()
+}
+
 /// `modes` with every mode that takes fewer than `people` people marked unusable, `reason`
 /// saying why from the cap. A mode is still offered and the row can step onto it: it draws
 /// dimmed with the reason under it ([`Menu::unavailable`]), the way an unusable remix option

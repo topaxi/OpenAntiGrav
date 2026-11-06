@@ -526,13 +526,13 @@ pub struct Graphics {
     #[serde(default)]
     pub hud_scale: oag_display::display::HudScale,
     /// How much of the screen the HUD and the front-end pages use, in percent: the title's own
-    /// `Safe Area Setting`. One value for both.
+    /// `Safe Area Setting`. One value for both, and for every title; the SCREEN SIZE row writes it.
     ///
-    /// **Read only by a title that has the option** (`oag_title::HudArt::safe_area`, HD alone);
-    /// the HUD is drawn at `percent / 100` about the centre of the screen, the value held to the
-    /// title's slider (HD: 80 to 100 in steps of 2). Absent means the title's own default (HD:
-    /// 90). Taken when a race loads or the menus open. No menu row: a one-line settings-file choice, the way
-    /// [`Self::hud_scale`] is. See `docs/formats/hd-hud.md`.
+    /// The HUD and the front end are drawn at `percent / 100` about the centre of the screen, the
+    /// value held to the title's slider (`oag_title::HudArt::safe_area`: HD's 80 to 100 in steps
+    /// of 2, the same range on a title whose disc authors none). Absent means the title's own
+    /// default (HD: 90, the disc's; the others: 100, drawn 1:1). Applies live. See
+    /// `docs/formats/hd-hud.md`.
     #[serde(default)]
     pub hud_safe_area: Option<u8>,
     /// Whether the track's draw calls are tested against the camera's view
@@ -1195,6 +1195,17 @@ pub fn menu_seeds(
     if title.weather.is_played() {
         out.push(("graphics.weather", text(&profile.weather.to_string())));
     }
+    // The SCREEN SIZE row shows the value the title draws at: the saved one, or the title's own
+    // default while none is saved.
+    out.push((
+        "graphics.hud_safe_area",
+        text(
+            &title
+                .hud_art
+                .safe_area_percent(settings.graphics.hud_safe_area)
+                .to_string(),
+        ),
+    ));
     // Offered only where the title's options list it; elsewhere the row is dropped
     // (`Definition::drop_unavailable_dynamic_hud`) and nothing seeds it.
     if title.hud_art.dynamic_hud.is_some() {

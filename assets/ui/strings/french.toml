@@ -207,6 +207,7 @@ OAG_DISPLAY_WINDOW_SIZE = { text = "TAILLE DE LA FENÊTRE", human = false }
 OAG_DISPLAY_FULLSCREEN_RESOLUTION = { text = "RÉSOLUTION PLEIN ÉCRAN", human = false }
 OAG_DISPLAY_CANVAS_SIZE = { text = "TAILLE DU CANVAS", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "FORMAT D'IMAGE", human = false }
+OAG_DISPLAY_SCREEN_SIZE = { text = "TAILLE DE L'ÉCRAN", human = false }
 OAG_DISPLAY_BRIGHTNESS = { text = "LUMINOSITÉ", human = false }
 OAG_DISPLAY_GAMMA = { text = "GAMMA", human = false }
 OAG_DISPLAY_DYNAMIC_HUD = { text = "HUD DYNAMIQUE", human = false }
