@@ -7,6 +7,7 @@
 //! `race/tests/spline.rs`.
 
 use super::*;
+use crate::spline_table::Positions;
 
 /// The authored racing line and the corridor around it, one entry per spline
 /// sample.
@@ -163,9 +164,8 @@ pub(super) fn ai_order(spline: &Spline, course: Option<&Course>) -> Vec<u32> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Spline {
     samples: Vec<Sample>,
-    /// Each sample's position, parallel to [`Self::samples`]: [`Self::nearest`] walks all of
-    /// them for every craft every tick, and a sample is mostly what it does not read.
-    positions: Vec<Vec3>,
+    /// Each sample's position, parallel to [`Self::samples`], for [`Self::nearest`].
+    positions: Positions,
     /// Which path each sample came from, parallel to [`Self::samples`].
     paths: Vec<u16>,
     /// The AI bytes of the control point each sample was evaluated from,
@@ -219,7 +219,7 @@ impl Spline {
             }
         }
         Self {
-            positions: samples.iter().map(|s| Vec3::from_array(s.pos)).collect(),
+            positions: Positions::new(samples.iter().map(|s| Vec3::from_array(s.pos)).collect()),
             samples,
             paths,
             point_ai,
@@ -288,22 +288,8 @@ impl Spline {
     /// The nearest sample to `position`: its index, itself, and its distance.
     #[must_use]
     pub fn nearest(&self, position: Vec3) -> Option<(usize, &Sample, f32)> {
-        // A length is the root of its square and a root never falls, so a square no
-        // smaller than the best's cannot be strictly nearer: only a smaller one pays
-        // for the root, and the comparison that decides stays on the lengths.
-        let mut best: Option<(usize, f32, f32)> = None;
-        for (index, at) in self.positions.iter().enumerate() {
-            let squared = (*at - position).length_squared();
-            if best.is_some_and(|(_, _, previous)| squared >= previous) {
-                continue;
-            }
-            let distance = squared.sqrt();
-            // Strictly nearer, so a tie keeps the earlier sample.
-            if best.is_none_or(|(_, previous, _)| distance < previous) {
-                best = Some((index, distance, squared));
-            }
-        }
-        best.map(|(index, distance, _)| (index, &self.samples[index], distance))
+        let (index, distance) = self.positions.nearest(position)?;
+        Some((index, &self.samples[index], distance))
     }
 
     /// The nearest sample to `position` with its distance and path, skipping the
