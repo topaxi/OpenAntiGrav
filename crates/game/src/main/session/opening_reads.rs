@@ -41,6 +41,8 @@ struct Slot {
 pub(crate) struct OpeningReads {
     track: Slot,
     ship: Slot,
+    /// The screen open on the last frame this looked: a frame that changed it has work enough.
+    open: Option<Kind>,
 }
 
 impl OpeningReads {
@@ -82,10 +84,16 @@ impl Session {
             return;
         };
         let open = stage.picker.as_ref().map(|picker| picker.model.kind());
+        // Working out a screen and starting its read costs a frame 1 to 2 ms on the Deck. Not on
+        // the frame that just changed screen, and one a frame, so it never adds to a slow one.
+        if std::mem::replace(&mut self.opening_reads.open, open) != open {
+            return;
+        }
         for kind in [Kind::Track, Kind::Ship] {
             let asked = self.asked(kind);
             if open != Some(kind) && self.opening_reads.slot(kind).asked.as_ref() != Some(&asked) {
                 self.start_opening_read(kind, asked);
+                return;
             }
         }
     }
