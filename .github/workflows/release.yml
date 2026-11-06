@@ -322,7 +322,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: cargo build --profile dist --target aarch64-apple-ios -p oag-game
+      # `--no-default-features`: the default `extensions` feature links
+      # oag-modhost, which refuses iOS at compile time (no JIT, no Pulley yet).
+      - run: cargo build --profile dist --target aarch64-apple-ios -p oag-game --no-default-features
       # The icons come from a host build: the iOS binary cannot run here.
       - run: cargo build -p oag-game
       - name: Bundle OpenAntiGrav.app into an .ipa
