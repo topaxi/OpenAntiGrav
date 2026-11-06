@@ -130,12 +130,15 @@ jobs:
       RUSTFLAGS: ""
     steps:
       - uses: actions/checkout@v7
+      # rust-toolchain.toml pins 1.99.0 and wins over the default this step sets,
+      # so the cargo call names the nightly (as the msrv job does).
       - uses: dtolnay/rust-toolchain@master
+        id: web-toolchain
         with:
           toolchain: nightly-2026-10-08
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --target wasm32-unknown-unknown -p oag-game --no-default-features --example oag_web --features web
+      - run: cargo +${{ steps.web-toolchain.outputs.name }} check --target wasm32-unknown-unknown -p oag-game --no-default-features --example oag_web --features web
 
   # Every WGSL module the web build emits goes through a real browser's shader
   # compiler (scripts/check-web-shaders.py, docs/tools/web.md "Shaders").
