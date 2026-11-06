@@ -57,8 +57,8 @@ impl Race {
         }
     }
 
-    /// The name over `slot`'s craft: the lobby's for a network race, else `Player N` (the
-    /// maintainer's stop gap; the original's own fallback string is one shared `PLAYER`).
+    /// The name over `slot`'s craft: the lobby's for a network race, else `Player N` (a stop
+    /// gap; the original's own fallback string is one shared `PLAYER`).
     #[must_use]
     pub fn tag_name(&self, slot: usize) -> String {
         self.view
