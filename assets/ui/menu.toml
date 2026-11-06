@@ -652,6 +652,26 @@ string_id = "OAG_DISPLAY_DYNAMIC_HUD"
 setting = "display.dynamic_hud"
 values = ["default", "off"]
 
+# Pulse's `Ghost Ship Visible` and `Auto Load Ghost` (`Additional_Definition.xml`'s `Settings`
+# screen, `FE_ON` / `FE_OFF`, default on; the PS2 list lacks the second and the PSP list wins).
+# Visible off stops drawing the ghost ship and nothing else: it is still raced, recorded and
+# replaced by a quicker lap. Auto load off races no stored ghost when a Time Trial or Speed Lap
+# starts; the run is still recorded and a quicker lap still saved. Each is dropped on a title whose
+# options list no such row (`menu::Definition::drop_unavailable_ghost_options`).
+[[page.entry]]
+kind = "choice"
+label = "GHOST SHIPS VISIBLE"
+string_id = "OAG_DISPLAY_GHOST_SHIP_VISIBLE"
+setting = "display.ghost_ship_visible"
+values = ["on", "off"]
+
+[[page.entry]]
+kind = "choice"
+label = "AUTO LOAD GHOST"
+string_id = "OAG_DISPLAY_AUTO_LOAD_GHOST"
+setting = "display.auto_load_ghost"
+values = ["on", "off"]
+
 # `off` never waits and tears; `on` is classic vsync, which never tears and
 # halves the rate when a frame misses a refresh; `smooth` is that miss handled
 # properly - the newest finished frame is presented and the rest discarded.

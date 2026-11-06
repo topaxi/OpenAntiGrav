@@ -107,6 +107,14 @@ optional = true
 type = "boolean"
 optional = true
 
+[types.display.ghost_ship_visible]
+type = "boolean"
+optional = true
+
+[types.display.auto_load_ghost]
+type = "boolean"
+optional = true
+
 # [graphics]: how the picture is drawn, whatever the source.
 [types.graphics]
 type = "table"

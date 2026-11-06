@@ -106,6 +106,7 @@ const TITLE: &Title = &Title {
         zone_transition: None,
         zoom_ring: None,
         borrows_zoom_ring: false,
+        ghost_options: oag_title::race::GhostOptions::NONE,
         zone_stage_textures: None,
         zone_sky: None,
         // Unread here too: nothing in this crate resolves a team's variant.

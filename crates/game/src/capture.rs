@@ -516,6 +516,8 @@ pub fn run(
                 hud_scale: options.settings.graphics.hud_scale,
                 hud_safe_area: options.settings.graphics.hud_safe_area,
                 dynamic_hud: options.settings.display.dynamic_hud,
+                // The front-end capture path races nothing.
+                ghost_visible: true,
                 shadows: render_profile.shadows,
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,

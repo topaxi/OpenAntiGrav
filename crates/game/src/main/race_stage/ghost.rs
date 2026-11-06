@@ -12,13 +12,14 @@ use oag_game::{ghosts, records};
 use oag_raceplay as race;
 use oag_raceplay::Ghost;
 
-/// Loads `key`'s stored ghost into `race` and starts recording, on a mode that
-/// races one with one person flying it. A no-op otherwise: a ghost is a single
-/// player's Time Trial or Speed Lap.
+/// Loads `key`'s stored ghost into `race` (unless `auto_load` is off, Pulse's `Auto Load
+/// Ghost`) and starts recording, on a mode that races one with one person flying it. A no-op
+/// otherwise: a ghost is a single player's Time Trial or Speed Lap.
 pub(crate) fn arm(
     race: &mut race::Race,
     key: &records::Key,
     mode: oag_race::Mode,
+    auto_load: bool,
     team: &str,
     seed: u64,
     options: std::collections::BTreeMap<String, String>,
@@ -26,7 +27,7 @@ pub(crate) fn arm(
     if !races_a_ghost(mode, race.people()) {
         return;
     }
-    if let Some(stored) = ghosts::load(key)
+    if let Some(stored) = ghosts::auto_load(key, auto_load)
         && let Some(lap) = stored.ghost
     {
         info!(

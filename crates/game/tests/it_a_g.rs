@@ -32,6 +32,7 @@ mod endrace_voice_ground_truth;
 mod flyby_voice_ground_truth;
 mod font_roles_ground_truth;
 mod frontend_grid_ground_truth;
+mod ghost_options_ground_truth;
 mod glow_stamp_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
