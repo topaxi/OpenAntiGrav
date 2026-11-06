@@ -691,6 +691,57 @@ settings rows are the executable's `List` blocks (`draw_list_rows`) or Pure's
 own list; **checked, differs**, untouched - HD's `--menu-page options` and `race`
 stills are byte-identical before and after.
 
+## Game Options: the original's list against ours
+
+**Confidence 92 for the rows and entries** (read off the disc, 2026-11-06): `Data\Plugins\PI001\GUI\Additional_Definition.xml`,
+`Settings` screen, `oag-wad cat <image>:PSP_GAME/USRDIR/Data.wad <name> --expand` on `pulse-psp-usa.chd` and
+`pulse-psp-eu.chd` (byte-identical after expansion) and `oag-wad cat <image>:54748/WADS2.WAD <name> --expand` on
+`pulse-ps2-eu.chd`. Display text from `Data\Plugins\PI012\entries.xml`. Every list is `save="true"`: the original
+persists each into the profile, as ours persist into `settings.toml`.
+
+| Row (`idstring`, text) | Entries, default first where the XML says so | PSP | PS2 | Ours |
+| --- | --- | --- | --- | --- |
+| `OPT_MUSIC_VOL`, Music volume | 0, 25, 50, 75, 100 % (default 100) | yes | yes | present: AUDIO page (a finer slider, not these five steps) |
+| `OPT_SFX_VOL`, SFX volume | 0, 25, 50, 75, 100 % (default 100) | yes | yes | present: AUDIO page |
+| `OPT_MUSIC_PL`, Music order | `OPT_SEQ` (sequential), `FE_RANDOM` (default sequential) | yes | yes | present: MUSIC page |
+| `OPT_CAM`, Camera | `OPT_INT` (internal), `OPT_CLOSE`, `OPT_FAR` (default close) | yes | yes | present: CAMERA VIEW |
+| `OPT_HUD`, Dynamic HUD | `FE_DEFAULT`, `FE_CONCAVE`, `FE_FLAT`, `FE_OFF` (default `FE_DEFAULT`) | all four | three: no `FE_FLAT` | present, **two of four**: default and off. `FE_CONCAVE` and `FE_FLAT` flag the HUD's two panel groups (bit 1 of `+0xd0`); what that draws is **unread** |
+| `OPT_MP_TAGS`, Multiplayer tags | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **not added**: the law is unread, see below |
+| `OPT_GHOST_VIS`, Ghost ships visible | `FE_ON`, `FE_OFF` (default on) | yes | yes | **added**: GHOST SHIPS VISIBLE, hides the ghost's draw (`Race::set_ghost_visible`) |
+| `OPT_AL_GHOST`, Auto load ghost | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **added**: AUTO LOAD GHOST, gates loading the stored lap when a Time Trial or Speed Lap starts |
+| `OPT_LANG`, Language | the installed languages | yes | yes | present: LANGUAGE |
+
+Where the two pressings differ the PSP list wins (the project rule for anything invented for Pulse), so the PS2
+pressing offers both ghost rows and the same two Dynamic HUD entries.
+
+**Behaviour the rows have in the original** (`docs/ghidra/functions/psp-pulse-usa/ghost.md`, "Best lap, restarting at the
+line" and "Saving and loading"): `Ghost_Update` sets the ghost's visibility from the options byte `options+0x45c`
+(`FUN_08809bc8` reads it from the profile, anything but `FE_OFF` is on); the ghost is still raced, recorded and replaced
+by a quicker lap while hidden. `Ghost_Construct` starts the stored-ghost load only when `Auto Load Ghost` reads `FE_ON`.
+Ours: GHOST SHIPS VISIBLE gates `Race::ghost_pose`, the one place every draw path asks for the ghost, so no hull and no fade
+is built while it is off; AUTO LOAD GHOST gates `oag_game::ghosts::auto_load`, and a run with it off still records and still
+saves a lap that beats the stored one. A `--ghost <file>` on the command line is an explicit request and ignores AUTO LOAD
+GHOST. Both rows are `Title` data (`oag_title::race::GhostOptions`, Pulse only), seeded and shown only where the title
+lists them, and default to on, so no title's behaviour moved.
+
+**MULTIPLAYER TAGS is not wired, and no row stands in for it.** `MPTag_HUD.xml` authors `PlrTag0`-`PlrTag7` (eight
+centred `font="HUD"` texts at scale 0.5 with no `x`/`y`, anchored at runtime). What each tag says, which craft carries one,
+where it sits against the hull and in which modes it draws are all unread: no Ghidra session was available to this lane
+(no GUI instance up, no headless project in `data/ghidra/`), and a row that stores a value nothing reads is a defect.
+Where to start: `Hud_Update` (`0x0881bf50`, `psp-pulse-usa`) is the HUD's per-frame update and `FUN_08809bc8` is the profile
+reader `Ghost_Update` takes `Ghost Ship Visible` from; whether either touches `Multiplayer Tags` is not read. Open in the handover thread
+`frontend/pulse-game-options-unread-entries`.
+
+**Checked against the other titles** (the Pulse rule: an invented Pulse row is checked for the others, not widened to them):
+
+- **Pure** ships no `Additional_Definition.xml`: its `Data.wad` (841 entries) has no front-end XML at all, so its settings
+  list lives in the executable and is **not checkable** from the data. The rows stay off (`GhostOptions::NONE`).
+- **HD** (`docs/formats/hd-frontend.md`, `DATA06`'s `Additional_Definition.xml`): `Multiplayer Tags` and a ghost row
+  (`GhostOption`, "Ghost Ships Visible") exist, with no `Auto Load Ghost` and no `Dynamic HUD`. **Checked, applies, not wired**:
+  HD races a ghost (Pulse's recipe, chosen not measured) with no way to hide it.
+- **Omega, 2048**: Omega's front end is HD's (`PI001`), but nobody has read Omega's own `Settings` list, and 2048's is unread
+  too: **not checkable** from this lane, named in the handover thread.
+
 ## Reproducing this
 
 ```sh
