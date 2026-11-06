@@ -69,9 +69,12 @@ pub(super) fn load(
         // the cull rule below reads it the same way - inherited from HD, not
         // measured on PS4 (`oag_rcs::rcsmodel::psp2::lineage_blend`).
         if mesh::rcs::psp2::is_psp2(&geometry) {
-            return match mesh::rcs::psp2::build(entry, &geometry, None, &mut |path| {
-                archives.read_name(path).ok()
-            }) {
+            return match mesh::rcs::psp2::build(
+                entry,
+                &geometry,
+                None,
+                &mut crate::stages::reader(archives),
+            ) {
                 Ok((mut model, built)) => {
                     let states = oag_rcs::rcsmodel::psp2::parse(&geometry).map(|parsed| {
                         parsed
@@ -99,7 +102,7 @@ pub(super) fn load(
             entry,
             &blob,
             &geometry,
-            &mut |path| archives.read_name(path).ok(),
+            &mut crate::stages::reader(archives),
             |c| c.mesh,
         ) {
             Ok((mut model, built)) => {

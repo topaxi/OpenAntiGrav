@@ -113,7 +113,7 @@ pub(super) fn resolve(
     let track_blob = archives
         .read_name(&track)
         .with_context(|| format!("reading {track} out of {}", archives.layout.describe()))?;
-    stages::reach(stages::Stage::TrackRead);
+    stages::reach(stages::Stage::TrackRead)?;
     // **This track file's own class numbering.** Read once, off its version word,
     // and consulted everywhere below that used to spell a `vex::CLASS_*`
     // constant - all of which are version 6's. A version-4 track (Pure's are)

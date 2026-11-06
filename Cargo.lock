@@ -3338,6 +3338,7 @@ dependencies = [
  "oag-rcs",
  "oag-shader-check",
  "oag-texture",
+ "oag-thread",
  "oag-vex",
  "pollster",
  "serde",

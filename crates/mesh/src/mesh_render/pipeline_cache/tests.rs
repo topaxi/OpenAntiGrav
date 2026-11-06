@@ -411,3 +411,38 @@ fn a_kept_cache_defers_to_an_open_scope() {
     assert!(in_scope > 0, "the build went to the open scope");
     assert_eq!(kept.pipelines(), 0, "and not to the kept cache");
 }
+
+/// A build stops between its pipeline sets once the process is exiting, instead of making the
+/// rest for a scene nobody will see (`oag_thread::gpu_workers`). The stop is process-wide and
+/// one-way, so this is the only test here that sets it (nextest runs each in a process of its
+/// own).
+#[test]
+fn a_build_ends_between_pipeline_sets_once_the_process_is_exiting() {
+    let Some((device, queue)) = device() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let model = triangle_model();
+    let _worker = oag_thread::gpu_workers::Guard::enter("pipeline-cache-test");
+    assert!(!oag_thread::gpu_workers::finish_within(
+        std::time::Duration::ZERO
+    ));
+    let error = mesh_render::build(
+        &device,
+        &queue,
+        &model,
+        FORMAT,
+        Anisotropy::Off,
+        1,
+        mesh_render::Depth::Scene,
+        mesh_render::TRANSPARENT_BLEND,
+        mesh_render::GlowMask::Protected,
+        mesh_render::Velocity::Write,
+        &mesh_render::zone::StageArt::NONE,
+        mesh_render::ShadowMaps::NONE,
+        mesh_render::ShadowReceiver::Never,
+    )
+    .err()
+    .expect("a build in a process that is exiting ends early");
+    assert!(error.to_string().contains("exiting"), "{error:#}");
+}

@@ -69,6 +69,17 @@ mod texture;
 mod texture_sink;
 pub use texture_sink::Scope as TextureSinkScope;
 pub(crate) use texture_sink::offer as offer_to_texture_sink;
+
+/// Ends a build between its pipeline sets once the process is exiting, so closing the window on
+/// the loading screen does not wait out the rest of the scene build for a race nobody will see
+/// (`oag_thread::gpu_workers`). The browser build never sets it.
+fn not_exiting() -> Result<()> {
+    anyhow::ensure!(
+        !oag_thread::gpu_workers::stopping(),
+        "the process is exiting"
+    );
+    Ok(())
+}
 pub use texture_sink::without_scope as without_texture_sink;
 pub mod zone;
 
@@ -815,15 +826,18 @@ pub fn build_with(
         alpha_test_pipeline,
         cutout_pipelines,
     } = solid_set(primitive, false);
+    not_exiting()?;
     let culling = wgpu::PrimitiveState {
         cull_mode: Some(wgpu::Face::Back),
         ..primitive
     };
     let culled = per_draw_cull.then(|| solid_set(culling, false));
+    not_exiting()?;
     let unwritten = (velocity == Velocity::Gated).then(|| Unwritten {
         base: solid_set(primitive, true),
         culled: per_draw_cull.then(|| solid_set(culling, true)),
     });
+    not_exiting()?;
 
     // Third pipeline for `Model::transparent_draws` (list B): same shader
     // module, bind group layouts and vertex layout, blended instead of
@@ -931,6 +945,7 @@ pub fn build_with(
         make_pipeline("mesh blend (alpha over, two-sided)", Some(blend), false),
         make_pipeline("mesh blend (alpha over, culled)", Some(blend), true),
     ];
+    not_exiting()?;
     let additive_pipeline = [
         make_pipeline(
             "mesh blend (additive, two-sided)",
@@ -939,10 +954,12 @@ pub fn build_with(
         ),
         make_pipeline("mesh blend (additive, culled)", Some(ADDITIVE_BLEND), true),
     ];
+    not_exiting()?;
     let unblended_pipeline = [
         make_pipeline("mesh blend (none, two-sided)", None, false),
         make_pipeline("mesh blend (none, culled)", None, true),
     ];
+    not_exiting()?;
     // One pair per *distinct* state the model's transparent draws name, in
     // first-seen order. A linear scan over a handful of entries rather than a
     // map: `wgpu::BlendState` is not `Hash`, the count is five on the widest
@@ -964,6 +981,7 @@ pub fn build_with(
         if authored_pipelines.iter().any(|(seen, _)| *seen == key) {
             continue;
         }
+        not_exiting()?;
         let (state, writes_depth) = key;
         let label = format!("mesh blend (authored {state:?}, depth write {writes_depth})");
         let depth = if writes_depth {

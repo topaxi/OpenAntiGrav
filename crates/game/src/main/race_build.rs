@@ -271,7 +271,10 @@ fn warm(staged: Staged) -> Built {
     // compiled them.** Several backends defer that to the first real draw, so
     // the scene draws one frame here, still behind the loading screen. See
     // `RaceStage::warm_up`.
-    if let Ok(race_stage) = &mut stage {
+    // Not once the process is exiting: nobody sees the frame, and the exit waits for it.
+    if let Ok(race_stage) = &mut stage
+        && !oag_thread::gpu_workers::stopping()
+    {
         race_stage.warm_up(
             &gpu,
             &warm_target,

@@ -77,9 +77,27 @@ impl Drop for StageScope {
     }
 }
 
-/// Reports that the load on this thread has reached `stage`. Never goes back,
-/// and does nothing outside a [`StageScope`].
-pub(super) fn reach(stage: Stage) {
+/// Why a load returned early: the process is exiting and nobody will read the result
+/// (`oag_thread::gpu_workers`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Stopped;
+
+impl std::fmt::Display for Stopped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the process is exiting")
+    }
+}
+
+impl std::error::Error for Stopped {}
+
+/// Reports that the load on this thread has reached `stage`, then [`checkpoint`]s. Never goes
+/// back, and reports nothing outside a [`StageScope`].
+///
+/// # Errors
+///
+/// [`Stopped`] when the process is exiting.
+#[track_caller]
+pub(super) fn reach(stage: Stage) -> Result<(), Stopped> {
     ACTIVE.with(|active| {
         if let Some((reached, since)) = active.borrow().as_ref() {
             reached.fetch_max(stage as u8, Ordering::Relaxed);
@@ -87,8 +105,69 @@ pub(super) fn reach(stage: Stage) {
                 "race load reached {stage:?} after {:.0} ms",
                 since.elapsed().as_secs_f32() * 1000.0
             );
+            hold_for_test();
         }
     });
+    checkpoint()
+}
+
+/// Debug builds only: holds the load at each stage so the exit-during-a-load test has a load that
+/// is still running when the process starts to leave, however fast the machine
+/// (`drive_ground_truth`). It sits beside [`checkpoint`], not in it, so a load that dropped its
+/// checks still waits here.
+#[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
+fn hold_for_test() {
+    if let Some(ms) = std::env::var("OAG_TEST_RACE_LOAD_STAGE_DELAY_MS")
+        .ok()
+        .and_then(|ms| ms.parse().ok())
+    {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
+    }
+}
+
+#[cfg(not(all(debug_assertions, not(target_arch = "wasm32"))))]
+fn hold_for_test() {}
+
+/// Where the load may stop: `Err` once the process is exiting, so a window closed on the loading
+/// screen does not wait out the rest of the load for a race nobody will see. Set only by
+/// `gpu_workers::finish`, which `main` calls after the session is dropped, so a load nobody
+/// leaves never takes the `Err`; the browser build never sets it. The result is dropped unread,
+/// and nothing here logs above `trace`.
+///
+/// # Errors
+///
+/// [`Stopped`] when the process is exiting.
+#[track_caller]
+pub(super) fn checkpoint() -> Result<(), Stopped> {
+    let at = std::panic::Location::caller();
+    ACTIVE.with(|active| match active.borrow().as_ref() {
+        Some((_, since)) => log::trace!(
+            "race load checkpoint {}:{} after {:.0} ms",
+            at.file(),
+            at.line(),
+            since.elapsed().as_secs_f32() * 1000.0
+        ),
+        None => log::trace!("race build checkpoint {}:{}", at.file(), at.line()),
+    });
+    if oag_thread::gpu_workers::stopping() {
+        return Err(Stopped);
+    }
+    Ok(())
+}
+
+/// The archive reader a model builder takes for its textures (`oag_mesh`'s `build` family), that
+/// finds nothing once the process is exiting: the builder skips each texture it was not given
+/// instead of reading and decoding the rest, and the next [`checkpoint`] ends the load. The
+/// model it returns is never read.
+pub(super) fn reader(
+    archives: &mut oag_assets::Archives,
+) -> impl FnMut(&str) -> Option<Vec<u8>> + '_ {
+    move |path| {
+        if oag_thread::gpu_workers::stopping() {
+            return None;
+        }
+        archives.read_name(path).ok()
+    }
 }
 
 #[cfg(test)]
@@ -98,15 +177,15 @@ mod tests {
     #[test]
     fn a_stage_is_seen_only_inside_a_scope_and_never_goes_back() {
         let stages = LoadStages::default();
-        reach(Stage::TrackRead);
+        reach(Stage::TrackRead).unwrap();
         assert_eq!(stages.reached(), 0, "no scope open, nothing reported");
         {
             let _scope = stages.open();
-            reach(Stage::WorldBuilt);
-            reach(Stage::TrackRead);
+            reach(Stage::WorldBuilt).unwrap();
+            reach(Stage::TrackRead).unwrap();
             assert_eq!(stages.reached(), Stage::WorldBuilt as u8);
         }
-        reach(Stage::CraftsBuilt);
+        reach(Stage::CraftsBuilt).unwrap();
         assert_eq!(stages.reached(), 3, "the scope closed with its guard");
     }
 
@@ -124,7 +203,7 @@ mod tests {
                     Stage::CraftsBuilt,
                 ]
                 .map(|stage| {
-                    reach(stage);
+                    reach(stage).unwrap();
                     stages.reached()
                 })
             }
@@ -132,5 +211,18 @@ mod tests {
         .join()
         .unwrap();
         assert_eq!(reported, [1, 2, 3, 4]);
+    }
+
+    /// The stop is process-wide and one-way, which is why this is the one test of it in this
+    /// binary (nextest runs each test in a process of its own).
+    #[test]
+    fn a_load_ends_at_its_next_checkpoint_once_the_process_is_exiting() {
+        assert_eq!(checkpoint(), Ok(()), "a load nobody leaves goes on");
+        let _worker = oag_thread::gpu_workers::Guard::enter("stages-test");
+        assert!(!oag_thread::gpu_workers::finish_within(
+            std::time::Duration::ZERO
+        ));
+        assert_eq!(checkpoint(), Err(Stopped));
+        assert_eq!(reach(Stage::TrackRead), Err(Stopped));
     }
 }

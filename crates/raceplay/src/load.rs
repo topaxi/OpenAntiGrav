@@ -309,6 +309,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(not(feature = "view"))]
     let chase = chase_params(stats.external_camera_far);
 
+    stages::checkpoint()?;
     // The grid's roster - see `roster::available`.
     let available = roster::available(
         craft_of(&mut craft, &mut archives),
@@ -332,6 +333,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     )?;
     #[cfg(not(feature = "view"))]
     let slot_teams = roster::teams(craft_title, options, &team, &available, &mut report);
+    stages::checkpoint()?;
     // Each AI slot's own tuning where the title's variant family says it flies a
     // different team's file than the player's - see `family`.
     let (opponent_handling, opponent_weapon_counts) = family::opponent_handling(
@@ -363,6 +365,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         bomb_blast_models,
         leach_ball_model,
     ) = weapon_models::load_bodies(&mut archives, wm, &mut report);
+    stages::checkpoint()?;
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
@@ -370,6 +373,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let (shield_cockpit, shield_cockpit_alpha) =
         oag_livery::cockpit_shield(craft_of(&mut craft, &mut archives), &mut report);
 
+    stages::checkpoint()?;
     // Shared with the sky and the pads below: all three are node classes inside
     // the same track file, and a material in any of them names a texture by its
     // ordinal among *all* of the file's `Texture` nodes, not a per-class one -
@@ -403,6 +407,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         } else {
             (None, None)
         };
+    stages::checkpoint()?;
     // **Built here rather than below, because whether it built decides the
     // fallback.** A `.rcsmodel` that will not decode is the same outcome for a
     // race as none at all - the derived ribbon - and Wipeout 2048 made the
@@ -419,6 +424,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.mode == Mode::Zone,
         &mut report,
     );
+    stages::checkpoint()?;
     #[cfg(feature = "view")]
     let ribbon = options.ribbon
         || drawn.is_some()
@@ -476,6 +482,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
         track_model
     };
+    stages::checkpoint()?;
     // HD's zoom-streak ring on a title that draws none of its own: the player's
     // `graphics.boost_zoom`, honoured only where the title offers it. Chosen, not
     // measured - see `crate::zoom`.
@@ -502,6 +509,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.zone_stage,
         &mut report,
     );
+    stages::checkpoint()?;
     // A comparison's held exposure over the circuit's adapting one.
     #[cfg(feature = "view")]
     let wo_composite = wo_composite.map(|params| oag_post::wo_composite::Params {
@@ -513,6 +521,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     });
     #[cfg(feature = "view")]
     let probes = environment::read_probes(&mut archives, &track, &mut report);
+    stages::checkpoint()?;
     // `fc01_dummy`'s pixel is the circuit's fog colour, which only the staging
     // knows: write it into the vertices that carry the placeholder.
     #[cfg(feature = "view")]
@@ -565,6 +574,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         volumes
     };
 
+    stages::checkpoint()?;
     // The ribbon build draws an invented surface rather than the disc's art, so
     // it gets no sky either: the two belong to the same "show what shipped"
     // mode.
@@ -655,6 +665,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // the original's own order: `World_CollectNodeLists` always walks the tree
     // before anything asks whether weapons are on. The PS3 path is
     // `geometry::weapon_pad_model` - see its own doc comment for why.
+    stages::checkpoint()?;
     #[cfg(feature = "view")]
     let weapon_pad_model = if rcs_drawn {
         geometry::weapon_pad_model(ps3_weapon_pad_model, options.weapons_on(), &mut report)
@@ -713,6 +724,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     }
 
+    stages::checkpoint()?;
     #[cfg(feature = "view")]
     let (gantry, visibility, adverts) = gantry_visibility::build(
         &mut archives,
@@ -737,7 +749,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let vex_geometry = !options.ribbon
         && !track.starts_with("foreign:")
         && !oag_vex::vex::geometry_is_external(&track_blob);
-    stages::reach(stages::Stage::TrackBuilt);
+    stages::reach(stages::Stage::TrackBuilt)?;
 
     let spline = Spline::from_track(&ai);
     report.push(format!(
@@ -786,7 +798,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else {
         None
     };
-    stages::reach(stages::Stage::WorldBuilt);
+    stages::reach(stages::Stage::WorldBuilt)?;
+    stages::checkpoint()?;
     // The player's own, and reported by `livery::load` beside the hull it was
     // read off. Sparks are slot 0's today - `oag_fx::sparks` triggers off
     // the player's contacts alone - so this takes slot 0's locators rather than
@@ -808,6 +821,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     #[cfg(feature = "view")]
+    stages::checkpoint()?;
     let mut effects = psys::Library::new();
     let extents = pulse_psp::is_pulse_psp(title, &archives);
     #[cfg(feature = "view")]
@@ -887,6 +901,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let handles = super::EffectHandles::resolve(craft_title, &effects).with_own(mod_effects);
 
     #[cfg(feature = "view")]
+    stages::checkpoint()?;
     let (sounds, announcer, class_announcer) = audio::banks_and_announcers(
         &mut archives,
         title.race,
@@ -896,6 +911,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     #[cfg(feature = "view")]
+    stages::checkpoint()?;
     let rumble = crate::rumble_library::load(&mut archives, &mut report);
     #[cfg(feature = "view")]
     let track_emitters = audio::track_emitters(
@@ -910,6 +926,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // one, HD authors a template whose material names its own - craft content,
     // hence `craft_title`. See `oag_title::exhaust::Exhaust`.
     #[cfg(feature = "view")]
+    stages::checkpoint()?;
     let (noise, trail_blend, trail_shape) = assets::trail_texture(
         craft_of(&mut craft, &mut archives),
         craft_title,
@@ -967,6 +984,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
 
     #[cfg(feature = "view")]
+    stages::checkpoint()?;
     let magstrip_wake = magstrip_wake::load(
         craft_of(&mut craft, &mut archives),
         wm,
@@ -995,6 +1013,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     #[cfg(feature = "view")]
+    stages::checkpoint()?;
     let hud = load_hud(
         craft_of(&mut craft, &mut archives),
         craft_title,
@@ -1018,6 +1037,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The ring the lap counter runs on. Reported either way: "this track has no
     // lap counting" is exactly the kind of thing that otherwise gets discovered
     // as a HUD that never counts past one.
+    stages::checkpoint()?;
     let course = Course::from_track(&ai, start_position.as_ref().map(|s| Vec3::from(s.position)));
     match &course {
         Some(course) => report.push(format!(
@@ -1052,6 +1072,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let psp_glow_mask = vex_geometry && title.looks.psp_glow_mask.applies(archives.layout.platform);
     let pulse_ps2_data =
         vex_geometry && title.looks.ps2_glow_mask.applies(archives.layout.platform);
+    stages::checkpoint()?;
     let track_stats = track_stats::read(
         &options.source,
         &mut archives,
@@ -1075,6 +1096,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         },
         &mut report,
     );
+    stages::checkpoint()?;
     let original_tables = super::original_tables::read(
         craft_of(&mut craft, &mut archives),
         title,
@@ -1083,7 +1105,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         original_laws,
         &mut report,
     );
-    stages::reach(stages::Stage::CraftsBuilt);
+    stages::reach(stages::Stage::CraftsBuilt)?;
     #[cfg(feature = "view")]
     let models = &craft_title.weapon_models;
     #[cfg_attr(not(feature = "view"), allow(unused_mut))]

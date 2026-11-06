@@ -623,6 +623,7 @@ impl Scene {
         // every drawable: `Scene::shadow.strength` at zero is what makes it
         // inert, so the shadow row applies live without rebuilding a pipeline.
         // A caller that never casts pays one megabyte and a cleared pass.
+        crate::stages::checkpoint()?;
         let shadow_map = oag_render::shadow::map::Map::new(device);
         let sun_occlusion = oag_render::shadow::occlusion::Maps::new(
             device,
@@ -645,6 +646,7 @@ impl Scene {
             env_probes: env_probes.as_ref().map(crate::env_probes::EnvProbes::view),
             sky_probe: sky_probe.as_ref(),
         };
+        crate::stages::checkpoint()?;
         let behind_glass = behind_glass::Target::build(
             device,
             queue,
@@ -656,6 +658,7 @@ impl Scene {
             zone_art,
             shadow_maps,
         )?;
+        crate::stages::checkpoint()?;
         let sky = sky_model
             .filter(|model| !model.indices.is_empty())
             .map(|model| {
@@ -680,6 +683,7 @@ impl Scene {
                 )
             })
             .transpose()?;
+        crate::stages::checkpoint()?;
         let measured_mask = track_model.stamps_glow; // see `bloom` below
         let ps2_mask = measured_mask && track_model.glow_by_texel;
         let track_shine = shine::TrackShine::build(
@@ -693,6 +697,7 @@ impl Scene {
             zone_art,
             shadow_maps,
         )?;
+        crate::stages::checkpoint()?;
         let placeholders = oag_render::gantry::placeholder_texture_slots(&track_model);
         let mut track = Drawable::new_with(
             device,
@@ -722,6 +727,7 @@ impl Scene {
             mesh_render::Velocity::Gated,
             true,
         )?;
+        crate::stages::checkpoint()?;
         let adverts = if adverts.is_empty() {
             None
         } else {
@@ -737,6 +743,7 @@ impl Scene {
         // any caller takes.
         let mut ships = Vec::with_capacity(GRID_SLOTS as usize);
         for slot in 0..GRID_SLOTS as usize {
+            crate::stages::checkpoint()?;
             let livery = &liveries[slot.min(liveries.len().saturating_sub(1))];
             ships.push(Drawable::new(
                 device,
@@ -755,6 +762,7 @@ impl Scene {
                 mesh_render::Velocity::Gated,
             )?);
         }
+        crate::stages::checkpoint()?;
         let collision = collision_model
             .map(|model| {
                 Drawable::new(
@@ -798,6 +806,7 @@ impl Scene {
                 })
                 .transpose()
         };
+        crate::stages::checkpoint()?;
         let pads = pad_drawable(pad_model)?;
         // `World_CollectNodeLists` clears the node's own visibility bit
         // whenever `g_weapons_enabled` is `0`, which the front end forces for
@@ -819,6 +828,7 @@ impl Scene {
             None
         };
         // The start gantry, already measured onto its mount by `race::gantry`.
+        crate::stages::checkpoint()?;
         let gantry = gantry
             .map(|placed| {
                 gantry::Gantry::new(
@@ -833,6 +843,7 @@ impl Scene {
                 )
             })
             .transpose()?;
+        crate::stages::checkpoint()?;
         let flare_origins = (0..GRID_SLOTS as usize)
             .map(|slot| liveries[slot.min(liveries.len().saturating_sub(1))].flare_origins)
             .collect();
@@ -873,6 +884,7 @@ impl Scene {
         // mask - the stencil rule measured on docs/rendering/glow-mask.md.
         // Other sources keep it in the mask, as a shield is one of the frame's
         // brightest things; the shell's own GE state has not been read.
+        crate::stages::checkpoint()?;
         let slots = per_slot::Build {
             device,
             queue,
@@ -893,6 +905,7 @@ impl Scene {
         // The cockpit sphere, on the shell's own pipeline: same additive blend,
         // same glow mask, same argument. One rather than eight - a craft whose
         // camera is inside it is the player's, and there is one of those.
+        crate::stages::checkpoint()?;
         let shield_cockpit = match shield_cockpit.filter(|model| !model.indices.is_empty()) {
             Some(model) => Some(Drawable::new(
                 device,
@@ -912,6 +925,7 @@ impl Scene {
             )?),
             None => None,
         };
+        crate::stages::checkpoint()?;
         let absorb_overlay = [slots.absorb_overlays()?, slots.leach_overlays()?];
         let shine = slots.shines()?;
         let wrecks = wreck::Wrecks::build(&slots, scene_depth, zone_art)?;
@@ -969,6 +983,7 @@ impl Scene {
         }
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
+        crate::stages::checkpoint()?;
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
         let noise = noise.unwrap_or_else(|| FlareTexture::placeholder(64));
         // The ribbon's own blend where the title authors one, and the recovered
@@ -1007,6 +1022,7 @@ impl Scene {
             leach_beam_texture.as_ref(),
             sample_count,
         );
+        crate::stages::checkpoint()?;
         let ribbons = ribbons::build(device, queue, format, store, &ribbon_textures, sample_count);
         // One silhouette per grid slot, in the same slot order the liveries
         // are in - `race::shadow::silhouettes` built them, and the load report
@@ -1014,6 +1030,7 @@ impl Scene {
         // generated falloff.
         let shadow_silhouette_count = shadows.len();
         let generated_silhouettes = shadows.iter().filter(|s| s.generated).count();
+        crate::stages::checkpoint()?;
         let shadow = std::cell::RefCell::new(oag_render::shadow::Pipeline::new(
             device,
             queue,
@@ -1026,6 +1043,7 @@ impl Scene {
         // dimmer, not broken. The HD chain replaces this pass outright, and it
         // runs only over a mask stamped as Pulse PSP's is measured to be -
         // Pure's and the PS2's are not (docs/rendering/glow-mask.md).
+        crate::stages::checkpoint()?;
         let bloom = match (hd.is_none() && omega.is_none() && measured_mask && !ps2_mask)
             .then(|| oag_post::bloom::Bloom::new(device, format))
             .transpose()
@@ -1061,6 +1079,7 @@ impl Scene {
             }
         };
 
+        crate::stages::checkpoint()?;
         let depth = depth_texture(device, size, sample_count);
         let velocity = motion::velocity_texture(device, size, sample_count);
         let msaa_color = msaa_color_texture(device, format, size, sample_count);

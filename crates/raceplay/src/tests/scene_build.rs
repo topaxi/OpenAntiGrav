@@ -241,6 +241,31 @@ fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
     );
 }
 
+/// A scene build ends at its first checkpoint once the process is exiting, so the race build
+/// does not hold the exit for a scene nobody will see (`oag_thread::gpu_workers`). `scene_over`
+/// expects the build to succeed, so the stop is its panic. The stop is process-wide and one-way:
+/// nextest runs this in a process of its own.
+#[test]
+fn a_scene_build_ends_once_the_process_is_exiting() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let _worker = oag_thread::gpu_workers::Guard::enter("scene-build-test");
+    assert!(!oag_thread::gpu_workers::finish_within(
+        std::time::Duration::ZERO
+    ));
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        bare_scene(&device, &queue);
+    }))
+    .expect_err("a scene build in a process that is exiting ends early");
+    let message = panic
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| panic.downcast_ref::<&str>().copied())
+        .unwrap_or_default();
+    assert!(message.contains("the process is exiting"), "{message}");
+}
+
 /// **A circuit's advert cards are what its placeholder quads sample.**
 ///
 /// Builds the real scene of each disc's default circuit and counts the track
