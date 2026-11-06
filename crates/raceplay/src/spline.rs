@@ -108,7 +108,9 @@ pub(super) fn racing_line(
     } else {
         unsupported
     };
-    oag_ai::Line::with_corridor(points, corridor).with_unsupported(unsupported)
+    oag_ai::Line::with_corridor(points, corridor)
+        .with_unsupported(unsupported)
+        .with_strides(oag_ai::Tuning::default().curvature_span)
 }
 
 /// Which spline samples the AI line is made of, in the order a lap drives them.

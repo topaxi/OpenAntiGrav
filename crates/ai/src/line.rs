@@ -92,6 +92,25 @@ pub struct Line {
     /// Parallel to [`Self::points`], or empty: `true` on the [`TAKEOFF_RUNUP`]
     /// of road before each run of unsupported samples. See [`Self::is_takeoff`].
     takeoff: Vec<bool>,
+    /// Empty, or [`Self::max_curvature_stepped`]'s answers for one span. See
+    /// [`Self::with_strides`].
+    strides: Strides,
+}
+
+/// One sample's reading and step for one span: what
+/// [`Line::max_curvature_stepped`] would compute there.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Stride {
+    curvature: f32,
+    next: u32,
+    stepped: f32,
+}
+
+/// [`Stride`]s for one span, one per point.
+#[derive(Debug, Clone, PartialEq, Default)]
+struct Strides {
+    span: f32,
+    at: Vec<Stride>,
 }
 
 impl Line {
@@ -103,6 +122,7 @@ impl Line {
             corridor: Vec::new(),
             unsupported: Vec::new(),
             takeoff: Vec::new(),
+            strides: Strides::default(),
         }
     }
 
@@ -121,6 +141,7 @@ impl Line {
             corridor,
             unsupported: Vec::new(),
             takeoff: Vec::new(),
+            strides: Strides::default(),
         }
     }
 
@@ -145,6 +166,36 @@ impl Line {
             Vec::new()
         };
         self.takeoff = self.takeoff_runups();
+        self.strides = Strides::default();
+        self
+    }
+
+    /// Tabulates [`Self::max_curvature_stepped`]'s per-sample work for `span`,
+    /// the chord and step a driver above walking pace asks for every tick
+    /// ([`crate::Tuning::curvature_span`]). Purely an acceleration: each entry
+    /// is what the walk computes at that sample, so every answer is the same to
+    /// the bit, and any other span walks as before. `None` tabulates nothing.
+    ///
+    /// Call last: it reads everything a curvature reads.
+    #[must_use]
+    pub fn with_strides(mut self, span: Option<f32>) -> Self {
+        let Some(span) = span.filter(|span| *span > 0.0) else {
+            return self;
+        };
+        if self.points.len() < 3 {
+            return self;
+        }
+        let at = (0..self.points.len())
+            .map(|index| {
+                let (next, _, stepped) = self.ahead(index, span);
+                Stride {
+                    curvature: self.curvature(index, span),
+                    next: next as u32,
+                    stepped,
+                }
+            })
+            .collect();
+        self.strides = Strides { span, at };
         self
     }
 
@@ -387,6 +438,19 @@ impl Line {
         let mut worst = 0.0f32;
         let mut at = index;
         let mut travelled = 0.0;
+        if !self.strides.at.is_empty() && chord == self.strides.span && step == chord {
+            at %= self.strides.at.len();
+            while travelled < distance {
+                let stride = self.strides.at[at];
+                worst = worst.max(stride.curvature);
+                if stride.stepped <= f32::EPSILON {
+                    break;
+                }
+                travelled += stride.stepped;
+                at = stride.next as usize;
+            }
+            return worst;
+        }
         while travelled < distance {
             worst = worst.max(self.curvature(at, chord));
             let (next, _, stepped) = self.ahead(at, step);
