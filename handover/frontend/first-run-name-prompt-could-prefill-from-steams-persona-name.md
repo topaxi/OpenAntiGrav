@@ -1,7 +1,7 @@
 ---
 status: parked
 titles: [all]
-updated: 2026-10-27
+updated: 2026-11-06
 summary: "Idea: prefill the first-run name prompt from Steam's PersonaName, else the OS user name; not started"
 size: S (40)
 difficulty: easy (40)
@@ -41,7 +41,9 @@ titles). A player who launches this port as a non-Steam game from Steam already 
 - **Not seen.** The file's exact format on the maintainer's install has not been read yet.
 - **Where the hook goes** is unlocated: the first-run name entry has not been found in
   `oag-ui` / `oag-ui-screens`. Per-title name length and charset limits (and which titles ask for a
-  handle) come from the original's own entry, which this thread has not measured.
+  handle) come from the original's own entry, which this thread has not measured. Which titles
+  keep a name and a 3-character tag is in `docs/formats/fexml.md`, "Which titles keep a name and a
+  tag": Pulse and Pure both, HD the name only, 2048 and Omega neither.
 - **Precedent** (Playnite's Steam plugin, SteamTinkerLaunch, Steam ROM Manager read it, from memory)
   is unverified. The file is undocumented by Valve and may change.
 

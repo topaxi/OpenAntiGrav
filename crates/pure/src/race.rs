@@ -110,6 +110,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_transition: None,
     zoom_ring: None,
     borrows_zoom_ring: true,
+    ghost_options: oag_title::race::GhostOptions::NONE,
     zone_stage_textures: None,
     // `None` for the same reason as Pulse's.
     zone_sky: None,

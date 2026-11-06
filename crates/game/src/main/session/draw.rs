@@ -445,6 +445,12 @@ impl Session {
                 stage.race.set_weather(render_profile.weather);
                 // And the DYNAMIC HUD row, for the same reason.
                 stage.race.set_dynamic_hud(self.settings.display.dynamic_hud);
+                // And the GHOST SHIPS VISIBLE row.
+                if let Some(shell) = &self.shell {
+                    stage
+                        .race
+                        .set_ghost_visible(self.settings.display.ghost_ship_shown(shell.title));
+                }
                 if let Some(hud) = &mut stage.hud {
                     hud.set_dynamic_hud(self.settings.display.dynamic_hud);
                 }

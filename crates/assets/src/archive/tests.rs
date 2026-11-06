@@ -41,11 +41,16 @@ fn tiny_wad(name_hash: u32, blob: &[u8]) -> Vec<u8> {
 /// bit 31 of `size_uncompressed` set, and a stored size that differs from
 /// it. Unlike [`tiny_lzss_wad`], this blob really is what it claims -
 /// there is no `oag-formats` deflate encoder to fake it with, so the
-/// test compresses with `miniz_oxide` (a dev-dependency here, not a
+/// test compresses with `flate2` (a dev-dependency here, not a
 /// runtime one) and [`wad::decompress_zlib`] has to undo real deflate
 /// output, not a hand-shaped stand-in.
 fn tiny_zlib_wad(name_hash: u32, plain: &[u8]) -> Vec<u8> {
-    let compressed = miniz_oxide::deflate::compress_to_vec_zlib(plain, 6);
+    let compressed = {
+        use std::io::Write;
+        let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(6));
+        e.write_all(plain).unwrap();
+        e.finish().unwrap()
+    };
     assert_ne!(
         compressed.len(),
         plain.len(),

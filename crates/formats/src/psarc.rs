@@ -67,8 +67,7 @@
 
 use std::fmt;
 
-use miniz_oxide::inflate::TINFLStatus;
-use miniz_oxide::inflate::core::{DecompressorOxide, decompress, inflate_flags};
+use flate2::{Decompress, FlushDecompress, Status};
 
 mod md5;
 
@@ -484,7 +483,7 @@ impl Directory {
         let blocks = self.head_blocks(index, len)?;
 
         let mut out = Vec::with_capacity(size);
-        let mut inflater: Option<Box<DecompressorOxide>> = None;
+        let mut inflater: Option<Decompress> = None;
         let mut at = 0usize;
         for (n, stored_len) in blocks.into_iter().enumerate() {
             let block = entry.first_block + u32::try_from(n).unwrap_or(u32::MAX);
@@ -527,8 +526,7 @@ impl Directory {
                 let room = block_size.min(size.saturating_sub(start));
                 if !inflate_block_into(&mut inflater, chunk, &mut out, room) {
                     out.extend_from_slice(
-                        &miniz_oxide::inflate::decompress_to_vec_zlib(chunk)
-                            .unwrap_or_else(|_| chunk.to_vec()),
+                        &crate::wad::decompress_zlib(chunk).unwrap_or_else(|_| chunk.to_vec()),
                     );
                 }
             } else {
@@ -554,34 +552,33 @@ impl Directory {
 /// Inflates one zlib-wrapped block straight onto the end of `out`, with one
 /// decompressor reused across an entry's blocks, and says whether it did.
 ///
-/// The same inflate and flags as `miniz_oxide::inflate::decompress_to_vec_zlib`,
-/// minus what that call costs per block: a fresh decompressor (about 11 KiB to
-/// set up) and an output buffer started at twice the input and doubled until the
-/// block fits, then copied once more onto `out`. Only a stream that finishes
-/// within `room` bytes (a block, or what the entry has left) is taken; anything
-/// else (an error, or more output than `room` holds) leaves `out` as it was and
-/// returns `false`, and the caller runs `decompress_to_vec_zlib` itself, so
-/// every outcome is the one it always produced.
+/// The same stream as [`crate::wad::decompress_zlib`] (header and Adler-32 both
+/// checked), minus what that call costs per block: a fresh decompressor and an
+/// output buffer grown by doubling and copied once more onto `out`. Only a
+/// stream that finishes within `room` bytes (a block, or what the entry has
+/// left) is taken; anything else (an error, or more output than `room` holds)
+/// leaves `out` as it was and returns `false`, and the caller runs
+/// `decompress_zlib` itself, so every outcome is the one it always produced.
 fn inflate_block_into(
-    inflater: &mut Option<Box<DecompressorOxide>>,
+    inflater: &mut Option<Decompress>,
     chunk: &[u8],
     out: &mut Vec<u8>,
     room: usize,
 ) -> bool {
-    let inflater = inflater.get_or_insert_with(Box::default);
-    inflater.init();
+    let inflater = inflater.get_or_insert_with(|| Decompress::new(true));
+    inflater.reset(true);
     let start = out.len();
     out.resize(start + room, 0);
-    let flags = inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER
-        | inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
-    let (status, _, written) = decompress(inflater, chunk, &mut out[start..], 0, flags);
-    if status == TINFLStatus::Done {
-        out.truncate(start + written);
-        true
+    let done = matches!(
+        inflater.decompress(chunk, &mut out[start..], FlushDecompress::Finish),
+        Ok(Status::StreamEnd)
+    );
+    if done {
+        out.truncate(start + usize::try_from(inflater.total_out()).unwrap_or(room));
     } else {
         out.truncate(start);
-        false
     }
+    done
 }
 
 /// Splits the manifest's text into paths.

@@ -169,6 +169,24 @@ pub fn load(key: &Key) -> Option<Replay> {
     load_from(&path_in(&dir()?, key), key)
 }
 
+/// [`load_from`] when `auto_load` is on, `None` without reading the file when it is off:
+/// Pulse's `Auto Load Ghost`. The run is still recorded and a quicker lap still saved;
+/// only the stored lap is not raced.
+#[must_use]
+pub fn auto_load_from(path: &Path, key: &Key, auto_load: bool) -> Option<Replay> {
+    if auto_load {
+        load_from(path, key)
+    } else {
+        None
+    }
+}
+
+/// [`auto_load_from`] under [`dir`].
+#[must_use]
+pub fn auto_load(key: &Key, auto_load: bool) -> Option<Replay> {
+    auto_load_from(&path_in(&dir()?, key), key, auto_load)
+}
+
 /// Writes `replay` as `key`'s ghost at `path` when its lap is quicker than
 /// the one stored there. Returns whether it wrote.
 ///

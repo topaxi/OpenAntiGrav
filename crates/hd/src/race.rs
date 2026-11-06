@@ -90,6 +90,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_transition: Some(ZONE_TRANSITION),
     zoom_ring: Some(&ZOOM_RING),
     borrows_zoom_ring: false,
+    ghost_options: oag_title::race::GhostOptions::NONE,
     zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
     zone_sky: Some(ZONE_SKY),
     team_variants: Some(&TEAM_VARIANTS),

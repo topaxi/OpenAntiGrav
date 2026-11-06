@@ -43,7 +43,13 @@ fn build(block_size: u32, block_width: usize, files: &[Planned]) -> Vec<u8> {
                 padded.resize(block_size as usize, 0);
                 body.extend_from_slice(&padded);
             } else {
-                let deflated = miniz_oxide::deflate::compress_to_vec_zlib(chunk, 6);
+                let deflated = {
+                    use std::io::Write;
+                    let mut e =
+                        flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(6));
+                    e.write_all(chunk).unwrap();
+                    e.finish().unwrap()
+                };
                 blocks.push(deflated.len() as u32);
                 body.extend_from_slice(&deflated);
             }
@@ -481,4 +487,68 @@ fn an_entry_head_reads_only_its_leading_blocks() {
         let (_, one_block) = directory.entry_head_range(1, 10).unwrap();
         assert!(one_block < whole, "ten bytes need one of five blocks");
     }
+}
+
+fn zlib(data: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(6));
+    e.write_all(data).unwrap();
+    e.finish().unwrap()
+}
+
+/// A block is taken only when its zlib stream finishes, checksum included, within
+/// the room it was given; anything else is left to the caller's fallbacks.
+#[test]
+fn a_block_is_inflated_only_when_its_whole_stream_checks_out() {
+    let plain: Vec<u8> = (0..4000u32).map(|i| (i % 7) as u8).collect();
+    let good = zlib(&plain);
+    let mut inflater = None;
+    let mut out = vec![9u8; 3];
+
+    assert!(super::inflate_block_into(
+        &mut inflater,
+        &good,
+        &mut out,
+        plain.len()
+    ));
+    assert_eq!(&out[..3], &[9, 9, 9]);
+    assert_eq!(&out[3..], &plain[..]);
+
+    let mut bad_sum = good.clone();
+    *bad_sum.last_mut().unwrap() ^= 1;
+    let mut out = Vec::new();
+    assert!(!super::inflate_block_into(
+        &mut inflater,
+        &bad_sum,
+        &mut out,
+        plain.len()
+    ));
+    assert!(out.is_empty(), "a refused block leaves `out` as it was");
+    assert!(crate::wad::decompress_zlib(&bad_sum).is_err());
+
+    assert!(!super::inflate_block_into(
+        &mut inflater,
+        &good[..good.len() - 6],
+        &mut out,
+        plain.len()
+    ));
+    assert!(crate::wad::decompress_zlib(&good[..good.len() - 6]).is_err());
+    assert!(crate::wad::decompress_zlib(&good[..good.len() / 2]).is_err());
+    assert!(crate::wad::decompress_zlib(&good[..2]).is_err());
+    assert!(!super::inflate_block_into(
+        &mut inflater,
+        &good,
+        &mut out,
+        plain.len() - 1
+    ));
+    assert!(out.is_empty());
+    assert_eq!(crate::wad::decompress_zlib(&good).unwrap(), plain);
+
+    assert!(super::inflate_block_into(
+        &mut inflater,
+        &good,
+        &mut out,
+        plain.len()
+    ));
+    assert_eq!(out, plain, "the reused decompressor starts clean");
 }
