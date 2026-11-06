@@ -160,6 +160,25 @@ pub trait Raycaster {
             _ => 0,
         }
     }
+
+    /// What this geometry can answer early for a batch of rays inside `bounds`, for
+    /// [`Self::raycast_all_in`]. A world's walk for the whole batch; nothing by default.
+    fn region(&self, _bounds: &Aabb) -> Region {
+        Region(None)
+    }
+
+    /// [`Self::raycast_all`] of a ray whose segment lies inside the bounds `region` was
+    /// taken for: the same hits in the same order, whatever `region` holds.
+    fn raycast_all_in(
+        &self,
+        _region: &Region,
+        ray: Ray,
+        skip: Option<u32>,
+        include_reset: bool,
+        out: &mut [Option<RaycastHit>],
+    ) -> usize {
+        self.raycast_all(ray, skip, include_reset, out)
+    }
 }
 
 /// A bounded segment query.
@@ -236,6 +255,10 @@ impl Aabb {
             && self.max.z >= other.min.z
     }
 }
+
+/// The candidates of a batch of rays, from [`Raycaster::region`].
+#[derive(Debug)]
+pub struct Region(Option<Indices>);
 
 /// Where a segment crosses a triangle, if it does.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -656,6 +679,38 @@ impl CollisionWorld {
         self.broadphase.get_or_init(|| Flat::build(&self.colliders))
     }
 
+    /// The narrowphase of [`Raycaster::raycast_all`] over candidate items, in their order.
+    fn hits_among(
+        &self,
+        candidates: impl Iterator<Item = u32>,
+        ray: Ray,
+        skip: Option<u32>,
+        include_reset: bool,
+        out: &mut [Option<RaycastHit>],
+    ) -> usize {
+        let p0 = ray.origin;
+        let p1 = ray.end();
+        let flat = self.flat();
+        let mut found = 0;
+        for item in candidates {
+            if found == out.len() {
+                break;
+            }
+            let (collider, triangle) = flat.item(item);
+            let soup = &self.colliders[collider];
+            if !Self::asks(soup, skip, include_reset) {
+                continue;
+            }
+            let [a, b, c] = soup.corners(triangle);
+            if segment_triangle(p0, p1, a, b, c).is_none() {
+                continue;
+            }
+            out[found] = Some(soup.hit(ray, triangle));
+            found += 1;
+        }
+        found
+    }
+
     /// Whether a query with these arguments asks this collider at all: the two rejects
     /// each [`TriangleSoup`] query makes before its walk.
     fn asks(soup: &TriangleSoup, skip: Option<u32>, include_reset: bool) -> bool {
@@ -734,30 +789,44 @@ impl Raycaster for CollisionWorld {
         include_reset: bool,
         out: &mut [Option<RaycastHit>],
     ) -> usize {
-        let p0 = ray.origin;
-        let p1 = ray.end();
-        let segment = Aabb::from_segment(p0, p1);
-        let flat = self.flat();
-        let candidates = Indices::overlapping(&flat.tree, &segment);
+        let segment = Aabb::from_segment(ray.origin, ray.end());
+        let candidates = Indices::overlapping(&self.flat().tree, &segment);
+        self.hits_among(
+            candidates.as_slice().iter().copied(),
+            ray,
+            skip,
+            include_reset,
+            out,
+        )
+    }
 
-        let mut found = 0;
-        for &item in candidates.as_slice() {
-            if found == out.len() {
-                break;
-            }
-            let (collider, triangle) = flat.item(item);
-            let soup = &self.colliders[collider];
-            if !Self::asks(soup, skip, include_reset) {
-                continue;
-            }
-            let [a, b, c] = soup.corners(triangle);
-            if segment_triangle(p0, p1, a, b, c).is_none() {
-                continue;
-            }
-            out[found] = Some(soup.hit(ray, triangle));
-            found += 1;
-        }
-        found
+    /// One walk for a batch: a triangle whose box overlaps a segment inside `bounds` overlaps
+    /// `bounds`, so these candidates hold every ray's own.
+    fn region(&self, bounds: &Aabb) -> Region {
+        Region(Some(Indices::overlapping(&self.flat().tree, bounds)))
+    }
+
+    /// The region's candidates cut down to this segment's are the ones
+    /// [`Indices::overlapping`] returns for it, still ascending.
+    fn raycast_all_in(
+        &self,
+        region: &Region,
+        ray: Ray,
+        skip: Option<u32>,
+        include_reset: bool,
+        out: &mut [Option<RaycastHit>],
+    ) -> usize {
+        let Some(candidates) = &region.0 else {
+            return self.raycast_all(ray, skip, include_reset, out);
+        };
+        let segment = Aabb::from_segment(ray.origin, ray.end());
+        let boxes = self.flat().tree.boxes();
+        let own = candidates
+            .as_slice()
+            .iter()
+            .copied()
+            .filter(|&item| segment.overlaps(&boxes[item as usize]));
+        self.hits_among(own, ray, skip, include_reset, out)
     }
 }
 

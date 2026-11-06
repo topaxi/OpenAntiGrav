@@ -91,7 +91,7 @@
 
 use oag_core::math::{Quat, Vec3};
 
-use crate::collide::{Ray, Raycaster, Surface, combine_friction};
+use crate::collide::{Aabb, Ray, Raycaster, Surface, combine_friction};
 use crate::forces::Environment;
 use crate::params::{Dimensions, Handling};
 use crate::ship::{Body, ShipState};
@@ -726,6 +726,19 @@ pub fn hull_probes(body: &Body, handling: &Handling) -> [(Vec3, Vec3, f32); HULL
     })
 }
 
+/// The box around every one of `probes`' segments, each reaching `extra` further: the
+/// bounds of a [`Raycaster::region`] for the batch.
+#[must_use]
+pub fn probe_bounds(probes: &[(Vec3, Vec3, f32); HULL_PROBES], extra: f32) -> Aabb {
+    let mut bounds = Aabb::EMPTY;
+    for &(origin, direction, reach) in probes {
+        let ray = Ray::new(origin, direction, reach + extra);
+        bounds.expand(ray.origin);
+        bounds.expand(ray.end());
+    }
+    bounds
+}
+
 /// How many hits a single hull probe may contribute.
 ///
 /// **An invention.** The original caps nothing per sample point: it appends until the
@@ -758,14 +771,17 @@ fn hull_contacts<R: Raycaster + ?Sized>(
     let mut found = 0;
     let mut dropped = 0;
 
-    for (origin, direction, reach) in hull_probes(&state.body, handling) {
+    let probes = hull_probes(&state.body, handling);
+    let region = raycaster.region(&probe_bounds(&probes, 0.0));
+    for (origin, direction, reach) in probes {
         let probeable = reach > MIN_HULL_EXTENT;
         if !probeable {
             continue;
         }
 
         let mut hits = [None; MAX_HITS_PER_PROBE];
-        let hit_count = raycaster.raycast_all(
+        let hit_count = raycaster.raycast_all_in(
+            &region,
             Ray::new(origin, direction, reach),
             env.self_collider,
             false,
