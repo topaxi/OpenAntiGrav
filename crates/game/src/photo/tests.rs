@@ -57,16 +57,13 @@ fn every_chip_has_a_rect_inside_the_grid_and_a_click_finds_it() {
 
 #[test]
 fn the_help_names_the_lens_and_the_hud_and_hiding_it_leaves_only_the_message() {
-    let say = |id: &str| id.to_string();
+    let say = |id: &str| id.trim_start_matches("OAG_PHOTO_").to_string();
     let button = |b: Button| b.to_string().to_uppercase();
     let mut photo = Photo::new(0, true, None);
     let grid = (483.0, 272.0);
     let shown = texts(&draw_list(&photo, grid, &words(&say, &button), None));
-    assert!(
-        shown.contains(&"OAG_PHOTO_CAMERA: OAG_PHOTO_INTERNAL".to_string()),
-        "{shown:?}"
-    );
-    assert!(shown.contains(&"OAG_PHOTO_HUD: OAG_PHOTO_OFF".to_string()));
+    assert!(shown.contains(&"CAMERA: INTERNAL".to_string()), "{shown:?}");
+    assert!(shown.contains(&"HUD: OFF".to_string()));
     let start = Pad {
         help: true,
         ..Pad::default()
@@ -173,4 +170,26 @@ fn a_click_on_the_panel_finds_its_row_and_its_arrows() {
     }
     assert_eq!(row_at(&photo, grid, (20.0, 150.0)), None);
     let _ = Row::Exposure;
+}
+
+#[test]
+fn a_chip_whose_row_word_is_too_long_for_it_says_its_value_alone() {
+    let say = |id: &str| match id {
+        strings::CAMERA => "PHOTO CAMERA MODE".to_string(),
+        strings::INTERNAL => "INTERNAL".to_string(),
+        other => other.to_string(),
+    };
+    let button = |b: Button| b.to_string().to_uppercase();
+    let photo = Photo::new(0, false, None);
+    let shown = texts(&draw_list(
+        &photo,
+        (483.0, 272.0),
+        &words(&say, &button),
+        None,
+    ));
+    assert!(shown.contains(&"INTERNAL".to_string()), "{shown:?}");
+    assert!(
+        !shown.iter().any(|t| t.starts_with("PHOTO CAMERA MODE:")),
+        "{shown:?}"
+    );
 }
