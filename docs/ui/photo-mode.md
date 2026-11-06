@@ -180,9 +180,17 @@ sample cannot vouch for stays `UNPLACED`, which draws everything. A recovery in 
 subject, not the seat, blanks the shot. A station camera's exact section (`station_camera_section`)
 is not used while the mode is open. Before this, a subject more than 96 samples from the seat drew
 everything (the camera could not be placed), and a nearer one was culled to the seat's section
-plus the camera's. Test: `tests::photo::photo_modes_subject_places_the_cull_not_the_seat`. 2048
-and Omega: same code path as Pulse's (the section set), checked by the same test; HD's chunk set
-reads the subject's position through the same accessor.
+plus the camera's. Tests: `tests::photo::photo_modes_subject_places_the_cull_not_the_seat`
+(a synthetic straight with a section per control point) and
+`tests::wreck_finished::photo_mode_over_the_directors_camera_is_not_masked_by_the_directors_station`.
+Measured on Pulse (`03_Track`, seed 7, eight craft): the section the driver's index gives equals the
+nearest-sample scan's for all seven subjects, and PVS on against off differs only by thin coplanar
+slivers on the rails and, on one subject, by background buildings the section's row leaves out,
+which is what the cull does to the seat's own view in that section. **Checked, applies, not
+run as a frame** for 2048 and Omega: the same `visible_set` path, and a circuit that authors no
+sections (`section_id` `0xff`, several 2048 circuits) has `has_sections()` false and is never
+culled. HD: the chunk set reads the subject's position through the same accessor; PVS on and off
+were pixel-identical on HD before and after, so no frame shows the effect there.
 
 **Controls**, all on one stick and the buttons a keyboard has (the abstract input has one stick):
 
