@@ -121,9 +121,16 @@ fn photo_modes_subject_places_the_cull_not_the_seat() {
     let far_section = race.section_of_slot(3);
     assert_ne!(seat_section, UNPLACED);
     assert_ne!(far_section, UNPLACED);
-    assert_ne!(seat_section, far_section, "the fixture must tell the two apart");
+    assert_ne!(
+        seat_section, far_section,
+        "the fixture must tell the two apart"
+    );
 
-    assert_eq!(race.visibility_sections().0, seat_section, "before the mode");
+    assert_eq!(
+        race.visibility_sections().0,
+        seat_section,
+        "before the mode"
+    );
     assert!(race.photo_begin(false, false, None));
     for _ in 0..3 {
         race.photo_step(Pad {
@@ -135,7 +142,10 @@ fn photo_modes_subject_places_the_cull_not_the_seat() {
 
     let (craft, camera) = race.visibility_sections();
     assert_eq!(craft, far_section, "the craft half follows the subject");
-    assert_eq!(camera, far_section, "the camera half is searched near the subject (sample {far})");
+    assert_eq!(
+        camera, far_section,
+        "the camera half is searched near the subject (sample {far})"
+    );
 
     // The free camera moved off the craft is still placed from the subject's sample.
     for _ in 0..30 {

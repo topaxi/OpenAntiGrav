@@ -591,7 +591,10 @@ impl Race {
             return self.located_sample(ship);
         }
         let hint = self
-            .sample_index_for(slot, usize::try_from(ship.driver.index).unwrap_or(usize::MAX))
+            .sample_index_for(
+                slot,
+                usize::try_from(ship.driver.index).unwrap_or(usize::MAX),
+            )
             .unwrap_or(usize::MAX);
         self.located_from(ship, hint)
     }
