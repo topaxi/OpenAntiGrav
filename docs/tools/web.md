@@ -603,11 +603,19 @@ names `libGLX_nvidia.so.0`, which loads `libEGL.so.1`, which loads `libEGL_nvidi
 `libnvidia-eglcore` (`LD_DEBUG=files`). `oag_game::adapter::BACKENDS` never asks for wgpu's GL
 backend.
 
-**A player reaches this too**: `--drive` runs the real session (`crates/game/src/main/drive.rs`), and
-closing the window on the loading screen takes the same route, `event_loop.exit()` to
-`Session::drop` to `main` returning. The wait costs that player the rest of the load: 0.5 s (Pulse),
-3.7 s (2048), 3.9 s (HD) from a launch's first frame in a debug build. The load does not check
-`gpu_workers::stopping()`.
+**A player reaches this too, measured.** `--drive` runs the real session
+(`crates/game/src/main/drive.rs`), and closing the window on the loading screen takes the same route:
+`event_loop.exit()`, `Session::drop`, `main` returning. A real X11 window on Xvfb on the NVIDIA GPU,
+sent `WM_DELETE_WINDOW` once `race load reached` is logged (2048, first event), with `race-load` left
+out of the registry: 3 of 9 closes crashed (`SIGSEGV` on `race-load`, exit -11). With it registered:
+0 of 9, every run logged the wait and exited 0. In about one run in eight the close never took
+effect within 30 s, on both binaries; that is unexplained, and it is not this crash.
+
+**The fix, in numbers.** The same test on the same machine with the registration removed: 6 of 8 runs
+crashed, 12 s when one passed. With it: 30 of 30 passed, no new core, about 16.5 s. The wait costs a
+player closing the window the rest of the load: 0.5 s (Pulse), 3.7 s (2048), 3.9 s (HD) from a
+launch's first frame in a debug build. The load does not check `gpu_workers::stopping()`, so the
+window stays up for that long.
 
 **A guard lasts as long as the thread** (`Guard::hold_to_thread_end`) where the worker returns GPU
 objects. `std` stores a thread's result after the closure has returned and drops it on that thread
