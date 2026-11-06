@@ -415,6 +415,23 @@ pub fn seat_for_launch(
     }
 }
 
+/// Names the person at this machine, seat 1 ([`Race::player_slot`]), with the stored player
+/// name ([`crate::settings::Player::name`]), so the multiplayer tag over their craft in the
+/// other seat's view and their row on the end screens carry it. Every other slot stays unnamed
+/// and keeps `Player N`. With no name stored nothing is set. A network race's lobby names
+/// replace this whole list when it joins ([`Race::set_person_names`]).
+///
+/// Display only: nothing here reaches the simulation or its hash.
+pub fn name_first_seat(race: &mut Race, player: &crate::settings::Player) {
+    let Some(name) = player.name() else {
+        return;
+    };
+    let seat = race.player_slot();
+    let mut names = vec![String::new(); seat + 1];
+    names[seat] = name.to_string();
+    race.set_person_names(names);
+}
+
 /// Keeps `race`'s local slots to the ones a device is on: a slot below the seated
 /// count with nothing driving it is flown by the grid's driver
 /// ([`Controller::Ai`]), and goes back to [`Controller::Local`] when a device

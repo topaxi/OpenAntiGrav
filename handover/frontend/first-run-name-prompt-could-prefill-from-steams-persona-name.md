@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-06
-summary: "Shared name and Pulse/Pure tag are built and stored; Steam persona prefill is open, plus a Deck keyboard call and a phone check"
+summary: "Name and tag are built, stored and shown (Pulse title readable, tags carry the stored name); Steam persona prefill is open, plus 2048/Omega asking, a Deck keyboard call and a phone check"
 size: S (40)
 difficulty: easy (40)
 ---
@@ -33,12 +33,11 @@ titles). A player who launches this port as a non-Steam game from Steam already 
 
 ## Open
 
-- **Pulse's `ENTER YOUR NAME` title is nearly invisible**: dark glyphs on the dark panel in the `TagInput` prompt (read on `--menu-prompt player-name`, Pulse EU). `Prompt::frame` asks for white, so the face's own colour wins there; HD's grid draws it white. The pilot rename shares the frame, so check it too.
-- **Split-screen tags still say `Player 1`**: `Race::tag_name` (`crates/raceplay/src/player_tags.rs`) does not read `settings.player.name()`. Seat 1 takes the stored name through `Race::set_person_names`, from the race start in `oag-game`.
 - **2048 and Omega ask when the name is first needed, not at first run** (maintainer, 2026-11-06), for example on entering the online lobby or a split-screen race with tags. Not built: `Title::profile` has no name on them and nothing asks yet, so the lobby falls back to the login name. Which moments count is open.
 - **Built (2026-11-06, `docs/ui/player-name.md`).** `[player] name`/`tag` in settings, `Title::profile`,
   the first-run prompt (Pulse's `TagInput` row, the grid elsewhere), OPTIONS rows, the footer tag, the
-  lobby default and the desk keyboard. Prefill from Steam is **not** built and stays open below.
+  lobby default and the desk keyboard; the Pulse prompt's title reads on its panel and seat 1's
+  multiplayer tag carries the stored name (`docs/ui/player-name.md`, "Where the name goes in a race"). Prefill from Steam is **not** built and stays open below.
 - **Where the prefill hooks in**: `session::player_name::Session::ask_player` opens the name prompt with
   an empty initial text; a prefill passes `clean_name(persona)` as `initial` in
   `open_player_prompt`. The charset rule (`settings::player::clean_name`) already drops what a font

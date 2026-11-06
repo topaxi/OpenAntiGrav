@@ -65,6 +65,30 @@ The online lobby's name field opens on the stored player name (lower-cased: the 
 lower case), else the name the last connection used, else the login name. The footer tag draws only
 on a title that uses a tag (`Player::footer_tag`).
 
+## Where the name goes in a race
+
+Seat 1 is `Race::player_slot()`, the grid's first human slot (slot 0 in every local session).
+`oag_game::split_screen::name_first_seat` hands the stored name to
+`Race::set_person_names` as that slot's name, from `build_race_stage` (every windowed race) and
+`race_capture::capture` (`--race --screenshot`). The name then shows in three places that all
+read `person_names`:
+
+- the multiplayer tag over seat 1's craft in the other seat's view (`Race::tag_name`), where it
+  said `Player 1` before. Seat 2 has no stored name and keeps `Player 2`; with none stored
+  seat 1 keeps `Player 1`;
+- seat 1's row on Pulse's multiplayer end table (`PersonName::Named`) and HD's field grid;
+- on HD's grid also a one-person race's own row, which had no name before (HD keeps a name,
+  `Title::profile`): unmeasured against the original.
+
+The name never reaches the simulation or a hash. A network race joins after the stage is built and
+`NetPlay::begin_join` replaces the whole list with the lobby's names, so the lobby wins. The
+earlier claim that seat 1 already took the stored name at the race start was wrong: nothing
+called `set_person_names` on a local race. Fixed at the race start in `oag-game`, not by making
+`oag-raceplay` read settings. Tests: `player_tags_ground_truth` (the names a race returns) and
+`split_screen_ground_truth::the_stored_name_is_the_tag_over_the_first_seats_craft` (a captured
+frame; it fails with the `race_capture` call removed). `build_race_stage`'s own call is not
+pinned by a test: it is in the binary, which only a window reaches.
+
 ## Keyboards
 
 - **Controller and pointer**: the existing `Prompt` paths, unchanged.
@@ -89,6 +113,14 @@ on a title that uses a tag (`Player::footer_tag`).
 
 ## Open
 
+- The `ENTER YOUR NAME` / `ENTER YOUR TAG` title on Pulse is the disc's `FEGlobals->TitleColor`
+  (`0xFF000000`, black), authored for Pulse's light page. The prompt's dark panel is ours, so
+  `TagEntry::draw` passes the title through `window_layout::legible` (white at 0.6 where the ink is
+  too dark, as the window picker does for its boxes). A light authored colour is kept. Checked on
+  Pulse EU `--menu-page options --menu-prompt player-name` and `player-tag`; Pure takes the grid
+  (white title, `player-name-grid`), and the pilot rename shares `TagEntry::draw`. Test:
+  `tag_entry::tests::a_black_authored_title_is_drawn_so_it_reads_on_the_dark_panel` and the
+  disc-backed `the_name_and_tag_titles_read_on_the_prompts_panel`.
 - The Pulse prompts read the disc (`pilot_editor::Session::pulse_tag_entry`, in
   `crates/game/src/main/session/pilot_editor.rs`: opens the archive, parses two XML entries) on the
   render thread each time a name or tag prompt opens. Inherited from the pilot rename; a boot-time read
