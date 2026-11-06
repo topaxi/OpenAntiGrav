@@ -501,11 +501,11 @@
 # 2026-10-12 ai-handling-verify: whose handling an opponent flies (opponent-handling.md)
 0x08840b24	function	Craft_Construct	85	opponent-handling.md
 0x088892e4	function	Team_FindByName	85	opponent-handling.md
-0x08813f24	function	PhotoMode_Update	84	photo-mode.md
-0x08880704	function	Camera_AddPhotoPitch	84	photo-mode.md
-0x08880774	function	Camera_AddPhotoYaw	84	photo-mode.md
+0x08813f24	function	PhotoMode_Update	90	photo-mode.md
+0x08880704	function	Camera_AddPhotoPitch	90	photo-mode.md
+0x08880774	function	Camera_AddPhotoYaw	90	photo-mode.md
 0x088805e4	function	Camera_FollowPlayer	78	photo-mode.md
 0x0883b0d8	function	Camera_UpdatePlayerViewUnlessPhoto	78	photo-mode.md
 0x0891e788	function	PhotoMode_BeginJpegSave	80	photo-mode.md
-0x08936838	function	JpegWriter_Construct	84	photo-mode.md
-0x08935850	function	JpegWriter_Encode	84	photo-mode.md
+0x08936838	function	JpegWriter_Construct	90	photo-mode.md
+0x08935850	function	JpegWriter_Encode	90	photo-mode.md

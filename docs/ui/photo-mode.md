@@ -65,14 +65,15 @@ Controls: CROSS takes (the redirect's forward), CIRCLE leaves. The camera:
 | above | Mode 2: 6 behind, 2.5 above (`camera.md`: "above" is not above) | none | |
 | track | Mode 7: the authored `Camera` node nearest the craft | X zooms `+0x270`, `[3, 40]` | L `-5`, R `+5` |
 
-Pitch `+= stick * 0.05` per frame, clamped to **`[-1.0, 0.6]`** radians. Yaw `+= stick * 0.05`, free,
-wrapped at `+-2 pi`. Confidence 84, one binary. Reset on a mode change into close or front, and on
-leaving.
+Pitch `+= stick * 0.05` per frame, clamped to **`[-1.0, 0.6]`** radians; stick up is negative, lifting
+the eye. Yaw `+= stick * 0.05`, free, wrapped at `+-2 pi`. Confidence 90, live. Reset on a mode change
+into close or front, and on leaving.
 
-**There is no free camera on Pulse.** The eye is a rigid offset from the craft turned by two angles,
-or an authored node, so nothing in `PhotoMode_Update` asks the track where the eye may go, and the
-stick cannot leave the orbit radius. `+0x270` feeds `Camera_FramingFov`'s view width, so "zoom" is
-field, not position.
+**There is no free camera on Pulse, and the track does not limit it.** The eye is a rigid offset from
+the craft turned by two angles, or an authored node. `|eye - craft|` read 12.3693 at every pitch and
+yaw, and at pitch `0.6` the eye sits under the road (the frame shows the hull from below). Confidence 90.
+Track "zoom" is the field of view: `+0x270 = z` draws `z + 0.06 * (25.1 - z)` degrees at 112 units
+(six values matched; the target is the node framing).
 
 ## HD/Fury
 
@@ -112,6 +113,10 @@ Pulse offers none (the row is absent from `InGame Pause MP`). HD's `Block name="
 blocks marked `InputPad="1"`, and `PhotoMode_Update` reads `g_GameState+0xe4`/`+0xe5` for the paused
 pad, so HD allows it in a local split. See the live section.
 
-## Live
+## What entering stops
 
-Pending.
+**Pulse, measured (PPSSPP, Pulse USA, 90).** In `InGame Photo`, `Ship_UpdateCraft` and
+`RaceManager_Update` take no hits, the craft stands to the bit, and only `Camera_UpdateSpectatorView`
+runs. The same holds for `InGame Pause`, so photo mode is the pause plus a camera. The race resumes
+where it stopped. Numbers: [Pulse EU, Live](../ghidra/functions/psp-pulse-eu/photo-mode.md#live-ppsspp-pulse-usa).
+Audio was not measured: the emulator ran muted; recipe on that page.
