@@ -744,12 +744,17 @@ const FURY_GRID_FIXTURE: &str = r#"
     <Image name="unlockboxbrackets"><Values x="168" y="708" width="440" height="168" color="0xFFDEDEDE" src="Data\FE\Images\dot.gtf"></Values>
       <Bracket><Values corner="true" X="160" Y="700" Width="448" Height="176" Colour="0xFF646464"></Values></Bracket>
     </Image>
+    <Image name="Flyer Left Arrow"><Values x="710" y="540" width="32" height="64" color="0xFF8AC0CA" src="Data\FE\Images\tilted_arrows.gtf"></Values></Image>
     <Image name="Flyer Right Arrow"><Values x="1700" y="540" width="96" height="64" color="0xFF8AC0CA" src="Data\FE\Images\tilted_arrows.gtf"></Values></Image>
   </Screen>
 </Screen>
 "#;
 
 fn fury_grid_list(unlock_pending: bool) -> Vec<Draw> {
+    fury_grid_list_at(unlock_pending, 2, 0)
+}
+
+fn fury_grid_list_at(unlock_pending: bool, count: usize, index: usize) -> Vec<Draw> {
     let screens = oag_ui::screen::Screens::from_xml(FURY_GRID_FIXTURE);
     let layout = Layout {
         screen: screens.by_name("Grid Selection Fury").unwrap().clone(),
@@ -766,10 +771,10 @@ fn fury_grid_list(unlock_pending: bool) -> Vec<Draw> {
         locked: false,
         flyer_name: Some(format!("0{name}")),
     };
-    let model = GridSelection::new(vec![
-        grid("a", if unlock_pending { 10 } else { 0 }),
-        grid("b", 0),
-    ]);
+    let mut grids = vec![grid("a", if unlock_pending { 10 } else { 0 })];
+    grids.extend((1..count).map(|_| grid("b", 0)));
+    let mut model = GridSelection::new(grids);
+    model.step(i32::try_from(index).unwrap());
     let skin = oag_ui::menu::Skin::new(
         oag_pulse::FRONT_END.menu.unwrap(),
         oag_display::space::Space::HD,
@@ -812,14 +817,165 @@ fn the_grid_counter_is_capitals_in_the_title_face() {
     );
 }
 
-#[test]
-fn the_flyer_arrow_is_the_frames_grey_not_the_authored_blue() {
-    let list = fury_grid_list(true);
-    let arrow = list.iter().find_map(|draw| match draw {
-        Draw::Sprite { rect, color, .. } if rect[0] == 1700.0 => Some(*color),
+/// The colour of the sprite drawn at `x` (the arrows' authored left edges).
+fn sprite_color_at(list: &[Draw], x: f32) -> Option<[f32; 4]> {
+    list.iter().find_map(|draw| match draw {
+        Draw::Sprite { rect, color, .. } if rect[0] == x => Some(*color),
         _ => None,
-    });
-    assert_eq!(arrow, Some(argb_to_rgba(FLYER_ARROW_COLOR)), "{list:?}");
+    })
+}
+
+const LEFT_ARROW_X: f32 = 710.0;
+const RIGHT_ARROW_X: f32 = 1700.0;
+
+/// The frame (`menu-grid-select`, the first card) reads the right arrow as
+/// `100,100,100`, where the screen authors `0xFF8AC0CA`, and the left a
+/// half-strength copy of it.
+#[test]
+fn on_the_first_card_the_left_arrow_is_half_strength_and_the_right_full() {
+    let list = fury_grid_list_at(true, 8, 0);
+    assert_eq!(
+        sprite_color_at(&list, RIGHT_ARROW_X),
+        Some(argb_to_rgba(0xFF64_6464)),
+        "{list:?}"
+    );
+    assert_eq!(
+        sprite_color_at(&list, LEFT_ARROW_X),
+        Some(argb_to_rgba(0x7F64_6464)),
+        "{list:?}"
+    );
+}
+
+#[test]
+fn on_a_middle_card_both_arrows_are_full_strength() {
+    let list = fury_grid_list_at(true, 8, 3);
+    for x in [LEFT_ARROW_X, RIGHT_ARROW_X] {
+        assert_eq!(
+            sprite_color_at(&list, x),
+            Some(argb_to_rgba(0xFF64_6464)),
+            "{x} in {list:?}"
+        );
+    }
+}
+
+#[test]
+fn on_the_last_card_the_right_arrow_is_half_strength_and_the_left_full() {
+    let list = fury_grid_list_at(true, 8, 7);
+    assert_eq!(
+        sprite_color_at(&list, RIGHT_ARROW_X),
+        Some(argb_to_rgba(0x7F64_6464)),
+        "{list:?}"
+    );
+    assert_eq!(
+        sprite_color_at(&list, LEFT_ARROW_X),
+        Some(argb_to_rgba(0xFF64_6464)),
+        "{list:?}"
+    );
+}
+
+/// The original's branch tests "first card" before "last card", so a page of
+/// one leaves the right arrow opaque.
+#[test]
+fn a_page_of_one_dims_only_the_left_arrow() {
+    let list = fury_grid_list_at(true, 1, 0);
+    assert_eq!(
+        sprite_color_at(&list, RIGHT_ARROW_X),
+        Some(argb_to_rgba(0xFF64_6464))
+    );
+    assert_eq!(
+        sprite_color_at(&list, LEFT_ARROW_X),
+        Some(argb_to_rgba(0x7F64_6464))
+    );
+}
+
+fn fury_arrow_targets(card: Option<[f32; 4]>) -> Vec<Target> {
+    let screens = oag_ui::screen::Screens::from_xml(FURY_GRID_FIXTURE);
+    let layout = Layout {
+        screen: screens.by_name("Grid Selection Fury").unwrap().clone(),
+        scale: [1.0, 1.0],
+        faces: crate::picker::FaceScales::default(),
+    };
+    let any = |_: &str| {
+        Some(Placed {
+            x: 0,
+            y: 0,
+            width: 128,
+            height: 64,
+            quad_extent: None,
+            quad_centre: None,
+            blend: None,
+        })
+    };
+    hd_grid_targets(&layout, &any, card)
+}
+
+/// Where the flyer card is drawn on HD at 1920x1080: about x=770 to 1610.
+const HD_CARD: [f32; 4] = [770.0, 300.0, 840.0, 520.0];
+
+/// The authored arrows are 21x43 px on a 1280x800 screen; a tap beside them,
+/// where a finger lands, pages the grid.
+#[test]
+fn a_tap_beside_a_drawn_arrow_pages_the_grid() {
+    let targets = fury_arrow_targets(Some(HD_CARD));
+    for (at, from, to) in [
+        ((1660.0, 520.0), 3, 4),
+        ((1840.0, 640.0), 3, 4),
+        ((660.0, 500.0), 3, 2),
+        ((700.0, 660.0), 3, 2),
+    ] {
+        let mut model = pager(8);
+        model.step(from);
+        assert_eq!(
+            model.hd_pointer(&click_at(at.0, at.1), &targets),
+            vec![Event::Moved],
+            "a tap at {at:?}"
+        );
+        assert_eq!(model.index(), to, "a tap at {at:?}");
+    }
+}
+
+#[test]
+fn a_tap_well_clear_of_the_arrows_does_not_page() {
+    let targets = fury_arrow_targets(Some(HD_CARD));
+    for at in [
+        (1880.0, 570.0),
+        (1700.0, 400.0),
+        (600.0, 570.0),
+        (720.0, 800.0),
+    ] {
+        let mut model = pager(8);
+        model.step(3);
+        model.hd_pointer(&click_at(at.0, at.1), &targets);
+        assert_eq!(model.index(), 3, "a tap at {at:?}");
+    }
+}
+
+/// The grown arrows stop at the card: its own edge taps still confirm it.
+#[test]
+fn a_tap_on_the_card_still_confirms_it_beside_a_grown_arrow() {
+    let targets = fury_arrow_targets(Some(HD_CARD));
+    for at in [(775.0, 570.0), (1605.0, 570.0), (790.0, 560.0)] {
+        let mut model = pager(8);
+        model.step(3);
+        assert_eq!(
+            model.hd_pointer(&click_at(at.0, at.1), &targets),
+            vec![Event::Confirmed],
+            "a tap at {at:?}"
+        );
+    }
+}
+
+/// Omega draws no card: the arrows still win over the page-wide confirm band.
+#[test]
+fn with_no_card_drawn_a_tap_beside_an_arrow_pages_rather_than_confirms() {
+    let targets = fury_arrow_targets(None);
+    let mut model = pager(8);
+    model.step(3);
+    assert_eq!(
+        model.hd_pointer(&click_at(1660.0, 520.0), &targets),
+        vec![Event::Moved]
+    );
+    assert_eq!(model.index(), 4);
 }
 
 #[test]
