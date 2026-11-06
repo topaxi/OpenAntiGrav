@@ -4445,14 +4445,36 @@ package (`CellMode_Definition.xml`):
 - `Flyer Left Arrow` is `x=710 y=540 32x64` and `Flyer Right Arrow` `x=1700 y=540 96x64`
   (`src=Data\FE\Images\tilted_arrows.gtf`), and `hd_grid_targets` makes a target of each from
   those authored sizes.
-- **Neither is drawn**: `tilted_arrows` is not in `oag_hd::campaign::OTHER_TEXTURES`, so
-  `sprites(&image.src)` answers nothing and the widget is skipped (a `--menu-page grid-select`
-  capture at 1920x1080 shows no arrow at either place). The target remains, an invisible one. On
-  Omega the art is `tilted_arrows.gnf` (two copies on the package pair), and its loader reads the same list.
 - **The rects are fingertip-hostile**: 32x64 units of a 1080-unit-tall page is about 21x43 px (one scale, 2/3) on a
   1280x800 screen. Neither overlaps the card (the card spans roughly x=770 to 1610 on HD), so the
-  card does not shadow them. **Open**: load the art on both titles (a `crates/hd` and `crates/omega`
-  texture list change) and, if arrows are to be tapped, give them a hit rect of their own.
+  card does not shadow them.
+
+### The flyer arrows draw and can be tapped (2026-11-06, `hd-grid-arrows`)
+
+- **Drawn**: `tilted_arrows.gtf` is in `OTHER_TEXTURES` (HD) and the loader's `.gtf` to `.gnf` sibling fallback reads Omega's
+  copy. The texture is one white 128x63 sheet with alpha; the left arrow is `U=0`, `TxtrWidth=32`, the right `U=32`,
+  `TxtrWidth=96`, so the colour is all tint.
+- **The colour is code, not data**: `FlyerSelection`'s per-frame update gives each arrow `0x646464` with alpha `0xFF`, or
+  `0x7F` when there is no page to go to (the left arrow on the first card, the right on the last); the authored
+  `Color="0xFF8AC0CA"` never reaches the screen. `oag_ui_screens::campaign::hd::flyer_arrow_color`, evidence and
+  addresses in `docs/ghidra/functions/ps3-hdfury-eu/flyer-selection-arrows.md`. Confidence 90. The earlier fitted constant
+  (`100,100,100` for both arrows) is gone.
+- **Against the frames** (`menu-grid-select`, the pair re-rendered with its recorded flags and 96 % Safe Area): HD's right
+  arrow box differs from the original's by 0.01 grey (3,079 px of arrow, the same count in both); the left arrow adds `50`
+  over the dark backdrop in both, but the original's sits under the flyer's particle glow, so its box (52.9 mean grey
+  difference) is the card art's error, not the arrow's. Omega's left arrow box goes from 25.5 to 11.3 and its right is
+  6.1; both are backdrop (the original's is 243 grey where ours is 255) and the open blend question on the ghidra page.
+- **Tap rect**: each arrow's tap rect is its drawn rect grown by `hd::ARROW_TAP_MARGIN` (64 units, 43 px at 2/3 scale) on every
+  side, so about 160x192 (left) and 224x192 units (right), and cut back at the card's own edge so a tap on the card still
+  confirms it. **Chosen, not measured**: the original is played on a pad and its click region is not read. With no card
+  drawn (Omega) the arrows still come first in the target list and win over the page-wide confirm band. Pinned by
+  `a_tap_beside_a_drawn_arrow_pages_the_grid`, `a_tap_on_the_card_still_confirms_it_beside_a_grown_arrow`,
+  `with_no_card_drawn_a_tap_beside_an_arrow_pages_rather_than_confirms`, and the swipe tests stay as they were.
+  `hd_pointer` has no hover path to preserve; the wheel and the swipe are untouched.
+- **Open**: the original dims an arrow with nothing to page to, which suggests its pad does not wrap at the ends of a range;
+  `GridSelection::step` wraps (chosen) and a dimmed arrow here still pages. Not changed.
+- **Omega**: ported (same arrow code in `FUN_01546a50`, three ranges where HD has two); frame blend differs, see the ghidra page.
+
 - `step` wraps and returns `Moved` even with one grid (the wheel and the arrows share this); the
   swipe checks the count itself.
 
@@ -4587,7 +4609,8 @@ Re-rendering unchanged code reproduces every number to the last digit, so the fl
 - **Grid Selection**: `EventNum` goes through `cell_text::draw` (capitals, bold `Title` face, 150 grey, as Cell Selection
   already does); `unlockboxbrackets`' `dot.gtf` fill and its `<Bracket>` corner marks draw (the panel round `12 MORE POINTS`);
   `Flyer Left/Right Arrow` draw (`tilted_arrows.gtf` joined `oag_hd::campaign::OTHER_TEXTURES`, `dot.gtf` too) in
-  `100,100,100` where the screen authors `0xFF8AC0CA` (one frame; the recolouring state is unread).
+  `100,100,100` where the screen authors `0xFF8AC0CA` (the recolouring is `FlyerSelection`'s own update, read since:
+  "The flyer arrows draw and can be tapped").
 - **Track Select records rows**: the rows author `color=HD_LightGrey` (resolved `0x7f646464`) and `textcolor=HD_Grey`.
   The block fill dropped the colour's own alpha, and the label was always white. `oag_ui::menu::block::draw_fill` now
   multiplies the colour's alpha into each pass and `BlockWidget::text_color` carries `TextColor`. Fill reads 38 where the

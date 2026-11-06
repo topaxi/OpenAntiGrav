@@ -273,12 +273,13 @@ pub fn hd_grid_draw_list(
         let Some(placed) = sprites(&image.src) else {
             continue;
         };
-        if matches!(
-            image.name.as_deref(),
-            Some("Flyer Left Arrow" | "Flyer Right Arrow")
-        ) {
+        if let Some(color) = image
+            .name
+            .as_deref()
+            .and_then(|name| flyer_arrow_color(name, model.index(), model.grids().len()))
+        {
             let mut arrow = image.clone();
-            arrow.color = FLYER_ARROW_COLOR;
+            arrow.color = color;
             out.push(image_draw(&arrow, placed));
             continue;
         }
@@ -336,10 +337,29 @@ pub fn hd_grid_draw_list(
     layers
 }
 
-/// The flyer arrows' colour in the frame: `100,100,100` at the right arrow's
-/// centre, where the screen authors `0xFF8AC0CA`. Measured on one frame
-/// (`menu-grid-select`); which native state recolours it is unread.
-const FLYER_ARROW_COLOR: u32 = 0xFF64_6464;
+/// The colour `FlyerSelection`'s per-frame update gives a flyer arrow
+/// (`docs/ui/campaign-screens.md`, "The flyer arrows' colour"), for the
+/// arrow's widget `name` with the card at `index` of `len`: `Some` for the two
+/// arrows, `None` for any other image. The screen's authored `Color`
+/// (`0xFF8AC0CA`) is overwritten every update, so it never reaches the frame.
+///
+/// RGB is the literal `0x646464`. Alpha is `0xFF` for an arrow with a page
+/// to go to and `0x7F` for one without: the left arrow on the first card,
+/// the right arrow on the last (but never when the first card is also the
+/// last, which the original's branch leaves opaque). Confidence 90: the
+/// immediates in `FlyerSelection`'s update and the frame, whose right arrow
+/// reads `100,100,100` and whose left, on the first card, reads half of it.
+#[must_use]
+fn flyer_arrow_color(name: &str, index: usize, len: usize) -> Option<u32> {
+    const LIVE: u32 = 0xFF64_6464;
+    const SPENT: u32 = 0x7F64_6464;
+    let spent = match name {
+        "Flyer Left Arrow" => index == 0,
+        "Flyer Right Arrow" => index != 0 && index + 1 == len,
+        _ => return None,
+    };
+    Some(if spent { SPENT } else { LIVE })
+}
 
 /// `"Event {:02}/{:02}"` - `EventNum`'s own template (`"Event 01/08"`) and
 /// `GridNum`'s identical copy on `Cell Selection`, 1-based. Confidence 95:
@@ -894,7 +914,8 @@ fn hd_difficulty_button_line(
 /// There is only ever one tier on screen, so a click on the page confirming
 /// it is the two-tap idiom's second tap with nothing else to select.
 /// **Chosen, not measured**, either way: the original's click region is not
-/// read. The arrows come first in the list so they win where they overlap.
+/// read. The arrows come first in the list so they win where they overlap,
+/// and their tap rects are grown past the drawn arrows ([`arrow_tap_rect`]).
 #[must_use]
 pub fn hd_grid_targets(
     layout: &Layout,
@@ -910,7 +931,10 @@ pub fn hd_grid_targets(
             _ => continue,
         };
         if let Some(rect) = image_rect(image, sprites) {
-            out.push(Target { what, rect });
+            out.push(Target {
+                what,
+                rect: arrow_tap_rect(rect, what, card),
+            });
         }
     }
     out.push(Target {
@@ -918,6 +942,35 @@ pub fn hd_grid_targets(
         rect: card.unwrap_or(CONFIRM_BAND),
     });
     out
+}
+
+/// How far a paging arrow's tap rect reaches past its drawn rect on every
+/// side, in this screen's 1920x1080 grid: the authored `32x64` and `96x64`
+/// are about 21x43 px and 64x43 px on a 1280x800 screen, too small for a
+/// finger, and this makes the left arrow 160x192 and the right 224x192 units.
+/// **Chosen, not measured.**
+pub const ARROW_TAP_MARGIN: f32 = 64.0;
+
+/// An arrow's drawn rect grown by [`ARROW_TAP_MARGIN`], cut back at the
+/// flyer card's own edge (the side `what` points away from) so that a tap on
+/// the card still confirms it. With no card drawn nothing is cut: the arrows
+/// are first in the target list, so they win over the page-wide confirm band.
+fn arrow_tap_rect(drawn: [f32; 4], what: What, card: Option<[f32; 4]>) -> [f32; 4] {
+    let [x, y, width, height] = drawn;
+    let (mut left, mut right) = (x - ARROW_TAP_MARGIN, x + width + ARROW_TAP_MARGIN);
+    if let Some([card_x, _, card_width, _]) = card {
+        match what {
+            What::Previous => right = right.min(card_x).max(x + width),
+            What::Next => left = left.max(card_x + card_width).min(x),
+            What::Hex(_) => {}
+        }
+    }
+    [
+        left,
+        y - ARROW_TAP_MARGIN,
+        right - left,
+        height + 2.0 * ARROW_TAP_MARGIN,
+    ]
 }
 
 /// Where a click confirms `Grid Selection` when no flyer card is drawn: the
