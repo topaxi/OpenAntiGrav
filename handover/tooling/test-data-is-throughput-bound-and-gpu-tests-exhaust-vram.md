@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-06
-summary: "test-data 14,018 s to 12,321 s, 9,000 s not met (plan learning left; PFSC inflate landed; .gnf duplicates measured under 1 % of the suite, not built); NVIDIA segfault in one 2048 test"
+summary: "test-data: om 8,349 s summed, notebook 12,321 s; speed-plan learning left; .gnf dedup not worth it; NVIDIA segfault in one 2048 test"
 size: M (50)
 difficulty: medium (50)
 ---
