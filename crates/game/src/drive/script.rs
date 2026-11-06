@@ -10,6 +10,7 @@
 //! select <row>                     move focus to a row by id, setting key, label or #index
 //! set race.mode=time_trial         select that row, then step its value until it reads so
 //! press cross down                 tap each button in turn
+//! hold select left 40              hold every button down together for this many ticks
 //! escape                           the Escape key (a race: the pause menu's way out)
 //! ticks 120                        let this many ticks pass
 //! screenshot out.png               draw the next frame offscreen into a PNG
@@ -105,6 +106,8 @@ pub enum Step {
     },
     /// Tap each button in turn.
     Press(Vec<Button>),
+    /// Hold every button down together for this many ticks, then let go.
+    Hold { buttons: Vec<Button>, ticks: u32 },
     /// The Escape key, which a button tap does not reach.
     Escape,
     /// Let this many ticks pass.
@@ -135,6 +138,7 @@ impl std::fmt::Display for Step {
                 within,
             } => write!(f, "set {setting}={value} within {within}"),
             Self::Press(buttons) => write!(f, "press {buttons:?}"),
+            Self::Hold { buttons, ticks } => write!(f, "hold {buttons:?} {ticks}"),
             Self::Escape => f.write_str("escape"),
             Self::Ticks(n) => write!(f, "ticks {n}"),
             Self::Screenshot(path) => write!(f, "screenshot {}", path.display()),
@@ -281,6 +285,25 @@ impl Script {
                     })
                     .collect::<Result<_, _>>()?;
                 Step::Press(buttons)
+            }
+            "hold" => {
+                let Some(ticks) = words.pop() else {
+                    return Err("hold needs buttons and a number of ticks".into());
+                };
+                let ticks = ticks
+                    .parse()
+                    .map_err(|_| format!("{ticks:?} is not a number of ticks"))?;
+                if words.is_empty() {
+                    return Err("hold needs a button".into());
+                }
+                let buttons = words
+                    .iter()
+                    .map(|w| {
+                        oag_core::buttons::button_from_name(w)
+                            .ok_or_else(|| format!("{w:?} is not a button"))
+                    })
+                    .collect::<Result<_, _>>()?;
+                Step::Hold { buttons, ticks }
             }
             "ticks" => match words.as_slice() {
                 [n] => Step::Ticks(n.parse().map_err(|_| format!("{n:?} is not a number"))?),

@@ -138,6 +138,21 @@ pub struct State {
     /// The resolved race, from the frame a launch begins loading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub race: Option<Resolved>,
+    /// Photo mode's lens (`internal`, `close`, `track`), or `none` when it is closed, on
+    /// `stage=race`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub photo: Option<String>,
+    /// The end-of-race screen on top, `photo` for `Race End Photo` and `other` for the rest,
+    /// on `stage=race` once the race has ended with an end-of-race flow built.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endrace: Option<String>,
+    /// The race's state hash, hex, on `stage=race`. It moves with every tick, so a line is
+    /// written for each tick the race steps and none while it stands still.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
+    /// The simulation's own tick count, on `stage=race`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sim_tick: Option<u64>,
 }
 
 impl State {
@@ -176,6 +191,8 @@ impl State {
             "screen" => one(screen.map(|s| s.kind.clone())),
             "screen.id" => one(screen.map(|s| s.id.clone())),
             "title" => one(screen.map(|s| s.title.clone())),
+            "photo" => one(self.photo.clone()),
+            "endrace" => one(self.endrace.clone()),
             "focus" => screen
                 .and_then(|s| s.focus.as_ref())
                 .map(|f| {
@@ -223,6 +240,8 @@ impl State {
                 | "screen.id"
                 | "title"
                 | "focus"
+                | "photo"
+                | "endrace"
         ) || key.strip_prefix("race.").is_some_and(|rest| {
             matches!(
                 rest,

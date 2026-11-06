@@ -141,3 +141,80 @@ road at pitch `0.6`. HD: at orbit 1.34 the frame looks up through the road. A po
 to be faithful.
 
 **Omega: not checkable** live, shadPS4 has no memory readout.
+
+## What ours does
+
+One photo mode for every title, on by default (Pure included, which has none in the original).
+Code: `oag_raceplay::photo` (the camera), `oag_game::photo` (the screen and the files),
+`oag-game`'s `session::photo` (the session half). Everything here that is not a number measured
+off an original is **chosen, not measured**; where Pulse's and HD's laws differ the wider one is
+taken, and a value one title measured is used on the rest unchanged.
+
+**Entry.** The pause menu's PHOTO MODE row, which is the front end's main page over the race
+parked behind it (Escape, or Back on a phone): the row is parked off the page unless a race with
+one view is held, as a choice with nothing to offer is (`Menu::offer`). The built-in mod
+`oag-extras` attaches it, so it is on every title's main page (after OPTIONS' own rows; on HD and
+Omega's strip it is the tab right of OPTIONS). On Pulse's `Race End Photo`, SELECT opens it once
+the screen takes input (61 ticks after the finish), and leaving returns to the screen. Left out:
+split screen (no single picture, no single pad: a follow-up), a LAN or online race (the server's),
+and a build that cannot write a file (a page, a phone).
+
+**While it is open** the race does not tick (`oag_game::photo::ticks`), whatever state it is in,
+so its state hash does not move and the race resumes where it stood; the audio is stepped as under
+the pause. The camera is a render-side override (`CameraOverride`), put back on leaving. Leaving spends
+Circle, Cross, Start, Select and the shoulders, so none reaches the race. Escape (and Back, and the
+window losing focus, which does nothing then) leaves the mode and goes no further; the next Escape
+opens the menus.
+
+**Lenses** (the camera row): `internal` (5 ahead of the nose, Pulse's measured), `close` (12 behind
+and 3 above, free to orbit; Pulse's measured offset, **chosen** on the others), `track` (the
+circuit's authored `Camera` node nearest the craft, aimed at it; only where a circuit authors
+one, left out of the cycle otherwise). The mode opens on `internal`, as both originals do.
+
+**Controls**, all on one stick and the buttons a keyboard has (the abstract input has one stick):
+
+| Input | Does |
+| --- | --- |
+| stick, arrow keys | orbit `close` (yaw and pitch, each free, wrapped at +-2 pi, 0.05 rad a tick: HD's law); zoom and tilt `track` |
+| SELECT held + stick | `close`: zoom (up and down, field 10 to 100 from 65) and tilt (left and right) |
+| SQUARE held + stick | `close`: pan, +-5 |
+| SELECT tap | next lens |
+| SQUARE tap | HUD on or off (off on opening) |
+| L, R | previous, next craft, wrapping, skipping craft out of the race |
+| TRIANGLE | reset the orbit, tilt, pan and fields |
+| START | hide or show the help |
+| CROSS | take the shot (refused for 0.15 s after opening: HD's guard) |
+| CIRCLE, right click | leave |
+
+A click on the four chips along the top (camera, HUD, TAKE PHOTO, BACK) does the same, and a click
+with the help hidden shows it. Not ported: HD's separate tilt triggers (L2, R2 are the airbrakes'
+axes here), the right-stick zoom, the touch gestures of 2048 (a follow-up).
+
+**The shot.** The frame the player sees, at the size they see it (`Framebuffer::output`, the
+presentation target: the picture at window size, **before** the display grade and anything drawn
+over the surface), written as a PNG to `photos/` under the user's data directory
+(`<data dir>/oag/photos/oag-<title>-<unix seconds>-<n>.png`, `n` making the name unique). The
+screen's text is drawn over the surface, so it is not in the file; the race's HUD is, only when
+its row is on, and the end screens and track panel never are. The result message ("PHOTO SAVED")
+shows and the mode stays open on the same camera. `crates/game/tests/photo_mode_ground_truth.rs`
+checks the file is pixel-identical to a `--drive` screenshot of the same tick with the help
+hidden, and of the same size.
+
+**Words.** One id per row, `OAG_PHOTO_*` in `assets/ui/strings/english.toml`; where a title's disc
+words a row the disc's own text is played instead (`oag_title::photo::Strings`: Pulse's
+`ER_PHOTO_CAM` and `ER_PHOTO_HUD`; HD's and Omega's `MSC_PHOTO_HUD`, `_HELP`, `_ROT`, `_PAN`,
+`_RESET` and `_SHIP`), checked to be in each disc's string table by the ground-truth test. The
+rest is ours, with French named under `[untranslated]`.
+
+**Checked against the other lineage.** 2048 and Omega both run this mode (driven to a race, the
+mode opened from the pause menu, orbited, the HUD row on, a shot taken and read): ported, with
+`photo_mode_ground_truth` on Pulse and a `--drive` walk on each of the five titles. `Race End Photo`
+exists on Pulse only in this build (HD's end-race flow does not open on it), so SELECT at the finish
+is Pulse's alone. 2048's own touch screen,
+its preview step and its Glory Moment are not used.
+
+**Left open:** exposure, saturation, speed blur,
+depth of field and motion blur (`oag-post`, `photo-effects`), the photo counter stat, split screen,
+touch gestures, saving on a page or a phone, HD's real `close` rest offset, and a shot at the
+scene's own pixels (the file is the presentation target, upscaled from the scene drawn at its
+configured render size: the dynamic resolution is held there while the mode is open).

@@ -80,6 +80,10 @@ pub enum Action {
     EditPlayerName,
     /// The OPTIONS page's PLAYER TAG row, on titles that use a tag.
     EditPlayerTag,
+    /// The pause menu's PHOTO MODE row: resumes the parked race into the one photo mode
+    /// (`crate::main::session::photo` in `oag-game`). The row is on the page only while a
+    /// race with one view is parked ([`super::Menu::offer`]).
+    PhotoMode,
 }
 
 impl Action {
@@ -103,6 +107,7 @@ impl Action {
             Self::OnlineJoin => "online_join",
             Self::EditPlayerName => "edit_player_name",
             Self::EditPlayerTag => "edit_player_tag",
+            Self::PhotoMode => "photo_mode",
         }
     }
 
@@ -137,13 +142,14 @@ impl Action {
             "online_join" => Some(Self::OnlineJoin),
             "edit_player_name" => Some(Self::EditPlayerName),
             "edit_player_tag" => Some(Self::EditPlayerTag),
+            "photo_mode" => Some(Self::PhotoMode),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 16] {
+    pub fn all() -> [Self; 17] {
         [
             Self::LaunchRace,
             Self::Quit,
@@ -161,6 +167,7 @@ impl Action {
             Self::OnlineJoin,
             Self::EditPlayerName,
             Self::EditPlayerTag,
+            Self::PhotoMode,
         ]
     }
 }

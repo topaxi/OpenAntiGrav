@@ -16,10 +16,9 @@
 //! (`0.7 s`) later. Until then the view is clean - the HUD went at the finish
 //! plus one frame, and nothing is drawn over the race.
 //!
-//! What is **not** here: photo mode. `SELECT` does nothing in this build, so
-//! the line `PRESS SELECT BUTTON FOR PHOTO MODE` promises a mode that does not
-//! exist yet; it is drawn anyway because the disc authors it and leaving it
-//! out would be a second invention, in the other direction.
+//! What is **not** here: photo mode, which is `oag_raceplay::photo` and the session's half
+//! (`oag-game`'s `session::photo`): `SELECT` on this screen, once it takes input, opens it, and
+//! leaving it returns here. The line `PRESS SELECT BUTTON FOR PHOTO MODE` is the disc's own.
 
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::screen::argb_to_rgba;

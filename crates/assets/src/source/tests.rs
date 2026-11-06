@@ -238,6 +238,7 @@ const TITLE: &Title = &Title {
     // No prompt glyph of this title's has been read; the disc's own draw unchanged.
     prompts: &oag_title::prompts::Prompts::UNREAD,
     profile: oag_title::profile::Profile::NEITHER,
+    photo: oag_title::photo::Strings::NONE,
     reset_enables: oag_title::recovery::ResetEnables::PULSE,
     effects_volume_law: oag_title::pre_race::Sourced::chosen(
         oag_title::group_volume::GroupVolumeLaw::Linear,

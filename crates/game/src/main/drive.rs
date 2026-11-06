@@ -235,6 +235,18 @@ impl Driver {
                     self.tap(*button, oag_game::drive::script::DEFAULT_WITHIN)?;
                 }
             }
+            Step::Hold { buttons, ticks } => {
+                for button in buttons {
+                    self.session.controls.press_button(*button, true);
+                }
+                for _ in 0..*ticks {
+                    self.frame(None)?;
+                }
+                for button in buttons {
+                    self.session.controls.press_button(*button, false);
+                }
+                self.frame(None)?;
+            }
             Step::Escape => {
                 self.session.escape();
                 self.frame(None)?;
@@ -340,6 +352,14 @@ fn state_of(session: &Session) -> State {
         || matches!(&session.stage, Stage::Loading(stage) if stage.race.is_some())
     {
         state.race = resolved(session);
+    }
+    if let Stage::Race(stage) = &session.stage {
+        state.photo = Some(session.photo_lens_name().to_string());
+        state.endrace = stage.endrace.as_ref().map(|endrace| {
+            if endrace.is_photo() { "photo" } else { "other" }.to_string()
+        });
+        state.hash = Some(format!("{:016x}", stage.race.sim.state_hash()));
+        state.sim_tick = Some(stage.race.sim.world.tick);
     }
     state
 }

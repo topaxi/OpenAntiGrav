@@ -428,6 +428,26 @@ ids = [
     "OAG_PAUSE_OPEN_UNOWNED",
     # The resume countdown's last word, new 2026-10-14; no translation pass yet.
     "OAG_COUNTDOWN_GO",
+    "OAG_MENU_PHOTO_MODE",
+    "OAG_MENU_PHOTO_MODE_SUBTITLE",
+    "OAG_PHOTO_CAMERA",
+    "OAG_PHOTO_INTERNAL",
+    "OAG_PHOTO_CLOSE",
+    "OAG_PHOTO_TRACK",
+    "OAG_PHOTO_HUD",
+    "OAG_PHOTO_ON",
+    "OAG_PHOTO_OFF",
+    "OAG_PHOTO_TAKE",
+    "OAG_PHOTO_BACK",
+    "OAG_PHOTO_STICK",
+    "OAG_PHOTO_ROTATE",
+    "OAG_PHOTO_ZOOM_TILT",
+    "OAG_PHOTO_PAN",
+    "OAG_PHOTO_RESET",
+    "OAG_PHOTO_SHIP",
+    "OAG_PHOTO_HELP",
+    "OAG_PHOTO_SAVED",
+    "OAG_PHOTO_FAILED",
 ]
 
 OAG_MENU_RESET_TO_DEFAULT = { text = "RESTAURER LA VALEUR PAR DÉFAUT", human = false }

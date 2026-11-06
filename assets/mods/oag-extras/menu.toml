@@ -83,6 +83,19 @@ target = "mods"
 subtitle = "Turn each mod on or off; who made it, its licence and what it adds"
 subtitle_string_id = "OAG_MENU_MODS_SUBTITLE"
 
+# PHOTO MODE is a row of the pause menu: `Menu::offer` leaves it off the page unless a race with
+# one view is held behind the menus. Chosen, not measured.
+[[entry]]
+id = "photo_mode"
+parent = "top"
+after = "options"
+kind = "action"
+label = "PHOTO MODE"
+string_id = "OAG_MENU_PHOTO_MODE"
+action = "photo_mode"
+subtitle = "Fly the camera round the race and save a picture"
+subtitle_string_id = "OAG_MENU_PHOTO_MODE_SUBTITLE"
+
 [[entry]]
 id = "quit"
 parent = "options"

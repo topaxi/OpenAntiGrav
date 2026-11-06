@@ -127,6 +127,7 @@ pub const TITLE: &Title = &Title {
     // Measured: the six glyphs of `PS_BUTTONS.fnt` - see `prompts`.
     prompts: prompts::PROMPTS,
     profile: oag_title::profile::Profile::NEITHER,
+    photo: oag_title::photo::Strings::HD,
     // Omega's own recovery is unread; HD's, which runs Pulse's.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout HD"),
     // Omega's authored mix owns the buses.

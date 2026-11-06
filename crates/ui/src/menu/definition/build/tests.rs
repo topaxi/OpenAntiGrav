@@ -66,6 +66,7 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
         "options>records",
         "options>mods",
         "options>quit",
+        "photo_mode",
     ];
     assert_eq!(main_rows(Some(oag_pulse::TITLE), HEADER).unwrap(), pulse);
     assert_eq!(main_rows(Some(oag_pure::TITLE), HEADER).unwrap(), pulse);
@@ -77,6 +78,7 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
         "options",
         "options>mods",
         "options>quit",
+        "photo_mode",
         "records",
     ];
     assert_eq!(main_rows(Some(oag_hd::TITLE), HEADER).unwrap(), hd);
@@ -91,7 +93,8 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
             "options",
             "options>records",
             "options>mods",
-            "options>quit"
+            "options>quit",
+            "photo_mode"
         ]
     );
 }
@@ -107,6 +110,7 @@ fn no_title_keeps_every_vanilla_row_and_the_extras_around_them() {
             "options",
             "options>mods",
             "options>quit",
+            "photo_mode",
             "records"
         ]
     );

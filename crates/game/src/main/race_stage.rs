@@ -621,6 +621,19 @@ impl RaceStage {
         self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
     }
 
+    /// The race's HUD alone over `view`: photo mode with its HUD row on. No end screens and no
+    /// track panel, which are not part of the view.
+    pub(crate) fn draw_photo_hud(
+        &mut self,
+        gpu: &impl GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
+    ) {
+        self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
+    }
+
     /// What the race shows once it is over, over `view`, and whether it drew anything: the
     /// disc's own EndRace screens when this title carries `EndRace_Definition.xml` and it read
     /// (see `RaceStage::endrace`'s own doc), else the built-in results table. `false` while the

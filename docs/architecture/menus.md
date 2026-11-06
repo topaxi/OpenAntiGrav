@@ -1130,6 +1130,13 @@ names pausing, `IG_PAUSE_QUIT`, is drawn by nothing (see
 [hud.md](../ui/hud.md)'s "There is no pause"). See `PAUSE_OVERLAY` in
 `crates/game/src/main/menu_stage.rs`.
 
+**A row that is on the pause menu only while a race is held** (PHOTO MODE) is `menu::Menu::offer`'s:
+the row is in the definition, off the page from `Menu::new`, and `Session::menu_model` puts it
+back when a race with one view is held behind the menus (not a split, not a LAN or online race,
+not a build that cannot save a file). Parked, it leaves the row count, the cursor window and the
+pointer's hit-test the way a choice with nothing to offer does (`menu/hide.rs`). The row fires
+`Action::PhotoMode`, which resumes the parked race into the mode (`docs/ui/photo-mode.md`).
+
 **The race's own music already worked this way**, and is the reason the
 World's turn was safe to build the same way. Its playlist - through the
 sixteen soundtrack tracks, distinct from the menu's loop - already paused and

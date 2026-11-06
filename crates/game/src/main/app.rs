@@ -523,6 +523,7 @@ impl App {
             stalled: true,
             stutter: Default::default(),
             pause: oag_game::pause::State::Running,
+            photo: None,
             rumbler: None,
             wall: 0.0,
             go_at: None,

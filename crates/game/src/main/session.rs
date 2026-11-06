@@ -104,6 +104,8 @@ mod seat_assign;
 mod window_layout;
 #[path = "session/devrun.rs"]
 pub(crate) mod devrun;
+#[path = "session/photo.rs"]
+mod photo;
 #[path = "session/pure_chain.rs"]
 mod pure_chain;
 #[path = "session/placeholder.rs"]
@@ -400,6 +402,9 @@ pub(crate) struct Session {
     /// `session::pause`, which owns the rules and the one gate
     /// (`pause::State::ticks`).
     pub(crate) pause: oag_game::pause::State,
+    /// Photo mode while it is open: the race stands still and the camera is the player's
+    /// (`session::photo`).
+    pub(crate) photo: Option<photo::Open>,
     /// The live race's pad rumble, or `None` (`session::rumble`).
     pub(crate) rumbler: Option<oag_game::rumble::Rumbler>,
     /// The session's wall clock in seconds, read once a frame: what a pause's

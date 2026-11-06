@@ -78,7 +78,8 @@ impl Session {
         }
         // A network race is never paused from here: the server's race goes on
         // whatever this window does, so a frozen client only falls behind it.
-        let running = self.race_running() && self.net.is_none();
+        // Photo mode already holds the race still, and the window going away leaves it.
+        let running = self.race_running() && self.net.is_none() && self.photo.is_none();
         let pause = decide(
             away,
             self.settings.display.pause_on_focus_loss,
