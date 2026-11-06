@@ -189,6 +189,12 @@ oag-testdata.workspace = true
 oag-pob.workspace = true
 zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 oag-weapons.workspace = true
+
+# The TOML Schema reference validator (`settings_schema` test). Cargo builds an
+# example's dev-dependencies, and the `oag_web` example is a wasm32 build where
+# `toml-schema` (`url::Url::from_file_path`) does not compile, so it is left out
+# there; no test runs on wasm32.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 oag-schema = { workspace = true, features = ["validate"] }
 
 # The Android entry point: the binary's own body again (`src/android.rs`

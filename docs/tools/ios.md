@@ -83,9 +83,16 @@ cargo check --target aarch64-apple-ios -p oag-mobile
 cargo check --target aarch64-apple-ios -p oag-game
 ```
 
-Both succeed with no Apple SDK: `cargo check` runs build scripts on the host and
-never links. They prove the Rust type-checks for the target, including `wgpu`'s
-Metal backend, `cpal`'s CoreAudio backend and `winit`'s UIKit backend. **They do
+The `oag-mobile` check still runs on Linux with no Apple SDK. The `oag-game` one no
+longer does: `zip` brought `zstd-sys` in through `oag-mod`, and its `cc` build step
+needs `xcrun` (`error occurred in cc-rs: failed to find tool "xcrun"`, measured
+2026-11-06), so it needs a Mac. Build `oag-game` for iOS with
+`--no-default-features`: the default `extensions` feature links `oag-modhost`, which
+refuses iOS at compile time. `release.yml`'s `ios` job built without the flag and
+went red on every nightly from 2026-10-31; the flag is added, but no Mac has run the
+job since, so what comes after that error is unknown. Where `cargo check` runs
+(without a C dependency, build scripts run on the host and nothing links), it proves the Rust type-checks for the target, including `wgpu`'s
+Metal backend, `cpal`'s CoreAudio backend and `winit`'s UIKit backend. **It does
 not prove** that it links (`cargo build` needs the iOS SDK's frameworks and
 `clang`), that any `-sys` crate with a C build step (`cc`) compiles for the
 device, that the shaders and `re_rav1d` (the AV1 movie decoder) build, or that it

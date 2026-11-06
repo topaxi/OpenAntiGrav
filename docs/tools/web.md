@@ -475,6 +475,17 @@ constants are not module text and are not varied.
   Chrome stable and Chrome beta (`browser-actions/setup-chrome`), the second to
   catch the next Tint tightening before a player does. It could not be run from
   here, so the runner is unverified (HANDOVER.md lists what).
+- **CI** (`web-compile` in `.github/workflows/ci.yml`) runs `cargo check` of the
+  `oag_web` example for wasm32 with the pinned nightly on every push and pull
+  request (about 1.5 minutes cold on a loaded machine; no `-Z build-std`, no
+  link, so it does not need `rust-src`). Cargo builds an example's
+  dev-dependencies, so a dependency that is fine for tests but not for wasm32
+  fails there: `oag-game`'s `oag-schema` with `validate` (`toml-schema` calls
+  `url::Url::from_file_path`, absent on wasm32) broke the nightly's Pages job
+  four nights running while every other check was green. The dev-dependency is
+  now `cfg(not(target_arch = "wasm32"))`. Locally:
+  `cargo +nightly-2026-10-08 check --target wasm32-unknown-unknown -p oag-game
+  --no-default-features --example oag_web --features web`.
 
 `/usr/bin/chromium` (Chromium 153 for the walks above; 154 since 2026-10-12) is the browser it was run with: Playwright's
 own Chromium build has no WebGPU on Linux. Headless Chromium here reports a hardware
