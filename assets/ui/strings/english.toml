@@ -495,6 +495,28 @@ OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSED - ANYONE CAN RESUME", human = false }
 # no string. **Chosen, not measured**.
 OAG_COUNTDOWN_GO = { text = "GO", human = false }
 
+# Photo mode: the pause menu's row and the screen over the picture.
+OAG_MENU_PHOTO_MODE = { text = "PHOTO MODE", human = false }
+OAG_MENU_PHOTO_MODE_SUBTITLE = { text = "Fly the camera round the race and save a picture", human = false }
+OAG_PHOTO_CAMERA = { text = "CAMERA", human = false }
+OAG_PHOTO_INTERNAL = { text = "INTERNAL", human = false }
+OAG_PHOTO_CLOSE = { text = "CLOSE", human = false }
+OAG_PHOTO_TRACK = { text = "TRACK", human = false }
+OAG_PHOTO_HUD = { text = "HUD", human = false }
+OAG_PHOTO_ON = { text = "ON", human = false }
+OAG_PHOTO_OFF = { text = "OFF", human = false }
+OAG_PHOTO_TAKE = { text = "TAKE PHOTO", human = false }
+OAG_PHOTO_BACK = { text = "BACK", human = false }
+OAG_PHOTO_STICK = { text = "STICK", human = false }
+OAG_PHOTO_ROTATE = { text = "ROTATE", human = false }
+OAG_PHOTO_ZOOM_TILT = { text = "ZOOM, TILT", human = false }
+OAG_PHOTO_PAN = { text = "PAN", human = false }
+OAG_PHOTO_RESET = { text = "RESET CAMERA", human = false }
+OAG_PHOTO_SHIP = { text = "CHOOSE SHIP", human = false }
+OAG_PHOTO_HELP = { text = "HIDE OR SHOW HELP", human = false }
+OAG_PHOTO_SAVED = { text = "PHOTO SAVED", human = false }
+OAG_PHOTO_FAILED = { text = "PHOTO NOT SAVED", human = false }
+
 # The hint under a settings page's rows while the selected row is off its default,
 # also what a click or a tap on it does. Ours, in no original.
 OAG_MENU_RESET_TO_DEFAULT = { text = "RESET TO DEFAULT", human = false }

@@ -629,7 +629,7 @@ impl Menu {
             .iter()
             .map(|page| focus::snapped(page.entries.len(), 0))
             .collect();
-        Self {
+        let mut menu = Self {
             definition,
             stack: vec![root],
             cursor,
@@ -647,7 +647,10 @@ impl Menu {
             reset_label: String::new(),
             reset_rect: None,
             reset_glyph: None,
-        }
+        };
+        // A row that is on a page only while the host offers it starts off the page.
+        menu.offer(Action::PhotoMode, false);
+        menu
     }
 
     /// Seeds every row that edits `setting` with its current value.

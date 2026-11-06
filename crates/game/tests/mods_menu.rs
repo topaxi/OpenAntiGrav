@@ -173,7 +173,8 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
             "OPTIONS",
             "RECORDS",
             "MODS",
-            "QUIT"
+            "QUIT",
+            "PHOTO MODE"
         ]
     );
     assert_eq!(
@@ -185,9 +186,48 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
             "OPTIONS",
             "MODS",
             "QUIT",
+            "PHOTO MODE",
             "RECORDS"
         ]
     );
+}
+
+/// The pause menu has a PHOTO MODE row on every title, and the row is on the page only while
+/// the session offers it (a race with one view held behind the menus).
+#[test]
+fn the_pause_menu_offers_photo_mode_on_all_five_titles_and_only_when_offered() {
+    let none = scratch("photo");
+    for title in [
+        oag_pulse::TITLE,
+        oag_pure::TITLE,
+        oag_hd::TITLE,
+        oag_omega::TITLE,
+        oag_2048::TITLE,
+    ] {
+        let mods = Mods::load_from(&[none.clone()], &Default::default()).unwrap();
+        let built = mods
+            .build(
+                oag_ui::menu::BUILT_IN,
+                None,
+                Some(oag_ui::menu::For {
+                    title,
+                    updated: false,
+                }),
+            )
+            .unwrap();
+        let mut menu = oag_ui::menu::Menu::new(built.definition);
+        let has = |menu: &oag_ui::menu::Menu| {
+            menu.page()
+                .entries
+                .iter()
+                .any(|e| e.label() == "PHOTO MODE")
+        };
+        assert!(!has(&menu), "{}: off the page until offered", title.name);
+        menu.offer(oag_ui::menu::Action::PhotoMode, true);
+        assert!(has(&menu), "{}: on the page when offered", title.name);
+        menu.offer(oag_ui::menu::Action::PhotoMode, false);
+        assert!(!has(&menu), "{}: gone when not", title.name);
+    }
 }
 
 const FRENCH: &str = "[strings]\nTEST_GARAGE = { text = \"GARAGE (du mod)\", human = true }\n";

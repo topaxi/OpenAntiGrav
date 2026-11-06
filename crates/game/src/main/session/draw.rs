@@ -331,6 +331,8 @@ impl Session {
         let timing_first_race_frame =
             self.race_ready_at.is_some() && matches!(self.stage, Stage::Race(_));
         let resume_art = oag_game::pause::art_seconds(self.pause, self.go_at, self.wall);
+        // Read before the match, which borrows `self.stage` mutably.
+        let stepping = self.race_stepping();
         self.phases.mark(super::phases::Phase::Setup);
         let (scene_stats, video_label) = match &mut self.stage {
             Stage::Launcher(stage) => {
@@ -468,7 +470,7 @@ impl Session {
                     // clock is into the next one, so motion is smooth at any
                     // frame rate - and the tick exactly while paused, when the
                     // race is not stepping. See `race::between_ticks`.
-                    oag_raceplay::between_ticks::frame_alpha(&self.clock, !self.pause.frozen()),
+                    oag_raceplay::between_ticks::frame_alpha(&self.clock, stepping),
                     inside,
                     self.settings.graphics.fov,
                     self.settings.graphics.frustum_culling,
@@ -730,13 +732,25 @@ impl Session {
             // that path too. `RaceStage::draw_hud`'s `target_size` has to be
             // `view`'s real size rather than assumed from `gpu.output.config`
             // internally - see its own doc.
-            stage.draw_hud(
-                &self.gpu,
-                &mut encoder,
-                self.framebuffer.output(),
-                rect,
-                self.framebuffer.output_size(),
-            );
+            // Photo mode draws the race's HUD only when its row is on, and never the end
+            // screens or the track panel: the picture is the view.
+            match stage.race.photo().map(oag_raceplay::photo::Photo::hud) {
+                None => stage.draw_hud(
+                    &self.gpu,
+                    &mut encoder,
+                    self.framebuffer.output(),
+                    rect,
+                    self.framebuffer.output_size(),
+                ),
+                Some(true) => stage.draw_photo_hud(
+                    &self.gpu,
+                    &mut encoder,
+                    self.framebuffer.output(),
+                    rect,
+                    self.framebuffer.output_size(),
+                ),
+                Some(false) => {}
+            }
             // Pulse's bloom over the HUD (PSP measured, PS2 inherited), as
             // the queue order draws it: see
             // `oag_raceplay::Scene::composite_bloom`.
@@ -970,6 +984,8 @@ impl Session {
         ));
         // The line under a split race's pause: who paused and when it is anyone's.
         list.extend(self.pause_line(overlay_space.size));
+        // Photo mode's screen, over the surface and so not in a shot.
+        list.extend(self.photo_screen(overlay_space.size));
         // The TOUCH CONTROLS page's picture of the overlay, over its rows.
         if let Stage::Menu(stage) = &self.stage
             && let Some(art) = oag_game::touch_controls::art::Art::from_sheet(&self.cursor_sheet)
@@ -1029,6 +1045,8 @@ impl Session {
         self.phases.mark(super::phases::Phase::Overlay);
         let submit_start = timing_first_race_frame.then(web_time::Instant::now);
         frame_work.submit(&self.gpu.queue, encoder);
+        // A photo mode shot reads the picture this frame just drew.
+        self.finish_photo_shot();
         if let Some(reaper) = &self.gpu.reaper {
             reaper.reap();
         }

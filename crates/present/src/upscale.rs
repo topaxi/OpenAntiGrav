@@ -215,6 +215,7 @@ pub struct Framebuffer {
 /// scene must not be graded twice - and the player's brightness and gamma on
 /// the way out. One buffer would have to hold both at once.
 struct Output {
+    texture: wgpu::Texture,
     view: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
     grade: wgpu::Buffer,
@@ -782,6 +783,13 @@ impl Framebuffer {
     #[must_use]
     pub fn output(&self) -> &wgpu::TextureView {
         &self.output.view
+    }
+
+    /// The texture behind [`Framebuffer::output`], for reading the finished picture back: what a
+    /// photo mode shot copies, before the grade and anything drawn over the surface.
+    #[must_use]
+    pub fn output_texture(&self) -> &wgpu::Texture {
+        &self.output.texture
     }
 
     /// How big [`Framebuffer::output`] actually is.

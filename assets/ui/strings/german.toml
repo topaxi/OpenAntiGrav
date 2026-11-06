@@ -319,6 +319,28 @@ OAG_PAUSE_OPEN = { text = "SPIELER %s HAT PAUSIERT - JEDER KANN FORTSETZEN", hum
 OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSIERT - JEDER KANN FORTSETZEN", human = false }
 OAG_COUNTDOWN_GO = { text = "LOS", human = false }
 
+# Photo mode: the pause menu's row and the screen over the picture.
+OAG_MENU_PHOTO_MODE = { text = "FOTOMODUS", human = false }
+OAG_MENU_PHOTO_MODE_SUBTITLE = { text = "Die Kamera um das Rennen fliegen lassen und ein Bild speichern", human = false }
+OAG_PHOTO_CAMERA = { text = "KAMERA", human = false }
+OAG_PHOTO_INTERNAL = { text = "INNEN", human = false }
+OAG_PHOTO_CLOSE = { text = "NAH", human = false }
+OAG_PHOTO_TRACK = { text = "STRECKE", human = false }
+OAG_PHOTO_HUD = { text = "HUD", human = false }
+OAG_PHOTO_ON = { text = "AN", human = false }
+OAG_PHOTO_OFF = { text = "AUS", human = false }
+OAG_PHOTO_TAKE = { text = "FOTO MACHEN", human = false }
+OAG_PHOTO_BACK = { text = "ZURÜCK", human = false }
+OAG_PHOTO_STICK = { text = "STICK", human = false }
+OAG_PHOTO_ROTATE = { text = "DREHEN", human = false }
+OAG_PHOTO_ZOOM_TILT = { text = "ZOOM, NEIGEN", human = false }
+OAG_PHOTO_PAN = { text = "SCHWENKEN", human = false }
+OAG_PHOTO_RESET = { text = "KAMERA ZURÜCKSETZEN", human = false }
+OAG_PHOTO_SHIP = { text = "SCHIFF WÄHLEN", human = false }
+OAG_PHOTO_HELP = { text = "HILFE AUS- ODER EINBLENDEN", human = false }
+OAG_PHOTO_SAVED = { text = "FOTO GESPEICHERT", human = false }
+OAG_PHOTO_FAILED = { text = "FOTO NICHT GESPEICHERT", human = false }
+
 OAG_MENU_RESET_TO_DEFAULT = { text = "AUF STANDARD ZURÜCKSETZEN", human = false }
 
 # The player name and tag: the OPTIONS rows and the entry screens' titles.

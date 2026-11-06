@@ -212,8 +212,6 @@ pub mod extensions;
 mod field;
 #[cfg(feature = "view")]
 pub mod finish_camera;
-#[cfg(feature = "view")]
-pub mod photo;
 mod finished_thrust;
 pub mod foreign;
 #[cfg(feature = "view")]
@@ -258,6 +256,8 @@ mod original_tables;
 mod pads;
 #[cfg(feature = "view")]
 mod perfect_start;
+#[cfg(feature = "view")]
+pub mod photo;
 mod pilot_assist;
 pub mod pilots;
 pub mod player_step;

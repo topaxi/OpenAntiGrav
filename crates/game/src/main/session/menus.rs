@@ -532,6 +532,8 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::Quit) => {
                 self.quit = true;
             }
+            // The pause menu's PHOTO MODE row (`session::photo`).
+            menu::MenuEvent::Fired(menu::Action::PhotoMode) => self.open_photo_from_menu(),
             // The AI PILOTS page's own two actions - see `super::pilot_editor`.
             menu::MenuEvent::Fired(menu::Action::SavePilot) => self.save_pilot(),
             menu::MenuEvent::Fired(menu::Action::NewPilot) => self.new_pilot(),
@@ -937,6 +939,9 @@ impl Session {
         let mut definition = shell.definition.clone();
         oag_game::music_pool::expand(&mut definition, self.music_discs.pool(), &shell.strings);
         let mut model = menu::Menu::new(definition);
+        // PHOTO MODE is a row of the pause menu: there while a race with one view is held
+        // behind the menus, and on no other page of the front end.
+        model.offer(menu::Action::PhotoMode, self.photo_available());
         // Just the first frame's own value - `MenuStage::render` refreshes
         // this every frame off whichever page is actually current, since a
         // player can navigate to a page with a different reservation need

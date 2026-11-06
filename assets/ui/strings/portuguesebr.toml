@@ -317,6 +317,28 @@ OAG_PAUSE_OPEN = { text = "JOGADOR %s PAUSOU - QUALQUER UM PODE RETOMAR", human 
 OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSADO - QUALQUER UM PODE RETOMAR", human = false }
 OAG_COUNTDOWN_GO = { text = "VAI", human = false }
 
+# Photo mode: the pause menu's row and the screen over the picture.
+OAG_MENU_PHOTO_MODE = { text = "MODO FOTO", human = false }
+OAG_MENU_PHOTO_MODE_SUBTITLE = { text = "Mova a câmera pela corrida e salve uma imagem", human = false }
+OAG_PHOTO_CAMERA = { text = "CÂMERA", human = false }
+OAG_PHOTO_INTERNAL = { text = "INTERNA", human = false }
+OAG_PHOTO_CLOSE = { text = "PRÓXIMA", human = false }
+OAG_PHOTO_TRACK = { text = "PISTA", human = false }
+OAG_PHOTO_HUD = { text = "HUD", human = false }
+OAG_PHOTO_ON = { text = "LIGADO", human = false }
+OAG_PHOTO_OFF = { text = "DESLIGADO", human = false }
+OAG_PHOTO_TAKE = { text = "TIRAR FOTO", human = false }
+OAG_PHOTO_BACK = { text = "VOLTAR", human = false }
+OAG_PHOTO_STICK = { text = "ANALÓGICO", human = false }
+OAG_PHOTO_ROTATE = { text = "GIRAR", human = false }
+OAG_PHOTO_ZOOM_TILT = { text = "ZOOM, INCLINAR", human = false }
+OAG_PHOTO_PAN = { text = "PANORÂMICA", human = false }
+OAG_PHOTO_RESET = { text = "REDEFINIR CÂMERA", human = false }
+OAG_PHOTO_SHIP = { text = "ESCOLHER NAVE", human = false }
+OAG_PHOTO_HELP = { text = "OCULTAR OU MOSTRAR AJUDA", human = false }
+OAG_PHOTO_SAVED = { text = "FOTO SALVA", human = false }
+OAG_PHOTO_FAILED = { text = "FOTO NÃO SALVA", human = false }
+
 OAG_MENU_RESET_TO_DEFAULT = { text = "RESTAURAR O PADRÃO", human = false }
 
 # The player name and tag: the OPTIONS rows and the entry screens' titles.

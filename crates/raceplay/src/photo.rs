@@ -162,6 +162,16 @@ impl Photo {
         }
     }
 
+    /// The mode as it opens with SELECT and SQUARE already down: their release is not a tap.
+    #[must_use]
+    pub fn holding(mut self, select: bool, square: bool) -> Self {
+        self.select_down = select;
+        self.select_used = select;
+        self.square_down = square;
+        self.square_used = square;
+        self
+    }
+
     /// The lens that is up.
     #[must_use]
     pub fn lens(&self) -> Lens {
@@ -418,8 +428,10 @@ fn wrap(angle: f32) -> f32 {
 impl Race {
     /// Opens photo mode on the player's craft. The world is not touched; the pose is imposed
     /// as a camera override, and whatever override was in force is put back by
-    /// [`Self::photo_end`]. `false` in a split screen or on a race with more than one view.
-    pub fn photo_begin(&mut self) -> bool {
+    /// [`Self::photo_end`]. `select` and `square` say which of the two modifier buttons are down
+    /// as the mode opens, so letting go of them is not read as a tap. `false` in a split screen
+    /// or on a race with more than one view.
+    pub fn photo_begin(&mut self, select: bool, square: bool) -> bool {
         if self.viewport_count() > 1 || self.windowed() || self.view.photo.is_some() {
             return false;
         }
@@ -430,7 +442,7 @@ impl Race {
             .is_some_and(finish_camera::FinishCamera::has_nodes);
         let restore = self.view.camera_override;
         let subject = self.player_slot();
-        self.view.photo = Some(Photo::new(subject, track, restore));
+        self.view.photo = Some(Photo::new(subject, track, restore).holding(select, square));
         self.photo_pose();
         true
     }
@@ -439,6 +451,20 @@ impl Race {
     #[must_use]
     pub fn photo(&self) -> Option<&Photo> {
         self.view.photo.as_ref()
+    }
+
+    /// Takes the next lens, as a click on the screen's camera chip does.
+    pub fn photo_cycle_lens(&mut self) {
+        if let Some(photo) = self.view.photo.as_mut() {
+            photo.cycle_lens();
+        }
+    }
+
+    /// Turns the HUD in the picture on or off, as a click on the screen's HUD chip does.
+    pub fn photo_toggle_hud(&mut self) {
+        if let Some(photo) = self.view.photo.as_mut() {
+            photo.toggle_hud();
+        }
     }
 
     /// One tick of photo mode, and the pose it leaves. [`Action::None`] when it is not open.

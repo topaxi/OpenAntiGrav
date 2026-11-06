@@ -53,7 +53,10 @@ fn the_orbit_keeps_the_eye_at_one_distance_from_the_craft_at_every_angle() {
         let y = (step as f32 * 0.11).cos();
         photo.step(stick(x, y), &[0]);
         let reach = (photo.pose(&craft, None).eye - craft.position).length();
-        assert!((reach - rest).abs() < 1e-3, "step {step}: {reach} against {rest}");
+        assert!(
+            (reach - rest).abs() < 1e-3,
+            "step {step}: {reach} against {rest}"
+        );
     }
 }
 
@@ -270,7 +273,11 @@ fn a_tap_on_select_changes_the_lens_and_a_hold_with_the_stick_does_not() {
     assert_eq!(photo.lens(), Lens::Close);
     photo.step(held((0.0, 0.5)), &[0]);
     photo.step(Pad::default(), &[0]);
-    assert_eq!(photo.lens(), Lens::Close, "the stick made the hold a modifier");
+    assert_eq!(
+        photo.lens(),
+        Lens::Close,
+        "the stick made the hold a modifier"
+    );
 }
 
 #[test]
@@ -308,4 +315,20 @@ fn a_jump_of_the_picture_is_counted_so_the_upscaler_drops_its_history() {
     let before = photo.cuts();
     photo.cycle_lens();
     assert_ne!(photo.cuts(), before);
+}
+
+#[test]
+fn letting_go_of_the_button_that_opened_the_mode_is_not_a_tap() {
+    let mut photo = Photo::new(0, true, None).holding(true, true);
+    photo.step(
+        Pad {
+            select: true,
+            square: true,
+            ..Pad::default()
+        },
+        &[0],
+    );
+    photo.step(Pad::default(), &[0]);
+    assert_eq!(photo.lens(), Lens::Internal);
+    assert!(!photo.hud());
 }

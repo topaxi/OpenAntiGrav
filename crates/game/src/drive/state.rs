@@ -138,6 +138,17 @@ pub struct State {
     /// The resolved race, from the frame a launch begins loading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub race: Option<Resolved>,
+    /// Photo mode's lens (`internal`, `close`, `track`), or `none` when it is closed, on
+    /// `stage=race`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub photo: Option<String>,
+    /// The race's state hash, hex, on `stage=race`. Not part of the change test: it moves with
+    /// every tick.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
+    /// The simulation's own tick count, on `stage=race`. Not part of the change test.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sim_tick: Option<u64>,
 }
 
 impl State {
@@ -146,9 +157,13 @@ impl State {
     pub fn same_as(&self, other: &Self) -> bool {
         Self {
             tick: 0,
+            hash: None,
+            sim_tick: None,
             ..self.clone()
         } == Self {
             tick: 0,
+            hash: None,
+            sim_tick: None,
             ..other.clone()
         }
     }
@@ -176,6 +191,7 @@ impl State {
             "screen" => one(screen.map(|s| s.kind.clone())),
             "screen.id" => one(screen.map(|s| s.id.clone())),
             "title" => one(screen.map(|s| s.title.clone())),
+            "photo" => one(self.photo.clone()),
             "focus" => screen
                 .and_then(|s| s.focus.as_ref())
                 .map(|f| {
@@ -223,6 +239,7 @@ impl State {
                 | "screen.id"
                 | "title"
                 | "focus"
+                | "photo"
         ) || key.strip_prefix("race.").is_some_and(|rest| {
             matches!(
                 rest,
