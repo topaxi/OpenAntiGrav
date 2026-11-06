@@ -442,6 +442,10 @@ evidence. Nothing here establishes load order." - written before that page's
 own capture). Scored as **unconfirmed**, not assigned a number, rather than
 guessed at 50-60 to look decisive.
 
+**Screen size** (`hd-hud.md`, "SCREEN SIZE on every title"): `additional_definition.xml` (`data00`, `data08`, `data09`) authors no
+`Safe Area Setting` slider, though `eboot.bin` names the global; Omega takes the shared SCREEN SIZE row (default 100).
+**Checked, differs** from HD on the authored option.
+
 ## Open
 
 - **Which archive wins when a path is duplicated across the archives** -

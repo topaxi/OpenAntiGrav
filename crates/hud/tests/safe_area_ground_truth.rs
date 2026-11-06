@@ -143,7 +143,21 @@ fn pure_authors_no_screen_size_and_takes_the_shared_slider() {
         };
         let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pure::TITLE)
             .expect("the archives open");
-        for file in ["Skin", "Selection_Definition"] {
+        // `Skin.xml` and every unlocalised file its `LoadXML` list names (the credits and online
+        // screens carry a language suffix); `Options_Definition.xml` is Pure's options screen.
+        for file in [
+            "Skin",
+            "Controls_Definition",
+            "Demo_Definition",
+            "InGame_Definition",
+            "Multiplayer_Definition",
+            "Options_Definition",
+            "RecordGrid_Definition",
+            "Selection_Definition",
+            "StartProfile_Definition",
+            "Stats_Definition",
+            "Teaser_Definition",
+        ] {
             let blob = archives
                 .read_name(&format!(r"Data\Plugins\PI001\GUI\{file}.xml"))
                 .unwrap_or_else(|e| panic!("{image}: {file}: {e}"));

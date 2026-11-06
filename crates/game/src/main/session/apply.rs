@@ -330,8 +330,8 @@ impl Session {
                 }
             },
             // Applied on the spot to the menus: the inset is set here, and the pointer reads it
-            // back out of the same renderer. A race's HUD takes it when the race loads (no page
-            // is open over a running race).
+            // back out of the same renderer. A race parked behind the menus takes it from the
+            // settings on the first frame after it resumes.
             "graphics.hud_safe_area" => match text.parse::<u8>() {
                 Ok(percent) => {
                     self.settings.graphics.hud_safe_area = Some(percent);

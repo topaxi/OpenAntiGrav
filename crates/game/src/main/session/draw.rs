@@ -469,6 +469,8 @@ impl Session {
                 }
                 if let Some(hud) = &mut stage.hud {
                     hud.set_dynamic_hud(self.settings.display.dynamic_hud);
+                    // And the SCREEN SIZE row.
+                    hud.set_safe_area(self.settings.graphics.hud_safe_area);
                 }
                 stage
                     .scene

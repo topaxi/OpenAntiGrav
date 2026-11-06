@@ -463,8 +463,7 @@ impl Frontend {
                             max: f32::from(control.range.max_percent),
                             default: f32::from(control.range.default_percent),
                         },
-                        &label,
-                        "",
+                        &format!("{label} {}", control.value),
                         u32::from(control.value),
                         self.touch.camera_row == 1,
                         cursor,
@@ -508,8 +507,7 @@ impl Frontend {
                         .unwrap_or_default();
                     self.draw_touch_slider(
                         slider,
-                        &label,
-                        "%",
+                        &format!("{label} {value}%"),
                         value,
                         i == self.touch.audio_slider,
                         cursor,
@@ -582,8 +580,7 @@ impl Frontend {
     fn draw_touch_slider(
         &self,
         slider: &TouchSlider,
-        label: &str,
-        unit: &str,
+        caption: &str,
         value: u32,
         focused: bool,
         cursor: [f32; 4],
@@ -619,7 +616,7 @@ impl Frontend {
             color: [1.0, 1.0, 1.0, 1.0],
             border: None,
             align: Align::Centre,
-            text: format!("{label} {value}{unit}"),
+            text: caption.to_string(),
             wrap_width: Some(rect[2] - 4.0),
         });
     }

@@ -1243,7 +1243,7 @@ too common to tell).
 **Ours.** `oag_title::hud::SafeArea` on `HudArt::safe_area` (HD **measured** off the disc XML; every other title
 carries the shared slider, see [SCREEN SIZE on every title](#screen-size-on-every-title)),
 `[graphics] hud_safe_area` in the settings file (percent, `None` = the title's default, 90 on HD, held to the
-slider's range and step; the SCREEN SIZE row writes it, taken at race load), and one scale about the
+slider's range and step; the SCREEN SIZE row writes it, read every frame), and one scale about the
 centre of the layout's grid at the end of `oag_game::hud_overlay::Overlay::draw` (`safe_area_frame`).
 **Default 90, the disc's**: an HD player's HUD is now 10% smaller than before, as the original's is on a fresh
 profile. The comparison profile (`scripts/compare-environment.toml`, `hd-fury`) pins `hud_safe_area = 96`, the
@@ -1293,7 +1293,7 @@ HD's range, step and default (90) are the disc's own; the other four titles carr
 `assets/ui/menu.toml`'s `graphics.hud_safe_area` on the DISPLAY page, its values supplied from the booted title's
 `HudArt::safe_area` (`ValueSource::SafeAreas`), so the range is the title's data and not a list in the menu file; the
 menus' inset applies the moment a step lands (`Session::apply_setting`, `Renderer::set_inset`; the pointer reads the
-same inset back out), a race's HUD takes it when the race loads (no page opens over a running race), and the label is
+same inset back out), a race's HUD takes it from the settings every frame (`Overlay::set_safe_area`), so a race parked behind the menus (Start, then Circle) draws at the new size the frame it resumes, and the label is
 ours (`OAG_DISPLAY_SCREEN_SIZE`, English `SCREEN SIZE`, the same words as HD's `OPT_SCREEN_SIZE`). **2048** never
 reaches that page (its options are the disc's touch hub), so its `OptionsCamera` panel carries a second control,
 SCREEN SIZE, with its own chosen rect, and its touch front end takes the inset (`docs/formats/2048-frontend.md`).
@@ -1303,17 +1303,17 @@ SCREEN SIZE, with its own chosen rect, and its touch front end takes the inset (
 
 | Title | Front-end XML | Executable | Verdict |
 | --- | --- | --- | --- |
-| HD, Fury | `additional_definition.xml` in `DATA02`, `DATA03`, `DATA05` and `DATA06`: `Slider name="Safe Area Setting"`, `OPT_SCREEN_SIZE`, `minSlide="80" maxSlide="100" incSlide="2" default="90%"` in all four; `DATA00` carries no copy | the string is in the running image (`0x0077a680`); the on-disc `EBOOT.BIN` is a SELF and not searched | **found.** Fury is the same disc (`hdfury-ps3-eu`): its Game Options page is these copies, so it carries the slider |
+| HD, Fury | `additional_definition.xml` in `DATA02`, `DATA03`, `DATA05` and `DATA06`: `Slider name="Safe Area Setting"`, `OPT_SCREEN_SIZE`, `minSlide="80" maxSlide="100" incSlide="2" default="90%"` in all four; `DATA00` carries no copy | the string is in the running image (`0x0077a680`); the on-disc `EBOOT.BIN` is a SELF and not searched | **found.** Fury is the same disc (`hdfury-ps3-eu`): its Game Options page is these copies, so it carries the slider. The reader mounts the four on-disc archives; the update packages (`data/images/hdfury-updates`) are not mounted by it and were not searched |
 | Omega | `additional_definition.xml` (`data00`, `data08`, `data09`), `mainmenu_definition.xml`, `racebox_definition.xml`, `skin.xml`: none of `Safe Area`, `Screen Size`, `OPT_SCREEN_SIZE`, `OPT_SAFE_AREA` (`skin.xml` carries `SafeZone` attributes only) | `eboot.bin` (base and patch) carries `Safe Area Setting`, `ObeySafeZone` and `ignoreSafeZoneFullscreen` | **not found as an option.** The engine names the global (as HD's does) but no screen authors a slider; the original draws 1:1 (measured) |
 | 2048 | `NEWGUI` `Definition`, `Options_Definition`, `Bootup_Definition_EU`, `Team`, `Profile`, `Community`, `Skin`: none | `eboot.elf` (base and v1.04) carries the same three strings as Omega's. The disc's string table lists `OPT_SCREEN_SIZE` and `OPT_SAFE_AREA` ids (the engine's shared table), referenced by no XML read | **not found as an option**, same as Omega |
 | Pulse PSP (EU, USA), Pulse PS2 (EU) | `Additional_Definition`, `Skin`, `MainMenu_Definition`, `Selection_Definition`, `InGame_Definition`, `EndRace_Definition`, `RaceBox_Definition`: none | `BOOT.BIN` and `SCES_547.48`: no `safe area`, `screen size`, `overscan`, `screen position` or `picture position` string (only camera `centre` strings) | **not found** |
-| Pure PSP (EU, USA) | `Skin.xml`, `Selection_Definition.xml`: none. Pure's options XML is not at `PI001\GUI\Additional_Definition.xml` and was not located by name | `BOOT.BIN`: none | **not found** in what was read; the options file itself unread |
+| Pure PSP (EU, USA) | `Skin.xml` and the eleven unlocalised files its `LoadXML` list names, `Options_Definition.xml` (Pure's options screen) among them: none (the credits and online files carry a language suffix and were not read) | `BOOT.BIN`: none | **not found** |
 
 Reproduce: `crates/hud/tests/safe_area_ground_truth.rs` (`just test-data`) reads the XML and asserts HD's slider against
 `oag_hd::TITLE` and the absence in the others; the executable search is
 `grep -a -o -i -E '[ -~]{0,30}(safe.?area|screen.?size|overscan)[ -~]{0,30}' <extracted executable>`.
 **Confidence 80** that no other title authors the option (an executable string is not a screen: the engine names the
-global on 2048 and Omega and no XML uses it, so a screen this search did not name is the open remainder).
+global on 2048 and Omega and no XML uses it, so a screen this search did not name is the open remainder; HD's update packages are unread).
 
 **Result.** 1280x800 frames of every title at 90 and at 100, driven through the row (a pad step in `--drive`), and the
 default against 100: byte-identical on Pulse, Pure, 2048 and Omega (their HUD, race frame), so nothing of theirs moved;

@@ -31,8 +31,8 @@ What is already known:
 ## Landed (2026-11-07, `screen-size`)
 
 - Every title offers `SCREEN SIZE`: the DISPLAY page row `graphics.hud_safe_area` (`assets/ui/menu.toml`, values from
-  `HudArt::safe_area` through `ValueSource::SafeAreas`), applied live to the menus' inset, taken by a race's HUD at race
-  load. HD keeps the disc's slider (default 90); Pulse, Pure, 2048 and Omega carry `SafeArea::SHARED` (default 100,
+  `HudArt::safe_area` through `ValueSource::SafeAreas`), applied live to the menus' inset and to a race's HUD (read
+  every frame, so a race resumed from the pause menu draws at the new size). HD keeps the disc's slider (default 90); Pulse, Pure, 2048 and Omega carry `SafeArea::SHARED` (default 100,
   **chosen**). 2048's options are the disc's touch hub, so `OptionsCamera` has a second control there and the touch
   front end takes the inset. Evidence, the per-title search and frames: `docs/formats/hd-hud.md`, "SCREEN SIZE on every
   title". Fury is HD's disc and carries the same slider (checked).
@@ -44,11 +44,12 @@ What is already known:
 
 - **Corner markers** (optional): a page that draws the safe edge to line up against the TV's. Not built.
 - **Phones and notches** (step 4, out of scope here): the platform insets as the setting's default on a phone.
-- **Pure's own options XML** was not located by name (`PI001\GUI\Additional_Definition.xml` is absent), so "Pure
-  authors no option" rests on its `Skin.xml`, `Selection_Definition.xml` and `BOOT.BIN`.
+- **HD's update packages** (`data/images/hdfury-updates`) are not mounted by the reader and were not searched for a
+  second copy of `additional_definition.xml`; the four on-disc copies agree.
 - **The value is one global**: a 96 set on HD is 96 on Pulse too (maintainer's decision); the default is per title.
 - **The boot screens** (logos, language picker, loading's neighbours on a non-touch title) are not inset; their
-  original is unmeasured at a safe area. A race's HUD is not live because no page opens over a running race.
+  original is unmeasured at a safe area. 2048's Select Team hull is drawn outside the inset renderer (`team_hull`),
+  so at 90 it keeps its slot while the panel around it shrinks; it sits clear of the panel in a 1280x800 frame.
 - **HD's own Game Options screen** (`additional_definition.xml`, `DATA06`) is not drawn by this build: the live page is
   our `menu.toml`, so HD shows our label (English words identical to `OPT_SCREEN_SIZE`), not the disc's string.
 - **Split screen** HUDs are not scaled (`draw_views`, unmeasured).
@@ -57,4 +58,4 @@ What is already known:
 
 1. Corner markers on a screen-adjust page, if wanted.
 2. Phones and notches: platform insets as the default (step 4 of the original thread).
-3. Locate Pure's options XML and record found or not found on its frontend page.
+3. Search HD's update packages for another `additional_definition.xml`.
