@@ -225,7 +225,9 @@ impl Race {
     }
 
     /// Names the person flying each slot, by slot (empty for a slot with none): what the end
-    /// screens of a network race call the people. View-only; the simulation never reads it.
+    /// screens and the multiplayer tags call the people. A network race gives the lobby's names;
+    /// a local one gives seat 1 the stored player name
+    /// (`oag_game::split_screen::name_first_seat`). View-only; the simulation never reads it.
     pub fn set_person_names(&mut self, names: Vec<String>) {
         self.view.person_names = names;
     }
@@ -301,7 +303,7 @@ impl Race {
             self.sim.world.laps_target(),
             oag_race::race_clock_ticks(self.sim.world.tick),
         );
-        // A network race names its people; every other race has no names to give.
+        // A race names the people it was given names for (the lobby's, or seat 1's stored name).
         for row in board.rows.iter_mut().filter(|row| row.player) {
             row.name = self
                 .view

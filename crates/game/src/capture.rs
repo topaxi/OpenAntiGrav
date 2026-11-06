@@ -521,6 +521,7 @@ pub fn run(
                 // The front-end capture path races nothing.
                 ghost_visible: true,
                 player_tags: false,
+                player: crate::settings::Player::default(),
                 shadows: render_profile.shadows,
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,

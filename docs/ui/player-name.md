@@ -56,6 +56,20 @@ allowed keys. Pure ships no front-end XML on its disc, so it takes the grid (che
 real disc: `--menu-page options --menu-prompt player-tag-grid`). `--menu-prompt player-name`,
 `player-tag`, `player-name-grid` and `player-tag-grid` draw them as stills.
 
+The title ("ENTER YOUR NAME", "ENTER YOUR TAG") is the disc's `FEGlobals->TitleColor`, `0xFF000000`
+(black), the same ink the OPTIONS header uses. The prompt's panel is ours and dark, so
+`TagEntry::draw` passes the title through `window_layout::legible` (white at 0.6 where the ink is too
+dark, as the window picker does for its boxes); a light authored colour is kept. What the original
+draws the title over on its own name screen is not measured. Checked on Pulse EU `--menu-page options
+--menu-prompt player-name` and `player-tag` (the title was 1.10:1 against the panel, now readable). On
+Pure the live prompt's `pulse_tag_entry` fails for a source that is not Pulse's and the grid opens
+(white title); `--menu-prompt player-name` on a Pure disc prints that same refusal and
+`player-name-grid` draws the Pure grid. The pilot rename shares `TagEntry::draw`; its `--menu-prompt
+rename` still draws the grid, so that still is not evidence for it. Tests:
+`tag_entry::tests::a_black_authored_title_is_drawn_so_it_reads_on_the_dark_panel` and the disc-backed
+`tag_entry_ground_truth::the_name_and_tag_titles_read_on_the_prompts_panel`.
+
+
 The footer's `<TextInfo type="tag">` (`NewsItemTagText`) now draws the stored tag at its authored
 `(30, 235)` in the `Default` face (`NavigationLegend::set_tag`); `docs/ui/menus-original.md`,
 "What still differs, ranked", item 3. The face and colour are not measured against the original:
@@ -64,6 +78,46 @@ the colour is the file's `FEGlobals->BackgroundColor`, the face is the ticker's.
 The online lobby's name field opens on the stored player name (lower-cased: the lobby's keys are
 lower case), else the name the last connection used, else the login name. The footer tag draws only
 on a title that uses a tag (`Player::footer_tag`).
+
+## Where the name goes in a race
+
+Seat 1 is `Race::player_slot()`, the grid's first human slot (slot 0 in every local session).
+`oag_game::split_screen::name_first_seat` hands the stored name to
+`Race::set_person_names` as that slot's name, from `build_race_stage` (every windowed race) and
+`race_capture::capture` (`--race --screenshot`). The name then shows in three places that all
+read `person_names`:
+
+- the multiplayer tag over seat 1's craft in the other seat's view (`Race::tag_name`), where it
+  said `Player 1` before. Seat 2 has no stored name and keeps `Player 2`; with none stored
+  seat 1 keeps `Player 1`;
+- seat 1's row on Pulse's multiplayer end table (`PersonName::Named`) and HD's field grid;
+- on HD's grid also a one-person race's own row, which had no name before (HD keeps a name,
+  `Title::profile`): unmeasured against the original.
+
+Only a title whose `Title::profile` keeps a name is given it (Pulse, Pure, HD): 2048 and Omega keep
+none and ask when it is first needed (open, above), so a stored name does not reach their tags or
+end rows yet.
+
+The name never reaches the simulation or a hash. A network race joins after the stage is built and
+`NetPlay::begin_join` replaces the whole list with the lobby's names, so the lobby wins. The
+earlier claim that seat 1 already took the stored name at the race start was wrong: nothing
+called `set_person_names` on a local race. Fixed at the race start in `oag-game`, not by making
+`oag-raceplay` read settings. Tests: `player_tags_ground_truth` (the names a race returns) and
+`split_screen_ground_truth::the_stored_name_is_the_tag_over_the_first_seats_craft` (a captured
+frame; it fails with the `race_capture` call removed). `build_race_stage`'s own call is not
+pinned by a test: it is in the binary, which only a window reaches.
+
+### Names for further players (maintainer's decision, 2026-11-06)
+
+1. **Local split**: seat 1 takes the stored name, further seats keep `Player 2`, `Player 3` and so on.
+   Naming them is optional, so no prompt asks for them, ever. Built and tested
+   (`player_tags_ground_truth::the_stored_name_is_seat_ones_tag_and_seat_two_keeps_its_stop_gap`).
+2. **Online split** (several players on one client): further seats default to
+   `<stored name> (2)`, `(3)`, on what the lobby and the other players see; an empty stored name
+   leaves `Player N`. **Not built: online split seats do not exist.** A `oag_net` client holds one
+   seat (`Client::seat`) and the lobby seats one person per connection.
+3. **A name set by hand for a seat wins over either default.** **Not built: a per-seat name has no
+   storage or UI yet** (`[player]` holds one name).
 
 ## Keyboards
 

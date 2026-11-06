@@ -696,6 +696,7 @@ impl Stage {
         }
         race.set_ghost_visible(settings.display.ghost_ship_shown(title));
         race.set_player_tags(settings.display.multiplayer_tags_shown(title));
+        oag_game::split_screen::name_first_seat(&mut race, &settings.player, &title.profile);
         crate::race_stage::ghost::arm(
             &mut race,
             &result_key,

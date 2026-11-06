@@ -50,7 +50,8 @@ pub struct Row {
     /// Whether this is a player's row: a person flew this craft. Every
     /// person-flown slot has one, so a two-person race marks two.
     pub player: bool,
-    /// The name the person raced under (a network race), `None` where the race knows none.
+    /// The name the person raced under (the lobby's, or seat 1's stored player name), `None`
+    /// where the race knows none.
     pub name: Option<String>,
 }
 

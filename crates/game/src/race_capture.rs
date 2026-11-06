@@ -305,6 +305,8 @@ pub struct CaptureOptions {
     /// Whether the other people's multiplayer tags are drawn
     /// ([`crate::settings::Display::multiplayer_tags_shown`]).
     pub player_tags: bool,
+    /// The stored player name, which names seat 1 ([`crate::split_screen::name_first_seat`]).
+    pub player: crate::settings::Player,
     /// What casts a shadow in the captured frame: `--shadows`.
     ///
     /// Honoured the same way [`Self::motion_blur`] is, and here for the same
@@ -511,6 +513,7 @@ pub fn capture(
     race.set_dynamic_hud(options.dynamic_hud);
     race.set_ghost_visible(options.ghost_visible);
     race.set_player_tags(options.player_tags);
+    crate::split_screen::name_first_seat(&mut race, &options.player, &title.profile);
     race.set_hull_shake(options.hull_shake);
     race.watch_laps(
         &hud,

@@ -734,7 +734,7 @@ only drops our extra tiles). The text comes off the disc's `MPTag_HUD.xml` (`Plr
 border alpha 0.25; the eight labels share it, a ground-truth test pins that) and is placed where the lock-on reticle is,
 projected through each view's own camera at the craft's drawn pose.
 **Chosen, not measured:** the raise runs along the craft's own up (the original's axis is unread); only other person-flown
-craft are tagged (no AI craft); a name is the lobby's where the race has one (`Race::set_person_names`) and otherwise
+craft are tagged (no AI craft); a name is the lobby's where the race has one, else seat 1's stored player name (`Race::set_person_names`), and otherwise
 `Player N`, the maintainer's stop gap (the original falls back to one shared string, `ONL_CRJ_PLAYER`, for every
 unnamed slot); and there is no occlusion test, because the original's own gate (`FUN_0883e37c`) reads as a viewport test, so a tag
 shows through a wall. A craft behind a view's camera has no tag in that view.

@@ -57,7 +57,8 @@ impl Race {
         }
     }
 
-    /// The name over `slot`'s craft: the lobby's for a network race, else `Player N` (a stop
+    /// The name over `slot`'s craft: the one [`Self::set_person_names`] gave it (the lobby's in a
+    /// network race, the stored player name for seat 1 in a local one), else `Player N` (a stop
     /// gap; the original's own fallback string is one shared `PLAYER`).
     #[must_use]
     pub fn tag_name(&self, slot: usize) -> String {
