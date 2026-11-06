@@ -700,7 +700,7 @@ impl Chain {
     pub fn run(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         origin: (f32, f32),
@@ -728,7 +728,7 @@ impl Chain {
     fn run_placed(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         seat: &Seat,
@@ -832,15 +832,15 @@ impl Chain {
 
     /// Runs the chain over one view of a split: the view's own mean luminance and
     /// adaptation (the seat's), the curve applied over the view's rectangle and nothing
-    /// outside it. **Call it once per view with its own encoder and submit each before the
-    /// next**: the constants are written with the queue, which lands before the submission
+    /// outside it. **Call it once per view with its own encoder, its writes landing ahead
+    /// of it**: the constants are written with the queue, which lands before the submission
     /// that follows. **The per-seat adaptation is this project's, chosen, not measured**:
     /// the original has no split screen. Draws no distortion (that pass reads the depth
     /// attachment, which holds the last view's alone).
     pub fn run_view(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         run: View,

@@ -1085,12 +1085,15 @@ pub fn capture(
     // the rest read it, as the window's frame loop has them.
     let mut shared_work = false;
     for window in windows {
+        // The frame's work as the session's frame loop holds it, so a capture draws what a
+        // player sees whatever a split does with its submissions.
+        let frame_work = oag_gpu::split_finish::Frame::begin();
         let mut encoder = first_encoder.take().unwrap_or_else(|| {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("race capture window"),
             })
         });
-        // A split screen draws one scene per view, each submitted on its own: see
+        // A split screen draws one scene per view, in command buffers of its own: see
         // `Scene::render_viewports`. One view is the call below, untouched.
         let stats = if let Some(index) = window {
             // One window of a multi-window race: its seats cut up in it, the same call the
@@ -1451,7 +1454,7 @@ pub fn capture(
                 depth_or_array_layers: 1,
             },
         );
-        queue.submit(Some(encoder.finish()));
+        frame_work.submit(&queue, encoder);
 
         let slice = readback.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| {});

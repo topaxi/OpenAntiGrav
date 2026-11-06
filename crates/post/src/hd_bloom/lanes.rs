@@ -225,14 +225,15 @@ pub struct View {
 impl Chain {
     /// Runs the chain over one view of a split: its own half-size ladder, its own
     /// adaptation (the seat's lane), its glow clamped to its rectangle, and its resolve into
-    /// the same rectangle of `view`. **Call it once per view with its own encoder, and
-    /// submit each before the next** - the constants are written with the queue, which
-    /// lands before the submission that follows.
+    /// the same rectangle of `view`. **Call it once per view with its own encoder and its
+    /// own `queue`, its writes landing ahead of that encoder and behind the last view's**:
+    /// a submission each, or a log per view (`oag_gpu::writes`). The constants of two views
+    /// written straight to the queue would both land before one submission's commands.
     ///
     /// Reads no zoom streak (it holds the primary craft's pulse).
     pub fn run_view(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,

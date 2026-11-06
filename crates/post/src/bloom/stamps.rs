@@ -38,7 +38,7 @@ impl Bloom {
     pub fn stamp_glow(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
         origin: (f32, f32),

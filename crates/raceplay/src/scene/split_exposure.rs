@@ -15,10 +15,10 @@
 //! **Chosen, not measured**: the original has no split screen. The adaptation law itself
 //! (rates, clamps, curve) is the single-view one in every lane.
 //!
-//! **One submission per view's chain**, for [`Scene::blur_split_views`]' reason: the
-//! chain's constants are written with `queue.write_buffer`, which lands before the
-//! submission's commands, so two views in one encoder would both run with the last view's
-//! rectangle.
+//! **Each view's chain has its writes ahead of its commands**
+//! ([`Scene::post_stage`]), for [`Scene::blur_split_views`]' reason: a queue write lands
+//! before the submission's commands, so two views' chains with their constants written that
+//! way would both run with the last view's rectangle.
 
 use super::*;
 
@@ -34,70 +34,86 @@ impl Scene {
         slots: &[usize],
         rects: &[(f32, f32, f32, f32)],
         area: (f32, f32, f32, f32),
+        mut folded: Option<&mut super::split_record::Folded>,
     ) -> bool {
         if let Some(hd) = &self.hd {
             // The boost zoom streak holds the primary craft's pulse; a split draws none.
             hd.set_zoom_frame(None);
             for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
-                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("race viewport hd post"),
-                });
-                hd.run_view(
-                    queue,
+                self.post_stage(
                     device,
-                    &mut encoder,
-                    view,
-                    oag_post::hd_bloom::View {
-                        seat: slot,
-                        rect: pixels(rect),
-                        area: (area.2 as u32, area.3 as u32),
-                        // The glow's reach is authored as a fraction of the whole frame, and a
-                        // view shows a fraction of it: scale it by the view's own pixel scale
-                        // so the glow keeps its size against what it surrounds. Chosen, not
-                        // measured.
-                        reach: super::bloom::mean_reach(area, &[rect]),
-                        first: index == 0,
+                    queue,
+                    folded.as_deref_mut(),
+                    "race viewport hd post",
+                    |writes, encoder| {
+                        hd.run_view(
+                            writes,
+                            device,
+                            encoder,
+                            view,
+                            oag_post::hd_bloom::View {
+                                seat: slot,
+                                rect: pixels(rect),
+                                area: (area.2 as u32, area.3 as u32),
+                                // The glow's reach is authored as a fraction of the whole
+                                // frame, and a view shows a fraction of it: scale it by the
+                                // view's own pixel scale so the glow keeps its size against
+                                // what it surrounds. Chosen, not measured.
+                                reach: super::bloom::mean_reach(area, &[rect]),
+                                first: index == 0,
+                            },
+                        );
+                        true
                     },
                 );
-                queue.submit(Some(encoder.finish()));
             }
             true
         } else if let Some(omega) = &self.omega {
             for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
-                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("race viewport omega post"),
-                });
-                omega.run_view(
+                self.post_stage(
                     device,
                     queue,
-                    &mut encoder,
-                    view,
-                    oag_post::omega_tonemap::View {
-                        seat: slot,
-                        rect: pixels(rect),
-                        first: index == 0,
+                    folded.as_deref_mut(),
+                    "race viewport omega post",
+                    |writes, encoder| {
+                        omega.run_view(
+                            device,
+                            writes,
+                            encoder,
+                            view,
+                            oag_post::omega_tonemap::View {
+                                seat: slot,
+                                rect: pixels(rect),
+                                first: index == 0,
+                            },
+                        );
+                        true
                     },
                 );
-                queue.submit(Some(encoder.finish()));
             }
             true
         } else if let Some(wo) = &self.wo {
             for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
-                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("race viewport wo post"),
-                });
-                wo.run_view(
+                self.post_stage(
                     device,
                     queue,
-                    &mut encoder,
-                    view,
-                    oag_post::wo_composite::View {
-                        seat: slot,
-                        rect: pixels(rect),
-                        first: index == 0,
+                    folded.as_deref_mut(),
+                    "race viewport wo post",
+                    |writes, encoder| {
+                        wo.run_view(
+                            device,
+                            writes,
+                            encoder,
+                            view,
+                            oag_post::wo_composite::View {
+                                seat: slot,
+                                rect: pixels(rect),
+                                first: index == 0,
+                            },
+                        );
+                        true
                     },
                 );
-                queue.submit(Some(encoder.finish()));
             }
             true
         } else {

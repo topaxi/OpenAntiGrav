@@ -260,7 +260,7 @@ impl Levels {
     /// place: it is consumed before the next view starts.
     pub(super) fn run(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         pipelines: &Pipelines,
         share: [f32; 2],

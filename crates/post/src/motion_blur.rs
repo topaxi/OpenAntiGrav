@@ -530,7 +530,7 @@ impl MotionBlur {
     pub fn render(
         &mut self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: &Frame<'_>,
         timestamps: Option<ChainTimestamps<'_>>,
