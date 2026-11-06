@@ -295,7 +295,7 @@ mod tests {
             "auricom".to_string(),
             "qirex".to_string(),
         ];
-        let rows = field_rows(Some(&board), &team_keys(&oag_hd::TITLE, &roster));
+        let rows = field_rows(Some(&board), &team_keys(oag_hd::TITLE, &roster));
         assert_eq!(rows.len(), 2);
         assert_eq!(
             rows[0].team.as_deref(),
@@ -307,7 +307,7 @@ mod tests {
             Some("Feisar"),
             "a variant directory is its base team"
         );
-        assert_eq!(team_key(&oag_hd::TITLE, "nobody"), "nobody");
+        assert_eq!(team_key(oag_hd::TITLE, "nobody"), "nobody");
         assert_eq!(rows[0].place, 1);
         assert_eq!(rows[0].time_ticks, Some(1234));
         assert!(!rows[0].player);

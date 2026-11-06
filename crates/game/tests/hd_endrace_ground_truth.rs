@@ -102,7 +102,7 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
 
     let rows = oag_game::results_tables::field_rows(
         Some(&board),
-        &oag_game::results_tables::team_keys(&oag_hd::TITLE, race.slot_teams()),
+        &oag_game::results_tables::team_keys(oag_hd::TITLE, race.slot_teams()),
     );
     let model = oag_ui_screens::endrace::FieldResults {
         loyalty: None,
