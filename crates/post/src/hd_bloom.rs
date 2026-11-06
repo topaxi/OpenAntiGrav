@@ -163,6 +163,11 @@ pub struct Params {
     pub tone_darkening_clamp: f32,
     /// `Tone maximum brightness`: the exposure on a black frame.
     pub tone_maximum_brightness: f32,
+    /// The final composite reads the scene half a source texel off, `(0.5 / width,
+    /// 0.5 / height)` of the drawn rectangle, so each pixel is the mean of four texels in
+    /// linear light (a title's `final_composite_half_texel` rule, injected by the
+    /// caller; this crate reaches no title). `false` reads on the texel centres.
+    pub final_half_texel: bool,
     /// HD's boost and damage zoom-streak ring, when the title has one. See
     /// [`super::hd_zoom`].
     pub zoom: Option<super::hd_zoom::Tuning>,
@@ -245,7 +250,9 @@ struct Constants {
     tone_adaption_boost: f32,
     tone_darkening_clamp: f32,
     tone_maximum_brightness: f32,
-    _pad: [f32; 2],
+    /// The resolve's read offset in the drawn rectangle's `0..1`; zero for every pass but
+    /// the scene-read one, and for a title that reads on the texel centres.
+    read_shift: [f32; 2],
     /// Which sub-rectangle of every source in the chain was drawn.
     ///
     /// **One pair for the whole ladder**, which is what makes this tractable:
@@ -312,7 +319,7 @@ impl Constants {
             tone_adaption_boost: params.tone_adaption_boost,
             tone_darkening_clamp: params.tone_darkening_clamp,
             tone_maximum_brightness: params.tone_maximum_brightness,
-            _pad: [0.0; 2],
+            read_shift: [0.0; 2],
             uv_scale: rect.scale,
             uv_max: rect.max,
             uv_offset: rect.offset,
@@ -816,7 +823,15 @@ impl Chain {
                 ],
                 rect,
             );
-            write(&self.sized.buffers[3], [0.0, 0.0], scene_rect);
+            let read = Constants {
+                read_shift: if self.params.final_half_texel {
+                    [0.5 / viewport.0 as f32, 0.5 / viewport.1 as f32]
+                } else {
+                    [0.0; 2]
+                },
+                ..Constants::new(self.params, [0.0, 0.0], scene_rect)
+            };
+            queue.write_buffer(&self.sized.buffers[3], 0, bytemuck::bytes_of(&read));
             self.written.set(Some(placement));
         }
 
@@ -1065,6 +1080,8 @@ fn level_viewport(level: (u32, u32), viewport: (u32, u32), scene: (u32, u32)) ->
 mod lanes;
 mod zoom;
 
+#[cfg(test)]
+mod half_texel_tests;
 #[cfg(test)]
 mod split_tests;
 #[cfg(test)]

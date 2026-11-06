@@ -104,7 +104,57 @@ pub fn hd_bloom_params(
         tone_adaption_boost: env.scalar(TONE_ADAPTION_BOOST)?,
         tone_darkening_clamp: env.scalar(TONE_DARKENING_CLAMP)?,
         tone_maximum_brightness: env.scalar(TONE_MAXIMUM_BRIGHTNESS)?,
+        final_half_texel: false,
         zoom: None,
         store: oag_gpu::formats::SceneStore::Computed,
     })
+}
+
+/// `params` with what the title decides: its zoom ring, what its scene target stores and
+/// whether its final composite reads half a texel off.
+pub(in crate::load) fn for_title(
+    params: oag_post::hd_bloom::Params,
+    title: &oag_title::Title,
+) -> oag_post::hd_bloom::Params {
+    oag_post::hd_bloom::Params {
+        zoom: title.race.zoom_ring.map(crate::zoom::tuning),
+        final_half_texel: title.looks.final_composite_half_texel.applies_everywhere(),
+        store: if title.looks.blends_encoded.applies_everywhere() {
+            oag_gpu::formats::SceneStore::Encoded
+        } else {
+            oag_gpu::formats::SceneStore::Computed
+        },
+        ..params
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn authored() -> oag_post::hd_bloom::Params {
+        oag_post::hd_bloom::Params {
+            alpha_contribution: 1.0,
+            frame_contribution: 1.0,
+            frame_exponent: 1.0,
+            horizontal_size: 1.0,
+            vertical_size: 1.0,
+            adaption_rate: 0.1,
+            adaption_boost: 1.0,
+            tone_adaption_boost: 1.0,
+            tone_darkening_clamp: 1.0,
+            tone_maximum_brightness: 1.0,
+            final_half_texel: false,
+            zoom: None,
+            store: oag_gpu::formats::SceneStore::Computed,
+        }
+    }
+
+    /// HD's race chain reads the final composite half a texel off, and a title whose
+    /// rule is unread does not.
+    #[test]
+    fn the_half_texel_follows_the_titles_rule() {
+        assert!(for_title(authored(), oag_hd::TITLE).final_half_texel);
+        assert!(!for_title(authored(), oag_pulse::TITLE).final_half_texel);
+    }
 }

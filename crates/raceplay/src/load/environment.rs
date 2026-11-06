@@ -723,15 +723,7 @@ pub(super) fn staging(
     let hd_bloom = (ps3_geometry && !wo_title)
         .then(|| envsettings_bloom(archives, track, report))
         .flatten()
-        .map(|params| oag_post::hd_bloom::Params {
-            zoom: title.race.zoom_ring.map(crate::zoom::tuning),
-            store: if title.looks.blends_encoded.applies_everywhere() {
-                oag_gpu::formats::SceneStore::Encoded
-            } else {
-                oag_gpu::formats::SceneStore::Computed
-            },
-            ..params
-        });
+        .map(|params| bloom::for_title(params, title));
     let omega_tonemap = (geometry == GeometryKind::Ps4)
         .then(|| envsettings_tonemap(archives, track, report))
         .flatten();

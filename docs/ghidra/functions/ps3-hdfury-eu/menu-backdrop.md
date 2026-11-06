@@ -641,8 +641,32 @@ not match. Wired: `oag_game::boot::fury` reads that file through `oag_raceplay::
 frames, 8 of them races on Anulpha Pass, Moa Therma, Talon's Junction and Vineta K at widths `1300`, `1320` and `1660` (`0.000385`, `0.000379`, `0.000301`), `0.000463` on `v`
 in all. So on a race the offset follows the dynamic width, and it is half a texel of the source, not of the display. Confidence 90; a dump's own `1920` frames say the same.
 
-The half texel of "Three more readings" happens in our present pass, ahead of the chain, because the chain has no tap for it;
-the original's ladder reads the field directly. Measured effect: none separated. Open.
+**Wired (2026-11-06).** `oag_title::Looks::final_composite_half_texel` (HD: `Measured`) reaches `oag_post::hd_bloom::Params::final_half_texel`
+as the race chain's resolve (`fs_encode`) offset `(0.5 / w, 0.5 / h)` of the drawn rectangle, so it follows the dynamic width. The four
+texels are taken by hand, each decoded to light first: on HD the scene target holds encoded values, and the hardware's bilinear filter would
+average those and decode after. Test: `hd_bloom::half_texel_tests` (a 1-texel black and white checker over a 43x41 rectangle of a 64x64 target
+resolves to the byte of a flat linear `0.5` with the tap and texel for texel without; red if the tap is dropped or divided by the wrong size).
+The Fury backdrop's present pass is a plain copy now and its chain carries the same tap (`the_constants_are_the_ones_rpcs3_uploads`), so the
+offset is applied once and the gate sees the field's scanline rows whole, as the original's ladder does.
+
+Race pairs, Laplacian variance of grey over 1920x1080 boxes (x, y, w, h), theirs / ours before / ours after:
+
+| Pair, box | theirs | before | after |
+| --- | ---: | ---: | ---: |
+| `anulpha-pass`, billboard text 1500,300,300,120 | 378 | 1219 | 265 |
+| `anulpha-pass`, floor 1250,800,400,250 | 431 | 635 | 381 |
+| `anulpha-pass`, wall 100,500,400,300 | 106 | 483 | 116 |
+| `moa-therma`, billboard text 1500,300,300,120 | 285 | 1778 | 358 |
+| `moa-therma`, floor 1250,800,400,250 | 437 | 523 | 307 |
+| `moa-therma`, wall 100,500,400,300 | 228 | 1012 | 206 |
+
+Ours was sharper than the original in all six boxes and is now within about a third of it, overshooting to softer in four. Ours renders these at
+a native 1920 wide; the capture's own dynamic width was not separated, so the remaining gap is not attributed to the tap. A crop of the
+billboard text reads as the original's softness with a little less bloom glow around the letters.
+
+**Lineage.** 2048 and Omega: not checked. Their race ends in `wo_composite` and `omega_tonemap`, not this chain, and the offset is in the
+final quad's immediate vertices, which no 2048 or Omega page has read (2048's `exposure.md` half texels are the ladder's). Reading Omega's final
+draw in `eboot.bin` is real work; open.
 
 ## The Fury references carry an RPCS3 defect: records past 16,383 are never drawn
 
