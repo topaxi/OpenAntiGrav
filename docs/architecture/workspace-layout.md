@@ -1362,7 +1362,7 @@ Moved out of `CLAUDE.md`, which keeps the rules and the ceilings.
   | Family, summed seconds | Before | After | Change |
   | --- | --- | --- | --- |
   | `ai_clean_lap_gate` | 447 | 239 | -47 % |
-  | `autopilot_original` | 372 | 256 | -31 %, not all of it this work: the one test profiled is about 70 % disc load (`miniz_oxide`, AES), and the same family read 572 and 384 s in two subset runs at the two trees |
+  | `autopilot_original` | 372 | 256 | -31 %: the Pulse circuit tests about halve; the load-bound ones hold (`an_opponent_flies_its_autopilot_by_class_and_difficulty` 83 to 77 s, about 70 % `miniz_oxide` and AES) |
   | `vita_2048_original_ai` | 327 | 259 | -21 %; `miniz_oxide` and PVRTC on the load stay |
   | `speed_plan` | 280 | 142 | -49 % |
   | `ai_roll` | 227 | 121 | -47 % |
