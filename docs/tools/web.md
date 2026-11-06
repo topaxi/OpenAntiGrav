@@ -579,7 +579,7 @@ a Pulse race run there (2026-10-09). `actionlint` passes on the workflow.
 
 ### Exit and GPU workers
 
-Natively, `oag_game::gpu_workers` is the one place the process waits for threads that hold the
+Natively, `oag_thread::gpu_workers` is the one place the process waits for threads that hold the
 `wgpu` device (EndRace prefetch, race build, a parked race's drop) before `main` returns. The web
 build has nothing to wait for: the race build runs inline, the EndRace prefetch type is
 uninhabited, and closing the page ends every Web Worker with it.

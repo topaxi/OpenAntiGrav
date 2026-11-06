@@ -854,10 +854,10 @@ pub(crate) struct Session {
 
 impl Drop for Session {
     /// The GPU workers finish before the device, the surface and the instance go: see
-    /// [`oag_game::gpu_workers`]. Every route out of a run (window close, QUIT, a finished
+    /// [`oag_thread::gpu_workers`]. Every route out of a run (window close, QUIT, a finished
     /// `--drive` or `--screenshot`) drops the session, so the wait lives here once.
     fn drop(&mut self) {
-        oag_game::gpu_workers::finish();
+        oag_thread::gpu_workers::finish();
     }
 }
 

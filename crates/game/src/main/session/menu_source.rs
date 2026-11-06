@@ -119,7 +119,7 @@ impl Job {
             anisotropy: self.anisotropy,
         };
         for warm in &self.warm {
-            if oag_game::gpu_workers::stopping() {
+            if oag_thread::gpu_workers::stopping() {
                 return None;
             }
             if let Err(error) = crate::picker_stage::build_preview(
@@ -197,9 +197,9 @@ impl Session {
                 format: self.gpu.output.config.format,
                 anisotropy: self.anisotropy,
             };
-            let guard = oag_game::gpu_workers::Guard::enter("menu-source");
+            let guard = oag_thread::gpu_workers::Guard::enter("menu-source");
             let task = oag_thread::Task::spawn("menu-source", move || {
-                let _guard = guard;
+                guard.hold_to_thread_end();
                 job.run()
             });
             self.menu_source = MenuSource::Opening(key, task);
