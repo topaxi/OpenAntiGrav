@@ -1374,3 +1374,56 @@ quad over the 14x80 cell, and the lap count `3` (scale 0.6) a 26.8x49.0 quad ove
 inherits HD's HUD engine, unmeasured. Pulse's PSP path does the same on its own flag (`HudArt::raster`); 2048 is
 unmeasured.
 
+
+## HD's Eliminator race line (2026-11-06, `eliminator-hud`)
+
+The maintainer's report: in HD's Eliminator the HUD is missing many elements. Compared on RPCS3
+(HD Fury EU, Racebox Eliminator, Vineta K, weapons on: the intro board, the countdown, 30 s of
+racing with a weapon held; evidence and addresses in
+[`eliminator-hud.md`](../ghidra/functions/ps3-hdfury-eu/eliminator-hud.md)) against
+`oag-game --race --mode eliminator --track Data\Environments\01_Vineta_K\track.vex` (the default circuit differs). **The original draws `DATA00`'s
+`elimination_hud.xml`** (the `HUD_Elim_*` fragments), not `DATA02`'s `KillsText` design: its
+executable has no `KillsText`, and the frames show the widgets only `DATA00` authors.
+
+| Element | Original | Ours before | Ours now |
+| --- | --- | --- | --- |
+| Lap panel `LAP` and the digit | yes | yes | yes |
+| Hexagon round the lap digit (`LapPanel2`) | yes | no | **yes** |
+| Shield hexagon and `100` | yes | yes | yes |
+| Message line (`Machine Gun`, clipped at its left in both) | yes | yes | yes |
+| Race line: bar, two end panels, marker per craft | yes | no | **yes** |
+| `ShipsBehind` / `ShipsInFront` (`0` ... `7` on a grid of eight) | yes | no | **yes** |
+| `TARGET ( 200 )` header | yes | no | **open** |
+| Ranked `NAME ( score )` rows, player's highlighted, rank digit and bracket | yes | no | **open** |
+| `MPWeaponIcon`, `ScoreFeedBack` popups | none seen (no score changed) | no | **open** |
+
+Region metric, the fraction of the original's red HUD pixels (relative redness over 45, within 6 px
+of one of ours), the countdown frame against ours at tick 60 on the same circuit (Vineta K,
+1280x720, safe area 100 percent): lap panel **0.93** (0.40 before the hexagon), race-line band
+**0.51**, whole frame 0.24 (rows missing). The band is 0.0 before the race line existed. Safe
+area 100 percent is **inferred from panel geometry** (the original's panels start 52 px in on 1278,
+ours match there; at HD's default 90 percent ours sit 40 px further in), the profile was not read.
+The grid marker sits at about 0.98 of the bar in ours and 0.96 in the original (x 1085 against
+1069 on a 926 px bar): the same end of the bar, 16 px apart, which is the unread `RM+0x1948`
+offset or the grid's own placement, not explained. A loose metric (the two worlds differ); the
+side-by-sides are the evidence, and the pair is an ad-hoc HUD-region one, not a compare-page pair.
+
+The law is on the page above: each craft's marker at `bar_x + fraction * bar_width`, the fraction
+the distance into the lap wrapped to one lap, the player's the last slot, the counts the markers
+at or past the player's against the rest (`oag_hud::race_line`). The wiring is generic (a layout
+that authors `ShipLinePos0` draws it for a readout that carries a line, `oag_raceplay` fills one
+in every Eliminator) and the guard is `crates/raceplay/tests/hd_eliminator_hud_ground_truth.rs`.
+
+**Open, and why.** The rows print a *score*, `craft+0x6f80`, not kills: HD's Eliminator is "reach
+the target score", with points for damage, for an elimination and for laps, and a loss on being
+eliminated. This build races Pulse's kill-count rule, so there is no number to print and a row of
+invented `( 0 )`s would be a stand-in for data the original has. The scoring law, the `200`
+target (`g_GameState+0x20`) and the row writer `0x0008c6f8` are unread. The marker half turn
+(`craft+0x6ad8`) is unread too. Not captured: a frame after a kill (none was reachable without
+the scoring), the split-screen Eliminator pair (`splitscreen_elimination_hud_{0,1}.xml` author the
+same line and take the same code path, unchecked). 2048 and Omega: both executables name `ShipLinePos%d`, `ShipsInFront` and `EliminatorPositions`
+and both packages ship the same `Elimination_HUD` / `hud_elim_*` fragments (Omega's
+`hud_elim_lap_counters.xml` is 1,482 bytes, HD's size), so the race line **now draws on an
+Eliminator race of either through the shared path, unmeasured on both** (no 2048 or Omega
+Eliminator frame): **ported, unmeasured**. Their `ALWAYS_ON` lists do not carry `LapPanel2`:
+**checked, applies, not wired**.

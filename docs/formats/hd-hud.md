@@ -312,6 +312,16 @@ Worth knowing before spending time on it: the executable's own
 choice is not made by composing a name at runtime. See
 [race-hud.md](../ghidra/functions/ps3-hdfury-eu/race-hud.md).
 
+### Eliminator draws `DATA00`'s copy (2026-11-06, `eliminator-hud`)
+
+For this one root the question is settled by the original's picture: the HD executable names
+`ShipLinePos%d`, `ShipsInFront`, `ScoreFeedBack%d` and `MPWeaponIcon%d` and has no `KillsText`,
+and an RPCS3 Eliminator frame draws the race line and ranked score rows that only `DATA00`'s
+design authors (confidence 90). `Archives::holder_of` already returns that copy; nothing changes.
+Whether the original reaches it by its own precedence is still unread, and the other five
+duplicated roots stay as they were. See
+[the Eliminator page](../ghidra/functions/ps3-hdfury-eu/eliminator-hud.md).
+
 ### The precedence mechanism, read precisely
 
 `Archives::holder_of` (`crates/assets/src/source.rs`) checks the bulk archive

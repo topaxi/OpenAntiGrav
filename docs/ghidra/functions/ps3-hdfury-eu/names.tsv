@@ -864,3 +864,4 @@
 0x000a9a20	function	Camera_AddPhotoPanA	78	photo-mode.md
 0x000aa6e0	function	Camera_AddPhotoPanB	78	photo-mode.md
 0x000aa740	function	Camera_AddPhotoFov	78	photo-mode.md
+0x00089fa8	function	Hud_UpdateRaceLine	85	eliminator-hud.md

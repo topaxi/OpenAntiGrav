@@ -555,6 +555,10 @@ pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
 /// [`rpcs3-debugger.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/reverse-engineering/rpcs3-debugger.md
 pub const ALWAYS_ON: &[&str] = &[
     "LapPanel",
+    // The hexagon round the lap number in the Eliminator's lap counter
+    // (`HUD_Elim_lap_counters.xml`, with its split-screen twin): up in every RPCS3 frame of
+    // an Eliminator, from the grid on. Authored by the Eliminator roots alone.
+    "LapPanel2",
     "PositionPanel",
     "TotalTimeBG",
     "PickupFarBackground",
