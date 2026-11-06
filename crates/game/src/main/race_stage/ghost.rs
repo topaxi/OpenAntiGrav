@@ -24,10 +24,35 @@ pub(crate) fn arm(
     seed: u64,
     options: std::collections::BTreeMap<String, String>,
 ) {
+    arm_in(
+        ghosts::dir().as_deref(),
+        race,
+        key,
+        mode,
+        auto_load,
+        team,
+        seed,
+        options,
+    );
+}
+
+/// [`arm`] reading the stored ghost from under `root` (`None`: nowhere, so none).
+#[allow(clippy::too_many_arguments)]
+fn arm_in(
+    root: Option<&std::path::Path>,
+    race: &mut race::Race,
+    key: &records::Key,
+    mode: oag_race::Mode,
+    auto_load: bool,
+    team: &str,
+    seed: u64,
+    options: std::collections::BTreeMap<String, String>,
+) {
     if !races_a_ghost(mode, race.people()) {
         return;
     }
-    if let Some(stored) = ghosts::auto_load(key, auto_load)
+    let stored = root.and_then(|root| ghosts::auto_load_from(&ghosts::path_in(root, key), key, auto_load));
+    if let Some(stored) = stored
         && let Some(lap) = stored.ghost
     {
         info!(
@@ -74,7 +99,7 @@ fn races_a_ghost(mode: oag_race::Mode, people: usize) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::races_a_ghost;
+    use super::{arm_in, races_a_ghost};
     use oag_race::Mode;
 
     #[test]
@@ -84,5 +109,62 @@ mod tests {
         assert!(!races_a_ghost(Mode::TimeTrial, 2));
         assert!(!races_a_ghost(Mode::SpeedLap, 4));
         assert!(!races_a_ghost(Mode::Head2Head, 1));
+    }
+
+    /// A stored ghost is raced when AUTO LOAD GHOST is on and not when it is off: the choice
+    /// `arm` is handed reaches the load. Dropping the gate in `arm_in` turns the second half red.
+    #[test]
+    #[ignore = "needs data/images/pulse-psp-eu.chd"]
+    fn a_stored_ghost_is_raced_only_with_auto_load_on() {
+        use oag_core::math::{Quat, Vec3};
+        use oag_replay::{GhostLap, Pose, Recorder};
+
+        let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+            return;
+        };
+        let key = oag_game::records::Key::new(
+            "Wipeout Pulse",
+            Some(r"Data\Environments\16_Track\track.vex"),
+            "time_trial",
+            "Venom",
+        );
+        let root = std::env::temp_dir().join(format!("oag-arm-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let lap = GhostLap {
+            lap_ticks: 100,
+            poses: vec![
+                Pose {
+                    position: Vec3::ZERO,
+                    rotation: Quat::IDENTITY,
+                };
+                101
+            ],
+        };
+        let replay = Recorder::new(oag_game::ghosts::header(&key, "feisar", 1), 7).replay(Some(lap));
+        let path = oag_game::ghosts::path_in(&root, &key);
+        assert!(oag_game::ghosts::save_to(&path, &key, &replay).expect("writes"));
+
+        for (auto_load, raced) in [(true, true), (false, false)] {
+            let loaded = oag_raceplay::load(&oag_raceplay::Options {
+                source: image.display().to_string(),
+                seed: Some(1),
+                opponents: false,
+                ..oag_raceplay::Options::default()
+            })
+            .expect("loading the race");
+            let mut race = oag_raceplay::Race::start(loaded.setup);
+            arm_in(
+                Some(&root),
+                &mut race,
+                &key,
+                Mode::TimeTrial,
+                auto_load,
+                "feisar",
+                1,
+                Default::default(),
+            );
+            assert_eq!(race.ghost().is_some(), raced, "auto load {auto_load}");
+        }
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

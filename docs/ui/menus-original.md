@@ -694,22 +694,22 @@ stills are byte-identical before and after.
 ## Game Options: the original's list against ours
 
 **Confidence 92 for the rows and entries** (read off the disc, 2026-11-06): `Data\Plugins\PI001\GUI\Additional_Definition.xml`,
-`Settings` screen, `oag-wad cat <image>:PSP_GAME/USRDIR/Data.wad <name> --expand` on `pulse-psp-usa.chd` and
+`Settings` screen (title `OPT_GAME_OPT`, "Game options"), `oag-wad cat <image>:PSP_GAME/USRDIR/Data.wad <name> --expand` on `pulse-psp-usa.chd` and
 `pulse-psp-eu.chd` (byte-identical after expansion) and `oag-wad cat <image>:54748/WADS2.WAD <name> --expand` on
 `pulse-ps2-eu.chd`. Display text from `Data\Plugins\PI012\entries.xml`. Every list is `save="true"`: the original
 persists each into the profile, as ours persist into `settings.toml`.
 
 | Row (`idstring`, text) | Entries, default first where the XML says so | PSP | PS2 | Ours |
 | --- | --- | --- | --- | --- |
-| `OPT_MUSIC_VOL`, Music volume | 0, 25, 50, 75, 100 % (default 100) | yes | yes | present: AUDIO page (a finer slider, not these five steps) |
-| `OPT_SFX_VOL`, SFX volume | 0, 25, 50, 75, 100 % (default 100) | yes | yes | present: AUDIO page |
-| `OPT_MUSIC_PL`, Music order | `OPT_SEQ` (sequential), `FE_RANDOM` (default sequential) | yes | yes | present: MUSIC page |
-| `OPT_CAM`, Camera | `OPT_INT` (internal), `OPT_CLOSE`, `OPT_FAR` (default close) | yes | yes | present: CAMERA VIEW |
-| `OPT_HUD`, Dynamic HUD | `FE_DEFAULT`, `FE_CONCAVE`, `FE_FLAT`, `FE_OFF` (default `FE_DEFAULT`) | all four | three: no `FE_FLAT` | present, **two of four**: default and off. `FE_CONCAVE` and `FE_FLAT` flag the HUD's two panel groups (bit 1 of `+0xd0`); what that draws is **unread** |
-| `OPT_MP_TAGS`, Multiplayer tags | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **not added**: the law is unread, see below |
+| `OPT_MUSIC_VOL`, Music volume | 0, 25, 50, 75, 100 % (default 100) | yes | yes | present: AUDIO page, `audio.music_volume` (0, 25, 50, 75, 90, 100) |
+| `OPT_SFX_VOL`, Sfx volume | 0, 25, 50, 75, 100 % (default 100) | yes | yes | present: AUDIO page, `audio.sfx_volume` (same steps) |
+| `OPT_MUSIC_PL`, Music playlist (list `Music Order`) | `OPT_SEQ` Sequential, `FE_RANDOM` Random (default sequential) | yes | yes | **not added**: ours has per-disc source toggles and a pool (`audio.music_source`, `audio.music_pool`) but no sequential/random choice (`oag_sound::song_control` has no shuffle); named in the handover thread |
+| `OPT_CAM`, Camera | `OPT_INT` Internal, `OPT_CLOSE` Close, `OPT_FAR` Far (default close) | yes | yes | present: `graphics.camera_view` (internal, close, far) |
+| `OPT_HUD`, Dynamic HUD | `FE_DEFAULT`, `FE_CONCAVE`, `FE_FLAT`, `FE_OFF` (default `FE_DEFAULT`) | all four | three: no `FE_FLAT` | present, **two of four**: default and off. `FE_CONCAVE` and `FE_FLAT` set bit 1 of `+0xd0` on the HUD's two panel groups (1 and 0; `FE_DEFAULT` takes `race_manager+0x6f & 1`), a vertex warp read by `Text_Draw`, `Image_Draw` and the speed bar whose maths (`FUN_08919c2c`) is **unread** |
+| `OPT_MP_TAGS`, Multiplayer tags | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **not added**: the law is read (`docs/ghidra/functions/psp-pulse-usa/hud-game-options.md`), the draw is not built, see below |
 | `OPT_GHOST_VIS`, Ghost ships visible | `FE_ON`, `FE_OFF` (default on) | yes | yes | **added**: GHOST SHIPS VISIBLE, hides the ghost's draw (`Race::set_ghost_visible`) |
 | `OPT_AL_GHOST`, Auto load ghost | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **added**: AUTO LOAD GHOST, gates loading the stored lap when a Time Trial or Speed Lap starts |
-| `OPT_LANG`, Language | the installed languages | yes | yes | present: LANGUAGE |
+| `OPT_LANG`, Language | the installed languages | yes | yes | present: `language` |
 
 Where the two pressings differ the PSP list wins (the project rule for anything invented for Pulse), so the PS2
 pressing offers both ghost rows and the same two Dynamic HUD entries.
@@ -724,13 +724,14 @@ saves a lap that beats the stored one. A `--ghost <file>` on the command line is
 GHOST. Both rows are `Title` data (`oag_title::race::GhostOptions`, Pulse only), seeded and shown only where the title
 lists them, and default to on, so no title's behaviour moved.
 
-**MULTIPLAYER TAGS is not wired, and no row stands in for it.** `MPTag_HUD.xml` authors `PlrTag0`-`PlrTag7` (eight
-centred `font="HUD"` texts at scale 0.5 with no `x`/`y`, anchored at runtime). What each tag says, which craft carries one,
-where it sits against the hull and in which modes it draws are all unread: no Ghidra session was available to this lane
-(no GUI instance up, no headless project in `data/ghidra/`), and a row that stores a value nothing reads is a defect.
-Where to start: `Hud_Update` (`0x0881bf50`, `psp-pulse-usa`) is the HUD's per-frame update and `FUN_08809bc8` is the profile
-reader `Ghost_Update` takes `Ghost Ship Visible` from; whether either touches `Multiplayer Tags` is not read. Open in the handover thread
-`frontend/pulse-game-options-unread-entries`.
+**MULTIPLAYER TAGS is read and not wired, and no row stands in for it.** The law
+(`docs/ghidra/functions/psp-pulse-usa/hud-game-options.md`, confidence 80, headless Ghidra 2026-11-06): the option is one byte
+(`g_multiplayer_tags_on`), `Hud_UpdateMultiplayerTags` (`0x0881ba58`) draws a white name 2 units above each craft in the
+view (the player name of its slot, fading in at 1.2 per second, fully opaque to 20 units and gone by 60), and the byte at
+0 forces the alpha to 0. Building it needs two things this engine lacks: a text draw anchored on a projected world point in
+`oag-hud` (the lock-on reticle is the only projected element and draws a sprite, not text), and a player name for every
+craft in a split-screen race (only online seats have names). A row that stores a value nothing reads is a defect, so
+the row waits for the draw. Open in the handover thread.
 
 **Checked against the other titles** (the Pulse rule: an invented Pulse row is checked for the others, not widened to them):
 
