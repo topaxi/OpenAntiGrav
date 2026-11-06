@@ -1,8 +1,8 @@
 ---
-status: parked
+status: ready-to-wire
 titles: [all]
 updated: 2026-11-06
-summary: "Idea: prefill the first-run name prompt from Steam's PersonaName, else the OS user name; not started"
+summary: "One shared player name, a tag prompted on Pulse and Pure only: decided, not built; Steam prefill follows; no stored name exists yet"
 size: S (40)
 difficulty: easy (40)
 ---
@@ -14,6 +14,7 @@ titles). A player who launches this port as a non-Steam game from Steam already 
 
 ## Decision so far
 
+- **One shared player name across all titles; the 3-character tag is prompted only on titles that use it, Pulse and Pure** (maintainer, 2026-11-06). Neither is stored today: `settings.rs` and `schemas/v1/settings.tosd` hold no player name, so the stored name comes before any prefill. The tag fills Pulse's footer strip, which draws nothing today (`docs/ui/menus-original.md`).
 - **Read `PersonaName` from `loginusers.vdf`, not the Steamworks API.** A non-Steam shortcut has no
   real AppID, so `SteamAPI_Init` does not work as itself. Spacewar (480) is tolerated for testing but
   not sanctioned for a shipped build (friends see "playing Spacewar"). A real AppID needs Steam Direct,
