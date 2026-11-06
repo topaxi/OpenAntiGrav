@@ -100,7 +100,10 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
         "the player's own row should be on the board"
     );
 
-    let rows = oag_game::results_tables::field_rows(Some(&board));
+    let rows = oag_game::results_tables::field_rows(
+        Some(&board),
+        &oag_game::results_tables::team_keys(&oag_hd::TITLE, race.slot_teams()),
+    );
     let model = oag_ui_screens::endrace::FieldResults {
         loyalty: None,
         headline: oag_ui_screens::endrace::Headline::Position(
@@ -117,7 +120,7 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
         .display()
         .to_string();
     let mut archives = open_hd_archives(&source);
-    let strings = oag_ui::language::StringTable::default();
+    let strings = english(&mut archives);
     let base = oag_hud::sprite::Sheet::default();
     let screens = oag_game::endrace::load(
         &mut archives,
@@ -173,14 +176,28 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
         texts.contains(&player_place.to_string()),
         "the player's own place ({player_place}) should be drawn: {texts:?}"
     );
-    // At least one other craft's own row drew too, if the field is more
-    // than one - the whole-field grid, not only the player's line.
-    if board.rows.len() > 1 {
+    // Every craft's row names its team (`Grid1.r`), as the disc's own string table
+    // spells it, and the ones still racing say `ER_RACING`: the whole-field grid,
+    // not only the player's line.
+    for row in &board.rows {
+        let team = oag_title::team::listed_id(
+            oag_hd::TITLE.teams,
+            &race.slot_teams()[usize::from(row.slot)],
+        );
+        let shown = strings.get_or_id(team);
         assert!(
-            texts.len() > 3,
-            "more than just the title/headline/POS/TIME captions should have drawn \
-             for an {}-craft field: {texts:?}",
-            board.rows.len()
+            texts.iter().any(|text| text == shown),
+            "slot {} ({team}) should be named {shown:?}: {texts:?}",
+            row.slot
+        );
+        assert_ne!(shown, team, "{team} resolves through HD's own strings");
+    }
+    let racing = strings.get_or_id("ER_RACING");
+    for row in board.rows.iter().filter(|row| row.finish_tick.is_none()) {
+        assert!(
+            texts.iter().any(|text| text == racing),
+            "place {} was still racing: {texts:?}",
+            row.place
         );
     }
 }
@@ -233,6 +250,7 @@ fn hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag() {
             player: true,
             seat: None,
             name: None,
+            team: None,
         }],
     };
     let layers = oag_ui_screens::endrace::hd::hd_results_draw_list(
@@ -544,6 +562,7 @@ fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
             player: place == 5,
             seat: None,
             name: None,
+            team: None,
         })
         .collect();
     let model = oag_ui_screens::endrace::FieldResults {

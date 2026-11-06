@@ -18,8 +18,10 @@ use oag_ui_screens::endrace::{
 /// `crate::scoreboard::Overlay` draws when no `EndRace_Definition.xml` is read at
 /// all. `board` is `None` only before `Race::capture_results` has run, which the
 /// caller's own guard rules out, so this draws an empty field rather than failing.
+/// `roster` is the grid's team ids in slot order, as the string table keys them
+/// ([`team_keys`]): each row's team column, which the draw resolves to the display name.
 #[must_use]
-pub fn field_rows(board: Option<&Board>) -> Vec<FieldRow> {
+pub fn field_rows(board: Option<&Board>, roster: &[String]) -> Vec<FieldRow> {
     board
         .map(|board| {
             board
@@ -31,10 +33,30 @@ pub fn field_rows(board: Option<&Board>) -> Vec<FieldRow> {
                     player: row.player,
                     seat: (row.player && board.persons() > 1).then_some(row.slot + 1),
                     name: row.name.clone(),
+                    team: roster.get(usize::from(row.slot)).cloned(),
                 })
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// A grid's team id as the title's string table keys the team: a variant directory
+/// (`Assegai_c1`) is its base team, and a base is spelled as `Title::teams` lists it
+/// (`assegai` is `Assegai`). An id neither knows is returned as it is.
+#[must_use]
+pub fn team_key(title: &oag_title::Title, id: &str) -> String {
+    let base = title
+        .race
+        .team_variants
+        .and_then(|variants| variants.split(id))
+        .map_or(id, |(base, _)| base);
+    oag_title::team::listed_id(title.teams, base).to_string()
+}
+
+/// A grid's team ids (`Race::slot_teams`) as `title`'s string table keys them.
+#[must_use]
+pub fn team_keys(title: &oag_title::Title, roster: &[String]) -> Vec<String> {
+    roster.iter().map(|id| team_key(title, id)).collect()
 }
 
 /// Pulse's multiplayer table for a race several people flew: the whole field in
@@ -194,7 +216,7 @@ mod tests {
             matches!(named[1].name, PersonName::Player(_)),
             "a person the race has no name for keeps the seat"
         );
-        let rows = field_rows(Some(&board));
+        let rows = field_rows(Some(&board), &[]);
         assert_eq!(
             rows.iter()
                 .filter_map(|row| row.name.as_deref())
@@ -205,7 +227,7 @@ mod tests {
 
     #[test]
     fn hd_rows_name_a_person_only_when_there_are_several() {
-        let rows = field_rows(Some(&two_people()));
+        let rows = field_rows(Some(&two_people()), &[]);
         let seats: Vec<_> = rows.iter().filter_map(|row| row.seat).collect();
         assert_eq!(seats, vec![1, 2]);
         // One person: the row is highlighted and carries no seat.
@@ -229,11 +251,11 @@ mod tests {
         ];
         let alone = build(&crafts, Some(3), 7000);
         assert!(
-            field_rows(Some(&alone))
+            field_rows(Some(&alone), &[])
                 .iter()
                 .all(|row| row.seat.is_none())
         );
-        assert!(field_rows(Some(&alone))[0].player);
+        assert!(field_rows(Some(&alone), &[])[0].player);
     }
 
     /// `field_rows` reads place/finish tick/player straight off the
@@ -268,8 +290,24 @@ mod tests {
             laps_target: Some(3),
             tick: 1234,
         };
-        let rows = field_rows(Some(&board));
+        let roster = [
+            "Feisar_c1".to_string(),
+            "auricom".to_string(),
+            "qirex".to_string(),
+        ];
+        let rows = field_rows(Some(&board), &team_keys(&oag_hd::TITLE, &roster));
         assert_eq!(rows.len(), 2);
+        assert_eq!(
+            rows[0].team.as_deref(),
+            Some("Qirex"),
+            "slot 2's team, as the title spells it"
+        );
+        assert_eq!(
+            rows[1].team.as_deref(),
+            Some("Feisar"),
+            "a variant directory is its base team"
+        );
+        assert_eq!(team_key(&oag_hd::TITLE, "nobody"), "nobody");
         assert_eq!(rows[0].place, 1);
         assert_eq!(rows[0].time_ticks, Some(1234));
         assert!(!rows[0].player);
@@ -280,6 +318,6 @@ mod tests {
 
     #[test]
     fn field_rows_is_empty_rather_than_panicking_with_no_board() {
-        assert!(field_rows(None).is_empty());
+        assert!(field_rows(None, &[]).is_empty());
     }
 }

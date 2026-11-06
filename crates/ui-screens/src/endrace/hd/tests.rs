@@ -125,6 +125,7 @@ fn grid_cell_text_reads_place_and_time_and_nothing_past_column_one() {
                 player: true,
                 seat: None,
                 name: None,
+                team: None,
             },
             FieldRow {
                 place: 2,
@@ -132,6 +133,7 @@ fn grid_cell_text_reads_place_and_time_and_nothing_past_column_one() {
                 player: false,
                 seat: None,
                 name: None,
+                team: None,
             },
         ],
     };
@@ -167,6 +169,7 @@ fn results_draws_only_the_two_captioned_columns_and_the_resolved_headline() {
             player: true,
             seat: None,
             name: None,
+            team: None,
         }],
     };
     let strings = strings();
@@ -218,6 +221,7 @@ fn results_repositions_the_highlight_onto_the_player_s_row() {
                 player: false,
                 seat: None,
                 name: None,
+                team: None,
             },
             FieldRow {
                 place: 2,
@@ -225,6 +229,7 @@ fn results_repositions_the_highlight_onto_the_player_s_row() {
                 player: true,
                 seat: None,
                 name: None,
+                team: None,
             },
         ],
     };
@@ -293,6 +298,7 @@ fn results_uses_hds_own_place_idstring_and_never_leaks_the_target_or_loyalty_pla
             player: true,
             seat: None,
             name: None,
+            team: None,
         }],
     };
     let strings = strings();
@@ -573,6 +579,7 @@ fn a_two_person_race_names_and_highlights_each_person() {
         player: seat.is_some(),
         seat,
         name: None,
+        team: None,
     };
     let model = FieldResults {
         loyalty: None,
@@ -621,6 +628,7 @@ fn a_named_person_is_drawn_by_name() {
         player: true,
         seat: Some(seat),
         name: name.map(str::to_string),
+        team: None,
     };
     let model = FieldResults {
         loyalty: None,

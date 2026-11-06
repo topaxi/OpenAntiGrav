@@ -312,6 +312,11 @@ pub struct FieldRow {
     pub seat: Option<u8>,
     /// The name a person raced under (a network race), drawn in place of `PLAYER n`.
     pub name: Option<String>,
+    /// The craft's team, by string-table id (its folder name): `Grid1.r` is the
+    /// record's own idstring, which the draw localises (`0x0022b688`, the
+    /// non-multiplayer branch; `docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md`).
+    /// Drawn when neither `name` nor `seat` is. `None` where no team is known.
+    pub team: Option<String>,
 }
 
 /// Wipeout HD/Fury's own `EndRace Results`: the headline (the same

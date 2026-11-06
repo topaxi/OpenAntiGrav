@@ -70,10 +70,25 @@ Per racer `r` (records `300` bytes apart):
   `x = 40` (`0x42200000`), `y = 96 + 45 r` (`0x008b07b4` = `96.0`,
   `0x008b07b0` = `45.0`).
 - `Grid1.r` - a string off the record's `+0x50` - at `x = 200`
-  (`0x43480000`), same `y`. **What `+0x50` holds is not identified** (a pilot
-  or team name is the obvious reading; not drawn by this build).
-- `Grid2.r` - the finish time, or a placeholder idstring for a craft still
-  racing - at `x = 545` (`0x008b07d4`), same `y`.
+  (`0x43480000`), same `y`. **Re-read 2026-11-06 (confidence 75): it is a
+  team idstring.** On a non-multiplayer race (`g_GameState+0xe0 < 0x10`) the
+  string is set through `_opd_FUN_00202f58(widget, str, 0, 1)`, the same call
+  that sets `Line1` from the idstring `ER_SHIP_DES`, i.e. the localising
+  setter, where the number columns go through `_opd_FUN_00202d28`, the literal
+  one. The same `+0x50` string is then hashed (`FUN_006764c8` / `_opd_FUN_0032a740`)
+  and compared against the hashes of the 32 badge textures loaded on the screen
+  (`param_1 + 0xb3c`, hash at `+0x80`), and the match is assigned to `Gridi.r`:
+  the string is the key of the row's ship badge (`Data\Ships\<Team>\fe\miniBW.tga`),
+  so it names the craft's team. The multiplayer branch (`+0xe0 == 0x10`) prints
+  the same field as a literal name instead (the player's name; the podium reads it
+  likewise). What this build draws: the team, through the string table (`Assegai`
+  is `ASSEGAI`, `Goteki` is `GOTEKI 45`).
+- `Grid2.r` - the finish time at `x = 545` (`0x008b07d4`), same `y`, off the
+  record's `+0x160`: above `0` the time (`_opd_FUN_00083720`), `-1` the string
+  `ER_DNF` (TOC `0xc6b`, `0x008b0684`), anything else `0` the string `ER_RACING`
+  (TOC `0xcd4`, `0x008b0828`; confidence 80, both strings read off the executable).
+  A craft still racing when the table fills reads `RACING`, which is what this
+  build draws; nothing here produces `DNF`.
 - `Gridi.r` - the badge image - shown at `x = 130` (`0x008b07d8`),
   `y = 82 + 45 r` (`0x008b07bc`).
 - For the player's record, `EndRaceResults_HighlightRow(screen, 94 + 45 r,
@@ -94,7 +109,8 @@ inside the `487` bottom bar.
 ## Implemented
 
 `oag_ui_screens::endrace::hd::hd_results_draw_list`'s `RaceGrid` - every number
-above, applied to a race-family headline; Time Trial and Speed Lap keep the
+above, applied to a race-family headline, with `Grid1.r` the team and `Grid2.r`
+`RACING` for a craft still racing (2026-11-06; `Gridi.r`, the badge, is not drawn); Time Trial and Speed Lap keep the
 file's frame and this build's older, chosen row pitch, since their fillers
 (`0x002239a8`, `0x00227b30`) were not read. Pinned against the real disc by
 `crates/game/tests/hd_endrace_ground_truth.rs`'s

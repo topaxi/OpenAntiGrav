@@ -324,7 +324,10 @@ impl Session {
                 } else {
                     headline(mode, observation.place)
                 },
-                rows: oag_game::results_tables::field_rows(board.as_ref()),
+                rows: oag_game::results_tables::field_rows(
+                    board.as_ref(),
+                    &oag_game::results_tables::team_keys(title_ref, stage.race.slot_teams()),
+                ),
                 loyalty: hd_loyalty,
             })
         } else {

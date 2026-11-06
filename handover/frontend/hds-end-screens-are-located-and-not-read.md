@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-10-06
+updated: 2026-11-06
 summary: "Which archive copy HD loads is unresolved; no live capture reaches a finished EndRace Results; Podium is multiplayer-only"
 ---
 
@@ -68,8 +68,8 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   stays Results -> Menu. **Still open under it**: what starts the `+0x34ec`
   deadline, the `DAT_008a5644`/`DAT_008b0458` bytes, the ship portraits
   (`pod_img`) and badge panels, its title string (`FE_ENDRACE_PODIUM`, only in
-  `DATA05`/`06`'s table), and what `+0x50` of a race record is (the same
-  unidentified field as `Grid1.r`). Omega: checked, applies, not wired
+  `DATA05`/`06`'s table), and what `+0x50` of a race record is (a team idstring on a race, 75; the podium prints it as a
+  literal name). Omega: checked, applies, not wired
   (Results, Menu, Podium, no Rewards in all three copies).
 - **Which copy the runtime actually loads is still unresolved** - the same
   open question [hd-frontend.md](../../docs/formats/hd-frontend.md) records
@@ -102,8 +102,13 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   on the footer. See
   [endrace-results-grid.md](../../docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md).
   **Still open under it**: Time Trial / Speed Lap rows keep the chosen
-  `row_y` (fillers `0x002239a8`/`0x00227b30` unread); `Grid1.r` (`x = 200`)
-  is a per-racer string off the record's `+0x50`, unidentified and undrawn.
+  `row_y` (fillers `0x002239a8`/`0x00227b30` unread); `Gridi.r` (the row's
+  team badge) is not drawn. ~~`Grid1.r` unidentified~~ **2026-11-06 (`hd-endrace-rows`): a team
+  idstring, drawn** (the live Results listed no names before), with `ER_RACING` for a craft
+  still racing; see `docs/ui/endrace-screens.md`'s "HD's `Results` names every craft".
+  **Open under it**: whether the original refreshes the other crafts' times while `Results` is
+  up (ours holds the board at the player's finish); Omega's finished race still shows the
+  built-in overflowing `scoreboard::Overlay` because its `endrace_entry` is `None`.
 - **2026-09-28: `EndRace Menu` draws its cursor the executable's way** - the
   focused option Block turns `ActiveColor` (`0xff8ac0ca`), eases 60 wider and
   blinks a 32x32 arrow (`Block_Update`, `0x0018d588`,

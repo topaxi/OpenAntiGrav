@@ -198,6 +198,7 @@ fn a_race_lays_its_grid_out_as_the_executable_does() {
                 player: false,
                 seat: None,
                 name: None,
+                team: None,
             },
             FieldRow {
                 place: 2,
@@ -205,6 +206,7 @@ fn a_race_lays_its_grid_out_as_the_executable_does() {
                 player: true,
                 seat: None,
                 name: None,
+                team: None,
             },
         ],
     };
@@ -233,7 +235,7 @@ fn a_race_lays_its_grid_out_as_the_executable_does() {
     assert_eq!(text("1"), (375.0 + 40.0, 368.0 + 96.0, grey));
     assert_eq!(text("1.40.00"), (375.0 + 545.0, 368.0 + 96.0, grey));
     assert_eq!(text("2"), (375.0 + 40.0, 368.0 + 141.0, [1.0; 4]));
-    assert_eq!(text("-").0, 375.0 + 545.0);
+    assert_eq!(text("ER_RACING").0, 375.0 + 545.0);
     let fills: Vec<[f32; 4]> = body
         .iter()
         .filter_map(|draw| match draw {
@@ -273,4 +275,51 @@ fn hd_steps_its_options_in_screen_order_keeping_the_focus() {
     assert_eq!(menu.selected(), Some(MenuOption::ReturnToGrid));
     menu.step(-1);
     assert_eq!(menu.selected(), Some(MenuOption::RaceAgain), "Up goes up");
+}
+
+/// A one-person race names every craft by its team in the column the original fills
+/// from the record's idstring, and a craft still racing reads `ER_RACING`, not a dash.
+#[test]
+fn a_single_race_names_each_craft_by_its_team_and_a_racing_craft_says_so() {
+    let row = |place: u8, team: &str, time: Option<u64>| FieldRow {
+        place,
+        time_ticks: time,
+        player: place == 1,
+        seat: None,
+        name: None,
+        team: Some(team.to_string()),
+    };
+    let model = FieldResults {
+        loyalty: None,
+        headline: Headline::Position(1),
+        rows: vec![row(1, "Feisar", Some(6000)), row(2, "Auricom", None)],
+    };
+    let strings = oag_ui::language::StringTable::from_xml(
+        r#"<Strings>
+<Entry ID="Feisar" String="FEISAR"></Entry>
+<Entry ID="Auricom" String="AURICOM"></Entry>
+<Entry ID="ER_RACING" String="RACING"></Entry>
+</Strings>"#,
+    );
+    let layers = hd_results_draw_list(
+        &model,
+        &layout("EndRace Results"),
+        &skin(),
+        &frame(),
+        &strings,
+        None,
+        false,
+        &|_| None,
+    );
+    let texts: Vec<String> = layers
+        .body
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect();
+    for wanted in ["FEISAR", "AURICOM", "RACING", "1.40.00"] {
+        assert!(texts.contains(&wanted.to_string()), "{wanted}: {texts:?}");
+    }
 }
