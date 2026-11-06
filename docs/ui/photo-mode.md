@@ -12,10 +12,10 @@ functions and their evidence are on each binary's page:
 
 | Title | Has one | Entry | Shot | Conf. |
 | --- | --- | --- | --- | ---: |
-| Pulse PSP | yes | Pause (`EXT_PHOTO`, single-player screens only); SELECT on `Race End Photo` | 480x272 JPEG 4:4:4, quality 90, `/PICTURE/WIPEOUT_PULSE/` | 90 |
+| Pulse PSP | yes | Pause (`EXT_PHOTO`, single-player screens only); SELECT on `Race End Photo` | 480x272 JPEG 4:4:4, quality argument 90, `/PICTURE/WIPEOUT_PULSE/` | 90 |
 | Pulse PS2 | no save path | See [below](#pulse-ps2) | none | 70 |
 | Pure | **no** | none | none | 90 |
-| HD/Fury | yes | Pause, including split screen; SQUARE on `Race End Photo` | JPEG at display resolution (1920x1080 measured), quality 90, exported to the XMB | 90 |
+| HD/Fury | yes | Pause, including split screen; SQUARE on `Race End Photo` | JPEG at display resolution (1920x1080 measured), quality argument 90, exported to the XMB | 90 |
 | 2048 | yes, its own | Pause and `Race End Photo`: `PhotoModeTouchButton` to `InGame VitaPhoto` | JPEG at the display surface, `ScePhotoExport` | 84 |
 | Omega | yes, cut down | Pause; SQUARE at the finish per the XML, the string says OPTIONS | The console's Share function, no file of its own | 80 |
 
@@ -37,7 +37,7 @@ Screens, all in `Data\Plugins\PI001\GUI\InGame_Definition.xml` (`31b50f2e`), `Ph
 | `InGame Taking Photo` | none | Empty, so no menu is in the shot; 30 frames, then the save |
 | `InGame Taking Photo Saving` | `Pause` | `TRC_SAVING`, waits on the writer thread |
 | `InGame Photo Message` | `Pause` | Result dialog, `FE_CONTINUE` back to `InGame Photo` |
-| `InGame Race End Photo` | `Pause` | An unused prompt: `ER_PHOTO_TAKE2`, redirect to `InGame Taking Photo` |
+| `InGame Race End Photo` | `Pause` | A prompt, `ER_PHOTO_TAKE2`, then `InGame Taking Photo`. No `goto` to it in this file, and only the camera gate names it in code |
 
 **Entry from pause.** `InGame Pause SP`, `SP Time Trial`, `SP Speed Lap`, `SP Tournament` carry
 `EXT_PHOTO` as row 3 and `goto="InGame Photo"`. `InGame Pause MP` and `MP Tournament Host` do not:
@@ -130,9 +130,10 @@ pad. Read, not run. Omega: same blocks, same screens. 2048: not checked in a spl
 `RaceManager_Update` take no hits, the craft stands to the bit, and only `Camera_UpdateSpectatorView`
 runs. The same holds for `InGame Pause`, so photo mode is the pause plus a camera. The race resumes
 where it stopped. Numbers: [Pulse EU, Live](../ghidra/functions/psp-pulse-eu/photo-mode.md#live-ppsspp-pulse-usa).
-Audio was not measured: the emulator ran muted; recipe on that page.
+**Audio stops with it.** The engine note, the cue sequencer and the music callback take no hits in pause or
+photo mode and the SAS voices stand still, while the mixer keeps ticking (80).
 
-**HD, measured (RPCS3, 90).** Same: the craft stands to the bit, Continue resumes.
+**HD, measured (RPCS3, 90).** Same: the craft stands to the bit, Continue resumes. Audio not measured.
 [HD, Live](../ghidra/functions/ps3-hdfury-eu/photo-mode.md#live-rpcs3).
 
 **Neither title's camera stops at the track.** Pulse: 12.3693 from the craft at every angle, under the

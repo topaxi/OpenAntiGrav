@@ -93,11 +93,11 @@ has focus, `FUN_00678eb8(2 d)` draws the focus plane; otherwise `-1`.
 | Input index | Legend | `close` (mode 3) | `track` (mode 4) | `internal` (mode 5) |
 | --- | --- | --- | --- | --- |
 | stick `0x14`, `0x13` | `MSC_PHOTO_ROT` | orbit A, B | none | none |
-| `7` held plus stick | `MSC_PHOTO_PAN`, `ά` | pan B, A, `+-5` | none | none |
-| `0xb`, `0xa` | `MSC_PHOTO_TILT`, `Κ/Μ` | tilt | tilt | none |
-| `0x12` | `MSC_PHOTO_ZOOM`, `Λ/Ν` | FOV `[10, 100]`, starts 65 | `+0x290` `[3, 40]`, starts 20 | none |
-| `5` | `MSC_PHOTO_RESET`, `Ϊ` | pan, orbit, tilt 0; FOV 65; `+0x2f0 = 0.25` | `+0x290 = 20`, tilt 0 | none |
-| `8`, `9` | `MSC_PHOTO_SHIP` | previous, next craft, skipping any with `+0x6a64 & 0x1000` | same | same |
+| `7` held plus left stick | `MSC_PHOTO_PAN`, `ά` (square) | pan B, A, `+-5` | none | none |
+| `0xb`, `0xa` | `MSC_PHOTO_TILT`, `Λ/Ν` (L2, R2) | tilt | tilt | none |
+| `0x12` | `MSC_PHOTO_ZOOM`, right stick Y icon | FOV `[10, 100]`, starts 65 | `+0x290` `[3, 40]`, starts 20 | none |
+| `5` | `MSC_PHOTO_RESET`, `Ϊ` (triangle) | pan, orbit, tilt 0; FOV 65; `+0x2f0 = 0.25` | `+0x290 = 20`, tilt 0 | none |
+| `8`, `9` | `MSC_PHOTO_SHIP`, `Κ/Μ` (L1, R1) | previous, next craft, skipping any with `+0x6a64 & 0x1000` | same | same |
 | `0xe` | `MSC_PHOTO_HELP` | toggle `Photo Toggle Help Display` | same | same |
 
 Entering `close` zeroes all five; the label bar moves with the mode. With one craft in the race
@@ -118,7 +118,7 @@ the controls off while either runs. A shot is refused for `0.15` s after entry (
 `cellPhotoExportFromFile` on a thread (`exportPhotoThread`), then `cellFsUnlink`. The manual string
 `MAN_2_PM`: "saved in the JPEG format to the Photo folder ... in the resolution that the game is
 currently being displayed at". Reads with it: the writer is sized from the colour target, `0x5a`
-quality (90) on both paths. `MSC_PHOTO_INSUF`, `ER_PHOTO_RESOURCE` and `MSC_PHOTO_CANCELLED` are
+as the quality argument on both paths (see below for what that writes). `MSC_PHOTO_INSUF`, `ER_PHOTO_RESOURCE` and `MSC_PHOTO_CANCELLED` are
 returns 1, 2, 3. Success adds 1 to the stat `+0x238` (`uNumPhotosTaken`).
 
 Tiled capture is `*(0x008c1f04 + 4) >= 2`. `0x008c1f08` reads `1` in the static image and live, so
@@ -140,17 +140,21 @@ the single path ran. No writer was read; recipe: `get_xrefs_to 0x008c1f08`.
 - **Stick.** Left Y drives `+0x294`, left X `+0x298`, unclamped (`a` read 6.03 and `-3.55`; `2 pi`
   wrap at `+-6.28`). Right Y drives `+0x2b0`, held to **100.0** at the top; 65 after reset. L2 and R2
   move `+0x29c`. The rate is the same `0.05` per frame (emulated at about 11 frames a second here).
-- **Pan was not seen.** With the virtual pad's `square` held, `+0x2a8` and `+0x2ac` stayed `0.0` and
-  the stick kept orbiting, though the legend shows stick plus square. Index 7 is `FUN_00677308`, a
-  different query from `FUN_006770c8`: unresolved. Recipe: break in `Camera_AddPhotoPanA`.
+- **Pan was not seen, and the reason is the test pad.** The virtual pad's `triangle` did nothing, twice,
+  while holding its `square` fired the reset (tilt to 0, field of view to 65, orbit to about 0). So on
+  this pad those two buttons reach the game swapped (`scripts/rpcs3_pad.py` maps `BTN_WEST`, `BTN_NORTH`),
+  and the pan modifier, index 7, was never held. `+0x2a8` and `+0x2ac` stayed `0.0`. The pan rows
+  remain static. Recipe: hold the virtual `triangle` with the left stick and read `+0x2ac`.
 - **Track collision does not limit it.** At `+0x294 = 1.34` the eye is under the road: the road's back
   face is culled and the frame looks up at the sky and the buildings. `-1.36` is overhead.
 - **The shot.** Button to file: `InGame Taking Photo Transition Screen`, 1.8 s, `InGame Taking Photo`,
   `InGame Taking Photo Saving`, `InGame Photo Message`. Temp `wohd_20261106_153859.jpg` in
   `USRDIR`, exported as `dev_hdd0/photo/2026/11/06/...`, 495,667 bytes: **1920 x 1080**, baseline,
-  `0x11` three times, the same luma table start as Pulse's, `2, 1, 1, 1, 1, 1, 2, 1`. So quality 90
-  holds in two binaries. UI and HUD absent. The first shot printed `TROPHY: Unlocking trophy 12`.
-- Audio not measured (Null renderer). Recipe as on the Pulse page: voice state over `InGame Photo`.
+  `0x11` three times, the same luma table start as Pulse's, `2, 1, 1, 1, 1, 1, 2, 1`. So argument 90
+  gives the same table in two binaries; that table equals IJG's quality 95, not 90. UI and HUD absent. The first shot printed `TROPHY: Unlocking trophy 12`.
+- Audio not measured on HD; only Pulse was. The Null renderer stops output, not the sound code. Recipe:
+  hit-count `Scream_OpKeyOn` (`0x00626728`) and the group volume writers in `audio-mix.md` over `InGame`,
+  `InGame Pause SP` and `InGame Photo` with `scripts/rpcs3_debugger.py`.
 
 ## Split screen and the finish
 

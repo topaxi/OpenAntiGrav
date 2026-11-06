@@ -84,7 +84,7 @@ and `TKR_PHOTOS`. Failure is `TRC_NO_MS` or `TRC_MS_INSUFKB2`.
 ## The saved file
 
 `JpegWriter_Construct` is called once, from `FUN_0891edfc`, the renderer's constructor, at
-`0x0891f32c`: `a1 = 0x1e0`, `a2 = 0x110`, `t0 = 0x5a`. **480 x 272, baseline JPEG, quality 90, 4:4:4**
+`0x0891f32c`: `a1 = 0x1e0`, `a2 = 0x110`, `t0 = 0x5a`. **480 x 272, baseline JPEG, quality argument 90, 4:4:4**
 (all three components `0x11`, marker `ff c0`), confirmed on a real file below. `JpegWriter_Encode` reads the buffer `0x88000` into
 the display pair (which of the two by `+0x5df0`) with stride 512, 4 bytes a pixel: `0x88000` is
 `512 * 272 * 4`, so it encodes what was displayed, with whatever the HUD flag let through.
@@ -132,15 +132,36 @@ clamped at 3 and 40 (read 35, 30, 25, 20, 15, 10, 5, 3, then 8, 13). The value i
 stick X adds to it per frame, reaching 40 inside a second at full tilt.
 
 **The file.** `PICTURE/WIPEOUT_PULSE/wo_20261106_151717.jpg`, 64,644 bytes: JFIF 1.02, `ff c0`, 8 bit,
-**480 x 272**, three components all `0x11`, luma quant `2, 1, 1, 1, 1, 1, 2, 1`. The picture has no
+**480 x 272**, three components all `0x11`, luma quant `2, 1, 1, 1, 1, 1, 2, 1`, which equals IJG's
+quality 95 scaling, not 90: the argument is `0x5a`, the encoder's own scaling (`FUN_08936034` onward,
+not read) gives that table. The picture has no
 menu and no HUD with the row off, and on `FE_ON` the race HUD draws through the photo screen.
 States in order: `InGame Photo`, `InGame Taking Photo`, `InGame Taking Photo Saving`,
 `InGame Photo Message`; `FE_CONTINUE` returns to `InGame Photo` with the camera as it was.
 
-Not run: SELECT from `Race End Photo` (a finished race), and audio. The instance runs with sound off.
-Recipe for audio: on a sound-on instance, read the voice pool over a pause and over `InGame Photo`,
-or break on the `Pause` task handler behind `BackendController` (`task="Pause"` on all five of
-these screens, the same value as `InGame Pause`). Unread.
+Not run: SELECT from `Race End Photo` (a finished race).
+
+**Audio stops.** Sound output was off in the emulator, which does not stop the game's sound code.
+Breakpoint hits in 1.2 s, capped at 3:
+
+| Function | `InGame` | `InGame Pause SP Time Trial` | `InGame Photo` |
+| --- | ---: | ---: | ---: |
+| `Exhaust_UpdateEngineSound` `0x08904cf4` | 3 | 0 | 0 |
+| `Scream_StepCommandList` `0x0898efd8` | 3 | 0 | 0 |
+| `MusicPlayer_ComputeCallbackGain` `0x0893c208` | 3 | 0 | 0 |
+| `Scream_TickHandlers` `0x08993124` | 3 | 3 | 3 |
+| `Sas_CommitVoices` `0x0898c7e8` | 3 | 3 | 3 |
+| `Audio_UpdateGroupVolumes` `0x0893ac70` | 3 | 3 | 3 |
+
+The first `0x400` bytes of `g_sas_voices` change over 0.5 s racing and stand still in both other states.
+So the mixer keeps ticking with nothing moving: the engine note, the cue sequencer and the music
+callback are all stopped, and pause and photo mode do not differ. Confidence 80: read off the code path,
+not heard, and the music's stream itself was not watched.
+
+**The strings.** Named by `PhotoMode_Update` or a screen: `ER_PHOTO_CAM`, `_CAM_FRONT`, `_CAM_ABOVE`,
+`_CAM_TRACK`, `_HUD`, `_ZOOMCAM`, `_ROTATECAM`, `_RESETCAM`, `_TAKE2`, `_SPACE`, `_RESOURCE`, `_SLEEP`.
+On the disc with no reader in this file or that function: `ER_PHOTO_TAKE`, `ER_PHOTO_TAKE_NOHUD`, `ER_PHOTO_OP`,
+`ER_PHOTO_CAM_SHIP`, `ER_PHOTO_CAM_ZOOM`.
 
 ## History
 

@@ -10,16 +10,16 @@ summary: "Photo mode read on all five titles, Pulse and HD measured live; Pulse'
 The read is `docs/ui/photo-mode.md`; each binary's evidence is
 `docs/ghidra/functions/<binary>/photo-mode.md`. Maintainer's decisions (2026-11-06): every title gets the
 mode on by default, a title without one takes Pulse's as a port, a saved shot always takes full
-render resolution. So 480x272 and JPEG quality 90 are recorded fact, not a limit.
+render resolution. So 480x272 and the JPEG format are recorded fact, not a limit.
 
 ## Open
 
-- Audio during photo mode: not measured on either title, both emulators ran muted. Recipe on
-  the Pulse EU page.
+- Audio on HD: not measured; recipe with addresses on the HD page. Pulse stops its engine note,
+  cues and music callback, measured.
 - SELECT from Pulse's `Race End Photo` and SQUARE from HD's: read, not driven. From a finish the
   camera stays the spectator's and the subject stays the chosen craft (`PhotoMode_Update`, circle branch).
-- HD pan (`+0x2a8`, `+0x2ac`, `+-5`): read, never moved on the virtual pad. Index 7 is
-  `FUN_00677308`. Recipe on the HD page.
+- HD pan (`+0x2a8`, `+0x2ac`, `+-5`): read, never moved, because the virtual pad's square and triangle
+  reach the game swapped. Recipe on the HD page.
 - HD tiled capture `0x008c1f08`: reads 1, no writer searched.
 - Omega's update `FUN_0155e450`: unread, with its recipe. Its camera limits are assumed HD's until then.
 - 2048: who writes `this+0x10c = 4` (track camera in the touch mode).
@@ -34,7 +34,7 @@ render resolution. So 480x272 and JPEG quality 90 are recorded fact, not a limit
 2. Entry: `EXT_PHOTO` on the four single-player pause screens only; absent in multiplayer, so leave
    it out of a split on Pulse. SELECT on `Race End Photo` replaces the swallow in `Session::tick_endrace`.
 3. The race does not tick and only the spectator camera runs; the same as pause, so a state hash must
-   not move. Re-subject to the player each frame from a race; keep the chosen craft from a finish.
+   not move. Sound stops as in pause. Re-subject to the player each frame from a race; keep the chosen craft from a finish.
 4. Camera: modes 1, 4, 3, 2, 7 already exist in `oag_render::camera` for the finish. Pitch `[-1, 0.6]`,
    yaw free, both `0.05` per frame on the stick, TRIANGLE resets, and only with no digital button
    held. Track: field `z` in `[3, 40]`, L and R `+-5`, stick X additive, drawn at
