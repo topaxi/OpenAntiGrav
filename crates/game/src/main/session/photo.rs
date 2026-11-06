@@ -325,6 +325,24 @@ impl super::Session {
         )
     }
 
+    /// The drive's reading of the picture controls while the mode is open.
+    pub(crate) fn photo_fx_name(&self) -> Option<String> {
+        use oag_raceplay::photo::effects::Row;
+        let Stage::Race(stage) = &self.stage else {
+            return None;
+        };
+        let effects = stage.race.photo()?.effects();
+        Some(format!(
+            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={}",
+            effects.value(Row::Exposure),
+            effects.value(Row::Saturation),
+            effects.value(Row::SpeedBlur),
+            if effects.value(Row::DepthOfField) == 1 { "on" } else { "off" },
+            effects.value(Row::Aperture),
+            effects.value(Row::Focus),
+        ))
+    }
+
     /// The drive's name for the mode: the lens, or `none`.
     pub(crate) fn photo_lens_name(&self) -> &'static str {
         use oag_raceplay::photo::Lens;

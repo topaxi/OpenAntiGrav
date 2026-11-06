@@ -252,7 +252,9 @@ impl Photo {
                 tuning,
                 oag_post::hd_zoom::Frame {
                     boost: blur,
-                    damage: blur,
+                    // The original writes the damage pulse too, which tints the streak red;
+                    // a speed blur does not read as damage here.
+                    damage: 0.0,
                     size: [1.0, 1.0],
                     // A tick of the mode's own, far from any the race counts: the ring's
                     // history advances once per tick of it, and the race is not stepping.

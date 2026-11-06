@@ -148,6 +148,9 @@ const GAP: f32 = 4.0;
 const BAND: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
 const TEXT: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const LINE: f32 = 9.5;
+/// A glyph's advance on the overlay grid at [`SCALE`], and the room a chip keeps either side.
+const CHAR_WIDTH: f32 = 4.7;
+const CHIP_PADDING: f32 = 3.0;
 const SCALE: f32 = 0.75;
 
 /// Where a chip sits on the overlay grid `grid` (width, height): `[x, y, w, h]`.
@@ -346,16 +349,27 @@ pub fn draw_list(
         Lens::Close => strings::CLOSE,
         Lens::Track => strings::TRACK,
     };
+    // A chip says its row and its value; a row whose word is too long for the chip (Pulse's
+    // own "PHOTO CAMERA MODE") gives the value alone.
+    let fitted = |label: String, value: String, width: f32| {
+        let both = format!("{label}: {value}");
+        if both.chars().count() as f32 * CHAR_WIDTH + 2.0 * CHIP_PADDING <= width {
+            both
+        } else {
+            value
+        }
+    };
+    let width = chip_rect(Chip::Camera, grid)[2];
     let chip = |chip: Chip| match chip {
-        Chip::Camera => format!("{}: {}", say(strings::CAMERA), say(lens)),
-        Chip::Hud => format!(
-            "{}: {}",
+        Chip::Camera => fitted(say(strings::CAMERA), say(lens), width),
+        Chip::Hud => fitted(
             say(strings::HUD),
             say(if photo.hud() {
                 strings::ON
             } else {
                 strings::OFF
-            })
+            }),
+            width,
         ),
         Chip::Effects => say(strings::EFFECTS),
         Chip::Take => say(strings::TAKE),

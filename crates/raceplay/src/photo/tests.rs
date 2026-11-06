@@ -441,7 +441,7 @@ fn the_speed_blur_is_the_zoom_ring_held_at_the_rows_value_and_needs_the_ring() {
     assert!(photo.speed_blur().is_none(), "no ring handed in, no streak");
     let mut photo = photo.with_zoom(Some(crate::zoom::tuning(&oag_hd::race::ZOOM_RING)));
     let (_, frame) = photo.speed_blur().expect("a pulse");
-    assert!((frame.boost - 0.2).abs() < 1e-6 && (frame.damage - 0.2).abs() < 1e-6);
+    assert!((frame.boost - 0.2).abs() < 1e-6 && frame.damage == 0.0);
     let first = frame.tick;
     photo.step(stick(0.0, 0.0), &[0]);
     assert_ne!(

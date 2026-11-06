@@ -156,6 +156,23 @@ the single path ran. No writer was read; recipe: `get_xrefs_to 0x008c1f08`.
   hit-count `Scream_OpKeyOn` (`0x00626728`) and the group volume writers in `audio-mix.md` over `InGame`,
   `InGame Pause SP` and `InGame Photo` with `scripts/rpcs3_debugger.py`.
 
+## Speed blur target and depth of field targets
+
+Read 2026-11-06, lane `photo-effects`. The three setters `PhotoMode_Update` calls with a slider's value
+are cross-TOC trampolines (`std r2,0x28(r1); addis r2,r2,1; subi r2,r2,0x114; b ...`, the same shape
+`renderer.md` reads for `0x00678ee8`):
+
+| Trampoline | Target | Body | Reads as | Conf. |
+| --- | --- | --- | --- | ---: |
+| `0x00678f18` (`Photo Blur`) | `0x003af870` | `lwz r9,-0x6008(r2); stfs f1,0x68(r9); stfs f1,0x64(r9)` | `*(0x008b73bc) = 0x00c50ee0`, `g_FunkLayer`: `+0x64` and `+0x68` are the zoom ring's `E` and `P` (`funklayer-zoom.md`, "`E` is `+0x64`") | 85 |
+| `0x00678f38` (`DOF Aperture`) | `0x003bad38` | `lwz r9,-0x5dd4(r2); stfs f1,0x0(r9)` | one float, reader not chased | 60 |
+
+So **speed blur is the zoom-streak ring held at a constant `v * 0.01`, boost and damage together**, and
+not a velocity blur. `P` carries the ring's damage tint, so on HD a speed blur of 100 reads red at the
+edge as a hit does (not run). The project's photo mode writes the boost only
+(`docs/ui/photo-mode.md`, "Picture controls"). Neither `0x00c50f44` nor `0x00c50f48` has a direct xref (every
+access is through the TOC pointer).
+
 ## Split screen and the finish
 
 `Block name="Photo"` is on `InGame Pause Split Player 1`, `Split Player 2` (with `InputPad="1"`), both

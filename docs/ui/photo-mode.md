@@ -182,12 +182,13 @@ one, left out of the cycle otherwise). The mode opens on `internal`, as both ori
 | SQUARE tap | HUD on or off (off on opening) |
 | L, R | previous, next craft, wrapping, skipping craft out of the race |
 | TRIANGLE | reset the orbit, tilt, pan and fields |
-| START | hide or show the help |
+| START | the help, then the effects panel, then neither |
 | CROSS | take the shot (refused for 0.15 s after opening: HD's guard) |
 | CIRCLE, right click | leave |
 
-A click on the four chips along the top (camera, HUD, TAKE PHOTO, BACK) does the same, and a click
-with the help hidden shows it. Not ported: HD's separate tilt triggers (L2, R2 are the airbrakes'
+A click on the five chips along the top (camera, HUD, EFFECTS, TAKE PHOTO, BACK) does the same, and a
+click with the help hidden shows it. A chip says its row and its value, and the value alone where the
+row's word is too long for it (Pulse's own `PHOTO CAMERA MODE`). Not ported: HD's separate tilt triggers (L2, R2 are the airbrakes'
 axes here), the right-stick zoom, the touch gestures of 2048 (a follow-up).
 
 **The shot.** The frame the player sees, at the size they see it (`Framebuffer::output`, the
@@ -213,8 +214,64 @@ exists on Pulse only in this build (HD's end-race flow does not open on it), so 
 is Pulse's alone. 2048's own touch screen,
 its preview step and its Glory Moment are not used.
 
-**Left open:** exposure, saturation, speed blur,
-depth of field and motion blur (`oag-post`, `photo-effects`), the photo counter stat, split screen,
-touch gestures, saving on a page or a phone, HD's real `close` rest offset, and a shot at the
-scene's own pixels (the file is the presentation target, upscaled from the scene drawn at its
-configured render size: the dynamic resolution is held there while the mode is open).
+**Picture controls** (`photo-effects`; `oag_post::photo_fx`, `oag_raceplay::photo::effects`). The
+EFFECTS chip, or START once, opens a panel under the chips: exposure, saturation, speed blur, depth of
+field, and aperture and focus while depth of field is on. With it up the stick moves its cursor (up and
+down) and the row (left and right, repeating while held) and the camera stands still; a click on a row
+puts the cursor on it and the arrows either side of the value change it. HD's rows, ranges and
+laws on every title (`docs/ghidra/functions/ps3-hdfury-eu/photo-mode.md`, "`PhotoMode_Update`"):
+
+| Row | Range, step | Opens on | Does |
+| --- | --- | --- | --- |
+| Exposure | 0 to 100, 1 | 33 | `2^((v - 33) * 0.03003)` on linear light, up is brighter |
+| Saturation | 0 to 100, 1 | 20 | `v * 0.05`: 20 is the colour as it is, 0 is grey, 100 is five times |
+| Speed blur | 0 to 100, 5 | 0 | HD's zoom ring held at `v * 0.01` (`oag_post::hd_zoom`), on every title |
+| Depth of field | off, on | off | HD's focus curve over the scene's depth |
+| Aperture | 0 to 100, 1 | 40 | the widest blur, `0.025 * v / 100` of the picture's height |
+| Focus | 0 to 100, 1 | 20 | focus distance `d` from 3 to 493 (HD's curve); sharp from `d - c` to `d + 2c`, `c = d^0.55`, widest blur at `c^1.7` further out |
+
+The pass runs on the finished frame (after the glow of HD, 2048 and Omega and after the motion blur,
+before the HUD), so a shot and the screen show the same picture. **A control at its opening value is not
+applied at all, and a pass that is not asked for builds nothing:** the shot with every control at its
+opening is the one the mode saved before anything was touched, byte for byte
+(`photo_mode_ground_truth::each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unprocessed_one`,
+which also moves each control and reads the file: exposure up raises the mean luma, saturation 0 leaves no
+colour, the speed blur lands at the edge and not the middle, depth of field softens the far field and
+leaves the craft). The values live on the mode and die with it, so a race that opened the mode and left
+it with every control moved is, after leaving, the picture a visit that moved nothing leaves, at the same
+tick, with the same state hash (`a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without`).
+
+**Chosen, not measured:**
+
+- the **exposure curve**: HD's slider falls as its value rises and what its shader does with the number was
+  never read, so the slider here runs the other way (up is brighter) and its step is stops of linear light;
+- **`g` is 0** on every title: no title here models the race grade HD opens its exposure on
+  (`(int)(33.3 - 33.3 g)`, 21 on Vineta K), so it opens on 33;
+- the aperture's reach, and the gather (56 taps over the blur circle; a tap behind the pixel is held to the
+  pixel's own radius, so a sharp craft keeps a hard edge and the blurred background does not halo over it);
+- **speed blur is the boost pulse only.** HD's `Photo Blur` writes `v * 0.01` into both `FunkLayer+0x64`
+  and `+0x68`, the ring's boost `E` and damage `P` pulses
+  ([`FUN_00678f18`](../ghidra/functions/ps3-hdfury-eu/photo-mode.md#speed-blur-target-and-depth-of-field-targets), 85); `P`
+  tints the streak red, so a photographer's speed blur here leaves it at zero;
+- blur and depth of field are two independent rows (Omega's two lists), because the pass runs both;
+- **the ring lives under its own tick** while the mode is open: the race does not step, so the history draw
+  steps once per mode tick.
+
+Where the pass is not run: the glow Pulse and Pure add **over the HUD** (their composite is after the HUD,
+`bloom.md`) is outside it, so the exposure does not scale and the depth of field does not blur that glow.
+GL is not built or run here (the WebGPU and Vulkan backends are). `cargo check -p oag-raceplay --target
+wasm32-unknown-unknown` builds with the pass.
+
+**Not here, named:** HD's and 2048's **motion blur** (track and ship, a 120-frame accumulation whose
+shutter is `(v * 0.01)^2 * 0.25`) and **accumulated** depth of field (7 frames): how a craft's motion gets
+into either on a frozen race was never read and the simulation must not tick, so they stay out. 2048's own
+depth of field law (`(a * 0.01)^2 * 900 + 100` for the blur, a cubic for the focus) differs from HD's; HD's
+is used. Also left open: split screen, the photo counter stat, touch gestures, saving on a page or a phone,
+HD's real `close` rest offset, and a shot at the scene's own pixels (the file is the presentation target,
+upscaled from the scene drawn at its configured render size: the dynamic resolution is held there while the
+mode is open).
+
+**Checked against the other lineage.** Speed blur's target (HD) is the zoom ring `oag_post::hd_zoom`
+already ports; 2048's `FUN_8112ea02` carries HD's focus formula (the two agree, as above) and Omega's two
+effect lists are what the independent rows follow: ported, the same pass runs on all five (screenshots of
+each on a race of its own).

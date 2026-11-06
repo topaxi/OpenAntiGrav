@@ -355,6 +355,7 @@ fn state_of(session: &Session) -> State {
     }
     if let Stage::Race(stage) = &session.stage {
         state.photo = Some(session.photo_lens_name().to_string());
+        state.photo_fx = session.photo_fx_name();
         state.endrace = stage.endrace.as_ref().map(|endrace| {
             if endrace.is_photo() { "photo" } else { "other" }.to_string()
         });

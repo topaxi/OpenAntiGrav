@@ -93,7 +93,18 @@ fn the_photos(run: &Run) -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = std::fs::read_dir(dir)
         .map(|entries| entries.filter_map(|e| Some(e.ok()?.path())).collect())
         .unwrap_or_default();
-    found.sort();
+    // `oag-<title>-<seconds>-<n>.png`: by the two numbers, so `-10` follows `-9`.
+    let key = |path: &PathBuf| {
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default();
+        let mut parts = stem.rsplit('-');
+        let n: u64 = parts.next().and_then(|n| n.parse().ok()).unwrap_or(0);
+        let seconds: u64 = parts.next().and_then(|n| n.parse().ok()).unwrap_or(0);
+        (seconds, n)
+    };
+    found.sort_by_key(key);
     found
 }
 
@@ -130,12 +141,28 @@ fn a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without() {
         &format!(
             "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
              until photo=internal within 200; press select; ticks 5; hold left 60; \
-             hold select up 30; press square; ticks 5; press cross; ticks 5; \
-             screenshot SHOTS/during.png; press circle; until photo=none within 50; ticks 500"
+             hold select up 30; press square; ticks 5; \
+             press start; hold right 30; hold down 1; ticks 2; hold right 30; hold down 1; ticks 2; \
+             hold right 15; hold down 1; ticks 2; hold right 1; hold down 1; ticks 2; \
+             hold right 15; ticks 10; \
+             press start; press start; press cross; ticks 5; \
+             screenshot SHOTS/during.png; press circle; until photo=none within 50; ticks 500; \
+             screenshot SHOTS/end-photo.png"
         ),
         &shots,
     );
     assert!(photographed.status.success(), "{}", photographed.stderr);
+    assert!(
+        photographed.states.iter().any(|state| state
+            .get("photo_fx")
+            .and_then(Value::as_str)
+            .is_some_and(|fx| {
+                fx.contains("dof=on")
+                    && !fx.contains("speed_blur=0 ")
+                    && !fx.contains("exposure=33 ")
+            })),
+        "the run never moved the effects"
+    );
 
     let held: BTreeMap<u64, String> = ticks(&control)
         .into_iter()
@@ -172,6 +199,30 @@ fn a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without() {
         "the simulation ticked inside photo mode: {under:?}"
     );
     assert_eq!(the_photos(&photographed).len(), 1, "one shot, one file");
+    // The effects went with the mode: after leaving, the picture is the one a visit that moved
+    // nothing leaves, at the same tick.
+    let plain = drive(
+        &image,
+        "hash-plain",
+        &format!(
+            "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=internal within 200; press select; ticks 5; hold left 60; \
+             hold select up 30; press square; ticks 5; press cross; ticks 5; \
+             screenshot SHOTS/during-plain.png; press circle; until photo=none within 50; \
+             ticks 500; screenshot SHOTS/end-plain.png"
+        ),
+        &shots,
+    );
+    assert!(plain.status.success(), "{}", plain.stderr);
+    let (left, right) = (
+        decode(&shots.join("end-plain.png")),
+        decode(&shots.join("end-photo.png")),
+    );
+    assert!(
+        left.2 == right.2,
+        "the picture after leaving carries what the mode did to it (differs by {})",
+        difference(&left, &right, ALL)
+    );
 }
 
 #[test]
@@ -191,7 +242,7 @@ fn a_saved_picture_is_the_frame_the_player_saw_at_its_full_size() {
         &format!(
             "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
              until photo=internal within 200; press select; ticks 5; hold right 45; \
-             press start; ticks 10; screenshot SHOTS/bare.png; press start; ticks 5; \
+             press start; press start; ticks 10; screenshot SHOTS/bare.png; press start; ticks 5; \
              press cross; ticks 3; screenshot SHOTS/with-help.png; \
              press square; ticks 5; press cross; ticks 3; screenshot SHOTS/with-hud.png; \
              press circle; until photo=none within 50"
@@ -350,4 +401,170 @@ fn every_disc_word_a_title_maps_is_in_its_string_table() {
         }
     }
     assert!(seen > 0 || oag_testdata::image("pulse-psp-eu.chd").is_none());
+}
+
+/// Mean of `f` over the pixels of the rectangle `(x0, y0, x1, y1)`, in fractions of the picture.
+fn over(
+    picture: &(u32, u32, Vec<u8>),
+    (x0, y0, x1, y1): (f32, f32, f32, f32),
+    f: impl Fn(&[u8]) -> f32,
+) -> f32 {
+    let (w, h, pixels) = picture;
+    let (xs, xe) = ((x0 * *w as f32) as u32, (x1 * *w as f32) as u32);
+    let (ys, ye) = ((y0 * *h as f32) as u32, (y1 * *h as f32) as u32);
+    let mut sum = 0.0;
+    let mut count = 0.0;
+    for y in ys..ye {
+        for x in xs..xe {
+            let at = ((y * w + x) * 4) as usize;
+            sum += f(&pixels[at..at + 4]);
+            count += 1.0;
+        }
+    }
+    sum / count
+}
+
+const ALL: (f32, f32, f32, f32) = (0.0, 0.0, 1.0, 1.0);
+
+fn luma(p: &[u8]) -> f32 {
+    0.2126 * f32::from(p[0]) + 0.7152 * f32::from(p[1]) + 0.0722 * f32::from(p[2])
+}
+
+fn chroma(p: &[u8]) -> f32 {
+    f32::from(p[..3].iter().max().copied().unwrap_or(0) - p[..3].iter().min().copied().unwrap_or(0))
+}
+
+/// Mean absolute difference between two pictures of one size over a region.
+fn difference(
+    a: &(u32, u32, Vec<u8>),
+    b: &(u32, u32, Vec<u8>),
+    region: (f32, f32, f32, f32),
+) -> f32 {
+    assert_eq!((a.0, a.1), (b.0, b.1));
+    let (w, h) = (a.0, a.1);
+    let mut diff = vec![0u8; a.2.len()];
+    for (i, d) in diff.iter_mut().enumerate() {
+        *d = a.2[i].abs_diff(b.2[i]);
+    }
+    over(&(w, h, diff), region, |p| {
+        (f32::from(p[0]) + f32::from(p[1]) + f32::from(p[2])) / 3.0
+    })
+}
+
+/// How much fine detail a region holds: the mean absolute step between neighbouring pixels.
+fn detail(picture: &(u32, u32, Vec<u8>), region: (f32, f32, f32, f32)) -> f32 {
+    let (w, h, pixels) = picture;
+    let (xs, xe) = ((region.0 * *w as f32) as u32, (region.2 * *w as f32) as u32);
+    let (ys, ye) = ((region.1 * *h as f32) as u32, (region.3 * *h as f32) as u32);
+    let mut sum = 0.0;
+    let mut count = 0.0;
+    for y in ys..ye {
+        for x in xs..xe - 1 {
+            let at = ((y * w + x) * 4) as usize;
+            let next = at + 4;
+            sum += f32::from(pixels[at].abs_diff(pixels[next]))
+                + f32::from(pixels[at + 1].abs_diff(pixels[next + 1]))
+                + f32::from(pixels[at + 2].abs_diff(pixels[next + 2]));
+            count += 3.0;
+        }
+    }
+    sum / count
+}
+
+/// The edge of the picture, where the speed streak is, and the middle, where it is not.
+const EDGE: (f32, f32, f32, f32) = (0.0, 0.0, 0.12, 1.0);
+const MIDDLE: (f32, f32, f32, f32) = (0.40, 0.30, 0.60, 0.50);
+/// The far field up the left of a `close` shot, and the craft's own body.
+const FAR_FIELD: (f32, f32, f32, f32) = (0.02, 0.10, 0.38, 0.55);
+const CRAFT: (f32, f32, f32, f32) = (0.44, 0.70, 0.56, 0.82);
+
+/// Each picture control, moved in turn, changes the saved file in the direction it names, and put
+/// back where it opened gives the file the mode saved before anything was touched, byte for byte.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unprocessed_one() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-effects-shots");
+    let _ = std::fs::remove_dir_all(&shots);
+    // Rows: exposure, saturation, speed blur, depth of field. 72 ticks of a held push is 21 steps
+    // (it fires on the first tick, again after 14 and then every 3), 69 is 20, 39 is 10 and 1 is
+    // one. A shot after each move (the drive draws a frame only when it is asked for a screenshot, so each
+    // shot is asked for one); the race stands still, so every file is one frame's picture.
+    let run = drive(
+        &image,
+        "effects",
+        &format!(
+            "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=internal within 200; press select; ticks 20; press cross; ticks 2; screenshot SHOTS/frame-1.png; ticks 2; \
+             press start; hold right 72; ticks 3; press cross; ticks 2; screenshot SHOTS/frame-2.png; ticks 2; \
+             hold left 72; ticks 3; press cross; ticks 2; screenshot SHOTS/frame-3.png; ticks 2; \
+             hold down 1; ticks 2; hold left 69; ticks 3; press cross; ticks 2; screenshot SHOTS/frame-4.png; ticks 2; \
+             hold right 69; ticks 3; press cross; ticks 2; screenshot SHOTS/frame-5.png; ticks 2; \
+             hold down 1; ticks 2; hold right 39; ticks 40; press cross; ticks 2; screenshot SHOTS/frame-6.png; ticks 2; \
+             hold left 39; ticks 10; press cross; ticks 2; screenshot SHOTS/frame-7.png; ticks 2; \
+             hold down 1; ticks 2; hold right 1; ticks 8; press cross; ticks 2; screenshot SHOTS/frame-8.png; ticks 2; \
+             hold left 1; ticks 8; press cross; ticks 2; screenshot SHOTS/frame-9.png; ticks 2; \
+             press circle; until photo=none within 50"
+        ),
+        &shots,
+    );
+    assert!(run.status.success(), "{}", run.stderr);
+    let photos = the_photos(&run);
+    assert_eq!(photos.len(), 9, "{photos:?}");
+    let [
+        neutral,
+        bright,
+        exposure_back,
+        grey,
+        saturation_back,
+        speed,
+        speed_back,
+        dof,
+        dof_back,
+    ] = <[_; 9]>::try_from(photos.iter().map(|p| decode(p)).collect::<Vec<_>>())
+        .unwrap_or_else(|_| unreachable!());
+
+    // Back where it opened, the file is the unprocessed one.
+    for (name, back) in [
+        ("exposure", &exposure_back),
+        ("saturation", &saturation_back),
+        ("speed blur", &speed_back),
+        ("depth of field", &dof_back),
+    ] {
+        assert!(
+            back.2 == neutral.2,
+            "{name} put back is not the picture the mode saved before it was touched"
+        );
+    }
+
+    // Exposure up is brighter.
+    let (before, after) = (over(&neutral, ALL, luma), over(&bright, ALL, luma));
+    assert!(
+        after > before + 3.0,
+        "exposure up: mean luma {before} -> {after}"
+    );
+    // Saturation at zero is grey.
+    assert!(
+        over(&grey, ALL, chroma) < 0.1 * over(&neutral, ALL, chroma).max(1.0),
+        "saturation 0 left colour in the picture"
+    );
+    // Speed blur lands at the edge of the picture and leaves the middle alone.
+    assert!(
+        difference(&neutral, &speed, EDGE) > 2.0,
+        "no streak at the edge"
+    );
+    assert!(
+        difference(&neutral, &speed, MIDDLE) < 1.0,
+        "the speed blur reached the middle of the picture"
+    );
+    // Depth of field blurs the far field and leaves the craft sharp.
+    let (sharp, soft) = (detail(&neutral, FAR_FIELD), detail(&dof, FAR_FIELD));
+    assert!(soft < 0.75 * sharp, "far-field detail {sharp} -> {soft}");
+    assert!(
+        difference(&neutral, &dof, CRAFT) < 4.0,
+        "the craft in focus changed: {}",
+        difference(&neutral, &dof, CRAFT)
+    );
 }
