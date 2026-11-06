@@ -112,7 +112,7 @@ Numbers in `docs/rendering/frame-thread-cpu.md`, "What is left of the frame thre
   lock, the schedule, the sibling thread, glibc's arenas or the power budget
   (`docs/rendering/frame-thread-cpu.md`, "What the reaper costs one view, and what it is not"). Leaving one
   view to the next submit was a trade (HD +0.8 % fps on AC, p99 up on all three titles), reverted; the
-  rule waits on local branch `park/reaper-one-view`. Worth another look only if the cause turns up or
+  rule waits on the pushed branch `park/reaper-one-view`. Worth another look only if the cause turns up or
   battery proves a bigger gain. Measure: `OAG_REAP_THREAD=0/1`, HD 800p.
 - **A split's one submission, what is left** (`docs/rendering/split-screen.md`, "What is left"): the
   frame's submit now drops most of the encoders, 10 % of the frame thread at two views against 2.1 %

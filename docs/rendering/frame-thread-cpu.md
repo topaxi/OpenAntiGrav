@@ -1659,7 +1659,7 @@ one view in one window to the next submit, which did the work on the frame threa
 race and the front end kept the thread; nobody measured them without it.
 
 **Reverted the same day: the reaper runs after every frame, one view included.** It was a trade, and
-the maintainer took the side of p99. The rule is on the unpublished branch `park/reaper-one-view`, one
+the maintainer took the side of p99. The rule is on the branch `park/reaper-one-view`, one
 commit on the reverted tree. Final build, 800p, 3 rounds, reaper on after every frame against the rule:
 
 | One view | `total` | fps | p99 | `present_ms` |
