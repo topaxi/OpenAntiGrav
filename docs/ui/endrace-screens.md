@@ -54,7 +54,7 @@ A Pulse race that ended on the line does not open `EndRace Results` at once. The
 | Legend | `ProceedMessage` (`FE_PRESS_TO_CONT`, y 242) and `PhotoMessage` (`ER_PRESS_SELECT_PHOTO`, y 212): `Stats` font, left-aligned at x 20, white. Strings come from the disc's language file, so `check-strings` has nothing to add | the disc |
 | Fade | straight ramp, 42 ticks, from tick 61 | measured (a photograph every second frame) |
 | Leaving | X, Start or a click, from tick 61; the press is spent before that | the clock is measured; accepting a press in the first second is moot, the original is not on the state yet |
-| SELECT | nothing (`Session::frame` spends the press instead of cycling the camera view) | photo mode is not built |
+| SELECT | nothing (`Session::frame` spends the press instead of cycling the camera view) | photo mode is not built; [photo-mode.md](photo-mode.md) is what it would be |
 | Pointer | a click anywhere, like the other two confirm-only screens | chosen |
 
 A finish by the line and a **Single Race wreck** get it (the wreck on the maintainer's 2026-10-02 decision "hold, then results", the original having no

@@ -30,7 +30,10 @@ end, `docs/formats/omega-status.md`):
 
 Omega's own shot is the console's share function, so it records no resolution or format of its own.
 `CHANGEINFO_102` in the language file: "Changed photo mode UI hiding behaviour".
-`Race End Photo Redirect` stays; `MSC_PHOTO_PRESS_SELECT` reads "PRESS OPTIONS BUTTON FOR PHOTO MODE".
+`Race End Photo Redirect` stays with `forward="square"`, as HD, though `MSC_PHOTO_PRESS_SELECT` reads
+"PRESS OPTIONS BUTTON FOR PHOTO MODE". The `Photo` pause block is on the same eleven pause screens as
+HD, split included. 2048's touch mode is what Omega dropped from reach: 2048 has no `InGame Photo` screen,
+Omega has no route to `InGame VitaPhoto`.
 
 `gui/vita/vita_ingame_definition.xml` ships `InGame2048` with the Glory Moment widgets,
 `WV_PhotoMode` strings stand in the binary, and `photomode_dots.gnf`, `Photomode_controls.gnf` and

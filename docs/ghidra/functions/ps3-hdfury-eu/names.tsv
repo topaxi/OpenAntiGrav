@@ -130,7 +130,7 @@
 0x005e29c0	function	Post_BindResolveParams	85	renderer.md
 0x005e3f68	function	Post_BindResolveCorrectionParams	85	renderer.md
 0x003df0d8	function	Renderer_SetColourCorrection	85	renderer.md
-0x0023f568	function	PhotoMode_Update	84	photo-mode.md
+0x0023f568	function	PhotoMode_Update	90	photo-mode.md
 0x00c50f00	data	g_FullscreenTintColour	88	renderer.md
 0x00c81a80	data	g_RenderGlobals	72	renderer.md
 0x005e1140	function	Post_BindFilterColourScaleParams	85	renderer.md
@@ -851,12 +851,12 @@
 0x0033e460	function	Pad_Update	78	rumble.md
 0x000d10c8	function	Ship_UpdateContactRumble	82	rumble.md
 0x003b8550	function	FunkLayer_DrawScanBand	85	menu-backdrop.md
-0x00241940	function	PhotoMode_ScreenUpdate	84	photo-mode.md
-0x0023e570	function	PhotoMode_ScreenEnter	84	photo-mode.md
+0x00241940	function	PhotoMode_ScreenUpdate	90	photo-mode.md
+0x0023e570	function	PhotoMode_ScreenEnter	90	photo-mode.md
 0x0023f4c0	function	PhotoMode_EnterTransition	72	photo-mode.md
-0x0023ed48	function	PhotoMode_TakeShot	84	photo-mode.md
-0x0023f170	function	PhotoMode_WaitForSave	84	photo-mode.md
-0x002d5118	function	Renderer_SaveFrameJpeg	80	photo-mode.md
+0x0023ed48	function	PhotoMode_TakeShot	90	photo-mode.md
+0x0023f170	function	PhotoMode_WaitForSave	90	photo-mode.md
+0x002d5118	function	Renderer_SaveFrameJpeg	90	photo-mode.md
 0x002d59d0	function	Renderer_SaveTiledJpeg	72	photo-mode.md
 0x000a9a50	function	Camera_AddPhotoOrbitA	78	photo-mode.md
 0x000a9a90	function	Camera_AddPhotoOrbitB	78	photo-mode.md

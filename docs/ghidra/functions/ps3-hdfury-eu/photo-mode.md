@@ -11,13 +11,13 @@ vtable entry of `PhotoMode_Screen.cpp`'s class.
 
 | Address | Name | Conf. | What it does |
 | --- | --- | ---: | --- |
-| `0x00241940` | `PhotoMode_ScreenUpdate` | 84 | `this+0xfc += dt`, then on `g_GamePaused`, dispatch on screen name, both the state machine's and the screen's own |
-| `0x0023e570` | `PhotoMode_ScreenEnter` | 84 | Saves stick settings, rebuilds the effect list, sets exposure and saturation |
-| `0x0023f568` | `PhotoMode_Update` | 84 | `InGame Photo`, per frame |
+| `0x00241940` | `PhotoMode_ScreenUpdate` | 90 | `this+0xfc += dt`, then on `g_GamePaused`, dispatch on screen name, both the state machine's and the screen's own |
+| `0x0023e570` | `PhotoMode_ScreenEnter` | 90 | Saves stick settings, rebuilds the effect list, sets exposure and saturation |
+| `0x0023f568` | `PhotoMode_Update` | 90 | `InGame Photo`, per frame |
 | `0x0023f4c0` | `PhotoMode_EnterTransition` | 72 | `InGame Taking Photo Transition Screen` |
-| `0x0023ed48` | `PhotoMode_TakeShot` | 84 | `InGame Taking Photo`: name, then one of the two save paths |
-| `0x0023f170` | `PhotoMode_WaitForSave` | 84 | `InGame Taking Photo Saving`: flashes the icon, exports, removes the temp file |
-| `0x002d5118` | `Renderer_SaveFrameJpeg` | 80 | Single frame: JPEG writer at colour target size, quality 90 |
+| `0x0023ed48` | `PhotoMode_TakeShot` | 90 | `InGame Taking Photo`: name, then one of the two save paths |
+| `0x0023f170` | `PhotoMode_WaitForSave` | 90 | `InGame Taking Photo Saving`: flashes the icon, exports, removes the temp file |
+| `0x002d5118` | `Renderer_SaveFrameJpeg` | 90 | Single frame: JPEG writer at colour target size, quality 90 |
 | `0x002d59d0` | `Renderer_SaveTiledJpeg` | 72 | Stitched: width and height times a tile count, tiles `photomodeTile_` |
 | `0x000a9a50` | `Camera_AddPhotoOrbitA` | 78 | `+0x294 += stick * 0.05`, wrapped at `+-2 pi` |
 | `0x000a9a90` | `Camera_AddPhotoOrbitB` | 78 | `+0x298 += stick * 0.05`, wrapped at `+-2 pi` |
@@ -46,8 +46,8 @@ Saturation slider = "20%"
 ```
 
 `g` is the current grade bias and `-33.3 / 33.3` is the exact inverse of the per-frame law below,
-so the sliders open on the picture already on screen; the same line stands at `8112e6bc` in 2048
-with the same `"20%"`. `g` itself lives in BSS (`0x00c51134`), so its value is live only.
+so the sliders open on the picture already on screen; the same line stands at `0x8112e6bc` in 2048
+with the same `"20%"`. `g` lives in BSS (`0x00c51134`); it read `0.3452` on Vineta K (Live, below).
 
 The effect list is **rebuilt in code**, not read from the XML (`_opd_FUN_0015a278` clears it, then
 `_opd_FUN_0015b298` adds): `FE_OFF`, `MSC_PHOTO_DEPTH`, and `MSC_PHOTO_MBT`, `MSC_PHOTO_MBS` only
@@ -121,11 +121,50 @@ currently being displayed at". Reads with it: the writer is sized from the colou
 quality (90) on both paths. `MSC_PHOTO_INSUF`, `ER_PHOTO_RESOURCE` and `MSC_PHOTO_CANCELLED` are
 returns 1, 2, 3. Success adds 1 to the stat `+0x238` (`uNumPhotosTaken`).
 
-Tiled capture is `*(0x008c1f04 + 4) >= 2`. The static image holds `1` at `0x008c1f08`, and no writer
-was read: the single path is what a boot runs unless a writer exists. Recipe: `get_xrefs_to
-0x008c1f08`, or a watchpoint on RPCS3.
+Tiled capture is `*(0x008c1f04 + 4) >= 2`. `0x008c1f08` reads `1` in the static image and live, so
+the single path ran. No writer was read; recipe: `get_xrefs_to 0x008c1f08`.
+
+## Live, RPCS3
+
+2026-11-06, Fury EU, cold boot, Single Race on Vineta K, `Resolution: 1920x1080`, audio renderer Null.
+`scripts/emu-env.sh`, `rpcs3-drive.py serve`, guest memory through `RemoteMem`.
+
+- **The race stops.** Craft body position (`body+0x200`): moved 7.3 units in 0.5 s racing, then
+  unchanged to the bit across `InGame Pause SP`, entry, and 4 s of `InGame Photo`. CIRCLE returns to
+  `InGame Pause SP`, Continue to `InGame`, and the craft moves again.
+- **Sliders open on the race's grade.** The screen reads Exposure `21%`, Saturation `20%`, both not
+  the XML's. Table value `g = 0.34520742` at `0x00c51134`: `(int)(33.3 - 33.3 g) = 21`, and
+  `(21 - 33.3) * -0.03003 = 0.36937` is what `g_RenderGlobals+0x3e4` held, `0.36936936`. The
+  correction switch `g_RenderGlobals+0x3e0` reads `01` in photo mode and `00` after leaving.
+- **Modes.** `camera+0x40`: `5` on entry (`internal`), `3` on `close`.
+- **Stick.** Left Y drives `+0x294`, left X `+0x298`, unclamped (`a` read 6.03 and `-3.55`; `2 pi`
+  wrap at `+-6.28`). Right Y drives `+0x2b0`, held to **100.0** at the top; 65 after reset. L2 and R2
+  move `+0x29c`. The rate is the same `0.05` per frame (emulated at about 11 frames a second here).
+- **Pan was not seen.** With the virtual pad's `square` held, `+0x2a8` and `+0x2ac` stayed `0.0` and
+  the stick kept orbiting, though the legend shows stick plus square. Index 7 is `FUN_00677308`, a
+  different query from `FUN_006770c8`: unresolved. Recipe: break in `Camera_AddPhotoPanA`.
+- **Track collision does not limit it.** At `+0x294 = 1.34` the eye is under the road: the road's back
+  face is culled and the frame looks up at the sky and the buildings. `-1.36` is overhead.
+- **The shot.** Button to file: `InGame Taking Photo Transition Screen`, 1.8 s, `InGame Taking Photo`,
+  `InGame Taking Photo Saving`, `InGame Photo Message`. Temp `wohd_20261106_153859.jpg` in
+  `USRDIR`, exported as `dev_hdd0/photo/2026/11/06/...`, 495,667 bytes: **1920 x 1080**, baseline,
+  `0x11` three times, the same luma table start as Pulse's, `2, 1, 1, 1, 1, 1, 2, 1`. So quality 90
+  holds in two binaries. UI and HUD absent. The first shot printed `TROPHY: Unlocking trophy 12`.
+- Audio not measured (Null renderer). Recipe as on the Pulse page: voice state over `InGame Photo`.
+
+## Split screen and the finish
+
+`Block name="Photo"` is on `InGame Pause Split Player 1`, `Split Player 2` (with `InputPad="1"`), both
+`Tournament Split` and `Zone P1`/`P2` screens. So **HD offers photo mode in split screen**, from either
+pad; `PhotoMode_ScreenEnter` picks the pad from `g_GameState+0xe4/+0xe5`. On leaving,
+`0x0023fae4`'s byte is set for two local players, unless the phase is 3 or 4.
+
+`Race End Photo` carries `PhotoModeButton`/`PhotoModeText` and `Race End Photo Redirect` with
+`forward="square"`: **square here, SELECT on Pulse.**
 
 ## History
 
 - 2026-11-06: `PhotoMode_Update` 78 -> 84. Sole caller read, its rows and laws read
   (`renderer.md` gave it 78 from strings alone).
+- 2026-11-06: 84 -> 90 on the RPCS3 run above. `PhotoMode_ScreenEnter`, `PhotoMode_TakeShot`,
+  `PhotoMode_WaitForSave`, `Renderer_SaveFrameJpeg` move to 90 with it.

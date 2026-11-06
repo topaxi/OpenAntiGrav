@@ -276,3 +276,5 @@
 0x813d6048	function	VitaPhoto_Construct	80	photo-mode.md
 0x81146898	function	VitaPhoto_Update	84	photo-mode.md
 0x812ad888	function	RaceManager2048_Construct	78	photo-mode.md
+0x811466a6	function	VitaPhoto_UpdateCamera	84	photo-mode.md
+0x81146552	function	VitaPhoto_CycleShip	84	photo-mode.md

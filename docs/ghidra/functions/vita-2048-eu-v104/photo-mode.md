@@ -1,8 +1,9 @@
 # 2048: photo mode
 
 Read 2026-11-06, lane `photo-read`, `/2048/eboot-vita-2048-eu-v104.elf`. Player-facing law:
-[docs/ui/photo-mode.md](../../../ui/photo-mode.md). 2048 carries **two** modes and an unrelated
-camera feature; `InGame_Definition.xml` is patch `data1.psarc`'s copy (43,418 bytes).
+[docs/ui/photo-mode.md](../../../ui/photo-mode.md). 2048 ships **one** reachable mode, `InGame VitaPhoto`,
+HD's code still in the binary with no screen to run it, and an unrelated camera feature.
+`InGame_Definition.xml` is patch `data1.psarc`'s copy (43,418 bytes).
 
 ## Functions
 
@@ -12,26 +13,26 @@ camera feature; `InGame_Definition.xml` is patch `data1.psarc`'s copy (43,418 by
 | `0x8112ea02` | `PhotoMode_Update` | 84 | HD's `0x0023f568` with touch gestures added |
 | `0x813d6048` | `VitaPhoto_Construct` | 80 | `Frontend/Screens/WV_PhotoMode_Screen.cpp`, screen type `Vita Photo Mode` |
 | `0x81146898` | `VitaPhoto_Update` | 84 | Eight-state capture machine on `this+0x160` |
+| `0x811466a6` | `VitaPhoto_UpdateCamera` | 84 | Button 5 toggles the camera; dispatches to the close and track controls |
+| `0x81146552` | `VitaPhoto_CycleShip` | 84 | Buttons 8, 9: previous, next craft, skipping `+0x60a4 & 0x1000` |
 | `0x812ad888` | `RaceManager2048_Construct` | 78 | `GameMode_RaceManager.cpp`; binds `gloryImage`, `CancelPicture`, `TakePicture` |
 
 `0x81145efa` and `0x81146898` had no function in the database; both were created (a vtable at
 `0x81510b48` points at them) and `0x81145efa` is unread. The two strings at `0x81145f9c` and
 `0x81146a78` sit in those.
 
-## `InGame Photo`, the pad mode
+## `InGame Photo` is HD's code with no screen
 
-Reachable from the legacy pause blocks (`Block name="Photo"`, `goto="InGame Photo"`); the same rows
-and laws as HD: same `0.3, 0.04` stick response, `0.15` s guard, same depth of field, same
-`[3, 40]` track field starting 20, `FE_MOTION_TRACK`/`FE_MOTION_SHIP` compares, rebuilt list adding
-`MSC_PHOTO_MBT`/`MSC_PHOTO_MBS` on phase 2 or 3 (`RaceManager +0x11d50`). What 2048 adds in `close`:
-
-- Touch drag, `+0x376`/`+0x378` times `0.1`, clamped to `+-1`, drives orbit.
-- Two fingers, `+0x38a` to `+0x398`: their angle times `15` rolls, the change in distance times
-  `0.035` zooms.
+`Screen name="InGame Photo"` is in no XML of the base or patch packages, and nothing redirects to it,
+so `PhotoMode_ScreenEnter` and `PhotoMode_Update` are unreachable leftovers. They match HD function for
+function, with touch added in `close`: one finger, `+0x376`/`+0x378` times `0.1`, clamped to `+-1`,
+orbits; two fingers, their angle times `15` rolls, the change in distance times `0.035` zooms. The
+screen's other effect entries follow HD (`RaceManager +0x11d50` 2 or 3 adds motion blur).
 
 ## `InGame VitaPhoto`, the touch mode
 
-Pause menus carry `PhotoModeTouchButton` with `redirect="InGame VitaPhoto"`. Screen `Pause`.
+Pause menus carry `PhotoModeTouchButton` with `redirect="InGame VitaPhoto"`, and so does
+`Race End Photo` in `LegacyInGame_Definition.xml`. Screen task `Pause`.
 
 Effects are three toggles, one at a time. Sliders are `TouchSlider`s, min 1, max 100:
 
@@ -64,11 +65,13 @@ State `this+0x160`:
 
 ## What the brief's strings do
 
-- `MSC_PHOTO_CHANGE_CAMERA`, `MSC_PHOTO_CYCLE_LEFT`, `MSC_PHOTO_CYCLE_RIGHT`, and the rest of
-  `PhotoControlsTxt`: **labels on one help image**, `Data\FE\NewImages\Photomode_controls.gtf`, shown by
-  `Photo Controls Button`. No code reads them. The actions are `InGame VitaPhoto`'s pad handling,
-  shared with the mode above (`FUN_811466a6`, called last in `VitaPhoto_Update`, unread: recipe,
-  decompile it; expect L, R for the cycle and a button for the camera row).
+- `MSC_PHOTO_CHANGE_CAMERA`, `MSC_PHOTO_CYCLE_LEFT`, `MSC_PHOTO_CYCLE_RIGHT` and the rest of
+  `PhotoControlsTxt` are **labels on one help image**, `Data\FE\NewImages\Photomode_controls.gtf`, shown
+  by `Photo Controls Button`. No code reads them. The actions they name:
+  - Change camera: button 5 in `VitaPhoto_UpdateCamera`, close (3) to internal (5) and back. Track (4)
+    is not on this toggle; `this+0x10c` holds it, track zoom `[3, 40]` and reset to 20 by button 4
+    are in the same function, and no writer of 4 was read. Recipe: search `this+0x10c`.
+  - Cycle: L and R, `VitaPhoto_CycleShip`. Same skip and wrap as HD.
 - `MSC_PHOTO_CANCEL` ("CANCEL PHOTO") and `MSC_PHOTO_CANCEL_PHOTO` ("CANCELLING PHOTO IN...") are
   **not photo mode.** They sit on `InGame2048`'s `gloryImageBG`: the Glory Moment, a front-camera
   picture sent to other racers (`kill_joy`, `Options_Glory_Moment_On`). `RaceManager2048_Construct`
