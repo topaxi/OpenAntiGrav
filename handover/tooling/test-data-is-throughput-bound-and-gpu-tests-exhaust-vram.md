@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-06
-summary: "test-data: om 8,349 s summed before speed-plan, notebook 10,753 s after; single-ray broadphase left; NVIDIA segfault in one 2048 test"
+summary: "test-data: om 8,349 s summed before speed-plan, notebook 10,753 s after; single-ray broadphase left; lead's gate may drop its Intel ICD"
 size: M (50)
 difficulty: medium (50)
 ---
@@ -24,16 +24,16 @@ table and method: `docs/architecture/workspace-layout.md`, "Test groups".
 
 ## Open
 
-- **`campaign_cursor_ground_truth::the_2048_map_reopens_on_the_event_last_started` segfaults on
-  NVIDIA, and it is not VRAM**: 3 of 8 runs alone on the idle GPU (787 MiB), 7 of 7 pass on the
-  Intel ICD. `coredumpctl` shows `SIGSEGV` (`SEGV_ACCERR`) on the game's `race-load` thread at an
-  instruction pointer outside every mapping, while the main thread is inside an `ioctl` in
-  `libnvidia-eglcore`. A thread loading the race while the main thread talks to the driver is the
-  suspect. Reproduce: `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all -E
-  'test(the_2048_map_reopens_on_the_event_last_started)'` on the NVIDIA GPU, a few times.
-- **The lead's gate can stop forcing the Intel ICD for memory's sake**: the group makes the NVIDIA
-  run pass. It still hides this segfault, so drop `VK_ICD_FILENAMES` when that test is fixed or
-  accepted as flaky.
+- **The lead's gate can stop forcing the Intel ICD**: the group makes the NVIDIA run pass, and the
+  NVIDIA segfault it hid is fixed (`race-load` is a GPU worker; cause and numbers in
+  `docs/tools/web.md`, "Exit and GPU workers"). Dropping `VK_ICD_FILENAMES` from the gate script and
+  the "Which GPU" paragraph of `.claude/skills/oag-drive/member-rules.md` is what is left.
+- **The race load does not stop early on exit**: closing the window on the loading screen waits out
+  the rest of the load (at most 0.5 s Pulse, 3.7 s 2048, 3.9 s HD in a debug build). A check of
+  `gpu_workers::stopping()` at the load's stages would cut it. Only worth it if a player notices.
+- **A window close sometimes does not land**: about one run in eight of a `WM_DELETE_WINDOW` sent to
+  a window on Xvfb during a load was ignored for 30 s, with or without the fix. Unexplained; may be
+  the harness (python-xlib, no window manager).
 - **Lane B landed 2026-11-06** (numbers and per-family table in `docs/architecture/workspace-layout.md`, "Test-data suite measurements"): summed time 14,018 s to 12,321 s, wall 896 s to 787 s. The 9,000 s target is not met. What is left, with where to measure it:
   - **Speed-plan learning landed 2026-11-06** (`docs/architecture/workspace-layout.md`, "What the `speed-plan` pass measured"): suite 12,611 s to 10,753 s, `ai_clean_lap_gate` 447 to 239, `speed_plan` 280 to 142, bit-identical on 240 runs. Left on a gate row, measured with the recipe below on `ai_clean_lap_gate::track_07_flash`: `Indices::overlapping` under the single rays (`hover`, `maglock`, `clip`, `sweep`) 14 %, `PadVolume::contains` 5 %, `hull_probes` 5 %, `CageTrack::locate` 3 %.
   - ~~PFSC inflate and XTS~~ landed (lane suite-decoders, Ryzen 9 7900): `oag-disc` reads a 685 MB Omega archive out of the patch package at 365 to 552 MB/s (output hash identical), and `autopilot_original_ground_truth::omega_flies_the_original_autopilot` fell from 9.25 s to 6.86 s (three runs each, load 5). Almost no other test opens the `.pkg`; most read `data/extracted`. Open: `vpk` (2048) still inflates with `miniz_oxide`.
@@ -45,7 +45,3 @@ table and method: `docs/architecture/workspace-layout.md`, "Test groups".
 ## Next Steps
 
 **Lane B, the rest** is the list above; 10,753 s is the suite after speed-plan learning, 1,750 s short of 9,000. Run on an idle machine, since the ceiling is judged there.
-
-**The NVIDIA segfault**: run the test under `gdb` with the core from `coredumpctl debug`; look at what
-`race-load` runs at that moment (the load runs wgpu calls off the main thread?) and whether the
-Intel and AMD drivers merely tolerate it.

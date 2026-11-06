@@ -47,3 +47,30 @@ fn a_worker_that_will_not_stop_is_reported_not_waited_for_forever() {
     handle.join().unwrap();
     assert!(!live().contains(&"stubborn"));
 }
+
+/// What a worker returns drops under its guard, as a load's result full of texture views must.
+/// The handle is gone first, so `std` drops the value on the worker, after the closure returned.
+#[test]
+fn a_held_guard_outlasts_the_value_the_worker_returns() {
+    static DROPPED: AtomicBool = AtomicBool::new(false);
+    struct Result;
+    impl Drop for Result {
+        fn drop(&mut self) {
+            std::thread::sleep(Duration::from_millis(100));
+            DROPPED.store(true, Ordering::SeqCst);
+        }
+    }
+    let (go, wait) = std::sync::mpsc::channel::<()>();
+    let guard = Guard::enter("returns-gpu-objects");
+    drop(std::thread::spawn(move || {
+        guard.hold_to_thread_end();
+        let _ = wait.recv();
+        Result
+    }));
+    go.send(()).unwrap();
+    assert!(finish_within(Duration::from_secs(10)));
+    assert!(
+        DROPPED.load(Ordering::SeqCst),
+        "finish returned before the worker's result had dropped"
+    );
+}

@@ -40,13 +40,14 @@ use super::{Loaded, Options, TextureSink};
 
 /// A circuit being read, on a thread.
 ///
-/// Holds no GPU and hands back none: [`super::load`] produces plain data -
-/// vertex and index buffers, handling blocks, a spline - and the device only
-/// enters at `Stage::race`, which runs on the frame thread with the result.
-/// The one exception is an optional [`TextureSink`], which only *receives*
-/// decoded textures.
-/// That is what makes the split cheap rather than a rewrite; see
-/// [`super::Setup`]'s own "no GPU anywhere in sight".
+/// Without a [`TextureSink`] it holds no GPU and hands back none:
+/// [`super::load`] produces plain data - vertex and index buffers, handling
+/// blocks, a spline - and the device only enters at `Stage::race`, which runs
+/// on the frame thread with the result. That is what makes the split cheap
+/// rather than a rewrite; see [`super::Setup`]'s own "no GPU anywhere in sight".
+///
+/// With one, the thread is inside the driver for every texture and its result
+/// holds their views, so it is a GPU worker (`oag_thread::gpu_workers`).
 #[derive(Debug)]
 pub struct LoadWorker {
     /// The load, on a thread natively and on a Web Worker in the browser,
@@ -95,10 +96,11 @@ impl LoadWorker {
             Self::spawn_with(label, plan_ahead, move || super::load(&options))
         };
         #[cfg(not(target_arch = "wasm32"))]
-        Self::spawn_with(label, plan_ahead, move || {
-            let _scope = TextureSink::open_if(sink.as_ref());
-            super::load(&options)
-        })
+        Self::spawn_with(
+            label,
+            plan_ahead,
+            sinking(sink, move || super::load(&options)),
+        )
     }
 
     /// [`Self::spawn`] for a Wipeout 2048 campaign event, resolved on the
@@ -120,10 +122,11 @@ impl LoadWorker {
             })
         };
         #[cfg(not(target_arch = "wasm32"))]
-        Self::spawn_with(label, plan_ahead, move || {
-            let _scope = TextureSink::open_if(sink.as_ref());
-            super::load_event(&options, &event)
-        })
+        Self::spawn_with(
+            label,
+            plan_ahead,
+            sinking(sink, move || super::load_event(&options, &event)),
+        )
     }
 
     fn spawn_with(
@@ -237,6 +240,36 @@ impl LoadWorker {
             finished: self.is_finished(),
             stage: self.stages.reached(),
         }
+    }
+}
+
+/// `load` with `sink` open around it, and registered as a GPU worker for as
+/// long as the thread lives (`oag_thread::gpu_workers`): the process must not
+/// exit while the sink is inside the driver, or while a result holding its
+/// views is still to drop here.
+#[cfg(not(target_arch = "wasm32"))]
+fn sinking(
+    sink: Option<TextureSink>,
+    load: impl FnOnce() -> anyhow::Result<Loaded> + Send + 'static,
+) -> impl FnOnce() -> anyhow::Result<Loaded> + Send + 'static {
+    let guard = sink
+        .as_ref()
+        .map(|_| oag_thread::gpu_workers::Guard::enter("race-load"));
+    move || {
+        if let Some(guard) = guard {
+            guard.hold_to_thread_end();
+        }
+        // Debug builds only: the exit-during-a-load test holds the load up so the process is
+        // leaving while it runs, however fast the machine (`drive_ground_truth`).
+        #[cfg(debug_assertions)]
+        if let Some(ms) = std::env::var("OAG_TEST_RACE_LOAD_DELAY_MS")
+            .ok()
+            .and_then(|ms| ms.parse().ok())
+        {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
+        let _scope = TextureSink::open_if(sink.as_ref());
+        load()
     }
 }
 
