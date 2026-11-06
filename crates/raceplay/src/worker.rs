@@ -259,6 +259,15 @@ fn sinking(
         if let Some(guard) = guard {
             guard.hold_to_thread_end();
         }
+        // Debug builds only: the exit-during-a-load test holds the load up so the process is
+        // leaving while it runs, however fast the machine (`drive_ground_truth`).
+        #[cfg(debug_assertions)]
+        if let Some(ms) = std::env::var("OAG_TEST_RACE_LOAD_DELAY_MS")
+            .ok()
+            .and_then(|ms| ms.parse().ok())
+        {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
         let _scope = TextureSink::open_if(sink.as_ref());
         load()
     }

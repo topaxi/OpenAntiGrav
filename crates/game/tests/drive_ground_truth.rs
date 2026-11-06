@@ -257,7 +257,8 @@ fn the_process_waits_for_a_running_gpu_worker_before_it_exits() {
 
 /// A run that ends on the loading screen waits for the race load: its texture sink is inside the
 /// driver, and exiting under it crashes NVIDIA's Vulkan driver (`docs/tools/web.md`, "Exit and GPU
-/// workers"). On any GPU the line names the worker, so this needs no crash to fail.
+/// workers"). On any GPU the line names the worker, so this needs no crash to fail; the load is
+/// held up (a debug-build hook) so the script always ends first.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_process_waits_for_the_race_load_before_it_exits() {
@@ -273,12 +274,14 @@ fn the_process_waits_for_the_race_load_before_it_exits() {
          until screen.id=ship-select; select Feisar; press cross; \
          until stage=loading within 3000",
         None,
-        &[],
+        &[("OAG_TEST_RACE_LOAD_DELAY_MS", "2000")],
     );
     assert!(run.output.status.success(), "{}", run.why_not_success());
     assert!(
         run.stderr()
-            .contains("waiting for GPU workers before exit: [\"race-load\"]"),
+            .lines()
+            .any(|line| line.contains("waiting for GPU workers before exit")
+                && line.contains("\"race-load\"")),
         "the exit did not wait for the race load:\n{}",
         run.stderr()
     );
