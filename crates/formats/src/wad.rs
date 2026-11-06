@@ -394,15 +394,21 @@ pub fn align_up(value: u64) -> u64 {
 
 /// Inflates a [`Compression::Zlib`] blob.
 ///
-/// A thin wrapper over `miniz_oxide`, the crate's one third-party dependency,
-/// so callers reach it through this module. The error is a message:
-/// `miniz_oxide`'s own carries no more than its `Debug` output.
+/// A thin wrapper over `flate2` (its `zlib-rs` backend), the crate's one
+/// third-party dependency, so callers reach it through this module. The header
+/// and the Adler-32 are both checked. The error is `flate2`'s message.
 ///
 /// # Errors
 ///
 /// `input` is not a valid zlib stream.
 pub fn decompress_zlib(input: &[u8]) -> std::result::Result<Vec<u8>, String> {
-    miniz_oxide::inflate::decompress_to_vec_zlib(input).map_err(|e| format!("{e:?}"))
+    use std::io::Read;
+
+    let mut out = Vec::with_capacity(input.len().saturating_mul(2));
+    flate2::bufread::ZlibDecoder::new(input)
+        .read_to_end(&mut out)
+        .map_err(|e| e.to_string())?;
+    Ok(out)
 }
 
 /// Hashes an entry name the way the game does.

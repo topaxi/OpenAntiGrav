@@ -612,7 +612,7 @@ The load's 5.9 s before, inclusive:
   text 1.0 s; a further 1.7 s of garbage collection over the run came mostly
   from those 1 MiB response strings. On a worker the same reads go through
   `FileReaderSync` and return an `ArrayBuffer`, with no text and no loop.
-- **Inflate**, 1.3 s (`miniz_oxide`); **parse and decode** the rest, about
+- **Inflate**, 1.3 s (measured with `miniz_oxide`; the build now uses `flate2`'s `zlib-rs`); **parse and decode** the rest, about
   0.7 s.
 - **GPU work**: only the texture sink's uploads, about 0.15 s.
 

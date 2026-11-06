@@ -226,8 +226,9 @@ by construction; nothing about the simulation can see the split.
   Interleaved A/B, five runs each: HD 1.943 to 1.762 s (**-9.3%**), 2048 1.701
   to 1.587 s (**-6.7%**), Omega unchanged (its archives store no deflated
   block). Under the 10% this lane set for a new dependency in a determinism
-  crate, so not taken; it is the next thing to take if a load-time budget ever
-  needs it.
+  crate, so not taken then. Taken later, see "Inflate unified on `flate2`"
+  in `docs/architecture/workspace-layout.md`, which measured it again with the
+  whole `Archive::read` path and found a larger gain.
 - **`perf record --call-graph dwarf`.** Every stack came back as its leaf
   frame alone on this binary, which made the first profile read as "inflate
   is 30%" with no caller. Use a frame-pointer build.
