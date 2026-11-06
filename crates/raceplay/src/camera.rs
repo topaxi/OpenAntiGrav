@@ -485,12 +485,13 @@ impl Race {
         }
         let ship = &self.sim.world.ships[slot];
         // The simulation already located the craft this tick and left the
-        // sample index in `Ship::segment`, so the craft's half is a table read
-        // rather than a second scan of the whole track. Doing it again here
-        // would cost more per frame than the culling it enables saves.
-        // `u16::MAX` is the never-located sentinel, and it is out of range of
-        // any real table, so the bounds check covers both.
-        let Some(index) = self.located_sample(ship) else {
+        // sample index in `Ship::segment` (a person's) or in its driver (an
+        // opponent's), so the craft's half is a table read rather than a second
+        // scan of the whole track. Doing it again here would cost more per frame
+        // than the culling it enables saves. `u16::MAX` is the never-located
+        // sentinel, and it is out of range of any real table, so the bounds
+        // check covers both.
+        let Some(index) = self.framed_sample(slot) else {
             return (UNPLACED, UNPLACED);
         };
         let craft = self.section_of(index, ship.physics.body.position);
@@ -577,7 +578,26 @@ impl Race {
     /// stretch that crosses itself, and a global scan could take it to the wrong stretch (the bridge above the
     /// road): that stays *draw everything*, as [`Self::visibility_sections`] documents.
     fn located_sample(&self, ship: &oag_gameplay::Ship) -> Option<usize> {
-        let index = usize::from(ship.segment);
+        self.located_from(ship, usize::from(ship.segment))
+    }
+
+    /// The spline sample under the craft in `slot`, for a picture that frames it. A person's
+    /// craft is located by the tick in `Ship::segment`; an opponent's `segment` is never
+    /// written, and its driver's index on its own line, mapped to the sample table, is where
+    /// the simulation has it (photo mode's subject is usually one).
+    fn framed_sample(&self, slot: usize) -> Option<usize> {
+        let ship = &self.sim.world.ships[slot];
+        if self.sim.world.person_flown(slot) {
+            return self.located_sample(ship);
+        }
+        let hint = self
+            .sample_index_for(slot, usize::try_from(ship.driver.index).unwrap_or(usize::MAX))
+            .unwrap_or(usize::MAX);
+        self.located_from(ship, hint)
+    }
+
+    /// [`Self::located_sample`] from `index`, where the simulation last had the craft.
+    fn located_from(&self, ship: &oag_gameplay::Ship, index: usize) -> Option<usize> {
         if index < self.sim.spline.len()
             && self.section_of(index, ship.physics.body.position) != UNPLACED
         {

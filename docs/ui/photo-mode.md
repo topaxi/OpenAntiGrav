@@ -171,6 +171,19 @@ and 3 above, free to orbit; Pulse's measured offset, **chosen** on the others), 
 circuit's authored `Camera` node nearest the craft, aimed at it; only where a circuit authors
 one, left out of the cycle otherwise). The mode opens on `internal`, as both originals do.
 
+**Culling follows the subject.** What the authored visibility set (Pulse, Pure, 2048, Omega: the
+craft's and the camera's sections) and HD's chunk set (`Pvs::around(craft, camera)`) cull to is
+the craft the picture frames, `Race::framed_slot`: the subject while the mode is open, the seat
+otherwise. An opponent's `Ship::segment` is never written (only a person's is), so the subject's
+spline sample is its driver's index mapped through the racing line's order; a position the
+sample cannot vouch for stays `UNPLACED`, which draws everything. A recovery in flight on the
+subject, not the seat, blanks the shot. A station camera's exact section (`station_camera_section`)
+is not used while the mode is open. Before this, a subject more than 96 samples from the seat drew
+everything (the camera could not be placed), and a nearer one was culled to the seat's section
+plus the camera's. Test: `tests::photo::photo_modes_subject_places_the_cull_not_the_seat`. 2048
+and Omega: same code path as Pulse's (the section set), checked by the same test; HD's chunk set
+reads the subject's position through the same accessor.
+
 **Controls**, all on one stick and the buttons a keyboard has (the abstract input has one stick):
 
 | Input | Does |

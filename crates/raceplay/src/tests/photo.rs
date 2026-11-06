@@ -96,13 +96,17 @@ fn race_on_a_sectioned_straight() -> Race {
     Race::start(setup)
 }
 
-/// Stands `slot` on the spline's last sample, where the simulation would have left it.
+/// Stands the opponent in `slot` on the spline's last sample, where its driver would have
+/// left it: an opponent's `Ship::segment` is never written, its driver's index is.
 fn stand_at_the_far_end(race: &mut Race, slot: usize) -> usize {
     let last = race.spline().len() - 1;
     let pos = race.spline().sample(last).expect("a sample").pos;
+    let line = (0..race.sim.ai_order.len())
+        .find(|&k| race.ai_sample_index(k) == Some(last))
+        .expect("the last sample is on the racing line");
     let ship = &mut race.sim.world.ships[slot];
     ship.physics.body.position = Vec3::from_array(pos);
-    ship.segment = u16::try_from(last).expect("a short fixture");
+    ship.driver.index = u32::try_from(line).expect("a short fixture");
     last
 }
 
