@@ -212,7 +212,8 @@ Conditions are `key=value` or `key!=value`, case-insensitive: `stage` (`launcher
 `frontend`, `menu`, `race`), `frontend` (the disc's state name), `page` (the menu page, under
 whatever is open over it), `screen` (`page`, `picker`, `campaign`, `prompt`, ...), `screen.id`
 (the page id, or `track-select`/`ship-select`), `title`, `focus` (the focused row's id, setting
-or label - any of them holds) `photo` (photo mode's lens, `internal`, `close` or `track`, or `none`, on `stage=race`), `endrace` (`photo` while `Race End Photo` is up, `other` for the rest of the end screens) and `race.title|track|track_file|team|variant|mode|source|craft_source` (only once a race is loading). On `stage=race` the state lines also carry `hash` (the race's state hash) and `sim_tick`, so a line is written for every tick the race steps and none while it stands still (photo mode, the pause menu).
+or label - any of them holds), `opening_reads` (`landed` once what the next selection screen
+opens on is read, else `reading`; `stage=menu` only), `photo` (photo mode's lens, `internal`, `close` or `track`, or `none`, on `stage=race`), `endrace` (`photo` while `Race End Photo` is up, `other` for the rest of the end screens) and `race.title|track|track_file|team|variant|mode|source|craft_source` (only once a race is loading). On `stage=race` the state lines also carry `hash` (the race's state hash) and `sim_tick`, so a line is written for every tick the race steps and none while it stands still (photo mode, the pause menu).
 
 **What the game reports.** One JSON line whenever anything but the tick changed. A menu state:
 

@@ -127,6 +127,42 @@ fn text<'a>(state: &'a Value, path: &[&str]) -> Option<&'a str> {
         .and_then(Value::as_str)
 }
 
+/// The frame that opens a selection screen waits on no disc read
+/// (`docs/rendering/frame-thread-cpu.md`, "A picker's opening read"): Track Select, Ship Select
+/// and the way back each open on a read that landed on a worker before the tap, also after a
+/// change of mode asked for another. Fails on a build whose opening frame starts the read
+/// itself, which logs that it waited.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_selection_screen_opens_on_a_read_that_has_landed() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive_with(
+        &image,
+        "opening-reads",
+        "boot; select racebox; press cross; until page=race; \
+         until opening_reads=landed; set race.mode=speed_lap; \
+         until opening_reads=landed; select launch_race; press cross; \
+         until screen.id=track-select; until opening_reads=landed; press cross; \
+         until screen.id=ship-select; until opening_reads=landed; press circle; \
+         until screen.id=track-select",
+        None,
+        &[("RUST_LOG", "oag_game=debug")],
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let stderr = run.stderr();
+    assert!(
+        !stderr.contains("opens waiting for its read"),
+        "an opening frame waited:\n{stderr}"
+    );
+    assert_eq!(
+        stderr.matches("opens on a read that has landed").count(),
+        3,
+        "Track Select, Ship Select and Track Select again:\n{stderr}"
+    );
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_race_box_launches_the_track_and_craft_it_was_told_to_pick() {

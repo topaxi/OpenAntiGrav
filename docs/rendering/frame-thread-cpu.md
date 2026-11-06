@@ -1188,10 +1188,144 @@ Select after 0 and 1, RACE CAMPAIGN's first two screens), before and after, with
 the worker to land: byte-identical. With too few ticks the after pictures differ only where the
 previous entry's picture is still up, as designed.
 
-**Open:** the opening read above; a variant or skin the worker did not build (HD's per-circuit
-models, a Zone hull) may still compile on the frame thread once; the Pure chain's art player and
-HD's campaign screens read the disc on the frame thread from their own archives (not measured:
-only Pulse's campaign was walked).
+**Open:** a variant or skin the worker did not build (HD's per-circuit models, a Zone hull) may
+still compile on the frame thread once; the Pure chain's art player and HD's campaign screens
+read the disc on the frame thread from their own archives (next section).
+
+## A picker's opening read (2026-11-06, `menu-read`)
+
+The read above that stayed joined on the opening frame is off the frame thread for a screen that
+opens on what the player already picked. On the Deck the worst frame of an opening falls from 12.7, 13.9 and 19.9 ms to 3.5, 4.2 and
+5.2 ms at 800p, 1080p and 4K, one round, noise 0.5 ms; the screens are byte-identical.
+
+Where the frame went. A frame-pointer profile of forty Track Select and Ship Select openings on
+the Deck (`cpu-clock:u`, `--user-callchains --call-graph fp`, user mode only) charged the frame
+thread 2.8 ms an opening, and the worker 5.8 ms; `refresh_preview`'s join does not show in a
+sampling profile, because a blocked thread takes no samples. So wall-clock probes around the same
+calls, removed before the commit (1280x800, one walk, ms):
+
+| Piece of the opening frame | Track Select | Ship Select |
+| --- | --- | --- |
+| `ticks` phase of the frame | 11 to 12 | 10 |
+| read on the worker, joined | 8.0 to 9.4 | 6.1 to 6.9 |
+| spawning the read | 0.4 to 1.2 | 0.4 to 1.2 |
+| `land`: the GPU half (`Preview::new`) | 0.9 | 1.6 to 2.1 |
+| the frame outside `ticks` | 1.5 to 2 | 1.5 to 2 |
+
+Two shapes were on the table. Keeping the previous screen up until the read lands removes no
+wait: the new screen appears as late as it does today or a frame later, it only trades one long
+frame for several short ones, and every `stage.picker = None` and each of the campaign and Pure
+openers would have to keep the old screen. So the read goes ahead of the tap
+(`session::opening_reads`):
+
+- Each menu frame compares the picks a screen would open on (the pending race, the language, the
+  circuit, or the team, skin and variant) with the ones last asked for, and on a change starts
+  the read on a worker. `Session::track_screen` and `ship_screen` are what opening the screen
+  runs, with no side effects, so the guess and the screen cannot disagree on an index or a skin.
+- The screen adopts the read only if `ReadFacts` match what it was about to ask for and it came
+  out of the same archives, and reads for itself otherwise. Equal facts on one title and language read the same bytes, so an adopted
+  read draws what a joined one does.
+- The work is never on a frame that changed screen, and at most one read starts a frame: done on
+  the tap's own frame it cost 0.9 to 2.5 ms, and made Ship Select's Back to Grid Selection slower.
+- An open screen's own kind is not read ahead, so a Down costs no second read. Track Select keeps
+  Ship Select's read ready and Ship Select keeps Track Select's, for Confirm and Back.
+- Off the menus the reads are dropped, because a race can change the records the livery row reads.
+- **The fallback is the join.** A tap before the worker lands (the menus' source is still
+  opening, or the pick changed within the same few milliseconds), a seat past the first, and a
+  team the guess did not cut (Pure's team gate reads the disc, so the guess leaves it out) wait
+  as before and log `opens waiting for its read` at debug level.
+- The web build opens no menus' source, so it reads nothing ahead and behaves as it did.
+
+The reads are CPU only: they touch no GPU object, so nothing registers with
+`oag_thread::gpu_workers`. Cost: one speculative read per change of pick, 6 to 9 ms of a worker
+on the Deck, plus holding one extended sheet per screen while the menus are up.
+
+Test: `drive_ground_truth::a_selection_screen_opens_on_a_read_that_has_landed` waits on the
+`opening_reads` state key, opens Track Select, Ship Select and Track Select again, and fails if
+the log says an opening frame waited. It fails with adoption switched off.
+
+**Deck, before / copy of before / after, worst frame `total`, ms, one round in that rotation.** Pulse
+PSP EU, the method of the section above, `dist` `znver2`, load 0.4 to 1.0. The maintainer's game
+took the Deck back before the second round, so there is one round, and Pure's chain and HD's
+campaign were not walked.
+
+| Tap | 800p | 1080p | 4K |
+| --- | --- | --- | --- |
+| Track Select or Ship Select opens, race walk (12 opens) | 12.7 / 12.2 / **3.5** | 13.9 / 14.2 / **4.2** | 19.9 / 19.7 / **5.2** |
+| a cell opens Ship Select, campaign walk (4 opens) | 11.0 / 11.5 / **4.3** | 13.0 / 13.4 / **4.5** | 19.8 / 19.9 / **6.2** |
+| Back to Grid Selection, not changed | 11.5 / 11.6 / 11.6 | 12.5 / 13.1 / 12.1 | 19.6 / 20.3 / 19.4 |
+| first Grid Selection, not changed | 11.1 / 11.2 / 11.3 | 11.1 / 12.5 / 11.8 | 17.2 / 17.7 / 16.8 |
+| worst picker Down, not changed | 2.8 / 2.4 / 2.5 | 2.6 / 2.6 / 2.6 | 3.8 / 4.3 / 4.2 |
+
+These sit below the 13 to 17 ms and 37 ms of the 2026-10-31 walk because this one opens with the
+page cache warm and counts re-openings; compare within this table only. Grid Selection is now the
+worst menu tap, and the row above says it did not move: it is not the read this section removed.
+One walk of the copy of before at 4K lost its taps to a stall, so its campaign row has fewer
+opens. An earlier build of the change had a single 2.1 s frame outside every phase, with no
+repeat in eighteen walks of the round above. Neither is explained.
+
+**Notebook, before / copy of before / after, ms, three rotated rounds, not comparable with the Deck.**
+Core Ultra 7 265H, RTX PRO 2000, `release`, `x86-64-v3`, a window on Xvfb, load 1.5 to 10.8, each
+round holding the gate lock. Xvfb's copy spends 100 ms (365 ms at 4K) in `present`, so the column
+is the frame less `present`, median over the opens. The race walk at 4K ran at 2.7 fps and its
+taps outran the menus, so 4K has only the campaign walk.
+
+| Tap | 800p | 1080p | 4K |
+| --- | --- | --- | --- |
+| Track Select or Ship Select opens, race walk (36 opens) | 18.3 / 16.4 / **8.0** | 20.0 / 18.8 / **7.1** | not valid |
+| the same, its `ticks` phase | 16.1 / 13.6 / **5.1** | 16.6 / 16.0 / **4.3** | not valid |
+| a cell opens Ship Select (12 opens) | 18.2 / 17.0 / **8.6** | 17.8 / 18.8 / **7.3** | 18.8 / 18.1 / **8.5** |
+| Back to Grid Selection, not changed (9) | 16.5 / 13.6 / 18.3 | 14.5 / 14.6 / 13.4 | 16.0 / 14.8 / 16.1 |
+
+On the notebook the join is about two thirds of the opening's `ticks`, as on the Deck.
+
+Pictures: a headless `--drive` walk on the notebook, before against after, 22 frames: Pulse's Track
+Select and Ship Select on the opening frame and 300 ticks on, after a Down and after Back; a
+campaign cell's Ship Select; Pure's Track Select and Team Selection, by the race box and by the
+SINGLE PLAYER chain; HD's Track Select and Ship Select. 21 are byte-identical in one pass. The other,
+Ship Select after a Down, matched before on two more runs of after. That is timing: Back's later
+frame differs the same way between two runs of the one before binary, and matches after. The opening
+frame shows the stills and the hull, not a hole.
+
+A real profile adopts as well: a release build (which ignores `unlock_everything`), no
+`--unlock-all`, a 155 KB `records.toml` copied off the Deck, the race box to Track, Ship, Back and
+Ship: Pulse, Pure and HD, 12 opens, 12 on a landed read, none waited. The numbers above were taken
+on the commit before the same-archives check, which no walk reaches.
+
+To repeat the Deck walk. `settings.toml` is a copy of the Deck's with `vsync = "off"`,
+`frame_limit = "unlimited"`, `pause_on_focus_loss = false`, `cpu_governor = false`, `track =
+"16_Track"` and `window_size` set; `XDG_*` point at a directory of the walk's own, with
+`$XDG_CACHE_HOME/oag/movies` a link to `~/.cache/oag/movies` (a fresh cache transcodes the boot
+movie past the walk's first taps); a third binary, a copy of before, gives the noise.
+
+```sh
+# Binaries: `dist`, `-C target-cpu=znver2`, one CARGO_TARGET_DIR; `touch crates/game/src/**/*.rs`
+# in the second tree, or cargo keeps the first binary (`cmp` them).
+S="3:start,6:start,9:down,11:cross,14:right,14.5:right,15:right"   # race walk, Pulse
+t=16; for i in 1 2 3 4 5; do S="$S,$t:down"; t=$(awk "BEGIN{print $t + 0.5}"); done
+S="$S,19:cross"
+t=22; for i in 1 2 3 4 5; do S="$S,$t:down"; t=$(awk "BEGIN{print $t + 0.4}"); done
+t=$(awk "BEGIN{print $t + 1}"); S="$S,$t:cross"
+t=$(awk "BEGIN{print $t + 1.5}"); for i in 1 2 3 4 5 6 7; do S="$S,$t:down"; t=$(awk "BEGIN{print $t + 0.4}"); done
+t=$(awk "BEGIN{print $t + 1}")
+for i in 1 2 3 4 5; do S="$S,$t:circle,$(awk "BEGIN{print $t+1.2}"):cross"; t=$(awk "BEGIN{print $t + 2.4}"); done
+S="$S,$t:quit"
+# Campaign walk, Pulse: Grid Selection, a cell's screen, Ship Select, and back round.
+C="3:start,6:start,9:cross,11:cross,13:cross,15:down,16:circle"
+t=18; for i in 1 2 3; do C="$C,$t:cross,$(awk "BEGIN{print $t+1.5}"):cross,$(awk "BEGIN{print $t+3}"):circle"; t=$(awk "BEGIN{print $t + 4.5}"); done
+C="$C,$t:quit"
+# W H: 1280 800, 1920 1080, 3840 2160, inside ~/oag-perf/deck-run.sh, which takes the lock.
+OAG_MODS=$PWD/nomods OAG_PHASE_SPIKE_MS=0 ENABLE_GAMESCOPE_WSI=0 \
+  gamescope --backend headless -W $W -H $H -w $W -h $H -r 90 -- \
+  "$BIN" ~/.local/share/oag/images/pulse-psp-eu.chd --unlock-all --no-audio --frame-log \
+  --render-scale 100 --script "$S" > "$LABEL.log" 2>&1
+```
+
+Read the worst `frame-spike` `total` between each `script: tap` line and the next. A cell's Cross
+logs `on menu:main`, and any walk whose taps stop matching this list lost one to a stall.
+
+**Open:** the Deck's other two rounds; Grid Selection, 11 to 20 ms at the three sizes, not split
+into read and upload.
 
 ## Per-frame allocations: five removed from the shadow, pad and advert paths (2026-11-04, `alloc-batch1`)
 

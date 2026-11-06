@@ -135,6 +135,10 @@ pub struct State {
     /// The screen that takes input, on `stage=menu`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub screen: Option<Screen>,
+    /// `landed` once the reads a selection screen opens on are in, `reading` before, on
+    /// `stage=menu`: a script waits for it to see a screen open with nothing to wait for.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opening_reads: Option<String>,
     /// The resolved race, from the frame a launch begins loading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub race: Option<Resolved>,
@@ -182,7 +186,7 @@ impl State {
     /// focused row's id, setting and label, so `focus=launch` and `focus="LAUNCH RACE"` both hold.
     ///
     /// Keys: `stage`, `frontend`, `map_event`, `page`, `screen` (the overlay kind, `page` when none),
-    /// `screen.id`, `title`, `focus`, and `race.title|track|track_file|team|variant|mode|source|craft_source`.
+    /// `screen.id`, `title`, `focus`, `opening_reads`, and `race.title|track|track_file|team|variant|mode|source|craft_source`.
     #[must_use]
     pub fn get(&self, key: &str) -> Vec<String> {
         let screen = self.screen.as_ref();
@@ -192,6 +196,7 @@ impl State {
             "frontend" => one(self.frontend.clone()),
             "map_event" => one(self.map_event.clone()),
             "page" => one(self.page.clone()),
+            "opening_reads" => one(self.opening_reads.clone()),
             "screen" => one(screen.map(|s| s.kind.clone())),
             "screen.id" => one(screen.map(|s| s.id.clone())),
             "title" => one(screen.map(|s| s.title.clone())),
@@ -248,6 +253,7 @@ impl State {
                 | "photo"
                 | "photo_fx"
                 | "endrace"
+                | "opening_reads"
         ) || key.strip_prefix("race.").is_some_and(|rest| {
             matches!(
                 rest,
