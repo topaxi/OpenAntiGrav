@@ -298,6 +298,7 @@ impl Pending {
 /// when it asks for the same read ([`ReadFacts`]) and reads for itself otherwise.
 pub(crate) struct OpeningRead {
     facts: ReadFacts,
+    archives: SharedArchives,
     pending: Pending,
 }
 
@@ -320,7 +321,7 @@ impl OpeningRead {
             previews: previews.clone(),
             archives: Arc::clone(archives),
         };
-        Self { facts, pending: Pending::start(job) }
+        Self { facts, archives: Arc::clone(archives), pending: Pending::start(job) }
     }
 
     /// Whether the worker has finished.
@@ -585,7 +586,11 @@ impl PickerStage {
             entry_changed,
         );
         self.pending = Some(match self.opening.take() {
-            Some(opening) if opening.facts == facts => opening.pending,
+            Some(opening)
+                if opening.facts == facts && Arc::ptr_eq(&opening.archives, &self.archives) =>
+            {
+                opening.pending
+            }
             _ => Pending::start(ReadJob {
                 base: facts.slideshow.then(|| self.base.clone()),
                 facts,

@@ -34,16 +34,11 @@ disc reads and parses leave the render thread, though none of it passes 50 ms on
 
 ## Next Steps
 
-1. Finish the Deck measure when the Deck is free. The scripts are not in the repository, so
-   recreate them from the doc's `walk.sh` (vsync off, `frame_limit = "unlimited"`,
-   `cpu_governor = false`, `OAG_PHASE_SPIKE_MS=0`, `gamescope --backend headless`,
-   `--render-scale 100`, `--no-audio`) and build the pair as the doc says, one target directory,
-   `touch`ing `crates/game/src` before the second build (`cargo` kept the first binary otherwise;
-   `cmp` the two). Run three binaries, before, after and a copy of before for the noise, rotated,
-   through `ssh deck@steamdeck '~/oag-perf/deck-run.sh --wait 300 -- ...'`, at 1280x800, 1920x1080
-   and 3840x2160, and read the worst frame `total` per tap. Baseline to beat: 13 to 17 ms, 37 ms at
-   4K in the 2026-10-31 walk; one round on this tree read 12.7, 13.9 and 19.9 ms before and 3.5,
-   4.2 and 5.2 after.
+1. Finish the Deck measure when the Deck is free: the exact walks and command are at the end of
+   `docs/rendering/frame-thread-cpu.md`, "A picker's opening read". Compare, within one session,
+   before, after and a copy of before, rotated, at 800p, 1080p and 4K, worst frame `total` per tap.
+   Baseline: 13 to 17 ms, 37 ms at 4K in the 2026-10-31 walk; one round on this tree read 12.7, 13.9
+   and 19.9 ms before and 3.5, 4.2 and 5.2 after.
 2. Walk Pure's SINGLE PLAYER chain and HD's campaign the same way and read the worst taps. Not
-   taken. Move a read off the frame thread only if it passes 50 ms; otherwise write its number here.
+   taken: a Pure and an HD tap script were written but never run, so none is recorded. Move a read off the frame thread only if it passes 50 ms; otherwise write its number here.
 3. Split RACE CAMPAIGN's Grid open (`Session::open_campaign`) and say whether it is a read at all.

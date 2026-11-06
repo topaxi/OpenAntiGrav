@@ -1222,8 +1222,8 @@ openers would have to keep the old screen. So the read goes ahead of the tap
   circuit, or the team, skin and variant) with the ones last asked for, and on a change starts
   the read on a worker. `Session::track_screen` and `ship_screen` are what opening the screen
   runs, with no side effects, so the guess and the screen cannot disagree on an index or a skin.
-- The screen adopts the read only if `ReadFacts` match what it was about to ask for, and reads
-  for itself otherwise. Equal facts on one title and language read the same bytes, so an adopted
+- The screen adopts the read only if `ReadFacts` match what it was about to ask for and it came
+  out of the same archives, and reads for itself otherwise. Equal facts on one title and language read the same bytes, so an adopted
   read draws what a joined one does.
 - The work is never on a frame that changed screen, and at most one read starts a frame: done on
   the tap's own frame it cost 0.9 to 2.5 ms, and made Ship Select's Back to Grid Selection slower.
@@ -1286,6 +1286,43 @@ SINGLE PLAYER chain; HD's Track Select and Ship Select. 21 are byte-identical in
 Ship Select after a Down, matched before on two more runs of after. That is timing: Back's later
 frame differs the same way between two runs of the one before binary, and matches after. The opening
 frame shows the stills and the hull, not a hole.
+
+A real profile adopts as well: a release build (which ignores `unlock_everything`), no
+`--unlock-all`, a 155 KB `records.toml` copied off the Deck, the race box to Track, Ship, Back and
+Ship: Pulse, Pure and HD, 12 opens, 12 on a landed read, none waited. The numbers above were taken
+on the commit before the same-archives check, which no walk reaches.
+
+To repeat the Deck walk. `settings.toml` is a copy of the Deck's with `vsync = "off"`,
+`frame_limit = "unlimited"`, `pause_on_focus_loss = false`, `cpu_governor = false`, `track =
+"16_Track"` and `window_size` set; `XDG_*` point at a directory of the walk's own, with
+`$XDG_CACHE_HOME/oag/movies` a link to `~/.cache/oag/movies` (a fresh cache transcodes the boot
+movie past the walk's first taps); a third binary, a copy of before, gives the noise.
+
+```sh
+# Binaries: `dist`, `-C target-cpu=znver2`, one CARGO_TARGET_DIR; `touch crates/game/src/**/*.rs`
+# in the second tree, or cargo keeps the first binary (`cmp` them).
+S="3:start,6:start,9:down,11:cross,14:right,14.5:right,15:right"   # race walk, Pulse
+t=16; for i in 1 2 3 4 5; do S="$S,$t:down"; t=$(awk "BEGIN{print $t + 0.5}"); done
+S="$S,19:cross"
+t=22; for i in 1 2 3 4 5; do S="$S,$t:down"; t=$(awk "BEGIN{print $t + 0.4}"); done
+t=$(awk "BEGIN{print $t + 1}"); S="$S,$t:cross"
+t=$(awk "BEGIN{print $t + 1.5}"); for i in 1 2 3 4 5 6 7; do S="$S,$t:down"; t=$(awk "BEGIN{print $t + 0.4}"); done
+t=$(awk "BEGIN{print $t + 1}")
+for i in 1 2 3 4 5; do S="$S,$t:circle,$(awk "BEGIN{print $t+1.2}"):cross"; t=$(awk "BEGIN{print $t + 2.4}"); done
+S="$S,$t:quit"
+# Campaign walk, Pulse: Grid Selection, a cell's screen, Ship Select, and back round.
+C="3:start,6:start,9:cross,11:cross,13:cross,15:down,16:circle"
+t=18; for i in 1 2 3; do C="$C,$t:cross,$(awk "BEGIN{print $t+1.5}"):cross,$(awk "BEGIN{print $t+3}"):circle"; t=$(awk "BEGIN{print $t + 4.5}"); done
+C="$C,$t:quit"
+# W H: 1280 800, 1920 1080, 3840 2160, inside ~/oag-perf/deck-run.sh, which takes the lock.
+OAG_MODS=$PWD/nomods OAG_PHASE_SPIKE_MS=0 ENABLE_GAMESCOPE_WSI=0 \
+  gamescope --backend headless -W $W -H $H -w $W -h $H -r 90 -- \
+  "$BIN" ~/.local/share/oag/images/pulse-psp-eu.chd --unlock-all --no-audio --frame-log \
+  --render-scale 100 --script "$S" > "$LABEL.log" 2>&1
+```
+
+Read the worst `frame-spike` `total` between each `script: tap` line and the next. A cell's Cross
+logs `on menu:main`, and any walk whose taps stop matching this list lost one to a stall.
 
 **Open:** the Deck's other two rounds; Grid Selection, 11 to 20 ms at the three sizes, not split
 into read and upload.

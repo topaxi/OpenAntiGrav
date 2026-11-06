@@ -23,7 +23,7 @@ use crate::stage::Stage;
 use super::Session;
 
 /// Which source the menus' archives were opened from: a changed source or DLC set is another.
-type Key = (String, Vec<PathBuf>);
+pub(super) type Key = (String, Vec<PathBuf>);
 
 /// What the worker hands back.
 pub(crate) struct Opened {
@@ -156,7 +156,7 @@ impl Job {
 
 impl Session {
     /// The source the menus would open now, `None` with no source chosen.
-    fn menu_source_key(&self) -> Option<Key> {
+    pub(super) fn menu_source_key(&self) -> Option<Key> {
         let options = self.race_options.as_ref()?;
         Some((options.source.clone(), options.dlc.clone()))
     }

@@ -24,6 +24,7 @@ use super::picker::{ShipScreen, TrackScreen};
 /// The picks a read was started for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Asked {
+    source: Option<super::menu_source::Key>,
     race: oag_game::pending_race::PendingRace,
     language: Option<String>,
     /// The pick on the screen's own axis: the circuit, or the team and its livery.
@@ -101,6 +102,7 @@ impl Session {
     fn asked(&self, kind: Kind) -> Asked {
         let race = &self.settings.race;
         Asked {
+            source: self.menu_source_key(),
             race: self.pending_race(),
             language: self.settings.language.clone(),
             picks: match kind {
