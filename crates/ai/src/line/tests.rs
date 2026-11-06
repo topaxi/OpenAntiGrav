@@ -363,14 +363,25 @@ fn a_tabulated_line_reads_the_same_bits_as_the_walk() {
         .collect();
     points[40] = points[39];
     points[120] += Vec3::new(30.0, 0.0, 0.0);
-    let unsupported: Vec<bool> = (0..200).map(|i| (150..170).contains(&i)).collect();
+    let unsupported: Vec<bool> = (0..200).map(|i| (120..170).contains(&i)).collect();
     let walked = Line::new(points).with_unsupported(unsupported);
     let tabulated = walked.clone().with_strides(Some(11.0));
     for index in 0..420 {
         for distance in [0.0, 5.0, 11.0, 120.0, 225.0, 5000.0] {
             let a = walked.max_curvature_stepped(index, distance, 11.0, 11.0);
             let b = tabulated.max_curvature_stepped(index, distance, 11.0, 11.0);
-            assert_eq!(a.to_bits(), b.to_bits(), "index {index} distance {distance}");
+            assert_eq!(
+                a.to_bits(),
+                b.to_bits(),
+                "index {index} distance {distance}"
+            );
+        }
+        for reach in [RUN_UP_REACH, 60.0] {
+            assert_eq!(
+                walked.takeoff_within(index, reach),
+                tabulated.takeoff_within(index, reach),
+                "index {index} reach {reach}"
+            );
         }
         let a = walked.max_curvature_stepped(index, 100.0, 9.0, 11.0);
         let b = tabulated.max_curvature_stepped(index, 100.0, 9.0, 11.0);

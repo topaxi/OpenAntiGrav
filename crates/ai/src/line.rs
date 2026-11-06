@@ -1,6 +1,7 @@
 //! The line an opponent drives, as plain world-space points, and the corridor
 //! it is allowed to drift inside.
 
+use crate::driver::planned::RUN_UP_REACH;
 use oag_core::math::Vec3;
 
 pub mod shift;
@@ -106,11 +107,13 @@ struct Stride {
     stepped: f32,
 }
 
-/// [`Stride`]s for one span, one per point.
+/// [`Stride`]s for one span, one per point, and [`Line::takeoff_within`] at the one reach a
+/// driver asks for, one per point.
 #[derive(Debug, Clone, PartialEq, Default)]
 struct Strides {
     span: f32,
     at: Vec<Stride>,
+    run_up: Vec<bool>,
 }
 
 impl Line {
@@ -195,7 +198,14 @@ impl Line {
                 }
             })
             .collect();
-        self.strides = Strides { span, at };
+        let run_up = if self.takeoff.is_empty() {
+            Vec::new()
+        } else {
+            (0..self.points.len())
+                .map(|index| self.takeoff_within(index, RUN_UP_REACH))
+                .collect()
+        };
+        self.strides = Strides { span, at, run_up };
         self
     }
 
@@ -246,6 +256,9 @@ impl Line {
         let n = self.takeoff.len();
         if n == 0 {
             return false;
+        }
+        if distance == RUN_UP_REACH && !self.strides.run_up.is_empty() {
+            return self.strides.run_up[index % n];
         }
         let mut at = index % n;
         let mut travelled = 0.0;
