@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-06
-summary: "A picker's opening read is off the frame thread; RACE CAMPAIGN's Grid open is now the worst menu tap, and Pure's chain, HD's campaign and two more Deck rounds are unwalked"
+summary: "Opening read is off the frame thread; Grid Selection is the worst menu tap; Deck rounds 2 and 3, Pure and HD walks not taken"
 categories: [rendering]
 difficulty: easy (35)
 ---

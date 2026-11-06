@@ -1282,10 +1282,10 @@ On the notebook the join is about two thirds of the opening's `ticks`, as on the
 Pictures: a headless `--drive` walk on the notebook, before against after, 22 frames: Pulse's Track
 Select and Ship Select on the opening frame and 300 ticks on, after a Down and after Back; a
 campaign cell's Ship Select; Pure's Track Select and Team Selection, by the race box and by the
-SINGLE PLAYER chain; HD's Track Select and Ship Select. 20 are byte-identical in one pass. The other
-two are timing, not the change: Back's later frame differs between two runs of the same before
-binary, and both match before on two more runs of after. The opening frame shows the stills and
-the hull, not a hole.
+SINGLE PLAYER chain; HD's Track Select and Ship Select. 21 are byte-identical in one pass. The other,
+Ship Select after a Down, matched before on two more runs of after. That is timing: Back's later
+frame differs the same way between two runs of the one before binary, and matches after. The opening
+frame shows the stills and the hull, not a hole.
 
 **Open:** the Deck's other two rounds; Grid Selection, 11 to 20 ms at the three sizes, not split
 into read and upload.

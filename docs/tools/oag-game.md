@@ -211,7 +211,8 @@ Conditions are `key=value` or `key!=value`, case-insensitive: `stage` (`launcher
 `frontend`, `menu`, `race`), `frontend` (the disc's state name), `page` (the menu page, under
 whatever is open over it), `screen` (`page`, `picker`, `campaign`, `prompt`, ...), `screen.id`
 (the page id, or `track-select`/`ship-select`), `title`, `focus` (the focused row's id, setting
-or label - any of them holds) and `race.title|track|track_file|team|variant|mode|source|craft_source` (only once a race is loading).
+or label - any of them holds), `opening_reads` (`landed` once what the next selection screen
+opens on is read, else `reading`; `stage=menu` only) and `race.title|track|track_file|team|variant|mode|source|craft_source` (only once a race is loading).
 
 **What the game reports.** One JSON line whenever anything but the tick changed. A menu state:
 
