@@ -1,6 +1,6 @@
 ---
 status: re-first
-titles: [hd, omega]
+titles: [hd, omega, 2048]
 updated: 2026-11-06
 summary: "HD Eliminator's race line and lap hexagon are drawn; the TARGET header and the ranked score rows need HD's scoring law (craft+0x6f80) first"
 ---
@@ -26,10 +26,12 @@ summary: "HD Eliminator's race line and lap hexagon are drawn; the TARGET header
 - **Not captured:** a frame after a kill or any score change; the split-screen Eliminator pair
   (`splitscreen_elimination_hud_{0,1}.xml`, same widgets, unchecked). The Eliminator weapon-pad
   disarm time was not seen in the frames.
-- **Omega: checked, applies, not wired for `LapPanel2`** (its `ALWAYS_ON` is "HD's list"); the
-  race line draws there through the shared path. Not seen on an Omega frame.
-- **Compare pair:** the countdown pair is in the lane's scratch only (original frame and ours, with
-  the region metric); adopting it into `data/reference/compare-page/hd-race/` is the lead's.
+- **2048 and Omega: the race line draws there unmeasured.** Both executables name the same
+  widgets and both packages author them, so any Eliminator race on either draws the line through
+  the shared path; no frame of either was taken. `LapPanel2` is **checked, applies, not wired**
+  in both `ALWAYS_ON` lists.
+- **Compare pair:** the countdown pair is in the lane's scratch only (original frame and ours on Vineta K, an ad-hoc
+  HUD-region metric, no `pair.json`); adopting it into `data/reference/compare-page/hd-race/` is the lead's.
 
 ## Next Steps
 

@@ -52,7 +52,8 @@ is absent** (`search_strings` and the raw bytes `4B 69 6C 6C 73 54 65 78 74`, no
 widgets are authored by `DATA00`'s `elimination_hud.xml` (the `HUD_Elim_*` fragments), and the
 RPCS3 frames draw exactly them: the bottom race line, the `TARGET ( 200 )` header, the ranked
 `NAME ( score )` rows with the player's row highlighted. `DATA02`'s copy (generic fragments plus
-`KillsText`) has none of them. Confidence 90 that **Eliminator draws `DATA00`'s copy**, which is
+`KillsText`) has none of them. `DATA02`'s own Racebox lists no Eliminator at all ([head2head.md](head2head.md)), which fits the
+Fury-layer reading. Confidence 90 that **Eliminator draws `DATA00`'s copy**, which is
 what `Archives::holder_of` already returns, so no archive-order change and no per-file selection
 is needed. Whether the original picks `DATA00` by its own precedence stays unread for the other
 five duplicated roots.

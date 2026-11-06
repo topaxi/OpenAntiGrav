@@ -1381,7 +1381,7 @@ The maintainer's report: in HD's Eliminator the HUD is missing many elements. Co
 (HD Fury EU, Racebox Eliminator, Vineta K, weapons on: the intro board, the countdown, 30 s of
 racing with a weapon held; evidence and addresses in
 [`eliminator-hud.md`](../ghidra/functions/ps3-hdfury-eu/eliminator-hud.md)) against
-`oag-game --race --mode eliminator` on the same circuit. **The original draws `DATA00`'s
+`oag-game --race --mode eliminator --track Data\Environments\01_Vineta_K\track.vex` (the default circuit differs). **The original draws `DATA00`'s
 `elimination_hud.xml`** (the `HUD_Elim_*` fragments), not `DATA02`'s `KillsText` design: its
 executable has no `KillsText`, and the frames show the widgets only `DATA00` authors.
 
@@ -1398,11 +1398,15 @@ executable has no `KillsText`, and the frames show the widgets only `DATA00` aut
 | `MPWeaponIcon`, `ScoreFeedBack` popups | none seen (no score changed) | no | **open** |
 
 Region metric, the fraction of the original's red HUD pixels (relative redness over 45, within 6 px
-of one of ours) in the race-line band, the countdown frame against ours at tick 60: **0.0 before,
-0.31 after at the HD default safe area of 90 percent, 0.67 at 100 percent**, which is the
-capture's own profile (the original's panels start 52 px in on 1278; ours match at 100 percent).
-The whole frame stays near 0.06 until the rows are drawn. A loose metric (the two worlds differ);
-the side-by-sides are the evidence.
+of one of ours), the countdown frame against ours at tick 60 on the same circuit (Vineta K,
+1280x720, safe area 100 percent): lap panel **0.93** (0.40 before the hexagon), race-line band
+**0.51**, whole frame 0.24 (rows missing). The band is 0.0 before the race line existed. Safe
+area 100 percent is **inferred from panel geometry** (the original's panels start 52 px in on 1278,
+ours match there; at HD's default 90 percent ours sit 40 px further in), the profile was not read.
+The grid marker sits at about 0.98 of the bar in ours and 0.96 in the original (x 1085 against
+1069 on a 926 px bar): the same end of the bar, 16 px apart, which is the unread `RM+0x1948`
+offset or the grid's own placement, not explained. A loose metric (the two worlds differ); the
+side-by-sides are the evidence, and the pair is an ad-hoc HUD-region one, not a compare-page pair.
 
 The law is on the page above: each craft's marker at `bar_x + fraction * bar_width`, the fraction
 the distance into the lap wrapped to one lap, the player's the last slot, the counts the markers
@@ -1417,7 +1421,9 @@ invented `( 0 )`s would be a stand-in for data the original has. The scoring law
 target (`g_GameState+0x20`) and the row writer `0x0008c6f8` are unread. The marker half turn
 (`craft+0x6ad8`) is unread too. Not captured: a frame after a kill (none was reachable without
 the scoring), the split-screen Eliminator pair (`splitscreen_elimination_hud_{0,1}.xml` author the
-same line and take the same code path, unchecked). Omega: its executable names the same widgets
-and `data00` ships the same `hud_elim_*` fragments (`hud_elim_lap_counters.xml` is 1,482 bytes
-on both), so the race line draws there through the shared path; its `ALWAYS_ON` ("HD's list") does
-not carry `LapPanel2`: **checked, applies, not wired**, not measured on an Omega frame.
+same line and take the same code path, unchecked). 2048 and Omega: both executables name `ShipLinePos%d`, `ShipsInFront` and `EliminatorPositions`
+and both packages ship the same `Elimination_HUD` / `hud_elim_*` fragments (Omega's
+`hud_elim_lap_counters.xml` is 1,482 bytes, HD's size), so the race line **now draws on an
+Eliminator race of either through the shared path, unmeasured on both** (no 2048 or Omega
+Eliminator frame): **ported, unmeasured**. Their `ALWAYS_ON` lists do not carry `LapPanel2`:
+**checked, applies, not wired**.
