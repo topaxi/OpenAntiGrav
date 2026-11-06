@@ -1,12 +1,14 @@
-//! 2048's loading screen: HD's screen, re-spelt for the Vita's `.gxt`, with no mode icon.
+//! 2048's loading screen: HD's feature screen, re-spelt for the Vita's `.gxt`, with no mode icon.
 //!
 //! Read off the v1.04 `eboot.elf` (`docs/ghidra/functions/vita-2048-eu-v104/loading-screen.md`,
-//! `docs/formats/2048-loading.md`). `LoadingScreen_LoadAssets` (`0x81281ab2`) is HD's thread body
-//! and its state 7 is the race load: it loads `corner`, `dot`, `square`, `line`, `Title_Arrow_HD`
-//! and `Subtitle_Arrow_HD` as `.gxt`, then the one illustration the feature draw picked, and
-//! `LoadingScreen_Draw` (`0x812830c8`) places them at HD's operands. States 8 and 9 are the
-//! epilepsy and ESRB stills and state 4 is the `White2048`/`Blue2048` percentage screen, so the
-//! state numbers are not Omega's.
+//! `docs/formats/2048-loading.md`). `LoadingScreen_LoadAssets` (`0x81281ab2`) is HD's thread
+//! body and its kind 7 loads `corner`, `dot`, `square`, `line`, `Title_Arrow_HD` and
+//! `Subtitle_Arrow_HD` as `.gxt`, then the one illustration the feature draw picked, and
+//! `LoadingScreen_Draw` (`0x812830c8`) places them at HD's operands.
+//!
+//! **Chosen, not measured: that a race load shows this screen.** No call site of the v1.04
+//! executable starts kind 7; a race load starts kind 4 (an event card or a controls still and a
+//! percentage box), which is not built. This is the screen 2048's own data authors in full.
 //!
 //! What differs from HD's, each read off the same functions:
 //!
@@ -14,13 +16,13 @@
 //!   picks between them on the byte at `0x8151cae8`, which is `0` in the image and has no writer
 //!   in the program, so the base (white-and-blue) art is the one the original draws. The `_fury`
 //!   pictures ship and are named but unreachable, so [`FEATURES`] carries the base style alone.
-//! - **The ground is white, chosen, not measured.** State 7 fills no ground (`HD_BG`, which the
-//!   constructor resolves, is read by no draw of state 7); the base pictures are opaque white to
+//! - **The ground is white, chosen, not measured.** Kind 7 fills no ground (`HD_BG`, which the
+//!   constructor resolves, is read by no draw of kind 7); the base pictures are opaque white to
 //!   their edge, which only shows nothing against a white ground. [`PALETTE`] therefore takes
 //!   `HD_White` for the ground, the one white global of 2048's `HD_Colours` block.
-//! - **No mode icon.** State 7 draws the panel's label (`FE_MODE_ICON`) and its four brackets
+//! - **No mode icon.** Kind 7 draws the panel's label (`FE_MODE_ICON`) and its four brackets
 //!   and nothing inside them; there is no clip and no still to name.
-//! - **The brand is HD's literal**, `WIPEOUT\u{ae} HD` (`0x814d0e24`), in the layout file.
+//! - **The brand is HD's literal**, `WIPEOUT(R) HD` (`0x814d0e24`), in the layout file.
 //! - **The colours are the four `HD_*` globals**, resolved by the constructor
 //!   (`LoadingScreen_Construct`, `0x8128074c`) the way HD's are.
 //!

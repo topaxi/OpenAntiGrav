@@ -1,15 +1,16 @@
-# Wipeout 2048: the race load's screen, HD's layout carried over.
+# Wipeout 2048: HD's feature screen as 2048's executable carries it, HD's layout carried over.
 # Read by oag_hud::loading_layout through the asset layers (docs/architecture/asset-layers.md), served
 # as the fallback layer's copy (an archive or a player override of the same path wins).
 #
-# 2048's draw function (FUN_812830c8 of the v1.04 eboot.elf, state 7; docs/ghidra/functions/vita-2048-eu-v104/
+# 2048's draw function (LoadingScreen_Draw, 0x812830c8 of the v1.04 eboot.elf, kind 7; docs/ghidra/functions/vita-2048-eu-v104/
 # loading-screen.md) was compared by its operands against LoadingScreen_HD.toml, element by element: the rules,
 # the caption arrow and caption, the five label squares, the four bracket sets, the dot bar's rectangle, the
 # picture window (0.875 by 0.9375 of 1024x512 at (180, 190), 896x480), both name-row arrows, the paragraph
 # (975, 215, wrap 780, pitch 40) are the same numbers, in the same 1920x1080 grid. The addresses in the
 # comments below are HD's (LoadingScreen_HD.toml). What is 2048's own: the brand is HD's literal
-# (0x814d0e24), and the mode icon's panel is a label and four brackets with nothing drawn in it (state 7
-# places no picture or clip there), so this file has no mode-icon element.
+# (0x814d0e24), and the mode icon's panel is a label and four brackets with nothing drawn in it (kind 7
+# places no picture or clip there), so this file has no mode-icon element. CHOSEN, NOT MEASURED: that a race
+# load of this build draws this screen; the retail executable starts kind 4 for it and never kind 7.
 #
 # Not carried because unread: the tournament screen (type 1) and the second `Title` pass at the caption.
 

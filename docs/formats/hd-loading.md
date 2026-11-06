@@ -379,6 +379,16 @@ code layout, and is what 2026-11-01's `hd-loading-layout` replaced:
 `--loading-draw` picking the original's feature. What remains is glyph rasterisation and the clip's and the
 bar's phase, which are not locked between the two.)
 
+**2048: ported, kind 7 dormant** ([2048-loading.md](2048-loading.md)): the same class, strings, deck and layout operands,
+but the retail executable starts its kind 4 for a race load. **The white ground over the name row, read
+2026-11-06:** the draw order is not the cause. 2048's `LoadingScreen_Draw` draws the picture, then the name and heading
+rows, then the paragraph, the order the layout file keeps (HD's heading row, `0x002b7738`, follows its picture,
+`0x002b76d8`; the name row's own call site was not located), and the rows do draw over the picture here. What shows is the HD styling's white pictures on the
+served archive's black ground: the four globals come from the served front end's `Skin.xml` (the dark `DATA00`), not
+from the chosen style's, so the white picture meets a black ground mid-row (y about 190 to 220). The original has a
+`Skin.xml` per style; reading the globals from the copy that carries the chosen style's ground is the fix, and
+is open.
+
 **Omega: ported.** Omega's loading screen is this one with `.gnf` files, a still for the mode icon and a string-id brand
 ([omega-loading.md](omega-loading.md)); the unpicked-style rule and the panel cut are title data and a layout rule, and
 carry over (Omega has one styling).

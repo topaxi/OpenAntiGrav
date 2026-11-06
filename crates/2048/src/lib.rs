@@ -20,9 +20,9 @@
 //!   gap: 2048 authors no `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary
 //!   anywhere, a touch-icon grid over a persistent scene instead
 //!   ([`oag_title::FrontEnd::touch`]).
-//! - [`Title::loading`] is `Some`: the race load's screen, HD's with the Vita's
-//!   `.gxt` marks and no mode icon, read off the v1.04 executable - see
-//!   [`loading`]. [`Title::music`] is `Some` since 2026-09-25:
+//! - [`Title::loading`] is `Some`: HD's feature screen (kind 7) with the Vita's
+//!   `.gxt` marks and no mode icon, read off the v1.04 executable - which starts
+//!   kind 4 for a race load and never this one, see [`loading`]. [`Title::music`] is `Some` since 2026-09-25:
 //!   `data/audio/sound/frontend.bnk`, the bank this thread's own evidence
 //!   first pointed at, turned out to carry no name table at all (so it
 //!   cannot be what a cue name addresses); the front end's music is instead
