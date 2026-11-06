@@ -206,6 +206,16 @@ fn lerp(e0: u8, e1: u8, w: u32) -> u8 {
     (((64 - w) * u32::from(e0) + w * u32::from(e1) + 32) >> 6) as u8
 }
 
+/// Red, green and blue of an endpoint in three 16-bit lanes, so one multiply
+/// interpolates all three: a lane holds at most `255 * 64 + 32`, which never
+/// carries into the next.
+fn pack(endpoint: [u8; 4]) -> u64 {
+    u64::from(endpoint[0]) | u64::from(endpoint[1]) << 16 | u64::from(endpoint[2]) << 32
+}
+
+/// The `+ 32` of [`lerp`] in each lane of [`pack`].
+const ROUND: u64 = 32 | 32 << 16 | 32 << 32;
+
 /// Reads one index per texel, the anchor texel of each subset one bit
 /// narrower (its top bit is known to be zero).
 ///
@@ -247,13 +257,26 @@ const ONE_SUBSET: [u8; 16] = [0; 16];
 pub(crate) fn bc7(block: &[u8; 16]) -> [[u8; 4]; 16] {
     // The mode is unary from bit 0: its number is the count of zero bits before
     // the first one.
-    if block[0] == 0 {
-        return [[0, 0, 0, 255]; 16];
+    match block[0].trailing_zeros() {
+        0 => decode_mode::<0>(block),
+        1 => decode_mode::<1>(block),
+        2 => decode_mode::<2>(block),
+        3 => decode_mode::<3>(block),
+        4 => decode_mode::<4>(block),
+        5 => decode_mode::<5>(block),
+        6 => decode_mode::<6>(block),
+        7 => decode_mode::<7>(block),
+        _ => [[0, 0, 0, 255]; 16],
     }
-    let mode_number = block[0].trailing_zeros();
-    let mode = &MODES[mode_number as usize];
+}
+
+/// [`bc7`] for a block of mode `MODE`. The mode is a constant here, so every
+/// field width and loop bound below folds away in the compiled copy for that
+/// mode.
+fn decode_mode<const MODE: usize>(block: &[u8; 16]) -> [[u8; 4]; 16] {
+    let mode = &MODES[MODE];
     let mut bits = BitStream::new(block);
-    bits.pos = mode_number + 1;
+    bits.pos = MODE as u32 + 1;
 
     let partition = bits.read(mode.partition_bits) as usize;
     let rotation = bits.read(mode.rotation_bits);
@@ -348,6 +371,7 @@ pub(crate) fn bc7(block: &[u8; 16]) -> [[u8; 4]; 16] {
     let color_weights = weights(color_bits);
     let alpha_weights = weights(alpha_bits);
 
+    let packed: [u64; 6] = std::array::from_fn(|e| pack(endpoint_rgba[e]));
     let mut out = [[0u8; 4]; 16];
     for t in 0..16 {
         let subset = subset_of[t] as usize;
@@ -355,9 +379,13 @@ pub(crate) fn bc7(block: &[u8; 16]) -> [[u8; 4]; 16] {
         let e1 = endpoint_rgba[2 * subset + 1];
         let cw = color_weights[color_index[t] as usize];
         let aw = alpha_weights[alpha_index[t] as usize];
-        let r = lerp(e0[0], e1[0], cw);
-        let g = lerp(e0[1], e1[1], cw);
-        let b = lerp(e0[2], e1[2], cw);
+        let colour = (packed[2 * subset] * u64::from(64 - cw)
+            + packed[2 * subset + 1] * u64::from(cw)
+            + ROUND)
+            >> 6;
+        let r = colour as u8;
+        let g = (colour >> 16) as u8;
+        let b = (colour >> 32) as u8;
         let a = lerp(e0[3], e1[3], aw);
         // Rotation swaps alpha with one colour channel. A choice of whole arrays,
         // not a `swap`: the swap caused a store-forwarding stall (over half this

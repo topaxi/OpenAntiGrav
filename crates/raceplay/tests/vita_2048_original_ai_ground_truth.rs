@@ -78,7 +78,7 @@ fn held(skill: f32, from: f32, to: f32) -> Option<Vec<Vec<(u8, f32)>>> {
     let mut race = race("2048 - Event 4", Some(skill))?;
     let mut out = Vec::new();
     while seconds(&race) <= to {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         if seconds(&race) >= from {
             let places = race.places();
             let field = race.original_ai_field().expect("the field is on");
@@ -243,7 +243,7 @@ fn fly_at(event: &str, respawns: u32, offset: f32) {
     let mut weapon = [None; 8];
     let mut owned = [0usize; 8];
     while seconds(&race) <= limit && !(1..8).all(|s| race.sim.world.ships[s].standing.finished()) {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         let mut now = [0usize; 8];
         for projectile in &race.sim.world.projectiles.slots {
             if projectile.kind.is_some() && usize::from(projectile.owner) < 8 {
@@ -410,7 +410,7 @@ fn the_super_phantom_field_runs_square_clean() {
     let mut lap = [1u32; 8];
     let mut per_lap: [Vec<f32>; 8] = Default::default();
     while seconds(&race) <= 120.0 {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         for slot in 1..8 {
             let ship = &race.sim.world.ships[slot];
             if ship.standing.lap != lap[slot] {
