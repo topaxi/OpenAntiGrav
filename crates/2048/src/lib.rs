@@ -20,9 +20,11 @@
 //!   gap: 2048 authors no `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary
 //!   anywhere, a touch-icon grid over a persistent scene instead
 //!   ([`oag_title::FrontEnd::touch`]).
-//! - [`Title::loading`] is `Some`: HD's feature screen (kind 7) with the Vita's
-//!   `.gxt` marks and no mode icon, read off the v1.04 executable - which starts
-//!   kind 4 for a race load and never this one, see [`loading`]. [`Title::music`] is `Some` since 2026-09-25:
+//! - [`Title::loading`] is `None`: a real gap rather than a structural one. The
+//!   executable's race load is `LoadingScreen` kind 4 (the mode's event card or a
+//!   controls still, and a `Blue2048` percentage box), read and not built; the HD
+//!   feature screen (kind 7) it also carries is started by no call site. See
+//!   `docs/formats/2048-loading.md`. [`Title::music`] is `Some` since 2026-09-25:
 //!   `data/audio/sound/frontend.bnk`, the bank this thread's own evidence
 //!   first pointed at, turned out to carry no name table at all (so it
 //!   cannot be what a cue name addresses); the front end's music is instead
@@ -61,7 +63,6 @@ use oag_title::{ArchiveCandidates, Platform, Title};
 pub mod campaign;
 pub mod frontend;
 pub mod hud;
-pub mod loading;
 pub mod main_menu;
 pub mod race;
 
@@ -139,7 +140,7 @@ pub const TITLE: &Title = &Title {
     rear_occlusion: None,
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
-    loading: Some(&loading::LOADING),
+    loading: None,
     music: Some(MUSIC),
     // Invented like the other four - and 2048 is the one title where that
     // is worth a second look: its `data/FE/Images/cursor.gxt` turned out to
@@ -521,26 +522,6 @@ pub fn open(source: &str) -> Result<Archives> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// 2048 names a loading screen: five illustrations and six marks as `.gxt`, one styling, no
-    /// mode icon and the deck the executable draws. `loading: None` again fails here.
-    #[test]
-    fn the_2048_names_a_loading_screen_of_gxt_files() {
-        let loading = TITLE.loading.expect("2048 names a loading screen");
-        assert_eq!(loading.features.len(), 1);
-        let style = &loading.features[0];
-        assert_eq!(style.features.len(), 5);
-        assert!(style.features.iter().all(|f| f.image.ends_with(".gxt")));
-        assert!(style.mode_icons.is_empty() && style.mode_stills.entries().next().is_none());
-        assert_eq!(loading.chrome.len(), 6);
-        assert!(
-            loading
-                .chrome
-                .iter()
-                .all(|(_, entry)| entry.ends_with(".gxt"))
-        );
-        assert!(loading.layout.is_some() && loading.deck.is_some());
-    }
 
     #[test]
     fn the_2048s_opponent_fire_law_is_measured_not_inherited() {

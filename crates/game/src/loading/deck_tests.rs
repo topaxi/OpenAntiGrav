@@ -121,15 +121,3 @@ fn only_the_named_modes_have_an_executable_id() {
     assert_eq!(executable_mode(Mode::Zone), None);
     assert_eq!(executable_mode(Mode::SpeedLap), None);
 }
-
-/// 2048 draws the same deck as HD from the same rows (`LoadingScreen_Construct`, `0x8128074c`):
-/// a single race never shows Flip, and Eliminator shows all five.
-#[test]
-fn the_2048_deck_is_hds_rows_with_a_four_wide_default() {
-    let assets = five(Some(oag_2048::loading::DECK));
-    assert_eq!(shown(&assets, Some(3), 200), titles(&[0, 1, 2, 3]));
-    assert_eq!(shown(&assets, Some(8), 300), titles(&[0, 1, 2, 3, 4]));
-    assert_eq!(shown(&assets, Some(0xd), 200), titles(&[0, 1, 3]));
-    assert_eq!(shown(&assets, Some(0xe), 50), titles(&[1]));
-    assert_eq!(shown(&assets, Some(6), 100), titles(&[0, 1]));
-}

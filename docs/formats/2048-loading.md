@@ -3,6 +3,8 @@
 **2048 ships HD's loading-screen class, and the retail executable starts a different kind of it for a race load.**
 Confidence 80 (a call-site census and a decompile, no running original: the machine has no Vita3K profile). The
 evidence is [vita-2048-eu-v104/loading-screen.md](../ghidra/functions/vita-2048-eu-v104/loading-screen.md).
+`oag_2048::TITLE.loading` is `None`, on purpose: the screen a Vita player sees is not built, and the one that is
+authored in full is never started.
 
 ## Two screens in one class
 
@@ -11,72 +13,56 @@ evidence is [vita-2048-eu-v104/loading-screen.md](../ghidra/functions/vita-2048-
 | **4** | the race load: the mode's event card (or a controls still), a `Blue2048`/`White2048` percentage box, `FE_LOADINGDOT` and a `%d%%` readout | by every race start (`FUN_8115f09a`, `FUN_811494fa`) |
 | **7** | HD's screen: caption naming the circuit, one of five illustrated features, a dotted progression bar | **by no call site** of the v1.04 executable |
 
-A Vita player's race load is kind 4. Kind 7 is HD's `LoadingScreen_Draw` carried over with its code, its strings and
-its ten illustrations, and nothing starts it. **This build draws kind 7** (`oag_2048::loading::LOADING`,
-`assets/fallback/Data/XML/LoadingScreen_2048.toml`) because it is the screen 2048's own data authors in full, and
-kind 4 (a card plus a percentage box, composed from the front end's event card) is not built. **Chosen, not
-measured:** that a race load of this build shows kind 7. A player of the original sees kind 4. Kind 4 is the open
-work, below.
+Every call of the starter `LoadingScreen_Start` (`0x812845ce`) was censused: eight calls, with `0` (presents), `4` (race
+start, three sites), `6` (boot and shutdown, three sites) and `8` (the epilepsy still). The argument is a literal at each.
 
-## What kind 7 is, in 2048
+**Why nothing is wired.** Kind 7 was wired in this lane (the layout is HD's operand for operand, minus the mode icon,
+the ten illustrations and six marks resolve, a white ground) and taken out again: it is a screen no 2048 player has
+seen, and a stand-in for the one they have. The evidence page keeps its operands. Kind 4 needs, and a lane that builds it
+should start from:
 
-- **Art.** All sixteen names resolve in `data.psarc`: the six marks (`corner`, `dot`, `square`, `line`,
-  `Title_Arrow_HD`, `Subtitle_Arrow_HD`) and the ten illustrations (`Barrel_Roll`, `Side_Shift_Tap`, `Pilot_Assist`,
-  `Absorb`, `Flip`, each with and without `_fury`), all `.gxt`. **Both arrows ship**: the Omega page's "the two arrows
-  were not listed" was a census gap, and the brief's "four of six marks" was wrong. The illustrations are 1024 by 512.
-  Asserted by `loading_ground_truth::every_entry_of_the_loading_table_is_in_the_package` (and
-  `the_unreached_fury_pictures_ship_beside_the_base_ones`, in `oag-2048`).
-- **One styling is reachable.** The loader picks `_fury` on a byte that is `0` in the image and has no writer
-  (confidence 70), so the table carries the base styling alone. The `_fury` pictures ship and nothing reaches them.
-- **The layout is HD's, operand for operand**, minus the mode icon: rules, caption, labels, brackets, the picture
-  window (896 by 480 at (180, 190)), the name and heading rows, the paragraph and the bar's rectangle. The grid is HD's
-  1920 by 1080; how it maps onto the Vita's 960 by 544 surface is unread.
-- **No mode icon.** The panel's label and brackets are drawn and nothing inside them (no clip, no still).
-- **The brand is HD's literal**, `WIPEOUT(R) HD`, at `0x814d0e24`. (The Omega page said the literal was `WIPEOUT`; it
-  is the whole of HD's.)
-- **The deck is HD's, row for row**, with a four-wide default and no Fury byte (mode `6`: two, `0xe`: one, `0xd` and
-  `0x15`: `0 1 3`, Eliminator `8` and `0x14`: five). Asserted in `deck_tests::the_2048_deck_is_hds_rows_with_a_four_wide_default`.
-  2048's own mode flags that also select the Eliminator row cannot be keyed by id and draw the default.
-- **The colours** are the four `HD_*` globals of the `HD_Colours` block of `Skin.xml`, which 2048 inherits from
-  HD's black-and-red archive: ink `969696`, accent `ac0717`, trough `64646480`. The ground is **chosen, not
-  measured**: kind 7 reads `HD_BG` nowhere and fills no ground, and the base pictures are opaque white to their edge,
-  which shows nothing only against white. The palette's ground is therefore `HD_White`, the one white global of the same
-  block. An earlier Vita3K walk records the load screen as light (mean luma 0.9,
-  [vita3k-capture.md](../reverse-engineering/vita3k-capture.md)), which fits a light ground (that screen was kind 4).
-- **The bar** fills with the time estimate (`progression: None`, chosen, not measured). 2048's ceiling is 94.62 at 0.115 a
-  frame against HD's 149.4 at 0.1.
-- **The circuit's name** in the caption comes from the caller: `--loading-screen ... --track` prints the track's own
-  stem (`altima`, `Vineta_K`), where a race started from the menus passes the catalogue label.
+1. The event card as a backdrop. The card's painter (`CampaignEventCard_DrawPanel`, `0x81055a16`, read in
+   `campaign-event-card.md`) is `oag_ui::frontend::Frontend::draw_event_card`, which lives in the front end's state and needs
+   the launched event's `EventCard`; `loading::Screen` has the front end's sprite sheet and none of that state, so the launch
+   must hand the event over.
+2. The mode test that picks the card or the still (vtable slot `+0x60`, unread) and which of our modes are on the HD
+   lineage; the controls still sits at (-32, 144), 1024 by 256.
+3. The percentage box: `Blue2048` (`0xff19295d`) and `White2048` (`0xffe1e4eb`), a 70 by 70 fill at (16, 16), a 338 by 4
+   bar at (86, 82), `FE_LOADINGDOT` at (105, 30), `%d%%` at (51, 38) at scale 0.6, a meter at (790, 475). Its fraction
+   is the bar's `+0x88 / 166`, ceiling `94.62 / 166` = 57 % until the loader raises the target (`FUN_812845b8`), which is the
+   56 % a stalled Vita3K load sat at ([vita3k-capture.md](../reverse-engineering/vita3k-capture.md)).
+4. A frame of the original. **None exists**: this machine has no Vita3K profile (no `~/.config/Vita3K`). The recipe is
+   `scripts/vita-2048-pair.py --walk` (`docs/tools/compare-page.md`, "2048 (Vita) pairs"): its walk waits "out the load on the loading bar" until a
+   dark frame, so grab frames every second between the mode card's tap and that frame.
 
-## Kind 4, not built
+## What ships (asserted)
 
-Read in the evidence page and summarised here so the next lane starts from it:
+All nine pictures kind 4 names resolve, and all sixteen kind 7 names (six marks, **both arrows included**, and ten
+illustrations): `oag-2048` `loading_ground_truth::every_picture_the_race_load_names_is_in_the_package` and
+`the_art_of_the_dormant_feature_screen_ships_whole`. The Omega page's "the two arrows were not listed" and the earlier
+"four of six marks" were a census gap. The illustrations are 1024 by 512. The loader picks `_fury` on a byte that is
+`0` in the image with no writer (confidence 70), so the base styling is the only one kind 7 reaches.
 
-1. Its backdrop is `CampaignEventCard_DrawPanel` for a mode whose vtable slot `+0x60` is `0`, and otherwise a
-   still at (-32, 144), 1024 by 256: `LoadingScreens/LoadingScreen_{racer,motion,wipeout}_controls.gxt` for an HD-lineage mode by
-   control scheme, `Title_Screen.gxt` otherwise.
-2. The percentage box is 70 by 70 at (16, 16) in `Blue2048`, a 338 by 4 bar at (86, 82), `FE_LOADINGDOT` at (105, 30)
-   and `%d%%` at (51, 38). `Blue2048` and `White2048` are in `Skin.xml`.
-3. The readout's ceiling is `94.62 / 166` = 57 %, which is the 56 % a Vita3K load sat at when it stalled.
+## Kind 7's operands, for the record
 
-Omega's "state 5" is the same screen (`omega-loading.md`, "Not wired").
+HD's, compared in `LoadingScreen_Draw` (`0x812830c8`): rules (160, 110) and (160, 975), 1600 by 8; caption arrow (160, 73);
+caption in `Title` at (194, 62); labels at (160, 48), (160, 125), (960, 125), (160, 670), (1510, 670); four bracket sets; the
+picture 896 by 480 at (180, 190) with uv 0.875 by 0.9375; name and heading rows at (175, 175) and (975, 175); the paragraph at
+(975, 215), wrap 780, pitch 40; the brand is HD's literal `WIPEOUT(R) HD` (`0x814d0e24`); the mode icon's panel is a label and
+brackets with nothing inside. The deck is HD's row for row (mode `6`: two, `0xe`: one, `0xd` and `0x15`: `0 1 3`, `8` and
+`0x14`: five, else `rand() % 4`). 2048 reads `FE_HD_BG` and draws it nowhere in kind 7; the picture's ground is white, so the
+ground that makes a base picture's overhang invisible is white. The kind draws the picture first and the rows over it.
 
 ## Against Omega and HD
 
-- **Omega: checked, differs.** Omega's race load is its kind 8 and draws HD's screen (a still per mode in the icon
-  panel, brand `MSC_WOOM_CAPS`); 2048's kinds are numbered differently (8 and 9 are the epilepsy and ESRB stills), and
-  2048's race load is kind 4. The marks, the pictures' sizes, the strings and the layout operands are the same files and
-  numbers, so `LoadingScreen_2048.toml` is `LoadingScreen_Omega.toml` with HD's brand and no mode icon.
-- **HD: ported.** Nothing in HD's loader changes. The generic loader's style pick is unchanged; 2048 names one
-  style, so a saved `FURY` falls back to it with the loader's note.
+- **Omega: checked, differs, and the check confirms Omega's wiring.** Omega's constructor `FUN_01708fe0` is called with
+  `EDI = 8` by `ModeManager_ConstructByMode` (`0x0124fe44`) and `FUN_01277470` (`0x01277752`) and with `7` by `Game_Main`
+  (`0x0163e71d`): the race start of Omega **is** the HD feature screen (its state 8), so `omega-loading.md`'s reading, which
+  had been taken from the thread body alone, holds. 2048's race start is its kind 4, which is Omega's unwired
+  "state 5" in shape (backdrop, `FE_LOADINGDOT`, a `%d%%` readout in a `Blue2048` box), so state 5 is **a different screen
+  on Omega** (not its race load) and the same screen on 2048. Omega's state 5 was not wired here.
+- **HD: ported.** Nothing changes in HD's loader.
 
 ## Looking at it
 
-```sh
-oag-game data/extracted/vita/PCSF00007 --no-audio --loading-screen 0/0 --loading-step race --ticks 0 \
-    --loading-draw 1 --mode single_race --track 'Data\art\published\environments\altima\track.vex' \
-    --size 1920x1080 --screenshot /tmp/2048_loading.png
-```
-
-`--loading-draw` picks the feature (`1` is Pilot Assist), `--mode eliminator` the five-wide deck. The original is
-unavailable here: no Vita3K frame of a race load exists.
+Nothing to look at: `oag-game data/extracted/vita/PCSF00007 --loading-screen ...` draws this build's generic counts screen.

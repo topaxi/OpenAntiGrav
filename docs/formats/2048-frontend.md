@@ -569,9 +569,9 @@ optional field on `FrontEnd` for a touch-driven front end, or a `MenuSkin`
 variant, either of which is a type decision bigger than a first sweep should
 make unasked. `loading` and `music` stayed `None` on narrower, ordinary
 evidence gaps (a real loading screen with no located plugin XML; a located
-bank with no read cues) rather than this structural one. **`loading` is `Some` since
-2026-11-06** ([2048-loading.md](2048-loading.md)): the class is HD's, its screen is in the executable and not a
-plugin XML, and a race load starts a different kind of it than the one wired.
+bank with no read cues) rather than this structural one. **`loading` is still `None`, and
+for a better reason as of 2026-11-06** ([2048-loading.md](2048-loading.md)): the class is HD's, its screen is in the
+executable and not a plugin XML, and the kind a race load starts (an event card and a percentage box) is read and not built.
 
 ### Resolved 2026-09-20: `front_end` is wired, and `menu` is the one field left `None`
 

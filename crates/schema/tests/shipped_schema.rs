@@ -67,10 +67,6 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
             "assets/fallback/Data/XML/LoadingScreen_Omega.toml",
             "screen-layout",
         ),
-        (
-            "assets/fallback/Data/XML/LoadingScreen_2048.toml",
-            "screen-layout",
-        ),
     ]
 }
 

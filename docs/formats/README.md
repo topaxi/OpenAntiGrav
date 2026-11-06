@@ -390,11 +390,10 @@ five illustrations, six marks and string ids as `.gnf`, the same layout operands
 (compared in the executable's draw function), one styling, and a still where HD
 plays a clip for the mode icon. Wired as `oag_omega::loading::LOADING`.
 
-**[2048 loading screen](2048-loading.md)** is the same class again, in `.gxt`: all sixteen
-names resolve, the layout is HD's minus the mode icon, and it is wired as
-`oag_2048::loading::LOADING`. Its finding is that the retail executable starts a different
-kind of the class for a race load (an event card or a still and a percentage box, not
-built), so the wired screen is the one 2048's data authors in full and no call site starts.
+**[2048 loading screen](2048-loading.md)** is the same class again, in `.gxt`, and its finding is
+that the retail executable starts a different kind of it for a race load (an event card or a
+still and a percentage box) than the HD feature screen it also carries. The former is read and
+not built, the latter has no caller, so `oag_2048::TITLE.loading` stays `None`.
 
 **[Omega front end](omega-frontend.md)** answers a player's own observation -
 "the Omega menu looks like HD/Fury's" - with a byte-level diff rather than a

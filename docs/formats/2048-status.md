@@ -126,9 +126,9 @@ the start line and runs the simulation. What it does **not** do, and why:
   more accurate name - "draws no MenuSkin-shaped menu ... race on it with
   `--race` instead" - where it used to refuse for "no front end at all."
   `loading` stayed `None` on the narrower gap this page already named: a
-  real percentage-bar loading screen with no located plugin XML. **It is `Some` since 2026-11-06**
-  ([2048-loading.md](2048-loading.md)): HD's feature screen is wired, and the percentage-bar screen
-  (the executable's kind 4, the one a race load starts) is read and not built.
+  real percentage-bar loading screen with no located plugin XML. **Re-read 2026-11-06**
+  ([2048-loading.md](2048-loading.md)): the percentage-bar screen is the executable's kind 4, the one a race
+  load starts; it is read and not built, and HD's feature screen (kind 7) beside it has no caller.
   **`music` is `Some` since 2026-09-25**: `frontend.bnk` turned out to
   carry no 16-byte name table (its names are FNV-1 hashes, [2048-xfx.md](2048-xfx.md#sblk-version-5-banks-names-are-hashes-95)),
   so what fills `Music::front_end` instead is

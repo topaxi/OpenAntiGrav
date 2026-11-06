@@ -333,6 +333,30 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
     }
 }
 
+/// A style chosen against the served front end's ground takes its colours from the skin file
+/// whose ground matches: HD's white pictures get the white ground, Fury's black ones keep the
+/// served black. Without it the white picture met a black ground mid-way down the feature's name
+/// row. Reading the globals from the served copy alone again fails the first assertion.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_style_takes_the_ground_its_own_pictures_were_drawn_for() {
+    let Some(image) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let source = image.display().to_string();
+    let (table, entries) = table_and_entries(&image);
+    let ground = |style: &str| {
+        let assets = Assets::load(&source, &table, entries.as_deref(), Some(style));
+        assert_eq!(
+            assets.style,
+            Some(if style == "HD" { "HD" } else { "FURY" })
+        );
+        assets.palette.expect("the four globals resolve").background
+    };
+    assert_eq!(ground(oag_hd::loading::STYLE_HD), [1.0, 1.0, 1.0, 1.0]);
+    assert_eq!(ground(oag_hd::loading::STYLE_FURY), [0.0, 0.0, 0.0, 1.0]);
+}
+
 /// An unpicked style is the style the menus are drawn in, and the whole screen follows it:
 /// the pictures, the mode icon's clip and the four globals.
 ///
@@ -825,100 +849,4 @@ fn omega_marks_are_drawn_the_way_up_hd_draws_them() {
              sheet fails)"
         );
     }
-}
-
-fn vita_2048() -> Option<PathBuf> {
-    oag_testdata::exact("data/extracted/vita/PCSF00007")
-}
-
-/// The screen 2048 draws is built from its own `.gxt` files: five features whose pictures are
-/// 1024 by 512 and in the sheet, all six marks (the arrows included), HD's four globals out of its
-/// own `Skin.xml`, the caption out of its English table, HD's brand literal, and no mode icon (its
-/// draw function places none).
-#[test]
-#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
-fn vita_2048_draws_its_loading_screen_from_its_own_files() {
-    let Some(source) = vita_2048() else { return };
-    let (table, entries) = table_and_entries(&source);
-    let assets = Assets::load(
-        &source.display().to_string(),
-        &table,
-        entries.as_deref(),
-        None,
-    );
-    for note in &assets.notes {
-        println!("{note}");
-    }
-    assert!(!assets.wave);
-    assert_eq!(assets.style, Some("HD"), "the one styling, unpicked");
-    assert_eq!(assets.caption.as_deref(), Some("LOADING..."));
-    assert_eq!(assets.features.len(), 5, "all five features resolve");
-    let art = assets.art.as_ref().expect("2048 ships art");
-    assert_eq!(art.illustrations.len(), assets.features.len());
-    for illustration in &art.illustrations {
-        assert_eq!(
-            (illustration[2], illustration[3]),
-            (1024.0, 512.0),
-            "the picture window is cut from a 1024 by 512 texture"
-        );
-    }
-    for mark in [
-        art.title_arrow,
-        art.subtitle_arrow,
-        art.rule,
-        art.corner,
-        art.dot,
-        art.square,
-    ] {
-        assert!(mark.is_some(), "a mark is missing from the sheet");
-    }
-    assert!(
-        assets
-            .notes
-            .iter()
-            .all(|note| !note.contains("did not decode") && !note.contains("no such string")),
-        "{:?}",
-        assets.notes
-    );
-    let palette = assets
-        .palette
-        .expect("HD's four globals resolve out of 2048's Skin.xml");
-    assert_eq!(
-        palette.background,
-        [1.0, 1.0, 1.0, 1.0],
-        "the picture's own ground"
-    );
-    assert_eq!(
-        palette.ink[..3],
-        [150.0 / 255.0; 3],
-        "HD_Grey of 2048's HD_Colours"
-    );
-
-    let layouts = assets.layout.as_ref().expect("2048's layout loads");
-    let layout = layouts
-        .for_race("single_race", 16.0 / 9.0)
-        .expect("it answers a single race");
-    let brand = layout
-        .elements
-        .iter()
-        .find(|element| element.id == "label-title")
-        .and_then(|element| element.text.as_deref())
-        .expect("the brand is HD's literal");
-    assert_eq!(brand, "WIPEOUT\u{ae} HD");
-    assert!(
-        layout
-            .elements
-            .iter()
-            .all(|element| element.id != "mode-icon"),
-        "state 7 draws nothing in the mode icon's panel"
-    );
-    assert!(assets.mode_icons.is_empty(), "no clip");
-    let stills = art
-        .mode_stills
-        .as_ref()
-        .expect("the table is present, empty");
-    assert!(
-        (0..0x20).all(|mode| stills.get(Some(mode)).is_none()),
-        "no still"
-    );
 }

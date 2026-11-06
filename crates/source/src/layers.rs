@@ -170,10 +170,6 @@ pub fn fallback_layer() -> Layer {
         include_bytes!("../../../assets/fallback/Data/XML/LoadingScreen_Omega.toml"),
     );
     layer.insert_bytes(
-        "Data\\XML\\LoadingScreen_2048.toml",
-        include_bytes!("../../../assets/fallback/Data/XML/LoadingScreen_2048.toml"),
-    );
-    layer.insert_bytes(
         "Data\\Psys\\Tex\\OAGSplash.oagmask",
         include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGSplash.oagmask"),
     );

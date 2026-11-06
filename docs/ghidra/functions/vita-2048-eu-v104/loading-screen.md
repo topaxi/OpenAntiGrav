@@ -3,8 +3,8 @@
 Functions in `eboot.elf` (WipEout 2048, Vita, `PCSF00007` patch v1.04), image base `0x81000000`. Every name here
 is applied from [names.tsv](names.tsv). The screen is HD's `LoadingScreen` class carried over
 ([ps3-hdfury-eu/loading-screen.md](../ps3-hdfury-eu/loading-screen.md) is the reading it is compared against); the
-format-side page is [2048-loading.md](../../../formats/2048-loading.md). Implemented, in part, by
-`oag_2048::loading` (state 7, see "The race load starts kind 4, not kind 7").
+format-side page is [2048-loading.md](../../../formats/2048-loading.md). **Not implemented**: a race load starts kind 4
+(below), which is unbuilt, and kind 7 is started by no call site. `oag_2048::TITLE.loading` stays `None`.
 
 ## The object and its kinds
 
@@ -30,7 +30,9 @@ kind would not show; none of the eight does).
 ## Kind 7: HD's feature screen (`LoadingScreen_Draw`, `0x812830c8`)
 
 The same screen as HD's `LoadingScreen_Draw` (`0x002b61c8`) and Omega's state 8, compared by operand. The kind
-exists in the code and is dormant.
+exists in the code and is **dormant**: nothing starts it, so nothing in this build draws it. It was wired and drawn once
+in this lane (white ground, base art, HD's layout operands) and taken out when the call-site census showed a
+player never sees it; the operands stay here for whoever needs them.
 
 `LoadAssets` kind 7 loads the six marks in this order, as `.gxt`: `data/FE/Images/corner`, `dot`, `data/Fe/Images/square`,
 `line`, `Title_Arrow_HD`, `Subtitle_Arrow_HD` (object `+0x2c` to `+0x40`), then, when the type is `0`
@@ -113,8 +115,14 @@ What a Vita player sees on a race load. Read, **not built** (the Omega page's "s
   `CampaignEventCard_DrawPanel(0, 0, 1.0, mode)` (or `FUN_81056e90` when `mode+0x1a0 & 4`); any other mode draws a
   still, `+0x18`, at (-32, 144), 1024 by 256: for a mode on the HD lineage (`GameMode_IsHdLineage`) one of
   `LoadingScreens/LoadingScreen_{racer,motion,wipeout}_controls.gxt` by the control scheme (`DAT_818a5098`: 1 racer,
-  2 motion, else wipeout), otherwise `Title_Screen.gxt` (`LoadAssets` also loads `Post_Race_Medals.gxt`, `loading_screen_demo_bar.gxt` and one of
-  three `Team_Logos_*` at random).
+  2 motion, else wipeout), otherwise `Title_Screen.gxt` (`LoadAssets` also loads `Post_Race_Medals.gxt`,
+  `loading_screen_demo_bar.gxt` and one of three team logos at random, `data/FE/NewImages/Team_Logos/{AG_Systems2048,
+  Feisar2048, Qirex2048}.gxt`, `rand() % 3`, from the pointer table at `0x815248ac`). All nine pictures ship
+  (`loading_ground_truth::every_picture_the_race_load_names_is_in_the_package`).
+- **Not read, and why this build does not draw it:** vtable slot `+0x60` of the mode (what separates the card
+  from the still), `FUN_8105021c` and `FUN_81056e90` (the other two backdrops), `FUN_8105d4a8` (the meter at (790, 475)),
+  the card's `mode` argument (`CampaignEventCard_DrawPanel(slide, event)`'s second argument is the *event*, and the
+  load has no event card state of its own), and which of our `oag_race::Mode`s are on the HD lineage.
 - A percentage box: `Blue2048` (`0xff19295d`) and `White2048` (`0xffe1e4eb`) of `Skin.xml`, a 70 by 70 fill at (16,16),
   a bar fill (86,82) 338 by 4, `FE_LOADINGDOT` at (105,30) in the `default` face, `%d%%` of `+0x88 * 0.006024096 * 100`
   (1/166) at (51,38) at scale 0.6, and `FUN_8105d4a8(+0x88 / 166, 790, 475, Blue2048)` at the bottom right.
