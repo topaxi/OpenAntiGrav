@@ -211,6 +211,10 @@ impl Scene {
         viewport: (f32, f32, f32, f32),
         race: &Race,
     ) {
+        // HD's own chain draws its ring (`Self::run_hd`); a second one over it would double it.
+        if self.hd.is_some() {
+            return;
+        }
         let Some(tuning) = race.borrowed_zoom_tuning() else {
             return;
         };

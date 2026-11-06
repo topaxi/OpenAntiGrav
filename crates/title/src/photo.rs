@@ -24,6 +24,10 @@ pub enum Row {
     Reset,
     /// Choosing the craft.
     Ship,
+    /// The speed blur row.
+    SpeedBlur,
+    /// The depth of field row.
+    Depth,
 }
 
 /// The disc string id, in the title's own string table, that words each [`Row`], or `None` where
@@ -37,6 +41,8 @@ pub struct Strings {
     pub pan: Option<&'static str>,
     pub reset: Option<&'static str>,
     pub ship: Option<&'static str>,
+    pub speed_blur: Option<&'static str>,
+    pub depth: Option<&'static str>,
 }
 
 impl Strings {
@@ -49,6 +55,8 @@ impl Strings {
         pan: None,
         reset: None,
         ship: None,
+        speed_blur: None,
+        depth: None,
     };
 
     /// Pulse's `Photo Mode Top Level`: its two rows (`docs/ui/photo-mode.md`, "Pulse").
@@ -68,6 +76,8 @@ impl Strings {
         pan: Some("MSC_PHOTO_PAN"),
         reset: Some("MSC_PHOTO_RESET"),
         ship: Some("MSC_PHOTO_SHIP"),
+        speed_blur: Some("MSC_PHOTO_SPEED"),
+        depth: Some("MSC_PHOTO_DEPTH"),
     };
 
     /// The disc id for `row`.
@@ -81,6 +91,8 @@ impl Strings {
             Row::Pan => self.pan,
             Row::Reset => self.reset,
             Row::Ship => self.ship,
+            Row::SpeedBlur => self.speed_blur,
+            Row::Depth => self.depth,
         }
     }
 }
@@ -99,6 +111,8 @@ mod tests {
             Row::Pan,
             Row::Reset,
             Row::Ship,
+            Row::SpeedBlur,
+            Row::Depth,
         ] {
             assert_eq!(Strings::NONE.disc_id(row), None);
         }

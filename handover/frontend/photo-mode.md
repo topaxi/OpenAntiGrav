@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-06
-summary: "The shared photo mode is wired on all five titles (docs/ui/photo-mode.md, What ours does); photo-effects through oag-post and the follow-ups are open"
+summary: "Photo mode and its picture controls run on all five titles (docs/ui/photo-mode.md); motion blur, accumulated depth of field and follow-ups are open"
 ---
 
 # Photo mode
@@ -28,7 +28,7 @@ limits.
 - Omega's update `FUN_0155e450`: unread, with its recipe. Not needed for the shared mode.
 - 2048: who writes `this+0x10c = 4` (track camera in the touch mode).
 - Pulse PS2: the screens' XML was not read; no save path in its binary.
-- Depth of field on HD and 2048's two laws, and accumulated blur (7 and 120 frames), need `oag-post`.
+- Accumulated depth of field and motion blur (7 and 120 frames, shutter `(v * 0.01)^2 * 0.25`): how a craft's motion gets into a frozen race was never read, and the simulation must not tick. The aperture target `0x003bad38` (one float) has no reader chased; the pass's aperture reach is chosen.
 
 ## Next Steps
 
@@ -54,16 +54,21 @@ in that page's lineage and `git log`; what is left from it is here.
 - **Mods.** `photo_mode` is a new `menu.toml` action name; the mod author skill lists actions only
   as "a closed set", so it needed no change.
 
-### `photo-effects`: through `oag-post`, after `photo-wire`
+### `photo-effects`: landed
 
-| Feature | Take | Over | Why | Conf. |
-| --- | --- | --- | --- | ---: |
-| Exposure | HD's law, `(v - 33.3) * -0.03003`, opening at `33.3 - 33.3 g` | Omega's fixed `50%` | Opens on the picture already on screen. `g` is 0 on a title with no grade, so it opens at 33 | 90 |
-| Saturation | HD's `v * 0.05`, opens 20% | Omega: removed | | 90 |
-| Speed blur | HD, 0 to 100, step 5 | Omega: removed | | 84 |
-| Depth of field | HD's focus curve `d` in 3 to 493, aperture, focus | 2048's touch law | Same formula in HD and 2048's own pad code, so it is the better-attested one | 84 |
-| Effect choice | Omega's two lists, blur and depth independent | HD's single list | More shots possible, if the pipeline can run both | 80 |
-| Motion blur | HD and 2048's track and ship, shutter sets its strength | | Shutter is not an exposure control: `(v * 0.01)^2 * 0.25`, used only by motion blur. Needs the conflict below settled | 84 |
+Exposure, saturation, speed blur and depth of field run through `oag_post::photo_fx` and the zoom ring on all
+five titles, with HD's laws and independent blur and depth rows (`docs/ui/photo-mode.md`, "Picture
+controls", says what is chosen). What is left from that table:
+
+- **Motion blur and its shutter** (HD, 2048; Omega's `Photo Use MB`): needs the craft's motion on a frozen
+  race, and the simulation must not tick. A design of its own (a per-craft pose delta from the last two
+  ticks into the velocity buffer is the obvious start), or it stays out.
+- **Accumulated depth of field** (7 frames) and the 2048 law, if a better picture is wanted than the single
+  gather.
+- **HD's aperture reader** (`0x003bad38`) and its exposure shader: unread, so the aperture reach and the
+  exposure curve are chosen.
+- **The glow Pulse and Pure add over the HUD** is not graded or blurred.
+- **GL** was not run.
 
 ### Conflicts to settle
 
@@ -82,5 +87,5 @@ in that page's lineage and `git log`; what is left from it is here.
    above is the fallback, chosen on the other titles.
 7. **One stick.** Rotate, pan and zoom assume two sticks. A keyboard or a one-stick device needs its own
    binding; 2048's touch gestures (drag, two-finger roll and zoom) are the phone follow-up.
-8. **Effect rows on a low tier.** An effect `oag-post` cannot do is left out and named, per the draft, so the
-   one screen has rows that vary by build, not by title.
+8. **Effect rows on a low tier.** Every effect the pass runs is on every title; none is left out on a tier. A
+   pass that fails to build is reported and the frame draws without it.

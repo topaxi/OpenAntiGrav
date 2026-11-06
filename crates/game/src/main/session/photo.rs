@@ -105,7 +105,9 @@ impl super::Session {
         let Stage::Race(stage) = &mut self.stage else {
             return;
         };
-        if !stage.race.photo_begin(select, square) {
+        if !stage
+            .race
+            .photo_begin(select, square, Some(oag_source::title::borrowed_zoom_ring())) {
             return;
         }
         info!("photo mode opened ({origin:?})");
@@ -173,12 +175,29 @@ impl super::Session {
                     None
                 }
             });
+            let row = grid.at.and_then(|at| {
+                stage
+                    .race
+                    .photo()
+                    .and_then(|p| photo::row_at(p, grid_size, at))
+            });
+            if let Some(row) = row {
+                stage.race.photo_effects(|effects| {
+                    effects.select(row.row);
+                    if row.step != 0 {
+                        effects.adjust_row(row.row, row.step);
+                    }
+                });
+            }
             match hit {
+                Some(Chip::Effects) => stage.race.photo_toggle_panel(),
                 Some(Chip::Camera) => stage.race.photo_cycle_lens(),
                 Some(Chip::Hud) => stage.race.photo_toggle_hud(),
                 Some(Chip::Take) => pad.shot = true,
                 Some(Chip::Back) => pad.leave = true,
-                None if !stage.race.photo().is_some_and(|p| p.help()) => pad.help = true,
+                None if row.is_none() && !stage.race.photo().is_some_and(|p| p.help()) => {
+                    pad.help = true;
+                }
                 None => {}
             }
         }
@@ -304,6 +323,24 @@ impl super::Session {
             },
             open.message.as_ref().map(|(text, _)| text.as_str()),
         )
+    }
+
+    /// The drive's reading of the picture controls while the mode is open.
+    pub(crate) fn photo_fx_name(&self) -> Option<String> {
+        use oag_raceplay::photo::effects::Row;
+        let Stage::Race(stage) = &self.stage else {
+            return None;
+        };
+        let effects = stage.race.photo()?.effects();
+        Some(format!(
+            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={}",
+            effects.value(Row::Exposure),
+            effects.value(Row::Saturation),
+            effects.value(Row::SpeedBlur),
+            if effects.value(Row::DepthOfField) == 1 { "on" } else { "off" },
+            effects.value(Row::Aperture),
+            effects.value(Row::Focus),
+        ))
     }
 
     /// The drive's name for the mode: the lens, or `none`.

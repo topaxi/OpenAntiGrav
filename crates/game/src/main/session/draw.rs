@@ -326,6 +326,14 @@ impl Session {
         // Read before `self.stage` is borrowed mutably below, for the same
         // reason `pvs_culling` is.
         let render_profile = self.governed_profile();
+        // Photo mode frames one still picture: the game's motion blur smears a frozen race
+        // (the camera the player flies moves the velocity buffer), so the mode draws none
+        // whatever the setting says, and leaving puts the player's setting back untouched.
+        let motion_blur = if self.photo.is_some() {
+            oag_display::display::MotionBlur::Off
+        } else {
+            render_profile.motion_blur
+        };
         // Diagnostic only, and read before the match for the same reason
         // `pvs_culling` is: whether this is the frame `race_ready_at` is still
         // waiting on. Splits `Session::race_ready_at`'s single "since the scene
@@ -392,7 +400,7 @@ impl Session {
                         self.settings.graphics.frustum_culling,
                         pvs_culling,
                         self.anim_seconds,
-                        render_profile.motion_blur,
+                        motion_blur,
                         render_profile.shadows,
                         // No jitter: `temporal` below stays `None` for this
                         // stage, so there is no reconstruction pass to feed a
@@ -479,7 +487,7 @@ impl Session {
                     self.settings.graphics.frustum_culling,
                     pvs_culling,
                     self.anim_seconds,
-                    render_profile.motion_blur,
+                    motion_blur,
                     render_profile.shadows,
                     // **Derived from the upscaler, not read from the flag**,
                     // and computed here because this is the one place that

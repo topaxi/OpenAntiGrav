@@ -7,6 +7,10 @@
 
 use super::*;
 
+/// The near plane every race projection uses, in world units.
+#[cfg(feature = "view")]
+pub const NEAR_PLANE: f32 = 1.0;
+
 /// Converts the disc's `pos_length` into the one
 /// [`ChaseParams::pos_length`] documents.
 ///
@@ -652,7 +656,7 @@ impl Race {
     /// fixed fov instead misregisters by 1.12-1.26x depending on the tick's speed.
     #[must_use]
     pub fn projection(&self, aspect: f32, far: f32, setting: oag_display::display::Fov) -> Mat4 {
-        oag_render::camera::projection(self.vertical_fov(aspect, setting), aspect, 1.0, far)
+        oag_render::camera::projection(self.vertical_fov(aspect, setting), aspect, NEAR_PLANE, far)
     }
 
     /// The camera the per-frame `LodGroup` switch runs from this frame: the

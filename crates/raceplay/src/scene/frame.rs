@@ -247,6 +247,10 @@ impl Scene {
             blur_lens,
             blur_timestamps,
         );
+        // Photo mode's picture controls, last of all: they grade and blur the finished frame.
+        if whole {
+            self.run_photo_fx(device, queue, encoder, view, viewport, race);
+        }
         oag_gpu::perfprobe::mark("post-chain");
         (hd_bloom_encoded, blur_encoded)
     }

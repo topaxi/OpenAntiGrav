@@ -516,6 +516,14 @@ OAG_PHOTO_SHIP = { text = "SHIP", human = false }
 OAG_PHOTO_HELP = { text = "HIDE HELP", human = false }
 OAG_PHOTO_SAVED = { text = "PHOTO SAVED", human = false }
 OAG_PHOTO_FAILED = { text = "PHOTO NOT SAVED", human = false }
+OAG_PHOTO_EFFECTS = { text = "EFFECTS", human = false }
+OAG_PHOTO_EXPOSURE = { text = "EXPOSURE", human = false }
+OAG_PHOTO_SATURATION = { text = "SATURATION", human = false }
+OAG_PHOTO_SPEED_BLUR = { text = "SPEED BLUR", human = false }
+OAG_PHOTO_DEPTH = { text = "DEPTH OF FIELD", human = false }
+OAG_PHOTO_APERTURE = { text = "APERTURE", human = false }
+OAG_PHOTO_FOCUS = { text = "FOCUS", human = false }
+OAG_PHOTO_PANEL_KEYS = { text = "STICK UP DOWN ROW    LEFT RIGHT CHANGE", human = false }
 
 # The hint under a settings page's rows while the selected row is off its default,
 # also what a click or a tap on it does. Ours, in no original.

@@ -297,16 +297,160 @@ fn a_tap_on_square_turns_the_hud_on_and_a_pan_does_not() {
 }
 
 #[test]
-fn start_hides_and_shows_the_help() {
+fn start_cycles_the_help_then_the_effects_panel_then_neither() {
     let mut photo = Photo::new(0, false, None);
     let start = Pad {
         help: true,
         ..Pad::default()
     };
     photo.step(start, &[0]);
-    assert!(!photo.help());
+    assert!(photo.help() && photo.panel(), "the panel after the help");
     photo.step(start, &[0]);
-    assert!(photo.help());
+    assert!(!photo.help() && !photo.panel(), "then neither");
+    photo.step(start, &[0]);
+    assert!(photo.help() && !photo.panel(), "and the help again");
+}
+
+fn pushed(x: f32, y: f32) -> Pad {
+    stick(x, y)
+}
+
+fn on_the_panel() -> Photo {
+    let mut photo = Photo::new(0, false, None);
+    photo.toggle_panel();
+    photo
+}
+
+#[test]
+fn on_the_panel_the_stick_moves_the_cursor_and_the_value_and_the_camera_stands_still() {
+    use effects::Row;
+    let mut photo = on_the_panel();
+    let pose = photo.pose(&craft(0), None);
+    assert_eq!(photo.effects().selected(), Row::Exposure);
+    // Down is negative on the stick; the list reads downward.
+    photo.step(pushed(0.0, -1.0), &[0]);
+    photo.step(pushed(0.0, 0.0), &[0]);
+    assert_eq!(photo.effects().selected(), Row::Saturation);
+    photo.step(pushed(1.0, 0.0), &[0]);
+    photo.step(pushed(0.0, 0.0), &[0]);
+    assert_eq!(photo.effects().value(Row::Saturation), 21);
+    assert_eq!(
+        photo.effects().value(Row::Exposure),
+        33,
+        "only the cursor's row moved"
+    );
+    assert_eq!(photo.pose(&craft(0), None), pose, "the camera did not move");
+}
+
+#[test]
+fn a_held_push_repeats_after_a_pause() {
+    use effects::Row;
+    let mut photo = on_the_panel();
+    for _ in 0..60 {
+        photo.step(pushed(1.0, 0.0), &[0]);
+    }
+    let moved = photo.effects().value(Row::Exposure) - 33;
+    assert!(moved > 10, "a held push keeps going: {moved}");
+    assert!(moved < 40, "but not at the tick rate: {moved}");
+}
+
+#[test]
+fn every_control_opens_neutral_and_returning_to_its_opening_is_neutral_again() {
+    use effects::{Effects, Row};
+    let mut effects = Effects::new();
+    assert!(effects.is_neutral());
+    assert!(
+        effects
+            .params(1.0, 500.0)
+            .grade
+            .is_some_and(|g| g.is_neutral())
+    );
+    effects.select(Row::Exposure);
+    effects.adjust(1);
+    assert!(!effects.is_neutral());
+    effects.adjust(-1);
+    assert!(effects.is_neutral(), "back where it opened");
+    effects.select(Row::SpeedBlur);
+    effects.adjust(1);
+    assert_eq!(effects.value(Row::SpeedBlur), 5, "HD's step");
+    assert!((effects.speed_blur() - 0.05).abs() < 1e-6);
+    effects.adjust(-1);
+    effects.select(Row::DepthOfField);
+    effects.adjust(1);
+    assert!(!effects.is_neutral());
+    assert_eq!(
+        effects.rows().len(),
+        6,
+        "aperture and focus appear with depth of field"
+    );
+    effects.adjust(-1);
+    assert_eq!(effects.rows().len(), 4);
+    assert!(effects.is_neutral());
+}
+
+#[test]
+fn the_sliders_stop_at_zero_and_a_hundred_and_the_opening_values_are_hds() {
+    use effects::{Effects, Row};
+    let mut effects = Effects::new();
+    assert_eq!(effects.value(Row::Saturation), 20);
+    assert_eq!(effects.value(Row::Exposure), 33);
+    effects.select(Row::Saturation);
+    for _ in 0..200 {
+        effects.adjust(1);
+    }
+    assert_eq!(effects.value(Row::Saturation), 100);
+    // 100 * 0.05 = 5, HD's top.
+    let grade = effects.params(1.0, 500.0).grade.expect("a grade");
+    assert!((grade.saturation - 5.0).abs() < 1e-5);
+    for _ in 0..200 {
+        effects.adjust(-1);
+    }
+    assert_eq!(effects.value(Row::Saturation), 0);
+    assert!(
+        effects
+            .params(1.0, 500.0)
+            .grade
+            .expect("a grade")
+            .saturation
+            .abs()
+            < 1e-5
+    );
+}
+
+#[test]
+fn exposure_up_is_brighter_and_the_effects_die_with_the_mode() {
+    use effects::Row;
+    let mut photo = on_the_panel();
+    photo.effects_mut().adjust(1);
+    assert!(photo.effects().value(Row::Exposure) > 33);
+    let grade = photo.effects().params(1.0, 500.0).grade.expect("a grade");
+    assert!(grade.exposure > 0.0, "more exposure is more light");
+    let fresh = Photo::new(0, false, None);
+    assert!(
+        fresh.effects().is_neutral(),
+        "a mode opened again starts neutral"
+    );
+}
+
+#[test]
+fn the_speed_blur_is_the_zoom_ring_held_at_the_rows_value_and_needs_the_ring() {
+    use effects::Row;
+    let mut photo = on_the_panel();
+    photo.effects_mut().select(Row::SpeedBlur);
+    photo.effects_mut().adjust(4);
+    assert!(photo.speed_blur().is_none(), "no ring handed in, no streak");
+    let mut photo = photo.with_zoom(Some(crate::zoom::tuning(&oag_hd::race::ZOOM_RING)));
+    let (_, frame) = photo.speed_blur().expect("a pulse");
+    assert!((frame.boost - 0.2).abs() < 1e-6 && frame.damage == 0.0);
+    let first = frame.tick;
+    photo.step(stick(0.0, 0.0), &[0]);
+    assert_ne!(
+        photo.speed_blur().expect("a pulse").1.tick,
+        first,
+        "a tick of its own per step"
+    );
+    photo.effects_mut().adjust(-4);
+    assert!(photo.speed_blur().is_none(), "at zero the ring is off");
 }
 
 #[test]

@@ -142,6 +142,10 @@ pub struct State {
     /// `stage=race`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub photo: Option<String>,
+    /// Photo mode's picture controls as `exposure=33 saturation=20 speed_blur=0 dof=off
+    /// aperture=40 focus=20`, while it is open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub photo_fx: Option<String>,
     /// The end-of-race screen on top, `photo` for `Race End Photo` and `other` for the rest,
     /// on `stage=race` once the race has ended with an end-of-race flow built.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -192,6 +196,7 @@ impl State {
             "screen.id" => one(screen.map(|s| s.id.clone())),
             "title" => one(screen.map(|s| s.title.clone())),
             "photo" => one(self.photo.clone()),
+            "photo_fx" => one(self.photo_fx.clone()),
             "endrace" => one(self.endrace.clone()),
             "focus" => screen
                 .and_then(|s| s.focus.as_ref())
@@ -241,6 +246,7 @@ impl State {
                 | "title"
                 | "focus"
                 | "photo"
+                | "photo_fx"
                 | "endrace"
         ) || key.strip_prefix("race.").is_some_and(|rest| {
             matches!(

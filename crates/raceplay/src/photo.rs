@@ -24,6 +24,9 @@
 
 use super::*;
 
+pub mod effects;
+
+use effects::Effects;
 use finish_camera::Subject;
 use oag_render::camera::craft_view;
 use oag_render::camera::destroy::Destroy;
@@ -47,6 +50,12 @@ pub const PAN_LIMIT: f32 = 5.0;
 pub const CLOSE_FOV: (f32, f32, f32) = (10.0, 100.0, 65.0);
 /// The `track` lens's vertical field, in degrees: `(least, greatest, opening)`.
 pub const TRACK_FOV: (f32, f32, f32) = (3.0, 40.0, 20.0);
+
+/// The stick deflection that counts as a push on the effects panel.
+const PUSH: f32 = 0.5;
+/// Ticks a push is held before it repeats, and between repeats once it does.
+const REPEAT_AFTER: u32 = 14;
+const REPEAT_EVERY: u32 = 3;
 
 /// The turn at which an angle wraps.
 const WRAP: f32 = std::f32::consts::TAU;
@@ -124,6 +133,15 @@ pub struct Photo {
     age: u32,
     /// Whether a circuit node is there to put the `track` lens on.
     track_available: bool,
+    /// The picture controls, and whether their panel is up (the stick then moves its cursor
+    /// and the camera stands still).
+    effects: Effects,
+    panel: bool,
+    /// Ticks the stick has been pushed the same way on the panel, per axis: `(x, y)`.
+    held: (i32, i32),
+    held_ticks: (u32, u32),
+    /// The zoom ring's numbers, for the speed blur: HD's, handed in by the composition root.
+    zoom: Option<oag_post::hd_zoom::Tuning>,
     select_down: bool,
     select_used: bool,
     square_down: bool,
@@ -153,6 +171,11 @@ impl Photo {
             help: true,
             age: 0,
             track_available,
+            effects: Effects::new(),
+            panel: false,
+            held: (0, 0),
+            held_ticks: (0, 0),
+            zoom: None,
             select_down: false,
             select_used: false,
             square_down: false,
@@ -170,6 +193,75 @@ impl Photo {
         self.square_down = square;
         self.square_used = square;
         self
+    }
+
+    /// The mode with the zoom ring's numbers the speed blur plays. Without them the row does
+    /// nothing.
+    #[must_use]
+    pub fn with_zoom(mut self, tuning: Option<oag_post::hd_zoom::Tuning>) -> Self {
+        self.zoom = tuning;
+        self
+    }
+
+    /// The picture controls.
+    #[must_use]
+    pub fn effects(&self) -> &Effects {
+        &self.effects
+    }
+
+    /// The picture controls, to change.
+    pub fn effects_mut(&mut self) -> &mut Effects {
+        &mut self.effects
+    }
+
+    /// Whether the effects panel is up.
+    #[must_use]
+    pub fn panel(&self) -> bool {
+        self.panel
+    }
+
+    /// Shows or hides the effects panel, showing the help it sits in.
+    pub fn toggle_panel(&mut self) {
+        self.panel = !self.panel;
+        if self.panel {
+            self.help = true;
+        }
+        self.held = (0, 0);
+        self.held_ticks = (0, 0);
+    }
+
+    /// START: help, then the effects panel, then neither.
+    fn cycle_help(&mut self) {
+        if !self.help {
+            self.help = true;
+        } else if !self.panel {
+            self.toggle_panel();
+        } else {
+            self.help = false;
+            self.panel = false;
+        }
+    }
+
+    /// The zoom ring's numbers and the pulse the speed blur holds, when the row is above zero.
+    #[must_use]
+    pub fn speed_blur(&self) -> Option<(oag_post::hd_zoom::Tuning, oag_post::hd_zoom::Frame)> {
+        let blur = self.effects.speed_blur();
+        let tuning = self.zoom?;
+        (blur > 0.0).then(|| {
+            (
+                tuning,
+                oag_post::hd_zoom::Frame {
+                    boost: blur,
+                    // The original writes the damage pulse too, which tints the streak red;
+                    // a speed blur does not read as damage here.
+                    damage: 0.0,
+                    size: [1.0, 1.0],
+                    // A tick of the mode's own, far from any the race counts: the ring's
+                    // history advances once per tick of it, and the race is not stepping.
+                    tick: u64::MAX / 2 + u64::from(self.age),
+                },
+            )
+        })
     }
 
     /// The lens that is up.
@@ -301,7 +393,7 @@ impl Photo {
             return Action::Leave;
         }
         if pad.help {
-            self.help = !self.help;
+            self.cycle_help();
         }
         if pad.reset {
             self.reset();
@@ -315,12 +407,47 @@ impl Photo {
         if !live.contains(&self.subject) {
             self.step_subject(true, live);
         }
-        self.drive(pad);
+        if self.panel {
+            self.push(pad.stick);
+        } else {
+            self.drive(pad);
+        }
         self.taps(pad);
         if pad.shot && self.armed() {
             return Action::Shot;
         }
         Action::None
+    }
+
+    /// What the stick does on the effects panel: up and down move the cursor, left and right
+    /// change the row. A push repeats while held.
+    fn push(&mut self, (x, y): (f32, f32)) {
+        let direction = |v: f32| {
+            if v > PUSH {
+                1
+            } else if v < -PUSH {
+                -1
+            } else {
+                0
+            }
+        };
+        let (dx, dy) = (direction(x), direction(y));
+        let fires = |dir: i32, held: &mut i32, ticks: &mut u32| {
+            if dir == 0 || dir != *held {
+                *held = dir;
+                *ticks = 0;
+                return dir != 0;
+            }
+            *ticks += 1;
+            *ticks >= REPEAT_AFTER && (*ticks - REPEAT_AFTER).is_multiple_of(REPEAT_EVERY)
+        };
+        if fires(dy, &mut self.held.1, &mut self.held_ticks.1) {
+            // Stick up is positive and the list reads downward.
+            self.effects.step_row(-dy);
+        }
+        if fires(dx, &mut self.held.0, &mut self.held_ticks.0) {
+            self.effects.adjust(dx);
+        }
     }
 
     /// What the stick does under the buttons held.
@@ -429,9 +556,15 @@ impl Race {
     /// Opens photo mode on the player's craft. The world is not touched; the pose is imposed
     /// as a camera override, and whatever override was in force is put back by
     /// [`Self::photo_end`]. `select` and `square` say which of the two modifier buttons are down
-    /// as the mode opens, so letting go of them is not read as a tap. `false` in a split screen
-    /// or on a race with more than one view.
-    pub fn photo_begin(&mut self, select: bool, square: bool) -> bool {
+    /// as the mode opens, so letting go of them is not read as a tap. `zoom` is the ring the
+    /// speed blur row plays (HD's, handed in by the composition root); without it the row does
+    /// nothing. `false` in a split screen or on a race with more than one view.
+    pub fn photo_begin(
+        &mut self,
+        select: bool,
+        square: bool,
+        zoom: Option<&'static oag_title::ZoomRing>,
+    ) -> bool {
         if self.viewport_count() > 1 || self.windowed() || self.view.photo.is_some() {
             return false;
         }
@@ -442,7 +575,11 @@ impl Race {
             .is_some_and(finish_camera::FinishCamera::has_nodes);
         let restore = self.view.camera_override;
         let subject = self.player_slot();
-        self.view.photo = Some(Photo::new(subject, track, restore).holding(select, square));
+        self.view.photo = Some(
+            Photo::new(subject, track, restore)
+                .holding(select, square)
+                .with_zoom(zoom.map(crate::zoom::tuning)),
+        );
         self.photo_pose();
         true
     }
@@ -467,6 +604,20 @@ impl Race {
         }
     }
 
+    /// Shows or hides the effects panel, as a click on the screen's EFFECTS chip does.
+    pub fn photo_toggle_panel(&mut self) {
+        if let Some(photo) = self.view.photo.as_mut() {
+            photo.toggle_panel();
+        }
+    }
+
+    /// Changes the picture controls, as a click on the panel does.
+    pub fn photo_effects(&mut self, change: impl FnOnce(&mut effects::Effects)) {
+        if let Some(photo) = self.view.photo.as_mut() {
+            change(photo.effects_mut());
+        }
+    }
+
     /// One tick of photo mode, and the pose it leaves. [`Action::None`] when it is not open.
     pub fn photo_step(&mut self, pad: Pad) -> Action {
         let live: Vec<usize> = self.spectator_subjects().iter().map(|s| s.slot).collect();
@@ -476,6 +627,15 @@ impl Race {
         let action = photo.step(pad, &live);
         self.photo_pose();
         action
+    }
+
+    /// What the picture controls ask of the frame: `None` when the mode is closed or every
+    /// control stands where it opened.
+    #[must_use]
+    pub fn photo_fx(&self, near: f32, far: f32) -> Option<oag_post::photo_fx::Params> {
+        let photo = self.view.photo.as_ref()?;
+        let params = photo.effects().params(near, far);
+        params.active().then_some(params)
     }
 
     /// Closes photo mode and puts the camera back as it was.
