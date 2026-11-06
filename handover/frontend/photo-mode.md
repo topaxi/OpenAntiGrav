@@ -47,9 +47,7 @@ in that page's lineage and `git log`; what is left from it is here.
   reaches. A download on the web, the photo library on a phone.
 - **HD's `close` rest offset** was never read; Pulse's measured 12 behind, 3 above is used on every
   title (chosen). HD's separate tilt triggers and right-stick zoom are folded onto the one stick.
-- **The shot on a lowered render scale** is the presentation target, upscaled: a shot at the
-  configured render size needs the scene at its allocation (dynamic resolution held at its
-  ceiling while the mode is open).
+- **The shot at a render scale below 1.0** is the presentation target, upscaled from the scene at its configured render size (dynamic resolution is held at that size while the mode is open); a shot at the scene's own pixels, before the upscaler, would be a second target.
 - **The track lens** is only where a circuit authors a `Camera` node and the title builds the
   spectator director (Pulse off a disc today); HD's, 2048's and Omega's nodes are not read into
   it, so those titles cycle `internal` and `close`.

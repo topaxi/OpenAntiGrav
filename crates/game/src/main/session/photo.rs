@@ -128,6 +128,11 @@ impl super::Session {
 
     /// One tick of the mode: the player's devices into the camera, and what came of it.
     pub(crate) fn tick_photo(&mut self, pointer: &Pointer, input: &InputSnapshot) {
+        // The mode belongs to the race on screen: with none, it is over.
+        if !matches!(self.stage, Stage::Race(_)) {
+            self.photo = None;
+            return;
+        }
         let Some(open) = self.photo.as_mut() else {
             return;
         };

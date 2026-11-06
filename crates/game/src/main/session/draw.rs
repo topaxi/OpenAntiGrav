@@ -244,7 +244,10 @@ impl Session {
         // (`Session::feed_windows`) and applies its scale to each window's own ceiling, while
         // every window holds one seat; with a window of several seats (a split, whose views are
         // not timed) the scale holds at the ceiling, as a split screen's does.
-        self.framebuffer.set_extent(if windowed && !self.drs_runs() {
+        // Photo mode draws at the configured render size, not the dynamic resolution's: a shot is
+        // the picture at its best, and the race is not being timed while it stands still.
+        let held_full = self.photo.is_some();
+        self.framebuffer.set_extent(if (windowed && !self.drs_runs()) || held_full {
             own_wanted
         } else {
             self.drs.extent(drs_limits)
@@ -252,7 +255,7 @@ impl Session {
         // The controller's second output, the blur's gather resolution
         // (ADR-0075), re-derived every frame the same way and held to the
         // player's own wherever the extent is held.
-        let blur_resolution = if windowed && !self.drs_runs() {
+        let blur_resolution = if (windowed && !self.drs_runs()) || held_full {
             self.render_profile().motion_blur_resolution
         } else {
             self.drs.blur_resolution(drs_limits)

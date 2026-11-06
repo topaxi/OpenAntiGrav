@@ -182,37 +182,80 @@ fn a_saved_picture_is_the_frame_the_player_saw_at_its_full_size() {
     };
     let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-pixels-shots");
     let _ = std::fs::remove_dir_all(&shots);
+    // The camera is moved off the craft. The reference is a screenshot with the help hidden and the
+    // HUD off. The first shot is taken with the help up, so the screen's text would show in it if
+    // it were drawn into the picture; the second with the HUD row on, so the HUD would show in it.
     let run = drive(
         &image,
         "pixels",
         &format!(
             "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
              until photo=internal within 200; press select; ticks 5; hold right 45; \
-             press start; ticks 10; screenshot SHOTS/seen.png; press cross; ticks 5; \
-             screenshot SHOTS/after.png; press circle; until photo=none within 50"
+             press start; ticks 10; screenshot SHOTS/bare.png; press start; ticks 5; \
+             press cross; ticks 3; screenshot SHOTS/with-help.png; \
+             press square; ticks 5; press cross; ticks 3; screenshot SHOTS/with-hud.png; \
+             press circle; until photo=none within 50"
         ),
         &shots,
     );
     assert!(run.status.success(), "{}", run.stderr);
-    let seen = decode(&shots.join("seen.png"));
-    let after = decode(&shots.join("after.png"));
+    let bare = decode(&shots.join("bare.png"));
+    let with_help = decode(&shots.join("with-help.png"));
+    assert_ne!(
+        bare.2, with_help.2,
+        "the help is on screen in the second frame"
+    );
     let photos = the_photos(&run);
-    assert_eq!(photos.len(), 1, "{photos:?}");
-    let saved = decode(&photos[0]);
+    assert_eq!(photos.len(), 2, "{photos:?}");
+    let (plain, hud) = (decode(&photos[0]), decode(&photos[1]));
     assert_eq!(
-        (saved.0, saved.1),
-        (seen.0, seen.1),
+        (plain.0, plain.1),
+        (bare.0, bare.1),
         "the render's own size"
     );
     assert!(
-        saved.0 >= 1280,
+        plain.0 >= 1280,
         "a picture at the size a player sees, not the PSP's 480"
     );
     assert_eq!(
-        saved.2, seen.2,
-        "the picture saved is the frame seen with the help hidden"
+        plain.2, bare.2,
+        "with the help up, the picture saved is still the frame seen without it"
     );
-    assert_eq!(seen.2, after.2, "and a shot does not move the camera");
+    assert_ne!(
+        hud.2, plain.2,
+        "with the HUD row on the HUD is in the picture"
+    );
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn escape_leaves_the_mode_and_the_next_one_opens_the_menus_and_the_race_still_runs() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-escape-shots");
+    let run = drive(
+        &image,
+        "escape",
+        &format!(
+            "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=internal within 200; ticks 5; escape; expect stage=race photo=none; \
+             ticks 60; escape; until stage=menu; select photo_mode; press cross; \
+             until photo=internal within 200; press circle; until photo=none within 50; ticks 60"
+        ),
+        &shots,
+    );
+    assert!(run.status.success(), "{}", run.stderr);
+    let seen = ticks(&run);
+    let last_under = seen
+        .iter()
+        .rposition(|(_, _, lens)| lens != "none")
+        .unwrap();
+    assert!(
+        seen[last_under + 1..].len() >= 60,
+        "the race runs again after the second mode: {} ticks",
+        seen.len() - last_under - 1
+    );
 }
 
 #[test]

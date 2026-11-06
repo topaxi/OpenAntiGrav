@@ -143,6 +143,8 @@ impl Session {
     /// a rectangle. A stage that is not the front end leaves the menus where
     /// they are, which is what makes this safe to call from the frame loop.
     pub(crate) fn open_menus(&mut self) -> Result<()> {
+        // Whatever opens the menus ends photo mode, so a race parked behind them is not held by it.
+        self.leave_photo();
         self.stop_rumble();
         self.restore_campaign_home();
         let shell = self

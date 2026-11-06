@@ -161,8 +161,10 @@ and a build that cannot write a file (a page, a phone).
 
 **While it is open** the race does not tick (`oag_game::photo::ticks`), whatever state it is in,
 so its state hash does not move and the race resumes where it stood; the audio is stepped as under
-the pause. The camera is a render-side override (`CameraOverride`), put back on leaving. Pressing
-Circle, Cross, Start, Select and the shoulders to leave is spent, so none reaches the race.
+the pause. The camera is a render-side override (`CameraOverride`), put back on leaving. Leaving spends
+Circle, Cross, Start, Select and the shoulders, so none reaches the race. Escape (and Back, and the
+window losing focus, which does nothing then) leaves the mode and goes no further; the next Escape
+opens the menus.
 
 **Lenses** (the camera row): `internal` (5 ahead of the nose, Pulse's measured), `close` (12 behind
 and 3 above, free to orbit; Pulse's measured offset, **chosen** on the others), `track` (the
@@ -205,11 +207,14 @@ words a row the disc's own text is played instead (`oag_title::photo::Strings`: 
 rest is ours, with French named under `[untranslated]`.
 
 **Checked against the other lineage.** 2048 and Omega both run this mode (driven to a race, the
-mode opened from the pause menu, orbited, HUD on, shot taken): ported, with
-`photo_mode_ground_truth` on Pulse and screenshots on all five titles. 2048's own touch screen,
+mode opened from the pause menu, orbited, the HUD row on, a shot taken and read): ported, with
+`photo_mode_ground_truth` on Pulse and a `--drive` walk on each of the five titles. `Race End Photo`
+exists on Pulse only in this build (HD's end-race flow does not open on it), so SELECT at the finish
+is Pulse's alone. 2048's own touch screen,
 its preview step and its Glory Moment are not used.
 
 **Left open:** exposure, saturation, speed blur,
 depth of field and motion blur (`oag-post`, `photo-effects`), the photo counter stat, split screen,
-touch gestures, saving on a page or a phone, HD's real `close` rest offset, and the shot on a
-frame the render scale has lowered (it is the presentation target, upscaled).
+touch gestures, saving on a page or a phone, HD's real `close` rest offset, and a shot at the
+scene's own pixels (the file is the presentation target, upscaled from the scene drawn at its
+configured render size: the dynamic resolution is held there while the mode is open).
