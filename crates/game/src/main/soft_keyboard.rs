@@ -6,7 +6,7 @@
 //! phone build. **Untested on a device**: no phone was driven for this
 //! (`docs/ui/player-name.md`, "Soft keyboards").
 
-use super::Session;
+use crate::session::Session;
 
 /// Whether the soft keyboard should be showing: a phone build with a typing prompt open.
 pub(crate) const fn wanted(mobile: bool, typing_open: bool) -> bool {
