@@ -652,6 +652,12 @@ What is not cut: one pipeline set (up to 0.45 s on HD) and the grid's `oag_liver
 `docs/tools/oag-game.md` ("Driving the menus with no window") with a script that ends
 `until stage=loading; ticks N` for N from 0 to 3000, a scratch `XDG_*` profile, `RUST_LOG=info`.
 
+With the checks in, the same test ran 30 of 30 clean on the NVIDIA GPU (no `VK_ICD_FILENAMES`),
+about 12.5 s a run, no new core. Measured on Pulse, 2048 and HD; Pure and Omega are not measured
+(they share the same `load`, `Scene::new` and `build_with`, so the checks apply, but no close was
+timed). Not covered by a test that fails when it is dropped: `stages::reader`, the per-node check
+in `rcs::build_with_options`, the warm-up skip, and every `Scene::new` checkpoint after the first.
+
 **A close that does not land.** In 3 of 15 runs of a real X11 window on Xvfb, `WM_DELETE_WINDOW`
 sent to the window (the only one, carrying `WM_DELETE_WINDOW` in `WM_PROTOCOLS`) as the load began
 was ignored for 30 s while the event loop kept running (frame warnings). A second identical message
