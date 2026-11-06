@@ -388,7 +388,7 @@ impl Race {
     }
 
     /// The craft the picture being drawn frames: photo mode's subject while the mode is open,
-    /// else [`Self::viewed_slot`]. What places the culling, the weather and the recovery test;
+    /// else [`Self::viewed_slot`]. What places the weather and the boost lens;
     /// [`Self::viewed_slot`] stays the key of the view's scene blocks and histories, which a
     /// change of subject must not move.
     #[must_use]
@@ -415,12 +415,6 @@ impl Race {
     #[must_use]
     pub fn viewed_ship(&self) -> &Ship {
         &self.sim.world.ships[self.viewed_slot()]
-    }
-
-    /// The craft [`Self::framed_slot`] names.
-    #[must_use]
-    pub fn framed_ship(&self) -> &Ship {
-        &self.sim.world.ships[self.framed_slot()]
     }
 
     /// An extra view's blended camera with its seat's impact shake, `None` for the player's

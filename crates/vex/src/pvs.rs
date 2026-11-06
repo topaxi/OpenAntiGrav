@@ -212,6 +212,18 @@ impl TrackPvs {
         }
     }
 
+    /// A set that declares exactly `sections`, as if one `section` node had been read for each.
+    pub fn from_sections(sections: impl IntoIterator<Item = Section>) -> Self {
+        let mut pvs = Self::empty();
+        for section in sections {
+            let id = usize::from(section.index);
+            pvs.declared |= 1u64 << id;
+            pvs.masks[id] = section.visible;
+            pvs.bounds[id] = section.bounds;
+        }
+        pvs
+    }
+
     /// Reads every `section` node in an already-walked scene tree.
     ///
     /// `data` is the whole `.vex` file and `nodes` the result of

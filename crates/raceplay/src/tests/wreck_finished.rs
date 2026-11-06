@@ -362,10 +362,6 @@ fn photo_mode_over_the_directors_camera_is_not_masked_by_the_directors_station()
         .expect("open");
     assert_eq!(race.framed_slot(), subject);
     assert_eq!(
-        race.framed_ship().physics.body.position,
-        race.sim.world.ships[subject].physics.body.position
-    );
-    assert_eq!(
         race.station_camera_section(),
         None,
         "the photo's own camera"

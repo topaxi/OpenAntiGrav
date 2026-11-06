@@ -476,22 +476,21 @@ impl Race {
     /// degrades only the camera's half.
     #[must_use]
     pub fn visibility_sections(&self) -> (u8, u8) {
-        // The framed craft's, because this places the camera being drawn: the seat's on a
-        // network client, not slot 0's, and photo mode's subject while it is open. An
-        // opponent recovering across the circuit must not blank the shot.
-        let slot = self.framed_slot();
+        // The viewed craft's, because this places the camera being drawn: the seat's on a
+        // network client, not slot 0's. An opponent recovering across the circuit must not
+        // blank the shot.
+        let slot = self.viewed_slot();
         if self.sim.respawn_cooldown[slot] > 0 {
             return (UNPLACED, UNPLACED);
         }
-        let ship = &self.sim.world.ships[slot];
+        let ship = self.viewed_ship();
         // The simulation already located the craft this tick and left the
-        // sample index in `Ship::segment` (a person's) or in its driver (an
-        // opponent's), so the craft's half is a table read rather than a second
-        // scan of the whole track. Doing it again here would cost more per frame
-        // than the culling it enables saves. `u16::MAX` is the never-located
-        // sentinel, and it is out of range of any real table, so the bounds
-        // check covers both.
-        let Some(index) = self.framed_sample(slot) else {
+        // sample index in `Ship::segment`, so the craft's half is a table read
+        // rather than a second scan of the whole track. Doing it again here
+        // would cost more per frame than the culling it enables saves.
+        // `u16::MAX` is the never-located sentinel, and it is out of range of
+        // any real table, so the bounds check covers both.
+        let Some(index) = self.located_sample(ship) else {
             return (UNPLACED, UNPLACED);
         };
         let craft = self.section_of(index, ship.physics.body.position);
@@ -509,7 +508,10 @@ impl Race {
         (craft, camera)
     }
 
-    /// What may be drawn this frame: the one row of the section a station camera is placed by
+    /// What may be drawn this frame. **Everything while photo mode is open**, on every title
+    /// and over the director's camera too: a shot must not lose scenery to a visibility set
+    /// that was authored for a craft in a race (the draws still go through the frustum test).
+    /// Otherwise the one row of the section a station camera is placed by
     /// ([`Self::station_camera_section`]), or the craft's and the camera's own sections with
     /// padding for every other camera ([`Self::visibility_sections`]), narrowed to the view.
     pub(super) fn visible_set(
@@ -517,6 +519,9 @@ impl Race {
         visibility: &super::visibility::TrackVisibility,
         view_projection: &Mat4,
     ) -> VisibleSet {
+        if self.view.photo.is_some() {
+            return VisibleSet::everything();
+        }
         match self.station_camera_section() {
             Some(section) => visibility.set_exact(section, view_projection),
             None => {
@@ -581,22 +586,26 @@ impl Race {
         self.located_from(ship, usize::from(ship.segment))
     }
 
-    /// The spline sample under the craft in `slot`, for a picture that frames it. A person's
-    /// craft is located by the tick in `Ship::segment`; an opponent's `segment` is never
-    /// written, and its driver's index on its own line, mapped to the sample table, is where
-    /// the simulation has it (photo mode's subject is usually one).
-    fn framed_sample(&self, slot: usize) -> Option<usize> {
+    /// The section of the craft the picture frames ([`Self::framed_slot`]), [`UNPLACED`] where
+    /// it cannot be told. A person's craft is located by the tick in `Ship::segment`; an
+    /// opponent's `segment` is never written, and its driver's index on its own line, mapped
+    /// to the sample table, is where the simulation has it (photo mode's subject is usually
+    /// one).
+    pub(super) fn section_of_framed(&self) -> u8 {
+        let slot = self.framed_slot();
         let ship = &self.sim.world.ships[slot];
-        if self.sim.world.person_flown(slot) {
-            return self.located_sample(ship);
-        }
-        let hint = self
-            .sample_index_for(
-                slot,
-                usize::try_from(ship.driver.index).unwrap_or(usize::MAX),
+        let index = if self.sim.world.person_flown(slot) {
+            self.located_sample(ship)
+        } else {
+            let line = usize::try_from(ship.driver.index).unwrap_or(usize::MAX);
+            self.located_from(
+                ship,
+                self.sample_index_for(slot, line).unwrap_or(usize::MAX),
             )
-            .unwrap_or(usize::MAX);
-        self.located_from(ship, hint)
+        };
+        index.map_or(UNPLACED, |index| {
+            self.section_of(index, ship.physics.body.position)
+        })
     }
 
     /// [`Self::located_sample`] from `index`, where the simulation last had the craft.

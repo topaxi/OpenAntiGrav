@@ -96,42 +96,32 @@ fn race_on_a_sectioned_straight() -> Race {
     Race::start(setup)
 }
 
-/// Stands the opponent in `slot` on the spline's last sample, where its driver would have
-/// left it: an opponent's `Ship::segment` is never written, its driver's index is.
-fn stand_at_the_far_end(race: &mut Race, slot: usize) -> usize {
-    let last = race.spline().len() - 1;
-    let pos = race.spline().sample(last).expect("a sample").pos;
-    let line = (0..race.sim.ai_order.len())
-        .find(|&k| race.ai_sample_index(k) == Some(last))
-        .expect("the last sample is on the racing line");
-    let ship = &mut race.sim.world.ships[slot];
-    ship.physics.body.position = Vec3::from_array(pos);
-    ship.driver.index = u32::try_from(line).expect("a short fixture");
-    last
+/// What the race's cull allows from the seat: each section sees only itself, so a seat in one
+/// section is a set of one.
+fn each_section_sees_itself() -> crate::visibility::TrackVisibility {
+    let pvs = oag_vex::pvs::TrackPvs::from_sections((1u8..=8).map(|index| oag_vex::pvs::Section {
+        index,
+        visible: 1u64 << index,
+        bounds: None,
+    }));
+    crate::visibility::TrackVisibility::declaring(pvs)
 }
 
-/// Photo mode frames its subject, so the track drawn around the picture is the subject's, not
-/// the seat's: with the subject at the far end of the circuit, culling to the seat's section
-/// leaves the scenery around the subject out of the frame.
+/// While photo mode is open nothing is culled by section, on whichever craft it frames: a shot
+/// must not lose scenery to a set authored for a craft in a race. Leaving restores the cull.
 #[test]
-fn photo_modes_subject_places_the_cull_not_the_seat() {
+fn photo_mode_draws_every_section_and_leaving_restores_the_cull() {
     let mut race = race_on_a_sectioned_straight();
-    let far = stand_at_the_far_end(&mut race, 3);
-    let seat_section = race.section_of_slot(0);
-    let far_section = race.section_of_slot(3);
-    assert_ne!(seat_section, UNPLACED);
-    assert_ne!(far_section, UNPLACED);
-    assert_ne!(
-        seat_section, far_section,
-        "the fixture must tell the two apart"
-    );
+    let visibility = each_section_sees_itself();
+    let view = Mat4::ZERO;
+    let seat = race.visible_set(&visibility, &view);
+    assert!(!seat.is_everything(), "the race culls: {seat:?}");
 
-    assert_eq!(
-        race.visibility_sections().0,
-        seat_section,
-        "before the mode"
-    );
     assert!(race.photo_begin(false, false, None));
+    assert!(
+        race.visible_set(&visibility, &view).is_everything(),
+        "the seat's own picture"
+    );
     for _ in 0..3 {
         race.photo_step(Pad {
             next: true,
@@ -139,43 +129,45 @@ fn photo_modes_subject_places_the_cull_not_the_seat() {
         });
     }
     assert_eq!(race.photo().map(crate::photo::Photo::subject), Some(3));
-
-    let (craft, camera) = race.visibility_sections();
-    assert_eq!(craft, far_section, "the craft half follows the subject");
-    assert_eq!(
-        camera, far_section,
-        "the camera half is searched near the subject (sample {far})"
+    assert!(
+        race.visible_set(&visibility, &view).is_everything(),
+        "another craft's"
     );
 
-    // The free camera moved off the craft is still placed from the subject's sample.
-    for _ in 0..30 {
+    race.photo_end();
+    assert_eq!(
+        race.visible_set(&visibility, &view),
+        seat,
+        "the cull is back"
+    );
+}
+
+/// The weather's section is the framed craft's, located from its driver where it is an
+/// opponent (whose `Ship::segment` is never written).
+#[test]
+fn photo_modes_weather_section_is_the_subjects() {
+    let mut race = race_on_a_sectioned_straight();
+    let last = race.spline().len() - 1;
+    let pos = race.spline().sample(last).expect("a sample").pos;
+    let line = (0..race.sim.ai_order.len())
+        .find(|&k| race.ai_sample_index(k) == Some(last))
+        .expect("the last sample is on the racing line");
+    let ship = &mut race.sim.world.ships[3];
+    ship.physics.body.position = Vec3::from_array(pos);
+    ship.driver.index = u32::try_from(line).expect("a short fixture");
+    let seat = race.section_of_framed();
+    assert!(race.photo_begin(false, false, None));
+    for _ in 0..3 {
         race.photo_step(Pad {
-            stick: (1.0, 0.0),
-            select: true,
+            next: true,
             ..pad()
         });
     }
-    assert_eq!(race.visibility_sections().0, far_section);
-
-    race.photo_end();
-    assert_eq!(race.visibility_sections().0, seat_section, "the seat again");
-}
-
-/// A recovery in flight blanks the shot of the craft the picture is about: the subject's,
-/// not the seat's.
-#[test]
-fn photo_modes_respawn_cooldown_is_the_subjects() {
-    let mut race = race_on_a_sectioned_straight();
-    stand_at_the_far_end(&mut race, 1);
-    assert!(race.photo_begin(false, false, None));
-    race.photo_step(Pad {
-        next: true,
-        ..pad()
-    });
-    assert_eq!(race.photo().map(crate::photo::Photo::subject), Some(1));
-    race.sim.respawn_cooldown[1] = 1;
-    assert_eq!(race.visibility_sections(), (UNPLACED, UNPLACED));
-    race.sim.respawn_cooldown[1] = 0;
-    race.sim.respawn_cooldown[0] = 1;
-    assert_ne!(race.visibility_sections(), (UNPLACED, UNPLACED));
+    let subject = race.section_of_framed();
+    assert_ne!(subject, UNPLACED);
+    assert_ne!(subject, seat);
+    assert_eq!(
+        subject,
+        race.spline().sample(last).expect("a sample").section_id
+    );
 }

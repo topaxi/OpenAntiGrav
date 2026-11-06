@@ -244,7 +244,7 @@ impl super::Race {
     pub(super) fn advance_weather(&mut self, dt: f32) {
         let section = self
             .station_camera_section()
-            .unwrap_or_else(|| self.section_of_slot(self.framed_slot()));
+            .unwrap_or_else(|| self.section_of_framed());
         let section = if section == oag_render::pvs::UNPLACED {
             self.view.scenery_fx.weather().section()
         } else {
