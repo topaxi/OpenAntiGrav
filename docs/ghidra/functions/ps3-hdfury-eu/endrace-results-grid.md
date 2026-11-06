@@ -89,6 +89,11 @@ Per racer `r` (records `300` bytes apart):
   (TOC `0xcd4`, `0x008b0828`; confidence 80, both strings read off the executable).
   A craft still racing when the table fills reads `RACING`, which is what this
   build draws; nothing here produces `DNF`.
+
+**Omega**: `checked, applies, not wired`. Omega's `eboot.bin` carries the same
+`Grid%d.%d` format string (`0x01823d9a`), so the same screen code exists there; its
+`FillRaceRows` was not read for `+0x50`/`+0x160`, and Omega's front end does not load the
+screen yet (`docs/ui/endrace-screens.md`, "HD's `Results` names every craft").
 - `Gridi.r` - the badge image - shown at `x = 130` (`0x008b07d8`),
   `y = 82 + 45 r` (`0x008b07bc`).
 - For the player's record, `EndRaceResults_HighlightRow(screen, 94 + 45 r,

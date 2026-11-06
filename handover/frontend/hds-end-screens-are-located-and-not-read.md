@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-06
-summary: "Which archive copy HD loads is unresolved; no live capture reaches a finished EndRace Results; Podium is multiplayer-only"
+summary: "Which archive copy HD loads is unresolved; Results lists every craft by team now, open: whether times refresh, the badge, Omega still on the built-in scoreboard; Podium is multiplayer-only"
 ---
 
 # HD's end screens: read and drawn (Results/Menu/Rewards/Podium); Podium multiplayer-only
@@ -75,18 +75,12 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   open question [hd-frontend.md](../../docs/formats/hd-frontend.md) records
   for `skin.xml`'s six copies. This build serves `DATA02`'s, by
   `oag_assets::Archives::holder_of`'s own mount order, not a measurement.
-- **No live capture reaches a finished `EndRace Results` yet.** Xvfb `:94`
-  with `xdotool` (mouse-only, `WAYLAND_DISPLAY` unset - see
-  `docs/architecture/menus.md`'s "DISPLAY against GRAPHICS" for why that
-  matters) reached a real race launch (`Main Menu` -> `RACE CAMPAIGN` ->
-  `Grid Selection` -> `Cell Selection` -> `LOADING... VINETA K` -> racing),
-  the same point `docs/ui/campaign-screens.md`'s own 2026-09-21 walk reached
-  by an identical route. The race itself renders at ~5s/frame in this
-  sandbox (scene built in 53.7s, first frame 5.2s after) - independently
-  confirmed twice now (that walk's own 107.6s/741ms-8056ms-per-frame
-  numbers, and this pass's) - so a full race is hours of wall clock here, not
-  a code bug. The exact command for a machine with a working display is in
-  `docs/ui/endrace-screens.md`'s own Live section.
+- ~~**No live capture reaches a finished `EndRace Results` yet.**~~ **2026-11-06
+  (`hd-endrace-rows`): reached headless on three routes** (Fury campaign, HD campaign, RACEBOX
+  single race) with `oag-game --drive ... --autopilot`, the real `Session` and no window, a
+  race in about two minutes; the scripts and frames are in `docs/ui/endrace-screens.md`'s "HD's
+  `Results` names every craft". A live RPCS3 run of the original is still what would lift the
+  static readings.
 - **2048 and Pure were not looked at.** Neither `oag_title::FrontEnd`
   instance's `endrace_entry` is anything but `None` - a gap, not a
   measurement that either ships no such screen.
