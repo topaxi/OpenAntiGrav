@@ -204,7 +204,7 @@ fn the_pause_menu_offers_photo_mode_on_all_five_titles_and_only_when_offered() {
         oag_omega::TITLE,
         oag_2048::TITLE,
     ] {
-        let mods = Mods::load_from(&[none.clone()], &Default::default()).unwrap();
+        let mods = Mods::load_from(std::slice::from_ref(&none), &Default::default()).unwrap();
         let built = mods
             .build(
                 oag_ui::menu::BUILT_IN,
