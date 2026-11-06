@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-06
-summary: "One shared photo mode on all five titles: read done, each feature ranked by which title does it best, conflicts named"
+summary: "One shared photo mode for all five titles, best of each: features ranked, photo-wire then photo-effects"
 ---
 
 # Photo mode
@@ -32,15 +32,16 @@ limits.
 
 ## Next Steps
 
-Each feature: the best version, what it beats, and the score of the source read.
+Two lanes, one implementation. Features are in rank order inside each lane. Each row gives the winning
+version, what it beats and the score of the source read. The Glory Moment stays out.
 
-### Lane 2, the shared mode
+### `photo-wire`: the shared mode on all five titles, no new `oag-post` work
 
 | Feature | Take | Over | Why | Conf. |
 | --- | --- | --- | --- | ---: |
 | Freeze | Pause, plus a camera update | none, all alike | Same on Pulse and HD: no craft or race tick. State hash must not move | 90 |
 | Camera list | `internal`, `close`, `track` (HD) | Pulse's five rows | HD `close` orbits on two free axes, so Pulse's `front` and `above` are positions within it | 90 |
-| Orbit | HD: two axes, free, `0.05` a frame, `+-2 pi` wrap | Pulse pitch `[-1, 0.6]`, yaw only | Wider, and Pulse's clamp did not stop the eye going under the road anyway | 90 |
+| Orbit | HD: two axes, free, `+-2 pi` wrap | Pulse pitch `[-1, 0.6]`, yaw | Wider, and Pulse's clamp did not stop the eye going under the road anyway. Stick rates do not conflict: both are `0.05` a frame | 90 |
 | Track collision | None | none, all alike | Neither Pulse nor HD has one. The eye may go under the road | 90 |
 | Zoom, `close` | HD: right stick Y, field `[10, 100]`, starts 65 | Pulse: no zoom in `close` | | 90 top limit; 84 floor |
 | Tilt | HD: L2, R2, `0.05` a frame | Pulse: none | | 90 |
@@ -59,7 +60,7 @@ Each feature: the best version, what it beats, and the score of the source read.
 Dropped on purpose: Pulse's rule that the stick is ignored while any digital button is held (it would
 kill stick plus SQUARE). 2048's Glory Moment: needs a camera and a session.
 
-### Lane 3, effects
+### `photo-effects`: through `oag-post`, after `photo-wire`
 
 | Feature | Take | Over | Why | Conf. |
 | --- | --- | --- | --- | ---: |
@@ -68,12 +69,12 @@ kill stick plus SQUARE). 2048's Glory Moment: needs a camera and a session.
 | Speed blur | HD, 0 to 100, step 5 | Omega: removed | | 84 |
 | Depth of field | HD's focus curve `d` in 3 to 493, aperture, focus | 2048's touch law | Same formula in HD and 2048's own pad code, so it is the better-attested one | 84 |
 | Effect choice | Omega's two lists, blur and depth independent | HD's single list | More shots possible, if the pipeline can run both | 80 |
-| Motion blur | HD and 2048's track and ship | | Needs the conflict below settled | 84 |
+| Motion blur | HD and 2048's track and ship, shutter sets its strength | | Shutter is not an exposure control: `(v * 0.01)^2 * 0.25`, used only by motion blur. Needs the conflict below settled | 84 |
 
 ### Conflicts to settle
 
 1. **Finish button.** Pulse SELECT, HD and Omega SQUARE, 2048 a touch button. The draft says SELECT.
-   SELECT stays, but `MSC_PHOTO_PRESS_SELECT` ships reading "OPTIONS" on Omega, and HD's button prompt
+   SELECT wins, because SQUARE is the pan modifier inside the mode, but `MSC_PHOTO_PRESS_SELECT` ships reading "OPTIONS" on Omega, and HD's button prompt
    glyph is square: use one project string.
 2. **Split screen.** Pulse none, HD and Omega yes, from either pad. The draft leaves it out for now.
    That is a cut from the best version, not a neutral default: name it as a follow-up.
