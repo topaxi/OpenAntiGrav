@@ -340,6 +340,14 @@ OAG_PHOTO_SHIP = { text = "SCHIFF", human = false }
 OAG_PHOTO_HELP = { text = "HILFE AUSBLENDEN", human = false }
 OAG_PHOTO_SAVED = { text = "FOTO GESPEICHERT", human = false }
 OAG_PHOTO_FAILED = { text = "FOTO NICHT GESPEICHERT", human = false }
+OAG_PHOTO_EFFECTS = { text = "EFFEKTE", human = false }
+OAG_PHOTO_EXPOSURE = { text = "BELICHTUNG", human = false }
+OAG_PHOTO_SATURATION = { text = "SÄTTIGUNG", human = false }
+OAG_PHOTO_SPEED_BLUR = { text = "GESCHWINDIGKEITSUNSCHÄRFE", human = false }
+OAG_PHOTO_DEPTH = { text = "TIEFENSCHÄRFE", human = false }
+OAG_PHOTO_APERTURE = { text = "BLENDE", human = false }
+OAG_PHOTO_FOCUS = { text = "FOKUS", human = false }
+OAG_PHOTO_PANEL_KEYS = { text = "STICK HOCH RUNTER ZEILE    LINKS RECHTS ÄNDERN", human = false }
 
 OAG_MENU_RESET_TO_DEFAULT = { text = "AUF STANDARD ZURÜCKSETZEN", human = false }
 

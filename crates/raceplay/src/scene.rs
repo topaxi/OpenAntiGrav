@@ -24,6 +24,7 @@ mod magstrip_wake;
 mod mist;
 mod motion;
 mod per_slot;
+mod photo_fx;
 mod queries;
 mod record;
 #[cfg(test)]
@@ -392,6 +393,8 @@ pub struct Scene {
     /// and then left alone like every AI craft.
     flaps_stowed: std::cell::Cell<[bool; oag_gameplay::MAX_SHIPS]>,
     boost_zoom: hd_chain::BoostZoom,
+    /// Photo mode's exposure, saturation and depth of field, built when first asked for.
+    photo_fx: photo_fx::PhotoFxPass,
     /// Wipeout HD's post chain: the linear float scene target the whole race
     /// draws into, the read `FunkLayerBloom` passes over it, and the encode
     /// into the caller's own view. `None` for every other title, where the
@@ -1105,6 +1108,7 @@ impl Scene {
             layer: std::cell::Cell::new(viewports::Layer::Whole),
             flaps_stowed: std::cell::Cell::new([true; oag_gameplay::MAX_SHIPS]),
             boost_zoom: hd_chain::BoostZoom::new(caller_format),
+            photo_fx: photo_fx::PhotoFxPass::new(caller_format),
             hd,
             omega,
             wo,

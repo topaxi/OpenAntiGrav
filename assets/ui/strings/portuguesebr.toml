@@ -338,6 +338,14 @@ OAG_PHOTO_SHIP = { text = "NAVE", human = false }
 OAG_PHOTO_HELP = { text = "OCULTAR AJUDA", human = false }
 OAG_PHOTO_SAVED = { text = "FOTO SALVA", human = false }
 OAG_PHOTO_FAILED = { text = "FOTO NÃO SALVA", human = false }
+OAG_PHOTO_EFFECTS = { text = "EFEITOS", human = false }
+OAG_PHOTO_EXPOSURE = { text = "EXPOSIÇÃO", human = false }
+OAG_PHOTO_SATURATION = { text = "SATURAÇÃO", human = false }
+OAG_PHOTO_SPEED_BLUR = { text = "DESFOQUE DE VELOCIDADE", human = false }
+OAG_PHOTO_DEPTH = { text = "PROFUNDIDADE DE CAMPO", human = false }
+OAG_PHOTO_APERTURE = { text = "ABERTURA", human = false }
+OAG_PHOTO_FOCUS = { text = "FOCO", human = false }
+OAG_PHOTO_PANEL_KEYS = { text = "ANALÓGICO CIMA BAIXO LINHA    ESQUERDA DIREITA ALTERAR", human = false }
 
 OAG_MENU_RESET_TO_DEFAULT = { text = "RESTAURAR O PADRÃO", human = false }
 

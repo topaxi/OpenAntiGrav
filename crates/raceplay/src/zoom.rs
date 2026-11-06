@@ -62,6 +62,14 @@ impl Race {
     /// draw runs once per tick however fast frames render.
     #[must_use]
     pub fn hd_zoom_frame(&self) -> Option<Frame> {
+        if let Some((_, frame)) = self
+            .view
+            .photo
+            .as_ref()
+            .and_then(|photo| photo.speed_blur())
+        {
+            return Some(frame);
+        }
         self.viewed_zoom().map(oag_post::hd_zoom::Pulse::frame)
     }
 
@@ -77,7 +85,8 @@ impl Race {
     /// (HD's, drawn inside its bloom chain) or none. The scene's host pass reads it.
     #[must_use]
     pub fn borrowed_zoom_tuning(&self) -> Option<Tuning> {
-        self.view
+        let borrowed = self
+            .view
             .zoom_borrowed
             .then(|| {
                 self.view
@@ -85,7 +94,13 @@ impl Race {
                     .as_ref()
                     .map(oag_post::hd_zoom::Pulse::tuning)
             })
-            .flatten()
+            .flatten();
+        // Photo mode's speed blur draws the ring on a title that has none up (HD's own is
+        // drawn inside its bloom chain, which `view.zoom` marks).
+        borrowed.or_else(|| {
+            let (tuning, _) = self.view.photo.as_ref()?.speed_blur()?;
+            self.view.zoom.is_none().then_some(tuning)
+        })
     }
 
     /// The boost pulse, for a person's own speed pad or Turbo: the player's, or the local seat

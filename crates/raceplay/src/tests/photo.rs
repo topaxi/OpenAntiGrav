@@ -14,7 +14,7 @@ fn photo_mode_imposes_a_camera_and_leaving_puts_back_the_one_that_was_in_force()
     let mut race = race_with_a_grid();
     race.tick(&PlayerInputs::none());
     let before = race.camera_position();
-    assert!(race.photo_begin(false, false));
+    assert!(race.photo_begin(false, false, None));
     assert!(race.photo().is_some());
     race.photo_step(Pad {
         select: true,
@@ -49,7 +49,7 @@ fn a_race_taken_through_photo_mode_hashes_as_one_that_was_not() {
         control.tick(&PlayerInputs::none());
         photographed.tick(&PlayerInputs::none());
         if tick == 60 {
-            assert!(photographed.photo_begin(false, false));
+            assert!(photographed.photo_begin(false, false, None));
             for step in 0..90 {
                 let moved = Pad {
                     stick: ((step as f32 * 0.2).sin(), (step as f32 * 0.1).cos()),
@@ -73,7 +73,7 @@ fn a_race_taken_through_photo_mode_hashes_as_one_that_was_not() {
 fn a_race_split_across_views_does_not_open_photo_mode() {
     let mut race = race_with_a_grid();
     assert_eq!(race.set_viewport_count(2), 2);
-    assert!(!race.photo_begin(false, false));
+    assert!(!race.photo_begin(false, false, None));
     assert!(race.photo().is_none());
     assert_eq!(race.photo_step(pad()), Action::None);
 }

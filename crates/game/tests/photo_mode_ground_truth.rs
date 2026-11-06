@@ -334,6 +334,8 @@ fn every_disc_word_a_title_maps_is_in_its_string_table() {
             Row::Pan,
             Row::Reset,
             Row::Ship,
+            Row::SpeedBlur,
+            Row::Depth,
         ] {
             let Some(id) = title.photo.disc_id(row) else {
                 continue;

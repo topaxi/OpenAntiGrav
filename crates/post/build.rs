@@ -18,6 +18,8 @@ const ARTIFACTS: &[(&str, &str, &[&str])] = &[
     ("wo_composite", "package::wo_composite", &[]),
     ("hd_bloom", "package::hd_bloom", &[]),
     ("hd_zoom", "package::hd_zoom", &[]),
+    ("photo_fx", "package::photo_fx", &[]),
+    ("photo_fx_msaa", "package::photo_fx", &["msaa"]),
     ("ps2_bloom", "package::ps2_bloom", &[]),
     ("bloom", "package::bloom", &[]),
     ("fsr3_clear", "package::fsr3::clear", &[]),

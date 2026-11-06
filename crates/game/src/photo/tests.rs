@@ -67,13 +67,13 @@ fn the_help_names_the_lens_and_the_hud_and_hiding_it_leaves_only_the_message() {
         "{shown:?}"
     );
     assert!(shown.contains(&"OAG_PHOTO_HUD: OAG_PHOTO_OFF".to_string()));
-    photo.step(
-        Pad {
-            help: true,
-            ..Pad::default()
-        },
-        &[0],
-    );
+    let start = Pad {
+        help: true,
+        ..Pad::default()
+    };
+    // START shows the effects panel after the help, and hides both after that.
+    photo.step(start, &[0]);
+    photo.step(start, &[0]);
     assert!(!photo.help());
     assert!(draw_list(&photo, grid, &words(&say, &button), None).is_empty());
     let saved = draw_list(&photo, grid, &words(&say, &button), Some("SAVED"));
@@ -104,4 +104,73 @@ fn a_row_the_disc_words_takes_the_discs_text_and_one_it_does_not_keeps_ours() {
         None,
         "a chip with no disc row"
     );
+}
+
+#[test]
+fn the_effects_panel_lists_four_rows_and_two_more_with_depth_of_field_on() {
+    let say = |id: &str| id.to_string();
+    let button = |b: Button| b.to_string().to_uppercase();
+    let grid = (483.0, 272.0);
+    let mut photo = Photo::new(0, false, None);
+    let help_only = texts(&draw_list(&photo, grid, &words(&say, &button), None));
+    assert!(
+        !help_only.contains(&"OAG_PHOTO_EXPOSURE".to_string()),
+        "the panel is not up yet"
+    );
+    photo.toggle_panel();
+    let shown = texts(&draw_list(&photo, grid, &words(&say, &button), None));
+    for id in [
+        "OAG_PHOTO_EXPOSURE",
+        "OAG_PHOTO_SATURATION",
+        "OAG_PHOTO_SPEED_BLUR",
+        "OAG_PHOTO_DEPTH",
+    ] {
+        assert!(shown.contains(&id.to_string()), "{id} in {shown:?}");
+    }
+    assert!(
+        shown.contains(&"33%".to_string()) && shown.contains(&"20%".to_string()),
+        "{shown:?}"
+    );
+    assert!(!shown.contains(&"OAG_PHOTO_APERTURE".to_string()));
+    photo
+        .effects_mut()
+        .select(oag_raceplay::photo::effects::Row::DepthOfField);
+    photo.effects_mut().adjust(1);
+    let shown = texts(&draw_list(&photo, grid, &words(&say, &button), None));
+    assert!(
+        shown.contains(&"OAG_PHOTO_APERTURE".to_string())
+            && shown.contains(&"OAG_PHOTO_FOCUS".to_string())
+    );
+}
+
+#[test]
+fn a_click_on_the_panel_finds_its_row_and_its_arrows() {
+    use oag_raceplay::photo::effects::Row;
+    let grid = (483.0, 272.0);
+    let mut photo = Photo::new(0, false, None);
+    assert_eq!(
+        row_at(&photo, grid, (400.0, 40.0)),
+        None,
+        "no panel, no rows"
+    );
+    photo.toggle_panel();
+    for (index, &row) in photo.effects().rows().iter().enumerate() {
+        let [x, y, w, h] = row_rect(index, grid);
+        assert!(x >= 0.0 && x + w <= grid.0 && y + h <= grid.1);
+        let mid = y + h / 2.0;
+        assert_eq!(
+            row_at(&photo, grid, (x + 8.0, mid)),
+            Some(RowHit { row, step: 0 })
+        );
+        assert_eq!(
+            row_at(&photo, grid, (x + w - 3.0, mid)),
+            Some(RowHit { row, step: 1 })
+        );
+        assert_eq!(
+            row_at(&photo, grid, (x + w - ARROW - VALUE - 3.0, mid)),
+            Some(RowHit { row, step: -1 })
+        );
+    }
+    assert_eq!(row_at(&photo, grid, (20.0, 150.0)), None);
+    let _ = Row::Exposure;
 }
