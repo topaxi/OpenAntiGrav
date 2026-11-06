@@ -476,14 +476,14 @@ impl Race {
     /// degrades only the camera's half.
     #[must_use]
     pub fn visibility_sections(&self) -> (u8, u8) {
-        // The viewed craft's, because this places the camera being drawn: the seat's on a
-        // network client, not slot 0's. An opponent recovering across the circuit must not
-        // blank the shot.
-        let slot = self.viewed_slot();
+        // The framed craft's, because this places the camera being drawn: the seat's on a
+        // network client, not slot 0's, and photo mode's subject while it is open. An
+        // opponent recovering across the circuit must not blank the shot.
+        let slot = self.framed_slot();
         if self.sim.respawn_cooldown[slot] > 0 {
             return (UNPLACED, UNPLACED);
         }
-        let ship = self.viewed_ship();
+        let ship = &self.sim.world.ships[slot];
         // The simulation already located the craft this tick and left the
         // sample index in `Ship::segment`, so the craft's half is a table read
         // rather than a second scan of the whole track. Doing it again here
@@ -537,7 +537,7 @@ impl Race {
     /// inside a tube whose inside the original's mask leaves out.
     #[must_use]
     pub fn station_camera_section(&self) -> Option<u8> {
-        if self.extra_viewpoint().is_some() {
+        if self.extra_viewpoint().is_some() || self.view.photo.is_some() {
             return None;
         }
         self.drawn_craft_of_a_station_camera()

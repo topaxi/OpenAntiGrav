@@ -348,7 +348,7 @@ impl Scene {
             .and_then(|pvs| {
                 ChunkSet::around(
                     pvs,
-                    race.viewed_ship().physics.body.position,
+                    race.framed_ship().physics.body.position,
                     race.camera_position(),
                 )
             });

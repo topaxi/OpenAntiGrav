@@ -244,7 +244,7 @@ impl super::Race {
     pub(super) fn advance_weather(&mut self, dt: f32) {
         let section = self
             .station_camera_section()
-            .unwrap_or_else(|| self.section_of_slot(self.player_slot()));
+            .unwrap_or_else(|| self.section_of_slot(self.framed_slot()));
         let section = if section == oag_render::pvs::UNPLACED {
             self.view.scenery_fx.weather().section()
         } else {
@@ -256,7 +256,7 @@ impl super::Race {
         // Ours, chosen: the lens's drops slide outward while the viewed craft boosts, with
         // the enhanced weather on only; off, the lens keeps the original's law untouched.
         let boosting = self.enhanced_weather() && {
-            let ship = &self.sim.world.ships[self.viewed_slot()].physics;
+            let ship = &self.sim.world.ships[self.framed_slot()].physics;
             ship.pad_timer > 0.0 || ship.turbo_timer > 0.0
         };
         self.view
