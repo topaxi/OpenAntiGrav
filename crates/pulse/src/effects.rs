@@ -199,6 +199,7 @@ pub const LOOKS: &Looks = &Looks {
     material_lod_bias: Rule::UNREAD,
     material_render_state: Rule::UNREAD,
     blends_encoded: Rule::UNREAD,
+    final_composite_half_texel: Rule::UNREAD,
     // Pulse ends its frame in its own bloom (`oag_post::bloom`), not the `wo_*` chain.
     wo_composite: Rule::UNREAD,
 };

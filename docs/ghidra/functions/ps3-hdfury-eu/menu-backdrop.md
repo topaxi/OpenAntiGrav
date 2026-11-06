@@ -641,8 +641,68 @@ not match. Wired: `oag_game::boot::fury` reads that file through `oag_raceplay::
 frames, 8 of them races on Anulpha Pass, Moa Therma, Talon's Junction and Vineta K at widths `1300`, `1320` and `1660` (`0.000385`, `0.000379`, `0.000301`), `0.000463` on `v`
 in all. So on a race the offset follows the dynamic width, and it is half a texel of the source, not of the display. Confidence 90; a dump's own `1920` frames say the same.
 
-The half texel of "Three more readings" happens in our present pass, ahead of the chain, because the chain has no tap for it;
-the original's ladder reads the field directly. Measured effect: none separated. Open.
+**Wired (2026-11-06).** `oag_title::Looks::final_composite_half_texel` (HD: `Measured`) reaches `oag_post::hd_bloom::Params::final_half_texel`
+as the race chain's resolve (`fs_encode`) offset `(0.5 / w, 0.5 / h)` of the drawn rectangle, so it follows the dynamic width. The four
+texels are taken by hand, each decoded to light first: on HD the scene target holds encoded values, and the hardware's bilinear filter would
+average those and decode after. Test: `hd_bloom::half_texel_tests` (a 1-texel black and white checker over a 43x41 rectangle of a 64x64 target
+resolves to the byte of a flat linear `0.5` with the tap and texel for texel without; red if the tap is dropped or divided by the wrong size).
+The Fury backdrop's present pass is a plain copy now and its chain carries the same tap (`the_constants_are_the_ones_rpcs3_uploads`), so the
+offset is applied once and the gate sees the field's scanline rows whole, as the original's ladder does.
+
+Race pairs, Laplacian variance of grey over 1920x1080 boxes (x, y, w, h), theirs / ours before / ours after:
+
+| Pair, box | theirs | before | after |
+| --- | ---: | ---: | ---: |
+| `anulpha-pass`, billboard text 1500,300,300,120 | 378 | 1219 | 265 |
+| `anulpha-pass`, floor 1250,800,400,250 | 431 | 635 | 381 |
+| `anulpha-pass`, wall 100,500,400,300 | 106 | 483 | 116 |
+| `moa-therma`, billboard text 1500,300,300,120 | 285 | 1778 | 358 |
+| `moa-therma`, floor 1250,800,400,250 | 437 | 523 | 307 |
+| `moa-therma`, wall 100,500,400,300 | 228 | 1012 | 206 |
+
+Ours was sharper than the original in all six boxes and is now within about a third of it, overshooting to softer in four. Ours renders these at
+a native 1920 wide; the capture's own dynamic width was not separated, so the remaining gap is not attributed to the tap. A crop of the
+billboard text reads as the original's softness with a little less bloom glow around the letters.
+
+**Lineage (read 2026-11-06, `half-texel-lineage`, static, no live readout).**
+
+**Omega: checked, differs (confidence 78).** The offset is not in the shader and not in the quad:
+
+- The race composite's pixel program (patch `Shdr` `0x9c9f94`, base `0x954e64`) samples `FrameTexture`, `LowResAdditiveTexture` and
+  `BloomTexture` at `v_interp` `attr0` (`In.m_UV`) plus a distortion term (`0.0100021 * Distortion.rg`) and nothing else; the vignette
+  uses `uv - 0.5`, so the UV runs 0..1 across the screen. No `0.5 / w` term anywhere in its 135 instructions.
+- Both candidate vertex programs (`0x954c34` with `xyOffset`, `0x9613f4`) export `param0 = Input.m_UV` unchanged. `xyOffset` only feeds
+  `param1` (`m_xyOffsetUV`), which this composite does not read.
+- The vertices are a static quad in the base `eboot.bin` at va `0x80dd20` (Ghidra `0x0180dd20`; file offset = va + `0x50f0` on the
+  base): `(x, y, u, v)` = `(-1, 1, 0, 0)`, `(1, 1, 1, 0)`, `(1, -1, 1, 1)`, `(-1, -1, 0, 1)`. UV is exactly 0 and 1. It is copied
+  into the frame's dynamic buffer by `0x784020` (Ghidra `0x01784020`), which `FUN_01625750` (the composite and bloom driver) calls at
+  four sites (`0x625d14`, `0x626317`, `0x6268c4`, `0x626d19`), each with a program object in `rdi`.
+- The scanout copy (`FUN_0122d670`) is a vertex-id rect (`Shdr` `0x7e8db4`, no UV) with `image_load_mip`: an integer fetch, no
+  sampler, so no offset by construction.
+
+So Omega's final composite carries no half texel (read, not inferred from the API): **nothing to wire**. HD's `0.5 / width` lives in its immediate vertices and Omega's quad authors none. Not read: the pairing of
+each of the four `0x784020` sites to the composite program (the quad is the only one `FUN_01625750` draws, which is the evidence).
+Reproduce: `cargo run -p oag-rcs --example gcn_dump -- <omega-eu>/uroot/eboot.bin --at 0x954e64` (and `0x954c34`, `0x9613f4`),
+`python3` over the 64 bytes at file offset `0x80dd20 + 0x50f0`.
+
+**2048: not settled, one value unread (confidence 35).** Not a verdict. What is read:
+
+- `PostFx_RenderChain` (`0x810387b4`) writes the composite's three vertex uniforms as half pairs through handles `0x8151c614`
+  (`mainScaleBias`), `0x8151c618` (`bloomScaleBias`) and `0x8151c61c` (`vignetteTint`), at `0x81039816`-`0x81039872`, from halves
+  at `sp+0x88..0x9c`. (The handles are the lookup order in `PostFx_CreateTargets`, `0x81037670`, not read off a name; `0x8151c610` is
+  the `tex` sampler of the program at `0x816af0e0`.)
+- `wo_composite`'s vertex program is `uv * scale + bias` (Omega carries the same programs, `Shdr` `0x9581f4` and `0x9590b4`:
+  `v_mad_f32 uv, scale, bias`), so the half texel, if any, is inside `bias` or in the quad.
+- The bias is a rectangle `(x0, y0, x1, y1)` read from `[r4]..[r4+0xc]` at `0x81039382` (`scale = x1 - x0`, `y1 - y0`; bias `x0`,
+  `y0`), plus a **conditional `0.25 / width` and `0.25 / height`** of the surface at `[arg + 0x20]` added to the bias at
+  `0x810393a6`-`0x810393ee`, taken when the byte at `sp+0x35c` (a caller argument) is set. That is a quarter texel of some target,
+  not a half texel, and which target and which race state sets the flag is unread.
+- The CPU quads of the blur branches (`0x81038f1a`, `0x8103bc90`) are `(-1, 1)`, `(-1, -1)`, `(1, -1)`, `(1, 1)` with UVs `(0, 0)`,
+  `(0, 1)`, `(1, 1)`, `(1, 0)`: no offset. The blur programs' `offset` uniform carries `+-0.5 / w` and `0.5 / h` (`0x81038dec`-`0x81038e14`,
+  `0x81039080`-`0x810390a8`); those are the blur taps (`exposure.md`'s half texels), not the final quad.
+- Not read: the composite draw's own quad and the flag at `sp+0x35c`. Recipe: in `0x810387b4`, follow `[sp+0x35c]` back to the caller
+  arg, then read the word stored through `0x8151c614` (`0x81039824`) in Vita3K with a breakpoint on that store, or decode the halves at
+  `sp+0x88`/`sp+0x8c` for a race frame. Disassembler: `capstone` Thumb over the patch `eboot.elf` (`PCSF00007/patch-v104`).
 
 ## The Fury references carry an RPCS3 defect: records past 16,383 are never drawn
 

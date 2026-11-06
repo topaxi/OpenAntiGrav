@@ -71,6 +71,7 @@ fn plain() -> hd_bloom::Params {
         tone_adaption_boost: 0.0,
         tone_darkening_clamp: 0.0,
         tone_maximum_brightness: 1.0,
+        final_half_texel: false,
         zoom: None,
         store: oag_gpu::formats::SceneStore::Computed,
     }
