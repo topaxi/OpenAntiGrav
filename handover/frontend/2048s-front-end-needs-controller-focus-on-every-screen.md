@@ -30,3 +30,4 @@ screens (executable and Vita3K both read), so the pad focus is the tile's own pr
 
 1. Read `FUN_810edc10`'s `+0xfc` writer and the `Touchlist` selected look on Vita3K.
 2. Draw the toggles above from their `TouchButton` widgets, then they join the pad's tile list.
+3. A toggle counts as done only if it changes something: check that `Music Sequential` and `Music Random` really switch 2048's music order, in the original and in `oag-music`/`oag-sound`.
