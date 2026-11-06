@@ -540,6 +540,22 @@ opt-level = 2
 [profile.dev.package.oag-fx]
 opt-level = 2
 
+# The music path: ATRAC3+, ATRAC9, MP3 and Wwise decodes, the mixer and the
+# soundtrack's segment mixing, per-sample loops over whole songs.
+[profile.dev.package.oag-audio]
+opt-level = 2
+[profile.dev.package.oag-music]
+opt-level = 2
+[profile.dev.package.oag-sound]
+opt-level = 2
+
+# Every race's hulls, skins and shields, and every circuit's track file written
+# and read back: whole-disc walks in code that ran at opt-level 0.
+[profile.dev.package.oag-livery]
+opt-level = 2
+[profile.dev.package.oag-trackfile]
+opt-level = 2
+
 # The mesh pipeline and the post-processing chain were `oag-render`'s two
 # hottest modules; the ground-truth tests that decode a whole model and run a
 # pass over it keep the same opt-level they had there.
@@ -621,4 +637,14 @@ opt-level = 0
 [profile.quick.package.oag-mesh]
 opt-level = 0
 [profile.quick.package.oag-post]
+opt-level = 0
+[profile.quick.package.oag-audio]
+opt-level = 0
+[profile.quick.package.oag-music]
+opt-level = 0
+[profile.quick.package.oag-sound]
+opt-level = 0
+[profile.quick.package.oag-livery]
+opt-level = 0
+[profile.quick.package.oag-trackfile]
 opt-level = 0
