@@ -188,6 +188,7 @@ pub struct PfscSource<S: Source> {
     pub data_len: u64,
     cache: Vec<(u64, Vec<u8>)>,
     cache_blocks: usize,
+    inflater: flate2::Decompress,
 }
 
 impl<S: Source> PfscSource<S> {
@@ -245,6 +246,7 @@ impl<S: Source> PfscSource<S> {
             data_len,
             cache: Vec::new(),
             cache_blocks,
+            inflater: flate2::Decompress::new(false),
         })
     }
 
@@ -268,7 +270,7 @@ impl<S: Source> PfscSource<S> {
             } else {
                 let mut packed = vec![0u8; span as usize];
                 self.inner.read_at(from, &mut packed)?;
-                inflate_sector(&packed, block, index)?
+                inflate_sector(&mut self.inflater, &packed, block, index)?
             };
             if self.cache.len() >= self.cache_blocks {
                 self.cache.remove(0);
@@ -279,8 +281,14 @@ impl<S: Source> PfscSource<S> {
     }
 }
 
-/// A zlib stream (two-byte header, deflate, checksum) inflated to exactly one sector.
-fn inflate_sector(packed: &[u8], block: usize, index: u64) -> Result<Vec<u8>> {
+/// A zlib stream (two-byte header, deflate, checksum) inflated to exactly one
+/// sector. `inflater` is reused across sectors (reset, not rebuilt).
+fn inflate_sector(
+    inflater: &mut flate2::Decompress,
+    packed: &[u8],
+    block: usize,
+    index: u64,
+) -> Result<Vec<u8>> {
     let refuse = |why: String| Error::Package {
         path: PathBuf::new(),
         reason: format!("PFSC sector {index}: {why}"),
@@ -288,13 +296,19 @@ fn inflate_sector(packed: &[u8], block: usize, index: u64) -> Result<Vec<u8>> {
     let body = packed
         .get(2..)
         .ok_or_else(|| refuse("shorter than its header".into()))?;
-    let out = miniz_oxide::inflate::decompress_to_vec_with_limit(body, block)
-        .map_err(|e| refuse(format!("inflate failed: {:?}", e.status)))?;
-    if out.len() != block {
+    inflater.reset(false);
+    let mut out = vec![0u8; block];
+    let status = inflater
+        .decompress(body, &mut out, flate2::FlushDecompress::Finish)
+        .map_err(|e| refuse(format!("inflate failed: {e}")))?;
+    let got = inflater.total_out() as usize;
+    if status != flate2::Status::StreamEnd {
         return Err(refuse(format!(
-            "inflated to {} of {block} bytes",
-            out.len()
+            "inflate did not end within {block} bytes (produced {got})"
         )));
+    }
+    if got != block {
+        return Err(refuse(format!("inflated to {got} of {block} bytes")));
     }
     Ok(out)
 }

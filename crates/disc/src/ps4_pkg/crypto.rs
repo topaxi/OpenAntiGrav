@@ -5,6 +5,7 @@
 
 use aes::Aes128;
 use aes::cipher::generic_array::GenericArray;
+use aes::cipher::inout::InOutBuf;
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 use num_bigint::BigUint;
 
@@ -137,6 +138,9 @@ pub fn aes_cbc_decrypt(data: &mut [u8], key: &[u8; 16], iv: &[u8; 16]) {
     }
 }
 
+/// Blocks in the largest sector `Xts::decrypt_sector` is given.
+const XTS_BLOCKS: usize = 0x1000 / 16;
+
 /// One AES-XTS-128 key pair, decrypting 4 KiB sectors the way the PS4's PFS does.
 pub struct Xts {
     data: Aes128,
@@ -164,24 +168,30 @@ impl Xts {
         t[..8].copy_from_slice(&number.to_le_bytes());
         self.tweak
             .encrypt_block(GenericArray::from_mut_slice(&mut t));
-        for block in sector.as_chunks_mut::<16>().0 {
-            for (b, x) in block.iter_mut().zip(t) {
-                *b ^= x;
-            }
-            self.data
-                .decrypt_block(GenericArray::from_mut_slice(&mut block[..]));
-            for (b, x) in block.iter_mut().zip(t) {
-                *b ^= x;
-            }
-            let mut carry = 0u8;
-            for byte in t.iter_mut() {
-                let next = *byte >> 7;
-                *byte = (*byte << 1) | carry;
-                carry = next;
-            }
-            if carry != 0 {
-                t[0] ^= 0x87;
-            }
+        // The tweak sequence is data-independent, so the whole sector is masked,
+        // decrypted as one batch (the cipher pipelines blocks) and unmasked.
+        assert!(
+            sector.len() <= XTS_BLOCKS * 16,
+            "sector longer than {} bytes",
+            XTS_BLOCKS * 16
+        );
+        let mut tweak = u128::from_le_bytes(t);
+        let mut masks = [0u128; XTS_BLOCKS];
+        for (block, mask) in sector
+            .as_chunks_mut::<16>()
+            .0
+            .iter_mut()
+            .zip(masks.iter_mut())
+        {
+            *mask = tweak;
+            *block = (u128::from_le_bytes(*block) ^ tweak).to_le_bytes();
+            let carry = tweak >> 127;
+            tweak = (tweak << 1) ^ (carry * 0x87);
+        }
+        let (batch, _) = InOutBuf::from(&mut sector[..]).into_chunks();
+        self.data.decrypt_blocks_inout(batch);
+        for (block, mask) in sector.as_chunks_mut::<16>().0.iter_mut().zip(masks) {
+            *block = (u128::from_le_bytes(*block) ^ mask).to_le_bytes();
         }
     }
 }

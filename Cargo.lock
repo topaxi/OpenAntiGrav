@@ -3068,6 +3068,7 @@ dependencies = [
  "aes",
  "chd",
  "dirs",
+ "flate2",
  "miniz_oxide 0.9.1",
  "num-bigint",
  "oag-testdata",
