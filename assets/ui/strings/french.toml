@@ -313,6 +313,12 @@ OAG_MEDAL_GOLD = { text = "OR", human = false }
 OAG_MEDAL_SILVER = { text = "ARGENT", human = false }
 OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }
 
+# The player name and tag: the OPTIONS rows and the entry screens' titles.
+OAG_OPTIONS_PLAYER_NAME = { text = "NOM DU JOUEUR", human = false }
+OAG_OPTIONS_PLAYER_TAG = { text = "TAG DU JOUEUR", human = false }
+OAG_PLAYER_NAME_TITLE = { text = "ENTREZ VOTRE NOM", human = false }
+OAG_PLAYER_TAG_TITLE = { text = "ENTREZ VOTRE TAG", human = false }
+
 [untranslated]
 ids = [
     # The MODS page, new 2026-10-12; no translation pass yet.

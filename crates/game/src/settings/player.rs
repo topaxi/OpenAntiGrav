@@ -64,6 +64,27 @@ impl Player {
         }
     }
 
+    /// Stores `text` as the name. An answer with nothing drawable in it leaves the stored name
+    /// alone and returns `false`.
+    pub fn set_name(&mut self, text: &str) -> bool {
+        let name = clean_name(text);
+        let keep = !name.is_empty();
+        if keep {
+            self.name = name;
+        }
+        keep
+    }
+
+    /// As [`Self::set_name`], for the tag.
+    pub fn set_tag(&mut self, text: &str) -> bool {
+        let tag = clean_tag(text);
+        let keep = !tag.is_empty();
+        if keep {
+            self.tag = tag;
+        }
+        keep
+    }
+
     /// The name, or `None` while none is stored. `multiplayer-tags` and the lobby read this.
     #[must_use]
     pub fn name(&self) -> Option<&str> {
@@ -205,6 +226,18 @@ mod tests {
             what_to_ask(&Profile::NAME_AND_TAG, &Player::default(), true, true),
             Ask::Nothing
         );
+    }
+
+    #[test]
+    fn an_empty_answer_never_blanks_a_stored_name_or_tag() {
+        let mut player = stored("Zoe", "ZOE");
+        assert!(!player.set_name(""));
+        assert!(!player.set_name("!!!"));
+        assert!(!player.set_tag(""));
+        assert_eq!(player, stored("Zoe", "ZOE"));
+        assert!(player.set_name("kim"));
+        assert!(player.set_tag("kim"));
+        assert_eq!(player, stored("kim", "KIM"));
     }
 
     #[test]

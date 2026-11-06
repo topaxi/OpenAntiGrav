@@ -472,3 +472,27 @@ fn pose_parses_in_every_build() {
 fn a_run_with_no_window_opens_no_gamepad() {
     assert!(!app::controls_for(true).pad().is_available());
 }
+
+/// The first-run name prompt opens only for a person at a plain launch: every capture, script,
+/// trace, comparison or race flag is automation and never gets it.
+#[test]
+fn only_a_plain_launch_is_interactive() {
+    assert!(Cli::try_parse_from(["oag-game"]).expect("parses").is_interactive());
+    for flags in [
+        &["--screenshot", "x.png"][..],
+        &["--original-menu"],
+        &["--race"],
+        &["--dry-run"],
+        &["--trace"],
+        &["--script", "1:down"],
+        &["--preseat"],
+        &["--prefetch"],
+        &["--probe-pad"],
+        &["--until", "Home"],
+    ] {
+        let mut args = vec!["oag-game"];
+        args.extend_from_slice(flags);
+        let cli = Cli::try_parse_from(&args).expect("parses");
+        assert!(!cli.is_interactive(), "{flags:?} is automation");
+    }
+}

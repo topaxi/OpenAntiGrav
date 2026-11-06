@@ -500,6 +500,20 @@ label = "CONTROLS"
 string_id = "OAG_OPTIONS_CONTROLS"
 target = "controls"
 
+# The name every title shares, and the tag Pulse and Pure draw (`oag_title::profile`). The
+# rows are dropped on a title that keeps neither (`drop_unavailable_player_rows`).
+[[page.entry]]
+kind = "action"
+label = "PLAYER NAME"
+string_id = "OAG_OPTIONS_PLAYER_NAME"
+action = "edit_player_name"
+
+[[page.entry]]
+kind = "action"
+label = "PLAYER TAG"
+string_id = "OAG_OPTIONS_PLAYER_TAG"
+action = "edit_player_tag"
+
 # Ours - no disc has ever shipped a pilot editor, because pilots are this
 # project's own invention. See `crates/game/src/pilots.rs`.
 [[page.entry]]
