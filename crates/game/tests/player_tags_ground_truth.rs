@@ -108,7 +108,7 @@ fn the_stored_name_is_seat_ones_tag_and_seat_two_keeps_its_stop_gap() {
         name: "Ada".into(),
         ..Default::default()
     };
-    oag_game::split_screen::name_first_seat(&mut named, &player);
+    oag_game::split_screen::name_first_seat(&mut named, &player, &oag_pulse::TITLE.profile);
     assert_eq!(named.player_slot(), 0, "seat 1 is the grid's first slot");
     assert_eq!(named.tag_name(0), "Ada");
     assert_eq!(named.tag_name(1), "Player 2");
@@ -122,9 +122,18 @@ fn the_stored_name_is_seat_ones_tag_and_seat_two_keeps_its_stop_gap() {
     );
 
     let mut blank = two_people(true).unwrap();
-    oag_game::split_screen::name_first_seat(&mut blank, &oag_game::settings::Player::default());
+    oag_game::split_screen::name_first_seat(
+        &mut blank,
+        &oag_game::settings::Player::default(),
+        &oag_pulse::TITLE.profile,
+    );
     assert_eq!(blank.tag_name(0), "Player 1");
     assert_eq!(blank.tag_name(1), "Player 2");
+
+    // A title that keeps no name (2048, Omega) is not named from the shared one.
+    let mut other = two_people(true).unwrap();
+    oag_game::split_screen::name_first_seat(&mut other, &player, &oag_2048::TITLE.profile);
+    assert_eq!(other.tag_name(0), "Player 1");
 }
 
 /// The face the tags are drawn in comes off the disc's `MPTag_HUD.xml`, and the eight labels

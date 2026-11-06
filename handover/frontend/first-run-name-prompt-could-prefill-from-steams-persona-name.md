@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-06
-summary: "Name and tag are built, stored and shown (Pulse title readable, tags carry the stored name); Steam persona prefill is open, plus 2048/Omega asking, a Deck keyboard call and a phone check"
+summary: "Name and tag built and shown; Steam persona prefill, 2048/Omega asking, a Deck keyboard call and a phone check are open"
 size: S (40)
 difficulty: easy (40)
 ---

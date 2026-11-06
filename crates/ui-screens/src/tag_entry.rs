@@ -533,8 +533,8 @@ impl TagEntry {
                 // own header behind it. Chosen, not measured.
                 y: title.y.max(panel_top + skin.line_height() * 0.3),
                 scale: skin.row_scale(),
-                // Authored `FEGlobals->TitleColor`, black on Pulse's light page; it reads
-                // on this panel only once `legible` swaps it for white.
+                // Authored `FEGlobals->TitleColor` (black); it reads on this panel only once
+                // `legible` swaps it for white.
                 color: legible(argb_to_rgba(title.color)),
                 border: None,
                 align: Align::parse(&title.align),

@@ -513,7 +513,7 @@ pub fn capture(
     race.set_dynamic_hud(options.dynamic_hud);
     race.set_ghost_visible(options.ghost_visible);
     race.set_player_tags(options.player_tags);
-    crate::split_screen::name_first_seat(&mut race, &options.player);
+    crate::split_screen::name_first_seat(&mut race, &options.player, &title.profile);
     race.set_hull_shake(options.hull_shake);
     race.watch_laps(
         &hud,

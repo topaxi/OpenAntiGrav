@@ -429,8 +429,8 @@ fn title_over_panel(title_colour: u32) -> ([f32; 4], [f32; 4]) {
     (ink, panel)
 }
 
-/// Pulse authors the title in `FEGlobals->TitleColor`, black, for its light page. The panel
-/// this draws over is dark, so black reads as nothing.
+/// Pulse authors the title in `FEGlobals->TitleColor`, black. The panel this draws over is
+/// dark, so black reads as nothing.
 #[test]
 fn a_black_authored_title_is_drawn_so_it_reads_on_the_dark_panel() {
     let (ink, panel) = title_over_panel(0xFF00_0000);

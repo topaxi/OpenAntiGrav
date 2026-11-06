@@ -56,6 +56,20 @@ allowed keys. Pure ships no front-end XML on its disc, so it takes the grid (che
 real disc: `--menu-page options --menu-prompt player-tag-grid`). `--menu-prompt player-name`,
 `player-tag`, `player-name-grid` and `player-tag-grid` draw them as stills.
 
+The title ("ENTER YOUR NAME", "ENTER YOUR TAG") is the disc's `FEGlobals->TitleColor`, `0xFF000000`
+(black), the same ink the OPTIONS header uses. The prompt's panel is ours and dark, so
+`TagEntry::draw` passes the title through `window_layout::legible` (white at 0.6 where the ink is too
+dark, as the window picker does for its boxes); a light authored colour is kept. What the original
+draws the title over on its own name screen is not measured. Checked on Pulse EU `--menu-page options
+--menu-prompt player-name` and `player-tag` (the title was 1.10:1 against the panel, now readable). On
+Pure the live prompt's `pulse_tag_entry` fails for a source that is not Pulse's and the grid opens
+(white title); `--menu-prompt player-name` on a Pure disc prints that same refusal and
+`player-name-grid` draws the Pure grid. The pilot rename shares `TagEntry::draw`; its `--menu-prompt
+rename` still draws the grid, so that still is not evidence for it. Tests:
+`tag_entry::tests::a_black_authored_title_is_drawn_so_it_reads_on_the_dark_panel` and the disc-backed
+`tag_entry_ground_truth::the_name_and_tag_titles_read_on_the_prompts_panel`.
+
+
 The footer's `<TextInfo type="tag">` (`NewsItemTagText`) now draws the stored tag at its authored
 `(30, 235)` in the `Default` face (`NavigationLegend::set_tag`); `docs/ui/menus-original.md`,
 "What still differs, ranked", item 3. The face and colour are not measured against the original:
@@ -79,6 +93,10 @@ read `person_names`:
 - seat 1's row on Pulse's multiplayer end table (`PersonName::Named`) and HD's field grid;
 - on HD's grid also a one-person race's own row, which had no name before (HD keeps a name,
   `Title::profile`): unmeasured against the original.
+
+Only a title whose `Title::profile` keeps a name is given it (Pulse, Pure, HD): 2048 and Omega keep
+none and ask when it is first needed (open, above), so a stored name does not reach their tags or
+end rows yet.
 
 The name never reaches the simulation or a hash. A network race joins after the stage is built and
 `NetPlay::begin_join` replaces the whole list with the lobby's names, so the lobby wins. The
@@ -113,14 +131,6 @@ pinned by a test: it is in the binary, which only a window reaches.
 
 ## Open
 
-- The `ENTER YOUR NAME` / `ENTER YOUR TAG` title on Pulse is the disc's `FEGlobals->TitleColor`
-  (`0xFF000000`, black), authored for Pulse's light page. The prompt's dark panel is ours, so
-  `TagEntry::draw` passes the title through `window_layout::legible` (white at 0.6 where the ink is
-  too dark, as the window picker does for its boxes). A light authored colour is kept. Checked on
-  Pulse EU `--menu-page options --menu-prompt player-name` and `player-tag`; Pure takes the grid
-  (white title, `player-name-grid`), and the pilot rename shares `TagEntry::draw`. Test:
-  `tag_entry::tests::a_black_authored_title_is_drawn_so_it_reads_on_the_dark_panel` and the
-  disc-backed `the_name_and_tag_titles_read_on_the_prompts_panel`.
 - The Pulse prompts read the disc (`pilot_editor::Session::pulse_tag_entry`, in
   `crates/game/src/main/session/pilot_editor.rs`: opens the archive, parses two XML entries) on the
   render thread each time a name or tag prompt opens. Inherited from the pilot rename; a boot-time read
