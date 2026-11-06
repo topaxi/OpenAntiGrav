@@ -58,6 +58,8 @@ mod load_probe;
 mod menu_sound;
 #[path = "session/menu_source.rs"]
 mod menu_source;
+#[path = "session/opening_reads.rs"]
+mod opening_reads;
 #[path = "session/music.rs"]
 mod music;
 #[path = "session/mods_page.rs"]
@@ -562,6 +564,9 @@ pub(crate) struct Session {
     /// The source the race box's selection screens read, opened on a worker on the first menu
     /// frame - see `session::menu_source`.
     pub(crate) menu_source: menu_source::MenuSource,
+    /// What Track Select and Ship Select would open on, read ahead - see
+    /// `session::opening_reads`.
+    pub(crate) opening_reads: opening_reads::OpeningReads,
     pub(crate) prompt: oag_game::prompts::PromptState,
     /// Every screen filter this run can offer: the built-ins and the player's
     /// own `shaders/` directory, polled once a second by the frame loop so a

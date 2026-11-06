@@ -1054,6 +1054,7 @@ impl Session {
         self.phases.mark(super::phases::Phase::Ticks);
         self.start_endrace_prefetch();
         self.start_menu_source();
+        self.refresh_opening_reads();
         self.build_endrace();
 
         self.begin_scene_frame();

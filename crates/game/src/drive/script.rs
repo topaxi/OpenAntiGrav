@@ -52,7 +52,7 @@ impl Cond {
         };
         if !super::State::is_key(key) {
             return Err(format!(
-                "{key:?} is not a state key (stage, frontend, page, screen, screen.id, title, focus, race.*)"
+                "{key:?} is not a state key (stage, frontend, page, screen, screen.id, title, focus, opening_reads, race.*)"
             ));
         }
         Ok(Self {

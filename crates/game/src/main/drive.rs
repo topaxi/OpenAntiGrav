@@ -331,6 +331,8 @@ fn state_of(session: &Session) -> State {
         Stage::Menu(stage) => {
             state.page = Some(stage.menu.page().id.clone());
             state.screen = Some(screen(stage));
+            let landed = session.opening_reads_landed();
+            state.opening_reads = Some(if landed { "landed" } else { "reading" }.to_string());
         }
         _ => {}
     }

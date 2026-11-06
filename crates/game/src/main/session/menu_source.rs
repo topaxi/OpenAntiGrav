@@ -251,6 +251,15 @@ impl Session {
         }
     }
 
+    /// [`Self::menu_source`] that never waits: `None` while the worker is still running.
+    pub(super) fn landed_menu_source(&mut self) -> Option<(SharedArchives, oag_game::unlock::Gate)> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if matches!(&self.menu_source, MenuSource::Opening(_, task) if !task.is_finished()) {
+            return None;
+        }
+        self.menu_source()
+    }
+
     /// Owned archives for a screen that keeps them, from the worker's spare when the menus'
     /// source is open for the current options (a refill is opened on a worker at once), else
     /// `None`: the caller opens its own.
