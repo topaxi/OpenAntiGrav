@@ -255,15 +255,14 @@ fn fs_scanlines(in: ClipUv) -> @location(0) vec4<f32> {
     return stored(vec4<f32>(post.scanline.rgb, 0.0));
 }
 
-// What the final composite reads: its quad carries a half-texel offset on both
-// axes and reads bilinearly, so each pixel on screen is the mean of four field
-// texels in linear light and a scanline is two half-dark rows
-// (menu-backdrop.md, "Three more readings"). Linear, for the bloom chain's float
-// scene target, which is what runs that composite.
+// The finished field into the bloom chain's float scene target, as light and with no
+// offset: the original's ladder reads the field directly, and the half texel the final
+// composite's quad carries is the chain's own resolve (`Params::final_half_texel`), so a
+// scanline reaches the gate as one dark row and the screen as two half-dark ones
+// (menu-backdrop.md, "A race's final composite is the same quad").
 @fragment
 fn fs_present(in: ClipUv) -> @location(0) vec4<f32> {
-    let half_texel = 0.5 / vec2<f32>(textureDimensions(source));
-    return textureSample(source, trail_sampler, in.uv + half_texel);
+    return textureSample(source, trail_sampler, in.uv);
 }
 
 // The finished picture onto the page, as the bytes it holds: the page is

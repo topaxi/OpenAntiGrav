@@ -86,7 +86,15 @@ pub(super) fn load(
     };
     let settings = FuryBackdrop::read(&read_settings(archives, FURY_SETTINGS, report)?);
     let bloom_table = read_settings(archives, FURY_BLOOM_SETTINGS, report)?;
-    let Some(bloom) = oag_raceplay::hd_bloom_params(&bloom_table) else {
+    let Some(bloom) = oag_raceplay::hd_bloom_params(&bloom_table).map(|bloom| {
+        // The backdrop ends in the final composite's quad, which reads half a texel off
+        // (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "The field reaches the screen
+        // half a texel off"): the same law as a race's, on the Fury skin that draws it.
+        oag_post::hd_bloom::Params {
+            final_half_texel: true,
+            ..bloom
+        }
+    }) else {
         report.push(format!(
             "menu backdrop: {FURY_BLOOM_SETTINGS} has no complete HDR and Bloom block"
         ));

@@ -29,8 +29,10 @@ struct Constants {
     tone_adaption_boost: f32,
     tone_darkening_clamp: f32,
     tone_maximum_brightness: f32,
-    _pad0: f32,
-    _pad1: f32,
+    // The resolve's read offset, in the drawn rectangle's own 0..1: half a
+    // source texel on each axis, or zero where the title's final composite
+    // reads on the texel centres. Only `fs_encode` reads it.
+    read_shift: vec2<f32>,
     // Which sub-rectangle of every source in this chain was drawn, as a UV
     // scale and a clamp half a texel inside its edge. One pair for the whole
     // ladder: each level's viewport is its own size times the same fraction,
@@ -283,6 +285,33 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(sum / 4.2, 1.0);
 }
 
+// The resolve's tap of the scene, in linear light.
+//
+// With no `read_shift` it is the plain bilinear tap. With one it is the same
+// bilinear filter taken by hand, texel by texel: the target holds an encoded
+// value on a title whose scene stores encoded (`scene_encoded`), and the
+// hardware filter would average those and decode after, where the original's
+// units decode on fetch and filter light. Each texel is clamped and decoded
+// first (`scene_tap`), then weighted, and the four stay inside the drawn
+// rectangle.
+fn resolve_scene_tap(uv: vec2<f32>) -> vec3<f32> {
+    if constants.read_shift.x == 0.0 && constants.read_shift.y == 0.0 {
+        return scene_tap(textureSample(source_tex, source_sampler, drawn_scene(uv))).rgb;
+    }
+    let size = vec2<f32>(textureDimensions(source_tex));
+    let at = drawn_scene(uv) * size - 0.5;
+    let first = floor(at);
+    let weight = at - first;
+    let last = floor(constants.scene_max * size);
+    let low = vec2<i32>(max(first, vec2<f32>(0.0)));
+    let high = vec2<i32>(min(first + 1.0, last));
+    let a = scene_tap(textureLoad(source_tex, vec2<i32>(low.x, low.y), 0)).rgb;
+    let b = scene_tap(textureLoad(source_tex, vec2<i32>(high.x, low.y), 0)).rgb;
+    let c = scene_tap(textureLoad(source_tex, vec2<i32>(low.x, high.y), 0)).rgb;
+    let d = scene_tap(textureLoad(source_tex, vec2<i32>(high.x, high.y), 0)).rgb;
+    return mix(mix(a, b, weight.x), mix(c, d, weight.x), weight.y);
+}
+
 // The read resolve, `downsamplescaleaddfeedback_fp` (0x92a500) plus the PPU
 // arithmetic that fills its `scale` parameter (FUN_003e3268/FUN_003df7c0,
 // all four parameter names settled by crc32 preimage):
@@ -303,8 +332,9 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
 // not an exposure stage. The original's resolve itself ends on the ADD_SAT.
 @fragment
 fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {
-    let scene = scene_tap(textureSample(source_tex, source_sampler, drawn_scene(in.uv))).rgb;
-    let bloom = textureSample(bloom_tex, source_sampler, drawn(in.uv)).rgb;
+    let uv = in.uv + constants.read_shift;
+    let scene = resolve_scene_tap(uv);
+    let bloom = textureSample(bloom_tex, source_sampler, drawn(uv)).rgb;
     let adapted = textureSample(state_tex, source_sampler, vec2<f32>(0.5, 0.5)).x;
     let scale = constants.tone_maximum_brightness
         - min(

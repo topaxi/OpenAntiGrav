@@ -827,6 +827,13 @@ pub struct Looks {
     /// of what is behind it (`docs/rendering/hd-track-tone.md`, "HD's blends
     /// combine encoded values").
     pub blends_encoded: Rule,
+    /// The race's final composite reads the scaled scene half a source texel
+    /// off, `(0.5 / width, 0.5 / height)` of the scaled source (so it follows the
+    /// dynamic width), bilinearly: each output pixel is the mean of four source
+    /// texels in linear light. Wipeout HD's
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "A race's final
+    /// composite is the same quad").
+    pub final_composite_half_texel: Rule,
     /// The race frame ends in the `wo_*` post chain: the scene lit in the
     /// gamma-2 space its programs square a texel into, a quarter-resolution
     /// gate and two diagonal blurs, and `wo_composite_nocc_fp` at an exposure
@@ -898,6 +905,7 @@ impl Looks {
             material_lod_bias: Rule::UNREAD,
             material_render_state: Rule::UNREAD,
             blends_encoded: Rule::UNREAD,
+            final_composite_half_texel: Rule::UNREAD,
             wo_composite: Rule::UNREAD,
         }
     }

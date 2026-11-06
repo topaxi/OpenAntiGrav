@@ -140,6 +140,10 @@ fn the_constants_are_the_ones_rpcs3_uploads() {
         return;
     };
     let assets = fury(&image);
+    assert!(
+        assets.bloom.final_half_texel,
+        "the backdrop ends in the final composite's quad, which reads half a texel off"
+    );
     struct Uploaded {
         path: usize,
         frame: u32,
