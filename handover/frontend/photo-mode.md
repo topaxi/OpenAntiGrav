@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-06
-summary: "One shared photo mode for all five titles, best of each: features ranked, photo-wire then photo-effects"
+summary: "The shared photo mode is wired on all five titles (docs/ui/photo-mode.md, What ours does); photo-effects through oag-post and the follow-ups are open"
 ---
 
 # Photo mode
@@ -32,33 +32,29 @@ limits.
 
 ## Next Steps
 
-Two lanes, one implementation. Features are in rank order inside each lane. Each row gives the winning
-version, what it beats and the score of the source read. The Glory Moment stays out.
+`photo-wire` landed: the one mode is wired on all five titles, and `docs/ui/photo-mode.md` ("What
+ours does") says what it does, the bindings and the shot. The ranked table that chose its laws is
+in that page's lineage and `git log`; what is left from it is here.
 
-### `photo-wire`: the shared mode on all five titles, no new `oag-post` work
+### Follow-ups to `photo-wire`
 
-| Feature | Take | Over | Why | Conf. |
-| --- | --- | --- | --- | ---: |
-| Freeze | Pause, plus a camera update | none, all alike | Same on Pulse and HD: no craft or race tick. State hash must not move | 90 |
-| Camera list | `internal`, `close`, `track` (HD) | Pulse's five rows | HD `close` orbits on two free axes, so Pulse's `front` and `above` are positions within it | 90 |
-| Orbit | HD: two axes, free, `+-2 pi` wrap | Pulse pitch `[-1, 0.6]`, yaw | Wider, and Pulse's clamp did not stop the eye going under the road anyway. Stick rates do not conflict: both are `0.05` a frame | 90 |
-| Track collision | None | none, all alike | Neither Pulse nor HD has one. The eye may go under the road | 90 |
-| Zoom, `close` | HD: right stick Y, field `[10, 100]`, starts 65 | Pulse: no zoom in `close` | | 90 top limit; 84 floor |
-| Tilt | HD: L2, R2, `0.05` a frame | Pulse: none | | 90 |
-| Pan | HD: left stick plus SQUARE, `+-5` | Pulse: none | Read, never moved live | 84 |
-| Track camera | Field `[3, 40]`, starts 20, stick on the zoom axis (HD) | Pulse starts at 3 (4.3 degrees) | Same limits on Pulse, HD and 2048. HD's start frames the craft | 90 limits |
-| Track field drawn | `z` itself | Pulse's `z + 0.06 (target - z)` | That ramp is a by-product of re-subjecting each frame, not a feature | chosen |
-| Choose the craft | L1, R1, wrap, skip dead craft (HD, same law in 2048) | Pulse: player only in a race | | 84 |
-| Reset | TRIANGLE, all of orbit, pan, tilt, zoom (HD) | Pulse: pitch and yaw only | | 84 |
-| HUD | Row, default off | none, all alike | The same row on Pulse and HD | 90 |
-| Hide the menu | Toggle help (HD, button index `0xe`) | Pulse: menu always up | Needed to look at the shot before taking it | 84 |
-| Guard | No shot for `0.15` s after entry (HD, 2048) | Pulse: none | Stops the CROSS that opened the mode taking a shot | 84 |
-| Entry | Pause row on every title | none | All four originals that have one use it | 90 |
-| Shot flow | Press, result message, back with the camera kept (Pulse, HD) | 2048's preview step | Our render needs neither Pulse's 30 frames nor HD's transition: draw without UI | 90 |
-| Count | One stat, `PRO_STATS_PHOTO` where a stats row exists | | Follow-up | |
-
-Dropped on purpose: Pulse's rule that the stick is ignored while any digital button is held (it would
-kill stick plus SQUARE). 2048's Glory Moment: needs a camera and a session.
+- **Split screen.** Left out on purpose (the mode frames one picture and one pad drives it); HD and
+  Omega offer it from either pad. A cut from the best version, not a neutral default.
+- **The photo counter stat** (`PRO_STATS_PHOTO` where a stats row exists).
+- **Touch.** 2048's gestures (drag, two-finger roll and zoom) and a one-finger layout for a phone:
+  the chips and a click work, the stick-and-modifier bindings do not reach a touchscreen.
+- **Saving on a page or a phone.** The row is left out there: neither has a directory the player
+  reaches. A download on the web, the photo library on a phone.
+- **HD's `close` rest offset** was never read; Pulse's measured 12 behind, 3 above is used on every
+  title (chosen). HD's separate tilt triggers and right-stick zoom are folded onto the one stick.
+- **The shot on a lowered render scale** is the presentation target, upscaled: a shot at the
+  configured render size needs the scene at its allocation (dynamic resolution held at its
+  ceiling while the mode is open).
+- **The track lens** is only where a circuit authors a `Camera` node and the title builds the
+  spectator director (Pulse off a disc today); HD's, 2048's and Omega's nodes are not read into
+  it, so those titles cycle `internal` and `close`.
+- **Mods.** `photo_mode` is a new `menu.toml` action name; the mod author skill lists actions only
+  as "a closed set", so it needed no change.
 
 ### `photo-effects`: through `oag-post`, after `photo-wire`
 

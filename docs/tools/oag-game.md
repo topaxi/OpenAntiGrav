@@ -203,6 +203,7 @@ sends the state lines to a file, stderr otherwise. `--drive` needs one disc imag
 | `select <row> [within N]` | Move focus to a row by pressing buttons, never by setting it. A row not on the screen yet is waited for until the budget is gone (a scan may add it). `<row>` is a row `id`, a setting key (`race.mode`), an action name (`launch_race`, `quit`: the same in every language), a label (case-insensitive) or `#index`; on a picker, an entry id (`03_Track`, `Feisar`). |
 | `set <setting>=<value> [within N]` | `select` the row of that setting, then step it right until it reads the value (its stored value, its label, or for a file the file name). An option the row lists but marks unusable (the custom-track check is still running) is waited for, then the step times out naming why. |
 | `press <button> ...` | Tap each in turn: held one tick, released the next. Waits out a page transition first. |
+| `hold <button> ... N` | Hold every named button down together for N ticks, then let go: `hold left 60` turns photo mode's camera, `hold select up 30` zooms it. |
 | `ticks N` | Let N ticks pass. |
 | `screenshot <path>` | Draw the next frame offscreen through the window's own draw and write a PNG. The only step that draws. |
 | `quit` | End the run. Reaching the end of the script does too. |
@@ -211,7 +212,7 @@ Conditions are `key=value` or `key!=value`, case-insensitive: `stage` (`launcher
 `frontend`, `menu`, `race`), `frontend` (the disc's state name), `page` (the menu page, under
 whatever is open over it), `screen` (`page`, `picker`, `campaign`, `prompt`, ...), `screen.id`
 (the page id, or `track-select`/`ship-select`), `title`, `focus` (the focused row's id, setting
-or label - any of them holds) and `race.title|track|track_file|team|variant|mode|source|craft_source` (only once a race is loading).
+or label - any of them holds) `photo` (photo mode's lens, `internal`, `close` or `track`, or `none`, on `stage=race`), `endrace` (`photo` while `Race End Photo` is up, `other` for the rest of the end screens) and `race.title|track|track_file|team|variant|mode|source|craft_source` (only once a race is loading). On `stage=race` the state lines also carry `hash` (the race's state hash) and `sim_tick`, so a line is written for every tick the race steps and none while it stands still (photo mode, the pause menu).
 
 **What the game reports.** One JSON line whenever anything but the tick changed. A menu state:
 
