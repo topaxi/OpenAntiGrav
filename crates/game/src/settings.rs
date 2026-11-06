@@ -1234,3 +1234,6 @@ pub fn save(settings: &Settings) -> Result<()> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod ghost_tests;
