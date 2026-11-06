@@ -25,7 +25,7 @@ record once, `13.9` on a silent frame. Do not fit towards the reference. The cle
    or 1920x1088, against the ring's 16:9 (`proj x 2.1148` against `2.0993`). `boot/backdrop.rs` passes `w / h` of
    `oag_display::display::viewport`; check whether that viewport or a PSP-shaped layout space is the source. It moves dots, not level,
    and may be the `3` pixel sideways residual.
-4. **Lineage of the final quad's half texel** to 2048 and Omega is unread: their frames end in `wo_composite` and `omega_tonemap`; the offset lives in the final quad's immediate vertices (`menu-backdrop.md`, "Wired"). Read Omega's last full-screen draw in `eboot.bin`.
+4. **Lineage of the final quad's half texel, 2048 only.** Omega is `checked, differs` (static quad, UV exactly 0 and 1; `menu-backdrop.md`, "Lineage"). 2048's composite vertex program is `uv * mainScaleBias.scale + bias`; the bias carries a conditional `0.25 / dim` term (`PostFx_RenderChain` `0x810393a6`-`0x810393ee`, flag `sp+0x35c`) and the composite's own quad is unread. Recipe on the page.
 5. **`[graphics] bloom` does not reach the menu**: the backdrop hard-codes `Glow::Drawn`.
 6. **HD-style (non-Fury) menus end in the same present path** but `oag_game::render::SceneBackdrop` does not run this chain.
    Not measured; check the scene backdrop's exposure against a reference.
