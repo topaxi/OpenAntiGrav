@@ -275,7 +275,7 @@ pub enum Error {
     /// A ranged read asked for the middle of a compressed blob.
     ///
     /// Raised for both LZSS and zlib, and for the same reason: [`decompress`]
-    /// (LZSS) and `miniz_oxide` (zlib) are decodable here, they are just not
+    /// (LZSS) and `flate2` (zlib) are decodable here, they are just not
     /// *seekable*. LZSS's back-references reach into the ring buffer the
     /// earlier bytes filled and zlib's deflate stream reaches into its own
     /// sliding window, so byte 300 MiB of either cannot be produced without

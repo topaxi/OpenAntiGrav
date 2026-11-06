@@ -96,7 +96,7 @@ anyway is asking a question with no meaning, because `0x78` is an ordinary byte
 in the middle of arbitrary content: on `hdfury-ps3-eu-dec.iso`,
 `Data\Music\Exceeder\music_stereo.mp3` is `DATA01.PSARC` entry 16, its block 574
 is a raw MP3 block that happens to begin `78`, and the reader handed it to
-`miniz_oxide` and reported the whole entry unreadable. One music track of
+the inflater and reported the whole entry unreadable. One music track of
 fifteen, dropped from a listing rather than reported.
 
 Fixed on 2026-08-17; `psarc::tests::a_full_stored_block_beginning_with_the_zlib_marker_is_not_inflated`
@@ -193,7 +193,7 @@ owns the seeking, the way `oag_assets::Archive` already does for the
 Two things it hand-rolls and one it does not. **MD5** is a page of RFC 1321 with
 published test vectors, so `psarc::path_digest` costs nothing to own.
 **Inflate** is not: deflate is a published standard whose failure mode is silent
-garbage, so `miniz_oxide` does it - pure Rust with no C toolchain, the same bar
+garbage, so `flate2` (its `zlib-rs` backend) does it - pure Rust with no C toolchain, the same bar
 `re_rav1d` is held to, and the first third-party dependency in `oag-formats`'
 default build.
 

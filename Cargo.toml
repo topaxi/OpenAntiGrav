@@ -203,7 +203,7 @@ png = "0.18"
 #
 # **A library rather than our own.** `oag-formats` hand-rolls every *Wipeout*
 # format because nothing else will; MPEG is a published standard whose failure
-# mode is plausible-sounding noise, which is the same argument `miniz_oxide` and
+# mode is plausible-sounding noise, which is the same argument `flate2` and
 # `re_rav1d` are here on.
 #
 # Pure Rust with no C toolchain, the bar those two are held to. **MPL-2.0**,
@@ -229,19 +229,18 @@ opus-rs = "0.1"
 # four- and eight-channel files are measured there too.
 atrac9dec = "0.9"
 
-# Inflate, for the PS3 `.psarc` container. Pure Rust with no C toolchain, the
-# same bar `re_rav1d` is held to. `oag-formats` hand-rolls every *Wipeout*
-# format and the two checksums PNG needs, but deflate is a published standard
-# whose failure mode is silent garbage, so this one is not worth rewriting.
-# `default-features = false` drops `with-alloc`'s `simd` and the C-shim
-# feature; `with-alloc` is what provides `decompress_to_vec_zlib`.
-miniz_oxide = { version = "0.9", default-features = false, features = [
-  "with-alloc",
-] }
-
-# Inflate with the `zlib-rs` backend, for the PS4 package's PFSC sectors (the
-# hot path of every Omega load). Pure Rust, already in the build through `chd`
-# and `zip`; `default-features = false` keeps `miniz_oxide` out of this edge.
+# Inflate for every deflate and zlib stream we read: PSARC and WAD blocks
+# (`oag-formats`), `.vpk` entries and the PS4 package's PFSC sectors
+# (`oag-disc`). Pure Rust with no C toolchain, the same bar `re_rav1d` is held
+# to. `oag-formats` hand-rolls every *Wipeout* format and the two checksums PNG
+# needs, but deflate is a published standard whose failure mode is silent
+# garbage, so this one is not worth rewriting. The `zlib-rs` feature selects the
+# inflater: about 30 % faster than `miniz_oxide` on a whole HD PSARC read.
+# `default-features = false` only drops this edge's request for the
+# `miniz_oxide` backend; `png` asks for `flate2`'s default `rust_backend`, so
+# `flate2 -> miniz_oxide` 0.8 stays in the tree (`cargo tree -i miniz_oxide`).
+# It is not the inflater in use: `flate2` compiles `miniz_oxide` in only when no
+# zlib backend feature is on, and `zlib-rs` implies one (`any_zlib`).
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 
 # LZMA, for the Unity asset bundle container (`oag-unity`): the one compression
