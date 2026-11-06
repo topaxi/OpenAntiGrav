@@ -142,11 +142,11 @@ pub struct State {
     /// `stage=race`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub photo: Option<String>,
-    /// The race's state hash, hex, on `stage=race`. Not part of the change test: it moves with
-    /// every tick.
+    /// The race's state hash, hex, on `stage=race`. It moves with every tick, so a line is
+    /// written for each tick the race steps and none while it stands still.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<String>,
-    /// The simulation's own tick count, on `stage=race`. Not part of the change test.
+    /// The simulation's own tick count, on `stage=race`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sim_tick: Option<u64>,
 }
@@ -157,13 +157,9 @@ impl State {
     pub fn same_as(&self, other: &Self) -> bool {
         Self {
             tick: 0,
-            hash: None,
-            sim_tick: None,
             ..self.clone()
         } == Self {
             tick: 0,
-            hash: None,
-            sim_tick: None,
             ..other.clone()
         }
     }

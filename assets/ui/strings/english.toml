@@ -511,9 +511,9 @@ OAG_PHOTO_STICK = { text = "STICK", human = false }
 OAG_PHOTO_ROTATE = { text = "ROTATE", human = false }
 OAG_PHOTO_ZOOM_TILT = { text = "ZOOM, TILT", human = false }
 OAG_PHOTO_PAN = { text = "PAN", human = false }
-OAG_PHOTO_RESET = { text = "RESET CAMERA", human = false }
-OAG_PHOTO_SHIP = { text = "CHOOSE SHIP", human = false }
-OAG_PHOTO_HELP = { text = "HIDE OR SHOW HELP", human = false }
+OAG_PHOTO_RESET = { text = "RESET", human = false }
+OAG_PHOTO_SHIP = { text = "SHIP", human = false }
+OAG_PHOTO_HELP = { text = "HIDE HELP", human = false }
 OAG_PHOTO_SAVED = { text = "PHOTO SAVED", human = false }
 OAG_PHOTO_FAILED = { text = "PHOTO NOT SAVED", human = false }
 

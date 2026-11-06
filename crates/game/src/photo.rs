@@ -98,7 +98,8 @@ const CHIP_HEIGHT: f32 = 18.0;
 const GAP: f32 = 4.0;
 const BAND: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
 const TEXT: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-const LINE: f32 = 12.0;
+const LINE: f32 = 9.5;
+const SCALE: f32 = 0.75;
 
 /// Where a chip sits on the overlay grid `grid` (width, height): `[x, y, w, h]`.
 #[must_use]
@@ -146,7 +147,7 @@ pub fn draw_list(
     let text = |x: f32, y: f32, text: String, align: Align| Draw::Text {
         x,
         y,
-        scale: 1.0,
+        scale: SCALE,
         color: TEXT,
         border: None,
         align,
@@ -198,15 +199,13 @@ pub fn draw_list(
         ));
     }
     let button = words.button;
-    let lines = [
+    let mut lines = vec![
         format!(
-            "{} {}    {} {}    {} {}",
+            "{} {}    {} {}",
             button(Button::Cross),
             say(strings::TAKE),
             button(Button::Circle),
             say(strings::BACK),
-            button(Button::Start),
-            say(strings::HELP),
         ),
         format!(
             "{} {}    {} {}    {} {}",
@@ -218,13 +217,15 @@ pub fn draw_list(
             say(strings::RESET),
         ),
         format!(
-            "{} / {} {}    {}",
+            "{} {}    {} / {} {}",
+            button(Button::Start),
+            say(strings::HELP),
             button(Button::L),
             button(Button::R),
             say(strings::SHIP),
-            say_lens_keys(photo, say, button),
         ),
     ];
+    lines.extend(lens_lines(photo, say, button));
     let top = grid.1 - MARGIN - LINE * lines.len() as f32;
     list.push(Draw::Fill {
         rect: [0.0, top - 4.0, grid.0, grid.1 - top + 4.0],
@@ -236,24 +237,25 @@ pub fn draw_list(
     list
 }
 
-/// The line of what the stick does on the lens that is up.
-fn say_lens_keys(
+/// The lines of what the stick does on the lens that is up.
+fn lens_lines(
     photo: &Photo,
     say: &dyn Fn(&str) -> String,
     button: &dyn Fn(Button) -> String,
-) -> String {
+) -> Vec<String> {
     let stick = say(strings::STICK);
     match photo.lens() {
-        Lens::Internal => String::new(),
-        Lens::Close => format!(
-            "{stick} {}    {} + {stick} {}    {} + {stick} {}",
-            say(strings::ROTATE),
-            button(Button::Select),
-            say(strings::ZOOM_TILT),
-            button(Button::Square),
-            say(strings::PAN)
-        ),
-        Lens::Track => format!("{stick} {}", say(strings::ZOOM_TILT)),
+        Lens::Internal => Vec::new(),
+        Lens::Close => vec![
+            format!(
+                "{stick} {}    {} + {stick} {}",
+                say(strings::ROTATE),
+                button(Button::Select),
+                say(strings::ZOOM_TILT),
+            ),
+            format!("{} + {stick} {}", button(Button::Square), say(strings::PAN)),
+        ],
+        Lens::Track => vec![format!("{stick} {}", say(strings::ZOOM_TILT))],
     }
 }
 

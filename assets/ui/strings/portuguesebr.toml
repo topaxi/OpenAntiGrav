@@ -333,9 +333,9 @@ OAG_PHOTO_STICK = { text = "ANALÓGICO", human = false }
 OAG_PHOTO_ROTATE = { text = "GIRAR", human = false }
 OAG_PHOTO_ZOOM_TILT = { text = "ZOOM, INCLINAR", human = false }
 OAG_PHOTO_PAN = { text = "PANORÂMICA", human = false }
-OAG_PHOTO_RESET = { text = "REDEFINIR CÂMERA", human = false }
-OAG_PHOTO_SHIP = { text = "ESCOLHER NAVE", human = false }
-OAG_PHOTO_HELP = { text = "OCULTAR OU MOSTRAR AJUDA", human = false }
+OAG_PHOTO_RESET = { text = "REDEFINIR", human = false }
+OAG_PHOTO_SHIP = { text = "NAVE", human = false }
+OAG_PHOTO_HELP = { text = "OCULTAR AJUDA", human = false }
 OAG_PHOTO_SAVED = { text = "FOTO SALVA", human = false }
 OAG_PHOTO_FAILED = { text = "FOTO NÃO SALVA", human = false }
 

@@ -335,9 +335,9 @@ OAG_PHOTO_STICK = { text = "STICK", human = false }
 OAG_PHOTO_ROTATE = { text = "DREHEN", human = false }
 OAG_PHOTO_ZOOM_TILT = { text = "ZOOM, NEIGEN", human = false }
 OAG_PHOTO_PAN = { text = "SCHWENKEN", human = false }
-OAG_PHOTO_RESET = { text = "KAMERA ZURÜCKSETZEN", human = false }
-OAG_PHOTO_SHIP = { text = "SCHIFF WÄHLEN", human = false }
-OAG_PHOTO_HELP = { text = "HILFE AUS- ODER EINBLENDEN", human = false }
+OAG_PHOTO_RESET = { text = "ZURÜCKSETZEN", human = false }
+OAG_PHOTO_SHIP = { text = "SCHIFF", human = false }
+OAG_PHOTO_HELP = { text = "HILFE AUSBLENDEN", human = false }
 OAG_PHOTO_SAVED = { text = "FOTO GESPEICHERT", human = false }
 OAG_PHOTO_FAILED = { text = "FOTO NICHT GESPEICHERT", human = false }
 
