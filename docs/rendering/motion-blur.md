@@ -199,13 +199,24 @@ after the ramp, 88 seconds unless noted:
 | Setup | Before, no ramp | With the ramp |
 | --- | --- | --- |
 | 3840x2160, target 30 | 15.6 fps, 5.78 MP, smear capped at `low` | 47.8 fps, 8.1 MP (2160 lines), factor 0, one flip, no return |
-| 3840x2160, target 60 | 48.6 fps, 3.01 MP, fps spread 3.58, 1.56 a second | 48.7 fps, 3.19 MP, factor 0.35 to 0.84, median 0.66, fps spread 3.33, 1.47 a second |
+| 3840x2160, target 60 | 48.6 fps, 3.01 MP, fps spread 3.58, 1.56 a second | 48.7 fps, 3.22 MP, factor 0.35 to 0.82, median 0.67, fps spread 3.17, 1.43 a second |
 | 1280x800, frame limit 50, 30 s | | factor 0.67, lowest and highest second alike, no flip |
 | 1280x800, frame limit 40, 30 s | | factor 0.33, lowest and highest second alike, no flip |
 | 3840x2160, frame limit 30, 40 or 50, 40 s, no target, `full` | | chain off once and stays off: 80 ms of chain does not fit any of them |
 
 The fps spread at target 60 is no larger with the ramp, so no cycle shows on top of the scene's own
-swing.
+swing. Both target-60 runs are vsync off, frame limit unlimited; the target-30 pair is the default
+240 limit.
+
+**The target-30 row is a startup result, not a settled one.** The chain went off about a second into
+the race, on the frame after the rung's second shed, with the strength cap still easing in. The
+first window of frames seeds the smoothing with no averaging, and the chain's remembered cost was
+still mostly the full gather's. A quarter chain was reading 13 ms there, so on the 21 ms frame the
+race settled at, the return would predict 34 ms against the 31.7 it needs, and it may well have
+stayed out anyway; that is arithmetic, not a run. Unbuilt: hold each frame time to at most the
+ramp's bottom before smoothing, start the smoothing at 60 fps, and forget the chain's cost when the
+drawn gather changes. Measure with a target-30 session and read when the `motion blur ramp:` line
+lands against the `gathers at` lines.
 
 **The chain runs after bloom, inside `Scene::render`.** Both halves of that are
 load-bearing and both look wrong at a glance:

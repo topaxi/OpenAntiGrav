@@ -90,6 +90,10 @@ so they are unchanged. Split screen draws no blur.
   went off once and the race ran 8.1 MP at 47.8 fps against 5.77 MP at 15.6 to 30 with the chain.
   The freed cost goes to pixels, the chain's measured cost keeps the return out, and a player who
   chose `high` sees none. Whether none at 30 is right is the maintainer's to judge on the Deck.
+  That run went off about a second into the race, before the strength cap had settled, so it is a
+  startup result; [the page](../../rendering/motion-blur.md), "Blur length", says what is unbuilt.
+- A steady rate reached with the chain off draws nothing, by the return rule: the iGPU at 4K held
+  43 fps at a limit of 50, chain off, because its chain at `full` is about 80 ms and no return fits.
 - A rate just above 30 pays the chain's whole cost for a smear too short to see.
 - Most of the saving is the strength cap (5.3 of 8.5 ms on both titles): a player gives up the
   smear they chose, and a player already on `low` saves 15 % rather than 33 %.

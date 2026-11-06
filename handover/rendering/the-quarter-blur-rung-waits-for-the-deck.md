@@ -22,6 +22,12 @@ ADR-0087. The tile skip (the other half of this lane) came out false and landed 
   iGPU at 4K, target 30, the chain went off once and stayed off: 8.1 MP at 47.8 fps, no blur at
   `high`. A target of 30 means no blur on any machine that needs it. Judge the ramp's two ends and
   its fade on a real panel: nobody has watched it. `SMOOTHING` is derived, the ends are not.
+- **The ramp's start.** That chain-off came a second into the race, after the second shed, with the
+  cap still easing, so it reads startup as much as cost: the first window seeds the smoothing
+  undamped, and the chain memory was mostly the full gather's. Try: hold frame time to at most 1/30
+  before smoothing, start the smoothing at 1/60, forget the chain cost when the gather changes.
+  Measure: the target-30 session, then
+  `rg -n "motion blur ramp|gathers at" <session log>` and the settled `blur_ramp=`.
 - **Paused frame.** The bit-equality is a unit test; no pixel diff of a paused frame was taken.
   `press start` on a `--drive` script did not pause.
 - **Quarter at a fallen extent.** Gathers go under 540 lines there: 270 at the default floor, 135
