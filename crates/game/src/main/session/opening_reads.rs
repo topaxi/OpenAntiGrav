@@ -61,6 +61,7 @@ impl OpeningReads {
 
 impl Session {
     /// Whether the reads of the screens that could open next have landed.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn opening_reads_landed(&self) -> bool {
         let Stage::Menu(stage) = &self.stage else {
             return false;

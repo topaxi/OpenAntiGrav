@@ -324,6 +324,7 @@ impl OpeningRead {
     }
 
     /// Whether the worker has finished.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn landed(&self) -> bool {
         self.pending.finished()
     }
