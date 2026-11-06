@@ -589,6 +589,8 @@ struct Flat {
     collider: Vec<u32>,
     /// Each collider's first item.
     first: Vec<u32>,
+    /// The [`Surface::Reset`] colliders, ascending.
+    resets: Vec<u32>,
 }
 
 impl Flat {
@@ -601,10 +603,17 @@ impl Flat {
             boxes.extend_from_slice(soup.broadphase.boxes());
             collider.extend(std::iter::repeat_n(index as u32, soup.triangles.len()));
         }
+        let resets = colliders
+            .iter()
+            .enumerate()
+            .filter(|(_, soup)| soup.surface == Surface::Reset)
+            .map(|(index, _)| index as u32)
+            .collect();
         Self {
             tree: Bvh::build(boxes),
             collider,
             first,
+            resets,
         }
     }
 
@@ -632,6 +641,15 @@ impl CollisionWorld {
     #[must_use]
     pub fn colliders(&self) -> &[TriangleSoup] {
         &self.colliders
+    }
+
+    /// The [`Surface::Reset`] colliders, in query order: a contact test asks them every tick
+    /// and the track's other colliders never.
+    pub fn reset_colliders(&self) -> impl Iterator<Item = &TriangleSoup> {
+        let flat = self.flat();
+        flat.resets
+            .iter()
+            .map(|&index| &self.colliders[index as usize])
     }
 
     fn flat(&self) -> &Flat {
