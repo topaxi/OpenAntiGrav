@@ -230,8 +230,10 @@ laws on every title (`docs/ghidra/functions/ps3-hdfury-eu/photo-mode.md`, "`Phot
 | Aperture | 0 to 100, 1 | 40 | the widest blur, `0.025 * v / 100` of the picture's height |
 | Focus | 0 to 100, 1 | 20 | focus distance `d` from 3 to 493 (HD's curve); sharp from `d - c` to `d + 2c`, `c = d^0.55`, widest blur at `c^1.7` further out |
 
-The pass runs on the finished frame (after the glow of HD, 2048 and Omega and after the motion blur,
-before the HUD), so a shot and the screen show the same picture. **A control at its opening value is not
+**The game's own motion blur is off while the mode is open, whatever the setting says**, on every
+title (it smeared a frozen race whenever the camera moved); leaving puts the player's setting back, and
+`the_games_motion_blur_never_reaches_a_photo` checks a shot is the same file with it `high` as `off`. The pass
+runs on the finished frame (after the glow of HD, 2048 and Omega, before the HUD), so a shot and the screen show the same picture. **A control at its opening value is not
 applied at all, and a pass that is not asked for builds nothing:** the shot with every control at its
 opening is the one the mode saved before anything was touched, byte for byte
 (`photo_mode_ground_truth::each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unprocessed_one`,

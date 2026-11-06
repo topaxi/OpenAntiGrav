@@ -568,3 +568,34 @@ fn each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unproces
         difference(&neutral, &dof, CRAFT)
     );
 }
+
+/// The game's own motion blur is a setting the mode overrides: a saved shot is the same file
+/// with the blur on `high` as with it `off`, a camera flown about the craft included.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_games_motion_blur_never_reaches_a_photo() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-blur-shots");
+    let _ = std::fs::remove_dir_all(&shots);
+    let script = format!(
+        "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
+         until photo=internal within 200; press select; ticks 5; hold left 40; hold up 1; \
+         ticks 2; press cross; ticks 2; screenshot SHOTS/frame.png; ticks 2; \
+         press circle; until photo=none within 50"
+    );
+    let mut files = Vec::new();
+    for (tag, level) in [("blur-off", "off"), ("blur-high", "high")] {
+        let run = drive_with(&image, tag, &script, &shots, &["--motion-blur", level]);
+        assert!(run.status.success(), "{}", run.stderr);
+        let photos = the_photos(&run);
+        assert_eq!(photos.len(), 1, "{photos:?}");
+        files.push(decode(&photos[0]));
+    }
+    assert!(
+        files[0].2 == files[1].2,
+        "the motion blur reached a photo (differs by {})",
+        difference(&files[0], &files[1], ALL)
+    );
+}
