@@ -44,7 +44,7 @@ fn resolve(
 }
 
 fn checker(x: u32, y: u32) -> f32 {
-    if (x + y) % 2 == 0 { 0.0 } else { 1.0 }
+    if (x + y).is_multiple_of(2) { 0.0 } else { 1.0 }
 }
 
 /// Every pixel of the drawn rectangle whose four texels are all inside it: the last row
@@ -87,7 +87,7 @@ fn without_the_tap_the_checker_reaches_the_screen_texel_for_texel() {
     };
     let plain = resolve(&device, &queue, params(false, SceneStore::Encoded), checker);
     for (x, y, byte) in interior(&plain) {
-        let want = if (x + y) % 2 == 0 { 0 } else { 255 };
+        let want = if (x + y).is_multiple_of(2) { 0 } else { 255 };
         assert_eq!(byte, want, "pixel ({x}, {y})");
     }
 }
