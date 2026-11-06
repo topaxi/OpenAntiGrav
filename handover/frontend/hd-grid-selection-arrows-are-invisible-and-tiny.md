@@ -20,8 +20,9 @@ alpha `0xFF`, or `0x7F` with no page to go to) and each has a grown tap rect
   the right on the last, which reads as "nothing to page to". `GridSelection::step` wraps (chosen) and a dimmed arrow
   here still pages. A frame of a pad press on the last card settles it.
 - **Omega's translucent arrow reads lighter than ours**: `omega/menu-grid-select`'s left arrow is `190` over a `243`
-  backdrop; `0x7F` alpha blended in sRGB gives `178` (ours), in linear light `189`. One frame; check another
-  translucent Omega widget before changing a blend.
+  backdrop; `0x7F` alpha blended in sRGB gives `178` (ours), in linear light `189`. HD's frame blends in sRGB space (50 over
+  black, linear would be about 71), so this is a PS4 renderer difference in the blend, not the law. One frame; check
+  another translucent Omega widget before changing a blend.
 - **HD's left arrow cannot be compared box for box**: in `hd/menu-grid-select` it sits under the flyer's particle glow
   (the card art's error, not the arrow's).
 - **A page flip** also writes the arrows' colour in the original's update; no frame caught one.

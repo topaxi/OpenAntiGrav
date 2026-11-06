@@ -23,9 +23,8 @@ TOC for both functions: `0x008ad4d8`, `scripts/ps3-toc.py toc` reads `exact` for
 | `+0x10c` | `0x351c` | `0x00795058` | `Flyer Right Arrow` |
 | `+0x110` | `0x3520` | `0x00795070` | `Flyer Pad Lock` |
 
-The slot-to-string step is a read of the TOC (`0x008b09f0` holds `0x00795040`); the right and lock strings
-sit at the next two slots and follow the same order as the three calls. The `flyerlist` widget is TOC slot
-`0x356c` (`0x008b0a44` holds `0x007950e8`, `flyerlist`).
+Read directly: `0x008b09f0` holds `0x00795040`; the 8 bytes at `0x008b09f4` are `0x00795058`, `0x00795070`. The `flyerlist`
+widget is TOC slot `0x356c` (`0x008b0a44` holds `0x007950e8`, `flyerlist`).
 
 ## The update sets the arrows' colour every frame
 
@@ -46,12 +45,12 @@ else:                                      left  = 0xFF646464
   of the base campaign (`grid0`) or of Fury (`grid8`); `n - 1` and `n + 7` are their last cards (`n` is 8 on both
   screens). The `0 || 8` test comes first, so a page whose only card is its first leaves the right arrow opaque.
 - The text colour `0xFF646464` is `FEGlobals->HD_Grey` as the same screen's `EventNum` authors it.
-- The unlock panel (`unlockbox`, `unlockboxbrackets`, TOC slots `0x3594`/`0x3598`) is what the tail of the update
+- The unlock panel (`unlockbox`, `unlockboxbrackets`, TOC slots `0x35bc`/`0x35c0`, `0x008b0a94`/`0x008b0a98` holding `0x007951e0`/`0x007951f0`) is what the tail of the update
   hides; the arrows are never hidden, only dimmed.
 
 **Evidence from the frame**, `data/reference/compare-page/hd/menu-grid-select/theirs.png` (grid 1, `Event 01/08`):
 the right arrow's pixels read `100,100,100`; the left arrow, on the first card, adds `50` to each channel over
-the dark backdrop (`0.5 * 100`), a faint grey shape at the card's left edge. Ours at the same frame: the right
+the dark backdrop (`0.5 * 100`, an sRGB-space blend: a linear-light blend would add about 71), a faint grey shape at the card's left edge. Ours at the same frame: the right
 arrow's box differs from the original's by 0.01 grey, and the left adds `50` as well. Confidence 90.
 
 **What is not read.** The first branch of the update (a page flip in progress, `param_2 + 0x118 != 0`) also writes
@@ -69,5 +68,7 @@ grids, `Cup_Name_2048..2050`). Same literals, same rule, one more range. Confide
 readout; the decompile only).
 
 On Omega's frame (`omega/menu-grid-select`) the left arrow over the white backdrop reads `190` where `0x7F`
-alpha blended in sRGB reads `178` (ours) and blended in linear light reads `189`: **open**, one frame, a
-different renderer's blend; the HD frame (dark backdrop) cannot tell the two apart.
+alpha blended in sRGB reads `178` (ours) and blended in linear light reads `189`. HD's frame (the same `0x7F` over a
+black backdrop) reads `50`, an sRGB-space blend (linear light would be about 71), so the **law is ported** and the
+**blend differs**: Omega's PS4 renderer reads like a linear-light blend. **Checked, differs** on the blend; one Omega
+frame, so another translucent Omega widget should confirm it before ours changes.
