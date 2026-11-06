@@ -625,10 +625,6 @@ fn prompt_draws(
     match kind {
         "tag-entry" | "tag-entry-typed" => {
             let source = source.context("tag-entry needs a --race source open")?;
-            let alphabet: String = oag_pulse::tag_input::ALPHABET
-                .chars()
-                .filter(|&c| oag_ui_screens::prompt::accepts(c))
-                .collect();
             let mut tag_entry = pulse_tag_entry(
                 source,
                 "Name",
@@ -640,7 +636,7 @@ fn prompt_draws(
                         "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
                     ),
                 },
-                &alphabet,
+                oag_ui_screens::prompt::accepts,
                 name,
             )?;
             if kind == "tag-entry-typed" {
@@ -679,10 +675,6 @@ fn prompt_draws(
                         crate::settings::player::allowed_in_tag,
                     )
                 };
-            let alphabet: String = oag_pulse::tag_input::ALPHABET
-                .chars()
-                .filter(|&c| accepts(c))
-                .collect();
             let tag_entry = pulse_tag_entry(
                 source,
                 widget,
@@ -694,7 +686,7 @@ fn prompt_draws(
                         "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
                     ),
                 },
-                &alphabet,
+                accepts,
                 name,
             )?;
             Ok(tag_entry.draw(skin))
@@ -805,7 +797,7 @@ fn pulse_tag_entry(
     source: &str,
     widget: &str,
     labels: oag_ui_screens::tag_entry::Labels,
-    alphabet: &str,
+    accepts: impl Fn(char) -> bool,
     text: &str,
 ) -> Result<oag_ui_screens::tag_entry::TagEntry> {
     let mut archives = oag_pulse::open(source).context("this source is not Pulse's own")?;
@@ -820,8 +812,12 @@ fn pulse_tag_entry(
     let xml = oag_tables::fexml::text(&entry_raw).context("TagInput entry text")?;
     let geometry = oag_ui_screens::tag_entry::geometry(&xml, &globals, widget)
         .with_context(|| format!("the {widget} TagInput was not found in it"))?;
+    let alphabet: String = oag_pulse::tag_input::ALPHABET
+        .chars()
+        .filter(|&c| accepts(c))
+        .collect();
     Ok(oag_ui_screens::tag_entry::TagEntry::new(
-        labels, geometry, alphabet, text,
+        labels, geometry, &alphabet, text,
     ))
 }
 
