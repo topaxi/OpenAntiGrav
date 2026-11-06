@@ -132,7 +132,7 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
     let mut was_airborne = false;
     for tick in 0..TICKS {
         let before = race.respawns_of(LONE);
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         if race.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
@@ -300,7 +300,7 @@ fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
 
     for tick in 0..TICKS {
         let before: Vec<u32> = slots.iter().map(|&s| race.respawns_of(s)).collect();
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         for (i, &slot) in slots.iter().enumerate() {
             if race.respawns_of(slot) != before[i] {
                 recovered_this_lap[slot] = true;

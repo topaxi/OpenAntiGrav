@@ -212,8 +212,8 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
         );
     }
     for tick in 0..120 {
-        ahead.tick(&oag_gameplay::PlayerInputs::none());
-        lazy.tick(&oag_gameplay::PlayerInputs::none());
+        ahead.tick_sim_only(&oag_gameplay::PlayerInputs::none());
+        lazy.tick_sim_only(&oag_gameplay::PlayerInputs::none());
         assert_eq!(ahead.sim.state_hash(), lazy.sim.state_hash(), "tick {tick}");
     }
 }
