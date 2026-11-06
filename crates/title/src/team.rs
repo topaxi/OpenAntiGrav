@@ -46,11 +46,29 @@ pub fn identity_of(roster: Roster, id: &str) -> String {
         )
 }
 
+/// The spelling the title's own strings key `id` under: the listed id for a case-folded
+/// match (a race's grid names `assegai`, the string table `Assegai`), else `id` as given.
+#[must_use]
+pub fn listed_id(roster: Roster, id: &str) -> &str {
+    let id = id.trim();
+    roster
+        .iter()
+        .find(|entry| entry.id.eq_ignore_ascii_case(id))
+        .map_or(id, |entry| entry.id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const ROSTER: Roster = &[team("AG_Systems", "ag_systems"), team("Mantis", "mirage")];
+
+    #[test]
+    fn a_listed_id_is_spelled_as_the_title_does_and_an_unlisted_one_is_left_alone() {
+        assert_eq!(listed_id(ROSTER, "ag_systems"), "AG_Systems");
+        assert_eq!(listed_id(ROSTER, "Mantis"), "Mantis");
+        assert_eq!(listed_id(ROSTER, "nobody"), "nobody");
+    }
 
     #[test]
     fn a_listed_id_takes_its_identity_and_an_unlisted_one_its_own_spelling() {

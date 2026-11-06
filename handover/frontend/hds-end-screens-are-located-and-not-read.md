@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-10-06
-summary: "Which archive copy HD loads is unresolved; no live capture reaches a finished EndRace Results; Podium is multiplayer-only"
+updated: 2026-11-06
+summary: "Served EndRace copy unresolved; Results names every craft, open: times refresh, badge, Omega on the built-in scoreboard; Podium multiplayer-only"
 ---
 
 # HD's end screens: read and drawn (Results/Menu/Rewards/Podium); Podium multiplayer-only
@@ -68,25 +68,19 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   stays Results -> Menu. **Still open under it**: what starts the `+0x34ec`
   deadline, the `DAT_008a5644`/`DAT_008b0458` bytes, the ship portraits
   (`pod_img`) and badge panels, its title string (`FE_ENDRACE_PODIUM`, only in
-  `DATA05`/`06`'s table), and what `+0x50` of a race record is (the same
-  unidentified field as `Grid1.r`). Omega: checked, applies, not wired
+  `DATA05`/`06`'s table), and what `+0x50` of a race record is (a team idstring on a race, 75; the podium prints it as a
+  literal name). Omega: checked, applies, not wired
   (Results, Menu, Podium, no Rewards in all three copies).
 - **Which copy the runtime actually loads is still unresolved** - the same
   open question [hd-frontend.md](../../docs/formats/hd-frontend.md) records
   for `skin.xml`'s six copies. This build serves `DATA02`'s, by
   `oag_assets::Archives::holder_of`'s own mount order, not a measurement.
-- **No live capture reaches a finished `EndRace Results` yet.** Xvfb `:94`
-  with `xdotool` (mouse-only, `WAYLAND_DISPLAY` unset - see
-  `docs/architecture/menus.md`'s "DISPLAY against GRAPHICS" for why that
-  matters) reached a real race launch (`Main Menu` -> `RACE CAMPAIGN` ->
-  `Grid Selection` -> `Cell Selection` -> `LOADING... VINETA K` -> racing),
-  the same point `docs/ui/campaign-screens.md`'s own 2026-09-21 walk reached
-  by an identical route. The race itself renders at ~5s/frame in this
-  sandbox (scene built in 53.7s, first frame 5.2s after) - independently
-  confirmed twice now (that walk's own 107.6s/741ms-8056ms-per-frame
-  numbers, and this pass's) - so a full race is hours of wall clock here, not
-  a code bug. The exact command for a machine with a working display is in
-  `docs/ui/endrace-screens.md`'s own Live section.
+- ~~**No live capture reaches a finished `EndRace Results` yet.**~~ **2026-11-06
+  (`hd-endrace-rows`): reached headless on three routes** (Fury campaign, HD campaign, RACEBOX
+  single race) with `oag-game --drive ... --autopilot`, the real `Session` and no window, a
+  race in about two minutes; the scripts and frames are in `docs/ui/endrace-screens.md`'s "HD's
+  `Results` names every craft". A live RPCS3 run of the original is still what would lift the
+  static readings.
 - **2048 and Pure were not looked at.** Neither `oag_title::FrontEnd`
   instance's `endrace_entry` is anything but `None` - a gap, not a
   measurement that either ships no such screen.
@@ -102,8 +96,13 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   on the footer. See
   [endrace-results-grid.md](../../docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md).
   **Still open under it**: Time Trial / Speed Lap rows keep the chosen
-  `row_y` (fillers `0x002239a8`/`0x00227b30` unread); `Grid1.r` (`x = 200`)
-  is a per-racer string off the record's `+0x50`, unidentified and undrawn.
+  `row_y` (fillers `0x002239a8`/`0x00227b30` unread); `Gridi.r` (the row's
+  team badge) is not drawn. ~~`Grid1.r` unidentified~~ **2026-11-06 (`hd-endrace-rows`): a team
+  idstring, drawn** (the live Results listed no names before), with `ER_RACING` for a craft
+  still racing; see `docs/ui/endrace-screens.md`'s "HD's `Results` names every craft".
+  **Open under it**: whether the original refreshes the other crafts' times while `Results` is
+  up (ours holds the board at the player's finish); Omega's finished race still shows the
+  built-in overflowing `scoreboard::Overlay` because its `endrace_entry` is `None`.
 - **2026-09-28: `EndRace Menu` draws its cursor the executable's way** - the
   focused option Block turns `ActiveColor` (`0xff8ac0ca`), eases 60 wider and
   blinks a 32x32 arrow (`Block_Update`, `0x0018d588`,

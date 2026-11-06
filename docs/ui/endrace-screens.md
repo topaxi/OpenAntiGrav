@@ -717,6 +717,44 @@ DISPLAY=:1 WAYLAND_DISPLAY= XDG_CONFIG_HOME=<isolated> \
 # flag -> screenshot EndRace Results, click Menu, screenshot EndRace Menu
 ```
 
+## HD's `Results` names every craft (2026-11-06, `hd-endrace-rows`)
+
+**The fault**: a Fury campaign race (`grid8_3_1`, autopilot, `--drive` through the real
+`Session`), a Wipeout HD campaign race (`grid0_3_1`) and a RACEBOX single race on HD all drew
+eight rows of place and time with the **name column empty** and `-` for every craft the race had
+not finished: no row said whose it was. The ground-truth test passed because it asserted that
+rows exist, not what they say. The campaign route, the definition copy served and the draw order
+were not at fault; every route showed the same table.
+
+**The fix**: `Grid1.r` is the record's `+0x50` string, which the executable sets through the
+localising setter and hashes to pick the row's badge: a team idstring
+([endrace-results-grid.md](../ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md), 75). So
+`oag_ui_screens::endrace::FieldRow::team` carries the grid's team for the slot, keyed as HD's
+string table spells it (`oag_game::results_tables::team_key`: a variant directory `Assegai_c1`
+is its base team, a base is spelled as `Title::teams` lists it), and the draw resolves it.
+The time of a craft still racing reads `ER_RACING` (the `+0x160 == 0` string) in place of the
+dash. A person of a split screen or a network race keeps their seat or name in that column.
+
+**Live**, `--drive` (the real `Session`, no window), 1440x816: Fury `ASSEGAI`, `MIRAGE`,
+`HARIMAU`, `ICARAS`, `AG-SYSTEMS`, `TRIAKIS`, `GOTEKI 45`, `FEISAR` in finishing order, the
+player's row highlighted, `RACING` in the seven time cells, the same in frames 60 ticks
+apart (the table does not animate); the same on HD's campaign and a RACEBOX race. Pinned by
+`crates/game/tests/hd_endrace_ground_truth.rs::a_finished_hd_race_reaches_endrace_results_with_the_field_populated`
+(every craft's team, through HD's own strings, and `RACING` for each unfinished one),
+`crates/game/src/results_tables.rs` and `crates/ui-screens/src/endrace/hd/tests/cursor.rs`.
+
+**Not changed**: the table is the board taken when the race ends (the player's finish), so the
+other seven read `RACING` for as long as `Results` is up; whether the original refreshes them
+while it is up is unmeasured. The badge (`Gridi.r`) is not drawn. Time Trial and Speed Lap are
+untouched.
+
+**Omega** (`checked, applies, not wired`): Omega's `Title::front_end.endrace_entry` is `None`,
+so a finished Omega race keeps the built-in `scoreboard::Overlay`, which on a 1440x816 frame
+overflows the screen (columns overlap, the fourth row is off the bottom) and names the AI
+`SLOT n`. Its HD-lineage `endrace_definition.xml` is in `data09.psarc`
+(`docs/formats/omega-status.md`); wiring it is open in the thread, not done here because which
+of Omega's copies the runtime serves is unmeasured.
+
 ## The table's rows are the file's own, not the PSP's (2026-10-13)
 
 `table::Grid` (`crates/ui-screens/src/endrace/table.rs`) reads every table's geometry off

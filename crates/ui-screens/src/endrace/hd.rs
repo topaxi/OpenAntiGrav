@@ -483,11 +483,12 @@ const GRID_HEAD_Y: f32 = 24.0;
 /// A race-layout cell's content: column 0 the place (`0x0022b688` formats
 /// the entry's `+0x168` position), column 2 the finish time. **Column 1 is
 /// drawn only for a person of a race several people flew**: `0x0022b688` fills
-/// it from a string at the entry's own `+0x50`, a field this pass did not identify
-/// (the podium's slot setter reads the same field as the name it prints, so in a
-/// multiplayer race it is the player's name), and a guess is not drawn for an
-/// opponent. A person's seat, `PLAYER 1`, is ours, **chosen, not measured**.
-/// Column 3 is never written on a race.
+/// it from the idstring at the entry's own `+0x50`, localised, and the same string
+/// hashed picks the row's `Gridi` badge off the loaded ship badges, so it names a
+/// team, which is the grid's own team here. A person's seat, `PLAYER 1`, is ours,
+/// **chosen, not measured**. Column 2 reads `ER_RACING` for a craft still racing
+/// (`+0x160` of `0`) and `ER_DNF` for `-1`, which nothing here produces. Column 3 is
+/// never written on a race.
 fn race_cell_text(
     col: usize,
     row: usize,
@@ -497,15 +498,24 @@ fn race_cell_text(
     let entry = model.rows.get(row)?;
     match col {
         0 => Some(entry.place.to_string()),
-        1 => entry.name.clone().or_else(|| {
-            entry
-                .seat
-                .map(|seat| format!("{} {seat}", strings.get_or_id("OAG_JOIN_PLAYER")))
-        }),
+        1 => entry
+            .name
+            .clone()
+            .or_else(|| {
+                entry
+                    .seat
+                    .map(|seat| format!("{} {seat}", strings.get_or_id("OAG_JOIN_PLAYER")))
+            })
+            .or_else(|| {
+                entry
+                    .team
+                    .as_deref()
+                    .map(|team| strings.get_or_id(team).to_string())
+            }),
         2 => Some(
             entry
                 .time_ticks
-                .map_or_else(|| "-".to_string(), format_ticks),
+                .map_or_else(|| strings.get_or_id("ER_RACING").to_string(), format_ticks),
         ),
         _ => None,
     }

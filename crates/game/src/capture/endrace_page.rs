@@ -658,6 +658,7 @@ fn hd_endrace_page(
                         player: true,
                         seat: None,
                         name: None,
+                        team: None,
                     },
                     oag_ui_screens::endrace::FieldRow {
                         place: 2,
@@ -665,6 +666,7 @@ fn hd_endrace_page(
                         player: false,
                         seat: None,
                         name: None,
+                        team: None,
                     },
                 ],
             };
@@ -680,7 +682,7 @@ fn hd_endrace_page(
             )
         }
         EndRaceKind::PeopleResults | EndRaceKind::OnlineResults => {
-            let rows = crate::results_tables::field_rows(Some(&two_person_board(online)));
+            let rows = crate::results_tables::field_rows(Some(&two_person_board(online)), &[]);
             let model = oag_ui_screens::endrace::FieldResults {
                 loyalty: None,
                 headline: oag_ui_screens::endrace::Headline::Several,
