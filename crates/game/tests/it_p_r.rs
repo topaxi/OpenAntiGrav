@@ -19,6 +19,7 @@ mod picker_glyphs_ground_truth;
 mod picker_pitch_ground_truth;
 mod plasma_cues_audio_ground_truth;
 mod player_tags_ground_truth;
+mod player_rows;
 mod pose_hold_ground_truth;
 mod pose_lean_ground_truth;
 mod ps2_glow_mask_ground_truth;

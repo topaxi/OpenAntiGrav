@@ -54,6 +54,7 @@ pub mod opponent_autopilot;
 pub mod original_driver;
 pub mod pre_race;
 pub mod pressing;
+pub mod profile;
 pub mod prompts;
 pub mod race;
 pub mod race_song;
@@ -176,6 +177,8 @@ pub struct Title {
     /// Which codepoints in this title's strings are controller-button glyphs,
     /// and which control each depicts. See [`prompts::Prompts`].
     pub prompts: &'static prompts::Prompts,
+    /// Which name and tag entries this title has. See [`profile::Profile`].
+    pub profile: profile::Profile,
     /// The plugin definition declaring what this release carries to race with:
     /// one `PI_Team` node per team, one `PI_Track` per circuit, one `PI_Music`
     /// per soundtrack track.

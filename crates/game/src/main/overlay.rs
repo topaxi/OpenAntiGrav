@@ -32,6 +32,10 @@ pub(crate) enum Purpose {
         /// Whose file.
         name: String,
     },
+    /// The player's name, shared by every title (`session::player_name`).
+    PlayerName,
+    /// The player's tag, on the titles that use one.
+    PlayerTag,
     /// Ask the LAN host list's browser to look at the address typed
     /// (`session::lan`).
     LanAddress,
@@ -109,7 +113,12 @@ impl Prompt {
     pub(crate) fn accepts(&self, c: char) -> bool {
         match &self.model {
             Model::Keyboard(keyboard) => keyboard.accepts(c),
-            _ => oag_ui_screens::prompt::accepts(c),
+            Model::TagEntry(_) => match self.purpose {
+                Purpose::PlayerName => crate::settings::player::allowed(c),
+                Purpose::PlayerTag => crate::settings::player::allowed_in_tag(c),
+                _ => oag_ui_screens::prompt::accepts(c),
+            },
+            Model::Confirm(_) => oag_ui_screens::prompt::accepts(c),
         }
     }
 

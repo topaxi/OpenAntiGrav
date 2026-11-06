@@ -191,6 +191,10 @@ pub(crate) struct MenuArgs {
     /// `docs/formats/fexml.md`'s `TagInput` section. Needs a real `--race`
     /// source open, since it reads the row's geometry live off the disc;
     /// `-typed` is the same screen after a few glyph changes.
+    ///
+    /// `player-name` and `player-tag` draw the first-run entries on Pulse's own `TagInput` row
+    /// (needs a Pulse source); `player-name-grid` and `player-tag-grid` draw the grid every other
+    /// title gets.
     #[arg(long, value_name = "PROMPT", requires = "menu_page")]
     pub(crate) menu_prompt: Option<String>,
 }

@@ -79,6 +79,8 @@ pub fn finish_definition(
     // And the DYNAMIC HUD row, where the options list it: Pulse.
     definition.drop_unavailable_dynamic_hud(title);
     definition.drop_unavailable_game_options(title);
+    // And the PLAYER NAME and PLAYER TAG rows, where the title keeps them: see `oag_title::profile`.
+    definition.drop_unavailable_player_rows(title);
     // And the TRAIL ORDER row, where the ribbon is the PSP preset: Pulse and Pure.
     definition.drop_unavailable_trail_order(title);
     // And the WEATHER row, where the weather is played: Pulse.

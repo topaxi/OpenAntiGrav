@@ -20,8 +20,15 @@ fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
         "delete-built-in",
         "binding",
     ] {
-        let list = prompt_draws(kind, "winston", &strings, &skin, None)
-            .unwrap_or_else(|e| panic!("{kind:?} is named by the flag's own help: {e:#}"));
+        let list = prompt_draws(
+            kind,
+            "winston",
+            &crate::settings::Player::default(),
+            &strings,
+            &skin,
+            None,
+        )
+        .unwrap_or_else(|e| panic!("{kind:?} is named by the flag's own help: {e:#}"));
         assert!(!list.is_empty(), "{kind:?} drew nothing");
         // `name` reaches every one of them, which is the whole reason the
         // substitution exists - a prompt that asked about `%s` would be
@@ -45,8 +52,15 @@ fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
             "{kind:?} left a %s unsubstituted"
         );
     }
-    let error = prompt_draws("qwerty", "winston", &strings, &skin, None)
-        .expect_err("an unknown prompt has to be an error, not an empty picture");
+    let error = prompt_draws(
+        "qwerty",
+        "winston",
+        &crate::settings::Player::default(),
+        &strings,
+        &skin,
+        None,
+    )
+    .expect_err("an unknown prompt has to be an error, not an empty picture");
     assert!(format!("{error:#}").contains("qwerty"));
 }
 
@@ -63,8 +77,15 @@ fn tag_entry_with_no_source_is_an_error_not_an_empty_picture() {
         22.0,
     );
     let strings = oag_ui::language::StringTable::default();
-    let error = prompt_draws("tag-entry", "winston", &strings, &skin, None)
-        .expect_err("no --race source means nothing was read");
+    let error = prompt_draws(
+        "tag-entry",
+        "winston",
+        &crate::settings::Player::default(),
+        &strings,
+        &skin,
+        None,
+    )
+    .expect_err("no --race source means nothing was read");
     assert!(format!("{error:#}").contains("source"));
 }
 
@@ -253,4 +274,33 @@ fn pulses_track_entries_draw_the_unset_record_as_three_dashed_fields() {
         panic!("a circuit entry");
     };
     assert_eq!(info, &["5178", "-.--.--", "-.--.--"]);
+}
+
+/// The player prompts open on the stored name and tag, not on the pilot's name.
+#[test]
+fn the_player_grids_open_on_the_stored_name_and_tag() {
+    let skin = oag_ui::menu::Skin::new(
+        oag_pulse::FRONT_END.menu.unwrap(),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    let strings = oag_ui::language::StringTable::default();
+    let player = crate::settings::Player {
+        name: "zoe".into(),
+        tag: "ZOE".into(),
+    };
+    for (kind, shown) in [("player-name-grid", "zoe"), ("player-tag-grid", "ZOE")] {
+        let list = prompt_draws(kind, "winston", &player, &strings, &skin, None).expect("draws");
+        assert!(
+            list.iter().any(
+                |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. }
+                if text.contains(shown))
+            ),
+            "{kind} does not show {shown}"
+        );
+        assert!(!list.iter().any(
+            |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. }
+            if text.contains("winston"))
+        ));
+    }
 }

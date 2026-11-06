@@ -590,7 +590,9 @@ Ranked by how much a player notices, ours first listed worst:
    now draws in the `Default` role (`TickerLayout::read`'s `font`, which was a
    chosen `"small"` and is now a chosen `"default"` corroborated by this
    capture; `before`/`after` in `sheets/footer-compare.png`: lowercase, inside
-   the strip, ink and size matching). The tag is still empty. On the campaign
+   the strip, ink and size matching). **The tag now draws the stored profile tag** at the authored
+   `(30, 235)` in the `Default` face (`NavigationLegend::set_tag`, `docs/ui/player-name.md`); the
+   colour is the file's `BackgroundColor`, and neither face nor colour is checked against the original's `AAA`. On the campaign
    pages a `--menu-page` still draws no tip at all (`static_footer_overlay`
    passes an empty rotation), so only the live stage and `--menu-page main`
    show the new face. *(Our `Confirm` label was

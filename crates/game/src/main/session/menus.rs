@@ -302,7 +302,7 @@ impl Session {
                 text_atlas,
                 default_atlas: shell.font.clone(),
                 frame: shell.frame.clone(),
-                nav_legend: shell.nav_legend.clone(),
+                nav_legend: super::player_name::tagged(shell.nav_legend.clone(), &self.settings.player, shell.title),
                 ticker: shell.ticker.clone(),
                 // Free-running from zero on every open, the same choice
                 // `CampaignStage::ticker_elapsed` already makes and for the
@@ -359,6 +359,7 @@ impl Session {
             )));
         // An online race that ended lands back in its room.
         self.online_menus_opened();
+        self.ask_player();
         Ok(())
     }
 
@@ -521,6 +522,9 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::OpenOnline) => self.open_online(),
             menu::MenuEvent::Fired(menu::Action::OnlineCreate) => self.open_online_create(),
             menu::MenuEvent::Fired(menu::Action::OnlineJoin) => self.open_online_join(),
+            // The OPTIONS page's PLAYER NAME and PLAYER TAG rows (`session::player_name`).
+            menu::MenuEvent::Fired(menu::Action::EditPlayerName) => self.edit_player_name(),
+            menu::MenuEvent::Fired(menu::Action::EditPlayerTag) => self.edit_player_tag(),
             // A `launch_race` row that names its inputs by setting key (`session::launch_keys`).
             menu::MenuEvent::Launch(keys) => self.launch_keyed(keys),
             // QUIT always quits, parked race or not - it is a row a player

@@ -465,6 +465,10 @@ impl App {
             }
         );
 
+        let interactive_launch = self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| pending.cli.is_interactive());
         let mut session = Session {
             idle: Default::default(),
             gpu,
@@ -555,6 +559,9 @@ impl App {
             scheme: self.scheme,
             anisotropy: self.anisotropy,
             launched: false,
+            interactive_launch,
+            player_asked: false,
+            soft_keyboard: false,
             pending_event: None,
             races_launched: 0,
             menu_source: Default::default(),
@@ -1033,6 +1040,7 @@ impl ApplicationHandler for App {
                 if session.too_early_for_frame(web_time::Instant::now()) {
                     return;
                 }
+                session.sync_soft_keyboard();
                 if let Err(e) = session.frame() {
                     error!("frame error: {e:#}");
                     event_loop.exit();

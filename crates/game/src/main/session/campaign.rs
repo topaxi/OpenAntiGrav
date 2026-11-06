@@ -146,7 +146,7 @@ impl Session {
                         campaign.selection_layout,
                         campaign.chooser,
                         campaign.cell_help,
-                        campaign.nav_legend,
+                        super::player_name::tagged(campaign.nav_legend, &self.settings.player, title_ref),
                         campaign.ticker,
                         strings,
                         campaign.sprites,

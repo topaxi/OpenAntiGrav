@@ -164,6 +164,7 @@ pub const TITLE: &Title = &Title {
     // [`names::FRONT_END_PLUGIN_DEFINITION`].
     // Measured: `PS_BUTTONS.fnt`'s three face-button glyphs - see `prompts`.
     prompts: prompts::PROMPTS,
+    profile: oag_title::profile::Profile::NAME_ONLY,
     // HD's own recovery is unread; Pulse's law.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
     // HD's authored mix owns the buses.

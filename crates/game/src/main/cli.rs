@@ -1178,6 +1178,34 @@ pub(crate) struct Cli {
 }
 
 impl Cli {
+    /// Whether a person is at this launch, as opposed to a capture, a script, a trace or a
+    /// comparison: only then may the first-run name prompt open. An allowlist, so a flag added
+    /// later is automation until it is listed here.
+    pub(crate) fn is_interactive(&self) -> bool {
+        let scripted = self.dev.preseat
+            || self.dev.script.is_some()
+            || self.dev.drive.is_some()
+            || self.dev.drive_file.is_some();
+        let captured = self.screenshot.is_some()
+            || self.dump_audio.is_some()
+            || self.tap_audio.is_some()
+            || self.until.is_some()
+            || self.screen.is_some()
+            || self.press.is_some()
+            || self.hold.is_some()
+            || self.loading_screen.is_some();
+        !(scripted
+            || captured
+            || self.original_menu
+            || self.race
+            || self.dry_run
+            || self.trace
+            || self.probe_pad
+            || self.prefetch
+            || self.net.connect.is_some()
+            || self.net.online.is_some())
+    }
+
     /// `--seed`; always `None` in a build without `dev-cli`.
     pub(crate) fn seed(&self) -> Option<u64> {
         #[cfg(feature = "dev-cli")]

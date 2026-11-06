@@ -79,13 +79,21 @@ pub(crate) fn decide_with(
         // finger on shift types the same name rather than nothing at all -
         // the grid has no uppercase to offer and `pilots::check_name` has no
         // uppercase to allow.
-        Key::Character(text) => match text.chars().next().map(|c| c.to_ascii_lowercase()) {
+        Key::Character(text) => {
+            let mut chars = text.chars();
             // One character only: a dead key or an IME commit can deliver
             // several, and appending them all would type a string the grid
             // could not have produced.
-            Some(c) if text.chars().count() == 1 && accepts(c) => Typed::Edit(Edit::Type(c)),
-            _ => Typed::Ignore,
-        },
+            let (Some(c), None) = (chars.next(), chars.next()) else {
+                return Typed::Ignore;
+            };
+            // As typed when the prompt takes it (a name keeps its capitals), else folded to
+            // the case its grid offers.
+            [c, c.to_ascii_lowercase(), c.to_ascii_uppercase()]
+                .into_iter()
+                .find(|&case| accepts(case))
+                .map_or(Typed::Ignore, |case| Typed::Edit(Edit::Type(case)))
+        }
         _ => Typed::Ignore,
     }
 }
@@ -110,6 +118,16 @@ mod tests {
         assert_eq!(
             decide(&Key::Character("W".into()), true, false),
             Typed::Edit(Edit::Type('w'))
+        );
+    }
+
+    /// A prompt whose alphabet has capitals gets them as typed.
+    #[test]
+    fn a_capital_a_prompt_accepts_is_typed_as_it_is() {
+        let accepts = |c: char| c.is_ascii_alphanumeric();
+        assert_eq!(
+            decide_with(&Key::Character("W".into()), true, false, accepts),
+            Typed::Edit(Edit::Type('W'))
         );
     }
 
