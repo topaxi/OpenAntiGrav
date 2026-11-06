@@ -334,8 +334,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         oag_title::hud::HudSway { x_per_lean: -15 },
         "hd",
     )),
-    // Checked 2026-10-21: the patch front end (`data09.psarc`) authors no `Safe Area Setting`.
-    // The disc authors no `Safe Area Setting` (`docs/formats/omega-status.md`); the shared slider.
+    // The disc authors no `Safe Area Setting` (`docs/formats/hd-hud.md`, "SCREEN SIZE on every
+    // title"), so the shared slider stands in, drawn 1:1 until the player moves it.
     safe_area: Some(oag_title::pre_race::Sourced::chosen(
         oag_title::hud::SafeArea::SHARED,
     )),

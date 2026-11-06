@@ -19,6 +19,7 @@ mod medal_message_ground_truth;
 mod menu_definition_settings;
 mod menu_graphics_advanced;
 mod menu_screen_filter;
+mod menu_screen_size;
 mod menu_sfx_ground_truth;
 mod menu_web_rows;
 mod mine_launch_audio_ground_truth;

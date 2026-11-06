@@ -44,7 +44,10 @@ fn slider_label(slider: &Node) -> Option<&str> {
 /// Every word of [`WORDS`] the XML `blob` contains.
 fn mentions(blob: &[u8]) -> Vec<&'static str> {
     let xml = fexml::text(blob).expect("front-end XML is text");
-    WORDS.into_iter().filter(|word| xml.contains(word)).collect()
+    WORDS
+        .into_iter()
+        .filter(|word| xml.contains(word))
+        .collect()
 }
 
 #[test]
@@ -60,11 +63,15 @@ fn hds_slider_is_the_range_the_row_offers_in_every_copy_of_the_file() {
         "DATA06's copy is the live Game Options screen: {:?}",
         copies.iter().map(|(label, _)| label).collect::<Vec<_>>()
     );
-    let art = oag_hd::TITLE.hud_art.safe_area.expect("HD offers the slider");
+    let art = oag_hd::TITLE
+        .hud_art
+        .safe_area
+        .expect("HD offers the slider");
     assert_eq!(art.origin, Origin::Measured);
     for (label, blob) in &copies {
         let root = fexml::parse(&fexml::text(blob).expect("text"));
-        let slider = find(&root, "Safe Area Setting").unwrap_or_else(|| panic!("{label}: no slider"));
+        let slider =
+            find(&root, "Safe Area Setting").unwrap_or_else(|| panic!("{label}: no slider"));
         let authored = SafeArea {
             default_percent: number(slider, "default"),
             min_percent: number(slider, "minSlide"),
@@ -87,7 +94,10 @@ fn hds_slider_is_the_range_the_row_offers_in_every_copy_of_the_file() {
 #[test]
 #[ignore = "needs the Pulse discs in data/images/"]
 fn pulse_authors_no_screen_size_and_takes_the_shared_slider() {
-    let art = oag_pulse::TITLE.hud_art.safe_area.expect("Pulse offers the row");
+    let art = oag_pulse::TITLE
+        .hud_art
+        .safe_area
+        .expect("Pulse offers the row");
     assert_eq!((art.value, art.origin), (SafeArea::SHARED, Origin::Chosen));
     for image in [
         "data/images/pulse-psp-eu.chd",
@@ -119,9 +129,15 @@ fn pulse_authors_no_screen_size_and_takes_the_shared_slider() {
 #[test]
 #[ignore = "needs the Pure discs in data/images/"]
 fn pure_authors_no_screen_size_and_takes_the_shared_slider() {
-    let art = oag_pure::TITLE.hud_art.safe_area.expect("Pure offers the row");
+    let art = oag_pure::TITLE
+        .hud_art
+        .safe_area
+        .expect("Pure offers the row");
     assert_eq!((art.value, art.origin), (SafeArea::SHARED, Origin::Chosen));
-    for image in ["data/images/pure-psp-eu.chd", "data/images/pure-psp-usa.chd"] {
+    for image in [
+        "data/images/pure-psp-eu.chd",
+        "data/images/pure-psp-usa.chd",
+    ] {
         let Some(path) = oag_testdata::image(image) else {
             continue;
         };
@@ -139,7 +155,10 @@ fn pure_authors_no_screen_size_and_takes_the_shared_slider() {
 #[test]
 #[ignore = "needs data/images/omega-ps4-eu.pkg"]
 fn omega_authors_no_screen_size_and_takes_the_shared_slider() {
-    let art = oag_omega::TITLE.hud_art.safe_area.expect("Omega offers the row");
+    let art = oag_omega::TITLE
+        .hud_art
+        .safe_area
+        .expect("Omega offers the row");
     assert_eq!((art.value, art.origin), (SafeArea::SHARED, Origin::Chosen));
     let Some(pkg) = oag_testdata::image("data/images/omega-ps4-eu.pkg") else {
         return;
@@ -162,7 +181,10 @@ fn omega_authors_no_screen_size_and_takes_the_shared_slider() {
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita/"]
 fn wipeout_2048_authors_no_screen_size_and_takes_the_shared_slider() {
-    let art = oag_2048::TITLE.hud_art.safe_area.expect("2048 offers the row");
+    let art = oag_2048::TITLE
+        .hud_art
+        .safe_area
+        .expect("2048 offers the row");
     assert_eq!((art.value, art.origin), (SafeArea::SHARED, Origin::Chosen));
     let Some(dir) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
         return;

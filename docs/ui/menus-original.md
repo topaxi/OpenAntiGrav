@@ -711,6 +711,7 @@ persists each into the profile, as ours persist into `settings.toml`.
 | `OPT_MP_TAGS`, Multiplayer tags | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **added**: MULTIPLAYER TAGS, a player's name over each other person's craft in a multiplayer race (`oag_hud::player_tags`) |
 | `OPT_GHOST_VIS`, Ghost ships visible | `FE_ON`, `FE_OFF` (default on) | yes | yes | **added**: GHOST SHIPS VISIBLE, hides the ghost's draw (`Race::set_ghost_visible`) |
 | `OPT_AL_GHOST`, Auto load ghost | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **added**: AUTO LOAD GHOST, gates loading the stored lap when a Time Trial or Speed Lap starts |
+| `OPT_SCREEN_SIZE`, Screen size (HD's slider) | not authored on Pulse: no row in any front-end XML or in the executable | no | no | **added**: SCREEN SIZE, the shared slider shared with every title (`hud_safe_area`, 80 to 100, default 100), [hd-hud.md](../formats/hd-hud.md#screen-size-on-every-title) |
 | `OPT_LANG`, Language | the installed languages | yes | yes | present: `language` |
 
 Where the two pressings differ the PSP list wins (the project rule for anything invented for Pulse), so the PS2

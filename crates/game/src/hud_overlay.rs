@@ -295,14 +295,8 @@ impl Overlay {
     /// no `Safe Area Setting` keeps its HUD at full size whatever this says.
     #[must_use]
     pub fn with_safe_area(mut self, percent: Option<u8>) -> Self {
-        self.set_safe_area(percent);
-        self
-    }
-
-    /// [`Self::with_safe_area`] on a built overlay. Idempotent, so the frame loop sets it every
-    /// frame and the SCREEN SIZE row applies live.
-    pub fn set_safe_area(&mut self, percent: Option<u8>) {
         self.safe_area_scale = self.art.safe_area_scale(percent);
+        self
     }
 
     /// The placement [`Self::safe_area`] applies, or `None` at full size.

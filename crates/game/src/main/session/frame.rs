@@ -528,7 +528,12 @@ impl Session {
                     // The language picker takes the pointer itself; every
                     // other screen in the chain waits for a button and
                     // reads a click as one. See `session::pointer`.
-                    let grid = pointer::in_grid(pointer, stage.frontend.space(), rect, 1.0);
+                    let grid = pointer::in_grid(
+                        pointer,
+                        stage.frontend.space(),
+                        rect,
+                        stage.renderer.inset(),
+                    );
                     stage
                         .frontend
                         .set_pad_driving(!self.pointer.pointer_spoke_last());
@@ -539,6 +544,20 @@ impl Session {
                         stage
                             .frontend
                             .update(dt, self.controls.buttons_mut(), movie_playhead);
+                    // SCREEN SIZE on a touch front end: applied the tick it moves, and saved
+                    // like every other row.
+                    if let (Some(scale), Some(percent)) = (
+                        stage.frontend.screen_size_scale(),
+                        stage.frontend.screen_size_choice(),
+                    ) {
+                        stage.renderer.set_inset(scale);
+                        if self.settings.graphics.hud_safe_area != Some(percent) {
+                            self.settings.graphics.hud_safe_area = Some(percent);
+                            if let Err(e) = settings::save(&self.settings) {
+                                warn!("could not save the screen size: {e:#}");
+                            }
+                        }
+                    }
                     // One set of planes and one voice serve every movie the front
                     // end draws, so each is installed on the tick its own screen
                     // is entered - picture and sound together, which is what makes

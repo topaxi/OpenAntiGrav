@@ -366,9 +366,19 @@ impl Session {
             )
         });
         self.controls.silence_motors();
+        let touch_front_end = touch.is_some();
+        let hud_art = loaded.title.hud_art;
         self.stage = Stage::frontend(&self.gpu, loaded, video_format, trace, &mut self.audio)?;
         if let Stage::Frontend(stage) = &mut self.stage {
             stage.team_hull = hull;
+            // A touch front end (2048's) is the player's whole front end, so it takes the
+            // SCREEN SIZE control and the inset itself; every other title's boot screens are
+            // unmeasured at a safe area and its menus are `MenuStage`'s.
+            if touch_front_end && let Some(area) = hud_art.safe_area {
+                let saved = self.settings.graphics.hud_safe_area;
+                stage.frontend.set_screen_size(area.value, saved);
+                stage.renderer.set_inset(area.value.scale(saved));
+            }
         }
         Ok(())
     }

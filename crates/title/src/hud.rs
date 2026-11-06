@@ -1090,6 +1090,20 @@ mod tests {
         caption_hidden_from_zone: None,
     };
 
+    /// The shared slider offers HD's range and step, lowest first, and snaps a value into it.
+    #[test]
+    fn the_shared_slider_is_eighty_to_a_hundred_in_twos_and_draws_one_to_one_by_default() {
+        let area = SafeArea::SHARED;
+        assert_eq!(
+            area.values().collect::<Vec<_>>(),
+            [80, 82, 84, 86, 88, 90, 92, 94, 96, 98, 100]
+        );
+        assert_eq!(area.snapped(None), 100);
+        assert_eq!(area.snapped(Some(97)), 96);
+        assert_eq!(area.snapped(Some(3)), 80);
+        assert_eq!(area.scale(None), 1.0);
+    }
+
     /// The bottom rung has no name: HD's `0 Start` has no speed class beside it.
     #[test]
     fn an_unnamed_rung_reads_as_nothing_rather_than_as_the_next_one() {

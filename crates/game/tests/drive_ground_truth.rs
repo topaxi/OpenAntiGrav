@@ -580,6 +580,57 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
     );
 }
 
+/// The SCREEN SIZE row, stepped the way a pad steps it, reaches the settings file and the menus'
+/// own picture: it opens on Pulse's 100, a step to 90 saves `[graphics] hud_safe_area`, and the
+/// reported row reads 90. Dropping the session's `graphics.hud_safe_area` arm leaves the file
+/// without the key.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_screen_size_row_saves_hud_safe_area() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive(
+        &image,
+        "screen-size",
+        "boot; select options; press cross; until page=options; \
+         select display; press cross; until page=display; \
+         set graphics.hud_safe_area=90; ticks 5; expect page=display",
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.stderr());
+    let value = |state: &Value| {
+        state["screen"]["rows"]
+            .as_array()
+            .and_then(|rows| {
+                rows.iter()
+                    .find(|row| row["setting"] == "graphics.hud_safe_area")
+            })
+            .map(|row| row["value"].as_str().unwrap_or_default().to_string())
+    };
+    let seen: Vec<String> = run.states.iter().filter_map(value).collect();
+    assert_eq!(
+        seen.first().map(String::as_str),
+        Some("100"),
+        "opens on Pulse's own default"
+    );
+    assert_eq!(
+        seen.last().map(String::as_str),
+        Some("90"),
+        "and ends where the pad left it"
+    );
+    let saved = std::fs::read_to_string(
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-screen-size/config/oag/settings.toml"),
+    )
+    .expect("the run saved its settings");
+    let saved: toml::Table = saved.parse().unwrap();
+    assert_eq!(
+        saved["graphics"]["hud_safe_area"].as_integer(),
+        Some(90),
+        "the step wrote the setting: {saved}"
+    );
+}
+
 /// The MUSIC page's rows reach the settings file: the booted disc's own row
 /// saves a switch into `[audio] music_switches`, and turning it back on saves that too.
 #[test]

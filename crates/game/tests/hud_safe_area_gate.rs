@@ -1,5 +1,6 @@
-//! `[graphics] hud_safe_area`: which titles have a `Safe Area Setting`, the scale a value gives,
-//! and that the HUD's draws move in toward the middle of the screen by it.
+//! `[graphics] hud_safe_area`: the `Safe Area Setting` every title carries (HD's measured, the others'
+//! shared and chosen), the scale a value gives, and that the HUD's draws move in toward the middle
+//! of the screen by it.
 
 use oag_game::hud_overlay::safe_area_frame;
 use oag_hud::Frame;
@@ -14,8 +15,9 @@ fn sprite(rect: [f32; 4]) -> Draw {
 }
 
 #[test]
-fn only_hd_has_the_option_and_its_default_is_the_discs_ninety() {
+fn hd_carries_the_discs_slider_and_every_other_title_the_shared_one_at_a_hundred() {
     let hd = oag_hd::hud::ART.safe_area.expect("HD's Safe Area Setting");
+    assert_eq!(hd.origin, oag_title::Origin::Measured);
     assert_eq!(
         (
             hd.value.default_percent,
@@ -32,7 +34,19 @@ fn only_hd_has_the_option_and_its_default_is_the_discs_ninety() {
         ("2048", oag_2048::hud::ART),
         ("omega", oag_omega::hud::ART),
     ] {
-        assert!(art.safe_area.is_none(), "{name} authors no such option");
+        let area = art.safe_area.expect("the shared slider");
+        assert_eq!(
+            area.origin,
+            oag_title::Origin::Chosen,
+            "{name}: authors none"
+        );
+        assert_eq!(area.value, oag_title::hud::SafeArea::SHARED, "{name}");
+        assert_eq!(
+            art.safe_area_scale(None),
+            1.0,
+            "{name}: drawn 1:1 until the player moves it"
+        );
+        assert_eq!(art.safe_area_scale(Some(90)), 0.9, "{name}");
     }
 }
 

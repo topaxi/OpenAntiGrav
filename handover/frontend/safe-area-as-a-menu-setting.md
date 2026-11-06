@@ -1,10 +1,10 @@
 ---
-status: re-first
+status: parked
 titles: [all]
-updated: 2026-10-27
+updated: 2026-11-07
 size: L (50)
 difficulty: medium (60)
-summary: "Offer the safe area (screen size) as a menu setting: HD's own Screen Size slider first, find Pulse PS2's, a shared invented screen elsewhere"
+summary: "SCREEN SIZE row landed on all five titles; open: corner markers, phone insets, Pure options XML unlocated"
 ---
 
 # The safe area as a menu setting
@@ -28,24 +28,33 @@ What is already known:
 - **Omega** draws its front end 1:1 and authors no slider (checked, differs).
 - **Fury** ships with HD: check whether its options page carries the same slider.
 
+## Landed (2026-11-07, `screen-size`)
+
+- Every title offers `SCREEN SIZE`: the DISPLAY page row `graphics.hud_safe_area` (`assets/ui/menu.toml`, values from
+  `HudArt::safe_area` through `ValueSource::SafeAreas`), applied live to the menus' inset, taken by a race's HUD at race
+  load. HD keeps the disc's slider (default 90); Pulse, Pure, 2048 and Omega carry `SafeArea::SHARED` (default 100,
+  **chosen**). 2048's options are the disc's touch hub, so `OptionsCamera` has a second control there and the touch
+  front end takes the inset. Evidence, the per-title search and frames: `docs/formats/hd-hud.md`, "SCREEN SIZE on every
+  title". Fury is HD's disc and carries the same slider (checked).
+- Tests: `crates/hud/tests/safe_area_ground_truth.rs`, `crates/game/tests/menu_screen_size.rs`,
+  `drive_ground_truth::the_screen_size_row_saves_hud_safe_area`,
+  `vita_2048_boot_ground_truth::options_camera_carries_the_screen_size_control`.
+
 ## Open
 
-- Whether Pulse PS2 (or Pulse PSP, Pure) has a screen-position or screen-size option, and what it changes
-  (PS2 games often offer a picture-position nudge instead of a scale). Unread.
-- Whether 2048 (Vita, fixed screen) or Omega have anything comparable. Probably not; confirm, never assume.
-- How HD's live Game Options screen draws the slider (it is authored XML, so ours may already be able to
-  draw the row once wired).
-- For titles without an original option: what the invented screen looks like. It belongs in the fallback
-  asset layer, labelled ours, and should be shared across titles rather than drawn once per title.
+- **Corner markers** (optional): a page that draws the safe edge to line up against the TV's. Not built.
+- **Phones and notches** (step 4, out of scope here): the platform insets as the setting's default on a phone.
+- **Pure's own options XML** was not located by name (`PI001\GUI\Additional_Definition.xml` is absent), so "Pure
+  authors no option" rests on its `Skin.xml`, `Selection_Definition.xml` and `BOOT.BIN`.
+- **The value is one global**: a 96 set on HD is 96 on Pulse too (maintainer's decision); the default is per title.
+- **The boot screens** (logos, language picker, loading's neighbours on a non-touch title) are not inset; their
+  original is unmeasured at a safe area. A race's HUD is not live because no page opens over a running race.
+- **HD's own Game Options screen** (`additional_definition.xml`, `DATA06`) is not drawn by this build: the live page is
+  our `menu.toml`, so HD shows our label (English words identical to `OPT_SCREEN_SIZE`), not the disc's string.
+- **Split screen** HUDs are not scaled (`draw_views`, unmeasured).
 
 ## Next Steps
 
-1. Wire HD's own `Screen Size` slider row on its Game Options page from the disc XML, writing
-   `hud_safe_area` live (front end and HUD together), with pointer support.
-2. Search Pulse PS2's executable and front-end tables for a screen-adjust option (strings such as
-   "screen", "position", "centre"); record found or not found per title on the title's frontend page.
-3. If a title has none, add one shared invented "Screen size" page (slider 80-100, step 2, default the
-   title's own value or 100 where the original is 1:1, corner markers), labelled as ours.
-4. Phones and notches (maintainer, 2026-10-27): the platform's safe-area insets (Android display cutout,
-   iOS safe area) are the setting's **default** on a phone, not a floor. A player may still choose a value
-   beyond them ("if someone wants to go below it, so be it").
+1. Corner markers on a screen-adjust page, if wanted.
+2. Phones and notches: platform insets as the default (step 4 of the original thread).
+3. Locate Pure's options XML and record found or not found on its frontend page.
