@@ -657,7 +657,7 @@ values = ["default", "off"]
 # Visible off stops drawing the ghost ship and nothing else: it is still raced, recorded and
 # replaced by a quicker lap. Auto load off races no stored ghost when a Time Trial or Speed Lap
 # starts; the run is still recorded and a quicker lap still saved. Each is dropped on a title whose
-# options list no such row (`menu::Definition::drop_unavailable_ghost_options`).
+# options list no such row (`menu::Definition::drop_unavailable_game_options`).
 [[page.entry]]
 kind = "choice"
 label = "GHOST SHIPS VISIBLE"
@@ -670,6 +670,16 @@ kind = "choice"
 label = "AUTO LOAD GHOST"
 string_id = "OAG_DISPLAY_AUTO_LOAD_GHOST"
 setting = "display.auto_load_ghost"
+values = ["on", "off"]
+
+# Pulse's `Multiplayer Tags` (PSP list; `FE_ON` / `FE_OFF`, default on): each other person's name
+# over their craft in a multiplayer race. Dropped on a title whose options list no such row
+# (`menu::Definition::drop_unavailable_game_options`). Applies live.
+[[page.entry]]
+kind = "choice"
+label = "MULTIPLAYER TAGS"
+string_id = "OAG_DISPLAY_MULTIPLAYER_TAGS"
+setting = "display.multiplayer_tags"
 values = ["on", "off"]
 
 # `off` never waits and tears; `on` is classic vsync, which never tears and

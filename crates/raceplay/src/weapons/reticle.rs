@@ -75,6 +75,7 @@ impl Race {
         let locked = self.sim.locks[primary].locked();
         self.view.sight_state = self.view.sight.follow(self.sim.dt, projected, locked);
         self.update_viewed_sights();
+        self.advance_tag_fades();
     }
 
     #[cfg(feature = "view")]

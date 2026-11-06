@@ -68,11 +68,12 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zoom_ring: None,
     borrows_zoom_ring: true,
     // `Additional_Definition.xml`'s `Settings` screen on the PSP discs (USA and EU) lists
-    // `Ghost Ship Visible` and `Auto Load Ghost`; the PS2 list has the first only, and the PSP
-    // list wins (`docs/ui/menus-original.md`, "Game Options").
-    ghost_options: oag_title::race::GhostOptions {
+    // `Ghost Ship Visible`, `Auto Load Ghost` and `Multiplayer Tags`; the PS2 list has the first
+    // only, and the PSP list wins (`docs/ui/menus-original.md`, "Game Options").
+    game_options: oag_title::race::GameOptions {
         ship_visible: true,
         auto_load: true,
+        multiplayer_tags: true,
     },
     zone_stage_textures: None,
     // `None` on the same terms as the table above: Pulse ships no Zone

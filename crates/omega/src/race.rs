@@ -121,7 +121,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_transition: None,
     zoom_ring: None,
     borrows_zoom_ring: false,
-    ghost_options: oag_title::race::GhostOptions::NONE,
+    game_options: oag_title::race::GameOptions::NONE,
     zone_stage_textures: None,
     zone_sky: None,
     team_variants: Some(&TEAM_VARIANTS),

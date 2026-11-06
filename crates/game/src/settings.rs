@@ -371,17 +371,22 @@ pub struct Display {
     #[serde(default = "default_pause_on_focus_loss")]
     pub pause_on_focus_loss: bool,
     /// Whether a race draws the ghost ship (Pulse's `Ghost Ship Visible`). **Read only by a title
-    /// whose own options list it** (`oag_title::race::GhostOptions::ship_visible`); the row is
+    /// whose own options list it** (`oag_title::race::GameOptions::ship_visible`); the row is
     /// dropped on every other title and a saved `false` there is ignored. Hiding it hides the
     /// drawing alone: the ghost is still raced, recorded and replaced. Applies live.
     #[serde(default = "default_true")]
     pub ghost_ship_visible: bool,
     /// Whether a race starts with the stored ghost loaded (Pulse's `Auto Load Ghost`). **Read
-    /// only by a title whose own options list it** (`GhostOptions::auto_load`). Off, a Time
+    /// only by a title whose own options list it** (`GameOptions::auto_load`). Off, a Time
     /// Trial or Speed Lap races no ghost but still records the run and saves a lap that
     /// beats the stored one. Read when a race loads.
     #[serde(default = "default_true")]
     pub auto_load_ghost: bool,
+    /// Whether a multiplayer race draws each other person's name over their craft (Pulse's
+    /// `Multiplayer Tags`, default on as in the original). **Read only by a title whose own
+    /// options list it** (`GameOptions::multiplayer_tags`). Off, no tag draws. Applies live.
+    #[serde(default = "default_true")]
+    pub multiplayer_tags: bool,
 }
 
 fn default_true() -> bool {
@@ -401,14 +406,21 @@ impl Display {
     /// title's options list it, always elsewhere.
     #[must_use]
     pub fn ghost_ship_shown(&self, title: &oag_title::Title) -> bool {
-        !title.race.ghost_options.ship_visible || self.ghost_ship_visible
+        !title.race.game_options.ship_visible || self.ghost_ship_visible
     }
 
     /// Whether `title`'s races load the stored ghost: the player's `Auto Load Ghost` where the
     /// title's options list it, always elsewhere.
     #[must_use]
     pub fn ghost_auto_loads(&self, title: &oag_title::Title) -> bool {
-        !title.race.ghost_options.auto_load || self.auto_load_ghost
+        !title.race.game_options.auto_load || self.auto_load_ghost
+    }
+
+    /// Whether `title`'s multiplayer races draw player tags: the player's `Multiplayer Tags` where
+    /// the title's options list it, never elsewhere (no other title's tags are wired).
+    #[must_use]
+    pub fn multiplayer_tags_shown(&self, title: &oag_title::Title) -> bool {
+        title.race.game_options.multiplayer_tags && self.multiplayer_tags
     }
 
     /// The saved `HUD Style` as a name for `race::Options::hud_style`, `None` while empty.
@@ -438,6 +450,7 @@ impl Default for Display {
             pause_on_focus_loss: default_pause_on_focus_loss(),
             ghost_ship_visible: true,
             auto_load_ghost: true,
+            multiplayer_tags: true,
         }
     }
 }
@@ -1184,18 +1197,24 @@ pub fn menu_seeds(
         ));
     }
     // Offered only where the title's options list them; elsewhere the rows are dropped
-    // (`Definition::drop_unavailable_ghost_options`) and nothing seeds them.
+    // (`Definition::drop_unavailable_game_options`) and nothing seeds them.
     let on_off = |on: bool| text(if on { "on" } else { "off" });
-    if title.race.ghost_options.ship_visible {
+    if title.race.game_options.ship_visible {
         out.push((
             "display.ghost_ship_visible",
             on_off(settings.display.ghost_ship_visible),
         ));
     }
-    if title.race.ghost_options.auto_load {
+    if title.race.game_options.auto_load {
         out.push((
             "display.auto_load_ghost",
             on_off(settings.display.auto_load_ghost),
+        ));
+    }
+    if title.race.game_options.multiplayer_tags {
+        out.push((
+            "display.multiplayer_tags",
+            on_off(settings.display.multiplayer_tags),
         ));
     }
     // The web's own row; a desktop file has no such key (see `web::not_on_the_web`).

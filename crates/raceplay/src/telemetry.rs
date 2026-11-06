@@ -235,6 +235,7 @@ impl Race {
             time_trial_pace: None,
             head_to_head: self.head_to_head(slot),
             kill_tags: self.kill_tags(slot),
+            player_tags: self.player_tags_for(slot),
             kill_target: if self.sim.world.mode() == oag_race::Mode::Eliminator {
                 self.sim.eliminator_kill_target
             } else {

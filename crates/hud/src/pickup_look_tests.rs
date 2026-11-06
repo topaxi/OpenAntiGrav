@@ -139,6 +139,7 @@ fn a_mod_icon_draws_the_backdrop_and_no_title_icon() {
     let strings = oag_ui::language::StringTable::default();
     let cx = Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,
@@ -234,6 +235,7 @@ fn hds_runtime_backdrop_takes_a_mod_pickups_look_through_the_same_fade() {
     let strings = oag_ui::language::StringTable::default();
     let cx = Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,

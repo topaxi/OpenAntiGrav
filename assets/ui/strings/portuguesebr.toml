@@ -169,6 +169,7 @@ OAG_DISPLAY_HUD_STYLE = { text = "ESTILO DO HUD", human = false }
 OAG_DISPLAY_DYNAMIC_HUD = { text = "HUD DINÂMICO", human = false }
 OAG_DISPLAY_GHOST_SHIP_VISIBLE = { text = "NAVES FANTASMA VISÍVEIS", human = false }
 OAG_DISPLAY_AUTO_LOAD_GHOST = { text = "CARREGAR FANTASMA AUTOMATICAMENTE", human = false }
+OAG_DISPLAY_MULTIPLAYER_TAGS = { text = "NOMES NO MULTIJOGADOR", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }
 OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS = { text = "PAUSAR AO PERDER O FOCO", human = false }
 OAG_DISPLAY_FRAME_LIMIT = { text = "LIMITE DE QUADROS", human = false }

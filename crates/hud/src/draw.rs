@@ -705,6 +705,10 @@ pub struct Context<'a> {
     /// 57 of the 84 HUD-font widgets are in that position, and the original draws
     /// an outline on them regardless - see [`BORDER_CONSTANT`].
     pub default_border: [f32; 4],
+    /// The `PlrTag` label of the title's `MPTag_HUD.xml`, which gives the multiplayer tags
+    /// their face, scale and alignment; `None` where the layout did not load or the title has
+    /// none. See [`crate::player_tags`].
+    pub tag_label: Option<&'a Label>,
 }
 
 /// One frame's worth of HUD, split by which pass draws it.

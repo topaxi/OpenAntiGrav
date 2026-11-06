@@ -51,6 +51,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     elimination: skins::played::ELIMINATION,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
+    player_tags: None,
     skins: &[],
 };
 
@@ -73,6 +74,7 @@ pub const HD_CAMPAIGN: &oag_title::HudLayouts = &oag_title::HudLayouts {
     elimination: skins::campaign::ELIMINATION,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
+    player_tags: None,
     skins: &[],
 };
 

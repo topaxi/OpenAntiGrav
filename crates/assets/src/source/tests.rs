@@ -106,7 +106,7 @@ const TITLE: &Title = &Title {
         zone_transition: None,
         zoom_ring: None,
         borrows_zoom_ring: false,
-        ghost_options: oag_title::race::GhostOptions::NONE,
+        game_options: oag_title::race::GameOptions::NONE,
         zone_stage_textures: None,
         zone_sky: None,
         // Unread here too: nothing in this crate resolves a team's variant.
@@ -128,6 +128,7 @@ const TITLE: &Title = &Title {
         elimination: r"Data\XML\Nothing_HUD.xml",
         split: None,
         split_layout: None,
+        player_tags: None,
         skins: &[],
     },
     // And unread on the same terms: which widgets a HUD keeps up, and out of

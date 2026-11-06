@@ -233,6 +233,7 @@ OAG_DISPLAY_HUD_STYLE = { text = "HUD STYLE", human = false }
 OAG_DISPLAY_DYNAMIC_HUD = { text = "DYNAMIC HUD", human = false }
 OAG_DISPLAY_GHOST_SHIP_VISIBLE = { text = "GHOST SHIPS VISIBLE", human = false }
 OAG_DISPLAY_AUTO_LOAD_GHOST = { text = "AUTO LOAD GHOST", human = false }
+OAG_DISPLAY_MULTIPLAYER_TAGS = { text = "MULTIPLAYER TAGS", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }
 OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS = { text = "PAUSE ON FOCUS LOSS", human = false }
 OAG_DISPLAY_FRAME_LIMIT = { text = "FRAME LIMIT", human = false }
