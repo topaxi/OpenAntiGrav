@@ -1622,7 +1622,7 @@ reversed every other round; each run takes the Deck's lock on its own.
 
 **Compare within a session only.** The Deck read about 4 % faster from 22:26 to 23:10 than after
 23:30 (HD one view 152 against 146 fps, Pulse one view 248 against 234), for the same binary: `cmp1`
-ran both builds side by side and they matched. Load 1.6 against 2.3, 70 against 77 C. Not identified.
+ran both builds side by side and they matched. Load 1.6 against 2.3, 70 against 77 C. Not identified; the power state is the leading candidate: the fast session was on battery, and the Deck was docked and charging from just after 23:07 (`Discharging` at 55 % at 23:07, `Charging` at 54 % minutes later), unproven. The acceptance matrix, 00:58 to 02:16, is all on AC, charge level per round not recorded.
 It moves the size of the reaper's cost too: 2.3 % of HD's fps in the fast session, 0.8 % in the slow.
 
 ### What the reaper costs one view, and what it is not

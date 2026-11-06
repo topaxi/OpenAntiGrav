@@ -120,7 +120,7 @@ Numbers in `docs/rendering/frame-thread-cpu.md`, "What is left of the frame thre
   maps (3.4 %), which upload a whole `GpuVertex` to change eight bytes; a streamed coordinate buffer as
   the circuit's pass has would cut the copy. Measure: frame pointer build, Pulse two views, 800p.
 - **Why the Deck ran 4 % faster for one session** on the same binary, 2026-11-05 22:26 to 23:10. Until
-  known, compare only inside a session. Candidate: in the slow session `steamwebhelper` read 19 % of a
+  known, compare only inside a session. Candidates: battery against docked and charging, whose change just after 23:07 matches the fast session's end (one same-binary run on each would settle it); in the slow session `steamwebhelper` read 19 % of a
   core and gamescope and Xwayland 10 % each. Measure: per-process CPU from `top` during one run.
 
 ## Also open from the Deck lane (cheap, any time)
