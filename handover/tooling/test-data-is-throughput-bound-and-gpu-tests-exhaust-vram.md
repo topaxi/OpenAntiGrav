@@ -24,10 +24,6 @@ table and method: `docs/architecture/workspace-layout.md`, "Test groups".
 
 ## Open
 
-- **The lead's gate can stop forcing the Intel ICD**: the group makes the NVIDIA run pass, and the
-  NVIDIA segfault it hid is fixed (`race-load` is a GPU worker; cause and numbers in
-  `docs/tools/web.md`, "Exit and GPU workers"). Dropping `VK_ICD_FILENAMES` from the gate script and
-  the "Which GPU" paragraph of `.claude/skills/oag-drive/member-rules.md` is what is left.
 - **The race load does not stop early on exit**: closing the window on the loading screen waits out
   the rest of the load (at most 0.5 s Pulse, 3.7 s 2048, 3.9 s HD in a debug build). A check of
   `gpu_workers::stopping()` at the load's stages would cut it. Only worth it if a player notices.
