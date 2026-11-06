@@ -329,3 +329,45 @@ fn the_director_starts_240_ticks_after_the_wreck_call() {
     }
     panic!("the director never started");
 }
+
+/// Photo mode opened over the director's camera frames its own subject: the director's
+/// station mask (the drawn craft's row alone) is not applied to the photo's picture, and the
+/// cull follows the subject.
+#[test]
+fn photo_mode_over_the_directors_camera_is_not_masked_by_the_directors_station() {
+    let mut race = a_race_the_wreck_ended();
+    race.view.finish_camera = Some(crate::finish_camera::FinishCamera::new(
+        vec![oag_render::camera::destroy::Station {
+            eye: Vec3::new(400.0, 30.0, 0.0),
+            aim: Vec3::new(10.0, 0.0, 0.0),
+        }],
+        0.4,
+        crate::finish_camera::SPECTATOR_SEED,
+    ));
+    for _ in 0..crate::finish_camera::WRECK_HANDOFF_TICKS + 2 {
+        race.tick_finished();
+    }
+    assert!(
+        race.station_camera_section().is_some(),
+        "the director's mask"
+    );
+    assert!(race.photo_begin(false, false, None));
+    race.photo_step(crate::photo::Pad {
+        next: true,
+        ..crate::photo::Pad::default()
+    });
+    let subject = race
+        .photo()
+        .map(crate::photo::Photo::subject)
+        .expect("open");
+    assert_eq!(race.framed_slot(), subject);
+    assert_eq!(
+        race.framed_ship().physics.body.position,
+        race.sim.world.ships[subject].physics.body.position
+    );
+    assert_eq!(
+        race.station_camera_section(),
+        None,
+        "the photo's own camera"
+    );
+}
