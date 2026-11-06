@@ -1647,7 +1647,8 @@ HD one view, 800p, 4 rounds, one binary, `OAG_REAP_MODE` selecting the schedule 
   rounds: 155.8 and 152.1 fps, `scene` 2.17 and 2.41. **Not glibc's arenas**:
   `GLIBC_TUNABLES=glibc.malloc.arena_max=1`, on: 153.1 fps, `scene` 2.42. **Not the APU's power
   budget**: 3 rounds at 100 ms, GPU 1,593 against 1,591 MHz, CPU 2,380 against 2,384 MHz, 14.8 against
-  14.9 W. **Not an artefact of `perf-probe`**: its counter is gated off and `dealloc` counts nothing.
+  14.9 W. `perf-probe`'s counting allocator is an unlikely source, read not run: its counter is gated
+  off and `dealloc` counts nothing.
 - **Cause not identified.** What is left is that the same objects are freed on another core:
   the command pool, the staging buffers and their reference counts come back to the frame thread out of
   its cache. Fits, not measured.

@@ -348,7 +348,8 @@ impl TrackNormals {
 
     /// [`Self::write_view`] over `spans` of the vertices alone, for a view that draws only
     /// those ([`draw_vertices`]): what `out` holds elsewhere is left as it was. Most of a
-    /// circuit's pass is out of any one view, a tenth of it drawn on Talon's Junction.
+    /// circuit's pass is out of any one view (`docs/rendering/frame-thread-cpu.md`, "The shine
+    /// passes").
     pub fn write_view_spans(
         &mut self,
         model: &Model,
