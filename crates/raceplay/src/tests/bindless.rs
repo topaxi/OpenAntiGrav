@@ -85,7 +85,12 @@ fn strips(half: usize) -> Model {
     }
 }
 
-fn drawable(device: &wgpu::Device, queue: &wgpu::Queue, half: usize, bindless: bool) -> Drawable {
+pub(super) fn drawable(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    half: usize,
+    bindless: bool,
+) -> Drawable {
     Drawable::new_with(
         device,
         queue,

@@ -7,6 +7,7 @@
 //! the 1,000-line rule.
 
 use super::*;
+use crate::drawable::TrackCull;
 
 /// A circuit's extra pass: its drawable and, for each draw of it, the circuit
 /// draw it redraws - the key the circuit's own section mask, level-of-detail
@@ -22,6 +23,10 @@ pub(super) struct TrackShine {
     /// The vertices' turned normals, which no camera decides: computed once for the race
     /// when no node moves, else once per clock value, however many views draw at it.
     normals: std::cell::RefCell<oag_render::shine::TrackNormals>,
+    /// For each draw, the vertices it reads ([`oag_render::shine::draw_vertices`]).
+    vertices: Vec<std::ops::Range<usize>>,
+    /// This view's share of [`Self::vertices`], refilled rather than rebuilt.
+    shown: std::cell::RefCell<Vec<std::ops::Range<usize>>>,
 }
 
 impl TrackShine {
@@ -56,6 +61,7 @@ impl TrackShine {
         let Some(pass) = oag_render::shine::build_track(track) else {
             return Ok(None);
         };
+        let vertices = oag_render::shine::draw_vertices(&pass.model);
         let drawable = Drawable::new_with(
             device,
             queue,
@@ -81,36 +87,49 @@ impl TrackShine {
             sources: pass.sources,
             texcoords: std::cell::RefCell::default(),
             normals: std::cell::RefCell::default(),
+            vertices,
+            shown: std::cell::RefCell::default(),
         }))
     }
 }
 
 impl Scene {
-    /// The slots whose shine pass draws this frame - the same craft the hull
-    /// itself is drawn for.
-    fn shines<'a>(&'a self, race: &'a Race) -> impl Iterator<Item = (usize, &'a Drawable)> + 'a {
+    /// The slots whose shine pass this view draws - the same craft the hull itself is drawn
+    /// for, frustum included ([`Scene::hull_seen`]), so a craft behind the camera costs its
+    /// pass neither a map nor a draw.
+    fn shines<'a: 'f, 'f>(
+        &'a self,
+        race: &'a Race,
+        frustum: Option<&'f Frustum>,
+    ) -> impl Iterator<Item = (usize, &'a Drawable)> + 'f {
         let drawn = usize::from(race.ship_count());
         self.shine
             .iter()
             .enumerate()
             .take(drawn)
             .filter_map(move |(slot, shine)| {
-                if !race.ship_active(slot) || self.hull_skipped(race, slot) {
+                if !race.ship_active(slot)
+                    || self.hull_skipped(race, slot)
+                    || !self.hull_seen(race, slot, frustum)
+                {
                     return None;
                 }
                 Some((slot, shine.as_ref()?))
             })
     }
 
-    /// Writes every live craft's pose and its environment-mapped coordinates:
-    /// [`oag_render::shine::write`] over the craft's model matrix, never the
-    /// camera.
+    /// Writes every drawn craft's pose and the environment-mapped coordinates:
+    /// [`oag_render::shine::write`] over the craft's model matrix, never the camera.
     ///
     /// **The coordinates are the frame's, not the view's**: a craft's pose, its flaps and the
-    /// set of craft drawn (`Scene::shines` reads the slot, never the viewpoint) are the same
+    /// set of live craft (`Scene::shines` reads the slot, never the viewpoint) are the same
     /// from every camera, so only the first view of a split uploads them
     /// ([`Scene::does_frame_work`]) and a later view draws what it left in the vertex
-    /// buffers. The pose uniform carries the view-projection and stays per view.
+    /// buffers. That first view maps every craft, not only those it sees: a later view's
+    /// write is copied into its log and again into the queue, which costs a split more than
+    /// mapping a craft no view shows. A race of one view maps what it draws. The pose uniform
+    /// carries the view-projection and stays per view.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn write_shine(
         &self,
         race: &Race,
@@ -118,6 +137,8 @@ impl Scene {
         view_projection: Mat4,
         prev_vp: Mat4,
         prev: &motion::Snapshot,
+        block: ViewBlock,
+        cull: TrackCull<'_>,
         scratch: &mut Vec<mesh::GpuVertex>,
     ) {
         if let Some(track) = &self.track_shine {
@@ -126,34 +147,48 @@ impl Scene {
             track
                 .drawable
                 .write(queue, view_projection, Mat4::IDENTITY, prev_vp);
-            track
-                .drawable
-                .write_node_anims_started(queue, seconds, &|start| race.channel_started(start));
+            if self.does_frame_work() {
+                track
+                    .drawable
+                    .write_node_anims_started(queue, seconds, &|start| race.channel_started(start));
+            }
+            let mut shown = track.shown.borrow_mut();
+            shown.clear();
+            shown.extend(
+                track
+                    .drawable
+                    .track_shine_shown(block, &self.track, &track.sources, cull)
+                    .map(|index| track.vertices[index].clone()),
+            );
+            oag_render::shine::merge_spans(&mut shown);
             track.drawable.write_view_map(
                 queue,
                 view,
                 seconds,
                 &mut track.normals.borrow_mut(),
                 &mut track.texcoords.borrow_mut(),
+                &shown,
             );
         }
         // The flaps the hull's base draw swings: a person's own (`deflect_airbrakes` runs for
         // every craft a person flies), so a rival's pass stays with its own stowed hull.
-        let maps = self.does_frame_work();
-        for (slot, shine) in self.shines(race) {
-            let ship = race.ship_model_matrix_of(slot);
+        for (slot, shine) in self.shines(race, cull.frustum) {
             shine.write(
                 queue,
                 view_projection,
-                ship,
+                race.ship_model_matrix_of(slot),
                 prev_vp * prev.ship(slot, race),
             );
-            if maps {
+        }
+        if self.does_frame_work() {
+            let mapped = cull
+                .frustum
+                .filter(|_| self.layer.get() == super::viewports::Layer::Whole);
+            for (slot, shine) in self.shines(race, mapped) {
+                let ship = race.ship_model_matrix_of(slot);
                 let flaps = race.airbrake_flaps_of(slot);
                 shine.write_environment_map(queue, ship, flaps, scratch);
             }
-        }
-        if maps {
             self.frame_work.update(|w| super::FrameWork {
                 shine_maps: w.shine_maps + 1,
                 ..w
@@ -161,10 +196,15 @@ impl Scene {
         }
     }
 
-    /// Draws every live craft's shine pass, after the hulls so their depth is
+    /// Draws the shine pass of every craft this view shows, after the hulls so their depth is
     /// in the buffer it tests against.
-    pub(super) fn draw_shine<'a>(&'a self, race: &'a Race, list: &mut super::record::DrawList<'a>) {
-        for (_, shine) in self.shines(race) {
+    pub(super) fn draw_shine<'a>(
+        &'a self,
+        race: &'a Race,
+        frustum: Option<&Frustum>,
+        list: &mut super::record::DrawList<'a>,
+    ) {
+        for (_, shine) in self.shines(race, frustum) {
             list.overlay(shine);
         }
     }

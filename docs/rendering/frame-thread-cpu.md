@@ -1502,8 +1502,9 @@ identified (candidates: Arc counts on the same cache lines, the allocator's lock
 `write_buffer`'s staging, a sibling hardware thread). HD one view's fps is 1 % lower in both A/Bs
 (147.3 to 146.0 here, 137.9 to 137.1 before the other cuts) with `total` within 0.04. That loss is
 outside `total`: `frame-log`'s `present_ms`, which counts the acquire's wait, reads 0.65 off and 0.79
-on. Waiting on the reaper's hold on the snatch lock fits, not proven. It stays on: `total` and p99 are
-lower in every cell, and a split gains 3 to 6 %.
+on. It stayed on here: `total` and p99 are lower in every cell, and a split gains 3 to 6 %. The cause
+and the rule that replaced this are in "The reaper at one view and the shine passes" below; the
+snatch-lock clash was tested there and is not it.
 
 ### A second finishing thread
 
@@ -1598,3 +1599,128 @@ log. wgpu was not patched and no PR was tried: our own levers were not exhausted
 Commands: `run.sh` and `avg.sh` as in the batch two section, an arm being `env OAG_REAP_THREAD=0` or
 `OAG_FINISH_THREADS=1` around the same binary. Thread times: `/proc/<pid>/task/<tid>/stat` fields 14
 and 15, read twice 8 s apart in the race, on a run started under the Deck lock.
+
+## The reaper at one view and the shine passes (2026-11-06, `reaper-shine`)
+
+Claim: two named frame-thread costs fall on the Deck with no picture change: the reaper's one-view
+cost goes, and Pulse's `write_shine` stops being 10.3 % of the frame thread in a split. **Shine: true
+as a saving, not as a share. Reaper: true for HD at 800p, at a price elsewhere.**
+
+- Shine: Pulse two views 6.43 to 6.38 ms (151.0 to 152.8 fps), Pulse one view 4.08 to 3.85 (228.7 to
+  238.7), Pure two views 5.30 to 5.26 (181.4 to 182.8). `write_shine` itself only fell from 11.4 % to
+  10.0 % of the frame thread: most of what is left is the craft maps every frame needs.
+- Reaper at one view, off: HD 800p 146.1 to 147.2 fps, `present_ms` 0.667 to 0.567, but `total` 6.18
+  to 6.24 and p99 8.87 to 9.08, and Pulse and Pure pay (table below).
+
+**Method.** As the section above: `dist` `znver2` `perf-probe` container builds, base `952ab242f`,
+headless gamescope, render scale 100, same race arguments, mean of `frame-phases` after six lines.
+Governor off in the profile (every line reads `governor=0`). Arm order rotated each round and
+reversed every other round; each run takes the Deck's lock on its own.
+
+**Noise.** The same bytes under two names, HD one view, 800p, 4 rounds: `total` 6.04 and 6.01, fps
+151.7 and 152.3, `present_ms` 0.532 and 0.541. So 0.03 ms and 0.6 fps are nothing.
+
+**Compare within a session only.** The Deck read about 4 % faster from 22:26 to 23:10 than after
+23:30 (HD one view 152 against 146 fps, Pulse one view 248 against 234), for the same binary: `cmp1`
+ran both builds side by side and they matched. Load 1.6 against 2.3, 70 against 77 C. Not identified.
+It moves the size of the reaper's cost too: 2.3 % of HD's fps in the fast session, 0.8 % in the slow.
+
+### What the reaper costs one view, and what it is not
+
+HD one view, 800p, 4 rounds, one binary, `OAG_REAP_MODE` selecting the schedule (a probe, not kept):
+
+| schedule | `total` | `scene` | `submit` | fps | p99 | acquire | `queue.present` | polls / frame |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| off | 5.96 | 2.18 | 2.76 | 155.4 | 8.44 | 0.338 | 0.174 | 0 |
+| after the submit, every 1 ms (as shipped) | 6.04 | 2.43 | 2.66 | 151.7 | 8.50 | 0.494 | 0.147 | 4.7 |
+| same, first poll after the present | 6.04 | 2.42 | 2.67 | 151.8 | 8.40 | 0.489 | 0.147 | 4.7 |
+| one poll after the present | 6.03 | 2.20 | 2.80 | 153.9 | 8.68 | 0.337 | 0.177 | 1.0 |
+| from the frame's submit to the queue submit | 6.04 | 2.35 | 2.78 | 151.9 | 8.45 | 0.490 | 0.145 | 1.3 |
+
+- **It is not the snatch lock.** A present began inside a poll on 0.4 to 0.5 % of frames, and
+  `queue.present` is *shorter* with the reaper on. The whole rise in `present_ms` is the acquire. The
+  1 ms sleep was no guard either way: the loop reaches `QueueEmpty` on 3 % of frames, so it runs free.
+- **Timing does not help.** Each schedule that reclaims pays `scene` and the acquire, whenever it
+  runs, even inside the frame thread's idle wait. The one that does not pay reclaims nothing: 0.09 ms
+  of poll, because the GPU has not finished yet, and `submit` goes back up.
+- **Not the sibling hardware thread**: `taskset -c 0,2,4,6`, one logical CPU per core, off and on, 3
+  rounds: 155.8 and 152.1 fps, `scene` 2.17 and 2.41. **Not glibc's arenas**:
+  `GLIBC_TUNABLES=glibc.malloc.arena_max=1`, on: 153.1 fps, `scene` 2.42. **Not the APU's power
+  budget**: 3 rounds at 100 ms, GPU 1,593 against 1,591 MHz, CPU 2,380 against 2,384 MHz, 14.8 against
+  14.9 W. `perf-probe`'s counting allocator is an unlikely source, read not run: its counter is gated
+  off and `dealloc` counts nothing.
+- **Cause not identified.** What is left is that the same objects are freed on another core:
+  the command pool, the staging buffers and their reference counts come back to the frame thread out of
+  its cache. Fits, not measured.
+
+`queue.submit`'s reclaim costs the frame thread 0.10 ms of `submit` at one view, against `scene` +0.25
+and the acquire +0.15. So `Reaper::frame_submitted` leaves a race's frame of exactly one view in
+one window to the next submit, which does the work on the frame thread. A split, a windowed race and
+the front end keep the thread; nobody measured them without it. `OAG_REAP_THREAD=1` reclaims after every
+frame, `=0` never.
+
+**This is a trade.** Final build, 800p, 3 rounds, reaper on after every frame against this rule:
+
+| One view | `total` | fps | p99 | `present_ms` |
+| --- | --- | --- | --- | --- |
+| HD | 6.18 to 6.24 | 146.1 to 147.2 | 8.87 to 9.08 | 0.667 to 0.567 |
+| Pulse | 3.85 to 3.93 | 238.7 to 236.9 | 5.48 to 5.64 | 0.362 to 0.324 |
+| Pure | 3.15 to 3.29 | 271.8 to 271.7 | 4.88 to 5.02 | 0.503 to 0.384 |
+
+At 1080p and 4K, the fast session, 2 rounds, fps rose 0.1 to 0.8 and `total` rose 0.13 to 0.46: one
+view there is GPU-bound and the frame thread has room. It helps the slowest title and costs the two
+that run far past any panel. Reverting the rule is one commit.
+
+### The shine passes
+
+`write_shine` is two jobs. The craft half was already frame work. The circuit's half is per view by
+nature: its coordinates are rows 0 and 1 of the view matrix, so they cannot be shared. What could go
+was the work no view reads: on Talon's Junction a view draws 132 to 3,356 of the pass's 24,080
+vertices, 3 to 57 of its 215 draws.
+
+- **A view computes coordinates for the draws it draws.** `Drawable::track_shine_shown` is the one
+  predicate, called by the write and by `draw_track_shine`, so they cannot drift. One write from the
+  first vertex to the last, because a write is a staging buffer and a gap holds coordinates nothing
+  reads.
+- **An animated vertex is turned when a view first draws it at a clock value**, not all of them.
+- **The normals are stored by axis** (`texgen::UnitNormals`), so the loop runs in vector registers:
+  1.6 to 2 times as fast in a micro-benchmark, same bits, each lane keeping the scalar order.
+- **A craft's pass takes the hull's frustum test.** It drew every live craft before.
+- **A race of one view maps only the craft it draws. A split's first view maps them all.** Giving
+  that job to each view was tried first and made a split worse: Pulse two views 6.45 to 6.55, because
+  a later view's map is copied into its write log and again into the queue (`replay` +2.2 % of the
+  frame thread, `write_buffer` +1.1 %), which costs more than mapping a craft nobody sees.
+- **A circuit's node table goes up with the first view.**
+
+Frame pointer profile, Pulse two views, 800p, 2 kHz, frame thread: `write_shine` 11.4 % to 10.0 %,
+`write_view_map` 4.69 % to 2.44 %, `write_environment_map` 3.35 % to 3.43 %, node tables 1.06 % to
+1.11 %, `record_views` 5,825 to 5,502 samples. The profile on the frame path before this was 10.3 % on
+an older tree. A dwarf profile of the `dist` binary is no substitute: it loses the callers.
+
+Dropped, never built: the coordinates in the vertex shader, which would not keep the picture's bytes:
+the GPU's rounding is not the CPU's.
+
+### All of it together
+
+`952ab242f` against the branch, mean `total` in ms, interleaved, 3 rounds, Deck load 1.3 to 3.2.
+The two-view gains of the reaper hold: HD 800p two views 10.47 to 10.43.
+
+| | 1v 800p | 1v 1080p | 1v 4K | 2v 800p | 2v 1080p | 2v 4K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pure | 3.24 to 3.29 | 4.15 to 4.27 | 5.10 to 5.13 | 5.30 to 5.26 | 7.66 to 7.54 | 9.31 to 9.21 |
+| Pulse | 4.08 to 3.93 | 5.44 to 5.36 | 6.67 to 6.42 | 6.43 to 6.38 | 8.82 to 8.80 | 12.01 to 11.70 |
+| HD | 6.19 to 6.24 | 7.43 to 7.77 | 10.17 to 10.41 | 10.47 to 10.43 | 12.59 to 12.75 | 20.52 to 20.59 |
+
+| fps | 1v 800p | 1v 1080p | 1v 4K | 2v 800p | 2v 1080p | 2v 4K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pure | 270.0 to 271.7 | 140.4 to 141.7 | 32.6 to 32.7 | 181.4 to 182.8 | 117.8 to 118.0 | 31.1 to 31.1 |
+| Pulse | 228.7 to 236.9 | 131.2 to 132.7 | 31.2 to 31.2 | 151.0 to 152.8 | 106.1 to 106.3 | 29.0 to 29.1 |
+| HD | 145.8 to 147.2 | 99.8 to 100.1 | 34.0 to 34.2 | 93.0 to 93.1 | 74.5 to 73.8 | 29.3 to 29.1 |
+
+HD has no circuit pass moved by this, so its two-view cells are the noise floor at those sizes: 2v
+1080p's +0.16 has rounds from -0.07 to +0.36. Its 1v `total` rises by the rule.
+
+Pictures: 18 of 18 pairs byte-identical by `cmp` on the Deck, RADV, Pure, Pulse and HD at one and two
+views, ticks 900, 1,500 and 2,400. **Single frames**, which cannot reach a stale buffer. For that the
+evidence is the tests: every drawn vertex carries the whole call's bits, at each clock value and
+whichever view drew it first (`oag_render::shine`), and a pose the buffer holds is not written again.

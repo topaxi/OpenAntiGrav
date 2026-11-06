@@ -311,6 +311,95 @@ fn the_normals_are_computed_once_per_clock_value_and_never_again_when_nothing_mo
     assert_eq!(kept.refreshed(), 1, "no animated node: once for the race");
 }
 
+/// A view writes only the vertices it draws: those are the bits the whole model's call gives,
+/// and the rest of the list stays as it was.
+#[test]
+fn a_span_of_the_vertices_gets_the_whole_calls_bits_and_nothing_else_moves() {
+    let mut model = build_track(&circuit()).unwrap().model;
+    skewed(&mut model);
+    let view = Mat4::from_rotation_y(0.7);
+    let mut whole = Vec::new();
+    TrackNormals::default().write_view(&model, &mut whole, view, 1.0);
+    assert!(whole.len() >= 3);
+
+    let spans = [0..1, 2..whole.len()];
+    let mut out = vec![[-1.0_f32; 2]; whole.len()];
+    TrackNormals::default().write_view_spans(&model, &mut out, view, 1.0, &spans);
+    for (index, (got, want)) in out.iter().zip(&whole).enumerate() {
+        if spans.iter().any(|span| span.contains(&index)) {
+            assert_eq!(
+                got.map(f32::to_bits),
+                want.map(f32::to_bits),
+                "vertex {index}"
+            );
+        } else {
+            assert_eq!(*got, [-1.0; 2], "vertex {index}");
+        }
+    }
+}
+
+/// Views that draw different spans of an animated circuit each get the bits of a fresh call,
+/// at each clock value and whichever of them drew a vertex first.
+#[test]
+fn an_animated_vertex_is_current_for_each_view_that_draws_it() {
+    let mut track = circuit();
+    track.vertices[1].xform = 1;
+    track.vertices[3].xform = 1;
+    track.anim_nodes = vec![oag_mesh::mesh::AnimNode {
+        transform: oag_mesh::mesh::Motion::Vex(Box::default()),
+        static_above: oag_vex::vex::IDENTITY,
+        parent: None,
+    }];
+    let mut model = build_track(&track).unwrap().model;
+    skewed(&mut model);
+    let last = model.vertices.len();
+    let mut kept = TrackNormals::default();
+    let mut out = Vec::new();
+    for (yaw, seconds, span) in [
+        (0.3_f32, 1.0_f32, 0..1),
+        (2.1, 1.0, 0..last),
+        (-1.2, 2.0, 1..last),
+        (0.9, 2.0, 0..2),
+        (0.4, 3.0, 2..last),
+    ] {
+        let view = Mat4::from_rotation_y(yaw);
+        let spans = [span.clone()];
+        kept.write_view_spans(&model, &mut out, view, seconds, &spans);
+        let fresh = per_call_view_map(&model, view, seconds);
+        for index in span {
+            assert_eq!(
+                out[index].map(f32::to_bits),
+                fresh[index].map(f32::to_bits),
+                "vertex {index} at yaw {yaw}, seconds {seconds}"
+            );
+        }
+    }
+}
+
+/// Every index a draw reads is inside its span, so the coordinates it reads are written.
+#[test]
+fn a_draws_span_holds_every_vertex_it_indexes() {
+    let model = build_track(&circuit()).unwrap().model;
+    let spans = draw_vertices(&model);
+    assert_eq!(spans.len(), model.draws.len());
+    for (draw, span) in model.draws.iter().zip(&spans) {
+        for &index in &model.indices[draw.range.start as usize..draw.range.end as usize] {
+            assert!(span.contains(&(index as usize)));
+        }
+    }
+}
+
+/// Overlapping and touching spans join, in any order; a gap stays a gap.
+#[test]
+fn spans_merge_sorted_with_no_vertex_twice() {
+    let mut spans = vec![9..12, 0..3, 2..5, 5..6, 20..21];
+    merge_spans(&mut spans);
+    assert_eq!(spans, [0..6, 9..12, 20..21]);
+    let mut none = Vec::new();
+    merge_spans(&mut none);
+    assert!(none.is_empty());
+}
+
 /// A shine model whose last three vertices are the left airbrake flap: off the
 /// hinge, with a normal that turns when the flap does.
 fn flapped() -> Model {
