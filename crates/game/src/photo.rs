@@ -77,6 +77,36 @@ pub mod strings {
     pub const ROW: &str = "OAG_MENU_PHOTO_MODE";
 }
 
+/// The row of the screen a project string id words, for the title's own disc words
+/// ([`oag_title::photo::Strings`]); the lens names and the two buttons' chips have no disc row.
+#[must_use]
+pub fn row_of(id: &str) -> Option<oag_title::photo::Row> {
+    use oag_title::photo::Row;
+    Some(match id {
+        strings::CAMERA => Row::Camera,
+        strings::HUD => Row::Hud,
+        strings::HELP => Row::Help,
+        strings::ROTATE => Row::Rotate,
+        strings::PAN => Row::Pan,
+        strings::RESET => Row::Reset,
+        strings::SHIP => Row::Ship,
+        _ => return None,
+    })
+}
+
+/// The disc's own text for the project string `id` on `title`, upper case as the screen is
+/// drawn, when the title's disc has a word for that row and its string table carries it.
+#[must_use]
+pub fn disc_word(
+    id: &str,
+    words: &oag_title::photo::Strings,
+    table: &oag_ui::language::StringTable,
+) -> Option<String> {
+    let disc = words.disc_id(row_of(id)?)?;
+    let text = table.get(disc)?.trim();
+    (!text.is_empty()).then(|| text.to_uppercase())
+}
+
 /// The four things the screen can be clicked on, in the order they are drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Chip {

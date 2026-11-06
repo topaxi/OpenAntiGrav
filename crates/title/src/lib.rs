@@ -52,6 +52,7 @@ pub mod menu;
 pub mod now_playing;
 pub mod opponent_autopilot;
 pub mod original_driver;
+pub mod photo;
 pub mod pre_race;
 pub mod pressing;
 pub mod profile;
@@ -179,6 +180,8 @@ pub struct Title {
     pub prompts: &'static prompts::Prompts,
     /// Which name and tag entries this title has. See [`profile::Profile`].
     pub profile: profile::Profile,
+    /// Which of photo mode's words this title's disc already says. See [`photo::Strings`].
+    pub photo: photo::Strings,
     /// The plugin definition declaring what this release carries to race with:
     /// one `PI_Team` node per team, one `PI_Track` per circuit, one `PI_Music`
     /// per soundtrack track.

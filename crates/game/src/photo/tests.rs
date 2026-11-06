@@ -79,3 +79,29 @@ fn the_help_names_the_lens_and_the_hud_and_hiding_it_leaves_only_the_message() {
     let saved = draw_list(&photo, grid, &words(&say, &button), Some("SAVED"));
     assert_eq!(texts(&saved), ["SAVED"]);
 }
+
+#[test]
+fn a_row_the_disc_words_takes_the_discs_text_and_one_it_does_not_keeps_ours() {
+    let table = oag_ui::language::StringTable::from_xml(
+        r#"<StringTable><Entry ID="MSC_PHOTO_PAN" String="Pan Camera"></Entry></StringTable>"#,
+    );
+    assert_eq!(
+        disc_word(strings::PAN, &oag_title::photo::Strings::HD, &table).as_deref(),
+        Some("PAN CAMERA")
+    );
+    assert_eq!(
+        disc_word(strings::PAN, &oag_title::photo::Strings::NONE, &table),
+        None,
+        "a title with no word of its own"
+    );
+    assert_eq!(
+        disc_word(strings::SHIP, &oag_title::photo::Strings::HD, &table),
+        None,
+        "the disc has the id but this table does not"
+    );
+    assert_eq!(
+        disc_word(strings::TAKE, &oag_title::photo::Strings::HD, &table),
+        None,
+        "a chip with no disc row"
+    );
+}

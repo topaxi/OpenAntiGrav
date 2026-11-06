@@ -14,7 +14,7 @@ use oag_ui::pointer::Pointer;
 
 use crate::stage::Stage;
 
-use super::pause::say;
+use oag_ui::language::StringTable;
 
 /// How long a result stays on screen, in ticks.
 const MESSAGE_TICKS: u32 = 180;
@@ -36,6 +36,21 @@ pub(crate) struct Open {
     message: Option<(String, u32)>,
     /// A shot asked for this tick, read back by `Session::draw` once the frame is drawn.
     shot: Option<std::path::PathBuf>,
+    /// The project's words in the player's language and in English, read once when the mode
+    /// opens: the screen is drawn every frame.
+    own: StringTable,
+    english: StringTable,
+}
+
+impl Open {
+    /// The project's text for `id`, its English where the language leaves it untranslated.
+    fn word(&self, id: &str) -> String {
+        self.own
+            .get(id)
+            .or_else(|| self.english.get(id))
+            .unwrap_or(id)
+            .to_string()
+    }
 }
 
 /// Every button the mode reads, spent on leaving so none of them reaches the race as an edge.
@@ -95,10 +110,13 @@ impl super::Session {
         }
         info!("photo mode opened ({origin:?})");
         self.controls.silence_motors();
+        let language = self.settings.language.as_deref();
         self.photo = Some(Open {
             origin,
             message: None,
             shot: None,
+            own: oag_ui::strings::project_table(language),
+            english: oag_ui::strings::project_table(None),
         });
     }
 
@@ -188,9 +206,8 @@ impl super::Session {
     }
 
     fn photo_message(&mut self, id: &str) {
-        let text = say(self.settings.language.as_deref(), id);
         if let Some(open) = self.photo.as_mut() {
-            open.message = Some((text, MESSAGE_TICKS));
+            open.message = Some((open.word(id), MESSAGE_TICKS));
         }
     }
 
@@ -259,8 +276,13 @@ impl super::Session {
         let Some(photo) = stage.race.photo() else {
             return Vec::new();
         };
-        let language = self.settings.language.as_deref();
-        let say_id = |id: &str| say(language, id);
+        // The disc's own word for a row where the title's disc has one, else the project's.
+        let say_id = |id: &str| {
+            self.shell
+                .as_ref()
+                .and_then(|shell| photo::disc_word(id, &shell.title.photo, &shell.strings))
+                .unwrap_or_else(|| open.word(id))
+        };
         let button = |button: Button| {
             let name = button.to_string().to_uppercase();
             match self.controls.bound_keys(button).first() {

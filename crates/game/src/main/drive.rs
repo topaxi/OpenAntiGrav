@@ -355,6 +355,9 @@ fn state_of(session: &Session) -> State {
     }
     if let Stage::Race(stage) = &session.stage {
         state.photo = Some(session.photo_lens_name().to_string());
+        state.endrace = stage.endrace.as_ref().map(|endrace| {
+            if endrace.is_photo() { "photo" } else { "other" }.to_string()
+        });
         state.hash = Some(format!("{:016x}", stage.race.sim.state_hash()));
         state.sim_tick = Some(stage.race.sim.world.tick);
     }

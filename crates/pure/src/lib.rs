@@ -67,6 +67,7 @@ pub const TITLE: &Title = &Title {
     // Measured: the six glyphs of `FX300ANG.fnt` - see `prompts`.
     prompts: prompts::PROMPTS,
     profile: oag_title::profile::Profile::NAME_AND_TAG,
+    photo: oag_title::photo::Strings::NONE,
     // Pure's own recovery is unread; Pulse's law.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
     // Pure's effects law is unread; Pulse's commit helper squares the group volume.

@@ -142,6 +142,10 @@ pub struct State {
     /// `stage=race`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub photo: Option<String>,
+    /// The end-of-race screen on top, `photo` for `Race End Photo` and `other` for the rest,
+    /// on `stage=race` once the race has ended with an end-of-race flow built.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endrace: Option<String>,
     /// The race's state hash, hex, on `stage=race`. It moves with every tick, so a line is
     /// written for each tick the race steps and none while it stands still.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -188,6 +192,7 @@ impl State {
             "screen.id" => one(screen.map(|s| s.id.clone())),
             "title" => one(screen.map(|s| s.title.clone())),
             "photo" => one(self.photo.clone()),
+            "endrace" => one(self.endrace.clone()),
             "focus" => screen
                 .and_then(|s| s.focus.as_ref())
                 .map(|f| {
@@ -236,6 +241,7 @@ impl State {
                 | "title"
                 | "focus"
                 | "photo"
+                | "endrace"
         ) || key.strip_prefix("race.").is_some_and(|rest| {
             matches!(
                 rest,

@@ -31,6 +31,11 @@ const TO_THE_RACE: &str = "boot; select racebox; press cross; until page=race; \
      until screen.id=ship-select; press cross; until stage=race within 4000; ticks 400; ";
 
 fn drive(image: &Path, tag: &str, script: &str, shots: &Path) -> Run {
+    drive_with(image, tag, script, shots, &[])
+}
+
+/// [`drive`] with `args` added to the game's command line.
+fn drive_with(image: &Path, tag: &str, script: &str, shots: &Path, args: &[&str]) -> Run {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a scratch directory");
@@ -40,6 +45,7 @@ fn drive(image: &Path, tag: &str, script: &str, shots: &Path) -> Run {
         // One seed, or each launch deals its own weapons and the two races differ from tick 1.
         .args(["--no-audio", "--no-intro", "--seed", "7", "--drive"])
         .arg(script.replace("SHOTS", &shots.display().to_string()))
+        .args(args)
         .arg("--state-log")
         .arg(&log)
         .env("XDG_CONFIG_HOME", dir.join("config"))
@@ -207,4 +213,96 @@ fn a_saved_picture_is_the_frame_the_player_saw_at_its_full_size() {
         "the picture saved is the frame seen with the help hidden"
     );
     assert_eq!(seen.2, after.2, "and a shot does not move the camera");
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn select_on_race_end_photo_opens_the_mode_and_leaving_returns_to_it() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-finish-shots");
+    // The player is flown for them, so the race reaches its line and `Race End Photo`.
+    let run = drive_with(
+        &image,
+        "finish",
+        &format!(
+            "{TO_THE_RACE} ticks 8000; until endrace=photo within 2000; ticks 100; \
+             press select; until photo=internal within 50; ticks 20; \
+             press circle; until photo=none within 50; ticks 5; expect endrace=photo"
+        ),
+        &shots,
+        &["--autopilot"],
+    );
+    assert!(
+        run.status.success(),
+        "{}\n{:?}",
+        run.stderr,
+        run.states.last()
+    );
+    let seen = ticks(&run);
+    let under: Vec<u64> = seen
+        .iter()
+        .filter(|(_, _, lens)| lens != "none")
+        .map(|(tick, _, _)| *tick)
+        .collect();
+    assert!(!under.is_empty(), "SELECT never opened the mode");
+    assert!(
+        under.windows(2).all(|pair| pair[0] == pair[1]),
+        "the race ran on behind the mode: {under:?}"
+    );
+}
+
+/// Every disc word a title's photo mode takes is in that disc's own string table: a mapped id the
+/// table lacks would silently fall back to ours and leave the mapping untested.
+#[test]
+#[ignore = "needs disc images in data/images/"]
+fn every_disc_word_a_title_maps_is_in_its_string_table() {
+    use oag_title::photo::Row;
+    let mut seen = 0;
+    for name in [
+        "pulse-psp-eu.chd",
+        "hdfury-ps3-eu-dec.iso",
+        "omega-ps4-eu.pkg",
+    ] {
+        let Some(image) = oag_testdata::image(name) else {
+            continue;
+        };
+        let options = oag_game::boot::Options {
+            language: None,
+            source: image.display().to_string(),
+            dlc: Vec::new(),
+            leg: oag_ui::frontend::Leg::LogoFmv,
+            movie: None,
+            cache: std::env::temp_dir().join("oag-photo-strings-ground-truth"),
+            audio_cache: oag_source::cache::default_audio_cache_dir(),
+            extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
+            no_video: true,
+            refresh_video: false,
+            prefer_av1_cache: false,
+        };
+        let (shell, _archives, title) =
+            oag_game::boot::load_shell(&options).unwrap_or_else(|e| panic!("{name}: {e:#}"));
+        for row in [
+            Row::Camera,
+            Row::Hud,
+            Row::Help,
+            Row::Rotate,
+            Row::Pan,
+            Row::Reset,
+            Row::Ship,
+        ] {
+            let Some(id) = title.photo.disc_id(row) else {
+                continue;
+            };
+            let text = shell
+                .strings
+                .get(id)
+                .unwrap_or_else(|| panic!("{name}: {id} is not in the string table"));
+            assert!(!text.trim().is_empty(), "{name}: {id} is empty");
+            println!("{name}: {row:?} = {id} = {text:?}");
+            seen += 1;
+        }
+    }
+    assert!(seen > 0 || oag_testdata::image("pulse-psp-eu.chd").is_none());
 }
