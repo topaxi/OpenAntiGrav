@@ -237,9 +237,10 @@ atrac9dec = "0.9"
 # garbage, so this one is not worth rewriting. The `zlib-rs` feature selects the
 # inflater: about 30 % faster than `miniz_oxide` on a whole HD PSARC read.
 # `default-features = false` only drops this edge's request for the
-# `miniz_oxide` backend; `png` and `zip` still pull `flate2 -> miniz_oxide`
-# 0.8 into the tree, and `flate2` uses `zlib-rs` whenever that feature is on
-# (its `ffi` module compiles `miniz_oxide` in only when no zlib backend is).
+# `miniz_oxide` backend; `png` asks for `flate2`'s default `rust_backend`, so
+# `flate2 -> miniz_oxide` 0.8 stays in the tree (`cargo tree -i miniz_oxide`).
+# It is not the inflater in use: `flate2` compiles `miniz_oxide` in only when no
+# zlib backend feature is on, and `zlib-rs` implies one (`any_zlib`).
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 
 # LZMA, for the Unity asset bundle container (`oag-unity`): the one compression

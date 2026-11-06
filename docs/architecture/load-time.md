@@ -228,7 +228,8 @@ by construction; nothing about the simulation can see the split.
   block). Under the 10% this lane set for a new dependency in a determinism
   crate, so not taken then. Taken later, see "Inflate unified on `flate2`"
   in `docs/architecture/workspace-layout.md`, which measured it again with the
-  whole `Archive::read` path and found a larger gain.
+  whole `Archive::read` path (including the Fury disc this entry used) and
+  found a larger gain: HD Fury 9.2 to 10.5 s down to 6.7 s.
 - **`perf record --call-graph dwarf`.** Every stack came back as its leaf
   frame alone on this binary, which made the first profile read as "inflate
   is 30%" with no caller. Use a frame-pointer build.
