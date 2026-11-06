@@ -572,7 +572,7 @@ impl super::Scene {
     pub(super) fn encode_motion_blur(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         views: [&wgpu::TextureView; 3],
         viewport: (f32, f32, f32, f32),

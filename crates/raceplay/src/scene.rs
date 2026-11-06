@@ -470,6 +470,8 @@ pub struct Scene {
     split_recording: std::cell::Cell<Recording>,
     /// The later views' write logs, kept between frames for their memory (`split_record`).
     split_logs: std::cell::RefCell<Vec<oag_gpu::writes::Log>>,
+    /// Where a split's held-back writes go up, kept between frames (`split_record::Folded`).
+    split_upload: std::cell::RefCell<oag_gpu::writes::UploadBuffer>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -1101,6 +1103,7 @@ impl Scene {
             seat_drawn: Default::default(),
             split_recording: std::cell::Cell::new(Recording::default_for_target()),
             split_logs: std::cell::RefCell::default(),
+            split_upload: std::cell::RefCell::default(),
             track,
             visibility,
             ships,

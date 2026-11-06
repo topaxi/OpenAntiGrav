@@ -190,7 +190,7 @@ impl Scene {
     pub(super) fn prepare_split_bloom(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         rects: &[(f32, f32, f32, f32)],

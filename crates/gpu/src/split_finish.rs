@@ -30,14 +30,17 @@ thread_local! {
 }
 
 /// A closed encoder: finished, or being finished on the worker.
-enum Closed {
+#[derive(Debug)]
+pub enum Closed {
     Finished(wgpu::CommandBuffer),
     #[cfg(not(target_arch = "wasm32"))]
     Finishing(std::sync::mpsc::Receiver<wgpu::CommandBuffer>),
 }
 
 impl Closed {
-    fn buffer(self) -> wgpu::CommandBuffer {
+    /// Its command buffer, waiting for the worker if it is not done.
+    #[must_use]
+    pub fn buffer(self) -> wgpu::CommandBuffer {
         match self {
             Self::Finished(buffer) => buffer,
             #[cfg(not(target_arch = "wasm32"))]
@@ -115,6 +118,40 @@ pub fn submit_with_closed(queue: &wgpu::Queue, last: wgpu::CommandBuffer) -> wgp
     let mut buffers: Vec<wgpu::CommandBuffer> = closed.into_iter().map(Closed::buffer).collect();
     buffers.push(last);
     queue.submit(buffers)
+}
+
+/// `encoder` closed: finished on another thread when this thread has an open [`Frame`], since
+/// the frame's work then has somewhere to wait for it, and finished here otherwise.
+#[must_use]
+pub fn close(encoder: wgpu::CommandEncoder) -> Closed {
+    if frame_open() {
+        finish_elsewhere(encoder)
+    } else {
+        Closed::Finished(encoder.finish())
+    }
+}
+
+/// Whether this thread has an open [`Frame`].
+#[must_use]
+pub fn frame_open() -> bool {
+    OPEN.with(|open| open.borrow().is_some())
+}
+
+/// Puts `closed` behind what this thread's open frame has closed so far, for [`Frame::submit`]
+/// to submit with the rest; with no frame open, submits them now. Every queue write made before
+/// that submit, for all that they are made after these commands were recorded, lands ahead of
+/// them: a caller has to know that none of what follows writes what these commands read.
+pub fn defer(queue: &wgpu::Queue, closed: Vec<Closed>) {
+    let left = OPEN.with(|open| match open.borrow_mut().as_mut() {
+        Some(frame) => {
+            frame.extend(closed);
+            Vec::new()
+        }
+        None => closed,
+    });
+    if !left.is_empty() {
+        queue.submit(left.into_iter().map(Closed::buffer));
+    }
 }
 
 /// Whether frames split their encoder: `OAG_SPLIT_FINISH` when set (`0` off, anything else
@@ -195,28 +232,34 @@ pub fn split(device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn finish_elsewhere(encoder: wgpu::CommandEncoder) -> Closed {
+#[must_use]
+pub fn finish_elsewhere(encoder: wgpu::CommandEncoder) -> Closed {
     Closed::Finished(encoder.finish())
 }
 
 /// How many threads finish a frame's closed encoders where [`known_equal_cores`], each encoder
-/// on the next: encoders finish independently, and a frame closes its second while the first is
-/// still finishing, so one thread would queue it and the frame thread would wait for the pair
-/// (`docs/rendering/frame-thread-cpu.md`, "A second finishing thread"). Elsewhere one thread.
+/// on the one holding the fewest: encoders finish independently, and a frame closes its next
+/// while the last is still finishing, so too few threads queue them and the frame thread waits
+/// for the queue. A view of a split is a thread's worth by itself, and what follows it needs
+/// a third (`docs/rendering/split-screen.md`, "One submission"). Elsewhere one thread.
 /// `OAG_FINISH_THREADS` overrides it (an A/B switch for benches, nothing a player sets).
 #[cfg(not(target_arch = "wasm32"))]
-const FINISH_THREADS: usize = 2;
+const FINISH_THREADS: usize = 3;
 
 /// Sends `encoder` to a finishing thread, started on first use; finishes it here if no thread
 /// can be started.
 #[cfg(not(target_arch = "wasm32"))]
-fn finish_elsewhere(encoder: wgpu::CommandEncoder) -> Closed {
+#[must_use]
+pub fn finish_elsewhere(encoder: wgpu::CommandEncoder) -> Closed {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
     type Job = (wgpu::CommandEncoder, mpsc::Sender<wgpu::CommandBuffer>);
-    static WORKERS: std::sync::OnceLock<Vec<std::sync::Mutex<mpsc::Sender<Job>>>> =
-        std::sync::OnceLock::new();
-    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    /// A finishing thread: where to send it work, and how many encoders it holds.
+    struct Worker {
+        jobs: std::sync::Mutex<mpsc::Sender<Job>>,
+        held: std::sync::Arc<AtomicUsize>,
+    }
+    static WORKERS: std::sync::OnceLock<Vec<Worker>> = std::sync::OnceLock::new();
     let workers = WORKERS.get_or_init(|| {
         let threads = std::env::var("OAG_FINISH_THREADS")
             .ok()
@@ -229,30 +272,44 @@ fn finish_elsewhere(encoder: wgpu::CommandEncoder) -> Closed {
         (0..threads)
             .filter_map(|_| {
                 let (jobs, inbox) = mpsc::channel::<Job>();
+                let held = std::sync::Arc::new(AtomicUsize::new(0));
+                let done = held.clone();
                 std::thread::Builder::new()
                     .name("oag-finish".into())
                     .spawn(move || {
                         for (encoder, answer) in inbox {
                             let _ = answer.send(encoder.finish());
+                            done.fetch_sub(1, Ordering::Release);
                         }
                     })
                     .ok()
-                    .map(|_| std::sync::Mutex::new(jobs))
+                    .map(|_| Worker {
+                        jobs: std::sync::Mutex::new(jobs),
+                        held,
+                    })
             })
             .collect()
     });
-    if workers.is_empty() {
+    // The thread holding the fewest: a split's small encoders must not queue behind a view's.
+    let Some(worker) = workers
+        .iter()
+        .min_by_key(|worker| worker.held.load(Ordering::Acquire))
+    else {
         return Closed::Finished(encoder.finish());
-    }
-    let jobs = &workers[NEXT.fetch_add(1, Ordering::Relaxed) % workers.len()];
+    };
+    worker.held.fetch_add(1, Ordering::AcqRel);
     let (answer, finished) = mpsc::channel();
-    let sent = jobs
+    let sent = worker
+        .jobs
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .send((encoder, answer));
     match sent {
         Ok(()) => Closed::Finishing(finished),
-        Err(mpsc::SendError((encoder, _))) => Closed::Finished(encoder.finish()),
+        Err(mpsc::SendError((encoder, _))) => {
+            worker.held.fetch_sub(1, Ordering::AcqRel);
+            Closed::Finished(encoder.finish())
+        }
     }
 }
 

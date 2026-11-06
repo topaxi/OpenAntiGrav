@@ -273,7 +273,7 @@ impl RaceStage {
                 },
             );
         }
-        // A split screen draws one scene per view, each submitted on its own, so
+        // A split screen draws one scene per view, in command buffers of its own, so
         // `encoder` keeps only what the caller records after it: see
         // `Scene::render_viewports`. The blur runs once per view after the last, its
         // timestamp pair bracketing every chain; no scene timer. Each view jitters on its

@@ -178,7 +178,7 @@ impl Scene {
     /// once a tick; `None` draws none).
     pub(super) fn run_hd(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
@@ -205,7 +205,7 @@ impl Scene {
     pub(super) fn run_boost_zoom(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),

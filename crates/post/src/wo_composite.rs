@@ -545,7 +545,7 @@ impl Chain {
     /// `viewport` - the rectangle the race pass drew - and steps the exposure.
     pub fn run(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         origin: (f32, f32),
@@ -565,7 +565,7 @@ impl Chain {
     /// lands at `placement.1` of `view`, exposed by `seat`.
     fn run_placed(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         seat: &Seat,
@@ -664,13 +664,13 @@ impl Chain {
 
     /// Runs the chain over one view of a split: the view's own exposure (the seat's), the
     /// composite over the view's rectangle and nothing outside it. **Call it once per view
-    /// with its own encoder and submit each before the next**: the constants are written
+    /// with its own encoder, its writes landing ahead of it**: the constants are written
     /// with the queue, which lands before the submission that follows. **The per-seat
     /// exposure is this project's, chosen, not measured**: the original has no split screen.
     pub fn run_view(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         run: View,

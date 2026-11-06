@@ -8,10 +8,11 @@
 //! pixels. The velocities themselves are each view's own: [`Scene::render`] measured them
 //! against that view's camera history ([`motion::split_history`]).
 //!
-//! **One submission per view's chain.** `MotionBlur::render` writes its one uniform buffer
-//! with `queue.write_buffer`, which lands before the submission's commands, so two chains in
-//! one encoder would both run with the last view's rectangle, tile and lens map - the trap
-//! `Scene::render_slots` records for the scene draws. **Chosen, not measured.**
+//! **Each view's chain has its writes ahead of its commands** ([`Scene::post_stage`]).
+//! `MotionBlur::render` writes its one uniform buffer, and a queue write lands before the
+//! submission's commands, so two chains written that way would both run with the last view's
+//! rectangle, tile and lens map - the trap `Scene::render_slots` records for the scene draws.
+//! **Chosen, not measured.**
 
 use super::*;
 
@@ -30,6 +31,7 @@ impl Scene {
         rects: &[(f32, f32, f32, f32)],
         strength: f32,
         timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
+        mut folded: Option<&mut super::split_record::Folded>,
     ) -> bool {
         if strength <= 0.0 || self.motion_blur.is_none() {
             return false;
@@ -40,28 +42,34 @@ impl Scene {
         let last = slots.len().saturating_sub(1);
         let mut ran = false;
         for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("race viewport blur"),
-            });
             let lens = self.histories[motion::split_history(slot)].blur_lens.get();
-            ran |= self.encode_motion_blur(
+            let stamps = oag_post::motion_blur::ChainTimestamps {
+                begin: if index == 0 { begin.take() } else { None },
+                end: if index == last { end.take() } else { None },
+            };
+            self.post_stage(
                 device,
                 queue,
-                &mut encoder,
-                [
-                    view,
-                    &self.attachment_views.velocity,
-                    &self.attachment_views.depth,
-                ],
-                rect,
-                strength,
-                lens,
-                Some(oag_post::motion_blur::ChainTimestamps {
-                    begin: if index == 0 { begin.take() } else { None },
-                    end: if index == last { end.take() } else { None },
-                }),
+                folded.as_deref_mut(),
+                "race viewport blur",
+                |writes, encoder| {
+                    ran |= self.encode_motion_blur(
+                        device,
+                        writes,
+                        encoder,
+                        [
+                            view,
+                            &self.attachment_views.velocity,
+                            &self.attachment_views.depth,
+                        ],
+                        rect,
+                        strength,
+                        lens,
+                        Some(stamps),
+                    );
+                    true
+                },
             );
-            queue.submit(Some(encoder.finish()));
         }
         ran
     }

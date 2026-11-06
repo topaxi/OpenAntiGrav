@@ -477,7 +477,7 @@ impl Bloom {
     pub fn render(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: Frame<'_>,
     ) {
@@ -502,7 +502,7 @@ impl Bloom {
     pub fn prepare(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: Frame<'_>,
     ) {
@@ -523,7 +523,7 @@ impl Bloom {
     pub fn prepare_view(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: usize,
         extent: (u32, u32),
@@ -545,7 +545,7 @@ impl Bloom {
         &self,
         lane: &Lane,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: Frame<'_>,
     ) {

@@ -68,12 +68,20 @@ impl Scene {
         self.history().lens_flare.set(placement);
     }
 
+    /// Whether [`Self::encode_lens_flare`] has a flare to draw for this view.
+    pub(super) fn lens_flare_placed(&self) -> bool {
+        let placement = self.history().lens_flare.take();
+        let placed = placement.is_some();
+        self.history().lens_flare.set(placement);
+        placed && self.lens_flare.borrow().is_some()
+    }
+
     /// Draws the flare [`Self::place_lens_flare`] left for this view over `view`, reading
     /// the scene's depth for the sun's occlusion.
     pub(super) fn encode_lens_flare(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
     ) {

@@ -139,7 +139,7 @@ impl Scene {
     pub(super) fn finish_view(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         race: &Race,

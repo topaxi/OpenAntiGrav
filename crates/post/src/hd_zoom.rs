@@ -640,7 +640,7 @@ impl Zoom {
     /// and `max` its UV mapping, as `hd_bloom` computes them.
     pub fn history(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: &Frame,
         rect: (u32, u32),
@@ -660,7 +660,7 @@ impl Zoom {
     pub(super) fn history_from(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: &Frame,
         scene: &wgpu::TextureView,
@@ -712,7 +712,7 @@ impl Zoom {
     #[allow(clippy::too_many_arguments)]
     fn history_pass(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: &Frame,
         rect: (u32, u32),
@@ -765,7 +765,7 @@ impl Zoom {
     /// `rect` is the scene's drawn rectangle in pixels: the ring is in NDC of it.
     pub fn ring(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         scene: &wgpu::TextureView,
         frame: &Frame,
@@ -779,7 +779,7 @@ impl Zoom {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn ring_at(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         scene: &wgpu::TextureView,
         frame: &Frame,
@@ -840,7 +840,7 @@ impl Zoom {
 
     fn write_constants(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         which: usize,
         (uv_scale, uv_max): ([f32; 2], [f32; 2]),
         source: SourceMap,

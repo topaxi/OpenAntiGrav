@@ -6,10 +6,20 @@
 //! cards) and its [`ViewPass`]. The first view's writes go to the queue as they always did; a
 //! later view's are kept in a [`Log`]. The views' scene passes are then recorded, each into its
 //! own encoder, by [`Recorder::record`], which reads only its view's `ViewPass` and GPU objects
-//! no view changes. Last, in view order on the calling thread: the view's log is replayed, its
-//! post passes encoded (the borrowed boost zoom, the GPU timer's resolve), and both submitted.
-//! What lands before each submission is what landed when the views were drawn one after
-//! another, so the picture is the same; `oag-game`'s `split_recording_ground_truth` compares them.
+//! no view changes. Last, in view order on the calling thread: the view's post passes are
+//! encoded (the borrowed boost zoom, the GPU timer's resolve), their writes behind the view's.
+//! `oag-game`'s `split_recording_ground_truth` compares the picture with the interleaved one.
+//!
+//! **One submission** ([`Folded`]). A later view's log and each post chain's become copies in a
+//! command buffer just ahead of the commands that read them ([`Log::encode`]), which is the
+//! order a submission each gave. Folding alone saves nothing (on the Deck HD reads +0.3 ms,
+//! Pulse and Pure nothing). What it buys is that nothing waits for a view's commands before the
+//! frame's own submit: a view's encoder goes to a finishing thread as soon as it is recorded,
+//! its shadow maps and advert cards earlier still, and the post chains, the glow and the HUD run
+//! while they finish (`docs/rendering/split-screen.md`, "One submission"). A window's split may
+//! not wait for the frame's submit: its window submits on its own.
+//! [`Recording::Interleaved`], so a phone and the web, and [`Recording::Overlapped`] keep a
+//! submission per view.
 //!
 //! **The default is [`Recording::Interleaved`]; equal cores take [`Recording::Threaded`].**
 //! [`Recording::default_for_target`] picks threads only on positive evidence of equal cores:
@@ -39,6 +49,7 @@
 //! **On the web the views are always recorded on the page's thread**: wgpu's browser objects
 //! belong to it, and the page may not block on a worker, so `threaded` records serially there.
 
+use oag_gpu::split_finish::Closed;
 use oag_gpu::writes::Log;
 
 use super::record::{Recorder, ViewPass};
@@ -138,12 +149,62 @@ fn native_core_capacities() -> Vec<u32> {
     }
 }
 
+/// A split's commands held back for one submission, in the order they run, and the buffer the
+/// later stages' writes go up through. Each stage's writes reach the GPU as copies just ahead of
+/// its commands ([`Log::encode`]), which is the order one submission per stage gave them, and
+/// the frame thread pays for one submission instead of one per view and per post chain.
+pub(super) struct Folded {
+    closed: Vec<Closed>,
+    upload: oag_gpu::writes::UploadBuffer,
+}
+
+impl Folded {
+    /// Empty, with the scene's upload buffer.
+    pub(super) fn begin(scene: &Scene) -> Self {
+        let mut upload = std::mem::take(&mut *scene.split_upload.borrow_mut());
+        upload.rewind();
+        Self {
+            closed: Vec::new(),
+            upload,
+        }
+    }
+
+    /// `log`'s writes as copies, next in line; it comes back empty.
+    fn copies(&mut self, gpu: (&wgpu::Device, &wgpu::Queue), log: &mut Log) {
+        if let Some(encoder) = log.encode(gpu.0, gpu.1, &mut self.upload) {
+            self.closed.push(oag_gpu::split_finish::close(encoder));
+        }
+    }
+
+    /// Submits it all, with the frame's own submission when `with_frame`, and gives the upload
+    /// buffer back.
+    pub(super) fn submit(self, scene: &Scene, queue: &wgpu::Queue, with_frame: bool) {
+        if with_frame {
+            oag_gpu::split_finish::defer(queue, self.closed);
+        } else if !self.closed.is_empty() {
+            queue.submit(self.closed.into_iter().map(Closed::buffer));
+        }
+        oag_gpu::perfprobe::mark("submit");
+        *scene.split_upload.borrow_mut() = self.upload;
+    }
+}
+
+/// Whether a split recorded with `recording` holds its commands for one submission: every
+/// recording that makes all its views before it submits any. `OAG_SPLIT_SUBMIT=views` keeps a
+/// submission per view and per post chain (an A/B switch for benches, nothing a player sets).
+pub(super) fn folds(recording: Recording) -> bool {
+    static PER_VIEW: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    recording != Recording::Overlapped
+        && !*PER_VIEW
+            .get_or_init(|| std::env::var("OAG_SPLIT_SUBMIT").is_ok_and(|value| value == "views"))
+}
+
 /// One view between its prepare and its recording: the encoder its prepare recorded the
 /// view's other passes into, and its scene pass.
 type Prepared<'a> = (wgpu::CommandEncoder, ViewPass<'a>);
 
 /// One view recorded: its commands and what its scene pass drew.
-type Recorded = (wgpu::CommandBuffer, SceneStats);
+type Recorded = (Closed, SceneStats);
 
 impl Scene {
     /// Which [`Recording`] a split records with.
@@ -171,6 +232,7 @@ impl Scene {
         settings: &frame::ViewSettings<'_>,
         view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
         recording: Recording,
+        folded: &mut Option<Folded>,
     ) -> SceneStats {
         let stamps = timestamp_clones(view_timers, slots.len());
         let gpu = Gpu {
@@ -178,7 +240,7 @@ impl Scene {
             queue,
             view,
         };
-        let mut views = Views::begin(self);
+        let mut views = Views::begin(self, folded.is_some());
         // The draw dump appends a line a draw to one file, which two threads would interleave.
         #[cfg(not(target_arch = "wasm32"))]
         if recording == Recording::Overlapped
@@ -213,7 +275,10 @@ impl Scene {
             logs.push(log);
         }
         oag_gpu::perfprobe::mark("views-prepared");
-        let recorded = record_views(&self.recorder(), prepared, recording);
+        // Under one submission nothing waits for a view's commands until that submission, so
+        // their `finish`, by far the larger part of a view, overlaps what follows the views.
+        let hand_off = folded.is_some() && oag_gpu::split_finish::frame_open();
+        let recorded = record_views(&self.recorder(), prepared, recording, hand_off);
         let mut stats = SceneStats::default();
         for (index, ((recorded, log), (&slot, &rect))) in recorded
             .into_iter()
@@ -229,6 +294,7 @@ impl Scene {
                 recorded,
                 log,
                 view_timers,
+                folded.as_mut(),
             ));
         }
         views.end(self);
@@ -263,7 +329,10 @@ impl Scene {
             // Spawned before the first prepare, so the worker is awake by the time it is done.
             let worker = scope.spawn(move || {
                 for prepared in to_record {
-                    if recorded_tx.send(record_one(recorder, prepared)).is_err() {
+                    if recorded_tx
+                        .send(record_one(recorder, prepared, false))
+                        .is_err()
+                    {
                         break;
                     }
                 }
@@ -296,12 +365,13 @@ impl Scene {
                         previous,
                         previous_log,
                         view_timers,
+                        None,
                     ));
                 }
                 match mine {
                     None => owed = Some(log),
                     Some(prepared) => {
-                        let commands = record_one(recorder, prepared);
+                        let commands = record_one(recorder, prepared, false);
                         stats.add(self.submit_view(
                             gpu,
                             views,
@@ -310,6 +380,7 @@ impl Scene {
                             commands,
                             log,
                             view_timers,
+                            None,
                         ));
                     }
                 }
@@ -322,9 +393,10 @@ impl Scene {
         stats
     }
 
-    /// View `index`'s log replayed, its post passes (the borrowed boost zoom, its GPU timer's
-    /// resolve) encoded, and its commands submitted after them. In view order on the calling
-    /// thread: the post passes read the scene's cells.
+    /// View `index`'s post passes (the borrowed boost zoom, its GPU timer's resolve) encoded,
+    /// their writes behind the rest of the view's, and all of it handed to `folded`, or the
+    /// log replayed and submitted when there is none. In view order on the calling thread: the
+    /// post passes read the scene's cells.
     #[allow(clippy::too_many_arguments)]
     fn submit_view(
         &self,
@@ -335,11 +407,8 @@ impl Scene {
         (commands, drawn): Recorded,
         log: Option<Log>,
         view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
+        folded: Option<&mut Folded>,
     ) -> SceneStats {
-        if let Some(mut log) = log {
-            log.replay(gpu.queue);
-            views.spare.push(log);
-        }
         // What follows the view's scene pass, recorded here because it reads the scene's
         // cells: the post chains of a split view (only the borrowed boost zoom draws; the
         // chains and the blur run after the last view) and the view's timer.
@@ -349,9 +418,15 @@ impl Scene {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("race viewport post"),
             });
+        let draws = self.view_post_draws(race);
+        let log = log.map(std::cell::RefCell::new);
+        let writes: &dyn oag_gpu::writes::Writes = match &log {
+            Some(log) => log,
+            None => gpu.queue,
+        };
         let (hd_bloom_encoded, blur_encoded) = self.finish_view(
             gpu.device,
-            gpu.queue,
+            writes,
             &mut post,
             gpu.view,
             race,
@@ -360,16 +435,78 @@ impl Scene {
             None,
             None,
         );
-        if let Some(timer) = view_timers.get_mut(index).and_then(Option::as_mut) {
-            timer.resolve(&mut post);
+        let timed = match view_timers.get_mut(index).and_then(Option::as_mut) {
+            Some(timer) => {
+                timer.resolve(&mut post);
+                true
+            }
+            None => false,
+        };
+        let mut log = log.map(std::cell::RefCell::into_inner);
+        match folded {
+            Some(folded) => {
+                if let Some(log) = &mut log {
+                    folded.copies((gpu.device, gpu.queue), log);
+                }
+                folded.closed.extend(views.frame_passes.take());
+                folded.closed.push(commands);
+                // Most frames a view has no post pass, and an encoder is a command pool the
+                // driver resets when the GPU is done.
+                if timed || draws {
+                    folded.closed.push(oag_gpu::split_finish::close(post));
+                }
+            }
+            None => {
+                if let Some(log) = &mut log {
+                    log.replay(gpu.queue);
+                }
+                gpu.queue.submit([commands.buffer(), post.finish()]);
+                oag_gpu::perfprobe::mark("submit");
+            }
         }
-        gpu.queue.submit([commands, post.finish()]);
-        oag_gpu::perfprobe::mark("submit");
+        views.spare.extend(log);
         SceneStats {
             hd_bloom_encoded,
             blur_encoded,
             ..drawn
         }
+    }
+
+    /// Whether [`Scene::finish_view`] draws anything for a view of a split: the flare the view
+    /// placed, or the borrowed boost zoom. Asked before it runs, since it takes the flare.
+    fn view_post_draws(&self, race: &Race) -> bool {
+        self.lens_flare_placed()
+            || (race.borrowed_zoom_tuning().is_some() && race.hd_zoom_frame().is_some())
+    }
+
+    /// A stage of a split's post work that needs its own writes ahead of its own commands:
+    /// `encode` records it with its writes going to `folded`'s next copies, or, with no
+    /// `folded`, to the queue and submitted alone. It answers whether it recorded anything.
+    pub(super) fn post_stage(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        folded: Option<&mut Folded>,
+        label: &str,
+        encode: impl FnOnce(&dyn oag_gpu::writes::Writes, &mut wgpu::CommandEncoder) -> bool,
+    ) {
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
+        let Some(folded) = folded else {
+            if encode(queue, &mut encoder) {
+                queue.submit(Some(encoder.finish()));
+            }
+            return;
+        };
+        let spare = self.split_logs.borrow_mut().pop().unwrap_or_default();
+        let log = std::cell::RefCell::new(spare);
+        let recorded = encode(&log, &mut encoder);
+        let mut log = log.into_inner();
+        folded.copies((device, queue), &mut log);
+        if recorded {
+            folded.closed.push(oag_gpu::split_finish::close(encoder));
+        }
+        self.split_logs.borrow_mut().push(log);
     }
 
     /// Points the scene's per-view cells at view `index` of a split, following `slot`.
@@ -421,13 +558,18 @@ fn timestamp_clones(timers: &[Option<oag_gpu::timing::PassTimer>], views: usize)
 struct Views {
     staging: Staging,
     spare: Vec<Log>,
+    folding: bool,
+    /// The first view's passes into other targets, closed ahead of its scene pass.
+    frame_passes: Option<Closed>,
 }
 
 impl Views {
-    fn begin(scene: &Scene) -> Self {
+    fn begin(scene: &Scene, folding: bool) -> Self {
         Self {
             staging: std::mem::take(&mut *scene.upload_staging.borrow_mut()),
             spare: std::mem::take(&mut *scene.split_logs.borrow_mut()),
+            folding,
+            frame_passes: None,
         }
     }
 
@@ -480,6 +622,17 @@ impl Views {
         );
         let (back, log) = uploads.into_parts();
         self.staging = back;
+        // The first view's shadow maps and advert cards, closed now: they finish while the
+        // views after it are prepared, and do not wait behind its scene pass.
+        if self.folding && index == 0 && oag_gpu::split_finish::frame_open() {
+            let next = gpu
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("race viewport"),
+                });
+            let passes = std::mem::replace(&mut encoder, next);
+            self.frame_passes = Some(oag_gpu::split_finish::close(passes));
+        }
         ((encoder, pass), log)
     }
 
@@ -489,24 +642,34 @@ impl Views {
     }
 }
 
-/// One view's scene pass recorded and its encoder finished.
-fn record_one(recorder: &Recorder<'_>, (mut encoder, pass): Prepared<'_>) -> Recorded {
+/// One view's scene pass recorded and its encoder finished, here or, with `hand_off`, on a
+/// finishing thread.
+fn record_one(
+    recorder: &Recorder<'_>,
+    (mut encoder, pass): Prepared<'_>,
+    hand_off: bool,
+) -> Recorded {
     let drawn = recorder.record(&pass, &mut encoder);
     drop(pass);
     oag_gpu::perfprobe::mark("scene-pass");
-    let commands = encoder.finish();
+    let commands = if hand_off {
+        oag_gpu::split_finish::finish_elsewhere(encoder)
+    } else {
+        Closed::Finished(encoder.finish())
+    };
     oag_gpu::perfprobe::mark("encoder-finish");
     (commands, drawn)
 }
 
-/// Records every prepared view's scene pass and finishes its encoder, in view order whatever
+/// Records every prepared view's scene pass and closes its encoder, in view order whatever
 /// order they were recorded in.
 fn record_views(
     recorder: &Recorder<'_>,
     prepared: Vec<Prepared<'_>>,
     recording: Recording,
+    hand_off: bool,
 ) -> Vec<Recorded> {
-    let one = |prepared: Prepared<'_>| record_one(recorder, prepared);
+    let one = |prepared: Prepared<'_>| record_one(recorder, prepared, hand_off);
     // The draw dump appends a line a draw to one file, which several threads would interleave.
     let dumping = std::env::var_os("OAG_DRAW_DUMP").is_some();
     match recording {

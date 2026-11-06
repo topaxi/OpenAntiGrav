@@ -737,7 +737,7 @@ impl Chain {
     /// `crates/raceplay/src/scene/frame.rs`'s call site.
     pub fn run(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         origin: (f32, f32),
@@ -767,7 +767,7 @@ impl Chain {
     /// reach of `(1, 1)`, which is every bit the chain ever drew.
     fn run_placed(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         lane: &Lane,
