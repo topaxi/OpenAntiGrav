@@ -171,26 +171,26 @@ and 3 above, free to orbit; Pulse's measured offset, **chosen** on the others), 
 circuit's authored `Camera` node nearest the craft, aimed at it; only where a circuit authors
 one, left out of the cycle otherwise). The mode opens on `internal`, as both originals do.
 
-**Culling follows the subject.** What the authored visibility set (Pulse, Pure, 2048, Omega: the
-craft's and the camera's sections) and HD's chunk set (`Pvs::around(craft, camera)`) cull to is
-the craft the picture frames, `Race::framed_slot`: the subject while the mode is open, the seat
-otherwise. An opponent's `Ship::segment` is never written (only a person's is), so the subject's
-spline sample is its driver's index mapped through the racing line's order; a position the
-sample cannot vouch for stays `UNPLACED`, which draws everything. A recovery in flight on the
-subject, not the seat, blanks the shot. A station camera's exact section (`station_camera_section`)
-is not used while the mode is open. Before this, a subject more than 96 samples from the seat drew
-everything (the camera could not be placed), and a nearer one was culled to the seat's section
-plus the camera's. Tests: `tests::photo::photo_modes_subject_places_the_cull_not_the_seat`
-(a synthetic straight with a section per control point) and
-`tests::wreck_finished::photo_mode_over_the_directors_camera_is_not_masked_by_the_directors_station`.
-Measured on Pulse (`03_Track`, seed 7, eight craft): the section the driver's index gives equals the
-nearest-sample scan's for all seven subjects, and PVS on against off differs only by thin coplanar
-slivers on the rails and, on one subject, by background buildings the section's row leaves out,
-which is what the cull does to the seat's own view in that section. **Checked, applies, not
-run as a frame** for 2048 and Omega: the same `visible_set` path, and a circuit that authors no
-sections (`section_id` `0xff`, several 2048 circuits) has `has_sections()` false and is never
-culled. HD: the chunk set reads the subject's position through the same accessor; PVS on and off
-were pixel-identical on HD before and after, so no frame shows the effect there.
+**No visibility culling while it is open** (maintainer's decision: a shot must never lose
+scenery). On every title the section set (`Race::visible_set`: Pulse, Pure, 2048 and Omega
+circuits that author sections) is every section, including over the director's station camera,
+and HD's chunk set is not built; the draws still go through the frustum test. Leaving the mode
+restores the cull on the next frame. Test:
+`tests::photo::photo_mode_draws_every_section_and_leaving_restores_the_cull` (red without the
+rule); the director case is `tests::wreck_finished::photo_mode_over_the_directors_camera_is_not_masked_by_the_directors_station`.
+Why: with the cull following the subject (the section a driver's index gives equals a full
+nearest-sample scan's), PVS on against off dropped the background skyline on one Pulse subject
+(`03_Track`, seed 7, tick 600, R once) and thin coplanar slivers on the rails. Before any change,
+photo mode on another craft was culled to the seat's section where the camera could be placed and
+drew everything where it could not (more than 96 samples away), so the symptom was not
+reproduced as missing geometry on `main`. With the rule, PVS on is pixel-identical to PVS off
+on Pulse (7 subjects) and HD (7 subjects). The weather's section and the boost lens follow the
+framed craft (`Race::framed_slot`; an opponent's `Ship::segment` is never written, so its
+driver's index is mapped through the racing line). 2048 and Omega: **checked, applies, not run
+as a frame**: the same `visible_set`, and a circuit with no sections is never culled.
+Frame time with the mode open, 1280x800, debug build, drive `screenshot` frames (CPU record and
+submit, no GPU wait), twelve frames each, median: Pulse 7.3 ms, HD 6.6 ms (a quiet-machine
+number it is not: single frames spread 3.7 to 12.6 ms).
 
 **Controls**, all on one stick and the buttons a keyboard has (the abstract input has one stick):
 
