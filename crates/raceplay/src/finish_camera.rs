@@ -220,6 +220,12 @@ impl FinishCamera {
         self.running.then(|| self.previous.unwrap_or(self.subject))
     }
 
+    /// The eye of the circuit's camera node nearest `position`, `None` where there is none.
+    #[must_use]
+    pub fn node_eye_near(&self, position: Vec3) -> Option<Vec3> {
+        self.nearest_node(position).map(|node| self.nodes[node].eye)
+    }
+
     /// Whether the camera override in force is this director's.
     #[must_use]
     pub(super) fn is_imposed(&self) -> bool {
@@ -505,7 +511,7 @@ fn position_of(live: &[Subject], slot: usize) -> Vec3 {
 
 impl Race {
     /// Every craft still in the race, as the director sees it.
-    fn spectator_subjects(&self) -> Vec<Subject> {
+    pub(super) fn spectator_subjects(&self) -> Vec<Subject> {
         (0..usize::from(self.sim.world.ship_count))
             .filter(|&slot| {
                 let ship = &self.sim.world.ships[slot];

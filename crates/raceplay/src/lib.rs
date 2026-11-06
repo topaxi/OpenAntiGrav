@@ -212,6 +212,8 @@ pub mod extensions;
 mod field;
 #[cfg(feature = "view")]
 pub mod finish_camera;
+#[cfg(feature = "view")]
+pub mod photo;
 mod finished_thrust;
 pub mod foreign;
 #[cfg(feature = "view")]

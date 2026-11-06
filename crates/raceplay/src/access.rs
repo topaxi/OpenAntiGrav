@@ -268,10 +268,12 @@ impl Race {
             .intro
             .as_ref()
             .map_or(0, intro_camera::IntroCamera::cuts);
+        let photo = self.view.photo.as_ref().map_or(0, photo::Photo::cuts);
         self.sim.respawns[0]
             .wrapping_add(self.view.destroy_camera.cuts)
             .wrapping_add(spectator)
             .wrapping_add(intro)
+            .wrapping_add(photo)
     }
 
     /// The same, for any craft on the grid.

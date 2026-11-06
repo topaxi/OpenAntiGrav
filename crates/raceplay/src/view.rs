@@ -89,6 +89,8 @@ pub struct RaceView {
     /// The spectator director that flies the camera behind the end-race panels, `None` on a
     /// title it was not read for. See [`super::finish_camera`].
     pub(super) finish_camera: Option<super::finish_camera::FinishCamera>,
+    /// Photo mode's camera while it is open. See [`super::photo`].
+    pub(super) photo: Option<super::photo::Photo>,
     /// The tick the player's wreck ended the race on, `None` until it does.
     /// View-side bookkeeping for [`Race::runs_on_after_the_end`] and the spectator
     /// director's clock; nothing the simulation reads.
