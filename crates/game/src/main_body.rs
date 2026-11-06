@@ -79,6 +79,8 @@ mod session;
 mod stage;
 #[path = "main/touch.rs"]
 mod touch;
+#[path = "main/soft_keyboard.rs"]
+mod soft_keyboard;
 #[path = "main/typing.rs"]
 mod typing;
 #[path = "main/window.rs"]

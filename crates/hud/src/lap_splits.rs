@@ -201,6 +201,7 @@ mod tests {
             default_line_height: 10.0,
             skin_line_height: 10.0,
             default_border: layout.default_border(),
+            tag_label: None,
         };
         let mut readout = Readout::blank();
         // A minute-and-nothing lap, so its formatted time is unambiguous.

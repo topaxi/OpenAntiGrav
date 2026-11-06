@@ -134,6 +134,7 @@ const BASE: oag_title::HudLayouts = oag_title::HudLayouts {
     elimination: layouts::ELIMINATION,
     split: Some(SPLIT),
     split_layout: Some(r"Data\XML\SplitHud_HD.toml"),
+    player_tags: None,
     skins: &[],
 };
 

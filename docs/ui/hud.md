@@ -428,7 +428,7 @@ the player's team name where the original prints the profile tag (this build
 has none), and the tie order follows this build's grid array. `PosTag` is no
 longer skipped by `hud::is_screen_positioned`.
 
-**`PlrTag0`-`PlrTag7` are the genuine runtime anchor** - a separate,
+**`PlrTag0`-`PlrTag7` are the genuine runtime anchor** (drawn since: `oag_hud::player_tags`, in the reticle's placement) - a separate,
 multiplayer-only layout (`MPTag_HUD.xml`), and its eight `<Text>` widgets
 carry no `x`/`y` at all, unlike `PosTag`. That is the one case
 `hud::is_screen_positioned`'s exemption still describes correctly: nothing

@@ -233,6 +233,7 @@ OAG_DISPLAY_HUD_STYLE = { text = "HUD STYLE", human = false }
 OAG_DISPLAY_DYNAMIC_HUD = { text = "DYNAMIC HUD", human = false }
 OAG_DISPLAY_GHOST_SHIP_VISIBLE = { text = "GHOST SHIPS VISIBLE", human = false }
 OAG_DISPLAY_AUTO_LOAD_GHOST = { text = "AUTO LOAD GHOST", human = false }
+OAG_DISPLAY_MULTIPLAYER_TAGS = { text = "MULTIPLAYER TAGS", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }
 OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS = { text = "PAUSE ON FOCUS LOSS", human = false }
 OAG_DISPLAY_FRAME_LIMIT = { text = "FRAME LIMIT", human = false }
@@ -497,3 +498,9 @@ OAG_COUNTDOWN_GO = { text = "GO", human = false }
 # The hint under a settings page's rows while the selected row is off its default,
 # also what a click or a tap on it does. Ours, in no original.
 OAG_MENU_RESET_TO_DEFAULT = { text = "RESET TO DEFAULT", human = false }
+
+# The player name and tag: the OPTIONS rows and the entry screens' titles.
+OAG_OPTIONS_PLAYER_NAME = { text = "PLAYER NAME", human = false }
+OAG_OPTIONS_PLAYER_TAG = { text = "PLAYER TAG", human = false }
+OAG_PLAYER_NAME_TITLE = { text = "ENTER YOUR NAME", human = false }
+OAG_PLAYER_TAG_TITLE = { text = "ENTER YOUR TAG", human = false }

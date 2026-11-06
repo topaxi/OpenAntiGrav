@@ -96,6 +96,8 @@ mod online;
 mod online;
 #[path = "session/multiplayer.rs"]
 mod multiplayer;
+#[path = "session/player_name.rs"]
+mod player_name;
 #[path = "session/seat_assign.rs"]
 mod seat_assign;
 #[path = "session/window_layout.rs"]
@@ -482,6 +484,13 @@ pub(crate) struct Session {
     /// Set the first time `Launch Game` starts a race, so a load that fails is
     /// reported once rather than on every frame.
     pub(crate) launched: bool,
+    /// Whether a person is at this launch (`Cli::is_interactive`): only then may the first-run
+    /// name prompt open.
+    pub(crate) interactive_launch: bool,
+    /// The first-run prompt has been shown this run, answered or not.
+    pub(crate) player_asked: bool,
+    /// Whether the phone's soft keyboard is up (`soft_keyboard`).
+    pub(crate) soft_keyboard: bool,
     /// The Wipeout 2048 campaign event the next [`Session::launch_race`]
     /// starts, by its `SP.xml` name - set by the front end's own
     /// `Launch 2048` and taken by that one launch. `None` is an ordinary

@@ -590,7 +590,9 @@ Ranked by how much a player notices, ours first listed worst:
    now draws in the `Default` role (`TickerLayout::read`'s `font`, which was a
    chosen `"small"` and is now a chosen `"default"` corroborated by this
    capture; `before`/`after` in `sheets/footer-compare.png`: lowercase, inside
-   the strip, ink and size matching). The tag is still empty. On the campaign
+   the strip, ink and size matching). **The tag now draws the stored profile tag** at the authored
+   `(30, 235)` in the `Default` face (`NavigationLegend::set_tag`, `docs/ui/player-name.md`); the
+   colour is the file's `BackgroundColor`, and neither face nor colour is checked against the original's `AAA`. On the campaign
    pages a `--menu-page` still draws no tip at all (`static_footer_overlay`
    passes an empty rotation), so only the live stage and `--menu-page main`
    show the new face. *(Our `Confirm` label was
@@ -706,7 +708,7 @@ persists each into the profile, as ours persist into `settings.toml`.
 | `OPT_MUSIC_PL`, Music playlist (list `Music Order`) | `OPT_SEQ` Sequential, `FE_RANDOM` Random (default sequential) | yes | yes | **not added**: ours has per-disc source toggles and a pool (`audio.music_source`, `audio.music_pool`) but no sequential/random choice (`oag_sound::song_control` has no shuffle); named in the handover thread |
 | `OPT_CAM`, Camera | `OPT_INT` Internal, `OPT_CLOSE` Close, `OPT_FAR` Far (default close) | yes | yes | present: `graphics.camera_view` (internal, close, far) |
 | `OPT_HUD`, Dynamic HUD | `FE_DEFAULT`, `FE_CONCAVE`, `FE_FLAT`, `FE_OFF` (default `FE_DEFAULT`) | all four | three: no `FE_FLAT` | present, **two of four**: default and off. `FE_CONCAVE` and `FE_FLAT` set bit 1 of `+0xd0` on the HUD's two panel groups (1 and 0; `FE_DEFAULT` takes `race_manager+0x6f & 1`), a vertex warp read by `Text_Draw`, `Image_Draw` and the speed bar whose maths (`FUN_08919c2c`) is **unread** |
-| `OPT_MP_TAGS`, Multiplayer tags | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **not added**: the law is read (`docs/ghidra/functions/psp-pulse-usa/hud-game-options.md`), the draw is not built, see below |
+| `OPT_MP_TAGS`, Multiplayer tags | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **added**: MULTIPLAYER TAGS, a player's name over each other person's craft in a multiplayer race (`oag_hud::player_tags`) |
 | `OPT_GHOST_VIS`, Ghost ships visible | `FE_ON`, `FE_OFF` (default on) | yes | yes | **added**: GHOST SHIPS VISIBLE, hides the ghost's draw (`Race::set_ghost_visible`) |
 | `OPT_AL_GHOST`, Auto load ghost | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **added**: AUTO LOAD GHOST, gates loading the stored lap when a Time Trial or Speed Lap starts |
 | `OPT_LANG`, Language | the installed languages | yes | yes | present: `language` |
@@ -724,14 +726,18 @@ saves a lap that beats the stored one. A `--ghost <file>` on the command line is
 GHOST. Both rows are `Title` data (`oag_title::race::GhostOptions`, Pulse only), seeded and shown only where the title
 lists them, and default to on, so no title's behaviour moved.
 
-**MULTIPLAYER TAGS is read and not wired, and no row stands in for it.** The law
-(`docs/ghidra/functions/psp-pulse-usa/hud-game-options.md`, confidence 80, headless Ghidra 2026-11-06): the option is one byte
-(`g_multiplayer_tags_on`), `Hud_UpdateMultiplayerTags` (`0x0881ba58`) draws a white name 2 units above each craft in the
-view (the player name of its slot, fading in at 1.2 per second, fully opaque to 20 units and gone by 60), and the byte at
-0 forces the alpha to 0. Building it needs two things this engine lacks: a text draw anchored on a projected world point in
-`oag-hud` (the lock-on reticle is the only projected element and draws a sprite, not text), and a player name for every
-craft in a split-screen race (only online seats have names). A row that stores a value nothing reads is a defect, so
-the row waits for the draw. Open in the handover thread.
+**MULTIPLAYER TAGS is wired** (`docs/ghidra/functions/psp-pulse-usa/hud-game-options.md`, confidence 80): a white name 2 units
+above each other person's craft, fading in at 1.2 per second, fully opaque to 20 units and gone by 60, forced to 0 by the
+option. The row is `Title` data (`GameOptions::multiplayer_tags`, Pulse only; the type was `GhostOptions` and covers the three
+Pulse rows), default on, seeded and shown only where the title lists it, and not hidden under `--original-menu` (that flag
+only drops our extra tiles). The text comes off the disc's `MPTag_HUD.xml` (`PlrTag0`: `HUD` face, scale 0.5, centred, white,
+border alpha 0.25; the eight labels share it, a ground-truth test pins that) and is placed where the lock-on reticle is,
+projected through each view's own camera at the craft's drawn pose.
+**Chosen, not measured:** the raise runs along the craft's own up (the original's axis is unread); only other person-flown
+craft are tagged (no AI craft); a name is the lobby's where the race has one (`Race::set_person_names`) and otherwise
+`Player N`, the maintainer's stop gap (the original falls back to one shared string, `ONL_CRJ_PLAYER`, for every
+unnamed slot); and there is no occlusion test, because the original's own gate (`FUN_0883e37c`) reads as a viewport test, so a tag
+shows through a wall. A craft behind a view's camera has no tag in that view.
 
 **Checked against the other titles** (the Pulse rule: an invented Pulse row is checked for the others, not widened to them):
 
@@ -739,7 +745,9 @@ the row waits for the draw. Open in the handover thread.
   list lives in the executable and is **not checkable** from the data. The rows stay off (`GhostOptions::NONE`).
 - **HD** (`docs/formats/hd-frontend.md`, `DATA06`'s `Additional_Definition.xml`): `Multiplayer Tags` and a ghost row
   (`GhostOption`, "Ghost Ships Visible") exist, with no `Auto Load Ghost` and no `Dynamic HUD`. **Checked, applies, not wired**:
-  HD races a ghost (Pulse's recipe, chosen not measured) with no way to hide it.
+  HD races a ghost (Pulse's recipe, chosen not measured) with no way to hide it. `Multiplayer Tags` is also listed: **checked,
+  applies, not wired** (`HudLayouts::player_tags` is `None` for HD, whose `mptag_hud.xml` and the 1920x1080 label face are unread
+  here; the engine path is title-blind once a title names the layout and lists the row).
 - **Omega, 2048**: Omega's front end is HD's (`PI001`), but nobody has read Omega's own `Settings` list, and 2048's is unread
   too: **not checkable** from this lane, named in the handover thread.
 

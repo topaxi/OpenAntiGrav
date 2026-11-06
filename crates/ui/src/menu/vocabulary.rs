@@ -75,6 +75,11 @@ pub enum Action {
     OnlineCreate,
     /// The ONLINE page's JOIN GAME row: Ship Select, then the lobby's list of rooms.
     OnlineJoin,
+    /// The OPTIONS page's PLAYER NAME row: opens the name entry on the stored name
+    /// (`crate::main::session::player_name` in `oag-game`).
+    EditPlayerName,
+    /// The OPTIONS page's PLAYER TAG row, on titles that use a tag.
+    EditPlayerTag,
 }
 
 impl Action {
@@ -96,6 +101,8 @@ impl Action {
             Self::OpenOnline => "online_open",
             Self::OnlineCreate => "online_create",
             Self::OnlineJoin => "online_join",
+            Self::EditPlayerName => "edit_player_name",
+            Self::EditPlayerTag => "edit_player_tag",
         }
     }
 
@@ -128,13 +135,15 @@ impl Action {
             "online_open" => Some(Self::OpenOnline),
             "online_create" => Some(Self::OnlineCreate),
             "online_join" => Some(Self::OnlineJoin),
+            "edit_player_name" => Some(Self::EditPlayerName),
+            "edit_player_tag" => Some(Self::EditPlayerTag),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 14] {
+    pub fn all() -> [Self; 16] {
         [
             Self::LaunchRace,
             Self::Quit,
@@ -150,6 +159,8 @@ impl Action {
             Self::OpenOnline,
             Self::OnlineCreate,
             Self::OnlineJoin,
+            Self::EditPlayerName,
+            Self::EditPlayerTag,
         ]
     }
 }

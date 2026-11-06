@@ -574,16 +574,37 @@ impl Definition {
         }
     }
 
-    /// Drops the GHOST SHIPS VISIBLE and AUTO LOAD GHOST rows a title's own options list
-    /// lacks (`oag_title::race::RaceDefaults::ghost_options`): Pulse's list has the first on both
-    /// pressings and the second on the PSP's, so it offers both. Same once-before-read
+    /// Drops the PLAYER NAME and PLAYER TAG rows a title does not use
+    /// (`oag_title::profile::Profile`): 2048 and Omega keep neither, HD only the name. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_player_rows(&mut self, title: &oag_title::Title) {
+        let profile = title.profile;
+        for page in &mut self.pages {
+            page.retain_rows(|entry| match entry {
+                Entry::Run {
+                    action: Action::EditPlayerName,
+                    ..
+                } => profile.asks_for_name(),
+                Entry::Run {
+                    action: Action::EditPlayerTag,
+                    ..
+                } => profile.asks_for_tag(),
+                _ => true,
+            });
+        }
+    }
+
+    /// Drops the GHOST SHIPS VISIBLE, AUTO LOAD GHOST and MULTIPLAYER TAGS rows a title's own
+    /// options list lacks (`oag_title::race::RaceDefaults::game_options`): Pulse's list has the
+    /// first on both pressings and the others on the PSP's, so it offers all three. Same once-before-read
     /// timing as [`Self::drop_unavailable_boost_zoom`].
-    pub fn drop_unavailable_ghost_options(&mut self, title: &oag_title::Title) {
-        let offered = title.race.ghost_options;
+    pub fn drop_unavailable_game_options(&mut self, title: &oag_title::Title) {
+        let offered = title.race.game_options;
         for page in &mut self.pages {
             page.retain_rows(|entry| match entry.setting() {
                 Some("display.ghost_ship_visible") => offered.ship_visible,
                 Some("display.auto_load_ghost") => offered.auto_load,
+                Some("display.multiplayer_tags") => offered.multiplayer_tags,
                 _ => true,
             });
         }

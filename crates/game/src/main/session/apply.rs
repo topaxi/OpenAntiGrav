@@ -605,6 +605,15 @@ impl Session {
                     return;
                 }
             },
+            // Applied by the next frame the race draws.
+            "display.multiplayer_tags" => match text.as_str() {
+                "on" => self.settings.display.multiplayer_tags = true,
+                "off" => self.settings.display.multiplayer_tags = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
             "display.pause_on_focus_loss" => match text.as_str() {
                 // Read at the next focus event; nothing to apply now.
                 "on" => self.settings.display.pause_on_focus_loss = true,

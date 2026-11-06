@@ -256,6 +256,10 @@ translation may fill a gap, as `ID = { text = "...", human = false }`; `human`
 is `true` only when a human wrote or approved it (convention in
 `english.toml`'s doc comment).
 
+### GPU debugging
+
+wgpu's debug labels and shader debug info are off in every build. Set `OAG_WGPU_DEBUG=1` on `oag-game` for RenderDoc or to read a validation message by label; this leaves validation as it was (`docs/architecture/load-time.md`).
+
 ### Logging
 
 Full table and how to get lines back: [`docs/architecture/logging.md`](docs/architecture/logging.md).

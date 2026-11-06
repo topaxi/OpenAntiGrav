@@ -63,6 +63,7 @@ pub mod now_playing;
 mod pickup;
 pub mod pickup_fade;
 mod placement;
+pub mod player_tags;
 mod runtime;
 pub mod screen_layout;
 mod shield_bar;
@@ -82,6 +83,7 @@ pub use head_to_head::HeadToHead;
 pub use kill_tags::KillTag;
 pub use pickup::pickup_icon_name;
 pub use placement::{Placement, place};
+pub use player_tags::PlayerTag;
 pub use sight_draw::sight_draws;
 pub use sub_weapon::SubWeapon;
 pub use time_trial_pace::{PaceTier, RecordTarget, TimeTrialPace, pace_for};
@@ -798,6 +800,10 @@ pub struct Readout {
     /// The Eliminator's kill target, resolved: the number in `KILLS (5)`.
     /// Zero in every other mode. See [`kill_tags::header`].
     pub kill_target: u32,
+    /// The multiplayer tags over the other people's craft, projected for this view and already
+    /// at the law's alpha; empty when there are none or the option is off. Drawn with the
+    /// reticle's placement, not the layout's. See [`player_tags`].
+    pub player_tags: Vec<PlayerTag>,
     /// The message slots this frame - `Info1` to `Info4`. See [`messages`].
     pub messages: messages::Lines,
     /// The lap-line time gap this frame - `TimeDiffText` and `TimeDiffIcon`.

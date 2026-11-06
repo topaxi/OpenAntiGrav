@@ -212,6 +212,7 @@ OAG_DISPLAY_GAMMA = { text = "GAMMA", human = false }
 OAG_DISPLAY_DYNAMIC_HUD = { text = "HUD DYNAMIQUE", human = false }
 OAG_DISPLAY_GHOST_SHIP_VISIBLE = { text = "VAISSEAUX FANTÔMES VISIBLES", human = false }
 OAG_DISPLAY_AUTO_LOAD_GHOST = { text = "CHARGEMENT AUTO DU FANTÔME", human = false }
+OAG_DISPLAY_MULTIPLAYER_TAGS = { text = "ÉTIQUETTES MULTIJOUEUR", human = false }
 
 # GRAPHICS's own rows. The PC-rendering jargon block (`RENDERER`,
 # `RENDER_SCALE`, `TARGET_FPS`, `RECONSTRUCTION`, `UPSCALER_SHARPNESS`,
@@ -312,6 +313,12 @@ OAG_MENU_SINGLE_PLAYER_SUBTITLE = { text = "Arcade, tournois, contre-la-montre e
 OAG_MEDAL_GOLD = { text = "OR", human = false }
 OAG_MEDAL_SILVER = { text = "ARGENT", human = false }
 OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }
+
+# The player name and tag: the OPTIONS rows and the entry screens' titles.
+OAG_OPTIONS_PLAYER_NAME = { text = "NOM DU JOUEUR", human = false }
+OAG_OPTIONS_PLAYER_TAG = { text = "TAG DU JOUEUR", human = false }
+OAG_PLAYER_NAME_TITLE = { text = "ENTREZ VOTRE NOM", human = false }
+OAG_PLAYER_TAG_TITLE = { text = "ENTREZ VOTRE TAG", human = false }
 
 [untranslated]
 ids = [

@@ -127,6 +127,7 @@ const BASE: oag_title::HudLayouts = oag_title::HudLayouts {
     elimination: r"Data\XML\Elimination_HUD.xml",
     split: Some(SPLIT),
     split_layout: None,
+    player_tags: None,
     skins: &[],
 };
 

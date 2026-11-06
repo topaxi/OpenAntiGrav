@@ -468,6 +468,12 @@ impl CampaignStage {
     /// source's `Skin.xml` carried none - see
     /// `oag_ui_screens::campaign::footer::NavigationLegend::draw`, and [`Self::notice`]
     /// when there is one.
+    pub(crate) fn set_tag(&mut self, tag: &str) {
+        if let Some(legend) = &mut self.nav_legend {
+            legend.set_tag(tag);
+        }
+    }
+
     #[must_use]
     pub(crate) fn nav_legend_draw(
         &self,

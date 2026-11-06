@@ -242,6 +242,8 @@ pub fn run(
         face_scales,
         ..
     } = loaded;
+    let nav_legend = nav_legend
+        .map(|legend| legend.with_tag(options.settings.player.footer_tag(&loaded.title.profile)));
 
     // Checked before anything is printed or stepped: a name that matches
     // nothing would otherwise draw the backdrop and nothing else, which looks
@@ -518,6 +520,7 @@ pub fn run(
                 dynamic_hud: options.settings.display.dynamic_hud,
                 // The front-end capture path races nothing.
                 ghost_visible: true,
+                player_tags: false,
                 shadows: render_profile.shadows,
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,

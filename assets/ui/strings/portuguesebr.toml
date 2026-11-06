@@ -169,6 +169,7 @@ OAG_DISPLAY_HUD_STYLE = { text = "ESTILO DO HUD", human = false }
 OAG_DISPLAY_DYNAMIC_HUD = { text = "HUD DINÂMICO", human = false }
 OAG_DISPLAY_GHOST_SHIP_VISIBLE = { text = "NAVES FANTASMA VISÍVEIS", human = false }
 OAG_DISPLAY_AUTO_LOAD_GHOST = { text = "CARREGAR FANTASMA AUTOMATICAMENTE", human = false }
+OAG_DISPLAY_MULTIPLAYER_TAGS = { text = "NOMES NO MULTIJOGADOR", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }
 OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS = { text = "PAUSAR AO PERDER O FOCO", human = false }
 OAG_DISPLAY_FRAME_LIMIT = { text = "LIMITE DE QUADROS", human = false }
@@ -317,3 +318,9 @@ OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSADO - QUALQUER UM PODE RETOMAR", human = 
 OAG_COUNTDOWN_GO = { text = "VAI", human = false }
 
 OAG_MENU_RESET_TO_DEFAULT = { text = "RESTAURAR O PADRÃO", human = false }
+
+# The player name and tag: the OPTIONS rows and the entry screens' titles.
+OAG_OPTIONS_PLAYER_NAME = { text = "NOME DO JOGADOR", human = false }
+OAG_OPTIONS_PLAYER_TAG = { text = "TAG DO JOGADOR", human = false }
+OAG_PLAYER_NAME_TITLE = { text = "DIGITE SEU NOME", human = false }
+OAG_PLAYER_TAG_TITLE = { text = "DIGITE SUA TAG", human = false }

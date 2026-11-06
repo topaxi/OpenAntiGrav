@@ -90,6 +90,7 @@ fn pure_pickup_context<'a>(
 ) -> Context<'a> {
     Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout,
         strings,
         sheet,
@@ -218,6 +219,7 @@ fn a_title_with_no_icon_model_table_draws_nothing_through_this_path() {
     let sheet = crate::sprite::Sheet::default();
     let cx = Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,

@@ -266,6 +266,7 @@ pub fn view_draws<'a>(
                         },
                         readout: Readout {
                             sight: None,
+                            player_tags: Vec::new(),
                             ..readout.clone()
                         },
                         placement: piece.placement(rect, space.size),

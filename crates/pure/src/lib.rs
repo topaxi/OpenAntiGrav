@@ -66,6 +66,7 @@ pub const TITLE: &Title = &Title {
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     // Measured: the six glyphs of `FX300ANG.fnt` - see `prompts`.
     prompts: prompts::PROMPTS,
+    profile: oag_title::profile::Profile::NAME_AND_TAG,
     // Pure's own recovery is unread; Pulse's law.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
     // Pure's effects law is unread; Pulse's commit helper squares the group volume.

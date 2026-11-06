@@ -106,7 +106,7 @@ const TITLE: &Title = &Title {
         zone_transition: None,
         zoom_ring: None,
         borrows_zoom_ring: false,
-        ghost_options: oag_title::race::GhostOptions::NONE,
+        game_options: oag_title::race::GameOptions::NONE,
         zone_stage_textures: None,
         zone_sky: None,
         // Unread here too: nothing in this crate resolves a team's variant.
@@ -128,6 +128,7 @@ const TITLE: &Title = &Title {
         elimination: r"Data\XML\Nothing_HUD.xml",
         split: None,
         split_layout: None,
+        player_tags: None,
         skins: &[],
     },
     // And unread on the same terms: which widgets a HUD keeps up, and out of
@@ -236,6 +237,7 @@ const TITLE: &Title = &Title {
     // this crate looks at.
     // No prompt glyph of this title's has been read; the disc's own draw unchanged.
     prompts: &oag_title::prompts::Prompts::UNREAD,
+    profile: oag_title::profile::Profile::NEITHER,
     reset_enables: oag_title::recovery::ResetEnables::PULSE,
     effects_volume_law: oag_title::pre_race::Sourced::chosen(
         oag_title::group_volume::GroupVolumeLaw::Linear,

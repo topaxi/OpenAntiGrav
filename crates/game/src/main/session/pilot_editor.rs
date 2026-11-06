@@ -412,6 +412,29 @@ impl Session {
     /// the disc's alphabet has no glyph for at all - see this method's own
     /// `## Open` note in the handover thread.
     fn tag_entry_for_rename(&self, name: &str) -> Result<TagEntry, &'static str> {
+        let labels = tag_entry::Labels {
+            title: say(self.table(), "OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
+            confirm: say(self.table(), "OAG_KEYBOARD_ACCEPT", "OK"),
+            hint: say(
+                self.table(),
+                "OAG_TAG_ENTRY_HINT",
+                "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
+            ),
+        };
+        self.pulse_tag_entry("Name", name, labels, prompt::accepts)
+    }
+
+    /// Pulse's own `<TagInput name="{widget}">` row on `text`, over the authored alphabet
+    /// narrowed to what `accepts` allows. Shared by the pilot rename and the player name and
+    /// tag; the error is the first reason it cannot be used and the caller falls back to the grid.
+    pub(super) fn pulse_tag_entry(
+        &self,
+        widget: &str,
+        text: &str,
+        labels: tag_entry::Labels,
+        accepts: impl Fn(char) -> bool,
+    ) -> Result<TagEntry, &'static str> {
+        let name = text;
         let source = self
             .race_options
             .as_ref()
@@ -431,12 +454,12 @@ impl Session {
             .read_hash(oag_pulse::hashes::TAG_INPUT_SCREENS)
             .map_err(|_| "no TagInput screens entry on this disc")?;
         let xml = oag_tables::fexml::text(&entry_raw).map_err(|_| "TagInput entry is not text")?;
-        let geometry = tag_entry::geometry(&xml, &globals, "Name")
-            .ok_or("the Name TagInput was not found in it")?;
+        let geometry = tag_entry::geometry(&xml, &globals, widget)
+            .ok_or("that TagInput was not found in it")?;
 
         let alphabet: String = oag_pulse::tag_input::ALPHABET
             .chars()
-            .filter(|&c| prompt::accepts(c))
+            .filter(|&c| accepts(c))
             .collect();
         if name.chars().count() as u32 > geometry.tag_input.length {
             return Err("the name is longer than the authored row");
@@ -445,15 +468,6 @@ impl Session {
             return Err("the name has a character the authored alphabet cannot show");
         }
 
-        let labels = tag_entry::Labels {
-            title: say(self.table(), "OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
-            confirm: say(self.table(), "OAG_KEYBOARD_ACCEPT", "OK"),
-            hint: say(
-                self.table(),
-                "OAG_TAG_ENTRY_HINT",
-                "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
-            ),
-        };
         Ok(TagEntry::new(labels, geometry, &alphabet, name))
     }
 
@@ -534,6 +548,10 @@ impl Session {
             self.lan_address_entered(&finished.text);
             return;
         }
+        if matches!(finished.purpose, Purpose::PlayerName | Purpose::PlayerTag) {
+            self.player_entered(&finished.purpose, &finished.text);
+            return;
+        }
         if let Purpose::Online(field) = finished.purpose {
             self.online_field_entered(field, &finished.text);
             return;
@@ -582,7 +600,7 @@ impl Session {
                 // better to land on than the top.
                 self.reload_pilot_roster(None);
             }
-            Purpose::LanAddress | Purpose::Online(_) => {}
+            Purpose::LanAddress | Purpose::Online(_) | Purpose::PlayerName | Purpose::PlayerTag => {}
         }
     }
 

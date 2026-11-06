@@ -46,25 +46,29 @@
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
-/// Which ghost rows of the Game Options page a title's own list offers.
+/// Which ghost and tag rows of the Game Options page a title's own list offers.
 ///
 /// Pulse's `Settings` screen authors `Ghost Ship Visible` (a ghost ship is drawn or not) and,
-/// on the PSP discs, `Auto Load Ghost` (the stored ghost is loaded when a race starts). A
+/// on the PSP discs, `Auto Load Ghost` (the stored ghost is loaded when a race starts) and
+/// `Multiplayer Tags` (a player's name over each other person's craft). A
 /// title whose list is unread or lacks a row offers none of it and behaves as the row's
 /// default, which is today's behaviour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GhostOptions {
+pub struct GameOptions {
     /// `Ghost Ship Visible`.
     pub ship_visible: bool,
     /// `Auto Load Ghost`.
     pub auto_load: bool,
+    /// `Multiplayer Tags`.
+    pub multiplayer_tags: bool,
 }
 
-impl GhostOptions {
+impl GameOptions {
     /// Neither row.
     pub const NONE: Self = Self {
         ship_visible: false,
         auto_load: false,
+        multiplayer_tags: false,
     };
 }
 
@@ -302,8 +306,8 @@ pub struct RaceDefaults {
     /// `None` because the title draws no such ring, **chosen, not measured**. See
     /// [`crate::ZoomRing`].
     pub borrows_zoom_ring: bool,
-    /// The ghost rows this title's own Game Options list offers. See [`GhostOptions`].
-    pub ghost_options: GhostOptions,
+    /// The ghost and tag rows this title's own Game Options list offers. See [`GameOptions`].
+    pub game_options: GameOptions,
     /// Where this title keeps the per-stage textures a Zone race swaps as it
     /// escalates. See [`ZoneStageTextures`]. `None` where not located, every title
     /// but HD/Fury.

@@ -115,6 +115,10 @@ optional = true
 type = "boolean"
 optional = true
 
+[types.display.multiplayer_tags]
+type = "boolean"
+optional = true
+
 # [graphics]: how the picture is drawn, whatever the source.
 [types.graphics]
 type = "table"
@@ -384,6 +388,18 @@ optional = true
 type = "string"
 optional = true
 
+# [player]: the name every title shares and the tag Pulse and Pure use.
+[types.player]
+type = "table"
+
+[types.player.name]
+type = "string"
+optional = true
+
+[types.player.tag]
+type = "string"
+optional = true
+
 # [controls]: scheme, triggers, rumble, touch and key bindings.
 [types.controls]
 type = "table"
@@ -509,6 +525,10 @@ optional = true
 
 [elements.online]
 type = "types.online"
+optional = true
+
+[elements.player]
+type = "types.player"
 optional = true
 
 [elements.controls]

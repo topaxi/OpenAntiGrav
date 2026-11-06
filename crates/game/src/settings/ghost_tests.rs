@@ -16,7 +16,11 @@ fn the_ghost_rows_are_seeded_where_listed_default_on_and_round_trip() {
         .into_iter()
         .any(|(seed, _)| seed == key)
     };
-    for key in ["display.ghost_ship_visible", "display.auto_load_ghost"] {
+    for key in [
+        "display.ghost_ship_visible",
+        "display.auto_load_ghost",
+        "display.multiplayer_tags",
+    ] {
         assert!(seeded(oag_pulse::TITLE, key), "{key}");
         assert!(!seeded(oag_pure::TITLE, key), "{key}");
         assert!(!seeded(oag_hd::TITLE, key), "{key}");
@@ -27,6 +31,11 @@ fn the_ghost_rows_are_seeded_where_listed_default_on_and_round_trip() {
     assert!(settings.display.ghost_auto_loads(oag_pulse::TITLE));
     settings.display.ghost_ship_visible = false;
     settings.display.auto_load_ghost = false;
+    assert!(settings.display.multiplayer_tags_shown(oag_pulse::TITLE));
+    settings.display.multiplayer_tags = false;
+    assert!(!settings.display.multiplayer_tags_shown(oag_pulse::TITLE));
+    settings.display.multiplayer_tags = true;
+    assert!(!settings.display.multiplayer_tags_shown(oag_pure::TITLE));
     assert!(!settings.display.ghost_ship_shown(oag_pulse::TITLE));
     assert!(!settings.display.ghost_auto_loads(oag_pulse::TITLE));
     assert!(settings.display.ghost_ship_shown(oag_pure::TITLE));
@@ -34,6 +43,7 @@ fn the_ghost_rows_are_seeded_where_listed_default_on_and_round_trip() {
     let written = toml::to_string_pretty(&settings).expect("serialise");
     let back: Settings = toml::from_str(&written).expect("parse");
     assert!(!back.display.ghost_ship_visible && !back.display.auto_load_ghost);
+    assert!(back.display.multiplayer_tags);
     let missing: Settings = toml::from_str("[display]\n").expect("parse");
     assert!(missing.display.ghost_ship_visible && missing.display.auto_load_ghost);
 }
