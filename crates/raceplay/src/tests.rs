@@ -177,6 +177,15 @@ fn straight_track() -> AiTrack {
 
 /// [`straight_track`] with its own half-widths, left then right.
 pub(crate) fn straight_track_with_widths(left: f32, right: f32) -> AiTrack {
+    straight_track_in_sections(left, right, |_| 0)
+}
+
+/// [`straight_track_with_widths`] with the authored section of each control point, by index.
+pub(crate) fn straight_track_in_sections(
+    left: f32,
+    right: f32,
+    section: impl Fn(usize) -> u8,
+) -> AiTrack {
     let count = 8usize;
     let paths_at = track::HEADER_LEN + track::RESERVED_LEN;
     let junctions_at = paths_at + track::PATH_LEN;
@@ -202,6 +211,7 @@ pub(crate) fn straight_track_with_widths(left: f32, right: f32) -> AiTrack {
         // The four light-scale bytes (`+0x62..+0x65`): an open road, full light. Left at zero they would
         // read as a tunnel dark enough to black out a hull the course now locates wherever it stands.
         out[at + 0x62..at + 0x66].fill(255);
+        out[at + 0x60] = section(k);
     }
     track::parse(&out).expect("the synthetic track must parse")
 }

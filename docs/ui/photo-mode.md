@@ -171,6 +171,27 @@ and 3 above, free to orbit; Pulse's measured offset, **chosen** on the others), 
 circuit's authored `Camera` node nearest the craft, aimed at it; only where a circuit authors
 one, left out of the cycle otherwise). The mode opens on `internal`, as both originals do.
 
+**No visibility culling while it is open** (maintainer's decision: a shot must never lose
+scenery). On every title the section set (`Race::visible_set`: Pulse, Pure, 2048 and Omega
+circuits that author sections) is every section, including over the director's station camera,
+and HD's chunk set is not built; the draws still go through the frustum test. Leaving the mode
+restores the cull on the next frame. Test:
+`tests::photo::photo_mode_draws_every_section_and_leaving_restores_the_cull` (red without the
+rule); the director case is `tests::wreck_finished::photo_mode_over_the_directors_camera_is_not_masked_by_the_directors_station`.
+Why: with the cull following the subject (the section a driver's index gives equals a full
+nearest-sample scan's), PVS on against off dropped the background skyline on one Pulse subject
+(`03_Track`, seed 7, tick 600, R once) and thin coplanar slivers on the rails. Before any change,
+photo mode on another craft was culled to the seat's section where the camera could be placed and
+drew everything where it could not (more than 96 samples away), so the symptom was not
+reproduced as missing geometry on `main`. With the rule, PVS on is pixel-identical to PVS off
+on Pulse (7 subjects) and HD (7 subjects). The weather's section and the boost lens follow the
+framed craft (`Race::framed_slot`; an opponent's `Ship::segment` is never written, so its
+driver's index is mapped through the racing line). 2048 and Omega: **checked, applies, not run
+as a frame**: the same `visible_set`, and a circuit with no sections is never culled.
+Frame time with the mode open, 1280x800, debug build, drive `screenshot` frames (CPU record and
+submit, no GPU wait), twelve frames each, median: Pulse 7.3 ms, HD 6.6 ms (a quiet-machine
+number it is not: single frames spread 3.7 to 12.6 ms).
+
 **Controls**, all on one stick and the buttons a keyboard has (the abstract input has one stick):
 
 | Input | Does |

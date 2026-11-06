@@ -343,7 +343,7 @@ impl Scene {
         let chunk_set = self
             .visibility
             .as_ref()
-            .filter(|_| pvs_cull)
+            .filter(|_| pvs_cull && race.photo().is_none())
             .and_then(|visibility| visibility.chunks())
             .and_then(|pvs| {
                 ChunkSet::around(
