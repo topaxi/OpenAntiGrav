@@ -19,8 +19,6 @@ fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
         "delete",
         "delete-built-in",
         "binding",
-        "player-name-grid",
-        "player-tag-grid",
     ] {
         let list = prompt_draws(
             kind,
@@ -276,4 +274,33 @@ fn pulses_track_entries_draw_the_unset_record_as_three_dashed_fields() {
         panic!("a circuit entry");
     };
     assert_eq!(info, &["5178", "-.--.--", "-.--.--"]);
+}
+
+/// The player prompts open on the stored name and tag, not on the pilot's name.
+#[test]
+fn the_player_grids_open_on_the_stored_name_and_tag() {
+    let skin = oag_ui::menu::Skin::new(
+        oag_pulse::FRONT_END.menu.unwrap(),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    let strings = oag_ui::language::StringTable::default();
+    let player = crate::settings::Player {
+        name: "zoe".into(),
+        tag: "ZOE".into(),
+    };
+    for (kind, shown) in [("player-name-grid", "zoe"), ("player-tag-grid", "ZOE")] {
+        let list = prompt_draws(kind, "winston", &player, &strings, &skin, None).expect("draws");
+        assert!(
+            list.iter().any(
+                |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. }
+                if text.contains(shown))
+            ),
+            "{kind} does not show {shown}"
+        );
+        assert!(!list.iter().any(
+            |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. }
+            if text.contains("winston"))
+        ));
+    }
 }
