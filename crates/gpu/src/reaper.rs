@@ -17,11 +17,6 @@
 //! threaded recording takes): the work moves to another core, which pays on the Deck and is not
 //! measured on a phone's slower ones.
 //! `OAG_REAP_THREAD=0` or `=1` overrides that (an A/B switch for benches, nothing a player sets).
-//!
-//! **Not for a frame of one view** ([`Reaper::frame_submitted`]). A split has no idle moment on
-//! the frame thread and gains 3 to 6 %. One view waits on its finishing threads anyway, gains
-//! 0.1 ms of `submit`, and pays more than that in `scene` and the next acquire on the Deck
-//! (`docs/rendering/frame-thread-cpu.md`, "Reaping off the frame thread").
 
 /// How long the thread leaves the GPU between polls. Long enough to miss the present that
 /// follows a submit, which would otherwise wait for this thread's hold on the snatch lock.
@@ -36,8 +31,6 @@ pub struct Reaper {
     thread: Option<std::thread::JoinHandle<()>>,
     #[cfg(not(target_arch = "wasm32"))]
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    #[cfg(not(target_arch = "wasm32"))]
-    every_frame: bool,
 }
 
 impl Reaper {
@@ -75,7 +68,6 @@ impl Reaper {
         Some(Self {
             thread: Some(thread),
             stop,
-            every_frame: std::env::var("OAG_REAP_THREAD").is_ok_and(|value| value != "0"),
         })
     }
 
@@ -86,19 +78,7 @@ impl Reaper {
         None
     }
 
-    /// A frame's last submission has gone to the queue: reclaim until the queue is empty,
-    /// unless the frame drew `one_view` and left it to the next submit, which does it on the
-    /// frame thread. `OAG_REAP_THREAD=1` reclaims here after every frame.
-    pub fn frame_submitted(&self, one_view: bool) {
-        #[cfg(not(target_arch = "wasm32"))]
-        if !one_view || self.every_frame {
-            self.reap();
-        }
-        #[cfg(target_arch = "wasm32")]
-        let _ = one_view;
-    }
-
-    /// Reclaims until the queue is empty.
+    /// A frame's last submission has gone to the queue: reclaim until the queue is empty.
     pub fn reap(&self) {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(thread) = &self.thread {

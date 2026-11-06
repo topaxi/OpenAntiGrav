@@ -1503,8 +1503,8 @@ identified (candidates: Arc counts on the same cache lines, the allocator's lock
 (147.3 to 146.0 here, 137.9 to 137.1 before the other cuts) with `total` within 0.04. That loss is
 outside `total`: `frame-log`'s `present_ms`, which counts the acquire's wait, reads 0.65 off and 0.79
 on. It stayed on here: `total` and p99 are lower in every cell, and a split gains 3 to 6 %. The cause
-and the rule that replaced this are in "The reaper at one view and the shine passes" below; the
-snatch-lock clash was tested there and is not it.
+is still open, and a rule that left one view out was tried and reverted: "The reaper at one view and
+the shine passes" below; the snatch-lock clash was tested there and is not it.
 
 ### A second finishing thread
 
@@ -1654,12 +1654,13 @@ HD one view, 800p, 4 rounds, one binary, `OAG_REAP_MODE` selecting the schedule 
   its cache. Fits, not measured.
 
 `queue.submit`'s reclaim costs the frame thread 0.10 ms of `submit` at one view, against `scene` +0.25
-and the acquire +0.15. So `Reaper::frame_submitted` leaves a race's frame of exactly one view in
-one window to the next submit, which does the work on the frame thread. A split, a windowed race and
-the front end keep the thread; nobody measured them without it. `OAG_REAP_THREAD=1` reclaims after every
-frame, `=0` never.
+and the acquire +0.15. So a rule was built: `Reaper::frame_submitted` left a race's frame of exactly
+one view in one window to the next submit, which did the work on the frame thread. A split, a windowed
+race and the front end kept the thread; nobody measured them without it.
 
-**This is a trade.** Final build, 800p, 3 rounds, reaper on after every frame against this rule:
+**Reverted the same day: the reaper runs after every frame, one view included.** It was a trade, and
+the maintainer took the side of p99. The rule is on the unpublished branch `park/reaper-one-view`, one
+commit on the reverted tree. Final build, 800p, 3 rounds, reaper on after every frame against the rule:
 
 | One view | `total` | fps | p99 | `present_ms` |
 | --- | --- | --- | --- | --- |
@@ -1668,8 +1669,8 @@ frame, `=0` never.
 | Pure | 3.15 to 3.29 | 271.8 to 271.7 | 4.88 to 5.02 | 0.503 to 0.384 |
 
 At 1080p and 4K, the fast session, 2 rounds, fps rose 0.1 to 0.8 and `total` rose 0.13 to 0.46: one
-view there is GPU-bound and the frame thread has room. It helps the slowest title and costs the two
-that run far past any panel. Reverting the rule is one commit.
+view there is GPU-bound and the frame thread has room. It helped the slowest title by 0.8 % on AC and raised p99 on all
+three. The gain may be larger on battery (2.3 % of HD's fps in the fast session), unproven.
 
 ### The shine passes
 

@@ -110,9 +110,10 @@ Numbers in `docs/rendering/frame-thread-cpu.md`, "What is left of the frame thre
   profile. Measure: `/proc/<pid>/task/<tid>/stat` fields 14 and 15 over 8 s of race.
 - **Why reclaiming on another core costs one view `scene` +0.25 and the acquire +0.15**: not the snatch
   lock, the schedule, the sibling thread, glibc's arenas or the power budget
-  (`docs/rendering/frame-thread-cpu.md`, "What the reaper costs one view, and what it is not"). One view
-  now leaves it to the next submit, a trade: HD gains, Pulse and Pure lose a little `total` and p99. If
-  the cause turns up, the reaper can come back at one view. Measure: `OAG_REAP_THREAD=0/1`, HD 800p.
+  (`docs/rendering/frame-thread-cpu.md`, "What the reaper costs one view, and what it is not"). Leaving one
+  view to the next submit was a trade (HD +0.8 % fps on AC, p99 up on all three titles), reverted; the
+  rule waits on local branch `park/reaper-one-view`. Worth another look only if the cause turns up or
+  battery proves a bigger gain. Measure: `OAG_REAP_THREAD=0/1`, HD 800p.
 - **HD's split post chains**: a `finish` and a submit per view, 0.9 ms, on the frame thread. They need
   each view's writes ahead of its own submit, so they wait for the write log or
   `record-uploads-in-the-encoder-so-a-split-is-one-submit.md`.
