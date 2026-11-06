@@ -302,6 +302,9 @@ pub struct CaptureOptions {
     /// `[display] ghost_ship_visible`, resolved for the title
     /// ([`crate::settings::Display::ghost_ship_shown`]).
     pub ghost_visible: bool,
+    /// Whether the other people's multiplayer tags are drawn
+    /// ([`crate::settings::Display::multiplayer_tags_shown`]).
+    pub player_tags: bool,
     /// What casts a shadow in the captured frame: `--shadows`.
     ///
     /// Honoured the same way [`Self::motion_blur`] is, and here for the same
@@ -507,6 +510,7 @@ pub fn capture(
     race.set_weather(options.weather);
     race.set_dynamic_hud(options.dynamic_hud);
     race.set_ghost_visible(options.ghost_visible);
+    race.set_player_tags(options.player_tags);
     race.set_hull_shake(options.hull_shake);
     race.watch_laps(
         &hud,

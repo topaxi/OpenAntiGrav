@@ -695,6 +695,7 @@ impl Stage {
             }
         }
         race.set_ghost_visible(settings.display.ghost_ship_shown(title));
+        race.set_player_tags(settings.display.multiplayer_tags_shown(title));
         crate::race_stage::ghost::arm(
             &mut race,
             &result_key,

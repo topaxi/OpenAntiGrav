@@ -15,6 +15,9 @@ use super::*;
 /// The shield bar's and the other bars' memory, plus a split view's reticle.
 #[derive(Clone, Debug, Default)]
 pub(super) struct SlotHud {
+    /// Each other craft's multiplayer-tag fade as this view sees it, `0..=1`
+    /// (`oag_hud::player_tags::step_fade`). Display only.
+    pub(super) tag_fade: [f32; oag_gameplay::MAX_SHIPS],
     /// `Hud_UpdateEnergyBar`'s `hud+0x118`: the shield percentage as of the
     /// previous tick. Seeded `0.0`.
     pub(super) shield_flash_prev: f32,

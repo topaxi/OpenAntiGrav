@@ -76,6 +76,19 @@ pub fn views_frame(views: &[ViewDraw<'_>]) -> Frame {
                     .filter_map(|draw| oag_hud::place(draw, at))
                     .collect()
             };
+        if view.items.is_none() && !view.readout.player_tags.is_empty() {
+            // The tags were projected into the reticle's grid, so they go where the reticle goes.
+            let at = view.sight.as_ref().unwrap_or(&view.placement);
+            let mut mine = Frame::default();
+            oag_hud::player_tags::append(&mut mine, &view.cx, &view.readout);
+            let mut mine = mine.into_placed(at);
+            mine.spans.clear();
+            mine.spans.push(Span {
+                clip: at.clip,
+                start: [0; 5],
+            });
+            frame.extend(mine);
+        }
         if let Some(grid) = view.items {
             let mut mine = Frame::default();
             oag_hud::ext_draws::append(&mut mine, &view.cx, &view.readout.ext, grid);
@@ -156,6 +169,8 @@ pub struct Overlay {
     split: Option<oag_hud::SplitAssets>,
     split_columns: Option<oag_hud::SplitAssets>,
     split_hud: Option<oag_hud::split_hud::SplitHudAssets>,
+    /// The player-tag face, [`Assets::tag_label`].
+    tag_label: Option<oag_hud::Label>,
     /// The whole HUD's scale about the screen's centre, [`oag_title::HudArt::safe_area`] at the
     /// player's value; `1.0` for a title with no such option.
     safe_area_scale: f32,
@@ -263,6 +278,7 @@ impl Overlay {
             split: assets.split.clone(),
             split_columns: assets.split_columns.clone(),
             split_hud: assets.split_hud.clone(),
+            tag_label: assets.tag_label.clone(),
             safe_area_scale: assets.art.safe_area_scale(None),
             hud_shown: true,
         }))
@@ -331,6 +347,7 @@ impl Overlay {
             default_line_height: self.default_line_height,
             skin_line_height: self.skin_line_height,
             default_border: self.layout.default_border(),
+            tag_label: self.tag_label.as_ref(),
         }
     }
 

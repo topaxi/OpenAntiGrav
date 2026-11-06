@@ -38,6 +38,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     elimination: layouts::ELIMINATION,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_Pulse.toml"),
+    player_tags: Some(layouts::MP_TAG),
     skins: &[],
 };
 

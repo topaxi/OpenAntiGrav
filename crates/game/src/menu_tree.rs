@@ -78,7 +78,7 @@ pub fn finish_definition(
     definition.drop_unavailable_hud_style(title);
     // And the DYNAMIC HUD row, where the options list it: Pulse.
     definition.drop_unavailable_dynamic_hud(title);
-    definition.drop_unavailable_ghost_options(title);
+    definition.drop_unavailable_game_options(title);
     // And the TRAIL ORDER row, where the ribbon is the PSP preset: Pulse and Pure.
     definition.drop_unavailable_trail_order(title);
     // And the WEATHER row, where the weather is played: Pulse.

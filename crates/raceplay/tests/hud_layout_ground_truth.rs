@@ -541,6 +541,7 @@ fn no_two_live_widgets_share_an_anchor_on_any_shipped_layout() {
         let frame = hud::draw_list(
             &hud::Context {
                 default_border: layout.default_border(),
+                tag_label: None,
                 layout: &layout,
                 strings: &strings,
                 // Empty: this test reads only the label passes, and no sprite

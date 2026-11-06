@@ -450,6 +450,9 @@ impl Session {
                     stage
                         .race
                         .set_ghost_visible(self.settings.display.ghost_ship_shown(shell.title));
+                    stage
+                        .race
+                        .set_player_tags(self.settings.display.multiplayer_tags_shown(shell.title));
                 }
                 if let Some(hud) = &mut stage.hud {
                     hud.set_dynamic_hud(self.settings.display.dynamic_hud);

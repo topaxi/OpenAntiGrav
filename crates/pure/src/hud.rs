@@ -95,6 +95,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     elimination: layouts::ARCADE,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_Pure.toml"),
+    player_tags: None,
     skins: &[],
 };
 

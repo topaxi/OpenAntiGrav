@@ -748,6 +748,7 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
         default_line_height: 34.0,
         skin_line_height: 34.0,
         default_border: layout.default_border(),
+        tag_label: None,
     };
 
     // Zone 1 on rung 1, which is the state the reference frame is in.
@@ -850,6 +851,7 @@ fn the_zone_eight_frame_is_reproduced_row_for_row() {
         default_line_height: 34.0,
         skin_line_height: 34.0,
         default_border: layout.default_border(),
+        tag_label: None,
     };
 
     // Zone 8: rung 5 (`5 Sub Rapier`), next bump four rows down at zone 12.
@@ -939,6 +941,7 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
         default_line_height: 34.0,
         skin_line_height: 34.0,
         default_border: layout.default_border(),
+        tag_label: None,
     };
     let frame = hud::draw_list(&cx, &oag_hud::Readout::default());
     // A bare digit string is no longer unique to the `ZonePlus*` ladder:
@@ -1129,6 +1132,7 @@ fn a_leaning_hd_frame_is_the_still_frame_slid_along_x() {
         default_line_height: 34.0,
         skin_line_height: 34.0,
         default_border: layout.default_border(),
+        tag_label: None,
     };
 
     const FOLLOWER: f32 = 1.39815;
@@ -1282,6 +1286,7 @@ fn lit_hud_quads_carry_the_captured_alpha_byte_and_the_outline_and_bars_do_not()
             default_line_height: 34.0,
             skin_line_height: 34.0,
             default_border: layout.default_border(),
+            tag_label: None,
         };
         hud::draw_list(&cx, &readout)
     };
@@ -1404,6 +1409,7 @@ fn every_lit_text_string_has_a_black_twin_one_unit_up_and_left_drawn_first() {
             default_line_height: 34.0,
             skin_line_height: 34.0,
             default_border: layout.default_border(),
+            tag_label: None,
         };
         hud::draw_list(&cx, &readout)
     };

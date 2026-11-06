@@ -998,6 +998,7 @@ pub(super) fn context<'a>(
 ) -> Context<'a> {
     Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout,
         strings,
         sheet: &SAMPLE_SHEET,

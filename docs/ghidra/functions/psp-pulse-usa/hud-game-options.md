@@ -49,5 +49,6 @@ is the widget array, `hud+0x40` the eight-entry source list, stride 0x10):
    craft's slot (`craft+0x364`).
 
 Confidence 80. Unread: what `FUN_0883e37c` tests (it compares the display's viewport mask against the craft's, which
-reads as "visible in this view", confidence 50), and whether the local player's own craft gets a tag. This engine's
-split screen has no player names to show and no projected-text path exists in `oag-hud`, so the tags are not drawn here yet.
+reads as "visible in this view", confidence 50), and whether the local player's own craft gets a tag. Ours: wired as
+`oag_hud::player_tags` (law and tests) and `oag_raceplay`'s `player_tags` (fades, projection, names); `docs/ui/menus-original.md`,
+"Game Options" lists what is chosen.

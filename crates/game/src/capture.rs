@@ -518,6 +518,7 @@ pub fn run(
                 dynamic_hud: options.settings.display.dynamic_hud,
                 // The front-end capture path races nothing.
                 ghost_visible: true,
+                player_tags: false,
                 shadows: render_profile.shadows,
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,

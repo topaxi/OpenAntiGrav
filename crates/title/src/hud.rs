@@ -63,6 +63,9 @@ pub struct HudLayouts {
     /// in `assets/fallback/`. `None` draws the whole-screen layout scaled into
     /// each view.
     pub split_layout: Option<&'static str>,
+    /// The layout whose `PlrTag` text is the face of a multiplayer race's player tags
+    /// (Pulse's `MPTag_HUD.xml`; `Multiplayer Tags`). `None` where the tags are not wired.
+    pub player_tags: Option<&'static str>,
     /// The disc's `HUD Style` list, one entry per skin, default first. Empty
     /// where the title authors none (Pulse, Pure, 2048). A skin's own
     /// [`HudSkin::layouts`] carries an empty list, so the lookup never recurses.

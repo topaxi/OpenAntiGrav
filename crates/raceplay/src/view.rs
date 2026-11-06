@@ -60,6 +60,8 @@ pub struct RaceView {
     pub(super) hull_shake_law: Option<oag_title::hull_shake::HullShake>,
     /// Whether the shake runs ([`super::Race::set_hull_shake`]).
     pub(super) hull_shake_on: bool,
+    /// Whether other people's multiplayer tags are drawn ([`super::Race::set_player_tags`]).
+    pub(super) player_tags_on: bool,
     /// The grid slot this machine's person flies in a network race, set by
     /// [`super::Race::set_seat`]. View-only: in a network race every person's slot
     /// is [`oag_gameplay::Controller::Remote`] on every peer, because the
