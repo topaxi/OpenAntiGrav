@@ -1,17 +1,22 @@
 //! The threads that touch the GPU, and the one place the process waits for them on its way out.
 //!
-//! A worker holds clones of the `wgpu` device and queue (the EndRace prefetch, the race build,
-//! the parked race's drop). Dropping a handle does not stop it, and `main` returning runs the
-//! Vulkan driver's process-exit teardown under whatever thread is still inside the driver: a
-//! SIGSEGV (exit 139) on a loaded machine, in the `--drive` tests and on a window close alike.
-//! So the rule is: **no GPU-touching thread is alive when `main` returns.** Each such thread
-//! holds a [`Guard`] for its whole life, detached or not, and [`finish`] asks them to stop and
-//! waits (bounded) until none is left.
+//! A worker holds clones of the `wgpu` device and queue (the race load's texture sink, the
+//! EndRace prefetch, the race build, the parked race's drop). Dropping a handle does not stop it,
+//! and `main` returning runs the Vulkan driver's process-exit teardown under whatever thread is
+//! still inside the driver: a SIGSEGV (exit 139), in the `--drive` tests and on a window close
+//! alike (`docs/tools/web.md`, "Exit and GPU workers"). So the rule is: **no GPU-touching thread
+//! is alive when `main` returns.** Each such thread holds a [`Guard`] for its whole life,
+//! detached or not, and [`finish`] asks them to stop and waits (bounded) until none is left.
+//!
+//! Its whole life includes what it returns: a worker's result can hold textures, and `std` stores
+//! that result after the closure has returned, then drops it on the worker if the handle has gone
+//! already. A worker that returns GPU objects hands its guard to [`Guard::hold_to_thread_end`].
 //!
 //! Threads that never touch the GPU (music, circuit lengths, connects, the records writer) are
 //! not here. The web build has no such thread to wait for: its race build runs inline and the
 //! page closing ends everything (`docs/tools/web.md`, "Threads").
 
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
@@ -25,6 +30,12 @@ pub const EXIT_WAIT: Duration = Duration::from_secs(60);
 static LIVE: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
 static IDLE: Condvar = Condvar::new();
 static STOP: AtomicBool = AtomicBool::new(false);
+
+thread_local! {
+    /// A thread-local's destructor runs as the thread ends, after `std` has stored the closure's
+    /// result and dropped its own reference to it, which is the moment [`Guard`] has to last to.
+    static HELD: RefCell<Option<Guard>> = const { RefCell::new(None) };
+}
 
 /// Held by a worker thread from before it starts until it returns.
 #[derive(Debug)]
@@ -41,6 +52,12 @@ impl Guard {
             live.push(name);
         }
         Self { name }
+    }
+
+    /// Keeps this guard until the current thread has ended, past the closure's return value.
+    /// Called once on the worker, first thing. A second call on one thread releases the first.
+    pub fn hold_to_thread_end(self) {
+        HELD.with(|held| *held.borrow_mut() = Some(self));
     }
 }
 

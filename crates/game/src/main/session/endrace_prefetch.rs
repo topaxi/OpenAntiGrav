@@ -56,7 +56,7 @@ pub(crate) struct EndRacePrepArgs {
 impl EndRacePrepArgs {
     /// The process is exiting or this race's stage is being dropped.
     fn leaving(&self) -> bool {
-        oag_game::gpu_workers::stopping() || self.cancel.load(std::sync::atomic::Ordering::Relaxed)
+        oag_thread::gpu_workers::stopping() || self.cancel.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Opens the source, reads the screens and builds the GPU side. `None` after saying why:
@@ -209,9 +209,9 @@ impl Session {
                 return;
             };
             stage.endrace_prefetch = args.map(|args| {
-                let guard = oag_game::gpu_workers::Guard::enter("endrace-prefetch");
+                let guard = oag_thread::gpu_workers::Guard::enter("endrace-prefetch");
                 oag_thread::Task::spawn("endrace-prefetch", move || {
-                    let _guard = guard;
+                    guard.hold_to_thread_end();
                     args.run()
                 })
             });
