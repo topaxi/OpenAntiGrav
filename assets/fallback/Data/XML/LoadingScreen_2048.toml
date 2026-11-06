@@ -1,0 +1,261 @@
+# Wipeout 2048: the race load's screen, HD's layout carried over.
+# Read by oag_hud::loading_layout through the asset layers (docs/architecture/asset-layers.md), served
+# as the fallback layer's copy (an archive or a player override of the same path wins).
+#
+# 2048's draw function (FUN_812830c8 of the v1.04 eboot.elf, state 7; docs/ghidra/functions/vita-2048-eu-v104/
+# loading-screen.md) was compared by its operands against LoadingScreen_HD.toml, element by element: the rules,
+# the caption arrow and caption, the five label squares, the four bracket sets, the dot bar's rectangle, the
+# picture window (0.875 by 0.9375 of 1024x512 at (180, 190), 896x480), both name-row arrows, the paragraph
+# (975, 215, wrap 780, pitch 40) are the same numbers, in the same 1920x1080 grid. The addresses in the
+# comments below are HD's (LoadingScreen_HD.toml). What is 2048's own: the brand is HD's literal
+# (0x814d0e24), and the mode icon's panel is a label and four brackets with nothing drawn in it (state 7
+# places no picture or clip there), so this file has no mode-icon element.
+#
+# Not carried because unread: the tournament screen (type 1) and the second `Title` pass at the caption.
+
+screen = "loading"
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/screen-layout.tosd"
+version = "1.0.0"
+
+[[layout]]
+name = "race-load"
+grid = [1920, 1080]
+
+[[layout.element]]            # top rule, line.gtf  [0x002b6d20, 80]
+id = "rule-top"
+draw = "image"
+asset = "rule"
+at = [160, 110]
+size = [1600, 8]
+
+[[layout.element]]            # bottom rule  [0x002b6d78, 80]
+id = "rule-bottom"
+draw = "image"
+asset = "rule"
+at = [160, 975]
+size = [1600, 8]
+
+[[layout.element]]            # caption arrow, Title_Arrow_HD  [0x002b6e7c, 80]
+id = "caption-arrow"
+draw = "image"
+asset = "title-arrow"
+at = [160, 73]
+size = [32, 32]
+colour = "ink"
+
+[[layout.element]]            # LOADING... <circuit>, font Title scale 1.0  [0x002b6e18, 80]; the original draws it twice at the same point (second pass unread)
+id = "caption"
+draw = "text"
+source = "caption"
+font = "Title"
+scale = 1.0
+at = [194, 62]
+colour = "ink"
+
+[[layout.element]]            # "WIPEOUT(R) HD"  [0x002b6cd0, 85]; label = 16x16 square at (x, y), text at x + 22, font Default scale 0.45
+id = "label-title"
+draw = "label"
+asset = "square"
+size = [16, 16]
+gap = 22
+font = "Default"
+scale = 0.45
+colour = "ink"
+text = "WIPEOUT\u00ae HD"
+at = [160, 48]
+
+[[layout.element]]
+id = "label-feature-image"    # [0x002b6ef0, 88]
+draw = "label"
+asset = "square"
+size = [16, 16]
+gap = 22
+font = "Default"
+scale = 0.45
+colour = "ink"
+string_id = "FE_FEATURE_IMAGE"
+at = [160, 125]
+
+[[layout.element]]
+id = "label-feature-desc"     # [0x002b6f0c, 88]
+draw = "label"
+asset = "square"
+size = [16, 16]
+gap = 22
+font = "Default"
+scale = 0.45
+colour = "ink"
+string_id = "FE_FEATURE_DESC"
+at = [960, 125]
+
+[[layout.element]]
+id = "label-progress"         # [0x002b6eb8, 88]
+draw = "label"
+asset = "square"
+size = [16, 16]
+gap = 22
+font = "Default"
+scale = 0.45
+colour = "ink"
+string_id = "FE_PROG_BAR"
+at = [160, 670]
+
+[[layout.element]]
+id = "label-mode-icon"        # [0x002b6ed4, 88]
+draw = "label"
+asset = "square"
+size = [16, 16]
+gap = 22
+font = "Default"
+scale = 0.45
+colour = "ink"
+string_id = "FE_MODE_ICON"
+at = [1510, 670]
+
+[[layout.element]]            # brackets round the feature picture  [0x002b6f20..0x002b6f90, 80]
+id = "panel-feature-image"
+draw = "corners"
+asset = "corner"
+size = [16, 16]
+back = 12
+rect = [160, 155, 950, 655]
+colour = "ink"
+
+[[layout.element]]            # brackets round the description  [0x002b6f98..0x002b7004, 80]
+id = "panel-feature-desc"
+draw = "corners"
+asset = "corner"
+size = [16, 16]
+back = 12
+rect = [960, 155, 1756, 655]
+colour = "ink"
+
+[[layout.element]]            # brackets round the bar  [0x002b73f4..0x002b7464, 80]
+id = "panel-progress"
+draw = "corners"
+asset = "corner"
+size = [16, 16]
+back = 12
+rect = [160, 700, 1500, 950]
+colour = "ink"
+
+[[layout.element]]            # brackets round the mode icon  [0x002b7020..0x002b70a0, 80]
+id = "panel-mode-icon"
+draw = "corners"
+asset = "corner"
+size = [16, 16]
+back = 12
+rect = [1510, 700, 1756, 950]
+colour = "ink"
+
+[[layout.element]]            # the dot bar: 166 x 30 tiles of 8, lit = HD_Blue, unlit = HD_LightGrey  [0x002b70b8..0x002b73ec, 85]
+id = "bar"
+draw = "dots"
+asset = "dot"
+at = [168, 708]
+columns = 166
+rows = 30
+tile = 8
+fill = "progress"
+colour = "accent"
+unlit = "trough"
+
+[[layout.element]]            # the feature picture: a 1024x512 texture's (0, 0)-(896, 480), 1:1 at (180, 190)  [0x002b76d8, 80]. The code's float
+# operands are 0.875 and 0.0625 (= 1 - 0.9375, v counted from the bottom); the RPCS3 frame places the ring 31 px lower
+# than the other reading (which crops the top 32 rows) does, so the window is texel rows 0..480
+id = "feature-image"
+draw = "image"
+asset = "@feature"
+at = [180, 190]
+size = [896, 480]
+uv = [0.0, 0.0, 0.875, 0.9375]
+
+[[layout.element]]            # feature name row: 32x32 arrow at (x, y), text Default 0.8 at (x + 34, y - 4)  [0x002b3368, 78]
+id = "feature-title-arrow"
+draw = "image"
+asset = "subtitle-arrow"
+at = [175, 175]
+size = [32, 32]
+colour = "ink"
+
+[[layout.element]]
+id = "feature-title"
+draw = "text"
+source = "feature.title"
+font = "Default"
+scale = 0.8
+at = [209, 171]
+colour = "ink"
+
+[[layout.element]]            # description heading row  [0x002b7738, 78]
+id = "feature-heading-arrow"
+draw = "image"
+asset = "subtitle-arrow"
+at = [975, 175]
+size = [32, 32]
+colour = "ink"
+
+[[layout.element]]
+id = "feature-heading"
+draw = "text"
+source = "feature.heading"
+font = "Default"
+scale = 0.8
+at = [1009, 171]
+colour = "ink"
+
+[[layout.element]]            # the paragraph: Default 1.0, wrap 780, pitch 40  [0x002b774c, 72; wrap and pitch read off one call, agree with the frame]
+id = "feature-text"
+draw = "text"
+source = "feature.text"
+font = "Default"
+scale = 1.0
+at = [975, 215]
+wrap = 780
+pitch = 40
+colour = "ink"
+
+# The rows below belong to this build's own waits (a transcode, a prefetch, the boot's movie
+# loads), which the original has no counterpart for: CHOSEN, NOT MEASURED. They draw only while
+# something is being counted and sit under the bar, in the 27 units between its last dot row
+# (948) and the bottom rule (975) and below the rule. A race load counts nothing, so they draw
+# nothing there.
+[[layout.element]]
+id = "counts"
+draw = "text"
+source = "counts"
+font = "Default"
+scale = 0.45
+at = [168, 952]
+colour = "ink"
+
+[[layout.element]]
+id = "percentage"
+draw = "text"
+source = "percentage"
+font = "Default"
+scale = 0.45
+at = [1496, 952]
+align = "right"
+colour = "ink"
+
+[[layout.element]]
+id = "current"
+draw = "text"
+source = "current"
+font = "Default"
+scale = 0.4
+at = [168, 992]
+wrap = 1328
+colour = "ink"
+
+[[layout.element]]
+id = "step"
+draw = "text"
+source = "step"
+font = "Default"
+scale = 0.4
+at = [168, 1016]
+colour = "ink"
