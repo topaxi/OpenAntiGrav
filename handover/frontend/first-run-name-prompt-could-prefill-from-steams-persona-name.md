@@ -33,6 +33,9 @@ titles). A player who launches this port as a non-Steam game from Steam already 
 
 ## Open
 
+- **Pulse's `ENTER YOUR NAME` title is nearly invisible**: dark glyphs on the dark panel in the `TagInput` prompt (read on `--menu-prompt player-name`, Pulse EU). `Prompt::frame` asks for white, so the face's own colour wins there; HD's grid draws it white. The pilot rename shares the frame, so check it too.
+- **Split-screen tags still say `Player 1`**: `Race::tag_name` (`crates/raceplay/src/player_tags.rs`) does not read `settings.player.name()`. Seat 1 takes the stored name through `Race::set_person_names`, from the race start in `oag-game`.
+- **2048 and Omega never ask**: `Title::profile` follows the originals, so a player who only runs those has no name for the lobby but the login name. Decide whether the shared name is asked for there too.
 - **Built (2026-11-06, `docs/ui/player-name.md`).** `[player] name`/`tag` in settings, `Title::profile`,
   the first-run prompt (Pulse's `TagInput` row, the grid elsewhere), OPTIONS rows, the footer tag, the
   lobby default and the desk keyboard. Prefill from Steam is **not** built and stays open below.
