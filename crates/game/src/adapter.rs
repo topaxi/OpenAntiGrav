@@ -65,6 +65,11 @@ pub const BACKENDS: wgpu::Backends = wgpu::Backends::PRIMARY;
 pub fn instance() -> wgpu::Instance {
     let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
     descriptor.backends = BACKENDS;
+    // `DEBUG` (on in a debug build) makes naga's SPIR-V writer resolve a line
+    // and column for every statement by rescanning the shader source, about a
+    // quarter of a headless HD race load's CPU (`docs/architecture/load-time.md`).
+    // Validation stays on.
+    descriptor.flags.remove(wgpu::InstanceFlags::DEBUG);
     wgpu::Instance::new(descriptor)
 }
 

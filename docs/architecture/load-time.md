@@ -254,6 +254,34 @@ their lengths (`oag_music::measure`). It reads each track's first PSARC block
 since 2026-10-19 (`psarc::Archive::peek`): 305 ms became 23 ms on the Steam
 Deck, on the `race-music` thread ([music threads](music-threads.md)).
 
+## `memchr` and `CharSearcher` in a debug build
+
+A headless HD Fury race load (`--race --screenshot <png> --ticks 1`,
+`hdfury-ps3-eu-dec.iso`, default circuit, `target/debug/oag-game` built with
+`-Cforce-frame-pointers=yes`) spent 22.5% of its CPU samples in
+`core::slice::memchr::memchr_aligned` (15.3%) and `CharSearcher::next_match`
+(7.2%). Every one of those samples is under
+`naga::span::Span::location` called from `naga::back::spv::BlockContext::write_block`
+(1,051 of 1,051): naga's SPIR-V writer resolves a line and column for each
+statement by rescanning the shader source, when wgpu's `InstanceFlags::DEBUG`
+is set. `InstanceFlags::from_build_config` sets it in a debug build only, so
+the release build never paid it (0.18% of samples there). It is not string
+scanning in `oag-tables` or `oag-ui`.
+
+`oag_game::adapter::instance` now removes `DEBUG` and keeps `VALIDATION`.
+Same load, three interleaved runs each, `perf stat -e instructions:u`, load
+average 3.5 to 3.6:
+
+| | before | after |
+| --- | ---: | ---: |
+| instructions:u | 82.18 / 82.19 / 82.20 G | 44.24 / 44.17 / 44.18 G (**-46%**) |
+| user time | 4.72 / 4.68 / 4.73 s | 2.96 / 3.00 / 2.97 s (**-37%**) |
+| `memchr_aligned` + `CharSearcher` | 22.5% of samples | 0.07% |
+
+The captured PNG is byte-identical in all six runs. The cost left is inflate
+(17% of samples), music decode and the shader pipeline itself. The release
+build is untouched by the change.
+
 ## The player's path, and per-frame CPU
 
 One `--measure-race-load 1` on HD Fury in an Xvfb display with lavapipe
