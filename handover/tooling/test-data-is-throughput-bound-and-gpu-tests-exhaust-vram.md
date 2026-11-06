@@ -24,12 +24,12 @@ table and method: `docs/architecture/workspace-layout.md`, "Test groups".
 
 ## Open
 
-- **The race load does not stop early on exit**: closing the window on the loading screen waits out
-  the rest of the load (at most 0.5 s Pulse, 3.7 s 2048, 3.9 s HD in a debug build). A check of
-  `gpu_workers::stopping()` at the load's stages would cut it. Only worth it if a player notices.
-- **A window close sometimes does not land**: about one run in eight of a `WM_DELETE_WINDOW` sent to
-  a window on Xvfb during a load was ignored for 30 s, with or without the fix. Unexplained; may be
-  the harness (python-xlib, no window manager).
+- **A window close sometimes does not land** (game or winit, not the harness): about one run in
+  eight of a `WM_DELETE_WINDOW` sent to a window on Xvfb as a load begins is ignored for 30 s, and
+  the same message sent again from a fresh connection lands at once. The event loop is alive. Cause
+  not found; evidence in `docs/tools/web.md`, "A close that does not land". Next: log
+  `CloseRequested` at `app.rs`'s `window_event` (and what `winit` delivers before it) in a run that
+  loses one.
 - **Lane B landed 2026-11-06** (numbers and per-family table in `docs/architecture/workspace-layout.md`, "Test-data suite measurements"): summed time 14,018 s to 12,321 s, wall 896 s to 787 s. The 9,000 s target is not met. What is left, with where to measure it:
   - **Speed-plan learning landed 2026-11-06** (`docs/architecture/workspace-layout.md`, "What the `speed-plan` pass measured"): suite 12,611 s to 10,753 s, `ai_clean_lap_gate` 447 to 239, `speed_plan` 280 to 142, bit-identical on 240 runs. Left on a gate row, measured with the recipe below on `ai_clean_lap_gate::track_07_flash`: `Indices::overlapping` under the single rays (`hover`, `maglock`, `clip`, `sweep`) 14 %, `PadVolume::contains` 5 %, `hull_probes` 5 %, `CageTrack::locate` 3 %.
   - ~~PFSC inflate and XTS~~ landed (lane suite-decoders, Ryzen 9 7900): `oag-disc` reads a 685 MB Omega archive out of the patch package at 365 to 552 MB/s (output hash identical), and `autopilot_original_ground_truth::omega_flies_the_original_autopilot` fell from 9.25 s to 6.86 s (three runs each, load 5). Almost no other test opens the `.pkg`; most read `data/extracted`. Open: `vpk` (2048) still inflates with `miniz_oxide`.

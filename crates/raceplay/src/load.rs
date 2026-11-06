@@ -309,6 +309,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(not(feature = "view"))]
     let chase = chase_params(stats.external_camera_far);
 
+    stages::checkpoint()?;
     // The grid's roster - see `roster::available`.
     let available = roster::available(
         craft_of(&mut craft, &mut archives),
@@ -332,6 +333,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     )?;
     #[cfg(not(feature = "view"))]
     let slot_teams = roster::teams(craft_title, options, &team, &available, &mut report);
+    stages::checkpoint()?;
     // Each AI slot's own tuning where the title's variant family says it flies a
     // different team's file than the player's - see `family`.
     let (opponent_handling, opponent_weapon_counts) = family::opponent_handling(
@@ -403,6 +405,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         } else {
             (None, None)
         };
+    stages::checkpoint()?;
     // **Built here rather than below, because whether it built decides the
     // fallback.** A `.rcsmodel` that will not decode is the same outcome for a
     // race as none at all - the derived ribbon - and Wipeout 2048 made the
@@ -419,6 +422,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.mode == Mode::Zone,
         &mut report,
     );
+    stages::checkpoint()?;
     #[cfg(feature = "view")]
     let ribbon = options.ribbon
         || drawn.is_some()
@@ -565,6 +569,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         volumes
     };
 
+    stages::checkpoint()?;
     // The ribbon build draws an invented surface rather than the disc's art, so
     // it gets no sky either: the two belong to the same "show what shipped"
     // mode.
@@ -655,6 +660,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // the original's own order: `World_CollectNodeLists` always walks the tree
     // before anything asks whether weapons are on. The PS3 path is
     // `geometry::weapon_pad_model` - see its own doc comment for why.
+    stages::checkpoint()?;
     #[cfg(feature = "view")]
     let weapon_pad_model = if rcs_drawn {
         geometry::weapon_pad_model(ps3_weapon_pad_model, options.weapons_on(), &mut report)
@@ -737,7 +743,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let vex_geometry = !options.ribbon
         && !track.starts_with("foreign:")
         && !oag_vex::vex::geometry_is_external(&track_blob);
-    stages::reach(stages::Stage::TrackBuilt);
+    stages::reach(stages::Stage::TrackBuilt)?;
 
     let spline = Spline::from_track(&ai);
     report.push(format!(
@@ -786,7 +792,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else {
         None
     };
-    stages::reach(stages::Stage::WorldBuilt);
+    stages::reach(stages::Stage::WorldBuilt)?;
     // The player's own, and reported by `livery::load` beside the hull it was
     // read off. Sparks are slot 0's today - `oag_fx::sparks` triggers off
     // the player's contacts alone - so this takes slot 0's locators rather than
@@ -886,6 +892,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     let handles = super::EffectHandles::resolve(craft_title, &effects).with_own(mod_effects);
 
+    stages::checkpoint()?;
     #[cfg(feature = "view")]
     let (sounds, announcer, class_announcer) = audio::banks_and_announcers(
         &mut archives,
@@ -895,6 +902,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &slot_teams,
         &mut report,
     );
+    stages::checkpoint()?;
     #[cfg(feature = "view")]
     let rumble = crate::rumble_library::load(&mut archives, &mut report);
     #[cfg(feature = "view")]
@@ -1083,7 +1091,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         original_laws,
         &mut report,
     );
-    stages::reach(stages::Stage::CraftsBuilt);
+    stages::reach(stages::Stage::CraftsBuilt)?;
     #[cfg(feature = "view")]
     let models = &craft_title.weapon_models;
     #[cfg_attr(not(feature = "view"), allow(unused_mut))]

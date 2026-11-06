@@ -609,13 +609,63 @@ backend.
 sent `WM_DELETE_WINDOW` once `race load reached` is logged (2048, first event), with `race-load` left
 out of the registry: 3 of 9 closes crashed (`SIGSEGV` on `race-load`, exit -11). With it registered:
 0 of 9, every run logged the wait and exited 0. In about one run in eight the close never took
-effect within 30 s, on both binaries; that is unexplained, and it is not this crash.
+effect within 30 s, on both binaries; that is not this crash, and the harness is not the cause
+(see "A close that does not land", below).
 
 **The fix, in numbers.** The same test on the same machine with the registration removed: 6 of 8 runs
-crashed, 12 s when one passed. With it: 30 of 30 passed, no new core, about 16.5 s. The wait costs a
-player closing the window the rest of the load: 0.5 s (Pulse), 3.7 s (2048), 3.9 s (HD) from a
-launch's first frame in a debug build. The load does not check `gpu_workers::stopping()`, so the
-window stays up for that long.
+crashed, 12 s when one passed. With it: 30 of 30 passed, no new core, about 16.5 s. Before the stop
+checks below, a close waited out the rest of the load: 0.5 s (Pulse), 3.7 s (2048), 3.9 s (HD) from
+a launch's first frame in a debug build.
+
+**The load and the scene build stop at their next checkpoint** (`oag_raceplay::stages::checkpoint`
+and `reach`, `oag_raceplay::stages::reader`, `mesh_render::build_with`, `rcs::build_with_options`,
+`Scene::new`, the warm-up draw in `race_build.rs`). `gpu_workers::finish` sets the stop, so a load
+nobody leaves never takes the new path, and the web build, which never calls it, reads a plain
+`false`. A stopped load returns an `Err` through the path a failed load already takes; the
+result is dropped unread and nothing above `trace` is logged (`RUST_LOG=oag_raceplay::stages=trace`
+prints each checkpoint with its time into the load). The model builders read their textures through
+`stages::reader`, which finds nothing once the stop is set, so a track model skips the rest of
+its textures instead of decoding them (2048's track model was 4.1 s of a 6 s load, nearly all of
+it textures).
+
+**Where the time goes, and what a close waits now.** A load is two stages with a GPU worker each:
+`race-load` (the circuit and the grid read from the disc, textures through the sink; HD 2 to 4 s,
+2048 2.5 to 6 s, Pulse 0.5 s in a debug build) and `race-build` (the scene: for HD 136 distinct
+pipelines and 735 textures, about 6 s; Pulse 3.2 s; 2048 2.2 s). Before the checks a close waited
+for the stage it landed in. The exit wait (from the `waiting for GPU workers before exit` line to
+the process ending) for a close at a random point of load and build, debug build, NVIDIA RTX PRO
+2000 (Blackwell), 20, 18 and 24 runs spread over the whole of each:
+
+| | before | after, worst run | after, next worst |
+| --- | --- | --- | --- |
+| Pulse | 1.6 s (load alone, one run) | 0.41 s | 0.28 s |
+| 2048 | 5.5 s (load alone, one run) | 0.36 s | 0.36 s |
+| HD | 4.2 s (load alone, one run); the build alone about 6 s | 1.13 s | 0.49 s |
+
+0.2 to 0.3 s of every figure is the process tearing down after the wait. The HD worst, 1.13 s, was
+one run of 24, at load average 3.4, that stopped inside the track's `Drawable` build
+(`mesh_render::build_with`: six pipeline sets of 0.15 to 0.45 s each, the check between them);
+ten repeats at the same position on a quieter machine read 0.26 to 0.44 s. Before the check in
+`rcs::build_with_options` an HD close read up to 1.66 s: that loop is 0.45 s of the track model.
+What is not cut: one pipeline set (up to 0.45 s on HD) and the grid's `oag_livery::load`
+(0.4 to 0.6 s, all slots in one call, no check of its own). Method: `--drive` as
+`docs/tools/oag-game.md` ("Driving the menus with no window") with a script that ends
+`until stage=loading; ticks N` for N from 0 to 3000, a scratch `XDG_*` profile, `RUST_LOG=info`.
+
+With the checks in, the same test ran 30 of 30 clean on the NVIDIA GPU (no `VK_ICD_FILENAMES`),
+about 12.5 s a run, no new core. Measured on Pulse, 2048 and HD; Pure and Omega are not measured
+(they share the same `load`, `Scene::new` and `build_with`, so the checks apply, but no close was
+timed). Not covered by a test that fails when it is dropped: `stages::reader`, the per-node check
+in `rcs::build_with_options`, the warm-up skip, and every `Scene::new` checkpoint after the first.
+
+**A close that does not land.** In 3 of 15 runs of a real X11 window on Xvfb, `WM_DELETE_WINDOW`
+sent to the window (the only one, carrying `WM_DELETE_WINDOW` in `WM_PROTOCOLS`) as the load began
+was ignored for 30 s while the event loop kept running (frame warnings). A second identical message
+from a fresh connection after the 30 s landed at once, 2 of 2. So the harness is not the cause, and
+neither are the stop checks (the same loss was seen before they existed): the first close is lost in the
+game or in winit's X11 backend, and the runs that lost it ran the whole load on to the race. The
+cause is not found; `app.rs`'s `window_event` drops an event while `suspended` is set or the session
+does not exist yet, and nothing ties the loss to that. Not fixed.
 
 **A guard lasts as long as the thread** (`Guard::hold_to_thread_end`) where the worker returns GPU
 objects. `std` stores a thread's result after the closure has returned and drops it on that thread

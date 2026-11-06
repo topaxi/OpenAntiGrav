@@ -830,6 +830,7 @@ fn build_with_options(
         .enumerate()
         .filter(|(_, n)| n.class_id == class_id)
     {
+        crate::not_exiting()?;
         report.nodes += 1;
         let Some((hash, min, max)) = node_geometry(&data[node.payload()], order) else {
             continue;
