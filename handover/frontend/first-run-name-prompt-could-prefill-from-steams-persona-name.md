@@ -14,6 +14,7 @@ titles). A player who launches this port as a non-Steam game from Steam already 
 
 ## Decision so far
 
+- **Name and tag entry works with a controller, a phone keyboard, a physical keyboard and the Steam Deck's virtual keyboard; the phone and Deck keyboards open by themselves when that is easily detectable** (maintainer, 2026-11-06). Detection and the opening call are unmeasured on every platform: if one is not easy, the entry still works with a controller.
 - **One shared player name across all titles; the 3-character tag is prompted only on titles that use it, Pulse and Pure** (maintainer, 2026-11-06). Neither is stored today: `settings.rs` and `schemas/v1/settings.tosd` hold no player name, so the stored name comes before any prefill. The tag fills Pulse's footer strip, which draws nothing today (`docs/ui/menus-original.md`).
 - **Read `PersonaName` from `loginusers.vdf`, not the Steamworks API.** A non-Steam shortcut has no
   real AppID, so `SteamAPI_Init` does not work as itself. Spacewar (480) is tolerated for testing but
