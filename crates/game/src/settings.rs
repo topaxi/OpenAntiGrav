@@ -64,6 +64,7 @@ use oag_mesh::mesh_render::Anisotropy;
 mod controls;
 mod online;
 pub mod platform;
+pub mod player;
 mod race;
 mod render_profile;
 mod rescue;
@@ -71,6 +72,7 @@ pub mod web;
 
 pub use controls::{Controls, TriggerSensitivity};
 pub use online::Online;
+pub use player::Player;
 pub use race::Race;
 pub mod mod_settings;
 pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key};
@@ -128,6 +130,9 @@ pub struct Settings {
     /// The online lobby last connected to (`session::online`).
     #[serde(default)]
     pub online: Online,
+    /// The name and tag shared by every title (`session::player_name`).
+    #[serde(default)]
+    pub player: Player,
     #[serde(default)]
     pub controls: Controls,
     #[serde(default)]
