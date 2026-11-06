@@ -333,6 +333,30 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
     }
 }
 
+/// A style chosen against the served front end's ground takes its colours from the skin file
+/// whose ground matches: HD's white pictures get the white ground, Fury's black ones keep the
+/// served black. Without it the white picture met a black ground mid-way down the feature's name
+/// row. Reading the globals from the served copy alone again fails the first assertion.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_style_takes_the_ground_its_own_pictures_were_drawn_for() {
+    let Some(image) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let source = image.display().to_string();
+    let (table, entries) = table_and_entries(&image);
+    let ground = |style: &str| {
+        let assets = Assets::load(&source, &table, entries.as_deref(), Some(style));
+        assert_eq!(
+            assets.style,
+            Some(if style == "HD" { "HD" } else { "FURY" })
+        );
+        assets.palette.expect("the four globals resolve").background
+    };
+    assert_eq!(ground(oag_hd::loading::STYLE_HD), [1.0, 1.0, 1.0, 1.0]);
+    assert_eq!(ground(oag_hd::loading::STYLE_FURY), [0.0, 0.0, 0.0, 1.0]);
+}
+
 /// An unpicked style is the style the menus are drawn in, and the whole screen follows it:
 /// the pictures, the mode icon's clip and the four globals.
 ///

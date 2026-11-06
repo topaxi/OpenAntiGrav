@@ -140,7 +140,7 @@ pairs: HD/Fury and Omega".
 
 ## Cross-title check (CLAUDE.md: 2048 and Omega)
 
-**HD only so far.** 2048, Omega and Pure name no `Loading` at all, and Pulse's names no layout (`oag_title::Loading::layout` is `None`), so their screens are still the code's. The HD law is **checked, not applicable yet**:
+**HD and Omega carry a loading layout.** 2048, Pure name no `Loading` at all, and Pulse's names no layout (`oag_title::Loading::layout` is `None`), so their screens are still the code's. The HD law is **checked, not applicable yet**:
 Omega's front end is HD's, but no Omega loading frame exists and shadPS4 race shots are untrusted
-(`docs/formats/omega-status.md`); 2048's loading screen is unread. The split-HUD half is unchanged on all
+(`docs/formats/omega-status.md`); 2048's loading screen is unbuilt ([2048-loading.md](2048-loading.md): its race load is a different kind from HD's feature screen). The split-HUD half is unchanged on all
 four titles (`SplitHud_*.toml` each carry `screen = "split-hud"`).

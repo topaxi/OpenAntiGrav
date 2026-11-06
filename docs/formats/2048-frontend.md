@@ -2,7 +2,7 @@
 
 **This page is a reading plus one real capture, not a full measurement.**
 `docs/formats/2048-status.md` has said since the title's first pass that
-`oag_2048::TITLE` carries `front_end: None`, `loading: None` and `music: None`,
+`oag_2048::TITLE` carried `front_end: None`, `loading: None` and `music: None`,
 and that "neither has been read." That was true. This page is the same sweep
 [hd-frontend.md](hd-frontend.md) ran for Wipeout HD, applied to 2048's Vita
 package: every front-end-shaped entry in `PSP2/data.psarc` (plus the v1.04
@@ -567,9 +567,11 @@ and the touch-screen tree are all read and are all sitting in this document
 for whoever designs the axis that would hold them - most plausibly a new,
 optional field on `FrontEnd` for a touch-driven front end, or a `MenuSkin`
 variant, either of which is a type decision bigger than a first sweep should
-make unasked. `loading` and `music` stay `None` on narrower, ordinary
+make unasked. `loading` and `music` stayed `None` on narrower, ordinary
 evidence gaps (a real loading screen with no located plugin XML; a located
-bank with no read cues) rather than this structural one.
+bank with no read cues) rather than this structural one. **`loading` is still `None`, and
+for a better reason as of 2026-11-06** ([2048-loading.md](2048-loading.md)): the class is HD's, its screen is in the
+executable and not a plugin XML, and the kind a race load starts (an event card and a percentage box) is read and not built.
 
 ### Resolved 2026-09-20: `front_end` is wired, and `menu` is the one field left `None`
 

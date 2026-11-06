@@ -43,19 +43,23 @@ it (the corner is an L, so a flipped sheet fails).
 
 - **State 5** of `LoadingScreenThread`: a backdrop, a `FE_LOADINGDOT` caption and a `%d%%` readout in a `Blue2048`
   box (`White2048` text). It is what the strings `White2048`/`Blue2048` before `FE_LOADINGDOT` belong to; it is not
-  the race load. What raises it is unread.
+  Omega's race load. On 2048 the same screen (its kind 4) **is** the race load, started by every race start
+  ([2048-loading.md](2048-loading.md)); what raises Omega's is unread (its constructor's other callers pass 7 and, at
+  `0x01252b86`, a value not read).
 - The three `LoadingScreens/LoadingScreen_{racer,motion,wipeout}_controls.gnf` (states 0, 1, 9, 10: full-screen stills
   with a fade) and `loading_screen_demo_bar.gnf`.
 - The tournament variant (`+0x598 == 1`: `ER_TOUR_STAN`, `FE_TOUR_TRACKS`, a track list).
 
 ## Against 2048 and HD
 
-- **2048: checked, applies, not wired.** 2048's `eboot.elf` carries the same string run (`FE_LOADINGDOT`,
-  `LoadingScreenThread`, `Feature type == %i`, the six marks and all ten illustrations including the `_fury` ones, the
-  brand literal `WIPEOUT`, `White2048` after the thread name), and `data.psarc` ships the ten illustrations and
-  `corner`, `dot`, `line` and `square` as `.gxt` (`Data/FE/Images/Barrel_Roll.gxt` and the rest; the two arrows were
-  not listed). `oag_2048::TITLE.loading` stays `None`; wiring it is a `Loading`
-  table of `.gxt` names plus a layout, open.
+- **2048: checked, differs, not wired** ([2048-loading.md](2048-loading.md)). 2048's `eboot.elf` carries the same
+  class and string run, and `data.psarc` ships all ten illustrations and **all six marks** (both arrows too: this page's
+  first census missed them) as `.gxt`; HD's brand literal is `WIPEOUT(R) HD` (not `WIPEOUT`, and not Omega's string id).
+  But 2048's kinds are numbered differently (8 and 9 are the epilepsy and ESRB stills, 4 is the race load, 7 is HD's
+  feature screen and **no call site starts it**), so a Vita player's race load is 2048's kind 4, this page's unbuilt state 5,
+  and `oag_2048::TITLE.loading` stays `None` until that is built.
+- **Omega's state 8 is the race load, confirmed:** its constructor is called with 8 by `ModeManager_ConstructByMode`
+  and `FUN_01277470` (the same census that found 2048's).
 - **HD: ported the other way.** The generic loader changes (colour template, bottom-up rows, an undecodable picture
   drops its feature) leave HD's tests unchanged; `oag_title::loading::Labels::brand` was dead data and is gone (the
   brand lives in the layout file on both titles).

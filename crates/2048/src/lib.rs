@@ -20,9 +20,11 @@
 //!   gap: 2048 authors no `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary
 //!   anywhere, a touch-icon grid over a persistent scene instead
 //!   ([`oag_title::FrontEnd::touch`]).
-//! - [`Title::loading`] is `None` on the same terms `front_end` used to be: a
-//!   real gap rather than a structural one - a real loading screen with no
-//!   located plugin XML. [`Title::music`] is `Some` since 2026-09-25:
+//! - [`Title::loading`] is `None`: a real gap rather than a structural one. The
+//!   executable's race load is `LoadingScreen` kind 4 (the mode's event card or a
+//!   controls still, and a `Blue2048` percentage box), read and not built; the HD
+//!   feature screen (kind 7) it also carries is started by no call site. See
+//!   `docs/formats/2048-loading.md`. [`Title::music`] is `Some` since 2026-09-25:
 //!   `data/audio/sound/frontend.bnk`, the bank this thread's own evidence
 //!   first pointed at, turned out to carry no name table at all (so it
 //!   cannot be what a cue name addresses); the front end's music is instead
