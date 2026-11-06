@@ -113,9 +113,13 @@ Numbers in `docs/rendering/frame-thread-cpu.md`, "What is left of the frame thre
   (`docs/rendering/frame-thread-cpu.md`, "What the reaper costs one view, and what it is not"). One view
   now leaves it to the next submit, a trade: HD gains, Pulse and Pure lose a little `total` and p99. If
   the cause turns up, the reaper can come back at one view. Measure: `OAG_REAP_THREAD=0/1`, HD 800p.
-- **HD's split post chains**: a `finish` and a submit per view, 0.9 ms, on the frame thread. They need
-  each view's writes ahead of its own submit, so they wait for the write log or
-  `record-uploads-in-the-encoder-so-a-split-is-one-submit.md`.
+- **A split's one submission, what is left** (`docs/rendering/split-screen.md`, "What is left"): the
+  frame's submit now drops most of the encoders, 10 % of the frame thread at two views against 2.1 %
+  before, because the reaper catches fewer; polling every 250 us read Pulse -0.10, Pure -0.11, HD
+  -0.06 at `present` +0.04, not kept. `Log::encode` is 3.3 to 3.6 %: a mapped write with no second
+  copy, or the log handed to a finishing thread. A view's scene pass is one `finish` that nothing
+  splits, which is what HD's frame thread still waits for. Measure: two views, 800p, Deck,
+  `OAG_SPLIT_SUBMIT=views` as the base arm.
 - **Pulse's `write_shine`**: still 10.0 % of the frame thread in a split. Left: the first view's craft
   maps (3.4 %), which upload a whole `GpuVertex` to change eight bytes; a streamed coordinate buffer as
   the circuit's pass has would cut the copy. Measure: frame pointer build, Pulse two views, 800p.

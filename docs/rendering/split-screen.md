@@ -117,10 +117,11 @@ puts the player's back. Chosen, not measured:
 `Scene::render_viewports` calls the ordinary `Scene::render` once per view. Six
 things make that more than a loop:
 
-1. **One encoder and one submit per view.** `Scene::render` writes every
-   drawable's uniforms with `queue.write_buffer`, which lands before the
-   *submission's* commands. Two views in one encoder would both draw with the last
-   view's matrices.
+1. **One encoder per view, and each view's writes ahead of its commands.**
+   `Scene::render` writes every drawable's uniforms with `queue.write_buffer`, which lands
+   before the *submission's* commands. Two views in one encoder would both draw with the last
+   view's matrices. `interleaved` submits per view; a batched recording keeps a later view's
+   writes in a log and copies them just ahead of its commands ("One submission", below).
 2. **Only the first view clears.** The scene pass clears the whole attachment
    whatever the viewport is. Later views load the colour, the velocity and the
    depth (2026-10-15, rule 3; the depth was cleared each time before, which is
@@ -158,14 +159,14 @@ things make that more than a loop:
      is the load, which "Per-view blur" measures. The velocity buffer is still always
      written, setting or no setting (`hd-gpu`'s experiment to gate it is on its own branch
      and is not on `main`).
-   - *The blur runs per view, after the last, and one submission each.* A view's blur
+   - *The blur runs per view, after the last, its writes ahead of its commands.* A view's blur
      cannot run as the view is drawn for rule 4's reason (the next view's multisample
      resolve rewrites the whole resolved target). So `Scene::blur_split_views` runs the
      ordinary chain once per view over that view's rectangle: its taps clamp to the
      rectangle (the shader's own `rect_offset`/`rect_size` clamp, written for the aspect
      bars of a capture), and every intermediate target is cleared whole and drawn only
      inside the rectangle, so no view's velocity reaches another's pixels across the 2
-     pixel gap. **One encoder and one submit per view's chain**, for rule 1's reason:
+     pixel gap. **One encoder per view's chain, its writes ahead of it**, for rule 1's reason:
      `MotionBlur::render` writes one uniform buffer with `queue.write_buffer`, which lands
      before the submission's commands, so two chains in one encoder would both run with the
      last view's rectangle, tile and shake (lanes of a uniform buffer and bind groups per
@@ -228,7 +229,7 @@ things make that more than a loop:
    view's pixels (a two-player HD race drew a black top view, `hd-split-black-view`), so the
    views only fill the linear target and `Scene::run_split_post`
    (`crates/raceplay/src/scene/split_exposure.rs`) then runs the chain **once per view over
-   that view's rectangle of the finished scene**, one encoder and one submit each, for rule
+   that view's rectangle of the finished scene**, one encoder each and its writes ahead of it, for rule
    3's reason (the chain's constants are written with the queue). The chain's own pieces,
    in `oag_post::hd_bloom::Chain::run_view` and `oag_post::omega_tonemap::Chain::run_view`:
    - *Each view's own ladder and exposure.* The luminance reduction ladder is cut over the
@@ -2159,3 +2160,139 @@ Pure two views at 1080p reads +0.14 and +0.21 at a paced rate; HD two views at 4
 any worse p99. The maintainer flipped it anyway: 14.2 ms stays inside
 the frame budget at 90 fps, and the gain is up to 1.9 ms of frame thread and 25 fps elsewhere.
 
+## One submission (2026-11-06, `uploads-encoder`)
+
+Claim: a split's uploads recorded per view let a split submit once, so the Deck's frame thread falls
+at two views at no picture change and one view loses nothing. **True, with one correction**: the
+copies live in a command buffer of their own ahead of each view, not in the view's encoder, and the
+gain is not the submission. Folding alone saved nothing. It is what lets a view's `finish` stop
+holding up everything after it.
+
+| `total` ms, base to tip | 1v 800p | 1v 1080p | 1v 4K | 2v 800p | 2v 1080p | 2v 4K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pure | 3.31 to 3.29 | 4.28 to 4.28 | 5.12 to 5.14 | 5.25 to 4.76 | 7.49 to 5.68 | 9.21 to 7.34 |
+| Pulse | 3.93 to 3.93 | 5.38 to 5.37 | 6.44 to 6.45 | 6.36 to 5.92 | 8.79 to 7.93 | 11.68 to 9.79 |
+| HD | 6.28 to 6.27 | 7.81 to 7.63 | 10.43 to 10.39 | 10.48 to 9.38 | 12.79 to 9.89 | 20.56 to 14.29 |
+
+| fps | 1v 800p | 1v 1080p | 1v 4K | 2v 800p | 2v 1080p | 2v 4K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pure | 270.4 to 271.7 | 141.2 to 142.1 | 32.7 to 32.7 | 183.2 to 195.9 | 118.4 to 118.1 | 31.1 to 31.1 |
+| Pulse | 237.1 to 236.9 | 132.2 to 132.7 | 31.3 to 31.3 | 153.3 to 162.9 | 106.8 to 108.0 | 29.1 to 29.2 |
+| HD | 146.9 to 147.0 | 100.4 to 100.7 | 34.3 to 34.2 | 92.8 to 98.4 | 73.9 to 74.5 | 29.1 to 29.5 |
+
+| p99 ms | 1v 800p | 1v 1080p | 1v 4K | 2v 800p | 2v 1080p | 2v 4K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pure | 5.04 to 5.10 | 7.83 to 7.76 | 33.10 to 33.18 | 6.65 to 6.56 | 9.81 to 9.38 | 34.94 to 34.97 |
+| Pulse | 5.74 to 5.68 | 8.95 to 8.89 | 38.79 to 39.09 | 7.77 to 7.46 | 12.06 to 10.89 | 37.97 to 37.77 |
+| HD | 9.14 to 9.06 | 11.75 to 11.45 | 31.92 to 31.94 | 14.26 to 14.55 | 20.32 to 18.11 | 49.10 to 48.77 |
+
+**Method.** Steam Deck, RADV, `dist` `znver2` `perf-probe` container builds, base `1b46f590c`, tip
+`8124187a5` (the lane's one code commit after it adds a lint `allow`). `--render-scale 100`, headless
+gamescope, the race arguments of `frame-thread-cpu.md`, 3 rounds, arm order rotated each round and
+reversed every other round, each run under the Deck's lock, mean of `frame-phases` after six lines.
+Governor off in the profile, AC every round, load 0.8 to 2.5.
+
+**Noise.** The tip under a second name, 800p, 3 rounds: `total` differs by at most 0.03 ms, fps by
+0.9, p99 by 0.11. The one-view columns are that noise, but for HD 1080p's -0.18 (rounds -0.25, -0.25,
+-0.07). With `OAG_REAP_THREAD=1` on both arms, the state if the one-view reaper rule is reverted, the
+result is the same: two views 800p Pure 5.26 to 4.75, Pulse 6.34 to 5.91, HD 10.41 to 9.39, one view
+within 0.03.
+
+**How to read it.** `scene` falls by half and `submit` rises, because the wait for the views moved
+into the frame's submit: compare `total`. At 1080p and 4K a split is GPU-bound, fps holds and the
+time saved is spent in `present`, waiting for the GPU. At 800p the CPU binds and fps rises 6 to 7 %.
+HD's two-view p99 at 800p is the one cell that pays, +0.29 ms, against 0.11 of noise.
+
+**Pictures.** Byte-identical by `cmp` on the Deck's RADV, final binary, Pure, Pulse and HD at ticks
+900, 1,500 and 2,400: 18 of 18 against base at one and two views, 9 of 9 two views against
+`interleaved`; on the notebook's NVIDIA the same against `interleaved` at ticks 900 and 1,500 and
+in a `--window-seats 1,2` race. `split_recording_ground_truth` now opens the frame a session opens
+(`OAG_SPLIT_FINISH=1`), and a capture does too, or a hybrid machine never takes this path.
+**Single frames do not reach a stale buffer.** For that: `raceplay::tests::split_frames` draws twelve
+frames with the race moving and the count of views going 2, 1, 2, 4, through each post chain, glow
+and blur, for every batched recording against interleaved under an open frame, and fails when a
+post stage's writes go to the queue. `oag_gpu::writes` tests order inside one submission, a frame
+with no writes, growth mid-frame and textures against a queue write.
+
+### What was built
+
+- **`oag_gpu::writes::Log::encode`.** A log's bytes go up as one `queue.write_buffer` into an
+  `UploadBuffer`, one buffer kept by the scene and grown on demand, and its writes become
+  `copy_buffer_to_buffer` in a command buffer the caller places ahead of the commands that read
+  them. Texture writes are repacked to a copy's row spacing. Reusing the buffer is ordered: the next
+  frame's write lands after this frame's copies.
+- **Why not the view's own encoder.** `prepare_view` records shadow maps and advert cards into it
+  while the writes are still being made, and each of those passes reads the view's last write, as
+  it did from the queue. A copy at the write's place would come after a pass that reads it.
+- **Every per-view write goes through a sink.** `finish_view`, the post chains, the glow and the blur
+  take `&dyn Writes`; the flare, the boost zoom and each chain's constants would otherwise all land
+  ahead of the first view.
+- **`Folded`.** A later view's copies, its commands, a post stage's copies and its commands, in
+  order. A later view is a few writes: 22 to 32 of them, 0.65 to 1.34 MB, none to a texture at tick
+  900, no destination written twice (Pure, Pulse, HD Anulpha).
+- **`split_finish::defer`.** The list waits for the frame's own submission, with the HUD's encoder
+  behind it. The contract: a queue write made after `render_viewports` lands ahead of the split's
+  commands, so nothing the caller writes may be what the views read. A one-view frame already lives
+  by this. A window's split does not wait: its window submits on its own (`with_frame`).
+- **The view's encoder goes to a finishing thread once recorded**, and the first view's other passes
+  before that, so they finish while the second view is prepared. Three finishing threads where
+  cores are equal, and each encoder goes to the one holding the fewest.
+- **No encoder for a view with no post pass.** It was an empty command pool to reset.
+
+`interleaved` is untouched, so a hybrid notebook, a phone and the web keep today's path and need no
+fallback. `overlapped` keeps a submission per view. `OAG_SPLIT_SUBMIT=views` is the A/B switch.
+
+### What each step gave
+
+Two views, 800p, mean `total`, 2 rounds, one session per row or two, so read a row against its
+neighbour:
+
+| Step | Pure | Pulse | HD |
+| --- | ---: | ---: | ---: |
+| per view | 5.24 | 6.36 | 10.45 |
+| fold only, submit at the split's end | 5.24 | 6.33 | 10.68 |
+| to the frame's submit, post encoders on a worker | 5.07 | 6.17 | 10.23 |
+| view encoders on a worker too | 4.90 | 6.00 | 10.19 |
+| three finishing threads, least held | 4.78 | 5.97 | 10.24 |
+| the first view's other passes closed early | 4.76 | 5.93 | 9.38 |
+
+### What staging costs, and the belt
+
+Frame pointer profile, 14 s of race, 800p, 2 kHz, Deck, base. Share of the frame thread's samples,
+`OAG_REAP_THREAD=0` so that all of it lands there, and in ms against that run's `total`. 99.7 % of
+samples reach `oag_game::run`, so RADV having no symbols did not break the walk; its leaves count
+under their wgpu callers.
+
+| | `StagingBuffer::new` | freeing it in `maintain` | together | encoder drop in `maintain` | all of `write_buffer` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| HD 1v | 2.43 % | 1.66 % | 0.26 ms | 10.36 %, 0.66 ms | 6.2 % |
+| HD 2v | 2.13 % | 1.62 % | 0.43 ms | 10.78 %, 1.22 ms | 4.5 % |
+| Pulse 1v | 3.40 % | 2.39 % | 0.23 ms | 9.23 %, 0.37 ms | 8.3 % |
+| Pulse 2v | 2.88 % | 2.71 % | 0.38 ms | 9.73 %, 0.67 ms | 6.6 % |
+
+So staging is real, 0.2 to 0.4 ms a frame, and the encoders' command pools cost 1.6 to 2.8 times
+that. With the reaper on, the free moves with the rest of `maintain`.
+
+**Taking it away at one view loses.** A probe sent a one-view frame's writes, and a split's first
+view's, through the upload buffer: one staging buffer for all of them. It costs more than it saves:
+one view HD 6.25 to 6.50, Pulse 3.90 to 4.12, Pure 3.29 to 3.45, fps -2 to -5 %; two views Pulse and
+Pure +0.1, HD -0.06. The saving goes on the copies, an encoder to finish and reset, and copying the
+bytes twice, once into the log. A `StagingBelt` removes that last copy and adds a `map_async` per
+chunk and frame. It was not built: that copy is about 0.1 ms by estimate, not measured, and the probe's loss is 0.2. At two views a
+later view's log gained where it had to exist anyway. One view stays on `queue.write_buffer`.
+
+### Tried and dropped
+
+- **Four finishing threads**: nothing over three (Pure 4.77 and 4.78, Pulse 5.93 and 5.97).
+- **Waking the reaper before the frame's submit waits**: nothing, HD 9.49 against 9.48.
+- **Polling every 250 us**: Pulse 5.95 to 5.85, Pure 4.78 to 4.67, HD 9.48 to 9.42, `present` +0.04.
+  Small, and the reaper's interval is set by another cost (`gpu::reaper`). Open.
+- `wgpu` was neither patched nor was a PR tried: our own levers were not exhausted.
+
+### What is left
+
+Tip profile, two views, 800p: `Queue::submit` is about 19 % of the frame thread on HD and 20 % on
+Pulse, and most of that is dropping encoders, 9.5 % and 10.1 %, against 2.1 % before the fold: with
+one submission a frame the reaper catches fewer of them. `Log::encode` is 3.3 to 3.6 %. HD's `submit`
+phase is 3.8 ms, about 1.8 of it wgpu's work and the rest a wait for the finishing threads: a view's
+scene pass is one `finish`, and nothing here splits it.

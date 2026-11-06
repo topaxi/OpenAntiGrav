@@ -1508,12 +1508,12 @@ snatch-lock clash was tested there and is not it.
 
 ### A second finishing thread
 
-`oag_gpu::split_finish` sends each closed encoder to the next of two threads where
-`known_equal_cores` holds, and keeps one thread elsewhere. Encoders finish independently and the
-buffers still go to the queue in recording order. `OAG_FINISH_THREADS=1` is the old behaviour, for a
-bench. A threaded split's views do not split their encoders, so on the Deck this is one view only.
-The Deck takes the same path as the measured binaries, which were built before that rule was: two
-threads, reaper on. Same binary, 800p, 3 rounds:
+`oag_gpu::split_finish` sends each closed encoder to the thread holding the fewest, of three where
+`known_equal_cores` holds and one elsewhere (it was the next of two when this was measured; a split
+needs the third, one view does not move, `split-screen.md`, "One submission"). Encoders finish
+independently and the buffers still go to the queue in recording order. `OAG_FINISH_THREADS=1` is the
+old behaviour, for a bench. The table is one view, two threads, reaper on. Same binary, 800p, 3
+rounds:
 
 | | `total` one thread | two threads | `submit` | fps | p99 |
 | --- | ---: | ---: | --- | --- | --- |
@@ -1593,8 +1593,8 @@ over a run of frames is covered by the argument above and not by a capture.
 unseen by a user-space profile (the Deck's `perf_event_paranoid` is 2, no sudo). It is unattributed:
 the command submissions, futex waits on the finish channels and the scoped thread `split_record`
 spawns per later view per frame are the candidates. HD's split post chains (a `finish` and a submit per view,
-0.9 ms) need each view's writes ahead of its own submit, so they cannot overlap without the write
-log. wgpu was not patched and no PR was tried: our own levers were not exhausted.
+0.9 ms) needed each view's writes ahead of its own submit, so they could not overlap: the write log
+now goes up as copies inside one submission (`split-screen.md`, "One submission"). wgpu was not patched and no PR was tried: our own levers were not exhausted.
 
 Commands: `run.sh` and `avg.sh` as in the batch two section, an arm being `env OAG_REAP_THREAD=0` or
 `OAG_FINISH_THREADS=1` around the same binary. Thread times: `/proc/<pid>/task/<tid>/stat` fields 14
