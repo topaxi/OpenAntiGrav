@@ -38,6 +38,12 @@ titles). A player who launches this port as a non-Steam game from Steam already 
   the first-run prompt (Pulse's `TagInput` row, the grid elsewhere), OPTIONS rows, the footer tag, the
   lobby default and the desk keyboard; the Pulse prompt's title reads on its panel and seat 1's
   multiplayer tag carries the stored name (`docs/ui/player-name.md`, "Where the name goes in a race"). Prefill from Steam is **not** built and stays open below.
+- **Further players' names (maintainer's decision, 2026-11-06).** Local split is built: seat 1 has the
+  stored name, further seats keep `Player N`, no prompt ever. Open: (a) when online split seats exist
+  (one client, several people; `oag_net` has one seat per client today), default further seats to
+  `<stored name> (2)`, `(3)` on the lobby and other players' screens, `Player N` if no name is stored,
+  in one place; (b) an optional per-seat name set by hand, which needs storage and a UI and always
+  wins over either default.
 - **Where the prefill hooks in**: `session::player_name::Session::ask_player` opens the name prompt with
   an empty initial text; a prefill passes `clean_name(persona)` as `initial` in
   `open_player_prompt`. The charset rule (`settings::player::clean_name`) already drops what a font

@@ -107,6 +107,18 @@ called `set_person_names` on a local race. Fixed at the race start in `oag-game`
 frame; it fails with the `race_capture` call removed). `build_race_stage`'s own call is not
 pinned by a test: it is in the binary, which only a window reaches.
 
+### Names for further players (maintainer's decision, 2026-11-06)
+
+1. **Local split**: seat 1 takes the stored name, further seats keep `Player 2`, `Player 3` and so on.
+   Naming them is optional, so no prompt asks for them, ever. Built and tested
+   (`player_tags_ground_truth::the_stored_name_is_seat_ones_tag_and_seat_two_keeps_its_stop_gap`).
+2. **Online split** (several players on one client): further seats default to
+   `<stored name> (2)`, `(3)`, on what the lobby and the other players see; an empty stored name
+   leaves `Player N`. **Not built: online split seats do not exist.** A `oag_net` client holds one
+   seat (`Client::seat`) and the lobby seats one person per connection.
+3. **A name set by hand for a seat wins over either default.** **Not built: a per-seat name has no
+   storage or UI yet** (`[player]` holds one name).
+
 ## Keyboards
 
 - **Controller and pointer**: the existing `Prompt` paths, unchanged.
