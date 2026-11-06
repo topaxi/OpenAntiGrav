@@ -51,11 +51,16 @@ Use `--no-audio` on every `oag-game` run, headless or on your own Xvfb display
   appear). `World` is copied whole for replays and golden tests;
   `world::tests::the_world_snapshot_does_not_grow` ratchets it, so lower its
   `LIMIT` when you shrink it. Padding and oversized enum variants show up here.
-- **CPU profile**: `perf` is installed (`perf record -g --call-graph dwarf`,
-  `perf report --no-children`, `perf stat`). Build the profiled binary with
-  debug info in release (`CARGO_PROFILE_RELEASE_DEBUG=line-tables-only`) into a
-  separate `CARGO_TARGET_DIR` under `data/` so it does not disturb the shared
-  cache. Not installed, so tell the lead rather than assuming: `samply`,
+- **CPU profile**: `perf` is installed, user mode only (`perf_event_paranoid`
+  2), and `--call-graph dwarf` unwinds nothing here. Build with
+  `RUSTFLAGS=-Cforce-frame-pointers=yes` and debug info in release
+  (`CARGO_PROFILE_RELEASE_DEBUG=line-tables-only`) into a separate
+  `CARGO_TARGET_DIR` under `data/` so it does not disturb the shared cache,
+  then `perf record -e cpu-clock:u -F 999 --user-callchains --call-graph fp
+  <bin>` (without `--user-callchains` the event does not open),
+  `perf report --no-children`, `perf stat`. Compare two builds with
+  `taskset -c 0-5 perf stat -e cpu_core/cycles/u,cpu_core/instructions/u`.
+  Not installed, so tell the lead rather than assuming: `samply`,
   `cargo flamegraph`, `hyperfine`, `heaptrack`, `valgrind`, `cargo-llvm-lines`,
   `cargo-bloat`. Check with `which` before relying on one.
 - **Allocations**: no allocator profiler is installed. A counting
