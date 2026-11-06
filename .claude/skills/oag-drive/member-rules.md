@@ -87,6 +87,7 @@ Recipes: `docs/reverse-engineering/emulator-recipes.md`.
 
 ## Project rules that bite members
 
+- **GPU debugging: `OAG_WGPU_DEBUG=1`.** wgpu's debug labels and shader debug info are off in every build, because they cost a debug build a quarter of a race load. Set it on `oag-game` for RenderDoc or to read a validation message by label; this leaves validation as it was.
 - **No compatibility re-exports.** No crate is published: when you move an item, update every call site in the same change; no `pub use old::path` (maintainer).
 - **The maintainer may type into your pane directly.** Act on it like the brief and name it as the maintainer's instruction in your report.
 - **Never invent what the assets author** (CLAUDE.md). Parse it and play it; if it will not parse, draw or play nothing and say so in the loader report. Anything genuinely chosen is labelled **chosen, not measured**, with no confidence score; a score means measured off the original. The label is only for a value that stands in for something the original has; where it is self-evident that the thing is ours (our own hash tag bytes, file formats, settings, tooling, a module that exists only in this engine), write no "chosen, not measured" or "this is ours" comment (maintainer, 2026-11-02).

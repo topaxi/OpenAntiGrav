@@ -282,6 +282,8 @@ The captured PNG is byte-identical in all six runs. The cost left is inflate
 (17% of samples), music decode and the shader pipeline itself. The release
 build is untouched by the change.
 
+**To get the labels back:** `OAG_WGPU_DEBUG=1` keeps `InstanceFlags::DEBUG` in any build (`oag_game::adapter::DEBUG_LABELS_VAR`), for RenderDoc or a validation message read by label. It costs the load the quarter above and changes no picture.
+
 ## The player's path, and per-frame CPU
 
 One `--measure-race-load 1` on HD Fury in an Xvfb display with lavapipe
