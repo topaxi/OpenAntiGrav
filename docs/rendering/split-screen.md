@@ -2198,6 +2198,12 @@ Governor off in the profile, AC every round, load 0.8 to 2.5.
 result is the same: two views 800p Pure 5.26 to 4.75, Pulse 6.34 to 5.91, HD 10.41 to 9.39, one view
 within 0.03.
 
+**Three and four views**, 2 rounds, base to tip, `total` then fps: Pure three views 800p 8.58 to 7.45,
+113.8 to 129.3; 1080p 10.18 to 9.22, 96.2 to 102.6; four views 800p 7.85 to 7.30, 123.9 to 131.6;
+1080p 9.61 to 7.93, 96.8 to 95.3. HD three views 800p 12.73 to 11.11, 77.2 to 83.3; 1080p 15.08 to
+11.57, 64.9 to 67.9; four views 800p 15.22 to 13.59, 64.9 to 70.2; 1080p 17.11 to 14.40, 57.1 to
+59.3. Pure three views at 1080p, the p99 threaded recording paid for ("Threaded recording on equal cores"), reads 12.55 to 12.11.
+
 **How to read it.** `scene` falls by half and `submit` rises, because the wait for the views moved
 into the frame's submit: compare `total`. At 1080p and 4K a split is GPU-bound, fps holds and the
 time saved is spent in `present`, waiting for the GPU. At 800p the CPU binds and fps rises 6 to 7 %.
