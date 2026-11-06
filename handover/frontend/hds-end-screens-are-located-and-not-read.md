@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-06
-summary: "Which archive copy HD loads is unresolved; Results lists every craft by team now, open: whether times refresh, the badge, Omega still on the built-in scoreboard; Podium is multiplayer-only"
+summary: "Served EndRace copy unresolved; Results names every craft, open: times refresh, badge, Omega on the built-in scoreboard; Podium multiplayer-only"
 ---
 
 # HD's end screens: read and drawn (Results/Menu/Rewards/Podium); Podium multiplayer-only
