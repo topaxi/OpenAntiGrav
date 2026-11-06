@@ -239,6 +239,11 @@ miniz_oxide = { version = "0.9", default-features = false, features = [
   "with-alloc",
 ] }
 
+# Inflate with the `zlib-rs` backend, for the PS4 package's PFSC sectors (the
+# hot path of every Omega load). Pure Rust, already in the build through `chd`
+# and `zip`; `default-features = false` keeps `miniz_oxide` out of this edge.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+
 # LZMA, for the Unity asset bundle container (`oag-unity`): the one compression
 # a track bundle uses that is not a handful of lines to hand-write. The same
 # decoder `chd` already pulls in, pinned so offline resolution cannot drift.

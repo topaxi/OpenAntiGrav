@@ -13,6 +13,7 @@ autotests = false
 aes.workspace = true
 chd.workspace = true
 dirs = "7"
+flate2.workspace = true
 num-bigint.workspace = true
 miniz_oxide.workspace = true
 thiserror.workspace = true
