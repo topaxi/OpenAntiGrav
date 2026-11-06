@@ -26,6 +26,7 @@ impl Scene {
     /// Runs HD's chain, Omega's tone map or 2048's composite over each of `rects` (view `i`
     /// follows `slots[i]`) of the scene target, resolving into the same rectangle of `view`.
     /// Returns whether a chain ran: Pulse and Pure draw straight into the caller's view.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn run_split_post(
         &self,
         device: &wgpu::Device,
