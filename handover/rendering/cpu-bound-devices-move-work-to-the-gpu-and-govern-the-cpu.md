@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-05
+updated: 2026-11-06
 summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles and trails; governor is on by default, undoes a useless step, skips per track"
 categories: [rendering, tooling]
 size: XL (35)
@@ -108,13 +108,19 @@ Numbers in `docs/rendering/frame-thread-cpu.md`, "What is left of the frame thre
   to a user-space profile (`perf_event_paranoid` 2, no sudo). Unattributed: command submissions, futex
   waits on the finish channels, the scoped thread per later view per frame. Read it with a kernel
   profile. Measure: `/proc/<pid>/task/<tid>/stat` fields 14 and 15 over 8 s of race.
-- **What the reaper costs at one view**: on HD `scene` +0.20 ms against `submit` -0.16, and
-  `present_ms` 0.65 to 0.79, which takes 1 % of fps. Next: start the first poll after the present, not
-  1 ms after the submit, A/B with `OAG_REAP_THREAD=0`.
+- **Why reclaiming on another core costs one view `scene` +0.25 and the acquire +0.15**: not the snatch
+  lock, the schedule, the sibling thread, glibc's arenas or the power budget
+  (`docs/rendering/frame-thread-cpu.md`, "What the reaper costs one view, and what it is not"). One view
+  now leaves it to the next submit, a trade: HD gains, Pulse and Pure lose a little `total` and p99. If
+  the cause turns up, the reaper can come back at one view. Measure: `OAG_REAP_THREAD=0/1`, HD 800p.
 - **HD's split post chains**: a `finish` and a submit per view, 0.9 ms, on the frame thread. They need
   each view's writes ahead of its own submit, so they wait for the write log or
   `record-uploads-in-the-encoder-so-a-split-is-one-submit.md`.
-- **Pulse's `write_absorb_overlays`**: 10.3 % of the frame thread in a split (`write_shine`).
+- **Pulse's `write_shine`**: still 10.0 % of the frame thread in a split. Left: the first view's craft
+  maps (3.4 %), which upload a whole `GpuVertex` to change eight bytes; a streamed coordinate buffer as
+  the circuit's pass has would cut the copy. Measure: frame pointer build, Pulse two views, 800p.
+- **Why the Deck ran 4 % faster for one session** on the same binary, 2026-11-05 22:26 to 23:10. Until
+  known, compare only inside a session.
 
 ## Also open from the Deck lane (cheap, any time)
 
