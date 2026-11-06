@@ -1,7 +1,8 @@
 //! A split screen drawn while the frame loop has a split frame open (`oag_gpu::split_finish`,
 //! on by default on a machine with uniform cores) is the picture it is without one: each
 //! view's scene pass is split off the view's encoder, and what follows it in the view's
-//! submission (the blur over the finished picture) must still run behind it.
+//! submission (the blur over the finished picture) must still run behind it, and reaches the
+//! GPU when the frame is submitted.
 
 use super::scene_build::test_gpu;
 use super::split_blur::{AREA, drawn, hull_scene, pixels, rows, target};
@@ -62,7 +63,8 @@ fn a_split_drawn_in_an_open_frame_is_the_picture_it_is_without_one() {
         draw(gpu, &scene, &race, &plain, MotionBlur::High);
         let frame = oag_gpu::split_finish::Frame::open();
         draw(gpu, &scene, &race, &framed, MotionBlur::High);
-        drop(frame);
+        // A split's commands wait for the frame's own submit, as the session's frame has it.
+        frame.submit(&queue, device.create_command_encoder(&Default::default()));
     }
     let rects = race.view_rects(AREA);
     let [off, plain, framed] =
