@@ -178,7 +178,23 @@ impl PadVolume {
     /// [`Self::disabled`] are both exactly zero.
     #[must_use]
     pub fn contains(&self, world: [f32; 3]) -> bool {
-        self.distance(world) == 0.0 && self.disabled == 0.0
+        // [`Self::distance`]'s length is zero exactly when each axis's square is, and a
+        // sum of squares cannot cancel, so the first axis outside decides.
+        let m = &self.to_world;
+        let d = [world[0] - m[12], world[1] - m[13], world[2] - m[14]];
+        self.disabled == 0.0
+            && (0..3).all(|axis| {
+                let row = axis * 4;
+                let local = dot(d, [m[row], m[row + 1], m[row + 2]]);
+                let outside = if local < self.min[axis] {
+                    self.min[axis] - local
+                } else if local > self.max[axis] {
+                    self.max[axis] - local
+                } else {
+                    0.0
+                };
+                outside * outside == 0.0
+            })
     }
 }
 
@@ -264,6 +280,21 @@ mod tests {
         pad.disabled = 1.0;
         assert!(!pad.contains([0.0, 0.0, 0.0]));
         assert_eq!(pad.distance([0.0, 0.0, 0.0]), 0.0, "geometry is unchanged");
+    }
+
+    /// The early exit reads what the length reads, on and around every face.
+    #[test]
+    fn contains_agrees_with_the_distance_at_every_face() {
+        let pad = PadVolume::parse(&payload(), vex::IDENTITY, ByteOrder::Little).expect("parse");
+        for axis in 0..3 {
+            let edge = pad.max[axis];
+            for offset in [0.0, 1e-6, 1.0, -1.0, -edge * 2.0] {
+                let mut at = [0.0; 3];
+                at[axis] = edge + offset;
+                assert_eq!(pad.contains(at), pad.distance(at) == 0.0, "{at:?}");
+            }
+        }
+        assert!(!pad.contains([f32::INFINITY, 0.0, 0.0]));
     }
 
     /// A pad rotated a quarter turn about `+y` and moved 100 units along `+x`.
