@@ -345,3 +345,46 @@ fn a_short_gap_has_no_run_up() {
     assert!(!line.is_takeoff(60));
     assert!(line.curvature(34, 4.0) > 0.01);
 }
+
+/// The table answers what the walk answers, to the bit, on a line with a seam
+/// longer than the span, coincident samples and an unsupported run, from every
+/// index and past the wrap.
+#[test]
+fn a_tabulated_line_reads_the_same_bits_as_the_walk() {
+    let mut points: Vec<Vec3> = (0..200)
+        .map(|i| {
+            let angle = i as f32 * 0.0314;
+            Vec3::new(
+                angle.cos() * 90.0,
+                (angle * 3.0).sin() * 4.0,
+                angle.sin() * 60.0,
+            )
+        })
+        .collect();
+    points[40] = points[39];
+    points[120] += Vec3::new(30.0, 0.0, 0.0);
+    let unsupported: Vec<bool> = (0..200).map(|i| (120..170).contains(&i)).collect();
+    let walked = Line::new(points).with_unsupported(unsupported);
+    let tabulated = walked.clone().with_strides(Some(11.0));
+    for index in 0..420 {
+        for distance in [0.0, 5.0, 11.0, 120.0, 225.0, 5000.0] {
+            let a = walked.max_curvature_stepped(index, distance, 11.0, 11.0);
+            let b = tabulated.max_curvature_stepped(index, distance, 11.0, 11.0);
+            assert_eq!(
+                a.to_bits(),
+                b.to_bits(),
+                "index {index} distance {distance}"
+            );
+        }
+        for reach in [RUN_UP_REACH, 60.0] {
+            assert_eq!(
+                walked.takeoff_within(index, reach),
+                tabulated.takeoff_within(index, reach),
+                "index {index} reach {reach}"
+            );
+        }
+        let a = walked.max_curvature_stepped(index, 100.0, 9.0, 11.0);
+        let b = tabulated.max_curvature_stepped(index, 100.0, 9.0, 11.0);
+        assert_eq!(a.to_bits(), b.to_bits(), "another chord walks");
+    }
+}

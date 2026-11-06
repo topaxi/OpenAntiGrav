@@ -7,6 +7,7 @@
 //! `race/tests/spline.rs`.
 
 use super::*;
+use crate::spline_table::Positions;
 
 /// The authored racing line and the corridor around it, one entry per spline
 /// sample.
@@ -108,7 +109,9 @@ pub(super) fn racing_line(
     } else {
         unsupported
     };
-    oag_ai::Line::with_corridor(points, corridor).with_unsupported(unsupported)
+    oag_ai::Line::with_corridor(points, corridor)
+        .with_unsupported(unsupported)
+        .with_strides(oag_ai::Tuning::default().curvature_span)
 }
 
 /// Which spline samples the AI line is made of, in the order a lap drives them.
@@ -161,6 +164,8 @@ pub(super) fn ai_order(spline: &Spline, course: Option<&Course>) -> Vec<u32> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Spline {
     samples: Vec<Sample>,
+    /// Each sample's position, parallel to [`Self::samples`], for [`Self::nearest`].
+    positions: Positions,
     /// Which path each sample came from, parallel to [`Self::samples`].
     paths: Vec<u16>,
     /// The AI bytes of the control point each sample was evaluated from,
@@ -214,6 +219,7 @@ impl Spline {
             }
         }
         Self {
+            positions: Positions::new(samples.iter().map(|s| Vec3::from_array(s.pos)).collect()),
             samples,
             paths,
             point_ai,
@@ -282,15 +288,8 @@ impl Spline {
     /// The nearest sample to `position`: its index, itself, and its distance.
     #[must_use]
     pub fn nearest(&self, position: Vec3) -> Option<(usize, &Sample, f32)> {
-        let mut best: Option<(usize, f32)> = None;
-        for (index, sample) in self.samples.iter().enumerate() {
-            let distance = (Vec3::from_array(sample.pos) - position).length();
-            // Strictly nearer, so a tie keeps the earlier sample.
-            if best.is_none_or(|(_, previous)| distance < previous) {
-                best = Some((index, distance));
-            }
-        }
-        best.map(|(index, distance)| (index, &self.samples[index], distance))
+        let (index, distance) = self.positions.nearest(position)?;
+        Some((index, &self.samples[index], distance))
     }
 
     /// The nearest sample to `position` with its distance and path, skipping the

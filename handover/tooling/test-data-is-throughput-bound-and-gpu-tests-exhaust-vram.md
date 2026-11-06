@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-06
-summary: "test-data: om 8,349 s summed, notebook 12,321 s; speed-plan learning left; .gnf dedup not worth it; NVIDIA segfault in one 2048 test"
+summary: "test-data: om 8,349 s summed before speed-plan, notebook 10,753 s after; single-ray broadphase left; NVIDIA segfault in one 2048 test"
 size: M (50)
 difficulty: medium (50)
 ---
@@ -35,16 +35,16 @@ table and method: `docs/architecture/workspace-layout.md`, "Test groups".
   run pass. It still hides this segfault, so drop `VK_ICD_FILENAMES` when that test is fixed or
   accepted as flaky.
 - **Lane B landed 2026-11-06** (numbers and per-family table in `docs/architecture/workspace-layout.md`, "Test-data suite measurements"): summed time 14,018 s to 12,321 s, wall 896 s to 787 s. The 9,000 s target is not met. What is left, with where to measure it:
-  - Speed-plan learning is about two thirds of a fork circuit's AI gate row (`ai_clean_lap_gate::track_07_*`: 1.2 to 1.7 s per `Race::start`, five starts per row). The perturbation reaches the plans, so they cannot be shared across the five runs; making `with_plan_course_on` cheaper is a bit-identical `oag-physics`/`oag-ai` change (collision `Aabb::overlaps`, the BVH walk, `nearest_reset`, `Line::walk` are the top frames). Measure: an in-process `SIGPROF` sampler (below) on `ai_clean_lap_gate::track_07_flash`, then `just check-determinism` and the committed hashes.
+  - **Speed-plan learning landed 2026-11-06** (`docs/architecture/workspace-layout.md`, "What the `speed-plan` pass measured"): suite 12,611 s to 10,753 s, `ai_clean_lap_gate` 447 to 239, `speed_plan` 280 to 142, bit-identical on 240 runs. Left on a gate row, measured with the recipe below on `ai_clean_lap_gate::track_07_flash`: `Indices::overlapping` under the single rays (`hover`, `maglock`, `clip`, `sweep`) 14 %, `PadVolume::contains` 5 %, `hull_probes` 5 %, `CageTrack::locate` 3 %.
   - ~~PFSC inflate and XTS~~ landed (lane suite-decoders, Ryzen 9 7900): `oag-disc` reads a 685 MB Omega archive out of the patch package at 365 to 552 MB/s (output hash identical), and `autopilot_original_ground_truth::omega_flies_the_original_autopilot` fell from 9.25 s to 6.86 s (three runs each, load 5). Almost no other test opens the `.pkg`; most read `data/extracted`. Open: `vpk` (2048) still inflates with `miniz_oxide`.
   - `.gnf` duplicate memoisation, measured and not built (lane suite-decoders): by texel count 14 % (data00), 18 % (data01), 27 % (data02), 10 % (data03), 18 % (data04), 2 % (data08) of an archive's `.gnf` are byte-duplicates, but only 6.5, 8, 17, 2, 7 and 1 % are duplicates within one `i % 3` slice. Slicing by content hash would reach the whole-archive figure (about 17 % weighted) at the cost of every slice reading and hashing every blob. A slice is 60 % BC7 (`bc7`, `read_indices`), so the cut is about 40 to 60 s of the 504 s, under 1 % of the suite. Reopen only if the BC7 block decode itself cannot get faster.
-  - `omega_wem` (370 s) is `atrac9dec` at 15 ns per sample; `extract_ground_truth` (350 s) is the Omega load plus the flight; `speed_plan_ground_truth` (250 s) learns plans by design.
+  - `omega_wem` (370 s) is `atrac9dec` at 15 ns per sample; `extract_ground_truth` (350 s) is the Omega load plus the flight.
   - Other sim-driving tests still tick drawn: `absorb`, `replay`, `projectile_tilt`, `hit_effects_inherit`, `launch_boost`, `zone`, `lock_sight`, `checkpoint_circuit` (they read effects or cues, so each needs a look).
-  - **No profiler is installed** (`perf`, `samply`, `valgrind` absent; `perf_event_paranoid` 2 and `ptrace_scope` 1 rule out `samply` and an external `gdb -p`). What worked: an `ITIMER_PROF` handler calling `libc::backtrace`, dumped at exit and resolved with `addr2line`. It needs `unsafe` (the workspace forbids it), so it lived as an uncommitted test module with a local `allow(unsafe_code)`; the maintainer said the lead may argue for it. A `scripts/` tool or an `unsafe`-allowed dev-only crate would keep it.
+  - **Profiling recipe.** `perf` is installed; user mode only (`perf_event_paranoid` 2). `--call-graph dwarf` unwinds nothing here; build with frame pointers into a separate target and pass `--user-callchains` or the event does not open: `RUSTFLAGS=-Cforce-frame-pointers=yes CARGO_TARGET_DIR=<scratch> CARGO_BUILD_BUILD_DIR=<scratch> RUSTC_WRAPPER= cargo test -p oag-raceplay --test it_a_g --no-run`, then from `crates/raceplay` with `LD_LIBRARY_PATH=$(rustc --print sysroot)/lib`: `perf record -e cpu-clock:u -F 999 --user-callchains --call-graph fp <bin> --ignored --exact <test>`. To compare two builds, `taskset -c 0-5 perf stat -e cpu_core/cycles/u,cpu_core/instructions/u` repeats to 0.5 % where task-clock wanders 10 %; a test-only `cargo test -p` binary and a `--workspace` one differ, so compare like with like.
 
 ## Next Steps
 
-**Lane B, the rest** is the list above; take speed-plan learning first (largest, and it helps every race load). Run on an idle machine, since the ceiling is judged there.
+**Lane B, the rest** is the list above; 10,753 s is the suite after speed-plan learning, 1,750 s short of 9,000. Run on an idle machine, since the ceiling is judged there.
 
 **The NVIDIA segfault**: run the test under `gdb` with the core from `coredumpctl debug`; look at what
 `race-load` runs at that moment (the load runs wgpu calls off the main thread?) and whether the

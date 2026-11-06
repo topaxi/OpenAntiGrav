@@ -241,7 +241,9 @@ fn narrow_the_mouth(
         })
         .collect();
     let unsupported: Vec<bool> = (0..line.len()).map(|i| line.is_unsupported(i)).collect();
-    oag_ai::Line::with_corridor(points, corridor).with_unsupported(unsupported)
+    oag_ai::Line::with_corridor(points, corridor)
+        .with_unsupported(unsupported)
+        .with_strides(oag_ai::Tuning::default().curvature_span)
 }
 
 /// The line a driver on `route` follows: the ring for `0`, else that route's.

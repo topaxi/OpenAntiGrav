@@ -286,6 +286,7 @@ mod slot_hud;
 mod spawn;
 mod speed_plan;
 mod spline;
+mod spline_table;
 #[cfg(feature = "view")]
 mod split_gap;
 mod stages;
