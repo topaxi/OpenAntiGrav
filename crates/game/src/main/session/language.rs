@@ -154,7 +154,7 @@ impl Session {
             // `Session::open_menus`' own build of these from `shell`, since a
             // `MenuStage` keeps its own copies rather than reading `self.shell`
             // fresh every frame.
-            stage.nav_legend = super::player_name::tagged(shell.nav_legend.clone(), &self.settings.player.tag);
+            stage.nav_legend = super::player_name::tagged(shell.nav_legend.clone(), &self.settings.player, shell.title);
             stage.ticker = shell.ticker.clone();
             stage.frame = shell.frame.clone();
             stage.default_atlas = shell.font.clone();

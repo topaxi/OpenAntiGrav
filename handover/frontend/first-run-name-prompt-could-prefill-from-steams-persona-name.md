@@ -51,6 +51,8 @@ titles). A player who launches this port as a non-Steam game from Steam already 
 - **Not seen.** The file's exact format on the maintainer's install has not been read yet.
 - **Steam Deck virtual keyboard: not wired.** Whether `steam://open/keyboard` opens it from a non-Steam
   shortcut is unrun; steps are in `docs/ui/player-name.md`, "Keyboards". The controller path works there.
+- **Disc read on the render thread**: `pulse_tag_entry` (inherited from the pilot rename); see
+  `docs/ui/player-name.md`, "Open".
 - **Phone soft keyboard: written, not driven.** `soft_keyboard::sync_soft_keyboard` (winit
   `set_ime_allowed`); the Android target could not be built where it was written (no NDK clang).
 - **Desk typing into a name is as typed** (capitals kept); on the grid it folds to the grid's case.

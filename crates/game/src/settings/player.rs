@@ -104,6 +104,17 @@ impl Player {
         (!self.name.is_empty()).then_some(self.name.as_str())
     }
 
+    /// The tag a title draws in its footer: the stored one where the title uses a tag, else
+    /// nothing.
+    #[must_use]
+    pub fn footer_tag(&self, profile: &oag_title::profile::Profile) -> &str {
+        if profile.asks_for_tag() {
+            &self.tag
+        } else {
+            ""
+        }
+    }
+
     /// The tag, or `None` while none is stored.
     #[must_use]
     pub fn tag(&self) -> Option<&str> {
@@ -251,6 +262,29 @@ mod tests {
         assert!(player.set_name("kim"));
         assert!(player.set_tag("kim"));
         assert_eq!(player, stored("kim", "KIM"));
+    }
+
+    #[test]
+    fn a_title_with_no_tag_draws_none_in_its_footer() {
+        let player = stored("Zoe", "ZOE");
+        assert_eq!(player.footer_tag(&Profile::NAME_AND_TAG), "ZOE");
+        assert_eq!(player.footer_tag(&Profile::NAME_ONLY), "");
+        assert_eq!(player.footer_tag(&Profile::NEITHER), "");
+    }
+
+    #[test]
+    fn a_hand_edited_file_is_cleaned_when_it_loads() {
+        let dir = std::env::temp_dir().join(format!("oag-player-clean-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        let file = dir.join("settings.toml");
+        std::fs::write(
+            &file,
+            "[player]\nname = \"Zo\u{eb}_!!x\"\ntag = \"a-bcd\"\n",
+        )
+        .expect("write");
+        let loaded = super::super::load_from(&file).expect("loads");
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(loaded.player, stored("Zox", "ABC"));
     }
 
     #[test]

@@ -302,7 +302,7 @@ impl Session {
                 text_atlas,
                 default_atlas: shell.font.clone(),
                 frame: shell.frame.clone(),
-                nav_legend: super::player_name::tagged(shell.nav_legend.clone(), &self.settings.player.tag),
+                nav_legend: super::player_name::tagged(shell.nav_legend.clone(), &self.settings.player, shell.title),
                 ticker: shell.ticker.clone(),
                 // Free-running from zero on every open, the same choice
                 // `CampaignStage::ticker_elapsed` already makes and for the

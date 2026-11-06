@@ -161,7 +161,11 @@ impl Session {
     }
 }
 
-/// `legend` with the stored `tag` set, for a stage about to draw it.
-pub(crate) fn tagged(legend: Option<NavigationLegend>, tag: &str) -> Option<NavigationLegend> {
-    legend.map(|legend| legend.with_tag(tag))
+/// `legend` with the stored tag set where `title` uses one, for a stage about to draw it.
+pub(crate) fn tagged(
+    legend: Option<NavigationLegend>,
+    player: &crate::settings::Player,
+    title: &oag_title::Title,
+) -> Option<NavigationLegend> {
+    legend.map(|legend| legend.with_tag(player.footer_tag(&title.profile)))
 }

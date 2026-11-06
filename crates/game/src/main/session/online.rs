@@ -39,13 +39,13 @@ use crate::stage::Stage;
 
 use super::Session;
 
-/// The name the lobby's name field opens on: what the last connection went by, else the shared
-/// player name (the lobby's keys are lower case), else the login name.
+/// The name the lobby's name field opens on: the shared player name (the lobby's keys are lower
+/// case), else what the last connection went by, else the login name.
 fn lobby_name(saved: &str, player: &crate::settings::Player) -> String {
-    if !saved.is_empty() {
-        saved.to_string()
-    } else if let Some(name) = player.name() {
+    if let Some(name) = player.name() {
         name.to_ascii_lowercase()
+    } else if !saved.is_empty() {
+        saved.to_string()
     } else {
         super::lan::player_name()
     }
@@ -1160,8 +1160,13 @@ mod tests {
     }
 
     #[test]
-    fn a_name_the_last_connection_used_wins_over_the_player_name() {
-        assert_eq!(lobby_name("bob", &player("Zoe")), "bob");
+    fn the_player_name_wins_over_the_name_the_last_connection_used() {
+        assert_eq!(lobby_name("bob", &player("Zoe")), "zoe");
+    }
+
+    #[test]
+    fn with_no_player_name_the_last_connections_name_is_kept() {
+        assert_eq!(lobby_name("bob", &player("")), "bob");
     }
 
     #[test]

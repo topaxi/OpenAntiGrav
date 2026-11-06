@@ -937,6 +937,8 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
         None => fresh(),
     };
     ensure_known_titles(&mut settings);
+    // A hand-edited name cannot hold what a title's font cannot draw.
+    settings.player = settings.player.cleaned();
 
     let canonical = render(&settings)?;
     if !keep_file && on_disk.as_deref() != Some(canonical.as_str()) {

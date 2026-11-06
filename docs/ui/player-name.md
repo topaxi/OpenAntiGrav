@@ -32,8 +32,8 @@ Letters, digits and the hyphen, at most 10 characters; a tag is letters and digi
 most 3 (`settings::player::allowed`, `clean_name`, `clean_tag`). That is the intersection of what
 every consumer can show: Pulse's `<TagInput>` alphabet has no underscore, and the online lobby's
 name keys (`a-z0-9-_`) have no space or punctuation. A test checks every allowed character against
-both. A file edited by hand is cleaned the same way on use, so a name can always be drawn on every
-title.
+both. A file edited by hand is cleaned the same way when `settings.toml` loads
+(`Player::cleaned`), so a name can always be drawn on every title.
 
 ## When it is asked
 
@@ -61,8 +61,9 @@ The footer's `<TextInfo type="tag">` (`NewsItemTagText`) now draws the stored ta
 "What still differs, ranked", item 3. The face and colour are not measured against the original:
 the colour is the file's `FEGlobals->BackgroundColor`, the face is the ticker's.
 
-The online lobby's name field opens on the name the last connection used, else the stored player
-name (lower-cased: the lobby's keys are lower case), else the login name.
+The online lobby's name field opens on the stored player name (lower-cased: the lobby's keys are
+lower case), else the name the last connection used, else the login name. The footer tag draws only
+on a title that uses a tag (`Player::footer_tag`).
 
 ## Keyboards
 
@@ -76,9 +77,22 @@ name (lower-cased: the lobby's keys are lower case), else the login name.
   device**; the Android target could not be built on the authoring machine (no NDK clang for `ring`).
   To test: install the APK, open OPTIONS > PLAYER NAME, expect the keyboard to rise, type, press
   Enter.
-- **Steam Deck**: not wired. Detection by the `SteamDeck` environment variable is plausible and the
-  virtual keyboard is opened by the client's `steam://open/keyboard` URL or Steamworks'
-  `ShowFloatingGamepadTextInput`, which needs an AppID a non-Steam shortcut does not have. None of
-  that was run (no Deck). To test: from a non-Steam shortcut, run `steam steam://open/keyboard`
-  in a terminal in Gaming Mode and see whether the keyboard rises over the game; if it does, call it
-  when a typing prompt opens and `SteamDeck=1`. Until then the controller path is what works there.
+- **Steam Deck**: not wired. `SteamDeck=1` is set by Steam for a game started on a Deck
+  (`docs/ui/button-prompts.md`, item 5, itself unverified without a client). A web search
+  (2026-11-06) found only the user's own Steam+X shortcut that raises the virtual keyboard, and
+  nothing on a program opening it: **`steam://open/keyboard` and Steamworks'
+  `ShowFloatingGamepadTextInput` are from memory, unverified**, and the latter needs an AppID a
+  non-Steam shortcut does not have. To test: in Gaming Mode, from a non-Steam shortcut, run
+  `steam steam://open/keyboard` in a terminal and see whether the keyboard rises over the game; if it
+  does, call it when a typing prompt opens and `SteamDeck=1`. Until then the controller path is what
+  works there.
+
+## Open
+
+- The Pulse prompts read the disc (`pilot_editor::Session::pulse_tag_entry`, in
+  `crates/game/src/main/session/pilot_editor.rs`: opens the archive, parses two XML entries) on the
+  render thread each time a name or tag prompt opens. Inherited from the pilot rename; a boot-time read
+  of the `Name` and `Tag` geometry beside `read_nav_legend` would remove it.
+- The footer tag draws only where a root authors a `type="tag"` `TextInfo` and the title uses a tag:
+  Pulse. Pure's root authors none (checked in a `--menu-page main` shot), so Pure keeps a tag it
+  never draws; HD and Omega draw none.

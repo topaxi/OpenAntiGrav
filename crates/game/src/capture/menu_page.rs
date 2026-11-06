@@ -522,7 +522,14 @@ pub(super) fn menu_page(
         list.extend(nav_legend_draws);
         list.extend(ticker_draws);
         let clip = ticker_clip(&list);
-        list.extend(prompt_draws(kind, &name, strings, skin, source)?);
+        list.extend(prompt_draws(
+            kind,
+            &name,
+            &settings.player,
+            strings,
+            skin,
+            source,
+        )?);
         return Ok((list, clip));
     }
     let Some(phase) = phase else {
@@ -616,6 +623,8 @@ fn records_draws(
 fn prompt_draws(
     kind: &str,
     name: &str,
+    player: &crate::settings::Player,
+
     strings: &oag_ui::language::StringTable,
     skin: &oag_ui::menu::Skin,
     source: Option<&str>,
@@ -687,7 +696,11 @@ fn prompt_draws(
                     ),
                 },
                 accepts,
-                name,
+                if kind == "player-name" {
+                    &player.name
+                } else {
+                    &player.tag
+                },
             )?;
             Ok(tag_entry.draw(skin))
         }
@@ -717,7 +730,11 @@ fn prompt_draws(
                         "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
                     ),
                 },
-                name,
+                if kind == "player-name-grid" {
+                    &player.name
+                } else {
+                    &player.tag
+                },
                 limit,
                 keys,
             )
