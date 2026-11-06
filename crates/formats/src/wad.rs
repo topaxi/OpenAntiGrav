@@ -402,13 +402,34 @@ pub fn align_up(value: u64) -> u64 {
 ///
 /// `input` is not a valid zlib stream.
 pub fn decompress_zlib(input: &[u8]) -> std::result::Result<Vec<u8>, String> {
-    use std::io::Read;
+    use flate2::{Decompress, FlushDecompress, Status};
 
-    let mut out = Vec::with_capacity(input.len().saturating_mul(2));
-    flate2::bufread::ZlibDecoder::new(input)
-        .read_to_end(&mut out)
-        .map_err(|e| e.to_string())?;
-    Ok(out)
+    let mut inflater = Decompress::new(true);
+    let mut out = Vec::with_capacity(input.len().saturating_mul(2).max(64));
+    loop {
+        let consumed = usize::try_from(inflater.total_in()).unwrap_or(usize::MAX);
+        let before_out = inflater.total_out();
+        let status = inflater
+            .decompress_vec(
+                input.get(consumed..).unwrap_or(&[]),
+                &mut out,
+                FlushDecompress::Finish,
+            )
+            .map_err(|e| e.to_string())?;
+        match status {
+            Status::StreamEnd => return Ok(out),
+            Status::Ok | Status::BufError => {
+                let progressed = inflater.total_out() != before_out
+                    || usize::try_from(inflater.total_in()).unwrap_or(usize::MAX) != consumed;
+                if !progressed && out.len() < out.capacity() {
+                    return Err("the zlib stream ends before its end marker".to_string());
+                }
+                if out.len() == out.capacity() {
+                    out.reserve(out.capacity().max(64));
+                }
+            }
+        }
+    }
 }
 
 /// Hashes an entry name the way the game does.

@@ -532,6 +532,9 @@ fn a_block_is_inflated_only_when_its_whole_stream_checks_out() {
         &mut out,
         plain.len()
     ));
+    assert!(crate::wad::decompress_zlib(&good[..good.len() - 6]).is_err());
+    assert!(crate::wad::decompress_zlib(&good[..good.len() / 2]).is_err());
+    assert!(crate::wad::decompress_zlib(&good[..2]).is_err());
     assert!(!super::inflate_block_into(
         &mut inflater,
         &good,
