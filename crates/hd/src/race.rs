@@ -724,6 +724,35 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         texture: "Data/RibbonEffects/textures/smoke_trails_frame2_alpha.gtf",
         opacity_ramp: "Data/RibbonEffects/textures/smoke_trails_opacity_ramp.tga",
     }),
+    // The Missile's four `FatLine` elements: `Missile_Init_q` (`0x0011c5d0`)
+    // takes two of `RibbonEffects` pool `+0x50` (the stub) and two of pool `+0x68`
+    // (the helix), and `FatLine_PushChains` (`0x002ab9d0`) lays their nodes. The
+    // numbers are the two static config blocks at `0x00920fd0` and `0x00921010`,
+    // read from the ELF; the texture is the blocks' own `ThickLine_Red.gtf`. See
+    // `docs/ghidra/functions/ps3-hdfury-eu/missile-ribbon.md`.
+    missile_trail: Some(oag_title::weapons::MissileTrail {
+        texture: "Data/Tex/ThickLine_Red.gtf",
+        stub: oag_title::weapons::FatLineSpec {
+            width: [0.5, 0.0],
+            lifetime: 0.3,
+            u_per_unit: 0.2,
+            chains: 1,
+            capacity: 50,
+            phase_step: 0.0,
+            radius: 0.0,
+            ramp: false,
+        },
+        helix: oag_title::weapons::FatLineSpec {
+            width: [0.08, 0.3],
+            lifetime: 2.8,
+            u_per_unit: 0.2,
+            chains: 3,
+            capacity: 350,
+            phase_step: 0.06,
+            radius: 0.6,
+            ramp: true,
+        },
+    }),
     // `leachbeam_triangle.rcsmodel`'s material names the glow and the noise;
     // the live draw binds a 128x128 on unit 0 and a 256x256 on unit 1. See
     // `docs/ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md`, "hd-leach-draw".

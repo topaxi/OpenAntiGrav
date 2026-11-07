@@ -442,6 +442,7 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     magstrip_wake: None,
     magstrip_pob: false,
     rocket_trail: None,
+    missile_trail: None,
     leach_strip: None,
     leachbeam_ball: None,
     missile_head: None,

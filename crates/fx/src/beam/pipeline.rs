@@ -63,6 +63,9 @@ pub struct Style {
     /// Whether the fragment is HD's LeachBeam strip program: two textures
     /// and the engine clock - see [`Style::leach_strip`].
     pub leach: bool,
+    /// Whether the fragment is HD's `FatLine_fp`: `tex * (rgb, alpha)` unweighted,
+    /// for the draw's own `SRC_ALPHA, ONE` - see [`Style::fat_line`].
+    pub fat: bool,
 }
 
 impl Style {
@@ -78,6 +81,7 @@ impl Style {
         capacity: MAX_VERTICES,
         smoke: false,
         leach: false,
+        fat: false,
     };
 
     /// The magstrip arc wake, `capacity` vertices of triangle list.
@@ -118,6 +122,7 @@ impl Style {
             capacity,
             smoke: false,
             leach: false,
+            fat: false,
         }
     }
 
@@ -160,6 +165,7 @@ impl Style {
             capacity,
             smoke: true,
             leach: false,
+            fat: false,
         }
     }
 
@@ -192,6 +198,29 @@ impl Style {
         };
         style.smoke = false;
         style.leach = true;
+        style
+    }
+}
+
+impl Style {
+    /// Wipeout HD's `FatLine` ribbon (the Missile's stub and helix), `capacity`
+    /// vertices of triangle list.
+    ///
+    /// **Measured** (`docs/ghidra/functions/ps3-hdfury-eu/missile-ribbon.md`):
+    /// `FatLine_fp` is two instructions, `TEX R0, f[TC0]` then `MUL H0, f[COL0],
+    /// R0`, and `RibbonEffects_Render` draws the element's pools under
+    /// `blend(SRC_ALPHA, ONE)` (rocket-trail.md, "The manager"; one factor for
+    /// both channels, as `Style::magstrip`'s note reads the wrapper). Like the
+    /// LeachBeam strip's draw, so the blend is that strip's and the fragment is
+    /// `fat`. No transfer function in the program, so the texture is not decoded on
+    /// a linear target. **Chosen, not measured**: depth test on, depth write off,
+    /// cull off.
+    #[must_use]
+    pub const fn fat_line(capacity: usize) -> Self {
+        let mut style = Self::leach_strip(capacity);
+        style.label = "fat line";
+        style.leach = false;
+        style.fat = true;
         style
     }
 }
@@ -366,6 +395,7 @@ impl Pipeline {
                 ),
                 ("smoke", f64::from(u8::from(style.smoke))),
                 ("leach", f64::from(u8::from(style.leach))),
+                ("fat", f64::from(u8::from(style.fat))),
             ])
             .collect();
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

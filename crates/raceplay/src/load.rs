@@ -1217,6 +1217,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
             magstrip_pob: wm.magstrip_pob,
             #[cfg(feature = "view")]
             leach_strip: magstrip_wake.leach_anchors,
+            #[cfg(feature = "view")]
+            missile_trail: magstrip_wake
+                .textures
+                .missile_smoke
+                .as_ref()
+                .and(wm.missile_trail),
             collision,
             handling,
             opponent_handling,

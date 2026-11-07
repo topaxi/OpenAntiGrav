@@ -545,6 +545,7 @@ impl Race {
             self.advance_leach_beam_ribbon();
             self.advance_leach_strip();
             self.advance_rocket_smoke();
+            self.advance_missile_smoke();
         }
 
         // Beside them for the same reason: a Repulser's wave sweep reads every

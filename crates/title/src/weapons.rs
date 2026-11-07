@@ -268,6 +268,10 @@ pub struct WeaponModels {
     /// ramp its nodes age through (`oag_fx::rocket_smoke`). `None` where the ribbon
     /// law is unread, every title but HD.
     pub rocket_trail: Option<RocketTrail>,
+    /// The flying Missile's own ribbons: per head a short stub and a helix, both
+    /// `FatLine` elements (`oag_fx::fat_line`). `None` where the Missile's ribbons
+    /// are unread, every title but HD.
+    pub missile_trail: Option<MissileTrail>,
     /// HD's LeachBeam strip: the ribbon `LeachBeam_DrawStrip` builds from the
     /// target's anchor trail and its two textures (`oag_fx::leach_strip`). `None`
     /// where Pulse's ribbon is drawn instead.
@@ -359,6 +363,41 @@ pub struct RocketTrail {
     pub opacity_ramp: &'static str,
 }
 
+/// One `FatLine` element's config block: the numbers the engine copies out of its
+/// static table into the element (`docs/ghidra/functions/ps3-hdfury-eu/missile-ribbon.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FatLineSpec {
+    /// Half-width of a node when it is laid, and as it dies.
+    pub width: [f32; 2],
+    /// Seconds a node lives.
+    pub lifetime: f32,
+    /// Texture `u` per world unit of arc length.
+    pub u_per_unit: f32,
+    /// Chains laid per push, spaced `pi / chains` apart in phase.
+    pub chains: u32,
+    /// Nodes one chain's draw buffer holds.
+    pub capacity: u32,
+    /// Phase added after each chain of a push, radians.
+    pub phase_step: f32,
+    /// Distance of each node from the anchor, along the rotating reference axis.
+    pub radius: f32,
+    /// Whether a node's alpha reads the opacity ramp (else `1 - age`).
+    pub ramp: bool,
+}
+
+/// What a flying Missile's ribbons draw with - see [`WeaponModels::missile_trail`].
+/// Each of its two heads lays one `stub` and one `helix`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MissileTrail {
+    /// The texture both elements sample, an archive entry name folded as
+    /// [`MagstripWake`]'s are.
+    pub texture: &'static str,
+    /// The short straight element (`RibbonEffects` pool `+0x50`).
+    pub stub: FatLineSpec,
+    /// The winding element (pool `+0x68`).
+    pub helix: FatLineSpec,
+}
+
 /// What HD's LeachBeam strip draws with - see [`WeaponModels::leach_strip`].
 ///
 /// Archive entry names. `hd_leachbeam.rcsmaterial` samples the noise on unit 0 and
@@ -393,6 +432,7 @@ impl WeaponModels {
         magstrip_wake: None,
         magstrip_pob: false,
         rocket_trail: None,
+        missile_trail: None,
         leach_strip: None,
         leachbeam_ball: None,
         missile_head: None,

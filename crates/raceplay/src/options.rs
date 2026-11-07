@@ -604,6 +604,10 @@ pub struct Setup {
     /// Each slot's `arc_anchor_point` for HD's LeachBeam strip, `Some` when drawn.
     #[cfg(feature = "view")]
     pub leach_strip: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
+    /// The Missile's ribbon config where the title draws them and the texture
+    /// loaded, else `None`: see [`crate::missile_smoke`].
+    #[cfg(feature = "view")]
+    pub missile_trail: Option<oag_title::weapons::MissileTrail>,
     /// The circuit's authored cameras, where the player's camera stands once
     /// their craft is destroyed - see `race::destroy_camera`. Empty off Pulse.
     #[cfg(feature = "view")]

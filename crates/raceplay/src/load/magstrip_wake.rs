@@ -32,6 +32,12 @@ pub(super) fn load(
     report: &mut Vec<String>,
 ) -> Loaded {
     let rocket_smoke = crate::rocket_smoke::load(archives, models, report);
+    let missile_smoke = crate::missile_smoke::load(
+        archives,
+        models,
+        rocket_smoke.as_ref().map(|assets| &assets.ramp),
+        report,
+    );
     let leach_strip = crate::leach_strip::load(archives, models, report);
     let leach_anchors = leach_strip.as_ref().map(|_| {
         let mut anchors = [None; oag_gameplay::MAX_SHIPS];
@@ -43,6 +49,7 @@ pub(super) fn load(
     let only_smoke = || RibbonTextures {
         magstrip: None,
         rocket_smoke: rocket_smoke.clone(),
+        missile_smoke: missile_smoke.clone(),
         leach_strip: leach_strip.clone(),
     };
     let Some(wake) = models.magstrip_wake else {
@@ -90,6 +97,7 @@ pub(super) fn load(
         textures: RibbonTextures {
             magstrip: textures,
             rocket_smoke,
+            missile_smoke,
             leach_strip,
         },
         leach_anchors,
