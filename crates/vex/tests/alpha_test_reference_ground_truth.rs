@@ -255,7 +255,7 @@ fn psp_pulses_cutout_batches_split_two_ways_and_the_strict_reference_hides_nothi
             (9, 175),
         ]),
         "`batch + 0x29` is authored per batch, `0..=9`: the original shifts the batch's depth \
-         range by `6 * bias` (`mesh-draw.md`, \"The per-batch depth bias\")"
+         range by `6 * bias` (`mesh-draw.md`, \"The per-batch depth bias is file data\")"
     );
     assert_eq!(
         c.forced_bias,

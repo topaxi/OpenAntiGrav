@@ -187,6 +187,11 @@ overlay draws them for HD yet.
   measured** (450, the viewport less the text's inset both sides; the XML authors none); and the
   leave starts on the tick the flyby ends where the original's starts 1 or 2 ticks after its
   substate changes.
+- **The opening shot's window panes stipple on Platinum Rush** (measured 2026-11-07, section
+  above): three exactly coplanar copies of the start building tie in our float depth. Open: whether
+  the original draws copy 365 (decides culling versus a tie rule) and the fix; the probe is tick 5
+  at `--draw-alpha 0.5` against `1.0` (pane region mean 45.72 now, 0.00 with two copies hidden). The
+  original also fades the opening second in from white; ours does not.
 - **The world does not settle** under the flyby, by choice: ticking it would move every
   hash. Not a visible gap after the first second: the original's craft is placed 2.14 below rest
   and rises to rest by about frame 50, ours is placed at rest, so both sit level from then on
@@ -281,8 +286,8 @@ left pane region mean `45.72` (0..765 scale), **`0.00` with node 365's panes hid
 of nodes 365, 342 and 349 hidden** (a debug hide hook, not kept). The panes are
 `rf_spanbuilding_windows_shinemap` batches (`pass_mask 0x3001`, depth bias `0`), drawn by three copies
 of the same building: node 365 (6 small batches, layer `0x45`, its pane 10 triangles) and nodes 342
-and 349 (full copies, layer `0x4a`, panes 82 and 85 triangles). Every pane vertex of 365 lies within
-`1e-5` of the plane of 342's and 349's pane triangles: **exactly coplanar surfaces cut in different
+and 349 (full copies, layer `0x4a`, panes 82 and 85 triangles). Every pane triangle centroid of 365 lies within
+`1e-5` of the plane of 342's and 349's pane triangles it falls inside: **exactly coplanar surfaces cut in different
 triangles, so the interpolated depth differs by a float ulp or two and the winner flips per pixel.**
 Not the shine pass: `--no-track-shine` stipples too. PVS, shadows, reconstruction and MSAA flags
 change nothing (`--pvs false` is the same bytes; with only the craft's own section row admitted the
@@ -300,13 +305,16 @@ them, so it is draw order plus 16-bit ties, not the authored bias.
 
 **Other circuits.** The same probe on the opening shot of every Pulse circuit and its reversed file
 (`track_reversed.vex`): `13_Track` 2,076 pixels differ by more than 60 (2,059 of them in the left
-half, matching the report), `01_Track` 20, every other circuit 0 to 6. Black (`13` reversed) is the
-same. HD, 2048 and Omega: no document names Platinum Rush (not checked on the discs), and their
-`.rcsmodel` chunks have no per-batch depth byte, **checked, differs**.
+half, matching the report), `01_Track` 20, every other circuit 0 to 6. The reversed files gave the
+same numbers as the forward ones on the three pairs run (`13`, `16`, `03`), so this probe cannot tell
+the two apart: Black is not measured separately. HD, 2048 and Omega: no document names Platinum Rush
+(the discs were not searched), and the `.rcsmodel` container layout read in the docs has no
+per-batch depth byte (**checked, differs**, by the layout, not by a census of the discs).
 
 **What is not settled.** Whether the original *draws* node 365 at all in that shot: a GE dump of the
-held shot was not captured (the RESTART RACE route presses Cross and skips the flyby), and the dump
-taken 5 seconds in shows 349's pane and not 365's. If it culls 365 the fix is which copies the
+held shot was not captured (the RESTART RACE route presses Cross and skips the flyby; a dump at the
+description screen's onset is 721 two-vertex UI prims, a delayed one is a 830-prim frame whose
+geometry sits near x -700, the grid), and the dump taken 5 seconds in shows 349's pane and not 365's. If it culls 365 the fix is which copies the
 flyby admits; if it draws it, the fix is the tie rule (a 16-bit depth step, first drawn wins).
 The open work is listed in the Open section of this page.
 

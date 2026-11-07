@@ -27,6 +27,20 @@ pub enum BlendClass {
     None,
 }
 
+/// A batch's depth bias: PSP header byte `+0x29`, forced to `1` under `pass_mask & 0x4000`
+/// (`Mesh_InitBatch`, `0x0890e8b4`). `0` on a PS2 VIF batch, whose header holds a float bound there;
+/// the PS2 executable is unread, so what a non-VIF PS2 batch's byte means is not established.
+#[must_use]
+pub(super) fn depth_bias(vertex_type: u16, pass_mask: u16, header_byte: u8) -> u8 {
+    if super::is_vif_batch(vertex_type) {
+        0
+    } else if pass_mask & 0x4000 != 0 {
+        1
+    } else {
+        header_byte
+    }
+}
+
 impl Batch {
     /// Whether this batch is transparent and must be drawn after opaque ones. The
     /// `0x0700` mask is the exact test `Gfx_BuildBatchStateList` branches on;
@@ -260,5 +274,19 @@ mod tests {
     fn the_unauthored_pattern_follows_the_decompiles_own_order() {
         assert_eq!(batch(0x0880, 0x00).alpha_test_reference(), Some(0));
         assert_eq!(batch(0x0800, 0x20).alpha_test_reference(), Some(0x10));
+    }
+
+    #[test]
+    fn the_0x4000_pass_bit_forces_a_depth_bias_of_one_and_otherwise_the_header_byte_stands() {
+        const PSP_TYPE: u16 = 0x0000;
+        assert_eq!(depth_bias(PSP_TYPE, 0x1001, 0), 0);
+        assert_eq!(depth_bias(PSP_TYPE, 0x1001, 9), 9);
+        assert_eq!(depth_bias(PSP_TYPE, 0x5001, 0), 1);
+        assert_eq!(depth_bias(PSP_TYPE, 0x5001, 9), 1);
+        assert_eq!(
+            depth_bias(super::super::POSITION_F32, 0x1001, 9),
+            0,
+            "a VIF batch reads no bias"
+        );
     }
 }

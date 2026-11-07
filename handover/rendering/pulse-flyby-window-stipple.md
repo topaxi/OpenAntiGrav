@@ -19,13 +19,20 @@ the tie per pixel, the original's 16-bit strict-`GREATER` depth ties and the fir
 
 ## Open
 
-- **Does the original draw node 365 in the held shot?** One GE dump decides the fix. Capture it with
-  `scripts/psp-ge-dump.py dump` while the track-description screen's first 28 ticks run (the
-  `--restart` route presses Cross and skips the flyby; start a race from the menu walk,
-  `psp-drive.py menu --single-race --unlock --track-down 19`, which gave Platinum Rush **Black** on
-  this machine, and dump on the first `InGameTrackDescriptionScreen`), then
-  `psp-ge-dump.py census` and match node 365's batches by vertex count and sorted extents
-  (pane: 30 indices, extents 28.8 x 36.1 x 36.1; the 342/349 pane: 255 indices, 25.6 x 167 x 181).
+- **Does the original draw node 365 in the held shot?** The one fact that picks the fix. Two GE-dump
+  routes were tried and failed: `psp-flyby.py --restart` presses Cross and skips the flyby; a
+  menu-walk dump (`psp-drive.py menu --single-race --unlock --track-down 19`, Platinum Rush **Black**)
+  taken at the description screen's onset is 721 two-vertex UI prims, and one taken 1 s later is a
+  830-prim frame whose geometry sits near x -700 (the grid), nothing near the building. A dump 5 s
+  into the flyby (camera at the right dome) has 349's pane and not 365's. Routes that avoid the
+  timing problem (not run):
+  - **Save state, then dump**: stop at about hit 10 of `psp-flyby.py --frames`, save a state, dump
+    from the state (`docs/reverse-engineering/ppsspp-debugger.md`, save states).
+  - **Match the pane's look, no emulator timing**: `frames.jsonl` of a `psp-flyby.py --frames` run
+    carries each frame's render view. Render ours with `--camera-pose`/`--camera-fov` at a held frame,
+    once with only node 365 drawn and once with only 342/349, and see which pane look matches the
+    original's frame (365 draws first and would win ties, so a 342/349 look means the original culls
+    365; a 365 look is ambiguous).
   - **365 absent:** the fix is which copies the flyby admits (the PVS eye or section placement while the
     camera is off the racing line; `visible_set` in `crates/raceplay/src/camera.rs`, which the
     `photo-cull` lane owns - coordinate before touching it).
@@ -51,7 +58,7 @@ the tie per pixel, the original's 16-bit strict-`GREATER` depth ties and the fir
 
 ## Next Steps
 
-1. Capture the held-shot GE dump above and settle which branch applies.
+1. Settle which branch applies by one of the two routes above.
 2. Land the matching fix with the probe as its test; run the glow-mask and decal ground truths and
    a before/after pixel diff of `16_Track` and two other circuits.
 3. Decide separately whether `Batch::depth_bias` is applied.

@@ -118,11 +118,3 @@ fn decodes_the_additive_blend_flag() {
     assert!(batch(0x40).is_additive_blend());
     assert!(!batch(0x50).is_additive_blend());
 }
-
-#[test]
-fn the_0x4000_pass_bit_forces_a_depth_bias_of_one_and_otherwise_the_header_byte_stands() {
-    assert_eq!(psp_depth_bias(0x1001, 0), 0);
-    assert_eq!(psp_depth_bias(0x1001, 9), 9);
-    assert_eq!(psp_depth_bias(0x5001, 0), 1);
-    assert_eq!(psp_depth_bias(0x5001, 9), 1);
-}
