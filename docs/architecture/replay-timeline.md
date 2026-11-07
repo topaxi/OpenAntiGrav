@@ -126,7 +126,7 @@ it reaches the state hash. Its layout, its cost on all five titles and the respa
 are on [the replay file's page](../formats/replay-file.md) ("The pose track"). The numbers that
 bear on this page:
 
-- 156 to 176 bytes a craft a second, so a Single Race of eight craft for five minutes is 0.37 to
+- At Venom, 156 to 176 bytes a craft a second (Phantom: 197 to 263), so a Single Race of eight craft for five minutes is 0.37 to
   0.42 MB: 4.5 percent over the 149 to 168 decision 4 chose, the difference being the key index the
   sweep did not store and a refinement that now holds the stated bound.
 - **Capture is a segment at a time.** Refinement works on one 6-tick segment alone, so the recorder
