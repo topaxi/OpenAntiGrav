@@ -542,65 +542,43 @@ mod omega_screens {
         assert_eq!(run.states.last().expect("a state")["screen"]["id"], "main");
     }
 
-    /// START and CONTINUE resume the race, and the PILOT ASSIST list reaches it on resume.
+    /// START resumes the race with the lists on their opening values (PILOT ASSIST off, GHOST on),
+    /// and what the lists were set to reaches the race it resumes: ON is Extreme, the level HD
+    /// flies with, and GHOST OFF hides the ghost ship (`display.ghost_ship_visible`).
     #[test]
     #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
-    fn start_resumes_and_the_pilot_assist_list_reaches_the_race() {
+    fn start_resumes_and_the_lists_reach_the_race_they_resume() {
         if omega().is_none() {
             return;
         }
-        let level = |run: &Run| -> String {
+        let last = |run: &Run, key: &str| -> Value {
             run.states
                 .iter()
                 .rev()
-                .find_map(|state| state.get("pilot_assist")?.as_str().map(str::to_string))
+                .find_map(|state| state.get(key).cloned())
                 .expect("a race state")
         };
         let race = to_the_race("time_trial");
         let plain = run_omega(
-            "assist-off",
+            "lists-opening",
             &format!("{race} {OPEN} press start; until stage=race; ticks 30"),
         );
-        assert_eq!(level(&plain), "off", "the list opens on OFF");
-        let on = run_omega(
-            "assist-on",
+        assert_eq!(last(&plain, "pilot_assist"), "off", "the list opens on OFF");
+        assert_eq!(last(&plain, "ghost_visible"), true, "the list opens on ON");
+        let set = run_omega(
+            "lists-set",
             &format!(
                 "{race} {OPEN} select pause_pilot_assist; press right; \
+                 select pause_ghost; press left; \
                  select pause_resume; press cross; until stage=race; ticks 30"
             ),
         );
-        assert_eq!(level(&on), "extreme", "ON is Extreme");
-    }
-
-    /// The GHOST list opens on ON (the original's does) and OFF hides the ghost ship of the race
-    /// it resumes.
-    #[test]
-    #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
-    fn the_ghost_list_opens_on_and_hides_the_ghost_ship_of_the_race_it_resumes() {
-        if omega().is_none() {
-            return;
-        }
-        let shown = |run: &Run| -> bool {
-            run.states
-                .iter()
-                .rev()
-                .find_map(|state| state.get("ghost_visible")?.as_bool())
-                .expect("a race state")
-        };
-        let race = to_the_race("time_trial");
-        let plain = run_omega(
-            "ghost-on",
-            &format!("{race} {OPEN} press start; until stage=race; ticks 30"),
+        assert_eq!(last(&set, "pilot_assist"), "extreme", "ON is Extreme");
+        assert_eq!(
+            last(&set, "ghost_visible"),
+            false,
+            "OFF hides the ghost ship"
         );
-        assert!(shown(&plain), "the list opens on ON");
-        let off = run_omega(
-            "ghost-off",
-            &format!(
-                "{race} {OPEN} select pause_ghost; press left; \
-                 select pause_resume; press cross; until stage=race; ticks 30"
-            ),
-        );
-        assert!(!shown(&off), "OFF hides it");
     }
 
     /// RESTART RACE loads the race again.
