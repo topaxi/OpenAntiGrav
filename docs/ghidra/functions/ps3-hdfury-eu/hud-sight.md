@@ -3,7 +3,7 @@
 ## Measured live, 2026-11-07: the sight is the PSP law in HD's pixels, with its own colours
 
 Read off the original, running (RPCS3, Wipeout HD Fury EU, Racebox Single Race, Vineta K, Venom, Feisar,
-HUD Style and Menu Style the defaults of that walk, 1920x1080 HUD grid), by polling the HUD object through
+HUD Style HD (the blue palette) and the default Menu Style, on both sides; Fury unknown; 1920x1080 HUD grid), by polling the HUD object through
 `/proc` memory and photographing the paused frame at each state change:
 `scripts/rpcs3-hd-lock-sight.py` (finds the HUD object by its ten `0x866210`-vtable widget pointers at
 `+0x578`, gives the player a pickup state - 1 Missile, 10 LeachBeam, `docs/ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md` -
@@ -82,14 +82,25 @@ fire path was not read for it.
 
 ### Open, and checked against 2048 and Omega
 
-- **A moving pursuit never locked in ours.** One free race, player at full throttle, rival ahead: the Missile reticle was
-  visible `131` and `188` ticks and never locked (the lock needs the reticle to catch the target the same frame, `0.9 px` at
-  `60` Hz). The original locked in every placement tried, at matched speed. Geometry not matched, so not a finding yet.
+- **A moving pursuit never locks in ours on HD, and does on Pulse: the reproduction of the maintainer's "not as in Pulse".**
+  Same scenario on both discs (single race, cross held 400 ticks, a Missile always in hand, 1,500 ticks): Pulse
+  `272` ticks visible, `141` locked (longest visible run `141`); HD `318` visible, `0` locked (longest run `188`). HD's
+  Missile needs the reticle to catch its target the same frame (`Sight::step`: distance under `dt * 30 * rate`, about
+  `1` to `2` px, here in a `1920` px grid), so a target crossing the screen at several px a tick is never caught.
+  **The original does not seem to need that.** In three runs `hud+0xdc` flipped on the first frame `hud+0xec` passed `0.8`
+  while the chase centre `hud+0xe0` was still moving `7` to `8` px a frame (the PSP's lag law puts a `7` px/frame target about
+  `43` px behind it), and it was held while the centre sped to `40` px a frame. Static read of the store
+  (`0x0008b7ec`, reached only from `0x0008ad70`, `fcmpu ec, 0.8; bgt`) shows the same arrival compare as the PSP's
+  (`0x0008ad48`: `f11 * (dt * 30.0) > distance`, `30.0` at `0x008a77bc`, `f11` seeded `1.0` from `0x008a75bc` and replaced
+  by `0x008a764c` (`0.5`) or `0x008a75b8` (`0.0`) on the other paths), with the arrival path gated further by a flag
+  (`r22`) this pass did not trace. So the code has the gate and the data does not show it biting: **unresolved**, and no
+  law was changed for it. The target's own screen position was not logged next to the centre, which is what settles it
+  (poll the target craft's projection, or read `r22`'s writers).
 - The distance dependence of the seeking size; the `Middle` growth before it hides; the sound, if any, at the lock; the
   alpha ramp of `Outer` and `Middle` before they are full (ours multiplies the law's own alpha).
 - **2048 and Omega**: same widget names (`Sights::Concentric` rows), checked, applies, not wired: `live: None` there,
   their executables' updates are not read. A reader run on them would be the same poll against `Hud_UpdateMissileSight`'s Vita and PS4 copies.
-- A `Fury` HUD Style was not compared: both sides ran the default HUD Style.
+- A Fury HUD Style was not compared: both sides ran HUD Style HD (the blue palette).
 
 The sections below are the earlier readings, kept for their evidence; where they disagree with this one, this one wins.
 
