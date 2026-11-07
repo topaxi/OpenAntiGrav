@@ -944,3 +944,44 @@ fn a_locked_reticle_follows_its_target_between_ticks() {
         "it does not move between the ticks"
     );
 }
+
+/// A pad that is never stamped (HD, Fury, 2048 and Omega in an Eliminator) is
+/// armed on every entry: a craft that leaves and comes straight back, an empty
+/// slot each time, is handed a pickup both times, while one that sits inside is
+/// handed one per crossing and not one per tick.
+#[test]
+fn an_unstamped_pad_pays_on_every_entry_and_never_once_per_tick() {
+    let mut race = race_with_weapon_pads(Mode::Eliminator, enveloping_pad(), 0.0);
+    let far_away = pad_at(Vec3::splat(1.0e6), 1.0);
+    let place = |race: &mut Race, pad: oag_vex::pads::PadVolume| {
+        race.sim.weapon_pads[0] = pad;
+        race.sim.weapon_pad_distance[0][0] = 0.0;
+    };
+
+    let mut granted = 0;
+    for _ in 0..30 {
+        race.tick(&PlayerInputs::none());
+        if race.ship_pickup().is_some() {
+            granted += 1;
+            race.sim.world.ships[0].pickup.weapon = None;
+        }
+        assert_eq!(
+            race.weapon_pad_refresh_left(),
+            [0.0],
+            "an unstamped pad greyed"
+        );
+    }
+    assert_eq!(
+        granted, 1,
+        "sitting inside paid {granted} times for one crossing"
+    );
+
+    place(&mut race, far_away);
+    race.tick(&PlayerInputs::none());
+    place(&mut race, enveloping_pad()[0]);
+    race.tick(&PlayerInputs::none());
+    assert!(
+        race.ship_pickup().is_some(),
+        "re-entering an unstamped pad one tick later paid nothing"
+    );
+}

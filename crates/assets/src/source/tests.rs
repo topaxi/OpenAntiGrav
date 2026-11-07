@@ -144,6 +144,7 @@ const TITLE: &Title = &Title {
         },
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::chosen(true),
         autopilot_pad_grants: oag_title::pre_race::Sourced::chosen(false),
+        pads_stamp_in_eliminator: oag_title::pre_race::Sourced::chosen(true),
         opponent_fire: oag_title::pre_race::Sourced::chosen(
             oag_title::weapons::OpponentFire::PULSE,
         ),

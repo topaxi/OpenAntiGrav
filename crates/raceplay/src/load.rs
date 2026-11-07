@@ -239,7 +239,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
         weapon_pad_refresh,
         pilot_assist,
         wall_restitution,
-    } = global::resolve(&mut archives, options, &stats, &mut report);
+    } = global::resolve(
+        &mut archives,
+        options,
+        &stats,
+        title.weapons.pads_stamp_in_eliminator.value,
+        &mut report,
+    );
     // Nothing is scaled here: the four pre-scaled fields are converted exactly once and this
     // is not the place it happens, and neither `<SpeedupPads>` nor `<Special>` is one of them.
     // `None` where this team's file does not author the requested rung: a race
