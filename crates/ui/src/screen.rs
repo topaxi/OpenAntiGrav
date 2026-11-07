@@ -382,6 +382,8 @@ pub struct Menu {
     pub align: String,
     /// Font name, e.g. `Default`.
     pub font: String,
+    /// `vertalign="middle"`: [`Self::y`] is the middle of the first row, not its top.
+    pub middle: bool,
 }
 
 /// One screen, flattened out of the tree.

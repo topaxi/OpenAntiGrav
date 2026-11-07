@@ -1,8 +1,8 @@
 # The pause menu
 
 What each title's own pause screen is, and what this build does (2026-11-07, lanes `pause-menu`,
-`pause-menu-2`, `pause-menu-3` and `pause-menu-omega`). Scores follow the [rubric](../reverse-engineering/confidence-rubric.md). **Pulse, HD, Fury and
-Omega are wired; 2048 and Pure are not** (see [Other titles](#other-titles)): there, pausing still opens the
+`pause-menu-2`, `pause-menu-3`, `pause-menu-omega` and `pause-menu-pure`). Scores follow the [rubric](../reverse-engineering/confidence-rubric.md). **Pulse, HD, Fury, Omega and
+Pure are wired; 2048 is not** (see [Other titles](#other-titles)): there, pausing still opens the
 front end's main page over the parked race, as before.
 
 ## Pulse
@@ -281,9 +281,89 @@ table (`oag_omega::pause_menu::tests`); the game driving a real Omega race
 (`pause_menu_ground_truth::omega_screens`: the rows per mode, END SESSION, START and the PILOT ASSIST list
 reaching the race, RESTART).
 
+## Pure
+
+**Wired** (`Title::pause_menu` is `oag_pure::pause_menu::PAUSE_MENU`). The screen START opens is **not
+`InGame Pause`**: that screen is a `Paused` text on a band with no rows. START goes through
+`InGame`'s redirect (`forward="start"`) in `Data\Plugins\PI001\GUI\InGame_Definition.xml` (identical on the EU
+and USA PSP discs), and the **mode is in the file**, as an `Entry` row on the front end's own state, where
+Pulse's and HD's is the executable's switch:
+
+| Screen | Rows (`idstring`) | Opened by |
+| --- | --- | --- |
+| `InGame Main Menu` | `Continue`, `Restart`, `Quit` (scale 1.2) | the default: Single Race, Time Trial, Zone |
+| `InGame NoRestart Main Menu` | `Continue`, `Quit` (scale 1.0) | `Single Player->Mode` = `Tournament`, `Main Menu->Mode` = `Multiplayer` |
+| `InGame Free Play Menu` | `Continue`, `Restart`, `End Session` (scale 1.0) | `Single Player->Mode` = `Free Play` |
+
+Each screen draws the same band: an image `0xc0000010` over `y = 75` to `195` across the whole 480, two 1-pixel
+rules `0xff3192bb` at `y = 75` and `175`, one `<Menu name="Option">` centred at `x = 240` (`vertalign="middle"`,
+`y = 106`) and the footer `Press X to Confirm` at `y = 175`. START resumes (`forward="start"`, default `InGame`)
+and `backward="none"`: CIRCLE does nothing. Nothing outside the band is tinted.
+
+### What the original draws
+
+PPSSPP 1.20.4, software renderer, 480x272, the USA disc, a fresh profile, Vineta K, Feisar, class Vector,
+walked by pad to the grid and START pressed on the countdown (Single Race) or after it (Time Trial, Tournament,
+Free Play). Reference frames: `data/reference/pure-pause-menu/` (`p1` Single Race, `p2`, `p3` its cursor on
+RESTART and QUIT, `t2` Time Trial, `u2` Tournament, `f3` Free Play, `c1` the same race a moment before).
+
+- **Single Race, Time Trial, Tournament and Free Play** were walked live and draw the rows the file authors
+  (confidence 90 each). Zone is the default by the file's own redirect: not walked (static, 85).
+- **The band is the authored image and nothing else.** Pixels above and below it are the unpaused frame's; inside
+  it the scene is `0.25` of itself plus `(0, 0, 16)` (`0xc0000010` at alpha 0.75: the brightest text-free pixel of the
+  band reads (63, 63, 75) against the law's (64, 64, 80)). **The HUD stays on screen at full brightness outside
+  the band** (CURRENT, POS, LAP, the speed bar) and is dimmed inside it like the scene.
+- **Ink**: the cursor row white (253), the others grey (157, 155 over the band's 20), the footer white. The focused
+  glyph is 11 pixels tall at scale 1.2 and 10 at 1.0.
+- **Pitch**: rows stand `15 * scale` apart (18 at 1.2: ink rows 103 to 114, 121 to 132, 140 to 150; 15 at 1.0: 104
+  to 113, 119 to 128, 134 to 143), the first row's middle at the widget's `y`.
+- **The cursor does not wrap**: DOWN on QUIT stays on QUIT and UP on CONTINUE stays on CONTINUE (checked on Single
+  Race, three presses each way), though the file authors `wrap="true"`.
+
+### What ours does
+
+The page is the disc's own screen over the HD/Omega drawer (`oag_ui_screens::pause`), which now also lays out a
+`<Menu>` widget: `PauseLayout::chrome` is `None` (each screen carries its own band), and `PauseLayout::menu_rows`
+gives the two numbers the file does not author, the pitch (`15`, measured) and the alpha of a row without the cursor
+(`0.5`: the authored alpha that lands the measured grey 157 on our blend). Every row of the page is drawn down the
+widget in page order, the one with the cursor at full ink, and each is a pointer target across the band
+(`oag_ui_screens::pause::regions`). The scrim is transparent and `hud_under_scrim` is on. Pad, pointer, START, CIRCLE
+doing nothing and the rows' actions are the menu's (`Definition::open_on_pause_screen`), as on the other titles.
+
+- **PHOTO MODE** follows CONTINUE (`PauseMenu::offers_photo`; the screen authors none, photo mode is one
+  implementation on every title, maintainer). So ours has one row more than the original on every screen.
+- **END SESSION** (Free Play) leaves the race the way QUIT does: **chosen, not measured**. The original goes to
+  `InGame Void` and the session's results; this build races Free Play as a single race
+  (`docs/formats/pure-campaign.md`, "The modes"). Free Play is chosen by the campaign cell's name
+  (`Session::pause_mode`, key `free_play`), not by the engine's mode.
+- **The words** are the disc's own (`Continue`, `Restart`, `Quit`, `End Session`, `Press X to Confirm`, drawn by the
+  front end's face). The PSP footer's cross glyph is the font's.
+
+**Measured against the original** (`scripts/pause-band-metric.py`, both frames at 480x272; ours is a 1440x816
+capture box-filtered down): the two rules at rows 75 and 175 on both, x 0 to 480; the first row's ink at rows 103
+to 114 against 103 to 114 and its x from 188 to 291 against 188 to 293; the second row's 121 to 132 on both and the
+third's 139 to 150 against 140 to 150; the cursor row's ink 252 against 253 and the others 156 against 157; the
+Tournament screen's first row 104 to 112 against 104 to 113, x 197 to 282 on both. The mean absolute colour
+difference over the first row's box is 22.8 of 255 per channel on Single Race and 42 on Tournament, where the
+backgrounds differ and a one-pixel glyph shift is worth about that: the placement numbers above are the ones to read.
+
+Residuals:
+
+- **The cursor wraps** in ours (the menu's rule on every title); the original's does not. Not changed here.
+- **Our rows**: PHOTO MODE is extra, so the third row on the original (QUIT) is the fourth in ours.
+- **The race's now-playing line** (the music title at the foot, "COLD STORAGE - ONYX") draws under the pause in ours at
+  400 ticks; the original's frames at the same moment show none. A now-playing question, not a pause one.
+- **Craft livery**: the Feisar in ours is gold, the original's blue and yellow. Not this lane's.
+
+Tests: the three screens' rows against both pressings, the redirect's rows against `by_mode` and the band, rules and
+menu place (`main_menu_ground_truth::pures_pause_screens_are_the_three_menus_the_ingame_redirect_picks_between`);
+the table (`oag_pure::pause_menu::tests`); the draw and the pointer
+(`oag_ui_screens::pause::tests::menu_widget`); the game driving a real race (`pause_menu_ground_truth::pure_screens`:
+the rows per mode, START, CIRCLE, RESTART, QUIT and PHOTO MODE by pad).
+
 ## Other titles
 
 Not wired: **2048** (`InGame_Definition.xml`, 36 screens, and `LegacyInGame_Definition.xml`; Vita, a
-binder of its own) and **Pure** (`InGame Pause`, no photo screen, never seen live), in that order. A
-2048 finding is checked against Omega and the reverse: Omega's binder above reads the same ids, so
-2048's is the first thing to compare.
+binder of its own). A 2048 finding is checked against Omega and the reverse: Omega's binder above reads the
+same ids, so 2048's is the first thing to compare. Pure's screens share nothing with 2048's or Omega's (a
+`<Menu>` of entries on a band, not `Block` widgets), so Pure's finding is **checked, differs** against both.

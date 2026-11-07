@@ -14,6 +14,15 @@ use crate::stage::Stage;
 
 use super::Session;
 
+/// The key a race's pause screen is chosen by: its mode's name, or `free_play` for a Free Play
+/// event (Pure's, which this build races as a single race, `docs/formats/pure-campaign.md`).
+fn pause_mode(stage: &RaceStage) -> &str {
+    match &stage.campaign_cell {
+        Some(cell) if oag_tables::pure_campaign::is_free_play(&cell.name) => "free_play",
+        _ => stage.race.sim.world.mode().name(),
+    }
+}
+
 impl Session {
     /// Whether the race in `stage` pauses into the title's own pause screen: the title authors
     /// one, and the race has one view and is not a network race.
@@ -41,7 +50,7 @@ impl Session {
         let shell = self.shell.as_ref()?;
         let table = shell.title.pause_menu?;
         let stage = self.pausing_race()?;
-        let name = table.screen_for(stage.race.sim.world.mode().name()).name;
+        let name = table.screen_for(pause_mode(stage)).name;
         let screen = shell
             .pause_screens
             .screens
@@ -69,7 +78,7 @@ impl Session {
         let (Some(pause), Some(stage)) = (shell.title.pause_menu, self.pausing_race()) else {
             return false;
         };
-        let mode = stage.race.sim.world.mode().name();
+        let mode = pause_mode(stage);
         let mut trial = definition.clone();
         let strings = if pause.layout.is_some() {
             &shell.pause_screens.strings

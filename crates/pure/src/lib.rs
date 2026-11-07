@@ -230,7 +230,7 @@ pub const TITLE: &Title = &Title {
     // its `Definition.xml` and each circuit's `stats.xml`
     // (`docs/formats/pure-campaign.md`).
     main_menu: main_menu::MAIN_MENU,
-    pause_menu: None,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pure,
         definition_entry: None,
@@ -408,6 +408,7 @@ pub mod effects;
 pub mod frontend;
 pub mod hud;
 pub mod main_menu;
+pub mod pause_menu;
 pub mod prompts;
 pub mod race;
 

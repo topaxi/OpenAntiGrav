@@ -1,4 +1,4 @@
-//! Pulse's and HD's own pause screens over a real race: the rows are the disc's for the race's
+//! Pulse's, HD's, Omega's and Pure's own pause screens over a real race: the rows are the disc's for the race's
 //! mode, START and ESCAPE open it, and each row does what it says.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs a disc image.
@@ -604,6 +604,170 @@ mod omega_screens {
         assert!(
             sims.last().copied().unwrap_or(u64::MAX) < 100,
             "RESTART RACE loads the race again: {sims:?}"
+        );
+    }
+}
+
+mod pure_screens {
+    use super::*;
+
+    fn pure() -> Option<std::path::PathBuf> {
+        oag_testdata::image("pure-psp-eu.chd")
+    }
+
+    fn run_pure(tag: &str, script: &str) -> Run {
+        let image = pure().expect("the caller checks first");
+        run_on(&image, &format!("pure-{tag}"), script)
+    }
+
+    /// To a Tournament race, 400 ticks in: SINGLE PLAYER, TOURNAMENT, the class, the first
+    /// tournament, the team.
+    const TO_THE_TOURNAMENT: &str = "boot; select campaign; press cross; ticks 40; press down; \
+        ticks 10; press cross; ticks 40; press cross; ticks 40; press cross; ticks 40; \
+        press cross; ticks 40; until stage=race within 4000; ticks 400; ";
+
+    /// Pure's own words for the rows (`Continue`, `Restart`, `Quit`), with this project's PHOTO
+    /// MODE row after the first (the screen authors none).
+    fn rows_with_restart() -> Vec<(String, String)> {
+        pairs(&[
+            ("Continue", "back"),
+            ("PHOTO MODE", "photo_mode"),
+            ("Restart", "restart_race"),
+            ("Quit", "quit_race"),
+        ])
+    }
+
+    /// Single Race, Time Trial and Zone take the default screen, `InGame Main Menu`.
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn a_single_race_a_time_trial_and_a_zone_race_pause_into_the_default_screen() {
+        if pure().is_none() {
+            return;
+        }
+        for mode in ["single_race", "time_trial"] {
+            let run = run_pure(mode, &format!("{} {OPEN}", to_the_race(mode)));
+            assert_eq!(rows(&run), rows_with_restart(), "{mode}");
+        }
+        // A Zone race picks its circuit and takes no ship selection after it.
+        let zone = run_pure(
+            "zone",
+            &format!(
+                "boot; select racebox; press cross; until page=race; set race.mode=zone; \
+                 select launch_race; press cross; until screen=picker; press cross; \
+                 until stage=race within 4000; ticks 400; {OPEN}"
+            ),
+        );
+        assert_eq!(rows(&zone), rows_with_restart(), "zone");
+    }
+
+    /// A Tournament race takes `InGame NoRestart Main Menu`: no RESTART.
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn a_tournament_race_pauses_into_the_screen_without_a_restart() {
+        if pure().is_none() {
+            return;
+        }
+        let run = run_pure("tournament", &format!("{TO_THE_TOURNAMENT} {OPEN}"));
+        assert_eq!(
+            rows(&run),
+            pairs(&[
+                ("Continue", "back"),
+                ("PHOTO MODE", "photo_mode"),
+                ("Quit", "quit_race")
+            ])
+        );
+    }
+
+    /// A Free Play race takes `InGame Free Play Menu`: END SESSION in place of QUIT, which leaves
+    /// the race for the main page here.
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn a_free_play_race_pauses_into_the_screen_with_end_session() {
+        if pure().is_none() {
+            return;
+        }
+        let to_free_play = "boot; select campaign; press cross; ticks 40; press down; ticks 10; \
+            press down; ticks 10; press down; ticks 10; press down; ticks 10; press cross; \
+            ticks 40; press cross; ticks 40; press cross; ticks 40; press cross; ticks 40; \
+            press cross; ticks 40; until stage=race within 4000; ticks 400; ";
+        let run = run_pure("free-play", &format!("{to_free_play} {OPEN}"));
+        assert_eq!(
+            rows(&run),
+            pairs(&[
+                ("Continue", "back"),
+                ("PHOTO MODE", "photo_mode"),
+                ("Restart", "restart_race"),
+                ("End Session", "quit_race")
+            ])
+        );
+        let ended = run_pure(
+            "free-play-end",
+            &format!(
+                "{to_free_play} {OPEN} select pause_quit; press cross; until stage=menu; \
+                 expect page=main"
+            ),
+        );
+        assert_eq!(ended.states.last().expect("a state")["stage"], "menu");
+    }
+
+    /// START and CONTINUE resume, CIRCLE on the root does nothing, RESTART loads the race again,
+    /// QUIT leaves for the main page and PHOTO MODE opens from the screen.
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn the_rows_work_by_pad() {
+        if pure().is_none() {
+            return;
+        }
+        let race = to_the_race("single_race");
+        let resumed = run_pure(
+            "start",
+            &format!("{race} {OPEN} press start; until stage=race; ticks 30"),
+        );
+        assert_eq!(
+            resumed.states.last().expect("a state")["stage"],
+            "race",
+            "START resumes"
+        );
+        let circle = run_pure(
+            "circle",
+            &format!("{race} {OPEN} press circle; ticks 20; expect stage=menu page=pause"),
+        );
+        assert_eq!(rows(&circle), rows_with_restart(), "CIRCLE does nothing");
+        let restart = run_pure(
+            "restart",
+            &format!(
+                "{race} {OPEN} select pause_restart; press cross; until stage=race within 4000; \
+                 ticks 20"
+            ),
+        );
+        let sims: Vec<u64> = restart
+            .states
+            .iter()
+            .filter_map(|state| state.get("sim_tick")?.as_u64())
+            .collect();
+        assert!(
+            sims.last().copied().unwrap_or(u64::MAX) < 100,
+            "RESTART: {sims:?}"
+        );
+        let quit = run_pure(
+            "quit",
+            &format!(
+                "{race} {OPEN} select pause_quit; press cross; until stage=menu; expect page=main"
+            ),
+        );
+        assert_eq!(quit.states.last().expect("a state")["screen"]["id"], "main");
+        let photo = run_pure(
+            "photo",
+            &format!(
+                "{race} {OPEN} select photo_mode; press cross; until photo=internal within 200"
+            ),
+        );
+        assert!(
+            photo
+                .states
+                .iter()
+                .any(|state| state["photo"] == "internal"),
+            "PHOTO MODE opens the photo lens from the pause screen"
         );
     }
 }

@@ -482,6 +482,180 @@ fn pulses_ps2_pause_screens_are_the_psps_without_photo_and_the_manual() {
     );
 }
 
+/// The `(item, equals, goto)` of every `Entry` of `screen`'s redirect named `redirect`, and its
+/// `Default`'s `goto`.
+fn redirect_rows(
+    root: &Node,
+    screen: &str,
+    redirect: &str,
+) -> (Vec<(String, String, String)>, String) {
+    fn find<'a>(node: &'a Node, screen: &str) -> Option<&'a Node> {
+        if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(screen) {
+            return Some(node);
+        }
+        node.children.iter().find_map(|child| find(child, screen))
+    }
+    let screen = find(root, screen).unwrap_or_else(|| panic!("no screen {screen:?}"));
+    let redirect = screen
+        .children
+        .iter()
+        .find(|node| {
+            node.name.eq_ignore_ascii_case("Redirect") && node.attr("name") == Some(redirect)
+        })
+        .unwrap_or_else(|| panic!("no redirect {redirect:?}"));
+    let attr = |node: &Node, name: &str| node.attr(name).unwrap_or_default().to_string();
+    let rows = redirect
+        .children
+        .iter()
+        .filter(|node| node.name.eq_ignore_ascii_case("Entry"))
+        .map(|node| (attr(node, "item"), attr(node, "equals"), attr(node, "goto")))
+        .collect();
+    let default = redirect
+        .children
+        .iter()
+        .find(|node| node.name.eq_ignore_ascii_case("Default"))
+        .map(|node| attr(node, "goto"))
+        .expect("a default");
+    (rows, default)
+}
+
+/// Where `screen`'s redirect that carries `forward="start"` goes by default.
+fn start_goes_to(root: &Node, screen: &str) -> Option<String> {
+    fn find<'a>(node: &'a Node, screen: &str) -> Option<&'a Node> {
+        if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(screen) {
+            return Some(node);
+        }
+        node.children.iter().find_map(|child| find(child, screen))
+    }
+    find(root, screen)?
+        .children
+        .iter()
+        .filter(|node| node.name.eq_ignore_ascii_case("Redirect"))
+        .find(|redirect| {
+            redirect.children.iter().any(|values| {
+                values.name.eq_ignore_ascii_case("Values")
+                    && values.attr("forward") == Some("start")
+            })
+        })?
+        .children
+        .iter()
+        .find(|node| node.name.eq_ignore_ascii_case("Default"))?
+        .attr("goto")
+        .map(str::to_string)
+}
+
+/// Pure's pause screens are the `<Menu name="Option">` entries of the three screens `InGame`'s
+/// START redirect picks between, on both pressings. The mode is **in the file**: the redirect
+/// tests the front end's own `Single Player->Mode` and `Main Menu->Mode`, so `by_mode` is read
+/// back from its `Entry` rows (Tournament and multiplayer: `InGame NoRestart Main Menu`; Free
+/// Play: `InGame Free Play Menu`; everything else the default), where Pulse's and HD's is the
+/// executable's switch. The band, its two rules and the menu's place are the file's too, and
+/// the table's `menu_rows` are the two things it does not author (measured, `docs/ui/pause-menu.md`).
+/// `InGame Pause` is a rowless band with a `Paused` text: no row to choose, not what START opens.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pures_pause_screens_are_the_three_menus_the_ingame_redirect_picks_between() {
+    let pause = oag_pure::TITLE
+        .pause_menu
+        .expect("Pure authors pause screens");
+    let layout = pause.layout.expect("Pure names where its screens are read");
+    for name in ["pure-psp-eu.chd", "pure-psp-usa.chd"] {
+        let Some(image) = image(name) else { continue };
+        let mut archives = oag_pure::open(&image.display().to_string()).expect("opening the disc");
+        let root = read(&mut archives, layout.definition);
+        for screen in pause.screens {
+            let rows: Vec<&str> = screen.rows.iter().map(|row| row.disc_id).collect();
+            assert_eq!(
+                entries(&root, screen.name, "Option"),
+                rows,
+                "{name}: {:?} against `Title::pause_menu`",
+                screen.name
+            );
+        }
+        let (rows, default) = redirect_rows(&root, "InGame", "Redirect");
+        assert_eq!(default, pause.default_screen, "{name}: the default screen");
+        let mut named: Vec<(String, String)> = rows
+            .iter()
+            .filter(|(item, _, _)| item.ends_with("->Mode"))
+            .map(|(item, equals, goto)| (format!("{item}={equals}"), goto.clone()))
+            .collect();
+        named.sort();
+        let mut want = vec![
+            (
+                "Main Menu->Mode=Multiplayer".to_string(),
+                pause.screen_for("tournament").name.to_string(),
+            ),
+            (
+                "Single Player->Mode=Free Play".to_string(),
+                pause.screen_for("free_play").name.to_string(),
+            ),
+            (
+                "Single Player->Mode=Tournament".to_string(),
+                pause.screen_for("tournament").name.to_string(),
+            ),
+        ];
+        want.sort();
+        assert_eq!(named, want, "{name}: the redirect's rows against `by_mode`");
+        for screen in pause.screens {
+            assert_eq!(
+                start_goes_to(&root, screen.name).as_deref(),
+                Some("InGame"),
+                "{name}: START resumes from {:?}",
+                screen.name
+            );
+        }
+
+        let screens = oag_ui::screen::Screens::from_xml(
+            &fexml::text(&archives.read_name(layout.definition).expect("the file")).expect("text"),
+        );
+        for screen in pause.screens {
+            let parsed = screens.by_name(screen.name).expect("the screen parses");
+            let fills: Vec<(u32, [f32; 4])> = parsed
+                .fills
+                .iter()
+                .map(|fill| {
+                    (
+                        fill.color,
+                        [
+                            fill.x,
+                            fill.y,
+                            fill.width.unwrap_or(0.0),
+                            fill.height.unwrap_or(0.0),
+                        ],
+                    )
+                })
+                .collect();
+            assert_eq!(
+                fills,
+                [
+                    (0xc000_0010, [0.0, 75.0, 480.0, 120.0]),
+                    (0xff31_92bb, [0.0, 75.0, 480.0, 1.0]),
+                    (0xff31_92bb, [0.0, 175.0, 480.0, 1.0]),
+                ],
+                "{name}: {:?}'s band and its two rules",
+                screen.name
+            );
+            let menu = parsed.menu.as_ref().expect("the screen's Menu widget");
+            assert_eq!(
+                (menu.x, menu.y, menu.middle, menu.align.as_str()),
+                (240.0, 106.0, true, "centre"),
+                "{name}: {:?}",
+                screen.name
+            );
+            let scale = if screen.name == "InGame Main Menu" {
+                1.2
+            } else {
+                1.0
+            };
+            assert!(
+                (menu.scale - scale).abs() < 1e-6,
+                "{name}: {:?}",
+                screen.name
+            );
+        }
+    }
+}
+
 /// The `idstring` of every live row of the HD-style pause screen `screen`: its `Block` and
 /// `List` widgets in document order. The `aVertMenu` and `aBlock` elements the file spells with
 /// an `a` prefix are switched off, and are not rows.
@@ -681,7 +855,8 @@ fn check_pause_layout(archives: &mut oag_assets::Archives, pause: &oag_title::Pa
         assert!(focus.selectable, "{label}");
     }
     let screens = oag_ui::screen::Screens::from_xml(&xml);
-    let chrome = screens.by_name(layout.chrome).expect("the chrome screen");
+    let chrome_name = layout.chrome.expect("HD's screens share a chrome screen");
+    let chrome = screens.by_name(chrome_name).expect("the chrome screen");
     let rules: Vec<[f32; 4]> = chrome
         .fills
         .iter()
@@ -697,8 +872,7 @@ fn check_pause_layout(archives: &mut oag_assets::Archives, pause: &oag_title::Pa
     assert_eq!(
         rules,
         [[480.0, 292.0, 960.0, 4.0], [480.0, 790.0, 960.0, 4.0]],
-        "{}: the two rules",
-        layout.chrome
+        "{chrome_name}: the two rules"
     );
     for screen in pause.screens {
         let read = screens.by_name(screen.name).expect(screen.name);

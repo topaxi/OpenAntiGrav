@@ -60,20 +60,34 @@ pub struct PauseScreen {
 }
 
 /// Where a title's pause screens are authored and what its draw reads off them: the file, the
-/// shared chrome screen and the grid both are authored in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// shared chrome screen both are authored in, and the grid.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PauseLayout {
     /// The archive path of the definition file the screens are in.
     pub definition: &'static str,
     /// The screen of that file whose rules and footer every pause screen draws under its own
-    /// widgets (`InGame Main Menu`: two rules, the START glyph and `IG_PAUSE_RESU`, CONFIRM).
-    pub chrome: &'static str,
+    /// widgets (HD's `InGame Main Menu`: two rules, the START glyph and `IG_PAUSE_RESU`,
+    /// CONFIRM). `None` where each screen authors its own band (Pure's).
+    pub chrome: Option<&'static str>,
     /// The grid the file is authored in.
     pub grid: [u32; 2],
+    /// How a screen that authors one `<Menu>` of entries, rather than a widget per row, lays
+    /// its rows out. `None` for a title whose screens are `Block` and `List` widgets.
+    pub menu_rows: Option<PauseMenuRows>,
+}
+
+/// The two numbers a `<Menu>` widget does not author: how far apart its rows stand and how
+/// bright a row without the cursor is.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PauseMenuRows {
+    /// The distance between two rows at the widget's `scale` of `1.0`, in the file's grid.
+    pub pitch: f32,
+    /// The alpha a row without the cursor draws its label with, the focused one drawing `1.0`.
+    pub unfocused_alpha: f32,
 }
 
 /// A title's pause screens and which game mode opens which.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PauseMenu {
     /// The `idstring` of the heading the screen draws (`IG_PAUSE_GPAUSED`).
     pub heading: &'static str,
@@ -83,7 +97,7 @@ pub struct PauseMenu {
     /// redirect names as its default.
     pub default_screen: &'static str,
     /// `(mode name, screen name)`: the modes whose pause is not the default. A mode's name
-    /// is `oag_race::Mode::name`.
+    /// is `oag_race::Mode::name`, or `free_play` for a Free Play event.
     pub by_mode: &'static [(&'static str, &'static str)],
     /// The tint the screen draws over the race, as the `ARGB` its full-screen image authors
     /// (`InGame Pause`'s `0xe8000000`).

@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, hd, omega, 2048, pure]
 updated: 2026-11-07
-summary: "Pulse, HD, Fury and Omega pause into the disc's own screen per mode; 2048 and Pure open the main page"
+summary: "Pulse, HD, Fury, Omega and Pure pause into the disc's own screen per mode; 2048 opens the main page"
 ---
 
 # The title's own pause screen
@@ -24,10 +24,13 @@ pause screen where one applies). Online pause stays the maintainer's decision
   OPTIONS pill (`FE_START_BUTTON` is `"I"`; is `data00`'s or `data08`'s `PS_BUTTONS.fnt` read?); Speed Lap,
   Eliminator, Tournament and Zone not all walked live (the doc says which); the original's own game options
   page was not read for `GHOST SHIPS VISIBLE` (Omega's `ship_visible` is on for the pause GHOST list).
-- **2048, Pure: not wired** (`pause_menu: None`), in that order. 2048 has `InGame_Definition.xml` (36
-  screens) and `LegacyInGame_Definition.xml` on Vita, with a binder of its own; Omega's reads the same
-  mode ids as HD's, so compare 2048's against it first. Pure has `InGame Pause` and no photo screen,
-  never seen live (PPSSPP, own frame needed). A 2048 finding is checked against Omega and the reverse.
+- **Pure: wired** (`oag_pure::pause_menu`, original frames of Single Race, Time Trial, Tournament and Free
+  Play on PPSSPP in `docs/ui/pause-menu.md`, "Pure"). Open: the original's cursor does not wrap and ours
+  does; Zone was not walked live (the file's redirect gives it the default); Free Play's END SESSION leaves
+  like QUIT (chosen); the race's now-playing line draws under the pause where the original shows none.
+- **2048: not wired** (`pause_menu: None`). 2048 has `InGame_Definition.xml` (36 screens) and
+  `LegacyInGame_Definition.xml` on Vita, with a binder of its own; Omega's reads the same mode ids as HD's, so
+  compare 2048's against it first. No Vita frame yet. A 2048 finding is checked against Omega and the reverse.
 - **HD, Fury: the FE Style** is the one thing a player in the HD style would see differ: the focused
   row, the opaque blocks and the grey follow `FEGlobals` (`HD_Blue`), and this build serves `DATA00`'s
   Fury palette on every page. The original's pause screen in the Fury style is red (RPCS3, Single Race and
@@ -48,8 +51,6 @@ pause screen where one applies). Online pause stays the maintainer's decision
 
 ## Next Steps
 
-1. Pure: build `crates/pure/src/pause_menu.rs` beside `crates/pulse/src/pause_menu.rs` (Pulse's `Option`
-   mechanism, the front end's list), a ground-truth test beside `pulses_*_pause_screens_*`, and a PPSSPP
-   frame of `InGame Pause`; then 2048 (Vita3K) against Omega.
+1. 2048 (Vita3K) against Omega: a Vita frame of its pause screen, then its binder and table.
 2. The front end's FE Style (HD palette: `DATA06`'s `HD_*` globals, opaque blocks, white page) so the HD-style
    pause frames can be matched too.
