@@ -582,7 +582,11 @@ impl RaceSim {
         }
         size_of::<Self>()
             + self.pad_distance.iter().map(|v| held(v)).sum::<usize>()
-            + self.weapon_pad_distance.iter().map(|v| held(v)).sum::<usize>()
+            + self
+                .weapon_pad_distance
+                .iter()
+                .map(|v| held(v))
+                .sum::<usize>()
             + held(&self.weapon_pad_refresh_left)
             + held(&self.cues)
             + held(&self.announcements)

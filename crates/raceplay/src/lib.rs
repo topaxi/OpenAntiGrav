@@ -352,9 +352,9 @@ pub use options::{
     CameraOverride, Campaign2048Progress, CaptureHud, CaptureZone, Loaded, Options, PoseRequest,
     SeatPick, Setup, Sighting,
 };
+pub use replay::{ApplyError, Launch, UnknownOption, rebuild};
 #[cfg(feature = "view")]
 pub use replay::{Ghost, GhostCapture};
-pub use replay::{ApplyError, Launch, UnknownOption, rebuild};
 pub use respawn::RespawnCause;
 pub use results::RunStats;
 #[cfg(feature = "view")]
