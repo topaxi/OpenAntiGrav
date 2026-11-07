@@ -1019,7 +1019,7 @@ impl Scene {
             }
         }
         // Only the billboard *fallback*, per kind: a body whose own model did
-        // not load, or a Missile or Plasma, which has none at all.
+        // not load, or a Missile whose title authors no head.
         vertices.extend(race.projectile_sprites(right, up, |kind| match kind {
             oag_tables::weapons::Weapon::Rocket => !self.rockets.is_empty(),
             oag_tables::weapons::Weapon::Mine => !self.mines.is_empty(),
@@ -1027,6 +1027,7 @@ impl Scene {
             oag_tables::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
             oag_tables::weapons::Weapon::Plasma => !self.plasma_blast.ball.is_empty(),
             oag_tables::weapons::Weapon::Shuriken => !self.plasma_blast.shuriken.is_empty(),
+            oag_tables::weapons::Weapon::Missile => !self.plasma_blast.missile_head.is_empty(),
             _ => false,
         }));
         self.gather_cannon_quads(race, right, up, cannon_bolt, cannon_flash);
@@ -1138,6 +1139,7 @@ impl Scene {
             draws.mesh(drawable);
         }
         self.draw_shurikens(race.shuriken_model_matrices().len(), &mut draws);
+        self.draw_missile_heads(race.missile_head_model_matrices().len(), &mut draws);
         self.draw_plasma_blasts(&plasma_blast_active, &mut draws);
         self.draw_disruptor_halos(&disruptor_halo_active, &mut draws);
         self.draw_bomb_blasts(&blasts_active, &mut draws);

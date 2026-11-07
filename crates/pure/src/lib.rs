@@ -207,6 +207,7 @@ pub const TITLE: &Title = &Title {
         rocket_trail: None,
         leach_strip: None,
         leachbeam_ball: None,
+        missile_head: None,
         shuriken: None,
         // No Cannon on Pure, so no Cannon draw.
         cannon_look: None,

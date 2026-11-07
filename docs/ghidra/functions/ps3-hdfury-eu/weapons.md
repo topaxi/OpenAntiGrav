@@ -1435,3 +1435,45 @@ sprites are `.gtf` flipbooks under `/data/psys/tex/`; they now play. The measure
 original smoke colour, the cause and what is open are in
 [`particle-triggers.md`](particle-triggers.md), "The Rocket's wall burst". Omega and
 2048: checked, applies, not wired.
+
+## The flying Missile's head draws its own model (2026-11-07, `hd-weapons`)
+
+Until now every HD Missile in flight drew the engine's procedural glow billboard
+(`Race::projectile_sprites`, `exhaust::sprite`), a stand-in, under `WO_MISSILE_HEAD`'s two
+particle balls. The disc's own head is `HD_missile_ball_bloomring.vex`; it is now loaded
+(`WeaponModels::missile_head`) and drawn in the billboard's place.
+
+- **What is read.** `Missile.cpp`'s constructor (`0x0011ccc8`, vtable `0x00863d18`, confidence
+  75 on the class) builds the model **twice**: a scene node into `this + 0x1c0` and another
+  into `this + 0x1c4` (`param_1[0x70]`, `[0x71]` in the decompile), each registered as a render
+  record, state bit 4 cleared. Two nodes per missile match the two `WO_MISSILE_HEAD` flare
+  anchors of `Missile_Init`. The destructor (`0x0011c230`) walks `+0x1c0`/`+0x1c4` only.
+- **What is not read.** The per-tick placement. The Missile's update is an AltiVec body
+  (`0x0011e640`, slot 5 of the vtable; Ghidra truncates it at the first vector op), so which
+  matrix each node takes, and its scale, is unresolved. **Chosen, not measured**: one head on
+  each of the two orbiting flare anchors (`missile_flare_anchors`, the law `WO_MISSILE_HEAD`
+  already rides on HD), on the velocity-built basis every HD body takes, at the model's authored
+  size (`Race::missile_head_model_matrices`).
+- **The model.** Two nodes, 800 triangles: an inline sphere and a bloom ring, the
+  LeachBeam ball's materials (`hd_leachbeam_ball_glow`, `hd_leachbeam_bloomring`), so the
+  existing `RIM_GLOW` routing applies unchanged; the loader reports it as
+  `HD_missile_ball_bloomring.vex: ... - a missile's head is this model, not a billboard`.
+- **What a player sees.** At 1920x1088, tick 305 (fired at 286): the glow billboard is gone and the
+  ring-and-core eye of the head shows inside the two white particle balls. The head is small
+  against the particles, so the change is a few thousand pixels around the missile
+  (3,952 differing pixels in a 160 x 70 box); the stand-in was mostly hidden under the effect
+  already.
+- **Still not drawn: the Missile's own smoke ribbon.** `RibbonEffects_Construct`'s pool `+0x74`
+  (18 elements, `smoke_trails_frame1_ALPHA.gtf`) is acquired from `Missile.cpp`'s `0x0011d288`
+  ([rocket-trail.md](rocket-trail.md)); its law is unread and nothing is drawn for it.
+- **No screen flash on HD.** `flash_for` starts `ScreenFlash_Start` for a Missile, but the
+  consumer is Pulse PSP's alone (`Options::screen_flash`), so HD runs none of it.
+- **Omega / 2048.** Omega ships the same entry (`Data\Weapons\HD_missile_ball_bloomring.vex`,
+  300 triangles over 2 submeshes, `hd_missile_ball.gnf`) and it builds through `psp2::build`:
+  **checked, applies, not wired**: the ball's rim-glow program is a PS3 fingerprint the PS4
+  builder does not set (the same hold as the LeachBeam ball), so Omega's Missile keeps its
+  billboard. 2048: the model is not named in its tables, `not checkable` without a title entry.
+- **Test.** `the_missile_head_loads_off_the_disc_and_glows_like_the_leach_ball`
+  (`crates/raceplay/tests/hd_rim_glow_ground_truth.rs`) pins the load, the report line and the
+  sphere's `RIM_GLOW`; `a_missile_places_two_heads_on_its_flare_anchors` pins the placement. The
+  draw call itself is judged by the frame, not a test.

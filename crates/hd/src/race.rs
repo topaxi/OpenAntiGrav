@@ -732,6 +732,9 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         noise: "Data/RibbonEffects/textures/hd_waketrail_clouds.gtf",
     }),
     leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),
+    // `Missile.cpp`'s constructor (`0x0011ccc8`) loads it twice, into the
+    // object's `+0x1c0` and `+0x1c4`: the flying head, not the explosion.
+    missile_head: Some(r"Data\Weapons\HD_missile_ball_bloomring.vex"),
     shuriken: None,
     cannon_look: Some(CANNON_LOOK),
     // No `staticglow` string in HD's EBOOT: it never binds a ghost static.
