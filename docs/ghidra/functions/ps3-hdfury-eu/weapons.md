@@ -1486,3 +1486,77 @@ particle balls. The disc's own head is `HD_missile_ball_bloomring.vex`; it is no
   (`crates/raceplay/tests/hd_rim_glow_ground_truth.rs`) pins the load, the report line and the
   sphere's `RIM_GLOW`; `a_missile_places_two_heads_on_its_flare_anchors` pins the placement. The
   draw call itself is judged by the frame, not a test.
+
+## The Missile's red rings: the white blob was the particles drawn without their atlas (2026-11-07, `hd-weapons-2`)
+
+**Claim before this change** (`hd-weapons`, above): a flying Missile in ours is two white-hot balls with a
+10 px eye where the original shows red-orange lobes with hollow rings about 60 px across; the cause was
+guessed to be the particle balls, the bloom or the head model's scale.
+
+**Result: the cause is the particles' sprite, and it is fixed.** Evidence, all from one RPCS3 grid
+(Talon's Junction, Feisar, rest pose, `scripts/rpcs3-hd-weapon.py --state 1 --shot-at 0.2,0.5,0.8`,
+1920x1080, `Write Color Buffers` on, no toast) and ours at the same pose, camera (`viewProj` decomposed from
+the pushbuffer: eye, forward, up, fov 60.0006) and lap-clock second (`scripts/hd-weapon-pair.py`):
+
+- **Bisect in ours** (the same frame, the head model, the particle effect and both toggled out): the head
+  model alone is two 10 px dots; the white blob is `WO_MISSILE_HEAD`'s particles, and the model draws
+  nothing the blob hides. The head model is **not** the colour gap.
+- **The effect** (`WO_MISSILE_HEAD`, HD `DATA02`): the root emitter and `MISSILE_HEAD_TRANSFORMED` spawn
+  one particle per tick for 12 +/- 6 ticks, additive, half-size 1.5 to 3 (1 to 2), alpha 255 to 0, colour
+  ramp `(255,81,18)` at birth, `(255,240,247)` at mid-life, `(255,11,35)` at the end, sprite
+  `vandergraf_balls_1024x512_missile`, an **8 x 4 atlas of thin red filament arcs** (read with
+  `oag_texture::gtf`). Multiplied by white-disc texels that ramp is a white blowout; multiplied by the
+  filaments it is the original's red rings with small white cores.
+- **The fix is the existing mechanism**: `oag_hd::effects::SPRITES`, the per-effect list of HD effects whose
+  `.gtf` sprites play (`Effects.sprites`), gains `MISSILE_FLARE_EFFECT`. Nothing else in the effect changed.
+- **Region metric**, box 760,330 520x430 of the 1920x1080 frame, `scripts/hd-weapon-region.py`, fire second
+  2.10 (the press window is 1.73 to 2.03 on the lap clock and a sweep over 1.95, 2.10, 2.20 places the
+  phase): lit pixels (red or every channel >= 240), centroid y, theirs against ours at the three frames
+  (lap clock 2.27, 2.55, 2.87):
+
+| | theirs red / white, mean RGB | ours before (list entry absent), red / white, mean RGB | ours after, red / white, mean RGB |
+| --- | --- | --- | --- |
+| frame 1 (2.55 s) | 6,310 / 2,329, (240, 149, 147), centroid y 515 | 1,756 / 6,822, (247, 224, 226), y 501 | 5,338 / 2,351, (239, 151, 153), y 509 |
+| frame 2 (2.87 s) | 2,391 / 1,044, (235, 154, 146), y 479 | not measured | 1,957 / 464, (233, 131, 137), y 472 |
+
+  Before, the lit mass was 80 % white and near-white on average; after, its mean colour is within 4 of
+  the original's on every channel at frame 1.   The centroid is within 7 px of the original's on both frames; the red mass is 85 % and 82 % of theirs. Frame 0
+  is not a clean metric (the original's frame carries a translucent HUD ring through the box).
+- **What still differs**, named: the two lobes orbit wider in ours (the anchor ellipse `1.5` x `3.0` is
+  Pulse's law, the original's is tighter at 0.5 s); the original's long wispy loops from the nose to the
+  missile at 0.8 s are more than the 12-tick particles reach, which is the ribbon below; a listed effect draws
+  each particle on its spawn frame, HD's own flipbook advance still unread (`Effects.sprites`).
+- **Still undrawn: the Missile's smoke ribbon** (`RibbonEffects` pool `+0x74`, `smoke_trails_frame1_ALPHA`).
+  Its law and the AltiVec per-tick update `0x0011e640` were not read in this change; nothing is drawn for it,
+  and the loader says so. The head model keeps its authored size (about 10 px at this distance): in the
+  original frames nothing a player sees is that small, and the model's own scale and placement stay
+  **chosen, not measured**.
+- **Omega / 2048: checked, applies, no pixel check.** `Effects.sprites` is an HD (`.gtf`) gate only:
+  `oag_raceplay::assets::particle_effect` reads `.gnf` (PS4) and `.gxt` (Vita) sprites for every effect
+  ungated, so an Omega or 2048 `WO_MISSILE_HEAD` draws whatever atlas its own `.pob` names. Whether Omega
+  ships the same ring atlas, and how its Missile looks, was not measured: nobody has a shadPS4 frame of an
+  Omega Missile in flight.
+- **Tests.** `only_hd_lists_effects_whose_gtf_sprites_play` pins the list entry: dropping `WO_MISSILE_HEAD` from
+  `SPRITES` fails it. `the_missile_head_draws_its_ring_atlas_when_listed_and_a_white_disc_when_not`
+  (`crates/raceplay/src/tests/hd_effect_sprites.rs`, disc-backed) pins what the entry does: the two head
+  emitters decode the atlas when listed and none does when not. The picture is judged by the pair above.
+
+### The other weapons against the original (same grid, same camera, `hd-weapons-2`)
+
+One RPCS3 grid, a weapon given by the pickup slot (`scripts/rpcs3-hd-weapon.py --shot-at`), three or four
+paused frames each, ours rendered at the original's pose, camera and fire second
+(`scripts/hd-weapon-pair.py`). **A shot's effect can outlast it**: state 8 left a green shell around the
+craft that was still drawn at the next weapon, so a weapon fired after another on the same grid is not a
+clean frame (the first Plasma and Rocket frames taken that way were discarded and retaken; the Bomb and LeachBeam
+ones were not retaken).
+
+| Weapon (state) | Same moment | Differences | Status |
+| --- | --- | --- | --- |
+| Missile (1) | lap clock 2.27, 2.55, 2.87 | rings drawn since this change; orbit wider; ribbon undrawn | fixed (rings), ribbon named |
+| Rocket (0) | 4.67, 4.92, 5.32 | three flames and three smoke trails in both, rockets level by 0.8 s; the original's trails are blue-grey and fan wider, ours white and tight (the ribbon vertex colour is chosen, `particle-triggers.md`); ours leaves the nose 0.1 s behind (one big white flash where the original shows three flames) | named |
+| Plasma (7) | 10.42, 10.67, 11.05 | the ring-and-ball at the nose matches; the original adds purple lightning rays and a forward blue ripple wave by 0.4 s that ours does not draw. **Candidates, not a cause:** `WO_PLASMA_LAUNCH` (no recovered caller), `WO_PLASMA_CHARGING` (unwired), or `WO_PLASMA_LIGHTNING_EXPAND` (wired) not playing at these ticks in ours. The original's button was held about 0.5 s and ours' for one tick, which matters for a charging weapon. **The brief's growing-sphere question stays open**: the clean frames stop at 0.8 s | named, open |
+| Cannon (8) | 2.28, 2.42, 2.67 | **the original draws a green-cyan shell around the whole craft for many seconds, not a muzzle flash**; ours a small spark; the HUD names it "Machine Gun" with damage 5. Whether state 8's visual is the Cannon's own or a shield-like effect is unresolved | named, open |
+| Bomb (9), Mine, LeachBeam (10) | | frames taken on a grid carrying the state-8 shell and a displaced craft: unusable | not paired; command in the thread |
+| Detonator's weapons | | deferred with the mode | undrawn, named |
+
+`HD_Mine_halo` stays unwired: it needs its own rim program and no original frame of a laid Mine was taken.

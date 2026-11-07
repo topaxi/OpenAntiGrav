@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-07
-summary: "HD weapons draw their own models; open: Missile head placement and smoke ribbon, Plasma noise tap, HD_Mine_halo, Fury detonator bolt"
+summary: "Missile rings fixed on a pinned pair; open: Missile ribbon, Plasma launch, state 8 shell, Bomb/Mine/Leach pairs, Mine halo"
 difficulty: medium (30)
 ---
 
@@ -399,9 +399,29 @@ Audit with `--give <weapon>` on Talon's Junction: the only HD projectile that st
 billboard was the Missile (the closure in `scene/frame.rs` had no arm for it). `HD_missile_ball_bloomring`
 is now `WeaponModels::missile_head`, two per missile on the two flare anchors (`weapons.md`,
 "The flying Missile's head draws its own model"). Open on it, in order of what a player would notice:
-- A pinned pair against the original (capture `viewProj`; `rpcs3-hd-weapon.py --state 1`, shot at film 6.2 s): its heads are red-orange lobes with hollow rings about six times ours in size, ours are white-hot (particle colour and bloom, and possibly the head's scale).
+- ~~A pinned pair against the original~~ **done by `hd-weapons-2`, see its section below** (capture `viewProj`; `rpcs3-hd-weapon.py --state 1`, shot at film 6.2 s): its heads are red-orange lobes with hollow rings about six times ours in size, ours are white-hot (particle colour and bloom, and possibly the head's scale).
 - The original's per-tick placement and scale of the two nodes (`0x0011e640`, AltiVec, read with capstone
   over the raw bytes); the head is small under the particles, so a matched frame is the way to judge it.
 - The Missile's smoke ribbon (`RibbonEffects` pool `+0x74`, `smoke_trails_frame1_ALPHA`); law unread.
 - Omega: the model ships and builds, held with the LeachBeam ball (PS4 program for the rim glow).
 - The `ScreenFlash` is Pulse PSP's alone, so the Missile's `flash::BLAST` runs on HD: no (checked).
+
+## 2026-11-07 (`hd-weapons-2`): the Missile's rings fixed, the pair tooling, what is still unpaired
+
+The Missile's white blob was its particles drawn without their sprite: `oag_hd::effects::SPRITES` gains
+`WO_MISSILE_HEAD`, the atlas `vandergraf_balls_1024x512_missile` (8 x 4 red filament arcs) draws, and a pinned
+pair (camera from the pushbuffer, ours at the same pose and lap-clock second) matches the original's mean colour
+and centroid (`weapons.md`, "The Missile's red rings"). Tools: `scripts/rpcs3-hd-weapon.py --shot-at T,T`
+(paused frames with camera and pose), `scripts/hd-weapon-pair.py` (ours at the same moment),
+`scripts/hd-weapon-region.py` (the box metric). Open, in order:
+- **Bomb, Mine, LeachBeam, Cannon pairs.** Fire ONE weapon per fresh grid: state 8 leaves a green shell around the craft
+  for many seconds, which ruined every shot after it (and the craft is displaced by `--teleport-back`). Restart Race from
+  the pause menu between weapons (`press start`, five `down`, `cross`, one press at a time: a host at load 30 drops
+  presses). A fire in the first second after GO fires nothing; `--fire-after 3` and `--hold 1.0` are the defaults that fired.
+- **State 8's visual**: a green-cyan shell around the whole craft, no muzzle flash, HUD "Machine Gun" damage 5. Settle
+  which weapon it is (the Shield is state 5 in `rpcs3-capture.md`) before touching the Cannon's look.
+- **Plasma's launch**: purple lightning rays and a forward blue ripple wave at 0.4 s that ours lacks (candidates
+  `WO_PLASMA_LAUNCH`, `_CHARGING`, or the wired `_LIGHTNING_EXPAND` not playing). Hold ours' button like the original's
+  (~0.5 s), film out to 3 s on one fresh grid for the growing sphere, and find the trigger before drawing anything.
+- **Rocket**: the original's smoke is blue-grey and fans wider; ours white and tight (the ribbon vertex RGB, chosen).
+- **Missile ribbon** (`RibbonEffects` pool `+0x74`) and the heads' own scale: unread (`0x0011e640`); `HD_Mine_halo` unwired.
