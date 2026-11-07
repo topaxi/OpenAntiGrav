@@ -89,7 +89,7 @@ impl super::Session {
     }
 
     /// Whether a shot of several frames is under way.
-    pub(super) fn photo_job_running(&self) -> bool {
+    pub(crate) fn photo_job_running(&self) -> bool {
         self.photo.as_ref().is_some_and(|open| open.job.is_some())
     }
 

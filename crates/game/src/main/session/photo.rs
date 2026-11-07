@@ -380,14 +380,23 @@ impl super::Session {
         };
         let effects = stage.race.photo()?.effects();
         Some(format!(
-            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={}",
+            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={} blur={} shutter={} rewind={}",
             effects.value(Row::Exposure),
             effects.value(Row::Saturation),
             effects.value(Row::SpeedBlur),
             if effects.value(Row::DepthOfField) == 1 { "on" } else { "off" },
             effects.value(Row::Aperture),
             effects.value(Row::Focus),
+            effects.value(Row::MotionBlur),
+            effects.value(Row::Shutter),
+            effects.target_tick(),
         ))
+    }
+
+    /// The drive's reading of the shot under way: `frames drawn / frames`, or `none`.
+    pub(crate) fn photo_job_name(&self) -> String {
+        self.photo_progress()
+            .map_or_else(|| "none".to_string(), |(done, all)| format!("{done}/{all}"))
     }
 
     /// The drive's name for the mode: the lens, or `none`.
