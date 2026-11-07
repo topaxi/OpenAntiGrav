@@ -226,6 +226,12 @@ impl Effects {
         self.back = self.back.min(tick);
     }
 
+    /// The live tick: the rewind row's far end.
+    #[must_use]
+    pub fn live(&self) -> u64 {
+        self.live
+    }
+
     /// The tick the rewind row asks the picture to show.
     #[must_use]
     pub fn target_tick(&self) -> u64 {

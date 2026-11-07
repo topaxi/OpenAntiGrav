@@ -280,6 +280,9 @@ impl Session {
         // the scene texture can be larger than the rectangle drawn into it.
         // Everything that normalises against this inherits the extent for
         // free, the camera jitter of ADR-0039 included.
+        // A photo mode shot of several frames stands the race at its next frame and says how far
+        // between ticks to draw it (`session::photo_rewind`).
+        let job_alpha = self.photo_job_prepare();
         let size = self.framebuffer.extent();
         let inside = (0.0, 0.0, size.0 as f32, size.1 as f32);
         let scene_target = self.framebuffer.view();
@@ -489,7 +492,9 @@ impl Session {
                     // clock is into the next one, so motion is smooth at any
                     // frame rate - and the tick exactly while paused, when the
                     // race is not stepping. See `race::between_ticks`.
-                    oag_raceplay::between_ticks::frame_alpha(&self.clock, stepping),
+                    job_alpha.unwrap_or_else(|| {
+                        oag_raceplay::between_ticks::frame_alpha(&self.clock, stepping)
+                    }),
                     inside,
                     self.settings.graphics.fov,
                     self.settings.graphics.frustum_culling,

@@ -80,6 +80,12 @@ pub mod strings {
     pub const APERTURE: &str = "OAG_PHOTO_APERTURE";
     pub const FOCUS: &str = "OAG_PHOTO_FOCUS";
     pub const PANEL_KEYS: &str = "OAG_PHOTO_PANEL_KEYS";
+    pub const REWIND: &str = "OAG_PHOTO_REWIND";
+    pub const MOTION_BLUR: &str = "OAG_PHOTO_MOTION_BLUR";
+    pub const SHUTTER: &str = "OAG_PHOTO_SHUTTER";
+    pub const PROGRESS: &str = "OAG_PHOTO_PROGRESS";
+    pub const CANCELLED: &str = "OAG_PHOTO_CANCELLED";
+    pub const ANY_INPUT: &str = "OAG_PHOTO_ANY_INPUT";
     pub const HELP: &str = "OAG_PHOTO_HELP";
     pub const SAVED: &str = "OAG_PHOTO_SAVED";
     pub const FAILED: &str = "OAG_PHOTO_FAILED";
@@ -237,7 +243,17 @@ fn label_of(row: Effect) -> &'static str {
         Effect::DepthOfField => strings::DEPTH,
         Effect::Aperture => strings::APERTURE,
         Effect::Focus => strings::FOCUS,
+        Effect::Rewind => strings::REWIND,
+        Effect::MotionBlur => strings::MOTION_BLUR,
+        Effect::Shutter => strings::SHUTTER,
     }
+}
+
+/// The race's clock at `tick`, `M:SS.s`: what the rewind row shows.
+#[must_use]
+pub fn clock(tick: u64) -> String {
+    let tenths = tick * 10 / 60;
+    format!("{}:{:02}.{}", tenths / 600, tenths / 10 % 60, tenths % 10)
 }
 
 /// The effects panel: one line a row, the cursor's row lit, an arrow either side of the value.
@@ -278,6 +294,12 @@ fn panel_list(photo: &Photo, grid: (f32, f32), say: &dyn Fn(&str) -> String) -> 
             } else {
                 strings::OFF
             }),
+            Effect::MotionBlur => say(match effects.value(row) {
+                1 => strings::TRACK,
+                2 => strings::SHIP,
+                _ => strings::OFF,
+            }),
+            Effect::Rewind => clock(effects.target_tick()),
             _ => format!("{}%", effects.value(row)),
         };
         list.push(text(x + 4.0, y + 2.0, say(label_of(row)), Align::Left));
@@ -316,6 +338,7 @@ pub fn draw_list(
     grid: (f32, f32),
     words: &Words,
     message: Option<&str>,
+    progress: Option<(u32, u32)>,
 ) -> Vec<Draw> {
     let say = words.say;
     let mut list = Vec::new();
@@ -340,6 +363,37 @@ pub fn draw_list(
             message.to_string(),
             Align::Centre,
         ));
+    }
+    if let Some((done, frames)) = progress {
+        // A shot under way: the bar and the way out, and nothing else.
+        let top = grid.1 * 0.5 - 14.0;
+        let width = grid.0 * 0.5;
+        let left = (grid.0 - width) / 2.0;
+        list.push(Draw::Fill {
+            rect: [0.0, top, grid.0, 36.0],
+            color: BAND,
+        });
+        list.push(text(
+            grid.0 / 2.0,
+            top + 4.0,
+            format!("{}  {done} / {frames}", say(strings::PROGRESS)),
+            Align::Centre,
+        ));
+        list.push(Draw::Fill {
+            rect: [left, top + 15.0, width, 4.0],
+            color: SELECTED,
+        });
+        list.push(Draw::Fill {
+            rect: [left, top + 15.0, width * done as f32 / frames.max(1) as f32, 4.0],
+            color: TEXT,
+        });
+        list.push(text(
+            grid.0 / 2.0,
+            top + 23.0,
+            say(strings::ANY_INPUT),
+            Align::Centre,
+        ));
+        return list;
     }
     if !photo.help() {
         return list;

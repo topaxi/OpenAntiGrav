@@ -110,6 +110,8 @@ mod window_layout;
 pub(crate) mod devrun;
 #[path = "session/photo.rs"]
 mod photo;
+#[path = "session/photo_rewind.rs"]
+mod photo_rewind;
 #[path = "session/pure_chain.rs"]
 mod pure_chain;
 #[path = "session/placeholder.rs"]

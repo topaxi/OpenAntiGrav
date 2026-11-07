@@ -40,6 +40,13 @@ pub(crate) struct Open {
     /// opens: the screen is drawn every frame.
     own: StringTable,
     english: StringTable,
+    /// The race on screen moved through its past, once the rewind row or a motion blur shot
+    /// first needs it (`photo_rewind`).
+    pub(super) rewind: Option<oag_raceplay::photo::rewind::Rewind>,
+    /// A shot of several frames under way.
+    pub(super) job: Option<super::photo_rewind::Job>,
+    /// The tick the rewind row last asked for.
+    pub(super) asked: u64,
 }
 
 impl Open {
@@ -102,6 +109,7 @@ impl super::Session {
     fn begin_photo(&mut self, origin: Origin) {
         let held = self.controls.buttons();
         let (select, square) = (held.is_held(Button::Select), held.is_held(Button::Square));
+        let title_shot = self.shell.as_ref().and_then(|shell| shell.title.photo_shot);
         let Stage::Race(stage) = &mut self.stage else {
             return;
         };
@@ -111,6 +119,13 @@ impl super::Session {
             return;
         }
         info!("photo mode opened ({origin:?})");
+        // What the title's original accumulates, and whether the race can be moved through its
+        // past (a menu visit to a race with keyframes; the finish keeps its board).
+        stage.race.photo_offer(
+            title_shot,
+            origin == Origin::Menu && stage.keeper.is_some(),
+        );
+        let asked = stage.race.sim.world.tick;
         self.controls.silence_motors();
         let language = self.settings.language.as_deref();
         self.photo = Some(Open {
@@ -119,6 +134,9 @@ impl super::Session {
             shot: None,
             own: oag_ui::strings::project_table(language),
             english: oag_ui::strings::project_table(None),
+            rewind: None,
+            job: None,
+            asked,
         });
     }
 
@@ -160,6 +178,14 @@ impl super::Session {
             shot: buttons.take(Button::Cross),
             leave: buttons.take(Button::Circle),
         };
+        // A shot of several frames under way owns the mode: any input abandons it, and the
+        // controls stand still while it runs.
+        if self.photo_job_running() {
+            if Self::photo_input_abandons(&pad, pointer, input) {
+                self.photo_job_cancel();
+            }
+            return;
+        }
         let Stage::Race(stage) = &mut self.stage else {
             return;
         };
@@ -202,7 +228,7 @@ impl super::Session {
             }
         }
         match stage.race.photo_step(pad) {
-            Action::None => {}
+            Action::None => self.photo_rewind_sync(),
             Action::Leave => self.leave_photo(),
             Action::Shot => self.ask_for_a_shot(),
         }
@@ -224,12 +250,18 @@ impl super::Session {
             self.photo_message(strings::FAILED);
             return;
         }
+        let path = photo::shot_path(&dir, title, now);
+        // Several frames when the title's shot accumulates and the controls ask for it, else the
+        // frame on screen.
+        if self.start_photo_job(&path) {
+            return;
+        }
         if let Some(open) = self.photo.as_mut() {
-            open.shot = Some(photo::shot_path(&dir, title, now));
+            open.shot = Some(path);
         }
     }
 
-    fn photo_message(&mut self, id: &str) {
+    pub(super) fn photo_message(&mut self, id: &str) {
         if let Some(open) = self.photo.as_mut() {
             open.message = Some((open.word(id), MESSAGE_TICKS));
         }
@@ -240,28 +272,15 @@ impl super::Session {
     /// the screen nor (unless its row is on) the HUD is in the file. Called once the frame is
     /// submitted.
     pub(super) fn finish_photo_shot(&mut self) {
+        self.photo_job_collect();
         let Some(path) = self.photo.as_mut().and_then(|open| open.shot.take()) else {
             return;
         };
-        let (width, height) = self.framebuffer.output_size();
-        let texture = self.framebuffer.output_texture();
-        let device = &self.gpu.device;
-        let encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("photo shot"),
-        });
-        let result = oag_game::capture::read_back(device, &self.gpu.queue, encoder, texture, width, height)
-            .map(|mut pixels| {
-                if matches!(
-                    texture.format(),
-                    wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
-                ) {
-                    for pixel in pixels.as_chunks_mut::<4>().0 {
-                        pixel.swap(0, 2);
-                    }
-                }
-                pixels
-            })
-            .and_then(|pixels| oag_game::capture::write_png(&path, width, height, &pixels));
+        let result = self
+            .read_photo_output()
+            .and_then(|(pixels, width, height)| {
+                oag_game::capture::write_png(&path, width, height, &pixels)
+            });
         match result {
             Ok(()) => {
                 debug!("photo mode: saved {}", path.display());
@@ -274,13 +293,40 @@ impl super::Session {
         }
     }
 
+    /// The presentation target as the frame just submitted left it, as RGBA bytes with its
+    /// size.
+    pub(super) fn read_photo_output(&mut self) -> anyhow::Result<(Vec<u8>, u32, u32)> {
+        let (width, height) = self.framebuffer.output_size();
+        let texture = self.framebuffer.output_texture();
+        let device = &self.gpu.device;
+        let encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("photo shot"),
+        });
+        let mut pixels =
+            oag_game::capture::read_back(device, &self.gpu.queue, encoder, texture, width, height)?;
+        if matches!(
+            texture.format(),
+            wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
+        ) {
+            for pixel in pixels.as_chunks_mut::<4>().0 {
+                pixel.swap(0, 2);
+            }
+        }
+        Ok((pixels, width, height))
+    }
+
     /// Closes the mode: the camera as it was, the race stepping again, every button the mode
     /// read spent so none reaches the race or the end screens as a press.
     pub(crate) fn leave_photo(&mut self) {
-        let Some(open) = self.photo.take() else {
+        self.photo_job_cancel();
+        let Some(mut open) = self.photo.take() else {
             return;
         };
         if let Stage::Race(stage) = &mut self.stage {
+            // The live race, put back to the bit, before the camera is.
+            if let Some(rewind) = open.rewind.take() {
+                rewind.end(&mut stage.race);
+            }
             stage.race.photo_end();
         }
         let buttons = self.controls.buttons_mut();
@@ -322,6 +368,7 @@ impl super::Session {
                 button: &button,
             },
             open.message.as_ref().map(|(text, _)| text.as_str()),
+            self.photo_progress(),
         )
     }
 
