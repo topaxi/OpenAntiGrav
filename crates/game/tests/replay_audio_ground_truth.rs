@@ -103,6 +103,8 @@ enum Reach {
     Seek,
     /// A seek and nothing else.
     SeekOnly,
+    /// Played at 1X to `FROM`, then at 2X (the effects muted) to `AT`, then at 1X again.
+    Fast,
 }
 
 /// Renders the mixer for the window after `AT`, returning its samples (left and right
@@ -143,6 +145,51 @@ fn render(
                 audio.tick();
             }
             AT as usize * FRAMES_PER_TICK * 2
+        }
+        Reach::Fast => {
+            while viewer.at() < FROM {
+                if let Moved::Stepped(_) = viewer.update(&mut race) {
+                    oag_game::sound::race_tick(&mut audio, &mut race);
+                }
+                audio.tick();
+            }
+            let mut muted = false;
+            viewer.faster();
+            while viewer.at() < AT - 2 {
+                if let Moved::Stepped(ticks) = viewer.update(&mut race) {
+                    let at = viewer.at();
+                    oag_game::sound::viewer_step(
+                        &mut audio,
+                        &mut race,
+                        ticks == 1 && viewer.speed() == 16,
+                        &mut muted,
+                        at,
+                    );
+                }
+                audio.tick();
+            }
+            // 2X to 4X to 0.5X to 1X: the next speed wraps round.
+            for _ in 0..3 {
+                viewer.faster();
+            }
+            assert_eq!(viewer.speed(), 16);
+            // The first frames at 1X are what is compared, so the rebuild is in them.
+            let mut kept = None;
+            for _ in 0..(SKIP + WINDOW + 2) {
+                if let Moved::Stepped(ticks) = viewer.update(&mut race) {
+                    let at = viewer.at();
+                    if kept.is_none() {
+                        kept = Some(at);
+                    }
+                    oag_game::sound::viewer_step(&mut audio, &mut race, ticks == 1, &mut muted, at);
+                }
+                audio.tick();
+            }
+            audio.finish().expect("writing the dump");
+            // Every frame before the first at 1X, which is `AT - 1` or `AT - 2` ticks in.
+            let before = pcm(&path).len() - (SKIP + WINDOW + 2) as usize * FRAMES_PER_TICK * 2;
+            let _ = kept;
+            return pcm(&path).split_off(before);
         }
         Reach::Seek | Reach::SeekOnly => {
             // The viewer has been playing from the start up to `FROM`, as a player's would.
@@ -319,6 +366,12 @@ fn a_seek_sounds_like_playing_on_to_it() {
         Reach::SeekOnly,
         "replay-audio-bare.wav",
     ));
+    let fast = window(&render(
+        &loaded,
+        &replay,
+        Reach::Fast,
+        "replay-audio-fast.wav",
+    ));
 
     let (bp, bs, bb) = (
         semitone_bands(&played),
@@ -328,6 +381,18 @@ fn a_seek_sounds_like_playing_on_to_it() {
     let (rp, rs, rb) = (rms(&played), rms(&sought), rms(&bare));
     let (cp, cs, cb) = (centroid(&bp), centroid(&bs), centroid(&bb));
     let (shape, shape_bare) = (shape_correlation(&bp, &bs), shape_correlation(&bp, &bb));
+    let bf = semitone_bands(&fast);
+    let (rf, cf, shape_fast) = (rms(&fast), centroid(&bf), shape_correlation(&bp, &bf));
+    println!(
+        "2X then 1X again:         rms {rf:.5} ({:.3} of played), centroid {cf:.2} ({:+.2} semitones), spectrum correlation {shape_fast:.4}",
+        rf / rp,
+        cf - cp
+    );
+    assert!(
+        (0.8..=1.25).contains(&(rf / rp)) && (cf - cp).abs() < 0.5 && shape_fast > 0.9,
+        "back at 1X after a fast stretch the engines are rebuilt, not started cold: \
+         gain {rf} against {rp}, centroid {cf} against {cp}, correlation {shape_fast}"
+    );
     println!(
         "at tick {AT}, a window of {WINDOW} ticks from {SKIP} after it, a seek from tick {FROM}\n\
          played (continuous):      rms {rp:.5}, centroid {cp:.2} semitones over 100 Hz\n\

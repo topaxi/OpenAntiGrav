@@ -203,6 +203,23 @@ pub fn rebuild(audio: &mut Audio, race: &mut Race, tick: u64) {
     audio.rebuild_race_sfx(frame_of(race, Vec::new(), Vec::new(), Vec::new()), tick);
 }
 
+/// The sound of one step of a replay being watched. At 1X the race sounds as a race does; at any
+/// other speed the cues of the ticks that ran are dropped and the effects stopped, and back at
+/// 1X they are rebuilt from the state at `at` (`muted` remembers it), not started cold.
+pub fn viewer_step(audio: &mut Audio, race: &mut Race, normal: bool, muted: &mut bool, at: u64) {
+    if !normal {
+        drop(race.drain_cues());
+        drop(race.drain_announcements());
+        drop(race.drain_class_announcements());
+        audio.stop_race_sfx();
+        *muted = true;
+    } else if std::mem::take(muted) {
+        rebuild(audio, race, at);
+    } else {
+        race_tick(audio, race);
+    }
+}
+
 /// One tick of the sound effects under a title's pre-race flyby, where its rule fades them in
 /// (`Race::intro_plays_race_sounds`): the circuit's ambience emitters from the flyby camera's
 /// ears, through the effects fade, and the craft's engines by range (inaudible until the camera

@@ -138,6 +138,9 @@ pub(crate) struct Active {
     /// Whether the race is stepping between ticks, for the draw's blend alpha: playing, and not
     /// held at the opening, the end or the last tick that agrees.
     pub(crate) stepping: bool,
+    /// Whether the effects were stopped for a speed other than 1X: back at 1X they are rebuilt
+    /// from the state, not started cold.
+    muted: bool,
     own: StringTable,
     english: StringTable,
 }
@@ -198,6 +201,7 @@ pub(crate) fn open_viewer(
     Ok(Active {
         viewer: Box::new(viewer),
         stepping: false,
+        muted: false,
         own: oag_ui::strings::project_table(language),
         english: oag_ui::strings::project_table(None),
     })
@@ -393,18 +397,21 @@ impl Session {
         let normal = viewer.speed() == 16;
         match moved {
             // The race at its own speed sounds as a race does; at any other speed the effects
-            // are muted and the cues of the ticks that ran are dropped.
-            Moved::Stepped(1) if normal => {
-                oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
+            // are muted, and back at 1X they are rebuilt (`oag_game::sound::viewer_step`).
+            Moved::Stepped(ticks) => {
+                let normal = normal && ticks == 1;
+                oag_game::sound::viewer_step(
+                    &mut self.audio,
+                    &mut stage.race,
+                    normal,
+                    &mut active.muted,
+                    at,
+                );
             }
-            Moved::Stepped(_) => {
-                drop(stage.race.drain_cues());
-                drop(stage.race.drain_announcements());
-                drop(stage.race.drain_class_announcements());
-                self.audio.stop_race_sfx();
+            Moved::Seeked => {
+                active.muted = false;
+                oag_game::sound::rebuild(&mut self.audio, &mut stage.race, at);
             }
-            Moved::Seeked => oag_game::sound::rebuild(&mut self.audio, &mut stage.race, at),
-            Moved::Still if normal && active.stepping => {}
             Moved::Still => {}
         }
     }
