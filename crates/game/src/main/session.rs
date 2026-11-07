@@ -413,6 +413,12 @@ pub(crate) struct Session {
     /// Photo mode while it is open: the race stands still and the camera is the player's
     /// (`session::photo`).
     pub(crate) photo: Option<photo::Open>,
+    /// The recorded races the REPLAYS page lists, read each time the menus open
+    /// (`session::replays`).
+    pub(crate) replay_list: Vec<oag_game::replays::Entry>,
+    /// Replays WATCH opened and the rebuild refused, with the reason: the page lists them
+    /// dimmed (`oag_game::replays::page::Context::refused`).
+    pub(crate) replay_refused: std::collections::BTreeMap<std::path::PathBuf, String>,
     /// The live race's pad rumble, or `None` (`session::rumble`).
     pub(crate) rumbler: Option<oag_game::rumble::Rumbler>,
     /// The session's wall clock in seconds, read once a frame: what a pause's

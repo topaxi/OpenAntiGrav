@@ -441,3 +441,30 @@ fn the_header_alone_reads_from_a_file_whose_body_is_cut_or_damaged() {
         Err(ReadError::BadMagic)
     ));
 }
+
+/// A seed is drawn over all of `u64` (`oag_game::race_seed`), and a TOML integer is an `i64`: a
+/// seed above `i64::MAX` written as it stands made a header no reader could parse, so half the
+/// races a player recorded could not be listed or watched.
+#[test]
+fn a_seed_over_the_signed_range_survives_the_file() {
+    for seed in [
+        0,
+        7,
+        i64::MAX as u64,
+        i64::MAX as u64 + 1,
+        9_915_474_475_271_654_925,
+        u64::MAX,
+    ] {
+        let mut replay = record(60);
+        replay.header.seed = seed;
+        let bytes = replay.to_bytes();
+        assert_eq!(Replay::from_bytes(&bytes).expect("reads").header.seed, seed);
+        assert_eq!(
+            Replay::read_head(&bytes).expect("the head reads").seed,
+            seed
+        );
+    }
+    // A file a build wrote with a small seed, as an unsigned-looking integer, reads as it did.
+    let old = edit_head(&record(60), |text| text.replace("seed = 7", "seed = 12345"));
+    assert_eq!(Replay::from_bytes(&old).expect("reads").header.seed, 12_345);
+}

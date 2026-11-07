@@ -23,6 +23,8 @@ use oag_replay::{Header, ReadError, Replay};
 
 pub use crate::ghosts::EXTENSION;
 
+pub mod page;
+
 /// The directory under the user's data directory replays are kept in.
 pub const DIRECTORY: &str = "replays";
 /// The ring: written when a race ends, pruned.
@@ -89,6 +91,19 @@ pub struct Entry {
     pub bytes: u64,
     /// What its header said.
     pub head: Head,
+}
+
+impl Entry {
+    /// What names this file among the listed ones: its folder and file name. A kept copy has
+    /// the name of the automatic file it was copied from, so the name alone would not do.
+    #[must_use]
+    pub fn key(&self) -> String {
+        let name = self
+            .path
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        format!("{}/{name}", self.folder.name())
+    }
 }
 
 /// The title as a file-name segment: lower-case letters and digits, anything else a `-`.

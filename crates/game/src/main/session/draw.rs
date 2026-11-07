@@ -852,9 +852,18 @@ impl Session {
                 .shell
                 .as_ref()
                 .and_then(|shell| {
-                    crate::records_page::table_for(&stage.menu, shell, &self.records).or_else(|| {
-                        oag_game::mods::table_for(&stage.menu, &shell.mods, &shell.strings)
-                    })
+                    crate::records_page::table_for(&stage.menu, shell, &self.records)
+                        .or_else(|| {
+                            oag_game::mods::table_for(&stage.menu, &shell.mods, &shell.strings)
+                        })
+                        .or_else(|| {
+                            let cx = super::replays::context(
+                                shell,
+                                &self.replay_refused,
+                                self.settings.replay.record,
+                            );
+                            oag_game::replays::page::table_for(&stage.menu, &self.replay_list, &cx)
+                        })
                 })
                 .unwrap_or_default();
             // The footer ticker's own honest rotation, off `Session::records` -

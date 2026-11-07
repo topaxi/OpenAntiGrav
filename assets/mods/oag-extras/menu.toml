@@ -48,6 +48,20 @@ target = "multiplayer"
 subtitle = "Race with other people, on this machine and later over a network"
 subtitle_string_id = "OAG_MENU_MULTIPLAYER_SUBTITLE"
 
+# REPLAYS lists the races the game recorded and plays them back (ADR-0087). Where the build has
+# no directory a player can reach (a page, a phone) the page is empty and says so. Chosen, not
+# measured.
+[[entry]]
+id = "replays"
+parent = "top"
+after = "multiplayer"
+kind = "submenu"
+label = "REPLAYS"
+string_id = "OAG_MENU_REPLAYS"
+target = "replays"
+subtitle = "Watch, keep or delete the races you have recorded"
+subtitle_string_id = "OAG_MENU_REPLAYS_SUBTITLE"
+
 [[entry]]
 id = "options"
 parent = "top"

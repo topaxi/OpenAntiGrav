@@ -524,6 +524,8 @@ impl App {
             stutter: Default::default(),
             pause: oag_game::pause::State::Running,
             photo: None,
+            replay_list: Vec::new(),
+            replay_refused: std::collections::BTreeMap::new(),
             rumbler: None,
             wall: 0.0,
             go_at: None,

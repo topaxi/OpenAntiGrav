@@ -536,3 +536,29 @@ OAG_OPTIONS_PLAYER_NAME = { text = "PLAYER NAME", human = false }
 OAG_OPTIONS_PLAYER_TAG = { text = "PLAYER TAG", human = false }
 OAG_PLAYER_NAME_TITLE = { text = "ENTER YOUR NAME", human = false }
 OAG_PLAYER_TAG_TITLE = { text = "ENTER YOUR TAG", human = false }
+
+# The REPLAYS page and the replay viewer (ADR-0087). Ours, in no original.
+OAG_MENU_REPLAYS = { text = "REPLAYS", human = false }
+OAG_MENU_REPLAYS_SUBTITLE = { text = "Watch, keep or delete the races you have recorded", human = false }
+OAG_REPLAYS_PAGE_TITLE = { text = "REPLAYS", human = false }
+OAG_REPLAYS_ROW = { text = "REPLAY", human = false }
+OAG_REPLAYS_WATCH = { text = "WATCH", human = false }
+OAG_REPLAYS_KEEP = { text = "KEEP", human = false }
+OAG_REPLAYS_DELETE = { text = "DELETE", human = false }
+OAG_REPLAYS_NONE = { text = "NONE YET", human = false }
+OAG_REPLAYS_NONE_WHY = { text = "EVERY RACE YOU DRIVE IS RECORDED HERE", human = false }
+OAG_REPLAYS_NONE_OFF = { text = "RECORDING IS OFF: [REPLAY] RECORD IN THE SETTINGS FILE", human = false }
+OAG_REPLAYS_MODE = { text = "RACE", human = false }
+OAG_REPLAYS_FINISH = { text = "FINISH", human = false }
+OAG_REPLAYS_DATE = { text = "DATE", human = false }
+OAG_REPLAYS_SIZE = { text = "SIZE", human = false }
+OAG_REPLAYS_NOTE = { text = "NOTE", human = false }
+OAG_REPLAYS_SAVED = { text = "SAVED", human = false }
+OAG_REPLAYS_TAKEN_OVER = { text = "TAKEN OVER AT %s", human = false }
+OAG_REPLAYS_NOT_FINISHED = { text = "NOT FINISHED", human = false }
+OAG_REPLAYS_NOT_VERIFIED = { text = "MODE NOT VERIFIED", human = false }
+OAG_REPLAYS_OTHER_TITLE = { text = "RECORDED ON %s: OPEN THAT DISC", human = false }
+OAG_REPLAYS_NEWER = { text = "RECORDED BY A NEWER VERSION", human = false }
+OAG_REPLAYS_DAMAGED = { text = "DAMAGED FILE", human = false }
+OAG_REPLAYS_NO_SETUP = { text = "CANNOT BE REBUILT: NO LAUNCH REQUEST", human = false }
+OAG_REPLAYS_REFUSED = { text = "CANNOT BE REBUILT HERE: %s", human = false }
