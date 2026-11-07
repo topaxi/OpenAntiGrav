@@ -90,7 +90,13 @@ impl Rewind {
     /// returns the tick reached, which with no recording is the keyframe at or before it.
     pub fn seek(&mut self, keeper: &mut Keeper, race: &mut Race, tick: u64) -> u64 {
         let target = tick.min(self.live);
-        let from = target.saturating_sub(PRE_ROLL);
+        // With no recording there is no pre-roll to play: the whole keyframe at or before the
+        // target is the nearest the race goes.
+        let from = if self.replay.is_some() {
+            target.saturating_sub(PRE_ROLL)
+        } else {
+            target
+        };
         let Some(timeline) = keeper.timeline() else {
             return self.at;
         };

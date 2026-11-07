@@ -229,8 +229,12 @@ impl Shot {
             while rewind.at() < frame.stand && rewind.step(race) {}
         }
         race.photo_set_shift(frame.lens);
-        if let Some(photo) = race.view.photo.as_mut() {
-            // Each frame is a different picture: the upscaler keeps no history across them.
+        // Each lens sample is a different picture, and the upscaler keeps no history across
+        // them. A blur's frames are one motion and the camera blend is keyed on the cut count,
+        // so it is left alone there.
+        if self.plan.blur.is_none()
+            && let Some(photo) = race.view.photo.as_mut()
+        {
             photo.cuts = photo.cuts.wrapping_add(1);
         }
         frame.alpha
