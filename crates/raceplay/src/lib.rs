@@ -314,6 +314,7 @@ mod weapon_light;
 mod weapons;
 #[cfg(feature = "view")]
 mod wreck_fx;
+mod flip;
 mod wrong_way_kill;
 #[cfg(feature = "view")]
 pub(crate) use weapons::{CannonAssets, CannonDraw};

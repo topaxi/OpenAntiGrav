@@ -137,6 +137,7 @@ impl Race {
                 *slot_controls = self.player_controls(slot, inputs.get(slot));
             }
         }
+        self.tick_flips(inputs, &mut controls);
         #[cfg(test)]
         {
             self.last_controls = controls;

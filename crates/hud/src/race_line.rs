@@ -16,8 +16,8 @@
 //! - **Counts.** `ShipsInFront` is the number of other craft whose marker is at or right of the
 //!   player's, `ShipsBehind` is every other craft left over.
 //!
-//! **Not drawn: the marker's half turn.** The original rotates a marker by pi when a byte at
-//! `craft+0x6ad8` is set; what that byte is is unread, so every marker is upright.
+//! - **Half turn.** A craft facing back down the track (`craft+0x6ad8`) has its marker turned by
+//!   pi, `docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`.
 //!
 //! The layout is the gate: only the Eliminator roots author these widgets, and a readout without
 //! a race line draws none of them.
@@ -29,8 +29,12 @@ use crate::{Layout, Sprite};
 pub struct RaceLine {
     /// The player's own marker.
     pub player: f32,
+    /// The player faces back down the track.
+    pub player_turned: bool,
     /// The other craft's markers, in craft order.
     pub others: Vec<f32>,
+    /// Which of [`Self::others`] face back down the track.
+    pub others_turned: Vec<bool>,
 }
 
 impl RaceLine {
@@ -74,10 +78,14 @@ pub fn sprites(layout: &Layout, line: &RaceLine) -> Vec<Sprite> {
     }
     let bar_rect = layout.sprites[bar].rect;
     let mut drawn: Vec<Sprite> = layout.sprites[bar..markers].to_vec();
-    let place = |slot: usize, fraction: f32| -> Option<Sprite> {
+    let place = |slot: usize, fraction: f32, turned: bool| -> Option<Sprite> {
         let mut marker = layout.sprite(&format!("{MARKER_PREFIX}{slot}"))?.clone();
         let centre = bar_rect[0] + fraction * bar_rect[2];
         marker.rect[0] = centre - marker.rect[2] / 2.0;
+        if turned {
+            let [u, v, width, height] = marker.uv;
+            marker.uv = [u + width, v + height, -width, -height];
+        }
         Some(marker)
     };
     drawn.extend(
@@ -85,9 +93,12 @@ pub fn sprites(layout: &Layout, line: &RaceLine) -> Vec<Sprite> {
             .iter()
             .take(PLAYER_SLOT)
             .enumerate()
-            .filter_map(|(slot, &fraction)| place(slot, fraction)),
+            .filter_map(|(slot, &fraction)| {
+                let turned = line.others_turned.get(slot).copied().unwrap_or(false);
+                place(slot, fraction, turned)
+            }),
     );
-    drawn.extend(place(PLAYER_SLOT, line.player));
+    drawn.extend(place(PLAYER_SLOT, line.player, line.player_turned));
     drawn
 }
 
@@ -121,7 +132,28 @@ mod tests {
         RaceLine {
             player: 0.5,
             others: vec![0.75],
+            ..RaceLine::default()
         }
+    }
+
+    #[test]
+    fn a_craft_facing_back_has_its_marker_turned_by_half_a_turn() {
+        let layout = Layout::from_xml(&fixture());
+        let upright = sprites(&layout, &line());
+        let turned = sprites(
+            &layout,
+            &RaceLine {
+                player_turned: true,
+                others_turned: vec![true],
+                ..line()
+            },
+        );
+        for (upright, turned) in upright.iter().zip(&turned).skip(2) {
+            let [u, v, width, height] = upright.uv;
+            assert_eq!(turned.uv, [u + width, v + height, -width, -height]);
+            assert_eq!(turned.rect, upright.rect);
+        }
+        assert_eq!(upright[..2], turned[..2], "the bar and panels stay");
     }
 
     #[test]
@@ -129,6 +161,7 @@ mod tests {
         let tied = RaceLine {
             player: 0.5,
             others: vec![0.5, 0.25, 0.75],
+            ..RaceLine::default()
         };
         assert_eq!((tied.in_front(), tied.behind()), (2, 1));
     }

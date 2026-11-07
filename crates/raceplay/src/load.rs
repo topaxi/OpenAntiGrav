@@ -1308,6 +1308,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             reset_triggers: crate::respawn::reset_triggers_for(&title.reset_enables),
             opponent_fire: title.weapons.opponent_fire.value,
             score_law: rule.law,
+            flip_law: rule.flip,
             speedup_pads,
             weapon_pads,
             weapons,

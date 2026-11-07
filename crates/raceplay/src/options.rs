@@ -845,6 +845,9 @@ pub struct Setup {
     /// What an Eliminator is won on, `None` for kills: `oag_title::Title::eliminator` with the
     /// opponents' scale resolved for this race's difficulty.
     pub score_law: Option<oag_race::ScoreLaw>,
+    /// The Eliminator flip, `None` outside an Eliminator and on a title without one:
+    /// `oag_title::Title::eliminator_flip`.
+    pub flip_law: Option<oag_physics::flip::FlipLaw>,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*

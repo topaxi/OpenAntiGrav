@@ -53,6 +53,8 @@ pub const TITLE: &Title = &Title {
         oag_title::eliminator::EliminatorRule::Kills,
         "Wipeout Pulse",
     ),
+    // No flip in this executable: no `FE_FLIP`, no flip tunable, no `5 pi`.
+    eliminator_flip: oag_title::pre_race::Sourced::measured(None),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Pulse,

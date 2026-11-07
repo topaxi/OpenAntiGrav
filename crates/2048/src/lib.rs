@@ -94,6 +94,9 @@ pub const TITLE: &Title = &Title {
         oag_title::eliminator::EliminatorRule::Kills,
         "Wipeout Pulse",
     ),
+    // The executable has it, off `<Misc eliminator_flip_time>` per craft and class; not wired
+    // (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Per title").
+    eliminator_flip: oag_title::pre_race::Sourced::chosen(None),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,

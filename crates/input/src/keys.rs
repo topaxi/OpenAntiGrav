@@ -57,6 +57,7 @@ fn default_table() -> Vec<(&'static str, Key, Button)> {
         ("V", Key::Character("v".into()), Button::Triangle),
         ("Q", Key::Character("q".into()), Button::L),
         ("E", Key::Character("e".into()), Button::R),
+        ("F", Key::Character("f".into()), Button::Flip),
     ]
 }
 

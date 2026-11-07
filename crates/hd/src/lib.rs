@@ -95,6 +95,10 @@ pub const TITLE: &Title = &Title {
             race_setup: r"Data\Plugins\Frontend\Gui\racebox_definition.xml",
         }),
     ),
+    // `docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`: `5 pi` rad/s, read live.
+    eliminator_flip: oag_title::pre_race::Sourced::measured(Some(
+        oag_title::eliminator::FlipRule { seconds: 0.2 },
+    )),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,

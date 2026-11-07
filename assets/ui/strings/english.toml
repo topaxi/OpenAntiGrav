@@ -294,6 +294,7 @@ OAG_CONTROLS_PITCH_UP = { text = "PITCH UP", human = false }
 OAG_CONTROLS_PITCH_DOWN = { text = "PITCH DOWN", human = false }
 OAG_CONTROLS_AIRBRAKE_LEFT = { text = "AIRBRAKE LEFT", human = false }
 OAG_CONTROLS_AIRBRAKE_RIGHT = { text = "AIRBRAKE RIGHT", human = false }
+OAG_CONTROLS_ELIMINATOR_FLIP = { text = "ELIMINATOR FLIP", human = false }
 OAG_CONTROLS_CAMERA_VIEW = { text = "CAMERA VIEW", human = false }
 OAG_CONTROLS_SIDESHIFT = { text = "SIDESHIFT", human = false }
 OAG_CONTROLS_TRIGGERS = { text = "TRIGGERS", human = false }

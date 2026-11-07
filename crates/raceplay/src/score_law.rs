@@ -12,6 +12,8 @@ pub(crate) struct Resolved {
     pub(crate) law: Option<oag_race::ScoreLaw>,
     /// The target, `None` for the mode's default.
     pub(crate) target: Option<u32>,
+    /// The flip, `None` outside an Eliminator and on a title without one.
+    pub(crate) flip: Option<oag_physics::flip::FlipLaw>,
 }
 
 /// The race's rule and target, once, at load.
@@ -28,6 +30,14 @@ pub(crate) fn of(
         law: resolve(rule, stats.as_ref(), options.difficulty)
             .filter(|_| options.mode == oag_race::Mode::Eliminator),
         target: target(options, rule, archives, report),
+        // The original's block sits behind the same mode test.
+        flip: title
+            .eliminator_flip
+            .value
+            .filter(|_| options.mode == oag_race::Mode::Eliminator)
+            .map(|rule| oag_physics::flip::FlipLaw {
+                seconds: rule.seconds,
+            }),
     }
 }
 
