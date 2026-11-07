@@ -86,8 +86,9 @@ pub(crate) fn bounds(title: &str, run: &Run) {
         rotation[3]
     );
     assert!(
-        (100.0..=220.0).contains(&per_second),
-        "{title}: {per_second:.1} B per craft per s is not near the 149 to 168 ADR-0087 measured"
+        (140.0..=185.0).contains(&per_second),
+        "{title}: {per_second:.1} B per craft per s; the sweep's Venom race measured 156 to 176 \
+         (docs/formats/replay-file.md, \"The pose track\")"
     );
     capture_cost(title, run);
 }

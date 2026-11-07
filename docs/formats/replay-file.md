@@ -148,9 +148,11 @@ POSE  varint last tick (poses exist for ticks 0..=last)
 - **Playback** (`PoseTrack::pose(craft, at: f64)`): lerp and slerp between the keys around `at`
   ticks, the ends held. Across a jump of more than 16 units in one tick (a respawn) the earlier pose
   is held up to the later tick, so a frame between the two never draws the hull halfway along it. The
-  16 is **chosen, not measured**: the fastest step a flying craft takes is under 7 units a tick on
-  every title; the respawns measured below move 147 to 538 units. The recorded ticks are exact either
-  way.
+  16 is **chosen, not measured**, on the steps seen: the 99.99th percentile of a craft's step is 4.8
+  to 5.0 units a tick at Venom and 4.8 to 7.7 at Phantom (the first 6,000 ticks of the Autopilot race
+  on each title, `OAG_SWEEP_CLASS=PHANTOM`), and the respawns measured below move 147 to 538 units.
+  A craft that flew faster than 16 units a tick (a class or a mode not swept) would hold for a frame
+  wherever refinement left a one-tick segment; that is open. The recorded ticks are exact either way.
 - **Bounds.** `MAX_TICKS` is 216,000 (one hour): the recorder takes nothing past it, and the track
   ends there. A capture holds 20 bytes a key in memory, about 300 bytes a craft a second.
 - **Chosen, not measured:** the 1/64 step, the 10-bit rotation, the 6-tick base, the tolerances and
@@ -179,13 +181,21 @@ degree (the ADR's own row); refining against the keys as read adds a few keys an
 167.2 (Omega, 7,880), 170.9 (Pulse, 8,088) and 171.5 (HD, 8,257), worst error 0.0500 unit and 0.499
 degree on all five.
 
+**Class matters.** The table is Venom. The same Autopilot race at Phantom, first 6,000 ticks (Venom
+over the same stretch: Pulse 171.3, 2048 167.5): Pulse 230.3, Pure 196.9, HD 230.1, 2048 263.1, Omega
+246.3 bytes a craft a second, the error bound unchanged (0.0500 unit, 0.499 degree). A faster craft
+bends the line more per tick and refinement adds keys, so a Phantom race costs 15 to 57 percent more.
+The classes between, Zone and the other modes are not swept.
+
 **A respawn** (`pose_track_ground_truth::*_pose_track_bounds_a_respawn`): the pad flies to tick 600,
 the test lifts the player's craft 500 units off the circuit, and the game's own rescue puts it back
 (Pulse: the collision cage, the next tick, a step of 146.8 units; Pure, HD, 2048 and Omega: the
 200-unit distance rescue 30 ticks later, a step of 522 to 538 units). The track holds 0.0500 unit and
 0.5 degree at every tick of the run, and at the ticks around the jump (-2 to +30): Pulse 0.039 unit,
 Pure 0.048, HD 0.031, 2048 0.035, Omega 0.041; the two ticks either side of the jump are both keys,
-and a frame between them is the earlier pose. The refinement's handling of a teleport is shown, not argued.
+and a frame between them is the earlier pose. The refinement's handling of a teleport is shown, not argued. The 2048 Phantom Autopilot race above
+also contains one it did not provoke (a step of 1,104 units in the first 6,000 ticks) and holds the
+same bound.
 
 **Reading it.** An unknown chunk is skipped: `file::tests::a_build_that_does_not_know_the_pose_chunk_skips_it`
 renames the tag, redoes the checksum and reads the same recording without a track, which still
@@ -195,10 +205,17 @@ trailing byte, a mask bit past the last tick, a track longer than the recording.
 **Cost at the end of a race**, dev profile, load average about 30 (so an upper bound): a push a tick
 4 to 26 microseconds for eight craft, `Race::recorded`'s copy of the track 0.13 to 0.21 ms and
 `to_bytes` 2.5 to 4.6 ms on 2048's 14,410 ticks. No worker thread is needed. The capture holds
-270 to 650 KiB for eight craft over a race to the finish. The capture does not change the race:
-a recording race hashes as one without at every tick (`replay_ground_truth::ghost_changes_nothing`,
-`replay_timeline_ground_truth::a_visit_changes_nothing`, and every seek on the probe, which never
-records).
+270 to 650 KiB for eight craft over a race to the finish. The capture does not change the race, and
+the evidence differs by title: on Pulse, Pure, HD and 2048 a recording race hashes as a plain one
+at every tick of 7,200 (`replay_ground_truth::ghost_changes_nothing`, which records in the haunted
+twin); on Omega, which that test does not cover, the recording run's hashes are reproduced by the
+`Timeline`'s probe, which never records, at the opening pass's per-second hashes and 40 seek targets
+(`replay_timeline_ground_truth::omega_seeks_reproduce_a_pad_flown_race`), and the same seeks do so on
+the other four.
+
+**A restart or a quit** drops the race, and its recording with it. `Race::recorded` is valid at any
+tick (the open segment is closed in a copy), so writing the file before the drop is the session's:
+`restart_parked_race` and `quit_parked_race` build or drop the race, and neither touches the track.
 
 ## Checked against the other title of the pair
 
