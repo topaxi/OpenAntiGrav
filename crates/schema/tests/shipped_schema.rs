@@ -47,6 +47,10 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
         ("crates/game/tests/fixtures/music-state.toml", "music-state"),
         ("crates/game/tests/fixtures/settings.toml", "settings"),
         (
+            "crates/replay/tests/fixtures/replay-header.toml",
+            "replay-header",
+        ),
+        (
             "assets/fallback/Data/XML/SplitHud_Pulse.toml",
             "screen-layout",
         ),

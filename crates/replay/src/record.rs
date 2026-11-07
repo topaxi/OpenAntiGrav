@@ -2,6 +2,7 @@
 
 use oag_gameplay::{InputSnapshot, PlayerInputs};
 
+use crate::event::{Event, Kind};
 use crate::file::Replay;
 use crate::header::Header;
 use crate::pose::GhostLap;
@@ -32,6 +33,7 @@ impl Recorder {
                 initial_hash,
                 hashes: Vec::new(),
                 ghost: None,
+                events: Vec::new(),
             },
         }
     }
@@ -53,6 +55,19 @@ impl Recorder {
         if due {
             self.replay.hashes.push(hash());
         }
+    }
+
+    /// Records a change made to the race now, before the next tick: it applies before tick
+    /// [`Self::ticks`] runs, which is the tick a re-drive applies it before.
+    pub fn event(&mut self, seat: u8, kind: Kind, value: u32) {
+        let tick = self.ticks();
+        self.replay.events.push(Event::new(tick, seat, kind, value));
+    }
+
+    /// The events recorded so far.
+    #[must_use]
+    pub fn events(&self) -> &[Event] {
+        &self.replay.events
     }
 
     /// Whether the tick about to be recorded is one whose hash is stored.

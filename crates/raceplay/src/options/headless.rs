@@ -48,6 +48,8 @@ impl Setup {
             #[cfg(feature = "view")]
             trail_sparks: false,
             #[cfg(feature = "view")]
+            request: None,
+            #[cfg(feature = "view")]
             campaign_event: false,
             seed,
             // An empty track, spelled out because `AiTrack` deliberately has

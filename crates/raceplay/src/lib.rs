@@ -352,7 +352,7 @@ pub use options::{
     SeatPick, Setup, Sighting,
 };
 #[cfg(feature = "view")]
-pub use replay::{Ghost, GhostCapture};
+pub use replay::{ApplyError, Ghost, GhostCapture, Launch, UnknownOption, rebuild};
 pub use respawn::RespawnCause;
 pub use results::RunStats;
 #[cfg(feature = "view")]

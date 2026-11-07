@@ -168,6 +168,10 @@ pub struct State {
     /// Whether the race draws its ghost ship, on `stage=race`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ghost_visible: Option<bool>,
+    /// How many out-of-tick changes (a Pilot Assist switch, a handed-over weapon) the race's
+    /// recording holds, on `stage=race`; absent when the race records nothing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recorded_events: Option<usize>,
 }
 
 impl State {

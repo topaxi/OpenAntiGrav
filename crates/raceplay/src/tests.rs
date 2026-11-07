@@ -296,6 +296,7 @@ fn setup(handling: Handling) -> Setup {
         slot_teams: Vec::new(),
         sight: Sighting::default(),
         trail_sparks: false,
+        request: None,
         campaign_event: false,
         spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),

@@ -1,0 +1,197 @@
+# The HEAD chunk of a replay file (.oagr): what the run was of and how to rebuild its race, see
+# crates/replay/src/header.rs, docs/formats/replay-file.md and ADR-0087 decision 8. The inputs, hashes,
+# events and poses are binary chunks and are not described here. What this cannot say and stays
+# the reader's: that the key names a title this build knows, and that the tick-zero hash agrees
+# once the race is rebuilt from [setup].
+#
+# The schema is closed. The reader tolerates a key it does not know (a file a later build wrote
+# within this same v1); the schema itself refuses it.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/replay-header[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+# Whatever else the composition root needs to rebuild the same race: the control scheme, the AI
+# difficulty, the operator's autopilot, the Pilot Assist level, a handed-over weapon. Open: the
+# keys are the composition root's, the values are text.
+[types.options]
+type = "collection"
+itemtype = "string"
+keypattern = "^.+$"
+
+[types.ghost]
+type = "table"
+
+[types.ghost.lap]
+type = "integer"
+
+[types.ghost.start_tick]
+type = "integer"
+
+[types.ghost.lap_ticks]
+type = "integer"
+
+# The resolved launch request. Every key is optional: a reader takes the default of an absent
+# one, and an absent track or team is the title's own.
+[types.setup]
+type = "table"
+
+[types.setup.mode]
+type = "string"
+optional = true
+
+[types.setup.class]
+type = "string"
+optional = true
+
+[types.setup.track]
+type = "string"
+optional = true
+
+[types.setup.team]
+type = "string"
+optional = true
+
+[types.setup.hull_variant]
+type = "string"
+optional = true
+
+[types.setup.skin]
+type = "string"
+optional = true
+
+[types.setup.opponent_teams]
+type = "array"
+itemtype = "string"
+optional = true
+
+[types.setup.opponents]
+type = "boolean"
+optional = true
+
+[types.setup.no_driver_for_class]
+type = "boolean"
+optional = true
+
+[types.setup.people]
+type = "integer"
+optional = true
+
+[types.setup.views]
+type = "integer"
+optional = true
+
+[types.setup.laps_override]
+type = "integer"
+optional = true
+
+[types.setup.weapons_override]
+type = "boolean"
+optional = true
+
+[types.setup.eliminator_kill_target]
+type = "integer"
+optional = true
+
+[types.setup.eliminator_score_target]
+type = "integer"
+optional = true
+
+[types.setup.add_on_campaign]
+type = "string"
+optional = true
+
+[types.setup.zone_model]
+type = "boolean"
+optional = true
+
+# Set when the file is a fork of another replay (ADR-0087 decision 9). Read by this build, not yet
+# written.
+[types.fork]
+type = "table"
+
+[types.fork.tick]
+type = "integer"
+optional = true
+
+[types.fork.offered_at]
+type = "integer"
+optional = true
+
+[types.fork.seats]
+type = "array"
+itemtype = "integer"
+optional = true
+
+[types.fork.parent_build]
+type = "string"
+optional = true
+
+[types.fork.parent_hash]
+type = "string"
+pattern = "^0x[0-9a-f]{16}$"
+optional = true
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+optional = true
+
+[elements.title]
+type = "string"
+
+[elements.track]
+type = "string"
+
+[elements.mode]
+type = "string"
+
+[elements.class]
+type = "string"
+
+[elements.team]
+type = "string"
+
+[elements.seed]
+type = "integer"
+
+[elements.tick_rate]
+type = "integer"
+
+[elements.build]
+type = "string"
+optional = true
+
+[elements.hash_interval]
+type = "integer"
+
+[elements.slots]
+type = "array"
+itemtype = "integer"
+
+[elements.options]
+type = "types.options"
+optional = true
+
+[elements.ghost]
+type = "types.ghost"
+optional = true
+
+[elements.setup]
+type = "types.setup"
+optional = true
+
+[elements.fork]
+type = "types.fork"
+optional = true

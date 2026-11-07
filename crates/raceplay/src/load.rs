@@ -1,7 +1,5 @@
 //! [`load`]: everything a race needs, read out of one disc image, and the report
 //! of what came back.
-//!
-//! Split out of `race.rs` under the 1,000-line rule; its tests are `race/tests/load.rs`.
 
 use super::*;
 #[cfg(feature = "view")]
@@ -1129,6 +1127,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             people: options.people_flying(),
             #[cfg(feature = "view")]
             trail_sparks: options.trail_sparks,
+            #[cfg(feature = "view")]
+            request: Some(options.replay_setup()),
             #[cfg(feature = "view")]
             campaign_event: false,
             seed: options.seed.unwrap_or(SEED),

@@ -108,3 +108,102 @@ fn auto_load_off_races_no_stored_ghost_and_leaves_the_file_to_be_beaten() {
     assert!(save_to(&path, &key, &replay(&key, 2_900)).expect("writes"));
     assert!(!save_to(&path, &key, &replay(&key, 3_100)).expect("reads"));
 }
+
+mod old_and_foreign_headers {
+    use std::sync::Mutex;
+
+    use super::*;
+
+    static LINES: Mutex<Vec<(log::Level, String)>> = Mutex::new(Vec::new());
+
+    struct Capture;
+
+    impl log::Log for Capture {
+        fn enabled(&self, _: &log::Metadata) -> bool {
+            true
+        }
+        fn log(&self, record: &log::Record) {
+            LINES
+                .lock()
+                .unwrap()
+                .push((record.level(), record.args().to_string()));
+        }
+        fn flush(&self) {}
+    }
+
+    /// `bytes` with its `HEAD` text passed through `edit` and the checksum redone.
+    fn with_head(bytes: &[u8], edit: impl FnOnce(&str) -> String) -> Vec<u8> {
+        let len = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+        let text = edit(std::str::from_utf8(&bytes[16..16 + len]).unwrap());
+        let mut out = bytes[..8].to_vec();
+        out.extend_from_slice(b"HEAD");
+        out.extend_from_slice(&(text.len() as u32).to_le_bytes());
+        out.extend_from_slice(text.as_bytes());
+        out.extend_from_slice(&bytes[16 + len..bytes.len() - 16]);
+        let mut hasher = oag_core::StateHasher::new();
+        hasher.write(&out);
+        let sum = hasher.finish();
+        out.extend_from_slice(b"END_");
+        out.extend_from_slice(&8u32.to_le_bytes());
+        out.extend_from_slice(&sum.to_le_bytes());
+        out
+    }
+
+    fn stored(name: &str, edit: impl FnOnce(&str) -> String) -> (PathBuf, Key) {
+        let root = scratch(name);
+        let key = key();
+        let path = path_in(&root, &key);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let bytes = with_head(&replay(&key, 3_000).to_bytes(), edit);
+        std::fs::write(&path, bytes).unwrap();
+        (path, key)
+    }
+
+    /// An old ghost file (no `toml-schema` line) is raced as before and the absence is a `debug`
+    /// line; a file of another kind or a later major is ignored, naming what it is, at `warn`.
+    /// Fails if the loader stops reading the header, or logs the old file louder.
+    #[test]
+    fn an_old_file_loads_at_debug_and_a_foreign_header_is_refused_by_name() {
+        let _ = log::set_logger(Box::leak(Box::new(Capture)));
+        log::set_max_level(log::LevelFilter::Debug);
+
+        let (path, key) = stored("old", |text| {
+            text.lines().skip(1).collect::<Vec<_>>().join("\n")
+        });
+        assert!(load_from(&path, &key).is_some(), "an old ghost still loads");
+        let seen = LINES.lock().unwrap().clone();
+        assert!(
+            seen.iter()
+                .any(|(level, line)| *level == log::Level::Debug && line.contains("no toml-schema")),
+            "{seen:?}"
+        );
+        assert!(
+            seen.iter().all(|(level, _)| *level > log::Level::Warn),
+            "no warning for an old file: {seen:?}"
+        );
+
+        LINES.lock().unwrap().clear();
+        let (path, key) = stored("later", |text| {
+            text.replace("/v1/replay-header.tosd", "/v2/replay-header.tosd")
+        });
+        assert!(load_from(&path, &key).is_none());
+        let seen = LINES.lock().unwrap().clone();
+        assert!(
+            seen.iter().any(|(level, line)| *level == log::Level::Warn
+                && line.contains("replay-header schema v2 is not supported")),
+            "{seen:?}"
+        );
+
+        LINES.lock().unwrap().clear();
+        let (path, key) = stored("kind", |text| {
+            text.replace("/v1/replay-header.tosd", "/v1/pilot.tosd")
+        });
+        assert!(load_from(&path, &key).is_none());
+        let seen = LINES.lock().unwrap().clone();
+        assert!(
+            seen.iter()
+                .any(|(_, line)| line.contains("names a \"pilot\" file")),
+            "{seen:?}"
+        );
+    }
+}

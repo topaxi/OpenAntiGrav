@@ -44,10 +44,8 @@ pub(super) fn advance_one_tick(
     // Before the tick, so `spend_pickup` can fire it on this tick's edge.
     // Every viewed slot, which is slot 0 alone without a split.
     for slot in 0..race.viewport_count() {
-        if let Some(weapon) = options.give
-            && race.sim.world.ships[slot].pickup.weapon.is_none()
-        {
-            race.sim.world.ships[slot].pickup.weapon = Some(weapon);
+        if let Some(weapon) = options.give {
+            race.give_weapon(slot, weapon);
         }
     }
     match (&options.net, &options.remote_correction) {
