@@ -1,9 +1,10 @@
 # The pause menu
 
 What each title's own pause screen is, and what this build does (2026-11-07, lanes `pause-menu` and
-`pause-menu-2`). Scores follow the [rubric](../reverse-engineering/confidence-rubric.md). **Pulse, HD,
-Fury and Omega are wired; 2048 and Pure are not** (see [Other titles](#other-titles)): there, pausing
-still opens the front end's main page over the parked race, as before.
+`pause-menu-2`). Scores follow the [rubric](../reverse-engineering/confidence-rubric.md). **Pulse, HD and
+Fury are wired; Omega's table is read and tested but not wired; 2048 and Pure are not** (see
+[Omega](#omega) and [Other titles](#other-titles)): there, pausing still opens the front end's main
+page over the parked race, as before.
 
 ## Pulse
 
@@ -130,7 +131,8 @@ patches before and after).
 ### What ours does
 
 Frames, Time Trial and Speed Lap on Talon's Junction (original on RPCS3, ours on the Fury disc), read
-side by side. **Match**: the rows and their words, the order, the dimming, the title and its underline,
+side by side. **Match**: the rows and their words, the order, the dimming (the same patches of the paused frame
+against the race frame read 0.247 on ours and 0.247 to 0.250 on the original), the title and its underline,
 the cursor row, Confirm in the footer. The page is the front end's own column (a page of navigation rows
 is a `<HorizMenu>` strip elsewhere; `strip::suits` leaves the pause page a column on every title).
 
@@ -146,9 +148,11 @@ is a `<HorizMenu>` strip elsewhere; `strip::suits` leaves the pause page a colum
 - **Differs, open**: the race HUD is not drawn under the tint; the focused row is the front end's red
   where the original's is `HD_Blue`; the list starts at the page's left edge rather than at the authored
   `x = 480`; the footer reads NAVIGATION and CONFIRM where the original's has `RESUME GAME` in place of
-  NAVIGATION; the Eliminator HUD and the L1 flip are untouched by a pause and resume
-  (`an_eliminator_race_resumes_with_its_flip_intact`: the state hash at one tick is the unpaused
-  race's, and a flip pressed after the resume changes it).
+  NAVIGATION.
+- **Eliminator**: it takes the default `InGame Pause SP` screen, and its HUD (TARGET, the ranked rows,
+  the race line) is drawn again after a resume. A pause and resume leaves the race as it was and the L1
+  flip works after it (`an_eliminator_race_resumes_with_its_flip_intact`: the state hash at one tick is
+  the unpaused race's, and a flip pressed after the resume changes it).
 - **A split-screen race** still gets the main page (START's freeze); the disc's `Split Player 1`/`2`
   screens are the model.
 
@@ -159,16 +163,20 @@ table and that every screen can be left (`oag_hd::pause_menu::tests`); the game 
 
 ## Omega
 
-**Checked: ported, with one row less.** Omega's `ingame_definition.xml` (`data00`, `data08`, `data09`,
+**Checked, applies, not wired.** Omega's `ingame_definition.xml` (`data00`, `data08`, `data09`,
 identical on these screens) is HD's Fury file **without `ONL_VIEW_INV`**. Its binder
 ([`PauseMenu_BindRedirectForMode`](../ghidra/functions/ps4-omega-eu/pause-menu.md), `0x0155dc00`, 80)
 is the same switch on the same mode ids, preceded by a rewrite of the mode from a campaign event
-object. Not walked live: **not checkable here**, shadPS4 and `sway` are not installed on this
-machine. Ours is the HD table less that row (`oag_omega::pause_menu`, the test asserts the three
-copies and the equality with HD's less the row, and the drive test pauses a Time Trial and a
-Speed Lap). **Open on Omega**: the screen title and the footer legend draw in the front end's dark
-ink, unreadable over the dark tint (the Omega skin's frame is white); the original's own ink in a
-race is unmeasured.
+object. The table is `oag_omega::pause_menu::PAUSE_MENU` (HD's less that row; the ground-truth test
+asserts the three copies and the equality with HD's less the row), **but `Title::pause_menu` stays
+`None`** and a pause on Omega is the main page over the race, as before
+(`pause_menu_ground_truth::omega_screens`). Two reasons:
+
+1. **No original frame.** Not walked live: shadPS4 and `sway` are not installed on the machine that did
+   this (`scripts/shadps4-omega-pair.py`'s rig with a START press after the grid is the recipe).
+2. **A legibility defect ours has there.** Wired, the screen title and the footer legend draw in the
+   front end's dark ink (Omega's frame is white) and are unreadable over the dark tint; the original's
+   own ink in a race is unmeasured. Wire it once a frame says what the title and footer look like.
 
 ## Other titles
 

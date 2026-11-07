@@ -1,4 +1,5 @@
-//! Wipeout Omega Collection's own pause screens, as its disc authors them.
+//! Wipeout Omega Collection's own pause screens, as its disc authors them. **Read and tested, not
+//! wired** (`oag_title::Title::pause_menu` is `None`): `docs/ui/pause-menu.md`, "Omega".
 
 use oag_title::{
     Origin,

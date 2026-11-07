@@ -230,7 +230,10 @@ pub const TITLE: &Title = &Title {
     // read through its own `load_omega`; no grids file is read on its own and no
     // unlock row is wired.
     main_menu: main_menu::MAIN_MENU,
-    pause_menu: Some(pause_menu::PAUSE_MENU),
+    // The table is read and tested (`pause_menu`) but not wired: no frame of Omega's own pause
+    // screen exists to compare it with, and its title and footer draw dark over the tint, so a
+    // pause opens the main page over the race, as before (`docs/ui/pause-menu.md`, "Omega").
+    pause_menu: None,
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Omega,
         definition_entry: None,

@@ -413,50 +413,30 @@ mod hd_screens {
     }
 }
 
-/// Omega's front end is HD's: the same screens without the invites row, opened by the same switch.
-/// Needs the decrypted package pair, not an image.
+/// Omega's table is read but not wired: a pause there is the main page over the parked race, as
+/// before. Needs the decrypted package pair, not an image.
 mod omega_screens {
     use super::*;
 
-    fn omega() -> Option<std::path::PathBuf> {
-        oag_testdata::exact("data/extracted/ps4")
-    }
-
     #[test]
     #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
-    fn a_time_trial_and_a_speed_lap_pause_into_hds_rows() {
-        let Some(source) = omega() else {
+    fn a_pause_on_omega_opens_the_main_page_over_the_race() {
+        let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
             return;
         };
-        let run_omega = |tag: &str, mode: &str| {
-            run_on(
-                &source,
-                &format!("omega-{tag}"),
-                &format!("{} {OPEN}", to_the_race(mode)),
-            )
-        };
-        let time_trial = run_omega("time-trial", "time_trial");
-        assert_eq!(
-            rows(&time_trial),
-            pairs(&[
-                ("CONTINUE", "back"),
-                ("GAME OPTIONS", "submenu"),
-                ("AUDIO OPTIONS", "submenu"),
-                ("PHOTO MODE", "photo_mode"),
-                ("RESTART RACE", "restart_race"),
-                ("QUIT RACE", "quit_race"),
-            ])
+        let run = run_on(
+            &source,
+            "omega-fall-through",
+            &format!(
+                "{} escape; until stage=menu; expect page=main",
+                to_the_race("time_trial")
+            ),
         );
-        let speed_lap = run_omega("speed-lap", "speed_lap");
-        assert_eq!(
-            rows(&speed_lap),
-            pairs(&[
-                ("CONTINUE", "back"),
-                ("GAME OPTIONS", "submenu"),
-                ("AUDIO OPTIONS", "submenu"),
-                ("PHOTO MODE", "photo_mode"),
-                ("END SESSION", "quit_race"),
-            ])
+        assert!(
+            on_page(&run, "pause").is_empty(),
+            "no pause page: Omega is not wired"
         );
+        let last = run.states.last().expect("a state");
+        assert_eq!(last["screen"]["id"], "main");
     }
 }

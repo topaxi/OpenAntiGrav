@@ -593,9 +593,7 @@ fn omegas_pause_screens_are_hds_without_the_invites_row_in_every_archive() {
     let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    let pause = oag_omega::TITLE
-        .pause_menu
-        .expect("Omega authors pause screens");
+    let pause = oag_omega::pause_menu::PAUSE_MENU;
     let mut archives = oag_omega::open(&source.display().to_string()).expect("opening Omega");
     let all = copies(&mut archives, HD_INGAME);
     assert!(
