@@ -265,6 +265,12 @@ impl PoseTrack {
         Self { last, crafts }
     }
 
+    /// What the track costs in a file: the size of its `POSE` chunk's payload.
+    #[must_use]
+    pub fn encoded_len(&self) -> usize {
+        self.encode().len()
+    }
+
     /// The chunk's payload: the last tick, the craft count, then per craft the byte length of
     /// its keys, its interior-key mask, and its keys.
     pub(crate) fn encode(&self) -> Vec<u8> {
