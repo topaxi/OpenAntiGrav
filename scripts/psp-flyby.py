@@ -260,6 +260,8 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--single-race", action="store_true")
     parser.add_argument("--track-down", type=int, default=0)
+    parser.add_argument("--unlock", action="store_true",
+                        help="set the dev-unlock byte so Track Select offers all 24 circuits")
     parser.add_argument("--duration", type=float, default=60.0)
     parser.add_argument("--interval", type=float, default=1.0)
     parser.add_argument("--skip-at", type=float)
@@ -285,7 +287,9 @@ def main():
         drive.settle_into_race(dbg)
     survey(args)
     menu_args = argparse.Namespace(port=args.port, single_race=args.single_race,
-                                   race_type=None, track_down=args.track_down, any_track=True)
+                                   race_type=None, track_down=args.track_down, any_track=True,
+                                   unlock=args.unlock, class_right=0, ship_down=0,
+                                   weapons_off=False, weapons_on=False)
     drive.menu(menu_args)
 
 

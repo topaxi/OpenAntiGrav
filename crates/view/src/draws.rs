@@ -219,12 +219,13 @@ fn report_materials(data: &[u8]) {
                 };
                 println!(
                     "    node {index:>4} {:<28} list {list} mat {:>3} flags {:#06x} \
-                     pass {:#06x} hdr {:#04x} {pipeline:<6} {state}",
+                     pass {:#06x} hdr {:#04x} bias {} {pipeline:<6} {state}",
                     node.name.clone().unwrap_or_default(),
                     batch.material_index,
                     material.flatten().map_or(0, |m| m.flags),
                     batch.pass_mask,
                     batch.header_flags,
+                    batch.depth_bias,
                 );
             }
         }
