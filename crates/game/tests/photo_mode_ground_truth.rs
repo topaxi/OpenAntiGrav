@@ -706,3 +706,98 @@ fn the_games_motion_blur_never_reaches_a_photo() {
         difference(&files[0], &files[1], ALL)
     );
 }
+
+/// HD's motion blur (ADR-0087, decision 5, stage 6): a shot of 120 frames of a race that has not
+/// moved, over the recorded ticks before it. A track blur smears the scenery and leaves the craft
+/// the camera rides sharp; a ship blur holds the camera and smears the craft; any input while the
+/// frames are drawn abandons the shot and writes nothing.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-mblur-shots");
+    let _ = std::fs::remove_dir_all(&shots);
+    let to_the_race = "boot; select racebox; press cross; until page=race; \
+         set race.mode=time_trial; select launch_race; press cross; until screen=picker; \
+         press cross; until screen.id=ship-select; press cross; until stage=race within 4000; \
+         ticks 300; hold cross 400; escape; until stage=menu; select photo_mode; press cross; \
+         until photo=internal within 200; press select; ticks 5; hold left 8; ticks 3; ";
+    let down = "hold down 1; ticks 2; ";
+    // The plain shot, a track blur at full shutter, and a ship blur, all at the one tick.
+    let run = drive(
+        &image,
+        "mblur",
+        &format!(
+            "{to_the_race} press cross; ticks 3; screenshot SHOTS/plain.png; press start; \
+             {down}{down}{down}{down} hold right 1; ticks 2; {down} hold right 260; ticks 3; \
+             press cross; ticks 3; until photo_job=none within 800; ticks 3; \
+             hold up 1; ticks 3; hold right 1; ticks 3; press cross; ticks 3; \
+             until photo_job=none within 800; ticks 3"
+        ),
+        &shots,
+    );
+    assert!(run.status.success(), "{}", run.stderr);
+    let photos = the_photos(&run);
+    assert_eq!(photos.len(), 3, "a plain shot, a track blur and a ship blur: {photos:?}");
+    let [plain, track, ship] = [0, 1, 2].map(|i| decode(&photos[i]));
+    assert_eq!((plain.0, plain.1), (track.0, track.1));
+    // Where the craft's hull sits in the close lens turned by `hold left 8`, and a stretch of
+    // scenery well clear of it. What a blur takes away is detail: a smear lowers the picture's
+    // gradient along the way it moves.
+    const HULL: (f32, f32, f32, f32) = (0.40, 0.68, 0.52, 0.78);
+    const SCENERY: (f32, f32, f32, f32) = (0.0, 0.1, 0.3, 0.5);
+    let kept = |blurred: &(u32, u32, Vec<u8>), region| detail(blurred, region) / detail(&plain, region);
+    println!(
+        "detail kept, track blur: hull {:.2} scenery {:.2}; ship blur: hull {:.2} scenery {:.2}",
+        kept(&track, HULL),
+        kept(&track, SCENERY),
+        kept(&ship, HULL),
+        kept(&ship, SCENERY)
+    );
+    assert!(
+        kept(&track, SCENERY) < 0.6,
+        "a track blur left the scenery sharp: {}",
+        kept(&track, SCENERY)
+    );
+    assert!(
+        kept(&track, HULL) > 0.8,
+        "a track blur smeared the craft the camera rides: {}",
+        kept(&track, HULL)
+    );
+    assert!(
+        kept(&ship, HULL) < 0.8,
+        "a ship blur left the craft sharp: {}",
+        kept(&ship, HULL)
+    );
+    assert!(
+        kept(&ship, SCENERY) > 0.8,
+        "a ship blur smeared the scenery the camera holds: {}",
+        kept(&ship, SCENERY)
+    );
+    // Any input abandons a shot under way, and the rest of the shot is not written.
+    let abandoned = drive(
+        &image,
+        "mblur-abandon",
+        &format!(
+            "{to_the_race} press start; {down}{down}{down}{down} hold right 1; ticks 2; \
+             {down} hold right 260; ticks 3; press cross; ticks 3; ticks 20; hold left 3; \
+             ticks 3; until photo_job=none within 20; ticks 5"
+        ),
+        &shots,
+    );
+    assert!(abandoned.status.success(), "{}", abandoned.stderr);
+    assert!(
+        the_photos(&abandoned).is_empty(),
+        "an abandoned shot wrote a file: {:?}",
+        the_photos(&abandoned)
+    );
+    assert!(
+        abandoned.states.iter().any(|state| state
+            .get("photo_job")
+            .and_then(Value::as_str)
+            .is_some_and(|job| job != "none")),
+        "the shot never started"
+    );
+}
