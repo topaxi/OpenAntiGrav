@@ -19,14 +19,25 @@ pub const PRE_RACE: PreRace = PreRace {
     // (`docs/ghidra/functions/ps3-hdfury-eu/start-grid-selection.md`).
     grid: "start_grid.vex",
     grid_reversed: Some("start_grid_reversed.vex"),
-    by_mode: &[ModeGrid {
-        // Game modes 5 and 10 (Time Trial, Speed Lap) and 6 (Zone): `_ta`, the fly-by that frames
-        // the one craft's slot. The executable's other `_ta` modes (7, 13, 14, 21) are not modes
-        // of ours. Mode 2 (`Demo`) takes `start_grid_de`; this project has no demo.
-        modes: &["time_trial", "speed_lap", "zone"],
-        grid: "start_grid_ta.vex",
-        grid_reversed: Some("start_grid_ta_reversed.vex"),
-    }],
+    by_mode: &[
+        ModeGrid {
+            // Game modes 5 and 10 (Time Trial, Speed Lap) and 6 (Zone): `_ta`, the fly-by that
+            // frames the one craft's slot. The executable's other `_ta` modes (7, 13, 14, 21)
+            // are not modes of ours. Mode 2 (`Demo`) takes `start_grid_de`; this project has no
+            // demo.
+            modes: &["time_trial", "speed_lap", "zone"],
+            grid: "start_grid_ta.vex",
+            grid_reversed: Some("start_grid_ta_reversed.vex"),
+        },
+        ModeGrid {
+            // Head to Head, **chosen, not measured**: the executable gives mode 9 the plain
+            // file, whose shots mostly frame slots no craft sits in. `_ta` frames slots 1 and 2,
+            // where its two craft start (`docs/gameplay/race-intro.md`, "HD's file per mode").
+            modes: &["head_to_head"],
+            grid: "start_grid_ta.vex",
+            grid_reversed: Some("start_grid_ta_reversed.vex"),
+        },
+    ],
     // The `gridCamera` leaf is the same Maya export as Pulse's, so Pulse's measured field is
     // borrowed until HD's own is read off a capture.
     fov_degrees: Sourced::chosen(54.308_994),
@@ -49,7 +60,7 @@ mod tests {
 
     #[test]
     fn a_solo_mode_tries_ta_then_the_plain_file() {
-        for mode in ["time_trial", "speed_lap", "zone"] {
+        for mode in ["time_trial", "speed_lap", "zone", "head_to_head"] {
             assert_eq!(
                 PRE_RACE.grid_files(mode, false),
                 ["start_grid_ta.vex", "start_grid.vex"],
@@ -65,7 +76,7 @@ mod tests {
 
     #[test]
     fn every_other_mode_tries_the_plain_pair() {
-        for mode in ["single_race", "eliminator", "head_to_head", "tournament"] {
+        for mode in ["single_race", "eliminator", "tournament"] {
             assert_eq!(PRE_RACE.grid_files(mode, false), ["start_grid.vex"]);
             assert_eq!(
                 PRE_RACE.grid_files(mode, true),

@@ -175,10 +175,12 @@ Wired as `PreRace::by_mode`, tested by `hd_flyby_ground_truth`. One Time Trial f
 on RPCS3 (Talon's Junction, mode 5 in the TTY log): its first ten seconds match ours on `_ta`, but
 those shots frame no grid slot, so they do not tell `_ta` from the plain file.
 
-**Open: Head to Head, and Zone's own circuits.** Head to Head is game mode 9 in the campaign code,
-so the rule gives it the plain file and its two craft fly under a fly-by that mostly frames empty
-slots; the original never offered the mode (`head2head.md`), so this is the maintainer's call
-(`_ta` frames our two slots, 1 and 2). `zone_1` to `zone_4` ship no `_ta`, so Zone on them falls
+**Head to Head flies `_ta`, chosen, not measured** (maintainer, 2026-11-07). It is game mode 9 in
+the campaign code, so the executable's rule gives it the plain file, whose shots mostly frame empty
+slots; the original never offered the mode (`head2head.md`). `_ta` frames its two slots, 1 and 2,
+on Talon's Junction. Tested by `hd_flyby_ground_truth::a_head_to_head_flies_the_ta_file`.
+
+**Open: Zone's own circuits.** `zone_1` to `zone_4` ship no `_ta`, so Zone on them falls
 back to the plain file, which has no `grid_camera1`: ours plays no fly-by there and says so in the
 loader report; what the original does with it is unwatched.
 

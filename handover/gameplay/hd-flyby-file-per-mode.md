@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega]
 updated: 2026-11-07
-summary: "File per mode wired (Time Trial, Speed Lap, Zone fly _ta). Open: Head to Head's file (maintainer), Zone circuits, a watched fly-by"
+summary: "File per mode wired: Time Trial, Speed Lap and Zone fly _ta, Head to Head too by choice. Open: Zone circuits, a watched fly-by"
 ---
 
 # HD's fly-by file per mode
@@ -18,10 +18,6 @@ and the loader's try-then-fall-back, one `hd_flyby_ground_truth` test per mode.
 
 ## Open
 
-- **Head to Head: the maintainer's call.** The executable gives mode 9 (Head to Head) the plain
-  file, where two craft sit in slots 1 and 2 and the fly-by mostly frames empty ones. The original
-  never offered the mode, so this is ours either way. The data would be `_ta` (it frames slots 1
-  and 2 on Talon's Junction) as a chosen row, not skipping slots and not cutting the camera.
 - **Zone's own circuits.** `zone_1` to `zone_4` ship no `_ta`; the fall-back `start_grid.vex` has
   no `grid_camera1`, so ours plays no fly-by there. What the original does is unwatched.
 - **Watch the grid close-ups.** A Time Trial fly-by was watched on RPCS3 (mode 5, first ten
@@ -35,6 +31,5 @@ and the loader's try-then-fall-back, one `hd_flyby_ground_truth` test per mode.
 
 ## Next Steps
 
-1. Ask the maintainer which file Head to Head flies.
-2. Pin the original's fly-by clock on RPCS3 and compare its grid close-ups (Talon's Junction,
+1. Pin the original's fly-by clock on RPCS3 and compare its grid close-ups (Talon's Junction,
    Time Trial) with `--race --mode time_trial --intro-ticks 1200 --screenshot`.

@@ -131,12 +131,21 @@ fn a_zone_race_on_a_circuit_flies_the_ta_file() {
 
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn a_head_to_head_flies_the_ta_file() {
+    // Chosen, not measured: the executable gives mode 9 the plain file (`oag_hd::pre_race`).
+    let Some(file) = flown(TRACK, oag_race::Mode::Head2Head) else {
+        return;
+    };
+    assert_eq!(file.as_deref(), Some("start_grid_ta.vex"));
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn the_modes_with_a_grid_fly_the_plain_file() {
-    // Single Race (3), Eliminator (8), Head to Head (9) and Tournament (4) are in no `_ta` row.
+    // Single Race (3), Eliminator (8) and Tournament (4) are in no `_ta` row.
     for mode in [
         oag_race::Mode::SingleRace,
         oag_race::Mode::Eliminator,
-        oag_race::Mode::Head2Head,
         oag_race::Mode::Tournament,
     ] {
         let Some(file) = flown(TRACK, mode) else {
