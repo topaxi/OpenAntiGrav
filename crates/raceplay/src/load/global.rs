@@ -59,7 +59,7 @@ pub(super) fn resolve(
     archives: &mut oag_assets::Archives,
     options: &Options,
     stats: &handling::Stats,
-    pads_stamp_in_eliminator: bool,
+    title: &oag_title::Title,
     report: &mut Vec<String>,
 ) -> GlobalTunables {
     // Three distinct failures, reported as three distinct lines. The decoder was
@@ -171,6 +171,7 @@ pub(super) fn resolve(
     // (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title"): the stamp
     // is zero. A title with no second figure (Pure, which has no Eliminator) falls
     // back to the ordinary one.
+    let pads_stamp_in_eliminator = title.weapons.pads_stamp_in_eliminator.value;
     let weapon_pad_refresh = match class {
         Some((_, _, _)) if options.mode == Mode::Eliminator && !pads_stamp_in_eliminator => {
             report.push(
