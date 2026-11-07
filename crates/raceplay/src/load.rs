@@ -104,11 +104,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &options.dlc,
         &oag_source::cache::default_dlc_cache_dir(),
     );
-    // **Opened as whichever title the source turned out to be**, the same way the
-    // boot path already does it. This used to be `oag_pulse::open_with_packs`
-    // outright, which refused a Pure disc by name (`WrongTitle`) - so `--race`
-    // and the menus' own `Launch Game` could not reach a second title at all,
-    // however much of the rest of the path was ready for one.
+    // **Opened as whichever title the source turned out to be**, the way the boot
+    // path does, so `--race` and the menus' `Launch Game` reach every title.
     //
     // **Two sources when `craft_source` names a Race Remix** - see
     // `oag_source::remix::Remix`. `archives`/`title` stay the track's; a
@@ -272,6 +269,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // Two failures, two lines, for the reason `<Global>` above gives at length.
     let weapons = assets::load_weapons(&mut archives, title, options.mode, &mut report);
     let weapon_ai = assets::load_weapon_ai(&mut archives, title, &mut report);
+    let (score_law, eliminator_kill_target) = crate::score_law::of(
+        options,
+        title,
+        weapon_ai.as_ref(),
+        &mut archives,
+        &mut report,
+    );
     if options.weapons_on() && weapons.is_none() {
         // Only worth saying on a mode that would otherwise hand something out.
         report.push("weapon pads hand nothing out this run".to_string());
@@ -1119,13 +1123,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         platform: archives.layout.platform,
         setup: Setup {
             mode: options.mode,
-            eliminator_kill_target: crate::score_law::target(
-                options.eliminator_kill_target,
-                title.eliminator.value,
-                options.mode,
-                &mut archives,
-                &mut report,
-            ),
+            eliminator_kill_target,
             laps_override: options.laps_override,
             weapons_override: options.weapons_override,
             difficulty: options.difficulty,
@@ -1315,11 +1313,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             autopilot_pad_grants: title.weapons.autopilot_pad_grants.value,
             reset_triggers: crate::respawn::reset_triggers_for(&title.reset_enables),
             opponent_fire: title.weapons.opponent_fire.value,
-            score_law: crate::score_law::resolve(
-                title.eliminator.value,
-                weapon_ai.as_ref(),
-                options.difficulty,
-            ),
+            score_law,
             speedup_pads,
             weapon_pads,
             weapons,

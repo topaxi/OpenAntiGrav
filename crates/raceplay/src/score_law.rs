@@ -6,9 +6,25 @@
 use oag_tables::race_campaign::Difficulty;
 use oag_title::eliminator::EliminatorRule;
 
+/// The race's rule and target, once, at load.
+pub(crate) fn of(
+    options: &crate::Options,
+    title: &oag_title::Title,
+    stats: Option<&oag_tables::weapons::ai::WeaponAiStats>,
+    archives: &mut oag_assets::Archives,
+    report: &mut Vec<String>,
+) -> (Option<oag_race::ScoreLaw>, Option<u32>) {
+    let rule = title.eliminator.value;
+    let chosen = options.eliminator_kill_target;
+    (
+        resolve(rule, stats, options.difficulty),
+        target(chosen, rule, options.mode, archives, report),
+    )
+}
+
 /// The awards `rule` gives at `difficulty`. A table with no `<EliminatorAIStats>` row leaves an
 /// opponent's scale at `1.0`.
-pub(crate) fn resolve(
+fn resolve(
     rule: EliminatorRule,
     stats: Option<&oag_tables::weapons::ai::WeaponAiStats>,
     difficulty: oag_ai::Difficulty,
@@ -36,7 +52,7 @@ pub(crate) fn resolve(
 ///
 /// With no authored minimum a score race has no target at all and says so in the report; a kill
 /// count's fallback would end it on the first five points.
-pub(crate) fn target(
+fn target(
     chosen: Option<u32>,
     rule: EliminatorRule,
     mode: oag_race::Mode,
