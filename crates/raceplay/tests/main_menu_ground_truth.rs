@@ -399,7 +399,7 @@ fn default_goto(root: &Node, screen: &str) -> Option<String> {
         }
         node.children.iter().find_map(|child| find(child, screen))
     }
-    fn default<'a>(node: &'a Node) -> Option<&'a Node> {
+    fn default(node: &Node) -> Option<&Node> {
         if node.name.eq_ignore_ascii_case("Default") {
             return Some(node);
         }
