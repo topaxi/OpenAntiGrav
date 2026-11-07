@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-07
-summary: "HD weapon visuals still on Pulse fallbacks in part: the Plasma explosion's remaining three things and other weapons"
+summary: "HD weapons draw their own models; open: Missile head placement and smoke ribbon, Plasma noise tap, HD_Mine_halo, Fury detonator bolt"
 difficulty: medium (30)
 ---
 
@@ -143,7 +143,7 @@ The executable's own load-path strings name every model above
   (4) `FUN_001310e8`'s `0x006778c8` call looks like a per-round point
   light, unread; (5) what sets `ship+0x5f42` (the `Ship Muzzle` fallback
   branch) is unread.
-- **Missile (2026-09-23, read, not wired):** `HD_missile_ball_bloomring` is
+- ~~**Missile (2026-09-23, read, not wired):**~~ **Both models drawn (head 2026-11-07, explosion 2026-10-08).** `HD_missile_ball_bloomring` is
   the flying missile's head (`Missile.cpp` constructor `0x0011ccc8`), not an
   explosion model; `HD_missile_explosion` loads in `0x00154cf0` (from
   `MissileManager_Construct`), binds `UV_offset` and `Shockwave_scalar`, and
@@ -167,8 +167,8 @@ The executable's own load-path strings name every model above
   noise tap (needs the sun, ambient, `0x7480de6d` and the reflection probe, all
   unwired), and the ring/halo's own colour and alpha combine (the engine's
   path stands in; only the tap coordinates are the program's).
-- **Missile's detonation pair and the Bomb's five detonation models: no
-  trigger read, so nothing drawn.** `HD_missile_explosion`'s object (vtable
+- ~~**Missile's detonation pair and the Bomb's five detonation models: no
+  trigger read, so nothing drawn.**~~ **Drawn since 2026-10-07/08 (below).** `HD_missile_explosion`'s object (vtable
   `0x00864b38`, shared with the constructors at `0x00154990`/`0x00155c10`/
   `0x00155d00`; slot 5 `0x00155420` only writes the per-viewport matrix at
   `this + 0xf0`) has no found writer of `this + 0xf0` and nothing that starts
