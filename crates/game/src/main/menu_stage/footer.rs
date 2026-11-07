@@ -47,6 +47,10 @@ impl MenuStage {
     /// from it shows both - this reproduces.
     #[must_use]
     fn nav_legend_overlay(&self) -> Vec<Draw> {
+        // The disc's pause screen draws its own footer.
+        if self.on_pause_page() {
+            return Vec::new();
+        }
         let Some(legend) = &self.nav_legend else {
             return Vec::new();
         };

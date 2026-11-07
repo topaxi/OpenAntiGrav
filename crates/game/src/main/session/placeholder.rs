@@ -220,6 +220,7 @@ impl Session {
             nav_legend: None,
             ticker: None,
             fury_backdrop: None,
+            pause_screens: Default::default(),
             // 2048's front end is unread, so its race launches from the
             // RACE page the way every title's did before the pickers.
             track_select: None,

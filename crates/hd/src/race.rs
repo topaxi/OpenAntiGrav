@@ -90,7 +90,13 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_transition: Some(ZONE_TRANSITION),
     zoom_ring: Some(&ZOOM_RING),
     borrows_zoom_ring: false,
-    game_options: oag_title::race::GameOptions::NONE,
+    // `FE_GHOST`, the `GhostOption` list on the Time Trial and Speed Lap pause screens
+    // (`crate::pause_menu`), is the ghost ship's visibility; HD authors no other of the three.
+    game_options: oag_title::race::GameOptions {
+        ship_visible: true,
+        auto_load: false,
+        multiplayer_tags: false,
+    },
     zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
     zone_sky: Some(ZONE_SKY),
     team_variants: Some(&TEAM_VARIANTS),

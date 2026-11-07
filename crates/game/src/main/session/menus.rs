@@ -177,6 +177,7 @@ impl Session {
             .pause_menu
             .filter(|_| model.definition().pages[model.definition().root].id == menu::PAUSE_PAGE)
             .map(|pause| pause.scrim_argb);
+        let pause_view = pause_scrim.and_then(|_| self.pause_view());
         // **The movie planes are asked for only when there is a movie to put in
         // them.** This used to be unconditionally `None`, on the grounds that
         // wanting them would tie the menus to a stage that had played one; that
@@ -308,7 +309,9 @@ impl Session {
                 skin,
                 text_atlas,
                 default_atlas: shell.font.clone(),
-                frame: if pause_scrim.is_some() {
+                frame: if pause_view.is_some() {
+                    shell.frame.without_marks()
+                } else if pause_scrim.is_some() {
                     shell.frame.without_footer(skin.space().size.1)
                 } else {
                     shell.frame.clone()
@@ -322,6 +325,7 @@ impl Session {
                 // from instead.
                 ticker_elapsed: 0.0,
                 pause_scrim: pause_scrim.map(oag_ui::screen::argb_to_rgba),
+                pause_view,
                 marquee: marquee::Timer::default(),
                 // Opening the menus is not a page change: the front end's own
                 // hand-off already had its moment, and starting a transition
@@ -521,7 +525,10 @@ impl Session {
             self.drop_split_lobby();
         }
         match event {
-            menu::MenuEvent::Changed { setting, value } => self.apply_setting(setting, value),
+            menu::MenuEvent::Changed { setting, value } => {
+                self.apply_setting(setting, value);
+                self.apply_pause_setting(setting);
+            }
             menu::MenuEvent::Fired(menu::Action::LaunchRace) => self.start_race_box(),
             // The MULTIPLAYER page's LOCAL MULTIPLAYER row (`session::multiplayer`).
             menu::MenuEvent::Fired(menu::Action::OpenMultiplayerLocal) => {

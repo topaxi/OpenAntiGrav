@@ -57,7 +57,7 @@
 use crate::kinetic::{Extent, Kinetic};
 use crate::pointer::{Pointer, contains};
 
-use super::{Frame, Menu, MenuEvent, Skin, strip};
+use super::{Entry, Frame, Menu, MenuEvent, Skin, strip};
 
 /// What a click on a region does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -305,7 +305,12 @@ impl Menu {
     /// than snapping.
     fn move_cursor(&mut self, page: usize, row: usize) {
         let rows = self.definition.pages[page].entries.len();
-        if row >= rows {
+        if row >= rows
+            || matches!(
+                self.definition.pages[page].entries[row],
+                Entry::Inert { .. }
+            )
+        {
             return;
         }
         let dir = if row > self.cursor[page] {

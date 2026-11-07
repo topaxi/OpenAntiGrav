@@ -110,6 +110,13 @@ impl Race {
         });
     }
 
+    /// Stops recording this race. A run whose laws changed under the recording (Pilot Assist
+    /// switched mid-race) is one neither a replay nor a ghost lap can reproduce, so it saves
+    /// neither from here on.
+    pub fn stop_recording(&mut self) {
+        self.replay.recording = None;
+    }
+
     /// Whether this race is being recorded.
     #[must_use]
     pub fn recording(&self) -> bool {

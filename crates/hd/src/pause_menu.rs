@@ -2,8 +2,8 @@
 
 use oag_title::{
     Origin,
-    PauseAction::{Audio, Options, Photo, Quit, Restart, Resume},
-    PauseMenu, PauseScreen,
+    PauseAction::{Audio, Ghost, Inert, Options, Photo, PilotAssist, Quit, Restart, Resume},
+    PauseLayout, PauseMenu, PauseScreen,
     pause_menu::row,
 };
 
@@ -17,10 +17,12 @@ use oag_title::{
 /// single-view mode the redirect's default `InGame Pause SP`. A split-screen race takes the
 /// `Split Player` screens, a network race the `MP` ones; a race here opens neither.
 ///
-/// Rows with nothing behind them in this build are not drawn: `FE_PILOT_ASSIST` and `FE_GHOST` are
-/// on/off lists for settings that live on the CONTROLS and DISPLAY pages here, and
-/// `ONL_VIEW_INV` is PSN. `IG_PAUSE_ENDSES` is the Speed Lap screen's only way out (it has no
-/// RESTART and no QUIT) and leaves the race the way QUIT RACE does.
+/// `FE_PILOT_ASSIST` and `FE_GHOST` are the on/off lists of the settings the CONTROLS and DISPLAY
+/// pages also edit; `ONL_VIEW_INV` is PSN's invites, drawn greyed and skipped by the cursor, as the
+/// original does offline. `IG_PAUSE_ENDSES` is the Speed Lap screen's only way out (it has no
+/// RESTART and no QUIT) and leaves the race the way QUIT RACE does. The screens' geometry, the
+/// rules and the footer are read off the same file when the page is drawn
+/// ([`oag_title::PauseLayout`]).
 pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
     heading: "IG_PAUSE_GPAUSED",
     screens: &[
@@ -28,11 +30,11 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
             name: "InGame Pause SP",
             rows: &[
                 row("IG_PAUSE_CONT", Some(Resume)),
-                row("FE_PILOT_ASSIST", None),
+                row("FE_PILOT_ASSIST", Some(PilotAssist)),
                 row("OPT_GAME_OPT", Some(Options)),
                 row("FE_AUDIO_OPT", Some(Audio)),
                 row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
-                row("ONL_VIEW_INV", None),
+                row("ONL_VIEW_INV", Some(Inert)),
                 row("IG_PAUSE_REST", Some(Restart)),
                 row("IG_PAUSE_QUIT", Some(Quit)),
             ],
@@ -41,12 +43,12 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
             name: "InGame Pause SP Time Trial",
             rows: &[
                 row("IG_PAUSE_CONT", Some(Resume)),
-                row("FE_PILOT_ASSIST", None),
-                row("FE_GHOST", None),
+                row("FE_PILOT_ASSIST", Some(PilotAssist)),
+                row("FE_GHOST", Some(Ghost)),
                 row("OPT_GAME_OPT", Some(Options)),
                 row("FE_AUDIO_OPT", Some(Audio)),
                 row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
-                row("ONL_VIEW_INV", None),
+                row("ONL_VIEW_INV", Some(Inert)),
                 row("IG_PAUSE_REST", Some(Restart)),
                 row("IG_PAUSE_QUIT", Some(Quit)),
             ],
@@ -55,12 +57,12 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
             name: "InGame Pause SP Speed Lap",
             rows: &[
                 row("IG_PAUSE_CONT", Some(Resume)),
-                row("FE_PILOT_ASSIST", None),
-                row("FE_GHOST", None),
+                row("FE_PILOT_ASSIST", Some(PilotAssist)),
+                row("FE_GHOST", Some(Ghost)),
                 row("OPT_GAME_OPT", Some(Options)),
                 row("FE_AUDIO_OPT", Some(Audio)),
                 row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
-                row("ONL_VIEW_INV", None),
+                row("ONL_VIEW_INV", Some(Inert)),
                 row("IG_PAUSE_ENDSES", Some(Quit)),
             ],
         },
@@ -68,11 +70,11 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
             name: "InGame Pause SP Tournament",
             rows: &[
                 row("IG_PAUSE_CONT", Some(Resume)),
-                row("FE_PILOT_ASSIST", None),
+                row("FE_PILOT_ASSIST", Some(PilotAssist)),
                 row("OPT_GAME_OPT", Some(Options)),
                 row("FE_AUDIO_OPT", Some(Audio)),
                 row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
-                row("ONL_VIEW_INV", None),
+                row("ONL_VIEW_INV", Some(Inert)),
                 row("IG_PAUSE_QUIT", Some(Quit)),
             ],
         },
@@ -83,7 +85,7 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
                 row("OPT_GAME_OPT", Some(Options)),
                 row("FE_AUDIO_OPT", Some(Audio)),
                 row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
-                row("ONL_VIEW_INV", None),
+                row("ONL_VIEW_INV", Some(Inert)),
                 row("IG_PAUSE_REST", Some(Restart)),
                 row("IG_PAUSE_QUIT", Some(Quit)),
             ],
@@ -97,6 +99,12 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
         ("zone", "InGame Pause Zone"),
     ],
     scrim_argb: 0xc000_0000,
+    layout: Some(PauseLayout {
+        definition: r"Data\Plugins\Frontend\Gui\ingame_definition.xml",
+        chrome: "InGame Main Menu",
+        grid: [1920, 1080],
+    }),
+    hud_under_scrim: true,
     offers_photo: true,
     origin: Origin::Measured,
 };

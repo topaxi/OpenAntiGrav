@@ -68,6 +68,10 @@ pub struct Boot {
     pub ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     /// The style's animated menu backdrop - see [`backdrop::load`]. `None` where none.
     pub fury_backdrop: Option<Arc<backdrop::MenuBackdrop>>,
+    /// The title's pause screens, read off its definition file: one per screen
+    /// [`oag_title::PauseMenu::screens`] names. Empty for a title that draws its pause page as
+    /// the front end's own list.
+    pub pause_screens: screens::PauseScreens,
     /// The race box's selection screens. See [`Shell::track_select`].
     pub track_select: Option<oag_ui_screens::picker::Layout>,
     pub ship_select: Option<oag_ui_screens::picker::Layout>,
@@ -274,6 +278,10 @@ pub struct Shell {
     pub ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     /// The style's menu backdrop, read here for the same reason the frame is.
     pub fury_backdrop: Option<Arc<backdrop::MenuBackdrop>>,
+    /// The title's pause screens, read off its definition file: one per screen
+    /// [`oag_title::PauseMenu::screens`] names. Empty for a title that draws its pause page as
+    /// the front end's own list.
+    pub pause_screens: screens::PauseScreens,
     /// The race box's two selection screens, read off the same XML the
     /// frame was - `Track Creation` and `Team Selection` on Pulse - with
     /// every string resolved. `None` on a title that authors neither, which
@@ -816,6 +824,22 @@ pub fn load_shell(
     if let Some(legend) = &nav_legend {
         report.push(format!("nav legend: {}", legend.describe()));
     }
+    let pause_screens = screens::read_pause_screens(
+        &mut archives,
+        title,
+        &screens.globals,
+        &strings,
+        preferred_language.and_then(|language| language.entries.as_deref()),
+        oag_ui_screens::picker::FaceScales {
+            default: menu_font.as_ref().map_or(
+                oag_ui_screens::picker::FaceScales::default().default,
+                |menu| font.line_height / menu.line_height,
+            ),
+            ..oag_ui_screens::picker::FaceScales::default()
+        },
+        space,
+        &mut report,
+    );
     // See [`screens::read_ticker`]'s own doc.
     let ticker = read_ticker(skin_xml.as_deref(), &screens.globals);
     if let Some(ticker) = &ticker {
@@ -859,6 +883,7 @@ pub fn load_shell(
             nav_legend,
             ticker,
             fury_backdrop,
+            pause_screens,
             track_select,
             ship_select,
             ship_select_split,
@@ -1180,6 +1205,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         nav_legend,
         ticker,
         fury_backdrop,
+        pause_screens,
         track_select,
         ship_select,
         ship_select_split,
@@ -1385,6 +1411,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         nav_legend,
         ticker,
         fury_backdrop,
+        pause_screens,
         track_select,
         ship_select,
         ship_select_split,
@@ -1631,7 +1658,7 @@ pub(crate) mod roster;
 pub mod scene;
 mod screens;
 pub mod tiers2048;
-pub use screens::RaceSetup;
+pub use screens::{PauseScreens, RaceSetup};
 pub(crate) mod sprites;
 mod steps;
 mod team_ratings2048;

@@ -629,12 +629,12 @@ pub(super) fn hex_slot_xy(name: &str, prefix: &str) -> Option<(u32, u32)> {
     Some((x, y))
 }
 
-pub(super) fn fill_draw(fill: &Fill) -> Draw {
+pub(crate) fn fill_draw(fill: &Fill) -> Draw {
     fill.draw()
 }
 
 /// An ordinary image widget, at its own authored position.
-pub(super) fn image_draw(image: &Image, placed: Placed) -> Draw {
+pub(crate) fn image_draw(image: &Image, placed: Placed) -> Draw {
     sprite_draw(image, placed, image.x, image.y, image.color)
 }
 
@@ -861,7 +861,7 @@ pub fn cell_help_draw(layout: &Layout, sprites: &dyn Fn(&str) -> Option<Placed>)
 /// `wrap_width: None`, which would silently drop the wrap width a
 /// `widthlimited="true"` text (`Required`/`Required Previous` on HD) still
 /// needs - this preserves `text.wrap_width` on either face instead.
-pub(super) fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
+pub(crate) fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
     let x = text.x;
     let y = text.y;
     let scale = text.scale * layout.face_scale(&text.font);

@@ -522,6 +522,7 @@ fn page_screen(stage: &MenuStage) -> Screen {
                 Entry::Run { .. } => ("action", None, None, Vec::new()),
                 Entry::Back { .. } => ("back", None, None, Vec::new()),
                 Entry::Binding { .. } => ("binding", None, None, Vec::new()),
+                Entry::Inert { .. } => ("inert", None, None, Vec::new()),
                 Entry::Choice {
                     setting,
                     values,

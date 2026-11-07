@@ -744,3 +744,93 @@ mod race_setup_tests {
         assert_eq!(ids("SplitScreen"), ["RB_HORIZ", "RB_VERT"]);
     }
 }
+
+/// The pause screens of a title that draws them from its definition file, and the words they
+/// use: the served string table with what it lacks filled in from the archive that has it
+/// (`FE_GHOST` is in `DATA06`'s English table and in none of the base game's).
+#[derive(Debug, Clone, Default)]
+pub struct PauseScreens {
+    /// One per screen [`oag_title::PauseMenu::screens`] names that read.
+    pub screens: Vec<oag_ui_screens::pause::PauseScreen>,
+    /// The words for the rows and the chrome.
+    pub strings: StringTable,
+}
+
+/// The title's pause screens off its definition file: every screen of
+/// [`oag_title::PauseMenu::screens`] with the chrome screen behind it, laid out as the disc
+/// authors them. Empty for a title that names no layout, and for one whose file will not read
+/// (said in `report`, and the page is then the front end's own list).
+pub(super) fn read_pause_screens(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    globals: &std::collections::HashMap<String, String>,
+    served: &StringTable,
+    entries: Option<&str>,
+    faces: oag_ui_screens::picker::FaceScales,
+    space: oag_display::space::Space,
+    report: &mut Vec<String>,
+) -> PauseScreens {
+    let Some((table, layout)) = title
+        .pause_menu
+        .and_then(|table| table.layout.map(|layout| (table, layout)))
+    else {
+        return PauseScreens::default();
+    };
+    let xml = match archives
+        .read_name(layout.definition)
+        .map_err(|e| e.to_string())
+        .and_then(|blob| oag_ui::xml::expand(&blob).map_err(|e| format!("{e:#}")))
+    {
+        Ok(xml) => xml,
+        Err(error) => {
+            report.push(format!(
+                "{}: {error} - the pause page is the front end's list",
+                layout.definition
+            ));
+            return PauseScreens::default();
+        }
+    };
+    let gaps: Vec<&str> = xml
+        .split("idstring=\"")
+        .skip(1)
+        .filter_map(|rest| rest.split('"').next())
+        .filter(|id| served.get(id).is_none())
+        .collect();
+    let mut strings = served.clone();
+    if let Some(entries) = entries {
+        strings.merge(crate::campaign::hd_data06_strings(archives, entries, &gaps));
+    }
+    let fallback: Vec<(&str, &str)> = globals
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let parsed = Screens::from_xml_with_fallback_globals(&xml, &fallback);
+    let grid = [space.size.0, space.size.1];
+    let screens: Vec<_> = table
+        .screens
+        .iter()
+        .filter_map(|screen| {
+            let read = oag_ui_screens::pause::PauseScreen::read(
+                &parsed,
+                screen.name,
+                layout.chrome,
+                &strings,
+                faces,
+                grid,
+            );
+            if read.is_none() {
+                report.push(format!(
+                    "{}: no screen {:?} or {:?}",
+                    layout.definition, screen.name, layout.chrome
+                ));
+            }
+            read
+        })
+        .collect();
+    report.push(format!(
+        "pause screens: {} of {} read",
+        screens.len(),
+        table.screens.len()
+    ));
+    PauseScreens { screens, strings }
+}

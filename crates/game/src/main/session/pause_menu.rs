@@ -36,6 +36,29 @@ impl Session {
         race.filter(|stage| self.pause_screen_applies(stage))
     }
 
+    /// The disc's own layout of the pause screen for the race held, when the title carries it.
+    pub(crate) fn pause_view(&self) -> Option<crate::menu_stage::PauseView> {
+        let shell = self.shell.as_ref()?;
+        let table = shell.title.pause_menu?;
+        let stage = self.pausing_race()?;
+        let name = table.screen_for(stage.race.sim.world.mode().name()).name;
+        let screen = shell
+            .pause_screens
+            .screens
+            .iter()
+            .find(|screen| screen.name() == name)?
+            .clone();
+        let sprites = screen
+            .sprite_srcs()
+            .filter_map(|src| Some((src.to_string(), shell.sprites.get(src)?)))
+            .collect();
+        Some(crate::menu_stage::PauseView {
+            screen,
+            table,
+            sprites,
+        })
+    }
+
     /// Puts the pause screen at the root of `definition` when a race that pauses into one is
     /// held. Returns whether it did; nothing changes otherwise, and when the disc's words for
     /// the rows cannot be found (no CONTINUE row), which falls back to the main page.
@@ -48,7 +71,12 @@ impl Session {
         };
         let mode = stage.race.sim.world.mode().name();
         let mut trial = definition.clone();
-        let built = trial.open_on_pause_screen(pause, mode, &shell.strings);
+        let strings = if pause.layout.is_some() {
+            &shell.pause_screens.strings
+        } else {
+            &shell.strings
+        };
+        let built = trial.open_on_pause_screen(pause, mode, strings);
         let resumes = trial
             .page(oag_ui::menu::PAUSE_PAGE)
             .is_some_and(|page| page.row_with_id("pause_resume").is_some());
@@ -66,6 +94,32 @@ impl Session {
         );
         *definition = trial;
         true
+    }
+
+    /// A setting the pause screen's own lists changed (PILOT ASSIST, GHOST) reaches the parked
+    /// race now rather than at the next one. Ghost visibility is read every frame from the
+    /// settings; Pilot Assist is the level the race flies with, and a run that switches it
+    /// mid-race stops recording, so no replay or ghost lap claims laws it did not fly under.
+    pub(crate) fn apply_pause_setting(&mut self, setting: &str) {
+        let on_pause_page = matches!(&self.stage, Stage::Menu(stage) if stage.on_pause_page());
+        if !on_pause_page || setting != "controls.pilot_assist" {
+            return;
+        }
+        let level = self.settings.controls.pilot_assist;
+        let Some(parked) = self.suspended_race.as_mut() else {
+            return;
+        };
+        if parked.race.pilot_assist_level() == level {
+            return;
+        }
+        parked.race.set_pilot_assist(level);
+        if parked.race.recording() {
+            info!(
+                "Pilot Assist {} from the pause screen: this run records no replay or ghost",
+                level.name()
+            );
+            parked.race.stop_recording();
+        }
     }
 
     /// RESTART RACE: the parked race again, on the options it ran with, the way the end of a

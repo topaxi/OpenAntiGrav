@@ -3824,6 +3824,7 @@ dependencies = [
  "oag-race",
  "oag-tables",
  "oag-testdata",
+ "oag-title",
  "oag-ui",
 ]
 
