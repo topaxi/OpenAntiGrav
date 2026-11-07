@@ -1262,7 +1262,9 @@ fn the_ghost_rows_are_offered_only_where_the_options_list_them() {
         (oag_pulse::TITLE, (1, 1, 1)),
         (oag_pure::TITLE, (0, 0, 0)),
         (oag_hd::TITLE, (1, 0, 0)),
-        (oag_omega::TITLE, (0, 0, 0)),
+        // Omega's pause screen authors the `FE_GHOST` list (the ghost ship's visibility), as HD's
+        // does; its own options page was not read for the row.
+        (oag_omega::TITLE, (1, 0, 0)),
         (oag_2048::TITLE, (0, 0, 0)),
     ] {
         let mut definition = built_in();
