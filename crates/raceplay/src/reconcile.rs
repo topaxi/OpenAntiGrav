@@ -27,7 +27,8 @@ impl Race {
     /// A restorable copy of everything that decides what happens next.
     ///
     /// The simulation half only. See [`Self::restore_sim`] for why that is the
-    /// whole point rather than an omission.
+    /// whole point rather than an omission. Its constant half is shared, not copied
+    /// ([`RaceSim`], "Why it is `Clone`"), so this is 27 to 32 KiB and a few microseconds.
     #[must_use]
     pub fn snapshot_sim(&self) -> RaceSim {
         self.sim.clone()
