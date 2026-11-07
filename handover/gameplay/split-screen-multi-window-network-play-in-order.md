@@ -1,7 +1,7 @@
 ---
 status: blocked-hardware
 titles: [all]
-updated: 2026-10-16
+updated: 2026-11-07
 summary: "Deck frame-rate drop on CUT to VERTICAL not reproduced; maintainer's Steam launch with --frame-log; server nightly asset"
 categories: [rendering, frontend]
 ---
