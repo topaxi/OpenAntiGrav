@@ -885,3 +885,4 @@
 0x002ebf80	function	LineBuilder_Flush	78	missile-ribbon.md
 0x002ebec8	function	RibbonNode_Advance	85	missile-ribbon.md
 0x002ec748	function	LineBuilder_BindParams	55	missile-ribbon.md
+0x0031f438	function	FwFile_Exists	78	start-grid-selection.md
