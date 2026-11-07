@@ -1,10 +1,10 @@
-//! Wipeout Omega Collection's own pause screens, as its disc authors them. **Read and tested, not
-//! wired** (`oag_title::Title::pause_menu` is `None`): `docs/ui/pause-menu.md`, "Omega".
+//! Wipeout Omega Collection's own pause screens, as its disc authors them
+//! (`docs/ui/pause-menu.md`, "Omega").
 
 use oag_title::{
     Origin,
-    PauseAction::{Audio, Options, Photo, Quit, Restart, Resume},
-    PauseMenu, PauseScreen,
+    PauseAction::{Audio, Ghost, Options, Photo, PilotAssist, Quit, Restart, Resume},
+    PauseLayout, PauseMenu, PauseScreen,
     pause_menu::row,
 };
 
@@ -17,10 +17,10 @@ use oag_title::{
 /// every other single-view mode the redirect's default `InGame Pause SP`. A campaign event
 /// overrides the mode first (event kind 3 picks Time Trial or Speed Lap by a count).
 ///
-/// Rows with nothing behind them in this build are not drawn: `FE_PILOT_ASSIST` and `FE_GHOST` are
-/// on/off lists for settings that live on the CONTROLS and DISPLAY pages here.
-/// `IG_PAUSE_ENDSES` is the Speed Lap screen's only way out and leaves the race the way QUIT RACE
-/// does.
+/// `FE_PILOT_ASSIST` and `FE_GHOST` are the on/off lists of the settings the CONTROLS and DISPLAY
+/// pages also edit. `IG_PAUSE_ENDSES` is the Speed Lap screen's only way out and leaves the race
+/// the way QUIT RACE does. The screens' geometry, the rules and the footer are read off the same
+/// file when the page is drawn ([`oag_title::PauseLayout`]).
 pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
     heading: "IG_PAUSE_GPAUSED",
     screens: &[
@@ -28,7 +28,7 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
             name: "InGame Pause SP",
             rows: &[
                 row("IG_PAUSE_CONT", Some(Resume)),
-                row("FE_PILOT_ASSIST", None),
+                row("FE_PILOT_ASSIST", Some(PilotAssist)),
                 row("OPT_GAME_OPT", Some(Options)),
                 row("FE_AUDIO_OPT", Some(Audio)),
                 row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
@@ -40,8 +40,8 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
             name: "InGame Pause SP Time Trial",
             rows: &[
                 row("IG_PAUSE_CONT", Some(Resume)),
-                row("FE_PILOT_ASSIST", None),
-                row("FE_GHOST", None),
+                row("FE_PILOT_ASSIST", Some(PilotAssist)),
+                row("FE_GHOST", Some(Ghost)),
                 row("OPT_GAME_OPT", Some(Options)),
                 row("FE_AUDIO_OPT", Some(Audio)),
                 row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
@@ -53,8 +53,8 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
             name: "InGame Pause SP Speed Lap",
             rows: &[
                 row("IG_PAUSE_CONT", Some(Resume)),
-                row("FE_PILOT_ASSIST", None),
-                row("FE_GHOST", None),
+                row("FE_PILOT_ASSIST", Some(PilotAssist)),
+                row("FE_GHOST", Some(Ghost)),
                 row("OPT_GAME_OPT", Some(Options)),
                 row("FE_AUDIO_OPT", Some(Audio)),
                 row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
@@ -65,7 +65,7 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
             name: "InGame Pause SP Tournament",
             rows: &[
                 row("IG_PAUSE_CONT", Some(Resume)),
-                row("FE_PILOT_ASSIST", None),
+                row("FE_PILOT_ASSIST", Some(PilotAssist)),
                 row("OPT_GAME_OPT", Some(Options)),
                 row("FE_AUDIO_OPT", Some(Audio)),
                 row("MSC_PHOTO_PHOTOMODE", Some(Photo)),
@@ -91,8 +91,12 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
         ("tournament", "InGame Pause SP Tournament"),
         ("zone", "InGame Pause Zone"),
     ],
-    scrim_argb: 0xc000_0000,
-    layout: None,
+    scrim_argb: 0x8500_0000,
+    layout: Some(PauseLayout {
+        definition: r"Data\Plugins\Frontend\Gui\ingame_definition.xml",
+        chrome: "InGame Main Menu",
+        grid: [1920, 1080],
+    }),
     hud_under_scrim: false,
     offers_photo: true,
     origin: Origin::Measured,

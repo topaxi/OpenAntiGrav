@@ -1,10 +1,9 @@
 # The pause menu
 
 What each title's own pause screen is, and what this build does (2026-11-07, lanes `pause-menu`,
-`pause-menu-2` and `pause-menu-3`). Scores follow the [rubric](../reverse-engineering/confidence-rubric.md). **Pulse, HD and
-Fury are wired; Omega's table is read and tested but not wired; 2048 and Pure are not** (see
-[Omega](#omega) and [Other titles](#other-titles)): there, pausing still opens the front end's main
-page over the parked race, as before.
+`pause-menu-2`, `pause-menu-3` and `pause-menu-omega`). Scores follow the [rubric](../reverse-engineering/confidence-rubric.md). **Pulse, HD, Fury and
+Omega are wired; 2048 and Pure are not** (see [Other titles](#other-titles)): there, pausing still opens the
+front end's main page over the parked race, as before.
 
 ## Pulse
 
@@ -211,22 +210,67 @@ back, END SESSION, restart, Eliminator).
 
 ## Omega
 
-**Checked, applies, not wired.** Omega's `ingame_definition.xml` (`data00`, `data08`, `data09`,
-identical on these screens) is HD's Fury file **without `ONL_VIEW_INV`**, and carries the same `InGame
-Main Menu` chrome (rules at `y = 292` and `790`, `IG_PAUSE_RESU` at `525, 800`), so the layout above applies
-unchanged once a frame says what the title and footer look like (the textures are `.gnf`). Its binder
-([`PauseMenu_BindRedirectForMode`](../ghidra/functions/ps4-omega-eu/pause-menu.md), `0x0155dc00`, 80)
-is the same switch on the same mode ids, preceded by a rewrite of the mode from a campaign event
-object. The table is `oag_omega::pause_menu::PAUSE_MENU` (HD's less that row; the ground-truth test
-asserts the three copies and the equality with HD's less the row), **but `Title::pause_menu` stays
-`None`** and a pause on Omega is the main page over the race, as before
-(`pause_menu_ground_truth::omega_screens`). Two reasons:
+**Wired** (`Title::pause_menu` is `oag_omega::pause_menu::PAUSE_MENU`). Omega's `ingame_definition.xml`
+(`data00`, `data08`, `data09`, identical on these screens) is HD's Fury file **without `ONL_VIEW_INV`**, and
+carries the same `InGame Main Menu` chrome (rules at `y = 292` and `790`, `IG_PAUSE_RESU` at `525, 800`), so
+the HD layout above is the one drawn (`oag_omega::pause_menu` sets `layout` to the same file and chrome). Its
+binder ([`PauseMenu_BindRedirectForMode`](../ghidra/functions/ps4-omega-eu/pause-menu.md), `0x0155dc00`, 80) is
+the same switch on the same mode ids, preceded by a rewrite of the mode from a campaign event object. The table
+is HD's less that row, with PILOT ASSIST and GHOST as the same lists (the ground-truth test asserts the three
+copies and the equality with HD's less the row).
 
-1. **No original frame.** Not walked live: shadPS4 and `sway` are not installed on the machine that did
-   this (`scripts/shadps4-omega-pair.py`'s rig with a START press after the grid is the recipe).
-2. **A legibility defect ours has there.** Wired, the screen title and the footer legend draw in the
-   front end's dark ink (Omega's frame is white) and are unreadable over the dark tint; the original's
-   own ink in a race is unmeasured. Wire it once a frame says what the title and footer look like.
+### What the original draws
+
+shadPS4 0.20 on the EU pressing (`scripts/shadps4-omega-pair.py`'s rig: its own headless `sway`, one uinput
+pad, muted; the walk is MAIN MENU, RACEBOX, the race type row, Track Select, Ship Select, START RACE, then the
+START button, "OPTIONS" on a PS4 pad), Vineta K, the first Feisar craft, Venom class, 1920x1080. Reference
+frames: `data/reference/omega-pause-menu/`.
+
+- **Single Race** and **Time Trial** read as read off the file. Single Race: CONTINUE, PILOT ASSIST (OFF),
+  GAME OPTIONS, AUDIO OPTIONS, PHOTO MODE, RESTART RACE, QUIT RACE. Time Trial adds GHOST (ON) after PILOT
+  ASSIST. The footer is the START glyph with `RESUME GAME` and `CONFIRM`, as on HD. START at once opens it, over
+  the race on the grid or on the road.
+- **Ink and blocks** (answers the dark-ink defect the first reading expected): the title, the labels and the
+  footer are **white**; the blocks are **opaque black** with the focused one **red** `(239, 0, 0)`, the list value
+  boxes the same. There is no HD-style cyan on this profile: the red and black is the palette this build
+  already serves. Whether Omega has a `Menu Style` row that switches it was not looked for on its options page.
+- **The tint is lighter than HD's**: the scene is about half as bright, not a quarter. Seven patches of static
+  geometry outside the panel and the HUD, paused against the frame before and the frame after the resume
+  (unpaused frames agree to 1.00), read 0.38 to 0.52, median 0.48 of the unpaused brightness
+  (`scrim_argb = 0x85000000`, black at alpha 0.52).
+- **No HUD under the tint**: the lap hexagon, position, best time and speedometer are gone from a paused frame
+  and back on the resume (HD keeps its HUD, dimmed). `hud_under_scrim` is off.
+- The START glyph is the **OPTIONS button** (a pill with a tiny "OPTIONS" label above it, `FE_START_BUTTON`
+  is `"I"` in `PS_BUTTONS.fnt`); ours draws a triangle there (below).
+
+### What ours does
+
+The page is the one HD gets (`oag_ui_screens::pause` over the file's widgets; `Definition::open_on_pause_screen`),
+with Omega's table: rows, pad, pointer, START, CIRCLE on the root doing nothing and the settings reaching the
+parked race are HD's code. Omega's `GameOptions::ship_visible` is on so the GHOST list has the setting to switch
+(its OPTIONS page here gains `GHOST SHIPS VISIBLE`; the original's own game options page was not read, only the
+pause screen's `FE_GHOST` row, which proves the setting exists).
+
+**Measured against the original** (`scripts/pause-panel-metric.py`, Time Trial pair, `--orig-box 0 0 1920 1080
+--inset 1.0`): the rules at rows 195 to 196 and 527 to 528 on the original, 196 to 197 and 526 on ours, both
+spanning x 320 to 960 at 1280x720; the focused row (239, 0, 0) against (238, 7, 7); the mean absolute colour
+difference over the eight rows' box interiors **1.2** of 255 per channel (24 samples; the backgrounds differ).
+
+Residuals:
+
+- **The START glyph** draws HD's triangle where the original draws the OPTIONS pill. Not chased: whether Omega's
+  `PS_BUTTONS.fnt` (`data00`'s copy or `data08`'s) draws `"I"` as the pill and ours reads the other copy is open.
+- The marker arrow blinks off in the frames taken; the list step arrows were not compared.
+- The Fury style's red is Omega's own; the pause frames have no second style to switch to.
+
+**A 2048 finding is checked against Omega, and the reverse**: Omega's binder reads the same mode ids as HD's, so
+this table is the model for 2048's `InGame_Definition.xml` (Vita), which is not wired.
+
+Tests: the rows per screen against all three archives' copies and the equality with HD's less the row
+(`main_menu_ground_truth::omegas_pause_screens_are_hds_without_the_invites_row_in_every_archive`); the mode
+table (`oag_omega::pause_menu::tests`); the game driving a real Omega race
+(`pause_menu_ground_truth::omega_screens`: the rows per mode, END SESSION, START and the PILOT ASSIST list
+reaching the race, RESTART).
 
 ## Other titles
 

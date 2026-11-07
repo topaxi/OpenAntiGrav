@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, hd, omega, 2048, pure]
 updated: 2026-11-07
-summary: "Pulse, HD and Fury pause into the disc's own screen per mode; Omega read, not wired; 2048 and Pure open the main page"
+summary: "Pulse, HD, Fury and Omega pause into the disc's own screen per mode; 2048 and Pure open the main page"
 ---
 
 # The title's own pause screen
@@ -19,11 +19,11 @@ pause screen where one applies). Online pause stays the maintainer's decision
 
 ## Open
 
-- **Omega: read, tested, not wired** (`oag_omega::pause_menu`, `Title::pause_menu` is `None`): HD's screen
-  layout applies unchanged (same `InGame Main Menu` chrome and row positions, `docs/ui/pause-menu.md`,
-  "Omega"); wire it (set `layout`, `hud_under_scrim`, the three Pilot Assist/Ghost rows) once a shadPS4
-  frame says what the title and footer look like over the tint, and the `.gnf` arrow decodes. No shadPS4
-  or `sway` on the machine that did this.
+- **Omega: wired** (`oag_omega::pause_menu`, original frames of Single Race and Time Trial on shadPS4 in
+  `docs/ui/pause-menu.md`, "Omega"). Open: the START glyph draws HD's triangle where the original draws the
+  OPTIONS pill (`FE_START_BUTTON` is `"I"`; is `data00`'s or `data08`'s `PS_BUTTONS.fnt` read?); Speed Lap,
+  Eliminator, Tournament and Zone not all walked live (the doc says which); the original's own game options
+  page was not read for `GHOST SHIPS VISIBLE` (Omega's `ship_visible` is on for the pause GHOST list).
 - **2048, Pure: not wired** (`pause_menu: None`), in that order. 2048 has `InGame_Definition.xml` (36
   screens) and `LegacyInGame_Definition.xml` on Vita, with a binder of its own; Omega's reads the same
   mode ids as HD's, so compare 2048's against it first. Pure has `InGame Pause` and no photo screen,
@@ -51,6 +51,5 @@ pause screen where one applies). Online pause stays the maintainer's decision
 1. Pure: build `crates/pure/src/pause_menu.rs` beside `crates/pulse/src/pause_menu.rs` (Pulse's `Option`
    mechanism, the front end's list), a ground-truth test beside `pulses_*_pause_screens_*`, and a PPSSPP
    frame of `InGame Pause`; then 2048 (Vita3K) against Omega.
-2. Omega: a shadPS4 frame (`scripts/shadps4-omega-pair.py`'s rig, START after the grid), then wire.
-3. The front end's FE Style (HD palette: `DATA06`'s `HD_*` globals, opaque blocks, white page) so the HD-style
+2. The front end's FE Style (HD palette: `DATA06`'s `HD_*` globals, opaque blocks, white page) so the HD-style
    pause frames can be matched too.
