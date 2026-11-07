@@ -187,11 +187,8 @@ overlay draws them for HD yet.
   measured** (450, the viewport less the text's inset both sides; the XML authors none); and the
   leave starts on the tick the flyby ends where the original's starts 1 or 2 ticks after its
   substate changes.
-- **The opening shot's window panes stipple on Platinum Rush** (measured 2026-11-07, section
-  above): three exactly coplanar copies of the start building tie in our float depth. Open: whether
-  the original draws copy 365 (decides culling versus a tie rule) and the fix; the probe is tick 5
-  at `--draw-alpha 0.5` against `1.0` (pane region mean 45.72 now, 0.00 with two copies hidden). The
-  original also fades the opening second in from white; ours does not.
+- **The original fades the opening second in from white**; ours does not (measured 2026-11-07,
+  frames 6 to 45 of a capture, every circuit).
 - **The world does not settle** under the flyby, by choice: ticking it would move every
   hash. Not a visible gap after the first second: the original's craft is placed 2.14 below rest
   and rises to rest by about frame 50, ours is placed at rest, so both sit level from then on
@@ -311,12 +308,101 @@ the two apart: Black is not measured separately. HD, 2048 and Omega: no document
 (the discs were not searched), and the `.rcsmodel` container layout read in the docs has no
 per-batch depth byte (**checked, differs**, by the layout, not by a census of the discs).
 
-**What is not settled.** Whether the original *draws* node 365 at all in that shot: a GE dump of the
-held shot was not captured (the RESTART RACE route presses Cross and skips the flyby; a dump at the
-description screen's onset is 721 two-vertex UI prims, a delayed one is a 830-prim frame whose
-geometry sits near x -700, the grid), and the dump taken 5 seconds in shows 349's pane and not 365's. If it culls 365 the fix is which copies the
-flyby admits; if it draws it, the fix is the tie rule (a 16-bit depth step, first drawn wins).
-The open work is listed in the Open section of this page.
+**Fixed by the mask below.** The original never draws node 365 in that shot, so the tie never
+arises; the tie rule the first pass considered (one 16-bit depth step, first drawn wins) was not
+built and is not needed for this surface. The difference in depth precision stays: a circuit
+that draws coplanar copies inside one row would stipple in ours and not in the original. None
+shows in the opening shots (table below).
+
+## The flyby is masked by the section under its camera (measured 2026-11-07, lane `pulse-flyby-fix`)
+
+**Claim**: Platinum Rush's flyby draws no flickering surface in its opening shot, White and Black.
+**True**, because the flyby now draws the section row the original draws.
+
+**What the original draws in the held shot (confidence 92).** A GE list of the shot itself: stop on
+`VIEW_PUBLISH` (`0x08882e9c`) of `scripts/psp-flyby.py` at hit 8, the eye reading the held
+`(55.31, 64.84, 363.38)`; send `gpu.record.dump` with the CPU stopped, then resume, so the dump is
+the next whole frame. That is `scripts/psp-flyby.py --frames N --dump-at 8`; the earlier attempts
+asked for the dump by wall clock. White and Black, same result. Matched by vertex count and world box, strip count
+being triangles plus two:
+
+| Copy | Group | Its own batches | In the dump |
+| --- | --- | --- | --- |
+| node 365 | section 32 | pane 10 triangles, box `(95,89,145)..(123,125,181)`; all 6 batches | **none** |
+| node 342 | section 27, `LodGroup` 335 child 0 | tile 407 and 434 triangles, pane 82, wall 378, 245, 291 | **none**: the unique boxes are absent, and the strips are 87, 271, 187 and 65 vertices, which are 349's counts |
+| node 349 | section 27, `LodGroup` 335 child 1 | tile 440 and 125 triangles, pane 85 | all (prims of 442, 375 and 87 vertices) |
+
+Node 342 and 349 share several boxes, so a box match alone would claim both; the vertex counts and
+342's unique batches are what separate them. They are tiers of one `LodGroup`, chosen by distance,
+which ours already did. So the only copy to remove was 365, and hiding it alone took the
+probe to `0.00` in the first pass.
+
+**Why it is absent: the row (confidence 90).** The render-view publisher `FUN_08882cbc` ends with
+`AiTrack_LocatePosition(2000.0, track, record, eye, 0, -1, 0)` and `Camera_PublishSection(record+0x60)`,
+which is `view_section` (`0x08ab10a0`), the row `Gfx_GetVisibleSectionMask` hands the draws. It runs
+every frame of the flyby with no cursor, so the lookup is global, and the section is the camera's,
+not the craft's as in the race. Section 8's row `0x021f0000a8001ff8` holds bit 27 and not bit 32,
+so 365's group is out and 349's in.
+
+Ours asked the race's question instead. The camera is searched for near the craft and held to a
+half-width test, both of which fail on a flyby, so it read `UNPLACED` and drew every section
+(`--pvs false` gave the same bytes, which is what hid this). `Race::flyby_camera_section` now takes
+the sample nearest the camera anywhere on the spline, and `Race::visible_set` masks by that one row,
+the path the station cameras already use.
+
+**The locate rule against the original, whole flybys** (`0x08ab10a0` read at every publisher hit, `view_section` in
+`psp-flyby.py --frames`' log, the camera eye beside it, ours `Spline::nearest` on the same eye):
+
+| Circuit | Rows | Differ | Largest camera to spline distance |
+| --- | --- | --- | --- |
+| Platinum Rush White (`13_Track`) | 1,523 | 6 | 60.0 |
+| Talon's Junction White (`16_Track`) | 1,520 | 10 | 149.5 |
+
+The rows that differ are each a section change: the breakpoint precedes the publish, so the global
+lags by a frame, plus the first rows before the camera has a pose (eye at the origin). Sections in
+order: Platinum Rush `8, 1, 17, 14, 23` (Black too), Talon's Junction `0, 27, 25, 18, 19, 20, 8`.
+`flyby_section_ground_truth` holds both, off the disc, through `Race::tick_intro`.
+
+Not exercised: a miss. `AiTrack_LocatePosition` failing leaves the pre-zeroed record, so the original
+would publish section `0`; no camera measured stood more than 150 units off the spline, and ours
+has no reach test.
+
+**Acceptance.** The probe of the section above: `45.72` before, `0.00` after, on `track.vex` and on
+`track_reversed.vex` (`flyby_pane_ground_truth`, red with the rule off). The opening-shot sweep,
+pixels differing by more than 60 between the blends, on the 12 circuit files:
+
+| File | Before | After |
+| --- | --- | --- |
+| `13_Track` | 2,076 | 0 |
+| `01_Track` | 20 | 6 |
+| `09_Track` | 6 | 4 |
+| `02`, `03`, `04`, `05`, `06`, `07`, `10`, `14`, `16` | 0 to 5 | unchanged |
+
+**Consecutive frames.** Mean change between ticks 30 and 35 (960x544, pane region, then the wall
+above it): before `59.5, 56.7, 54.1, 51.8, 64.9` against `14`, after `24.2, 23.8, 24.1, 24.1, 24.3`
+against `14`. The camera pans, so a pane with reflections moves more than a plain wall; the
+crawling chequer is gone in all six frames.
+
+**The rest of the flyby.** Before and after differ by up to 85,370 pixels (960x544) further in. Read
+against the original's frame at the same camera:
+
+| Circuit | Ticks | Against the original |
+| --- | --- | --- |
+| Talon's Junction | 450, 1250 | after matches; before drew a grey panel and a sign over the pink advert at 1250 |
+| De Konstruct Black | 750, 1000, 1250 | after matches; before drew a building across the sky and hover vehicles |
+| Platinum Rush | 60, 100 | after matches on the left dome's panes and the walkway's |
+
+Not read against the original: Platinum Rush tick 200 (10,385 pixels) and `03_Track` (up to 4,949
+pixels), compared before and after only.
+
+**Other titles.** The path needs `section` nodes. HD, 2048 and Omega draw `.rcsmodel` chunks with a
+partition of their own, located by world position, and have no such nodes: **checked, differs**, by
+the code path; their flyby's mask is unmeasured. Whether HD authors coplanar copies was not
+censused, because the fix takes no tie rule that could reach it. Pure declares no sections. PS2 Pulse
+has them, and its flyby is off (`PRE_RACE.on`).
+
+The weather reads the same global (`Weather_Update`); `Race::advance_weather` does not take the
+flyby's section, and that is left as it was.
 
 ## What the original plays under the flyby (watched 2026-11-02, lane `pulse-flyby-audio-capture`)
 

@@ -1706,6 +1706,11 @@ the decode does report clamp when it is set. Timing a countdown dump: `gpu.recor
 take screenshots first and one dump late (the board's prims are drawn through the dark phase
 too).
 
+**A dump of one chosen frame** (2026-11-07, `pulse-flyby-fix`): stop the CPU on a breakpoint in that
+frame, send `gpu.record.dump`, then resume with the breakpoint gone; the answer is the next whole
+frame. Two passes asked by wall clock during the flyby and landed on a UI frame and a later shot.
+`scripts/psp-flyby.py --frames N --dump-at K` does this and logs `view_section` per hit.
+
 Two traps:
 
 - **A pose placed at speed is not the pose dumped.** `psp-drive.py place --speed 41

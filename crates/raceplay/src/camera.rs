@@ -512,7 +512,8 @@ impl Race {
     /// and over the director's camera too: a shot must not lose scenery to a visibility set
     /// that was authored for a craft in a race (the draws still go through the frustum test).
     /// Otherwise the one row of the section a station camera is placed by
-    /// ([`Self::station_camera_section`]), or the craft's and the camera's own sections with
+    /// ([`Self::station_camera_section`]) or the pre-race flyby's camera stands in
+    /// ([`Self::flyby_camera_section`]), or the craft's and the camera's own sections with
     /// padding for every other camera ([`Self::visibility_sections`]), narrowed to the view.
     pub(super) fn visible_set(
         &self,
@@ -522,7 +523,10 @@ impl Race {
         if self.view.photo.is_some() {
             return VisibleSet::everything();
         }
-        match self.station_camera_section() {
+        match self
+            .station_camera_section()
+            .or_else(|| self.flyby_camera_section())
+        {
             Some(section) => visibility.set_exact(section, view_projection),
             None => {
                 let (craft, camera) = self.visibility_sections();
@@ -548,6 +552,25 @@ impl Race {
         }
         self.drawn_craft_of_a_station_camera()
             .map(|slot| self.section_of_slot(slot))
+    }
+
+    /// The section the draws are masked with during the pre-race flyby: that of the spline
+    /// sample nearest the camera, wherever on the circuit that is, `None` outside the flyby.
+    ///
+    /// The render-view publisher (`FUN_08882cbc`) locates the camera itself on the AI track
+    /// with no cursor and publishes the located section, the row the draws are masked with.
+    /// The camera flies far from the craft and the racing line, so the craft's window and
+    /// half-width test of [`Self::visibility_sections`] read [`UNPLACED`], which drew every
+    /// section: Platinum Rush's building then shows the coplanar panes of a group the
+    /// original's row leaves out (`docs/gameplay/race-intro.md`, "The flyby is masked by the
+    /// section under its camera").
+    #[must_use]
+    pub fn flyby_camera_section(&self) -> Option<u8> {
+        if !self.in_intro() {
+            return None;
+        }
+        let (_, sample, _) = self.sim.spline.nearest(self.camera_position())?;
+        Some(sample.section_id)
     }
 
     /// The craft the camera draws when it stands on an authored station: the destroy camera's

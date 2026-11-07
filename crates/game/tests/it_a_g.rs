@@ -29,6 +29,7 @@ mod drive_ground_truth;
 mod endrace_split_ground_truth;
 mod endrace_trophy_ground_truth;
 mod endrace_voice_ground_truth;
+mod flyby_pane_ground_truth;
 mod flyby_voice_ground_truth;
 mod font_roles_ground_truth;
 mod frontend_grid_ground_truth;

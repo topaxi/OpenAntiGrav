@@ -14,6 +14,7 @@ Raw captures are derived game data: write them under `data/`, never commit them.
 """
 
 import argparse
+import base64
 import importlib.util
 import json
 import struct
@@ -62,6 +63,7 @@ G_CAMERA_FOV = 0x08B34310
 RACE_MANAGER = 0x08B317B4
 G_HUD = 0x08AB0838
 VIEW_BASE_POINTER = 0x08AB10B0
+VIEW_SECTION = 0x08AB10A0
 
 
 def gpr(dbg):
@@ -146,9 +148,38 @@ def per_frame(dbg, args):
     raise SystemExit(0)
 
 
+def dump_next_frame(dbg, out):
+    """A GE list of the frame after this stop. Asked with the CPU stopped and answered at the end
+    of the next whole frame, so it is the frame this hit's camera draws, not whatever the wall
+    clock lands on (`docs/reverse-engineering/ppsspp-debugger.md`, "Reading the frame's GE list")."""
+    ticket = dbg.send("gpu.record.dump")
+    dbg.call("cpu.status")
+    dbg.pending = []
+    dbg.call("cpu.resume")
+    end = time.time() + 120
+    while time.time() < end:
+        reply = dbg._recv()
+        if reply is not None and reply.get("ticket") == ticket:
+            _, data = reply["uri"].split(",", 1)
+            out.write_bytes(base64.b64decode(data))
+            print("dumped %s" % out, file=sys.stderr)
+            return
+    raise TimeoutError("no answer to gpu.record.dump")
+
+
 def _frames(dbg, args, log, t0, shots):
+    if args.dump_at is None:
+        _frame_rows(dbg, args, log, t0, shots, 0, args.frames)
+        return
+    _frame_rows(dbg, args, log, t0, shots, 0, args.dump_at + 1)
+    dump_next_frame(dbg, args.out / ("hit%04d.ppdmp" % args.dump_at))
+    _frame_rows(dbg, args, log, t0, shots, args.dump_at + 1, args.frames - args.dump_at - 1)
+
+
+def _frame_rows(dbg, args, log, t0, shots, first, count):
     skipped = False
-    for index, _ in dbg.each_hit(args.break_at, args.frames, timeout=args.hit_timeout):
+    for hit, _ in dbg.each_hit(args.break_at, count, timeout=args.hit_timeout):
+        index = first + hit
         if args.skip_frame is not None and index >= args.skip_frame and not skipped:
             skipped = True
             dbg.call("input.buttons.press", button=args.skip_button, duration=4)
@@ -167,6 +198,8 @@ def _frames(dbg, args, log, t0, shots):
             "fov": f[4], "pose": f[8:24], "tail": f[24:48],
             "view": list(struct.unpack("<16f", dbg.read(base + 0x40, 64))),
             "fov_global": dbg.read_f32(G_CAMERA_FOV),
+            # Read before this frame's publish, so it lags the camera by one hit at a change.
+            "view_section": dbg.read_u32(VIEW_SECTION),
             "clock": dbg.read_f32(ingame + 0x40),
             "ingame_0x3c": dbg.read_u32(ingame + 0x3C),
         }
@@ -274,6 +307,7 @@ def main():
                         help="seconds without a hit before the publisher is taken to have stopped")
     parser.add_argument("--break-at", type=lambda v: int(v, 0), default=VIEW_PUBLISH)
     parser.add_argument("--after", type=int, default=0, help="frames of Weapons_DispatchFire to log after the flyby")
+    parser.add_argument("--dump-at", type=int, help="per-frame mode: a GE dump of the frame after this hit")
     parser.add_argument("--skip-frame", type=int)
     parser.add_argument("--skip-button", default="cross")
     args = parser.parse_args()
