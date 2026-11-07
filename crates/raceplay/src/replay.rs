@@ -32,6 +32,14 @@ use oag_replay::{GhostLap, Header, Pose, Recorder, Replay};
 
 use super::*;
 
+mod events;
+mod launch;
+mod rebuild;
+
+pub use events::ApplyError;
+pub use launch::{Launch, UnknownOption};
+pub use rebuild::rebuild;
+
 /// The recording and the ghost, both optional.
 #[derive(Debug, Default)]
 pub(super) struct ReplayState {
@@ -40,6 +48,19 @@ pub(super) struct ReplayState {
     /// The player's `Ghost Ship Visible` is off: the ghost is still raced and
     /// recorded, but [`Race::ghost_pose`] draws nothing.
     ghost_hidden: bool,
+    /// The launch request this race was loaded with, which a recording of it carries in its
+    /// header ([`Header::setup`]) so the file can rebuild the race.
+    request: Option<oag_replay::header::Setup>,
+}
+
+impl ReplayState {
+    /// No recording, no ghost, and the request a recording will carry.
+    pub(super) fn requested(request: Option<oag_replay::header::Setup>) -> Self {
+        Self {
+            request,
+            ..Self::default()
+        }
+    }
 }
 
 /// A recording in progress.
@@ -97,6 +118,7 @@ impl Race {
             .filter_map(|slot| u8::try_from(slot).ok())
             .collect();
         header.tick_rate = TickRate::DEFAULT.hz();
+        header.setup = self.replay.request.clone();
         let recorder = Recorder::new(header, self.sim.state_hash());
         let standing = self.player_standing();
         self.replay.recording = Some(Recording {
@@ -108,13 +130,6 @@ impl Race {
             best: None,
             best_unsaved: false,
         });
-    }
-
-    /// Stops recording this race. A run whose laws changed under the recording (Pilot Assist
-    /// switched mid-race) is one neither a replay nor a ghost lap can reproduce, so it saves
-    /// neither from here on.
-    pub fn stop_recording(&mut self) {
-        self.replay.recording = None;
     }
 
     /// Whether this race is being recorded.

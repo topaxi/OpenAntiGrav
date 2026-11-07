@@ -3567,6 +3567,7 @@ dependencies = [
  "png",
  "pollster",
  "serde",
+ "thiserror 2.0.21",
  "toml",
  "toml_edit",
  "wat",

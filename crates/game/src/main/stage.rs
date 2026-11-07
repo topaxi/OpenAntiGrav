@@ -680,9 +680,13 @@ impl Stage {
         // set again whenever the cycle button or the menu row moves it - see
         // `Session::cycle_camera_view`.
         race.set_camera_view(settings.graphics.camera_view);
-        race.set_control_scheme(scheme);
-        race.set_autopilot(autopilot);
-        race.set_pilot_assist(settings.controls.pilot_assist);
+        let launch = race::Launch {
+            scheme,
+            difficulty,
+            autopilot,
+            pilot_assist: settings.controls.pilot_assist,
+        };
+        race.apply_launch(&launch);
         if autopilot {
             info!("--autopilot: the player's craft is being flown for them");
             let skill = autopilot_skill.unwrap_or(difficulty);
@@ -704,13 +708,7 @@ impl Stage {
             settings.display.ghost_auto_loads(title),
             liveries.first().map_or("", |l| l.team.as_str()),
             seed,
-            oag_game::ghosts::race_options(
-                scheme,
-                difficulty,
-                autopilot,
-                settings.controls.pilot_assist,
-                None,
-            ),
+            launch.to_table(),
         );
         Ok(Box::new(RaceStage {
             scene,

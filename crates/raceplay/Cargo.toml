@@ -64,6 +64,7 @@ oag-ui-screens = { workspace = true, optional = true }
 oag-vex.workspace = true
 oag-weapons.workspace = true
 anyhow.workspace = true
+thiserror.workspace = true
 bytemuck = { workspace = true, features = ["derive"], optional = true }
 png = { workspace = true, optional = true }
 dirs = "7"

@@ -1130,6 +1130,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             trail_sparks: options.trail_sparks,
             #[cfg(feature = "view")]
+            request: Some(options.replay_setup()),
+            #[cfg(feature = "view")]
             campaign_event: false,
             seed: options.seed.unwrap_or(SEED),
             zone,
