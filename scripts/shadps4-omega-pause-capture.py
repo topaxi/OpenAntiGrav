@@ -9,8 +9,8 @@ directory the frames go to. The last argument is the plan after the race has sta
 frame until it darkens), `hold-BUTTON:SECONDS`, `BUTTON:SECONDS`, `shot:NAME`, `wait:SECONDS`, `burst:N`.
 
 Environment: `RACE_TYPE_ROW=1` moves to the Racebox RACE TYPE row; `TARGET_TYPE=time_trial|speed_lap|eliminator|zone` steps it
-until the icon matches the crop in `$OMEGA_TYPE_REFS/modeN.png` (N is 1 to 4, a 1920x1080 frame of the Racebox page on that
-type with RACE TYPE focused); `SHIP_DOWNS` is the Downs on Ship Select (default 2, the first unlocked Feisar craft; 0 for Zone).
+until the icon matches the crop in `data/reference/omega-pause-menu/omega-racebox-type-ref-N.png` (N is 1 to 4: time trial, speed
+lap, eliminator, zone; a 1920x1080 frame of the Racebox page on that type with RACE TYPE focused); `SHIP_DOWNS` is the Downs on Ship Select (default 2, the first unlocked Feisar craft; 0 for Zone).
 `MODE_RIGHTS=N` with `STOP_AT_MODE=1` photographs N steps of a row and stops.
 
 shadPS4 runs about a frame a second under a loaded machine and drops short presses, so every step polls what is on screen.
@@ -66,7 +66,7 @@ try:
     if target:
         import subprocess
         ref = {"time_trial": 1, "speed_lap": 2, "eliminator": 3, "zone": 4}[target]
-        refpng = os.path.join(os.environ["OMEGA_TYPE_REFS"], "mode%d.png" % ref)
+        refpng = str(ROOT / "data/reference/omega-pause-menu" / ("omega-racebox-type-ref-%d.png" % ref))
         crop = ["-crop", "500x320+1180+160", "+repage"]
         def dist(png):
             a_ = subprocess.run(["magick", str(png), *crop, "-resize", "50%", "gray:-"], capture_output=True).stdout

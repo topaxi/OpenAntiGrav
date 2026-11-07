@@ -91,7 +91,7 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
         ("tournament", "InGame Pause SP Tournament"),
         ("zone", "InGame Pause Zone"),
     ],
-    scrim_argb: 0x8500_0000,
+    scrim_argb: 0x8000_0000,
     layout: Some(PauseLayout {
         definition: r"Data\Plugins\Frontend\Gui\ingame_definition.xml",
         chrome: "InGame Main Menu",

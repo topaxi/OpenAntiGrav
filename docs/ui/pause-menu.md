@@ -243,10 +243,10 @@ frames: `data/reference/omega-pause-menu/`.
   footer are **white**; the blocks are **opaque black** with the focused one **red** `(239, 0, 0)`, the list value
   boxes the same. There is no HD-style cyan on this profile: the red and black is the palette this build
   already serves. Whether Omega has a `Menu Style` row that switches it was not looked for on its options page.
-- **The tint is lighter than HD's**: the scene is about half as bright, not a quarter. Seven patches of static
-  geometry outside the panel and the HUD, paused against the frame before and the frame after the resume
-  (unpaused frames agree to 1.00), read 0.38 to 0.52, median 0.48 of the unpaused brightness
-  (`scrim_argb = 0x85000000`, black at alpha 0.52).
+- **The tint is lighter than HD's**: the scene is about half as bright, not a quarter. A least-squares fit of
+  the paused frame on the frame before it over 348,000 pixels outside the panel and the HUD (correlation
+  0.99, so the same scene) gives a slope of **0.50**; seven hand-picked patches read 0.38 to 0.52 (the fit is
+  the better number). `scrim_argb = 0x80000000`, black at alpha 0.5.
 - **No HUD under the tint**: the lap hexagon, position, best time and speedometer are gone from a paused frame
   and back on the resume (HD keeps its HUD, dimmed). `hud_under_scrim` is off.
 - The START glyph is the **OPTIONS button** (a pill with a tiny "OPTIONS" label above it, `FE_START_BUTTON`
@@ -257,11 +257,11 @@ frames: `data/reference/omega-pause-menu/`.
 The page is the one HD gets (`oag_ui_screens::pause` over the file's widgets; `Definition::open_on_pause_screen`),
 with Omega's table: rows, pad, pointer, START, CIRCLE on the root doing nothing and the settings reaching the
 parked race are HD's code. Omega's `GameOptions::ship_visible` is on so the GHOST list has the setting to switch
-(its OPTIONS page here gains `GHOST SHIPS VISIBLE`; the original's own game options page was not read, only the
-pause screen's `FE_GHOST` row, which proves the setting exists).
+(its OPTIONS page here gains `GHOST SHIPS VISIBLE`, **inherited from HD**; the original's own options page was
+not read, only the pause screen's `FE_GHOST` row, which proves the setting exists, `docs/ui/menus-original.md`).
 
 **Measured against the original** (`scripts/pause-panel-metric.py`, Time Trial pair, `--orig-box 0 0 1920 1080
---inset 1.0`): the rules at rows 195 to 196 and 527 to 528 on the original, 196 to 197 and 526 on ours, both
+--inset 1.0`; ours is the same fit on its own paused frame: slope **0.48** at alpha 0.52, so 0.5 gives 0.5): the rules at rows 195 to 196 and 527 to 528 on the original, 196 to 197 and 526 on ours, both
 spanning x 320 to 960 at 1280x720; the focused row (239, 0, 0) against (238, 7, 7); the mean absolute colour
 difference over the eight rows' box interiors **1.2** of 255 per channel (24 samples; the backgrounds differ).
 
