@@ -394,3 +394,28 @@ fn the_rewind_row_goes_back_to_the_start_and_forward_to_the_live_tick() {
     effects.set_target_tick(900);
     assert_eq!(effects.target_tick(), 100);
 }
+
+/// What a player sees the moment the race resumes: the chase camera is where it was at the live
+/// tick, not where the rewind last left it. Fails if `Rewind::end` restores the simulation and
+/// leaves the view where the last seek put it.
+#[test]
+fn leaving_a_rewind_leaves_the_camera_where_the_live_race_had_it() {
+    let (mut control, _, _) = driven();
+    let (mut visited, mut keeper, _) = driven();
+    // Nothing imposed over the chase camera: the picture the race itself draws.
+    let live = visited.camera_position();
+    assert_eq!(live, control.camera_position());
+    let mut rewind = Rewind::begin(&mut keeper, &mut visited).expect("running");
+    rewind.seek(&mut keeper, &mut visited, 5);
+    assert!(
+        visited.camera_position().distance(live) > 5.0,
+        "the camera is back at the start of the race"
+    );
+    rewind.end(&mut keeper, &mut visited);
+    visited.tick(&inputs(LIVE));
+    control.tick(&inputs(LIVE));
+    let apart = visited
+        .camera_position()
+        .distance(control.camera_position());
+    assert!(apart < 0.5, "the camera is {apart} units from where it was");
+}
