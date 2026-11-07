@@ -207,31 +207,47 @@ impl Session {
             return;
         };
         info!("replays: WATCH {}", entry.path.display());
-        let refuse = |this: &mut Self, why: String| {
+        if let Err(why) = self.watch_path(&entry.path) {
             error!("replays: {}: {why}", entry.path.display());
-            this.replay_refused.insert(entry.path.clone(), why);
-            this.resupply_replays(Some(&entry.key()));
+            self.replay_refused.insert(entry.path.clone(), why);
+            self.resupply_replays(Some(&entry.key()));
+        }
+    }
+
+    /// The end-of-race menu's WATCH REPLAY row: the race just driven is written to `auto/` now
+    /// (it would be on leaving) and opened in the viewer.
+    pub(crate) fn watch_last_race(&mut self) {
+        let Stage::Race(stage) = &mut self.stage else {
+            return;
         };
-        let replay = match std::fs::read(&entry.path)
+        let Some(path) = stage.write_auto_replay() else {
+            error!("replays: this race left no recording to watch");
+            return;
+        };
+        info!("replays: WATCH REPLAY {}", path.display());
+        if let Err(why) = self.watch_path(&path) {
+            error!("replays: {}: {why}", path.display());
+            self.replay_refused.insert(path, why);
+        }
+    }
+
+    /// Reads the recording at `path` and starts loading the race it was made in.
+    ///
+    /// # Errors
+    ///
+    /// Why it cannot be opened: the file does not read, no disc is open, or the header cannot be
+    /// rebuilt here.
+    fn watch_path(&mut self, path: &std::path::Path) -> Result<(), String> {
+        let replay = std::fs::read(path)
             .map_err(|e| e.to_string())
-            .and_then(|bytes| Replay::from_bytes(&bytes).map_err(|e| e.to_string()))
-        {
-            Ok(replay) => replay,
-            Err(why) => return refuse(self, why),
-        };
-        let Some(home) = self.race_options.as_ref() else {
-            return refuse(self, "no disc image has been chosen yet".to_string());
-        };
+            .and_then(|bytes| Replay::from_bytes(&bytes).map_err(|e| e.to_string()))?;
+        let home = self
+            .race_options
+            .as_ref()
+            .ok_or_else(|| "no disc image has been chosen yet".to_string())?;
         let (source, dlc) = (home.source.clone(), home.dlc.clone());
-        let mut options = match oag_raceplay::Options::for_replay(&replay.header, &source) {
-            Ok(options) => options,
-            Err(e) => return refuse(self, format!("{e:#}")),
-        };
-        // The packs this machine has mounted, as the race box mounts them: the header's
-        // `opponent_teams` may name a team only a pack ships, and a rebuild without the pack
-        // fields another hull there. Whether the packs are the recording's is the tick-zero
-        // hash's to say.
-        options.dlc = dlc;
+        let mut options = oag_raceplay::Options::for_replay(&replay.header, &source)
+            .map_err(|e| format!("{e:#}"))?;
         options.language = self.settings.language.clone();
         options.hud_style = self.settings.display.hud_style_choice();
         options.boost_zoom = self
@@ -239,6 +255,11 @@ impl Session {
             .graphics
             .boost_zoom
             .then(oag_source::title::borrowed_zoom_ring);
+        // The packs this machine has mounted, as the race box mounts them: the header's
+        // `opponent_teams` may name a team only a pack ships, and a rebuild without the pack
+        // fields another hull there. Whether the packs are the recording's is the tick-zero
+        // hash's to say.
+        options.dlc = dlc;
         if let Some(parked) = self.suspended_race.take() {
             crate::race_build::drop_off_thread(parked);
         }
@@ -246,14 +267,15 @@ impl Session {
         let mode = options.mode;
         self.watching = Some(Watching {
             replay: Box::new(replay),
-            path: entry.path.clone(),
+            path: path.to_path_buf(),
             setup: None,
         });
         self.return_to_replays = true;
-        if let Err(e) = self.start_race_loading(options, mode, None, false) {
-            self.watching = None;
-            error!("replays: cannot start loading: {e:#}");
-        }
+        self.start_race_loading(options, mode, None, false)
+            .map_err(|e| {
+                self.watching = None;
+                format!("{e:#}")
+            })
     }
 
     /// The viewer's state for the drive's state line: the word and `at/length/built`.

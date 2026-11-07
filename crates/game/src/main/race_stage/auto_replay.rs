@@ -68,21 +68,23 @@ impl RaceStage {
         Some(replay)
     }
 
-    /// Writes this race's recording into the ring, once.
-    pub(crate) fn write_auto_replay(&mut self) {
-        let Some(replay) = self.finished_recording() else {
-            return;
-        };
+    /// Writes this race's recording into the ring, once. Returns where it went.
+    pub(crate) fn write_auto_replay(&mut self) -> Option<std::path::PathBuf> {
+        let replay = self.finished_recording()?;
         self.auto_replay = false;
-        let Some(root) = oag_game::replays::dir() else {
-            return;
-        };
+        let root = oag_game::replays::dir()?;
         let unix = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |since| since.as_secs());
         match oag_game::replays::write_auto_in(&root, &self.result_key.title, unix, &replay) {
-            Ok(path) => debug!("replays: kept {} ({} ticks)", path.display(), replay.ticks()),
-            Err(e) => warn!("replays: could not keep this race: {e:#}"),
+            Ok(path) => {
+                debug!("replays: kept {} ({} ticks)", path.display(), replay.ticks());
+                Some(path)
+            }
+            Err(e) => {
+                warn!("replays: could not keep this race: {e:#}");
+                None
+            }
         }
     }
 }

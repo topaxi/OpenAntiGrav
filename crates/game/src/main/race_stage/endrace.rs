@@ -607,20 +607,32 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
 /// per `docs/gameplay/race-modes.md#tournament`. `false` for every
 /// non-Tournament race, and for a Tournament's own last leg.
 #[must_use]
-pub(crate) fn menu_options(campaign: bool, tournament_next_leg: bool) -> Vec<MenuOption> {
+///
+/// **`watch_replay`** adds WATCH REPLAY after VIEW RESULTS AGAIN, for a race that was recorded
+/// and a dialect that can draw a row the disc does not author (Pulse's list; HD's blocks and
+/// 2048's buttons are the disc's own and have no such row).
+pub(crate) fn menu_options(
+    campaign: bool,
+    tournament_next_leg: bool,
+    watch_replay: bool,
+) -> Vec<MenuOption> {
     let leave = if campaign {
         MenuOption::ReturnToGrid
     } else {
         MenuOption::ReturnToMenu
     };
-    if tournament_next_leg {
+    let mut options = if tournament_next_leg {
         // `EndRaceMenu_PopulateOptions` adds `ER_NEXT_RACE` first and has no
         // `ER_RACE_AGAIN` mid-Tournament, so the cursor starts on the next
         // leg; a leave row first would end the tournament on a plain confirm.
         vec![MenuOption::NextRace, leave, MenuOption::ViewResultsAgain]
     } else {
         vec![leave, MenuOption::RaceAgain, MenuOption::ViewResultsAgain]
+    };
+    if watch_replay {
+        options.push(MenuOption::WatchReplay);
     }
+    options
 }
 
 /// Pulse's own Tournament standings, off this project's `oag_race::tournament`

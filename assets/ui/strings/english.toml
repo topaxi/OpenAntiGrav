@@ -572,3 +572,4 @@ OAG_REPLAY_EXIT = { text = "EXIT", human = false }
 OAG_REPLAY_SPEED = { text = "SPEED", human = false }
 OAG_REPLAY_SKIP = { text = "5 SEC", human = false }
 OAG_REPLAY_ENDED = { text = "END OF REPLAY", human = false }
+OAG_ENDRACE_WATCH_REPLAY = { text = "WATCH REPLAY", human = false }

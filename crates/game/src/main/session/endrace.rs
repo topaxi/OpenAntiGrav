@@ -354,8 +354,16 @@ impl Session {
             observation.campaign_medal.map(to_campaign_medal),
         )
         .filter(|_| !split);
+        // WATCH REPLAY: a recorded race, on the dialect whose list can draw a row the disc does
+        // not author. Pulse's `<Menu>` is that list.
+        let watch_replay = matches!(&self.stage, Stage::Race(stage) if stage.auto_replay)
+            && oag_game::endrace::dialect(title_ref) == Some(oag_title::EndRaceDialect::Pulse);
         let menu = oag_ui_screens::endrace::EndRaceMenu::new(
-            menu_options(campaign, !split && self.tournament_has_next_leg()),
+            menu_options(
+                campaign,
+                !split && self.tournament_has_next_leg(),
+                watch_replay,
+            ),
             new_best_lap_ticks,
         );
 
@@ -484,6 +492,7 @@ impl Session {
                     endrace.view_results_again();
                 }
             }
+            MenuOption::WatchReplay => self.watch_last_race(),
             MenuOption::RaceAgain => {
                 // A LAN race ended on its server; a rematch is the lobby's, so the menus come back.
                 if self.net.is_some() {
