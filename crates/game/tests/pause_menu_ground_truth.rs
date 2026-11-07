@@ -274,7 +274,7 @@ mod hd_screens {
 
     /// The rows each HD screen shows (label, action or kind), by the mode that opens it: the
     /// disc's widgets in its order, PILOT ASSIST and GHOST as lists and VIEW INVITES inert.
-    fn hd_rows(mode: &str) -> Vec<(String, String)> {
+    pub(super) fn hd_rows(mode: &str) -> Vec<(String, String)> {
         let continue_ = ("CONTINUE", "back");
         let pilot = ("PILOT ASSIST", "choice");
         let ghost = ("GHOST", "choice");
@@ -475,30 +475,135 @@ mod hd_screens {
     }
 }
 
-/// Omega's table is read but not wired: a pause there is the main page over the parked race, as
-/// before. Needs the decrypted package pair, not an image.
+/// Omega's pause screens: HD's file less the invites row, over a real Omega race. Needs the
+/// decrypted package pair, not an image.
 mod omega_screens {
     use super::*;
 
+    fn omega() -> Option<std::path::PathBuf> {
+        oag_testdata::exact("data/extracted/ps4")
+    }
+
+    fn run_omega(tag: &str, script: &str) -> Run {
+        let source = omega().expect("the caller checks first");
+        run_on(&source, &format!("omega-{tag}"), script)
+    }
+
+    /// The rows an Omega screen shows: HD's, without PSN's invites.
+    fn omega_rows(mode: &str) -> Vec<(String, String)> {
+        super::hd_screens::hd_rows(mode)
+            .into_iter()
+            .filter(|(label, _)| label != "VIEW INVITES")
+            .collect()
+    }
+
+    fn rows_of(mode: &str) {
+        if omega().is_none() {
+            return;
+        }
+        let run = run_omega(mode, &format!("{} {OPEN}", to_the_race(mode)));
+        assert_eq!(rows(&run), omega_rows(mode), "{mode}");
+    }
+
     #[test]
     #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
-    fn a_pause_on_omega_opens_the_main_page_over_the_race() {
-        let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+    fn a_single_race_pauses_into_the_default_screen() {
+        rows_of("single_race");
+    }
+
+    #[test]
+    #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+    fn a_time_trial_pauses_into_the_time_trial_screen() {
+        rows_of("time_trial");
+    }
+
+    #[test]
+    #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+    fn a_zone_race_pauses_into_the_zone_screen() {
+        rows_of("zone");
+    }
+
+    /// The Speed Lap screen has no RESTART and no QUIT: END SESSION is its only way out.
+    #[test]
+    #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+    fn a_speed_lap_pauses_into_its_screen_and_end_session_leaves_the_race() {
+        if omega().is_none() {
             return;
-        };
-        let run = run_on(
-            &source,
-            "omega-fall-through",
+        }
+        let run = run_omega(
+            "speed-lap",
             &format!(
-                "{} escape; until stage=menu; expect page=main",
-                to_the_race("time_trial")
+                "{} {OPEN} select pause_options; press circle; expect page=pause; \
+                 select pause_quit; press cross; until stage=menu; expect page=main",
+                to_the_race("speed_lap")
             ),
         );
-        assert!(
-            on_page(&run, "pause").is_empty(),
-            "no pause page: Omega is not wired"
+        assert_eq!(rows(&run), omega_rows("speed_lap"));
+        assert_eq!(run.states.last().expect("a state")["screen"]["id"], "main");
+    }
+
+    /// START resumes the race with the lists on their opening values (PILOT ASSIST off, GHOST on),
+    /// and what the lists were set to reaches the race it resumes: ON is Extreme, the level HD
+    /// flies with, and GHOST OFF hides the ghost ship (`display.ghost_ship_visible`).
+    #[test]
+    #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+    fn start_resumes_and_the_lists_reach_the_race_they_resume() {
+        if omega().is_none() {
+            return;
+        }
+        let last = |run: &Run, key: &str| -> Value {
+            run.states
+                .iter()
+                .rev()
+                .find_map(|state| state.get(key).cloned())
+                .expect("a race state")
+        };
+        let race = to_the_race("time_trial");
+        let plain = run_omega(
+            "lists-opening",
+            &format!("{race} {OPEN} press start; until stage=race; ticks 30"),
         );
-        let last = run.states.last().expect("a state");
-        assert_eq!(last["screen"]["id"], "main");
+        assert_eq!(last(&plain, "pilot_assist"), "off", "the list opens on OFF");
+        assert_eq!(last(&plain, "ghost_visible"), true, "the list opens on ON");
+        let set = run_omega(
+            "lists-set",
+            &format!(
+                "{race} {OPEN} select pause_pilot_assist; press right; \
+                 select pause_ghost; press left; \
+                 select pause_resume; press cross; until stage=race; ticks 30"
+            ),
+        );
+        assert_eq!(last(&set, "pilot_assist"), "extreme", "ON is Extreme");
+        assert_eq!(
+            last(&set, "ghost_visible"),
+            false,
+            "OFF hides the ghost ship"
+        );
+    }
+
+    /// RESTART RACE loads the race again.
+    #[test]
+    #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+    fn restart_race_loads_the_race_again_from_the_grid() {
+        if omega().is_none() {
+            return;
+        }
+        let run = run_omega(
+            "restart",
+            &format!(
+                "{} {OPEN} select pause_restart; press cross; until stage=race within 4000; \
+                 ticks 20",
+                to_the_race("single_race")
+            ),
+        );
+        let sims: Vec<u64> = run
+            .states
+            .iter()
+            .filter_map(|state| state.get("sim_tick")?.as_u64())
+            .collect();
+        assert!(
+            sims.last().copied().unwrap_or(u64::MAX) < 100,
+            "RESTART RACE loads the race again: {sims:?}"
+        );
     }
 }

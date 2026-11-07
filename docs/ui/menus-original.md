@@ -749,8 +749,11 @@ shows through a wall. A craft behind a view's camera has no tag in that view.
   HD races a ghost (Pulse's recipe, chosen not measured) with no way to hide it. `Multiplayer Tags` is also listed: **checked,
   applies, not wired** (`HudLayouts::player_tags` is `None` for HD, whose `mptag_hud.xml` and the 1920x1080 label face are unread
   here; the engine path is title-blind once a title names the layout and lists the row).
-- **Omega, 2048**: Omega's front end is HD's (`PI001`), but nobody has read Omega's own `Settings` list, and 2048's is unread
-  too: **not checkable** from this lane, named in the handover thread.
+- **Omega**: Omega's front end is HD's (`PI001`), but nobody has read Omega's own `Settings` list: **not checkable** from this
+  lane. Its pause screen authors `FE_GHOST` (the ghost ship's visibility, seen live on shadPS4 in Time Trial and Speed Lap,
+  `docs/ui/pause-menu.md`, "Omega"), so this build offers GHOST SHIPS VISIBLE there on that evidence alone, **inherited from HD**
+  for the options row; `Auto Load Ghost` and `Multiplayer Tags` stay off.
+- **2048**: its `Settings` list is unread too: **not checkable** from this lane, named in the handover thread.
 
 ## Reproducing this
 
