@@ -213,6 +213,11 @@ fn a_click_on_an_hd_pause_row_does_what_confirm_does() {
              <Entry ID="OPT_GAME_OPT" String="GAME OPTIONS"></Entry>
              <Entry ID="FE_AUDIO_OPT" String="AUDIO OPTIONS"></Entry>
              <Entry ID="MSC_PHOTO_PHOTOMODE" String="PHOTO MODE"></Entry>
+             <Entry ID="FE_PILOT_ASSIST" String="PILOT ASSIST"></Entry>
+             <Entry ID="FE_GHOST" String="GHOST"></Entry>
+             <Entry ID="FE_ON" String="ON"></Entry>
+             <Entry ID="FE_OFF" String="OFF"></Entry>
+             <Entry ID="ONL_VIEW_INV" String="VIEW INVITES"></Entry>
              <Entry ID="IG_PAUSE_REST" String="RESTART RACE"></Entry>
              <Entry ID="IG_PAUSE_QUIT" String="QUIT RACE"></Entry>
            </StringTable>"#,
@@ -227,6 +232,8 @@ fn a_click_on_an_hd_pause_row_does_what_confirm_does() {
         assert!(built.unworded.is_empty(), "{:?}", built.unworded);
         let mut menu = Menu::new(definition);
         menu.offer(Action::PhotoMode, true);
+        // Nine rows: the page is as tall as the disc's screen, not a scrolled list.
+        menu.set_visible_rows(12);
         menu
     };
     let labels: Vec<String> = build()
@@ -239,9 +246,12 @@ fn a_click_on_an_hd_pause_row_does_what_confirm_does() {
         labels,
         [
             "CONTINUE",
+            "PILOT ASSIST",
+            "GHOST",
             "GAME OPTIONS",
             "AUDIO OPTIONS",
             "PHOTO MODE",
+            "VIEW INVITES",
             "RESTART RACE",
             "QUIT RACE"
         ]
@@ -259,7 +269,31 @@ fn click_is_confirm(build: &dyn Fn() -> Menu, skin: &Skin) {
     use crate::pointer::Pointer;
 
     let rows = build().page().entries.len();
+    let mut cursor_row = 0;
     for row in 0..rows {
+        // An inert row has no region to click and the cursor never rests on it.
+        if matches!(build().page().entries[row], Entry::Inert { .. }) {
+            let regions = pointer::regions(&build(), skin, &Frame::default(), &measure);
+            let rect = regions
+                .iter()
+                .find(|region| region.row == row)
+                .map(|region| region.rect)
+                .expect("the generic page still lays a region for it");
+            let mut menu = build();
+            let click = Pointer {
+                at: Some((rect[0] + 1.0, rect[1] + 1.0)),
+                moved: true,
+                clicked: true,
+                ..Pointer::default()
+            };
+            assert_eq!(
+                menu.pointer(&click, &regions),
+                [],
+                "a click on an inert row does nothing"
+            );
+            assert_ne!(menu.selected(), row, "and the cursor does not land on it");
+            continue;
+        }
         let mut clicked = build();
         let regions = pointer::regions(&clicked, skin, &Frame::default(), &measure);
         let region = regions
@@ -277,10 +311,12 @@ fn click_is_confirm(build: &dyn Fn() -> Menu, skin: &Skin) {
         let events = clicked.pointer(&click, &regions);
 
         let mut confirmed = build();
-        for _ in 0..row {
+        for _ in 0..cursor_row {
             press(&mut confirmed, &[Button::Down]);
         }
+        assert_eq!(confirmed.selected(), row, "the cursor skips inert rows");
         assert_eq!(events, press(&mut confirmed, &[Button::Cross]), "row {row}");
+        cursor_row += 1;
         assert!(
             !events.is_empty() || ["options", "audio"].contains(&clicked.page().id.as_str()),
             "row {row} did something"
@@ -333,4 +369,102 @@ fn an_audio_row_opens_the_audio_page_and_the_pause_page_is_a_column_not_a_strip(
         !super::super::strip::suits(page),
         "every row is navigation, and the disc authors this screen as a column on HD"
     );
+}
+
+fn hd_words() -> crate::language::StringTable {
+    crate::language::StringTable::from_xml(
+        r#"<StringTable>
+             <Entry ID="IG_PAUSE_GPAUSED" String="GAME PAUSED"></Entry>
+             <Entry ID="IG_PAUSE_CONT" String="CONTINUE"></Entry>
+             <Entry ID="OPT_GAME_OPT" String="GAME OPTIONS"></Entry>
+             <Entry ID="FE_AUDIO_OPT" String="AUDIO OPTIONS"></Entry>
+             <Entry ID="MSC_PHOTO_PHOTOMODE" String="PHOTO MODE"></Entry>
+             <Entry ID="FE_PILOT_ASSIST" String="PILOT ASSIST"></Entry>
+             <Entry ID="FE_GHOST" String="GHOST"></Entry>
+             <Entry ID="FE_ON" String="ON"></Entry>
+             <Entry ID="FE_OFF" String="OFF"></Entry>
+             <Entry ID="ONL_VIEW_INV" String="VIEW INVITES"></Entry>
+             <Entry ID="IG_PAUSE_REST" String="RESTART RACE"></Entry>
+             <Entry ID="IG_PAUSE_QUIT" String="QUIT RACE"></Entry>
+           </StringTable>"#,
+    )
+}
+
+fn on(menu: &Menu) -> &str {
+    menu.page().entries[menu.selected()].label()
+}
+
+fn hd_pause_menu(mode: &str) -> Menu {
+    let mut definition = built_in_hd();
+    definition.open_on_pause_screen(
+        oag_hd::TITLE.pause_menu.expect("HD authors pause screens"),
+        mode,
+        &hd_words(),
+    );
+    let mut menu = Menu::new(definition);
+    menu.offer(Action::PhotoMode, true);
+    menu
+}
+
+/// The two lists change the settings the CONTROLS and DISPLAY pages edit, in the order the disc
+/// spells their entries, and the cursor never rests on the greyed VIEW INVITES row.
+#[test]
+fn the_pause_lists_edit_the_shared_settings_and_the_cursor_skips_the_inert_row() {
+    let mut menu = hd_pause_menu("time_trial");
+    press(&mut menu, &[Button::Down]);
+    assert_eq!(on(&menu), "PILOT ASSIST");
+    assert_eq!(
+        press(&mut menu, &[Button::Right]),
+        [MenuEvent::Changed {
+            setting: "controls.pilot_assist".to_string(),
+            value: Value::Text("off".to_string()),
+        }],
+        "ON is Extreme, the level HD flies with; the list opens on ON"
+    );
+    press(&mut menu, &[Button::Down]);
+    assert_eq!(on(&menu), "GHOST");
+    assert!(menu.seed("display.ghost_ship_visible", &Value::Text("on".to_string())));
+    assert_eq!(
+        press(&mut menu, &[Button::Right]),
+        [MenuEvent::Changed {
+            setting: "display.ghost_ship_visible".to_string(),
+            value: Value::Text("off".to_string()),
+        }]
+    );
+
+    let mut menu = hd_pause_menu("time_trial");
+    let mut seen = Vec::new();
+    for _ in 0..12 {
+        seen.push(on(&menu).to_string());
+        press(&mut menu, &[Button::Down]);
+    }
+    assert!(
+        !seen.iter().any(|label| label == "VIEW INVITES"),
+        "{seen:?}"
+    );
+    assert!(seen.iter().any(|label| label == "RESTART RACE"), "{seen:?}");
+    let invites = menu
+        .page()
+        .entries
+        .iter()
+        .find(|entry| entry.label() == "VIEW INVITES")
+        .expect("the row is drawn");
+    assert!(menu.is_disabled(invites), "greyed");
+}
+
+/// A Zone race authors no PILOT ASSIST row; the other single-player screens do.
+#[test]
+fn zone_has_no_pilot_assist_list_and_the_default_screen_has_no_ghost_list() {
+    let labels = |mode| -> Vec<String> {
+        hd_pause_menu(mode)
+            .page()
+            .entries
+            .iter()
+            .map(|entry| entry.label().to_string())
+            .collect()
+    };
+    assert!(!labels("zone").contains(&"PILOT ASSIST".to_string()));
+    assert!(labels("single_race").contains(&"PILOT ASSIST".to_string()));
+    assert!(!labels("single_race").contains(&"GHOST".to_string()));
+    assert!(labels("speed_lap").contains(&"GHOST".to_string()));
 }

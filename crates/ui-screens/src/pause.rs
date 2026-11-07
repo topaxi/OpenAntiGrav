@@ -490,3 +490,6 @@ pub fn regions(screen: &PauseScreen, table: &PauseMenu, menu: &Menu, skin: &Skin
     }
     out
 }
+
+#[cfg(test)]
+mod tests;

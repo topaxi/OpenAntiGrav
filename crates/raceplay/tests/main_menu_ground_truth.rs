@@ -641,6 +641,27 @@ fn check_pause_layout(archives: &mut oag_assets::Archives, pause: &oag_title::Pa
             );
         }
     }
+    // The focused row's ink is whatever `HD_Blue` the served front end declares: the page reads
+    // the file with the skin's globals as fallbacks, so each style's own colours reach the row.
+    for (label, globals) in skin_globals(archives) {
+        let fallback: Vec<(&str, &str)> = globals
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+            .collect();
+        let read = oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, &fallback);
+        let want = oag_ui::screen::parse_argb(&globals["HD_Blue"]).expect("a colour");
+        let rows = read.by_name("InGame Pause SP").expect("the default screen");
+        let focus = rows
+            .blocks
+            .iter()
+            .find(|block| block.name.as_deref() == Some("Continue"))
+            .expect("the CONTINUE block");
+        assert_eq!(
+            focus.active_color, want,
+            "{label}: CONTINUE's focus ink is HD_Blue"
+        );
+        assert!(focus.selectable, "{label}");
+    }
     let screens = oag_ui::screen::Screens::from_xml(&xml);
     let chrome = screens.by_name(layout.chrome).expect("the chrome screen");
     let rules: Vec<[f32; 4]> = chrome
