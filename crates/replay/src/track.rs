@@ -290,13 +290,12 @@ impl PoseTrack {
             let mut mask = vec![0u8; mask_bytes(self.last)];
             let mut previous = [0i32; 3];
             for key in craft {
-                if key.tick % STRIDE != 0 && key.tick != self.last {
+                if !key.tick.is_multiple_of(STRIDE) && key.tick != self.last {
                     let bit = (key.tick / STRIDE) * (STRIDE - 1) + (key.tick % STRIDE - 1);
                     mask[(bit / 8) as usize] |= 1 << (bit % 8);
                 }
-                for axis in 0..3 {
-                    let step = i64::from(key.position[axis]) - i64::from(previous[axis]);
-                    put_varint(&mut keys, zigzag(step));
+                for (now, before) in key.position.iter().zip(&previous) {
+                    put_varint(&mut keys, zigzag(i64::from(*now) - i64::from(*before)));
                 }
                 previous = key.position;
                 keys.extend_from_slice(&key.rotation.to_le_bytes());
@@ -333,7 +332,7 @@ impl PoseTrack {
                 ticks.push(tick);
                 tick += STRIDE;
             }
-            if last % STRIDE != 0 {
+            if !last.is_multiple_of(STRIDE) {
                 ticks.push(last);
             }
             for bit in 0..mask.len() as u32 * 8 {
@@ -350,10 +349,10 @@ impl PoseTrack {
             let mut previous = [0i32; 3];
             let mut list = Vec::with_capacity(ticks.len());
             for tick in ticks {
-                for axis in 0..3 {
+                for before in &mut previous {
                     let step = unzigzag(keys.varint()?);
-                    previous[axis] = i32::try_from(i64::from(previous[axis]) + step)
-                        .map_err(|_| Truncated(at))?;
+                    *before =
+                        i32::try_from(i64::from(*before) + step).map_err(|_| Truncated(at))?;
                 }
                 list.push(Key {
                     tick,
@@ -441,7 +440,7 @@ impl PoseRecorder {
                 continue;
             }
             run.segment.push(*pose);
-            if tick % STRIDE == 0 {
+            if tick.is_multiple_of(STRIDE) {
                 run.close();
                 run.segment.clear();
                 run.segment.push(*pose);

@@ -197,6 +197,7 @@ fn respawn(title: &str) {
     );
     assert!(jump(respawned) > 16.0, "{title}: the respawn is a teleport");
     let mut window = String::new();
+    #[allow(clippy::needless_range_loop)]
     for at in respawned - 2..=respawned + 30 {
         let got = track.pose(0, at as f64).expect("a craft");
         window.push_str(&format!(
