@@ -668,7 +668,8 @@ second at a 1-unit threshold. A recorded pad stream would pin it.
 The same sweep as "Reconciliation cost" above, one circuit (09_Track), profile `dev`,
 AMD Ryzen 9 7900, 1-minute load average 9.0 (21.97 and 20.47 over five and fifteen
 minutes), so read as inflated: a tick 63 us (`Race::tick`) and 59 us (`tick_sim_only`),
-a 6-tick rollback 0.446 ms, 12 ticks 0.77 ms, 24 ticks 1.48 ms, a snapshot 62 us. The
+a 6-tick rollback 0.446 ms, 12 ticks 0.77 ms, 24 ticks 1.48 ms, a snapshot 62 us (since shared: "The snapshot since the constant half is
+shared" above). The
 2026-10-14 figures (65 / 60 us, 0.42 / 0.77 / 1.50 ms) hold. **Per correction**, the
 network runs above replay 7 to 11 ticks a correction, so about **0.4 to 0.65 ms a
 correction and 0.05 to 0.10 ms of CPU a second** averaged (the 4-client run's 1,019 to
