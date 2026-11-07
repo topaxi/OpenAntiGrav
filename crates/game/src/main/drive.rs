@@ -364,6 +364,7 @@ fn state_of(session: &Session) -> State {
         state.hash = Some(format!("{:016x}", stage.race.sim.state_hash()));
         state.sim_tick = Some(stage.race.sim.world.tick);
         state.pilot_assist = Some(stage.race.pilot_assist_level().name().to_string());
+        state.ghost_visible = Some(stage.race.ghost_visible());
     }
     state
 }

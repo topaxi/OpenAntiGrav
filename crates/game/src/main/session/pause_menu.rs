@@ -101,7 +101,10 @@ impl Session {
     /// settings; Pilot Assist is the level the race flies with, and a run that switches it
     /// mid-race stops recording, so no replay or ghost lap claims laws it did not fly under.
     pub(crate) fn apply_pause_setting(&mut self, setting: &str) {
-        let on_pause_page = matches!(&self.stage, Stage::Menu(stage) if stage.on_pause_page());
+        let on_pause_page = matches!(
+            &self.stage,
+            Stage::Menu(stage) if stage.menu.page().id == oag_ui::menu::PAUSE_PAGE
+        );
         if !on_pause_page || setting != "controls.pilot_assist" {
             return;
         }

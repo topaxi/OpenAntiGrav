@@ -239,8 +239,7 @@ pub fn draw_list(
                 widget,
                 text,
                 entry.label(),
-                (selected, focus, lit),
-                menu.is_disabled(entry),
+                (selected, focus, lit, menu.is_disabled(entry)),
                 frame,
                 &mut body,
             ),
@@ -272,8 +271,7 @@ fn block_draw(
     widget: &BlockWidget,
     text: &Text,
     label: &str,
-    (selected, focus, lit): (bool, f32, bool),
-    inert: bool,
+    (selected, focus, lit, inert): (bool, f32, bool, bool),
     frame: &Frame,
     out: &mut Vec<Draw>,
 ) {
@@ -420,6 +418,8 @@ fn list_draw(
         }
     }
     let mut label_text = text.clone();
+    // The disc authors a list's label in `font="small"`; the original's frame draws it at the
+    // block labels' size and face (measured, RPCS3), so it takes theirs.
     label_text.font = "default".to_string();
     label_text.x = label[0] + LABEL_INSET.0;
     label_text.y = label[1] + LABEL_INSET.1;

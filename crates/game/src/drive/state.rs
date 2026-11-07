@@ -165,6 +165,9 @@ pub struct State {
     /// `stage=race`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pilot_assist: Option<String>,
+    /// Whether the race draws its ghost ship, on `stage=race`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ghost_visible: Option<bool>,
 }
 
 impl State {

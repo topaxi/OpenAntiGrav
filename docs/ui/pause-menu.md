@@ -167,9 +167,11 @@ keeps the front end's list, said in the boot report.
 - **PILOT ASSIST** is the on/off view of the setting the CONTROLS page edits (`controls.pilot_assist`): ON is
   `extreme`, the level HD flies with, OFF is `off`; a stored `normal` shows as ON. A switch from this page
   reaches the parked race when the player resumes (`Session::apply_pause_setting`), **and that run records no
-  replay or ghost lap from then on** (`Race::stop_recording`): a switch is not in the input stream, so a
-  recording could not reproduce it. The CONTROLS page still applies from the next race, as before.
-- **GHOST** is `display.ghost_ship_visible`, applied to the parked race at once. HD lists it itself: its own
+  replay or ghost lap from then on** (`Race::stop_recording`, logged at `warn`): a switch is not in the input
+  stream, so a recording could not reproduce it. Laps already set are safe: a ghost is written on the tick its lap
+  completes, not at the end. The CONTROLS page still applies from the next race, as before.
+- **GHOST** is `display.ghost_ship_visible`, applied to the parked race at once (`the_ghost_list_hides_the_ghost_ship_of_the_race_it_resumes`).
+  It is one setting across titles, so a player who turned ghosts off on Pulse now has them hidden on HD too. HD lists it itself: its own
   GAME OPTIONS page has `GHOST SHIPS VISIBLE` and `MULTIPLAYER TAGS` (frame, `Menu Style` capture), so
   `oag_hd`'s `GameOptions::ship_visible` is on and this build's OPTIONS page keeps that row.
 - **END SESSION** (Speed Lap) leaves the race the way QUIT RACE does: **chosen, not measured**. The original
@@ -177,6 +179,8 @@ keeps the front end's list, said in the boot report.
   the race. This build's Speed Lap never finishes, so there is nothing to finish.
 - **The HUD under the tint**: `PauseMenu::hud_under_scrim`, on for HD only (Pulse's is unmeasured). The parked
   race draws its HUD (not the track panel or end screens, `RaceStage::draw_view_hud`) before the menu's tint.
+  It stays behind this build's OPTIONS and AUDIO pages too; whether the original keeps it behind its own
+  `InGame Settings` is not measured.
 - **Palette.** The page takes the front end's: this build serves `DATA00`'s Fury palette on every page
   (`docs/formats/hd-frontend.md`), so the focused row is red and the blocks translucent. **That is the
   original's own Fury-style pause screen** (RPCS3, Fury style, Single Race and Time Trial); the cyan frames

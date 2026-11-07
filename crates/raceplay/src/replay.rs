@@ -139,6 +139,12 @@ impl Race {
         self.replay.ghost_hidden = !visible;
     }
 
+    /// Whether the ghost is drawn ([`Self::set_ghost_visible`]).
+    #[must_use]
+    pub fn ghost_visible(&self) -> bool {
+        !self.replay.ghost_hidden
+    }
+
     /// The ghost being raced, if any.
     #[must_use]
     pub fn ghost(&self) -> Option<&Ghost> {

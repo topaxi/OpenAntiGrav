@@ -619,31 +619,49 @@ fn check_pause_layout(archives: &mut oag_assets::Archives, pause: &oag_title::Pa
         .expect("HD names where its screens are drawn from");
     let blob = archives.read_name(layout.definition).expect("the file");
     let xml = fexml::text(&blob).expect("text");
-    for (label, globals) in skin_globals(archives) {
-        let blue = globals.get("HD_Blue").map(String::as_str);
-        let grey = globals.get("HD_Grey").map(String::as_str);
+    let skins = skin_globals(archives);
+    let colour = |globals: &std::collections::HashMap<String, String>, name: &str| {
+        oag_ui::screen::parse_argb(globals.get(name).unwrap_or_else(|| panic!("no {name}")))
+    };
+    let mut styles = (false, false);
+    for (label, globals) in &skins {
+        let blue = colour(globals, "HD_Blue");
+        let grey = colour(globals, "HD_Grey");
         if label.contains("DATA06") {
             assert_eq!(
                 blue,
-                Some("0xff8ac0ca"),
+                Some(0xff8a_c0ca),
                 "{label}: the HD style's focused ink"
             );
             assert_eq!(
                 grey,
-                Some("0xff646464"),
+                Some(0xff64_6464),
                 "{label}: the HD style's resting ink"
             );
+            styles.0 = true;
         } else if label.contains("DATA00") {
             assert_ne!(
                 blue,
-                Some("0xff8ac0ca"),
+                Some(0xff8a_c0ca),
                 "{label}: the Fury style is not cyan"
             );
+            assert_eq!(
+                grey,
+                Some(0xff96_9696),
+                "{label}: the Fury style's resting ink"
+            );
+            styles.1 = true;
         }
     }
+    assert_eq!(
+        styles,
+        (true, true),
+        "both styles' archives were read: {:?}",
+        skins.iter().map(|s| &s.0).collect::<Vec<_>>()
+    );
     // The focused row's ink is whatever `HD_Blue` the served front end declares: the page reads
     // the file with the skin's globals as fallbacks, so each style's own colours reach the row.
-    for (label, globals) in skin_globals(archives) {
+    for (label, globals) in skins {
         let fallback: Vec<(&str, &str)> = globals
             .iter()
             .map(|(key, value)| (key.as_str(), value.as_str()))

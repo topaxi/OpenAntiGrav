@@ -400,6 +400,37 @@ mod hd_screens {
         assert_eq!(level(&on), "extreme", "ON is Extreme");
     }
 
+    /// The GHOST list switches the ghost ship's drawing in the race it resumes
+    /// (`display.ghost_ship_visible`, which HD's own GAME OPTIONS page lists too).
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn the_ghost_list_hides_the_ghost_ship_of_the_race_it_resumes() {
+        if hd().is_none() {
+            return;
+        }
+        let shown = |run: &Run| -> bool {
+            run.states
+                .iter()
+                .rev()
+                .find_map(|state| state.get("ghost_visible")?.as_bool())
+                .expect("a race state")
+        };
+        let race = to_the_race("time_trial");
+        let plain = run_hd(
+            "ghost-on",
+            &format!("{race} {OPEN} press cross; until stage=race; ticks 30"),
+        );
+        assert!(shown(&plain), "the list opens on ON");
+        let off = run_hd(
+            "ghost-off",
+            &format!(
+                "{race} {OPEN} select pause_ghost; press left; \
+                 select pause_resume; press cross; until stage=race; ticks 30"
+            ),
+        );
+        assert!(!shown(&off), "OFF hides it");
+    }
+
     /// An Eliminator race pauses into the default screen, and a pause and resume leaves the race
     /// as it was (the state hash at one simulation tick is the unpaused race's) and the flip still
     /// works after it (a press after the resume changes the hash at that tick).
