@@ -28,6 +28,12 @@ summary: "HD Eliminator is scored and its rows draw; the results screen's POINTS
 - **2048 and Omega: checked, applies, not wired.** Both keep the kill rule, inherited from Pulse.
   Their score writers are unread, and Omega's named file has no `<EliminatorAIStats>` row.
 - **`HighlightBar`'s width** needs a font in the HUD's draw list.
+- **Ours reaches the target about four times sooner.** The original's Novice race took ten laps
+  to reach 200; ours on the same circuit and seed-free setup was over by tick 6000, about three
+  laps. The awards match row for row, so the likely cause is how often our field lands a kill,
+  not the law. Unmeasured.
+- **`--race` ends on this build's own board** (`RACE COMPLETE`, the person first). That is the
+  capture path; the front end's results are the first item above.
 
 ## Next Steps
 
