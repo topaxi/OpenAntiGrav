@@ -23,10 +23,11 @@ pub(crate) fn of(
     report: &mut Vec<String>,
 ) -> Resolved {
     let rule = title.eliminator.value;
-    let chosen = options.eliminator_kill_target;
     Resolved {
-        law: resolve(rule, stats.as_ref(), options.difficulty),
-        target: target(chosen, rule, options.mode, archives, report),
+        // The original's awards all sit behind `mode == 8`.
+        law: resolve(rule, stats.as_ref(), options.difficulty)
+            .filter(|_| options.mode == oag_race::Mode::Eliminator),
+        target: target(options, rule, archives, report),
     }
 }
 
@@ -56,22 +57,25 @@ fn resolve(
     })
 }
 
-/// The target a race starts on: the caller's, else a score rule's Racebox minimum off the disc.
+/// The target a race starts on: a kill rule's pick, or a score rule's own, a campaign cell's or
+/// the Racebox minimum off the disc.
 ///
 /// With no authored minimum a score race has no target at all and says so in the report; a kill
 /// count's fallback would end it on the first five points.
 fn target(
-    chosen: Option<u32>,
+    options: &crate::Options,
     rule: EliminatorRule,
-    mode: oag_race::Mode,
     archives: &mut oag_assets::Archives,
     report: &mut Vec<String>,
 ) -> Option<u32> {
     let EliminatorRule::Score(rule) = rule else {
-        return chosen;
+        return options.eliminator_kill_target;
     };
-    if chosen.is_some() || mode != oag_race::Mode::Eliminator {
-        return chosen;
+    if options.mode != oag_race::Mode::Eliminator {
+        return None;
+    }
+    if options.eliminator_score_target.is_some() {
+        return options.eliminator_score_target;
     }
     let authored = archives
         .read_name(rule.race_setup)

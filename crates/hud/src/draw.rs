@@ -226,7 +226,8 @@ pub(super) fn text_for(
         // prerequisite the per-lap history needed - so this is `None` outright
         // rather than a half-wired gate, until that exists.
         "PickupDamageTxt" | "PickupAbsorbTxt" | "PickupDamage" | "PickupAbsorb" => None,
-        // **Drawn nothing.** `HUD_positions.xml`'s `PositionTxt2` is the
+        // **Drawn nothing but a score Eliminator's `TARGET` header**, which the
+        // executable writes into it. `HUD_positions.xml`'s `PositionTxt2` is the
         // second of two widgets sharing `idstring="IG_HUD_POS"` - the first,
         // `PositionTxt`, is this module's own `"PositionTxt"` arm below,
         // gated on `place_shown`. `PositionTxt2` sits inside the `PosTag0`-`7`

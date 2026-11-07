@@ -214,6 +214,9 @@ pub struct Options {
     /// it is: a campaign loader would fill it in per cell instead of leaving
     /// it `None`.
     pub eliminator_kill_target: Option<u32>,
+    /// A campaign cell's score target. A score Eliminator takes this and never the `KILLS`
+    /// pick above, which another title's kill count may have stored.
+    pub eliminator_score_target: Option<u32>,
     /// Laps this race ends after, overriding [`Mode::laps_target`]'s own
     /// per-class table - or `None` for that table's own answer, which is
     /// every caller outside the campaign.

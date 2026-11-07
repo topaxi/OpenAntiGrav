@@ -359,6 +359,44 @@ const SCORE_LAW: oag_race::ScoreLaw = oag_race::ScoreLaw {
     opponent_scale: 1.15,
 };
 
+/// A person flies the mine's layer, so nothing is scaled.
+#[test]
+fn a_tripped_mine_pays_its_layer_through_the_tick() {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::Eliminator;
+    setup.weapons = Some(one_mine_table());
+    setup.score_law = Some(SCORE_LAW);
+    setup.start_position = Some(oag_vex::track::StartPosition {
+        position: [0.0, 0.0, 0.0],
+        left: [0.0, 0.0, -1.0],
+        up: [0.0, 1.0, 0.0],
+        forward: [1.0, 0.0, 0.0],
+    });
+    let mut race = Race::start(setup);
+    race.sim.eliminator_kill_target = 1000;
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+    race.sim.world.ships[0].pickup.begin_drop(1);
+    race.tick(&PlayerInputs::none());
+    let mine = race
+        .sim
+        .world
+        .projectiles
+        .slots
+        .iter()
+        .find(|p| p.kind == Some(oag_tables::weapons::Weapon::Mine))
+        .expect("the drop laid a mine")
+        .position;
+    race.sim.world.ships[1].physics.body.position = mine;
+    race.sim.world.ships[1].physics.shield = 1.0;
+    for _ in 0..240 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert_eq!(race.sim.world.ships[0].standing.kills, 1);
+    // The table's Mine deals 20 and the blow pays in full, not capped by the one shield point
+    // left: 20 for the kill and 2 for the blow.
+    near(score_of(&race, 0), 22.0);
+}
+
 fn scored(target: u32) -> Race {
     let mut race = eliminator();
     race.sim.score_law = Some(SCORE_LAW);

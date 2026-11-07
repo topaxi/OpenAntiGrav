@@ -636,6 +636,7 @@ impl Session {
         // out of before racing. The kill target is then set from the KILLS
         // row below.
         race_options.eliminator_kill_target = None;
+        race_options.eliminator_score_target = None;
         race_options.laps_override = None;
         // Resolved before the circuit below, and out of its usual
         // order beneath the class and difficulty rows: which list a

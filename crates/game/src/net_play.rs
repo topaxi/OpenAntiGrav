@@ -239,6 +239,7 @@ impl NetPlay {
             seat_picks: server.seat_picks,
             laps_override: server.laps_override,
             eliminator_kill_target: None,
+            eliminator_score_target: None,
             zone_stage: None,
             ..options
         })

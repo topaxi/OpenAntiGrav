@@ -43,6 +43,7 @@ impl Default for Options {
             hud_style: None,
             add_on_campaign: None,
             eliminator_kill_target: None,
+            eliminator_score_target: None,
             laps_override: None,
             weapons_override: None,
             no_driver_for_class: false,

@@ -112,6 +112,10 @@ fn a_single_race_carries_no_race_line() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading an HD single race");
+    assert_eq!(
+        loaded.setup.score_law, None,
+        "the awards are the Eliminator's alone"
+    );
     let mut race = oag_raceplay::Race::start(loaded.setup);
     race.tick(&PlayerInputs::none());
     assert_eq!(race.readout().race_line, None);
@@ -238,4 +242,27 @@ fn an_opponents_first_lap_pays_through_the_tick() {
         before = after;
     }
     panic!("no opponent finished a lap");
+}
+
+/// A score Eliminator takes a cell's target and ignores a `KILLS` pick stored by another title.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_score_race_ignores_a_stored_kill_pick() {
+    let Some(image) = image() else { return };
+    let options = oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Eliminator,
+        eliminator_kill_target: Some(5),
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    };
+    let picked = oag_raceplay::load(&options).expect("loading an HD Eliminator");
+    assert_eq!(picked.setup.eliminator_kill_target, Some(200));
+    let cell = oag_raceplay::load(&oag_raceplay::Options {
+        eliminator_score_target: Some(260),
+        ..options
+    })
+    .expect("loading an HD Eliminator");
+    assert_eq!(cell.setup.eliminator_kill_target, Some(260));
 }
