@@ -112,8 +112,8 @@ OAG_SWEEP=1 OAG_SWEEP_TITLE=<title> OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p
 The whole-pass column includes the plans and is on a pad-flown race; decision 3's pass was the
 Autopilot's, took a whole clone every 60 ticks and read eight poses a tick, so the two are not one
 measurement. On this load every title is inside the 100-times-real-time mark decision 3 sets for the
-Deck. **The Deck itself stays owed.** Seeks on the dev profile, load about 10, median 1 to 3 ms, worst
-2 to 6 ms.
+Deck. **The Deck itself stays owed.** Seeks on the dev profile, load about 10 to 20, median 1 to 4 ms, worst
+2 to 18 ms.
 
 ## The other title of the pair
 
