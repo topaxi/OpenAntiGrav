@@ -1,33 +1,39 @@
 ---
-status: re-first
+status: measure
 titles: [hd, omega]
 updated: 2026-11-07
-summary: "HD ships start_grid_ta and _de beside the plain fly-by and we load only the plain one; a lone craft's fly-by may show empty grid slots"
+summary: "HD's fly-by file per mode is wired (Time Trial, Speed Lap, Zone fly start_grid_ta); open: Head to Head's file is the maintainer's call, Zone's own circuits have no camera, and no mode's fly-by was watched on the original"
 ---
 
 # HD's fly-by file per mode
 
-The maintainer's question, 2026-11-07: on HD, a fly-by in Time Trial, Speed Lap, Zone or Head to
-Head pans over grid slots no craft sits in. They suggest skipping those. They always skip the
-fly-by on the original, so what it shows there is unknown: this is a question for the disc, not a
-memory to match.
+The maintainer's report, 2026-11-07: on HD, a fly-by in Time Trial, Speed Lap, Zone or Head to
+Head pans over grid slots no craft sits in. Cause: ours flew the plain `start_grid.vex` for every
+mode, where the executable flies `start_grid_ta.vex` for the single-craft modes.
+
+**Landed** (`docs/ghidra/functions/ps3-hdfury-eu/start-grid-selection.md`,
+`docs/gameplay/race-intro.md`, "HD's file per mode"): the selection law read off
+`Track_Construct_q` (`0x000b2af0`), `_de` is mode 2's `Demo` fly-by, `oag_title::pre_race::PreRace::by_mode`
+and the loader's try-then-fall-back, one `hd_flyby_ground_truth` test per mode.
 
 ## Open
 
-- **We load one file.** `oag_hd::pre_race` names plain `start_grid.vex` and the executable also
-  builds `start_grid_de` and `start_grid_ta` (`docs/gameplay/race-intro.md`). Which mode takes
-  which was not watched. Hypothesis, unmeasured: `_ta` is the lone craft's fly-by.
-- **`_de` is unidentified.**
-- **Zone.** `zone_N/start_grid.vex` has no `grid_camera1`, so what ours plays there needs its own
-  check.
-- **Head to Head.** It may take the plain file with six empty slots. If the original shows them,
-  skipping is a departure of ours and needs the maintainer's call.
-- **Omega ships HD's circuits**, so it gets the 2048 and Omega check; 2048's files differ.
+- **Head to Head: the maintainer's call.** The executable gives mode 9 (Head to Head) the plain
+  file, where two craft sit in slots 1 and 2 and the fly-by mostly frames empty ones. The original
+  never offered the mode, so this is ours either way. The data would be `_ta` (it frames slots 1
+  and 2 on Talon's Junction) as a chosen row, not skipping slots and not cutting the camera.
+- **Zone's own circuits.** `zone_1` to `zone_4` ship no `_ta`; the fall-back `start_grid.vex` has
+  no `grid_camera1`, so ours plays no fly-by there. What the original does is unwatched.
+- **Watch one.** No mode's fly-by was watched on the original except Single Race on Talon's
+  Junction. A Time Trial fly-by on RPCS3 against ours would turn the static read (84) into a
+  measurement.
+- **Unread branches.** The byte `0x009384e1` skips the grid file choice altogether (online?);
+  mode 7 belongs to no mode of ours; Omega adds a track-name test and `g_GameState+0x21c == 0` to
+  its `_ta` gate, and 2048's gate (`FUN_8121bce2`) was not read.
+- **Omega** ships HD's circuits and no `_de`; its `PRE_RACE` is not on.
 
 ## Next Steps
 
-1. Find the caller that formats `%s\%sstart_grid%s.vex` in `/hdfury/EBOOT-ps3-hdfury-eu.elf` and
-   read which mode picks which suffix.
-2. Diff the camera tracks of plain, `_ta` and `_de` on one circuit.
-3. Watch a Time Trial fly-by on RPCS3 against ours.
-4. Wire the choice as `oag_title` data, one test per mode.
+1. Ask the maintainer which file Head to Head flies.
+2. Watch a Time Trial fly-by on RPCS3 (Talon's Junction, stop before `START RACE`) and compare it
+   with `--race --mode time_trial --intro-ticks N --screenshot`.
