@@ -35,9 +35,14 @@ const ARROW_SIZE: f32 = 32.0;
 const VALUE_TEXT_INSET: f32 = 13.0;
 /// The ink of a row that is drawn and cannot be chosen, on its label and its border: white at a
 /// third. **Measured**, off the original's VIEW INVITES row over `HD_Grey` (100): border 153,
-/// glyphs 151 to 165, so `0.33` to `0.4`; its fill reads 111 against the other rows' 100, which
-/// this does not reproduce.
+/// glyphs 151 to 165, so `0.33` to `0.4`.
 const INERT: [f32; 4] = [1.0, 1.0, 1.0, 0.35];
+
+/// What the fill of a row that cannot be chosen keeps of its alpha. **Chosen, not measured**:
+/// the original's VIEW INVITES fill reads 73 where the other rows read 105 on the Fury palette
+/// (an effective alpha of 0.44 against 0.68); this lands the Fury frame. On the HD palette it
+/// reads lighter than its neighbours (111 against 100), which this build has no palette to show.
+const INERT_FILL_ALPHA: f32 = 0.65;
 
 /// One pause screen and the chrome behind it, read off the disc's definition file.
 #[derive(Debug, Clone)]
@@ -293,7 +298,9 @@ fn block_draw(
             landing: widget.landing,
         };
         if inert {
-            block::draw_fill(&shape, &art, (1.0, 1.0), out);
+            let mut faded = shape;
+            faded.color[3] *= INERT_FILL_ALPHA;
+            block::draw_fill(&faded, &art, (1.0, 1.0), out);
             block::draw_border(
                 &block::Block {
                     color: INERT,

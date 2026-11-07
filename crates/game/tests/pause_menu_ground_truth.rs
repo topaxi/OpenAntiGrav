@@ -368,6 +368,38 @@ mod hd_screens {
         );
     }
 
+    /// The PILOT ASSIST list reaches the parked race on resume (ON is Extreme, the level HD
+    /// flies with), and the other settings page edits the same level: nothing is switched on
+    /// that the player did not choose.
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn the_pilot_assist_list_switches_the_race_it_resumes() {
+        if hd().is_none() {
+            return;
+        }
+        let level = |run: &Run| -> String {
+            run.states
+                .iter()
+                .rev()
+                .find_map(|state| state.get("pilot_assist")?.as_str().map(str::to_string))
+                .expect("a race state")
+        };
+        let race = to_the_race("time_trial");
+        let plain = run_hd(
+            "assist-off",
+            &format!("{race} {OPEN} press cross; until stage=race; ticks 30"),
+        );
+        assert_eq!(level(&plain), "off", "the list opens on OFF");
+        let on = run_hd(
+            "assist-on",
+            &format!(
+                "{race} {OPEN} select pause_pilot_assist; press right; \
+                 select pause_resume; press cross; until stage=race; ticks 30"
+            ),
+        );
+        assert_eq!(level(&on), "extreme", "ON is Extreme");
+    }
+
     /// An Eliminator race pauses into the default screen, and a pause and resume leaves the race
     /// as it was (the state hash at one simulation tick is the unpaused race's) and the flip still
     /// works after it (a press after the resume changes the hash at that tick).
