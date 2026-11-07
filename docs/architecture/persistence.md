@@ -4,7 +4,8 @@ This is a map of the files this project writes to a player's own
 machine, not inside the repository or the disc image. All of them live under
 `<config dir>/oag/` - `dirs::config_dir()`'s answer, which is
 `$XDG_CONFIG_HOME/oag` (or `~/.config/oag`) on Linux, `~/Library/Application
-Support/oag` on macOS, and `%APPDATA%\oag` on Windows.
+Support/oag` on macOS, and `%APPDATA%\oag` on Windows - except the replays row,
+which is under `<data dir>/oag/` (`dirs::data_dir()`, where `photos/` already is).
 
 | File | Owner module | What it holds |
 | --- | --- | --- |

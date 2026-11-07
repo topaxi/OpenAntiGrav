@@ -19,8 +19,11 @@ ADR and are not open.
 
 - **Accept or amend the ADR.** What is a proposal, not the maintainer's: the 60-tick keyframe, the 16 MiB ceiling, the
   `auto/` ring (20 files, 32 MiB), the pose track at 10 Hz refined to 0.05 unit and 0.5 degree, the REPLAYS page and its
-  rows, the 3-2-1 countdown and the two-second hold at a take-over, and v1 being single-seat. The hold lets go of the
-  recorded stream up to two seconds after "here" (decision 9); say if that is a departure to refuse.
+  rows, the 3-2-1 countdown at a take-over, and v1 being single-seat.
+- **A question for the maintainer (decision 9):** is a frozen 3-2-1 with the recorded stick on screen enough, or should the seat
+  keep its recorded input after GO until the pad engages (at most two seconds)? The hand-off table says 12 to 45 percent of
+  points hit a wall inside two seconds with nothing held. The hold departs from "the stream stops at tick T", so it is
+  asked, not taken.
 - **The Steam Deck is not measured.** The command is in the ADR (decision 3). The design needs `tick_sim_only` at or
   under about 280 us there.
 - **A respawn in the pose track is argued, not shown**: the sweep's Autopilot races have none. Stage 4 needs one.

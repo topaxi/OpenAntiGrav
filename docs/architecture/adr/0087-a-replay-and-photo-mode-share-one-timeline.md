@@ -5,7 +5,8 @@
 **Proposed** (2026-11-07, lane `replay-timeline`). The decisions the maintainer made on
 2026-11-07 are marked **(M)** and are not reopened here. Everything else, the sizes, the
 intervals, the budgets and the screen rows, is this lane's proposal for review; each is
-measured where a number exists and labelled **chosen, not measured** where it does not.
+measured where a number exists and labelled **chosen, not measured** where it does not. One
+question is left to the maintainer: decision 9's engagement hold.
 
 **Supersedes [ADR-0055](0055-replays-are-inputs-and-a-ghost-is-poses.md) in three places only:**
 
@@ -81,6 +82,26 @@ fingerprinting the `Debug` text of every field of it: unchanged from the first t
 18,000 on all five titles. Two things are filled on the first tick, not at `Race::start`: the
 speed plans (`speed_plan`, `hull_plans`: 355 to 1,088 KiB) and, on 2048, the route lines
 (`routes`, +218 KiB). So "constant" means **constant after the first tick**.
+
+**The 2048 and Omega census** (CLAUDE.md, "A 2048 finding is checked against Omega"), each
+title having been measured on its own data: the snapshot split holds on both, **ported**
+(constant half 5.1 MiB and 3.5 MiB, mutable 8 and 4 KiB). The route lines are the one
+difference: 2048 fills `routes` on the first tick, Omega has it already at `Race::start`
+(only `speed_plan` and `hull_plans` change there), **checked, differs**. A circuit that
+authors a fork is what `routes` is for, so this may be a property of the circuit sampled, not
+of the title; not checked further. Seek and the pose track were run on both, **ported**, with
+their own numbers. The take-over table was run on both, **ported**. HD's front end is not
+involved: the end-screen rows of decision 9 are per title and say so.
+
+**What these runs prove, and what they do not.** Every run flew the player on the Autopilot
+with the pad idle, so the input stream was constant. They prove that a restore plus
+resimulation is deterministic and complete (hash and text) under constant input, and they
+price it. They do **not** prove that a varying recorded stream re-drives correctly; that half
+is `crates/raceplay/tests/replay_ground_truth.rs` (7,200 analog ticks through `Verifier` on
+Pulse, Pure, HD and 2048), and stage 3's acceptance repeats the seek test over a pad-flown
+recording on all five titles. The "18,000-tick pass" figures include a whole-clone snapshot
+every 60 ticks (300 of them: about 0.34 s of 6.38 s on 2048) and eight pose reads a tick, so
+they overstate the cost of the shared design.
 `World::clone` alone, which is what a snapshot sharing the constant half would cost, is 0 to
 1 us (release; 1 to 2 us dev); the whole `snapshot_sim` is 57 to 1,132 us (release: Pulse 111,
 Pure 57, HD 484, 2048 1,132, Omega 381; the first networking sweep measured Pulse at 63 us on an
@@ -92,8 +113,10 @@ idle-er machine).
 
 - **Record every race that can be recorded** (a single-player or split-screen race, not a
   modded one, not a network one: decision 7). The recorder already exists
-  (`Race::start_recording`); it is now armed for every such race from `Race::start`, not by the
-  ghost path alone. Its cost is one 32-byte `InputSnapshot` per human slot per tick in memory
+  (`Race::start_recording`); the session that starts a player's race now arms it for every such
+  race, not the ghost path alone. A race built any other way (a test, a trace, a capture, a
+  server) records nothing unless it asks, so every existing golden and trace runs the code it
+  ran before, which was ADR-0055's reason for "off by default". Its cost is one 32-byte `InputSnapshot` per human slot per tick in memory
   and one `state_hash` a second (12 to 53 us, release, loaded: 12 Pulse, 26 Pure, 27 HD, 53 2048,
   45 Omega).
 - **Where.** `<data dir>/oag/replays/`, `dirs::data_dir()`'s, which is where `photos/` already
@@ -417,11 +440,10 @@ seat's input stream stops, the live pad takes the seat, and the race goes on liv
 
   ```toml
   [fork]
-  tick = 4312            # the first tick the live pad flew
-  offered_at = 4290      # the tick the player pressed TAKE OVER (hold, below)
+  tick = 4312            # the first tick the live pad flew: the tick TAKE OVER was pressed on
   seats = [0]
   parent_build = "..."   # the parent's header.build, informational
-  parent_hash = 123...   # the parent's stored hash nearest before the tick
+  parent_hash = "0x0123456789abcdef"   # the parent's stored hash nearest before the tick
   ```
 
   It carries **no `ghost` chunk**. It is held in memory until the end-of-race menu offers
@@ -432,22 +454,28 @@ seat's input stream stops, the live pad takes the seat, and the race goes on liv
   `None`, and `ghosts::auto_load_from` refuses a file with a `[fork]` table or no ghost chunk.
   The results table still shows, without a NEW RECORD or NEW GHOST marker, and a TAKEN OVER
   line. The REPLAYS list labels the file TAKEN OVER AT 1:12.
-- **Which row is SAVE REPLAY, per title.** It is the last row of the end-of-race menu on every
-  title, offered only for a fork:
-  - **Pulse (PSP and PS2):** the fifth row, after `ER_VIEW_AGAIN`, where the original's
-    `ER_SAVE_GHOST` sits (`docs/formats/endrace-screens.md`, "The option list is built per
-    mode"). The original gates that row to Time Trial and Speed Lap; ours is offered for any
-    mode with a fork. This build models no `SaveGhost` row, so a new `MenuOption::SaveReplay`
-    follows `ViewResultsAgain`.
-  - **HD and Omega's HD-lineage races:** `Endrace Options` has four blocks (`next_race`,
+- **Which row is SAVE REPLAY, per title.** What decides the screen is
+  `oag_title::FrontEnd::endrace_style` (`crates/title/src/endrace.rs`), read by
+  `oag_game::endrace`. It is the last row of the end-of-race menu, offered only for a fork:
+  - **Pulse (`EndRaceDialect::Pulse`):** after `ER_VIEW_AGAIN`, in the place the original puts
+    `ER_SAVE_GHOST` (the last step of `EndRaceMenu_PopulateOptions`, `docs/formats/
+    endrace-screens.md`, "The option list is built per mode"; the fourth row shown in a
+    non-Tournament race). The original gates that row to Time Trial and Speed Lap; ours is
+    offered for any mode with a fork. This build models no `SaveGhost` row, so a new
+    `MenuOption::SaveReplay` follows `ViewResultsAgain` in `menu_options`.
+  - **HD (`EndRaceDialect::Field`):** `Endrace Options` has four `<Block>` rows (`next_race`,
     `race_again`, return, `view_again`) and no ghost row (`docs/formats/hd-endrace-screens.md`),
-    so SAVE REPLAY is a fifth block under `view_again`, at the block spacing of the others.
-  - **2048 and Omega's 2048-lineage races:** the `EndRace` tree has `RestartRaceTouchButton`
-    and `QuitTouchButton` only (`docs/ui/endrace-2048.md`); SAVE REPLAY is a third box beside
-    them in the same `Blue2048` idiom.
-  - **Pure:** shares Pulse's menu shape as the other `MenuOption` users do; SAVE REPLAY follows
-    `ViewResultsAgain`.
-  The layouts of HD, 2048 and Omega are chosen, not read off an original (none has the row);
+    so SAVE REPLAY is a fifth block under `view_again`, at the spacing of the others.
+  - **2048 (`EndRaceDialect::Touch`):** the `EndRace` tree has `RestartRaceTouchButton` and
+    `QuitTouchButton` only (`docs/ui/endrace-2048.md`); SAVE REPLAY is a third box beside them
+    in the same `Blue2048` idiom.
+  - **Pure and Omega: not investigated.** Both carry `endrace_style: None`
+    (`crates/pure/src/lib.rs`, whose comment calls it "a gap, not a measurement that Pure ships
+    no such screen"; `crates/omega/src/frontend.rs`; `docs/formats/omega-status.md` records that
+    the end screens "still dispatch `title == HD` alone"). Where a title draws no end-of-race
+    screen of the three dialects, the session shows a **SAVE THIS REPLAY? YES / NO** prompt
+    when a fork ends. Chosen.
+  The layouts of HD and 2048 are chosen, not read off an original (neither has the row);
   stage 7 shows a frame of each. The string is a new `OAG_SAVE_REPLAY` id in `english.toml`
   (`just check-strings`) with French under `[untranslated]`, and every new row has pointer
   support in the same change.
@@ -460,9 +488,25 @@ seat's input stream stops, the live pad takes the seat, and the race goes on liv
   because a recorded stream is right only for the state it was recorded in and the field has
   already moved. That the driver's state is all hashed or snapshotted is to be proved by the
   fork verifying. **v1 offers take-over on single-seat replays only.**
-- **What the hand-off looks like.** Measured first, because the maintainer's concern is real:
-  from 60 keyframes along each title's five-minute race, take the Autopilot off the player's
-  craft and fly it with a pad that holds nothing, or only the throttle:
+- **What the hand-off looks like.** The pad takes the seat **at the tick, exactly**: the
+  recorded stream stops at `tick` and the first tick the pad flies is `tick` (the fork's
+  `tick` and the tick TAKE OVER was pressed on are the same), as the maintainer set it. The
+  craft is moving at speed, so what the player sees first is a countdown, not a cut:
+  1. The replay **pauses on the chosen frame** and TAKE OVER opens a **3-2-1 countdown with
+     the race frozen** (not ticking: the fork's state is the verified state at `tick`, so
+     nothing is simulated while the player gets their hands on the pad).
+  2. During it the screen draws **the recorded stick and throttle at `tick`** (the deflection
+     the replay's input stream holds there) beside the live pad's, so a player can already
+     be holding what the craft was doing when GO arrives. A replay recorded by the Autopilot
+     or a pad-less seat has none and shows the live pad alone.
+  3. At GO the race ticks live with the pad.
+
+  The 3-2-1, its length (three seconds, the engine's own start countdown) and the stick
+  display are chosen, not measured; the countdown is one constant.
+
+  **This does not remove the hazard, and the measurement says how large it is.** From 60
+  keyframes along each title's five-minute race, take the Autopilot off the player's craft and
+  fly it with a pad that holds nothing, or only the throttle:
 
 | Title | Nothing held: wall contact within 1 s / 2 s | Throttle held: within 1 s / 2 s | Earliest contact (ticks) |
 | --- | ---: | ---: | ---: |
@@ -473,20 +517,21 @@ seat's input stream stops, the live pad takes the seat, and the race goes on liv
 | Omega | 0 / 10 | 7 / 16 | 51 |
 
   Between 7 and 27 of the 60 points (12 to 45 percent) put the craft into a wall inside two
-  seconds, the earliest in 41 ticks (0.7 s), if the pad is not already steering. A hard cut is a
-  trap. (Release, loaded. The points are every 300th tick from tick 120; the Autopilot is
-  taken off at each and the craft flown for 600 ticks. The earlier dev-profile run, 58 points
-  from tick 600, read the same: 3 to 23 within two seconds.)
-  The design, in order: **(1) the replay pauses on the chosen frame** and TAKE OVER shows a
-  3-2-1 countdown, the race frozen (not ticking), so nothing happens while the player gets
-  their hands on the pad; **(2) at GO the race runs live and the seat keeps its recorded input
-  until the pad engages**: the stick leaves a 0.1 dead zone or a button other than the held
-  throttle changes, at most 120 ticks (two seconds) after GO. The tick the pad engages is the
-  fork tick `F` and `offered_at` is the tick the player pressed TAKE OVER. This lets go of the
-  recorded stream up to two seconds after "here"; it is the only departure from the
-  maintainer's wording and the reason `[fork]` has both ticks. The 3-2-1 and the two seconds
-  are chosen, not measured; a plain cut at GO is one constant. The recorded inputs after the
-  tick exist in the file and are valid there, because the state is verified.
+  seconds, the earliest in 41 ticks (0.7 s), if the pad is not already steering. (Release,
+  loaded. The points are every 300th tick from tick 120; the Autopilot is taken off at each
+  and the craft flown for 600 ticks. The earlier dev-profile run, 58 points from tick 600, read
+  the same: 3 to 23 within two seconds.) A frozen countdown with the recorded stick on screen
+  is the answer inside the maintainer's rule, and **whether it is enough is owed**: stage 7
+  measures it with a pad-flown run (the stick held at the recorded deflection at GO), not with
+  the Autopilot, which is neither a pad nor a physics reference.
+
+  **A question for the maintainer, not decided here.** An *engagement hold* would remove the
+  hazard instead of hoping the player is ready: at GO the seat keeps its recorded input until
+  the pad is deflected past a 0.1 dead zone or presses a button, at most 120 ticks, and the
+  fork `tick` becomes the tick the pad engaged on (the header would then also need
+  `offered_at`). It lets go of the recorded stream up to two seconds after "here", which
+  departs from the decision that at tick T the stream stops. This ADR does not take it; the
+  table is the argument for asking.
 - **Audio and camera hand-off.** Audio: the same `Sfx::rebuild` as a seek, then the live race's
   ordinary cues. Camera: the viewer may have been on any craft or a cinematic view; the live
   race starts on the taken seat's chase camera (the one a new race opens on), cold-started by
@@ -532,11 +577,12 @@ in parallel), then 3 and 5, then 4, 6 and 7.
    extended to rewind; shots of a track blur, a ship blur and a depth of field, each next to
    the same shot unblurred; the measured time of a 120-frame shot.
 7. **`take-over`.** *Claim:* a player can take the pad from any verified moment of a replay and
-   save the result without it ever counting as a record. The hold and countdown, the fork, the
+   save the result without it ever counting as a record. The countdown and stick display, the fork, the
    `[fork]` table, `SaveReplay` per title, `taken_over`. *Evidence:* a saved fork verifies on this
    build; after a fork `records.toml` and `ghosts/` are byte-identical to before (a test);
    a frame of the SAVE REPLAY row on each of the five titles' end screens; the hand-off table
-   re-run with the hold (contacts within two seconds of GO, expected near zero).
+   re-run with a pad-flown run that holds the recorded stick at GO (contacts within two seconds
+   of GO), which decides whether the countdown is enough or the engagement hold is asked for.
 
 Not staged: modded-race replays, network replays from `oag-server`, multi-seat take-over,
 the Steam Deck measurement (owed, decision 3).
@@ -569,8 +615,12 @@ state, and state needs inputs.
 recorder, HUD, results capture or end-of-race flow; building the ordinary race and moving it to
 the tick keeps one path for how a race is driven and ended **(M)**.
 
-**A hard cut at the take-over tick.** Measured above: a quarter of the points hit a wall inside
-two seconds with nothing held.
+**A hard cut at the take-over tick, with no countdown.** Measured above: 12 to 45 percent of the
+points hit a wall inside two seconds with nothing held or only the throttle.
+
+**An engagement hold after GO** (the recorded input flies the seat until the pad moves, at most
+two seconds). Not taken: it departs from "the stream stops at tick T". Offered as a question
+in decision 9 with the table as its argument.
 
 **Auto-save every taken-over run.** Rejected **(M)**: a fork is saved from SAVE REPLAY only.
 
@@ -602,8 +652,8 @@ pose track can carry the rest; a player should see the race, labelled.
   read.
 - Every race writes a file. The ring bounds it at 32 MiB, but a player who does not want it
   must find `[replay] record`.
-- The hold lets go of "from here" by up to two seconds, and the countdown makes a take-over
-  slower than a plain cut. Both are chosen, not measured, and both are one constant.
+- The countdown makes a take-over slower than a plain cut, and does not by itself remove the
+  hand-off hazard (decision 9). The 3-2-1 is chosen, not measured, and is one constant.
 - A view rebuilt at a seek or take-over is not the view the original run had: the particles and
   shake draw from fresh view RNGs. The race is identical; the sparks are not.
 - **Not measured:** the Steam Deck (owed); a race with a respawn in the pose track (the sweep's
