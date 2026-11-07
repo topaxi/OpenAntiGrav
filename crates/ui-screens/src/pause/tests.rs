@@ -71,7 +71,7 @@ fn screen() -> PauseScreen {
     PauseScreen::read(
         &screens,
         "InGame Pause SP Time Trial",
-        "InGame Main Menu",
+        Some("InGame Main Menu"),
         &words(),
         FaceScales::default(),
         [1920.0, 1080.0],
@@ -275,4 +275,185 @@ fn the_inert_row_is_drawn_greyed_and_has_no_pointer_region() {
         .filter(|region| matches!(region.part, Part::StepBack | Part::StepForward))
         .count();
     assert_eq!(steps, 2, "the list's two arrows");
+}
+
+/// A screen that authors one `<Menu>` and a band of fills, as Pure's do.
+mod menu_widget {
+    use super::*;
+    use oag_title::{PauseLayout, PauseMenuRows};
+
+    const BAND_XML: &str = r#"
+<Screen name="InGame Main Menu">
+<Image><Values x="0" y="75" width="480" height="120" color="0xc0000010"></Values></Image>
+<Image><Values x="0" y="75" width="480" height="1" color="0xff3192bb"></Values></Image>
+<Image><Values x="0" y="175" width="480" height="1" color="0xff3192bb"></Values></Image>
+<Menu name="Option"><Values align="centre" scale="1.2" vertalign="middle" x="240" y="106" wrap="true" color="0xFFFFFFFF"></Values><Entry idstring="Continue"></Entry><Entry idstring="Restart"></Entry><Entry idstring="Quit"></Entry></Menu>
+<Text><Values y="175" align="centre" x="240" idstring="Press X to Confirm" color="0xFFFFFFFF"></Values></Text>
+</Screen>
+"#;
+
+    const BAND: &PauseMenu = &PauseMenu {
+        heading: "Paused",
+        screens: &[Screen {
+            name: "InGame Main Menu",
+            rows: &[
+                row("Continue", Some(A::Resume)),
+                row("Restart", Some(A::Restart)),
+                row("Quit", Some(A::Quit)),
+            ],
+        }],
+        default_screen: "InGame Main Menu",
+        by_mode: &[],
+        scrim_argb: 0,
+        layout: Some(PauseLayout {
+            definition: "InGame_Definition.xml",
+            chrome: None,
+            grid: [480, 272],
+            menu_rows: Some(PauseMenuRows {
+                pitch: 15.0,
+                unfocused_alpha: 0.5,
+            }),
+        }),
+        hud_under_scrim: true,
+        offers_photo: false,
+        origin: Origin::Measured,
+    };
+
+    fn band_words() -> StringTable {
+        StringTable::from_xml(
+            r#"<Strings>
+<Entry ID="Continue" String="CONTINUE"></Entry>
+<Entry ID="Restart" String="RESTART"></Entry>
+<Entry ID="Quit" String="QUIT"></Entry>
+<Entry ID="Press X to Confirm" String="PRESS X TO CONFIRM"></Entry>
+</Strings>"#,
+        )
+    }
+
+    fn band_screen() -> PauseScreen {
+        let screens = Screens::from_xml_with_fallback_globals(BAND_XML, &[]);
+        PauseScreen::read(
+            &screens,
+            "InGame Main Menu",
+            None,
+            &band_words(),
+            FaceScales::default(),
+            [480.0, 272.0],
+        )
+        .expect("the screen is in the fixture")
+    }
+
+    fn band_menu() -> Menu {
+        let mut definition =
+            Definition::built_in(&StringTable::default()).expect("the built-in menu");
+        definition.open_on_pause_screen(BAND, "single_race", &band_words());
+        Menu::new(definition)
+    }
+
+    fn band_skin() -> Skin {
+        Skin::new(
+            oag_pure::frontend::MENU_SKIN,
+            oag_display::space::Space::PSP,
+            14.0,
+        )
+    }
+
+    fn band_draws(menu: &Menu) -> Layers {
+        draw_list(
+            &band_screen(),
+            BAND,
+            menu,
+            &band_skin(),
+            &Frame::default(),
+            &|_| None,
+        )
+    }
+
+    fn rows_of(draws: &[Draw]) -> Vec<(String, f32, [f32; 4])> {
+        draws
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, y, color, .. } | Draw::FacedText { text, y, color, .. } => {
+                    Some((text.clone(), *y, *color))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The band is the screen's own fills, drawn once: no chrome screen stands behind it.
+    #[test]
+    fn the_band_and_its_rules_are_the_screens_own_fills_drawn_once() {
+        let layers = band_draws(&band_menu());
+        let fills: Vec<[f32; 4]> = layers
+            .chrome
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Fill { rect, .. } => Some(*rect),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            fills,
+            [
+                [0.0, 75.0, 480.0, 120.0],
+                [0.0, 75.0, 480.0, 1.0],
+                [0.0, 175.0, 480.0, 1.0]
+            ]
+        );
+        assert_eq!(
+            text_at(&layers.chrome, "PRESS X TO CONFIRM"),
+            Some((240.0, 175.0)),
+            "the footer line"
+        );
+    }
+
+    /// Every row of the page is drawn down the widget, centred on its `x`, `15 * scale` apart,
+    /// and the one with the cursor is at full ink while the others are dimmed.
+    #[test]
+    fn every_row_is_drawn_down_the_menu_widget_with_the_cursor_row_brightest() {
+        let mut menu = band_menu();
+        for _ in 0..40 {
+            menu.tick_focus(1.0 / 6.0);
+        }
+        let rows = rows_of(&band_draws(&menu).body);
+        let words: Vec<&str> = rows.iter().map(|(text, _, _)| text.as_str()).collect();
+        assert_eq!(words, ["CONTINUE", "RESTART", "QUIT"]);
+        let pitch = rows[1].1 - rows[0].1;
+        assert!((pitch - 18.0).abs() < 1e-3, "15 * 1.2: {pitch}");
+        assert!((rows[2].1 - rows[1].1 - pitch).abs() < 1e-3);
+        assert!(
+            (rows[0].2[3] - 1.0).abs() < 1e-3,
+            "the cursor row: {:?}",
+            rows[0].2
+        );
+        assert!(
+            (rows[1].2[3] - 0.5).abs() < 1e-3,
+            "the others: {:?}",
+            rows[1].2
+        );
+    }
+
+    /// A row is a target the whole band wide and one pitch tall, at the row's own place.
+    #[test]
+    fn every_row_has_a_pointer_region_across_the_band() {
+        let menu = band_menu();
+        let regions = regions(&band_screen(), BAND, &menu, &band_skin());
+        assert_eq!(regions.len(), 3);
+        for (n, region) in regions.iter().enumerate() {
+            assert_eq!(region.row, n);
+            assert_eq!(region.rect[0], 0.0);
+            assert_eq!(region.rect[2], 480.0);
+            assert!((region.rect[3] - 18.0).abs() < 1e-3);
+            assert!((region.rect[1] - (106.0 - 9.0 + 18.0 * n as f32)).abs() < 1e-3);
+        }
+        for (n, y) in [(0, 106.0), (1, 125.0), (2, 142.0)] {
+            let hit = oag_ui::menu::pointer::hit(&regions, (240.0, y)).map(|region| region.row);
+            assert_eq!(hit, Some(n), "a pointer at y {y} is on row {n}");
+        }
+        assert!(
+            oag_ui::menu::pointer::hit(&regions, (240.0, 60.0)).is_none(),
+            "above the band is no row"
+        );
+    }
 }

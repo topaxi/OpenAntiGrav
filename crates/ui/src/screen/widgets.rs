@@ -181,6 +181,9 @@ impl Screens {
                 .unwrap_or(0xffff_ffff),
             align: node.value("align").unwrap_or("left").to_string(),
             font: node.value("font").unwrap_or("Default").to_string(),
+            middle: node
+                .value("vertalign")
+                .is_some_and(|value| value.eq_ignore_ascii_case("middle")),
         }
     }
 

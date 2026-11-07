@@ -1,6 +1,8 @@
 //! A title's pause screen laid out as its disc authors it: the screen's own `Block` and `List`
 //! widgets at their authored positions, the title and its arrow, and the shared chrome screen's
-//! two rules and footer (`InGame Main Menu` on HD, `oag_title::PauseLayout`).
+//! two rules and footer (`InGame Main Menu` on HD, `oag_title::PauseLayout`). A screen that
+//! authors one `<Menu>` instead (Pure's band of centred rows) draws every row of the page down
+//! that widget.
 //!
 //! The rows' behaviour is the menu's (`oag_ui::menu::Menu`, built by
 //! `Definition::open_on_pause_screen`); this draws them. A widget finds its row by the disc
@@ -48,17 +50,18 @@ const INERT_FILL_ALPHA: f32 = 0.65;
 #[derive(Debug, Clone)]
 pub struct PauseScreen {
     screen: Layout,
-    chrome: Layout,
+    chrome: Option<Layout>,
 }
 
 impl PauseScreen {
-    /// The screen called `name` and the shared `chrome` screen out of `screens`, every
-    /// `idstring` resolved through `strings`. `None` when either is not in the file.
+    /// The screen called `name` and the shared `chrome` screen, when the file has one, out of
+    /// `screens`, every `idstring` resolved through `strings`. `None` when either is not in
+    /// the file.
     #[must_use]
     pub fn read(
         screens: &Screens,
         name: &str,
-        chrome: &str,
+        chrome: Option<&str>,
         strings: &StringTable,
         faces: FaceScales,
         grid: [f32; 2],
@@ -67,7 +70,10 @@ impl PauseScreen {
             |screen: &str| Layout::read_authored(screens, screen, strings, faces, grid, grid);
         Some(Self {
             screen: read(name)?,
-            chrome: read(chrome)?,
+            chrome: match chrome {
+                Some(chrome) => Some(read(chrome)?),
+                None => None,
+            },
         })
     }
 
@@ -79,9 +85,13 @@ impl PauseScreen {
 
     /// The texture paths the screen and its chrome draw, for the caller to place on its sheet.
     pub fn sprite_srcs(&self) -> impl Iterator<Item = &str> {
-        [&self.chrome, &self.screen]
-            .into_iter()
+        self.layouts()
             .flat_map(|layout| layout.screen.images.iter().map(|image| image.src.as_str()))
+    }
+
+    /// The chrome screen, when there is one, then the screen itself: the order they draw in.
+    fn layouts(&self) -> impl Iterator<Item = &Layout> {
+        self.chrome.iter().chain(std::iter::once(&self.screen))
     }
 
     fn blocks(&self) -> &[BlockWidget] {
@@ -111,6 +121,8 @@ struct Row<'a> {
 enum Kind<'a> {
     Block(&'a BlockWidget, &'a Text),
     List(&'a ListWidget),
+    /// Row `n` of the screen's `<Menu>`, counting from its first.
+    Menu(usize),
 }
 
 /// Every widget of `screen` that has a row on the page, in the screen's own order, with that
@@ -121,6 +133,14 @@ fn rows<'a>(screen: &'a PauseScreen, table: &PauseMenu, menu: &Menu) -> Vec<Row<
         return Vec::new();
     };
     let page = menu.page();
+    if screen.screen.screen.menu.is_some() && table.layout.is_some_and(|l| l.menu_rows.is_some()) {
+        return (0..page.entries.len())
+            .map(|row| Row {
+                row,
+                kind: Kind::Menu(row),
+            })
+            .collect();
+    }
     let row_for = |text: &Text| -> Option<usize> {
         let id = text.idstring.as_deref()?;
         let action: PauseAction = disc.rows.iter().find(|row| row.disc_id == id)?.builds?;
@@ -179,7 +199,7 @@ pub fn draw_list(
 ) -> Layers {
     let mut layers = Layers::default();
     let mut chrome = Vec::new();
-    for layout in [&screen.chrome, &screen.screen] {
+    for layout in screen.layouts() {
         for fill in &layout.screen.fills {
             chrome.push(fill_draw(fill));
         }
@@ -190,7 +210,7 @@ pub fn draw_list(
         }
     }
     let (_, _, title_scale) = skin.title_at();
-    for layout in [&screen.chrome, &screen.screen] {
+    for layout in screen.layouts() {
         for text in &layout.screen.texts {
             if layout
                 .screen
@@ -241,6 +261,11 @@ pub fn draw_list(
                 frame,
                 &mut body,
             ),
+            Kind::Menu(n) => {
+                if let Some(draw) = menu_row_draw(screen, table, skin, n, entry, focus) {
+                    body.push(draw);
+                }
+            }
             Kind::List(widget) => {
                 if let Some(numbers) = numbers {
                     list_draw(
@@ -259,6 +284,54 @@ pub fn draw_list(
     }
     layers.body = body;
     layers
+}
+
+/// The line `n` of a `<Menu>` screen's rows: centred on the widget's `x`, the first row's middle
+/// at its `y`, each `pitch * scale` below the one before, white at the widget's colour for the
+/// row with the cursor and dimmed on the others as the cursor eases on and off them.
+fn menu_row_draw(
+    screen: &PauseScreen,
+    table: &PauseMenu,
+    skin: &Skin,
+    n: usize,
+    entry: &Entry,
+    focus: f32,
+) -> Option<Draw> {
+    let widget = screen.screen.screen.menu.as_ref()?;
+    let rows = table.layout?.menu_rows?;
+    let (_, y, _) = menu_row_box(widget, &rows, n);
+    let top = if widget.middle {
+        y - 0.5 * skin.line_height() * widget.scale
+    } else {
+        y
+    };
+    let alpha = rows.unfocused_alpha + (1.0 - rows.unfocused_alpha) * focus;
+    let mut color = argb_to_rgba(widget.color);
+    color[3] *= alpha;
+    let text = Text {
+        font: widget.font.clone(),
+        x: widget.x,
+        y: top,
+        scale: widget.scale,
+        color: widget.color,
+        align: widget.align.clone(),
+        ..Text::default()
+    };
+    let mut draw = text_draw(&text, entry.label(), &screen.screen);
+    if let Draw::Text { color: ink, .. } | Draw::FacedText { color: ink, .. } = &mut draw {
+        *ink = color;
+    }
+    Some(draw)
+}
+
+/// Where row `n` of a `<Menu>` stands: the widget's `x`, the row's middle `y` and its pitch.
+fn menu_row_box(
+    widget: &oag_ui::screen::Menu,
+    rows: &oag_title::PauseMenuRows,
+    n: usize,
+) -> (f32, f32, f32) {
+    let pitch = rows.pitch * widget.scale;
+    (widget.x, widget.y + n as f32 * pitch, pitch)
 }
 
 /// One `<Block>` as `Block_Render` draws it: the box (the authored width plus the focus growth
@@ -461,6 +534,21 @@ pub fn regions(screen: &PauseScreen, table: &PauseMenu, menu: &Menu, skin: &Skin
                     widget.height,
                 ],
             }),
+            Kind::Menu(n) => {
+                let (Some(widget), Some(rows)) = (
+                    screen.screen.screen.menu.as_ref(),
+                    table.layout.and_then(|layout| layout.menu_rows),
+                ) else {
+                    continue;
+                };
+                let (_, y, pitch) = menu_row_box(widget, &rows, n);
+                let width = table.layout.map_or(0.0, |layout| layout.grid[0] as f32);
+                out.push(Region {
+                    row: placed.row,
+                    part: Part::Row,
+                    rect: [0.0, y - 0.5 * pitch, width, pitch],
+                });
+            }
             Kind::List(widget) => {
                 let Some(numbers) = numbers else {
                     continue;

@@ -94,8 +94,9 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
     scrim_argb: 0x8000_0000,
     layout: Some(PauseLayout {
         definition: r"Data\Plugins\Frontend\Gui\ingame_definition.xml",
-        chrome: "InGame Main Menu",
+        chrome: Some("InGame Main Menu"),
         grid: [1920, 1080],
+        menu_rows: None,
     }),
     hud_under_scrim: false,
     offers_photo: true,
