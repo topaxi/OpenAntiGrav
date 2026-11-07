@@ -6,7 +6,7 @@
 use super::reconcile_predict::fixture;
 use super::*;
 use crate::timeline::Pass;
-use crate::viewer::{Moved, PRE_ROLL, SPEEDS, State, Viewer};
+use crate::viewer::{Moved, SPEEDS, State, Viewer};
 use oag_gameplay::PlayerInputs;
 use oag_replay::{Header, Replay};
 
@@ -126,7 +126,6 @@ fn a_seek_lands_on_the_recorded_run_wherever_it_goes() {
         assert_eq!(viewer.at(), target);
         assert_stands_at(&race, &text, target);
     }
-    assert!(PRE_ROLL > 0);
 }
 
 /// A seek past the built prefix is held at it, and the recording's end is the last tick.

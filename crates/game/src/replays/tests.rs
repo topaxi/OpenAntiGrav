@@ -188,3 +188,18 @@ fn delete_removes_the_file() {
     assert!(list_in(&root).is_empty());
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Recording is on unless the player turned it off (`[replay] record`): a fresh profile, an old
+/// file with no table and a table with no key all record.
+#[test]
+fn recording_is_on_unless_the_player_turned_it_off() {
+    use crate::settings::{Settings, fresh};
+    let read = |text: &str| toml::from_str::<Settings>(text).expect("parses");
+    assert!(fresh().replay.record, "a fresh profile records");
+    assert!(read("").replay.record, "an old file without [replay]");
+    assert!(read("[replay]\n").replay.record, "a table with no key");
+    let off = read("[replay]\nrecord = false\n");
+    assert!(!off.replay.record);
+    let written = toml::to_string_pretty(&off).expect("serialise");
+    assert!(!read(&written).replay.record, "{written}");
+}

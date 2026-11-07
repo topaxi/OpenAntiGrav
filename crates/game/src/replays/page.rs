@@ -101,6 +101,9 @@ fn fit_to(text: &str, width: usize) -> String {
     format!("{keep}...")
 }
 
+/// A circuit's localised name from the mode of a race and the entry a header names.
+pub type CircuitName<'a> = Box<dyn Fn(oag_race::Mode, &str) -> Option<String> + 'a>;
+
 /// What the page needs to say about a list of files.
 #[allow(missing_debug_implementations)]
 pub struct Context<'a> {
@@ -111,7 +114,7 @@ pub struct Context<'a> {
     /// The race modes with their localised labels, as the RACE page's MODE row has them.
     pub modes: &'a [Choice],
     /// A circuit's localised name from the mode of a race and the entry a header names.
-    pub circuit: Box<dyn Fn(oag_race::Mode, &str) -> Option<String> + 'a>,
+    pub circuit: CircuitName<'a>,
     /// Files WATCH opened and the rebuild refused, with the reason.
     pub refused: &'a BTreeMap<PathBuf, String>,
     /// Whether `[replay] record` is on, for what an empty list says.
