@@ -181,7 +181,7 @@ fn circle_on_the_pause_root_does_nothing_and_escape_and_continue_resume() {
     press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Cross]);
     assert_eq!(menu.page().id, "options");
-    menu.take_nav();
+    let _ = menu.take_nav();
     press(&mut menu, &[Button::Circle]);
     assert_eq!(menu.page().id, PAUSE_PAGE);
     assert_eq!(menu.take_nav(), [Nav::Decline]);
