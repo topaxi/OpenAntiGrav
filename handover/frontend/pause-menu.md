@@ -32,7 +32,7 @@ pause screen where one applies). Online pause stays the maintainer's decision
   footer has NAVIGATION where the original has `RESUME GAME`; the on/off lists `FE_PILOT_ASSIST` and
   `FE_GHOST` and the greyed `ONL_VIEW_INV` are not drawn; END SESSION leaves like QUIT, the original
   finishes the race into the results.
-- Zone and Tournament on HD are the static reading, not walked live.
+- Tournament and Eliminator on HD are the static reading, not walked live (Single Race, Time Trial, Speed Lap and Zone were).
 - **Split screen** keeps START's freeze and the ownership rule; HD's `InGame Pause Split Player 1`/`2`,
   `Tournament Split` and `Zone P1`/`P2` screens are the model (`PauseMenu_BindRedirectForMode` on HD
   picks them per pad).

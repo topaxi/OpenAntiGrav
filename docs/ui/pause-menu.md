@@ -114,8 +114,8 @@ this build does not pause into the disc's screen):
 [`PauseMenu_BindRedirectForMode`](../ghidra/functions/ps3-hdfury-eu/pause-menu.md) (`0x0023d660`, 85):
 Tournament (4), Time Trial (5), Speed Lap (10) and Zone (6, 14) their own screen, every other
 single-view mode (Single Race, Head to Head, **Eliminator**) the redirect's default `InGame Pause SP`.
-Live on RPCS3 (Fury EU): Time Trial and Speed Lap read the expected state names, Single Race is
-`photo-mode.md`'s run (90); Zone and Tournament are the static reading.
+Live on RPCS3 (Fury EU): Single Race, Time Trial, Speed Lap and Zone read the expected state names
+(90) and drew exactly the rows above; Tournament and Eliminator are the static reading.
 
 **The disc has three generations of the file** (`DATA00`/`DATA06`: Fury, with `FE_GHOST`; `DATA05`:
 without it; `DATA02`/`DATA03`: the base game, without `FE_GHOST` and `ONL_VIEW_INV`, and a Speed Lap
@@ -130,8 +130,8 @@ patches before and after).
 
 ### What ours does
 
-Frames, Time Trial and Speed Lap on Talon's Junction (original on RPCS3, ours on the Fury disc), read
-side by side. **Match**: the rows and their words, the order, the dimming (the same patches of the paused frame
+Frames: the original on RPCS3 (Fury EU) for Single Race, Time Trial, Speed Lap and Zone, ours on the same
+disc for Time Trial (and the Eliminator's resume), read side by side. **Match**: the rows and their words, the order, the dimming (the same patches of the paused frame
 against the race frame read 0.247 on ours and 0.247 to 0.250 on the original), the title and its underline,
 the cursor row, Confirm in the footer. The page is the front end's own column (a page of navigation rows
 is a `<HorizMenu>` strip elsewhere; `strip::suits` leaves the pause page a column on every title).

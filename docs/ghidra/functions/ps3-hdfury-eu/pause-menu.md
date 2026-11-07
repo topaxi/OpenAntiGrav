@@ -48,9 +48,10 @@ Zone screen and no split-screen branch.
 ## Live (RPCS3, Fury EU, Talon's Junction, 2026-11-07, 90)
 
 START in a race read the state name off `TTY.log` (`Switching Screen`): `InGame Pause SP Time Trial`
-(Racebox Time Trial) and `InGame Pause SP Speed Lap` (Racebox Speed Lap); the Single Race name,
-`InGame Pause SP`, is `photo-mode.md`'s run. **Zone and Tournament were not walked live** (the
-static reading, 85).
+(Racebox Time Trial), `InGame Pause SP Speed Lap` (Speed Lap), `InGame Pause SP` (Single Race, also
+`photo-mode.md`'s run) and `InGame Pause Zone` (Zone, four `right`s on RACE TYPE from Single Race).
+**Tournament was not walked live** (the static reading, 85); the Eliminator takes the default by the
+same switch, not walked.
 
 What the screens drew on RPCS3 (1280x720 inside the 2000x1200 window, frames kept in the lane's
 scratch): a vertical list at `x = 480` of 1920, 50 apart from `y = 310`, the title `GAME PAUSED`
