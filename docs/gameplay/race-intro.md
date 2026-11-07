@@ -261,6 +261,55 @@ overlay draws them for HD yet.
   Fixing it is a one-line change in `scene/frame.rs`, which is 1,000 lines of one function and
   has to be split first.
 
+## The opening shot's window panes stipple on Platinum Rush (measured 2026-11-07, lane `pulse-flyby-flicker`)
+
+The maintainer's play report on PSP Pulse: "a flickering texture at the beginning of the flyby on
+the left half of the screen" (Platinum Rush White). **Reproduced in ours, not in the original.**
+
+**The surface.** The glass panes of the left dome of the start building, `13_Track`'s first shot
+(the camera holds `(55.3, 64.8, 363.4)` for about 28 ticks, then pans slowly). In ours they draw as
+a diagonal chequer of pane and wall through each other, the pattern shifting with any change of the
+camera. Over ticks 30 to 35 (the camera panning) the left half changes by a mean of 17.1 against
+10.9 on the right (960x544), the pane region 59 against 14 on the wall above it; the original's
+frames over the same stretch (frames 36 to 69 of a `psp-flyby.py --frames` run) change by about the
+same on pane and wall (ratio 1.0 to 1.3), and a pane close-up at frames 100 and 101 is clean.
+
+**Which draws, and the probe.** `oag-game --race --track Data\Environments\13_Track\track.vex
+--ticks 0 --intro-ticks 5 --screenshot`, once at `--draw-alpha 0.5` and once at the default `1.0`:
+the held shot is the same camera to the last bit and the two frames differ only where depth ties,
+left pane region mean `45.72` (0..765 scale), **`0.00` with node 365's panes hidden, or with any two
+of nodes 365, 342 and 349 hidden** (a debug hide hook, not kept). The panes are
+`rf_spanbuilding_windows_shinemap` batches (`pass_mask 0x3001`, depth bias `0`), drawn by three copies
+of the same building: node 365 (6 small batches, layer `0x45`, its pane 10 triangles) and nodes 342
+and 349 (full copies, layer `0x4a`, panes 82 and 85 triangles). Every pane vertex of 365 lies within
+`1e-5` of the plane of 342's and 349's pane triangles: **exactly coplanar surfaces cut in different
+triangles, so the interpolated depth differs by a float ulp or two and the winner flips per pixel.**
+Not the shine pass: `--no-track-shine` stipples too. PVS, shadows, reconstruction and MSAA flags
+change nothing (`--pvs false` is the same bytes; with only the craft's own section row admitted the
+shot draws almost nothing, so the flyby is not culled to the grid row). Not temporal jitter: the
+camera is bit-held; the blend alone (`between_ticks::blend_view` round-trips through an inverse)
+changes the last bit and that is enough to flip the pattern, which is why a live window crawls.
+
+**Why the original is clean (depth state read live).** A GE list of a flyby frame
+(`scripts/psp-ge-dump.py`, now with `zscale`/`zcenter`/`minz`/`maxz`): depth range `1001..64946`,
+`GREATER` with writes on (a strict test), a 16-bit buffer, projection near `1.2`, far `2000`, so
+about `1.2` depth levels per world unit at 250 units. Surfaces closer than a level **tie, and the
+first drawn wins**; the same three copies, exactly coplanar, resolve to the first drawn in every
+pixel. The batches' own depth bias (`batch+0x29`, [vex.md](../formats/vex.md)) is `0` on all of
+them, so it is draw order plus 16-bit ties, not the authored bias.
+
+**Other circuits.** The same probe on the opening shot of every Pulse circuit and its reversed file
+(`track_reversed.vex`): `13_Track` 2,076 pixels differ by more than 60 (2,059 of them in the left
+half, matching the report), `01_Track` 20, every other circuit 0 to 6. Black (`13` reversed) is the
+same. HD, 2048 and Omega: no document names Platinum Rush (not checked on the discs), and their
+`.rcsmodel` chunks have no per-batch depth byte, **checked, differs**.
+
+**What is not settled.** Whether the original *draws* node 365 at all in that shot: a GE dump of the
+held shot was not captured (the RESTART RACE route presses Cross and skips the flyby), and the dump
+taken 5 seconds in shows 349's pane and not 365's. If it culls 365 the fix is which copies the
+flyby admits; if it draws it, the fix is the tie rule (a 16-bit depth step, first drawn wins).
+The open work is listed in the Open section of this page.
+
 ## What the original plays under the flyby (watched 2026-11-02, lane `pulse-flyby-audio-capture`)
 
 **Claim**: the original's flyby plays craft engines under an effects fade, silent for 20 calls

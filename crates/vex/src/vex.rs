@@ -529,6 +529,26 @@ pub struct Batch {
     /// decoded by [`is_additive_blend`](Self::is_additive_blend), confirmed on
     /// the PSP draw path only. The rest are undecoded.
     pub header_flags: u8,
+    /// The batch's authored depth bias, `0..=9` on the disc: the original
+    /// shifts the batch's `sceGuDepthRange` pair by `6 * bias`, which is how a
+    /// decal or window pane authored coplanar with its wall wins the depth test
+    /// (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "The per-batch depth
+    /// bias"). Byte `+0x29` of a PSP batch header, replaced by `1` when
+    /// `pass_mask & 0x4000` is set (`Mesh_InitBatch`). `0` on a PS2 VIF batch,
+    /// where that byte is inside a float bound; the PS2 executable is unread, so
+    /// what a non-VIF PS2 batch's byte means there is not established.
+    pub depth_bias: u8,
+}
+
+/// A PSP batch's depth bias: the header byte at `+0x29`, or `1` when
+/// `pass_mask & 0x4000` is set (`Mesh_InitBatch`, `0x0890e8b4`).
+#[must_use]
+pub fn psp_depth_bias(pass_mask: u16, header_byte: u8) -> u8 {
+    if pass_mask & 0x4000 != 0 {
+        1
+    } else {
+        header_byte
+    }
 }
 
 /// GU primitive type for a triangle list.
@@ -1130,6 +1150,11 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             (vertices, (corner(0x18), corner(0x20)))
         };
 
+        let depth_bias = if is_vif_batch(vertex_type) {
+            0
+        } else {
+            psp_depth_bias(pass_mask, payload[at + 0x29])
+        };
         out.push(Batch {
             pass_mask,
             material_index: payload[at + 2],
@@ -1140,6 +1165,7 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             declared_vertex_count: u16_at(payload, at + 4),
             bounds,
             header_flags: flags,
+            depth_bias,
         });
 
         // `payload_size` covers the vertex data only.

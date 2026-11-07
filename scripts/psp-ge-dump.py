@@ -87,6 +87,10 @@ TEX_STATE_OPS = {
     0xDB: "alphatest",  # func bits 0..2, reference bits 8..15, mask bits 16..23
     0xDC: "stenciltest",  # func bits 0..2, reference bits 8..15, mask bits 16..23
     0xDD: "stencilop",  # fail bits 0..2, zfail 8..10, zpass 16..18
+    0x44: "zscale",  # VIEWPORTZSCALE: the depth range's half-width, sceGuDepthRange's (near - far) / 2
+    0x47: "zcenter",  # VIEWPORTZCENTER: (near + far) / 2
+    0xD6: "minz",  # MINZ: the depth clip floor
+    0xD7: "maxz",  # MAXZ
     0xDE: "ztest",  # function, 0 never .. 7 always
     0xE7: "zmask",  # bit 0 set = depth writes off
     0xE8: "pmsk1",  # colour write mask, RGB

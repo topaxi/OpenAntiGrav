@@ -66,6 +66,14 @@ struct Census {
     /// `(list, header_flags & 0x02) -> batches`, over the extra pass's
     /// batches: `pass_mask & 0x2000` inside a mesh whose own word has it.
     shine: BTreeMap<(u8, u8), usize>,
+    /// `depth_bias -> batches`, over every drawn batch.
+    bias: BTreeMap<u8, usize>,
+    /// `depth_bias -> batches`, over the PS2 VIF batches (`vex::is_vif_batch`),
+    /// whose header holds a float bound where the PSP's bias byte sits.
+    vif_bias: BTreeMap<u8, usize>,
+    /// `depth_bias -> batches`, over the batches whose `pass_mask & 0x4000` is
+    /// set, which `Mesh_InitBatch` forces to bias `1`.
+    forced_bias: BTreeMap<u8, usize>,
 }
 
 fn blobs(disc: &mut DiscImage, archive_name: &str) -> Vec<Vec<u8>> {
@@ -132,6 +140,13 @@ fn census(blobs: &[Vec<u8>]) -> Census {
                     continue;
                 };
                 for batch in &batches {
+                    *out.bias.entry(batch.depth_bias).or_default() += 1;
+                    if vex::is_vif_batch(batch.vertex_type) {
+                        *out.vif_bias.entry(batch.depth_bias).or_default() += 1;
+                    }
+                    if batch.pass_mask & 0x4000 != 0 {
+                        *out.forced_bias.entry(batch.depth_bias).or_default() += 1;
+                    }
                     if mesh_word & 0x2000 != 0 && batch.pass_mask & 0x2000 != 0 {
                         *out.shine
                             .entry((list, batch.header_flags & 0x02))
@@ -225,6 +240,29 @@ fn psp_pulses_cutout_batches_split_two_ways_and_the_strict_reference_hides_nothi
         BTreeMap::new(),
         "no batch loses its whole texture"
     );
+    assert_eq!(
+        c.bias,
+        BTreeMap::from([
+            (0, 62_033),
+            (1, 1_932),
+            (2, 1_856),
+            (3, 967),
+            (4, 317),
+            (5, 133),
+            (6, 197),
+            (7, 24),
+            (8, 4),
+            (9, 175),
+        ]),
+        "`batch + 0x29` is authored per batch, `0..=9`: the original shifts the batch's depth \
+         range by `6 * bias` (`mesh-draw.md`, \"The per-batch depth bias\")"
+    );
+    assert_eq!(
+        c.forced_bias,
+        BTreeMap::new(),
+        "no Pulse batch sets `pass_mask & 0x4000`, the bit `Mesh_InitBatch` turns into bias 1; \
+         `psp_depth_bias`'s own unit test covers the override"
+    );
 }
 
 /// **PSP Pure, a second title, and the discriminating case.** From a different
@@ -305,5 +343,10 @@ fn ps2_pulse_authors_the_same_three_patterns() {
         c.vanishing,
         BTreeMap::new(),
         "PS2 model textures live outside the .vex, so only the embedded ones are measured here"
+    );
+    assert_eq!(
+        c.vif_bias.keys().copied().collect::<Vec<_>>(),
+        vec![0],
+        "a PS2 VIF batch's header holds a float bound at `+0x29`, so no bias is read there"
     );
 }

@@ -219,6 +219,7 @@ mod tests {
             declared_vertex_count: 0,
             bounds: ([0.0; 3], [0.0; 3]),
             header_flags,
+            depth_bias: 0,
         }
     }
 
