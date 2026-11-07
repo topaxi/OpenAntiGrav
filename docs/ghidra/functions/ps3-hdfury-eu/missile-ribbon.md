@@ -48,7 +48,7 @@ the ELF (`+0x10` onward):
 | --- | ---: | ---: | --- |
 | `+0x10` width at birth | 0.5 | 0.08 | `FatLine_Update` writes `width = t * (w10 - w14) + w14` |
 | `+0x14` width at death | 0.0 | 0.3 | same |
-| `+0x18` lifetime, s | 0.3 | 2.8 | `t = life * (1 / lifetime)`, init stores the reciprocal at `this + 0x2c` |
+| `+0x18` lifetime, s | 0.3 | 2.8 | `t = life * (1 / lifetime)`, init stores the reciprocal at `this + 0x0c` and the width delta at `+0x08` |
 | `+0x1c` | 0.2 | 0.2 | passed to the line builder, becomes the vertex program's `c[211].x`, which multiplies `u` (a per-world-unit texture scale) |
 | `+0x20` | `ThickLine_Red.gtf` | `ThickLine_Red.gtf` | texture name |
 | `+0x24` chains | 1 | 3 | `FatLine_PushChains` lays one node per chain per call |
@@ -60,7 +60,8 @@ the ELF (`+0x10` onward):
 (Pool `+0x5c`: widths 0 and 2.0, life 1.2, 1 chain, 350 nodes, step 0.06,
 radius 0.6, ramp off. Pool `+0x74`, `smoke_trails_frame1_ALPHA`: widths 0.05 and
 1.5, life 0.7, 3 chains, 100 nodes, ramp off, radius 0.8, element class
-`0x002ac070`, not `FatLine`.)
+`0x002ac070`, a `FatLine` subclass with its own update: its vtable `0x00869e00`
+shares slots 0 and 2 (`0x002ab098`, `0x002ab458`) with the base.)
 
 So each Missile head gets **a stub** (`+0x50`: 0.3 s, one straight chain,
 tapering 0.5 to 0) and **a helix** (`+0x68`: 2.8 s, three chains 60 degrees apart
@@ -84,7 +85,7 @@ element.phase += phase step                        (after each chain)
 ```
 
 `rotate` is the Rodrigues rotation the vector code builds (`aa^T` rows, `cos`,
-`sin` from the polynomial at `0x00879c3d0..`), with `row2` the axis. `row2` is
+`sin` from the polynomial at `0x0079c3d0..`), with `row2` the axis. `row2` is
 the head's forward axis and `row1` its second basis row (HD's objects: row 1 points
 down on a level track, see rocket-trail.md). The sign of the `sin` term (the
 helix's handedness) is **not decided**: the scratch decode shows both terms and

@@ -1574,12 +1574,9 @@ pixels, mean RGB over them, 5th-95th percentile extent):
 
 | frame, box (x,y,w,h) | | lit px | mean RGB | centroid | extent w x h |
 | --- | --- | ---: | --- | --- | --- |
-| 2.87 s, the ribbon-only box 880,530,160,90 | original | 913 | (232,116,105) | (962,568) | 48 x 64 |
+| 2.87 s, the lower box 880,530,160,90 (the heads' particles are above it) | original | 913 | (232,116,105) | (962,568) | 48 x 64 |
 | | ours before | 127 | (217,106,126) | (957,533) | 41 x 8 |
 | | ours after | 458 | (237,125,120) | (948,570) | 78 x 76 |
-| 2.55 s, the ribbon-only box 880,540,160,70 | original | 3,818 | (241,128,122) | (975,571) | 107 x 59 |
-| | ours before | 1,988 | (233,105,112) | (910,577) | 71 x 58 |
-| | ours after | 1,682 | (237,129,130) | (910,580) | 89 x 61 |
 | 2.87 s, the whole effect, box 820,360,320,280 | original | 2,849 (2,350 red) | (233,136,126) | (976,505) | 126 x 228 |
 | | ours before | 2,276 (1,957 red) | (232,124,130) | (952,479) | 52 x 118 |
 | | ours after | 2,312 (1,652 red) | (239,159,153) | (955,490) | 89 x 184 |
@@ -1590,8 +1587,12 @@ pixels, mean RGB over them, 5th-95th percentile extent):
 | | ours before | 8,839 (2,149 red) | (252,223,224) | (987,587) | 152 x 88 |
 | | ours after | 8,777 (1,795 red) | (253,228,228) | (988,587) | 152 x 88 |
 
-Read with the frames: the ribbon is drawn and is the same kind of thing (thin red-orange helical bands,
-the colour of the lower, ribbon-only box within about 10 per channel of the original's); the whole-box
+Ribbon pixels of ours alone, the pixels that differ between before and after by 24 or more in a channel
+(`pair-before` against `pair-final`, box 700,300,520,420): 828 at 2.27 s, 8,841 at 2.55 s, 10,388 at 2.87 s
+(mean RGB (239,209,196), (220,181,162), (196,154,142); extent 52 x 40, 109 x 124, 101 x 158). That includes the
+ribbon's bloom, and the original has no ribbon-free twin frame, so the original's ribbon pixels are only the lit
+counts above. Read with the frames: the ribbon is drawn and is the same kind of thing (thin red-orange helical bands,
+the mean colour of the lower box within about 10 per channel of the original's); the whole-box
 metric does not improve everywhere because the head particles (out of scope here) are still whiter than the
 original's at 2.27 s and the ribbon adds light over them, so "red" falls where the ribbon turns a red pixel
 orange. The **differences**, named: ours' heads orbit wider (the ellipse `1.5` x `3.0` is Pulse's, as above),
