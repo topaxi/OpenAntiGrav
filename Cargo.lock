@@ -3619,6 +3619,7 @@ dependencies = [
  "oag-bytes",
  "oag-core",
  "oag-gameplay",
+ "oag-schema",
  "serde",
  "thiserror 2.0.21",
  "toml",

@@ -59,6 +59,93 @@ pub struct Header {
     /// The lap this file's ghost is, if it carries one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ghost: Option<GhostInfo>,
+    /// The launch request the race was built from, resolved: what a build needs to rebuild the
+    /// race without the menu. `None` in a file written before the table existed, and in a file
+    /// whose writer had no request to record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub setup: Option<Setup>,
+    /// Set when this file is a fork of another replay (ADR-0087, decision 9). Read, never yet
+    /// written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fork: Option<Fork>,
+}
+
+/// The schema kind of a replay header's `toml-schema` line.
+pub const SCHEMA_KIND: &str = "replay-header";
+/// The one major of the schema this build reads and writes.
+pub const SCHEMA_MAJOR: u32 = 1;
+
+/// The resolved launch request of a race: every input to building it that is not the disc, the
+/// seed or an [`oag_gameplay::InputSnapshot`].
+///
+/// Names and tokens, never a path: the source is whatever the reader has of the header's title.
+/// **The tick-zero hash is the check that this is enough** (ADR-0087, decision 7): a rebuild that
+/// lacks something disagrees at tick 0 and is refused by name. Plain data so the header stays
+/// text a person can read; the crate that builds races (`oag-raceplay`) owns the mapping to and
+/// from its own options.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Setup {
+    /// The race mode's token (`time_trial`, `single_race`, ...).
+    pub mode: String,
+    /// The speed class, spelled the way the disc spells it.
+    pub class: String,
+    /// The circuit's archive entry, or none for the title's own default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub track: Option<String>,
+    /// The player's team id, or none for the title's own default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team: Option<String>,
+    /// The player's alternate hull file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hull_variant: Option<String>,
+    /// The player's `PI_ModelSkin`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skin: Option<String>,
+    /// The team ids the opponents may fly, in the caller's order.
+    pub opponent_teams: Vec<String>,
+    /// The grid is filled although the mode would not.
+    pub opponents: bool,
+    /// The class has no controller, so the race fields no opponents.
+    pub no_driver_for_class: bool,
+    /// How many people fly the race, across every window (0 is one per view).
+    pub people: u8,
+    /// How many split-screen views the race is drawn in.
+    pub views: u8,
+    /// Laps the race ends after, over the mode's own table.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub laps_override: Option<u32>,
+    /// The weapons switch, over the mode's own answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weapons_override: Option<bool>,
+    /// The Eliminator kill count.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eliminator_kill_target: Option<u32>,
+    /// The Eliminator score target.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eliminator_score_target: Option<u32>,
+    /// The `Campaign=` value of a downloadable campaign's event.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub add_on_campaign: Option<String>,
+    /// A 2048 Zone race draws its own track model.
+    pub zone_model: bool,
+}
+
+/// What marks a replay as a fork of another (ADR-0087, decision 9): the tick the live pad first
+/// flew, and which recording it came from.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Fork {
+    /// The first tick the live pad flew.
+    pub tick: u64,
+    /// The tick the player picked TAKE OVER on, which the hold of at most a second follows.
+    pub offered_at: u64,
+    /// The slots a person took.
+    pub seats: Vec<u8>,
+    /// The parent's [`Header::build`], informational.
+    pub parent_build: String,
+    /// The parent's stored hash nearest before the tick, as `0x` and sixteen hex digits.
+    pub parent_hash: String,
 }
 
 /// Where a file's ghost lap sits in the recorded run.
@@ -98,6 +185,8 @@ impl Header {
             slots: vec![0],
             options: BTreeMap::new(),
             ghost: None,
+            setup: None,
+            fork: None,
         }
     }
 }
