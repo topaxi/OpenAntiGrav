@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega]
 updated: 2026-11-07
-summary: "HD's fly-by file per mode is wired (Time Trial, Speed Lap, Zone fly start_grid_ta); open: Head to Head's file is the maintainer's call, Zone's own circuits have no camera, and no mode's fly-by was watched on the original"
+summary: "File per mode wired (Time Trial, Speed Lap, Zone fly _ta). Open: Head to Head's file (maintainer), Zone circuits, a watched fly-by"
 ---
 
 # HD's fly-by file per mode
