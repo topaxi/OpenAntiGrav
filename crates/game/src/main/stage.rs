@@ -666,6 +666,8 @@ impl Stage {
         // fallback when the flag was not given.
         let difficulty = setup.difficulty;
         let (mode, seed) = (setup.mode, setup.seed);
+        // Photo mode's rewind starts a second race from this when it is first used.
+        let keeper_setup = oag_game::photo::SAVES.then(|| setup.clone());
         // Started on the web's load worker already, from a copy of the same
         // setup (`race::Loaded::started`).
         let mut race = match started {
@@ -710,9 +712,11 @@ impl Stage {
             seed,
             launch.to_table(),
         );
+        let keeper = keeper_setup.map(|setup| race::timeline::Keeper::new(setup, &race));
         Ok(Box::new(RaceStage {
             scene,
             race,
+            keeper,
             hud: overlay,
             scoreboard,
             countdown,

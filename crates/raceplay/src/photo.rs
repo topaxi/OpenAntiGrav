@@ -25,6 +25,8 @@
 use super::*;
 
 pub mod effects;
+pub mod rewind;
+pub mod shot;
 
 use effects::Effects;
 use finish_camera::Subject;
@@ -150,6 +152,33 @@ pub struct Photo {
     cuts: u32,
     /// The override that was in force when the mode was entered.
     restore: Option<CameraOverride>,
+    /// What the title's shot accumulates, when it does (`oag_title::photo::Accumulation`).
+    accumulation: Option<oag_title::photo::Accumulation>,
+    /// The eye moved across the lens for one frame of an accumulated depth of field.
+    shift: Option<LensShift>,
+}
+
+/// The eye moved by `(dx, dy)` in view space and aimed at the point `focus` ahead of where it
+/// was: one sample of the lens, so that the focus plane stays where it is and the rest of the
+/// picture smears about it (an accumulated depth of field).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LensShift {
+    /// Sideways, in world units.
+    pub dx: f32,
+    /// Up, in world units.
+    pub dy: f32,
+    /// The distance of the plane that stays sharp, in world units.
+    pub focus: f32,
+}
+
+impl LensShift {
+    /// `view` (world to camera, looking down `-Z`) for the shifted eye.
+    #[must_use]
+    pub fn apply(self, view: Mat4) -> Mat4 {
+        let aim = Vec3::new(-self.dx, -self.dy, -self.focus).normalize();
+        let turn = Quat::from_rotation_arc(aim, Vec3::NEG_Z);
+        Mat4::from_quat(turn) * Mat4::from_translation(Vec3::new(-self.dx, -self.dy, 0.0)) * view
+    }
 }
 
 impl Photo {
@@ -182,7 +211,34 @@ impl Photo {
             square_used: false,
             cuts: 0,
             restore,
+            accumulation: None,
+            shift: None,
         }
+    }
+
+    /// The mode on a title whose shot accumulates frames, with the race able to rewind or not:
+    /// the blur and rewind rows are on offer.
+    #[must_use]
+    pub fn offering(
+        mut self,
+        accumulation: Option<oag_title::photo::Accumulation>,
+        rewinds: bool,
+    ) -> Self {
+        self.accumulation = accumulation;
+        self.effects = self.effects.offering(accumulation.is_some(), rewinds);
+        self
+    }
+
+    /// What the title's shot accumulates.
+    #[must_use]
+    pub fn accumulation(&self) -> Option<oag_title::photo::Accumulation> {
+        self.accumulation
+    }
+
+    /// The lens sample the frame is drawn with, if an accumulated shot is under way.
+    #[must_use]
+    pub fn shift(&self) -> Option<LensShift> {
+        self.shift
     }
 
     /// The mode as it opens with SELECT and SQUARE already down: their release is not a tap.
@@ -584,6 +640,60 @@ impl Race {
         true
     }
 
+    /// Offers the blur and rewind rows to the mode that is open (`Photo::offering`).
+    pub fn photo_offer(
+        &mut self,
+        accumulation: Option<oag_title::photo::Accumulation>,
+        rewinds: bool,
+    ) {
+        let live = self.sim.world.tick;
+        if let Some(photo) = self.view.photo.take() {
+            let mut photo = photo.offering(accumulation, rewinds);
+            photo.effects_mut().set_live(live);
+            self.view.photo = Some(photo);
+        }
+    }
+
+    /// Moves the lens sample the next draw is made with; `None` is the camera as it is.
+    pub fn photo_set_shift(&mut self, shift: Option<LensShift>) {
+        if let Some(photo) = self.view.photo.as_mut() {
+            photo.shift = shift;
+        }
+    }
+
+    /// Imposes the mode's pose for the craft positions the race stands at now: after the race
+    /// has been moved to another tick.
+    pub fn photo_repose(&mut self) {
+        self.photo_pose();
+    }
+
+    /// Imposes `pose` as the camera, whatever the mode would put there: a ship blur holds the
+    /// camera at the pose of the tick the shot is taken at.
+    pub fn photo_hold(&mut self, pose: CameraOverride) {
+        if self.view.photo.is_some() {
+            self.view.camera_override = Some(pose);
+        }
+    }
+
+    /// The camera the mode puts at the tick the race stands at now.
+    #[must_use]
+    pub fn photo_camera(&self) -> Option<CameraOverride> {
+        let photo = self.view.photo.as_ref()?;
+        let slot = photo.subject();
+        let ship = &self.sim.world.ships[slot];
+        let craft = Subject {
+            slot,
+            position: ship.physics.body.position,
+            orientation: ship.physics.body.orientation,
+        };
+        let node = self
+            .view
+            .finish_camera
+            .as_ref()
+            .and_then(|director| director.node_eye_near(craft.position));
+        Some(photo.pose(&craft, node))
+    }
+
     /// Whether photo mode is open.
     #[must_use]
     pub fn photo(&self) -> Option<&Photo> {
@@ -634,7 +744,14 @@ impl Race {
     #[must_use]
     pub fn photo_fx(&self, near: f32, far: f32) -> Option<oag_post::photo_fx::Params> {
         let photo = self.view.photo.as_ref()?;
-        let params = photo.effects().params(near, far);
+        let mut params = photo.effects().params(near, far);
+        // An accumulated depth of field frame keeps half of the single-frame pass's blur: the
+        // other half is the lens sample it is drawn through (`shot`).
+        if photo.shift().is_some()
+            && let Some(dof) = params.dof.as_mut()
+        {
+            dof.aperture *= 0.5;
+        }
         params.active().then_some(params)
     }
 
@@ -647,22 +764,9 @@ impl Race {
 
     /// Imposes the mode's pose for this tick's craft positions.
     fn photo_pose(&mut self) {
-        let Some(photo) = self.view.photo.as_ref() else {
-            return;
-        };
-        let slot = photo.subject();
-        let ship = &self.sim.world.ships[slot];
-        let craft = Subject {
-            slot,
-            position: ship.physics.body.position,
-            orientation: ship.physics.body.orientation,
-        };
-        let node = self
-            .view
-            .finish_camera
-            .as_ref()
-            .and_then(|director| director.node_eye_near(craft.position));
-        self.view.camera_override = Some(photo.pose(&craft, node));
+        if self.view.photo.is_some() {
+            self.view.camera_override = self.photo_camera();
+        }
     }
 }
 

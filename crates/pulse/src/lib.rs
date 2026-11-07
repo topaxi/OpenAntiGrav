@@ -79,6 +79,7 @@ pub const TITLE: &Title = &Title {
     prompts: prompts::PROMPTS,
     profile: oag_title::profile::Profile::NAME_AND_TAG,
     photo: oag_title::photo::Strings::PULSE,
+    photo_shot: None,
     // The reset state `FUN_088418e0` enters (`docs/gameplay/leaving-the-track.md`).
     reset_enables: oag_title::recovery::ResetEnables::PULSE,
     // `FUN_089957c0` multiplies a voice by its group volume squared; the flyby's fade reads `fade ** 2`

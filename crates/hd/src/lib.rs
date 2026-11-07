@@ -181,6 +181,7 @@ pub const TITLE: &Title = &Title {
     prompts: prompts::PROMPTS,
     profile: oag_title::profile::Profile::NAME_ONLY,
     photo: oag_title::photo::Strings::HD,
+    photo_shot: Some(oag_title::photo::Accumulation::HD),
     // HD's own recovery is unread; Pulse's law.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
     // HD's authored mix owns the buses.

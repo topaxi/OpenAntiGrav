@@ -189,6 +189,9 @@ pub struct Title {
     pub profile: profile::Profile,
     /// Which of photo mode's words this title's disc already says. See [`photo::Strings`].
     pub photo: photo::Strings,
+    /// The frames its photo mode accumulates into a shot, or `None` where the original's shot is
+    /// the one frame on screen. See [`photo::Accumulation`].
+    pub photo_shot: Option<photo::Accumulation>,
     /// The plugin definition declaring what this release carries to race with:
     /// one `PI_Team` node per team, one `PI_Track` per circuit, one `PI_Music`
     /// per soundtrack track.
