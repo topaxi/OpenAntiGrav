@@ -39,6 +39,7 @@ fn every_fixed_name_still_parses_to_its_own_source() {
         "music_sources",
         "front_end_styles",
         "hud_styles",
+        "safe_areas",
         "teams",
         "titles",
         "craft_titles",

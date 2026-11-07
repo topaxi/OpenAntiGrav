@@ -1014,6 +1014,10 @@ impl Session {
                 oag_game::unlock::hud_skin_unlocked(skin, &self.records, shell.title)
             }),
         );
+        model.supply(
+            menu::ValueSource::SafeAreas,
+            &menu::safe_area_choices(shell.title),
+        );
         // Enumerated every time the menus open rather than kept from startup,
         // because a screen can be plugged in while the game is running and the
         // row should show it without a restart.

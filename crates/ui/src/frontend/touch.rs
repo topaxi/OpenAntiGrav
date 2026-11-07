@@ -198,6 +198,11 @@ pub struct TouchState {
     /// Which of `OptionsAudio`'s two sliders Up/Down last focused: `0` music,
     /// `1` SFX.
     pub audio_slider: usize,
+    /// `OptionsCamera`'s SCREEN SIZE control - see [`Frontend::set_screen_size`].
+    pub screen_size: Option<super::options2048::ScreenSize>,
+    /// Which of `OptionsCamera`'s two controls Up/Down last focused: `0` the camera list, `1`
+    /// SCREEN SIZE.
+    pub camera_row: usize,
     /// `OptionsControls`' `Motion Sensor` list. Drawn and cycled; not wired
     /// to any setting - see `frontend::options2048`'s module doc.
     pub controls_index: usize,

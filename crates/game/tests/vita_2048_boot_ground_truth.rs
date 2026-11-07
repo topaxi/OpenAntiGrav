@@ -983,6 +983,85 @@ fn options_camera_is_reached_directly_from_home_and_the_choice_cycles() {
     );
 }
 
+/// `OptionsCamera`'s second control, SCREEN SIZE: the shared slider on a title whose disc authors
+/// none. It reports nothing until moved, Down focuses it, Left steps it one slider step of two
+/// below the title's default 100, a tap inside its own rect steps it forward, and Square (or a tap on the
+/// hint under it) puts it back on 100. Dropping `Frontend::set_screen_size` leaves the
+/// control absent, so the first Left reports nothing.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn options_camera_carries_the_screen_size_control() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let area = loaded
+        .title
+        .hud_art
+        .safe_area
+        .expect("2048 offers the slider");
+    let mut frontend = loaded.frontend;
+    frontend.set_screen_size(area.value, None);
+    frontend.set_option_defaults(oag_game::settings::option_defaults());
+    drive_to_home(&mut frontend);
+    let mut input = Input::new();
+    for _ in 0..3 {
+        press_release(&mut frontend, &mut input, Button::Right);
+    }
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::OPTIONS_CAMERA));
+    assert_eq!(frontend.screen_size_choice(), None, "untouched so far");
+    // Left/Right still belong to the camera list until SCREEN SIZE is focused.
+    press_release(&mut frontend, &mut input, Button::Down);
+    press_release(&mut frontend, &mut input, Button::Left);
+    assert_eq!(
+        frontend.screen_size_choice(),
+        Some(98),
+        "one step of two under 100"
+    );
+    assert_eq!(frontend.screen_size_scale(), Some(0.98));
+    assert_eq!(
+        frontend.camera_choice(),
+        None,
+        "the camera list was not moved"
+    );
+    let hint = frontend
+        .panel_reset_rect()
+        .expect("SCREEN SIZE is off its default, so the hint is shown");
+    press_release(&mut frontend, &mut input, Button::Square);
+    assert_eq!(
+        frontend.screen_size_choice(),
+        Some(100),
+        "reset to the title's default"
+    );
+    assert_eq!(frontend.panel_reset_rect(), None, "nothing left to reset");
+    press_release(&mut frontend, &mut input, Button::Left);
+    press_release(&mut frontend, &mut input, Button::Left);
+    assert_eq!(frontend.screen_size_choice(), Some(96));
+    let click = |frontend: &mut oag_ui::frontend::Frontend, at: [f32; 4]| {
+        frontend.pointer(&oag_ui::pointer::Pointer {
+            at: Some((at[0] + 2.0, at[1] + 2.0)),
+            moved: true,
+            clicked: true,
+            ..oag_ui::pointer::Pointer::default()
+        });
+    };
+    click(&mut frontend, hint);
+    assert_eq!(
+        frontend.screen_size_choice(),
+        Some(100),
+        "the tap on the hint resets too"
+    );
+    press_release(&mut frontend, &mut input, Button::Left);
+    let widget = frontend.screen_size_rect().expect("the control has a rect");
+    click(&mut frontend, widget);
+    assert_eq!(
+        frontend.screen_size_choice(),
+        Some(100),
+        "a tap on the widget steps it forward"
+    );
+    press_release(&mut frontend, &mut input, Button::Circle);
+    assert!(frontend.machine().is(w2048::OPTIONS));
+}
+
 /// `OptionsPilot`'s list starts on its authored `FE_NORMAL` and reports a choice only once
 /// moved: one Right is `FE_SUPER` (2), the law this build runs; see
 /// `crate::main::session::frame` for how each index reaches `[controls] pilot_assist`.

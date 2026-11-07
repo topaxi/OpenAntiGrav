@@ -1313,6 +1313,13 @@ languages on its disc. See [the offered languages](../architecture/frontend-boot
 See [front-end menu definitions](fe-menu-definitions.md) and
 [the original's menus](../ui/menus-original.md).
 
+## Screen size
+
+`Skin.xml` and the eleven unlocalised files its `LoadXML` list names (`Options_Definition.xml` among them) author no
+`Safe Area Setting`, `Screen Size`, `OPT_SCREEN_SIZE` or `OPT_SAFE_AREA`, and `BOOT.BIN` carries no such string:
+**not found**. Pure takes the shared SCREEN SIZE row (default 100); see
+[hd-hud.md](hd-hud.md#screen-size-on-every-title). **Checked, differs** from HD.
+
 ## Music: recovered by name, and played
 
 Pure's front end and its races both have music now, and neither is found by

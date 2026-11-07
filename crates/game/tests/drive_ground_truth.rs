@@ -580,6 +580,124 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
     );
 }
 
+/// The SCREEN SIZE row, stepped the way a pad steps it, reaches the settings file and the menus'
+/// own picture: it opens on Pulse's 100, a step to 90 saves `[graphics] hud_safe_area`, and the
+/// reported row reads 90. Dropping the session's `graphics.hud_safe_area` arm leaves the file
+/// without the key.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_screen_size_row_saves_hud_safe_area() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive(
+        &image,
+        "screen-size",
+        "boot; select options; press cross; until page=options; \
+         select display; press cross; until page=display; \
+         set graphics.hud_safe_area=90; ticks 5; expect page=display",
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.stderr());
+    let value = |state: &Value| {
+        state["screen"]["rows"]
+            .as_array()
+            .and_then(|rows| {
+                rows.iter()
+                    .find(|row| row["setting"] == "graphics.hud_safe_area")
+            })
+            .map(|row| row["value"].as_str().unwrap_or_default().to_string())
+    };
+    let seen: Vec<String> = run.states.iter().filter_map(value).collect();
+    assert_eq!(
+        seen.first().map(String::as_str),
+        Some("100"),
+        "opens on Pulse's own default"
+    );
+    assert_eq!(
+        seen.last().map(String::as_str),
+        Some("90"),
+        "and ends where the pad left it"
+    );
+    let saved = std::fs::read_to_string(
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-screen-size/config/oag/settings.toml"),
+    )
+    .expect("the run saved its settings");
+    let saved: toml::Table = saved.parse().unwrap();
+    assert_eq!(
+        saved["graphics"]["hud_safe_area"].as_integer(),
+        Some(90),
+        "the step wrote the setting: {saved}"
+    );
+}
+
+/// The rightmost pixel of the HUD's cyan shield bar in the lower right of a frame, which is
+/// where the bar's end sits. Pulse's `speed` bar draws pure cyan there at every size.
+fn shield_bar_right_edge(path: &Path) -> u32 {
+    let file = std::fs::File::open(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let mut reader = png::Decoder::new(std::io::BufReader::new(file))
+        .read_info()
+        .expect("a PNG");
+    let mut pixels = vec![0; reader.output_buffer_size().expect("a buffer size")];
+    let info = reader.next_frame(&mut pixels).expect("a frame");
+    let channels = info.color_type.samples();
+    let (width, height) = (info.width as usize, info.height as usize);
+    let mut right = 0;
+    for y in height * 3 / 4..height {
+        for x in width * 11 / 20..width {
+            let at = (y * width + x) * channels;
+            let (r, g, b) = (pixels[at], pixels[at + 1], pixels[at + 2]);
+            if r < 60 && g > 200 && b > 200 {
+                right = right.max(x as u32);
+            }
+        }
+    }
+    right
+}
+
+/// A race parked behind the menus takes the SCREEN SIZE row the moment it resumes: the same race,
+/// paused, through OPTIONS, DISPLAY, back and resumed, draws its HUD pulled in from the screen's
+/// edge. Dropping the per-frame `Overlay::set_safe_area` leaves the resumed HUD at the scale the
+/// race loaded with.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_race_resumed_from_the_pause_menu_draws_its_hud_at_the_new_screen_size() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-screen-size-live");
+    let _ = std::fs::remove_dir_all(&shots);
+    std::fs::create_dir_all(&shots).expect("a screenshot directory");
+    let (before, after) = (shots.join("before.png"), shots.join("after.png"));
+    let run = drive(
+        &image,
+        "screen-size-live",
+        &format!(
+            "boot; select racebox; press cross; until page=race; select launch_race; press cross; \
+             until screen=picker; press cross; until screen.id=ship-select; press cross; \
+             until stage=race within 4000; ticks 300; screenshot {}; \
+             press start; ticks 10; press circle; until stage=menu within 300; ticks 20; \
+             select options; press cross; until page=options; \
+             select display; press cross; until page=display; \
+             set graphics.hud_safe_area=90; press circle; until page=options; \
+             press circle; until page=main; press circle; until stage=race within 300; \
+             ticks 30; screenshot {}",
+            before.display(),
+            after.display()
+        ),
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let (was, now) = (
+        shield_bar_right_edge(&before),
+        shield_bar_right_edge(&after),
+    );
+    assert!(
+        was > 0 && now + 30 < was,
+        "the shield bar's end moved in from {was} to {now}"
+    );
+}
+
 /// The MUSIC page's rows reach the settings file: the booted disc's own row
 /// saves a switch into `[audio] music_switches`, and turning it back on saves that too.
 #[test]

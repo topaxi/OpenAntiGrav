@@ -2497,7 +2497,8 @@ link to the slider rests on the value 96 matching on the same save, not on an ad
 
 Ours: `oag_game::render::inset` (one `Renderer::set_inset`, applied per draw in `render_with`,
 `MenuStage` and the headless menu-page capture), the scale from `HudArt::safe_area_scale`
-(`[graphics] hud_safe_area`, default 90 = the disc's), pointer hits moved back out in
+(`[graphics] hud_safe_area`, default 90 = the disc's, written by the SCREEN SIZE row on the DISPLAY page; the live
+Game Options screen is our `menu.toml`, the disc's `additional_definition.xml` screen is not drawn), pointer hits moved back out in
 `session::pointer::in_grid`. The `Flyer` cards (campaign cards) obey it too (`obeySafeZone="true"`
 on the widget); the scene `.vex` (`obeySafeZone="false"`) and the `.bik` (`ignoreSafeZoneFullscreen`)
 do not. Boot screens, loading and the end-of-race screens are **not** inset (unmeasured).
@@ -2508,5 +2509,6 @@ do not. Boot screens, loading and the end-of-race screens are **not** inset (unm
 8.09, with 1.0). Ship Select stat labels and the Track Select records table now draw at the authored size.
 
 Omega: **checked, differs**: Omega's original is 1:1 (`omega/menu-ship-select` theirs spans x 159..1760,
-as ours does) and authors no `Safe Area Setting` slider, so `safe_area` is `None` and nothing moves.
+as ours does) and authors no `Safe Area Setting` slider, so it takes the shared SCREEN SIZE row (default 100, nothing
+moves until it is) - see [hd-hud.md](hd-hud.md#screen-size-on-every-title).
 The row-text fix applies to Omega's picker by the same skin flag (HD's dialect), untested against a pair.

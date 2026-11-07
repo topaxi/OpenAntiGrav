@@ -39,6 +39,13 @@
 //! Assist` list on the same terms. **`OptionsControls`'s `Motion Sensor` list
 //! draws and cycles and reaches nothing** - this build has no motion-sensor axis.
 //!
+//! **`OptionsCamera` carries a second control, SCREEN SIZE**, below the list: the shared
+//! `Safe Area Setting` slider (`oag_title::hud::SafeArea`, 80 to 100 in steps of 2). 2048's disc
+//! authors no such option, so the widget is this build's, its rect **chosen** (under `CameraP1`'s
+//! own, clear of its reset hint and of the screen's tick button). Up and Down move between the two, Left/Right and a click step it,
+//! Square resets it to the title's default, and the composition root reads
+//! [`Frontend::screen_size_choice`] every tick and applies it to the front end at once.
+//!
 //! **The starting index is `CameraP1`'s own authored `default="OPT_CLOSE"`
 //! (index 0), which is also what [`oag_display::display::CameraView::default`]
 //! now is** - a fresh Pulse profile starts on `OPT_CLOSE` too (measured
@@ -87,8 +94,17 @@ pub struct OptionDefaults {
     pub sfx: u32,
 }
 
+/// 2048's SCREEN SIZE control on `OptionsCamera`: the slider's range and where it stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScreenSize {
+    range: oag_title::hud::SafeArea,
+    value: u8,
+    moved: bool,
+}
+
 /// Where a panel reset moves a control to.
 enum PanelReset {
+    ScreenSize(u8),
     Camera(u8),
     Pilot(u8),
     Music(u32),
@@ -123,6 +139,53 @@ impl Frontend {
         self.touch.sfx_choice
     }
 
+    /// Gives `OptionsCamera` its SCREEN SIZE control: the title's slider and the saved value
+    /// (`None`: the slider's own default).
+    pub fn set_screen_size(&mut self, range: oag_title::hud::SafeArea, saved: Option<u8>) {
+        self.touch.screen_size = Some(ScreenSize {
+            range,
+            value: range.snapped(saved),
+            moved: false,
+        });
+    }
+
+    /// The SCREEN SIZE control's percent, once the player has moved it. `None` until touched.
+    #[must_use]
+    pub fn screen_size_choice(&self) -> Option<u8> {
+        self.touch
+            .screen_size
+            .filter(|control| control.moved)
+            .map(|control| control.value)
+    }
+
+    /// [`Self::screen_size_choice`] as the scale the front end is drawn at.
+    #[must_use]
+    pub fn screen_size_scale(&self) -> Option<f32> {
+        self.touch
+            .screen_size
+            .filter(|control| control.moved)
+            .map(|control| control.range.scale(Some(control.value)))
+    }
+
+    /// Whether SCREEN SIZE, not the camera list, is `OptionsCamera`'s focused control.
+    fn screen_size_focused(&self, current: &str) -> bool {
+        current == w2048::OPTIONS_CAMERA
+            && self.touch.screen_size.is_some()
+            && self.touch.camera_row == 1
+    }
+
+    /// SCREEN SIZE's own rect, where a tap steps it. **Chosen**, the disc authors no such widget.
+    #[must_use]
+    pub fn screen_size_rect(&self) -> Option<[f32; 4]> {
+        self.touch.screen_size?;
+        let list = self
+            .screens
+            .by_name(w2048::OPTIONS_CAMERA)?
+            .touch_lists
+            .first()?;
+        Some([list.x, list.y + list.height + 38.0, list.width * 0.6, 30.0])
+    }
+
     /// Tells the settings panels what a fresh install holds, for their reset. Until it is
     /// called a panel has nothing to reset to and offers no reset.
     pub fn set_option_defaults(&mut self, defaults: OptionDefaults) {
@@ -134,6 +197,11 @@ impl Frontend {
     fn panel_reset_target(&self, current: &str) -> Option<PanelReset> {
         let defaults = self.touch.option_defaults?;
         match current {
+            w2048::OPTIONS_CAMERA if self.screen_size_focused(current) => {
+                let control = self.touch.screen_size?;
+                let default = control.range.snapped(None);
+                (control.value != default).then_some(PanelReset::ScreenSize(default))
+            }
             w2048::OPTIONS_CAMERA => {
                 let held = self.touch.camera_choice.unwrap_or(CAMERA_DEFAULT_INDEX);
                 (held != defaults.camera).then_some(PanelReset::Camera(defaults.camera))
@@ -158,6 +226,12 @@ impl Frontend {
     /// root then applies the way it applies any other move of the control.
     fn reset_panel(&mut self, current: &str) {
         match self.panel_reset_target(current) {
+            Some(PanelReset::ScreenSize(percent)) => {
+                if let Some(control) = &mut self.touch.screen_size {
+                    control.value = percent;
+                    control.moved = true;
+                }
+            }
             Some(PanelReset::Camera(index)) => self.touch.camera_choice = Some(index),
             Some(PanelReset::Pilot(index)) => self.touch.pilot_choice = Some(index),
             Some(PanelReset::Music(percent)) => self.touch.music_choice = Some(percent),
@@ -169,6 +243,9 @@ impl Frontend {
 
     /// The widget a panel's pointer targets are laid against: its list, else the focused slider.
     fn panel_widget_rect(&self, current: &str) -> Option<[f32; 4]> {
+        if self.screen_size_focused(current) {
+            return self.screen_size_rect();
+        }
         let screen = self.screens.by_name(current)?;
         screen
             .touch_lists
@@ -215,6 +292,15 @@ impl Frontend {
         if step != 0 {
             self.step_panel(current, step);
         }
+        if current == w2048::OPTIONS_CAMERA && self.touch.screen_size.is_some() {
+            if input.is_pressed(Button::Down) {
+                input.consume_press(Button::Down);
+                self.touch.camera_row = 1;
+            } else if input.is_pressed(Button::Up) {
+                input.consume_press(Button::Up);
+                self.touch.camera_row = 0;
+            }
+        }
         if current == w2048::OPTIONS_AUDIO {
             if input.is_pressed(Button::Down) {
                 input.consume_press(Button::Down);
@@ -239,6 +325,17 @@ impl Frontend {
     /// rect.
     fn step_panel(&mut self, current: &str, step: i32) {
         match current {
+            w2048::OPTIONS_CAMERA if self.screen_size_focused(current) => {
+                if let Some(control) = &mut self.touch.screen_size {
+                    let values: Vec<u8> = control.range.values().collect();
+                    let at = values.iter().position(|v| *v == control.value).unwrap_or(0);
+                    let next = (at as i32 + step).clamp(0, values.len() as i32 - 1) as usize;
+                    control.value = values[next];
+                    control.moved = true;
+                    self.notes
+                        .push(format!("OptionsCamera: SCREEN SIZE {}", control.value));
+                }
+            }
             w2048::OPTIONS_CAMERA => {
                 let len = CAMERA_ENTRIES.len() as i32;
                 let index = self.touch.camera_choice.unwrap_or(CAMERA_DEFAULT_INDEX) as i32;
@@ -299,6 +396,18 @@ impl Frontend {
             self.reset_panel(&current);
             return true;
         }
+        if current == w2048::OPTIONS_CAMERA
+            && self
+                .screen_size_rect()
+                .is_some_and(|rect| contains(rect, at))
+        {
+            self.touch.camera_row = 1;
+            self.step_panel(&current, 1);
+            return true;
+        }
+        if current == w2048::OPTIONS_CAMERA {
+            self.touch.camera_row = 0;
+        }
         let widget_rect = self.screens.by_name(&current).and_then(|screen| {
             screen
                 .touch_lists
@@ -335,6 +444,32 @@ impl Frontend {
                         out,
                     );
                 }
+                if let (Some(control), Some(rect)) =
+                    (self.touch.screen_size, self.screen_size_rect())
+                {
+                    let label = self
+                        .strings
+                        .get_or_fallback("OAG_DISPLAY_SCREEN_SIZE", "SCREEN SIZE")
+                        .to_string();
+                    self.draw_touch_slider(
+                        &TouchSlider {
+                            name: None,
+                            idstring: None,
+                            x: rect[0],
+                            y: rect[1],
+                            width: rect[2],
+                            height: rect[3],
+                            min: f32::from(control.range.min_percent),
+                            max: f32::from(control.range.max_percent),
+                            default: f32::from(control.range.default_percent),
+                        },
+                        &format!("{label} {}", control.value),
+                        u32::from(control.value),
+                        self.touch.camera_row == 1,
+                        cursor,
+                        out,
+                    );
+                }
             }
             w2048::OPTIONS_CONTROLS => {
                 if let Some(list) = screen.touch_lists.first() {
@@ -365,8 +500,14 @@ impl Frontend {
                     } else {
                         self.touch.sfx_choice.unwrap_or(100)
                     };
+                    let label = slider
+                        .idstring
+                        .as_deref()
+                        .map(|id| self.strings.get_or_id(id).to_string())
+                        .unwrap_or_default();
                     self.draw_touch_slider(
                         slider,
+                        &format!("{label} {value}%"),
                         value,
                         i == self.touch.audio_slider,
                         cursor,
@@ -439,6 +580,7 @@ impl Frontend {
     fn draw_touch_slider(
         &self,
         slider: &TouchSlider,
+        caption: &str,
         value: u32,
         focused: bool,
         cursor: [f32; 4],
@@ -467,11 +609,6 @@ impl Frontend {
                 self.global_colour("Grey2048")
             },
         });
-        let label = slider
-            .idstring
-            .as_deref()
-            .map(|id| self.strings.get_or_id(id).to_string())
-            .unwrap_or_default();
         out.push(Draw::Text {
             x: rect[0] + rect[2] * 0.5,
             y: rect[1] + rect[3] * 0.5 - 8.0,
@@ -479,7 +616,7 @@ impl Frontend {
             color: [1.0, 1.0, 1.0, 1.0],
             border: None,
             align: Align::Centre,
-            text: format!("{label} {value}%"),
+            text: caption.to_string(),
             wrap_width: Some(rect[2] - 4.0),
         });
     }

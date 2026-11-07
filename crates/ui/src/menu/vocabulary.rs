@@ -248,6 +248,11 @@ pub enum ValueSource {
     /// the reason [`Self::FrontEndStyles`] is; a title that lists none has the row dropped
     /// (`Definition::drop_unavailable_hud_style`).
     HudStyles,
+    /// The values of the title's `Safe Area Setting` slider (`oag_title::hud::SafeArea`), in
+    /// percent, lowest first: HD's own 80 to 100 in steps of 2, and the shared slider of the
+    /// titles whose disc authors none. Supplied rather than spelled so the row's range is the
+    /// title's data.
+    SafeAreas,
     /// The teams this source offers, from its own plugin definition and from
     /// any `crate::dlc` mounted behind it.
     ///
@@ -387,6 +392,7 @@ impl ValueSource {
             Self::MusicSources => "music_sources",
             Self::FrontEndStyles => "front_end_styles",
             Self::HudStyles => "hud_styles",
+            Self::SafeAreas => "safe_areas",
             Self::Teams => "teams",
             Self::Titles => "titles",
             Self::CraftTitles => "craft_titles",
@@ -421,6 +427,7 @@ impl ValueSource {
             "music_sources" => Some(Self::MusicSources),
             "front_end_styles" => Some(Self::FrontEndStyles),
             "hud_styles" => Some(Self::HudStyles),
+            "safe_areas" => Some(Self::SafeAreas),
             "teams" => Some(Self::Teams),
             "titles" => Some(Self::Titles),
             "craft_titles" => Some(Self::CraftTitles),

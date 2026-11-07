@@ -651,6 +651,18 @@ setting = "display.hud_style"
 values_from = "hud_styles"
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 
+# How much of the screen the front end and the HUD use: HD's own `Screen Size` slider
+# (`OPT_SCREEN_SIZE`, `additional_definition.xml`'s `Safe Area Setting`, 80 to 100 in steps of 2,
+# default 90) and, on a title whose disc authors none, the same range with a default of 100 so it
+# looks unchanged until moved (`oag_title::hud::SafeArea`). One value for every title
+# (`[graphics] hud_safe_area`), the values supplied from the booted title's data. Applies live.
+[[page.entry]]
+kind = "choice"
+label = "SCREEN SIZE"
+string_id = "OAG_DISPLAY_SCREEN_SIZE"
+setting = "graphics.hud_safe_area"
+values_from = "safe_areas"
+
 # Pulse's `Dynamic HUD` option (`Additional_Definition.xml`, a list of `FE_DEFAULT`,
 # `FE_CONCAVE`, `FE_FLAT` and `FE_OFF`, default `FE_DEFAULT`). `off` draws no HUD at all, the
 # song marquee included: a poke of the byte `FE_OFF` clears removed every element from a

@@ -649,8 +649,8 @@ pair of the 26 code-only keys; the other 25 are not read.
   `borderExtendPixels` and the halo closes about 43 % of the measured gap -
   see [hud-skins.md part D](hud-skins.md#d-what-was-built-2026-10-06-hud-crisp-lane).
   `[graphics] hud_scale` (default `sharp-bilinear`) is the other half, for the
-  raster HUDs. HD alone has a `Safe Area Setting` that draws the whole HUD at `percent / 100`
-  about the screen centre: `[graphics] hud_safe_area` (default 90, the disc's;
+  raster HUDs. HD alone authors a `Safe Area Setting`, which every title now offers as the SCREEN SIZE row: the whole HUD is drawn
+  at `percent / 100` about the screen centre, `[graphics] hud_safe_area` (default 90 on HD, the disc's, and 100 elsewhere;
   [hd-hud.md](../formats/hd-hud.md#the-whole-hud-is-drawn-at-the-safe-area-setting-hd-hud-leftovers-2026-10-21)).
 - **`TotalTime` overflows the right edge.** `align="left"` at `OffsetX="475"
   x="-75"` starts at 400, and a `HUD`-font time at scale 1.0 measures 92 px - 12 px

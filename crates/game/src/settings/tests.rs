@@ -254,6 +254,9 @@ fn a_display_key_that_is_not_a_table_leaves_the_file_untouched() {
 fn every_menu_seed_names_a_key_the_settings_file_has() {
     let mut settings = Settings::default();
     ensure_known_titles(&mut settings);
+    // An unset `hud_safe_area` is not written (the title's own default), so the key is looked
+    // for in a file that has one saved, as `language` is only present once picked.
+    settings.graphics.hud_safe_area = Some(100);
     let written = toml::to_string_pretty(&settings).expect("serialise");
     let table: toml::Table = written.parse().expect("parse");
 

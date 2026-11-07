@@ -56,6 +56,10 @@ pub(super) fn supply(
         &race_setup.weapon_choices(strings),
     );
     model.supply(
+        oag_ui::menu::ValueSource::SafeAreas,
+        &oag_ui::menu::safe_area_choices(title),
+    );
+    model.supply(
         oag_ui::menu::ValueSource::HudStyles,
         &oag_ui::menu::hud_style_choices(title, |skin| {
             let records = crate::records::load();
