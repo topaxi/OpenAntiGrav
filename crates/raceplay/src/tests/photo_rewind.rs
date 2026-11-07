@@ -5,10 +5,10 @@
 
 use super::reconcile_predict::fixture;
 use super::*;
+use crate::photo::LensShift;
 use crate::photo::effects::{Blur, Row};
 use crate::photo::rewind::Rewind;
 use crate::photo::shot::{Mover, Plan, Shot};
-use crate::photo::LensShift;
 use crate::timeline::Keeper;
 use oag_gameplay::PlayerInputs;
 use oag_replay::Header;
@@ -207,7 +207,9 @@ fn the_lens_samples_surround_the_centre_and_average_to_it() {
     for shift in &shifts[1..] {
         assert!((shift.dx.hypot(shift.dy) - radius).abs() < 1e-4);
     }
-    let mean = shifts.iter().fold((0.0, 0.0), |m, s| (m.0 + s.dx, m.1 + s.dy));
+    let mean = shifts
+        .iter()
+        .fold((0.0, 0.0), |m, s| (m.0 + s.dx, m.1 + s.dy));
     assert!(mean.0.abs() < 1e-3 && mean.1.abs() < 1e-3, "{mean:?}");
     assert!(
         shifts.iter().all(|s| s.focus == shifts[0].focus),
@@ -229,11 +231,17 @@ fn a_lens_sample_keeps_the_focus_plane_sharp() {
     };
     let moved = shift.apply(view);
     let at_focus = moved.transform_point3(Vec3::new(0.0, 0.0, -40.0));
-    assert!(at_focus.x.abs() < 1e-4 && at_focus.y.abs() < 1e-4, "{at_focus:?}");
+    assert!(
+        at_focus.x.abs() < 1e-4 && at_focus.y.abs() < 1e-4,
+        "{at_focus:?}"
+    );
     let near = moved.transform_point3(Vec3::new(0.0, 0.0, -10.0));
     assert!(near.x.abs() > 0.1 || near.y.abs() > 0.1, "{near:?}");
     let far = moved.transform_point3(Vec3::new(0.0, 0.0, -200.0));
-    assert!(far.x * near.x < 0.0 || far.y * near.y < 0.0, "near and far smear opposite ways");
+    assert!(
+        far.x * near.x < 0.0 || far.y * near.y < 0.0,
+        "near and far smear opposite ways"
+    );
 }
 
 /// Where the camera is, in world space.
@@ -277,7 +285,10 @@ fn the_eye_and_the_craft_through(kind: i32) -> Vec<(Vec3, Vec3, Vec3)> {
         }),
         &mut race,
     );
-    assert_eq!(race.sim.world.tick, LIVE, "the race is back at the shot's tick");
+    assert_eq!(
+        race.sim.world.tick, LIVE,
+        "the race is back at the shot's tick"
+    );
     seen
 }
 
@@ -290,7 +301,10 @@ fn a_ship_blur_holds_the_camera_and_a_track_blur_follows_the_craft() {
     type Seen = (Vec3, Vec3, Vec3);
     let spread = |points: &[Seen], pick: fn(&Seen) -> Vec3| {
         let first = pick(&points[0]);
-        points.iter().map(|p| pick(p).distance(first)).fold(0.0, f32::max)
+        points
+            .iter()
+            .map(|p| pick(p).distance(first))
+            .fold(0.0, f32::max)
     };
     let eyes = |p: &Seen| p.0;
     let crafts = |p: &Seen| p.1;
@@ -358,11 +372,19 @@ fn the_rewind_row_goes_back_to_the_start_and_forward_to_the_live_tick() {
     assert_eq!(effects.target_tick(), 100, "it opens on the live tick");
     effects.select(Row::Rewind);
     effects.adjust(-1);
-    assert_eq!(effects.target_tick(), 70, "left is back, half a second a push");
+    assert_eq!(
+        effects.target_tick(),
+        70,
+        "left is back, half a second a push"
+    );
     effects.adjust(-1);
     effects.adjust(-1);
     effects.adjust(-1);
-    assert_eq!(effects.target_tick(), 0, "it stops at the start of the race");
+    assert_eq!(
+        effects.target_tick(),
+        0,
+        "it stops at the start of the race"
+    );
     effects.adjust(1);
     assert_eq!(effects.target_tick(), 30);
     effects.adjust(50);

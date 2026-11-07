@@ -68,19 +68,16 @@ impl Plan {
     pub fn new(photo: &Photo, tick: u64, resimulates: bool) -> Option<Self> {
         let acc = photo.accumulation()?;
         let effects = photo.effects();
-        let blur = effects
-            .blur()
-            .filter(|_| resimulates)
-            .and_then(|kind| {
-                let scale = match kind {
-                    Blur::Track => 1.0,
-                    Blur::Ship => acc.ship_shutter,
-                };
-                let seconds = Accumulation::shutter_seconds(effects.shutter()) * scale;
-                let ticks = (seconds * TICKS_PER_SECOND)
-                    .min(Accumulation::LONGEST_SHUTTER * TICKS_PER_SECOND);
-                (ticks >= LEAST_SHUTTER_TICKS).then_some((kind, ticks))
-            });
+        let blur = effects.blur().filter(|_| resimulates).and_then(|kind| {
+            let scale = match kind {
+                Blur::Track => 1.0,
+                Blur::Ship => acc.ship_shutter,
+            };
+            let seconds = Accumulation::shutter_seconds(effects.shutter()) * scale;
+            let ticks =
+                (seconds * TICKS_PER_SECOND).min(Accumulation::LONGEST_SHUTTER * TICKS_PER_SECOND);
+            (ticks >= LEAST_SHUTTER_TICKS).then_some((kind, ticks))
+        });
         let aperture = effects.depth_of_field().map(|(aperture, focus)| {
             let distance = Edges::new(focus).distance;
             let height = 2.0 * (photo.fov().to_radians() * 0.5).tan();

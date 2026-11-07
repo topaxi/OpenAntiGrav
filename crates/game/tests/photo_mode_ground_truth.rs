@@ -295,7 +295,10 @@ fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &P
         // The control's log starts after the first tick it steps, so the state before it (the
         // rewind goes back to it) has nothing to be compared with.
         if let Some(control) = held.get(tick) {
-            assert_eq!(hash, control, "tick {tick} hashes differently after a rewind");
+            assert_eq!(
+                hash, control,
+                "tick {tick} hashes differently after a rewind"
+            );
             compared += 1;
         }
     }
@@ -324,7 +327,9 @@ fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &P
     // The first line after the mode is the live tick again, or the tick after it when the
     // report for the last frame of the mode and the first tick of the race share a line.
     assert!(
-        after.first().is_some_and(|tick| (live..=live + 1).contains(tick)),
+        after
+            .first()
+            .is_some_and(|tick| (live..=live + 1).contains(tick)),
         "leaving puts the race back at the tick it left: {:?}",
         &after[..after.len().min(4)]
     );
@@ -740,7 +745,11 @@ fn a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it() {
     );
     assert!(run.status.success(), "{}", run.stderr);
     let photos = the_photos(&run);
-    assert_eq!(photos.len(), 3, "a plain shot, a track blur and a ship blur: {photos:?}");
+    assert_eq!(
+        photos.len(),
+        3,
+        "a plain shot, a track blur and a ship blur: {photos:?}"
+    );
     let [plain, track, ship] = [0, 1, 2].map(|i| decode(&photos[i]));
     assert_eq!((plain.0, plain.1), (track.0, track.1));
     // Where the craft's hull sits in the close lens turned by `hold left 8`, and a stretch of
@@ -748,7 +757,8 @@ fn a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it() {
     // gradient along the way it moves.
     const HULL: (f32, f32, f32, f32) = (0.40, 0.68, 0.52, 0.78);
     const SCENERY: (f32, f32, f32, f32) = (0.0, 0.1, 0.3, 0.5);
-    let kept = |blurred: &(u32, u32, Vec<u8>), region| detail(blurred, region) / detail(&plain, region);
+    let kept =
+        |blurred: &(u32, u32, Vec<u8>), region| detail(blurred, region) / detail(&plain, region);
     println!(
         "detail kept, track blur: hull {:.2} scenery {:.2}; ship blur: hull {:.2} scenery {:.2}",
         kept(&track, HULL),

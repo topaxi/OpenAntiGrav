@@ -384,7 +384,12 @@ pub fn draw_list(
             color: SELECTED,
         });
         list.push(Draw::Fill {
-            rect: [left, top + 15.0, width * done as f32 / frames.max(1) as f32, 4.0],
+            rect: [
+                left,
+                top + 15.0,
+                width * done as f32 / frames.max(1) as f32,
+                4.0,
+            ],
             color: TEXT,
         });
         list.push(text(

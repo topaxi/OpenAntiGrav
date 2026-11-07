@@ -190,7 +190,12 @@ impl Race {
     /// `view` through the lens sample an accumulated depth of field frame is drawn with
     /// ([`crate::photo::LensShift`]), or `view` itself with none.
     fn lens_sampled(&self, view: Mat4) -> Mat4 {
-        match self.view.photo.as_ref().and_then(crate::photo::Photo::shift) {
+        match self
+            .view
+            .photo
+            .as_ref()
+            .and_then(crate::photo::Photo::shift)
+        {
             Some(shift) => shift.apply(view),
             None => view,
         }
@@ -219,7 +224,9 @@ impl Race {
         if let Some(view) = self.extra_view_unshaken() {
             return view;
         }
-        self.lens_sampled(self.view_between(self.tick_view_unshaken(), |previous| previous.unshaken))
+        self.lens_sampled(
+            self.view_between(self.tick_view_unshaken(), |previous| previous.unshaken),
+        )
     }
 
     /// [`Self::view_unshaken`] as this tick leaves it, never blended.

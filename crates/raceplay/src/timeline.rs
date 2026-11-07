@@ -421,11 +421,7 @@ impl Keeper {
     pub fn visit(&mut self, race: &Race) -> &mut Timeline {
         let tick = race.sim.world.tick;
         let timeline = self.timeline.get_or_insert_with(|| {
-            Timeline::over(
-                probe_of(&self.setup, race),
-                Arc::clone(&self.shared),
-                tick,
-            )
+            Timeline::over(probe_of(&self.setup, race), Arc::clone(&self.shared), tick)
         });
         timeline.visit(race);
         timeline
