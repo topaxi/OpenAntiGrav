@@ -343,8 +343,15 @@ impl GhostCapture {
         if let Some(path) = &self.race {
             let bytes =
                 std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
-            let replay = Replay::from_bytes(&bytes)
+            let read = Replay::read(&bytes)
                 .with_context(|| format!("reading the ghost in {}", path.display()))?;
+            if !read.schema_header {
+                log::debug!(
+                    "{} has no toml-schema header (an older file); loaded as it is",
+                    path.display()
+                );
+            }
+            let replay = read.replay;
             let lap = replay
                 .ghost
                 .with_context(|| format!("{} carries no ghost lap", path.display()))?;

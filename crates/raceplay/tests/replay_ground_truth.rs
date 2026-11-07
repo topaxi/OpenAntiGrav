@@ -404,8 +404,7 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
     );
     assert_eq!(race::Launch::from_table(&read.header.options), Ok(launch));
 
-    let source = source.display().to_string();
-    let rebuilt = race::rebuild(&read.header, &source).expect("rebuilds");
+    let rebuilt = race::rebuild(&read.header, &source.display().to_string()).expect("rebuilds");
     Verifier::new(&read, rebuilt.sim.state_hash()).unwrap_or_else(|d| {
         panic!(
             "{title} {}: the rebuild disagrees at tick zero: {d}",
@@ -415,10 +414,24 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
     assert_eq!(rebuilt.pilot_assist_level(), launch.pilot_assist);
     assert_eq!(rebuilt.control_scheme(), launch.scheme);
 
-    // The request is what rebuilds it: a header without it is refused by name before any load.
+    // The request is what rebuilds it: the same file with another mode in it is another race,
+    // refused at tick zero.
+    let other = if mode == oag_race::Mode::SingleRace {
+        oag_race::Mode::TimeTrial
+    } else {
+        oag_race::Mode::SingleRace
+    };
+    let mut swapped = read.clone();
+    swapped.header.setup.as_mut().expect("present").mode = other.name().to_string();
+    let rebuilt = race::rebuild(&swapped.header, &source.display().to_string()).expect("rebuilds");
+    let desync = Verifier::new(&swapped, rebuilt.sim.state_hash())
+        .expect_err("a request naming another mode is another race");
+    assert_eq!(desync.tick, 0);
+
+    // A header without it is refused by name before any load.
     let mut bare = read.header.clone();
     bare.setup = None;
-    let refused = race::rebuild(&bare, &source)
+    let refused = race::rebuild(&bare, &source.display().to_string())
         .err()
         .expect("no request, no race");
     assert!(format!("{refused:#}").contains("[setup]"), "{refused:#}");
@@ -460,7 +473,8 @@ fn mid_race_events(title: &str) {
         return;
     };
     let assist_at = oag_race::state::COUNTDOWN_TICKS + 60;
-    let give_at = oag_race::state::COUNTDOWN_TICKS + 200;
+    // On the grid, where the pickup slot is empty: a top-up only writes an empty one.
+    let give_at = 10;
     let ticks = oag_race::state::COUNTDOWN_TICKS + 420;
     assert!(
         race.pilot_assist_available(Level::Extreme),
@@ -472,7 +486,11 @@ fn mid_race_events(title: &str) {
             race.change_pilot_assist(Level::Extreme);
         }
         if tick == give_at {
-            assert!(race.give_weapon(0, oag_tables::weapons::Weapon::Rocket));
+            assert!(
+                race.give_weapon(0, oag_tables::weapons::Weapon::Rocket),
+                "{title}: the slot holds {:?}",
+                race.sim.world.ships[0].pickup.weapon
+            );
         }
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
@@ -483,8 +501,8 @@ fn mid_race_events(title: &str) {
     assert_eq!(
         replay.events,
         vec![
-            oag_replay::Event::new(assist_at, 0, oag_replay::Kind::PilotAssist, 2),
             oag_replay::Event::new(give_at, 0, oag_replay::Kind::Give, 0),
+            oag_replay::Event::new(assist_at, 0, oag_replay::Kind::PilotAssist, 2),
         ],
         "{title}: the changes are in the file, between the ticks they were made between"
     );

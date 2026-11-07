@@ -27,7 +27,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use log::warn;
+use log::{debug, warn};
 use oag_replay::{Header, Replay};
 
 use crate::records::Key;
@@ -103,8 +103,18 @@ pub fn load_from(path: &Path, key: &Key) -> Option<Replay> {
             return None;
         }
     };
-    let replay = match Replay::from_bytes(&bytes) {
-        Ok(replay) => replay,
+    let replay = match Replay::read(&bytes) {
+        Ok(read) => {
+            if !read.schema_header {
+                // Written before the header existed; nobody edits a machine-written chunk, so
+                // this is not worth a warning. The next write adds the line.
+                debug!(
+                    "ghost {} has no toml-schema header (an older file); loaded as it is",
+                    path.display()
+                );
+            }
+            read.replay
+        }
         Err(e) => {
             warn!("ignoring ghost {}: {e}", path.display());
             return None;
