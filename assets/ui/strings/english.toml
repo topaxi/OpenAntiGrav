@@ -574,3 +574,5 @@ OAG_REPLAY_SPEED = { text = "SPEED", human = false }
 OAG_REPLAY_SKIP = { text = "5 SEC", human = false }
 OAG_REPLAY_ENDED = { text = "END OF REPLAY", human = false }
 OAG_ENDRACE_WATCH_REPLAY = { text = "WATCH REPLAY", human = false }
+OAG_REPLAY_POSE_VIEW = { text = "POSE VIEW: THE CRAFT ARE WHERE THEY WERE RECORDED. NO HUD, WEAPONS OR EFFECTS", human = false }
+OAG_REPLAY_POSE_END = { text = "END OF THE POSE TRACK: IT HOLDS AT MOST AN HOUR", human = false }

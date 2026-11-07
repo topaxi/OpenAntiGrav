@@ -44,8 +44,14 @@ pub enum State {
     Ready,
     /// At the end of a recording that reproduced.
     Ended,
-    /// At the last tick the build reproduces, in a recording it does not match past there.
+    /// At the last tick the build reproduces, in a recording it does not match past there, with
+    /// no pose track to go on with.
     Stopped,
+    /// Past the last tick the build reproduces, playing the recorded poses of every craft: a
+    /// picture, with no HUD, weapons, pickups or effects (ADR-0087, decision 4).
+    PoseView,
+    /// The end of a pose track.
+    PoseEnded,
 }
 
 /// What a frame tick of the viewer did, for the caller's sound and screen.
@@ -173,10 +179,39 @@ impl Viewer {
             return State::Opening;
         };
         match self.timeline.pass() {
-            Pass::Desynced(_) | Pass::Refused(_) if self.at >= built => State::Stopped,
+            Pass::Desynced(_) | Pass::Refused(_) if self.at >= built => {
+                match self.pose_end(built) {
+                    Some(end) if self.at >= end => State::PoseEnded,
+                    Some(_) => State::PoseView,
+                    None => State::Stopped,
+                }
+            }
             Pass::Complete if self.at >= self.ticks() => State::Ended,
             _ => State::Ready,
         }
+    }
+
+    /// The last tick the pose track can show past `built`, when the build stopped matching and
+    /// the file has a track that reaches beyond what plays: `None` otherwise.
+    fn pose_end(&self, built: u64) -> Option<u64> {
+        let track = self.replay.pose_track.as_ref()?;
+        let end = track.last_tick().min(self.ticks());
+        (end > built).then_some(end)
+    }
+
+    /// Whether the pose track ends before the recording does (the track is capped at an hour):
+    /// its end is then named, not shown as the end of the replay.
+    #[must_use]
+    pub fn pose_track_is_short(&self) -> bool {
+        self.replay
+            .pose_track
+            .as_ref()
+            .is_some_and(|track| track.last_tick() < self.ticks())
+    }
+
+    /// Whether the playhead is in POSE VIEW or at the end of a pose track.
+    pub fn in_pose_view(&mut self) -> bool {
+        matches!(self.state(), State::PoseView | State::PoseEnded)
     }
 
     /// Plays or pauses; playing from the end plays from the start.
@@ -186,7 +221,10 @@ impl Viewer {
             return Moved::Still;
         }
         self.playing = true;
-        if matches!(self.state(), State::Ended | State::Stopped) {
+        if matches!(
+            self.state(),
+            State::Ended | State::Stopped | State::PoseEnded
+        ) {
             return self.seek(race, 0);
         }
         Moved::Still
@@ -234,10 +272,26 @@ impl Viewer {
             return false;
         };
         if self.at >= built.min(self.ticks()) {
+            // Past what agrees: the recorded poses, when the build stopped matching and the
+            // file has them.
+            if self.stops_matching()
+                && let Some(end) = self.pose_end(built)
+                && self.at < end
+            {
+                self.at += 1;
+                self.show_poses(race);
+                return true;
+            }
             return false;
         }
         self.advance(race);
         true
+    }
+
+    fn show_poses(&self, race: &mut Race) {
+        if let Some(track) = &self.replay.pose_track {
+            race.show_poses(track, self.at as f64);
+        }
     }
 
     fn advance(&mut self, race: &mut Race) {
@@ -258,7 +312,13 @@ impl Viewer {
         let Some(built) = self.timeline.prefix() else {
             return Moved::Still;
         };
-        let target = tick.min(built).min(self.ticks());
+        let reach = self
+            .pose_end(built)
+            .filter(|_| self.stops_matching())
+            .unwrap_or(built);
+        let wanted = tick.min(reach).min(self.ticks());
+        // The part that is state: to the last tick that agrees; the rest, if any, is pictures.
+        let target = wanted.min(built);
         let from = target.saturating_sub(PRE_ROLL);
         if self.timeline.seek(from).is_err() {
             return Moved::Still;
@@ -272,6 +332,10 @@ impl Viewer {
             drop(race.drain_cues());
             drop(race.drain_announcements());
             drop(race.drain_class_announcements());
+        }
+        if wanted > target {
+            self.at = wanted;
+            self.show_poses(race);
         }
         self.owed = 0;
         Moved::Seeked

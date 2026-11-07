@@ -141,6 +141,9 @@ pub(crate) struct Active {
     /// Whether the effects were stopped for a speed other than 1X: back at 1X they are rebuilt
     /// from the state, not started cold.
     muted: bool,
+    /// Whether the picture is the recorded poses: the race's HUD is not drawn (a pose track has
+    /// no readouts to feed it).
+    pub(crate) pose_view: bool,
     own: StringTable,
     english: StringTable,
 }
@@ -159,7 +162,9 @@ impl Active {
             speed: viewer.speed(),
             // The banner names the last second that agreed, the end of what can be played.
             mismatch: viewer.stops_matching().then_some(built).flatten(),
-            at_end: matches!(state, State::Ended | State::Stopped),
+            at_end: matches!(state, State::Ended | State::Stopped | State::PoseEnded),
+            pose_view: matches!(state, State::PoseView | State::PoseEnded),
+            track_short: viewer.pose_track_is_short(),
         }
     }
 
@@ -202,6 +207,7 @@ pub(crate) fn open_viewer(
         viewer: Box::new(viewer),
         stepping: false,
         muted: false,
+        pose_view: false,
         own: oag_ui::strings::project_table(language),
         english: oag_ui::strings::project_table(None),
     })
@@ -296,6 +302,8 @@ impl Session {
             State::Opening => "opening",
             State::Ended => "ended",
             State::Stopped => "stopped",
+            State::PoseView => "pose_view",
+            State::PoseEnded => "pose_ended",
             State::Ready if active.viewer.playing() => "playing",
             State::Ready => "paused",
         };
@@ -392,14 +400,17 @@ impl Session {
         if moved == Moved::Still {
             moved = viewer.update(&mut stage.race);
         }
-        active.stepping = viewer.playing() && viewer.state() == State::Ready;
+        let state = viewer.state();
+        active.stepping = viewer.playing() && state == State::Ready;
+        active.pose_view = matches!(state, State::PoseView | State::PoseEnded);
         let at = viewer.at();
         let normal = viewer.speed() == 16;
         match moved {
             // The race at its own speed sounds as a race does; at any other speed the effects
             // are muted, and back at 1X they are rebuilt (`oag_game::sound::viewer_step`).
             Moved::Stepped(ticks) => {
-                let normal = normal && ticks == 1;
+                // A pose track has no cues: its picture is silent.
+                let normal = normal && ticks == 1 && !active.pose_view;
                 oag_game::sound::viewer_step(
                     &mut self.audio,
                     &mut stage.race,
@@ -443,4 +454,11 @@ struct Asked {
     leave: bool,
     seek: Option<u64>,
     bar: Option<f32>,
+}
+
+impl Session {
+    /// Whether the race on screen is POSE VIEW, whose HUD is not drawn.
+    pub(crate) fn pose_view_shown(&self) -> bool {
+        self.viewer.as_ref().is_some_and(|active| active.pose_view)
+    }
 }

@@ -1,10 +1,10 @@
 # Replays: the REPLAYS page and the viewer
 
-**Status: built (stage 5 of [ADR-0087](../architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md)).**
+**Status: built, POSE VIEW included (stage 5 of [ADR-0087](../architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md)).**
 **Chosen, not measured**: nothing here is read off an original; the screens, the words and the
 controls are this project's own. The mechanism is [the replay timeline](../architecture/replay-timeline.md);
-the file is [the replay file](../formats/replay-file.md). **Open: POSE VIEW** (the viewer past the
-last second a build reproduces), which waits for the `POSE` chunk; see "What stops it" below.
+the file is [the replay file](../formats/replay-file.md). POSE VIEW, past the last
+second a build reproduces, plays the file's `POSE` chunk; see "What stops it" below.
 
 ## Recording
 
@@ -136,14 +136,30 @@ part at about 77 percent three seconds in).
 
 ## What stops it: a build mismatch
 
-The `Timeline`'s pass ends at the first stored hash that disagrees (`Pass::Desynced`). The viewer
-plays and seeks the agreeing part exactly, stops at its last second (`replay=stopped`) and draws a banner:
-**THIS REPLAY WAS RECORDED ON AN EARLIER VERSION AND STOPS MATCHING AT 0:25** and IT STOPS HERE:
-THIS VERSION CANNOT REBUILD THE REST. `replay_viewer_ground_truth` changes one tick of a recorded
-throttle, writes the file back, and watches it: the viewer reports `stopped` at `1500/1500`, the
-last agreeing hash. **POSE VIEW is not built**: with the `POSE` chunk the playhead would go on
-past that second with the hulls at their recorded poses and no HUD (decision 4); with a file
-that has none, which is every file today, it stops there, which is what this build does.
+The `Timeline`'s pass ends at the first stored hash that disagrees (`Pass::Desynced`; a recorded
+event of a kind a later build wrote, `Pass::Refused`, is the same to the player). The viewer
+plays and seeks the agreeing part exactly and draws a banner: **THIS REPLAY WAS RECORDED ON AN
+EARLIER VERSION AND STOPS MATCHING AT 0:25**. Then:
+
+- **With a pose track** (`Replay::pose_track`, every file this build writes) the playhead goes on in
+  **POSE VIEW** (`replay=pose_view`; the banner's second line says so): every craft is put at its
+  recorded pose for the tick (`Race::show_poses`: the positions are written over the race on
+  screen's state, the roll and lean are zero because the pose has them folded in, the velocity is
+  zero, the chase camera follows, and no tick of the simulation runs), the HUD is not drawn, and
+  nothing sounds. A pose track has no weapons, pickups or effects, so none are shown. A seek past
+  the last agreeing second restores the last agreeing state and then places the poses. The
+  picture is not a verified state: it can never start a take-over (decision 9).
+- **At the end of the track** (`replay=pose_ended`) it holds. The track is capped at an hour
+  (216,000 ticks): when the recording is longer, the end is **named** (END OF THE POSE TRACK: IT
+  HOLDS AT MOST AN HOUR), not shown as the end of the replay, so the hulls do not freeze silently.
+- **Without a pose track** (a file written before the chunk) it stops at the last agreeing second
+  (`replay=stopped`, IT STOPS HERE: THIS VERSION CANNOT REBUILD THE REST).
+
+`replay_viewer_ground_truth` changes one tick of a recorded throttle, writes the file back and
+watches it: `pose_view` begins at `1500/.../1500`, runs to `pose_ended` at the end of the recording
+(frames read: the banner, the craft moving with the camera on it, no HUD). The fixture tests are
+`tests::viewer::past_the_last_agreeing_second_a_pose_track_plays_in_pose_view` (every craft at its
+recorded pose at the end and after a seek) and `..._stops_at_the_last_agreeing_second` (no track).
 
 ## The end-of-race row
 
@@ -166,7 +182,6 @@ Omega's light backdrop needed the band behind the detail lines; 2048's value col
 
 ## Open
 
-- **POSE VIEW** (decision 4) waits for the `POSE` chunk.
 - **Split screen**: the craft L and R cycle, one view per window.
 - **The Steam Deck** (ADR-0087 decision 3) is still unmeasured; the opening pass's wall time on this desktop is in the timeline page.
 - **A modded race and a network race record nothing** (decision 7).

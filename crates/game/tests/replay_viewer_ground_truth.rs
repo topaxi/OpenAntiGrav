@@ -8,7 +8,8 @@
 //!   were before the viewer opened (a watched race is not a record, a ghost or a replay).
 //! - **A mismatch is shown**: one tick of the recorded input is changed and the file written
 //!   back, so the first stored hash after it disagrees. The viewer plays the part that agrees,
-//!   stops at its last second (`replay=stopped`), and the banner is on screen.
+//!   goes on in POSE VIEW on the recorded poses (`replay=pose_view`, then `pose_ended`), and the
+//!   banner is on screen.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs a disc image.
 //!
@@ -110,7 +111,7 @@ fn collect(dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
 }
 
 fn pulse() -> Option<PathBuf> {
-    oag_testdata::image("pulse-psp-eu.chd")
+    oag_testdata::image("pulse-psp-usa.chd")
 }
 
 const TO_THE_RACE: &str = "boot; select racebox; press cross; until page=race; \
@@ -124,7 +125,7 @@ fn text<'a>(state: &'a Value, key: &str) -> Option<&'a str> {
 }
 
 #[test]
-#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
 fn a_recorded_race_is_watched_and_a_mismatch_is_shown() {
     let Some(image) = pulse() else {
         return;
@@ -188,27 +189,41 @@ fn a_recorded_race_is_watched_and_a_mismatch_is_shown() {
         &format!(
             "{TO_THE_LIST} ticks 30; screenshot DIR/shots/list.png; select watch_replay; \
              press cross; until replay=playing within 4000; ticks 60; screenshot DIR/shots/playing.png; \
-             until replay=stopped within 4000; ticks 10; screenshot DIR/shots/banner.png; \
+             until replay=pose_view within 4000; ticks 30; screenshot DIR/shots/pose-view.png; \
+             until replay=pose_ended within 4000; ticks 10; screenshot DIR/shots/pose-end.png; \
              press left; ticks 5; screenshot DIR/shots/seek-back.png; quit"
         ),
         &[],
     );
     assert!(status.success());
-    let stopped = states
+    // The build stops matching at tick 1500: the viewer plays what agrees to there, then the
+    // recorded poses to the end of the recording (the track is the whole run's).
+    let first = states
         .iter()
-        .find(|state| text(state, "replay") == Some("stopped"))
-        .expect("the viewer stopped where the build stops matching");
-    let at = text(stopped, "replay_at").expect("where");
-    let parts: Vec<u64> = at.split('/').filter_map(|part| part.parse().ok()).collect();
-    assert_eq!(parts.len(), 3, "{at}");
+        .find(|state| text(state, "replay") == Some("pose_view"))
+        .expect("the viewer went on past the last agreeing second in POSE VIEW");
+    let at: Vec<u64> = text(first, "replay_at")
+        .expect("where")
+        .split('/')
+        .filter_map(|part| part.parse().ok())
+        .collect();
+    assert_eq!(at.len(), 3);
     assert_eq!(
-        parts[0], parts[2],
-        "it stopped at the end of what is built: {at}"
+        at[2], 1_500,
+        "the last stored hash before tick {tick} agrees"
     );
-    assert_eq!(
-        parts[2], 1_500,
-        "the last stored hash before tick {tick} agrees: {at}"
-    );
+    assert!(at[0] >= at[2], "pose view begins where what agrees ends");
+    let last = states
+        .iter()
+        .filter(|state| text(state, "replay") == Some("pose_ended"))
+        .next_back()
+        .expect("and stops at the end of the pose track");
+    let end: Vec<u64> = text(last, "replay_at")
+        .expect("where")
+        .split('/')
+        .filter_map(|part| part.parse().ok())
+        .collect();
+    assert_eq!(end[0], end[1], "the track runs to the end of the recording");
 
     // 4. Watching changed nothing it must not.
     assert_eq!(
@@ -225,7 +240,7 @@ fn a_recorded_race_is_watched_and_a_mismatch_is_shown() {
 
 /// A race a `--race` run builds records nothing unless it asks (decision 1).
 #[test]
-#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
 fn a_race_a_capture_builds_leaves_no_replay() {
     let Some(image) = pulse() else {
         return;
@@ -268,7 +283,7 @@ fn a_race_a_capture_builds_leaves_no_replay() {
 /// A recording whose rebuild is not the recorded race is refused by name, in the list, and never
 /// played wrong: the tick-zero hash is the judge (decision 7).
 #[test]
-#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
 fn a_recording_this_build_cannot_rebuild_is_refused_by_name() {
     let Some(image) = pulse() else {
         return;

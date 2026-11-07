@@ -41,8 +41,7 @@ ADR and are not open.
 - **Stage 5 landed** ([the replay page](../../docs/ui/replays.md)): every race the session hands over is recorded to `auto/`
   (a 20-file, 32 MiB ring), the REPLAYS page (WATCH, KEEP, DELETE), the viewer over a `Timeline` with a bar showing the built
   prefix, the mismatch banner, `Audio::rebuild_race_sfx`, the 60-tick pre-roll, WATCH REPLAY on the Pulse end-of-race list, and
-  `[replay] record`. **Open: POSE VIEW**, the viewer past the last agreeing second, waits for the `POSE` chunk (stage 4); a file
-  without one stops there. Also open: split-screen craft cycling in the viewer, and the end-of-race row on HD, 2048, Pure and Omega
+  `[replay] record`. POSE VIEW (the viewer past the last agreeing second, on the `POSE` chunk, named end at the one-hour cap) is built. Open: split-screen craft cycling in the viewer, and the end-of-race row on HD, 2048, Pure and Omega
   (their dialects author no such row). Found on the way: a seed above `i64::MAX` made a header unreadable (about half of all
   recordings, ghosts included); a front-end race needs the original AI's request in `[options]`; `follow_devices` is now the
   `controller` event; a DLC pack mounted on the machine fields other hulls, so a rebuild mounts the reader's own.

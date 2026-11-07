@@ -198,19 +198,13 @@ fn pause_and_speed() {
     assert_eq!(viewer.at(), 0);
 }
 
-/// One input changed late in the run: the first stored hash past it disagrees, the viewer stops at
-/// the last second that agreed, and says what stopped it. Nothing past it can be sought to.
+/// One input changed late in the run: the first stored hash past it disagrees. With no pose track
+/// the viewer plays the part that agrees, stops at its last second, and says what stopped it;
+/// nothing past it can be sought to.
 #[test]
 fn a_recording_this_build_does_not_reproduce_stops_at_the_last_agreeing_second() {
-    let (mut replay, _) = recording(TICKS);
-    // The fixture's craft does not answer its stick, so the run is changed by what it is handed:
-    // a weapon the recorded run never had, between ticks 329 and 330.
-    replay.events.push(oag_replay::event::Event {
-        tick: 330,
-        seat: 0,
-        kind: oag_replay::event::Kind::Give.code(),
-        value: 0,
-    });
+    let mut replay = perturbed();
+    replay.pose_track = None;
     let (mut viewer, mut race) = open(replay);
     let Pass::Desynced(desync) = pass_ended(&mut viewer) else {
         panic!("the perturbed input must desync");
@@ -223,6 +217,58 @@ fn a_recording_this_build_does_not_reproduce_stops_at_the_last_agreeing_second()
     assert_eq!(viewer.state(), State::Stopped);
     viewer.seek(&mut race, 399);
     assert_eq!(viewer.at(), 300, "a seek is held inside what agrees");
+}
+
+fn perturbed() -> Replay {
+    let (mut replay, _) = recording(TICKS);
+    // The fixture's craft does not answer its stick, so the run is changed by what it is handed:
+    // a weapon the recorded run never had, between ticks 329 and 330.
+    replay.events.push(oag_replay::event::Event {
+        tick: 330,
+        seat: 0,
+        kind: oag_replay::event::Kind::Give.code(),
+        value: 0,
+    });
+    replay
+}
+
+/// With a pose track the playhead goes on past the last agreeing second in POSE VIEW: every
+/// craft stands where it was recorded, to the end of the track, and a seek there lands on a pose.
+#[test]
+fn past_the_last_agreeing_second_a_pose_track_plays_in_pose_view() {
+    let replay = perturbed();
+    let track = replay
+        .pose_track
+        .clone()
+        .expect("a recording carries its poses");
+    let (mut viewer, mut race) = open(replay);
+    assert!(matches!(pass_ended(&mut viewer), Pass::Desynced(_)));
+    while viewer.update(&mut race) != Moved::Still {}
+    assert_eq!(
+        viewer.at(),
+        TICKS,
+        "the track runs to the end of the recording"
+    );
+    assert_eq!(viewer.state(), State::PoseEnded);
+    assert!(!viewer.pose_track_is_short());
+    let slots = usize::from(race.ship_count());
+    for slot in 0..slots {
+        let shown = race.craft_pose(slot);
+        let recorded = track.pose(slot, TICKS as f64).expect("a pose");
+        assert!(
+            (shown.position - recorded.position).length() < 1e-3,
+            "slot {slot} stands where it was recorded"
+        );
+    }
+    // Back into what agrees, and out again by a seek.
+    viewer.seek(&mut race, 100);
+    assert_eq!(viewer.state(), State::Ready);
+    viewer.seek(&mut race, 350);
+    assert_eq!(viewer.at(), 350);
+    assert_eq!(viewer.state(), State::PoseView);
+    let shown = race.craft_pose(0);
+    let recorded = track.pose(0, 350.0).expect("a pose");
+    assert!((shown.position - recorded.position).length() < 1e-3);
 }
 
 /// While the first keyframe is not in, the viewer holds the grid and moves nothing.

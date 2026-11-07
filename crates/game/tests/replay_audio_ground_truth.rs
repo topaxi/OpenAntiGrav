@@ -40,7 +40,7 @@ const WINDOW: u64 = 64;
 const RECORDED: u64 = AT + 300;
 
 fn source() -> Option<PathBuf> {
-    oag_testdata::image("pulse-psp-eu.chd")
+    oag_testdata::image("pulse-psp-usa.chd")
 }
 
 fn options(source: &std::path::Path) -> race::Options {
@@ -341,7 +341,7 @@ fn shape_correlation(a: &[f32], b: &[f32]) -> f32 {
 }
 
 #[test]
-#[ignore = "needs data/images/pulse-psp-eu.chd"]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
 fn a_seek_sounds_like_playing_on_to_it() {
     let Some(source) = source() else {
         return;

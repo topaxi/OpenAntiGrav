@@ -19,6 +19,8 @@ pub mod strings {
     pub const SPEED: &str = "OAG_REPLAY_SPEED";
     pub const SKIP: &str = "OAG_REPLAY_SKIP";
     pub const ENDED: &str = "OAG_REPLAY_ENDED";
+    pub const POSE_VIEW: &str = "OAG_REPLAY_POSE_VIEW";
+    pub const POSE_END: &str = "OAG_REPLAY_POSE_END";
 }
 
 /// What can be clicked, in the order the chips are drawn, and the bar.
@@ -133,6 +135,11 @@ pub struct View {
     pub mismatch: Option<u64>,
     /// The playhead has reached the end of what can be played.
     pub at_end: bool,
+    /// The playhead is past what the build reproduces, in the recorded poses.
+    pub pose_view: bool,
+    /// The pose track ends before the recording does: its end is named, not shown as the end
+    /// of the replay.
+    pub track_short: bool,
 }
 
 /// The speed as the chip says it: `1X`, `0.5X`.
@@ -261,13 +268,15 @@ pub fn draw_list(
             say(strings::MISMATCH).replace("%s", &clock(stops)),
             Align::Centre,
         ));
-        if view.at_end {
-            list.push(text(
-                grid.0 / 2.0,
-                top + 3.0 + LINE,
-                say(strings::STOPPED),
-                Align::Centre,
-            ));
+        let line = if view.pose_view && view.at_end && view.track_short {
+            Some(strings::POSE_END)
+        } else if view.pose_view {
+            Some(strings::POSE_VIEW)
+        } else {
+            view.at_end.then_some(strings::STOPPED)
+        };
+        if let Some(id) = line {
+            list.push(text(grid.0 / 2.0, top + 3.0 + LINE, say(id), Align::Centre));
         }
     } else if view.at_end {
         list.push(text(

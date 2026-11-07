@@ -15,6 +15,8 @@ fn view() -> View {
         speed: 16,
         mismatch: None,
         at_end: false,
+        pose_view: false,
+        track_short: false,
     }
 }
 
@@ -132,4 +134,25 @@ fn the_clock_and_the_speeds() {
     assert_eq!(clock(5_400), "1:30");
     assert_eq!(clock(60 * 600), "10:00");
     assert_eq!([8, 16, 32, 64].map(speed_label), ["0.5X", "1X", "2X", "4X"]);
+}
+
+#[test]
+fn past_the_last_agreeing_second_the_banner_says_pose_view_and_names_a_short_track() {
+    let mut view = view();
+    view.mismatch = Some(5_400);
+    view.pose_view = true;
+    let words = texts(&draw_list(&view, GRID, &say, ""));
+    assert!(
+        words.contains(&"OAG_REPLAY_POSE_VIEW".to_string()),
+        "{words:?}"
+    );
+    assert!(!words.contains(&"OAG_REPLAY_STOPPED".to_string()));
+    view.at_end = true;
+    assert!(texts(&draw_list(&view, GRID, &say, "")).contains(&"OAG_REPLAY_POSE_VIEW".to_string()));
+    view.track_short = true;
+    let words = texts(&draw_list(&view, GRID, &say, ""));
+    assert!(
+        words.contains(&"OAG_REPLAY_POSE_END".to_string()),
+        "{words:?}"
+    );
 }
