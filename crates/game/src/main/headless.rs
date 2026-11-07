@@ -693,6 +693,7 @@ pub(crate) fn run_race(
                     difficulty: loaded.setup.difficulty,
                     autopilot: cli.driver.autopilot,
                     pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
+                    original_ai: None,
                 }
                 .to_table();
                 (path, header)

@@ -685,6 +685,7 @@ impl Stage {
             difficulty,
             autopilot,
             pilot_assist: settings.controls.pilot_assist,
+            original_ai: None,
         };
         race.apply_launch(&launch);
         if autopilot {
@@ -757,6 +758,7 @@ impl Stage {
             earned_medal: None,
             replay_header,
             auto_replay: false,
+            watching: false,
         }))
     }
 }

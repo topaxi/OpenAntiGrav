@@ -38,6 +38,8 @@ pub mod words {
         "RECORDING IS OFF: [REPLAY] RECORD IN THE SETTINGS FILE",
     );
     /// The detail line labels.
+    pub const CIRCUIT: (&str, &str) = ("OAG_REPLAYS_CIRCUIT", "CIRCUIT");
+    /// See [`CIRCUIT`].
     pub const MODE: (&str, &str) = ("OAG_REPLAYS_MODE", "RACE");
     /// See [`MODE`].
     pub const FINISH: (&str, &str) = ("OAG_REPLAYS_FINISH", "FINISH");
@@ -74,11 +76,20 @@ pub mod words {
 /// Longest value the page draws before it cuts with `...`.
 const VALUE_CHARS: usize = 22;
 
+/// The REPLAY row's value is drawn in the row's own face, which is wider than the detail
+/// lines': a longer label runs off the screen on Pulse.
+const ROW_CHARS: usize = 19;
+
 fn fit(text: &str) -> String {
-    if text.chars().count() <= VALUE_CHARS {
+    fit_to(text, VALUE_CHARS)
+}
+
+fn fit_to(text: &str, width: usize) -> String {
+    let text = text.trim();
+    if text.chars().count() <= width {
         return text.to_string();
     }
-    let keep: String = text.chars().take(VALUE_CHARS - 3).collect();
+    let keep: String = text.chars().take(width - 3).collect();
     format!("{keep}...")
 }
 
@@ -116,13 +127,18 @@ impl Context<'_> {
 
     fn circuit_name(&self, header: &oag_replay::Header) -> String {
         let mode = oag_race::Mode::from_name(&header.mode).unwrap_or_default();
-        (self.circuit)(mode, &header.track).unwrap_or_else(|| {
+        // The setup spells the entry as the disc does; the key's copy is lower case.
+        let entry = header
+            .setup
+            .as_ref()
+            .and_then(|setup| setup.track.as_deref())
+            .unwrap_or(&header.track);
+        (self.circuit)(mode, entry).unwrap_or_else(|| {
             // The entry's own name when the source lists no such circuit.
-            header
-                .track
+            entry
                 .rsplit(['\\', '/'])
                 .nth(1)
-                .unwrap_or(&header.track)
+                .unwrap_or(entry)
                 .to_string()
         })
     }
@@ -164,22 +180,18 @@ fn unusable(entry: &Entry, cx: &Context<'_>) -> Option<String> {
     None
 }
 
-/// The REPLAY row's value for `entry`: when it was recorded and where, `*` first for a kept one.
+/// The REPLAY row's value for `entry`: when it was recorded, `*` first for a kept one. The
+/// circuit is the first detail line under the rows: the row's value is too narrow for both.
 #[must_use]
 pub fn choice(entry: &Entry, cx: &Context<'_>) -> Choice {
-    let (y, month, day, hour, minute) = civil(entry.unix);
-    let _ = y;
+    let (_, month, day, hour, minute) = civil(entry.unix);
     let when = format!("{month:02}-{day:02} {hour:02}:{minute:02}");
-    let what = match &entry.head {
-        Head::Read(header) => cx.circuit_name(header).to_uppercase(),
-        Head::Newer | Head::Damaged => String::new(),
-    };
     let saved = if entry.folder == Folder::Saved {
         "*"
     } else {
         ""
     };
-    let label = fit(&format!("{saved}{when} {what}").trim().to_string());
+    let label = fit_to(&format!("{saved}{when}"), ROW_CHARS);
     let choice = Choice::labelled(entry.key(), label);
     match unusable(entry, cx) {
         Some(why) => choice.unusable(why),
@@ -245,6 +257,10 @@ pub fn lines(entry: &Entry, cx: &Context<'_>) -> Vec<(String, String)> {
     };
     let ticks = |ticks: u64| oag_hud::format_lap_time(ticks, oag_hud::Precision::Tenths);
     let mut out = Vec::new();
+    out.push((
+        cx.say(words::CIRCUIT),
+        fit(&cx.circuit_name(header).to_uppercase()),
+    ));
     let finish = match header.finish {
         Some(finish) => format!(
             "{}  {}",

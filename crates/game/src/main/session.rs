@@ -41,7 +41,7 @@ pub(crate) mod frame_timing;
 #[path = "session/lifecycle.rs"]
 pub(crate) mod lifecycle;
 #[path = "session/replays.rs"]
-mod replays;
+pub(crate) mod replays;
 #[path = "session/rumble.rs"]
 mod rumble;
 #[path = "session/phases.rs"]
@@ -419,6 +419,14 @@ pub(crate) struct Session {
     /// Replays WATCH opened and the rebuild refused, with the reason: the page lists them
     /// dimmed (`oag_game::replays::page::Context::refused`).
     pub(crate) replay_refused: std::collections::BTreeMap<std::path::PathBuf, String>,
+    /// A recording WATCH asked to open, from the launch to the race's hand-over
+    /// (`session::replays`).
+    pub(crate) watching: Option<replays::Watching>,
+    /// The replay viewer while a recording is being watched (`session::replays`).
+    pub(crate) viewer: Option<replays::Active>,
+    /// Whether the menus open on the REPLAYS page: set by leaving the viewer and by a recording
+    /// the rebuild refused.
+    pub(crate) return_to_replays: bool,
     /// The live race's pad rumble, or `None` (`session::rumble`).
     pub(crate) rumbler: Option<oag_game::rumble::Rumbler>,
     /// The session's wall clock in seconds, read once a frame: what a pause's

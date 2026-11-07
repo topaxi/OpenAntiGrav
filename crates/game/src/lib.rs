@@ -84,6 +84,7 @@ pub mod race_seed;
 pub mod records;
 pub mod remix;
 pub mod render;
+pub mod replay_view;
 pub mod replays;
 pub mod results_tables;
 pub mod rumble;

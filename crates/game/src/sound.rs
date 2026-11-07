@@ -193,6 +193,16 @@ pub fn race_tick_keeping(
     tick_effects(audio, race, keep, false);
 }
 
+/// A seek in a recorded race: every effect voice is stopped and the continuous ones are
+/// rebuilt from the race as it stands at `tick` (`Audio::rebuild_race_sfx`). The cues of the
+/// ticks the seek ran are dropped, so nothing that sounded before the target sounds late.
+pub fn rebuild(audio: &mut Audio, race: &mut Race, tick: u64) {
+    drop(race.drain_cues());
+    drop(race.drain_announcements());
+    drop(race.drain_class_announcements());
+    audio.rebuild_race_sfx(frame_of(race, Vec::new(), Vec::new(), Vec::new()), tick);
+}
+
 /// One tick of the sound effects under a title's pre-race flyby, where its rule fades them in
 /// (`Race::intro_plays_race_sounds`): the circuit's ambience emitters from the flyby camera's
 /// ears, through the effects fade, and the craft's engines by range (inaudible until the camera
@@ -221,7 +231,25 @@ fn tick_effects(
         )
     };
     cues.retain(|event| keep(event));
-    let frame = RaceFrame {
+    let frame = frame_of(race, cues, announcements, class_announcements);
+    audio.race_tick(frame);
+    if flyby {
+        return;
+    }
+    // The song-name marquee shows each race song once, off the same audio state a `--no-audio`
+    // run reaches: the selection does not wait on a device.
+    race.note_song(audio.now_playing().as_ref());
+}
+
+/// One tick of `race` as the sound effects see it, with the cues and announcements the caller
+/// drained from it.
+fn frame_of<'a>(
+    race: &'a Race,
+    cues: Vec<oag_gameplay::cue::CueEvent>,
+    announcements: Vec<u16>,
+    class_announcements: Vec<u32>,
+) -> RaceFrame<'a> {
+    RaceFrame {
         banks: race.sounds(),
         emitters: race.track_emitters(),
         announcer: race.announcer(),
@@ -254,14 +282,7 @@ fn tick_effects(
         sight: race.sight_state(),
         quake_point: race.quake_point(),
         leach_beams: race.sim.world.leach_beams,
-    };
-    audio.race_tick(frame);
-    if flyby {
-        return;
     }
-    // The song-name marquee shows each race song once, off the same audio state a `--no-audio`
-    // run reaches: the selection does not wait on a device.
-    race.note_song(audio.now_playing().as_ref());
 }
 
 /// The listener, off the camera the frame is actually drawn from.

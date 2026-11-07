@@ -364,6 +364,7 @@ impl Session {
         if let Stage::Race(stage) = outgoing
             && !stage.race.finished()
             && !was_lan
+            && !stage.watching
         {
             self.suspended_race = Some(stage);
         }
@@ -373,6 +374,12 @@ impl Session {
             .set_title(&hints::shell_title(&strings::project_table(
                 self.settings.language.as_deref(),
             )));
+        // A recording left, or one the rebuild refused, lands on the list it came from.
+        if std::mem::take(&mut self.return_to_replays)
+            && let Stage::Menu(stage) = &mut self.stage
+        {
+            stage.menu.push(oag_game::replays::page::PAGE);
+        }
         // An online race that ended lands back in its room.
         self.online_menus_opened();
         self.ask_player();

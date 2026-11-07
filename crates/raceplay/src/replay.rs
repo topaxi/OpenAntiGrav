@@ -43,7 +43,7 @@ mod rebuild;
 mod recording;
 
 pub use events::ApplyError;
-pub use launch::{Launch, UnknownOption};
+pub use launch::{Launch, OriginalAi, UnknownOption};
 pub use rebuild::{apply_recorded, load_recorded, rebuild, start_recorded};
 #[cfg(feature = "view")]
 pub(crate) use recording::ReplayState;

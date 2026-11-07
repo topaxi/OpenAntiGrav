@@ -14,8 +14,19 @@ use oag_physics::pilot_assist::Level;
 
 use crate::Race;
 
+/// The recovered original driver flying the opponents, and what it was asked to do
+/// ([`Race::use_original_ai`]): written to the race after its seats, so it is part of the state
+/// a rebuild must reproduce.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OriginalAi {
+    /// A campaign cell's resolved skill scale; `None` reads the load's ambient one.
+    pub skill: Option<f32>,
+    /// The pack shuffle's level, `0..=2`.
+    pub level: usize,
+}
+
 /// The launch settings a replay records.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Launch {
     /// Which scheme maps the pilot's buttons.
     pub scheme: ControlScheme,
@@ -26,6 +37,8 @@ pub struct Launch {
     pub autopilot: bool,
     /// The Pilot Assist level every seat starts with.
     pub pilot_assist: Level,
+    /// The original driver flies the opponents, when it does. `None`: this project's driver.
+    pub original_ai: Option<OriginalAi>,
 }
 
 /// Why a header's `options` table did not read.
@@ -54,6 +67,13 @@ impl Launch {
                 "pilot_assist".to_string(),
                 self.pilot_assist.name().to_string(),
             );
+        }
+        if let Some(ai) = self.original_ai {
+            table.insert("ai".to_string(), "original".to_string());
+            table.insert("ai_level".to_string(), ai.level.to_string());
+            if let Some(skill) = ai.skill {
+                table.insert("ai_skill".to_string(), skill.to_string());
+            }
         }
         table
     }
@@ -93,11 +113,26 @@ impl Launch {
             Some("true") => true,
             Some(value) => return Err(unknown("autopilot", value)),
         };
+        let original_ai = match get("ai") {
+            None | Some("ours") => None,
+            Some("original") => Some(OriginalAi {
+                skill: match get("ai_skill") {
+                    None => None,
+                    Some(value) => Some(value.parse().map_err(|_| unknown("ai_skill", value))?),
+                },
+                level: match get("ai_level") {
+                    None => 1,
+                    Some(value) => value.parse().map_err(|_| unknown("ai_level", value))?,
+                },
+            }),
+            Some(value) => return Err(unknown("ai", value)),
+        };
         Ok(Self {
             scheme,
             difficulty,
             autopilot,
             pilot_assist,
+            original_ai,
         })
     }
 }
@@ -109,5 +144,47 @@ impl Race {
         self.set_control_scheme(launch.scheme);
         self.set_autopilot(launch.autopilot);
         self.set_pilot_assist(launch.pilot_assist);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn launch(original_ai: Option<OriginalAi>) -> Launch {
+        Launch {
+            scheme: ControlScheme::default(),
+            difficulty: oag_ai::Difficulty::default(),
+            autopilot: false,
+            pilot_assist: Level::Normal,
+            original_ai,
+        }
+    }
+
+    /// The original driver is part of the state a rebuild must reproduce, so the table carries
+    /// what it was asked and reads it back; an absent key is this project's driver.
+    #[test]
+    fn the_original_drivers_request_round_trips_through_the_table() {
+        for ai in [
+            None,
+            Some(OriginalAi {
+                skill: None,
+                level: 1,
+            }),
+            Some(OriginalAi {
+                skill: Some(0.37),
+                level: 2,
+            }),
+        ] {
+            let launch = launch(ai);
+            assert_eq!(Launch::from_table(&launch.to_table()), Ok(launch), "{ai:?}");
+        }
+        assert!(!launch(None).to_table().contains_key("ai"));
+        let mut table = launch(None).to_table();
+        table.insert("ai".into(), "telepathy".into());
+        assert_eq!(Launch::from_table(&table).unwrap_err().key, "ai");
+        table.insert("ai".into(), "original".into());
+        table.insert("ai_level".into(), "high".into());
+        assert_eq!(Launch::from_table(&table).unwrap_err().key, "ai_level");
     }
 }

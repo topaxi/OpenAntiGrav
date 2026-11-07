@@ -1029,6 +1029,8 @@ impl Session {
         list.extend(self.pause_line(overlay_space.size));
         // Photo mode's screen, over the surface and so not in a shot.
         list.extend(self.photo_screen(overlay_space.size));
+        // The replay viewer's bar, controls and banner.
+        list.extend(self.viewer_screen(overlay_space.size));
         // The TOUCH CONTROLS page's picture of the overlay, over its rows.
         if let Stage::Menu(stage) = &self.stage
             && let Some(art) = oag_game::touch_controls::art::Art::from_sheet(&self.cursor_sheet)

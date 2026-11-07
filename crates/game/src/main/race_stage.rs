@@ -192,6 +192,9 @@ pub(crate) struct RaceStage {
     /// Whether this race is recorded for the REPLAYS page and not yet written
     /// ([`Self::arm_auto_replay`]).
     pub(crate) auto_replay: bool,
+    /// Whether this race is a recording being watched: it is never parked behind the menus, and
+    /// nothing it does is a record, a ghost or a replay.
+    pub(crate) watching: bool,
 }
 
 impl Drop for RaceStage {

@@ -27,9 +27,25 @@ impl RaceStage {
     ///
     /// A race that already records for a ghost starts afresh: the same header, seats now right.
     pub(crate) fn arm_auto_replay(&mut self) {
+        if let Some(path) = std::env::var_os("OAG_TMP_SIMDUMP") {
+            let _ = std::fs::write(path, format!("{:#?}", self.race.sim));
+        }
         self.race.start_recording(self.replay_header.clone());
         self.auto_replay = self.race.recording();
         debug!("replays: recording this race for the REPLAYS page: {}", self.auto_replay);
+    }
+
+    /// Adds the original driver's request to the header a recording of this race is filed under.
+    pub(crate) fn note_original_ai(&mut self, ai: Option<oag_raceplay::OriginalAi>) {
+        let Some(ai) = ai else {
+            return;
+        };
+        let options = &mut self.replay_header.options;
+        options.insert("ai".to_string(), "original".to_string());
+        options.insert("ai_level".to_string(), ai.level.to_string());
+        if let Some(skill) = ai.skill {
+            options.insert("ai_skill".to_string(), skill.to_string());
+        }
     }
 
     /// The file this race leaves behind, if it is armed and long enough to be worth one.

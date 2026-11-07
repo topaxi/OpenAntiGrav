@@ -548,6 +548,7 @@ OAG_REPLAYS_DELETE = { text = "DELETE", human = false }
 OAG_REPLAYS_NONE = { text = "NONE YET", human = false }
 OAG_REPLAYS_NONE_WHY = { text = "EVERY RACE YOU DRIVE IS RECORDED HERE", human = false }
 OAG_REPLAYS_NONE_OFF = { text = "RECORDING IS OFF: [REPLAY] RECORD IN THE SETTINGS FILE", human = false }
+OAG_REPLAYS_CIRCUIT = { text = "CIRCUIT", human = false }
 OAG_REPLAYS_MODE = { text = "RACE", human = false }
 OAG_REPLAYS_FINISH = { text = "FINISH", human = false }
 OAG_REPLAYS_DATE = { text = "DATE", human = false }
@@ -562,3 +563,12 @@ OAG_REPLAYS_NEWER = { text = "RECORDED BY A NEWER VERSION", human = false }
 OAG_REPLAYS_DAMAGED = { text = "DAMAGED FILE", human = false }
 OAG_REPLAYS_NO_SETUP = { text = "CANNOT BE REBUILT: NO LAUNCH REQUEST", human = false }
 OAG_REPLAYS_REFUSED = { text = "CANNOT BE REBUILT HERE: %s", human = false }
+OAG_REPLAY_OPENING = { text = "OPENING REPLAY", human = false }
+OAG_REPLAY_MISMATCH = { text = "THIS REPLAY WAS RECORDED ON AN EARLIER VERSION AND STOPS MATCHING AT %s", human = false }
+OAG_REPLAY_STOPPED = { text = "IT STOPS HERE: THIS VERSION CANNOT REBUILD THE REST", human = false }
+OAG_REPLAY_PLAY = { text = "PLAY", human = false }
+OAG_REPLAY_PAUSE = { text = "PAUSE", human = false }
+OAG_REPLAY_EXIT = { text = "EXIT", human = false }
+OAG_REPLAY_SPEED = { text = "SPEED", human = false }
+OAG_REPLAY_SKIP = { text = "5 SEC", human = false }
+OAG_REPLAY_ENDED = { text = "END OF REPLAY", human = false }

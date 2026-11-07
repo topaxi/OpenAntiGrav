@@ -80,8 +80,12 @@ fn a_list_row_says_when_and_where_and_a_kept_one_is_marked() {
             Head::Read(Box::new(header("single_race"))),
             1_794_084_439,
         );
-        assert_eq!(choice(&auto, cx).label, "11-07 20:47 TALON'S...");
-        assert!(choice(&saved, cx).label.starts_with("*11-07 20:47"));
+        assert_eq!(choice(&auto, cx).label, "11-07 20:47");
+        assert!(
+            choice(&saved, cx).label.starts_with("*11-07 20:47"),
+            "{}",
+            choice(&saved, cx).label
+        );
         assert!(choice(&auto, cx).unavailable.is_none());
     });
 }
@@ -179,8 +183,9 @@ fn the_detail_lines_lead_with_the_finish_and_name_what_is_not_verified() {
             1_794_084_439,
         );
         let lines = lines(&e, cx);
-        assert_eq!(lines[0], ("FINISH".into(), "3RD  2.00.00".into()));
-        assert_eq!(lines[1].0, "RACE");
+        assert_eq!(lines[0], ("CIRCUIT".into(), "TALON'S JUNCTION".into()));
+        assert_eq!(lines[1], ("FINISH".into(), "3RD  2.00.00".into()));
+        assert_eq!(lines[2].0, "RACE");
         let note = &lines.iter().find(|(label, _)| label == "NOTE").unwrap().1;
         assert!(
             note.contains("SAVED") && note.contains("TAKEN OVER"),
@@ -192,7 +197,7 @@ fn the_detail_lines_lead_with_the_finish_and_name_what_is_not_verified() {
             Head::Read(Box::new(header("single_race"))),
             1,
         );
-        assert_eq!(super::lines(&unfinished, cx)[0].1, "NOT FINISHED");
+        assert_eq!(super::lines(&unfinished, cx)[1].1, "NOT FINISHED");
         assert!(super::lines(&entry("d.oagr", Folder::Auto, Head::Damaged, 1), cx).is_empty());
     });
 }

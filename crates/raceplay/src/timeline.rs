@@ -200,6 +200,9 @@ impl Timeline {
     /// As [`Self::open`].
     pub fn open_within(setup: Setup, replay: Replay, ceiling: usize) -> Result<Self, OpenError> {
         let probe = start_recorded(setup.clone(), &replay.header).map_err(OpenError::Start)?;
+        if let Some(path) = std::env::var_os("OAG_TMP_SIMDUMP2") {
+            let _ = std::fs::write(path, format!("{:#?}", probe.sim));
+        }
         Verifier::new(&replay, probe.sim.state_hash())?;
         let replay = Arc::new(replay);
         let shared = Shared::new(ceiling, Pass::Running);
