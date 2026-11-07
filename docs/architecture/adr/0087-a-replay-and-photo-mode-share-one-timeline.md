@@ -2,11 +2,10 @@
 
 ## Status
 
-**Proposed** (2026-11-07, lane `replay-timeline`). The decisions the maintainer made on
+**Accepted** (2026-11-07, lane `replay-timeline`). The decisions the maintainer made on
 2026-11-07 are marked **(M)** and are not reopened here. Everything else, the sizes, the
-intervals, the budgets and the screen rows, is this lane's proposal for review; each is
-measured where a number exists and labelled **chosen, not measured** where it does not. One
-question is left to the maintainer: decision 9's engagement hold.
+intervals, the budgets and the screen rows, is measured where a number exists and labelled
+**chosen, not measured** where it does not.
 
 **Supersedes [ADR-0055](0055-replays-are-inputs-and-a-ghost-is-poses.md) in three places only:**
 
@@ -417,7 +416,8 @@ the lane runs under, so `dist` is not measured; the one `dist` datum in the docs
 ### 9. Take over
 
 A replay has **TAKE OVER AND PLAY FROM HERE** **(M)**: at a tick the player picks, the recorded
-seat's input stream stops, the live pad takes the seat, and the race goes on live.
+seat's input stream runs on through a one-second hold after GO, then stops; the live pad takes the
+seat and the race goes on live.
 
 - **On the real race, not the copy.** The viewer's probe never becomes the race the player
   drives. The session builds the ordinary race (`Race::start`, with its HUD, recorder, results
@@ -525,13 +525,10 @@ seat's input stream stops, the live pad takes the seat, and the race goes on liv
   measures it with a pad-flown run (the stick held at the recorded deflection at GO), not with
   the Autopilot, which is neither a pad nor a physics reference.
 
-  **A question for the maintainer, not decided here.** An *engagement hold* would remove the
-  hazard instead of hoping the player is ready: at GO the seat keeps its recorded input until
-  the pad is deflected past a 0.1 dead zone or presses a button, at most 120 ticks, and the
-  fork `tick` becomes the tick the pad engaged on (the header would then also need
-  `offered_at`). It lets go of the recorded stream up to two seconds after "here", which
-  departs from the decision that at tick T the stream stops. This ADR does not take it; the
-  table is the argument for asking.
+  **A one-second hold (M).** The table is why: after GO the seat keeps its recorded input for
+  exactly 60 ticks, then the stream stops and the pad flies the seat. The hold is fixed: moving the
+  pad does not end it early. The fork `tick` is the tick the pad first flies, so the file's
+  inputs stay the truth, and the header keeps `offered_at` for the tick the player picked.
 - **Audio and camera hand-off.** Audio: the same `Sfx::rebuild` as a seek, then the live race's
   ordinary cues. Camera: the viewer may have been on any craft or a cinematic view; the live
   race starts on the taken seat's chase camera (the one a new race opens on), cold-started by
@@ -582,7 +579,7 @@ in parallel), then 3 and 5, then 4, 6 and 7.
    build; after a fork `records.toml` and `ghosts/` are byte-identical to before (a test);
    a frame of the SAVE REPLAY row on each of the five titles' end screens; the hand-off table
    re-run with a pad-flown run that holds the recorded stick at GO (contacts within two seconds
-   of GO), which decides whether the countdown is enough or the engagement hold is asked for.
+   of GO), which says whether one second is enough.
 
 Not staged: modded-race replays, network replays from `oag-server`, multi-seat take-over,
 the Steam Deck measurement (owed, decision 3).
@@ -618,9 +615,7 @@ the tick keeps one path for how a race is driven and ended **(M)**.
 **A hard cut at the take-over tick, with no countdown.** Measured above: 12 to 45 percent of the
 points hit a wall inside two seconds with nothing held or only the throttle.
 
-**An engagement hold after GO** (the recorded input flies the seat until the pad moves, at most
-two seconds). Not taken: it departs from "the stream stops at tick T". Offered as a question
-in decision 9 with the table as its argument.
+**A two-second hold that ends when the pad moves.** Rejected **(M)** for a fixed second (decision 9).
 
 **Auto-save every taken-over run.** Rejected **(M)**: a fork is saved from SAVE REPLAY only.
 
