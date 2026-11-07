@@ -298,14 +298,78 @@ Where the pass is not run: the glow Pulse and Pure add **over the HUD** (their c
 GL is not built or run here (the WebGPU and Vulkan backends are). `cargo check -p oag-raceplay --target
 wasm32-unknown-unknown` builds with the pass.
 
-**Not here, named:** HD's and 2048's **motion blur** (track and ship, a 120-frame accumulation whose
-shutter is `(v * 0.01)^2 * 0.25`) and **accumulated** depth of field (7 frames): how a craft's motion gets
-into either on a frozen race was never read and the simulation must not tick, so they stay out. [ADR-0087](../architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md) designs both, and a rewind, over a copy of the race (a `Timeline`) so the live race never ticks: accumulated depth of field is the same tick drawn again with the lens moved, and motion blur is the copy stepped through the shutter's ticks (**chosen, not measured**: the original's mapping of frames to time is still unread). Not built. 2048's own
-depth of field law (`(a * 0.01)^2 * 900 + 100` for the blur, a cubic for the focus) differs from HD's; HD's
-is used. Also left open: split screen, the photo counter stat, touch gestures, saving on a page or a phone,
-HD's real `close` rest offset, and a shot at the scene's own pixels (the file is the presentation target,
-upscaled from the scene drawn at its configured render size: the dynamic resolution is held there while the
-mode is open).
+## Accumulated shots and rewind
+
+Motion blur (track and ship), accumulated depth of field and a rewind, on the titles whose originals
+have the first two (`oag_title::photo::Accumulation`: HD and 2048) and on every title for the rewind
+([ADR-0087](../architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md), stage 6;
+code: `oag_raceplay::photo::{rewind, shot}`, `oag_raceplay::timeline::Keeper`, `oag-game`'s
+`session::photo_rewind`).
+
+**Rows.** In the effects panel: MOTION BLUR (off, track, ship), SHUTTER (shown with a blur chosen,
+0 to 100, opens on 20) and REWIND (the race's clock at the moment on screen, `M:SS.s`). The first two
+are on offer where the title's `photo_shot` is set, the third in a race that has keyframes and was
+entered from the pause menu (not from `Race End Photo`, which keeps its board). A click on the row's
+arrows moves them as the stick does.
+
+| Title | Depth of field | Motion blur | Ship shutter | Evidence |
+| --- | ---: | ---: | ---: | --- |
+| HD | 7 frames | 120 | `0.05` of the track's | `ps3-hdfury-eu/photo-mode.md`: `this+0x100` and `+0x10c` |
+| 2048 | 7 | 130 (`0x82`) | `0.05` | `vita-2048-eu-v104/photo-mode.md`, `VitaPhoto_Update` |
+| Pulse, Pure | none | none | | no accumulating shot in the original |
+| Omega | **checked, applies, not wired** | | | its `InGame Photo` has a motion blur list of its own (above); its frame counts and shutter were not read and shadPS4 has no memory readout |
+
+The shutter is `(v * 0.01)^2 * 0.25` seconds, at most 15 ticks. **HD's ship factor is 2048's `0.05`,
+chosen, not measured**: HD's two blurs were read as one shutter, and at `1.0` the craft crosses a held
+camera in a fraction of the window and leaves no picture (read: the ship blur shot of the lane's
+first run had no craft in it). At `0.05` the window is 0.75 tick at the longest shutter.
+
+**Rewind** is the race on screen moved through its own recording: the keyframe a pre-roll (60 ticks,
+the viewer's own) before the tick, then the ticks up to it through `Race::tick`, drawn and silent, so
+the camera spring and the exhaust have settled there. The live race is **put back to the bit** on
+leaving: entering takes `Race::snapshot_sim()` and sets the recording aside
+(`Race::pause_recording`), leaving restores both. `Keeper` keeps a keyframe a second from the race's
+first tick (a few microseconds a second) and starts the second `Race` it seeks with only when a
+rewind first asks. With no recording (a race that records nothing) a seek stops at the whole
+keyframe at or before the tick and a motion blur is not offered. On `main` only a Time Trial or Speed
+Lap with one person records; the REPLAYS lane's "record every race" makes it every race.
+
+**The shot** is made of frames, one drawn each frame of the window behind a progress bar over the
+picture (not in the file), and **any input abandons it** and writes nothing (2048's own state 3).
+Each frame is read back from the presentation target before the grade, as a single shot is, and the
+frames are averaged in 16 bits a channel. A drive draws a frame only when asked, so `--drive` asks
+for one while a shot is under way (`photo_job` in the state, `drawn/frames`).
+
+- **Motion blur**, chosen, not measured: the frames are spread evenly over the shutter, from
+  `shutter` seconds before the shot's tick to the tick, each drawn from the race at that moment,
+  between the two ticks around it (`between_ticks`). **Track blur**: the camera rides the craft, so
+  the scenery smears and the craft stays sharp. **Ship blur**: the camera holds the pose it has at
+  the shot's tick and the craft smears.
+- **Depth of field**, chosen, not measured: the same tick drawn 7 times with the eye moved across the
+  lens (a centre sample and a ring of six) and aimed at the focus plane, so that plane stays sharp
+  (`LensShift`, applied after the blend in `Race::view`). The ring's radius is half of the widest
+  blur the single-frame pass draws at the aperture; each frame keeps the other half as that pass.
+- **Both on**: the frames of the blur, the lens samples taken in turn.
+
+**Measured** (HD, Time Trial, Anulpha Pass, close lens, tick 702, debug profile (opt-level 2), the
+discrete GPU, headless `--drive`, the 1-minute load average 4.6 to 7.2 on 24 threads): a 120-frame
+track blur takes **2.03 s at 1280x800, 2.11 s at 1920x1080 and 2.82 s at 3840x2160**; 7 frames of
+depth of field 0.12 to 0.23 s. A rewind seek takes 0.6 to 1.3 ms a push. Frames were read as pictures:
+a track blur leaves the hull sharp and the scenery smeared (detail kept, by horizontal gradient:
+hull 0.87, scenery 0.27), a ship blur the reverse (hull 0.49, scenery 1.00)
+(`photo_mode_ground_truth::a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it`).
+
+**Not done, named.** The shot is 8-bit frames averaged, so a dark gradient the blur flattens shows
+contour bands; the single plain frame shows them in the same places (a rewound shot of the start
+tunnel does), so they are the frame's. Rewind is not offered from `Race End Photo` or in a split
+screen. Omega's blur and 2048's own depth of field law (`(a * 0.01)^2 * 900 + 100`; HD's focus curve
+is used) stand as before. Leaving photo mode with CIRCLE, on `35aa3a902`, hands the race one frame
+of input the control run never had: a moving race (an autopilot Time Trial) differs on every tick
+after it, where leaving with ESCAPE does not. That is the pad's, found by the lane's hash test, and
+open. Also left open, as before: split screen, the photo
+counter stat, touch gestures, saving on a page or a phone, HD's real `close` rest offset, and a shot at
+the scene's own pixels (the file is the presentation target, upscaled from the scene drawn at its
+configured render size: the dynamic resolution is held there while the mode is open).
 
 **Checked against the other lineage.** Speed blur's target (HD) is the zoom ring `oag_post::hd_zoom`
 already ports; 2048's `FUN_8112ea02` carries HD's focus formula (the two agree, as above) and Omega's two

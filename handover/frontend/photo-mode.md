@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
-updated: 2026-11-07
-summary: "Photo mode and its picture controls run on all five titles (docs/ui/photo-mode.md); motion blur, accumulated depth of field and follow-ups are open"
+updated: 2026-11-08
+summary: "Photo mode with picture controls, rewind, motion blur and accumulated depth of field runs; split screen, touch and follow-ups are open"
 ---
 
 # Photo mode
@@ -61,11 +61,18 @@ Exposure, saturation, speed blur and depth of field run through `oag_post::photo
 five titles, with HD's laws and independent blur and depth rows (`docs/ui/photo-mode.md`, "Picture
 controls", says what is chosen). What is left from that table:
 
-- **Motion blur and its shutter** (HD, 2048; Omega's `Photo Use MB`): needs the craft's motion on a frozen
-  race, and the simulation must not tick. A design of its own (a per-craft pose delta from the last two
-  ticks into the velocity buffer is the obvious start), or it stays out.
-- **Accumulated depth of field** (7 frames) and the 2048 law, if a better picture is wanted than the single
-  gather.
+- ~~**Motion blur and its shutter**~~ and ~~**accumulated depth of field**~~ landed with the rewind
+  (`photo-rewind`, ADR-0087 stage 6; `docs/ui/photo-mode.md`, "Accumulated shots and rewind"): HD and 2048.
+  Open from it: **Omega's `Photo Use MB`** (its frame counts and shutter are unread: `photo_shot` is `None`),
+  **HD's ship blur factor** (2048's `0.05` is used, chosen), and 2048's own depth of field law.
+- **Leaving photo mode with CIRCLE changes the race that goes on.** On `35aa3a902` (no lane code), an
+  autopilot Pulse Time Trial that visits the mode and leaves by CIRCLE differs from one that never visited on
+  every tick after it (600 of 600); leaving by ESCAPE, or pausing and resuming, does not. Something of the
+  press reaches the first race tick (the held button the frame after, or an edge `SPENT` misses). The existing
+  hash test never sees it because its craft stands still. With a pickup in the slot, CIRCLE is the absorb.
+  Find what the first tick reads (`Controls`, `InputSnapshot`) before changing the leave.
+- **Rewind from `Race End Photo`** and in a split: not offered (the end screens keep a board a rewind would
+  lose).
 - **HD's aperture reader** (`0x003bad38`) and its exposure shader: unread, so the aperture reach and the
   exposure curve are chosen.
 - **The glow Pulse and Pure add over the HUD** is not graded or blurred.
