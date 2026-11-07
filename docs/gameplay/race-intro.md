@@ -147,7 +147,7 @@ Every title but Pure ships a `start_grid.vex` per circuit with a `grid_camera1` 
 | Pulse PSP | `start_grid.vex`, 17.7 to 27 s | measured (above) | ported |
 | Pulse PS2 | same names and reader (`16_Track`: 2,400 B, 25.00 s, 5 cuts); executable carries `%s\start_grid.vex` | **not watched** (PCSX2 run not done) | not wired: `PRE_RACE.on` is PSP only |
 | Pure PSP | **none**: `track.vex` hashes resolve on `01_Vineta_K`, `04_Chenghou_Project`, `10_Sebenco_Climb`, `start_grid.vex` and `_reversed` do not; only `Data\Defaults\start_grid_1.vex` (confidence 90 on a hash census, not a full listing). The executable has `be::StartSequenceCamera` and a GridCamera importer but no per-circuit path | not watched; a code camera (`StartSequenceCamera`) may play, unread | none, and no invented path |
-| HD / Fury PS3 | `start_grid.vex`, `_reversed`, `_ta`, `_de` per circuit (110 to 200 s, 8 circuits plus Fury's); `zone_N/start_grid.vex` has no `grid_camera1` | **measured**, RPCS3, Talons Junction: after the loading screen a camera flies the grid (craft in their slots, no HUD), cuts between shots, `START RACE` prompt strip at the bottom; a 230 s hold shows it **loops** at the file's 188.33 s (shot 19 repeats shot 1) and never ends by itself; one tap of cross skips it (`docs/rendering/start-gantry.md`) | camera ported, loops, press skips; **prompt not drawn** (below) |
+| HD / Fury PS3 | `start_grid.vex`, `_reversed`, `_ta`, `_de` per circuit (110 to 200 s, 8 circuits plus Fury's); `zone_N/start_grid.vex` has no `grid_camera1` | **measured**, RPCS3, Talons Junction: after the loading screen a camera flies the grid (craft in their slots, no HUD), cuts between shots, `START RACE` prompt strip at the bottom; a 230 s hold shows it **loops** at the file's 188.33 s (shot 19 repeats shot 1) and never ends by itself; one tap of cross skips it (`docs/rendering/start-gantry.md`) | camera ported, loops, press skips, **file per mode** (below); **prompt not drawn** (below) |
 | HD PSN | the same files (same engine) | not watched separately | same rule, `Platform::Ps3` |
 | 2048 Vita | `data/art/published/environments/<n>/start_grid.vex`; `grid_camera1` has `LoopEnd` (2300 on `altima`) but mostly no `AnimEnd`, `square` has 3000 (50 s); `defaults/start_grid_1..3` hold eight 5 s `gridCamera`s each (grid slots, not a flyby, unread) | **not watched** | not wired; `GridCamera::read` needs `AnimEnd` |
 | Omega PS4 | HD's circuits: HD's files byte-for-byte shape (Vineta K 173.33 s); 2048's: 2048's | **not checkable** here (no PS4 emulator) | not wired |
@@ -160,8 +160,32 @@ has decided it should, and here the end rule and skip differ between Pulse and H
 **HD's numbers.** Measured: plays after the load, loops, no HUD, one press skips. **Chosen, not
 measured**: the field of view (Pulse's `54.309`, the same Maya export, compared by eye against
 the original at matched circuit position and found to frame the same buildings), the hold and the lock
-(0 ticks), the HUD delay (0), and plain `start_grid.vex` (the executable builds `start_grid_de` and
-`start_grid_ta` too; which mode takes which was not watched).
+(0 ticks), the HUD delay (0).
+
+**HD's file per mode** (read off the executable, not watched; confidence 84,
+[`start-grid-selection.md`](../ghidra/functions/ps3-hdfury-eu/start-grid-selection.md)). The
+executable formats `%s\%sstart_grid%s.vex` from the race's mode and direction: Time Trial, Speed Lap
+and Zone (game modes 5, 10, 6) fly `start_grid_ta.vex`, every other mode of ours (Single Race,
+Eliminator, Tournament, Head to Head) the plain pair, a reversed circuit the `_reversed` file of
+either, and a file not on the disc falls back to the forward plain `start_grid.vex`. `_de` is mode
+2's, `Demo`; this project has no demo. `_ta` is the lone craft's fly-by: on Talon's Junction,
+Amphiseum, Vineta K and Ubermall its close-ups frame the Time Trial craft's slot (slot 1) and almost
+never an empty one, where the plain file spends 581 to 1,087 samples of about 5,000 on empty slots.
+Wired as `PreRace::by_mode`, tested by `hd_flyby_ground_truth`. One Time Trial fly-by was watched
+on RPCS3 (Talon's Junction, mode 5 in the TTY log): its first ten seconds match ours on `_ta`, but
+those shots frame no grid slot, so they do not tell `_ta` from the plain file.
+
+**Open: Head to Head, and Zone's own circuits.** Head to Head is game mode 9 in the campaign code,
+so the rule gives it the plain file and its two craft fly under a fly-by that mostly frames empty
+slots; the original never offered the mode (`head2head.md`), so this is the maintainer's call
+(`_ta` frames our two slots, 1 and 2). `zone_1` to `zone_4` ship no `_ta`, so Zone on them falls
+back to the plain file, which has no `grid_camera1`: ours plays no fly-by there and says so in the
+loader report; what the original does with it is unwatched.
+
+**Lineage check for the selection (2048, Omega).** 2048: *checked, applies (strings only), not wired*:
+the same four strings, the gate unread. Omega: *checked, differs*: no `_de`, mode 2 takes the plain
+file, and two further tests (a track-name match against the Zone circuits, a field of the current
+game-mode object) also send a race to `_ta`.
 
 **HD's eight numbered circuits were upside down until 2026-10-07**, and Talons Junction was not.
 Those eight (the Pulse lineage: Vineta K, 02, 03, Chenghou, Ubermall, Sebenco, Sol 2, Anulpha)
