@@ -62,6 +62,11 @@ use super::*;
 /// [`Arc`]: a snapshot holding the old value keeps it. A snapshot from before
 /// the first tick therefore restores to a race with no plans, which learns them
 /// again, exactly as a whole copy would.
+///
+/// **A shared field holds plain data.** No `Cell`, `Mutex` or lazy cell that is not
+/// derived from the field's own value may enter one: it would be one piece of state
+/// across the race and every snapshot, and the text cannot show that. The only cell
+/// in the half is `CollisionWorld`'s broadphase, built once from the colliders.
 #[derive(Debug, Clone)]
 pub struct RaceSim {
     /// The simulation state.
