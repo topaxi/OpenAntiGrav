@@ -108,8 +108,10 @@ pub struct Accumulation {
     pub dof_frames: u32,
     /// Frames a motion blur shot is made of (HD `0x78`, 2048 `0x82`).
     pub blur_frames: u32,
-    /// What the shutter's seconds are multiplied by for the ship blur (2048 `0.05`; HD's
-    /// two blurs were read as one shutter, so `1.0`).
+    /// What the shutter's seconds are multiplied by for the ship blur: 2048 reads `0.05`
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/photo-mode.md`). HD's own ship blur was not
+    /// read apart from the track's; it takes 2048's, **chosen, not measured**, because at `1.0`
+    /// the craft crosses a held camera in a fraction of the window and leaves no picture.
     pub ship_shutter: f32,
 }
 
@@ -118,7 +120,7 @@ impl Accumulation {
     pub const HD: Self = Self {
         dof_frames: 7,
         blur_frames: 120,
-        ship_shutter: 1.0,
+        ship_shutter: 0.05,
     };
 
     /// Wipeout 2048 (`docs/ghidra/functions/vita-2048-eu-v104/photo-mode.md`).
