@@ -24,7 +24,8 @@ Measured on PPSSPP; the numbers, the method and the confidence are on
   three AI flares and none outranks the player's. Ours draws every flare after the whole blended list,
   so a nearer tree is under a farther craft's flare. Rule and knock-on table on the page; plumes,
   shield shells, weapon bodies, wrecks and the Rocket ribbon have no key read and stay where they are.
-- **Open on the original:** the maintainer's spot (their settings hold `camera_view = "far"`), which of
+- **Open on the original:** the maintainer's spot (their settings hold `camera_view = "far"`; the
+  disc was Pulse PSP, they confirmed 2026-11-07, so the PS2 path is not the cause), which of
   White and Black each Track Select press landed on (`--track-down 18` and `19` gave the same start
   frame), the hull body's second layer (the `0x4a` bump moved it too), the tree's own key under a
   list-B bump (the prim vanished from the census), the weapon pads' submit (`0x0890cdc8`), PS2, Pure's,
