@@ -897,7 +897,9 @@ pub struct Setup {
     /// speed-pad tunables come from, stamped onto the pad by the original's
     /// `WeaponPads_TestCraft` - see [`oag_tables::handling::WeaponPad`], which
     /// records why it is a debounce rather than a respawn. Zero when the global
-    /// file could not be read.
+    /// file could not be read, and in an Eliminator on a title that never stamps a
+    /// pad there (`oag_title::weapons::Weapons::pads_stamp_in_eliminator`): the pad
+    /// stays armed.
     pub weapon_pad_refresh: f32,
     /// Where [`Options::pose`] asked for the craft to start, already resolved
     /// against the spline. `None` uses the ordinary spawn.

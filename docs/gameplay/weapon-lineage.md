@@ -92,6 +92,7 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | `weapons.quake_hit` | `WaveHeight` - measured | `WaveHeightEyeLevel` - inherited | `WaveHeight` - inherited | `WaveHeight` - inherited | `WaveHeight` - inherited |
 | `weapons.autopilot_absorb_cancels` | `set` - measured | `none` - measured | `set` - measured | `set` - inherited | `set` - inherited |
 | `weapons.autopilot_pad_grants` | `none` - measured | `none` - inherited | `none` - inherited | `none` - inherited | `none` - inherited |
+| `weapons.pads_stamp_in_eliminator` | `set` - measured | `set` - inherited | `none` - measured | `none` - measured | `none` - measured |
 | `weapons.opponent_fire` | `PULSE` - measured | `PULSE` - measured | `HD` - measured | `OMEGA` - measured | `OMEGA` - measured |
 | `weapon_models.rocket` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `set` - inherited |
 | `weapon_models.mine` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `set` - inherited |

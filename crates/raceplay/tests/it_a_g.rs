@@ -53,6 +53,7 @@ mod damage_fx_ground_truth;
 mod destroy_camera_ground_truth;
 mod difficulty_ground_truth;
 mod eliminator_finish_ground_truth;
+mod eliminator_pad_stamp_ground_truth;
 mod eliminator_pads_ground_truth;
 mod energy_turbo_ground_truth;
 mod falloff_survey_ground_truth;

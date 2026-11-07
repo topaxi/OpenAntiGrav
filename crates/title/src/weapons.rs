@@ -67,6 +67,14 @@ pub struct Weapons {
     /// bit clear (`0x0883f0c0`), so a pad crossed mid-stint grants nothing; the pad
     /// still stamps its refresh timer. Read on Pulse alone; the others run its law.
     pub autopilot_pad_grants: crate::pre_race::Sourced<bool>,
+    /// Whether a weapon pad is stamped inert for a while after a hit in an Eliminator race.
+    ///
+    /// Pulse's `WeaponPads_TestCraft` stamps `elimination_refresh_time` (`0.05` s, two grey
+    /// frames). HD, 2048 and Omega author `0.15` and never stamp in Eliminator: the pad stays
+    /// armed and a craft with an empty slot is handed a pickup on every entry
+    /// (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title"). Other modes stamp
+    /// `refresh_time` on every title. A title with no Eliminator (Pure) never reads it.
+    pub pads_stamp_in_eliminator: crate::pre_race::Sourced<bool>,
     /// Which terms of `WeaponAi_DecideFireOrAbsorb` the title's opponents roll
     /// by, on the [`Self::ai`] odds.
     pub opponent_fire: crate::pre_race::Sourced<OpponentFire>,

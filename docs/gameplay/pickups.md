@@ -932,11 +932,11 @@ for the mode that does not stamp at all.)
 
 ## Eliminator and the pads, per title
 
-2026-11-07 (`eliminator-pads`). The question: Pulse stamps a pad with
+2026-11-07 (`eliminator-pads`, wired by `pad-nodisarm`). The question: Pulse stamps a pad with
 `elimination_refresh_time` in Eliminator, so does the pad grey for that long on
 the other titles? **Pulse yes; HD, 2048 and Omega never stamp in Eliminator, so
-their pads never disarm.** Ours disarms them for `elimination_refresh_time`
-anyway on those three (see "Ours" below).
+their pads never disarm.** Ours disarmed them for `elimination_refresh_time`
+anyway on those three until it was wired (see "Ours" below).
 
 ### The census: every class authors both numbers
 
@@ -1030,10 +1030,24 @@ weapon pads:
 | `0.55` | 33 | Pulse Single Race (the original: 32) |
 | `0.75` | 46 | HD, 2048, Omega Single Race (the original, HD: about 45 at 60 Hz) |
 
-**So ours differs on three titles**: `crates/raceplay/src/load/global.rs` picks
-`elimination_refresh_time` for `Mode::Eliminator` on every title that authors it, which
-disarms a HD, 2048 or Omega pad for ten frames where the original never does. Pulse is
-right. The wiring is a ready-to-wire thread (`just threads --category gameplay`).
+**Wired** (`Weapons::pads_stamp_in_eliminator`, resolved once in `load/global.rs` into the race's
+`weapon_pad_refresh`): Pulse keeps `0.05`; HD, Fury, 2048 and Omega carry `0.0` in an Eliminator, so a
+pad is never stamped and never greys, and the loader report says so. Every other mode, and Pulse's
+Eliminator, is as the table above. Read through `race::load` on the four discs by
+`eliminator_pad_stamp_ground_truth` (Pulse `0.05` / `0.55`, the other three `0.0` / `0.75`).
+
+**One grant per crossing, not per tick.** `Race::test_weapon_pads` grants on the entry edge
+(`weapon_pad_current`), not on containment, so a zero stamp does not hand a pickup every tick a
+craft sits inside; a craft that crosses a pad is handed one pickup, and one that leaves and comes
+back in a tick is handed another (unit test `an_unstamped_pad_pays_on_every_entry_and_never_once_per_tick`).
+What the original gates the grant on, on the no-stamp path, is the swept containment test alone:
+2048's `WeaponPads_TestCraft` is `if (hit) goto grant` every tick, behind the slot checks
+([`weapon-pads.md`](../ghidra/functions/vita-2048-eu-v104/weapon-pads.md), "What it does on a hit";
+Omega the same shape). It is the full slot that stops a second grant, so a craft that empties its
+slot (fires or absorbs) while still inside an unstamped pad is handed another there on the next
+tick, and ours is not: **the entry edge is chosen, not measured**, shared with every other pad
+law here, and the edge is only ever later than the original's. Cross-check (2048 and Omega, the
+same function): **ported**.
 
 ### The method, to repeat it
 
@@ -1180,4 +1194,4 @@ effect of this one.
 - [shield](../ghidra/functions/psp-pulse-usa/shield.md) - the pool absorb pays
 - [the HUD](../ui/hud.md) - the widgets
 
-**Eliminator reads `elimination_refresh_time` (since 2026-09-08):** `crates/raceplay/src/load/global.rs` uses the shorter figure (`0.05` against `0.55`) in that mode only.
+**Eliminator reads `elimination_refresh_time` on Pulse (since 2026-09-08):** `crates/raceplay/src/load/global.rs` uses the shorter figure (`0.05` against `0.55`) in that mode only; HD, Fury, 2048 and Omega never stamp a pad in Eliminator (see "Eliminator and the pads, per title").

@@ -181,6 +181,9 @@ pub const TITLE: &Title = &Title {
         // HD's law, inherited: Omega's own Autopilot update and cancel are unread.
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
+        // Read in `WeaponPads_TestCraft`: the Eliminator family skips the stamp
+        // (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title").
+        pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(false),
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::OMEGA,
         ),
