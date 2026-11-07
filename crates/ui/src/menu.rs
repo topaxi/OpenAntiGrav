@@ -542,7 +542,7 @@ pub use page::{Page, RowMeta};
 mod expand;
 pub use expand::RowItem;
 mod definition;
-pub use definition::{Added, Definition, Error, For, ModMenu};
+pub use definition::{Added, Definition, Error, For, ModMenu, PAUSE_PAGE, PHOTO_ROW, Pause};
 
 /// What the menus did on a tick, for the composition root to act on.
 #[derive(Debug, Clone, PartialEq)]
@@ -619,6 +619,9 @@ pub struct Menu {
     reset_rect: Option<[f32; 4]>,
     /// The title's stand-in codepoint for the reset button. See [`Self::set_reset_glyph`].
     reset_glyph: Option<char>,
+    /// Whether START on the root page closes the menus instead of confirming a row. See
+    /// [`Self::set_start_closes`].
+    start_closes: bool,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -631,6 +634,12 @@ pub struct Menu {
 pub const DEFAULT_VISIBLE_ROWS: usize = 7;
 
 impl Menu {
+    /// Makes START on the root page close the menus (a pause screen resumes its race on START,
+    /// as the disc's `forward="start"` redirect does), where it otherwise confirms the row.
+    pub fn set_start_closes(&mut self, closes: bool) {
+        self.start_closes = closes;
+    }
+
     /// Opens a definition at its root page.
     #[must_use]
     pub fn new(definition: Definition) -> Self {
@@ -660,6 +669,7 @@ impl Menu {
             reset_label: String::new(),
             reset_rect: None,
             reset_glyph: None,
+            start_closes: false,
         };
         // A row that is on a page only while the host offers it starts off the page.
         menu.offer(Action::PhotoMode, false);
@@ -1052,6 +1062,10 @@ impl Menu {
             out.push(event);
         }
 
+        if self.start_closes && self.depth() == 1 && input.take(Button::Start) {
+            out.push(MenuEvent::Closed);
+            return out;
+        }
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.extend(self.activate());
         }

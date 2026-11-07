@@ -49,6 +49,7 @@ pub mod launch_hover;
 pub mod loading;
 pub mod loyalty;
 pub mod main_menu;
+pub mod pause_menu;
 pub mod menu;
 pub mod now_playing;
 pub mod opponent_autopilot;
@@ -83,6 +84,7 @@ pub use hud::{BarModels, HudArt, HudLayouts, HudSkin, ResumeCountdown, ZoneSpeed
 pub use language::LanguageManifest;
 pub use loading::Loading;
 pub use main_menu::{Attached, MainMenu, OriginalRow};
+pub use pause_menu::{PauseAction, PauseMenu, PauseRow, PauseScreen};
 pub use menu::{
     HelpText, ListBlocks, MenuBlocks, MenuGlow, MenuList, MenuSettings, MenuSkin, MenuStrip,
     StripBlocks,
@@ -248,6 +250,10 @@ pub struct Title {
     /// The rows of this title's own main menu, as the disc authors them, and how a
     /// row attached to one is drawn. See [`main_menu::MainMenu`].
     pub main_menu: &'static main_menu::MainMenu,
+    /// The pause screens this title's disc authors, per game mode, or `None` where none has
+    /// been read: pausing then falls through to the front end's main page over the parked
+    /// race. Never a stand-in screen. See [`pause_menu::PauseMenu`].
+    pub pause_menu: Option<&'static pause_menu::PauseMenu>,
     /// What this title's executable resolves per pressing (the title screen's
     /// wordmark, a localised boot movie), or `None` when it resolves nothing
     /// per pressing. See [`pressing::Pressings`].

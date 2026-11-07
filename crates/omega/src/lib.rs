@@ -226,6 +226,7 @@ pub const TITLE: &Title = &Title {
     // read through its own `load_omega`; no grids file is read on its own and no
     // unlock row is wired.
     main_menu: main_menu::MAIN_MENU,
+    pause_menu: None,
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Omega,
         definition_entry: None,

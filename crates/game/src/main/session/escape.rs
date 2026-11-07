@@ -144,7 +144,7 @@ impl Session {
     /// custom one can. The result capture at the top of [`Session::escape`]
     /// has already run, so a Speed Lap or Time Trial best is kept. HD and
     /// Fury keep the raced cell under the cursor (chosen, nothing measured).
-    fn quit_campaign_race(
+    pub(super) fn quit_campaign_race(
         &mut self,
         cell: &str,
         difficulty: Option<oag_tables::race_campaign::Difficulty>,
@@ -335,6 +335,7 @@ impl Session {
 
         if self.shell.is_some()
             && let Stage::Race(stage) = &self.stage
+            && !self.pause_screen_applies(stage)
             && let RaceExit::CellSelection { cell, difficulty } =
                 race_exit(stage.campaign_cell.as_ref(), stage.campaign_difficulty)
         {

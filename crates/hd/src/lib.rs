@@ -242,6 +242,7 @@ pub const TITLE: &Title = &Title {
     // Measured: `docs/ui/campaign-screens.md`'s HD section. The
     // `Campaign Selection` ids are in `DATA06`'s entries copy alone.
     main_menu: main_menu::MAIN_MENU,
+    pause_menu: None,
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Hd,
         definition_entry: Some(campaign::DEFINITION_ENTRY),

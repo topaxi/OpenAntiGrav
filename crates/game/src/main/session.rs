@@ -73,6 +73,8 @@ pub(crate) mod menus;
 mod pacing;
 #[path = "session/pause.rs"]
 pub(crate) mod pause;
+#[path = "session/pause_menu.rs"]
+mod pause_menu;
 #[path = "session/picker.rs"]
 mod picker;
 // Named `pilot_editor`, not `pilots` - `oag_raceplay::pilots` is already imported

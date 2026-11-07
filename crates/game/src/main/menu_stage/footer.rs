@@ -73,6 +73,9 @@ impl MenuStage {
     /// `Default` role, the face the disc's own tips are lowercase in.
     #[must_use]
     fn ticker_overlay(&self, tips: &[String]) -> Option<(Draw, (f32, f32))> {
+        if self.pause_scrim.is_some() {
+            return None;
+        }
         let layout = self.ticker.as_ref()?;
         let measure = |text: &str| font::measure(&self.default_atlas, text);
         let draw = oag_ui_screens::campaign::footer::ticker_draw(

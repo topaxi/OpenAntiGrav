@@ -432,7 +432,16 @@ impl Session {
                 let presses = self.controls.take_presses(Button::Start)
                     | u8::from(click)
                     | if paused { seat_clicks } else { 0 };
-                self.step_pause(presses);
+                // The title's own pause screen takes START (the original's pause is a menu).
+                if presses != 0
+                    && let Stage::Race(stage) = &self.stage
+                    && !paused
+                    && self.pause_screen_applies(stage)
+                {
+                    self.escape();
+                } else {
+                    self.step_pause(presses);
+                }
             }
             // Circle is "back" everywhere else on screen - the menus, the
             // front end - and a paused race is the one place a still-running

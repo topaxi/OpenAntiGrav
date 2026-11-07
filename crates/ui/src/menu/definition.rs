@@ -126,6 +126,8 @@ pub enum Error {
 
 mod build;
 mod mod_setting;
+mod pause;
+pub use pause::{PAUSE_PAGE, PHOTO_ROW, Pause};
 pub use build::{Added, For, ModMenu};
 
 impl From<&raw::Launch> for LaunchInputs {

@@ -84,6 +84,12 @@ pub enum Action {
     /// (`crate::main::session::photo` in `oag-game`). The row is on the page only while a
     /// race with one view is parked ([`super::Menu::offer`]).
     PhotoMode,
+    /// The pause menu's RESTART RACE row: the parked race again from the grid, on the options
+    /// it ran with (`crate::main::session::pause_menu` in `oag-game`).
+    RestartRace,
+    /// The pause menu's QUIT RACE row: leaves the parked race for the front end, or for the
+    /// campaign cell it was launched from.
+    QuitRace,
 }
 
 impl Action {
@@ -108,6 +114,8 @@ impl Action {
             Self::EditPlayerName => "edit_player_name",
             Self::EditPlayerTag => "edit_player_tag",
             Self::PhotoMode => "photo_mode",
+            Self::RestartRace => "restart_race",
+            Self::QuitRace => "quit_race",
         }
     }
 
@@ -143,13 +151,15 @@ impl Action {
             "edit_player_name" => Some(Self::EditPlayerName),
             "edit_player_tag" => Some(Self::EditPlayerTag),
             "photo_mode" => Some(Self::PhotoMode),
+            "restart_race" => Some(Self::RestartRace),
+            "quit_race" => Some(Self::QuitRace),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 17] {
+    pub fn all() -> [Self; 19] {
         [
             Self::LaunchRace,
             Self::Quit,
@@ -168,6 +178,8 @@ impl Action {
             Self::EditPlayerName,
             Self::EditPlayerTag,
             Self::PhotoMode,
+            Self::RestartRace,
+            Self::QuitRace,
         ]
     }
 }

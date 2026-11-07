@@ -100,6 +100,18 @@ impl Frame {
             .collect()
     }
 
+    /// This frame without the marks in the lower half of a screen `height` high: the footer
+    /// strips. A pause screen is not nested in the front end's frame and draws none.
+    #[must_use]
+    pub fn without_footer(&self, height: f32) -> Self {
+        let mut frame = self.clone();
+        frame.marks.retain(|mark| match mark {
+            Draw::Sprite { rect, .. } | Draw::Fill { rect, .. } => rect[1] < height * 0.5,
+            _ => true,
+        });
+        frame
+    }
+
     /// Whether this title draws any frame at all.
     #[must_use]
     pub fn is_empty(&self) -> bool {
