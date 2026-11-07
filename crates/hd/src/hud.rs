@@ -298,6 +298,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         live: Some(oag_title::hud::LiveSight {
             missile_extent_unit: 30.0 / 2.65625,
             leach_extent_unit: 30.0 / 3.40909,
+            chase_gain: 4.0,
         }),
     },
     // **Not Pulse's substitution.** HD's `PickupBackground` is a hexagon

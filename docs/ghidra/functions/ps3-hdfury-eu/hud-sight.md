@@ -18,7 +18,8 @@ the figures below repeat across them.
 | --- | --- | ---: |
 | `hud+0xec` | adds `dt` every frame a target is on screen; **not reset when the lock drops**, zeroed only when the target leaves (it read `0.0` on the first frame with none) | 90 |
 | `hud+0xdc` (byte) | `1` on the first frame `0xec` passes `0.8` (`0.8000` in three of three runs, `24` frames at `1/30`); drops to `0` on a frame the reticle has not caught its target and is retaken at once while `0xec` is still above `0.8` | 90 |
-| `hud+0xe0`, `+0xe4` | the sight's centre in the 1920x1080 grid; chases the target from the first sighting, then follows it | 80 |
+| `hud+0xe0`, `+0xe4` | **the target's raw projection** in the 1920x1080 grid (the previous frame's, read at `0x0008ab40`/`0x0008ab48` and overwritten with this frame's at `0x0008ab64`/`0x0008ab68`; the aim is `2 * new - old`). The first pass of this page read it as the sight's centre; the chase centre is `hud+0xd4`, `+0xd8` ("Moving pursuit" below) | 92 |
+| `hud+0xd4`, `+0xd8` | **the sight's chase centre** in the same grid: read at `0x0008abcc`/`0x0008abd4`, stepped at `0x0008b948`..`0x0008b95c`, snapped to the aim on arrival at `0x0008ad54`/`0x0008ad58` | 92 |
 | `hud+0x6b8` (byte) | `1` while not locked, `0` from the lock frame on, `1` again when the lock drops: the one-shot latch of the cue call `FUN_00677518(..., 0x38)` | 85 |
 | `hud+0x634` | `+= 4 dt`, wraps at `2 pi`: confirmed on every row | 95 |
 | widget `+0x34` bit `0x4` | shown; `+0xac`/`+0xb0` width and height, `+0x12c` rotation (the ring angles turn, so it is a rotation: raised from 65 to 90), `+0xbc..+0xc8` the four vertex colours | 90 |
@@ -80,26 +81,74 @@ and `::hd_missile_locks_after_the_point_eight_second_hold` (timing; the first re
 The LeachBeam's fire gate (`oag_raceplay::weapons`) now waits for that lock on HD as it does on Pulse: **inherited from the PSP**, HD's
 fire path was not read for it.
 
+### Moving pursuit, 2026-11-07: the chase is the PSP's times 4.0
+
+**Law, confidence 92.** On the target-on-screen path `Hud_UpdateMissileSight` (`0x0008a5b8`) builds the chase rate as
+the PSP does and then multiplies it by one more constant:
+
+| Step | Address | Value |
+| --- | --- | --- |
+| `dt * 30.0` (`f31`) | `0x0008a898`, `30.0` at `0x008a77bc` | the PSP's `step` |
+| `rate = (0.12 d + 1.5) * 1.1` | `0x0008abf0`, `0.12` at `0x008a77a8`, `1.5` at `0x008a776c`, `1.1` at `0x008a77ac` | the PSP's, `d` the `0.7`-weighted distance (`0x008a7614`) |
+| `rate = 15.0` once `hud+0xec > 0.8` and the lock byte is set | `0x0008ac08`, `15.0` at `0x008a77b8` | the PSP's |
+| `zoom = clamp(30 / w, 1, 5)` | `0x0008ac18`..`0x0008ac38`, `5.0` at `0x008a7710` | the PSP's |
+| **`f11 = rate * zoom * 4.0`** | `0x0008ac3c` (`fmuls f0,f10,f0` with `4.0` at `0x008a7770`), `0x0008ac40` | **new: the PSP has no factor** |
+| arrival: `f11 * dt * 30.0 > d` | `0x0008ad3c`, `0x0008ad48` | the PSP's compare, so the radius is four times the PSP's |
+| chase: `centre += (aim - centre) * (f11 * dt * 30 / d)` | `0x0008b934`..`0x0008b960` | the PSP's, four times the step |
+
+`4.0` is the HUD grid's width over the PSP's (`1920 / 480`): HD rescaled the chase into its own pixels. Every other
+constant is the PSP's, unscaled. The `1.0` seed the first page took for `f11` (`0x008a75bc`) is the no-target path
+(`0x0008acf8`..`0x0008ad0c`), where the rate is `1` and nothing is multiplied. `r22` is only "a target is on screen this
+frame" (`li r22,1` at `0x0008ac20`, `0` at `0x0008ad20`), not a second gate. The lock byte is set at `0x0008b7ec` from
+`0x0008ad70` (`hud+0xec > 0.8`) on the arrival path, exactly as the PSP's.
+
+**Why the first pass saw no gate.** It logged `hud+0xe0/0xe4` as the sight's centre. That is the *target's* projection, so
+"the centre moved 7 to 8 px a frame at the lock" was the target moving; the real centre (`0xd4/0xd8`) was never logged.
+With `4.0` the steady-state lag behind a `7.4` px/frame target is about `1.5` px and the arrival radius about `14` px, so
+the reticle is on its target every frame.
+
+**Live, confidence 92.** RPCS3, Wipeout HD Fury EU, Racebox Single Race, Talons Junction, the player teleported 60 units behind a
+rival at its heading and speed (`scripts/rpcs3-hd-lock-sight.py --behind 60`, which now also logs `hud+0xd4/0xd8` and picks the HUD
+object by its widgets' authored sizes: the scan alone also matches runs of image widgets elsewhere in the heap), cross held,
+`dt = 1/30`. Over the 8 recorded chase frames with a clear zoom of `1` (the target past 30 units),
+the centre moved **`4.00` times** (`3.99` to `4.00`) the step `dt * 30 * 1.1 * (0.12 d + 1.5)` the PSP's law gives, at `d` from
+`16.7` to `1,168` px; and on the arrival frames the centre equalled the aim exactly from `12.8` and `9.0` px away,
+where `3.3` and `2.8` px is all a gain of one allows. The lock byte (`hud+0xdc`) set on the first frame after `hud+0xec` passed
+`0.8` (`0.8002`) with the centre on the aim and held for the 42 frames to the end of the sighting, with the target moving `3` to `150` px a
+frame. Pinned in `crates/race/src/sight/tests.rs::hd_chases_at_four_times_the_psp_step_as_the_original_does` (the eight frames
+as a table; the PSP's step misses each by over a pixel) and `::a_target_crossing_the_screen_locks_with_the_hd_gain_and_never_without_it`.
+
+**Ours before and after.** Same pursuit on the disc (`crates/raceplay/tests/lock_sight_ground_truth.rs::hd_missile_holds_its_lock_on_a_craft_it_is_chasing_across_the_screen`:
+single race, cross held 400 ticks, a Missile always in hand, 1,500 ticks): HD locked on **359 of 656** visible ticks (`55 %`)
+before and **573 of 656** (`87 %`) after; Pulse **585 of 634** (`92 %`) before and after, bit for bit. The first lane's
+"0 of 318" did not reproduce on this tree (its scenario was not kept); the shortfall did.
+Wired as `oag_title::hud::LiveSight::chase_gain` (`4.0`; `Sights::chase_gain()` is `1.0` wherever `live` is `None`),
+`oag_raceplay::Sighting::chase_gain`, `oag_race::sight::Sight::set_chase_gain`, applied as `rate *= zoom * gain` on the
+target-on-screen path only. The simulation's per-slot locks and the drawn reticle take the same value from the same
+`Sighting`, so the red, the tone and the shot agree.
+
+**Not covered.** `Hud_UpdateLeachBeamSight` (`0x00090d30`) was not read for a gain: the LeachBeam's lock is its own closing
+law, and its centre chase on HD keeps the Missile's unscaled step in ours. Open.
+
 ### Open, and checked against 2048 and Omega
 
-- **A moving pursuit never locks in ours on HD, and does on Pulse: the reproduction of the maintainer's "not as in Pulse".**
-  Same scenario on both discs (single race, cross held 400 ticks, a Missile always in hand, 1,500 ticks): Pulse
-  `272` ticks visible, `141` locked (longest visible run `141`); HD `318` visible, `0` locked (longest run `188`). HD's
-  Missile needs the reticle to catch its target the same frame (`Sight::step`: distance under `dt * 30 * rate`, about
-  `1` to `2` px, here in a `1920` px grid), so a target crossing the screen at several px a tick is never caught.
-  **The original does not seem to need that.** In three runs `hud+0xdc` flipped on the first frame `hud+0xec` passed `0.8`
-  while the chase centre `hud+0xe0` was still moving `7` to `8` px a frame (the PSP's lag law puts a `7` px/frame target about
-  `43` px behind it), and it was held while the centre sped to `40` px a frame. Static read of the store
-  (`0x0008b7ec`, reached only from `0x0008ad70`, `fcmpu ec, 0.8; bgt`) shows the same arrival compare as the PSP's
-  (`0x0008ad48`: `f11 * (dt * 30.0) > distance`, `30.0` at `0x008a77bc`, `f11` seeded `1.0` from `0x008a75bc` and replaced
-  by `0x008a764c` (`0.5`) or `0x008a75b8` (`0.0`) on the other paths), with the arrival path gated further by a flag
-  (`r22`) this pass did not trace. So the code has the gate and the data does not show it biting: **unresolved**, and no
-  law was changed for it. The target's own screen position was not logged next to the centre, which is what settles it
-  (poll the target craft's projection, or read `r22`'s writers).
+- ~~**A moving pursuit never locks in ours on HD, and does on Pulse: the reproduction of the maintainer's "not as in Pulse".**~~
+  **Resolved 2026-11-07, "Moving pursuit" above**: the reading below took `hud+0xe0/0xe4` for the sight's centre and missed the
+  `4.0` at `0x0008ac3c`. Kept for its evidence. The original text:
+  The first lane's reading, kept for its evidence (its centre was the target's projection, and the `4.0` was missed):
+  same scenario on both discs (single race, cross held 400 ticks, a Missile always in hand, 1,500 ticks): Pulse
+  `272` ticks visible, `141` locked; HD `318` visible, `0` locked. In three runs `hud+0xdc` flipped on the first frame
+  `hud+0xec` passed `0.8` while `hud+0xe0` was moving `7` to `8` px a frame, and was held while it sped to `40` px a frame;
+  `r22` was not traced.
 - The distance dependence of the seeking size; the `Middle` growth before it hides; the sound, if any, at the lock; the
   alpha ramp of `Outer` and `Middle` before they are full (ours multiplies the law's own alpha).
-- **2048 and Omega**: same widget names (`Sights::Concentric` rows), checked, applies, not wired: `live: None` there,
-  their executables' updates are not read. A reader run on them would be the same poll against `Hud_UpdateMissileSight`'s Vita and PS4 copies.
+- **2048 and Omega**: same widget names (`Sights::Concentric` rows), checked, applies, not wired: `live: None` there, so
+  their chase gain stays `1.0`. Their updates are not located: the bind functions are `FUN_81158d88` (2048 v1.04) and
+  `FUN_0126c020` (Omega), the sight widgets' offsets are read there, and a search for the PSP's `0.12` literal
+  (`8f c2 f5 3d`) turns up no function that reads the sight's widget offsets (Omega's only xref'd hit is `FUN_016372a0`, a
+  10 KB render function). Omega draws HD's `1920 x 1080` HUD space, so the same `4.0` is the expectation there; 2048's grid is
+  not HD's, so its gain is not guessed. Next: search both executables' functions for the widget offsets the bind stores at.
+- The LeachBeam's own centre chase on HD (`Hud_UpdateLeachBeamSight`, `0x00090d30`) was not checked for the gain.
 - A Fury HUD Style was not compared: both sides ran HUD Style HD (the blue palette).
 
 The sections below are the earlier readings, kept for their evidence; where they disagree with this one, this one wins.

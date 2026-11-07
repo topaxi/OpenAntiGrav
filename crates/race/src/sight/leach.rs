@@ -69,6 +69,18 @@ impl Sight {
         self.leach_law = on;
     }
 
+    /// Sets what the Missile's chase rate is multiplied by while a target is on
+    /// screen: the title's `oag_title::hud::Sights::chase_gain`.
+    ///
+    /// Wipeout HD multiplies the PSP's `rate * zoom` by `4.0`
+    /// (`Hud_UpdateMissileSight` `0x0008ac3c`, `docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`,
+    /// "Moving pursuit"), which both quickens the chase and widens the arrival
+    /// radius the lock needs. The PSP's law, and every title whose update is
+    /// unread, keeps [`super::CHASE_GAIN_NONE`].
+    pub fn set_chase_gain(&mut self, gain: f32) {
+        self.chase_gain = gain;
+    }
+
     /// Whether the title's LeachBeam reticle runs its own law
     /// ([`Self::set_leach_law`]): Pulse and HD.
     ///

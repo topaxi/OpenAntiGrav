@@ -1146,6 +1146,7 @@ static LIVE_SIGHTS: oag_title::hud::Sights = oag_title::hud::Sights::Concentric 
     live: Some(oag_title::hud::LiveSight {
         missile_extent_unit: 30.0 / 2.65625,
         leach_extent_unit: 30.0 / 3.40909,
+        chase_gain: 4.0,
     }),
 };
 

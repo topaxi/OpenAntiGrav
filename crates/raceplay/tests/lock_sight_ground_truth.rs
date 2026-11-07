@@ -740,3 +740,82 @@ fn hd_missile_locks_after_the_point_eight_second_hold() {
         "locked {ticks} ticks after the first sighting"
     );
 }
+
+/// What a held-throttle pursuit does to slot 0's reticle.
+#[derive(Debug, Clone, Copy, Default)]
+struct Pursuit {
+    /// Ticks a target is on screen (seeking or locked).
+    visible: u32,
+    /// Ticks the reticle is locked.
+    locked: u32,
+}
+
+/// A single race on `setup`, cross held for the first 400 ticks, a Missile in slot 0's hand
+/// whenever it has none, `ticks` long.
+///
+/// The craft drives the circuit with the field around it, so a target crosses the screen at
+/// several pixels a tick: the case a lock on a standing target never meets.
+fn pursuit(setup: race::Setup, ticks: u32) -> Pursuit {
+    use oag_gameplay::input::Button;
+    use oag_race::sight;
+
+    let mut race = race::Race::start(setup);
+    let mut held = race::HeldButtons::new(Button::Cross.bit());
+    let mut seen = Pursuit::default();
+    for tick in 0..ticks {
+        if race.sim.world.ships[0].pickup.weapon.is_none() {
+            race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+        }
+        let inputs = if tick < 400 {
+            PlayerInputs::single(held.snapshot())
+        } else {
+            PlayerInputs::none()
+        };
+        race.tick(&inputs);
+        match race.sight_state() {
+            sight::State::Absent => {}
+            sight::State::Seeking => seen.visible += 1,
+            sight::State::Locked => {
+                seen.visible += 1;
+                seen.locked += 1;
+            }
+        }
+    }
+    seen
+}
+
+/// HD's Missile reticle holds its lock on a craft it is chasing across the screen.
+///
+/// The original's chase step is the PSP's times `4.0` (`1920 / 480`, `0x008a7770`, applied
+/// at `0x0008ac3c`), so its arrival radius is four times the PSP's and a target moving a few
+/// pixels a tick is caught the frame the hold ends (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`,
+/// "Moving pursuit"). Without the factor this run locked on `359` of its `656` visible ticks
+/// (`55 %`); with it, `573` (`87 %`), where Pulse's own is `585` of `634` (`92 %`).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_missile_holds_its_lock_on_a_craft_it_is_chasing_across_the_screen() {
+    let Some(image) = image_named("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = race_on(&image);
+    assert_eq!(
+        loaded.setup.sight.chase_gain, 4.0,
+        "HD's chase gain does not reach the race"
+    );
+    let seen = pursuit(loaded.setup, 1_500);
+    println!("HD pursuit: {seen:?}");
+    assert!(
+        seen.visible > 400 && seen.locked * 100 >= seen.visible * 80,
+        "HD locked {} of {} visible ticks of a pursuit",
+        seen.locked,
+        seen.visible
+    );
+}
+
+/// Pulse's reticle keeps the PSP's own step: HD's gain is HD's alone.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulse_keeps_the_psp_chase_step() {
+    let Some(loaded) = single_race() else { return };
+    assert_eq!(loaded.setup.sight.chase_gain, 1.0);
+}
