@@ -150,8 +150,11 @@ Code: `oag_raceplay::photo` (the camera), `oag_game::photo` (the screen and the 
 off an original is **chosen, not measured**; where Pulse's and HD's laws differ the wider one is
 taken, and a value one title measured is used on the rest unchanged.
 
-**Entry.** The pause menu's PHOTO MODE row, which is the front end's main page over the race
-parked behind it (Escape, or Back on a phone): the row is parked off the page unless a race with
+**Entry.** The pause menu's PHOTO MODE row. **On Pulse that is the title's own pause screen**
+(`EXT_PHOTO`, the disc's row on the screens that author one, ours after OPTIONS on a screen that
+does not; [the pause menu](pause-menu.md)), opened by START or Escape. **On the other titles it is
+the front end's main page over the race parked behind it** (Escape, or Back on a phone): the row is
+parked off the page unless a race with
 one view is held, as a choice with nothing to offer is (`Menu::offer`). The built-in mod
 `oag-extras` attaches it, so it is on every title's main page (after OPTIONS' own rows; on HD and
 Omega's strip it is the tab right of OPTIONS). On Pulse's `Race End Photo`, SELECT opens it once

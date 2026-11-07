@@ -676,11 +676,11 @@ fn a_race_resumed_from_the_pause_menu_draws_its_hud_at_the_new_screen_size() {
             "boot; select racebox; press cross; until page=race; select launch_race; press cross; \
              until screen=picker; press cross; until screen.id=ship-select; press cross; \
              until stage=race within 4000; ticks 300; screenshot {}; \
-             press start; ticks 10; press circle; until stage=menu within 300; ticks 20; \
-             select options; press cross; until page=options; \
+             press start; until stage=menu within 300; ticks 20; \
+             select pause_options; press cross; until page=options; \
              select display; press cross; until page=display; \
              set graphics.hud_safe_area=90; press circle; until page=options; \
-             press circle; until page=main; press circle; until stage=race within 300; \
+             press circle; until page=pause; press start; until stage=race within 300; \
              ticks 30; screenshot {}",
             before.display(),
             after.display()

@@ -1070,8 +1070,8 @@ Recorded so none of this reads as undiscovered work.
 - ~~**Medal targets.** `IG_HUD_GOLD`/`SILVER`/`BRONZE`/`RECORD` need
   progression data...~~ **Closed 2026-09-28** - see "Medal targets, closed
   2026-09-28" below.
-- **`IG_PAUSE_QUIT`.** There is no pause: leaving a race drops the `World` rather
-  than suspending it.
+- **`IG_PAUSE_QUIT`.** Drawn since 2026-11-07, as the pause screen's QUIT RACE row ([the pause
+  menu](pause-menu.md)); it drops the parked race.
 - **Unreferenced `Data\HUD\*.vex` models** (Pure's gauge set, `Bar_1`/`Bar_3`/`Bar_outline_1` and `Zone_*`, is referenced and drawn as of 2026-10-22; the rest of the 26 below is not). `Bar_1`, `Speed`, `Shield`, `Lap`,
   `Position`, `Thrust`, 11 `Weapon_*`, `Zone_Bar_*`, `ghostship`, `grid`,
   `memory_stick_anim`. Referenced by **no** layout's `Src=` and by no string in

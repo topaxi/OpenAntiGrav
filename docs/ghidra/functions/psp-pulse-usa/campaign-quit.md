@@ -54,9 +54,10 @@ entry, so the destination follows by the same data (confidence 75 for those).
 `Session::escape` in a campaign race (any mode, Pulse and HD/Fury through the shared
 code) records the result, discards the race and opens `Cell Selection` on the cell's
 grid. On Pulse the cursor is the default cell (measured); HD and Fury keep the raced
-cell under the cursor (**chosen, not measured**: nothing on HD was walked). There is no
-pause menu in this build, so escape stands for QUIT RACE and a campaign race cannot be
-resumed from the menus (**chosen, not measured**). Our own walk reaches the same screen
+cell under the cursor (**chosen, not measured**: nothing on HD was walked). On
+Pulse the pause menu now exists (`docs/ui/pause-menu.md`) and its QUIT RACE row lands here; on a
+title without one, escape stands for QUIT RACE and a campaign race cannot be resumed from the menus
+(**chosen, not measured**). Our own walk reaches the same screen
 (`o11.png`).
 
 **2048 / Omega:** not checkable here. 2048's pause is a different screen set and Omega

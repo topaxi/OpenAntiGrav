@@ -1128,7 +1128,16 @@ a pause screen to read one off - `Skin.xml`'s `LoadXML` list is exhaustively
 and none of them is a `Pause` definition - and the one HUD string that
 names pausing, `IG_PAUSE_QUIT`, is drawn by nothing (see
 [hud.md](../ui/hud.md)'s "There is no pause"). See `PAUSE_OVERLAY` in
-`crates/game/src/main/menu_stage.rs`.
+`crates/game/src/main/menu_stage.rs`. **That held until `InGame_Definition.xml`
+was read: it is the 23rd file and carries Pulse's pause screens.** A title with
+`Title::pause_menu` draws the authored tint (`0xe8000000`) instead, on the
+screen [the pause menu](../ui/pause-menu.md) describes; `PAUSE_OVERLAY` stays
+the tint over a parked race on the other titles.
+
+**On a title with a pause screen** (`oag_title::Title::pause_menu`, Pulse) the menus open over a
+parked race on that screen, not on the main page: `Definition::open_on_pause_screen` adds a page of
+the disc's rows for the race's mode and makes it the root
+([the pause menu](../ui/pause-menu.md)). The rest of this section is the other titles' pause.
 
 **A row that is on the pause menu only while a race is held** (PHOTO MODE) is `menu::Menu::offer`'s:
 the row is in the definition, off the page from `Menu::new`, and `Session::menu_model` puts it

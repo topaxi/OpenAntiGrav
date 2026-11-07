@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
-updated: 2026-11-06
+updated: 2026-11-07
 summary: "Photo mode and its picture controls run on all five titles (docs/ui/photo-mode.md); motion blur, accumulated depth of field and follow-ups are open"
 ---
 
@@ -38,6 +38,7 @@ in that page's lineage and `git log`; what is left from it is here.
 
 ### Follow-ups to `photo-wire`
 
+- **Entry moved (2026-11-07):** on Pulse the PHOTO MODE row is the pause screen's (`handover/frontend/pause-menu.md`); the other titles keep the main page's.
 - **Split screen.** Left out on purpose (the mode frames one picture and one pad drives it); HD and
   Omega offer it from either pad. A cut from the best version, not a neutral default.
 - **The photo counter stat** (`PRO_STATS_PHOTO` where a stats row exists).

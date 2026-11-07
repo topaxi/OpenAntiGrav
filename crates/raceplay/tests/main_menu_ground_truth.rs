@@ -15,6 +15,10 @@
 //! it and compares the whole list, so a row dropped, added or reordered fails by
 //! name rather than by a menu that quietly drifted. The rows this build has nothing
 //! behind (`builds: None`) stay in the list: the list is the disc's.
+//!
+//! The same pass reads each title's pause screens (`Title::pause_menu`) out of the
+//! `InGame_Definition.xml` beside it: every authored screen's row list, whole, and the
+//! default the pause redirect names.
 
 use std::path::{Path, PathBuf};
 
@@ -87,6 +91,7 @@ fn copies(archives: &mut oag_assets::Archives, name: &str) -> Vec<(String, Node)
 }
 
 const PULSE_MAIN: &str = r"Data\Plugins\PI001\GUI\MainMenu_Definition.xml";
+const PULSE_INGAME: &str = r"Data\Plugins\PI001\GUI\InGame_Definition.xml";
 const HD_MAIN: &str = r"Data\Plugins\Frontend\Gui\MainMenu_Definition.xml";
 
 fn check(menu: &MainMenu, found: &[String], what: &str) {
@@ -384,4 +389,95 @@ fn wipeout_2048s_dlc_archives_carry_no_front_end_definition() {
             .collect();
         assert!(found.is_empty(), "{dlc}: {found:?}");
     }
+}
+
+/// The `goto` of the first `<Default>` under the screen named `screen`.
+fn default_goto(root: &Node, screen: &str) -> Option<String> {
+    fn find<'a>(node: &'a Node, screen: &str) -> Option<&'a Node> {
+        if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(screen) {
+            return Some(node);
+        }
+        node.children.iter().find_map(|child| find(child, screen))
+    }
+    fn default(node: &Node) -> Option<&Node> {
+        if node.name.eq_ignore_ascii_case("Default") {
+            return Some(node);
+        }
+        node.children.iter().find_map(default)
+    }
+    default(find(root, screen)?)?
+        .attr("goto")
+        .map(str::to_string)
+}
+
+/// Every pause screen the title authors, row for row, and the screen its pause redirect
+/// opens by default. `InGame Pause MP` and its tournament host are the network modes' and a
+/// race here never opens them, so they are not in the table.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_psp_pause_screens_are_the_four_single_player_lists_on_both_pressings() {
+    let pause = oag_pulse::TITLE
+        .pause_menu
+        .expect("Pulse authors pause screens");
+    for name in ["pulse-psp-eu.chd", "pulse-psp-usa.chd"] {
+        let Some(image) = image(name) else { continue };
+        let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening the disc");
+        let root = read(&mut archives, PULSE_INGAME);
+        for screen in pause.screens {
+            let rows: Vec<&str> = screen.rows.iter().map(|row| row.disc_id).collect();
+            assert_eq!(
+                entries(&root, screen.name, "Option"),
+                rows,
+                "{name}: {:?} against `Title::pause_menu`",
+                screen.name
+            );
+        }
+        assert_eq!(
+            default_goto(&root, "InGame Pause Redirect").as_deref(),
+            Some(pause.default_screen),
+            "{name}: the screen the pause redirect opens by default"
+        );
+        for (_, screen) in pause.by_mode {
+            assert!(
+                pause.screen(screen).is_some(),
+                "{name}: {screen:?} is a table row"
+            );
+        }
+    }
+}
+
+/// Checked, differs: the PS2 pressing authors the same four screens without `EXT_PHOTO` and
+/// `IG_PAUSE_GMAN`. The table is the PSP's; the PS2 gets the same rows built, because the game
+/// manual is not built anywhere and PHOTO MODE is this project's row after OPTIONS where the
+/// screen authors none (`PauseMenu::offers_photo`).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_ps2_pause_screens_are_the_psps_without_photo_and_the_manual() {
+    let pause = oag_pulse::TITLE
+        .pause_menu
+        .expect("Pulse authors pause screens");
+    let Some(image) = image("pulse-ps2-eu.chd") else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening the disc");
+    let root = read(&mut archives, PULSE_INGAME);
+    for screen in pause.screens {
+        let rows: Vec<&str> = screen
+            .rows
+            .iter()
+            .map(|row| row.disc_id)
+            .filter(|id| !["EXT_PHOTO", "IG_PAUSE_GMAN"].contains(id))
+            .collect();
+        assert_eq!(
+            entries(&root, screen.name, "Option"),
+            rows,
+            "PS2: {:?} against `Title::pause_menu` without the two rows it lacks",
+            screen.name
+        );
+    }
+    assert_eq!(
+        default_goto(&root, "InGame Pause Redirect").as_deref(),
+        Some(pause.default_screen),
+        "PS2: the screen the pause redirect opens by default"
+    );
 }

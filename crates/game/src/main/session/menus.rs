@@ -172,6 +172,11 @@ impl Session {
         // selection screens' rows - the renderer below draws them with it.
         skin.set_row_ink(oag_ui::pointer::RowInk::measure(&rows_face));
         let model = self.menu_model(&shell, &skin);
+        let pause_scrim = shell
+            .title
+            .pause_menu
+            .filter(|_| model.definition().pages[model.definition().root].id == menu::PAUSE_PAGE)
+            .map(|pause| pause.scrim_argb);
         // **The movie planes are asked for only when there is a movie to put in
         // them.** This used to be unconditionally `None`, on the grounds that
         // wanting them would tie the menus to a stage that had played one; that
@@ -303,7 +308,11 @@ impl Session {
                 skin,
                 text_atlas,
                 default_atlas: shell.font.clone(),
-                frame: shell.frame.clone(),
+                frame: if pause_scrim.is_some() {
+                    shell.frame.without_footer(skin.space().size.1)
+                } else {
+                    shell.frame.clone()
+                },
                 nav_legend: super::player_name::tagged(shell.nav_legend.clone(), &self.settings.player, shell.title),
                 ticker: shell.ticker.clone(),
                 // Free-running from zero on every open, the same choice
@@ -312,6 +321,7 @@ impl Session {
                 // its phase on a menu open, so there is nothing to seed this
                 // from instead.
                 ticker_elapsed: 0.0,
+                pause_scrim: pause_scrim.map(oag_ui::screen::argb_to_rgba),
                 marquee: marquee::Timer::default(),
                 // Opening the menus is not a page change: the front end's own
                 // hand-off already had its moment, and starting a transition
@@ -536,6 +546,9 @@ impl Session {
             }
             // The pause menu's PHOTO MODE row (`session::photo`).
             menu::MenuEvent::Fired(menu::Action::PhotoMode) => self.open_photo_from_menu(),
+            // The pause menu's RESTART RACE and QUIT RACE rows (`session::pause_menu`).
+            menu::MenuEvent::Fired(menu::Action::RestartRace) => self.restart_parked_race(),
+            menu::MenuEvent::Fired(menu::Action::QuitRace) => self.quit_parked_race(),
             // The AI PILOTS page's own two actions - see `super::pilot_editor`.
             menu::MenuEvent::Fired(menu::Action::SavePilot) => self.save_pilot(),
             menu::MenuEvent::Fired(menu::Action::NewPilot) => self.new_pilot(),
@@ -941,7 +954,9 @@ impl Session {
     pub(crate) fn menu_model(&mut self, shell: &super::Shell, skin: &menu::Skin) -> menu::Menu {
         let mut definition = shell.definition.clone();
         oag_game::music_pool::expand(&mut definition, self.music_discs.pool(), &shell.strings);
+        let paused = self.add_pause_screen(&mut definition);
         let mut model = menu::Menu::new(definition);
+        model.set_pause_screen(paused);
         // PHOTO MODE is a row of the pause menu: there while a race with one view is held
         // behind the menus, and on no other page of the front end.
         model.offer(menu::Action::PhotoMode, self.photo_available());

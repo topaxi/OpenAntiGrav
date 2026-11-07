@@ -229,6 +229,7 @@ pub const TITLE: &Title = &Title {
     // its `Definition.xml` and each circuit's `stats.xml`
     // (`docs/formats/pure-campaign.md`).
     main_menu: main_menu::MAIN_MENU,
+    pause_menu: None,
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pure,
         definition_entry: None,

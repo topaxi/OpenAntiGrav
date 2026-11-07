@@ -542,7 +542,7 @@ pub use page::{Page, RowMeta};
 mod expand;
 pub use expand::RowItem;
 mod definition;
-pub use definition::{Added, Definition, Error, For, ModMenu};
+pub use definition::{Added, Definition, Error, For, ModMenu, PAUSE_PAGE, PHOTO_ROW, Pause};
 
 /// What the menus did on a tick, for the composition root to act on.
 #[derive(Debug, Clone, PartialEq)]
@@ -619,6 +619,9 @@ pub struct Menu {
     reset_rect: Option<[f32; 4]>,
     /// The title's stand-in codepoint for the reset button. See [`Self::set_reset_glyph`].
     reset_glyph: Option<char>,
+    /// Whether this tree is a title's pause screen over a parked race. See
+    /// [`Self::set_pause_screen`].
+    pause_screen: bool,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -631,6 +634,14 @@ pub struct Menu {
 pub const DEFAULT_VISIBLE_ROWS: usize = 7;
 
 impl Menu {
+    /// Marks this tree as a pause screen over a parked race. On its root page START closes the
+    /// menus (the disc's `forward="start"` redirect resumes the race) instead of confirming a
+    /// row, and CIRCLE does nothing (`backward="none"`, a silent press, measured). ESCAPE, which
+    /// is not a button of the original, still backs out of it through [`Self::back`].
+    pub fn set_pause_screen(&mut self, pause: bool) {
+        self.pause_screen = pause;
+    }
+
     /// Opens a definition at its root page.
     #[must_use]
     pub fn new(definition: Definition) -> Self {
@@ -660,6 +671,7 @@ impl Menu {
             reset_label: String::new(),
             reset_rect: None,
             reset_glyph: None,
+            pause_screen: false,
         };
         // A row that is on a page only while the host offers it starts off the page.
         menu.offer(Action::PhotoMode, false);
@@ -1052,13 +1064,19 @@ impl Menu {
             out.push(event);
         }
 
+        let pause_root = self.pause_screen && self.depth() == 1;
+        if pause_root && input.take(Button::Start) {
+            self.nav.push(nav::Nav::Accept);
+            out.push(MenuEvent::Closed);
+            return out;
+        }
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.extend(self.activate());
         }
         if input.take(Button::Square) {
             out.extend(self.reset());
         }
-        if input.take(Button::Circle) {
+        if input.take(Button::Circle) && !pause_root {
             out.extend(self.back());
         }
 

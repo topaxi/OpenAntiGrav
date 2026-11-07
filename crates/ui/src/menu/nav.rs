@@ -297,7 +297,10 @@ impl Menu {
     /// no input state of their own - [`Self::update`] takes edges off a
     /// snapshot and this takes none at all.
     pub fn back(&mut self) -> Vec<MenuEvent> {
-        self.nav.push(Nav::Decline);
+        // Resuming a race from its pause screen is START's cue, `ACCEPT` (measured).
+        let resumes = self.pause_screen && self.stack.len() == 1;
+        self.nav
+            .push(if resumes { Nav::Accept } else { Nav::Decline });
         if self.stack.len() > 1 {
             self.stack.pop();
             self.snap_focus();

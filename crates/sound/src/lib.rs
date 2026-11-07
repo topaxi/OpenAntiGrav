@@ -893,14 +893,10 @@ impl Audio {
         Self::playlist_len(discs, booted)
     }
 
-    /// Stops the race playlist where it stands and resumes the menu voice.
-    ///
-    /// The position is saved to [`Self::race_position`] in the track's seconds
-    /// so the next [`Self::start_race_music`] resumes; [`Self::race_index`] is
-    /// untouched. The menu voice restarts from [`Self::menu_sound`] because
-    /// [`Self::start_music`] is idempotent and would do nothing. Silent when no
-    /// menu sound was ever loaded.
-    pub fn pause_race_music(&mut self) {
+    /// Stops the race playlist where it stands and leaves nothing sounding: a title's own pause
+    /// screen is silent (`docs/ui/photo-mode.md`, "What entering stops"). The position is saved
+    /// as in [`Self::pause_race_music`], so [`Self::start_race_music`] resumes it.
+    pub fn hold_race_music(&mut self) {
         self.reset_music_line();
         if let Some(id) = self.race_voice.take() {
             self.race_position = self
@@ -911,7 +907,17 @@ impl Audio {
         }
         self.race_from = None;
         self.race_context = None;
+    }
 
+    /// Stops the race playlist where it stands and resumes the menu voice.
+    ///
+    /// The position is saved to [`Self::race_position`] in the track's seconds
+    /// so the next [`Self::start_race_music`] resumes; [`Self::race_index`] is
+    /// untouched. The menu voice restarts from [`Self::menu_sound`] because
+    /// [`Self::start_music`] is idempotent and would do nothing. Silent when no
+    /// menu sound was ever loaded.
+    pub fn pause_race_music(&mut self) {
+        self.hold_race_music();
         if let Some(sound) = &self.menu_sound {
             self.music = self
                 .output

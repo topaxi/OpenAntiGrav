@@ -68,6 +68,9 @@ pub(crate) struct MenuStage {
     /// clock (advanced by [`Self::tick`]). See `footer::ticker_overlay`.
     pub(crate) ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     pub(crate) ticker_elapsed: f32,
+    /// The tint a title's own pause screen draws over the parked race, `None` on every other
+    /// menu: the screen authors it and no footer ticker (`oag_title::PauseMenu`).
+    pub(crate) pause_scrim: Option<[f32; 4]>,
     /// The value marquee's clock: which row it is timing, and for how long.
     pub(crate) marquee: marquee::Timer,
     /// The modal prompt on screen, if one is: an on-screen keyboard or a
@@ -532,7 +535,7 @@ impl MenuStage {
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {
                     rect: overlay_rect(self.skin.space(), viewport),
-                    color: PAUSE_OVERLAY,
+                    color: self.pause_scrim.unwrap_or(PAUSE_OVERLAY),
                 })
                 .chain(flat)
                 .collect()
@@ -761,7 +764,7 @@ impl MenuStage {
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {
                     rect: overlay_rect(self.skin.space(), viewport),
-                    color: PAUSE_OVERLAY,
+                    color: self.pause_scrim.unwrap_or(PAUSE_OVERLAY),
                 })
                 .chain(flat)
                 .collect()
@@ -932,7 +935,7 @@ impl MenuStage {
         let list: Vec<Draw> = if frozen_race {
             std::iter::once(Draw::Fill {
                 rect: overlay_rect(self.skin.space(), viewport),
-                color: PAUSE_OVERLAY,
+                color: self.pause_scrim.unwrap_or(PAUSE_OVERLAY),
             })
             .chain(list)
             .collect()
