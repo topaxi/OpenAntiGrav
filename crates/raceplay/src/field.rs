@@ -1033,8 +1033,15 @@ impl Race {
         // a `Vec` copy per frame for nothing.
         let finished_before: [bool; oag_gameplay::MAX_PLAYERS] =
             std::array::from_fn(|slot| self.sim.world.ships[slot].standing.finished());
+        let laps_before: [u32; MAX_SHIPS] =
+            std::array::from_fn(|slot| self.sim.world.ships[slot].standing.lap);
         if let Some(course) = &self.sim.course {
             advance_standings(&mut self.sim.world, course);
+        }
+        for (slot, &before) in laps_before.iter().enumerate() {
+            if self.sim.world.ships[slot].standing.lap > before {
+                self.credit_lap_points(slot);
+            }
         }
         // The tick a person crosses the line for the last time is the tick
         // their craft is handed to the driver, which has never run for them:
