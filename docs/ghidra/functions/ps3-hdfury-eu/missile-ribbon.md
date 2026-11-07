@@ -136,9 +136,12 @@ screen-space side of the segment, averaged over the two segments at a node.
 0, not off the array**, which is set by a constant this lane did not locate;
 a `0 / 1` array would give a one-sided ribbon. Confidence 70.
 
-`FatLine_fp`: `H0 = tex(TC0) * COL0` (two instructions). The state is the
+`FatLine_fp`: `H0 = tex(TC0) * COL0` (two instructions). The colour state is the
 `RibbonEffects_Render` one for pools 0, 2, 1, 5 (rocket-trail.md, "The manager"):
-`blend(SRC_ALPHA, ONE)`. The tint `c[209]` comes from a global vector the
+`blend(SRC_ALPHA, ONE)`. The alpha channel is **chosen against the film**: left as
+it is. Adding the fragment's alpha into the frame's alpha (what one factor for both
+channels would do) bloomed the ribbons white where the original's are red; the
+pair's table below carries both. The tint `c[209]` comes from a global vector the
 builder's bind function `0x002ec748` negates (`-[g + 0x70]`); its value was **not
 read**. Against the film it is white or near it (the texture is red already).
 

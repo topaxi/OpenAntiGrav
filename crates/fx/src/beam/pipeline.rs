@@ -209,18 +209,27 @@ impl Style {
     /// **Measured** (`docs/ghidra/functions/ps3-hdfury-eu/missile-ribbon.md`):
     /// `FatLine_fp` is two instructions, `TEX R0, f[TC0]` then `MUL H0, f[COL0],
     /// R0`, and `RibbonEffects_Render` draws the element's pools under
-    /// `blend(SRC_ALPHA, ONE)` (rocket-trail.md, "The manager"; one factor for
-    /// both channels, as `Style::magstrip`'s note reads the wrapper). Like the
-    /// LeachBeam strip's draw, so the blend is that strip's and the fragment is
-    /// `fat`. No transfer function in the program, so the texture is not decoded on
-    /// a linear target. **Chosen, not measured**: depth test on, depth write off,
-    /// cull off.
+    /// `blend(SRC_ALPHA, ONE)` (rocket-trail.md, "The manager"), the colour half of
+    /// which this takes from [`Self::leach_strip`]. No transfer function in the
+    /// program, so the texture is not decoded on a linear target.
+    ///
+    /// **Chosen against the film, not measured**: the alpha channel (the glow mask
+    /// the bloom reads) is left as it is, `ZERO, ONE`. Adding the fragment's alpha
+    /// into it, as the wrapper's single factor would, bloomed the ribbons white
+    /// where the original's are red (frame 3 of the pinned pair: 406 red pixels
+    /// against the original's 2,350; with the alpha untouched 1,652). Also chosen:
+    /// depth test on, depth write off, cull off.
     #[must_use]
     pub const fn fat_line(capacity: usize) -> Self {
         let mut style = Self::leach_strip(capacity);
         style.label = "fat line";
         style.leach = false;
         style.fat = true;
+        style.blend.alpha = wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::Zero,
+            dst_factor: wgpu::BlendFactor::One,
+            operation: wgpu::BlendOperation::Add,
+        };
         style
     }
 }
