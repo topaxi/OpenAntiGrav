@@ -274,7 +274,7 @@ fn an_event_of_a_kind_this_build_does_not_know_is_kept_and_not_understood() {
     replay.events.push(Event {
         tick: 10,
         seat: 0,
-        kind: 3,
+        kind: 4,
         value: 9,
     });
     let read = Replay::from_bytes(&replay.to_bytes()).expect("reads");
@@ -282,7 +282,7 @@ fn an_event_of_a_kind_this_build_does_not_know_is_kept_and_not_understood() {
     assert_eq!(
         read.events[0].kind(),
         None,
-        "controller is reserved, not implemented"
+        "kind 4 is not one this build knows"
     );
 }
 

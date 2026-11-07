@@ -213,3 +213,42 @@ fn a_race_that_records_nothing_rewinds_to_whole_keyframes() {
     assert_eq!(timeline.probe().sim.world.tick, 60);
     assert_eq!(timeline.step(), Ok(None));
 }
+
+/// A pad leaving a split-screen seat hands it to the driver outside the tick
+/// (`oag_game::split_screen::follow_devices`), and the controllers are in the state hash. With
+/// the change recorded as an event the recording reproduces; with the event stripped the first
+/// hash after it disagrees, so the event is what the recording rests on.
+#[test]
+fn a_seat_handed_to_the_driver_reproduces_and_without_its_event_desyncs() {
+    use oag_gameplay::Controller;
+    let at = 330;
+    let mut race = Race::start(fixture());
+    race.sim.world.controllers[1] = Controller::Local;
+    race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
+    for tick in 0..TICKS {
+        if tick == at {
+            assert!(race.set_controller(1, Controller::Ai));
+            assert!(!race.set_controller(1, Controller::Ai), "no change, no event");
+        }
+        race.tick(&inputs(tick));
+        race.drain_cues();
+    }
+    let replay = race.recorded().expect("recording");
+    assert_eq!(replay.header.slots, [0, 1], "both seats were people when it began");
+    assert_eq!(replay.events.len(), 1);
+    assert_eq!(replay.events[0].tick, at);
+
+    let mut whole = Timeline::open(fixture(), replay.clone()).expect("rebuilds");
+    assert_eq!(whole.wait(), Pass::Complete, "with the event it reproduces");
+    // A seek past it holds the seat the driver has.
+    whole.seek(TICKS - 1).expect("in the prefix");
+    assert_eq!(whole.probe().sim.world.controllers[1], Controller::Ai);
+
+    let mut stripped = replay;
+    stripped.events.clear();
+    let mut cut = Timeline::open(fixture(), stripped).expect("rebuilds");
+    assert!(
+        matches!(cut.wait(), Pass::Desynced(desync) if desync.tick == 360),
+        "without it the first stored hash after tick {at} disagrees"
+    );
+}
