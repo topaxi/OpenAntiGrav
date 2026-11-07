@@ -265,6 +265,14 @@ impl PoseTrack {
         Self { last, crafts }
     }
 
+    /// The ticks `craft` has a key at, in order; empty for a craft the track does not hold.
+    #[must_use]
+    pub fn key_ticks(&self, craft: usize) -> Vec<u64> {
+        self.crafts.get(craft).map_or_else(Vec::new, |keys| {
+            keys.iter().map(|key| u64::from(key.tick)).collect()
+        })
+    }
+
     /// What the track costs in a file: the size of its `POSE` chunk's payload.
     #[must_use]
     pub fn encoded_len(&self) -> usize {

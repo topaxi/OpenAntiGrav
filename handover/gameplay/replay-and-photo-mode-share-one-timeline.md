@@ -3,7 +3,7 @@ status: blocked-maintainer
 categories: [frontend, tooling]
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-07
-summary: "ADR-0087: one Timeline for replay viewer, photo rewind and take-over; stages 1 to 3 landed, stages 4 to 7 open"
+summary: "ADR-0087: one Timeline for replay viewer, photo rewind and take-over; stages 1 to 4 landed, stages 5 to 7 open"
 size: XL
 difficulty: hard
 ---
@@ -26,7 +26,6 @@ ADR and are not open.
   asked, not taken.
 - **The Steam Deck is not measured.** The command is in the ADR (decision 3). The design needs `tick_sim_only` at or
   under about 280 us there.
-- **A respawn in the pose track is argued, not shown**: the sweep's Autopilot races have none. Stage 4 needs one.
 - **Whether a fresh `Race` derives `capture_results` and `wreck_ended_tick`** at a take-over after a finish. The plan
   refuses those moments; a stage-7 lane may lift that.
 - **Stage 2 landed** ([replay file](../../docs/formats/replay-file.md)): `HEAD` names its schema, `[setup]` and `[options]` rebuild the
@@ -39,9 +38,13 @@ ADR and are not open.
   opening pass, the desync state. A seek reproduces a pad-flown Single Race on all five titles, and split screen on Pulse (two
   people, Head to Head) once `start_recorded` seats `Header::slots`. Its page's "Open" lists what stage 5 inherits: the probe's
   `results` and `wreck_ended_tick` after a seek back, quiet `step`, and `follow_devices` as an unrecorded writer of `controllers`.
+- **Stage 4 landed** ([the replay file](../../docs/formats/replay-file.md), "The pose track"): `POSE`, every
+  craft refined to 0.05 unit and 0.5 degree, captured a segment at a time. 156 to 176 B a craft a second on all five
+  titles (4.5 percent over the ADR's row: the sweep stored no key index), a respawn bounded to the same error on all five,
+  an unknown chunk skipped. `PoseTrack::pose(craft, at: f64)` is the reader stage 5 builds POSE VIEW on.
 - **Unstaged:** replays of modded races, replays written by `oag-server`, multi-seat take-over.
 
 ## Next Steps
 
-1. ~~Stages 1 to 3~~ landed. The modes the replay file does not claim stay unclaimed: nothing has shown them reproducing.
-2. Stage 4 `pose-track`, then 5 to 7 as the ADR orders them.
+1. ~~Stages 1 to 4~~ landed. The modes the replay file does not claim stay unclaimed: nothing has shown them reproducing.
+2. ~~Stage 4 `pose-track`~~ landed; stages 5 to 7 as the ADR orders them.

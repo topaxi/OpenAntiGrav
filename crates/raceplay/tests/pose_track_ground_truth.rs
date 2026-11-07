@@ -215,7 +215,10 @@ fn respawn(title: &str) {
             .expect("a craft");
         assert_eq!(between, before, "{title}: a frame {fraction} into the jump");
     }
-    assert!((after.position - before.position).length() > 16.0, "{title}");
+    assert!(
+        (after.position - before.position).length() > 16.0,
+        "{title}"
+    );
 }
 
 fn grid(race: &Race) -> Vec<Pose> {

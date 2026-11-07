@@ -1,6 +1,6 @@
 # The replay file (`.oagr`)
 
-**Status: built (stage 2 of [ADR-0087](../architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md), 2026-11-07).**
+**Status: built (stages 2 and 4 of [ADR-0087](../architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md), 2026-11-07).**
 Code: [`oag-replay`](../../crates/replay) (the container), [`oag-raceplay`](../../crates/raceplay)
 (`replay/`: the launch request, the rebuild, the event writers), `oag_game::ghosts` (the files in
 `ghosts/`). Design: [ADR-0055](../architecture/adr/0055-replays-are-inputs-and-a-ghost-is-poses.md)
@@ -16,13 +16,16 @@ chunk*: [u8; 4] tag, u32 length, payload      (all integers little-endian)
   INPT  one per recorded slot: u8 slot, then the input codec's stream
   HASH  u64 initial hash, varint count, count x u64
   EVNT  optional: varint count, then per event: varint tick, u8 seat, u8 kind, varint value
-  GHST  optional: the ghost lap's pose track
+  GHST  optional: the ghost lap's pose track (one craft, 28 bytes a tick)
+  POSE  optional: every craft on the grid, as refined keys (below)
   END_  u64: FNV-1a over every byte before this chunk
 ```
 
 **A chunk the reader does not know is skipped**, and the `u16` version has not moved: it is bumped
 only when a chunk that already exists changes meaning. `EVNT` is written only when there is an
 event, so a race with none is the file it was before the chunk existed, apart from the header line.
+`POSE` is written only by a run that recorded one (`Race::recorded`); a ghost file cut from a run
+(`take_new_best_ghost`) carries none.
 
 ## `HEAD` and its schema
 
@@ -107,13 +110,104 @@ shows that a copy with the Pilot Assist event stripped, and a copy with the weap
 desync. **Pilot Assist's level is not in the state hash**, so only the hashes after the change can
 tell. A cut file (a ghost lap) keeps the events of the ticks it keeps.
 
+## The pose track (`POSE`)
+
+Every craft on the grid, recorded while the race is driven, for the day the inputs no longer
+reproduce the run (ADR-0087 decision 4): a **picture** of the race on the build that recorded it,
+hulls only, never a verified state. Code: `oag_replay::track` (the codec and the reader; it knows
+no race), `oag_raceplay::replay::recording` (the capture).
+
+```text
+POSE  varint last tick (poses exist for ticks 0..=last)
+      u8 craft count (craft i = grid slot i)
+      per craft:  varint key bytes
+                  mask: ceil(5 * ceil(last / 6) / 8) bytes
+                  keys: per key  3 x zigzag varint (position step), u32 LE (rotation)
+```
+
+- **Tick 0** is the state before the recording's first tick, the same index as `INPT` (`inputs[k]`
+  is the tick that moves `k` to `k + 1`) and `Replay::ticks()`; a track's `last` is at most that.
+- **A pose** is what `Race::craft_pose` reads: the position, and the orientation with the barrel roll
+  and the steering lean folded in, exactly as the hull is drawn (`Race::player_pose` is the same
+  function for the player).
+- **Position** is quantised to 1/64 unit and coded as the step from the previous key (the first key
+  from zero) in each axis, zigzag then LEB128.
+- **Rotation** is a smallest-three quaternion in four bytes: the largest component dropped (sign
+  chosen so it is positive), the other three in ten bits each over +-1/sqrt 2, two bits (the top two)
+  for which was dropped.
+- **Which ticks are keys.** Every 6th tick from 0 and the last tick always are; they are not stored.
+  An interior key is one bit in the mask: five bits a 6-tick segment, bit `j` of segment `s` meaning
+  tick `6s + j + 1`, LSB first. A bit for a tick at or past `last` (the padding included) is refused.
+  Keys are read in tick order, so the number of keys is fixed by `last` and the mask.
+- **Refinement.** Inside each segment the tick that interpolates worst becomes a key, and again,
+  until no tick between two keys is more than **0.05 unit or 0.5 degree** from the truth (lerp and
+  slerp, measured against the keys as a reader rebuilds them, so quantisation is inside the bound).
+  A segment is refined alone, so the recorder does it as each closes (`PoseRecorder`): the keys equal
+  an offline pass over the whole race (`track::tests::streaming_equals_offline`, byte for byte) and a
+  recording holds keys, never a pose a tick.
+- **Playback** (`PoseTrack::pose(craft, at: f64)`): lerp and slerp between the keys around `at`
+  ticks, the ends held. Across a jump of more than 16 units in one tick (a respawn) the earlier pose
+  is held up to the later tick, so a frame between the two never draws the hull halfway along it. The
+  16 is **chosen, not measured**: the fastest step a flying craft takes is under 7 units a tick on
+  every title; the respawns measured below move 147 to 529 units. The recorded ticks are exact either
+  way.
+- **Bounds.** `MAX_TICKS` is 216,000 (one hour): the recorder takes nothing past it, and the track
+  ends there. A capture holds 20 bytes a key in memory, about 300 bytes a craft a second.
+- **Chosen, not measured:** the 1/64 step, the 10-bit rotation, the 6-tick base, the tolerances and
+  the 16-unit jump. **Measured:** what they cost and lose, below.
+
+**What it costs and loses**, 8 craft, the cost sweep's Autopilot race of 18,000 ticks (the race
+ADR-0087 decision 4 measured; one title a process, `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`). Bytes a
+craft a second; error against the true pose at every tick, p50 / p99 / p99.9 / max:
+
+| Title | ADR-0087's row (sweep encoder) | `POSE` as written | Position, units | Rotation, degrees |
+| --- | ---: | ---: | --- | --- |
+| Pulse | 167.5 | 174.8 | 0.0140 / 0.0470 / 0.0496 / 0.0500 | 0.069 / 0.319 / 0.488 / 0.499 |
+| Pure | 149.0 | 155.7 | 0.0163 / 0.0465 / 0.0496 / 0.0500 | 0.069 / 0.244 / 0.373 / 0.496 |
+| HD/Fury | 168.3 | 175.5 | 0.0137 / 0.0464 / 0.0495 / 0.0500 | 0.079 / 0.382 / 0.489 / 0.499 |
+| 2048 | 162.9 | 169.6 | 0.0159 / 0.0454 / 0.0494 / 0.0500 | 0.079 / 0.312 / 0.444 / 0.499 |
+| Omega | 166.6 | 174.0 | 0.0170 / 0.0471 / 0.0496 / 0.0500 | 0.079 / 0.280 / 0.442 / 0.499 |
+
+The file costs **6.7 to 7.4 bytes a craft a second (about 4.5 percent) more** than the row decision 4
+chose, and the bound now holds. Two reasons, both measured on these runs: the sweep's encoder did
+not store which ticks are keys (a reader cannot decode a refined track without it: a five-bit mask a
+segment is 6.2 B a craft a second, a varint tick step a key would be 16.6 to 19.4), and it refined
+against the unquantised keys, which left its worst error at 0.057 to 0.059 unit and 0.54 to 0.62
+degree (the ADR's own row); refining against the keys as read adds a few keys and holds 0.0500 and
+0.499. A pad-flown Single Race to the finish (`pose_track_ground_truth::bounds`, over
+`replay_timeline_ground_truth`'s recording) gives 145.5 (Pure, 6,700 ticks), 166.6 (2048, 14,410),
+167.2 (Omega, 7,880), 170.9 (Pulse, 8,088) and 171.5 (HD, 8,257), worst error 0.0500 unit and 0.499
+degree on all five.
+
+**A respawn** (`pose_track_ground_truth::*_pose_track_bounds_a_respawn`): the pad flies to tick 600,
+the test lifts the player's craft 500 units off the circuit, and the game's own rescue puts it back
+(Pulse: the collision cage, the next tick, a step of 146.8 units; Pure, HD, 2048 and Omega: the
+200-unit distance rescue 30 ticks later, a step of 522 to 529 units). The track holds 0.0500 unit and
+0.5 degree at every tick of the run, and at the ticks around the jump (-2 to +30): Pulse 0.039 unit,
+Pure 0.048, 2048 0.035, Omega 0.041 (HD in the test's output); the two ticks either side of the jump are both keys,
+and a frame between them is the earlier pose. The refinement's handling of a teleport is shown, not argued.
+
+**Reading it.** An unknown chunk is skipped: `file::tests::a_build_that_does_not_know_the_pose_chunk_skips_it`
+renames the tag, redoes the checksum and reads the same recording without a track, which still
+reproduces to the last tick. A damaged chunk is refused by byte (`Truncated`): a cut payload, a
+trailing byte, a mask bit past the last tick, a track longer than the recording.
+
+**Cost at the end of a race**, dev profile, load average about 30 (so an upper bound): a push a tick
+4 to 26 microseconds for eight craft, `Race::recorded`'s copy of the track 0.13 to 0.21 ms and
+`to_bytes` 2.5 to 4.6 ms on 2048's 14,410 ticks. No worker thread is needed. The capture holds
+270 to 650 KiB for eight craft over a race to the finish. The capture does not change the race:
+a recording race hashes as one without at every tick (`replay_ground_truth::ghost_changes_nothing`,
+`replay_timeline_ground_truth::a_visit_changes_nothing`, and every seek on the probe, which never
+records).
+
 ## Checked against the other title of the pair
 
 The file knows no title; the rebuild reads each title's own source. 2048 and Omega are both in the
 table above with their own tick-zero rows. **ported**: Omega and 2048 use the same `[setup]`,
-`Launch` and events as the other three titles.
+`Launch` and events as the other three titles. The pose track is **ported** the same way: each title
+was recorded and measured on its own data (the tables above), and the respawn ran on each.
 
 ## Open
 
-Everything after stage 2 of ADR-0087 is later work: recording every race and the `auto/` ring, the
-`POSE` chunk, the `Timeline`, any screen, `[fork]` written, the `controller` event.
+Later work: recording every race and the `auto/` ring, any screen (POSE VIEW included), `[fork]`
+written, the `controller` event. A track holds hulls only; nothing else a craft does is in it.
