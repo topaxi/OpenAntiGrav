@@ -52,7 +52,6 @@ fn a_flip_stops_the_craft_and_sends_it_back_up_the_circuit() {
     race.tick(&inputs(thrust | Button::Flip.bit(), thrust));
     let mut stopped = None;
     let mut reversed = None;
-    let mut falling = Vec::new();
     for step in 1..360 {
         race.tick(&inputs(thrust, thrust));
         let body = &race.sim.world.ships[0].physics.body;
@@ -65,17 +64,12 @@ fn a_flip_stops_the_craft_and_sends_it_back_up_the_circuit() {
                 body.forward().dot(forward)
             );
         }
-        if let Some(original) = [(15, 40.8), (30, 20.1), (45, 6.8)]
-            .iter()
-            .find_map(|&(at, speed)| (at == step).then_some(speed))
-        {
-            falling.push((step, original, body.linear_velocity.length()));
-        }
         if stopped.is_none() && along <= 1.0 {
             stopped = Some(step);
         }
         if reversed.is_none() && along < -40.0 {
             reversed = Some(step);
+            break;
         }
     }
     let body = &race.sim.world.ships[0].physics.body;

@@ -84,11 +84,6 @@ impl Race {
     /// [`Self::wrong_way`] for the craft in `slot`.
     #[must_use]
     pub fn wrong_way_for(&self, slot: usize) -> bool {
-        // Facing back is the move here: no frame of the original's flips shows the warning
-        // (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "The HUD").
-        if self.sim.flip_law.is_some() {
-            return false;
-        }
         let ship = &self.sim.world.ships[slot];
         let Some((_, sample, _)) = self.sim.spline.nearest(ship.physics.body.position) else {
             return false;
@@ -193,7 +188,9 @@ impl Race {
             } else {
                 [None; oag_race::MAX_RECORDED_LAPS]
             },
-            wrong_way: self.wrong_way_for(slot),
+            // Facing back is the move here: no frame of the original's flips shows the
+            // warning (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Ours").
+            wrong_way: self.sim.flip_law.is_none() && self.wrong_way_for(slot),
             zone: race.zone.into(),
             score: race.score,
             // The colour grade lives on `crate::Scene`, not on the

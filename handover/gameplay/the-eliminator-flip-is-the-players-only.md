@@ -18,6 +18,10 @@ Landed: the player's flip on HD and Fury, `docs/ghidra/functions/ps3-hdfury-eu/e
 - **2048 and Omega.** `<Misc eliminator_flip_time>` per team and class, `race_eliminator_flip`, a
   second stick trigger at `0x811b369c`. Their `Title::eliminator_flip` is `None`.
 - **Touch** has no flip button.
+- **The stop.** Ours stops about `0.2 s` later than the original (page, "Ours").
+- **`WRONG WAY`** is dropped off frames; trace `status+0x54`'s writer. The rumble still fires.
+- **The bindings row** shows on every title, Pulse and Pure included. Scope it to titles with a flip.
+- `Button::Flip` takes index 10: check `psp-pulse-usa/input.md` leaves it free before a PS2 L2/R2 wants it.
 - **The flip's sound and effects** were not looked for.
 
 ## Next Steps

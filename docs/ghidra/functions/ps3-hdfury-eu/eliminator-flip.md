@@ -80,9 +80,10 @@ if *0x009384e1 == 0 and mode in (8, 0x14):                 // Eliminator, Multip
 | Cost, cooldown | none. A flip at `t = 16.0` after one at `10.0`, one at `20.0`, one at `26.5`; `+0x90` is the only guard | live | 88 |
 | Facing flag | `craft+0x6ad8`, below | live | 90 |
 
-What follows is the ordinary thrust against the travel, measured on a held throttle (wall clock, the
-emulator ran about `0.8` of real time): `|v|` `117.7` at the press, `40.8` `0.25 s` later, `6.8` at
-`0.85 s`, through zero at about `1.2 s`, then the wrong way up the circuit, `-85` at `3.4 s`, `-109` at `5.9 s`.
+What follows is the ordinary thrust against the travel, measured on a held throttle, counted in the
+game's `1/30 s` steps (the angle's own step; the capture's wall clock ran at about `0.8`): `|v|`
+`117.7` at the press, `40.8` at `0.23 s`, `20.1` at `0.40 s`, `6.8` at `0.63 s`, through zero at
+`0.80 s`, then the wrong way up the circuit, about `-85` `3.4 s` of wall clock after the press.
 
 A counter at `0x000ce648..0x000ce65c` (`*(0x0004d7e0()) + 0x98 += 1`) runs per flipping tick on a human
 craft with `+0x7a60 == 0`. It feeds no law; the Most Flips badge is not traced.
@@ -174,11 +175,16 @@ craft has flipped.
   Touch has no flip button.
 - The lean is `ShipState::steer_lean_follower`, HD's `craft+0x6a58` follower.
 - The race line's marker turns on `Race::facing_back`, the test `wrong_way_kill` runs. The original's
-  frames of a flip show no `WRONG WAY`, so a race with a flip raises none. That is read off frames,
-  not off the code that drives the warning.
-- `crates/raceplay/tests/hd_flip_ground_truth.rs`: ours fell through `41.0`, `22.4`, `9.1`, about
-  zero at `1.0 s`, against the original's `40.8`, `20.1`, `6.8`, about zero at `1.0 s` of game time. No
-  tuning: it is the velocity left alone and the engine HD already has.
+  frames of a flip show no `WRONG WAY`, so a race with a flip draws none; the rumble is untouched.
+  That is read off frames, not off the code: `Hud_UpdateWrongWay` (`0x00093c48`) reads `status+0x54`,
+  whose writer is not traced.
+- `crates/raceplay/tests/hd_flip_ground_truth.rs`: ours reads `41.0` at `0.25 s`, `22.4` at `0.50 s`,
+  `9.1` at `0.75 s` and stops at about `1.0 s`, with nothing tuned: the velocity left alone and the
+  engine HD already has. **Ours stops about `0.2 s` later than the original.** The first quarter
+  second agrees; below `40` the original brakes harder. Unread, and it may be a `1/30` against `1/60`
+  integration difference or a drag term at low speed.
+- **Known cost:** L1 down reads the whole left airbrake axis as zero, so a player holding L2 loses
+  that brake for the ticks L1 is down. Our snapshot cannot tell the two apart.
 
 **The AI's flip is not wired.** Its chain is read above, but it needs the weapon AI's per-weapon
 range tests and a fire on the far side of the turn. On ours the absorb gate on the facing byte stays
