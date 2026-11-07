@@ -307,8 +307,11 @@ walked by pad to the grid and START pressed on the countdown (Single Race) or af
 Free Play). Reference frames: `data/reference/pure-pause-menu/` (`p1` Single Race, `p2`, `p3` its cursor on
 RESTART and QUIT, `t2` Time Trial, `u2` Tournament, `f3` Free Play, `c1` the same race a moment before).
 
-- **Single Race, Time Trial, Tournament and Free Play** were walked live and draw the rows the file authors
-  (confidence 90 each). Zone is the default by the file's own redirect: not walked (static, 85).
+- **Single Race, Time Trial, Tournament, Free Play and Zone** were all walked live and draw the rows the file
+  authors (confidence 90 each; `zone` in the reference frames: CONTINUE, RESTART, QUIT, the default).
+- **END SESSION** (Free Play) was walked live too: it ends the session onto a fly-past with one row, `RETURN TO MAIN
+  MENU` (`free-play-end-session-return` in the reference frames), and CONFIRM lands on the main menu (confidence 85:
+  one run, no laps set). It is not QUIT's straight drop.
 - **The band is the authored image and nothing else.** Pixels above and below it are the unpaused frame's; inside
   it the scene is `0.25` of itself plus `(0, 0, 16)` (`0xc0000010` at alpha 0.75: the brightest text-free pixel of the
   band reads (63, 63, 75) against the law's (64, 64, 80)). **The HUD stays on screen at full brightness outside
@@ -332,10 +335,10 @@ doing nothing and the rows' actions are the menu's (`Definition::open_on_pause_s
 
 - **PHOTO MODE** follows CONTINUE (`PauseMenu::offers_photo`; the screen authors none, photo mode is one
   implementation on every title, maintainer). So ours has one row more than the original on every screen.
-- **END SESSION** (Free Play) leaves the race the way QUIT does: **chosen, not measured**. The original goes to
-  `InGame Void` and the session's results; this build races Free Play as a single race
-  (`docs/formats/pure-campaign.md`, "The modes"). Free Play is chosen by the campaign cell's name
-  (`Session::pause_mode`, key `free_play`), not by the engine's mode.
+- **END SESSION** (Free Play) leaves the race the way QUIT does, for the main page: **chosen, not measured**. The
+  original shows the one-row `RETURN TO MAIN MENU` screen first; this build races Free Play as a single race with no
+  session results to show (`docs/formats/pure-campaign.md`, "The modes"). Free Play is chosen by the campaign cell's
+  name (`Session::pause_mode`, key `free_play`), not by the engine's mode.
 - **The words** are the disc's own (`Continue`, `Restart`, `Quit`, `End Session`, `Press X to Confirm`, drawn by the
   front end's face). The PSP footer's cross glyph is the font's.
 
@@ -351,8 +354,11 @@ Residuals:
 
 - **The cursor wraps** in ours (the menu's rule on every title); the original's does not. Not changed here.
 - **Our rows**: PHOTO MODE is extra, so the third row on the original (QUIT) is the fourth in ours.
-- **The race's now-playing line** (the music title at the foot, "COLD STORAGE - ONYX") draws under the pause in ours at
-  400 ticks; the original's frames at the same moment show none. A now-playing question, not a pause one.
+- **The race's now-playing line** (the music title at the foot, "COLD STORAGE - ONYX") draws under the pause in ours;
+  the original's frames show none. The disc authors that text as widgets of the `InGame` screen
+  (`InGameArtistText`, `InGameTrackText`, `InGameLabelText`), and the pause screens are siblings of it, so the original
+  cannot draw it while paused. Ours draws it because `hud_under_scrim` brings the whole race HUD under the band.
+  Open: leave the music line out of the HUD drawn under a Pure pause.
 - **Craft livery**: the Feisar in ours is gold, the original's blue and yellow. Not this lane's.
 
 Tests: the three screens' rows against both pressings, the redirect's rows against `by_mode` and the band, rules and

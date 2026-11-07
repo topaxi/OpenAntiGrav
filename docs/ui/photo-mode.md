@@ -24,8 +24,10 @@ functions and their evidence are on each binary's page:
 Confidence 90. No string containing `photo` (any case) in `BOOT.BIN`, EU or USA, nor `.jpg`. All
 1,241 entries of `Data.wad`, `FE.wad` and `FEData.wad` of the EU disc, extracted and searched: no
 `photo` in any, including the language files (nine files with `Entry ID=`, up to 909 rows each).
-`InGame_Definition.xml` has `InGame Pause` and no photo screen. Short of 94: no Pure pause menu was
-walked for this, and the USA disc's archives were not searched, only its binary.
+`InGame_Definition.xml` authors no photo screen, and the pause screens START opens (`InGame Main Menu`,
+`InGame NoRestart Main Menu`, `InGame Free Play Menu`) have no photo row: walked live on PPSSPP (USA) in Single Race,
+Time Trial, Tournament, Free Play and Zone, `docs/ui/pause-menu.md`, "Pure". Short of 94: the USA disc's archives
+were not searched, only its binary. This build's PHOTO MODE row follows CONTINUE on every Pure pause screen.
 
 ## Pulse
 

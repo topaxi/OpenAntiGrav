@@ -26,8 +26,9 @@ pause screen where one applies). Online pause stays the maintainer's decision
   page was not read for `GHOST SHIPS VISIBLE` (Omega's `ship_visible` is on for the pause GHOST list).
 - **Pure: wired** (`oag_pure::pause_menu`, original frames of Single Race, Time Trial, Tournament and Free
   Play on PPSSPP in `docs/ui/pause-menu.md`, "Pure"). Open: the original's cursor does not wrap and ours
-  does; Zone was not walked live (the file's redirect gives it the default); Free Play's END SESSION leaves
-  like QUIT (chosen); the race's now-playing line draws under the pause where the original shows none.
+  does; Free Play's END SESSION leaves like QUIT where the original shows a `RETURN TO MAIN MENU` screen first
+  (chosen); the race's now-playing line draws under the pause where the original shows none (the music widgets
+  belong to `InGame`, not to the pause screens: leave it out of the HUD drawn under a Pure pause).
 - **2048: not wired** (`pause_menu: None`). 2048 has `InGame_Definition.xml` (36 screens) and
   `LegacyInGame_Definition.xml` on Vita, with a binder of its own; Omega's reads the same mode ids as HD's, so
   compare 2048's against it first. No Vita frame yet. A 2048 finding is checked against Omega and the reverse.
