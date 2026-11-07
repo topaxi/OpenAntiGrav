@@ -3,7 +3,7 @@ status: blocked-maintainer
 categories: [frontend, tooling]
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-07
-summary: "ADR-0087 designs one Timeline for replay viewer, photo rewind and take-over; stage 2 (replay header v1) landed, stage 1 in flight, stages 3 to 7 open"
+summary: "ADR-0087: one Timeline for replay viewer, photo rewind and take-over; stages 1 to 3 landed, stages 4 to 7 open"
 size: XL
 difficulty: hard
 ---
@@ -35,13 +35,13 @@ ADR and are not open.
   Head to Head, split-screen and multi-window (`seat_picks`, several people), Race Remix, DLC and foreign tracks, campaign
   events (`grid_teams`), capture aids (`pose`, `field`), network and modded races. A recording of one of these may be written
   and its rebuild is refused by the tick-zero hash, never played wrong.
-- **Split-screen recordings** are not shown to reproduce.
+- **Stage 3 landed** ([the timeline](../../docs/architecture/replay-timeline.md)): `Timeline`, keyframes, the ceiling, the
+  opening pass, the desync state. A seek reproduces a pad-flown Single Race on all five titles, and split screen on Pulse (two
+  people, Head to Head) once `start_recorded` seats `Header::slots`. Its page's "Open" lists what stage 5 inherits: the probe's
+  `results` and `wreck_ended_tick` after a seek back, quiet `step`, and `follow_devices` as an unrecorded writer of `controllers`.
 - **Unstaged:** replays of modded races, replays written by `oag-server`, multi-seat take-over.
 
 ## Next Steps
 
-1. Stage 1, `shared-track-half`: put the constant half of `RaceSim` (collision, spline, racing line, ai order, routes,
-   pads, weapon tables, speed and hull plans, title laws) behind an `Arc`. Full gate; no golden hash moves. Re-run the
-   sweep for the snapshot table.
-2. ~~Stage 2, `replay-header-v1`~~ landed. Stage 3 also owes the unclaimed modes above.
-3. Then stage 3 `timeline-core` and stage 4 `pose-track`, then 5 to 7 as the ADR orders them.
+1. ~~Stages 1 to 3~~ landed. The modes the replay file does not claim stay unclaimed: nothing has shown them reproducing.
+2. Stage 4 `pose-track`, then 5 to 7 as the ADR orders them.

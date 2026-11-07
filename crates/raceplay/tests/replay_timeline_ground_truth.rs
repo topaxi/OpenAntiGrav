@@ -35,7 +35,7 @@ const TARGETS: usize = 40;
 /// A run goes this long at least, then to the finish, then a little past it.
 const SHORTEST: u64 = 6_700;
 const PAST_THE_FINISH: u64 = 300;
-const LONGEST: u64 = 14_000;
+const LONGEST: u64 = 14_500;
 /// Pilot Assist changes on a keyframe's own tick, then among the ticks a seek resimulates.
 const ASSIST_ON: u64 = 9 * KEYFRAME_TICKS;
 const ASSIST_OFF: u64 = ASSIST_ON + 37;
