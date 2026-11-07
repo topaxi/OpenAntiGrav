@@ -66,7 +66,8 @@ pub struct PadVolume {
     /// reports a hit only when this is `0.0`, so non-zero disables the pad.
     /// **Nothing here writes it.** The writer is identified (`WeaponPads_TestCraft`
     /// stamps a `Weapon Pad`'s `<WeaponPad refresh_time>`, or
-    /// `elimination_refresh_time` under Eliminator, on pickup;
+    /// `elimination_refresh_time` under Eliminator on Pulse (HD, 2048 and Omega stamp
+    /// nothing there), on pickup;
     /// `Pad_UpdateRefreshTimer` counts it down; see `pads.md` under
     /// `docs/ghidra/functions/`)
     /// but there is no pickup system to drive it. Carried inert: a term provably

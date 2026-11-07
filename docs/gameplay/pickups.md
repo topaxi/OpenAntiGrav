@@ -1037,12 +1037,17 @@ Eliminator, is as the table above. Read through `race::load` on the four discs b
 `eliminator_pad_stamp_ground_truth` (Pulse `0.05` / `0.55`, the other three `0.0` / `0.75`).
 
 **One grant per crossing, not per tick.** `Race::test_weapon_pads` grants on the entry edge
-(`weapon_pad_current`), not on containment, so a zero stamp does not hand a pickup every tick a craft
-sits inside. The original's gate is unread on HD (the stamp site is unlocated) and read on 2048 and Omega
-as "no stamp, grant"; a craft that empties its slot while still parked in a pad would be handed another
-there and is not here. Parked-in-a-pad spends are rare (a pad is a quarter-second of road at racing
-speed), and the edge is the same law Pulse's stamped pad follows, so the edge stays. Cross-check
-(2048 and Omega, the same function): **ported**.
+(`weapon_pad_current`), not on containment, so a zero stamp does not hand a pickup every tick a
+craft sits inside; a craft that crosses a pad is handed one pickup, and one that leaves and comes
+back in a tick is handed another (unit test `an_unstamped_pad_pays_on_every_entry_and_never_once_per_tick`).
+What the original gates the grant on, on the no-stamp path, is the swept containment test alone:
+2048's `WeaponPads_TestCraft` is `if (hit) goto grant` every tick, behind the slot checks
+([`weapon-pads.md`](../ghidra/functions/vita-2048-eu-v104/weapon-pads.md), "What it does on a hit";
+Omega the same shape). It is the full slot that stops a second grant, so a craft that empties its
+slot (fires or absorbs) while still inside an unstamped pad is handed another there on the next
+tick, and ours is not: **the entry edge is chosen, not measured**, shared with every other pad
+law here, and the edge is only ever later than the original's. Cross-check (2048 and Omega, the
+same function): **ported**.
 
 ### The method, to repeat it
 
