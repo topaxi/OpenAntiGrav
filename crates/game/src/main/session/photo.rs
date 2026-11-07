@@ -4,7 +4,9 @@
 //!
 //! The mode is the pause plus a camera. While it is open the frame loop does not tick the race
 //! (`oag_game::photo::ticks`), so no state hash, replay or ghost can tell it happened, and the
-//! race resumes where it stood. Audio stops the way it does under the pause.
+//! race resumes where it stood. **Except through a rewind**, which moves the race on screen
+//! through its past and restores its simulation on leaving (`photo_rewind`). Audio stops the way
+//! it does under the pause.
 
 use log::{debug, info, warn};
 use oag_game::photo::{self, Chip, Words, strings};
@@ -148,9 +150,10 @@ impl super::Session {
 
     /// One tick of the mode: the player's devices into the camera, and what came of it.
     pub(crate) fn tick_photo(&mut self, pointer: &Pointer, input: &InputSnapshot) {
-        // The mode belongs to the race on screen: with none, it is over.
+        // The mode belongs to the race on screen: with none, it is over, and the race that was
+        // moved is put back wherever it is now (parked behind the menus, say).
         if !matches!(self.stage, Stage::Race(_)) {
-            self.photo = None;
+            self.leave_photo();
             return;
         }
         let Some(open) = self.photo.as_mut() else {
@@ -322,10 +325,15 @@ impl super::Session {
         let Some(mut open) = self.photo.take() else {
             return;
         };
-        if let Stage::Race(stage) = &mut self.stage {
+        let parked = self.suspended_race.as_deref_mut();
+        let stage = match &mut self.stage {
+            Stage::Race(stage) => Some(&mut **stage),
+            _ => parked,
+        };
+        if let Some(stage) = stage {
             // The live race, put back to the bit, before the camera is.
-            if let Some(rewind) = open.rewind.take() {
-                rewind.end(&mut stage.race);
+            if let (Some(rewind), Some(keeper)) = (open.rewind.take(), stage.keeper.as_mut()) {
+                rewind.end(keeper, &mut stage.race);
             }
             stage.race.photo_end();
         }

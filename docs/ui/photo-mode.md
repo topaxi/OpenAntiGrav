@@ -164,8 +164,9 @@ the screen takes input (61 ticks after the finish), and leaving returns to the s
 split screen (no single picture, no single pad: a follow-up), a LAN or online race (the server's),
 and a build that cannot write a file (a page, a phone).
 
-**While it is open** the race does not tick (`oag_game::photo::ticks`), whatever state it is in,
-so its state hash does not move and the race resumes where it stood; the audio is stepped as under
+**While it is open** the race does not tick in the frame loop (`oag_game::photo::ticks`), whatever
+state it is in, so its state hash does not move and the race resumes where it stood (a rewind moves
+the race on screen through its past and puts it back, "Accumulated shots and rewind" below); the audio is stepped as under
 the pause. The camera is a render-side override (`CameraOverride`), put back on leaving. Leaving spends
 Circle, Cross, Start, Select and the shoulders, so none reaches the race. Escape (and Back, and the
 window losing focus, which does nothing then) leaves the mode and goes no further; the next Escape
@@ -324,6 +325,15 @@ chosen, not measured**: HD's two blurs were read as one shutter, and at `1.0` th
 camera in a fraction of the window and leaves no picture (read: the ship blur shot of the lane's
 first run had no craft in it). At `0.05` the window is 0.75 tick at the longest shutter.
 
+**A departure from the ADR's wording, named.** ADR-0087 decision 5 has the probe `Race` moved and the live
+race neither ticked nor written. Drawing a second `Race` through the one `Scene` was not what the replay
+viewer does (it moves the race on screen), so this does the same: the race on screen **is ticked and
+written** by a rewind, and put back to the bit when the mode closes. The proofs are the hash and text ones
+below; the price is that the view (camera spring, exhaust, particles) is rebuilt, not kept (after leaving a
+rewind of 5 s on HD the picture one tick later differs from a visit that did not rewind by 0.9 percent MAE,
+at five ticks 0.3, at twenty 0.1; before `Rewind::end` ran the pre-roll to the live tick it was 10.3, 7.3
+and 1.4). The `Timeline` probe holds the keyframes and nothing is drawn from it.
+
 **Rewind** is the race on screen moved through its own recording: the keyframe a pre-roll (60 ticks,
 the viewer's own) before the tick, then the ticks up to it through `Race::tick`, drawn and silent, so
 the camera spring and the exhaust have settled there. The live race is **put back to the bit** on
@@ -348,13 +358,20 @@ for one while a shot is under way (`photo_job` in the state, `drawn/frames`).
 - **Depth of field**, chosen, not measured: the same tick drawn 7 times with the eye moved across the
   lens (a centre sample and a ring of six) and aimed at the focus plane, so that plane stays sharp
   (`LensShift`, applied after the blend in `Race::view`). The ring's radius is half of the widest
-  blur the single-frame pass draws at the aperture; each frame keeps the other half as that pass.
+  blur the single-frame pass draws at the aperture; each frame keeps the other half as that pass. The
+  intent is a total as wide as the preview's; the saved shot was not compared with the preview.
 - **Both on**: the frames of the blur, the lens samples taken in turn.
 
 **Measured** (HD, Time Trial, Anulpha Pass, close lens, tick 702, debug profile (opt-level 2), the
-discrete GPU, headless `--drive`, the 1-minute load average 4.6 to 7.2 on 24 threads): a 120-frame
-track blur takes **2.03 s at 1280x800, 2.11 s at 1920x1080 and 2.82 s at 3840x2160**; 7 frames of
-depth of field 0.12 to 0.23 s. A rewind seek takes 0.6 to 1.3 ms a push. Frames were read as pictures:
+discrete GPU, headless `--drive`, one frame drawn and read back per tick, the 1-minute load average 6.4 to
+6.7 on 24 threads): a 120-frame track blur takes **1.97 s at 1280x800, 2.68 s at 1920x1080 and 3.20 s at
+3840x2160**, 16 to 27 ms a frame. (An earlier run waited on the shot with `until`, which holds each frame to
+16.7 ms: 2.03, 2.11 and 2.82 s, so the wait step sets the floor of that one. At 1280x800 the unpaced figure
+sits on that floor too, so the cost there may be lower.) A 60 Hz window draws a frame a tick, so a shot
+takes at least 2 s of wall clock there whatever it costs. 2048 (130 frames, 1440x816): 2.2 s paced. Depth
+of field, 7 frames: 0.12 to 0.23 s. A rewind seek: 0.6 to 1.3 ms a push. `Setup::clone` at race build, for
+the keeper: 0.8 ms on HD, 1.1 ms on 2048, 1.0 ms on Pulse, resident memory +0, +0 and +1.2 MiB (its large
+parts are shared, not copied). Frames were read as pictures:
 a track blur leaves the hull sharp and the scenery smeared (detail kept, by horizontal gradient:
 hull 0.87, scenery 0.27), a ship blur the reverse (hull 0.49, scenery 1.00)
 (`photo_mode_ground_truth::a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it`).

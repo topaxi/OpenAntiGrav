@@ -149,7 +149,16 @@ impl Rewind {
     }
 
     /// Puts the live race back: its simulation to the bit, its recording as it was.
-    pub fn end(self, race: &mut Race) {
+    ///
+    /// The race first goes forward to the live tick the way a seek does, so that the view (the
+    /// camera spring, the exhaust trails) has settled where the race resumes and not where the
+    /// rewind last left it; the simulation is then restored from the snapshot whatever that
+    /// pre-roll made of it.
+    pub fn end(mut self, keeper: &mut Keeper, race: &mut Race) {
+        if self.at != self.live && self.resimulates() {
+            self.follow = true;
+            self.seek(keeper, race, self.live);
+        }
         race.restore_sim(&self.saved);
         race.settle_poses();
         race.resume_recording(self.paused);

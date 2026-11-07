@@ -391,7 +391,7 @@ fn a_rewind_changes_nothing(title: &str) {
                     "{title}: tick {target} on a rewind"
                 );
             }
-            rewind.end(&mut live);
+            rewind.end(&mut keeper, &mut live);
             assert!(
                 format!("{:?}", live.sim) == before,
                 "{title}: the rewind left the live race changed"

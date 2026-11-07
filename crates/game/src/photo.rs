@@ -2,8 +2,9 @@
 //! and when the mode is on offer.
 //!
 //! The camera is `oag_raceplay::photo`; this is the half that needs a screen and a disc.
-//! The mode is the pause plus a camera: nothing here ticks the race, and the picture it saves
-//! is the frame the player sees, at the size they see it, without the screen's own text.
+//! The mode is the pause plus a camera: nothing here ticks the race (a rewind does, in the
+//! session, and puts it back), and the picture it saves is the frame the player sees, at the
+//! size they see it, without the screen's own text.
 //!
 //! **Chosen, not measured:** the screen's layout and the file name.
 
@@ -28,8 +29,9 @@ pub fn offered(views: usize) -> bool {
     SAVES && views <= 1
 }
 
-/// Whether the race ticks: not while photo mode is open. The rule the frame loop asks, in one
-/// place so the test of the hash and the loop cannot disagree.
+/// Whether the race ticks in the frame loop: not while photo mode is open. The rule the frame
+/// loop asks, in one place so the test of the hash and the loop cannot disagree. A rewind moves
+/// the race outside that loop and restores it on leaving.
 #[must_use]
 pub fn ticks(open: bool) -> bool {
     !open

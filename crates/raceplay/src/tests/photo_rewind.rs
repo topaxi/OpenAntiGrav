@@ -79,7 +79,7 @@ fn a_rewind_lands_on_the_recorded_run_and_leaves_the_live_race_to_the_bit() {
             assert_eq!(race.sim.state_hash(), hashes[0]);
         }
     }
-    rewind.end(&mut race);
+    rewind.end(&mut keeper, &mut race);
     assert!(
         format!("{:?}", race.sim) == text[LIVE as usize],
         "the live race was not put back"
@@ -100,7 +100,7 @@ fn a_race_that_goes_on_after_a_rewind_hashes_as_one_that_was_not_visited() {
     let mut rewind = Rewind::begin(&mut keeper, &mut visited).expect("running");
     rewind.seek(&mut keeper, &mut visited, 77);
     rewind.seek(&mut keeper, &mut visited, 200);
-    rewind.end(&mut visited);
+    rewind.end(&mut keeper, &mut visited);
     visited.photo_end();
     for tick in LIVE..LIVE + 200 {
         visited.tick(&inputs(tick));
@@ -128,7 +128,7 @@ fn with_no_recording_a_seek_stops_at_the_keyframe_before_it() {
     assert!(!rewind.resimulates());
     assert_eq!(rewind.seek(&mut keeper, &mut race, 150), 120);
     assert_eq!(race.sim.world.tick, 120);
-    rewind.end(&mut race);
+    rewind.end(&mut keeper, &mut race);
     assert_eq!(race.sim.world.tick, LIVE);
 }
 

@@ -3,7 +3,10 @@
 //! The race stands still, as in pause (`Race::tick` is not called), and this
 //! flies the camera about a chosen craft. Nothing here reaches the simulation or
 //! its hash: the pose goes out as the same [`CameraOverride`] a `--camera-pose`
-//! run and the spectator director use.
+//! run and the spectator director use. **The one exception is the rewind and the
+//! shot's frames ([`rewind`], [`shot`])**, which move the race on screen through
+//! its past with [`Race::tick`] and put its simulation back to the bit when the
+//! mode closes.
 //!
 //! The laws are read off Pulse and Wipeout HD/Fury (`docs/ui/photo-mode.md`);
 //! where they differ the better one is taken, and a value one title measured is
