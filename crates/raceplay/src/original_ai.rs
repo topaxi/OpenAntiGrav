@@ -59,7 +59,7 @@ impl Race {
     /// read or the track has no closed lap: the race keeps this project's
     /// driver, which is an honest fallback rather than a guessed table.
     pub fn use_original_ai(&mut self, skill: Option<f32>, level: usize) -> bool {
-        let Some(tables) = self.sim.original_tables else {
+        let Some(tables) = self.sim.original_tables.as_deref().copied() else {
             log::warn!(
                 "AI: this project's driver flies (no original tables for this title and class; \
                  see the loader report)"
@@ -349,7 +349,7 @@ impl Race {
     /// driver instead. Its contact summary is empty: the player's planner
     /// zeroes what the push feeds, and the player's rail ignores contact.
     pub(super) fn drive_original_autopilot(&mut self, slot: usize) -> Option<Output> {
-        let tables = self.sim.original_tables?;
+        let tables = self.sim.original_tables.as_deref().copied()?;
         let (tick, progress, fraction, lap_length) = self.original_tick(slot, (0, false))?;
         let seat = self.sim.autopilots.get_mut(slot)?;
         let mut autopilot = seat.take().unwrap_or_else(|| {

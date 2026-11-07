@@ -79,6 +79,7 @@ mod scene_blocks;
 mod scene_build;
 mod seat_view;
 mod second_person;
+mod shared_half;
 mod shield_flash;
 mod shine_writes;
 mod slot_hud;

@@ -629,7 +629,10 @@ impl Race {
     /// craft's timer is asserted *against* rather than a value to assert.
     #[must_use]
     pub fn slowdown_limit(&self) -> Option<f32> {
-        self.sim.weapons.as_deref().map(|table| table.slowdown_limit)
+        self.sim
+            .weapons
+            .as_deref()
+            .map(|table| table.slowdown_limit)
     }
 
     /// The Bomb's authored `<Stats>`, or `None` when the table did not load or

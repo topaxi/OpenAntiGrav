@@ -458,8 +458,11 @@ impl Race {
             let position = self.sim.world.ships[slot].physics.body.position;
             let by = |impact: &&oag_weapons::projectile::Impact| {
                 impact.struck.is_some_and(|struck| struck as usize == slot)
-                    || oag_weapons::projectile::blast_stats(self.sim.weapons.as_deref(), impact.kind)
-                        .is_some_and(|stats| (position - impact.point).length() <= stats.radius)
+                    || oag_weapons::projectile::blast_stats(
+                        self.sim.weapons.as_deref(),
+                        impact.kind,
+                    )
+                    .is_some_and(|stats| (position - impact.point).length() <= stats.radius)
             };
             if let Some(owner) = impacts.iter().flatten().find(by).map(|impact| impact.owner) {
                 self.credit_hit_points(slot, owner, hit.amount);

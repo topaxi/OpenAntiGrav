@@ -48,11 +48,20 @@ use super::*;
 /// cannot forget a field, so the completeness is structural rather than
 /// asserted.
 ///
-/// It copies the track with the race - the collision soup, the spline, the
-/// racing line, both pad lists - none of which any tick mutates. That is
-/// wasteful for a snapshot taken every tick and it is not what this is
-/// measured on yet; the handover thread records the split as the optimization
-/// to reach for when a reconcile budget exists.
+/// **The constant half is shared, not copied.** The collision soup, the spline,
+/// the racing line and its order, the routes, the pads, the weapon tables, the
+/// speed and hull plans and the pilots are each behind an [`Arc`], so a clone
+/// costs a reference count for them and carries a copy of the mutable half only
+/// (`docs/architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md`,
+/// decision 2). `Clone` still cannot forget a field, and an `Arc`'s `Debug` is
+/// its value's, so the text a restore is compared by still reads all of it.
+///
+/// **Constant means constant after the first tick.** The plans, and the routes'
+/// plans, are written by [`Race::ensure_speed_plans`], and a test or a setter
+/// may write any of the others, always through [`Arc::make_mut`] or a new
+/// [`Arc`]: a snapshot holding the old value keeps it. A snapshot from before
+/// the first tick therefore restores to a race with no plans, which learns them
+/// again, exactly as a whole copy would.
 #[derive(Debug, Clone)]
 pub struct RaceSim {
     /// The simulation state.
@@ -61,7 +70,7 @@ pub struct RaceSim {
     /// Pulse classes. See [`super::finished_thrust`].
     pub(super) finished_thrust: Option<super::finished_thrust::FinishedThrust>,
     /// The original opponent's tables, for [`super::Race::use_original_ai`].
-    pub(super) original_tables: Option<super::original_tables::OriginalTables>,
+    pub(super) original_tables: Option<Arc<super::original_tables::OriginalTables>>,
     /// The campaign's original opponent, when [`super::Race::use_original_ai`]
     /// switched it on; `None` flies this project's driver. Outside
     /// [`World`], so no state hash and no other mode moves.
@@ -118,7 +127,7 @@ pub struct RaceSim {
     /// player's, and is read only while [`Race::flown_for_the_player`] is -
     /// by [`Race::set_ai_pilot`] (`--autopilot-pilot`) or the Autopilot
     /// pickup - otherwise inert.
-    pub(super) ai_pilots: [oag_ai::Pilot; oag_gameplay::MAX_SHIPS],
+    pub(super) ai_pilots: Arc<[oag_ai::Pilot; oag_gameplay::MAX_SHIPS]>,
     /// [`Race::autopilot_controls`]'s own tuning, for `--autopilot-skill`.
     ///
     /// `None` outside that flag - every ordinary race, and every existing
@@ -548,7 +557,45 @@ pub struct WallContactReading {
     pub side: f32,
 }
 
+/// A snapshot crosses threads (the speed-plan worker, a timeline's opening pass) and
+/// the learners share `&RaceSim`, so a shared field's type must stay `Send + Sync`.
+const _: () = {
+    const fn crosses_threads<T: Send + Sync>() {}
+    crosses_threads::<RaceSim>();
+};
+
 impl RaceSim {
+    /// Whether every field of the constant half is the very allocation `other` holds. The
+    /// `Debug` text cannot say this: a copy reads the same.
+    #[cfg(test)]
+    pub(super) fn shares_constant_half_with(&self, other: &Self) -> bool {
+        fn both<T: ?Sized>(a: &Option<Arc<T>>, b: &Option<Arc<T>>) -> bool {
+            match (a, b) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+        }
+        Arc::ptr_eq(&self.collision, &other.collision)
+            && Arc::ptr_eq(&self.spline, &other.spline)
+            && Arc::ptr_eq(&self.racing_line, &other.racing_line)
+            && Arc::ptr_eq(&self.ai_order, &other.ai_order)
+            && Arc::ptr_eq(&self.routes, &other.routes)
+            && Arc::ptr_eq(&self.hull_plans, &other.hull_plans)
+            && Arc::ptr_eq(&self.plan_steps, &other.plan_steps)
+            && Arc::ptr_eq(&self.ai_pilots, &other.ai_pilots)
+            && Arc::ptr_eq(&self.speedup_pads, &other.speedup_pads)
+            && Arc::ptr_eq(&self.weapon_pads, &other.weapon_pads)
+            && Arc::ptr_eq(&self.weapon_pad_line, &other.weapon_pad_line)
+            && Arc::ptr_eq(&self.allowed_weapons, &other.allowed_weapons)
+            && Arc::ptr_eq(&self.class, &other.class)
+            && both(&self.speed_plan, &other.speed_plan)
+            && both(&self.course, &other.course)
+            && both(&self.weapons, &other.weapons)
+            && both(&self.weapon_ai, &other.weapon_ai)
+            && both(&self.original_tables, &other.original_tables)
+    }
+
     /// The mode's damage rules with this race's own weapons switch applied -
     /// what every damage and weapon-hit site asks instead of
     /// `oag_gameplay::damage_rules(mode)` alone, which knows only the mode.

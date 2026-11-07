@@ -694,9 +694,9 @@ impl Race {
                 // see `oag_ai::Difficulty`. At the top level this is the
                 // measurement unchanged.
                 ai_tuning: difficulty.tune(&oag_ai::Tuning::default()),
-                ai_pilots,
+                ai_pilots: Arc::new(ai_pilots),
                 finished_thrust,
-                original_tables,
+                original_tables: original_tables.map(Arc::new),
                 original_ai: None,
                 race_seed: seed,
                 people,

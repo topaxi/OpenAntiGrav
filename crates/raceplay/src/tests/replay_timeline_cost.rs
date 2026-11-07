@@ -122,8 +122,9 @@ fn source(title: &str) -> Option<(String, String)> {
     Some((path.display().to_string(), class))
 }
 
-/// The bytes of the parts of a [`RaceSim`] no tick writes, and of the rest.
+/// What one snapshot holds of its own, and the bytes of the shared half it points at.
 struct Split {
+    /// The heap of one [`RaceSim`] clone: the mutable half.
     whole: i64,
     world: i64,
     track: i64,
@@ -137,29 +138,29 @@ impl Split {
         let (_, world) = heap_bytes(|| sim.world.clone());
         let (_, track) = heap_bytes(|| {
             (
-                sim.collision.clone(),
-                sim.spline.clone(),
-                sim.racing_line.clone(),
-                sim.ai_order.clone(),
-                sim.routes.clone(),
-                sim.speedup_pads.clone(),
-                sim.weapon_pads.clone(),
-                sim.course.clone(),
+                (*sim.collision).clone(),
+                (*sim.spline).clone(),
+                (*sim.racing_line).clone(),
+                sim.ai_order.to_vec(),
+                sim.routes.to_vec(),
+                sim.speedup_pads.to_vec(),
+                sim.weapon_pads.to_vec(),
+                sim.course.as_deref().cloned(),
             )
         });
         let (_, tables) = heap_bytes(|| {
             (
-                sim.weapons.clone(),
-                sim.weapon_ai.clone(),
-                sim.allowed_weapons.clone(),
-                sim.original_tables,
-                sim.class.clone(),
+                sim.weapons.as_deref().cloned(),
+                sim.weapon_ai.as_deref().cloned(),
+                sim.allowed_weapons.to_vec(),
+                sim.original_tables.as_deref().copied(),
+                sim.class.to_string(),
             )
         });
         let (_, plans) = heap_bytes(|| {
             (
-                sim.speed_plan.clone(),
-                sim.hull_plans.clone(),
+                sim.speed_plan.as_deref().cloned(),
+                sim.hull_plans.to_vec(),
                 sim.plan_reference,
             )
         });
@@ -177,7 +178,7 @@ impl Split {
     }
 
     fn mutable(&self) -> i64 {
-        self.whole - self.constant()
+        self.whole
     }
 }
 
@@ -502,21 +503,43 @@ fn replay_timeline_cost_sweep() {
         changed(&constants_after_first, &constants_at_end),
     );
     let after_run = Split::of(&race.sim);
-    println!("snapshot heap, KiB: whole / world / track / tables / plans / rest-mutable");
+    println!("heap, KiB: a snapshot's own / world / shared: track / tables / plans");
     for (label, s) in [("tick 0", &before_run), ("end", &after_run)] {
         println!(
-            "  {label:>6}: {:.0} / {:.0} / {:.0} / {:.0} / {:.0} / {:.0}   mutable {:.0} KiB, constant {:.0} KiB",
+            "  {label:>6}: {:.1} / {:.0} / {:.0} / {:.0} / {:.0}   shared half {:.0} KiB",
             s.whole as f64 / 1024.0,
             s.world as f64 / 1024.0,
             s.track as f64 / 1024.0,
             s.tables as f64 / 1024.0,
             s.plans as f64 / 1024.0,
-            (s.whole - s.world - s.track - s.tables - s.plans) as f64 / 1024.0,
-            s.mutable() as f64 / 1024.0,
             s.constant() as f64 / 1024.0,
         );
     }
-    let mutable_total: i64 = keyframes.iter().map(|(_, s)| Split::of(s).mutable()).sum();
+    let inline = std::mem::size_of::<RaceSim>() as i64;
+    let at_end = race.snapshot_sim();
+    let largest = keyframes
+        .iter()
+        .map(|(_, s)| heap_bytes(|| s.clone()).1)
+        .max()
+        .unwrap_or(0);
+    println!(
+        "snapshot bytes: {} at the end, {} at the largest keyframe ({inline} inline plus heap), \
+         limit 40960",
+        inline + after_run.whole,
+        inline + largest
+    );
+    println!(
+        "keyframes holding the race's own shared half: {} of {}",
+        keyframes
+            .iter()
+            .filter(|(_, s)| s.shares_constant_half_with(&at_end))
+            .count(),
+        keyframes.len()
+    );
+    let mutable_total: i64 = keyframes
+        .iter()
+        .map(|(_, s)| heap_bytes(|| s.clone()).1)
+        .sum();
     println!(
         "keyframes every 60 ticks: {} held, mutable bytes {:.1} MiB in all, {:.0} KiB each on average",
         keyframes.len(),

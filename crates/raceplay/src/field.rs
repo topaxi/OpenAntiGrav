@@ -54,7 +54,7 @@ impl Race {
     /// temper it too. It is not a difficulty setting and nothing in the game
     /// calls it.
     pub fn set_ai_pilot(&mut self, slot: usize, pilot: oag_ai::Pilot) {
-        if let Some(entry) = self.sim.ai_pilots.get_mut(slot) {
+        if let Some(entry) = Arc::make_mut(&mut self.sim.ai_pilots).get_mut(slot) {
             *entry = pilot;
         }
     }
@@ -69,7 +69,7 @@ impl Race {
         difficulty: oag_ai::Difficulty,
     ) {
         let tempered = difficulty.temper(&entry.pilot);
-        for pilot in self.sim.ai_pilots.iter_mut().skip(1) {
+        for pilot in Arc::make_mut(&mut self.sim.ai_pilots).iter_mut().skip(1) {
             *pilot = tempered;
         }
         let world = &mut self.sim.world;
