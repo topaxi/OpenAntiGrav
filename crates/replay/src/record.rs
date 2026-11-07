@@ -64,6 +64,12 @@ impl Recorder {
         self.replay.events.push(Event::new(tick, seat, kind, value));
     }
 
+    /// The events recorded so far.
+    #[must_use]
+    pub fn events(&self) -> &[Event] {
+        &self.replay.events
+    }
+
     /// Whether the tick about to be recorded is one whose hash is stored.
     ///
     /// A caller that computes its hash eagerly can skip the work on every other

@@ -49,6 +49,15 @@ impl Race {
         true
     }
 
+    /// How many events the recording holds so far, or `None` when this race records nothing.
+    #[must_use]
+    pub fn recorded_event_count(&self) -> Option<usize> {
+        self.replay
+            .recording
+            .as_ref()
+            .map(|recording| recording.recorder.events().len())
+    }
+
     /// Applies a recorded `event`, the way its writer made the change live. A re-drive calls
     /// this for each [`oag_replay::Verifier::events_due`] before it runs the tick.
     ///

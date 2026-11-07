@@ -365,6 +365,7 @@ fn state_of(session: &Session) -> State {
         state.sim_tick = Some(stage.race.sim.world.tick);
         state.pilot_assist = Some(stage.race.pilot_assist_level().name().to_string());
         state.ghost_visible = Some(stage.race.ghost_visible());
+        state.recorded_events = stage.race.recorded_event_count();
     }
     state
 }
