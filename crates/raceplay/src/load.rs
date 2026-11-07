@@ -1,7 +1,5 @@
 //! [`load`]: everything a race needs, read out of one disc image, and the report
 //! of what came back.
-//!
-//! Split out of `race.rs` under the 1,000-line rule; its tests are `race/tests/load.rs`.
 
 use super::*;
 #[cfg(feature = "view")]
