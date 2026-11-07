@@ -2,8 +2,8 @@
 status: blocked-maintainer
 categories: [frontend, tooling]
 titles: [pulse, pure, hd, 2048, omega]
-updated: 2026-11-07
-summary: "ADR-0087: one Timeline for replay viewer, photo rewind and take-over; stages 1 to 3 landed, stages 4 to 7 open"
+updated: 2026-11-08
+summary: "ADR-0087: one Timeline for replay viewer, photo rewind and take-over; stages 1 to 3 and 5 landed (POSE VIEW open), 4, 6 and 7 open"
 size: XL
 difficulty: hard
 ---
@@ -39,9 +39,18 @@ ADR and are not open.
   opening pass, the desync state. A seek reproduces a pad-flown Single Race on all five titles, and split screen on Pulse (two
   people, Head to Head) once `start_recorded` seats `Header::slots`. Its page's "Open" lists what stage 5 inherits: the probe's
   `results` and `wreck_ended_tick` after a seek back, quiet `step`, and `follow_devices` as an unrecorded writer of `controllers`.
+- **Stage 5 landed** ([the replay page](../../docs/ui/replays.md)): every race the session hands over is recorded to `auto/`
+  (a 20-file, 32 MiB ring), the REPLAYS page (WATCH, KEEP, DELETE), the viewer over a `Timeline` with a bar showing the built
+  prefix, the mismatch banner, `Audio::rebuild_race_sfx`, the 60-tick pre-roll, WATCH REPLAY on the Pulse end-of-race list, and
+  `[replay] record`. **Open: POSE VIEW**, the viewer past the last agreeing second, waits for the `POSE` chunk (stage 4); a file
+  without one stops there. Also open: split-screen craft cycling in the viewer, and the end-of-race row on HD, 2048, Pure and Omega
+  (their dialects author no such row). Found on the way: a seed above `i64::MAX` made a header unreadable (about half of all
+  recordings, ghosts included); a front-end race needs the original AI's request in `[options]`; `follow_devices` is now the
+  `controller` event; a DLC pack mounted on the machine fields other hulls, so a rebuild mounts the reader's own.
 - **Unstaged:** replays of modded races, replays written by `oag-server`, multi-seat take-over.
 
 ## Next Steps
 
-1. ~~Stages 1 to 3~~ landed. The modes the replay file does not claim stay unclaimed: nothing has shown them reproducing.
-2. Stage 4 `pose-track`, then 5 to 7 as the ADR orders them.
+1. ~~Stages 1 to 3~~ and ~~5~~ landed. Zone, Eliminator and one-person Head to Head reproduced 752 ticks on Pulse through WATCH; the
+   replay file still claims only the table in its page.
+2. Stage 4 `pose-track`, then POSE VIEW in the viewer (a seek is held inside `Timeline::prefix()` today), then 6 and 7.

@@ -5,8 +5,8 @@ Code: [`oag_raceplay::timeline`](../../crates/raceplay/src/timeline.rs). Tests:
 [`src/tests/timeline.rs`](../../crates/raceplay/src/tests/timeline.rs) (a fixture, in CI) and
 [`tests/replay_timeline_ground_truth.rs`](../../crates/raceplay/tests/replay_timeline_ground_truth.rs)
 (every title's data). The ADR holds the decisions and why; this page is what was built and what it
-was measured to do. Nothing draws from it yet: the viewer, the photo rewind and the take-over are
-stages 5 to 7.
+was measured to do. The viewer draws from it (stage 5, [the replay page](../ui/replays.md)); the photo
+rewind and the take-over are stages 6 and 7.
 
 ## The shape
 
@@ -122,11 +122,9 @@ Deck. **The Deck itself stays owed.** Seeks on the dev profile, load about 10 to
 ## Open
 
 - **The probe's view half after a seek back.** `results` and `wreck_ended_tick` are written once and
-  a restore leaves them, so a viewer that reads the probe's board after seeking before the finish
-  sees the later one. They do not reach the simulation. Stage 5 owns what the viewer shows.
-- **Unrecorded writers.** `oag_game::split_screen::follow_devices` writes `World::controllers`
-  outside the tick when a pad leaves a seat. It has no event kind, so such a recording desyncs at
-  the next hash. The `controller` kind is reserved; nothing writes it.
+  a restore leaves them. The viewer never reads the probe's: it moves the race on screen and
+  restores into it with `Race::restore_for_viewing`, which clears both (`tests::viewer::a_seek_back_clears_...`).
+- **Unrecorded writers.** `follow_devices` is the `controller` event now (`Race::set_controller`).
 - **Modes.** Single Race on every title and Head to Head with two people on Pulse. Time Trial and
   Speed Lap reach the same pass through `replay_ground_truth`'s `Verifier` run, not through a
   `Timeline`. The modes the [replay file](../formats/replay-file.md) does not claim stay unclaimed.
@@ -134,5 +132,9 @@ Deck. **The Deck itself stays owed.** Seeks on the dev profile, load about 10 to
   applies it again. Harmless for `pilot_assist` and `give`; the `controller` kind will need a look.
 - **The lock on the page's thread.** `Keyframes::push` can reallocate the list while holding it,
   milliseconds for a list of 25 KB entries. Boxing each keyframe fixes that; stage 5 can do it.
-- **Playback through `Race::tick`.** `step` is quiet. Decision 6's drawn 1x playback and
-  `Sfx::rebuild` are stage 5.
+- **Playback through `Race::tick`** is `oag_raceplay::viewer::Viewer`, which keeps the race on
+  screen and uses the timeline for its keyframes; the sound is `Audio::rebuild_race_sfx`
+  ([the replay page](../ui/replays.md)). A WAV of a seek against continuous playback at tick 1,200
+  (Pulse Time Trial, one craft, seek from tick 285): gain 0.979 of the continuous render's, spectral
+  centroid +0.03 semitones, spectrum correlation 0.9997; the same seek with no rebuild is gain 0.992,
+  centroid -1.11 semitones, correlation 0.9985 (`replay_audio_ground_truth`).
