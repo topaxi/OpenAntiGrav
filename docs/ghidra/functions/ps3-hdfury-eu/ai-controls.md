@@ -340,8 +340,8 @@ come back); keep each invocation well under the tool ceiling.
 
 ## Not ported, by name
 
-- The Eliminator spin (step 11 above): what `craft+0x628c == 2` means is not read.
-  Our Eliminator handles a craft out of the race its own way.
+- The Eliminator spin (step 11 above) is the flip, a live opponent move: [eliminator-flip.md](eliminator-flip.md).
+  `craft+0x628c == 2` is an opponent, below. Read, not wired.
 - The Duel override and the Duel rail gap: no Duel opponent is wired in this project.
 - The split-screen multiplier: no split screen.
 

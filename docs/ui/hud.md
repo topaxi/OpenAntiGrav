@@ -1420,7 +1420,7 @@ the target score", with points for damage, for an elimination and for laps, and 
 eliminated. This build races Pulse's kill-count rule, so there is no number to print and a row of
 invented `( 0 )`s would be a stand-in for data the original has. The scoring law, the `200`
 target (`g_GameState+0x20`) and the row writer `0x0008c6f8` are unread. The marker half turn
-(`craft+0x6ad8`) is unread too. Not captured: a frame after a kill (none was reachable without
+(`craft+0x6ad8`) was read 2026-11-07, [eliminator-flip.md](../ghidra/functions/ps3-hdfury-eu/eliminator-flip.md). Not captured: a frame after a kill (none was reachable without
 the scoring), the split-screen Eliminator pair (`splitscreen_elimination_hud_{0,1}.xml` author the
 same line and take the same code path, unchecked). 2048 and Omega: both executables name `ShipLinePos%d`, `ShipsInFront` and `EliminatorPositions`
 and both packages ship the same `Elimination_HUD` / `hud_elim_*` fragments (Omega's

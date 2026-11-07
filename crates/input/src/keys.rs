@@ -15,7 +15,7 @@
 //! # The candidate set is closed
 //!
 //! [`candidates`] is not a hint, it is the whole universe: every key this
-//! build can ever offer a player, rebound or not, is one of these eighteen.
+//! build can ever offer a player, rebound or not, is one of these nineteen.
 //! [`crate::bindings::Bindings`] only ever changes which button a candidate
 //! currently produces, never adds a new one - the same shape as a menu row's
 //! `values_from` list, and for the same reason: a closed set is what keeps
@@ -107,6 +107,7 @@ pub fn key_at(physical: PhysicalKey) -> Option<Key> {
         KeyCode::KeyV => letter("v"),
         KeyCode::KeyQ => letter("q"),
         KeyCode::KeyE => letter("e"),
+        KeyCode::KeyF => letter("f"),
         _ => None,
     }
 }
@@ -124,7 +125,7 @@ pub fn map_key(key: &Key) -> Option<Button> {
         .map(|(_, _, button)| button)
 }
 
-/// The candidate name for `key`, if it is one of [`candidates`]'s eighteen.
+/// The candidate name for `key`, if it is one of [`candidates`]'s nineteen.
 ///
 /// What a rebind capture turns a raw key press into: the closed set means
 /// this is a lookup rather than a spelling decision, so a key the capture
@@ -150,7 +151,7 @@ pub fn name_for(key: &Key) -> Option<&'static str> {
 /// `pub(crate)` rather than private: [`crate::bindings`] walks this same list
 /// to resolve a live, rebindable table, and doing so through this function
 /// rather than a second copy of [`default_table`] is what keeps the two unable
-/// to disagree about which eighteen keys exist.
+/// to disagree about which nineteen keys exist.
 pub(crate) fn candidates() -> Vec<(&'static str, Key)> {
     default_table()
         .into_iter()
@@ -209,6 +210,7 @@ mod tests {
             KeyCode::KeyV,
             KeyCode::KeyQ,
             KeyCode::KeyE,
+            KeyCode::KeyF,
         ];
         let mut reached: Vec<&str> = codes
             .iter()

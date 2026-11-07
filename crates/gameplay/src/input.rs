@@ -69,12 +69,8 @@ impl InputSnapshot {
         let [held, last, released, pressed] = self.buttons.masks();
         if (held | released | pressed) & Button::Flip.bit() != 0 {
             let keep = !Button::L.bit();
-            self.buttons = Input::from_masks([
-                held & keep,
-                last & keep,
-                released & keep,
-                pressed & keep,
-            ]);
+            self.buttons =
+                Input::from_masks([held & keep, last & keep, released & keep, pressed & keep]);
             self.airbrake_left = 0.0;
         }
         self

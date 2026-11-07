@@ -88,16 +88,12 @@ pub fn sprites(layout: &Layout, line: &RaceLine) -> Vec<Sprite> {
         }
         Some(marker)
     };
-    drawn.extend(
-        line.others
-            .iter()
-            .take(PLAYER_SLOT)
-            .enumerate()
-            .filter_map(|(slot, &fraction)| {
-                let turned = line.others_turned.get(slot).copied().unwrap_or(false);
-                place(slot, fraction, turned)
-            }),
-    );
+    drawn.extend(line.others.iter().take(PLAYER_SLOT).enumerate().filter_map(
+        |(slot, &fraction)| {
+            let turned = line.others_turned.get(slot).copied().unwrap_or(false);
+            place(slot, fraction, turned)
+        },
+    ));
     drawn.extend(place(PLAYER_SLOT, line.player, line.player_turned));
     drawn
 }

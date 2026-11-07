@@ -72,7 +72,8 @@ impl Flip {
         let heading = (across * cos + up.cross(across) * sin).normalize_or_zero();
         let forward = body.forward();
         if heading != Vec3::ZERO {
-            body.orientation = (Quat::from_rotation_arc(forward, heading) * body.orientation).normalize();
+            body.orientation =
+                (Quat::from_rotation_arc(forward, heading) * body.orientation).normalize();
         }
     }
 }
@@ -109,7 +110,11 @@ mod tests {
             ticks += 1;
         }
         assert_eq!(ticks, 12);
-        assert!(body.forward().dot(Vec3::NEG_Z) < -0.999, "{}", body.forward());
+        assert!(
+            body.forward().dot(Vec3::NEG_Z) < -0.999,
+            "{}",
+            body.forward()
+        );
         assert!(body.up().dot(Vec3::Y) > 0.999);
         assert_eq!(body.linear_velocity, velocity);
     }

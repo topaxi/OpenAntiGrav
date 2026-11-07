@@ -149,3 +149,47 @@ the player's. The trigger is `WeaponAi` ([weapon-ai-fire.md](weapon-ai-fire.md))
 controls record is `PlayerInput+0x4c` (`craft+0x5fac -> +0x84` read `0x30837bdc` on a `PlayerInput`
 at `0x30837b90`), so `+0x19` is the use edge `+0x65`, `+0x1a` the use hold `+0x66`, `+0x1b` absorb
 `+0x67` and `+0x1c` action `8`'s edge `+0x68`, the same button's `EMP` and `INVALID LAP` uses.
+
+## The camera: open
+
+A burst through a live flip (`data/reference/hd-eliminator-flip/original-burst.png`, local) shows the
+hull spinning on screen while the chase camera turns far less, then the view lands on the reversed
+heading with the hull centred. Ours keeps the chase camera rigid behind the hull, so for `0.2 s` it
+swings round the craft and can pass through a trackside wall. The settled frames agree. The
+camera's law is unread: the reader of `PlayerInput+0x90` or `+0x94` is the next address to find.
+No hull-side effect or sound of the flip was looked for.
+
+## Ours
+
+`oag_title::Title::eliminator_flip` is `0.2 s` on HD and `oag_raceplay::score_law::of` resolves it
+once at load into `Setup::flip_law`, `None` outside an Eliminator. `oag_physics::flip` is the turn;
+`Race::tick_flips` starts it on a person's `Button::Flip` press, past the countdown, on a craft in
+the race. `Button::Flip` is bit 10 of the masks a replay and the wire already carry, so neither
+format moves and a replay without the move reads as before; the flip enters the state hash only once a
+craft has flipped.
+
+- L1 on a pad raises both `L` and `Flip`, because our pad's shoulders are the airbrakes on every other
+  title. Where the race has a flip, `InputSnapshot::shoulder_flips` reads the press as the flip
+  alone. `F` on a keyboard, and a row in the bindings page. **Chosen, not measured:** the key.
+  Touch has no flip button.
+- The lean is `ShipState::steer_lean_follower`, HD's `craft+0x6a58` follower.
+- The race line's marker turns on `Race::facing_back`, the test `wrong_way_kill` runs. The original's
+  frames of a flip show no `WRONG WAY`, so a race with a flip raises none. That is read off frames,
+  not off the code that drives the warning.
+- `crates/raceplay/tests/hd_flip_ground_truth.rs`: ours fell through `41.0`, `22.4`, `9.1`, about
+  zero at `1.0 s`, against the original's `40.8`, `20.1`, `6.8`, about zero at `1.0 s` of game time. No
+  tuning: it is the velocity left alone and the engine HD already has.
+
+**The AI's flip is not wired.** Its chain is read above, but it needs the weapon AI's per-weapon
+range tests and a fire on the far side of the turn. On ours the absorb gate on the facing byte stays
+unused for the same reason: no opponent turns round.
+
+## Per title
+
+| Title | State | Answer |
+| --- | --- | --- |
+| HD / Fury | one disc, one executable | **wired** |
+| 2048 | **checked, differs, not wired.** `PlayerInput_Update` (`0x811b3072`) has the block: the gate is the mode test **or** the handling table's `race_eliminator_flip` (`handling+0x4b8`, `0x811b363c`), the rate is `pi / handling+0x4b4` (`0x811b36c6..0x811b36e4`), the attribute `eliminator_flip_time` under `<Misc>` (`0x811ab9aa`), default `0.2` (`0x3e4ccccd`, `0x811ab8e4`). So HD's `5 pi` is the default. A second trigger, `input+0x99` with a stick value below `-0.97` (`0x811b369c`), is unread. Confidence 80 |
+| Omega | **checked, differs, not wired.** The same two attributes in its `eboot.bin` (`0x01814b5e`, `0x01814b73`, read by `FUN_012d8e30`), and its `data00.psarc` ships them: on the five `*2048` teams' handling files, class 1 `0.4` on every team, class 3 `0.2`, class 4 `0.2`, Qirex `0.4`, Auricom `0.5`, AG-Systems `race_eliminator_flip="true"`, class 2 unset. Ours has no per-craft value to read them into yet. The reader on Omega's own `PlayerInput_Update` was not opened. Confidence 75 |
+| Pulse | **absent.** No flip string, no tunable, no `5 pi` word in the PSP or PS2 executable. The state's ancestor exists: Pulse's `craft+0x1c0 & 0x2000` is this same `dot < -0.4` test, and there it kills the engine (`oag_raceplay::wrong_way_kill`). HD turned the punishment into the move: `CraftLaws::eliminator_wrong_way_kill` is false on HD |
+| Pure | **absent.** The same census on its executable |

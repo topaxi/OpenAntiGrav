@@ -418,7 +418,8 @@ impl Race {
             (distance / length).rem_euclid(1.0)
         };
         let others = || {
-            (0..world.ship_count as usize).filter(|&slot| slot != player && world.ships[slot].active)
+            (0..world.ship_count as usize)
+                .filter(|&slot| slot != player && world.ships[slot].active)
         };
         Some(oag_hud::RaceLine {
             player: fraction(player),

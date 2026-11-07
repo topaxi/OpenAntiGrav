@@ -213,6 +213,7 @@ mod field;
 #[cfg(feature = "view")]
 pub mod finish_camera;
 mod finished_thrust;
+mod flip;
 pub mod foreign;
 #[cfg(feature = "view")]
 pub mod gantry;
@@ -314,7 +315,6 @@ mod weapon_light;
 mod weapons;
 #[cfg(feature = "view")]
 mod wreck_fx;
-mod flip;
 mod wrong_way_kill;
 #[cfg(feature = "view")]
 pub(crate) use weapons::{CannonAssets, CannonDraw};

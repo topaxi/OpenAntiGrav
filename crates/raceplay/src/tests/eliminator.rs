@@ -539,7 +539,11 @@ mod flip {
         }
         let physics = &race.sim.world.ships[0].physics;
         assert!(!physics.flip.active, "twelve ticks at 60 Hz is 0.2 s");
-        assert!(physics.body.forward().dot(before) < -0.95, "{}", physics.body.forward());
+        assert!(
+            physics.body.forward().dot(before) < -0.95,
+            "{}",
+            physics.body.forward()
+        );
     }
 
     #[test]
@@ -551,7 +555,8 @@ mod flip {
         for _ in 0..30 {
             race.tick(&held(Button::Flip));
         }
-        assert!(!race.sim.world.ships[0].physics.flip.active);
+        let turned = race.sim.world.ships[0].physics.body.forward();
+        assert!(turned.dot(before) < -0.9, "{turned} against {before}");
         race.tick(&PlayerInputs::default());
         race.tick(&press(Button::Flip));
         for _ in 0..30 {

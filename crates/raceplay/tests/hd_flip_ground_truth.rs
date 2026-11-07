@@ -5,8 +5,8 @@
 //!
 //! The law and the original's run are on `docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`.
 
-use oag_gameplay::input::{Button, Input, InputSnapshot};
 use oag_gameplay::PlayerInputs;
+use oag_gameplay::input::{Button, Input, InputSnapshot};
 
 fn inputs(held: u32, last: u32) -> PlayerInputs {
     let mut buttons = Input::EMPTY;
@@ -34,7 +34,13 @@ fn a_flip_stops_the_craft_and_sends_it_back_up_the_circuit() {
     .expect("loading an HD Eliminator");
     let mut race = oag_raceplay::Race::start(loaded.setup);
     let thrust = Button::Cross.bit();
-    let speed = |race: &oag_raceplay::Race| race.sim.world.ships[0].physics.body.linear_velocity.length();
+    let speed = |race: &oag_raceplay::Race| {
+        race.sim.world.ships[0]
+            .physics
+            .body
+            .linear_velocity
+            .length()
+    };
     let mut tick = 0;
     while speed(&race) < 115.0 && tick < 60 * 30 {
         race.tick(&inputs(thrust, thrust));
@@ -79,7 +85,10 @@ fn a_flip_stops_the_craft_and_sends_it_back_up_the_circuit() {
     let stopped = stopped.expect("the engine stops the craft");
     assert!((50..75).contains(&stopped), "stopped after {stopped} ticks");
     for (step, original, ours) in falling {
-        assert!((ours - original).abs() < 5.0, "tick {step}: {ours} against {original}");
+        assert!(
+            (ours - original).abs() < 5.0,
+            "tick {step}: {ours} against {original}"
+        );
     }
     assert!(reversed.is_some(), "and drives it back up the circuit");
 }

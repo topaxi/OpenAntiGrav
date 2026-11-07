@@ -761,6 +761,13 @@ Custom Race outside the campaign still has no cell to read, so
 first `KILLS` entry, see below) - the only figure a `--mode eliminator` run with no campaign
 cell in play can have.
 
+### The flip (2026-11-07)
+
+HD and Fury's Eliminator gives the player a half turn on L1: `0.2 s`, velocity kept, free, so the
+engine stops the craft and sends it back up the circuit at the field. Opponents do it too, in the
+original only. Law, evidence and the other titles:
+[eliminator-flip.md](../ghidra/functions/ps3-hdfury-eu/eliminator-flip.md).
+
 ### The kill target of a non-campaign Eliminator is the race box's `KILLS` row, and it starts on 5 (2026-09-30)
 
 `Hud_BindWidgets` (`0x0881fbec`) formats `KillsText` as `"%s (%d)"` of `IG_HUD_KILLS` and
