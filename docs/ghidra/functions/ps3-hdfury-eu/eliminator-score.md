@@ -107,7 +107,9 @@ the name. Next: a frame burst across one of the person's hits, reading `hud+0x3d
 into a plain `oag_race::ScoreLaw` on the race's setup, and nothing during a race reads a title. The
 HUD follows that value too (`Readout::score_rows`), so the rule is free to move off the title later.
 A Racebox target is `<Slider name="Eliminations">`'s `minSlide` off `DATA00`; a campaign cell's is
-its `NitroElim*` number for the rung. `Standing::score` enters the state hash only once it is not
+its `NitroElim*` number for the rung, on `Options::eliminator_score_target`. A score race ignores the
+`KILLS` pick, which another title may have stored. The law is `None` outside an Eliminator, as the
+original's awards all sit behind `mode == 8`. `Standing::score` enters the state hash only once it is not
 zero, so a kill race hashes as before.
 
 Three departures, all stated: a kill's points and the `-5` land when ours first sees the craft down,
@@ -120,7 +122,9 @@ row with, where `Hud_PlaceHighlightBar` fits its left edge to the text.
 table is `oag_raceplay::scoreboard`'s places, not `POINTS`); the Racebox's TARGET row (`race_setup`
 is `None` on HD, and the disc's row is a `Slider`, not a list); the lap refill for an opponent:
 ours refills every craft, HD's reads as the person's alone (an AI's shield did not move on any lap);
-`ScoreFeedBack` above; the person's name in a row is the team's, not a profile's.
+`ScoreFeedBack` above; the person's name in a row is the team's, not a profile's, and `--race` with
+no `--team` keeps the lowercase default id, upper-cased, because the HUD has no roster to look it up
+in.
 
 ## Other titles
 
