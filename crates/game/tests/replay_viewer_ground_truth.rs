@@ -215,8 +215,7 @@ fn a_recorded_race_is_watched_and_a_mismatch_is_shown() {
     assert!(at[0] >= at[2], "pose view begins where what agrees ends");
     let last = states
         .iter()
-        .filter(|state| text(state, "replay") == Some("pose_ended"))
-        .next_back()
+        .rfind(|state| text(state, "replay") == Some("pose_ended"))
         .expect("and stops at the end of the pose track");
     let end: Vec<u64> = text(last, "replay_at")
         .expect("where")
