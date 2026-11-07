@@ -20,7 +20,7 @@ impl Race {
         };
         let dt = self.sim.dt;
         let racing = !RaceState::thrust_gated(self.sim.world.tick);
-        for slot in 0..MAX_PLAYERS {
+        for (slot, slot_controls) in controls.iter_mut().enumerate() {
             if !self.sim.world.person_flown(slot) {
                 continue;
             }
@@ -33,7 +33,7 @@ impl Race {
             }
             if physics.flip.active {
                 physics.flip.advance(&mut physics.body, dt);
-                controls[slot].steer_x = 0.0;
+                slot_controls.steer_x = 0.0;
             }
         }
     }
