@@ -43,6 +43,7 @@ mod race_remix_ground_truth;
 mod record_readout_ground_truth;
 mod render_bench_ground_truth;
 mod replay_audio_ground_truth;
+mod replay_viewer_ground_truth;
 mod resume_countdown_ground_truth;
 mod roster_declared_ground_truth;
 mod rumble_ground_truth;
