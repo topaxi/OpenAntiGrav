@@ -8,7 +8,7 @@
 //! - **Keys.** A key every [`STRIDE`]th tick (10 Hz at 60 Hz ticks), plus the last tick, plus
 //!   *refinement*: inside any segment, the tick that interpolates worst becomes a key, until no
 //!   tick between two keys is more than [`MAX_POSITION_ERROR`] units or
-//!   [`MAX_ROTATION_ERROR`] degrees from the truth. Playback is a lerp and a slerp.
+//!   [`MAX_ROTATION_ERROR`] degrees from the truth. Playback is a lerp for the position and a normalised lerp for the rotation.
 //! - **A key** is the position in 1/[`STEPS_PER_UNIT`] unit, delta-coded per axis against the
 //!   previous key as zigzag varints, and the rotation as a four-byte smallest-three quaternion.
 //! - **Which ticks are keys** is not stored per key: the base keys follow from the track's last
@@ -137,14 +137,24 @@ fn unpack_rotation(word: u32) -> Quat {
 /// The angle between two orientations, in degrees.
 #[must_use]
 pub fn degrees_between(a: Quat, b: Quat) -> f32 {
-    (2.0 * a.dot(b).abs().min(1.0).acos()).to_degrees()
+    (2.0 * oag_core::math::acos(a.dot(b).abs().min(1.0))).to_degrees()
 }
 
-/// How far `truth` is from the lerp and slerp of `a` and `b` at `fraction`, as a multiple of the
+/// The rotation between `a` and `b` at `fraction`: a normalised lerp, the short way round.
+///
+/// Not a slerp, which needs the platform's `acos` and `sin`: the keys a recorder picks are then
+/// the same on every machine, and the angular speed of the blend is uneven by less than the
+/// refinement's bound anywhere it matters (refinement measures this function).
+fn blend(a: Quat, b: Quat, fraction: f32) -> Quat {
+    let b = if a.dot(b) < 0.0 { -b } else { b };
+    (a * (1.0 - fraction) + b * fraction).normalize()
+}
+
+/// How far `truth` is from the blend of `a` and `b` at `fraction`, as a multiple of the
 /// tolerance: over `1.0` is out of bounds.
 fn over(a: &Pose, b: &Pose, fraction: f32, truth: &Pose) -> f32 {
     let position = (a.position.lerp(b.position, fraction) - truth.position).length();
-    let rotation = degrees_between(a.rotation.slerp(b.rotation, fraction), truth.rotation);
+    let rotation = degrees_between(blend(a.rotation, b.rotation, fraction), truth.rotation);
     (position / MAX_POSITION_ERROR).max(rotation / MAX_ROTATION_ERROR)
 }
 
@@ -236,7 +246,7 @@ impl PoseTrack {
         let fraction = ((at - f64::from(before.tick)) / f64::from(span)) as f32;
         Some(Pose {
             position: a.position.lerp(b.position, fraction),
-            rotation: a.rotation.slerp(b.rotation, fraction),
+            rotation: blend(a.rotation, b.rotation, fraction),
         })
     }
 
