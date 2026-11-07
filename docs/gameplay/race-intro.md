@@ -364,8 +364,8 @@ order: Platinum Rush `8, 1, 17, 14, 23` (Black too), Talon's Junction `0, 27, 25
 `flyby_section_ground_truth` holds both, off the disc, through `Race::tick_intro`.
 
 Not exercised: a miss. `AiTrack_LocatePosition` failing leaves the pre-zeroed record, so the original
-would publish section `0`; no camera came within a tenth of the 2000 reach of it, and ours has no
-reach test.
+would publish section `0`; no camera measured stood more than 150 units off the spline, and ours
+has no reach test.
 
 **Acceptance.** The probe of the section above: `45.72` before, `0.00` after, on `track.vex` and on
 `track_reversed.vex` (`flyby_pane_ground_truth`, red with the rule off). The opening-shot sweep,
@@ -382,8 +382,8 @@ pixels differing by more than 60 between the blends, on the 12 circuit files:
 pixels (960x544) further in, and every large case read against the original's frame at the same
 camera is the mask removing what the original does not draw: on Talon's Junction (tick 1250) a grey
 panel and a white sign over the pink advert, and on De Konstruct Black (ticks 750, 1000, 1250) the
-tower across the sky and two hover vehicles. Platinum Rush (ticks 60, 100) also loses the bad reflections
-on the left dome and the walkway. The ticks of `03_Track` were compared before and after only.
+building across the sky and the hover vehicles. Platinum Rush (ticks 60, 100) matches on the left
+dome's panes and the walkway's. The ticks of `03_Track` were compared before and after only.
 
 **Other titles.** The path needs `section` nodes. HD, 2048 and Omega draw `.rcsmodel` chunks with a
 partition of their own, located by world position, and have no such nodes: **checked, differs**, by
@@ -391,8 +391,8 @@ the code path; their flyby's mask is unmeasured. Whether HD authors coplanar cop
 censused, because the fix takes no tie rule that could reach it. Pure declares no sections. PS2 Pulse
 has them, and its flyby is off (`PRE_RACE.on`).
 
-The weather reads the same global (`Weather_Update`); ours does not tick it under the flyby by
-this path, and that is left as it was.
+The weather reads the same global (`Weather_Update`); `Race::advance_weather` does not take the
+flyby's section, and that is left as it was.
 
 ## What the original plays under the flyby (watched 2026-11-02, lane `pulse-flyby-audio-capture`)
 
