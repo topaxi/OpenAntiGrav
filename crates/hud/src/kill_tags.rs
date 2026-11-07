@@ -110,7 +110,9 @@ pub(super) fn text(
 /// Whether `PlaceString<n>`, the digit the layout authors beside a row, is up: on a score
 /// Eliminator's rows that hold a craft.
 pub(super) fn rank_shown(readout: &Readout, name: &str) -> bool {
-    let row = name.strip_prefix("PlaceString").and_then(|row| row.parse().ok());
+    let row = name
+        .strip_prefix("PlaceString")
+        .and_then(|row| row.parse().ok());
     readout.score_rows && row.is_some_and(|row: usize| row < readout.kill_tags.len())
 }
 

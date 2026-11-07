@@ -7,7 +7,12 @@ pub fn slider_min(xml: &str, name: &str) -> Option<u32> {
     let at = xml.find(&format!("<Slider name=\"{name}\""))?;
     let body = &xml[at..];
     let body = &body[..body.find("</Slider>")?];
-    body.split(" minSlide=\"").nth(1)?.split('"').next()?.parse().ok()
+    body.split(" minSlide=\"")
+        .nth(1)?
+        .split('"')
+        .next()?
+        .parse()
+        .ok()
 }
 
 #[cfg(test)]

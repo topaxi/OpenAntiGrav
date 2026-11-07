@@ -277,11 +277,11 @@ mod roll_payout;
 mod routes;
 #[cfg(feature = "view")]
 pub mod rumble_library;
-mod score_law;
 #[cfg(feature = "view")]
 mod scene;
 #[cfg(feature = "view")]
 pub mod scenery_fx;
+mod score_law;
 pub mod scoreboard;
 #[cfg(feature = "view")]
 mod shadow;

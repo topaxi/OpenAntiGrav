@@ -173,7 +173,10 @@ fn a_score_row_prints_its_score_in_brackets_and_grows_the_player() {
         ..Readout::default()
     };
     assert_eq!(text(&readout, "PosTag0", &strings).unwrap(), "EG-X  ( 41 )");
-    assert_eq!(text(&readout, "PosTag1", &strings).unwrap(), "PLAYER  ( 15 )");
+    assert_eq!(
+        text(&readout, "PosTag1", &strings).unwrap(),
+        "PLAYER  ( 15 )"
+    );
     assert_eq!(scale(&readout, "PosTag0"), Some(1.0));
     assert_eq!(scale(&readout, "PosTag1"), Some(1.2));
     assert_eq!(

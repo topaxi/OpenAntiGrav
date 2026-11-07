@@ -178,7 +178,10 @@ fn a_racebox_eliminator_is_scored_to_the_slider_target() {
         .and_then(|stats| stats.eliminator())
         .expect("DATA00's row");
     assert_eq!(law.opponent_scale, row.score_scale[0]);
-    assert!(law.opponent_scale > 1.0, "an opponent earns more than a person");
+    assert!(
+        law.opponent_scale > 1.0,
+        "an opponent earns more than a person"
+    );
 
     let context = loaded.hud.context().expect("HD's layout parses");
     let mut race = oag_raceplay::Race::start(loaded.setup);
@@ -192,4 +195,47 @@ fn a_racebox_eliminator_is_scored_to_the_slider_target() {
         10,
         "the header's panel, a bracket per row and the highlight"
     );
+}
+
+/// The lap award reaches a craft through the race's own tick, at the opponents' scale.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_opponents_first_lap_pays_through_the_tick() {
+    let Some(image) = image() else { return };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Eliminator,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading an HD Eliminator");
+    let law = loaded.setup.score_law.expect("HD's Eliminator is scored");
+    let pay = law.lap * law.opponent_scale;
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let snapshot = |race: &oag_raceplay::Race| {
+        let world = &race.sim.world;
+        std::array::from_fn::<_, 8, _>(|slot| {
+            let standing = &world.ships[slot].standing;
+            (standing.lap, standing.score)
+        })
+    };
+    let mut before = snapshot(&race);
+    for _ in 0..4000 {
+        race.tick(&PlayerInputs::none());
+        let after = snapshot(&race);
+        for slot in 1..8 {
+            if after[slot].0 > before[slot].0 {
+                assert!(
+                    after[slot].1 - before[slot].1 >= pay - 1e-3,
+                    "slot {slot} crossed the line: {:?} to {:?}",
+                    before[slot],
+                    after[slot]
+                );
+                return;
+            }
+        }
+        before = after;
+    }
+    panic!("no opponent finished a lap");
 }

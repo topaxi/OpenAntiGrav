@@ -871,11 +871,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             } else {
                 Vec::new()
             },
-            kill_target: if kill_column {
-                readout.kill_target
-            } else {
-                0
-            },
+            kill_target: if kill_column { readout.kill_target } else { 0 },
             messages: if cx.art.message_slots {
                 readout.messages.clone()
             } else {

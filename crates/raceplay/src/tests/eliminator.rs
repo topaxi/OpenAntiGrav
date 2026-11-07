@@ -372,7 +372,10 @@ fn score_of(race: &Race, slot: usize) -> f32 {
 }
 
 fn near(value: f32, expected: f32) {
-    assert!((value - expected).abs() < 1e-4, "{value} against {expected}");
+    assert!(
+        (value - expected).abs() < 1e-4,
+        "{value} against {expected}"
+    );
 }
 
 #[test]
