@@ -874,3 +874,14 @@
 0x000bd3e8	function	Options_GetButtonBinding	90	eliminator-flip.md
 0x006770c8	function	Pad_WasPressed	90	eliminator-flip.md
 0x0023d660	function	PauseMenu_BindRedirectForMode	85	pause-menu.md
+# 2026-11-07 hd-missile-ribbon: the Missile's FatLine ribbons
+0x0011c5d0	function	Missile_Init	65	missile-ribbon.md
+0x002ab9d0	function	FatLine_PushChains	85	missile-ribbon.md
+0x002ab608	function	FatLine_Update	88	missile-ribbon.md
+0x002ab098	function	FatLine_Init	85	missile-ribbon.md
+0x002ab458	function	FatLine_Render	82	missile-ribbon.md
+0x002ab410	function	FatLine_AlphaOverLife	85	missile-ribbon.md
+0x002ebef8	function	LineBuilder_AddSample	80	missile-ribbon.md
+0x002ebf80	function	LineBuilder_Flush	78	missile-ribbon.md
+0x002ebec8	function	RibbonNode_Advance	85	missile-ribbon.md
+0x002ec748	function	LineBuilder_BindParams	55	missile-ribbon.md

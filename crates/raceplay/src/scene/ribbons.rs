@@ -5,6 +5,7 @@
 
 use oag_fx::beam::pipeline::Style;
 use oag_fx::rocket_smoke::{CAPACITY, FINS, MAX_TRAILS, OpacityRamp};
+use oag_title::weapons::MissileTrail;
 
 use crate::Race;
 use crate::rocket_smoke::RibbonTextures;
@@ -13,15 +14,32 @@ use crate::rocket_smoke::RibbonTextures;
 /// segment.
 const SMOKE_VERTICES: usize = MAX_TRAILS * (CAPACITY - 1) * FINS * 6;
 
+/// Vertices the Missile ribbons' buffer holds: both pools full, every chain at its
+/// builder's capacity, six vertices a segment. The specs are the title's, so this is
+/// sized from them when the title builds the ribbons.
+fn missile_vertices(trail: &MissileTrail) -> usize {
+    let per_element = |spec: oag_title::weapons::FatLineSpec| {
+        spec.chains as usize * (spec.capacity as usize).saturating_sub(1) * 6
+    };
+    crate::missile_smoke::POOL * (per_element(trail.stub) + per_element(trail.helix))
+}
+
 #[derive(Debug)]
 pub(super) struct Ribbons {
     pub(super) magstrip: Option<super::magstrip_wake::Magstrip>,
     rocket_smoke: Option<RocketSmoke>,
+    missile_smoke: Option<MissileSmoke>,
     leach_strip: Option<std::cell::RefCell<oag_fx::beam::Pipeline>>,
 }
 
 #[derive(Debug)]
 struct RocketSmoke {
+    pipeline: std::cell::RefCell<oag_fx::beam::Pipeline>,
+    ramp: OpacityRamp,
+}
+
+#[derive(Debug)]
+struct MissileSmoke {
     pipeline: std::cell::RefCell<oag_fx::beam::Pipeline>,
     ramp: OpacityRamp,
 }
@@ -55,6 +73,19 @@ pub(super) fn build(
         )),
         ramp: assets.ramp.clone(),
     });
+    let missile_smoke = textures.missile_smoke.as_ref().map(|assets| MissileSmoke {
+        pipeline: std::cell::RefCell::new(oag_fx::beam::Pipeline::with_style(
+            device,
+            queue,
+            format,
+            store,
+            &assets.texture,
+            sample_count,
+            super::mesh_render::Velocity::Write,
+            Style::fat_line(missile_vertices(&assets.trail)),
+        )),
+        ramp: assets.ramp.clone(),
+    });
     let leach_strip = textures.leach_strip.as_ref().map(|assets| {
         std::cell::RefCell::new(oag_fx::beam::Pipeline::with_noise(
             device,
@@ -71,14 +102,17 @@ pub(super) fn build(
     Ribbons {
         magstrip,
         rocket_smoke,
+        missile_smoke,
         leach_strip,
     }
 }
 
 impl Ribbons {
     /// The pipelines in the order the effects draw them: the wake's contact quads under its
-    /// arcs, then the smoke over it, then HD's Leach strip.
-    pub(super) fn cells(&self) -> [Option<&std::cell::RefCell<oag_fx::beam::Pipeline>>; 4] {
+    /// arcs, then the Missile's additive ribbons, the Rocket's smoke over them
+    /// (`RibbonEffects_Render` blends pools 0, 2, 1, 5 additively before 3 and 4), then HD's
+    /// Leach strip.
+    pub(super) fn cells(&self) -> [Option<&std::cell::RefCell<oag_fx::beam::Pipeline>>; 5] {
         let (contact, atlas) = self
             .magstrip
             .as_ref()
@@ -86,6 +120,7 @@ impl Ribbons {
         [
             contact,
             atlas,
+            self.missile_smoke.as_ref().map(|smoke| &smoke.pipeline),
             self.rocket_smoke.as_ref().map(|smoke| &smoke.pipeline),
             self.leach_strip.as_ref(),
         ]
@@ -105,6 +140,14 @@ impl super::Scene {
         if let Some(smoke) = &self.ribbons.rocket_smoke {
             let eye = race.view().inverse().w_axis.truncate();
             let vertices = race.rocket_smoke_vertices(&smoke.ramp);
+            smoke
+                .pipeline
+                .borrow_mut()
+                .upload_with_eye(queue, vp, eye.to_array(), &vertices);
+        }
+        if let Some(smoke) = &self.ribbons.missile_smoke {
+            let eye = race.view().inverse().w_axis.truncate();
+            let vertices = race.missile_smoke_vertices(eye, &smoke.ramp);
             smoke
                 .pipeline
                 .borrow_mut()

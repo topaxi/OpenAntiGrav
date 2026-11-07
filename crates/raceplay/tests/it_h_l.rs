@@ -27,6 +27,7 @@ mod hd_flyby_ground_truth;
 mod hd_grid_hover_ground_truth;
 mod hd_hud_ground_truth;
 mod hd_livery_ground_truth;
+mod hd_missile_ribbon_ground_truth;
 mod hd_mix_ground_truth;
 mod hd_opponent_variant_ground_truth;
 mod hd_original_ai_ground_truth;

@@ -23,6 +23,8 @@ pub(super) struct Loaded {
     /// Each slot's `arc_anchor_point`, for HD's LeachBeam strip, when the
     /// title draws one.
     pub(super) leach_anchors: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
+    /// The Missile's ribbon config, `Some` only where its texture loaded.
+    pub(super) missile_trail: Option<oag_title::weapons::MissileTrail>,
 }
 
 pub(super) fn load(
@@ -32,6 +34,13 @@ pub(super) fn load(
     report: &mut Vec<String>,
 ) -> Loaded {
     let rocket_smoke = crate::rocket_smoke::load(archives, models, report);
+    let missile_smoke = crate::missile_smoke::load(
+        archives,
+        models,
+        rocket_smoke.as_ref().map(|assets| &assets.ramp),
+        report,
+    );
+    let missile_trail = missile_smoke.as_ref().and(models.missile_trail);
     let leach_strip = crate::leach_strip::load(archives, models, report);
     let leach_anchors = leach_strip.as_ref().map(|_| {
         let mut anchors = [None; oag_gameplay::MAX_SHIPS];
@@ -43,6 +52,7 @@ pub(super) fn load(
     let only_smoke = || RibbonTextures {
         magstrip: None,
         rocket_smoke: rocket_smoke.clone(),
+        missile_smoke: missile_smoke.clone(),
         leach_strip: leach_strip.clone(),
     };
     let Some(wake) = models.magstrip_wake else {
@@ -52,6 +62,7 @@ pub(super) fn load(
                 anchors: None,
                 textures: only_smoke(),
                 leach_anchors,
+                missile_trail,
             };
         }
         let mut anchors = [None; oag_gameplay::MAX_SHIPS];
@@ -67,6 +78,7 @@ pub(super) fn load(
             anchors: Some(anchors),
             textures: only_smoke(),
             leach_anchors,
+            missile_trail,
         };
     };
     let platform = archives.layout.platform;
@@ -90,9 +102,11 @@ pub(super) fn load(
         textures: RibbonTextures {
             magstrip: textures,
             rocket_smoke,
+            missile_smoke,
             leach_strip,
         },
         leach_anchors,
+        missile_trail,
     }
 }
 

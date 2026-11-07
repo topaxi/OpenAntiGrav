@@ -26,6 +26,7 @@ pub mod beam;
 pub mod cloud;
 pub mod cockpit_hit;
 pub mod exhaust;
+pub mod fat_line;
 pub mod flash;
 pub mod hull_overlay;
 pub mod leach_strip;

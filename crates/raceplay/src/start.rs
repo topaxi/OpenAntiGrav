@@ -190,6 +190,8 @@ impl Race {
             #[cfg(feature = "view")]
             leach_strip,
             #[cfg(feature = "view")]
+            missile_trail,
+            #[cfg(feature = "view")]
             destroy_stations,
             #[cfg(feature = "view")]
             intro_camera,
@@ -937,6 +939,7 @@ impl Race {
                 leach_beam_ribbon: std::array::from_fn(|_| None),
                 leach_beam_rng: Rng::new(LEACH_BEAM_SEED),
                 rocket_smoke: crate::rocket_smoke::Smoke::new(),
+                missile_smoke: missile_trail.map(crate::missile_smoke::Smoke::new),
                 leach_ball_elapsed: [0.0; oag_weapons::projectile::leach_beam::POOL_SIZE],
                 plasma_blasts: [None; blast_models::PLASMA_BLAST_SLOTS],
                 bomb_blasts: [None; bomb_blast::BOMB_BLAST_SLOTS],

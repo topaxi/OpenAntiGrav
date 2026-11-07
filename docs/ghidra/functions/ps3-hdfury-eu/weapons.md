@@ -1472,9 +1472,8 @@ particle balls. The disc's own head is `HD_missile_ball_bloomring.vex`; it is no
   head model, which sits under them in both; whether the original's head model is also larger
   (the rings are about 60 px across at 1280x720, ours about 10 px) is the open placement/scale
   question above. No `viewProj` was captured, so the camera is not pinned and no pixel comparison was made.
-- **Still not drawn: the Missile's own smoke ribbon.** `RibbonEffects_Construct`'s pool `+0x74`
-  (18 elements, `smoke_trails_frame1_ALPHA.gtf`) is acquired from `Missile.cpp`'s `0x0011d288`
-  ([rocket-trail.md](rocket-trail.md)); its law is unread and nothing is drawn for it.
+- ~~**Still not drawn: the Missile's own smoke ribbon.**~~ **Drawn 2026-11-07 (`hd-missile-ribbon`), and
+  it was never pool `+0x74`**: the Missile's ribbons are two `FatLine` pools, see "The Missile's ribbons" below.
 - **No screen flash on HD.** `flash_for` starts `ScreenFlash_Start` for a Missile, but the
   consumer is Pulse PSP's alone (`Options::screen_flash`), so HD runs none of it.
 - **Omega / 2048.** Omega ships the same entry (`Data\Weapons\HD_missile_ball_bloomring.vex`,
@@ -1526,9 +1525,8 @@ the pushbuffer: eye, forward, up, fov 60.0006) and lap-clock second (`scripts/hd
   Pulse's law, the original's is tighter at 0.5 s); the original's long wispy loops from the nose to the
   missile at 0.8 s are more than the 12-tick particles reach, which is the ribbon below; a listed effect draws
   each particle on its spawn frame, HD's own flipbook advance still unread (`Effects.sprites`).
-- **Still undrawn: the Missile's smoke ribbon** (`RibbonEffects` pool `+0x74`, `smoke_trails_frame1_ALPHA`).
-  Its law and the AltiVec per-tick update `0x0011e640` were not read in this change; nothing is drawn for it,
-  and the loader says so. The head model keeps its authored size (about 10 px at this distance): in the
+- ~~**Still undrawn: the Missile's smoke ribbon**~~ **drawn since `hd-missile-ribbon`** ("The Missile's ribbons"
+  below; it is not pool `+0x74`). The head model keeps its authored size (about 10 px at this distance): in the
   original frames nothing a player sees is that small, and the model's own scale and placement stay
   **chosen, not measured**.
 - **Omega / 2048: checked, applies, no pixel check.** `Effects.sprites` is an HD (`.gtf`) gate only:
@@ -1552,7 +1550,7 @@ ones were not retaken).
 
 | Weapon (state) | Same moment | Differences | Status |
 | --- | --- | --- | --- |
-| Missile (1) | lap clock 2.27, 2.55, 2.87 | rings drawn since this change; orbit wider; ribbon undrawn | fixed (rings), ribbon named |
+| Missile (1) | lap clock 2.27, 2.55, 2.87 | rings drawn since this change; orbit wider; ribbon drawn since `hd-missile-ribbon` | fixed (rings, ribbon) |
 | Rocket (0) | 4.67, 4.92, 5.32 | three flames and three smoke trails in both, rockets level by 0.8 s; the original's trails are blue-grey and fan wider, ours white and tight (the ribbon vertex colour is chosen, `particle-triggers.md`); ours leaves the nose 0.1 s behind (one big white flash where the original shows three flames) | named |
 | Plasma (7) | 10.42, 10.67, 11.05 | the ring-and-ball at the nose matches; the original adds purple lightning rays and a forward blue ripple wave by 0.4 s that ours does not draw. **Candidates, not a cause:** `WO_PLASMA_LAUNCH` (no recovered caller), `WO_PLASMA_CHARGING` (unwired), or `WO_PLASMA_LIGHTNING_EXPAND` (wired) not playing at these ticks in ours. The original's button was held about 0.5 s and ours' for one tick, which matters for a charging weapon. **The brief's growing-sphere question stays open**: the clean frames stop at 0.8 s | named, open |
 | Cannon (8) | 2.28, 2.42, 2.67 | **the original draws a green-cyan shell around the whole craft for many seconds, not a muzzle flash**; ours a small spark; the HUD names it "Machine Gun" with damage 5. Whether state 8's visual is the Cannon's own or a shield-like effect is unresolved | named, open |
@@ -1560,3 +1558,48 @@ ones were not retaken).
 | Detonator's weapons | | deferred with the mode | undrawn, named |
 
 `HD_Mine_halo` stays unwired: it needs its own rim program and no original frame of a laid Mine was taken.
+
+## The Missile's ribbons: two `FatLine` pools, drawn (2026-11-07, `hd-missile-ribbon`)
+
+The law is [missile-ribbon.md](missile-ribbon.md): each head lays a 0.3 s stub (pool `+0x50`) and a 2.8 s
+three-chain helix (pool `+0x68`), `ThickLine_Red.gtf`, camera-facing strips, `SRC_ALPHA, ONE`. The brief's "pool
+`+0x74`, `smoke_trails_frame1_ALPHA`" was a mis-reading and is corrected there and in rocket-trail.md.
+Wired on `oag_fx::fat_line` (the law, the strip) and `oag_raceplay::missile_smoke` (the two six-element pools,
+ownership by projectile slot, the loader), HD's config in `oag_hd`'s `WeaponModels::missile_trail`.
+
+Pinned pair: the `hd-weapons-2` capture (camera from the pushbuffer, Talon's Junction, Feisar, rest pose, the
+same lap-clock seconds 2.27, 2.55, 2.87), ours rendered at the same pose, camera and fire second 2.10, before
+(the title data's `missile_trail` off) and after. Box metric (`scripts/hd-weapon-region.py`; red or white lit
+pixels, mean RGB over them, 5th-95th percentile extent):
+
+| frame, box (x,y,w,h) | | lit px | mean RGB | centroid | extent w x h |
+| --- | --- | ---: | --- | --- | --- |
+| 2.87 s, the lower box 880,530,160,90 (the heads' particles are above it) | original | 913 | (232,116,105) | (962,568) | 48 x 64 |
+| | ours before | 127 | (217,106,126) | (957,533) | 41 x 8 |
+| | ours after | 458 | (237,125,120) | (948,570) | 78 x 76 |
+| 2.87 s, the whole effect, box 820,360,320,280 | original | 2,849 (2,350 red) | (233,136,126) | (976,505) | 126 x 228 |
+| | ours before | 2,276 (1,957 red) | (232,124,130) | (952,479) | 52 x 118 |
+| | ours after | 2,312 (1,652 red) | (239,159,153) | (955,490) | 89 x 184 |
+| 2.55 s, the whole effect | original | 7,537 (6,133 red) | (240,137,135) | (973,536) | 128 x 126 |
+| | ours before | 7,283 (5,338 red) | (238,145,148) | (956,518) | 155 x 157 |
+| | ours after | 6,335 (3,738 red) | (243,169,168) | (954,518) | 157 x 164 |
+| 2.27 s, the whole effect | original | 9,276 (5,006 red) | (250,178,180) | (962,568) | 146 x 113 |
+| | ours before | 8,839 (2,149 red) | (252,223,224) | (987,587) | 152 x 88 |
+| | ours after | 8,777 (1,795 red) | (253,228,228) | (988,587) | 152 x 88 |
+
+Ribbon pixels of ours alone, the pixels that differ between before and after by 24 or more in a channel
+(`pair-before` against `pair-final`, box 700,300,520,420): 828 at 2.27 s, 8,841 at 2.55 s, 10,388 at 2.87 s
+(mean RGB (239,209,196), (220,181,162), (196,154,142); extent 52 x 40, 109 x 124, 101 x 158). That includes the
+ribbon's bloom, and the original has no ribbon-free twin frame, so the original's ribbon pixels are only the lit
+counts above. Read with the frames: the ribbon is drawn and is the same kind of thing (thin red-orange helical bands,
+the mean colour of the lower box within about 10 per channel of the original's); the whole-box
+metric does not improve everywhere because the head particles (out of scope here) are still whiter than the
+original's at 2.27 s and the ribbon adds light over them, so "red" falls where the ribbon turns a red pixel
+orange. The **differences**, named: ours' heads orbit wider (the ellipse `1.5` x `3.0` is Pulse's, as above),
+so ours' loops are bigger and the two heads further apart; the original's bands are softer and wider where
+ours show the texture's dark edges and bright core; the vertex tint is **chosen, not measured** (white, the
+source `0x002ec748` negates was not read); the helix's handedness is chosen; the strip's `v = 1` side is chosen.
+One finding from the pair: adding the fragment's alpha into the frame's alpha (the glow mask the bloom reads)
+bloomed the ribbons white (frame 2.87 s: 406 red, mean (251,233,231)), so the draw leaves the alpha channel alone.
+
+Omega / 2048: **checked, applies, not wired** (missile-ribbon.md, "2048 and Omega").

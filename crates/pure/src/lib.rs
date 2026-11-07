@@ -205,6 +205,7 @@ pub const TITLE: &Title = &Title {
         magstrip_wake: None,
         magstrip_pob: false,
         rocket_trail: None,
+        missile_trail: None,
         leach_strip: None,
         leachbeam_ball: None,
         missile_head: None,

@@ -1088,8 +1088,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     stages::reach(stages::Stage::CraftsBuilt)?;
-    #[cfg(feature = "view")]
-    let models = &craft_title.weapon_models;
     #[cfg_attr(not(feature = "view"), allow(unused_mut))]
     let extensions = crate::extensions::prepare(
         &extension_sources,
@@ -1160,17 +1158,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 craft_of(&mut craft, &mut archives).layout.platform,
             ),
             #[cfg(feature = "view")]
-            hd_plasma_blast: models.plasma_blast_hd.is_some(),
+            hd_plasma_blast: wm.plasma_blast_hd.is_some(),
             #[cfg(feature = "view")]
-            plasma_blast_law: models.plasma_blast_pulse.map(|blast| blast.law),
+            plasma_blast_law: wm.plasma_blast_pulse.map(|blast| blast.law),
             #[cfg(feature = "view")]
-            disruptor_halo_law: models.disruptor_halo,
+            disruptor_halo_law: wm.disruptor_halo,
             #[cfg(feature = "view")]
-            hd_bomb_blast: models.bomb_blast_hd.is_some(),
+            hd_bomb_blast: wm.bomb_blast_hd.is_some(),
             #[cfg(feature = "view")]
-            bomb_shockwave_fades: models.bomb_blast_pulse.is_some_and(|b| b.shockwave_fades),
+            bomb_shockwave_fades: wm.bomb_blast_pulse.is_some_and(|b| b.shockwave_fades),
             #[cfg(feature = "view")]
-            hd_missile_blast: models.missile_blast_hd.is_some(),
+            hd_missile_blast: wm.missile_blast_hd.is_some(),
             #[cfg(feature = "view")]
             pulse_laid_pose: craft_title.looks.laid_pose.applies_everywhere(),
             #[cfg(feature = "view")]
@@ -1217,6 +1215,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             magstrip_pob: wm.magstrip_pob,
             #[cfg(feature = "view")]
             leach_strip: magstrip_wake.leach_anchors,
+            #[cfg(feature = "view")]
+            missile_trail: magstrip_wake.missile_trail,
             collision,
             handling,
             opponent_handling,

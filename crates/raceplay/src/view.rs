@@ -362,6 +362,9 @@ pub struct RaceView {
     pub(super) leach_ball_elapsed: [f32; oag_weapons::projectile::leach_beam::POOL_SIZE],
     /// The Rocket's smoke ribbons - see [`crate::rocket_smoke`].
     pub(super) rocket_smoke: crate::rocket_smoke::Smoke,
+    /// The Missile's ribbons, `None` where the title draws none - see
+    /// [`crate::missile_smoke`].
+    pub(super) missile_smoke: Option<crate::missile_smoke::Smoke>,
     /// The Plasma's own render-side detonation instances, one per
     /// [`blast_models::PLASMA_BLAST_SLOTS`] - see that module's own doc
     /// comment for why this lives here rather than in `World`, and

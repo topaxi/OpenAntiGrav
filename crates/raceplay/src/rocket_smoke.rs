@@ -31,12 +31,14 @@ pub struct RocketSmokeAssets {
 }
 
 /// The ribbon effects' textures a race hands its scene: the HD-lineage
-/// magstrip arc wake's `[atlas, contact]` (see `load::magstrip_wake`) and the
-/// Rocket's smoke. `None` draws nothing rather than a stand-in.
+/// magstrip arc wake's `[atlas, contact]` (see `load::magstrip_wake`), the
+/// Rocket's smoke and the Missile's ribbons. `None` draws nothing rather than a stand-in.
 #[derive(Debug, Clone, Default)]
 pub struct RibbonTextures {
     pub magstrip: Option<[FlareTexture; 2]>,
     pub rocket_smoke: Option<RocketSmokeAssets>,
+    /// The Missile's `FatLine` ribbons - see [`crate::missile_smoke`].
+    pub missile_smoke: Option<crate::missile_smoke::MissileSmokeAssets>,
     /// HD's LeachBeam strip - see [`crate::leach_strip`].
     pub leach_strip: Option<crate::leach_strip::LeachStripAssets>,
 }

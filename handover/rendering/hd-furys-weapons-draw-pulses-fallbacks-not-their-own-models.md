@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-07
-summary: "Missile rings fixed on a pinned pair; open: Missile ribbon, Plasma launch, state 8 shell, Bomb/Mine/Leach pairs, Mine halo"
+summary: "Missile rings and ribbons drawn on a pinned pair; open: Plasma launch, state 8 shell, Bomb/Mine/Leach pairs, Mine halo, Missile head orbit/ribbon tint"
 difficulty: medium (30)
 ---
 
@@ -38,7 +38,7 @@ dump was taken with `scripts/psarc.py list` over all seven PSARCs):
 | weapon | models | HD-only effects |
 | --- | --- | --- |
 | ~~Plasma~~ **bolt done; blast drawn** | `HD_plasma_ball` (the **bolt head**, loaded, its program routed to `RIM_EDGE` 2026-09-25, still not drawn - `HD_PLASMA_BALL_DRAWN`, held off by the cull thread below), `HD_plasma_ring`/`_sphere`/`_halo` (the explosion, ramps read: targets 100/7.1/7.0, rates 0.01/0.3/0.2, windows 1.7/1.3/1.3 s, 3.5 s life, [ps3-hdfury-eu/plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md) - **drawn since 2026-09-23, culled as authored and on HD's own right-handed basis; the scale was right all along**) | `WO_PLASMA_CHARGING`, `WO_PLASMA_LAUNCH` still unwired; `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` wired and confirmed against the disc's own `.pob` internal name field, not just the fourcc |
-| ~~Rocket / ~~Missile | ~~`hd_Rocket`~~ **model wired**, ~~`HD_missile_ball_bloomring`~~ **drawn 2026-11-07, two heads per missile** (placement chosen), ~~`HD_missile_explosion`~~ drawn; the Missile's own smoke ribbon is open | `WO_MISSILE_LAUNCH` |
+| ~~Rocket / ~~Missile | ~~`hd_Rocket`~~ **model wired**, ~~`HD_missile_ball_bloomring`~~ **drawn 2026-11-07, two heads per missile** (placement chosen), ~~`HD_missile_explosion`~~ drawn; the Missile's own ribbons (two `FatLine` pools, not smoke) **drawn 2026-11-07** | `WO_MISSILE_LAUNCH` |
 | ~~Mine / ~~Bomb | ~~`HD_Mine`~~, ~~`HD_Bomb`~~ **models wired**; **the Bomb's detonation drawn 2026-10-07** (`HD_bomb_sphere`, `_white`, `hd_bomb_sphere_bloomring`, `hd_bomb_shockwaves` x8 - four models, not five; `HD_bomb_halo` is the armed bomb's, `HD_Mine_halo` the Mine's); `HD_Mine_halo` still open | `WO_BOMB_RAYS` **wired 2026-10-07** (0.5 s in); `WO_BOMB_SHOCKWAVE_FLASH`, `WO_BOMB_EXPLO_DETONATOR` are the Detonator mode's |
 | ~~Cannon~~ **done 2026-09-25** | `hd_muzzleflash` **is a muzzle flash, not a round body**: drawn at the craft's `cannon_flash` locator for the round's first 0.1 s; HD's own `.gtf` bolt/flash quads drawn; `detonator_cannonbolt` (Fury) still open | `WO_CANNON_MUZZLEFLASH`, `WO_CANNON_HOTSPOT`: **no trigger exists** (named by nothing but their own files); `WO_CANNON_SPARKS_DETONATOR` Detonator-only |
 | LeachBeam | `hd_leachbeam_ball_bloomring` **drawn 2026-09-25** through its own program (`RIM_GLOW`, [hd-unlit-programs.md](../../docs/rendering/hd-unlit-programs.md)) | `WO_LEACHBEAM_ABSORB` **wired 2026-09-25** (fires each drain trip); `_LAUNCH`/`_BREAK`/`_HIT_TARGET` confirmed to have no discoverable trigger in the retail EBOOT (same shape as the Cannon's two); `_EMIT`/`_HITSHELL`/`_BALL_SPARKS`/`_CHARGING_SPARKS`/`_ENERGY_SPRAY` still unread |
@@ -402,7 +402,7 @@ is now `WeaponModels::missile_head`, two per missile on the two flare anchors (`
 - ~~A pinned pair against the original~~ **done by `hd-weapons-2`, see its section below** (capture `viewProj`; `rpcs3-hd-weapon.py --state 1`, shot at film 6.2 s): its heads are red-orange lobes with hollow rings about six times ours in size, ours are white-hot (particle colour and bloom, and possibly the head's scale).
 - The original's per-tick placement and scale of the two nodes (`0x0011e640`, AltiVec, read with capstone
   over the raw bytes); the head is small under the particles, so a matched frame is the way to judge it.
-- The Missile's smoke ribbon (`RibbonEffects` pool `+0x74`, `smoke_trails_frame1_ALPHA`); law unread.
+- ~~The Missile's smoke ribbon (`RibbonEffects` pool `+0x74`)~~ **drawn by `hd-missile-ribbon`, and it is not pool `+0x74`**: a `FatLine` stub and helix per head (pools `+0x50`, `+0x68`).
 - Omega: the model ships and builds, held with the LeachBeam ball (PS4 program for the rim glow).
 - The `ScreenFlash` is Pulse PSP's alone, so the Missile's `flash::BLAST` runs on HD: no (checked).
 
@@ -424,4 +424,19 @@ and centroid (`weapons.md`, "The Missile's red rings"). Tools: `scripts/rpcs3-hd
   `WO_PLASMA_LAUNCH`, `_CHARGING`, or the wired `_LIGHTNING_EXPAND` not playing). Hold ours' button like the original's
   (~0.5 s), film out to 3 s on one fresh grid for the growing sphere, and find the trigger before drawing anything.
 - **Rocket**: the original's smoke is blue-grey and fans wider; ours white and tight (the ribbon vertex RGB, chosen).
-- **Missile ribbon** (`RibbonEffects` pool `+0x74`) and the heads' own scale: unread (`0x0011e640`); `HD_Mine_halo` unwired.
+- ~~**Missile ribbon**~~ **drawn** (see the next section). The heads' own scale and orbit are unread (`0x0011e640` stores the two matrices at `+0xf0`/`+0x130`); `HD_Mine_halo` unwired.
+
+## 2026-11-07 (`hd-missile-ribbon`): the Missile's ribbons are `FatLine`, drawn
+
+The brief's pool `+0x74` / `smoke_trails_frame1_ALPHA` was wrong (`rocket-trail.md` corrected): the Missile's init
+`0x0011c5d0` takes two elements of pool `+0x50` and two of `+0x68` and its update lays their nodes
+(`FatLine_PushChains`). Law, config and the vertex program: `missile-ribbon.md`; the pair and its table: `weapons.md`,
+"The Missile's ribbons". Open on it, in order:
+- **The head orbit** (ours wider, so ours' loops are bigger and the heads further apart) and the heads' own scale:
+  read `0x0011e640` (it stores the heads' matrices) with capstone; the ribbons follow whatever it fixes.
+- **Vertex tint** (`c[209]`, white here, chosen): the source `LineBuilder_BindParams_q` (`0x002ec748`) negates a global
+  vector at `[0x7378 slot] + 0x70`; read it live. The original's bands are softer and wider than ours.
+- **Helix handedness** (the Rodrigues sine sign, chosen) and the strip's `v = 1` side: a live node dump of one helix
+  (the `Ribbon_AgeSamples` method of rocket-trail.md) settles the first, the `v[4]` array the second.
+- **Pool `+0x74`**: its user is a craft-side update `0x002db130` (speed-driven), unnamed; draws nothing here.
+- **Omega / 2048** ship the same `FatLine` family (shaders and `ThickLine_*` textures): checked, applies, not wired.
