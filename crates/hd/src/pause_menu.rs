@@ -96,7 +96,7 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
         ("tournament", "InGame Pause SP Tournament"),
         ("zone", "InGame Pause Zone"),
     ],
-    scrim_argb: 0x0000_0000,
+    scrim_argb: 0xc000_0000,
     offers_photo: true,
     origin: Origin::Measured,
 };

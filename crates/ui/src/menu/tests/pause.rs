@@ -230,3 +230,48 @@ fn a_click_on_a_pause_row_does_what_confirm_does() {
         );
     }
 }
+
+#[test]
+fn an_audio_row_opens_the_audio_page_and_the_pause_page_is_a_column_not_a_strip() {
+    const AUDIO: &PauseMenu = &PauseMenu {
+        heading: "IG_PAUSE_GPAUSED",
+        screens: &[PauseScreen {
+            name: "Pause",
+            rows: &[
+                row("IG_PAUSE_CONT", Some(PauseAction::Resume)),
+                row("FE_AUDIO_OPT", Some(PauseAction::Audio)),
+                row("IG_PAUSE_QUIT", Some(PauseAction::Quit)),
+            ],
+        }],
+        default_screen: "Pause",
+        by_mode: &[],
+        scrim_argb: 0xc000_0000,
+        offers_photo: false,
+        origin: Origin::Chosen,
+    };
+    let words = crate::language::StringTable::from_xml(
+        r#"<StringTable>
+             <Entry ID="IG_PAUSE_GPAUSED" String="GAME PAUSED"></Entry>
+             <Entry ID="IG_PAUSE_CONT" String="CONTINUE"></Entry>
+             <Entry ID="FE_AUDIO_OPT" String="AUDIO OPTIONS"></Entry>
+             <Entry ID="IG_PAUSE_QUIT" String="QUIT RACE"></Entry>
+           </StringTable>"#,
+    );
+    let mut definition = built_in();
+    let audio = definition
+        .pages
+        .iter()
+        .position(|page| page.id == "audio")
+        .expect("the AUDIO page");
+    let built = definition.open_on_pause_screen(AUDIO, "single_race", &words);
+    assert!(built.unbuilt.is_empty(), "{:?}", built.unbuilt);
+    let page = definition.page(PAUSE_PAGE).expect("the pause page");
+    assert!(
+        matches!(page.entries[1], Entry::Submenu { target, .. } if target == audio),
+        "AUDIO OPTIONS opens the AUDIO page"
+    );
+    assert!(
+        !super::super::strip::suits(page),
+        "every row is navigation, and the disc authors this screen as a column on HD"
+    );
+}

@@ -1,5 +1,5 @@
-//! Pulse's own pause screen over a real race: the rows are the disc's for the race's mode, START
-//! and ESCAPE open it, and each row does what it says.
+//! Pulse's and HD's own pause screens over a real race: the rows are the disc's for the race's
+//! mode, START and ESCAPE open it, and each row does what it says.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs a disc image.
 //!
@@ -30,10 +30,18 @@ fn run(tag: &str, script: &str) -> Run {
     let Some(image) = pulse() else {
         panic!("OAG_REQUIRE_GAME_DATA unset and no Pulse image: the caller checks first");
     };
+    run_on(&image, tag, script)
+}
+
+fn hd() -> Option<std::path::PathBuf> {
+    oag_testdata::image("hdfury-ps3-eu-dec.iso")
+}
+
+fn run_on(image: &std::path::Path, tag: &str, script: &str) -> Run {
     let shots = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("pause-shots");
     let run = drive_binary(
         env!("CARGO_BIN_EXE_oag-game"),
-        &image,
+        image,
         &format!("pause-{tag}"),
         script,
         &shots,
@@ -251,4 +259,156 @@ fn photo_mode_and_game_options_open_from_the_pause_screen() {
         run.states.iter().any(|state| state["photo"] == "internal"),
         "photo mode opened"
     );
+}
+
+/// HD and Fury author a different pause screen: `Block` and `List` widgets, and per mode (Time
+/// Trial, Speed Lap, Tournament, Zone and the default) its own list. The rows this build has
+/// something behind are drawn; PILOT ASSIST, GHOST and VIEW INVITES are not.
+mod hd_screens {
+    use super::*;
+
+    fn run_hd(tag: &str, script: &str) -> Run {
+        let image = hd().expect("the caller checks first");
+        run_on(&image, &format!("hd-{tag}"), script)
+    }
+
+    fn the_rows() -> Vec<(String, String)> {
+        pairs(&[
+            ("CONTINUE", "back"),
+            ("GAME OPTIONS", "submenu"),
+            ("AUDIO OPTIONS", "submenu"),
+            ("PHOTO MODE", "photo_mode"),
+            ("RESTART RACE", "restart_race"),
+            ("QUIT RACE", "quit_race"),
+        ])
+    }
+
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn a_single_race_and_a_time_trial_pause_into_the_same_six_rows() {
+        if hd().is_none() {
+            return;
+        }
+        for mode in ["single_race", "time_trial"] {
+            let run = run_hd(mode, &format!("{} {OPEN}", to_the_race(mode)));
+            assert_eq!(rows(&run), the_rows(), "{mode}");
+        }
+    }
+
+    /// The Speed Lap screen has no RESTART and no QUIT: END SESSION is its only way out.
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn a_speed_lap_pauses_into_its_screen_and_end_session_leaves_the_race() {
+        if hd().is_none() {
+            return;
+        }
+        let run = run_hd(
+            "speed-lap",
+            &format!(
+                "{} {OPEN} select pause_options; press circle; expect page=pause; \
+                 select pause_quit; press cross; until stage=menu; expect page=main",
+                to_the_race("speed_lap")
+            ),
+        );
+        let first = on_page(&run, "pause")
+            .into_iter()
+            .next_back()
+            .expect("the pause page was on screen");
+        let labels: Vec<&str> = first["screen"]["rows"]
+            .as_array()
+            .expect("rows")
+            .iter()
+            .filter_map(|row| row["label"].as_str())
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                "CONTINUE",
+                "GAME OPTIONS",
+                "AUDIO OPTIONS",
+                "PHOTO MODE",
+                "END SESSION"
+            ]
+        );
+        assert_eq!(run.states.last().expect("a state")["screen"]["id"], "main");
+    }
+
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn a_zone_race_pauses_into_the_zone_screen() {
+        if hd().is_none() {
+            return;
+        }
+        let run = run_hd("zone", &format!("{} {OPEN}", to_the_race("zone")));
+        assert_eq!(rows(&run), the_rows());
+    }
+
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn audio_options_opens_the_audio_page_and_back_returns() {
+        if hd().is_none() {
+            return;
+        }
+        let run = run_hd(
+            "audio",
+            &format!(
+                "{} {OPEN} select pause_audio; press cross; expect page=audio; \
+                 press circle; expect page=pause; \
+                 select pause_restart; press cross; until stage=race within 4000; ticks 20",
+                to_the_race("time_trial")
+            ),
+        );
+        let sims: Vec<u64> = run
+            .states
+            .iter()
+            .filter_map(|state| state.get("sim_tick")?.as_u64())
+            .collect();
+        assert!(
+            sims.last().copied().unwrap_or(u64::MAX) < 100,
+            "RESTART RACE loads the race again: {sims:?}"
+        );
+    }
+
+    /// An Eliminator race pauses into the default screen, and a pause and resume leaves the race
+    /// as it was (the state hash at one simulation tick is the unpaused race's) and the flip still
+    /// works after it (a press after the resume changes the hash at that tick).
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn an_eliminator_race_resumes_with_its_flip_intact() {
+        if hd().is_none() {
+            return;
+        }
+        let hash_at = |run: &Run, tick: u64| -> String {
+            run.states
+                .iter()
+                .find(|state| state.get("sim_tick").and_then(Value::as_u64) == Some(tick))
+                .and_then(|state| state["hash"].as_str())
+                .unwrap_or_else(|| panic!("no state at sim tick {tick}"))
+                .to_string()
+        };
+        let race = to_the_race("eliminator");
+        let resume = format!("{OPEN} press cross; until stage=race within 200;");
+        let plain = run_hd("elim-plain", &format!("{race} ticks 80"));
+        let paused = run_hd("elim-paused", &format!("{race} {resume} ticks 80"));
+        let flipped = run_hd(
+            "elim-flipped",
+            &format!("{race} {resume} press flip; ticks 80"),
+        );
+        assert_eq!(
+            rows(&paused),
+            the_rows(),
+            "an Eliminator race takes the default screen"
+        );
+        let at = 460;
+        assert_eq!(
+            hash_at(&plain, at),
+            hash_at(&paused, at),
+            "a pause and resume leaves the race as it was"
+        );
+        assert_ne!(
+            hash_at(&paused, at),
+            hash_at(&flipped, at),
+            "the flip works after the resume"
+        );
+    }
 }
