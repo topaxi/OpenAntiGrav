@@ -264,3 +264,50 @@ fn a_race_a_capture_builds_leaves_no_replay() {
         profile.replays()
     );
 }
+
+/// A recording whose rebuild is not the recorded race is refused by name, in the list, and never
+/// played wrong: the tick-zero hash is the judge (decision 7).
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+fn a_recording_this_build_cannot_rebuild_is_refused_by_name() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let profile = Profile::new("refused");
+    let (status, _) = profile.drive(&image, &format!("{TO_THE_RACE} ticks 400; quit"), &[]);
+    assert!(status.success());
+    let files = profile.replays();
+    assert_eq!(files.len(), 1, "{files:?}");
+    let mut replay =
+        oag_replay::Replay::from_bytes(&std::fs::read(&files[0]).expect("read")).expect("parse");
+    // The same file asking for another race: the rebuild is not the recorded one.
+    replay.header.setup.as_mut().expect("a setup").mode = "zone".to_string();
+    std::fs::write(&files[0], replay.to_bytes()).expect("write");
+    let shots = profile.dir.join("shots");
+    std::fs::create_dir_all(&shots).expect("a directory");
+    let (status, states) = profile.drive(
+        &image,
+        &format!(
+            "{TO_THE_LIST} ticks 20; select watch_replay; press cross; ticks 600; \
+             screenshot DIR/shots/refused.png; quit"
+        ),
+        &[],
+    );
+    assert!(status.success());
+    assert!(
+        states.iter().all(|state| text(state, "replay").is_none()),
+        "the viewer never opened on a race that is not the recorded one"
+    );
+    let last = states.last().expect("a state");
+    assert_eq!(
+        text(last, "page"),
+        Some("replays"),
+        "back on the list it came from"
+    );
+    let row = &last["screen"]["rows"][0];
+    let reason = row["values"][0]["unavailable"].as_str().unwrap_or_default();
+    assert!(
+        reason.starts_with("NOT THE RACE THAT WAS RECORDED"),
+        "the row says why: {row}"
+    );
+}

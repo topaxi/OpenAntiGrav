@@ -18,6 +18,10 @@ use oag_ui::menu::{Choice, Menu};
 
 use super::{Entry, Folder, Head};
 
+/// What [`Context::refused`] holds for a recording whose rebuild is not the recorded race: the
+/// tick-zero hash disagreed. Worded by [`words::NOT_THE_RACE`].
+pub const TICK_ZERO: &str = "tick-zero";
+
 /// The page, and the row that holds which file the page is about. Never persisted.
 pub const PAGE: &str = "replays";
 /// See [`PAGE`].
@@ -69,7 +73,12 @@ pub mod words {
         "OAG_REPLAYS_NO_SETUP",
         "CANNOT BE REBUILT: NO LAUNCH REQUEST",
     );
-    /// Why a file cannot be played: the race it rebuilds is not the recorded one.
+    /// Why a file cannot be played: the race it rebuilds is not the recorded one. The tick-zero
+    /// hash disagrees: another mode this build does not rebuild, a pack or track this machine
+    /// lacks, a roster that changed.
+    pub const NOT_THE_RACE: (&str, &str) =
+        ("OAG_REPLAYS_NOT_THE_RACE", "NOT THE RACE THAT WAS RECORDED");
+    /// Why a file cannot be played: it opened and failed otherwise; `%s` is the reason.
     pub const REFUSED: (&str, &str) = ("OAG_REPLAYS_REFUSED", "CANNOT BE REBUILT HERE: %s");
 }
 
@@ -165,7 +174,11 @@ fn unusable(entry: &Entry, cx: &Context<'_>) -> Option<String> {
         Head::Damaged => return Some(cx.say(words::DAMAGED)),
     };
     if let Some(why) = cx.refused.get(&entry.path) {
-        return Some(cx.say(words::REFUSED).replace("%s", why));
+        return Some(if why == TICK_ZERO {
+            cx.say(words::NOT_THE_RACE)
+        } else {
+            cx.say(words::REFUSED).replace("%s", why)
+        });
     }
     if !header.title.eq_ignore_ascii_case(cx.title) {
         return Some(
@@ -245,8 +258,15 @@ pub fn table_for(
         .visible_rows()
         .saturating_sub(model.page().entries.len());
     let entry = selected(model, entries)?;
+    // A dimmed value's reason draws in the note slot under the rows, which is the first detail
+    // line's place: the lines start one lower.
+    let room = if unusable(entry, cx).is_some() {
+        room.saturating_sub(1)
+    } else {
+        room
+    };
     let mut lines = lines(entry, cx);
-    lines.truncate(room.max(1));
+    lines.truncate(room);
     Some(lines)
 }
 

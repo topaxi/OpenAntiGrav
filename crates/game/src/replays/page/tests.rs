@@ -143,6 +143,23 @@ fn a_file_the_list_will_not_play_is_dimmed_with_its_reason() {
 }
 
 #[test]
+fn a_tick_zero_refusal_reads_as_a_sentence_not_a_hash() {
+    let mut refused = BTreeMap::new();
+    refused.insert(PathBuf::from("r.oagr"), TICK_ZERO.to_string());
+    with(&refused, |cx| {
+        let rebuilt = entry(
+            "r.oagr",
+            Folder::Auto,
+            Head::Read(Box::new(header("zone"))),
+            1,
+        );
+        let why = choice(&rebuilt, cx).unavailable.expect("dimmed");
+        assert!(why.starts_with("NOT THE RACE THAT WAS RECORDED"), "{why}");
+        assert!(!why.contains("0x"), "{why}");
+    });
+}
+
+#[test]
 fn only_the_proved_modes_are_claimed() {
     for mode in ["time_trial", "speed_lap", "single_race"] {
         assert!(claimed(&header(mode)), "{mode}");

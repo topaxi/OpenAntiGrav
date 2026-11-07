@@ -8,6 +8,7 @@ use log::{error, info};
 use oag_game::replay_view::{self, View};
 use oag_game::replays::{self, page};
 use oag_gameplay::input::Button;
+use oag_raceplay::timeline::OpenError;
 use oag_raceplay::viewer::{Moved, SKIP, State, Viewer};
 use oag_replay::Replay;
 use oag_ui::language::StringTable;
@@ -181,7 +182,11 @@ pub(crate) fn open_viewer(
     let Watching { replay, path, setup } = watching;
     let setup = setup.context("the race's setup was not kept")?;
     let viewer = Viewer::open(setup, *replay).map_err(|e| {
-        refused.insert(path.clone(), e.to_string());
+        let why = match &e {
+            OpenError::Desync(_) => page::TICK_ZERO.to_string(),
+            OpenError::Start(start) => format!("{start:#}"),
+        };
+        refused.insert(path.clone(), why);
         anyhow::anyhow!("{} cannot be rebuilt here: {e}", path.display())
     })?;
     viewer.begin(&mut stage.race)?;

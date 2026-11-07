@@ -228,13 +228,20 @@ fn a_seat_handed_to_the_driver_reproduces_and_without_its_event_desyncs() {
     for tick in 0..TICKS {
         if tick == at {
             assert!(race.set_controller(1, Controller::Ai));
-            assert!(!race.set_controller(1, Controller::Ai), "no change, no event");
+            assert!(
+                !race.set_controller(1, Controller::Ai),
+                "no change, no event"
+            );
         }
         race.tick(&inputs(tick));
         race.drain_cues();
     }
     let replay = race.recorded().expect("recording");
-    assert_eq!(replay.header.slots, [0, 1], "both seats were people when it began");
+    assert_eq!(
+        replay.header.slots,
+        [0, 1],
+        "both seats were people when it began"
+    );
     assert_eq!(replay.events.len(), 1);
     assert_eq!(replay.events[0].tick, at);
 
