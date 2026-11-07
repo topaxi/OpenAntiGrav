@@ -176,10 +176,6 @@ impl Split {
     fn constant(&self) -> i64 {
         self.track + self.tables + self.plans
     }
-
-    fn mutable(&self) -> i64 {
-        self.whole
-    }
 }
 
 /// A text fingerprint of every part [`Split`] counts as constant, one per field.
