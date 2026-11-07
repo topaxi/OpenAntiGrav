@@ -148,9 +148,10 @@ POSE  varint last tick (poses exist for ticks 0..=last)
 - **Playback** (`PoseTrack::pose(craft, at: f64)`): lerp (position) and normalised lerp (rotation, the short way round) between the keys around `at`
   ticks, the ends held. Across a jump of more than 16 units in one tick (a respawn) the earlier pose
   is held up to the later tick, so a frame between the two never draws the hull halfway along it. The
-  16 is **chosen, not measured**, on the steps seen: the 99.99th percentile of a craft's step is 4.8
-  to 5.0 units a tick at Venom and 4.8 to 7.7 at Phantom (the first 6,000 ticks of the Autopilot race
-  on each title, `OAG_SWEEP_CLASS=PHANTOM`), and the respawns measured below move 147 to 538 units.
+  16 is **chosen, not measured**, on the steps seen: the 99.99th percentile of a craft's step is 3.2
+  to 4.8 units a tick at Venom (the largest 6.6) and 4.8 to 7.7 at Phantom (the largest 5.8, bar a
+  1,104-unit respawn on 2048; the first 6,000 ticks of the Autopilot race on each title,
+  `OAG_SWEEP_CLASS=PHANTOM`), and the respawns measured below move 147 to 538 units.
   A craft that flew faster than 16 units a tick (a class or a mode not swept) would hold for a frame
   wherever refinement left a one-tick segment; that is open. The recorded ticks are exact either way.
 - **Bounds.** `MAX_TICKS` is 216,000 (one hour): the recorder takes nothing past it, and the track
@@ -165,10 +166,10 @@ craft a second; error against the true pose at every tick, p50 / p99 / p99.9 / m
 | Title | ADR-0087's row (sweep encoder) | `POSE` as written | Position, units | Rotation, degrees |
 | --- | ---: | ---: | --- | --- |
 | Pulse | 167.5 | 174.8 | 0.0140 / 0.0470 / 0.0496 / 0.0500 | 0.069 / 0.319 / 0.488 / 0.499 |
-| Pure | 149.0 | 155.7 | 0.0163 / 0.0465 / 0.0496 / 0.0500 | 0.069 / 0.244 / 0.373 / 0.496 |
-| HD/Fury | 168.3 | 175.5 | 0.0137 / 0.0464 / 0.0495 / 0.0500 | 0.079 / 0.382 / 0.489 / 0.499 |
-| 2048 | 162.9 | 169.6 | 0.0159 / 0.0454 / 0.0494 / 0.0500 | 0.079 / 0.312 / 0.444 / 0.499 |
-| Omega | 166.6 | 174.0 | 0.0170 / 0.0471 / 0.0496 / 0.0500 | 0.079 / 0.280 / 0.442 / 0.499 |
+| Pure | 149.0 | 155.7 | 0.0163 / 0.0465 / 0.0496 / 0.0500 | 0.069 / 0.241 / 0.373 / 0.496 |
+| HD/Fury | 168.3 | 175.5 | 0.0137 / 0.0464 / 0.0495 / 0.0500 | 0.069 / 0.382 / 0.489 / 0.499 |
+| 2048 | 162.9 | 169.6 | 0.0159 / 0.0454 / 0.0494 / 0.0500 | 0.079 / 0.309 / 0.444 / 0.499 |
+| Omega | 166.6 | 174.0 | 0.0170 / 0.0471 / 0.0496 / 0.0500 | 0.069 / 0.280 / 0.444 / 0.499 |
 
 The file costs **6.7 to 7.4 bytes a craft a second (about 4.5 percent) more** than the row decision 4
 chose, and the bound now holds. Two reasons, both measured on these runs: the sweep's encoder did
@@ -178,7 +179,7 @@ against the unquantised keys, which left its worst error at 0.057 to 0.059 unit 
 degree (the ADR's own row); refining against the keys as read adds a few keys and holds 0.0500 and
 0.499. A pad-flown Single Race to the finish (`pose_track_ground_truth::bounds`, over
 `replay_timeline_ground_truth`'s recording) gives 145.5 (Pure, 6,700 ticks), 166.6 (2048, 14,410),
-167.2 (Omega, 7,880), 170.9 (Pulse, 8,088) and 171.5 (HD, 8,257), worst error 0.0500 unit and 0.499
+167.2 (Omega, 7,880), 171.0 (Pulse, 8,088) and 171.5 (HD, 8,257), worst error 0.0500 unit and 0.499
 degree on all five.
 
 **Class matters.** The table is Venom. The same Autopilot race at Phantom, first 6,000 ticks (Venom
@@ -191,8 +192,8 @@ The classes between, Zone and the other modes are not swept.
 the test lifts the player's craft 500 units off the circuit, and the game's own rescue puts it back
 (Pulse: the collision cage, the next tick, a step of 146.8 units; Pure, HD, 2048 and Omega: the
 200-unit distance rescue 30 ticks later, a step of 522 to 538 units). The track holds 0.0500 unit and
-0.5 degree at every tick of the run, and at the ticks around the jump (-2 to +30): Pulse 0.039 unit,
-Pure 0.048, HD 0.031, 2048 0.035, Omega 0.041; the two ticks either side of the jump are both keys,
+0.5 degree at every tick of the run, and at the ticks around the jump (-2 to +30), worst position error
+Pulse 0.039 unit, Pure 0.048, HD 0.031, 2048 0.035, Omega 0.041 (worst rotation 0.097 to 0.224 degree); the two ticks either side of the jump are both keys,
 and a frame between them is the earlier pose. The refinement's handling of a teleport is shown, not argued. The 2048 Phantom Autopilot race above
 also contains one it did not provoke (a step of 1,104 units in the first 6,000 ticks) and holds the
 same bound.
@@ -202,9 +203,9 @@ renames the tag, redoes the checksum and reads the same recording without a trac
 reproduces to the last tick. A damaged chunk is refused by byte (`Truncated`): a cut payload, a
 trailing byte, a mask bit past the last tick, a track longer than the recording.
 
-**Cost at the end of a race**, dev profile, load average about 30 (so an upper bound): a push a tick
-4 to 26 microseconds for eight craft, `Race::recorded`'s copy of the track 0.13 to 0.21 ms and
-`to_bytes` 2.5 to 4.6 ms on 2048's 14,410 ticks. No worker thread is needed. The capture holds
+**Cost at the end of a race**, dev profile, load average about 20 (so an upper bound): a push a tick
+1.5 to 6.1 microseconds for eight craft, `Race::recorded`'s copy of the track 0.05 to 0.19 ms and
+the chunk's encoding 1.0 to 5.0 ms (5.0 on 2048's 14,410 ticks). No worker thread is needed. The capture holds
 270 to 650 KiB for eight craft over a race to the finish. The capture does not change the race, and
 the evidence differs by title: on Pulse, Pure, HD and 2048 a recording race hashes as a plain one
 at every tick of 7,200 (`replay_ground_truth::ghost_changes_nothing`, which records in the haunted

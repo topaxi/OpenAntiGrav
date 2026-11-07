@@ -133,8 +133,8 @@ bear on this page:
   closes a segment as it ends and keeps keys (20 bytes each, about 300 bytes a craft a second), not a
   pose a tick. Eight craft over a race to the finish hold 270 to 650 KiB; a track stops at an hour
   (`MAX_TICKS`). A race that ends by finish, quit or restart has nothing left to encode:
-  `Race::recorded` closes the open segment in a copy (0.13 to 0.21 ms) and `to_bytes` writes it (2.5
-  to 4.6 ms on 2048's 14,410 ticks, dev profile at load 30), so no worker thread is used.
+  `Race::recorded` closes the open segment in a copy (0.05 to 0.19 ms) and the chunk's encoding takes
+  1.0 to 5.0 ms (5.0 on 2048's 14,410 ticks, dev profile at load 20), so no worker thread is used.
 - A recording that writes no track costs nothing: a race with no `start_recording` does no work.
 
 ## The other title of the pair
