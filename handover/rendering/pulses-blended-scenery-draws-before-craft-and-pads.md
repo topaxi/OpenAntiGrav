@@ -35,7 +35,9 @@ Measured on PPSSPP; the numbers, the method and the confidence are on
 
 1. Wire the flares into the blended list by depth, in `Model::blended_order`'s units made the
    original's first (`display+0x4310 / 65`); pair at a frame with an AI flare behind a nearer tree.
-2. Ask the maintainer for the spot; if the hull and pad report reproduces at `original`, read the
-   frame's order with the key bump of the page.
+2. Reproduce with a **speed or weapon pad**, not a craft. The maintainer specifically saw a pad and
+   may have misremembered the ship (2026-11-07). The measured poses and the synthetic one used a
+   craft. Use far camera, Pulse PSP, Platinum Rush White, and a tree between the eye and a pad. If it
+   reproduces at `original`, read the frame's order with the key bump on the page.
 3. For HD, Omega and 2048, read each title's queue keys before moving a blended list: their path draws
    it before the craft today.
