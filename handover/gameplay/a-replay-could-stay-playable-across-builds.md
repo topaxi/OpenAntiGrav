@@ -2,7 +2,7 @@
 status: parked
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-07
-summary: "Low priority: a replay stops being playable once the simulation changes; a full state stream in the file could keep it watchable and open to a take-over"
+summary: "Low priority: a replay breaks once the simulation changes; a full state stream could keep it watchable and open to a take-over"
 ---
 
 # A replay could stay playable across builds
