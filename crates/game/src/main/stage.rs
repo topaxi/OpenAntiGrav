@@ -701,12 +701,15 @@ impl Stage {
         race.set_ghost_visible(settings.display.ghost_ship_shown(title));
         race.set_player_tags(settings.display.multiplayer_tags_shown(title));
         oag_game::split_screen::name_first_seat(&mut race, &settings.player, &title.profile);
+        let team = liveries.first().map_or("", |l| l.team.as_str());
+        let replay_header =
+            crate::race_stage::ghost::header_for(&result_key, team, seed, launch.to_table());
         crate::race_stage::ghost::arm(
             &mut race,
             &result_key,
             mode,
             settings.display.ghost_auto_loads(title),
-            liveries.first().map_or("", |l| l.team.as_str()),
+            team,
             seed,
             launch.to_table(),
         );
@@ -752,6 +755,8 @@ impl Stage {
             endrace_prefetch_started: false,
             endrace_cancel: std::sync::Arc::default(),
             earned_medal: None,
+            replay_header,
+            auto_replay: false,
         }))
     }
 }

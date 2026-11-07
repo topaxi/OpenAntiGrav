@@ -64,9 +64,20 @@ fn arm_in(
             team: stored.header.team,
         });
     }
+    race.start_recording(header_for(key, team, seed, options));
+}
+
+/// The header a recording of the race filed under `key` carries: the key, `team`, `seed` and
+/// the launch settings the race started with.
+pub(crate) fn header_for(
+    key: &records::Key,
+    team: &str,
+    seed: u64,
+    options: std::collections::BTreeMap<String, String>,
+) -> oag_replay::Header {
     let mut header = ghosts::header(key, team, seed);
     header.options = options;
-    race.start_recording(header);
+    header
 }
 
 /// Writes the run's best lap as `key`'s ghost when it set one since the last

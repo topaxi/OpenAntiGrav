@@ -835,6 +835,11 @@ impl Session {
                     // A fork's job started on the load thread already
                     // (`plan_ahead` in `launch_race`) and is kept if it still fits.
                     race_stage.race.begin_speed_plans();
+                    // After everything above that writes to the race, so the recording's
+                    // tick-zero hash is the one a rebuild from its header must reproduce.
+                    if self.settings.replay.record && oag_game::replays::SAVES {
+                        race_stage.arm_auto_replay();
+                    }
                 }
             }
             if let Some(e) = join_error {
