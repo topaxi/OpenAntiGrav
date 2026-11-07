@@ -53,6 +53,7 @@ pub mod frontend;
 pub mod hud;
 pub mod loading;
 pub mod main_menu;
+pub mod pause_menu;
 pub mod prompts;
 pub mod race;
 pub mod weapons;
@@ -229,7 +230,7 @@ pub const TITLE: &Title = &Title {
     // read through its own `load_omega`; no grids file is read on its own and no
     // unlock row is wired.
     main_menu: main_menu::MAIN_MENU,
-    pause_menu: None,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Omega,
         definition_entry: None,

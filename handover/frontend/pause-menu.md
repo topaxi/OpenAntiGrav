@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, hd, omega, 2048, pure]
 updated: 2026-11-07
-summary: "Pulse pauses into its own authored screen per mode; HD/Fury, Omega, 2048, Pure still open the main page over the parked race"
+summary: "Pulse, HD/Fury and Omega pause into their own authored screen per mode; 2048 and Pure still open the main page over the parked race"
 ---
 
 # The title's own pause screen
@@ -19,23 +19,32 @@ pause screen where one applies). Online pause stays the maintainer's decision
 
 ## Open
 
-- **HD, Fury, Omega, 2048, Pure: not wired** (`pause_menu: None`), in that order. HD's
-  `ingame_definition.xml` has 58 screens, a `Photo` block on the split-player, tournament and Zone pairs; the
-  mode-to-screen choice is the executable's (`PauseMenu_BindRedirectForMode` is the Pulse one; HD's is unread).
-  Omega's front end is HD's: check, do not assume. 2048 has `InGame_Definition.xml` and
-  `LegacyInGame_Definition.xml`; Pure has `InGame Pause` and no photo row, never seen live. A 2048 finding is
-  checked against Omega and the reverse.
+- **2048, Pure: not wired** (`pause_menu: None`), in that order. 2048 has `InGame_Definition.xml` (36
+  screens) and `LegacyInGame_Definition.xml` on Vita, with a binder of its own; Omega's reads the same
+  mode ids as HD's, so compare 2048's against it first. Pure has `InGame Pause` and no photo screen,
+  never seen live. A 2048 finding is checked against Omega and the reverse.
+- **HD, Fury, Omega: drawn differences** (`docs/ui/pause-menu.md`, "HD and Fury", "Omega"): the race HUD
+  is not drawn under the tint (the original draws it dimmed); the focused row is the front end's red, the
+  original's `HD_Blue`; the list is at the page's left edge, the original's at `x = 480` of 1920; the
+  footer has NAVIGATION where the original has `RESUME GAME`; the on/off lists `FE_PILOT_ASSIST` and
+  `FE_GHOST` and the greyed `ONL_VIEW_INV` are not drawn; END SESSION leaves like QUIT, the original
+  finishes the race into the results.
+- **Omega**: the title and footer ink read dark over the dark tint (not checked against the original:
+  no shadPS4 or `sway` on the machine that did this; `scripts/shadps4-omega-pair.py`'s rig with a START
+  press after the grid is the recipe). Zone and Tournament on HD are the static reading, not walked
+  live.
+- **Split screen** keeps START's freeze and the ownership rule; HD's `InGame Pause Split Player 1`/`2`,
+  `Tournament Split` and `Zone P1`/`P2` screens are the model (`PauseMenu_BindRedirectForMode` on HD
+  picks them per pad).
 - **Pulse `MusicList`** (the playing track at the foot, LEFT and RIGHT change it): not drawn.
 - **Pulse GAME MANUAL, END SESSION (Speed Lap), SKIP (Tournament)**: authored, nothing behind them here.
-- **Pulse Tournament**: the screen is the static reading of the executable (conf 85); not walked live, the
-  Racebox flow lands on the tournament setup.
-- **CIRCLE** on the pause root resumes (the original does nothing); the abstract back button is shared with ESCAPE.
-- **Split screen** keeps START's freeze and the ownership rule; the original's `InGame Pause Split Player 1`
-  screens (HD) are the model for it.
+- **Pulse Tournament**: the screen is the static reading of the executable (conf 85); not walked live.
+- **ESCAPE** (and the phone Back) resumes: chosen, the original has no such button; CIRCLE on the root does nothing, as on the disc.
 
 ## Next Steps
 
-1. HD and Fury: read `ingame_definition.xml`'s pause screens and where the executable picks one, add a
-   `pause_menu` table beside `crates/hd/src/main_menu.rs`, a ground-truth test beside
-   `main_menu_ground_truth`, frames from RPCS3 (ask the lead; one shared instance).
-2. Omega (checked, applies or differs against HD), then 2048, then Pure.
+1. 2048: read `InGame_Definition.xml`'s pause screens and its binder in `/2048/eboot-vita-2048-eu-v104.elf`,
+   add `crates/2048/src/pause_menu.rs` beside `crates/hd/src/pause_menu.rs`, a ground-truth test beside
+   `hds_pause_screens_...`, then check Omega against it. Frames from Vita3K (the lane's recipe in
+   `docs/reverse-engineering/emulator-recipes.md`).
+2. Pure, then the HD-style differences above (the HUD under the tint is the one a player sees first).

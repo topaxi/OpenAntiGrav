@@ -583,3 +583,45 @@ fn hds_pause_screens_are_the_five_single_player_widget_lists() {
         }
     }
 }
+
+/// Omega's `ingame_definition.xml` (`data00`, `data08`, `data09`) is HD's file with the same five
+/// pause screens **without `ONL_VIEW_INV`** (checked, differs): the table is the same rows less
+/// that one, in all three copies.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omegas_pause_screens_are_hds_without_the_invites_row_in_every_archive() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let pause = oag_omega::TITLE
+        .pause_menu
+        .expect("Omega authors pause screens");
+    let mut archives = oag_omega::open(&source.display().to_string()).expect("opening Omega");
+    let all = copies(&mut archives, HD_INGAME);
+    assert!(
+        all.len() >= 3,
+        "{:?}",
+        all.iter().map(|c| &c.0).collect::<Vec<_>>()
+    );
+    for (label, root) in &all {
+        check_widget_pause_screens(pause, root, label);
+    }
+    let hd = oag_hd::TITLE.pause_menu.expect("HD authors pause screens");
+    for screen in hd.screens {
+        let hd_rows: Vec<&str> = screen
+            .rows
+            .iter()
+            .map(|row| row.disc_id)
+            .filter(|id| *id != "ONL_VIEW_INV")
+            .collect();
+        let omega_rows: Vec<&str> = pause
+            .screen(screen.name)
+            .expect("the same screens")
+            .rows
+            .iter()
+            .map(|row| row.disc_id)
+            .collect();
+        assert_eq!(omega_rows, hd_rows, "{:?}", screen.name);
+    }
+    assert_eq!(pause.by_mode, hd.by_mode, "the same mode switch");
+}
