@@ -90,6 +90,18 @@ impl RaceSim {
     }
 
     /// Takes the plans a thread learned on a copy of this race.
+    /// Takes the plans a later copy of this race learned, so a snapshot from before the first
+    /// tick does not learn them again when it is restored. Nothing else of `learned` is read.
+    pub(crate) fn share_plans_of(&mut self, learned: &RaceSim) {
+        self.plans_built = learned.plans_built;
+        self.speed_plan.clone_from(&learned.speed_plan);
+        self.plan_reference.clone_from(&learned.plan_reference);
+        self.hull_plans = Arc::clone(&learned.hull_plans);
+        self.ship_plan = learned.ship_plan;
+        self.plan_steps = Arc::clone(&learned.plan_steps);
+        self.routes = Arc::clone(&learned.routes);
+    }
+
     fn adopt_plans(&mut self, learned: LearnedPlans) {
         self.plans_built = true;
         self.speed_plan = learned.speed_plan;

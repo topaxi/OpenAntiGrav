@@ -28,17 +28,21 @@ pub enum ApplyError {
 }
 
 impl Race {
-    /// Switches Pilot Assist to `level` for every seat, as the pause menu does, and records it
-    /// for each person-flown seat so the recording reproduces: the level changes the player's
-    /// physics, so a recording that did not hear of the change would desync at the next hash.
+    #[cfg(feature = "view")]
+    /// Switches every person-flown seat to `level`, as the pause menu does, and records each
+    /// one so the recording reproduces: the level changes the player's physics, so a recording
+    /// that did not hear of the change would desync at the next hash. Only those seats: nothing
+    /// reads another's level, and a write the file does not hold would part a seek's `RaceSim`
+    /// from the recorded one in the text, which is the only place the level shows.
     pub fn change_pilot_assist(&mut self, level: Level) {
-        self.set_pilot_assist(level);
         let seats: Vec<usize> = self.sim.world.human_slots().collect();
         for seat in seats {
+            self.set_pilot_assist_seat(seat, level);
             self.record_event(seat, Kind::PilotAssist, ordinal(&Level::ALL, level));
         }
     }
 
+    #[cfg(feature = "view")]
     /// Hands `slot` the `weapon` when its pickup slot is empty (the capture flag `--give`),
     /// recording the top-up. Returns whether it wrote.
     pub fn give_weapon(&mut self, slot: usize, weapon: Weapon) -> bool {
@@ -49,6 +53,7 @@ impl Race {
         true
     }
 
+    #[cfg(feature = "view")]
     /// How many events the recording holds so far, or `None` when this race records nothing.
     #[must_use]
     pub fn recorded_event_count(&self) -> Option<usize> {
@@ -103,6 +108,7 @@ impl Race {
         true
     }
 
+    #[cfg(feature = "view")]
     fn record_event(&mut self, seat: usize, kind: Kind, value: u32) {
         let (Some(recording), Ok(seat)) = (self.replay.recording.as_mut(), u8::try_from(seat))
         else {
@@ -112,6 +118,7 @@ impl Race {
     }
 }
 
+#[cfg(feature = "view")]
 /// A value's index in the list the file stores it by.
 fn ordinal<T: PartialEq>(all: &[T], value: T) -> u32 {
     all.iter()

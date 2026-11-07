@@ -266,8 +266,7 @@ pub mod player_step;
 #[cfg(feature = "view")]
 mod player_tags;
 mod reconcile;
-#[cfg(feature = "view")]
-mod replay;
+pub mod replay;
 #[cfg(feature = "view")]
 mod repulser_field;
 mod respawn;
@@ -303,6 +302,7 @@ mod telemetry;
 #[cfg(feature = "view")]
 mod texture_sink;
 mod tick;
+pub mod timeline;
 pub mod tournament;
 #[cfg(feature = "view")]
 pub mod track_panel;
@@ -353,7 +353,8 @@ pub use options::{
     SeatPick, Setup, Sighting,
 };
 #[cfg(feature = "view")]
-pub use replay::{ApplyError, Ghost, GhostCapture, Launch, UnknownOption, rebuild};
+pub use replay::{Ghost, GhostCapture};
+pub use replay::{ApplyError, Launch, UnknownOption, rebuild};
 pub use respawn::RespawnCause;
 pub use results::RunStats;
 #[cfg(feature = "view")]
