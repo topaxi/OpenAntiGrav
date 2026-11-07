@@ -97,6 +97,7 @@ mod split_temporal;
 mod split_windows;
 mod sub_weapon;
 mod thrust_chase;
+mod timeline;
 mod title_effects;
 mod track_stages;
 mod trail_hits;

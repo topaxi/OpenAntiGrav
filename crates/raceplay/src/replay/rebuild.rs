@@ -7,10 +7,11 @@
 //! ([`oag_replay::Verifier::new`]).
 
 use anyhow::{Context, Result, bail};
+use oag_gameplay::Controller;
 use oag_replay::Header;
 
 use super::Launch;
-use crate::{Options, Race};
+use crate::{Options, Race, Setup};
 
 impl Options {
     /// The options a header's race was loaded with, over `source`.
@@ -76,17 +77,45 @@ impl Options {
     }
 }
 
-/// The race `header` was recorded from, loaded from `source` and started with the recorded
-/// launch settings, before its first tick.
+/// The setup of the race `header` was recorded from, loaded from `source`.
 ///
 /// # Errors
 ///
-/// [`Options::for_replay`]'s, a launch setting this build does not know, or the load's.
-pub fn rebuild(header: &Header, source: &str) -> Result<Race> {
+/// [`Options::for_replay`]'s or the load's.
+pub fn load_recorded(header: &Header, source: &str) -> Result<Setup> {
     let options = Options::for_replay(header, source)?;
-    let launch = Launch::from_table(&header.options)?;
     let loaded = crate::load(&options).context("loading the replay's race")?;
-    let mut race = Race::start(loaded.setup);
+    Ok(loaded.setup)
+}
+
+/// The race `header` was recorded from, started from `setup` with the recorded launch settings
+/// and its recorded seats, before its first tick.
+///
+/// The seats are the header's: a split screen makes its slots [`Controller::Local`] after
+/// [`Race::start`], and `World::controllers` is hashed, so a race that left them to the start
+/// disagrees at tick zero.
+///
+/// # Errors
+///
+/// A launch setting this build does not know.
+pub fn start_recorded(setup: Setup, header: &Header) -> Result<Race> {
+    let launch = Launch::from_table(&header.options)?;
+    let mut race = Race::start(setup);
     race.apply_launch(&launch);
+    for &slot in &header.slots {
+        if let Some(controller) = race.sim.world.controllers.get_mut(usize::from(slot)) {
+            *controller = Controller::Local;
+        }
+    }
     Ok(race)
+}
+
+/// The race `header` was recorded from, loaded from `source` and started as
+/// [`start_recorded`] starts it.
+///
+/// # Errors
+///
+/// [`load_recorded`]'s and [`start_recorded`]'s.
+pub fn rebuild(header: &Header, source: &str) -> Result<Race> {
+    start_recorded(load_recorded(header, source)?, header)
 }

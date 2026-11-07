@@ -570,6 +570,31 @@ const _: () = {
 };
 
 impl RaceSim {
+    /// What one snapshot holds of its own: the struct and the heap of its mutable half. An
+    /// estimate, for a budget (`timeline`): the shared half is not in it, and it counts lengths,
+    /// not what an allocator rounded them to.
+    pub(crate) fn snapshot_bytes(&self) -> usize {
+        fn held<T>(items: &[T]) -> usize {
+            size_of_val(items)
+        }
+        fn boxed<T>(item: &Option<Box<T>>) -> usize {
+            item.as_ref().map_or(0, |_| size_of::<T>())
+        }
+        size_of::<Self>()
+            + self.pad_distance.iter().map(|v| held(v)).sum::<usize>()
+            + self
+                .weapon_pad_distance
+                .iter()
+                .map(|v| held(v))
+                .sum::<usize>()
+            + held(&self.weapon_pad_refresh_left)
+            + held(&self.cues)
+            + held(&self.announcements)
+            + held(&self.class_announcements)
+            + self.autopilots.iter().map(boxed).sum::<usize>()
+            + boxed(&self.original_ai)
+    }
+
     /// Whether every field of the constant half is the very allocation `other` holds. The
     /// `Debug` text cannot say this: a copy reads the same.
     #[cfg(test)]

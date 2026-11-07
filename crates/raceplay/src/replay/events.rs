@@ -28,6 +28,7 @@ pub enum ApplyError {
 }
 
 impl Race {
+    #[cfg(feature = "view")]
     /// Switches Pilot Assist to `level` for every seat, as the pause menu does, and records it
     /// for each person-flown seat so the recording reproduces: the level changes the player's
     /// physics, so a recording that did not hear of the change would desync at the next hash.
@@ -39,6 +40,7 @@ impl Race {
         }
     }
 
+    #[cfg(feature = "view")]
     /// Hands `slot` the `weapon` when its pickup slot is empty (the capture flag `--give`),
     /// recording the top-up. Returns whether it wrote.
     pub fn give_weapon(&mut self, slot: usize, weapon: Weapon) -> bool {
@@ -49,6 +51,7 @@ impl Race {
         true
     }
 
+    #[cfg(feature = "view")]
     /// How many events the recording holds so far, or `None` when this race records nothing.
     #[must_use]
     pub fn recorded_event_count(&self) -> Option<usize> {
@@ -77,7 +80,9 @@ impl Race {
                     .ok()
                     .and_then(|at| Level::ALL.get(at))
                     .ok_or(bad)?;
-                self.set_pilot_assist_seat(seat, *level);
+                // Every seat, as the writer does: no hash reads a seat nobody flies, and only
+                // this keeps the `RaceSim` of a seek equal to the recorded one as text.
+                self.set_pilot_assist(*level);
             }
             Some(Kind::Give) => {
                 let weapon = usize::try_from(event.value)
@@ -103,6 +108,7 @@ impl Race {
         true
     }
 
+    #[cfg(feature = "view")]
     fn record_event(&mut self, seat: usize, kind: Kind, value: u32) {
         let (Some(recording), Ok(seat)) = (self.replay.recording.as_mut(), u8::try_from(seat))
         else {
@@ -112,6 +118,7 @@ impl Race {
     }
 }
 
+#[cfg(feature = "view")]
 /// A value's index in the list the file stores it by.
 fn ordinal<T: PartialEq>(all: &[T], value: T) -> u32 {
     all.iter()

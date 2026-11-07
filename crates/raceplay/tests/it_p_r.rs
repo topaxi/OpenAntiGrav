@@ -42,6 +42,7 @@ mod race_finish_ground_truth;
 mod race_load_read_memo_ground_truth;
 mod ram_ground_truth;
 mod replay_ground_truth;
+mod replay_timeline_ground_truth;
 mod repulser_fork_ground_truth;
 mod repulser_guard_band_ground_truth;
 mod reset_zone_ground_truth;

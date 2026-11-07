@@ -39,7 +39,7 @@ use oag_replay::{Header, Replay, Verifier};
 const TICKS: u64 = 7_200;
 
 /// Where each title's source is, or `None` without it.
-fn source(title: &str) -> Option<PathBuf> {
+pub(crate) fn source(title: &str) -> Option<PathBuf> {
     let (path, marker) = match title {
         "pulse" => ("data/images/pulse-psp-usa.chd", ""),
         "pure" => ("data/images/pure-psp-eu.chd", ""),
@@ -92,7 +92,7 @@ fn setup_in(title: &str, mode: oag_race::Mode) -> Option<race::Setup> {
 /// The driver reads the player's craft and decides; its controls become a
 /// stick deflection and a held cross, which is all a pad can say. Nothing it
 /// keeps is simulation state - it is the person holding the pad.
-struct Pad {
+pub(crate) struct Pad {
     driver: oag_ai::Driver,
     tuning: oag_ai::Tuning,
     input: Input,
@@ -114,7 +114,7 @@ struct Pad {
 const RACE_DRIVER: [&str; 1] = ["pure"];
 
 impl Pad {
-    fn new(title: &str) -> Self {
+    pub(crate) fn new(title: &str) -> Self {
         Self {
             driver: oag_ai::Driver::default(),
             tuning: oag_ai::Tuning::default(),
@@ -124,35 +124,39 @@ impl Pad {
         }
     }
 
-    fn inputs(&mut self, race: &mut race::Race) -> PlayerInputs {
+    pub(crate) fn inputs(&mut self, race: &mut race::Race) -> PlayerInputs {
+        let slot = race.sim.world.primary_slot();
+        PlayerInputs::single(self.snapshot(race, slot))
+    }
+
+    /// What this pad holds this tick for the craft in `slot`.
+    pub(crate) fn snapshot(&mut self, race: &mut race::Race, slot: usize) -> InputSnapshot {
         let controls = if let Some(driver) = self.race_driver.as_mut() {
-            let slot = race.sim.world.primary_slot();
             race.autopilot_wants(slot, driver)
         } else {
             let line = race.racing_line();
+            let physics = &race.sim.world.ships[slot].physics;
             if !self.seated {
-                let position = race.ship().physics.body.position;
+                let position = physics.body.position;
                 self.driver.index = line.nearest(position, 0, line.len()) as u32;
                 self.seated = true;
             }
             let ctx = oag_ai::Context::new(line, &self.tuning);
-            self.driver.drive(&race.ship().physics, &ctx)
+            self.driver.drive(physics, &ctx)
         };
         let mut held = 0;
         if controls.thrust > 0.5 {
             held |= Button::Cross.bit();
         }
         self.input.begin_frame(held);
-        PlayerInputs::single(
-            InputSnapshot {
-                buttons: self.input,
-                stick_x: controls.steer_x,
-                stick_y: 0.0,
-                airbrake_left: controls.airbrake_left,
-                airbrake_right: controls.airbrake_right,
-            }
-            .sanitised(),
-        )
+        InputSnapshot {
+            buttons: self.input,
+            stick_x: controls.steer_x,
+            stick_y: 0.0,
+            airbrake_left: controls.airbrake_left,
+            airbrake_right: controls.airbrake_right,
+        }
+        .sanitised()
     }
 }
 

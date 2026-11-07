@@ -54,9 +54,10 @@ table keeps its keys open (ADR-0087 decision 8).
 ## Rebuilding a race from a header
 
 `oag_raceplay::rebuild(&header, source)` loads the race `[setup]` describes from `source` (the
-reader's own disc image or package for the header's title; it is not in the file), starts it, and
+reader's own disc image or package for the header's title; it is not in the file), starts it,
 applies `[options]` through `Race::apply_launch`, the same call the composition root makes when it
-launches a race. **The tick-zero hash is the safety net**: a rebuild that is missing something
+launches a race, and seats `slots` as local people, which a split screen writes after
+`Race::start` and the state hash reads. **The tick-zero hash is the safety net**: a rebuild that is missing something
 disagrees at tick 0 and `Verifier::new` refuses it by name; a header with no `[setup]` is refused
 before any load.
 
@@ -74,9 +75,10 @@ every title, so the table is what the rebuild uses.
 | Omega (PS4) | proved | proved | proved |
 
 **Not claimed** (a recording of these may be written, and its rebuild is then not promised; the
-tick-zero hash refuses a rebuild that does not match): Zone, Eliminator, Tournament and Head to
-Head; split-screen and multi-window races (`seat_picks`, several people; stage 3 proves a split
-recording with `head_to_head_people_ground_truth`'s setup); Race Remix (`craft_source`); DLC and
+tick-zero hash refuses a rebuild that does not match): Zone, Eliminator, Tournament; Head to Head
+and split-screen beyond the one setup [the timeline's page](../architecture/replay-timeline.md)
+proves (two people, Pulse); a seat a pad left mid-race (`follow_devices`, no event yet); multi-window
+races (`seat_picks`); Race Remix (`craft_source`); DLC and
 foreign tracks (`dlc`, `foreign_track`); campaign events (`grid_teams`); capture aids (`pose`,
 `field`, `hud`); network races (a client records nothing) and modded races (`start_recording`
 returns early). None of these is in `[setup]` yet.
@@ -88,11 +90,12 @@ hand-made setup (`*_replays_reproduce...`).
 
 ADR-0055's rule is that anything that changes the race outside `Race::tick` must become an input
 or be recorded. An `Event` is `(tick, seat, kind, value)`, applied **before** tick `tick` runs, by
-whoever re-drives the file (`Verifier::events_due`, then `Race::apply_event`).
+whoever re-drives the file (`Verifier::events_due`, then `Race::apply_event`). A seek applies them
+the same way, between the same two ticks ([the timeline](../architecture/replay-timeline.md)).
 
 | Kind | Code | Value | Writer |
 | --- | --- | --- | --- |
-| `pilot_assist` | 1 | the level's index in `Level::ALL` (off 0, normal 1, extreme 2) | `Race::change_pilot_assist`, called by the pause menu (`Session::apply_pause_setting`); one event per person-flown seat |
+| `pilot_assist` | 1 | the level's index in `Level::ALL` (off 0, normal 1, extreme 2) | `Race::change_pilot_assist`, called by the pause menu (`Session::apply_pause_setting`); one event per person-flown seat, each applied as the writer does, to every seat |
 | `give` | 2 | the weapon's index in `Weapon::ALL` | `Race::give_weapon`, the capture flag `--give` (writes only an empty pickup slot) |
 | `controller` | 3 | reserved for a seat handed to the opponent driver at a fork (decision 9) | not implemented; a file carrying it reads, and `Race::apply_event` refuses it by name |
 

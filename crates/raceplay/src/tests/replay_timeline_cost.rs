@@ -525,6 +525,15 @@ fn replay_timeline_cost_sweep() {
         inline + largest
     );
     println!(
+        "snapshot_bytes, the budget's estimate: {} at the end, {} at the largest keyframe",
+        at_end.snapshot_bytes(),
+        keyframes
+            .iter()
+            .map(|(_, s)| s.snapshot_bytes())
+            .max()
+            .unwrap_or(0)
+    );
+    println!(
         "keyframes holding the race's own shared half: {} of {}",
         keyframes
             .iter()
