@@ -35,7 +35,21 @@ fn drive(image: &Path, tag: &str, script: &str, shots: &Path) -> Run {
 }
 
 /// [`drive`] with `args` added to the game's command line.
-pub(crate) fn drive_with(
+fn drive_with(image: &Path, tag: &str, script: &str, shots: &Path, args: &[&str]) -> Run {
+    drive_binary(
+        env!("CARGO_BIN_EXE_oag-game"),
+        image,
+        tag,
+        script,
+        shots,
+        args,
+    )
+}
+
+/// [`drive_with`] on the game binary `binary`: the module that names it is the one that spawns
+/// the game, which is what puts it in the `gpu-vram` test group.
+pub(crate) fn drive_binary(
+    binary: &str,
     image: &Path,
     tag: &str,
     script: &str,
@@ -46,7 +60,7 @@ pub(crate) fn drive_with(
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     let log = dir.join("state.jsonl");
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+    let output = std::process::Command::new(binary)
         .arg(image)
         // One seed, or each launch deals its own weapons and the two races differ from tick 1.
         .args(["--no-audio", "--no-intro", "--seed", "7", "--drive"])

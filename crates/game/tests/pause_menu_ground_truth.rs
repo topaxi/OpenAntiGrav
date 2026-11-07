@@ -15,7 +15,7 @@
 
 use serde_json::Value;
 
-use super::photo_mode_ground_truth::{Run, drive_with, pulse};
+use super::photo_mode_ground_truth::{Run, drive_binary, pulse};
 
 /// To a race of `mode` on the RACE page, 400 ticks in.
 fn to_the_race(mode: &str) -> String {
@@ -31,7 +31,14 @@ fn run(tag: &str, script: &str) -> Run {
         panic!("OAG_REQUIRE_GAME_DATA unset and no Pulse image: the caller checks first");
     };
     let shots = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("pause-shots");
-    let run = drive_with(&image, &format!("pause-{tag}"), script, &shots, &[]);
+    let run = drive_binary(
+        env!("CARGO_BIN_EXE_oag-game"),
+        &image,
+        &format!("pause-{tag}"),
+        script,
+        &shots,
+        &[],
+    );
     assert!(run.status.success(), "{tag}: {}", run.stderr);
     run
 }
