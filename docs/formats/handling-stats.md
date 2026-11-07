@@ -425,7 +425,7 @@ Three parts are decoded, because they are the three with consumers (`<StartBoost
   <GlobalClass name="VECTOR|VENOM|FLASH|RAPIER|PHANTOM">
     <SpeedupPads amount time/>                           <- decoded
     <GravityMul airborne/>
-    <WeaponPad refresh_time elimination_refresh_time/>
+    <WeaponPad refresh_time elimination_refresh_time/>   <- 0.55/0.05 Pulse, 0.75/0.15 HD, 2048, Omega; Pure only refresh_time
   </GlobalClass>                                          x5
   <ExternalCloseCamPitchMod/> <ExternalFarCamPitchMod/> <ReplayCamPitchMod/>
   <CameraSideOffset/>
