@@ -1261,7 +1261,7 @@ fn the_ghost_rows_are_offered_only_where_the_options_list_them() {
     for (title, offered) in [
         (oag_pulse::TITLE, (1, 1, 1)),
         (oag_pure::TITLE, (0, 0, 0)),
-        (oag_hd::TITLE, (0, 0, 0)),
+        (oag_hd::TITLE, (1, 0, 0)),
         (oag_omega::TITLE, (0, 0, 0)),
         (oag_2048::TITLE, (0, 0, 0)),
     ] {

@@ -22,6 +22,15 @@ mod footer;
 mod screens;
 pub(crate) use screens::PAUSE_OVERLAY;
 
+/// The pause screen drawn from the disc's own widgets: the screen read for this race's mode and
+/// the title's table that says which row each widget is.
+pub(crate) struct PauseView {
+    pub(crate) screen: oag_ui_screens::pause::PauseScreen,
+    pub(crate) table: &'static oag_title::PauseMenu,
+    /// Where the screen's textures sit on the menus' sprite sheet.
+    pub(crate) sprites: Vec<(String, oag_ui::frontend::Placed)>,
+}
+
 /// The front end, and everything only it needs.
 /// The menus, and a renderer of their own.
 ///
@@ -71,6 +80,9 @@ pub(crate) struct MenuStage {
     /// The tint a title's own pause screen draws over the parked race, `None` on every other
     /// menu: the screen authors it and no footer ticker (`oag_title::PauseMenu`).
     pub(crate) pause_scrim: Option<[f32; 4]>,
+    /// The pause screen as the disc lays it out, when the title has it and the tree opened on
+    /// the pause page: drawn in place of the front end's list on that page.
+    pub(crate) pause_view: Option<PauseView>,
     /// The value marquee's clock: which row it is timing, and for how long.
     pub(crate) marquee: marquee::Timer,
     /// The modal prompt on screen, if one is: an on-screen keyboard or a
@@ -245,6 +257,12 @@ pub(crate) fn menu_playhead(
 }
 
 impl MenuStage {
+    /// Whether the page on screen is the pause page of a tree that opened on it, drawn from the
+    /// disc's own screen.
+    pub(crate) fn on_pause_page(&self) -> bool {
+        self.pause_view.is_some() && self.menu.page().id == menu::PAUSE_PAGE
+    }
+
     /// Advances the backdrop by one tick.
     ///
     /// Driven from the same fixed `dt` the simulation is, and for the same
@@ -817,7 +835,7 @@ impl MenuStage {
             || self.menu.reserves_unavailable_note();
         self.menu
             .set_visible_rows(menu::visible_rows(&self.skin, &self.frame, reserve_note));
-        let arriving = menu::draw_list(
+        let mut arriving = menu::draw_list(
             &self.menu,
             &self.skin,
             bound_keys,
@@ -831,6 +849,19 @@ impl MenuStage {
             &self.frame,
             frozen_race,
         );
+        // The pause screen is the disc's own widgets where the title carries them.
+        if let Some(view) = self.pause_view.as_ref().filter(|_| self.on_pause_page()) {
+            let drawn = oag_ui_screens::pause::draw_list(
+                &view.screen,
+                view.table,
+                &self.menu,
+                &self.skin,
+                &self.frame,
+                &|src| view.sprites.iter().find(|(path, _)| path == src).map(|(_, placed)| *placed),
+            );
+            arriving.chrome = drawn.chrome;
+            arriving.body = drawn.body;
+        }
         let (list, clip) = match &self.change {
             // The page being left grows and fades out; the one arriving grows
             // into place from smaller and fades in. Both run off one tween, so
@@ -903,7 +934,7 @@ impl MenuStage {
         };
         // The footer's own draws, skipped mid-transition too - see `footer.rs`. The reset
         // prompt's rect goes back to the menu for the next pointer tick.
-        let reset = if self.change.is_none() {
+        let reset = if self.change.is_none() && !self.on_pause_page() {
             let measure = |text: &str| font::measure(&self.default_atlas, text);
             oag_game::prompts::reset_prompt(
                 &self.menu,

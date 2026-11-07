@@ -4,7 +4,7 @@
 
 use oag_title::{PauseAction, PauseMenu};
 
-use super::{Action, Definition, Entry, Page, RowMeta};
+use super::{Action, Choice, Definition, Entry, Page, RowMeta};
 use crate::language::StringTable;
 
 /// The id of the page [`Definition::open_on_pause_screen`] adds.
@@ -12,6 +12,23 @@ pub const PAUSE_PAGE: &str = "pause";
 
 /// The row id of the project's PHOTO MODE row, on the pause page and where the extras attach it.
 pub const PHOTO_ROW: &str = "photo_mode";
+
+/// The row id the page gives the row that does `action`: how a drawer that lays the page out
+/// from the disc's screen finds the row for a widget.
+#[must_use]
+pub fn row_id(action: PauseAction) -> &'static str {
+    match action {
+        PauseAction::Resume => "pause_resume",
+        PauseAction::Options => "pause_options",
+        PauseAction::Audio => "pause_audio",
+        PauseAction::Photo => PHOTO_ROW,
+        PauseAction::PilotAssist => "pause_pilot_assist",
+        PauseAction::Ghost => "pause_ghost",
+        PauseAction::Inert => "pause_inert",
+        PauseAction::Restart => "pause_restart",
+        PauseAction::Quit => "pause_quit",
+    }
+}
 
 /// What [`Definition::open_on_pause_screen`] built.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,29 +93,78 @@ impl Definition {
                 continue;
             };
             match action {
-                PauseAction::Resume => push(&mut page, "pause_resume", Entry::Back { label }),
+                PauseAction::Resume => push(
+                    &mut page,
+                    row_id(PauseAction::Resume),
+                    Entry::Back { label },
+                ),
                 PauseAction::Options => {
                     let Some(target) = options else {
                         built.unbuilt.push(row.disc_id);
                         continue;
                     };
-                    push(&mut page, "pause_options", Entry::Submenu { label, target });
+                    push(
+                        &mut page,
+                        row_id(PauseAction::Options),
+                        Entry::Submenu { label, target },
+                    );
                 }
                 PauseAction::Audio => {
                     let Some(target) = audio else {
                         built.unbuilt.push(row.disc_id);
                         continue;
                     };
-                    push(&mut page, "pause_audio", Entry::Submenu { label, target });
+                    push(
+                        &mut page,
+                        row_id(PauseAction::Audio),
+                        Entry::Submenu { label, target },
+                    );
                 }
                 PauseAction::Photo => {
                     has_photo = true;
                     push(&mut page, PHOTO_ROW, run(label, Action::PhotoMode));
                 }
-                PauseAction::Restart => {
-                    push(&mut page, "pause_restart", run(label, Action::RestartRace));
+                PauseAction::PilotAssist => {
+                    let (on, off) = (on_off(strings, "FE_ON"), on_off(strings, "FE_OFF"));
+                    push(
+                        &mut page,
+                        row_id(PauseAction::PilotAssist),
+                        list(
+                            label,
+                            "controls.pilot_assist",
+                            [("extreme", on), ("off", off)],
+                        ),
+                    );
                 }
-                PauseAction::Quit => push(&mut page, "pause_quit", run(label, Action::QuitRace)),
+                PauseAction::Ghost => {
+                    let (on, off) = (on_off(strings, "FE_ON"), on_off(strings, "FE_OFF"));
+                    push(
+                        &mut page,
+                        row_id(PauseAction::Ghost),
+                        list(
+                            label,
+                            "display.ghost_ship_visible",
+                            [("off", off), ("on", on)],
+                        ),
+                    );
+                }
+                PauseAction::Inert => push(
+                    &mut page,
+                    row_id(PauseAction::Inert),
+                    Entry::Inert { label },
+                ),
+                PauseAction::Restart => {
+                    push(
+                        &mut page,
+                        row_id(PauseAction::Restart),
+                        run(label, Action::RestartRace),
+                    );
+                }
+                PauseAction::Quit => push(
+                    &mut page,
+                    row_id(PauseAction::Quit),
+                    run(label, Action::QuitRace),
+                ),
             }
         }
         if pause.offers_photo && !has_photo {
@@ -108,11 +174,11 @@ impl Definition {
             let at = page
                 .meta
                 .iter()
-                .position(|meta| meta.id.as_deref() == Some("pause_options"))
+                .position(|meta| meta.id.as_deref() == Some(row_id(PauseAction::Options)))
                 .or_else(|| {
                     page.meta
                         .iter()
-                        .position(|meta| meta.id.as_deref() == Some("pause_resume"))
+                        .position(|meta| meta.id.as_deref() == Some(row_id(PauseAction::Resume)))
                 })
                 .map_or(0, |index| index + 1);
             page.entries.insert(at, run(label, Action::PhotoMode));
@@ -147,5 +213,35 @@ fn run(label: String, action: Action) -> Entry {
         label,
         action,
         inputs: None,
+    }
+}
+
+/// The words of an on/off list's entry, from the disc's table.
+fn on_off(strings: &StringTable, id: &str) -> String {
+    strings.get(id).unwrap_or(id).to_string()
+}
+
+/// An on/off list row: a [`Entry::Choice`] over `values` (`stored value`, `shown words`), in
+/// the order the disc's `<List>` spells its entries.
+fn list<const N: usize>(label: String, setting: &str, values: [(&str, String); N]) -> Entry {
+    Entry::Choice {
+        label,
+        setting: setting.to_string(),
+        values: values
+            .into_iter()
+            .map(|(value, label)| Choice {
+                value: value.to_string(),
+                label,
+                unavailable: None,
+            })
+            .collect(),
+        source: None,
+        query: None,
+        default: None,
+        current: 0,
+        disabled_by: None,
+        pins: Vec::new(),
+        warnings: Vec::new(),
+        restart: None,
     }
 }

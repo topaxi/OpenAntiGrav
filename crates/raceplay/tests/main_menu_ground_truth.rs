@@ -556,6 +556,7 @@ fn hds_pause_screens_are_the_five_single_player_widget_lists() {
         &read(&mut archives, HD_INGAME),
         "the file the game reads",
     );
+    check_pause_layout(&mut archives, pause);
     let all = copies(&mut archives, HD_INGAME);
     assert_eq!(
         all.len(),
@@ -580,6 +581,143 @@ fn hds_pause_screens_are_the_five_single_player_widget_lists() {
                 .filter(|id| !["ONL_VIEW_INV", "FE_GHOST"].contains(&id.as_str()))
                 .collect();
             assert_eq!(found, rows, "{label}: {:?}", screen.name);
+        }
+    }
+}
+
+/// The globals each archive's copy of the front end's `Skin.xml` declares, by archive label.
+fn skin_globals(
+    archives: &mut oag_assets::Archives,
+) -> Vec<(String, std::collections::HashMap<String, String>)> {
+    const SKIN: &str = r"Data\Plugins\Frontend\Gui\Skin.xml";
+    let containers = std::iter::once(&mut archives.data)
+        .chain(archives.patch.iter_mut())
+        .chain(archives.fe.iter_mut())
+        .chain(archives.extra.iter_mut());
+    let mut out = Vec::new();
+    for container in containers {
+        if !container.contains(SKIN) {
+            continue;
+        }
+        let label = container.label().to_string();
+        let blob = container.read_entry(SKIN).expect("the skin");
+        let xml = fexml::text(&blob).expect("text");
+        out.push((label, oag_ui::screen::Screens::from_xml(&xml).globals));
+    }
+    out
+}
+
+/// Where HD's pause screens draw their rows, read off the file the game reads: every row of
+/// every screen is a `Block` or `List` at `x = 480`, fifty apart from `y = 310`, in the table's
+/// order, and the chrome screen behind them carries the two rules (`y = 292` and `790`, 960
+/// wide). The focused row's ink is `HD_Blue`, which the HD-style archive resolves to
+/// `0xff8ac0ca` and the Fury-style one to red: the original's pause screen on RPCS3 in the HD
+/// style measured (138, 192, 202) on its focused row and (100, 100, 100) on the others.
+fn check_pause_layout(archives: &mut oag_assets::Archives, pause: &oag_title::PauseMenu) {
+    let layout = pause
+        .layout
+        .expect("HD names where its screens are drawn from");
+    let blob = archives.read_name(layout.definition).expect("the file");
+    let xml = fexml::text(&blob).expect("text");
+    let skins = skin_globals(archives);
+    let colour = |globals: &std::collections::HashMap<String, String>, name: &str| {
+        oag_ui::screen::parse_argb(globals.get(name).unwrap_or_else(|| panic!("no {name}")))
+    };
+    let mut styles = (false, false);
+    for (label, globals) in &skins {
+        let blue = colour(globals, "HD_Blue");
+        let grey = colour(globals, "HD_Grey");
+        if label.contains("DATA06") {
+            assert_eq!(
+                blue,
+                Some(0xff8a_c0ca),
+                "{label}: the HD style's focused ink"
+            );
+            assert_eq!(
+                grey,
+                Some(0xff64_6464),
+                "{label}: the HD style's resting ink"
+            );
+            styles.0 = true;
+        } else if label.contains("DATA00") {
+            assert_ne!(
+                blue,
+                Some(0xff8a_c0ca),
+                "{label}: the Fury style is not cyan"
+            );
+            assert_eq!(
+                grey,
+                Some(0xff96_9696),
+                "{label}: the Fury style's resting ink"
+            );
+            styles.1 = true;
+        }
+    }
+    assert_eq!(
+        styles,
+        (true, true),
+        "both styles' archives were read: {:?}",
+        skins.iter().map(|s| &s.0).collect::<Vec<_>>()
+    );
+    // The focused row's ink is whatever `HD_Blue` the served front end declares: the page reads
+    // the file with the skin's globals as fallbacks, so each style's own colours reach the row.
+    for (label, globals) in skins {
+        let fallback: Vec<(&str, &str)> = globals
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+            .collect();
+        let read = oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, &fallback);
+        let want = oag_ui::screen::parse_argb(&globals["HD_Blue"]).expect("a colour");
+        let rows = read.by_name("InGame Pause SP").expect("the default screen");
+        let focus = rows
+            .blocks
+            .iter()
+            .find(|block| block.name.as_deref() == Some("Continue"))
+            .expect("the CONTINUE block");
+        assert_eq!(
+            focus.active_color, want,
+            "{label}: CONTINUE's focus ink is HD_Blue"
+        );
+        assert!(focus.selectable, "{label}");
+    }
+    let screens = oag_ui::screen::Screens::from_xml(&xml);
+    let chrome = screens.by_name(layout.chrome).expect("the chrome screen");
+    let rules: Vec<[f32; 4]> = chrome
+        .fills
+        .iter()
+        .map(|fill| {
+            [
+                fill.x,
+                fill.y,
+                fill.width.unwrap_or(0.0),
+                fill.height.unwrap_or(0.0),
+            ]
+        })
+        .collect();
+    assert_eq!(
+        rules,
+        [[480.0, 292.0, 960.0, 4.0], [480.0, 790.0, 960.0, 4.0]],
+        "{}: the two rules",
+        layout.chrome
+    );
+    for screen in pause.screens {
+        let read = screens.by_name(screen.name).expect(screen.name);
+        let mut at: Vec<(f32, f32)> = read
+            .blocks
+            .iter()
+            .map(|block| (block.x, block.y))
+            .chain(read.lists.iter().map(|list| (list.x, list.y)))
+            .collect();
+        at.sort_by(|a, b| a.1.total_cmp(&b.1));
+        assert!(at.len() >= screen.rows.len(), "{}", screen.name);
+        for (index, (x, y)) in at.iter().take(screen.rows.len()).enumerate() {
+            assert_eq!(*x, 480.0, "{}: row {index}", screen.name);
+            assert_eq!(
+                *y,
+                310.0 + 50.0 * index as f32,
+                "{}: row {index}",
+                screen.name
+            );
         }
     }
 }

@@ -530,3 +530,33 @@ impl Focus {
         self.blink < BLINK_OFF_FROM
     }
 }
+
+/// Where a list row's two step arrows are drawn, left then right, each `[x, y, width, height]`
+/// in the grid being drawn in: the right one at `arrow_right_offset` from the label block's right
+/// edge, the left the same arrow mirrored from `arrow_left_offset`, so its rect starts a full
+/// arrow width before that. Both share the marker's `y`.
+#[must_use]
+pub fn list_arrow_rects(
+    numbers: &oag_title::ListBlocks,
+    label: [f32; 4],
+    (sx, sy): (f32, f32),
+) -> [[f32; 4]; 2] {
+    let size = numbers.arrow_size * sx;
+    let label_right = label[0] + label[2];
+    let top = label[1] + numbers.marker_offset.1 * sy;
+    let height = numbers.arrow_size * sy;
+    [
+        [
+            label_right + numbers.arrow_left_offset * sx - size,
+            top,
+            size,
+            height,
+        ],
+        [
+            label_right + numbers.arrow_right_offset * sx,
+            top,
+            size,
+            height,
+        ],
+    ]
+}

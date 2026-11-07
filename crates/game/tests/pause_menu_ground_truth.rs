@@ -272,26 +272,44 @@ mod hd_screens {
         run_on(&image, &format!("hd-{tag}"), script)
     }
 
-    fn the_rows() -> Vec<(String, String)> {
-        pairs(&[
-            ("CONTINUE", "back"),
+    /// The rows each HD screen shows (label, action or kind), by the mode that opens it: the
+    /// disc's widgets in its order, PILOT ASSIST and GHOST as lists and VIEW INVITES inert.
+    fn hd_rows(mode: &str) -> Vec<(String, String)> {
+        let continue_ = ("CONTINUE", "back");
+        let pilot = ("PILOT ASSIST", "choice");
+        let ghost = ("GHOST", "choice");
+        let options = [
             ("GAME OPTIONS", "submenu"),
             ("AUDIO OPTIONS", "submenu"),
             ("PHOTO MODE", "photo_mode"),
-            ("RESTART RACE", "restart_race"),
-            ("QUIT RACE", "quit_race"),
-        ])
+            ("VIEW INVITES", "inert"),
+        ];
+        let restart = ("RESTART RACE", "restart_race");
+        let quit = ("QUIT RACE", "quit_race");
+        let mut rows = vec![continue_];
+        match mode {
+            "time_trial" => rows.extend([pilot, ghost]),
+            "speed_lap" => rows.extend([pilot, ghost]),
+            "zone" => {}
+            _ => rows.push(pilot),
+        }
+        rows.extend(options);
+        match mode {
+            "speed_lap" => rows.push(("END SESSION", "quit_race")),
+            _ => rows.extend([restart, quit]),
+        }
+        pairs(&rows)
     }
 
     #[test]
     #[ignore = "needs a disc image in data/images/"]
-    fn a_single_race_and_a_time_trial_pause_into_the_same_six_rows() {
+    fn a_single_race_and_a_time_trial_pause_into_their_own_screens() {
         if hd().is_none() {
             return;
         }
         for mode in ["single_race", "time_trial"] {
             let run = run_hd(mode, &format!("{} {OPEN}", to_the_race(mode)));
-            assert_eq!(rows(&run), the_rows(), "{mode}");
+            assert_eq!(rows(&run), hd_rows(mode), "{mode}");
         }
     }
 
@@ -310,26 +328,7 @@ mod hd_screens {
                 to_the_race("speed_lap")
             ),
         );
-        let first = on_page(&run, "pause")
-            .into_iter()
-            .next_back()
-            .expect("the pause page was on screen");
-        let labels: Vec<&str> = first["screen"]["rows"]
-            .as_array()
-            .expect("rows")
-            .iter()
-            .filter_map(|row| row["label"].as_str())
-            .collect();
-        assert_eq!(
-            labels,
-            [
-                "CONTINUE",
-                "GAME OPTIONS",
-                "AUDIO OPTIONS",
-                "PHOTO MODE",
-                "END SESSION"
-            ]
-        );
+        assert_eq!(rows(&run), hd_rows("speed_lap"));
         assert_eq!(run.states.last().expect("a state")["screen"]["id"], "main");
     }
 
@@ -340,7 +339,7 @@ mod hd_screens {
             return;
         }
         let run = run_hd("zone", &format!("{} {OPEN}", to_the_race("zone")));
-        assert_eq!(rows(&run), the_rows());
+        assert_eq!(rows(&run), hd_rows("zone"));
     }
 
     #[test]
@@ -367,6 +366,69 @@ mod hd_screens {
             sims.last().copied().unwrap_or(u64::MAX) < 100,
             "RESTART RACE loads the race again: {sims:?}"
         );
+    }
+
+    /// The PILOT ASSIST list reaches the parked race on resume (ON is Extreme, the level HD
+    /// flies with), and the other settings page edits the same level: nothing is switched on
+    /// that the player did not choose.
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn the_pilot_assist_list_switches_the_race_it_resumes() {
+        if hd().is_none() {
+            return;
+        }
+        let level = |run: &Run| -> String {
+            run.states
+                .iter()
+                .rev()
+                .find_map(|state| state.get("pilot_assist")?.as_str().map(str::to_string))
+                .expect("a race state")
+        };
+        let race = to_the_race("time_trial");
+        let plain = run_hd(
+            "assist-off",
+            &format!("{race} {OPEN} press cross; until stage=race; ticks 30"),
+        );
+        assert_eq!(level(&plain), "off", "the list opens on OFF");
+        let on = run_hd(
+            "assist-on",
+            &format!(
+                "{race} {OPEN} select pause_pilot_assist; press right; \
+                 select pause_resume; press cross; until stage=race; ticks 30"
+            ),
+        );
+        assert_eq!(level(&on), "extreme", "ON is Extreme");
+    }
+
+    /// The GHOST list switches the ghost ship's drawing in the race it resumes
+    /// (`display.ghost_ship_visible`, which HD's own GAME OPTIONS page lists too).
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn the_ghost_list_hides_the_ghost_ship_of_the_race_it_resumes() {
+        if hd().is_none() {
+            return;
+        }
+        let shown = |run: &Run| -> bool {
+            run.states
+                .iter()
+                .rev()
+                .find_map(|state| state.get("ghost_visible")?.as_bool())
+                .expect("a race state")
+        };
+        let race = to_the_race("time_trial");
+        let plain = run_hd(
+            "ghost-on",
+            &format!("{race} {OPEN} press cross; until stage=race; ticks 30"),
+        );
+        assert!(shown(&plain), "the list opens on ON");
+        let off = run_hd(
+            "ghost-off",
+            &format!(
+                "{race} {OPEN} select pause_ghost; press left; \
+                 select pause_resume; press cross; until stage=race; ticks 30"
+            ),
+        );
+        assert!(!shown(&off), "OFF hides it");
     }
 
     /// An Eliminator race pauses into the default screen, and a pause and resume leaves the race
@@ -396,7 +458,7 @@ mod hd_screens {
         );
         assert_eq!(
             rows(&paused),
-            the_rows(),
+            hd_rows("eliminator"),
             "an Eliminator race takes the default screen"
         );
         let at = 460;

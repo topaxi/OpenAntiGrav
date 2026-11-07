@@ -92,6 +92,8 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
         ("zone", "InGame Pause Zone"),
     ],
     scrim_argb: 0xc000_0000,
+    layout: None,
+    hud_under_scrim: false,
     offers_photo: true,
     origin: Origin::Measured,
 };

@@ -161,6 +161,13 @@ pub struct State {
     /// The simulation's own tick count, on `stage=race`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sim_tick: Option<u64>,
+    /// The Pilot Assist level the player's craft flies with (`off`, `normal`, `extreme`), on
+    /// `stage=race`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pilot_assist: Option<String>,
+    /// Whether the race draws its ghost ship, on `stage=race`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ghost_visible: Option<bool>,
 }
 
 impl State {

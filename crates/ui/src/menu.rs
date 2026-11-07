@@ -424,6 +424,12 @@ pub enum Entry {
         /// Row label.
         label: String,
     },
+    /// A row the disc authors that this build has nothing behind: drawn greyed, skipped by the
+    /// cursor, and a click on it does nothing (the pause screen's `ONL_VIEW_INV`).
+    Inert {
+        /// Row label.
+        label: String,
+    },
 }
 
 impl Entry {
@@ -436,6 +442,7 @@ impl Entry {
             | Self::Choice { label, .. }
             | Self::Toggle { label, .. }
             | Self::Binding { label, .. }
+            | Self::Inert { label }
             | Self::Back { label } => label,
         }
     }
@@ -542,7 +549,9 @@ pub use page::{Page, RowMeta};
 mod expand;
 pub use expand::RowItem;
 mod definition;
-pub use definition::{Added, Definition, Error, For, ModMenu, PAUSE_PAGE, PHOTO_ROW, Pause};
+pub use definition::{
+    Added, Definition, Error, For, ModMenu, PAUSE_PAGE, PHOTO_ROW, Pause, pause_row_id,
+};
 
 /// What the menus did on a tick, for the composition root to act on.
 #[derive(Debug, Clone, PartialEq)]
@@ -1013,11 +1022,11 @@ impl Menu {
         let page = self.current();
         let mut moved = None;
         if input.take(Button::Down) && rows > 0 {
-            self.cursor[page] = (self.cursor[page] + 1) % rows;
+            self.cursor[page] = self.next_row(page, true);
             moved = Some(nav::Dir::Down);
         }
         if input.take(Button::Up) && rows > 0 {
-            self.cursor[page] = (self.cursor[page] + rows - 1) % rows;
+            self.cursor[page] = self.next_row(page, false);
             moved = Some(nav::Dir::Up);
         }
         // The window follows the cursor and then **stays there**. Storing it is
@@ -1106,7 +1115,8 @@ impl Menu {
     /// that has silently vanished has no way to find out what took it away.
     #[must_use]
     pub fn is_disabled(&self, entry: &Entry) -> bool {
-        self.pin(entry).is_some()
+        matches!(entry, Entry::Inert { .. })
+            || self.pin(entry).is_some()
             || entry
                 .disabled_by()
                 .is_some_and(|condition| condition.matches(self.held(&condition.setting).as_ref()))
@@ -1149,6 +1159,25 @@ impl Menu {
                     .iter()
                     .any(|running| Some(running) == chosen.as_ref())
         })
+    }
+
+    /// The row the cursor moves to from `page`'s current one, wrapping, past any
+    /// [`Entry::Inert`] row (a page of nothing but those stays put).
+    fn next_row(&self, page: usize, forward: bool) -> usize {
+        let entries = &self.definition.pages[page].entries;
+        let rows = entries.len();
+        let mut row = self.cursor[page];
+        for _ in 0..rows {
+            row = if forward {
+                (row + 1) % rows
+            } else {
+                (row + rows - 1) % rows
+            };
+            if !matches!(entries[row], Entry::Inert { .. }) {
+                return row;
+            }
+        }
+        self.cursor[page]
     }
 
     /// Whether the row the cursor is on is inert.

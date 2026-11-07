@@ -363,6 +363,8 @@ fn state_of(session: &Session) -> State {
         });
         state.hash = Some(format!("{:016x}", stage.race.sim.state_hash()));
         state.sim_tick = Some(stage.race.sim.world.tick);
+        state.pilot_assist = Some(stage.race.pilot_assist_level().name().to_string());
+        state.ghost_visible = Some(stage.race.ghost_visible());
     }
     state
 }
@@ -522,6 +524,7 @@ fn page_screen(stage: &MenuStage) -> Screen {
                 Entry::Run { .. } => ("action", None, None, Vec::new()),
                 Entry::Back { .. } => ("back", None, None, Vec::new()),
                 Entry::Binding { .. } => ("binding", None, None, Vec::new()),
+                Entry::Inert { .. } => ("inert", None, None, Vec::new()),
                 Entry::Choice {
                     setting,
                     values,

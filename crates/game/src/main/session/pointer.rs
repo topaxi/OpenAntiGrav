@@ -107,9 +107,14 @@ pub(super) fn menu_pointer(
     if pointer.is_idle() {
         return Vec::new();
     }
-    let regions = menu::pointer::regions(&stage.menu, &stage.skin, &stage.frame, &|text| {
-        font::measure(&stage.text_atlas, text)
-    });
+    let regions = match stage.pause_view.as_ref().filter(|_| stage.on_pause_page()) {
+        Some(view) => {
+            oag_ui_screens::pause::regions(&view.screen, view.table, &stage.menu, &stage.skin)
+        }
+        None => menu::pointer::regions(&stage.menu, &stage.skin, &stage.frame, &|text| {
+            font::measure(&stage.text_atlas, text)
+        }),
+    };
     let hit = pointer
         .at
         .and_then(|at| menu::pointer::hit(&regions, at))

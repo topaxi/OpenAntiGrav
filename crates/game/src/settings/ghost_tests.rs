@@ -23,7 +23,12 @@ fn the_ghost_rows_are_seeded_where_listed_default_on_and_round_trip() {
     ] {
         assert!(seeded(oag_pulse::TITLE, key), "{key}");
         assert!(!seeded(oag_pure::TITLE, key), "{key}");
-        assert!(!seeded(oag_hd::TITLE, key), "{key}");
+        // HD's own GAME OPTIONS lists the ghost ship's visibility and nothing else of the three.
+        assert_eq!(
+            seeded(oag_hd::TITLE, key),
+            key == "display.ghost_ship_visible",
+            "{key}"
+        );
     }
 
     let mut settings = Settings::default();
@@ -40,6 +45,11 @@ fn the_ghost_rows_are_seeded_where_listed_default_on_and_round_trip() {
     assert!(!settings.display.ghost_auto_loads(oag_pulse::TITLE));
     assert!(settings.display.ghost_ship_shown(oag_pure::TITLE));
     assert!(settings.display.ghost_auto_loads(oag_pure::TITLE));
+    assert!(
+        !settings.display.ghost_ship_shown(oag_hd::TITLE),
+        "HD reads the same setting"
+    );
+    assert!(settings.display.ghost_auto_loads(oag_hd::TITLE));
     let written = toml::to_string_pretty(&settings).expect("serialise");
     let back: Settings = toml::from_str(&written).expect("parse");
     assert!(!back.display.ghost_ship_visible && !back.display.auto_load_ghost);

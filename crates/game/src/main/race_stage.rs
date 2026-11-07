@@ -621,9 +621,9 @@ impl RaceStage {
         self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
     }
 
-    /// The race's HUD alone over `view`: photo mode with its HUD row on. No end screens and no
-    /// track panel, which are not part of the view.
-    pub(crate) fn draw_photo_hud(
+    /// The race's HUD alone over `view`: photo mode with its HUD row on, and a parked race under
+    /// the pause screen's tint. No end screens and no track panel, which are not part of the view.
+    pub(crate) fn draw_view_hud(
         &mut self,
         gpu: &impl GpuContext,
         encoder: &mut wgpu::CommandEncoder,

@@ -112,6 +112,18 @@ impl Frame {
         frame
     }
 
+    /// This frame without any mark and without its clear: the block art and the inks stay.
+    /// A screen that draws its own chrome from the disc (the pause screen) sits on the race and
+    /// not on the front end's frame.
+    #[must_use]
+    pub fn without_marks(&self) -> Self {
+        Self {
+            clear: None,
+            marks: Vec::new(),
+            ..self.clone()
+        }
+    }
+
     /// Whether this title draws any frame at all.
     #[must_use]
     pub fn is_empty(&self) -> bool {

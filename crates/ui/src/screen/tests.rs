@@ -1101,3 +1101,31 @@ fn a_block_keeps_its_text_colour() {
     let colours: Vec<Option<u32>> = screen.blocks.iter().map(|b| b.text_color).collect();
     assert_eq!(colours, vec![Some(0xffff_ffff), Some(0xff64_6464), None]);
 }
+
+/// HD's `<List>` is a row of its own: where it sits, the entries by `idstring` in the order the
+/// file lists them, the inks its `Values` name and its label, which is the widget's and not one
+/// of the screen's texts (a screen drawn from its texts gains nothing from its lists).
+#[test]
+fn a_list_widget_lands_in_lists_and_adds_no_text_to_the_screen() {
+    let screens = Screens::from_xml_with_fallback_globals(
+        r#"<Screen name="Pause">
+<List name="Pilot Assist" global="Pilot Assist" default="FE_OFF">
+<Values idstring="FE_PILOT_ASSIST" font="small" x="480" y="360" ActiveColor="FEGlobals->HD_Blue" InactiveColor="0xff646464" arrowcolor="0xffffffff"></Values>
+<Entry idstring="FE_ON"></Entry>
+<Entry idstring="FE_OFF"></Entry>
+</List>
+</Screen>"#,
+        &[("HD_Blue", "0xff8ac0ca")],
+    );
+    let screen = screens.by_name("Pause").expect("the screen");
+    let [list] = screen.lists.as_slice() else {
+        panic!("one list: {:?}", screen.lists);
+    };
+    assert_eq!((list.x, list.y), (480.0, 360.0));
+    assert_eq!(list.entries, ["FE_ON", "FE_OFF"]);
+    assert_eq!(list.default.as_deref(), Some("FE_OFF"));
+    assert_eq!(list.active_color, Some(0xff8a_c0ca));
+    assert_eq!(list.inactive_color, Some(0xff64_6464));
+    assert_eq!(list.label.idstring.as_deref(), Some("FE_PILOT_ASSIST"));
+    assert!(screen.texts.is_empty(), "{:?}", screen.texts);
+}

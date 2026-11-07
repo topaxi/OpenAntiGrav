@@ -284,7 +284,7 @@ impl Menu {
                 self.nav.when(changed.is_none(), Nav::Decline);
                 changed.into_iter().collect()
             }
-            Entry::Binding { .. } => Vec::new(),
+            Entry::Binding { .. } | Entry::Inert { .. } => Vec::new(),
         }
     }
 

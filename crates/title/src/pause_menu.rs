@@ -27,6 +27,14 @@ pub enum PauseAction {
     Audio,
     /// Photo mode ([`oag_ui`'s `Action::PhotoMode`]).
     Photo,
+    /// The on/off list for Pilot Assist (`FE_PILOT_ASSIST`): `controls.pilot_assist`, on being
+    /// the level HD flies with.
+    PilotAssist,
+    /// The on/off list for the ghost ship (`FE_GHOST`): `display.ghost_ship_visible`.
+    Ghost,
+    /// Drawn dimmed and skipped by the cursor, doing nothing (`ONL_VIEW_INV`: PSN's invites,
+    /// which the original greys offline).
+    Inert,
     /// Starts the race again from the grid.
     Restart,
     /// Leaves the race: the front end, or the campaign's cell for a campaign race.
@@ -51,6 +59,19 @@ pub struct PauseScreen {
     pub rows: &'static [PauseRow],
 }
 
+/// Where a title's pause screens are authored and what its draw reads off them: the file, the
+/// shared chrome screen and the grid both are authored in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PauseLayout {
+    /// The archive path of the definition file the screens are in.
+    pub definition: &'static str,
+    /// The screen of that file whose rules and footer every pause screen draws under its own
+    /// widgets (`InGame Main Menu`: two rules, the START glyph and `IG_PAUSE_RESU`, CONFIRM).
+    pub chrome: &'static str,
+    /// The grid the file is authored in.
+    pub grid: [u32; 2],
+}
+
 /// A title's pause screens and which game mode opens which.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PauseMenu {
@@ -67,6 +88,12 @@ pub struct PauseMenu {
     /// The tint the screen draws over the race, as the `ARGB` its full-screen image authors
     /// (`InGame Pause`'s `0xe8000000`).
     pub scrim_argb: u32,
+    /// Where the screens' geometry is read from, for a title that draws them as the disc authors
+    /// them. `None` draws the page as the front end's own list.
+    pub layout: Option<PauseLayout>,
+    /// Whether the race's HUD stays on screen under the tint: the original's does, dimmed with
+    /// the rest of the picture.
+    pub hud_under_scrim: bool,
     /// Whether a screen with no photo row of its own gets this project's PHOTO MODE row
     /// after OPTIONS. Photo mode is one implementation on every title.
     pub offers_photo: bool,

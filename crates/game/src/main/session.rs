@@ -1057,6 +1057,9 @@ pub(crate) struct Shell {
     /// `None` where the source has none, and then the menus sit on the movie or
     /// the page's clear.
     pub(crate) fury_backdrop: Option<std::sync::Arc<oag_game::boot::backdrop::MenuBackdrop>>,
+    /// The title's pause screens as its disc lays them out, read at boot - see
+    /// `oag_game::boot::Shell::pause_screens`.
+    pub(crate) pause_screens: oag_game::boot::PauseScreens,
     /// The race box's two selection screens, read at boot - see
     /// `oag_game::boot::Shell::track_select`. `None` launches straight from
     /// the RACE page.
@@ -1182,6 +1185,7 @@ impl Shell {
             nav_legend: boot_shell.nav_legend.clone(),
             ticker: boot_shell.ticker.clone(),
             fury_backdrop: boot_shell.fury_backdrop.clone(),
+            pause_screens: boot_shell.pause_screens.clone(),
             track_select: boot_shell.track_select.clone(),
             ship_select: boot_shell.ship_select.clone(),
             ship_select_split: boot_shell.ship_select_split.clone(),

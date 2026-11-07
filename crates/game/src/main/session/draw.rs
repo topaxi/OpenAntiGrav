@@ -384,6 +384,12 @@ impl Session {
                         .set_texture_detail(render_profile.texture_detail);
                     parked.race.set_trail_order(render_profile.trail_order);
                     parked.race.set_weather(render_profile.weather);
+                    // The pause screen's GHOST list takes hold under the menus.
+                    if let Some(shell) = &self.shell {
+                        parked
+                            .race
+                            .set_ghost_visible(self.settings.display.ghost_ship_shown(shell.title));
+                    }
                     parked
                         .scene
                         .set_blur_resolution(blur_resolution);
@@ -755,7 +761,7 @@ impl Session {
                     rect,
                     self.framebuffer.output_size(),
                 ),
-                Some(true) => stage.draw_photo_hud(
+                Some(true) => stage.draw_view_hud(
                     &self.gpu,
                     &mut encoder,
                     self.framebuffer.output(),
@@ -775,12 +781,27 @@ impl Session {
             // reads the tick itself. See `RaceStage::render`.
             stage.race.set_draw_alpha(1.0);
         }
-        // A race parked behind the menus has no HUD; its glow still lands,
-        // before the menu rows go on.
-        if let (Stage::Menu(_), Some(parked)) = (&self.stage, self.suspended_race.as_ref()) {
+        // A race parked behind the menus has no HUD, except under a pause screen whose title
+        // keeps it (dimmed by the tint the menus draw over it); its glow still lands, before
+        // the menu rows go on.
+        let hud_under_tint = matches!(
+            &self.stage,
+            Stage::Menu(menu) if menu.pause_scrim.is_some()
+                && menu.pause_view.as_ref().is_some_and(|view| view.table.hud_under_scrim)
+        );
+        if let (Stage::Menu(_), Some(parked)) = (&self.stage, self.suspended_race.as_mut()) {
             parked
                 .scene
                 .composite_bloom_under_hud(&mut encoder, self.framebuffer.output(), rect);
+            if hud_under_tint {
+                parked.draw_view_hud(
+                    &self.gpu,
+                    &mut encoder,
+                    self.framebuffer.output(),
+                    rect,
+                    self.framebuffer.output_size(),
+                );
+            }
             parked
                 .scene
                 .composite_bloom(&mut encoder, self.framebuffer.output(), rect);
