@@ -799,6 +799,15 @@ impl Sight {
         self.target.map(|at| self.grid_of(at))
     }
 
+    /// The half-extent the reticle is at this frame, in the law's own pixels:
+    /// [`EXTENT_OPEN`] with nothing, closing to [`EXTENT_SEEKING`] or, for the
+    /// LeachBeam's own law, `LEACH_EXTENT_CLOSED`. Draw-only: the concentric
+    /// dialect sizes its rings off it.
+    #[must_use]
+    pub fn extent(&self) -> f32 {
+        self.extent
+    }
+
     /// The eased alpha, 0..1.
     #[must_use]
     pub fn alpha(&self) -> f32 {

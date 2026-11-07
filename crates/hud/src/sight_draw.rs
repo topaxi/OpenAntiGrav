@@ -87,10 +87,17 @@ pub fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> Vec<Draw
             leach,
             seeking: _,
             locked: _,
+            live,
         } if sight.held() == oag_race::sight::Held::LeachBeam => match leach {
-            Some(names) => leach_reveal_draws(cx, sight, *names, alpha),
+            Some(names) => leach_reveal_draws(cx, sight, *names, alpha, live.as_ref()),
             None => Vec::new(),
         },
+        oag_title::hud::Sights::Concentric {
+            seeking,
+            locked,
+            live: Some(live),
+            ..
+        } => missile_live_draws(cx, sight, seeking, locked, live, alpha),
         oag_title::hud::Sights::Concentric {
             seeking, locked, ..
         } => {
@@ -112,7 +119,12 @@ pub fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> Vec<Draw
                 INNER => -phase,
                 _ => 0.0,
             };
-            concentric_draws(cx, sight, set.iter().map(|name| (*name, turn(name))), alpha)
+            concentric_draws(
+                cx,
+                sight,
+                set.iter().map(|name| Ring::authored(name, turn(name))),
+                alpha,
+            )
         }
     }
 }
@@ -120,6 +132,7 @@ pub fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> Vec<Draw
 const OUTER: &str = "MissileSightOuter";
 const INNER: &str = "MissileSightInner";
 const MIDDLE: &str = "MissileSightMiddle";
+const LOCKED_MIDDLE: &str = "MissileSightLockedOnMiddle";
 
 /// The PSP dialect: four rotated brackets around a box, plus an optional inner.
 ///
@@ -193,32 +206,60 @@ fn bracket_draws(
     out
 }
 
+/// One ring of the concentric dialect: which widget, how it turns, and what of
+/// its authored look the runtime overrides.
+struct Ring<'a> {
+    name: &'a str,
+    rotation: f32,
+    /// A square side in pixels replacing the authored size, or `None`.
+    side: Option<f32>,
+    /// `[r, g, b, a]` replacing the authored colour, or `None` for the layout's own
+    /// colour dimmed by the reticle's blink.
+    colour: Option<[f32; 4]>,
+}
+
+impl<'a> Ring<'a> {
+    /// The widget as the layout authors it, turned by `rotation`.
+    fn authored(name: &'a str, rotation: f32) -> Self {
+        Self {
+            name,
+            rotation,
+            side: None,
+            colour: None,
+        }
+    }
+}
+
 /// The HD dialect: concentric sprites at the reticle's centre.
 ///
 /// **The layout carries the geometry.** Each widget's authored rectangle is a
 /// placeholder whose *size* is real - 128, 108, 80 and 64 pixels square - and
 /// whose position the runtime overwrites, exactly as the PSP models' is. So this
-/// keeps the authored size and its authored colour, and moves only the centre.
-///
-/// Nothing rotates: HD authors rings rather than corners, and there is no fourth
-/// copy of one asset for a rotation to differentiate.
+/// keeps the authored size and its authored colour unless the [`Ring`] says
+/// otherwise, and moves the centre.
 fn concentric_draws<'a>(
     cx: &Context<'_>,
     sight: &oag_race::sight::Sight,
-    names: impl Iterator<Item = (&'a str, f32)>,
+    rings: impl Iterator<Item = Ring<'a>>,
     alpha: f32,
 ) -> Vec<Draw> {
     let brightness = sight.brightness();
     let [cx_px, cy_px] = sight.centre();
     let mut out = Vec::new();
-    for (name, rotation) in names {
-        let Some(sprite) = cx.layout.sprites.iter().find(|s| s.name == name) else {
+    for ring in rings {
+        let Some(sprite) = cx.layout.sprites.iter().find(|s| s.name == ring.name) else {
             continue;
         };
         let Some(placed) = cx.sheet.get(&sprite.src) else {
             continue;
         };
-        let (w, h) = (sprite.rect[2], sprite.rect[3]);
+        let (w, h) = match ring.side {
+            Some(side) => (side, side),
+            None => (sprite.rect[2], sprite.rect[3]),
+        };
+        if w <= 0.0 || h <= 0.0 {
+            continue;
+        }
         let rect = [cx_px - w * 0.5, cy_px - h * 0.5, w, h];
         let uv = [
             placed.x as f32 + sprite.uv[0],
@@ -226,38 +267,155 @@ fn concentric_draws<'a>(
             sprite.uv[2],
             sprite.uv[3],
         ];
-        let color = [
-            sprite.color[0] * brightness,
-            sprite.color[1] * brightness,
-            sprite.color[2] * brightness,
-            sprite.color[3] * alpha,
-        ];
-        if rotation != 0.0 {
-            out.push(Draw::BlendedSprite {
-                rect,
-                uv,
-                color,
-                rotation,
-                blend: None,
-            });
-            continue;
-        }
-        out.push(Draw::Sprite {
-            rect,
-            uv,
-            // The layout's own colour, dimmed by the reticle's fade and its
-            // blink. HD authors these individually - a red outer, a green inner
-            // - so overwriting them with white would throw away real data.
-            color: [
+        // The layout's own colour, dimmed by the reticle's fade and its blink,
+        // unless the runtime writes one (`Image_SetVertexColours`).
+        let color = match ring.colour {
+            Some([r, g, b, a]) => [r, g, b, a * alpha],
+            None => [
                 sprite.color[0] * brightness,
                 sprite.color[1] * brightness,
                 sprite.color[2] * brightness,
                 sprite.color[3] * alpha,
             ],
-        });
+        };
+        if ring.rotation != 0.0 {
+            out.push(Draw::BlendedSprite {
+                rect,
+                uv,
+                color,
+                rotation: ring.rotation,
+                blend: None,
+            });
+        } else {
+            out.push(Draw::Sprite { rect, uv, color });
+        }
     }
     out
 }
+
+/// The fraction of `period` that `clock` has run through, `0..1`.
+fn sawtooth(clock: f32, period: f32) -> f32 {
+    (clock / period).fract().max(0.0)
+}
+
+/// HD's Missile sight as `Hud_UpdateMissileSight` was measured writing it
+/// (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`, "Measured live").
+///
+/// **Sizes** are the authored size times the law's half-extent over
+/// `unit.missile_extent_unit`: 340 px for the open `Outer`, 108.8 seeking, and
+/// once locked both rings at `Inner`'s seeking size. **Colours** are written
+/// every frame: `Outer` and `Inner` yellow while seeking and red once locked,
+/// the backdrop, `Middle` and `LockedOnLines` white, `LockedOnMiddle` red.
+/// **`Middle`** grows from nothing to half of `Outer` every quarter turn of the
+/// ring angle (`pi / 2` of it, `0.39` s) and its alpha climbs with it;
+/// **`LockedOnMiddle`** shrinks over a quarter second and `Outer`'s alpha climbs
+/// over `0.79` s once locked: both read off the sampled widget fields, their
+/// clocks chosen from the free-running ones this engine already carries.
+/// `Middle` is hidden at the lock; the original grows it to `Inner`'s size over
+/// a variable number of frames first (not ported).
+fn missile_live_draws(
+    cx: &Context<'_>,
+    sight: &oag_race::sight::Sight,
+    seeking: &[&'static str],
+    locked: &[&'static str],
+    live: &oag_title::hud::LiveSight,
+    alpha: f32,
+) -> Vec<Draw> {
+    use oag_race::sight::{EXTENT_SEEKING, RING_LOCKED_ANGLE};
+    let authored = |name: &str| {
+        cx.layout
+            .sprites
+            .iter()
+            .find(|s| s.name == name)
+            .map_or(0.0, |s| s.rect[2])
+    };
+    let scale = sight.extent() / live.missile_extent_unit;
+    let held = EXTENT_SEEKING / live.missile_extent_unit;
+    let white = [1.0, 1.0, 1.0, 1.0];
+    let yellow = [1.0, 1.0, 0.0, 1.0];
+    let red = [1.0, 0.0, 0.0, 1.0];
+    let mut rings = Vec::new();
+    if sight.locked() {
+        let inner = authored(INNER) * held;
+        let half_outer = authored(OUTER) * held * 0.5;
+        let pulse = sawtooth(sight.leach_cycle(), LOCKED_MIDDLE_PERIOD);
+        for name in seeking.iter().chain(locked.iter()).copied() {
+            let ring = match name {
+                MIDDLE => continue,
+                OUTER => Ring {
+                    name,
+                    rotation: -RING_LOCKED_ANGLE,
+                    side: Some(inner),
+                    colour: Some([
+                        red[0],
+                        red[1],
+                        red[2],
+                        sawtooth(sight.ring_phase(), LOCKED_OUTER_PERIOD).max(0.04),
+                    ]),
+                },
+                INNER => Ring {
+                    name,
+                    rotation: RING_LOCKED_ANGLE,
+                    side: Some(inner),
+                    colour: Some(red),
+                },
+                LOCKED_MIDDLE => Ring {
+                    name,
+                    rotation: 0.0,
+                    side: Some(half_outer * (1.0 - pulse)),
+                    colour: Some(red),
+                },
+                _ => Ring {
+                    name,
+                    rotation: 0.0,
+                    side: Some(authored(name) * held),
+                    colour: Some(white),
+                },
+            };
+            rings.push(ring);
+        }
+    } else {
+        let phase = sight.ring_phase();
+        let grown = sawtooth(phase, std::f32::consts::FRAC_PI_2);
+        for name in seeking.iter().copied() {
+            let ring = match name {
+                OUTER => Ring {
+                    name,
+                    rotation: phase,
+                    side: Some(authored(name) * scale),
+                    colour: Some(yellow),
+                },
+                INNER => Ring {
+                    name,
+                    rotation: -phase,
+                    side: Some(authored(name) * scale),
+                    colour: Some(yellow),
+                },
+                MIDDLE => Ring {
+                    name,
+                    rotation: 0.0,
+                    side: Some(authored(OUTER) * scale * 0.5 * grown),
+                    colour: Some([1.0, 1.0, 1.0, (0.12 + 1.24 * grown).min(1.0)]),
+                },
+                _ => Ring {
+                    name,
+                    rotation: 0.0,
+                    side: Some(authored(name) * scale),
+                    colour: Some(white),
+                },
+            };
+            rings.push(ring);
+        }
+    }
+    concentric_draws(cx, sight, rings.into_iter(), alpha)
+}
+
+/// The seconds `LockedOnMiddle` takes to shrink from half of `Outer` to nothing
+/// (eight frames at 30 Hz in the sampled run).
+const LOCKED_MIDDLE_PERIOD: f32 = 0.25;
+/// The seconds `Outer`'s alpha takes to climb from nothing to full once locked
+/// (about twenty-three frames at 30 Hz in the sampled run).
+const LOCKED_OUTER_PERIOD: f32 = std::f32::consts::FRAC_PI_4;
 
 /// HD/2048's own LeachBeam reticle: the backdrop plus one of its three rings,
 /// each owning one exclusive quarter of a looping half second.
@@ -274,6 +432,7 @@ fn leach_reveal_draws(
     sight: &oag_race::sight::Sight,
     names: [&'static str; 4],
     alpha: f32,
+    live: Option<&oag_title::hud::LiveSight>,
 ) -> Vec<Draw> {
     let t = sight.leach_cycle();
     let quarter = oag_race::sight::LEACH_CYCLE_SECONDS * 0.25;
@@ -287,7 +446,28 @@ fn leach_reveal_draws(
         None
     };
     let shown = [Some(names[0]), ring];
-    concentric_draws(cx, sight, shown.iter().flatten().map(|n| (*n, 0.0)), alpha)
+    let rings = shown.iter().flatten().map(|name| match live {
+        // `Hud_UpdateLeachBeamSight` writes the size and the colour of every
+        // ring: the authored size over the law's extent, and yellow turning red
+        // at the lock.
+        Some(live) => {
+            let authored = cx
+                .layout
+                .sprites
+                .iter()
+                .find(|s| s.name == *name)
+                .map_or(0.0, |s| s.rect[2]);
+            let [r, g, b] = sight.tint();
+            Ring {
+                name,
+                rotation: 0.0,
+                side: Some(authored * sight.extent() / live.leach_extent_unit),
+                colour: Some([r, g, b, 1.0]),
+            }
+        }
+        None => Ring::authored(name, 0.0),
+    });
+    concentric_draws(cx, sight, rings, alpha)
 }
 
 /// Where a `<Mode3D><Model>` widget's art sits in the sheet, by widget name.

@@ -669,3 +669,74 @@ fn locks_within(race: &mut race::Race, ticks: u32) -> bool {
     }
     false
 }
+
+/// Ticks from a reticle's first sighting to its lock on HD's starting grid, for
+/// `weapon` in slot 0's hand.
+fn hd_ticks_to_lock(weapon: oag_tables::weapons::Weapon) -> Option<(u32, u32)> {
+    use oag_race::sight;
+
+    let image = image_named("hdfury-ps3-eu-dec.iso")?;
+    let loaded = race_on(&image);
+    let mut race = race::Race::start(loaded.setup);
+    for _ in 0..30 {
+        race.tick(&PlayerInputs::none());
+    }
+    race.sim.world.ships[0].pickup.weapon = Some(weapon);
+    let (mut first_seen, mut locked) = (None, None);
+    for tick in 0..240u32 {
+        race.tick(&PlayerInputs::none());
+        match race.sight_state() {
+            sight::State::Absent => {}
+            sight::State::Seeking => {
+                first_seen.get_or_insert(tick);
+            }
+            sight::State::Locked => {
+                first_seen.get_or_insert(tick);
+                locked.get_or_insert(tick);
+            }
+        }
+        if locked.is_some() {
+            break;
+        }
+    }
+    Some((first_seen?, locked?))
+}
+
+/// HD's LeachBeam reticle locks `0.34` s after its first sighting, not the
+/// Missile's `0.8` s.
+///
+/// Measured on the original (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`,
+/// "Measured live"): the rings close from `3.41x` to `0.68x` of their authored size
+/// at `1,400` px a second and turn red on arrival, which is `PSP`'s
+/// `FUN_0881e8c8` in `30 -> 6` extent units at `70` a second. Before it, this
+/// engine ran the Missile's `0.8` s hold on HD's LeachBeam: `48` ticks.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_leachbeam_locks_in_its_closing_time_not_the_missiles_hold() {
+    let Some((seen, locked)) = hd_ticks_to_lock(oag_tables::weapons::Weapon::LeachBeam) else {
+        return;
+    };
+    let ticks = locked - seen;
+    println!("HD LeachBeam: seen at tick {seen}, locked {ticks} ticks later");
+    assert!(
+        (19..=24).contains(&ticks),
+        "locked {ticks} ticks ({} s) after the first sighting; the original takes 0.34 s",
+        f64::from(ticks) / 60.0
+    );
+}
+
+/// HD's Missile reticle locks `0.8` s after its first sighting: `hud+0xec` past the
+/// literal `0.8`, `24` frames of the sampled `1/30` s run and `48` ticks here.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_missile_locks_after_the_point_eight_second_hold() {
+    let Some((seen, locked)) = hd_ticks_to_lock(oag_tables::weapons::Weapon::Missile) else {
+        return;
+    };
+    let ticks = locked - seen;
+    println!("HD Missile: seen at tick {seen}, locked {ticks} ticks later");
+    assert!(
+        (47..=50).contains(&ticks),
+        "locked {ticks} ticks after the first sighting"
+    );
+}

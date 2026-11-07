@@ -522,8 +522,11 @@ impl Race {
                     // `entity+0x860 & 1`, the flag `HudSight_UpdateLeachBeam` sets
                     // when its extent reaches `6.0`, about `0.34` s after a first
                     // sighting; before that it passes `(0, -1)`, the unlocked arm.
-                    // Wipeout HD's LeachBeam reticle is a different function, so it
-                    // keeps firing off the window alone. An opponent has no reticle.
+                    // HD's own update closes its rings over the same `0.34` s and
+                    // turns them red there, so it takes the same gate (inherited
+                    // from the PSP: HD's fire path was not read for it). A title
+                    // whose reticle keeps the Missile's law fires off the window
+                    // alone. An opponent has no reticle.
                     //
                     // **Every person-flown slot holds the lock.** The
                     // [`Race::sight_target`] window is computed for `slot` itself,

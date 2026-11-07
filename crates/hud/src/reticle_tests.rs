@@ -208,6 +208,7 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
         ],
         locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
         leach: None,
+        live: None,
     },
     pickup_backdrop_colour: None,
     pickup_colours: None,
@@ -299,6 +300,7 @@ static HD_LEACH_ART: oag_title::HudArt = oag_title::HudArt {
             "LeachBeamSightMiddle",
             "LeachBeamSightInner",
         ]),
+        live: None,
     },
     pickup_backdrop_colour: None,
     pickup_colours: None,
@@ -1124,4 +1126,204 @@ fn a_ps2_reticle_is_stretched_into_its_grid_and_untinted() {
     let outer: Vec<_> = sizes.iter().filter(|s| s[0].min(s[1]) == 7.0).collect();
     assert_eq!(outer.len(), 4, "{sizes:?}");
     assert!(sizes.contains(&[15.0, 10.5]), "{sizes:?}");
+}
+
+/// HD's sight axis as `oag_hd::hud::ART` carries it: the run-time law measured.
+static LIVE_SIGHTS: oag_title::hud::Sights = oag_title::hud::Sights::Concentric {
+    seeking: &[
+        "MissileSightBG",
+        "MissileSightOuter",
+        "MissileSightInner",
+        "MissileSightMiddle",
+    ],
+    locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
+    leach: Some([
+        "LeachBeamSightBG",
+        "LeachBeamSightOuter",
+        "LeachBeamSightMiddle",
+        "LeachBeamSightInner",
+    ]),
+    live: Some(oag_title::hud::LiveSight {
+        missile_extent_unit: 30.0 / 2.65625,
+        leach_extent_unit: 30.0 / 3.40909,
+    }),
+};
+
+fn live_art() -> &'static oag_title::HudArt {
+    Box::leak(Box::new(oag_title::HudArt {
+        sights: &LIVE_SIGHTS,
+        ..HD_ART
+    }))
+}
+
+fn authored_width(layout: &Layout, name: &str) -> f32 {
+    layout
+        .sprites
+        .iter()
+        .find(|s| s.name == name)
+        .unwrap_or_else(|| panic!("{name} is not in the fixture"))
+        .rect[2]
+}
+
+/// Seeking, HD writes `Outer` and `Inner` yellow and sizes them off the law's
+/// extent (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`, "Measured live"):
+/// 108.8 px on the 128 px `Outer` at the seeking extent, never the authored red
+/// and green at the authored size.
+#[test]
+fn hd_seeking_rings_are_yellow_and_sized_off_the_extent() {
+    let layout = Layout::from_xml(HD_SIGHTS);
+    let sheet = hd_sheet();
+    let strings = strings();
+    let mut reticle = sight::Sight::new([1920.0, 1080.0]);
+    let target = sight::Projected {
+        screen: [700.0, 400.0],
+        distance: 60.0,
+    };
+    for _ in 0..30 {
+        reticle.update(1.0 / 60.0, Some(target));
+    }
+    assert!(
+        !reticle.locked(),
+        "the fixture was meant to still be seeking"
+    );
+    let readout = Readout {
+        sight: Some(reticle),
+        ..Readout::blank()
+    };
+    let art = live_art();
+    let frame = draw_list(&context_with(&layout, &strings, &sheet, art), &readout);
+    let turning: Vec<_> = frame
+        .sprites
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::BlendedSprite { rect, color, .. } => Some((rect[2], *color)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(turning.len(), 2, "{frame:?}");
+    let unit = 30.0 / 2.65625;
+    let want = authored_width(&layout, "MissileSightOuter") * reticle.extent() / unit;
+    assert!(
+        (turning[0].0 - want).abs() < 0.01,
+        "{turning:?} wanted {want}"
+    );
+    assert!(
+        (reticle.extent() - sight::EXTENT_SEEKING).abs() < 0.01,
+        "{}",
+        reticle.extent()
+    );
+    for (_, colour) in &turning {
+        assert_eq!(&colour[..3], &[1.0, 1.0, 0.0], "{turning:?}");
+    }
+}
+
+/// Locked, both rings are red at `Inner`'s seeking size and parked at `-+30`
+/// degrees, the `Middle` ring is gone and `LockedOnLines` is white.
+#[test]
+fn hd_locked_rings_are_red_at_the_inners_size() {
+    let layout = Layout::from_xml(HD_SIGHTS);
+    let sheet = hd_sheet();
+    let strings = strings();
+    let mut reticle = sight::Sight::new([1920.0, 1080.0]);
+    let target = sight::Projected {
+        screen: [700.0, 400.0],
+        distance: 60.0,
+    };
+    for _ in 0..600 {
+        if reticle.update(1.0 / 60.0, Some(target)) == sight::State::Locked {
+            break;
+        }
+    }
+    assert!(reticle.locked(), "the reticle never locked");
+    for _ in 0..30 {
+        reticle.update(1.0 / 60.0, Some(target));
+    }
+    let readout = Readout {
+        sight: Some(reticle),
+        ..Readout::blank()
+    };
+    let art = live_art();
+    let frame = draw_list(&context_with(&layout, &strings, &sheet, art), &readout);
+    let turning: Vec<_> = frame
+        .sprites
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::BlendedSprite {
+                rect,
+                color,
+                rotation,
+                ..
+            } => Some((rect[2], *color, *rotation)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(turning.len(), 2, "{frame:?}");
+    let unit = 30.0 / 2.65625;
+    let want = authored_width(&layout, "MissileSightInner") * sight::EXTENT_SEEKING / unit;
+    for (width, colour, _) in &turning {
+        assert!((width - want).abs() < 0.01, "{turning:?} wanted {want}");
+        assert_eq!(&colour[..3], &[1.0, 0.0, 0.0], "{turning:?}");
+    }
+    assert!((turning[0].2 + sight::RING_LOCKED_ANGLE).abs() < 1e-6);
+    let middle = authored_width(&layout, "MissileSightMiddle");
+    assert!(
+        plain(&frame)
+            .iter()
+            .all(|(rect, _)| (rect[2] - middle).abs() > 0.01),
+        "{frame:?}"
+    );
+}
+
+/// HD's LeachBeam rings are sized off the extent and are yellow until the lock,
+/// red after: `0.34` s from a first sighting, the PSP's own closing.
+#[test]
+fn hd_leachbeam_rings_close_and_turn_red_at_the_lock() {
+    let layout = Layout::from_xml(HD_LEACH_SIGHTS);
+    let sheet = hd_leach_sheet();
+    let strings = strings();
+    let art = live_art();
+    let mut reticle = sight::Sight::new([1920.0, 1080.0]);
+    reticle.set_held(sight::Held::LeachBeam);
+    reticle.set_leach_law(true);
+    let target = sight::Projected {
+        screen: [700.0, 400.0],
+        distance: 60.0,
+    };
+    let backdrop = |reticle: &sight::Sight| {
+        let readout = Readout {
+            sight: Some(*reticle),
+            ..Readout::blank()
+        };
+        let drawn = plain(&draw_list(
+            &context_with(&layout, &strings, &sheet, art),
+            &readout,
+        ));
+        drawn[0]
+    };
+    let unit = 30.0 / 3.40909;
+    let open = authored_width(&layout, "LeachBeamSightBG") * sight::EXTENT_OPEN / unit;
+    let (rect, colour) = backdrop(&{
+        reticle.update(1.0 / 60.0, Some(target));
+        reticle
+    });
+    assert!(
+        rect[2] < open && rect[2] > open * 0.9,
+        "{rect:?} open {open}"
+    );
+    assert_eq!(&colour[..3], &[1.0, 1.0, 0.0]);
+
+    let mut ticks = 1;
+    while !reticle.locked() {
+        reticle.update(1.0 / 60.0, Some(target));
+        ticks += 1;
+        assert!(ticks < 120, "the LeachBeam never locked");
+    }
+    assert!(
+        (19..=23).contains(&ticks),
+        "locked after {ticks} ticks, not the closing 0.34 s"
+    );
+    let (rect, colour) = backdrop(&reticle);
+    let closed = authored_width(&layout, "LeachBeamSightBG") * sight::LEACH_EXTENT_CLOSED / unit;
+    assert!((rect[2] - closed).abs() < 0.01, "{rect:?} closed {closed}");
+    assert_eq!(&colour[..3], &[1.0, 0.0, 0.0]);
 }

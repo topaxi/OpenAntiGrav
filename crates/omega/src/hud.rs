@@ -273,6 +273,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "LeachBeamSightMiddle",
             "LeachBeamSightInner",
         ]),
+        live: None,
     },
     pickup_backdrop_colour: None,
     pickup_colours: Some(PICKUP_COLOURS),

@@ -156,6 +156,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "LeachBeamSightMiddle",
             "LeachBeamSightInner",
         ]),
+        live: None,
     },
     // `None` is "draw what the layout authors", which is the conservative
     // answer for a title whose pickup backdrop colour nothing has measured -
