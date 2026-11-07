@@ -821,7 +821,7 @@ fn one(
         vertex_decl::FLOAT2
     };
     let diffuse = own
-        .and_then(|decl| decl.own_diffuse_texcoord(half_type))
+        .and_then(|decl| decl.own_diffuse_texcoord(half_type, float_type))
         .filter(|attr| ps4 || attr.gxm_type == half_type || attr.gxm_type == float_type);
     if let Some(attr) = diffuse {
         let off = usize::from(attr.offset);
