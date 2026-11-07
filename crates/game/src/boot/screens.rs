@@ -760,6 +760,10 @@ pub struct PauseScreens {
 /// [`oag_title::PauseMenu::screens`] with the chrome screen behind it, laid out as the disc
 /// authors them. Empty for a title that names no layout, and for one whose file will not read
 /// (said in `report`, and the page is then the front end's own list).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each is read from a different place in `load_shell`"
+)]
 pub(super) fn read_pause_screens(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
