@@ -310,6 +310,8 @@ pub mod tournament;
 pub mod track_panel;
 mod view;
 #[cfg(feature = "view")]
+pub mod viewer;
+#[cfg(feature = "view")]
 mod viewpoint;
 #[cfg(feature = "view")]
 mod visibility;

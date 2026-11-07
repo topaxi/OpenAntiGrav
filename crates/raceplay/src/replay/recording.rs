@@ -96,6 +96,13 @@ impl Race {
         });
     }
 
+    /// Stops recording and drops the ghost: a race that plays a recording back is not a run, so
+    /// it keeps no lap, and nothing it does can be written as a ghost or a replay.
+    pub fn stop_recording(&mut self) {
+        self.replay.recording = None;
+        self.replay.ghost = None;
+    }
+
     /// Whether this race is being recorded.
     #[must_use]
     pub fn recording(&self) -> bool {
