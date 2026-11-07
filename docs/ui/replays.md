@@ -156,8 +156,7 @@ dialect that cannot draw it would be a cursor stop with nothing on it.
 ## Per title
 
 Each title: a Time Trial flown by the Autopilot, 1,794 to 2,401 ticks, recorded through the menus
-and watched through the list, frames of the page, a playing replay, and seeks of 5 seconds (`--drive`,
-`data/scratch/replay-viewer/ev-<title>/`): Pulse (PSP, EU), Pure (PSP, EU), HD (PS3, EU),
+and watched through the list, frames of the page, a playing replay, and seeks of 5 seconds (`--drive`, no window): Pulse (PSP, EU), Pure (PSP, EU), HD (PS3, EU),
 2048 (Vita, EU, extracted package, from the race box), Omega (PS4, EU). All five rebuild at tick zero, play, seek and pause.
 2048's recording through its own campaign event is refused at tick zero (the table above).
 
