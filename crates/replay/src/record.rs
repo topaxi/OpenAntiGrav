@@ -33,6 +33,7 @@ impl Recorder {
                 initial_hash,
                 hashes: Vec::new(),
                 ghost: None,
+                pose_track: None,
                 events: Vec::new(),
             },
         }
