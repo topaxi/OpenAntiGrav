@@ -269,13 +269,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // Two failures, two lines, for the reason `<Global>` above gives at length.
     let weapons = assets::load_weapons(&mut archives, title, options.mode, &mut report);
     let weapon_ai = assets::load_weapon_ai(&mut archives, title, &mut report);
-    let (score_law, eliminator_kill_target) = crate::score_law::of(
-        options,
-        title,
-        weapon_ai.as_ref(),
-        &mut archives,
-        &mut report,
-    );
+    let rule = crate::score_law::of(options, title, &weapon_ai, &mut archives, &mut report);
     if options.weapons_on() && weapons.is_none() {
         // Only worth saying on a mode that would otherwise hand something out.
         report.push("weapon pads hand nothing out this run".to_string());
@@ -1123,7 +1117,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         platform: archives.layout.platform,
         setup: Setup {
             mode: options.mode,
-            eliminator_kill_target,
+            eliminator_kill_target: rule.target,
             laps_override: options.laps_override,
             weapons_override: options.weapons_override,
             difficulty: options.difficulty,
@@ -1313,7 +1307,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             autopilot_pad_grants: title.weapons.autopilot_pad_grants.value,
             reset_triggers: crate::respawn::reset_triggers_for(&title.reset_enables),
             opponent_fire: title.weapons.opponent_fire.value,
-            score_law,
+            score_law: rule.law,
             speedup_pads,
             weapon_pads,
             weapons,

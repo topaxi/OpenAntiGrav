@@ -6,20 +6,28 @@
 use oag_tables::race_campaign::Difficulty;
 use oag_title::eliminator::EliminatorRule;
 
+/// A race's Eliminator rule, resolved.
+pub(crate) struct Resolved {
+    /// The awards, `None` for a race won on kills.
+    pub(crate) law: Option<oag_race::ScoreLaw>,
+    /// The target, `None` for the mode's default.
+    pub(crate) target: Option<u32>,
+}
+
 /// The race's rule and target, once, at load.
 pub(crate) fn of(
     options: &crate::Options,
     title: &oag_title::Title,
-    stats: Option<&oag_tables::weapons::ai::WeaponAiStats>,
+    stats: &Option<oag_tables::weapons::ai::WeaponAiStats>,
     archives: &mut oag_assets::Archives,
     report: &mut Vec<String>,
-) -> (Option<oag_race::ScoreLaw>, Option<u32>) {
+) -> Resolved {
     let rule = title.eliminator.value;
     let chosen = options.eliminator_kill_target;
-    (
-        resolve(rule, stats, options.difficulty),
-        target(chosen, rule, options.mode, archives, report),
-    )
+    Resolved {
+        law: resolve(rule, stats.as_ref(), options.difficulty),
+        target: target(chosen, rule, options.mode, archives, report),
+    }
 }
 
 /// The awards `rule` gives at `difficulty`. A table with no `<EliminatorAIStats>` row leaves an
