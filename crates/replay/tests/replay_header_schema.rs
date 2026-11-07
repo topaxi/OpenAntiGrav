@@ -86,10 +86,17 @@ fn head(bytes: &[u8]) -> String {
     String::from_utf8(text).unwrap()
 }
 
-/// Writes the fixture: `cargo nextest run -p oag-replay --run-ignored all writes_the_fixture`.
+/// Writes the fixture:
+/// `OAG_WRITE_FIXTURE=1 cargo nextest run -p oag-replay --run-ignored all writes_the_fixture`.
+///
+/// `just test-data` runs every ignored test, so without the variable this returns early: it
+/// would hide a stale fixture, and its truncating write races the test that reads the file.
 #[test]
-#[ignore = "regenerates tests/fixtures/replay-header.toml"]
+#[ignore = "regenerates tests/fixtures/replay-header.toml when OAG_WRITE_FIXTURE is set"]
 fn writes_the_fixture() {
+    if std::env::var_os("OAG_WRITE_FIXTURE").is_none() {
+        return;
+    }
     let path =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/replay-header.toml");
     std::fs::write(path, head(&populated().to_bytes())).unwrap();
