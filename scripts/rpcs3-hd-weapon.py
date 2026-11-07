@@ -135,8 +135,8 @@ def main():
     ap.add_argument("--countdown", type=float, default=22.0)
     ap.add_argument("--shot-at", default="", help="game seconds after the shot to pause and photograph, comma separated")
     ap.add_argument("--restart", action="store_true",
-                    help="attached: Restart Race from the pause menu first, so the shot is on a fresh grid (the lap clock "
-                         "of a race left running reads minutes, and ours would have to run as many ticks)")
+                    help="attached: Restart Race from the pause menu first, so the shot is on a fresh grid. UNRELIABLE on a loaded "
+                         "host (the blind presses drop; its one run timed out): restart by hand with one press at a time instead")
     ap.add_argument("--hold", type=float, default=0.5, help="seconds the button is held in the paused-frame mode; a loaded host drops a short press")
     ap.add_argument("--fire-after", type=float, default=3.0,
                     help="lap-clock seconds to let pass before the shot: a press in the first second after GO fired nothing")

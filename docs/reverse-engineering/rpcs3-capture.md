@@ -982,6 +982,9 @@ named, and a row below 80 says why:
 | 5 | Shield | readout 0; absorb-style blue glow, state spent | 70 |
 | 7 | Plasma | readout 60 = Plasma's `damage`; fire handler sets bit `0x4`, the id `Weapon_FirePlasma` uses | 80 |
 | 8 | Cannon | the HUD announces **"Machine Gun"**; readout 5 | 90 |
+
+**Caveat (2026-11-07, `hd-weapons-2`):** on two grids a state-8 shot also drew a green-cyan shell around the whole craft that stayed for many seconds, with no muzzle flash; which weapon that is, or whether the Cannon draws it, is unresolved (`ps3-hdfury-eu/weapons.md`, "The other weapons against the original").
+
 | **9** | **Bomb** | readout 15 = Bomb's `damage`; fired, a red-and-white bomb sits on the track, ringed, and detonates | **90** |
 | 1 | Missile | readout 15; the later row below (a projectile with five bounces, a hit that fills the explosion pool) | 70 |
 | **2** | **Quake** | readout 15; `Weapon_FireFromSlot`'s state-2 handler (`0x0012daa0`) sets slot `+0x200` bit `0x8`, which `QuakeManager_Fire` (`0x00147d18`) clears, and the live `g_quake` block (`0x00ae98c0`) runs (speed `270`, age, amplitude) the moment it is fired. `scripts/rpcs3-hd-quake.py`, `docs/ghidra/functions/ps3-hdfury-eu/quake.md` | **90** |

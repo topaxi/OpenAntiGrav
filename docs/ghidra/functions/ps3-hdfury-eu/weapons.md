@@ -1531,13 +1531,15 @@ the pushbuffer: eye, forward, up, fov 60.0006) and lap-clock second (`scripts/hd
   and the loader says so. The head model keeps its authored size (about 10 px at this distance): in the
   original frames nothing a player sees is that small, and the model's own scale and placement stay
   **chosen, not measured**.
-- **Omega / 2048.** Omega's `Effects.sprites` is empty (the list is an HD gate); whether its own
-  `WO_MISSILE_HEAD` has the same ring atlas is **not checkable here**: the extracted Omega tree names no
-  `.pob` or `.gnf` (hashed), and nobody has watched an Omega Missile fly. 2048 names no Missile head effect.
-- **Test.** `the_missile_head_draws_its_ring_atlas_when_listed_and_a_white_disc_when_not`
-  (`crates/raceplay/src/tests/hd_effect_sprites.rs`, disc-backed): both head emitters read the atlas when the
-  title lists the effect and none when it does not, so dropping the list entry fails it;
-  `only_hd_lists_effects_whose_gtf_sprites_play` pins the list.
+- **Omega / 2048: checked, applies, no pixel check.** `Effects.sprites` is an HD (`.gtf`) gate only:
+  `oag_raceplay::assets::particle_effect` reads `.gnf` (PS4) and `.gxt` (Vita) sprites for every effect
+  ungated, so an Omega or 2048 `WO_MISSILE_HEAD` draws whatever atlas its own `.pob` names. Whether Omega
+  ships the same ring atlas, and how its Missile looks, was not measured: nobody has a shadPS4 frame of an
+  Omega Missile in flight.
+- **Tests.** `only_hd_lists_effects_whose_gtf_sprites_play` pins the list entry: dropping `WO_MISSILE_HEAD` from
+  `SPRITES` fails it. `the_missile_head_draws_its_ring_atlas_when_listed_and_a_white_disc_when_not`
+  (`crates/raceplay/src/tests/hd_effect_sprites.rs`, disc-backed) pins what the entry does: the two head
+  emitters decode the atlas when listed and none does when not. The picture is judged by the pair above.
 
 ### The other weapons against the original (same grid, same camera, `hd-weapons-2`)
 
@@ -1545,13 +1547,14 @@ One RPCS3 grid, a weapon given by the pickup slot (`scripts/rpcs3-hd-weapon.py -
 paused frames each, ours rendered at the original's pose, camera and fire second
 (`scripts/hd-weapon-pair.py`). **A shot's effect can outlast it**: state 8 left a green shell around the
 craft that was still drawn at the next weapon, so a weapon fired after another on the same grid is not a
-clean frame (the first Plasma, Rocket and Bomb frames taken that way were discarded and retaken).
+clean frame (the first Plasma and Rocket frames taken that way were discarded and retaken; the Bomb and LeachBeam
+ones were not retaken).
 
 | Weapon (state) | Same moment | Differences | Status |
 | --- | --- | --- | --- |
 | Missile (1) | lap clock 2.27, 2.55, 2.87 | rings drawn since this change; orbit wider; ribbon undrawn | fixed (rings), ribbon named |
 | Rocket (0) | 4.67, 4.92, 5.32 | three flames and three smoke trails in both, rockets level by 0.8 s; the original's trails are blue-grey and fan wider, ours white and tight (the ribbon vertex colour is chosen, `particle-triggers.md`); ours leaves the nose 0.1 s behind (one big white flash where the original shows three flames) | named |
-| Plasma (7) | 10.42, 10.67, 11.05 | the ring-and-ball at the nose matches; the original adds purple lightning rays and a forward blue ripple wave by 0.4 s that ours does not draw: `WO_PLASMA_LAUNCH`'s trigger is the unwired effect (no recovered caller), so it stays undrawn | named |
+| Plasma (7) | 10.42, 10.67, 11.05 | the ring-and-ball at the nose matches; the original adds purple lightning rays and a forward blue ripple wave by 0.4 s that ours does not draw. **Candidates, not a cause:** `WO_PLASMA_LAUNCH` (no recovered caller), `WO_PLASMA_CHARGING` (unwired), or `WO_PLASMA_LIGHTNING_EXPAND` (wired) not playing at these ticks in ours. The original's button was held about 0.5 s and ours' for one tick, which matters for a charging weapon. **The brief's growing-sphere question stays open**: the clean frames stop at 0.8 s | named, open |
 | Cannon (8) | 2.28, 2.42, 2.67 | **the original draws a green-cyan shell around the whole craft for many seconds, not a muzzle flash**; ours a small spark; the HUD names it "Machine Gun" with damage 5. Whether state 8's visual is the Cannon's own or a shield-like effect is unresolved | named, open |
 | Bomb (9), Mine, LeachBeam (10) | | frames taken on a grid carrying the state-8 shell and a displaced craft: unusable | not paired; command in the thread |
 | Detonator's weapons | | deferred with the mode | undrawn, named |
