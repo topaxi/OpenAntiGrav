@@ -298,7 +298,7 @@ wasm32-unknown-unknown` builds with the pass.
 
 **Not here, named:** HD's and 2048's **motion blur** (track and ship, a 120-frame accumulation whose
 shutter is `(v * 0.01)^2 * 0.25`) and **accumulated** depth of field (7 frames): how a craft's motion gets
-into either on a frozen race was never read and the simulation must not tick, so they stay out. 2048's own
+into either on a frozen race was never read and the simulation must not tick, so they stay out. [ADR-0087](../architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md) designs both, and a rewind, over a copy of the race (a `Timeline`) so the live race never ticks: accumulated depth of field is the same tick drawn again with the lens moved, and motion blur is the copy stepped through the shutter's ticks (**chosen, not measured**: the original's mapping of frames to time is still unread). Not built. 2048's own
 depth of field law (`(a * 0.01)^2 * 900 + 100` for the blur, a cubic for the focus) differs from HD's; HD's
 is used. Also left open: split screen, the photo counter stat, touch gestures, saving on a page or a phone,
 HD's real `close` rest offset, and a shot at the scene's own pixels (the file is the presentation target,
