@@ -110,7 +110,7 @@ struct Row<'a> {
 
 enum Kind<'a> {
     Block(&'a BlockWidget, &'a Text),
-    List(&'a ListWidget, &'a Text),
+    List(&'a ListWidget),
 }
 
 /// Every widget of `screen` that has a row on the page, in the screen's own order, with that
@@ -144,14 +144,12 @@ fn rows<'a>(screen: &'a PauseScreen, table: &PauseMenu, menu: &Menu) -> Vec<Row<
         }
     }
     for list in screen.lists() {
-        if let Some(text) = screen.label_of(list.name.as_deref())
-            && let Some(row) = row_for(text)
-        {
+        if let Some(row) = row_for(&list.label) {
             out.push((
                 list.y,
                 Row {
                     row,
-                    kind: Kind::List(list, text),
+                    kind: Kind::List(list),
                 },
             ));
         }
@@ -243,12 +241,11 @@ pub fn draw_list(
                 frame,
                 &mut body,
             ),
-            Kind::List(widget, text) => {
+            Kind::List(widget) => {
                 if let Some(numbers) = numbers {
                     list_draw(
                         &screen.screen,
                         widget,
-                        text,
                         entry,
                         menu,
                         (selected, focus, lit),
@@ -355,7 +352,6 @@ fn dimmed(mut draw: Draw) -> Draw {
 fn list_draw(
     layout: &Layout,
     widget: &ListWidget,
-    text: &Text,
     entry: &Entry,
     menu: &Menu,
     (selected, focus, _lit): (bool, f32, bool),
@@ -417,7 +413,7 @@ fn list_draw(
             });
         }
     }
-    let mut label_text = text.clone();
+    let mut label_text = widget.label.clone();
     // The disc authors a list's label in `font="small"`; the original's frame draws it at the
     // block labels' size and face (measured, RPCS3), so it takes theirs.
     label_text.font = "default".to_string();
@@ -465,7 +461,7 @@ pub fn regions(screen: &PauseScreen, table: &PauseMenu, menu: &Menu, skin: &Skin
                     widget.height,
                 ],
             }),
-            Kind::List(widget, _) => {
+            Kind::List(widget) => {
                 let Some(numbers) = numbers else {
                     continue;
                 };

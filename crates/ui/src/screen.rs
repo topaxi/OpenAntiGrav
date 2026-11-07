@@ -421,7 +421,7 @@ pub struct Screen {
     pub texts: Vec<Text>,
     /// The box half of every `<Block>` (label in [`Self::texts`]).
     pub blocks: Vec<BlockWidget>,
-    /// The row half of every `<List>` (label in [`Self::texts`]).
+    /// Every `<List>` widget (its label is the widget's own, not in [`Self::texts`]).
     pub lists: Vec<ListWidget>,
     /// Every `<Mode3D>`'s `<Model>`s, in document order.
     pub models: Vec<Mode3dModel>,
@@ -868,14 +868,11 @@ impl Screens {
                     .blocks
                     .push(self.block_widget_from_node(child, inner));
             }
-            // A `List` is the settings row: the label is a `Text` as a `Block`'s is, and
-            // the row half lands in [`Screen::lists`].
-            "list" => {
-                let mut text = self.text_from_node(child, viewport_width, inner);
-                text.transition = transition;
-                screen.texts.push(text);
-                screen.lists.push(self.list_widget_from_node(child, inner));
-            }
+            // A `List` is the settings row; it lands in [`Screen::lists`] and nowhere else, so a
+            // screen drawn from its texts gains nothing.
+            "list" => screen
+                .lists
+                .push(self.list_widget_from_node(child, viewport_width, inner)),
             "mode3d" => screen.models.extend(self.mode3d_models_from_node(child)),
             "redirect" => screen.redirects.push(widgets::redirect_from_node(child)),
             "touchbutton" => screen

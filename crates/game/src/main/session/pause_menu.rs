@@ -97,15 +97,26 @@ impl Session {
     }
 
     /// A setting the pause screen's own lists changed (PILOT ASSIST, GHOST) reaches the parked
-    /// race now rather than at the next one. Ghost visibility is read every frame from the
-    /// settings; Pilot Assist is the level the race flies with, and a run that switches it
+    /// race now rather than at the next one. Ghost visibility is set on it at once and read
+    /// again every frame from the settings; Pilot Assist is the level the race flies with, and a run that switches it
     /// mid-race stops recording, so no replay or ghost lap claims laws it did not fly under.
     pub(crate) fn apply_pause_setting(&mut self, setting: &str) {
         let on_pause_page = matches!(
             &self.stage,
             Stage::Menu(stage) if stage.menu.page().id == oag_ui::menu::PAUSE_PAGE
         );
-        if !on_pause_page || setting != "controls.pilot_assist" {
+        if !on_pause_page {
+            return;
+        }
+        if setting == "display.ghost_ship_visible" {
+            if let (Some(shell), Some(parked)) = (&self.shell, self.suspended_race.as_mut()) {
+                parked
+                    .race
+                    .set_ghost_visible(self.settings.display.ghost_ship_shown(shell.title));
+            }
+            return;
+        }
+        if setting != "controls.pilot_assist" {
             return;
         }
         let level = self.settings.controls.pilot_assist;

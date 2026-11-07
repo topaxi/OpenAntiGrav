@@ -1103,9 +1103,10 @@ fn a_block_keeps_its_text_colour() {
 }
 
 /// HD's `<List>` is a row of its own: where it sits, the entries by `idstring` in the order the
-/// file lists them, and the inks its `Values` name, with the label also a `Text` named for it.
+/// file lists them, the inks its `Values` name and its label, which is the widget's and not one
+/// of the screen's texts (a screen drawn from its texts gains nothing from its lists).
 #[test]
-fn a_list_widget_lands_in_lists_beside_its_label_text() {
+fn a_list_widget_lands_in_lists_and_adds_no_text_to_the_screen() {
     let screens = Screens::from_xml_with_fallback_globals(
         r#"<Screen name="Pause">
 <List name="Pilot Assist" global="Pilot Assist" default="FE_OFF">
@@ -1125,10 +1126,6 @@ fn a_list_widget_lands_in_lists_beside_its_label_text() {
     assert_eq!(list.default.as_deref(), Some("FE_OFF"));
     assert_eq!(list.active_color, Some(0xff8a_c0ca));
     assert_eq!(list.inactive_color, Some(0xff64_6464));
-    let label = screen
-        .texts
-        .iter()
-        .find(|text| text.name.as_deref() == Some("Pilot Assist"))
-        .expect("its label");
-    assert_eq!(label.idstring.as_deref(), Some("FE_PILOT_ASSIST"));
+    assert_eq!(list.label.idstring.as_deref(), Some("FE_PILOT_ASSIST"));
+    assert!(screen.texts.is_empty(), "{:?}", screen.texts);
 }
