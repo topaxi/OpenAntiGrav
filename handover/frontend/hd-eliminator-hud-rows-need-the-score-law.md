@@ -21,8 +21,6 @@ summary: "HD Eliminator is scored and its rows draw; the results screen's POINTS
   every Racebox race runs on the minimum.
 - **`ScoreFeedBack0-15`.** Authored and read, never caught in a frame.
 - **Opponent lap refill.** Ours refills every craft; on HD an AI's shield did not move on any lap.
-- **The marker half turn:** `Hud_UpdateRaceLine` rotates a marker by pi when `craft+0x6ad8` is
-  set; the byte is unidentified (it also gates the absorb in `weapon-ai-fire.md`). Markers are upright.
 - **Not captured:** the split-screen Eliminator pair (`splitscreen_elimination_hud_{0,1}.xml`, same
   widgets, unchecked).
 - **2048 and Omega: checked, applies, not wired.** Both keep the kill rule, inherited from Pulse.
@@ -31,7 +29,8 @@ summary: "HD Eliminator is scored and its rows draw; the results screen's POINTS
 - **Ours reaches the target about four times sooner.** The original's Novice race took ten laps
   to reach 200; ours on the same circuit and seed-free setup was over by tick 6000, about three
   laps. The awards match row for row, so the likely cause is how often our field lands a kill,
-  not the law. Unmeasured.
+  not the law. Unmeasured. Re-measure the pace first: pads stopped disarming after the 3-laps
+  reading, so the supply went up.
 - **`--race` ends on this build's own board** (`RACE COMPLETE`, the person first). That is the
   capture path; the front end's results are the first item above.
 
