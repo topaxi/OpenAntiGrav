@@ -107,8 +107,8 @@ impl Session {
 
     /// A setting the pause screen's own lists changed (PILOT ASSIST, GHOST) reaches the parked
     /// race now rather than at the next one. Ghost visibility is set on it at once and read
-    /// again every frame from the settings; Pilot Assist is the level the race flies with, and a run that switches it
-    /// mid-race stops recording, so no replay or ghost lap claims laws it did not fly under.
+    /// again every frame from the settings; Pilot Assist is the level the race flies with, and a mid-race change is
+    /// an event in the recording, so a replay or ghost lap flies the laws it was recorded under.
     pub(crate) fn apply_pause_setting(&mut self, setting: &str) {
         let on_pause_page = matches!(
             &self.stage,
@@ -135,14 +135,9 @@ impl Session {
         if parked.race.pilot_assist_level() == level {
             return;
         }
-        parked.race.set_pilot_assist(level);
-        if parked.race.recording() {
-            info!(
-                "Pilot Assist {} from the pause screen: this run records no replay or ghost",
-                level.name()
-            );
-            parked.race.stop_recording();
-        }
+        // Applied and recorded together: the recording keeps going and the change is an
+        // event between the same two ticks (`Race::change_pilot_assist`).
+        parked.race.change_pilot_assist(level);
     }
 
     /// RESTART RACE: the parked race again, on the options it ran with, the way the end of a

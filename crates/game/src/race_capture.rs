@@ -523,9 +523,12 @@ pub fn capture(
             .and_then(|record| record.best_lap_ticks),
     );
     race.set_camera_view(options.camera_view);
-    race.set_control_scheme(options.scheme);
-    race.set_autopilot(options.autopilot);
-    race.set_pilot_assist(options.pilot_assist);
+    race.apply_launch(&oag_raceplay::Launch {
+        scheme: options.scheme,
+        difficulty,
+        autopilot: options.autopilot,
+        pilot_assist: options.pilot_assist,
+    });
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);
         if let Some(pilot) = options.autopilot_pilot {

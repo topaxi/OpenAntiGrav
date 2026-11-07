@@ -688,13 +688,13 @@ pub(crate) fn run_race(
             record: cli.ghost.record_ghost.clone().map(|path| {
                 let team = loaded.liveries.first().map_or("", |l| l.team.as_str());
                 let mut header = oag_game::ghosts::header(&key, team, loaded.setup.seed);
-                header.options = oag_game::ghosts::race_options(
+                header.options = race::Launch {
                     scheme,
-                    loaded.setup.difficulty,
-                    cli.driver.autopilot,
-                    cli.driver.pilot_assist.unwrap_or_default(),
-                    give_weapon(cli.give()).ok().flatten(),
-                );
+                    difficulty: loaded.setup.difficulty,
+                    autopilot: cli.driver.autopilot,
+                    pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
+                }
+                .to_table();
                 (path, header)
             }),
         };

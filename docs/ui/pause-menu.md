@@ -165,10 +165,9 @@ keeps the front end's list, said in the boot report.
   RESTART RACE, QUIT RACE. START resumes, CIRCLE on the root does nothing, as on Pulse.
 - **PILOT ASSIST** is the on/off view of the setting the CONTROLS page edits (`controls.pilot_assist`): ON is
   `extreme`, the level HD flies with, OFF is `off`; a stored `normal` shows as ON. A switch from this page
-  reaches the parked race when the player resumes (`Session::apply_pause_setting`), **and that run records no
-  replay or ghost lap from then on** (`Race::stop_recording`, logged at `warn`): a switch is not in the input
-  stream, so a recording could not reproduce it. Laps already set are safe: a ghost is written on the tick its lap
-  completes, not at the end. The CONTROLS page still applies from the next race, as before.
+  reaches the parked race when the player resumes (`Session::apply_pause_setting`), **and the recording goes
+  on**: the switch is an event between the two ticks it was made between (`Race::change_pilot_assist`, the `EVNT`
+  chunk of the [replay file](../formats/replay-file.md)), so the file still reproduces. The CONTROLS page still applies from the next race, as before.
 - **GHOST** is `display.ghost_ship_visible`, applied to the parked race at once (`the_ghost_list_hides_the_ghost_ship_of_the_race_it_resumes`).
   It is one setting across titles, so a player who turned ghosts off on Pulse now has them hidden on HD too. HD lists it itself: its own
   GAME OPTIONS page has `GHOST SHIPS VISIBLE` and `MULTIPLAYER TAGS` (frame, `Menu Style` capture), so

@@ -42,6 +42,8 @@ impl Race {
             #[cfg(feature = "view")]
             trail_sparks,
             #[cfg(feature = "view")]
+            request,
+            #[cfg(feature = "view")]
             campaign_event,
             seed,
             zone,
@@ -1001,7 +1003,7 @@ impl Race {
                 flap_graphics: setup.airbrake_graphics,
             },
             #[cfg(feature = "view")]
-            replay: replay::ReplayState::default(),
+            replay: replay::ReplayState::requested(request),
             quiet: false,
             speed_plan_job: None,
             #[cfg(feature = "view")]

@@ -398,6 +398,23 @@ mod hd_screens {
             ),
         );
         assert_eq!(level(&on), "extreme", "ON is Extreme");
+
+        // The change is recorded as an event and the recording goes on, so the run still
+        // reproduces (the replay ground truth proves the file); dropping the call that records
+        // it leaves the count at zero.
+        let events = |run: &Run| -> Option<u64> {
+            run.states
+                .iter()
+                .rev()
+                .find_map(|state| state.get("recorded_events"))
+                .and_then(serde_json::Value::as_u64)
+        };
+        assert_eq!(events(&plain), Some(0), "a recorded race with no change");
+        assert!(
+            events(&on).is_some_and(|n| n >= 1),
+            "the switch is an event in a recording that went on: {:?}",
+            events(&on)
+        );
     }
 
     /// The GHOST list switches the ghost ship's drawing in the race it resumes

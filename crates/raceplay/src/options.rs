@@ -440,6 +440,11 @@ pub struct Setup {
     /// See [`Options::trail_sparks`] - a draw-path verification aid.
     #[cfg(feature = "view")]
     pub trail_sparks: bool,
+    /// The launch request the options described, resolved, which a recording of the race writes
+    /// into its header so the file can rebuild it ([`Options::replay_setup`]). `None` for a
+    /// setup built by hand.
+    #[cfg(feature = "view")]
+    pub request: Option<oag_replay::header::Setup>,
     /// Whether the race is an event of the title's own single-player campaign: 2048's
     /// `SP.xml`, set by [`load_event`](super::load_event) and by nothing else. It is what the HUD
     /// reads as "an event object exists" - [`oag_hud::Readout::campaign_event`]. A DLC circuit
