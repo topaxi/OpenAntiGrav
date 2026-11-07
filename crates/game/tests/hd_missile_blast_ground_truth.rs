@@ -127,3 +127,84 @@ fn a_missile_that_reaches_a_craft_draws_its_explosion() {
         "the blast does not grow: {early} then {late}"
     );
 }
+
+/// The log's own count for the frame at `ticks`: `(draws submitted, triangles)`,
+/// for a Missile fired at tick 286 and left in flight.
+fn submitted_at(ticks: u32) -> Option<(u32, u32)> {
+    let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
+    let scratch = std::env::temp_dir().join(format!(
+        "oag-hd-missile-head-{}-{ticks}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let script = scratch.join("fire.inputs");
+    std::fs::write(&script, "285 none\n1 square\n400 none\n").expect("the input script");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(image)
+        .args(["--race", "--no-audio", "--size", "960x544", "--opponents"])
+        .args(["--render-scale", "100", "--msaa", "off"])
+        .args(["--screen-filter", "off", "--anisotropy", "off"])
+        .args(["--motion-blur", "off", "--ticks", &ticks.to_string()])
+        .args(["--give", "missile"])
+        .arg("--input-script")
+        .arg(&script)
+        .arg("--screenshot")
+        .arg(scratch.join("frame.png"))
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"))
+        .output()
+        .expect("running oag-game");
+    assert!(output.status.success());
+    std::fs::remove_dir_all(&scratch).ok();
+    let log = String::from_utf8_lossy(&output.stderr).into_owned()
+        + &String::from_utf8_lossy(&output.stdout);
+    let line = log
+        .lines()
+        .find(|line| line.contains(&format!("frame at tick {ticks}:")))
+        .unwrap_or_else(|| panic!("no frame line in the log:\n{log}"));
+    let number = |after: &str, before: &str| -> u32 {
+        let from = line.find(after).map_or(0, |at| at + after.len());
+        let tail = &line[from..];
+        tail[..tail.find(before).expect("the line's shape")]
+            .trim()
+            .parse()
+            .expect("a count")
+    };
+    Some((
+        number(&format!("frame at tick {ticks}:"), " draw(s)"),
+        number("culled, ", " triangle(s)"),
+    ))
+}
+
+/// A Missile in flight draws its two heads: `HD_missile_ball_bloomring`'s two
+/// 400-triangle draws each, in place of the glow billboard.
+///
+/// The frame's own count is the check, not a pixel region: the heads sit under
+/// the `WO_MISSILE_HEAD` particle balls and change about 4 % of the pixels around
+/// them, which no threshold separates across adapters, while the draw and
+/// triangle counts are exact. Fired at tick 286: 902 draws and 448,723
+/// triangles at tick 280 and at 292 with the head draw dropped; 906 and
+/// 450,323 with it.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn a_missile_in_flight_draws_its_two_heads() {
+    let (Some((before_draws, before_triangles)), Some((flying_draws, flying_triangles))) =
+        (submitted_at(280), submitted_at(292))
+    else {
+        return;
+    };
+    println!(
+        "draws {before_draws} -> {flying_draws}, triangles {before_triangles} -> {flying_triangles}"
+    );
+    assert_eq!(
+        flying_draws - before_draws,
+        4,
+        "two heads of two draws each"
+    );
+    assert_eq!(
+        flying_triangles - before_triangles,
+        1600,
+        "two heads of 800 triangles each"
+    );
+}

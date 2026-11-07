@@ -127,6 +127,7 @@ impl Scene {
             &mut self.plasma_blast.hemisphere1,
             &mut self.plasma_blast.ball,
             &mut self.plasma_blast.shuriken,
+            &mut self.plasma_blast.missile_head,
             &mut self.bomb_blast.hemisphere,
             &mut self.bomb_blast.shockwave,
             &mut self.bomb_blast.repulser_field,

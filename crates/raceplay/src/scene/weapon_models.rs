@@ -210,6 +210,16 @@ impl super::Scene {
             None,
         );
         write_one_kind(
+            &self.plasma_blast.missile_head,
+            weapon_scene,
+            &race.missile_head_model_matrices(),
+            &prev.missile_heads,
+            queue,
+            view_projection,
+            prev_vp,
+            None,
+        );
+        write_one_kind(
             &self.mines,
             weapon_scene,
             &mine_matrices,
@@ -257,6 +267,17 @@ impl super::Scene {
         list: &mut super::record::DrawList<'a>,
     ) {
         for drawable in self.plasma_blast.shuriken.iter().take(live) {
+            list.mesh(drawable);
+        }
+    }
+
+    /// Draws the `live` Missile heads [`Self::write_weapon_models`] wrote.
+    pub(super) fn draw_missile_heads<'a>(
+        &'a self,
+        live: usize,
+        list: &mut super::record::DrawList<'a>,
+    ) {
+        for drawable in self.plasma_blast.missile_head.iter().take(live) {
             list.mesh(drawable);
         }
     }

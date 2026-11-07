@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-10-12
-summary: "HD weapon visuals still on Pulse fallbacks in part: the Plasma explosion's remaining three things and other weapons"
+updated: 2026-11-07
+summary: "HD weapons draw their own models; open: Missile head placement and smoke ribbon, Plasma noise tap, HD_Mine_halo, Fury detonator bolt"
 difficulty: medium (30)
 ---
 
@@ -38,7 +38,7 @@ dump was taken with `scripts/psarc.py list` over all seven PSARCs):
 | weapon | models | HD-only effects |
 | --- | --- | --- |
 | ~~Plasma~~ **bolt done; blast drawn** | `HD_plasma_ball` (the **bolt head**, loaded, its program routed to `RIM_EDGE` 2026-09-25, still not drawn - `HD_PLASMA_BALL_DRAWN`, held off by the cull thread below), `HD_plasma_ring`/`_sphere`/`_halo` (the explosion, ramps read: targets 100/7.1/7.0, rates 0.01/0.3/0.2, windows 1.7/1.3/1.3 s, 3.5 s life, [ps3-hdfury-eu/plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md) - **drawn since 2026-09-23, culled as authored and on HD's own right-handed basis; the scale was right all along**) | `WO_PLASMA_CHARGING`, `WO_PLASMA_LAUNCH` still unwired; `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` wired and confirmed against the disc's own `.pob` internal name field, not just the fourcc |
-| ~~Rocket / ~~Missile | ~~`hd_Rocket`~~ **model wired**, `HD_missile_ball_bloomring`, `HD_missile_explosion` still open | `WO_MISSILE_LAUNCH` |
+| ~~Rocket / ~~Missile | ~~`hd_Rocket`~~ **model wired**, ~~`HD_missile_ball_bloomring`~~ **drawn 2026-11-07, two heads per missile** (placement chosen), ~~`HD_missile_explosion`~~ drawn; the Missile's own smoke ribbon is open | `WO_MISSILE_LAUNCH` |
 | ~~Mine / ~~Bomb | ~~`HD_Mine`~~, ~~`HD_Bomb`~~ **models wired**; **the Bomb's detonation drawn 2026-10-07** (`HD_bomb_sphere`, `_white`, `hd_bomb_sphere_bloomring`, `hd_bomb_shockwaves` x8 - four models, not five; `HD_bomb_halo` is the armed bomb's, `HD_Mine_halo` the Mine's); `HD_Mine_halo` still open | `WO_BOMB_RAYS` **wired 2026-10-07** (0.5 s in); `WO_BOMB_SHOCKWAVE_FLASH`, `WO_BOMB_EXPLO_DETONATOR` are the Detonator mode's |
 | ~~Cannon~~ **done 2026-09-25** | `hd_muzzleflash` **is a muzzle flash, not a round body**: drawn at the craft's `cannon_flash` locator for the round's first 0.1 s; HD's own `.gtf` bolt/flash quads drawn; `detonator_cannonbolt` (Fury) still open | `WO_CANNON_MUZZLEFLASH`, `WO_CANNON_HOTSPOT`: **no trigger exists** (named by nothing but their own files); `WO_CANNON_SPARKS_DETONATOR` Detonator-only |
 | LeachBeam | `hd_leachbeam_ball_bloomring` **drawn 2026-09-25** through its own program (`RIM_GLOW`, [hd-unlit-programs.md](../../docs/rendering/hd-unlit-programs.md)) | `WO_LEACHBEAM_ABSORB` **wired 2026-09-25** (fires each drain trip); `_LAUNCH`/`_BREAK`/`_HIT_TARGET` confirmed to have no discoverable trigger in the retail EBOOT (same shape as the Cannon's two); `_EMIT`/`_HITSHELL`/`_BALL_SPARKS`/`_CHARGING_SPARKS`/`_ENERGY_SPRAY` still unread |
@@ -143,7 +143,7 @@ The executable's own load-path strings name every model above
   (4) `FUN_001310e8`'s `0x006778c8` call looks like a per-round point
   light, unread; (5) what sets `ship+0x5f42` (the `Ship Muzzle` fallback
   branch) is unread.
-- **Missile (2026-09-23, read, not wired):** `HD_missile_ball_bloomring` is
+- ~~**Missile (2026-09-23, read, not wired):**~~ **Both models drawn (head 2026-11-07, explosion 2026-10-08).** `HD_missile_ball_bloomring` is
   the flying missile's head (`Missile.cpp` constructor `0x0011ccc8`), not an
   explosion model; `HD_missile_explosion` loads in `0x00154cf0` (from
   `MissileManager_Construct`), binds `UV_offset` and `Shockwave_scalar`, and
@@ -167,8 +167,8 @@ The executable's own load-path strings name every model above
   noise tap (needs the sun, ambient, `0x7480de6d` and the reflection probe, all
   unwired), and the ring/halo's own colour and alpha combine (the engine's
   path stands in; only the tap coordinates are the program's).
-- **Missile's detonation pair and the Bomb's five detonation models: no
-  trigger read, so nothing drawn.** `HD_missile_explosion`'s object (vtable
+- ~~**Missile's detonation pair and the Bomb's five detonation models: no
+  trigger read, so nothing drawn.**~~ **Drawn since 2026-10-07/08 (below).** `HD_missile_explosion`'s object (vtable
   `0x00864b38`, shared with the constructors at `0x00154990`/`0x00155c10`/
   `0x00155d00`; slot 5 `0x00155420` only writes the per-viewport matrix at
   `this + 0xf0`) has no found writer of `this + 0xf0` and nothing that starts
@@ -392,3 +392,16 @@ Open, in order of what a player would notice:
 - **Whether HD's CPU `Quake_UpdateSpan` also moves what the RSX draws**; the big-endian span table
   `oag_vex::quake::spans` cannot read (every HD circuit authors the `Quake` node).
 - **A matched pair with the same ship**: the film is the Fury campaign's first event.
+
+## 2026-11-07 (`hd-weapons`): the Missile's body is its own model
+
+Audit with `--give <weapon>` on Talon's Junction: the only HD projectile that still drew a procedural
+billboard was the Missile (the closure in `scene/frame.rs` had no arm for it). `HD_missile_ball_bloomring`
+is now `WeaponModels::missile_head`, two per missile on the two flare anchors (`weapons.md`,
+"The flying Missile's head draws its own model"). Open on it, in order of what a player would notice:
+- A pinned pair against the original (capture `viewProj`; `rpcs3-hd-weapon.py --state 1`, shot at film 6.2 s): its heads are red-orange lobes with hollow rings about six times ours in size, ours are white-hot (particle colour and bloom, and possibly the head's scale).
+- The original's per-tick placement and scale of the two nodes (`0x0011e640`, AltiVec, read with capstone
+  over the raw bytes); the head is small under the particles, so a matched frame is the way to judge it.
+- The Missile's smoke ribbon (`RibbonEffects` pool `+0x74`, `smoke_trails_frame1_ALPHA`); law unread.
+- Omega: the model ships and builds, held with the LeachBeam ball (PS4 program for the rim glow).
+- The `ScreenFlash` is Pulse PSP's alone, so the Missile's `flash::BLAST` runs on HD: no (checked).

@@ -179,6 +179,8 @@ pub struct PlasmaBlastModels {
     pub ball: Option<Model>,
     /// The Shuriken's blade, which rides here for the same reason.
     pub shuriken: Option<Model>,
+    /// The flying Missile's head, which rides here for the same reason.
+    pub missile_head: Option<Model>,
     /// Pure's Disruptor explosion halo, which rides here for the same reason.
     pub disruptor_halo: Option<Model>,
 }
@@ -195,6 +197,8 @@ pub(crate) struct PlasmaBlastDrawables {
     pub(crate) ball: Vec<Drawable>,
     /// The Shuriken's blade, one per projectile slot.
     pub(crate) shuriken: Vec<Drawable>,
+    /// The flying Missile's head, one per projectile slot.
+    pub(crate) missile_head: Vec<Drawable>,
     /// The Disruptor's explosion halo, one per [`PLASMA_BLAST_SLOTS`] slot.
     pub(crate) disruptor_halo: Vec<Drawable>,
 }
@@ -214,6 +218,7 @@ impl PlasmaBlastDrawables {
             hemisphere1: build_one(models.hemisphere1)?,
             ball: build_one(models.ball)?,
             shuriken: build_one(models.shuriken)?,
+            missile_head: build_one(models.missile_head)?,
             disruptor_halo: build_one(models.disruptor_halo)?,
         })
     }

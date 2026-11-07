@@ -276,6 +276,13 @@ pub struct WeaponModels {
     /// wired**: what places the model each tick is unread (see
     /// `oag_raceplay::load::weapon_models`).
     pub leachbeam_ball: Option<&'static str>,
+    /// The flying Missile's own head: one model, built twice per missile
+    /// (`Missile.cpp`'s constructor, `0x0011ccc8`), drawn in place of the
+    /// glow billboard a Missile otherwise rides. The LeachBeam ball shares its
+    /// materials. **Placement is chosen, not measured** (see
+    /// `oag_raceplay::Race::missile_head_model_matrices`). `None` where the
+    /// billboard is the Missile's body (Pulse's body is a flare effect).
+    pub missile_head: Option<&'static str>,
     /// The Shuriken's own blade, drawn on the Rocket dart's basis. `None` where the
     /// blade model is not recovered.
     pub shuriken: Option<&'static str>,
@@ -388,6 +395,7 @@ impl WeaponModels {
         rocket_trail: None,
         leach_strip: None,
         leachbeam_ball: None,
+        missile_head: None,
         shuriken: None,
         cannon_look: None,
         ghost_static: None,

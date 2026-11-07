@@ -67,7 +67,9 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     // player size (`weapon-lineage.md`), so it stays unwired until the PS4
     // `HD_Leachbeam` material's own samplers are read.
     leach_strip: None,
-    // Held back: see the module doc.
+    // Held back: see the module doc. The Missile's head (`HD_missile_ball_bloomring.vex`,
+    // 300 triangles) ships and builds too, on the same ball program, so it stays
+    // unnamed for the same reason and Omega's Missile keeps its billboard.
     leachbeam_ball: None,
     cannon_look: Some(CANNON_LOOK),
     // Ships it as `.gnf`; the eboot does not name it, so Pulse's law.

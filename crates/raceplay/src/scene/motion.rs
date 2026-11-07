@@ -107,6 +107,8 @@ pub(super) struct Snapshot {
     pub(super) plasma_balls: Vec<Mat4>,
     /// A live Shuriken blade's own, same terms.
     pub(super) shurikens: Vec<Mat4>,
+    /// A live Missile's heads, same terms.
+    pub(super) missile_heads: Vec<Mat4>,
     /// The Mine's own, same terms as [`Self::rockets`].
     pub(super) mines: Vec<Mat4>,
     /// The Bomb's own, same terms.
@@ -134,6 +136,7 @@ impl Snapshot {
             rockets: race.rocket_model_matrices(),
             plasma_balls: race.plasma_ball_model_matrices(),
             shurikens: race.shuriken_model_matrices(),
+            missile_heads: race.missile_head_model_matrices(),
             mines: race.mine_model_matrices(),
             bombs: race.bomb_model_matrices(),
             cannon_rounds: race.cannon_model_matrices(cannon),

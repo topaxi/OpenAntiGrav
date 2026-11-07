@@ -444,6 +444,7 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     rocket_trail: None,
     leach_strip: None,
     leachbeam_ball: None,
+    missile_head: None,
     // `Shuriken_Init`'s model string `0x08a7cd74`.
     shuriken: Some(r"Data\Weapons\pulse_shuriken.vex"),
     // `None` is this title's own reading - see the field's doc comment.
