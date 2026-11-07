@@ -501,7 +501,7 @@ impl Race {
         let Some(time) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Autopilot))
             .map(|simple| simple.time)
         else {
@@ -602,7 +602,7 @@ impl Race {
                 air_trim: oag_ai::air_trim(&ship.handling, ship.physics.air_pitch_bias),
                 plan: super::routes::plan_for(
                     &self.sim.routes,
-                    self.sim.speed_plan.as_ref(),
+                    self.sim.speed_plan.as_deref(),
                     super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
                     route,
                 ),
@@ -794,7 +794,7 @@ impl Race {
                         yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&handling, &ship.physics.body)),
                         plan: super::routes::plan_for(
                             &self.sim.routes,
-                            self.sim.speed_plan.as_ref(),
+                            self.sim.speed_plan.as_deref(),
                             super::speed_plan::hull_of(
                                 &self.sim.hull_plans,
                                 self.sim.ship_plan[slot],
@@ -881,7 +881,7 @@ impl Race {
                 &controls,
                 &handling,
                 &env,
-                &self.sim.collision,
+                &*self.sim.collision,
                 self.sim.dt,
             );
             let reset_contact = self.reset_zone_contact(slot, &env, position);
@@ -1164,7 +1164,7 @@ impl Race {
     /// The lap counter's ring, for a caller that wants to measure against it.
     #[must_use]
     pub fn course(&self) -> Option<&Course> {
-        self.sim.course.as_ref()
+        self.sim.course.as_deref()
     }
 
     /// The player's own race position, `1`-based.

@@ -135,7 +135,7 @@ fn the_boost_outlives_the_pad_and_then_expires() {
     assert!(race.ship().physics.pad_timer > 0.0);
 
     // Take the pad away, which is the same to the trigger as driving off it.
-    race.sim.speedup_pads.clear();
+    race.sim.speedup_pads = Vec::new().into();
     let mut boosted_ticks = 0;
     for _ in 0..120 {
         if race.tick(&PlayerInputs::none()).speedup_pad != Vec3::ZERO {
@@ -228,7 +228,7 @@ fn the_flare_outlives_the_force_and_ignores_the_class_tunable() {
         exhaust::BOOST_SECONDS
     );
 
-    race.sim.speedup_pads.clear();
+    race.sim.speedup_pads = Vec::new().into();
     let mut force_ticks = 0;
     let mut flare_ticks = 0;
     for _ in 0..120 {

@@ -110,8 +110,8 @@ impl Race {
         weapon: Weapon,
         aimed: bool,
     ) -> Option<Situation> {
-        let odds = self.sim.weapon_ai.as_ref()?.get(weapon)?;
-        let course = self.sim.course.as_ref()?;
+        let odds = self.sim.weapon_ai.as_deref()?.get(weapon)?;
+        let course = self.sim.course.as_deref()?;
         let length = course.length();
         let count = self.sim.world.ship_count as usize;
         let ships = &self.sim.world.ships[..count];
@@ -176,7 +176,7 @@ impl Race {
     /// for the Plasma (`Plasma_ClassSpeed`) and the Rocket's for everything
     /// else (`0x0885d22c`) - as authored, with no `/ 3.6`.
     fn shot_speed(&self, weapon: Weapon) -> Option<f32> {
-        let weapons = self.sim.weapons.as_ref()?;
+        let weapons = self.sim.weapons.as_deref()?;
         let class = &self.sim.class;
         match weapon {
             Weapon::Missile => weapons.missile()?.speed_for_named(class),

@@ -106,6 +106,7 @@
 //! drives).
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 #[cfg(feature = "view")]

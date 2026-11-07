@@ -230,7 +230,7 @@ fn an_armed_quake_cut_short_by_destruction_does_not_fire_after_the_respawn() {
 /// which goes through the same `spend_opponent_pickup` gate.
 fn opponent_rockets(state: CraftState, resume_at: usize) -> usize {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(one_rocket_table());
+    race.sim.weapons = Some(Arc::new(one_rocket_table()));
     for _ in 0..oag_race::COUNTDOWN_TICKS {
         race.tick(&PlayerInputs::none());
     }

@@ -140,7 +140,7 @@ impl Race {
     fn leach_course_length(&self) -> f32 {
         self.sim
             .course
-            .as_ref()
+            .as_deref()
             .map_or(0.0, |course| course.length())
     }
 

@@ -11,10 +11,10 @@ use oag_tables::weapons::Weapon;
 /// slot 0 holding `weapon` under `pulse`'s reticle dialect or Wipeout HD's.
 fn parked_race(weapon: Weapon, pulse: bool, distance: f32, side: f32) -> (Race, Vec3) {
     let mut race = race_with_a_grid_sighted(title_sighting(pulse));
-    race.sim.weapons = Some(match weapon {
+    race.sim.weapons = Some(Arc::new(match weapon {
         Weapon::LeachBeam => one_leach_beam_table(),
         _ => one_missile_table(),
-    });
+    }));
     let body = race.sim.world.ships[0].physics.body;
     let at = body.position + body.forward() * distance + body.right() * side;
     race.sim.world.ships[0].pickup.weapon = Some(weapon);
@@ -149,7 +149,7 @@ fn the_lock_is_hashed_while_a_lock_weapon_is_held() {
 #[test]
 fn a_second_persons_early_leach_press_fires_unlocked() {
     let mut race = race_with_a_grid_sighted(title_sighting(true));
-    race.sim.weapons = Some(one_leach_beam_table());
+    race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
     race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
     let forward = race.sim.world.ships[0].physics.body.forward();
     let rival = race.sim.world.ships[0].physics.body.position;

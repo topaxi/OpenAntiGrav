@@ -34,7 +34,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::missile)
         else {
             return false;
@@ -57,7 +57,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::rocket)
         else {
             return false;
@@ -132,7 +132,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::leach_beam)
         else {
             return false;
@@ -149,7 +149,7 @@ impl Race {
             ship.physics.body.forward(),
             stats.lock_min_dist,
             stats.lock_max_dist,
-            self.sim.course.as_ref().map(oag_race::Course::length),
+            self.sim.course.as_deref().map(oag_race::Course::length),
         ) else {
             return false;
         };
@@ -179,7 +179,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::plasma)
         else {
             return false;
@@ -218,7 +218,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::shuriken)
         else {
             return false;
@@ -326,7 +326,7 @@ impl Race {
         let Some((simple, absorb)) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .map(|weapons| (weapons.simple(looked_up), weapons.absorb(looked_up)))
         else {
             return;
@@ -400,7 +400,7 @@ impl Race {
                 yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&ship.handling, &ship.physics.body)),
                 plan: super::routes::plan_for(
                     &self.sim.routes,
-                    self.sim.speed_plan.as_ref(),
+                    self.sim.speed_plan.as_deref(),
                     super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
                     route,
                 ),
@@ -559,7 +559,7 @@ impl Race {
         slot: usize,
         field: &oag_ai::Field,
     ) -> bool {
-        let Some(weapons) = self.sim.weapons.as_ref() else {
+        let Some(weapons) = self.sim.weapons.as_deref() else {
             return false;
         };
         let counts = self.sim.world.ships[slot].weapon_counts;
@@ -633,7 +633,7 @@ impl Race {
         forward: oag_core::math::Vec3,
         right: oag_core::math::Vec3,
     ) -> Option<oag_ai::Hazard> {
-        let radii = oag_weapons::projectile::TriggerRadii::from_table(self.sim.weapons.as_ref());
+        let radii = oag_weapons::projectile::TriggerRadii::from_table(self.sim.weapons.as_deref());
         let origin = self.sim.world.ships[slot].physics.body.position;
         // Half the hull's width, so a charge the craft would clip with a wingtip
         // counts as much as one it would drive over.

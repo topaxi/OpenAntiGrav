@@ -154,7 +154,7 @@ impl Race {
         // `oag_weapons::slowdown::drain`.
         oag_weapons::slowdown::drain(
             &mut self.sim.world.ships[..self.sim.world.ship_count as usize],
-            self.sim.weapons.as_ref().map(|table| table.slowdown_limit),
+            self.sim.weapons.as_deref().map(|table| table.slowdown_limit),
         );
 
         self.cancel_pickup_use_of_downed_crafts();
@@ -239,8 +239,8 @@ impl Race {
             &mut self.sim.world.projectiles,
             &mut self.sim.world.ships[..self.sim.world.ship_count as usize],
             self.sim.dt,
-            &self.sim.collision,
-            self.sim.weapons.as_ref(),
+            &*self.sim.collision,
+            self.sim.weapons.as_deref(),
             &self.sim.class,
             damage_rules,
             &mut hits,

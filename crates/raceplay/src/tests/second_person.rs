@@ -16,7 +16,7 @@ use oag_tables::weapons::Weapon;
 /// a few ticks run so the standings have located every craft.
 fn second_person_holding(weapon: Weapon, table: oag_tables::weapons::WeaponStats) -> Race {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(table);
+    race.sim.weapons = Some(Arc::new(table));
     race.sim.world.controllers[1] = Controller::Local;
     assert!(
         race.sim.world.person_flown(1),
@@ -132,14 +132,14 @@ fn a_second_persons_repulser_is_theirs() {
 #[test]
 fn the_missiles_reticle_hold_follows_the_primary_slot() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(one_missile_table());
+    race.sim.weapons = Some(Arc::new(one_missile_table()));
     race.sim.world.controllers[0] = Controller::Ai;
     race.sim.world.controllers[1] = Controller::Local;
     assert_eq!(race.sim.world.primary_slot(), 1);
     let stats = race
         .sim
         .weapons
-        .as_ref()
+        .as_deref()
         .and_then(oag_tables::weapons::WeaponStats::missile)
         .expect("the fixture authors a Missile");
     let forward = race.sim.world.ships[1].physics.body.forward();
@@ -212,7 +212,7 @@ fn the_original_fields_opponents_are_the_craft_nobody_flies() {
 fn no_person_seeks_a_weapon_pad() {
     let mut race = race_with_a_grid();
     race.sim.pad_seeking = PadSeeking::Every;
-    race.sim.weapon_pad_line = vec![Some((6, 0.0))];
+    race.sim.weapon_pad_line = vec![Some((6, 0.0))].into();
     race.sim.weapon_pad_refresh_left = vec![0.0];
     assert!(
         race.pad_for(1).is_some(),
@@ -255,15 +255,15 @@ fn an_ai_flown_slot_zero_gets_a_driver_of_its_own() {
 #[test]
 fn the_weapon_ai_sees_a_second_person_ahead() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(one_rocket_table());
-    race.sim.weapon_ai = Some(
+    race.sim.weapons = Some(Arc::new(one_rocket_table()));
+    race.sim.weapon_ai = Some(Arc::new(
         oag_tables::weapons::ai::parse(
             r#"<WeaponAIStats>
                  <Rockets useAgainstPlayer="1.1" useAgainstAI="1.2" absorb="1.0"/>
                </WeaponAIStats>"#,
         )
         .expect("the fixture table must parse"),
-    );
+    ));
     race.sim.world.controllers[1] = Controller::Local;
     let progress = |race: &mut Race, slot: usize, at: f32| {
         race.sim.world.ships[slot].standing.progress = Some(at);

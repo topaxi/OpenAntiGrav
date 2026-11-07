@@ -252,7 +252,7 @@ impl Race {
     /// fraction, its fraction along its own segment and the lap's length,
     /// for the lookahead. `None` off a closed lap or off the track.
     fn original_tick(&self, slot: usize, contacts: (i32, bool)) -> Option<(Tick, f32, f32, f32)> {
-        let course = self.sim.course.as_ref()?;
+        let course = self.sim.course.as_deref()?;
         let lap_length = course.length();
         let ship = &self.sim.world.ships[slot];
         let progress = (ship.standing.progress.unwrap_or(0.0) / lap_length).rem_euclid(1.0);
@@ -304,7 +304,7 @@ impl Race {
     ) -> Option<Output> {
         let contacts = self.sim.original_ai.as_ref()?.contacts[slot];
         let (tick, progress, fraction, lap_length) = self.original_tick(slot, contacts)?;
-        let course = self.sim.course.as_ref()?;
+        let course = self.sim.course.as_deref()?;
         let count = self.sim.world.ship_count as usize;
         // Lap-length units: `Standing::distance`, laps included.
         let racers: [(f32, u8); MAX_SHIPS] = std::array::from_fn(|k| {
@@ -377,7 +377,7 @@ impl Race {
     /// tick's step: Pure's zone multiplier and launch flag. Nothing without
     /// an original field or a closed lap.
     pub(super) fn original_ai_end_tick(&mut self, places: &[u8; MAX_SHIPS]) {
-        let Some(course) = self.sim.course.as_ref() else {
+        let Some(course) = self.sim.course.as_deref() else {
             return;
         };
         let count = self.sim.world.ship_count as usize;

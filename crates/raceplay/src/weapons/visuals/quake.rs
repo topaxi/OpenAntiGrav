@@ -80,7 +80,7 @@ impl Race {
             }
             return;
         };
-        let Some(course) = self.sim.course.as_ref() else {
+        let Some(course) = self.sim.course.as_deref() else {
             return;
         };
         let Some(index) = course_index_near_progress(course, wave.progress) else {

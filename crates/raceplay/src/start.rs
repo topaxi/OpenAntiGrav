@@ -679,17 +679,17 @@ impl Race {
         let race = Self {
             sim: RaceSim {
                 extensions: crate::extensions::Extensions::new(extensions),
-                racing_line: line,
-                ai_order: order,
-                routes,
+                racing_line: Arc::new(line),
+                ai_order: order.into(),
+                routes: routes.into(),
                 // Built below, once the field is seated: see
                 // `Race::field_speed_plan`.
                 speed_plan: None,
                 plans_built: false,
                 plan_reference: None,
-                hull_plans: Vec::new(),
+                hull_plans: Arc::default(),
                 ship_plan: [None; oag_gameplay::MAX_SHIPS],
-                plan_steps: super::speed_plan::PlanSteps::default(),
+                plan_steps: Arc::default(),
                 // **Degraded from the measured tuning**, never boosted toward it -
                 // see `oag_ai::Difficulty`. At the top level this is the
                 // measurement unchanged.
@@ -709,9 +709,9 @@ impl Race {
                 autopilot_ours: false,
                 opponent_autopilot,
                 world,
-                collision,
-                spline,
-                course,
+                collision: Arc::new(collision),
+                spline: Arc::new(spline),
+                course: course.map(Arc::new),
                 // Only Zone reads these, so the other two modes carry `None` and the
                 // engine keeps its ordinary throttle path.
                 zone: zone.filter(|_| mode == Mode::Zone),
@@ -781,26 +781,26 @@ impl Race {
                 // cache at load, so the first tick measures rather than trusting a
                 // distance nothing has computed yet.
                 pad_distance: std::array::from_fn(|_| vec![0.0; speedup_pads.len()]),
-                speedup_pads,
+                speedup_pads: speedup_pads.into(),
                 // The same broadphase, and the same "due for a real test" start.
                 weapon_pad_distance: std::array::from_fn(|_| vec![0.0; weapon_pads.len()]),
                 // Every pad starts collectable. The original's `+0x1a0` is zero
                 // until something stamps it, and nothing stamps it at load.
                 weapon_pad_refresh_left: vec![0.0; weapon_pads.len()],
-                weapon_pads,
+                weapon_pads: weapon_pads.into(),
                 weapon_pad_current: [None; MAX_SHIPS],
                 weapon_pad_refresh,
-                weapon_pad_line,
+                weapon_pad_line: weapon_pad_line.into(),
                 pad_seeking: super::PadSeeking::for_mode(mode),
                 fire_law: if weapon_ai.is_some() {
                     super::FireLaw::Original
                 } else {
                     super::FireLaw::Ours
                 },
-                weapon_ai,
-                weapons,
-                allowed_weapons,
-                class,
+                weapon_ai: weapon_ai.map(Arc::new),
+                weapons: weapons.map(Arc::new),
+                allowed_weapons: allowed_weapons.into(),
+                class: class.into(),
                 class_gravity_scale,
                 class_gravity_term,
                 start_boost,
