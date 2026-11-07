@@ -66,7 +66,11 @@ fn only_the_focused_rows_attached_rows_are_drawn_below_it() {
         ]
     );
     assert_eq!(menu.tabs().last().map(|t| t.depth), Some(0));
-    assert_eq!(menu.tabs()[2].depth, 1, "REPLAYS hangs one tab below RACEBOX");
+    assert_eq!(
+        menu.tabs()[2].depth,
+        1,
+        "REPLAYS hangs one tab below RACEBOX"
+    );
     assert_eq!(menu.tabs()[3].depth, 2, "and REMIX one more, below it");
     // On OPTIONS it is QUIT's turn.
     press(&mut menu, &[Button::Right]);
