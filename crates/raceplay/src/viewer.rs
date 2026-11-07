@@ -155,6 +155,16 @@ impl Viewer {
         }
     }
 
+    /// Whether the pass ended because this build stopped matching the recording: a stored hash
+    /// disagreed, or an event of a kind a later build wrote came up. Either way the viewer plays
+    /// what agrees and says so.
+    pub fn stops_matching(&mut self) -> bool {
+        matches!(
+            self.timeline.pass(),
+            Pass::Desynced(_) | Pass::Refused(_)
+        )
+    }
+
     /// Whether the first keyframe is not yet in: the screen holds the grid and says so.
     pub fn opening(&mut self) -> bool {
         self.timeline.prefix().is_none()

@@ -158,7 +158,7 @@ impl Active {
             playing: viewer.playing(),
             speed: viewer.speed(),
             // The banner names the last second that agreed, the end of what can be played.
-            mismatch: viewer.mismatch().and(built),
+            mismatch: viewer.stops_matching().then_some(built).flatten(),
             at_end: matches!(state, State::Ended | State::Stopped),
         }
     }
