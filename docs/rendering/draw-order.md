@@ -144,6 +144,73 @@ items share the depth-zero key. The order is now the TRAIL ORDER setting on the 
 by default, `over-floors` chosen, not measured). Details in [exhaust.md](../ghidra/functions/psp-pulse-usa/exhaust.md),
 "Re-verified independently, and the order made a setting".
 
+### Hull, pads and trees on Platinum Rush White: hull 0x45, pads 0x4a, trees 0x4d plus depth (2026-11-07)
+
+Measured on PPSSPP 1.20.4, Pulse USA, a Single Race on `13_Track` (Platinum Rush White, dev-unlock byte, VENOM,
+craft at `(-542.8, 2.9, -292.9)`, race clock 4.02), two separate boots of the same state. Two instruments:
+(1) `Gfx_Enqueue` (`0x0891e35c`) stopped on every hit over one frame, logging the item (`a1`), the key (`a2`) and the
+caller (`ra`) - 147 entries per frame, the same keys on both boots; (2) the GE list of the frame
+(`scripts/psp-ge-dump.py dump` and `census`, 638 prims) with a **key bump**: the same state loaded with
+a breakpoint on `Gfx_FlushRenderManager` (`0x0891e3c0`) that adds `0x30000000` to the key of a chosen set of queue
+entries before the sort, a second connection recording the next frame, and the prims' new positions read off the
+census. A prim is named by its texture address and world box, not its index. The class of an entry is the
+`ra` of its `Gfx_Enqueue` call plus its layer.
+
+| Class | Key | Caller of `Gfx_Enqueue` | Where its prims drew (638-prim frame) | State (`ztest`, `zmask`, blend, alpha test) |
+| --- | --- | --- | --- | --- |
+| The four craft's hull sets | `0x45000000` | `0x0892ed4c` (the batch-set submit) | 299-316, 369-371 | opaque: 6, writes, no blend, alpha test on; the shield and glass passes: 2 (EQUAL), no write, blend |
+| Speed pads (all 11 of the circuit, drawn whether or not in view) | `0x4a000000` | `0x0892ed4c` | 312-350, three passes of 11 | pass 1: **7, writes**; pass 2: 6, writes; pass 3 (a 10-vertex cutout): 6, writes; none blended, alpha test on |
+| Weapon pads | `0x4a000000` | `0x0890cdc8` (not the batch-set path) | 535-543, pairs | 7 then 6, writes, no blend, alpha test on |
+| Trees and every other list-B mesh | `0x4d000000` + depth | `0x0890cee0` (`Mesh_SubmitNode`) | 578-599, the blended block at the end | **blend on, alpha test on (func 6, reference 0), `ztest` 6, `zmask` 1: no depth write** |
+| `Trail` ribbons, flares | `0x4d000000`, `0x4d0xxxxx` | `0x0892a440`, `0x08904a14` | as above | no depth write |
+| The ship object (4 in view) | `0x46000000` | `0x08902f18` | not read | not read |
+
+**The bump moved what its key says.** Bumping the `0x4a` batch sets sent the 22 speed-pad prims from 312-333 to 675-696 of
+730 and left the hull at 301; bumping the `0x45` sets sent the hull from 299 to 496 and left the pads ahead of it;
+bumping the three `0x4a` entries called from `0x0890cdc8` sent the weapon pads from 535 to 721 and left the speed
+pads. Repeated on a second boot with identical positions. So **hull `0x45000000` < speed and weapon pad `0x4a000000`
+< list B `0x4d000000` + depth**, and in the original frame a tree draws after the craft and after every pad: 581
+against 299, 312 and 535.
+
+The depth state is what makes that the right picture. A list-B tree writes **no depth** (`zmask` 1) and tests
+"nearer wins" (`ztest` 6): it is painted over what is already in the buffer where it is nearer, and a craft or pad
+drawn after it would overwrite it whatever the distance. The original's hull and pads come first, so a nearer tree
+lies over both. The tree prims of the same frame that are opaque (`blend` 0, alpha test on, `zmask` 0, list A) write
+depth.
+
+**Ours draws the PSP in the same order and holds the same depth state by default.** `Scene::prepare_view`
+(`crates/raceplay/src/scene/frame.rs`) pushes the circuit (solid, sky, shine), the pads, the gantry, the shadows, the
+hulls, `Draw::Ribbon`, `Draw::TrackBlended`, then wrecks, weapons, flares, plumes and `Draw::Effects`, whenever
+`Race::ribbons_first()` holds: a PSP-preset ribbon (not HD's tube) and `trail_order = original`, the default and the
+maintainer's own setting for every title. The blended pipeline tests `Less` and writes no depth
+(`crates/mesh/src/mesh_render.rs`), the original's nearer-wins and `zmask` 1. Where a tree overlaps a hull in a frame of
+ours the tree draws over it: a synthetic pose on this circuit with the camera beside a tree (the craft 11.6 units ahead
+of the eye, the camera put by hand) leaves 98 of 130,560 pixels, all on the craft, that differ between
+`--trail-order original` and `over-floors`, and with `original` the foliage lies over the craft's wing.
+
+**The symptom is the other order.** With `ribbons_first()` false the circuit draws whole inside `Draw::Track`, so the
+blended list (no depth write) goes down before the pads and the hulls, and a hull or pad drawn later overwrites a nearer
+tree: the tree "draws behind" it. That is exactly what `trail_order = over-floors` does, and what the HD tube
+(`hd_trail_active`) does on HD, Omega and 2048. On Pulse and Pure by default it does not happen, and **the
+maintainer's report was not reproduced on White**: three matched poses of ours against the original (the start grid,
+the approach to speed pad 2, spline row 2430 beside trees 755 and 756) show trees where the original shows them, and no
+pose reachable by a hovering craft put a tree between the chase camera and the craft or a pad. What remains open is
+which build or setting the report came from; it needs the maintainer's spot on the circuit.
+
+Confidence: the layers and the order, **85** (a runtime trace of one frame of one circuit, two boots, the bump
+reproducing on each; it stops at 85 because it is one state); the depth states, **85** (read off the GE command words
+of the same frame); the claim that a nearer tree lies over the hull and pads in the original, **80** (inferred from the
+order and the depth state, not seen as a pair frame: no pose put a tree over a craft in the original). Platinum Rush
+Black was not reached (below). **Not measured:** the weapon pads' exact submit (`0x0890cdc8`, unread), the ship object's
+prims, PS2.
+
+**Cross-title check (CLAUDE.md).** Pure: **checked, applies, not wired** - the same `trail_order` path, its queue keys
+unread. HD: **checked, differs** - `hd_trail_active` sends the circuit whole through `Draw::Track`, so its blended
+list precedes the hulls and pads (the HD queue is a different pass, `docs/rendering/trail-ribbon.md`; its layers are
+unread). 2048 and Omega: **not checkable here** - no queue read; they share HD's `ribbons_first() == false` path, so
+any translucent scenery with no depth write is drawn before the craft there too. A reorder for HD/2048/Omega needs
+that title's own queue keys first.
+
 ### The exhaust flare is the one thing that computes a depth
 
 `ExhaustFlare_Submit` (`0x0890490c`, confidence 85):
