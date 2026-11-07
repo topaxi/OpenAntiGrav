@@ -69,6 +69,7 @@ mod quake_lift;
 mod reconcile;
 mod reconcile_cost;
 mod reconcile_predict;
+mod replay_timeline_cost;
 mod repulser;
 pub(crate) mod respawn;
 mod roll_payout;

@@ -240,6 +240,20 @@ nextest run -p oag-raceplay --run-ignored all --no-capture -E 'test(/reconcile_c
 (one circuit per process; omit `OAG_SWEEP_TRACKS` for all twelve, with heap
 figures that then read low after the first).
 
+**Re-measured with an exact allocator (2026-11-07, lane `replay-timeline`).** The "track half"
+row above is the resident-set delta of 64 copies and leaves out the speed plans, which are
+built on the first tick and make up the rest. By live-heap bytes of one `RaceSim` clone, on all
+five titles (Pulse, Pure, HD, 2048, Omega: 1.3 to 5.1 MiB), **97.8 to 99.3 percent of a
+snapshot is load-constant after the first tick** (collision, spline, racing line, pads, routes,
+weapon tables, speed and hull plans) and no tick writes it; the part that changes is the
+27.8 KiB inline struct plus 2 to 8 KiB of heap. So a snapshot that shares the constant half is
+about 30 to 35 KiB and `World::clone` alone is 0 to 2 us, against 57 to 1,132 us for the whole
+clone (release, loaded). This moves the "lever to reach for": sharing the constant half takes a
+24-tick window of per-tick snapshots from about 41 MiB (Pulse) to under 1 MiB. Method, per-title
+tables and the reproducing command:
+[ADR-0087](../architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md), "The
+measurements this ADR rests on".
+
 ## Remote-input predictability (2026-10-14, desktop)
 
 Section 3a's M1. Counts are deterministic, shown rather than assumed: the full
