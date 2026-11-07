@@ -68,6 +68,28 @@ pub struct Header {
     /// written.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork: Option<Fork>,
+    /// How many ticks the file records, filled when it is written. The REPLAYS list reads the
+    /// header alone, so a length has to be in it; `0` in a file written before the key.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub ticks: u64,
+    /// How the player's craft finished, when the race ended with a result. Written with
+    /// [`Self::ticks`], for the same reason.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish: Option<Finish>,
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
+
+/// How the recorded player's craft finished, for the list of replays.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Finish {
+    /// The final position, 1-based.
+    pub place: u8,
+    /// The finishing time, in ticks.
+    pub ticks: u32,
 }
 
 /// The schema kind of a replay header's `toml-schema` line.
@@ -187,6 +209,8 @@ impl Header {
             ghost: None,
             setup: None,
             fork: None,
+            ticks: 0,
+            finish: None,
         }
     }
 }

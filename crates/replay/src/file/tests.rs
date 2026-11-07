@@ -400,3 +400,44 @@ fn the_setup_and_fork_tables_round_trip_and_an_absent_one_reads_as_none() {
         5
     );
 }
+
+/// The list of replays reads this much of a file and no more: a damaged body does not hide it,
+/// and a header of another kind is still refused by name.
+#[test]
+fn the_header_alone_reads_from_a_file_whose_body_is_cut_or_damaged() {
+    let mut replay = record(600);
+    replay.header.ticks = 600;
+    replay.header.finish = Some(crate::header::Finish {
+        place: 3,
+        ticks: 590,
+    });
+    let bytes = replay.to_bytes();
+    assert_eq!(Replay::read_head(&bytes).expect("reads"), replay.header);
+    // Cut mid-body: the whole file is refused, its header is still listed.
+    let cut = &bytes[..bytes.len() / 2];
+    assert!(Replay::from_bytes(cut).is_err());
+    assert_eq!(
+        Replay::read_head(cut).expect("the header reads"),
+        replay.header
+    );
+    // A flipped byte in the body: the checksum refuses the whole file, not the header.
+    let mut flipped = bytes.clone();
+    let middle = flipped.len() - 40;
+    flipped[middle] ^= 0x01;
+    assert!(matches!(
+        Replay::from_bytes(&flipped),
+        Err(ReadError::Checksum)
+    ));
+    assert!(Replay::read_head(&flipped).is_ok());
+    let newer = edit_head(&replay, |text| {
+        text.replace("version = \"1.0.0\"", "version = \"2.0.0\"")
+    });
+    assert!(matches!(
+        Replay::read_head(&newer),
+        Err(ReadError::Schema(_))
+    ));
+    assert!(matches!(
+        Replay::read_head(b"RIFF...."),
+        Err(ReadError::BadMagic)
+    ));
+}
