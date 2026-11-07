@@ -124,6 +124,19 @@ only those two on Talon's Junction (26 empty-only samples of 5,450 at 40 units a
 for the plain file); the executable, though, gives mode 9 the plain file. Vineta K's `_de` frames no
 slot of ours at all (it is a different shot list, for a different grid).
 
+## Live (RPCS3, Fury EU, Talon's Junction, 2026-11-07)
+
+A Racebox Time Trial (Venom, Feisar) booted and walked on RPCS3 logged `BackendRoot has
+g_GameState.GetMode()==5` and `Loading World "Data\Environments\Talons_Junction\track.vex"`: Time
+Trial is mode 5, as the table has it (confidence 90 on the id). The fly-by played after the loading
+screen with the `START RACE` strip, no HUD and a camera that rises past the green stands and flies
+the corridor; its first ten seconds (RPCS3 frames at roughly 0.5 s steps) show the same buildings,
+framing and sky as ours at `--race --mode time_trial --intro-ticks 150`, `300` and `450` on the
+`_ta` file. That window frames no grid slot, so it does not tell `_ta` from the plain file; the
+grid close-ups later in the file (our ticks 1,200 and 10,200 show the Time Trial craft on `_ta` and
+empty slots on the plain file) were **not aligned in time** (no fly-by clock on the original), so
+the file choice itself stays a static read, 84.
+
 ## Omega and 2048
 
 - **Omega** (`/omega/eboot-ps4-omega-eu.bin`): **checked, differs.** The strings are

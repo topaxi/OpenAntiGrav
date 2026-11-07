@@ -171,7 +171,9 @@ either, and a file not on the disc falls back to the forward plain `start_grid.v
 2's, `Demo`; this project has no demo. `_ta` is the lone craft's fly-by: on Talon's Junction,
 Amphiseum, Vineta K and Ubermall its close-ups frame the Time Trial craft's slot (slot 1) and almost
 never an empty one, where the plain file spends 581 to 1,087 samples of about 5,000 on empty slots.
-Wired as `PreRace::by_mode`, tested by `hd_flyby_ground_truth`.
+Wired as `PreRace::by_mode`, tested by `hd_flyby_ground_truth`. One Time Trial fly-by was watched
+on RPCS3 (Talon's Junction, mode 5 in the TTY log): its first ten seconds match ours on `_ta`, but
+those shots frame no grid slot, so they do not tell `_ta` from the plain file.
 
 **Open: Head to Head, and Zone's own circuits.** Head to Head is game mode 9 in the campaign code,
 so the rule gives it the plain file and its two craft fly under a fly-by that mostly frames empty

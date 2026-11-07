@@ -24,9 +24,10 @@ and the loader's try-then-fall-back, one `hd_flyby_ground_truth` test per mode.
   and 2 on Talon's Junction) as a chosen row, not skipping slots and not cutting the camera.
 - **Zone's own circuits.** `zone_1` to `zone_4` ship no `_ta`; the fall-back `start_grid.vex` has
   no `grid_camera1`, so ours plays no fly-by there. What the original does is unwatched.
-- **Watch one.** No mode's fly-by was watched on the original except Single Race on Talon's
-  Junction. A Time Trial fly-by on RPCS3 against ours would turn the static read (84) into a
-  measurement.
+- **Watch the grid close-ups.** A Time Trial fly-by was watched on RPCS3 (mode 5, first ten
+  seconds match ours on `_ta`), but those shots frame no grid slot. Ours shows the craft on `_ta`
+  at ticks 1,200 and 10,200 where the plain file shows empty slots; the original's clock needs
+  pinning (a memory read of the fly-by time) to compare those.
 - **Unread branches.** The byte `0x009384e1` skips the grid file choice altogether (online?);
   mode 7 belongs to no mode of ours; Omega adds a track-name test and a game-mode-object field test to
   its `_ta` gate, and 2048's gate (`FUN_8121bce2`) was not read.
@@ -35,5 +36,5 @@ and the loader's try-then-fall-back, one `hd_flyby_ground_truth` test per mode.
 ## Next Steps
 
 1. Ask the maintainer which file Head to Head flies.
-2. Watch a Time Trial fly-by on RPCS3 (Talon's Junction, stop before `START RACE`) and compare it
-   with `--race --mode time_trial --intro-ticks N --screenshot`.
+2. Pin the original's fly-by clock on RPCS3 and compare its grid close-ups (Talon's Junction,
+   Time Trial) with `--race --mode time_trial --intro-ticks 1200 --screenshot`.
