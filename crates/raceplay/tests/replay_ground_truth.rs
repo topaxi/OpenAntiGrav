@@ -156,15 +156,18 @@ impl Pad {
     }
 }
 
-fn header(title: &str) -> Header {
-    Header::new(title, "default", "time_trial", "venom", "default", 0)
+/// The header a session writes: the seed is the race's own, which a rebuild loads it with.
+fn header(title: &str, seed: u64) -> Header {
+    Header::new(title, "default", "time_trial", "venom", "default", seed)
 }
 
 /// Drives a recorded run of [`TICKS`] and hands back the race and its
 /// recording.
 fn record(title: &str) -> Option<(race::Race, Replay)> {
-    let mut race = race::Race::start(setup(title)?);
-    race.start_recording(header(title));
+    let setup = setup(title)?;
+    let seed = setup.seed;
+    let mut race = race::Race::start(setup);
+    race.start_recording(header(title, seed));
     let mut pad = Pad::new(title);
     for _ in 0..TICKS {
         let inputs = pad.inputs(&mut race);
@@ -286,7 +289,7 @@ fn ghost_changes_nothing(title: &str, replay: &Replay) {
     });
     // The haunted race records too, so the recorder is covered by the same
     // equality.
-    haunted.start_recording(header(title));
+    haunted.start_recording(header(title, replay.header.seed));
     let mut seen = 0u64;
     for tick in 0..replay.ticks() {
         let inputs = replay.inputs_at(tick);
