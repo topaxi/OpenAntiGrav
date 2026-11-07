@@ -433,9 +433,9 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
     // A header without it is refused by name before any load.
     let mut bare = read.header.clone();
     bare.setup = None;
-    let refused = race::rebuild(&bare, &source.display().to_string())
-        .err()
-        .expect("no request, no race");
+    let Err(refused) = race::rebuild(&bare, &source.display().to_string()) else {
+        panic!("{title}: no request, no race");
+    };
     assert!(format!("{refused:#}").contains("[setup]"), "{refused:#}");
 }
 

@@ -137,7 +137,7 @@ fn what_the_writer_emits_is_accepted_by_both() {
         "the schema line is the first line: {text}"
     );
     let (loader, schema) = verdicts(&text);
-    assert_eq!(loader.expect("the loader reads it"), true);
+    assert!(loader.expect("the loader reads it"));
     schema.unwrap_or_else(|e| panic!("{e:#?}\n{text}"));
 }
 
@@ -166,7 +166,7 @@ fn a_header_with_nothing_optional_is_accepted_by_both() {
     replay.header.options.clear();
     let text = head(&replay.to_bytes());
     let (loader, schema) = verdicts(&text);
-    assert_eq!(loader.expect("the loader reads it"), true);
+    assert!(loader.expect("the loader reads it"));
     schema.unwrap_or_else(|e| panic!("{e:#?}\n{text}"));
 }
 
@@ -204,7 +204,7 @@ fn a_header_with_no_schema_line_loads_and_says_so() {
     let text = head(&populated().to_bytes());
     let bare: String = text.lines().skip(1).collect::<Vec<_>>().join("\n");
     let (loader, schema) = verdicts(&bare);
-    assert_eq!(loader.expect("an old file still loads"), false);
+    assert!(!loader.expect("an old file still loads"));
     schema.expect("the schema's line is optional, as every schema's is");
 }
 
@@ -216,7 +216,7 @@ fn a_key_a_later_build_added_loads_but_the_closed_schema_refuses_it() {
     let rest: String = text.lines().skip(1).collect::<Vec<_>>().join("\n");
     let text = format!("{top}\nadded_later = 1\n{rest}\n");
     let (loader, schema) = verdicts(&text);
-    assert_eq!(loader.expect("the reader tolerates an unknown key"), true);
+    assert!(loader.expect("the reader tolerates an unknown key"));
     assert!(schema.is_err(), "the schema is closed");
 }
 
