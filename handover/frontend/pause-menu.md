@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, hd, omega, 2048, pure]
 updated: 2026-11-07
-summary: "Pulse and HD/Fury pause into their own authored screen per mode; Omega is read and tested but not wired; 2048 and Pure open the main page over the parked race"
+summary: "Pulse and HD/Fury pause into their own screen per mode; Omega read, not wired; 2048 and Pure open the main page"
 ---
 
 # The title's own pause screen
