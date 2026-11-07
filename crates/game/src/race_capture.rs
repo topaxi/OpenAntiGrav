@@ -600,7 +600,6 @@ pub fn capture(
     // **`Rgba8Unorm` on both paths now**, because every shader in this pipeline
     // writes gamma-space values and nothing may encode them again - see
     // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
-    //
     // `--presented` used to be `Rgba8UnormSrgb`; the window stopped encoding in
     // the same change, which made two captures of one frame differ by up to
     // 73/255. The non-sRGB twin keeps FSR 1 working (`remove_srgb_suffix`).
