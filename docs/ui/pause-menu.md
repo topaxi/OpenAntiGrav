@@ -226,10 +226,19 @@ pad, muted; the walk is MAIN MENU, RACEBOX, the race type row, Track Select, Shi
 START button, "OPTIONS" on a PS4 pad), Vineta K, the first Feisar craft, Venom class, 1920x1080. Reference
 frames: `data/reference/omega-pause-menu/`.
 
-- **Single Race** and **Time Trial** read as read off the file. Single Race: CONTINUE, PILOT ASSIST (OFF),
-  GAME OPTIONS, AUDIO OPTIONS, PHOTO MODE, RESTART RACE, QUIT RACE. Time Trial adds GHOST (ON) after PILOT
-  ASSIST. The footer is the START glyph with `RESUME GAME` and `CONFIRM`, as on HD. START at once opens it, over
-  the race on the grid or on the road.
+- **Single Race, Time Trial and Speed Lap** were walked live and draw the rows the file authors (confidence
+  90 each). Single Race: CONTINUE, PILOT ASSIST (OFF), GAME OPTIONS, AUDIO OPTIONS, PHOTO MODE, RESTART RACE,
+  QUIT RACE. Time Trial adds GHOST (ON) after PILOT ASSIST. Speed Lap is Time Trial's without RESTART and QUIT,
+  ending in END SESSION. The footer is the START glyph with `RESUME GAME` and `CONFIRM`, as on HD. START opens it
+  over the countdown board or the road.
+- **Not walked live**: Zone (shadPS4 0.20 died at the Zone race start in the one try, an access violation on
+  the render thread; the native port was not tried), Eliminator (the default screen by the binder, as on HD),
+  Tournament (a campaign event rewrites the mode first; static reading, confidence 80). The tables for those
+  are the file's.
+- The pad is the PS4's: the original is driven by CROSS and by the OPTIONS button, which the virtual pad's
+  START presses. Input over shadPS4 on this machine lags by tens of seconds under load and drops short presses,
+  so the walk polls the screen between steps (`scripts/shadps4-omega-pause-capture.py`, on the rig of
+  `scripts/shadps4-omega-pair.py`).
 - **Ink and blocks** (answers the dark-ink defect the first reading expected): the title, the labels and the
   footer are **white**; the blocks are **opaque black** with the focused one **red** `(239, 0, 0)`, the list value
   boxes the same. There is no HD-style cyan on this profile: the red and black is the palette this build
