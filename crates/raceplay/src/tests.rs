@@ -524,6 +524,7 @@ pub(super) fn race_with_a_grid_sighted(sight: Sighting) -> Race {
 pub(super) fn sighting_of(sights: &oag_title::hud::Sights) -> Sighting {
     Sighting {
         leach_law: sights.runs_leach_law(),
+        chase_gain: sights.chase_gain(),
         ..Sighting::default()
     }
 }

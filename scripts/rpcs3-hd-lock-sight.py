@@ -3,7 +3,7 @@
 
 `Hud_UpdateMissileSight` (`0x0008a5b8`) and `Hud_UpdateLeachBeamSight` (`0x00090d30`) read and
 write fields of the HUD object (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`): the lock byte
-`hud+0xdc`, the accumulator `hud+0xec`, the Leach Beam's loop clock `hud+0x604`, the Missile's spin
+`hud+0xdc`, the chase centre `hud+0xd4/0xd8`, the target's raw projection `hud+0xe0/0xe4`, the accumulator `hud+0xec`, the Leach Beam's loop clock `hud+0x604`, the Missile's spin
 angle `hud+0x634`, the cue latch `hud+0x6b8`, and ten widget pointers `hud+0x578..0x59c`. This
 finds the HUD object by those ten pointers, hands the player a weapon (the pickup slot's state
 word, `docs/reverse-engineering/rpcs3-capture.md`, "Giving the player a weapon"), holds cross, and
@@ -162,11 +162,13 @@ def row_text(t, snap):
     cols = " ".join("c%d=%08x" % (i, struct.unpack_from(">I", r, 0xBC)[0]) for i, r in enumerate(rows))
     wid += " " + cols
     return (
-        "%.3f dc=%08x ec=%.4f e0=%.4f e4=%.4f t604=%.4f r634=%.4f c6b8=%08x vis=%s %s"
+        "%.3f dc=%08x ec=%.4f d4=%.4f d8=%.4f e0=%.4f e4=%.4f t604=%.4f r634=%.4f c6b8=%08x vis=%s %s"
         % (
             t,
             struct.unpack_from(">I", a, 0xDC - 0xD0)[0],
             f32(a, 0xEC - 0xD0),
+            f32(a, 0xD4 - 0xD0),
+            f32(a, 0xD8 - 0xD0),
             f32(a, 0xE0 - 0xD0),
             f32(a, 0xE4 - 0xD0),
             f32(b, 0x4),
@@ -217,6 +219,20 @@ def main():
                 print("hud candidate %#x widgets %s vtables %s" % (hud_at, [hex(p) for p in ptrs], [hex(v) for v in vt]))
             if not found:
                 sys.exit("no HUD object found in %#x..%#x" % (args.scan_lo, args.scan_hi))
+            # Any run of ten image widgets in a widget list passes the scan; the HUD's are the ones
+            # still at the layout's authored sizes (the LockedOnMiddle and the four LeachBeam
+            # widgets are never resized while a Missile is held: 64, 176, 176, 128, 80 square).
+            authored = {5: 64.0, 6: 176.0, 7: 176.0, 8: 128.0, 9: 80.0}
+
+            def laid_out(ptrs):
+                n = 0
+                for i, p in authored.items():
+                    mem.seek(GUEST + ptrs[i] + 0xAC)
+                    w, h = struct.unpack(">2f", mem.read(8))
+                    n += (w, h) == (p, p)
+                return n
+
+            found.sort(key=lambda c: -laid_out(c[1]))
             hud = found[0][0]
         mem.seek(GUEST + hud + WIDGETS)
         widgets = list(struct.unpack(">10I", mem.read(40)))

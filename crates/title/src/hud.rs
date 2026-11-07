@@ -287,12 +287,28 @@ pub struct LiveSight {
     /// The LeachBeam's rings are `authored * extent / this`: the open backdrop
     /// is 600 px on a 176 px one, so `30 / 3.40909`.
     pub leach_extent_unit: f32,
+    /// The Missile's chase rate is the PSP's times this while a target is on
+    /// screen: `4.0`, the HUD grid's width over the PSP's (`1920 / 480`).
+    /// It widens the arrival radius the lock needs along with the step.
+    pub chase_gain: f32,
 }
 
 // The units are authored finite constants, never NaN.
 impl Eq for LiveSight {}
 
 impl Sights {
+    /// What the Missile's chase rate is multiplied by: HD's measured gain, and
+    /// `1.0` (the PSP's law) wherever the title's own update is unread.
+    #[must_use]
+    pub const fn chase_gain(&self) -> f32 {
+        match self {
+            Self::Concentric {
+                live: Some(live), ..
+            } => live.chase_gain,
+            _ => 1.0,
+        }
+    }
+
     /// Whether a held LeachBeam's reticle runs the LeachBeam's own law
     /// (`FUN_0881e8c8`: spinning arrowheads, no hold timer, lock taken on
     /// arrival) rather than the Missile's: the PSP dialect with a LeachBeam set,

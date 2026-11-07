@@ -460,3 +460,147 @@ fn a_ps2_reticle_runs_in_its_own_512_square_and_is_stretched_into_the_grid() {
     );
     assert_eq!(sight.tint(), [1.0, 1.0, 1.0]);
 }
+
+/// Wipeout HD's Missile reticle on a 1920x1080 grid, with its chase gain.
+fn hd_missile_reticle() -> Sight {
+    let mut sight = Sight::new([1920.0, 1080.0]);
+    sight.set_chase_gain(4.0);
+    sight
+}
+
+/// One reticle step from a recorded centre and target, as `(centre, target)` after it.
+fn step_from(
+    mut sight: Sight,
+    previous_target: [f32; 2],
+    centre: [f32; 2],
+    target: [f32; 2],
+) -> [f32; 2] {
+    sight.previous = Some(previous_target);
+    sight.centre = centre;
+    sight.update(
+        1.0 / 30.0,
+        Some(Projected {
+            screen: target,
+            distance: 100.0,
+        }),
+    );
+    sight.centre
+}
+
+/// HD's chase step is the PSP's times `4.0`, frame for frame.
+///
+/// Each row is one frame read off the running original (RPCS3, `hud+0xd4/0xd8` the
+/// chase centre, `hud+0xe0/0xe4` the target's projection, a sighting closing in at
+/// `1/30` s a frame with the target past 30 units so the zoom is 1): the target one
+/// frame earlier, the centre one frame earlier, the target now, and the centre the
+/// original left. On the chasing rows the original moved `4.00` times the step the
+/// PSP's law takes (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`, "Moving
+/// pursuit"; the table is rounded to a thousandth and the frame time taken as exactly
+/// `1/30` s, hence the quarter pixel allowed); on the two arrived rows it snapped to the target from `12.8` and `9.0`
+/// px away, past the `3.3` and `2.8` px a gain of one allows.
+#[test]
+fn hd_chases_at_four_times_the_psp_step_as_the_original_does() {
+    // (previous target, previous centre, target, centre after)
+    let frames = [
+        // dist 65.5 chasing
+        (
+            [1157.822, 511.476],
+            [1045.617, 579.133],
+            [1073.543, 521.434],
+            [1010.186, 549.117],
+        ),
+        // dist 23.0 chasing
+        (
+            [1073.543, 521.434],
+            [1010.186, 549.117],
+            [1030.398, 536.266],
+            [991.490, 550.731],
+        ),
+        // dist 16.7 chasing
+        (
+            [1030.398, 536.266],
+            [991.490, 550.731],
+            [1004.103, 550.279],
+            [978.843, 563.266],
+        ),
+        // dist 12.8 arrived
+        (
+            [1004.103, 550.279],
+            [978.843, 563.266],
+            [985.955, 561.432],
+            [967.807, 572.585],
+        ),
+        // dist 9.0 arrived
+        (
+            [985.955, 561.432],
+            [967.807, 572.585],
+            [972.877, 570.006],
+            [959.799, 578.579],
+        ),
+        // dist 116.8 chasing
+        (
+            [1179.347, 610.959],
+            [1109.813, 639.837],
+            [1200.749, 602.510],
+            [1175.474, 613.081],
+        ),
+        // dist 19.8 chasing
+        (
+            [1223.445, 554.239],
+            [1215.169, 541.853],
+            [1216.868, 561.778],
+            [1210.951, 565.610],
+        ),
+        // dist 95.9 chasing
+        (
+            [1076.123, 613.279],
+            [1075.306, 614.809],
+            [1027.811, 611.732],
+            [1018.124, 612.049],
+        ),
+    ];
+    for (previous_target, centre, target, after) in frames {
+        let hd = step_from(hd_missile_reticle(), previous_target, centre, target);
+        let psp = step_from(
+            Sight::new([1920.0, 1080.0]),
+            previous_target,
+            centre,
+            target,
+        );
+        let miss = |at: [f32; 2]| (at[0] - after[0]).hypot(at[1] - after[1]);
+        assert!(
+            miss(hd) < 0.25,
+            "HD's gain left the centre {hd:?} from {centre:?}; the original left {after:?}"
+        );
+        assert!(
+            miss(psp) > 1.0,
+            "the PSP's step reaches {psp:?}, which would make the gain unmeasured"
+        );
+    }
+}
+
+/// A target crossing the screen at a few pixels a tick is caught on HD and trails
+/// the PSP's reticle for good.
+///
+/// `3.7` px a tick is the `7.4` px a frame the original's target moved at the lock
+/// in the live run. The PSP's arrival radius is under a pixel at 60 Hz and its lag
+/// behind such a target tens of pixels, so the hold ends with the brackets still
+/// on their way.
+#[test]
+fn a_target_crossing_the_screen_locks_with_the_hd_gain_and_never_without_it() {
+    let lock_tick = |mut sight: Sight| {
+        (0..300u32).find(|tick| {
+            let state = sight.update(
+                DT,
+                Some(Projected {
+                    screen: [400.0 + 3.7 * *tick as f32, 540.0],
+                    distance: 60.0,
+                }),
+            );
+            state == State::Locked
+        })
+    };
+    let hd = lock_tick(hd_missile_reticle()).expect("HD never caught a crossing target");
+    assert!((48..80).contains(&hd), "HD locked at tick {hd}");
+    assert_eq!(lock_tick(Sight::new([1920.0, 1080.0])), None);
+}
