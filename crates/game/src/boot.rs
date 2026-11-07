@@ -1437,35 +1437,6 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     }
 }
 
-/// Whether two movies can share one set of I420 planes.
-///
-/// The front end is drawn by one renderer with one plane set, and
-/// [`crate::render::Renderer::upload_frame`] slices a frame by *those*
-/// dimensions rather than by the frame's own - so handing it a
-/// differently-shaped picture is a garbled image rather than an error.
-///
-/// The display aspect is deliberately **not** compared: that differs per movie on
-/// the PS2 and is handled by the pillarbox rect, not by the plane size.
-///
-/// **Unknown geometry is not disagreeing geometry.** `VideoFormat::of` answers
-/// `None` for a movie with no decoded frames - `--no-video`, no `ffmpeg`, a
-/// failed transcode - and there are then no planes to conflict over, because
-/// nothing will be uploaded. Reading that as a mismatch dropped the second movie
-/// on every `--no-video` load, which is the configuration the ground-truth tests
-/// use.
-fn same_planes(a: &Movie, b: &Movie) -> bool {
-    match (
-        crate::render::VideoFormat::of(a),
-        crate::render::VideoFormat::of(b),
-    ) {
-        (Some(a), Some(b)) => {
-            (a.width, a.height, a.chroma_width, a.chroma_height)
-                == (b.width, b.height, b.chroma_width, b.chroma_height)
-        }
-        _ => true,
-    }
-}
-
 /// Decodes the intro movie's ATRAC3+ track, if it should be heard at all.
 ///
 /// # The widget decides, not the container
@@ -1665,7 +1636,7 @@ mod team_ratings2048;
 
 use fonts::load_font;
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
-use movies::{load_movie, resolve_movie_region, resolve_pure_movie_region};
+use movies::{load_movie, resolve_movie_region, resolve_pure_movie_region, same_planes};
 use oag_ui::language::load::{chosen_language, load_languages, load_strings};
 use oag_ui::xml::expand;
 pub use progress::MediaProgress;
