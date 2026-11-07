@@ -149,7 +149,7 @@ POSE  varint last tick (poses exist for ticks 0..=last)
   ticks, the ends held. Across a jump of more than 16 units in one tick (a respawn) the earlier pose
   is held up to the later tick, so a frame between the two never draws the hull halfway along it. The
   16 is **chosen, not measured**: the fastest step a flying craft takes is under 7 units a tick on
-  every title; the respawns measured below move 147 to 529 units. The recorded ticks are exact either
+  every title; the respawns measured below move 147 to 538 units. The recorded ticks are exact either
   way.
 - **Bounds.** `MAX_TICKS` is 216,000 (one hour): the recorder takes nothing past it, and the track
   ends there. A capture holds 20 bytes a key in memory, about 300 bytes a craft a second.
@@ -182,9 +182,9 @@ degree on all five.
 **A respawn** (`pose_track_ground_truth::*_pose_track_bounds_a_respawn`): the pad flies to tick 600,
 the test lifts the player's craft 500 units off the circuit, and the game's own rescue puts it back
 (Pulse: the collision cage, the next tick, a step of 146.8 units; Pure, HD, 2048 and Omega: the
-200-unit distance rescue 30 ticks later, a step of 522 to 529 units). The track holds 0.0500 unit and
+200-unit distance rescue 30 ticks later, a step of 522 to 538 units). The track holds 0.0500 unit and
 0.5 degree at every tick of the run, and at the ticks around the jump (-2 to +30): Pulse 0.039 unit,
-Pure 0.048, 2048 0.035, Omega 0.041 (HD in the test's output); the two ticks either side of the jump are both keys,
+Pure 0.048, HD 0.031, 2048 0.035, Omega 0.041; the two ticks either side of the jump are both keys,
 and a frame between them is the earlier pose. The refinement's handling of a teleport is shown, not argued.
 
 **Reading it.** An unknown chunk is skipped: `file::tests::a_build_that_does_not_know_the_pose_chunk_skips_it`
