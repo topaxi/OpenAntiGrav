@@ -416,7 +416,7 @@ the lane runs under, so `dist` is not measured; the one `dist` datum in the docs
 ### 9. Take over
 
 A replay has **TAKE OVER AND PLAY FROM HERE** **(M)**: at a tick the player picks, the recorded
-seat's input stream runs on through a one-second hold after GO, then stops; the live pad takes the
+seat's input stream runs on through a hold of at most a second after GO, then stops; the live pad takes the
 seat and the race goes on live.
 
 - **On the real race, not the copy.** The viewer's probe never becomes the race the player
@@ -525,10 +525,10 @@ seat and the race goes on live.
   measures it with a pad-flown run (the stick held at the recorded deflection at GO), not with
   the Autopilot, which is neither a pad nor a physics reference.
 
-  **A one-second hold (M).** The table is why: after GO the seat keeps its recorded input for
-  exactly 60 ticks, then the stream stops and the pad flies the seat. The hold is fixed: moving the
-  pad does not end it early. The fork `tick` is the tick the pad first flies, so the file's
-  inputs stay the truth, and the header keeps `offered_at` for the tick the player picked.
+  **A hold of at most one second (M).** The table is why: after GO the seat keeps its recorded
+  input until the stick moves past a 0.1 dead zone or an airbrake is pressed, 60 ticks at most, then
+  the stream stops and the pad flies the seat. The fork `tick` is the tick the pad first flies, so the
+  file's inputs stay the truth, and the header keeps `offered_at` for the tick the player picked.
 - **Audio and camera hand-off.** Audio: the same `Sfx::rebuild` as a seek, then the live race's
   ordinary cues. Camera: the viewer may have been on any craft or a cinematic view; the live
   race starts on the taken seat's chase camera (the one a new race opens on), cold-started by
@@ -615,7 +615,7 @@ the tick keeps one path for how a race is driven and ended **(M)**.
 **A hard cut at the take-over tick, with no countdown.** Measured above: 12 to 45 percent of the
 points hit a wall inside two seconds with nothing held or only the throttle.
 
-**A two-second hold that ends when the pad moves.** Rejected **(M)** for a fixed second (decision 9).
+**A two-second hold.** Rejected **(M)** for at most one second, ended by the stick or an airbrake (decision 9).
 
 **Auto-save every taken-over run.** Rejected **(M)**: a fork is saved from SAVE REPLAY only.
 
