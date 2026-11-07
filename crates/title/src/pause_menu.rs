@@ -23,6 +23,8 @@ pub enum PauseAction {
     Resume,
     /// The front end's OPTIONS page, over the parked race.
     Options,
+    /// The front end's AUDIO page, over the parked race.
+    Audio,
     /// Photo mode ([`oag_ui`'s `Action::PhotoMode`]).
     Photo,
     /// Starts the race again from the grid.

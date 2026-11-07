@@ -481,3 +481,105 @@ fn pulses_ps2_pause_screens_are_the_psps_without_photo_and_the_manual() {
         "PS2: the screen the pause redirect opens by default"
     );
 }
+
+/// The `idstring` of every live row of the HD-style pause screen `screen`: its `Block` and
+/// `List` widgets in document order. The `aVertMenu` and `aBlock` elements the file spells with
+/// an `a` prefix are switched off, and are not rows.
+fn widget_rows(root: &Node, screen: &str) -> Vec<String> {
+    fn find<'a>(node: &'a Node, screen: &str) -> Option<&'a Node> {
+        if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(screen) {
+            return Some(node);
+        }
+        node.children.iter().find_map(|child| find(child, screen))
+    }
+    let screen = find(root, screen).unwrap_or_else(|| panic!("no screen {screen:?}"));
+    screen
+        .children
+        .iter()
+        .filter(|node| {
+            node.name.eq_ignore_ascii_case("Block") || node.name.eq_ignore_ascii_case("List")
+        })
+        .filter_map(|node| {
+            let values = node
+                .children
+                .iter()
+                .find(|child| child.name.eq_ignore_ascii_case("Values"))?;
+            values.attr("idstring").or_else(|| values.attr("IDString"))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+const HD_INGAME: &str = r"Data\Plugins\Frontend\Gui\ingame_definition.xml";
+
+/// Every pause screen `pause` names, row for row, and the screen its pause redirect opens by
+/// default, in `root`.
+fn check_widget_pause_screens(pause: &oag_title::PauseMenu, root: &Node, what: &str) {
+    for screen in pause.screens {
+        let rows: Vec<&str> = screen.rows.iter().map(|row| row.disc_id).collect();
+        assert_eq!(
+            widget_rows(root, screen.name),
+            rows,
+            "{what}: {:?} against `Title::pause_menu`",
+            screen.name
+        );
+    }
+    assert_eq!(
+        default_goto(root, "InGame Pause Redirect").as_deref(),
+        Some(pause.default_screen),
+        "{what}: the screen the pause redirect opens by default"
+    );
+    for (_, screen) in pause.by_mode {
+        assert!(
+            pause.screen(screen).is_some(),
+            "{what}: {screen:?} is a table row"
+        );
+    }
+}
+
+/// HD's pause screens are `Block` and `List` widgets, not an `Option` menu's entries. The file
+/// the game reads (`Archives::read_name`) is the table. The other four copies are **checked,
+/// differs**: `DATA05` has no `FE_GHOST` row, and the base game's `DATA02` and `DATA03` neither
+/// that nor `ONL_VIEW_INV`, and their Speed Lap screen also has RESTART and QUIT. Everything else
+/// agrees. The split-screen and network screens are the ones a race here never opens, so they
+/// are not in the table.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hds_pause_screens_are_the_five_single_player_widget_lists() {
+    let Some(image) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let pause = oag_hd::TITLE.pause_menu.expect("HD authors pause screens");
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("opening the disc");
+    check_widget_pause_screens(
+        pause,
+        &read(&mut archives, HD_INGAME),
+        "the file the game reads",
+    );
+    let all = copies(&mut archives, HD_INGAME);
+    assert_eq!(
+        all.len(),
+        5,
+        "{:?}",
+        all.iter().map(|c| &c.0).collect::<Vec<_>>()
+    );
+    for (label, root) in &all {
+        for screen in pause
+            .screens
+            .iter()
+            .filter(|screen| !screen.name.ends_with("Speed Lap"))
+        {
+            let rows: Vec<&str> = screen
+                .rows
+                .iter()
+                .map(|row| row.disc_id)
+                .filter(|id| !["ONL_VIEW_INV", "FE_GHOST"].contains(id))
+                .collect();
+            let found: Vec<String> = widget_rows(root, screen.name)
+                .into_iter()
+                .filter(|id| !["ONL_VIEW_INV", "FE_GHOST"].contains(&id.as_str()))
+                .collect();
+            assert_eq!(found, rows, "{label}: {:?}", screen.name);
+        }
+    }
+}
