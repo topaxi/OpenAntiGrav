@@ -29,15 +29,13 @@ pub enum ApplyError {
 
 impl Race {
     #[cfg(feature = "view")]
-    /// Switches every person-flown seat to `level`, as the pause menu does, and records each
-    /// one so the recording reproduces: the level changes the player's physics, so a recording
-    /// that did not hear of the change would desync at the next hash. Only those seats: nothing
-    /// reads another's level, and a write the file does not hold would part a seek's `RaceSim`
-    /// from the recorded one in the text, which is the only place the level shows.
+    /// Switches Pilot Assist to `level` for every seat, as the pause menu does, and records it
+    /// for each person-flown seat so the recording reproduces: the level changes the player's
+    /// physics, so a recording that did not hear of the change would desync at the next hash.
     pub fn change_pilot_assist(&mut self, level: Level) {
+        self.set_pilot_assist(level);
         let seats: Vec<usize> = self.sim.world.human_slots().collect();
         for seat in seats {
-            self.set_pilot_assist_seat(seat, level);
             self.record_event(seat, Kind::PilotAssist, ordinal(&Level::ALL, level));
         }
     }
@@ -82,7 +80,9 @@ impl Race {
                     .ok()
                     .and_then(|at| Level::ALL.get(at))
                     .ok_or(bad)?;
-                self.set_pilot_assist_seat(seat, *level);
+                // Every seat, as the writer does: no hash reads a seat nobody flies, and only
+                // this keeps the `RaceSim` of a seek equal to the recorded one as text.
+                self.set_pilot_assist(*level);
             }
             Some(Kind::Give) => {
                 let weapon = usize::try_from(event.value)

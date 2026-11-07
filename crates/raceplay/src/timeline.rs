@@ -160,8 +160,7 @@ impl Shared {
         })
     }
 
-    /// The lock is held for a push or a restore, a few microseconds, so the page's thread may
-    /// take it. A panicking holder leaves nothing half-written that a read could trip on.
+    /// The lock is held for a push or a restore, so the page's thread may take it. A panicking holder leaves nothing half-written that a read could trip on.
     fn built(&self) -> std::sync::MutexGuard<'_, Built> {
         oag_thread::lock(&self.built).unwrap_or_else(std::sync::PoisonError::into_inner)
     }
@@ -278,8 +277,9 @@ impl Timeline {
         self.shared.built().pass
     }
 
-    /// Waits for the opening pass. Natively only: the page's thread may not block, so there a
-    /// caller polls [`Self::pass`].
+    /// Waits for the opening pass. Not in the browser: the page's thread may not block, so a
+    /// caller there polls [`Self::pass`].
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn wait(&mut self) -> Pass {
         self.collect();
         self.shared.built().pass

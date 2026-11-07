@@ -1,6 +1,6 @@
 //! [`Timeline`] on a fixture race: where a seek lands, what ends the prefix, what the ceiling
 //! does, and that a visit leaves the live race alone. The same claims on every title's data are
-//! `tests/timeline_ground_truth.rs`.
+//! `tests/replay_timeline_ground_truth.rs`.
 
 use super::reconcile_predict::fixture;
 use super::*;

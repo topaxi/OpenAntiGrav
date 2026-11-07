@@ -95,7 +95,7 @@ the same way, between the same two ticks ([the timeline](../architecture/replay-
 
 | Kind | Code | Value | Writer |
 | --- | --- | --- | --- |
-| `pilot_assist` | 1 | the level's index in `Level::ALL` (off 0, normal 1, extreme 2) | `Race::change_pilot_assist`, called by the pause menu (`Session::apply_pause_setting`); writes and records each person-flown seat, and no other |
+| `pilot_assist` | 1 | the level's index in `Level::ALL` (off 0, normal 1, extreme 2) | `Race::change_pilot_assist`, called by the pause menu (`Session::apply_pause_setting`); one event per person-flown seat, each applied as the writer does, to every seat |
 | `give` | 2 | the weapon's index in `Weapon::ALL` | `Race::give_weapon`, the capture flag `--give` (writes only an empty pickup slot) |
 | `controller` | 3 | reserved for a seat handed to the opponent driver at a fork (decision 9) | not implemented; a file carrying it reads, and `Race::apply_event` refuses it by name |
 

@@ -85,10 +85,10 @@ tick.
   `Race::start`, the controllers are hashed, and `rebuild` left them at slot 0. `start_recorded` now
   seats `Header::slots`. Pulse only.
 
-**Found by the text, not by a hash:** `change_pilot_assist` wrote the level to all eight seats and
-recorded the person-flown ones, so a seek read `[Normal, Off, Off, ...]` against the live race's
-eight `Normal`. Nothing reads a seat nobody flies, so no hash could show it. It now writes the seats
-it records.
+**Found by the text, not by a hash:** `change_pilot_assist` writes the level to all eight seats and
+records the person-flown ones, and `Race::apply_event` applied each event to its own seat, so a seek
+read `[Normal, Off, Off, ...]` against the live race's eight `Normal`. Nothing reads a seat nobody
+flies, so no hash could show it. The applier now does what the writer does.
 
 ## Cost
 
@@ -113,7 +113,7 @@ The whole-pass column includes the plans and is on a pad-flown race; decision 3'
 Autopilot's, took a whole clone every 60 ticks and read eight poses a tick, so the two are not one
 measurement. On this load every title is inside the 100-times-real-time mark decision 3 sets for the
 Deck. **The Deck itself stays owed.** Seeks on the dev profile, load about 10 to 20, median 1 to 4 ms, worst
-2 to 18 ms.
+2 to 22 ms.
 
 ## The other title of the pair
 
@@ -130,5 +130,9 @@ Deck. **The Deck itself stays owed.** Seeks on the dev profile, load about 10 to
 - **Modes.** Single Race on every title and Head to Head with two people on Pulse. Time Trial and
   Speed Lap reach the same pass through `replay_ground_truth`'s `Verifier` run, not through a
   `Timeline`. The modes the [replay file](../formats/replay-file.md) does not claim stay unclaimed.
+- **An event can apply twice.** A seek that walks on from a `visit` to a tick that took an event
+  applies it again. Harmless for `pilot_assist` and `give`; the `controller` kind will need a look.
+- **The lock on the page's thread.** `Keyframes::push` can reallocate the list while holding it,
+  milliseconds for a list of 25 KB entries. Boxing each keyframe fixes that; stage 5 can do it.
 - **Playback through `Race::tick`.** `step` is quiet. Decision 6's drawn 1x playback and
   `Sfx::rebuild` are stage 5.

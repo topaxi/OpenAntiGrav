@@ -88,6 +88,22 @@ fn assist_level(race: &Race) -> Option<Level> {
         .find(|level| race.pilot_assist_available(*level))
 }
 
+/// What the run changes outside the tick, through the writers a session calls, so that it is
+/// in the recording.
+fn write_between_ticks(race: &mut Race, assist: Option<Level>, tick: u64) {
+    if let Some(level) = assist {
+        if tick == ASSIST_ON {
+            race.change_pilot_assist(level);
+        }
+        if tick == ASSIST_OFF {
+            race.change_pilot_assist(Level::Off);
+        }
+    }
+    if tick == 10 {
+        assert!(race.give_weapon(0, oag_tables::weapons::Weapon::Rocket));
+    }
+}
+
 fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::PathBuf, Run)> {
     let source = source(title)?;
     let loaded = race::load(&single_race(&source)).expect("loading the race");
@@ -114,17 +130,7 @@ fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::PathBuf, Run)> 
         if enough {
             break;
         }
-        if let Some(level) = assist {
-            if tick == ASSIST_ON {
-                race.change_pilot_assist(level);
-            }
-            if tick == ASSIST_OFF {
-                race.change_pilot_assist(Level::Off);
-            }
-        }
-        if tick == 10 {
-            assert!(race.give_weapon(0, oag_tables::weapons::Weapon::Rocket));
-        }
+        write_between_ticks(&mut race, assist, tick);
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
         race.drain_cues();
@@ -246,14 +252,18 @@ fn a_visit_changes_nothing(title: &str, setup: race::Setup, run: &Run) {
     let mut live = Race::start(setup.clone());
     live.apply_launch(&launch());
     live.start_recording(header_of(title, oag_race::Mode::SingleRace, seed));
+    let assist = assist_level(&live);
     let mut timeline = Timeline::live(setup, &live);
+    let early = 12;
+    let mut early_text = String::new();
     for tick in 0..visit_at + 300 {
-        for event in run.replay.events_at(tick) {
-            live.apply_event(event).expect("applies");
-        }
+        write_between_ticks(&mut live, assist, tick);
         live.tick(&run.replay.inputs_at(tick));
         live.drain_cues();
         timeline.keep(&live);
+        if tick + 1 == early {
+            early_text = format!("{:?}", live.sim);
+        }
         if tick + 1 == visit_at {
             let before = format!("{:?}", live.sim);
             timeline.visit(&live);
