@@ -399,6 +399,7 @@ Audit with `--give <weapon>` on Talon's Junction: the only HD projectile that st
 billboard was the Missile (the closure in `scene/frame.rs` had no arm for it). `HD_missile_ball_bloomring`
 is now `WeaponModels::missile_head`, two per missile on the two flare anchors (`weapons.md`,
 "The flying Missile's head draws its own model"). Open on it, in order of what a player would notice:
+- A pinned pair against the original (capture `viewProj`; `rpcs3-hd-weapon.py --state 1`, shot at film 6.2 s): its heads are red-orange lobes with hollow rings about six times ours in size, ours are white-hot (particle colour and bloom, and possibly the head's scale).
 - The original's per-tick placement and scale of the two nodes (`0x0011e640`, AltiVec, read with capstone
   over the raw bytes); the head is small under the particles, so a matched frame is the way to judge it.
 - The Missile's smoke ribbon (`RibbonEffects` pool `+0x74`, `smoke_trails_frame1_ALPHA`); law unread.

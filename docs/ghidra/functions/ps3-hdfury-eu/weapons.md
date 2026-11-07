@@ -1463,6 +1463,15 @@ particle balls. The disc's own head is `HD_missile_ball_bloomring.vex`; it is no
   against the particles, so the change is a few thousand pixels around the missile
   (3,952 differing pixels in a 160 x 70 box); the stand-in was mostly hidden under the effect
   already.
+- **Against the original (one RPCS3 boot, `scripts/rpcs3-hd-weapon.py --state 1`, 30 fps film, Talon's
+  Junction, craft at rest; ours at the same rest pose, default chase camera, ticks 290-298).** The
+  original's two heads read as two red-orange lobes pulsing over the nose with a pink twisting halo
+  (`WO_MISSILE_HEAD`'s goo), a hollow ring structure visible around each; ours are white-hot balls
+  with a pink halo and the head's small red ring-and-core eye inside. **They do not match in
+  colour and size**: the difference is in the particle balls' colour and the bloom, not in the
+  head model, which sits under them in both; whether the original's head model is also larger
+  (the rings are about 60 px across at 1280x720, ours about 10 px) is the open placement/scale
+  question above. No `viewProj` was captured, so the camera is not pinned and no pixel comparison was made.
 - **Still not drawn: the Missile's own smoke ribbon.** `RibbonEffects_Construct`'s pool `+0x74`
   (18 elements, `smoke_trails_frame1_ALPHA.gtf`) is acquired from `Missile.cpp`'s `0x0011d288`
   ([rocket-trail.md](rocket-trail.md)); its law is unread and nothing is drawn for it.
