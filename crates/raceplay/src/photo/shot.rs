@@ -194,6 +194,9 @@ impl Shot {
             {
                 rewind.follow = false;
                 race.photo_hold(pose);
+                // Again, with the camera held: the poses a frame blends from were taken under
+                // the camera that followed the craft.
+                rewind.seek(keeper, race, plan.tick);
             }
         }
         Self { plan, next: 0 }

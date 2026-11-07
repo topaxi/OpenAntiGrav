@@ -28,13 +28,14 @@ fn inputs(tick: u64) -> PlayerInputs {
 
 /// A recorded fixture race driven to `LIVE`, with its keeper fed as the session feeds it, and
 /// the text of its simulation at every tick.
-fn driven() -> (Race, Keeper, Vec<String>) {
+fn driven() -> (Box<Race>, Keeper, Vec<String>) {
     let (race, keeper, text, _) = driven_with_hashes();
     (race, keeper, text)
 }
 
-fn driven_with_hashes() -> (Race, Keeper, Vec<String>, Vec<u64>) {
-    let mut race = Race::start(fixture());
+fn driven_with_hashes() -> (Box<Race>, Keeper, Vec<String>, Vec<u64>) {
+    // Boxed: a `Race` is large, and a test thread's stack holds the few that a debug build copies.
+    let mut race = Box::new(Race::start(fixture()));
     race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
     let mut keeper = Keeper::new(fixture(), &race);
     let mut text = vec![format!("{:?}", race.sim)];
@@ -116,7 +117,7 @@ fn a_race_that_goes_on_after_a_rewind_hashes_as_one_that_was_not_visited() {
 /// A race that records nothing has no inputs to play: a seek stops at a whole keyframe.
 #[test]
 fn with_no_recording_a_seek_stops_at_the_keyframe_before_it() {
-    let mut race = Race::start(fixture());
+    let mut race = Box::new(Race::start(fixture()));
     let mut keeper = Keeper::new(fixture(), &race);
     for tick in 0..LIVE {
         race.tick(&inputs(tick));
@@ -321,4 +322,53 @@ fn a_ship_blur_holds_the_camera_and_a_track_blur_follows_the_craft() {
         "the craft stood still in a ship blur's picture: {}",
         spread(&ship, in_view)
     );
+}
+
+#[test]
+fn the_blur_and_rewind_rows_are_offered_only_where_the_title_and_the_race_have_them() {
+    use crate::photo::effects::Effects;
+    let bare = Effects::new();
+    assert!(!bare.rows().contains(&Row::MotionBlur));
+    assert!(!bare.rows().contains(&Row::Rewind));
+    let mut full = Effects::new().offering(true, true);
+    assert!(full.rows().contains(&Row::MotionBlur));
+    assert!(full.rows().contains(&Row::Rewind));
+    assert!(
+        !full.rows().contains(&Row::Shutter),
+        "the shutter is shown with a blur chosen"
+    );
+    full.select(Row::MotionBlur);
+    full.adjust(1);
+    assert_eq!(full.blur(), Some(Blur::Track));
+    assert!(full.rows().contains(&Row::Shutter));
+    full.adjust(1);
+    assert_eq!(full.blur(), Some(Blur::Ship));
+    full.adjust(5);
+    assert_eq!(full.blur(), Some(Blur::Ship), "it stops at the last choice");
+    full.adjust(-9);
+    assert_eq!(full.blur(), None);
+    assert!(!full.rows().contains(&Row::Shutter));
+}
+
+#[test]
+fn the_rewind_row_goes_back_to_the_start_and_forward_to_the_live_tick() {
+    use crate::photo::effects::Effects;
+    let mut effects = Effects::new().offering(false, true);
+    effects.set_live(100);
+    assert_eq!(effects.target_tick(), 100, "it opens on the live tick");
+    effects.select(Row::Rewind);
+    effects.adjust(-1);
+    assert_eq!(effects.target_tick(), 70, "left is back, half a second a push");
+    effects.adjust(-1);
+    effects.adjust(-1);
+    effects.adjust(-1);
+    assert_eq!(effects.target_tick(), 0, "it stops at the start of the race");
+    effects.adjust(1);
+    assert_eq!(effects.target_tick(), 30);
+    effects.adjust(50);
+    assert_eq!(effects.target_tick(), 100, "and at the live tick");
+    effects.set_target_tick(45);
+    assert_eq!(effects.target_tick(), 45);
+    effects.set_target_tick(900);
+    assert_eq!(effects.target_tick(), 100);
 }

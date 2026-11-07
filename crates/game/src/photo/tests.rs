@@ -194,3 +194,30 @@ fn a_chip_whose_row_word_is_too_long_for_it_says_its_value_alone() {
         "{shown:?}"
     );
 }
+
+#[test]
+fn the_rewind_row_shows_the_race_clock() {
+    assert_eq!(clock(0), "0:00.0");
+    assert_eq!(clock(60), "0:01.0");
+    assert_eq!(clock(90), "0:01.5");
+    assert_eq!(clock(60 * 75 + 6), "1:15.1");
+}
+
+#[test]
+fn a_shot_under_way_shows_its_progress_and_the_way_out_and_nothing_else() {
+    let say = |id: &str| id.trim_start_matches("OAG_PHOTO_").to_string();
+    let button = |b: Button| b.to_string().to_uppercase();
+    let photo = Photo::new(0, false, None);
+    let shown = texts(&draw_list(
+        &photo,
+        (483.0, 272.0),
+        &words(&say, &button),
+        None,
+        Some((37, 120)),
+    ));
+    assert_eq!(
+        shown,
+        vec!["PROGRESS  37 / 120".to_string(), "ANY_INPUT".to_string()],
+        "no chips and no help while the frames are drawn"
+    );
+}
