@@ -322,8 +322,8 @@ shows in the opening shots (table below).
 **What the original draws in the held shot (confidence 92).** A GE list of the shot itself: stop on
 `VIEW_PUBLISH` (`0x08882e9c`) of `scripts/psp-flyby.py` at hit 8, the eye reading the held
 `(55.31, 64.84, 363.38)`; send `gpu.record.dump` with the CPU stopped, then resume, so the dump is
-the next whole frame. That is the route the earlier attempts missed (they asked for the dump
-by wall clock). White and Black, same result. Matched by vertex count and world box, strip count
+the next whole frame. That is `scripts/psp-flyby.py --frames N --dump-at 8`; the earlier attempts
+asked for the dump by wall clock. White and Black, same result. Matched by vertex count and world box, strip count
 being triangles plus two:
 
 | Copy | Group | Its own batches | In the dump |
@@ -350,8 +350,8 @@ half-width test, both of which fail on a flyby, so it read `UNPLACED` and drew e
 the sample nearest the camera anywhere on the spline, and `Race::visible_set` masks by that one row,
 the path the station cameras already use.
 
-**The locate rule against the original, whole flybys** (`0x08ab10a0` read at every publisher hit, the
-camera eye beside it, ours `Spline::nearest` on the same eye):
+**The locate rule against the original, whole flybys** (`0x08ab10a0` read at every publisher hit, `view_section` in
+`psp-flyby.py --frames`' log, the camera eye beside it, ours `Spline::nearest` on the same eye):
 
 | Circuit | Rows | Differ | Largest camera to spline distance |
 | --- | --- | --- | --- |
@@ -378,12 +378,22 @@ pixels differing by more than 60 between the blends, on the 12 circuit files:
 | `09_Track` | 6 | 4 |
 | `02`, `03`, `04`, `05`, `06`, `07`, `10`, `14`, `16` | 0 to 5 | unchanged |
 
-**The rest of the flyby got closer to the original too.** Before and after differ by up to 85,370
-pixels (960x544) further in, and every large case read against the original's frame at the same
-camera is the mask removing what the original does not draw: on Talon's Junction (tick 1250) a grey
-panel and a white sign over the pink advert, and on De Konstruct Black (ticks 750, 1000, 1250) the
-building across the sky and the hover vehicles. Platinum Rush (ticks 60, 100) matches on the left
-dome's panes and the walkway's. The ticks of `03_Track` were compared before and after only.
+**Consecutive frames.** Mean change between ticks 30 and 35 (960x544, pane region, then the wall
+above it): before `59.5, 56.7, 54.1, 51.8, 64.9` against `14`, after `24.2, 23.8, 24.1, 24.1, 24.3`
+against `14`. The camera pans, so a pane with reflections moves more than a plain wall; the
+crawling chequer is gone in all six frames.
+
+**The rest of the flyby.** Before and after differ by up to 85,370 pixels (960x544) further in. Read
+against the original's frame at the same camera:
+
+| Circuit | Ticks | Against the original |
+| --- | --- | --- |
+| Talon's Junction | 450, 1250 | after matches; before drew a grey panel and a sign over the pink advert at 1250 |
+| De Konstruct Black | 750, 1000, 1250 | after matches; before drew a building across the sky and hover vehicles |
+| Platinum Rush | 60, 100 | after matches on the left dome's panes and the walkway's |
+
+Not read against the original: Platinum Rush tick 200 (10,385 pixels) and `03_Track` (up to 4,949
+pixels), compared before and after only.
 
 **Other titles.** The path needs `section` nodes. HD, 2048 and Omega draw `.rcsmodel` chunks with a
 partition of their own, located by world position, and have no such nodes: **checked, differs**, by
