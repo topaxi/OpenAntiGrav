@@ -208,10 +208,10 @@ fn tiles_with(bases: &[std::path::PathBuf]) -> Vec<String> {
 }
 
 #[test]
-fn wipeout_2048s_grid_gets_the_race_box_multiplayer_and_replays_tiles_with_no_mod() {
+fn wipeout_2048s_grid_gets_the_race_box_replays_and_multiplayer_tiles_with_no_mod() {
     // The split entry is the MULTIPLAYER tile's page, as it is a row on the other titles; the
-    // recorded races are the REPLAYS tile's.
-    assert_eq!(tiles_with(&[]), ["race", "multiplayer", "replays"]);
+    // recorded races are the REPLAYS tile's, which hangs off RACEBOX.
+    assert_eq!(tiles_with(&[]), ["race", "replays", "multiplayer"]);
 }
 
 #[test]
@@ -224,7 +224,7 @@ fn a_mods_row_under_racebox_is_a_tile_between_them_and_replays_still_fits() {
     }
     assert_eq!(
         tiles_with(&[official]),
-        ["race", "oag.remix/remix", "multiplayer", "replays"]
+        ["race", "replays", "oag.remix/remix", "multiplayer"]
     );
 }
 

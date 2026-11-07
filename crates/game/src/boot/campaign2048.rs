@@ -169,8 +169,8 @@ pub(super) fn touch_menus(
 }
 
 /// This build's own tiles: the rows of the menu tree built for 2048 that open the race
-/// box, every submenu a mod attaches under it (RACE REMIX with `oag.remix` on),
-/// MULTIPLAYER and REPLAYS, in that order, labelled as that tree labels them (so a mod that words
+/// box, every submenu attached under it (REPLAYS, and RACE REMIX with `oag.remix` on) and
+/// MULTIPLAYER, in that order, labelled as that tree labels them (so a mod that words
 /// them differently, or the language, reaches the tile too). A row that is not there
 /// (a mod turned off) is no tile.
 ///
@@ -211,7 +211,6 @@ pub(super) fn tiles_of(definition: &oag_ui::menu::Definition) -> Vec<ExtraTile> 
         .into_iter()
         .chain(under_racebox)
         .chain(page.row_with_id("multiplayer"))
-        .chain(page.row_with_id("replays"))
         .filter_map(|row| match &page.entries[row] {
             oag_ui::menu::Entry::Submenu { label, target } => Some(ExtraTile {
                 label: label.clone(),

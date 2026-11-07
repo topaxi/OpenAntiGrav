@@ -48,13 +48,14 @@ target = "multiplayer"
 subtitle = "Race with other people, on this machine and later over a network"
 subtitle_string_id = "OAG_MENU_MULTIPLAYER_SUBTITLE"
 
-# REPLAYS lists the races the game recorded and plays them back (ADR-0087). Where the build has
-# no directory a player can reach (a page, a phone) the page is empty and says so. Chosen, not
+# REPLAYS lists the races the game recorded and plays them back (ADR-0087). It hangs off RACEBOX,
+# as a mod's REMIX does, and not off the top: HD's strip fits RACE CAMPAIGN, RACEBOX, MULTIPLAYER,
+# OPTIONS and RECORDS, and a sixth tab pushed RECORDS off the end of it. Where the build has no
+# directory a player can reach (a page, a phone) the page is empty and says so. Chosen, not
 # measured.
 [[entry]]
 id = "replays"
-parent = "top"
-after = "multiplayer"
+parent = "racebox"
 kind = "submenu"
 label = "REPLAYS"
 string_id = "OAG_MENU_REPLAYS"
