@@ -295,6 +295,10 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "LeachBeamSightMiddle",
             "LeachBeamSightInner",
         ]),
+        live: Some(oag_title::hud::LiveSight {
+            missile_extent_unit: 30.0 / 2.65625,
+            leach_extent_unit: 30.0 / 3.40909,
+        }),
     },
     // **Not Pulse's substitution.** HD's `PickupBackground` is a hexagon
     // *outline* rather than a filled white one, so the icon on it is visible in

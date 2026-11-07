@@ -60,19 +60,21 @@ pub const LEACH_SPIN_LOCKED: f32 = 4.0;
 impl Sight {
     /// Chooses the law a held LeachBeam's reticle runs on.
     ///
-    /// **Off by default, and on for the PSP dialect only.** Wipeout HD's own
-    /// LeachBeam reticle has its own update (`Hud_UpdateLeachBeamSight`), unread
-    /// as a law here, and keeps the Missile's - see [`Sight::leach_cycle`].
+    /// **Off by default, and on for the PSP dialect and Wipeout HD.** HD's
+    /// `Hud_UpdateLeachBeamSight` was measured closing its rings from open to
+    /// closed in the same `0.34` s and turning them from yellow to red there
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`, "Measured live"); a title
+    /// whose own update is unread keeps the Missile's.
     pub fn set_leach_law(&mut self, on: bool) {
         self.leach_law = on;
     }
 
     /// Whether the title's LeachBeam reticle runs its own law
-    /// ([`Self::set_leach_law`]), the Pulse dialect.
+    /// ([`Self::set_leach_law`]): Pulse and HD.
     ///
     /// The fire gate keys on this and not on [`Self::runs_leach_law`]: the shot
     /// is taken while the sight still holds the LeachBeam, but a title whose
-    /// reticle keeps the Missile's law (Wipeout HD) fires off the window alone.
+    /// reticle keeps the Missile's law fires off the window alone.
     #[must_use]
     pub fn leach_law(&self) -> bool {
         self.leach_law

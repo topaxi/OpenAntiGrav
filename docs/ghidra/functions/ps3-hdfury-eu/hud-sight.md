@@ -1,5 +1,99 @@
 # HD's own lock-on sight: two per-tick updates, one shared bind
 
+## Measured live, 2026-11-07: the sight is the PSP law in HD's pixels, with its own colours
+
+Read off the original, running (RPCS3, Wipeout HD Fury EU, Racebox Single Race, Vineta K, Venom, Feisar,
+HUD Style and Menu Style the defaults of that walk, 1920x1080 HUD grid), by polling the HUD object through
+`/proc` memory and photographing the paused frame at each state change:
+`scripts/rpcs3-hd-lock-sight.py` (finds the HUD object by its ten `0x866210`-vtable widget pointers at
+`+0x578`, gives the player a pickup state - 1 Missile, 10 LeachBeam, `docs/ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md` -
+holds cross, puts the craft behind a rival at its heading and speed with `--behind`, logs a row per poll).
+Game time is read off the frame deltas the HUD accumulates (`dt` was `1/30` s in the Missile runs and `1/60` s
+in the LeachBeam run: RPCS3 paces frames, never the wall clock). Three Missile runs and one LeachBeam run;
+the figures below repeat across them.
+
+### The Missile, `Hud_UpdateMissileSight` (`0x0008a5b8`)
+
+| Field | Reading | Confidence |
+| --- | --- | ---: |
+| `hud+0xec` | adds `dt` every frame a target is on screen; **not reset when the lock drops**, zeroed only when the target leaves (it read `0.0` on the first frame with none) | 90 |
+| `hud+0xdc` (byte) | `1` on the first frame `0xec` passes `0.8` (`0.8000` in three of three runs, `24` frames at `1/30`); drops to `0` on a frame the reticle has not caught its target and is retaken at once while `0xec` is still above `0.8` | 90 |
+| `hud+0xe0`, `+0xe4` | the sight's centre in the 1920x1080 grid; chases the target from the first sighting, then follows it | 80 |
+| `hud+0x6b8` (byte) | `1` while not locked, `0` from the lock frame on, `1` again when the lock drops: the one-shot latch of the cue call `FUN_00677518(..., 0x38)` | 85 |
+| `hud+0x634` | `+= 4 dt`, wraps at `2 pi`: confirmed on every row | 95 |
+| widget `+0x34` bit `0x4` | shown; `+0xac`/`+0xb0` width and height, `+0x12c` rotation (the ring angles turn, so it is a rotation: raised from 65 to 90), `+0xbc..+0xc8` the four vertex colours | 90 |
+
+**The cue `0x38` is `Lockon_Rumble` (56)**, not a sound (`docs/gameplay/rumble.md`, row 56). It is wired:
+`oag_game::rumble` raises `Level::LockedOn` while the reticle is locked. Whether HD also plays a sound at the lock was not
+looked for in this pass.
+
+**Sizes.** Every ring is `authored * extent / 11.294` with `extent` the PSP law's own half-extent
+(`oag_race::sight`: `30` open, `9.6` seeking, `6` locked, eased at `50 * 1.4 = 70` a second): `340` px on the
+`128` px `Outer` when open (`30 / 2.65625`), `108.8` seeking. The ring closed `26.5` px a frame at `1/30`
+(`795` px/s, `70 * 128 / 11.294`). Before the first sighting the rings sit open and the backdrop hides once they are
+fully open. Locked, the original does **not** use the locked extent: `Outer` and `Inner` are both `91.4` px (`Inner`'s
+authored `108` at the seeking scale) and `LockedOnLines` stays `108.8`. The seeking size fell from `108.8` to `76`
+as the craft closed on the target in two runs, so something in the distance moves it **below** the PSP's `zoom >= 1`:
+not fitted, `oag_race::sight`'s zoom is what draws it.
+
+**Colours** (ARGB, written every frame): seeking `Outer` and `Inner` yellow `ffff00`, backdrop and `Middle` and
+`LockedOnLines` white; locked `Outer`, `Inner` and `LockedOnMiddle` red `ff0000`, the rest white. The authored red
+outer and green inner of the layout never show.
+
+**Motion.** `Middle` is a sawtooth: `0` to half of `Outer` once per `pi/2` of the ring angle (`0.39` s; it
+matched `r634 mod (pi/2)` on five rows to the pixel), its alpha climbing with it. Locked, `LockedOnMiddle` shrinks from half of
+`Outer` to nothing every `0.25` s and `Outer`'s alpha climbs from nothing to full about every `0.79` s. `Outer` and
+`Inner` are written `-30` and `+30` degrees on the lock frame itself.
+
+**What differs from the brief's reading.** The lock frame and the visuals are not simultaneous: `Middle`
+is hidden and `LockedOnLines`/`LockedOnMiddle` shown `1` to `11` frames after `0xdc` flips (`0.05` to `0.38` s over three
+locks); in the first run `Middle` grew to `Inner`'s size on the lock frame before it hid. So "shrinks then
+hides" is wrong, it grows to `Inner`'s size and hides, after a variable delay. Not ported: ours hides it at the lock.
+
+### The LeachBeam, `Hud_UpdateLeachBeamSight` (`0x00090d30`): it has a lock, and it is the PSP's
+
+The brief's open question ("whether the LeachBeam has a lock state of its own") is answered. On a target the four rings
+**close from `600` px (`3.409x` the authored `176`) to `120` px (`0.682x`) at `1,400` px a second**, their vertex colour
+alpha climbing as they close, and at `120` px **every ring turns from yellow `ffff00` to red `ff0000` at full alpha**. Over
+`0.34` s from the first sighting (`600 - 120 = 480` px at `1,400` px/s). That is `FUN_0881e8c8`'s law in
+`30 -> 6` extent units at the same `70` a second (`docs/ghidra/functions/psp-pulse-usa/lock-sight.md`, "The LeachBeam's
+reticle is its own function"), with `locked = extent == 6`, alpha `6 / extent` and no blink. The three-ring reveal on the `0.5` s
+`hud+0x604` loop runs on top of it (the same four bits cycled while the rings closed and while they were locked), which is
+what this page already had at 88. The Missile's `0.8` s hold has nothing to do with it. `hud+0x604` runs whatever is held;
+the Missile's fields freeze while a LeachBeam is.
+
+### Ours before and after
+
+| | Before | After |
+| --- | --- | --- |
+| LeachBeam lock on HD's grid | **48 ticks** (the Missile's hold; `race_on` probe) | **20 ticks**, `0.33` s |
+| Missile lock on HD's grid | 48 ticks | 48 ticks (unchanged, matches `24` frames at `1/30`) |
+| Seeking rings | authored red outer and green inner, authored size, a grey disc for the backdrop | yellow, sized off the extent, `Middle` pulsing |
+| Locked rings | the same red/green, the `Middle` swapped for the pair | red, `Inner`'s size, parked at `+-30` degrees |
+| LeachBeam rings | authored size and colour, a fixed three-ring loop | closing yellow, red at the lock |
+
+Wired as `oag_title::hud::Sights::Concentric::live` (`LiveSight`: the two extent units), `Sights::runs_leach_law`
+(true for HD), `oag_hud::sight_draw::{missile_live_draws, leach_reveal_draws}`. Tests:
+`crates/hud/src/reticle_tests.rs::hd_*` (draw), `crates/raceplay/tests/lock_sight_ground_truth.rs::hd_leachbeam_locks_in_its_closing_time_not_the_missiles_hold`
+and `::hd_missile_locks_after_the_point_eight_second_hold` (timing; the first reads `48` ticks without the change).
+
+The LeachBeam's fire gate (`oag_raceplay::weapons`) now waits for that lock on HD as it does on Pulse: **inherited from the PSP**, HD's
+fire path was not read for it.
+
+### Open, and checked against 2048 and Omega
+
+- **A moving pursuit never locked in ours.** One free race, player at full throttle, rival ahead: the Missile reticle was
+  visible `131` and `188` ticks and never locked (the lock needs the reticle to catch the target the same frame, `0.9 px` at
+  `60` Hz). The original locked in every placement tried, at matched speed. Geometry not matched, so not a finding yet.
+- The distance dependence of the seeking size; the `Middle` growth before it hides; the sound, if any, at the lock; the
+  alpha ramp of `Outer` and `Middle` before they are full (ours multiplies the law's own alpha).
+- **2048 and Omega**: same widget names (`Sights::Concentric` rows), checked, applies, not wired: `live: None` there,
+  their executables' updates are not read. A reader run on them would be the same poll against `Hud_UpdateMissileSight`'s Vita and PS4 copies.
+- A `Fury` HUD Style was not compared: both sides ran the default HUD Style.
+
+The sections below are the earlier readings, kept for their evidence; where they disagree with this one, this one wins.
+
+
 ## Correction, 2026-10-19: there is no 0.5 s hold, and the Missile has a real locked state
 
 Disassembling both functions end to end (`disassemble_function`, the decompile

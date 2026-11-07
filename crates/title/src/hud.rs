@@ -258,6 +258,13 @@ pub enum Sights {
         /// literals, confidence 88). Drawn off
         /// [`oag_race::sight::Sight::leach_cycle`].
         leach: Option<[&'static str; 4]>,
+        /// What this title's own sight update was measured to do at run time, or
+        /// `None` where only the layout is known and the widgets draw as authored.
+        ///
+        /// Wipeout HD (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`,
+        /// "Measured live"). 2048 and Omega author the same widget names and
+        /// have not been read.
+        live: Option<LiveSight>,
     },
     /// This title's reticle has not been read.
     ///
@@ -265,6 +272,25 @@ pub enum Sights {
     /// shipped title uses it; a fourth title is a row, not a panic.
     Unread,
 }
+
+/// How HD's sight widgets are driven at run time, as measured on the original.
+///
+/// The sight law (`oag_race::sight`) keeps one half-extent in the PSP's pixels
+/// (30 open, 9.6 seeking, 6 locked); HD writes each widget's size as its authored
+/// size times that extent over a constant. `docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`,
+/// "Measured live".
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LiveSight {
+    /// The Missile's rings are `authored * extent / this`: the open ring is
+    /// 340 px on a 128 px `Outer`, so `30 / 2.65625`.
+    pub missile_extent_unit: f32,
+    /// The LeachBeam's rings are `authored * extent / this`: the open backdrop
+    /// is 600 px on a 176 px one, so `30 / 3.40909`.
+    pub leach_extent_unit: f32,
+}
+
+// The units are authored finite constants, never NaN.
+impl Eq for LiveSight {}
 
 impl Sights {
     /// Whether a held LeachBeam's reticle runs the LeachBeam's own law
@@ -274,7 +300,15 @@ impl Sights {
     /// the Missile's; HD's own update is a different function nobody has read.
     #[must_use]
     pub const fn runs_leach_law(&self) -> bool {
-        matches!(self, Self::Brackets { leach: Some(_), .. })
+        matches!(
+            self,
+            Self::Brackets { leach: Some(_), .. }
+                | Self::Concentric {
+                    leach: Some(_),
+                    live: Some(_),
+                    ..
+                }
+        )
     }
 }
 

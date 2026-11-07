@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [hd, pure]
-updated: 2026-10-19
+updated: 2026-11-07
 summary: "Weapons::elimination (Pure's Eliminator tuning) is carried and unread; the second axis row is read by nothing"
 ---
 
@@ -109,6 +109,12 @@ title showing the reticle over a craft ahead.
   accumulated, the Middle ring's shrink-before-hide, the lock cue
   (`FUN_00677518(..., 0x38)`, latched by `hud+0x6b8`, `oag-sound`'s), and that
   `+0x12c` is a rotation (inferred).
+- **2026-11-07, `hd-lock-sight`: HD's sight measured live** ([hud-sight.md](../../docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md),
+  "Measured live"). Wired: HD's colours (yellow seeking, red locked), ring sizes off the law's extent, the `Middle`
+  pulse, the LeachBeam running the PSP's closing law (locks `0.34` s after the first sighting, `48` ticks before).
+  Open: a moving pursuit never locked in ours (no matched geometry yet), the seeking size's distance dependence, the
+  `Middle` ring's grow-then-hide delay, any sound at the lock (the `0x38` cue is `Lockon_Rumble`, wired), 2048 and
+  Omega (`live: None`, same widgets, updates unread), and a Fury HUD Style comparison.
 - **Pure's Eliminator tuning is one file, and nothing reads the axis's second
   row.** `oag_title::weapons::Weapons::elimination` is carried and unread:
   `Race::load` opens the race table for every mode on every title.

@@ -44,6 +44,7 @@ WIDGET_NAMES = [
     "LeachBeamSightBG", "LeachBeamSightOuter", "LeachBeamSightMiddle", "LeachBeamSightInner",
 ]
 WIDGET_SPAN = 0x140
+SIGHT_WIDGET_VTABLE = 0x866210
 
 
 def u32(mem, addr):
@@ -78,13 +79,15 @@ def find_hud(mem, lo, hi, chunk=0x1000000):
             flag = mem_byte(mem, hud + 0x161)
         except struct.error:
             continue
-        # The Leach Beam's four are authored at 176/176/128/80 px (`hud hud_art`, hud-sight.md).
-        sizes = []
-        for p in ptrs[6:]:
-            mem.seek(GUEST + p + 0xAC)
-            sizes.append(struct.unpack(">f", mem.read(4))[0])
-        if sizes == [176.0, 176.0, 128.0, 80.0] and flag:
-            good.append((hud, ptrs, vt))
+        # The ten sight widgets are one widget class (vtable `0x866210` on the EU disc) and the
+        # object carries its "already bound" byte at `+0x161`.
+        if set(vt) == {SIGHT_WIDGET_VTABLE} and flag:
+            widths = []
+            for w in ptrs:
+                mem.seek(GUEST + w + 0xAC)
+                widths.append(struct.unpack(">f", mem.read(4))[0])
+            if all(0.0 < x <= 400.0 for x in widths):
+                good.append((hud, ptrs, vt))
     return good
 
 
@@ -117,7 +120,7 @@ def teleport_behind(session, gdb, mem, body, distance, timeout=240.0):
         other_body = struct.unpack(">I", gdb.read(ship + place.OFF_BODY, 4))[0]
         pose = place.read_pose(gdb, other_body)
         ahead = sum((pose["pos"][i] - me["pos"][i]) * me["rows"][2][i] for i in range(3))
-        if ahead > 0 and (best is None or ahead < best[0]):
+        if best is None or abs(ahead) < abs(best[0]):
             best = (ahead, pose)
     if best is None:
         gdb.resume()
@@ -156,6 +159,8 @@ def row_text(t, snap):
         "%d:%.1f,%.1f,r%.2f" % (i, f32(r, 0xAC), f32(r, 0xB0), f32(r, 0x12C))
         for i, r in enumerate(rows)
     )
+    cols = " ".join("c%d=%08x" % (i, struct.unpack_from(">I", r, 0xBC)[0]) for i, r in enumerate(rows))
+    wid += " " + cols
     return (
         "%.3f dc=%08x ec=%.4f e0=%.4f e4=%.4f t604=%.4f r634=%.4f c6b8=%08x vis=%s %s"
         % (
@@ -252,6 +257,8 @@ def main():
                     name = "shot%03d.png" % shots
                     drive.screenshot(str(out / name), trim=True)
                     (out / (name + ".widgets")).write_text("\n".join(r.hex() for r in snap[3]))
+                    mem.seek(GUEST + hud)
+                    (out / (name + ".hud")).write_text(mem.read(0x720).hex())
                     gdb.resume()
                     last_shot = time.time() - began
                     shots += 1
