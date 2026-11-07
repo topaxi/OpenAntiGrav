@@ -119,13 +119,17 @@ frame. Pinned in `crates/race/src/sight/tests.rs::hd_chases_at_four_times_the_ps
 as a table; the PSP's step misses each by over a pixel) and `::a_target_crossing_the_screen_locks_with_the_hd_gain_and_never_without_it`.
 
 **Ours before and after.** Same pursuit on the disc (`crates/raceplay/tests/lock_sight_ground_truth.rs::hd_missile_holds_its_lock_on_a_craft_it_is_chasing_across_the_screen`:
-single race, cross held 400 ticks, a Missile always in hand, 1,500 ticks): HD locked on **359 of 656** visible ticks (`55 %`)
-before and **573 of 656** (`87 %`) after; Pulse **585 of 634** (`92 %`) before and after, bit for bit. The first lane's
-"0 of 318" did not reproduce on this tree (its scenario was not kept); the shortfall did.
+single race, cross held 400 ticks, a Missile always in hand, 1,500 ticks). Ticks 48 to 371 are the grid's lock on a parked
+target and say nothing about the chase, so the figure is the moving phase (slot 0 past 20 m/s): HD locked on **111 of 360**
+visible ticks (`31 %`) before and **325 of 360** (`90 %`) after (all phases: 359 of 656 before, 573 of 656 after); Pulse
+585 of 634 over all phases, before and after, bit for bit (its gain is `1.0`). The first lane's "0 of 318" did not reproduce
+on this tree (its scenario was not kept); the shortfall did.
 Wired as `oag_title::hud::LiveSight::chase_gain` (`4.0`; `Sights::chase_gain()` is `1.0` wherever `live` is `None`),
 `oag_raceplay::Sighting::chase_gain`, `oag_race::sight::Sight::set_chase_gain`, applied as `rate *= zoom * gain` on the
 target-on-screen path only. The simulation's per-slot locks and the drawn reticle take the same value from the same
-`Sighting`, so the red, the tone and the shot agree.
+`Sighting`, so the red, the tone and the shot agree. Only person-flown slots run a `Sight` (`Race::advance_locks`: opponents
+have no lock, their shot takes the window's candidate at once), so HD's AI is untouched; a player's Missile shot on HD now
+finds its lock taken far more often while chasing, as the original's does.
 
 **Not covered.** `Hud_UpdateLeachBeamSight` (`0x00090d30`) was not read for a gain: the LeachBeam's lock is its own closing
 law, and its centre chase on HD keeps the Missile's unscaled step in ours. Open.

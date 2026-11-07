@@ -748,6 +748,10 @@ struct Pursuit {
     visible: u32,
     /// Ticks the reticle is locked.
     locked: u32,
+    /// Ticks a target is on screen while slot 0 is moving (past the grid's hold).
+    visible_moving: u32,
+    /// Ticks the reticle is locked while slot 0 is moving.
+    locked_moving: u32,
 }
 
 /// A single race on `setup`, cross held for the first 400 ticks, a Missile in slot 0's hand
@@ -772,12 +776,23 @@ fn pursuit(setup: race::Setup, ticks: u32) -> Pursuit {
             PlayerInputs::none()
         };
         race.tick(&inputs);
+        let moving = race.sim.world.ships[0]
+            .physics
+            .body
+            .linear_velocity
+            .length()
+            > 20.0;
         match race.sight_state() {
             sight::State::Absent => {}
-            sight::State::Seeking => seen.visible += 1,
+            sight::State::Seeking => {
+                seen.visible += 1;
+                seen.visible_moving += u32::from(moving);
+            }
             sight::State::Locked => {
                 seen.visible += 1;
                 seen.locked += 1;
+                seen.visible_moving += u32::from(moving);
+                seen.locked_moving += u32::from(moving);
             }
         }
     }
@@ -789,8 +804,9 @@ fn pursuit(setup: race::Setup, ticks: u32) -> Pursuit {
 /// The original's chase step is the PSP's times `4.0` (`1920 / 480`, `0x008a7770`, applied
 /// at `0x0008ac3c`), so its arrival radius is four times the PSP's and a target moving a few
 /// pixels a tick is caught the frame the hold ends (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`,
-/// "Moving pursuit"). Without the factor this run locked on `359` of its `656` visible ticks
-/// (`55 %`); with it, `573` (`87 %`), where Pulse's own is `585` of `634` (`92 %`).
+/// "Moving pursuit"). Counted only while slot 0 is moving, since the grid's own lock on a
+/// parked target (ticks 48 to 371) is not a pursuit: without the factor this run locked on
+/// `111` of its `360` moving visible ticks (`31 %`); with it, `325` (`90 %`).
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn hd_missile_holds_its_lock_on_a_craft_it_is_chasing_across_the_screen() {
@@ -805,10 +821,10 @@ fn hd_missile_holds_its_lock_on_a_craft_it_is_chasing_across_the_screen() {
     let seen = pursuit(loaded.setup, 1_500);
     println!("HD pursuit: {seen:?}");
     assert!(
-        seen.visible > 400 && seen.locked * 100 >= seen.visible * 80,
-        "HD locked {} of {} visible ticks of a pursuit",
-        seen.locked,
-        seen.visible
+        seen.visible_moving > 200 && seen.locked_moving * 100 >= seen.visible_moving * 80,
+        "HD locked {} of {} visible ticks of a pursuit while moving",
+        seen.locked_moving,
+        seen.visible_moving
     );
 }
 
