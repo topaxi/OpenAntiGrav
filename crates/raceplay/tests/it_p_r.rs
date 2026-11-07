@@ -21,6 +21,7 @@ mod plasma_blast_models_ground_truth;
 mod plasma_ground_truth;
 mod plasma_timing_ground_truth;
 mod portuguese_br_ground_truth;
+mod pose_track_ground_truth;
 mod posed_visibility_ground_truth;
 mod post_finish_ground_truth;
 mod projectile_tilt_ground_truth;

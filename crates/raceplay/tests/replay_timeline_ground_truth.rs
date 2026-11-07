@@ -26,7 +26,7 @@ use oag_gameplay::{Controller, PlayerInputs};
 use oag_physics::pilot_assist::Level;
 use oag_raceplay::timeline::{KEYFRAME_TICKS, Pass, Timeline};
 use oag_raceplay::{self as race, Launch, Race};
-use oag_replay::{Header, Replay};
+use oag_replay::{Header, Pose, Replay};
 
 use crate::replay_ground_truth::{Pad, source};
 
@@ -68,15 +68,23 @@ fn header_of(title: &str, mode: oag_race::Mode, seed: u64) -> Header {
 }
 
 /// A recorded run, and what it looked like: the hash after every tick, the text at [`TEXT_AT`].
-struct Run {
-    replay: Replay,
-    hashes: Vec<u64>,
+pub(crate) struct Run {
+    pub(crate) replay: Replay,
+    pub(crate) hashes: Vec<u64>,
     text: Vec<(u64, String)>,
+    /// Every craft's drawn pose after tick `k`, at index `k`: the truth a pose track is judged
+    /// against.
+    pub(crate) truth: Vec<Vec<Pose>>,
 }
 
 fn watch(run: &mut Run, race: &Race) {
     let tick = run.hashes.len() as u64;
     run.hashes.push(race.sim.state_hash());
+    run.truth.push(
+        (0..usize::from(race.ship_count()))
+            .map(|slot| race.craft_pose(slot))
+            .collect(),
+    );
     if TEXT_AT.contains(&tick) {
         run.text.push((tick, format!("{:?}", race.sim)));
     }
@@ -105,7 +113,7 @@ fn write_between_ticks(race: &mut Race, assist: Option<Level>, tick: u64) {
     }
 }
 
-fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::PathBuf, Run)> {
+pub(crate) fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::PathBuf, Run)> {
     let source = source(title)?;
     let loaded = race::load(&single_race(&source)).expect("loading the race");
     let seed = loaded.setup.seed;
@@ -117,6 +125,7 @@ fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::PathBuf, Run)> 
         replay: race.recorded().expect("recording"),
         hashes: Vec::new(),
         text: Vec::new(),
+        truth: Vec::new(),
     };
     watch(&mut run, &race);
     let mut pad = Pad::new(title);
@@ -314,6 +323,7 @@ fn seek_reproduces_the_run(title: &str) {
     let Some((source, run)) = record(title, None) else {
         return;
     };
+    crate::pose_track_ground_truth::bounds(title, &run);
     let setup = file_setup(&source, &run);
     let mut timeline = opened(title, setup.clone(), &run);
     seeks_reproduce(title, &mut timeline, &run);
@@ -377,6 +387,7 @@ fn a_split_screen_recording_reproduces() {
         replay: race.recorded().expect("recording"),
         hashes: Vec::new(),
         text: Vec::new(),
+        truth: Vec::new(),
     };
     watch(&mut run, &race);
     let mut pads = [Pad::new(title), Pad::new(title)];

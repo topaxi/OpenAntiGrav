@@ -468,3 +468,80 @@ fn a_seed_over_the_signed_range_survives_the_file() {
     let old = edit_head(&record(60), |text| text.replace("seed = 7", "seed = 12345"));
     assert_eq!(Replay::from_bytes(&old).expect("reads").header.seed, 12_345);
 }
+
+fn with_pose_track(ticks: u32) -> Replay {
+    let mut replay = record(ticks);
+    let mut recorder = crate::PoseRecorder::new(3);
+    for tick in 0..=ticks {
+        let poses: Vec<Pose> = (0..3)
+            .map(|craft| Pose {
+                position: oag_core::math::Vec3::new(tick as f32 * 4.0, craft as f32 * 30.0, 0.0),
+                rotation: oag_core::math::Quat::from_rotation_y(tick as f32 * 0.002),
+            })
+            .collect();
+        recorder.push(&poses);
+    }
+    replay.pose_track = recorder.track();
+    replay
+}
+
+#[test]
+fn a_pose_track_round_trips_with_the_file() {
+    let replay = with_pose_track(700);
+    assert!(replay.pose_track.is_some());
+    assert_eq!(
+        Replay::from_bytes(&replay.to_bytes()).expect("reads"),
+        replay
+    );
+}
+
+#[test]
+fn a_recording_with_no_pose_track_writes_no_pose_chunk() {
+    assert!(!record(120).to_bytes().windows(4).any(|w| w == b"POSE"));
+}
+
+/// A build that does not know the chunk skips it: the tag renamed to one nothing reads, the
+/// checksum redone, and the file reads as the same recording without its track.
+#[test]
+fn a_build_that_does_not_know_the_pose_chunk_skips_it() {
+    let replay = with_pose_track(700);
+    let mut bytes = replay.to_bytes();
+    let at = bytes
+        .windows(4)
+        .position(|w| w == b"POSE")
+        .expect("the chunk is written");
+    bytes[at..at + 4].copy_from_slice(b"POSX");
+    let end = bytes.len() - (4 + 4 + 8);
+    bytes.truncate(end);
+    let sum = checksum(&bytes);
+    chunk(&mut bytes, *b"END_", &sum.to_le_bytes());
+    let read = Replay::from_bytes(&bytes).expect("an unknown chunk is skipped");
+    let mut expected = replay;
+    expected.pose_track = None;
+    assert_eq!(read, expected, "everything else is as it was written");
+    assert_eq!(replay_hashes(&read), Ok(700), "and it still reproduces");
+}
+
+#[test]
+fn a_cut_file_keeps_the_pose_track_of_the_ticks_it_keeps() {
+    let mut replay = with_pose_track(700);
+    replay.truncate(301);
+    let track = replay.pose_track.as_ref().expect("kept");
+    assert_eq!(track.last_tick(), 301);
+    assert_eq!(
+        Replay::from_bytes(&replay.to_bytes()).expect("reads"),
+        replay
+    );
+}
+
+#[test]
+fn a_pose_track_longer_than_the_recording_is_refused() {
+    let mut replay = with_pose_track(700);
+    replay.truncate(0);
+    let longer = with_pose_track(700).pose_track;
+    replay.pose_track = longer;
+    assert!(matches!(
+        Replay::from_bytes(&replay.to_bytes()),
+        Err(ReadError::Inconsistent(_))
+    ));
+}

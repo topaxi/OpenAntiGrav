@@ -1,6 +1,6 @@
 use oag_gameplay::PlayerInputs;
 use oag_replay::header::GhostInfo;
-use oag_replay::{GhostLap, Header, Pose, Recorder, Replay};
+use oag_replay::{GhostLap, Header, Pose, PoseRecorder, Recorder, Replay};
 
 use crate::*;
 
@@ -31,6 +31,9 @@ impl ReplayState {
 #[derive(Debug)]
 pub(super) struct Recording {
     pub(super) recorder: Recorder,
+    /// Every craft on the grid, refined as each segment closes: keys, not a pose a tick
+    /// (`oag_replay::track`).
+    track: PoseRecorder,
     /// The player's pose at world ticks `base..base + poses.len()`.
     ///
     /// Trimmed to the lap being driven at every line crossing, so an hour of
@@ -85,8 +88,11 @@ impl Race {
         header.setup = self.replay.request.clone();
         let recorder = Recorder::new(header, self.sim.state_hash());
         let standing = self.player_standing();
+        let mut track = PoseRecorder::new(usize::from(self.ship_count()));
+        track.push(&self.grid_poses());
         self.replay.recording = Some(Recording {
             recorder,
+            track,
             poses: vec![self.player_pose()],
             base: self.sim.world.tick,
             last_lap: standing.lap,
@@ -184,13 +190,16 @@ impl Race {
         Some(replay)
     }
 
-    /// The whole recording so far, with this run's best lap as its ghost.
+    /// The whole recording so far, with this run's best lap as its ghost and every craft's pose
+    /// track. Valid at any tick: the open segment is closed in the copy, so a race that ends by
+    /// finish, quit or restart writes the same kind of file.
     #[must_use]
     pub fn recorded(&self) -> Option<Replay> {
         let recording = self.replay.recording.as_ref()?;
         let mut replay = recording
             .recorder
             .replay(recording.best.as_ref().map(|(_, lap)| lap.clone()));
+        replay.pose_track = recording.track.track();
         replay.header.ghost = recording.best.as_ref().map(|(info, _)| *info);
         Some(replay)
     }
@@ -199,7 +208,15 @@ impl Race {
     /// the barrel roll and the steering lean folded in exactly as [`model_matrix_of`]
     /// folds them.
     fn player_pose(&self) -> Pose {
-        let ship = self.ship();
+        self.craft_pose(self.player_slot())
+    }
+
+    /// Grid slot `slot`'s craft as the pose it is drawn at: its position, and its orientation
+    /// with the barrel roll and the steering lean folded in. What the pose track records for
+    /// every craft and the ghost for the player's.
+    #[must_use]
+    pub fn craft_pose(&self, slot: usize) -> Pose {
+        let ship = &self.sim.world.ships[slot];
         let roll = oag_render::roll::display_rotation(
             Vec3::NEG_Z,
             ship.physics.roll_phase,
@@ -209,6 +226,13 @@ impl Race {
             position: ship.physics.body.position,
             rotation: ship.physics.body.orientation * roll,
         }
+    }
+
+    /// Every craft on the grid, in slot order.
+    fn grid_poses(&self) -> Vec<Pose> {
+        (0..usize::from(self.ship_count()))
+            .map(|slot| self.craft_pose(slot))
+            .collect()
     }
 
     /// Everything the recording and the ghost do after a tick has run: the
@@ -221,12 +245,14 @@ impl Race {
         recording.recorder.record(inputs, || sim.state_hash());
 
         let pose = self.player_pose();
+        let grid = self.grid_poses();
         let standing = *self.player_standing();
         let tick = self.sim.world.tick;
         let Some(recording) = self.replay.recording.as_mut() else {
             return;
         };
         recording.poses.push(pose);
+        recording.track.push(&grid);
 
         let crossed = standing.lap_start_tick != recording.last_start;
         let completed = crossed && standing.lap > recording.last_lap;

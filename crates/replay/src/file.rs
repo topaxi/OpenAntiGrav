@@ -8,6 +8,7 @@
 //!   HASH  u64 initial hash, varint count, count x u64
 //!   EVNT  optional: varint count, then per event varint tick, u8 seat, u8 kind, varint value
 //!   GHST  optional: the ghost lap's pose track
+//!   POSE  optional: every craft's pose track (`track.rs`)
 //!   END_  u64: FNV-1a over every byte before this chunk
 //! ```
 //!
@@ -25,6 +26,7 @@ use crate::codec::{Truncated, decode_inputs, encode_inputs, put_varint};
 use crate::event::Event;
 use crate::header::{Header, SCHEMA_KIND, SCHEMA_MAJOR};
 use crate::pose::GhostLap;
+use crate::track::PoseTrack;
 use oag_bytes::Reader;
 
 /// The version this build writes, and the only one it reads.
@@ -85,6 +87,10 @@ pub struct Replay {
     pub hashes: Vec<u64>,
     /// The lap a ghost is drawn from, if this file carries one.
     pub ghost: Option<GhostLap>,
+    /// Every craft on the grid, a pose a tick, if the run recorded them (ADR-0087, decision 4).
+    /// A picture of the race on the build that recorded it: it plays when the inputs no longer
+    /// reproduce the run, and it never starts anything.
+    pub pose_track: Option<PoseTrack>,
     /// The changes made to the race between ticks, in the order they were made; each applies
     /// before the tick it names (see [`Event`]).
     pub events: Vec<Event>,
@@ -146,6 +152,7 @@ impl Replay {
         let hashes = usize::try_from(ticks / interval).unwrap_or(usize::MAX);
         self.hashes.truncate(hashes);
         self.events.retain(|event| event.tick < ticks);
+        self.pose_track = self.pose_track.take().map(|track| track.truncated(ticks));
     }
 
     /// The file's bytes.
@@ -188,6 +195,9 @@ impl Replay {
         if let Some(ghost) = &self.ghost {
             chunk(&mut out, *b"GHST", &ghost.encode());
         }
+        if let Some(track) = &self.pose_track {
+            chunk(&mut out, *b"POSE", &track.encode());
+        }
         let checksum = checksum(&out);
         chunk(&mut out, *b"END_", &checksum.to_le_bytes());
         out
@@ -224,6 +234,7 @@ impl Replay {
         let mut inputs = Vec::new();
         let mut hashes = None;
         let mut ghost = None;
+        let mut pose_track = None;
         let mut events = Vec::new();
         let mut schema_header = true;
         let mut ended = false;
@@ -276,6 +287,7 @@ impl Replay {
                     hashes = Some((initial, list));
                 }
                 b"GHST" => ghost = Some(GhostLap::decode(payload)?),
+                b"POSE" => pose_track = Some(PoseTrack::decode(payload)?),
                 b"END_" => {
                     let stored = Reader::le(payload).u64()?;
                     if stored != checksum(&bytes[..start]) {
@@ -311,6 +323,7 @@ impl Replay {
             initial_hash,
             hashes,
             ghost,
+            pose_track,
             events,
         };
         replay.check()?;
@@ -372,6 +385,15 @@ impl Replay {
             .any(|pair| pair[1].tick < pair[0].tick)
         {
             return Err(ReadError::Inconsistent("events out of order".into()));
+        }
+        if self
+            .pose_track
+            .as_ref()
+            .is_some_and(|track| track.last_tick() > ticks)
+        {
+            return Err(ReadError::Inconsistent(
+                "pose track longer than the recorded ticks".into(),
+            ));
         }
         if self.header.hash_interval == 0 {
             return Err(ReadError::Inconsistent("hash interval of zero".into()));

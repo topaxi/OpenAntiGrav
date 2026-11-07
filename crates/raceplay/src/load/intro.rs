@@ -18,27 +18,30 @@ pub(super) fn rule(
 }
 
 /// The flyby for the circuit `track` (a `.vex` entry name) lives in, or `None` where the title
-/// plays none or the circuit authors none. Says which in `report`.
+/// plays none or the circuit authors none. The title may fly another file for the race's mode.
+/// Says which in `report`.
 pub(super) fn read(
     archives: &mut oag_assets::source::Archives,
     track: &str,
+    options: &crate::Options,
     rule: Option<&'static oag_title::pre_race::PreRace>,
     report: &mut Vec<String>,
 ) -> Option<(GridCamera, &'static oag_title::pre_race::PreRace)> {
     let rule = rule?;
     let (directory, file) = track.rsplit_once('\\')?;
-    let name = match rule.grid_reversed {
-        Some(reversed) if file.to_ascii_lowercase().contains("reversed") => reversed,
-        _ => rule.grid,
-    };
-    let entry = format!(r"{directory}\{name}");
-    let blob = match archives.read_name(&entry) {
-        Ok(blob) => blob,
-        Err(e) => {
-            report.push(format!("pre-race flyby: {entry} did not read ({e})"));
-            return None;
+    let reversed = file.to_ascii_lowercase().contains("reversed");
+    let mut found = None;
+    for name in rule.grid_files(options.mode.name(), reversed) {
+        let entry = format!(r"{directory}\{name}");
+        match archives.read_name(&entry) {
+            Ok(blob) => {
+                found = Some((entry, blob));
+                break;
+            }
+            Err(e) => report.push(format!("pre-race flyby: {entry} did not read ({e})")),
         }
-    };
+    }
+    let (entry, blob) = found?;
     let grid = GridCamera::read(&blob);
     report.push(match &grid {
         Some(grid) => format!(
