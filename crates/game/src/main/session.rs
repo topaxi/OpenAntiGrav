@@ -400,9 +400,11 @@ pub(crate) struct Session {
     pub(crate) stalled: bool,
     /// The `frame: N ms` warn's rate limit - see [`stutter::Stutter`].
     pub(crate) stutter: stutter::Stutter,
-    /// Moved by `Start` while a race is running: freezes the tick, nothing else,
+    /// Moved by `Start` while a race is running on a title with no pause screen
+    /// of its own, or in a split-screen race: freezes the tick, nothing else,
     /// and counts a resume down in a race with more than one person. There is
-    /// deliberately no pause screen behind it, only the line under it - see
+    /// deliberately no pause screen behind it, only the line under it (a title
+    /// that has one opens it instead, `session::pause_menu`) - see
     /// `session::pause`, which owns the rules and the one gate
     /// (`pause::State::ticks`).
     pub(crate) pause: oag_game::pause::State,

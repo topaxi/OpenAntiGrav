@@ -2,10 +2,7 @@
 
 use super::*;
 
-use oag_title::{
-    Origin, PauseAction, PauseMenu, PauseScreen,
-    pause_menu::row,
-};
+use oag_title::{Origin, PauseAction, PauseMenu, PauseScreen, pause_menu::row};
 
 const SCREENS: &PauseMenu = &PauseMenu {
     heading: "IG_PAUSE_GPAUSED",
@@ -83,7 +80,13 @@ fn the_pause_page_holds_the_rows_the_disc_authors_for_the_mode() {
     let labels: Vec<&str> = menu.page().entries.iter().map(Entry::label).collect();
     assert_eq!(
         labels,
-        ["CONTINUE", "GAME OPTIONS", "PHOTO MODE", "RESTART RACE", "QUIT RACE"]
+        [
+            "CONTINUE",
+            "GAME OPTIONS",
+            "PHOTO MODE",
+            "RESTART RACE",
+            "QUIT RACE"
+        ]
     );
 
     let mut tournament = built_in();
@@ -104,7 +107,12 @@ fn a_row_whose_disc_words_are_missing_is_left_off_and_named() {
     let built = definition.open_on_pause_screen(SCREENS, "time_trial", &none);
     assert_eq!(
         built.unworded,
-        ["IG_PAUSE_CONT", "OPT_GAME_OPT", "IG_PAUSE_REST", "IG_PAUSE_QUIT"]
+        [
+            "IG_PAUSE_CONT",
+            "OPT_GAME_OPT",
+            "IG_PAUSE_REST",
+            "IG_PAUSE_QUIT"
+        ]
     );
     assert!(
         !ids(&definition).contains(&"pause_resume".to_string()),
@@ -124,7 +132,11 @@ fn the_extras_photo_row_leaves_the_main_page_for_the_pause_page() {
             .filter(|meta| meta.id.as_deref() == Some(PHOTO_ROW))
             .count()
     };
-    assert_eq!(main(&definition), 1, "the extras attach it to the main page");
+    assert_eq!(
+        main(&definition),
+        1,
+        "the extras attach it to the main page"
+    );
     definition.open_on_pause_screen(SCREENS, "tournament", &words());
     assert_eq!(main(&definition), 0);
 }
@@ -192,6 +204,9 @@ fn a_click_on_a_pause_row_does_what_confirm_does() {
             press(&mut confirmed, &[Button::Down]);
         }
         assert_eq!(events, press(&mut confirmed, &[Button::Cross]), "row {row}");
-        assert!(!events.is_empty() || clicked.page().id == "options", "row {row} did something");
+        assert!(
+            !events.is_empty() || clicked.page().id == "options",
+            "row {row} did something"
+        );
     }
 }

@@ -411,7 +411,8 @@ impl Session {
             }
             // Pause, on the same button the original spends on "leave the
             // results table" - free during a still-running race because
-            // nothing else there reads `Start` yet. **No menu, no overlay**:
+            // nothing else there reads `Start` yet. **No menu, no overlay** (where the
+            // title has no pause screen of its own, see below):
             // this only decides whether `Race::tick` below runs, so the world
             // is exactly as the freezing tick left it, the way the finished
             // race arm below already leaves it under the results table.

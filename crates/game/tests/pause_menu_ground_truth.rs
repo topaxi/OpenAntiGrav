@@ -96,7 +96,10 @@ fn a_time_trial_pauses_into_the_time_trial_screen() {
     if pulse().is_none() {
         return;
     }
-    let run = run("time-trial", &format!("{} {OPEN}", to_the_race("time_trial")));
+    let run = run(
+        "time-trial",
+        &format!("{} {OPEN}", to_the_race("time_trial")),
+    );
     assert_eq!(rows(&run), the_rows());
 }
 
@@ -116,7 +119,10 @@ fn a_single_race_pauses_into_the_default_screen() {
     if pulse().is_none() {
         return;
     }
-    let run = run("single-race", &format!("{} {OPEN}", to_the_race("single_race")));
+    let run = run(
+        "single-race",
+        &format!("{} {OPEN}", to_the_race("single_race")),
+    );
     assert_eq!(rows(&run), the_rows());
 }
 
@@ -143,8 +149,14 @@ fn escape_opens_the_same_screen_and_start_or_continue_resumes() {
         .iter()
         .filter_map(|state| state.get("sim_tick")?.as_u64())
         .collect();
-    assert!(ticks.windows(2).all(|pair| pair[1] >= pair[0]), "one race, never reset");
-    assert!(ticks.last().copied().unwrap_or(0) > 430, "it ran on: {ticks:?}");
+    assert!(
+        ticks.windows(2).all(|pair| pair[1] >= pair[0]),
+        "one race, never reset"
+    );
+    assert!(
+        ticks.last().copied().unwrap_or(0) > 430,
+        "it ran on: {ticks:?}"
+    );
 }
 
 #[test]
@@ -169,7 +181,10 @@ fn restart_race_loads_the_race_again_from_the_grid() {
     let before = ticks.iter().copied().max().unwrap_or(0);
     let last = ticks.last().copied().unwrap_or(u64::MAX);
     assert!(before >= 400, "the first race ran: {before}");
-    assert!(last < 100, "the race that followed starts again from tick 0: {last}");
+    assert!(
+        last < 100,
+        "the race that followed starts again from tick 0: {last}"
+    );
 }
 
 #[test]
@@ -187,7 +202,10 @@ fn quit_race_leaves_a_custom_race_for_the_main_page() {
     );
     let last = run.states.last().expect("a state");
     assert_eq!(last["stage"], "menu");
-    assert_eq!(last["screen"]["id"], "main", "no parked race: the main page");
+    assert_eq!(
+        last["screen"]["id"], "main",
+        "no parked race: the main page"
+    );
 }
 
 #[test]

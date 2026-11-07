@@ -81,11 +81,7 @@ impl Definition {
                         built.unbuilt.push(row.disc_id);
                         continue;
                     };
-                    push(
-                        &mut page,
-                        "pause_options",
-                        Entry::Submenu { label, target },
-                    );
+                    push(&mut page, "pause_options", Entry::Submenu { label, target });
                 }
                 PauseAction::Photo => {
                     has_photo = true;
@@ -122,7 +118,15 @@ impl Definition {
             );
         }
         for other in &mut self.pages {
-            other.retain_rows(|entry| !matches!(entry, Entry::Run { action: Action::PhotoMode, .. }));
+            other.retain_rows(|entry| {
+                !matches!(
+                    entry,
+                    Entry::Run {
+                        action: Action::PhotoMode,
+                        ..
+                    }
+                )
+            });
         }
         self.root = self.pages.len();
         self.pages.push(page);

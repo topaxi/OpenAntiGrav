@@ -35,7 +35,13 @@ fn drive(image: &Path, tag: &str, script: &str, shots: &Path) -> Run {
 }
 
 /// [`drive`] with `args` added to the game's command line.
-pub(crate) fn drive_with(image: &Path, tag: &str, script: &str, shots: &Path, args: &[&str]) -> Run {
+pub(crate) fn drive_with(
+    image: &Path,
+    tag: &str,
+    script: &str,
+    shots: &Path,
+    args: &[&str],
+) -> Run {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a scratch directory");

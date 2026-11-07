@@ -1,8 +1,9 @@
 //! Wipeout Pulse's own pause screens, as its disc authors them.
 
 use oag_title::{
-    Origin, PauseMenu, PauseScreen,
+    Origin,
     PauseAction::{Options, Photo, Quit, Restart, Resume},
+    PauseMenu, PauseScreen,
     pause_menu::row,
 };
 

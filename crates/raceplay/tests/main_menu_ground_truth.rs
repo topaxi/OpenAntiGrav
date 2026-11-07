@@ -405,7 +405,9 @@ fn default_goto(root: &Node, screen: &str) -> Option<String> {
         }
         node.children.iter().find_map(default)
     }
-    default(find(root, screen)?)?.attr("goto").map(str::to_string)
+    default(find(root, screen)?)?
+        .attr("goto")
+        .map(str::to_string)
 }
 
 /// Every pause screen the title authors, row for row, and the screen its pause redirect
@@ -414,7 +416,9 @@ fn default_goto(root: &Node, screen: &str) -> Option<String> {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn pulses_psp_pause_screens_are_the_four_single_player_lists_on_both_pressings() {
-    let pause = oag_pulse::TITLE.pause_menu.expect("Pulse authors pause screens");
+    let pause = oag_pulse::TITLE
+        .pause_menu
+        .expect("Pulse authors pause screens");
     for name in ["pulse-psp-eu.chd", "pulse-psp-usa.chd"] {
         let Some(image) = image(name) else { continue };
         let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening the disc");
@@ -434,7 +438,10 @@ fn pulses_psp_pause_screens_are_the_four_single_player_lists_on_both_pressings()
             "{name}: the screen the pause redirect opens by default"
         );
         for (_, screen) in pause.by_mode {
-            assert!(pause.screen(screen).is_some(), "{name}: {screen:?} is a table row");
+            assert!(
+                pause.screen(screen).is_some(),
+                "{name}: {screen:?} is a table row"
+            );
         }
     }
 }
@@ -446,7 +453,9 @@ fn pulses_psp_pause_screens_are_the_four_single_player_lists_on_both_pressings()
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn pulses_ps2_pause_screens_are_the_psps_without_photo_and_the_manual() {
-    let pause = oag_pulse::TITLE.pause_menu.expect("Pulse authors pause screens");
+    let pause = oag_pulse::TITLE
+        .pause_menu
+        .expect("Pulse authors pause screens");
     let Some(image) = image("pulse-ps2-eu.chd") else {
         return;
     };

@@ -13,8 +13,8 @@
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
 mod pad_join_end_to_end;
-mod pause_resume_ground_truth;
 mod pause_menu_ground_truth;
+mod pause_resume_ground_truth;
 mod photo_mode_ground_truth;
 mod picker_flaps_ground_truth;
 mod picker_glyphs_ground_truth;

@@ -49,11 +49,11 @@ pub mod launch_hover;
 pub mod loading;
 pub mod loyalty;
 pub mod main_menu;
-pub mod pause_menu;
 pub mod menu;
 pub mod now_playing;
 pub mod opponent_autopilot;
 pub mod original_driver;
+pub mod pause_menu;
 pub mod photo;
 pub mod pre_race;
 pub mod pressing;
@@ -84,12 +84,12 @@ pub use hud::{BarModels, HudArt, HudLayouts, HudSkin, ResumeCountdown, ZoneSpeed
 pub use language::LanguageManifest;
 pub use loading::Loading;
 pub use main_menu::{Attached, MainMenu, OriginalRow};
-pub use pause_menu::{PauseAction, PauseMenu, PauseRow, PauseScreen};
 pub use menu::{
     HelpText, ListBlocks, MenuBlocks, MenuGlow, MenuList, MenuSettings, MenuSkin, MenuStrip,
     StripBlocks,
 };
 pub use oag_disc::Platform;
+pub use pause_menu::{PauseAction, PauseMenu, PauseRow, PauseScreen};
 pub use pressing::{Pressing, Pressings};
 pub use race::sound::{
     FrontEndSounds, MedalScreen, MenuCues, ResultsLaw, ResultsVoices, StyledCue, TournamentPlace,

@@ -138,10 +138,12 @@ impl Session {
     /// than the default cell the Head2Head reading saw
     /// (`campaign_cursor_ground_truth`).
     ///
-    /// **Chosen, not measured:** this build has no pause menu, so escape is
+    /// **Chosen, not measured:** on a title without a pause screen escape is
     /// the pause menu's QUIT RACE row and the race is discarded rather than
     /// parked - a campaign race cannot be resumed from the menus the way a
-    /// custom one can. The result capture at the top of [`Session::escape`]
+    /// custom one can. Where the title has one (`Title::pause_menu`) escape
+    /// opens it and its QUIT RACE row comes here
+    /// ([`Session::quit_parked_race`]). The result capture at the top of [`Session::escape`]
     /// has already run, so a Speed Lap or Time Trial best is kept. HD and
     /// Fury keep the raced cell under the cursor (chosen, nothing measured).
     pub(super) fn quit_campaign_race(
