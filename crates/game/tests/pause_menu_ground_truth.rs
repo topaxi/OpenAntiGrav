@@ -166,6 +166,23 @@ fn escape_opens_the_same_screen_and_start_or_continue_resumes() {
     );
 }
 
+/// The disc's pause screen authors `backward="none"`: CIRCLE on the root does nothing.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn circle_on_the_pause_screen_does_nothing() {
+    if pulse().is_none() {
+        return;
+    }
+    let run = run(
+        "circle",
+        &format!(
+            "{} {OPEN} press circle; ticks 20; expect stage=menu page=pause",
+            to_the_race("time_trial")
+        ),
+    );
+    assert_eq!(rows(&run), the_rows());
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn restart_race_loads_the_race_again_from_the_grid() {

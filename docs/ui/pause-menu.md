@@ -35,8 +35,8 @@ and no frame bar.
 
 ### What ours does
 
-Frames, same ship and track (Talon's Junction, the Feisar default), original beside ours: Time
-Trial, Speed Lap and Single Race, read side by side. The rows, the heading, the row pitch, the
+Frames, same track (Talon's Junction), the originals from PPSSPP on the USA disc and ours from the
+EU disc, original beside ours: Time Trial, Speed Lap and Single Race, read side by side. The rows, the heading, the row pitch, the
 `Confirm` legend and the heavy tint match; ours leaves out GAME MANUAL, END SESSION and the
 `MusicList`.
 
@@ -62,8 +62,16 @@ Trial, Speed Lap and Single Race, read side by side. The rows, the heading, the 
   **QUIT RACE** drops the race: a campaign race lands on its cell (`Session::quit_campaign_race`,
   measured), any other on the main page. Every row works by pad and by pointer: the page is a
   `Menu` page like the rest, and a click is what CROSS is (`menu::tests::pause`).
-- **CIRCLE** resumes the race, where the original does nothing on the root: the abstract back
-  button is shared with ESCAPE, which resumes. **Chosen, not measured.**
+- **CIRCLE does nothing on the root** (`backward="none"`, measured silent), as on the disc;
+  below it, in OPTIONS, it is back. **ESCAPE** (and Back on a phone) is not a button of the
+  original and resumes: **chosen, not measured**. START and ESCAPE and CONTINUE play `ACCEPT`
+  (measured for START and the rows).
+- **Silent.** Opening it stops the engine note and the race music where they were (the position
+  is kept and resumes, `Audio::hold_race_music`); the front end's menu loop does not start
+  (measured on the original, `photo-mode.md`, "What entering stops"). A window losing focus,
+  minimising and Android's `Suspended` open it the way ESCAPE does.
+- **Not animated:** the header bar slides in from `Y = -24` on the original (`delay="1"`); ours
+  is there from the first frame.
 - **A campaign race pauses** now: ESCAPE used to leave it straight for `Cell Selection`.
 - **Rows left out**, named in the load report at `debug`: `IG_PAUSE_GMAN` (the game manual),
   `IG_PAUSE_ENDSES` (ending a Speed Lap session), `IG_PAUSE_SKIP` (a tournament leg).

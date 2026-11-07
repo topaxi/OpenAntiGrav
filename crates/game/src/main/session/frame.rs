@@ -439,6 +439,8 @@ impl Session {
                     && !paused
                     && self.pause_screen_applies(stage)
                 {
+                    // START plays `ACCEPT` on pausing, measured.
+                    self.play_navs([oag_ui::menu::nav::Nav::Accept]);
                     self.escape();
                 } else {
                     self.step_pause(presses);

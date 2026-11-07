@@ -956,7 +956,7 @@ impl Session {
         oag_game::music_pool::expand(&mut definition, self.music_discs.pool(), &shell.strings);
         let paused = self.add_pause_screen(&mut definition);
         let mut model = menu::Menu::new(definition);
-        model.set_start_closes(paused);
+        model.set_pause_screen(paused);
         // PHOTO MODE is a row of the pause menu: there while a race with one view is held
         // behind the menus, and on no other page of the front end.
         model.offer(menu::Action::PhotoMode, self.photo_available());

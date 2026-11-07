@@ -9,7 +9,7 @@ use oag_title::{
 
 /// `Data\Plugins\PI001\GUI\InGame_Definition.xml`'s four single-player pause screens, identical
 /// on the EU and USA PSP discs (`crates/raceplay/tests/pause_menu_ground_truth.rs`). The
-/// executable picks the screen from the game mode (`FUN_088e35d4` on the USA binary: mode 4
+/// executable picks the screen from the game mode (`PauseMenu_BindRedirectForMode` on the USA binary: mode 4
 /// `Tournament`, 5 `Time Trial`, 10 `Speed Lap`, every other single-player mode the redirect's
 /// default `InGame Pause SP`; the multiplayer modes 13 to 18 take `InGame Pause MP`, which a
 /// race here never opens). `docs/ui/photo-mode.md`, "Entry".
@@ -81,7 +81,7 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
 mod tests {
     use super::PAUSE_MENU;
 
-    /// The executable's own switch on the game mode (`FUN_088e35d4`): Tournament, Time Trial
+    /// The executable's own switch on the game mode (`PauseMenu_BindRedirectForMode`): Tournament, Time Trial
     /// and Speed Lap have screens, every other mode the redirect's default.
     #[test]
     fn a_mode_opens_the_screen_the_executable_picks_for_it() {

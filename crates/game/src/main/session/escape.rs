@@ -349,8 +349,13 @@ impl Session {
             info!("leaving the race");
             // Before `open_menus`, not after: the menu voice this resumes has
             // to be sounding by the time the menus themselves draw. See
-            // `Audio::pause_race_music`.
-            self.audio.pause_race_music();
+            // `Audio::pause_race_music`. A title's own pause screen is silent
+            // instead (`Audio::hold_race_music`).
+            if matches!(&self.stage, Stage::Race(stage) if self.pause_screen_applies(stage)) {
+                self.audio.hold_race_music();
+            } else {
+                self.audio.pause_race_music();
+            }
             self.save_race_music();
             // The engine is a *held* voice - `~ENGINE` - so leaving the race
             // has to release it. Without this the menus hum.

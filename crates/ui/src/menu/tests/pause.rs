@@ -146,8 +146,10 @@ fn start_resumes_from_the_pause_page_and_confirms_a_row_elsewhere() {
     let mut definition = built_in();
     definition.open_on_pause_screen(SCREENS, "time_trial", &words());
     let mut menu = Menu::new(definition);
-    menu.set_start_closes(true);
+    menu.set_pause_screen(true);
     assert_eq!(press(&mut menu, &[Button::Start]), [MenuEvent::Closed]);
+    // `ACCEPT`, the cue the original plays for START on its pause screen.
+    assert_eq!(menu.take_nav(), [crate::menu::nav::Nav::Accept]);
 
     // GAME OPTIONS: START there is a confirm, as the disc's `forward="start"` is the pause
     // screen's alone.
@@ -157,14 +159,32 @@ fn start_resumes_from_the_pause_page_and_confirms_a_row_elsewhere() {
     assert!(!press(&mut menu, &[Button::Start]).contains(&MenuEvent::Closed));
 }
 
+/// The disc's pause screen authors `backward="none"`: CIRCLE on its root is silent and does
+/// nothing (measured). ESCAPE, ours, and the CONTINUE row resume, each with `ACCEPT`.
 #[test]
-fn backing_out_of_the_pause_page_closes_the_menus() {
+fn circle_on_the_pause_root_does_nothing_and_escape_and_continue_resume() {
+    use crate::menu::nav::Nav;
+
     let mut definition = built_in();
     definition.open_on_pause_screen(SCREENS, "time_trial", &words());
     let mut menu = Menu::new(definition);
-    assert_eq!(press(&mut menu, &[Button::Circle]), [MenuEvent::Closed]);
+    menu.set_pause_screen(true);
+    assert_eq!(press(&mut menu, &[Button::Circle]), []);
+    assert_eq!(menu.take_nav(), [], "silent");
+    assert_eq!(menu.back(), [MenuEvent::Closed]);
+    assert_eq!(menu.take_nav(), [Nav::Accept]);
     // CONTINUE is a Back row.
     assert_eq!(press(&mut menu, &[Button::Cross]), [MenuEvent::Closed]);
+    assert_eq!(menu.take_nav(), [Nav::Accept]);
+
+    // Below the root CIRCLE is back as everywhere.
+    press(&mut menu, &[Button::Down]);
+    press(&mut menu, &[Button::Cross]);
+    assert_eq!(menu.page().id, "options");
+    menu.take_nav();
+    press(&mut menu, &[Button::Circle]);
+    assert_eq!(menu.page().id, PAUSE_PAGE);
+    assert_eq!(menu.take_nav(), [Nav::Decline]);
 }
 
 /// Every row of the pause page has a region the pointer lands on, and a click on one fires

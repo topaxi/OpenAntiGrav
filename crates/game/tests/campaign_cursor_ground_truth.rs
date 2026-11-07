@@ -190,8 +190,8 @@ fn first_and_last_cell(states: &[Value]) -> (String, String) {
     (first, last_campaign(states).1)
 }
 
-/// Back from a race lands on the cell raced - through the real path (launch, Escape, which is
-/// the pause menu's QUIT RACE) - and so does a relaunch after a launch.
+/// Back from a race lands on the cell raced - through the real path (launch, Escape, the pause
+/// menu's QUIT RACE row) - and so does a relaunch after a launch.
 #[test]
 #[ignore = "needs data/images/pulse-psp-eu.chd"]
 fn the_cell_raced_is_the_one_the_campaign_reopens_on() {
@@ -203,7 +203,8 @@ fn the_cell_raced_is_the_one_the_campaign_reopens_on() {
         &format!(
             "{OPEN}; press cross; until screen.id=cell; press down; ticks 5; \
              press cross; until screen=picker; press cross; until stage=race within 3000; ticks 10; \
-             escape; until screen.id=cell within 600; ticks 10"
+             escape; until stage=menu; select pause_quit; press cross; \
+             until screen.id=cell within 600; ticks 10"
         ),
         "a.jsonl",
     );
