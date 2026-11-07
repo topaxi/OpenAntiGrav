@@ -55,7 +55,7 @@ checkable on this one disc (`g_FuryContentFlags` read `00 01` here). Confidence 
 p = PlayerInput
 if *0x009384e1 == 0 and mode in (8, 0x14):                 // Eliminator, Multiplayer Elimination
     if Pad_WasPressed(binding(8)) and !p+0x90:
-        if RM+0x1970 == 2 and !(craft+0x6a64 & 0x1000):    // racing, not out of the race
+        if RM+0x1970 == 2 and !(craft+0x6a64 & 0x1000):    // racing, not out of the race; `0x1621` on a destroyed craft, `0x621` racing
             p+0x90 = 1                                     // flipping
             p+0x94 = 0                                     // angle
             p+0x80 = body+0x1f0                            // forward held at the press
@@ -116,11 +116,11 @@ of a flip show the ordinary HUD. Confidence 88.
 
 `AI_UpdateCraft` step 11 ([ai-controls.md](ai-controls.md)) is the same move, same constants at
 `0x8a96e4..0x8a96f0`, on a craft with `+0x628c == 2`, which `ai-controls.md` measured as "opponent".
-Live: opponents flip. Six reversed spells in `140 s` (craft 1, 5, 1, 0, 5, 4, 6, 5 of the eight), `2.2 s`
-to `11 s` of wall clock. Confidence 90 that they flip, 84 on the chain below.
+Live: opponents flip. Eight reversed spells of `2.2 s` to `11 s` of wall clock in `140 s`, across five of the seven
+opponents (`data/reference/hd-eliminator-flip/original-ai.csv`, local). Confidence 90 that they flip, 84 on the chain below.
 
 `driver` fields: `+0x20` flipping, `+0x21` way round (`craft+0x6a58 >= 0`), `+0x24` angle, `+0x28` a
-timer, `+0x10` block the forward held.
+timer.
 
 ```text
 each tick, mode 8 or 0x14:
