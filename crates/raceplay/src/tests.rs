@@ -396,6 +396,7 @@ fn setup(handling: Handling) -> Setup {
         reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
         opponent_fire: oag_title::weapons::OpponentFire::PULSE,
         score_law: None,
+        flip_law: None,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
         speedup_pads: Vec::new(),

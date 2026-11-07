@@ -128,6 +128,8 @@ pub struct Title {
     pub hud_art: &'static hud::HudArt,
     /// What an Eliminator is won on. See [`eliminator::EliminatorRule`].
     pub eliminator: pre_race::Sourced<eliminator::EliminatorRule>,
+    /// The Eliminator flip, `None` where the title has none or nobody has wired it.
+    pub eliminator_flip: pre_race::Sourced<Option<eliminator::FlipRule>>,
     /// The team ids this title's roster names and the shared identity each is
     /// kept under, for loyalty. See [`team`].
     pub teams: team::Roster,

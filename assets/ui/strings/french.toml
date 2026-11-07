@@ -248,6 +248,7 @@ OAG_CONTROLS_PITCH_UP = { text = "TANGAGE HAUT", human = false }
 OAG_CONTROLS_PITCH_DOWN = { text = "TANGAGE BAS", human = false }
 OAG_CONTROLS_AIRBRAKE_LEFT = { text = "AÉROFREIN GAUCHE", human = false }
 OAG_CONTROLS_AIRBRAKE_RIGHT = { text = "AÉROFREIN DROIT", human = false }
+OAG_CONTROLS_ELIMINATOR_FLIP = { text = "DEMI-TOUR ÉLIMINATEUR", human = false }
 OAG_CONTROLS_CAMERA_VIEW = { text = "VUE DE LA CAMÉRA", human = false }
 OAG_CONTROLS_TRIGGERS = { text = "GÂCHETTES", human = false }
 OAG_CONTROLS_PILOT_ASSIST = { text = "AIDE AU PILOTAGE", human = false }

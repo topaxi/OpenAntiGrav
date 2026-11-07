@@ -108,7 +108,12 @@ impl Race {
             self.autopilot_controls(slot)
         } else {
             self.release_autopilot(slot);
-            ship_controls(snapshot, self.sim.scheme)
+            let snapshot = if self.sim.flip_law.is_some() {
+                snapshot.shoulder_flips()
+            } else {
+                *snapshot
+            };
+            ship_controls(&snapshot, self.sim.scheme)
         };
         // Past the line the original's own law sets the pace - see
         // `race::finished_thrust`.

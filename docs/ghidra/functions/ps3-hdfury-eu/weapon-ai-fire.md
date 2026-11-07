@@ -99,7 +99,7 @@ world step is exactly `1/60` at the point this runs (not measured here).
 | HD | Pulse | What |
 | --- | --- | --- |
 | `+0x04` | `+0x04` | the craft record |
-| `+0x14` | `+0x10` | the controller record the request bytes go to: **fire** `+0x19`, **absorb** `+0x1b`, and an HD-only `+0x1a` (flip request) |
+| `+0x14` | `+0x10` | the controller record the request bytes go to: **fire** `+0x19`, **absorb** `+0x1b`, and `+0x1a`, use held ([eliminator-flip.md](eliminator-flip.md)) |
 | `+0x1c` | `+0x18` | the `WeaponAIStats` object |
 | `+0x24` | `+0x20` | the held weapon id |
 | `+0x30` | `+0x2c` | held time scalar (`> 0.8` fire, `> 0.2` absorb; `0.8` is `0x8a9428`, `0.2` is `0x8a9430`) |
@@ -166,7 +166,9 @@ draw times `2^-31`. **Not** a divergence. Decoded constants: `150.0` (`0x8a943c`
 table is chosen for modes `8` and `0x14` (Pulse: `8` and `0x12`); `0x14` is HD's id for the mode
 Pulse calls `0x12`, not read further here.
 
-### The Eliminator-only flip block (read, not interpreted)
+### The Eliminator-only flip block
+
+Interpreted 2026-11-07: [eliminator-flip.md](eliminator-flip.md) has the chain and corrects `+0x1a` below, which is use held, not a flip request.
 
 Two pieces, both only when `E`; `rec` is the record at entry `+4` of this craft's own row in the racer table (`table + 0x14 +
 idx * 0x9c0`, `idx` found by walking the table for `self + 4`), which `ai-controls.md`

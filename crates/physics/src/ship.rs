@@ -496,6 +496,8 @@ pub struct ShipState {
     /// live (no Elimination state was captured). Written by the race every tick, not
     /// hashed, for [`Self::on_grid`]'s reason: it is a function of the pose and the mode.
     pub wrong_way_kill: bool,
+    /// The Eliminator flip, [`crate::flip`].
+    pub flip: crate::flip::Flip,
     /// The craft runs `Ship_HoverFourCorner` rather than `Ship_HoverTwoPoint`:
     /// `Ship_UpdateHover` (`0x0884870c`) picks it each frame on
     /// `g_game_mode == 6 && g_debug_mode_override == 0` (Zone). It selects the title's Zone
@@ -737,6 +739,7 @@ impl Default for ShipState {
             inertia_frame: InertiaFrame::World,
             released: true,
             wrong_way_kill: false,
+            flip: crate::flip::Flip::IDLE,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,
             mag_lock_blend: 0.0,

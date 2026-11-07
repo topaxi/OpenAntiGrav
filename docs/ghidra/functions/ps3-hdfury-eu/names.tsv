@@ -871,3 +871,5 @@
 0x0008c568	function	Hud_PlaceHighlightBar	80	eliminator-score.md
 0x00083ba0	function	Hud_RaiseScoreFeedback	75	eliminator-score.md
 0x000d9d60	function	Ship_RefillLapShield	88	eliminator-score.md
+0x000bd3e8	function	Options_GetButtonBinding	90	eliminator-flip.md
+0x006770c8	function	Pad_WasPressed	90	eliminator-flip.md

@@ -578,7 +578,8 @@ mod tests {
     fn the_world_snapshot_does_not_grow() {
         // +360 bytes: the LeachBeam pool of eight (was one Option<Beam>); +64: `Held::quake_armed`,
         // one byte per ship; +128: `Ship::muzzle`, the hull's weapon node, 16 bytes per ship.
-        const LIMIT: usize = 19_944;
+        // +192: `ShipState::flip`, the Eliminator flip, 24 bytes per craft.
+        const LIMIT: usize = 20_136;
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,

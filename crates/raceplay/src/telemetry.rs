@@ -188,7 +188,9 @@ impl Race {
             } else {
                 [None; oag_race::MAX_RECORDED_LAPS]
             },
-            wrong_way: self.wrong_way_for(slot),
+            // Facing back is the move here: no frame of the original's flips shows the
+            // warning (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Ours").
+            wrong_way: self.sim.flip_law.is_none() && self.wrong_way_for(slot),
             zone: race.zone.into(),
             score: race.score,
             // The colour grade lives on `crate::Scene`, not on the
@@ -412,12 +414,15 @@ impl Race {
             let distance = world.ships[slot].standing.distance(course);
             (distance / length).rem_euclid(1.0)
         };
+        let others = || {
+            (0..world.ship_count as usize)
+                .filter(|&slot| slot != player && world.ships[slot].active)
+        };
         Some(oag_hud::RaceLine {
             player: fraction(player),
-            others: (0..world.ship_count as usize)
-                .filter(|&slot| slot != player && world.ships[slot].active)
-                .map(fraction)
-                .collect(),
+            player_turned: self.facing_back(player),
+            others: others().map(fraction).collect(),
+            others_turned: others().map(|slot| self.facing_back(slot)).collect(),
         })
     }
 

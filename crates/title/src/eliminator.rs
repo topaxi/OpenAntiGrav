@@ -12,6 +12,14 @@ pub enum EliminatorRule {
     Score(ScoreRule),
 }
 
+/// A title's Eliminator flip: the craft turns half about its own up axis on a button press.
+/// `docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FlipRule {
+    /// How long the half turn takes, seconds.
+    pub seconds: f32,
+}
+
 /// The awards of a score Eliminator and where a Racebox race's target is authored.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScoreRule {

@@ -60,6 +60,22 @@ impl InputSnapshot {
         Self::default()
     }
 
+    /// The snapshot of a race whose left shoulder is the flip: while [`Button::Flip`] is down,
+    /// [`Button::L`] and the left airbrake it feeds read released, so the press brakes nothing
+    /// and counts toward no sideshift. HD binds the flip to L1 and the airbrakes to L2 and R2
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`).
+    #[must_use]
+    pub fn shoulder_flips(mut self) -> Self {
+        let [held, last, released, pressed] = self.buttons.masks();
+        if (held | released | pressed) & Button::Flip.bit() != 0 {
+            let keep = !Button::L.bit();
+            self.buttons =
+                Input::from_masks([held & keep, last & keep, released & keep, pressed & keep]);
+            self.airbrake_left = 0.0;
+        }
+        self
+    }
+
     /// Clamps the axes into range and drops NaN.
     ///
     /// Called on every snapshot before it reaches the simulation. An out-of-range

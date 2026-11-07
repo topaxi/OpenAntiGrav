@@ -40,8 +40,7 @@ from the grid show one chevron at the right and `0` / `7` at the ends. Ours take
 
 Confidence 85: the offsets and the counting are read off the instructions and the frames agree
 (counts `0 / 7` on the grid, `1 / 6` and `0 / 7` mid-lap, markers where the counts put them).
-**Unread:** what `craft+0x6ad8` is (the same byte gates `WeaponAi_DecideFireOrAbsorb`'s absorb
-in [weapon-ai-fire.md](weapon-ai-fire.md)); ours draws every marker upright.
+`craft+0x6ad8` is a facing flag, [eliminator-flip.md](eliminator-flip.md); ours turns the marker too.
 
 ## Which design the original draws (settles hd-hud.md's open question for this file)
 

@@ -1606,6 +1606,13 @@ label = "AIRBRAKE RIGHT"
 string_id = "OAG_CONTROLS_AIRBRAKE_RIGHT"
 button = "r"
 
+# The original's action 8, the Eliminator flip. L1 on a pad.
+[[page.entry]]
+kind = "binding"
+label = "ELIMINATOR FLIP"
+string_id = "OAG_CONTROLS_ELIMINATOR_FLIP"
+button = "flip"
+
 # Not one of the original's eight driving bindings, and listed here anyway: the
 # in-race camera cycle is the one control a player has no other way to discover.
 # It is bound (SELECT on a pad, TAB on a keyboard, through

@@ -394,6 +394,8 @@ pub struct RaceSim {
     pub(super) fire_terms: oag_ai::weapon_ai::Law,
     /// What an Eliminator is won on - see [`Setup::score_law`].
     pub(super) score_law: Option<oag_race::ScoreLaw>,
+    /// The Eliminator flip - see [`Setup::flip_law`].
+    pub(super) flip_law: Option<oag_physics::flip::FlipLaw>,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
     /// Which gravity term that scale multiplies, the title's craft law.

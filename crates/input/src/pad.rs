@@ -254,6 +254,16 @@ pub fn map_button(pad: gilrs::Button) -> Option<Button> {
     })
 }
 
+/// The abstract bits `pad` raises: L1 is the left airbrake and also the Eliminator flip, and a
+/// race with a flip reads it as the flip alone (`oag_gameplay::input::InputSnapshot::shoulder_flips`).
+fn bits_of(pad: gilrs::Button, button: Button) -> u32 {
+    if pad == gilrs::Button::LeftTrigger {
+        button.bit() | Button::Flip.bit()
+    } else {
+        button.bit()
+    }
+}
+
 /// Every button [`map_button`] binds, which is what a poll reads.
 pub const BOUND_BUTTONS: [gilrs::Button; 12] = [
     gilrs::Button::DPadUp,
@@ -930,7 +940,7 @@ impl Pad {
                     }
                 }
                 if let gilrs::EventType::ButtonPressed(button, _) = event.event
-                    && let Some(bit) = map_button(button).map(Button::bit)
+                    && let Some(bit) = map_button(button).map(|mapped| bits_of(button, mapped))
                     && is_real_pad(&gilrs.gamepad(event.id))
                 {
                     match self.presses.iter_mut().find(|(id, _)| *id == event.id) {
@@ -962,7 +972,7 @@ impl Pad {
                     if pad.is_pressed(bound_button)
                         && let Some(button) = map_button(bound_button)
                     {
-                        reading.buttons |= button.bit();
+                        reading.buttons |= bits_of(bound_button, button);
                     }
                 }
                 let pushed = pad.value(gilrs::Axis::LeftStickX).abs() > ACTIVITY_STICK

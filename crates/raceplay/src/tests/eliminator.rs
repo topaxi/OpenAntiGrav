@@ -490,3 +490,118 @@ fn a_kill_race_scores_nothing_and_still_ends_on_kills() {
     race.tick_destroyed_craft();
     assert!(race.sim.world.race[0].finished);
 }
+
+mod flip {
+    use super::*;
+    use oag_gameplay::input::{Button, Input, InputSnapshot};
+    use oag_physics::flip::FlipLaw;
+
+    /// Past the countdown, on the flip law `seconds` long.
+    fn racing(law: Option<FlipLaw>) -> Race {
+        let mut race = eliminator();
+        race.sim.flip_law = law;
+        while RaceState::thrust_gated(race.sim.world.tick) {
+            race.tick(&PlayerInputs::default());
+        }
+        race
+    }
+
+    fn press(button: Button) -> PlayerInputs {
+        let mut buttons = Input::EMPTY;
+        buttons.begin_frame(button.bit());
+        PlayerInputs::single(InputSnapshot {
+            buttons,
+            ..InputSnapshot::EMPTY
+        })
+    }
+
+    fn held(button: Button) -> PlayerInputs {
+        let mut buttons = Input::EMPTY;
+        buttons.begin_frame(button.bit());
+        buttons.begin_frame(button.bit());
+        PlayerInputs::single(InputSnapshot {
+            buttons,
+            ..InputSnapshot::EMPTY
+        })
+    }
+
+    const LAW: Option<FlipLaw> = Some(FlipLaw { seconds: 0.2 });
+
+    #[test]
+    fn the_press_turns_the_craft_half_about_in_twelve_ticks_through_the_tick() {
+        let mut race = racing(LAW);
+        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        let before = race.sim.world.ships[0].physics.body.forward();
+        race.tick(&press(Button::Flip));
+        assert!(race.sim.world.ships[0].physics.flip.active);
+        for _ in 0..11 {
+            race.tick(&held(Button::Flip));
+        }
+        let physics = &race.sim.world.ships[0].physics;
+        assert!(!physics.flip.active, "twelve ticks at 60 Hz is 0.2 s");
+        assert!(
+            physics.body.forward().dot(before) < -0.95,
+            "{}",
+            physics.body.forward()
+        );
+    }
+
+    #[test]
+    fn holding_the_button_flips_once_and_a_new_press_flips_back() {
+        let mut race = racing(LAW);
+        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        let before = race.sim.world.ships[0].physics.body.forward();
+        race.tick(&press(Button::Flip));
+        for _ in 0..30 {
+            race.tick(&held(Button::Flip));
+        }
+        let turned = race.sim.world.ships[0].physics.body.forward();
+        assert!(turned.dot(before) < -0.9, "{turned} against {before}");
+        race.tick(&PlayerInputs::default());
+        race.tick(&press(Button::Flip));
+        for _ in 0..30 {
+            race.tick(&PlayerInputs::default());
+        }
+        let forward = race.sim.world.ships[0].physics.body.forward();
+        assert!(forward.dot(before) > 0.9, "{forward} against {before}");
+    }
+
+    #[test]
+    fn no_law_no_flip() {
+        let mut race = racing(None);
+        race.tick(&press(Button::Flip));
+        assert!(!race.sim.world.ships[0].physics.flip.active);
+    }
+
+    #[test]
+    fn the_grid_and_a_destroyed_craft_refuse_it() {
+        let mut race = eliminator();
+        race.sim.flip_law = LAW;
+        race.tick(&press(Button::Flip));
+        assert!(!race.sim.world.ships[0].physics.flip.active, "on the grid");
+
+        let mut race = racing(LAW);
+        race.sim.world.ships[0].physics.craft_state = oag_physics::damage::CraftState::Destroyed;
+        race.tick(&press(Button::Flip));
+        assert!(!race.sim.world.ships[0].physics.flip.active, "destroyed");
+    }
+
+    #[test]
+    fn the_left_shoulder_flips_and_does_not_brake_where_the_flip_is_armed() {
+        let shoulder = || {
+            let mut buttons = Input::EMPTY;
+            buttons.begin_frame(Button::L.bit() | Button::Flip.bit());
+            PlayerInputs::single(InputSnapshot {
+                buttons,
+                airbrake_left: 1.0,
+                ..InputSnapshot::EMPTY
+            })
+        };
+        let mut armed = racing(LAW);
+        let controls = armed.player_controls(0, shoulder().get(0));
+        assert_eq!(controls.airbrake_left, 0.0);
+        let mut plain = racing(None);
+        let controls = plain.player_controls(0, shoulder().get(0));
+        assert_eq!(controls.airbrake_left, 1.0);
+    }
+}
