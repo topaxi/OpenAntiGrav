@@ -276,6 +276,7 @@ fn a_visit_changes_nothing(title: &str, setup: race::Setup, run: &Run) {
                 );
             }
             carries_the_plans(title, &mut timeline);
+            same_text(title, early, &timeline, &early_text);
             assert!(
                 format!("{:?}", live.sim) == before,
                 "{title}: the visit wrote"
