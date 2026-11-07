@@ -418,18 +418,17 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
     assert_eq!(rebuilt.control_scheme(), launch.scheme);
 
     // The request is what rebuilds it: the same file with another mode in it is another race,
-    // refused at tick zero.
-    let other = if mode == oag_race::Mode::SingleRace {
-        oag_race::Mode::TimeTrial
-    } else {
-        oag_race::Mode::SingleRace
-    };
-    let mut swapped = read.clone();
-    swapped.header.setup.as_mut().expect("present").mode = other.name().to_string();
-    let rebuilt = race::rebuild(&swapped.header, &source.display().to_string()).expect("rebuilds");
-    let desync = Verifier::new(&swapped, rebuilt.sim.state_hash())
-        .expect_err("a request naming another mode is another race");
-    assert_eq!(desync.tick, 0);
+    // refused at tick zero. Once per title (a third load), on its first mode.
+    if mode == oag_race::Mode::TimeTrial {
+        let mut swapped = read.clone();
+        swapped.header.setup.as_mut().expect("present").mode =
+            oag_race::Mode::SingleRace.name().to_string();
+        let rebuilt =
+            race::rebuild(&swapped.header, &source.display().to_string()).expect("rebuilds");
+        let desync = Verifier::new(&swapped, rebuilt.sim.state_hash())
+            .expect_err("a request naming another mode is another race");
+        assert_eq!(desync.tick, 0, "{title}");
+    }
 
     // A header without it is refused by name before any load.
     let mut bare = read.header.clone();

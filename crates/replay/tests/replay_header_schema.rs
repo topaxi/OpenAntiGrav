@@ -25,7 +25,7 @@ fn populated() -> Replay {
         7,
     );
     header.build = "abc123".into();
-    header.options.insert("scheme".into(), "classic".into());
+    header.options.insert("scheme".into(), "veteran".into());
     header
         .options
         .insert("pilot_assist".into(), "normal".into());
@@ -86,6 +86,15 @@ fn head(bytes: &[u8]) -> String {
     String::from_utf8(text).unwrap()
 }
 
+/// Writes the fixture: `cargo nextest run -p oag-replay --run-ignored all writes_the_fixture`.
+#[test]
+#[ignore = "regenerates tests/fixtures/replay-header.toml"]
+fn writes_the_fixture() {
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/replay-header.toml");
+    std::fs::write(path, head(&populated().to_bytes())).unwrap();
+}
+
 /// `bytes` with its `HEAD` text replaced, the checksum rewritten to match.
 fn with_head(bytes: &[u8], text: &str) -> Vec<u8> {
     let mut out = bytes[..8].to_vec();
@@ -130,6 +139,22 @@ fn what_the_writer_emits_is_accepted_by_both() {
     let (loader, schema) = verdicts(&text);
     assert_eq!(loader.expect("the loader reads it"), true);
     schema.unwrap_or_else(|e| panic!("{e:#?}\n{text}"));
+}
+
+/// The shipped fixture (`crates/schema/tests/shipped_schema.rs` validates it against the schema):
+/// the header `populated()` writes. Fails naming the file when the writer's text moves; to
+/// regenerate, write `head(&populated().to_bytes())` there.
+#[test]
+fn the_shipped_fixture_is_what_the_writer_emits() {
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/replay-header.toml");
+    let shipped = std::fs::read_to_string(&path).expect("the fixture exists");
+    assert_eq!(
+        shipped,
+        head(&populated().to_bytes()),
+        "{} is stale",
+        path.display()
+    );
 }
 
 #[test]
@@ -206,7 +231,7 @@ fn options_is_an_open_table_of_strings() {
     let (loader, schema) = verdicts(&text);
     loader.expect("loads");
     schema.unwrap_or_else(|e| panic!("{e:#?}"));
-    let integer = text.replace("scheme = \"classic\"", "scheme = 3");
+    let integer = text.replace("scheme = \"veteran\"", "scheme = 3");
     assert!(
         accepts(KIND, 1, &integer).is_err(),
         "a value that is not text is refused"
