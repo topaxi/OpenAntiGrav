@@ -199,3 +199,4 @@
 0x01304c50	function	WeaponPads_TestCraft	85	weapon-pads.md
 0x01a10f30	data	g_weapon_pad_refresh_time	80	weapon-pads.md
 0x01a10f50	data	g_weapon_pad_elimination_refresh_time	80	weapon-pads.md
+0x0155dc00	function	PauseMenu_BindRedirectForMode	80	pause-menu.md

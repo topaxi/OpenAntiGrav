@@ -191,9 +191,6 @@ fn circle_on_the_pause_root_does_nothing_and_escape_and_continue_resume() {
 /// what the pad's CROSS on it does.
 #[test]
 fn a_click_on_a_pause_row_does_what_confirm_does() {
-    use crate::menu::pointer::{self, Part, hit};
-    use crate::pointer::Pointer;
-
     let build = || {
         let mut definition = built_in();
         definition.open_on_pause_screen(SCREENS, "time_trial", &words());
@@ -201,10 +198,68 @@ fn a_click_on_a_pause_row_does_what_confirm_does() {
         menu.offer(Action::PhotoMode, true);
         menu
     };
+    click_is_confirm(&build, &skin());
+}
+
+/// HD's own table on HD's menu tree, with its AUDIO OPTIONS row: the same equality.
+#[test]
+fn a_click_on_an_hd_pause_row_does_what_confirm_does() {
+    let words = crate::language::StringTable::from_xml(
+        r#"<StringTable>
+             <Entry ID="IG_PAUSE_GPAUSED" String="GAME PAUSED"></Entry>
+             <Entry ID="IG_PAUSE_CONT" String="CONTINUE"></Entry>
+             <Entry ID="OPT_GAME_OPT" String="GAME OPTIONS"></Entry>
+             <Entry ID="FE_AUDIO_OPT" String="AUDIO OPTIONS"></Entry>
+             <Entry ID="MSC_PHOTO_PHOTOMODE" String="PHOTO MODE"></Entry>
+             <Entry ID="IG_PAUSE_REST" String="RESTART RACE"></Entry>
+             <Entry ID="IG_PAUSE_QUIT" String="QUIT RACE"></Entry>
+           </StringTable>"#,
+    );
+    let build = || {
+        let mut definition = built_in_hd();
+        let built = definition.open_on_pause_screen(
+            oag_hd::TITLE.pause_menu.expect("HD authors pause screens"),
+            "time_trial",
+            &words,
+        );
+        assert!(built.unworded.is_empty(), "{:?}", built.unworded);
+        let mut menu = Menu::new(definition);
+        menu.offer(Action::PhotoMode, true);
+        menu
+    };
+    let labels: Vec<String> = build()
+        .page()
+        .entries
+        .iter()
+        .map(|entry| entry.label().to_string())
+        .collect();
+    assert_eq!(
+        labels,
+        [
+            "CONTINUE",
+            "GAME OPTIONS",
+            "AUDIO OPTIONS",
+            "PHOTO MODE",
+            "RESTART RACE",
+            "QUIT RACE"
+        ]
+    );
+    let hd_skin = Skin::new(
+        oag_hd::frontend::MENU_SKIN,
+        oag_display::space::Space::HD,
+        22.0,
+    );
+    click_is_confirm(&build, &hd_skin);
+}
+
+fn click_is_confirm(build: &dyn Fn() -> Menu, skin: &Skin) {
+    use crate::menu::pointer::{self, Part, hit};
+    use crate::pointer::Pointer;
+
     let rows = build().page().entries.len();
     for row in 0..rows {
         let mut clicked = build();
-        let regions = pointer::regions(&clicked, &skin(), &Frame::default(), &measure);
+        let regions = pointer::regions(&clicked, skin, &Frame::default(), &measure);
         let region = regions
             .iter()
             .find(|region| region.row == row && region.part == Part::Row)
@@ -225,8 +280,53 @@ fn a_click_on_a_pause_row_does_what_confirm_does() {
         }
         assert_eq!(events, press(&mut confirmed, &[Button::Cross]), "row {row}");
         assert!(
-            !events.is_empty() || clicked.page().id == "options",
+            !events.is_empty() || ["options", "audio"].contains(&clicked.page().id.as_str()),
             "row {row} did something"
         );
     }
+}
+
+#[test]
+fn an_audio_row_opens_the_audio_page_and_the_pause_page_is_a_column_not_a_strip() {
+    const AUDIO: &PauseMenu = &PauseMenu {
+        heading: "IG_PAUSE_GPAUSED",
+        screens: &[PauseScreen {
+            name: "Pause",
+            rows: &[
+                row("IG_PAUSE_CONT", Some(PauseAction::Resume)),
+                row("FE_AUDIO_OPT", Some(PauseAction::Audio)),
+                row("IG_PAUSE_QUIT", Some(PauseAction::Quit)),
+            ],
+        }],
+        default_screen: "Pause",
+        by_mode: &[],
+        scrim_argb: 0xc000_0000,
+        offers_photo: false,
+        origin: Origin::Chosen,
+    };
+    let words = crate::language::StringTable::from_xml(
+        r#"<StringTable>
+             <Entry ID="IG_PAUSE_GPAUSED" String="GAME PAUSED"></Entry>
+             <Entry ID="IG_PAUSE_CONT" String="CONTINUE"></Entry>
+             <Entry ID="FE_AUDIO_OPT" String="AUDIO OPTIONS"></Entry>
+             <Entry ID="IG_PAUSE_QUIT" String="QUIT RACE"></Entry>
+           </StringTable>"#,
+    );
+    let mut definition = built_in();
+    let audio = definition
+        .pages
+        .iter()
+        .position(|page| page.id == "audio")
+        .expect("the AUDIO page");
+    let built = definition.open_on_pause_screen(AUDIO, "single_race", &words);
+    assert!(built.unbuilt.is_empty(), "{:?}", built.unbuilt);
+    let page = definition.page(PAUSE_PAGE).expect("the pause page");
+    assert!(
+        matches!(page.entries[1], Entry::Submenu { target, .. } if target == audio),
+        "AUDIO OPTIONS opens the AUDIO page"
+    );
+    assert!(
+        !super::super::strip::suits(page),
+        "every row is navigation, and the disc authors this screen as a column on HD"
+    );
 }

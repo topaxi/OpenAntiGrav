@@ -33,7 +33,7 @@ impl Definition {
     /// (the disc's table); a row whose words are missing is left off and named in
     /// [`Pause::unworded`]. A screen with no photo row of its own gets the project's PHOTO
     /// MODE row after OPTIONS when [`PauseMenu::offers_photo`]. GAME OPTIONS opens this
-    /// tree's OPTIONS page. The PHOTO MODE row is taken off every other page: a race is
+    /// tree's OPTIONS page, AUDIO OPTIONS its AUDIO page. The PHOTO MODE row is taken off every other page: a race is
     /// parked and the pause page is where it lives.
     pub fn open_on_pause_screen(
         &mut self,
@@ -43,6 +43,7 @@ impl Definition {
     ) -> Pause {
         let screen = pause.screen_for(mode);
         let options = self.pages.iter().position(|page| page.id == "options");
+        let audio = self.pages.iter().position(|page| page.id == "audio");
         let mut page = Page {
             id: PAUSE_PAGE.to_string(),
             title: strings.get(pause.heading).unwrap_or_default().to_string(),
@@ -82,6 +83,13 @@ impl Definition {
                         continue;
                     };
                     push(&mut page, "pause_options", Entry::Submenu { label, target });
+                }
+                PauseAction::Audio => {
+                    let Some(target) = audio else {
+                        built.unbuilt.push(row.disc_id);
+                        continue;
+                    };
+                    push(&mut page, "pause_audio", Entry::Submenu { label, target });
                 }
                 PauseAction::Photo => {
                     has_photo = true;

@@ -873,3 +873,4 @@
 0x000d9d60	function	Ship_RefillLapShield	88	eliminator-score.md
 0x000bd3e8	function	Options_GetButtonBinding	90	eliminator-flip.md
 0x006770c8	function	Pad_WasPressed	90	eliminator-flip.md
+0x0023d660	function	PauseMenu_BindRedirectForMode	85	pause-menu.md

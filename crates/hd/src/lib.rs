@@ -62,6 +62,7 @@ pub mod hud;
 pub mod loading;
 pub mod loyalty;
 pub mod main_menu;
+pub mod pause_menu;
 pub mod pre_race;
 pub mod prompts;
 pub mod psn;
@@ -246,7 +247,7 @@ pub const TITLE: &Title = &Title {
     // Measured: `docs/ui/campaign-screens.md`'s HD section. The
     // `Campaign Selection` ids are in `DATA06`'s entries copy alone.
     main_menu: main_menu::MAIN_MENU,
-    pause_menu: None,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Hd,
         definition_entry: Some(campaign::DEFINITION_ENTRY),
