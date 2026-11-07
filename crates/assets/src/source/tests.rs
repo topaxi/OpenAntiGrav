@@ -166,6 +166,7 @@ const TITLE: &Title = &Title {
         attached: oag_title::Attached::Inline,
         origin: oag_title::Origin::Chosen,
     },
+    pause_menu: None,
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: None,
