@@ -80,9 +80,9 @@ fn a_list_row_says_when_and_where_and_a_kept_one_is_marked() {
             Head::Read(Box::new(header("single_race"))),
             1_794_084_439,
         );
-        assert_eq!(choice(&auto, cx).label, "11-07 20:47");
+        assert_eq!(choice(&auto, cx).label, "07 20:47");
         assert!(
-            choice(&saved, cx).label.starts_with("*11-07 20:47"),
+            choice(&saved, cx).label.starts_with("*07 20:47"),
             "{}",
             choice(&saved, cx).label
         );

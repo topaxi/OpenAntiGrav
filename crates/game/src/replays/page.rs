@@ -76,9 +76,8 @@ pub mod words {
 /// Longest value the page draws before it cuts with `...`.
 const VALUE_CHARS: usize = 22;
 
-/// The REPLAY row's value is drawn in the row's own face, which is wider than the detail
-/// lines': a longer label runs off the screen on Pulse.
-const ROW_CHARS: usize = 19;
+/// The REPLAY row's value column, in letters: about ten on 2048's face, the narrowest.
+const ROW_CHARS: usize = 10;
 
 fn fit(text: &str) -> String {
     fit_to(text, VALUE_CHARS)
@@ -180,12 +179,14 @@ fn unusable(entry: &Entry, cx: &Context<'_>) -> Option<String> {
     None
 }
 
-/// The REPLAY row's value for `entry`: when it was recorded, `*` first for a kept one. The
-/// circuit is the first detail line under the rows: the row's value is too narrow for both.
+/// The REPLAY row's value for `entry`: the day of the month and the time it was recorded, `*`
+/// first for a kept one. The files are listed newest first and the DATE line under the rows has
+/// the whole date: the value column is ten letters wide on 2048's face and a longer one is cut.
+/// The circuit is the first detail line, for the same reason.
 #[must_use]
 pub fn choice(entry: &Entry, cx: &Context<'_>) -> Choice {
-    let (_, month, day, hour, minute) = civil(entry.unix);
-    let when = format!("{month:02}-{day:02} {hour:02}:{minute:02}");
+    let (_, _, day, hour, minute) = civil(entry.unix);
+    let when = format!("{day:02} {hour:02}:{minute:02}");
     let saved = if entry.folder == Folder::Saved {
         "*"
     } else {

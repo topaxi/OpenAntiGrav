@@ -198,15 +198,21 @@ pub fn draw_list(
     let first = chip_rect(Control::Play, grid);
     let last = chip_rect(Control::Exit, grid);
     let time = format!("{} / {}", clock(view.at), clock(view.ticks));
+    let line = format!("{time}    {keys}");
+    let width = line.chars().count() as f32 * 4.7 + 12.0;
     list.push(Draw::Fill {
-        rect: [first[0] - 70.0, first[1], 66.0, CHIP_HEIGHT],
+        rect: [
+            (first[0] + last[0] + last[2]) / 2.0 - width / 2.0,
+            first[1] + CHIP_HEIGHT + 2.0,
+            width,
+            LINE + 2.0,
+        ],
         color: BAND,
     });
-    list.push(text(first[0] - 6.0, first[1] + 3.0, time, Align::Right));
     list.push(text(
         (first[0] + last[0] + last[2]) / 2.0,
-        first[1] + CHIP_HEIGHT + 3.0,
-        keys.to_string(),
+        first[1] + CHIP_HEIGHT + 4.0,
+        line,
         Align::Centre,
     ));
     for chip in CHIPS {
@@ -244,7 +250,7 @@ pub fn draw_list(
         ));
     }
     if let Some(stops) = view.mismatch {
-        let top = MARGIN + CHIP_HEIGHT + LINE + 6.0;
+        let top = MARGIN + CHIP_HEIGHT + LINE + 8.0;
         list.push(Draw::Fill {
             rect: [0.0, top, grid.0, 2.0 * LINE + 6.0],
             color: WARNING,

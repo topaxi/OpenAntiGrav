@@ -159,7 +159,7 @@ impl Driver {
     }
 
     fn observe(&mut self) -> Result<()> {
-        let state = state_of(&self.session);
+        let state = state_of(&mut self.session);
         if !state.same_as(&self.last) || self.last.stage.is_empty() {
             writeln!(self.out, "{}", state.to_line())?;
             self.out.flush()?;
@@ -329,7 +329,7 @@ fn stage_name(stage: &Stage) -> &'static str {
 }
 
 /// Everything the game reports after a frame.
-fn state_of(session: &Session) -> State {
+fn state_of(session: &mut Session) -> State {
     let mut state = State {
         tick: session.clock.tick(),
         stage: stage_name(&session.stage).to_string(),
@@ -355,6 +355,7 @@ fn state_of(session: &Session) -> State {
     {
         state.race = resolved(session);
     }
+    (state.replay, state.replay_at) = session.replay_names();
     if let Stage::Race(stage) = &session.stage {
         state.photo = Some(session.photo_lens_name().to_string());
         state.photo_fx = session.photo_fx_name();

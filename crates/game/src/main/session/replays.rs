@@ -256,6 +256,26 @@ impl Session {
         }
     }
 
+    /// The viewer's state for the drive's state line: the word and `at/length/built`.
+    pub(crate) fn replay_names(&mut self) -> (Option<String>, Option<String>) {
+        let Some(active) = self.viewer.as_mut() else {
+            return (None, None);
+        };
+        let word = match active.viewer.state() {
+            State::Opening => "opening",
+            State::Ended => "ended",
+            State::Stopped => "stopped",
+            State::Ready if active.viewer.playing() => "playing",
+            State::Ready => "paused",
+        };
+        let built = active
+            .viewer
+            .built()
+            .map_or_else(|| "-".to_string(), |built| built.to_string());
+        let at = format!("{}/{}/{built}", active.viewer.at(), active.viewer.ticks());
+        (Some(word.to_string()), Some(at))
+    }
+
     /// Whether the race on screen steps between ticks, for the draw's blend alpha.
     pub(crate) fn viewer_stepping(&self) -> bool {
         self.viewer.as_ref().is_none_or(|active| active.stepping)

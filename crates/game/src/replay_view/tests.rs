@@ -71,7 +71,10 @@ fn every_chip_is_found_where_it_is_drawn_and_none_overlap() {
 fn the_screen_shows_the_time_the_chips_and_the_built_part() {
     let list = draw_list(&view(), GRID, &say, "");
     let words = texts(&list);
-    assert!(words.contains(&"0:30 / 5:00".to_string()), "{words:?}");
+    assert!(
+        words.iter().any(|w| w.starts_with("0:30 / 5:00")),
+        "{words:?}"
+    );
     assert!(words.contains(&"OAG_REPLAY_PAUSE".to_string()));
     assert!(words.contains(&"1X".to_string()));
     assert!(!words.iter().any(|w| w == "OAG_REPLAY_OPENING"));

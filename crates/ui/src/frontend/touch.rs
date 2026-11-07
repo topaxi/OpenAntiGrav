@@ -76,7 +76,7 @@
 //! (`GameModeChoice` is nested inside `newFEshell`) authors a `<TouchNews>`
 //! at `(16, 432)`, but that widget carries no size and this build draws
 //! nothing for it, so the rect is empty in the picture. See
-//! [`EXTRA_TILES`]; a fourth row has no slot and is dropped with a warning. No disc
+//! [`EXTRA_TILES`]; a fifth row has no slot and is dropped with a warning. No disc
 //! icon exists for any, so none draws one. A compare shot leaves them all out (`oag-game --original-menu`, maintainer
 //! 2026-10-27): the original's page has none, a player keeps them.
 
@@ -141,10 +141,11 @@ pub struct ExtraTile {
 /// 122x96 is the tick's own authored size; the 20-unit gap between them
 /// is this build's. Stacked in the left column, clear of the v1.04 grid's
 /// three columns that start at x=228.
-pub const EXTRA_TILES: [[f32; 4]; 3] = [
+pub const EXTRA_TILES: [[f32; 4]; 4] = [
     [16.0, 110.0, 122.0, 96.0],
     [16.0, 226.0, 122.0, 96.0],
     [16.0, 342.0, 122.0, 96.0],
+    [16.0, 458.0, 122.0, 80.0],
 ];
 
 /// Where the touch front end is: which tile the pad is on, which mode has
