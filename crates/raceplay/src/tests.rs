@@ -527,12 +527,13 @@ pub(super) fn sighting_of(sights: &oag_title::hud::Sights) -> Sighting {
     }
 }
 
-/// Pulse's reticle (`pulse`) or Wipeout HD's, for a test that compares the two.
+/// Pulse's reticle (`pulse`) or one whose LeachBeam keeps the Missile's law (2048's
+/// concentric rings, whose own update is unread), for a test that compares the two.
 pub(super) fn title_sighting(pulse: bool) -> Sighting {
     sighting_of(if pulse {
         oag_pulse::hud::ART.sights
     } else {
-        oag_hd::hud::ART.sights
+        oag_2048::hud::ART.sights
     })
 }
 
