@@ -19,6 +19,7 @@ mod hd_air_pose_walk;
 mod hd_chenghou_jumps_sweep;
 mod hd_eliminator_hud_ground_truth;
 mod hd_engine_flare_ground_truth;
+mod hd_flip_ground_truth;
 mod hd_env_probes_ground_truth;
 mod hd_envsettings_carry_ground_truth;
 mod hd_flare_spike_names_ground_truth;

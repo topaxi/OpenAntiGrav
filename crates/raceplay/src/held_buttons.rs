@@ -152,6 +152,7 @@ pub(crate) fn key_for_button(button: Button) -> Option<winit::keyboard::Key> {
         Button::Circle => Key::Character("z".into()),
         Button::L => Key::Character("q".into()),
         Button::R => Key::Character("e".into()),
+        Button::Flip => Key::Character("f".into()),
         _ => return None,
     };
     Some(key)
