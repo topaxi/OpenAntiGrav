@@ -151,7 +151,7 @@ fn a_leach_beams_victim_is_throttled_by_the_authored_factor() {
     };
     let build = || {
         let mut race = race_with_a_grid();
-        race.sim.weapons = Some(table.clone());
+        race.sim.weapons = Some(Arc::new(table.clone()));
         // The grid fixture's craft have no engine; give the victim one so
         // there is a thrust to take a fifth of.
         let engine = &mut race.sim.world.ships[1].handling.engine;
@@ -212,7 +212,7 @@ fn two_live_leach_beams_each_drain_their_own_victim() {
         ..table.leach_beam().expect("the fixture authors a LeachBeam")
     };
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(table);
+    race.sim.weapons = Some(Arc::new(table));
     while RaceState::thrust_gated(race.sim.world.tick) {
         race.tick(&PlayerInputs::none());
     }
@@ -282,7 +282,7 @@ fn an_opponent_holding_a_leach_beam_charges_and_the_player_who_is_not_does_not()
 fn a_held_leach_beam_spins_its_reticle_under_its_own_law_only() {
     let run = |pulse: bool| {
         let mut race = race_with_a_grid_sighted(title_sighting(pulse));
-        race.sim.weapons = Some(one_leach_beam_table());
+        race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
         let forward = race.sim.world.ships[0].physics.body.forward();
         let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
         race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
@@ -325,7 +325,7 @@ fn firing_the_leach_beam_takes_the_reticle_down_while_the_beam_is_live() {
     let mut race = race_with_a_grid_sighted(title_sighting(true));
     // The fixture's half-second `active_time` outlasts the 16 ticks checked.
     let table = one_leach_beam_table();
-    race.sim.weapons = Some(table);
+    race.sim.weapons = Some(Arc::new(table));
     let forward = race.sim.world.ships[0].physics.body.forward();
     let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
@@ -374,7 +374,7 @@ fn firing_the_leach_beam_takes_the_reticle_down_while_the_beam_is_live() {
 fn the_leach_beam_locks_only_once_its_reticle_has() {
     let kind_at = |pulse: bool, press: usize| {
         let mut race = race_with_a_grid_sighted(title_sighting(pulse));
-        race.sim.weapons = Some(one_leach_beam_table());
+        race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
         let forward = race.sim.world.ships[0].physics.body.forward();
         let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
         race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
@@ -409,7 +409,7 @@ fn the_leach_beam_locks_only_once_its_reticle_has() {
     );
     let hd = |press: usize| {
         let mut race = race_with_a_grid_sighted(sighting_of(oag_hd::hud::ART.sights));
-        race.sim.weapons = Some(one_leach_beam_table());
+        race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
         let forward = race.sim.world.ships[0].physics.body.forward();
         let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
         race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
@@ -450,7 +450,7 @@ fn the_leach_beam_locks_only_once_its_reticle_has() {
 #[test]
 fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
     let mut race = race_with_a_grid_sighted(title_sighting(true));
-    race.sim.weapons = Some(one_leach_beam_table());
+    race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
     race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
     assert!(
         race.sim.world.person_flown(1),
@@ -503,7 +503,7 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
 fn the_players_locked_beam_takes_the_titles_drain_cadence() {
     let fire = |drain: oag_title::weapons::LeachDrain| {
         let mut race = race_with_a_grid_sighted(title_sighting(false));
-        race.sim.weapons = Some(one_leach_beam_table());
+        race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
         race.sim.leach_drain = drain;
         let forward = race.sim.world.ships[0].physics.body.forward();
         let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;

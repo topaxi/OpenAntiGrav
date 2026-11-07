@@ -54,7 +54,7 @@ impl Race {
     /// temper it too. It is not a difficulty setting and nothing in the game
     /// calls it.
     pub fn set_ai_pilot(&mut self, slot: usize, pilot: oag_ai::Pilot) {
-        if let Some(entry) = self.sim.ai_pilots.get_mut(slot) {
+        if let Some(entry) = Arc::make_mut(&mut self.sim.ai_pilots).get_mut(slot) {
             *entry = pilot;
         }
     }
@@ -69,7 +69,7 @@ impl Race {
         difficulty: oag_ai::Difficulty,
     ) {
         let tempered = difficulty.temper(&entry.pilot);
-        for pilot in self.sim.ai_pilots.iter_mut().skip(1) {
+        for pilot in Arc::make_mut(&mut self.sim.ai_pilots).iter_mut().skip(1) {
             *pilot = tempered;
         }
         let world = &mut self.sim.world;
@@ -501,7 +501,7 @@ impl Race {
         let Some(time) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Autopilot))
             .map(|simple| simple.time)
         else {
@@ -602,7 +602,7 @@ impl Race {
                 air_trim: oag_ai::air_trim(&ship.handling, ship.physics.air_pitch_bias),
                 plan: super::routes::plan_for(
                     &self.sim.routes,
-                    self.sim.speed_plan.as_ref(),
+                    self.sim.speed_plan.as_deref(),
                     super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
                     route,
                 ),
@@ -794,7 +794,7 @@ impl Race {
                         yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&handling, &ship.physics.body)),
                         plan: super::routes::plan_for(
                             &self.sim.routes,
-                            self.sim.speed_plan.as_ref(),
+                            self.sim.speed_plan.as_deref(),
                             super::speed_plan::hull_of(
                                 &self.sim.hull_plans,
                                 self.sim.ship_plan[slot],
@@ -881,7 +881,7 @@ impl Race {
                 &controls,
                 &handling,
                 &env,
-                &self.sim.collision,
+                &*self.sim.collision,
                 self.sim.dt,
             );
             let reset_contact = self.reset_zone_contact(slot, &env, position);
@@ -1164,7 +1164,7 @@ impl Race {
     /// The lap counter's ring, for a caller that wants to measure against it.
     #[must_use]
     pub fn course(&self) -> Option<&Course> {
-        self.sim.course.as_ref()
+        self.sim.course.as_deref()
     }
 
     /// The player's own race position, `1`-based.

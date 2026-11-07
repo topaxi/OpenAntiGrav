@@ -273,7 +273,7 @@ impl Race {
             controls,
             &ship.handling,
             &env,
-            &self.sim.collision,
+            &*self.sim.collision,
             self.sim.dt,
         );
         let reset_contact = self.reset_zone_contact(slot, &env, before);

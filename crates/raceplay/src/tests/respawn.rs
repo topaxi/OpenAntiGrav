@@ -624,7 +624,8 @@ fn opponent_beneath(depth: f32, supported: bool) -> Race {
     race.tick(&PlayerInputs::none());
     if supported {
         let line = &race.sim.racing_line;
-        race.sim.racing_line = oag_ai::Line::new((0..line.len()).map(|i| line.point(i)).collect());
+        let rebuilt = oag_ai::Line::new((0..line.len()).map(|i| line.point(i)).collect());
+        race.sim.racing_line = Arc::new(rebuilt);
     }
     let index = race.sim.world.ships[1].driver.index as usize;
     let sample = *race.ai_sample(index).expect("a grid race has samples");

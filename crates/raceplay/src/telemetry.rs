@@ -349,7 +349,7 @@ impl Race {
             let cannon = self
                 .sim
                 .weapons
-                .as_ref()
+                .as_deref()
                 .and_then(oag_tables::weapons::WeaponStats::cannon)?;
             let rounds = match ship.pickup.cannon_rounds {
                 0 => cannon.rounds.max(0.0).round() as u32,
@@ -408,7 +408,7 @@ impl Race {
         if world.mode() != oag_race::Mode::Eliminator {
             return None;
         }
-        let course = self.sim.course.as_ref()?;
+        let course = self.sim.course.as_deref()?;
         let length = course.length();
         let fraction = |slot: usize| {
             let distance = world.ships[slot].standing.distance(course);
@@ -455,7 +455,7 @@ impl Race {
         if self.sim.world.mode() != oag_race::Mode::Head2Head {
             return None;
         }
-        let course = self.sim.course.as_ref()?;
+        let course = self.sim.course.as_deref()?;
         let world = &self.sim.world;
         let opponent = (0..world.ship_count as usize)
             .find(|&slot| slot != player && world.ships[slot].active)?;

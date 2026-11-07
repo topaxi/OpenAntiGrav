@@ -117,7 +117,7 @@ impl Race {
         if self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(|w| w.simple(oag_tables::weapons::Weapon::Turbo))
             .is_none()
         {
@@ -212,7 +212,7 @@ impl Race {
             self.sim.extensions.pickup_used(slot, !fire);
             return;
         }
-        let Some(weapons) = self.sim.weapons.as_ref() else {
+        let Some(weapons) = self.sim.weapons.as_deref() else {
             return;
         };
 
@@ -671,7 +671,7 @@ impl Race {
     /// almost all of the time: [`oag_weapons::pickup::Held::advance_drop`]
     /// returns immediately on a zero counter.
     pub(super) fn lay_mines(&mut self) {
-        let Some(weapons) = self.sim.weapons.as_ref() else {
+        let Some(weapons) = self.sim.weapons.as_deref() else {
             // No table. A craft cannot have started a drop without one - the arm
             // above gates on exactly this - so there is nothing in flight to
             // abandon.
@@ -786,7 +786,7 @@ impl Race {
         let Some(cannon) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::cannon)
         else {
             // No table, or the table authors no Cannon - Pure's does not.
@@ -970,7 +970,7 @@ impl Race {
             position,
             ship.physics.body.forward(),
             stats,
-            self.sim.course.as_ref().map(oag_race::Course::length),
+            self.sim.course.as_deref().map(oag_race::Course::length),
         );
         // Only a person-flown craft needs the extra hold - see
         // "The lock test is shared; the hold is not" above. A press before the

@@ -389,14 +389,14 @@ impl Race {
     /// chain does not close.
     #[must_use]
     pub fn race_distance_of(&self, slot: usize) -> Option<f32> {
-        let course = self.sim.course.as_ref()?;
+        let course = self.sim.course.as_deref()?;
         Some(self.sim.world.ships.get(slot)?.standing.distance(course))
     }
 
     /// The race's weapon table, `None` with weapons off or none read.
     #[must_use]
     pub fn weapon_stats(&self) -> Option<&oag_tables::weapons::WeaponStats> {
-        self.sim.weapons.as_ref()
+        self.sim.weapons.as_deref()
     }
 
     /// The fixed timestep, from [`TickRate::DEFAULT`].
@@ -518,7 +518,7 @@ impl Race {
     pub fn missile_stats(&self) -> Option<oag_tables::weapons::MissileStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::missile)
     }
 
@@ -534,7 +534,7 @@ impl Race {
     pub fn leach_beam_stats(&self) -> Option<oag_tables::weapons::LeachBeamStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::leach_beam)
     }
 
@@ -547,7 +547,7 @@ impl Race {
     pub fn mine_stats(&self) -> Option<oag_tables::weapons::MineStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::mine)
     }
 
@@ -561,7 +561,7 @@ impl Race {
     pub fn quake_stats(&self) -> Option<oag_tables::weapons::QuakeStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::quake)
     }
 
@@ -574,7 +574,7 @@ impl Race {
     pub fn shuriken_stats(&self) -> Option<oag_tables::weapons::ShurikenStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::shuriken)
     }
 
@@ -589,7 +589,7 @@ impl Race {
     pub fn rocket_stats(&self) -> Option<oag_tables::weapons::RocketStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::rocket)
     }
 
@@ -602,7 +602,7 @@ impl Race {
     pub fn plasma_stats(&self) -> Option<oag_tables::weapons::PlasmaStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::plasma)
     }
 
@@ -615,7 +615,7 @@ impl Race {
     pub fn cannon_stats(&self) -> Option<oag_tables::weapons::CannonStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::cannon)
     }
 
@@ -629,7 +629,10 @@ impl Race {
     /// craft's timer is asserted *against* rather than a value to assert.
     #[must_use]
     pub fn slowdown_limit(&self) -> Option<f32> {
-        self.sim.weapons.as_ref().map(|table| table.slowdown_limit)
+        self.sim
+            .weapons
+            .as_deref()
+            .map(|table| table.slowdown_limit)
     }
 
     /// The Bomb's authored `<Stats>`, or `None` when the table did not load or
@@ -638,7 +641,7 @@ impl Race {
     pub fn bomb_stats(&self) -> Option<oag_tables::weapons::BombStats> {
         self.sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::bomb)
     }
 }
