@@ -1,5 +1,5 @@
 ---
-status: open
+status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-07
 summary: "Wired: HD, Fury, 2048 and Omega never stamp a pad in Eliminator. Left: HD's stamp function, 2048 campaign Eliminator, Omega live"
