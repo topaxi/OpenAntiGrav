@@ -39,8 +39,8 @@ ADR and are not open.
   people, Head to Head) once `start_recorded` seats `Header::slots`. Its page's "Open" lists what stage 5 inherits: the probe's
   `results` and `wreck_ended_tick` after a seek back, quiet `step`, and `follow_devices` as an unrecorded writer of `controllers`.
 - **Stage 4 landed** ([the replay file](../../docs/formats/replay-file.md), "The pose track"): `POSE`, every
-  craft refined to 0.05 unit and 0.5 degree, captured a segment at a time. 156 to 176 B a craft a second on all five
-  titles (4.5 percent over the ADR's row: the sweep stored no key index), a respawn bounded to the same error on all five,
+  craft refined to 0.05 unit and 0.5 degree, captured a segment at a time. 156 to 176 B a craft a second at Venom on all
+  five titles (Phantom, first 6,000 ticks: 197 to 263; 4.5 percent over the ADR's Venom row: the sweep stored no key index), a respawn bounded to the same error on all five,
   an unknown chunk skipped. `PoseTrack::pose(craft, at: f64)` is the reader stage 5 builds POSE VIEW on.
 - **Unstaged:** replays of modded races, replays written by `oag-server`, multi-seat take-over.
 

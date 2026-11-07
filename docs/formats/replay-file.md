@@ -141,7 +141,7 @@ POSE  varint last tick (poses exist for ticks 0..=last)
   Keys are read in tick order, so the number of keys is fixed by `last` and the mask.
 - **Refinement.** Inside each segment the tick that interpolates worst becomes a key, and again,
   until no tick between two keys is more than **0.05 unit or 0.5 degree** from the truth (lerp and
-  a normalised lerp for the rotation, measured against the keys as a reader rebuilds them, so quantisation is inside the bound).
+  a normalised lerp for the rotation (ADR-0087 decision 4 says slerp; `oag-replay` is in `check-determinism`'s scan, which flags `slerp` and `acos`, and the two gave the same bytes and bound), measured against the keys as a reader rebuilds them, so quantisation is inside the bound).
   A segment is refined alone, so the recorder does it as each closes (`PoseRecorder`): the keys equal
   an offline pass over the whole race (`track::tests::streaming_equals_offline`, byte for byte) and a
   recording holds keys, never a pose a tick.
