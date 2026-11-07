@@ -49,6 +49,10 @@ pub const TITLE: &Title = &Title {
     front_end: Some(FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
+    eliminator: oag_title::pre_race::Sourced::inherited(
+        oag_title::eliminator::EliminatorRule::Kills,
+        "Wipeout Pulse",
+    ),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Pulse,

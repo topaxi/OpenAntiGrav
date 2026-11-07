@@ -39,8 +39,8 @@ pub struct KillTag {
     /// The team id the craft flies (`Feisar`), which the string table turns
     /// into the name a player reads.
     pub team: String,
-    /// The craft's kills.
-    pub kills: u32,
+    /// The craft's kills, or its whole score under [`Readout::score_rows`].
+    pub count: u32,
     /// Whether this is the player's own craft.
     pub player: bool,
 }
@@ -53,6 +53,10 @@ pub struct KillTag {
 /// crop of the live frame shows the `AAA` row taller than `Triakis` beside it
 /// at the same brightness.
 const OPPONENT_SCALE: f32 = 0.8;
+
+/// A score row's player scale, `1.2` against an opponent's `1.0`
+/// (`Hud_UpdateEliminatorRows`, `0x008a7620` and `0x008a75bc`).
+const SCORE_PLAYER_SCALE: f32 = 1.2;
 
 /// The row each craft takes, top to bottom: `result[row]` is an index into
 /// `kills`.
@@ -89,10 +93,38 @@ pub(super) fn text(
 ) -> Option<String> {
     let tag = readout.kill_tags.get(row_of(name)?)?;
     let who = strings.get_or_id(&tag.team);
-    Some(if tag.player {
-        format!("{who}  {}", tag.kills)
+    Some(if readout.score_rows {
+        let who = if tag.player {
+            who.to_uppercase()
+        } else {
+            who.to_string()
+        };
+        format!("{who}  ( {} )", tag.count)
+    } else if tag.player {
+        format!("{who}  {}", tag.count)
     } else {
-        format!("{who} {}", tag.kills)
+        format!("{who} {}", tag.count)
+    })
+}
+
+/// Whether `PlaceString<n>`, the digit the layout authors beside a row, is up: on a score
+/// Eliminator's rows that hold a craft.
+pub(super) fn rank_shown(readout: &Readout, name: &str) -> bool {
+    let row = name
+        .strip_prefix("PlaceString")
+        .and_then(|row| row.parse().ok());
+    readout.score_rows && row.is_some_and(|row: usize| row < readout.kill_tags.len())
+}
+
+/// `PositionTxt2` on a score Eliminator: `TARGET ( 200 )`, `Hud_BindWidgets`' `"%s ( %d )"`
+/// (`0x0009d494`) of `IG_HUD_TARGET` and the target. Nothing on a kill Eliminator.
+pub(super) fn target_header(
+    readout: &Readout,
+    strings: &oag_ui::language::StringTable,
+) -> Option<String> {
+    (readout.score_rows && readout.kill_target > 0).then(|| {
+        let caption = strings.get_or_id("IG_HUD_TARGET");
+        format!("{caption} ( {} )", readout.kill_target)
     })
 }
 
@@ -119,7 +151,11 @@ pub(super) fn header(
 /// `0.8` - see [`OPPONENT_SCALE`].
 pub(super) fn scale(readout: &Readout, name: &str) -> Option<f32> {
     let tag = readout.kill_tags.get(row_of(name)?)?;
-    Some(if tag.player { 1.0 } else { OPPONENT_SCALE })
+    Some(match (readout.score_rows, tag.player) {
+        (true, true) => SCORE_PLAYER_SCALE,
+        (true, false) | (false, true) => 1.0,
+        (false, false) => OPPONENT_SCALE,
+    })
 }
 
 #[cfg(test)]

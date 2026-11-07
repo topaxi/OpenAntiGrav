@@ -556,6 +556,13 @@ impl Session {
             }
         }
         race_options.eliminator_kill_target = plan.eliminator_kill_target;
+        // A score Eliminator's cell authors its target per rung, `SPElimination_UpdateTarget`'s
+        // `cell+0xd4 + difficulty * 4` (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`).
+        race_options.eliminator_score_target = cell
+            .nitro_elimination_target_for_difficulty(
+                difficulty.unwrap_or(oag_tables::race_campaign::Difficulty::Easy),
+            )
+            .and_then(|target| u32::try_from(target).ok());
         race_options.laps_override = plan.laps_override;
         let leg_entries = plan.leg_entries;
         // `AI_ResolveSkillScale`'s campaign-cell branch

@@ -865,3 +865,9 @@
 0x000aa6e0	function	Camera_AddPhotoPanB	78	photo-mode.md
 0x000aa740	function	Camera_AddPhotoFov	78	photo-mode.md
 0x00089fa8	function	Hud_UpdateRaceLine	85	eliminator-hud.md
+# 2026-11-07 hd-score-law: the Eliminator score law (eliminator-score.md)
+0x00069130	function	SPElimination_UpdateTarget	90	eliminator-score.md
+0x0008c6f8	function	Hud_UpdateEliminatorRows	88	eliminator-score.md
+0x0008c568	function	Hud_PlaceHighlightBar	80	eliminator-score.md
+0x00083ba0	function	Hud_RaiseScoreFeedback	75	eliminator-score.md
+0x000d9d60	function	Ship_RefillLapShield	88	eliminator-score.md

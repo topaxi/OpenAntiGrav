@@ -58,22 +58,7 @@ what `Archives::holder_of` already returns, so no archive-order change and no pe
 is needed. Whether the original picks `DATA00` by its own precedence stays unread for the other
 five duplicated roots.
 
-## Unread: the rows, and the score they print
+## The rows, and the score they print
 
-The frames show a score where Pulse shows kills: `TARGET ( 200 )` over `PLAYER ( 0 )`,
-`EG-X ( 0 )` ... ranked 1 to 8, the screen's intro text reading "Score points for damaging and
-eliminating opponents. Extra points for completing laps. After elimination you will respawn but
-lose points". The pieces found, none read:
-
-- `Hud_BindWidgets` formats the header as `"%s ( %d )"` (`0x0077fb50`) from `IG_HUD_TARGET` and
-  `g_GameState+0x20` (`0x0009d494`, the `hud+0x44 & 0x200` branch).
-- The rows' format is `"%s  ( %d )"` (`0x0077ed98`, two spaces) with writers `0x0008c6f8`
-  (not decompiled) and, for the two-person list, `0x00095950` (read: it orders crafts by
-  `craft+0x6f80`, a float score truncated to int, then `craft+0x6f7c`, then `craft+0x628c`).
-- So the score is `craft+0x6f80`. What writes it (points per damage, per elimination, per lap,
-  the loss at an elimination) is the scoring law and is **not recovered**; this build's Eliminator
-  counts kills to a target of 5 to 25 (`Standing::kills`), a different rule.
-
-`ScoreFeedBack0`..`15` (bound at `hud+0x3d0`, stride 12, for modes 8, 13, 14, 20, 21) are the
-popups that scoring raises; `MPWeaponIcon0`..`7` and `VoiceCom0`..`7` sit in the same rows.
-None is drawn in the frames taken (no score changed).
+Read 2026-11-07: [eliminator-score.md](eliminator-score.md) has the law, the row writer and what
+each `HUD_Elim_*` widget does.

@@ -249,7 +249,7 @@ fn a_layout_with_no_widgets_draws_nothing_from_a_full_readout() {
                 }),
                 kill_tags: vec![crate::KillTag {
                     team: "Feisar".into(),
-                    kills: 3,
+                    count: 3,
                     player: true,
                 }],
                 kill_target: 5,

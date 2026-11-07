@@ -281,6 +281,7 @@ pub mod rumble_library;
 mod scene;
 #[cfg(feature = "view")]
 pub mod scenery_fx;
+mod score_law;
 pub mod scoreboard;
 #[cfg(feature = "view")]
 mod shadow;

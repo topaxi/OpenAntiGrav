@@ -34,6 +34,7 @@ pub mod boot;
 pub mod campaign;
 pub mod craft_laws;
 pub mod effects;
+pub mod eliminator;
 pub mod endrace;
 pub mod engine_effects;
 pub mod exhaust;
@@ -125,6 +126,8 @@ pub struct Title {
     pub hud: &'static hud::HudLayouts,
     /// How this title's HUD sprites reach the screen. See [`hud::HudArt`].
     pub hud_art: &'static hud::HudArt,
+    /// What an Eliminator is won on. See [`eliminator::EliminatorRule`].
+    pub eliminator: pre_race::Sourced<eliminator::EliminatorRule>,
     /// The team ids this title's roster names and the shared identity each is
     /// kept under, for loyalty. See [`team`].
     pub teams: team::Roster,

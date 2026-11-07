@@ -1087,7 +1087,7 @@ reaches 70" verdicts below: use scale replaces `x5`, absorb scale replaces the f
 | absorb rate `0.001` | `*AbsorbScale` 3.6 / 2.6 / 0.6, falling with difficulty | Opposite shape: Pulse's is one tiny constant for every skill. Conflicts on its face | 20 |
 | `+0x34` forced `0` (a skill index) | none | Not a flip; no counterpart | n/a |
 | none | `normalFlip`, `infrontFlip`, `*FlipScale` | New. Plausibly the chance a craft that is ahead, or in front of the player, flips a pickup into a different weapon; **unread, a hypothesis** | below 50 |
-| none | `*ScoreScale` | New | below 50 |
+| none | `*ScoreScale` | Multiplies an opponent's every Eliminator award ([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md), 1.15 read live at Novice) | 90 |
 
 No mapping reaches 70, so **nothing is wired**: HD, Omega and 2048 stay on Pulse's hard-coded
 mode-8 terms (the maintainer's inherit rule), Pulse and Pure are untouched, and no golden moved.

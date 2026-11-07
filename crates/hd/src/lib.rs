@@ -85,6 +85,16 @@ pub const TITLE: &Title = &Title {
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
+    // `docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`.
+    eliminator: oag_title::pre_race::Sourced::measured(
+        oag_title::eliminator::EliminatorRule::Score(oag_title::eliminator::ScoreRule {
+            damage: 0.1,
+            kill: 20.0,
+            lap: 5.0,
+            death: 5.0,
+            race_setup: r"Data\Plugins\Frontend\Gui\racebox_definition.xml",
+        }),
+    ),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,

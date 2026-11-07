@@ -112,6 +112,10 @@ fn a_single_race_carries_no_race_line() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading an HD single race");
+    assert_eq!(
+        loaded.setup.score_law, None,
+        "the awards are the Eliminator's alone"
+    );
     let mut race = oag_raceplay::Race::start(loaded.setup);
     race.tick(&PlayerInputs::none());
     assert_eq!(race.readout().race_line, None);
@@ -151,4 +155,114 @@ fn the_eliminator_only_widgets_are_authored_by_the_eliminator_roots_alone() {
             && line.contains(&default[0]),
         "{line:?}"
     );
+}
+
+/// A Racebox Eliminator is won on score: the target is the slider's authored minimum, an
+/// opponent's scale is `DATA00`'s row for the difficulty, and the HUD carries the ranked rows, the
+/// header's panel, eight brackets and the highlight (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_racebox_eliminator_is_scored_to_the_slider_target() {
+    let Some(image) = image() else { return };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Eliminator,
+        difficulty: oag_ai::Difficulty::Novice,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading an HD Eliminator");
+    let law = loaded.setup.score_law.expect("HD's Eliminator is scored");
+    assert_eq!(loaded.setup.eliminator_kill_target, Some(200));
+    let row = loaded
+        .setup
+        .weapon_ai
+        .as_ref()
+        .and_then(|stats| stats.eliminator())
+        .expect("DATA00's row");
+    assert_eq!(law.opponent_scale, row.score_scale[0]);
+    assert!(
+        law.opponent_scale > 1.0,
+        "an opponent earns more than a person"
+    );
+
+    let context = loaded.hud.context().expect("HD's layout parses");
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    race.tick(&PlayerInputs::none());
+    let readout = race.readout();
+    assert!(readout.score_rows);
+    assert_eq!(readout.kill_target, 200);
+    assert_eq!(readout.kill_tags.len(), 8);
+    assert_eq!(
+        oag_hud::score_rows::sprites(context.layout, &readout).len(),
+        10,
+        "the header's panel, a bracket per row and the highlight"
+    );
+}
+
+/// The lap award reaches a craft through the race's own tick, at the opponents' scale.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_opponents_first_lap_pays_through_the_tick() {
+    let Some(image) = image() else { return };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Eliminator,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading an HD Eliminator");
+    let law = loaded.setup.score_law.expect("HD's Eliminator is scored");
+    let pay = law.lap * law.opponent_scale;
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let snapshot = |race: &oag_raceplay::Race| {
+        let world = &race.sim.world;
+        std::array::from_fn::<_, 8, _>(|slot| {
+            let standing = &world.ships[slot].standing;
+            (standing.lap, standing.score)
+        })
+    };
+    let mut before = snapshot(&race);
+    for _ in 0..4000 {
+        race.tick(&PlayerInputs::none());
+        let after = snapshot(&race);
+        for slot in 1..8 {
+            if after[slot].0 > before[slot].0 {
+                assert!(
+                    after[slot].1 - before[slot].1 >= pay - 1e-3,
+                    "slot {slot} crossed the line: {:?} to {:?}",
+                    before[slot],
+                    after[slot]
+                );
+                return;
+            }
+        }
+        before = after;
+    }
+    panic!("no opponent finished a lap");
+}
+
+/// A score Eliminator takes a cell's target and ignores a `KILLS` pick stored by another title.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_score_race_ignores_a_stored_kill_pick() {
+    let Some(image) = image() else { return };
+    let options = oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Eliminator,
+        eliminator_kill_target: Some(5),
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    };
+    let picked = oag_raceplay::load(&options).expect("loading an HD Eliminator");
+    assert_eq!(picked.setup.eliminator_kill_target, Some(200));
+    let cell = oag_raceplay::load(&oag_raceplay::Options {
+        eliminator_score_target: Some(260),
+        ..options
+    })
+    .expect("loading an HD Eliminator");
+    assert_eq!(cell.setup.eliminator_kill_target, Some(260));
 }

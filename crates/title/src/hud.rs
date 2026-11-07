@@ -590,8 +590,7 @@ pub struct HudArt {
     /// are drawn as `"<team> <kills>"` and `KILLS (n)`. **Pulse only**: read off
     /// its executable (`Hud_UpdateKillColumn`) and a live frame. HD's Eliminator
     /// draws `DATA00`'s layout, which has no `KillsText` and whose rows print a
-    /// score, `NAME ( score )`, not kills (`docs/ui/hud.md`, "HD's Eliminator race
-    /// line"), so it stays off there.
+    /// score: the race's own `oag_race::ScoreLaw` turns those on, not this.
     pub kill_column: bool,
     /// Whether the four `Info1`-`Info4` widgets are the HUD's message lines
     /// (`oag_hud::messages`). Pulse, Pure and HD author the same four widgets in
