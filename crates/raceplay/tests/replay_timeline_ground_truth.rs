@@ -24,7 +24,8 @@ use std::time::Instant;
 
 use oag_gameplay::{Controller, PlayerInputs};
 use oag_physics::pilot_assist::Level;
-use oag_raceplay::timeline::{KEYFRAME_TICKS, Pass, Timeline};
+use oag_raceplay::photo::rewind::Rewind;
+use oag_raceplay::timeline::{KEYFRAME_TICKS, Keeper, Pass, Timeline};
 use oag_raceplay::{self as race, Launch, Race};
 use oag_replay::{Header, Pose, Replay};
 
@@ -348,6 +349,80 @@ seek_tests! {
     hd_seeks_reproduce_a_pad_flown_race: "hd";
     wipeout_2048_seeks_reproduce_a_pad_flown_race: "2048";
     omega_seeks_reproduce_a_pad_flown_race: "omega";
+}
+
+/// Photo mode's rewind on the title's own data (ADR-0087, decision 5): the race on screen is moved
+/// through its past by the recording its own session wrote, lands on the recorded hash at every
+/// tick it is sent to, and is put back to the bit: the text of its simulation is the same either
+/// side, the recording holds the ticks it held, and every tick after the visit hashes as the
+/// recorded run does. Fails if a seek plays the wrong inputs, if `end` leaves anything of the past
+/// in the live race, or if a rewound tick is written into the recording.
+fn a_rewind_changes_nothing(title: &str) {
+    let Some((source, run)) = record(title, Some(1_900)) else {
+        return;
+    };
+    let setup = file_setup(&source, &run);
+    let seed = setup.seed;
+    let mut live = Race::start(setup.clone());
+    live.apply_launch(&launch());
+    live.start_recording(header_of(title, oag_race::Mode::SingleRace, seed));
+    let assist = assist_level(&live);
+    let mut keeper = Keeper::new(setup, &live);
+    let visit_at = 1_500;
+    for tick in 0..visit_at + 300 {
+        write_between_ticks(&mut live, assist, tick);
+        live.tick(&run.replay.inputs_at(tick));
+        live.drain_cues();
+        keeper.keep(&live);
+        if tick + 1 == visit_at {
+            let before = format!("{:?}", live.sim);
+            let recorded = live.recorded().expect("recording").ticks();
+            let mut rewind = Rewind::begin(&mut keeper, &mut live).expect("a running race");
+            assert!(rewind.resimulates(), "{title}");
+            for target in [visit_at, 73, 1_259, 0, 61, visit_at - 1, 1_200, 540, 541, visit_at] {
+                assert_eq!(rewind.seek(&mut keeper, &mut live, target), target, "{title}");
+                assert_eq!(
+                    live.sim.state_hash(),
+                    run.hashes[target as usize],
+                    "{title}: tick {target} on a rewind"
+                );
+            }
+            rewind.end(&mut live);
+            assert!(
+                format!("{:?}", live.sim) == before,
+                "{title}: the rewind left the live race changed"
+            );
+            assert_eq!(
+                live.recorded().expect("still recording").ticks(),
+                recorded,
+                "{title}: the rewound ticks are in the recording"
+            );
+        }
+        assert_eq!(
+            live.sim.state_hash(),
+            run.hashes[tick as usize + 1],
+            "{title}: the live race at tick {}",
+            tick + 1
+        );
+    }
+}
+
+macro_rules! rewind_tests {
+    ($($name:ident: $title:literal;)*) => {$(
+        #[test]
+        #[ignore = "needs the title's game data"]
+        fn $name() {
+            a_rewind_changes_nothing($title);
+        }
+    )*};
+}
+
+rewind_tests! {
+    pulse_rewinds_leave_the_live_race_to_the_bit: "pulse";
+    pure_rewinds_leave_the_live_race_to_the_bit: "pure";
+    hd_rewinds_leave_the_live_race_to_the_bit: "hd";
+    wipeout_2048_rewinds_leave_the_live_race_to_the_bit: "2048";
+    omega_rewinds_leave_the_live_race_to_the_bit: "omega";
 }
 
 /// A split-screen recording, set up as `head_to_head_people_ground_truth` sets one up: two
