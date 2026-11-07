@@ -6,7 +6,7 @@
     uv run --with evdev python3 scripts/rpcs3-hd-weapon-pad-poll.py --seconds 120 --out <dir> [--start-race]
 
 Attached to a `serve` that sits on a race's grid (`scripts/emu-hd-race-walk.sh`, or the Racebox walk in
-`docs/gameplay/pickups.md`, "How long a pad shows grey"). Finds every `WeaponPad_Importer` (vtable `0x0086a730`,
+`docs/gameplay/pickups.md`, "Eliminator and the pads, per title"). Finds every `WeaponPad_Importer` (vtable `0x0086a730`,
 `docs/ghidra/functions/ps3-hdfury-eu/pads.md`) once, then samples each pad's refresh timer (`+0x160`, float,
 seconds) and its packed colour (`+0xf0`, `0xff3f3f3f` while cooling) next to the player's lap clock (`ship+0x7014`)
 as fast as the memory channel answers (about 100 Hz). Writes `<out>/samples.json` and prints, per pad, every stamp

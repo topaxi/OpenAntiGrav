@@ -27,6 +27,10 @@ if (DAT_01f999e4 == 8 || DAT_01f999e4 == 0x14) {   // g_game_mode
 }
 ```
 
+The same no-stamp arm is also taken when the current game-mode object's `+0x21c` is `1` or `4`
+(`DAT_01e31910`, the family test of [`weapon-ai-fire.md`](../vita-2048-eu-v104/weapon-ai-fire.md)), which is how an
+Omega campaign Eliminator event reaches it; which event type carries `1` or `4` was not read.
+
 The elimination table is selected only inside the `else`, which a mode `8` never reaches: **Omega
 does not stamp a pad in Eliminator (modes `8` and `0x14`), and `elimination_refresh_time` is dead
 data**, as in 2048. Read statically, not run: shadPS4 0.20 has no memory readout (the native

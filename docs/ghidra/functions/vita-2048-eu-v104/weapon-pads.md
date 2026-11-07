@@ -46,9 +46,25 @@ never run**: 2048 authors the attribute, parses it, and does not use it. In Elim
 never stamped, so `WeaponPad`'s timer stays zero and the pad never greys.
 
 Where Pulse's single test is `g_game_mode == 8` (`pads.md`), 2048 asks for the family first and
-the family contains 8. Seen only in the decompile, not run: 2048 has no emulator route here
-(Vita3K is not installed on this machine), so this is **checked, differs** from Pulse and
-**ported** from the HD run below by lineage only.
+the family contains 8.
+
+**What is not read, and what it costs the claim.** In a 2048 *campaign* race `DAT_8153fd24` is a
+CRC of the event's name, not `8` ([`ships-effects.md`](ships-effects.md)), so the mode-`8` arm of the
+family test is the racebox's; a campaign Eliminator event reaches the no-stamp path only through the
+game-mode object's field at `+400` being `1` or `4`
+([`weapon-ai-fire.md`](weapon-ai-fire.md), "Eliminator class"). Which value `GameMode_EliminatorRace`
+carries was not read, so "2048 never stamps in Eliminator" is read for the racebox id and inferred,
+by the family's name and its other consumers, for the events (confidence 70 for the events, 85 for
+the function's shape).
+
+**Not run.** Vita3K is installed (`/usr/bin/vita3k`) and has a recipe
+([`vita3k-capture.md`](../../../reverse-engineering/vita3k-capture.md)) and a proven live read
+(`/proc/<pid>/mem`, host = `0x400000000` + guest, `ships-effects.md` "Method"), but a Vita3K walk to an
+Eliminator event is touch-fragile (a second event load was not reached there) and was not tried. The
+command that would settle it: the weston + Xwayland + `vita3k -c <cfg> -w -r PCSF00007` launch of that
+page, then a poll of every pad object's `+0x160` (find them by the `WeaponPad` class's vtable) while an
+Eliminator event runs, as `scripts/rpcs3-hd-weapon-pad-poll.py` does on RPCS3. **Not checked live**:
+checked, differs from Pulse by reading; HD's run below is its lineage's evidence.
 
 ## Against HD and Omega
 
