@@ -27,9 +27,6 @@ impl RaceStage {
     ///
     /// A race that already records for a ghost starts afresh: the same header, seats now right.
     pub(crate) fn arm_auto_replay(&mut self) {
-        if let Some(path) = std::env::var_os("OAG_TMP_SIMDUMP") {
-            let _ = std::fs::write(path, format!("{:#?}", self.race.sim));
-        }
         self.race.start_recording(self.replay_header.clone());
         self.auto_replay = self.race.recording();
         debug!("replays: recording this race for the REPLAYS page: {}", self.auto_replay);

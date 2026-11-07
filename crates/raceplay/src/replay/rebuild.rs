@@ -119,9 +119,6 @@ pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
             *controller = Controller::Local;
         }
     }
-    if let Some(path) = std::env::var_os("OAG_TMP_SIMDUMP3") {
-        let _ = std::fs::write(path, format!("{:#?}", race.sim));
-    }
     // After the seats, as the session applies the AI choice: which driver flies reads who is
     // human.
     if let Some(ai) = launch.original_ai {

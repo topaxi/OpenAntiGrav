@@ -833,9 +833,6 @@ impl Session {
                     // with no tables keeps this project's driver.
                     // A mod campaign event's own AI (ADR-0077): its pilot for
                     // every opponent, and whose driver flies.
-                    if let Some(path) = std::env::var_os("OAG_TMP_SIMDUMP4") {
-                        let _ = std::fs::write(path, format!("{:#?}", race_stage.race.sim));
-                    }
                     let custom = race_stage.campaign_custom.clone();
                     if let Some(pilot) = custom.as_ref().and_then(|c| c.pilot.as_ref()) {
                         race_stage.race.set_opponent_pilot(pilot, ai_difficulty);
@@ -911,9 +908,6 @@ impl Session {
         match loaded {
             Ok(loaded) => {
                 oag_raceplay::loader_log::lines(&loaded.report);
-                if let Some(path) = std::env::var_os("OAG_TMP_SETUPDUMP") {
-                    let _ = std::fs::write(path, format!("{:#?}", loaded.setup));
-                }
                 // The viewer's timeline starts its own race from the same setup.
                 if let Some(watching) = self.watching.as_mut() {
                     watching.setup = Some(loaded.setup.clone());
