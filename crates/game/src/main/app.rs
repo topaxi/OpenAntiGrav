@@ -1078,6 +1078,7 @@ impl ApplicationHandler for App {
             session.controls.silence_motors();
             session.save_race_music();
             session.keep_campaign_position();
+            session.keep_replays();
         }
         oag_game::records::finish_background_saves();
     }

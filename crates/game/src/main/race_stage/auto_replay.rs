@@ -29,6 +29,7 @@ impl RaceStage {
     pub(crate) fn arm_auto_replay(&mut self) {
         self.race.start_recording(self.replay_header.clone());
         self.auto_replay = self.race.recording();
+        debug!("replays: recording this race for the REPLAYS page: {}", self.auto_replay);
     }
 
     /// The file this race leaves behind, if it is armed and long enough to be worth one.
@@ -55,7 +56,7 @@ impl RaceStage {
     }
 
     /// Writes this race's recording into the ring, once.
-    pub(super) fn write_auto_replay(&mut self) {
+    pub(crate) fn write_auto_replay(&mut self) {
         let Some(replay) = self.finished_recording() else {
             return;
         };

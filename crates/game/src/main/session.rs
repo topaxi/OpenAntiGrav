@@ -40,6 +40,8 @@ mod frame;
 pub(crate) mod frame_timing;
 #[path = "session/lifecycle.rs"]
 pub(crate) mod lifecycle;
+#[path = "session/replays.rs"]
+mod replays;
 #[path = "session/rumble.rs"]
 mod rumble;
 #[path = "session/phases.rs"]
