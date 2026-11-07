@@ -1498,3 +1498,14 @@ fn a_mods_saved_picks_round_trip_and_survive_the_mod_being_turned_off() {
             && *v == oag_ui::menu::Value::Text("Vostok".into()))
     );
 }
+
+#[test]
+fn recording_is_on_unless_the_player_turned_it_off() {
+    assert!(fresh().replay.record, "a fresh profile records");
+    assert!(read("").replay.record, "an old file without [replay]");
+    assert!(read("[replay]\n").replay.record, "a table with no key");
+    let off = read("[replay]\nrecord = false\n");
+    assert!(!off.replay.record);
+    let written = toml::to_string_pretty(&off).expect("serialise");
+    assert!(!read(&written).replay.record, "{written}");
+}

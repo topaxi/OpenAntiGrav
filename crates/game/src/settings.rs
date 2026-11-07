@@ -142,6 +142,9 @@ pub struct Settings {
     /// Which mods are turned off on the MODS page.
     #[serde(default)]
     pub mods: Mods,
+    /// Whether races are recorded (`crate::replays`).
+    #[serde(default)]
+    pub replay: Replay,
     /// What each mod's own menu rows saved, by mod id then key (`mod_settings`).
     /// Kept whether or not the mod is turned on.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -214,6 +217,27 @@ pub struct Log {
 pub struct Mods {
     #[serde(default)]
     pub disabled: std::collections::BTreeSet<String>,
+}
+
+/// `[replay]`: whether a race that can be recorded is, and written to `auto/` when it ends
+/// (ADR-0087, decision 1). On unless the player turns it off.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Replay {
+    /// Record races for the REPLAYS page.
+    #[serde(default = "default_record")]
+    pub record: bool,
+}
+
+impl Default for Replay {
+    fn default() -> Self {
+        Self {
+            record: default_record(),
+        }
+    }
+}
+
+fn default_record() -> bool {
+    true
 }
 
 /// What the opponents are like.
