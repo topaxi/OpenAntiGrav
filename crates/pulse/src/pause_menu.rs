@@ -75,3 +75,29 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
     offers_photo: true,
     origin: Origin::Measured,
 };
+
+#[cfg(test)]
+mod tests {
+    use super::PAUSE_MENU;
+
+    /// The executable's own switch on the game mode (`FUN_088e35d4`): Tournament, Time Trial
+    /// and Speed Lap have screens, every other mode the redirect's default.
+    #[test]
+    fn a_mode_opens_the_screen_the_executable_picks_for_it() {
+        let screen = |mode| PAUSE_MENU.screen_for(mode).name;
+        assert_eq!(screen("time_trial"), "InGame Pause SP Time Trial");
+        assert_eq!(screen("speed_lap"), "InGame Pause SP Speed Lap");
+        assert_eq!(screen("tournament"), "InGame Pause SP Tournament");
+        for mode in ["single_race", "head_to_head", "zone", "eliminator"] {
+            assert_eq!(screen(mode), "InGame Pause SP", "{mode}");
+        }
+    }
+
+    #[test]
+    fn every_screen_a_mode_names_is_in_the_table() {
+        for (mode, screen) in PAUSE_MENU.by_mode {
+            assert!(PAUSE_MENU.screen(screen).is_some(), "{mode}: {screen}");
+        }
+        assert!(PAUSE_MENU.screen(PAUSE_MENU.default_screen).is_some());
+    }
+}

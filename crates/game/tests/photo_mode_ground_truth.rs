@@ -19,11 +19,11 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 /// A race on `image` as far as `race_prefix` goes, then `script`, in a profile of its own.
-struct Run {
-    status: std::process::ExitStatus,
-    stderr: String,
-    states: Vec<Value>,
-    dir: PathBuf,
+pub(crate) struct Run {
+    pub(crate) status: std::process::ExitStatus,
+    pub(crate) stderr: String,
+    pub(crate) states: Vec<Value>,
+    pub(crate) dir: PathBuf,
 }
 
 const TO_THE_RACE: &str = "boot; select racebox; press cross; until page=race; \
@@ -35,7 +35,7 @@ fn drive(image: &Path, tag: &str, script: &str, shots: &Path) -> Run {
 }
 
 /// [`drive`] with `args` added to the game's command line.
-fn drive_with(image: &Path, tag: &str, script: &str, shots: &Path, args: &[&str]) -> Run {
+pub(crate) fn drive_with(image: &Path, tag: &str, script: &str, shots: &Path, args: &[&str]) -> Run {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a scratch directory");
@@ -70,7 +70,7 @@ fn drive_with(image: &Path, tag: &str, script: &str, shots: &Path, args: &[&str]
     }
 }
 
-fn pulse() -> Option<PathBuf> {
+pub(crate) fn pulse() -> Option<PathBuf> {
     oag_testdata::image("pulse-psp-eu.chd")
 }
 
