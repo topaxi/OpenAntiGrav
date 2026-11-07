@@ -128,18 +128,21 @@ slot of ours at all (it is a different shot list, for a different grid).
 
 - **Omega** (`/omega/eboot-ps4-omega-eu.bin`): **checked, differs.** The strings are
   `%s\start_grid%s.vex` (`0x018172de`), `%s\start_grid_ta%s.vex` (`0x018172f2`) and
-  `%s\start_grid.vex` (`0x01817309`): no `_de`, no prefix. The chooser `FUN_0138b360` branches at
-  `0x0138bc3d`-`0x0138bcc6`: mode 10, 5 and the set 6, 13, 14, 21 (`bt 0x8181` on `mode - 6`) and 7
-  take `_ta` as in HD; mode 2 takes the plain file (no demo file); and two further tests send a race
-  to `_ta`: a byte at `0x0203a728` with `FUN_01669270` (a case-insensitive match of the track name
-  against `WV_Zone_1` to `4` and four more names), and `*(g_GameState + 0x21c) == 0`
-  (`g_GameState` is the pointer at `0x01e31910`; the field is unread). Confidence 70. Omega's
-  `PRE_RACE` is not on, so nothing of ours changes.
-- **2048** (`/2048/eboot-vita-2048-eu-v104.elf`): **checked, applies, not wired.** The same four
-  strings with the prefix (`0x814a91bc`, `0x814a91d8`, `0x814a91f4`, `0x814a920c`), one caller,
-  `FUN_8121bce2`; its mode gate was not read. 2048's `grid_camera1` shape needs `AnimEnd` that
-  mostly is not authored ([race-intro.md](../../../gameplay/race-intro.md)), so a fly-by is not
-  turned on there.
+  `%s\start_grid.vex` (`0x01817309`): no `_de`, no prefix. The chooser `FUN_0138b360` compares a
+  mode id (`r13d`; its load was not located in this function, and every other reader takes the
+  game state's mode word `0x01f999e4`, `ps4-omega-eu/ai-controls.md`) at `0x0138bc3d`-`0x0138bcc6`:
+  10, 5, 7 and the set 6, 13, 14, 21 (`bt 0x8181` on `mode - 6`) take `_ta` as in HD; **2 takes
+  the plain file** (no demo file); and two further tests send a race to `_ta`: a byte at
+  `0x0203a728` with `FUN_01669270` (a case-insensitive match of a track name at `0x0203a6f8`
+  against `WV_Zone_1` to `4` and four more names), and `*(0x01e31910 + 0x21c) == 0`, where
+  `0x01e31910` is the current game-mode object (`ai-controls.md`) and the field is unread.
+  Confidence 65. Omega's `PRE_RACE` is not on, so nothing of ours changes.
+- **2048** (`/2048/eboot-vita-2048-eu-v104.elf`): **checked, applies (strings only), not wired.**
+  The same four strings with the prefix (`0x814a91bc`, `0x814a91d8`, `0x814a91f4`, `0x814a920c`),
+  one caller, `FUN_8121bce2` (the Thumb-2 blocks at `0x8121ca4c`-`0x8121cb3e` load them); the mode
+  gate that chooses between them was not read. 2048's `grid_camera1` shape needs an `AnimEnd`
+  that mostly is not authored ([race-intro.md](../../../gameplay/race-intro.md)), so a fly-by is
+  not turned on there. Confidence 60.
 
 ## Function table
 

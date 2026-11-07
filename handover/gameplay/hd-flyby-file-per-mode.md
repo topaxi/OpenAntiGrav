@@ -28,7 +28,7 @@ and the loader's try-then-fall-back, one `hd_flyby_ground_truth` test per mode.
   Junction. A Time Trial fly-by on RPCS3 against ours would turn the static read (84) into a
   measurement.
 - **Unread branches.** The byte `0x009384e1` skips the grid file choice altogether (online?);
-  mode 7 belongs to no mode of ours; Omega adds a track-name test and `g_GameState+0x21c == 0` to
+  mode 7 belongs to no mode of ours; Omega adds a track-name test and a game-mode-object field test to
   its `_ta` gate, and 2048's gate (`FUN_8121bce2`) was not read.
 - **Omega** ships HD's circuits and no `_de`; its `PRE_RACE` is not on.
 

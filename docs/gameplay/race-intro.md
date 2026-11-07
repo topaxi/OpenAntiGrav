@@ -180,10 +180,10 @@ slots; the original never offered the mode (`head2head.md`), so this is the main
 back to the plain file, which has no `grid_camera1`: ours plays no fly-by there and says so in the
 loader report; what the original does with it is unwatched.
 
-**Lineage check for the selection (2048, Omega).** 2048: *checked, applies, not wired*: the same
-four strings, gate unread. Omega: *checked, differs*: no `_de`, mode 2 takes the plain file, and two
-further tests (a track-name match against the Zone circuits, `g_GameState+0x21c == 0`) also send a
-race to `_ta`.
+**Lineage check for the selection (2048, Omega).** 2048: *checked, applies (strings only), not wired*:
+the same four strings, the gate unread. Omega: *checked, differs*: no `_de`, mode 2 takes the plain
+file, and two further tests (a track-name match against the Zone circuits, a field of the current
+game-mode object) also send a race to `_ta`.
 
 **HD's eight numbered circuits were upside down until 2026-10-07**, and Talons Junction was not.
 Those eight (the Pulse lineage: Vineta K, 02, 03, Chenghou, Ubermall, Sebenco, Sol 2, Anulpha)
