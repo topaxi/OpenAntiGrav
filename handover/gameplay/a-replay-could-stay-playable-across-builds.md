@@ -29,5 +29,6 @@ patches and can be taken over. Not a priority. Nothing in ADR-0087's stages depe
 
 ## Next Steps
 
-1. When the `pose-track` stage is briefed, decide whether this stays parked. Its default is the
-   hull-only track ADR-0087 specifies.
+1. ~~Decide at the `pose-track` briefing whether this stays parked.~~ It stays parked: the `POSE` chunk is
+   hull-only as ADR-0087 specifies, with no field reserved; an unknown chunk is skipped (proved), so a state
+   stream can still be added as a new chunk.

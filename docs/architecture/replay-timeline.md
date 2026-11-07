@@ -115,6 +115,28 @@ measurement. On this load every title is inside the 100-times-real-time mark dec
 Deck. **The Deck itself stays owed.** Seeks on the dev profile, load about 10 to 20, median 1 to 7 ms, worst
 2 to 22 ms.
 
+## The pose track
+
+Stage 4 of the ADR: the `POSE` chunk records every craft on the grid beside the inputs, for the day
+a build no longer reproduces the run (POSE VIEW, decision 4). The `Timeline` does not read it: a
+seek resimulates, and a pose track is never a state. **Where it sits:** the codec and the reader in
+`oag-replay` (`track.rs`, which knows no race), the capture in `oag-raceplay`'s `Recording`
+(`replay/recording.rs`, the `view` half), next to the recorder and outside `RaceSim`, so nothing in
+it reaches the state hash. Its layout, its cost on all five titles and the respawn it was shown on
+are on [the replay file's page](../formats/replay-file.md) ("The pose track"). The numbers that
+bear on this page:
+
+- At Venom, 156 to 176 bytes a craft a second (Phantom: 197 to 263), so a Single Race of eight craft for five minutes is 0.37 to
+  0.42 MB: 4.5 percent over the 149 to 168 decision 4 chose, the difference being the key index the
+  sweep did not store and a refinement that now holds the stated bound.
+- **Capture is a segment at a time.** Refinement works on one 6-tick segment alone, so the recorder
+  closes a segment as it ends and keeps keys (20 bytes each, about 300 bytes a craft a second), not a
+  pose a tick. Eight craft over a race to the finish hold 270 to 650 KiB; a track stops at an hour
+  (`MAX_TICKS`). A race that ends by finish, quit or restart has nothing left to encode:
+  `Race::recorded` closes the open segment in a copy (0.05 to 0.19 ms) and the chunk's encoding takes
+  1.0 to 5.0 ms (5.0 on 2048's 14,410 ticks, dev profile at load 20), so no worker thread is used.
+- A recording that writes no track costs nothing: a race with no `start_recording` does no work.
+
 ## The other title of the pair
 
 **Ported.** 2048 and Omega each ran every row above on their own data; nothing here is per title.

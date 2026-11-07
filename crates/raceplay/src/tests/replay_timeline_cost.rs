@@ -784,6 +784,72 @@ fn replay_timeline_cost_sweep() {
             std::fs::write(file, &bytes).expect("writing the encoded track");
         }
     }
+    shipped_row(&track, ticks);
     println!("== {title}: load at end {}", loadavg());
     let _ = mib(0);
+}
+
+/// The track as `oag_replay::PoseRecorder` writes it: the row of the table above that is the
+/// file's, with the cost of saying which ticks are keys (a five-bit mask a segment, against a
+/// varint tick step a key) and the refinement measured against the keys as a reader rebuilds
+/// them.
+fn shipped_row(track: &Track, ticks: u64) {
+    let mut recorder = oag_replay::PoseRecorder::new(track.slots);
+    for tick in &track.poses {
+        let poses: Vec<oag_replay::Pose> = tick
+            .iter()
+            .map(|&(position, rotation)| oag_replay::Pose { position, rotation })
+            .collect();
+        recorder.push(&poses);
+    }
+    let shipped = recorder.track().expect("ticks were pushed");
+    let (mut position, mut rotation) = (Vec::new(), Vec::new());
+    let mut steps = 0usize;
+    let mut keys = 0usize;
+    for slot in 0..track.slots {
+        let key_ticks = shipped.key_ticks(slot);
+        keys += key_ticks.len();
+        for pair in key_ticks.windows(2) {
+            let mut varint_bytes = Vec::new();
+            varint(&mut varint_bytes, (pair[1] - pair[0]) as u32);
+            steps += varint_bytes.len();
+        }
+        for (tick, truth) in track.poses.iter().enumerate() {
+            let got = shipped.pose(slot, tick as f64).expect("a craft");
+            position.push((got.position - truth[slot].0).length());
+            rotation.push(degrees_between(got.rotation, truth[slot].1));
+        }
+    }
+    let pick = |v: &mut Vec<f32>| {
+        v.sort_by(f32::total_cmp);
+        let at = |p: f64| v[((v.len() as f64 * p) as usize).min(v.len() - 1)];
+        [at(0.5), at(0.99), at(0.999), v[v.len() - 1]]
+    };
+    let (pos, rot) = (pick(&mut position), pick(&mut rotation));
+    let bytes = shipped.encoded_len();
+    let per = |bytes: usize| bytes as f64 / track.slots as f64 / (ticks as f64 / 60.0);
+    let mask = (0..track.slots)
+        .map(|_| (ticks as usize).div_ceil(6) * 5)
+        .sum::<usize>()
+        .div_ceil(8);
+    println!(
+        "  as shipped (POSE chunk, refined against the keys a reader rebuilds): {bytes} bytes, \
+         {:.1} B per craft per s, {keys} keys; error p50/p99/p99.9/max position \
+         {:.4}/{:.4}/{:.4}/{:.4} units, rotation {:.3}/{:.3}/{:.3}/{:.3} degrees",
+        per(bytes),
+        pos[0],
+        pos[1],
+        pos[2],
+        pos[3],
+        rot[0],
+        rot[1],
+        rot[2],
+        rot[3]
+    );
+    println!(
+        "  which ticks are keys: mask about {mask} bytes ({:.1} B per craft per s) against {steps} \
+         bytes of varint tick steps ({:.1} B per craft per s)",
+        per(mask),
+        per(steps)
+    );
 }
