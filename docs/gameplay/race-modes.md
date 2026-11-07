@@ -658,13 +658,15 @@ status:
   "weapons do more damage" *is* in the recovered engine: a second, real table,
   not an invented multiplier. A title with no second table (Pure) falls back
   to the ordinary one and says so in the load report.
-- **Pads refresh an order of magnitude faster.** `<WeaponPad
+- **Pads refresh an order of magnitude faster - on Pulse only.** `<WeaponPad
   elimination_refresh_time>` is `0.05` seconds against the ordinary
-  `refresh_time`'s `0.55` on both shipped PSP discs -
-  `oag_tables::handling::global::WeaponPad`'s own doc comment already named
-  Eliminator by name before this mode existed to read it. `race::load` selects
-  it the same way it selects the weapon table above, falling back to the
-  ordinary figure for a title with none. See [pickups](pickups.md#the-refresh-timer-is-a-debounce-not-a-respawn).
+  `refresh_time`'s `0.55` on both shipped PSP discs, and Pulse stamps it
+  (measured live, `docs/gameplay/pickups.md`, "Eliminator and the pads, per
+  title"). **HD, 2048 and Omega author `0.15` against `0.75` and never stamp a
+  pad in Eliminator at all**: HD measured on RPCS3, 2048 and Omega read in
+  `WeaponPads_TestCraft`, where the Eliminator family skips the stamp. `race::load`
+  still selects the elimination figure for every title that authors it, which is
+  right on Pulse and wrong on those three; the wiring is a handover thread.
 - **No energy from an absorb; the absorb is a one-second Shield instead
   (2026-10-03, read statically, confidence 80).** `Mode::pickups_absorb` answers
   `false` for Eliminator alone. Until 2026-10-03 both absorb paths then kept
