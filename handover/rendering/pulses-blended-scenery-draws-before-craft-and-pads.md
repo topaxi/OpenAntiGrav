@@ -38,6 +38,9 @@ Measured on PPSSPP; the numbers, the method and the confidence are on
 2. Reproduce with a **speed or weapon pad**, not a craft. The maintainer specifically saw a pad and
    may have misremembered the ship (2026-11-07). The measured poses and the synthetic one used a
    craft. Use far camera, Pulse PSP, Platinum Rush White, and a tree between the eye and a pad. If it
-   reproduces at `original`, read the frame's order with the key bump on the page.
+   reproduces at `original`, read the frame's order with the key bump on the page. Placing the
+   camera is the easy part in ours (maintainer's suggestion): park the race in photo mode
+   (`docs/ui/photo-mode.md`) or use a capture pose, and put a tree between the lens and a pad. Then
+   find a matching spot on PPSSPP for the original.
 3. For HD, Omega and 2048, read each title's queue keys before moving a blended list: their path draws
    it before the craft today.
