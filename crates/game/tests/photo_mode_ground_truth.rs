@@ -30,6 +30,16 @@ const TO_THE_RACE: &str = "boot; select racebox; press cross; until page=race; \
      select launch_race; press cross; until screen=picker; press cross; \
      until screen.id=ship-select; press cross; until stage=race within 4000; ticks 400; ";
 
+/// [`TO_THE_RACE`] as a Time Trial, which records every tick it plays (a rewind plays the
+/// recording). Run it with `--autopilot` so the craft moves with nothing held on the pad: a held
+/// button is read by the pad's own smoothing, which a visit's frames without a race tick do not
+/// run down, and that is the pad and not the race.
+const TO_THE_TIME_TRIAL: &str = "boot; select racebox; press cross; until page=race; \
+     set race.mode=time_trial; \
+     select launch_race; press cross; until screen=picker; press cross; \
+     until screen.id=ship-select; press cross; until stage=race within 4000; \
+     ticks 400; ";
+
 fn drive(image: &Path, tag: &str, script: &str, shots: &Path) -> Run {
     drive_with(image, tag, script, shots, &[])
 }
@@ -243,6 +253,83 @@ fn a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without() {
         "the picture after leaving carries what the mode did to it (differs by {})",
         difference(&left, &right, ALL)
     );
+    a_visit_that_rewinds_leaves_every_live_tick_as_it_was(&image, &shots);
+}
+
+/// ADR-0087, decision 5: a visit that rewinds. On a Time Trial, which records, the mode goes back
+/// to the start of the race, forward again, takes a shot of the moment it stands at and goes
+/// back once more before leaving. Every tick it reports (the rewound ones too, each a state the
+/// recording replays) hashes as the same tick of a race that was never visited, and the race
+/// resumes at the tick it left.
+fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &Path) {
+    let control = drive_with(
+        image,
+        "hash-control-tt",
+        &format!("{TO_THE_TIME_TRIAL} ticks 600"),
+        shots,
+        &["--autopilot"],
+    );
+    assert!(control.status.success(), "{}", control.stderr);
+    let rewound = drive_with(
+        image,
+        "hash-rewind",
+        &format!(
+            "{TO_THE_TIME_TRIAL} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=internal within 200; press start; \
+             hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; \
+             hold left 90; ticks 5; hold right 20; ticks 5; press cross; ticks 5; \
+             screenshot SHOTS/rewound.png; hold left 90; ticks 60; \
+             escape; until photo=none within 50; ticks 600"
+        ),
+        shots,
+        &["--autopilot"],
+    );
+    assert!(rewound.status.success(), "{}", rewound.stderr);
+    let held: BTreeMap<u64, String> = ticks(&control)
+        .into_iter()
+        .map(|(tick, hash, _)| (tick, hash))
+        .collect();
+    let seen = ticks(&rewound);
+    let mut compared = 0;
+    for (tick, hash, _) in &seen {
+        // The control's log starts after the first tick it steps, so the state before it (the
+        // rewind goes back to it) has nothing to be compared with.
+        if let Some(control) = held.get(tick) {
+            assert_eq!(hash, control, "tick {tick} hashes differently after a rewind");
+            compared += 1;
+        }
+    }
+    assert!(compared > 600, "only {compared} ticks compared");
+    let under: Vec<u64> = seen
+        .iter()
+        .filter(|(_, _, lens)| lens != "none")
+        .map(|(tick, _, _)| *tick)
+        .collect();
+    let live = *under.first().expect("the mode opened");
+    let lowest = *under.iter().min().expect("the mode opened");
+    assert!(
+        under.iter().all(|tick| *tick <= live),
+        "the visit went past the live tick {live}: {under:?}"
+    );
+    assert!(
+        lowest + 200 < live,
+        "the rewind never went back: lowest tick {lowest}, live {live}"
+    );
+    let after: Vec<u64> = seen
+        .iter()
+        .skip_while(|(_, _, lens)| lens == "none")
+        .skip_while(|(_, _, lens)| lens != "none")
+        .map(|(tick, _, _)| *tick)
+        .collect();
+    // The first line after the mode is the live tick again, or the tick after it when the
+    // report for the last frame of the mode and the first tick of the race share a line.
+    assert!(
+        after.first().is_some_and(|tick| (live..=live + 1).contains(tick)),
+        "leaving puts the race back at the tick it left: {:?}",
+        &after[..after.len().min(4)]
+    );
+    assert!(after.contains(&(live + 1)), "and it goes on from there");
+    assert_eq!(the_photos(&rewound).len(), 1, "one shot, one file");
 }
 
 #[test]

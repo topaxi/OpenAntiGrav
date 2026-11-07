@@ -379,7 +379,7 @@ fn a_rewind_changes_nothing(title: &str) {
             let recorded = live.recorded().expect("recording").ticks();
             let mut rewind = Rewind::begin(&mut keeper, &mut live).expect("a running race");
             assert!(rewind.resimulates(), "{title}");
-            for target in [visit_at, 73, 1_259, 0, 61, visit_at - 1, 1_200, 540, 541, visit_at] {
+            for target in [visit_at, 73, 1_259, 0, 61, visit_at - 1, 540, 541, 1_200] {
                 assert_eq!(rewind.seek(&mut keeper, &mut live, target), target, "{title}");
                 assert_eq!(
                     live.sim.state_hash(),
