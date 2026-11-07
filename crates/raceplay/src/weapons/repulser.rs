@@ -114,6 +114,7 @@ impl Race {
         for (slot, owner) in credits {
             if hits[slot].landed {
                 self.record_pending_hit(slot, owner);
+                self.credit_hit_points(slot, owner, hits[slot].amount);
             }
         }
     }

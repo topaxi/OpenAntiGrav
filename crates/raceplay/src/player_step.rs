@@ -464,6 +464,7 @@ impl Race {
             // Eliminator's own per-lap mechanic, a no-op on every other
             // mode - see `Race::eliminator_lap_health_refill`.
             self.eliminator_lap_health_refill(slot);
+            self.credit_lap_points(slot);
         }
     }
 }

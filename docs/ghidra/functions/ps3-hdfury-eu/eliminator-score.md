@@ -28,7 +28,7 @@ function, so nothing there is renamed.
 `scale(craft)` multiplies every award: `1.0` for a craft whose role `+0x628c` is `0`, the person,
 and for role `2`, an opponent, the float `RM+0x193c + difficulty * 4`. That is
 `WeaponAIStats.xml`'s `<EliminatorAIStats>` `easyScoreScale`, `mediumScoreScale`, `hardScoreScale`
-(the loader is [weapon-ai-stats.md](weapon-ai-stats.md); `RM+0x1880+176..+228` is the parse target,
+(the loader is [weapon-ai-stats.md](weapon-ai-stats.md); the parse fills `RM+6240+176..+228`,
 which puts the three score floats at `RM+0x193c`). Read live at Novice: `RM+0x193c..+0x1944` =
 `1.15, 1.25, 1.4`, the file's own three.
 
@@ -63,7 +63,7 @@ tick's change:
 | AI `c6`, `0 -> 0.805`, on `c3`'s shield `53.7 -> 46.7` (LeachBeam tick) | `+0.805` | `7 * 0.1 * 1.15` |
 | AI `c6`, `1.2075 -> 24.61`, `kills 0 -> 1`, `c3` down | `+23.4025` | `23 + 0.4025` (`20 * 1.15` and a `3.5` blow) |
 | AI `c3`, `41.4 -> 36.4`, `deaths 0 -> 1`, state `1 -> 4` | `-5.0` | not scaled |
-| Every AI at each lap, `lap n -> n+1` (46 rows) | `+5.75` | `5 * 1.15` |
+| Every AI at each lap, `lap n -> n+1` (21 rows in run 2) | `+5.75` | `5 * 1.15` |
 | Person, three laps, `0 -> 5 -> 10 -> 15` | `+5.0` | scale `1.0` |
 | Person, Quake kills, `15 -> 41`, `41 -> 67`, `148 -> 177` | `+26`, `+26`, `+29` | `20 + 6`, `20 + 6`, `20 + 9` |
 | Person, Quake hits, `67 -> 70` | `+3.0` | `30 * 0.1` |
@@ -100,6 +100,27 @@ and were never caught.** `Hud_RaiseScoreFeedback` is called for the person's dam
 (`0x000e7c2c`, `0x000e8458`). Frames 0.05 to 1.3 s after six of the person's awards show no popup, so
 either it is shorter than that or it draws somewhere the sampling missed. Not drawn by ours, 75 for
 the name. Next: a frame burst across one of the person's hits, reading `hud+0x3d0 + 12 * i`.
+
+## What ours does
+
+`oag_title::Title::eliminator` states the rule; `oag_raceplay::score_law` resolves it once at load
+into a plain `oag_race::ScoreLaw` on the race's setup, and nothing during a race reads a title. The
+HUD follows that value too (`Readout::score_rows`), so the rule is free to move off the title later.
+A Racebox target is `<Slider name="Eliminations">`'s `minSlide` off `DATA00`; a campaign cell's is
+its `NitroElim*` number for the rung. `Standing::score` enters the state hash only once it is not
+zero, so a kill race hashes as before.
+
+Three departures, all stated: a kill's points and the `-5` land when ours first sees the craft down,
+about half a second after the original's tick (`Race::credit_kill`, its existing path); a blast's
+points go to the first impact whose radius reached the craft (`credit_blast`'s owner, chosen);
+`HighlightBar` keeps its authored width, because the HUD's draw list has no font to measure the
+row with, where `Hud_PlaceHighlightBar` fits its left edge to the text.
+
+**Open:** the results screen (HD's Eliminator headline is still `Headline::Unresolved` and its
+table is `oag_raceplay::scoreboard`'s places, not `POINTS`); the Racebox's TARGET row (`race_setup`
+is `None` on HD, and the disc's row is a `Slider`, not a list); the lap refill for an opponent:
+ours refills every craft, HD's reads as the person's alone (an AI's shield did not move on any lap);
+`ScoreFeedBack` above; the person's name in a row is the team's, not a profile's.
 
 ## Other titles
 

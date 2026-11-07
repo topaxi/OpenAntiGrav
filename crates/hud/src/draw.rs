@@ -237,7 +237,7 @@ pub(super) fn text_for(
         // through to the catch-all drew this one anyway, since text is not
         // gated by `ALWAYS_ON` the way sprites are: a second `POS` label with
         // nothing under it, floating beside the real one.
-        "PositionTxt2" => None,
+        "PositionTxt2" => super::kill_tags::target_header(readout, strings),
         // **2048's `XP` row is up only while an `SP.xml` event is being raced.**
         // `Hud_BindWidgets` (`0x81192cd0`) sets `hud+4` to the current event
         // (`DAT_81965b58`, which only the campaign's event card writes) and shows
@@ -267,6 +267,10 @@ pub(super) fn text_for(
             .map(|line| line.behind().to_string()),
         "KillsText" => super::kill_tags::header(readout, label, strings),
         name if name.starts_with("PosTag") => super::kill_tags::text(readout, name, strings),
+        name if name.starts_with("PlaceString") => label
+            .string
+            .clone()
+            .filter(|_| super::kill_tags::rank_shown(readout, name)),
         "Lap" => (readout.lap > 0).then(|| readout.lap.to_string()),
         "Lap Outof" => (readout.laps > 0).then(|| readout.laps.to_string()),
         // 2048's own name and own shape: one widget for the whole `1/3`
@@ -854,20 +858,20 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
     // The kill column is Pulse's alone - see [`oag_title::HudArt::kill_column`] -
     // and so are the message lines, [`oag_title::HudArt::message_slots`].
     let ungated;
-    let readout = if (cx.art.kill_column
-        || (readout.kill_tags.is_empty() && readout.kill_target == 0))
+    let kill_column = cx.art.kill_column || readout.score_rows;
+    let readout = if (kill_column || (readout.kill_tags.is_empty() && readout.kill_target == 0))
         && (cx.art.message_slots
             || (readout.messages.iter().all(Option::is_none) && readout.time_gap.is_none()))
     {
         readout
     } else {
         ungated = Readout {
-            kill_tags: if cx.art.kill_column {
+            kill_tags: if kill_column {
                 readout.kill_tags.clone()
             } else {
                 Vec::new()
             },
-            kill_target: if cx.art.kill_column {
+            kill_target: if kill_column {
                 readout.kill_target
             } else {
                 0
@@ -1008,6 +1012,12 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             .map(|draw| lit_draw(cx, draw)),
     );
     frame.sprites.extend(super::assist::sprites(cx, readout));
+    frame.sprites.extend(
+        super::score_rows::sprites(cx.layout, readout)
+            .iter()
+            .filter_map(|sprite| sprite_draw(sprite, cx.sheet))
+            .map(|draw| lit_draw(cx, draw)),
+    );
     if let Some(line) = &readout.race_line {
         frame.sprites.extend(
             super::race_line::sprites(cx.layout, line)

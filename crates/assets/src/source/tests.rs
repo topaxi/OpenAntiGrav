@@ -191,6 +191,7 @@ const TITLE: &Title = &Title {
     adverts: None,
     teams: &[],
     loyalty: None,
+    eliminator: oag_title::pre_race::Sourced::chosen(oag_title::eliminator::EliminatorRule::Kills),
     hud_art: &oag_title::HudArt {
         texture_extension: None,
         always_on: &[],

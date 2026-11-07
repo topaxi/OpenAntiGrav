@@ -235,6 +235,8 @@ impl Race {
             time_trial_pace: None,
             head_to_head: self.head_to_head(slot),
             kill_tags: self.kill_tags(slot),
+            score_rows: self.sim.score_law.is_some()
+                && self.sim.world.mode() == oag_race::Mode::Eliminator,
             race_line: self.race_line(slot),
             player_tags: self.player_tags_for(slot),
             kill_target: if self.sim.world.mode() == oag_race::Mode::Eliminator {
@@ -368,17 +370,25 @@ impl Race {
         let slots: Vec<usize> = (0..world.ship_count as usize)
             .filter(|&slot| world.ships[slot].active)
             .collect();
-        let kills: Vec<u32> = slots
+        let scored = self.sim.score_law.is_some();
+        let counts: Vec<u32> = slots
             .iter()
-            .map(|&slot| world.ships[slot].standing.kills)
+            .map(|&slot| {
+                let standing = &world.ships[slot].standing;
+                if scored {
+                    standing.whole_score()
+                } else {
+                    standing.kills
+                }
+            })
             .collect();
-        oag_hud::kill_tags::ranked(&kills)
+        oag_hud::kill_tags::ranked(&counts)
             .into_iter()
             .filter_map(|row| {
                 let slot = slots[row];
                 Some(oag_hud::KillTag {
                     team: self.view.slot_teams.get(slot)?.clone(),
-                    kills: kills[row],
+                    count: counts[row],
                     player: slot == player,
                 })
             })

@@ -253,6 +253,7 @@ impl Race {
                 self.note_weapon_hit(slot);
             }
         }
+        self.credit_impact_points(&impacts, &hits);
         // A hit that got through throws the struck hull's own sparks - the
         // victim's `Ship_Damage`, not the weapon. See `race::hit_sparks`.
         #[cfg(feature = "view")]

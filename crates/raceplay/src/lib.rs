@@ -277,6 +277,7 @@ mod roll_payout;
 mod routes;
 #[cfg(feature = "view")]
 pub mod rumble_library;
+mod score_law;
 #[cfg(feature = "view")]
 mod scene;
 #[cfg(feature = "view")]

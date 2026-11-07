@@ -66,6 +66,7 @@ mod placement;
 pub mod player_tags;
 pub mod race_line;
 mod runtime;
+pub mod score_rows;
 pub mod screen_layout;
 mod shield_bar;
 mod sight_draw;
@@ -802,6 +803,9 @@ pub struct Readout {
     /// The Eliminator's kill target, resolved: the number in `KILLS (5)`.
     /// Zero in every other mode. See [`kill_tags::header`].
     pub kill_target: u32,
+    /// Whether [`Self::kill_tags`] count a score and [`Self::kill_target`] is a score target:
+    /// the race's own law, not the title's. See [`score_rows`].
+    pub score_rows: bool,
     /// The Eliminator's race line: where each craft is round the lap and the counts at either end.
     /// `None` outside an Eliminator. See [`race_line`].
     pub race_line: Option<RaceLine>,

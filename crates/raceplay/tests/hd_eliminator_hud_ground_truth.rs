@@ -152,3 +152,44 @@ fn the_eliminator_only_widgets_are_authored_by_the_eliminator_roots_alone() {
         "{line:?}"
     );
 }
+
+/// A Racebox Eliminator is won on score: the target is the slider's authored minimum, an
+/// opponent's scale is `DATA00`'s row for the difficulty, and the HUD carries the ranked rows, the
+/// header's panel, eight brackets and the highlight (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_racebox_eliminator_is_scored_to_the_slider_target() {
+    let Some(image) = image() else { return };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Eliminator,
+        difficulty: oag_ai::Difficulty::Novice,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading an HD Eliminator");
+    let law = loaded.setup.score_law.expect("HD's Eliminator is scored");
+    assert_eq!(loaded.setup.eliminator_kill_target, Some(200));
+    let row = loaded
+        .setup
+        .weapon_ai
+        .as_ref()
+        .and_then(|stats| stats.eliminator())
+        .expect("DATA00's row");
+    assert_eq!(law.opponent_scale, row.score_scale[0]);
+    assert!(law.opponent_scale > 1.0, "an opponent earns more than a person");
+
+    let context = loaded.hud.context().expect("HD's layout parses");
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    race.tick(&PlayerInputs::none());
+    let readout = race.readout();
+    assert!(readout.score_rows);
+    assert_eq!(readout.kill_target, 200);
+    assert_eq!(readout.kill_tags.len(), 8);
+    assert_eq!(
+        oag_hud::score_rows::sprites(context.layout, &readout).len(),
+        10,
+        "the header's panel, a bracket per row and the highlight"
+    );
+}

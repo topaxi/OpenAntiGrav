@@ -1119,7 +1119,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
         platform: archives.layout.platform,
         setup: Setup {
             mode: options.mode,
-            eliminator_kill_target: options.eliminator_kill_target,
+            eliminator_kill_target: crate::score_law::target(
+                options.eliminator_kill_target,
+                title.eliminator.value,
+                options.mode,
+                &mut archives,
+                &mut report,
+            ),
             laps_override: options.laps_override,
             weapons_override: options.weapons_override,
             difficulty: options.difficulty,
@@ -1309,6 +1315,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
             autopilot_pad_grants: title.weapons.autopilot_pad_grants.value,
             reset_triggers: crate::respawn::reset_triggers_for(&title.reset_enables),
             opponent_fire: title.weapons.opponent_fire.value,
+            score_law: crate::score_law::resolve(
+                title.eliminator.value,
+                weapon_ai.as_ref(),
+                options.difficulty,
+            ),
             speedup_pads,
             weapon_pads,
             weapons,

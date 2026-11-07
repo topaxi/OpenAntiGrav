@@ -221,6 +221,7 @@ impl Race {
         for (slot, hit) in hits.iter().enumerate() {
             if hit.landed {
                 self.record_pending_hit(slot, wave.owner);
+                self.credit_hit_points(slot, wave.owner, hit.amount);
             }
         }
         self.sim.world.quake = Some(wave);
@@ -310,6 +311,7 @@ impl Race {
         // other hit - see `race::hit_sparks`.
         if report.landed {
             self.record_pending_hit(beam.target as usize, beam.owner);
+            self.credit_hit_points(beam.target as usize, beam.owner, report.asked);
             let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
             if let Some(hit) = hits.get_mut(beam.target as usize) {
                 hit.landed = true;

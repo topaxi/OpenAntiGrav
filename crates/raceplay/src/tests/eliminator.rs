@@ -349,3 +349,103 @@ fn only_an_eliminator_craft_facing_back_down_the_track_loses_its_engine() {
         "not an Eliminator race"
     );
 }
+
+/// HD's awards (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`).
+const SCORE_LAW: oag_race::ScoreLaw = oag_race::ScoreLaw {
+    damage: 0.1,
+    kill: 20.0,
+    lap: 5.0,
+    death: 5.0,
+    opponent_scale: 1.15,
+};
+
+fn scored(target: u32) -> Race {
+    let mut race = eliminator();
+    race.sim.score_law = Some(SCORE_LAW);
+    race.sim.eliminator_kill_target = target;
+    race.sim.world.ships[1].active = true;
+    race
+}
+
+fn score_of(race: &Race, slot: usize) -> f32 {
+    race.sim.world.ships[slot].standing.score
+}
+
+fn near(value: f32, expected: f32) {
+    assert!((value - expected).abs() < 1e-4, "{value} against {expected}");
+}
+
+#[test]
+fn a_hit_pays_the_attacker_and_the_scale_is_an_opponents_alone() {
+    let mut race = scored(200);
+    race.credit_hit_points(1, 0, 30.0);
+    near(score_of(&race, 0), 3.0);
+    race.credit_hit_points(0, 1, 80.0);
+    near(score_of(&race, 1), 9.2);
+}
+
+#[test]
+fn a_craft_earns_nothing_for_hitting_itself() {
+    let mut race = scored(200);
+    race.credit_hit_points(1, 1, 80.0);
+    near(score_of(&race, 1), 0.0);
+}
+
+#[test]
+fn a_kill_pays_twenty_on_top_of_its_count() {
+    let mut race = scored(200);
+    race.sim.last_damager[1] = Some(0);
+    race.sim.last_weapon_hit[1] = race.sim.world.tick + 1;
+    race.credit_kill(1);
+    assert_eq!(race.sim.world.ships[0].standing.kills, 1);
+    near(score_of(&race, 0), 20.0);
+}
+
+#[test]
+fn a_lap_pays_every_craft_and_nothing_outside_the_eliminator() {
+    let mut race = scored(200);
+    race.credit_lap_points(0);
+    race.credit_lap_points(1);
+    near(score_of(&race, 0), 5.0);
+    near(score_of(&race, 1), 5.75);
+
+    let mut race =
+        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_mine_table());
+    race.sim.score_law = Some(SCORE_LAW);
+    race.credit_lap_points(0);
+    near(score_of(&race, 0), 0.0);
+}
+
+#[test]
+fn a_destroyed_craft_loses_five_once_and_stops_at_zero() {
+    let mut race = scored(200);
+    race.sim.world.ships[0].standing.score = 7.0;
+    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Eliminated;
+    race.tick_destroyed_craft();
+    race.tick_destroyed_craft();
+    near(score_of(&race, 0), 2.0);
+}
+
+#[test]
+fn the_race_ends_on_the_score_target_and_not_on_kills() {
+    let mut race = scored(200);
+    race.sim.world.ships[0].standing.kills = 200;
+    race.sim.world.ships[0].standing.score = 199.99;
+    race.tick_destroyed_craft();
+    assert!(!race.sim.world.race[0].finished, "199.99 truncates to 199");
+    race.sim.world.ships[0].standing.score = 200.0;
+    race.tick_destroyed_craft();
+    assert!(race.sim.world.race[0].finished);
+}
+
+#[test]
+fn a_kill_race_scores_nothing_and_still_ends_on_kills() {
+    let mut race = eliminator();
+    race.sim.eliminator_kill_target = 1;
+    race.credit_hit_points(1, 0, 80.0);
+    race.credit_lap_points(0);
+    near(score_of(&race, 0), 0.0);
+    race.sim.world.ships[0].standing.kills = 1;
+    race.tick_destroyed_craft();
+    assert!(race.sim.world.race[0].finished);
+}

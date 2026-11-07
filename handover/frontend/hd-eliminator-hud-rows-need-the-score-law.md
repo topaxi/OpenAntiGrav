@@ -1,41 +1,35 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [hd, omega, 2048]
-updated: 2026-11-06
-summary: "HD Eliminator's race line and lap hexagon are drawn; the TARGET header and the ranked score rows need HD's scoring law (craft+0x6f80) first"
+updated: 2026-11-07
+summary: "HD Eliminator is scored and its rows draw; the results screen's POINTS table, the TARGET row and ScoreFeedBack popups are open"
 ---
 
-# HD's Eliminator HUD: the score rows wait for the scoring law
+# HD's Eliminator: what is left after the score law
 
-2026-11-06, `eliminator-hud`. Evidence: `docs/ui/hud.md` ("HD's Eliminator race line"),
-`docs/ghidra/functions/ps3-hdfury-eu/eliminator-hud.md`. Guarded by
+2026-11-07, `hd-score-law`. Law, evidence and departures:
+`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`. Guarded by
+`crates/race/src/score.rs`, `crates/raceplay/src/tests/eliminator.rs` and
 `crates/raceplay/tests/hd_eliminator_hud_ground_truth.rs`.
 
 ## Open
 
-- **HD's Eliminator is score-based; this build's is Pulse's kill count.** The original prints
-  `TARGET ( 200 )` over ranked `NAME ( score )` rows, scoring points for damage, eliminations and
-  laps and losing points on an elimination (the intro board's own text). The score is
-  `craft+0x6f80` (a float read as an int; tie-breaks `+0x6f7c`, then `+0x628c`); the target is
-  `g_GameState+0x20`. Recover the writers of `craft+0x6f80`, then the rows (`0x0008c6f8`, not
-  decompiled), the header (`Hud_BindWidgets` `0x0009d494`) and the rank brackets and
-  `HighlightBar`. Until then the rows, `TARGET`, `MPWeaponIcon0-7`, `VoiceCom0-7` and
-  `ScoreFeedBack0-15` stay undrawn: a row of `( 0 )` would stand in for data the original has.
+- **Results screen.** The original ranks by `POINTS` under `2ND PLACE - KILLS: 6 DEATHS: 0`
+  (`data/reference/hd-eliminator-score/results.png`, local). Ours draws `oag_raceplay::scoreboard`'s
+  places under `Headline::Unresolved`.
+- **Racebox TARGET row.** HD's row is a `Slider` (`200..600`, step `20`). `race_setup` is `None`, so
+  every Racebox race runs on the minimum.
+- **`ScoreFeedBack0-15`.** Authored and read, never caught in a frame.
+- **Opponent lap refill.** Ours refills every craft; on HD an AI's shield did not move on any lap.
 - **The marker half turn:** `Hud_UpdateRaceLine` rotates a marker by pi when `craft+0x6ad8` is
   set; the byte is unidentified (it also gates the absorb in `weapon-ai-fire.md`). Markers are upright.
-- **Not captured:** a frame after a kill or any score change; the split-screen Eliminator pair
-  (`splitscreen_elimination_hud_{0,1}.xml`, same widgets, unchecked). The Eliminator weapon-pad
-  disarm time was not seen in the frames.
-- **2048 and Omega: the race line draws there unmeasured.** Both executables name the same
-  widgets and both packages author them, so any Eliminator race on either draws the line through
-  the shared path; no frame of either was taken. `LapPanel2` is **checked, applies, not wired**
-  in both `ALWAYS_ON` lists.
-- **Compare pair:** the countdown pair is in the lane's scratch only (original frame and ours on Vineta K, an ad-hoc
-  HUD-region metric, no `pair.json`); adopting it into `data/reference/compare-page/hd-race/` is the lead's.
+- **Not captured:** the split-screen Eliminator pair (`splitscreen_elimination_hud_{0,1}.xml`, same
+  widgets, unchecked).
+- **2048 and Omega: checked, applies, not wired.** Both keep the kill rule, inherited from Pulse.
+  Their score writers are unread, and Omega's named file has no `<EliminatorAIStats>` row.
+- **`HighlightBar`'s width** needs a font in the HUD's draw list.
 
 ## Next Steps
 
-1. Find the writers of `craft+0x6f80` (`get_xrefs_to` is unreliable here: run
-   `scripts/ps3-toc.py toc` on every caller first) and write the scoring law up.
-2. Decompile `0x0008c6f8`; wire the rows through `oag_hud::kill_tags`'s ranking, with HD's score.
-3. Capture a frame after a score change on RPCS3 (Autopilot is fine for getting there).
+1. Give `Board` the score for a scored race and draw `POINTS` in HD's results table.
+2. Take a frame burst across one of the person's hits for `ScoreFeedBack`; read `hud+0x3d0 + 12 * i`.

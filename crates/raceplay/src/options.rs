@@ -839,6 +839,9 @@ pub struct Setup {
     /// Which terms the opponents' fire-or-absorb decision rolls by,
     /// `oag_title::weapons::Weapons::opponent_fire`.
     pub opponent_fire: oag_title::weapons::OpponentFire,
+    /// What an Eliminator is won on, `None` for kills: `oag_title::Title::eliminator` with the
+    /// opponents' scale resolved for this race's difficulty.
+    pub score_law: Option<oag_race::ScoreLaw>,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*
