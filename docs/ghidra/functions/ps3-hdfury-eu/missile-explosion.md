@@ -207,15 +207,25 @@ it when its last node dies.
   (frames from a camera 130 units to the side and 60 above the blast: near-white
   pixels 13,658 with the streaks and 3,635 without at tick 335, 9,524 against 2,548
   at tick 365 after the blast retired, 2,567 at tick 410 once every node is dead).
-- **Seen:** from that camera the sixteen streaks read as thin white lines radiating
-  from the blast, curling slightly (the swirl and the jitter), thickening toward
-  their origin and thinning at the heads, and fading out about 1.2 s after the
-  blast retires. From the player's own chase camera, 12 units from the centre,
-  they are sheets inside the white-out. **Not paired against the film `m5`**: its
-  frames were a scratch directory that was not kept (this page, section 1), so the
-  only comparison is the film's recorded description (white-out to the frame edge,
-  yellow-orange arcs at the top corners) against the model alone; the streaks add
-  to it and are unpaired.
+- **Seen:** from a camera 130 units to the side and 60 above the blast the sixteen
+  streaks read as thin white lines radiating from the centre, curling slightly (the
+  swirl and the jitter), thicker near their origin and thinner at the heads, and fading
+  out within about 1.2 s of the blast's retirement. **From the player's own camera
+  (the `--force-missile-hit` scenario, eye 19 to 22 units from the centre) they
+  prolong the white-out**: whole-frame mean luma, the metric of this page's film
+  numbers, against 97.8 before the hit, is 229/233/228/189/141/103 at ticks
+  296/302/310/325/345/355 (ages 0.1, 0.2, 0.33, 0.58, 0.92 and 1.08 s) with the streaks
+  and 226/229/220/169/94/95 without them. So the model alone is back at its pre-hit
+  level by 0.92 s and the streaks hold it 44 above until about 1.0 s. **Conflict, open:**
+  the film (`m5`) is back within 15 of its pre-hit 135 by about 0.6 s (162 at 0.5 s, 150
+  at 0.6 s), so ours clears later than the film with the model alone (169 against 98 at
+  0.58 s) and later still with the streaks. The law was read at confidence 80 and is not
+  tuned to this. Candidates, unresolved: the scenario's eye is farther from the centre
+  than the film's (12 units behind the rival), the config's width `2.0` read as a
+  half-width (the Missile ribbons' `half_width` convention), the strip's `v` side order
+  shared with the Missile ribbons (**chosen**), and the 60 Hz update rate (assumed).
+  **Not paired against the film `m5`**: its frames were a scratch directory that was not
+  kept (section 1), so there is no frame-for-frame pair.
 
 ## 3. Which node draws which material
 

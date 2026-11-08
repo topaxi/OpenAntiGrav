@@ -236,7 +236,12 @@ lead is closed (0.996105 is our own law at age 0.81), but ours' core still white
    2. ~~The sixteen streaks~~ **done**: the shared 20-element pool, `Ribbon::push`'s new
       scale argument, a view-side `Rng`, drawn after the Missile ribbons. Open: the pair
       against film `m5` (its frames were not kept; a fresh RPCS3 capture of one hit at a
-      known camera is the next step), and the blast's basis (the struck craft's own, chosen).
+      known camera is the next step), and **a measured conflict**: in the
+      `--force-missile-hit` scenario the whole-frame luma is back to its pre-hit level at
+      0.92 s with the model alone and 1.0 s with the streaks, against the film's about
+      0.6 s (`missile-explosion.md`, "Seen"). Candidates, unresolved: eye distance, the
+      width read as a half-width, the shared `v` side order, the assumed 60 Hz. Do not tune
+      the law to it. The blast's basis (the struck craft's own) is chosen.
    3. ~~Materials~~ **done**: the `MISSILE_CORE` doc and `missile_blast.rs`'s module doc
       cite section 3 of the page.
    4. **Bloom boost** (confidence 80, effect not measured), **still open**: while a blast
