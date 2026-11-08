@@ -107,6 +107,7 @@ impl Session {
         // authored `EndRace Results Split`, `docs/ui/split-end-race.md`.
         let split = stage.race.viewport_count() > 1;
         let board = stage.race.results().cloned();
+        let board_revision = stage.race.results_revision();
         // A network race several people flew names every person in its table (by the name
         // they raced under), as a split screen's does, but is otherwise this machine's own
         // race: loyalty, the medal and the menu rows are as for any other.
@@ -347,6 +348,16 @@ impl Session {
                 total_ticks: observation.tick,
             })
         };
+        // The tables that list the field are rebuilt from the board as the rest of the field
+        // finishes (`RaceStage::refresh_endrace_board`).
+        let field_roster = match &results {
+            ResultsModel::Hd(_) => Some(oag_game::results_tables::team_keys(
+                title_ref,
+                stage.race.slot_teams(),
+            )),
+            ResultsModel::PulsePeople(_) => Some(stage.race.slot_teams().to_vec()),
+            _ => None,
+        };
         // The place and the medal, under the title's own law
         // (`oag_title::ResultsLaw`): Pulse's `EndRaceResults_Update` and
         // `EndRaceRewards_OnEnter`, HD's `EndRaceResults` entry and `EndRacePhoto`.
@@ -377,7 +388,7 @@ impl Session {
             new_best_lap_ticks,
         );
 
-        let runtime = EndRaceRuntime::new(
+        let mut runtime = EndRaceRuntime::new(
             prep,
             skin,
             frame,
@@ -389,6 +400,9 @@ impl Session {
             runs_on_after_the_end,
             voice,
         );
+        if let Some(roster) = field_roster {
+            runtime.follow_board(roster, board_revision);
+        }
         if let Stage::Race(stage) = &mut self.stage {
             stage.endrace = Some(EndRace::Disc(Box::new(runtime)));
         }

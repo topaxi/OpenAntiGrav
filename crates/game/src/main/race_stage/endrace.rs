@@ -96,6 +96,19 @@ pub(crate) struct EndRaceRuntime {
     /// The place and medal lines this race's screens speak; `None` on a title
     /// whose triggers were not read (Wipeout HD/Fury).
     voice: endrace_voice::Speaker,
+    /// How the field table is rebuilt when the race's board is retaken (a craft crossed the line
+    /// after the person did), for the two tables that list the whole field.
+    field: Option<FieldFeed>,
+}
+
+/// What [`EndRaceRuntime::refresh_field`] needs beside the board: the grid's team column and
+/// which board the table shows.
+struct FieldFeed {
+    /// The team ids in slot order, in the shape the table's builder takes (`team_keys` for HD's
+    /// `Results`, `Race::slot_teams` for Pulse's people table).
+    roster: Vec<String>,
+    /// `Race::results_revision` of the board the table was built from.
+    revision: u32,
 }
 
 impl std::fmt::Debug for EndRaceRuntime {
@@ -227,6 +240,39 @@ impl EndRaceRuntime {
             flow,
             trophy,
             voice: endrace_voice::Speaker::new(voice),
+            field: None,
+        }
+    }
+
+    /// Arms [`Self::refresh_field`] for a race whose field table was built from `revision` of the
+    /// board with `roster` as its team column.
+    pub(crate) fn follow_board(&mut self, roster: Vec<String>, revision: u32) {
+        self.field = Some(FieldFeed { roster, revision });
+    }
+
+    /// Rebuilds the field table from `board` when it is a newer one than the table shows:
+    /// a craft that was `RACING` gets its time and place. Only the rows are replaced - the
+    /// headline, loyalty, voice, menu and flow were fixed at the finish and a screen the person
+    /// is on keeps its place. A no-op for every table that does not list the field.
+    pub(crate) fn refresh_field(&mut self, board: &oag_raceplay::scoreboard::Board, revision: u32) {
+        let Some(feed) = &mut self.field else {
+            return;
+        };
+        if feed.revision == revision {
+            return;
+        }
+        feed.revision = revision;
+        match &mut self.results {
+            ResultsModel::Hd(results) => {
+                results.rows = oag_game::results_tables::field_rows(Some(board), &feed.roster);
+            }
+            ResultsModel::PulsePeople(results) => {
+                if let Some(people) = oag_game::results_tables::people_rows(Some(board), &feed.roster)
+                {
+                    *results = people;
+                }
+            }
+            _ => {}
         }
     }
 

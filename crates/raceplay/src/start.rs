@@ -980,6 +980,7 @@ impl Race {
                 absorb_shell: Default::default(),
                 stage_rng: Rng::new(STAGE_SEED),
                 results: None,
+                results_revision: 0,
                 run_stats: results::RunStats::default(),
                 shield_was_up: false,
                 // Every bar starts at `0.0`, not `1.0`: the pool is `0.0` until

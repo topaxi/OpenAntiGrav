@@ -410,6 +410,17 @@ impl RaceStage {
         self.scene.temporal(window)
     }
 
+    /// Hands the end screens the race's board when it was retaken since they were built:
+    /// [`oag_raceplay::Race::refresh_results`]'s craft that crossed after the person, now
+    /// with a time. Touches no race state; the screen keeps its page and its cursor.
+    pub(crate) fn refresh_endrace_board(&mut self) {
+        if let (Some(endrace_touch::EndRace::Disc(runtime)), Some(board)) =
+            (&mut self.endrace, self.race.results())
+        {
+            runtime.refresh_field(board, self.race.results_revision());
+        }
+    }
+
     /// Reads the player's own outcome so far, straight off [`race::Race`]'s
     /// already-public state - never from inside a tick.
     ///
