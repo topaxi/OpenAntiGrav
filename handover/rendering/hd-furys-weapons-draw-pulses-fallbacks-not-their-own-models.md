@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-08
-summary: "Missile explosion read, ready to wire (streaks, retire, bloom boost); open: Plasma launch, state 8 shell, Bomb/Mine/Leach pairs, Mine halo"
+summary: "Missile explosion read, ready to wire; open: Plasma launch, state 8 shell, Bomb/Mine/Leach pairs, Mine halo, Missile head orbit/ribbon tint"
 difficulty: medium (30)
 ---
 
