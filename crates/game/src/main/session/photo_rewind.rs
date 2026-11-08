@@ -13,6 +13,7 @@ use oag_raceplay::photo::rewind::Rewind;
 use oag_raceplay::photo::shot::{Mover, Plan, Shot};
 use oag_ui::pointer::Pointer;
 
+use super::photo::Origin;
 use crate::stage::Stage;
 
 /// The stick deflection that abandons a shot under way: 2048's own threshold.
@@ -33,6 +34,10 @@ impl super::Session {
     /// Moves the race on screen to the tick the rewind row names, when that is not where it
     /// stands.
     pub(super) fn photo_rewind_sync(&mut self) {
+        if self.photo.as_ref().is_some_and(|open| open.origin() == Origin::Viewer) {
+            self.photo_viewer_sync();
+            return;
+        }
         let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
             return;
         };
@@ -67,6 +72,83 @@ impl super::Session {
             stage
                 .race
                 .photo_effects(|effects| effects.set_target_tick(reached));
+        }
+    }
+
+    /// The viewer's race moved to the tick the rewind row names, by the viewer's own seek: the
+    /// scrub is a seek, and the viewer carries on from where it lands.
+    fn photo_viewer_sync(&mut self) {
+        let (Stage::Race(stage), Some(open), Some(active)) =
+            (&mut self.stage, self.photo.as_mut(), self.viewer.as_mut())
+        else {
+            return;
+        };
+        let Some(target) = stage.race.photo().map(|p| p.effects().target_tick()) else {
+            return;
+        };
+        if target == open.asked {
+            return;
+        }
+        active.viewer.seek(&mut stage.race, target);
+        stage.race.photo_repose();
+        let reached = active.viewer.at();
+        debug!("photo mode: the viewer sought to tick {reached} (asked {target})");
+        open.asked = reached;
+        if reached != target {
+            stage
+                .race
+                .photo_effects(|effects| effects.set_target_tick(reached));
+        }
+    }
+
+    /// One tick of the PLAY row: with it on, the recording plays on from the moment on screen at
+    /// the speed it was made, the rewind row following, until it reaches the live tick or the
+    /// end of the recording, where the row turns itself off. A live race is moved by its
+    /// [`Rewind`] and put back to the bit on leaving; a watched one by the viewer.
+    pub(super) fn photo_play_tick(&mut self) {
+        let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
+            return;
+        };
+        if !stage.race.photo().is_some_and(|p| p.effects().playing()) {
+            return;
+        }
+        let at = if let Some(active) = self.viewer.as_mut() {
+            let viewer = &mut active.viewer;
+            viewer.set_playing(true);
+            let before = viewer.at();
+            let moved = viewer.update(&mut stage.race);
+            stage.race.photo_repose();
+            let state = viewer.state();
+            active.stepping = false;
+            (moved != oag_raceplay::viewer::Moved::Still
+                && viewer.at() > before
+                && state == oag_raceplay::viewer::State::Ready)
+                .then(|| viewer.at())
+        } else {
+            let Some(keeper) = stage.keeper.as_mut() else {
+                stage.race.photo_effects(|effects| effects.set_playing(false));
+                return;
+            };
+            if open.rewind.is_none() {
+                open.rewind = Rewind::begin(keeper, &mut stage.race);
+            }
+            open.rewind
+                .as_mut()
+                .and_then(|rewind| rewind.step(&mut stage.race).then(|| rewind.at()))
+        };
+        match at {
+            Some(at) => {
+                open.asked = at;
+                stage
+                    .race
+                    .photo_effects(|effects| effects.set_target_tick(at));
+            }
+            None => {
+                if let Some(active) = self.viewer.as_mut() {
+                    active.viewer.set_playing(false);
+                }
+                stage.race.photo_effects(|effects| effects.set_playing(false));
+            }
         }
     }
 

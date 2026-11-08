@@ -388,13 +388,24 @@ impl Session {
             // for a race that is driven applies to it: not the pause, not the end screens, not
             // a record or a ghost.
             if self.viewer.is_some() && matches!(self.stage, Stage::Race(_)) {
-                self.tick_viewer(&pointer);
+                // Photo mode over the viewer owns the devices, as it does over a race; the
+                // viewer carries on from where it leaves the playhead.
+                if self.photo.is_some() {
+                    self.tick_photo(&pointer, inputs.get(0));
+                } else {
+                    self.tick_viewer(&pointer);
+                }
                 continue;
             }
             // Photo mode first: while it is open it owns the devices and the race stands
             // still, and what it leaves (a press it spent, a leave) is settled before the
             // blocks below read the pad.
-            if self.photo.is_some() {
+            // **The tick that leaves it is still the mode's**: `inputs` was read from the
+            // devices before the mode spent its presses, so the race that takes the next tick
+            // reads them, whatever the mode does with the button that left (CIRCLE is the
+            // absorb).
+            let photo_tick = self.photo.is_some();
+            if photo_tick {
                 self.tick_photo(&pointer, inputs.get(0));
             }
             // SELECT on `Race End Photo` opens photo mode, once that screen takes input; on
@@ -512,7 +523,7 @@ impl Session {
                 // finished with the end screens behind). The audio is not simulation state, so
                 // it is stepped as under the pause, which is what lets the engine note spin down
                 // while `World` stands at the tick the mode caught it on.
-                Stage::Race(stage) if self.photo.is_some() => {
+                Stage::Race(stage) if photo_tick || self.photo.is_some() => {
                     if let Some(rumbler) = &mut self.rumbler {
                         rumbler.tick(&stage.race, true, self.controls.pad_mut());
                     }

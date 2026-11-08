@@ -66,11 +66,45 @@ pub(crate) fn drive_binary(
     shots: &Path,
     args: &[&str],
 ) -> Run {
+    drive_binary_in(binary, image, tag, script, shots, args, false)
+}
+
+/// [`drive_with`] with no simulation mod mounted: a modded race records nothing (ADR-0087,
+/// decision 7), so the rewind of a race that must play its recording is run this way.
+fn drive_unmodded(image: &Path, tag: &str, script: &str, shots: &Path, args: &[&str]) -> Run {
+    drive_binary_in(
+        env!("CARGO_BIN_EXE_oag-game"),
+        image,
+        tag,
+        script,
+        shots,
+        args,
+        true,
+    )
+}
+
+fn drive_binary_in(
+    binary: &str,
+    image: &Path,
+    tag: &str,
+    script: &str,
+    shots: &Path,
+    args: &[&str],
+    unmodded: bool,
+) -> Run {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     let log = dir.join("state.jsonl");
-    let output = std::process::Command::new(binary)
+    let no_mods = dir.join("no-mods");
+    if unmodded {
+        std::fs::create_dir_all(&no_mods).expect("a scratch directory");
+    }
+    let mut command = std::process::Command::new(binary);
+    if unmodded {
+        command.env("OAG_MODS", &no_mods);
+    }
+    let output = command
         .arg(image)
         // One seed, or each launch deals its own weapons and the two races differ from tick 1.
         .args(["--no-audio", "--no-intro", "--seed", "7", "--drive"])
@@ -335,6 +369,164 @@ fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &P
     );
     assert!(after.contains(&(live + 1)), "and it goes on from there");
     assert_eq!(the_photos(&rewound).len(), 1, "one shot, one file");
+}
+
+/// A moving race (an autopilot Single Race) that visits photo mode and leaves by `leave` hashes at
+/// every tick after it as one that never visited: the button that left the mode is not a press
+/// the race reads. Returns how many ticks it compared.
+fn leaving_by(image: &Path, tag: &str, mode: &str, leave: &str) -> usize {
+    let to_the_race = TO_THE_TIME_TRIAL.replace("single_race", mode);
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-{tag}-shots"));
+    let control = drive_with(
+        image,
+        &format!("{tag}-control"),
+        &format!("{to_the_race} ticks 1000"),
+        &shots,
+        &["--autopilot"],
+    );
+    assert!(control.status.success(), "{}", control.stderr);
+    let visited = drive_with(
+        image,
+        tag,
+        &format!(
+            "{to_the_race} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=internal within 200; ticks 15; {leave}; until photo=none within 50; \
+             ticks 600"
+        ),
+        &shots,
+        &["--autopilot"],
+    );
+    assert!(visited.status.success(), "{}", visited.stderr);
+    let held: BTreeMap<u64, String> = ticks(&control)
+        .into_iter()
+        .map(|(tick, hash, _)| (tick, hash))
+        .collect();
+    let mut compared = 0;
+    for (tick, hash, lens) in ticks(&visited) {
+        if lens != "none" {
+            continue;
+        }
+        if let Some(control) = held.get(&tick) {
+            assert_eq!(
+                hash, *control,
+                "tick {tick} hashes differently after leaving by `{leave}`"
+            );
+            compared += 1;
+        }
+    }
+    compared
+}
+
+/// The CIRCLE that leaves the mode is spent there: it does not reach the race as the absorb
+/// press it is on a race that runs, whether it is tapped or held as a thumb holds it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn leaving_photo_mode_with_circle_hands_the_race_no_press() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    for (tag, mode, leave) in [
+        ("circle-tap", "single_race", "press circle"),
+        ("circle-hold", "single_race", "hold circle 6"),
+        ("circle-tap-tt", "time_trial", "press circle"),
+        ("circle-hold-tt", "time_trial", "hold circle 6"),
+    ] {
+        let compared = leaving_by(&image, tag, mode, leave);
+        assert!(compared > 400, "{tag}: only {compared} ticks compared");
+    }
+}
+
+/// ADR-0088: over a live race the mode's PLAY row plays the race's own recording on from the tick the
+/// rewind row was scrubbed to, to the live tick, and leaving puts the live race back to the bit:
+/// every live tick hashes as the same tick of a race that never visited.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_live_race_played_from_a_scrub_and_left_hashes_as_it_was() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-play-shots");
+    // The throttle is held so the craft moves and every hash is sensitive. No mod is mounted
+    // (`drive_unmodded`): a modded race records nothing, and a rewind of a race that records
+    // nothing stops at whole keyframes, so it would never play the recording
+    // (`docs/ui/photo-mode.md`, "Not done, named").
+    let to_the_throttle = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 400; ");
+    let control = drive_unmodded(
+        &image,
+        "play-control",
+        &format!("{to_the_throttle} ticks 1000"),
+        &shots,
+        &[],
+    );
+    assert!(control.status.success(), "{}", control.stderr);
+    let down = "hold down 1; ticks 2; ";
+    let played = drive_unmodded(
+        &image,
+        "play",
+        &format!(
+            "{to_the_throttle} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=internal within 200; press start; {down}{down}{down}{down} \
+             hold left 25; ticks 40; {down} {down} hold right 2; ticks 100; \
+             screenshot SHOTS/playing.png; escape; until photo=none within 50; ticks 500"
+        ),
+        &shots,
+        &[],
+    );
+    assert!(played.status.success(), "{}", played.stderr);
+    let held: BTreeMap<u64, String> = ticks(&control)
+        .into_iter()
+        .map(|(tick, hash, _)| (tick, hash))
+        .collect();
+    let seen = ticks(&played);
+    let mut compared = 0;
+    for (tick, hash, _) in &seen {
+        if let Some(control) = held.get(tick) {
+            assert_eq!(
+                hash, control,
+                "tick {tick} hashes differently after playing"
+            );
+            compared += 1;
+        }
+    }
+    assert!(compared > 500, "only {compared} ticks compared");
+    let under: Vec<u64> = seen
+        .iter()
+        .filter(|(_, _, lens)| lens != "none")
+        .map(|(tick, _, _)| *tick)
+        .collect();
+    let live = *under.first().expect("the mode opened");
+    let lowest = *under.iter().min().expect("the mode opened");
+    assert!(lowest + 100 < live, "the rewind never went back");
+    // A landing whose pre-roll starts from the first keyframe does not hash as the live run did;
+    // the scrub here stays out of it (`docs/ui/photo-mode.md`, "Not done, named").
+    assert!(lowest > 130, "the scrub went to {lowest}");
+    assert!(
+        under.iter().all(|tick| *tick <= live),
+        "past the live tick: {under:?}"
+    );
+    // From the lowest tick the race on screen only goes forward, a tick at a time.
+    let from = under
+        .iter()
+        .position(|tick| *tick == lowest)
+        .expect("a minimum");
+    let forward = &under[from..];
+    assert!(
+        forward
+            .windows(2)
+            .all(|pair| pair[1] >= pair[0] && pair[1] - pair[0] <= 1),
+        "PLAY plays tick by tick: {forward:?}"
+    );
+    assert!(
+        *forward.last().expect("ticks") > lowest + 30,
+        "PLAY played on from the scrub: {forward:?}"
+    );
+    assert!(
+        played.states.iter().any(|state| state
+            .get("photo_fx")
+            .and_then(Value::as_str)
+            .is_some_and(|fx| fx.contains("play=1"))),
+        "the PLAY row never went on"
+    );
 }
 
 #[test]

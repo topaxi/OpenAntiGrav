@@ -3,7 +3,7 @@ status: ready-to-wire
 categories: [frontend, tooling]
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-08
-summary: "ADR-0087: stages 1 to 6 landed, campaign replays fixed; stage 7 take-over next, a photo-mode ADR owed"
+summary: "ADR-0087: stages 1 to 6 landed, the viewer and photo mode switch both ways (ADR-0088); binding lane, then stage 7 take-over"
 size: XL
 difficulty: hard
 ---
@@ -17,22 +17,24 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
 
 ## Open
 
-- **Replay and photo mode switch both ways (maintainer, 2026-11-08).** From the replay viewer, photo mode opens at
-  the current tick; from photo mode (live race or replay), play starts the replay from the scrubbed tick. Leaving
-  photo mode opened from a replay continues the replay from where photo mode was scrubbed to (the scrub doubles as a
-  seek). A live race still resumes to the bit when photo mode closes. Not designed in ADR-0087: a new ADR records it,
-  and can carry the owed photo-mode rewind ADR below. Fix Next Step 5's CIRCLE bug first.
-  **Shared keys (maintainer, 2026-11-08):** an action both screens have uses the same binding in both. At least L, R
-  (previous, next craft, wrapping, skipping craft out of the race: photo mode's rule, also for one seat of a split
-  recording, the open item in `docs/ui/replays.md`) and SQUARE (HUD on or off). Where the two differ today (CROSS is play
-  in the viewer and the shot in photo mode), the ADR names the choice. **L1/R1 and L2/R2 may differ:** on a pad the
-  abstract `L`/`R` are L1/R1, and a trigger in airbrake mode raises the same bit (`crates/input/src/pad.rs`, the
-  `TriggerMode` doc). Craft cycling is L1/R1 only; on these two screens a trigger does not alias to it, and what L2/R2
-  do there (a seek, the speed, photo mode's tilt that HD has) is the ADR's choice. **The right stick is unbound**
-  everywhere (`InputSnapshot` carries one stick; nothing reads a second). The maintainer wants it used on these
-  screens. Candidates for the ADR: the camera orbit on the right stick with the left stick freed for pan or zoom in
-  photo mode (HD's right-stick zoom, `docs/ui/photo-mode.md`, "Not ported"), and a scrub or free camera in the
-  viewer. Read it view-side, never into the simulation's `InputSnapshot`, so a recording and its hashes do not move.
+- **Replay and photo mode switch both ways: landed** (`replay-photo-switch`,
+  [ADR-0088](../../docs/architecture/adr/0088-the-replay-viewer-and-photo-mode-switch-both-ways.md)). The viewer's PHOTO chip or SELECT
+  opens photo mode at its tick; photo mode's PLAY row (effects panel, under REWIND) plays the recording on from the
+  scrub over a live race or a replay; leaving a mode opened from a replay continues the replay from the scrub; a live
+  race resumes to the bit. The CIRCLE leak (the leave tick ran `Race::tick` on a stale snapshot) is fixed.
+  **Open, the binding lane (ADR-0088 holds the plan):** L1/R1 previous and next craft on both screens (wrapping,
+  skipping craft out of the race, one seat of a split recording), SQUARE the HUD in the viewer, the trigger split (L2/R2 a
+  view-side scrub and PLAY, not aliased to L1/R1), a key for PLAY (today the panel's row), and the right stick read
+  view-side (photo mode orbit, viewer jog), never into `InputSnapshot`.
+- **A rewind whose pre-roll starts from the first keyframe hashes differently from the live run** (landing at 101 with
+  `--autopilot`, 102 with the throttle held, a Pulse Single Race, no mod mounted; landings from 131 on matched). Probably the
+  first keyframe's plans (it is cut before the first tick learns them); not shown. Found by the PLAY test, which scrubs
+  past it; the viewer verifies every stored hash. **Also:** the stage-6 rewind hash test replays no recording while the
+  repository's mods are mounted (the race records nothing, `recorded_events` absent), so only keyframes are checked.
+  `docs/ui/photo-mode.md`, "Not done, named". Find why before a rewind to the start is offered as exact.
+- **Over a live race PLAY is photo mode's playback, not the viewer's screen** (ADR-0088, decision 1); a viewer over a
+  live race is not built.
+- **The viewer's photo mode** offers no blur rows (no keyframes of the race it moves) and is refused in POSE VIEW.
 - **Stage 7, `take-over`, is next** (decision 10's text). Stages 3 and 5, its dependencies, have landed.
 - **An ADR is owed for photo mode's rewind.** Stage 6 moves the live race on screen and restores it to the bit, departing
   from decision 5's probe. The maintainer accepted that on two conditions, both on `docs/ui/photo-mode.md`: photo mode
@@ -89,6 +91,6 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
    replay file still claims only the table in its page.
 2. ~~Stage 6 `photo-rewind`~~ landed.
 3. Stage 7 `take-over`, as the ADR orders it.
-4. The photo-mode rewind ADR (above), then `replay-file.md` for `campaign_skill` and Tournament.
-5. Leaving photo mode with CIRCLE reaches the race as an absorb press: `handover/frontend/photo-mode.md`. A real bug on
-   `main`; fix it before take-over makes photo mode and replays share more input paths.
+4. ~~The photo-mode rewind ADR~~ landed as ADR-0088; `replay-file.md` for `campaign_skill` and Tournament is still owed.
+5. ~~Leaving photo mode with CIRCLE reaches the race as an absorb press~~ fixed (ADR-0088, decision 5).
+6. The binding lane (above), then stage 7.

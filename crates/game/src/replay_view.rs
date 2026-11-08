@@ -16,6 +16,7 @@ pub mod strings {
     pub const PLAY: &str = "OAG_REPLAY_PLAY";
     pub const PAUSE: &str = "OAG_REPLAY_PAUSE";
     pub const EXIT: &str = "OAG_REPLAY_EXIT";
+    pub const PHOTO: &str = "OAG_REPLAY_PHOTO";
     pub const SPEED: &str = "OAG_REPLAY_SPEED";
     pub const SKIP: &str = "OAG_REPLAY_SKIP";
     pub const ENDED: &str = "OAG_REPLAY_ENDED";
@@ -34,6 +35,8 @@ pub enum Control {
     Forward,
     /// The next speed.
     Speed,
+    /// Open photo mode at the tick on screen.
+    Photo,
     /// Leave the viewer.
     Exit,
     /// The bar: a click seeks to where it lands.
@@ -41,17 +44,18 @@ pub enum Control {
 }
 
 /// The chips, in order.
-pub const CHIPS: [Control; 5] = [
+pub const CHIPS: [Control; 6] = [
     Control::Play,
     Control::Back,
     Control::Forward,
     Control::Speed,
+    Control::Photo,
     Control::Exit,
 ];
 
 const MARGIN: f32 = 8.0;
 const GAP: f32 = 4.0;
-const CHIP_WIDTH: f32 = 56.0;
+const CHIP_WIDTH: f32 = 46.0;
 const CHIP_HEIGHT: f32 = 14.0;
 const BAR_HEIGHT: f32 = 5.0;
 const BAND: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
@@ -233,6 +237,7 @@ pub fn draw_list(
             Control::Back => format!("-{}", say(strings::SKIP)),
             Control::Forward => format!("+{}", say(strings::SKIP)),
             Control::Speed => speed_label(view.speed),
+            Control::Photo => say(strings::PHOTO),
             Control::Exit => say(strings::EXIT),
             Control::Bar => String::new(),
         };

@@ -528,6 +528,7 @@ OAG_PHOTO_APERTURE = { text = "APERTURE", human = false }
 OAG_PHOTO_FOCUS = { text = "FOCUS", human = false }
 OAG_PHOTO_PANEL_KEYS = { text = "STICK UP DOWN ROW    LEFT RIGHT CHANGE", human = false }
 OAG_PHOTO_REWIND = { text = "REWIND", human = false }
+OAG_PHOTO_PLAY = { text = "PLAY", human = false }
 OAG_PHOTO_MOTION_BLUR = { text = "MOTION BLUR", human = false }
 OAG_PHOTO_SHUTTER = { text = "SHUTTER", human = false }
 OAG_PHOTO_PROGRESS = { text = "TAKING PHOTO", human = false }
@@ -577,6 +578,7 @@ OAG_REPLAY_STOPPED = { text = "IT STOPS HERE: THIS VERSION CANNOT REBUILD THE RE
 OAG_REPLAY_PLAY = { text = "PLAY", human = false }
 OAG_REPLAY_PAUSE = { text = "PAUSE", human = false }
 OAG_REPLAY_EXIT = { text = "EXIT", human = false }
+OAG_REPLAY_PHOTO = { text = "PHOTO", human = false }
 OAG_REPLAY_SPEED = { text = "SPEED", human = false }
 OAG_REPLAY_SKIP = { text = "5 SEC", human = false }
 OAG_REPLAY_ENDED = { text = "END OF REPLAY", human = false }

@@ -45,6 +45,8 @@ pub enum Row {
     Focus,
     /// The race's own moment the picture shows: the scrub back to its start.
     Rewind,
+    /// Whether the recording plays on from the moment the rewind row shows.
+    Play,
     /// Whether the shot smears the scenery (track) or the craft (ship), or neither.
     MotionBlur,
     /// How long the shutter stays open.
@@ -80,6 +82,8 @@ pub struct Effects {
     /// How many ticks before the live tick the picture is, and the live tick.
     back: u64,
     live: u64,
+    /// Whether the recording plays on from the moment on screen.
+    playing: bool,
 }
 
 impl Default for Effects {
@@ -121,6 +125,7 @@ impl Effects {
             rewinds: false,
             back: 0,
             live: 0,
+            playing: false,
         }
     }
 
@@ -153,7 +158,7 @@ impl Effects {
             }
         }
         if self.rewinds {
-            rows.push(Row::Rewind);
+            rows.extend([Row::Rewind, Row::Play]);
         }
         rows
     }
@@ -191,6 +196,7 @@ impl Effects {
             Row::Aperture => self.aperture,
             Row::Focus => self.focus,
             Row::Rewind => i32::try_from(self.back).unwrap_or(i32::MAX),
+            Row::Play => i32::from(self.playing),
             Row::MotionBlur => self.motion_blur,
             Row::Shutter => self.shutter,
         }
@@ -243,6 +249,17 @@ impl Effects {
         self.back = self.live - tick.min(self.live);
     }
 
+    /// Whether the recording plays on from the moment the rewind row shows.
+    #[must_use]
+    pub fn playing(&self) -> bool {
+        self.playing
+    }
+
+    /// Starts or stops the recording playing on from the moment on screen.
+    pub fn set_playing(&mut self, playing: bool) {
+        self.playing = playing;
+    }
+
     /// Moves the selected row's value `by` steps (negative is down), stopping at its ends.
     pub fn adjust(&mut self, by: i32) {
         self.adjust_row(self.selected, by);
@@ -274,6 +291,7 @@ impl Effects {
                     self.back.saturating_sub(step)
                 };
             }
+            Row::Play => self.playing = by > 0,
             Row::MotionBlur => self.motion_blur = (self.motion_blur + by).clamp(0, 2),
             Row::Shutter => self.shutter = slide(self.shutter, 1),
         }

@@ -168,7 +168,10 @@ and a build that cannot write a file (a page, a phone).
 state it is in, so its state hash does not move and the race resumes where it stood (a rewind moves
 the race on screen through its past and puts it back, "Accumulated shots and rewind" below); the audio is stepped as under
 the pause. The camera is a render-side override (`CameraOverride`), put back on leaving. Leaving spends
-Circle, Cross, Start, Select and the shoulders, so none reaches the race. Escape (and Back, and the
+Circle, Cross, Start, Select and the shoulders, so none reaches the race, and **the tick that leaves is still the
+mode's**: the frame loop read the devices into a snapshot before the mode spent its presses, so the leave tick used
+to run `Race::tick` with CIRCLE as an absorb press
+(`leaving_photo_mode_with_circle_hands_the_race_no_press`, tapped and held). Escape (and Back, and the
 window losing focus, which does nothing then) leaves the mode and goes no further; the next Escape
 opens the menus.
 
@@ -308,10 +311,23 @@ code: `oag_raceplay::photo::{rewind, shot}`, `oag_raceplay::timeline::Keeper`, `
 `session::photo_rewind`).
 
 **Rows.** In the effects panel: MOTION BLUR (off, track, ship), SHUTTER (shown with a blur chosen,
-0 to 100, opens on 20) and REWIND (the race's clock at the moment on screen, `M:SS.s`). The first two
-are on offer where the title's `photo_shot` is set, the third in a race that has keyframes and was
-entered from the pause menu (not from `Race End Photo`, which keeps its board). A click on the row's
-arrows moves them as the stick does.
+0 to 100, opens on 20) and REWIND (the race's clock at the moment on screen, `M:SS.s`) and PLAY (on or off). The first two
+are on offer where the title's `photo_shot` is set, the last two in a race that has keyframes and was
+entered from the pause menu (not from `Race End Photo`, which keeps its board), or over the replay
+viewer. A click on the row's arrows moves them as the stick does.
+
+**PLAY** plays the race's recording on from the moment REWIND shows, a tick a frame and silent, and
+turns itself off at the live tick (or the end of the recording). Over a live race it steps the same
+`Rewind` the scrub moves, so leaving still puts the race back to the bit
+(`photo_mode_ground_truth::a_live_race_played_from_a_scrub_and_left_hashes_as_it_was`, and the fixture test
+`playing_on_from_a_scrub_follows_the_recorded_run_to_the_live_tick`). Photo mode never offers a take-over.
+
+**Over the replay viewer** ([ADR-0088](../architecture/adr/0088-the-replay-viewer-and-photo-mode-switch-both-ways.md)).
+The viewer's PHOTO chip or SELECT opens the mode at the tick on screen. REWIND is then the viewer's seek over the whole
+recording and PLAY plays the viewer on; leaving continues the replay from where the row stands, playing if it
+was playing when the mode opened or PLAY is on. The blur rows are not offered over it (the viewer has no
+keyframes of the race it moves) and the mode is refused in POSE VIEW.
+`replay_viewer_ground_truth::photo_mode_and_the_viewer_switch_both_ways_at_the_tick_the_player_chose`.
 
 | Title | Depth of field | Motion blur | Ship shutter | Evidence |
 | --- | ---: | ---: | ---: | --- |
@@ -345,7 +361,7 @@ keyframe at or before the tick and a motion blur is not offered. Every race reco
 page's `[replay] record`, on by default), so a Single Race rewinds and blurs; with the setting off, or in a
 modded race, the keyframe rule applies.
 
-**What this rests on, the maintainer's two conditions.** Photo mode never offers a take-over: it shows the
+**What this rests on, the maintainer's two conditions** (kept by ADR-0088, which records this departure from decision 5). Photo mode never offers a take-over: it shows the
 past and cannot play from it (a take-over is the replay viewer's, decision 9), and the race resumes exactly
 where it was, to the bit (the proofs below).
 
@@ -381,14 +397,17 @@ a track blur leaves the hull sharp and the scenery smeared (detail kept, by hori
 hull 0.87, scenery 0.27), a ship blur the reverse (hull 0.49, scenery 1.00)
 (`photo_mode_ground_truth::a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it`).
 
-**Not done, named.** The shot is 8-bit frames averaged, so a dark gradient the blur flattens shows
+**Not done, named.** **A rewind into a recorded race's first second of pre-roll** (a landing under about 120
+ticks, which starts from the first keyframe) hashes differently from the live run: landing at 101 with
+`--autopilot` and 102 with the throttle held, a Pulse Single Race with no mod mounted; landings from 131 on, from
+later keyframes, matched tick for tick (found by ADR-0088's PLAY test, which scrubs past it; the seek path is
+unchanged by that lane; cause not found). **The stage-6 rewind hash test replays no recording while this
+repository's mods are mounted:** the race records nothing then, so its landings fall on whole keyframes and only
+the keyframes are checked. The shot is 8-bit frames averaged, so a dark gradient the blur flattens shows
 contour bands; the single plain frame shows them in the same places (a rewound shot of the start
 tunnel does), so they are the frame's. Rewind is not offered from `Race End Photo` or in a split
 screen. Omega's blur and 2048's own depth of field law (`(a * 0.01)^2 * 900 + 100`; HD's focus curve
-is used) stand as before. Leaving photo mode with CIRCLE, on `35aa3a902`, hands the race one frame
-of input the control run never had: a moving race (an autopilot Time Trial) differs on every tick
-after it, where leaving with ESCAPE does not. That is the pad's, found by the lane's hash test, and
-open. Also left open, as before: split screen, the photo
+is used) stand as before. Also left open, as before: split screen, the photo
 counter stat, touch gestures, saving on a page or a phone, HD's real `close` rest offset, and a shot at
 the scene's own pixels (the file is the presentation target, upscaled from the scene drawn at its
 configured render size: the dynamic resolution is held there while the mode is open).

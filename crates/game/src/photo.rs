@@ -83,6 +83,7 @@ pub mod strings {
     pub const FOCUS: &str = "OAG_PHOTO_FOCUS";
     pub const PANEL_KEYS: &str = "OAG_PHOTO_PANEL_KEYS";
     pub const REWIND: &str = "OAG_PHOTO_REWIND";
+    pub const PLAY: &str = "OAG_PHOTO_PLAY";
     pub const MOTION_BLUR: &str = "OAG_PHOTO_MOTION_BLUR";
     pub const SHUTTER: &str = "OAG_PHOTO_SHUTTER";
     pub const PROGRESS: &str = "OAG_PHOTO_PROGRESS";
@@ -246,6 +247,7 @@ fn label_of(row: Effect) -> &'static str {
         Effect::Aperture => strings::APERTURE,
         Effect::Focus => strings::FOCUS,
         Effect::Rewind => strings::REWIND,
+        Effect::Play => strings::PLAY,
         Effect::MotionBlur => strings::MOTION_BLUR,
         Effect::Shutter => strings::SHUTTER,
     }
@@ -291,7 +293,7 @@ fn panel_list(photo: &Photo, grid: (f32, f32), say: &dyn Fn(&str) -> String) -> 
             });
         }
         let value = match row {
-            Effect::DepthOfField => say(if effects.value(row) == 1 {
+            Effect::DepthOfField | Effect::Play => say(if effects.value(row) == 1 {
                 strings::ON
             } else {
                 strings::OFF

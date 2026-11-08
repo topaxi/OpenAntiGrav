@@ -96,6 +96,7 @@ out to be wrong.
 | [0085](0085-comparison-originals-live-in-a-private-repository.md) | Comparison originals live in a private repository | **Accepted** (2026-11-05); extends ADR-0074 |
 | [0086](0086-a-lead-session-may-push-to-the-private-repository.md) | A lead session may push to the private repository | **Accepted** (2026-11-05); replaces point 5 of ADR-0085 |
 | [0087](0087-a-replay-and-photo-mode-share-one-timeline.md) | A replay and photo mode share one `Timeline` over a copy of the race, built from keyframes in memory | **Accepted** (2026-11-07); supersedes ADR-0055 for the full-race viewer, the whole-race pose track and recording by default only |
+| [0088](0088-the-replay-viewer-and-photo-mode-switch-both-ways.md) | The replay viewer and photo mode switch both ways at a tick the player chose | **Accepted** (2026-11-08); departs from ADR-0087 decision 5 for photo mode alone; holds the binding plan for shared keys, triggers and the right stick |
 
 ## Format
 
