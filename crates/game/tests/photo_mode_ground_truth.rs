@@ -337,6 +337,71 @@ fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &P
     assert_eq!(the_photos(&rewound).len(), 1, "one shot, one file");
 }
 
+/// A moving race (an autopilot Single Race) that visits photo mode and leaves by `leave` hashes at
+/// every tick after it as one that never visited: the button that left the mode is not a press
+/// the race reads. Returns how many ticks it compared.
+fn leaving_by(image: &Path, tag: &str, mode: &str, leave: &str) -> usize {
+    let to_the_race = TO_THE_TIME_TRIAL.replace("single_race", mode);
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-{tag}-shots"));
+    let control = drive_with(
+        image,
+        &format!("{tag}-control"),
+        &format!("{to_the_race} ticks 1000"),
+        &shots,
+        &["--autopilot"],
+    );
+    assert!(control.status.success(), "{}", control.stderr);
+    let visited = drive_with(
+        image,
+        tag,
+        &format!(
+            "{to_the_race} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=internal within 200; ticks 15; {leave}; until photo=none within 50; \
+             ticks 600"
+        ),
+        &shots,
+        &["--autopilot"],
+    );
+    assert!(visited.status.success(), "{}", visited.stderr);
+    let held: BTreeMap<u64, String> = ticks(&control)
+        .into_iter()
+        .map(|(tick, hash, _)| (tick, hash))
+        .collect();
+    let mut compared = 0;
+    for (tick, hash, lens) in ticks(&visited) {
+        if lens != "none" {
+            continue;
+        }
+        if let Some(control) = held.get(&tick) {
+            assert_eq!(
+                hash, *control,
+                "tick {tick} hashes differently after leaving by `{leave}`"
+            );
+            compared += 1;
+        }
+    }
+    compared
+}
+
+/// The CIRCLE that leaves the mode is spent there: it does not reach the race as the absorb
+/// press it is on a race that runs, whether it is tapped or held as a thumb holds it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn leaving_photo_mode_with_circle_hands_the_race_no_press() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    for (tag, mode, leave) in [
+        ("circle-tap", "single_race", "press circle"),
+        ("circle-hold", "single_race", "hold circle 6"),
+        ("circle-tap-tt", "time_trial", "press circle"),
+        ("circle-hold-tt", "time_trial", "hold circle 6"),
+    ] {
+        let compared = leaving_by(&image, tag, mode, leave);
+        assert!(compared > 400, "{tag}: only {compared} ticks compared");
+    }
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_saved_picture_is_the_frame_the_player_saw_at_its_full_size() {
