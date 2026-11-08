@@ -1,30 +1,41 @@
 ---
-status: blocked-maintainer
+status: ready-to-wire
 categories: [frontend, tooling]
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-08
-summary: "ADR-0087: one Timeline for replay viewer, photo rewind and take-over; stages 1 to 6 landed, 7 open"
+summary: "ADR-0087: stages 1 to 6 landed, campaign replays fixed; stage 7 take-over next, a photo-mode ADR owed"
 size: XL
 difficulty: hard
 ---
 
 # A replay and photo mode share one `Timeline`
 
-[ADR-0087](../../docs/architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md) is **proposed**, with every size
-and cost measured on all five titles by `crates/raceplay/src/tests/replay_timeline_cost.rs` (an `#[ignore]`d sweep, run
-with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`). Nothing is built. The maintainer's decisions of 2026-11-07 are marked in the
-ADR and are not open.
+[ADR-0087](../../docs/architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md) is **accepted** (2026-11-07),
+with its take-over hold decided (decision 9: at most one second after GO, ended by the stick or an airbrake). Every size
+and cost is measured on all five titles by `crates/raceplay/src/tests/replay_timeline_cost.rs`, an `#[ignore]`d sweep run
+with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
 
 ## Open
 
-- **Accept or amend the ADR.** What is a proposal, not the maintainer's: the 60-tick keyframe, the 16 MiB ceiling, the
-  `auto/` ring (20 files, 32 MiB), the pose track at 10 Hz refined to 0.05 unit and 0.5 degree, the REPLAYS page and its
-  rows, the 3-2-1 countdown at a take-over, and v1 being single-seat.
-- **A question for the maintainer (decision 9):** is a frozen 3-2-1 with the recorded stick on screen enough, or should the seat
-  keep its recorded input after GO until the pad engages (at most two seconds)? The hand-off table says 12 to 45 percent of
-  points hit a wall inside two seconds with nothing held. The hold departs from "the stream stops at tick T", so it is
-  asked, not taken.
-- **The Steam Deck is not measured.** The command is in the ADR (decision 3). The design needs `tick_sim_only` at or
+- **Stage 7, `take-over`, is next** (decision 10's text). Stages 3 and 5, its dependencies, have landed.
+- **An ADR is owed for photo mode's rewind.** Stage 6 moves the live race on screen and restores it to the bit, departing
+  from decision 5's probe. The maintainer accepted that on two conditions, both on `docs/ui/photo-mode.md`: photo mode
+  offers no take-over, and the race resumes exactly where it was. ADRs are immutable, so a short new ADR records the
+  departure for photo mode alone.
+- **Campaign replays (fixed 2026-11-08, `replay-fix`).** Five campaign recordings from the maintainer's Steam Deck could not
+  be watched. `Mode::from_name` skips Tournament, so `Mode::from_recorded_name` reads a header. The campaign launch's AI
+  tuning and finished-craft thrust were never recorded, so `[options] campaign_skill` carries them. There is no back-compat
+  (unreleased; the maintainer deletes the old files). `campaign_replay_ground_truth` verifies the five Deck files with the key
+  inserted by name, from `data/reference/replays/pulse-tournament/` (local, never committed).
+  `replay_viewer_ground_truth::a_campaign_race_recorded_from_the_menus_reproduces` passes with `data/dlc` mounted.
+  **Docs not updated:** `docs/formats/replay-file.md` does not yet name `campaign_skill` or Tournament as claimed.
+- **Viewer blur (fixed, `replay-fix`).** "LOD and blur all over the place" was motion blur history surviving a seek, so the
+  landing frame smeared the whole screen. A seek now restarts the history and counts as a camera cut. No LOD difference
+  was found. Open: at 2X and 4X a frame spans 2 to 4 ticks, so blur is stronger there. The maintainer's idea of rendering
+  the landing frame from ticks X-3 to X is not built: the frame lands sharp instead.
+- **Seen in the viewer's frames, unchecked:** the transport rows (PAUSE, -5 SEC and the rest) overlap the HUD's lap and
+  position readouts. The HUD's `current` lap time read `0.04.7` at replay time `0:11 / 0:29`; confirm which clock each shows.
+- **The Steam Deck tick is not measured.** The command is in the ADR (decision 3). The design needs `tick_sim_only` at or
   under about 280 us there.
 - **Whether a fresh `Race` derives `capture_results` and `wreck_ended_tick`** at a take-over after a finish. The plan
   refuses those moments; a stage-7 lane may lift that.
@@ -60,4 +71,8 @@ ADR and are not open.
 
 1. ~~Stages 1 to 5~~ landed. Zone, Eliminator and one-person Head to Head reproduced 752 ticks on Pulse through WATCH; the
    replay file still claims only the table in its page.
-2. ~~Stage 6 `photo-rewind`~~ landed; stage 7 as the ADR orders it.
+2. ~~Stage 6 `photo-rewind`~~ landed.
+3. Stage 7 `take-over`, as the ADR orders it.
+4. The photo-mode rewind ADR (above), then `replay-file.md` for `campaign_skill` and Tournament.
+5. Leaving photo mode with CIRCLE reaches the race as an absorb press: `handover/frontend/photo-mode.md`. A real bug on
+   `main`; fix it before take-over makes photo mode and replays share more input paths.
