@@ -47,8 +47,6 @@ pub(super) struct MissileBlast {
     /// The place's frame; see the module doc (chosen).
     pub(super) orientation: Quat,
     pub(super) age: f32,
-    /// The streaks this blast started; `None` where the title draws none.
-    pub(super) streaks: Option<[streaks::Streak; streaks::COUNT]>,
 }
 
 impl Race {
@@ -60,16 +58,13 @@ impl Race {
         }
         if let Some(slot) = self.view.hd_missile_blasts.iter().position(Option::is_none) {
             log::debug!("HD missile blast starts at {position:?}");
-            let streaks = self
-                .view
-                .hd_missile_streaks
-                .as_mut()
-                .map(|pool| pool.start(position, orientation));
+            if let Some(pool) = self.view.hd_missile_streaks.as_mut() {
+                pool.start(slot, position, orientation);
+            }
             self.view.hd_missile_blasts[slot] = Some(MissileBlast {
                 position,
                 orientation,
                 age: 0.0,
-                streaks,
             });
         }
     }
@@ -79,18 +74,19 @@ impl Race {
     /// on that update), otherwise its streaks step. Then the streak pool ages, so a streak
     /// outlives its blast by its nodes' life.
     pub(crate) fn advance_hd_missile_blasts(&mut self, dt: f32) {
-        for slot in &mut self.view.hd_missile_blasts {
+        for (index, slot) in self.view.hd_missile_blasts.iter_mut().enumerate() {
             let Some(blast) = slot else { continue };
             blast.age += dt;
-            if blast.age > LIFETIME_SECONDS {
-                *slot = None;
-                continue;
+            let spent = blast.age > LIFETIME_SECONDS;
+            if let Some(pool) = self.view.hd_missile_streaks.as_mut() {
+                if spent {
+                    pool.retire(index);
+                } else {
+                    pool.step(index, blast.age);
+                }
             }
-            if let (Some(entries), Some(pool)) = (
-                blast.streaks.as_mut(),
-                self.view.hd_missile_streaks.as_mut(),
-            ) {
-                pool.step(entries, blast.age);
+            if spent {
+                *slot = None;
             }
         }
         if let Some(pool) = self.view.hd_missile_streaks.as_mut() {

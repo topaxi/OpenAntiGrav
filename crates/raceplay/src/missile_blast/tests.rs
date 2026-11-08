@@ -92,9 +92,10 @@ fn streaking_race() -> Race {
 
 /// Elements the blast in `slot` took.
 fn taken(race: &Race, slot: usize) -> usize {
-    let blast = race.view.hd_missile_blasts[slot].expect("a live blast");
-    blast
-        .streaks
+    race.view
+        .hd_missile_streaks
+        .as_ref()
+        .and_then(|pool| pool.entries(slot))
         .expect("a blast with streaks")
         .iter()
         .filter(|streak| streak.element.is_some())
@@ -160,7 +161,16 @@ fn an_entry_lays_a_node_at_the_centre_then_steps_along_its_row() {
     let mut race = streaking_race();
     let centre = Vec3::new(10.0, 20.0, 30.0);
     race.spawn_hd_missile_blast(centre, Quat::from_rotation_y(0.7));
-    let started = race.view.hd_missile_blasts[0].unwrap().streaks.unwrap();
+    let entries = |race: &Race| {
+        *race
+            .view
+            .hd_missile_streaks
+            .as_ref()
+            .unwrap()
+            .entries(0)
+            .unwrap()
+    };
+    let started = entries(&race);
     for streak in &started {
         assert_eq!(streak.position, centre);
         assert!((7.0..8.0).contains(&streak.speed));
@@ -170,7 +180,7 @@ fn an_entry_lays_a_node_at_the_centre_then_steps_along_its_row() {
         assert!(r0.dot(r1).abs() < 1e-4 && r1.dot(r2).abs() < 1e-4 && r0.dot(r2).abs() < 1e-4);
     }
     race.advance_hd_missile_blasts(1.0 / 60.0);
-    let stepped = race.view.hd_missile_blasts[0].unwrap().streaks.unwrap();
+    let stepped = entries(&race);
     for (before, after) in started.iter().zip(&stepped) {
         let moved = after.position - centre;
         assert!(
@@ -193,7 +203,7 @@ fn an_entry_lays_a_node_at_the_centre_then_steps_along_its_row() {
 fn a_title_without_streaks_starts_none() {
     let mut race = hd_race();
     race.spawn_hd_missile_blast(Vec3::ZERO, Quat::IDENTITY);
-    assert!(race.view.hd_missile_blasts[0].unwrap().streaks.is_none());
+    assert!(race.view.hd_missile_streaks.is_none());
     race.advance_hd_missile_blasts(1.0 / 60.0);
     assert_eq!(race.missile_streaks_live(), 0);
 }
