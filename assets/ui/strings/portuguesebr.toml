@@ -363,45 +363,46 @@ OAG_OPTIONS_PLAYER_TAG = { text = "TAG DO JOGADOR", human = false }
 OAG_PLAYER_NAME_TITLE = { text = "DIGITE SEU NOME", human = false }
 OAG_PLAYER_TAG_TITLE = { text = "DIGITE SUA TAG", human = false }
 
+# The REPLAYS page and the replay viewer (ADR-0087).
+OAG_MENU_REPLAYS = { text = "REPLAYS", human = false }
+OAG_MENU_REPLAYS_SUBTITLE = { text = "Assista, guarde ou apague as corridas que você gravou", human = false }
+OAG_REPLAYS_PAGE_TITLE = { text = "REPLAYS", human = false }
+OAG_REPLAYS_ROW = { text = "REPLAY", human = false }
+OAG_REPLAYS_WATCH = { text = "ASSISTIR", human = false }
+OAG_REPLAYS_KEEP = { text = "GUARDAR", human = false }
+OAG_REPLAYS_DELETE = { text = "APAGAR", human = false }
+OAG_REPLAYS_NONE = { text = "NENHUM AINDA", human = false }
+OAG_REPLAYS_NONE_WHY = { text = "TODA CORRIDA QUE VOCÊ PILOTA É GRAVADA AQUI", human = false }
+OAG_REPLAYS_NONE_OFF = { text = "GRAVAÇÃO DESLIGADA: [REPLAY] RECORD NO ARQUIVO DE CONFIGURAÇÕES", human = false }
+OAG_REPLAYS_CIRCUIT = { text = "CIRCUITO", human = false }
+OAG_REPLAYS_MODE = { text = "CORRIDA", human = false }
+OAG_REPLAYS_FINISH = { text = "CHEGADA", human = false }
+OAG_REPLAYS_DATE = { text = "DATA", human = false }
+OAG_REPLAYS_SIZE = { text = "TAMANHO", human = false }
+OAG_REPLAYS_NOTE = { text = "NOTA", human = false }
+OAG_REPLAYS_SAVED = { text = "GUARDADO", human = false }
+OAG_REPLAYS_TAKEN_OVER = { text = "ASSUMIDO EM %s", human = false }
+OAG_REPLAYS_NOT_FINISHED = { text = "NÃO TERMINADA", human = false }
+OAG_REPLAYS_NOT_VERIFIED = { text = "MODO NÃO VERIFICADO", human = false }
+OAG_REPLAYS_OTHER_TITLE = { text = "GRAVADO EM %s: ABRA ESSE DISCO", human = false }
+OAG_REPLAYS_NEWER = { text = "GRAVADO POR UMA VERSÃO MAIS NOVA", human = false }
+OAG_REPLAYS_DAMAGED = { text = "ARQUIVO DANIFICADO", human = false }
+OAG_REPLAYS_NO_SETUP = { text = "NÃO PODE SER RECONSTRUÍDO: SEM PEDIDO DE LANÇAMENTO", human = false }
+OAG_REPLAYS_NOT_THE_RACE = { text = "NÃO É A CORRIDA QUE FOI GRAVADA", human = false }
+OAG_REPLAYS_REFUSED = { text = "NÃO PODE SER RECONSTRUÍDO AQUI: %s", human = false }
+OAG_REPLAY_OPENING = { text = "ABRINDO REPLAY", human = false }
+OAG_REPLAY_MISMATCH = { text = "ESTE REPLAY FOI GRAVADO EM UMA VERSÃO ANTERIOR E DEIXA DE CORRESPONDER EM %s", human = false }
+OAG_REPLAY_STOPPED = { text = "PARA AQUI: ESTA VERSÃO NÃO CONSEGUE RECONSTRUIR O RESTO", human = false }
+OAG_REPLAY_PLAY = { text = "REPRODUZIR", human = false }
+OAG_REPLAY_PAUSE = { text = "PAUSAR", human = false }
+OAG_REPLAY_EXIT = { text = "SAIR", human = false }
+OAG_REPLAY_SPEED = { text = "VELOCIDADE", human = false }
+OAG_REPLAY_SKIP = { text = "5 SEG", human = false }
+OAG_REPLAY_ENDED = { text = "FIM DO REPLAY", human = false }
+OAG_ENDRACE_WATCH_REPLAY = { text = "ASSISTIR REPLAY", human = false }
+OAG_REPLAY_POSE_VIEW = { text = "VISTA DE POSES: AS NAVES ESTÃO ONDE FORAM GRAVADAS. SEM HUD, ARMAS OU EFEITOS", human = false }
+OAG_REPLAY_POSE_END = { text = "FIM DA TRILHA DE POSES: ELA GUARDA NO MÁXIMO UMA HORA", human = false }
+
 [untranslated]
 ids = [
-    # The REPLAYS page and the replay viewer (ADR-0087); no translation pass yet.
-    "OAG_MENU_REPLAYS",
-    "OAG_MENU_REPLAYS_SUBTITLE",
-    "OAG_REPLAYS_PAGE_TITLE",
-    "OAG_REPLAYS_ROW",
-    "OAG_REPLAYS_WATCH",
-    "OAG_REPLAYS_KEEP",
-    "OAG_REPLAYS_DELETE",
-    "OAG_REPLAYS_NONE",
-    "OAG_REPLAYS_NONE_WHY",
-    "OAG_REPLAYS_NONE_OFF",
-    "OAG_REPLAYS_CIRCUIT",
-    "OAG_REPLAYS_MODE",
-    "OAG_REPLAYS_FINISH",
-    "OAG_REPLAYS_DATE",
-    "OAG_REPLAYS_SIZE",
-    "OAG_REPLAYS_NOTE",
-    "OAG_REPLAYS_SAVED",
-    "OAG_REPLAYS_TAKEN_OVER",
-    "OAG_REPLAYS_NOT_FINISHED",
-    "OAG_REPLAYS_NOT_VERIFIED",
-    "OAG_REPLAYS_OTHER_TITLE",
-    "OAG_REPLAYS_NEWER",
-    "OAG_REPLAYS_DAMAGED",
-    "OAG_REPLAYS_NO_SETUP",
-    "OAG_REPLAYS_NOT_THE_RACE",
-    "OAG_REPLAYS_REFUSED",
-    "OAG_REPLAY_OPENING",
-    "OAG_REPLAY_MISMATCH",
-    "OAG_REPLAY_STOPPED",
-    "OAG_REPLAY_PLAY",
-    "OAG_REPLAY_PAUSE",
-    "OAG_REPLAY_EXIT",
-    "OAG_REPLAY_SPEED",
-    "OAG_REPLAY_SKIP",
-    "OAG_REPLAY_ENDED",
-    "OAG_REPLAY_POSE_VIEW",
-    "OAG_REPLAY_POSE_END",
-    "OAG_ENDRACE_WATCH_REPLAY",
 ]

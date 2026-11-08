@@ -42,6 +42,22 @@ section. `just fetch-texture-packs` fetches the packs; `just push-data` carries 
 - **`textures.zip` read in place** (the 2026 pack is only that) and **ZIM images** (a later
   pack's format, layout on the doc page) are first-class, not optional.
 
+- **Size, estimated (lead, 2026-11-08), not measured.** About 2,000 to 3,000 changed lines with
+  tests and docs. Roughly: `oag-mod` recognition, manifest, `default-enabled` and the MODS page
+  400 to 600; lookup at every PSP texture load 500 to 900; lazy PNG decode, cache and memory
+  cap 300 to 400 (553 MB of images cannot all be resident on the Deck); ZIM 200; tests, docs
+  and skill 500 to 800. The pixel-offset atlases (fonts, HUD sheet) are the overrun risk.
+  **Split it into two lanes:** (a) a pack is an off-by-default mod, done when the MODS page
+  lists the 2026 pack and the reTokyo one; (b) drawing, done when menus and tracks show the
+  pack in frames judged in a race.
+- **Later version (maintainer):** an in-game download-and-enable button, instead of or beside
+  `just fetch-texture-packs`.
+- **Other assets in the maintainer's `data/GitHub - WipEout Mods.zip`** (NR74W's mods, the
+  "WipEout Portable Collection"; replicating the collection is out of scope): a Pulse PS2 PCSX2
+  pack (637 MB, PCSX2's own hash, a second importer), Pulse EU DLC zips and six team skins
+  (check whether `oag-source` reads them as they are), and `Mods/Documentation/WAD Filenames`
+  (check against our entry names).
+
 ## Next Steps
 
 1. Make a pack a mod (see above), then pick where the lookup sits (a render-side `Replacements` the texture upload asks, keyed by
