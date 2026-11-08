@@ -14,7 +14,7 @@ use crate::Race;
 /// Why an event could not be applied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ApplyError {
-    /// A kind this build does not implement, including the reserved `controller`.
+    /// A kind this build does not implement.
     #[error("replay event of kind {0} is not one this build applies")]
     UnknownKind(u8),
     /// A value outside the kind's range.
@@ -48,6 +48,28 @@ impl Race {
             return false;
         }
         self.record_event(slot, Kind::Give, ordinal(&Weapon::ALL, weapon));
+        true
+    }
+
+    #[cfg(feature = "view")]
+    /// Hands `slot` to the opponent driver or to a person at this machine, from outside the tick
+    /// (a pad leaving or returning to a split-screen seat), recording the change: the
+    /// controllers are in the state hash, so a recording that did not hear of it would desync.
+    /// Returns whether the slot changed.
+    pub fn set_controller(&mut self, slot: usize, controller: oag_gameplay::Controller) -> bool {
+        let value = match controller {
+            oag_gameplay::Controller::Ai => 0,
+            oag_gameplay::Controller::Local => 1,
+            oag_gameplay::Controller::Remote => return false,
+        };
+        let Some(have) = self.sim.world.controllers.get_mut(slot) else {
+            return false;
+        };
+        if *have == controller {
+            return false;
+        }
+        *have = controller;
+        self.record_event(slot, Kind::Controller, value);
         true
     }
 
@@ -90,6 +112,17 @@ impl Race {
                     .and_then(|at| Weapon::ALL.get(at))
                     .ok_or(bad)?;
                 self.write_weapon(seat, *weapon);
+            }
+            Some(Kind::Controller) => {
+                let controller = match event.value {
+                    0 => oag_gameplay::Controller::Ai,
+                    1 => oag_gameplay::Controller::Local,
+                    _ => return Err(bad),
+                };
+                // Idempotent, as the others: an event a seek applies twice leaves the same seat.
+                if let Some(have) = self.sim.world.controllers.get_mut(seat) {
+                    *have = controller;
+                }
             }
             None => return Err(ApplyError::UnknownKind(event.kind)),
         }

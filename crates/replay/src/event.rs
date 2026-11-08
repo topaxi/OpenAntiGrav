@@ -25,8 +25,7 @@ pub struct Event {
 
 /// The kinds of change this build writes and applies.
 ///
-/// Code `3` is reserved for `controller` (ADR-0087, decision 9: a seat handed to the opponent
-/// driver at a fork) and is not implemented: a file carrying it reads, and the build that
+/// Code `4` and above are for a later build: a file carrying one reads, and the build that
 /// applies events refuses it by name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -35,6 +34,11 @@ pub enum Kind {
     /// The seat's pickup slot was topped up with a weapon (the capture flag `--give`). The value
     /// is the weapon's type number.
     Give,
+    /// Who flies the seat changed: `0` the opponent driver, `1` a person at this machine. A pad
+    /// leaving a split-screen seat hands it to the driver and a pad returning takes it back
+    /// (`oag_game::split_screen::follow_devices`); ADR-0087's fork hands a seat nobody took to
+    /// the driver the same way.
+    Controller,
 }
 
 impl Kind {
@@ -44,6 +48,7 @@ impl Kind {
         match self {
             Self::PilotAssist => 1,
             Self::Give => 2,
+            Self::Controller => 3,
         }
     }
 
@@ -53,6 +58,7 @@ impl Kind {
         match code {
             1 => Some(Self::PilotAssist),
             2 => Some(Self::Give),
+            3 => Some(Self::Controller),
             _ => None,
         }
     }

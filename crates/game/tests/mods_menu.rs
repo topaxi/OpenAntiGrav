@@ -169,6 +169,7 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
         [
             "RACE CAMPAIGN",
             "RACEBOX",
+            "REPLAYS",
             "MULTIPLAYER",
             "OPTIONS",
             "RECORDS",
@@ -182,6 +183,7 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
         [
             "RACE CAMPAIGN",
             "RACEBOX",
+            "REPLAYS",
             "MULTIPLAYER",
             "OPTIONS",
             "MODS",

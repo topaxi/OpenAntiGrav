@@ -341,8 +341,13 @@ leaving: entering takes `Race::snapshot_sim()` and sets the recording aside
 (`Race::pause_recording`), leaving restores both. `Keeper` keeps a keyframe a second from the race's
 first tick (a few microseconds a second) and starts the second `Race` it seeks with only when a
 rewind first asks. With no recording (a race that records nothing) a seek stops at the whole
-keyframe at or before the tick and a motion blur is not offered. On `main` only a Time Trial or Speed
-Lap with one person records; the REPLAYS lane's "record every race" makes it every race.
+keyframe at or before the tick and a motion blur is not offered. Every race records now (the REPLAYS
+page's `[replay] record`, on by default), so a Single Race rewinds and blurs; with the setting off, or in a
+modded race, the keyframe rule applies.
+
+**What this rests on, the maintainer's two conditions.** Photo mode never offers a take-over: it shows the
+past and cannot play from it (a take-over is the replay viewer's, decision 9), and the race resumes exactly
+where it was, to the bit (the proofs below).
 
 **The shot** is made of frames, one drawn each frame of the window behind a progress bar over the
 picture (not in the file), and **any input abandons it** and writes nothing (2048's own state 3).

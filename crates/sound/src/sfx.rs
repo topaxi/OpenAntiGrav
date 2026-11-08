@@ -252,10 +252,11 @@ impl Audio {
         {
             return;
         }
+        let warm = std::mem::take(&mut self.engine_warm_ticks);
         let voices = self.sfx.get_or_insert_with(|| {
             let mut rng = Rng::new(SFX_SEED);
             SfxVoices {
-                engines: std::array::from_fn(|_| Engine::new(&mut rng)),
+                engines: std::array::from_fn(|_| Engine::new(&mut rng).running_for(warm)),
                 xfade: std::array::from_fn(|slot| {
                     slot_teams[slot]
                         .and_then(|team| banks.xfade_team(team))
@@ -715,6 +716,25 @@ impl Audio {
             self.output
                 .with_mixer(|mixer| voices.ambience.playing(mixer))
         })
+    }
+
+    /// Puts the race's sound where `frame` says it stands `tick` ticks in, after a seek: every
+    /// effect voice is stopped and the continuous ones are rebuilt from the state, not from the
+    /// cues the skipped ticks raised (ADR-0087, decision 6).
+    ///
+    /// Rebuilt: the engine note of every slot (its pitch lag at the note the craft's speed
+    /// settles on, its volume as far up as `tick` ticks of running put it), the shield,
+    /// Autopilot and exploding loops, the lock-on beeps, the quake wave, the circuit's ambience,
+    /// every LeachBeam and every projectile's travel loop. Not replayed: a one-shot whose tick is
+    /// already past, which is the caller's to have dropped (`frame.cues` is what the target tick
+    /// itself raised, and plays). The engines' notes are the ones the first race tick drew
+    /// (`SFX_SEED`), so a rebuild is the engines the race had.
+    pub fn rebuild_race_sfx(&mut self, frame: RaceFrame<'_>, tick: u64) {
+        self.stop_race_sfx();
+        self.sfx = None;
+        self.engine_warm_ticks = tick;
+        self.race_tick(frame);
+        self.engine_warm_ticks = 0;
     }
 
     /// Releases the held race voices, on leaving a race and on launching one: a

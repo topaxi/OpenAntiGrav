@@ -8,6 +8,8 @@ use oag_raceplay as race;
 
 use crate::gpu::GpuContext;
 
+#[path = "race_stage/auto_replay.rs"]
+pub(crate) mod auto_replay;
 #[path = "race_stage/endrace.rs"]
 pub(crate) mod endrace;
 #[path = "race_stage/endrace_touch.rs"]
@@ -186,6 +188,16 @@ pub(crate) struct RaceStage {
     /// The best medal [`Self::tick_messages`] has already announced, so a medal
     /// is raised once however many ticks it stays earned.
     pub(super) earned_medal: Option<oag_tables::race_campaign::Medal>,
+    /// The header a recording of this race is filed under: the records key, the team, the seed
+    /// and the launch settings. Kept from the build so the session can start the recording once
+    /// it has finished writing to the race.
+    pub(crate) replay_header: oag_replay::Header,
+    /// Whether this race is recorded for the REPLAYS page and not yet written
+    /// ([`Self::arm_auto_replay`]).
+    pub(crate) auto_replay: bool,
+    /// Whether this race is a recording being watched: it is never parked behind the menus, and
+    /// nothing it does is a record, a ghost or a replay.
+    pub(crate) watching: bool,
 }
 
 impl Drop for RaceStage {
@@ -194,6 +206,7 @@ impl Drop for RaceStage {
     /// SIGSEGV on leaving a race with the prefetch unfinished). Waits only for the phase the
     /// worker is in; a stage dropped off the frame thread (`drop_off_thread`) waits there.
     fn drop(&mut self) {
+        self.write_auto_replay();
         self.endrace_cancel
             .store(true, std::sync::atomic::Ordering::Relaxed);
         if let Some(mut task) = self.endrace_prefetch.take() {

@@ -310,6 +310,8 @@ pub mod tournament;
 pub mod track_panel;
 mod view;
 #[cfg(feature = "view")]
+pub mod viewer;
+#[cfg(feature = "view")]
 mod viewpoint;
 #[cfg(feature = "view")]
 mod visibility;
@@ -354,7 +356,7 @@ pub use options::{
     CameraOverride, Campaign2048Progress, CaptureHud, CaptureZone, Loaded, Options, PoseRequest,
     SeatPick, Setup, Sighting,
 };
-pub use replay::{ApplyError, Launch, UnknownOption, rebuild};
+pub use replay::{ApplyError, Launch, OriginalAi, UnknownOption, rebuild};
 #[cfg(feature = "view")]
 pub use replay::{Ghost, GhostCapture};
 pub use respawn::RespawnCause;

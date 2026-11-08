@@ -145,7 +145,7 @@ impl super::Session {
     /// Whether the race is stepping between ticks: not frozen by the pause and not held by the
     /// mode. What the draw's blend alpha asks.
     pub(crate) fn race_stepping(&self) -> bool {
-        !self.pause.frozen() && photo::ticks(self.photo.is_some())
+        !self.pause.frozen() && photo::ticks(self.photo.is_some()) && self.viewer_stepping()
     }
 
     /// One tick of the mode: the player's devices into the camera, and what came of it.

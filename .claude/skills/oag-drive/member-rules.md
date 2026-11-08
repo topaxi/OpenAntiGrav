@@ -9,7 +9,7 @@ lanes you must not touch, and the gate baseline. If one is missing, ask
 
 1. `cd /home/topaxi/projects/OpenAntiGrav && git worktree add ../OpenAntiGrav-worktrees/<lane> -b <lane> main`
 2. Work ONLY in `/home/topaxi/projects/OpenAntiGrav-worktrees/<lane>`: `git merge main`, then `git submodule update --init assets/mods/examples assets/mods/official` (without the examples about 19 test-data tests fail; without the official mods the RACE REMIX tests skip), then `just link-data`.
-3. Never write into the main checkout except your scratch dir `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/` (create it).
+3. Never write into the main checkout except your scratch dir `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/` (create it). **`data/` in your worktree is symlinks into the main checkout's disc images**: never `rm` under it, and in a script `rm` only absolute paths inside your scratch dir, quoted, after a guard (`case "$p" in /home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/*) ;; *) exit 1;; esac`). Under zsh an unquoted variable does not word-split, and on 2026-11-08 one `rm -rf $R` deleted four disc images and an extract.
 4. No forks, no sub-agent that can write. **Exception (maintainer, 2026-10-19): read-only haiku helpers** for scanning docs, code, logs or captures: `subagent_type: "Explore"`, `model: "haiku"`, absolute paths into your worktree or `data/`, told to write nothing and return at most 15 lines. One at a time, short-lived. Nothing a helper says is evidence until you have read the cited `path:line`.
 5. Never `git stash`: the stash list is shared by all worktrees. Commit work in progress on your branch.
 

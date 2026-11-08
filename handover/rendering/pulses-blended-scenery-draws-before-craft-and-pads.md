@@ -1,36 +1,46 @@
 ---
-status: measure
+status: ready-to-wire
 titles: [pulse]
 updated: 2026-11-07
-summary: "Trees and bushes in front of a craft or a pad draw behind it: the circuit's blended list draws before both in our pass, hypothesis unmeasured"
+summary: "Ours matches the original on hull, pads, list B; flares are the measured gap (they sort into list B by depth). Hull and pad report not reproduced"
 ---
 
 # Pulse's blended scenery draws before craft and pads
 
 The maintainer's report from play, 2026-11-07: in Pulse, trees render behind ships, speed pads and
-weapon pads, even when the tree or bush is in front. Observed on Platinum Rush White
-(`13_Track`), so take the pair there first, then check Black, which is unobserved.
+weapon pads, even when the tree or bush is in front. Observed on Platinum Rush White (`13_Track`).
+Measured on PPSSPP; the numbers, the method and the confidence are on
+`docs/rendering/draw-order.md`, "Hull, pads and trees on Platinum Rush White".
 
 ## Open
 
-- **Our order, read in code.** `crates/raceplay/src/scene/frame.rs` pushes `Draw::Track` first, and
-  the track draws its solid and blended lists inside it (`Recorder::draw_track`). Pads, the gantry
-  and craft come after it.
-- **Hypothesis, unmeasured.** Trees are list-B meshes, in `transparent_draws`
-  (`docs/rendering/draw-order.md`). If that list writes no depth, nothing stops a later pad or hull
-  drawing over a tree nearer the eye. Confirm the state of the tree materials first.
-- **The original.** One queue sorted by key: list-B meshes sit on layer `0x4d` with a view depth.
-  The layers of a hull and a pad are not recorded on that page. If they sort below `0x4d`, a tree
-  draws over them there.
-- **Knock-on.** Moving the blended list changes its order against engine flares, plumes, the Rocket
-  ribbon and shadows. `draw-order.md` names part of this: the flare interleaving is open, and the
-  list-B meshes draw after the ribbon on the original.
-- **Other titles.** All share this pass. HD has the same queue shape (`renderer.md`). Pure and Omega
-  are unchecked, and the report is Pulse's alone.
+- **Hull and pads: ours already matches the original at the default.** The original draws hull, then
+  speed and weapon pads (layer `0x4a000000`), then list B (`0x4d000000` plus depth, no depth write).
+  Ours does the same whenever `Race::ribbons_first()` holds (PSP ribbon, `trail_order = original`, the
+  maintainer's own setting). The symptom as reported is the other order: `over-floors`, or the HD tube
+  path (HD, Omega, 2048). Not reproduced on White: three matched poses and one synthetic pose.
+- **Flares are the measured gap, ready to wire.** The original keys a flare `0x4d` plus depth, so list-B
+  meshes nearer than a flare draw after it: in the logged frame all twelve list-B meshes outrank the
+  three AI flares and none outranks the player's. Ours draws every flare after the whole blended list,
+  so a nearer tree is under a farther craft's flare. Rule and knock-on table on the page; plumes,
+  shield shells, weapon bodies, wrecks and the Rocket ribbon have no key read and stay where they are.
+- **Open on the original:** the maintainer's spot (their settings hold `camera_view = "far"`; the
+  disc was Pulse PSP, they confirmed 2026-11-07, so the PS2 path is not the cause), which of
+  White and Black each Track Select press landed on (`--track-down 18` and `19` gave the same start
+  frame), the hull body's second layer (the `0x4a` bump moved it too), the tree's own key under a
+  list-B bump (the prim vanished from the census), the weapon pads' submit (`0x0890cdc8`), PS2, Pure's,
+  HD's, 2048's and Omega's queue keys.
 
 ## Next Steps
 
-1. A frame of ours with a tree between the camera and a pad or craft, and the original at the same
-   spot on PPSSPP, to show the bug and the target.
-2. Read the hull's and pads' `Gfx_Enqueue` keys and the blended materials' depth state.
-3. Reorder on measured keys, as data, with a pair per case and the other titles checked.
+1. Wire the flares into the blended list by depth, in `Model::blended_order`'s units made the
+   original's first (`display+0x4310 / 65`); pair at a frame with an AI flare behind a nearer tree.
+2. Reproduce with a **speed or weapon pad**, not a craft. The maintainer specifically saw a pad and
+   may have misremembered the ship (2026-11-07). The measured poses and the synthetic one used a
+   craft. Use far camera, Pulse PSP, Platinum Rush White, and a tree between the eye and a pad. If it
+   reproduces at `original`, read the frame's order with the key bump on the page. Placing the
+   camera is the easy part in ours (maintainer's suggestion): park the race in photo mode
+   (`docs/ui/photo-mode.md`) or use a capture pose, and put a tree between the lens and a pad. Then
+   find a matching spot on PPSSPP for the original.
+3. For HD, Omega and 2048, read each title's queue keys before moving a blended list: their path draws
+   it before the craft today.

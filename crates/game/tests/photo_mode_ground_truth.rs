@@ -30,12 +30,12 @@ const TO_THE_RACE: &str = "boot; select racebox; press cross; until page=race; \
      select launch_race; press cross; until screen=picker; press cross; \
      until screen.id=ship-select; press cross; until stage=race within 4000; ticks 400; ";
 
-/// [`TO_THE_RACE`] as a Time Trial, which records every tick it plays (a rewind plays the
-/// recording). Run it with `--autopilot` so the craft moves with nothing held on the pad: a held
+/// [`TO_THE_RACE`] as a Single Race, eight craft; every race records every tick it plays (a rewind
+/// plays the recording). Run it with `--autopilot` so the craft moves with nothing held on the pad: a held
 /// button is read by the pad's own smoothing, which a visit's frames without a race tick do not
 /// run down, and that is the pad and not the race.
 const TO_THE_TIME_TRIAL: &str = "boot; select racebox; press cross; until page=race; \
-     set race.mode=time_trial; \
+     set race.mode=single_race; \
      select launch_race; press cross; until screen=picker; press cross; \
      until screen.id=ship-select; press cross; until stage=race within 4000; \
      ticks 400; ";
@@ -256,7 +256,7 @@ fn a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without() {
     a_visit_that_rewinds_leaves_every_live_tick_as_it_was(&image, &shots);
 }
 
-/// ADR-0087, decision 5: a visit that rewinds. On a Time Trial, which records, the mode goes back
+/// ADR-0087, decision 5: a visit that rewinds. On a Single Race, whose recording the rewind plays, the mode goes back
 /// to the start of the race, forward again, takes a shot of the moment it stands at and goes
 /// back once more before leaving. Every tick it reports (the rewound ones too, each a state the
 /// recording replays) hashes as the same tick of a race that was never visited, and the race

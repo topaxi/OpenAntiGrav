@@ -154,6 +154,14 @@ pub struct State {
     /// is open.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub photo_job: Option<String>,
+    /// The replay viewer while a recording is being watched on `stage=race`: `opening`,
+    /// `playing`, `paused`, `ended` or `stopped` (the build stops matching the recording).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replay: Option<String>,
+    /// The tick the viewer stands at, the length of the recording and the last tick built, as
+    /// `at/length/built` (`-` before the first keyframe).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replay_at: Option<String>,
     /// The end-of-race screen on top, `photo` for `Race End Photo` and `other` for the rest,
     /// on `stage=race` once the race has ended with an end-of-race flow built.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -218,6 +226,8 @@ impl State {
             "photo" => one(self.photo.clone()),
             "photo_fx" => one(self.photo_fx.clone()),
             "photo_job" => one(self.photo_job.clone()),
+            "replay" => one(self.replay.clone()),
+            "replay_at" => one(self.replay_at.clone()),
             "endrace" => one(self.endrace.clone()),
             "focus" => screen
                 .and_then(|s| s.focus.as_ref())
@@ -269,6 +279,8 @@ impl State {
                 | "photo"
                 | "photo_fx"
                 | "photo_job"
+                | "replay"
+                | "replay_at"
                 | "endrace"
                 | "opening_reads"
         ) || key.strip_prefix("race.").is_some_and(|rest| {

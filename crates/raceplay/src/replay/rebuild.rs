@@ -99,15 +99,32 @@ pub fn load_recorded(header: &Header, source: &str) -> Result<Setup> {
 ///
 /// A launch setting this build does not know.
 pub fn start_recorded(setup: Setup, header: &Header) -> Result<Race> {
-    let launch = Launch::from_table(&header.options)?;
     let mut race = Race::start(setup);
+    apply_recorded(&mut race, header)?;
+    Ok(race)
+}
+
+/// What a recorded race had written to it after [`Race::start`]: `header`'s launch settings and
+/// its seats. [`start_recorded`] does it to a race it starts; a viewer that was handed a race
+/// loaded by the ordinary path does it to that one.
+///
+/// # Errors
+///
+/// A launch setting this build does not know.
+pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
+    let launch = Launch::from_table(&header.options)?;
     race.apply_launch(&launch);
     for &slot in &header.slots {
         if let Some(controller) = race.sim.world.controllers.get_mut(usize::from(slot)) {
             *controller = Controller::Local;
         }
     }
-    Ok(race)
+    // After the seats, as the session applies the AI choice: which driver flies reads who is
+    // human.
+    if let Some(ai) = launch.original_ai {
+        race.use_original_ai(ai.skill, ai.level);
+    }
+    Ok(())
 }
 
 /// The race `header` was recorded from, loaded from `source` and started as

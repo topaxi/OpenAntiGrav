@@ -30,7 +30,10 @@ pub struct Header {
     /// The team whose craft was flown, which is also the hull a ghost of the
     /// run is drawn as.
     pub team: String,
-    /// The world generator's seed.
+    /// The world generator's seed. A TOML integer is signed 64 bits and a seed is drawn over all
+    /// of `u64`, so the file holds its bit pattern as an `i64` ([`seed_bits`]): a seed above
+    /// `i64::MAX` written as it stands is a header no reader can parse.
+    #[serde(with = "seed_bits")]
     pub seed: u64,
     /// Simulation ticks per second. Every tick index in the file is at this
     /// rate.
@@ -68,6 +71,44 @@ pub struct Header {
     /// written.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork: Option<Fork>,
+    /// How many ticks the file records, filled when it is written. The REPLAYS list reads the
+    /// header alone, so a length has to be in it; `0` in a file written before the key.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub ticks: u64,
+    /// How the player's craft finished, when the race ended with a result. Written with
+    /// [`Self::ticks`], for the same reason.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish: Option<Finish>,
+}
+
+/// A seed as the `i64` TOML can hold: the same 64 bits. A file with a small seed reads as it
+/// always did.
+mod seed_bits {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    #[allow(clippy::cast_possible_wrap)]
+    pub(super) fn serialize<S: Serializer>(seed: &u64, out: S) -> Result<S::Ok, S::Error> {
+        (*seed as i64).serialize(out)
+    }
+
+    #[allow(clippy::cast_sign_loss)]
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(from: D) -> Result<u64, D::Error> {
+        i64::deserialize(from).map(|bits| bits as u64)
+    }
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
+
+/// How the recorded player's craft finished, for the list of replays.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Finish {
+    /// The final position, 1-based.
+    pub place: u8,
+    /// The finishing time, in ticks.
+    pub ticks: u32,
 }
 
 /// The schema kind of a replay header's `toml-schema` line.
@@ -187,6 +228,8 @@ impl Header {
             ghost: None,
             setup: None,
             fork: None,
+            ticks: 0,
+            finish: None,
         }
     }
 }

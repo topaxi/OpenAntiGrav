@@ -49,6 +49,7 @@ fn launch() -> Launch {
         difficulty: oag_ai::Difficulty::default(),
         autopilot: false,
         pilot_assist: Level::Off,
+        original_ai: None,
     }
 }
 

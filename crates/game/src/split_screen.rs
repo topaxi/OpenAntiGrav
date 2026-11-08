@@ -452,7 +452,8 @@ pub fn name_first_seat(
 /// merged.
 ///
 /// This writes `World::controllers`, which the state hash covers, from outside
-/// the tick: a replay or a network client would have to carry it as an input.
+/// the tick, through [`Race::set_controller`], which records the change as an event so a
+/// recording of the race reproduces (`docs/formats/replay-file.md`, "Events").
 pub fn follow_devices<D: Copy + PartialEq>(race: &mut Race, assignment: &Assignment<D>) -> usize {
     let Some(humans) = assignment.humans() else {
         return 0;
@@ -465,8 +466,10 @@ pub fn follow_devices<D: Copy + PartialEq>(race: &mut Race, assignment: &Assignm
             Controller::Ai
         };
         let have = race.sim.world.controllers[slot];
-        if have != want && matches!(have, Controller::Local | Controller::Ai) {
-            race.sim.world.controllers[slot] = want;
+        if have != want
+            && matches!(have, Controller::Local | Controller::Ai)
+            && race.set_controller(slot, want)
+        {
             changed += 1;
             log::debug!("split screen: slot {slot} is now {want:?}");
         }

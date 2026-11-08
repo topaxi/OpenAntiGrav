@@ -202,6 +202,11 @@ impl Session {
             self.leave_photo();
             return;
         }
+        // A recording being watched is left for the REPLAYS page: nothing to save, nothing parked.
+        if self.viewer.is_some() {
+            self.leave_viewer();
+            return;
+        }
         // **The other capture site** - see `oag_game::records`'s own module
         // doc for why there have to be two. This one exists for the three
         // modes `Session::frame`'s finish-transition arm can never reach:

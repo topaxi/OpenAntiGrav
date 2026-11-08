@@ -567,6 +567,10 @@ pub struct Audio {
     /// banks did not load; made on the first tick with cues, so a silent source
     /// never allocates one.
     sfx: Option<sfx::SfxVoices>,
+    /// The seconds the race's engines have already been running, for the voices the next
+    /// [`Audio::race_tick`] creates: `0` for a race that is starting, the playhead for a rebuild
+    /// after a seek ([`Audio::rebuild_race_sfx`]).
+    engine_warm_ticks: u64,
     /// What [`Audio::start_race_music`] was last called with, so the
     /// advance-on-finish check in [`Audio::tick`] can fetch the next track
     /// without threading arguments through every caller. `None` outside a race.
@@ -734,6 +738,7 @@ impl Audio {
             pending_restore: None,
             source_switch: None,
             sfx: None,
+            engine_warm_ticks: 0,
         };
         audio.apply(settings);
         audio

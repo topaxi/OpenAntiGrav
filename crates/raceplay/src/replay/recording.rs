@@ -117,6 +117,13 @@ impl Race {
         self.replay.recording = paused.0;
     }
 
+    /// Stops recording and drops the ghost: a race that plays a recording back is not a run, so
+    /// it keeps no lap, and nothing it does can be written as a ghost or a replay.
+    pub fn stop_recording(&mut self) {
+        self.replay.recording = None;
+        self.replay.ghost = None;
+    }
+
     /// Whether this race is being recorded.
     #[must_use]
     pub fn recording(&self) -> bool {
@@ -234,6 +241,33 @@ impl Race {
             position: ship.physics.body.position,
             rotation: ship.physics.body.orientation * roll,
         }
+    }
+
+    /// Puts every craft the track holds at its recorded pose at tick `at` and steps the picture
+    /// (the view's poses, shake and stage) without the simulation: POSE VIEW, past the last
+    /// second a build reproduces. The race is a picture from here on, never run again: the
+    /// positions are written over its state, the roll and lean are zero because the pose already
+    /// has them folded in, and the craft's velocity is zero.
+    pub fn show_poses(&mut self, track: &oag_replay::PoseTrack, at: f64) {
+        let count = usize::from(self.ship_count()).min(track.crafts());
+        for slot in 0..count {
+            let Some(pose) = track.pose(slot, at) else {
+                continue;
+            };
+            let physics = &mut self.sim.world.ships[slot].physics;
+            physics.body.position = pose.position;
+            physics.body.orientation = pose.rotation;
+            physics.roll_phase = 0.0;
+            physics.steer_lean = 0.0;
+            physics.body.linear_velocity = Vec3::ZERO;
+        }
+        // The chase camera follows the craft where it stands now, as a tick would have moved it.
+        let target = self.camera_target();
+        self.view
+            .camera
+            .advance(target, &self.view.chase_params, self.sim.dt);
+        self.advance_viewpoints();
+        self.tick_cosmetics();
     }
 
     /// Every craft on the grid, in slot order.

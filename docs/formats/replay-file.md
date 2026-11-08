@@ -48,8 +48,9 @@ table keeps its keys open (ADR-0087 decision 8).
 
 | Table | What it is |
 | --- | --- |
-| top level | the key (`title`, `track`, `mode`, `class`, `team`), `seed`, `tick_rate`, `build` (informational, never compared), `hash_interval`, `slots` |
-| `[options]` | the launch settings: `scheme`, `difficulty`, `autopilot`, `pilot_assist` (`oag_raceplay::Launch`). **Read back** by a rebuild; an absent key is the default, an unknown value is refused by name |
+| top level | the key (`title`, `track`, `mode`, `class`, `team`; the records key, so lower case), `seed` (**the 64 bits as an `i64`**: a TOML integer is signed and a seed is drawn over all of `u64`; a seed above `i64::MAX` written as it stood made the header unreadable), `tick_rate`, `build` (informational, never compared), `hash_interval`, `slots`, `ticks` (the length, written with the file so the REPLAYS list reads it from `HEAD`) |
+| `[finish]` | how the player's craft finished, when the race ended with a result: `place`, `ticks` (written with `ticks`) |
+| `[options]` | the launch settings: `scheme`, `difficulty`, `autopilot`, `pilot_assist`, and the original driver's request `ai = "original"`, `ai_level`, `ai_skill` (`oag_raceplay::Launch`; the session flies a front-end race's opponents with it, so a rebuild must). **Read back** by a rebuild; an absent key is the default, an unknown value is refused by name |
 | `[setup]` | the resolved launch request (`oag_replay::header::Setup`): mode, class, track, team, hull variant, skin, opponent teams, opponents, people, views, lap/weapon/Eliminator overrides, add-on campaign, Zone model. Written by `Race::start_recording` from the request the race was loaded with, so no caller can forget it |
 | `[ghost]` | the lap a file's ghost is |
 | `[fork]` | read, never yet written (stage 7): `tick`, `offered_at`, `seats`, `parent_build`, `parent_hash` |
@@ -80,11 +81,13 @@ every title, so the table is what the rebuild uses.
 **Not claimed** (a recording of these may be written, and its rebuild is then not promised; the
 tick-zero hash refuses a rebuild that does not match): Zone, Eliminator, Tournament; Head to Head
 and split-screen beyond the one setup [the timeline's page](../architecture/replay-timeline.md)
-proves (two people, Pulse); a seat a pad left mid-race (`follow_devices`, no event yet); multi-window
+proves (two people, Pulse); multi-window
 races (`seat_picks`); Race Remix (`craft_source`); DLC and
 foreign tracks (`dlc`, `foreign_track`); campaign events (`grid_teams`); capture aids (`pose`,
 `field`, `hud`); network races (a client records nothing) and modded races (`start_recording`
-returns early). None of these is in `[setup]` yet.
+returns early). None of these is in `[setup]` yet. [The viewer](../ui/replays.md) lists a mode outside the table as MODE NOT
+VERIFIED and tries it: Zone, Eliminator and Head to Head with one person each reproduced 752
+ticks on Pulse through WATCH.
 
 The four titles' 7,200-tick Time Trial recordings are re-driven through the rebuild, not through a
 hand-made setup (`*_replays_reproduce...`).
@@ -100,7 +103,7 @@ the same way, between the same two ticks ([the timeline](../architecture/replay-
 | --- | --- | --- | --- |
 | `pilot_assist` | 1 | the level's index in `Level::ALL` (off 0, normal 1, extreme 2) | `Race::change_pilot_assist`, called by the pause menu (`Session::apply_pause_setting`); one event per person-flown seat, each applied as the writer does, to every seat |
 | `give` | 2 | the weapon's index in `Weapon::ALL` | `Race::give_weapon`, the capture flag `--give` (writes only an empty pickup slot) |
-| `controller` | 3 | reserved for a seat handed to the opponent driver at a fork (decision 9) | not implemented; a file carrying it reads, and `Race::apply_event` refuses it by name |
+| `controller` | 3 | `0` the opponent driver, `1` a person at this machine | `Race::set_controller`, called by `oag_game::split_screen::follow_devices` when a pad leaves or returns to a seat; applied idempotently. ADR-0087's fork hands a seat nobody took to the driver the same way |
 
 A mid-race Pilot Assist change used to stop the recording (`Race::stop_recording`, removed); it is an
 event now, and the file reproduces: the pause-menu test sees `recorded_events` rise and the recording
@@ -227,5 +230,6 @@ was recorded and measured on its own data (the tables above), and the respawn ra
 
 ## Open
 
-Later work: recording every race and the `auto/` ring, any screen (POSE VIEW included), `[fork]`
-written, the `controller` event. A track holds hulls only; nothing else a craft does is in it.
+Recording every race and the `auto/` ring, the `Timeline`, the REPLAYS page and the viewer are built
+([replays](../ui/replays.md)); POSE VIEW plays the track past the last second a build reproduces.
+Later work: `[fork]` written. A track holds hulls only; nothing else a craft does is in it.

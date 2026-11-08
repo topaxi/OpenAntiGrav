@@ -51,6 +51,25 @@ impl Race {
         self.sim = snapshot.clone();
     }
 
+    /// [`Self::restore_sim`] for a race that is being watched, not played: the state is put back
+    /// and what the view kept about a later moment goes with it.
+    ///
+    /// The results board is taken once, on the first tick the race is finished, and the tick a
+    /// wreck ended the race on is written once; a seek back from past the finish would leave
+    /// both standing over a race that is running again. Neither reaches the simulation (the
+    /// board is read by the screens and the finish camera), so only a viewer that draws the
+    /// race needs this. The poses are settled: the next draw shows the restored tick as it
+    /// stands, not blended from a tick long gone.
+    pub fn restore_for_viewing(&mut self, snapshot: &RaceSim) {
+        self.restore_sim(snapshot);
+        #[cfg(feature = "view")]
+        {
+            self.view.results = None;
+            self.view.wreck_ended_tick = None;
+            self.settle_poses();
+        }
+    }
+
     /// One tick of the simulation and nothing else: the replay step of a
     /// reconciliation.
     ///
