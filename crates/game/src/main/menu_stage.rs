@@ -923,9 +923,17 @@ impl MenuStage {
                         .iter()
                         .enumerate()
                         .flat_map(|(index, (label, value))| {
-                            oag_ui_screens::prompt::record_row_draw(
+                            // The REPLAYS page's lines have a band of their own: Omega's
+                            // backdrop is light and the lines are white.
+                            let back = (self.menu.page().id == oag_game::replays::page::PAGE)
+                                .then(|| {
+                                    oag_ui_screens::prompt::record_row_back(
+                                        &self.menu, &self.skin, index,
+                                    )
+                                });
+                            back.into_iter().chain(oag_ui_screens::prompt::record_row_draw(
                                 &self.menu, &self.skin, index, label, value,
-                            )
+                            ))
                         }),
                 )
                 .collect()

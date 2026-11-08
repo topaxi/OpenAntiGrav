@@ -53,6 +53,11 @@ fn populated() -> Replay {
         add_on_campaign: Some("DLC1".into()),
         zone_model: true,
     });
+    header.ticks = 7_200;
+    header.finish = Some(oag_replay::header::Finish {
+        place: 2,
+        ticks: 7_100,
+    });
     header.fork = Some(Fork {
         tick: 4_312,
         offered_at: 4_300,

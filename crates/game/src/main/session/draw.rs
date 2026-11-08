@@ -157,6 +157,7 @@ impl Session {
         // with. One rectangle for every stage, so a change moves the whole game
         // rather than only what happens to be on screen.
         let rect = display::viewport(self.gpu.output.size(), self.aspect());
+        let pose_view = self.pose_view_shown();
         // The presentation target follows the *surface*, not the render scale -
         // it is where the resolved frame and the UI meet, so it is sized in the
         // pixels a player actually has. Cheap when nothing moved; a window
@@ -754,6 +755,8 @@ impl Session {
             // Photo mode draws the race's HUD only when its row is on, and never the end
             // screens or the track panel: the picture is the view.
             match stage.race.photo().map(oag_raceplay::photo::Photo::hud) {
+                // POSE VIEW: hulls at their recorded poses, no HUD.
+                None if pose_view => {}
                 None => stage.draw_hud(
                     &self.gpu,
                     &mut encoder,
@@ -852,9 +855,18 @@ impl Session {
                 .shell
                 .as_ref()
                 .and_then(|shell| {
-                    crate::records_page::table_for(&stage.menu, shell, &self.records).or_else(|| {
-                        oag_game::mods::table_for(&stage.menu, &shell.mods, &shell.strings)
-                    })
+                    crate::records_page::table_for(&stage.menu, shell, &self.records)
+                        .or_else(|| {
+                            oag_game::mods::table_for(&stage.menu, &shell.mods, &shell.strings)
+                        })
+                        .or_else(|| {
+                            let cx = super::replays::context(
+                                shell,
+                                &self.replay_refused,
+                                self.settings.replay.record,
+                            );
+                            oag_game::replays::page::table_for(&stage.menu, &self.replay_list, &cx)
+                        })
                 })
                 .unwrap_or_default();
             // The footer ticker's own honest rotation, off `Session::records` -
@@ -1020,6 +1032,8 @@ impl Session {
         list.extend(self.pause_line(overlay_space.size));
         // Photo mode's screen, over the surface and so not in a shot.
         list.extend(self.photo_screen(overlay_space.size));
+        // The replay viewer's bar, controls and banner.
+        list.extend(self.viewer_screen(overlay_space.size));
         // The TOUCH CONTROLS page's picture of the overlay, over its rows.
         if let Stage::Menu(stage) = &self.stage
             && let Some(art) = oag_game::touch_controls::art::Art::from_sheet(&self.cursor_sheet)

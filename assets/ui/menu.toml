@@ -465,6 +465,50 @@ kind = "back"
 label = "BACK"
 string_id = "OAG_MENU_BACK"
 
+# **The REPLAYS page** (ADR-0087, stage 5). One REPLAY row that steps through the recorded races
+# (`values_from = "replays"`: `saved/` then `auto/`, newest first, read each time the menus open;
+# a file this build will not play is listed dimmed with the reason, as a mod that did not load
+# is), WATCH, KEEP and DELETE for the file it is on, and under them its detail lines
+# (`oag_game::replays::page`). `replays.selected` is never stored. Reached from the main page
+# through the built-in mod `oag-extras`, as PHOTO MODE is. Chosen, not measured.
+[[page]]
+id = "replays"
+title = "REPLAYS"
+title_string_id = "OAG_REPLAYS_PAGE_TITLE"
+
+[[page.entry]]
+kind = "choice"
+label = "REPLAY"
+string_id = "OAG_REPLAYS_ROW"
+setting = "replays.selected"
+values_from = "replays"
+
+[[page.entry]]
+id = "watch_replay"
+kind = "action"
+label = "WATCH"
+string_id = "OAG_REPLAYS_WATCH"
+action = "watch_replay"
+
+[[page.entry]]
+id = "keep_replay"
+kind = "action"
+label = "KEEP"
+string_id = "OAG_REPLAYS_KEEP"
+action = "keep_replay"
+
+[[page.entry]]
+id = "delete_replay"
+kind = "action"
+label = "DELETE"
+string_id = "OAG_REPLAYS_DELETE"
+action = "delete_replay"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
 [[page]]
 id = "options"
 title = "OPTIONS"

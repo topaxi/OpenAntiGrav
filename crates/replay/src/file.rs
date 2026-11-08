@@ -333,6 +333,39 @@ impl Replay {
         })
     }
 
+    /// Only the header of a file: the first chunk, and not the checksum or anything after it.
+    ///
+    /// What the list of replays reads, a few hundred bytes of a file that may be hundreds of
+    /// kilobytes. A file whose header parses is listed even if its body is damaged; opening it
+    /// is what finds that out.
+    ///
+    /// # Errors
+    ///
+    /// [`ReadError`]: not a replay, another format version, a first chunk that is not the header,
+    /// or a header that does not parse; one naming another kind or a later major is
+    /// [`ReadError::Schema`].
+    pub fn read_head(bytes: &[u8]) -> Result<Header, ReadError> {
+        let mut cursor = Reader::le(bytes);
+        if cursor.take(4).map_err(|_| ReadError::BadMagic)? != MAGIC {
+            return Err(ReadError::BadMagic);
+        }
+        let version = cursor.u16()?;
+        if version != FORMAT_VERSION {
+            return Err(ReadError::Version(version));
+        }
+        let _reserved = cursor.u16()?;
+        let tag = cursor.take(4)?;
+        let len = cursor.u32()? as usize;
+        let payload = cursor.take(len)?;
+        if tag != b"HEAD" {
+            return Err(ReadError::Inconsistent(
+                "the first chunk is not the header".into(),
+            ));
+        }
+        let text = std::str::from_utf8(payload).map_err(|e| ReadError::Header(e.to_string()))?;
+        parse_header(text).map(|(header, _)| header)
+    }
+
     /// The cross-chunk invariants: equal stream lengths, and no more hashes
     /// than the recorded ticks can have produced.
     fn check(&self) -> Result<(), ReadError> {

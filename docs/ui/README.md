@@ -13,8 +13,9 @@
 > three `EndRace` screens (`Results`/`Rewards`/`Menu`) draw too; see
 > [endrace-screens.md](endrace-screens.md), and the end of a split-screen
 > race in [split-end-race.md](split-end-race.md). What each title's photo mode is,
-read off its binary, is in [photo-mode.md](photo-mode.md), and the pause
-screen a race opens in [pause-menu.md](pause-menu.md).
+read off its binary, is in [photo-mode.md](photo-mode.md), the pause
+screen a race opens in [pause-menu.md](pause-menu.md), and this project's
+own REPLAYS page and viewer in [replays.md](replays.md).
 
 Why the raster HUD text reads poorly, and which HUD skins the later titles
 ship, are in [hud-skins.md](hud-skins.md). Every HUD file on every disc, which

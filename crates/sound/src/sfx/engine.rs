@@ -126,6 +126,16 @@ impl Engine {
         }
     }
 
+    /// This engine as it stands `ticks` into a race it has run through: the volume's rise
+    /// (`0.25` a second, to its ceiling) already made. The pitch needs nothing: the first tick
+    /// snaps `lag` to its target, so a rebuilt engine is at the note a craft at that speed has
+    /// settled on, not gliding up from rest.
+    #[must_use]
+    pub fn running_for(mut self, ticks: u64) -> Self {
+        self.intensity = (ticks as f32 * super::DT * ENGINE_RISE).clamp(0.0, 1.0);
+        self
+    }
+
     /// Advances the law one tick and writes the result to the voice.
     ///
     /// `on` is the original's `engine_on`, mapped to "the race is still

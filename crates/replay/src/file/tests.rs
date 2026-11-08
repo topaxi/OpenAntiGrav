@@ -274,7 +274,7 @@ fn an_event_of_a_kind_this_build_does_not_know_is_kept_and_not_understood() {
     replay.events.push(Event {
         tick: 10,
         seat: 0,
-        kind: 3,
+        kind: 4,
         value: 9,
     });
     let read = Replay::from_bytes(&replay.to_bytes()).expect("reads");
@@ -282,7 +282,7 @@ fn an_event_of_a_kind_this_build_does_not_know_is_kept_and_not_understood() {
     assert_eq!(
         read.events[0].kind(),
         None,
-        "controller is reserved, not implemented"
+        "kind 4 is not one this build knows"
     );
 }
 
@@ -399,6 +399,74 @@ fn the_setup_and_fork_tables_round_trip_and_an_absent_one_reads_as_none() {
             .tick,
         5
     );
+}
+
+/// The list of replays reads this much of a file and no more: a damaged body does not hide it,
+/// and a header of another kind is still refused by name.
+#[test]
+fn the_header_alone_reads_from_a_file_whose_body_is_cut_or_damaged() {
+    let mut replay = record(600);
+    replay.header.ticks = 600;
+    replay.header.finish = Some(crate::header::Finish {
+        place: 3,
+        ticks: 590,
+    });
+    let bytes = replay.to_bytes();
+    assert_eq!(Replay::read_head(&bytes).expect("reads"), replay.header);
+    // Cut mid-body: the whole file is refused, its header is still listed.
+    let cut = &bytes[..bytes.len() / 2];
+    assert!(Replay::from_bytes(cut).is_err());
+    assert_eq!(
+        Replay::read_head(cut).expect("the header reads"),
+        replay.header
+    );
+    // A flipped byte in the body: the checksum refuses the whole file, not the header.
+    let mut flipped = bytes.clone();
+    let middle = flipped.len() - 40;
+    flipped[middle] ^= 0x01;
+    assert!(matches!(
+        Replay::from_bytes(&flipped),
+        Err(ReadError::Checksum)
+    ));
+    assert!(Replay::read_head(&flipped).is_ok());
+    let newer = edit_head(&replay, |text| {
+        text.replace("version = \"1.0.0\"", "version = \"2.0.0\"")
+    });
+    assert!(matches!(
+        Replay::read_head(&newer),
+        Err(ReadError::Schema(_))
+    ));
+    assert!(matches!(
+        Replay::read_head(b"RIFF...."),
+        Err(ReadError::BadMagic)
+    ));
+}
+
+/// A seed is drawn over all of `u64` (`oag_game::race_seed`), and a TOML integer is an `i64`: a
+/// seed above `i64::MAX` written as it stands made a header no reader could parse, so half the
+/// races a player recorded could not be listed or watched.
+#[test]
+fn a_seed_over_the_signed_range_survives_the_file() {
+    for seed in [
+        0,
+        7,
+        i64::MAX as u64,
+        i64::MAX as u64 + 1,
+        9_915_474_475_271_654_925,
+        u64::MAX,
+    ] {
+        let mut replay = record(60);
+        replay.header.seed = seed;
+        let bytes = replay.to_bytes();
+        assert_eq!(Replay::from_bytes(&bytes).expect("reads").header.seed, seed);
+        assert_eq!(
+            Replay::read_head(&bytes).expect("the head reads").seed,
+            seed
+        );
+    }
+    // A file a build wrote with a small seed, as an unsigned-looking integer, reads as it did.
+    let old = edit_head(&record(60), |text| text.replace("seed = 7", "seed = 12345"));
+    assert_eq!(Replay::from_bytes(&old).expect("reads").header.seed, 12_345);
 }
 
 fn with_pose_track(ticks: u32) -> Replay {

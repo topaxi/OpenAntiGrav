@@ -61,6 +61,7 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
     let pulse = [
         "campaign",
         "racebox",
+        "racebox>replays",
         "multiplayer",
         "options",
         "options>records",
@@ -74,6 +75,7 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
     let hd = [
         "campaign",
         "racebox",
+        "racebox>replays",
         "multiplayer",
         "options",
         "options>mods",
@@ -89,6 +91,7 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
         main_rows(Some(oag_2048::TITLE), HEADER).unwrap(),
         [
             "racebox",
+            "racebox>replays",
             "multiplayer",
             "options",
             "options>records",
@@ -107,6 +110,7 @@ fn no_title_keeps_every_vanilla_row_and_the_extras_around_them() {
             "campaign",
             "multiplayer",
             "racebox",
+            "racebox>replays",
             "options",
             "options>mods",
             "options>quit",
@@ -123,14 +127,18 @@ fn a_mod_row_goes_after_a_sibling_or_at_the_end_of_its_parents_rows() {
         &row("id = \"a\"\nparent = \"racebox\"\n"),
     )
     .unwrap();
-    assert_eq!(rows[1..3], ["racebox", "racebox>a"]);
+    // REPLAYS hangs off RACEBOX from the extras, so a mod's row lands after it.
+    assert_eq!(rows[1..4], ["racebox", "racebox>replays", "racebox>a"]);
 
     let two = format!(
         "{}[[entry]]\nid = \"b\"\nparent = \"racebox\"\nafter = \"racebox\"\nkind = \"action\"\nlabel = \"X\"\naction = \"quit\"\n",
         row("id = \"a\"\nparent = \"racebox\"\n")
     );
     let rows = main_rows(Some(oag_hd::TITLE), &two).unwrap();
-    assert_eq!(rows[1..4], ["racebox", "racebox>b", "racebox>a"]);
+    assert_eq!(
+        rows[1..5],
+        ["racebox", "racebox>b", "racebox>replays", "racebox>a"]
+    );
 
     let rows = main_rows(
         Some(oag_hd::TITLE),

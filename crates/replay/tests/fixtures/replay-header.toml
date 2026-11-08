@@ -9,6 +9,7 @@ tick_rate = 60
 build = "abc123"
 hash_interval = 60
 slots = [0]
+ticks = 7200
 
 [options]
 pilot_assist = "normal"
@@ -44,3 +45,7 @@ offered_at = 4300
 seats = [0]
 parent_build = "def456"
 parent_hash = "0x0123456789abcdef"
+
+[finish]
+place = 2
+ticks = 7100

@@ -364,6 +364,7 @@ impl Session {
         if let Stage::Race(stage) = outgoing
             && !stage.race.finished()
             && !was_lan
+            && !stage.watching
         {
             self.suspended_race = Some(stage);
         }
@@ -373,6 +374,12 @@ impl Session {
             .set_title(&hints::shell_title(&strings::project_table(
                 self.settings.language.as_deref(),
             )));
+        // A recording left, or one the rebuild refused, lands on the list it came from.
+        if std::mem::take(&mut self.return_to_replays)
+            && let Stage::Menu(stage) = &mut self.stage
+        {
+            stage.menu.push(oag_game::replays::page::PAGE);
+        }
         // An online race that ended lands back in its room.
         self.online_menus_opened();
         self.ask_player();
@@ -556,6 +563,10 @@ impl Session {
             // The pause menu's RESTART RACE and QUIT RACE rows (`session::pause_menu`).
             menu::MenuEvent::Fired(menu::Action::RestartRace) => self.restart_parked_race(),
             menu::MenuEvent::Fired(menu::Action::QuitRace) => self.quit_parked_race(),
+            // The REPLAYS page's three rows (`session::replays`).
+            menu::MenuEvent::Fired(menu::Action::WatchReplay) => self.watch_selected_replay(),
+            menu::MenuEvent::Fired(menu::Action::KeepReplay) => self.keep_selected_replay(),
+            menu::MenuEvent::Fired(menu::Action::DeleteReplay) => self.delete_selected_replay(),
             // The AI PILOTS page's own two actions - see `super::pilot_editor`.
             menu::MenuEvent::Fired(menu::Action::SavePilot) => self.save_pilot(),
             menu::MenuEvent::Fired(menu::Action::NewPilot) => self.new_pilot(),
@@ -1114,6 +1125,10 @@ impl Session {
             &oag_game::mods::choices(&shell.mods, &shell.strings),
         );
         oag_game::mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
+        // The files are read each time the menus open, so a race that ended a moment ago is on
+        // the REPLAYS page.
+        let replays = self.replay_choices(shell);
+        model.supply(menu::ValueSource::Replays, &replays);
         self.seed_menu(&mut model, shell.title, shell.platform);
         self.resolve_menu_queries(&mut model);
         settings::supply_reset(

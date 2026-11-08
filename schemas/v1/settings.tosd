@@ -480,6 +480,14 @@ type = "array"
 itemtype = "string"
 optional = true
 
+# [replay]: whether a race is recorded for the REPLAYS page. On unless turned off.
+[types.replay]
+type = "table"
+
+[types.replay.record]
+type = "boolean"
+optional = true
+
 # [dev]: developer switches, read in debug builds only.
 [types.dev]
 type = "table"
@@ -545,6 +553,10 @@ optional = true
 
 [elements.mods]
 type = "types.mods"
+optional = true
+
+[elements.replay]
+type = "types.replay"
 optional = true
 
 [elements.mod_settings]

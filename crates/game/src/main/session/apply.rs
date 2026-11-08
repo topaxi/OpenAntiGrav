@@ -874,6 +874,8 @@ impl Session {
                 self.resupply_mod_switch();
                 return;
             }
+            // The REPLAY row moves the detail lines; nothing is stored.
+            oag_game::replays::page::SELECTED => return,
             // Saved by the switch itself, into `[mods] disabled`, and rebuilt live.
             oag_game::mods::ENABLED => {
                 self.switch_selected_mod(text == "on");

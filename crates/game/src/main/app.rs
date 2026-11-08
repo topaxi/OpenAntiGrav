@@ -524,6 +524,11 @@ impl App {
             stutter: Default::default(),
             pause: oag_game::pause::State::Running,
             photo: None,
+            replay_list: Vec::new(),
+            replay_refused: std::collections::BTreeMap::new(),
+            watching: None,
+            viewer: None,
+            return_to_replays: false,
             rumbler: None,
             wall: 0.0,
             go_at: None,
@@ -1078,6 +1083,7 @@ impl ApplicationHandler for App {
             session.controls.silence_motors();
             session.save_race_music();
             session.keep_campaign_position();
+            session.keep_replays();
         }
         oag_game::records::finish_background_saves();
     }

@@ -90,6 +90,14 @@ pub enum Action {
     /// The pause menu's QUIT RACE row: leaves the parked race for the front end, or for the
     /// campaign cell it was launched from.
     QuitRace,
+    /// The REPLAYS page's WATCH row: opens the replay the REPLAY row is on in the viewer
+    /// (`crate::main::session::replays` in `oag-game`).
+    WatchReplay,
+    /// The REPLAYS page's KEEP row: copies an automatic replay into the player's own folder,
+    /// where the ring never reaches it.
+    KeepReplay,
+    /// The REPLAYS page's DELETE row: removes the replay the REPLAY row is on.
+    DeleteReplay,
 }
 
 impl Action {
@@ -116,6 +124,9 @@ impl Action {
             Self::PhotoMode => "photo_mode",
             Self::RestartRace => "restart_race",
             Self::QuitRace => "quit_race",
+            Self::WatchReplay => "watch_replay",
+            Self::KeepReplay => "keep_replay",
+            Self::DeleteReplay => "delete_replay",
         }
     }
 
@@ -153,13 +164,16 @@ impl Action {
             "photo_mode" => Some(Self::PhotoMode),
             "restart_race" => Some(Self::RestartRace),
             "quit_race" => Some(Self::QuitRace),
+            "watch_replay" => Some(Self::WatchReplay),
+            "keep_replay" => Some(Self::KeepReplay),
+            "delete_replay" => Some(Self::DeleteReplay),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 19] {
+    pub fn all() -> [Self; 22] {
         [
             Self::LaunchRace,
             Self::Quit,
@@ -180,6 +194,9 @@ impl Action {
             Self::PhotoMode,
             Self::RestartRace,
             Self::QuitRace,
+            Self::WatchReplay,
+            Self::KeepReplay,
+            Self::DeleteReplay,
         ]
     }
 }
@@ -378,6 +395,9 @@ pub enum ValueSource {
     /// A template row that expands to one row per music source
     /// ([`super::Definition::expand_rows`]; `oag_sound::pool`). Never supplied as a list.
     MusicPool,
+    /// The recorded races under the data directory, `saved/` then `auto/`, newest first: the
+    /// REPLAYS page's REPLAY row, whose detail lines are the file's (`oag_game::replays`).
+    Replays,
 }
 
 impl ValueSource {
@@ -422,6 +442,7 @@ impl ValueSource {
             Self::Mods => "mods",
             Self::ModSwitch => "mod_switch",
             Self::MusicPool => "music_pool",
+            Self::Replays => "replays",
         }
     }
 
@@ -457,6 +478,7 @@ impl ValueSource {
             "mods" => Some(Self::Mods),
             "mod_switch" => Some(Self::ModSwitch),
             "music_pool" => Some(Self::MusicPool),
+            "replays" => Some(Self::Replays),
             _ => None,
         }
     }

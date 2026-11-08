@@ -558,6 +558,28 @@ impl Session {
                 stored.track.clone_from(&options.track);
             }
         }
+        // The speed plans start learning on the load thread, beside the scene build, unless
+        // something will change who flies which craft: a network host's race
+        // (`NetPlay::begin_join`) or split seating (`split_screen::seat_for_launch`).
+        // `Race::begin_speed_plans` at the hand-over keeps the job when the race still fits it.
+        let plan_ahead = self.net.is_none()
+            && self.split_lobby.is_none()
+            && self.controls.assignment().humans().is_none();
+        self.start_race_loading(options, options_mode, options_track, plan_ahead)
+    }
+
+    /// The loading screen for `options` and the worker that reads the circuit: the half of a
+    /// launch that is the same for a race a player set up and a recording being watched.
+    ///
+    /// `options_track` is the track file the launch was asked for, before a remix routed it
+    /// anywhere; the loading screen is its own.
+    pub(crate) fn start_race_loading(
+        &mut self,
+        options: oag_raceplay::Options,
+        options_mode: oag_race::Mode,
+        options_track: Option<std::path::PathBuf>,
+        plan_ahead: bool,
+    ) -> Result<()> {
         // The RACE page's own row for this circuit, which is the disc's
         // localised name rather than the `PI_Track` id - see
         // `oag_raceplay::catalogue::label`. `None` on a run whose source offered
@@ -600,13 +622,9 @@ impl Session {
         let sink = None;
         // A campaign event the front end asked for, or the menus' own race.
         // The speed plans start learning on the load thread, beside the scene
-        // build, unless something below will change who flies which craft: a
-        // network host's race (`NetPlay::begin_join`) or split seating
-        // (`split_screen::seat_for_launch`). `Race::begin_speed_plans` at the
+        // build, when `plan_ahead` (nothing will change who flies which craft: not a
+        // network host's race, not split seating): `Race::begin_speed_plans` at the
         // hand-over keeps the job when the race still fits it.
-        let plan_ahead = self.net.is_none()
-            && self.split_lobby.is_none()
-            && self.controls.assignment().humans().is_none();
         let worker = match self.pending_event.take() {
             Some(event) => race::LoadWorker::spawn_event(options, event, label, sink, plan_ahead),
             None => race::LoadWorker::spawn(options, label, sink, plan_ahead),
@@ -738,6 +756,21 @@ impl Session {
                     if let Err(e) = net.begin_join(&mut race_stage.race, title) {
                         join_error = Some(e);
                     }
+                } else if let Some(watching) = self.watching.take() {
+                    // A recording: the viewer seats the race from the header and moves it; the
+                    // lobby, the windows and the AI choice of a launch are not its.
+                    match super::replays::open_viewer(
+                        &mut self.replay_refused,
+                        self.settings.language.as_deref(),
+                        race_stage,
+                        watching,
+                    ) {
+                        Ok(active) => {
+                            self.viewer = Some(active);
+                            self.return_to_replays = false;
+                        }
+                        Err(e) => join_error = Some(e),
+                    }
                 } else {
                     // The join screen's players: the views, the local slots and the
                     // devices on them. Drained here, with the cell, for the same
@@ -822,7 +855,14 @@ impl Session {
                     };
                     match source {
                         Some(source) => {
-                            oag_game::ai_choice::apply(&mut race_stage.race, ai_choice, source);
+                            // What the original driver was asked goes into the header, so a
+                            // rebuild of the race flies the same opponents.
+                            let (_, original) = oag_game::ai_choice::apply_noting(
+                                &mut race_stage.race,
+                                ai_choice,
+                                source,
+                            );
+                            race_stage.note_original_ai(original);
                         }
                         None => log::info!(
                             "AI: this project's driver flies (the campaign event asks for it)"
@@ -835,6 +875,11 @@ impl Session {
                     // A fork's job started on the load thread already
                     // (`plan_ahead` in `launch_race`) and is kept if it still fits.
                     race_stage.race.begin_speed_plans();
+                    // After everything above that writes to the race, so the recording's
+                    // tick-zero hash is the one a rebuild from its header must reproduce.
+                    if self.settings.replay.record && oag_game::replays::SAVES {
+                        race_stage.arm_auto_replay();
+                    }
                 }
             }
             if let Some(e) = join_error {
@@ -863,6 +908,10 @@ impl Session {
         match loaded {
             Ok(loaded) => {
                 oag_raceplay::loader_log::lines(&loaded.report);
+                // The viewer's timeline starts its own race from the same setup.
+                if let Some(watching) = self.watching.as_mut() {
+                    watching.setup = Some(loaded.setup.clone());
+                }
                 let request = crate::race_build::Request {
                     gpu: self.gpu.handles(),
                     allocation: self.framebuffer.allocation(),
@@ -959,7 +1008,12 @@ impl Session {
                 // Begun here, at the hand-over, so no frame is drawn with the chase camera and
                 // the HUD before the flyby's first tick. A race resumed from the menus
                 // (`escape.rs`) is not a new one and does not come through here.
-                if !self.no_intro && self.net.is_none() && race_stage.race.begin_intro() {
+                // A recording being watched has no flyby: the viewer owns the camera from tick 0.
+                if !self.no_intro
+                    && self.net.is_none()
+                    && self.viewer.is_none()
+                    && race_stage.race.begin_intro()
+                {
                     oag_game::sound::prepare_intro_voice(
                         &mut self.audio,
                         &self.music_discs,
@@ -970,6 +1024,10 @@ impl Session {
             }
             Err(RaceBuildError::Load(e)) => {
                 error!("cannot start a race: {e:#}");
+                // A recording that would not load is listed dimmed with why.
+                if let Some(watching) = self.watching.take() {
+                    self.replay_refused.insert(watching.path, format!("{e:#}"));
+                }
                 return self.open_menus();
             }
             Err(RaceBuildError::Gpu(e)) => return Err(e),

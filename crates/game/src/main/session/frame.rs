@@ -384,6 +384,13 @@ impl Session {
             // which is what persists the choice across a restart. Before the tick
             // rather than after, so the frame this tick produces is already drawn
             // from the new view.
+            // A recording being watched owns the devices and the race, and nothing the loop does
+            // for a race that is driven applies to it: not the pause, not the end screens, not
+            // a record or a ghost.
+            if self.viewer.is_some() && matches!(self.stage, Stage::Race(_)) {
+                self.tick_viewer(&pointer);
+                continue;
+            }
             // Photo mode first: while it is open it owns the devices and the race stands
             // still, and what it leaves (a press it spent, a leave) is settled before the
             // blocks below read the pad.
