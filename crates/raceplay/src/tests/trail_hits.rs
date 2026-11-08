@@ -242,7 +242,11 @@ fn a_field_warm_up_leaves_a_live_burst_on_a_craft_tucked_in_a_ribbon() {
     race.sim.world.ships[1].physics.body.position = Vec3::new(-8.0, 0.0, 0.0);
     let velocities = [Vec3::new(60.0, 0.0, 0.0); 2];
     race.warm_up_field(&velocities, 120, None);
-    assert_ne!(race.view.trail_inside[0] & 0b10, 0, "the tucked craft is inside");
+    assert_ne!(
+        race.view.trail_inside[0] & 0b10,
+        0,
+        "the tucked craft is inside"
+    );
     let mean = particles_mean_x(&race).expect("the warm-up left no live burst");
     // Carried at half the craft's speed, a burst's older particles trail the craft that left
     // them: behind -8, by a fraction of a second's slip, and nowhere near the owner at 0.
