@@ -301,7 +301,7 @@ pub struct Controls {
     /// without the shoulder or CROSS a trigger raises, so L2 is not L1 there
     /// ([`Self::view_take`], [`view`]). One per tick, for the keyboard's slot.
     view_buttons: Input,
-    /// The right stick, the left stick on its own and the triggers, for the same screens.
+    /// The right stick and the triggers, for the same screens.
     view: view::ViewReading,
     /// A pad that is not there, for a run with no device (`--drive`, a test): read like a real
     /// one, its triggers raising their buttons in the snapshot as a trigger does.
@@ -960,7 +960,7 @@ impl Controls {
         .sanitised()
     }
 
-    /// What the right stick, the pad's left stick and the triggers read at the last
+    /// What the right stick and the triggers read at the last
     /// [`Self::player_snapshots`]. View-side only: nothing here is in an
     /// [`InputSnapshot`].
     #[must_use]

@@ -83,18 +83,15 @@ pub enum Lens {
 /// has. The stick (or the arrow keys) orbits `close` and zooms `track`; with
 /// [`Self::select`] held it zooms (up and down) and tilts (left and right); with
 /// [`Self::square`] held it pans. Either button pressed and released without moving the
-/// stick is a tap: SELECT changes the lens, SQUARE the HUD. A pad's two sticks are the layout
-/// ADR-0088 names, [`roles`]: the right orbits, the left pans and zooms.
+/// stick is a tap: SELECT changes the lens, SQUARE the HUD. A pad's left stick is that stick; its
+/// right stick zooms and tilts ([`roles`]).
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Pad {
     /// The stick, `x` right and `y` up, each in `-1..=1`: the arrow keys and the d-pad, and the
     /// whole snapshot stick where no pad is attached.
     pub stick: (f32, f32),
-    /// A pad's own left stick, apart from [`Self::stick`]. On `close` it pans (left and right)
-    /// and zooms (up and down).
-    pub left: (f32, f32),
-    /// The right stick: it orbits `close`.
-    pub orbit: (f32, f32),
+    /// The right stick: up and down zoom, left and right tilt, on `close` and `track`.
+    pub right: (f32, f32),
     /// SELECT is down.
     pub select: bool,
     /// SQUARE is down.
@@ -468,10 +465,7 @@ impl Photo {
             self.step_subject(true, live);
         }
         if self.panel {
-            self.push((
-                crate::photo::larger(pad.stick.0, pad.left.0),
-                crate::photo::larger(pad.stick.1, pad.left.1),
-            ));
+            self.push(pad.stick);
         } else {
             self.drive(pad);
         }
@@ -516,7 +510,7 @@ impl Photo {
     /// What the sticks do under the buttons held.
     fn drive(&mut self, pad: Pad) {
         let used = |(x, y): (f32, f32)| x.abs() > f32::EPSILON || y.abs() > f32::EPSILON;
-        let moved = used(pad.stick) || used(pad.left);
+        let moved = used(pad.stick);
         if moved && pad.select {
             self.select_used = true;
         }
@@ -609,11 +603,12 @@ impl Photo {
 }
 
 /// What the sticks mean on a lens, per tick at full deflection: the one place a stick is given a
-/// role. **Chosen, not measured** (ADR-0088: the right stick orbits and the left pans and zooms;
-/// HD's measured layout is the left stick orbiting and the right stick's Y zooming,
-/// `docs/ghidra/functions/ps3-hdfury-eu/photo-mode.md`). The arrow keys and the d-pad keep the
-/// one-stick fold they always had: they orbit, and SELECT or SQUARE held turn them into zoom and
-/// tilt, or pan.
+/// role. HD's measured layout (`docs/ghidra/functions/ps3-hdfury-eu/photo-mode.md`, "Controls"):
+/// the left stick, the arrow keys and the d-pad orbit `close` and, with SQUARE held, pan it; the
+/// right stick's vertical axis zooms. **Chosen, not measured:** the right stick's horizontal axis
+/// tilts (HD tilts on L2 and R2, which scrub the rewind row here), SELECT held turns the left
+/// stick into zoom and tilt for a pad with no right stick, and `track` zooms and tilts on the
+/// left stick too.
 struct Roles {
     /// Yaw (left and right) and pitch (up and down).
     orbit: (f32, f32),
@@ -634,30 +629,15 @@ fn roles(pad: Pad, lens: Lens) -> Roles {
         tilt: 0.0,
     };
     match lens {
-        Lens::Internal => {}
+        Lens::Internal => return roles,
         Lens::Close if pad.square => roles.pan = (x, y),
         Lens::Close if pad.select => (roles.zoom, roles.tilt) = (y, x),
         Lens::Close => roles.orbit = (x, y),
         Lens::Track => (roles.zoom, roles.tilt) = (y, x),
     }
-    match lens {
-        Lens::Internal => {}
-        Lens::Close => {
-            roles.orbit = (roles.orbit.0 + pad.orbit.0, roles.orbit.1 + pad.orbit.1);
-            roles.pan.0 += pad.left.0;
-            roles.zoom += pad.left.1;
-        }
-        Lens::Track => {
-            roles.zoom += pad.left.1;
-            roles.tilt += pad.left.0;
-        }
-    }
+    roles.zoom += pad.right.1;
+    roles.tilt += pad.right.0;
     roles
-}
-
-/// Whichever is further from centre, sign kept.
-fn larger(a: f32, b: f32) -> f32 {
-    if b.abs() > a.abs() { b } else { a }
 }
 
 /// The craft before or after `current` among `live` (the grid slots still in the race, in

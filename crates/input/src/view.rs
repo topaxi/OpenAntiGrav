@@ -1,6 +1,5 @@
-//! What the screens that only look at a race read off the devices: the right stick, the
-//! analogue triggers and a pad's own left stick, none of which reach
-//! [`oag_gameplay::InputSnapshot`].
+//! What the screens that only look at a race read off the devices: the right stick and the
+//! analogue triggers, none of which reach [`oag_gameplay::InputSnapshot`].
 //!
 //! The replay viewer and photo mode are view-side (ADR-0088, "The binding plan"). A trigger
 //! there is an analogue read taken **before** [`crate::pad::resolve`] turns a pull into a button,
@@ -18,16 +17,13 @@ pub const PLAY_PULL: f32 = 0.9;
 pub struct ViewRaw {
     /// Right stick, right and up positive.
     pub right: (f32, f32),
-    /// A pad's own left stick, apart from the arrow keys and the d-pad the snapshot's stick merges
-    /// it with.
+    /// The left stick of a pad that is injected (`Controls::inject_pad`): a real pad's left stick
+    /// is the snapshot's stick and is not read here.
     pub left: (f32, f32),
     /// L2, 0 to 1.
     pub l2: f32,
     /// R2, 0 to 1.
     pub r2: f32,
-    /// A real pad (or an injected one) is speaking, so `left` is the left stick and the arrow
-    /// keys are not.
-    pub pad: bool,
 }
 
 impl ViewRaw {
@@ -45,7 +41,6 @@ impl ViewRaw {
             ),
             l2: self.l2.max(other.l2),
             r2: self.r2.max(other.r2),
-            pad: self.pad || other.pad,
         }
     }
 
@@ -55,10 +50,8 @@ impl ViewRaw {
     pub fn read(self, config: TriggerConfig) -> ViewReading {
         ViewReading {
             right: (deadzone(self.right.0), deadzone(self.right.1)),
-            left: (deadzone(self.left.0), deadzone(self.left.1)),
             l2: condition(self.l2, config.curve()),
             r2: condition(self.r2, config.curve()),
-            pad: self.pad,
         }
     }
 }
@@ -68,14 +61,10 @@ impl ViewRaw {
 pub struct ViewReading {
     /// Right stick.
     pub right: (f32, f32),
-    /// The pad's left stick.
-    pub left: (f32, f32),
     /// L2, 0 to 1.
     pub l2: f32,
     /// R2, 0 to 1.
     pub r2: f32,
-    /// See [`ViewRaw::pad`].
-    pub pad: bool,
 }
 
 #[cfg(test)]

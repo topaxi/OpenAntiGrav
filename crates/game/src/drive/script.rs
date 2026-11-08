@@ -11,7 +11,7 @@
 //! set race.mode=time_trial         select that row, then step its value until it reads so
 //! press cross down                 tap each button in turn
 //! hold select left 40              hold every button down together for this many ticks
-//! rstick 1 0 30                    a pad's right stick (x y), held for this many ticks; `lstick` is the left
+//! rstick 1 0 30                    a pad's right stick (x y), held for this many ticks; `lstick` is the left, which flies and steers
 //! pull r2 0.6 30                   a pad's trigger (`l2` or `r2`) pulled this far, for this many ticks
 //! escape                           the Escape key (a race: the pause menu's way out)
 //! ticks 120                        let this many ticks pass
@@ -326,7 +326,6 @@ impl Script {
                 };
                 let stick = (axis(x)?, axis(y)?);
                 let mut pad = oag_input::view::ViewRaw {
-                    pad: true,
                     ..oag_input::view::ViewRaw::default()
                 };
                 if verb == "rstick" {
@@ -351,7 +350,6 @@ impl Script {
                     .filter(|v| (0.0..=1.0).contains(v))
                     .ok_or_else(|| format!("{amount:?} is not a pull from 0 to 1"))?;
                 let mut pad = oag_input::view::ViewRaw {
-                    pad: true,
                     ..oag_input::view::ViewRaw::default()
                 };
                 match which.to_ascii_lowercase().as_str() {

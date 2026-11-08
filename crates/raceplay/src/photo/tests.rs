@@ -478,65 +478,64 @@ fn letting_go_of_the_button_that_opened_the_mode_is_not_a_tap() {
 }
 
 #[test]
-fn the_right_stick_orbits_close_as_the_arrows_do_and_the_arrows_still_orbit() {
-    let mut arrows = on_close();
-    let mut right = on_close();
-    for _ in 0..20 {
-        arrows.step(stick(0.5, -0.3), &[0]);
-        right.step(
-            Pad {
-                orbit: (0.5, -0.3),
-                ..Pad::default()
-            },
-            &[0],
-        );
-    }
-    assert_ne!(arrows.orbit(), (0.0, 0.0), "the arrows orbit");
-    assert_eq!(right.orbit(), arrows.orbit(), "and so does the right stick");
-}
-
-#[test]
-fn the_left_stick_pans_across_and_zooms_up_and_down_and_does_not_orbit() {
+fn the_right_stick_zooms_up_and_down_and_tilts_left_and_right_and_does_not_orbit() {
     let mut photo = on_close();
     for _ in 0..10 {
         photo.step(
             Pad {
-                left: (1.0, 1.0),
+                right: (1.0, 1.0),
                 ..Pad::default()
             },
             &[0],
         );
     }
-    assert!(photo.pan().0 > 0.0, "across: {:?}", photo.pan());
-    assert_eq!(photo.pan().1, 0.0);
     assert!(photo.fov() < CLOSE_FOV.2, "up zooms in: {}", photo.fov());
+    assert!(photo.tilt() > 0.0, "right tilts: {}", photo.tilt());
     assert_eq!(photo.orbit(), (0.0, 0.0));
+    assert_eq!(photo.pan(), (0.0, 0.0));
 }
 
 #[test]
-fn the_right_stick_does_nothing_on_the_internal_lens() {
-    let mut photo = Photo::new(0, false, None);
-    photo.step(
+fn the_right_stick_zooms_and_tilts_the_track_lens_and_does_nothing_on_the_internal_one() {
+    let mut track = Photo::new(0, true, None);
+    track.cycle_lens();
+    track.cycle_lens();
+    assert_eq!(track.lens(), Lens::Track);
+    track.step(
         Pad {
-            orbit: (1.0, 1.0),
+            right: (0.5, 1.0),
             ..Pad::default()
         },
         &[0],
     );
-    assert_eq!(photo.orbit(), (0.0, 0.0));
+    assert!(track.fov() < TRACK_FOV.2);
+    assert!(track.tilt() > 0.0);
+    let mut internal = Photo::new(0, false, None);
+    internal.step(
+        Pad {
+            right: (1.0, 1.0),
+            ..Pad::default()
+        },
+        &[0],
+    );
+    assert_eq!(
+        (internal.tilt(), internal.fov()),
+        (0.0, Photo::new(0, false, None).fov())
+    );
 }
 
 #[test]
-fn a_stick_moved_with_square_held_is_not_a_hud_tap_on_the_left_stick_either() {
+fn a_stick_moved_with_square_held_pans_and_is_not_a_hud_tap() {
     let mut photo = on_close();
     let down = Pad {
         square: true,
-        left: (1.0, 0.0),
+        stick: (1.0, 0.0),
         ..Pad::default()
     };
     photo.step(down, &[0]);
     photo.step(Pad::default(), &[0]);
     assert!(!photo.hud(), "the stick used SQUARE as a modifier");
+    assert!(photo.pan().0 > 0.0, "and panned");
 }
 
 #[test]

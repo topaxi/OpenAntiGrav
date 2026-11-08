@@ -7,7 +7,6 @@ fn pulled(l2: f32, r2: f32) -> ViewRaw {
     ViewRaw {
         l2,
         r2,
-        pad: true,
         ..ViewRaw::default()
     }
 }
@@ -66,7 +65,6 @@ fn the_right_stick_is_not_in_the_snapshot() {
         controls.inject_pad(ViewRaw {
             right,
             left: (0.5, -0.25),
-            pad: true,
             ..ViewRaw::default()
         });
         let inputs = controls.player_snapshots();

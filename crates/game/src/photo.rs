@@ -484,7 +484,7 @@ pub fn draw_list(
         lines.push(say(strings::PANEL_KEYS));
     } else {
         lines.extend(lens_lines(photo, say, button));
-        if photo.lens() == Lens::Close {
+        if photo.lens() != Lens::Internal {
             lines.push(say(strings::PAD_KEYS));
         }
     }

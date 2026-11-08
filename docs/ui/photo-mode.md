@@ -205,9 +205,8 @@ number it is not: single frames spread 3.7 to 12.6 ms).
 
 | Input | Does |
 | --- | --- |
-| stick, arrow keys, d-pad | orbit `close` (yaw and pitch, each free, wrapped at +-2 pi, 0.05 rad a tick: HD's law); zoom and tilt `track` |
-| right stick (a pad) | `close`: orbit, as the arrows do |
-| left stick (a pad) | `close`: pan across (left and right) and zoom (up and down); `track`: zoom and tilt, as the arrows |
+| left stick, arrow keys, d-pad | orbit `close` (yaw and pitch, each free, wrapped at +-2 pi, 0.05 rad a tick: HD's law); zoom and tilt `track` |
+| right stick (a pad) | `close` and `track`: up and down zoom, left and right tilt (HD's right stick is zoom; the tilt on its X axis is chosen) |
 | SELECT held + stick | `close`: zoom (up and down, field 10 to 100 from 65) and tilt (left and right) |
 | SQUARE held + stick | `close`: pan, +-5 |
 | SELECT tap | next lens |
@@ -224,16 +223,16 @@ click with the help hidden shows it. A chip says its row and its value, and the 
 row's word is too long for it (Pulse's own `PHOTO CAMERA MODE`). Not ported: HD's separate tilt triggers (L2, R2 scrub the rewind row here), the touch gestures
 of 2048 (a follow-up).
 
-**The two-stick layout, chosen, not measured** ([ADR-0088](../architecture/adr/0088-the-replay-viewer-and-photo-mode-switch-both-ways.md),
-"The binding plan"): the right stick orbits, the left stick pans and zooms. **It is not HD's measured layout**
-(`docs/ghidra/functions/ps3-hdfury-eu/photo-mode.md`, "Controls": there the left stick orbits, SQUARE with the left stick
-pans and the right stick's Y zooms; the ADR calls the reverse "HD's layout"). The roles live in one function
-(`oag_raceplay::photo::roles`), so taking HD's is one edit. The arrow keys and the d-pad keep the one-stick fold above
-(they orbit; SELECT and SQUARE turn them into zoom and tilt, or pan), so a keyboard player loses nothing and a pad player
-with a keyboard on the desk can still orbit with the arrows. Where no pad is attached the whole snapshot stick is that
-fold. The sticks do not move the camera while the effects panel is up, as before.
+**The stick layout is HD's measured one** (`docs/ghidra/functions/ps3-hdfury-eu/photo-mode.md`, "Controls": the left stick
+orbits, SQUARE held with it pans, the right stick's Y zooms). **ADR-0088's binding plan misnames a different layout as
+HD's** ("the right stick orbits and the left stick pans and zooms"); the layout above, the measured one, is what is built,
+at the maintainer's direction. **Chosen, not measured, and different from HD:** the right stick's X axis tilts (HD has no
+such binding; it tilts on L2 and R2, which scrub the rewind row here per ADR-0088), and SELECT held still turns the left
+stick or the arrows into zoom and tilt for a pad with no right stick. The roles live in one function
+(`oag_raceplay::photo::roles`). A left stick and the arrows are the one snapshot stick, so a keyboard player and a pad player
+share the fold. The sticks do not move the camera while the effects panel is up, as before.
 
-**View-side only** (`oag_input::view`): the right stick, the left stick on its own and the triggers' travel are read
+**View-side only** (`oag_input::view`): the right stick and the triggers' travel are read
 from the devices into `Controls::view()`, never into the snapshot a craft is flown from. A trigger is read **before**
 `resolve` makes a button of it, so L2 is not L1 (under `airbrakes` a trigger past the threshold sets its shoulder's bit)
 and R2 is not CROSS (under `thrust_brake`) on these screens: `Controls::view_take` reads the buttons a device raised

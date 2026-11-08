@@ -1002,13 +1002,9 @@ impl Pad {
                         pad.value(gilrs::Axis::RightStickX),
                         pad.value(gilrs::Axis::RightStickY),
                     ),
-                    left: (
-                        pad.value(gilrs::Axis::LeftStickX),
-                        pad.value(gilrs::Axis::LeftStickY),
-                    ),
+                    left: (0.0, 0.0),
                     l2: analog(&pad, gilrs::Button::LeftTrigger2),
                     r2: analog(&pad, gilrs::Button::RightTrigger2),
-                    pad: true,
                 });
             }
         }

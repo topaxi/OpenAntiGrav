@@ -1034,7 +1034,7 @@ fn the_recording(run: &Run) -> Vec<u8> {
     std::fs::read(&files[0]).expect("the recording")
 }
 
-/// ADR-0088: on the new keys photo mode's right stick orbits, its left stick pans and zooms, L1
+/// ADR-0088 with HD's measured stick layout: photo mode's left stick orbits (SQUARE with it pans), the right stick zooms and tilts, L1
 /// and R1 change the craft, L2 and R2 scrub the REWIND row and never change the craft (under the
 /// default trigger mode a pulled trigger also raises its shoulder's button in the snapshot), a
 /// full pull of R2 is PLAY. None of it reaches the simulation: every live tick hashes as the same
@@ -1065,8 +1065,8 @@ fn the_right_stick_and_the_triggers_move_the_view_and_never_the_race() {
              until photo=internal within 200; \
              press r; ticks 3; screenshot SHOTS/craft-1.png; press l; ticks 3; press r; ticks 3; press r; ticks 3; \
              press l; ticks 3; press l; ticks 3; \
-             press select; ticks 5; rstick 1 -0.5 40; ticks 3; screenshot SHOTS/orbited.png; \
-             lstick 1 1 20; ticks 3; \
+             press select; ticks 5; rstick 1 1 40; ticks 3; screenshot SHOTS/zoomed.png; \
+             lstick 1 -0.5 40; ticks 3; screenshot SHOTS/orbited.png; hold square left 20; ticks 3; \
              pull l2 0.8 8; ticks 3; pull r2 0.5 4; ticks 3; \
              pull r2 1.0 3; ticks 60; screenshot SHOTS/playing.png; pull l2 0.4 3; ticks 3; \
              escape; until photo=none within 50; ticks 500"
@@ -1101,21 +1101,30 @@ fn the_right_stick_and_the_triggers_move_the_view_and_never_the_race() {
         "{after_the_cycling} craft changes and then the triggers pulled: the subject stayed {last}"
     );
 
-    // The right stick orbited, the left stick panned and zoomed.
+    // The left stick orbited (HD's layout), SQUARE with it panned, the right stick zoomed and
+    // tilted.
     let orbit = fx_values(&visited, "orbit");
-    let turned = orbit.iter().filter(|o| o.as_str() != "0.00,0.00").count();
-    assert!(turned > 0, "the right stick never orbited: {orbit:?}");
+    assert!(
+        orbit.iter().any(|o| o.as_str() != "0.00,0.00"),
+        "the left stick never orbited: {orbit:?}"
+    );
     assert!(
         fx_values(&visited, "pan")
             .iter()
             .any(|p| !p.starts_with("0.00,")),
-        "the left stick never panned"
+        "SQUARE with the stick never panned"
     );
     assert!(
         fx_values(&visited, "fov")
             .iter()
             .any(|f| f.parse::<f32>().is_ok_and(|f| f < 65.0)),
-        "the left stick never zoomed"
+        "the right stick never zoomed"
+    );
+    assert!(
+        fx_values(&visited, "tilt")
+            .iter()
+            .any(|t| t.parse::<f32>().is_ok_and(|t| t.abs() > 0.1)),
+        "the right stick never tilted"
     );
 
     // L2 scrubbed back, R2 on, and a full pull played.

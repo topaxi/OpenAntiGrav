@@ -25,9 +25,9 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
   **The binding lane landed** (`replay-photo-bindings`, ADR-0088's plan; [photo mode](../../docs/ui/photo-mode.md), "Controls",
   and [replays](../../docs/ui/replays.md)): L1/R1 previous and next craft on both screens (the viewer follows it through
   `Race::set_seat`, view-only), SQUARE the HUD in the viewer, L2/R2 a view-side scrub (photo mode: a full R2 is PLAY),
-  the right stick read view-side (photo mode orbits, the viewer jogs), none of it in `InputSnapshot`. **Open:** the layout the
-  ADR calls HD's (right stick orbits, left pans and zooms) is the reverse of what the HD page measured (left orbits, right Y
-  zooms); it was built as the ADR says, in one function (`oag_raceplay::photo::roles`), and the maintainer may want HD's.
+  the right stick read view-side (photo mode zooms and tilts, the viewer jogs), none of it in `InputSnapshot`. **ADR-0088
+  misnames the stick layout as HD's** (right orbits, left pans and zooms); HD's measured layout is built (left stick and arrows
+  orbit, SQUARE pans, right stick Y zooms; right stick X tilt is chosen), in one function (`oag_raceplay::photo::roles`).
   The scrub speeds, the jog and PLAY on a full R2 are chosen. A scrub seeks every frame, so a held trigger runs at the seek's
   cost. Not run on a real pad (the right stick and triggers are injected by `--drive`: `rstick`, `lstick`, `pull`).
 - **A rewind whose pre-roll starts from the first keyframe hashes differently from the live run** (landing at 101 with

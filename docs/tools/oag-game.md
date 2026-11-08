@@ -204,7 +204,7 @@ sends the state lines to a file, stderr otherwise. `--drive` needs one disc imag
 | `set <setting>=<value> [within N]` | `select` the row of that setting, then step it right until it reads the value (its stored value, its label, or for a file the file name). An option the row lists but marks unusable (the custom-track check is still running) is waited for, then the step times out naming why. |
 | `press <button> ...` | Tap each in turn: held one tick, released the next. Waits out a page transition first. |
 | `hold <button> ... N` | Hold every named button down together for N ticks, then let go: `hold left 60` turns photo mode's camera, `hold select up 30` zooms it. |
-| `rstick <x> <y> N`, `lstick <x> <y> N` | A pad that is not there: its right (or left) stick held at `x y` (`-1` to `1`, up positive) for N ticks, then let go. The right stick is view-side only (photo mode's orbit); the left reads beside the arrow keys. |
+| `rstick <x> <y> N`, `lstick <x> <y> N` | A pad that is not there: its right (or left) stick held at `x y` (`-1` to `1`, up positive) for N ticks, then let go. The right stick is view-side only (photo mode zooms and tilts with it, the viewer jogs); the left is the snapshot stick, as a real pad's. |
 | `pull <l2\|r2> <amount> N` | A trigger pulled `amount` (`0` to `1`) for N ticks. It raises its shoulder's (or, under `thrust_brake`, CROSS's) button in the race's snapshot as a real trigger does, and the replay viewer and photo mode read it apart from the buttons: L2 and R2 scrub, a full R2 is PLAY in photo mode. |
 | `ticks N` | Let N ticks pass. |
 | `screenshot <path>` | Draw the next frame offscreen through the window's own draw and write a PNG. The only step that draws. |

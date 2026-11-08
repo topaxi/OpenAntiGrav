@@ -355,7 +355,7 @@ OAG_REPLAY_CRAFT = { text = "SCHIFF", human = false }
 OAG_REPLAY_HUD = { text = "HUD", human = false }
 OAG_REPLAY_SCRUB = { text = "SPULEN", human = false }
 OAG_REPLAY_JOG = { text = "TIPPEN", human = false }
-OAG_PHOTO_PAD_KEYS = { text = "RECHTER STICK DREHEN    LINKER STICK VERSCHIEBEN, ZOOM", human = false }
+OAG_PHOTO_PAD_KEYS = { text = "RECHTER STICK HOCH RUNTER ZOOM    LINKS RECHTS NEIGUNG", human = false }
 OAG_PHOTO_SCRUB_KEYS = { text = "L2 / R2 SPULEN    R2 GANZ DURCH ABSPIELEN", human = false }
 OAG_PHOTO_REWIND = { text = "ZURÜCKSPULEN", human = false }
 OAG_PHOTO_MOTION_BLUR = { text = "BEWEGUNGSUNSCHÄRFE", human = false }

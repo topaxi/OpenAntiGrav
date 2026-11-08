@@ -353,7 +353,7 @@ OAG_REPLAY_CRAFT = { text = "NAVE", human = false }
 OAG_REPLAY_HUD = { text = "HUD", human = false }
 OAG_REPLAY_SCRUB = { text = "NAVEGAR", human = false }
 OAG_REPLAY_JOG = { text = "AJUSTAR", human = false }
-OAG_PHOTO_PAD_KEYS = { text = "ANALÓGICO DIREITO GIRAR    ANALÓGICO ESQUERDO DESLOCAR, ZOOM", human = false }
+OAG_PHOTO_PAD_KEYS = { text = "ANALÓGICO DIREITO CIMA BAIXO ZOOM    ESQUERDA DIREITA INCLINAR", human = false }
 OAG_PHOTO_SCRUB_KEYS = { text = "L2 / R2 NAVEGAR    R2 TOTAL REPRODUZIR", human = false }
 OAG_PHOTO_REWIND = { text = "VOLTAR NO TEMPO", human = false }
 OAG_PHOTO_PLAY = { text = "REPRODUZIR", human = false }

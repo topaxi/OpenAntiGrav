@@ -232,23 +232,9 @@ impl super::Session {
         let grid = super::pointer::in_grid(*pointer, space, rect, 1.0);
         let controls = &mut self.controls;
         let view = controls.view();
-        // The arrow keys and the d-pad keep the one-stick fold; a pad's own left stick is read
-        // apart from them (and the whole snapshot stick is the stick where no pad is attached).
-        let axis = |positive: Button, negative: Button, controls: &oag_input::Controls| {
-            f32::from(i8::from(controls.view_held(positive)) - i8::from(controls.view_held(negative)))
-        };
-        let stick = if view.pad {
-            (
-                axis(Button::Right, Button::Left, controls),
-                axis(Button::Up, Button::Down, controls),
-            )
-        } else {
-            (input.stick_x, input.stick_y)
-        };
         let mut pad = Pad {
-            stick,
-            left: view.left,
-            orbit: view.right,
+            stick: (input.stick_x, input.stick_y),
+            right: view.right,
             select: controls.view_held(Button::Select),
             square: controls.view_held(Button::Square),
             reset: controls.view_take(Button::Triangle),
@@ -488,9 +474,9 @@ impl super::Session {
         let photo = stage.race.photo()?;
         let effects = photo.effects();
         let (yaw, pitch) = photo.orbit();
-        let (pan, fov) = (photo.pan(), photo.fov());
+        let (pan, fov, tilt) = (photo.pan(), photo.fov(), photo.tilt());
         Some(format!(
-            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={} blur={} shutter={} rewind={} play={} orbit={yaw:.2},{pitch:.2} pan={:.2},{:.2} fov={fov:.1} subject={} hud={}",
+            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={} blur={} shutter={} rewind={} play={} orbit={yaw:.2},{pitch:.2} pan={:.2},{:.2} fov={fov:.1} tilt={tilt:.2} subject={} hud={}",
             effects.value(Row::Exposure),
             effects.value(Row::Saturation),
             effects.value(Row::SpeedBlur),
