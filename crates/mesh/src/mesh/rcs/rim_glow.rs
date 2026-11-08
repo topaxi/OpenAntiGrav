@@ -186,7 +186,9 @@ const BOMB_SHOCK: Shape = Shape {
 };
 
 /// `hd_missile_explosion_core_glow.rcsmaterial`, block `@0x17f0` (`DATA02`):
-/// the Missile blast's sphere and bloom. Earns [`slots::MISSILE_CORE`].
+/// the Missile blast's `sphere` node alone; the `bloom` node draws the light rays'
+/// program (`docs/ghidra/functions/ps3-hdfury-eu/missile-explosion.md`, "Which node draws
+/// which material"). Earns [`slots::MISSILE_CORE`].
 const MISSILE_CORE: Shape = Shape {
     bit: slots::MISSILE_CORE,
     mnemonics: &[

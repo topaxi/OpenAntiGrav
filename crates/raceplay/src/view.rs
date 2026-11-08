@@ -390,6 +390,9 @@ pub struct RaceView {
     /// Wipeout HD's Missile explosions, a pool of the original's sixteen. See
     /// [`missile_blast`].
     pub(super) hd_missile_blasts: [Option<missile_blast::MissileBlast>; missile_blast::SLOTS],
+    /// The streaks those explosions start and the pool they share, `None` where the title
+    /// draws none. See [`missile_blast::streaks`].
+    pub(super) hd_missile_streaks: Option<missile_blast::streaks::Streaks>,
     /// Whether a Missile that reaches a craft plays HD's explosion model. See
     /// `options::Setup::hd_missile_blast`.
     pub(super) hd_missile_blast: bool,

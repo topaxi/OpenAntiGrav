@@ -752,6 +752,24 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
             radius: 0.6,
             ramp: true,
         },
+        // `RibbonEffects` pool `+0x5c`, config block `0x00921050` (read from the ELF,
+        // `docs/ghidra/functions/ps3-hdfury-eu/missile-explosion.md`, "How a streak is
+        // drawn"): width `2 (1 - t)`, node life 1.2 s, alpha `1 - t`. Twenty elements; the
+        // explosion takes sixteen.
+        blast_streak: Some(oag_title::weapons::BlastStreak {
+            texture: "Data/Tex/ThickLine_bighalo.gtf",
+            line: oag_title::weapons::FatLineSpec {
+                width: [0.0, 2.0],
+                lifetime: 1.2,
+                u_per_unit: 0.2,
+                chains: 1,
+                capacity: 350,
+                phase_step: 0.06,
+                radius: 0.6,
+                ramp: false,
+            },
+            pool: 20,
+        }),
     }),
     // `leachbeam_triangle.rcsmodel`'s material names the glow and the noise;
     // the live draw binds a 128x128 on unit 0 and a 256x256 on unit 1. See

@@ -40,7 +40,7 @@ pub(super) fn load(
         rocket_smoke.as_ref().map(|assets| &assets.ramp),
         report,
     );
-    let missile_trail = missile_smoke.as_ref().and(models.missile_trail);
+    let missile_trail = missile_smoke.as_ref().map(|assets| assets.trail);
     let leach_strip = crate::leach_strip::load(archives, models, report);
     let leach_anchors = leach_strip.as_ref().map(|_| {
         let mut anchors = [None; oag_gameplay::MAX_SHIPS];

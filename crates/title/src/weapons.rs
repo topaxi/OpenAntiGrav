@@ -396,6 +396,22 @@ pub struct MissileTrail {
     pub stub: FatLineSpec,
     /// The winding element (pool `+0x68`).
     pub helix: FatLineSpec,
+    /// The Missile explosion's sixteen streaks, drawn with the same element class from a
+    /// pool of their own. `None` where the explosion's streaks are unread.
+    pub blast_streak: Option<BlastStreak>,
+}
+
+/// The Missile explosion's streak element: `RibbonEffects` pool `+0x5c`, twenty elements
+/// shared by every live explosion (`docs/ghidra/functions/ps3-hdfury-eu/missile-explosion.md`,
+/// "The sixteen entries").
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BlastStreak {
+    /// The texture the pool's config names, an archive entry name.
+    pub texture: &'static str,
+    /// The pool's config block.
+    pub line: FatLineSpec,
+    /// Elements in the pool.
+    pub pool: usize,
 }
 
 /// What HD's LeachBeam strip draws with - see [`WeaponModels::leach_strip`].

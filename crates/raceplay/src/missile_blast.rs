@@ -9,11 +9,14 @@
 //!   Confidence 70.
 //! - **The place.** The struck craft's own position (`m5`: the hit position
 //!   the entry stored was the rival's).
-//! - **The clock.** One second, the age `p` linear over it (confidence 80),
-//!   the entry freed once `p` reaches 1. The model's own keys (`sphere` and
-//!   `bloom` scaled 1 to 18 over 60 frames) run on that age, and so do the
-//!   `UV_offset` and `Shockwave_scalar` the three materials read.
+//! - **The clock.** One second, the age `p` linear over it (confidence 85),
+//!   the entry freed on the first update with `age > 1.0`
+//!   (`MissileExplosion_Update`, `0x00154a78`). The model's own keys (`sphere`,
+//!   `bloom` and `rays` scaled 1 to 18 over 60 frames) run on that age, and so do
+//!   the `UV_offset` and `Shockwave_scalar` the three materials read.
 //! - **The pool.** Sixteen entries, taken while the count is below sixteen.
+//! - **The streaks.** Each entry starts sixteen `ThickLine_bighalo` streaks from a
+//!   pool of twenty shared by all blasts (confidence 80); see [`streaks`].
 //!
 //! # What is chosen, not measured
 //!
@@ -23,13 +26,13 @@
 //!   rotationally symmetric.
 //! - **The viewport gate.** The original takes an entry per viewport the
 //!   point is visible in; this draws for the one camera.
-//! - **Not played.** The sixteen randomly rotated entries `Start` builds at
-//!   `+0x190` (confidence 45, read by nothing in the class).
 //!
 //! The point light `(1 - p)^2` is `crate::weapon_light`'s.
 
 use super::*;
 use oag_mesh::mesh_render::SpuLight;
+
+pub(crate) mod streaks;
 
 /// The original's pool size: `pool_take` enters an object while `count < 16`.
 pub(crate) const SLOTS: usize = 16;
@@ -44,6 +47,8 @@ pub(super) struct MissileBlast {
     /// The place's frame; see the module doc (chosen).
     pub(super) orientation: Quat,
     pub(super) age: f32,
+    /// The streaks this blast started; `None` where the title draws none.
+    pub(super) streaks: Option<[streaks::Streak; streaks::COUNT]>,
 }
 
 impl Race {
@@ -55,23 +60,64 @@ impl Race {
         }
         if let Some(slot) = self.view.hd_missile_blasts.iter().position(Option::is_none) {
             log::debug!("HD missile blast starts at {position:?}");
+            let streaks = self
+                .view
+                .hd_missile_streaks
+                .as_mut()
+                .map(|pool| pool.start(position, orientation));
             self.view.hd_missile_blasts[slot] = Some(MissileBlast {
                 position,
                 orientation,
                 age: 0.0,
+                streaks,
             });
         }
     }
 
-    /// Ages every live explosion and frees the ones whose age reached a second.
+    /// `MissileExplosion_Update` for every live explosion: the age advances, the entry is
+    /// freed on the first update past a second (strictly, `age > 1.0`, with no streak step
+    /// on that update), otherwise its streaks step. Then the streak pool ages, so a streak
+    /// outlives its blast by its nodes' life.
     pub(crate) fn advance_hd_missile_blasts(&mut self, dt: f32) {
         for slot in &mut self.view.hd_missile_blasts {
             let Some(blast) = slot else { continue };
             blast.age += dt;
-            if blast.age >= LIFETIME_SECONDS {
+            if blast.age > LIFETIME_SECONDS {
                 *slot = None;
+                continue;
+            }
+            if let (Some(entries), Some(pool)) = (
+                blast.streaks.as_mut(),
+                self.view.hd_missile_streaks.as_mut(),
+            ) {
+                pool.step(entries, blast.age);
             }
         }
+        if let Some(pool) = self.view.hd_missile_streaks.as_mut() {
+            pool.advance(dt);
+        }
+    }
+
+    /// Streak pool elements taken, owned by a live explosion or ageing out.
+    #[must_use]
+    pub fn missile_streaks_live(&self) -> usize {
+        self.view
+            .hd_missile_streaks
+            .as_ref()
+            .map_or(0, streaks::Streaks::live)
+    }
+
+    /// The streak pool's triangle list for a camera at `eye`. Empty where the title draws none.
+    #[must_use]
+    pub(crate) fn missile_streak_vertices(
+        &self,
+        eye: Vec3,
+        ramp: &oag_fx::rocket_smoke::OpacityRamp,
+    ) -> Vec<oag_mesh::mesh::GpuVertex> {
+        self.view
+            .hd_missile_streaks
+            .as_ref()
+            .map_or_else(Vec::new, |pool| pool.vertices(eye, ramp))
     }
 
     /// Each live explosion's point light, in slot order; see

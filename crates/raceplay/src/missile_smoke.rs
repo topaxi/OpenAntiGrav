@@ -34,7 +34,12 @@ pub const POOL: usize = 6;
 pub struct MissileSmokeAssets {
     pub texture: FlareTexture,
     pub ramp: OpacityRamp,
+    /// The title's config, with [`MissileTrail::blast_streak`] cleared where its texture
+    /// did not load.
     pub trail: MissileTrail,
+    /// The explosion's streak texture ([`MissileTrail::blast_streak`]); it loads, or
+    /// fails, apart from the ribbons' own.
+    pub streak_texture: Option<FlareTexture>,
 }
 
 /// Reads the title's [`WeaponModels::missile_trail`] texture, taking the ramp the
@@ -46,7 +51,7 @@ pub(crate) fn load(
     ramp: Option<&OpacityRamp>,
     report: &mut Vec<String>,
 ) -> Option<MissileSmokeAssets> {
-    let trail = models.missile_trail?;
+    let mut trail = models.missile_trail?;
     let platform = archives.layout.platform;
     let texture = archives
         .read_name(trail.texture)
@@ -63,14 +68,35 @@ pub(crate) fn load(
         "missile ribbons: {} {}x{}",
         trail.texture, texture.width, texture.height
     ));
+    let streak_texture = trail.blast_streak.and_then(|streak| {
+        let decoded = archives
+            .read_name(streak.texture)
+            .ok()
+            .and_then(|blob| crate::load::magstrip_wake::decode(&blob, platform));
+        match &decoded {
+            Some(texture) => report.push(format!(
+                "missile explosion streaks: {} {}x{}, {} elements",
+                streak.texture, texture.width, texture.height, streak.pool
+            )),
+            None => report.push(format!(
+                "missile explosion streaks: {} missing or unreadable - they do not draw",
+                streak.texture
+            )),
+        }
+        decoded
+    });
+    if streak_texture.is_none() {
+        trail.blast_streak = None;
+    }
     Some(MissileSmokeAssets {
         texture,
         ramp,
         trail,
+        streak_texture,
     })
 }
 
-fn spec(spec: FatLineSpec) -> Spec {
+pub(crate) fn spec(spec: FatLineSpec) -> Spec {
     Spec {
         width: spec.width,
         lifetime: spec.lifetime,
@@ -174,10 +200,10 @@ impl Race {
             for (head, anchor) in owner.heads.iter().zip([a, b]) {
                 let (stub, helix) = *head;
                 if let Some(ribbon) = stub.and_then(|i| smoke.stubs[i].as_mut()) {
-                    ribbon.push(anchor, forward, up);
+                    ribbon.push(anchor, forward, up, 1.0);
                 }
                 if let Some(ribbon) = helix.and_then(|i| smoke.helices[i].as_mut()) {
-                    ribbon.push(anchor, forward, up);
+                    ribbon.push(anchor, forward, up, 1.0);
                 }
             }
         }

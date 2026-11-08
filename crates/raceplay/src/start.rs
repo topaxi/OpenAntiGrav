@@ -940,6 +940,9 @@ impl Race {
                 leach_beam_ribbon: std::array::from_fn(|_| None),
                 leach_beam_rng: Rng::new(LEACH_BEAM_SEED),
                 rocket_smoke: crate::rocket_smoke::Smoke::new(),
+                hd_missile_streaks: missile_trail
+                    .and_then(|trail| trail.blast_streak)
+                    .map(missile_blast::streaks::Streaks::new),
                 missile_smoke: missile_trail.map(crate::missile_smoke::Smoke::new),
                 leach_ball_elapsed: [0.0; oag_weapons::projectile::leach_beam::POOL_SIZE],
                 plasma_blasts: [None; blast_models::PLASMA_BLAST_SLOTS],
