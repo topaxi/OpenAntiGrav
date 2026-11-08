@@ -124,6 +124,7 @@ pub(super) fn pickup_sprites(
     ext: &super::ext_draws::Outputs,
     art: &oag_title::HudArt,
     announcing: bool,
+    fly: Option<f32>,
     look: Option<Look>,
 ) -> Vec<Sprite> {
     let shown = shown(held, ext);
@@ -134,6 +135,7 @@ pub(super) fn pickup_sprites(
             shown.backdrop,
             uv_table,
             announcing,
+            fly,
         );
     }
     let icon = shown.icon.map(pickup_icon_name);

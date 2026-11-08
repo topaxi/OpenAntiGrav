@@ -1055,6 +1055,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             &readout.ext,
             cx.art,
             readout.pickup_announcing,
+            readout.pickup_fly,
             look,
         ) {
             frame

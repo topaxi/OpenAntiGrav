@@ -747,6 +747,13 @@ pub struct Readout {
     /// [`Self::blank`], and drawn only by a title whose art carries
     /// [`oag_title::HudArt::pickup_icon_uv`].
     pub pickup_announcing: bool,
+    /// How far 2048's grant has flown the icon from the top-centre rect toward the slot, in
+    /// layout pixels along y, once the announcement is over (`Hud_UpdatePickupIcon` adds
+    /// `dt * 1800.0` a frame). `PickupBgFrame`'s width follows the flight's progress. `None`
+    /// draws the icon at the slot, as does any distance past it; `Some(0.0)` while
+    /// [`Self::pickup_announcing`]. Ported by `SlotHud::advance`; drawn only by a title whose art
+    /// carries [`oag_title::HudArt::pickup_icon_uv`].
+    pub pickup_fly: Option<f32>,
     /// The held pickup's backdrop and icon fade, on a title whose art carries
     /// [`oag_title::HudArt::pickup_fade`]: advanced per rendered tick by
     /// `oag_raceplay`'s `SlotHud` and read by the draw. Its idle default draws
