@@ -28,6 +28,9 @@ pub(crate) enum Origin {
     Menu,
     /// SELECT on `Race End Photo`: the end screens carry on.
     RaceEnd,
+    /// The replay viewer's PHOTO chip or SELECT: the viewer carries on from where the mode left
+    /// the playhead (ADR-0088).
+    Viewer,
 }
 
 /// Photo mode while it is open.
@@ -49,9 +52,17 @@ pub(crate) struct Open {
     pub(super) job: Option<super::photo_rewind::Job>,
     /// The tick the rewind row last asked for.
     pub(super) asked: u64,
+    /// Whether the viewer this mode was opened from was playing when it was, so leaving puts
+    /// it back to playing from the tick the mode stands at.
+    pub(super) resume_viewer: bool,
 }
 
 impl Open {
+    /// Where the mode was opened from.
+    pub(super) fn origin(&self) -> Origin {
+        self.origin
+    }
+
     /// The project's text for `id`, its English where the language leaves it untranslated.
     fn word(&self, id: &str) -> String {
         self.own
@@ -101,6 +112,33 @@ impl super::Session {
         self.begin_photo(Origin::Menu);
     }
 
+    /// The viewer's PHOTO chip: photo mode over the viewer's race at the tick on screen. The
+    /// viewer stands still while it is open and carries on from where the mode's rewind row
+    /// leaves it ([`Self::leave_photo`]).
+    pub(crate) fn open_photo_from_viewer(&mut self) {
+        let Some(active) = self.viewer.as_mut() else {
+            return;
+        };
+        if self.photo.is_some()
+            || !matches!(&self.stage, Stage::Race(stage) if fits(stage))
+            || active.pose_view
+        {
+            return;
+        }
+        let playing = active.viewer.playing();
+        active.viewer.set_playing(false);
+        active.stepping = false;
+        self.begin_photo(Origin::Viewer);
+        match self.photo.as_mut() {
+            Some(open) => open.resume_viewer = playing,
+            None => {
+                if let Some(active) = self.viewer.as_mut() {
+                    active.viewer.set_playing(playing);
+                }
+            }
+        }
+    }
+
     /// SELECT on `Race End Photo` (once it takes input), with the mode open over the finish.
     pub(crate) fn open_photo_at_the_finish(&mut self) {
         if self.net.is_none() && matches!(&self.stage, Stage::Race(stage) if fits(stage)) {
@@ -112,6 +150,10 @@ impl super::Session {
         let held = self.controls.buttons();
         let (select, square) = (held.is_held(Button::Select), held.is_held(Button::Square));
         let title_shot = self.shell.as_ref().and_then(|shell| shell.title.photo_shot);
+        let watched = self
+            .viewer
+            .as_ref()
+            .map(|active| (active.viewer.at(), active.viewer.ticks()));
         let Stage::Race(stage) = &mut self.stage else {
             return;
         };
@@ -123,11 +165,26 @@ impl super::Session {
         info!("photo mode opened ({origin:?})");
         // What the title's original accumulates, and whether the race can be moved through its
         // past (a menu visit to a race with keyframes; the finish keeps its board).
+        // The viewer has no keyframes of the race it moves (the blur rows would do nothing), so
+        // over it the shot is the one frame, with the single-frame depth of field.
         stage.race.photo_offer(
-            title_shot,
-            origin == Origin::Menu && stage.keeper.is_some(),
+            title_shot.filter(|_| origin != Origin::Viewer),
+            match origin {
+                Origin::Menu => stage.keeper.is_some(),
+                Origin::RaceEnd => false,
+                Origin::Viewer => watched.is_some(),
+            },
         );
-        let asked = stage.race.sim.world.tick;
+        let mut asked = stage.race.sim.world.tick;
+        // A watched race is moved through the whole recording by the viewer: the row runs to its
+        // end and stands where the playhead does.
+        if let (Origin::Viewer, Some((at, ticks))) = (origin, watched) {
+            stage.race.photo_effects(|effects| {
+                effects.set_live(ticks);
+                effects.set_target_tick(at);
+            });
+            asked = at;
+        }
         self.controls.silence_motors();
         let language = self.settings.language.as_deref();
         self.photo = Some(Open {
@@ -139,6 +196,7 @@ impl super::Session {
             rewind: None,
             job: None,
             asked,
+            resume_viewer: false,
         });
     }
 
@@ -231,7 +289,10 @@ impl super::Session {
             }
         }
         match stage.race.photo_step(pad) {
-            Action::None => self.photo_rewind_sync(),
+            Action::None => {
+                self.photo_rewind_sync();
+                self.photo_play_tick();
+            }
             Action::Leave => self.leave_photo(),
             Action::Shot => self.ask_for_a_shot(),
         }
@@ -330,12 +391,23 @@ impl super::Session {
             Stage::Race(stage) => Some(&mut **stage),
             _ => parked,
         };
+        let mut play_on = false;
         if let Some(stage) = stage {
+            play_on = stage.race.photo().is_some_and(|p| p.effects().playing());
             // The live race, put back to the bit, before the camera is.
             if let (Some(rewind), Some(keeper)) = (open.rewind.take(), stage.keeper.as_mut()) {
                 rewind.end(keeper, &mut stage.race);
             }
             stage.race.photo_end();
+        }
+        // A viewer carries on from the tick the mode stands at: playing if it was playing when
+        // the mode opened or the PLAY row is on, silent voices rebuilt from that tick.
+        if open.origin == Origin::Viewer
+            && let (Some(active), Stage::Race(stage)) = (self.viewer.as_mut(), &mut self.stage)
+        {
+            active.viewer.set_playing(open.resume_viewer || play_on);
+            active.muted = false;
+            oag_game::sound::rebuild(&mut self.audio, &mut stage.race, active.viewer.at());
         }
         let buttons = self.controls.buttons_mut();
         for button in SPENT {
@@ -388,7 +460,7 @@ impl super::Session {
         };
         let effects = stage.race.photo()?.effects();
         Some(format!(
-            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={} blur={} shutter={} rewind={}",
+            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={} blur={} shutter={} rewind={} play={}",
             effects.value(Row::Exposure),
             effects.value(Row::Saturation),
             effects.value(Row::SpeedBlur),
@@ -398,6 +470,7 @@ impl super::Session {
             effects.value(Row::MotionBlur),
             effects.value(Row::Shutter),
             effects.target_tick(),
+            u8::from(effects.playing()),
         ))
     }
 

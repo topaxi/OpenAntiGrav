@@ -140,7 +140,7 @@ pub(crate) struct Active {
     pub(crate) stepping: bool,
     /// Whether the effects were stopped for a speed other than 1X: back at 1X they are rebuilt
     /// from the state, not started cold.
-    muted: bool,
+    pub(crate) muted: bool,
     /// Whether the picture is the recorded poses: the race's HUD is not drawn (a pose track has
     /// no readouts to feed it).
     pub(crate) pose_view: bool,
@@ -322,7 +322,8 @@ impl Session {
 
     /// The viewer's screen as an overlay draw list in `grid`; empty when none is open.
     pub(crate) fn viewer_screen(&mut self, grid: (f32, f32)) -> Vec<oag_ui::frontend::Draw> {
-        let Some(active) = self.viewer.as_mut() else {
+        // Photo mode's screen takes its place while it is open over the viewer.
+        let Some(active) = self.viewer.as_mut().filter(|_| self.photo.is_none()) else {
             return Vec::new();
         };
         let view = active.view();
@@ -353,6 +354,7 @@ impl Session {
             forward: buttons.take(Button::Right),
             faster: buttons.take(Button::Up) | buttons.take(Button::Down),
             leave: buttons.take(Button::Circle) | pointer.back,
+            photo: buttons.take(Button::Select),
             seek: None,
             bar: None,
         };
@@ -364,6 +366,7 @@ impl Session {
                 Some(Control::Back) => asked.back = true,
                 Some(Control::Forward) => asked.forward = true,
                 Some(Control::Speed) => asked.faster = true,
+                Some(Control::Photo) => asked.photo = true,
                 Some(Control::Exit) => asked.leave = true,
                 Some(Control::Bar) => asked.bar = Some(at.0),
                 None => {}
@@ -371,6 +374,10 @@ impl Session {
         }
         if asked.leave {
             self.leave_viewer();
+            return;
+        }
+        if asked.photo {
+            self.open_photo_from_viewer();
             return;
         }
         let (Some(active), Stage::Race(stage)) = (self.viewer.as_mut(), &mut self.stage) else {
@@ -452,6 +459,7 @@ struct Asked {
     forward: bool,
     faster: bool,
     leave: bool,
+    photo: bool,
     seek: Option<u64>,
     bar: Option<f32>,
 }

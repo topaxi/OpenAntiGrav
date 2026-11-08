@@ -230,6 +230,13 @@ impl Viewer {
         Moved::Still
     }
 
+    /// Plays or pauses without the seek to the start a play from the end makes: photo mode's
+    /// playback, which stops where the recording does.
+    pub fn set_playing(&mut self, playing: bool) {
+        self.playing = playing;
+        self.owed = 0;
+    }
+
     /// The next speed, wrapping.
     pub fn faster(&mut self) {
         self.speed = (self.speed + 1) % SPEEDS.len();

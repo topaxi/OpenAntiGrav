@@ -237,6 +237,145 @@ fn a_recorded_race_is_watched_and_a_mismatch_is_shown() {
     );
 }
 
+/// One visit to photo mode over the viewer: the viewer's tick on the line before it, the ticks
+/// the lines inside it report, and the lines after it.
+struct Visit {
+    before: (String, u64),
+    inside: Vec<u64>,
+    after: Vec<(String, u64)>,
+}
+
+/// The viewer's word and tick on a state line, when it is reporting one.
+fn viewer_at(state: &Value) -> Option<(String, u64)> {
+    let tick = text(state, "replay_at")?.split('/').next()?.parse().ok()?;
+    Some((text(state, "replay")?.to_string(), tick))
+}
+
+/// Every run of lines with photo mode open, in order.
+fn visits(states: &[Value]) -> Vec<Visit> {
+    let open = |state: &Value| text(state, "photo").is_some_and(|lens| lens != "none");
+    let mut found = Vec::new();
+    let mut index = 0;
+    while index < states.len() {
+        if !open(&states[index]) || index == 0 {
+            index += 1;
+            continue;
+        }
+        let Some(before) = states[..index].iter().rev().find_map(viewer_at) else {
+            index += 1;
+            continue;
+        };
+        let end = states[index..]
+            .iter()
+            .position(|state| !open(state))
+            .map_or(states.len(), |n| index + n);
+        found.push(Visit {
+            before,
+            inside: states[index..end]
+                .iter()
+                .filter_map(viewer_at)
+                .map(|(_, at)| at)
+                .collect(),
+            after: states[end..]
+                .iter()
+                .filter_map(viewer_at)
+                .take(40)
+                .collect(),
+        });
+        index = end;
+    }
+    found
+}
+
+/// ADR-0088: the viewer opens photo mode at the tick on screen; the mode's rewind row is a seek
+/// of the viewer, so leaving continues the replay from the tick it was scrubbed to; and the mode's
+/// PLAY row plays the recording on from the scrub.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
+fn photo_mode_and_the_viewer_switch_both_ways_at_the_tick_the_player_chose() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let profile = Profile::new("photo-switch");
+    let (status, _) = profile.drive(
+        &image,
+        &format!("{TO_THE_RACE} ticks 280; hold cross 1500; quit"),
+        &[],
+    );
+    assert!(status.success());
+    let shots = profile.dir.join("shots");
+    std::fs::create_dir_all(&shots).expect("a directory");
+    let down = "hold down 1; ticks 2; ";
+    let to_the_rewind_row = format!("press start; {down}{down}{down}{down}");
+    let (status, states) = profile.drive(
+        &image,
+        &format!(
+            "{TO_THE_LIST} ticks 30; select watch_replay; press cross; \
+             until replay=playing within 4000; ticks 400; screenshot DIR/shots/viewer.png; \
+             press select; until photo=internal within 50; ticks 20; \
+             {to_the_rewind_row} hold left 30; ticks 5; screenshot DIR/shots/photo-scrubbed.png; \
+             press circle; until photo=none within 50; ticks 40; \
+             screenshot DIR/shots/viewer-after.png; \
+             press select; until photo=internal within 50; ticks 5; \
+             {to_the_rewind_row} hold left 30; ticks 20; {down} {down} hold right 1; ticks 120; \
+             press circle; until photo=none within 50; ticks 30; quit"
+        ),
+        &[],
+    );
+    assert!(status.success());
+    let visits = visits(&states);
+    assert_eq!(visits.len(), 2, "two visits to photo mode");
+
+    // The viewer opens the mode at the tick on screen, and stands still under it until scrubbed.
+    let first = &visits[0];
+    assert_eq!(
+        first.inside[0], first.before.1,
+        "opened where the viewer stood"
+    );
+    assert_eq!(first.before.0, "playing");
+    // The scrub: the row went back, and the viewer was sought there.
+    let scrubbed = *first.inside.iter().min().expect("ticks");
+    assert!(
+        scrubbed + 100 < first.before.1,
+        "the scrub went back from {} to {scrubbed}",
+        first.before.1
+    );
+    assert_eq!(
+        *first.inside.last().expect("ticks"),
+        scrubbed,
+        "it stood where it was scrubbed to"
+    );
+    // Leaving continues the replay from that tick, playing as it was.
+    let resumed = &first.after;
+    assert_eq!(resumed[0].1, scrubbed, "leaving continues at the scrub");
+    assert!(
+        resumed.iter().any(|(word, _)| word == "playing"),
+        "and it plays on: {resumed:?}"
+    );
+    assert!(
+        resumed.last().expect("ticks").1 > scrubbed + 10,
+        "the playhead moved on from the scrub: {resumed:?}"
+    );
+
+    // The second visit scrubs back and plays from there: ticks under the mode go forward.
+    let second = &visits[1];
+    let back = *second.inside.iter().min().expect("ticks");
+    let at = second
+        .inside
+        .iter()
+        .position(|&tick| tick == back)
+        .expect("a minimum");
+    let played = &second.inside[at..];
+    assert!(
+        played.last().expect("ticks") > &(back + 30),
+        "PLAY played on from the scrub at {back}: {played:?}"
+    );
+    assert!(
+        played.windows(2).all(|pair| pair[1] >= pair[0]),
+        "and only forward: {played:?}"
+    );
+}
+
 /// A race a `--race` run builds records nothing unless it asks (decision 1).
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]

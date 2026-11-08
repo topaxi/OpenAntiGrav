@@ -350,6 +350,7 @@ OAG_PHOTO_APERTURE = { text = "ABERTURA", human = false }
 OAG_PHOTO_FOCUS = { text = "FOCO", human = false }
 OAG_PHOTO_PANEL_KEYS = { text = "ANALÓGICO CIMA BAIXO LINHA    ESQUERDA DIREITA ALTERAR", human = false }
 OAG_PHOTO_REWIND = { text = "VOLTAR NO TEMPO", human = false }
+OAG_PHOTO_PLAY = { text = "REPRODUZIR", human = false }
 OAG_PHOTO_MOTION_BLUR = { text = "BORRÃO DE MOVIMENTO", human = false }
 OAG_PHOTO_SHUTTER = { text = "OBTURADOR", human = false }
 OAG_PHOTO_PROGRESS = { text = "TIRANDO FOTO", human = false }
@@ -397,6 +398,7 @@ OAG_REPLAY_STOPPED = { text = "PARA AQUI: ESTA VERSÃO NÃO CONSEGUE RECONSTRUIR
 OAG_REPLAY_PLAY = { text = "REPRODUZIR", human = false }
 OAG_REPLAY_PAUSE = { text = "PAUSAR", human = false }
 OAG_REPLAY_EXIT = { text = "SAIR", human = false }
+OAG_REPLAY_PHOTO = { text = "FOTO", human = false }
 OAG_REPLAY_SPEED = { text = "VELOCIDADE", human = false }
 OAG_REPLAY_SKIP = { text = "5 SEG", human = false }
 OAG_REPLAY_ENDED = { text = "FIM DO REPLAY", human = false }

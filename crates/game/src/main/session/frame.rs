@@ -388,7 +388,13 @@ impl Session {
             // for a race that is driven applies to it: not the pause, not the end screens, not
             // a record or a ghost.
             if self.viewer.is_some() && matches!(self.stage, Stage::Race(_)) {
-                self.tick_viewer(&pointer);
+                // Photo mode over the viewer owns the devices, as it does over a race; the
+                // viewer carries on from where it leaves the playhead.
+                if self.photo.is_some() {
+                    self.tick_photo(&pointer, inputs.get(0));
+                } else {
+                    self.tick_viewer(&pointer);
+                }
                 continue;
             }
             // Photo mode first: while it is open it owns the devices and the race stands

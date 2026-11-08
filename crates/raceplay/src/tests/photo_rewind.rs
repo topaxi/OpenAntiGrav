@@ -91,6 +91,30 @@ fn a_rewind_lands_on_the_recorded_run_and_leaves_the_live_race_to_the_bit() {
     );
 }
 
+/// Fails if playing a rewind on from a scrub (the PLAY row) lands anywhere but on the recorded run,
+/// tick by tick, or goes past the live tick.
+#[test]
+fn playing_on_from_a_scrub_follows_the_recorded_run_to_the_live_tick() {
+    let (mut race, mut keeper, text) = driven();
+    open(&mut race);
+    let mut rewind = Rewind::begin(&mut keeper, &mut race).expect("a race that is running");
+    rewind.seek(&mut keeper, &mut race, 100);
+    for tick in 101..=LIVE {
+        assert!(rewind.step(&mut race), "tick {tick} is played");
+        assert_eq!(rewind.at(), tick);
+        assert!(
+            format!("{:?}", race.sim) == text[tick as usize],
+            "tick {tick} differs from the recorded run"
+        );
+    }
+    assert!(!rewind.step(&mut race), "and it stops at the live tick");
+    rewind.end(&mut keeper, &mut race);
+    assert!(
+        format!("{:?}", race.sim) == text[LIVE as usize],
+        "the live race was not put back"
+    );
+}
+
 /// Fails if the race that goes on after a visit is not the one that never had it.
 #[test]
 fn a_race_that_goes_on_after_a_rewind_hashes_as_one_that_was_not_visited() {
@@ -362,6 +386,22 @@ fn the_blur_and_rewind_rows_are_offered_only_where_the_title_and_the_race_have_t
     full.adjust(-9);
     assert_eq!(full.blur(), None);
     assert!(!full.rows().contains(&Row::Shutter));
+}
+
+#[test]
+fn the_play_row_follows_the_rewind_row_and_a_push_right_turns_it_on() {
+    use crate::photo::effects::Effects;
+    assert!(!Effects::new().rows().contains(&Row::Play));
+    let mut effects = Effects::new().offering(false, true);
+    let rows = effects.rows();
+    assert_eq!(&rows[rows.len() - 2..], [Row::Rewind, Row::Play]);
+    effects.select(Row::Play);
+    assert!(!effects.playing(), "it opens off");
+    effects.adjust(1);
+    assert!(effects.playing());
+    assert_eq!(effects.value(Row::Play), 1);
+    effects.adjust(-1);
+    assert!(!effects.playing());
 }
 
 #[test]
