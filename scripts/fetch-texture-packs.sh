@@ -28,6 +28,13 @@
 # The game looks for a pack at data/texture-packs/<name>/textures.ini (or textures.zip),
 # which is PPSSPP's own TEXTURES/<serial>/ layout, so the same folder also works unchanged
 # in a PPSSPP install. See docs/formats/ppsspp-texture-pack.md and docs/tools/texture-packs.md.
+#
+# **Each checkout also gets an oag-mod.toml** (`oag-mod init-pack`: the manifest the game
+# would otherwise recognise from the folder, with `default-enabled = false`, the pin's URL as
+# `repository` and its owner as the author). The file is listed in the checkout's
+# .git/info/exclude so the clean-tree check above still passes, and an oag-mod.toml that is
+# already there, edited or not, is never rewritten. Packs found in a PPSSPP install's
+# PSP/TEXTURES/<serial>/ that this script did not fetch are recognised without one.
 
 set -euo pipefail
 
@@ -96,6 +103,15 @@ checkout() {
     git -C "$dir" checkout --quiet --detach FETCH_HEAD
 }
 
+# Writes the checkout's oag-mod.toml if it has none (see the header).
+write_manifest() {
+    local dir="$1" url="$2" exclude="$1/.git/info/exclude"
+    mkdir -p "$dir/.git/info"
+    grep -qxF 'oag-mod.toml' "$exclude" 2>/dev/null || echo 'oag-mod.toml' >> "$exclude"
+    cargo run --manifest-path "$project_root/Cargo.toml" -q -p oag-tools --bin oag-mod -- \
+        init-pack "$dir" --repository "$url" >&2
+}
+
 install_ppsspp() {
     local name="$1" dir="$2" serial target
     local serials
@@ -143,6 +159,7 @@ for row in "${rows[@]}"; do
     step "$name at ${commit:0:12}"
     checkout "$dir" "$url" "$commit"
     [[ -f $dir/textures.ini ]] || die "$dir has no textures.ini; is $url a texture pack?"
+    write_manifest "$dir" "$url"
     new_pin+="$name $url $commit"$'\n'
     [[ -z $memstick ]] || install_ppsspp "$name" "$dir"
 done

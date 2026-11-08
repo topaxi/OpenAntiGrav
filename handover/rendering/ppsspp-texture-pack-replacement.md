@@ -17,6 +17,9 @@ packs; `just push-data` carries them.
 
 ## Landed
 
+- `just fetch-texture-packs` writes an `oag-mod.toml` (`oag-mod init-pack`) into each checkout; it wins
+  over recognition, is git-excluded and is never rewritten (`docs/tools/mods.md`, "Texture packs").
+
 - A pack is a mod that starts off: `oag-mod` recognises a `textures.ini` folder or zip (or a folder
   holding `textures.zip`); `[texture-pack]` and `default-enabled` in a written manifest; settings
   `[mods] enabled`; search path `data/texture-packs/`, `<data dir>/oag/texture-packs/` and a PPSSPP

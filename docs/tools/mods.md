@@ -65,7 +65,8 @@ or a folder holding a `textures.zip`, is **recognised** and given a manifest: `i
 `ppsspp.<name, lower-cased and slugged>` (a bare `textures.zip` takes its folder's name), `name`
 that name, version `0.0.0`, no authors, no licence (`no license stated` on the MODS page),
 `titles` empty, and the pack's `[games]` serials. A pack's author who wants a name, release
-and licence writes an `oag-mod.toml`, which wins:
+and licence writes an `oag-mod.toml`, which wins, and so does the one `just fetch-texture-packs` writes
+into each checkout it makes (below):
 
 ```toml
 [mod]
@@ -79,6 +80,19 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
 # serials = ["UCES00465"]    # absent: read from the ini's [games]
 ```
 
+- **Generated manifest.** `just fetch-texture-packs` runs `oag-mod init-pack` on each checkout,
+  which writes the manifest `oag_mod::texture_pack::recognise` would have made (same id, name,
+  version `0.0.0`, no licence, `default-enabled = false`, `format = "ppsspp"`) from the same
+  function, so the two cannot drift; the pin's URL becomes `repository` and its owner the author
+  (the schema wants one; `unknown` when the URL names none). It names **no `serials`**, so they
+  keep following the ini when the pin moves. **An `oag-mod.toml` that is already there is never
+  rewritten**, edited or not, which is safe because nothing in the file goes stale (id and name
+  follow the folder name). The file is added to the checkout's `.git/info/exclude`, so the script's
+  clean-tree check and `--update` still pass. A pack in a PPSSPP install's `PSP/TEXTURES/<serial>/`
+  that the script did not fetch is still recognised without one (`--install-ppsspp --copy` copies
+  the manifest along with the rest). `oag-mod init-pack <folder>... [--repository URL]` is the
+  command; a folder with only a `textures.zip` is refused, since a folder manifest would shadow
+  the zip PPSSPP prefers.
 - **`default-enabled`** is the one mod key that changes the settings file: a mod that starts
   off is switched on through `[mods] enabled = ["ppsspp.my-pack"]`, beside `disabled` for a mod
   that starts on; an id is in at most one. The MODS page's ENABLED row writes the right one.
