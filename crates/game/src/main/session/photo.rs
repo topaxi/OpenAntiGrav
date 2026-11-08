@@ -419,7 +419,7 @@ impl super::Session {
             if open.origin == Origin::Viewer
                 && let Some(subject) = stage.race.photo().map(oag_raceplay::photo::Photo::subject)
             {
-                stage.race.set_seat(Some(subject));
+                stage.race.follow(subject);
             }
             // The live race, put back to the bit, before the camera is.
             if let (Some(rewind), Some(keeper)) = (open.rewind.take(), stage.keeper.as_mut()) {

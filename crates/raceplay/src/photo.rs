@@ -807,17 +807,31 @@ impl Race {
     }
 
     /// The replay viewer's L1 and R1: follows the craft before or after the one the view follows
-    /// among those still in the race, as photo mode's do (`step_among`). View-only
-    /// ([`Self::set_seat`]); `false` when there was nothing to change to.
+    /// among those still in the race, as photo mode's do (`step_among`). `false` when there was
+    /// nothing to change to.
     pub fn step_followed(&mut self, forward: bool) -> bool {
         let live: Vec<usize> = self.spectator_subjects().iter().map(|s| s.slot).collect();
         let now = self.player_slot();
         match step_among(&live, now, forward) {
             Some(next) if next != now => {
-                self.set_seat(Some(next));
+                self.follow(next);
                 true
             }
             _ => false,
+        }
+    }
+
+    /// Makes the picture follow `slot`: its camera, HUD, sound and tags ([`Self::set_seat`], view
+    /// only; the player's own craft is no seat at all). The jump is a camera cut, so the motion
+    /// blur and the temporal history do not smear the old craft across the new one.
+    pub fn follow(&mut self, slot: usize) {
+        let before = self.player_slot();
+        self.set_seat((slot != self.sim.world.primary_slot()).then_some(slot));
+        if self.player_slot() != before {
+            #[cfg(feature = "view")]
+            {
+                self.view.restores = self.view.restores.wrapping_add(1);
+            }
         }
     }
 

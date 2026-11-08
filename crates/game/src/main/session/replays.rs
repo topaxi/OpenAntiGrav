@@ -431,11 +431,12 @@ impl Session {
         if asked.hud {
             active.hud = !active.hud;
         }
+        let mut followed = false;
         if asked.previous {
-            stage.race.step_followed(false);
+            followed |= stage.race.step_followed(false);
         }
         if asked.next {
-            stage.race.step_followed(true);
+            followed |= stage.race.step_followed(true);
         }
         let viewer = &mut active.viewer;
         if let Some(x) = asked.bar {
@@ -496,6 +497,11 @@ impl Session {
                 oag_game::sound::rebuild(&mut self.audio, &mut stage.race, at);
             }
             Moved::Still => {}
+        }
+        // Another craft's engine and cues are the sound now.
+        if followed {
+            active.muted = false;
+            oag_game::sound::rebuild(&mut self.audio, &mut stage.race, at);
         }
     }
 
