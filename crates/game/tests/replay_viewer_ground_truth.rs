@@ -325,3 +325,69 @@ fn a_recording_this_build_cannot_rebuild_is_refused_by_name() {
         "the row says why: {row}"
     );
 }
+
+/// A campaign race recorded from the menus, as WATCH REPLAY at its end opens it, rebuilds from
+/// its header and reproduces every stored hash; without its `campaign_skill` the field flies at
+/// another tuning and the file stops matching within seconds (`docs/ui/replays.md`, "What the
+/// header needed").
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
+fn a_campaign_race_recorded_from_the_menus_reproduces() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let profile = Profile::new("campaign");
+    // The campaign's first cell (a Single Race against the original driver), throttle for 25 s.
+    let (status, states) = profile.drive(
+        &image,
+        "boot; until stage=menu within 3000; select campaign; press cross; until screen=campaign; \
+         ticks 10; press cross; ticks 60; press cross; ticks 60; press cross; \
+         until stage=race within 4000; ticks 280; hold cross 1500; quit",
+        &[],
+    );
+    assert!(status.success());
+    assert!(
+        states.iter().any(|s| s["race"]["mode"] == "single_race"),
+        "the cell raced"
+    );
+    let files = profile.replays();
+    assert_eq!(files.len(), 1, "{files:?}");
+    let replay =
+        oag_replay::Replay::from_bytes(&std::fs::read(&files[0]).expect("read")).expect("parse");
+    let options = &replay.header.options;
+    assert_eq!(options.get("ai").map(String::as_str), Some("original"));
+    assert!(
+        options.contains_key("campaign_skill"),
+        "the cell's scale is recorded: {options:?}"
+    );
+    assert_eq!(
+        verify(&image, &replay),
+        Ok(replay.ticks()),
+        "the recording reproduces to its last tick"
+    );
+
+    let mut stripped = replay.clone();
+    stripped.header.options.remove("campaign_skill");
+    let desync = verify(&image, &stripped).expect_err("a rebuild without the cell's scale");
+    eprintln!("without campaign_skill: desync at tick {}", desync.tick);
+}
+
+/// Rebuilds `replay` from its header over `image`, as WATCH does, and checks every stored hash.
+fn verify(image: &Path, replay: &oag_replay::Replay) -> Result<u64, oag_replay::Desync> {
+    let mut options =
+        oag_raceplay::Options::for_replay(&replay.header, &image.display().to_string())
+            .expect("the header rebuilds");
+    // The packs the game mounted from the repository's `data/dlc`, as WATCH mounts the session's.
+    options.dlc = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/dlc")];
+    let loaded = oag_raceplay::load(&options).expect("loads");
+    let mut race =
+        oag_raceplay::replay::start_recorded(loaded.setup, &replay.header).expect("starts");
+    oag_replay::Verifier::run(replay, race.sim.state_hash(), |events, inputs| {
+        for event in events {
+            race.apply_event(event).expect("applies");
+        }
+        race.tick(inputs);
+        race.drain_cues();
+        race.sim.state_hash()
+    })
+}

@@ -25,7 +25,7 @@ impl Options {
             bail!("the replay records no launch request ([setup]), so its race cannot be rebuilt");
         };
         let launch = Launch::from_table(&header.options)?;
-        let mode = oag_race::Mode::from_name(&setup.mode)
+        let mode = oag_race::Mode::from_recorded_name(&setup.mode)
             .with_context(|| format!("the replay names the mode {:?}", setup.mode))?;
         Ok(Self {
             source: source.to_string(),

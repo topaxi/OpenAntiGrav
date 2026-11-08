@@ -39,6 +39,20 @@ impl Race {
         self.sim.ai_tuning = tuning;
     }
 
+    /// Races a campaign cell at its resolved skill scale (`AI_ResolveSkillScale`'s cell branch,
+    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`): the field's tuning at that
+    /// position ([`oag_ai::Difficulty::tune_at_scale`], which replaces the one [`Self::start`]
+    /// took from the difficulty) and the finished player's thrust, which reads the same scale.
+    /// Before the first tick; both are simulation state a recording's rebuild must repeat
+    /// ([`crate::Launch::campaign_skill`]).
+    pub fn apply_campaign_skill(&mut self, scale: f32) {
+        self.set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
+            scale,
+            &oag_ai::Tuning::default(),
+        ));
+        self.set_finished_thrust_skill(scale);
+    }
+
     /// Replaces the character one slot is flying, mid-race.
     ///
     /// **For measurement, exactly as [`Self::set_ai_tuning`] is**, and it exists

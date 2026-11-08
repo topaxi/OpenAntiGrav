@@ -158,6 +158,29 @@ fn a_seek_back_clears_what_the_view_kept_about_a_later_moment() {
     assert!(race.view.wreck_ended_tick.is_none());
 }
 
+/// A seek is a camera cut: the drawn view jumps, and the motion blur and a temporal upscaler
+/// must not read the jump as motion (`docs/ui/replays.md`, "The viewer"). Without it, the first
+/// frame after a seek smears the whole screen whatever the craft's speed.
+#[test]
+fn a_seek_is_a_camera_cut() {
+    let (replay, _) = recording(TICKS);
+    let (mut viewer, mut race) = open(replay);
+    assert_eq!(pass_ended(&mut viewer), Pass::Complete);
+    // The first update starts playback, which is a seek to the start.
+    viewer.update(&mut race);
+    viewer.seek(&mut race, 200);
+    let before = (race.camera_cuts(), race.viewed_camera_cuts());
+    let restores = race.viewer_restores();
+    viewer.seek(&mut race, 300);
+    assert_ne!(race.viewer_restores(), restores, "every pose jumped");
+    assert_ne!(race.camera_cuts(), before.0, "the player's view");
+    assert_ne!(race.viewed_camera_cuts(), before.1, "the view being drawn");
+    let after = race.camera_cuts();
+    viewer.update(&mut race);
+    assert_eq!(race.camera_cuts(), after, "playing on is not a cut");
+    assert_eq!(race.viewer_restores(), restores.wrapping_add(1));
+}
+
 /// Paused, nothing moves; a toggle from the end plays from the start; the speeds step in
 /// sixteenths of a tick a frame.
 #[test]

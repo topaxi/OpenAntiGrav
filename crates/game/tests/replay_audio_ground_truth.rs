@@ -61,6 +61,7 @@ fn recording(loaded: &race::Loaded) -> oag_replay::Replay {
         autopilot: true,
         pilot_assist: oag_physics::pilot_assist::Level::Off,
         original_ai: None,
+        campaign_skill: None,
     };
     let mut race = Race::start(loaded.setup.clone());
     race.apply_launch(&launch);

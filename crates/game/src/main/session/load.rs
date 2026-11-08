@@ -810,16 +810,10 @@ impl Session {
                     // position rather than adding to it, the same "replaces,
                     // not adds" shape `AI_ResolveSkillScale`'s own campaign
                     // branch has.
+                    // The finished player's thrust reads the same scale:
+                    // `AI_ResolveSkillScale` is its one source too.
                     if let Some(scale) = race_stage.campaign_ai_skill_scale {
-                        race_stage
-                            .race
-                            .set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
-                                scale,
-                                &oag_ai::Tuning::default(),
-                            ));
-                        // The finished player's thrust reads the same scale:
-                        // `AI_ResolveSkillScale` is its one source too.
-                        race_stage.race.set_finished_thrust_skill(scale);
+                        race_stage.race.apply_campaign_skill(scale);
                     }
                     // **Whose driver flies the opponents** (`oag_game::ai_choice`):
                     // the original's, in every race with opponents, unless
@@ -862,11 +856,14 @@ impl Session {
                                 ai_choice,
                                 source,
                             );
-                            race_stage.note_original_ai(original);
+                            race_stage.note_ai(original);
                         }
-                        None => log::info!(
-                            "AI: this project's driver flies (the campaign event asks for it)"
-                        ),
+                        None => {
+                            race_stage.note_ai(None);
+                            log::info!(
+                                "AI: this project's driver flies (the campaign event asks for it)"
+                            );
+                        }
                     }
                     // Last, once nothing else will change the race before its first
                     // tick: the speed plans are learned on a thread while the loading

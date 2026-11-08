@@ -855,6 +855,7 @@ impl Race {
                 world_clock_offset,
                 gantry_seconds,
                 wreck_ended_tick: None,
+                restores: 0,
                 photo: None,
                 finish_camera: (!destroy_stations.is_empty()).then(|| {
                     super::finish_camera::FinishCamera::new(

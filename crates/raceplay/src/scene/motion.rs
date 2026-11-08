@@ -27,6 +27,9 @@ pub(super) struct MotionState {
     /// [`Race::camera_cuts`] as of the last promotion: a change is a cut, and the blur must not
     /// read the jump as motion.
     cuts: u32,
+    /// [`Race::viewer_restores`] as of the last promotion: a change is a seek, where every
+    /// pose jumped, so nothing measures against the frame before it.
+    restores: u32,
     prev: Snapshot,
     cur: Snapshot,
 }
@@ -205,6 +208,7 @@ impl MotionState {
                 *state = Some(Self {
                     key: FrameKey::of(race),
                     cuts: race.viewed_camera_cuts(),
+                    restores: race.viewer_restores(),
                     prev: now.clone(),
                     cur: now,
                 });
@@ -219,7 +223,15 @@ impl MotionState {
                 // travel across it. The craft and the projectiles keep their own previous
                 // matrices: they did move.
                 let cuts = race.viewed_camera_cuts();
-                if cuts != state.cuts {
+                // **A seek is not motion either**, for anything: the viewer put the whole race
+                // at another tick, so the frame it lands on measures against itself and the
+                // next one blurs as the race does.
+                let restores = race.viewer_restores();
+                if restores != state.restores {
+                    state.restores = restores;
+                    state.cuts = cuts;
+                    state.prev = state.cur.clone();
+                } else if cuts != state.cuts {
                     state.cuts = cuts;
                     state.prev.view_projection = state.cur.view_projection;
                     state.prev.projection = state.cur.projection;

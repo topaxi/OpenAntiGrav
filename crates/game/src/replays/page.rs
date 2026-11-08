@@ -137,7 +137,7 @@ impl Context<'_> {
     }
 
     fn circuit_name(&self, header: &oag_replay::Header) -> String {
-        let mode = oag_race::Mode::from_name(&header.mode).unwrap_or_default();
+        let mode = oag_race::Mode::from_recorded_name(&header.mode).unwrap_or_default();
         // The setup spells the entry as the disc does; the key's copy is lower case.
         let entry = header
             .setup

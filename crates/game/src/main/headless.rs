@@ -694,6 +694,7 @@ pub(crate) fn run_race(
                     autopilot: cli.driver.autopilot,
                     pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                     original_ai: None,
+                    campaign_skill: None,
                 }
                 .to_table();
                 (path, header)

@@ -29,6 +29,16 @@ fn tournament_is_not_in_all() {
     assert!(!Mode::ALL.contains(&Mode::Tournament));
 }
 
+/// A recorded tournament leg reads back; a settings token still does not.
+#[test]
+fn a_recorded_name_reads_every_mode_and_a_settings_token_never_reads_tournament() {
+    for mode in Mode::ALL.into_iter().chain([Mode::Tournament]) {
+        assert_eq!(Mode::from_recorded_name(mode.name()), Some(mode));
+    }
+    assert_eq!(Mode::from_name(Mode::Tournament.name()), None);
+    assert_eq!(Mode::from_recorded_name("elimination"), None);
+}
+
 /// A leg races exactly like a single race - see [`Mode::Tournament`]'s
 /// own doc for the evidence.
 #[test]
