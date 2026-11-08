@@ -89,21 +89,44 @@ pub fn texture_asset_path(payload: &[u8]) -> Option<String> {
     cstr_at(payload, TEXTURE_ASSET_PATH)
 }
 
-/// Extracts the textures appended after the node tree.
+/// One embedded texture's header fields and its palette and texel bytes exactly
+/// as the file stores them: what [`stored_textures`] returns, and what the game
+/// reads before it swizzles an unflagged block for the GE.
+#[derive(Debug, Clone, Copy)]
+pub struct StoredTexture<'a> {
+    /// Width in pixels.
+    pub width: u16,
+    /// Height in pixels.
+    pub height: u16,
+    /// 4 or 8.
+    pub bits_per_pixel: u8,
+    /// Number of mip levels the header declares.
+    pub mip_count: u8,
+    /// The flags byte at payload `+0x06`; bit 0 is
+    /// [`oag_formats::swizzle::FLAG_SWIZZLED`].
+    pub flags: u8,
+    /// The palette bytes, RGBA8888, `4 * entries` long.
+    pub palette: &'a [u8],
+    /// The texel block: every level, each at its padded stride
+    /// ([`texture_row_stride`]), swizzled per level when `flags` says so.
+    pub texels: &'a [u8],
+    /// The node, for the name fields.
+    pub node: &'a Node,
+}
+
+/// Walks the `Texture` nodes and slices out each one's palette and texel bytes.
 ///
 /// No pointer reaches their data (the header's pointers are zero at rest):
 /// each texture's palette and texels are packed back to back in node order from
 /// the end of the tree. That the sizes add up exactly to the header's declared
 /// texture length confirms the packing, and this function checks it.
 ///
-/// # Position is the identity
-///
-/// Materials name a texture by its **ordinal among the `Texture` nodes**, so the
-/// result is positional, one entry per node, `None` for nodes this build cannot
-/// decode. Dropping them would silently renumber every later texture: a model
-/// wearing the wrong skins, not an error. Use `.iter().flatten()` for a plain
-/// list.
-pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
+/// One entry per node, in node order, `None` for a node this build cannot read
+/// (a PS2 or big-endian block, a depth that is not 4 or 8, a header too short).
+pub fn stored_textures<'a>(
+    data: &'a [u8],
+    tree: &'a [Node],
+) -> Result<Vec<Option<StoredTexture<'a>>>> {
     let block = FILE_HEADER_LEN + tree_len(data)?;
     let mut at = block;
     let mut out = Vec::new();
@@ -123,12 +146,8 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
     // **The `Texture` id from this file's version**, not version 6's `0x3c1`: a
     // version-4 file numbers it `0x373`, so the constant matched nothing and a
     // whole track drew white (what a Pure race looked like).
-    let classes = classes_of(data)?;
-    let texture_class = classes.texture;
-    for node in nodes(data)?
-        .into_iter()
-        .filter(|n| Some(n.class_id) == texture_class)
-    {
+    let texture_class = classes_of(data)?.texture;
+    for node in tree.iter().filter(|n| Some(n.class_id) == texture_class) {
         if !embedded {
             out.push(None);
             continue;
@@ -162,8 +181,53 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
             out.push(None);
             continue;
         }
+        out.push(Some(StoredTexture {
+            width,
+            height,
+            bits_per_pixel,
+            mip_count,
+            flags: p.get(6).copied().unwrap_or(0),
+            palette: &data[at..at + clut_size],
+            texels: &data[at + clut_size..end],
+            node,
+        }));
+        at = end;
+    }
+    Ok(out)
+}
 
-        let palette: Vec<[u8; 4]> = data[at..at + clut_size].as_chunks::<4>().0.to_vec();
+/// Extracts the textures appended after the node tree.
+///
+/// See [`stored_textures`] for how they are located.
+///
+/// # Position is the identity
+///
+/// Materials name a texture by its **ordinal among the `Texture` nodes**, so the
+/// result is positional, one entry per node, `None` for nodes this build cannot
+/// decode. Dropping them would silently renumber every later texture: a model
+/// wearing the wrong skins, not an error. Use `.iter().flatten()` for a plain
+/// list.
+pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
+    let tree = nodes(data)?;
+    let classes = classes_of(data)?;
+    let mut out = Vec::new();
+    for stored in stored_textures(data, &tree)? {
+        let Some(StoredTexture {
+            width,
+            height,
+            bits_per_pixel,
+            mip_count,
+            flags,
+            palette,
+            texels: block,
+            node,
+        }) = stored
+        else {
+            out.push(None);
+            continue;
+        };
+        let p = &data[node.payload()];
+        let palette: Vec<[u8; 4]> = palette.as_chunks::<4>().0.to_vec();
 
         // Only the base level; mips follow it and are not needed for viewing.
         let pixels = usize::from(width) * usize::from(height);
@@ -189,9 +253,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         // laid out like an unflagged block. A level under 8 rows tall with a
         // stride past 16 bytes is copied through (none exists on a flagged Pulse
         // texture; unverified).
-        let swizzled = p
-            .get(6)
-            .is_some_and(|flags| flags & oag_formats::swizzle::FLAG_SWIZZLED != 0);
+        let swizzled = flags & oag_formats::swizzle::FLAG_SWIZZLED != 0;
         // **Version 4 and below (Pure, Pulse's Zone wrecks)** keep the base level
         // unswizzled as one block and no authored levels, so the renderer
         // synthesises their chain (`docs/rendering/frame-audit.md`). Their levels
@@ -201,23 +263,13 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         let authored_levels = classes.version >= 5;
         let linear;
         let texels = if swizzled && !authored_levels {
-            linear = oag_formats::swizzle::unswizzle(
-                &data[at + clut_size..end],
-                stride,
-                usize::from(height),
-            );
+            linear = oag_formats::swizzle::unswizzle(block, stride, usize::from(height));
             &linear[..]
         } else if swizzled {
-            linear = unswizzle_levels(
-                &data[at + clut_size..end],
-                width,
-                height,
-                bits_per_pixel,
-                mip_count,
-            );
+            linear = unswizzle_levels(block, width, height, bits_per_pixel, mip_count);
             &linear[..]
         } else {
-            &data[at + clut_size..end]
+            block
         };
 
         let mut indices = Vec::with_capacity(pixels);
@@ -280,7 +332,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         }
 
         out.push(Some(EmbeddedTexture {
-            name: node.name,
+            name: node.name.clone(),
             asset_path: cstr_at(p, TEXTURE_ASSET_PATH),
             width,
             height,
@@ -290,7 +342,6 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
             indices,
             levels,
         }));
-        at = end;
     }
 
     Ok(out)

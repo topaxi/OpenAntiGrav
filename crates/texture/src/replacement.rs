@@ -21,7 +21,10 @@
 //!   palette format - with [`clut_hash`] XOR the whole `CLUTFORMAT` register word.
 //!   [`clut_register`] builds that word, command byte `0xC5` included.
 
+use oag_formats::swizzle::{FLAG_SWIZZLED, SWIZZLE_BLOCK_BYTES, swizzle};
+
 use crate::xxhash::{xxh32, xxh64};
+use crate::{fnt, texture};
 
 /// Seed of the data hash (`TextureReplacer::ComputeHash`).
 pub const DATA_SEED: u64 = 0xBACD_7814;
@@ -105,6 +108,164 @@ pub fn dim(width: u32, height: u32) -> u32 {
 #[must_use]
 pub fn clut_register(format: u32, shift: u32, mask: u32, start_blocks: u32) -> u32 {
     CLUT_FORMAT_COMMAND | format | (shift << 2) | (mask << 8) | (start_blocks << 16)
+}
+
+/// How many bytes of guest memory the palette hash reads, from the palette's
+/// first byte: a full 256-entry RGBA8888 palette. The game loads every palette
+/// as 256 entries, a 4-bit texture's sixteen included, so for those the hash
+/// also covers the 960 bytes after the palette.
+pub const CLUT_WINDOW_BYTES: usize = 1024;
+
+/// The `CLUTFORMAT` word the game programs: RGBA8888 entries, no shift, index
+/// mask `0xff`, start 0.
+pub const CLUT_REGISTER: u32 = 0xC500_FF03;
+
+/// A palette-indexed texture as a file stores it, before the loader has put it
+/// where the GE reads it.
+#[derive(Debug, Clone, Copy)]
+pub struct Stored<'a> {
+    /// Width in pixels.
+    pub width: u32,
+    /// Height in pixels.
+    pub height: u32,
+    /// 4 or 8.
+    pub bits_per_pixel: u32,
+    /// Levels in the texel block.
+    pub mip_levels: u8,
+    /// Whether the texels are already in the GE's block order (the file's flag).
+    /// The loader swizzles a texture whose flag is clear and leaves a flagged one
+    /// alone.
+    pub swizzled: bool,
+    /// The palette bytes, RGBA8888.
+    pub palette: &'a [u8],
+    /// The texel block, every level.
+    pub texels: &'a [u8],
+    /// Whether level 0's rows are padded to a 16-byte stride like every level
+    /// below it. `.vex` and `.fnt` textures are; a standalone `.mip` stores
+    /// level 0 unpadded (which only differs for a row under 16 bytes).
+    pub pad_level0: bool,
+}
+
+/// What a texture's key is made of, and whether it can be known from the file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Replacement {
+    /// The `dim` field of the key.
+    pub dim: u32,
+    /// [`data_hash`] of level 0 as it sits in guest memory.
+    pub data: u32,
+    /// The full key; `None` when the palette hash reads past the end of this
+    /// texture's own block (palette plus texels shorter than
+    /// [`CLUT_WINDOW_BYTES`]) into whatever the heap holds next.
+    pub key: Option<Key>,
+}
+
+impl<'a> Stored<'a> {
+    /// A standalone `.mip` blob, validated by the same checks
+    /// [`texture::Texture::parse`] makes.
+    ///
+    /// # Errors
+    ///
+    /// Whatever [`texture::Texture::parse`] refuses the blob for.
+    pub fn from_mip(data: &'a [u8]) -> Result<Self, texture::Error> {
+        let parsed = texture::Texture::parse(data)?;
+        let palette_len = 4usize << parsed.bits_per_pixel;
+        Ok(Self {
+            width: u32::from(parsed.width),
+            height: u32::from(parsed.height),
+            bits_per_pixel: u32::from(parsed.bits_per_pixel),
+            mip_levels: parsed.mip_levels,
+            swizzled: data[7] & FLAG_SWIZZLED != 0,
+            palette: &data[texture::HEADER_LEN..texture::HEADER_LEN + palette_len],
+            texels: &data[texture::HEADER_LEN + palette_len..],
+            pad_level0: false,
+        })
+    }
+
+    /// The glyph atlas of a PSP `.fnt`, validated by [`fnt::Font::parse`].
+    ///
+    /// # Errors
+    ///
+    /// Whatever [`fnt::Font::parse`] refuses the font for.
+    pub fn from_font_atlas(data: &'a [u8]) -> Result<Self, fnt::Error> {
+        let font = fnt::Font::parse(data)?;
+        let metrics = fnt::Metrics::parse(data)?;
+        let atlas = &data[metrics.atlas_at..];
+        let clut_size = metrics.order.u32(atlas, 8) as usize;
+        Ok(Self {
+            width: u32::from(font.width),
+            height: u32::from(font.height),
+            bits_per_pixel: 4,
+            mip_levels: 1,
+            swizzled: atlas[6] & FLAG_SWIZZLED != 0,
+            palette: &atlas[fnt::ATLAS_HEADER_LEN..fnt::ATLAS_HEADER_LEN + clut_size],
+            texels: &atlas[fnt::ATLAS_HEADER_LEN + clut_size..],
+            pad_level0: true,
+        })
+    }
+}
+
+impl Stored<'_> {
+    /// The texel block as the GE reads it: as stored when flagged, otherwise
+    /// each level swizzled on its own at its own stride (`Texture_SwizzleForGe`).
+    #[must_use]
+    pub fn guest_texels(&self) -> Vec<u8> {
+        if self.swizzled {
+            return self.texels.to_vec();
+        }
+        let mut out = Vec::with_capacity(self.texels.len());
+        let mut at = 0;
+        for level in 0..u32::from(self.mip_levels.max(1)) {
+            let height = (self.height >> level).max(1) as usize;
+            let (_, stride) = self.level_strides(level);
+            let Some(plane) = self.texels.get(at..at + stride * height) else {
+                break;
+            };
+            out.extend_from_slice(&swizzle(plane, stride, height));
+            at += stride * height;
+        }
+        out.extend_from_slice(&self.texels[at.min(self.texels.len())..]);
+        out
+    }
+
+    /// `(bytes of picture, bytes of stride)` of one level's rows.
+    fn level_strides(&self, level: u32) -> (usize, usize) {
+        let width = (self.width >> level).max(1);
+        let row = (width * self.bits_per_pixel).div_ceil(8) as usize;
+        if level == 0 && !self.pad_level0 {
+            (row, row)
+        } else {
+            (row, row.next_multiple_of(SWIZZLE_BLOCK_BYTES))
+        }
+    }
+
+    /// The key PPSSPP would name this texture by, from the file's bytes alone.
+    ///
+    /// `None` when level 0 does not fit the block (a truncated file).
+    #[must_use]
+    pub fn replacement(&self) -> Option<Replacement> {
+        let guest = self.guest_texels();
+        let (_, stride) = self.level_strides(0);
+        let bufw = (stride as u32 * 8) / self.bits_per_pixel;
+        let level0 = guest.get(..stride * self.height as usize)?;
+        let data = data_hash(
+            level0,
+            bufw,
+            self.width,
+            self.height,
+            self.bits_per_pixel,
+            0,
+        )?;
+        let dim = dim(self.width, self.height);
+        let own = self.palette.len() + guest.len();
+        let key = (own >= CLUT_WINDOW_BYTES).then(|| {
+            let mut window = Vec::with_capacity(CLUT_WINDOW_BYTES);
+            window.extend_from_slice(&self.palette[..self.palette.len().min(CLUT_WINDOW_BYTES)]);
+            let rest = CLUT_WINDOW_BYTES - window.len();
+            window.extend_from_slice(&guest[..rest.min(guest.len())]);
+            Key::with_palette(dim, clut_hash(&window), CLUT_REGISTER, data)
+        });
+        Some(Replacement { dim, data, key })
+    }
 }
 
 /// A 24-hex key with the address field dropped.

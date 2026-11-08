@@ -23,6 +23,7 @@ oag-testdata.workspace = true
 oag-assets.workspace = true
 oag-disc.workspace = true
 oag-pulse.workspace = true
+oag-vex.workspace = true
 
 [lints]
 workspace = true
