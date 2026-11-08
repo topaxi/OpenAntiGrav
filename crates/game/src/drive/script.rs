@@ -11,6 +11,8 @@
 //! set race.mode=time_trial         select that row, then step its value until it reads so
 //! press cross down                 tap each button in turn
 //! hold select left 40              hold every button down together for this many ticks
+//! rstick 1 0 30                    a pad's right stick (x y), held for this many ticks; `lstick` is the left
+//! pull r2 0.6 30                   a pad's trigger (`l2` or `r2`) pulled this far, for this many ticks
 //! escape                           the Escape key (a race: the pause menu's way out)
 //! ticks 120                        let this many ticks pass
 //! screenshot out.png               draw the next frame offscreen into a PNG
@@ -108,6 +110,12 @@ pub enum Step {
     Press(Vec<Button>),
     /// Hold every button down together for this many ticks, then let go.
     Hold { buttons: Vec<Button>, ticks: u32 },
+    /// A pad that is not there for this many ticks: its sticks and triggers read as given
+    /// (`rstick`, `lstick`, `pull`), beside the buttons.
+    Pad {
+        pad: oag_input::view::ViewRaw,
+        ticks: u32,
+    },
     /// The Escape key, which a button tap does not reach.
     Escape,
     /// Let this many ticks pass.
@@ -139,6 +147,7 @@ impl std::fmt::Display for Step {
             } => write!(f, "set {setting}={value} within {within}"),
             Self::Press(buttons) => write!(f, "press {buttons:?}"),
             Self::Hold { buttons, ticks } => write!(f, "hold {buttons:?} {ticks}"),
+            Self::Pad { pad, ticks } => write!(f, "pad {pad:?} {ticks}"),
             Self::Escape => f.write_str("escape"),
             Self::Ticks(n) => write!(f, "ticks {n}"),
             Self::Screenshot(path) => write!(f, "screenshot {}", path.display()),
@@ -304,6 +313,58 @@ impl Script {
                     })
                     .collect::<Result<_, _>>()?;
                 Step::Hold { buttons, ticks }
+            }
+            "rstick" | "lstick" => {
+                let [x, y, ticks] = words.as_slice() else {
+                    return Err(format!("{verb} takes x y and a number of ticks"));
+                };
+                let axis = |w: &String| {
+                    w.parse::<f32>()
+                        .ok()
+                        .filter(|v| v.abs() <= 1.0)
+                        .ok_or_else(|| format!("{w:?} is not an axis from -1 to 1"))
+                };
+                let stick = (axis(x)?, axis(y)?);
+                let mut pad = oag_input::view::ViewRaw {
+                    pad: true,
+                    ..oag_input::view::ViewRaw::default()
+                };
+                if verb == "rstick" {
+                    pad.right = stick;
+                } else {
+                    pad.left = stick;
+                }
+                Step::Pad {
+                    pad,
+                    ticks: ticks
+                        .parse()
+                        .map_err(|_| format!("{ticks:?} is not a number of ticks"))?,
+                }
+            }
+            "pull" => {
+                let [which, amount, ticks] = words.as_slice() else {
+                    return Err("pull takes l2 or r2, an amount and a number of ticks".into());
+                };
+                let amount = amount
+                    .parse::<f32>()
+                    .ok()
+                    .filter(|v| (0.0..=1.0).contains(v))
+                    .ok_or_else(|| format!("{amount:?} is not a pull from 0 to 1"))?;
+                let mut pad = oag_input::view::ViewRaw {
+                    pad: true,
+                    ..oag_input::view::ViewRaw::default()
+                };
+                match which.to_ascii_lowercase().as_str() {
+                    "l2" => pad.l2 = amount,
+                    "r2" => pad.r2 = amount,
+                    other => return Err(format!("{other:?} is not l2 or r2")),
+                }
+                Step::Pad {
+                    pad,
+                    ticks: ticks
+                        .parse()
+                        .map_err(|_| format!("{ticks:?} is not a number of ticks"))?,
+                }
             }
             "ticks" => match words.as_slice() {
                 [n] => Step::Ticks(n.parse().map_err(|_| format!("{n:?} is not a number"))?),

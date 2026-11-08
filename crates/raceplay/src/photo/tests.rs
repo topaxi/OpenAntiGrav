@@ -476,3 +476,96 @@ fn letting_go_of_the_button_that_opened_the_mode_is_not_a_tap() {
     assert_eq!(photo.lens(), Lens::Internal);
     assert!(!photo.hud());
 }
+
+#[test]
+fn the_right_stick_orbits_close_as_the_arrows_do_and_the_arrows_still_orbit() {
+    let mut arrows = on_close();
+    let mut right = on_close();
+    for _ in 0..20 {
+        arrows.step(stick(0.5, -0.3), &[0]);
+        right.step(
+            Pad {
+                orbit: (0.5, -0.3),
+                ..Pad::default()
+            },
+            &[0],
+        );
+    }
+    assert_ne!(arrows.orbit(), (0.0, 0.0), "the arrows orbit");
+    assert_eq!(right.orbit(), arrows.orbit(), "and so does the right stick");
+}
+
+#[test]
+fn the_left_stick_pans_across_and_zooms_up_and_down_and_does_not_orbit() {
+    let mut photo = on_close();
+    for _ in 0..10 {
+        photo.step(
+            Pad {
+                left: (1.0, 1.0),
+                ..Pad::default()
+            },
+            &[0],
+        );
+    }
+    assert!(photo.pan().0 > 0.0, "across: {:?}", photo.pan());
+    assert_eq!(photo.pan().1, 0.0);
+    assert!(photo.fov() < CLOSE_FOV.2, "up zooms in: {}", photo.fov());
+    assert_eq!(photo.orbit(), (0.0, 0.0));
+}
+
+#[test]
+fn the_right_stick_does_nothing_on_the_internal_lens() {
+    let mut photo = Photo::new(0, false, None);
+    photo.step(
+        Pad {
+            orbit: (1.0, 1.0),
+            ..Pad::default()
+        },
+        &[0],
+    );
+    assert_eq!(photo.orbit(), (0.0, 0.0));
+}
+
+#[test]
+fn a_stick_moved_with_square_held_is_not_a_hud_tap_on_the_left_stick_either() {
+    let mut photo = on_close();
+    let down = Pad {
+        square: true,
+        left: (1.0, 0.0),
+        ..Pad::default()
+    };
+    photo.step(down, &[0]);
+    photo.step(Pad::default(), &[0]);
+    assert!(!photo.hud(), "the stick used SQUARE as a modifier");
+}
+
+#[test]
+fn step_among_wraps_skips_and_lands_on_the_first_when_the_craft_is_gone() {
+    assert_eq!(step_among(&[0, 2, 5], 2, true), Some(5));
+    assert_eq!(step_among(&[0, 2, 5], 5, true), Some(0));
+    assert_eq!(step_among(&[0, 2, 5], 0, false), Some(5));
+    assert_eq!(
+        step_among(&[0, 2, 5], 3, true),
+        Some(0),
+        "3 is out of the race"
+    );
+    assert_eq!(step_among(&[4], 4, true), Some(4));
+    assert_eq!(step_among(&[], 4, true), None);
+}
+
+#[test]
+fn a_scrub_moves_the_rewind_row_by_the_pull_and_stops_at_both_ends() {
+    use crate::photo::effects::{Effects, scrub_ticks};
+    let mut effects = Effects::default().offering(false, true);
+    effects.set_live(100);
+    effects.scrub(-30);
+    assert_eq!(effects.target_tick(), 70);
+    effects.scrub(-500);
+    assert_eq!(effects.target_tick(), 0);
+    effects.scrub(500);
+    assert_eq!(effects.target_tick(), 100);
+    assert_eq!(scrub_ticks(0.0, 30), 0);
+    assert_eq!(scrub_ticks(0.05, 30), 1);
+    assert_eq!(scrub_ticks(1.0, 30), 30);
+    assert!(scrub_ticks(0.5, 30) < scrub_ticks(0.8, 30));
+}

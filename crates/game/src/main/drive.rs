@@ -252,6 +252,16 @@ impl Driver {
                 }
                 self.frame(None)?;
             }
+            Step::Pad { pad, ticks } => {
+                self.session.controls.inject_pad(*pad);
+                for _ in 0..*ticks {
+                    self.frame(None)?;
+                }
+                self.session
+                    .controls
+                    .inject_pad(oag_input::view::ViewRaw::default());
+                self.frame(None)?;
+            }
             Step::Escape => {
                 self.session.escape();
                 self.frame(None)?;
@@ -361,6 +371,7 @@ fn state_of(session: &mut Session) -> State {
         state.race = resolved(session);
     }
     (state.replay, state.replay_at) = session.replay_names();
+    (state.replay_follow, state.replay_hud) = session.replay_view_names();
     if let Stage::Race(stage) = &session.stage {
         state.photo = Some(session.photo_lens_name().to_string());
         state.photo_fx = session.photo_fx_name();

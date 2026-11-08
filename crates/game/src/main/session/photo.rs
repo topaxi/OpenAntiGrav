@@ -485,9 +485,12 @@ impl super::Session {
         let Stage::Race(stage) = &self.stage else {
             return None;
         };
-        let effects = stage.race.photo()?.effects();
+        let photo = stage.race.photo()?;
+        let effects = photo.effects();
+        let (yaw, pitch) = photo.orbit();
+        let (pan, fov) = (photo.pan(), photo.fov());
         Some(format!(
-            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={} blur={} shutter={} rewind={} play={}",
+            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={} blur={} shutter={} rewind={} play={} orbit={yaw:.2},{pitch:.2} pan={:.2},{:.2} fov={fov:.1} subject={} hud={}",
             effects.value(Row::Exposure),
             effects.value(Row::Saturation),
             effects.value(Row::SpeedBlur),
@@ -498,6 +501,10 @@ impl super::Session {
             effects.value(Row::Shutter),
             effects.target_tick(),
             u8::from(effects.playing()),
+            pan.0,
+            pan.1,
+            photo.subject(),
+            u8::from(photo.hud()),
         ))
     }
 

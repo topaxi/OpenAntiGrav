@@ -323,6 +323,17 @@ impl Session {
         (Some(word.to_string()), Some(at))
     }
 
+    /// The viewer's followed craft (a grid slot) and HUD (`on`, `off`) for the drive's state line.
+    pub(crate) fn replay_view_names(&self) -> (Option<String>, Option<String>) {
+        let (Some(active), Stage::Race(stage)) = (self.viewer.as_ref(), &self.stage) else {
+            return (None, None);
+        };
+        (
+            Some(stage.race.player_slot().to_string()),
+            Some(if active.hud { "on" } else { "off" }.to_string()),
+        )
+    }
+
     /// Whether the race on screen steps between ticks, for the draw's blend alpha.
     pub(crate) fn viewer_stepping(&self) -> bool {
         self.viewer.as_ref().is_none_or(|active| active.stepping)
