@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{Error, MANIFEST, Mod};
+use crate::{Error, MANIFEST, Mod, texture_pack};
 
 /// A colon-separated (semicolon on Windows) list of directories that replaces
 /// the default search path, as `OAG_OVERRIDES` does for overrides.
@@ -17,9 +17,14 @@ pub const EXAMPLES: &str = "assets/mods/examples";
 /// working directory: a checkout's submodule. The game runs without it.
 pub const OFFICIAL: &str = "assets/mods/official";
 
+/// Where PPSSPP texture packs are looked for beside the mods: a checkout's
+/// `data/texture-packs`, which `just fetch-texture-packs` fills.
+pub const TEXTURE_PACKS: &str = "data/texture-packs";
+
 /// Where mods are looked for when nothing names a directory: `data/mods` in a
 /// checkout, [`OFFICIAL`] and [`EXAMPLES`] in a checkout, `mods` beside the AppImage file and beside the program (inside the image
-/// for an AppImage), and `<data dir>/oag/mods`.
+/// for an AppImage), and `<data dir>/oag/mods`; then the texture packs: [`TEXTURE_PACKS`],
+/// `<data dir>/oag/texture-packs` and a PPSSPP memstick's `PSP/TEXTURES`.
 #[must_use]
 pub fn mods_search_path() -> Vec<PathBuf> {
     if let Some(from_env) = std::env::var_os(SEARCH_ENV) {
@@ -36,6 +41,13 @@ pub fn mods_search_path() -> Vec<PathBuf> {
     packaged_mods(appimage.as_deref(), program.as_deref(), &mut paths);
     if let Some(data) = dirs::data_dir() {
         paths.push(data.join("oag").join("mods"));
+    }
+    paths.push(PathBuf::from(TEXTURE_PACKS));
+    if let Some(data) = dirs::data_dir() {
+        paths.push(data.join("oag").join("texture-packs"));
+    }
+    if let Some(config) = dirs::config_dir() {
+        paths.push(config.join("ppsspp").join("PSP").join("TEXTURES"));
     }
     paths
 }
@@ -65,12 +77,15 @@ pub struct Found {
     pub path: PathBuf,
 }
 
-/// Every candidate directly inside `bases`: a folder holding an
-/// `oag-mod.toml`, a `.zip`, or a `.oagmod`. Sorted by name within a base, the
-/// bases in the order given.
+/// Every candidate directly inside `bases`: a folder holding an `oag-mod.toml`, a `.zip`, or a
+/// `.oagmod`, and a texture pack: a folder holding a `textures.ini` (read as it lies) or a
+/// `textures.zip` (the zip is the candidate, as PPSSPP prefers it). Sorted by name within a
+/// base, the bases in the order given; a path already found under another name (a memstick
+/// folder linked once per game serial) is found once.
 #[must_use]
 pub fn search(bases: &[PathBuf]) -> Vec<Found> {
     let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for base in bases {
         let Ok(read) = std::fs::read_dir(base) else {
             continue;
@@ -78,20 +93,37 @@ pub fn search(bases: &[PathBuf]) -> Vec<Found> {
         let mut here: Vec<PathBuf> = read
             .flatten()
             .map(|entry| entry.path())
-            .filter(|path| {
-                if path.is_dir() {
-                    path.join(MANIFEST).is_file()
-                } else {
-                    path.extension().is_some_and(|ext| {
-                        ext.eq_ignore_ascii_case("zip") || ext.eq_ignore_ascii_case("oagmod")
-                    })
-                }
-            })
+            .filter_map(|path| candidate(&path))
             .collect();
         here.sort();
-        out.extend(here.into_iter().map(|path| Found { path }));
+        for path in here {
+            let canonical = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+            if seen.insert(canonical) {
+                out.push(Found { path });
+            }
+        }
     }
     out
+}
+
+/// What a directory entry offers as a mod, if anything.
+fn candidate(path: &Path) -> Option<PathBuf> {
+    if path.is_dir() {
+        if path.join(MANIFEST).is_file() {
+            return Some(path.to_path_buf());
+        }
+        let zip = path.join(texture_pack::ZIP);
+        if zip.is_file() {
+            return Some(zip);
+        }
+        return path
+            .join(texture_pack::INI)
+            .is_file()
+            .then(|| path.to_path_buf());
+    }
+    path.extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("zip") || ext.eq_ignore_ascii_case("oagmod"))
+        .then(|| path.to_path_buf())
 }
 
 /// A candidate the search left out.

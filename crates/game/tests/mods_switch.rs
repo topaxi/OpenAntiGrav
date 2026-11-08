@@ -48,7 +48,11 @@ fn off(ids: &[&str]) -> BTreeSet<String> {
 }
 
 fn load(base: &Path, disabled: &BTreeSet<String>) -> Mods {
-    Mods::load_from(&[base.to_path_buf()], disabled).unwrap()
+    let switches = oag_game::settings::Mods {
+        disabled: disabled.clone(),
+        ..Default::default()
+    };
+    Mods::load_from(&[base.to_path_buf()], &switches).unwrap()
 }
 
 fn build(mods: &Mods) -> mods::Built {
@@ -124,9 +128,14 @@ fn the_built_in_cannot_be_turned_off() {
         "the MODS row is the built-in's; it stays"
     );
     assert_eq!(built.listing[0].enabled, Some(true));
-    let mut disabled = BTreeSet::new();
-    assert!(!mods::switch(&mut disabled, oag_mod::extras::ID, false));
-    assert!(disabled.is_empty());
+    let mut switches = oag_game::settings::Mods::default();
+    assert!(!mods::switch(
+        &mut switches,
+        oag_mod::extras::ID,
+        false,
+        true
+    ));
+    assert!(switches.disabled.is_empty());
     let (choices, value) = mods::switch_for(&built.listing[0], &StringTable::default());
     assert_eq!(value, "on");
     assert_eq!(choices.len(), 1, "one value: nothing to step to");
@@ -139,15 +148,16 @@ fn the_built_in_cannot_be_turned_off() {
 
 #[test]
 fn the_switch_turns_a_mod_off_and_on_again_in_the_set() {
-    let mut disabled = BTreeSet::new();
-    assert!(mods::switch(&mut disabled, "test.garage", false));
+    let mut switches = oag_game::settings::Mods::default();
+    assert!(mods::switch(&mut switches, "test.garage", false, true));
     assert!(
-        !mods::switch(&mut disabled, "test.garage", false),
+        !mods::switch(&mut switches, "test.garage", false, true),
         "already off"
     );
-    assert_eq!(disabled, off(&["test.garage"]));
-    assert!(mods::switch(&mut disabled, "test.garage", true));
-    assert!(disabled.is_empty());
+    assert_eq!(switches.disabled, off(&["test.garage"]));
+    assert!(mods::switch(&mut switches, "test.garage", true, true));
+    assert!(switches.disabled.is_empty());
+    assert!(switches.enabled.is_empty());
 }
 
 #[test]
@@ -320,4 +330,47 @@ fn a_flat_list_front_end_with_four_lines_keeps_the_no_one_sends_warning() {
         "{lines:?}"
     );
     assert!(lines.iter().any(|(l, _)| l == "ADDS"), "{lines:?}");
+}
+
+/// A mod that starts off (a texture pack) is off until the player turns it on, and the switch
+/// is the `enabled` list, not `disabled`: so it is a mod installed later that takes its own
+/// default, and turning it off again leaves nothing behind.
+#[test]
+fn a_texture_pack_starts_off_and_its_switch_is_the_enabled_list() {
+    let dir = base("pack");
+    let pack = dir.join("Some Pulse Pack");
+    std::fs::create_dir_all(&pack).unwrap();
+    std::fs::write(
+        pack.join("textures.ini"),
+        "[options]\nhash = xxh64\n[games]\nUCES00465 = textures.ini\n[hashes]\n",
+    )
+    .unwrap();
+    let id = "ppsspp.some-pulse-pack";
+
+    let mut switches = oag_game::settings::Mods::default();
+    let loaded = Mods::load_from(std::slice::from_ref(&dir), &switches).unwrap();
+    assert!(
+        loaded.is_disabled(id),
+        "off before the player says otherwise"
+    );
+    assert!(loaded.player().all(|m| m.manifest.id != id));
+    let listing = build(&loaded).listing;
+    let entry = listing.iter().find(|l| l.id == id).expect("listed");
+    assert_eq!(entry.enabled, Some(false));
+    assert!(!entry.default_enabled);
+
+    assert!(mods::switch(&mut switches, id, true, entry.default_enabled));
+    assert!(switches.enabled.contains(id) && switches.disabled.is_empty());
+    let loaded = Mods::load_from(std::slice::from_ref(&dir), &switches).unwrap();
+    assert!(!loaded.is_disabled(id));
+    assert!(loaded.player().any(|m| m.manifest.id == id));
+
+    assert!(mods::switch(
+        &mut switches,
+        id,
+        false,
+        entry.default_enabled
+    ));
+    assert!(switches.enabled.is_empty() && switches.disabled.is_empty());
+    assert!(Mods::load_from(&[dir], &switches).unwrap().is_disabled(id));
 }

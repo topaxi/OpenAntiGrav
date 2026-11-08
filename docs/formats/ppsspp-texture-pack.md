@@ -1,6 +1,6 @@
 # PPSSPP texture packs
 
-**Status: hash understood and measured, nothing wired.** A PPSSPP texture pack
+**Status: hash understood and measured; wired for Pulse's `.vex` and whole-image `.mip` textures as an off-by-default mod ("Wired" below).** A PPSSPP texture pack
 replaces a texture by the **key PPSSPP computes from the texture's bytes in guest
 memory**, before decode. This page is the key, its evidence, and how many keys of
 the two Wipeout packs this engine reproduces from the bytes it loads off the disc.
@@ -345,7 +345,44 @@ the pictures do not.
    runtime or live in a container this census does not read; 5 more decode to our
    picture (the hulls above and two `.mip`s, `Data.wad#981` and `#1018`).
 
-## Ready to wire
+## Wired
+
+A pack is a mod that starts off ([mods.md](../tools/mods.md), "Texture packs"): `oag-mod`
+recognises a `textures.ini` folder or zip (or a folder holding `textures.zip`) and
+`oag_mod::texture_pack::replacements` indexes it as an `oag_texture::replacer::Replacements`
+over the mod's own files. The race load (`oag_raceplay::texture_pack::engage`, which is the one
+place that knows the disc serial) makes the first enabled pack that names a PSP disc's serial
+the active one, and the decoders ask it:
+
+- **`.vex` textures** (`oag_mesh::mesh::embedded_texture_slots`): each `Texture` node is keyed
+  with `Stored::from_vex`; a hit becomes `ModelTexture::replaced`, in the **same form the disc's
+  texture took** (a `Texels::Chain` stays a chain, so the model's slope level selection stays
+  on for every slot) with the levels the scale adds (a 4x picture gains two), so the deepest
+  level is as small on screen as the original's. Lookup is PPSSPP's order, `(K, H)`, `(K, 0)`,
+  `(0, H)`; a texture with no reproducible key (4-bit, under 1,024 bytes) is found by `(0, H)`
+  alone; a blank line leaves a texture alone.
+- **Whole-image `.mip`** (`oag_texture::replacer::mip`): the flare, cloud and mist textures the
+  race load reads. Fractions of the picture are what they draw with, so a 4x picture needs no
+  change.
+- **Level selection.** The slope rule (`texlod_slope`, `crates/mesh/shaders/shade.wesl`) picks a
+  level from view depth alone, so a 4x picture is sampled at the same level number as the
+  disc's: four times the texels at every distance, and the extra levels a replacement chain gains
+  are never reached. No shimmer showed in the frames; kept so a rule change cannot starve a deep level.
+- **Not replaced, by choice**: the HUD sprite sheet, fonts and every other atlas cut by pixel
+  offset (`oag_hud::sprite`, `.fnt`), the menu and boot art, the loading screen, particle
+  (`.pob`) textures and ship skins. Their offsets are in the original's pixels, so drawing a
+  4x picture there misplaces glyphs; each is its own lane's check, in a frame.
+- **Frames** (Pulse EU, the 2020 reTokyo snapshot, `--race --seed 1 --ticks 600 --size 1280x720`):
+  with the pack off the frame is byte-identical to `main`'s; with it on, 453 textures were
+  replaced, the hull, the track surface and the walls read as the pack's art in the same
+  places, and the HUD is untouched. Test:
+  `crates/raceplay/tests/texture_pack_ground_truth.rs` (slots grow by a multiple, off
+  changes nothing, a pack for another serial is not used and says so).
+- **Not exercised**: the 2026 `textures.zip` itself (553 MB, inside the `GitHub - WipEout Mods`
+  download) was not unpacked for the frames; the zip route is covered by a synthetic zip in
+  `oag-mod` and the folder route by the real snapshot. ZIM images and Pure are not wired.
+
+### What the wiring was built from
 
 For the lane that draws a pack (opt-in, default off, rendering-only, lazy):
 
@@ -403,10 +440,12 @@ the original's guest memory, not by an asset name. The design that fits:
 - **Kind.** A texture pack changes only what is drawn: no simulation module, no menu row,
   no state. It is the one mod kind that must be **off by default**: the manifest gains a
   `default-enabled` boolean (default `true`, as every mod is on until `[mods] disabled`
-  names it), and a recognised pack is always `false`. Switching it on in the MODS page
-  writes the existing `[mods]` list; nothing new in the settings file. Per-title
-  filtering is the existing `titles` field.
-- **Search path.** `oag_mod::mods_search_path` gains `data/texture-packs/` (one level, a
+  names it), and a recognised pack is always `false`. **Done, with one correction to this
+  design**: `disabled` cannot say "on although it starts off", so the settings file gained
+  `[mods] enabled`, the opt-in list for a mod that starts off. The pack is filtered by the
+  disc's serial against its `[games]` rather than by `titles`, which a recognised pack leaves
+  empty (the serial-to-title table was not needed).
+- **Search path (done).** `oag_mod::mods_search_path` gains `data/texture-packs/` (one level, a
   folder holding `textures.ini`, or `textures.zip`), the device's
   `<XDG_DATA_HOME>/oag/texture-packs/`, and, when it exists, a PPSSPP memstick's
   `PSP/TEXTURES/` (each `<serial>/` folder: a pack linked once per serial is one mod, by

@@ -127,7 +127,7 @@ pub fn finish_definition(
 }
 
 /// The tree, listing and mod content a live rebuild starts from: the mods read again off
-/// `bases` (the search path) with `disabled` turned off, `mods_menu` for `language`, then the title's trims
+/// `bases` (the search path) with the mods `switches` turn off turned off, `mods_menu` for `language`, then the title's trims
 /// with `strings`, the new language's own words. What a boot builds, bar the disc reads.
 ///
 /// # Errors
@@ -135,7 +135,7 @@ pub fn finish_definition(
 /// The mods cannot be searched, or the vanilla tree is wrong ([`mods_menu`]).
 pub fn rebuilt(
     bases: &[std::path::PathBuf],
-    disabled: &std::collections::BTreeSet<String>,
+    switches: &crate::settings::Mods,
     language: Option<&str>,
     title: &'static oag_title::Title,
     updated: bool,
@@ -145,7 +145,7 @@ pub fn rebuilt(
     Vec<Listing>,
     crate::campaign::custom::Installed,
 )> {
-    let loaded = Mods::load_from(bases, disabled)?;
+    let loaded = Mods::load_from(bases, switches)?;
     let (mut definition, listing, installed) = mods_menu(&loaded, language, title, updated)?;
     finish_definition(&mut definition, title, strings);
     Ok((definition, listing, installed))

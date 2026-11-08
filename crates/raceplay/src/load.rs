@@ -104,7 +104,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
     // **Opened as whichever title the source turned out to be**, the way the boot
     // path does, so `--race` and the menus' `Launch Game` reach every title.
-    //
     // **Two sources when `craft_source` names a Race Remix** - see
     // `oag_source::remix::Remix`. `archives`/`title` stay the track's; a
     // craft-governed load reads `craft_title` and `craft_of(&mut craft, &mut archives)` instead.
@@ -126,6 +125,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         report.push(format!("craft from {}", craft_title.name));
     }
     report.push(archives.layout.describe());
+    let _pack = crate::texture_pack::engage(options, &archives, &mut report);
     for pack in &archives.packs {
         report.push(format!("dlc: {}", pack.label()));
     }

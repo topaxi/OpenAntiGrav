@@ -481,7 +481,7 @@ fn run(cli: Cli) -> Result<()> {
         .or_else(|| cli.track_file.clone())
         .map(|path| race::foreign::entry(&path))
         .transpose()?;
-    let (definition, menu_source) = prepare::definition(&cli, settings.language.as_deref(), &settings.mods.disabled)?;
+    let (definition, menu_source) = prepare::definition(&cli, settings.language.as_deref(), &settings.mods)?;
     let pending = prepare::Pending {
         foreign_entry,
         definition,
@@ -545,7 +545,6 @@ fn run(cli: Cli) -> Result<()> {
             cli.net.connect(&source)?;
             None
         };
-        #[cfg_attr(not(feature = "extensions"), expect(unused_mut, reason = "extensions off"))]
         let mut options = pending.race_options(&source, Vec::new());
         // The rules modules of the mods that are on. None in a network race (the host's
         // race runs vanilla, and the lobby's fingerprint leaves the examples out), an
@@ -553,8 +552,9 @@ fn run(cli: Cli) -> Result<()> {
         #[cfg(feature = "extensions")]
         {
             let vanilla = net.is_some() || cli.wreck.campaign_cell.is_some() || cli.event.is_some();
-            oag_game::mod_extensions::attach(&mut options, &settings.mods.disabled, vanilla);
+            oag_game::mod_extensions::attach(&mut options, &settings.mods, vanilla);
         }
+        oag_game::texture_pack::attach(&mut options, &settings.mods);
         let options = match &net {
             Some(net) => net.race_options(options)?,
             None => options,

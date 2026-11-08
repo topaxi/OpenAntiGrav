@@ -18,6 +18,7 @@ impl Default for Options {
             foreign_track: None,
             extensions: Vec::new(),
             find_extensions: None,
+            find_texture_packs: None,
             boost_zoom: None,
             team: None,
             hull_variant: None,

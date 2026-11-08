@@ -37,6 +37,7 @@ mod start_line_ground_truth;
 mod start_pose_ground_truth;
 #[cfg(feature = "ballisticng")]
 mod survey;
+mod texture_pack_ground_truth;
 mod texture_stream_ground_truth;
 mod track_audio_hd_ground_truth;
 mod track_props_ground_truth;

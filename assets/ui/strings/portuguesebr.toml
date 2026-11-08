@@ -300,6 +300,7 @@ OAG_MODS_ADDS = { text = "ADICIONA", human = false }
 OAG_MODS_NO_LICENSE = { text = "SEM LICENÇA INFORMADA", human = false }
 OAG_MODS_LICENSE_FILE = { text = "VEJA %s", human = false }
 OAG_MODS_NOTHING = { text = "NADA", human = false }
+OAG_MODS_TEXTURE_PACK = { text = "TEXTURAS", human = false }
 OAG_MODS_BUILT_IN = { text = "INTEGRADO", human = false }
 OAG_MODS_ENABLED = { text = "ATIVADO", human = false }
 OAG_MODS_ON = { text = "LIGADO", human = false }

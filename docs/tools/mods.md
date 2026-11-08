@@ -23,9 +23,12 @@ Searched, in this order: `$OAG_MODS` alone when set (a path list), else `data/mo
 checkout), `assets/mods/official/` (the official mods, the [`official-mods`](https://github.com/OpenAntiGrav/official-mods)
 submodule, `oag_mod::OFFICIAL`), `assets/mods/examples/` (the example mods, the [`mod-examples`](https://github.com/OpenAntiGrav/mod-examples) submodule;
 both found when the game runs from a checkout), `mods/` beside the program (or the AppImage), and `<data dir>/oag/mods/`
-(`~/.local/share/oag/mods/` on Linux). Each directory is searched one level deep: a
-folder holding `oag-mod.toml`, or a `*.zip`, or a `*.oagmod`. `just mods-list` shows
-what the search finds and what it left out.
+(`~/.local/share/oag/mods/` on Linux), then the texture packs: `data/texture-packs/`,
+`<data dir>/oag/texture-packs/` and a PPSSPP memstick's `PSP/TEXTURES/` (under `~/.config/ppsspp` on
+Linux). Each directory is searched one level deep: a folder holding `oag-mod.toml`, or a
+`*.zip`, or a `*.oagmod`, or (a texture pack, below) a folder holding `textures.ini` or `textures.zip`.
+A path found twice (a memstick folder linked once per game serial) is one candidate.
+`just mods-list` shows what the search finds and what it left out.
 
 ## The manifest
 
@@ -52,6 +55,49 @@ version is left out and named. `titles` names the titles the mod is for, by
 `oag_title::Title::slug` (`wipeout-pulse`, `wipeout-hd`, `wipeout-omega-collection`);
 a mod's campaigns are offered only on those (empty: any). `just mods-check <path>`
 opens a mod and checks its manifest.
+
+## Texture packs
+
+A PPSSPP texture pack is a mod that starts **off**
+([`docs/formats/ppsspp-texture-pack.md`](../formats/ppsspp-texture-pack.md) has the key and
+the evidence). It needs no `oag-mod.toml`: a folder or a zip with a `textures.ini` at its root,
+or a folder holding a `textures.zip`, is **recognised** and given a manifest: `id`
+`ppsspp.<name, lower-cased and slugged>` (a bare `textures.zip` takes its folder's name), `name`
+that name, version `0.0.0`, no authors, no licence (`no license stated` on the MODS page),
+`titles` empty, and the pack's `[games]` serials. A pack's author who wants a name, release
+and licence writes an `oag-mod.toml`, which wins:
+
+```toml
+[mod]
+id = "someone.pulse-hd"
+# ... the usual keys ...
+default-enabled = false      # optional; absent means false for a mod with [texture-pack], true otherwise
+
+[texture-pack]
+format = "ppsspp"            # the one format; anything else refuses the mod by name
+# ini = "textures.ini"       # where the ini is in the mod (default)
+# serials = ["UCES00465"]    # absent: read from the ini's [games]
+```
+
+- **`default-enabled`** is the one mod key that changes the settings file: a mod that starts
+  off is switched on through `[mods] enabled = ["ppsspp.my-pack"]`, beside `disabled` for a mod
+  that starts on; an id is in at most one. The MODS page's ENABLED row writes the right one.
+  The page's ADDS line for a pack that is on reads **TEXTURES**.
+- **What it does.** A race load opens the packs that are on, takes the first whose `[games]`
+  names the disc's serial (a PSP disc only: the keys are the PSP's), and the decoders ask it as
+  they build a picture (the pack is switched off again when the load ends, so a menu preview draws
+  the disc's own): a `.vex` texture (hulls, tracks) by its key, and the whole-image `.mip`
+  textures the load reads for flares, clouds and mist; the PNG is read the first time its
+  texture is decoded, under a 192 MiB cache cap. The HUD sheet, the fonts and every other
+  atlas cut by pixel offset keep the disc's own picture. Off, a frame is byte-identical to
+  the game without the mod. Rendering only: nothing reaches `World`, a snapshot or the LAN
+  content fingerprint.
+- **The load** says `texture pack <name>: N key(s)` in the load report and, when it ends, `N texture(s)
+  replaced` in the log, both at `debug`, and `texture pack not used: <name>: <why>` at `warn` (the pack's
+  `[games]` does not name this disc, it is not a PSP disc, its `textures.ini` hashes another
+  way, or it will not open).
+- `.zip` and folder alike are read in place; PPSSPP prefers `textures.zip` to a loose tree, so
+  does the search. ZIM images (a later pack's format) are not read yet.
 
 ## Campaigns, pilots and tracks: `campaigns/`, `pilots/`, `tracks/`
 

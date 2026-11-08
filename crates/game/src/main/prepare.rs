@@ -166,6 +166,8 @@ impl Pending {
             // Filled at launch (`oag_game::mod_extensions::attach`), from the mods on then.
             extensions: Vec::new(),
             find_extensions: None,
+            // Filled at launch (`oag_game::texture_pack::attach`), from the packs on then.
+            find_texture_packs: None,
             // Passed straight through like `track` above, `None` included:
             // `race::load` resolves an unnamed team from the title it opened,
             // which is the only place the title is known. See
@@ -450,7 +452,7 @@ impl Pending {
 pub(crate) fn definition(
     cli: &Cli,
     language: Option<&str>,
-    disabled: &std::collections::BTreeSet<String>,
+    switches: &crate::settings::Mods,
 ) -> Result<(menu::Definition, MenuSource)> {
     match cli.menu_args.menu.as_deref() {
         Some(path) => {
@@ -462,7 +464,7 @@ pub(crate) fn definition(
             Ok((tree, MenuSource::Custom))
         }
         None => {
-            let mods = oag_game::mods::Mods::load(disabled)?;
+            let mods = oag_game::mods::Mods::load(switches)?;
             let built = mods
                 .build(menu::BUILT_IN, language, None)
                 .context("building the menu definition")?;

@@ -26,7 +26,10 @@ fn tree(
     title: &'static oag_title::Title,
     language: Option<&str>,
 ) -> Definition {
-    let disabled = off.iter().map(ToString::to_string).collect();
+    let disabled = oag_game::settings::Mods {
+        disabled: off.iter().map(ToString::to_string).collect(),
+        ..Default::default()
+    };
     let mods = Mods::load_from(&[base.to_path_buf()], &disabled).unwrap();
     mods.build(
         oag_ui::menu::BUILT_IN,

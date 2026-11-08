@@ -301,6 +301,7 @@ mod stages;
 mod start;
 mod takeoff_line;
 mod telemetry;
+pub mod texture_pack;
 #[cfg(feature = "view")]
 mod texture_sink;
 mod tick;

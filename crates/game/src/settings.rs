@@ -211,12 +211,17 @@ pub struct Log {
 /// The MODS page's switches, by mod id (`oag_mod::Manifest::id`).
 ///
 /// A set of the mods turned **off**, so a mod installed later is on until the player
-/// says otherwise. An id no installed mod has is kept: a mod moved out of the search
+/// says otherwise (a mod that starts off is on only while it is in [`Mods::enabled`]). An id no installed mod has is kept: a mod moved out of the search
 /// path and back stays off. A `BTreeSet` so the rewrite [`load`] makes is stable.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Mods {
     #[serde(default)]
     pub disabled: std::collections::BTreeSet<String>,
+    /// The mods that start off (`oag_mod::Manifest::default_enabled`, a texture pack) the
+    /// player turned on. Kept apart from [`Self::disabled`] so that a mod installed later
+    /// takes its own default; an id is in at most one of the two.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub enabled: std::collections::BTreeSet<String>,
 }
 
 /// `[replay]`: whether a race that can be recorded is, and written to `auto/` when it ends
