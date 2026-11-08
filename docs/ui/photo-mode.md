@@ -223,7 +223,7 @@ click with the help hidden shows it. A chip says its row and its value, and the 
 row's word is too long for it (Pulse's own `PHOTO CAMERA MODE`). Not ported: HD's separate tilt triggers (L2, R2 scrub the rewind row here), the touch gestures
 of 2048 (a follow-up).
 
-**The stick layout is HD's measured one** (`docs/ghidra/functions/ps3-hdfury-eu/photo-mode.md`, "Controls": the left stick
+**The stick layout is HD's measured one** (`docs/ghidra/functions/ps3-hdfury-eu/photo-mode.md`, lines 95-98 and 140-141: the left stick
 orbits, SQUARE held with it pans, the right stick's Y zooms). **ADR-0088's binding plan misnames a different layout as
 HD's** ("the right stick orbits and the left stick pans and zooms"); the layout above, the measured one, is what is built,
 at the maintainer's direction. **Chosen, not measured, and different from HD:** the right stick's X axis tilts (HD has no
