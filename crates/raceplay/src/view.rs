@@ -96,6 +96,10 @@ pub struct RaceView {
     /// View-side bookkeeping for [`Race::runs_on_after_the_end`] and the spectator
     /// director's clock; nothing the simulation reads.
     pub(super) wreck_ended_tick: Option<u64>,
+    /// How many times a viewer has put the race back to another tick
+    /// ([`Race::restore_for_viewing`]): each is a cut, so the motion blur and a temporal
+    /// upscaler do not read the jump as motion ([`Race::camera_cuts`]).
+    pub(super) restores: u32,
     /// The external block the chase camera is currently flying, which is
     /// whichever of [`Self::chase_far`] / [`Self::chase_close`]
     /// [`Self::camera_view`] names. Kept as its own field rather than looked up

@@ -406,7 +406,7 @@ impl Race {
     #[must_use]
     pub fn viewed_camera_cuts(&self) -> u32 {
         match self.extra_viewpoint() {
-            Some(slot) => self.respawns_of(slot),
+            Some(slot) => self.respawns_of(slot).wrapping_add(self.view.restores),
             None => self.camera_cuts(),
         }
     }

@@ -254,7 +254,8 @@ impl Race {
     /// How many times the player's picture has jumped to a different shot: each
     /// of their respawns, and the destroy camera taking over and letting go
     /// ([`super::destroy_camera`]), and the spectator camera's take-over and cuts
-    /// ([`super::finish_camera`]). What the temporal upscaler's history reset
+    /// ([`super::finish_camera`]), and a viewer's seek ([`Self::restore_for_viewing`]).
+    /// What the temporal upscaler's history reset
     /// watches, so a cut throws the history away the way a respawn does.
     #[must_use]
     pub fn camera_cuts(&self) -> u32 {
@@ -274,6 +275,14 @@ impl Race {
             .wrapping_add(spectator)
             .wrapping_add(intro)
             .wrapping_add(photo)
+            .wrapping_add(self.view.restores)
+    }
+
+    #[cfg(feature = "view")]
+    /// How many times a viewer has put this race at another tick ([`Self::restore_for_viewing`]).
+    #[must_use]
+    pub fn viewer_restores(&self) -> u32 {
+        self.view.restores
     }
 
     /// The same, for any craft on the grid.
