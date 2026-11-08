@@ -193,6 +193,7 @@ fn a_race_lays_its_grid_out_as_the_executable_does() {
         headline: Headline::Position(2),
         rows: vec![
             FieldRow {
+                score: None,
                 place: 1,
                 time_ticks: Some(6000),
                 player: false,
@@ -201,6 +202,7 @@ fn a_race_lays_its_grid_out_as_the_executable_does() {
                 team: None,
             },
             FieldRow {
+                score: None,
                 place: 2,
                 time_ticks: None,
                 player: true,
@@ -282,6 +284,7 @@ fn hd_steps_its_options_in_screen_order_keeping_the_focus() {
 #[test]
 fn a_single_race_names_each_craft_by_its_team_and_a_racing_craft_says_so() {
     let row = |place: u8, team: &str, time: Option<u64>| FieldRow {
+        score: None,
         place,
         time_ticks: time,
         player: place == 1,

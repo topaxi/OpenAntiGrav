@@ -13,6 +13,7 @@ fn board(places: &[(u8, u8, bool)]) -> Board {
                 best_lap_ticks: None,
                 player: slot == 0,
                 name: None,
+                points: None,
             })
             .collect(),
         laps_target: Some(3),

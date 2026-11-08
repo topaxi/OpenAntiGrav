@@ -117,6 +117,13 @@ impl Session {
         // knows its seed (`race::load::roster`).
         let roster = stage.race.slot_teams().to_vec();
         let observation = stage.observation();
+        // A scored race (an HD Eliminator) is placed on its points, which `observation.place`
+        // already is; its headline is that place, where a race position has no Eliminator headline.
+        let scored_place = board
+            .as_ref()
+            .filter(|board| board.scored() && !split)
+            .and_then(|board| board.player())
+            .map(|row| row.place);
         let standing = &stage.race.sim.world.ships[0].standing;
         let boosts = stage.race.run_stats().boosts_by_lap;
         let laps: Vec<oag_ui_screens::endrace::LapSplit> = (0..oag_race::MAX_RECORDED_LAPS)
@@ -318,16 +325,19 @@ impl Session {
                 stage.race.run_stats(),
             ))
         } else if is_hd {
+            let rows = oag_game::results_tables::field_rows(
+                board.as_ref(),
+                &oag_game::results_tables::team_keys(title_ref, stage.race.slot_teams()),
+            );
             ResultsModel::Hd(oag_ui_screens::endrace::FieldResults {
                 headline: if split {
                     oag_ui_screens::endrace::Headline::Several
+                } else if let Some(place) = scored_place {
+                    oag_ui_screens::endrace::Headline::Position(place)
                 } else {
                     headline(mode, observation.place)
                 },
-                rows: oag_game::results_tables::field_rows(
-                    board.as_ref(),
-                    &oag_game::results_tables::team_keys(title_ref, stage.race.slot_teams()),
-                ),
+                rows,
                 loyalty: hd_loyalty,
             })
         } else {

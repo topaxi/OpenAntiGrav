@@ -78,7 +78,7 @@ against a `serve` on the grid, `--script "1:down:cross;2:give:6;3:tap:triangle"`
 
 `Hud_UpdateEliminatorRows` (`hud+0x350 + 4 * rank`, bound from `"PosTag%d"`, `0x0009d870`) gives each
 craft `rank = count - 1 - (crafts with a strictly lower truncated score)` and walks up from a taken
-rank, crafts in array order: the rule `oag_hud::kill_tags::ranked` already carries. Text is
+rank, crafts in array order: the rule `oag_race::score::ranked` carries (the HUD and the board both call it). Text is
 `"%s  ( %d )"` (`0x0077ed98`, two spaces), the truncated score. Scale is `1.2` for the person
 (`0x008a7620`), `1.0` for an opponent (`0x008a75bc`), both written to `+0xb8`/`+0xbc`. The name is
 the team's for an opponent and the profile's for the person (`PLAYER` on these frames). The person's
@@ -90,6 +90,40 @@ The header is `Hud_BindWidgets`' `"%s ( %d )"` of `IG_HUD_TARGET` and the target
 The results screen ranks by the same score: `HARIMAU 202`, `FEISAR 177`, `GOTEKI 45 176` ... under
 `POINTS`, headed `2ND PLACE - KILLS: 6 DEATHS: 0` (`results.png`). 195 Elimination loyalty was
 paid on that race.
+
+### The results table: `0x00229bf0` (2026-11-08, `hd-elim-points`)
+
+The Eliminator's `EndRace Results` filler, found off `IG_HUD_KILLS` (`0x00794b08`) through
+`scripts/ps3-toc.py attrib`; the call that reaches it is untraced (the table's frame is the race
+family's, `EndRaceResults_LayoutGrid`'s `3`/`4`/`0xf` numbers, which the reference frame fits).
+Confidence 80 for the layout (every constant below read off the function and its TOC, and the
+reference frame measured against it), 75 that this is the mode-8 filler (the string it writes
+and the frame agree; the caller is not traced).
+
+| Widget | Law | Constant |
+| --- | --- | --- |
+| `GridHead1` | shown, caption as laid out (`IG_HUD_POS`), `152` wide | `0x43180000` |
+| `GridHead2` | `ER_TEAM` at `x = 160`, `348` wide | `0x43200000`, `0x43ae0000` |
+| `GridHead3` | `ER_POINTS` at `x = 516`, `275` wide | `0x44010000`, `0x43898000` |
+| `Grid0.r` | the shown number at `x = 40`, `y = 96 + 45 r` | `0x42200000` |
+| `Grid1.r` | the team idstring, localised, at `x = 250` | `0x437a0000` |
+| `Grid2.r` | `%d` of the record's `+0x150` (the points) at `x = 556` | `0x440b0000` |
+| `Gridi.r` | the team's badge at `x = 180`, `y = 82 + 45 r` | `0x43340000` |
+| `Line1` | `"%s - %s: %d %s: %d "` (`0x00794b28`) of `ER_%dPLACE`, `IG_HUD_KILLS`, kills (`+0x158`), `ER_DEATHS`, deaths (`+0x15c`), written at the person's row, the place being the row's position | |
+
+The shown number is not the row index: row `i + 1` shows `i + 2` once its points differ from row
+`i`'s, and the same number when they match, so `177, 177, 90` reads `1, 1, 3`. `ER_DEATHS` ends in
+a colon on the disc and the format adds one; the original's frame shows one, how it avoids the
+second is not read, so ours drops the string's (chosen, not measured). The original's own
+record sort and its tie are not read here (chosen, not measured): ours ranks the board with the
+HUD's measured rule, `oag_race::score::ranked`, so equal points stack with the later grid slot on
+top, as the rows did on the live frame.
+
+Ours: `oag_raceplay::scoreboard::build` orders a scored race's board on points and numbers the rows
+(`Row::place`, the number the headline and the voice read in place of the race position);
+`Row::points` carries the truncated score, kills and deaths; `oag_ui_screens::endrace::hd` draws the
+table off `FieldRow::score`. Walked through the menus on an HD Racebox Eliminator
+(`--drive`, `--autopilot`) the frame matches `results.png` in layout, order and headline.
 
 **`MPWeaponIcon0`-`7` are not drawn in a single-player Eliminator.** `Hud_BindWidgets` binds them and
 clears their visible bits (`0x0009d988..`); no frame of four runs shows one. That half of the brief's
@@ -118,8 +152,7 @@ points go to the first impact whose radius reached the craft (`credit_blast`'s o
 `HighlightBar` keeps its authored width, because the HUD's draw list has no font to measure the
 row with, where `Hud_PlaceHighlightBar` fits its left edge to the text.
 
-**Open:** the results screen (HD's Eliminator headline is still `Headline::Unresolved` and its
-table is `oag_raceplay::scoreboard`'s places, not `POINTS`); the Racebox's TARGET row (`race_setup`
+**Open:** the Racebox's TARGET row (`race_setup`
 is `None` on HD, and the disc's row is a `Slider`, not a list); the lap refill for an opponent:
 ours refills every craft, HD's reads as the person's alone (an AI's shield did not move on any lap);
 `ScoreFeedBack` above; the person's name in a row is the team's, not a profile's, and `--race` with
@@ -128,11 +161,16 @@ in.
 
 ## Other titles
 
-- **2048:** **checked, applies, not wired.** The executable names `IG_HUD_TARGET`, `ScoreFeedBack%d`,
+- **2048:** the results table: **checked, differs.** Its executable carries no `%s - %s: %d %s: %d`
+  string (`search_strings` on the v1.04 eboot finds none) and its summaries are the touch
+  screens'. The score law: **checked, applies, not wired.** The executable names `IG_HUD_TARGET`, `ScoreFeedBack%d`,
   `MPWeaponIcon%d`, `%s ( %d )` and the three score scales, and its `WeaponAIStats2048.xml` carries
   the row. Whether its awards are HD's is unread: the writer of its score was not looked for, and
   its Elimination campaign objective reads kills (`crates/2048/src/campaign.rs`).
-- **Omega:** **checked, applies, not wired.** The same strings, including the row's two-space
+- **Omega:** the results table: **checked, applies, not wired.** The same format string and
+  `ER_DEATHS` sit together at `0x018241f9`/`0x018241ef`, beside its `Grid%d.%d`; its front end does
+  not load the screen yet (`docs/ui/endrace-screens.md`). The score law: **checked, applies, not
+  wired.** The same strings, including the row's two-space
   `%s  ( %d )` (`FUN_0125e9b0`). Its named `weaponaistats.xml` has no `<EliminatorAIStats>` row and
   its loader defaults every scale to `1.0`, so an opponent there would score flat if the law holds.
 - **Fury against the base game:** the `<EliminatorAIStats>` row is in `DATA00`'s copy alone

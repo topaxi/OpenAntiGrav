@@ -58,28 +58,6 @@ const OPPONENT_SCALE: f32 = 0.8;
 /// (`Hud_UpdateEliminatorRows`, `0x008a7620` and `0x008a75bc`).
 const SCORE_PLAYER_SCALE: f32 = 1.2;
 
-/// The row each craft takes, top to bottom: `result[row]` is an index into
-/// `kills`.
-///
-/// `FUN_0881af38`'s rule, read off its decompile: a craft's row is
-/// `count - 1 - (number of crafts with strictly fewer kills)`, and a taken
-/// row moves the craft up one at a time until a free one turns up, crafts
-/// taken in array order.
-#[must_use]
-pub fn ranked(kills: &[u32]) -> Vec<usize> {
-    let count = kills.len();
-    let mut rows = vec![usize::MAX; count];
-    for (craft, &mine) in kills.iter().enumerate() {
-        let fewer = kills.iter().filter(|&&other| other < mine).count();
-        let mut row = count - 1 - fewer;
-        while rows[row] != usize::MAX {
-            row -= 1;
-        }
-        rows[row] = craft;
-    }
-    rows
-}
-
 /// The row index `PosTag<n>` names.
 fn row_of(name: &str) -> Option<usize> {
     name.strip_prefix("PosTag")?.parse().ok()

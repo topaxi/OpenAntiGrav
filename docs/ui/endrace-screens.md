@@ -67,7 +67,7 @@ such state there). An Eliminator target and a Zone run keep the panels at once, 
 | Widget | Draws | Why |
 | --- | --- | --- |
 | `BigTopText` (`ER_RES`) | Yes | direct idstring, resolved generically |
-| `Line1` (headline) | Yes, for `TimeTrial`/`SpeedLap`/`SingleRace` | `SingleRace` uses the finishing-position idstring (`ER_1STP`..`ER_8THP`). `Zone` and `Eliminator` have tables of their own, below; `Headline::Unresolved` remains only for HD's grid, whose populate for them is unread |
+| `Line1` (headline) | Yes, for `TimeTrial`/`SpeedLap`/`SingleRace` | `SingleRace` uses the finishing-position idstring (`ER_1STP`..`ER_8THP`). `Zone` and `Eliminator` have tables of their own, below; `Headline::Unresolved` remains for HD's Zone (HD's Eliminator is a points table: `docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`, "The results table") |
 | `lap0.0`/`lap0.1` (header) | Yes | `RC_LAP`/`PRO_TIME` |
 | `lap0.2` (header) | **No text, but the header icon draws** | the cell is blanked in the original too: `boostimg` is the header - see the `boostimg` row |
 | `lap{n}.0`/`lap{n}.1` | Yes, up to [`oag_race::MAX_RECORDED_LAPS`] (4) | off `Standing::lap_splits`, which is itself capped at 4 - see below |

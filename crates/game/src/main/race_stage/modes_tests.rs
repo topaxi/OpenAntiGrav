@@ -104,6 +104,7 @@ fn leg_board(order: [u8; 3]) -> Board {
         best_lap_ticks: None,
         player: slot == 0,
         name: None,
+        points: None,
     };
     Board {
         rows: vec![row(0, 1), row(order[0], 2), row(order[1], 3), row(order[2], 4)],

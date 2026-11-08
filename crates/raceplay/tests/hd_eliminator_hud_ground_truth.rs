@@ -201,6 +201,51 @@ fn a_racebox_eliminator_is_scored_to_the_slider_target() {
     );
 }
 
+/// The board an Eliminator leaves is the score's: every row carries the points its craft ended on
+/// and the rows run highest first, so `EndRace Results` can draw a `POINTS` column in that order.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_finished_eliminator_leaves_a_board_ranked_on_points() {
+    let Some(image) = image() else { return };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Eliminator,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading an HD Eliminator");
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    race.set_autopilot(true);
+    for _ in 0..30_000 {
+        race.tick(&PlayerInputs::none());
+        if race.results().is_some() {
+            break;
+        }
+    }
+    let board = race.results().expect("the race reached its target");
+    assert!(board.scored(), "a score race's board ranks on points");
+    let world = &race.sim.world;
+    for row in &board.rows {
+        let standing = &world.ships[usize::from(row.slot)].standing;
+        let points = row.points.expect("every row carries its points");
+        assert_eq!(points.points, standing.score as u32, "slot {}", row.slot);
+        assert_eq!(points.kills, standing.kills);
+        assert_eq!(points.deaths, standing.deaths);
+    }
+    let ranked: Vec<u32> = board
+        .rows
+        .iter()
+        .filter_map(|row| row.points.map(|points| points.points))
+        .collect();
+    assert!(
+        ranked.windows(2).all(|pair| pair[0] >= pair[1]),
+        "{ranked:?}"
+    );
+    let places: Vec<u8> = board.rows.iter().map(|row| row.place).collect();
+    assert_eq!(places, (1..=8).collect::<Vec<u8>>());
+}
+
 /// The lap award reaches a craft through the race's own tick, at the opponents' scale.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
