@@ -597,7 +597,13 @@ fn race_cell_text(
 /// number and the next distinct one is its row's own position, so 202, 177, 177, 129 read
 /// 1, 2, 2, 4.
 fn shown_rank(model: &FieldResults, row: usize) -> usize {
-    let points = |index: usize| model.rows.get(index).and_then(|r| r.score).map(|s| s.points);
+    let points = |index: usize| {
+        model
+            .rows
+            .get(index)
+            .and_then(|r| r.score)
+            .map(|s| s.points)
+    };
     let mut rank = 1;
     for index in 0..row {
         if points(index) != points(index + 1) {
@@ -616,7 +622,9 @@ fn shown_rank(model: &FieldResults, row: usize) -> usize {
 fn scored_headline(model: &FieldResults, strings: &StringTable) -> Option<String> {
     let row = model.rows.iter().position(|row| row.player)?;
     let score = model.rows[row].score?;
-    let place = u8::try_from(row + 1).ok().filter(|place| (1..=8).contains(place))?;
+    let place = u8::try_from(row + 1)
+        .ok()
+        .filter(|place| (1..=8).contains(place))?;
     Some(format!(
         "{} - {}: {} {}: {} ",
         strings.get_or_id(&format!("ER_{place}PLACE")),

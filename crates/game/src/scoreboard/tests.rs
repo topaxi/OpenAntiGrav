@@ -10,6 +10,7 @@ fn finisher(slot: u8, place: u8, tick: u64) -> Craft {
         lap: 4,
         finish_tick: Some(tick),
         best_lap_ticks: Some(3_000 + u32::from(slot)),
+        points: None,
     }
 }
 
@@ -22,6 +23,7 @@ fn racer(slot: u8, place: u8, lap: u32) -> Craft {
         finish_tick: None,
         // A craft still on lap 1 has completed none, so it has no best.
         best_lap_ticks: (lap > 1).then_some(3_100 + u32::from(slot)),
+        points: None,
     }
 }
 

@@ -104,11 +104,20 @@ fn a_points_table_draws_the_points_column_in_the_row_order_it_was_given() {
         .iter()
         .map(|points| text_at(&draws, points).expect(points))
         .collect();
-    assert!(points.iter().all(|at| (at.0 - (375.0 + 556.0)).abs() < 1.0), "{points:?}");
-    assert!(points[0].1 < points[1].1 && points[1].1 < points[2].1, "{points:?}");
+    assert!(
+        points.iter().all(|at| (at.0 - (375.0 + 556.0)).abs() < 1.0),
+        "{points:?}"
+    );
+    assert!(
+        points[0].1 < points[1].1 && points[1].1 < points[2].1,
+        "{points:?}"
+    );
     assert!(text_at(&draws, "POINTS").is_some(), "the POINTS header");
     assert!(text_at(&draws, "TEAM").is_some(), "the TEAM header");
-    assert!(text_at(&draws, "TIME").is_none(), "no TIME header on a points table");
+    assert!(
+        text_at(&draws, "TIME").is_none(),
+        "no TIME header on a points table"
+    );
 }
 
 #[test]

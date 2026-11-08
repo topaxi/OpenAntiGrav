@@ -238,7 +238,10 @@ fn a_finished_eliminator_leaves_a_board_ranked_on_points() {
         .iter()
         .filter_map(|row| row.points.map(|points| points.points))
         .collect();
-    assert!(ranked.windows(2).all(|pair| pair[0] >= pair[1]), "{ranked:?}");
+    assert!(
+        ranked.windows(2).all(|pair| pair[0] >= pair[1]),
+        "{ranked:?}"
+    );
     let places: Vec<u8> = board.rows.iter().map(|row| row.place).collect();
     assert_eq!(places, (1..=8).collect::<Vec<u8>>());
 }

@@ -182,6 +182,7 @@ mod tests {
                 lap: if slot == 7 { 3 } else { 4 },
                 finish_tick: (slot != 7).then(|| 7000 + u64::from(slot) * 90),
                 best_lap_ticks: Some(2300 + u32::from(slot)),
+                points: None,
             })
             .collect();
         build(&crafts, Some(3), 7630)
@@ -244,6 +245,7 @@ mod tests {
                 lap: 4,
                 finish_tick: Some(7000),
                 best_lap_ticks: None,
+                points: None,
             },
             Craft {
                 slot: 1,
@@ -252,6 +254,7 @@ mod tests {
                 lap: 4,
                 finish_tick: Some(7100),
                 best_lap_ticks: None,
+                points: None,
             },
         ];
         let alone = build(&crafts, Some(3), 7000);
@@ -279,6 +282,7 @@ mod tests {
                     laps_completed: 3,
                     finish_tick: Some(1234),
                     best_lap_ticks: Some(400),
+                    points: None,
                     player: false,
                     name: None,
                 },
@@ -288,6 +292,7 @@ mod tests {
                     laps_completed: 2,
                     finish_tick: None,
                     best_lap_ticks: Some(410),
+                    points: None,
                     player: true,
                     name: None,
                 },
