@@ -162,10 +162,10 @@ while `FatLine_PushChains` gives the node `f1 * lifetime`, and this caller
 passes `f1 = scale` in `U(0.5, 1)`. So a streak's node is born at width
 `2 (1 - scale)` (0 to 1) and alpha `1 - scale` (0 to 0.5) and grows to width 2
 and alpha 1 as it dies (the oldest and newest node of a chain have their
-alpha cleared). The Missile's own ribbons pass `f1 = 1.0`, so this path is
-new to the engine: `oag_fx::fat_line::Ribbon::push` sets `life:
-spec.lifetime` and has no scale today, while `advance` already divides by
-`spec.lifetime`, which is the right denominator.
+alpha cleared). The Missile's own ribbons pass `f1 = 1.0`; `oag_fx::fat_line::Ribbon::push` takes
+the scale as its fourth argument (the ribbons pass 1.0, the streaks their
+`U(0.5, 1)`), and `advance` keeps dividing by `spec.lifetime`, which is the right
+denominator.
 
 One node is laid per update at the entry's position plus `row1 * 0.6` turned
 about `row2` by the element's running phase, and stays where it was laid. The
@@ -173,6 +173,49 @@ streaks therefore outlive the entry: the last nodes are laid just before the
 one-second retirement and live up to 1.2 s more, so the burst's lines fade by
 about 2.2 s. The entry's retirement does not free the element; the pool frees
 it when its last node dies.
+
+### Wired (2026-11-08, `hd-missile-blast-wire`)
+
+`oag_raceplay::missile_blast` and its `streaks` module play sections 1 and 2;
+`oag_title::weapons::MissileTrail::blast_streak` carries the pool's config for HD
+(`crates/hd/src/race.rs`, `0x00921050`, texture `Data/Tex/ThickLine_bighalo.gtf`,
+4 x 64 on the disc, 20 elements). What is read and what is chosen:
+
+- **Read, played as read:** retirement on the first update with `age > 1.0`
+  (strict; the retiring update lays no node and does not move the entries);
+  sixteen entries per blast, `speed U(7, 8)`, `scale U(0.5, 1)`, three turns of
+  `U(-2 pi, 2 pi)` about row 1, then row 0, then row 2 (each about the row as the
+  previous turn left it); per update one node at the entry's place with the node
+  life `1.2 scale` and the basis rows 2 and 1 as `axis` and `reference`, then the
+  step `row1 * speed + row0 * (sin 15a + 2 (1 - a) U(-1, 1)) + row2 * (cos 15a +
+  2 (1 - a) U(-1, 1))` **per update call** (the tick is the original's 60 Hz
+  frame, assumed); a first free element per entry, none when the pool is empty;
+  the pool ageing after the entries push, freeing an element when its last node
+  dies; width `2 (1 - t)` and alpha `1 - t` (`width: [0.0, 2.0]`, no ramp);
+  drawn after the Missile's ribbons and before the Rocket's smoke (pools 0, 2, 1).
+- **Chosen, not measured:** the basis is the struck craft's own, as the model's is
+  (`Start`'s source matrix is unresolved, section "The pieces together"); the
+  sense of each spawn turn (a uniform angle, so no sense can bias the burst); the
+  generator (a view-side `Rng`, `0x5_9a_2b_06`, not the original's); the strip's
+  vertex tint and side order are the Missile ribbons' own choices
+  (`oag_fx::fat_line`).
+- **Pinned by:** `oag-raceplay`'s `missile_blast::tests` (strict retirement, 16 then
+  4 then 0 elements, the streaks outliving the blast by their node life, the step
+  along row 1 equal to the speed and not scaled by `dt`), `oag-fx`'s `fat_line`
+  tests (a node born at `t = scale` has width `2 (1 - scale)` and alpha
+  `1 - scale`) and `hd_missile_blast_ground_truth::the_explosions_streaks_draw_and_outlive_it`
+  (frames from a camera 130 units to the side and 60 above the blast: near-white
+  pixels 13,658 with the streaks and 3,635 without at tick 335, 9,524 against 2,548
+  at tick 365 after the blast retired, 2,567 at tick 410 once every node is dead).
+- **Seen:** from that camera the sixteen streaks read as thin white lines radiating
+  from the blast, curling slightly (the swirl and the jitter), thickening toward
+  their origin and thinning at the heads, and fading out about 1.2 s after the
+  blast retires. From the player's own chase camera, 12 units from the centre,
+  they are sheets inside the white-out. **Not paired against the film `m5`**: its
+  frames were a scratch directory that was not kept (this page, section 1), so the
+  only comparison is the film's recorded description (white-out to the frame edge,
+  yellow-orange arcs at the top corners) against the model alone; the streaks add
+  to it and are unpaired.
 
 ## 3. Which node draws which material
 
@@ -290,7 +333,11 @@ What one Missile detonation is, for wiring:
 
 ## 2048 and Omega
 
-Census, the code not read on either.
+Census, the code not read on either. **The streaks are wired for HD alone**
+(2026-11-08): the path is gated on the title's `missile_trail`, whose ribbon
+elements are unread on 2048 and Omega, and the pool's config block
+(`0x00921050`) was read from HD's ELF only, so wiring either would be a guess at
+the numbers, not a free reuse of the code path. The census below stands.
 
 - **2048** (`PCSF00007` v1.04 `eboot.elf`): carries `HD_missile_explosion.vex`
   / `.rcsmodel`, `Shockwave_scalar` (three times, as HD) and
