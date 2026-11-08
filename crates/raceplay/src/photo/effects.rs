@@ -92,6 +92,18 @@ impl Default for Effects {
     }
 }
 
+/// Ticks to move in one frame for a trigger or a stick pulled `pull` of the way (`0..=1`): one
+/// at the lightest touch, `most` at a full pull, the speed following the square of how far.
+/// **Chosen, not measured.**
+#[must_use]
+pub fn scrub_ticks(pull: f32, most: u32) -> i64 {
+    let pull = pull.clamp(0.0, 1.0);
+    if pull <= 0.0 {
+        return 0;
+    }
+    1 + ((most.saturating_sub(1)) as f32 * pull * pull).round() as i64
+}
+
 impl Effects {
     /// Where exposure opens: HD's `(int)(33.3 - 33.3 g)` at `g = 0`.
     pub const EXPOSURE_OPENS: i32 = 33;
@@ -247,6 +259,20 @@ impl Effects {
     /// Puts the rewind row where it shows `tick` (clamped to the race so far).
     pub fn set_target_tick(&mut self, tick: u64) {
         self.back = self.live - tick.min(self.live);
+    }
+
+    /// Whether the REWIND and PLAY rows are on offer.
+    #[must_use]
+    pub fn rewinds(&self) -> bool {
+        self.rewinds
+    }
+
+    /// Moves the rewind row `ticks` (negative is back), stopping at the race's two ends: what
+    /// L2 and R2 do while held.
+    pub fn scrub(&mut self, ticks: i64) {
+        let target = i64::try_from(self.target_tick()).unwrap_or(i64::MAX);
+        let to = target.saturating_add(ticks).max(0);
+        self.set_target_tick(u64::try_from(to).unwrap_or(0));
     }
 
     /// Whether the recording plays on from the moment the rewind row shows.

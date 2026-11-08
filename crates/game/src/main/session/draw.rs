@@ -158,6 +158,7 @@ impl Session {
         // rather than only what happens to be on screen.
         let rect = display::viewport(self.gpu.output.size(), self.aspect());
         let pose_view = self.pose_view_shown();
+        let viewer_hud_off = self.viewer_hud_hidden();
         // The presentation target follows the *surface*, not the render scale -
         // it is where the resolved frame and the UI meet, so it is sized in the
         // pixels a player actually has. Cheap when nothing moved; a window
@@ -760,8 +761,9 @@ impl Session {
             // Photo mode draws the race's HUD only when its row is on, and never the end
             // screens or the track panel: the picture is the view.
             match stage.race.photo().map(oag_raceplay::photo::Photo::hud) {
-                // POSE VIEW: hulls at their recorded poses, no HUD.
-                None if pose_view => {}
+                // POSE VIEW: hulls at their recorded poses, no HUD. A viewer whose SQUARE
+                // turned the HUD off draws none either.
+                None if pose_view || viewer_hud_off => {}
                 None => stage.draw_hud(
                     &self.gpu,
                     &mut encoder,

@@ -144,6 +144,12 @@ pub(crate) struct Active {
     /// Whether the picture is the recorded poses: the race's HUD is not drawn (a pose track has
     /// no readouts to feed it).
     pub(crate) pose_view: bool,
+    /// Whether the race's HUD is drawn: SQUARE turns it off for a clean picture, as it does in
+    /// photo mode.
+    pub(crate) hud: bool,
+    /// The playhead was moved by a trigger or the right stick on the last tick, so the sound is
+    /// rebuilt when it stops rather than on every frame of the scrub.
+    scrubbing: bool,
     own: StringTable,
     english: StringTable,
 }
@@ -208,6 +214,8 @@ pub(crate) fn open_viewer(
         stepping: false,
         muted: false,
         pose_view: false,
+        hud: true,
+        scrubbing: false,
         own: oag_ui::strings::project_table(language),
         english: oag_ui::strings::project_table(None),
     })
@@ -327,15 +335,33 @@ impl Session {
             return Vec::new();
         };
         let view = active.view();
-        let keys = format!(
-            "{} {}  {} {}  {} {}",
-            self.controls.bound_keys(Button::Cross).first().map_or_else(|| "CROSS".to_string(), ToString::to_string),
-            active.word(replay_view::strings::PLAY),
-            "LEFT RIGHT",
-            active.word(replay_view::strings::SKIP),
-            "UP",
-            active.word(replay_view::strings::SPEED),
-        );
+        let name = |button: Button, fallback: &str| {
+            self.controls
+                .bound_keys(button)
+                .first()
+                .map_or_else(|| fallback.to_string(), ToString::to_string)
+        };
+        let keys = vec![
+            format!(
+                "{} {}  {} {}  {} {}",
+                name(Button::Cross, "CROSS"),
+                active.word(replay_view::strings::PLAY),
+                "LEFT RIGHT",
+                active.word(replay_view::strings::SKIP),
+                "UP",
+                active.word(replay_view::strings::SPEED),
+            ),
+            format!(
+                "{} {} {}  {} {}  L2 R2 {}  R-STICK {}",
+                name(Button::L, "L1"),
+                name(Button::R, "R1"),
+                active.word(replay_view::strings::CRAFT),
+                name(Button::Square, "SQUARE"),
+                active.word(replay_view::strings::HUD),
+                active.word(replay_view::strings::SCRUB),
+                active.word(replay_view::strings::JOG),
+            ),
+        ];
         let say = |id: &str| active.word(id);
         replay_view::draw_list(&view, grid, &say, &keys)
     }
@@ -347,14 +373,22 @@ impl Session {
         let space = oag_present::perf::grid(surface);
         let rect = (0.0, 0.0, surface.0 as f32, surface.1 as f32);
         let grid = super::pointer::in_grid(*pointer, space, rect, 1.0);
-        let buttons = self.controls.buttons_mut();
+        let controls = &mut self.controls;
+        let view = controls.view();
+        // The playhead's speed: a trigger scrubs (R2 on, L2 back) and the right stick's
+        // horizontal axis jogs, each faster the further it is pulled. **Chosen, not measured.**
+        let scrub = scrub_ticks(view.r2 - view.l2, SCRUB_MOST) + scrub_ticks(view.right.0, JOG_MOST);
         let mut asked = Asked {
-            toggle: buttons.take(Button::Cross) | buttons.take(Button::Start),
-            back: buttons.take(Button::Left),
-            forward: buttons.take(Button::Right),
-            faster: buttons.take(Button::Up) | buttons.take(Button::Down),
-            leave: buttons.take(Button::Circle) | pointer.back,
-            photo: buttons.take(Button::Select),
+            toggle: controls.view_take(Button::Cross) | controls.view_take(Button::Start),
+            back: controls.view_take(Button::Left),
+            forward: controls.view_take(Button::Right),
+            faster: controls.view_take(Button::Up) | controls.view_take(Button::Down),
+            leave: controls.view_take(Button::Circle) | pointer.back,
+            photo: controls.view_take(Button::Select),
+            previous: controls.view_take(Button::L),
+            next: controls.view_take(Button::R),
+            hud: controls.view_take(Button::Square),
+            scrub,
             seek: None,
             bar: None,
         };
@@ -383,6 +417,15 @@ impl Session {
         let (Some(active), Stage::Race(stage)) = (self.viewer.as_mut(), &mut self.stage) else {
             return;
         };
+        if asked.hud {
+            active.hud = !active.hud;
+        }
+        if asked.previous {
+            stage.race.step_followed(false);
+        }
+        if asked.next {
+            stage.race.step_followed(true);
+        }
         let viewer = &mut active.viewer;
         if let Some(x) = asked.bar {
             let tick = replay_view::tick_at(space.size, x, viewer.ticks());
@@ -400,6 +443,9 @@ impl Session {
         }
         if asked.forward {
             moved = viewer.skip(&mut stage.race, SKIP as i64);
+        }
+        if asked.scrub != 0 {
+            moved = viewer.skip(&mut stage.race, asked.scrub);
         }
         if let Some(tick) = asked.seek {
             moved = viewer.seek(&mut stage.race, tick);
@@ -426,7 +472,15 @@ impl Session {
                     at,
                 );
             }
+            // A scrub is silent and its sound is rebuilt where it stops.
+            Moved::Seeked if asked.scrub != 0 => active.scrubbing = true,
             Moved::Seeked => {
+                active.muted = false;
+                active.scrubbing = false;
+                oag_game::sound::rebuild(&mut self.audio, &mut stage.race, at);
+            }
+            Moved::Still if active.scrubbing && asked.scrub == 0 => {
+                active.scrubbing = false;
                 active.muted = false;
                 oag_game::sound::rebuild(&mut self.audio, &mut stage.race, at);
             }
@@ -452,6 +506,17 @@ impl Session {
     }
 }
 
+/// The most ticks a full trigger pull moves the playhead in a frame (half a second), and a full
+/// right-stick deflection (a sixth of a second).
+const SCRUB_MOST: u32 = super::photo_rewind::SCRUB_MOST;
+const JOG_MOST: u32 = 10;
+
+/// Signed ticks for a signed pull.
+fn scrub_ticks(pull: f32, most: u32) -> i64 {
+    let ticks = oag_raceplay::photo::effects::scrub_ticks(pull.abs(), most);
+    if pull < 0.0 { -ticks } else { ticks }
+}
+
 /// What the player asked of the viewer this tick.
 struct Asked {
     toggle: bool,
@@ -460,11 +525,21 @@ struct Asked {
     faster: bool,
     leave: bool,
     photo: bool,
+    previous: bool,
+    next: bool,
+    hud: bool,
+    /// Ticks to move the playhead, negative back.
+    scrub: i64,
     seek: Option<u64>,
     bar: Option<f32>,
 }
 
 impl Session {
+    /// Whether SQUARE turned the viewer's HUD off.
+    pub(crate) fn viewer_hud_hidden(&self) -> bool {
+        self.viewer.as_ref().is_some_and(|active| !active.hud)
+    }
+
     /// Whether the race on screen is POSE VIEW, whose HUD is not drawn.
     pub(crate) fn pose_view_shown(&self) -> bool {
         self.viewer.as_ref().is_some_and(|active| active.pose_view)

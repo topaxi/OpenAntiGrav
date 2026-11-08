@@ -82,6 +82,8 @@ pub mod strings {
     pub const APERTURE: &str = "OAG_PHOTO_APERTURE";
     pub const FOCUS: &str = "OAG_PHOTO_FOCUS";
     pub const PANEL_KEYS: &str = "OAG_PHOTO_PANEL_KEYS";
+    pub const PAD_KEYS: &str = "OAG_PHOTO_PAD_KEYS";
+    pub const SCRUB_KEYS: &str = "OAG_PHOTO_SCRUB_KEYS";
     pub const REWIND: &str = "OAG_PHOTO_REWIND";
     pub const PLAY: &str = "OAG_PHOTO_PLAY";
     pub const MOTION_BLUR: &str = "OAG_PHOTO_MOTION_BLUR";
@@ -482,6 +484,12 @@ pub fn draw_list(
         lines.push(say(strings::PANEL_KEYS));
     } else {
         lines.extend(lens_lines(photo, say, button));
+        if photo.lens() == Lens::Close {
+            lines.push(say(strings::PAD_KEYS));
+        }
+    }
+    if photo.effects().rewinds() {
+        lines.push(say(strings::SCRUB_KEYS));
     }
     let top = grid.1 - MARGIN - LINE * lines.len() as f32;
     list.push(Draw::Fill {

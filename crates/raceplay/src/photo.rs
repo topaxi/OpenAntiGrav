@@ -83,11 +83,18 @@ pub enum Lens {
 /// has. The stick (or the arrow keys) orbits `close` and zooms `track`; with
 /// [`Self::select`] held it zooms (up and down) and tilts (left and right); with
 /// [`Self::square`] held it pans. Either button pressed and released without moving the
-/// stick is a tap: SELECT changes the lens, SQUARE the HUD.
+/// stick is a tap: SELECT changes the lens, SQUARE the HUD. A pad's two sticks are the layout
+/// ADR-0088 names, [`roles`]: the right orbits, the left pans and zooms.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Pad {
-    /// The stick, `x` right and `y` up, each in `-1..=1`.
+    /// The stick, `x` right and `y` up, each in `-1..=1`: the arrow keys and the d-pad, and the
+    /// whole snapshot stick where no pad is attached.
     pub stick: (f32, f32),
+    /// A pad's own left stick, apart from [`Self::stick`]. On `close` it pans (left and right)
+    /// and zooms (up and down).
+    pub left: (f32, f32),
+    /// The right stick: it orbits `close`.
+    pub orbit: (f32, f32),
     /// SELECT is down.
     pub select: bool,
     /// SQUARE is down.
@@ -429,14 +436,8 @@ impl Photo {
     /// The craft before or after the one shown among `live`, wrapping, or the same one when
     /// no other is left. A subject no longer in `live` goes to the first that is.
     fn step_subject(&mut self, forward: bool, live: &[usize]) {
-        let Some(&first) = live.first() else {
+        let Some(next) = step_among(live, self.subject, forward) else {
             return;
-        };
-        let at = live.iter().position(|&slot| slot == self.subject);
-        let next = match (at, forward) {
-            (Some(i), true) => live[(i + 1) % live.len()],
-            (Some(i), false) => live[(i + live.len() - 1) % live.len()],
-            (None, _) => first,
         };
         if next != self.subject {
             self.subject = next;
@@ -467,7 +468,10 @@ impl Photo {
             self.step_subject(true, live);
         }
         if self.panel {
-            self.push(pad.stick);
+            self.push((
+                crate::photo::larger(pad.stick.0, pad.left.0),
+                crate::photo::larger(pad.stick.1, pad.left.1),
+            ));
         } else {
             self.drive(pad);
         }
@@ -509,33 +513,37 @@ impl Photo {
         }
     }
 
-    /// What the stick does under the buttons held.
+    /// What the sticks do under the buttons held.
     fn drive(&mut self, pad: Pad) {
-        let (x, y) = pad.stick;
-        let moved = x.abs() > f32::EPSILON || y.abs() > f32::EPSILON;
+        let used = |(x, y): (f32, f32)| x.abs() > f32::EPSILON || y.abs() > f32::EPSILON;
+        let moved = used(pad.stick) || used(pad.left);
         if moved && pad.select {
             self.select_used = true;
         }
         if moved && pad.square {
             self.square_used = true;
         }
+        let Roles {
+            orbit,
+            pan,
+            zoom,
+            tilt,
+        } = roles(pad, self.lens);
         match self.lens {
             Lens::Internal => {}
-            Lens::Close if pad.square => {
-                self.pan.0 = (self.pan.0 + x * PAN_RATE).clamp(-PAN_LIMIT, PAN_LIMIT);
-                self.pan.1 = (self.pan.1 + y * PAN_RATE).clamp(-PAN_LIMIT, PAN_LIMIT);
-            }
-            Lens::Close if pad.select => {
-                self.close_fov = (self.close_fov - y * ZOOM_RATE).clamp(CLOSE_FOV.0, CLOSE_FOV.1);
-                self.tilt = wrap(self.tilt + x * TILT_RATE);
-            }
             Lens::Close => {
-                self.yaw = wrap(self.yaw - x * ORBIT_RATE);
-                self.pitch = wrap(self.pitch + y * ORBIT_RATE);
+                self.pan.0 = (self.pan.0 + pan.0 * PAN_RATE).clamp(-PAN_LIMIT, PAN_LIMIT);
+                self.pan.1 = (self.pan.1 + pan.1 * PAN_RATE).clamp(-PAN_LIMIT, PAN_LIMIT);
+                self.close_fov =
+                    (self.close_fov - zoom * ZOOM_RATE).clamp(CLOSE_FOV.0, CLOSE_FOV.1);
+                self.tilt = wrap(self.tilt + tilt * TILT_RATE);
+                self.yaw = wrap(self.yaw - orbit.0 * ORBIT_RATE);
+                self.pitch = wrap(self.pitch + orbit.1 * ORBIT_RATE);
             }
             Lens::Track => {
-                self.track_fov = (self.track_fov - y * ZOOM_RATE).clamp(TRACK_FOV.0, TRACK_FOV.1);
-                self.tilt = wrap(self.tilt + x * TILT_RATE);
+                self.track_fov =
+                    (self.track_fov - zoom * ZOOM_RATE).clamp(TRACK_FOV.0, TRACK_FOV.1);
+                self.tilt = wrap(self.tilt + tilt * TILT_RATE);
             }
         }
     }
@@ -598,6 +606,73 @@ impl Photo {
             fov_deg: Some(self.fov()),
         }
     }
+}
+
+/// What the sticks mean on a lens, per tick at full deflection: the one place a stick is given a
+/// role. **Chosen, not measured** (ADR-0088: the right stick orbits and the left pans and zooms;
+/// HD's measured layout is the left stick orbiting and the right stick's Y zooming,
+/// `docs/ghidra/functions/ps3-hdfury-eu/photo-mode.md`). The arrow keys and the d-pad keep the
+/// one-stick fold they always had: they orbit, and SELECT or SQUARE held turn them into zoom and
+/// tilt, or pan.
+struct Roles {
+    /// Yaw (left and right) and pitch (up and down).
+    orbit: (f32, f32),
+    /// Pan across and up.
+    pan: (f32, f32),
+    /// Zoom in (positive).
+    zoom: f32,
+    /// Tilt.
+    tilt: f32,
+}
+
+fn roles(pad: Pad, lens: Lens) -> Roles {
+    let (x, y) = pad.stick;
+    let mut roles = Roles {
+        orbit: (0.0, 0.0),
+        pan: (0.0, 0.0),
+        zoom: 0.0,
+        tilt: 0.0,
+    };
+    match lens {
+        Lens::Internal => {}
+        Lens::Close if pad.square => roles.pan = (x, y),
+        Lens::Close if pad.select => (roles.zoom, roles.tilt) = (y, x),
+        Lens::Close => roles.orbit = (x, y),
+        Lens::Track => (roles.zoom, roles.tilt) = (y, x),
+    }
+    match lens {
+        Lens::Internal => {}
+        Lens::Close => {
+            roles.orbit = (roles.orbit.0 + pad.orbit.0, roles.orbit.1 + pad.orbit.1);
+            roles.pan.0 += pad.left.0;
+            roles.zoom += pad.left.1;
+        }
+        Lens::Track => {
+            roles.zoom += pad.left.1;
+            roles.tilt += pad.left.0;
+        }
+    }
+    roles
+}
+
+/// Whichever is further from centre, sign kept.
+fn larger(a: f32, b: f32) -> f32 {
+    if b.abs() > a.abs() { b } else { a }
+}
+
+/// The craft before or after `current` among `live` (the grid slots still in the race, in
+/// order), wrapping; the first of them when `current` is no longer there; `None` when none is.
+/// Photo mode's rule, and the replay viewer's.
+#[must_use]
+pub fn step_among(live: &[usize], current: usize, forward: bool) -> Option<usize> {
+    let &first = live.first()?;
+    Some(
+        match (live.iter().position(|&slot| slot == current), forward) {
+            (Some(i), true) => live[(i + 1) % live.len()],
+            (Some(i), false) => live[(i + live.len() - 1) % live.len()],
+            (None, _) => first,
+        },
+    )
 }
 
 /// Wraps an angle into `[-2 pi, 2 pi]`.
@@ -728,6 +803,21 @@ impl Race {
     pub fn photo_effects(&mut self, change: impl FnOnce(&mut effects::Effects)) {
         if let Some(photo) = self.view.photo.as_mut() {
             change(photo.effects_mut());
+        }
+    }
+
+    /// The replay viewer's L1 and R1: follows the craft before or after the one the view follows
+    /// among those still in the race, as photo mode's do (`step_among`). View-only
+    /// ([`Self::set_seat`]); `false` when there was nothing to change to.
+    pub fn step_followed(&mut self, forward: bool) -> bool {
+        let live: Vec<usize> = self.spectator_subjects().iter().map(|s| s.slot).collect();
+        let now = self.player_slot();
+        match step_among(&live, now, forward) {
+            Some(next) if next != now => {
+                self.set_seat(Some(next));
+                true
+            }
+            _ => false,
         }
     }
 

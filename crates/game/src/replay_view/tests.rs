@@ -71,7 +71,7 @@ fn every_chip_is_found_where_it_is_drawn_and_none_overlap() {
 
 #[test]
 fn the_screen_shows_the_time_the_chips_and_the_built_part() {
-    let list = draw_list(&view(), GRID, &say, "");
+    let list = draw_list(&view(), GRID, &say, &[]);
     let words = texts(&list);
     assert!(
         words.iter().any(|w| w.starts_with("0:30 / 5:00")),
@@ -82,10 +82,10 @@ fn the_screen_shows_the_time_the_chips_and_the_built_part() {
     assert!(!words.iter().any(|w| w == "OAG_REPLAY_OPENING"));
     let mut paused = view();
     paused.playing = false;
-    assert!(texts(&draw_list(&paused, GRID, &say, "")).contains(&"OAG_REPLAY_PLAY".to_string()));
+    assert!(texts(&draw_list(&paused, GRID, &say, &[])).contains(&"OAG_REPLAY_PLAY".to_string()));
     // The built part is its own fill, wider than the played part and narrower than the bar.
     let bar = bar_rect(GRID);
-    let widths: Vec<f32> = draw_list(&view(), GRID, &say, "")
+    let widths: Vec<f32> = draw_list(&view(), GRID, &say, &[])
         .iter()
         .filter_map(|d| match d {
             Draw::Fill { rect, .. } if rect[1] == bar[1] && rect[3] == bar[3] => Some(rect[2]),
@@ -101,12 +101,12 @@ fn opening_says_so_and_a_mismatch_names_the_second_it_stops_matching() {
     let mut opening = view();
     opening.built = None;
     assert!(
-        texts(&draw_list(&opening, GRID, &say, "")).contains(&"OAG_REPLAY_OPENING".to_string())
+        texts(&draw_list(&opening, GRID, &say, &[])).contains(&"OAG_REPLAY_OPENING".to_string())
     );
     let mut stopped = view();
     stopped.mismatch = Some(5_400);
     stopped.at_end = true;
-    let words = texts(&draw_list(&stopped, GRID, &say, ""));
+    let words = texts(&draw_list(&stopped, GRID, &say, &[]));
     assert!(
         words.contains(&"OAG_REPLAY_MISMATCH".to_string()),
         "{words:?}"
@@ -123,7 +123,7 @@ fn opening_says_so_and_a_mismatch_names_the_second_it_stops_matching() {
         }
     };
     assert!(
-        texts(&draw_list(&stopped, GRID, &fixed, ""))
+        texts(&draw_list(&stopped, GRID, &fixed, &[]))
             .contains(&"STOPS MATCHING AT 1:30".to_string())
     );
 }
@@ -141,16 +141,18 @@ fn past_the_last_agreeing_second_the_banner_says_pose_view_and_names_a_short_tra
     let mut view = view();
     view.mismatch = Some(5_400);
     view.pose_view = true;
-    let words = texts(&draw_list(&view, GRID, &say, ""));
+    let words = texts(&draw_list(&view, GRID, &say, &[]));
     assert!(
         words.contains(&"OAG_REPLAY_POSE_VIEW".to_string()),
         "{words:?}"
     );
     assert!(!words.contains(&"OAG_REPLAY_STOPPED".to_string()));
     view.at_end = true;
-    assert!(texts(&draw_list(&view, GRID, &say, "")).contains(&"OAG_REPLAY_POSE_VIEW".to_string()));
+    assert!(
+        texts(&draw_list(&view, GRID, &say, &[])).contains(&"OAG_REPLAY_POSE_VIEW".to_string())
+    );
     view.track_short = true;
-    let words = texts(&draw_list(&view, GRID, &say, ""));
+    let words = texts(&draw_list(&view, GRID, &say, &[]));
     assert!(
         words.contains(&"OAG_REPLAY_POSE_END".to_string()),
         "{words:?}"
