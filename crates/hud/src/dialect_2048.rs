@@ -114,27 +114,31 @@ pub(super) const PICKUP_BG_FRAME_2048: &str = "PickupBgFrame";
 
 /// [`super::draw::pickup_sprites`]'s branch for 2048's dialect: one
 /// `PickupIcon` widget, UV rewritten per weapon from `art.pickup_icon_uv`,
-/// drawn centred inside [`PICKUP_BG_FRAME_2048`]'s own authored rect.
+/// drawn centred on [`PICKUP_SLOT_NUDGE_X`] right of `PickupBgFrame`'s centre.
 ///
 /// **While [`Readout::pickup_announcing`] the icon is the grant announcement**: `PickupIcon` at
 /// its own authored top-centre rect with no frame (`Hud_UpdatePickupIcon` keeps `PickupBgFrame`
-/// at zero size until the announcement ends), the caption being [`pickup_caption_id`]. The
-/// original then flies the icon to the slot over a few frames and scales it; this build snaps
-/// it there, so those frames are unmatched.
+/// at zero size until the announcement ends), the caption being [`pickup_caption_id`].
 ///
-/// **The destination rect is measured, not decompiled.** `Hud_UpdatePickupIcon`
-/// (`docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`) never
-/// writes `PickupIcon`'s own `x`/`y`, only its UV; the held icon's on-screen
-/// position was found by scanning a captured frame's pixels for the icon's own
-/// tint and matches "native 85x86 size, centred inside `PickupBgFrame`'s own
-/// authored rect" to within 2-3 px on every edge - confidence 80, one frame,
-/// one weapon.
+/// **Then it flies** ([`Readout::pickup_fly`], `docs/ghidra/functions/vita-2048-eu-v104/
+/// pickup-icon-uv-table.md`, "The grant announcement"): the centre moves along the straight line
+/// from the authored rect's to the slot's, and `PickupBgFrame` draws at `progress` of its width,
+/// `progress` being the icon's `y` over the slot's `y` (the original divides the absolute
+/// coordinate, not the distance flown). The frame stays pinned at its left edge: it is authored
+/// `Centred="false"`; the original writes only its width, and nothing was measured on which edge
+/// holds (**chosen, not measured**).
+///
+/// **The slot is decompiled.** `Hud_BindWidgets` (`0x81192cd0`) stores the destination at
+/// `hud+0x20c`/`+0x210` as the frame's centre, `2.0` right of it in x, and the icon is centred on
+/// `PickupParent`'s origin, so it settles at `(frame centre + (2, 0)) - size / 2`. That agrees
+/// with the frame the old measurement came from (icon pixels `x: 102-186`, `y: 405-488`).
 pub(super) fn pickup_sprites_uv_rewrite(
     layout: &Layout,
     weapon: Option<oag_tables::weapons::Weapon>,
     backdrop: bool,
     uv_table: [Option<[u16; 4]>; 14],
     announcing: bool,
+    fly: Option<f32>,
 ) -> Vec<Sprite> {
     let uv_of = |weapon: Option<oag_tables::weapons::Weapon>| {
         weapon.and_then(|weapon| uv_table.get(weapon as usize).copied().flatten())
@@ -152,24 +156,73 @@ pub(super) fn pickup_sprites_uv_rewrite(
     let frame = layout.sprite(PICKUP_BG_FRAME_2048).filter(|_| backdrop);
 
     let mut sprites = Vec::new();
-    // The backdrop draws whenever a weapon is held, whether or not this title
-    // has an icon for it - the same "backdrop alone, rather than nothing or a
-    // panic" rule `pickup_sprites`' Pulse/HD branch already keeps for a name
-    // the layout does not author.
-    if let Some(frame) = frame {
-        sprites.push(frame.clone());
-    }
-
+    let mut flown = None;
     if let (Some(uv), Some(icon)) = (uv_of(weapon), layout.sprite(PICKUP_ICON_2048)) {
         let mut icon = icon.clone();
         icon.uv = uv.map(f32::from);
         if let Some(frame) = frame {
-            icon.rect[0] = frame.rect[0] + (frame.rect[2] - icon.rect[2]) * 0.5;
-            icon.rect[1] = frame.rect[1] + (frame.rect[3] - icon.rect[3]) * 0.5;
+            let from = [
+                icon.rect[0] + icon.rect[2] * 0.5,
+                icon.rect[1] + icon.rect[3] * 0.5,
+            ];
+            let to = [
+                frame.rect[0] + frame.rect[2] * 0.5 + PICKUP_SLOT_NUDGE_X,
+                frame.rect[1] + frame.rect[3] * 0.5,
+            ];
+            let flight = pickup_flight(from, to, fly.unwrap_or(f32::INFINITY));
+            icon.rect[0] = flight.centre[0] - icon.rect[2] * 0.5;
+            icon.rect[1] = flight.centre[1] - icon.rect[3] * 0.5;
+            flown = Some(flight.progress);
         }
         sprites.push(icon);
     }
+    // The backdrop draws whenever a weapon is held, whether or not this title
+    // has an icon for it - the same "backdrop alone, rather than nothing or a
+    // panic" rule `pickup_sprites`' Pulse/HD branch already keeps for a name
+    // the layout does not author. It goes first: the icon sits on it.
+    if let Some(frame) = frame {
+        let mut frame = frame.clone();
+        frame.rect[2] *= flown.unwrap_or(1.0);
+        sprites.insert(0, frame);
+    }
     sprites
+}
+
+/// How far right of `PickupBgFrame`'s centre the held icon settles: the `2.0` `Hud_BindWidgets`
+/// (`0x81192cd0`) adds to the slot's x.
+const PICKUP_SLOT_NUDGE_X: f32 = 2.0;
+
+/// Where the grant's fly has put the icon's centre, and how far along the frame's width is.
+struct PickupFlight {
+    centre: [f32; 2],
+    progress: f32,
+}
+
+/// `Hud_UpdatePickupIcon`'s fly from `from` to `to` (icon centres, layout pixels) after the icon
+/// has flown `travelled` pixels along y.
+///
+/// y advances at the flight's speed and x along the straight line to the slot, the original's
+/// `x -= dy * (x0 - x1) / (y1 - y0)` clamped at the slot (it assumes the slot is left of the
+/// start, as 2048's is). `progress` is `y / y1`: **the absolute coordinate over the slot's, so
+/// the frame is already about 13% wide when the fly starts** at `y0 = 60`, `y1 = 447.5`. A slot
+/// not below the start is arrival.
+fn pickup_flight(from: [f32; 2], to: [f32; 2], travelled: f32) -> PickupFlight {
+    let distance = to[1] - from[1];
+    if distance <= 0.0 || travelled >= distance {
+        return PickupFlight {
+            centre: to,
+            progress: 1.0,
+        };
+    }
+    let along = travelled.max(0.0) / distance;
+    let centre = [
+        from[0] + (to[0] - from[0]) * along,
+        from[1] + distance * along,
+    ];
+    PickupFlight {
+        centre,
+        progress: centre[1] / to[1],
+    }
 }
 
 /// The widget that names the weapon during the grant announcement.
