@@ -348,7 +348,7 @@ fn a_texture_pack_starts_off_and_its_switch_is_the_enabled_list() {
     let id = "ppsspp.some-pulse-pack";
 
     let mut switches = oag_game::settings::Mods::default();
-    let loaded = Mods::load_from(&[dir.clone()], &switches).unwrap();
+    let loaded = Mods::load_from(std::slice::from_ref(&dir), &switches).unwrap();
     assert!(
         loaded.is_disabled(id),
         "off before the player says otherwise"
@@ -361,7 +361,7 @@ fn a_texture_pack_starts_off_and_its_switch_is_the_enabled_list() {
 
     assert!(mods::switch(&mut switches, id, true, entry.default_enabled));
     assert!(switches.enabled.contains(id) && switches.disabled.is_empty());
-    let loaded = Mods::load_from(&[dir.clone()], &switches).unwrap();
+    let loaded = Mods::load_from(std::slice::from_ref(&dir), &switches).unwrap();
     assert!(!loaded.is_disabled(id));
     assert!(loaded.player().any(|m| m.manifest.id == id));
 

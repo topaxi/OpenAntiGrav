@@ -109,10 +109,10 @@ fn display_name(path: &Path) -> String {
             .unwrap_or_default()
     };
     let own = stem(path);
-    if own.eq_ignore_ascii_case("textures") {
-        if let Some(parent) = path.parent().map(stem).filter(|n| !n.is_empty()) {
-            return parent;
-        }
+    if own.eq_ignore_ascii_case("textures")
+        && let Some(parent) = path.parent().map(stem).filter(|n| !n.is_empty())
+    {
+        return parent;
     }
     own
 }
