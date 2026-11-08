@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-07
-summary: "Missile rings and ribbons drawn on a pinned pair; open: Plasma launch, state 8 shell, Bomb/Mine/Leach pairs, Mine halo, Missile head orbit/ribbon tint"
+updated: 2026-11-08
+summary: "Missile explosion read, ready to wire (streaks, retire, bloom boost); open: Plasma launch, state 8 shell, Bomb/Mine/Leach pairs, Mine halo"
 difficulty: medium (30)
 ---
 
@@ -228,24 +228,41 @@ lead is closed (0.996105 is our own law at age 0.81), but ours' core still white
    retail executable never names it is still unfixed. A live RPCS3 look at
    one Cannon shot would settle the Cannon's own open points (side sense,
    spawn point, blend).
-3. Rocket/Missile/Mine/Bomb **bodies** are wired; the Bomb's detonation is
-   drawn (2026-10-07). **The Missile's explosion is the next one; it is read
-   this far** (all with Ghidra truncated at AltiVec, so use capstone over the
-   raw bytes): a pool of 16 objects at the manager's `+0xc0`, count at `+0x10c`,
-   entered through `0x00141288` (also `0x001423a8`, `0x00143580`). **Start**
-   `0x00155568` copies the matrix to `+0xf0`, builds **16 randomly rotated
-   entries at `+0x190` (stride `0x50`, `0x28c660` = a ranged random)** of
-   unknown purpose, writes the per-viewport frame like the Bomb's, calls
-   `AnimNode_UpdateTransformTree(model, 0)`, spawns `WO_MISSILE_EXPLO` (tag
-   `'MIEX'`) and lights a point light. **Draw** `0x00155420` (vtable slot 5)
-   draws the one model (`+0x184`) at `+0xf0 + viewport * 0x40`. **No per-tick
-   update was found**: the model animates by its own keys (`sphere` and `bloom`
-   scale 1 to 18 over 60 frames) on the node clock, `UV_offset` and
-   `Shockwave_scalar` its age. **Open:** the lifetime (what retires it), the
-   16 entries, and the four-plus materials' programs (`sphere`, `bloom`,
-   `rays`, `shockwave` nodes). The harness is
-   `{ppcdis,emu,runblast,spec}.py`; the camera
-   table's lane masks at `0xc47730` are runtime-initialised and must be seeded.
+3. **The Missile's explosion: ready to wire (read 2026-11-08, `hd-missile-explo-re`,
+   `docs/ghidra/functions/ps3-hdfury-eu/missile-explosion.md`).** The model, its
+   programs, the light and the trigger are already drawn (`oag_raceplay::missile_blast`).
+   What is left, as a recipe:
+   1. **Lifetime** (confidence 85): keep `LIFETIME_SECONDS = 1.0`, but retire on the
+      first advance with `age > 1.0` (strict), as `MissileExplosion_Update`
+      (`0x00154a78`) does; the node clock, `UV_offset` and `Shockwave_scalar` are all
+      `age` (already so).
+   2. **The sixteen streaks** (confidence 80), new, view-side: at spawn, for `i < 16`
+      copy the blast's matrix, draw `speed = U(7, 8)` and `scale = U(0.5, 1)`, then
+      rotate the basis by `U(-2 pi, 2 pi)` about its row 1, then row 0, then row 2;
+      take a `ThickLine_bighalo` line from a **shared 20-slot pool** (a second blast
+      inside about 2.2 s gets only what is left; none left means no streak). Per
+      update, with `a` the age and `p = a`: push one node at
+      `pos + rotate(row1 * 0.6, about row2, phase)` (`phase += 0.06`; the `FatLine`
+      push already wired for the Missile's helix, `missile-ribbon.md`), node life
+      `1.2 * scale`, then `pos += row1 * speed + row0 * (sin 15a + 2(1-p) U(-1,1))
+      + row2 * (cos 15a + 2(1-p) U(-1,1))`. **Per update call, not times `dt`**:
+      call it at 60 Hz (assumed rate). Nodes widen 0 to 2, `alpha = 1 - t`, additive
+      `SRC_ALPHA, ONE`, texture `ThickLine_bighalo.gtf`, `u` 0.2 per unit; the lines
+      outlive the blast by their node life. Use a view-side RNG, never the sim `Rng`.
+   3. **Materials** (confidence 90): `sphere` core, `bloom` **and** `rays`
+      lightrays, `shockwave` shockwaves; already right in the draw (per-chunk), only
+      the `MISSILE_CORE` doc in `oag_mesh` and `missile_blast.rs`'s module doc ("the
+      sixteen entries not played", "the clock", "sphere and bloom") need the citation
+      fixed when this is wired.
+   4. **Bloom boost** (confidence 80, effect not measured): while a blast lives, the
+      HD bloom's `adaption_boost` is `6 + p (authored - 6)`, unless another live blast
+      already owns it; restored at retirement. Wire it into `oag_post::hd_bloom`'s
+      per-frame parameters behind the blast list. Open first: `hd-whiteout`'s "gate
+      constants identical in base and hit" conflicts with this (the page's section 4
+      names the read that settles it).
+   Then a pinned pair against film `m5` (the `hd-bomb-match` method). 2048/Omega:
+   same model and streak texture ship, checked, applies, not wired; the boost
+   differs (neither has the key).
 4. ~~Settle the Plasma explosion's scale~~ **Done 2026-09-23**. ~~Read what
    `node + 0xc0` is on the `PTR_PTR_008b3988` node class~~ **Done
    2026-09-25 at the mechanism level**: it is a generic Anim-Transform
