@@ -3,12 +3,13 @@
 # Pick which game data goes onto a Steam Deck (or any ssh host) or an Android
 # phone, and copy it there. One row per thing the player owns: a disc image,
 # a DLC zip, an unpacked 2048 package, an unpacked Omega package (its .psarc
-# archives only) and Pure's DLC key table. Each row says whether it is
+# archives only), Pure's DLC key table and a PPSSPP texture pack
+# (`just fetch-texture-packs`). Each row says whether it is
 # already on the device ("on device"), partly there or changed ("partial"), or
 # not there at all; TAB selects in the fzf picker, Enter copies.
 #
 # The data lands where oag-game's own search path looks without any flag:
-# `<XDG_DATA_HOME>/oag/{images,dlc,extracted/vita,extracted/ps4,keys}` - on the
+# `<XDG_DATA_HOME>/oag/{images,dlc,extracted/vita,extracted/ps4,keys,texture-packs}` - on the
 # Deck the remote user's XDG_DATA_HOME, on Android the app's files dir
 # (/sdcard/Android/data/org.openantigrav.game/files/data, which the app sets as
 # its XDG_DATA_HOME). The binaries go over with `just deploy deck` /
@@ -180,6 +181,13 @@ for d in "$data"/extracted/ps4/*/; do
     d="${d%/}"
     mapfile -t files < <(cd "$data" && find "extracted/ps4/$(basename "$d")" -type f -name '*.psarc' | sort)
     add_row "extracted/ps4/$(basename "$d")" "${files[@]}"
+done
+# A texture pack is a git checkout; its .git is not game data.
+for d in "$data"/texture-packs/*/; do
+    d="${d%/}"
+    [[ -f $d/textures.ini || -f $d/textures.zip ]] || continue
+    mapfile -t files < <(cd "$data" && find "texture-packs/$(basename "$d")" -type f -not -path '*/.git/*' | sort)
+    add_row "texture-packs/$(basename "$d")" "${files[@]}"
 done
 [[ -f $data/keys/pure-dlc-keys.txt ]] && add_row "keys/pure-dlc-keys.txt" "keys/pure-dlc-keys.txt"
 shopt -u nullglob

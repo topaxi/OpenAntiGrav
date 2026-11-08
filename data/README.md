@@ -18,6 +18,7 @@ data/
   cache/        Assets converted from your originals, rebuilt on demand
   dlc/          PSN DLC packages, as downloaded - see below
   keys/         zRIF strings and F00D cache for Vita PFS decryption - see below
+  texture-packs/ PPSSPP texture packs (`just fetch-texture-packs`), one git checkout each - see docs/tools/texture-packs.md
   ghidra/       Ghidra project directory (shared analysis, not versioned)
   tools/        Built third-party tooling, e.g. the Allegrex Ghidra extension
   traces/       Runtime traces captured from PPSSPP / PCSX2

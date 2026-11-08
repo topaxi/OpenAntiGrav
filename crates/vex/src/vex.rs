@@ -737,7 +737,8 @@ pub use anim_transform::{
 
 mod textures;
 pub use textures::{
-    EmbeddedTexture, texture_asset_path, texture_row_bytes, texture_row_stride, textures,
+    EmbeddedTexture, StoredTexture, stored_textures, texture_asset_path, texture_row_bytes,
+    texture_row_stride, textures,
 };
 
 /// One keyframe track of a mesh's texture-transform block: key times paired
