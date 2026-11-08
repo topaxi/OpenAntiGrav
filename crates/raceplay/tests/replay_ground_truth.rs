@@ -383,6 +383,7 @@ fn recorded_at_tick_zero(
         autopilot: false,
         pilot_assist: oag_physics::pilot_assist::Level::Normal,
         original_ai: None,
+        campaign_skill: None,
     };
     race.apply_launch(&launch);
     let mut header = Header::new(title, "default", mode.name(), "venom", "default", seed);

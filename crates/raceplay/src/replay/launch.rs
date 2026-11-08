@@ -39,6 +39,9 @@ pub struct Launch {
     pub pilot_assist: Level,
     /// The original driver flies the opponents, when it does. `None`: this project's driver.
     pub original_ai: Option<OriginalAi>,
+    /// A campaign cell's resolved skill scale, which tunes the field and the finished player's
+    /// thrust ([`Race::apply_campaign_skill`]). `None` outside a campaign cell.
+    pub campaign_skill: Option<f32>,
 }
 
 /// Why a header's `options` table did not read.
@@ -68,12 +71,31 @@ impl Launch {
                 self.pilot_assist.name().to_string(),
             );
         }
-        if let Some(ai) = self.original_ai {
+        table.extend(Self::ai_table(self.original_ai, self.campaign_skill));
+        table
+    }
+
+    /// The keys of an `options` table that say who flies the opponents and at what skill: what
+    /// [`Self::to_table`] writes for them, and what the composition root adds to a header once
+    /// the AI choice is made.
+    ///
+    /// `campaign_skill` is its own key, not `ai_skill`: a campaign cell is tuned whichever driver
+    /// flies it, and a 2048 event's driver skill tunes nothing.
+    #[must_use]
+    pub fn ai_table(
+        original_ai: Option<OriginalAi>,
+        campaign_skill: Option<f32>,
+    ) -> BTreeMap<String, String> {
+        let mut table = BTreeMap::new();
+        if let Some(ai) = original_ai {
             table.insert("ai".to_string(), "original".to_string());
             table.insert("ai_level".to_string(), ai.level.to_string());
             if let Some(skill) = ai.skill {
                 table.insert("ai_skill".to_string(), skill.to_string());
             }
+        }
+        if let Some(scale) = campaign_skill {
+            table.insert("campaign_skill".to_string(), scale.to_string());
         }
         table
     }
@@ -127,12 +149,17 @@ impl Launch {
             }),
             Some(value) => return Err(unknown("ai", value)),
         };
+        let campaign_skill = match get("campaign_skill") {
+            None => None,
+            Some(value) => Some(value.parse().map_err(|_| unknown("campaign_skill", value))?),
+        };
         Ok(Self {
             scheme,
             difficulty,
             autopilot,
             pilot_assist,
             original_ai,
+            campaign_skill,
         })
     }
 }
@@ -144,6 +171,9 @@ impl Race {
         self.set_control_scheme(launch.scheme);
         self.set_autopilot(launch.autopilot);
         self.set_pilot_assist(launch.pilot_assist);
+        if let Some(scale) = launch.campaign_skill {
+            self.apply_campaign_skill(scale);
+        }
     }
 }
 
@@ -158,6 +188,7 @@ mod tests {
             autopilot: false,
             pilot_assist: Level::Normal,
             original_ai,
+            campaign_skill: None,
         }
     }
 
@@ -186,5 +217,30 @@ mod tests {
         table.insert("ai".into(), "original".into());
         table.insert("ai_level".into(), "high".into());
         assert_eq!(Launch::from_table(&table).unwrap_err().key, "ai_level");
+    }
+
+    /// The campaign scale is its own key: written when there is one, whoever flies, and read
+    /// back; a file without it raced no campaign cell.
+    #[test]
+    fn the_campaign_skill_round_trips_apart_from_the_original_drivers() {
+        let original = Some(OriginalAi {
+            skill: Some(3.7),
+            level: 2,
+        });
+        assert!(!launch(original).to_table().contains_key("campaign_skill"));
+        assert_eq!(
+            Launch::from_table(&launch(original).to_table()).map(|l| l.campaign_skill),
+            Ok(None)
+        );
+        for (original_ai, campaign_skill) in [(None, Some(0.5)), (original, Some(3.7)), (None, None)] {
+            let launch = Launch {
+                campaign_skill,
+                ..launch(original_ai)
+            };
+            assert_eq!(Launch::from_table(&launch.to_table()), Ok(launch), "{launch:?}");
+        }
+        let mut table = launch(original).to_table();
+        table.insert("campaign_skill".into(), "lots".into());
+        assert_eq!(Launch::from_table(&table).unwrap_err().key, "campaign_skill");
     }
 }

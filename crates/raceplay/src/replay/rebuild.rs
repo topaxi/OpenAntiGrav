@@ -121,10 +121,6 @@ pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
     }
     // After the seats, as the session applies the AI choice: which driver flies reads who is
     // human.
-    if let Some(scale) = launch.original_ai.and_then(|ai| ai.skill) {
-        race.set_ai_tuning(oag_ai::Difficulty::tune_at_scale(scale, &oag_ai::Tuning::default()));
-        race.set_finished_thrust_skill(scale);
-    }
     if let Some(ai) = launch.original_ai {
         race.use_original_ai(ai.skill, ai.level);
     }

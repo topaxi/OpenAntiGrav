@@ -688,6 +688,7 @@ impl Stage {
             autopilot,
             pilot_assist: settings.controls.pilot_assist,
             original_ai: None,
+            campaign_skill: None,
         };
         race.apply_launch(&launch);
         if autopilot {

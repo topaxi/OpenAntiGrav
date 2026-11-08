@@ -32,17 +32,14 @@ impl RaceStage {
         debug!("replays: recording this race for the REPLAYS page: {}", self.auto_replay);
     }
 
-    /// Adds the original driver's request to the header a recording of this race is filed under.
-    pub(crate) fn note_original_ai(&mut self, ai: Option<oag_raceplay::OriginalAi>) {
-        let Some(ai) = ai else {
-            return;
-        };
-        let options = &mut self.replay_header.options;
-        options.insert("ai".to_string(), "original".to_string());
-        options.insert("ai_level".to_string(), ai.level.to_string());
-        if let Some(skill) = ai.skill {
-            options.insert("ai_skill".to_string(), skill.to_string());
-        }
+    /// Adds who flies the opponents to the header a recording of this race is filed under: the
+    /// original driver's request, and a campaign cell's skill scale
+    /// ([`oag_raceplay::Launch::campaign_skill`]), both written to the race before it is armed.
+    pub(crate) fn note_ai(&mut self, original: Option<oag_raceplay::OriginalAi>) {
+        self.replay_header.options.extend(oag_raceplay::Launch::ai_table(
+            original,
+            self.campaign_ai_skill_scale,
+        ));
     }
 
     /// The file this race leaves behind, if it is armed and long enough to be worth one.
