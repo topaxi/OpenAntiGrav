@@ -364,6 +364,10 @@ the active one, and the decoders ask it:
 - **Whole-image `.mip`** (`oag_texture::replacer::mip`): the flare, cloud and mist textures the
   race load reads. Fractions of the picture are what they draw with, so a 4x picture needs no
   change.
+- **Level selection.** The slope rule (`texlod_slope`, `crates/mesh/shaders/shade.wesl`) picks a
+  level from view depth alone, so a 4x picture is sampled at the same level number as the
+  disc's: four times the texels at every distance, and the extra levels a replacement chain gains
+  are never reached. No shimmer showed in the frames; kept so a rule change cannot starve a deep level.
 - **Not replaced, by choice**: the HUD sprite sheet, fonts and every other atlas cut by pixel
   offset (`oag_hud::sprite`, `.fnt`), the menu and boot art, the loading screen, particle
   (`.pob`) textures and ship skins. Their offsets are in the original's pixels, so drawing a

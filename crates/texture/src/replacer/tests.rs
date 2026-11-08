@@ -149,13 +149,18 @@ fn a_pack_that_hashes_another_way_is_refused_by_name() {
         Refused::Hash("quick".to_string())
     );
     assert_eq!(
+        Replacements::new("t", &text("ignoreAddress = true", ""), none()).unwrap_err(),
+        Refused::Hash("quick".to_string()),
+        "no hash line is PPSSPP's quick hash"
+    );
+    assert_eq!(
         Replacements::new("t", &text("hash = xxh64", ""), none()).unwrap_err(),
         Refused::Address
     );
     assert_eq!(
         Replacements::new(
             "t",
-            &text("ignoreAddress = true", "[hashranges]\n1 = 2"),
+            &text("hash = xxh64\nignoreAddress = true", "[hashranges]\n1 = 2"),
             none()
         )
         .unwrap_err(),

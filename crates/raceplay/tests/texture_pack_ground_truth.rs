@@ -94,6 +94,14 @@ fn a_pack_that_is_on_replaces_track_textures_with_larger_pictures_and_off_change
     let (Some(off), Some(on)) = (load(&dir, false, None), load(&dir, true, None)) else {
         return;
     };
+    assert!(
+        on.report
+            .iter()
+            .any(|line| line.ends_with("from the texture pack")),
+        "a whole-image .mip (a flare) draws from the pack: {:#?}",
+        on.report
+    );
+    assert!(!off.report.iter().any(|line| line.contains("texture pack")));
     let (off, on) = (sizes(&off), sizes(&on));
     assert_eq!(
         off.len(),

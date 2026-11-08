@@ -85,14 +85,15 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
   The page's ADDS line for a pack that is on reads **TEXTURES**.
 - **What it does.** A race load opens the packs that are on, takes the first whose `[games]`
   names the disc's serial (a PSP disc only: the keys are the PSP's), and the decoders ask it as
-  they build a picture: a `.vex` texture (hulls, tracks) by its key, and the whole-image `.mip`
+  they build a picture (the pack is switched off again when the load ends, so a menu preview draws
+  the disc's own): a `.vex` texture (hulls, tracks) by its key, and the whole-image `.mip`
   textures the load reads for flares, clouds and mist; the PNG is read the first time its
   texture is decoded, under a 192 MiB cache cap. The HUD sheet, the fonts and every other
   atlas cut by pixel offset keep the disc's own picture. Off, a frame is byte-identical to
   the game without the mod. Rendering only: nothing reaches `World`, a snapshot or the LAN
   content fingerprint.
-- **The load report** says `texture pack <name>: N key(s)` and, at the end, `N texture(s)
-  replaced` at `debug`, and `texture pack not used: <name>: <why>` at `warn` (the pack's
+- **The load** says `texture pack <name>: N key(s)` in the load report and, when it ends, `N texture(s)
+  replaced` in the log, both at `debug`, and `texture pack not used: <name>: <why>` at `warn` (the pack's
   `[games]` does not name this disc, it is not a PSP disc, its `textures.ini` hashes another
   way, or it will not open).
 - `.zip` and folder alike are read in place; PPSSPP prefers `textures.zip` to a loose tree, so

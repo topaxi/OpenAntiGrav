@@ -27,10 +27,10 @@ impl std::fmt::Debug for Finder {
 /// A PPSSPP pack is keyed by the PSP's guest memory, so it applies to a PSP disc whose
 /// serial the pack's `[games]` names; a disc of another platform, or of another serial,
 /// draws the disc's own textures. Asked for and not usable is an absence in the report.
-pub fn engage(finder: Option<&Finder>, archives: &Archives, report: &mut Vec<String>) {
+pub fn engage(options: &crate::Options, archives: &Archives, report: &mut Vec<String>) -> Engaged {
     replacer::install(None);
-    let Some(finder) = finder else {
-        return;
+    let Some(finder) = options.find_texture_packs.as_ref() else {
+        return Engaged;
     };
     let mut packs = Vec::new();
     for pack in (finder.0)() {
@@ -68,15 +68,25 @@ pub fn engage(finder: Option<&Finder>, archives: &Archives, report: &mut Vec<Str
         }
     }
     replacer::install(chosen);
+    Engaged
 }
 
-/// The line that says how many textures the pack replaced, for the end of a load.
-#[must_use]
-pub fn replaced_line() -> Option<String> {
-    let pack = replacer::active()?;
-    Some(format!(
-        "texture pack {}: {} texture(s) replaced",
-        pack.name(),
-        pack.replaced()
-    ))
+/// The load's use of the pack, held until it returns. Dropping it says how many textures the
+/// pack replaced (`debug`) and switches it off, so a decode after the load (a menu's track
+/// preview) draws the disc's own textures and the next race chooses afresh.
+#[derive(Debug)]
+#[must_use = "the pack is switched off when this is dropped"]
+pub struct Engaged;
+
+impl Drop for Engaged {
+    fn drop(&mut self) {
+        if let Some(pack) = replacer::active() {
+            log::debug!(
+                "texture pack {}: {} texture(s) replaced",
+                pack.name(),
+                pack.replaced()
+            );
+        }
+        replacer::install(None);
+    }
 }
