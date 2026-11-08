@@ -184,6 +184,9 @@ fn the_hd_campaigns_zone_reads_its_hd_layout() {
 /// corner (a solid white bar), if the icon stops following the setting, or if
 /// `HudArt::total_time_hundredths` is dropped from 2048. Omega plays HD's layouts and HD authors
 /// no widget of this kind (checked over HD's 191 HUD files), so it is **checked, not wired**.
+///
+/// It ends on [`a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame`]: the same
+/// 17 s load serves both claims.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths() {
@@ -222,28 +225,22 @@ fn pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths() {
         .collect();
     assert!(text.contains(&"0.00.00"), "TOTAL in hundredths: {text:?}");
     assert!(text.contains(&"0.00.0"), "CURRENT in tenths: {text:?}");
+
+    a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame(&context, &mut race);
 }
 
 /// 2048's pickup grant on the disc's own layout and Missile icon: the icon sits at the authored
 /// top-centre rect while the caption is up, then flies down and left at `dt * 1800.0` a frame
 /// with `PickupBgFrame` widening, and settles at the slot (`Hud_UpdatePickupIcon`,
-/// `Hud_BindWidgets`).
+/// `Hud_BindWidgets`). Runs on the race
+/// [`pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths`] already loaded.
 ///
 /// Fails if `Readout::pickup_fly` is dropped from the readout or the draw (the icon snaps), if
 /// the slot loses its `2.0` x nudge, or if the frame stops following the flight.
-#[test]
-#[ignore = "needs the extracted package under data/extracted/vita/"]
-fn a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame() {
-    let Some(source) = source() else { return };
-    let loaded = oag_raceplay::load(&oag_raceplay::Options {
-        track: Some(VINETA_K.to_string()),
-        team: Some("Feisar".to_string()),
-        mode: oag_race::Mode::SingleRace,
-        ..options(&source)
-    })
-    .expect("the DLC circuit loads");
-    let context = loaded.hud.context().expect("the layout parses");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+fn a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame(
+    context: &oag_hud::Context<'_>,
+    race: &mut oag_raceplay::Race,
+) {
     let slot = race.player_slot();
     race.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
@@ -252,7 +249,7 @@ fn a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame() {
     let frame_of = |race: &oag_raceplay::Race| {
         let mut icon = None;
         let mut frame = None;
-        for draw in &oag_hud::draw_list(&context, &race.readout()).sprites {
+        for draw in &oag_hud::draw_list(context, &race.readout()).sprites {
             if let Draw::Sprite { rect, .. } = draw {
                 if rect[2..] == [85.0, 86.0] {
                     icon = Some(*rect);

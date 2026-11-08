@@ -109,14 +109,15 @@ Ours: `SlotHud::advance` keeps the timer (`Readout::pickup_announcing`) and the 
 `crates/raceplay/src/tests/slot_hud.rs` (`the_grant_flies_at_1800_pixels_a_second_once_the_announcement_ends`,
 `a_grant_on_a_race_reads_its_flight_off_the_readout`), `crates/hud/src/tests.rs`
 (`the_2048_grant_flies_from_the_announcement_rect_to_the_slot`) and, on the disc's layout,
-`crates/raceplay/tests/vita_2048_hud_event_ground_truth.rs` (`a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame`).
+`crates/raceplay/tests/vita_2048_hud_event_ground_truth.rs` (`pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths`
+ends on the fly check, sharing its load).
 
-**Omega: checked, applies by code, nothing to move.** `FUN_012bba20` (`0x012bba20`, the eboot) carries the same update:
+**Omega: checked, differs** (same code, no widget to move). `FUN_012bba20` (`0x012bba20`, the eboot) carries the same update:
 the `1800.0` (`0x01801134`, its only reader), the `-70`/`7` pop-in, the `0.1` sine at `4 pi`, `y / ty` as the progress
 and the same `FE_ROCKETS` string table. The race layouts Omega plays (`Data/xml/wo3_hud/hud_pickups.xml`,
 `hud_damage_indicator.xml`) author neither `PickupIcon` nor `PickupBgFrame`, only HD-style per-weapon icons, so there is
 no widget for it to fly; the `2048_hud` set Omega also ships authors `PickupIcon` as 2048 does, and no race loads it.
-Not wired; `oag_omega::hud::ART` has no `pickup_icon_uv`.
+`oag_omega::hud::ART` has no `pickup_icon_uv`.
 
 ## `g_pickup_icon_uv_table` - `0x81489070`
 
