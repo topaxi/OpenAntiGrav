@@ -108,8 +108,8 @@ is set, `RaceStage::watching` keeps it out of the parked-race slot, and its reco
 `config/` (`records.toml`, `settings.toml`) and `ghosts/` byte for byte, and the file list of
 `auto/`, before and after a watch to the end.
 
-**The screen** (`oag_game::replay_view`, `Session::viewer_screen`): five chips in a row along the top, centred
-(PLAY or PAUSE, -5 SEC, +5 SEC, the speed, EXIT) with the time and the keys under them, and a thin bar
+**The screen** (`oag_game::replay_view`, `Session::viewer_screen`): six chips in a row along the top, centred
+(PLAY or PAUSE, -5 SEC, +5 SEC, the speed, PHOTO, EXIT) with the time and the keys under them, and a thin bar
 along the bottom edge (grey, the built part lighter, the played part blue, a white playhead).
 The top and bottom are where every title's HUD leaves room (lap box top left, position top
 right, times and speed bottom). A click on the bar seeks to where it lands, a click on a chip is
@@ -120,6 +120,7 @@ its button.
 | Cross, Start, Enter | play or pause; from the end, play from the start |
 | Left, Right | five seconds back or on (a seek) |
 | Up, Down | the next speed: 0.5X, 1X, 2X, 4X |
+| Select, PHOTO | photo mode at the tick on screen ([photo mode](photo-mode.md), "Over the replay viewer") |
 | Circle, Escape, a right click, EXIT | leave for the REPLAYS page |
 
 The **speed**: at 1X the race sounds as a race does (`sound::race_tick`); at any other speed the
@@ -182,8 +183,11 @@ Omega's light backdrop needed the band behind the detail lines; 2048's value col
 
 ## Open
 
+- **The shared keys with photo mode** (L1 and R1 craft, SQUARE the HUD), the trigger split and the right stick: the
+  plan is [ADR-0088](../architecture/adr/0088-the-replay-viewer-and-photo-mode-switch-both-ways.md), not built.
+
 - **Split screen**: the craft L and R cycle, one view per window.
 - **The Steam Deck** (ADR-0087 decision 3) is still unmeasured; the opening pass's wall time on this desktop is in the timeline page.
 - **A modded race and a network race record nothing** (decision 7).
 - **The web build and a phone** have no directory a player can reach: the page is empty there (`replays::SAVES`).
-- **Take-over, SAVE REPLAY, photo rewind**: stages 6 and 7.
+- **Take-over, SAVE REPLAY**: stage 7.

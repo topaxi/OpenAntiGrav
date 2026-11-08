@@ -65,12 +65,9 @@ controls", says what is chosen). What is left from that table:
   (`photo-rewind`, ADR-0087 stage 6; `docs/ui/photo-mode.md`, "Accumulated shots and rewind"): HD and 2048.
   Open from it: **Omega's `Photo Use MB`** (its frame counts and shutter are unread: `photo_shot` is `None`),
   **HD's ship blur factor** (2048's `0.05` is used, chosen), and 2048's own depth of field law.
-- **Leaving photo mode with CIRCLE changes the race that goes on.** On `35aa3a902` (no lane code), an
-  autopilot Pulse Time Trial that visits the mode and leaves by CIRCLE differs from one that never visited on
-  every tick after it (600 of 600); leaving by ESCAPE, or pausing and resuming, does not. Something of the
-  press reaches the first race tick (the held button the frame after, or an edge `SPENT` misses). The existing
-  hash test never sees it because its craft stands still. With a pickup in the slot, CIRCLE is the absorb.
-  Find what the first tick reads (`Controls`, `InputSnapshot`) before changing the leave.
+- ~~**Leaving photo mode with CIRCLE changes the race that goes on.**~~ Fixed (`replay-photo-switch`): the frame loop read the
+  devices before the mode spent its presses, so the leave tick ran `Race::tick` with CIRCLE as an edge; the leave tick is
+  now the mode's. `leaving_photo_mode_with_circle_hands_the_race_no_press` (tapped and held, Single Race and Time Trial).
 - **Rewind from `Race End Photo`** and in a split: not offered (the end screens keep a board a rewind would
   lose).
 - **HD's aperture reader** (`0x003bad38`) and its exposure shader: unread, so the aperture reach and the
