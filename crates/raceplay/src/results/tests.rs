@@ -382,7 +382,7 @@ fn refreshing_the_board_moves_no_state_hash() {
             "diverged at run-on tick {tick}"
         );
     }
-    assert_eq!(row_of(&refreshed, 3).finish_tick.is_some(), true);
+    assert!(row_of(&refreshed, 3).finish_tick.is_some());
     assert_eq!(
         row_of(&plain, 3).finish_tick,
         None,
