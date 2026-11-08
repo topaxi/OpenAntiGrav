@@ -151,7 +151,11 @@ impl Launch {
         };
         let campaign_skill = match get("campaign_skill") {
             None => None,
-            Some(value) => Some(value.parse().map_err(|_| unknown("campaign_skill", value))?),
+            Some(value) => Some(
+                value
+                    .parse()
+                    .map_err(|_| unknown("campaign_skill", value))?,
+            ),
         };
         Ok(Self {
             scheme,
@@ -232,15 +236,24 @@ mod tests {
             Launch::from_table(&launch(original).to_table()).map(|l| l.campaign_skill),
             Ok(None)
         );
-        for (original_ai, campaign_skill) in [(None, Some(0.5)), (original, Some(3.7)), (None, None)] {
+        for (original_ai, campaign_skill) in
+            [(None, Some(0.5)), (original, Some(3.7)), (None, None)]
+        {
             let launch = Launch {
                 campaign_skill,
                 ..launch(original_ai)
             };
-            assert_eq!(Launch::from_table(&launch.to_table()), Ok(launch), "{launch:?}");
+            assert_eq!(
+                Launch::from_table(&launch.to_table()),
+                Ok(launch),
+                "{launch:?}"
+            );
         }
         let mut table = launch(original).to_table();
         table.insert("campaign_skill".into(), "lots".into());
-        assert_eq!(Launch::from_table(&table).unwrap_err().key, "campaign_skill");
+        assert_eq!(
+            Launch::from_table(&table).unwrap_err().key,
+            "campaign_skill"
+        );
     }
 }

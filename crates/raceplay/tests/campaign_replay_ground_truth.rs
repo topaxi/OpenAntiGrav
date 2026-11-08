@@ -44,7 +44,10 @@ fn recording(name: &str) -> Option<Replay> {
 /// cell's scale, which they carry as the original driver's `ai_skill`.
 fn add_campaign_skill(replay: &mut Replay) {
     let options = &mut replay.header.options;
-    assert!(!options.contains_key("campaign_skill"), "the file already names it");
+    assert!(
+        !options.contains_key("campaign_skill"),
+        "the file already names it"
+    );
     let scale = options
         .get("ai_skill")
         .cloned()
@@ -92,7 +95,11 @@ fn watches_to_the_end(name: &str) {
             done => break done,
         }
     };
-    assert_eq!(pass, Pass::Complete, "{name}: the opening pass over {ticks} ticks");
+    assert_eq!(
+        pass,
+        Pass::Complete,
+        "{name}: the opening pass over {ticks} ticks"
+    );
     assert!(!viewer.stops_matching(), "{name}: the mismatch banner");
     assert_eq!(viewer.built(), Some(ticks), "{name}: every tick is built");
     viewer.seek(&mut on_screen, ticks);

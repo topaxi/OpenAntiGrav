@@ -295,7 +295,8 @@ impl Mode {
     /// [`Self::from_name`], which does not.
     #[must_use]
     pub fn from_recorded_name(name: &str) -> Option<Self> {
-        Self::from_name(name).or_else(|| (name == Self::Tournament.name()).then_some(Self::Tournament))
+        Self::from_name(name)
+            .or_else(|| (name == Self::Tournament.name()).then_some(Self::Tournament))
     }
 
     /// Laps the mode finishes after in `class`, or `None` when it never ends
