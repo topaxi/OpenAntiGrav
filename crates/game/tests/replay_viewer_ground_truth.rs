@@ -118,6 +118,12 @@ const TO_THE_RACE: &str = "boot; select racebox; press cross; until page=race; \
      select launch_race; press cross; until screen=picker; press cross; \
      until screen.id=ship-select; press cross; until stage=race within 4000; ";
 
+/// [`TO_THE_RACE`] as a Single Race, so there are craft to follow.
+const TO_THE_FIELD: &str = "boot; select racebox; press cross; until page=race; \
+     set race.mode=single_race; \
+     select launch_race; press cross; until screen=picker; press cross; \
+     until screen.id=ship-select; press cross; until stage=race within 4000; ";
+
 const TO_THE_LIST: &str = "boot; select replays; press cross; until page=replays; ";
 
 fn text<'a>(state: &'a Value, key: &str) -> Option<&'a str> {
@@ -529,4 +535,135 @@ fn verify(image: &Path, replay: &oag_replay::Replay) -> Result<u64, oag_replay::
         race.drain_cues();
         race.sim.state_hash()
     })
+}
+
+/// ADR-0088's binding plan over the viewer: R1 and L1 follow the next and previous craft
+/// (wrapping), SQUARE hides the HUD, L2 and R2 scrub the playhead back and on and never change
+/// the craft (under the default trigger mode a pulled trigger also raises its shoulder's button
+/// in the snapshot), the right stick jogs it. None of it is the race's: the recording on disk is
+/// not touched, and a tick that both runs reach hashes the same with and without the input.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
+fn the_viewer_follows_craft_scrubs_and_hides_its_hud_on_the_new_keys() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let profile = Profile::new("bindings");
+    let (status, _) = profile.drive(
+        &image,
+        &format!("{TO_THE_FIELD} ticks 280; hold cross 1500; quit"),
+        &[],
+    );
+    assert!(status.success());
+    let shots = profile.dir.join("shots");
+    std::fs::create_dir_all(&shots).expect("a directory");
+    let recorded = profile.replays();
+    let bytes: Vec<Vec<u8>> = recorded
+        .iter()
+        .map(|path| std::fs::read(path).expect("the recording"))
+        .collect();
+
+    // The control: the replay played on, no input.
+    let (status, control) = profile.drive(
+        &image,
+        &format!(
+            "{TO_THE_LIST} ticks 30; select watch_replay; press cross; \
+             until replay=playing within 4000; ticks 700; quit"
+        ),
+        &[],
+    );
+    assert!(status.success());
+
+    let (status, states) = profile.drive(
+        &image,
+        &format!(
+            "{TO_THE_LIST} ticks 30; select watch_replay; press cross; \
+             until replay=playing within 4000; ticks 400; press cross; \
+             until replay=paused within 50; ticks 5; screenshot DIR/shots/craft-0.png; \
+             press r; ticks 5; screenshot DIR/shots/craft-1.png; press l; ticks 3; press l; ticks 3; \
+             screenshot DIR/shots/craft-last.png; press r; ticks 3; \
+             press square; ticks 5; screenshot DIR/shots/hud-off.png; press square; ticks 3; \
+             pull l2 0.8 8; ticks 3; screenshot DIR/shots/scrubbed-back.png; \
+             pull r2 0.8 4; ticks 3; rstick 1 0 6; ticks 3; rstick 0 1 6; ticks 3; \
+             press cross; until replay=playing within 50; ticks 100; quit"
+        ),
+        &[],
+    );
+    assert!(status.success());
+
+    // The craft: 0, then R1 to 1, L1 back to 0 and again to the last, R1 back to 0, and no
+    // trigger or stick changed it after.
+    let mut follows: Vec<u32> = states
+        .iter()
+        .filter_map(|state| text(state, "replay_follow")?.parse().ok())
+        .collect();
+    follows.dedup();
+    assert!(
+        follows.starts_with(&[0, 1, 0]) && follows.len() == 5 && follows[3] > 1 && follows[4] == 0,
+        "L1 and R1 follow the previous and next craft, wrapping: {follows:?}"
+    );
+
+    // The HUD went off and on.
+    let mut huds: Vec<&str> = states
+        .iter()
+        .filter_map(|state| text(state, "replay_hud"))
+        .collect();
+    huds.dedup();
+    assert_eq!(huds, ["on", "off", "on"], "SQUARE turns the HUD off and on");
+
+    // The playhead: L2 went back, R2 on, the right stick's horizontal axis on, its vertical axis
+    // nowhere.
+    let paused = states
+        .iter()
+        .position(|state| text(state, "replay") == Some("paused"))
+        .expect("the viewer paused");
+    let ats: Vec<u64> = states[paused..]
+        .iter()
+        .filter_map(viewer_at)
+        .map(|(_, at)| at)
+        .collect();
+    let (start, lowest) = (ats[0], *ats.iter().min().expect("ticks"));
+    assert!(
+        lowest + 80 < start,
+        "L2 scrubbed back from {start} to {lowest}: {ats:?}"
+    );
+    let back = ats.iter().position(|&at| at == lowest).expect("a minimum");
+    let after = &ats[back..];
+    assert!(
+        after.iter().any(|&at| at > lowest + 40),
+        "R2 scrubbed on: {after:?}"
+    );
+
+    // Nothing of it was the race's. The files are as they were, and a tick both runs reach has
+    // the hash it has without the input.
+    assert_eq!(
+        profile
+            .replays()
+            .iter()
+            .map(|path| std::fs::read(path).expect("the recording"))
+            .collect::<Vec<_>>(),
+        bytes,
+        "watching with the new keys wrote to the recordings"
+    );
+    let held: BTreeMap<u64, String> = control
+        .iter()
+        .filter_map(|state| {
+            Some((
+                state.get("sim_tick")?.as_u64()?,
+                text(state, "hash")?.to_string(),
+            ))
+        })
+        .collect();
+    let mut compared = 0;
+    for state in &states {
+        if let (Some(tick), Some(hash)) = (
+            state.get("sim_tick").and_then(Value::as_u64),
+            text(state, "hash"),
+        ) && let Some(control) = held.get(&tick)
+        {
+            assert_eq!(hash, control, "tick {tick} hashes differently");
+            compared += 1;
+        }
+    }
+    assert!(compared > 300, "only {compared} ticks in common");
 }
