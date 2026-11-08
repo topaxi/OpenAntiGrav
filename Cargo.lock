@@ -3718,7 +3718,9 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-pulse",
+ "oag-source",
  "oag-testdata",
+ "oag-vex",
 ]
 
 [[package]]

@@ -1,0 +1,6 @@
+# PPSSPP texture packs `just fetch-texture-packs` clones into data/texture-packs/<name>/.
+# One row per pack: name, clone URL, pinned commit, separated by single spaces.
+# `just fetch-texture-packs --update` moves the pin to each repo's default branch head.
+# Pack content is never committed (both repos are unlicensed fan derivatives); this file is only the pin.
+WipEout-Pulse-Upscale-Version https://github.com/reTokyo/WipEout-Pulse-Upscale-Version.git 33fd6a3f1097284a9346310647d48f97ac132c49
+WipEout-Pure-HD-Texture-Pack https://github.com/reTokyo/WipEout-Pure-HD-Texture-Pack.git f91d55bbde515944edc6458ec9f0e58b217d7ce0
