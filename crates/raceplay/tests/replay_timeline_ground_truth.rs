@@ -50,6 +50,7 @@ fn launch() -> Launch {
         autopilot: false,
         pilot_assist: Level::Off,
         original_ai: None,
+        campaign_skill: None,
     }
 }
 

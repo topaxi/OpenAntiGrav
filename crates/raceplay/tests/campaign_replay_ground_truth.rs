@@ -4,7 +4,11 @@
 //! then `Viewer::open` over the loaded setup (`docs/ui/replays.md`, "The viewer").
 //!
 //! The five files are one Pulse EU Flash tournament (`[setup] mode = "tournament"`, the original
-//! driver at a campaign cell's skill). They are a player's, not game content, but they are kept
+//! driver at a campaign cell's skill). **They were written before `[options] campaign_skill`
+//! existed**, and a campaign cell's scale also tunes the field and the finished player's thrust,
+//! so unedited they disagree at tick 360 or 420 (`docs/formats/replay-file.md`). The test adds
+//! the key, by name, with the value this build writes for them ([`add_campaign_skill`]): the
+//! cell's scale, which the original driver's `ai_skill` already carries. They are a player's, not game content, but they are kept
 //! out of git all the same: the test reads them from `OAG_CAMPAIGN_REPLAYS` (a directory) or
 //! `data/reference/replays/pulse-tournament/`, and skips without them.
 //!
@@ -36,6 +40,18 @@ fn recording(name: &str) -> Option<Replay> {
     Some(Replay::from_bytes(&bytes).unwrap_or_else(|e| panic!("{}: {e}", path.display())))
 }
 
+/// What this build writes into a campaign recording's header and these files predate: the
+/// cell's scale, which they carry as the original driver's `ai_skill`.
+fn add_campaign_skill(replay: &mut Replay) {
+    let options = &mut replay.header.options;
+    assert!(!options.contains_key("campaign_skill"), "the file already names it");
+    let scale = options
+        .get("ai_skill")
+        .cloned()
+        .expect("a campaign cell flown by the original driver records its scale");
+    options.insert("campaign_skill".to_string(), scale);
+}
+
 /// The disc they were recorded on, or `None` without it.
 fn source() -> Option<PathBuf> {
     let path = root().join("data/images/pulse-psp-eu.chd");
@@ -54,9 +70,10 @@ fn source() -> Option<PathBuf> {
 /// Opens `name` as WATCH does, plays the opening pass to its end and seeks the race on screen
 /// to the last tick.
 fn watches_to_the_end(name: &str) {
-    let (Some(replay), Some(source)) = (recording(name), source()) else {
+    let (Some(mut replay), Some(source)) = (recording(name), source()) else {
         return;
     };
+    add_campaign_skill(&mut replay);
     let mut options = race::Options::for_replay(&replay.header, &source.display().to_string())
         .unwrap_or_else(|e| panic!("{name}: {e:#}"));
     assert_eq!(options.mode, oag_race::Mode::Tournament, "{name}");
