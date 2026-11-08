@@ -105,6 +105,18 @@ screen yet (`docs/ui/endrace-screens.md`, "HD's `Results` names every craft").
 `x = 545` - exactly columns 0 and 2. Eight rows end at `96 + 7 * 45 = 411`,
 inside the `487` bottom bar.
 
+**Called every frame (2026-11-08, `endrace-live-board`, confidence 60).** `FillRaceRows`'s caller
+is the `EndRace Results` screen's Update (`0x0022e680`, vtable `0x0087f1f0`): on a race layout
+(`g_GameState+0xe0` of `3` or `0x10`) with the grid page up it calls `0x0005a770` (on the
+`RaceManager`) and then `FillRaceRows` (on the screen) on every update. `0x0005a770` (mode `3`
+only) rewrites 300-byte records at the RaceManager's `+0x1980`: `+0x160` is `-1`/`-2` for a craft
+that is out, else the sum of its recorded lap times, `0` while a lap is missing; `+0x168` is a rank
+from the same loop. `FillRaceRows` reads `screen+0xb34 + 300 r + 0x160`/`+0x168`: same stride and
+offsets, but that `screen+0xb34` is the RaceManager's block is not shown, hence 60. If it is, a
+craft still racing reads `RACING` and then its time when it crosses, with the screen up. Not read:
+the `-2` case. Our board follows the field the same way
+(`docs/ui/endrace-screens.md`, "The field keeps finishing behind `Results`").
+
 ## `EndRaceResults_HighlightRow` - `0x002278c0`
 
 `(screen, y, row)`: colours the row's four `Grid{c}.row` texts, its

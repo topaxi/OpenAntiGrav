@@ -14,7 +14,8 @@
 //! cycle outside the tick: see `Session::frame`, which stops calling `tick` once
 //! [`Race::finished`] answers yes - **unless the player crossed the line**
 //! ([`Race::runs_on_after_the_line`]), where the original keeps the race running
-//! behind the panels and so does this.
+//! behind the panels and so does this. The board taken at the line is then kept
+//! current as the rest of the field finishes ([`Race::refresh_results`]).
 
 use super::*;
 
@@ -200,6 +201,7 @@ impl Race {
     pub fn tick_finished(&mut self) {
         if self.runs_on_after_the_end() {
             self.tick(&oag_gameplay::PlayerInputs::none());
+            self.refresh_results();
         } else {
             #[cfg(feature = "view")]
             self.tick_cosmetics();
@@ -242,17 +244,54 @@ impl Race {
     /// The results, once there are any.
     ///
     /// `None` for the whole race and `Some` from the finishing tick on. The
-    /// table is taken at that instant and never revised - see [`RaceView::results`]'s
-    /// field for why that matters.
+    /// table is taken at that instant. After it, only [`Race::refresh_results`]
+    /// revises it, and only what the rest of the field does: the player's own
+    /// row, [`Board::tick`] and the people's names are the ones taken at the
+    /// finish.
     #[must_use]
     pub fn results(&self) -> Option<&Board> {
         self.view.results.as_ref()
     }
 
-    /// Takes the board, on the tick the race finishes and only then.
+    /// How many times the board has been replaced since it was first taken:
+    /// what a screen drawn from a copy of it compares to know it is stale.
+    #[must_use]
+    pub fn results_revision(&self) -> u32 {
+        self.view.results_revision
+    }
+
+    /// Re-takes the board from the world as it is now, while the field runs on
+    /// behind the end screens ([`Race::runs_on_after_the_line`]): a craft that
+    /// crosses after the player gets its time and its place, and one still
+    /// lapping its laps and its running place.
     ///
-    /// Called at the end of [`Race::tick`], after the standings have been
-    /// advanced, so the last crossing is already in the table it reads.
+    /// **Presentation-side, like the first capture**: the board is read from
+    /// the simulation and nothing is written back, so no hash moves. The
+    /// player's row cannot move either - every craft still racing when they
+    /// crossed is placed behind them, and `Board::tick` and the names stay as
+    /// the finish took them. The revision counts only a board that differs from
+    /// the one held, and nothing is done once every craft has finished. A race
+    /// that ended any other way stands still and has nothing to refresh.
+    ///
+    /// Scored races (Eliminator) end on a kill target with no lap target, so
+    /// they never run on after the line and their points do not change here.
+    pub fn refresh_results(&mut self) {
+        if !self.runs_on_after_the_line() {
+            return;
+        }
+        let Some(held) = &self.view.results else {
+            return;
+        };
+        if held.rows.iter().all(scoreboard::Row::finished) {
+            return;
+        }
+        let fresh = self.take_board(held.tick);
+        if self.view.results.as_ref() != Some(&fresh) {
+            self.view.results = Some(fresh);
+            self.view.results_revision = self.view.results_revision.wrapping_add(1);
+        }
+    }
+
     /// Takes the board again from the simulation as it is now, replacing the one
     /// taken at the finish. A network client's: its board was taken on the tick
     /// its *prediction* finished, and the server's confirmed state is the race's
@@ -265,10 +304,21 @@ impl Race {
         }
     }
 
+    /// Takes the board, on the tick the race finishes and only then.
+    ///
+    /// Called at the end of [`Race::tick`], after the standings have been
+    /// advanced, so the last crossing is already in the table it reads.
     pub(super) fn capture_results(&mut self) {
         if !self.finished() || self.view.results.is_some() {
             return;
         }
+        let board = self.take_board(oag_race::race_clock_ticks(self.sim.world.tick));
+        self.view.results = Some(board);
+        self.view.results_revision = self.view.results_revision.wrapping_add(1);
+    }
+
+    /// The board off the world as it is now, ended on `tick`.
+    fn take_board(&self, tick: u64) -> Board {
         let places = self.places();
         // Every slot the grid has, whether or not the mode fielded a full one:
         // `ship_count` is 8 for a single race and 1 for the three single-ship
@@ -300,11 +350,7 @@ impl Race {
                 }
             })
             .collect();
-        let mut board = scoreboard::build(
-            &crafts,
-            self.sim.world.laps_target(),
-            oag_race::race_clock_ticks(self.sim.world.tick),
-        );
+        let mut board = scoreboard::build(&crafts, self.sim.world.laps_target(), tick);
         // A race names the people it was given names for (the lobby's, or seat 1's stored name).
         for row in board.rows.iter_mut().filter(|row| row.player) {
             row.name = self
@@ -314,7 +360,7 @@ impl Race {
                 .filter(|name| !name.is_empty())
                 .cloned();
         }
-        self.view.results = Some(board);
+        board
     }
 }
 

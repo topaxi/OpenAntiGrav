@@ -269,3 +269,138 @@ fn a_person_s_row_carries_the_name_they_raced_under() {
         "slot 2 is flown by the AI, so it is nobody's row"
     );
 }
+
+/// A race whose player crossed the line first, the board taken, and the rest of the field
+/// still lapping.
+fn player_won() -> Race {
+    let mut race = race_with_a_grid();
+    finish(&mut race, 0, 1_000);
+    race.sim.world.primary_race_mut().finished = true;
+    race.tick(&PlayerInputs::none());
+    assert!(race.runs_on_after_the_line());
+    assert!(race.results().is_some());
+    race
+}
+
+fn row_of(race: &Race, slot: u8) -> scoreboard::Row {
+    race.results()
+        .and_then(|board| board.rows.iter().find(|row| row.slot == slot))
+        .cloned()
+        .expect("the slot has a row")
+}
+
+/// The claim: a craft still racing when the player finished gets its time and its place on the
+/// board once it crosses, while the screens are up. Before, the row held no time for good.
+#[test]
+fn a_craft_that_finishes_after_the_player_gets_its_time_on_the_board() {
+    let mut race = player_won();
+    assert_eq!(row_of(&race, 3).finish_tick, None, "still racing");
+
+    race.tick_finished();
+    assert_eq!(row_of(&race, 3).finish_tick, None, "nothing changed yet");
+    let revision = race.results_revision();
+
+    finish(&mut race, 3, 1_200);
+    race.tick_finished();
+    let row = row_of(&race, 3);
+    assert_eq!(
+        row.finish_tick,
+        Some(1_200 - oag_race::COUNTDOWN_TICKS),
+        "the racing clock, like every other row"
+    );
+    assert_eq!(
+        row.place, 2,
+        "behind the player, ahead of those still racing"
+    );
+    assert_eq!(race.results_revision(), revision + 1);
+}
+
+/// The record a screen or the voice already read at the finish must not move: the player's row,
+/// the tick the race ended on and the names stay what the finish took, whatever the field does.
+#[test]
+fn the_players_row_and_the_finish_tick_stay_as_the_finish_took_them() {
+    let mut race = race_with_a_grid();
+    race.set_person_names(vec!["Ada".into()]);
+    finish(&mut race, 0, 1_000);
+    race.sim.world.primary_race_mut().finished = true;
+    race.tick(&PlayerInputs::none());
+    let (player, tick) = (row_of(&race, 0), race.results().expect("a board").tick);
+
+    for (slot, at) in [(4, 1_100), (2, 1_300), (6, 1_500)] {
+        finish(&mut race, slot, at);
+        race.tick_finished();
+        assert_eq!(row_of(&race, 0), player);
+        assert_eq!(race.results().expect("a board").tick, tick);
+    }
+}
+
+/// A board that did not change is not replaced, so a screen rebuilt on a revision change does no
+/// work on the ticks nothing happened, and none once every craft is home.
+#[test]
+fn the_revision_moves_only_when_the_board_does() {
+    let mut race = player_won();
+    race.tick_finished();
+    let settled = race.results_revision();
+    race.tick_finished();
+    assert_eq!(race.results_revision(), settled);
+
+    for slot in 1..8usize {
+        finish(&mut race, slot, 1_000 + slot as u64 * 10);
+    }
+    race.tick_finished();
+    let home = race.results_revision();
+    assert_ne!(home, settled);
+    assert!(
+        race.results()
+            .expect("a board")
+            .rows
+            .iter()
+            .all(|row| row.finished())
+    );
+    race.tick_finished();
+    race.tick_finished();
+    assert_eq!(race.results_revision(), home, "every craft finished");
+}
+
+/// The refresh is a read: ticking a finished race through `tick_finished` leaves the very state
+/// hash, every tick, that stepping it with the same neutral input does with no refresh.
+#[test]
+fn refreshing_the_board_moves_no_state_hash() {
+    let mut refreshed = player_won();
+    let mut plain = player_won();
+    for tick in 0..90 {
+        if tick == 30 {
+            for race in [&mut refreshed, &mut plain] {
+                finish(race, 3, 1_200);
+            }
+        }
+        refreshed.tick_finished();
+        plain.tick(&PlayerInputs::none());
+        assert_eq!(
+            refreshed.sim.state_hash(),
+            plain.sim.state_hash(),
+            "diverged at run-on tick {tick}"
+        );
+    }
+    assert!(row_of(&refreshed, 3).finish_tick.is_some());
+    assert_eq!(
+        row_of(&plain, 3).finish_tick,
+        None,
+        "the plain run keeps the first board"
+    );
+}
+
+/// A race that ended any other way stands still, so there is nothing to refresh.
+#[test]
+fn a_race_that_did_not_end_on_the_line_keeps_its_board() {
+    let mut race = race_with_a_grid();
+    race.sim.world.primary_race_mut().finished = true;
+    race.tick(&PlayerInputs::none());
+    assert!(race.results().is_some());
+    assert!(!race.runs_on_after_the_line());
+    let (held, revision) = (race.results().cloned(), race.results_revision());
+    finish(&mut race, 3, 1_200);
+    race.refresh_results();
+    assert_eq!(race.results().cloned(), held);
+    assert_eq!(race.results_revision(), revision);
+}

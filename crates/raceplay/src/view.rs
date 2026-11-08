@@ -486,16 +486,19 @@ pub struct RaceView {
     /// The results table, taken on the tick the race reached its finish
     /// condition, and `None` before that.
     ///
-    /// **A snapshot rather than a live query**, and that is the whole point: "the
-    /// race is over" has to mean one fixed table. The field is still moving when
-    /// the player crosses - `oag_race::places` ranks whoever has not finished by
-    /// distance covered, which is the honest answer at that instant - and a board
-    /// recomputed a second later would show a different one.
+    /// **A snapshot rather than a live query**: "the race is over" has to mean
+    /// one table, not one that moves under a reader at every tick. The field is
+    /// still moving when the player crosses - `oag_race::places` ranks whoever
+    /// has not finished by distance covered - so the board is replaced only by
+    /// [`Race::refresh_results`], when the world runs on behind the end screens,
+    /// and each replacement bumps [`Self::results_revision`].
     ///
     /// On `Race` rather than in `World`: it is derived from state the world
     /// already holds, so hashing it would hash the same facts twice, and a
     /// replay reproduces it by reaching the same tick. See [`Self::results`].
     pub(super) results: Option<crate::scoreboard::Board>,
+    /// Boards taken or replaced so far, for [`Race::results_revision`].
+    pub(super) results_revision: u32,
     /// The tallies the Zone results screen reports - see [`RunStats`].
     pub(super) run_stats: super::results::RunStats,
 }
@@ -514,5 +517,6 @@ pub struct RaceView {
     pub(super) wreck_ended_tick: Option<u64>,
     pub(super) slot_teams: Vec<String>,
     pub(super) results: Option<crate::scoreboard::Board>,
+    pub(super) results_revision: u32,
     pub(super) run_stats: super::results::RunStats,
 }

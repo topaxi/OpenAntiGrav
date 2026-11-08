@@ -831,9 +831,10 @@ impl Session {
                     // opponents go on lapping and the player's craft is flown by
                     // the AI. Neutral input, because the panels consume the pad
                     // and a craft that is not the player's must not read it. The
-                    // standings and the board were frozen at the line, so
-                    // nothing the panels show moves. See
-                    // `Race::runs_on_after_the_line`.
+                    // player's standing was fixed at the line; the board keeps
+                    // up with the rest of the field finishing, and the tables
+                    // that list it are rebuilt from it. See
+                    // `Race::runs_on_after_the_line` and `Race::refresh_results`.
                     //
                     // A Single Race wreck steps the whole world too
                     // (`Race::runs_on_after_the_wreck`); any other ending (a Zone
@@ -846,7 +847,10 @@ impl Session {
                         Some(net) => {
                             net.step(&mut stage.race, oag_gameplay::InputSnapshot::EMPTY);
                         }
-                        None => stage.race.tick_finished(),
+                        None => {
+                            stage.race.tick_finished();
+                            stage.refresh_endrace_board();
+                        }
                     }
                     if let Some(rumbler) = &mut self.rumbler {
                         rumbler.tick(&stage.race, false, self.controls.pad_mut());
