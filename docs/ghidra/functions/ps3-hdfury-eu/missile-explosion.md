@@ -145,9 +145,9 @@ and `RibbonEffects_Render` draws it with the other pool-1 lines under
 
 | Config | Value | Effect |
 | --- | ---: | --- |
-| `+0x10` width at birth | 0.0 | |
-| `+0x14` width at death | 2.0 | each node widens 0 to 2 as it ages |
-| `+0x18` lifetime | 1.2 s | `node.life = entry.scale * 1.2`, so 0.6 to 1.2 s |
+| `+0x10` width at `t = 1` | 0.0 | `width = 2 (1 - t)` |
+| `+0x14` width at `t = 0` | 2.0 | |
+| `+0x18` lifetime | 1.2 s | `node.life = entry.scale * 1.2` (0.6 to 1.2 s), but `t = life / 1.2` (the config's, not the node's) |
 | `+0x1c` | 0.2 | the texture's `u` per world unit |
 | `+0x20` texture | `Data/Tex/ThickLine_bighalo.gtf` (`0x0079c258`) | |
 | `+0x24` chains | 1 | |
@@ -155,6 +155,17 @@ and `RibbonEffects_Render` draws it with the other pool-1 lines under
 | `+0x2c` phase step | 0.06 | |
 | `+0x30` helix radius | 0.6 | |
 | `+0x34` opacity ramp | off | `alpha = 1 - t` |
+
+**A node is born at `t = scale`, not at 1.** `FatLine_Update` divides by
+the config's lifetime (its reciprocal at element `+0x0c`, missile-ribbon.md),
+while `FatLine_PushChains` gives the node `f1 * lifetime`, and this caller
+passes `f1 = scale` in `U(0.5, 1)`. So a streak's node is born at width
+`2 (1 - scale)` (0 to 1) and alpha `1 - scale` (0 to 0.5) and grows to width 2
+and alpha 1 as it dies (the oldest and newest node of a chain have their
+alpha cleared). The Missile's own ribbons pass `f1 = 1.0`, so this path is
+new to the engine: `oag_fx::fat_line::Ribbon::push` sets `life:
+spec.lifetime` and has no scale today, while `advance` already divides by
+`spec.lifetime`, which is the right denominator.
 
 One node is laid per update at the entry's position plus `row1 * 0.6` turned
 about `row2` by the element's running phase, and stays where it was laid. The
@@ -242,9 +253,11 @@ Reset:      if +0x174 > -1:  env.boost = +0x178; +0x174 = -1          (0x0015493
 (`0x008b743c`) and the adapted luminance, clamps at 1 (`fsel`) and writes
 `(1 - min(adapted * boost * 0.25, 1)) * contribution` into the gate's
 constant ([renderer.md](renderer.md), the gate's `contribution.y`). So on a
-circuit that authors 5, a blast **lowers** the bloom gate's fade term by up
-to a fifth for its second; on one that authors more than 6 (Sol 2 authors
-15), it raises it.
+circuit that authors 5, a blast at age 0 drops the fade
+`1 - min(0.25 a b, 1)` by `0.25 a` in absolute terms (`a` the adapted
+luminance; 20 % of it at `a = 0.4`, 60 % at `a = 0.6`), and clamps it to 0
+from `a >= 2/3` where 5 would still leave some; on a circuit that authors
+more than 6 (Sol 2 authors 15) it raises the fade instead.
 
 **Conflict, open.** `hd-whiteout` reported the gate and composite programs'
 patched constants identical in its `base`, `hit0` and `hit1` dumps. With
@@ -253,9 +266,11 @@ this law the gate's fade should differ at `hit0` (boost 5.92) unless
 the fade. Not resolved; the next read is the gate program's patched
 `contribution.y` in a base and a hit dump of the same boot.
 
-**The Bomb does the same.** `NormalBombBlast` code reads the same field at
-`0x001518f8` against its own saved copy (`+0x2d8`, `+0x2d4`) and loads
-`0x40c00000` (6.0) beside it; not read further here.
+**The Bomb does the same, and the guard is shared.** `NormalBombBlast` code
+reads the same field at `0x001518f8` against its own saved copy (`+0x2d8`,
+`+0x2d4`) and loads `0x40c00000` (6.0) beside it; not read further here. Each
+guard compares the live value with its own object's saved default, so
+whichever blast, Missile or Bomb, moved it first owns it until it retires.
 
 ## The pieces together
 
@@ -269,8 +284,9 @@ What one Missile detonation is, for wiring:
    ([weapons.md](weapons.md), "Weapon point lights"); the bloom boost at
    `6 + p (authored - 6)`.
 3. Sixteen `ThickLine_bighalo` streaks from the centre in random directions,
-   one node per frame for that second, each node living `1.2 U(0.5, 1)` s and
-   widening 0 to 2, additive; all from the shared 20-element pool.
+   one node per frame for that second, each node living `1.2 U(0.5, 1)` s,
+   born at `t = scale` and widening to 2, additive; all from the shared
+   20-element pool.
 
 ## 2048 and Omega
 
@@ -326,5 +342,5 @@ Of [weapons.md](weapons.md)'s 2026-10-07 (`hd-weapon-fx`) and 2026-10-08
 | `0x00143580` | `MissileManager_Update` | 75 |
 | `0x0028c660` | `Random_RangeFloat` | 80 |
 
-No Ghidra rename was applied (the decompiler truncates these functions); this
-page is authoritative (ADR-0005).
+No Ghidra rename was applied in this lane; `just apply-names` replays these
+rows, and this page is authoritative (ADR-0005).

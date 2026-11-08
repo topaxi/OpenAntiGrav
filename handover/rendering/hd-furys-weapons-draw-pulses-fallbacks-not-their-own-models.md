@@ -244,9 +244,12 @@ lead is closed (0.996105 is our own law at age 0.81), but ours' core still white
       update, with `a` the age and `p = a`: push one node at
       `pos + rotate(row1 * 0.6, about row2, phase)` (`phase += 0.06`; the `FatLine`
       push already wired for the Missile's helix, `missile-ribbon.md`), node life
-      `1.2 * scale`, then `pos += row1 * speed + row0 * (sin 15a + 2(1-p) U(-1,1))
+      `1.2 * scale` (a new scale argument on `oag_fx::fat_line::Ribbon::push`;
+      `advance` keeps dividing by `spec.lifetime`, so a node is born at
+      `t = scale`: width `2(1 - scale)`, alpha `1 - scale`), then
+      `pos += row1 * speed + row0 * (sin 15a + 2(1-p) U(-1,1))
       + row2 * (cos 15a + 2(1-p) U(-1,1))`. **Per update call, not times `dt`**:
-      call it at 60 Hz (assumed rate). Nodes widen 0 to 2, `alpha = 1 - t`, additive
+      call it at 60 Hz (assumed rate). `width = 2(1 - t)`, `alpha = 1 - t`, additive
       `SRC_ALPHA, ONE`, texture `ThickLine_bighalo.gtf`, `u` 0.2 per unit; the lines
       outlive the blast by their node life. Use a view-side RNG, never the sim `Rng`.
    3. **Materials** (confidence 90): `sphere` core, `bloom` **and** `rays`
@@ -255,8 +258,9 @@ lead is closed (0.996105 is our own law at age 0.81), but ours' core still white
       sixteen entries not played", "the clock", "sphere and bloom") need the citation
       fixed when this is wired.
    4. **Bloom boost** (confidence 80, effect not measured): while a blast lives, the
-      HD bloom's `adaption_boost` is `6 + p (authored - 6)`, unless another live blast
-      already owns it; restored at retirement. Wire it into `oag_post::hd_bloom`'s
+      HD bloom's `adaption_boost` is `6 + p (authored - 6)`, unless another live Missile
+      **or Bomb** blast already owns it (the Bomb writes the same field at
+      `0x001518f8`); restored at retirement. Wire it into `oag_post::hd_bloom`'s
       per-frame parameters behind the blast list. Open first: `hd-whiteout`'s "gate
       constants identical in base and hit" conflicts with this (the page's section 4
       names the read that settles it).
