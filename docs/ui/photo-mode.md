@@ -397,7 +397,13 @@ a track blur leaves the hull sharp and the scenery smeared (detail kept, by hori
 hull 0.87, scenery 0.27), a ship blur the reverse (hull 0.49, scenery 1.00)
 (`photo_mode_ground_truth::a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it`).
 
-**Not done, named.** The shot is 8-bit frames averaged, so a dark gradient the blur flattens shows
+**Not done, named.** **A rewind into a recorded race's first second of pre-roll** (a landing under about 120
+ticks, which starts from the first keyframe) hashes differently from the live run: landing at 101 with
+`--autopilot` and 102 with the throttle held, a Pulse Single Race with no mod mounted; landings from 131 on, from
+later keyframes, matched tick for tick (found by ADR-0088's PLAY test, which scrubs past it; the seek path is
+unchanged by that lane; cause not found). **The stage-6 rewind hash test replays no recording while this
+repository's mods are mounted:** the race records nothing then, so its landings fall on whole keyframes and only
+the keyframes are checked. The shot is 8-bit frames averaged, so a dark gradient the blur flattens shows
 contour bands; the single plain frame shows them in the same places (a rewound shot of the start
 tunnel does), so they are the frame's. Rewind is not offered from `Race End Photo` or in a split
 screen. Omega's blur and 2048's own depth of field law (`(a * 0.01)^2 * 900 + 100`; HD's focus curve

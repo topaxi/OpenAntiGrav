@@ -15,15 +15,21 @@ who had scrubbed to a moment could not play on from it.
 
 ## Decisions
 
-1. **The two switch both ways at the tick the player chose (M).** The viewer's PHOTO chip, or SELECT,
-   opens photo mode at the tick on screen; the viewer stands still under it. Photo mode, over a live race
-   or a replay, plays the recording on from the tick its REWIND row is scrubbed to, through a PLAY row
-   under REWIND in the effects panel (on or off, the arrows or a click as every row). PLAY runs at the
-   speed the race was made at and turns itself off at the live tick or the end of the recording.
+1. **The two switch both ways at the tick the player chose (M).** From the viewer, photo mode opens at the
+   tick on screen and the viewer stands still under it; from photo mode, over a live race or a replay,
+   playback starts from the tick the mode is scrubbed to (M). **The mechanism is chosen, not measured:** the
+   viewer's PHOTO chip, or SELECT, opens the mode; playback is a PLAY row under REWIND in the effects panel
+   (on or off, the arrows or a click as every row), run at the speed the race was made at and turning itself
+   off at the live tick or the end of the recording.
+   **Over a live race PLAY is photo mode's own playback of the race's recording, not a switch into the
+   replay viewer.** The mode stays open and its camera and rows stay; no viewer over a live race is built
+   (the viewer's `Timeline` is a second race that cannot be put over the one being driven without a
+   second snapshot path). A reading of "play starts the replay" as the viewer's screen is the alternative,
+   unbuilt, and the maintainer may ask for it.
 2. **The scrub is a seek (M).** Over a replay the REWIND row is `Viewer::seek`, its range the whole
    recording, and it stands where the playhead does when the mode opens. Leaving continues the
-   replay from where the row stands: playing if the viewer was playing when the mode opened or PLAY is
-   on, with the sound rebuilt from that tick. The viewer's own timeline is the only one over a watched
+   replay from where the row stands (M). **Chosen, not measured:** it plays if the viewer was playing when
+   the mode opened or PLAY is on, and stays paused otherwise, with the sound rebuilt from that tick. The viewer's own timeline is the only one over a watched
    race; the mode starts no keeper of its own.
 3. **A live race still resumes to the bit.** Over a live race PLAY steps the same `Rewind` the scrub
    moves (`Rewind::step`) and `Rewind::end` puts the simulation and its recording back, so there is no
@@ -70,10 +76,11 @@ Not built here; the lane that builds it reads this section as its brief.
 
 - PLAY is reachable only through the effects panel until the binding lane lands, a keyboard player's
   PLAY is the panel's row, and the viewer's key for photo mode is SELECT.
-- **Found on the way, not fixed:** over a recorded race a rewind that lands in the first two seconds (from
-  the first keyframe) hashes differently from the live run (tick 102 of a Pulse Single Race flown with
-  the throttle held; ticks from 132 on matched). It predates this ADR; the PLAY test scrubs past it.
-  The existing rewind hash test did not see it: a drive with `--autopilot` and this repository's mods
-  mounted reported no recording (`recorded_events` absent; the two causes were not separated), so its
-  rewind stopped at whole keyframes. The new PLAY test mounts no mods and holds the throttle instead.
+- **Found on the way, not fixed:** over a recorded race a rewind whose pre-roll starts from the first
+  keyframe (a landing under about 120 ticks) hashed differently from the live run: 101 with `--autopilot`
+  and 102 with the throttle held on a Pulse Single Race, with no mod mounted; landings from 131 on matched.
+  This lane does not change the seek path. Second, the stage-6 rewind hash test never replays a
+  recording while this repository's mods are mounted: the race records nothing then (`recorded_events`
+  absent), so its landings fall on whole keyframes. Both are in `docs/ui/photo-mode.md`, "Not done,
+  named". The PLAY test mounts no mods and scrubs past the first.
 - Over a live race PLAY is silent and plays one tick a frame; the viewer's speeds are not on offer there.

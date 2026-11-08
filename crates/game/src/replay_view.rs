@@ -55,7 +55,7 @@ pub const CHIPS: [Control; 6] = [
 
 const MARGIN: f32 = 8.0;
 const GAP: f32 = 4.0;
-const CHIP_WIDTH: f32 = 50.0;
+const CHIP_WIDTH: f32 = 46.0;
 const CHIP_HEIGHT: f32 = 14.0;
 const BAR_HEIGHT: f32 = 5.0;
 const BAND: [f32; 4] = [0.0, 0.0, 0.0, 0.6];

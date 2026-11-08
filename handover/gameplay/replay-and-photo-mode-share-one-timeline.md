@@ -26,11 +26,14 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
   skipping craft out of the race, one seat of a split recording), SQUARE the HUD in the viewer, the trigger split (L2/R2 a
   view-side scrub and PLAY, not aliased to L1/R1), a key for PLAY (today the panel's row), and the right stick read
   view-side (photo mode orbit, viewer jog), never into `InputSnapshot`.
-- **A rewind that lands in the first two seconds of a recorded race hashes differently from the live run** (tick 102 of a
-  Pulse Single Race flown with the throttle held; ticks from 132 on matched). A seek from the first keyframe (it carries the plans the first tick learns). Found by the PLAY test,
-  which scrubs past it; not reached on the viewer (its timeline verifies every second). The existing rewind hash test
-  never replayed a recording in this tree (`recorded_events` absent with `--autopilot` and the repository's mods).
-  Find why before a rewind to the start is offered as exact.
+- **A rewind whose pre-roll starts from the first keyframe hashes differently from the live run** (landing at 101 with
+  `--autopilot`, 102 with the throttle held, a Pulse Single Race, no mod mounted; landings from 131 on matched). Probably the
+  first keyframe's plans (it is cut before the first tick learns them); not shown. Found by the PLAY test, which scrubs
+  past it; the viewer verifies every stored hash. **Also:** the stage-6 rewind hash test replays no recording while the
+  repository's mods are mounted (the race records nothing, `recorded_events` absent), so only keyframes are checked.
+  `docs/ui/photo-mode.md`, "Not done, named". Find why before a rewind to the start is offered as exact.
+- **Over a live race PLAY is photo mode's playback, not the viewer's screen** (ADR-0088, decision 1); a viewer over a
+  live race is not built.
 - **The viewer's photo mode** offers no blur rows (no keyframes of the race it moves) and is refused in POSE VIEW.
 - **Stage 7, `take-over`, is next** (decision 10's text). Stages 3 and 5, its dependencies, have landed.
 - **An ADR is owed for photo mode's rewind.** Stage 6 moves the live race on screen and restores it to the bit, departing

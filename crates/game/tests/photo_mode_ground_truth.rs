@@ -446,8 +446,10 @@ fn a_live_race_played_from_a_scrub_and_left_hashes_as_it_was() {
         return;
     };
     let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-play-shots");
-    // Flown with the throttle held, which the recording keeps: an autopilot's flight is not in
-    // the recorded inputs, so a rewind would replay the craft sitting still.
+    // The throttle is held so the craft moves and every hash is sensitive. No mod is mounted
+    // (`drive_unmodded`): a modded race records nothing, and a rewind of a race that records
+    // nothing stops at whole keyframes, so it would never play the recording
+    // (`docs/ui/photo-mode.md`, "Not done, named").
     let to_the_throttle = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 400; ");
     let control = drive_unmodded(
         &image,
@@ -495,8 +497,8 @@ fn a_live_race_played_from_a_scrub_and_left_hashes_as_it_was() {
     let live = *under.first().expect("the mode opened");
     let lowest = *under.iter().min().expect("the mode opened");
     assert!(lowest + 100 < live, "the rewind never went back");
-    // Landing in a real race's first two seconds (from the first keyframe) does not hash as the
-    // live run did; the scrub here stays out of them (the thread names it).
+    // A landing whose pre-roll starts from the first keyframe does not hash as the live run did;
+    // the scrub here stays out of it (`docs/ui/photo-mode.md`, "Not done, named").
     assert!(lowest > 130, "the scrub went to {lowest}");
     assert!(
         under.iter().all(|tick| *tick <= live),
