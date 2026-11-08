@@ -126,6 +126,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         report.push(format!("craft from {}", craft_title.name));
     }
     report.push(archives.layout.describe());
+    crate::texture_pack::engage(options.find_texture_packs.as_ref(), &archives, &mut report);
     for pack in &archives.packs {
         report.push(format!("dlc: {}", pack.label()));
     }
@@ -1106,6 +1107,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
     #[cfg(feature = "view")]
     let track_module = extensions.has_track_module();
+    report.extend(crate::texture_pack::replaced_line());
     let mut loaded = Loaded {
         #[cfg(feature = "view")]
         started: None,

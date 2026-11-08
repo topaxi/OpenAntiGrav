@@ -181,6 +181,30 @@ impl<'a> Stored<'a> {
         })
     }
 
+    /// One texture of a PSP `.vex`, from the header fields and the palette and texel bytes
+    /// exactly as the file stores them (`oag_vex::vex::StoredTexture`). Rows are padded to
+    /// the 16-byte stride at every level, level 0 included.
+    #[must_use]
+    pub fn from_vex(
+        (width, height): (u16, u16),
+        bits_per_pixel: u8,
+        mip_levels: u8,
+        flags: u8,
+        palette: &'a [u8],
+        texels: &'a [u8],
+    ) -> Self {
+        Self {
+            width: u32::from(width),
+            height: u32::from(height),
+            bits_per_pixel: u32::from(bits_per_pixel),
+            mip_levels,
+            swizzled: flags & FLAG_SWIZZLED != 0,
+            palette,
+            texels,
+            pad_level0: true,
+        }
+    }
+
     /// The glyph atlas of a PSP `.fnt`, validated by [`fnt::Font::parse`].
     ///
     /// # Errors

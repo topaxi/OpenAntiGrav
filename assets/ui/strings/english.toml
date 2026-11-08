@@ -469,6 +469,7 @@ OAG_MODS_ADDS = { text = "ADDS", human = false }
 OAG_MODS_NO_LICENSE = { text = "NO LICENSE STATED", human = false }
 OAG_MODS_LICENSE_FILE = { text = "SEE %s", human = false }
 OAG_MODS_NOTHING = { text = "NOTHING", human = false }
+OAG_MODS_TEXTURE_PACK = { text = "TEXTURES", human = false }
 OAG_MODS_BUILT_IN = { text = "BUILT IN", human = false }
 OAG_MODS_ENABLED = { text = "ENABLED", human = false }
 OAG_MODS_ON = { text = "ON", human = false }

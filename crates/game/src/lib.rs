@@ -94,6 +94,7 @@ pub mod settings;
 pub mod sound;
 pub mod split_screen;
 pub mod team_hull;
+pub mod texture_pack;
 pub mod track_panel;
 pub mod unlock;
 

@@ -166,6 +166,8 @@ impl Pending {
             // Filled at launch (`oag_game::mod_extensions::attach`), from the mods on then.
             extensions: Vec::new(),
             find_extensions: None,
+            // Filled at launch (`oag_game::texture_pack::attach`), from the packs on then.
+            find_texture_packs: None,
             // Passed straight through like `track` above, `None` included:
             // `race::load` resolves an unnamed team from the title it opened,
             // which is the only place the title is known. See

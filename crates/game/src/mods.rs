@@ -72,6 +72,8 @@ pub struct Listing {
     pub enabled: Option<bool>,
     /// What the mod is when the player has not switched it: off for a texture pack.
     pub default_enabled: bool,
+    /// Whether the mod is a texture pack, which adds no rows.
+    pub texture_pack: bool,
     /// Why it is not in the game, when it is not.
     pub error: Option<String>,
     /// What of it is left out while the mod itself is in, as detail lines (label,
@@ -103,6 +105,8 @@ pub mod words {
     pub const LICENSE_FILE: (&str, &str) = ("OAG_MODS_LICENSE_FILE", "SEE %s");
     /// A mod that added no row.
     pub const NOTHING: (&str, &str) = ("OAG_MODS_NOTHING", "NOTHING");
+    /// What a texture pack that is on adds.
+    pub const TEXTURE_PACK: (&str, &str) = ("OAG_MODS_TEXTURE_PACK", "TEXTURES");
     /// The ADDS line of a mod the player turned off: it adds nothing while off.
     pub const TURNED_OFF: (&str, &str) = ("OAG_MODS_TURNED_OFF", "NOTHING, TURNED OFF");
     /// The ENABLED row's two values.
@@ -328,6 +332,7 @@ impl Listing {
             builtin,
             enabled: Some(enabled || builtin),
             default_enabled: m.default_enabled,
+            texture_pack: m.texture_pack.is_some(),
             error,
             problems: Vec::new(),
             publishes: m
@@ -352,6 +357,7 @@ impl Listing {
             builtin: false,
             enabled: None,
             default_enabled: true,
+            texture_pack: false,
             error: Some(failed.cause().to_string()),
             problems: Vec::new(),
             publishes: Vec::new(),
@@ -391,6 +397,8 @@ impl Listing {
         };
         let adds = if self.enabled == Some(false) {
             say(words::TURNED_OFF)
+        } else if self.texture_pack {
+            say(words::TEXTURE_PACK)
         } else if self.rows.is_empty() {
             say(words::NOTHING)
         } else {

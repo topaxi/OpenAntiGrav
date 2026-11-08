@@ -924,6 +924,22 @@ pub(super) fn cloud_layer(
             return None;
         }
     };
+    if let Some(image) = oag_texture::replacer::mip(&blob) {
+        report.push(format!(
+            "{CLOUD_TEXTURE}: {}x{} from the texture pack - drawing {} cloud sprite(s)",
+            image.width,
+            image.height,
+            layer.len()
+        ));
+        return Some((
+            layer,
+            FlareTexture {
+                width: image.width,
+                height: image.height,
+                rgba: image.rgba.clone(),
+            },
+        ));
+    }
     match oag_texture::texture::Texture::parse(&blob) {
         Ok(texture) => {
             report.push(format!(

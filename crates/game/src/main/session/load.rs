@@ -524,6 +524,7 @@ impl Session {
                 || self.net.is_some();
             oag_game::mod_extensions::attach(&mut options, &self.settings.mods, vanilla);
         }
+        oag_game::texture_pack::attach(&mut options, &self.settings.mods);
         self.seat_the_windows(&mut options);
         options.people = 0;
         if let Some(seats) = self

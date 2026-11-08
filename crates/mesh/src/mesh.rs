@@ -1047,10 +1047,36 @@ fn build_class(
 ///
 /// A texture block that will not walk.
 pub fn embedded_texture_slots(data: &[u8]) -> Result<TextureSlots> {
+    // The active texture pack's picture for each texture it names (`oag_texture::replacer`),
+    // looked up in node order. Nothing is read when no pack is on but one lock.
+    let pack = oag_texture::replacer::active();
+    let tree = pack.as_ref().and_then(|_| vex::nodes(data).ok());
+    let stored = tree
+        .as_deref()
+        .and_then(|tree| vex::stored_textures(data, tree).ok());
+    let replacements: Vec<Option<std::sync::Arc<oag_texture::replacer::Image>>> =
+        match (&pack, &stored) {
+            (Some(pack), Some(stored)) => stored
+                .iter()
+                .map(|slot| {
+                    let t = slot.as_ref()?;
+                    pack.find(&oag_texture::replacement::Stored::from_vex(
+                        (t.width, t.height),
+                        t.bits_per_pixel,
+                        t.mip_count,
+                        t.flags,
+                        t.palette,
+                        t.texels,
+                    ))
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
     Ok(vex::textures(data)
         .context("extracting textures")?
         .into_iter()
-        .map(|slot| {
+        .enumerate()
+        .map(|(index, slot)| {
             slot.map(|t| {
                 let label = t
                     .asset_path
@@ -1066,7 +1092,16 @@ pub fn embedded_texture_slots(data: &[u8]) -> Result<TextureSlots> {
                 // pre-swizzled Pure one) keeps the box-filtered chain, capped
                 // at the depth it declares; `.max(1)`: a 0 would upload no
                 // base level at all.
-                if t.levels.len() + 1 == usize::from(t.mip_count.max(1)) {
+                let chained = t.levels.len() + 1 == usize::from(t.mip_count.max(1));
+                if let Some(Some(image)) = replacements.get(index) {
+                    std::sync::Arc::new(ModelTexture::replaced(
+                        label,
+                        image,
+                        (width, height),
+                        t.mip_count,
+                        chained,
+                    ))
+                } else if chained {
                     std::sync::Arc::new(ModelTexture::chain(label, width, height, t.levels_rgba()))
                 } else {
                     std::sync::Arc::new(ModelTexture::rgba8(

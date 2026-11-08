@@ -646,6 +646,19 @@ pub(super) fn exhaust_texture(
 /// disc from a PS2 one in the load report, and the two reach this point by
 /// different names.
 fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, String), String> {
+    if let Some(image) = oag_texture::replacer::mip(blob) {
+        return Ok((
+            FlareTexture {
+                width: image.width,
+                height: image.height,
+                rgba: image.rgba.clone(),
+            },
+            format!(
+                "{name}: {}x{} from the texture pack",
+                image.width, image.height
+            ),
+        ));
+    }
     match oag_texture::texture::Texture::parse(blob) {
         Ok(texture) => Ok((
             FlareTexture {

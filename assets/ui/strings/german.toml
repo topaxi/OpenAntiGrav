@@ -302,6 +302,7 @@ OAG_MODS_ADDS = { text = "FÜGT HINZU", human = false }
 OAG_MODS_NO_LICENSE = { text = "KEINE LIZENZ ANGEGEBEN", human = false }
 OAG_MODS_LICENSE_FILE = { text = "SIEHE %s", human = false }
 OAG_MODS_NOTHING = { text = "NICHTS", human = false }
+OAG_MODS_TEXTURE_PACK = { text = "TEXTUREN", human = false }
 OAG_MODS_BUILT_IN = { text = "EINGEBAUT", human = false }
 OAG_MODS_ENABLED = { text = "AKTIVIERT", human = false }
 OAG_MODS_ON = { text = "AN", human = false }

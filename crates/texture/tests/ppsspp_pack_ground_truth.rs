@@ -184,16 +184,14 @@ fn visit(blob: &[u8], sources: &mut Vec<Source>, walked: &mut Walked) {
                 continue;
             };
             any = true;
-            let stored = Stored {
-                width: u32::from(t.width),
-                height: u32::from(t.height),
-                bits_per_pixel: u32::from(t.bits_per_pixel),
-                mip_levels: t.mip_count,
-                swizzled: t.flags & oag_formats::swizzle::FLAG_SWIZZLED != 0,
-                palette: t.palette,
-                texels: t.texels,
-                pad_level0: true,
-            };
+            let stored = Stored::from_vex(
+                (t.width, t.height),
+                t.bits_per_pixel,
+                t.mip_count,
+                t.flags,
+                t.palette,
+                t.texels,
+            );
             if let Some(replacement) = stored.replacement() {
                 sources.push(Source {
                     kind: "vex",

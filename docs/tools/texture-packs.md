@@ -57,9 +57,9 @@ just fetch-texture-packs --install-ppsspp ~/.config/ppsspp --copy   # copies ins
 
 The script refuses to replace a folder that is not its own symlink.
 
-The engine does not read either location yet. The wiring (opt-in, default off,
-rendering only) is the next lane: see "Ready to wire" in
-[ppsspp-texture-pack.md](../formats/ppsspp-texture-pack.md#ready-to-wire).
+Both locations are on the mod search path: a pack found there is a mod that starts off, switched
+on on the MODS page and drawn in a Pulse race (see [mods.md](mods.md), "Texture packs", and "Wired"
+in [ppsspp-texture-pack.md](../formats/ppsspp-texture-pack.md#wired)).
 
 ## Deploy to a Steam Deck or an Android phone
 

@@ -49,6 +49,9 @@ pub struct Options {
     /// Finds more of them on the load thread ([`crate::extensions::Finder`]); `None`
     /// looks for none.
     pub find_extensions: Option<crate::extensions::Finder>,
+    /// Opens the texture packs the player has on, on the load thread
+    /// ([`crate::texture_pack::Finder`]); `None` draws the disc's own textures.
+    pub find_texture_packs: Option<crate::texture_pack::Finder>,
     /// The ring the player's `graphics.boost_zoom` borrows, handed in by the composition
     /// root (the one place that may name HD's); `None` is off. Used only where
     /// `oag_title::RaceDefaults::borrows_zoom_ring`.

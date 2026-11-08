@@ -64,7 +64,7 @@ pub use shadow_map::{
     COVERAGE_FORMAT, ENV_PROBE_FORMAT, ENV_PROBE_LAYERS, ENV_PROBE_SIZE, OCCLUSION_FORMAT,
     OCCLUSION_LAYERS, SELF_SHADOW_FORMAT, SHADOW_DEPTH_FORMAT, SKY_PROBE_FORMAT, upload_sky_probe,
 };
-mod texture;
+pub(crate) mod texture;
 #[cfg_attr(target_arch = "wasm32", path = "mesh_render/texture_sink/web.rs")]
 mod texture_sink;
 pub use texture_sink::Scope as TextureSinkScope;

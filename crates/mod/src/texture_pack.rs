@@ -14,8 +14,9 @@
 use std::path::Path;
 
 use oag_texture::replacement_pack::Pack;
+use oag_texture::replacer::{Files, Replacements};
 
-use crate::{Container, License, Manifest, TexturePack};
+use crate::{Container, License, Manifest, Mod, TexturePack};
 
 /// A pack's ini, at the pack's root.
 pub const INI: &str = "textures.ini";
@@ -68,6 +69,35 @@ pub fn recognise(container: &Container) -> Option<Manifest> {
         }),
         default_enabled: false,
     })
+}
+
+impl Files for Mod {
+    fn read(&self, name: &str) -> Option<Vec<u8>> {
+        Mod::read(self, name).ok().flatten()
+    }
+}
+
+/// The pack `module` is, indexed over the mod's own files: its `textures.ini` read once, its
+/// PNGs read as a texture asks for them.
+///
+/// # Errors
+///
+/// The mod is not a texture pack, its ini will not read, or the pack hashes in a way this
+/// build does not compute (`oag_texture::replacer::Refused`).
+pub fn replacements(module: Mod) -> Result<Replacements, String> {
+    let label = module.label();
+    let ini = module
+        .manifest
+        .texture_pack
+        .as_ref()
+        .map(|pack| pack.ini.clone())
+        .ok_or_else(|| format!("{label}: not a texture pack"))?;
+    let text = module
+        .read_text(&ini)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("{label}: no {ini}"))?;
+    let name = module.manifest.name.clone();
+    Replacements::new(&name, &text, Box::new(module)).map_err(|why| format!("{label}: {why}"))
 }
 
 /// What a pack is called: its folder, or its zip's stem; a bare `textures.zip` takes the

@@ -3722,6 +3722,7 @@ dependencies = [
  "oag-source",
  "oag-testdata",
  "oag-vex",
+ "png",
  "zip",
 ]
 
