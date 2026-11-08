@@ -3721,6 +3721,7 @@ dependencies = [
  "oag-source",
  "oag-testdata",
  "oag-vex",
+ "zip",
 ]
 
 [[package]]

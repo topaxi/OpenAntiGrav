@@ -185,7 +185,7 @@ done
 # A texture pack is a git checkout; its .git is not game data.
 for d in "$data"/texture-packs/*/; do
     d="${d%/}"
-    [[ -f $d/textures.ini ]] || continue
+    [[ -f $d/textures.ini || -f $d/textures.zip ]] || continue
     mapfile -t files < <(cd "$data" && find "texture-packs/$(basename "$d")" -type f -not -path '*/.git/*' | sort)
     add_row "texture-packs/$(basename "$d")" "${files[@]}"
 done

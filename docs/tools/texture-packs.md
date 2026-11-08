@@ -10,6 +10,13 @@ device. What a pack is and how its keys are computed:
 | --- | --- | --- |
 | Pulse | `reTokyo/WipEout-Pulse-Upscale-Version` (about 910 MB) | Pulse EU or USA |
 | Pure | `reTokyo/WipEout-Pure-HD-Texture-Pack` (about 9 MB, user interface only) | Pure EU, USA, Japan or a demo |
+| Pure + Pulse 2026 | one `textures.zip` (553 MB) in NR74W's `WipEout Mods` download; **not fetched by the script** | either game |
+
+The two repositories are early 2020 snapshots; the 2026 `textures.zip` is the maintained
+pack and reuses their keys. Put it in
+`data/texture-packs/WipEout-Pure-Pulse-PPSSPP-Pack-2026-07-25/textures.zip` by hand
+(or point `OAG_TEXTURE_PACK_ZIP` at it); `just push-data` carries any folder there that holds a
+`textures.ini` or a `textures.zip`.
 
 **Both repositories are unlicensed fan derivatives of the games' textures.** They
 are never committed here: they live under the gitignored `data/` and `just

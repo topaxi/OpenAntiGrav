@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure]
 updated: 2026-11-08
-summary: "Draw a fan PPSSPP texture pack: keys reproduce (Pulse 2,181 of 2,380, Pure 650 of 896); wire the lookup opt-in, default off, lazy, rendering only"
+summary: "Draw a PPSSPP texture pack as an off-by-default mod: keys reproduce (2026 pack 5,039 of 7,476); wire lookup, zip and ZIM reading, rendering only"
 categories: [tooling]
 size: L (60)
 difficulty: medium (60)
@@ -34,13 +34,17 @@ section. `just fetch-texture-packs` fetches the packs; `just push-data` carries 
 - Unresolved misses: Pulse ship hull texels rewritten after load (167 ship keys), Pure
   `main_menu/previews` (truecolour images converted at load), about 20 effect textures
   with no source on the disc.
-- Does a pack belong in `oag-mod`? Judged no: it is keyed by a hash of the original's guest
-  memory, not an asset name. A mod field naming a pack would change a mod format and must
-  update the `oag-mod-author` skill.
+- **The maintainer wants a pack to be a mod** (enabled and disabled like any other, off by
+  default): the design is the doc page's "A pack is a mod to the game" (native recognition
+  of a `textures.ini` folder or zip in `oag-mod`, `[texture-pack]`, `default-enabled`, a
+  PPSSPP memstick search root). It is a mod-format change: update the `oag-mod-author`
+  skill and `docs/tools/mods.md` in the same change.
+- **`textures.zip` read in place** (the 2026 pack is only that) and **ZIM images** (a later
+  pack's format, layout on the doc page) are first-class, not optional.
 
 ## Next Steps
 
-1. Pick where the lookup sits (a render-side `Replacements` the texture upload asks, keyed by
+1. Make a pack a mod (see above), then pick where the lookup sits (a render-side `Replacements` the texture upload asks, keyed by
    `Stored::replacement`), and read `Pack` once per boot.
 2. Wire Pulse's `.vex` and `.mip` paths first (91.6 % of its keys); judge menu, track and
    hull draws in a race at the size a player sees, with the pack on and off.

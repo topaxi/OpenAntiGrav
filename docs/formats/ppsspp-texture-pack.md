@@ -10,13 +10,21 @@ Reader: [`oag_texture::replacement`](../../crates/texture/src/replacement.rs)
 [`crates/texture/tests/ppsspp_pack_ground_truth.rs`](../../crates/texture/tests/ppsspp_pack_ground_truth.rs).
 Fetching them: [texture-packs.md](../tools/texture-packs.md).
 
-The two packs, both unofficial and unlicensed fan work, never committed
-(`data/texture-packs/`, gitignored):
+Three packs were measured, all unofficial and unlicensed fan work, none committed
+(`data/texture-packs/`, gitignored). The **2026 pack is the primary target**; the
+two `reTokyo` repositories are early snapshots of the same work:
 
-| Pack | Repo | Pinned commit | Serials in `[games]` |
+| Pack | Source | Pinned | Serials in `[games]` |
 | --- | --- | --- | --- |
-| Pulse | `reTokyo/WipEout-Pulse-Upscale-Version` | `33fd6a3f1097` | UCES00465, UCUS98712 |
-| Pure | `reTokyo/WipEout-Pure-HD-Texture-Pack` | `f91d55bbde51` | UCES00001, UCUS98612, UCJS10007, ULES00229, ULUS10058 |
+| **Pure + Pulse 2026-07-25** | NR74W's `WipEout Mods` download, `Texture Packs/WipEout Pure-Pulse - PPSSPP Pack (2026-07-25)/textures.zip` (553 MB, one `textures.zip` for both games; not fetchable by script) | its file name | Pure: UCES00001, UCUS98612, UCJS10007, UCKS45008, ULES00229, ULUS10058, UCED00017, UCET00001. Pulse: UCES00465, UCUS98712, UCAS40179, UCET00713. WPCE02025 (the patched Portable Collection) |
+| Pulse (early snapshot) | `reTokyo/WipEout-Pulse-Upscale-Version`, 49 commits 2020-03-31 to 2020-06-10 | `33fd6a3f1097` | UCES00465, UCUS98712 (the forum thread adds UCET00713, UCAS40179) |
+| Pure (early snapshot) | `reTokyo/WipEout-Pure-HD-Texture-Pack`, ends 2020-04-13 "Update #5" | `f91d55bbde51` | UCES00001, UCUS98612, UCJS10007, ULES00229, ULUS10058 |
+
+The 2026 ini reuses the snapshots' keys: 2,359 of the Pulse repo's 2,377 live keys and
+869 of the Pure repo's 895 are in it, so the two share one hash scheme and the same
+oracle covers all three. The forum pack kept growing after the snapshots (hand-remade at
+8x to 16x in menus and 2x to 8x in game, AI upscaling only for skyboxes), so a
+replacement's size is **not a fixed multiple**: read each PNG's own size.
 
 ## `textures.ini` grammar both packs use
 
@@ -58,6 +66,7 @@ UCES00465 = textures.ini   # serial = ini file; the same file here
   (`0000000000000000dddddddd`): a **data-hash wildcard**, PPSSPP's last-resort
   lookup ("anything with this data hash"). Pure has none. 3 Pulse and 1 Pure
   keys are listed twice.
+- **The 2026 pack is one ini for both games** (13 serials, `[options]` as Pulse's with `ignoreMipmap`): 7,664 24-hex level-0 keys, 7,476 live, 188 blank, one 16-hex wildcard, 359 zero-cache-key lines, 6,949 distinct PNG targets of which 2,752 are not in the zip. It is a **`textures.zip`** (4,801 entries, `textures.ini` at its root), which PPSSPP prefers to a folder (`LoadIni` tries the zip first, and refuses a zip without an ini). Top folders: `environments` 2,593 files, `ships` 848, `tex` 627, `skins` 283, `tournaments` 170, `fe` 102, `music` 53, `psys` 45, `defaults` 33, `weapons`, `gallery`, `hud`, `pads`. Its Readme: "Due to dynamic CLUT, the HUD font textures in WipEout Pure are almost impossible to replace reliably"; the default fonts are 4x, 8x ones sit in `fe/fonts/8x_resolution`.
 - Lookup order for a texture with cache key `K` (address zeroed) and data hash `H`
   (`LookupWildcard`): `(K, H)`, then `(K, 0)`, then `(0, H)`. So a zero-key line
   matches any palette variant of a texture, and a full key matches only one.
@@ -209,6 +218,75 @@ contains** (the other 540 are keys the pack's author dumped and never filled in)
 Without the Pure DLC: 409 exact. Pure's `main_menu` is `previews` (376 keys), `skins`
 (63), `music` (24), `class_selection`, `league_selection`, `menu`, `loading`.
 
+### The 2026 pack against Pulse EU and Pure EU
+
+Same census, same classes, the discs plus their DLC (`pulse-psp-eu` and `pure-psp-eu`
+together: 1,110 `.mip`, 20 `.fnt`, 11,076 `.vex` textures, 24 DLC archives), against the
+one 2026 `textures.ini` (7,476 live keys). Tests `pack_2026_against_pulse_and_pure_eu`,
+`..._pulse_eu`, `..._pure_eu`; the zip is found at `OAG_TEXTURE_PACK_ZIP` or
+`data/texture-packs/WipEout-Pure-Pulse-PPSSPP-Pack-2026-07-25/textures.zip`.
+
+| Pack directory | keys | exact | wildcard | heap-tail | other | no-data |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `defaults` | 58 | 37 | 0 | 0 | 0 | 21 |
+| `environments/NN_* (Pure circuits)` | 2,095 | 1,978 | 96 | 0 | 0 | 21 |
+| `environments/classics` | 361 | 109 | 2 | 0 | 17 | 233 |
+| `environments/exclusive` | 166 | 32 | 0 | 0 | 2 | 132 |
+| `environments/pulse` | 1,791 | 1,525 | 224 | 1 | 4 | 37 |
+| `environments/zone` | 91 | 90 | 1 | 0 | 0 | 0 |
+| `fe` | 134 | 33 | 3 | 0 | 36 | 62 |
+| `gallery` | 373 | 0 | 0 | 0 | 0 | 373 |
+| `hud` | 14 | 8 | 1 | 0 | 0 | 5 |
+| `music` | 80 | 38 | 0 | 0 | 0 | 42 |
+| `pads` | 9 | 9 | 0 | 0 | 0 | 0 |
+| `psys` | 80 | 0 | 0 | 0 | 2 | 78 |
+| `ships/other` | 415 | 260 | 6 | 0 | 7 | 142 |
+| `ships/pulse` | 483 | 274 | 2 | 0 | 1 | 206 |
+| `skins` | 297 | 24 | 0 | 0 | 0 | 273 |
+| `tex` | 23 | 18 | 1 | 0 | 0 | 4 |
+| `tex/caustics` | 16 | 16 | 0 | 0 | 0 | 0 |
+| `tex/cloud` | 1 | 1 | 0 | 0 | 0 | 0 |
+| `tex/custom` | 431 | 0 | 0 | 0 | 0 | 431 |
+| `tex/engineflare` | 3 | 3 | 0 | 0 | 0 | 0 |
+| `tex/enginesmoke` | 2 | 0 | 0 | 0 | 0 | 2 |
+| `tex/lensflare` | 3 | 3 | 0 | 0 | 0 | 0 |
+| `tex/original` | 307 | 175 | 0 | 0 | 0 | 132 |
+| `tex/screenfx` | 1 | 1 | 0 | 0 | 0 | 0 |
+| `tex/unknown` | 19 | 9 | 2 | 1 | 0 | 7 |
+| `tex/weapons` | 5 | 3 | 0 | 0 | 0 | 2 |
+| `tournaments` | 176 | 16 | 0 | 0 | 0 | 160 |
+| `visual_effects` | 3 | 2 | 1 | 0 | 0 | 0 |
+| `weapons` | 39 | 31 | 5 | 0 | 0 | 3 |
+| **total** | **7,476** | **4,695** | **344** | **2** | **69** | **2,366** |
+
+**N = 5,039 of 7,476 keys (67.4 %) are reproduced by the two EU discs and their DLC**
+(4,695 exact, 344 wildcard); 3,144 of those name a PNG the zip contains, 1,895 do not.
+Per game: **Pulse EU alone 2,236 (1,994 + 242), Pure EU alone 2,900 (2,794 + 106)**; the
+rest of a game's keys belong to the other game, which is why the union is the headline.
+
+Where it misses, by the pack's own folders (what the table says, no more):
+
+- **Circuits and ships the discs and our DLC do not carry:** `environments/classics`
+  (233), `environments/exclusive` (132: Coke, Stealth, Wire, Puma specials),
+  `ships/other` (142), `tex/custom` (431, the pack's own alternates), `skins` (273),
+  `tournaments` (160), `gallery` (373, truecolour images converted at load, the
+  no-data case below), `music` (42).
+- **Numbered Pure circuits: 1,978 + 96 of 2,095 reproduced; 21 miss. Pulse circuits
+  (`environments/pulse`): 1,525 + 224 of 1,791; 37 miss.** The base games' own tracks
+  reproduce almost entirely; a patched-disc re-encode of their textures would show as
+  misses *inside* these folders, and it does not.
+- `fe` (134 keys): 33 exact, 3 wildcard, **36 other, 62 no-data**: the front-end fonts
+  under runtime palettes, as the pack's Readme says, plus alternates.
+- `ships/pulse`: 206 no-data, the hull texels rewritten after load (below).
+- `psys` (80): 78 no-data, 2 other: particle textures, not found among our sources.
+
+**On the lead's question whether a patched ISO changes the match:** the pack lists
+`WPCE02025`, the patched Portable Collection, beside the stock serials, and the Readme
+says it matches stock discs. On unpatched EU discs the misses cluster in content the discs
+do not hold (other circuits, other ships, custom alternates, truecolour images), not in
+the base circuits' folders, so these counts give **no sign** that a patch re-encodes
+textures. A patched image was not opened.
+
 ## Oracle: PPSSPP's own keys, Pulse EU
 
 PPSSPP v1.20.4 on `pulse-psp-eu.chd`, hardware (OpenGL) renderer under Xvfb (the
@@ -218,7 +296,7 @@ software renderer bypasses the texture cache and dumps nothing), with
 dump uses `quick` and addresses, and is not comparable). The walk covered the logo, the profile prompts, the campaign page, the ship select and about a minute
 of Talon's Junction. It wrote **3,411 files**, each named by the key PPSSPP would
 look it up by: the oracle for the key, independent of the pack and of this code.
-Re-run it with `OAG_PPSSPP_DUMP=<TEXTURES/UCES00465/new> just test-data`
+Of the 3,411 dumped keys, 219 are keys of the 2026 ini and 205 of the Pulse snapshot's; the dump holds 248 distinct data hashes, 239 of them in the 2026 ini. Re-run it with `OAG_PPSSPP_DUMP=<TEXTURES/UCES00465/new> just test-data`
 (`pulse_eu_oracle`).
 
 | Dumped keys | count | exact in our census | meaning |
@@ -275,9 +353,11 @@ For the lane that draws a pack (opt-in, default off, rendering-only, lazy):
    device's `<XDG_DATA_HOME>/oag/texture-packs/<name>/`, where `just push-data`
    puts it), then a PPSSPP memstick `PSP/TEXTURES/<serial>/` (symlinked there by
    `just fetch-texture-packs --install-ppsspp`; `~/.config/ppsspp` on Linux). The
-   folder is PPSSPP's own layout: `textures.ini` plus the PNGs it names, or a
-   `textures.zip` with the same content (`LoadIni` prefers the zip). Choose the
-   pack by the disc's serial against `[games]`.
+   folder is PPSSPP's own layout: `textures.ini` plus the PNGs it names, **or a
+   `textures.zip` with the ini at its root, read in place** (the 2026 pack is only
+   that; `zip` is already a dependency of `oag-mod`). The zip is preferred when both
+   exist, as in `LoadIni`. Choose the pack by the disc's serial against `[games]`
+   (the 2026 ini lists 13, including `WPCE02025`).
 2. **Parse** with `Pack::parse`; refuse a pack with `hash != xxh64`,
    `ignoreaddress` false, or any section but the three above (`other_sections`),
    by name.
@@ -291,23 +371,86 @@ For the lane that draws a pack (opt-in, default off, rendering-only, lazy):
    alone when the palette is a runtime variant** (Pure's HUD fonts): `other` keys
    need the palette bytes, so leave them unreplaced.
 5. **Skip a key whose PNG the pack lacks.** Only 1,592 Pulse and 110 Pure
-   reproduced keys have one. Honour a blank value (leave the texture alone) and
+   reproduced keys have one. Read each PNG's own size and scale UVs per texture (below). Honour a blank value (leave the texture alone) and
    the `0909` wildcard.
 6. **A replacement is larger**: over the 175 Pulse keys both the dump and the pack have, the PNG is 4x the original on 101, 2x on 29, 8x on 16, 16x on 12, 1x on 6, and a different factor per axis on 7. UVs are fractions, so a draw needs no change; a texture the game atlases by pixel offset (fonts, the HUD sprite sheet) must be checked per frame. Judge in a race, not a still.
 7. **Not wired by this lane.** Nothing in the loader report names a pack yet; the
    wiring lane adds the line (`warn`: pack requested and absent; `debug`: how many
    textures it replaced).
 
-### `oag-mod`
+### A pack is a mod to the game
 
-**Not a fit, and it should not import into one.** `oag-mod` carries menus, strings,
-settings, tracks, rumble, campaigns, icons and simulation modules; it has no
-texture-override path, and a pack is keyed by a hash of PSP guest memory
-(a property of the original's loader), not by an asset name. A pack stays a
-read-only directory looked up by key. A mod that carried a pack (an `oag-mod.toml`
-field naming one) would change a mod format and must update
-`assets/mods/examples/.claude/skills/oag-mod-author/SKILL.md` in the same change;
-this lane changed no mod format.
+The maintainer wants a texture pack to be enabled and disabled like any other mod. Today
+`oag-mod` has **no texture path**: its manifest carries menus, strings, settings, tracks,
+icons, effects, rumble, campaigns and simulation modules, and a pack is keyed by a hash of
+the original's guest memory, not by an asset name. The design that fits:
+
+- **Native reading, not an importer.** An importer that writes an `oag-mod.toml` has to
+  put it *inside* the pack: a 553 MB `textures.zip` cannot be given a manifest without
+  repacking it, and a folder shared with a PPSSPP install (symlinked per serial) would
+  gain a file PPSSPP ignores and a player did not put there. So `oag-mod` should
+  **recognise a PPSSPP pack where it finds one** and synthesise the manifest: a folder or
+  a zip with `textures.ini` at its root and a `[games]` table, and no `oag-mod.toml`.
+  A hand-written `oag-mod.toml` stays possible for a pack whose author wants a name,
+  version and licence, and wins over the synthesis.
+- **Manifest (synthesised or written).** `id` `ppsspp.<folder or zip stem, lower-cased>`,
+  `name` the same, `version` `0.0.0` unless written, `license` `License::None` (a mod
+  without one "loads, and says so wherever it is listed": exactly the state of these
+  packs), `titles` from the `[games]` serials through a serial-to-title table (the
+  2026 pack: `pulse` and `pure`; the Pulse snapshot: `pulse`). A written manifest gains a
+  `[texture-pack]` table: `format = "ppsspp"`, optionally `ini = "textures.ini"` and
+  `serials`.
+- **Kind.** A texture pack changes only what is drawn: no simulation module, no menu row,
+  no state. It is the one mod kind that must be **off by default**: the manifest gains a
+  `default-enabled` boolean (default `true`, as every mod is on until `[mods] disabled`
+  names it), and a recognised pack is always `false`. Switching it on in the MODS page
+  writes the existing `[mods]` list; nothing new in the settings file. Per-title
+  filtering is the existing `titles` field.
+- **Search path.** `oag_mod::mods_search_path` gains `data/texture-packs/` (one level, a
+  folder holding `textures.ini`, or `textures.zip`), the device's
+  `<XDG_DATA_HOME>/oag/texture-packs/`, and, when it exists, a PPSSPP memstick's
+  `PSP/TEXTURES/` (each `<serial>/` folder: a pack linked once per serial is one mod, by
+  canonical path, as `dlc::discover` already de-duplicates). `just mods-list` shows them
+  and what was left out, like any other.
+- **Reading.** Through `Container` (folder or zip, read in place): `textures.ini` once,
+  then PNG (or ZIM) entries lazily as a texture is first drawn. The key lookup is
+  `oag_texture::replacement`, a render-side consumer; `oag-mod` stays ignorant of titles
+  and textures, as its docs promise, and hands over the container.
+- **Consequence for the skill.** The manifest field, the table and the recognition rule
+  are a mod-format change, so the wiring change **must update**
+  `assets/mods/examples/.claude/skills/oag-mod-author/SKILL.md` (committed on the examples
+  submodule branch, then the pointer) and `docs/tools/mods.md`. This lane changed no mod
+  format and left the skill alone.
+
+Open: whether a pack that targets two games (the 2026 one) is one mod or two (one mod,
+`titles = ["pulse", "pure"]`, is the cheaper reading); whether `default-enabled` is a
+manifest field or a property of the kind.
+
+### ZIM images
+
+Later versions of the pack (PPSSPP v1.11.3 and later; "835 MB PNG, 1,009 MB ZIM" in
+the forum thread) ship **ZIM**, PPSSPP's own image format, as `.zim`; PPSSPP accepts
+`.png`, `.zim`, `.dds` and `.ktx2` (`ScanForHashNamedFiles`) and an alias names one.
+Layout, from `Common/Data/Format/ZIMLoad.cpp` and `.h` (v1.20.4), little-endian:
+
+```text
++0x00  4    "ZIMG"
++0x04  u32  width
++0x08  u32  height
++0x0c  u32  flags
++0x10  ...  pixel data
+```
+
+Flags: bits 0-3 pixel format (`0` RGBA8888, `1` RGBA4444, `2` RGB565, others refused),
+`0x10` has a full mip chain (levels = `log2(min(w, h)) + 1`, each half the size), `0x20`
+generate mips, `0x40` dithered on save, `0x80` clamp, `0x100` zlib-compressed, `0x200`
+`0x400` `0x800` ETC1 quality (unused by the loader), `0x1000` zstd-compressed. The data
+after the 16-byte header is **one** stream (the header's comment says each mip is
+compressed separately; the v1.20.4 code decompresses the whole `sum(w*h*bpp)` at once):
+raw, zlib or zstd, of the levels back to back. A wrong decompressed size is logged and
+the image used anyway. Decoding is not in this lane; a reader needs `flate2` (already in
+the workspace) and, for zstd, a decoder. **A player's own copy of the late pack would be
+ZIM**, so the wiring lane reads both.
 
 ### 2048 and Omega
 
@@ -335,6 +478,7 @@ construction.
 just fetch-texture-packs      # clones both packs at the pin
 just test-data                # runs ppsspp_pack_ground_truth (skips without the packs)
 OAG_PPSSPP_DUMP=<dir> just test-data   # also pulse_eu_oracle
+OAG_TEXTURE_PACK_ZIP=<textures.zip> just test-data   # the 2026 pack (else data/texture-packs/WipEout-Pure-Pulse-PPSSPP-Pack-2026-07-25/)
 ```
 
 The test prints the per-directory tables above.

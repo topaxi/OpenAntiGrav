@@ -25,6 +25,7 @@ oag-disc.workspace = true
 oag-pulse.workspace = true
 oag-vex.workspace = true
 oag-source.workspace = true
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 
 [lints]
 workspace = true

@@ -38,7 +38,7 @@ fn repo_root() -> PathBuf {
 
 /// The pack's `textures.ini`, parsed, or `None` (with the reason printed) when
 /// the pack is absent or not at the pinned commit.
-fn pack(name: &str) -> Option<(Pack, PathBuf)> {
+fn pack(name: &str) -> Option<(Pack, Files)> {
     let dir = repo_root().join("data/texture-packs").join(name);
     let Ok(ini) = std::fs::read_to_string(dir.join("textures.ini")) else {
         eprintln!(
@@ -63,7 +63,51 @@ fn pack(name: &str) -> Option<(Pack, PathBuf)> {
         eprintln!("skip: {name} is at {head:?}, the pin is {pinned}");
         return None;
     }
-    Some((Pack::parse(&ini), dir))
+    Some((Pack::parse(&ini), Files::Dir(dir)))
+}
+
+/// Where a pack's replacement files are: a folder or a `textures.zip`.
+enum Files {
+    Dir(PathBuf),
+    Zip(HashSet<String>),
+}
+
+impl Files {
+    fn has(&self, target: &str) -> bool {
+        match self {
+            Self::Dir(dir) => dir.join(target).is_file(),
+            Self::Zip(names) => names.contains(target),
+        }
+    }
+}
+
+/// A `textures.zip` pack (PPSSPP reads the ini and images straight out of it).
+/// Found at `OAG_TEXTURE_PACK_ZIP`, else `data/texture-packs/<name>/textures.zip`.
+fn zip_pack(name: &str) -> Option<(Pack, Files)> {
+    let path = std::env::var_os("OAG_TEXTURE_PACK_ZIP")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            repo_root()
+                .join("data/texture-packs")
+                .join(name)
+                .join("textures.zip")
+        });
+    let Ok(file) = std::fs::File::open(&path) else {
+        eprintln!("skip: {} is absent", path.display());
+        return None;
+    };
+    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(file)).expect("a zip");
+    let mut ini = String::new();
+    std::io::Read::read_to_string(
+        &mut zip.by_name("textures.ini").expect("textures.ini"),
+        &mut ini,
+    )
+    .expect("utf-8 ini");
+    let names = zip
+        .file_names()
+        .filter_map(|n| n.ok().map(|n| n.into_owned()))
+        .collect();
+    Some((Pack::parse(&ini), Files::Zip(names)))
 }
 
 /// One texture, keyed.
@@ -113,6 +157,15 @@ struct Walked {
     vex_unreadable_nodes: usize,
     ship_skins: usize,
     dlc_archives: usize,
+}
+
+impl Walked {
+    fn add(&mut self, o: &Walked) {
+        self.vex_files_with_textures += o.vex_files_with_textures;
+        self.vex_unreadable_nodes += o.vex_unreadable_nodes;
+        self.ship_skins += o.ship_skins;
+        self.dlc_archives += o.dlc_archives;
+    }
 }
 
 /// Keys one blob if it is a texture of a kind the census reads.
@@ -261,12 +314,24 @@ fn classify(line: &Line, keys: &HashSet<Key>, data: &HashMap<u32, bool>) -> Opti
     })
 }
 
-/// The directory a pack path is reported under: `in_game/<sub>` or the top one.
+/// The directory a pack path is reported under: `in_game/<sub>` or
+/// `<top>/<sub>` for the folders of a bigger pack that hold several kinds of
+/// thing, otherwise the top one.
 fn group(target: &str) -> String {
     let mut parts = target.split('/');
     match (parts.next(), parts.next()) {
-        (Some("in_game"), Some(sub)) if target.matches('/').count() > 1 => {
-            format!("in_game/{sub}")
+        (Some("environments"), Some(sub)) if target.matches('/').count() > 1 => {
+            if sub.starts_with(|c: char| c.is_ascii_digit()) {
+                "environments/NN_* (Pure circuits)".to_string()
+            } else {
+                format!("environments/{sub}")
+            }
+        }
+        (Some("ships"), Some(sub)) if target.matches('/').count() > 1 => {
+            format!("ships/{}", if sub == "pulse" { "pulse" } else { "other" })
+        }
+        (Some(top @ ("in_game" | "tex")), Some(sub)) if target.matches('/').count() > 1 => {
+            format!("{top}/{sub}")
         }
         (Some(top), _) => top.to_string(),
         _ => String::new(),
@@ -285,7 +350,7 @@ struct Outcome {
     reproduced_with_file: [usize; 2],
 }
 
-fn measure(pack: &Pack, dir: &std::path::Path, sources: &[Source]) -> Outcome {
+fn measure(pack: &Pack, files: &Files, sources: &[Source]) -> Outcome {
     let keys: HashSet<Key> = sources.iter().filter_map(|s| s.replacement.key).collect();
     let data = data_hashes(sources);
     let mut out = Outcome {
@@ -307,7 +372,7 @@ fn measure(pack: &Pack, dir: &std::path::Path, sources: &[Source]) -> Outcome {
         } else if let Some(class) = classify(line, &keys, &data) {
             out.keys += 1;
             if matches!(class, Class::Exact | Class::Wildcard) {
-                out.reproduced_with_file[usize::from(!dir.join(&line.target).is_file())] += 1;
+                out.reproduced_with_file[usize::from(!files.has(&line.target))] += 1;
             }
             if class == Class::NoData {
                 let deep: Vec<&str> = line.target.split('/').take(4).collect();
@@ -410,12 +475,24 @@ const PURE_GROUPS: &[(&str, [usize; 5])] = &[
 ];
 
 fn run(image: &str, pack_name: &str, expect: &Expect) {
-    let Some((pack, dir)) = pack(pack_name) else {
+    let Some(found) = pack(pack_name) else {
         return;
     };
-    let Some((sources, walked)) = census(image) else {
-        return;
-    };
+    run_with(&[image], found, expect);
+}
+
+/// The census of every image in `images` together, against one pack.
+fn run_with(images: &[&str], (pack, files): (Pack, Files), expect: &Expect) {
+    let (mut sources, mut walked) = (Vec::new(), Walked::default());
+    for image in images {
+        let Some((s, w)) = census(image) else {
+            return;
+        };
+        sources.extend(s);
+        walked.add(&w);
+    }
+    let image = images.join(" + ");
+    let image = image.as_str();
     assert_eq!(pack.hash_kind().as_deref(), Some("xxh64"));
     assert!(pack.flag("ignoreaddress"));
     assert!(
@@ -424,7 +501,7 @@ fn run(image: &str, pack_name: &str, expect: &Expect) {
         pack.other_sections
     );
     assert!(pack.unparsed.is_empty(), "{:?}", pack.unparsed);
-    let outcome = measure(&pack, &dir, &sources);
+    let outcome = measure(&pack, &files, &sources);
     report(image, &sources, &walked, &outcome);
     assert_eq!(sources.len(), expect.sources, "textures read");
     let keyed = sources
@@ -558,4 +635,153 @@ fn pulse_eu_oracle() {
         "too few dumped textures to mean anything: {dumped}"
     );
     assert!(exact * 100 >= dumped * 95, "{exact} of {dumped} exact");
+}
+
+const ZIP_2026: &str = "WipEout-Pure-Pulse-PPSSPP-Pack-2026-07-25";
+
+#[test]
+#[ignore = "needs pulse-psp-eu.chd, pure-psp-eu.chd and the 2026 textures.zip"]
+fn pack_2026_against_pulse_and_pure_eu() {
+    let Some(found) = zip_pack(ZIP_2026) else {
+        return;
+    };
+    run_with(
+        &["pulse-psp-eu.chd", "pure-psp-eu.chd"],
+        found,
+        &Expect {
+            sources: 12206,
+            keyed: 10318,
+            files: [3144, 1895],
+            keys: 7476,
+            groups: &[
+                ("defaults", [37, 0, 0, 0, 21]),
+                ("environments/NN_* (Pure circuits)", [1978, 96, 0, 0, 21]),
+                ("environments/classics", [109, 2, 0, 17, 233]),
+                ("environments/exclusive", [32, 0, 0, 2, 132]),
+                ("environments/pulse", [1525, 224, 1, 4, 37]),
+                ("environments/zone", [90, 1, 0, 0, 0]),
+                ("fe", [33, 3, 0, 36, 62]),
+                ("gallery", [0, 0, 0, 0, 373]),
+                ("hud", [8, 1, 0, 0, 5]),
+                ("music", [38, 0, 0, 0, 42]),
+                ("pads", [9, 0, 0, 0, 0]),
+                ("psys", [0, 0, 0, 2, 78]),
+                ("ships/other", [260, 6, 0, 7, 142]),
+                ("ships/pulse", [274, 2, 0, 1, 206]),
+                ("skins", [24, 0, 0, 0, 273]),
+                ("tex", [18, 1, 0, 0, 4]),
+                ("tex/caustics", [16, 0, 0, 0, 0]),
+                ("tex/cloud", [1, 0, 0, 0, 0]),
+                ("tex/custom", [0, 0, 0, 0, 431]),
+                ("tex/engineflare", [3, 0, 0, 0, 0]),
+                ("tex/enginesmoke", [0, 0, 0, 0, 2]),
+                ("tex/lensflare", [3, 0, 0, 0, 0]),
+                ("tex/original", [175, 0, 0, 0, 132]),
+                ("tex/screenfx", [1, 0, 0, 0, 0]),
+                ("tex/unknown", [9, 2, 1, 0, 7]),
+                ("tex/weapons", [3, 0, 0, 0, 2]),
+                ("tournaments", [16, 0, 0, 0, 160]),
+                ("visual_effects", [2, 1, 0, 0, 0]),
+                ("weapons", [31, 5, 0, 0, 3]),
+            ],
+        },
+    );
+}
+
+#[test]
+#[ignore = "needs pulse-psp-eu.chd and the 2026 textures.zip"]
+fn pack_2026_against_pulse_eu() {
+    let Some(found) = zip_pack(ZIP_2026) else {
+        return;
+    };
+    run_with(
+        &["pulse-psp-eu.chd"],
+        found,
+        &Expect {
+            sources: 7633,
+            keyed: 6169,
+            files: [2070, 166],
+            keys: 7476,
+            groups: &[
+                ("defaults", [37, 0, 0, 0, 21]),
+                ("environments/NN_* (Pure circuits)", [18, 2, 0, 9, 2066]),
+                ("environments/classics", [0, 0, 0, 11, 350]),
+                ("environments/exclusive", [0, 0, 0, 1, 165]),
+                ("environments/pulse", [1525, 224, 1, 4, 37]),
+                ("environments/zone", [0, 0, 0, 6, 85]),
+                ("fe", [22, 3, 0, 3, 106]),
+                ("gallery", [0, 0, 0, 0, 373]),
+                ("hud", [7, 1, 0, 0, 6]),
+                ("music", [17, 0, 0, 0, 63]),
+                ("pads", [3, 0, 0, 0, 6]),
+                ("psys", [0, 0, 0, 2, 78]),
+                ("ships/other", [19, 1, 0, 0, 395]),
+                ("ships/pulse", [274, 2, 0, 1, 206]),
+                ("skins", [1, 0, 0, 0, 296]),
+                ("tex", [10, 1, 0, 0, 12]),
+                ("tex/caustics", [16, 0, 0, 0, 0]),
+                ("tex/cloud", [1, 0, 0, 0, 0]),
+                ("tex/custom", [0, 0, 0, 0, 431]),
+                ("tex/engineflare", [3, 0, 0, 0, 0]),
+                ("tex/enginesmoke", [0, 0, 0, 0, 2]),
+                ("tex/lensflare", [0, 0, 0, 0, 3]),
+                ("tex/original", [18, 0, 0, 0, 289]),
+                ("tex/screenfx", [1, 0, 0, 0, 0]),
+                ("tex/unknown", [3, 2, 1, 0, 13]),
+                ("tex/weapons", [2, 0, 0, 0, 3]),
+                ("tournaments", [0, 0, 0, 0, 176]),
+                ("visual_effects", [2, 1, 0, 0, 0]),
+                ("weapons", [15, 5, 0, 0, 19]),
+            ],
+        },
+    );
+}
+
+#[test]
+#[ignore = "needs pure-psp-eu.chd and the 2026 textures.zip"]
+fn pack_2026_against_pure_eu() {
+    let Some(found) = zip_pack(ZIP_2026) else {
+        return;
+    };
+    run_with(
+        &["pure-psp-eu.chd"],
+        found,
+        &Expect {
+            sources: 4573,
+            keyed: 4149,
+            files: [1158, 1742],
+            keys: 7476,
+            groups: &[
+                ("defaults", [5, 0, 0, 0, 53]),
+                ("environments/NN_* (Pure circuits)", [1978, 96, 0, 0, 21]),
+                ("environments/classics", [109, 2, 0, 17, 233]),
+                ("environments/exclusive", [32, 0, 0, 1, 133]),
+                ("environments/pulse", [3, 0, 0, 22, 1766]),
+                ("environments/zone", [90, 1, 0, 0, 0]),
+                ("fe", [16, 0, 0, 36, 82]),
+                ("gallery", [0, 0, 0, 0, 373]),
+                ("hud", [7, 1, 0, 0, 6]),
+                ("music", [21, 0, 0, 0, 59]),
+                ("pads", [6, 0, 0, 0, 3]),
+                ("psys", [0, 0, 0, 0, 80]),
+                ("ships/other", [260, 6, 0, 7, 142]),
+                ("ships/pulse", [0, 0, 0, 0, 483]),
+                ("skins", [24, 0, 0, 0, 273]),
+                ("tex", [13, 0, 0, 0, 10]),
+                ("tex/caustics", [16, 0, 0, 0, 0]),
+                ("tex/cloud", [1, 0, 0, 0, 0]),
+                ("tex/custom", [0, 0, 0, 0, 431]),
+                ("tex/engineflare", [3, 0, 0, 0, 0]),
+                ("tex/enginesmoke", [0, 0, 0, 0, 2]),
+                ("tex/lensflare", [3, 0, 0, 0, 0]),
+                ("tex/original", [166, 0, 0, 0, 141]),
+                ("tex/screenfx", [1, 0, 0, 0, 0]),
+                ("tex/unknown", [7, 0, 0, 0, 12]),
+                ("tex/weapons", [1, 0, 0, 0, 4]),
+                ("tournaments", [16, 0, 0, 0, 160]),
+                ("visual_effects", [0, 0, 0, 0, 3]),
+                ("weapons", [16, 0, 0, 0, 23]),
+            ],
+        },
+    );
 }
