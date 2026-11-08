@@ -263,7 +263,7 @@ fn a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame(
     let mut seen = Vec::new();
     for _ in 0..90 {
         race.tick(&oag_gameplay::PlayerInputs::none());
-        seen.push((race.readout().pickup_announcing, frame_of(&race)));
+        seen.push((race.readout().pickup_announcing, frame_of(race)));
     }
     let announcing = seen.iter().take_while(|(up, _)| *up).count();
     assert!(
