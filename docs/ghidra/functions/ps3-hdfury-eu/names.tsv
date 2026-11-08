@@ -886,3 +886,10 @@
 0x002ebec8	function	RibbonNode_Advance	85	missile-ribbon.md
 0x002ec748	function	LineBuilder_BindParams	55	missile-ribbon.md
 0x0031f438	function	FwFile_Exists	78	start-grid-selection.md
+# 2026-11-08 hd-missile-explo-re: the Missile explosion object
+0x00154a78	function	MissileExplosion_Update	85	missile-explosion.md
+0x00154858	function	MissileExplosion_Reset	85	missile-explosion.md
+0x00155568	function	MissileExplosion_Start	80	missile-explosion.md
+0x00154cf0	function	MissileExplosion_Construct	80	missile-explosion.md
+0x00143580	function	MissileManager_Update	75	missile-explosion.md
+0x0028c660	function	Random_RangeFloat	80	missile-explosion.md

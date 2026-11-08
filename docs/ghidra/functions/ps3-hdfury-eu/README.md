@@ -78,6 +78,10 @@ Two structural facts to expect, both different from every other binary here:
   `RibbonEffects` pool manager, the ribbon node law (life 1.85 s, half-width
   0.4 to 2.0, the opacity ramp TGA read two bytes late), the three-fin
   geometry and the material, all matched against a live RPCS3 dump.
+- [missile-explosion.md](missile-explosion.md) - the Missile's explosion object:
+  `MissileExplosion_Update` (1.0 s life, retired on `age > 1`), the sixteen
+  `ThickLine_bighalo` `FatLine` streaks at `+0x190`, node to material for
+  `sphere`/`bloom`/`rays`/`shockwave`, and the `Bloom adaption boost` override.
 - [plasma.md](plasma.md) - `PlasmaManager_Update`, `Plasma_Update`,
   `Plasma_CheckShipHit` and the `WeaponExplosions` update/draw pair: the
   1.0 s hardcoded wind-up, the 10.0 s reap, the 6.0 probe, the +-6.0 hit

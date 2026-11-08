@@ -1603,3 +1603,14 @@ One finding from the pair: adding the fragment's alpha into the frame's alpha (t
 bloomed the ribbons white (frame 2.87 s: 406 red, mean (251,233,231)), so the draw leaves the alpha channel alone.
 
 Omega / 2048: **checked, applies, not wired** (missile-ribbon.md, "2048 and Omega").
+
+## 2026-11-08 (`hd-missile-explo-re`): the Missile explosion's update, streaks and materials
+
+Read on its own page, [missile-explosion.md](missile-explosion.md): the per-frame
+`MissileExplosion_Update` (`0x00154a78`) that the 2026-10-07 entry did not find
+(lifetime 1.0 s, retired on the first update with `age > 1`, confidence 85), the
+sixteen entries at `+0x190` as `ThickLine_bighalo` `FatLine` streaks from
+`RibbonEffects` pool `+0x5c` (confidence 80), node to material (`bloom` is a
+`lightrays_glow` chunk, not a core one; confidence 90), and a `Bloom adaption boost`
+override (6.0 easing back to the authored value, confidence 80). Its "Corrections"
+section lists which claims of the 2026-10-07/08 entries above it supersedes.
