@@ -430,6 +430,13 @@ the original's guest memory, not by an asset name. The design that fits:
   a zip with `textures.ini` at its root and a `[games]` table, and no `oag-mod.toml`.
   A hand-written `oag-mod.toml` stays possible for a pack whose author wants a name,
   version and licence, and wins over the synthesis.
+- **Generated manifest (done).** The maintainer asked for one in the folders the fetch script
+  makes, and the objection above holds only for a pack we did not fetch: `just
+  fetch-texture-packs` writes an `oag-mod.toml` (`oag-mod init-pack`, rendered from the same
+  `recognise` the synthesis uses) into each checkout, which wins over recognition; the file is
+  git-excluded and never rewritten. A pack in a PPSSPP install, or a `textures.zip`, is still
+  synthesised and never written to. 2048 and Omega: not applicable (PPSSPP keys are the PSP's;
+  the manifest and its writer are title-blind).
 - **Manifest (synthesised or written).** `id` `ppsspp.<folder or zip stem, lower-cased>`,
   `name` the same, `version` `0.0.0` unless written, `license` `License::None` (a mod
   without one "loads, and says so wherever it is listed": exactly the state of these

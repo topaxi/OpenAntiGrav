@@ -4,9 +4,11 @@
 //! oag-mod check <mod>                 open a folder, .zip or .oagmod and check its manifest
 //! oag-mod list  [<dir>...]            the mods a search finds (the default search path when none)
 //! oag-mod pack  <folder> [-o <file>]  write the folder as a .oagmod: zstd for text, stored for PNG and OGG
+//! oag-mod init-pack <folder>... [--repository <url>]
+//!                                     write an oag-mod.toml into each PPSSPP texture pack folder that has none
 //! ```
 //!
-//! `just pack-mod <folder>` runs `pack`. The format is `docs/tools/mods.md`.
+//! `just pack-mod <folder>` runs `pack`; `just fetch-texture-packs` runs `init-pack`. The format is `docs/tools/mods.md`.
 
 use std::path::PathBuf;
 
@@ -31,6 +33,16 @@ enum Command {
     List {
         /// Directories to search; the default search path when none is given.
         dirs: Vec<PathBuf>,
+    },
+    /// Write an `oag-mod.toml` into each PPSSPP texture pack folder that has none, from the
+    /// manifest the game would otherwise recognise. An existing manifest is left as it is.
+    InitPack {
+        /// Folders holding a `textures.ini`.
+        #[arg(required = true)]
+        folders: Vec<PathBuf>,
+        /// Where the pack was fetched from: written as `repository`, and its owner as the author.
+        #[arg(long)]
+        repository: Option<String>,
     },
     /// Write a mod folder as a `.oagmod` (zip with zstd entries).
     Pack {
@@ -72,6 +84,23 @@ fn main() -> Result<()> {
                     .collect::<Vec<_>>()
                     .join(", ")
             );
+        }
+        Command::InitPack {
+            folders,
+            repository,
+        } => {
+            for folder in &folders {
+                let written = oag_mod::texture_pack::write_manifest(folder, repository.as_deref())
+                    .with_context(|| folder.display().to_string())?;
+                match written {
+                    oag_mod::texture_pack::Written::Wrote(path) => {
+                        println!("wrote {}", path.display());
+                    }
+                    oag_mod::texture_pack::Written::Kept(path) => {
+                        println!("kept {} (already there)", path.display());
+                    }
+                }
+            }
         }
         Command::Pack { folder, out } => {
             let module =

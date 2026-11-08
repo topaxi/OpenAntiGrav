@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
+use crate::texture_pack::{Written, write_manifest};
 use crate::{Mod, search};
 
 const INI_TEXT: &str = "[options]\nhash = xxh64\n[games]\nUCES00465 = textures.ini\nUCUS98712 = textures.ini\n[hashes]\n000000007d9d618f1a5be898 = intro/a.png\n";
@@ -176,4 +177,80 @@ fn a_folder_with_neither_a_manifest_nor_an_ini_is_not_a_candidate() {
     std::fs::create_dir_all(base.join("something")).unwrap();
     std::fs::write(base.join("something/readme.txt"), "x").unwrap();
     assert!(search(&[base]).is_empty());
+}
+
+fn folder_pack(name: &str, pack_name: &str) -> PathBuf {
+    let pack = scratch(name).join(pack_name);
+    std::fs::create_dir_all(&pack).unwrap();
+    std::fs::write(pack.join("textures.ini"), INI_TEXT).unwrap();
+    pack
+}
+
+const REPOSITORY: &str = "https://github.com/someone/WipEout-Pulse-Upscale-Version.git";
+
+#[test]
+fn a_written_manifest_is_the_mod_detection_made_with_its_own_fields_winning() {
+    let pack = folder_pack("generated", "WipEout Pulse (Upscale) 2026");
+    let recognised = Mod::open(&pack).unwrap().manifest;
+
+    let written = write_manifest(&pack, Some(REPOSITORY)).unwrap();
+    assert_eq!(written, Written::Wrote(pack.join("oag-mod.toml")));
+    let module = Mod::open(&pack).unwrap();
+    let m = &module.manifest;
+
+    assert_eq!(m.id, recognised.id);
+    assert_eq!(m.name, recognised.name);
+    assert_eq!(m.texture_pack, recognised.texture_pack);
+    assert_eq!(
+        m.texture_pack.as_ref().unwrap().serials,
+        ["UCES00465", "UCUS98712"]
+    );
+    assert!(!m.default_enabled);
+    assert_eq!(m.default_enabled, recognised.default_enabled);
+    assert_eq!(m.license, recognised.license);
+    assert_eq!(
+        m.repository.as_deref(),
+        Some(REPOSITORY),
+        "the manifest's own field wins"
+    );
+    assert_eq!(m.authors, ["someone"]);
+    assert!(recognised.authors.is_empty() && recognised.repository.is_none());
+}
+
+#[test]
+fn the_written_text_validates_against_the_mod_schema_and_names_no_serials() {
+    let pack = folder_pack("schema", "A \"quoted\" pack");
+    write_manifest(&pack, None).unwrap();
+    let text = std::fs::read_to_string(pack.join("oag-mod.toml")).unwrap();
+    oag_schema::validate::accepts("mod", 1, &text).unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+    assert!(!text.contains("serials"), "{text}");
+    assert!(text.contains("default-enabled = false"), "{text}");
+    assert!(text.contains("authors = [\"unknown\"]"), "{text}");
+    assert_eq!(Mod::open(&pack).unwrap().manifest.name, "A \"quoted\" pack");
+}
+
+#[test]
+fn a_manifest_that_is_already_there_is_left_alone_byte_for_byte() {
+    let pack = folder_pack("kept", "pack");
+    write_manifest(&pack, Some(REPOSITORY)).unwrap();
+    let edited = std::fs::read_to_string(pack.join("oag-mod.toml"))
+        .unwrap()
+        .replace("authors = [\"someone\"]", "authors = [\"Me\"]");
+    std::fs::write(pack.join("oag-mod.toml"), &edited).unwrap();
+
+    let again = write_manifest(&pack, Some("https://example.com/other/repo")).unwrap();
+    assert_eq!(again, Written::Kept(pack.join("oag-mod.toml")));
+    assert_eq!(
+        std::fs::read_to_string(pack.join("oag-mod.toml")).unwrap(),
+        edited
+    );
+    assert_eq!(Mod::open(&pack).unwrap().manifest.authors, ["Me"]);
+}
+
+#[test]
+fn a_folder_without_a_textures_ini_gets_no_manifest() {
+    let base = scratch("not-a-pack");
+    let error = write_manifest(&base, None).unwrap_err().to_string();
+    assert!(error.contains("textures.ini"), "{error}");
+    assert!(!base.join("oag-mod.toml").exists());
 }

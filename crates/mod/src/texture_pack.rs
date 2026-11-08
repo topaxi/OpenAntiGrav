@@ -4,19 +4,24 @@
 //! edited to be a mod: **a container with that file and no `oag-mod.toml` is
 //! recognised and given a manifest here**. The pack stays as its author made it, so
 //! a PPSSPP memstick folder shared with the emulator gains nothing, and a 553 MB
-//! `textures.zip` is read in place. A pack whose author wants a name, a release and a
-//! licence writes an `oag-mod.toml` with a `[texture-pack]` table, which wins.
+//! `textures.zip` is read in place. An `oag-mod.toml` with a `[texture-pack]` table
+//! wins over recognition: a pack's author writes one for a name, a release and a
+//! licence, and [`write_manifest`] writes one for a checkout `just fetch-texture-packs`
+//! makes, from the same [`recognise`] so the two cannot drift.
 //!
 //! Hashing, the ini and the PNGs are `oag-texture`'s and the race load's; this crate
 //! finds the pack and says what it is (`docs/formats/ppsspp-texture-pack.md`, "A pack is
 //! a mod to the game").
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use oag_texture::replacement_pack::Pack;
 use oag_texture::replacer::{Files, Replacements};
+use serde::Serialize;
 
-use crate::{Container, License, Manifest, Mod, TexturePack};
+use crate::{
+    Container, Error, License, MANIFEST, Manifest, Mod, SCHEMA_KIND, SCHEMA_MAJOR, TexturePack,
+};
 
 /// A pack's ini, at the pack's root.
 pub const INI: &str = "textures.ini";
@@ -69,6 +74,118 @@ pub fn recognise(container: &Container) -> Option<Manifest> {
         }),
         default_enabled: false,
     })
+}
+
+/// What [`write_manifest`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Written {
+    /// A new `oag-mod.toml` at this path.
+    Wrote(PathBuf),
+    /// An `oag-mod.toml` was already there and is untouched, whoever wrote it.
+    Kept(PathBuf),
+}
+
+/// The author a written manifest names when the repository's owner cannot be read from its
+/// URL: the schema wants one.
+pub const UNKNOWN_AUTHOR: &str = "unknown";
+
+#[derive(Serialize)]
+struct File<'a> {
+    #[serde(rename = "toml-schema")]
+    header: oag_schema::Header,
+    #[serde(rename = "mod")]
+    module: ModTable<'a>,
+    #[serde(rename = "texture-pack")]
+    texture_pack: PackTable,
+}
+
+#[derive(Serialize)]
+struct ModTable<'a> {
+    id: &'a str,
+    name: &'a str,
+    version: String,
+    authors: Vec<String>,
+    description: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repository: Option<&'a str>,
+    keywords: &'a [String],
+    #[serde(rename = "default-enabled")]
+    default_enabled: bool,
+}
+
+#[derive(Serialize)]
+struct PackTable {
+    format: &'static str,
+}
+
+/// `<owner>` of `https://host/<owner>/<repo>[.git]`; [`UNKNOWN_AUTHOR`] for anything else.
+fn owner(repository: Option<&str>) -> String {
+    repository
+        .and_then(|url| url.split_once("://"))
+        .and_then(|(_, rest)| rest.split('/').nth(1))
+        .filter(|owner| !owner.trim().is_empty())
+        .map_or_else(|| UNKNOWN_AUTHOR.to_string(), str::to_string)
+}
+
+/// `manifest` (what [`recognise`] made) as the text of an `oag-mod.toml`. The
+/// `[texture-pack]` table names no `serials`: the ini is read on every load, so they follow
+/// the pack when it moves to another commit. The author is the repository's owner, and no
+/// licence is named, as recognition has none.
+///
+/// # Errors
+///
+/// The manifest is not one [`recognise`] makes: it has no `[texture-pack]`.
+pub fn manifest_text(manifest: &Manifest, repository: Option<&str>) -> Result<String, String> {
+    if manifest.texture_pack.is_none() {
+        return Err(format!("{}: not a texture pack", manifest.id));
+    }
+    let file = File {
+        header: oag_schema::Header {
+            location: oag_schema::location(SCHEMA_KIND, SCHEMA_MAJOR),
+            version: oag_schema::LANGUAGE_VERSION.to_string(),
+        },
+        module: ModTable {
+            id: &manifest.id,
+            name: &manifest.name,
+            version: manifest.version.to_string(),
+            authors: vec![owner(repository)],
+            description: &manifest.description,
+            repository,
+            keywords: &manifest.keywords,
+            default_enabled: manifest.default_enabled,
+        },
+        texture_pack: PackTable { format: "ppsspp" },
+    };
+    toml::to_string(&file).map_err(|e| e.to_string())
+}
+
+/// Writes `folder`'s `oag-mod.toml` from what [`recognise`] makes of it, unless one is
+/// there: **an existing manifest is never touched**, so a hand edit survives every re-run.
+/// Nothing the file says goes stale (id and name follow the folder, serials the ini), which
+/// is why keeping it is enough. A pack read from a `textures.zip` is not written for: a
+/// folder manifest would shadow the zip PPSSPP prefers.
+///
+/// # Errors
+///
+/// `folder` holds no `textures.ini` at its root, or the file cannot be written.
+pub fn write_manifest(folder: &Path, repository: Option<&str>) -> Result<Written, Error> {
+    let path = folder.join(MANIFEST);
+    if path.exists() {
+        return Ok(Written::Kept(path));
+    }
+    let container = Container::open(folder)?;
+    let not_written = |why: String| Error::Io {
+        origin: container.label(),
+        source: std::io::Error::other(why),
+    };
+    let manifest =
+        recognise(&container).ok_or_else(|| not_written(format!("no {INI} at its root")))?;
+    let text = manifest_text(&manifest, repository).map_err(not_written)?;
+    std::fs::write(&path, text).map_err(|source| Error::Io {
+        origin: path.display().to_string(),
+        source,
+    })?;
+    Ok(Written::Wrote(path))
 }
 
 impl Files for Mod {
