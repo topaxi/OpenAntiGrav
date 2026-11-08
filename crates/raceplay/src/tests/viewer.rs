@@ -166,6 +166,8 @@ fn a_seek_is_a_camera_cut() {
     let (replay, _) = recording(TICKS);
     let (mut viewer, mut race) = open(replay);
     assert_eq!(pass_ended(&mut viewer), Pass::Complete);
+    // The first update starts playback, which is a seek to the start.
+    viewer.update(&mut race);
     viewer.seek(&mut race, 200);
     let before = (race.camera_cuts(), race.viewed_camera_cuts());
     let restores = race.viewer_restores();
