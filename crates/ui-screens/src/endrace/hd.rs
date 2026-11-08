@@ -610,7 +610,9 @@ fn shown_rank(model: &FieldResults, row: usize) -> usize {
 /// A points table's `Line1`: `"%s - %s: %d %s: %d "` (`0x008b0810`) of the person's place
 /// (`ER_%dPLACE`), `IG_HUD_KILLS`, their kills, `ER_DEATHS` and their deaths, written when the
 /// loop reaches the person's row (`0x00229bf0`). The place is that row's position, not its shown
-/// number. `None` with no person on the board.
+/// number. `ER_DEATHS` ends in a colon of its own on the disc and the format adds one, where the
+/// original's frame shows one: the string's is dropped, **chosen, not measured** (how the
+/// original avoids the second is not read). `None` with no person on the board.
 fn scored_headline(model: &FieldResults, strings: &StringTable) -> Option<String> {
     let row = model.rows.iter().position(|row| row.player)?;
     let score = model.rows[row].score?;
@@ -620,7 +622,7 @@ fn scored_headline(model: &FieldResults, strings: &StringTable) -> Option<String
         strings.get_or_id(&format!("ER_{place}PLACE")),
         strings.get_or_id("IG_HUD_KILLS"),
         score.kills,
-        strings.get_or_id("ER_DEATHS"),
+        strings.get_or_id("ER_DEATHS").trim_end_matches(':'),
         score.deaths
     ))
 }

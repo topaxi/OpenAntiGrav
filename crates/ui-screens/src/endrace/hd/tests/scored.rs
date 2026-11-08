@@ -27,7 +27,7 @@ fn strings() -> StringTable {
 <Entry ID="ER_TEAM" String="TEAM"></Entry>
 <Entry ID="ER_POINTS" String="POINTS"></Entry>
 <Entry ID="IG_HUD_KILLS" String="KILLS"></Entry>
-<Entry ID="ER_DEATHS" String="DEATHS"></Entry>
+<Entry ID="ER_DEATHS" String="DEATHS:"></Entry>
 <Entry ID="ER_2PLACE" String="2ND PLACE"></Entry>
 <Entry ID="Feisar" String="FEISAR"></Entry>
 <Entry ID="Harimau" String="HARIMAU"></Entry>
