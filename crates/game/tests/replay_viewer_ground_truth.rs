@@ -374,8 +374,13 @@ fn a_campaign_race_recorded_from_the_menus_reproduces() {
 
 /// Rebuilds `replay` from its header over `image`, as WATCH does, and checks every stored hash.
 fn verify(image: &Path, replay: &oag_replay::Replay) -> Result<u64, oag_replay::Desync> {
-    let source = image.display().to_string();
-    let mut race = oag_raceplay::rebuild(&replay.header, &source).expect("rebuilds");
+    let mut options = oag_raceplay::Options::for_replay(&replay.header, &image.display().to_string())
+        .expect("the header rebuilds");
+    // The packs the game mounted from the repository's `data/dlc`, as WATCH mounts the session's.
+    options.dlc = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/dlc")];
+    let loaded = oag_raceplay::load(&options).expect("loads");
+    let mut race =
+        oag_raceplay::replay::start_recorded(loaded.setup, &replay.header).expect("starts");
     oag_replay::Verifier::run(replay, race.sim.state_hash(), |events, inputs| {
         for event in events {
             race.apply_event(event).expect("applies");
