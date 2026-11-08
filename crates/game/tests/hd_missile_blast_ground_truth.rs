@@ -19,6 +19,9 @@
 //! simulation's own hit test takes the explosion on tick 290. The control is
 //! tick 289, one tick before; a dropped write or draw leaves what the psys
 //! stage alone draws.
+//!
+//! The streaks are seen from a camera 130 units to the side and 60 above the
+//! blast, where the player's own chase camera is inside the white-out.
 
 const SIZE: (usize, usize) = (960, 544);
 
@@ -67,6 +70,11 @@ fn rgb_of(png: &[u8]) -> Vec<[u8; 3]> {
 /// The scene at `ticks`: Talon's Junction, the player firing one Missile,
 /// rival 1 onto it after tick 289, from the default chase camera.
 fn frame_of(ticks: u32) -> Option<Vec<[u8; 3]>> {
+    frame_with(ticks, &[])
+}
+
+/// [`frame_of`] with more arguments for `oag-game`.
+fn frame_with(ticks: u32, extra: &[String]) -> Option<Vec<[u8; 3]>> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
     let scratch = std::env::temp_dir().join(format!(
         "oag-hd-missile-blast-{}-{ticks}",
@@ -83,6 +91,7 @@ fn frame_of(ticks: u32) -> Option<Vec<[u8; 3]>> {
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         .args(["--motion-blur", "off", "--ticks", &ticks.to_string()])
         .args(["--give", "missile", "--force-missile-hit", "289:1"])
+        .args(extra)
         .arg("--input-script")
         .arg(&script)
         .arg("--screenshot")
@@ -126,6 +135,52 @@ fn a_missile_that_reaches_a_craft_draws_its_explosion() {
         late > 200_000 && late > early,
         "the blast does not grow: {early} then {late}"
     );
+}
+
+/// Where the blast is on Talon's Junction in the scenario above, and a camera looking at
+/// it from 130 units along +z and 60 above: `eye,forward,up` for `--camera-pose`.
+fn side_camera() -> String {
+    let blast = [-121.987f32, -50.615, -175.324];
+    let (up, back) = (60.0f32, 130.0f32);
+    let length = up.hypot(back);
+    format!(
+        "--camera-pose={},{},{},0,{},{},0,1,0",
+        blast[0],
+        blast[1] + up,
+        blast[2] + back,
+        -up / length,
+        -back / length
+    )
+}
+
+/// Near-white pixels: the streaks are thin additive lines that burn out to white on the
+/// road and the walls behind them.
+fn white(&[r, g, b]: &[u8; 3]) -> bool {
+    r > 240 && g > 240 && b > 240
+}
+
+/// The sixteen `ThickLine_bighalo` streaks draw, and outlive the blast.
+///
+/// Near-white pixels of 522,240 from the side camera. With the streak draw dropped the
+/// frame reads 3,635 at tick 335 and 2,548 at tick 365; drawn, 13,658 and 9,524. At tick
+/// 410, a second after the blast retired (age 1.0 at tick 350) and past the 1.2 s of
+/// its last node, 2,567: every streak has died.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn the_explosions_streaks_draw_and_outlive_it() {
+    let camera = [side_camera()];
+    let at =
+        |ticks| frame_with(ticks, &camera).map(|frame| frame.iter().filter(|p| white(p)).count());
+    let (Some(burst), Some(after), Some(gone)) = (at(335), at(365), at(410)) else {
+        return;
+    };
+    println!("white pixels: burst {burst}, after the blast {after}, all dead {gone}");
+    assert!(burst > 9_000, "the streaks are missing at 0.75 s: {burst}");
+    assert!(
+        after > 6_000,
+        "the streaks died with the blast instead of outliving it: {after}"
+    );
+    assert!(gone < 4_500, "a streak never dies: {gone}");
 }
 
 /// The log's own count for the frame at `ticks`: `(draws submitted, triangles)`,

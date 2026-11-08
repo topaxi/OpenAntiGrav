@@ -85,14 +85,17 @@ impl Ribbon {
         }
     }
 
-    /// `FatLine_PushChains` with the Missile's `f1 = 1.0`: one node per chain,
-    /// each `radius` from `position` along `reference` turned about `axis` by
-    /// `pi / chains * i + phase`, the phase then stepping.
+    /// `FatLine_PushChains`: one node per chain, each `radius` from `position` along
+    /// `reference` turned about `axis` by `pi / chains * i + phase`, the phase then
+    /// stepping. A node lives `scale * spec.lifetime`; the Missile's ribbons pass
+    /// `f1 = 1.0` and the explosion's streaks `U(0.5, 1)`. `advance` still divides by
+    /// `spec.lifetime`, so a node is born at `t = scale`, narrower and fainter than a
+    /// full-life one (`missile-explosion.md`, "How a streak is drawn").
     ///
     /// `axis` is the anchor matrix's row 2 and `reference` its row 1. The turn is
     /// the Rodrigues rotation the vector code builds; its sine term's sign is
     /// **chosen, not measured**: `axis x reference` here, the right-handed turn.
-    pub fn push(&mut self, position: Vec3, axis: Vec3, reference: Vec3) {
+    pub fn push(&mut self, position: Vec3, axis: Vec3, reference: Vec3, scale: f32) {
         let step = PI / self.spec.chains as f32;
         let across = axis.cross(reference);
         for (i, chain) in self.chains.iter_mut().enumerate() {
@@ -100,7 +103,7 @@ impl Ribbon {
             let (sin, cos) = theta.sin_cos();
             chain.push_back(Node {
                 position: position + (reference * cos + across * sin) * self.spec.radius,
-                life: self.spec.lifetime,
+                life: self.spec.lifetime * scale,
                 half_width: self.spec.width[0],
                 fade: 0.0,
                 u: None,
