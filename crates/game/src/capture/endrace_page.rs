@@ -148,6 +148,7 @@ fn two_person_board(online: bool) -> oag_raceplay::scoreboard::Board {
             finish_tick: (slot != 7)
                 .then(|| 120 * 60 + 4 + u64::from(places[usize::from(slot)]) * 97),
             best_lap_ticks: Some(2300 + u32::from(slot)),
+            points: None,
         })
         .collect();
     let mut board = oag_raceplay::scoreboard::build(&crafts, Some(3), 125 * 60);
@@ -653,6 +654,7 @@ fn hd_endrace_page(
                 headline: oag_ui_screens::endrace::Headline::Position(1),
                 rows: vec![
                     oag_ui_screens::endrace::FieldRow {
+                        score: None,
                         place: 1,
                         time_ticks: Some(u64::from(seconds_to_ticks(191.76))),
                         player: true,
@@ -661,6 +663,7 @@ fn hd_endrace_page(
                         team: None,
                     },
                     oag_ui_screens::endrace::FieldRow {
+                        score: None,
                         place: 2,
                         time_ticks: Some(u64::from(seconds_to_ticks(203.11))),
                         player: false,

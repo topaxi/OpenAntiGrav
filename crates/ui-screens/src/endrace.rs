@@ -317,6 +317,18 @@ pub struct FieldRow {
     /// non-multiplayer branch; `docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md`).
     /// Drawn when neither `name` nor `seat` is. `None` where no team is known.
     pub team: Option<String>,
+    /// What an Eliminator craft ended on, `Some` on every row of a scored race: the table then
+    /// has the `POINTS` layout of `EndRaceResults`' Eliminator filler ([`hd`]).
+    pub score: Option<FieldScore>,
+}
+
+/// An Eliminator craft's points and the two counts the headline reads
+/// (`0x00229bf0`: the record's `+0x150` points, `+0x158` kills, `+0x15c` deaths).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FieldScore {
+    pub points: u32,
+    pub kills: u32,
+    pub deaths: u32,
 }
 
 /// Wipeout HD/Fury's own `EndRace Results`: the headline (the same
@@ -331,6 +343,14 @@ pub struct FieldResults {
     /// `loyalty2`). `None` draws neither - a race with no team behind it has
     /// no total to show, and the disc's own placeholder text never draws.
     pub loyalty: Option<HdLoyalty>,
+}
+
+impl FieldResults {
+    /// Whether this is a points table: every row carries a score.
+    #[must_use]
+    pub fn scored(&self) -> bool {
+        !self.rows.is_empty() && self.rows.iter().all(|row| row.score.is_some())
+    }
 }
 
 /// HD's loyalty block, in its final state - the one the ticker

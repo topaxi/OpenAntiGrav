@@ -11,7 +11,7 @@
 
 use oag_raceplay::scoreboard::Board;
 use oag_ui_screens::endrace::{
-    FieldRow, Headline, LapSplit, PeopleResults, PersonName, PersonRow, Results,
+    FieldRow, FieldScore, Headline, LapSplit, PeopleResults, PersonName, PersonRow, Results,
 };
 
 /// Wipeout HD/Fury's whole field, ordered by place - the same feed
@@ -34,6 +34,11 @@ pub fn field_rows(board: Option<&Board>, roster: &[String]) -> Vec<FieldRow> {
                     seat: (row.player && board.persons() > 1).then_some(row.slot + 1),
                     name: row.name.clone(),
                     team: roster.get(usize::from(row.slot)).cloned(),
+                    score: row.points.map(|score| FieldScore {
+                        points: score.points,
+                        kills: score.kills,
+                        deaths: score.deaths,
+                    }),
                 })
                 .collect()
         })

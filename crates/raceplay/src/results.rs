@@ -279,6 +279,7 @@ impl Race {
         // cut. That table is what the HUD's own position readout comes from,
         // and a scoreboard that renumbered would contradict the number the
         // player was just looking at.
+        let scored = self.sim.score_law.is_some();
         let crafts: Vec<Craft> = (0..usize::from(self.sim.world.ship_count))
             .map(|slot| {
                 let ship = &self.sim.world.ships[slot];
@@ -295,6 +296,7 @@ impl Race {
                     // only times slot 0 - the two agree there, which is what
                     // `crates/raceplay/tests/lap_times_ground_truth.rs` asserts.
                     best_lap_ticks: ship.standing.best_lap_ticks,
+                    points: scored.then(|| scoreboard::Points::of(&ship.standing)),
                 }
             })
             .collect();
