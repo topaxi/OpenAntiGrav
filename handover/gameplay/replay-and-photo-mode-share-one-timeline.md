@@ -3,7 +3,7 @@ status: ready-to-wire
 categories: [frontend, tooling]
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-08
-summary: "ADR-0087: stages 1 to 6 landed, the viewer and photo mode switch both ways (ADR-0088); binding lane, then stage 7 take-over"
+summary: "ADR-0087: stages 1 to 6 landed, the viewer and photo mode switch both ways and share their keys (ADR-0088); stage 7 take-over is next"
 size: XL
 difficulty: hard
 ---
@@ -22,10 +22,14 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
   opens photo mode at its tick; photo mode's PLAY row (effects panel, under REWIND) plays the recording on from the
   scrub over a live race or a replay; leaving a mode opened from a replay continues the replay from the scrub; a live
   race resumes to the bit. The CIRCLE leak (the leave tick ran `Race::tick` on a stale snapshot) is fixed.
-  **Open, the binding lane (ADR-0088 holds the plan):** L1/R1 previous and next craft on both screens (wrapping,
-  skipping craft out of the race, one seat of a split recording), SQUARE the HUD in the viewer, the trigger split (L2/R2 a
-  view-side scrub and PLAY, not aliased to L1/R1), a key for PLAY (today the panel's row), and the right stick read
-  view-side (photo mode orbit, viewer jog), never into `InputSnapshot`.
+  **The binding lane landed** (`replay-photo-bindings`, ADR-0088's plan; [photo mode](../../docs/ui/photo-mode.md), "Controls",
+  and [replays](../../docs/ui/replays.md)): L1/R1 previous and next craft on both screens (the viewer follows it through
+  `Race::set_seat`, view-only), SQUARE the HUD in the viewer, L2/R2 a view-side scrub (photo mode: a full R2 is PLAY),
+  the right stick read view-side (photo mode orbits, the viewer jogs), none of it in `InputSnapshot`. **Open:** the layout the
+  ADR calls HD's (right stick orbits, left pans and zooms) is the reverse of what the HD page measured (left orbits, right Y
+  zooms); it was built as the ADR says, in one function (`oag_raceplay::photo::roles`), and the maintainer may want HD's.
+  The scrub speeds, the jog and PLAY on a full R2 are chosen. A scrub seeks every frame, so a held trigger runs at the seek's
+  cost. Not run on a real pad (the right stick and triggers are injected by `--drive`: `rstick`, `lstick`, `pull`).
 - **A rewind whose pre-roll starts from the first keyframe hashes differently from the live run** (landing at 101 with
   `--autopilot`, 102 with the throttle held, a Pulse Single Race, no mod mounted; landings from 131 on matched). Probably the
   first keyframe's plans (it is cut before the first tick learns them); not shown. Found by the PLAY test, which scrubs
@@ -93,4 +97,4 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
 3. Stage 7 `take-over`, as the ADR orders it.
 4. ~~The photo-mode rewind ADR~~ landed as ADR-0088; `replay-file.md` for `campaign_skill` and Tournament is still owed.
 5. ~~Leaving photo mode with CIRCLE reaches the race as an absorb press~~ fixed (ADR-0088, decision 5).
-6. The binding lane (above), then stage 7.
+6. ~~The binding lane~~ landed; then stage 7.
