@@ -324,6 +324,10 @@ pub struct PadState {
     pub airbrake_left: f32,
     /// Right airbrake: R1, or a conditioned trigger.
     pub airbrake_right: f32,
+    /// The bits of [`Self::held`] that are buttons, without the ones a trigger (or the touch
+    /// airbrake corners) raised: what a screen that reads the triggers as analogue acts on
+    /// ([`crate::view`]).
+    pub digital: u32,
 }
 
 /// Turns one tick's readings into what the pad contributes.
@@ -381,12 +385,13 @@ pub fn resolve(reading: Reading, config: TriggerConfig) -> PadState {
         stick_y: deadzone(reading.stick_y),
         airbrake_left,
         airbrake_right,
+        digital: reading.buttons,
     }
 }
 
 /// Zero inside the deadzone, and rescaled outside it so the axis still reaches
 /// its full travel rather than jumping from 0 to [`STICK_DEADZONE`].
-fn deadzone(value: f32) -> f32 {
+pub(crate) fn deadzone(value: f32) -> f32 {
     let magnitude = value.abs();
     if magnitude <= STICK_DEADZONE {
         return 0.0;
@@ -741,6 +746,8 @@ pub struct Pad {
     music: crate::music::Tracker,
     /// Which control does which music action. Empty until [`Self::set_music_bindings`].
     music_bindings: crate::music::MusicBindings,
+    /// What the last [`Self::poll_players`] read for the screens that only look at a race.
+    view: crate::view::ViewRaw,
 }
 
 impl std::fmt::Debug for Pad {
@@ -773,6 +780,7 @@ impl Pad {
                 rumble: rumble::Effects::default(),
                 music: crate::music::Tracker::default(),
                 music_bindings: crate::music::MusicBindings::default(),
+                view: crate::view::ViewRaw::default(),
             },
             Err(e) => {
                 warn!("no gamepad support ({e}); keyboard only");
@@ -786,6 +794,7 @@ impl Pad {
                     rumble: rumble::Effects::default(),
                     music: crate::music::Tracker::default(),
                     music_bindings: crate::music::MusicBindings::default(),
+                    view: crate::view::ViewRaw::default(),
                 }
             }
         }
@@ -809,6 +818,7 @@ impl Pad {
             rumble: rumble::Effects::default(),
             music: crate::music::Tracker::default(),
             music_bindings: crate::music::MusicBindings::default(),
+            view: crate::view::ViewRaw::default(),
         }
     }
 
@@ -912,6 +922,7 @@ impl Pad {
     pub fn poll_players(&mut self) -> [PadState; oag_gameplay::MAX_PLAYERS] {
         let triggers = self.triggers;
         let mut readings = [Reading::default(); oag_gameplay::MAX_PLAYERS];
+        self.view = crate::view::ViewRaw::default();
         if let Some(gilrs) = &mut self.gilrs {
             while let Some(event) = gilrs.next_event() {
                 if matches!(event.event, gilrs::EventType::Disconnected) {
@@ -986,9 +997,25 @@ impl Pad {
                     .throttle
                     .max(analog(&pad, gilrs::Button::RightTrigger2));
                 reading.brake = reading.brake.max(analog(&pad, gilrs::Button::LeftTrigger2));
+                self.view = self.view.merge(crate::view::ViewRaw {
+                    right: (
+                        pad.value(gilrs::Axis::RightStickX),
+                        pad.value(gilrs::Axis::RightStickY),
+                    ),
+                    left: (0.0, 0.0),
+                    l2: analog(&pad, gilrs::Button::LeftTrigger2),
+                    r2: analog(&pad, gilrs::Button::RightTrigger2),
+                });
             }
         }
         readings.map(|reading| resolve(reading, triggers))
+    }
+
+    /// What the last [`Self::poll_players`] read for the view-side screens: the right stick, the
+    /// left stick on its own and the triggers' travel, before any of it means a button.
+    #[must_use]
+    pub fn view_raw(&self) -> crate::view::ViewRaw {
+        self.view
     }
 
     /// The bound buttons each real pad pressed since the last call, and clears
@@ -1115,6 +1142,7 @@ pub fn merge_states(a: PadState, b: PadState) -> PadState {
         stick_y: larger(a.stick_y, b.stick_y),
         airbrake_left: a.airbrake_left.max(b.airbrake_left),
         airbrake_right: a.airbrake_right.max(b.airbrake_right),
+        digital: a.digital | b.digital,
     }
 }
 

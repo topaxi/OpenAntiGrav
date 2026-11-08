@@ -22,6 +22,10 @@ pub mod strings {
     pub const ENDED: &str = "OAG_REPLAY_ENDED";
     pub const POSE_VIEW: &str = "OAG_REPLAY_POSE_VIEW";
     pub const POSE_END: &str = "OAG_REPLAY_POSE_END";
+    pub const CRAFT: &str = "OAG_REPLAY_CRAFT";
+    pub const HUD: &str = "OAG_REPLAY_HUD";
+    pub const SCRUB: &str = "OAG_REPLAY_SCRUB";
+    pub const JOG: &str = "OAG_REPLAY_JOG";
 }
 
 /// What can be clicked, in the order the chips are drawn, and the bar.
@@ -157,13 +161,13 @@ pub fn speed_label(speed: u32) -> String {
 }
 
 /// The screen over the picture, as draws in `grid`; `say` is the text of a project id and
-/// `button` the name of a button and its first key.
+/// `keys` the lines of what the keys do: the first beside the time, the rest under it.
 #[must_use]
 pub fn draw_list(
     view: &View,
     grid: (f32, f32),
     say: &dyn Fn(&str) -> String,
-    keys: &str,
+    keys: &[String],
 ) -> Vec<Draw> {
     let text = |x: f32, y: f32, text: String, align: Align| Draw::Text {
         x,
@@ -209,23 +213,23 @@ pub fn draw_list(
     let first = chip_rect(Control::Play, grid);
     let last = chip_rect(Control::Exit, grid);
     let time = format!("{} / {}", clock(view.at), clock(view.ticks));
-    let line = format!("{time}    {keys}");
-    let width = line.chars().count() as f32 * 4.7 + 12.0;
-    list.push(Draw::Fill {
-        rect: [
-            (first[0] + last[0] + last[2]) / 2.0 - width / 2.0,
-            first[1] + CHIP_HEIGHT + 2.0,
-            width,
-            LINE + 2.0,
-        ],
-        color: BAND,
-    });
-    list.push(text(
-        (first[0] + last[0] + last[2]) / 2.0,
-        first[1] + CHIP_HEIGHT + 4.0,
-        line,
-        Align::Centre,
-    ));
+    let centre = (first[0] + last[0] + last[2]) / 2.0;
+    let lines: Vec<String> = std::iter::once(format!(
+        "{time}    {}",
+        keys.first().map_or("", String::as_str)
+    ))
+    .chain(keys.iter().skip(1).cloned())
+    .collect();
+    for (i, line) in lines.iter().enumerate() {
+        let width = line.chars().count() as f32 * 4.7 + 12.0;
+        let y = first[1] + CHIP_HEIGHT + 2.0 + LINE * i as f32;
+        list.push(Draw::Fill {
+            rect: [centre - width / 2.0, y, width, LINE + 2.0],
+            color: BAND,
+        });
+        list.push(text(centre, y + 2.0, line.clone(), Align::Centre));
+    }
+    let extra = LINE * (lines.len() - 1) as f32;
     for chip in CHIPS {
         let rect = chip_rect(chip, grid);
         let label = match chip {
@@ -262,7 +266,7 @@ pub fn draw_list(
         ));
     }
     if let Some(stops) = view.mismatch {
-        let top = MARGIN + CHIP_HEIGHT + LINE + 8.0;
+        let top = MARGIN + CHIP_HEIGHT + LINE + 8.0 + extra;
         list.push(Draw::Fill {
             rect: [0.0, top, grid.0, 2.0 * LINE + 6.0],
             color: WARNING,

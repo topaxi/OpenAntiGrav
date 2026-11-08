@@ -1003,3 +1003,187 @@ fn a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it() {
         "the shot never started"
     );
 }
+
+/// One `key=value` of the drive's `photo_fx` line.
+fn fx_field<'a>(fx: &'a str, key: &str) -> Option<&'a str> {
+    fx.split(' ')
+        .find_map(|part| part.strip_prefix(key)?.strip_prefix('='))
+}
+
+fn fx_values(run: &Run, key: &str) -> Vec<String> {
+    run.states
+        .iter()
+        .filter_map(|state| state.get("photo_fx")?.as_str())
+        .filter_map(|fx| fx_field(fx, key).map(str::to_string))
+        .collect()
+}
+
+/// The recording a run left in `auto/`, whole.
+fn the_recording(run: &Run) -> Vec<u8> {
+    let dir = run.dir.join("data/oag/replays/auto");
+    let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .map(|entries| entries.filter_map(|e| Some(e.ok()?.path())).collect())
+        .unwrap_or_default();
+    files.sort();
+    assert_eq!(
+        files.len(),
+        1,
+        "one race, one recording in {}",
+        dir.display()
+    );
+    std::fs::read(&files[0]).expect("the recording")
+}
+
+/// ADR-0088 with HD's measured stick layout: photo mode's left stick orbits (SQUARE with it pans), the right stick zooms and tilts, L1
+/// and R1 change the craft, L2 and R2 scrub the REWIND row and never change the craft (under the
+/// default trigger mode a pulled trigger also raises its shoulder's button in the snapshot), a
+/// full pull of R2 is PLAY. None of it reaches the simulation: every live tick hashes as the same
+/// tick of a race that never visited, and the recording is byte for byte the control's.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_right_stick_and_the_triggers_move_the_view_and_never_the_race() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-bindings-shots");
+    let _ = std::fs::remove_dir_all(&shots);
+    std::fs::create_dir_all(&shots).expect("a directory");
+    let to_the_throttle = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 700; ");
+    let control = drive_unmodded(
+        &image,
+        "bindings-control",
+        &format!("{to_the_throttle} ticks 1500"),
+        &shots,
+        &[],
+    );
+    assert!(control.status.success(), "{}", control.stderr);
+    let visited = drive_unmodded(
+        &image,
+        "bindings",
+        &format!(
+            "{to_the_throttle} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=internal within 200; \
+             press r; ticks 3; screenshot SHOTS/craft-1.png; press l; ticks 3; press r; ticks 3; press r; ticks 3; \
+             press l; ticks 3; press l; ticks 3; \
+             press select; ticks 5; rstick 1 1 40; ticks 3; screenshot SHOTS/zoomed.png; \
+             lstick 1 -0.5 40; ticks 3; screenshot SHOTS/orbited.png; hold square left 20; ticks 3; \
+             pull l2 0.8 8; ticks 3; pull r2 0.5 4; ticks 3; \
+             pull r2 1.0 3; ticks 60; screenshot SHOTS/playing.png; pull l2 0.4 3; ticks 3; \
+             escape; until photo=none within 50; ticks 500"
+        ),
+        &shots,
+        &[],
+    );
+    assert!(visited.status.success(), "{}", visited.stderr);
+
+    // L1 and R1 changed the craft and wrapped; the triggers never did.
+    let subjects: Vec<u32> = {
+        let mut seen: Vec<u32> = fx_values(&visited, "subject")
+            .iter()
+            .filter_map(|s| s.parse().ok())
+            .collect();
+        seen.dedup();
+        seen
+    };
+    assert!(
+        subjects.starts_with(&[0, 1, 0]) && subjects.len() >= 6,
+        "L1 and R1 cycle the craft: {subjects:?}"
+    );
+    let after_the_cycling = subjects.len();
+    let last = *subjects.last().expect("subjects");
+    assert!(
+        fx_values(&visited, "subject")
+            .iter()
+            .rev()
+            .take_while(|s| s.parse() == Ok(last))
+            .count()
+            > 40,
+        "{after_the_cycling} craft changes and then the triggers pulled: the subject stayed {last}"
+    );
+
+    // The left stick orbited (HD's layout), SQUARE with it panned, the right stick zoomed and
+    // tilted.
+    let orbit = fx_values(&visited, "orbit");
+    assert!(
+        orbit.iter().any(|o| o.as_str() != "0.00,0.00"),
+        "the left stick never orbited: {orbit:?}"
+    );
+    assert!(
+        fx_values(&visited, "pan")
+            .iter()
+            .any(|p| !p.starts_with("0.00,")),
+        "SQUARE with the stick never panned"
+    );
+    assert!(
+        fx_values(&visited, "fov")
+            .iter()
+            .any(|f| f.parse::<f32>().is_ok_and(|f| f < 65.0)),
+        "the right stick never zoomed"
+    );
+    assert!(
+        fx_values(&visited, "tilt")
+            .iter()
+            .any(|t| t.parse::<f32>().is_ok_and(|t| t.abs() > 0.1)),
+        "the right stick never tilted"
+    );
+
+    // L2 scrubbed back, R2 on, and a full pull played.
+    let rewind: Vec<u64> = fx_values(&visited, "rewind")
+        .iter()
+        .filter_map(|r| r.parse().ok())
+        .collect();
+    let live = *rewind.first().expect("the mode opened");
+    let lowest = *rewind.iter().min().expect("rewind ticks");
+    // A landing under about 130 ticks starts from the first keyframe and does not hash as the live
+    // run did (`docs/ui/photo-mode.md`, "Not done, named"): the scrub stays above it.
+    assert!(lowest > 130, "the scrub went to {lowest}");
+    assert!(lowest + 100 < live, "L2 never scrubbed back: {rewind:?}");
+    assert!(
+        fx_values(&visited, "play").iter().any(|p| p == "1"),
+        "a full pull of R2 never turned PLAY on"
+    );
+
+    // Nothing of it reached the race.
+    let held: BTreeMap<u64, String> = ticks(&control)
+        .into_iter()
+        .map(|(tick, hash, _)| (tick, hash))
+        .collect();
+    let mut compared = 0;
+    for (tick, hash, _) in &ticks(&visited) {
+        if let Some(control) = held.get(tick) {
+            assert_eq!(hash, control, "tick {tick} hashes differently");
+            compared += 1;
+        }
+    }
+    assert!(compared > 500, "only {compared} ticks compared");
+    // The two races ran different lengths: what both recorded is the same, input for input,
+    // event for event and stored hash for stored hash.
+    let (theirs, ours) = (
+        oag_replay::Replay::from_bytes(&the_recording(&control)).expect("the control's recording"),
+        oag_replay::Replay::from_bytes(&the_recording(&visited)).expect("the visit's recording"),
+    );
+    let common = theirs.ticks().min(ours.ticks());
+    assert!(common > 1000, "only {common} ticks were recorded by both");
+    assert_eq!(theirs.initial_hash, ours.initial_hash);
+    for (slot, (a, b)) in theirs.inputs.iter().zip(&ours.inputs).enumerate() {
+        assert!(
+            a[..common as usize] == b[..common as usize],
+            "slot {slot}'s recorded inputs differ"
+        );
+    }
+    let before = |replay: &oag_replay::Replay| -> Vec<oag_replay::Event> {
+        replay
+            .events
+            .iter()
+            .copied()
+            .filter(|e| e.tick < common)
+            .collect()
+    };
+    assert_eq!(before(&theirs), before(&ours), "the recorded events differ");
+    let hashes = (common / u64::from(theirs.header.hash_interval.max(1))) as usize;
+    assert_eq!(
+        theirs.hashes[..hashes],
+        ours.hashes[..hashes],
+        "the stored hashes differ"
+    );
+}

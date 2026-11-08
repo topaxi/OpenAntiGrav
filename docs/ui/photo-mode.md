@@ -205,12 +205,14 @@ number it is not: single frames spread 3.7 to 12.6 ms).
 
 | Input | Does |
 | --- | --- |
-| stick, arrow keys | orbit `close` (yaw and pitch, each free, wrapped at +-2 pi, 0.05 rad a tick: HD's law); zoom and tilt `track` |
+| left stick, arrow keys, d-pad | orbit `close` (yaw and pitch, each free, wrapped at +-2 pi, 0.05 rad a tick: HD's law); zoom and tilt `track` |
+| right stick (a pad) | `close` and `track`: up and down zoom, left and right tilt (HD's right stick is zoom; the tilt on its X axis is chosen) |
 | SELECT held + stick | `close`: zoom (up and down, field 10 to 100 from 65) and tilt (left and right) |
 | SQUARE held + stick | `close`: pan, +-5 |
 | SELECT tap | next lens |
 | SQUARE tap | HUD on or off (off on opening) |
-| L, R | previous, next craft, wrapping, skipping craft out of the race |
+| L1, R1 | previous, next craft, wrapping, skipping craft out of the race |
+| L2, R2 | scrub the REWIND row back and on while held, the speed following how far it is pulled (1 to 30 ticks a frame); a full pull of R2 turns PLAY on and any pull of L2 turns it off. Only where the rewind row is on offer. Never the craft, whatever the trigger mode |
 | TRIANGLE | reset the orbit, tilt, pan and fields |
 | START | the help, then the effects panel, then neither |
 | CROSS | take the shot (refused for 0.15 s after opening: HD's guard) |
@@ -218,8 +220,27 @@ number it is not: single frames spread 3.7 to 12.6 ms).
 
 A click on the five chips along the top (camera, HUD, EFFECTS, TAKE PHOTO, BACK) does the same, and a
 click with the help hidden shows it. A chip says its row and its value, and the value alone where the
-row's word is too long for it (Pulse's own `PHOTO CAMERA MODE`). Not ported: HD's separate tilt triggers (L2, R2 are the airbrakes'
-axes here), the right-stick zoom, the touch gestures of 2048 (a follow-up).
+row's word is too long for it (Pulse's own `PHOTO CAMERA MODE`). Not ported: HD's separate tilt triggers (L2, R2 scrub the rewind row here), the touch gestures
+of 2048 (a follow-up).
+
+**The stick layout is HD's measured one** (`docs/ghidra/functions/ps3-hdfury-eu/photo-mode.md`, "Controls": the left stick
+orbits, SQUARE held with it pans, the right stick's Y zooms). **ADR-0088's binding plan misnames a different layout as
+HD's** ("the right stick orbits and the left stick pans and zooms"); the layout above, the measured one, is what is built,
+at the maintainer's direction. **Chosen, not measured, and different from HD:** the right stick's X axis tilts (HD has no
+such binding; it tilts on L2 and R2, which scrub the rewind row here per ADR-0088), and SELECT held still turns the left
+stick or the arrows into zoom and tilt for a pad with no right stick. The roles live in one function
+(`oag_raceplay::photo::roles`). A left stick and the arrows are the one snapshot stick, so a keyboard player and a pad player
+share the fold. The sticks do not move the camera while the effects panel is up, as before.
+
+**View-side only** (`oag_input::view`): the right stick and the triggers' travel are read
+from the devices into `Controls::view()`, never into the snapshot a craft is flown from. A trigger is read **before**
+`resolve` makes a button of it, so L2 is not L1 (under `airbrakes` a trigger past the threshold sets its shoulder's bit)
+and R2 is not CROSS (under `thrust_brake`) on these screens: `Controls::view_take` reads the buttons a device raised
+without a trigger, and the race's own snapshot is built exactly as before. Tests:
+`oag_input::view::tests` (the L bit and the CROSS bit are in the race's snapshot and not the view's; a right stick
+leaves the snapshot bit for bit as it was), `photo_mode_ground_truth::the_right_stick_and_the_triggers_move_the_view_and_never_the_race`
+(on Pulse: every live tick hashes as the control's and the stored hashes, inputs and events of the recording are the
+control's). `--drive` can inject all of it (`rstick`, `lstick`, `pull`, `docs/tools/oag-game.md`).
 
 **The shot.** The frame the player sees, at the size they see it (`Framebuffer::output`, the
 presentation target: the picture at window size, **before** the display grade and anything drawn

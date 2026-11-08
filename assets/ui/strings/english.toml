@@ -527,6 +527,12 @@ OAG_PHOTO_DEPTH = { text = "DEPTH OF FIELD", human = false }
 OAG_PHOTO_APERTURE = { text = "APERTURE", human = false }
 OAG_PHOTO_FOCUS = { text = "FOCUS", human = false }
 OAG_PHOTO_PANEL_KEYS = { text = "STICK UP DOWN ROW    LEFT RIGHT CHANGE", human = false }
+OAG_REPLAY_CRAFT = { text = "CRAFT", human = false }
+OAG_REPLAY_HUD = { text = "HUD", human = false }
+OAG_REPLAY_SCRUB = { text = "SCRUB", human = false }
+OAG_REPLAY_JOG = { text = "JOG", human = false }
+OAG_PHOTO_PAD_KEYS = { text = "RIGHT STICK UP DOWN ZOOM    LEFT RIGHT TILT", human = false }
+OAG_PHOTO_SCRUB_KEYS = { text = "L2 / R2 SCRUB    R2 FULL PULL PLAY", human = false }
 OAG_PHOTO_REWIND = { text = "REWIND", human = false }
 OAG_PHOTO_PLAY = { text = "PLAY", human = false }
 OAG_PHOTO_MOTION_BLUR = { text = "MOTION BLUR", human = false }

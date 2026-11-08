@@ -9,6 +9,7 @@
 
 use log::{debug, warn};
 use oag_gameplay::input::InputSnapshot;
+use oag_raceplay::photo::effects;
 use oag_raceplay::photo::rewind::Rewind;
 use oag_raceplay::photo::shot::{Mover, Plan, Shot};
 use oag_ui::pointer::Pointer;
@@ -18,6 +19,13 @@ use crate::stage::Stage;
 
 /// The stick deflection that abandons a shot under way: 2048's own threshold.
 const ABANDON_STICK: f32 = 0.2;
+
+/// The most ticks a full trigger pull moves the REWIND row in a frame (half a second of the
+/// race): **chosen, not measured**.
+pub(super) const SCRUB_MOST: u32 = 30;
+
+/// A trigger let go below this re-arms the full pull that turns PLAY on.
+const PLAY_RELEASE: f32 = 0.5;
 
 /// A shot of several frames under way.
 #[derive(Debug)]
@@ -101,6 +109,42 @@ impl super::Session {
         }
     }
 
+    /// The triggers while the mode is open (ADR-0088): L2 scrubs the REWIND row back and R2 on,
+    /// the speed following how far it is pulled; a full pull of R2 turns PLAY on and L2 turns it
+    /// off, so the mode has a key for it. Read apart from the buttons, whatever the trigger mode.
+    pub(super) fn photo_triggers(&mut self, view: &oag_input::view::ViewReading) {
+        use oag_input::view::PLAY_PULL;
+        let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
+            return;
+        };
+        let Some(photo) = stage.race.photo() else {
+            return;
+        };
+        if !photo.effects().rewinds() {
+            return;
+        }
+        let playing = photo.effects().playing();
+        let full = view.r2 >= PLAY_PULL;
+        let edge = full && !open.play_latched;
+        if full {
+            open.play_latched = true;
+        } else if view.r2 < PLAY_RELEASE {
+            open.play_latched = false;
+        }
+        if playing && view.l2 > 0.0 {
+            stage.race.photo_effects(|effects| effects.set_playing(false));
+        } else if edge {
+            stage.race.photo_effects(|effects| effects.set_playing(true));
+        } else if !playing {
+            let pull = view.r2 - view.l2;
+            let ticks = effects::scrub_ticks(pull.abs(), SCRUB_MOST);
+            if ticks != 0 {
+                let ticks = if pull < 0.0 { -ticks } else { ticks };
+                stage.race.photo_effects(|effects| effects.scrub(ticks));
+            }
+        }
+    }
+
     /// One tick of the PLAY row: with it on, the recording plays on from the moment on screen at
     /// the speed it was made, the rewind row following, until it reaches the live tick or the
     /// end of the recording, where the row turns itself off. A live race is moved by its
@@ -157,6 +201,7 @@ impl super::Session {
         pad: &oag_raceplay::photo::Pad,
         pointer: &Pointer,
         input: &InputSnapshot,
+        view: &oag_input::view::ViewReading,
     ) -> bool {
         pad.shot
             || pad.leave
@@ -168,6 +213,10 @@ impl super::Session {
             || pointer.back
             || input.stick_x.abs() > ABANDON_STICK
             || input.stick_y.abs() > ABANDON_STICK
+            || view.right.0.abs() > ABANDON_STICK
+            || view.right.1.abs() > ABANDON_STICK
+            || view.l2 > ABANDON_STICK
+            || view.r2 > ABANDON_STICK
     }
 
     /// Whether a shot of several frames is under way.

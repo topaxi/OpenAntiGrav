@@ -326,3 +326,55 @@ fn the_race_on_screen_does_not_record() {
     viewer.begin(&mut race).expect("settings");
     assert!(!race.recording());
 }
+
+/// L1 and R1 in the viewer follow the craft before or after the one on screen, wrapping; a
+/// craft out of the race is skipped; and following another craft is the picture's and nothing
+/// the simulation reads: the race on screen stays on the recorded run at every tick of a play
+/// with the followed craft changed throughout.
+#[test]
+fn following_another_craft_moves_the_picture_and_not_one_tick_of_the_run() {
+    let (replay, text) = recording(TICKS);
+    let (mut viewer, mut race) = open(replay);
+    assert_eq!(pass_ended(&mut viewer), Pass::Complete);
+    viewer.update(&mut race);
+    let start = race.player_slot();
+    let count = usize::from(race.sim.world.ship_count);
+    assert!(count > 1, "the fixture field");
+    assert!(race.step_followed(true));
+    assert_eq!(
+        race.player_slot(),
+        (start + 1) % count,
+        "R1 follows the next craft"
+    );
+    assert!(race.step_followed(false));
+    assert_eq!(race.player_slot(), start, "and L1 back");
+    assert!(race.step_followed(false));
+    assert_eq!(
+        race.player_slot(),
+        (start + count - 1) % count,
+        "L1 wraps over the start"
+    );
+    for tick in 1..=TICKS {
+        if tick % 37 == 0 {
+            race.step_followed(tick % 2 == 0);
+        }
+        assert_eq!(viewer.update(&mut race), Moved::Stepped(1));
+        assert_stands_at(&race, &text, tick);
+    }
+}
+
+/// A craft that has left the race is passed over, and the first one still in it is where a
+/// follow of a craft that is gone lands.
+#[test]
+fn following_skips_a_craft_out_of_the_race() {
+    let (replay, _) = recording(20);
+    let (mut viewer, mut race) = open(replay);
+    assert_eq!(pass_ended(&mut viewer), Pass::Complete);
+    viewer.update(&mut race);
+    let start = race.player_slot();
+    let next = (start + 1) % usize::from(race.sim.world.ship_count);
+    race.sim.world.ships[next].physics.craft_state = oag_physics::CraftState::Eliminated;
+    race.step_followed(true);
+    assert_ne!(race.player_slot(), next, "an eliminated craft is skipped");
+    assert_ne!(race.player_slot(), start);
+}

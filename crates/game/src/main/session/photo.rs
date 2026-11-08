@@ -55,6 +55,8 @@ pub(crate) struct Open {
     /// Whether the viewer this mode was opened from was playing when it was, so leaving puts
     /// it back to playing from the tick the mode stands at.
     pub(super) resume_viewer: bool,
+    /// R2 is held at its full pull, so one pull is one press of PLAY.
+    pub(super) play_latched: bool,
 }
 
 impl Open {
@@ -197,6 +199,7 @@ impl super::Session {
             job: None,
             asked,
             resume_viewer: false,
+            play_latched: false,
         });
     }
 
@@ -227,22 +230,24 @@ impl super::Session {
         let space = oag_present::perf::grid(surface);
         let rect = (0.0, 0.0, surface.0 as f32, surface.1 as f32);
         let grid = super::pointer::in_grid(*pointer, space, rect, 1.0);
-        let buttons = self.controls.buttons_mut();
+        let controls = &mut self.controls;
+        let view = controls.view();
         let mut pad = Pad {
             stick: (input.stick_x, input.stick_y),
-            select: buttons.is_held(Button::Select),
-            square: buttons.is_held(Button::Square),
-            reset: buttons.take(Button::Triangle),
-            previous: buttons.take(Button::L),
-            next: buttons.take(Button::R),
-            help: buttons.take(Button::Start),
-            shot: buttons.take(Button::Cross),
-            leave: buttons.take(Button::Circle),
+            right: view.right,
+            select: controls.view_held(Button::Select),
+            square: controls.view_held(Button::Square),
+            reset: controls.view_take(Button::Triangle),
+            previous: controls.view_take(Button::L),
+            next: controls.view_take(Button::R),
+            help: controls.view_take(Button::Start),
+            shot: controls.view_take(Button::Cross),
+            leave: controls.view_take(Button::Circle),
         };
         // A shot of several frames under way owns the mode: any input abandons it, and the
         // controls stand still while it runs.
         if self.photo_job_running() {
-            if Self::photo_input_abandons(&pad, pointer, input) {
+            if Self::photo_input_abandons(&pad, pointer, input, &view) {
                 self.photo_job_cancel();
             }
             return;
@@ -288,7 +293,9 @@ impl super::Session {
                 None => {}
             }
         }
-        match stage.race.photo_step(pad) {
+        let action = stage.race.photo_step(pad);
+        self.photo_triggers(&view);
+        match action {
             Action::None => {
                 self.photo_rewind_sync();
                 self.photo_play_tick();
@@ -394,6 +401,12 @@ impl super::Session {
         let mut play_on = false;
         if let Some(stage) = stage {
             play_on = stage.race.photo().is_some_and(|p| p.effects().playing());
+            // The craft the mode ended on is the one the viewer goes on following.
+            if open.origin == Origin::Viewer
+                && let Some(subject) = stage.race.photo().map(oag_raceplay::photo::Photo::subject)
+            {
+                stage.race.follow(subject);
+            }
             // The live race, put back to the bit, before the camera is.
             if let (Some(rewind), Some(keeper)) = (open.rewind.take(), stage.keeper.as_mut()) {
                 rewind.end(keeper, &mut stage.race);
@@ -458,9 +471,12 @@ impl super::Session {
         let Stage::Race(stage) = &self.stage else {
             return None;
         };
-        let effects = stage.race.photo()?.effects();
+        let photo = stage.race.photo()?;
+        let effects = photo.effects();
+        let (yaw, pitch) = photo.orbit();
+        let (pan, fov, tilt) = (photo.pan(), photo.fov(), photo.tilt());
         Some(format!(
-            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={} blur={} shutter={} rewind={} play={}",
+            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={} blur={} shutter={} rewind={} play={} orbit={yaw:.2},{pitch:.2} pan={:.2},{:.2} fov={fov:.1} tilt={tilt:.2} subject={} hud={}",
             effects.value(Row::Exposure),
             effects.value(Row::Saturation),
             effects.value(Row::SpeedBlur),
@@ -471,6 +487,10 @@ impl super::Session {
             effects.value(Row::Shutter),
             effects.target_tick(),
             u8::from(effects.playing()),
+            pan.0,
+            pan.1,
+            photo.subject(),
+            u8::from(photo.hud()),
         ))
     }
 

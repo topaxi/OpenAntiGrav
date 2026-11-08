@@ -120,13 +120,17 @@ its button.
 | Cross, Start, Enter | play or pause; from the end, play from the start |
 | Left, Right | five seconds back or on (a seek) |
 | Up, Down | the next speed: 0.5X, 1X, 2X, 4X |
+| L1, R1 | follow the previous, next craft, wrapping, skipping craft out of the race (photo mode's rule, `oag_raceplay::photo::step_among`): the picture, the HUD, the sound and the camera follow it (`Race::set_seat`, view-only: the race on screen stays on the recorded run at every tick with the craft changed throughout, `tests::viewer::following_another_craft_moves_the_picture_and_not_one_tick_of_the_run`). A split recording shows one view and cycles all the craft |
+| Square | the race's HUD on or off (the chips and the bar stay) |
+| L2, R2 | scrub the playhead back and on while held, 1 to 30 ticks a frame by how far it is pulled; silent, and the sound is rebuilt where it stops. Read apart from the buttons, so neither is L1 or R1 whatever the trigger mode |
+| Right stick | jog: its horizontal axis moves the playhead 1 to 10 ticks a frame; the vertical axis does nothing |
 | Select, PHOTO | photo mode at the tick on screen ([photo mode](photo-mode.md), "Over the replay viewer") |
 | Circle, Escape, a right click, EXIT | leave for the REPLAYS page |
 
 The **speed**: at 1X the race sounds as a race does (`sound::race_tick`); at any other speed the
 effects are muted (the cues of the ticks that ran are dropped); the music is the race's own
-playlist and a seek does not touch it. **Split screen**: a split recording opens in one view of the first seat; L and R do not
-cycle craft yet (**open**).
+playlist and a seek does not touch it. **Split screen**: a split recording opens in one view of the first seat; L1 and R1 cycle every
+craft in the race, not the seats alone (the seats' own windows are not built).
 
 **While the first keyframe is not in**, `prefix()` is `None` for 0.2 to 1.1 s (the plans a keyframe
 carries): the grid is held at tick 0, the bar is empty and OPENING REPLAY is on the picture.
@@ -183,10 +187,12 @@ Omega's light backdrop needed the band behind the detail lines; 2048's value col
 
 ## Open
 
-- **The shared keys with photo mode** (L1 and R1 craft, SQUARE the HUD), the trigger split and the right stick: the
-  plan is [ADR-0088](../architecture/adr/0088-the-replay-viewer-and-photo-mode-switch-both-ways.md), not built.
+- **The shared keys with photo mode** (ADR-0088's binding plan) are built: L1 and R1 craft, SQUARE the HUD, L2 and R2 scrub, the
+  right stick jogs ([photo mode](photo-mode.md), "Controls"). The speeds of the scrub and the jog, and PLAY on a full pull of R2
+  in photo mode alone, are **chosen, not measured**. A scrub seeks every frame (a keyframe restore and a 60-tick pre-roll),
+  so a held trigger runs at the seek's cost, not at a fixed rate.
 
-- **Split screen**: the craft L and R cycle, one view per window.
+- **Split screen**: one view per window.
 - **The Steam Deck** (ADR-0087 decision 3) is still unmeasured; the opening pass's wall time on this desktop is in the timeline page.
 - **A modded race and a network race record nothing** (decision 7).
 - **The web build and a phone** have no directory a player can reach: the page is empty there (`replays::SAVES`).
