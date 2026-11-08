@@ -165,12 +165,166 @@ it when its last node dies.
 
 ## 3. Which node draws which material
 
-PENDING.
+**Confidence 90**: read off the files, and three of the four chunks matched
+to the original's own draws.
 
-## 4. The bloom boost
+`HD_missile_explosion.vex` (`DATA02`) is `world / Root` with four keyed
+`Anim Transform` children, each holding one `Mesh` node whose payload `+0x30`
+names a chunk of `HD_missile_explosion.rcsmodel`. The chunk's `+0x20` picks
+the material (`oag_rcs::rcsmodel::Mesh::material`). Read with a throwaway
+`oag-rcs` test over `vex::nodes` and `rcsmodel::Model::parse` (not kept):
 
-PENDING.
+| Node | Mesh node | Chunk (hash) | Indices | Material |
+| --- | --- | --- | ---: | --- |
+| `sphere` | `sphereShape` | 0 (`532d1720`) | 4,320 | `hd_missile_explosion_core_glow` |
+| `bloom` | `bloomShape` | 1 (`37dbf9be`) | 10,080 | `hd_missile_explosion_lightrays_glow` |
+| `rays` | `raysShape` | 2 (`2cbe4fd5`) | 2,700 | `hd_missile_explosion_lightrays_glow` |
+| `shockwave` | `shockwaveShape` | 3 (`fdfed0de`) | 3,072 | `hd_missile_explosion_shockwaves_glow` |
 
-## Corrections
+Four nodes, three materials: **`bloom` draws the rays' Fresnel-shell program,
+not the core's.** The earlier wording "core: the sphere and bloom"
+(`weapons.md`, `hd-missile-blast`, and `oag_mesh`'s `MISSILE_CORE` doc) is
+wrong about `bloom`; the engine's draws are right anyway, because the slot
+bits are earned per chunk from the chunk's own material.
 
-PENDING.
+**The live match.** `hd-whiteout`'s `run1 hit0` frame (`weapons.md`,
+"`hd-whiteout`", point 3) listed three draws carrying the age in `c[464].x`,
+with index counts 224, 96 and 140. Those dumps kept only the last 256-index
+batch of each `0x1824` method (corrected the same day,
+`docs/reverse-engineering/rpcs3-capture.md`, "Index batches"), and
+`4320 mod 256 = 224`, `10080 mod 256 = 96`, `2700 mod 256 = 140`. So those
+three were `sphere`, `bloom` and `rays`; `shockwave`'s `3072` is a whole
+number of batches and would have read 256.
+
+**Blend, state and parameters**, each already read and cited here only:
+
+- Blend: HD authors `SRC_ALPHA, ONE` on all three materials
+  (`oag_rcs::rcsmodel::psp2::lineage_blend`, re-derived from the disc by
+  `hd_lineage_blend_ground_truth.rs`).
+- State on the original's frame: additive `SrcAlpha/One`, depth test `LEQUAL`,
+  depth mask off, culling off, alpha test off (`weapons.md`, `hd-whiteout`
+  point 3, confidence 75).
+- Programs (`weapons.md`, `hd-missile-blast`, confidence 70):
+  `core_glow` `rgb = tex(u, v + 0.5 U).rgb * colour.rgb`, `a = tex.a * colour.a`;
+  `lightrays_glow` `rim = sat(1 - N.V)`, `f = sat(0.9 - 0.9 rim^5)^5`,
+  `out = (f tex(u, U).rgb, tex.a)`; `shockwaves_glow` the Bomb ring's program
+  with `c = 0.45 S - (v + 0.05 n)` and `a = colour2.a * sum(tex(c, c).rgb) * (1 - S)`.
+- `U` (`UV_offset`) and `S` (`Shockwave_scalar`) are the same four bytes,
+  the `MeshImporter` node's time, which `Update` sets to `p` every frame
+  (section 1; `MissileExplosion_Construct` binds both by pointer).
+- Node scales: the `Anim Transform` keys, `sphere`/`bloom`/`rays` 1 to 18 over
+  60 frames, `shockwave` pre-scaled `0.0977` to 44 ([plasma.md](plasma.md)).
+
+## 4. The bloom boost: a blast raises `Bloom adaption boost` to 6 and lets it back
+
+**Confidence 80** for the law (three functions agree: `Start`, `Update`,
+`Reset`; the live `+0x174 = 5.0` while alive and `-1.0` when free matches the
+owning branch on Talon's Junction, which authors 5). **Its effect on a frame
+is not measured.**
+
+`+0x690` is the environment-settings singleton (`0x006772e8` ->
+`EnvSettings_GetOrCreate` `0x003a9520`), and its `+0x53c` is
+`HDR and Bloom.Bloom adaption boost` (the registrar's key at `TOC[-0x6340]`
+-> `0x007b0770`, stored at `0x003a9d08`; engine default 15.0 at
+`0x003a9880`, the circuit's file overrides it).
+
+```text
+construct:  +0x178 = env.boost;  +0x174 = -1                         (0x00154ec4, 0x00154e94)
+Start:      +0x174 = env.boost
+            if env.boost == +0x178: env.boost = K2 (6.0)              (0x0015590c..0x0015592c)
+            else:                   +0x174 = -1   (another blast owns it)
+Update:     if +0x174 != -1: env.boost = 6 + p (+0x174 - 6)           (0x00154c6c..0x00154c88)
+Reset:      if +0x174 > -1:  env.boost = +0x178; +0x174 = -1          (0x00154930..0x0015494c)
+```
+
+**It is live.** The post chain reads the field every frame at `0x003b6230`
+(`EnvSettings_GetOrCreate` then `lfs f13, 0x53c(r3)`), multiplies by `0.25`
+(`0x008b743c`) and the adapted luminance, clamps at 1 (`fsel`) and writes
+`(1 - min(adapted * boost * 0.25, 1)) * contribution` into the gate's
+constant ([renderer.md](renderer.md), the gate's `contribution.y`). So on a
+circuit that authors 5, a blast **lowers** the bloom gate's fade term by up
+to a fifth for its second; on one that authors more than 6 (Sol 2 authors
+15), it raises it.
+
+**Conflict, open.** `hd-whiteout` reported the gate and composite programs'
+patched constants identical in its `base`, `hit0` and `hit1` dumps. With
+this law the gate's fade should differ at `hit0` (boost 5.92) unless
+`adapted * boost * 0.25 >= 1` in both frames or the constant compared was not
+the fade. Not resolved; the next read is the gate program's patched
+`contribution.y` in a base and a hit dump of the same boot.
+
+**The Bomb does the same.** `NormalBombBlast` code reads the same field at
+`0x001518f8` against its own saved copy (`+0x2d8`, `+0x2d4`) and loads
+`0x40c00000` (6.0) beside it; not read further here.
+
+## The pieces together
+
+What one Missile detonation is, for wiring:
+
+1. An entry is taken per viewport the hit point is visible in, while the
+   pool holds fewer than 16.
+2. For 1.0 s (retired on the first update with `age > 1`): the model at the
+   hit, its four nodes at `p = age`; the point light `(500, 200, 50)`,
+   range `150 (1 - p)^2`, exponent `7 (1 - p)^2 + 1.5`
+   ([weapons.md](weapons.md), "Weapon point lights"); the bloom boost at
+   `6 + p (authored - 6)`.
+3. Sixteen `ThickLine_bighalo` streaks from the centre in random directions,
+   one node per frame for that second, each node living `1.2 U(0.5, 1)` s and
+   widening 0 to 2, additive; all from the shared 20-element pool.
+
+## 2048 and Omega
+
+Census, the code not read on either.
+
+- **2048** (`PCSF00007` v1.04 `eboot.elf`): carries `HD_missile_explosion.vex`
+  / `.rcsmodel`, `Shockwave_scalar` (three times, as HD) and
+  `data/Tex/ThickLine_bighalo.gxt`. **Checked, applies, not wired** for
+  sections 1 to 3: the same model, the same parameter name and the same streak
+  texture; whether its `Update` keeps `K` = `(2, 1, 6)` was not read. Section 4
+  **checked, differs**: 2048 has no `Bloom adaption boost` key (its bloom
+  vocabulary is `Bloom.Bloom Factor`, `Bloom.Bloom Gate`,
+  `Bloom.Luminance Factor`), so the override cannot be the same field.
+- **Omega** (`omega-eu` and `omega-eu-patch` `eboot.bin`): carries
+  `HD_missile_explosion.vex`/`.rcsmodel` and `data/Tex/ThickLine_bighalo.gnf`,
+  and its `MissileManager_Construct` (`0x013574d0`) builds a pool with an
+  explosion object ([../ps4-omega-eu/weapons.md](../ps4-omega-eu/weapons.md)).
+  **Checked, applies, not wired** for sections 1 to 3 on the same terms. No
+  `Shockwave_scalar` string (its programs bind by another route, unread).
+  Section 4 **checked, differs**: no `Bloom adaption boost` key either (its
+  vocabulary is `Bloom.Bloom Gate`, `Bloom.Bright-pass *`, `BloomHDR.*`).
+
+## Corrections to earlier sections
+
+Of [weapons.md](weapons.md)'s 2026-10-07 (`hd-weapon-fx`) and 2026-10-08
+(`hd-missile-blast`) entries, left as written there:
+
+- "Which function advances `p` and frees the entry was not found ... it runs
+  through a computed store": it is `MissileExplosion_Update`
+  (`0x00154a78`), called directly from `0x00143650`; the count's decrement is
+  the plain `stw r11, 0x10c(r26)` at `0x00143610`, a swap-with-last.
+- "There is no age clock in the object ... the node clock runs on the render
+  tree's own tick": the age is `+0x170`, and `Update` sets the node clock to it.
+- "`+0x17c` ... never stored by this class's own functions": stored at
+  `0x00154908` (`Reset`) and `0x00154b38` (`Update`).
+- "The 16 entries ... read by nothing ... confidence 45": read by `Update`
+  every frame; they are the streaks (section 2).
+- "core: the sphere and bloom": `bloom` is a `lightrays_glow` chunk (section 3).
+- [plasma.md](plasma.md) calls `0x00154cf0` `MissileManager_Construct`; it is
+  the explosion object's constructor, called in a 16-iteration loop
+  (`0x00141d2c`, `cmpwi r24, 0x3c`) of `MissileManager_Construct`'s twin
+  `0x00141a88` and at `0x00142114` in `MissileManager_Construct`
+  (`0x00141e70`) itself.
+
+## Named here
+
+| Address | Name | Confidence |
+| --- | --- | ---: |
+| `0x00154a78` | `MissileExplosion_Update` | 85 |
+| `0x00154858` | `MissileExplosion_Reset` | 85 |
+| `0x00155568` | `MissileExplosion_Start` | 80 |
+| `0x00154cf0` | `MissileExplosion_Construct` | 80 |
+| `0x00143580` | `MissileManager_Update` | 75 |
+| `0x0028c660` | `Random_RangeFloat` | 80 |
+
+No Ghidra rename was applied (the decompiler truncates these functions); this
+page is authoritative (ADR-0005).
