@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-06
-summary: "Served EndRace copy unresolved; Results names every craft, open: times refresh, badge, Omega on the built-in scoreboard; Podium multiplayer-only"
+updated: 2026-11-08
+summary: "Results names every craft, its times refresh live; open: served EndRace copy, badge, Omega on the built-in scoreboard, Podium multiplayer-only"
 ---
 
 # HD's end screens: read and drawn (Results/Menu/Rewards/Podium); Podium multiplayer-only
@@ -100,8 +100,11 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   team badge) is not drawn. ~~`Grid1.r` unidentified~~ **2026-11-06 (`hd-endrace-rows`): a team
   idstring, drawn** (the live Results listed no names before), with `ER_RACING` for a craft
   still racing; see `docs/ui/endrace-screens.md`'s "HD's `Results` names every craft".
-  **Open under it**: whether the original refreshes the other crafts' times while `Results` is
-  up (ours holds the board at the player's finish); Omega's finished race still shows the
+  ~~Whether the original refreshes the other crafts' times while `Results` is up~~
+  **2026-11-08 (`endrace-live-board`): it does, and so do we** - the screen's Update refills
+  the records and `FillRaceRows` every frame, and our board is retaken as the field finishes
+  (`docs/ui/endrace-screens.md`, "The field keeps finishing behind `Results`"). **Open under
+  it**: Omega's finished race still shows the
   built-in overflowing `scoreboard::Overlay` because its `endrace_entry` is `None`.
 - **2026-09-28: `EndRace Menu` draws its cursor the executable's way** - the
   focused option Block turns `ActiveColor` (`0xff8ac0ca`), eases 60 wider and

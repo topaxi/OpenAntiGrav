@@ -743,9 +743,9 @@ apart (the table does not animate); the same on HD's campaign and a RACEBOX race
 (every craft's team, through HD's own strings, and `RACING` for each unfinished one),
 `crates/game/src/results_tables.rs` and `crates/ui-screens/src/endrace/hd/tests/cursor.rs`.
 
-**Not changed**: the table is the board taken when the race ends (the player's finish), so the
-other seven read `RACING` for as long as `Results` is up; whether the original refreshes them
-while it is up is unmeasured. The badge (`Gridi.r`) is not drawn. Time Trial and Speed Lap are
+**Not changed**: ~~the table is the board taken when the race ends, so the other seven read
+`RACING` for as long as `Results` is up~~ - it now follows the field, see "The field keeps
+finishing behind `Results`" below. The badge (`Gridi.r`) is not drawn. Time Trial and Speed Lap are
 untouched.
 
 **Omega** (`checked, applies, not wired`): Omega's `Title::front_end.endrace_entry` is `None`,
@@ -754,6 +754,69 @@ overflows the screen (columns overlap, the fourth row is off the bottom) and nam
 `SLOT n`. Its HD-lineage `endrace_definition.xml` is in `data09.psarc`
 (`docs/formats/omega-status.md`); wiring it is open in the thread, not done here because which
 of Omega's copies the runtime serves is unmeasured.
+
+## The field keeps finishing behind `Results` (2026-11-08, `endrace-live-board`)
+
+**The fault**: the race runs on behind the end screens once the player crosses the line
+(`Race::runs_on_after_the_line`), but the results board was taken once, on the player's finish
+tick, so every craft still racing then read `RACING` on the screen for good.
+
+**The original refreshes** (matches the original, confidence 75): `0x0022e680`, the slot of
+`EndRace Results`'s vtable at `0x0087f1f0` that takes the frame's `dt` (the screen's Update),
+calls `0x0005a770` and then `EndRaceResults_FillRaceRows` (`0x0022b688`) on **every update** while
+the race-layout page is up (`g_GameState+0xe0` of `3` or `0x10`, `+0xc78 == 0`).
+`0x0005a770` rebuilds each 300-byte record's `+0x160` (the struct base `+0x1980`; it is the
+`param_1 + 0x1ae0` slot of the loop) from the live craft: `-1`/`-2` for a destroyed craft, else
+the sum of that craft's recorded lap times, which is `0` until every lap has one, and
+`FillRaceRows` prints `0` as `ER_RACING` and above `0` as the time. Not read: the `-2` case and
+whether `+0x168` (the position) is re-sorted by the same function (the ranking loop in
+`0x0005a770` writes a position from the record's value, so it likely is). Static read of
+`/hdfury/EBOOT-ps3-hdfury-eu.elf`, no emulator.
+
+**The fix**: `Race::refresh_results` (`crates/raceplay/src/results.rs`), called from
+`Race::tick_finished` while the world runs on after the line, retakes the board from the world.
+It replaces the board only when it differs and bumps `Race::results_revision`; nothing is done
+once every craft has finished. The player's row, `Board::tick` and the people's names stay as
+the finish took them, so nothing read once at the finish (the place the voice speaks, the
+loyalty banked, the best lap recorded, a Tournament leg's points) can change, and the screens'
+headline, cursor, page and menu are untouched. `EndRaceRuntime::refresh_field` rebuilds only the
+rows of the two tables that list the field (HD's `Results`, Pulse's multi-person table) when
+`RaceStage::refresh_endrace_board` sees a newer revision. A craft still racing also moves
+between places as the running order changes. It is a read of the simulation: no hash moves.
+
+| Screen | Follows the field | Why |
+| --- | --- | --- |
+| HD/Fury `EndRace Results` | yes | rows rebuilt from the board |
+| Pulse multi-person (network) `Results` | yes | `PeopleResults` rebuilt from the board |
+| Built-in scoreboard (Omega, any title with no EndRace definition) | yes | drawn from `race.results()` every frame |
+| Pulse single-race `Results`, `Rewards`, Pure | n/a | the player's lap table only; no other craft is listed |
+| Pulse Tournament table | no, **chosen, not measured** | leg points are banked at the person's finish; a live table would show points the standings never took |
+| 2048 touch pages | n/a (checked, differs) | summarise one racer; no field list |
+| Eliminator / Zone / a race that ended on a wreck | no | the world stands still (or the player's row would move), so there is nothing to refresh; a scored race has no lap target and never runs on after the line, so **its points never change here** |
+
+A network race is untouched: its board is the server's, taken from confirmed state, and the
+client compares it with the server's once (`net_play::check_server_board`); the refresh lives in
+`tick_finished`, which a network race does not call.
+
+**Pinned by**: `crates/raceplay/src/results/tests.rs`
+(`a_craft_that_finishes_after_the_player_gets_its_time_on_the_board`, red with the call
+removed; `the_players_row_and_the_finish_tick_stay_as_the_finish_took_them`;
+`the_revision_moves_only_when_the_board_does`;
+`refreshing_the_board_moves_no_state_hash`, the state hash of a `tick_finished` run against a
+plain `tick` run, every tick) and, disc-backed,
+`crates/game/tests/hd_endrace_ground_truth.rs::a_craft_that_crosses_behind_the_results_screen_replaces_racing_with_its_time`
+(real circuit, real definition: a `RACING` cell becomes the time on the drawn screen). The session
+glue (`follow_board` in `build_endrace`, the call in `Session::frame`) is pinned only by the
+`--drive` frames below.
+
+**Live**, `--drive` through the real `Session` (1440x816, HD EU, RACEBOX single race, autopilot):
+every row `RACING` 5 ticks after the finish, then `QIREX` reads `1.50.88` where it read
+`RACING` 355 ticks on, the other six still `RACING`, and 45 ticks later the order of the
+three-to-eight rows has changed (`EG-X` ahead of `HARIMAU`) with the loyalty total unchanged
+(180, banked once). In an earlier run all eight rows had a time by 1,565 ticks.
+
+**Omega**: `checked, applies`: its built-in scoreboard draws from the board every frame, so it
+follows the field with this change. **2048**: `checked, differs`: its touch pages list no other craft.
 
 ## The table's rows are the file's own, not the PSP's (2026-10-13)
 
