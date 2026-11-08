@@ -816,6 +816,13 @@ impl Race {
     /// on the pose it holds now, at its captured velocity, so `trail_head_of` and the drawn hull
     /// agree and nothing but the exhaust has moved.
     ///
+    /// **And the trail-hit burst with it.** A craft the capture caught inside a rival's ribbon
+    /// carries the original's burst on its nose, re-raised every frame it stays inside
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The trail-hit burst, measured").
+    /// On an HD race each replayed tick therefore also runs the effect stage and then
+    /// [`Self::advance_trail_hits`], in the order a real tick runs them, so a posed frame shows
+    /// the burst at the age a racing frame would. Off HD the stage is left alone.
+    ///
     /// **Chosen, not measured:** the straight path and the fixed heading (the original's craft
     /// had curved), and full thrust for every craft: the player's throttle reads 100 in the
     /// capture, an opponent's is not read from RAM. The velocities are read.
@@ -854,7 +861,13 @@ impl Race {
                 ship.body.linear_velocity = velocities[slot];
                 ship.thrust = Self::FULL_THRUST;
             }
+            if self.view.hd_trail_active {
+                self.view
+                    .stage
+                    .advance(self.sim.dt, &mut self.view.stage_rng);
+            }
             self.advance_exhausts();
+            self.advance_trail_hits();
         }
         if aged == Some(0) {
             self.view.exhaust[0].boost(exhaust::BOOST_SECONDS);
