@@ -722,8 +722,8 @@ warm-up that lets a posed frame carry the burst.
 
 The 2026-10-29 breakpoint fired the spawn every frame with the player tucked 8 units
 behind a rival. At the same tuck, ours' anchor test (`exhaust::hd::FIN_HALF_WIDTH`, 0.5)
-fired in 1 of 9 usable captures. The nearest authored anchor sat 0.48 to 7.2 units off
-the warm-up ribbon at the frame; at the four best tucks it was 0.48, 0.50, 0.63 and 0.84.
+fired as tucked in 1 of 9 captured pairs. The nearest authored anchor sat 0.48 to 7.2 units
+off the warm-up ribbon at the frame; at the six best tucks it was 0.48 to 0.90.
 The ribbon is laid from the rival's nozzle, and it runs 2.4 to 3.6 units to the side of
 the tucked player's centre. **Measured, not wired**: the original's test runs in the
 `Trails` SPU job, and its reach is unread. The next measurement is the breakpoint hit
@@ -819,8 +819,16 @@ aggregate against the names-broken run, at the same tuck.
 | 05 | 0.63 | 2,302 | 59x96 | 97x98 | no |
 | 04 | 0.84 | 4,403 | 80x108 | 141x112 | no |
 | 11 | 0.90 | 8,554 | 133x151 | 189x159 | no |
+| 12 | 0.79 | 1,326 | 52x28 | 294x238 | yes |
 
-ORIGINAL_AGGREGATE
+**The stated metric cannot isolate the original's burst.** In the same nose box, near-white
+pixels average **2,903** over the 9 captured on frames and **3,114** over 9 names-broken
+frames at the same tuck. Hull highlights, track lines and the trails swamp a burst that
+small, so the count does not separate on from off. The original's side therefore rests on
+the frames, read at full size: the compact white glow, and the thin rays of a fresh burst
+(`data/reference/hd-capture/trail-hit-pair/`). Isolating it needs a per-frame A/B: the same
+pause captured twice, names broken and restored. A recompiled RPCS3 does not replay a frame,
+so that means the interpreter and a breakpoint stop.
 
 **Verdict: ours does not match.** Its burst is a cloud of soft blobs 50 to 150 px across,
 spread up to 300 px behind and beside the hull. The original shows a compact white glow on
