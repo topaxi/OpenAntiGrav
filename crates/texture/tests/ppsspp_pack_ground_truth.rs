@@ -38,7 +38,7 @@ fn repo_root() -> PathBuf {
 
 /// The pack's `textures.ini`, parsed, or `None` (with the reason printed) when
 /// the pack is absent or not at the pinned commit.
-fn pack(name: &str) -> Option<Pack> {
+fn pack(name: &str) -> Option<(Pack, PathBuf)> {
     let dir = repo_root().join("data/texture-packs").join(name);
     let Ok(ini) = std::fs::read_to_string(dir.join("textures.ini")) else {
         eprintln!(
@@ -63,7 +63,7 @@ fn pack(name: &str) -> Option<Pack> {
         eprintln!("skip: {name} is at {head:?}, the pin is {pinned}");
         return None;
     }
-    Some(Pack::parse(&ini))
+    Some((Pack::parse(&ini), dir))
 }
 
 /// One texture, keyed.
@@ -280,9 +280,12 @@ struct Outcome {
     levels: usize,
     cache_key_wildcards: usize,
     no_data: BTreeMap<String, usize>,
+    /// Reproduced keys (exact or wildcard) whose replacement file the pack has /
+    /// does not have.
+    reproduced_with_file: [usize; 2],
 }
 
-fn measure(pack: &Pack, sources: &[Source]) -> Outcome {
+fn measure(pack: &Pack, dir: &std::path::Path, sources: &[Source]) -> Outcome {
     let keys: HashSet<Key> = sources.iter().filter_map(|s| s.replacement.key).collect();
     let data = data_hashes(sources);
     let mut out = Outcome {
@@ -292,6 +295,7 @@ fn measure(pack: &Pack, sources: &[Source]) -> Outcome {
         levels: 0,
         cache_key_wildcards: 0,
         no_data: BTreeMap::new(),
+        reproduced_with_file: [0; 2],
     };
     for line in &pack.hashes {
         if line.level > 0 {
@@ -302,6 +306,9 @@ fn measure(pack: &Pack, sources: &[Source]) -> Outcome {
             out.blank += 1;
         } else if let Some(class) = classify(line, &keys, &data) {
             out.keys += 1;
+            if matches!(class, Class::Exact | Class::Wildcard) {
+                out.reproduced_with_file[usize::from(!dir.join(&line.target).is_file())] += 1;
+            }
             if class == Class::NoData {
                 let deep: Vec<&str> = line.target.split('/').take(4).collect();
                 *out.no_data.entry(deep.join("/")).or_default() += 1;
@@ -359,6 +366,10 @@ fn report(image: &str, sources: &[Source], walked: &Walked, o: &Outcome) {
         println!("   no-data {n:4} {dir}");
     }
     println!(
+        "   reproduced with / without the pack's PNG on disk: {:?}",
+        o.reproduced_with_file
+    );
+    println!(
         "   TOTAL [exact, wildcard, heap-tail, other, no-data] {:?}",
         totals(o)
     );
@@ -369,6 +380,8 @@ struct Expect {
     sources: usize,
     /// Of those, the ones whose key is knowable from their own bytes.
     keyed: usize,
+    /// Reproduced keys whose PNG the pack ships / lacks.
+    files: [usize; 2],
     keys: usize,
     /// `[exact, wildcard, heap-tail, other, no-data]` per reported directory.
     groups: &'static [(&'static str, [usize; 5])],
@@ -397,7 +410,9 @@ const PURE_GROUPS: &[(&str, [usize; 5])] = &[
 ];
 
 fn run(image: &str, pack_name: &str, expect: &Expect) {
-    let Some(pack) = pack(pack_name) else { return };
+    let Some((pack, dir)) = pack(pack_name) else {
+        return;
+    };
     let Some((sources, walked)) = census(image) else {
         return;
     };
@@ -409,7 +424,7 @@ fn run(image: &str, pack_name: &str, expect: &Expect) {
         pack.other_sections
     );
     assert!(pack.unparsed.is_empty(), "{:?}", pack.unparsed);
-    let outcome = measure(&pack, &sources);
+    let outcome = measure(&pack, &dir, &sources);
     report(image, &sources, &walked, &outcome);
     assert_eq!(sources.len(), expect.sources, "textures read");
     let keyed = sources
@@ -418,6 +433,7 @@ fn run(image: &str, pack_name: &str, expect: &Expect) {
         .count();
     assert_eq!(keyed, expect.keyed, "textures whose key is knowable");
     assert_eq!(outcome.keys, expect.keys, "level-0 full keys classified");
+    assert_eq!(outcome.reproduced_with_file, expect.files, "PNG on disk");
     let got: Vec<(String, [usize; 5])> = outcome
         .by_group
         .iter()
@@ -449,6 +465,7 @@ fn pulse_eu_keys() {
         &Expect {
             sources: 7633,
             keyed: 6169,
+            files: [1592, 589],
             keys: 2380,
             groups: PULSE_GROUPS,
         },
@@ -464,6 +481,7 @@ fn pulse_usa_keys() {
         &Expect {
             sources: 7633,
             keyed: 6169,
+            files: [1592, 589],
             keys: 2380,
             groups: PULSE_GROUPS,
         },
@@ -479,6 +497,7 @@ fn pure_eu_keys() {
         &Expect {
             sources: 4573,
             keyed: 4149,
+            files: [110, 540],
             keys: 896,
             groups: PURE_GROUPS,
         },
@@ -494,6 +513,7 @@ fn pure_usa_keys() {
         &Expect {
             sources: 4567,
             keyed: 4143,
+            files: [110, 540],
             keys: 896,
             groups: PURE_GROUPS,
         },

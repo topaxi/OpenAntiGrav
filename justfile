@@ -741,12 +741,20 @@ logcat-android *ARGS:
     ./scripts/logcat-android.sh "$@"
 
 # Pick game data (disc images, DLC, unpacked 2048/Omega packages, Pure's DLC
-# keys) in an fzf multiselect, each row marked as already on the device or not,
+# keys, the PPSSPP texture packs `just fetch-texture-packs` fetched) in an fzf multiselect, each row marked as already on the device or not,
 # and copy it: `just push-data deck [user@host]` or `just push-data android`.
 # Globs instead of the picker: `just push-data android 'images/pulse-psp-*'`.
 # See scripts/push-game-data.sh
 push-data *ARGS:
     ./scripts/push-game-data.sh "$@"
+
+# Fetch the PPSSPP texture packs for Pulse and Pure into data/texture-packs/<name>/ at the
+# commit scripts/texture-packs.pin names (shallow clone; never committed, both are unlicensed
+# fan work). `--update` moves the pin to each repo's head; `--install-ppsspp ~/.config/ppsspp`
+# also links them into a PPSSPP install's PSP/TEXTURES/<serial>/. `just push-data` carries them to a
+# device. See docs/tools/texture-packs.md and scripts/fetch-texture-packs.sh
+fetch-texture-packs *ARGS:
+    ./scripts/fetch-texture-packs.sh "$@"
 
 # Run the tick loop with no renderer, no window and no disc, and print its hash
 headless-sim *ARGS:
