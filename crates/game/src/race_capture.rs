@@ -515,13 +515,11 @@ pub fn capture(
     race.set_player_tags(options.player_tags);
     crate::split_screen::name_first_seat(&mut race, &options.player, &title.profile);
     race.set_hull_shake(options.hull_shake);
-    race.watch_laps(
-        &hud,
-        options
-            .previous_best
-            .as_ref()
-            .and_then(|record| record.best_lap_ticks),
-    );
+    let best_lap = options
+        .previous_best
+        .as_ref()
+        .and_then(|r| r.best_lap_ticks);
+    race.watch_laps(&hud, best_lap);
     race.set_camera_view(options.camera_view);
     race.apply_launch(&oag_raceplay::Launch {
         scheme: options.scheme,
