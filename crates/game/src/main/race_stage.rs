@@ -421,9 +421,17 @@ impl RaceStage {
     pub(crate) fn observation(&self) -> oag_game::records::Observation {
         let standing = self.race.player_standing();
         let finished = self.race.finished();
+        // A scored race (an HD Eliminator) is placed on its points, the board's own order, which
+        // the results table, the headline, the voice and the record all read.
+        let place = self
+            .race
+            .results()
+            .filter(|board| board.scored())
+            .and_then(|board| board.player())
+            .map_or_else(|| self.race.player_place(), |row| row.place);
         oag_game::records::Observation {
             finished,
-            place: Some(self.race.player_place()),
+            place: Some(place),
             laps_completed: oag_game::records::laps_completed(
                 standing.lap,
                 finished,

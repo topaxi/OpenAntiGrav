@@ -117,8 +117,8 @@ impl Session {
         // knows its seed (`race::load::roster`).
         let roster = stage.race.slot_teams().to_vec();
         let observation = stage.observation();
-        // A scored race (an HD Eliminator) is placed on its points: the board's own order, which
-        // the headline and the voice read in place of the race position.
+        // A scored race (an HD Eliminator) is placed on its points, which `observation.place`
+        // already is; its headline is that place, where a race position has no Eliminator headline.
         let scored_place = board
             .as_ref()
             .filter(|board| board.scored() && !split)
@@ -359,7 +359,7 @@ impl Session {
                 .map(|results| results.law),
             mode,
             &results,
-            scored_place.or(observation.place),
+            observation.place,
             campaign,
             observation.campaign_medal.map(to_campaign_medal),
         )
