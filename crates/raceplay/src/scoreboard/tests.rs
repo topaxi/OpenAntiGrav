@@ -40,7 +40,7 @@ fn a_scored_race_is_ordered_by_points_not_by_race_position() {
 
 #[test]
 fn equal_points_stack_with_the_later_slot_on_top_as_the_hud_rows_do() {
-    let crafts = [craft(0, 2, points(40)), craft(1, 1, points(40))];
+    let crafts = [craft(0, 1, points(40)), craft(1, 2, points(40))];
     let board = build(&crafts, None, 0);
     let slots: Vec<u8> = board.rows.iter().map(|row| row.slot).collect();
     assert_eq!(slots, [1, 0]);
