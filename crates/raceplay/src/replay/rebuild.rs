@@ -25,7 +25,7 @@ impl Options {
             bail!("the replay records no launch request ([setup]), so its race cannot be rebuilt");
         };
         let launch = Launch::from_table(&header.options)?;
-        let mode = oag_race::Mode::from_name(&setup.mode)
+        let mode = oag_race::Mode::from_recorded_name(&setup.mode)
             .with_context(|| format!("the replay names the mode {:?}", setup.mode))?;
         Ok(Self {
             source: source.to_string(),
@@ -121,6 +121,10 @@ pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
     }
     // After the seats, as the session applies the AI choice: which driver flies reads who is
     // human.
+    if let Some(scale) = launch.original_ai.and_then(|ai| ai.skill) {
+        race.set_ai_tuning(oag_ai::Difficulty::tune_at_scale(scale, &oag_ai::Tuning::default()));
+        race.set_finished_thrust_skill(scale);
+    }
     if let Some(ai) = launch.original_ai {
         race.use_original_ai(ai.skill, ai.level);
     }
