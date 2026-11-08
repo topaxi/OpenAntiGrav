@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd, omega, 2048]
-updated: 2026-11-07
-summary: "HD Eliminator is scored and its rows draw; the results screen's POINTS table, the TARGET row and ScoreFeedBack popups are open"
+updated: 2026-11-08
+summary: "HD Eliminator is scored, its rows draw and its results screen ranks on POINTS; the TARGET row and ScoreFeedBack popups are open"
 ---
 
 # HD's Eliminator: what is left after the score law
@@ -14,9 +14,6 @@ summary: "HD Eliminator is scored and its rows draw; the results screen's POINTS
 
 ## Open
 
-- **Results screen.** The original ranks by `POINTS` under `2ND PLACE - KILLS: 6 DEATHS: 0`
-  (`data/reference/hd-eliminator-score/results.png`, local). Ours draws `oag_raceplay::scoreboard`'s
-  places under `Headline::Unresolved`.
 - **Racebox TARGET row.** HD's row is a `Slider` (`200..600`, step `20`). `race_setup` is `None`, so
   every Racebox race runs on the minimum.
 - **`ScoreFeedBack0-15`.** Authored and read, never caught in a frame.
@@ -31,10 +28,14 @@ summary: "HD Eliminator is scored and its rows draw; the results screen's POINTS
   laps. The awards match row for row, so the likely cause is how often our field lands a kill,
   not the law. Unmeasured. Re-measure the pace first: pads stopped disarming after the 3-laps
   reading, so the supply went up.
+- **Results table, landed:** `0x00229bf0`, `docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`
+  ("The results table"). Open in it: how the original orders equal points, which function calls the
+  filler, and the second colon `ER_DEATHS` would add (ours drops the string's). A networked board
+  (`oag_net::wire::board::BoardRow`) carries `eliminations` only, no points.
 - **`--race` ends on this build's own board** (`RACE COMPLETE`, the person first). That is the
-  capture path; the front end's results are the first item above.
+  capture path; the front end's results are landed (below).
 
 ## Next Steps
 
-1. Give `Board` the score for a scored race and draw `POINTS` in HD's results table.
+1. Racebox TARGET row as HD's `Slider` (`200..600`, step `20`) feeding `race_setup`.
 2. Take a frame burst across one of the person's hits for `ScoreFeedBack`; read `hud+0x3d0 + 12 * i`.
