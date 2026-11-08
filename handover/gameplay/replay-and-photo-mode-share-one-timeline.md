@@ -17,6 +17,11 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
 
 ## Open
 
+- **Replay and photo mode switch both ways (maintainer, 2026-11-08).** From the replay viewer, photo mode opens at
+  the current tick; from photo mode (live race or replay), play starts the replay from the scrubbed tick. Leaving
+  photo mode opened from a replay continues the replay from where photo mode was scrubbed to (the scrub doubles as a
+  seek). A live race still resumes to the bit when photo mode closes. Not designed in ADR-0087: a new ADR records it,
+  and can carry the owed photo-mode rewind ADR below. Fix Next Step 5's CIRCLE bug first.
 - **Stage 7, `take-over`, is next** (decision 10's text). Stages 3 and 5, its dependencies, have landed.
 - **An ADR is owed for photo mode's rewind.** Stage 6 moves the live race on screen and restores it to the bit, departing
   from decision 5's probe. The maintainer accepted that on two conditions, both on `docs/ui/photo-mode.md`: photo mode
