@@ -243,6 +243,7 @@ const TITLE: &Title = &Title {
     prompts: &oag_title::prompts::Prompts::UNREAD,
     profile: oag_title::profile::Profile::NEITHER,
     photo: oag_title::photo::Strings::NONE,
+    photo_shot: None,
     reset_enables: oag_title::recovery::ResetEnables::PULSE,
     effects_volume_law: oag_title::pre_race::Sourced::chosen(
         oag_title::group_volume::GroupVolumeLaw::Linear,

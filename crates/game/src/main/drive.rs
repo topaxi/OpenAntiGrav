@@ -122,6 +122,11 @@ impl Driver {
             self.session.controls.press_button(button, true);
             self.down = Some(button);
         }
+        // A window draws every frame; a drive draws the ones it is asked for, and a photo mode
+        // shot of several frames is one frame drawn at a time.
+        if self.session.photo_job_running() {
+            self.session.gpu.output.draw_next = true;
+        }
         self.session.frame()?;
         if self.session.quit {
             bail!("the game quit (the last state is below)");
@@ -359,6 +364,7 @@ fn state_of(session: &mut Session) -> State {
     if let Stage::Race(stage) = &session.stage {
         state.photo = Some(session.photo_lens_name().to_string());
         state.photo_fx = session.photo_fx_name();
+        state.photo_job = session.photo_fx_name().map(|_| session.photo_job_name());
         state.endrace = stage.endrace.as_ref().map(|endrace| {
             if endrace.is_photo() { "photo" } else { "other" }.to_string()
         });

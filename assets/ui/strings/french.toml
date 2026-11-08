@@ -458,6 +458,12 @@ ids = [
     "OAG_PHOTO_PANEL_KEYS",
     "OAG_PHOTO_SAVED",
     "OAG_PHOTO_FAILED",
+    "OAG_PHOTO_REWIND",
+    "OAG_PHOTO_MOTION_BLUR",
+    "OAG_PHOTO_SHUTTER",
+    "OAG_PHOTO_PROGRESS",
+    "OAG_PHOTO_CANCELLED",
+    "OAG_PHOTO_ANY_INPUT",
     # The REPLAYS page and the replay viewer (ADR-0087); no translation pass yet.
     "OAG_MENU_REPLAYS",
     "OAG_MENU_REPLAYS_SUBTITLE",

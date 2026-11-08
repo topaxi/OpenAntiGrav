@@ -61,7 +61,7 @@ fn the_help_names_the_lens_and_the_hud_and_hiding_it_leaves_only_the_message() {
     let button = |b: Button| b.to_string().to_uppercase();
     let mut photo = Photo::new(0, true, None);
     let grid = (483.0, 272.0);
-    let shown = texts(&draw_list(&photo, grid, &words(&say, &button), None));
+    let shown = texts(&draw_list(&photo, grid, &words(&say, &button), None, None));
     assert!(shown.contains(&"CAMERA: INTERNAL".to_string()), "{shown:?}");
     assert!(shown.contains(&"HUD: OFF".to_string()));
     let start = Pad {
@@ -72,8 +72,8 @@ fn the_help_names_the_lens_and_the_hud_and_hiding_it_leaves_only_the_message() {
     photo.step(start, &[0]);
     photo.step(start, &[0]);
     assert!(!photo.help());
-    assert!(draw_list(&photo, grid, &words(&say, &button), None).is_empty());
-    let saved = draw_list(&photo, grid, &words(&say, &button), Some("SAVED"));
+    assert!(draw_list(&photo, grid, &words(&say, &button), None, None).is_empty());
+    let saved = draw_list(&photo, grid, &words(&say, &button), Some("SAVED"), None);
     assert_eq!(texts(&saved), ["SAVED"]);
 }
 
@@ -109,13 +109,13 @@ fn the_effects_panel_lists_four_rows_and_two_more_with_depth_of_field_on() {
     let button = |b: Button| b.to_string().to_uppercase();
     let grid = (483.0, 272.0);
     let mut photo = Photo::new(0, false, None);
-    let help_only = texts(&draw_list(&photo, grid, &words(&say, &button), None));
+    let help_only = texts(&draw_list(&photo, grid, &words(&say, &button), None, None));
     assert!(
         !help_only.contains(&"OAG_PHOTO_EXPOSURE".to_string()),
         "the panel is not up yet"
     );
     photo.toggle_panel();
-    let shown = texts(&draw_list(&photo, grid, &words(&say, &button), None));
+    let shown = texts(&draw_list(&photo, grid, &words(&say, &button), None, None));
     for id in [
         "OAG_PHOTO_EXPOSURE",
         "OAG_PHOTO_SATURATION",
@@ -133,7 +133,7 @@ fn the_effects_panel_lists_four_rows_and_two_more_with_depth_of_field_on() {
         .effects_mut()
         .select(oag_raceplay::photo::effects::Row::DepthOfField);
     photo.effects_mut().adjust(1);
-    let shown = texts(&draw_list(&photo, grid, &words(&say, &button), None));
+    let shown = texts(&draw_list(&photo, grid, &words(&say, &button), None, None));
     assert!(
         shown.contains(&"OAG_PHOTO_APERTURE".to_string())
             && shown.contains(&"OAG_PHOTO_FOCUS".to_string())
@@ -186,10 +186,38 @@ fn a_chip_whose_row_word_is_too_long_for_it_says_its_value_alone() {
         (483.0, 272.0),
         &words(&say, &button),
         None,
+        None,
     ));
     assert!(shown.contains(&"INTERNAL".to_string()), "{shown:?}");
     assert!(
         !shown.iter().any(|t| t.starts_with("PHOTO CAMERA MODE:")),
         "{shown:?}"
+    );
+}
+
+#[test]
+fn the_rewind_row_shows_the_race_clock() {
+    assert_eq!(clock(0), "0:00.0");
+    assert_eq!(clock(60), "0:01.0");
+    assert_eq!(clock(90), "0:01.5");
+    assert_eq!(clock(60 * 75 + 6), "1:15.1");
+}
+
+#[test]
+fn a_shot_under_way_shows_its_progress_and_the_way_out_and_nothing_else() {
+    let say = |id: &str| id.trim_start_matches("OAG_PHOTO_").to_string();
+    let button = |b: Button| b.to_string().to_uppercase();
+    let photo = Photo::new(0, false, None);
+    let shown = texts(&draw_list(
+        &photo,
+        (483.0, 272.0),
+        &words(&say, &button),
+        None,
+        Some((37, 120)),
+    ));
+    assert_eq!(
+        shown,
+        vec!["PROGRESS  37 / 120".to_string(), "ANY_INPUT".to_string()],
+        "no chips and no help while the frames are drawn"
     );
 }

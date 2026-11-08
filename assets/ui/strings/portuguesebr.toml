@@ -348,6 +348,12 @@ OAG_PHOTO_DEPTH = { text = "PROF. DE CAMPO", human = false }
 OAG_PHOTO_APERTURE = { text = "ABERTURA", human = false }
 OAG_PHOTO_FOCUS = { text = "FOCO", human = false }
 OAG_PHOTO_PANEL_KEYS = { text = "ANALÓGICO CIMA BAIXO LINHA    ESQUERDA DIREITA ALTERAR", human = false }
+OAG_PHOTO_REWIND = { text = "VOLTAR NO TEMPO", human = false }
+OAG_PHOTO_MOTION_BLUR = { text = "BORRÃO DE MOVIMENTO", human = false }
+OAG_PHOTO_SHUTTER = { text = "OBTURADOR", human = false }
+OAG_PHOTO_PROGRESS = { text = "TIRANDO FOTO", human = false }
+OAG_PHOTO_CANCELLED = { text = "FOTO CANCELADA", human = false }
+OAG_PHOTO_ANY_INPUT = { text = "QUALQUER BOTÃO CANCELA", human = false }
 
 OAG_MENU_RESET_TO_DEFAULT = { text = "RESTAURAR O PADRÃO", human = false }
 

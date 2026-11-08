@@ -150,6 +150,10 @@ pub struct State {
     /// aperture=40 focus=20`, while it is open.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub photo_fx: Option<String>,
+    /// A photo mode shot of several frames under way as `drawn/frames`, or `none`, while the mode
+    /// is open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub photo_job: Option<String>,
     /// The replay viewer while a recording is being watched on `stage=race`: `opening`,
     /// `playing`, `paused`, `ended` or `stopped` (the build stops matching the recording).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -221,6 +225,7 @@ impl State {
             "title" => one(screen.map(|s| s.title.clone())),
             "photo" => one(self.photo.clone()),
             "photo_fx" => one(self.photo_fx.clone()),
+            "photo_job" => one(self.photo_job.clone()),
             "replay" => one(self.replay.clone()),
             "replay_at" => one(self.replay_at.clone()),
             "endrace" => one(self.endrace.clone()),
@@ -273,6 +278,7 @@ impl State {
                 | "focus"
                 | "photo"
                 | "photo_fx"
+                | "photo_job"
                 | "replay"
                 | "replay_at"
                 | "endrace"

@@ -16,6 +16,11 @@
 //! | Aperture | 0 to 100, 1 | `40` | `v * 0.01` |
 //! | Focus | 0 to 100, 1 | `20` | `v * 0.01` into HD's focus curve ([`oag_post::photo_fx::Edges`]) |
 //!
+//! On a title whose photo mode accumulates (`oag_title::photo::Accumulation`), three rows more:
+//! the motion blur (off, track, ship), its shutter (`(v * 0.01)^2 * 0.25` seconds, default `20`)
+//! and, where the race can be moved through its past, the rewind (`docs/ui/photo-mode.md`,
+//! "Accumulated shots and rewind").
+//!
 //! **Chosen, not measured:** the direction of the exposure slider (up is brighter; HD's own value
 //! falls as the slider rises and what its shader does with it was never read), the exposure as
 //! stops of linear light, and the blur and depth of field being independent rows rather than
@@ -38,6 +43,21 @@ pub enum Row {
     Aperture,
     /// Where the depth of field is sharp.
     Focus,
+    /// The race's own moment the picture shows: the scrub back to its start.
+    Rewind,
+    /// Whether the shot smears the scenery (track) or the craft (ship), or neither.
+    MotionBlur,
+    /// How long the shutter stays open.
+    Shutter,
+}
+
+/// What a motion blur shot smears.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Blur {
+    /// The scenery: the camera rides the craft, so the craft stays sharp.
+    Track,
+    /// The craft: the camera holds where the shot is taken, so the scenery stays sharp.
+    Ship,
 }
 
 /// The slider values, as the integers the original shows.
@@ -50,6 +70,16 @@ pub struct Effects {
     aperture: i32,
     focus: i32,
     selected: Row,
+    /// Whether the title's photo mode accumulates frames, so the blur rows are on offer.
+    accumulates: bool,
+    /// 0 off, 1 track, 2 ship.
+    motion_blur: i32,
+    shutter: i32,
+    /// Whether the race can be moved through its past, so the rewind row is on offer.
+    rewinds: bool,
+    /// How many ticks before the live tick the picture is, and the live tick.
+    back: u64,
+    live: u64,
 }
 
 impl Default for Effects {
@@ -69,6 +99,10 @@ impl Effects {
     pub const FOCUS_OPENS: i32 = 20;
     /// The speed blur's step.
     pub const SPEED_BLUR_STEP: i32 = 5;
+    /// Where the shutter opens.
+    pub const SHUTTER_OPENS: i32 = 20;
+    /// Ticks a push of the rewind row moves the picture: half a second.
+    pub const REWIND_STEP: u64 = 30;
 
     /// Every value where the mode opens it: no effect.
     #[must_use]
@@ -81,29 +115,47 @@ impl Effects {
             aperture: Self::APERTURE_OPENS,
             focus: Self::FOCUS_OPENS,
             selected: Row::Exposure,
+            accumulates: false,
+            motion_blur: 0,
+            shutter: Self::SHUTTER_OPENS,
+            rewinds: false,
+            back: 0,
+            live: 0,
         }
     }
 
-    /// The rows on offer, top to bottom: aperture and focus only while depth of field is on.
+    /// The rows for a title whose photo mode accumulates frames, and a race that can be moved
+    /// through its past.
     #[must_use]
-    pub fn rows(&self) -> &'static [Row] {
+    pub const fn offering(mut self, accumulates: bool, rewinds: bool) -> Self {
+        self.accumulates = accumulates;
+        self.rewinds = rewinds;
+        self
+    }
+
+    /// The rows on offer, top to bottom: aperture and focus only while depth of field is on,
+    /// the shutter only while a motion blur is chosen.
+    #[must_use]
+    pub fn rows(&self) -> Vec<Row> {
+        let mut rows = vec![
+            Row::Exposure,
+            Row::Saturation,
+            Row::SpeedBlur,
+            Row::DepthOfField,
+        ];
         if self.depth_of_field {
-            &[
-                Row::Exposure,
-                Row::Saturation,
-                Row::SpeedBlur,
-                Row::DepthOfField,
-                Row::Aperture,
-                Row::Focus,
-            ]
-        } else {
-            &[
-                Row::Exposure,
-                Row::Saturation,
-                Row::SpeedBlur,
-                Row::DepthOfField,
-            ]
+            rows.extend([Row::Aperture, Row::Focus]);
         }
+        if self.accumulates {
+            rows.push(Row::MotionBlur);
+            if self.motion_blur != 0 {
+                rows.push(Row::Shutter);
+            }
+        }
+        if self.rewinds {
+            rows.push(Row::Rewind);
+        }
+        rows
     }
 
     /// The row the panel's cursor is on.
@@ -138,7 +190,57 @@ impl Effects {
             Row::DepthOfField => i32::from(self.depth_of_field),
             Row::Aperture => self.aperture,
             Row::Focus => self.focus,
+            Row::Rewind => i32::try_from(self.back).unwrap_or(i32::MAX),
+            Row::MotionBlur => self.motion_blur,
+            Row::Shutter => self.shutter,
         }
+    }
+
+    /// What a motion blur shot smears, or `None` with the row off.
+    #[must_use]
+    pub fn blur(&self) -> Option<Blur> {
+        match self.motion_blur {
+            1 => Some(Blur::Track),
+            2 => Some(Blur::Ship),
+            _ => None,
+        }
+    }
+
+    /// The shutter row, `0..=100`.
+    #[must_use]
+    pub fn shutter(&self) -> i32 {
+        self.shutter
+    }
+
+    /// Whether depth of field is on, and its sliders as fractions `(aperture, focus)`.
+    #[must_use]
+    pub fn depth_of_field(&self) -> Option<(f32, f32)> {
+        self.depth_of_field
+            .then_some((self.aperture as f32 * 0.01, self.focus as f32 * 0.01))
+    }
+
+    /// Tells the rewind row where the live race stands: the furthest forward it goes and the
+    /// furthest back is tick 0.
+    pub fn set_live(&mut self, tick: u64) {
+        self.live = tick;
+        self.back = self.back.min(tick);
+    }
+
+    /// The live tick: the rewind row's far end.
+    #[must_use]
+    pub fn live(&self) -> u64 {
+        self.live
+    }
+
+    /// The tick the rewind row asks the picture to show.
+    #[must_use]
+    pub fn target_tick(&self) -> u64 {
+        self.live - self.back.min(self.live)
+    }
+
+    /// Puts the rewind row where it shows `tick` (clamped to the race so far).
+    pub fn set_target_tick(&mut self, tick: u64) {
+        self.back = self.live - tick.min(self.live);
     }
 
     /// Moves the selected row's value `by` steps (negative is down), stopping at its ends.
@@ -163,6 +265,17 @@ impl Effects {
             }
             Row::Aperture => self.aperture = slide(self.aperture, 1),
             Row::Focus => self.focus = slide(self.focus, 1),
+            // Left goes back in the race, right forward to the live tick.
+            Row::Rewind => {
+                let step = Self::REWIND_STEP.saturating_mul(by.unsigned_abs().into());
+                self.back = if by < 0 {
+                    self.back.saturating_add(step).min(self.live)
+                } else {
+                    self.back.saturating_sub(step)
+                };
+            }
+            Row::MotionBlur => self.motion_blur = (self.motion_blur + by).clamp(0, 2),
+            Row::Shutter => self.shutter = slide(self.shutter, 1),
         }
     }
 

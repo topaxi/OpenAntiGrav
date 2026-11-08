@@ -942,6 +942,10 @@ impl Session {
                             self.controls.assignment(),
                         );
                         stage.race.tick(&inputs);
+                        // Photo mode's rewind goes back through these (`session::photo_rewind`).
+                        if let Some(keeper) = &mut stage.keeper {
+                            keeper.keep(&stage.race);
+                        }
                     }
                     stage.tick_messages();
                     oag_game::music_pad::drive(

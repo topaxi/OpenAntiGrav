@@ -526,6 +526,12 @@ OAG_PHOTO_DEPTH = { text = "DEPTH OF FIELD", human = false }
 OAG_PHOTO_APERTURE = { text = "APERTURE", human = false }
 OAG_PHOTO_FOCUS = { text = "FOCUS", human = false }
 OAG_PHOTO_PANEL_KEYS = { text = "STICK UP DOWN ROW    LEFT RIGHT CHANGE", human = false }
+OAG_PHOTO_REWIND = { text = "REWIND", human = false }
+OAG_PHOTO_MOTION_BLUR = { text = "MOTION BLUR", human = false }
+OAG_PHOTO_SHUTTER = { text = "SHUTTER", human = false }
+OAG_PHOTO_PROGRESS = { text = "TAKING PHOTO", human = false }
+OAG_PHOTO_CANCELLED = { text = "PHOTO CANCELLED", human = false }
+OAG_PHOTO_ANY_INPUT = { text = "ANY BUTTON CANCELS", human = false }
 
 # The hint under a settings page's rows while the selected row is off its default,
 # also what a click or a tap on it does. Ours, in no original.

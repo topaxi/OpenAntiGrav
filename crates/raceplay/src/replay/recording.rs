@@ -52,6 +52,10 @@ pub(super) struct Recording {
     best_unsaved: bool,
 }
 
+/// A recording set aside by [`Race::pause_recording`].
+#[derive(Debug)]
+pub struct Paused(Option<Recording>);
+
 /// The lap being raced against.
 #[derive(Debug, Clone)]
 pub struct Ghost {
@@ -100,6 +104,17 @@ impl Race {
             best: None,
             best_unsaved: false,
         });
+    }
+
+    /// Sets the recording aside, so ticks the race is moved through for a picture (photo mode's
+    /// rewind) are not written into it. [`Self::resume_recording`] puts it back untouched.
+    pub fn pause_recording(&mut self) -> Paused {
+        Paused(self.replay.recording.take())
+    }
+
+    /// Puts back what [`Self::pause_recording`] set aside.
+    pub fn resume_recording(&mut self, paused: Paused) {
+        self.replay.recording = paused.0;
     }
 
     /// Stops recording and drops the ghost: a race that plays a recording back is not a run, so

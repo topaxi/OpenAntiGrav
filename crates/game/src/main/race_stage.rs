@@ -25,6 +25,9 @@ mod medal_message;
 pub(crate) struct RaceStage {
     pub(crate) scene: race::Scene,
     pub(crate) race: race::Race,
+    /// The race's keyframes since its first tick, for photo mode's rewind; `None` where photo
+    /// mode is not offered (`oag_game::photo::SAVES`).
+    pub(crate) keeper: Option<race::timeline::Keeper>,
     /// The HUD, or `None` when the disc's layout could not be read.
     pub(crate) hud: Option<oag_game::hud_overlay::Overlay>,
     /// The results table, drawn once the race has one.

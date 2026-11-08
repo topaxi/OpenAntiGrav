@@ -5,8 +5,8 @@ Code: [`oag_raceplay::timeline`](../../crates/raceplay/src/timeline.rs). Tests:
 [`src/tests/timeline.rs`](../../crates/raceplay/src/tests/timeline.rs) (a fixture, in CI) and
 [`tests/replay_timeline_ground_truth.rs`](../../crates/raceplay/tests/replay_timeline_ground_truth.rs)
 (every title's data). The ADR holds the decisions and why; this page is what was built and what it
-was measured to do. The viewer draws from it (stage 5, [the replay page](../ui/replays.md)); the photo
-rewind and the take-over are stages 6 and 7.
+was measured to do. The viewer draws from it (stage 5, [the replay page](../ui/replays.md)) and so does the photo
+rewind (stage 6, through `Keeper` and `Rewind`: [photo mode](../ui/photo-mode.md), "Accumulated shots and rewind"); the take-over is stage 7.
 
 ## The shape
 
@@ -21,6 +21,11 @@ does not. It holds no reference to a live race and takes one only as `&Race`.
 | `Timeline::live(setup, &race)`, `keep(&race)`, `visit(&race)` | Over the race being driven: a keyframe when one falls due, straight after each tick; `visit` moves the probe to the live tick and opens every tick up to it |
 | `pass()`, `prefix()` | How the pass stands, and the last tick the probe may stand at |
 | `seek(tick)`, `step()` | Move the probe. `seek` returns the tick reached; with no recording (a modded race) that is the keyframe at or before the target |
+
+**`Keeper`** is the live half: the keyframes of the race being driven from its first tick, with the
+probe started only on the first `visit` (from the recording's header when there is one, so the scheme,
+the difficulty and the seats are the race's). A race that never rewinds pays the keyframes alone and no
+second `Race`.
 
 **A keyframe is a `RaceSim`.** A clone is the mutable half plus a reference count per constant field
 (`sim.rs`, "Why it is `Clone`"), so decision 5's "owns the shared constant half" needs no handle of

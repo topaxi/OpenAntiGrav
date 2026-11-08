@@ -350,6 +350,12 @@ OAG_PHOTO_DEPTH = { text = "TIEFENSCHÄRFE", human = false }
 OAG_PHOTO_APERTURE = { text = "BLENDE", human = false }
 OAG_PHOTO_FOCUS = { text = "FOKUS", human = false }
 OAG_PHOTO_PANEL_KEYS = { text = "STICK HOCH RUNTER ZEILE    LINKS RECHTS ÄNDERN", human = false }
+OAG_PHOTO_REWIND = { text = "ZURÜCKSPULEN", human = false }
+OAG_PHOTO_MOTION_BLUR = { text = "BEWEGUNGSUNSCHÄRFE", human = false }
+OAG_PHOTO_SHUTTER = { text = "VERSCHLUSSZEIT", human = false }
+OAG_PHOTO_PROGRESS = { text = "FOTO WIRD AUFGENOMMEN", human = false }
+OAG_PHOTO_CANCELLED = { text = "FOTO ABGEBROCHEN", human = false }
+OAG_PHOTO_ANY_INPUT = { text = "JEDE TASTE BRICHT AB", human = false }
 
 OAG_MENU_RESET_TO_DEFAULT = { text = "AUF STANDARD ZURÜCKSETZEN", human = false }
 

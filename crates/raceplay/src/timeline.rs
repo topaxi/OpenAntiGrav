@@ -222,11 +222,15 @@ impl Timeline {
     #[must_use]
     pub fn live(setup: Setup, race: &Race) -> Self {
         let shared = Shared::new(KEYFRAME_CEILING, Pass::Complete);
-        let tick = race.sim.world.tick;
-        let sim = race.snapshot_sim();
-        let mut probe = Race::start(setup);
-        probe.restore_sim(&sim);
-        shared.built().keyframes.push(tick, sim);
+        shared
+            .built()
+            .keyframes
+            .push(race.sim.world.tick, race.snapshot_sim());
+        Self::over(Race::start(setup), shared, race.sim.world.tick)
+    }
+
+    /// A timeline whose keyframes are `shared`, moved by `probe`.
+    fn over(probe: Race, shared: Arc<Shared>, tick: u64) -> Self {
         Self {
             replay: None,
             shared,
@@ -243,17 +247,7 @@ impl Timeline {
     /// A first keyframe from before the first tick is handed the plans that tick learned, so
     /// a rewind into the race's first second does not learn them again.
     pub fn keep(&mut self, race: &Race) {
-        let tick = race.sim.world.tick;
-        let mut built = self.shared.built();
-        if let Some((_, first)) = built.keyframes.frames.first_mut()
-            && !first.plans_built
-            && race.sim.plans_built
-        {
-            first.share_plans_of(&race.sim);
-        }
-        if built.keyframes.wants(tick) {
-            built.keyframes.push(tick, race.snapshot_sim());
-        }
+        keep_in(&self.shared, race);
     }
 
     /// Enters the live race as it stands: the probe moves to it, and every tick up to it can be
@@ -307,6 +301,13 @@ impl Timeline {
     #[must_use]
     pub fn probe(&self) -> &Race {
         &self.probe
+    }
+
+    /// The recording a seek plays between keyframes: the race's own, as of the last
+    /// [`Self::visit`]. `None` for a race that records nothing.
+    #[must_use]
+    pub fn recording(&self) -> Option<Arc<Replay>> {
+        self.replay.clone()
     }
 
     /// The tick the probe stands at.
@@ -381,6 +382,89 @@ impl Timeline {
         self.probe.tick_sim_only(&replay.inputs_at(self.at));
         self.at += 1;
         Ok(())
+    }
+}
+
+/// The keyframes of a race being driven, kept from its first tick before anyone asks to rewind,
+/// with the probe that moves between them started only on the first [`Self::visit`]: a race that
+/// never rewinds pays the keyframes alone (a few microseconds a second) and no second [`Race`].
+#[derive(Debug)]
+pub struct Keeper {
+    setup: Setup,
+    shared: Arc<Shared>,
+    timeline: Option<Timeline>,
+}
+
+impl Keeper {
+    /// Keeps `race`, which stands at its first tick, and holds `setup` to start a probe from.
+    #[must_use]
+    pub fn new(setup: Setup, race: &Race) -> Self {
+        let shared = Shared::new(KEYFRAME_CEILING, Pass::Complete);
+        shared
+            .built()
+            .keyframes
+            .push(race.sim.world.tick, race.snapshot_sim());
+        Self {
+            setup,
+            shared,
+            timeline: None,
+        }
+    }
+
+    /// As [`Timeline::keep`]: after every tick of the live race.
+    pub fn keep(&mut self, race: &Race) {
+        keep_in(&self.shared, race);
+    }
+
+    /// The timeline over the keyframes so far, with its probe at the live race's tick
+    /// ([`Timeline::visit`]). The first visit starts the probe.
+    pub fn visit(&mut self, race: &Race) -> &mut Timeline {
+        let tick = race.sim.world.tick;
+        let timeline = self.timeline.get_or_insert_with(|| {
+            Timeline::over(probe_of(&self.setup, race), Arc::clone(&self.shared), tick)
+        });
+        timeline.visit(race);
+        timeline
+    }
+
+    /// The timeline a [`Self::visit`] started, to seek again without visiting.
+    pub fn timeline(&mut self) -> Option<&mut Timeline> {
+        self.timeline.as_mut()
+    }
+
+    /// How many keyframes are held.
+    #[must_use]
+    pub fn keyframes(&self) -> usize {
+        self.shared.built().keyframes.frames.len()
+    }
+}
+
+/// The probe for `race`: started from `setup` the way its recording says the race was launched
+/// (the scheme, the difficulty, the seats), so that what it plays between keyframes is what the
+/// race played. A race that records nothing gets the plain start.
+fn probe_of(setup: &Setup, race: &Race) -> Race {
+    #[cfg(feature = "view")]
+    if let Some(replay) = race.recorded()
+        && let Ok(probe) = start_recorded(setup.clone(), &replay.header)
+    {
+        return probe;
+    }
+    #[cfg(not(feature = "view"))]
+    let _ = race;
+    Race::start(setup.clone())
+}
+
+fn keep_in(shared: &Shared, race: &Race) {
+    let tick = race.sim.world.tick;
+    let mut built = shared.built();
+    if let Some((_, first)) = built.keyframes.frames.first_mut()
+        && !first.plans_built
+        && race.sim.plans_built
+    {
+        first.share_plans_of(&race.sim);
+    }
+    if built.keyframes.wants(tick) {
+        built.keyframes.push(tick, race.snapshot_sim());
     }
 }
 
