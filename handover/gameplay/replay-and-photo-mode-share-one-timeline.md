@@ -25,7 +25,10 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
   **Shared keys (maintainer, 2026-11-08):** an action both screens have uses the same binding in both. At least L, R
   (previous, next craft, wrapping, skipping craft out of the race: photo mode's rule, also for one seat of a split
   recording, the open item in `docs/ui/replays.md`) and SQUARE (HUD on or off). Where the two differ today (CROSS is play
-  in the viewer and the shot in photo mode), the ADR names the choice.
+  in the viewer and the shot in photo mode), the ADR names the choice. **L1/R1 and L2/R2 may differ:** on a pad the
+  abstract `L`/`R` are L1/R1, and a trigger in airbrake mode raises the same bit (`crates/input/src/pad.rs`, the
+  `TriggerMode` doc). Craft cycling is L1/R1 only; on these two screens a trigger does not alias to it, and what L2/R2
+  do there (a seek, the speed, photo mode's tilt that HD has) is the ADR's choice.
 - **Stage 7, `take-over`, is next** (decision 10's text). Stages 3 and 5, its dependencies, have landed.
 - **An ADR is owed for photo mode's rewind.** Stage 6 moves the live race on screen and restores it to the bit, departing
   from decision 5's probe. The maintainer accepted that on two conditions, both on `docs/ui/photo-mode.md`: photo mode
