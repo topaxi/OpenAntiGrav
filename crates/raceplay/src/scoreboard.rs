@@ -22,11 +22,11 @@ pub struct Points {
 }
 
 impl Points {
-    /// A craft's points off its standing: the score truncated, floored at zero.
+    /// A craft's points off its standing (`Standing::whole_score`).
     #[must_use]
     pub fn of(standing: &oag_race::Standing) -> Self {
         Self {
-            points: standing.score.max(0.0) as u32,
+            points: standing.whole_score(),
             kills: standing.kills,
             deaths: standing.deaths,
         }
@@ -163,12 +163,13 @@ impl Board {
 /// that function breaks every tie, down to the slot index - so the sort is
 /// total.
 ///
-/// **A scored race is ordered on its points instead**: highest first, and craft on the same
-/// points in grid-slot order, the rule the HUD's rows rank with (`oag_hud::kill_tags::ranked`).
-/// `place` is then the row's 1-based index, the number `EndRaceResults`' headline reads
-/// (`0x00229bf0`, `docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`, "The rows and the
-/// results"); it is not `oag_race::places`, which an Eliminator's finish does not decide. How
-/// the original breaks a tie between records is not read: chosen, not measured.
+/// **A scored race is ordered on its points instead**, by the rule the HUD's rows rank with
+/// (`oag_race::score::ranked`, `Hud_UpdateEliminatorRows`, confidence 88): highest first, and
+/// craft on equal points stack with the later grid slot on top. `place` is then the row's 1-based
+/// index, the number `EndRaceResults`' headline reads (`0x00229bf0`,
+/// `docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`, "The results table"); it is not
+/// `oag_race::places`, which an Eliminator's finish does not decide. How the original's own
+/// records are sorted for a tie is not read: chosen, not measured.
 #[must_use]
 pub fn build(crafts: &[Craft], laps_target: Option<u32>, tick: u64) -> Board {
     let mut rows: Vec<Row> = crafts
@@ -190,7 +191,16 @@ pub fn build(crafts: &[Craft], laps_target: Option<u32>, tick: u64) -> Board {
         })
         .collect();
     if rows.iter().all(|row| row.points.is_some()) && !rows.is_empty() {
-        rows.sort_by_key(|row| (std::cmp::Reverse(row.points.map(|p| p.points)), row.slot));
+        let points: Vec<u32> = rows
+            .iter()
+            .map(|row| row.points.map_or(0, |p| p.points))
+            .collect();
+        let order = oag_race::score::ranked(&points);
+        let mut slots: Vec<Option<Row>> = rows.into_iter().map(Some).collect();
+        rows = order
+            .into_iter()
+            .filter_map(|index| slots[index].take())
+            .collect();
         for (index, row) in rows.iter_mut().enumerate() {
             row.place = u8::try_from(index + 1).unwrap_or(u8::MAX);
         }

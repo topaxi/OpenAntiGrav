@@ -384,7 +384,7 @@ impl Race {
                 }
             })
             .collect();
-        oag_hud::kill_tags::ranked(&counts)
+        oag_race::score::ranked(&counts)
             .into_iter()
             .filter_map(|row| {
                 let slot = slots[row];

@@ -158,3 +158,17 @@ fn a_race_without_scores_draws_no_points_column() {
     assert!(text_at(&draws, "POINTS").is_none());
     assert!(text_at(&draws, "202").is_none());
 }
+
+/// With several people in the race the original's filler writes `ER_RACE_COM2` and no one
+/// person's line (`0x00229bf0`, `+0xe4 >= 2`): ours names no one's kills either.
+#[test]
+fn several_people_have_no_one_persons_kills_line() {
+    let mut split = model([202, 177, 176]);
+    split.headline = Headline::Several;
+    let draws = draw(&split);
+    assert!(
+        !draws.iter().any(|draw| matches!(draw,
+            Draw::Text { text, .. } if text.contains("KILLS"))),
+        "{draws:?}"
+    );
+}

@@ -362,7 +362,9 @@ pub fn hd_results_draw_list(
             continue;
         }
         let content = match name {
-            "Line1" if model.scored() => scored_headline(model, strings),
+            "Line1" if model.scored() && model.headline != Headline::Several => {
+                scored_headline(model, strings)
+            }
             "Line1" => hd_headline_text(model.headline, strings),
             // Online-only - see the module doc.
             "DelayPostMsg" | "RecordsCycleButton" | "RecordsCycle" => None,

@@ -57,9 +57,56 @@ impl Standing {
     }
 }
 
+/// The row each craft takes on a ranked list, top to bottom: `result[row]` is an index into
+/// `points` (kills on a kill race, whole points on a score race).
+///
+/// `FUN_0881af38`'s and `Hud_UpdateEliminatorRows`' rule, read off their decompiles and checked
+/// against a live frame: a craft's row is `count - 1 - (number of crafts with strictly fewer)`,
+/// and a taken row moves the craft up one at a time until a free one turns up, crafts taken in
+/// array order. Equal craft therefore stack with the later one on top.
+#[must_use]
+pub fn ranked(points: &[u32]) -> Vec<usize> {
+    let count = points.len();
+    let mut rows = vec![usize::MAX; count];
+    for (craft, &mine) in points.iter().enumerate() {
+        let fewer = points.iter().filter(|&&other| other < mine).count();
+        let mut row = count - 1 - fewer;
+        while rows[row] != usize::MAX {
+            row -= 1;
+        }
+        rows[row] = craft;
+    }
+    rows
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The live PPSSPP frame (`AG Systems 1`, `Feisar 1`, `Qirex 1`, `AAA 0`,
+    /// `Triakis 0`, `Goteki 45 0`, `Piranha 0`, `EG-X 0`, top to bottom) is the
+    /// column this rule produces from a grid array in which the equal-kill craft
+    /// sit in the order `EG-X`, `Piranha`, `Goteki 45`, `Triakis`, `AAA` and
+    /// `Qirex`, `Feisar`, `AG Systems`: earlier in the array is lower.
+    #[test]
+    fn equal_craft_stack_with_the_later_craft_on_top() {
+        // Array order: 0 EG-X, 1 Piranha, 2 Goteki 45, 3 Triakis, 4 AAA,
+        // 5 Qirex, 6 Feisar, 7 AG Systems.
+        let kills = [0, 0, 0, 0, 0, 1, 1, 1];
+        assert_eq!(ranked(&kills), [7, 6, 5, 4, 3, 2, 1, 0]);
+    }
+
+    #[test]
+    fn more_kills_rank_higher_whatever_the_array_order() {
+        // Craft 2 leads on three, craft 0 and 3 tie on one, craft 1 has none.
+        assert_eq!(ranked(&[1, 0, 3, 1]), [2, 3, 0, 1]);
+    }
+
+    #[test]
+    fn a_lone_craft_is_row_zero() {
+        assert_eq!(ranked(&[4]), [0]);
+        assert!(ranked(&[]).is_empty());
+    }
 
     const LAW: ScoreLaw = ScoreLaw {
         damage: 0.1,

@@ -78,7 +78,7 @@ against a `serve` on the grid, `--script "1:down:cross;2:give:6;3:tap:triangle"`
 
 `Hud_UpdateEliminatorRows` (`hud+0x350 + 4 * rank`, bound from `"PosTag%d"`, `0x0009d870`) gives each
 craft `rank = count - 1 - (crafts with a strictly lower truncated score)` and walks up from a taken
-rank, crafts in array order: the rule `oag_hud::kill_tags::ranked` already carries. Text is
+rank, crafts in array order: the rule `oag_race::score::ranked` carries (the HUD and the board both call it). Text is
 `"%s  ( %d )"` (`0x0077ed98`, two spaces), the truncated score. Scale is `1.2` for the person
 (`0x008a7620`), `1.0` for an opponent (`0x008a75bc`), both written to `+0xb8`/`+0xbc`. The name is
 the team's for an opponent and the profile's for the person (`PLAYER` on these frames). The person's
@@ -114,9 +114,10 @@ and the frame agree; the caller is not traced).
 The shown number is not the row index: row `i + 1` shows `i + 2` once its points differ from row
 `i`'s, and the same number when they match, so `177, 177, 90` reads `1, 1, 3`. `ER_DEATHS` ends in
 a colon on the disc and the format adds one; the original's frame shows one, how it avoids the
-second is not read, so ours drops the string's (chosen, not measured). The order of the records
-and a tie between them are not read here: the records arrive sorted, and ours sorts highest
-points first, equal points in grid-slot order, the HUD's rule (chosen, not measured).
+second is not read, so ours drops the string's (chosen, not measured). The original's own
+record sort and its tie are not read here (chosen, not measured): ours ranks the board with the
+HUD's measured rule, `oag_race::score::ranked`, so equal points stack with the later grid slot on
+top, as the rows did on the live frame.
 
 Ours: `oag_raceplay::scoreboard::build` orders a scored race's board on points and numbers the rows
 (`Row::place`, the number the headline and the voice read in place of the race position);
