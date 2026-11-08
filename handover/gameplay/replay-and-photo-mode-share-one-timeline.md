@@ -28,7 +28,11 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
   in the viewer and the shot in photo mode), the ADR names the choice. **L1/R1 and L2/R2 may differ:** on a pad the
   abstract `L`/`R` are L1/R1, and a trigger in airbrake mode raises the same bit (`crates/input/src/pad.rs`, the
   `TriggerMode` doc). Craft cycling is L1/R1 only; on these two screens a trigger does not alias to it, and what L2/R2
-  do there (a seek, the speed, photo mode's tilt that HD has) is the ADR's choice.
+  do there (a seek, the speed, photo mode's tilt that HD has) is the ADR's choice. **The right stick is unbound**
+  everywhere (`InputSnapshot` carries one stick; nothing reads a second). The maintainer wants it used on these
+  screens. Candidates for the ADR: the camera orbit on the right stick with the left stick freed for pan or zoom in
+  photo mode (HD's right-stick zoom, `docs/ui/photo-mode.md`, "Not ported"), and a scrub or free camera in the
+  viewer. Read it view-side, never into the simulation's `InputSnapshot`, so a recording and its hashes do not move.
 - **Stage 7, `take-over`, is next** (decision 10's text). Stages 3 and 5, its dependencies, have landed.
 - **An ADR is owed for photo mode's rewind.** Stage 6 moves the live race on screen and restores it to the bit, departing
   from decision 5's probe. The maintainer accepted that on two conditions, both on `docs/ui/photo-mode.md`: photo mode
