@@ -761,16 +761,17 @@ of Omega's copies the runtime serves is unmeasured.
 (`Race::runs_on_after_the_line`), but the results board was taken once, on the player's finish
 tick, so every craft still racing then read `RACING` on the screen for good.
 
-**The original refreshes** (matches the original, confidence 75): `0x0022e680`, the slot of
+**The original most likely refreshes** (confidence 60): `0x0022e680`, the slot of
 `EndRace Results`'s vtable at `0x0087f1f0` that takes the frame's `dt` (the screen's Update),
-calls `0x0005a770` and then `EndRaceResults_FillRaceRows` (`0x0022b688`) on **every update** while
-the race-layout page is up (`g_GameState+0xe0` of `3` or `0x10`, `+0xc78 == 0`).
-`0x0005a770` rebuilds each 300-byte record's `+0x160` (the struct base `+0x1980`; it is the
-`param_1 + 0x1ae0` slot of the loop) from the live craft: `-1`/`-2` for a destroyed craft, else
-the sum of that craft's recorded lap times, which is `0` until every lap has one, and
-`FillRaceRows` prints `0` as `ER_RACING` and above `0` as the time. Not read: the `-2` case and
-whether `+0x168` (the position) is re-sorted by the same function (the ranking loop in
-`0x0005a770` writes a position from the record's value, so it likely is). Static read of
+calls `0x0005a770` (on the `RaceManager`) and then `EndRaceResults_FillRaceRows` (`0x0022b688`,
+on the screen) on **every update** while the race-layout page is up (`g_GameState+0xe0` of `3` or
+`0x10`, `+0xc78 == 0`); `0x0005a770` itself acts on mode `3` only. It rewrites 300-byte records
+at the RaceManager's `+0x1980`: `+0x160` is `-1`/`-2` for a craft that is out, else the sum of
+its recorded lap times, `0` until every lap has one, and `+0x168` is a rank written in the same
+loop. `FillRaceRows` reads its records through a pointer the screen holds (`screen+0xb34`),
+same stride, same `+0x160` and `+0x168`, and prints `0` as `ER_RACING` and above `0` as the time.
+**Not shown: that `screen+0xb34` points at the RaceManager's `+0x1980` block** (the offsets and
+stride agree, which is why this is "likely" and not 75). Not read: the `-2` case. Static read of
 `/hdfury/EBOOT-ps3-hdfury-eu.elf`, no emulator.
 
 **The fix**: `Race::refresh_results` (`crates/raceplay/src/results.rs`), called from
@@ -787,16 +788,19 @@ between places as the running order changes. It is a read of the simulation: no 
 | Screen | Follows the field | Why |
 | --- | --- | --- |
 | HD/Fury `EndRace Results` | yes | rows rebuilt from the board |
-| Pulse multi-person (network) `Results` | yes | `PeopleResults` rebuilt from the board |
-| Built-in scoreboard (Omega, any title with no EndRace definition) | yes | drawn from `race.results()` every frame |
-| Pulse single-race `Results`, `Rewards`, Pure | n/a | the player's lap table only; no other craft is listed |
+| Pulse multi-person `Results`, **local** split screen of 3+ (or 2 without `Results Split`) | yes | `PeopleResults` rebuilt from the board |
+| Any title's network race | no | goes through `net.step`, not `tick_finished`; the board is the server's, taken from confirmed state |
+| Built-in scoreboard (Omega and Pure: `endrace_entry` is `None`) | yes | drawn from `race.results()` every frame; a code read, no frame captured on either |
+| Pulse single-race `Results`, `Rewards` | n/a | the player's lap table only; no other craft is listed |
 | Pulse Tournament table | no, **chosen, not measured** | leg points are banked at the person's finish; a live table would show points the standings never took |
 | 2048 touch pages | n/a (checked, differs) | summarise one racer; no field list |
 | Eliminator / Zone / a race that ended on a wreck | no | the world stands still (or the player's row would move), so there is nothing to refresh; a scored race has no lap target and never runs on after the line, so **its points never change here** |
 
-A network race is untouched: its board is the server's, taken from confirmed state, and the
-client compares it with the server's once (`net_play::check_server_board`); the refresh lives in
-`tick_finished`, which a network race does not call.
+A network race is untouched, HD's included: its board is the server's, taken from confirmed state,
+and the client compares it with the server's once (`net_play::check_server_board`); the refresh
+lives in `tick_finished`, which a network race does not call. The Tournament leg is banked once
+(`record_finished_leg`'s only call is in the `result_saved`-guarded finish transition), from the
+board as the finish took it.
 
 **Pinned by**: `crates/raceplay/src/results/tests.rs`
 (`a_craft_that_finishes_after_the_player_gets_its_time_on_the_board`, red with the call
@@ -815,8 +819,9 @@ every row `RACING` 5 ticks after the finish, then `QIREX` reads `1.50.88` where 
 three-to-eight rows has changed (`EG-X` ahead of `HARIMAU`) with the loyalty total unchanged
 (180, banked once). In an earlier run all eight rows had a time by 1,565 ticks.
 
-**Omega**: `checked, applies`: its built-in scoreboard draws from the board every frame, so it
-follows the field with this change. **2048**: `checked, differs`: its touch pages list no other craft.
+**Omega** and **Pure** (code read, no frame captured): both keep the built-in scoreboard, which
+draws from the board every frame, so they follow the field with this change. **2048**
+(`checked, differs`): its touch pages summarise one racer and list no other craft.
 
 ## The table's rows are the file's own, not the PSP's (2026-10-13)
 
