@@ -480,6 +480,12 @@ type = "array"
 itemtype = "string"
 optional = true
 
+# Mods that start off (a texture pack) and the player turned on.
+[types.mods.enabled]
+type = "array"
+itemtype = "string"
+optional = true
+
 # [replay]: whether a race is recorded for the REPLAYS page. On unless turned off.
 [types.replay]
 type = "table"

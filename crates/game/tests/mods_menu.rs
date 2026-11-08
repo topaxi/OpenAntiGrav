@@ -237,7 +237,10 @@ const FRENCH: &str = "[strings]\nTEST_GARAGE = { text = \"GARAGE (du mod)\", hum
 /// The rebuild a MODS switch or a LANGUAGE pick runs, over a search path of `base`: the
 /// main page's labels.
 fn rebuilt_labels(base: &Path, disabled: &[&str], language: Option<&str>) -> Vec<String> {
-    let disabled = disabled.iter().map(|id| (*id).to_string()).collect();
+    let disabled = oag_game::settings::Mods {
+        disabled: disabled.iter().map(|id| (*id).to_string()).collect(),
+        ..Default::default()
+    };
     let (definition, _, _) = oag_game::menu_tree::rebuilt(
         &[base.to_path_buf()],
         &disabled,

@@ -153,7 +153,7 @@ impl Session {
                 .shell
                 .as_ref()
                 .map_or_else(String::new, |s| s.platform.to_string()),
-            content: oag_game::mods::Mods::load(&self.settings.mods.disabled)
+            content: oag_game::mods::Mods::load(&self.settings.mods)
                 .ok()
                 .map_or(0, |mods| mods.content_fingerprint()),
             build: oag_net::BUILD_VERSION.to_string(),

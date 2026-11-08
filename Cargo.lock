@@ -3351,6 +3351,7 @@ dependencies = [
  "oag-ext-abi",
  "oag-schema",
  "oag-tables",
+ "oag-texture",
  "semver",
  "serde",
  "thiserror 2.0.21",

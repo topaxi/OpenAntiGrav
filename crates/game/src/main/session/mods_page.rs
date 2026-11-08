@@ -38,11 +38,12 @@ impl Session {
         let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &self.stage) else {
             return;
         };
-        let Some(id) = mods::selected(&stage.menu, &shell.mods).map(|mod_| mod_.id.clone())
+        let Some((id, default_enabled)) = mods::selected(&stage.menu, &shell.mods)
+            .map(|mod_| (mod_.id.clone(), mod_.default_enabled))
         else {
             return;
         };
-        if !mods::switch(&mut self.settings.mods.disabled, &id, on) {
+        if !mods::switch(&mut self.settings.mods, &id, on, default_enabled) {
             self.resupply_mod_switch();
             return;
         }
@@ -65,7 +66,7 @@ impl Session {
         };
         let built = oag_game::menu_tree::rebuilt(
             &oag_mod::mods_search_path(),
-            &self.settings.mods.disabled,
+            &self.settings.mods,
             self.settings.language.as_deref(),
             shell.title,
             rebuild.updated,

@@ -99,7 +99,7 @@ impl Session {
         let rebuilt = rebuild.and_then(|rebuild| {
             oag_game::menu_tree::rebuilt(
                 &oag_mod::mods_search_path(),
-                &self.settings.mods.disabled,
+                &self.settings.mods,
                 self.settings.language.as_deref(),
                 title,
                 rebuild.updated,
