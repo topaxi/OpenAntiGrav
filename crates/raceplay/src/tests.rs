@@ -17,6 +17,7 @@ use oag_vex::track;
 mod autopilot;
 mod between_ticks;
 mod bindless;
+mod blast_push;
 mod camera;
 mod campaign_event;
 mod cannon_draw;
@@ -396,6 +397,7 @@ fn setup(handling: Handling) -> Setup {
         zoom_borrowed: false,
         weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        blast_push: oag_title::weapons::BlastPush::Posted,
         leach_beams: 8,
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::Chosen,

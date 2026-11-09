@@ -69,7 +69,7 @@ pub use geometry::hull_radius;
 use geometry::{SweepHit, nearest_hit};
 pub use hit::WeaponHit;
 
-pub use blast::{BlastStats, blast, blast_stats};
+pub use blast::{BlastPush, BlastStats, blast, blast_stats};
 pub use mine::TriggerRadii;
 pub use rocket::{
     LAUNCH_SPEED_SCALE as ROCKET_LAUNCH_SPEED_SCALE, LIFETIME_SECONDS as ROCKET_LIFETIME_SECONDS,
@@ -540,6 +540,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
     raycaster: &R,
     weapons: Option<&oag_tables::weapons::WeaponStats>,
     class: &str,
+    push: BlastPush,
     rules: oag_physics::DamageRules,
     hits: &mut [WeaponHit],
 ) -> [Option<Impact>; MAX_PROJECTILES] {
@@ -557,7 +558,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
         class,
     );
 
-    blast::apply_impacts(ships, weapons, &impacts, rules, hits);
+    blast::apply_impacts(ships, weapons, &impacts, push, rules, hits);
 
     impacts
 }

@@ -228,6 +228,7 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Read off HD's own EBOOT: one transfer per ball trip.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
+        blast_push: oag_title::pre_race::Sourced::chosen(oag_title::weapons::BlastPush::Immediate),
         // **Chosen, not measured**: HD measures one (`LeachBeamManager_Fire`, `weapon-instance-limits.md`);
         // it takes 2048's and Omega's eight as an intended divergence (maintainer, 2026-10-31).
         leach_beams: oag_title::pre_race::Sourced::chosen(8),

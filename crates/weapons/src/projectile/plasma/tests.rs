@@ -249,6 +249,7 @@ fn a_timed_out_plasma_bolt_damages_nobody_standing_in_it() {
             &empty,
             Some(&table),
             "VENOM",
+            crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
         );
@@ -353,6 +354,7 @@ fn a_plasma_bolt_that_strikes_a_craft_credits_it_directly() {
             &empty,
             Some(&table),
             "VENOM",
+            crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
         );
@@ -401,6 +403,7 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
             &empty,
             Some(&table),
             "VENOM",
+            crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 3],
         );
@@ -419,8 +422,9 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
         world.ships[2].pending_slowdown, 0.0,
         "a bystander inside the radius took slowdown the direct hit never spends on it"
     );
-    assert!(
-        world.ships[2].physics.body.linear_velocity.length() > 0.0,
+    assert_ne!(
+        world.ships[2].physics.pending_impulse,
+        Vec3::ZERO,
         "a bystander inside the radius took no impulse at all"
     );
 
@@ -433,8 +437,8 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
         "the firer took slowdown from its own bolt"
     );
     assert_eq!(
-        world.ships[0].physics.body.linear_velocity.length(),
-        0.0,
+        world.ships[0].physics.pending_impulse,
+        Vec3::ZERO,
         "the firer is excluded from the impulse sweep, even though it sits inside the radius"
     );
 }

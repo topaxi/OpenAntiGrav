@@ -88,6 +88,7 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | `weapons.elimination` | `Data\XML\WeaponStats_Elimination.xml` - measured | `none` - measured | `Data\XML\WeaponStats_Elimination.xml` - measured | `Data\XML\weaponstats_Elimination_2048.xml` - chosen | `Data\XML\WeaponStats_Elimination.xml` - chosen |
 | `weapons.ai` | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIStats2048.xml` - chosen | `Data\XML\WeaponAIstats.xml` - chosen |
 | `weapons.leach_drain` | `PerTick` - measured | `PerTick` - absent | `PerTrip` - measured | `PerTrip` - inherited | `PerTrip` - inherited |
+| `weapons.blast_push` | `Posted` - measured | `Posted` - inherited | `Immediate` - chosen | `Immediate` - chosen | `Immediate` - chosen |
 | `weapons.leach_beams` | `8` - chosen | `8` - chosen | `8` - chosen | `8` - measured | `8` - measured |
 | `weapons.quake_hit` | `WaveHeight` - measured | `WaveHeightEyeLevel` - inherited | `WaveHeight` - inherited | `WaveHeight` - inherited | `WaveHeight` - inherited |
 | `weapons.autopilot_absorb_cancels` | `set` - measured | `none` - measured | `set` - measured | `set` - inherited | `set` - inherited |
@@ -250,6 +251,7 @@ has it; only its table moves.
 | Pickup draw (`<Pickupodds>`) | M: [pickups.md](pickups.md), 92 | I:Pulse PSP | I:Pulse: Pure's own odds, Pulse's draw | I:Pulse draw, HD's own odds | I:Pulse draw, 2048's own odds | I:Pulse draw; a fifth `SuperPhantom` class is unread |
 | Absorb (energy paid back) | M: [shield.md](../ghidra/functions/psp-pulse-usa/shield.md) | I:Pulse PSP | I:Pulse | I:Pulse | I:Pulse | ?: unread |
 | Slowdown stacking | M: `Ship_AddSlowdown` clamped to `slowdown_limit`, [engine.md](../ghidra/functions/psp-pulse-usa/engine.md) | I:Pulse PSP | I:Pulse | I:Pulse | I:Pulse; its own `slowdown_time`s are half Pulse's | ?: unread |
+| Blast push (`entity+0x110`) | M: every blast (Mine, Bomb, Plasma, Rocket, Missile) adds `(1 - d / blastradius) * blastforce` to the craft's pending impulse, `d` and the direction taken from the craft's nose point (`4.875` ahead of its position, 75), and `Ship_ApplyCollisionImpulse` drains it as a push along the craft's forward axis, the `0.5` s stun and nothing under a running Shield ([contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#wired-every-blast-posts-its-push-through-the-pending-impulse-from-the-nose-point), `oag_weapons::projectile::blast`; axis `weapons.blast_push`) | I:Pulse PSP | I:Pulse; the Bomb's push is the same arithmetic ([weapons.md](../ghidra/functions/psp-pure-usa/weapons.md)), its consumer unread | C: the immediate radial velocity change this project had before, **not** Pulse's. Pulse's stun on HD moves a measured pace: `hd_eliminator_hud_ground_truth::a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace` goes red (200 not reached in 1,000 s). The blast-radius loop `FUN_00146470` and HD's own consumer are unread ([plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md)) | C: follows HD (its lineage); unread | C: follows HD; unread |
 
 ### Tuning table
 

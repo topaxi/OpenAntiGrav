@@ -12,6 +12,14 @@
 //! out of git all the same: the test reads them from `OAG_CAMPAIGN_REPLAYS` (a directory) or
 //! `data/reference/replays/pulse-tournament/`, and skips without them.
 //!
+//! **They desync, and that is expected.** A recording reproduces only the physics that wrote it.
+//! Pulse's weapon blasts now post their push through `pending_impulse` from the craft's nose
+//! point (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "Wired: every blast posts
+//! its push"), which the recordings predate, so each leg diverges at the first blast that
+//! reaches a craft; the maintainer accepts that a physics change desyncs old recordings. Each
+//! leg names its first diverging tick (`Some(tick)` in `deck_tests!`): a leg that stops diverging,
+//! or diverges elsewhere, fails. A re-recorded file takes `None` and must reproduce to its end.
+//!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay --run-ignored all campaign_replay_ground_truth
 //! ```
@@ -71,8 +79,8 @@ fn source() -> Option<PathBuf> {
 }
 
 /// Opens `name` as WATCH does, plays the opening pass to its end and seeks the race on screen
-/// to the last tick.
-fn watches_to_the_end(name: &str) {
+/// to the last tick, or checks the tick it diverges at when `desync_at` names one.
+fn watches_to_the_end(name: &str, desync_at: Option<u64>) {
     let (Some(mut replay), Some(source)) = (recording(name), source()) else {
         return;
     };
@@ -95,6 +103,17 @@ fn watches_to_the_end(name: &str) {
             done => break done,
         }
     };
+    if let Some(tick) = desync_at {
+        match pass {
+            Pass::Desynced(desync) => assert_eq!(
+                desync.tick, tick,
+                "{name}: the opening pass over {ticks} ticks diverges elsewhere"
+            ),
+            other => panic!("{name}: expected a desync at tick {tick}, got {other:?}"),
+        }
+        println!("{name}: desyncs at tick {tick}, as expected");
+        return;
+    }
     assert_eq!(
         pass,
         Pass::Complete,
@@ -112,19 +131,19 @@ fn watches_to_the_end(name: &str) {
 }
 
 macro_rules! deck_tests {
-    ($($test:ident: $file:literal;)*) => {$(
+    ($($test:ident: $file:literal, $desync_at:expr;)*) => {$(
         #[test]
         #[ignore = "needs data/images/pulse-psp-eu.chd and the recorded files"]
         fn $test() {
-            watches_to_the_end($file);
+            watches_to_the_end($file, $desync_at);
         }
     )*};
 }
 
 deck_tests! {
-    leg_1_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126092-1.oagr";
-    leg_2_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126226-1.oagr";
-    leg_3_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126364-1.oagr";
-    leg_4_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126501-1.oagr";
-    leg_5_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126656-1.oagr";
+    leg_1_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126092-1.oagr", Some(1260);
+    leg_2_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126226-1.oagr", Some(1320);
+    leg_3_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126364-1.oagr", Some(960);
+    leg_4_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126501-1.oagr", Some(1020);
+    leg_5_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126656-1.oagr", Some(1500);
 }

@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [pulse]
-updated: 2026-11-03
-summary: "No craft stun exists (measured 2026-11-03); pending_impulse still unset; port Weapon_PostBlastImpulse nose-point distance; ring consumer unread"
+updated: 2026-11-09
+summary: "Blast push wired through pending_impulse from the nose point; open: twins read T+0x50 unchecked, nose offset one hull, ring consumer unread"
 ---
 
 # Craft-to-craft collision is implemented; the stun is still not armed
@@ -96,11 +96,13 @@ than patched here.
 - **Closed 2026-11-03, measured (80): a craft-to-craft hit arms no stun, fuse, flag or timer.** The struck craft's only changes beyond pose following are its velocity and one contact-ring record at `body+0x170`; craft law is `Body_ResolveContactPair` as ported (`e = 0.1`, no friction, centred impulse). Nothing to wire. Evidence: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/contact-response.md#measured-2026-11-03-a-craft-to-craft-hit-arms-nothing-on-the-craft).
 - **Closed 2026-11-03: `FUN_0885bf84` is `Plasma_Launch`**, its `+0x48` a bolt's launch speed; the `craft->0x48` fuse was always the Mine entity's `+0x48` (`timetodie`). The "fuse-arming candidate" is refuted.
 - **Closed 2026-11-03: the `body+0x50` tension was two structs.** `Weapon_PostBlastImpulse`'s `T` is a node-transform object whose `+0x50` is the craft's nose point (body position + 4.875 x forward), not the rigid body. Confidence 75, read off two single-craft states; not checked across the eight-craft grid.
-- `pending_impulse` is still set by nothing in this crate: `apply_pending_impulse` is inert. `wall::post_blast_impulse` measures from the body's position; the original measures from the nose point (`T+0x50`). Wire that when a weapon calls it.
+- ~~`pending_impulse` is set by nothing~~ **Wired 2026-11-09 (`pulse-blast-impulse`)**: every blast (Mine, Bomb, Plasma, Rocket, Missile; `FUN_08868ea4` is `Missile_ApplyBlastForce`, 88) posts `(1 - d / radius) * blastforce` through `wall::post_blast_impulse` from the nose point `position + 4.875 * forward`, via one helper in `oag_weapons::projectile::blast`; `apply_pending_impulse` drains it (forward-axis push, 0.5 s stun, nothing under a Shield). Gated by `Weapons::blast_push`: Pulse `Posted` (measured), Pure `Posted` (inherited), HD/2048/Omega keep the immediate push (chosen: Pulse's stun fails HD's measured Novice score-Eliminator pace test; see `weapon-lineage.md`, "Blast push" - maintainer decision whether HD should inherit and retune). `gameplay/tests/determinism.rs` `REFERENCE` regenerated (behaviour move, commit message lists the four hashes). Account: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/contact-response.md#wired-every-blast-posts-its-push-through-the-pending-impulse-from-the-nose-point).
+- The Missile, Rocket and Bomb twins are taken to read `T+0x50` like the Mine and Plasma; read each position load in Ghidra (`program=` explicit) to confirm.
+- `4.875` was measured on one hull and equals `0.375 * 13`: check a second hull before treating it as a constant.
+- The shove is not watched in a race on the original (the stun per blast is read off the consumer's code): a PPSSPP run with a thrown mine, comparing the struck craft's `+0x290` and velocity, would close it.
 - The contact ring at `body+0x170` (flag word, point, normal, depth) has no read consumer; `psp-contact-fx-read.py` is the starting point.
 
 ## Next Steps
 
-- Port `Weapon_PostBlastImpulse`'s nose-point distance into `wall::post_blast_impulse` when a Mine blast is wired (`T+0x50 = position + 4.875 * forward`, `+0xd0` the tail point).
-- Port `FUN_08868ea4` now that both its callers (`FUN_08868a10`, `FUN_088690fc`) are read, or wire `post_blast_impulse` to a real weapon.
+- Confirm the three twins' position reads (above), then move the nose offset out of a constant if a second hull disagrees.
 - Optionally: repeat the node-layout read across the eight-craft grid (find `T` per craft by pointer refs from the craft's `+0x4c` side, not by `0x08b3bf88`).
