@@ -65,7 +65,7 @@ out to be wrong.
 | [0052](0052-world-and-race-tick-widen-to-n-players.md) | `World` and `Race::tick` widen to N players ahead of split screen, multi-window or network play | Accepted; extends ADR-0003 |
 | [0053](0053-screen-filters-are-loadable-wgsl-after-the-composite.md) | Screen filters are loadable WGSL files, run after the UI composites and before the grade, per title | Accepted; extends ADR-0036 and ADR-0041 |
 | [0054](0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) | A touch front end is a second axis on `FrontEnd`, not a `MenuSkin` variant | Accepted; extends ADR-0022 |
-| [0055](0055-replays-are-inputs-and-a-ghost-is-poses.md) | Replays are inputs and hashes, and a ghost is drawn from poses | Accepted; opens M7, creates `oag-replay` |
+| [0055](0055-replays-are-inputs-and-a-ghost-is-poses.md) | Replays are inputs and hashes, and a ghost is drawn from poses | Accepted; opens M7, creates `oag-replay`; its full-race viewer paragraph, whole-race pose track and "recording is optional" superseded by [ADR-0087](0087-a-replay-and-photo-mode-share-one-timeline.md) |
 | [0056](0056-a-render-side-port-of-the-particle-generator.md) | A render-side port of the original's particle generator | Accepted; `oag_fx::ranrot`, render-only |
 | [0057](0057-the-workspace-after-the-2026-10-05-splits.md) | The workspace after the 2026-10-05 splits | Accepted; extends ADR-0051, supersedes ADR-0050's `.pob` placement |
 | [0058](0058-per-title-behaviour-is-title-data-with-provenance.md) | Per-title behaviour is `Title` data with provenance, never a title comparison | Accepted; narrows [ADR-0022](0022-title-packages.md) item 4, extends [ADR-0025](0025-a-boot-chain-carries-its-provenance.md) |
@@ -92,7 +92,12 @@ out to be wrong.
 | [0081](0081-screen-layouts-are-files-and-a-track-may-carry-its-loading-screen.md) | Screen layouts are files (`screen-layout.tosd`, a split HUD or a loading screen), and a track may carry its own loading screen in its manifest | **Accepted** |
 | [0082](0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md) | A mod owns pages, settings, queries and one launch action | **Accepted** (2026-11-02); supersedes ADR-0066 decision 4 for declarative content, ADR-0080 stays for wasm screens |
 | [0083](0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md) | Official mods are a public folder, and the fingerprint counts only mods that change a race | **Accepted** (2026-11-02); amends ADR-0078's LAN-fingerprint consequence |
-| [0084](0084-a-mod-may-ship-turned-off.md) | A mod may ship turned off | **Proposed** (2026-11-03); amends ADR-0078's "on until named" and ADR-0083's "enabled unless named" |
+| [0084](0084-the-target-is-held-to-what-the-display-shows.md) | The resolution target is held to what the display shows | **Accepted** (2026-11-04); replaces ADR-0044's "cannot ask a surface" premise |
+| [0085](0085-comparison-originals-live-in-a-private-repository.md) | Comparison originals live in a private repository | **Accepted** (2026-11-05); extends ADR-0074 |
+| [0086](0086-a-lead-session-may-push-to-the-private-repository.md) | A lead session may push to the private repository | **Accepted** (2026-11-05); replaces point 5 of ADR-0085 |
+| [0087](0087-a-replay-and-photo-mode-share-one-timeline.md) | A replay and photo mode share one `Timeline` over a copy of the race, built from keyframes in memory | **Accepted** (2026-11-07); supersedes ADR-0055 for the full-race viewer, the whole-race pose track and recording by default only |
+| [0088](0088-the-replay-viewer-and-photo-mode-switch-both-ways.md) | The replay viewer and photo mode switch both ways at a tick the player chose | **Accepted** (2026-11-08); departs from ADR-0087 decision 5 for photo mode alone; holds the binding plan for shared keys, triggers and the right stick |
+| [0089](0089-a-mod-may-ship-turned-off.md) | A mod may ship turned off | **Proposed** (2026-11-03); amends ADR-0078's "on until named" and ADR-0083's "enabled unless named" |
 
 ## Format
 

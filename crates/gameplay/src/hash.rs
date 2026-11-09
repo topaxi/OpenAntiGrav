@@ -201,12 +201,14 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     if let Some(Transit {
         ticks_left,
         to,
+        route,
         exit_speed,
     }) = transit
     {
         hasher.write_u8(0x7a);
         hasher.write_u32(u32::from(*ticks_left));
         hasher.write_u32(*to);
+        hasher.write_u32(u32::from(*route));
         hasher.write_f32(*exit_speed);
     }
 }
@@ -349,6 +351,7 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
         best_lap_ticks,
         lap_splits,
         kills,
+        score,
         deaths,
     } = standing;
 
@@ -394,6 +397,16 @@ fn write_standing(hasher: &mut StateHasher, standing: &oag_race::Standing) {
     // Eliminator-only counts, `0` on every other mode - see `Standing::kills`.
     hasher.write_u32(*kills);
     hasher.write_u32(*deaths);
+    write_score(hasher, *score);
+}
+
+/// A score Eliminator's points, written only once there are any so that a kill-count race
+/// hashes as it did before the field.
+fn write_score(hasher: &mut StateHasher, score: f32) {
+    if score != 0.0 {
+        hasher.write_u8(0x5C);
+        hasher.write_f32(score);
+    }
 }
 
 /// The backward-crossing deficit, written only while there is one so that a

@@ -165,8 +165,10 @@ fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
     audio.race_voice = audio
         .output
@@ -236,8 +238,10 @@ fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
         pending_restore: None,
         source_switch: None,
         sfx: None,
+        engine_warm_ticks: 0,
         hd: Default::default(),
         song_hold: Default::default(),
+        music_line: Default::default(),
     };
 
     audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));

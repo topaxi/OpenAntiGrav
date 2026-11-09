@@ -42,6 +42,7 @@ fn assets() -> oag_hud::Assets {
     );
     let font = oag_ui::font::Atlas::build();
     let mut assets = oag_hud::Assets {
+        tag_label: None,
         layout: Some(layout),
         sheet,
         font: font.clone(),

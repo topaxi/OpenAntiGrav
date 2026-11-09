@@ -1,7 +1,8 @@
 
+
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
-use log::warn;
+use log::{info, warn};
 use oag_game::{launcher, loading, settings};
 use oag_raceplay as race;
 use oag_source::source;
@@ -22,6 +23,8 @@ use winit::event_loop::{ControlFlow, EventLoop};
 mod app;
 #[path = "main/args.rs"]
 mod args;
+#[path = "main/campaign_editor_stage.rs"]
+mod campaign_editor_stage;
 #[path = "main/campaign_stage.rs"]
 mod campaign_stage;
 #[path = "main/clipboard.rs"]
@@ -79,12 +82,17 @@ mod session;
 mod stage;
 #[path = "main/touch.rs"]
 mod touch;
+#[path = "main/soft_keyboard.rs"]
+mod soft_keyboard;
 #[path = "main/typing.rs"]
 mod typing;
 #[path = "main/window.rs"]
 mod window;
 #[path = "main/windows.rs"]
 mod windows;
+#[cfg(target_os = "linux")]
+#[path = "main/x11_refresh.rs"]
+mod x11_refresh;
 
 use crate::app::App;
 use crate::args::{autopilot_pilot, give_weapon};
@@ -132,6 +140,7 @@ use crate::pose::{
 fn init_logging() {
     oag_log::install("warn,oag=info,calloop=error", oag_log::tool::FILE_FILTER);
     oag_log::install_panic_hook();
+    oag_input::pad::silence_on_panic();
 }
 
 /// Opens the log file once the command line and the settings file are known,
@@ -196,7 +205,7 @@ fn main() -> Result<()> {
     let result = run(cli);
     // Every route out of `run` has dropped its session by now; a worker still inside the driver
     // must finish before the process exit tears the driver down under it.
-    oag_game::gpu_workers::finish();
+    oag_thread::gpu_workers::finish();
     oag_log::flush();
     result
 }
@@ -218,7 +227,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
         Ok(cli) => run(cli),
         Err(why) => Err(anyhow::anyhow!("launch arguments: {why}")),
     };
-    oag_game::gpu_workers::finish();
+    oag_thread::gpu_workers::finish();
     oag_log::flush();
     if let Err(why) = result {
         log::error!("oag-game exited: {why:#}");
@@ -262,6 +271,19 @@ fn run(cli: Cli) -> Result<()> {
     // seconds of intro later.
     let mut settings = settings::load()?;
     attach_log_file(&cli, &settings);
+    if cli.probe_pad {
+        info!("--probe-pad: printing pad events until stopped; no window opens");
+        return oag_input::probe::run(&mut std::io::stdout(), || false).map_err(anyhow::Error::msg);
+    }
+    #[cfg(feature = "dev-cli")]
+    if let Some(pattern) = &cli.dev.rumble_pattern {
+        return oag_game::rumble::probe(&oag_game::rumble::Probe {
+            pattern,
+            source: cli.source.as_deref().or(settings.source.image.as_deref()),
+            token: &settings.controls.rumble,
+            hold: cli.dev.rumble_hold,
+        });
+    }
     let anisotropy = cli.anisotropy.unwrap_or(settings.graphics.anisotropy);
     // A CLI render-profile flag overrides *every* title's entry for this run
     // only - never persisted, the same footing `anisotropy` above is already
@@ -526,7 +548,6 @@ fn run(cli: Cli) -> Result<()> {
             cli.net.connect(&source)?;
             None
         };
-        #[cfg_attr(not(feature = "extensions"), expect(unused_mut, reason = "extensions off"))]
         let mut options = pending.race_options(&source, Vec::new());
         // The rules modules of the mods that are on. None in a network race (the host's
         // race runs vanilla, and the lobby's fingerprint leaves the examples out), an
@@ -536,6 +557,7 @@ fn run(cli: Cli) -> Result<()> {
             let vanilla = net.is_some() || cli.wreck.campaign_cell.is_some() || cli.event.is_some();
             oag_game::mod_extensions::attach(&mut options, &settings.mods, &settings.mod_settings, vanilla);
         }
+        oag_game::texture_pack::attach(&mut options, &settings.mods);
         let options = match &net {
             Some(net) => net.race_options(options)?,
             None => options,

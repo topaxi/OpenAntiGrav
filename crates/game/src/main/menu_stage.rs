@@ -22,6 +22,15 @@ mod footer;
 mod screens;
 pub(crate) use screens::PAUSE_OVERLAY;
 
+/// The pause screen drawn from the disc's own widgets: the screen read for this race's mode and
+/// the title's table that says which row each widget is.
+pub(crate) struct PauseView {
+    pub(crate) screen: oag_ui_screens::pause::PauseScreen,
+    pub(crate) table: &'static oag_title::PauseMenu,
+    /// Where the screen's textures sit on the menus' sprite sheet.
+    pub(crate) sprites: Vec<(String, oag_ui::frontend::Placed)>,
+}
+
 /// The front end, and everything only it needs.
 /// The menus, and a renderer of their own.
 ///
@@ -68,6 +77,12 @@ pub(crate) struct MenuStage {
     /// clock (advanced by [`Self::tick`]). See `footer::ticker_overlay`.
     pub(crate) ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     pub(crate) ticker_elapsed: f32,
+    /// The tint a title's own pause screen draws over the parked race, `None` on every other
+    /// menu: the screen authors it and no footer ticker (`oag_title::PauseMenu`).
+    pub(crate) pause_scrim: Option<[f32; 4]>,
+    /// The pause screen as the disc lays it out, when the title has it and the tree opened on
+    /// the pause page: drawn in place of the front end's list on that page.
+    pub(crate) pause_view: Option<PauseView>,
     /// The value marquee's clock: which row it is timing, and for how long.
     pub(crate) marquee: marquee::Timer,
     /// The modal prompt on screen, if one is: an on-screen keyboard or a
@@ -242,20 +257,28 @@ pub(crate) fn menu_playhead(
 }
 
 impl MenuStage {
+    /// Whether the page on screen is the pause page of a tree that opened on it, drawn from the
+    /// disc's own screen.
+    pub(crate) fn on_pause_page(&self) -> bool {
+        self.pause_view.is_some() && self.menu.page().id == menu::PAUSE_PAGE
+    }
+
     /// Advances the backdrop by one tick.
     ///
     /// Driven from the same fixed `dt` the simulation is, and for the same
     /// reason the front end's movie is: nothing here reads the wall clock. The
     /// player wraps rather than finishing - it is a loop, which is the whole
-    /// difference between this movie and the intro.
-    pub(crate) fn tick(&mut self, dt: f64) {
+    /// difference between this movie and the intro. `bands` is this tick's
+    /// snapshot of the audio analysis, which the simulation never sees, and
+    /// with music playing the only thing here two runs do not share.
+    pub(crate) fn tick(&mut self, dt: f64, bands: &[f32; oag_ui::backdrop::BANDS]) {
         if let Some(backdrop) = &mut self.backdrop {
             backdrop.player.update(dt);
         }
         // One clip frame per tick: the original counts its clip up once per
         // rendered frame at sixty, and the stage's step is the same sixty.
         if let Some(styled) = &mut self.styled {
-            styled.tick(self.menu.depth() == 1);
+            styled.tick(self.menu.depth() == 1, bands);
         }
         // The same fixed `dt` the backdrop is stepped with, and for the same
         // reason: nothing on this stage reads the wall clock, so two runs of
@@ -290,6 +313,9 @@ impl MenuStage {
         if let Some(campaign) = &mut self.campaign {
             campaign.tick_ticker(dt as f32);
             campaign.tick_cards(dt as f32);
+            if let Some(editor) = campaign.editor.as_mut() {
+                editor.pulse.tick(dt as f32);
+            }
         }
         // The selected row's own pulse, measured on Pulse - see
         // `oag_title::MenuSkin::selected_pulse_period_secs`. Free-running like
@@ -530,7 +556,7 @@ impl MenuStage {
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {
                     rect: overlay_rect(self.skin.space(), viewport),
-                    color: PAUSE_OVERLAY,
+                    color: self.pause_scrim.unwrap_or(PAUSE_OVERLAY),
                 })
                 .chain(flat)
                 .collect()
@@ -613,7 +639,7 @@ impl MenuStage {
             // same two names - see `oag_ui_screens::campaign::hd`'s own module doc.
             let layers = if campaign.is_hd() {
                 match &campaign.screen {
-                    // **HD only** - `Campaign Selection` ahead of `Grid
+                    // `Campaign Selection` (HD and Omega) ahead of `Grid
                     // Selection`. See `crate::campaign_stage`'s own module
                     // doc. `selection_layout` is `None` only when
                     // `Screen::Selection` itself could never have been
@@ -623,7 +649,7 @@ impl MenuStage {
                     crate::campaign_stage::Screen::Selection(model) => {
                         match campaign.selection_layout() {
                             Some(layout) => {
-                                let (fury_gold, hd_gold) = campaign.campaign_gold_medals();
+                                let gold = campaign.campaign_gold_medals();
                                 let footer_overlay =
                                     campaign.nav_legend_draw(&layout.faces);
                                 oag_ui_screens::campaign::selection::draw_list(
@@ -632,8 +658,8 @@ impl MenuStage {
                                     &self.skin,
                                     &self.frame,
                                     &campaign.strings,
-                                    fury_gold,
-                                    hd_gold,
+                                    &gold,
+                                    0,
                                     if frozen_race { None } else { shown },
                                     frozen_race,
                                     &|src| campaign.sprites.get(src),
@@ -689,6 +715,24 @@ impl MenuStage {
             } else {
                 // The ticker's tips draw in the `Default` role.
                 let default_measure = |text: &str| font::measure(&self.default_atlas, text);
+                if let Some(editor) = &campaign.editor {
+                    let faces = &campaign.cell_layout().faces;
+                    let mut footer_overlay = campaign.nav_legend_draw(faces);
+                    let ticker = campaign.ticker_draw(faces, &default_measure);
+                    ticker_draw = ticker.clone();
+                    footer_overlay.extend(ticker);
+                    let shown_rows = editor.shown();
+                    oag_ui_screens::campaign::editor::draw_list(
+                        &shown_rows.view(&editor.pulse, editor.model.cursor()),
+                        campaign.cell_layout(),
+                        &self.skin,
+                        &self.frame,
+                        if frozen_race { None } else { shown },
+                        frozen_race,
+                        &|src| campaign.sprites.get(src),
+                        &footer_overlay,
+                    )
+                } else {
                 match &campaign.screen {
                     // Never built for a non-HD title - see
                     // `crate::campaign_stage::Screen::Selection`'s own doc.
@@ -740,6 +784,7 @@ impl MenuStage {
                         )
                     }
                 }
+                }
             };
             let layers = oag_game::campaign::gate_glow(campaign.frontend_glow, layers);
             let split = layers.backdrop.len();
@@ -759,12 +804,17 @@ impl MenuStage {
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {
                     rect: overlay_rect(self.skin.space(), viewport),
-                    color: PAUSE_OVERLAY,
+                    color: self.pause_scrim.unwrap_or(PAUSE_OVERLAY),
                 })
                 .chain(flat)
                 .collect()
             } else {
                 flat
+            };
+            // The campaign editor's name keyboard, over the screen.
+            let list: Vec<Draw> = match &self.prompt {
+                Some(prompt) => list.into_iter().chain(prompt.draw(&self.skin)).collect(),
+                None => list,
             };
             // The pause overlay's `Fill` above shifts every index by one -
             // `clip` was found against the unshifted list, so it has to
@@ -812,7 +862,7 @@ impl MenuStage {
             || self.menu.reserves_unavailable_note();
         self.menu
             .set_visible_rows(menu::visible_rows(&self.skin, &self.frame, reserve_note));
-        let arriving = menu::draw_list(
+        let mut arriving = menu::draw_list(
             &self.menu,
             &self.skin,
             bound_keys,
@@ -826,6 +876,19 @@ impl MenuStage {
             &self.frame,
             frozen_race,
         );
+        // The pause screen is the disc's own widgets where the title carries them.
+        if let Some(view) = self.pause_view.as_ref().filter(|_| self.on_pause_page()) {
+            let drawn = oag_ui_screens::pause::draw_list(
+                &view.screen,
+                view.table,
+                &self.menu,
+                &self.skin,
+                &self.frame,
+                &|src| view.sprites.iter().find(|(path, _)| path == src).map(|(_, placed)| *placed),
+            );
+            arriving.chrome = drawn.chrome;
+            arriving.body = drawn.body;
+        }
         let (list, clip) = match &self.change {
             // The page being left grows and fades out; the one arriving grows
             // into place from smaller and fades in. Both run off one tween, so
@@ -887,9 +950,17 @@ impl MenuStage {
                         .iter()
                         .enumerate()
                         .flat_map(|(index, (label, value))| {
-                            oag_ui_screens::prompt::record_row_draw(
+                            // The REPLAYS page's lines have a band of their own: Omega's
+                            // backdrop is light and the lines are white.
+                            let back = (self.menu.page().id == oag_game::replays::page::PAGE)
+                                .then(|| {
+                                    oag_ui_screens::prompt::record_row_back(
+                                        &self.menu, &self.skin, index,
+                                    )
+                                });
+                            back.into_iter().chain(oag_ui_screens::prompt::record_row_draw(
                                 &self.menu, &self.skin, index, label, value,
-                            )
+                            ))
                         }),
                 )
                 .collect()
@@ -898,7 +969,7 @@ impl MenuStage {
         };
         // The footer's own draws, skipped mid-transition too - see `footer.rs`. The reset
         // prompt's rect goes back to the menu for the next pointer tick.
-        let reset = if self.change.is_none() {
+        let reset = if self.change.is_none() && !self.on_pause_page() {
             let measure = |text: &str| font::measure(&self.default_atlas, text);
             oag_game::prompts::reset_prompt(
                 &self.menu,
@@ -930,7 +1001,7 @@ impl MenuStage {
         let list: Vec<Draw> = if frozen_race {
             std::iter::once(Draw::Fill {
                 rect: overlay_rect(self.skin.space(), viewport),
-                color: PAUSE_OVERLAY,
+                color: self.pause_scrim.unwrap_or(PAUSE_OVERLAY),
             })
             .chain(list)
             .collect()

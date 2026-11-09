@@ -51,7 +51,7 @@ fn run(source: &str, track: &str, ticks: u32) -> Option<(Forks, usize)> {
         .map(|s| race.sim.world.ships[s].standing.lap)
         .collect();
     for tick in 0..ticks {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         for slot in 0..count {
             let ship = &race.sim.world.ships[slot];
             let branching = ship.driver.branching;
@@ -259,7 +259,7 @@ fn a_craft_shoved_onto_the_other_side_of_a_fork_follows_that_side() {
         ship.physics.body.position = position;
         ship.physics.body.linear_velocity = tangent * 50.0;
     }
-    race.tick(&PlayerInputs::none());
+    race.tick_sim_only(&PlayerInputs::none());
     let branching = race.sim.world.ships[1].driver.branching;
     assert_eq!(
         branching.route, 0,

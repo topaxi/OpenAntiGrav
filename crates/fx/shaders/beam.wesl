@@ -61,6 +61,14 @@ override smoke: f32 = 0.0;
 // The glow's colour is left as `decode_source` has it for every HD ribbon.
 override leach: f32 = 0.0;
 
+// 1.0 for Wipeout HD's `FatLine` ribbon, whose fragment program (`FatLine_fp`,
+// `docs/ghidra/functions/ps3-hdfury-eu/missile-ribbon.md`) is
+//
+//     H0 = tex(uv) * (vertex.rgb, vertex.a)
+//
+// drawn `SRC_ALPHA, ONE`, so the alpha leaves here unweighted for the blend.
+override fat: f32 = 0.0;
+
 fn srgb_to_linear(value: f32) -> f32 {
     if value <= 0.04045 {
         return value / 12.92;
@@ -114,6 +122,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
     let texel = textureSample(beam_texture, beam_sampler, in.texcoord);
     let rgb = texel.rgb * in.colour.rgb;
+    if fat > 0.5 {
+        return vec4<f32>(target_out(gamma_to_target(rgb, linear_out * decode_source)), texel.a * in.colour.a);
+    }
     let decoded = gamma_to_target(rgb, linear_out * decode_source);
     // `GU_ADD, GU_SRC_ALPHA, GU_FIX(0xffffff)`: the colour is weighted by the
     // fragment's alpha here, so the alpha channel is free to carry the glow

@@ -545,7 +545,7 @@ impl Chain {
     /// `viewport` - the rectangle the race pass drew - and steps the exposure.
     pub fn run(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         origin: (f32, f32),
@@ -565,7 +565,7 @@ impl Chain {
     /// lands at `placement.1` of `view`, exposed by `seat`.
     fn run_placed(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         seat: &Seat,
@@ -654,21 +654,23 @@ impl Chain {
             label: Some("wo composite step"),
             timestamp_writes: None,
         });
+        oag_gpu::perfprobe::marks::mark_compute(&mut pass, "wo composite step");
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, &self.sized.gated_group, &[]);
         pass.set_bind_group(1, &seat.step, &[]);
         pass.dispatch_workgroups(1, 1, 1);
+        oag_gpu::perfprobe::marks::close_compute(&mut pass);
     }
 
     /// Runs the chain over one view of a split: the view's own exposure (the seat's), the
     /// composite over the view's rectangle and nothing outside it. **Call it once per view
-    /// with its own encoder and submit each before the next**: the constants are written
+    /// with its own encoder, its writes landing ahead of it**: the constants are written
     /// with the queue, which lands before the submission that follows. **The per-seat
     /// exposure is this project's, chosen, not measured**: the original has no split screen.
     pub fn run_view(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         run: View,
@@ -693,7 +695,7 @@ impl Chain {
         let (x, y, w, h) = run.rect;
         if run.first {
             // A pass that clears and draws nothing: the composite loads.
-            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("wo composite clear"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
@@ -709,6 +711,8 @@ impl Chain {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            oag_gpu::perfprobe::marks::mark(&mut pass, "wo composite clear");
+            oag_gpu::perfprobe::marks::close(&mut pass);
         }
         self.run_placed(
             queue,
@@ -749,7 +753,7 @@ impl Chain {
 /// One full-screen pass with no blending, loading what is there.
 fn draw(
     encoder: &mut wgpu::CommandEncoder,
-    label: &str,
+    label: &'static str,
     pipeline: &wgpu::RenderPipeline,
     groups: &[&wgpu::BindGroup],
     target: &wgpu::TextureView,
@@ -772,12 +776,14 @@ fn draw(
         occlusion_query_set: None,
         multiview_mask: None,
     });
+    oag_gpu::perfprobe::marks::mark(&mut pass, label);
     pass.set_pipeline(pipeline);
     pass.set_viewport(origin.0, origin.1, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
     for (index, group) in groups.iter().enumerate() {
         pass.set_bind_group(index as u32, *group, &[]);
     }
     pass.draw(0..3, 0..1);
+    oag_gpu::perfprobe::marks::close(&mut pass);
 }
 
 #[cfg(test)]

@@ -44,8 +44,6 @@
 //! Missing the scale makes every model a uniform wrong size, which looks like
 //! a units problem.
 
-use std::fmt;
-
 use oag_formats::ByteOrder;
 
 /// Bytes of file header before the node tree.
@@ -230,82 +228,6 @@ pub fn nodes_by_class(nodes: &[Node], class_id: u32) -> impl Iterator<Item = &No
 /// Divisor for `s16` positions and the `f32` scale. The game's offline tool uses
 /// 32767; 32768 matches the hardware and the 0.003% difference is irrelevant.
 const POSITION_DIVISOR: f32 = 32768.0;
-
-/// Something wrong with a `.vex` file.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Error {
-    /// Fewer bytes than the file header needs.
-    TooShort {
-        /// Bytes supplied.
-        got: usize,
-    },
-    /// A format version this project has no class table for.
-    ///
-    /// An error rather than a fall back to version 6: the numberings share no
-    /// id, so the wrong table finds nothing and looks like an empty file.
-    UnknownVersion {
-        /// The version word the file declares.
-        version: u32,
-    },
-    /// A structure points outside the file.
-    OutOfBounds {
-        /// What was being read.
-        what: &'static str,
-        /// Where it would end.
-        end: usize,
-        /// Size of the file.
-        len: usize,
-    },
-    /// A vertex type this build does not handle: an unexplored asset class or a
-    /// decoding error, either worth hearing about loudly.
-    UnsupportedVertexType {
-        /// The value found.
-        vertex_type: u16,
-    },
-    /// A PS2 batch's VIF command stream did not walk.
-    Vif {
-        /// Offset of the batch header in the mesh payload.
-        at: usize,
-        /// What the walker said. Boxed to keep this enum small.
-        error: Box<crate::vif::Error>,
-    },
-    /// A PS2 batch's packet framing did not add up.
-    ///
-    /// Separate from [`Self::Vif`]: these checks decide whether the packet was
-    /// read as the right *kind* of thing (three lengths that must close, the
-    /// attribute set agreeing with the vertex type).
-    Packet {
-        /// Which check failed.
-        what: &'static str,
-        /// Offset of the batch header in the mesh payload.
-        at: usize,
-    },
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::TooShort { got } => {
-                write!(f, "need at least {FILE_HEADER_LEN} bytes, got {got}")
-            }
-            Self::UnknownVersion { version } => write!(
-                f,
-                "no class table for .vex version {version}; \
-                 known versions are 6 (Pulse), 4 and 3"
-            ),
-            Self::OutOfBounds { what, end, len } => {
-                write!(f, "{what} ends at {end} but the file is {len} bytes")
-            }
-            Self::UnsupportedVertexType { vertex_type } => {
-                write!(f, "unsupported GU vertex type {vertex_type:#06x}")
-            }
-            Self::Vif { at, error } => write!(f, "batch at {at}: {error}"),
-            Self::Packet { what, at } => write!(f, "batch at {at}: {what}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -529,6 +451,9 @@ pub struct Batch {
     /// decoded by [`is_additive_blend`](Self::is_additive_blend), confirmed on
     /// the PSP draw path only. The rest are undecoded.
     pub header_flags: u8,
+    /// The authored depth bias, `0..=9`: the original shifts the batch's depth range by `6 * bias`
+    /// (`mesh-draw.md`, "The per-batch depth bias is file data"). `0` on a PS2 VIF batch.
+    pub depth_bias: u8,
 }
 
 /// GU primitive type for a triangle list.
@@ -789,6 +714,9 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
 mod batch_flags;
 pub use batch_flags::BlendClass;
 
+mod error;
+pub use error::Error;
+
 mod external;
 pub use external::geometry_is_external;
 
@@ -809,7 +737,8 @@ pub use anim_transform::{
 
 mod textures;
 pub use textures::{
-    EmbeddedTexture, texture_asset_path, texture_row_bytes, texture_row_stride, textures,
+    EmbeddedTexture, StoredTexture, stored_textures, texture_asset_path, texture_row_bytes,
+    texture_row_stride, textures,
 };
 
 /// One keyframe track of a mesh's texture-transform block: key times paired
@@ -1130,6 +1059,7 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             (vertices, (corner(0x18), corner(0x20)))
         };
 
+        let depth_bias = batch_flags::depth_bias(vertex_type, pass_mask, payload[at + 0x29]);
         out.push(Batch {
             pass_mask,
             material_index: payload[at + 2],
@@ -1140,6 +1070,7 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             declared_vertex_count: u16_at(payload, at + 4),
             bounds,
             header_flags: flags,
+            depth_bias,
         });
 
         // `payload_size` covers the vertex data only.

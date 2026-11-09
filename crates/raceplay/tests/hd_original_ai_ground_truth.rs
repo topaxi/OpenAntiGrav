@@ -51,7 +51,7 @@ fn held(level: usize, skill: f32, from: f32, to: f32) -> Option<Vec<(u8, f32)>> 
     };
     let mut out = Vec::new();
     while time(&race) <= to {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         if time(&race) >= from {
             let places = race.places();
             let field = race.original_ai_field().expect("the field is on");
@@ -185,7 +185,7 @@ fn the_original_field_gets_round_talons_junction_on_hd() {
     let mut lap = [1u32; 8];
     let mut per_lap: [Vec<f32>; 8] = Default::default();
     for _ in 0..60 * 150 {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         for slot in 1..8 {
             let ship = &race.sim.world.ships[slot];
             if ship.standing.lap != lap[slot] {

@@ -189,15 +189,14 @@ pub(super) fn psp2_sky_model(
         ));
         return None;
     }
-    let (mut model, built) = match mesh::rcs::psp2::build(&name, &blob, None, &mut |path| {
-        archives.read_name(path).ok()
-    }) {
-        Ok(built) => built,
-        Err(error) => {
-            report.push(format!("{name}: {error:#} - the sky stays black"));
-            return None;
-        }
-    };
+    let (mut model, built) =
+        match mesh::rcs::psp2::build(&name, &blob, None, &mut crate::stages::reader(archives)) {
+            Ok(built) => built,
+            Err(error) => {
+                report.push(format!("{name}: {error:#} - the sky stays black"));
+                return None;
+            }
+        };
     if model.indices.is_empty() {
         report.push(format!(
             "{name}: decoded to no triangles - the sky stays black"
@@ -575,6 +574,7 @@ mod exposure;
 mod light;
 mod probes;
 pub(super) use bloom::envsettings_bloom;
+pub use bloom::hd_bloom_params;
 use exposure::envsettings_exposure;
 pub(super) use light::{envsettings_light, envsettings_tonemap};
 pub(super) use probes::read_probes;
@@ -722,15 +722,7 @@ pub(super) fn staging(
     let hd_bloom = (ps3_geometry && !wo_title)
         .then(|| envsettings_bloom(archives, track, report))
         .flatten()
-        .map(|params| oag_post::hd_bloom::Params {
-            zoom: title.race.zoom_ring.map(crate::zoom::tuning),
-            store: if title.looks.blends_encoded.applies_everywhere() {
-                oag_gpu::formats::SceneStore::Encoded
-            } else {
-                oag_gpu::formats::SceneStore::Computed
-            },
-            ..params
-        });
+        .map(|params| bloom::for_title(params, title));
     let omega_tonemap = (geometry == GeometryKind::Ps4)
         .then(|| envsettings_tonemap(archives, track, report))
         .flatten();
@@ -932,6 +924,22 @@ pub(super) fn cloud_layer(
             return None;
         }
     };
+    if let Some(image) = oag_texture::replacer::mip(&blob) {
+        report.push(format!(
+            "{CLOUD_TEXTURE}: {}x{} from the texture pack - drawing {} cloud sprite(s)",
+            image.width,
+            image.height,
+            layer.len()
+        ));
+        return Some((
+            layer,
+            FlareTexture {
+                width: image.width,
+                height: image.height,
+                rgba: image.rgba.clone(),
+            },
+        ));
+    }
     match oag_texture::texture::Texture::parse(&blob) {
         Ok(texture) => {
             report.push(format!(

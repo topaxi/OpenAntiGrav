@@ -338,6 +338,18 @@ setting = "race.kill_target"
 values_from = "kill_targets"
 disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race", "head_to_head"] }
 
+# The race box's `TARGET` row, HD's Eliminator score target: the values are the steps of the
+# disc's own `Eliminations` slider (`oag_game::boot::RaceSetup::score_targets`, `200` to `600`
+# by `20`). It stands where `KILLS` does and only a title whose Eliminator ends on a score offers
+# it (`Definition::drop_rows_picked_on_screen`); the original enables it in an Eliminator alone.
+[[page.entry]]
+kind = "choice"
+label = "TARGET"
+string_id = "OAG_RACE_TARGET"
+setting = "race.score_target"
+values_from = "score_targets"
+disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race", "head_to_head"] }
+
 # Live in Zone too: every craft flies the one Zone hull, but the team is the one the race and
 # its loyalty credit use, and on some titles the paint on that hull
 # (`oag_title::ZoneTeamStep`). VARIANT below stays greyed there - the hull has no variant to pick.
@@ -465,6 +477,50 @@ kind = "back"
 label = "BACK"
 string_id = "OAG_MENU_BACK"
 
+# **The REPLAYS page** (ADR-0087, stage 5). One REPLAY row that steps through the recorded races
+# (`values_from = "replays"`: `saved/` then `auto/`, newest first, read each time the menus open;
+# a file this build will not play is listed dimmed with the reason, as a mod that did not load
+# is), WATCH, KEEP and DELETE for the file it is on, and under them its detail lines
+# (`oag_game::replays::page`). `replays.selected` is never stored. Reached from the main page
+# through the built-in mod `oag-extras`, as PHOTO MODE is. Chosen, not measured.
+[[page]]
+id = "replays"
+title = "REPLAYS"
+title_string_id = "OAG_REPLAYS_PAGE_TITLE"
+
+[[page.entry]]
+kind = "choice"
+label = "REPLAY"
+string_id = "OAG_REPLAYS_ROW"
+setting = "replays.selected"
+values_from = "replays"
+
+[[page.entry]]
+id = "watch_replay"
+kind = "action"
+label = "WATCH"
+string_id = "OAG_REPLAYS_WATCH"
+action = "watch_replay"
+
+[[page.entry]]
+id = "keep_replay"
+kind = "action"
+label = "KEEP"
+string_id = "OAG_REPLAYS_KEEP"
+action = "keep_replay"
+
+[[page.entry]]
+id = "delete_replay"
+kind = "action"
+label = "DELETE"
+string_id = "OAG_REPLAYS_DELETE"
+action = "delete_replay"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
 [[page]]
 id = "options"
 title = "OPTIONS"
@@ -499,6 +555,20 @@ kind = "submenu"
 label = "CONTROLS"
 string_id = "OAG_OPTIONS_CONTROLS"
 target = "controls"
+
+# The name every title shares, and the tag Pulse and Pure draw (`oag_title::profile`). The
+# rows are dropped on a title that keeps neither (`drop_unavailable_player_rows`).
+[[page.entry]]
+kind = "action"
+label = "PLAYER NAME"
+string_id = "OAG_OPTIONS_PLAYER_NAME"
+action = "edit_player_name"
+
+[[page.entry]]
+kind = "action"
+label = "PLAYER TAG"
+string_id = "OAG_OPTIONS_PLAYER_TAG"
+action = "edit_player_tag"
 
 # Ours - no disc has ever shipped a pilot editor, because pilots are this
 # project's own invention. See `crates/game/src/pilots.rs`.
@@ -637,6 +707,18 @@ setting = "display.hud_style"
 values_from = "hud_styles"
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 
+# How much of the screen the front end and the HUD use: HD's own `Screen Size` slider
+# (`OPT_SCREEN_SIZE`, `additional_definition.xml`'s `Safe Area Setting`, 80 to 100 in steps of 2,
+# default 90) and, on a title whose disc authors none, the same range with a default of 100 so it
+# looks unchanged until moved (`oag_title::hud::SafeArea`). One value for every title
+# (`[graphics] hud_safe_area`), the values supplied from the booted title's data. Applies live.
+[[page.entry]]
+kind = "choice"
+label = "SCREEN SIZE"
+string_id = "OAG_DISPLAY_SCREEN_SIZE"
+setting = "graphics.hud_safe_area"
+values_from = "safe_areas"
+
 # Pulse's `Dynamic HUD` option (`Additional_Definition.xml`, a list of `FE_DEFAULT`,
 # `FE_CONCAVE`, `FE_FLAT` and `FE_OFF`, default `FE_DEFAULT`). `off` draws no HUD at all, the
 # song marquee included: a poke of the byte `FE_OFF` clears removed every element from a
@@ -651,6 +733,36 @@ label = "DYNAMIC HUD"
 string_id = "OAG_DISPLAY_DYNAMIC_HUD"
 setting = "display.dynamic_hud"
 values = ["default", "off"]
+
+# Pulse's `Ghost Ship Visible` and `Auto Load Ghost` (`Additional_Definition.xml`'s `Settings`
+# screen, `FE_ON` / `FE_OFF`, default on; the PS2 list lacks the second and the PSP list wins).
+# Visible off stops drawing the ghost ship and nothing else: it is still raced, recorded and
+# replaced by a quicker lap. Auto load off races no stored ghost when a Time Trial or Speed Lap
+# starts; the run is still recorded and a quicker lap still saved. Each is dropped on a title whose
+# options list no such row (`menu::Definition::drop_unavailable_game_options`).
+[[page.entry]]
+kind = "choice"
+label = "GHOST SHIPS VISIBLE"
+string_id = "OAG_DISPLAY_GHOST_SHIP_VISIBLE"
+setting = "display.ghost_ship_visible"
+values = ["on", "off"]
+
+[[page.entry]]
+kind = "choice"
+label = "AUTO LOAD GHOST"
+string_id = "OAG_DISPLAY_AUTO_LOAD_GHOST"
+setting = "display.auto_load_ghost"
+values = ["on", "off"]
+
+# Pulse's `Multiplayer Tags` (PSP list; `FE_ON` / `FE_OFF`, default on): each other person's name
+# over their craft in a multiplayer race. Dropped on a title whose options list no such row
+# (`menu::Definition::drop_unavailable_game_options`). Applies live.
+[[page.entry]]
+kind = "choice"
+label = "MULTIPLAYER TAGS"
+string_id = "OAG_DISPLAY_MULTIPLAYER_TAGS"
+setting = "display.multiplayer_tags"
+values = ["on", "off"]
 
 # `off` never waits and tears; `on` is classic vsync, which never tears and
 # halves the rate when a frame misses a refresh; `smooth` is that miss handled
@@ -1299,6 +1411,22 @@ values = ["off", "on"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 
 
+# The burst a craft flying in a rival's engine trail plays, on the titles whose original never
+# shows it: Pulse and Pure, which author none, and 2048 and Omega, which author it but never
+# fire it. **An enhancement of this project's, off by default.** 2048 and Omega play their own
+# file; Pulse and Pure read it off another source that authors it (Wipeout HD's, else 2048's or
+# Omega's), and nothing is drawn, and the loader report says so, when this machine has none.
+# The row is dropped on Wipeout HD, which always plays it, by
+# `menu::Definition::drop_unavailable_trail_hits`. Read when a race loads.
+[[page.entry]]
+kind = "choice"
+label = "TRAIL HITS"
+string_id = "OAG_GRAPHICS_TRAIL_HITS"
+setting = "graphics.trail_hits"
+values = ["off", "on"]
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
+
 # `fps` is one line of numbers; `pacing` adds the graph, which is the one that
 # shows uneven frames - an average frame rate is exactly what hides them.
 # `dev` adds a third line of scene counts (draw calls, triangles). Drawn over
@@ -1550,6 +1678,13 @@ label = "AIRBRAKE RIGHT"
 string_id = "OAG_CONTROLS_AIRBRAKE_RIGHT"
 button = "r"
 
+# The original's action 8, the Eliminator flip. L1 on a pad.
+[[page.entry]]
+kind = "binding"
+label = "ELIMINATOR FLIP"
+string_id = "OAG_CONTROLS_ELIMINATOR_FLIP"
+button = "flip"
+
 # Not one of the original's eight driving bindings, and listed here anyway: the
 # in-race camera cycle is the one control a player has no other way to discover.
 # It is bound (SELECT on a pad, TAB on a keyboard, through
@@ -1621,6 +1756,18 @@ label = "TRIGGER SENSITIVITY"
 string_id = "OAG_CONTROLS_TRIGGER_SENSITIVITY"
 setting = "controls.trigger_sensitivity"
 values = ["50", "75", "100", "125", "150", "200"]
+
+# What the pad's motors play (`docs/gameplay/rumble.md`). `original` is the
+# title's own small-motor law and is offered only where the original plays
+# patterns (`oag_title::rumble::Rumble`, HD and Omega; `Definition::
+# drop_choice_value`). `ps3` is HD's on/off small motor, `ps4` is Omega's byte
+# sum, the default. See `oag_input::rumble::Mode`.
+[[page.entry]]
+kind = "choice"
+label = "RUMBLE"
+string_id = "OAG_CONTROLS_RUMBLE"
+setting = "controls.rumble"
+values = ["none", "original", "ps3", "ps4"]
 
 # A page of its own, with a live picture of the overlay beside the rows
 # (`oag_game::touch_controls::preview`). Only a touchscreen has an overlay to

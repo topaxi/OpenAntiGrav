@@ -141,6 +141,19 @@ impl TrackVisibility {
         })
     }
 
+    /// A track whose sections are `pvs`, with no draw calls placed in them.
+    #[cfg(test)]
+    pub(super) fn declaring(pvs: oag_vex::pvs::TrackPvs) -> Self {
+        Self {
+            pvs,
+            padding: SectionPadding::default(),
+            sections: DrawSections::default(),
+            swaps: SwapConflicts::none(),
+            placement: PlacementStats::default(),
+            chunks: None,
+        }
+    }
+
     /// The circuit's chunk partition, when it has one.
     #[must_use]
     pub fn chunks(&self) -> Option<&oag_rcs::hd_pvs::Pvs> {

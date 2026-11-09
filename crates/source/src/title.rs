@@ -114,7 +114,16 @@ fn open_unlayered(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Resu
 
     // **HD's refusal is kept for one case.** An encrypted PS3 image is HD's
     // to name; falling through to Pulse would report it as a missing `Data.wad`.
-    let hd_encrypted = match oag_hd::open(source) {
+    //
+    // A server extraction records the source's own bytes: an update folder is not
+    // on the image, and the chain changes no table a race reads
+    // (`docs/formats/hd-updates.md`).
+    let updates = if oag_assets::record::active() {
+        Vec::new()
+    } else {
+        crate::source::ps3_updates(source)
+    };
+    let hd_encrypted = match oag_hd::open_updated(source, &updates) {
         Ok(archives) => {
             let title = oag_hd::title_of(&archives);
             return Ok(Opened { archives, title });
@@ -231,6 +240,16 @@ pub fn identify(source: &str) -> Option<&'static Title> {
 #[must_use]
 pub fn borrowed_zoom_ring() -> &'static oag_title::ZoomRing {
     &oag_hd::race::ZOOM_RING
+}
+
+/// Whether `title` is the one a trail-hit burst is preferably lent from
+/// (`graphics.trail_hits`, `oag_raceplay::TrailHits`): Wipeout HD/Fury, whose
+/// `WO_TRAIL_HITSHIP` the burst is read from. Here for the reason
+/// [`borrowed_zoom_ring`] is: the one place a title package is named for another's data.
+#[must_use]
+pub fn is_preferred_trail_hit_lender(title: &Title) -> bool {
+    // By slug: a `const` title has no one address to compare.
+    title.slug() == oag_hd::TITLE.slug()
 }
 
 #[cfg(test)]

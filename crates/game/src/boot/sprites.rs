@@ -81,14 +81,7 @@ pub(super) fn block_art(
 /// rule and why it stands in for `FrontEnd_IsFuryStyle`. Read by the menu
 /// backdrop's loader too, since it is the same byte both widgets check.
 pub(super) fn fury_style(screens: &Screens) -> bool {
-    screens
-        .globals
-        .get("HD_BG")
-        .and_then(|value| oag_ui::screen::parse_argb(value))
-        .is_some_and(|argb| {
-            let [r, g, b] = [argb >> 16 & 0xff, argb >> 8 & 0xff, argb & 0xff];
-            r + g + b < 3 * 128
-        })
+    screens.global_is_dark("HD_BG")
 }
 
 /// Decodes every image the screens name.
@@ -290,7 +283,7 @@ pub(crate) fn gnf_sibling(
 /// A `.gnf` whose rows are in HD's `.gtf` order, decoded and reversed into the
 /// top-down order a sheet holds - see
 /// [`oag_title::FrontEnd::bottom_up_gnf`] for which images and why.
-fn bottom_up_rows(src: &str, blob: &[u8]) -> Option<oag_hud::sprite::DecodedImage> {
+pub(crate) fn bottom_up_rows(src: &str, blob: &[u8]) -> Option<oag_hud::sprite::DecodedImage> {
     let texture = oag_texture::gnf::Texture::parse(blob).ok()?;
     let pixels = texture.decode(blob).ok()?;
     let width = usize::try_from(texture.width).ok()?.max(1);
@@ -311,7 +304,7 @@ fn bottom_up_rows(src: &str, blob: &[u8]) -> Option<oag_hud::sprite::DecodedImag
 }
 
 /// Whether `src`'s file stem, lower-cased, is one of `stems`.
-fn is_bottom_up(src: &str, stems: &[&str]) -> bool {
+pub(crate) fn is_bottom_up(src: &str, stems: &[&str]) -> bool {
     let leaf = src.rsplit(['\\', '/']).next().unwrap_or(src);
     let stem = leaf.rsplit_once('.').map_or(leaf, |(stem, _)| stem);
     stems.iter().any(|known| known.eq_ignore_ascii_case(stem))

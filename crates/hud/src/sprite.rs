@@ -633,11 +633,46 @@ impl Sheet {
     #[must_use]
     pub fn opaque_extent(&self, src: &str) -> Option<[f32; 4]> {
         let placed = self.get(src)?;
+        let [x, y, width, height] = self.ink_within(
+            [
+                placed.x as f32,
+                placed.y as f32,
+                placed.width as f32,
+                placed.height as f32,
+            ],
+            |texel| texel[3] >= 128,
+        )?;
+        Some([x - placed.x as f32, y - placed.y as f32, width, height])
+    }
+
+    /// The box of the texels `is_ink` accepts (RGBA8) inside `rect`, `[x, y, width, height]` in
+    /// sheet pixels, or `None` when there are none. `rect` is a sheet rectangle in whole texels:
+    /// a placement, or the source of one draw.
+    #[must_use]
+    pub fn ink_within(&self, rect: [f32; 4], is_ink: impl Fn([u8; 4]) -> bool) -> Option<[f32; 4]> {
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a texel rectangle inside the sheet, clamped to it"
+        )]
+        let texels = |from: f32, length: f32, limit: u32| -> (u32, u32) {
+            let first = (from.max(0.0) as u32).min(limit);
+            (first, ((from + length).max(0.0).ceil() as u32).min(limit))
+        };
+        let (x_from, x_to) = texels(rect[0], rect[2], self.width);
+        let (y_from, y_to) = texels(rect[1], rect[3], self.height);
         let mut bounds: Option<(u32, u32, u32, u32)> = None;
-        for row in 0..placed.height {
-            for column in 0..placed.width {
-                let at = (((placed.y + row) * self.width + placed.x + column) * 4 + 3) as usize;
-                if self.rgba.get(at).is_none_or(|alpha| *alpha < 128) {
+        for row in y_from..y_to {
+            for column in x_from..x_to {
+                let at = ((row * self.width + column) * 4) as usize;
+                let Some(&[r, g, b, a]) = self
+                    .rgba
+                    .get(at..at + 4)
+                    .map(|t| <&[u8; 4]>::try_from(t).unwrap_or(&[0; 4]))
+                else {
+                    continue;
+                };
+                if !is_ink([r, g, b, a]) {
                     continue;
                 }
                 bounds = Some(match bounds {

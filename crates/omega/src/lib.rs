@@ -51,7 +51,10 @@ use oag_title::{ArchiveCandidates, Platform, Title};
 pub mod campaign;
 pub mod frontend;
 pub mod hud;
+pub mod loading;
 pub mod main_menu;
+pub mod pause_menu;
+pub mod prompts;
 pub mod race;
 pub mod weapons;
 
@@ -79,6 +82,13 @@ pub const TITLE: &Title = &Title {
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
+    eliminator: oag_title::pre_race::Sourced::inherited(
+        oag_title::eliminator::EliminatorRule::Kills,
+        "Wipeout Pulse",
+    ),
+    // The executable has it, off `<Misc eliminator_flip_time>` per craft and class; not wired
+    // (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Per title").
+    eliminator_flip: oag_title::pre_race::Sourced::chosen(None),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,
@@ -122,8 +132,11 @@ pub const TITLE: &Title = &Title {
     // `Data\Plugins\Frontend\Definition.xml`. `plugin_definition` names the
     // team one, the same reasoning `oag_2048::names::TEAM_PLUGIN_DEFINITION`
     // states: a race needs a roster before it needs a circuit list.
-    // No prompt glyph of this title's has been read; the disc's own draw unchanged.
-    prompts: &oag_title::prompts::Prompts::UNREAD,
+    // Measured: the six glyphs of `PS_BUTTONS.fnt` - see `prompts`.
+    prompts: prompts::PROMPTS,
+    profile: oag_title::profile::Profile::NEITHER,
+    photo: oag_title::photo::Strings::HD,
+    photo_shot: None,
     // Omega's own recovery is unread; HD's, which runs Pulse's.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout HD"),
     // Omega's authored mix owns the buses.
@@ -135,16 +148,21 @@ pub const TITLE: &Title = &Title {
     ),
     speech_follows_effects: oag_title::pre_race::Sourced::chosen(false),
     master_trim_db: oag_title::pre_race::Sourced::chosen(0.0),
+    rear_occlusion: None,
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
-    // Not read: the loading-screen plugin XML was not opened. `None` is a gap,
-    // not a measurement, on Pure's own terms.
-    loading: None,
+    // HD's screen re-spelt for `.gnf`, off the executable's own string run (`loading`).
+    loading: Some(&loading::LOADING),
     music: Some(MUSIC),
     cursor: include_str!("../../../assets/cursors/omega.svg"),
     // Not tried on Omega: its sun and craft carry-over from HD are unmeasured.
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
+    // Measured, confidence 80: the small bytes are summed (`docs/gameplay/rumble.md`).
+    rumble: oag_title::rumble::Rumble::Patterns(
+        oag_title::rumble::SmallMotor::Sum,
+        oag_title::rumble::Triggers::Omega,
+    ),
     // Unread, on `oag_2048::TITLE`'s own terms: this crate never opened
     // either weapon-stats table this lane, so nothing here can say which of
     // Omega's copies (HD's own two, or a fourth `_2048`-suffixed pair the way
@@ -168,6 +186,9 @@ pub const TITLE: &Title = &Title {
         // HD's law, inherited: Omega's own Autopilot update and cancel are unread.
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
+        // Read in `WeaponPads_TestCraft`: the Eliminator family skips the stamp
+        // (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title").
+        pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(false),
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::OMEGA,
         ),
@@ -210,6 +231,7 @@ pub const TITLE: &Title = &Title {
     // read through its own `load_omega`; no grids file is read on its own and no
     // unlock row is wired.
     main_menu: main_menu::MAIN_MENU,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Omega,
         definition_entry: None,
@@ -232,6 +254,10 @@ pub const TITLE: &Title = &Title {
             yaw: -0.25,
             offset: [29.0, 13.3, -129.0],
         }),
+        selection_card_scale: Some(0.903),
+        // Bronze, silver, gold from the top of each block of the `.gnf`, read off its texels and
+        // the shadPS4 `cell-select` frame (`docs/formats/omega-status.md`, "The medal atlas").
+        medal_tier_rows: Some([2, 1, 0]),
         frontend_glow: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         custom_campaigns: true,
@@ -268,6 +294,9 @@ pub const TITLE: &Title = &Title {
 const EFFECTS: oag_title::Effects = {
     use oag_title::{Burst, EffectSpec, Origin, Trigger, engine_effects};
     let mut effects = oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
+        // The original never spawns its own `WO_TRAIL_HITSHIP`
+        // (`docs/ghidra/functions/ps4-omega-eu/trail-hits.md`).
+        .trail_hits_on_setting()
         .without(Trigger::PlasmaBlast)
         .without(Trigger::EngineFlare)
         .without(Trigger::LeachbeamEnergy)

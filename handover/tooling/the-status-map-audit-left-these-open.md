@@ -42,7 +42,7 @@ built and checked against the original") picks the lower level unless noted:
   PSP's similar small gaps are scored).
 - **2048 Boot movies** 🟨 (`BOOT_PROFILE` is still `Provenance::Declared`,
   no attract-mode race). **2048 Loading** 📖 rather than 🟨: nothing
-  2048-specific is built (`loading: None`).
+  2048-specific is built (`loading: None`); the screen a race load starts (kind 4) is read, `docs/formats/2048-loading.md`.
 - **HD Track geometry**: ✅ is available if an RPCS3 matched-camera overlay
   counts as the screenshot diff (`docs/reverse-engineering/rpcs3-capture.md`,
   "The pick is fixed, and a rendered overlay confirms it"). The overlay is

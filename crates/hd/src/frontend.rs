@@ -685,6 +685,12 @@ pub mod names {
     /// [`menu-backdrop.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md
     pub const FURY_SETTINGS: &str = "Data/fe/fury.envsettings";
 
+    /// The front end's `HDR and Bloom` block under the Fury style: the running
+    /// settings store reads these values on the Fury menus, and the backdrop's
+    /// picture ends in the same chain as a race (`menu-backdrop.md`, "The final
+    /// composite adapts").
+    pub const FURY_BLOOM_SETTINGS: &str = "Data/fe/fe.fury.track.envsettings";
+
     /// The nineteen point clouds the Fury backdrop flies past, as the
     /// executable's own table at `0x009209b4` spells them - forward slashes
     /// and mixed case, unlike the backslashed `Data\FE\Images` names beside

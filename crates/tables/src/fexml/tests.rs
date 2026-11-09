@@ -260,3 +260,22 @@ fn expand_recovers_a_start_tag_missing_its_closing_bracket() {
     assert!(out.contains("</Values>"), "{out}");
     assert!(out.contains("</ImageModel>"), "{out}");
 }
+
+#[test]
+fn attributes_tolerate_whitespace_around_the_equals_sign() {
+    // Pure's HUD layouts write `BorderColor= "0x40000000"`; reading stopped at the
+    // space and dropped the attribute.
+    let got = attributes(r#" x="4" BorderColor= "0x40000000" scale = "0.8" y="2""#);
+    let want: Vec<(String, String)> = [
+        ("x", "4"),
+        ("BorderColor", "0x40000000"),
+        ("scale", "0.8"),
+        ("y", "2"),
+    ]
+    .iter()
+    .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+    .collect();
+    assert_eq!(got, want);
+    // A valueless word still ends the tag, as before.
+    assert_eq!(attributes(r#" x="4" disabled y="2""#).len(), 1);
+}

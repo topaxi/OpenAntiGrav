@@ -163,7 +163,9 @@ pub const MODE_ICONS_HD: &[(u32, &str)] = &[(3, r"Data\FE\Images\single_race_ico
 pub const FEATURES: &[oag_title::loading::FeatureStyle] = &[
     oag_title::loading::FeatureStyle {
         name: STYLE_HD,
+        dark_ground: false,
         mode_icons: MODE_ICONS_HD,
+        mode_stills: oag_title::loading::ModeStills::NONE,
         features: &[
             feature(
                 r"Data\FE\Images\Barrel_Roll.gtf",
@@ -199,7 +201,9 @@ pub const FEATURES: &[oag_title::loading::FeatureStyle] = &[
     },
     oag_title::loading::FeatureStyle {
         name: STYLE_FURY,
+        dark_ground: true,
         mode_icons: MODE_ICONS_FURY,
+        mode_stills: oag_title::loading::ModeStills::NONE,
         features: &[
             feature(
                 r"Data\FE\Images\Barrel_Roll_fury.gtf",
@@ -301,8 +305,9 @@ pub const PROGRESSION: oag_title::loading::Progression = oag_title::loading::Pro
 
 /// The base game's style, as `OPT_FE_STYLE`'s own first entry spells it.
 ///
-/// White and blue. First in [`FEATURES`], so a source with no saved choice gets
-/// it.
+/// White and blue. A source with no saved choice gets the style whose
+/// `dark_ground` matches the front end it serves, which is Fury's on the disc's
+/// `DATA00`.
 pub const STYLE_HD: &str = "HD";
 
 /// Fury's style, as `OPT_FE_STYLE`'s second entry spells it.
@@ -396,7 +401,6 @@ pub const CHROME: &[(oag_title::loading::Chrome, &str)] = &[
 /// `FE_MODE_ICON`), each drawn behind a `square.gtf` bullet. An earlier reading
 /// called them a debug overlay; the strings are in the retail string table.
 pub const LABELS: oag_title::loading::Labels = oag_title::loading::Labels {
-    brand: "WIPEOUT\u{ae} HD",
     feature_image: "FE_FEATURE_IMAGE",
     feature_description: "FE_FEATURE_DESC",
     progression_bar: "FE_PROG_BAR",

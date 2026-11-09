@@ -100,7 +100,10 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
         "the player's own row should be on the board"
     );
 
-    let rows = oag_game::results_tables::field_rows(Some(&board));
+    let rows = oag_game::results_tables::field_rows(
+        Some(&board),
+        &oag_game::results_tables::team_keys(oag_hd::TITLE, race.slot_teams()),
+    );
     let model = oag_ui_screens::endrace::FieldResults {
         loyalty: None,
         headline: oag_ui_screens::endrace::Headline::Position(
@@ -117,7 +120,7 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
         .display()
         .to_string();
     let mut archives = open_hd_archives(&source);
-    let strings = oag_ui::language::StringTable::default();
+    let strings = english(&mut archives);
     let base = oag_hud::sprite::Sheet::default();
     let screens = oag_game::endrace::load(
         &mut archives,
@@ -173,16 +176,170 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
         texts.contains(&player_place.to_string()),
         "the player's own place ({player_place}) should be drawn: {texts:?}"
     );
-    // At least one other craft's own row drew too, if the field is more
-    // than one - the whole-field grid, not only the player's line.
-    if board.rows.len() > 1 {
+    // Every craft's row names its team (`Grid1.r`), as the disc's own string table
+    // spells it, and the ones still racing say `ER_RACING`: the whole-field grid,
+    // not only the player's line.
+    for row in &board.rows {
+        let team = oag_title::team::listed_id(
+            oag_hd::TITLE.teams,
+            &race.slot_teams()[usize::from(row.slot)],
+        );
+        let shown = strings.get_or_id(team);
         assert!(
-            texts.len() > 3,
-            "more than just the title/headline/POS/TIME captions should have drawn \
-             for an {}-craft field: {texts:?}",
-            board.rows.len()
+            texts.iter().any(|text| text == shown),
+            "slot {} ({team}) should be named {shown:?}: {texts:?}",
+            row.slot
+        );
+        assert_ne!(shown, team, "{team} resolves through HD's own strings");
+    }
+    let racing = strings.get_or_id("ER_RACING");
+    for row in board.rows.iter().filter(|row| row.finish_tick.is_none()) {
+        assert!(
+            texts.iter().any(|text| text == racing),
+            "place {} was still racing: {texts:?}",
+            row.place
         );
     }
+}
+
+/// What `EndRace Results` draws for `board`: the text of every cell, off the real definition.
+fn results_texts(
+    board: &oag_raceplay::scoreboard::Board,
+    race: &race::Race,
+    screens: &oag_game::endrace::EndRaceScreens,
+    strings: &oag_ui::language::StringTable,
+) -> Vec<String> {
+    let rows = oag_game::results_tables::field_rows(
+        Some(board),
+        &oag_game::results_tables::team_keys(oag_hd::TITLE, race.slot_teams()),
+    );
+    let model = oag_ui_screens::endrace::FieldResults {
+        loyalty: None,
+        headline: oag_ui_screens::endrace::Headline::Position(
+            board.player().map_or(1, |row| row.place),
+        ),
+        rows,
+    };
+    let skin = oag_ui::menu::Skin::new(
+        oag_hd::frontend::FRONT_END
+            .menu
+            .expect("HD authors a MenuSkin"),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    oag_ui_screens::endrace::hd::hd_results_draw_list(
+        &model,
+        &screens.results,
+        &skin,
+        &oag_ui::menu::Frame::default(),
+        strings,
+        None,
+        false,
+        &|_| None,
+    )
+    .body
+    .iter()
+    .filter_map(|draw| match draw {
+        oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
+        _ => None,
+    })
+    .collect()
+}
+
+/// The field keeps finishing behind the Results screen: the autopilot crosses first, the board is
+/// taken with the rest `RACING`, and as the field runs on (`Race::tick_finished`, the frame
+/// loop's own step) a craft that crosses gets its time on the drawn screen where `ER_RACING`
+/// stood. Real circuit, real definition, real strings.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn a_craft_that_crosses_behind_the_results_screen_replaces_racing_with_its_time() {
+    let Some(mut race) = autopiloted_hd_race() else {
+        return;
+    };
+    race_to_the_flag(&mut race);
+    assert!(
+        race.runs_on_after_the_line(),
+        "the autopilot crossed the line"
+    );
+    let first = race.results().expect("a finished race has results").clone();
+    let racing_at_the_flag = first.rows.iter().filter(|row| !row.finished()).count();
+    assert!(
+        racing_at_the_flag > 0,
+        "nobody is left to finish after the player"
+    );
+
+    let source = image().expect("checked above").display().to_string();
+    let mut archives = open_hd_archives(&source);
+    let strings = english(&mut archives);
+    let screens = oag_game::endrace::load(
+        &mut archives,
+        &strings,
+        oag_ui_screens::picker::FaceScales::default(),
+        oag_hd::endrace::AUTHORED_GRID,
+        &oag_hud::sprite::Sheet::default(),
+        &[],
+        oag_hd::TITLE,
+    )
+    .expect("HD's own EndRace Results read off the real disc");
+    let racing = strings.get_or_id("ER_RACING").to_string();
+    let before = results_texts(&first, &race, &screens, &strings);
+    assert_eq!(
+        before.iter().filter(|text| **text == racing).count(),
+        racing_at_the_flag
+    );
+
+    let hash_at_the_flag = race.sim.state_hash();
+    let mut shown = first.clone();
+    let revision = race.results_revision();
+    for _ in 0..CAP {
+        race.tick_finished();
+        if race.results_revision() != revision
+            && race.results().is_some_and(|board| {
+                board.rows.iter().filter(|row| !row.finished()).count() < racing_at_the_flag
+            })
+        {
+            shown = race.results().expect("a board").clone();
+            break;
+        }
+    }
+    let now_racing = shown.rows.iter().filter(|row| !row.finished()).count();
+    assert!(
+        now_racing < racing_at_the_flag,
+        "no craft finished behind the screen"
+    );
+    assert_ne!(race.sim.state_hash(), hash_at_the_flag, "the field ran on");
+
+    let after = results_texts(&shown, &race, &screens, &strings);
+    assert_eq!(
+        after.iter().filter(|text| **text == racing).count(),
+        now_racing
+    );
+    let newly: Vec<_> = shown
+        .rows
+        .iter()
+        .filter(|row| {
+            row.finished()
+                && first
+                    .rows
+                    .iter()
+                    .any(|old| old.slot == row.slot && !old.finished())
+        })
+        .collect();
+    assert!(!newly.is_empty());
+    for row in newly {
+        let time = oag_ui_screens::endrace::draw::format_ticks(row.finish_tick.expect("finished"));
+        assert!(
+            after.contains(&time) && !before.contains(&time),
+            "slot {} should read {time} on the refreshed screen: {after:?}",
+            row.slot
+        );
+    }
+    let player = |board: &oag_raceplay::scoreboard::Board| board.player().cloned();
+    assert_eq!(
+        player(&shown),
+        player(&first),
+        "the person's own row never moves"
+    );
 }
 
 /// Regression for `oag_tables::fexml`'s malformed-tag recovery
@@ -228,11 +385,13 @@ fn hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag() {
         loyalty: None,
         headline: oag_ui_screens::endrace::Headline::Position(1),
         rows: vec![oag_ui_screens::endrace::FieldRow {
+            score: None,
             place: 1,
             time_ticks: Some(1000),
             player: true,
             seat: None,
             name: None,
+            team: None,
         }],
     };
     let layers = oag_ui_screens::endrace::hd::hd_results_draw_list(
@@ -539,11 +698,13 @@ fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
 
     let rows: Vec<oag_ui_screens::endrace::FieldRow> = (1..=8u8)
         .map(|place| oag_ui_screens::endrace::FieldRow {
+            score: None,
             place,
             time_ticks: Some(6000 + u64::from(place) * 60),
             player: place == 5,
             seat: None,
             name: None,
+            team: None,
         })
         .collect();
     let model = oag_ui_screens::endrace::FieldResults {

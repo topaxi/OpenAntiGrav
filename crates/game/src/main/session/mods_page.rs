@@ -20,6 +20,37 @@ use crate::stage::Stage;
 
 use super::Session;
 
+/// The menu tree, the MODS listing and the mod campaigns a rebuild makes.
+pub(crate) type Rebuilt = (
+    menu::Definition,
+    Vec<mods::Listing>,
+    oag_game::campaign::custom::Installed,
+);
+
+/// A rebuild's inputs, owned.
+pub(crate) struct RebuildJob {
+    bases: Vec<std::path::PathBuf>,
+    switches: oag_game::settings::Mods,
+    language: Option<String>,
+    title: &'static oag_title::Title,
+    updated: bool,
+    strings: oag_ui::language::StringTable,
+}
+
+impl RebuildJob {
+    /// Reads every mod from disk and builds the tree: the part that touches files.
+    pub(crate) fn run(self) -> anyhow::Result<Rebuilt> {
+        oag_game::menu_tree::rebuilt(
+            &self.bases,
+            &self.switches,
+            self.language.as_deref(),
+            self.title,
+            self.updated,
+            &self.strings,
+        )
+    }
+}
+
 impl Session {
     /// Re-supplies the ENABLED row for the mod the MOD row just moved onto.
     pub(crate) fn resupply_mod_switch(&mut self) {
@@ -38,12 +69,12 @@ impl Session {
         let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &self.stage) else {
             return;
         };
-        let Some((id, default)) = mods::selected(&stage.menu, &shell.mods)
+        let Some((id, default_enabled)) = mods::selected(&stage.menu, &shell.mods)
             .map(|mod_| (mod_.id.clone(), mod_.default_enabled))
         else {
             return;
         };
-        if !mods::switch(&mut self.settings.mods, &id, default, on) {
+        if !mods::switch(&mut self.settings.mods, &id, on, default_enabled) {
             self.resupply_mod_switch();
             return;
         }
@@ -51,56 +82,81 @@ impl Session {
         if let Err(e) = oag_game::settings::save(&self.settings) {
             error!("could not save settings: {e:#}");
         }
-        self.rebuild_mod_menus(&id);
+        self.rebuild_menus(Some(&id));
     }
 
     /// Builds the tree, listing, campaigns and tracks again for the switches in
-    /// `self.settings`, and reopens the menus where they were with `id` on the MOD row.
-    fn rebuild_mod_menus(&mut self, id: &str) {
-        let Some(mut shell) = self.shell.clone() else {
-            return;
-        };
-        let Some(rebuild) = shell.rebuild else {
+    /// `self.settings`, and reopens the menus where they were; with `select`, that mod
+    /// is on the MOD row. A campaign saved from the editor is found this way.
+    pub(super) fn rebuild_menus(&mut self, select: Option<&str>) {
+        let Some(job) = self.rebuild_job() else {
             info!("a --menu file has no mods to rebuild; the switch is saved");
             return;
         };
-        let built = mods::Mods::load(&self.settings.mods).and_then(|loaded| {
-            crate::prepare::mods_menu(
-                &loaded,
-                self.settings.language.as_deref(),
-                shell.title,
-                rebuild.updated,
-            )
-        });
-        let (mut definition, listing, installed) = match built {
+        let built = job.run().map_err(|e| format!("{e:#}"));
+        self.apply_rebuilt(built, select);
+    }
+
+    /// What a rebuild needs, owned, so it can run on a worker thread. `None` for a
+    /// `--menu` file, which has no mods.
+    pub(super) fn rebuild_job(&self) -> Option<RebuildJob> {
+        let shell = self.shell.as_ref()?;
+        let rebuild = shell.rebuild?;
+        Some(RebuildJob {
+            bases: oag_mod::mods_search_path(),
+            switches: self.settings.mods.clone(),
+            language: self.settings.language.clone(),
+            title: shell.title,
+            updated: rebuild.updated,
+            strings: shell.strings.clone(),
+        })
+    }
+
+    /// Puts a finished rebuild in place and reopens the menus where they were; with `select`,
+    /// that mod is on the MOD row.
+    pub(super) fn apply_rebuilt(&mut self, built: Result<Rebuilt, String>, select: Option<&str>) {
+        let Some(mut shell) = self.shell.clone() else {
+            return;
+        };
+        let (definition, listing, installed) = match built {
             Ok(built) => built,
             Err(e) => {
-                error!("could not rebuild the menus for the mods: {e:#}; the switch applies from the next launch");
+                error!("could not rebuild the menus for the mods: {e}; the change applies from the next launch");
                 return;
             }
         };
-        crate::prepare::finish_definition(&mut definition, shell.title, &shell.strings);
         self.custom_tracks.set_mod_files(&installed.tracks);
         shell.definition = definition;
         shell.mods = listing;
         shell.custom_campaigns = std::sync::Arc::new(installed);
-        let Stage::Menu(stage) = &self.stage else {
+        let Some(mut model) = self.reopened_menu(&shell) else {
             self.shell = Some(shell);
             return;
         };
-        let trail = stage.menu.trail();
-        let skin = stage.skin;
-        let mut model = self.menu_model(&shell, &skin);
-        if !model.restore_trail(&trail) {
-            error!("the rebuilt menus lack a page the player was on: {trail:?}");
+        if let Some(id) = select {
+            model.seed(mods::SELECTED, &menu::Value::Text(id.to_string()));
+            mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
         }
-        model.seed(mods::SELECTED, &menu::Value::Text(id.to_string()));
-        mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
         model.settle();
         if let Stage::Menu(stage) = &mut self.stage {
             stage.menu = model;
         }
         self.shell = Some(shell);
         self.stalled = true;
+    }
+
+    /// The menu model built on `shell`'s tree and opened where the open menus stand: the
+    /// same pages, the cursor on the same rows. `None` when no menu is open.
+    pub(crate) fn reopened_menu(&mut self, shell: &super::Shell) -> Option<menu::Menu> {
+        let Stage::Menu(stage) = &self.stage else {
+            return None;
+        };
+        let trail = stage.menu.trail();
+        let skin = stage.skin;
+        let mut model = self.menu_model(shell, &skin);
+        if !model.restore_trail(&trail) {
+            error!("the rebuilt menus lack a page the player was on: {trail:?}");
+        }
+        Some(model)
     }
 }

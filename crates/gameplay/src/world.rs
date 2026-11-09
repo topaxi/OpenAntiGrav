@@ -252,6 +252,9 @@ pub struct Transit {
     pub ticks_left: u16,
     /// The course ring point it comes out at, resolved when it entered.
     pub to: u32,
+    /// The fork route it comes out on, as its index in the course's routes plus one; `0`
+    /// for the ring.
+    pub route: u16,
     /// Its speed coming out, track units a second.
     pub exit_speed: f32,
 }
@@ -607,8 +610,9 @@ mod tests {
     fn the_world_snapshot_does_not_grow() {
         // +360 bytes: the LeachBeam pool of eight (was one Option<Beam>); +64: `Held::quake_armed`,
         // one byte per ship; +128: `Ship::muzzle`, the hull's weapon node, 16 bytes per ship;
-        // +128: `Ship::transit`, a mod's jump along the circuit, 16 bytes per ship.
-        const LIMIT: usize = 20_072;
+        // +128: `Ship::transit`, a mod's jump along the circuit, 16 bytes per ship;
+        // +192: `ShipState::flip`, the Eliminator flip, 24 bytes per craft.
+        const LIMIT: usize = 20_264;
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,

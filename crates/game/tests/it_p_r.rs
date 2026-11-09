@@ -13,11 +13,15 @@
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
 mod pad_join_end_to_end;
+mod pause_menu_ground_truth;
 mod pause_resume_ground_truth;
+mod photo_mode_ground_truth;
 mod picker_flaps_ground_truth;
 mod picker_glyphs_ground_truth;
 mod picker_pitch_ground_truth;
 mod plasma_cues_audio_ground_truth;
+mod player_rows;
+mod player_tags_ground_truth;
 mod pose_hold_ground_truth;
 mod pose_lean_ground_truth;
 mod ps2_glow_mask_ground_truth;
@@ -38,8 +42,11 @@ mod race_ground_truth;
 mod race_remix_ground_truth;
 mod record_readout_ground_truth;
 mod render_bench_ground_truth;
+mod replay_audio_ground_truth;
+mod replay_viewer_ground_truth;
 mod resume_countdown_ground_truth;
 mod roster_declared_ground_truth;
+mod rumble_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

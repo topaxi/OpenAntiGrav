@@ -428,7 +428,7 @@ the player's team name where the original prints the profile tag (this build
 has none), and the tie order follows this build's grid array. `PosTag` is no
 longer skipped by `hud::is_screen_positioned`.
 
-**`PlrTag0`-`PlrTag7` are the genuine runtime anchor** - a separate,
+**`PlrTag0`-`PlrTag7` are the genuine runtime anchor** (drawn since: `oag_hud::player_tags`, in the reticle's placement) - a separate,
 multiplayer-only layout (`MPTag_HUD.xml`), and its eight `<Text>` widgets
 carry no `x`/`y` at all, unlike `PosTag`. That is the one case
 `hud::is_screen_positioned`'s exemption still describes correctly: nothing
@@ -649,8 +649,8 @@ pair of the 26 code-only keys; the other 25 are not read.
   `borderExtendPixels` and the halo closes about 43 % of the measured gap -
   see [hud-skins.md part D](hud-skins.md#d-what-was-built-2026-10-06-hud-crisp-lane).
   `[graphics] hud_scale` (default `sharp-bilinear`) is the other half, for the
-  raster HUDs. HD alone has a `Safe Area Setting` that draws the whole HUD at `percent / 100`
-  about the screen centre: `[graphics] hud_safe_area` (default 90, the disc's;
+  raster HUDs. HD alone authors a `Safe Area Setting`, which every title now offers as the SCREEN SIZE row: the whole HUD is drawn
+  at `percent / 100` about the screen centre, `[graphics] hud_safe_area` (default 90 on HD, the disc's, and 100 elsewhere;
   [hd-hud.md](../formats/hd-hud.md#the-whole-hud-is-drawn-at-the-safe-area-setting-hd-hud-leftovers-2026-10-21)).
 - **`TotalTime` overflows the right edge.** `align="left"` at `OffsetX="475"
   x="-75"` starts at 400, and a `HUD`-font time at scale 1.0 measures 92 px - 12 px
@@ -1070,8 +1070,8 @@ Recorded so none of this reads as undiscovered work.
 - ~~**Medal targets.** `IG_HUD_GOLD`/`SILVER`/`BRONZE`/`RECORD` need
   progression data...~~ **Closed 2026-09-28** - see "Medal targets, closed
   2026-09-28" below.
-- **`IG_PAUSE_QUIT`.** There is no pause: leaving a race drops the `World` rather
-  than suspending it.
+- **`IG_PAUSE_QUIT`.** Drawn since 2026-11-07, as the pause screen's QUIT RACE row ([the pause
+  menu](pause-menu.md)); it drops the parked race.
 - **Unreferenced `Data\HUD\*.vex` models** (Pure's gauge set, `Bar_1`/`Bar_3`/`Bar_outline_1` and `Zone_*`, is referenced and drawn as of 2026-10-22; the rest of the 26 below is not). `Bar_1`, `Speed`, `Shield`, `Lap`,
   `Position`, `Thrust`, 11 `Weapon_*`, `Zone_Bar_*`, `ghostship`, `grid`,
   `memory_stick_anim`. Referenced by **no** layout's `Src=` and by no string in
@@ -1374,3 +1374,57 @@ quad over the 14x80 cell, and the lap count `3` (scale 0.6) a 26.8x49.0 quad ove
 inherits HD's HUD engine, unmeasured. Pulse's PSP path does the same on its own flag (`HudArt::raster`); 2048 is
 unmeasured.
 
+
+## HD's Eliminator race line (2026-11-06, `eliminator-hud`)
+
+The maintainer's report: in HD's Eliminator the HUD is missing many elements. Compared on RPCS3
+(HD Fury EU, Racebox Eliminator, Vineta K, weapons on: the intro board, the countdown, 30 s of
+racing with a weapon held; evidence and addresses in
+[`eliminator-hud.md`](../ghidra/functions/ps3-hdfury-eu/eliminator-hud.md)) against
+`oag-game --race --mode eliminator --track Data\Environments\01_Vineta_K\track.vex` (the default circuit differs). **The original draws `DATA00`'s
+`elimination_hud.xml`** (the `HUD_Elim_*` fragments), not `DATA02`'s `KillsText` design: its
+executable has no `KillsText`, and the frames show the widgets only `DATA00` authors.
+
+| Element | Original | Ours before | Ours now |
+| --- | --- | --- | --- |
+| Lap panel `LAP` and the digit | yes | yes | yes |
+| Hexagon round the lap digit (`LapPanel2`) | yes | no | **yes** |
+| Shield hexagon and `100` | yes | yes | yes |
+| Message line (`Machine Gun`, clipped at its left in both) | yes | yes | yes |
+| Race line: bar, two end panels, marker per craft | yes | no | **yes** |
+| `ShipsBehind` / `ShipsInFront` (`0` ... `7` on a grid of eight) | yes | no | **yes** |
+| `TARGET ( 200 )` header | yes | no | **open** |
+| Ranked `NAME ( score )` rows, player's highlighted, rank digit and bracket | yes | no | **open** |
+| `MPWeaponIcon` | never in a single-player Eliminator, hidden at bind ([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md)) | no | closed |
+| `ScoreFeedBack` popups | authored, not caught in a frame | no | **open** |
+
+Region metric, the fraction of the original's red HUD pixels (relative redness over 45, within 6 px
+of one of ours), the countdown frame against ours at tick 60 on the same circuit (Vineta K,
+1280x720, safe area 100 percent): lap panel **0.93** (0.40 before the hexagon), race-line band
+**0.51**, whole frame 0.24 (rows missing). The band is 0.0 before the race line existed. Safe
+area 100 percent is **inferred from panel geometry** (the original's panels start 52 px in on 1278,
+ours match there; at HD's default 90 percent ours sit 40 px further in), the profile was not read.
+The grid marker sits at about 0.98 of the bar in ours and 0.96 in the original (x 1085 against
+1069 on a 926 px bar): the same end of the bar, 16 px apart, which is the unread `RM+0x1948`
+offset or the grid's own placement, not explained. A loose metric (the two worlds differ); the
+side-by-sides are the evidence, and the pair is an ad-hoc HUD-region one, not a compare-page pair.
+
+The law is on the page above: each craft's marker at `bar_x + fraction * bar_width`, the fraction
+the distance into the lap wrapped to one lap, the player's the last slot, the counts the markers
+at or past the player's against the rest (`oag_hud::race_line`). The wiring is generic (a layout
+that authors `ShipLinePos0` draws it for a readout that carries a line, `oag_raceplay` fills one
+in every Eliminator) and the guard is `crates/raceplay/tests/hd_eliminator_hud_ground_truth.rs`.
+
+**Open, and why.** The rows print a *score*, `craft+0x6f80`, not kills: HD's Eliminator is "reach
+the target score", with points for damage, for an elimination and for laps, and a loss on being
+eliminated. This build races Pulse's kill-count rule, so there is no number to print and a row of
+invented `( 0 )`s would be a stand-in for data the original has. The scoring law, the `200`
+target (`g_GameState+0x20`) and the row writer `0x0008c6f8` are unread. The marker half turn
+(`craft+0x6ad8`) was read 2026-11-07, [eliminator-flip.md](../ghidra/functions/ps3-hdfury-eu/eliminator-flip.md). Not captured: a frame after a kill (none was reachable without
+the scoring), the split-screen Eliminator pair (`splitscreen_elimination_hud_{0,1}.xml` author the
+same line and take the same code path, unchecked). 2048 and Omega: both executables name `ShipLinePos%d`, `ShipsInFront` and `EliminatorPositions`
+and both packages ship the same `Elimination_HUD` / `hud_elim_*` fragments (Omega's
+`hud_elim_lap_counters.xml` is 1,482 bytes, HD's size), so the race line **now draws on an
+Eliminator race of either through the shared path, unmeasured on both** (no 2048 or Omega
+Eliminator frame): **ported, unmeasured**. Their `ALWAYS_ON` lists do not carry `LapPanel2`:
+**checked, applies, not wired**.

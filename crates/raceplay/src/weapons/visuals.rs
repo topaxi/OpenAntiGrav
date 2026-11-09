@@ -898,6 +898,42 @@ impl Race {
         self.projectile_model_matrices(oag_tables::weapons::Weapon::Shuriken)
     }
 
+    /// Where each live Missile's two heads are, for the model draw: two per
+    /// missile, `Missile.cpp`'s constructor builds the model twice
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "2026-11-07").
+    ///
+    /// **Chosen, not measured.** Each sits on one of the two orbiting
+    /// anchors `WO_MISSILE_HEAD` already rides ([`missile_flare_anchors`]),
+    /// on the velocity-built basis every HD body takes; the original's own
+    /// per-tick placement of the two nodes (`0x0011e640`, an AltiVec body) is
+    /// unread.
+    #[must_use]
+    pub fn missile_head_model_matrices(&self) -> Vec<Mat4> {
+        let kind = oag_tables::weapons::Weapon::Missile;
+        self.sim
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .enumerate()
+            .filter(|(_, projectile)| projectile.kind == Some(kind))
+            .flat_map(|(slot, projectile)| {
+                let age = oag_weapons::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
+                let (a, b) = missile_flare_anchors(projectile.position, projectile.velocity, age);
+                let body = self.projectile_between(
+                    slot,
+                    projectile,
+                    self.projectile_matrix(kind, slot, projectile),
+                );
+                [a, b].map(|anchor| {
+                    let mut head = body;
+                    head.w_axis += (anchor - projectile.position).extend(0.0);
+                    head
+                })
+            })
+            .collect()
+    }
+
     /// Where each live Plasma bolt's own head is, for the model draw.
     ///
     /// **HD only** - `oag_gameplay`'s `Projectile` carries no charge/flight

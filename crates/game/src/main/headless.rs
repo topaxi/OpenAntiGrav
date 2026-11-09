@@ -51,6 +51,7 @@ pub(crate) fn run_windowless(
     }
     if cli.original_menu {
         loaded.frontend.set_extra_tiles(Vec::new());
+        loaded.frontend.hide_pad_focus();
     }
     // A language chosen on an earlier run skips the picker. Reported either
     // way: silently not asking is indistinguishable from a broken picker, and
@@ -285,6 +286,7 @@ pub(crate) fn run_windowless(
                 menu_picker_seconds: cli.menu_args.menu_picker_seconds,
                 menu_picker_step_seconds: cli.menu_args.menu_picker_step_seconds,
                 menu_model_seconds: cli.menu_args.menu_model_seconds,
+                menu_movie_frame: cli.menu_args.menu_movie_frame,
                 menu_prompt: cli.menu_args.menu_prompt.clone(),
                 presented: cli.presented,
                 // The clone is overridden rather than `settings` itself, so
@@ -686,13 +688,15 @@ pub(crate) fn run_race(
             record: cli.ghost.record_ghost.clone().map(|path| {
                 let team = loaded.liveries.first().map_or("", |l| l.team.as_str());
                 let mut header = oag_game::ghosts::header(&key, team, loaded.setup.seed);
-                header.options = oag_game::ghosts::race_options(
+                header.options = race::Launch {
                     scheme,
-                    loaded.setup.difficulty,
-                    cli.driver.autopilot,
-                    cli.driver.pilot_assist.unwrap_or_default(),
-                    give_weapon(cli.give()).ok().flatten(),
-                );
+                    difficulty: loaded.setup.difficulty,
+                    autopilot: cli.driver.autopilot,
+                    pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
+                    original_ai: None,
+                    campaign_skill: None,
+                }
+                .to_table();
                 (path, header)
             }),
         };
@@ -775,6 +779,9 @@ pub(crate) fn run_race(
                 hud_scale: settings.graphics.hud_scale,
                 hud_safe_area: settings.graphics.hud_safe_area,
                 dynamic_hud: settings.display.dynamic_hud,
+                ghost_visible: settings.display.ghost_ship_shown(title),
+                player_tags: settings.display.multiplayer_tags_shown(title),
+                player: settings.player.clone(),
                 shadows: render_profile.shadows,
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,

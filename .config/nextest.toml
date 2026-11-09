@@ -1,20 +1,19 @@
 # Test-runner configuration. Scheduling only - nothing here changes whether a
 # test runs or what it asserts.
 #
-# `just test-data` is tail-bound rather than throughput-bound: the tests over 16
-# cores finish in about the time the *slowest single test* takes, so what
-# matters is that the long ones are already running while the short ones fill in
-# around them. Every ground-truth test that walks a disc takes tens of seconds;
-# almost every other test takes milliseconds. Left to the default order the
-# suite ends with a handful of long tests running alone on an otherwise idle
-# machine.
+# `just test-data` is throughput-bound: the tests' summed time (14,394 s on
+# 2026-11-05) over 16 threads is 900 s, against 925 s of wall clock, and the
+# slowest single test is 124 s. Every ground-truth test that walks a disc takes
+# tens of seconds; almost every other test takes milliseconds. Priority only
+# orders the queue, so it cannot shorten a run that has work for every thread
+# until the end; less work can (`docs/architecture/workspace-layout.md`, "Test-data
+# suite measurements", has the families by summed seconds).
 #
-# **This file is the second-order fix, and it stops paying once one test is the
-# whole tail.** On 2026-09-09 only 62s of a 587s run was not overlapped with a
-# single 525s test, so nothing schedulable here could have helped: the fix was
-# splitting that test. See `scripts/check-test-budget.py`, which fails the run
-# when a single test passes 300s, and `docs/architecture/workspace-layout.md`
-# for the measurements.
+# It was tail-bound on 2026-09-09, when one 525 s test was the whole tail
+# (62 s of a 587 s run was not overlapped with it): the fix then was splitting
+# that test, and `scripts/check-test-budget.py` fails a run when a single test
+# passes 300 s so it cannot come back. `docs/architecture/workspace-layout.md`
+# has the measurements.
 #
 # Priority runs from -100 to 100 and higher goes first.
 
@@ -53,3 +52,35 @@ priority = 50
 # in `oag-game`, and `oag-game` is among `oag-rcs`'s dependents. What a
 # selection cannot see is two branches that are each green on their own and red
 # together, which is what the lead's full `just test-data` per merge batch is for.
+
+# Test groups cap how many tests of a kind run at once, inside one nextest run.
+#
+# `gpu-vram`: the tests that open the machine's default GPU, which is a laptop's
+# discrete one. NVIDIA's Linux driver does not spill device memory into system
+# memory, so sixteen games drawing together exhaust 8 GiB (`wgpu error: Out of
+# Memory`): a full run peaked at 7,782 MiB with 13 processes on it, and five HD
+# scene tests failed. A spawned game peaks at 0.5 to 1.05 GiB (one Omega split
+# screen test at 2.6 GiB), so 4 of them stay under 6 GiB with the desktop and the
+# small in-process GPU tests beside them. Measurements and the cost in wall
+# clock: `docs/architecture/workspace-layout.md`, "Test groups".
+#
+# The modules below are exactly the test modules that spawn the game or call
+# `capture_pixels_from`/`capture_from`; `scripts/check-test-groups.py` (in the
+# gate) fails when a module is missing or stale. Every other in-process GPU test
+# picks its adapter through `oag_gpu::test_adapter`.
+[test-groups]
+gpu-vram = { max-threads = 4 }
+
+# An Omega race load holds more than the 1.05 GiB the group's cap assumes, so even two at once
+# beside an emulator run out of the 8 GiB (`wgpu error: Out of Memory`): each takes the whole group.
+[[profile.default.overrides]]
+filter = 'package(oag-game) & test(/pause_menu_ground_truth::omega_screens/)'
+threads-required = 4
+
+[[profile.default.overrides]]
+filter = 'package(oag-game) & test(/^(absorb_mask_ground_truth|bomb_orbit_ground_truth|boot_ground_truth|campaign_cursor_ground_truth|cockpit_hit_ground_truth|drive_ground_truth|flyby_pane_ground_truth|glow_stamp_ground_truth|hd_behind_glass_frame_ground_truth|hd_bomb_blast_ground_truth|hd_leach_ball_ground_truth|hd_leach_strip_ground_truth|hd_missile_blast_ground_truth|hd_plasma_ball_ground_truth|hd_rest_flame_ground_truth|hd_sun_occlusion_ground_truth|hd_weapon_scene_ground_truth|hillside_rain_frame_ground_truth|hud_boost_glow_ground_truth|mag_floor_scroll_ground_truth|mine_texture_scroll_ground_truth|mod_shader_frame_ground_truth|omega_menu_backdrop_ground_truth|pause_menu_ground_truth|photo_mode_ground_truth|pose_hold_ground_truth|pose_lean_ground_truth|ps2_glow_mask_ground_truth|pure_sign_glow_ground_truth|render_bench_ground_truth|replay_viewer_ground_truth|shake_blur_ground_truth|shield_shell_scroll_ground_truth|shine_ground_truth|split_head_to_head_ground_truth|split_recording_ground_truth|split_screen_ground_truth|texture_detail_ground_truth|trail_order_ground_truth|vita_2048_boot_ground_truth|weapon_stamp_ground_truth|window_layout_ground_truth|window_seats_grid_ground_truth|wreck_ground_truth|zone_airbrake_flaps_ground_truth)::/)'
+test-group = 'gpu-vram'
+
+[[profile.default.overrides]]
+filter = 'package(oag-render) & test(/^(collision_capture|hd_emissive_glow_ground_truth|hd_emissive_lit_path|hd_pad_ne_ground_truth|hd_pad_ne_lit_path|hd_scenery_animation_ground_truth|hd_vertex_scroll_ground_truth|moving_normal_inverse_transpose|node_anim_pipeline|pad_alpha_test_ground_truth)::/)'
+test-group = 'gpu-vram'

@@ -1305,6 +1305,19 @@ impl Stage {
         }
     }
 
+    /// [`Self::orient`] for a handle from [`Self::play_held`] (`orient` addresses attached
+    /// instances alone, which a held surface is not): a mod's portal or marker standing square
+    /// to the road rather than to world up. A no-op on a stale handle.
+    pub fn orient_surface(&mut self, playing: Playing, up: Vec3) {
+        if let Some(instance) = self
+            .instances
+            .get_mut(usize::from(playing.index))
+            .filter(|instance| instance.generation == playing.generation)
+        {
+            instance.up = up;
+        }
+    }
+
     /// Changes an attached instance's own severity - see [`System::rescale`].
     ///
     /// A no-op on a stale handle, the same shape [`Self::follow`] takes.

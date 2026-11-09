@@ -6,7 +6,10 @@
 //!   person's own clock alike, and the craft is frozen until then;
 //! - the craft drives on from where it came out, with no rescue;
 //! - a transit over the line on the final lap finishes the race on its exit tick;
-//! - a clearance probe on the track reads its width.
+//! - a clearance probe on the track reads its width;
+//! - an exit on a fork's route (Pulse `05_Track`) puts the craft on that route, with the
+//!   driver on its line, and it drives the detour on to the rejoin instead of being sent
+//!   back to the ring.
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay --run-ignored only \
@@ -19,12 +22,17 @@ use oag_raceplay as race;
 use oag_raceplay::transit::Distance;
 
 const TRACK: &str = "Data\\Environments\\16_Track\\track.vex";
+const FORKED: &str = "Data\\Environments\\05_Track\\track.vex";
 
 fn race_on_16() -> Option<race::Race> {
+    race_on(TRACK)
+}
+
+fn race_on(track: &str) -> Option<race::Race> {
     let image = oag_testdata::image("data/images/pulse-psp-eu.chd")?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        track: Some(TRACK.to_string()),
+        track: Some(track.to_string()),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         no_driver_for_class: true,
@@ -169,4 +177,73 @@ fn a_clearance_probe_reads_the_real_track() {
     assert!(fits, "a small portal fits the road 200 units on");
     assert!(!wide, "a 120-unit-wide one does not");
     assert_eq!(ahead, 200.0);
+}
+
+/// The nearest the craft is to a sample of course route `route` and to a ring point, in units.
+fn offsets(race: &race::Race, route: usize) -> (f32, f32) {
+    let course = race.course().expect("a course");
+    let at = race.sim.world.ships[0].physics.body.position;
+    let nearest = |points: &mut dyn Iterator<Item = oag_core::math::Vec3>| {
+        points.map(|p| p.distance(at)).fold(f32::INFINITY, f32::min)
+    };
+    (
+        nearest(&mut course.routes()[route].positions.iter().copied()),
+        nearest(&mut (0..course.len()).filter_map(|i| course.position(i))),
+    )
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn an_exit_on_a_forks_route_seats_the_craft_and_its_driver_on_the_route() {
+    let Some(mut race) = race_on(FORKED) else {
+        return;
+    };
+    let (route, half) = {
+        let course = race.course().expect("a course");
+        let route = &course.routes()[0];
+        let span = (course.progress_at(route.merge).unwrap()
+            - course.progress_at(route.split).unwrap())
+        .rem_euclid(course.length());
+        (0usize, course.advance(route.split, span * 0.4))
+    };
+    // Past the first lap's gate, so the move is a plain jump.
+    drive_until(&mut race, 1200, |r| {
+        r.sim.world.ships[0].standing.lap_start_tick.is_some()
+    });
+    let exit = race::transit::Exit {
+        to: half,
+        route: u16::try_from(route + 1).unwrap(),
+    };
+    assert!(race.move_to(0, exit, 150.0));
+    let driver = race.sim.world.ships[0].driver;
+    assert_eq!(
+        usize::from(driver.branching.route),
+        route + 1,
+        "the driver is on the route's line"
+    );
+    assert!(driver.branching.entered, "past the split");
+    let (on_route, on_ring) = offsets(&race, route);
+    assert!(
+        on_route < 25.0 && on_route * 3.0 < on_ring,
+        "put on the route's deck: {on_route:.1} from it, {on_ring:.1} from the ring"
+    );
+
+    // It drives the detour: still the route's driver a second on, never back at the ring.
+    let respawns = race.respawns();
+    for _ in 0..60 {
+        race.tick(&throttle());
+    }
+    assert_eq!(race.respawns(), respawns, "no rescue");
+    let driver = race.sim.world.ships[0].driver;
+    assert_eq!(usize::from(driver.branching.route), route + 1);
+    let (on_route, on_ring) = offsets(&race, route);
+    assert!(on_route * 3.0 < on_ring, "{on_route:.1} vs {on_ring:.1}");
+
+    // The same ring point as a ring exit is the ring: the route is the exit's own to name.
+    let mut ring = race_on(FORKED).unwrap();
+    drive_until(&mut ring, 1200, |r| {
+        r.sim.world.ships[0].standing.lap_start_tick.is_some()
+    });
+    assert!(ring.move_to(0, race::transit::Exit::ring(half), 150.0));
+    assert_eq!(ring.sim.world.ships[0].driver.branching.route, 0);
 }

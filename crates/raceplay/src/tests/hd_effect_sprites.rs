@@ -21,7 +21,8 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
         oag_hd::TITLE.effects.sprites,
         [
             oag_title::engine_effects::TRACK_BLAST_EFFECT,
-            oag_title::engine_effects::QUAKE_EFFECT
+            oag_title::engine_effects::QUAKE_EFFECT,
+            oag_title::engine_effects::MISSILE_FLARE_EFFECT,
         ]
     );
     let names = oag_hd::TITLE.effects.names();
@@ -113,4 +114,45 @@ fn the_quake_wave_spreads_by_the_extent_law_when_listed_and_stays_a_point_when_n
     assert!(listed.has_extents());
     let unlisted = quake(false).expect("same image");
     assert!(!unlisted.has_extents());
+}
+
+fn missile_head(listed: bool) -> Option<oag_fx::psys::Effect> {
+    let image = oag_testdata::image("hdfury-ps3-eu-dec.iso")?;
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    let title: &Title = oag_hd::TITLE;
+    let (effect, _) = particle_effect(
+        &mut archives,
+        title.race.effect_dir_for("track"),
+        oag_title::engine_effects::MISSILE_FLARE_EFFECT,
+        false,
+        false,
+        listed,
+    )
+    .expect("the effect loads");
+    Some(effect)
+}
+
+/// HD's flying Missile plays `WO_MISSILE_HEAD`, whose two head emitters name
+/// `vandergraf_balls_1024x512_missile`, an 8 x 4 atlas of red filament rings.
+/// Drawn without it every particle is the procedural soft disc, which the
+/// emitter's white-hot colour ramp blows out to a white blob; listed, the
+/// rings are what a player sees (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`,
+/// "The Missile's red rings").
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_missile_head_draws_its_ring_atlas_when_listed_and_a_white_disc_when_not() {
+    let Some(listed) = missile_head(true) else {
+        return;
+    };
+    let rings = |effect: &oag_fx::psys::Effect| {
+        effect
+            .emitters
+            .iter()
+            .filter(|e| e.name == "WO_MISSILE_HEAD" || e.name == "MISSILE_HEAD_TRANSFORMED")
+            .filter(|e| e.sprite.is_some())
+            .count()
+    };
+    assert_eq!(rings(&listed), 2, "both head emitters read the atlas");
+    let unlisted = missile_head(false).expect("same image");
+    assert_eq!(rings(&unlisted), 0);
 }

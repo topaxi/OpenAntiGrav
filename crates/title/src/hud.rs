@@ -63,6 +63,9 @@ pub struct HudLayouts {
     /// in `assets/fallback/`. `None` draws the whole-screen layout scaled into
     /// each view.
     pub split_layout: Option<&'static str>,
+    /// The layout whose `PlrTag` text is the face of a multiplayer race's player tags
+    /// (Pulse's `MPTag_HUD.xml`; `Multiplayer Tags`). `None` where the tags are not wired.
+    pub player_tags: Option<&'static str>,
     /// The disc's `HUD Style` list, one entry per skin, default first. Empty
     /// where the title authors none (Pulse, Pure, 2048). A skin's own
     /// [`HudSkin::layouts`] carries an empty list, so the lookup never recurses.
@@ -255,6 +258,13 @@ pub enum Sights {
         /// literals, confidence 88). Drawn off
         /// [`oag_race::sight::Sight::leach_cycle`].
         leach: Option<[&'static str; 4]>,
+        /// What this title's own sight update was measured to do at run time, or
+        /// `None` where only the layout is known and the widgets draw as authored.
+        ///
+        /// Wipeout HD (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`,
+        /// "Measured live"). 2048 and Omega author the same widget names and
+        /// have not been read.
+        live: Option<LiveSight>,
     },
     /// This title's reticle has not been read.
     ///
@@ -263,7 +273,42 @@ pub enum Sights {
     Unread,
 }
 
+/// How HD's sight widgets are driven at run time, as measured on the original.
+///
+/// The sight law (`oag_race::sight`) keeps one half-extent in the PSP's pixels
+/// (30 open, 9.6 seeking, 6 locked); HD writes each widget's size as its authored
+/// size times that extent over a constant. `docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`,
+/// "Measured live".
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LiveSight {
+    /// The Missile's rings are `authored * extent / this`: the open ring is
+    /// 340 px on a 128 px `Outer`, so `30 / 2.65625`.
+    pub missile_extent_unit: f32,
+    /// The LeachBeam's rings are `authored * extent / this`: the open backdrop
+    /// is 600 px on a 176 px one, so `30 / 3.40909`.
+    pub leach_extent_unit: f32,
+    /// The Missile's chase rate is the PSP's times this while a target is on
+    /// screen: `4.0`, the HUD grid's width over the PSP's (`1920 / 480`).
+    /// It widens the arrival radius the lock needs along with the step.
+    pub chase_gain: f32,
+}
+
+// The units are authored finite constants, never NaN.
+impl Eq for LiveSight {}
+
 impl Sights {
+    /// What the Missile's chase rate is multiplied by: HD's measured gain, and
+    /// `1.0` (the PSP's law) wherever the title's own update is unread.
+    #[must_use]
+    pub const fn chase_gain(&self) -> f32 {
+        match self {
+            Self::Concentric {
+                live: Some(live), ..
+            } => live.chase_gain,
+            _ => 1.0,
+        }
+    }
+
     /// Whether a held LeachBeam's reticle runs the LeachBeam's own law
     /// (`FUN_0881e8c8`: spinning arrowheads, no hold timer, lock taken on
     /// arrival) rather than the Missile's: the PSP dialect with a LeachBeam set,
@@ -271,7 +316,15 @@ impl Sights {
     /// the Missile's; HD's own update is a different function nobody has read.
     #[must_use]
     pub const fn runs_leach_law(&self) -> bool {
-        matches!(self, Self::Brackets { leach: Some(_), .. })
+        matches!(
+            self,
+            Self::Brackets { leach: Some(_), .. }
+                | Self::Concentric {
+                    leach: Some(_),
+                    live: Some(_),
+                    ..
+                }
+        )
     }
 }
 
@@ -585,9 +638,9 @@ pub struct HudArt {
     pub total_time_hundredths: bool,
     /// Whether the Eliminator's `PosTag0`-`PosTag7` rows and `KillsText` header
     /// are drawn as `"<team> <kills>"` and `KILLS (n)`. **Pulse only**: read off
-    /// its executable (`Hud_UpdateKillColumn`) and a live frame. HD authors
-    /// `KillsText` and six `PosTag` slots (`docs/formats/hd-hud.md`) but nothing
-    /// has measured what it writes in them, so it stays off there.
+    /// its executable (`Hud_UpdateKillColumn`) and a live frame. HD's Eliminator
+    /// draws `DATA00`'s layout, which has no `KillsText` and whose rows print a
+    /// score: the race's own `oag_race::ScoreLaw` turns those on, not this.
     pub kill_column: bool,
     /// Whether the four `Info1`-`Info4` widgets are the HUD's message lines
     /// (`oag_hud::messages`). Pulse, Pure and HD author the same four widgets in
@@ -619,6 +672,9 @@ pub struct HudArt {
     /// The drop shadow the original draws under every text string: `None` draws none. See
     /// [`TextShadow`].
     pub text_shadow: Option<crate::pre_race::Sourced<TextShadow>>,
+    /// The alpha, over 255, the original's HUD text outline pass draws at where it ignores the
+    /// layout's `BorderColor` alpha: `None` draws the layout's own. See [`TextOutlineAlpha`].
+    pub text_outline_alpha: Option<crate::pre_race::Sourced<TextOutlineAlpha>>,
     /// How the speed and shield bars' fill, marker and label follow the bar's
     /// tip: `None` where unmeasured, which leaves the plain left-anchored crop.
     pub bar_tip: Option<BarTip>,
@@ -628,8 +684,9 @@ pub struct HudArt {
     /// The whole HUD sliding with the drawn lean: `None` where unmeasured, which leaves the
     /// HUD fixed on the screen. See [`HudSway`].
     pub sway: Option<crate::pre_race::Sourced<HudSway>>,
-    /// The player's `Safe Area Setting`, which draws the whole HUD smaller about the screen's
-    /// centre: `None` where the title has no such option. See [`SafeArea`].
+    /// The player's `Safe Area Setting` (the SCREEN SIZE row), which draws the whole HUD and the
+    /// front end smaller about the screen's centre. HD's is the disc's own; every other title
+    /// carries [`SafeArea::SHARED`], and `None` draws 1:1 with no row. See [`SafeArea`].
     pub safe_area: Option<crate::pre_race::Sourced<SafeArea>>,
     /// The player's `Dynamic HUD` option, which can switch the whole HUD off: `None` where the
     /// title's options have no such list. See [`DynamicHudList`].
@@ -706,6 +763,28 @@ impl LitAlpha {
     }
 }
 
+/// The alpha of an outlined HUD font's border pass, replacing the layout's `BorderColor` alpha.
+///
+/// Pure **measured** (`docs/formats/pure-status.md`, "Pure's HUD text outline"): a PPSSPP GE
+/// list of a Time Trial frame draws every HUD string as two `RECTANGLES` prims over one 4-bit
+/// font texture, vertex colour white, the first under a black CLUT whose alpha is the `.fnt`
+/// palette's alpha times `0.40` on all 11 strings of the frame (`0x66`), the second under a white
+/// CLUT carrying the palette's grey as alpha. The layouts author `0x40000000` and `0x30000000`;
+/// neither reaches the first CLUT. Stored as the byte because [`HudArt`] compares by value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextOutlineAlpha {
+    /// The outline's alpha over 255.
+    pub byte: u8,
+}
+
+impl TextOutlineAlpha {
+    /// `byte / 255`.
+    #[must_use]
+    pub fn alpha(self) -> f32 {
+        f32::from(self.byte) / 255.0
+    }
+}
+
 /// The black copy of a text string the original draws under it, offset up and
 /// left.
 ///
@@ -758,6 +837,14 @@ impl HudArt {
     pub fn safe_area_scale(&self, percent: Option<u8>) -> f32 {
         self.safe_area.map_or(1.0, |area| area.value.scale(percent))
     }
+
+    /// The percent the SCREEN SIZE row shows for the player's `percent` (`None`: the title's
+    /// default): held to the slider's range and step. `100` where the title has no option.
+    #[must_use]
+    pub fn safe_area_percent(&self, percent: Option<u8>) -> u8 {
+        self.safe_area
+            .map_or(100, |area| area.value.snapped(percent))
+    }
 }
 
 /// A title's `Safe Area Setting`: a slider in percent whose value is how much of
@@ -784,16 +871,36 @@ pub struct SafeArea {
 }
 
 impl SafeArea {
-    /// The HUD's scale for a player's `percent` (`None` for the title's default): clamped to the
-    /// slider's range and snapped to its step, as a slider would hold it.
+    /// The slider a title gets when its original authors none, so the player can still pull
+    /// the screen in off a rounded corner or an overscanned edge: HD's range and step, and a
+    /// default of `100` because these titles draw 1:1 and look unchanged until it is moved.
+    pub const SHARED: Self = Self {
+        default_percent: 100,
+        min_percent: 80,
+        max_percent: 100,
+        step_percent: 2,
+    };
+
+    /// A player's `percent` (`None` for the title's default) clamped to the slider's range and
+    /// snapped to its step, as a slider would hold it.
     #[must_use]
-    pub fn scale(self, percent: Option<u8>) -> f32 {
+    pub fn snapped(self, percent: Option<u8>) -> u8 {
         let value = percent
             .unwrap_or(self.default_percent)
             .clamp(self.min_percent, self.max_percent);
         let step = self.step_percent.max(1);
-        let snapped = self.min_percent + (value - self.min_percent) / step * step;
-        f32::from(snapped) / 100.0
+        self.min_percent + (value - self.min_percent) / step * step
+    }
+
+    /// The HUD's scale for a player's `percent` (`None` for the title's default).
+    #[must_use]
+    pub fn scale(self, percent: Option<u8>) -> f32 {
+        f32::from(self.snapped(percent)) / 100.0
+    }
+
+    /// Every value the slider offers, lowest first.
+    pub fn values(self) -> impl Iterator<Item = u8> {
+        (self.min_percent..=self.max_percent).step_by(usize::from(self.step_percent.max(1)))
     }
 }
 
@@ -1031,6 +1138,20 @@ mod tests {
         rung_zones: None,
         caption_hidden_from_zone: None,
     };
+
+    /// The shared slider offers HD's range and step, lowest first, and snaps a value into it.
+    #[test]
+    fn the_shared_slider_is_eighty_to_a_hundred_in_twos_and_draws_one_to_one_by_default() {
+        let area = SafeArea::SHARED;
+        assert_eq!(
+            area.values().collect::<Vec<_>>(),
+            [80, 82, 84, 86, 88, 90, 92, 94, 96, 98, 100]
+        );
+        assert_eq!(area.snapped(None), 100);
+        assert_eq!(area.snapped(Some(97)), 96);
+        assert_eq!(area.snapped(Some(3)), 80);
+        assert_eq!(area.scale(None), 1.0);
+    }
 
     /// The bottom rung has no name: HD's `0 Start` has no speed class beside it.
     #[test]

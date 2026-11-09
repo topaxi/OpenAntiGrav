@@ -73,6 +73,8 @@
 //!
 //! [`mesh-draw.md`]: ../../../docs/ghidra/functions/psp-pulse-usa/mesh-draw.md
 
+use std::ops::Range;
+
 use oag_core::math::{Mat4, Vec3};
 
 use oag_mesh::mesh::GpuVertex;
@@ -189,35 +191,92 @@ pub fn environment_map_by(
     }));
 }
 
+/// A model's unit world normals, one run of floats per axis so the coordinate loop runs
+/// across vertices in vector registers: about twice the speed of a list of `Vec3`, and the
+/// same bits, each lane doing the scalar sum in the scalar order.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct UnitNormals {
+    x: Vec<f32>,
+    y: Vec<f32>,
+    z: Vec<f32>,
+}
+
+impl UnitNormals {
+    /// How many normals this holds.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.x.len()
+    }
+
+    /// Whether this holds no normal.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.x.is_empty()
+    }
+
+    /// Replaces normal `index`.
+    pub fn set(&mut self, index: usize, normal: Vec3) {
+        self.x[index] = normal.x;
+        self.y[index] = normal.y;
+        self.z[index] = normal.z;
+    }
+
+    /// Replaces every normal with `normals`, which the caller has renormalised.
+    pub fn refill(&mut self, normals: impl Iterator<Item = Vec3>) {
+        self.x.clear();
+        self.y.clear();
+        self.z.clear();
+        self.x.reserve(normals.size_hint().0);
+        self.y.reserve(normals.size_hint().0);
+        self.z.reserve(normals.size_hint().0);
+        for normal in normals {
+            self.x.push(normal.x);
+            self.y.push(normal.y);
+            self.z.push(normal.z);
+        }
+    }
+}
+
 /// Every vertex's unit world normal: `normal` taken per vertex and renormalised, which is
 /// the first half of what [`environment_map_by`] does for each coordinate. The half that does
 /// not depend on the camera, so a caller drawing one model from several cameras in a frame
 /// (a split screen) computes it once and runs [`environment_texcoords_from_units`] per view.
 pub fn unit_normals_by(
     base: &[GpuVertex],
-    out: &mut Vec<Vec3>,
+    out: &mut UnitNormals,
     normal: impl Fn(&GpuVertex) -> Vec3,
 ) {
-    out.clear();
-    out.reserve(base.len());
-    out.extend(base.iter().map(|v| normal(v).normalize_or_zero()));
+    out.refill(base.iter().map(|v| normal(v).normalize_or_zero()));
 }
 
 /// [`environment_map_by`], producing the coordinates alone from normals
 /// [`unit_normals_by`] already renormalised - for a drawable that streams them in their own
 /// buffer (`mesh_render::Texcoords::Streamed`) rather than re-uploading every whole vertex to
 /// change eight bytes of each. The same arithmetic to the bit as renormalising per call.
+///
+/// Writes `out` over `spans` of vertices and leaves the rest of it alone, for a caller that
+/// draws only part of the model. `out` is as long as `units`.
 pub fn environment_texcoords_from_units(
-    units: &[Vec3],
-    out: &mut Vec<[f32; 2]>,
+    units: &UnitNormals,
+    spans: &[Range<usize>],
+    out: &mut [[f32; 2]],
     light0: Vec3,
     light1: Vec3,
 ) {
     let l0 = light0.normalize_or_zero();
     let l1 = light1.normalize_or_zero();
-    out.clear();
-    out.reserve(units.len());
-    out.extend(units.iter().map(|&n| unit_coordinate(n, l0, l1)));
+    for span in spans {
+        let normals = units.x[span.clone()]
+            .iter()
+            .zip(&units.y[span.clone()])
+            .zip(&units.z[span.clone()]);
+        for (coordinate, ((&x, &y), &z)) in out[span.clone()].iter_mut().zip(normals) {
+            *coordinate = [
+                (1.0 + (x * l0.x + y * l0.y + z * l0.z)) * 0.5,
+                (1.0 + (x * l1.x + y * l1.y + z * l1.z)) * 0.5,
+            ];
+        }
+    }
 }
 
 /// One vertex's coordinate from its world normal, not yet renormalised.
@@ -227,12 +286,7 @@ pub fn environment_texcoords_from_units(
 /// screen rather than drawing one bad vertex.
 #[inline]
 fn coordinate(normal: Vec3, l0: Vec3, l1: Vec3) -> [f32; 2] {
-    unit_coordinate(normal.normalize_or_zero(), l0, l1)
-}
-
-/// [`coordinate`] of a normal that is already a unit vector (or zero).
-#[inline]
-fn unit_coordinate(n: Vec3, l0: Vec3, l1: Vec3) -> [f32; 2] {
+    let n = normal.normalize_or_zero();
     [(1.0 + n.dot(l0)) * 0.5, (1.0 + n.dot(l1)) * 0.5]
 }
 

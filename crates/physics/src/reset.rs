@@ -28,7 +28,7 @@
 
 use oag_core::math::Vec3;
 
-use crate::collide::{CollisionWorld, Ray, Raycaster, Surface};
+use crate::collide::{CollisionWorld, Ray, Raycaster};
 use crate::forces::Environment;
 use crate::params::Handling;
 use crate::ship::ShipState;
@@ -110,10 +110,7 @@ fn nearest_reset(
 ) -> Option<ResetContact> {
     let mut nearest: Option<(f32, ResetContact)> = None;
 
-    for collider in world.colliders() {
-        if collider.surface() != Surface::Reset {
-            continue;
-        }
+    for collider in world.reset_colliders() {
         // `include_reset` is set because the collider would otherwise skip itself.
         let Some(hit) = collider.raycast(ray, skip, true) else {
             continue;
@@ -138,7 +135,7 @@ fn nearest_reset(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::collide::TriangleSoup;
+    use crate::collide::{Surface, TriangleSoup};
     use crate::params::Dimensions;
     use crate::ship::Body;
 

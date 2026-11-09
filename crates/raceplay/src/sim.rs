@@ -48,11 +48,25 @@ use super::*;
 /// cannot forget a field, so the completeness is structural rather than
 /// asserted.
 ///
-/// It copies the track with the race - the collision soup, the spline, the
-/// racing line, both pad lists - none of which any tick mutates. That is
-/// wasteful for a snapshot taken every tick and it is not what this is
-/// measured on yet; the handover thread records the split as the optimization
-/// to reach for when a reconcile budget exists.
+/// **The constant half is shared, not copied.** The collision soup, the spline,
+/// the racing line and its order, the routes, the pads, the weapon tables, the
+/// speed and hull plans and the pilots are each behind an [`Arc`], so a clone
+/// costs a reference count for them and carries a copy of the mutable half only
+/// (`docs/architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md`,
+/// decision 2). `Clone` still cannot forget a field, and an `Arc`'s `Debug` is
+/// its value's, so the text a restore is compared by still reads all of it.
+///
+/// **Constant means constant after the first tick.** The plans, and the routes'
+/// plans, are written by [`Race::ensure_speed_plans`], and a test or a setter
+/// may write any of the others, always through [`Arc::make_mut`] or a new
+/// [`Arc`]: a snapshot holding the old value keeps it. A snapshot from before
+/// the first tick therefore restores to a race with no plans, which learns them
+/// again, exactly as a whole copy would.
+///
+/// **A shared field holds plain data.** No `Cell`, `Mutex` or lazy cell that is not
+/// derived from the field's own value may enter one: it would be one piece of state
+/// across the race and every snapshot, and the text cannot show that. The only cell
+/// in the half is `CollisionWorld`'s broadphase, built once from the colliders.
 #[derive(Debug, Clone)]
 pub struct RaceSim {
     /// The simulation state.
@@ -61,7 +75,7 @@ pub struct RaceSim {
     /// Pulse classes. See [`super::finished_thrust`].
     pub(super) finished_thrust: Option<super::finished_thrust::FinishedThrust>,
     /// The original opponent's tables, for [`super::Race::use_original_ai`].
-    pub(super) original_tables: Option<super::original_tables::OriginalTables>,
+    pub(super) original_tables: Option<Arc<super::original_tables::OriginalTables>>,
     /// The campaign's original opponent, when [`super::Race::use_original_ai`]
     /// switched it on; `None` flies this project's driver. Outside
     /// [`World`], so no state hash and no other mode moves.
@@ -71,8 +85,8 @@ pub struct RaceSim {
     /// How many people the grid was laid out for ([`Setup::people`](super::Setup::people)):
     /// the rows `rank_from_back` gave the craft, which the original field's grid positions follow.
     pub(super) people: u8,
-    pub(super) collision: CollisionWorld,
-    pub(super) spline: Spline,
+    pub(super) collision: Arc<CollisionWorld>,
+    pub(super) spline: Arc<Spline>,
     /// The authored racing line, as the opponents' drivers want it.
     ///
     /// Built once from [`Self::spline`] and **index-parallel to [`Self::ai_order`]**,
@@ -80,20 +94,20 @@ pub struct RaceSim {
     /// craft pays for two searches. Track data rather than world state, which is
     /// why it is here and the drivers themselves are on the ships. See
     /// [`racing_line`] and `docs/gameplay/ai.md`.
-    pub(super) racing_line: oag_ai::Line,
+    pub(super) racing_line: Arc<oag_ai::Line>,
     /// Which spline sample each racing-line index is, in lap order.
     ///
     /// The identity permutation on nine of the disc's twelve circuits. See
     /// [`ai_order`], and [`Race::ai_sample`] for the lookup itself.
-    pub(super) ai_order: Vec<u32>,
+    pub(super) ai_order: Arc<[u32]>,
     /// One AI line per way round a fork, beside the ring's - see
     /// [`super::routes`]. Empty on a circuit with no fork.
-    pub(super) routes: Vec<super::routes::RouteLine>,
+    pub(super) routes: Arc<[super::routes::RouteLine]>,
     /// The speed plan the opponents' drivers follow, built at the start from
     /// this line, this collision and the field's handling, or `None` when the
     /// race has no opponents or the plan did not verify clean. See
     /// [`Race::field_speed_plan`] and `oag_ai::plan`.
-    pub(super) speed_plan: Option<oag_ai::SpeedPlan>,
+    pub(super) speed_plan: Option<Arc<oag_ai::SpeedPlan>>,
     /// Whether [`Race::ensure_speed_plans`] has run: the plans are learned on
     /// the first tick, not in `Race::start`, so a race whose opponents all fly
     /// the original driver can skip them.
@@ -102,12 +116,12 @@ pub struct RaceSim {
     pub(super) plan_reference: Option<Handling>,
     /// Each other hull on the grid's own ring and route plans, one entry per
     /// distinct handling. See [`Race::adapt_hull_plans`].
-    pub(super) hull_plans: Vec<super::speed_plan::HullPlans>,
+    pub(super) hull_plans: Arc<[super::speed_plan::HullPlans]>,
     /// Which of [`Self::hull_plans`] each slot follows on the ring, `None` for
     /// [`Self::speed_plan`] itself.
     pub(super) ship_plan: [Option<u8>; oag_gameplay::MAX_SHIPS],
     /// What learning the plans cost, for a diagnostic; see [`super::speed_plan::PlanSteps`].
-    pub(super) plan_steps: super::speed_plan::PlanSteps,
+    pub(super) plan_steps: Arc<super::speed_plan::PlanSteps>,
     /// What the opponents' drivers are flown with. One set for the whole field:
     /// per-craft variation is the skill work, and this is the basic driver.
     pub(super) ai_tuning: oag_ai::Tuning,
@@ -118,7 +132,7 @@ pub struct RaceSim {
     /// player's, and is read only while [`Race::flown_for_the_player`] is -
     /// by [`Race::set_ai_pilot`] (`--autopilot-pilot`) or the Autopilot
     /// pickup - otherwise inert.
-    pub(super) ai_pilots: [oag_ai::Pilot; oag_gameplay::MAX_SHIPS],
+    pub(super) ai_pilots: Arc<[oag_ai::Pilot; oag_gameplay::MAX_SHIPS]>,
     /// [`Race::autopilot_controls`]'s own tuning, for `--autopilot-skill`.
     ///
     /// `None` outside that flag - every ordinary race, and every existing
@@ -145,7 +159,7 @@ pub struct RaceSim {
     /// the title's per-class rule.
     pub(super) opponent_autopilot: bool,
     /// The lap counter's ring, or `None` on a track whose chain does not close.
-    pub(super) course: Option<Course>,
+    pub(super) course: Option<Arc<Course>>,
     /// Zone mode's three numbers, off the disc. `None` outside Zone mode, and on
     /// a source whose `handlingstats.xml` carries no `<Global><Zone/>`.
     pub(super) zone: Option<oag_tables::handling::Zone>,
@@ -396,6 +410,12 @@ pub struct RaceSim {
     /// The opponents' decision terms, resolved for this race's difficulty - see
     /// [`Setup::opponent_fire`].
     pub(super) fire_terms: oag_ai::weapon_ai::Law,
+    /// What an Eliminator is won on - see [`Setup::score_law`].
+    pub(super) score_law: Option<oag_race::ScoreLaw>,
+    /// How a score Eliminator's opponents spend weapons - see [`crate::score_pace`].
+    pub(super) score_pace: Option<crate::score_pace::ScorePace>,
+    /// The Eliminator flip - see [`Setup::flip_law`].
+    pub(super) flip_law: Option<oag_physics::flip::FlipLaw>,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
     /// Which gravity term that scale multiplies, the title's craft law.
@@ -414,7 +434,7 @@ pub struct RaceSim {
     /// (`Race::set_barrel_rolls`).
     pub(super) barrel_rolls: bool,
     /// The track's speed-pad trigger volumes - see [`Setup::speedup_pads`].
-    pub(super) speedup_pads: Vec<oag_vex::pads::PadVolume>,
+    pub(super) speedup_pads: Arc<[oag_vex::pads::PadVolume]>,
     /// Distance from the ship to each pad, one entry per pad, in track units.
     ///
     /// The original's `pad+0x1d0`, reimplemented as a broadphase rather than as
@@ -441,7 +461,7 @@ pub struct RaceSim {
     /// does not skip the trigger, it zeroes the list's own count
     /// (`World_CollectNodeLists`), and emptying this reproduces that at the same
     /// layer rather than adding a mode test to every tick.
-    pub(super) weapon_pads: Vec<oag_vex::pads::PadVolume>,
+    pub(super) weapon_pads: Arc<[oag_vex::pads::PadVolume]>,
     /// Distance from the ship to each weapon pad. The speed pads'
     /// [`Self::pad_distance`], one class over, and the same broadphase.
     pub(super) weapon_pad_distance: [Vec<f32>; MAX_SHIPS],
@@ -471,23 +491,23 @@ pub struct RaceSim {
     pub(super) weapon_pad_refresh: f32,
     /// Each weapon pad's nearest sample on [`Self::racing_line`] and its
     /// offset across it - see `field::pad_seek::line_positions`.
-    pub(super) weapon_pad_line: Vec<Option<(u32, f32)>>,
+    pub(super) weapon_pad_line: Arc<[Option<(u32, f32)>]>,
     /// Which opponents steer for a weapon pad - see [`super::PadSeeking`].
     pub(super) pad_seeking: super::PadSeeking,
     /// Which rule fires an opponent's forward weapon - see [`super::FireLaw`].
     pub(super) fire_law: super::FireLaw,
     /// The odds the original's fire law reads - see [`Setup::weapon_ai`].
-    pub(super) weapon_ai: Option<oag_tables::weapons::ai::WeaponAiStats>,
+    pub(super) weapon_ai: Option<Arc<oag_tables::weapons::ai::WeaponAiStats>>,
     /// This race's weapon table - see [`Setup::weapons`].
-    pub(super) weapons: Option<oag_tables::weapons::WeaponStats>,
+    pub(super) weapons: Option<Arc<oag_tables::weapons::WeaponStats>>,
     /// Restricts what a `Weapon Pad` hands out - see
     /// [`Setup::allowed_weapons`]. Empty is no restriction.
-    pub(super) allowed_weapons: Vec<oag_tables::weapons::Weapon>,
+    pub(super) allowed_weapons: Arc<[oag_tables::weapons::Weapon]>,
     /// The speed class, which indexes the pickup odds - see [`Setup::class`].
     ///
     /// The disc's own spelling, so a title whose ladder is not Pulse's - Pure,
     /// with `VECTOR` - selects its own row.
-    pub(super) class: String,
+    pub(super) class: Arc<str>,
     /// Which control scheme maps the snapshot. `[controls] scheme`.
     ///
     /// On `Race` and not on the input layer because the schemes differ in which
@@ -535,7 +555,28 @@ pub struct RaceSim {
     /// never re-arm. Render-side state, and out of the hash for the same
     /// reason. See [`Race::tick`], where the two are set side by side.
     pub(super) contact_cue_cooldown: [f32; oag_gameplay::MAX_SHIPS],
+    /// This tick's wall contact per craft, for the pad: the contact's size and
+    /// its side, `None` with no contact. A per-tick output beside
+    /// [`Self::cues`], out of the hash; see [`Race::wall_contact_of`].
+    pub(super) wall_contact: [Option<WallContactReading>; oag_gameplay::MAX_SHIPS],
 }
+
+/// One craft's wall contact this tick, as the pad reads it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WallContactReading {
+    /// The contact's size: the impulse the wall response applied
+    /// (`WallResponse::impulse_sum`).
+    pub size: f32,
+    /// Negative when the wall is on the craft's left.
+    pub side: f32,
+}
+
+/// A snapshot crosses threads (the speed-plan worker, a timeline's opening pass) and
+/// the learners share `&RaceSim`, so a shared field's type must stay `Send + Sync`.
+const _: () = {
+    const fn crosses_threads<T: Send + Sync>() {}
+    crosses_threads::<RaceSim>();
+};
 
 impl RaceSim {
     /// [`Race::may_use_pickup`]'s check, for the paths that hold a `RaceSim` alone (a
@@ -554,6 +595,62 @@ impl RaceSim {
         let standings: [oag_race::Standing; oag_gameplay::MAX_SHIPS] =
             std::array::from_fn(|slot| self.world.ships[slot].standing);
         oag_race::places(&standings, course)
+    }
+
+    /// What one snapshot holds of its own: the struct and the heap of its mutable half. An
+    /// estimate, for a budget (`timeline`): the shared half is not in it, and it counts lengths,
+    /// not what an allocator rounded them to.
+    pub(crate) fn snapshot_bytes(&self) -> usize {
+        fn held<T>(items: &[T]) -> usize {
+            size_of_val(items)
+        }
+        fn boxed<T>(item: &Option<Box<T>>) -> usize {
+            item.as_ref().map_or(0, |_| size_of::<T>())
+        }
+        size_of::<Self>()
+            + self.pad_distance.iter().map(|v| held(v)).sum::<usize>()
+            + self
+                .weapon_pad_distance
+                .iter()
+                .map(|v| held(v))
+                .sum::<usize>()
+            + held(&self.weapon_pad_refresh_left)
+            + held(&self.cues)
+            + held(&self.announcements)
+            + held(&self.class_announcements)
+            + self.autopilots.iter().map(boxed).sum::<usize>()
+            + boxed(&self.original_ai)
+    }
+
+    /// Whether every field of the constant half is the very allocation `other` holds. The
+    /// `Debug` text cannot say this: a copy reads the same.
+    #[cfg(test)]
+    pub(super) fn shares_constant_half_with(&self, other: &Self) -> bool {
+        fn both<T: ?Sized>(a: &Option<Arc<T>>, b: &Option<Arc<T>>) -> bool {
+            match (a, b) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+        }
+        Arc::ptr_eq(&self.collision, &other.collision)
+            && Arc::ptr_eq(&self.spline, &other.spline)
+            && Arc::ptr_eq(&self.racing_line, &other.racing_line)
+            && Arc::ptr_eq(&self.ai_order, &other.ai_order)
+            && Arc::ptr_eq(&self.routes, &other.routes)
+            && Arc::ptr_eq(&self.hull_plans, &other.hull_plans)
+            && Arc::ptr_eq(&self.plan_steps, &other.plan_steps)
+            && Arc::ptr_eq(&self.ai_pilots, &other.ai_pilots)
+            && Arc::ptr_eq(&self.speedup_pads, &other.speedup_pads)
+            && Arc::ptr_eq(&self.weapon_pads, &other.weapon_pads)
+            && Arc::ptr_eq(&self.weapon_pad_line, &other.weapon_pad_line)
+            && Arc::ptr_eq(&self.allowed_weapons, &other.allowed_weapons)
+            && Arc::ptr_eq(&self.class, &other.class)
+            && both(&self.speed_plan, &other.speed_plan)
+            && both(&self.course, &other.course)
+            && both(&self.weapons, &other.weapons)
+            && both(&self.weapon_ai, &other.weapon_ai)
+            && both(&self.original_tables, &other.original_tables)
     }
 
     /// The mode's damage rules with this race's own weapons switch applied -

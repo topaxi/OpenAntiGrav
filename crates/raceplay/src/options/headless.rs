@@ -48,6 +48,8 @@ impl Setup {
             #[cfg(feature = "view")]
             trail_sparks: false,
             #[cfg(feature = "view")]
+            request: None,
+            #[cfg(feature = "view")]
             campaign_event: false,
             seed,
             // An empty track, spelled out because `AiTrack` deliberately has
@@ -129,6 +131,8 @@ impl Setup {
             #[cfg(feature = "view")]
             leach_strip: None,
             #[cfg(feature = "view")]
+            missile_trail: None,
+            #[cfg(feature = "view")]
             destroy_stations: Vec::new(),
             finished_thrust: None,
             original_tables: None,
@@ -196,6 +200,8 @@ impl Setup {
             announcer: oag_sound::sfx::Announcer::default(),
             #[cfg(feature = "view")]
             class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
+            #[cfg(feature = "view")]
+            rumble: oag_tables::rumble::Library::default(),
             zone_stages: None,
             countdown_voice: false,
             countdown_beat: false,
@@ -219,6 +225,8 @@ impl Setup {
             autopilot_pad_grants: false,
             reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
             opponent_fire: oag_title::weapons::OpponentFire::PULSE,
+            score_law: None,
+            flip_law: None,
             speedup_pads: Vec::new(),
             weapon_pads: Vec::new(),
             weapons: None,

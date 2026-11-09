@@ -70,7 +70,12 @@ fn inside(x: f32, y: f32, clip: [f32; 4]) -> bool {
 /// element and is dropped.
 #[must_use]
 pub fn place(draw: &Draw, p: &Placement) -> Option<Draw> {
-    let mut draw = draw.clone();
+    place_owned(draw.clone(), p)
+}
+
+/// [`place`] on a draw the caller gives up: moved rather than copied, so a text draw's string
+/// is not copied.
+fn place_owned(mut draw: Draw, p: &Placement) -> Option<Draw> {
     {
         match &mut draw {
             Draw::Fill { rect, .. }
@@ -141,6 +146,36 @@ impl Frame {
                     ..*stamp
                 })
                 .collect(),
+        }
+    }
+
+    /// [`Self::placed`] on a frame the caller gives up: each draw is moved into the placed
+    /// frame rather than copied, and each list keeps its own allocation.
+    #[must_use]
+    pub fn into_placed(self, p: &Placement) -> Frame {
+        let place_all = |list: Vec<Draw>| {
+            list.into_iter()
+                .filter_map(|draw| place_owned(draw, p))
+                .collect()
+        };
+        let mut spans = self.spans;
+        spans.clear();
+        spans.push(Span {
+            clip: p.clip,
+            start: [0; 5],
+        });
+        let mut glow = self.glow;
+        for stamp in &mut glow {
+            stamp.rect = moved(stamp.rect, p);
+        }
+        Frame {
+            sprites: place_all(self.sprites),
+            hud_text: place_all(self.hud_text),
+            small_text: place_all(self.small_text),
+            default_text: place_all(self.default_text),
+            skin_text: place_all(self.skin_text),
+            spans,
+            glow,
         }
     }
 

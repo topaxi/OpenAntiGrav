@@ -12,7 +12,7 @@ use crate::mesh::{ModelTexture, Texels};
 /// chase camera produces; without mips, minification aliases into shimmer
 /// that a single sample can't fix. Filtering happens on `Rgba8UnormSrgb`
 /// sample data, matching what the sampler itself blends between levels.
-pub(super) fn mip_chain(width: u32, height: u32, rgba: &[u8]) -> Vec<(u32, u32, Vec<u8>)> {
+pub(crate) fn mip_chain(width: u32, height: u32, rgba: &[u8]) -> Vec<(u32, u32, Vec<u8>)> {
     let mut levels: Vec<(u32, u32, Vec<u8>)> = vec![(width, height, rgba.to_vec())];
     loop {
         let (w, h, data) = levels.last().expect("levels is never empty");

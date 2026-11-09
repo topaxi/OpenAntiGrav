@@ -640,7 +640,7 @@ impl Zoom {
     /// and `max` its UV mapping, as `hd_bloom` computes them.
     pub fn history(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: &Frame,
         rect: (u32, u32),
@@ -660,7 +660,7 @@ impl Zoom {
     pub(super) fn history_from(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: &Frame,
         scene: &wgpu::TextureView,
@@ -712,7 +712,7 @@ impl Zoom {
     #[allow(clippy::too_many_arguments)]
     fn history_pass(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: &Frame,
         rect: (u32, u32),
@@ -751,11 +751,13 @@ impl Zoom {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "hd zoom history");
         pass.set_pipeline(&self.history_pipeline);
         pass.set_viewport(0.0, 0.0, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
         let bound = group.as_ref().unwrap_or_else(|| &self.history_groups[next]);
         pass.set_bind_group(0, bound, &[]);
         pass.draw(0..3, 0..1);
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     /// The ring, over the scene, while a pulse runs; nothing otherwise.
@@ -763,7 +765,7 @@ impl Zoom {
     /// `rect` is the scene's drawn rectangle in pixels: the ring is in NDC of it.
     pub fn ring(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         scene: &wgpu::TextureView,
         frame: &Frame,
@@ -777,7 +779,7 @@ impl Zoom {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn ring_at(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         scene: &wgpu::TextureView,
         frame: &Frame,
@@ -816,6 +818,7 @@ impl Zoom {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "hd zoom ring");
         pass.set_pipeline(&self.ring_pipeline);
         pass.set_viewport(
             origin.0 as f32,
@@ -832,11 +835,12 @@ impl Zoom {
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint16);
         pass.draw_indexed(0..self.index_count, 0, 0..1);
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     fn write_constants(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         which: usize,
         (uv_scale, uv_max): ([f32; 2], [f32; 2]),
         source: SourceMap,

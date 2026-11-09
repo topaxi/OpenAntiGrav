@@ -415,6 +415,28 @@ pub fn seat_for_launch(
     }
 }
 
+/// Names the person at this machine, seat 1 ([`Race::player_slot`]), with the stored player
+/// name ([`crate::settings::Player::name`]), so the multiplayer tag over their craft in the
+/// other seat's view and their row on the end screens carry it. Every other slot stays unnamed
+/// and keeps `Player N`. With no name stored, or on a title that keeps no name
+/// (`profile`: 2048 and Omega, which ask when it is first needed), nothing is set. A network
+/// race's lobby names replace this whole list when it joins ([`Race::set_person_names`]).
+///
+/// Display only: nothing here reaches the simulation or its hash.
+pub fn name_first_seat(
+    race: &mut Race,
+    player: &crate::settings::Player,
+    profile: &oag_title::profile::Profile,
+) {
+    let Some(name) = player.name().filter(|_| profile.asks_for_name()) else {
+        return;
+    };
+    let seat = race.player_slot();
+    let mut names = vec![String::new(); seat + 1];
+    names[seat] = name.to_string();
+    race.set_person_names(names);
+}
+
 /// Keeps `race`'s local slots to the ones a device is on: a slot below the seated
 /// count with nothing driving it is flown by the grid's driver
 /// ([`Controller::Ai`]), and goes back to [`Controller::Local`] when a device
@@ -430,7 +452,8 @@ pub fn seat_for_launch(
 /// merged.
 ///
 /// This writes `World::controllers`, which the state hash covers, from outside
-/// the tick: a replay or a network client would have to carry it as an input.
+/// the tick, through [`Race::set_controller`], which records the change as an event so a
+/// recording of the race reproduces (`docs/formats/replay-file.md`, "Events").
 pub fn follow_devices<D: Copy + PartialEq>(race: &mut Race, assignment: &Assignment<D>) -> usize {
     let Some(humans) = assignment.humans() else {
         return 0;
@@ -443,8 +466,10 @@ pub fn follow_devices<D: Copy + PartialEq>(race: &mut Race, assignment: &Assignm
             Controller::Ai
         };
         let have = race.sim.world.controllers[slot];
-        if have != want && matches!(have, Controller::Local | Controller::Ai) {
-            race.sim.world.controllers[slot] = want;
+        if have != want
+            && matches!(have, Controller::Local | Controller::Ai)
+            && race.set_controller(slot, want)
+        {
             changed += 1;
             log::debug!("split screen: slot {slot} is now {want:?}");
         }

@@ -57,7 +57,8 @@ frame is every number under `x' = 960 + (x - 960) * 0.96` at the save's 96 %).
 | `clip` | `source = "mode-icon"`, `at`, `size` | the mode's video clip, once it has a picture; not while the screen fades |
 
 **Roles, not paths.** `asset` is a role the title's art table names (`rule`, `corner`, `dot`, `square`,
-`title-arrow`, `subtitle-arrow`) or `@feature`, the feature's picture. `colour` is `ink`, `accent`,
+`title-arrow`, `subtitle-arrow`), `@feature`, the feature's picture, or `@mode-icon`, the still of the race's mode
+(Omega). `colour` is `ink`, `accent`,
 `trough` or `ground`, the four `FEGlobals` the original's constructor reads
 (`HD_Grey`, `HD_Blue`, `HD_LightGrey`, `HD_BG`). `source` is what the screen supplies this frame:
 `caption`, `feature.title`, `feature.heading`, `feature.text`, `counts`, `percentage`, `current`, `step`
@@ -139,7 +140,7 @@ pairs: HD/Fury and Omega".
 
 ## Cross-title check (CLAUDE.md: 2048 and Omega)
 
-**HD only so far.** 2048, Omega and Pure name no `Loading` at all, and Pulse's names no layout (`oag_title::Loading::layout` is `None`), so their screens are still the code's. The HD law is **checked, not applicable yet**:
+**HD and Omega carry a loading layout.** 2048, Pure name no `Loading` at all, and Pulse's names no layout (`oag_title::Loading::layout` is `None`), so their screens are still the code's. The HD law is **checked, not applicable yet**:
 Omega's front end is HD's, but no Omega loading frame exists and shadPS4 race shots are untrusted
-(`docs/formats/omega-status.md`); 2048's loading screen is unread. The split-HUD half is unchanged on all
+(`docs/formats/omega-status.md`); 2048's loading screen is unbuilt ([2048-loading.md](2048-loading.md): its race load is a different kind from HD's feature screen). The split-HUD half is unchanged on all
 four titles (`SplitHud_*.toml` each carry `screen = "split-hud"`).

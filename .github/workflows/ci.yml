@@ -116,6 +116,30 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev libasound2-dev libudev-dev libclang-dev pkg-config
       - run: cargo +${{ steps.msrv-toolchain.outputs.name }} build --workspace
 
+  # The browser build's example (`oag_web`, docs/tools/web.md) type-checks for
+  # wasm32 with the nightly pages.yml builds it with. Cargo builds an example's
+  # dev-dependencies too, so a `validate`-featured `oag-schema` there (toml-schema
+  # does not compile for wasm32) failed the nightly's Pages job for four nights
+  # while every job here was green. `check` is enough: it resolves the same
+  # features and reaches the same compile errors without std rebuilt or linked.
+  # `RUSTFLAGS` is cleared: the wasm-only dead code in the example is not an error.
+  web-compile:
+    name: web build compiles (wasm32)
+    runs-on: ubuntu-24.04
+    env:
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v7
+      # rust-toolchain.toml pins 1.99.0 and wins over the default this step sets,
+      # so the cargo call names the nightly (as the msrv job does).
+      - uses: dtolnay/rust-toolchain@master
+        id: web-toolchain
+        with:
+          toolchain: nightly-2026-10-08
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +${{ steps.web-toolchain.outputs.name }} check --target wasm32-unknown-unknown -p oag-game --no-default-features --example oag_web --features web
+
   # Every WGSL module the web build emits goes through a real browser's shader
   # compiler (scripts/check-web-shaders.py, docs/tools/web.md "Shaders").
   # naga, which validates at build time, lets through what Chrome's Tint

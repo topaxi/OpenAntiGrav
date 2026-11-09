@@ -143,7 +143,7 @@ impl super::Race {
         let mut live = 0;
         let ships = usize::from(self.ship_count());
         let places = self.places();
-        let length = self.sim.course.as_ref().map(oag_race::Course::length);
+        let length = self.sim.course.as_deref().map(oag_race::Course::length);
         let reached: Vec<(usize, usize, f32, bool)> = (0..ships)
             .map(|slot| {
                 let ship = &self.sim.world.ships[slot];

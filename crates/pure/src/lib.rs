@@ -49,6 +49,12 @@ pub const TITLE: &Title = &Title {
     front_end: Some(FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
+    eliminator: oag_title::pre_race::Sourced::inherited(
+        oag_title::eliminator::EliminatorRule::Kills,
+        "Wipeout Pulse",
+    ),
+    // No flip in this executable: no `FE_FLIP`, no flip tunable, no `5 pi`.
+    eliminator_flip: oag_title::pre_race::Sourced::measured(None),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Pulse,
@@ -64,8 +70,11 @@ pub const TITLE: &Title = &Title {
     // disc - see `oag_pulse`'s note for the literal it was read from.
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
-    // No prompt glyph of this title's has been read; the disc's own draw unchanged.
-    prompts: &oag_title::prompts::Prompts::UNREAD,
+    // Measured: the six glyphs of `FX300ANG.fnt` - see `prompts`.
+    prompts: prompts::PROMPTS,
+    profile: oag_title::profile::Profile::NAME_AND_TAG,
+    photo: oag_title::photo::Strings::NONE,
+    photo_shot: None,
     // Pure's own recovery is unread; Pulse's law.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
     // Pure's effects law is unread; Pulse's commit helper squares the group volume.
@@ -82,6 +91,7 @@ pub const TITLE: &Title = &Title {
     // Measured lower than Pulse in the same race, so a smaller trim than Pulse's
     // (`docs/ghidra/functions/psp-pulse-usa/audio-levels.md`, "Master trim").
     master_trim_db: oag_title::pre_race::Sourced::chosen(-3.0),
+    rear_occlusion: None,
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     // **`None`, and it is a measurement.** Neither
@@ -96,6 +106,8 @@ pub const TITLE: &Title = &Title {
     // Pure authors none of the seven shadow classes (`docs/formats/pure-status.md`): nothing is the right picture.
     original_shadows: oag_title::shadow::OriginalShadows::Absent,
     weather: oag_title::weather::Weather::Unplayed,
+    // No motors on a PSP (`docs/gameplay/rumble.md`, "Provenance per title").
+    rumble: oag_title::rumble::Rumble::Absent,
     // **One table, all lower case, and no Eliminator variant.**
     // `Data\XML\weaponstats.xml` at `0x08a445a0` in `/psp-pure-usa/BOOT.BIN`,
     // three strings before the `"WeaponStats"` and `"Weapon"` element names the
@@ -123,6 +135,7 @@ pub const TITLE: &Title = &Title {
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::measured(false),
         // Pulse's law, inherited: Pure's pad grant is unread.
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout Pulse"),
+        pads_stamp_in_eliminator: oag_title::pre_race::Sourced::inherited(true, "Wipeout Pulse"),
         // Measured: Pure's decision code equals Pulse's law (`psp-pure-usa/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::PULSE,
@@ -193,8 +206,10 @@ pub const TITLE: &Title = &Title {
         magstrip_wake: None,
         magstrip_pob: false,
         rocket_trail: None,
+        missile_trail: None,
         leach_strip: None,
         leachbeam_ball: None,
+        missile_head: None,
         shuriken: None,
         // No Cannon on Pure, so no Cannon draw.
         cannon_look: None,
@@ -217,6 +232,7 @@ pub const TITLE: &Title = &Title {
     // its `Definition.xml` and each circuit's `stats.xml`
     // (`docs/formats/pure-campaign.md`).
     main_menu: main_menu::MAIN_MENU,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pure,
         definition_entry: None,
@@ -239,6 +255,8 @@ pub const TITLE: &Title = &Title {
         grid_archive: None,
         fury_card_gain: None,
         grid_card_pose: None,
+        selection_card_scale: None,
+        medal_tier_rows: None,
         frontend_glow: None,
         origin: oag_title::Origin::Measured,
         custom_campaigns: false,
@@ -392,6 +410,8 @@ pub mod effects;
 pub mod frontend;
 pub mod hud;
 pub mod main_menu;
+pub mod pause_menu;
+pub mod prompts;
 pub mod race;
 
 /// Name hashes for `Data.wad` entries whose names are not recovered.

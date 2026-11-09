@@ -88,7 +88,14 @@ fn stored(device: &wgpu::Device, queue: &wgpu::Queue, grey: u8) -> f32 {
         vertex([3.0, -1.0, 0.5]),
         vertex([0.0, 3.0, 0.5]),
     ];
-    pipeline.upload(queue, &identity, Vec3::new(0.0, 0.0, 10.0), &[], &trail);
+    pipeline.upload(
+        queue,
+        &identity,
+        Vec3::new(0.0, 0.0, 10.0),
+        &[],
+        &[],
+        &trail,
+    );
     let size = wgpu::Extent3d {
         width: WIDTH,
         height: 1,

@@ -4,6 +4,16 @@
 
 use super::*;
 
+/// The index one before `index` in a soundtrack of `len` tracks, wrapping; the inverse of
+/// [`next_race_index`].
+pub(crate) fn previous_race_index(index: usize, len: usize) -> usize {
+    if len == 0 {
+        index
+    } else {
+        (index % len + len - 1) % len
+    }
+}
+
 /// Which track of `platform`'s soundtrack `index` means, `index` being an entry
 /// in the **booted** disc's own order.
 ///
@@ -70,6 +80,8 @@ enum Pick {
     Exact(usize),
     /// The track after this one, wrapping at the listing's length.
     After(usize),
+    /// The track before this one, wrapping at the listing's length.
+    Before(usize),
     /// A run's first race: one past the menu's [`MUSIC_TRACK`] when the menu
     /// plays a soundtrack track (a PS2 boot), so the race does not restart the
     /// recording the menu was playing; else [`MUSIC_TRACK`]. Decided by the
@@ -92,6 +104,15 @@ impl RacePick {
     pub(super) fn after(index: usize) -> Self {
         Self {
             index: Pick::After(index),
+            seek: None,
+            saved: None,
+        }
+    }
+
+    /// The track before `index`, from its start.
+    pub(super) fn before(index: usize) -> Self {
+        Self {
+            index: Pick::Before(index),
             seek: None,
             saved: None,
         }
@@ -121,6 +142,15 @@ impl RacePick {
         let normal = match self.index {
             Pick::Exact(index) => index,
             Pick::FirstRace if discs.booted() != Some(Platform::Ps2) => MUSIC_TRACK,
+            Pick::Before(index) => {
+                if len == 0 {
+                    warn!(
+                        "audio: could not list the booted disc's soundtrack, so the race \
+                         playlist stays on track {index} rather than the one before it"
+                    );
+                }
+                previous_race_index(index, len)
+            }
             Pick::After(_) | Pick::FirstRace => {
                 let index = match self.index {
                     Pick::After(index) => index,
@@ -263,7 +293,7 @@ impl RacePick {
     /// track it counts from.
     fn resolve_without_listing(&self) -> Resolved {
         let index = match self.index {
-            Pick::Exact(index) | Pick::After(index) => index,
+            Pick::Exact(index) | Pick::After(index) | Pick::Before(index) => index,
             Pick::FirstRace => MUSIC_TRACK,
         };
         Resolved {
@@ -497,6 +527,7 @@ impl Audio {
 
     /// Stops the menu voice and any race voice, before a race track starts.
     pub(super) fn stop_music_voices(&mut self) {
+        self.reset_music_line();
         self.song_hold.drop_parked();
         if let Some(id) = self.music.take() {
             self.output.with_mixer(|mixer| mixer.stop(id));

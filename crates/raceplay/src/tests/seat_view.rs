@@ -142,7 +142,7 @@ fn the_start_voice_is_the_seats() {
 fn a_seated_reticle_is_drawn_for_the_seats_weapon() {
     for seat in SEATS {
         let mut race = four_people_against_a_wall(Some(seat));
-        race.sim.weapons = Some(one_leach_beam_table());
+        race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
         for slot in 0..4 {
             race.sim.world.ships[slot].pickup.weapon = None;
         }

@@ -908,7 +908,7 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
 #[test]
 fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(one_mine_table());
+    race.sim.weapons = Some(Arc::new(one_mine_table()));
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
     race.sim.world.ships[0]
         .pickup
@@ -939,7 +939,7 @@ fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
 #[test]
 fn dropping_a_bomb_raises_no_mine_launch_cue() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(
+    race.sim.weapons = Some(Arc::new(
         oag_tables::weapons::parse(
             r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
@@ -952,7 +952,7 @@ fn dropping_a_bomb_raises_no_mine_launch_cue() {
            </WeaponStats>"#,
         )
         .expect("the fixture table must parse"),
-    );
+    ));
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Bomb);
     race.sim.world.ships[0].pickup.begin_drop(1);
 

@@ -1,6 +1,6 @@
 # Custom campaign (`campaigns/<id>.toml` in a mod)
 
-**Status: built (v1.0) for Wipeout Pulse, HD/Fury and Omega. Not 2048 or Pure.**
+**Status: built (v1.0) for Wipeout Pulse, HD/Fury and Omega. Not 2048 or Pure.** The in-game editor: Pulse only (below).
 The project's own format, not a disc's. Decision:
 [ADR-0077](../architecture/adr/0077-a-custom-campaign-compiles-to-the-titles-own-grid.md).
 Schema: [`schemas/v1/campaign.tosd`](../../schemas/v1/campaign.tosd). Reader:
@@ -10,8 +10,9 @@ locks). Worked example: `example-campaign/` in [`mod-examples`](https://github.c
 A mod carries any number of campaign files under `campaigns/`, pilot files under
 `pilots/`, and track files of this project's own format under `tracks/`. An event may
 also race a track another installed mod carries. An installed campaign is listed by name on the page RACE CAMPAIGN opens
-once at least one is installed. The page's first row is the disc's own campaign. With
-none installed the menu is unchanged.
+once at least one is installed, and on Pulse always, for its NEW CAMPAIGN row (the editor,
+below). The page's first row is the disc's own campaign. With none installed, a title that
+has no editor keeps RACE CAMPAIGN as it was.
 
 ## A file
 
@@ -25,6 +26,8 @@ description = "..."       # optional: the row's second line
 titles = ["wipeout-hd"]   # optional: narrows the mod's own `titles`
 reveal = "hidden"         # "locked" (default: drawn with a lock) or "hidden" (absent until open);
                           # a [[grid]] may override it
+difficulty = "medium"     # optional: the opponents' base difficulty for every cell that names none
+progression = "ramp"      # optional: "flat" (default) or "ramp"; see "Difficulty" below
 
 [[grid]]                  # a tier: one page of the title's grid, at most 16
 id = "opening"            # unique in the campaign
@@ -77,7 +80,9 @@ easy = { gold = 2, silver = 3, bronze = 5 }   # optional per-rung overrides
 | Class | Matched case-insensitively and stored as a disc cell writes it (`Venom`), so the screens show the title's own word. |
 | Tier | `unlock_grid` and `required_points` are the original's own law (`grid_points_met`); a tier with neither is open. |
 | Preset craft | Team Selection is skipped and the team flies its base hull. Cell `ship` holds the team and `ShipChoice` is `false`: **chosen**, those fields were never read on a disc cell. |
-| AI | `original`: the recovered driver, at `difficulty` (its rung, else the screen's) and `skill`. `ours`: this project's driver at `difficulty`, flying `pilot` in every opponent slot. `--ai ours` still overrides. |
+| AI | `original`: the recovered driver, at `difficulty` (its rung, else the campaign's, else the screen's) and `skill`. `ours`: this project's driver at `difficulty` (its level, else the campaign's), flying `pilot` in every opponent slot. `--ai ours` still overrides. |
+| Difficulty | `[campaign] difficulty` is the base for every event that names no `difficulty` of its own in `[field]`; one that does keeps its own, whatever the campaign says. The word is a rung of the original driver (`easy`, `medium`, `hard`) or a level of ours (`novice`, `skilled`, `elite`, `ace`); an event takes the rung of the driver it flies, and a word from the other ladder keeps its relative place, **chosen**, rounding down on a tie: `easy` is `novice`, `medium` is `skilled`, `hard` is `ace`; `skilled` and `elite` are `medium`. An event with no `[field]` at all follows it too. Absent, with `progression = "flat"`: nothing is set, and the screen's rung applies as it always did. |
+| Progression | `flat`: every cell at the base. `ramp`: the first cell at the base, the last at the top of its driver's ladder (`hard`, `ace`), the cells between stepping up evenly and never down. **Cell order** is the tier's position in the file, then the event's position within the tier; every event counts, whatever its mode. A ramp with no `difficulty` starts at the bottom of the ladder. Per-tier and per-cell steps are not in v1.0: a cell that must differ names its own `difficulty`. |
 | Pilot | A name looks in the mod's `pilots/<name>.toml` first, then the player's roster. A table written inline uses the pilot file's keys ([`pilot.tosd`](../../schemas/v1/pilot.tosd)). A pilot needs `ai = "ours"`. |
 | Head to head | `head2head` fields one opponent: name its team in `teams` and its pilot in `pilot`. |
 | Cross disc | `track = "wipeout-hd:03_Track"` races another title's circuit with this title's craft, the way RACE REMIX does. A campaign naming a disc this machine cannot open is **not offered**, and the log names it. |
@@ -95,16 +100,88 @@ says so, and no other team or pilot is substituted.
 ## Not in v1.0
 
 - **2048**: no hex screens to draw on (the plan's step 7). **Pure**: a list, not a grid.
+- A progression other than `flat` and `ramp` (a step per tier, a ceiling below the top of the ladder).
 - Opponent craft variants (`teams` entries with a variant), AI craft overrides (top
   speed and so on), a pilot per slot: later minors, compatible additions to `field`.
 - A flyer card shipped in the mod: only the disc's own cards are named.
-- The in-game editor: the grid itself, saving into a slot (the plan's step 9).
+- The in-game editor on **HD/Fury and Omega**, and the editor's own limits (tournaments,
+  editing a saved campaign, several tiers, unlock rules, laps, weapons, pilots): see below.
 - A track file in a zipped mod: the track reader takes a path on disk.
 - A track file as a tournament leg (a Zone `file` event is supported).
 
+## The in-game editor (Pulse)
+
+**Status: built for Wipeout Pulse (PSP and PS2). Open: HD/Fury, Omega** (their hex screens
+draw flyer cards and per-rung targets; `oag_game::campaign::custom::editor_offered` is the
+switch). The originals have no editor, and HD's `Racebox` is custom races, not this.
+
+RACE CAMPAIGN, then NEW CAMPAIGN (the picker's last row), opens the title's own `Cell
+Selection` with **every hex slot** drawn: a placed event filled, an empty slot dimmed. The
+pad moves the cursor (CROSS places an event and opens its fields; LEFT and RIGHT or CROSS step
+the selected field; UP and DOWN pick the field; TRIANGLE clears the slot; SQUARE names the
+campaign; START saves; CIRCLE closes the fields, then leaves without saving). The mouse or a
+finger clicks a hex to select it and the selected hex again to confirm it, hovers a field to move
+the panel's row and clicks a row to step it or act, and the secondary button backs out. Hovering
+a hex does not move the cursor, so crossing hexes on the way to the panel keeps the event.
+
+| Field | Values |
+| --- | --- |
+| Mode | race, time trial, speed lap, Zone, Eliminator, head to head (a tournament names legs of its own and is left to the file) |
+| Circuit | the booted disc's circuits |
+| Speed class | the title's ladder (no class on Zone) |
+| Team | the player chooses, or one of the roster's teams (a preset craft) |
+| Opponents | the original driver, or ours (`ai = "ours"`); the cell names no `difficulty`, the campaign's governs |
+
+SELECT (or the row SETTINGS) switches the details panel to the **campaign page**, which holds the
+settings no one event owns:
+
+| Row | Values |
+| --- | --- |
+| Difficulty | easy, medium (the default), hard: `[campaign] difficulty` |
+| Progression | flat (the default), ramp: `[campaign] progression` |
+| Seed | a number, 1 to start; LEFT and RIGHT step it, CROSS or a click types one (up to nine digits) |
+| Class from, class to | the slowest and fastest speed class a filled cell may draw (the whole ladder to start with); a bound that passes the other moves it along |
+
+FILL GRID (TRIANGLE on the campaign page) replaces **every** hex slot with an event drawn from the seed:
+each cell draws its mode (the six above), its circuit and its speed class, in that order, from `oag_core::Rng`
+seeded with the seed, a class per cell inside the bounds and none on a Zone cell. The same seed, bounds and
+disc give the same grid, whatever was placed before. Every filled cell has the player choosing the team and
+the original driver, is open from the start, and follows the campaign's difficulty (the editor writes no
+`difficulty` on a cell, **including the `skilled` it used to write on a cell flown by our driver**). Clicking a
+hex or CIRCLE returns to the event page, where a filled cell is edited like any other. The seed is not saved in
+the file: the grid is.
+
+SAVE writes the campaign (`CampaignDef::write`, which `parse` reads
+back equal) as a **fresh folder mod** `<data dir>/oag/mods/<campaign id>[-n]/` with a
+generated `oag-mod.toml` (id `player.<campaign id>`, `titles` this title, no licence) and
+`campaigns/<campaign id>.toml`, on a worker thread. An existing folder is never touched: a
+second save of the same name takes the next `-n`. The menus are then rebuilt the way a MODS
+page switch rebuilds them, so the campaign is in the picker at once. One tier `grid0`; every
+event is `unlock = { open = true }`. Medals: the disc's own cell for the same mode, circuit
+and class when it has one (seconds on a timed mode); for a finishing place (race, head to
+head) 1, 2, 3 when it has none; none for a timed event with no cell of its own (its screen
+reads `0:00.00` and it is never awarded, since a time exists per circuit and one invented
+would be a guess), and none for Zone and Eliminator without a same-class cell. Laps and
+weapons are the mode's own.
+
+The compile path is ADR-0077's. The difficulty setting is a `[campaign]` addition to v1.0 (nothing is released, so
+the format was edited in place), and the mod author skill (`oag-mod-author`) documents it. The editor cannot write
+what the format cannot read. A disc cell's medal tier at `0` is left out of a placed event (a tier the format refuses
+as a target and the original never awards), and a cell with all three at `0` gets no medals. Ground truth for the fill:
+`custom_campaign_ground_truth::a_grid_filled_from_a_seed_launches_on_pulse` (and `_on_ps2_pulse`: three seeds,
+every cell compiles and plans, the ramp never steps down) and
+`campaign_cursor_ground_truth::a_grid_filled_from_a_seed_in_the_editor_is_saved_with_its_setting` (the pad through
+the real session: the same seed twice writes the same grid, another seed another). Ground truth:
+`custom_campaign_ground_truth::a_campaign_built_in_the_editor_launches_on_pulse` (model to
+disc-compiled `grid0_x_y` cells that plan) and
+`campaign_cursor_ground_truth::a_campaign_made_in_the_editor_is_listed_and_its_event_launches`
+(the real session, headless: place, save, picker row, launch).
+
 ## Cross-check: 2048 and Omega
 
-**Checked, differs.** Omega draws HD's grid screens and takes mod campaigns.
+**Checked, differs.** The difficulty setting resolves in the title-independent compiler
+(`oag_game::campaign::custom`), so an HD or Omega campaign takes it with the same rung mapping: **checked, applies,
+not wired** for the editor (Pulse only) and without an HD or Omega disc-backed test (the unit tests compile on Pulse). Omega draws HD's grid screens and takes mod campaigns.
 2048 has no `CellMode_Definition.xml` (`docs/formats/2048-campaign.md`) and takes none
 yet. Its own event map is not reused. When it is covered it will draw the same compiled
 grid, with hidden reveal standing in for its events appearing.

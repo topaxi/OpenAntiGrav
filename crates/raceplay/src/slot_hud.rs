@@ -15,6 +15,9 @@ use super::*;
 /// The shield bar's and the other bars' memory, plus a split view's reticle.
 #[derive(Clone, Debug, Default)]
 pub(super) struct SlotHud {
+    /// Each other craft's multiplayer-tag fade as this view sees it, `0..=1`
+    /// (`oag_hud::player_tags::step_fade`). Display only.
+    pub(super) tag_fade: [f32; oag_gameplay::MAX_SHIPS],
     /// `Hud_UpdateEnergyBar`'s `hud+0x118`: the shield percentage as of the
     /// previous tick. Seeded `0.0`.
     pub(super) shield_flash_prev: f32,
@@ -44,6 +47,10 @@ pub(super) struct SlotHud {
     /// 2048's `hud+0x228`: seconds of the grant announcement left
     /// ([`oag_hud::Readout::pickup_announcing`]).
     pub(super) pickup_announce_left: f32,
+    /// How far 2048's `PickupParent` has flown along y since the announcement ended, in layout
+    /// pixels: `dt * 1800.0` a frame (`Hud_UpdatePickupIcon`). `0.0` while announcing or holding
+    /// nothing. Unclamped; the draw stops at the slot ([`oag_hud::Readout::pickup_fly`]).
+    pub(super) pickup_fly_travel: f32,
     /// The held pickup's backdrop and icon fade ([`oag_hud::Readout::pickup_fade`]).
     pub(super) pickup_fade: oag_hud::pickup_fade::Fade,
     /// The look of the mod pickup last held, kept so its fade-out after use draws what its
@@ -87,6 +94,10 @@ const THRUST_CHASE_FALL_PER_SECOND: f32 = 100.0;
 /// How long the pickup grant announcement stays up: `Hud_UpdatePickupIcon`'s `1.0` stored at
 /// `hud+0x228` when the held weapon changes (`0x3f800000`).
 pub(super) const PICKUP_ANNOUNCE_SECONDS: f32 = 1.0;
+
+/// The speed of the grant's fly to the slot along y, layout pixels a second: the `0x44e10000`
+/// (1800.0) `Hud_UpdatePickupIcon` multiplies `dt` by.
+pub(super) const PICKUP_FLY_PIXELS_PER_SECOND: f32 = 1800.0;
 
 impl SlotHud {
     /// One tick of every bar, in the order the original's update runs them:
@@ -151,7 +162,9 @@ impl SlotHud {
 impl SlotHud {
     /// One frame of `Hud_UpdatePickupIcon`'s announcement timer: a change of the held weapon to
     /// a new one arms it, the same frame takes `dt` off, and nothing held clears the memory so
-    /// the next grant announces even if it is the same weapon again.
+    /// the next grant announces even if it is the same weapon again. On the frame the timer
+    /// reaches zero, and every frame after, the icon flies on: the distance grows by
+    /// `dt * 1800.0`.
     fn advance_pickup_announcement(&mut self, held: Option<oag_tables::weapons::Weapon>, dt: f32) {
         if held != self.pickup_held_prev {
             self.pickup_held_prev = held;
@@ -161,6 +174,11 @@ impl SlotHud {
         }
         self.pickup_announce_left = if held.is_some() {
             (self.pickup_announce_left - dt).max(0.0)
+        } else {
+            0.0
+        };
+        self.pickup_fly_travel = if held.is_some() && self.pickup_announce_left <= 0.0 {
+            self.pickup_fly_travel + dt * PICKUP_FLY_PIXELS_PER_SECOND
         } else {
             0.0
         };

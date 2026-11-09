@@ -90,6 +90,10 @@ pub struct TrackEmitters {
     /// The directional `soundcone` `0x3e9` nodes, in authored order. Split from
     /// [`Self::omni`] because [`Ambience::tick`] places each under its own law.
     pub directional: Vec<Authored>,
+    /// The circuit's own `AudioConfig.xml` switches its distance low-pass off
+    /// (`low_pass="0"`; Moa Therma): the rear low-pass is not played there. Read by
+    /// [`Self::load`] off the file, never off a circuit's name.
+    pub low_pass_off: bool,
     /// What parsing did, for the race's own report.
     pub report: Vec<String>,
 }
@@ -128,6 +132,7 @@ impl TrackEmitters {
         Self {
             omni,
             directional,
+            low_pass_off: false,
             report,
         }
     }
@@ -158,6 +163,7 @@ impl TrackEmitters {
         blob: &[u8],
     ) -> Self {
         let mut parsed = Self::parse(track, blob);
+        parsed.low_pass_off = circuit_low_pass_off(archives, track);
 
         // Read whole, parsed after: `sblk::Bank` borrows the blob.
         let mut blobs: Vec<(&str, String, Vec<u8>)> = Vec::new();
@@ -445,6 +451,19 @@ fn circuit_bank_entries(
             .map(|directory| format!("{directory}\\{file}"))
             .collect(),
     }
+}
+
+/// Whether the `AudioConfig.xml` beside the circuit's `.vex` switches its distance low-pass off.
+/// A circuit with no such file keeps it.
+fn circuit_low_pass_off(archives: &mut Archives, track: &str) -> bool {
+    let Some(at) = track.rfind(['/', '\\']) else {
+        return false;
+    };
+    archives
+        .read_name(&format!("{}AudioConfig.xml", &track[..=at]))
+        .is_ok_and(|xml| {
+            oag_tables::audio_config::distance_filter_low_pass_off(&String::from_utf8_lossy(&xml))
+        })
 }
 
 /// The circuit's own `trackstartup.xml`, parsed, or `None` where it ships none:

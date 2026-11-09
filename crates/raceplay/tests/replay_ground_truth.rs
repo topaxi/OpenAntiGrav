@@ -39,12 +39,13 @@ use oag_replay::{Header, Replay, Verifier};
 const TICKS: u64 = 7_200;
 
 /// Where each title's source is, or `None` without it.
-fn source(title: &str) -> Option<PathBuf> {
+pub(crate) fn source(title: &str) -> Option<PathBuf> {
     let (path, marker) = match title {
         "pulse" => ("data/images/pulse-psp-usa.chd", ""),
         "pure" => ("data/images/pure-psp-eu.chd", ""),
         "hd" => ("data/images/hdfury-ps3-eu-dec.iso", ""),
         "2048" => ("data/extracted/vita/PCSF00007", "base/PSP2/data.psarc"),
+        "omega" => ("data/images/omega-ps4-eu.pkg", ""),
         _ => unreachable!("{title}"),
     };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -66,14 +67,23 @@ fn source(title: &str) -> Option<PathBuf> {
     None
 }
 
-fn setup(title: &str) -> Option<race::Setup> {
-    let source = source(title)?;
-    let loaded = race::load(&race::Options {
+/// The launch request a test races, over `source`.
+fn options(source: &Path, mode: oag_race::Mode) -> race::Options {
+    race::Options {
         source: source.display().to_string(),
-        mode: oag_race::Mode::TimeTrial,
+        mode,
         ..race::Options::default()
-    })
-    .unwrap_or_else(|e| panic!("loading {title}: {e:#}"));
+    }
+}
+
+fn setup(title: &str) -> Option<race::Setup> {
+    setup_in(title, oag_race::Mode::TimeTrial)
+}
+
+fn setup_in(title: &str, mode: oag_race::Mode) -> Option<race::Setup> {
+    let source = source(title)?;
+    let loaded =
+        race::load(&options(&source, mode)).unwrap_or_else(|e| panic!("loading {title}: {e:#}"));
     Some(loaded.setup)
 }
 
@@ -82,7 +92,7 @@ fn setup(title: &str) -> Option<race::Setup> {
 /// The driver reads the player's craft and decides; its controls become a
 /// stick deflection and a held cross, which is all a pad can say. Nothing it
 /// keeps is simulation state - it is the person holding the pad.
-struct Pad {
+pub(crate) struct Pad {
     driver: oag_ai::Driver,
     tuning: oag_ai::Tuning,
     input: Input,
@@ -104,7 +114,7 @@ struct Pad {
 const RACE_DRIVER: [&str; 1] = ["pure"];
 
 impl Pad {
-    fn new(title: &str) -> Self {
+    pub(crate) fn new(title: &str) -> Self {
         Self {
             driver: oag_ai::Driver::default(),
             tuning: oag_ai::Tuning::default(),
@@ -114,47 +124,54 @@ impl Pad {
         }
     }
 
-    fn inputs(&mut self, race: &mut race::Race) -> PlayerInputs {
+    pub(crate) fn inputs(&mut self, race: &mut race::Race) -> PlayerInputs {
+        let slot = race.sim.world.primary_slot();
+        PlayerInputs::single(self.snapshot(race, slot))
+    }
+
+    /// What this pad holds this tick for the craft in `slot`.
+    pub(crate) fn snapshot(&mut self, race: &mut race::Race, slot: usize) -> InputSnapshot {
         let controls = if let Some(driver) = self.race_driver.as_mut() {
-            let slot = race.sim.world.primary_slot();
             race.autopilot_wants(slot, driver)
         } else {
             let line = race.racing_line();
+            let physics = &race.sim.world.ships[slot].physics;
             if !self.seated {
-                let position = race.ship().physics.body.position;
+                let position = physics.body.position;
                 self.driver.index = line.nearest(position, 0, line.len()) as u32;
                 self.seated = true;
             }
             let ctx = oag_ai::Context::new(line, &self.tuning);
-            self.driver.drive(&race.ship().physics, &ctx)
+            self.driver.drive(physics, &ctx)
         };
         let mut held = 0;
         if controls.thrust > 0.5 {
             held |= Button::Cross.bit();
         }
         self.input.begin_frame(held);
-        PlayerInputs::single(
-            InputSnapshot {
-                buttons: self.input,
-                stick_x: controls.steer_x,
-                stick_y: 0.0,
-                airbrake_left: controls.airbrake_left,
-                airbrake_right: controls.airbrake_right,
-            }
-            .sanitised(),
-        )
+        InputSnapshot {
+            buttons: self.input,
+            stick_x: controls.steer_x,
+            stick_y: 0.0,
+            airbrake_left: controls.airbrake_left,
+            airbrake_right: controls.airbrake_right,
+        }
+        .sanitised()
     }
 }
 
-fn header(title: &str) -> Header {
-    Header::new(title, "default", "time_trial", "venom", "default", 0)
+/// The header a session writes: the seed is the race's own, which a rebuild loads it with.
+fn header(title: &str, seed: u64) -> Header {
+    Header::new(title, "default", "time_trial", "venom", "default", seed)
 }
 
 /// Drives a recorded run of [`TICKS`] and hands back the race and its
 /// recording.
 fn record(title: &str) -> Option<(race::Race, Replay)> {
-    let mut race = race::Race::start(setup(title)?);
-    race.start_recording(header(title));
+    let setup = setup(title)?;
+    let seed = setup.seed;
+    let mut race = race::Race::start(setup);
+    race.start_recording(header(title, seed));
     let mut pad = Pad::new(title);
     for _ in 0..TICKS {
         let inputs = pad.inputs(&mut race);
@@ -165,10 +182,18 @@ fn record(title: &str) -> Option<(race::Race, Replay)> {
     Some((race, replay))
 }
 
-/// Re-drives `replay` on a fresh race, checking every stored hash.
+/// Re-drives `replay` on a race **rebuilt from its header alone** (the title's source is the
+/// reader's own), applying the recorded events between the same two ticks, and checks every
+/// stored hash.
 fn verify(title: &str, replay: &Replay) -> Result<u64, oag_replay::Desync> {
-    let mut race = race::Race::start(setup(title).expect("source present"));
-    Verifier::run(replay, race.sim.state_hash(), |inputs| {
+    let source = source(title).expect("source present");
+    let mut race = race::rebuild(&replay.header, &source.display().to_string())
+        .unwrap_or_else(|e| panic!("{title}: rebuilding from the header: {e:#}"));
+    Verifier::run(replay, race.sim.state_hash(), |events, inputs| {
+        for event in events {
+            race.apply_event(event)
+                .unwrap_or_else(|e| panic!("{title}: {e}"));
+        }
         race.tick(inputs);
         race.drain_cues();
         race.sim.state_hash()
@@ -268,7 +293,7 @@ fn ghost_changes_nothing(title: &str, replay: &Replay) {
     });
     // The haunted race records too, so the recorder is covered by the same
     // equality.
-    haunted.start_recording(header(title));
+    haunted.start_recording(header(title, replay.header.seed));
     let mut seen = 0u64;
     for tick in 0..replay.ticks() {
         let inputs = replay.inputs_at(tick);
@@ -339,4 +364,188 @@ fn a_bare_pad_starts_on_the_line_where_the_grid_is_far_from_sample_zero() {
         gap < 20.0,
         "the pad's line sample is {gap} units from its craft"
     );
+}
+
+/// A race started from `title`'s source in `mode`, with non-default launch settings, recorded
+/// under a header and not ticked.
+fn recorded_at_tick_zero(
+    title: &str,
+    mode: oag_race::Mode,
+) -> Option<(PathBuf, race::Race, Replay, race::Launch)> {
+    let source = source(title)?;
+    let loaded = race::load(&options(&source, mode))
+        .unwrap_or_else(|e| panic!("loading {title} {}: {e:#}", mode.name()));
+    let seed = loaded.setup.seed;
+    let mut race = race::Race::start(loaded.setup);
+    let launch = race::Launch {
+        scheme: oag_gameplay::ControlScheme::Novice,
+        difficulty: oag_ai::Difficulty::Ace,
+        autopilot: false,
+        pilot_assist: oag_physics::pilot_assist::Level::Normal,
+        original_ai: None,
+        campaign_skill: None,
+    };
+    race.apply_launch(&launch);
+    let mut header = Header::new(title, "default", mode.name(), "venom", "default", seed);
+    header.options = launch.to_table();
+    race.start_recording(header);
+    let replay = race.recorded().expect("recording");
+    Some((source, race, replay, launch))
+}
+
+/// The rebuild from the file's header alone agrees with the recorded race at tick zero, on the
+/// bytes a file is written as and read back from.
+fn tick_zero(title: &str, mode: oag_race::Mode) {
+    let Some((source, race, replay, launch)) = recorded_at_tick_zero(title, mode) else {
+        return;
+    };
+    assert_eq!(replay.initial_hash, race.sim.state_hash());
+    let read = Replay::from_bytes(&replay.to_bytes()).expect("reads back");
+    let setup = read
+        .header
+        .setup
+        .clone()
+        .expect("the header carries the request");
+    assert_eq!(
+        setup.mode,
+        mode.name(),
+        "{title}: the request names its mode"
+    );
+    assert_eq!(race::Launch::from_table(&read.header.options), Ok(launch));
+
+    let rebuilt = race::rebuild(&read.header, &source.display().to_string()).expect("rebuilds");
+    Verifier::new(&read, rebuilt.sim.state_hash()).unwrap_or_else(|d| {
+        panic!(
+            "{title} {}: the rebuild disagrees at tick zero: {d}",
+            mode.name()
+        )
+    });
+    assert_eq!(rebuilt.pilot_assist_level(), launch.pilot_assist);
+    assert_eq!(rebuilt.control_scheme(), launch.scheme);
+
+    // The request is what rebuilds it: the same file with another mode in it is another race,
+    // refused at tick zero. Once per title (a third load), on its first mode.
+    if mode == oag_race::Mode::TimeTrial {
+        let mut swapped = read.clone();
+        swapped.header.setup.as_mut().expect("present").mode =
+            oag_race::Mode::SingleRace.name().to_string();
+        let rebuilt =
+            race::rebuild(&swapped.header, &source.display().to_string()).expect("rebuilds");
+        let desync = Verifier::new(&swapped, rebuilt.sim.state_hash())
+            .expect_err("a request naming another mode is another race");
+        assert_eq!(desync.tick, 0, "{title}");
+    }
+
+    // A header without it is refused by name before any load.
+    let mut bare = read.header.clone();
+    bare.setup = None;
+    let Err(refused) = race::rebuild(&bare, &source.display().to_string()) else {
+        panic!("{title}: no request, no race");
+    };
+    assert!(format!("{refused:#}").contains("[setup]"), "{refused:#}");
+}
+
+macro_rules! tick_zero_tests {
+    ($($name:ident: $title:literal, $mode:ident;)*) => {$(
+        #[test]
+        #[ignore = "needs the title's game data"]
+        fn $name() {
+            tick_zero($title, oag_race::Mode::$mode);
+        }
+    )*};
+}
+
+tick_zero_tests! {
+    pulse_time_trial_rebuilds_from_its_header_at_tick_zero: "pulse", TimeTrial;
+    pulse_speed_lap_rebuilds_from_its_header_at_tick_zero: "pulse", SpeedLap;
+    pulse_single_race_rebuilds_from_its_header_at_tick_zero: "pulse", SingleRace;
+    pure_time_trial_rebuilds_from_its_header_at_tick_zero: "pure", TimeTrial;
+    pure_speed_lap_rebuilds_from_its_header_at_tick_zero: "pure", SpeedLap;
+    pure_single_race_rebuilds_from_its_header_at_tick_zero: "pure", SingleRace;
+    hd_time_trial_rebuilds_from_its_header_at_tick_zero: "hd", TimeTrial;
+    hd_speed_lap_rebuilds_from_its_header_at_tick_zero: "hd", SpeedLap;
+    hd_single_race_rebuilds_from_its_header_at_tick_zero: "hd", SingleRace;
+    wipeout_2048_time_trial_rebuilds_from_its_header_at_tick_zero: "2048", TimeTrial;
+    wipeout_2048_speed_lap_rebuilds_from_its_header_at_tick_zero: "2048", SpeedLap;
+    wipeout_2048_single_race_rebuilds_from_its_header_at_tick_zero: "2048", SingleRace;
+    omega_time_trial_rebuilds_from_its_header_at_tick_zero: "omega", TimeTrial;
+    omega_speed_lap_rebuilds_from_its_header_at_tick_zero: "omega", SpeedLap;
+    omega_single_race_rebuilds_from_its_header_at_tick_zero: "omega", SingleRace;
+}
+
+/// A mid-race Pilot Assist change and a handed-over weapon are recorded as events: the file
+/// reproduces with them applied between the same two ticks, and each one dropped desyncs.
+fn mid_race_events(title: &str) {
+    use oag_physics::pilot_assist::Level;
+    let Some((_, mut race, _, _)) = recorded_at_tick_zero(title, oag_race::Mode::TimeTrial) else {
+        return;
+    };
+    let assist_at = oag_race::state::COUNTDOWN_TICKS + 60;
+    // On the grid, where the pickup slot is empty: a top-up only writes an empty one.
+    let give_at = 10;
+    let ticks = oag_race::state::COUNTDOWN_TICKS + 420;
+    assert!(
+        race.pilot_assist_available(Level::Extreme),
+        "{title}: no Extreme law, so the change would prove nothing"
+    );
+    let mut pad = Pad::new(title);
+    for tick in 0..ticks {
+        if tick == assist_at {
+            race.change_pilot_assist(Level::Extreme);
+        }
+        if tick == give_at {
+            assert!(
+                race.give_weapon(0, oag_tables::weapons::Weapon::Rocket),
+                "{title}: the slot holds {:?}",
+                race.sim.world.ships[0].pickup.weapon
+            );
+        }
+        let inputs = pad.inputs(&mut race);
+        race.tick(&inputs);
+        race.drain_cues();
+    }
+    let replay =
+        Replay::from_bytes(&race.recorded().expect("recording").to_bytes()).expect("reads");
+    assert_eq!(
+        replay.events,
+        vec![
+            oag_replay::Event::new(give_at, 0, oag_replay::Kind::Give, 0),
+            oag_replay::Event::new(assist_at, 0, oag_replay::Kind::PilotAssist, 2),
+        ],
+        "{title}: the changes are in the file, between the ticks they were made between"
+    );
+    assert_eq!(
+        verify(title, &replay),
+        Ok(ticks),
+        "{title}: reproduces with its events"
+    );
+
+    for (dropped, keep) in [
+        ("both", None),
+        ("the Pilot Assist change", Some(oag_replay::Kind::Give)),
+        ("the weapon", Some(oag_replay::Kind::PilotAssist)),
+    ] {
+        let mut stripped = replay.clone();
+        stripped
+            .events
+            .retain(|e| keep.is_some_and(|kind| e.kind() == Some(kind)));
+        let desync = verify(title, &stripped)
+            .expect_err(&format!("{title}: a replay without {dropped} must desync"));
+        println!("{title}: without {dropped}, desync at {}", desync.tick);
+    }
+}
+
+macro_rules! event_tests {
+    ($($name:ident: $title:literal;)*) => {$(
+        #[test]
+        #[ignore = "needs the title's game data"]
+        fn $name() {
+            mid_race_events($title);
+        }
+    )*};
+}
+
+event_tests! {
+    pulse_records_a_mid_race_pilot_assist_change_and_reproduces: "pulse";
+    hd_records_a_mid_race_pilot_assist_change_and_reproduces: "hd";
 }

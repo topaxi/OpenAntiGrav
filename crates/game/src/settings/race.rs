@@ -76,6 +76,11 @@ pub struct Race {
     /// Eliminator; see [`Self::eliminator_kill_target`].
     #[serde(default)]
     pub kill_target: String,
+    /// The Eliminator score target the `TARGET` row holds, as the disc's slider steps spell it
+    /// (`"200"` to `"600"` on HD), or empty for "untouched", which races the slider's minimum.
+    /// Read only in an Eliminator; see [`Self::eliminator_score_target`].
+    #[serde(default)]
+    pub score_target: String,
     /// The `WEAPONS` row's pick, as the disc's own `Weapons` list spells it
     /// (`"On"` or `"Off"`), or empty for "untouched", which is the list's
     /// authored default (`On`). Read only in a single race, the one mode whose
@@ -128,6 +133,7 @@ impl Default for Race {
             variant_chosen: false,
             skin: String::new(),
             kill_target: String::new(),
+            score_target: String::new(),
             weapons: String::new(),
             window_seats: String::new(),
             window_monitors: Vec::new(),
@@ -166,6 +172,16 @@ impl Race {
             .flatten()
     }
 
+    /// The score target a launch in `mode` carries: the `TARGET` row's pick in an Eliminator,
+    /// and `None` in every other mode or while the row is untouched, which leaves the
+    /// slider's minimum to `oag_raceplay::score_law`.
+    #[must_use]
+    pub fn eliminator_score_target(&self, mode: oag_race::Mode) -> Option<u32> {
+        (mode == oag_race::Mode::Eliminator)
+            .then(|| self.score_target.parse().ok())
+            .flatten()
+    }
+
     /// The model Ship Select opens on: the stored variant, or on Wipeout
     /// HD/Fury the fresh-profile default (`oag_hd::race::FRESH_PROFILE_VARIANT`)
     /// while the player has not picked one. A non-empty stored variant always
@@ -177,5 +193,25 @@ impl Race {
             Some(fresh) if self.variant.is_empty() && !self.variant_chosen => fresh.variant,
             _ => &self.variant,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oag_race::Mode;
+
+    /// The TARGET row reaches a launch only in an Eliminator, and only once touched.
+    #[test]
+    fn the_target_pick_is_an_eliminator_launch_option_only() {
+        let untouched = Race::default();
+        assert_eq!(untouched.eliminator_score_target(Mode::Eliminator), None);
+        let picked = Race {
+            score_target: "400".to_string(),
+            ..Race::default()
+        };
+        assert_eq!(picked.eliminator_score_target(Mode::Eliminator), Some(400));
+        assert_eq!(picked.eliminator_score_target(Mode::SingleRace), None);
+        assert_eq!(picked.eliminator_kill_target(Mode::Eliminator), None);
     }
 }

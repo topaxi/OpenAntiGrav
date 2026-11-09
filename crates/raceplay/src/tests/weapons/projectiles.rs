@@ -218,7 +218,7 @@ fn a_craft_with_one_rocket_fires_one() {
 #[test]
 fn a_craft_with_three_mines_lays_three() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(one_mine_table());
+    race.sim.weapons = Some(Arc::new(one_mine_table()));
     race.sim.world.ships[0].weapon_counts =
         oag_weapons::counts::WeaponCounts::from_authored(None, Some(3.0));
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);

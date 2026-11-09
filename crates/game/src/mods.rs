@@ -70,8 +70,10 @@ pub struct Listing {
     /// The player's switch for it: `None` for a candidate that never opened (its id is a
     /// file name, nothing to switch). The built-in is always `Some(true)`.
     pub enabled: Option<bool>,
-    /// The mod's own `default-enabled`: what the switch is stored against.
+    /// What the mod is when the player has not switched it: off for a texture pack.
     pub default_enabled: bool,
+    /// Whether the mod is a texture pack, which adds no rows.
+    pub texture_pack: bool,
     /// Why it is not in the game, when it is not.
     pub error: Option<String>,
     /// What of it is left out while the mod itself is in, as detail lines (label,
@@ -103,6 +105,8 @@ pub mod words {
     pub const LICENSE_FILE: (&str, &str) = ("OAG_MODS_LICENSE_FILE", "SEE %s");
     /// A mod that added no row.
     pub const NOTHING: (&str, &str) = ("OAG_MODS_NOTHING", "NOTHING");
+    /// What a texture pack that is on adds.
+    pub const TEXTURE_PACK: (&str, &str) = ("OAG_MODS_TEXTURE_PACK", "TEXTURES");
     /// The ADDS line of a mod the player turned off: it adds nothing while off.
     pub const TURNED_OFF: (&str, &str) = ("OAG_MODS_TURNED_OFF", "NOTHING, TURNED OFF");
     /// The ENABLED row's two values.
@@ -131,6 +135,13 @@ pub mod words {
     pub const NO_ONE_SENDS: (&str, &str) = ("OAG_MODS_NO_ONE_SENDS", "NO ONE SENDS");
     /// The page RACE CAMPAIGN opens once a mod adds a campaign (ADR-0077).
     pub const CAMPAIGN_PICKER: (&str, &str) = ("OAG_MENU_CAMPAIGN_PICKER", "CAMPAIGNS");
+    /// The campaign picker's last row, which opens the campaign editor.
+    pub const CAMPAIGN_EDITOR: (&str, &str) = ("OAG_MENU_CAMPAIGN_EDITOR", "NEW CAMPAIGN");
+    /// That row's second line.
+    pub const CAMPAIGN_EDITOR_SUBTITLE: (&str, &str) = (
+        "OAG_MENU_CAMPAIGN_EDITOR_SUBTITLE",
+        "Place events on the hex grid and save them as a campaign",
+    );
     /// The built-in mod's mark after its name.
     pub const BUILT_IN: (&str, &str) = ("OAG_MODS_BUILT_IN", "BUILT IN");
 }
@@ -260,16 +271,31 @@ pub fn resupply_switch(model: &mut oag_ui::menu::Menu, listing: &[Listing], stri
     model.seed(ENABLED, &oag_ui::menu::Value::Text(value.to_string()));
 }
 
-/// Turns `id` on or off in `switches`, against `manifest_default` (the mod's
-/// `default-enabled`). Returns whether anything changed. The built-in is never turned off
-/// ([`words::ALWAYS_ON`]).
+/// Turns `id` on or off in `disabled`. Returns whether anything changed. The built-in is
+/// never turned off ([`words::ALWAYS_ON`]).
+///
+/// `default_enabled` is the mod's own ([`Listing::default_enabled`]): a mod that starts off is
+/// switched through `switches.enabled`, every other through `switches.disabled`.
 pub fn switch(
     switches: &mut crate::settings::Mods,
     id: &str,
-    manifest_default: bool,
     on: bool,
+    default_enabled: bool,
 ) -> bool {
-    id != oag_mod::extras::ID && switches.switch(id, manifest_default, on)
+    if id == oag_mod::extras::ID {
+        return false;
+    }
+    let (set, other) = if default_enabled {
+        (&mut switches.disabled, &mut switches.enabled)
+    } else {
+        (&mut switches.enabled, &mut switches.disabled)
+    };
+    other.remove(id);
+    if on == default_enabled {
+        set.remove(id)
+    } else {
+        set.insert(id.to_string())
+    }
 }
 
 /// The choices for `ValueSource::Mods`.
@@ -313,6 +339,7 @@ impl Listing {
             builtin,
             enabled: Some(enabled || builtin),
             default_enabled: m.default_enabled,
+            texture_pack: m.texture_pack.is_some(),
             error,
             problems: Vec::new(),
             publishes: m
@@ -337,6 +364,7 @@ impl Listing {
             builtin: false,
             enabled: None,
             default_enabled: true,
+            texture_pack: false,
             error: Some(failed.cause().to_string()),
             problems: Vec::new(),
             publishes: Vec::new(),
@@ -376,6 +404,8 @@ impl Listing {
         };
         let adds = if self.enabled == Some(false) {
             say(words::TURNED_OFF)
+        } else if self.texture_pack {
+            say(words::TEXTURE_PACK)
         } else if self.rows.is_empty() {
             say(words::NOTHING)
         } else {
@@ -442,8 +472,8 @@ fn changes_a_race(m: &oag_mod::Mod) -> bool {
 }
 
 impl Mods {
-    /// The extras and whatever lies on the default search path, with the player's
-    /// `switches` (`settings::Mods`) applied.
+    /// The extras and whatever lies on the default search path, with the mods the player's
+    /// switches (`settings::Mods`) turn off turned off.
     ///
     /// # Errors
     ///
@@ -463,8 +493,7 @@ impl Mods {
         Self::load(&settings.mods)
     }
 
-    /// The extras and whatever lies in `bases`, with the player's `switches` resolved
-    /// against each mod's `default-enabled` ([`crate::settings::Mods::is_enabled`]).
+    /// The extras and whatever lies in `bases`, the mods `switches` turn off turned off.
     ///
     /// # Errors
     ///
@@ -472,13 +501,17 @@ impl Mods {
     pub fn load_from(bases: &[PathBuf], switches: &crate::settings::Mods) -> Result<Self> {
         let extras = oag_mod::extras::builtin().context("opening the built-in oag-extras")?;
         let found = oag_mod::load(bases, &game_version());
-        let mut disabled: BTreeSet<String> = found
-            .mods
-            .iter()
-            .filter(|m| !switches.is_enabled(&m.manifest.id, m.manifest.default_enabled))
-            .map(|m| m.manifest.id.clone())
-            .collect();
+        let mut disabled = switches.disabled.clone();
         disabled.remove(oag_mod::extras::ID);
+        // A mod that starts off is off until the player has turned it on.
+        disabled.extend(
+            found
+                .mods
+                .iter()
+                .filter(|m| !m.manifest.default_enabled)
+                .map(|m| m.manifest.id.clone())
+                .filter(|id| !switches.enabled.contains(id)),
+        );
         Ok(Self {
             extras,
             player: found.mods,

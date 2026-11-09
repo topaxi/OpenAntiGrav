@@ -343,6 +343,11 @@ pub struct CraftCaster<'a> {
     pub fit: Fit,
     /// The craft's own geometry.
     pub caster: Caster<'a>,
+    /// Whether any surface in the picture can read this craft's square. The record is written
+    /// either way, so a craft left out keeps its rank and every other craft its square; only
+    /// its draw goes, and the receiver's own [`CRAFT_CULL_RADIUS`] test never reaches the
+    /// square left clear.
+    pub seen: bool,
 }
 
 /// The coverage atlas, the `mapped` tier's depth map, their caster pipelines
@@ -388,6 +393,8 @@ pub struct Map {
     depth_clear: [bool; DEPTH_LAYERS as usize],
     /// Passes recorded over both targets, so a test can tell a skipped clear from a recorded one.
     passes: u64,
+    /// A depth layer's caster slots, staged for its one write and kept between frames.
+    layer_bytes: Vec<u8>,
 }
 
 /// The most casters one pass holds: a full grid.
@@ -638,6 +645,7 @@ impl Map {
             atlas_clear: false,
             depth_clear: [false; DEPTH_LAYERS as usize],
             passes: 0,
+            layer_bytes: Vec::new(),
         }
     }
 
@@ -736,15 +744,18 @@ impl Map {
         // Past the cap the rest are dropped; the caller sizes its list to it.
         let casters = &casters[..casters.len().min(MAX_DEPTH_CASTERS)];
         let first = MAX_CASTERS + layer * MAX_DEPTH_CASTERS;
-        // One write for the layer: a slot per caster, each padded to the stride.
+        // One write for the layer: a slot per caster, each padded to the stride, staged
+        // in a list the map keeps.
         if !casters.is_empty() {
-            let mut bytes = vec![0u8; UNIFORM_STRIDE as usize * casters.len()];
+            let bytes = &mut self.layer_bytes;
+            bytes.clear();
+            bytes.resize(UNIFORM_STRIDE as usize * casters.len(), 0);
             for (slot, caster) in casters.iter().enumerate() {
                 let mvp = (matrix * caster.model).to_cols_array();
                 let at = UNIFORM_STRIDE as usize * slot;
                 bytes[at..at + 64].copy_from_slice(bytemuck::cast_slice(&mvp));
             }
-            queue.write_buffer(&self.uniforms, UNIFORM_STRIDE * first as u64, &bytes);
+            queue.write_buffer(&self.uniforms, UNIFORM_STRIDE * first as u64, bytes);
         }
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("shadow depth map"),
@@ -761,6 +772,7 @@ impl Map {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "shadow depth map");
         pass.set_pipeline(&self.depth_pipeline);
         for (slot, caster) in casters.iter().enumerate() {
             if caster.ranges.is_empty() {
@@ -773,6 +785,7 @@ impl Map {
                 pass.draw_indexed(range.clone(), 0, 0..1);
             }
         }
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     /// How many atlas and depth passes have been recorded; an empty one over a
@@ -860,11 +873,12 @@ impl Map {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "shadow map atlas");
         pass.set_pipeline(&self.pipeline);
         for (index, craft) in crafts.iter().enumerate() {
             // Nothing to draw (a drawable with every chunk filtered out holds
             // zero-size buffers, which have no slice to bind).
-            if craft.caster.ranges.is_empty() {
+            if craft.caster.ranges.is_empty() || !craft.seen {
                 continue;
             }
             let (x, y, side) = RANK_SQUARES[craft.rank.min(MAX_CASTERS - 1)];
@@ -880,6 +894,7 @@ impl Map {
                 pass.draw_indexed(range.clone(), 0, 0..1);
             }
         }
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     /// The texture behind [`Self::view`].

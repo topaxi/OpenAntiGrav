@@ -311,8 +311,12 @@ struct Voice {
     pan: Option<f32>,
     /// See [`Play::front`].
     front: f32,
-    /// One-pole low-pass state per ear for [`SpatialMode::RearCue`].
+    /// One-pole low-pass state per ear for [`SpatialMode::RearCue`] and
+    /// [`Mixer::set_rear_occlusion`].
     rear_state: [f32; CHANNELS],
+    /// The smoothed rear-occlusion cutoff in hertz, or `None` until the first
+    /// [`Mixer::set_front`] of a voice that has one.
+    occlusion_hz: Option<f32>,
     /// The voice's place in the shared convolver, while it is a headphone
     /// voice.
     hrtf: Option<Box<VoiceState>>,
@@ -349,6 +353,7 @@ impl Default for Voice {
             pan: None,
             front: 1.0,
             rear_state: [0.0; CHANNELS],
+            occlusion_hz: None,
             hrtf: None,
             hrtf_wanted: false,
             hrtf_weight: 1.0,
@@ -404,8 +409,8 @@ pub struct Play {
     /// be. A voice whose position was never recovered is left alone.
     pub pan: Option<f32>,
     /// How far ahead of the listener the voice is: `+1.0` dead ahead, `-1.0`
-    /// dead behind. Read only for a voice with a [`Self::pan`], and only when
-    /// the mixer's [`SpatialMode`] is not `Original`.
+    /// dead behind. Read only for a voice with a [`Self::pan`], and under
+    /// `Original` only by [`Mixer::set_rear_occlusion`]'s law.
     pub front: f32,
     /// Whether to restart at the end instead of stopping.
     pub looping: bool,
@@ -448,11 +453,18 @@ const HRTF_CROSSFADE_FRAMES: u32 = 256;
 pub struct Mixer {
     voices: Vec<Voice>,
     bus_gain: [f32; Bus::COUNT],
+    /// A second gain per bus that [`Self::set_bus_gain`] never writes; see [`Self::set_bus_trim`].
+    bus_trim: [f32; Bus::COUNT],
+    /// See [`Self::music_tap`].
+    music_tap: Vec<f32>,
     master_gain: f32,
     /// A fixed gain a title asks for, ahead of the limiter; see [`Self::set_master_trim`].
     master_trim: f32,
     sample_rate: u32,
     spatial: SpatialMode,
+    /// `max_frequency` of the original's rear low-pass, or `None` where the
+    /// title has none. See [`Self::set_rear_occlusion`].
+    rear_occlusion: Option<f32>,
     /// The shared HRTF convolver, once built. See [`Self::set_binaural`].
     binaural: Option<Binaural>,
     binaural_requested: bool,
@@ -492,10 +504,13 @@ impl Mixer {
         Self {
             voices: vec![Voice::default(); MAX_VOICES],
             bus_gain: [1.0; Bus::COUNT],
+            bus_trim: [1.0; Bus::COUNT],
+            music_tap: Vec::new(),
             master_gain: 1.0,
             master_trim: 1.0,
             sample_rate: sample_rate.max(1),
             spatial: SpatialMode::Original,
+            rear_occlusion: None,
             binaural: None,
             binaural_requested: false,
             hrtf_cap: HRTF_VOICES,
@@ -539,6 +554,29 @@ impl Mixer {
     /// Sets one bus's gain, which is what a volume slider moves.
     pub fn set_bus_gain(&mut self, bus: Bus, gain: f32) {
         self.bus_gain[bus.index()] = gain.max(0.0);
+    }
+
+    /// The last [`Self::render`]'s music, mono, before any bus gain, trim or
+    /// the master: what the original's band analysis hears, which goes on
+    /// reading the music with the music slider at zero
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md`, "What a band
+    /// measures").
+    #[must_use]
+    pub fn music_tap(&self) -> &[f32] {
+        &self.music_tap
+    }
+
+    /// Multiplies one bus by `trim` on top of [`Self::set_bus_gain`]. Kept apart from it so a
+    /// caller that rewrites the bus gains every tick (HD's authored mix, the effects fade) does
+    /// not undo it, and [`Self::bus_gain`] still reads the level the settings asked for.
+    pub fn set_bus_trim(&mut self, bus: Bus, trim: f32) {
+        self.bus_trim[bus.index()] = trim.max(0.0);
+    }
+
+    /// Reads one bus's trim, `1.0` unless [`Self::set_bus_trim`] moved it.
+    #[must_use]
+    pub fn bus_trim(&self, bus: Bus) -> f32 {
+        self.bus_trim[bus.index()]
     }
 
     /// Reads one bus's gain.
@@ -651,6 +689,7 @@ impl Mixer {
             pan: play.pan,
             front: play.front,
             rear_state: [0.0; CHANNELS],
+            occlusion_hz: None,
             hrtf: None,
             hrtf_wanted: false,
             hrtf_weight: 1.0,
@@ -746,9 +785,38 @@ impl Mixer {
     /// Where a live voice is along the listener's forward axis. See
     /// [`Play::front`].
     pub fn set_front(&mut self, id: VoiceId, front: f32) {
+        let max = self.rear_occlusion;
         if let Some(voice) = self.voice_mut(id) {
             voice.front = front;
+            if let Some(max) = max {
+                let target = crate::spatial::rear_occlusion_cutoff(front, max);
+                voice.occlusion_hz = Some(voice.occlusion_hz.map_or(target, |previous| {
+                    crate::spatial::smooth_occlusion(previous, target)
+                }));
+            }
         }
+    }
+
+    /// Turns on the original's rear low-pass under [`SpatialMode::Original`]:
+    /// a placed voice behind the listener is low-passed by
+    /// [`crate::spatial::rear_occlusion_cutoff`] with this `max_frequency`
+    /// (the title's own `GlobalAudioConfig.xml` value). `None` is off, which is
+    /// bit-identical to a mixer without it, and what a title or circuit whose
+    /// original has no such filter asks for. The cutoff steps once per
+    /// [`Self::set_front`], the call every voice makes each tick.
+    pub fn set_rear_occlusion(&mut self, max_frequency: Option<f32>) {
+        if self.rear_occlusion != max_frequency {
+            self.rear_occlusion = max_frequency;
+            for voice in &mut self.voices {
+                voice.occlusion_hz = None;
+            }
+        }
+    }
+
+    /// The rear low-pass's `max_frequency`, or `None` where it is off.
+    #[must_use]
+    pub fn rear_occlusion(&self) -> Option<f32> {
+        self.rear_occlusion
     }
 
     /// Chooses how placed voices are rendered. See [`SpatialMode`].
@@ -806,7 +874,7 @@ impl Mixer {
                 continue;
             }
             let Some(bus) = voice.bus else { continue };
-            let level = voice.gain * self.bus_gain[bus.index()];
+            let level = voice.gain * self.bus_gain[bus.index()] * self.bus_trim[bus.index()];
             rank.push((level, voice.hrtf.is_some(), slot as u16));
         }
         if rank.len() > self.hrtf_cap {
@@ -942,10 +1010,14 @@ impl Mixer {
     /// what the limiter saw.
     pub fn render(&mut self, out: &mut [f32]) {
         out.fill(0.0);
+        self.music_tap.clear();
+        self.music_tap.resize(out.len() / CHANNELS, 0.0);
         let master = self.master_gain * self.master_trim;
         let bus_gain = self.bus_gain;
+        let bus_trim = self.bus_trim;
         let rate = f64::from(self.sample_rate);
         let spatial = self.spatial;
+        let rear_occlusion = self.rear_occlusion;
         if spatial == SpatialMode::Headphones && self.binaural.is_some() {
             self.rank_hrtf_voices();
         } else {
@@ -956,6 +1028,7 @@ impl Mixer {
             }
         }
         let binaural = &mut self.binaural;
+        let music_tap = &mut self.music_tap;
 
         for voice in &mut self.voices {
             let Some(sound) = voice.sound.clone() else {
@@ -964,7 +1037,7 @@ impl Mixer {
             let Some(bus) = voice.bus else {
                 continue;
             };
-            let gain = voice.gain * bus_gain[bus.index()] * master;
+            let gain = voice.gain * bus_gain[bus.index()] * bus_trim[bus.index()] * master;
             // One pair for the whole buffer. The original moves a pan over a
             // ramp inside SCREAM rather than per sample, and a tick is short
             // enough that stepping it here would model an interpolator we have
@@ -1001,6 +1074,16 @@ impl Mixer {
                 && (voice.hrtf.is_none() || hrtf_weight < 1.0 || !want_hrtf);
             let (rear_coeff, rear_gain) = if rear_active {
                 rear_cue(voice.front, self.sample_rate)
+            } else if let (SpatialMode::Original, Some(max), true) =
+                (spatial, rear_occlusion, voice.pan.is_some())
+            {
+                let hz = voice
+                    .occlusion_hz
+                    .unwrap_or_else(|| crate::spatial::rear_occlusion_cutoff(voice.front, max));
+                (
+                    crate::spatial::low_pass_coefficient(hz, self.sample_rate),
+                    1.0,
+                )
             } else {
                 (1.0, 1.0)
             };
@@ -1020,7 +1103,7 @@ impl Mixer {
             // shorter than the fade is shortened rather than swallowed.
             let closing = (f64::from(RELEASE_FRAMES) * step.abs()).min(frames as f64 / 4.0);
             let mut delay = voice.delay;
-            for chunk in out.as_chunks_mut::<CHANNELS>().0 {
+            for (at, chunk) in out.as_chunks_mut::<CHANNELS>().0.iter_mut().enumerate() {
                 if delay > 0 {
                     delay -= 1;
                     continue;
@@ -1094,6 +1177,9 @@ impl Mixer {
                             voice.rear_state[c] = x;
                             x
                         };
+                    }
+                    if bus == Bus::Music {
+                        music_tap[at] += 0.5 * (raw[0] + raw[1]) * voice.gain * fade * closing_fade;
                     }
                     if let (Some(state), Some(bin)) = (voice.hrtf.as_deref_mut(), binaural.as_mut())
                     {
@@ -1200,9 +1286,10 @@ impl Mixer {
 /// [`SpatialMode::RearCue`]: `(1.0, 1.0)` ahead (the filter is then a bit-exact
 /// pass), easing to the rear values dead behind.
 ///
-/// **Chosen, not measured**: the original cannot tell front from back
+/// **Chosen, not measured**: Pulse's original cannot tell front from back
 /// (`docs/ghidra/functions/psp-pulse-usa/positional-audio.md`, "The angle loses
-/// front from back"). Dead behind: one pole at [`REAR_CUTOFF_HZ`] and
+/// front from back"); HD's can, and plays its own law under
+/// [`SpatialMode::Original`] ([`Mixer::set_rear_occlusion`]). Dead behind: one pole at [`REAR_CUTOFF_HZ`] and
 /// [`REAR_GAIN`], both eased linearly in the rear half only.
 fn rear_cue(front: f32, sample_rate: u32) -> (f32, f32) {
     let behind = (-front).clamp(0.0, 1.0);

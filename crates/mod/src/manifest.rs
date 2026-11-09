@@ -75,9 +75,6 @@ pub struct Manifest {
     pub keywords: Vec<String>,
     /// The titles it is for (their lowercased hyphenated names); empty means any.
     pub titles: Vec<String>,
-    /// `default-enabled`: whether the mod is on until the player says otherwise (default
-    /// `true`). `false` ships it off: the MODS page turns it on.
-    pub default_enabled: bool,
     /// The game versions it works with.
     pub oag: Option<semver::VersionReq>,
     /// `[extension]`: the WebAssembly modules the mod runs, if any.
@@ -109,6 +106,23 @@ pub struct Manifest {
     pub pickup_odds: Vec<OddsRow>,
     /// `[channels]`: the event channels the mod's modules publish and listen to.
     pub channels: Channels,
+    /// `[texture-pack]`: the mod is a PPSSPP texture pack drawn in place of the disc's
+    /// textures, written or recognised ([`crate::texture_pack`]).
+    pub texture_pack: Option<TexturePack>,
+    /// Whether the mod is on until the player turns it off. `true` for every mod but a
+    /// texture pack, which changes what a race looks like and starts off.
+    pub default_enabled: bool,
+}
+
+/// `[texture-pack]` (`docs/tools/mods.md`, "Texture packs"): a PPSSPP pack read in place,
+/// its `textures.ini` naming the PNGs it replaces textures with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TexturePack {
+    /// The pack's `textures.ini`, as a path in the mod.
+    pub ini: String,
+    /// The disc serials the pack's `[games]` table names, as written there. Empty when the
+    /// manifest names none and the ini could not be read.
+    pub serials: Vec<String>,
 }
 
 /// `[channels]` (`docs/architecture/wasm-extensions/hooks.md`, "Events between mods"):
@@ -179,6 +193,8 @@ struct File {
     module: Table,
     extension: Option<ExtensionTable>,
     channels: Option<ChannelsTable>,
+    #[serde(rename = "texture-pack")]
+    texture_pack: Option<TexturePackTable>,
     #[serde(default)]
     icons: std::collections::BTreeMap<String, String>,
     #[serde(default)]
@@ -188,6 +204,15 @@ struct File {
     #[serde(default)]
     sounds: std::collections::BTreeMap<String, String>,
     pickup: Option<PickupTable>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TexturePackTable {
+    format: String,
+    ini: Option<String>,
+    #[serde(default)]
+    serials: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -416,13 +441,9 @@ struct Table {
     keywords: Vec<String>,
     #[serde(default)]
     titles: Vec<String>,
-    #[serde(rename = "default-enabled", default = "on")]
-    default_enabled: bool,
     oag: Option<String>,
-}
-
-const fn on() -> bool {
-    true
+    #[serde(rename = "default-enabled")]
+    default_enabled: Option<bool>,
 }
 
 fn bad(key: &'static str, problem: impl Into<String>) -> Error {
@@ -609,6 +630,11 @@ impl Manifest {
             })
             .transpose()?;
         let channels = channels(file.channels, &t.id)?;
+        let texture_pack = file
+            .texture_pack
+            .map(|table| texture_pack(table, has))
+            .transpose()?;
+        let default_enabled = t.default_enabled.unwrap_or(texture_pack.is_none());
         Ok(Self {
             id: t.id,
             name: t.name,
@@ -620,7 +646,6 @@ impl Manifest {
             homepage: t.homepage,
             keywords: t.keywords,
             titles: t.titles,
-            default_enabled: t.default_enabled,
             oag,
             extension,
             icons: file.icons,
@@ -631,6 +656,8 @@ impl Manifest {
             pickup_titles,
             pickup_odds,
             channels,
+            texture_pack,
+            default_enabled,
         })
     }
 
@@ -639,6 +666,29 @@ impl Manifest {
     pub fn works_with(&self, game: &semver::Version) -> bool {
         self.oag.as_ref().is_none_or(|req| req.matches(game))
     }
+}
+
+fn texture_pack(table: TexturePackTable, has: &dyn Fn(&str) -> bool) -> Result<TexturePack, Error> {
+    if table.format != "ppsspp" {
+        return Err(bad(
+            "texture-pack.format",
+            format!(
+                "{:?} is not a pack format this build reads: \"ppsspp\"",
+                table.format
+            ),
+        ));
+    }
+    let ini = table.ini.unwrap_or_else(|| "textures.ini".to_string());
+    if !has(&ini) {
+        return Err(bad(
+            "texture-pack.ini",
+            format!("{ini:?} is not in the mod"),
+        ));
+    }
+    Ok(TexturePack {
+        ini,
+        serials: table.serials,
+    })
 }
 
 /// The `[channels]` table, each name checked by `oag_ext_abi::check_channel`; a published

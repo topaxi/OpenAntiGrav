@@ -216,6 +216,9 @@ struct CardGpu {
     timeline: Option<crate::gantry::CardTimeline>,
     drawable: Drawable,
     view_projection: Mat4,
+    /// Whether the card's uniforms are in its buffer: its own camera, an identity model
+    /// and no motion, the same on every frame, so they are written once.
+    uniforms_written: std::cell::Cell<bool>,
     colour: wgpu::TextureView,
     wrap: bool,
     #[cfg(test)]
@@ -234,6 +237,9 @@ pub(super) struct Cards {
     rebound: usize,
     #[cfg(test)]
     wrapped: usize,
+    /// How many uniform writes [`Cards::render`] has made, all cards together.
+    #[cfg(test)]
+    uniform_writes: std::cell::Cell<usize>,
     depth: wgpu::TextureView,
     velocity: wgpu::TextureView,
 }
@@ -351,6 +357,7 @@ impl Cards {
                 timeline: card.timeline,
                 drawable,
                 view_projection: card.view_projection,
+                uniforms_written: std::cell::Cell::new(false),
                 colour: target.create_view(&wgpu::TextureViewDescriptor::default()),
                 wrap: card.wrap,
                 #[cfg(test)]
@@ -365,6 +372,8 @@ impl Cards {
             rebound: 0,
             #[cfg(test)]
             wrapped: 0,
+            #[cfg(test)]
+            uniform_writes: std::cell::Cell::new(0),
             depth,
             velocity,
         })
@@ -424,12 +433,16 @@ impl Cards {
             let seconds = card.timeline.as_ref().map_or(seconds, |timeline| {
                 timeline.apply(&card.drawable, gantry_clock(timeline))
             });
-            card.drawable.write(
-                queue,
-                card.view_projection,
-                Mat4::IDENTITY,
-                card.view_projection,
-            );
+            if !card.uniforms_written.replace(true) {
+                card.drawable.write(
+                    queue,
+                    card.view_projection,
+                    Mat4::IDENTITY,
+                    card.view_projection,
+                );
+                #[cfg(test)]
+                self.uniform_writes.set(self.uniform_writes.get() + 1);
+            }
             card.drawable.write_anims(queue, seconds);
             card.drawable.write_node_anims(queue, seconds);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -471,8 +484,10 @@ impl Cards {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            oag_gpu::perfprobe::marks::mark(&mut pass, "advert card");
             card.drawable
                 .draw(&mut pass, ViewBlock::NONE, None, None, None, None);
+            oag_gpu::perfprobe::marks::close(&mut pass);
         }
     }
 }

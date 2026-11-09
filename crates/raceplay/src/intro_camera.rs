@@ -24,6 +24,7 @@
 //! | neither can end it before the title's lock ticks have passed | read (`+0x1a04`, a counter from 60) and measured (it reads `57` at the third tick and `0` from the sixtieth) |
 //! | the world does not tick meanwhile: the countdown's 272 ticks start when the flyby ends | measured: the race clock reads zero and the mode state `0` throughout, and the first state after the flyby is the one a skip always reached |
 //! | the circuit's voice-over starts on the tick the lock counter reaches zero and stops when the flyby ends | read (`MusicPlayer_StartPreRaceDialogue` after the counter's last decrement, `MusicPlayer_Stop` in the exit branch) |
+//! | the draws are masked by the one section under the camera, wherever it flies | read (`FUN_08882cbc`) and measured on two whole flybys ([`Race::flyby_camera_section`]) |
 //! | the HUD is hidden through the flyby and for the title's HUD delay ticks after it | read (`g_hud+0x2c` flags, cleared at the intro's start and set when its `0.5` s fade-out substate ends) and seen: no HUD at tick 30, HUD at tick 60 |
 //!
 //! # What is chosen, not measured

@@ -121,10 +121,50 @@ fn pulse() -> Option<PathBuf> {
     oag_testdata::image("pulse-psp-eu.chd")
 }
 
+fn hd() -> Option<PathBuf> {
+    oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")
+}
+
 fn text<'a>(state: &'a Value, path: &[&str]) -> Option<&'a str> {
     path.iter()
         .try_fold(state, |at, key| at.get(key))
         .and_then(Value::as_str)
+}
+
+/// The frame that opens a selection screen waits on no disc read
+/// (`docs/rendering/frame-thread-cpu.md`, "A picker's opening read"): Track Select, Ship Select
+/// and the way back each open on a read that landed on a worker before the tap, also after a
+/// change of mode asked for another. Fails on a build whose opening frame starts the read
+/// itself, which logs that it waited.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_selection_screen_opens_on_a_read_that_has_landed() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive_with(
+        &image,
+        "opening-reads",
+        "boot; select racebox; press cross; until page=race; \
+         until opening_reads=landed; set race.mode=speed_lap; \
+         until opening_reads=landed; select launch_race; press cross; \
+         until screen.id=track-select; until opening_reads=landed; press cross; \
+         until screen.id=ship-select; until opening_reads=landed; press circle; \
+         until screen.id=track-select",
+        None,
+        &[("RUST_LOG", "oag_game=debug")],
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let stderr = run.stderr();
+    assert!(
+        !stderr.contains("opens waiting for its read"),
+        "an opening frame waited:\n{stderr}"
+    );
+    assert_eq!(
+        stderr.matches("opens on a read that has landed").count(),
+        3,
+        "Track Select, Ship Select and Track Select again:\n{stderr}"
+    );
 }
 
 #[test]
@@ -173,6 +213,32 @@ fn the_race_box_launches_the_track_and_craft_it_was_told_to_pick() {
         screens.contains(&"track-select") && screens.contains(&"ship-select"),
         "{screens:?}"
     );
+}
+
+/// HD's Racebox TARGET row (its `Eliminations` slider, `200` to `600` by `20`) reaches the race:
+/// an Eliminator launched with 400 ends on 400 points, not the slider's minimum. Fails on a build
+/// that drops the row's pick on the way to the loader.
+#[test]
+#[ignore = "needs an HD disc image in data/images/"]
+fn the_race_box_target_row_sets_what_an_hd_eliminator_ends_on() {
+    let Some(image) = hd() else {
+        return;
+    };
+    let run = drive(
+        &image,
+        "hd-target",
+        "boot; select racebox; press cross; until page=race; \
+         set race.mode=eliminator; set race.score_target=400; \
+         select launch_race; press cross; \
+         until screen=picker; press cross; \
+         until screen.id=ship-select; press cross; \
+         until stage=race within 3000; ticks 5",
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let race = &run.last()["race"];
+    assert_eq!(text(run.last(), &["race", "mode"]), Some("eliminator"));
+    assert_eq!(race["target"].as_u64(), Some(400), "{race}");
 }
 
 /// A Race Box race runs the example simulation mods in a build with the `extensions`
@@ -255,6 +321,86 @@ fn the_process_waits_for_a_running_gpu_worker_before_it_exits() {
     }
 }
 
+/// A run that ends on the loading screen waits for the race load: its texture sink is inside the
+/// driver, and exiting under it crashes NVIDIA's Vulkan driver (`docs/tools/web.md`, "Exit and GPU
+/// workers"). On any GPU the line names the worker, so this needs no crash to fail; the load is
+/// held up (a debug-build hook) so the script always ends first.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_process_waits_for_the_race_load_before_it_exits() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive_with(
+        &image,
+        "exit-in-load",
+        "boot; select racebox; press cross; until page=race; \
+         set race.mode=speed_lap; select launch_race; press cross; \
+         until screen=picker; select 03_Track; press cross; \
+         until screen.id=ship-select; select Feisar; press cross; \
+         until stage=loading within 3000",
+        None,
+        &[("OAG_TEST_RACE_LOAD_DELAY_MS", "2000")],
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    assert!(
+        run.stderr()
+            .lines()
+            .any(|line| line.contains("waiting for GPU workers before exit")
+                && line.contains("\"race-load\"")),
+        "the exit did not wait for the race load:\n{}",
+        run.stderr()
+    );
+}
+
+/// A load that is still running when the process starts to leave stops at its next stage instead
+/// of finishing: the load is held at each stage (a debug-build hook,
+/// `OAG_TEST_RACE_LOAD_STAGE_DELAY_MS`), the script ends during the first hold, and the
+/// game says it waited for `race-load` but never reports the later stages. Dropping the checks
+/// from `stages::reach` lets the load run to `CraftsBuilt`, three holds later.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_race_load_stops_at_its_next_stage_when_the_process_exits() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive_with(
+        &image,
+        "exit-stops-load",
+        "boot; select racebox; press cross; until page=race; \
+         set race.mode=speed_lap; select launch_race; press cross; \
+         until screen=picker; select 03_Track; press cross; \
+         until screen.id=ship-select; select Feisar; press cross; \
+         until stage=loading within 3000",
+        None,
+        &[
+            ("OAG_TEST_RACE_LOAD_STAGE_DELAY_MS", "1500"),
+            ("RUST_LOG", "oag_raceplay=debug,info"),
+        ],
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let stderr = run.stderr();
+    assert!(
+        stderr
+            .lines()
+            .any(|line| line.contains("waiting for GPU workers before exit")
+                && line.contains("\"race-load\"")),
+        "the exit did not wait for the race load:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("race load reached TrackRead"),
+        "the load never started:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("race load reached TrackBuilt"),
+        "the load ran on after the process started to exit:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("the process is exiting"),
+        "a stopped load is not a failure a player reads:\n{stderr}"
+    );
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn race_remix_launches_a_track_file_from_its_custom_title() {
@@ -322,7 +468,7 @@ fn a_row_that_does_not_exist_and_a_wait_that_never_ends_fail_with_the_state() {
     let missing = drive(
         &image,
         "no-row",
-        "boot; select racebox; press cross; until page=race; select nonesuch",
+        "boot; select racebox; press cross; until page=race; select nonesuch within 30",
         None,
     );
     assert!(!missing.output.status.success());
@@ -375,26 +521,26 @@ fn remix_tracks(run: &Run) -> Vec<Vec<String>> {
     seen
 }
 
-/// What RACE CAMPAIGN is on the main page, in order: `submenu` while a mod campaign puts
-/// the picker behind it, `action` (the disc's campaign) with none.
-fn campaign_row_kinds(run: &Run) -> Vec<String> {
-    let mut seen: Vec<String> = Vec::new();
+/// The labels of RACE CAMPAIGN's picker each time it was on screen, in order, one entry per
+/// distinct listing. On Pulse the page always exists (its NEW CAMPAIGN row), so what a mod adds
+/// or takes away is its own rows.
+fn campaign_picker_listings(run: &Run) -> Vec<Vec<String>> {
+    let mut seen: Vec<Vec<String>> = Vec::new();
     for state in run
         .states
         .iter()
-        .filter(|s| text(s, &["page"]) == Some("main"))
+        .filter(|s| text(s, &["page"]) == Some("campaigns"))
     {
-        let rows = state.pointer("/screen/rows").and_then(Value::as_array);
-        let kind = rows
-            .and_then(|rows| {
-                rows.iter()
-                    .find(|row| row.get("id").and_then(Value::as_str) == Some("campaign"))
-            })
-            .and_then(|row| row.get("kind").and_then(Value::as_str));
-        if let Some(kind) = kind
-            && seen.last().map(String::as_str) != Some(kind)
-        {
-            seen.push(kind.to_string());
+        let Some(rows) = state.pointer("/screen/rows").and_then(Value::as_array) else {
+            continue;
+        };
+        let labels: Vec<String> = rows
+            .iter()
+            .filter_map(|row| row.get("label").and_then(Value::as_str))
+            .map(str::to_string)
+            .collect();
+        if !labels.is_empty() && seen.last() != Some(&labels) {
+            seen.push(labels);
         }
     }
     seen
@@ -418,16 +564,22 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
     let run = drive(
         &image,
         "mods-switch",
-        "boot; select remix; press cross; until page=oag.remix/remix; \
+        "boot; select campaign; press cross; until page=campaigns; ticks 5; press circle; \
+         until page=main; \
+         select remix; press cross; until page=oag.remix/remix; \
          set mod.oag.remix.track_title=CUSTOM; ticks 120; press circle; until page=main; \
          select mods; press cross; until page=mods; \
          set mods.selected=oag.hillside; set mods.enabled=off; expect page=mods; \
          press circle; until page=main; \
+         select campaign; press cross; until page=campaigns; ticks 5; press circle; \
+         until page=main; \
          select remix; press cross; until page=oag.remix/remix; ticks 60; press circle; \
          until page=main; \
          select mods; press cross; until page=mods; \
          set mods.selected=oag.hillside; set mods.enabled=on; \
-         press circle; until page=main; ticks 5",
+         press circle; until page=main; \
+         select campaign; press cross; until page=campaigns; ticks 5; press circle; \
+         until page=main; ticks 5",
         None,
     );
     assert!(run.output.status.success(), "{}", run.stderr());
@@ -442,10 +594,18 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
         custom.last().is_some_and(|l| !has(l, "HILLSIDE")),
         "and not once it is off, the campaign's own track kept: {tracks:?}"
     );
-    assert_eq!(
-        campaign_row_kinds(&run),
-        ["submenu", "action", "submenu"],
-        "NIGHT RUN's picker goes with Hillside off (its event races Hillside) and comes back"
+    let listings = campaign_picker_listings(&run);
+    let has_night_run = |labels: &Vec<String>| labels.iter().any(|l| l == "NIGHT RUN");
+    assert_eq!(listings.len(), 3, "{listings:?}");
+    assert!(
+        has_night_run(&listings[0]) && !has_night_run(&listings[1]) && has_night_run(&listings[2]),
+        "NIGHT RUN's row goes with Hillside off (its event races Hillside) and comes back: {listings:?}"
+    );
+    assert!(
+        listings
+            .iter()
+            .all(|l| l.iter().any(|label| label == "NEW CAMPAIGN")),
+        "the editor's row stays: {listings:?}"
     );
     let why = run.stderr();
     assert!(
@@ -461,6 +621,124 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
         saved["mods"]["disabled"].as_array().map(Vec::len),
         Some(0),
         "turned back on, nothing is left off"
+    );
+}
+
+/// The SCREEN SIZE row, stepped the way a pad steps it, reaches the settings file and the menus'
+/// own picture: it opens on Pulse's 100, a step to 90 saves `[graphics] hud_safe_area`, and the
+/// reported row reads 90. Dropping the session's `graphics.hud_safe_area` arm leaves the file
+/// without the key.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_screen_size_row_saves_hud_safe_area() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive(
+        &image,
+        "screen-size",
+        "boot; select options; press cross; until page=options; \
+         select display; press cross; until page=display; \
+         set graphics.hud_safe_area=90; ticks 5; expect page=display",
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.stderr());
+    let value = |state: &Value| {
+        state["screen"]["rows"]
+            .as_array()
+            .and_then(|rows| {
+                rows.iter()
+                    .find(|row| row["setting"] == "graphics.hud_safe_area")
+            })
+            .map(|row| row["value"].as_str().unwrap_or_default().to_string())
+    };
+    let seen: Vec<String> = run.states.iter().filter_map(value).collect();
+    assert_eq!(
+        seen.first().map(String::as_str),
+        Some("100"),
+        "opens on Pulse's own default"
+    );
+    assert_eq!(
+        seen.last().map(String::as_str),
+        Some("90"),
+        "and ends where the pad left it"
+    );
+    let saved = std::fs::read_to_string(
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-screen-size/config/oag/settings.toml"),
+    )
+    .expect("the run saved its settings");
+    let saved: toml::Table = saved.parse().unwrap();
+    assert_eq!(
+        saved["graphics"]["hud_safe_area"].as_integer(),
+        Some(90),
+        "the step wrote the setting: {saved}"
+    );
+}
+
+/// The rightmost pixel of the HUD's cyan shield bar in the lower right of a frame, which is
+/// where the bar's end sits. Pulse's `speed` bar draws pure cyan there at every size.
+fn shield_bar_right_edge(path: &Path) -> u32 {
+    let file = std::fs::File::open(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let mut reader = png::Decoder::new(std::io::BufReader::new(file))
+        .read_info()
+        .expect("a PNG");
+    let mut pixels = vec![0; reader.output_buffer_size().expect("a buffer size")];
+    let info = reader.next_frame(&mut pixels).expect("a frame");
+    let channels = info.color_type.samples();
+    let (width, height) = (info.width as usize, info.height as usize);
+    let mut right = 0;
+    for y in height * 3 / 4..height {
+        for x in width * 11 / 20..width {
+            let at = (y * width + x) * channels;
+            let (r, g, b) = (pixels[at], pixels[at + 1], pixels[at + 2]);
+            if r < 60 && g > 200 && b > 200 {
+                right = right.max(x as u32);
+            }
+        }
+    }
+    right
+}
+
+/// A race parked behind the menus takes the SCREEN SIZE row the moment it resumes: the same race,
+/// paused, through OPTIONS, DISPLAY, back and resumed, draws its HUD pulled in from the screen's
+/// edge. Dropping the per-frame `Overlay::set_safe_area` leaves the resumed HUD at the scale the
+/// race loaded with.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_race_resumed_from_the_pause_menu_draws_its_hud_at_the_new_screen_size() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-screen-size-live");
+    let _ = std::fs::remove_dir_all(&shots);
+    std::fs::create_dir_all(&shots).expect("a screenshot directory");
+    let (before, after) = (shots.join("before.png"), shots.join("after.png"));
+    let run = drive(
+        &image,
+        "screen-size-live",
+        &format!(
+            "boot; select racebox; press cross; until page=race; select launch_race; press cross; \
+             until screen=picker; press cross; until screen.id=ship-select; press cross; \
+             until stage=race within 4000; ticks 300; screenshot {}; \
+             press start; until stage=menu within 300; ticks 20; \
+             select pause_options; press cross; until page=options; \
+             select display; press cross; until page=display; \
+             set graphics.hud_safe_area=90; press circle; until page=options; \
+             press circle; until page=pause; press start; until stage=race within 300; \
+             ticks 30; screenshot {}",
+            before.display(),
+            after.display()
+        ),
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let (was, now) = (
+        shield_bar_right_edge(&before),
+        shield_bar_right_edge(&after),
+    );
+    assert!(
+        was > 0 && now + 30 < was,
+        "the shield bar's end moved in from {was} to {now}"
     );
 }
 

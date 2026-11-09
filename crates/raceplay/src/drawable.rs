@@ -8,6 +8,7 @@ use super::*;
 mod instance;
 mod moving;
 mod pad_glow;
+mod pad_tint;
 mod scene_block;
 #[cfg(test)]
 pub(crate) use scene_block::Matrices;
@@ -49,6 +50,8 @@ pub(super) struct Drawable {
     /// The depth prepass pair, for the one drawable built with it - Wipeout
     /// HD's circuit. See `mesh_render::Prepass`.
     prepass: Option<mesh_render::Prepass>,
+    /// `mesh_render::Built::plain_draws`.
+    plain_draws: Vec<bool>,
     /// The index buffer with its triangles in reverse order, each triangle's
     /// own vertices untouched, for the prepass's shaded half - see
     /// `draw_lists`. `None` without a prepass.
@@ -244,6 +247,7 @@ impl Drawable {
         let mesh_render::Built {
             pipeline,
             prepass,
+            plain_draws,
             alpha_test_pipeline,
             cutout_pipelines,
             culled,
@@ -383,6 +387,7 @@ impl Drawable {
             authored_pipelines,
             stamp_pipeline,
             prepass,
+            plain_draws,
             hidden: std::sync::Mutex::default(),
             reversed_indices,
             vertices,
@@ -623,15 +628,22 @@ impl Drawable {
 
     /// Rewrites the Zone visualiser's lookup from `bands` levels, tinted by
     /// `tint` - or blanks it when `tint` is `None`, which is what a stage
-    /// with no authored `EQ colour tint` gets. See
-    /// `oag_mesh::mesh_render::zone::write_vis`, which this forwards to.
+    /// with no authored `EQ colour tint` gets. Writes nothing when the texels
+    /// equal `last`, what this drawable's lookup was last given (`None`: never
+    /// written), and leaves this frame's there. See
+    /// `oag_mesh::mesh_render::zone::write_vis_changed`, which this forwards to.
+    ///
+    /// Safe to skip because every view's writes land in the order the views were
+    /// prepared (`oag_gpu::writes`): the texture holds the last texels written.
+    /// Returns whether it wrote.
     pub(super) fn write_zone_vis(
         &self,
         queue: &dyn oag_gpu::writes::Writes,
         bands: &[f32],
         tint: Option<[u8; 3]>,
-    ) {
-        mesh_render::zone::write_vis(queue, &self.zone_vis, bands, tint);
+        last: &mut Option<mesh_render::zone::VisTexels>,
+    ) -> bool {
+        mesh_render::zone::write_vis_changed(queue, &self.zone_vis, bands, tint, last)
     }
 
     /// `prev_mvp` is the previous simulation tick's `view_projection * model`,
@@ -955,108 +967,6 @@ impl Drawable {
             out
         }));
         queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(tinted));
-    }
-
-    /// Recolours each weapon pad's own geometry by whether it currently hands
-    /// out a pickup - see [`oag_render::weapon_pad`] for the recovered
-    /// mechanism this reproduces. `ready[i]` pairs with this drawable's
-    /// `i`-th [`mesh::Model::node_vertex_ranges`] entry - positional, not by
-    /// name, for the reason that field's own doc comment gives.
-    ///
-    /// A no-op on a model with no weapon pads - every track and the sky -
-    /// since `ready` is empty there.
-    ///
-    /// **Also a no-op on a Wipeout HD model**, and that gate is the point of
-    /// [`mesh::Model::vertex_colour_is_light`] being read here rather than a
-    /// title enum. Two independent reasons, either sufficient:
-    ///
-    /// 1. The keyframe table is *Pulse's*, read out of the PSP executable at
-    ///    `0x08ac00c8` (see [`oag_render::weapon_pad`]). HD's own `Weapon Pad`
-    ///    does cycle, but through its own table at `0x008c26a0` and into the
-    ///    light bars' constant rather than the mesh - see
-    ///    [`Self::glow_weapon_pads`]. `ds_weaponup_cs.gtf` is a grey plate with
-    ///    a **red** cross on it, where Pulse's `weapon_under.tga` is neutral and
-    ///    takes its colour entirely from `pad+0x6c`.
-    /// 2. On an HD model `colour` is not a tint at all. It is the baked
-    ///    per-vertex light the fragment program **adds** inside its authored
-    ///    lighting sum - see `oag_mesh::mesh::rcs::emit`. Writing a palette
-    ///    entry there is not "the wrong colour", it is a different quantity.
-    ///
-    /// What HD does instead is unrecovered - see `docs/rendering/pads.md`. An
-    /// HD pad therefore draws its authored texture under the circuit's own
-    /// light rig, unarmed and armed alike, which is a visible absence rather
-    /// than an invented state.
-    pub(super) fn tint_weapon_pads(
-        &self,
-        queue: &dyn oag_gpu::writes::Writes,
-        seconds: f32,
-        ready: &[bool],
-        tinted: &mut Vec<mesh::GpuVertex>,
-    ) {
-        if self.model.vertex_colour_is_light {
-            return;
-        }
-        self.recolour_nodes(
-            queue,
-            ready.iter().map(|&is_ready| {
-                if is_ready {
-                    oag_render::weapon_pad::ready_colour(seconds)
-                } else {
-                    oag_render::weapon_pad::COOLDOWN_COLOUR
-                }
-            }),
-            tinted,
-        );
-    }
-
-    /// Rewrites each of this drawable's [`mesh::Model::node_vertex_ranges`]
-    /// entries to its own flat `colour`, one per iterator item, positional
-    /// and zipped the way [`Self::tint_weapon_pads`]' own doc comment
-    /// describes.
-    ///
-    /// Rewrites the *replacement* colour, not a multiply against the pad's
-    /// authored one - `pad+0x6c` overwrites the mesh's own GE colour command
-    /// every tick in the original (see `oag_render::weapon_pad`), and this
-    /// mirrors that shape for the speed pad's own, unrecovered override.
-    /// Always from `self.model.vertices`, never from the last frame's
-    /// buffer, for the same accumulation reason [`Self::deflect_airbrakes`]
-    /// gives.
-    ///
-    /// `tinted` is scratch the caller owns and this refills - see
-    /// `Scene::scratch`.
-    fn recolour_nodes(
-        &self,
-        queue: &dyn oag_gpu::writes::Writes,
-        colours: impl Iterator<Item = [f32; 3]>,
-        tinted: &mut Vec<mesh::GpuVertex>,
-    ) {
-        let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
-        // A Quake's bump rolling over a pad has to survive the pad's own
-        // rewrite from the authored vertices - see `Ripple::displace`.
-        let ripple = lock(&self.ripple);
-        for (range, colour) in self.model.node_vertex_ranges.iter().zip(colours) {
-            let span = range.start as usize..range.end as usize;
-            let Some(base) = self.model.vertices.get(span) else {
-                continue;
-            };
-            // Refilled rather than rebuilt - one pad's worth of vertices, and
-            // there is a pad's worth of them on every lap of every circuit
-            // every frame. See `Scene::scratch`.
-            tinted.clear();
-            tinted.extend(base.iter().zip(range.start..).map(|(v, index)| {
-                let mut out = *v;
-                out.colour = [colour[0], colour[1], colour[2], out.colour[3]];
-                if let Some(ripple) = ripple.as_ref() {
-                    ripple.displace(index, &mut out);
-                }
-                out
-            }));
-            queue.write_buffer(
-                &self.vertices,
-                u64::from(range.start) * stride,
-                bytemuck::cast_slice(tinted),
-            );
-        }
     }
 
     /// Chooses this frame's child of each authored `LodGroup` for the
@@ -1429,6 +1339,7 @@ mod tests {
 pub(super) mod draw;
 mod occlusion;
 mod overlay;
+pub(crate) use overlay::TrackCull;
 mod ripple;
 mod stamp;
 

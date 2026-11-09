@@ -82,6 +82,8 @@ mod multiplayer_time_trial;
 mod pads;
 mod people_grid;
 mod perfect_start;
+mod photo;
+mod photo_rewind;
 #[cfg(feature = "extensions")]
 mod portal_view;
 mod quake_armed;
@@ -89,6 +91,7 @@ mod quake_lift;
 mod reconcile;
 mod reconcile_cost;
 mod reconcile_predict;
+mod replay_timeline_cost;
 mod repulser;
 pub(crate) mod respawn;
 mod roll_payout;
@@ -98,7 +101,9 @@ mod scene_blocks;
 mod scene_build;
 mod seat_view;
 mod second_person;
+mod shared_half;
 mod shield_flash;
+mod shine_writes;
 mod slot_hud;
 mod spawn;
 mod spectator_press;
@@ -107,17 +112,21 @@ mod spline;
 mod split_bloom;
 mod split_blur;
 mod split_exposure;
+mod split_finish;
+mod split_frames;
 mod split_shadows;
 mod split_temporal;
 mod split_windows;
 mod sub_weapon;
 mod thrust_chase;
+mod timeline;
 mod title_effects;
 mod track_stages;
 mod trail_hits;
 mod trail_order;
 mod transit;
 mod velocity_gate;
+mod viewer;
 mod viewpoint;
 mod weapons;
 mod windowed;
@@ -195,6 +204,15 @@ fn straight_track() -> AiTrack {
 
 /// [`straight_track`] with its own half-widths, left then right.
 pub(crate) fn straight_track_with_widths(left: f32, right: f32) -> AiTrack {
+    straight_track_in_sections(left, right, |_| 0)
+}
+
+/// [`straight_track_with_widths`] with the authored section of each control point, by index.
+pub(crate) fn straight_track_in_sections(
+    left: f32,
+    right: f32,
+    section: impl Fn(usize) -> u8,
+) -> AiTrack {
     let count = 8usize;
     let paths_at = track::HEADER_LEN + track::RESERVED_LEN;
     let junctions_at = paths_at + track::PATH_LEN;
@@ -220,6 +238,7 @@ pub(crate) fn straight_track_with_widths(left: f32, right: f32) -> AiTrack {
         // The four light-scale bytes (`+0x62..+0x65`): an open road, full light. Left at zero they would
         // read as a tunnel dark enough to black out a hull the course now locates wherever it stands.
         out[at + 0x62..at + 0x66].fill(255);
+        out[at + 0x60] = section(k);
     }
     track::parse(&out).expect("the synthetic track must parse")
 }
@@ -295,6 +314,7 @@ fn setup(handling: Handling) -> Setup {
         magstrip_wake: None,
         magstrip_pob: false,
         leach_strip: None,
+        missile_trail: None,
         destroy_stations: Vec::new(),
         finished_thrust: None,
         original_tables: None,
@@ -303,6 +323,7 @@ fn setup(handling: Handling) -> Setup {
         slot_teams: Vec::new(),
         sight: Sighting::default(),
         trail_sparks: false,
+        request: None,
         campaign_event: false,
         spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),
@@ -378,6 +399,7 @@ fn setup(handling: Handling) -> Setup {
         // Same path: no title data, so no ladder, so nothing decodes.
         announcer: oag_sound::sfx::Announcer::default(),
         class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
+        rumble: oag_tables::rumble::Library::default(),
         // No title data here either, so no zone-to-stage ladder to fire the
         // class announcer against - the same "not this title" reason `zone`
         // above is `None`.
@@ -402,6 +424,8 @@ fn setup(handling: Handling) -> Setup {
         autopilot_pad_grants: false,
         reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
         opponent_fire: oag_title::weapons::OpponentFire::PULSE,
+        score_law: None,
+        flip_law: None,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
         speedup_pads: Vec::new(),
@@ -528,16 +552,18 @@ pub(super) fn race_with_a_grid_sighted(sight: Sighting) -> Race {
 pub(super) fn sighting_of(sights: &oag_title::hud::Sights) -> Sighting {
     Sighting {
         leach_law: sights.runs_leach_law(),
+        chase_gain: sights.chase_gain(),
         ..Sighting::default()
     }
 }
 
-/// Pulse's reticle (`pulse`) or Wipeout HD's, for a test that compares the two.
+/// Pulse's reticle (`pulse`) or one whose LeachBeam keeps the Missile's law (2048's
+/// concentric rings, whose own update is unread), for a test that compares the two.
 pub(super) fn title_sighting(pulse: bool) -> Sighting {
     sighting_of(if pulse {
         oag_pulse::hud::ART.sights
     } else {
-        oag_hd::hud::ART.sights
+        oag_2048::hud::ART.sights
     })
 }
 

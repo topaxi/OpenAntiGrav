@@ -361,6 +361,7 @@ impl Target {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "behind the glass");
         let groups = || self.alternate.iter().chain(&self.primary);
         let mut stats = SceneStats::default();
         let solid = Lists::Solid { order: None };
@@ -381,9 +382,13 @@ impl Target {
                 set,
                 chunks,
                 frustum,
-                Lists::Blended { depth_plane: None },
+                Lists::Blended {
+                    depth_plane: None,
+                    between: None,
+                },
             ));
         }
+        oag_gpu::perfprobe::marks::close(&mut pass);
         stats
     }
 }

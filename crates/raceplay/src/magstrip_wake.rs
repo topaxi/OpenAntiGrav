@@ -205,34 +205,38 @@ impl Race {
             .and_then(|handles| handles.get(slot).copied().flatten())
     }
 
-    /// What the wake reads of craft `slot` this frame. `with_track` and
-    /// `lateral` are the spawn's, and left at their neutral values when the
-    /// track has no sample under the craft.
-    fn wake_craft(&self, slot: usize, anchor: Mat4) -> Option<Craft> {
+    /// What the wake reads of craft `slot` this frame to draw it. `with_track` and `lateral`
+    /// are the spawn's alone: [`Self::wake_craft`] fills them in.
+    fn wake_pose(&self, slot: usize, anchor: Mat4) -> Craft {
         let model = self.ship_model_matrix_of(slot);
-        let physics = &self.sim.world.ships[slot].physics;
         let world_anchor = model * anchor;
-        let forward = model.z_axis.truncate().normalize_or_zero();
-        let (with_track, lateral) = match self.sim.spline.nearest(physics.body.position) {
-            Some((_, sample, _)) => {
-                let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();
-                let across = Vec3::from_array(sample.lateral).normalize_or_zero();
-                (
-                    forward.dot(tangent) >= 0.0,
-                    (physics.body.position - Vec3::from_array(sample.pos)).dot(across),
-                )
-            }
-            None => (true, 0.0),
-        };
-        Some(Craft {
+        Craft {
             anchor: world_anchor.w_axis.truncate(),
             position: model.w_axis.truncate(),
-            forward,
+            forward: model.z_axis.truncate().normalize_or_zero(),
             up: world_anchor.y_axis.truncate().normalize_or_zero(),
-            speed: physics.body.linear_velocity.length(),
-            with_track,
-            lateral,
-        })
+            speed: self.sim.world.ships[slot]
+                .physics
+                .body
+                .linear_velocity
+                .length(),
+            with_track: true,
+            lateral: 0.0,
+        }
+    }
+
+    /// [`Self::wake_pose`] with the spawn's `with_track` and `lateral`, left at their neutral
+    /// values when the track has no sample under the craft.
+    fn wake_craft(&self, slot: usize, anchor: Mat4) -> Option<Craft> {
+        let mut craft = self.wake_pose(slot, anchor);
+        let position = self.sim.world.ships[slot].physics.body.position;
+        if let Some((_, sample, _)) = self.sim.spline.nearest(position) {
+            let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();
+            let across = Vec3::from_array(sample.lateral).normalize_or_zero();
+            craft.with_track = craft.forward.dot(tangent) >= 0.0;
+            craft.lateral = (position - Vec3::from_array(sample.pos)).dot(across);
+        }
+        Some(craft)
     }
 
     /// The track `ahead` units along the spline from the sample nearest `from`,
@@ -290,12 +294,11 @@ impl Race {
             let Some(anchor) = wakes.anchors[slot] else {
                 continue;
             };
-            if !self.ship_active(slot) {
+            if !self.ship_active(slot) || wakes.wakes[slot].live() == 0 {
                 continue;
             }
-            if let Some(craft) = self.wake_craft(slot, anchor) {
-                wakes.wakes[slot].build(&craft, eye, &mut atlas, &mut contact);
-            }
+            let craft = self.wake_pose(slot, anchor);
+            wakes.wakes[slot].build(&craft, eye, &mut atlas, &mut contact);
         }
         (atlas, contact)
     }

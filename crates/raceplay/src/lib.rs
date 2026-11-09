@@ -106,6 +106,7 @@
 //! drives).
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 #[cfg(feature = "view")]
@@ -217,6 +218,7 @@ mod field;
 #[cfg(feature = "view")]
 pub mod finish_camera;
 mod finished_thrust;
+mod flip;
 pub mod foreign;
 #[cfg(feature = "view")]
 pub mod gantry;
@@ -251,6 +253,8 @@ mod magstrip_wake;
 #[cfg(feature = "view")]
 mod missile_blast;
 #[cfg(feature = "view")]
+pub mod missile_smoke;
+#[cfg(feature = "view")]
 mod models;
 #[cfg(feature = "view")]
 pub mod now_playing;
@@ -260,14 +264,17 @@ mod original_tables;
 mod pads;
 #[cfg(feature = "view")]
 mod perfect_start;
+#[cfg(feature = "view")]
+pub mod photo;
 mod pilot_assist;
 pub mod pilots;
 pub mod player_step;
 #[cfg(feature = "view")]
+mod player_tags;
+#[cfg(feature = "view")]
 mod portal_view;
 mod reconcile;
-#[cfg(feature = "view")]
-mod replay;
+pub mod replay;
 #[cfg(feature = "view")]
 mod repulser_field;
 mod respawn;
@@ -278,9 +285,13 @@ pub mod rocket_smoke;
 mod roll_payout;
 mod routes;
 #[cfg(feature = "view")]
+pub mod rumble_library;
+#[cfg(feature = "view")]
 mod scene;
 #[cfg(feature = "view")]
 pub mod scenery_fx;
+mod score_law;
+pub mod score_pace;
 pub mod scoreboard;
 #[cfg(feature = "view")]
 mod shadow;
@@ -290,20 +301,25 @@ mod slot_hud;
 mod spawn;
 mod speed_plan;
 mod spline;
+mod spline_table;
 #[cfg(feature = "view")]
 mod split_gap;
 mod stages;
 mod start;
 mod takeoff_line;
 mod telemetry;
+pub mod texture_pack;
 #[cfg(feature = "view")]
 mod texture_sink;
 mod tick;
+pub mod timeline;
 pub mod tournament;
 #[cfg(feature = "view")]
 pub mod track_panel;
 pub mod transit;
 mod view;
+#[cfg(feature = "view")]
+pub mod viewer;
 #[cfg(feature = "view")]
 mod viewpoint;
 #[cfg(feature = "view")]
@@ -337,6 +353,8 @@ pub use hit_sparks::{ContactSeed, HIT_SPARK_SEVERITY};
 pub use hud::{hud_layout, splice_assist_indicator};
 pub use load::authored_length;
 #[cfg(feature = "view")]
+pub use load::hd_bloom_params;
+#[cfg(feature = "view")]
 pub use load::load_event;
 #[cfg(feature = "view")]
 pub use load::ripple::{Ripples, SpanPlaces};
@@ -345,8 +363,9 @@ pub use load::{export_track, load};
 pub(crate) use oag_title::Trigger;
 pub use options::{
     CameraOverride, Campaign2048Progress, CaptureHud, CaptureZone, Loaded, Options, PoseRequest,
-    SeatPick, Setup, Sighting,
+    SeatPick, Setup, Sighting, TrailHits,
 };
+pub use replay::{ApplyError, Launch, OriginalAi, UnknownOption, rebuild};
 #[cfg(feature = "view")]
 pub use replay::{Ghost, GhostCapture};
 pub use respawn::RespawnCause;

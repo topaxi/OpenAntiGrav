@@ -74,6 +74,10 @@ pub const NORMAL_HASH: u32 = 0xde7a_971b;
 pub const TANGENT_HASH: u32 = 0xdbe5_f417;
 /// `~crc32("Uv1")` - the diffuse texture coordinate.
 pub const UV1_HASH: u32 = 0x4272_14fc;
+/// `~crc32("uv1")`, lower case: the vertex input the `fc*` object-library programs name
+/// (`fc06_lambert_simple`: `uv1` passes to the pixel program's `DiffuseMapSampler` lookup).
+/// Omega spells it as an `f32` pair ([`PS4_FLOAT2`]) where 2048 has a half or float pair.
+pub const LOWERCASE_UV1_HASH: u32 = 0x7a3f_521c;
 /// `~crc32("Uv1_Uv2")`: four halves, two coordinate pairs, the vertex input of
 /// `2048_shipshield_old`'s programs (`param1` is the first pair, `param2` the second). The
 /// declaration also lists `Uv1` and `Uv2` entries, both at the offset of the second pair;
@@ -103,6 +107,10 @@ pub const PS4_HALF2: u8 = 1;
 /// The type nibble of a Vita (SceGxm) two-component half-float attribute: `Uv1`, `lightmapUV`
 /// and (four of them) `barsUV_blendUV`.
 pub const VITA_HALF2: u8 = 8;
+
+/// The type nibble of a two-component `f32` attribute on the PS4: a diffuse coordinate that is a
+/// float pair (23 submeshes of Omega's `data02` name their `Uv1` this way).
+pub const PS4_FLOAT2: u8 = 0;
 
 /// The type nibble of an `f32` attribute on the Vita (the position's `3x9`; a diffuse
 /// coordinate declared `2x9` is a float pair, 2,291 base submeshes).
@@ -198,7 +206,7 @@ impl VertexDecl {
     /// own** - `Uv1` where it is named, otherwise the first two-component
     /// attribute that is not the lightmap's and is a pair of `half`s (the
     /// container's half type: [`PS4_HALF2`] or [`VITA_HALF2`]) or of `f32`s
-    /// ([`FLOAT2`]).
+    /// (the container's float type: [`PS4_FLOAT2`] or [`FLOAT2`]).
     ///
     /// **Only sound on a declaration reached through the record's own pointer**
     /// (`PS4_DECLARATION_POINTER`), on both containers. Where no `Uv1` is
@@ -209,20 +217,22 @@ impl VertexDecl {
     /// **confidence 70**, so [`Self::diffuse_texcoord_is_fallback`] says when
     /// it is the one answering.
     #[must_use]
-    pub fn own_diffuse_texcoord(&self, half: u8) -> Option<&Attribute> {
+    pub fn own_diffuse_texcoord(&self, half: u8, float: u8) -> Option<&Attribute> {
         self.diffuse_texcoord().or_else(|| {
             self.attributes.iter().find(|a| {
                 a.name_hash != LIGHTMAP_HASH
                     && a.components == 2
-                    && (a.gxm_type == half || a.gxm_type == FLOAT2)
+                    && (a.gxm_type == half
+                        || a.gxm_type == FLOAT2
+                        || (a.gxm_type == float && a.name_hash == LOWERCASE_UV1_HASH))
             })
         })
     }
 
     /// True when [`Self::own_diffuse_texcoord`] answers by the confidence-70 rule, not by name.
     #[must_use]
-    pub fn diffuse_texcoord_is_fallback(&self, half: u8) -> bool {
-        self.diffuse_texcoord().is_none() && self.own_diffuse_texcoord(half).is_some()
+    pub fn diffuse_texcoord_is_fallback(&self, half: u8, float: u8) -> bool {
+        self.diffuse_texcoord().is_none() && self.own_diffuse_texcoord(half, float).is_some()
     }
 }
 

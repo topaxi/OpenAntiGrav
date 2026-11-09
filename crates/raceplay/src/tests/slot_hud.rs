@@ -108,6 +108,84 @@ fn a_grant_announces_for_one_second_and_a_regrant_announces_again() {
     assert!(race.readout().pickup_announcing);
 }
 
+/// 2048's grant flies the icon at `dt * 1800.0` pixels a second once the announcement is over
+/// (`Hud_UpdatePickupIcon`, `0x44e10000`): nothing while the timer is up, a step on the frame it
+/// reaches zero and on each after, back to zero when nothing is held. Fails if the travel stops
+/// advancing, starts early, or does not reset on a regrant.
+#[test]
+fn the_grant_flies_at_1800_pixels_a_second_once_the_announcement_ends() {
+    use crate::slot_hud::SlotHud;
+    use oag_tables::weapons::Weapon;
+    let dt = 1.0 / 60.0;
+    let step = 1800.0 * dt;
+    let mut hud = SlotHud::default();
+    let held = Some(Weapon::Missile);
+
+    let mut travel = Vec::new();
+    for _ in 0..80 {
+        hud.advance(100.0, 1.0, 0.0, false, held, dt);
+        travel.push((hud.pickup_announce_left > 0.0, hud.pickup_fly_travel));
+    }
+    let announcing = travel.iter().take_while(|(up, _)| *up).count();
+    assert!(
+        (59..=60).contains(&announcing),
+        "a second of announcement, got {announcing} ticks"
+    );
+    assert!(
+        travel[..announcing].iter().all(|(_, flown)| *flown == 0.0),
+        "nothing flies while the caption is up"
+    );
+    for (n, (_, flown)) in travel[announcing..].iter().enumerate() {
+        let expected = step * (n + 1) as f32;
+        assert!(
+            (flown - expected).abs() < 0.01,
+            "{n} ticks after the announcement: {flown} px, expected {expected}"
+        );
+    }
+
+    hud.advance(100.0, 1.0, 0.0, false, None, dt);
+    assert_eq!(hud.pickup_fly_travel, 0.0, "nothing held, no flight");
+    hud.advance(100.0, 1.0, 0.0, false, held, dt);
+    assert_eq!(hud.pickup_fly_travel, 0.0, "a regrant announces first");
+}
+
+/// The fly reaches the readout: a grant on a race reads `Some(0.0)` through the announcement,
+/// then 30 px a tick along y. Fails if `Race::readout` drops `SlotHud::pickup_fly_travel`.
+#[test]
+fn a_grant_on_a_race_reads_its_flight_off_the_readout() {
+    use oag_tables::weapons::Weapon;
+    let mut race = race_with_a_grid();
+    let slot = race.player_slot();
+    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    let mut flights = Vec::new();
+    for _ in 0..70 {
+        race.tick(&PlayerInputs::none());
+        let readout = race.readout();
+        flights.push((readout.pickup_announcing, readout.pickup_fly));
+    }
+    let announcing = flights.iter().take_while(|(up, _)| *up).count();
+    assert!(
+        flights[..announcing]
+            .iter()
+            .all(|(_, fly)| *fly == Some(0.0))
+    );
+    let after: Vec<f32> = flights[announcing..]
+        .iter()
+        .map(|(_, fly)| fly.expect("a race always reads its flight"))
+        .collect();
+    assert!(
+        after.len() >= 8,
+        "ticks after the announcement: {}",
+        after.len()
+    );
+    for pair in after.windows(2) {
+        assert!(
+            (pair[1] - pair[0] - 30.0).abs() < 0.01,
+            "30 px a tick: {pair:?}"
+        );
+    }
+}
+
 /// The pickup fade ([`oag_hud::Readout::pickup_fade`]) advances per tick off the held weapon
 /// once a title's rate is seeded, runs on after use with `pickup` itself `None`, and stays idle
 /// for a title that seeds none. Fails if the slot's state is dropped from the readout.

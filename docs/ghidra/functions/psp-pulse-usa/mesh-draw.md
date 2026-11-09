@@ -85,6 +85,40 @@ as `GU_ADD, GU_SRC_ALPHA, GU_FIX` per [`exhaust.md`](exhaust.md), pinning
 `oag_vex::vex::Batch::is_additive_blend()` decodes this bit; see that
 function's own doc comment for the exact bit and confidence.
 
+### The per-batch depth bias is file data (2026-11-07)
+
+**Confidence 90** (decompile, a census of the disc and a live GE list; not a trace
+of a draw that the bias decides). `Mesh_InitBatch` (`0x0890e8b4`) reads:
+
+```c
+if ((*batch & 0x4000) != 0)  *(u8 *)(batch + 0x29) = 1;     // otherwise the byte stands
+state = Gfx_AcquireBatchStateList(g_display, *batch, batch[3],
+                                  mesh->0xcc, mesh->0xd0, *(u8 *)(batch + 0x29));
+```
+
+So `+0x29` is **authored**, not a load-time write as `vex.md` said. Census over every
+PSP Pulse `Data.wad` mesh batch: `0` on 62,033, `1..=9` on 5,605 (1 1,932, 2 1,856,
+3 967, 4 317, 5 133, 6 197, 7 24, 8 4, 9 175); `pass_mask & 0x4000` is never set on
+Pulse. On `13_Track` the biased batches are glows, additive light cones, `newtree2`
+cutouts and `greenfade` panels; every window-pane and wall batch carries `0`.
+
+Live (PPSSPP, a Platinum Rush Black flyby frame, `scripts/psp-ge-dump.py` with its
+`zscale`/`zcenter`/`minz`/`maxz` columns): the depth range of nearly every prim is
+`minz 1001`, `maxz 64946` (`0x3e9`, `0xfdb2`, the pair `Vex_LoadModel` passes), and
+the biased prims read `1007`, `1019`, `1025`, `1049`, `1055` - exactly
+`1001 + 6 * bias`. The depth function is `GREATER` (`ztest 6`) with depth writes on
+for the opaque prims, `EQUAL` (`2`) with writes off for the ordinary pass behind a
+`0x2000` batch's environment-mapped replace pass, and the projection is
+near `1.2`, far `2000` (`proj[10] = -1.0012`, `proj[14] = -2.4014`). The 16-bit
+depth buffer therefore resolves about 1.2 levels per world unit at 250 units: two
+surfaces closer than that **tie**, and with a strict test the one drawn first wins.
+
+Ported: no. `oag_vex::vex::Batch::depth_bias` reads it and `oag-view --draws`
+prints it; the renderer does not apply it. Checked on the other titles: Wipeout HD,
+2048 and Omega draw `.rcsmodel` chunks and have no such byte, **checked, differs**;
+Pure's `Mesh_InitBatch` is unread (**not checked**), though its `.vex` header is
+the same layout.
+
 ## `param_2` is the on-disk batch header, not a `Material`
 
 Both callers pass a pointer that is walked exactly like
@@ -2482,7 +2516,16 @@ if (mesh_flags & 2) {                           // list B
 `ViewCull_BuildViewProjection` (`0x0890296c`) caches at `0x08af2540` (the display's
 current view matrix) and returns `z * DAT_08b62380 * 0.015384615`, the global
 being that function's argument (`65.0` from `VexCamera_Submit`; the race
-camera passes `display+0x4310`, not read). `mesh+0xa0` is the centre of the
+camera passes **`g_camera_fov_degrees`** (`0x08b34310`): `Camera_SubmitScene`
+(`0x08878874`) ends with `ViewCull_BuildViewProjection(g_camera_fov_degrees)`,
+and the page's earlier "`display+0x4310`" was that global's address misread as an
+offset into the display, read 2026-11-09, confidence 88: static reading of the
+decompile and of the call's argument, one binary). So a list-B key is
+`0xfffff - trunc(-z * fov / 65 * 349.525)`, the same `fov / 65` scale
+`LodGroup_SelectChild` applies to a group's depth. `Gfx_ViewDepth` (`0x0890486c`),
+which `ExhaustFlare_Submit` keys a flare with, reads the **same view matrix**
+(`0x08b32d00`, which `Camera_SubmitScene` also copies to `display+0x1410`) with **no
+scale**, so a flare and a list-B mesh at the same distance rank apart by `fov / 65`. `mesh+0xa0` is the centre of the
 payload's `+0x10`/`+0x20` box over the last batch's position scale, set at the end
 of `Mesh_InitFromPayload`. `mesh+0xc8` is `0x4d000000` for a scene mesh.
 

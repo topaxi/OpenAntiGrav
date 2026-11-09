@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-04
-summary: "oag.slipstream, mod shaders and portal-view landed; open: mesh portal, route/island exits, Trigger test, Omega's spark pool, wall occlusion, loops."
+updated: 2026-11-09
+summary: "oag.slipstream, mod shaders, portal-view, route exits landed; open: mesh portal, island exit, route-aware portal-view, wall occlusion, loops."
 categories: [tooling, frontend]
 size: L (50)
 difficulty: medium (50)
@@ -33,7 +33,7 @@ The engine never names the mod.
    tracking record `progress`/`place` and the course length in the observation), item 2 (outputs:
    `screen-fill`, `fov-offset`, `fire-mod-effect-ahead`), item 3 (per-title icons
    `[pickup.titles.<title>]`, icon placed on the title's own Turbo glyph box) and item 4
-   (`default-enabled`, ADR-0084) are on branch `slipstream`. What each left open:
+   (`default-enabled`, ADR-0089) are on branch `slipstream`. What each left open:
    - **Wreck gate: landed** (main merged). A guest's `clear-pickup`, `scale-speed` and `transit` for a
      craft `may_use_pickup` refuses are ignored engine-side (`RaceSim::may_use_pickup`, which
      `Race::may_use_pickup` calls); proof `tests::extension_view`.
@@ -52,21 +52,30 @@ The engine never names the mod.
      Omega": the same HUD code draws the mod icon on both (`oag_hud::pickup::mod_icon_draw`);
      Omega is screenshot-verified, 2048 is not.
 
-2. **Exit on a branch route.** `Race::move_to` re-seats the driver on the ring
-   (`Race::reseat` uses `Branching::on_ring`), so an exit on a fork's route drives back to
-   the ring. `Course::locate_on_route` already maps a route sample to ring progress; the
-   work is seating the driver on the route, plus a test on a forked circuit
-   (`branch_progress_ground_truth`'s). Size S, half a day (50). Slipstream itself uses the
-   main ring (maintainer, 2026-11-03).
+2. ~~**Exit on a branch route.**~~ Landed. A `Distance::Trigger` whose centre is nearer a fork
+   route's sample than the ring's names that route (`transit::Exit::route`, `Transit::route`, in
+   the state hash only while a transit runs). `Course::route_point` maps the ring point onto the
+   route (the inverse of `locate_on_route`), `Race::move_to` places the craft there, and
+   `Race::seat_on_route` (shared with `locate_player_driver`) puts the driver on the route's
+   line; `Course::locate_exit` decides ring or route. A reset and every other distance (units, seconds, lap share, progress) stay on the
+   ring: only a trigger can name a route, and a craft already on a route that jumps forward by
+   units still comes out on the ring. Proof: `transit_ground_truth::an_exit_on_a_forks_route_...`
+   (Pulse `05_Track`; red with the seat dropped) and `branch_progress_ground_truth` (every
+   Pulse and 2048 route's `route_point` stands at its share of the route). Open from it, small:
+   a portal's view (`portal-view` takes a progress, so it frames the ring) is not route-aware;
+   2048 and Omega: checked, applies, not wired (their forks are in the same `Course`, the 2048
+   routes are covered by the `route_point` check, no transit test on them).
 3. **Exit with no spline near it (a floating island).** No lap fix, no AI line, and the
    distance reset would fire. Recommended rule for our track format: the author gives the
    island its own spline path that rejoins the circuit, which makes it item 5. An engine
    notion of an off-course stretch is a design question first. Size L if built (30).
 4. ~~Two mod pickups in one race~~ (landed: a pickup kind per mod, `tests::extension_pickup_kinds`,
    `slipstream_energy_turbo_ground_truth`).
-5. **`Distance::Trigger` with a real track file.** It is tested only through the
-   refusal path (a track with no trigger). A `track_props_ground_truth`-style test with a
-   trigger pair is owed.
+5. ~~**`Distance::Trigger` with a real track file.**~~ Landed:
+   `track_props_ground_truth::a_transit_to_a_trigger_comes_out_where_the_trigger_stands`
+   (Hillside with a trigger pair, a module answering `trigger-enter` with a `transit` to the
+   second; the exit is the course point at the second centre, within 5 units, and the craft
+   comes out on its road).
 
 ## Slipstream mod wired (lane slipstream-mod, 2026-11-03)
 
@@ -134,16 +143,23 @@ are `docs/architecture/wasm-extensions/mod-shaders.md`, "The engine texture". Fo
 
 Open from it, each small:
 
-1. **Omega's particle pool is full of `WO_TRAIL_HITSHIP`** on the grid: all 32 instances at tick 480,
-   with `oag.window` on and nothing else (2048 differs: its surface drew before the fix, 0.148 of the
-   view at tick 1230). Mod surfaces now hold a slot (`Stage::play_held`), the
-   trigger's rate was not looked at, and it evicts title effects too. It may
-   explain the high middle-of-view figure the mod shader page gives for Omega. Size S (40).
+1. ~~**Omega's particle pool is full of `WO_TRAIL_HITSHIP`**~~ Re-measured 2026-11-09 on
+   Omega EU, `oag.window` on, autopilot from the grid, 480 ticks (a temporary probe on
+   `Stage::claim`, not committed): with `graphics.trail_hits` off (the default since main
+   gated 2048's and Omega's burst) the pool holds the mod's held surface alone, 1 claim in the
+   whole run and 0 `WO_TRAIL_HITSHIP`; with it on, 31 of 32 slots are `WO_TRAIL_HITSHIP` and
+   the 32nd is the held surface (545 claims), so the cap on held slots keeps the surface drawn
+   either way. The burst is a title effect and was not touched.
 2. **A wall between the camera and the portal does not skip the view**: only the frustum and the
    face do. Testing the entrance's section against the main view's PVS is the cheap answer. Size S (50).
-3. **`Stage::orient` is a no-op on an effect from `play` or `play_held`**: it goes through `get_mut`,
-   which wants an attached instance, so `Fired::OwnAt`'s `up` never lands. An effect with `axis = "up"`
-   on a banked road is square to world up, not the road's. Size XS (60).
+3. ~~**`Stage::orient` is a no-op on an effect from `play_held`**~~ Landed for `Fired::OwnAt`:
+   `Stage::orient_surface` addresses a held surface by its generation
+   (`psys::tests::a_held_surface_takes_its_orientation`, red before). `Stage::orient` itself
+   stays attached-only, on purpose: the wreck debris and smoke (`wreck_fx`) `play` then `orient`
+   and today ignore it, so widening `orient` would change a title visual nobody measured. Open,
+   small: a mod effect fired by `fire-effect` (`Fired::Own`, `play` + `orient`) still ignores
+   its `axis` (`wall-penalty`'s `sputter.toml` is `rear`); fix it on `orient_surface` and look
+   at a frame.
 4. **A float target's values above 1 clamp in `engine_texture`**: `fs_main` clamps a shader's output,
    so HD's and Omega's brightest highlights in a portal stop at white. Size S (40).
 5. **The texture is a fixed 960x540** at every window size; a configurable rate and size are later
@@ -197,7 +213,8 @@ right in the smaller hex (the raster itself stays one texel to one pixel; a PNG 
 
 ## Next Steps
 
-1. Open items 2, 3 and 5: a route exit, an island exit, a `Distance::Trigger` test on a
-   real track file.
-2. Quote `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+1. Open item 3 (an island exit) is a design question first; the recommended rule is the author's
+   own spline path that rejoins the circuit, which a trigger exit on that route already reads.
+2. Make `portal-view` route-aware (its progress frames the ring).
+3. Quote `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
    before and after any change that touches racing.

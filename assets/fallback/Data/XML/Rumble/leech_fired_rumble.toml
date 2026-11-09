@@ -1,0 +1,16 @@
+# Wipeout Pulse and Pure rumble: the leech beam is launched: a rising hum that trails off.
+# Read through the fallback asset layer; a disc pattern of the same name wins, and a file
+# in overrides/<title>/Data/XML/Rumble/ replaces this one.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/rumble.tosd"
+version = "1.0.0"
+
+[pattern]
+type = "OneShot"
+class = "Game"
+priority = "Medium"
+
+[tracks]
+large = [140, 170, 200, 210, 200, 185, 165, 140, 115, 90, 65, 45, 30, 18, 8]
+small = [1, 0, 0, 0]

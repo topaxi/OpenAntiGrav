@@ -27,7 +27,8 @@ impl Race {
     /// A restorable copy of everything that decides what happens next.
     ///
     /// The simulation half only. See [`Self::restore_sim`] for why that is the
-    /// whole point rather than an omission.
+    /// whole point rather than an omission. Its constant half is shared, not copied
+    /// ([`RaceSim`], "Why it is `Clone`"), so this is 27 to 32 KiB and a few microseconds.
     #[must_use]
     pub fn snapshot_sim(&self) -> RaceSim {
         self.sim.clone()
@@ -48,6 +49,27 @@ impl Race {
     /// Replay through [`Self::tick_sim_only`] instead.
     pub fn restore_sim(&mut self, snapshot: &RaceSim) {
         self.sim = snapshot.clone();
+    }
+
+    /// [`Self::restore_sim`] for a race that is being watched, not played: the state is put back
+    /// and what the view kept about a later moment goes with it.
+    ///
+    /// The results board is taken once, on the first tick the race is finished, and the tick a
+    /// wreck ended the race on is written once; a seek back from past the finish would leave
+    /// both standing over a race that is running again. Neither reaches the simulation (the
+    /// board is read by the screens and the finish camera), so only a viewer that draws the
+    /// race needs this. The poses are settled: the next draw shows the restored tick as it
+    /// stands, not blended from a tick long gone, and the jump is a camera cut
+    /// ([`Self::camera_cuts`]), so the motion blur does not smear it across the screen.
+    pub fn restore_for_viewing(&mut self, snapshot: &RaceSim) {
+        self.restore_sim(snapshot);
+        #[cfg(feature = "view")]
+        {
+            self.view.results = None;
+            self.view.wreck_ended_tick = None;
+            self.view.restores = self.view.restores.wrapping_add(1);
+            self.settle_poses();
+        }
     }
 
     /// One tick of the simulation and nothing else: the replay step of a

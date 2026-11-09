@@ -475,6 +475,17 @@ constants are not module text and are not varied.
   Chrome stable and Chrome beta (`browser-actions/setup-chrome`), the second to
   catch the next Tint tightening before a player does. It could not be run from
   here, so the runner is unverified (HANDOVER.md lists what).
+- **CI** (`web-compile` in `.github/workflows/ci.yml`) runs `cargo check` of the
+  `oag_web` example for wasm32 with the pinned nightly on every push and pull
+  request (about 1.5 minutes cold on a loaded machine; no `-Z build-std`, no
+  link, so it does not need `rust-src`). Cargo builds an example's
+  dev-dependencies, so a dependency that is fine for tests but not for wasm32
+  fails there: `oag-game`'s `oag-schema` with `validate` (`toml-schema` calls
+  `url::Url::from_file_path`, absent on wasm32) broke the nightly's Pages job
+  four nights running while every other check was green. The dev-dependency is
+  now `cfg(not(target_arch = "wasm32"))`. Locally:
+  `cargo +nightly-2026-10-08 check --target wasm32-unknown-unknown -p oag-game
+  --no-default-features --example oag_web --features web`.
 
 `/usr/bin/chromium` (Chromium 153 for the walks above; 154 since 2026-10-12) is the browser it was run with: Playwright's
 own Chromium build has no WebGPU on Linux. Headless Chromium here reports a hardware
@@ -579,10 +590,97 @@ a Pulse race run there (2026-10-09). `actionlint` passes on the workflow.
 
 ### Exit and GPU workers
 
-Natively, `oag_game::gpu_workers` is the one place the process waits for threads that hold the
-`wgpu` device (EndRace prefetch, race build, a parked race's drop) before `main` returns. The web
-build has nothing to wait for: the race build runs inline, the EndRace prefetch type is
-uninhabited, and closing the page ends every Web Worker with it.
+Natively, `oag_thread::gpu_workers` is the one place the process waits for threads that hold the
+`wgpu` device (the race load's texture sink, EndRace prefetch, race build, the menus' opened source,
+a parked race's drop) before `main` returns. The web build has nothing to wait for: the race build
+runs inline, the EndRace prefetch type is uninhabited, the race load has no sink there, and closing
+the page ends every Web Worker with it.
+
+**What it prevents, measured on NVIDIA 615.78.08, Linux, 2026-11-06.** The load opens a texture sink,
+so `race-load` is inside the driver for every texture and its result holds their views, and it was
+not registered. A run ending during a load then crashed: 3 of 8 runs of
+`campaign_cursor_ground_truth::the_2048_map_reopens_on_the_event_last_started` alone on an idle GPU,
+none of 7 on Intel's driver. All 15 `oag-game` cores `coredumpctl` still held have the same shape: a
+`SIGSEGV` on `race-load` in a `--drive` script ending at `stage=loading`. In the symbolised one the
+main thread is in libc `exit()`, running `libEGL_nvidia`'s exit handler down into
+`libnvidia-eglcore`, and `race-load` is in `texture_sink::offer` -> `wgpu_hal`'s
+`create_image_without_memory_with_tiling` -> `vkCreateImage`, which jumped from `libnvidia-eglcore`
+to a heap address (`SEGV_ACCERR`, mapped but not executable). That is consistent with an indirect
+call through driver state the exit handler had freed; the driver is closed, so it is not proved.
+Calling Vulkan while the process exits is our bug, not the driver's.
+
+**The `egl` in those names is NVIDIA's Vulkan driver, not a GL path of ours.** `nvidia_icd.json`
+names `libGLX_nvidia.so.0`, which loads `libEGL.so.1`, which loads `libEGL_nvidia.so.0`, which loads
+`libnvidia-eglcore` (`LD_DEBUG=files`). `oag_game::adapter::BACKENDS` never asks for wgpu's GL
+backend.
+
+**A player reaches this too, measured.** `--drive` runs the real session
+(`crates/game/src/main/drive.rs`), and closing the window on the loading screen takes the same route:
+`event_loop.exit()`, `Session::drop`, `main` returning. A real X11 window on Xvfb on the NVIDIA GPU,
+sent `WM_DELETE_WINDOW` once `race load reached` is logged (2048, first event), with `race-load` left
+out of the registry: 3 of 9 closes crashed (`SIGSEGV` on `race-load`, exit -11). With it registered:
+0 of 9, every run logged the wait and exited 0. In about one run in eight the close never took
+effect within 30 s, on both binaries; that is not this crash, and the harness is not the cause
+(see "A close that does not land", below).
+
+**The fix, in numbers.** The same test on the same machine with the registration removed: 6 of 8 runs
+crashed, 12 s when one passed. With it: 30 of 30 passed, no new core, about 16.5 s. Before the stop
+checks below, a close waited out the rest of the load: 0.5 s (Pulse), 3.7 s (2048), 3.9 s (HD) from
+a launch's first frame in a debug build.
+
+**The load and the scene build stop at their next checkpoint** (`oag_raceplay::stages::checkpoint`
+and `reach`, `oag_raceplay::stages::reader`, `mesh_render::build_with`, `rcs::build_with_options`,
+`Scene::new`, the warm-up draw in `race_build.rs`). `gpu_workers::finish` sets the stop, so a load
+nobody leaves never takes the new path, and the web build, which never calls it, reads a plain
+`false`. A stopped load returns an `Err` through the path a failed load already takes; the
+result is dropped unread and nothing above `trace` is logged (`RUST_LOG=oag_raceplay::stages=trace`
+prints each checkpoint with its time into the load). The model builders read their textures through
+`stages::reader`, which finds nothing once the stop is set, so a track model skips the rest of
+its textures instead of decoding them (2048's track model was 4.1 s of a 6 s load, nearly all of
+it textures).
+
+**Where the time goes, and what a close waits now.** A load is two stages with a GPU worker each:
+`race-load` (the circuit and the grid read from the disc, textures through the sink; HD 2 to 4 s,
+2048 2.5 to 6 s, Pulse 0.5 s in a debug build) and `race-build` (the scene: for HD 136 distinct
+pipelines and 735 textures, about 6 s; Pulse 3.2 s; 2048 2.2 s). Before the checks a close waited
+for the stage it landed in. The exit wait (from the `waiting for GPU workers before exit` line to
+the process ending) for a close at a random point of load and build, debug build, NVIDIA RTX PRO
+2000 (Blackwell), 20, 18 and 24 runs spread over the whole of each:
+
+| | before | after, worst run | after, next worst |
+| --- | --- | --- | --- |
+| Pulse | 1.6 s (load alone, one run) | 0.41 s | 0.28 s |
+| 2048 | 5.5 s (load alone, one run) | 0.36 s | 0.36 s |
+| HD | 4.2 s (load alone, one run); the build alone about 6 s | 1.13 s | 0.49 s |
+
+0.2 to 0.3 s of every figure is the process tearing down after the wait. The HD worst, 1.13 s, was
+one run of 24, at load average 3.4, that stopped inside the track's `Drawable` build
+(`mesh_render::build_with`: six pipeline sets of 0.15 to 0.45 s each, the check between them);
+ten repeats at the same position on a quieter machine read 0.26 to 0.44 s. Before the check in
+`rcs::build_with_options` an HD close read up to 1.66 s: that loop is 0.45 s of the track model.
+What is not cut: one pipeline set (up to 0.45 s on HD) and the grid's `oag_livery::load`
+(0.4 to 0.6 s, all slots in one call, no check of its own). Method: `--drive` as
+`docs/tools/oag-game.md` ("Driving the menus with no window") with a script that ends
+`until stage=loading; ticks N` for N from 0 to 3000, a scratch `XDG_*` profile, `RUST_LOG=info`.
+
+With the checks in, the same test ran 30 of 30 clean on the NVIDIA GPU (no `VK_ICD_FILENAMES`),
+about 12.5 s a run, no new core. Measured on Pulse, 2048 and HD; Pure and Omega are not measured
+(they share the same `load`, `Scene::new` and `build_with`, so the checks apply, but no close was
+timed). Not covered by a test that fails when it is dropped: `stages::reader`, the per-node check
+in `rcs::build_with_options`, the warm-up skip, and every `Scene::new` checkpoint after the first.
+
+**A close that does not land.** In 3 of 15 runs of a real X11 window on Xvfb, `WM_DELETE_WINDOW`
+sent to the window (the only one, carrying `WM_DELETE_WINDOW` in `WM_PROTOCOLS`) as the load began
+was ignored for 30 s while the event loop kept running (frame warnings). A second identical message
+from a fresh connection after the 30 s landed at once, 2 of 2. So the harness is not the cause, and
+neither are the stop checks (the same loss was seen before they existed): the first close is lost in the
+game or in winit's X11 backend, and the runs that lost it ran the whole load on to the race. The
+cause is not found; `app.rs`'s `window_event` drops an event while `suspended` is set or the session
+does not exist yet, and nothing ties the loss to that. Not fixed.
+
+**A guard lasts as long as the thread** (`Guard::hold_to_thread_end`) where the worker returns GPU
+objects. `std` stores a thread's result after the closure has returned and drops it on that thread
+if the handle has gone, so a guard local to the closure ends before the views do.
 
 The browser build is threaded since 2026-10-09, for one job: **the race load.**
 Before it, starting a Wipeout HD race froze the page for the whole load: the
@@ -612,7 +710,7 @@ The load's 5.9 s before, inclusive:
   text 1.0 s; a further 1.7 s of garbage collection over the run came mostly
   from those 1 MiB response strings. On a worker the same reads go through
   `FileReaderSync` and return an `ArrayBuffer`, with no text and no loop.
-- **Inflate**, 1.3 s (`miniz_oxide`); **parse and decode** the rest, about
+- **Inflate**, 1.3 s (measured with `miniz_oxide`; the build now uses `flate2`'s `zlib-rs`); **parse and decode** the rest, about
   0.7 s.
 - **GPU work**: only the texture sink's uploads, about 0.15 s.
 

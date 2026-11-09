@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-10-12
+updated: 2026-11-07
 summary: "HD LeachBeam strip draw read in part; ghost-static axis on Title so HD stops asking for a Pulse asset"
 ---
 
@@ -14,7 +14,7 @@ The weapon-drawable scene work landed (`docs/rendering/hd-unlit-programs.md`,
 
 ## Open
 
-- **LeachBeam body.** HD's beam is two `0x63d0`-byte strip objects at
+- ~~**LeachBeam body.**~~ **Drawn since `hd-leach-draw`** (below). HD's beam is two `0x63d0`-byte strip objects at
   `LeachBeam+0x50`/`+0x6420` (`0x00115770`, constructors `0x001153c0`,
   `0x00115cc0`; 300 samples of `0x50` bytes, colour `0xffffff00`), built by
   `0x00153218`, from `leachbeam_triangle` + `hd_leachbeam.rcsmaterial` +
@@ -24,7 +24,7 @@ The weapon-drawable scene work landed (`docs/rendering/hd-unlit-programs.md`,
   scratch interpreter that read the Bomb (`hd-weapon-blasts`'s
   `{ppcdis,emu,runblast,spec}.py`, and `bomb_blast::hd::tests`
   for the shape of the check) is the way past Ghidra's AltiVec truncation.
-- **Ghost static.** `search_strings` in `/hdfury/EBOOT-ps3-hdfury-eu.elf` finds
+- ~~**Ghost static.**~~ **Landed** (the `Title` axis exists). `search_strings` in `/hdfury/EBOOT-ps3-hdfury-eu.elf` finds
   no `staticglow` and no `static.gtf`; `GhostShip.cpp` exists. So nothing in
   the executable binds the texture and the WARN is by design, but it still
   names a Pulse asset on HD: gate it with a `Title` field.
@@ -149,7 +149,7 @@ a dense path now gives a fixed strip, but on and off still differ by the forced 
 ## Next Steps
 
 1. ~~Build the strip~~ - done 2026-10-08, see the section above.
-2. Add the ghost-static axis to `Title` so HD stops asking.
+2. ~~Add the ghost-static axis to `Title` so HD stops asking.~~ Landed: `WeaponModels::ghost_static` is `None` on HD, a measurement (no `staticglow` string in the EBOOT).
 3. ~~Get a held LeachBeam on RPCS3 with a rival in range~~ - done 2026-10-12 (`hd-leach-2`):
    single player, `scripts/rpcs3-hd-weapon.py`'s grant inside `rpcs3-hd-whiteout.py --leach`,
    placed 40 behind the nearest rival at its speed, 3-4 s settle, TRIANGLE held. About one shot

@@ -151,7 +151,7 @@ fn a_leach_beams_victim_is_throttled_by_the_authored_factor() {
     };
     let build = || {
         let mut race = race_with_a_grid();
-        race.sim.weapons = Some(table.clone());
+        race.sim.weapons = Some(Arc::new(table.clone()));
         // The grid fixture's craft have no engine; give the victim one so
         // there is a thrust to take a fifth of.
         let engine = &mut race.sim.world.ships[1].handling.engine;
@@ -212,7 +212,7 @@ fn two_live_leach_beams_each_drain_their_own_victim() {
         ..table.leach_beam().expect("the fixture authors a LeachBeam")
     };
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(table);
+    race.sim.weapons = Some(Arc::new(table));
     while RaceState::thrust_gated(race.sim.world.tick) {
         race.tick(&PlayerInputs::none());
     }
@@ -271,18 +271,18 @@ fn an_opponent_holding_a_leach_beam_charges_and_the_player_who_is_not_does_not()
 }
 
 /// A held LeachBeam's reticle runs the LeachBeam's own law when the title's
-/// reticle dialect is Pulse's (`Setup::sight`), and not Wipeout HD's: the arrowheads turn, and they lock on arrival rather than after the
-/// Missile's hold.
+/// reticle dialect runs it (`Setup::sight`: Pulse's and Wipeout HD's, not 2048's): the arrowheads turn,
+/// and they lock on arrival rather than after the Missile's hold.
 ///
 /// **Through `Race::tick`** because the gate, the projection and the law meet
 /// there: the held weapon decides there is a target, the camera projects it, and
 /// `FUN_0881e8c8` turns what it sees into a figure. Without the flag the same
-/// race keeps the Missile's law, which is what Wipeout HD's rings still run.
+/// race keeps the Missile's law, which is what 2048's rings still run.
 #[test]
-fn a_held_leach_beam_spins_its_reticle_under_the_pulse_law_only() {
+fn a_held_leach_beam_spins_its_reticle_under_its_own_law_only() {
     let run = |pulse: bool| {
         let mut race = race_with_a_grid_sighted(title_sighting(pulse));
-        race.sim.weapons = Some(one_leach_beam_table());
+        race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
         let forward = race.sim.world.ships[0].physics.body.forward();
         let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
         race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
@@ -325,7 +325,7 @@ fn firing_the_leach_beam_takes_the_reticle_down_while_the_beam_is_live() {
     let mut race = race_with_a_grid_sighted(title_sighting(true));
     // The fixture's half-second `active_time` outlasts the 16 ticks checked.
     let table = one_leach_beam_table();
-    race.sim.weapons = Some(table);
+    race.sim.weapons = Some(Arc::new(table));
     let forward = race.sim.world.ships[0].physics.body.forward();
     let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
@@ -368,12 +368,13 @@ fn firing_the_leach_beam_takes_the_reticle_down_while_the_beam_is_live() {
 /// flag (`entity+0x860 & 1`) is up, and `(0, -1)`, the unlocked fizzle, before.
 /// A press at a target that is in the window but whose arrowheads have not
 /// closed fires unlocked; the same press once they have is locked. Wipeout HD's
-/// reticle is another function and keeps firing off the window alone.
+/// reticle closes over the same `0.34` s and takes the same gate; a title whose
+/// own update is unread (2048) keeps firing off the window alone.
 #[test]
-fn the_pulse_leach_beam_locks_only_once_its_reticle_has() {
+fn the_leach_beam_locks_only_once_its_reticle_has() {
     let kind_at = |pulse: bool, press: usize| {
         let mut race = race_with_a_grid_sighted(title_sighting(pulse));
-        race.sim.weapons = Some(one_leach_beam_table());
+        race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
         let forward = race.sim.world.ships[0].physics.body.forward();
         let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
         race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
@@ -400,11 +401,39 @@ fn the_pulse_leach_beam_locks_only_once_its_reticle_has() {
         Kind::Locked,
         "the reticle had locked, the beam did not"
     );
-    let hd_early = kind_at(false, 5);
+    let unread_early = kind_at(false, 5);
     assert_eq!(
-        hd_early,
+        unread_early,
         Kind::Locked,
-        "HD keeps firing off the window alone"
+        "a title whose update is unread keeps firing off the window alone"
+    );
+    let hd = |press: usize| {
+        let mut race = race_with_a_grid_sighted(sighting_of(oag_hd::hud::ART.sights));
+        race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
+        let forward = race.sim.world.ships[0].physics.body.forward();
+        let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
+        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+        let mut buttons = Buttons::new();
+        buttons.tick(0);
+        for tick in 0..=press {
+            race.sim.world.ships[1].physics.body.position = ahead;
+            race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+            let input = buttons.tick(if tick == press { SQUARE } else { 0 });
+            race.tick(&PlayerInputs::single(input));
+        }
+        race.sim.world.leach_beams[0]
+            .expect("the press must fire")
+            .kind
+    };
+    assert_eq!(
+        hd(5),
+        Kind::Unlocked,
+        "HD fired locked before its rings closed"
+    );
+    assert_eq!(
+        hd(40),
+        Kind::Locked,
+        "HD's rings had closed, the beam did not lock"
     );
 }
 
@@ -421,7 +450,7 @@ fn the_pulse_leach_beam_locks_only_once_its_reticle_has() {
 #[test]
 fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
     let mut race = race_with_a_grid_sighted(title_sighting(true));
-    race.sim.weapons = Some(one_leach_beam_table());
+    race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
     race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
     assert!(
         race.sim.world.person_flown(1),
@@ -474,7 +503,7 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
 fn the_players_locked_beam_takes_the_titles_drain_cadence() {
     let fire = |drain: oag_title::weapons::LeachDrain| {
         let mut race = race_with_a_grid_sighted(title_sighting(false));
-        race.sim.weapons = Some(one_leach_beam_table());
+        race.sim.weapons = Some(Arc::new(one_leach_beam_table()));
         race.sim.leach_drain = drain;
         let forward = race.sim.world.ships[0].physics.body.forward();
         let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;

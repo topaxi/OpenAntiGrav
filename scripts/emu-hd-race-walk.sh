@@ -2,7 +2,10 @@
 # Cold-boot HD Fury EU and walk Racebox SINGLE RACE with WEAPONS OFF to one circuit, then leave the
 # `serve` running on the grid (the race is loaded, START RACE not yet pressed).
 #
-#   scripts/emu-hd-race-walk.sh <lane> <circuit-index> [team-rights [classic 0|1]]
+#   [OAG_WEAPONS_ON=1] scripts/emu-hd-race-walk.sh <lane> <circuit-index> [team-rights [classic 0|1]]
+#
+# `OAG_WEAPONS_ON=1` leaves WEAPONS On: with it Off a pickup state written into the craft's slot is never
+# fired (2026-11-09, `hd-missile-capture`), so a weapon capture needs it.
 #
 # The recipe of `emu-hd-timetrial-state.sh` (stub off, Compatible Savestate Mode, so a state can be
 # saved later by `emu-save-state.sh`) with the Racebox page's rows for a race: RACE TYPE is Single
@@ -38,7 +41,7 @@ for _ in 1 2 3 4; do
 done
 [ "$(screen)" = "Single Player" ] || { echo "never reached Racebox setup: $(screen)" >&2; exit 3; }
 press down --wait 1; press down --wait 1      # WEAPONS
-press right --wait 1.5                        # On -> Off
+[ "${OAG_WEAPONS_ON:-0}" = 1 ] || press right --wait 1.5   # On -> Off
 press cross --wait 3                          # Track Select (reads `Track Creation`)
 [ "$(screen)" = "Track Creation" ] || { echo "not on Track Select: $(screen)" >&2; exit 3; }
 for _ in $(seq 1 "$circuit"); do press right --wait 0.8; done
@@ -50,4 +53,8 @@ press cross --wait 3                          # the race loads
 for _ in $(seq 1 60); do [ "$(screen)" = HUD ] && break; sleep 2; done
 [ "$(screen)" = HUD ] || { echo "race did not come up: $(screen)" >&2; exit 3; }
 grep -a "Loading World" "$XDG_CACHE_HOME/rpcs3/TTY.log" | tail -1
-echo "on the grid; weapons Off was set on the Racebox page (verify with a screenshot of the page or the race)"
+if [ "${OAG_WEAPONS_ON:-0}" = 1 ]; then
+  echo "on the grid; weapons left On on the Racebox page"
+else
+  echo "on the grid; weapons Off was set on the Racebox page (verify with a screenshot of the page or the race)"
+fi

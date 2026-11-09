@@ -17,7 +17,8 @@ Confidence scores follow the
 On Wipeout Pulse, `MainMenu_Definition.xml` redirects
 `Main Menu->Mode == FE_RACEBOX` to a screen named **`Single Player`**. The
 screen actually named `Racebox` offers `RB_SP` / `RB_LOAD_GRID` /
-`RB_EDIT_GRID` and is the **custom-grid editor**.
+`RB_EDIT_GRID` and is the **custom-race screen**: the originals ship no editor, and what the
+screen names is a custom race (a grid of cells the player lays out as a race of their own).
 
 Wipeout HD does the same and comments on it in the file: its
 `racebox_definition.xml` carries
@@ -27,8 +28,8 @@ authoring note saying it formerly went to `Racebox`
 old idstring.
 
 So: **`FE_RACEBOX` is the entry, `Single Player` is the screen, and the
-grid editor kept the name.** Code or documentation that greps for a screen
-called `Racebox` finds the editor.
+custom-race screen kept the name.** Code or documentation that greps for a screen
+called `Racebox` finds the custom-race screen.
 
 ## The shape four titles agree on
 
@@ -269,7 +270,7 @@ swaps the livery with `%s\%s.dat` - the skin file decoded in
 `IMAGE.DAT` and `Custom` sit in the same block and are **unattributed** - they
 are recorded here because the rest of the block is, not because anything places
 them. On the evidence here neither is a preview asset: no path template joins
-them to a directory, and `Custom` is also the vocabulary of the grid editor
+them to a directory, and `Custom` is also the vocabulary of the custom-race screen
 (`CustomGridMC`). Do not read `IMAGE.DAT` as evidence against the mesh reading
 without checking what loads it.
 
@@ -720,7 +721,7 @@ reads on `Track Creation`'s `1/1`/`1/3` counters and the placeholder circuit
 names - a template the executable substitutes into, not shipped content.
 
 Selecting a tier opens `Cell Selection` (`type="CellSelection"`): the same
-hex `GridController` as `Cell Creation`'s custom-grid editor (below), each
+hex `GridController` as `Cell Creation`'s custom-race grid (below), each
 cell a `Medal_x_y` / `Outline_x_y` / `Lock_x_y` triple - filled hex, outline,
 and a lock glyph overlay. `MaxX="7" MaxY="5"` is the bounding box, not the
 cell count: a hex grid staggers, and counting the authored `Medal_x_y` nodes
@@ -1034,7 +1035,7 @@ So the race length is **mode- and circuit-determined, not player-chosen**.
 
 ## Pure differs in shape, not only in value
 
-Pure has no `Racebox`, no hex grid and no grid editor. Confidence 94. Its chain:
+Pure has no `Racebox`, no hex grid and no custom-race screen. Confidence 94. Its chain:
 
 ```
 Main Menu -> Single Player (mode only) -> Class Selection -> League | Tournament

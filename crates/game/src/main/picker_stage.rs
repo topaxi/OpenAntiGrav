@@ -23,7 +23,7 @@ use oag_ui_screens::picker::{self, Picker};
 use crate::gpu::Gpu;
 
 /// Where an entry's preview mesh is on the disc.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PreviewSource {
     /// The circuit's outline preview: `<location>\FE\forward.vex` /
     /// `\reverse.vex`, which is what `Track Creation`'s info panel shows.
@@ -112,18 +112,51 @@ impl PreviewSource {
 
 type Key = (usize, Option<String>);
 
-/// What one selection's read needs, owned.
-struct ReadJob {
+/// What decides a selection's read: two reads with equal facts on one title and language read
+/// the same bytes, which is what lets a screen adopt a read started before it opened.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReadFacts {
     key: Key,
     kind: picker::Kind,
     axis: LiveryAxis,
     source: Option<PreviewSource>,
-    previews: Previews,
-    archives: SharedArchives,
-    /// The sheet to extend with the entry's stills, when the entry changed.
-    base: Option<Sheet>,
     slideshow: bool,
     mesh: bool,
+}
+
+impl ReadFacts {
+    /// The read of `key` on a screen of `model` and `layout`.
+    fn of(
+        key: Key,
+        model: &Picker,
+        layout: &picker::Layout,
+        axis: LiveryAxis,
+        sources: &[PreviewSource],
+        previews: &Previews,
+        entry_changed: bool,
+    ) -> Self {
+        let kind = model.kind();
+        let hull_only = kind == picker::Kind::Ship && previews.ship_hull.is_some();
+        let circuit_model = oag_game::preview::draws_circuit_model(previews.front_end, kind);
+        let source = sources.get(key.0).cloned();
+        Self {
+            key,
+            kind,
+            axis,
+            source,
+            slideshow: entry_changed && layout.hd_track.is_none(),
+            mesh: previews.meshes || hull_only || circuit_model,
+        }
+    }
+}
+
+/// What one selection's read needs, owned.
+struct ReadJob {
+    facts: ReadFacts,
+    previews: Previews,
+    archives: SharedArchives,
+    /// The sheet to extend with the entry's stills, when [`ReadFacts::slideshow`] asks for them.
+    base: Option<Sheet>,
 }
 
 enum ShowRead {
@@ -143,7 +176,8 @@ struct Read {
 impl ReadJob {
     /// The disc half of a selection: its stills (on a sheet) and its mesh, parsed.
     fn run(self) -> Read {
-        let ReadJob { key, kind, axis, source, previews, archives, base, slideshow, mesh } = self;
+        let ReadJob { facts, previews, archives, base } = self;
+        let ReadFacts { key, kind, axis, source, mesh, .. } = facts;
         let Some(source) = source else {
             warn!("entry {} has no preview source", key.0);
             return Read { key, show: ShowRead::Unchanged, preview: None };
@@ -153,8 +187,8 @@ impl ReadJob {
             return Read { key, show: ShowRead::Failed, preview: None };
         };
         let show = match base {
-            Some(base) if slideshow => read_slideshow(&mut archives, &previews, &source, &base),
-            _ => ShowRead::Unchanged,
+            Some(base) => read_slideshow(&mut archives, &previews, &source, &base),
+            None => ShowRead::Unchanged,
         };
         let preview = mesh.then(|| {
             read_preview(&mut archives, &previews, kind, &source, key.1.as_deref(), axis)
@@ -259,6 +293,44 @@ impl Pending {
     }
 }
 
+/// A screen's opening read, started on a worker before the screen opens, so that the frame that
+/// opens the screen has nothing to wait for - see `session::opening_reads`. The screen adopts it
+/// when it asks for the same read ([`ReadFacts`]) and reads for itself otherwise.
+pub(crate) struct OpeningRead {
+    facts: ReadFacts,
+    archives: SharedArchives,
+    pending: Pending,
+}
+
+impl OpeningRead {
+    /// Starts the read of what a screen of `model` and `layout` opens on.
+    pub(crate) fn start(
+        model: &Picker,
+        layout: &picker::Layout,
+        axis: LiveryAxis,
+        sources: &[PreviewSource],
+        previews: &Previews,
+        archives: &SharedArchives,
+        base: &Sheet,
+    ) -> Self {
+        let key = (model.index(), model.variant().map(|(id, _)| id.clone()));
+        let facts = ReadFacts::of(key, model, layout, axis, sources, previews, true);
+        let job = ReadJob {
+            base: facts.slideshow.then(|| base.clone()),
+            facts: facts.clone(),
+            previews: previews.clone(),
+            archives: Arc::clone(archives),
+        };
+        Self { facts, archives: Arc::clone(archives), pending: Pending::start(job) }
+    }
+
+    /// Whether the worker has finished.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn landed(&self) -> bool {
+        self.pending.finished()
+    }
+}
+
 /// What a title's front end says about how its selection screens preview an
 /// entry - the two facts [`PickerStage`] cannot read off the entry itself.
 #[derive(Debug, Clone, Default)]
@@ -324,6 +396,8 @@ pub(crate) struct PickerStage {
     requested: Option<(usize, Option<String>)>,
     /// The worker reading `requested` (or the request before it) off the disc.
     pending: Option<Pending>,
+    /// A read started before this screen opened, for its first request to adopt.
+    opening: Option<OpeningRead>,
     /// The worker's measurements, on a track picker; `None` on a ship one.
     distances: Option<Distances>,
     anisotropy: Anisotropy,
@@ -358,7 +432,8 @@ impl PickerStage {
         clippy::too_many_arguments,
         reason = "one call site, and each is a separate fact of the screen: the \
                   model, its layout, its axis, its sources, the disc, the worker, \
-                  the filter, the sheet and the title's own preview rules"
+                  the filter, the sheet, the title's own preview rules and the read \
+                  already under way"
     )]
     pub(crate) fn new(
         model: Picker,
@@ -370,6 +445,7 @@ impl PickerStage {
         anisotropy: Anisotropy,
         base: Sheet,
         previews: Previews,
+        opening: Option<OpeningRead>,
     ) -> Self {
         Self {
             model,
@@ -381,6 +457,7 @@ impl PickerStage {
             built_for: None,
             requested: None,
             pending: None,
+            opening,
             distances,
             anisotropy,
             previews,
@@ -452,11 +529,17 @@ impl PickerStage {
         self.requested = Some(key);
         self.poll_preview(gpu);
         // The screen's first picture has no earlier one to stay up: a screen that opens on
-        // nothing where the original shows its stills is a hole, so the opening frame waits
-        // for the first read (the one read left on the frame thread's clock).
+        // nothing where the original shows its stills is a hole, so the opening frame takes the
+        // first read whole. `session::opening_reads` has it landed by then; a read it did not
+        // foresee, or that is still running, is waited for here.
         if self.built_for.is_none()
             && let Some(pending) = self.pending.take()
         {
+            if pending.finished() {
+                debug!("{:?} opens on a read that has landed", self.model.kind());
+            } else {
+                debug!("{:?} opens waiting for its read", self.model.kind());
+            }
             self.finish(gpu, pending);
         }
     }
@@ -493,22 +576,28 @@ impl PickerStage {
             .built_for
             .as_ref()
             .is_none_or(|(built, _)| *built != key.0);
-        let hull_only = self.model.kind() == picker::Kind::Ship && self.previews.ship_hull.is_some();
-        let circuit_model =
-            oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
-        let source = self.sources.get(key.0).cloned();
-        let job = ReadJob {
+        let facts = ReadFacts::of(
             key,
-            kind: self.model.kind(),
-            axis: self.livery_axis,
-            source,
-            previews: self.previews.clone(),
-            archives: Arc::clone(&self.archives),
-            base: entry_changed.then(|| self.base.clone()),
-            slideshow: entry_changed && self.layout.hd_track.is_none(),
-            mesh: self.previews.meshes || hull_only || circuit_model,
-        };
-        self.pending = Some(Pending::start(job));
+            &self.model,
+            &self.layout,
+            self.livery_axis,
+            &self.sources,
+            &self.previews,
+            entry_changed,
+        );
+        self.pending = Some(match self.opening.take() {
+            Some(opening)
+                if opening.facts == facts && Arc::ptr_eq(&opening.archives, &self.archives) =>
+            {
+                opening.pending
+            }
+            _ => Pending::start(ReadJob {
+                base: facts.slideshow.then(|| self.base.clone()),
+                facts,
+                previews: self.previews.clone(),
+                archives: Arc::clone(&self.archives),
+            }),
+        });
     }
 
     fn land(&mut self, gpu: &Gpu, read: Read) {

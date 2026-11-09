@@ -1,39 +1,29 @@
-//! Wipeout HD/Fury's own `Campaign Selection` screen, ahead of `Grid
-//! Selection` - the screen this build had no state for at all until this
-//! file, which is why a boot here could only ever reach the base `Wipeout
-//! HD` campaign's `grid0`..`grid7` and never `Fury`'s `grid8`..`grid15`. See
-//! `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
-//! section for the full read of the disc's own XML, the RPCS3 measurements
-//! this model is built from, and what is chosen rather than measured.
+//! The `Campaign Selection` screen ahead of `Grid Selection`: Wipeout HD/Fury's
+//! two campaigns and Omega's three (2048, HD, Fury). See
+//! `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`" and
+//! "Omega: `Campaign Selection`" sections for the full read of the disc's own
+//! XML, the measurements this model is built from, and what is chosen rather
+//! than measured.
 //!
-//! **HD only.** Pulse and Wipeout Omega never build a [`CampaignSelection`] -
-//! `oag_game::campaign::load` only ever returns one for HD, and `crate`'s
-//! own `campaign_stage::CampaignStage` only ever opens on
-//! [`crate::campaign_stage::Screen::Selection`] when that is `Some`. Neither
-//! title's own flow changes; `crates/ui-screens/src/campaign/tests.rs` pins that.
-//!
-//! # Read off `DATA06`, not the archive this crate's other two screens read
-//!
-//! `Grid Selection`/`Cell Selection` are read off whichever archive
-//! [`oag_assets::Archives::read_name`]'s precedence resolves for
-//! [`oag_hd::campaign::SCREEN_ENTRY`] (`DATA02`, measured). This screen and
-//! `Grid Selection Fury` exist only on `DATA06`'s own copy of the same path -
-//! see [`oag_hd::campaign::SELECTION_SCREEN_ARCHIVE`]'s own doc for why
-//! `oag_game::campaign::load_hd` reaches into that archive by name rather
-//! than through the shared precedence.
+//! **Read, not declared.** Which campaigns it offers, in which order, where its
+//! `<Redirect>` sends each and which grids each target screen pages are all
+//! read off the screen's own XML ([`Chooser::read`]); this module names no
+//! title. `oag_game::campaign::load` returns a chooser for a title whose
+//! `CellMode_Definition.xml` authors the screen (HD's `DATA06` copy and Omega's
+//! only), and `crate::campaign_stage::CampaignStage` opens on
+//! [`crate::campaign_stage::Screen::Selection`] only when it has one.
 //!
 //! # The screen's own `<Redirect>` is not read generically
 //!
-//! `Campaign Selection`'s `<Redirect>` carries two `<Entry item="campaignList"
+//! `Campaign Selection`'s `<Redirect>` carries `<Entry item="campaignList"
 //! equals="..." goto="...">` children - a conditional table keyed on the
 //! `campaignList`'s own selection - which `oag_ui::screen::Redirect` does not
 //! model at all: that type only ever reads a `<Default goto="...">` (this
 //! screen's own `Default` is `"To Be Done"`, an unfinished fallback this
-//! build never reaches). So [`Campaign::grid_screen_name`] hardcodes the
-//! mapping read directly off the raw XML rather than through the generic
-//! screen parser, the same way [`super::neighbour_offsets`] hardcodes a
-//! table read directly off `PI001`'s own bytes rather than through a
-//! structural reader that does not model it.
+//! build never reaches). So [`Chooser::read`] reads the mapping off the raw
+//! XML rather than through the generic screen parser.
+
+use std::ops::Range;
 
 use oag_gameplay::input::{Button, Input};
 
@@ -41,13 +31,16 @@ use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
 use oag_ui::pointer::{Pointer, contains};
-use oag_ui::screen::argb_to_rgba;
+use oag_ui::screen::{Node, Screens, argb_to_rgba, parse, parse_argb};
 
 use super::draw::{fill_draw, image_draw, text_draw};
 use super::{Event, Layout};
 
 #[cfg(test)]
 mod tests;
+
+/// The screen's name in `CellMode_Definition.xml`.
+pub const SCREEN: &str = "Campaign Selection";
 
 /// `ScreenTitle`'s own idstring on this screen - `FE_RC_SELECT`,
 /// `"CAMPAIGN SELECT"` on an RPCS3 frame. Distinct from `Grid
@@ -67,150 +60,297 @@ pub const TITLE_ID: &str = "FE_RC_SELECT";
 /// this is `pub` too.
 pub const SUBTITLE_ID: &str = "FE_CAMPSEL_MODES";
 
-/// One of `campaignList`'s own two entries - `Fury` first, `Wipeout HD`
-/// second, `<List><Entry String="FE_RC_FURY">` then `<Entry
-/// String="FE_RC_HD">`, which is also the measured default (see the module
-/// doc's RPCS3 section in `docs/ui/campaign-screens.md`).
+/// One of `campaignList`'s entries, by position in the list: the first is the
+/// measured default (`Fury` on HD, `2048` on Omega). Which campaign it is
+/// belongs to the [`Chooser`] that was read off the same screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Campaign {
-    Fury,
-    Hd,
-}
+pub struct Campaign(usize);
 
 impl Campaign {
-    /// Which slice of [`oag_hd::campaign::DEFINITION_ENTRY`]'s sixteen grids
-    /// this campaign's own `Grid Selection` screen pages -
-    /// [`oag_hd::campaign::FURY_GRID_RANGE`]/[`oag_hd::campaign::HD_GRID_RANGE`].
+    /// The entry at `index` in `campaignList`.
     #[must_use]
-    pub fn grid_range(self) -> std::ops::Range<usize> {
-        match self {
-            Campaign::Fury => oag_hd::campaign::FURY_GRID_RANGE,
-            Campaign::Hd => oag_hd::campaign::HD_GRID_RANGE,
-        }
+    pub fn new(index: usize) -> Self {
+        Self(index)
     }
 
-    /// The `Grid Selection`/`Grid Selection Fury` screen name this
-    /// campaign's own `<Redirect>` entry names - see the module doc on why
-    /// this is hardcoded rather than read through [`oag_ui::screen::Redirect`].
+    /// Its position in `campaignList`.
     #[must_use]
-    pub fn grid_screen_name(self) -> &'static str {
-        match self {
-            Campaign::Fury => oag_hd::campaign::FURY_GRID_SCREEN,
-            Campaign::Hd => "Grid Selection",
-        }
-    }
-
-    /// `campaignList`'s own `<Entry String="...">` for this campaign -
-    /// `FE_RC_FURY`/`FE_RC_HD`, `"FURY CAMPAIGN"`/`"HD CAMPAIGN"` resolved
-    /// off `DATA06`'s own `Data\Plugins\Languages\English\entries.xml`
-    /// (confirmed directly against `hdfury-ps3-eu-dec.iso`: `<entry
-    /// id="FE_RC_FURY" string="FURY CAMPAIGN">`, `<entry id="FE_RC_HD"
-    /// string="HD CAMPAIGN">`). This is the disc's own name for each entry -
-    /// see [`FURY_ENTRY_NAME_POSITION`]'s own doc for where it is actually
-    /// drawn, since the list's own authored position is off-screen by design.
-    #[must_use]
-    pub fn entry_id(self) -> &'static str {
-        match self {
-            Campaign::Fury => "FE_RC_FURY",
-            Campaign::Hd => "FE_RC_HD",
-        }
+    pub fn index(self) -> usize {
+        self.0
     }
 }
 
-/// `campaignList`'s own two entries, in document order.
-const CAMPAIGNS: [Campaign; 2] = [Campaign::Fury, Campaign::Hd];
+/// One `<Entry String="...">` of `campaignList`, with where the screen's
+/// `<Redirect>` sends it: the campaign's own `Grid Selection` screen, its
+/// layout, and the grids that screen's own `flyerlist` pages.
+#[derive(Debug, Clone)]
+pub struct Entry {
+    /// `campaignList`'s own `String` - `FE_RC_HD`, `FE_RC_FURY`, `FE_RC`
+    /// (2048): also the idstring of the campaign's name.
+    pub id: String,
+    /// The `goto` of the `<Redirect>` entry that `equals` [`Self::id`].
+    pub screen: String,
+    /// The grids that screen's `flyerlist` names (`grid0`..`grid7`), as
+    /// indices into the title's grid list.
+    pub grids: Range<usize>,
+    /// [`Self::screen`]'s own layout.
+    pub layout: Layout,
+}
 
-/// The screen's own `<Bracket x="160" y="170" Width="1595" Height="780">` -
-/// read directly off the XML, not through [`oag_ui::screen::Screens::collect`],
-/// which has no `Bracket` arm at all (nothing else in this crate has needed
-/// one before this screen). The frame both flyers sit inside.
-const BRACKET_RECT: [f32; 4] = [160.0, 170.0, 1595.0, 780.0];
+/// What a widget's name calls an entry by (`NumMedalsTextHD`,
+/// `FuryCampaignFlyerModel`): the screen names its per-campaign widgets with
+/// it, and nothing in the XML ties the two together but the spelling.
+const TAGS: [(&str, &str); 3] = [
+    ("FE_RC_HD", "HD"),
+    ("FE_RC_FURY", "Fury"),
+    ("FE_RC", "2048"),
+];
 
-/// `CAMPAIGN MODES`'s own subtitle - `<MiniText><Values x="160" y="140"
-/// idstring="FE_CAMPSEL_MODES" color="FEGlobals->HD_Grey">`.
-///
-/// **Hand-placed, not read through `screen.texts`.** Adding a `MiniText` arm
-/// to [`oag_ui::screen::Screens::collect`] was tried first and reverted:
-/// that parser is shared by every title's every screen, and a scratch
-/// survey found `<MiniText>` on `MainMenu_Definition.xml`,
-/// `RaceBox_Definition.xml`, `Additional_Definition.xml` and
-/// `RecordGrid_Definition.xml` too - collecting it generically would have
-/// started drawing widgets on screens this pass never measured, on every
-/// title, not only this one. `BRACKET_RECT` already sets the precedent for
-/// a number the parser does not reach: read directly off the file, kept as
-/// a plain constant.
-const SUBTITLE_POSITION: (f32, f32) = (160.0, 140.0);
+/// The `campaignList` entries this build has met: the idstrings that name a
+/// campaign on the screen.
+pub fn known_entry_ids() -> impl Iterator<Item = &'static str> {
+    TAGS.iter().map(|(id, _)| *id)
+}
 
-/// `FuryGoldMedalsMiniText`'s own position and colour -
-/// `<MiniText name="FuryGoldMedalsMiniText"><Values x="755" y="710"
-/// idstring="RC_GM" color="0xff000000">`. Hand-placed - see
-/// [`SUBTITLE_POSITION`]'s own doc. The colour is a literal on this one
-/// widget (black), unlike [`HD_GOLD_MEDALS_LABEL_POSITION`]'s own
-/// `FEGlobals->HD_Grey`.
-const FURY_GOLD_MEDALS_LABEL_POSITION: (f32, f32) = (755.0, 710.0);
-const FURY_GOLD_MEDALS_LABEL_COLOR: u32 = 0xff00_0000;
+impl Entry {
+    /// The word the screen's own widgets name this campaign by, or `None` for
+    /// an entry this build has not met.
+    #[must_use]
+    pub fn tag(&self) -> Option<&'static str> {
+        TAGS.iter()
+            .find(|(id, _)| *id == self.id)
+            .map(|(_, tag)| *tag)
+    }
 
-/// `HDGoldMedalsMiniText`'s own position - `<MiniText name="HDGoldMedalsMiniText">
-/// <Values x="1395" y="710" idstring="RC_GM" color="FEGlobals->HD_Grey">`.
-/// Hand-placed - see [`SUBTITLE_POSITION`]'s own doc. Its own colour is
-/// `FEGlobals->HD_Grey`, read off `ScreenTitle`'s own already-collected
-/// `Text.color` in [`draw_list`] rather than re-resolved here - both name
-/// the same global, and `ScreenTitle` is a plain `Text`, not a `MiniText`,
-/// so it is already in `screen.texts` with the value resolved.
-const HD_GOLD_MEDALS_LABEL_POSITION: (f32, f32) = (1395.0, 710.0);
+    /// The `<Flyer>` widget that stands for this campaign.
+    #[must_use]
+    pub fn card_widget(&self) -> Option<String> {
+        self.tag().map(|tag| format!("{tag}CampaignFlyerModel"))
+    }
 
-/// `RC_GM`'s own idstring - `"GOLD MEDALS"` on an RPCS3 frame, the same
-/// idstring `Grid Selection`'s own `Medals Title` resolves. Named here since
-/// both hand-placed gold-medal labels share it.
-const GOLD_MEDALS_LABEL_ID: &str = "RC_GM";
+    /// The `Data/FE/Flyers/<name>/` folder of its card: the lower-cased tag and
+    /// `_campaign` (`fury_campaign`, `2048_campaign`).
+    #[must_use]
+    pub fn card_flyer(&self) -> Option<String> {
+        self.tag()
+            .map(|tag| format!("{}_campaign", tag.to_ascii_lowercase()))
+    }
+}
 
-/// Where this build draws `campaignList`'s own two entry names
-/// ([`Campaign::entry_id`]) - the list's own authored position
-/// (`<List name="campaignList"><Values x="159" y="-500">`) is off-screen by
-/// design (the file's own comment on that line reads `<!-- -500 for y so
-/// it's off screen!! -->`), there only to drive the widget's internal
-/// selection state, never meant to be drawn. **Chosen, not measured**: each
-/// `x` is the centre of its own half of [`BRACKET_RECT`] (the same split
-/// [`CampaignSelection::pointer`]'s own click targets and
-/// [`selector_outline`] both use), drawn with [`Align::Centre`] rather than
-/// [`FURY_GOLD_MEDALS_LABEL_POSITION`]/[`HD_GOLD_MEDALS_LABEL_POSITION`]'s
-/// own left-aligned `x` - a left-aligned name at that anchor runs past the
-/// Bracket's own midpoint and is cut by [`selector_outline`]'s own border,
-/// caught by looking at the first capture rather than measured off anything.
-/// `y` sits above the medal labels, inside the Bracket, in the space the
-/// (undrawn) 3D flyer card would otherwise fill - see the module doc's "not
-/// drawn" note.
-const FURY_ENTRY_NAME_POSITION: (f32, f32) = (558.75, 610.0);
-const HD_ENTRY_NAME_POSITION: (f32, f32) = (1356.25, 610.0);
+/// A `<MiniText>` of the screen: they are not collected generically (see
+/// [`Chooser::read`]), so the ones this screen authors are kept here.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Label {
+    /// The widget's `name`, when it has one (`HDGoldMedalsMiniText`).
+    pub name: Option<String>,
+    /// Its idstring.
+    pub idstring: String,
+    /// Where it starts.
+    pub position: (f32, f32),
+    /// ARGB, `FEGlobals` resolved.
+    pub color: u32,
+}
 
-/// The selected half's outline thickness and colour - [`BRACKET_RECT`] split
-/// at its own midpoint, the same split [`CampaignSelection::pointer`]'s own
-/// click targets already use. The screen authors no per-entry
+/// `Campaign Selection`, read off the disc's own XML: the entries of its
+/// `campaignList` in order, where its `<Redirect>` sends each, the grids that
+/// screen pages, and the screen's `<MiniText>` labels.
+#[derive(Debug, Clone)]
+pub struct Chooser {
+    entries: Vec<Entry>,
+    labels: Vec<Label>,
+    bracket: [f32; 4],
+}
+
+impl Chooser {
+    /// Reads the screen named [`SCREEN`] out of `xml`. `grid_layout` gives the
+    /// layout of a campaign's own grid screen by name.
+    ///
+    /// **Read straight off the raw tree, not through [`Screens::collect`]**:
+    /// `oag_ui::screen::Redirect` models only a `<Default goto>`, never the
+    /// conditional `<Entry item="campaignList" equals="..." goto="...">` rows
+    /// this screen's redirect is made of, and `<MiniText>` is on
+    /// `MainMenu_Definition.xml`, `RaceBox_Definition.xml` and
+    /// `Additional_Definition.xml` too, so collecting it generically would draw
+    /// widgets on screens nobody has measured.
+    ///
+    /// `None` when the screen, an entry's redirect, its grid screen's
+    /// `flyerlist` or its layout is missing: the caller then has no chooser
+    /// and opens straight on a grid.
+    #[must_use]
+    pub fn read(
+        xml: &str,
+        screens: &Screens,
+        grid_layout: &dyn Fn(&str) -> Option<Layout>,
+    ) -> Option<Self> {
+        let root = parse(xml);
+        let screen = find_screen(&root, SCREEN)?;
+        let list = descendants(screen).into_iter().find(|node| {
+            node.name.eq_ignore_ascii_case("List") && node.attr("name") == Some("campaignList")
+        })?;
+        let redirect = screen.children_named("Redirect").next()?;
+        let mut entries = Vec::new();
+        for entry in list.children_named("Entry") {
+            let id = entry.attr("String")?.to_string();
+            let goto = redirect
+                .children_named("Entry")
+                .find(|row| {
+                    row.attr("item") == Some("campaignList") && row.attr("equals") == Some(&id)
+                })
+                .and_then(|row| row.attr("goto"))?;
+            let grids = flyer_grids(find_screen(&root, goto)?)?;
+            entries.push(Entry {
+                id,
+                screen: goto.to_string(),
+                grids,
+                layout: grid_layout(goto)?,
+            });
+        }
+        if entries.is_empty() {
+            return None;
+        }
+        let number = |node: &Node, key: &str| screens.number(node.value(key));
+        let labels = descendants(screen)
+            .into_iter()
+            .filter(|node| node.name.eq_ignore_ascii_case("MiniText"))
+            .filter_map(|node| {
+                Some(Label {
+                    name: node.attr("name").map(str::to_string),
+                    idstring: node.value("idstring")?.to_string(),
+                    position: (number(node, "x")?, number(node, "y")?),
+                    color: node
+                        .value("color")
+                        .and_then(|value| screens.resolve(value))
+                        .and_then(parse_argb)
+                        .unwrap_or(0xffff_ffff),
+                })
+            })
+            .collect();
+        let bracket = descendants(screen)
+            .into_iter()
+            .find(|node| node.name.eq_ignore_ascii_case("Bracket"))
+            .and_then(|node| {
+                Some([
+                    number(node, "x")?,
+                    number(node, "y")?,
+                    number(node, "Width")?,
+                    number(node, "Height")?,
+                ])
+            })?;
+        Some(Self {
+            entries,
+            labels,
+            bracket,
+        })
+    }
+
+    /// The entries, in `campaignList` order.
+    #[must_use]
+    pub fn entries(&self) -> &[Entry] {
+        &self.entries
+    }
+
+    /// The entry `campaign` names.
+    #[must_use]
+    pub fn entry(&self, campaign: Campaign) -> Option<&Entry> {
+        self.entries.get(campaign.index())
+    }
+
+    /// The campaign whose grids include `grid`.
+    #[must_use]
+    pub fn campaign_of(&self, grid: usize) -> Option<Campaign> {
+        self.entries
+            .iter()
+            .position(|entry| entry.grids.contains(&grid))
+            .map(Campaign)
+    }
+
+    /// The `<Bracket>` both sides of the screen sit inside.
+    #[must_use]
+    pub fn bracket(&self) -> [f32; 4] {
+        self.bracket
+    }
+
+    /// The idstrings the screen draws by its own widgets: title, subtitle, the
+    /// medal and rank labels and each campaign's name.
+    #[must_use]
+    pub fn string_ids(&self) -> Vec<&str> {
+        [TITLE_ID, SUBTITLE_ID]
+            .into_iter()
+            .chain(self.labels.iter().map(|label| label.idstring.as_str()))
+            .chain(self.entries.iter().map(|entry| entry.id.as_str()))
+            .collect()
+    }
+
+    /// The `i`th of `count` equal columns of the bracket.
+    fn column(&self, index: usize) -> [f32; 4] {
+        let [x, y, width, height] = self.bracket;
+        let count = self.entries.len().max(1);
+        #[allow(clippy::cast_precision_loss, reason = "a handful of entries")]
+        let (index, count) = (index as f32, count as f32);
+        let each = width / count;
+        [x + each * index, y, each, height]
+    }
+}
+
+fn find_screen<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
+    if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(name) {
+        return Some(node);
+    }
+    node.children
+        .iter()
+        .find_map(|child| find_screen(child, name))
+}
+
+fn descendants(node: &Node) -> Vec<&Node> {
+    let mut out = Vec::new();
+    let mut stack: Vec<&Node> = node.children.iter().rev().collect();
+    while let Some(next) = stack.pop() {
+        out.push(next);
+        stack.extend(next.children.iter().rev());
+    }
+    out
+}
+
+/// The grids a `FlyerSelection` screen's `flyerlist` names, `grid8`..`grid15`
+/// as `8..16`; `None` when it names none or not a contiguous run.
+fn flyer_grids(screen: &Node) -> Option<Range<usize>> {
+    let list = descendants(screen).into_iter().find(|node| {
+        node.name.eq_ignore_ascii_case("List") && node.attr("name") == Some("flyerlist")
+    })?;
+    let indices: Vec<usize> = list
+        .children_named("Entry")
+        .filter_map(|entry| entry.attr("String")?.strip_prefix("grid")?.parse().ok())
+        .collect();
+    let first = *indices.first()?;
+    indices
+        .iter()
+        .enumerate()
+        .all(|(offset, grid)| *grid == first + offset)
+        .then(|| first..first + indices.len())
+}
+
+/// The selected column's outline thickness and colour - the bracket split
+/// into one column per entry. The screen authors no per-entry
 /// `Selector`/highlight widget at all, unlike `Grid Selection`/`Cell
 /// Selection`'s own `<Image name="Selector">`; the real game's equivalent is
-/// presumably the 3D flyer's own scale/emphasis animation (an RPCS3 frame
-/// shows the selected card larger and centred), which this build does not
-/// render - see the module doc's "not drawn" note. **Chosen, not measured**:
-/// a plain four-sided outline around the selected half stands in for that
-/// animation, so the choice is visible and the pointer has something to
-/// hover, without pretending to reproduce the disc's own look.
+/// the 3D flyer's own scale/emphasis animation (an RPCS3 frame shows the
+/// selected card larger and centred), which is drawn when the cards load. A
+/// plain four-sided outline stands in for it where they do not. **Chosen, not
+/// measured.**
 const SELECTOR_BORDER: f32 = 6.0;
 const SELECTOR_COLOR: u32 = 0xffff_ffff;
 
-/// The selected half of [`BRACKET_RECT`], as a plain four-sided outline -
-/// see [`SELECTOR_BORDER`]'s own doc.
-fn selector_outline(selected: Campaign) -> [Draw; 4] {
-    let slot = CAMPAIGNS
-        .iter()
-        .position(|&entry| entry == selected)
-        .unwrap_or(0);
-    #[allow(clippy::cast_precision_loss, reason = "slot is 0 or 1, exact in f32")]
-    let slot = slot as f32;
-    let [x, y, width, height] = BRACKET_RECT;
-    let half = width / 2.0;
-    let rect = [x + half * slot, y, half, height];
+/// Where each entry's name is drawn when no card stands in the column:
+/// the list's own position is off screen by design (`<!-- -500 for y so it's
+/// off screen!! -->`), so the name sits at the column's centre, above the
+/// medal labels. **Chosen, not measured.**
+const ENTRY_NAME_Y: f32 = 610.0;
+
+/// The selected column, as a plain four-sided outline - see
+/// [`SELECTOR_BORDER`]'s own doc.
+fn selector_outline(chooser: &Chooser, selected: Campaign) -> [Draw; 4] {
+    let [rx, ry, rw, rh] = chooser.column(selected.index());
     let color = argb_to_rgba(SELECTOR_COLOR);
-    let [rx, ry, rw, rh] = rect;
     let t = SELECTOR_BORDER;
     [
         Draw::Fill {
@@ -232,59 +372,60 @@ fn selector_outline(selected: Campaign) -> [Draw; 4] {
     ]
 }
 
-/// `Campaign Selection`'s own model: a flat two-entry list, the same shape
-/// [`super::GridSelection`]'s own pager is, stepped by `left`/`right`
-/// (measured: `right` moves `Fury` -> `Wipeout HD`, see the module doc)
+/// `Campaign Selection`'s own model: a flat list of the chooser's entries,
+/// the same shape [`super::GridSelection`]'s own pager is, stepped by
+/// `left`/`right` (measured on HD: `right` moves `Fury` -> `Wipeout HD`)
 /// rather than up/down.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct CampaignSelection {
     index: usize,
+    chooser: Chooser,
 }
 
 impl CampaignSelection {
+    /// On the list's first entry, the measured default.
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(chooser: Chooser) -> Self {
+        Self { index: 0, chooser }
     }
 
     /// Starts on `campaign` already selected - what a caller returning to
-    /// this screen from `Grid Selection`/`Grid Selection Fury` uses, so a
-    /// player who chose `Wipeout HD` and backs out lands on `Campaign
-    /// Selection` still showing `Wipeout HD` selected, not reset to the
-    /// screen's own default `Fury` entry.
+    /// this screen from a grid uses, so a player who chose `Wipeout HD` and
+    /// backs out lands on `Campaign Selection` still showing it selected, not
+    /// reset to the screen's own default.
     #[must_use]
-    pub fn at(campaign: Campaign) -> Self {
-        Self {
-            index: CAMPAIGNS
-                .iter()
-                .position(|&entry| entry == campaign)
-                .unwrap_or(0),
-        }
+    pub fn at(chooser: Chooser, campaign: Campaign) -> Self {
+        let index = campaign
+            .index()
+            .min(chooser.entries.len().saturating_sub(1));
+        Self { index, chooser }
     }
 
     #[must_use]
     pub fn selected(&self) -> Campaign {
-        CAMPAIGNS[self.index]
+        Campaign(self.index)
     }
 
-    /// `right` (`1`) is the measured toggle. **Clamped, not wrapping** -
-    /// unlike [`super::GridSelection::step`]'s own sixteen-tier pager, this
-    /// is measured directly rather than chosen for consistency with it:
-    /// `left` (`-1`) at the list's own first entry (`Fury`, the default) is
-    /// observed to leave the screen on `Fury`, not wrap to `Wipeout HD` the
-    /// way a wrapping step would. A wrapping step would make `left` and
-    /// `right` indistinguishable from `Fury` - both landing on `Hd` - which
-    /// the RPCS3 boot this is read from directly contradicts. See the
-    /// module doc's "The toggle" section.
+    #[must_use]
+    pub fn chooser(&self) -> &Chooser {
+        &self.chooser
+    }
+
+    /// `right` (`1`) is the measured step. **Clamped, not wrapping** - unlike
+    /// [`super::GridSelection::step`]'s own sixteen-tier pager, this is
+    /// measured directly rather than chosen for consistency with it: `left`
+    /// (`-1`) at the list's own first entry is observed to leave the screen
+    /// where it was, not wrap to the last. See `docs/ui/campaign-screens.md`,
+    /// "The toggle".
     fn step(&mut self, step: i32) {
-        let last = i32::try_from(CAMPAIGNS.len().saturating_sub(1)).unwrap_or(0);
+        let last = i32::try_from(self.chooser.entries.len().saturating_sub(1)).unwrap_or(0);
         let index = i32::try_from(self.index).unwrap_or(0) + step;
         self.index = usize::try_from(index.clamp(0, last)).unwrap_or(0);
     }
 
     /// The four directions and the two buttons this screen answers to -
     /// `up`/`down` unbound, since neither was independently isolated as a
-    /// toggle or a no-op (see the module doc's confidence-~50 note).
+    /// toggle or a no-op.
     pub fn update(&mut self, input: &mut Input) -> Vec<Event> {
         let mut out = Vec::new();
         if input.take(Button::Right) {
@@ -304,27 +445,33 @@ impl CampaignSelection {
         out
     }
 
-    /// Two click targets, invented from [`BRACKET_RECT`] split at its own
-    /// midpoint - Fury's flyer sits left of centre (`OriginX="640"`),
-    /// `Wipeout HD`'s right (`OriginX="1280"`), and the screen authors no
-    /// per-flyer clickable rect of its own to ground a target in more
-    /// precisely than that, the same "grounded in a real rect, not
-    /// free-standing" reasoning [`super::hd::hd_grid_targets`] already uses
-    /// for `Grid Selection`'s own confirm region. **Chosen, not measured.**
-    /// Hover selects, a second click on the already-selected half confirms -
-    /// the same two-tap idiom every other campaign screen in this crate
-    /// uses.
-    pub fn pointer(&mut self, pointer: &Pointer) -> Vec<Event> {
+    /// One click target per entry. `cards` are the drawn cards' rectangles, one
+    /// per entry in list order (what `oag_game::flyer::Flyers::card_rect` gives):
+    /// the selected card is tested first, so where a turned card's box overlaps
+    /// it the selected one wins, then the others. Without cards (none loaded, or
+    /// not one per entry) the bracket is split into equal columns: the screen
+    /// authors no per-flyer clickable rect, the same "grounded in a real rect,
+    /// not free-standing" reasoning [`super::hd::hd_grid_targets`] uses for
+    /// `Grid Selection`'s confirm region. **Chosen, not measured.**
+    /// Hover selects, a second click on the already-selected entry confirms -
+    /// the same two-tap idiom every other campaign screen in this crate uses.
+    pub fn pointer(&mut self, pointer: &Pointer, cards: &[[f32; 4]]) -> Vec<Event> {
         let mut out = Vec::new();
         if pointer.is_idle() {
             return out;
         }
-        let [x, y, width, height] = BRACKET_RECT;
-        let half = width / 2.0;
-        let rects = [[x, y, half, height], [x + half, y, half, height]];
+        let count = self.chooser.entries.len();
+        let rect = |index: usize| {
+            if cards.len() == count {
+                cards[index]
+            } else {
+                self.chooser.column(index)
+            }
+        };
+        let order = std::iter::once(self.index).chain((0..count).filter(|&i| i != self.index));
         let hit = pointer
             .at
-            .and_then(|at| rects.iter().position(|&r| contains(r, at)));
+            .and_then(|at| order.into_iter().find(|&index| contains(rect(index), at)));
         let was = self.index;
         if pointer.moved
             && let Some(index) = hit
@@ -350,33 +497,42 @@ impl CampaignSelection {
     }
 }
 
+/// Which entry a per-campaign widget belongs to, by the tag its name carries
+/// (`NumMedalsTextHD`, `FuryGoldMedalsMiniText`) or, for 2048's rank block
+/// (`RankText`, `TotalXPBg`, `TotalXPFill`, `Rank_Icon_Endrace`), the entry
+/// tagged `2048`. `None` for a widget of the screen itself.
+fn owner(chooser: &Chooser, name: &str) -> Option<usize> {
+    let rank = name.starts_with("Rank") || name.starts_with("TotalXP");
+    chooser.entries.iter().position(|entry| {
+        let tag = entry.tag().unwrap_or("");
+        if rank {
+            tag == "2048"
+        } else {
+            !tag.is_empty() && name.contains(tag)
+        }
+    })
+}
+
 /// `Campaign Selection`'s draw list.
 ///
-/// `cards` is whether the two flyer cards are drawn behind it. **When they are,
-/// the two stand-ins for them are not**: the selected half's white outline and
-/// the two campaign names ([`FURY_ENTRY_NAME_POSITION`],
-/// [`HD_ENTRY_NAME_POSITION`]) were this build's own invention for a screen
-/// with nothing in the space the cards fill, and an RPCS3 frame draws neither -
-/// the selected card faces the camera and the other is turned, which is the
-/// indication, and each card carries its own name.
+/// `cards` is whether the flyer cards are drawn behind it. **When they are,
+/// the stand-ins for them are not**: the selected column's white outline and
+/// the campaign names ([`ENTRY_NAME_Y`]) were this build's own invention for a
+/// screen with nothing in the space the cards fill, and an RPCS3 frame draws
+/// neither - the selected card faces the camera and the others are turned,
+/// which is the indication, and each card carries its own name.
 ///
-/// `fury_gold`/`hd_gold` are each `(earned, total)` - `earned` is `0` on a
-/// fresh profile, the same "player-progress source is optional" reading the
-/// rest of this module gives; `total` is the denominator: the campaign's own
-/// total cell count, which is also its total possible gold medals (every
-/// cell carries exactly one `<Gold>` target). **Closed, 2026-09-25**: an
+/// `gold` is one `(earned, total)` per entry, in `campaignList` order -
+/// `earned` is `0` on a fresh profile, the same "player-progress source is
+/// optional" reading the rest of this module gives; `total` is the
+/// denominator: the campaign's own total cell count, which is also its total
+/// possible gold medals (every cell carries exactly one `<Gold>` target). An
 /// RPCS3 frame reads `"0 / 80"` beside `Fury`'s own flyer and `"0 / 87"`
-/// beside `HD`'s
-/// (RPCS3 frames of the left and right taps) - **two different numbers, one per campaign**, which
-/// is what this page's own earlier note ("this build's own parse of
-/// `DATA00`'s eight Fury grids totals 80 cells, a gap this pass does not
-/// explain") missed: it read only the `HD`-side capture (`87`) and never the
-/// `Fury`-side one (`80`) sitting beside it in the same directory, so a
-/// correct count on the wrong side read as unexplained rather than as
-/// "already right, just not for this side". `oag_game::main::campaign_stage::CampaignStage::campaign_gold_medals`
-/// derives both halves, off `grid.cells.len()` summed across the campaign's
-/// own eight grids - no invented denominator, and no title-carried table
-/// either.
+/// beside `HD`'s: two different numbers, one per campaign, off
+/// `oag_game::main::campaign_stage::CampaignStage::campaign_gold_medals`,
+/// which sums `grid.cells.len()` over the campaign's own grids. The entry of
+/// 2048 draws a rank where the others draw a medal count: `rank` is its
+/// number (`0` on a fresh profile) and the experience bar under it is empty.
 ///
 /// `footer_overlay` is [`super::hd::hd_cell_draw_list`]'s own parameter,
 /// unchanged: an RPCS3 frame of this screen
@@ -385,9 +541,8 @@ impl CampaignSelection {
 #[must_use]
 #[allow(
     clippy::too_many_arguments,
-    reason = "the same shape every other screen's own *_draw_list takes, plus the two medal \
-              counts this screen alone needs and the footer overlay hd_cell_draw_list already \
-              takes"
+    reason = "the same shape every other screen's own *_draw_list takes, plus the counts this \
+              screen alone needs and the footer overlay hd_cell_draw_list already takes"
 )]
 pub fn draw_list(
     model: &CampaignSelection,
@@ -395,19 +550,15 @@ pub fn draw_list(
     skin: &Skin,
     frame: &Frame,
     strings: &StringTable,
-    // `(earned, total)` - a pair rather than two scalars each, since a
-    // caller never has one without the other and the pairing is what keeps
-    // a future fifth/sixth argument from landing between them by accident.
-    fury_gold: (u32, u32),
-    hd_gold: (u32, u32),
+    gold: &[(u32, u32)],
+    rank: u32,
     backdrop: Option<Picture>,
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
     footer_overlay: &[Draw],
     cards: bool,
 ) -> Layers {
-    let (fury_gold_medals, fury_gold_total) = fury_gold;
-    let (hd_gold_medals, hd_gold_total) = hd_gold;
+    let chooser = model.chooser();
     let mut layers = Layers {
         backdrop: frame.backdrops(
             skin.space(),
@@ -430,23 +581,32 @@ pub fn draw_list(
 
     let screen = &layout.screen;
     let mut out = Vec::new();
-    // With the cards drawn, only the selected campaign's medal counter shows:
-    // an RPCS3 frame with Fury selected has none beside the turned `HD` card
-    // and one with `HD` selected none beside Fury's.
-    let shown = |campaign: Campaign| !cards || model.selected() == campaign;
+    // With the cards drawn, only the selected campaign's counter shows: an
+    // RPCS3 frame with Fury selected has none beside the turned `HD` card and
+    // one with `HD` selected none beside Fury's.
+    let shown = |name: &str| {
+        owner(chooser, name).is_none_or(|entry| !cards || entry == model.selected().index())
+    };
     for fill in &screen.fills {
+        let name = fill.name.as_deref().unwrap_or("");
+        if !shown(name) {
+            continue;
+        }
+        // The experience bar's fill is as wide as the player's progress: none
+        // on a fresh profile.
+        if name == "TotalXPFill" {
+            continue;
+        }
         out.push(fill_draw(fill));
     }
     for image in &screen.images {
+        let name = image.name.as_deref().unwrap_or("");
         // Both crop no sub-rect of `Hexmedal_HD.mip`'s own shared
         // multi-colour atlas, unlike `Target0/1/2 Medal`'s use of the same
         // atlas elsewhere on this title (`u`/`v`/`TxtrWidth`) - drawing
         // either as authored would show the whole atlas, not a clean glyph.
         // Not drawn rather than guessed at; see the module doc.
-        if matches!(
-            image.name.as_deref(),
-            Some("MedalImageFury" | "MedalImageHD")
-        ) {
+        if name.starts_with("MedalImage") || !shown(name) {
             continue;
         }
         let Some(placed) = sprites(&image.src) else {
@@ -456,6 +616,17 @@ pub fn draw_list(
     }
     for text in &screen.texts {
         let name = text.name.as_deref().unwrap_or("");
+        if !shown(name) {
+            continue;
+        }
+        let counter = |tag: &str| {
+            chooser
+                .entries
+                .iter()
+                .position(|entry| entry.tag() == Some(tag))
+                .and_then(|entry| gold.get(entry))
+                .map(|(earned, total)| format!("{earned} / {total}"))
+        };
         let content = match name {
             // `ScreenTitle` is drawn above through `skin.title_font()`,
             // the same idiom `oag_ui_screens::campaign::hd` already uses for its
@@ -463,83 +634,61 @@ pub fn draw_list(
             "ScreenTitle" => None,
             // `RB_EVENT_TYPE` is a reused/generic idstring this build does
             // not trust as content - see [`draw_list`]'s own doc.
-            "NumMedalsTextFury" => {
-                shown(Campaign::Fury).then(|| format!("{fury_gold_medals} / {fury_gold_total}"))
-            }
-            "NumMedalsTextHD" => {
-                shown(Campaign::Hd).then(|| format!("{hd_gold_medals} / {hd_gold_total}"))
-            }
+            "NumMedalsTextFury" => counter("Fury"),
+            "NumMedalsTextHD" => counter("HD"),
+            // Authored `99`, the shield's placeholder: the number is the player's.
+            "RankText" => Some(rank.to_string()),
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
+        // A literal the face cannot spell is not drawn: the three `Caption*`
+        // widgets author Chinese strings and the frame shows none of them.
+        // **Chosen, not measured**: that the whole string is dropped rather than
+        // its Latin characters (`2048`) is read off that frame alone.
+        if !content.chars().all(|c| u32::from(c) < 0x250) {
+            continue;
+        }
         out.push(text_draw(text, &content, layout));
     }
 
-    // The subtitle and the two gold-medal labels - hand-placed, not
-    // resolved through `screen.texts`; see `SUBTITLE_POSITION`'s own doc on
-    // why. `grey` is `FEGlobals->HD_Grey`'s own resolved ARGB, read off
-    // `ScreenTitle`'s already-collected `Text.color` rather than
-    // re-resolved here - both name the same global.
-    let grey = screen
-        .texts
+    // The screen's `<MiniText>` labels: the subtitle, the medal and rank
+    // captions, drawn as the pickers' headings are - a square bullet and small
+    // text. Placed from the raw tree, see [`Chooser::read`].
+    let headings: Vec<crate::picker::hd::MiniText> = chooser
+        .labels
         .iter()
-        .find(|text| text.name.as_deref() == Some("ScreenTitle"))
-        .map_or(0xffff_ffff, |text| text.color);
-    let entry_names = [
-        (
-            FURY_ENTRY_NAME_POSITION,
-            grey,
-            strings.get_or_id(Campaign::Fury.entry_id()),
-            Align::Centre,
-        ),
-        (
-            HD_ENTRY_NAME_POSITION,
-            grey,
-            strings.get_or_id(Campaign::Hd.entry_id()),
-            Align::Centre,
-        ),
-    ];
-    let mut hand_placed = vec![(
-        SUBTITLE_POSITION,
-        grey,
-        strings.get_or_id(SUBTITLE_ID),
-        Align::Left,
-    )];
-    if shown(Campaign::Fury) {
-        hand_placed.push((
-            FURY_GOLD_MEDALS_LABEL_POSITION,
-            FURY_GOLD_MEDALS_LABEL_COLOR,
-            strings.get_or_id(GOLD_MEDALS_LABEL_ID),
-            Align::Left,
-        ));
-    }
-    if shown(Campaign::Hd) {
-        hand_placed.push((
-            HD_GOLD_MEDALS_LABEL_POSITION,
-            grey,
-            strings.get_or_id(GOLD_MEDALS_LABEL_ID),
-            Align::Left,
-        ));
-    }
-    let names: &[_] = if cards { &[] } else { &entry_names };
-    for ((x, y), color, content, align) in hand_placed.into_iter().chain(names.iter().copied()) {
-        out.push(Draw::Text {
-            x,
-            y,
-            scale: 1.0,
-            color: argb_to_rgba(color),
-            border: None,
-            align,
-            text: content.to_string(),
-            wrap_width: None,
-        });
-    }
-
-    // The selected half's outline - see [`SELECTOR_BORDER`]'s own doc on why
-    // this is drawn rather than a `Selector` widget the screen does not
-    // author.
+        .filter(|label| shown(label.name.as_deref().unwrap_or("")))
+        .map(|label| crate::picker::hd::MiniText {
+            x: label.position.0,
+            y: label.position.1,
+            text: strings.get_or_id(&label.idstring).to_string(),
+            color: label.color,
+        })
+        .collect();
+    crate::picker::hd::draw_labels(&headings, &mut out);
     if !cards {
-        out.extend(selector_outline(model.selected()));
+        let grey = screen
+            .texts
+            .iter()
+            .find(|text| text.name.as_deref() == Some("ScreenTitle"))
+            .map_or(0xffff_ffff, |text| text.color);
+        for (index, entry) in chooser.entries.iter().enumerate() {
+            let [x, _, width, _] = chooser.column(index);
+            out.push(Draw::Text {
+                x: x + width / 2.0,
+                y: ENTRY_NAME_Y,
+                scale: 1.0,
+                color: argb_to_rgba(grey),
+                border: None,
+                align: Align::Centre,
+                text: strings.get_or_id(&entry.id).to_string(),
+                wrap_width: None,
+            });
+        }
+        // The selected column's outline - see [`SELECTOR_BORDER`]'s own doc on
+        // why this is drawn rather than a `Selector` widget the screen does
+        // not author.
+        out.extend(selector_outline(chooser, model.selected()));
     }
 
     layers.body = out;

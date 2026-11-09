@@ -259,7 +259,7 @@ then a one-pole is a choice.
 
 | Value | Ours | Omega | HD, 2048 | Pulse, Pure |
 | --- | --- | --- | --- | --- |
-| `original` | Pulse's equal-power pan, no front/back, on every title | **Differs.** 7.1 bed, Wwise's panner, authored pass-by swaps; what a stereo system output does with the bed is firmware, unread | **Differs.** Pan plus the rear low-pass above, which ours does not play | **Same** (bit-identical) |
+| `original` | Pulse's equal-power pan on every title, plus HD's rear low-pass on HD alone | **Differs.** 7.1 bed, Wwise's panner, authored pass-by swaps; what a stereo system output does with the bed is firmware, unread | **HD: same law** (wired). **2048: differs**, pan only: the rear low-pass is checked, applies, not wired | **Same** (bit-identical) |
 | `rear_cue` | 2.5 kHz one-pole, gain 0.8, linear over the whole rear half; **chosen** | No equivalent in code. `RearOcclusion` parsed, unused. Data: one NPC engine layer's volume falls behind, pass-by samples swap | Closest thing we have, far stronger than HD's 14 kHz or 2048's 10 kHz, over a 20 degree ramp, with no gain drop | No equivalent |
 | `headphones` | SADIE II HRTF per voice; **ours** | **No equivalent outside VR.** In VR, objects to the PS4 system. "Headphones" in its menu is a dynamics preset | None | None |
 | `auto` | Headphones on a detected headphone route, else rear cue; **ours** | No such thing: channel count to `SURROUND_STATE` only, never headphones | None | None |
@@ -267,8 +267,34 @@ then a one-pole is a choice.
 So: the label `original` is accurate on Pulse and Pure only. On Omega, `original` cannot be Omega's until its Wwise pan and
 pass-by data play; today Pulse's pan on Omega is a stand-in, not an inheritance (Omega's lineage is HD), and it has no front/back at all,
 where Omega has some.
-On HD and 2048 it should carry the rear low-pass, which is open as a ready-to-wire thread. The `rear_cue` code comment in `oag_audio::mixer` says "the original cannot tell
-front from back", which is true of Pulse alone; that comment is left for the same wiring, as this lane changes no `.rs`.
+On HD `original` carries the rear low-pass (below, "Wired on HD"); 2048's is checked, applies, not wired. The `rear_cue` doc comment in `oag_audio::mixer` now says
+"Pulse's original cannot tell front from back".
+
+### Wired on HD
+
+`oag_title::Title::rear_occlusion` names the `<RearOcclusion>` child a title's original reads (HD: `Stereo`, `Sourced::measured`;
+`None` on Pulse, Pure, Omega and 2048, so Omega's dead element and 2048's unwired law play nothing). The frequency is the file's
+(`oag_tables::audio_config`, read by `oag_sound::hd_mix::Maps` off the same `GlobalAudioConfig.xml` blob as the mix; HD 14,000, the
+`DATA00` copy the original loads). `Mixer::set_rear_occlusion` takes it and `oag_audio::spatial::rear_occlusion_cutoff` is the law
+(ramp over 90..110 degrees, mirrored over 250..270 by folding the angle onto 0..180; `Placed.front` is `cos(angle)`).
+
+- **Chosen, not measured:** the filter is a one-pole at the cutoff (the consumer `FUN_003146e8` sub-voice `+0x48..+0x54` is unread), and the
+  `0.05 / 0.95` smoothing steps once per tick in `Mixer::set_front` (the update divisor is 1 in the file, its run-time value unread).
+  Front voices sit at 23,999 and take the filter's bit-exact pass.
+- **Moa Therma:** the circuit's own `AudioConfig.xml` is read beside its `.vex` (`TrackEmitters::low_pass_off`); `<DistanceFilter low_pass="0">`
+  turns the rear low-pass off for that race. Measured on HD's disc: `03_track` alone of the sixteen circuits (ground truth
+  `track_audio_hd_ground_truth`).
+- **What it does to HD's mix, measured on the real voices, and why that is not the original's strength**
+  (`rear_occlusion_wav_pair`, 48 kHz mixer, dead ahead against dead behind). HD's circuit voices are 803 distinct waveforms: 234 at 22 kHz
+  or lower (nothing above 14 kHz to cut) and 569 at 28-48 kHz. On the voice with the most energy above 14 kHz among those at 44 kHz and up
+  (Amphiseum, 44.4 kHz source, a 0.2 s loop) that band is 0.028 % of the voice's power dead ahead; behind, the band falls 2.3 dB and the whole voice 0.01 dB.
+  **That is our one-pole's ceiling, not the law's:** a one-pole at 14 kHz on a 48 kHz mixer has gain about -2.0 dB at 14 kHz and -2.8 dB at
+  Nyquist, so no voice can be cut more than that, and the measurement cannot show how hard the original's filter bites. What the player
+  hears of HD's law depends on the consumer's order and shape (`FUN_003146e8`, unread), which is the follow-up that also decides
+  whether `auto`'s speaker default should move to `original` on HD.
+- **2048: checked, applies, not wired.** Same law, 10,000 Hz, a second binary; but one voice kind's filter setter is an empty stub and the other
+  reaches `FUN_8134bde4`'s flags unread. Its `Title::rear_occlusion` stays `None`.
+- **Omega: checked, differs.** The element is parsed and nothing reads it (above).
 
 ## Names
 

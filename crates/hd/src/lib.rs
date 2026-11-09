@@ -62,6 +62,7 @@ pub mod hud;
 pub mod loading;
 pub mod loyalty;
 pub mod main_menu;
+pub mod pause_menu;
 pub mod pre_race;
 pub mod prompts;
 pub mod psn;
@@ -71,7 +72,7 @@ pub mod race;
 pub const TITLE: &Title = &Title {
     name: "Wipeout HD",
     archives: ArchiveCandidates {
-        patch: &[],
+        patch: PATCH_CANDIDATES,
         data: DATA_CANDIDATES,
         fe: FE_CANDIDATES,
         extra: EXTRA_CANDIDATES,
@@ -85,6 +86,20 @@ pub const TITLE: &Title = &Title {
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
+    // `docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`.
+    eliminator: oag_title::pre_race::Sourced::measured(
+        oag_title::eliminator::EliminatorRule::Score(oag_title::eliminator::ScoreRule {
+            damage: 0.1,
+            kill: 20.0,
+            lap: 5.0,
+            death: 5.0,
+            race_setup: r"Data\Plugins\Frontend\Gui\racebox_definition.xml",
+        }),
+    ),
+    // `docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`: `5 pi` rad/s, read live.
+    eliminator_flip: oag_title::pre_race::Sourced::measured(Some(
+        oag_title::eliminator::FlipRule { seconds: 0.2 },
+    )),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,
@@ -164,6 +179,9 @@ pub const TITLE: &Title = &Title {
     // [`names::FRONT_END_PLUGIN_DEFINITION`].
     // Measured: `PS_BUTTONS.fnt`'s three face-button glyphs - see `prompts`.
     prompts: prompts::PROMPTS,
+    profile: oag_title::profile::Profile::NAME_ONLY,
+    photo: oag_title::photo::Strings::HD,
+    photo_shot: Some(oag_title::photo::Accumulation::HD),
     // HD's own recovery is unread; Pulse's law.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
     // HD's authored mix owns the buses.
@@ -175,6 +193,7 @@ pub const TITLE: &Title = &Title {
     ),
     speech_follows_effects: oag_title::pre_race::Sourced::chosen(false),
     master_trim_db: oag_title::pre_race::Sourced::chosen(0.0),
+    rear_occlusion: Some(oag_title::pre_race::Sourced::measured("Stereo")),
     plugin_definition: names::FRONT_END_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),
@@ -183,6 +202,11 @@ pub const TITLE: &Title = &Title {
     // Built 2026-09-04: the craft render into a coverage map the track samples.
     original_shadows: oag_title::shadow::OriginalShadows::Built,
     weather: oag_title::weather::Weather::Unplayed,
+    // Measured, confidence 84: any non-zero small byte is full on (`docs/gameplay/rumble.md`).
+    rumble: oag_title::rumble::Rumble::Patterns(
+        oag_title::rumble::SmallMotor::OnOff,
+        oag_title::rumble::Triggers::Hd,
+    ),
     // **Pulse's two names, and HD answers them.** `Data\XML\WeaponStats_Race.xml`
     // resolves in `DATA00.PSARC` through the same path normalisation every other
     // HD entry goes through, and parses with thirteen weapons and four pickup
@@ -212,6 +236,10 @@ pub const TITLE: &Title = &Title {
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::measured(true),
         // Pulse's law, inherited: HD's pad grant is unread.
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout Pulse"),
+        // Run on RPCS3: no stamp in five Eliminator runs, `0.75` in a Single Race on the same
+        // instrument (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title"). Fury is
+        // the same disc and file.
+        pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(false),
         opponent_fire: oag_title::pre_race::Sourced::measured(oag_title::weapons::OpponentFire::HD),
     },
     weapon_models: race::WEAPON_MODELS,
@@ -220,6 +248,7 @@ pub const TITLE: &Title = &Title {
     // Measured: `docs/ui/campaign-screens.md`'s HD section. The
     // `Campaign Selection` ids are in `DATA06`'s entries copy alone.
     main_menu: main_menu::MAIN_MENU,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Hd,
         definition_entry: Some(campaign::DEFINITION_ENTRY),
@@ -236,6 +265,8 @@ pub const TITLE: &Title = &Title {
         grid_archive: Some(campaign::GRID_ARCHIVE),
         fury_card_gain: None,
         grid_card_pose: None,
+        selection_card_scale: None,
+        medal_tier_rows: None,
         frontend_glow: None,
         origin: oag_title::Origin::Measured,
         custom_campaigns: true,
@@ -596,6 +627,18 @@ const DATA_CANDIDATES: &[(&str, Platform)] = &[
 /// [`EXTRA_CANDIDATES`] and all of them mount.
 const FE_CANDIDATES: &[(&str, Platform)] = &[("USRDIR/DATA02.PSARC", Platform::Ps3)];
 
+/// Sony's update chain, on neither pressing's base: `data07` from 02.10 and
+/// `data08` from 02.30 on. Listed `data08` first, ahead of every base archive.
+///
+/// Read off 02.51's loader: everything but `data00`, `data07` and `data08` in
+/// sorted order, then `data00` and `data07`, then `data08` alone, later loads
+/// winning. So `data08` beats `data07` and both beat `DATA00`.
+/// `docs/ghidra/functions/ps3-hdfury-eu/update-0251.md`, "Archive load order".
+const PATCH_CANDIDATES: &[(&str, Platform)] = &[
+    ("USRDIR/DATA08.PSARC", Platform::Ps3),
+    ("USRDIR/DATA07.PSARC", Platform::Ps3),
+];
+
 /// The remaining archives, all mounted.
 ///
 /// `DATA03` is here for the disc and is also [`DATA_CANDIDATES`]' fallback for a
@@ -652,6 +695,17 @@ const FOREIGN_SERIALS: &[ForeignSerial] = &[
 /// Propagates [`Archives::open`].
 pub fn open(source: &str) -> Result<Archives> {
     Archives::open(source, TITLE)
+}
+
+/// As [`open`], with the update folder among `updates` that belongs to `source`
+/// mounted over a disc. A PSN install carries its updates in place and [`open`]
+/// finds them there.
+///
+/// # Errors
+///
+/// As [`open`].
+pub fn open_updated(source: &str, updates: &[oag_assets::UpdateFolder]) -> Result<Archives> {
+    Archives::open_updated(source, TITLE, updates)
 }
 
 /// Which of the two HD [`Title`]s `archives` is: [`psn::PSN`] when the bulk

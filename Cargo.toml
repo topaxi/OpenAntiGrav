@@ -134,6 +134,15 @@ thiserror = "2"
 # GPU rendering and windowing.
 wgpu = "30.0.1"
 winit = "0.30"
+# Idle inhibition on a Wayland desktop (`oag_game::idle`): the protocol bound over winit's own
+# connection. Already in the lockfile through winit.
+wayland-backend = { version = "0.3", features = ["client_system", "dlopen"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
+# The live refresh of an X11 window's output (`oag_game::x11_refresh`): winit's monitor report
+# freezes after window creation on X11, so RandR is asked directly over a connection of our own.
+# Already in the lockfile through winit.
+x11rb = { version = "0.13", default-features = false, features = ["randr"] }
 pollster = "1"
 
 # Diagnostics. Everything that used to be a bare `println!`/`eprintln!` note
@@ -198,7 +207,7 @@ resvg = { version = "0.48", default-features = false }
 #
 # **A library rather than our own.** `oag-formats` hand-rolls every *Wipeout*
 # format because nothing else will; MPEG is a published standard whose failure
-# mode is plausible-sounding noise, which is the same argument `miniz_oxide` and
+# mode is plausible-sounding noise, which is the same argument `flate2` and
 # `re_rav1d` are here on.
 #
 # Pure Rust with no C toolchain, the bar those two are held to. **MPL-2.0**,
@@ -224,15 +233,19 @@ opus-rs = "0.1"
 # four- and eight-channel files are measured there too.
 atrac9dec = "0.9"
 
-# Inflate, for the PS3 `.psarc` container. Pure Rust with no C toolchain, the
-# same bar `re_rav1d` is held to. `oag-formats` hand-rolls every *Wipeout*
-# format and the two checksums PNG needs, but deflate is a published standard
-# whose failure mode is silent garbage, so this one is not worth rewriting.
-# `default-features = false` drops `with-alloc`'s `simd` and the C-shim
-# feature; `with-alloc` is what provides `decompress_to_vec_zlib`.
-miniz_oxide = { version = "0.9", default-features = false, features = [
-  "with-alloc",
-] }
+# Inflate for every deflate and zlib stream we read: PSARC and WAD blocks
+# (`oag-formats`), `.vpk` entries and the PS4 package's PFSC sectors
+# (`oag-disc`). Pure Rust with no C toolchain, the same bar `re_rav1d` is held
+# to. `oag-formats` hand-rolls every *Wipeout* format and the two checksums PNG
+# needs, but deflate is a published standard whose failure mode is silent
+# garbage, so this one is not worth rewriting. The `zlib-rs` feature selects the
+# inflater: about 30 % faster than `miniz_oxide` on a whole HD PSARC read.
+# `default-features = false` only drops this edge's request for the
+# `miniz_oxide` backend; `png` asks for `flate2`'s default `rust_backend`, so
+# `flate2 -> miniz_oxide` 0.8 stays in the tree (`cargo tree -i miniz_oxide`).
+# It is not the inflater in use: `flate2` compiles `miniz_oxide` in only when no
+# zlib backend feature is on, and `zlib-rs` implies one (`any_zlib`).
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 
 # LZMA, for the Unity asset bundle container (`oag-unity`): the one compression
 # a track bundle uses that is not a handful of lines to hand-write. The same
@@ -535,6 +548,22 @@ opt-level = 2
 [profile.dev.package.oag-fx]
 opt-level = 2
 
+# The music path: ATRAC3+, ATRAC9, MP3 and Wwise decodes, the mixer and the
+# soundtrack's segment mixing, per-sample loops over whole songs.
+[profile.dev.package.oag-audio]
+opt-level = 2
+[profile.dev.package.oag-music]
+opt-level = 2
+[profile.dev.package.oag-sound]
+opt-level = 2
+
+# Every race's hulls, skins and shields, and every circuit's track file written
+# and read back: whole-disc walks in code that ran at opt-level 0.
+[profile.dev.package.oag-livery]
+opt-level = 2
+[profile.dev.package.oag-trackfile]
+opt-level = 2
+
 # The mesh pipeline and the post-processing chain were `oag-render`'s two
 # hottest modules; the ground-truth tests that decode a whole model and run a
 # pass over it keep the same opt-level they had there.
@@ -616,4 +645,14 @@ opt-level = 0
 [profile.quick.package.oag-mesh]
 opt-level = 0
 [profile.quick.package.oag-post]
+opt-level = 0
+[profile.quick.package.oag-audio]
+opt-level = 0
+[profile.quick.package.oag-music]
+opt-level = 0
+[profile.quick.package.oag-sound]
+opt-level = 0
+[profile.quick.package.oag-livery]
+opt-level = 0
+[profile.quick.package.oag-trackfile]
 opt-level = 0

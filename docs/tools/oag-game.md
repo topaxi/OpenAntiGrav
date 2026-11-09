@@ -160,6 +160,7 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 | `--trace-out <file.csv>` | Simulation only, no window: write our per-tick state to a CSV in the capture's own columns, for `oag-trace compare` against one from `scripts/psp-trace.py`. Refused together with `--screenshot`. |
 | `--input-script <file.inputs>` | With `--screenshot` or `--trace-out`: drive the run from a committed `.inputs` file instead of `--hold`/`--press` - see [the verification protocol](../reverse-engineering/verification-protocol.md). |
 | `--dry-run` | Report what was loaded and exit. |
+| `--probe-pad` | Print every connected pad's button presses and releases with the value `[controls.music]` takes for them (a button name or `raw:CODE`), until Ctrl-C. Opens no window and no audio; refused with `--race`, `--screenshot`, `--dry-run`, `--trace-out`, `--launcher` and `--drive`. See "Music controls in a race". |
 | `--drive <steps>` / `--drive-file <file>` | Run our own menus with no window, driven by a script, and exit non-zero when a step times out or a row is not there. See [Driving the menus with no window](#driving-the-menus-with-no-window). |
 | `--state-log <file>` | With `--drive`, write the game's state as one JSON line per change to this file (stderr when absent). |
 
@@ -199,9 +200,12 @@ sends the state lines to a file, stderr otherwise. `--drive` needs one disc imag
 | `boot` | Tap Start and Cross in turn while the disc's own front end is up (logo, language list) until our menus open. Those screens are the disc's and have no rows to select. |
 | `until <key=value ...> [within N]` | Wait until every condition holds. |
 | `expect <key=value ...>` | Fail now unless every condition holds. |
-| `select <row> [within N]` | Move focus to a row by pressing buttons, never by setting it. `<row>` is a row `id`, a setting key (`race.mode`), an action name (`launch_race`, `quit`: the same in every language), a label (case-insensitive) or `#index`; on a picker, an entry id (`03_Track`, `Feisar`). |
+| `select <row> [within N]` | Move focus to a row by pressing buttons, never by setting it. A row not on the screen yet is waited for until the budget is gone (a scan may add it). `<row>` is a row `id`, a setting key (`race.mode`), an action name (`launch_race`, `quit`: the same in every language), a label (case-insensitive) or `#index`; on a picker, an entry id (`03_Track`, `Feisar`). |
 | `set <setting>=<value> [within N]` | `select` the row of that setting, then step it right until it reads the value (its stored value, its label, or for a file the file name). An option the row lists but marks unusable (the custom-track check is still running) is waited for, then the step times out naming why. |
 | `press <button> ...` | Tap each in turn: held one tick, released the next. Waits out a page transition first. |
+| `hold <button> ... N` | Hold every named button down together for N ticks, then let go: `hold left 60` turns photo mode's camera, `hold select up 30` zooms it. |
+| `rstick <x> <y> N`, `lstick <x> <y> N` | A pad that is not there: its right (or left) stick held at `x y` (`-1` to `1`, up positive) for N ticks, then let go. The right stick is view-side only (photo mode zooms and tilts with it, the viewer jogs); the left is the snapshot stick, as a real pad's. |
+| `pull <l2\|r2> <amount> N` | A trigger pulled `amount` (`0` to `1`) for N ticks. It raises its shoulder's (or, under `thrust_brake`, CROSS's) button in the race's snapshot as a real trigger does, and the replay viewer and photo mode read it apart from the buttons: L2 and R2 scrub, a full R2 is PLAY in photo mode. |
 | `ticks N` | Let N ticks pass. |
 | `screenshot <path>` | Draw the next frame offscreen through the window's own draw and write a PNG. The only step that draws. |
 | `quit` | End the run. Reaching the end of the script does too. |
@@ -210,7 +214,8 @@ Conditions are `key=value` or `key!=value`, case-insensitive: `stage` (`launcher
 `frontend`, `menu`, `race`), `frontend` (the disc's state name), `page` (the menu page, under
 whatever is open over it), `screen` (`page`, `picker`, `campaign`, `prompt`, ...), `screen.id`
 (the page id, or `track-select`/`ship-select`), `title`, `focus` (the focused row's id, setting
-or label - any of them holds) and `race.title|track|track_file|team|variant|mode|source|craft_source` (only once a race is loading).
+or label - any of them holds), `opening_reads` (`landed` once what the next selection screen
+opens on is read, else `reading`; `stage=menu` only), `photo` (photo mode's lens, `internal`, `close` or `track`, or `none`, on `stage=race`), `replay` (the replay viewer while a recording is watched on `stage=race`: `opening`, `playing`, `paused`, `ended` or `stopped`, the last when the build stops matching the recording) `replay_at` (`at/length/built` in ticks, `-` before the first keyframe), `replay_follow` (the grid slot the viewer's picture follows) and `replay_hud` (`on` or `off`), `photo_fx` (photo mode's picture controls, the rewind row's tick, `orbit`, `pan`, `fov`, `subject` and `hud`) and `photo_job` (`drawn/frames` of a photo shot of several frames under way, else `none`; a drive draws only the frames it is asked for, and asks for one each frame while such a shot runs), `endrace` (`photo` while `Race End Photo` is up, `other` for the rest of the end screens) and `race.title|track|track_file|team|variant|mode|source|craft_source|target` (only once a race is loading; `target` is the Eliminator's kills or points to win, on `stage=race` in that mode). On `stage=race` the state lines also carry `hash` (the race's state hash) and `sim_tick`, so a line is written for every tick the race steps and none while it stands still (photo mode, the pause menu).
 
 **What the game reports.** One JSON line whenever anything but the tick changed. A menu state:
 
@@ -789,6 +794,84 @@ through it.
 - **A from-bytes entry point for `track`.** `track::load` takes an archive
   specifier, so a caller that also wants the file's collision nodes - which every
   caller that wants to drive on it does - decompresses the same blob twice.
+
+## Music controls in a race
+
+Six pad actions steer the race music while a race is running and not paused (`oag_input::music::MusicAction`,
+glued by `oag_game::music_pad`). Output only: they never reach `World`, the state hash or a replay, and
+the keyboard has no route. A press made in a menu or in pause is spent there and does nothing on resume.
+Nothing is bound by default. A player binds an action in `settings.toml`, no rebuild:
+
+```toml
+[controls.music]
+music_up = "RightThumb"       # right stick click
+music_down = "LeftThumb"      # left stick click
+next_song = "raw:300"         # a control only a code names, e.g. a back paddle
+```
+
+Keys: `show_song`, `restart_song`, `next_song`, `previous_song`, `music_up`, `music_down`. A value is a
+button name (`South`, `East`, `North`, `West`, `C`, `Z`, `LeftTrigger`, `LeftTrigger2`, `RightTrigger`,
+`RightTrigger2`, `Select`, `Start`, `Mode`, `LeftThumb`, `RightThumb`, `DPadUp`, `DPadDown`, `DPadLeft`,
+`DPadRight`; any case) or `raw:CODE` (decimal or `0x` hex). An unreadable value, an unknown key, or a
+control that is also a game button logs one `warn` naming the key and leaves that action unbound; an
+action never bound is not written to a fresh file. The table is `oag_input::music::MusicBindings`, read
+by `oag_game::settings::Controls::music_bindings`.
+
+To find a control's value, run `oag-game --probe-pad --no-audio` and press it: each press and release of
+every connected pad prints as `NAME: pressed RightThumb (code 318)` (or `raw:CODE` for an unnamed control, and
+a note when it is a game button and cannot be bound). It opens no window and no audio; stop it with Ctrl-C.
+The back paddles of the maintainer's 8BitDo Ultimate (2dc8:3109 dongle, 2dc8:3106 wired) sent no event the
+kernel or `gilrs` reported when probed, so they stay unreachable until a remap makes one appear.
+
+| Action | Gesture | Does |
+| --- | --- | --- |
+| Show song | press | shows the current song's name on the title's own now-playing display again |
+| Restart song | press | seeks the playing song to its start (not a new song for the display) |
+| Next song | press | the playlist's next index, wrapping |
+| Previous song | press | the playlist's previous index, wrapping |
+| Music up | hold | raises the music to the slider's maximum, then lowers every other bus together down to 25 % |
+| Music down | hold | walks the same line back (restores the others first), then lowers the music to 10 % of its level |
+
+- **The playlist** is one numbered list (the booted soundtrack, then enabled folders and discs). There is no shuffle,
+  so previous is exactly the song that played before when the player has only gone forward. A list of one
+  song, no race music, a song still held for the green light, or a track still being fetched: skip does nothing.
+- **The volume line** is one integer position, so up then down returns exactly. A full sweep of either stage is 120 ticks
+  (2 s). The trims sit on the mixer apart from the bus gains (`Mixer::set_bus_trim`), so HD's authored mix, which rewrites
+  its bus gains every tick, does not undo them. The music's floor is 10 % of the player's level (-20 dB), never silence;
+  a muted music slider does not go up. Nothing is saved: a new race, leaving or restarting a race, and any settings change
+  put the player's settings back.
+- **The song line**: Pulse, Pure, HD, Omega and 2048 all author a now-playing marquee, so show-song re-shows that and
+  no title needs a line of ours. A split screen draws no marquee (`Race::now_playing`), so show-song is silent there. In the
+  countdown restart and skip act on a song already sounding; the song is held for the green light on titles that hold it.
+
+Evidence: `now_playing_ground_truth::pulse_pad_music_controls_move_the_song_and_leave_the_simulation_alone`
+(restart seeks to zero, next and previous change the displayed song, the state hash equals a run with no pad input) and
+the unit tests in `oag-sound` (`music_line`, `song_control`) and `oag-input` (`music`).
+
+## Idle inhibition
+
+On a Wayland desktop the window holds an `idle-inhibit-unstable-v1` inhibitor while
+someone is playing, so a controller-only session is not locked or blanked mid-race. A
+compositor counts only input it handles itself, and the pad is read straight from the
+device, so without this a pad player looks idle to swayidle or a screen saver.
+
+It is held while **a race is running and not paused, or a pad was touched in the last
+60 seconds** (`oag_game::idle::Rule`). A paused race, a finished one and a menu nobody
+touches let the machine idle; navigating a menu with the pad does not. A minimised or hidden
+window releases it, because the protocol is per surface. Only the first window holds it in
+a `--windows` run. A compositor without the protocol gets one `debug` line and nothing else.
+
+winit 0.30 does not expose the protocol, so the inhibitor is created on winit's own
+connection from the window's raw display and surface handles (`oag_game::idle::wayland`,
+the one `unsafe` block, scoped with a comment). X11, XWayland (so a gamescope session, whose
+own session handles idle), Windows, macOS, phones, the web and `--screenshot` runs hold
+nothing. It is output-side state: never in `World`, never hashed.
+
+Checking it with no window on your desktop: start a private headless sway
+(`WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1`, its own
+`XDG_RUNTIME_DIR`), run `oag-game` against its `WAYLAND_DISPLAY`, and read `inhibit_idle`
+from `swaymsg -t get_tree`: `true` in a `--race`, `false` in an untouched front end with no
+pad attached.
 
 ## Requirements
 

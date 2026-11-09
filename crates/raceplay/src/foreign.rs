@@ -206,6 +206,7 @@ pub fn entry(path: &Path) -> anyhow::Result<crate::catalogue::Track> {
         available_in_zone: false,
         unlock_grid: None,
         sound_register: None,
+        string_id: None,
         foreign: Some(path.to_path_buf()),
     })
 }

@@ -1426,7 +1426,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
- "miniz_oxide 0.8.9",
+ "miniz_oxide",
  "zlib-rs",
 ]
 
@@ -2748,15 +2748,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "miniz_oxide"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b63fbc4a50860e98e7b2aa7804ded1db5cbc3aff9193adaff57a6931bf7c4b4c"
-dependencies = [
- "adler2",
-]
-
-[[package]]
 name = "mio"
 version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3002,8 +2993,8 @@ dependencies = [
 name = "oag-assets"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "log",
- "miniz_oxide 0.9.1",
  "oag-disc",
  "oag-formats",
  "oag-pulse",
@@ -3068,7 +3059,7 @@ dependencies = [
  "aes",
  "chd",
  "dirs",
- "miniz_oxide 0.9.1",
+ "flate2",
  "num-bigint",
  "oag-testdata",
  "oag-thread",
@@ -3099,7 +3090,7 @@ version = "0.1.0"
 name = "oag-formats"
 version = "0.1.0"
 dependencies = [
- "miniz_oxide 0.9.1",
+ "flate2",
  "oag-assets",
  "oag-bytes",
  "oag-disc",
@@ -3201,10 +3192,14 @@ dependencies = [
  "toml",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
  "web-sys",
  "web-time",
  "wgpu",
  "winit",
+ "x11rb",
  "zip",
 ]
 
@@ -3284,7 +3279,10 @@ version = "0.1.0"
 dependencies = [
  "gilrs",
  "log",
+ "oag-core",
  "oag-gameplay",
+ "oag-mod",
+ "oag-tables",
  "winit",
 ]
 
@@ -3333,6 +3331,7 @@ dependencies = [
  "oag-rcs",
  "oag-shader-check",
  "oag-texture",
+ "oag-thread",
  "oag-vex",
  "pollster",
  "serde",
@@ -3355,6 +3354,7 @@ dependencies = [
  "oag-ext-abi",
  "oag-schema",
  "oag-tables",
+ "oag-texture",
  "semver",
  "serde",
  "thiserror 2.0.21",
@@ -3570,6 +3570,7 @@ dependencies = [
  "png",
  "pollster",
  "serde",
+ "thiserror 2.0.21",
  "toml",
  "toml_edit",
  "wat",
@@ -3622,6 +3623,7 @@ dependencies = [
  "oag-bytes",
  "oag-core",
  "oag-gameplay",
+ "oag-schema",
  "serde",
  "thiserror 2.0.21",
  "toml",
@@ -3719,7 +3721,11 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-pulse",
+ "oag-source",
  "oag-testdata",
+ "oag-vex",
+ "png",
+ "zip",
 ]
 
 [[package]]
@@ -3827,6 +3833,7 @@ dependencies = [
  "oag-race",
  "oag-tables",
  "oag-testdata",
+ "oag-title",
  "oag-ui",
 ]
 
@@ -4490,7 +4497,7 @@ dependencies = [
  "crc32fast",
  "fdeflate",
  "flate2",
- "miniz_oxide 0.8.9",
+ "miniz_oxide",
 ]
 
 [[package]]

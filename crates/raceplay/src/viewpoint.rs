@@ -395,6 +395,18 @@ impl Race {
         self.extra_viewpoint().unwrap_or_else(|| self.player_slot())
     }
 
+    /// The craft the picture being drawn frames: photo mode's subject while the mode is open,
+    /// else [`Self::viewed_slot`]. What places the weather and the boost lens;
+    /// [`Self::viewed_slot`] stays the key of the view's scene blocks and histories, which a
+    /// change of subject must not move.
+    #[must_use]
+    pub fn framed_slot(&self) -> usize {
+        match (self.extra_viewpoint(), self.view.photo.as_ref()) {
+            (None, Some(photo)) => photo.subject(),
+            _ => self.viewed_slot(),
+        }
+    }
+
     /// How many times the picture being drawn has jumped to a different shot - what a camera
     /// history watches to throw its previous frame away. The player's view is
     /// [`Self::camera_cuts`]; an extra seat's chase camera jumps when that craft respawns, and
@@ -402,7 +414,7 @@ impl Race {
     #[must_use]
     pub fn viewed_camera_cuts(&self) -> u32 {
         match self.extra_viewpoint() {
-            Some(slot) => self.placements_of(slot),
+            Some(slot) => self.placements_of(slot).wrapping_add(self.view.restores),
             None => self.camera_cuts(),
         }
     }

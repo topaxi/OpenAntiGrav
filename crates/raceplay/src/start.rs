@@ -42,6 +42,8 @@ impl Race {
             #[cfg(feature = "view")]
             trail_sparks,
             #[cfg(feature = "view")]
+            request,
+            #[cfg(feature = "view")]
             campaign_event,
             seed,
             zone,
@@ -86,6 +88,8 @@ impl Race {
             announcer,
             #[cfg(feature = "view")]
             class_announcer,
+            #[cfg(feature = "view")]
+            rumble,
             zone_stages,
             countdown_voice,
             countdown_beat,
@@ -110,6 +114,8 @@ impl Race {
             autopilot_pad_grants,
             reset_triggers,
             opponent_fire,
+            score_law,
+            flip_law,
             speedup_pads,
             weapon_pads,
             weapons,
@@ -184,6 +190,8 @@ impl Race {
             #[cfg(feature = "view")]
             leach_strip,
             #[cfg(feature = "view")]
+            missile_trail,
+            #[cfg(feature = "view")]
             destroy_stations,
             #[cfg(feature = "view")]
             intro_camera,
@@ -194,6 +202,7 @@ impl Race {
             extensions,
             ..
         } = setup;
+        let score_pace = crate::score_pace::ScorePace::of(score_law, difficulty);
 
         // The mode gate, applied once at construction rather than on every tick,
         // because that is where the original applies it: `World_CollectNodeLists`
@@ -563,7 +572,11 @@ impl Race {
                 // The level scales how a pilot treats other craft and leaves
                 // the line it drives alone, so a shy pilot at novice is still
                 // shy rather than generically slow.
-                ai_pilots[slot as usize] = difficulty.temper(&entry.pilot);
+                ai_pilots[slot as usize] = crate::score_pace::ScorePace::temper_opponent(
+                    score_pace,
+                    difficulty,
+                    &entry.pilot,
+                );
                 pilot_names[slot as usize].clone_from(&entry.name);
                 // **The digest, into the world snapshot.** A pilot can come out
                 // of the player's own config directory, so two machines running
@@ -675,24 +688,24 @@ impl Race {
         let race = Self {
             sim: RaceSim {
                 extensions: crate::extensions::Extensions::new(extensions),
-                racing_line: line,
-                ai_order: order,
-                routes,
+                racing_line: Arc::new(line),
+                ai_order: order.into(),
+                routes: routes.into(),
                 // Built below, once the field is seated: see
                 // `Race::field_speed_plan`.
                 speed_plan: None,
                 plans_built: false,
                 plan_reference: None,
-                hull_plans: Vec::new(),
+                hull_plans: Arc::default(),
                 ship_plan: [None; oag_gameplay::MAX_SHIPS],
-                plan_steps: super::speed_plan::PlanSteps::default(),
+                plan_steps: Arc::default(),
                 // **Degraded from the measured tuning**, never boosted toward it -
                 // see `oag_ai::Difficulty`. At the top level this is the
                 // measurement unchanged.
                 ai_tuning: difficulty.tune(&oag_ai::Tuning::default()),
-                ai_pilots,
+                ai_pilots: Arc::new(ai_pilots),
                 finished_thrust,
-                original_tables,
+                original_tables: original_tables.map(Arc::new),
                 original_ai: None,
                 race_seed: seed,
                 people,
@@ -705,9 +718,9 @@ impl Race {
                 autopilot_ours: false,
                 opponent_autopilot,
                 world,
-                collision,
-                spline,
-                course,
+                collision: Arc::new(collision),
+                spline: Arc::new(spline),
+                course: course.map(Arc::new),
                 // Only Zone reads these, so the other two modes carry `None` and the
                 // engine keeps its ordinary throttle path.
                 zone: zone.filter(|_| mode == Mode::Zone),
@@ -765,6 +778,9 @@ impl Race {
                 autopilot_absorb_cancels,
                 autopilot_pad_grants,
                 reset_triggers,
+                score_law,
+                score_pace,
+                flip_law,
                 fire_terms: crate::field::fire_terms(opponent_fire, weapon_ai.as_ref(), difficulty),
                 autopilot: false,
                 cues: Vec::new(),
@@ -772,30 +788,36 @@ impl Race {
                 announcements: Vec::new(),
                 class_announcements: Vec::new(),
                 contact_cue_cooldown: [0.0; oag_gameplay::MAX_SHIPS],
+                wall_contact: [None; oag_gameplay::MAX_SHIPS],
                 // Every pad starts due for a real test. `Pad_Bind` zeroes the same
                 // cache at load, so the first tick measures rather than trusting a
                 // distance nothing has computed yet.
                 pad_distance: std::array::from_fn(|_| vec![0.0; speedup_pads.len()]),
-                speedup_pads,
+                speedup_pads: speedup_pads.into(),
                 // The same broadphase, and the same "due for a real test" start.
                 weapon_pad_distance: std::array::from_fn(|_| vec![0.0; weapon_pads.len()]),
                 // Every pad starts collectable. The original's `+0x1a0` is zero
                 // until something stamps it, and nothing stamps it at load.
                 weapon_pad_refresh_left: vec![0.0; weapon_pads.len()],
-                weapon_pads,
+                weapon_pads: weapon_pads.into(),
                 weapon_pad_current: [None; MAX_SHIPS],
                 weapon_pad_refresh,
-                weapon_pad_line,
-                pad_seeking: super::PadSeeking::for_mode(mode),
+                weapon_pad_line: weapon_pad_line.into(),
+                // A score Eliminator steers for no pad (`crate::score_pace`).
+                pad_seeking: if score_pace.is_some() {
+                    super::PadSeeking::Off
+                } else {
+                    super::PadSeeking::for_mode(mode)
+                },
                 fire_law: if weapon_ai.is_some() {
                     super::FireLaw::Original
                 } else {
                     super::FireLaw::Ours
                 },
-                weapon_ai,
-                weapons,
-                allowed_weapons,
-                class,
+                weapon_ai: weapon_ai.map(Arc::new),
+                weapons: weapons.map(Arc::new),
+                allowed_weapons: allowed_weapons.into(),
+                class: class.into(),
                 class_gravity_scale,
                 class_gravity_term,
                 start_boost,
@@ -831,6 +853,7 @@ impl Race {
                 hull_shake: std::array::from_fn(|_| None),
                 hull_shake_law: hull_shake,
                 hull_shake_on: true,
+                player_tags_on: false,
                 seat: None,
                 person_names: Vec::new(),
                 contact: super::contact_fx::ContactFx::new(),
@@ -845,6 +868,8 @@ impl Race {
                 world_clock_offset,
                 gantry_seconds,
                 wreck_ended_tick: None,
+                restores: 0,
+                photo: None,
                 finish_camera: (!destroy_stations.is_empty()).then(|| {
                     super::finish_camera::FinishCamera::new(
                         destroy_stations.clone(),
@@ -903,6 +928,7 @@ impl Race {
                 track_emitters,
                 announcer,
                 class_announcer,
+                rumble,
                 stage: psys::Stage::new(),
                 scenery_fx: super::scenery_fx::SceneryFx::new(scenery_fx),
                 engine_flare: [None; MAX_SHIPS],
@@ -927,6 +953,10 @@ impl Race {
                 leach_beam_ribbon: std::array::from_fn(|_| None),
                 leach_beam_rng: Rng::new(LEACH_BEAM_SEED),
                 rocket_smoke: crate::rocket_smoke::Smoke::new(),
+                hd_missile_streaks: missile_trail
+                    .and_then(|trail| trail.blast_streak)
+                    .map(missile_blast::streaks::Streaks::new),
+                missile_smoke: missile_trail.map(crate::missile_smoke::Smoke::new),
                 leach_ball_elapsed: [0.0; oag_weapons::projectile::leach_beam::POOL_SIZE],
                 plasma_blasts: [None; blast_models::PLASMA_BLAST_SLOTS],
                 bomb_blasts: [None; bomb_blast::BOMB_BLAST_SLOTS],
@@ -966,6 +996,7 @@ impl Race {
                 absorb_shell: Default::default(),
                 stage_rng: Rng::new(STAGE_SEED),
                 results: None,
+                results_revision: 0,
                 run_stats: results::RunStats::default(),
                 shield_was_up: false,
                 // Every bar starts at `0.0`, not `1.0`: the pool is `0.0` until
@@ -993,7 +1024,7 @@ impl Race {
                 flap_graphics: setup.airbrake_graphics,
             },
             #[cfg(feature = "view")]
-            replay: replay::ReplayState::default(),
+            replay: replay::ReplayState::requested(request),
             quiet: false,
             speed_plan_job: None,
             #[cfg(feature = "view")]

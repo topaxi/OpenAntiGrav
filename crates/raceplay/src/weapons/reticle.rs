@@ -75,6 +75,7 @@ impl Race {
         let locked = self.sim.locks[primary].locked();
         self.view.sight_state = self.view.sight.follow(self.sim.dt, projected, locked);
         self.update_viewed_sights();
+        self.advance_tag_fades();
     }
 
     #[cfg(feature = "view")]
@@ -198,7 +199,7 @@ impl Race {
     /// `leachbeam_sight_*` widgets, so a LeachBeam there has no window to run
     /// and gets no reticle rather than borrowing the Missile's.
     pub(crate) fn sight_held(&self, slot: usize) -> Option<sight::Held> {
-        let stats = self.sim.weapons.as_ref()?;
+        let stats = self.sim.weapons.as_deref()?;
         match self.sim.world.ships[slot].pickup.weapon? {
             oag_tables::weapons::Weapon::Missile => stats.missile().map(|_| sight::Held::Missile),
             oag_tables::weapons::Weapon::LeachBeam => {
@@ -233,7 +234,7 @@ impl Race {
     /// units out, so nothing visible turns on it.
     pub(crate) fn sight_target(&self, slot: usize) -> Option<u8> {
         let held = self.sight_held(slot)?;
-        let stats = self.sim.weapons.as_ref()?;
+        let stats = self.sim.weapons.as_deref()?;
         let count = self.sim.world.ship_count as usize;
         let ship = &self.sim.world.ships[slot];
         let (origin, min, max) = match held {
@@ -266,7 +267,7 @@ impl Race {
             ship.physics.body.forward(),
             min,
             max,
-            self.sim.course.as_ref().map(oag_race::Course::length),
+            self.sim.course.as_deref().map(oag_race::Course::length),
         )
     }
 }

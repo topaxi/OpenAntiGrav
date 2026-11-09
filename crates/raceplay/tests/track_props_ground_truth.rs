@@ -13,6 +13,9 @@
 //!     --run-ignored only -E 'test(/track_props_ground_truth::/)' --no-capture
 //! ```
 //!
+//! `Distance::Trigger`: a track with a trigger pair, a module answering `trigger-enter` on the
+//! first with a `transit` to the second, and the craft coming out where the second stands.
+//!
 //! The modules are WAT written here. A lone craft flown by this project's driver,
 //! throttle held, the same in every run until the first pad: the runs differ only by
 //! the module.
@@ -20,6 +23,8 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+use oag_core::math::Vec3;
 
 use oag_ext_abi::track::{
     ENTITIES_AT, ENTITY_FIRST_PROP, ENTITY_LEN, ENTITY_PROP_COUNT, PROP_LEN, PROPS_AT, prop_key,
@@ -39,6 +44,9 @@ const TRACK: usize = 8192;
 const TICKS: u32 = 2400;
 /// How far each speed pad's box is widened to either side, world units.
 const WIDEN: f32 = 20.0;
+/// Half the side of a trigger box, world units: wider than Hillside's road, so the craft's
+/// line passes through it.
+const HALF: f32 = 30.0;
 
 /// Hillside with every speed pad widened across the road (the driver's line passes
 /// beside them otherwise) and, with `boost`, `boost = 2.0` on that speed pad; written
@@ -56,6 +64,35 @@ fn hillside(boost: Option<usize>, tag: &str) -> Option<PathBuf> {
         track.speedup_pad_props[pad].insert("boost".into(), 2.0);
     }
     let dir = std::env::temp_dir().join(format!("oag-track-props-{}-{tag}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for entry in std::fs::read_dir(source.parent().unwrap()).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|e| e == "png") {
+            std::fs::copy(&path, dir.join(path.file_name().unwrap())).unwrap();
+        }
+    }
+    let manifest = dir.join("hillside.track.toml");
+    oag_trackfile::write(&track, &manifest).expect("writable");
+    Some(manifest)
+}
+
+/// Hillside with two trigger boxes, the entrance and the exit of a portal pair, each centred
+/// on `entrance` / `exit` and `HALF` wide in every direction; written like [`hillside`].
+fn hillside_with_triggers(entrance: Vec3, exit: Vec3, tag: &str) -> Option<PathBuf> {
+    let source = oag_testdata::exact(HILLSIDE)?;
+    let mut track = oag_trackfile::read(&source).expect("Hillside reads").track;
+    let at = |name: &str, p: Vec3| oag_trackfile::props::Trigger {
+        name: name.to_string(),
+        to_world: [
+            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, p.x, p.y, p.z, 1.0,
+        ],
+        min: [-HALF; 3],
+        max: [HALF; 3],
+        props: oag_trackfile::props::Props::new(),
+        emits: None,
+    };
+    track.triggers = vec![at("entrance", entrance), at("exit", exit)];
+    let dir = std::env::temp_dir().join(format!("oag-track-portal-{}-{tag}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     for entry in std::fs::read_dir(source.parent().unwrap()).unwrap() {
         let path = entry.unwrap().path();
@@ -338,5 +375,143 @@ fn a_slot_held_at_zero_gets_no_push_plume_or_sound_and_still_hears_each_pad() {
     assert_eq!(
         heard as usize, crossed,
         "the module hears every pad entered"
+    );
+}
+
+/// On `trigger-enter` of trigger 0, sends `transit{slot 0, 2 ticks, Trigger(1), 1.0}`.
+fn portal() -> race::extensions::Source {
+    use oag_ext_abi::{Command, Distance, Slot};
+    let record = Command::Transit {
+        slot: Slot::new(0).unwrap(),
+        ticks: 2,
+        distance: Distance::Trigger(1),
+        exit_factor: 1.0,
+    }
+    .encode();
+    let word = |at: usize| i32::from_le_bytes(record[at..at + 4].try_into().unwrap());
+    let reply = IO + REPLY_AT;
+    let cmd = reply + 4;
+    module(
+        "test.portal",
+        &format!(
+            "(local.set $i (i32.const 0))
+             (block $done (loop $next
+               (br_if $done (i32.ge_u (local.get $i) (i32.load (i32.const {count}))))
+               (local.set $p (i32.add (i32.const {events}) (i32.mul (local.get $i) (i32.const {EVENT_LEN}))))
+               (if (i32.and
+                     (i32.eq (i32.load8_u (local.get $p)) (i32.const 7))
+                     (i32.eqz (i32.load16_u (i32.add (local.get $p) (i32.const 2)))))
+                 (then
+                   (i32.store (i32.const {reply}) (i32.const 1))
+                   (i32.store (i32.const {cmd}) (i32.const {w0}))
+                   (i32.store (i32.const {cmd4}) (i32.const {w1}))
+                   (i32.store (i32.const {cmd8}) (i32.const {w2}))))
+               (local.set $i (i32.add (local.get $i) (i32.const 1)))
+               (br $next)))",
+            count = IO + EVENT_COUNT_AT,
+            events = IO + EVENTS_AT + EVENT_KIND,
+            w0 = word(0),
+            w1 = word(4),
+            w2 = word(8),
+            cmd4 = cmd + 4,
+            cmd8 = cmd + 8,
+        ),
+    )
+}
+
+/// The course ring point nearest `at`, and its position.
+fn ring_point_at(race: &race::Race, progress: f32) -> Vec3 {
+    let course = race.course().expect("a course");
+    let index = course.index_at_progress(progress).expect("on the lap");
+    course.position(index).expect("a ring point")
+}
+
+#[test]
+#[ignore = "needs a Pulse disc image, the mod examples and --features extensions"]
+fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
+    let Some(plain) = hillside(None, "portal-plain") else {
+        return;
+    };
+    let (entrance, exit, length) = {
+        let image = oag_testdata::image("data/images/pulse-psp-eu.chd").unwrap();
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            foreign_track: Some(plain),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            no_driver_for_class: true,
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        let race = race::Race::start(loaded.setup);
+        let length = race.course().expect("a course").length();
+        (
+            ring_point_at(&race, 150.0),
+            ring_point_at(&race, length * 0.6),
+            length,
+        )
+    };
+    let file = hillside_with_triggers(entrance, exit, "portal").unwrap();
+    let image = oag_testdata::image("data/images/pulse-psp-eu.chd").unwrap();
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        foreign_track: Some(file),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        no_driver_for_class: true,
+        extensions: vec![portal()],
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    race.set_autopilot(true);
+    let mut input = oag_gameplay::input::Input::new();
+    let mut tick = |race: &mut race::Race| {
+        input.begin_frame(Button::Cross.bit());
+        race.tick(&PlayerInputs::single(oag_gameplay::InputSnapshot {
+            buttons: input,
+            ..oag_gameplay::InputSnapshot::new()
+        }));
+    };
+
+    let mut before = None;
+    for _ in 0..TICKS {
+        tick(&mut race);
+        if race.sim.world.ships[0].transit.is_some() {
+            before = race.sim.world.ships[0].standing.progress;
+            break;
+        }
+    }
+    let before = before.expect("the craft entered the first trigger and the module answered");
+    let went = race.sim.world.ships[0].transit.expect("in transit");
+    let to = race.course().unwrap().position(went.to as usize).unwrap();
+    assert!(
+        to.distance(exit) < 5.0,
+        "the exit is the course point at the second trigger's centre"
+    );
+    for _ in 0..3 {
+        tick(&mut race);
+    }
+    let ship = &race.sim.world.ships[0];
+    assert_eq!(ship.transit, None, "out after its ticks");
+    let progress = ship.standing.progress.expect("located");
+    println!(
+        "entered at progress {before:.0} of {length:.0}, out at {progress:.0}; exit trigger at {:.1} units",
+        ship.physics.body.position.distance(exit)
+    );
+    assert!(
+        (progress - length * 0.6).abs() < 80.0,
+        "came out near the exit trigger's progress: {progress}"
+    );
+    assert!(
+        ship.physics.body.position.distance(exit) < 80.0,
+        "and on its road"
+    );
+
+    // A trigger the track does not have is a refusal that names it.
+    let refused = race.begin_transit(0, 2, race::transit::Distance::Trigger(9), 1.0);
+    assert!(
+        refused.unwrap_err().contains("no trigger 9"),
+        "named by its index"
     );
 }

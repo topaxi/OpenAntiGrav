@@ -67,6 +67,14 @@ pub struct Weapons {
     /// bit clear (`0x0883f0c0`), so a pad crossed mid-stint grants nothing; the pad
     /// still stamps its refresh timer. Read on Pulse alone; the others run its law.
     pub autopilot_pad_grants: crate::pre_race::Sourced<bool>,
+    /// Whether a weapon pad is stamped inert for a while after a hit in an Eliminator race.
+    ///
+    /// Pulse's `WeaponPads_TestCraft` stamps `elimination_refresh_time` (`0.05` s, two grey
+    /// frames). HD, 2048 and Omega author `0.15` and never stamp in Eliminator: the pad stays
+    /// armed and a craft with an empty slot is handed a pickup on every entry
+    /// (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title"). Other modes stamp
+    /// `refresh_time` on every title. A title with no Eliminator (Pure) never reads it.
+    pub pads_stamp_in_eliminator: crate::pre_race::Sourced<bool>,
     /// Which terms of `WeaponAi_DecideFireOrAbsorb` the title's opponents roll
     /// by, on the [`Self::ai`] odds.
     pub opponent_fire: crate::pre_race::Sourced<OpponentFire>,
@@ -260,6 +268,10 @@ pub struct WeaponModels {
     /// ramp its nodes age through (`oag_fx::rocket_smoke`). `None` where the ribbon
     /// law is unread, every title but HD.
     pub rocket_trail: Option<RocketTrail>,
+    /// The flying Missile's own ribbons: per head a short stub and a helix, both
+    /// `FatLine` elements (`oag_fx::fat_line`). `None` where the Missile's ribbons
+    /// are unread, every title but HD.
+    pub missile_trail: Option<MissileTrail>,
     /// HD's LeachBeam strip: the ribbon `LeachBeam_DrawStrip` builds from the
     /// target's anchor trail and its two textures (`oag_fx::leach_strip`). `None`
     /// where Pulse's ribbon is drawn instead.
@@ -268,6 +280,13 @@ pub struct WeaponModels {
     /// wired**: what places the model each tick is unread (see
     /// `oag_raceplay::load::weapon_models`).
     pub leachbeam_ball: Option<&'static str>,
+    /// The flying Missile's own head: one model, built twice per missile
+    /// (`Missile.cpp`'s constructor, `0x0011ccc8`), drawn in place of the
+    /// glow billboard a Missile otherwise rides. The LeachBeam ball shares its
+    /// materials. **Placement is chosen, not measured** (see
+    /// `oag_raceplay::Race::missile_head_model_matrices`). `None` where the
+    /// billboard is the Missile's body (Pulse's body is a flare effect).
+    pub missile_head: Option<&'static str>,
     /// The Shuriken's own blade, drawn on the Rocket dart's basis. `None` where the
     /// blade model is not recovered.
     pub shuriken: Option<&'static str>,
@@ -344,6 +363,57 @@ pub struct RocketTrail {
     pub opacity_ramp: &'static str,
 }
 
+/// One `FatLine` element's config block: the numbers the engine copies out of its
+/// static table into the element (`docs/ghidra/functions/ps3-hdfury-eu/missile-ribbon.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FatLineSpec {
+    /// Half-width of a node when it is laid, and as it dies.
+    pub width: [f32; 2],
+    /// Seconds a node lives.
+    pub lifetime: f32,
+    /// Texture `u` per world unit of arc length.
+    pub u_per_unit: f32,
+    /// Chains laid per push, spaced `pi / chains` apart in phase.
+    pub chains: u32,
+    /// Nodes one chain's draw buffer holds.
+    pub capacity: u32,
+    /// Phase added after each chain of a push, radians.
+    pub phase_step: f32,
+    /// Distance of each node from the anchor, along the rotating reference axis.
+    pub radius: f32,
+    /// Whether a node's alpha reads the opacity ramp (else `1 - age`).
+    pub ramp: bool,
+}
+
+/// What a flying Missile's ribbons draw with - see [`WeaponModels::missile_trail`].
+/// Each of its two heads lays one `stub` and one `helix`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MissileTrail {
+    /// The texture both elements sample, an archive entry name folded as
+    /// [`MagstripWake`]'s are.
+    pub texture: &'static str,
+    /// The short straight element (`RibbonEffects` pool `+0x50`).
+    pub stub: FatLineSpec,
+    /// The winding element (pool `+0x68`).
+    pub helix: FatLineSpec,
+    /// The Missile explosion's sixteen streaks, drawn with the same element class from a
+    /// pool of their own. `None` where the explosion's streaks are unread.
+    pub blast_streak: Option<BlastStreak>,
+}
+
+/// The Missile explosion's streak element: `RibbonEffects` pool `+0x5c`, twenty elements
+/// shared by every live explosion (`docs/ghidra/functions/ps3-hdfury-eu/missile-explosion.md`,
+/// "The sixteen entries").
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BlastStreak {
+    /// The texture the pool's config names, an archive entry name.
+    pub texture: &'static str,
+    /// The pool's config block.
+    pub line: FatLineSpec,
+    /// Elements in the pool.
+    pub pool: usize,
+}
+
 /// What HD's LeachBeam strip draws with - see [`WeaponModels::leach_strip`].
 ///
 /// Archive entry names. `hd_leachbeam.rcsmaterial` samples the noise on unit 0 and
@@ -378,8 +448,10 @@ impl WeaponModels {
         magstrip_wake: None,
         magstrip_pob: false,
         rocket_trail: None,
+        missile_trail: None,
         leach_strip: None,
         leachbeam_ball: None,
+        missile_head: None,
         shuriken: None,
         cannon_look: None,
         ghost_static: None,

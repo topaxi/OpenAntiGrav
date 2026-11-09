@@ -32,7 +32,7 @@ pub(super) fn delta(sim: &mut RaceSim, slot: usize, amount: f32) {
 pub(super) fn give(sim: &mut RaceSim, slot: usize) {
     let Some(simple) = sim
         .weapons
-        .as_ref()
+        .as_deref()
         .filter(|_| sim.weapons_on)
         .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Shield))
     else {

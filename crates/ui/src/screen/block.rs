@@ -52,6 +52,8 @@ pub struct BlockWidget {
     /// [`super::Screen::texts`] reads the plain `scale` attribute instead,
     /// which a `<Block>` does not author.
     pub text_scale: f32,
+    /// `TextColor` - `+0x150`, the label's colour. `None` when absent.
+    pub text_color: Option<u32>,
 }
 
 /// `Block_Construct`'s height default.
@@ -83,6 +85,7 @@ impl Screens {
             text_scale: self
                 .number(node.value("TextScale"))
                 .unwrap_or(DEFAULT_TEXT_SCALE),
+            text_color: argb("TextColor"),
         }
     }
 }

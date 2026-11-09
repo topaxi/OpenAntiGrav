@@ -102,7 +102,7 @@ fn the_camera_is_the_one_rpcs3_builds() {
             .force_path(captured.path)
             .expect("the path is authored");
         for _ in 0..captured.frame - CLOCK_LAG {
-            model.tick();
+            model.tick(&oag_ui::backdrop::SILENCE);
         }
         assert_eq!(model.path(), captured.path, "the clip outlived its path");
         let frame = model.frame(720.0, 16.0 / 9.0, [1.0; 4]);
@@ -140,6 +140,10 @@ fn the_constants_are_the_ones_rpcs3_uploads() {
         return;
     };
     let assets = fury(&image);
+    assert!(
+        assets.bloom.final_half_texel,
+        "the backdrop ends in the final composite's quad, which reads half a texel off"
+    );
     struct Uploaded {
         path: usize,
         frame: u32,
@@ -176,7 +180,7 @@ fn the_constants_are_the_ones_rpcs3_uploads() {
                 .expect("static paths are authored");
         model.force_path(path).expect("the path is authored");
         for _ in 0..at - CLOCK_LAG {
-            model.tick();
+            model.tick(&oag_ui::backdrop::SILENCE);
         }
         let frame = model.frame(720.0, 16.0 / 9.0, [1.0; 4]);
         for (ours, theirs) in frame.fog_factors.iter().zip(fog) {

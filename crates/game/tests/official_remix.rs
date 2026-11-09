@@ -66,10 +66,10 @@ fn with_the_mod_on_racebox_has_remix_and_with_it_off_nothing_and_every_title_bui
     let Some(base) = official() else { return };
     for title in TITLES {
         let on = tree(&base, &[], title, None);
-        assert_eq!(under_racebox(&on), ["REMIX"], "{}", title.name);
+        assert_eq!(under_racebox(&on), ["REPLAYS", "REMIX"], "{}", title.name);
         assert!(on.page(PAGE).is_some(), "{}", title.name);
         let off = tree(&base, &["oag.remix"], title, None);
-        assert!(under_racebox(&off).is_empty(), "{}", title.name);
+        assert_eq!(under_racebox(&off), ["REPLAYS"], "{}", title.name);
         assert!(off.page(PAGE).is_none(), "{}", title.name);
     }
 }

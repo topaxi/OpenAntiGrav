@@ -33,6 +33,10 @@
 use log::warn;
 use oag_gameplay::input::Button;
 
+mod rumble;
+
+pub use rumble::{silence_on_panic, silence_registered};
+
 /// How far a trigger has to travel before it counts as a button press.
 ///
 /// A resting trigger on a worn pad does not read exactly zero, and thrust that
@@ -250,6 +254,16 @@ pub fn map_button(pad: gilrs::Button) -> Option<Button> {
     })
 }
 
+/// The abstract bits `pad` raises: L1 is the left airbrake and also the Eliminator flip, and a
+/// race with a flip reads it as the flip alone (`oag_gameplay::input::InputSnapshot::shoulder_flips`).
+fn bits_of(pad: gilrs::Button, button: Button) -> u32 {
+    if pad == gilrs::Button::LeftTrigger {
+        button.bit() | Button::Flip.bit()
+    } else {
+        button.bit()
+    }
+}
+
 /// Every button [`map_button`] binds, which is what a poll reads.
 pub const BOUND_BUTTONS: [gilrs::Button; 12] = [
     gilrs::Button::DPadUp,
@@ -310,6 +324,10 @@ pub struct PadState {
     pub airbrake_left: f32,
     /// Right airbrake: R1, or a conditioned trigger.
     pub airbrake_right: f32,
+    /// The bits of [`Self::held`] that are buttons, without the ones a trigger (or the touch
+    /// airbrake corners) raised: what a screen that reads the triggers as analogue acts on
+    /// ([`crate::view`]).
+    pub digital: u32,
 }
 
 /// Turns one tick's readings into what the pad contributes.
@@ -367,12 +385,13 @@ pub fn resolve(reading: Reading, config: TriggerConfig) -> PadState {
         stick_y: deadzone(reading.stick_y),
         airbrake_left,
         airbrake_right,
+        digital: reading.buttons,
     }
 }
 
 /// Zero inside the deadzone, and rescaled outside it so the axis still reaches
 /// its full travel rather than jumping from 0 to [`STICK_DEADZONE`].
-fn deadzone(value: f32) -> f32 {
+pub(crate) fn deadzone(value: f32) -> f32 {
     let magnitude = value.abs();
     if magnitude <= STICK_DEADZONE {
         return 0.0;
@@ -721,6 +740,14 @@ pub struct Pad {
     /// counts, and the join screen can tell two pads apart before either has a
     /// slot.
     presses: Vec<(gilrs::GamepadId, u32)>,
+    /// The motors opened so far. See [`rumble`].
+    rumble: rumble::Effects,
+    /// The music controls, read off the same events and kept out of the abstract buttons.
+    music: crate::music::Tracker,
+    /// Which control does which music action. Empty until [`Self::set_music_bindings`].
+    music_bindings: crate::music::MusicBindings,
+    /// What the last [`Self::poll_players`] read for the screens that only look at a race.
+    view: crate::view::ViewRaw,
 }
 
 impl std::fmt::Debug for Pad {
@@ -750,6 +777,10 @@ impl Pad {
                 launch: crate::prompt::Launch::from_process(),
                 active: None,
                 presses: Vec::new(),
+                rumble: rumble::Effects::default(),
+                music: crate::music::Tracker::default(),
+                music_bindings: crate::music::MusicBindings::default(),
+                view: crate::view::ViewRaw::default(),
             },
             Err(e) => {
                 warn!("no gamepad support ({e}); keyboard only");
@@ -760,6 +791,10 @@ impl Pad {
                     launch: crate::prompt::Launch::default(),
                     active: None,
                     presses: Vec::new(),
+                    rumble: rumble::Effects::default(),
+                    music: crate::music::Tracker::default(),
+                    music_bindings: crate::music::MusicBindings::default(),
+                    view: crate::view::ViewRaw::default(),
                 }
             }
         }
@@ -780,6 +815,10 @@ impl Pad {
             launch: crate::prompt::Launch::default(),
             active: None,
             presses: Vec::new(),
+            rumble: rumble::Effects::default(),
+            music: crate::music::Tracker::default(),
+            music_bindings: crate::music::MusicBindings::default(),
+            view: crate::view::ViewRaw::default(),
         }
     }
 
@@ -883,10 +922,36 @@ impl Pad {
     pub fn poll_players(&mut self) -> [PadState; oag_gameplay::MAX_PLAYERS] {
         let triggers = self.triggers;
         let mut readings = [Reading::default(); oag_gameplay::MAX_PLAYERS];
+        self.view = crate::view::ViewRaw::default();
         if let Some(gilrs) = &mut self.gilrs {
             while let Some(event) = gilrs.next_event() {
+                if matches!(event.event, gilrs::EventType::Disconnected) {
+                    self.rumble.forget(event.id);
+                    self.music.release_all();
+                }
+                if is_real_pad(&gilrs.gamepad(event.id)) {
+                    match event.event {
+                        gilrs::EventType::ButtonPressed(button, code) => {
+                            self.music.note(
+                                self.music_bindings.rows(),
+                                button,
+                                code.into_u32(),
+                                true,
+                            );
+                        }
+                        gilrs::EventType::ButtonReleased(button, code) => {
+                            self.music.note(
+                                self.music_bindings.rows(),
+                                button,
+                                code.into_u32(),
+                                false,
+                            );
+                        }
+                        _ => {}
+                    }
+                }
                 if let gilrs::EventType::ButtonPressed(button, _) = event.event
-                    && let Some(bit) = map_button(button).map(Button::bit)
+                    && let Some(bit) = map_button(button).map(|mapped| bits_of(button, mapped))
                     && is_real_pad(&gilrs.gamepad(event.id))
                 {
                     match self.presses.iter_mut().find(|(id, _)| *id == event.id) {
@@ -918,7 +983,7 @@ impl Pad {
                     if pad.is_pressed(bound_button)
                         && let Some(button) = map_button(bound_button)
                     {
-                        reading.buttons |= button.bit();
+                        reading.buttons |= bits_of(bound_button, button);
                     }
                 }
                 let pushed = pad.value(gilrs::Axis::LeftStickX).abs() > ACTIVITY_STICK
@@ -932,9 +997,25 @@ impl Pad {
                     .throttle
                     .max(analog(&pad, gilrs::Button::RightTrigger2));
                 reading.brake = reading.brake.max(analog(&pad, gilrs::Button::LeftTrigger2));
+                self.view = self.view.merge(crate::view::ViewRaw {
+                    right: (
+                        pad.value(gilrs::Axis::RightStickX),
+                        pad.value(gilrs::Axis::RightStickY),
+                    ),
+                    left: (0.0, 0.0),
+                    l2: analog(&pad, gilrs::Button::LeftTrigger2),
+                    r2: analog(&pad, gilrs::Button::RightTrigger2),
+                });
             }
         }
         readings.map(|reading| resolve(reading, triggers))
+    }
+
+    /// What the last [`Self::poll_players`] read for the view-side screens: the right stick, the
+    /// left stick on its own and the triggers' travel, before any of it means a button.
+    #[must_use]
+    pub fn view_raw(&self) -> crate::view::ViewRaw {
+        self.view
     }
 
     /// The bound buttons each real pad pressed since the last call, and clears
@@ -942,6 +1023,17 @@ impl Pad {
     /// confirm, and before anyone has joined every pad is merged into slot 0.
     pub fn take_presses(&mut self) -> Vec<(gilrs::GamepadId, u32)> {
         std::mem::take(&mut self.presses)
+    }
+
+    /// Replaces the table the music controls are read through.
+    pub fn set_music_bindings(&mut self, bindings: crate::music::MusicBindings) {
+        self.music.release_all();
+        self.music_bindings = bindings;
+    }
+
+    /// What the music controls did since the last call (see [`crate::music`]).
+    pub fn take_music(&mut self) -> crate::music::MusicInput {
+        self.music.take()
     }
 
     /// The real pads connected now, in the order the backend lists them.
@@ -1027,7 +1119,7 @@ fn pad_caps(pad: &gilrs::Gamepad<'_>) -> crate::prompt::PadCaps {
 /// Whether the OS's joystick is a gamepad at all, for the controls and the
 /// prompts alike. A keyboard's system-control interface is listed as a
 /// joystick and is neither.
-fn is_real_pad(pad: &gilrs::Gamepad<'_>) -> bool {
+pub(crate) fn is_real_pad(pad: &gilrs::Gamepad<'_>) -> bool {
     crate::prompt::is_gamepad(&pad_info(pad), pad_caps(pad))
 }
 
@@ -1050,6 +1142,7 @@ pub fn merge_states(a: PadState, b: PadState) -> PadState {
         stick_y: larger(a.stick_y, b.stick_y),
         airbrake_left: a.airbrake_left.max(b.airbrake_left),
         airbrake_right: a.airbrake_right.max(b.airbrake_right),
+        digital: a.digital | b.digital,
     }
 }
 

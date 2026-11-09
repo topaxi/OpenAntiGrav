@@ -67,6 +67,14 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_transition: None,
     zoom_ring: None,
     borrows_zoom_ring: true,
+    // `Additional_Definition.xml`'s `Settings` screen on the PSP discs (USA and EU) lists
+    // `Ghost Ship Visible`, `Auto Load Ghost` and `Multiplayer Tags`; the PS2 list has the first
+    // only, and the PSP list wins (`docs/ui/menus-original.md`, "Game Options").
+    game_options: oag_title::race::GameOptions {
+        ship_visible: true,
+        auto_load: true,
+        multiplayer_tags: true,
+    },
     zone_stage_textures: None,
     // `None` on the same terms as the table above: Pulse ships no Zone
     // effectSettings and no located Zone sky.
@@ -434,8 +442,10 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     magstrip_wake: None,
     magstrip_pob: false,
     rocket_trail: None,
+    missile_trail: None,
     leach_strip: None,
     leachbeam_ball: None,
+    missile_head: None,
     // `Shuriken_Init`'s model string `0x08a7cd74`.
     shuriken: Some(r"Data\Weapons\pulse_shuriken.vex"),
     // `None` is this title's own reading - see the field's doc comment.

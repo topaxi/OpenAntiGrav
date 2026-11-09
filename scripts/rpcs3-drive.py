@@ -826,7 +826,7 @@ class Session:
         load = os.environ.get("OAG_RPCS3_LOAD_STATE")
         state_args = ["--savestate", load] if load else []
         self.proc = subprocess.Popen(
-            ["rpcs3", "--no-gui", "--input-config", rpcs3_pad.INPUT_CONFIG_NAME]
+            [os.environ.get("OAG_RPCS3_BIN", EMULATOR_BINARY), "--no-gui", "--input-config", rpcs3_pad.INPUT_CONFIG_NAME]
             + config_args + state_args + [str(self.image)],
             stdout=open(self.log_dir / "rpcs3.log", "w"),
             stderr=subprocess.STDOUT, start_new_session=True,

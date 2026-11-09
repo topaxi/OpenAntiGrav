@@ -102,6 +102,25 @@ fn leaving_the_race_keeps_the_state_readable() {
     assert_eq!(audio.race_music_state().map(|s| s.second), Some(12));
 }
 
+/// A title's pause screen is silent: holding the race music stops the race voice, saves where
+/// it was, and starts no menu voice; the race then resumes the same second.
+#[test]
+fn holding_the_race_music_saves_the_second_and_sounds_nothing() {
+    let (mut audio, ..) = psp_boot_fixture();
+    audio.race_tracks = 4;
+    audio.start_race_music(&discs(), MusicSource::Auto, Path::new("unused"));
+    for _ in 0..(60 * 12) {
+        audio.tick();
+    }
+    audio.hold_race_music();
+    assert_eq!(audio.race_music_state().map(|s| s.second), Some(12));
+    assert_eq!(audio.playhead_race(), None, "no race voice");
+    assert_eq!(audio.playhead(), None, "and no menu voice");
+    audio.start_race_music(&discs(), MusicSource::Auto, Path::new("unused"));
+    let at = audio.playhead_race().expect("the race track resumed");
+    assert!((at - 12.0).abs() <= 1.0, "resumed at {at}");
+}
+
 #[test]
 fn nothing_is_saved_before_a_race_has_started_the_playlist() {
     let (audio, ..) = psp_boot_fixture();

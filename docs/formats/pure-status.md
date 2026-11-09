@@ -1313,6 +1313,13 @@ languages on its disc. See [the offered languages](../architecture/frontend-boot
 See [front-end menu definitions](fe-menu-definitions.md) and
 [the original's menus](../ui/menus-original.md).
 
+## Screen size
+
+`Skin.xml` and the eleven unlocalised files its `LoadXML` list names (`Options_Definition.xml` among them) author no
+`Safe Area Setting`, `Screen Size`, `OPT_SCREEN_SIZE` or `OPT_SAFE_AREA`, and `BOOT.BIN` carries no such string:
+**not found**. Pure takes the shared SCREEN SIZE row (default 100); see
+[hd-hud.md](hd-hud.md#screen-size-on-every-title). **Checked, differs** from HD.
+
 ## Music: recovered by name, and played
 
 Pure's front end and its races both have music now, and neither is found by
@@ -1441,7 +1448,8 @@ was load-bearing:
   per waveform rather than collapsed to the cue - a play site that assumed the
   cue was uniform would loop a one-shot on about half the draws.
 - Pure's `ship.bnk` has **six** cues to Pulse's nine, and carries `~AMBIENCE`
-  and `rumble`, which Pulse has not got.
+  and `rumble`, which Pulse has not got. (A sound cue, not vibration:
+  [rumble-xml.md](rumble-xml.md#census).)
 - Pure names its circuit banks in full - `SEBCLIM`, `CITTANU`, `VINETTA`,
   `MODESTO`, `CHENGOU` - where Pulse abbreviates.
 
@@ -1625,6 +1633,39 @@ The 2026-10-26 normals change (a vertex normal carried through its node's rotati
 `Mesh` constructor (`0x0886cf04`) packs the node's full 4x3 world matrix into the GE as Pulse's does. It moved the
 four pairs' hull region by 0.17 to 0.27 grey (MAD) under the stand-in rig, all on the airbrake flaps; under the
 circuit's lights rotated and unrotated normals score within 0.13 of each other.
+
+## Pure's HUD text outline (2026-11-05, `pure-hud-glow`)
+
+Ours drew Pure's HUD digits with a dark, near-opaque halo where the original draws a soft light one. Two causes, both
+fixed:
+
+1. **`BorderColor= "0x40000000"` was never read.** Every Pure HUD text widget that outlines itself (Arcade 37, Time
+   Trial 8 plus the shared widgets, Zone) writes a space before the opening quote. `oag_tables::fexml::attributes`
+   stopped at the space and dropped the attribute (and any after it in the tag), so every label fell back to
+   `FALLBACK_BORDER`, opaque black. Pulse's XML never spaces an `=` (census of `Data`, `FE`, `FEData`, `BEData` of the
+   USA PSP disc: none), so Pulse reads the same bytes as before and a Pulse pair re-renders pixel-identical. Pure's
+   `Data.wad` has two more spaced attributes outside the HUD, `scale= "0.8"` on one front-end text widget
+   (entries 426 and 443); they read now. Confidence 90 (the parse, and `hud_layout_ground_truth::
+   pure_hud_labels_keep_the_border_colour_they_author`, which reads 0 of 37 labels' borders without the fix).
+2. **The outline pass is `0.40` of the font's alpha, not the layout's `0x40` (0.25).** `psp-ge-dump.py` of the
+   Vineta K Time Trial state (USA disc, PPSSPP software): every HUD string is two `RECTANGLES` prims, vertex type
+   `0x19f`, vertex colour white (`ffffffff`, captions `ff04c2fc`), `SRC_ALPHA / 1-SRC_ALPHA`, linear filter, one
+   4-bit font texture under two CLUTs. The first CLUT is black with alpha `0, 4, 0xa, 0x10, ...` which is the `.fnt`
+   palette's alpha times **0.39 to 0.40** on all 11 strings (`HUDFont.fnt` `1, 11, 27, 41, ...` to `0, 4, 10, 16,
+   ...`; `0x65` against 254 at the brightest entry); the second is white with the palette's grey as alpha (as
+   Pulse's, `docs/ui/hud.md`, "An outlined HUD font is two passes"). The layouts author `0x40000000` and `0x30000000`;
+   neither value reaches the CLUT, so the outline alpha is a constant of Pure's text code. `oag_title::HudArt::
+   text_outline_alpha` carries it (`0x66`, measured, confidence 80: one frame, one state, the `0x30` widgets not
+   separated out of the 11) and `oag_hud::draw::outline_colour` applies it. Pulse's alpha (the layout's `HudBGColour`)
+   is untouched; whether Pulse's own vertex colour is `0x40` is the unread value `docs/ui/hud.md` already names.
+
+Four Pure pairs (`pure-psp/{vineta, chenghou, blue-ridge, modesto}`, re-rendered on copies), mean grey difference
+over the frame 8.80 / 8.64 / 8.11 / 6.50 to 7.38 / 7.73 / 7.20 / 6.19. The four 120x48 corner regions' mean (the
+HUD's cells), 17.23 / 17.33 / 16.16 / 12.17 to 10.46 / 12.40 / 11.36 / 10.60; the top-left 96x38 digit box on Vineta K
+47.3 to 18.1, Chenghou 24.0 to 20.0. What is left in the digit box is the original's string running about 3 px wider
+over six glyphs (Vineta K `0.16.6` ends at x 93 against 90): a glyph advance or scale difference, open. Other titles:
+2048 and Omega ship no Pure HUD (not applicable); HD's layouts are a different XML dialect (not spaced, unchecked
+beyond the ground-truth suite).
 
 ## Pure's hull draws its extra pass, weighted by its texture's alpha (2026-10-26)
 

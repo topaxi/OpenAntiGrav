@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [all]
-updated: 2026-10-19
+updated: 2026-11-07
 summary: "Print the psys sprite-sheet fill for one race; measure original-tier hull clone and net correction rate"
 ---
 
@@ -114,14 +114,10 @@ Setup: `--race` on Talon's Junction (`data/images/pulse-psp-usa.chd`), `--ticks
    - How often: per correction. The count is **not measured**. The client keeps a
      `corrections` counter (`crates/net/src/stats.rs:97`), printed once a second by
      `log_second` in `crates/game/src/net_play.rs:391`.
-   - Expected win: each `RaceSim` clone is 1.7 MiB and 63 us (measured, in
-     `docs/networking/README.md:212`). A correction costs two clones now, about
-     3.4 MiB transient and about 0.13 ms.
-   - **Mostly already written down.** The 0.74 MiB immutable track half and the
-     lever to split it are in `docs/networking/README.md:232`, and the choice to
-     keep whole-struct clones is recorded in the split-screen network thread. The
-     new part is the per-correction clone count. Removing `before` drops one of
-     the two clones.
+   - **The split landed (ADR-0087 stage 1):** a `RaceSim` clone is now 27 to 32 KiB
+     and 1 to 6 us (`docs/networking/README.md`, "The snapshot since the constant
+     half is shared"), so a correction's two clones are about 60 KiB and 10 us.
+     Removing `before` is no longer worth doing for its own sake.
    - Measure: `OAG_SWEEP=1 OAG_SWEEP_TRACKS=09_Track OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay --run-ignored all --no-capture -E 'test(/reconcile_cost/)'`
      for the per-clone cost. Count corrections in a two-seat session with the
      one-line-a-second log.

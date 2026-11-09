@@ -126,7 +126,7 @@ fn a_pad_re_entered_within_its_cooldown_hands_out_nothing() {
     // Moves the pad under the ship or a long way from it, invalidating the
     // broadphase either way.
     let place = |race: &mut Race, pad: oag_vex::pads::PadVolume| {
-        race.sim.weapon_pads[0] = pad;
+        Arc::make_mut(&mut race.sim.weapon_pads)[0] = pad;
         // Slot 0's row: these tests fly the player.
         race.sim.weapon_pad_distance[0][0] = 0.0;
     };
@@ -700,7 +700,7 @@ fn holding_a_missile_behind_a_craft_locks_it_after_the_recovered_hold() {
     use oag_race::sight;
 
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(one_missile_table());
+    race.sim.weapons = Some(Arc::new(one_missile_table()));
 
     // Slot 1 parked squarely down slot 0's nose, inside the fixture table's
     // 10..400 longitudinal window. Placed rather than driven: this is about the
@@ -744,7 +744,7 @@ fn holding_a_rocket_draws_no_reticle() {
     use oag_race::sight;
 
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(one_missile_table());
+    race.sim.weapons = Some(Arc::new(one_missile_table()));
     let forward = race.sim.world.ships[0].physics.body.forward();
     let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
@@ -832,7 +832,7 @@ fn an_opponent_that_declines_a_shot_does_not_absorb_the_pickup() {
         oag_tables::weapons::Weapon::Mine,
     ] {
         let mut race = race_with_a_grid();
-        race.sim.weapons = Some(rear_and_forward_table());
+        race.sim.weapons = Some(Arc::new(rear_and_forward_table()));
 
         let slot = 1;
         assert!(race.sim.world.ships[slot].active, "no opponent on the grid");
@@ -882,7 +882,7 @@ fn rear_and_forward_table() -> oag_tables::weapons::WeaponStats {
 #[test]
 fn a_locked_reticle_follows_its_target_between_ticks() {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(one_missile_table());
+    race.sim.weapons = Some(Arc::new(one_missile_table()));
     // Past the countdown, which holds every craft still.
     for _ in 0..oag_race::COUNTDOWN_TICKS {
         race.tick(&PlayerInputs::none());
@@ -942,5 +942,46 @@ fn a_locked_reticle_follows_its_target_between_ticks() {
     assert!(
         (quarter[0] - three_quarters[0]).abs() > step * 0.3,
         "it does not move between the ticks"
+    );
+}
+
+/// A pad that is never stamped (HD, Fury, 2048 and Omega in an Eliminator) is
+/// armed on every entry: a craft that leaves and comes straight back, an empty
+/// slot each time, is handed a pickup both times, while one that sits inside is
+/// handed one per crossing and not one per tick.
+#[test]
+fn an_unstamped_pad_pays_on_every_entry_and_never_once_per_tick() {
+    let mut race = race_with_weapon_pads(Mode::Eliminator, enveloping_pad(), 0.0);
+    let far_away = pad_at(Vec3::splat(1.0e6), 1.0);
+    let place = |race: &mut Race, pad: oag_vex::pads::PadVolume| {
+        Arc::make_mut(&mut race.sim.weapon_pads)[0] = pad;
+        race.sim.weapon_pad_distance[0][0] = 0.0;
+    };
+
+    let mut granted = 0;
+    for _ in 0..30 {
+        race.tick(&PlayerInputs::none());
+        if race.ship_pickup().is_some() {
+            granted += 1;
+            race.sim.world.ships[0].pickup.weapon = None;
+        }
+        assert_eq!(
+            race.weapon_pad_refresh_left(),
+            [0.0],
+            "an unstamped pad greyed"
+        );
+    }
+    assert_eq!(
+        granted, 1,
+        "sitting inside paid {granted} times for one crossing"
+    );
+
+    place(&mut race, far_away);
+    race.tick(&PlayerInputs::none());
+    place(&mut race, enveloping_pad()[0]);
+    race.tick(&PlayerInputs::none());
+    assert!(
+        race.ship_pickup().is_some(),
+        "re-entering an unstamped pad one tick later paid nothing"
     );
 }

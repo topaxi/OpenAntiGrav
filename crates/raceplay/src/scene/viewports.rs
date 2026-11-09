@@ -5,13 +5,14 @@
 //! ([`Race::set_viewpoint`]). Five things make that more than a loop, and each
 //! is a way to get a plausible picture that is wrong:
 //!
-//! - **One encoder and one submit per view.** `Scene::render` writes every
-//!   drawable's uniforms with `queue.write_buffer`, and a queue write lands
-//!   before the *submission's* commands, not at its place in the encoder. Two
-//!   views recorded into one encoder would both draw with the last view's
-//!   matrices: every rectangle the same camera. A batched [`super::Recording`] keeps
-//!   that order by keeping a later view's writes in a log of its own and replaying
-//!   it just before that view's submission (`split_record`).
+//! - **One encoder per view, and each view's writes ahead of its commands.**
+//!   `Scene::render` writes every drawable's uniforms with `queue.write_buffer`, and a
+//!   queue write lands before the *submission's* commands, not at its place in the
+//!   encoder. Two views recorded into one encoder would both draw with the last view's
+//!   matrices: every rectangle the same camera. [`super::Recording::Interleaved`] submits
+//!   per view. A batched [`super::Recording`] keeps a later view's writes in a log of its
+//!   own and makes them copies just ahead of that view's commands, all in one submission
+//!   (`split_record`, "One submission").
 //! - **Only the first view clears.** The scene pass clears the whole attachment
 //!   whatever the viewport is, so the later views load what is there
 //!   ([`Layer::Next`]). Depth is cleared each time; the views do not
@@ -43,7 +44,7 @@
 //!   measures its velocity against a camera history of its own ([`motion::split_history`]),
 //!   writes it into its rectangle of the velocity and depth attachments (a later view
 //!   *loads* them, as it loads the colour), and [`Scene::blur_split_views`] then runs the
-//!   blur over each rectangle, one submission each. **Camera jitter and the temporal
+//!   blur over each rectangle, its writes ahead of its commands. **Camera jitter and the temporal
 //!   upscaler per view too**: each view jitters on its seat's own sequence and
 //!   records its frame in its seat's history, and [`Scene::temporal`] answers a frame per view
 //!   so the upscaler resolves each with a chain of its own; the window's own record is kept
@@ -62,6 +63,7 @@
 //!   read from the depth attachment, which since the blur (a later view loads it) holds
 //!   every view's and could be wired. Both open.
 
+use super::split_record::{Folded, folds};
 use super::*;
 
 /// Which split-screen view a [`Scene::render`] call is.
@@ -186,9 +188,10 @@ impl Scene {
     /// and returns the sum of what each drew. **That is one view once the race is
     /// over**: the end screens sit over the spectator camera, and it is drawn
     /// here, with no blur, jitter or upscaler history, rather than by
-    /// [`Scene::render`], whose history this path never wrote. Submits its own command buffers,
-    /// so everything the caller has already encoded must be submitted before
-    /// this, and the caller's own encoder after it.
+    /// [`Scene::render`], whose history this path never wrote. Its commands reach the queue on
+    /// their own or, with an open [`oag_gpu::split_finish::Frame`], at that frame's submit, so
+    /// everything the caller has already encoded must be submitted before this, the caller's
+    /// own encoder after it, and nothing it writes after this may be what the views read.
     ///
     /// `view_timers` brackets each view's scene pass, one claimed timer per view
     /// (the caller `begin`s them); empty everywhere but the render bench, which
@@ -232,6 +235,7 @@ impl Scene {
             zone_spectrum,
             false,
             0,
+            true,
             effects,
             view_timers,
         )
@@ -376,12 +380,15 @@ impl Scene {
             zone_spectrum,
             shared,
             window,
+            false,
             effects,
             view_timers,
         )
     }
 
     /// `slots[i]`'s view drawn into `rects[i]` of `area`, then the post chains once per view: what [`Scene::render_viewports`] and [`Scene::render_window_views`] are.
+    /// `with_frame` lets the commands wait for the frame's own submission; a window's may not,
+    /// since the caller submits what follows them on its own.
     #[allow(clippy::too_many_arguments)]
     fn render_slots(
         &self,
@@ -400,6 +407,7 @@ impl Scene {
         zone_spectrum: &[f32],
         shared: bool,
         window: usize,
+        with_frame: bool,
         effects: WindowEffects<'_>,
         view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
     ) -> SceneStats {
@@ -446,7 +454,13 @@ impl Scene {
         for &slot in slots {
             self.keep_split_seat(slot);
         }
-        let recording = self.split_recording();
+        // One view is drawn as one view always was, whatever a split would record with.
+        let recording = if slots.len() > 1 {
+            self.split_recording()
+        } else {
+            super::Recording::Interleaved
+        };
+        let mut folded = None;
         if recording == super::Recording::Interleaved {
             for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
                 self.enter_view(race, index, slot);
@@ -483,10 +497,13 @@ impl Scene {
                 }
                 let commands = encoder.finish();
                 oag_gpu::perfprobe::mark("encoder-finish");
-                queue.submit(Some(commands));
+                // Behind the view's own scene pass, which an open frame split off: the flare,
+                // the glow and the blur that follow read what that pass drew.
+                oag_gpu::split_finish::submit_with_closed(queue, commands);
                 oag_gpu::perfprobe::mark("submit");
             }
         } else {
+            folded = folds(recording).then(|| Folded::begin(self));
             stats = self.render_slots_batched(
                 device,
                 queue,
@@ -497,6 +514,7 @@ impl Scene {
                 &settings,
                 view_timers,
                 recording,
+                &mut folded,
             );
         }
         self.layer.set(Layer::Whole);
@@ -505,16 +523,17 @@ impl Scene {
         race.reset_viewpoint();
         // HD's and Omega's chains, one run per view with its own adaptation
         // (`split_exposure`).
-        let post_ran = self.run_split_post(device, queue, view, slots, rects, area);
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("race viewports post"),
-        });
+        let post_ran =
+            self.run_split_post(device, queue, view, slots, rects, area, folded.as_mut());
         // Pulse's glow, one lane per view, read from the finished picture: every view is in
         // `view` now, and the composite waits for the HUD as a single view's does.
-        let glow = self.prepare_split_bloom(device, queue, &mut encoder, view, rects, area);
-        if glow {
-            queue.submit(Some(encoder.finish()));
-        }
+        self.post_stage(
+            device,
+            queue,
+            folded.as_mut(),
+            "race viewports post",
+            |writes, encoder| self.prepare_split_bloom(device, writes, encoder, view, rects, area),
+        );
         stats.hd_bloom_encoded = post_ran && self.hd.is_some();
         // Motion blur, last, as a single view's is: after the glow's bright pass (which the
         // composite adds back over the blurred frame after the HUD) and after HD's and
@@ -527,7 +546,11 @@ impl Scene {
             rects,
             effects.motion_blur.shutter(),
             effects.blur_timestamps,
+            folded.as_mut(),
         );
+        if let Some(folded) = folded {
+            folded.submit(self, queue, with_frame);
+        }
         self.split_blur_reads.set(false);
         stats
     }

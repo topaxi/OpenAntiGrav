@@ -6,6 +6,12 @@ use oag_present::perf;
 use super::Session;
 use crate::stage::Stage;
 
+/// How often the monitor's refresh report is asked for again.
+const REPORT_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
+/// How many frames old a timed GPU cost may be and still stand for the frame being drawn. The
+/// reading lands a few frames after the work it times.
+const GPU_COST_STALE_AFTER: u64 = 4;
+
 impl Session {
     /// How long one frame is allowed to take at the least, or `None` when
     /// nothing is limiting.
@@ -67,31 +73,84 @@ impl Session {
     /// run - the default - drew a pacing graph that conveyed nothing. The rule
     /// line means "one target frame" and the target has to be the one in force.
     ///
-    /// With vsync on the display is the target and this build cannot ask a
-    /// surface what its refresh is, so it falls back to the simulation's own
-    /// rate. On a 144 Hz panel that reads pessimistically - the numbers are
-    /// still measured, only the graph's scale is off - and getting it right
-    /// needs a refresh rate off the monitor, which is work of its own.
+    /// With no limit in force the display is the target: its refresh as
+    /// [`oag_present::refresh::Display`] knows it, and the simulation's own rate while
+    /// nothing says.
     pub(super) fn presentation_hz(&self) -> u32 {
         self.frame_period()
             .and_then(|_| self.active_limit().hz())
+            .or_else(|| self.display.hz())
             .unwrap_or_else(|| self.clock.rate().hz())
     }
 
     /// The rate the frame limiter is actually holding the loop to, or `None`
     /// when nothing is.
     ///
-    /// `None` for `FrameLimit::UNLIMITED` and for [`oag_present::perf::Vsync::On`],
-    /// where the display is the bound and this build cannot ask a surface what
-    /// its refresh is. **Deliberately not the `presentation_hz` fallback**:
-    /// guessing the simulation's 60 is a fine default for a graph's scale and
-    /// a bad one for a clamp, because a 144 Hz panel would silently have its
-    /// `target_fps` capped at 60. See [`oag_present::drs::Target::at_most`].
+    /// `None` for `FrameLimit::UNLIMITED`. The display is a bound of its own
+    /// ([`oag_present::refresh`]); neither falls back to the simulation's 60, which
+    /// is a fine default for a graph's scale and a bad one for a clamp, because
+    /// a 144 Hz panel would silently have its `target_fps` capped at 60. See
+    /// [`oag_present::drs::Target::at_most`].
     pub(super) fn limiter_hz(&self) -> Option<u32> {
         // The race's own limit, not `active_limit`: this feeds dynamic
         // resolution's clamp, which is a race concern.
         self.frame_period()
             .and_then(|_| self.settings.display.frame_limit.hz())
+    }
+
+    /// The newest timed GPU cost, or `None` when it is older than a few frames.
+    pub(super) fn governor_gpu_fresh(&self) -> Option<f32> {
+        self.governor_gpu
+            .filter(|_| self.frame_index.saturating_sub(self.governor_gpu_at) <= GPU_COST_STALE_AFTER)
+    }
+
+    /// The rate the loop is held to by the limiter or the output, whichever is lower.
+    pub(super) fn held_hz(&self) -> Option<u32> {
+        oag_present::refresh::held_hz(self.limiter_hz(), &self.display)
+    }
+
+    /// One frame's evidence about the output, and the monitor's report asked again about once
+    /// a second so a window moved to another monitor follows. Only race frames with a timed GPU
+    /// cost, under a present mode that holds a frame back to the refresh, count: without the
+    /// cost a slow GPU cannot be told from a slow display, and an interval under any other mode
+    /// is the loop's own pacing.
+    pub(super) fn feed_display(&mut self, frame_seconds: Option<f32>, wait: f32) {
+        let now = web_time::Instant::now();
+        if self
+            .display_polled
+            .is_none_or(|at| now.duration_since(at) >= REPORT_EVERY)
+        {
+            self.display_polled = Some(now);
+            self.display.report(self.gpu.output.window.refresh_millihertz());
+        }
+        let racing = matches!(self.stage, Stage::Race(_));
+        let mode = self.gpu.output.config.present_mode;
+        let configures = self.gpu.output.configures;
+        if display_evidence_is_stale(racing, (self.display_mode, self.display_configures), (mode, configures)) {
+            // A new race, or a new present mode: the old frames are another state's evidence.
+            self.display.reset();
+            self.display_mode = racing.then_some(mode);
+            self.display_configures = configures;
+        }
+        if racing
+            && let (Some(interval), Some(gpu)) = (frame_seconds, self.governor_gpu_fresh())
+        {
+            self.display.observe(oag_present::refresh::Frame {
+                interval,
+                wait,
+                gpu,
+                held_to_refresh: mode == wgpu::PresentMode::Fifo,
+            });
+        }
+        let shown = self.display.hz();
+        if self.logged_display_hz != Some(shown) {
+            self.logged_display_hz = Some(shown);
+            log::debug!(
+                "display refresh in force: {} (target {} held under it)",
+                shown.map_or_else(|| "unknown".to_string(), |hz| format!("{hz} Hz")),
+                self.render_profile().target_fps
+            );
+        }
     }
 
     /// Puts the next frame on the schedule, one period after the last one was
@@ -128,5 +187,34 @@ impl Session {
         if self.next_frame < now || self.next_frame > now + period {
             self.next_frame = now + period;
         }
+    }
+}
+
+/// Whether the frames kept about the output no longer describe it: outside a race there are none
+/// worth keeping, and a changed present mode or a rebuilt swapchain is another state.
+fn display_evidence_is_stale(
+    racing: bool,
+    kept: (Option<wgpu::PresentMode>, u64),
+    now: (wgpu::PresentMode, u64),
+) -> bool {
+    !racing || kept != (Some(now.0), now.1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wgpu::PresentMode::{Fifo, Immediate};
+
+    #[test]
+    fn evidence_holds_only_in_the_race_it_was_taken_in() {
+        assert!(!display_evidence_is_stale(true, (Some(Fifo), 3), (Fifo, 3)));
+        assert!(display_evidence_is_stale(false, (Some(Fifo), 3), (Fifo, 3)));
+        assert!(display_evidence_is_stale(true, (None, 3), (Fifo, 3)));
+    }
+
+    #[test]
+    fn a_new_present_mode_or_a_rebuilt_swapchain_ends_it() {
+        assert!(display_evidence_is_stale(true, (Some(Fifo), 3), (Immediate, 3)));
+        assert!(display_evidence_is_stale(true, (Some(Fifo), 3), (Fifo, 4)));
     }
 }

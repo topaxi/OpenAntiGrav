@@ -90,6 +90,13 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_transition: Some(ZONE_TRANSITION),
     zoom_ring: Some(&ZOOM_RING),
     borrows_zoom_ring: false,
+    // `FE_GHOST`, the `GhostOption` list on the Time Trial and Speed Lap pause screens
+    // (`crate::pause_menu`), is the ghost ship's visibility; HD authors no other of the three.
+    game_options: oag_title::race::GameOptions {
+        ship_visible: true,
+        auto_load: false,
+        multiplayer_tags: false,
+    },
     zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
     zone_sky: Some(ZONE_SKY),
     team_variants: Some(&TEAM_VARIANTS),
@@ -717,6 +724,53 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         texture: "Data/RibbonEffects/textures/smoke_trails_frame2_alpha.gtf",
         opacity_ramp: "Data/RibbonEffects/textures/smoke_trails_opacity_ramp.tga",
     }),
+    // The Missile's four `FatLine` elements: `Missile_Init_q` (`0x0011c5d0`)
+    // takes two of `RibbonEffects` pool `+0x50` (the stub) and two of pool `+0x68`
+    // (the helix), and `FatLine_PushChains` (`0x002ab9d0`) lays their nodes. The
+    // numbers are the two static config blocks at `0x00920fd0` and `0x00921010`,
+    // read from the ELF; the texture is the blocks' own `ThickLine_Red.gtf`. See
+    // `docs/ghidra/functions/ps3-hdfury-eu/missile-ribbon.md`.
+    missile_trail: Some(oag_title::weapons::MissileTrail {
+        texture: "Data/Tex/ThickLine_Red.gtf",
+        stub: oag_title::weapons::FatLineSpec {
+            width: [0.5, 0.0],
+            lifetime: 0.3,
+            u_per_unit: 0.2,
+            chains: 1,
+            capacity: 50,
+            phase_step: 0.0,
+            radius: 0.0,
+            ramp: false,
+        },
+        helix: oag_title::weapons::FatLineSpec {
+            width: [0.08, 0.3],
+            lifetime: 2.8,
+            u_per_unit: 0.2,
+            chains: 3,
+            capacity: 350,
+            phase_step: 0.06,
+            radius: 0.6,
+            ramp: true,
+        },
+        // `RibbonEffects` pool `+0x5c`, config block `0x00921050` (read from the ELF,
+        // `docs/ghidra/functions/ps3-hdfury-eu/missile-explosion.md`, "How a streak is
+        // drawn"): width `2 (1 - t)`, node life 1.2 s, alpha `1 - t`. Twenty elements; the
+        // explosion takes sixteen.
+        blast_streak: Some(oag_title::weapons::BlastStreak {
+            texture: "Data/Tex/ThickLine_bighalo.gtf",
+            line: oag_title::weapons::FatLineSpec {
+                width: [0.0, 2.0],
+                lifetime: 1.2,
+                u_per_unit: 0.2,
+                chains: 1,
+                capacity: 350,
+                phase_step: 0.06,
+                radius: 0.6,
+                ramp: false,
+            },
+            pool: 20,
+        }),
+    }),
     // `leachbeam_triangle.rcsmodel`'s material names the glow and the noise;
     // the live draw binds a 128x128 on unit 0 and a 256x256 on unit 1. See
     // `docs/ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md`, "hd-leach-draw".
@@ -725,6 +779,9 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         noise: "Data/RibbonEffects/textures/hd_waketrail_clouds.gtf",
     }),
     leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),
+    // `Missile.cpp`'s constructor (`0x0011ccc8`) loads it twice, into the
+    // object's `+0x1c0` and `+0x1c4`: the flying head, not the explosion.
+    missile_head: Some(r"Data\Weapons\HD_missile_ball_bloomring.vex"),
     shuriken: None,
     cannon_look: Some(CANNON_LOOK),
     // No `staticglow` string in HD's EBOOT: it never binds a ghost static.

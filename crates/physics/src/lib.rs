@@ -61,6 +61,7 @@ pub mod collide;
 pub mod controls;
 pub mod damage;
 pub mod engine;
+pub mod flip;
 pub mod forces;
 pub mod hover;
 pub mod integrate;

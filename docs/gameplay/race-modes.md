@@ -658,13 +658,15 @@ status:
   "weapons do more damage" *is* in the recovered engine: a second, real table,
   not an invented multiplier. A title with no second table (Pure) falls back
   to the ordinary one and says so in the load report.
-- **Pads refresh an order of magnitude faster.** `<WeaponPad
+- **Pads refresh an order of magnitude faster - on Pulse only.** `<WeaponPad
   elimination_refresh_time>` is `0.05` seconds against the ordinary
-  `refresh_time`'s `0.55` on both shipped PSP discs -
-  `oag_tables::handling::global::WeaponPad`'s own doc comment already named
-  Eliminator by name before this mode existed to read it. `race::load` selects
-  it the same way it selects the weapon table above, falling back to the
-  ordinary figure for a title with none. See [pickups](pickups.md#the-refresh-timer-is-a-debounce-not-a-respawn).
+  `refresh_time`'s `0.55` on both shipped PSP discs, and Pulse stamps it
+  (measured live, `docs/gameplay/pickups.md`, "Eliminator and the pads, per
+  title"). **HD, 2048 and Omega author `0.15` against `0.75` and never stamp a
+  pad in Eliminator at all**: HD measured on RPCS3, 2048 and Omega read in
+  `WeaponPads_TestCraft`, where the Eliminator family skips the stamp. `race::load`
+  still selects the elimination figure for every title that authors it, which is
+  right on Pulse and wrong on those three; the wiring is a handover thread.
 - **No energy from an absorb; the absorb is a one-second Shield instead
   (2026-10-03, read statically, confidence 80).** `Mode::pickups_absorb` answers
   `false` for Eliminator alone. Until 2026-10-03 both absorb paths then kept
@@ -760,6 +762,13 @@ Custom Race outside the campaign still has no cell to read, so
 `oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT`, **5** as of 2026-09-30 (the race box's
 first `KILLS` entry, see below) - the only figure a `--mode eliminator` run with no campaign
 cell in play can have.
+
+### The flip (2026-11-07)
+
+HD and Fury's Eliminator gives the player a half turn on L1: `0.2 s`, velocity kept, free, so the
+engine stops the craft and sends it back up the circuit at the field. Opponents do it too, in the
+original only. Law, evidence and the other titles:
+[eliminator-flip.md](../ghidra/functions/ps3-hdfury-eu/eliminator-flip.md).
 
 ### The kill target of a non-campaign Eliminator is the race box's `KILLS` row, and it starts on 5 (2026-09-30)
 
@@ -924,7 +933,8 @@ blends its finished lateral offset toward the pad's offset on a smoothstep, tota
 corridor clamp still bounds it. `PadSeeking::for_mode` turns it on for an Eliminator and off for
 every other mode, and a driver handed no pad computes the same bits as before, so no golden hash
 moved. A held weapon blocks a pickup, so a full-slot craft keeps the line. The player's own slot
-is never handed a pad, so an autopilot driving the player does not detour.
+is never handed a pad, so an autopilot driving the player does not detour. A score Eliminator (HD's) seeks
+no pad ([The pace of a score Eliminator](#the-pace-of-a-score-eliminator-2026-11-09)).
 
 **A pad off the lap's road is skipped.** `05_Track`, `14_Track` and `07_Track` author pads on
 the branch of a split their lap ring does not drive, and `07_Track` one on a deck stacked over
@@ -1003,6 +1013,71 @@ The gap to the original's 85 s that remained here was the fire decision, ported 
 section. Guarded by
 `crates/raceplay/tests/eliminator_pads_ground_truth.rs` (pickups per empty craft-minute over seeds 1
 to 6, one game-minute each: 7.20 with the steering, 5.48 without).
+
+### The pace of a score Eliminator (2026-11-09)
+
+**Ours, chosen, not measured.** HD's Eliminator is won on points
+([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md)). The original's
+Novice race on Vineta K (Venom, target 200) ended when its leading opponent was on lap 10, nine
+laps done. That is one race, so n = 1, and nothing of the original's Skilled or Elite is
+measured. `oag_raceplay::score_pace` holds ours near it. Its terms apply only where the race's
+Eliminator is won on points, so a kill Eliminator (Pulse, 2048, Omega) and every other mode run as
+before:
+
+| Term | What it does | Why |
+| --- | --- | --- |
+| Trigger | Every tier drops Mines and Bombs and holds the Cannon on `TRIGGER_SHARE = 0.2` of its pilot's own trigger span | Novice's appetite is `0` (`Difficulty::aggression`). A Novice opponent that took a Mine, Bomb or Cannon held it for good, so its slot never took another pad |
+| Absorb | The measured decision's absorb half spends the weapon on the Eliminator's 1 s Shield (`Race::eliminator_absorb`, the player's path) instead of keeping it | The decision and HD's `absorbScale` (`3.6 / 2.6 / 0.6`) are measured ([weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md)); keeping the weapon fired it later instead |
+| Hold | The Hard rung (Elite, Ace) keeps a fresh pickup 20 s before spending it in any way (fire, drop, absorb, Turbo, Autopilot), on top of the measured 0.8 s gate | Measured on ours: an Elite opponent spent a Missile 1.5 to 1.8 s after taking it, and scaling the fire odds by 0.2 did not lengthen that. Why is unverified; the window's flat second chance (`rates[4]`, which ignores the odds) is a candidate. A held weapon blocks the next pad, so the hold paces supply. Novice and Skilled absorb enough of theirs |
+| No pad seeking | `PadSeeking::Off` ([Steering for weapon pads](#steering-for-weapon-pads-2026-10-03)) | Tuned for Pulse's five-kill race. Here it doubled the supply |
+| No pack | `Race::eliminator_pack_scale` is `1.0` | Tuned for Pulse's five-kill race. A pack this dense let one Repulser take several kills at once |
+
+**Before and after.** Measured on Vineta K, Venom, the person under autopilot, seeds 1 to 12.
+Race length is the leading opponent's completed laps when the race ends; a race still running at
+60,000 ticks (1,000 s) counts at the laps it had.
+
+| Tier | Before: laps, median (range) | Before: time, median | After: laps, median (range) | After: time, median |
+| --- | --- | --- | --- | --- |
+| Novice | 19 (5-20); 7 of 12 never reached 200 | 957 s | 10 (2-19) | 524 s |
+| Skilled | 1 (0-2) | 90 s | 7.5 (2-23); seed 5 never reached 200 | 350 s |
+| Elite | 1 (0-1) | 71 s | 6 (4-13) | 289 s |
+
+Opponents' points by award kind, pooled. Per completed lap, then per craft-minute:
+
+| Run | Damage | Kill | Death | Lap | All |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Original, Novice (runs 2 and 3, 35 craft-laps) | 4.70 / 3.11 | 5.26 / 3.48 | -1.14 / -0.76 | 5.75 / 3.81 | 14.57 / 9.65 |
+| Ours before, Novice | 0.89 / 1.04 | 0.93 / 1.10 | -0.17 / -0.19 | 5.75 / 6.75 | 7.40 / 8.69 |
+| Ours before, Skilled | 39.98 / 29.26 | 64.44 / 47.16 | -10.68 / -7.82 | 6.25 / 4.57 | 100.00 / 73.17 |
+| Ours before, Elite | 52.65 / 37.92 | 83.60 / 60.21 | -12.72 / -9.16 | 7.00 / 5.04 | 130.53 / 94.01 |
+| Ours after, Novice | 2.82 / 3.24 | 4.24 / 4.87 | -0.92 / -1.06 | 5.75 / 6.60 | 11.89 / 13.65 |
+| Ours after, Skilled | 3.54 / 4.39 | 5.17 / 6.42 | -0.92 / -1.15 | 6.25 / 7.76 | 14.03 / 17.43 |
+| Ours after, Elite | 4.05 / 5.27 | 5.12 / 6.66 | -0.90 / -1.18 | 7.00 / 9.10 | 15.27 / 19.85 |
+
+Opponents' shield, Novice. Per lap (the shield at each lap crossing) and at the end of the run are
+separate figures. Original: per lap 106.8, 58.6 and 90.7 in runs 2, 3 and 4; end of run 85.0, 40.2
+and 82.1. Ours after, seeds 1 to 3: per lap 53.1, 56.4 and 51.2; end of run 35.1, 59.4 and 63.0.
+
+**What was high.** The awards match the original row for row, so the rate was how often a hit
+landed. Our opponents spent most pickups within about 2 s of taking them. Before, Skilled and Elite opponents took 4
+to 9 pickups a lap. The Repulser and the Quake dealt the most damage. HD's Repulser runs Pulse's
+law (`I:Pulse` in [weapon-lineage.md](weapon-lineage.md)), and in a bunched field one wave took
+up to five kills. At Novice it was the reverse: the clogged slot gave 0.1 pickups a lap. Scaling
+the fire odds by 0.2 moved neither the hold time nor the race length; why is unverified.
+
+**Still different, not tuned here:**
+
+- Our opponents lap Vineta K in about 48 s at Novice. The original's took 80 to 100 s in these
+  runs.
+- Ours reads every HD craft's medium shield slot (`DEFAULT_SKILL_LEVEL`, `shield="105"` for
+  Qirex). The original's Novice field starts on `easyshield` (`145`; 135 to 145 live).
+- The spread is wide: seeds of one tier range from 2 to 19 laps, because one craft's run of kills
+  decides a race.
+
+Reproduce: the `OAG_SWEEP` test `hd_eliminator_hud_ground_truth::sweep_score_changes` writes one
+race's CSV (`OAG_SWEEP_OUT`, `OAG_SWEEP_SEED`, `OAG_SWEEP_DIFFICULTY`). `scripts/hd-eliminator-award-rates.py`
+pools the award table off ours or the original's CSVs. The pin is
+`hd_eliminator_hud_ground_truth::a_score_eliminator_reaches_its_target_at_about_the_originals_pace`.
 
 ### Firing on the original's law (2026-10-03)
 
@@ -1087,7 +1162,7 @@ reaches 70" verdicts below: use scale replaces `x5`, absorb scale replaces the f
 | absorb rate `0.001` | `*AbsorbScale` 3.6 / 2.6 / 0.6, falling with difficulty | Opposite shape: Pulse's is one tiny constant for every skill. Conflicts on its face | 20 |
 | `+0x34` forced `0` (a skill index) | none | Not a flip; no counterpart | n/a |
 | none | `normalFlip`, `infrontFlip`, `*FlipScale` | New. Plausibly the chance a craft that is ahead, or in front of the player, flips a pickup into a different weapon; **unread, a hypothesis** | below 50 |
-| none | `*ScoreScale` | New | below 50 |
+| none | `*ScoreScale` | Multiplies an opponent's every Eliminator award ([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md), 1.15 read live at Novice) | 90 |
 
 No mapping reaches 70, so **nothing is wired**: HD, Omega and 2048 stay on Pulse's hard-coded
 mode-8 terms (the maintainer's inherit rule), Pulse and Pure are untouched, and no golden moved.

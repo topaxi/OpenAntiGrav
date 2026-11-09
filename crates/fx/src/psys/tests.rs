@@ -328,6 +328,41 @@ fn an_oriented_instance_emits_along_its_own_up() {
     );
 }
 
+/// A held surface takes the `up` it is given (`Fired::OwnAt`'s, the road's own): `orient` is
+/// for attached instances and did nothing for it, so a banked road's portal stood square to
+/// world up. A plain `play` is left to `orient` as ever, which still ignores it.
+#[test]
+fn a_held_surface_takes_its_orientation() {
+    let mut rng = Rng::new(5);
+    let mut spec = (*effect("aimed", true, 10.0)).clone();
+    spec.emitters[0].speed_per_tick = (1.0, 0.0);
+    let aimed = std::sync::Arc::new(spec);
+    let emitted_along_x = |stage: &mut Stage, rng: &mut Rng| {
+        for _ in 0..8 {
+            stage.advance(DT, rng);
+        }
+        let (additive, _) = stage.vertices(Vec3::Z, Vec3::Y);
+        assert!(!additive.is_empty(), "nothing was emitted");
+        let centre = additive
+            .iter()
+            .fold(Vec3::ZERO, |sum, v| sum + Vec3::from_array(v.position))
+            / additive.len() as f32;
+        centre.x > 1.0 && centre.y.abs() < 0.5
+    };
+    let mut stage = Stage::new();
+    let held = stage.play_held(&aimed, Vec3::ZERO, 1.0).expect("play_held");
+    stage.orient_surface(held, Vec3::X);
+    assert!(emitted_along_x(&mut stage, &mut rng), "a held surface");
+
+    let mut stage = Stage::new();
+    let burst = stage.play(&aimed, Vec3::ZERO, 1.0).expect("play");
+    stage.orient(burst, Vec3::X);
+    assert!(
+        !emitted_along_x(&mut stage, &mut rng),
+        "orient is still attached-only"
+    );
+}
+
 /// One live streak particle, head at `position` and tail at `origin`.
 fn streak_particle(position: Vec3, origin: Vec3) -> Particle {
     Particle {

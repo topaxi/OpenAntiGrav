@@ -50,6 +50,7 @@ fn pulse_takes_the_titles_own_row_for_a_title_colour_and_its_own_sprite_for_a_ti
         oag_pulse::hud::ART,
         false,
         None,
+        None,
     );
     assert_eq!(names(&drawn), ["PickupBackground", "TurboIcon"]);
     assert_eq!(
@@ -70,6 +71,7 @@ fn a_mod_rgba_is_the_backdrop_word_as_given_and_the_title_fade_plays_on_it() {
         oag_pulse::hud::ART,
         false,
         None,
+        None,
     );
     assert_eq!(settled[0].color, argb_to_rgba(RED_WORD));
     assert!(settled[0].color[0] > settled[0].color[2], "red, not blue");
@@ -86,6 +88,7 @@ fn a_mod_rgba_is_the_backdrop_word_as_given_and_the_title_fade_plays_on_it() {
         &ext,
         oag_pulse::hud::ART,
         false,
+        None,
         Some(look),
     );
     assert_eq!(
@@ -106,6 +109,7 @@ fn a_mod_pickup_with_no_look_draws_nothing_and_never_borrows_an_icon() {
         oag_pulse::hud::ART,
         false,
         None,
+        None,
     );
     assert!(drawn.is_empty(), "{:?}", names(&drawn));
 }
@@ -120,6 +124,7 @@ fn a_mod_icon_draws_the_backdrop_and_no_title_icon() {
         &ext,
         oag_pulse::hud::ART,
         false,
+        None,
         None,
     );
     assert_eq!(names(&drawn), ["PickupBackground"]);
@@ -139,6 +144,7 @@ fn a_mod_icon_draws_the_backdrop_and_no_title_icon() {
     let strings = oag_ui::language::StringTable::default();
     let cx = Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,
@@ -222,6 +228,7 @@ fn a_mod_pickup_on_2048_never_indexes_past_its_tables() {
                 oag_2048::hud::ART,
                 announcing,
                 None,
+                None,
             );
         }
     }
@@ -234,6 +241,7 @@ fn hds_runtime_backdrop_takes_a_mod_pickups_look_through_the_same_fade() {
     let strings = oag_ui::language::StringTable::default();
     let cx = Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,
@@ -303,6 +311,7 @@ fn a_padded_icon_draws_its_art_at_native_size_on_the_frame_centre_and_a_big_one_
             small_line_height: 10.0,
             default_line_height: 10.0,
             skin_line_height: 10.0,
+            tag_label: None,
         };
         let Some(Draw::Sprite { rect, .. }) = mod_icon_draw(&cx, "mod:test/glyph", None) else {
             panic!("draws");
@@ -369,6 +378,7 @@ fn a_mod_icon_fills_the_box_the_titles_own_turbo_glyph_fills() {
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        tag_label: None,
     };
     let Some(Draw::Sprite { rect, .. }) = mod_icon_draw(&cx, "mod:test/glyph", None) else {
         panic!("draws");
@@ -418,6 +428,7 @@ fn on_hd_and_omega_the_mod_icon_is_centred_on_the_always_up_frame() {
         small_line_height: 10.0,
         default_line_height: 10.0,
         skin_line_height: 10.0,
+        tag_label: None,
     };
     let Some(Draw::Sprite { rect, .. }) = mod_icon_draw(&cx, "mod:test/glyph", None) else {
         panic!("draws");

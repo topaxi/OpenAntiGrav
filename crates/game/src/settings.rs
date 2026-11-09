@@ -64,6 +64,7 @@ use oag_mesh::mesh_render::Anisotropy;
 mod controls;
 mod online;
 pub mod platform;
+pub mod player;
 mod race;
 mod render_profile;
 mod rescue;
@@ -71,6 +72,7 @@ pub mod web;
 
 pub use controls::{Controls, TriggerSensitivity};
 pub use online::Online;
+pub use player::Player;
 pub use race::Race;
 pub mod mod_settings;
 pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key};
@@ -128,6 +130,9 @@ pub struct Settings {
     /// The online lobby last connected to (`session::online`).
     #[serde(default)]
     pub online: Online,
+    /// The name and tag shared by every title (`session::player_name`).
+    #[serde(default)]
+    pub player: Player,
     #[serde(default)]
     pub controls: Controls,
     #[serde(default)]
@@ -137,6 +142,9 @@ pub struct Settings {
     /// Which mods are turned off on the MODS page.
     #[serde(default)]
     pub mods: Mods,
+    /// Whether races are recorded (`crate::replays`).
+    #[serde(default)]
+    pub replay: Replay,
     /// What each mod's own menu rows saved, by mod id then key (`mod_settings`).
     /// Kept whether or not the mod is turned on.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -202,52 +210,39 @@ pub struct Log {
 
 /// The MODS page's switches, by mod id (`oag_mod::Manifest::id`).
 ///
-/// `disabled` holds the mods turned **off** and `enabled` the mods turned **on** against
-/// their manifest's `default-enabled = false`, so a mod installed later follows its own
-/// default until the player says otherwise ([`Self::is_enabled`]). An id no installed mod
-/// has is kept: a mod moved out of the search path and back keeps its switch. `BTreeSet`s
-/// so the rewrite [`load`] makes is stable.
+/// A set of the mods turned **off**, so a mod installed later is on until the player
+/// says otherwise (a mod that starts off is on only while it is in [`Mods::enabled`]). An id no installed mod has is kept: a mod moved out of the search
+/// path and back stays off. A `BTreeSet` so the rewrite [`load`] makes is stable.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Mods {
     #[serde(default)]
     pub disabled: std::collections::BTreeSet<String>,
-    #[serde(default)]
+    /// The mods that start off (`oag_mod::Manifest::default_enabled`, a texture pack) the
+    /// player turned on. Kept apart from [`Self::disabled`] so that a mod installed later
+    /// takes its own default; an id is in at most one of the two.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
     pub enabled: std::collections::BTreeSet<String>,
 }
 
-impl Mods {
-    /// Whether the mod `id` is on: the player's switch if there is one, else the mod's
-    /// own `manifest_default` (`oag_mod::Manifest::default_enabled`). The one resolver.
-    #[must_use]
-    pub fn is_enabled(&self, id: &str, manifest_default: bool) -> bool {
-        if self.disabled.contains(id) {
-            false
-        } else if self.enabled.contains(id) {
-            true
-        } else {
-            manifest_default
-        }
-    }
+/// `[replay]`: whether a race that can be recorded is, and written to `auto/` when it ends
+/// (ADR-0087, decision 1). On unless the player turns it off.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Replay {
+    /// Record races for the REPLAYS page.
+    #[serde(default = "default_record")]
+    pub record: bool,
+}
 
-    /// Records the player's switch for `id`. A switch that equals the manifest default is
-    /// not stored, so the mod follows a later change of its default. Returns whether the
-    /// mod's state changed.
-    pub fn switch(&mut self, id: &str, manifest_default: bool, on: bool) -> bool {
-        if self.is_enabled(id, manifest_default) == on {
-            return false;
+impl Default for Replay {
+    fn default() -> Self {
+        Self {
+            record: default_record(),
         }
-        self.disabled.remove(id);
-        self.enabled.remove(id);
-        if on != manifest_default {
-            let set = if on {
-                &mut self.enabled
-            } else {
-                &mut self.disabled
-            };
-            set.insert(id.to_string());
-        }
-        true
     }
+}
+
+fn default_record() -> bool {
+    true
 }
 
 /// What the opponents are like.
@@ -409,6 +404,27 @@ pub struct Display {
     /// always pause, whatever this says.
     #[serde(default = "default_pause_on_focus_loss")]
     pub pause_on_focus_loss: bool,
+    /// Whether a race draws the ghost ship (Pulse's `Ghost Ship Visible`). **Read only by a title
+    /// whose own options list it** (`oag_title::race::GameOptions::ship_visible`); the row is
+    /// dropped on every other title and a saved `false` there is ignored. Hiding it hides the
+    /// drawing alone: the ghost is still raced, recorded and replaced. Applies live.
+    #[serde(default = "default_true")]
+    pub ghost_ship_visible: bool,
+    /// Whether a race starts with the stored ghost loaded (Pulse's `Auto Load Ghost`). **Read
+    /// only by a title whose own options list it** (`GameOptions::auto_load`). Off, a Time
+    /// Trial or Speed Lap races no ghost but still records the run and saves a lap that
+    /// beats the stored one. Read when a race loads.
+    #[serde(default = "default_true")]
+    pub auto_load_ghost: bool,
+    /// Whether a multiplayer race draws each other person's name over their craft (Pulse's
+    /// `Multiplayer Tags`, default on as in the original). **Read only by a title whose own
+    /// options list it** (`GameOptions::multiplayer_tags`). Off, no tag draws. Applies live.
+    #[serde(default = "default_true")]
+    pub multiplayer_tags: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_canvas_size() -> String {
@@ -420,6 +436,27 @@ fn default_pause_on_focus_loss() -> bool {
 }
 
 impl Display {
+    /// Whether `title`'s races draw the ghost ship: the player's `Ghost Ship Visible` where the
+    /// title's options list it, always elsewhere.
+    #[must_use]
+    pub fn ghost_ship_shown(&self, title: &oag_title::Title) -> bool {
+        !title.race.game_options.ship_visible || self.ghost_ship_visible
+    }
+
+    /// Whether `title`'s races load the stored ghost: the player's `Auto Load Ghost` where the
+    /// title's options list it, always elsewhere.
+    #[must_use]
+    pub fn ghost_auto_loads(&self, title: &oag_title::Title) -> bool {
+        !title.race.game_options.auto_load || self.auto_load_ghost
+    }
+
+    /// Whether `title`'s multiplayer races draw player tags: the player's `Multiplayer Tags` where
+    /// the title's options list it, never elsewhere (no other title's tags are wired).
+    #[must_use]
+    pub fn multiplayer_tags_shown(&self, title: &oag_title::Title) -> bool {
+        title.race.game_options.multiplayer_tags && self.multiplayer_tags
+    }
+
     /// The saved `HUD Style` as a name for `race::Options::hud_style`, `None` while empty.
     #[must_use]
     pub fn hud_style_choice(&self) -> Option<String> {
@@ -445,6 +482,9 @@ impl Default for Display {
             brightness: Default::default(),
             gamma: Default::default(),
             pause_on_focus_loss: default_pause_on_focus_loss(),
+            ghost_ship_visible: true,
+            auto_load_ghost: true,
+            multiplayer_tags: true,
         }
     }
 }
@@ -515,13 +555,13 @@ pub struct Graphics {
     #[serde(default)]
     pub hud_scale: oag_display::display::HudScale,
     /// How much of the screen the HUD and the front-end pages use, in percent: the title's own
-    /// `Safe Area Setting`. One value for both.
+    /// `Safe Area Setting`. One value for both, and for every title; the SCREEN SIZE row writes it.
     ///
-    /// **Read only by a title that has the option** (`oag_title::HudArt::safe_area`, HD alone);
-    /// the HUD is drawn at `percent / 100` about the centre of the screen, the value held to the
-    /// title's slider (HD: 80 to 100 in steps of 2). Absent means the title's own default (HD:
-    /// 90). Taken when a race loads or the menus open. No menu row: a one-line settings-file choice, the way
-    /// [`Self::hud_scale`] is. See `docs/formats/hd-hud.md`.
+    /// The HUD and the front end are drawn at `percent / 100` about the centre of the screen, the
+    /// value held to the title's slider (`oag_title::HudArt::safe_area`: HD's 80 to 100 in steps
+    /// of 2, the same range on a title whose disc authors none). Absent means the title's own
+    /// default (HD: 90, the disc's; the others: 100, drawn 1:1). Applies live. See
+    /// `docs/formats/hd-hud.md`.
     #[serde(default)]
     pub hud_safe_area: Option<u8>,
     /// Whether the track's draw calls are tested against the camera's view
@@ -608,6 +648,19 @@ pub struct Graphics {
     #[serde(default)]
     pub boost_zoom: bool,
 
+    /// Play the trail-hit burst for a craft flying in a rival's engine trail on a title whose
+    /// original never shows it: Pulse and Pure, which author none and borrow Wipeout HD's, and
+    /// 2048 and Omega, which author it but never fire it and play their own
+    /// (`oag_title::Effects::trail_hits_native`). **Off by default**, and ignored on Wipeout HD,
+    /// which always plays it.
+    ///
+    /// **An enhancement of this project's, not the original's.** A borrowed effect is read off
+    /// another source that authors it, and drawn with nothing substituted when this machine has
+    /// none. Baked into the race at load, so a change applies from the next race. See
+    /// `oag_raceplay::TrailHits`.
+    #[serde(default)]
+    pub trail_hits: bool,
+
     /// Let the CPU governor turn this project's own CPU-heavy extras down at runtime while the
     /// frame thread is over its frame budget and the GPU is not (`oag_present::governor`).
     /// It overrides in memory only: this value and every render-profile value are never
@@ -658,6 +711,7 @@ impl Default for Graphics {
             pvs_culling: default_pvs_culling(),
             boost_fov_kick: default_boost_fov_kick(),
             boost_zoom: false,
+            trail_hits: false,
             cpu_governor: default_cpu_governor(),
             camera_view: default_camera_view(),
         }
@@ -939,6 +993,8 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
         None => fresh(),
     };
     ensure_known_titles(&mut settings);
+    // A hand-edited name cannot hold what a title's font cannot draw.
+    settings.player = settings.player.cleaned();
 
     let canonical = render(&settings)?;
     if !keep_file && on_disk.as_deref() != Some(canonical.as_str()) {
@@ -1007,6 +1063,7 @@ pub fn menu_seeds(
         ),
         ("controls.scheme", text(&settings.controls.scheme)),
         ("controls.triggers", text(&settings.controls.triggers)),
+        ("controls.rumble", text(&settings.controls.rumble)),
         (
             "controls.touch_go_zones",
             text(if settings.controls.touch_go_zones {
@@ -1113,6 +1170,14 @@ pub fn menu_seeds(
             }),
         ),
         (
+            "graphics.trail_hits",
+            text(if settings.graphics.trail_hits {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
             "graphics.cpu_governor",
             text(if settings.graphics.cpu_governor {
                 "on"
@@ -1165,6 +1230,7 @@ pub fn menu_seeds(
         ("race.track", text(&settings.race.track)),
         ("race.variant", text(&settings.race.variant)),
         ("race.kill_target", text(&settings.race.kill_target)),
+        ("race.score_target", text(&settings.race.score_target)),
         ("race.weapons", text(&settings.race.weapons)),
         ("ai.difficulty", text(&settings.ai.difficulty)),
     ];
@@ -1181,12 +1247,44 @@ pub fn menu_seeds(
     if title.weather.is_played() {
         out.push(("graphics.weather", text(&profile.weather.to_string())));
     }
+    // The SCREEN SIZE row shows the value the title draws at: the saved one, or the title's own
+    // default while none is saved.
+    out.push((
+        "graphics.hud_safe_area",
+        text(
+            &title
+                .hud_art
+                .safe_area_percent(settings.graphics.hud_safe_area)
+                .to_string(),
+        ),
+    ));
     // Offered only where the title's options list it; elsewhere the row is dropped
     // (`Definition::drop_unavailable_dynamic_hud`) and nothing seeds it.
     if title.hud_art.dynamic_hud.is_some() {
         out.push((
             "display.dynamic_hud",
             text(&settings.display.dynamic_hud.to_string()),
+        ));
+    }
+    // Offered only where the title's options list them; elsewhere the rows are dropped
+    // (`Definition::drop_unavailable_game_options`) and nothing seeds them.
+    let on_off = |on: bool| text(if on { "on" } else { "off" });
+    if title.race.game_options.ship_visible {
+        out.push((
+            "display.ghost_ship_visible",
+            on_off(settings.display.ghost_ship_visible),
+        ));
+    }
+    if title.race.game_options.auto_load {
+        out.push((
+            "display.auto_load_ghost",
+            on_off(settings.display.auto_load_ghost),
+        ));
+    }
+    if title.race.game_options.multiplayer_tags {
+        out.push((
+            "display.multiplayer_tags",
+            on_off(settings.display.multiplayer_tags),
         ));
     }
     // The web's own row; a desktop file has no such key (see `web::not_on_the_web`).
@@ -1225,3 +1323,9 @@ pub fn save(settings: &Settings) -> Result<()> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod ghost_tests;
+
+#[cfg(test)]
+mod mods_tests;

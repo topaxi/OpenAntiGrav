@@ -207,9 +207,13 @@ OAG_DISPLAY_WINDOW_SIZE = { text = "TAILLE DE LA FENÊTRE", human = false }
 OAG_DISPLAY_FULLSCREEN_RESOLUTION = { text = "RÉSOLUTION PLEIN ÉCRAN", human = false }
 OAG_DISPLAY_CANVAS_SIZE = { text = "TAILLE DU CANVAS", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "FORMAT D'IMAGE", human = false }
+OAG_DISPLAY_SCREEN_SIZE = { text = "TAILLE DE L'ÉCRAN", human = false }
 OAG_DISPLAY_BRIGHTNESS = { text = "LUMINOSITÉ", human = false }
 OAG_DISPLAY_GAMMA = { text = "GAMMA", human = false }
 OAG_DISPLAY_DYNAMIC_HUD = { text = "HUD DYNAMIQUE", human = false }
+OAG_DISPLAY_GHOST_SHIP_VISIBLE = { text = "VAISSEAUX FANTÔMES VISIBLES", human = false }
+OAG_DISPLAY_AUTO_LOAD_GHOST = { text = "CHARGEMENT AUTO DU FANTÔME", human = false }
+OAG_DISPLAY_MULTIPLAYER_TAGS = { text = "ÉTIQUETTES MULTIJOUEUR", human = false }
 
 # GRAPHICS's own rows. The PC-rendering jargon block (`RENDERER`,
 # `RENDER_SCALE`, `TARGET_FPS`, `RECONSTRUCTION`, `UPSCALER_SHARPNESS`,
@@ -244,10 +248,12 @@ OAG_CONTROLS_PITCH_UP = { text = "TANGAGE HAUT", human = false }
 OAG_CONTROLS_PITCH_DOWN = { text = "TANGAGE BAS", human = false }
 OAG_CONTROLS_AIRBRAKE_LEFT = { text = "AÉROFREIN GAUCHE", human = false }
 OAG_CONTROLS_AIRBRAKE_RIGHT = { text = "AÉROFREIN DROIT", human = false }
+OAG_CONTROLS_ELIMINATOR_FLIP = { text = "DEMI-TOUR ÉLIMINATEUR", human = false }
 OAG_CONTROLS_CAMERA_VIEW = { text = "VUE DE LA CAMÉRA", human = false }
 OAG_CONTROLS_TRIGGERS = { text = "GÂCHETTES", human = false }
 OAG_CONTROLS_PILOT_ASSIST = { text = "AIDE AU PILOTAGE", human = false }
 OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "SENSIBILITÉ DES GÂCHETTES", human = false }
+OAG_CONTROLS_RUMBLE = { text = "VIBRATION", human = false }
 OAG_CONTROLS_FIRE_PICKUP = { text = "TIRER L'ARME", human = false }
 OAG_CONTROLS_ABSORB_PICKUP = { text = "ABSORBER L'ARME", human = false }
 
@@ -310,8 +316,65 @@ OAG_MEDAL_GOLD = { text = "OR", human = false }
 OAG_MEDAL_SILVER = { text = "ARGENT", human = false }
 OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }
 
+# The player name and tag: the OPTIONS rows and the entry screens' titles.
+OAG_OPTIONS_PLAYER_NAME = { text = "NOM DU JOUEUR", human = false }
+OAG_OPTIONS_PLAYER_TAG = { text = "TAG DU JOUEUR", human = false }
+OAG_PLAYER_NAME_TITLE = { text = "ENTREZ VOTRE NOM", human = false }
+OAG_PLAYER_TAG_TITLE = { text = "ENTREZ VOTRE TAG", human = false }
+
 [untranslated]
 ids = [
+    # The campaign editor, new with it; no translation pass yet.
+    "OAG_MENU_CAMPAIGN_EDITOR",
+    "OAG_MENU_CAMPAIGN_EDITOR_SUBTITLE",
+    "OAG_EDITOR_TITLE",
+    "OAG_EDITOR_FIELD_MODE",
+    "OAG_EDITOR_FIELD_CIRCUIT",
+    "OAG_EDITOR_FIELD_CLASS",
+    "OAG_EDITOR_FIELD_TEAM",
+    "OAG_EDITOR_FIELD_AI",
+    "OAG_EDITOR_TEAM_CHOOSE",
+    "OAG_EDITOR_EMPTY",
+    "OAG_EDITOR_PLACED",
+    "OAG_EDITOR_ACTION_NAME",
+    "OAG_EDITOR_ACTION_SAVE",
+    "OAG_EDITOR_ACTION_CLEAR",
+    "OAG_EDITOR_SAVED",
+    "OAG_EDITOR_NEEDS_EVENT",
+    "OAG_EDITOR_NAME_TITLE",
+    "OAG_EDITOR_SAVE_FAILED",
+    "OAG_EDITOR_HINT_PLACE",
+    "OAG_EDITOR_LEGEND_CLEAR",
+    "OAG_EDITOR_LEGEND_NAME",
+    "OAG_EDITOR_DEFAULT_NAME",
+    "OAG_EDITOR_FIELD_DIFFICULTY",
+    "OAG_EDITOR_FIELD_PROGRESSION",
+    "OAG_EDITOR_FIELD_SEED",
+    "OAG_EDITOR_FIELD_CLASS_FROM",
+    "OAG_EDITOR_FIELD_CLASS_TO",
+    "OAG_EDITOR_HINT_SAVE",
+    "OAG_EDITOR_KEY_SELECT",
+    "OAG_EDITOR_KEY_TRIANGLE",
+    "OAG_EDITOR_KEY_START",
+    "OAG_EDITOR_ACTION_FILL",
+    "OAG_EDITOR_ACTION_SETTINGS",
+    "OAG_EDITOR_ACTION_EVENT",
+    "OAG_EDITOR_SEED_TITLE",
+    "OAG_EDITOR_FILLED",
+    "OAG_EDITOR_LEGEND_FILL",
+    "OAG_EDITOR_DIFFICULTY_EASY",
+    "OAG_EDITOR_DIFFICULTY_MEDIUM",
+    "OAG_EDITOR_DIFFICULTY_HARD",
+    "OAG_EDITOR_PROGRESSION_FLAT",
+    "OAG_EDITOR_PROGRESSION_RAMP",
+    "OAG_EDITOR_MODE_RACE",
+    "OAG_EDITOR_MODE_TIME_TRIAL",
+    "OAG_EDITOR_MODE_SPEED_LAP",
+    "OAG_EDITOR_MODE_ZONE",
+    "OAG_EDITOR_MODE_ELIMINATOR",
+    "OAG_EDITOR_MODE_HEAD_TO_HEAD",
+    "OAG_EDITOR_AI_ORIGINAL",
+    "OAG_EDITOR_AI_OURS",
     # The MODS page, new 2026-10-12; no translation pass yet.
     "OAG_MENU_MODS",
     "OAG_MENU_MODS_SUBTITLE",
@@ -325,6 +388,7 @@ ids = [
     "OAG_MODS_NO_LICENSE",
     "OAG_MODS_LICENSE_FILE",
     "OAG_MODS_NOTHING",
+    "OAG_MODS_TEXTURE_PACK",
     "OAG_MODS_BUILT_IN",
     "OAG_MODS_ENABLED",
     "OAG_MODS_ON",
@@ -344,6 +408,8 @@ ids = [
     "OAG_GRAPHICS_MOTION_BLUR_RESOLUTION",
     # The KILLS row, new with the Eliminator kill target; no translation pass yet.
     "OAG_RACE_KILLS",
+    # The TARGET row, new with HD's score Eliminator; no translation pass yet.
+    "OAG_RACE_TARGET",
     # The WEAPONS row, new with the race box's Weapons list; no translation pass yet.
     "OAG_RACE_WEAPONS",
     # RECORDS is new since this file's own translation pass and has not been
@@ -381,6 +447,7 @@ ids = [
     "OAG_GRAPHICS_WEATHER",
     "OAG_GRAPHICS_BOOST_FOV_KICK",
     "OAG_GRAPHICS_BOOST_ZOOM",
+    "OAG_GRAPHICS_TRAIL_HITS",
     "OAG_GRAPHICS_CPU_GOVERNOR",
     "OAG_GRAPHICS_PERFORMANCE_OVERLAY",
     "OAG_GRAPHICS_SCREEN_FILTER",
@@ -408,6 +475,7 @@ ids = [
     # Cell Selection's refusal lines, new with them; no translation pass yet.
     "OAG_CAMPAIGN_MODE_UNSUPPORTED",
     "OAG_CAMPAIGN_TRACK_UNAVAILABLE",
+    "OAG_CAMPAIGN_NOT_PLAYABLE",
     # Mod campaigns (ADR-0077), new 2026-10-29; no translation pass yet.
     "OAG_CAMPAIGN_EVENT_UNAVAILABLE",
     "OAG_MENU_CAMPAIGN_PICKER",
@@ -417,6 +485,87 @@ ids = [
     "OAG_PAUSE_OPEN_UNOWNED",
     # The resume countdown's last word, new 2026-10-14; no translation pass yet.
     "OAG_COUNTDOWN_GO",
+    "OAG_MENU_PHOTO_MODE",
+    "OAG_MENU_PHOTO_MODE_SUBTITLE",
+    "OAG_PHOTO_CAMERA",
+    "OAG_PHOTO_INTERNAL",
+    "OAG_PHOTO_CLOSE",
+    "OAG_PHOTO_TRACK",
+    "OAG_PHOTO_HUD",
+    "OAG_PHOTO_ON",
+    "OAG_PHOTO_OFF",
+    "OAG_PHOTO_TAKE",
+    "OAG_PHOTO_BACK",
+    "OAG_PHOTO_STICK",
+    "OAG_PHOTO_ROTATE",
+    "OAG_PHOTO_ZOOM_TILT",
+    "OAG_PHOTO_PAN",
+    "OAG_PHOTO_RESET",
+    "OAG_PHOTO_SHIP",
+    "OAG_PHOTO_HELP",
+    "OAG_PHOTO_EFFECTS",
+    "OAG_PHOTO_EXPOSURE",
+    "OAG_PHOTO_SATURATION",
+    "OAG_PHOTO_SPEED_BLUR",
+    "OAG_PHOTO_DEPTH",
+    "OAG_PHOTO_APERTURE",
+    "OAG_PHOTO_FOCUS",
+    "OAG_PHOTO_PANEL_KEYS",
+    "OAG_REPLAY_CRAFT",
+    "OAG_REPLAY_HUD",
+    "OAG_REPLAY_SCRUB",
+    "OAG_REPLAY_JOG",
+    "OAG_PHOTO_PAD_KEYS",
+    "OAG_PHOTO_SCRUB_KEYS",
+    "OAG_PHOTO_SAVED",
+    "OAG_PHOTO_FAILED",
+    "OAG_PHOTO_REWIND",
+    "OAG_PHOTO_MOTION_BLUR",
+    "OAG_PHOTO_SHUTTER",
+    "OAG_PHOTO_PROGRESS",
+    "OAG_PHOTO_CANCELLED",
+    "OAG_PHOTO_ANY_INPUT",
+    # The REPLAYS page and the replay viewer (ADR-0087); no translation pass yet.
+    "OAG_MENU_REPLAYS",
+    "OAG_MENU_REPLAYS_SUBTITLE",
+    "OAG_REPLAYS_PAGE_TITLE",
+    "OAG_REPLAYS_ROW",
+    "OAG_REPLAYS_WATCH",
+    "OAG_REPLAYS_KEEP",
+    "OAG_REPLAYS_DELETE",
+    "OAG_REPLAYS_NONE",
+    "OAG_REPLAYS_NONE_WHY",
+    "OAG_REPLAYS_NONE_OFF",
+    "OAG_REPLAYS_CIRCUIT",
+    "OAG_REPLAYS_MODE",
+    "OAG_REPLAYS_FINISH",
+    "OAG_REPLAYS_DATE",
+    "OAG_REPLAYS_SIZE",
+    "OAG_REPLAYS_NOTE",
+    "OAG_REPLAYS_SAVED",
+    "OAG_REPLAYS_TAKEN_OVER",
+    "OAG_REPLAYS_NOT_FINISHED",
+    "OAG_REPLAYS_NOT_VERIFIED",
+    "OAG_REPLAYS_OTHER_TITLE",
+    "OAG_REPLAYS_NEWER",
+    "OAG_REPLAYS_DAMAGED",
+    "OAG_REPLAYS_NO_SETUP",
+    "OAG_REPLAYS_NOT_THE_RACE",
+    "OAG_REPLAYS_REFUSED",
+    "OAG_REPLAY_OPENING",
+    "OAG_REPLAY_MISMATCH",
+    "OAG_REPLAY_STOPPED",
+    "OAG_REPLAY_PLAY",
+    "OAG_REPLAY_PAUSE",
+    "OAG_REPLAY_EXIT",
+    "OAG_REPLAY_PHOTO",
+    "OAG_PHOTO_PLAY",
+    "OAG_REPLAY_SPEED",
+    "OAG_REPLAY_SKIP",
+    "OAG_REPLAY_ENDED",
+    "OAG_REPLAY_POSE_VIEW",
+    "OAG_REPLAY_POSE_END",
+    "OAG_ENDRACE_WATCH_REPLAY",
 ]
 
 OAG_MENU_RESET_TO_DEFAULT = { text = "RESTAURER LA VALEUR PAR DÉFAUT", human = false }

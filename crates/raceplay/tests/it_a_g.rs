@@ -14,6 +14,7 @@
 
 mod add_on_circuits_ground_truth;
 mod field_capture_ground_truth;
+mod flyby_section_ground_truth;
 mod in_parallel;
 mod perturb;
 
@@ -41,6 +42,7 @@ mod boost_plume_ground_truth;
 mod branch_progress_ground_truth;
 mod cage_effect_sweep;
 mod cage_sparks_ground_truth;
+mod campaign_replay_ground_truth;
 mod campaign_skill_scale_ground_truth;
 mod cannon_ground_truth;
 mod cannon_tilt_ground_truth;
@@ -54,6 +56,7 @@ mod damage_fx_ground_truth;
 mod destroy_camera_ground_truth;
 mod difficulty_ground_truth;
 mod eliminator_finish_ground_truth;
+mod eliminator_pad_stamp_ground_truth;
 mod eliminator_pads_ground_truth;
 mod energy_turbo_ground_truth;
 mod falloff_survey_ground_truth;

@@ -8,7 +8,7 @@ use oag_gameplay::PlayerInputs;
 fn laid_back_by(from_rear: bool) -> f32 {
     let mut race = race_with_a_grid();
     race.sim.laid_from_rear = from_rear;
-    race.sim.weapons = Some(one_mine_table());
+    race.sim.weapons = Some(Arc::new(one_mine_table()));
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
     race.sim.world.ships[0].pickup.begin_drop(1);
     race.tick(&PlayerInputs::none());

@@ -60,6 +60,17 @@ pub enum Skip {
     Press,
 }
 
+/// The flyby files a game mode takes in place of [`PreRace::grid`] and [`PreRace::grid_reversed`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ModeGrid {
+    /// The modes that take these files, by `oag_race::Mode::name`.
+    pub modes: &'static [&'static str],
+    /// The file for a circuit run the way it is authored.
+    pub grid: &'static str,
+    /// The file for a circuit run the other way round; `None`: the forward file serves both.
+    pub grid_reversed: Option<&'static str>,
+}
+
 /// One title's pre-race flyby.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PreRace {
@@ -70,6 +81,9 @@ pub struct PreRace {
     /// The file for a circuit run the other way round, where the title ships one. `None`: the
     /// forward file serves both.
     pub grid_reversed: Option<&'static str>,
+    /// The modes that fly another pair of files than [`Self::grid`]: the title's executable picks
+    /// the file by the race's mode. A mode in no row flies [`Self::grid`].
+    pub by_mode: &'static [ModeGrid],
     /// Vertical field of view, degrees. The `gridCamera` payload does not carry it.
     pub fov_degrees: Sourced<f32>,
     /// Ticks before the animation starts moving.
@@ -105,6 +119,29 @@ pub struct EffectsFade {
 }
 
 impl PreRace {
+    /// The files to try for a circuit, in order: the mode's file (its `_reversed` one for a
+    /// circuit run backwards), then the forward default, which the original falls back to when the
+    /// first is not on the disc. `mode` is `oag_race::Mode::name`.
+    #[must_use]
+    pub fn grid_files(&self, mode: &str, reversed: bool) -> Vec<&'static str> {
+        let (grid, grid_reversed) = self
+            .by_mode
+            .iter()
+            .find(|row| row.modes.contains(&mode))
+            .map_or((self.grid, self.grid_reversed), |row| {
+                (row.grid, row.grid_reversed)
+            });
+        let first = match grid_reversed {
+            Some(file) if reversed => file,
+            _ => grid,
+        };
+        let mut files = vec![first];
+        if first != self.grid {
+            files.push(self.grid);
+        }
+        files
+    }
+
     /// The flyby tick the effects fade-in starts on, with its step per tick, or `None` for a title
     /// with no such fade. The counter reads `lock_ticks - tick` after tick `tick`'s decrement.
     #[must_use]

@@ -278,3 +278,48 @@ fn the_missile_explosion_programs_earn_their_pairs() {
         }
     }
 }
+
+/// The Missile's flying head is the LeachBall's own model (`Missile.cpp`'s
+/// constructor loads `HD_missile_ball_bloomring`, whose materials are the
+/// ball's): a race on HD loads it into the head pool and says so, and its
+/// sphere takes the same rim glow with an emissive ring.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_missile_head_loads_off_the_disc_and_glows_like_the_leach_ball() {
+    let Some(image) = image() else { return };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        track: Some("/data/environments/talons_junction/track.vex".to_string()),
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading the race");
+    assert!(
+        loaded.plasma_blast_models.missile_head.is_some(),
+        "the head model did not load"
+    );
+    assert!(
+        loaded.report.iter().any(|line| {
+            line.contains("HD_missile_ball_bloomring.vex")
+                && line.contains("a missile's head is this model, not a billboard")
+        }),
+        "the loader report names the head: {:?}",
+        loaded
+            .report
+            .iter()
+            .filter(|line| line.contains("missile"))
+            .collect::<Vec<_>>()
+    );
+    let roles = roles(&build(
+        &image,
+        "/data/weapons/hd_missile_ball_bloomring.vex",
+    ));
+    assert_eq!(roles.len(), 2, "the sphere and the ring");
+    assert_eq!(
+        roles.iter().filter(|r| *r & slots::RIM_GLOW != 0).count(),
+        1,
+        "exactly the sphere takes the rim glow: {roles:x?}"
+    );
+}

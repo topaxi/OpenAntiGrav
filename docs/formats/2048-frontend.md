@@ -2,7 +2,7 @@
 
 **This page is a reading plus one real capture, not a full measurement.**
 `docs/formats/2048-status.md` has said since the title's first pass that
-`oag_2048::TITLE` carries `front_end: None`, `loading: None` and `music: None`,
+`oag_2048::TITLE` carried `front_end: None`, `loading: None` and `music: None`,
 and that "neither has been read." That was true. This page is the same sweep
 [hd-frontend.md](hd-frontend.md) ran for Wipeout HD, applied to 2048's Vita
 package: every front-end-shaped entry in `PSP2/data.psarc` (plus the v1.04
@@ -567,9 +567,11 @@ and the touch-screen tree are all read and are all sitting in this document
 for whoever designs the axis that would hold them - most plausibly a new,
 optional field on `FrontEnd` for a touch-driven front end, or a `MenuSkin`
 variant, either of which is a type decision bigger than a first sweep should
-make unasked. `loading` and `music` stay `None` on narrower, ordinary
+make unasked. `loading` and `music` stayed `None` on narrower, ordinary
 evidence gaps (a real loading screen with no located plugin XML; a located
-bank with no read cues) rather than this structural one.
+bank with no read cues) rather than this structural one. **`loading` is still `None`, and
+for a better reason as of 2026-11-06** ([2048-loading.md](2048-loading.md)): the class is HD's, its screen is in the
+executable and not a plugin XML, and the kind a race load starts (an event card and a percentage box) is read and not built.
 
 ### Resolved 2026-09-20: `front_end` is wired, and `menu` is the one field left `None`
 
@@ -685,7 +687,7 @@ the order a player sees it, with what each part rests on:
 | `Boot Intro Movie` | its six button redirects; `AutoRedirect` when the movie ends | `intro.mp4`, picture and AAC track, through the AV1 cache ([mp4.md](mp4.md)) | plays its 99.57 s out and fires `AutoRedirect`, or leaves on any of its six buttons; the first run transcodes and caches |
 | `Load Save Bootup` | left the tick it is entered: `StartEnabled="false"` on its one redirect, armed by a save check this build has nothing to check | `icon_save.gtf`, `VITA_AUTO_MSG` | authored, 92 |
 | `TitleScreen` | its own six button redirects, all to `GameModeChoice` | `Title_Screen.gtf` centred, `BOOT_PRESS_ANY` pulsing after its `delay="1.0"`, the EU legal footer through the `DirectEmbed` include, in `NEOSANS_BOLD` at its own 22-unit line height against `NEOSANS_BOLD_LARGE`'s 37 | authored, 92; the font-role ratio is read off the two `.fnt` headers |
-| `GameModeChoice` | left/right and cross on the pad, hover and click with a pointer; two taps on a mode (the second is the tick), only `FE_SP_CAMPAIGN` confirms | the four `<TouchButton>`s: `Blue2048` squares, the icon at its texture's own size, the label under it; `Grey2048` for the three network modes; the `Blue2048` block under the white header icon | authored, 92; tile/label/icon geometry measured off `08-game-mode-grid-clean.png`, 80; the `Orange2048` cursor ring is **chosen** |
+| `GameModeChoice` | left/right and cross on the pad, hover and click with a pointer; two taps on a mode (the second is the tick), only `FE_SP_CAMPAIGN` confirms | the four `<TouchButton>`s: `Blue2048` squares, the icon at its texture's own size, the label under it; `Grey2048` for the three network modes; the `Blue2048` block under the white header icon | authored, 92; tile/label/icon geometry measured off `08-game-mode-grid-clean.png`, 80; the pad's `Orange2048` fill is the tile's own pressed colour, the mapping onto a pad **chosen** ("Controller focus" below) |
 | `Home` | the same | its five `<TouchButton>`s; each destination now draws - see [Wired: `Home`'s five destinations draw](#wired-homes-five-destinations-draw-2026-09-21) | authored, 92 |
 | `newFEshell` (the campaign map) | d-pad to the nearest event, cross or a second click to launch; circle back to `GameModeChoice`, triangle to `Home` (the `<TouchHomeButton>`'s two targets, on buttons **chosen** - the widget names none) | `SP.xml`'s 115 events with a cell, on an even grid over the shell's own scrollable canvas, **each drawn with the disc's own hex tile art and mode icon since 2026-09-27** - see below; **no panel or card draws on a tap since 2026-09-25** - see below | the events, cells and canvas are authored ([2048-campaign.md](2048-campaign.md)); **the cell-to-pixel mapping is chosen, not measured** - `M_X`/`M_Y` are real `GameModeBase` fields the executable does read, but only into a raw struct offset (`0x2c4`/`0x2c8`); the DLC tiers' own hotspots read a *different*, still-unfound cached position (`+0x15c`/`+0x160`) that something else must derive from them ([frontend-campaign-map.md](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md)'s 2026-09-21 section), and a live capture confirms the real map is a hexagonal tessellation, not this square grid (`data/reference/2048-frontend/README.md`'s frames `12`-`14`, gitignored); **2026-09-25: the grid's own scale is now measured, not the DLC-tier projection**, and **2026-09-27: each cell's own hex tile, outline, selection ring and mode icon are the disc's own decoded art**, pixel-confirmed against frames `12`/`13`'s green/grey chequered-flag and stopwatch tiles - see below |
 
@@ -957,10 +959,10 @@ does this for all five.)
 
 | Screen | Driven by | Drawn from | Standing |
 | --- | --- | --- | --- |
-| `team` | Left/Right moves the cursor along the five columns (Feisar, AG Systems, Qirex, Auricom, Pir-hana), Up/Down along the four rows (speed, combat, agility, prototype), Circle fires `select_button`'s own `redirect="PreviousScreen"`; a tap on a cell or badge selects it | header Image/Text and its `Blue2048` square (authored), the badge strip and the 5x4 cell grid of `TouchTeamGrid_Item.cpp` (`/2048/eboot-vita-2048-eu-v104.elf`: ctor `FUN_813d0254`, loader `FUN_81105710`, update `FUN_8110772e`, draw `FUN_8110700e`, confidence 85): cell 80x65, pitch 82x67, row 0 at `y=158`, `Blue2048` cells with the cursor cell `Orange2048` (Feisar Speed on entry), `teamgrid/*.gxt` icons at native size, the prototype row's icon by column; the confirm tick | the cursor's start and every layout number are the executable's, not measured off a capture. Open: padlocks (hypothesis, confidence 40: `FUN_812d16f6`; every cell draws unlocked), the `NEW` badge, `TeamInfo`'s tutorial bubble, `teamskin_touch` (authored transparent, not drawn, reaches no setting). **Since 2026-10-27 (`2048-team-table`) the statistics panel draws** (`TeamInfo_Item.cpp` draw `0x810e0bf6`: four rows of ten-cell bars with the `PI_TeamModel` `<FE>` numbers, the team and class icons, `FEISAR SPEED`, the two ability icons; the prototype's description is open) **and so does the `<Model name="ShipModel">` hull** (`oag_game::team_hull`: `Ship_LOD.vex`, `OriginX/OriginY` in a grid twice the screen's, settled rotation 0.546/-0.932 read off the update, field of view 40 degrees at confidence about 50). **Omega: checked, applies, not wired** - the same item class and art ship, no `Team_Definition.xml` does. **HD/Fury campaign mode** (4x3 grid, `FUN_81106a46`) is not drawn: ours shows the 2048 grid there. Evidence: [team-grid.md](../ghidra/functions/vita-2048-eu-v104/team-grid.md). Pair `2048/menu-team`: mean grey 94.9 to 38.3 (grid), then 27.3 (panel and hull; the statistics box 58.4 to 10.6) |
+| `team` | Left/Right moves the cursor along the five columns (Feisar, AG Systems, Qirex, Auricom, Pir-hana), Up/Down along the four rows (speed, combat, agility, prototype), Circle, Cross or Start fire `select_button`'s own `redirect="PreviousScreen"` (Cross and Start chosen); a tap on a cell or badge selects it | header Image/Text and its `Blue2048` square (authored), the badge strip and the 5x4 cell grid of `TouchTeamGrid_Item.cpp` (`/2048/eboot-vita-2048-eu-v104.elf`: ctor `FUN_813d0254`, loader `FUN_81105710`, update `FUN_8110772e`, draw `FUN_8110700e`, confidence 85): cell 80x65, pitch 82x67, row 0 at `y=158`, `Blue2048` cells with the cursor cell `Orange2048` (Feisar Speed on entry), `teamgrid/*.gxt` icons at native size, the prototype row's icon by column; the confirm tick | the cursor's start and every layout number are the executable's, not measured off a capture. Open: padlocks (hypothesis, confidence 40: `FUN_812d16f6`; every cell draws unlocked), the `NEW` badge, `TeamInfo`'s tutorial bubble, `teamskin_touch` (authored transparent, not drawn, reaches no setting). **Since 2026-10-27 (`2048-team-table`) the statistics panel draws** (`TeamInfo_Item.cpp` draw `0x810e0bf6`: four rows of ten-cell bars with the `PI_TeamModel` `<FE>` numbers, the team and class icons, `FEISAR SPEED`, the two ability icons; the prototype's description is open) **and so does the `<Model name="ShipModel">` hull** (`oag_game::team_hull`: `Ship_LOD.vex`, `OriginX/OriginY` in a grid twice the screen's, settled rotation 0.546/-0.932 read off the update, field of view 40 degrees at confidence about 50). **Omega: checked, applies, not wired** - the same item class and art ship, no `Team_Definition.xml` does. **HD/Fury campaign mode** (4x3 grid, `FUN_81106a46`) is not drawn: ours shows the 2048 grid there. Evidence: [team-grid.md](../ghidra/functions/vita-2048-eu-v104/team-grid.md). Pair `2048/menu-team`: mean grey 94.9 to 38.3 (grid), then 27.3 (panel and hull; the statistics box 58.4 to 10.6) |
 | `communityAdhocCheck` | `FE_COMMUNITY`'s **real** redirect target - `Home` never reaches `community` itself, which needs a live session | authored, 92 - the `FE_COMMUNITY_UNAVAILABLE_ADHOC` text and the tick back to `Home` | refused by note, the same standing `GameModeChoice`'s three network modes carry |
 | `profile` | generic touch grid | header Image/Text, arrow buttons to `profile_stats` | authored, 92; `ProfileTouchMain`'s own stat panel and the screen's `<Model>` preview are not drawn, both on the same native-populated/no-renderer-seam grounds `team` gives |
-| `OptionsCamera`/`OptionsAudio`/`OptionsControls`/`OptionsPilot` | Left/Right steps the panel's own control, Circle returns to `options` - **chosen, no widget on any of the four names a back button** | `options`'s own header and four buttons, drawn first (nested-not-sibling screens, see below), then the panel's own new widget kind: `Touchlist` (`CameraP1`/`Pilot Assist`/`Motion Sensor`) or `TouchSlider` (`Music Volume`/`SFX Volume`), `crates/ui/src/screen/settings.rs` | Camera and the two volumes feed `Frontend::camera_choice`/`music_choice`/`sfx_choice` (`None` until touched, applied once at `Launch Game` into `settings.graphics.camera_view`/`audio.music_volume`/`sfx_volume` - see `crate::main::session::frame`); Controls and Pilot draw and cycle and reach no setting this build has. Per-entry spacing across the widget's own one rect is **chosen** the same way the team grid's is. The picker's starting index is this build's own default, not `CameraP1`'s authored `default="OPT_CLOSE"` - see `options2048`'s module doc for why threading the live setting in was left open |
+| `OptionsCamera`/`OptionsAudio`/`OptionsControls`/`OptionsPilot` | Left/Right steps the panel's own control, Circle returns to `options` - **chosen, no widget on any of the four names a back button** | `options`'s own header and four buttons, drawn first (nested-not-sibling screens, see below), then the panel's own new widget kind: `Touchlist` (`CameraP1`/`Pilot Assist`/`Motion Sensor`) or `TouchSlider` (`Music Volume`/`SFX Volume`), `crates/ui/src/screen/settings.rs` | Camera and the two volumes feed `Frontend::camera_choice`/`music_choice`/`sfx_choice` (`None` until touched, applied once at `Launch Game` into `settings.graphics.camera_view`/`audio.music_volume`/`sfx_volume` - see `crate::main::session::frame`); Controls and Pilot draw and cycle and reach no setting this build has. Per-entry spacing across the widget's own one rect is **chosen** the same way the team grid's is. **`OptionsCamera` carries a second control, SCREEN SIZE** (the shared `Safe Area Setting` slider, 80 to 100 in steps of 2, default 100; the disc authors none, so its rect is chosen, under `CameraP1`'s): Up/Down move between the two, Left/Right and a tap step it, Square resets it, and `Frontend::screen_size_choice` is applied the tick it moves (the touch front end's whole draw is inset about its centre, pointer hits moved back out) and saved to `[graphics] hud_safe_area`; `vita_2048_boot_ground_truth::options_camera_carries_the_screen_size_control`. The engine's own `Safe Area Setting` string is in `eboot.elf` but no `NEWGUI` file uses it ([hd-hud.md](hd-hud.md#screen-size-on-every-title)): **checked, differs** from HD on the option, **ported** by the shared row. The picker's starting index is this build's own default, not `CameraP1`'s authored `default="OPT_CLOSE"` - see `options2048`'s module doc for why threading the live setting in was left open |
 | `2048extras`, `manual3D`, `extrasCredits` | generic touch grid; `manual3D`'s own tick is `redirect="PreviousScreen"` | header Image/Text, four real tiles (`<aTouchButton>`'s own tag-name typo drops the fifth, AR Museum, exactly the way a real player's build would - it is not a `<TouchButton>`) | authored, 92; the ship-unlock and season-recap movies the brief asked about are not named by any widget here - native-code driven, the same open gap `frontend-campaign-map.md` already records for the campaign map's own hotspot buttons, so nothing is played rather than a guessed path |
 
 **Home's own hub-versus-panel shape.** `optionsshell->options`'s four
@@ -1008,6 +1010,68 @@ then Cross) means adding `right` to reach a later tile makes Right win on
 different tiles needs a test driving per-tick input
 (`crates/game/tests/vita_2048_boot_ground_truth.rs::press_release`), not a
 single `--press` mask.
+
+## Controller focus (2026-11-05, member `2048-focus`)
+
+**The original draws no pad focus on these screens, and answers no pad at all.**
+Two independent readings:
+
+- *Executable* (confidence 75-80): none of the six touch item classes (`TouchButton`,
+  `TouchHomeButton`, `TouchTeamGrid`, `TouchSlider`, `Touchlist`, `TouchCampaign`) calls the
+  button query, tests the per-item focus flag `(item+0x30)&0x200` or names `HasFocus`; the generic
+  `Focus="true"` attribute exists in the base widget reader but sits only on `Animation` widgets
+  and the `Team` skin lists in the shipped XML. [pad-focus.md](../ghidra/functions/vita-2048-eu-v104/pad-focus.md).
+- *Live* (Vita3K v0.2.1, EU v1.04, a progressed save, d-pad, cross, circle, triangle): the frames
+  of `GameModeChoice`, `Home`, `options` and `2048extras` are bit-identical before and after every
+  press (0 differing pixels); `team`'s cursor row is bit-identical (the hull and the callout
+  animate on their own); the campaign map shows no marker that follows a key. The maintainer's
+  real Vita was not available; this is the evidence.
+
+**What the original does author is a selected look**: `TouchButton` fills a pressed or latched tile
+`Orange2048` instead of `Blue2048` (`FUN_810edc10`, confidence 65), `Options` shows its selected
+button that way and `team` its cursor cell, and the map's selection is the disc's own `hex_select`
+art in `Orange2048`. The pad focus plays that look: **the tile the pad is on is filled `Orange2048`
+(chosen mapping, not measured)**, from the screen's first frame while the pad or keyboard is the
+device in use (`Frontend::set_pad_driving`, fed from `oag_game`'s pointer window: the mouse or a
+finger speaking clears it, a pad or key press sets it), never under a pointer. On a slider, whose fill is its value, the focused one's value is `Orange2048` and the other's
+`Grey2048`, the palette's inactive colour (**chosen**). On the options panels the hub's button of
+the open panel is `Orange2048`, as the original's. The panels used to draw on black (the hub's base
+fill covered the white ground); they draw on white now.
+The directions, Cross as activate and Circle as back are all **chosen**: the original's grids
+have none of them. `Draw` colours come from the skin's own globals.
+
+| Screen | Reachable by pad | Activates | Backs out | Focus style | Test |
+| --- | --- | --- | --- | --- | --- |
+| `Boot Connect`, `Boot Studio Logo`, `Load Save Bootup`, `save_2048_options` | no controls: timed or pass-through (Studio Logo: Cross skips) | - | - | none needed | `the_boot_screens_draw_off_the_pad...` |
+| `Boot Intro Movie`, `TitleScreen` | no controls: the authored button redirects (Start, Cross, ...) | the authored redirect | - | none needed | `every_declared_chain_step_...` |
+| `GameModeChoice` | Left/Right cycle, Up/Down by layout | Cross or Start on the focused tile (one press, as the single tap) | none: the root grid, its tick is hidden | `Orange2048` fill | `the_mode_grid_marks_and_moves_its_focus...`, `a_hover_moves_the_cursor_...` |
+| `Home` | Left/Right cycle (five tiles, then the tick), Up/Down by layout | Cross or Start: the tile's `redirect` | Circle: the tick, to `newFEshell` | `Orange2048` fill | `home_reaches_each_destination_...`, `down_and_up_move_the_focus_by_layout_...` |
+| `newFEshell` (map) | d-pad to the nearest event | Cross or Start launches (or opens the card) | Circle to `GameModeChoice`, Triangle to `Home` (chosen) | the disc's `hex_select` art in `Orange2048` | `the_campaign_map_moves_its_selection_...` |
+| event card | Left/Right turn the page | Cross launches, Square changes craft | Circle closes | none: three buttons on three pad buttons (chosen) | `vita_2048_event_card_ground_truth` |
+| `team` | Left/Right/Up/Down on the 5x4 cursor | Cross, Start or Circle press the confirm tick | the tick (`PreviousScreen`) | `Orange2048` cell (authored, `FUN_8110700e`) | `the_team_grid_moves_its_cursor_and_cross_confirms` |
+| `profile`, `profile_stats` | Left/Right cycle the two arrows | Cross: the arrow's `redirect` | Circle: `PreviousScreen` (the arrows are not ticks) | `Orange2048` fill | `the_sub_screens_mark_their_focus_...` |
+| `options` | its four buttons and the tick | Cross: the panel it names | Circle: the tick, to `Home` through `save_2048_options` | `Orange2048` fill | `the_options_panels_mark_...` |
+| `OptionsCamera`, `OptionsControls`, `OptionsPilot` | Left/Right step the list | the step applies it | Circle to `options` | the selected entry filled `Orange2048`; the hub's button of the open panel too | same |
+| `OptionsAudio` | Up/Down pick the slider, Left/Right set it | the step applies it | Circle to `options` | the focused slider's value `Orange2048`, the other `Grey2048` (chosen) | `vita_2048_boot_ground_truth::options_*` |
+| `communityAdhocCheck`, `2048extras`, `extrasCredits` | tiles and the tick | Cross | Circle: the tick | `Orange2048` fill | `the_sub_screens_mark_their_focus_...` |
+| `manual3D` | the back tile | Cross: `PreviousScreen` | Circle | `Orange2048` fill | same |
+| `RaceSummary`, `ObjectiveSummary` (end of race) | the button strip | Cross | the strip's own buttons | `Orange2048` fill (was a ring) | `the_selected_strip_tile_is_filled_orange_and_the_other_blue` (no screenshot: reaching it needs a finished race) |
+
+**Not drawn, so not reachable**: `OptionsAudio`'s `Music Sequential`/`Music Random` toggles,
+`OptionsControls`' `FE_CTRL_VIEW_CONFIG` tile, `2048extras`' AR Museum (the `<aTouchButton>` typo), `team`'s
+`ar_view` and `replay_unlock` hotspots. They are drawing gaps, not focus gaps.
+
+**Chosen, not measured, for the maintainer** (every case where the disc authors nothing): the pad
+as a device on touch screens; Up/Down on the grids (nearest tile in that direction, no vertical
+wrap); Cross/Start as activate; Circle as back (the screen's own tick, else the `PreviousScreen`
+stack); Cross on `team` as the confirm tick; the slider's orange-versus-grey value. The fill colour itself is the
+authored pressed colour. `--original-menu` hides the pad focus, as it hides this build's own tiles: a compare pair of a route
+that presses buttons draws no filled tile, like the original. A player always has it.
+
+**Omega: checked, applies, not wired**: `TouchButton_Item.cpp`, `Orange2048` and `Blue2048` are
+in Omega's `eboot.bin`, but its front end is HD's `<HorizMenu>`, so no 2048 grid is reached and
+the draw law was not re-read on PS4 code. **HD: checked, differs**: HD's menu is its own
+row/strip focus, not these items.
 
 ## `GameModeChoice`'s positions are code, not the file (2026-10-27)
 

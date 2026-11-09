@@ -75,6 +75,8 @@
 //! frame. The 3 of those 88 draws whose world matrix is more than a scale are the
 //! rotated nodes, and they are why that step exists.
 
+use std::ops::Range;
+
 use oag_core::math::{Mat4, Vec3};
 
 use crate::texgen;
@@ -225,21 +227,48 @@ pub fn write_view(model: &Model, out: &mut Vec<[f32; 2]>, view: Mat4, seconds: f
 /// turned by its animated node and renormalised, and none of that reads the view. This is
 /// that half, computed for a `seconds` once and reused by every camera drawn at it - a
 /// split screen's second view and every view after - and for good when the circuit has no
-/// animated node (the common case), where nothing it holds ever changes. The result is the
-/// bits [`write_view`] always produced.
+/// animated node (the common case), where nothing it holds ever changes. An animated
+/// vertex is turned the first time a view draws it at that clock value, so one no view draws
+/// costs nothing. The result is the bits [`write_view`] always produced.
 #[derive(Debug, Default)]
 pub struct TrackNormals {
-    units: Vec<Vec3>,
+    units: texgen::UnitNormals,
     /// The `seconds` (as bits) `units` is current for; `None` before the first call.
     at: Option<u32>,
     /// Whether the model has no animated node, so `units` holds for any `seconds`.
     fixed: bool,
-    /// How many times `units` has been recomputed.
+    /// How many times the clock moved `units` on.
     refreshed: u32,
-    /// The vertices that ride a node, so a new clock value turns those and nothing else.
+    /// The vertices that ride a node, ascending, so a new clock value turns those and nothing
+    /// else.
     animated: Vec<u32>,
-    /// How many nodes `animated` was read against.
-    nodes: usize,
+    /// The nodes at `at`.
+    nodes: Vec<[f32; 16]>,
+    /// For each of `animated`, the `refreshed` it was last turned at.
+    turned: Vec<u32>,
+}
+
+/// `v`'s unit normal in the circuit's space, under `nodes`.
+///
+/// An animated node's vertices are in the node's space; its matrix takes the normal to the
+/// circuit's. Not an inverse transpose, as the vertex shader's own normal is not: the animated
+/// meshes under a non-uniformly scaled node are the ones this skews.
+///
+/// Placed and mapped in one pass rather than copied into a placed list first. The arithmetic is
+/// the two-pass form's to the bit: a placed normal is renormalised, then goes through the
+/// identity the map's model matrix was, and is renormalised again.
+fn turned_normal(v: &GpuVertex, nodes: &[[f32; 16]]) -> Vec3 {
+    let identity = oag_core::math::Mat3::IDENTITY;
+    let normal = match (v.xform as usize).checked_sub(1).and_then(|i| nodes.get(i)) {
+        Some(m) => Vec3::new(
+            m[0] * v.normal[0] + m[4] * v.normal[1] + m[8] * v.normal[2],
+            m[1] * v.normal[0] + m[5] * v.normal[1] + m[9] * v.normal[2],
+            m[2] * v.normal[0] + m[6] * v.normal[1] + m[10] * v.normal[2],
+        )
+        .normalize_or_zero(),
+        None => Vec3::from_array(v.normal),
+    };
+    (identity * normal).normalize_or_zero()
 }
 
 impl TrackNormals {
@@ -249,83 +278,125 @@ impl TrackNormals {
         self.refreshed
     }
 
-    fn refresh(&mut self, model: &Model, seconds: f32) {
-        if self.at.is_some()
-            && (self.fixed || self.at == Some(seconds.to_bits()))
-            && self.units.len() == model.vertices.len()
-        {
-            return;
-        }
-        self.refreshed += 1;
-        self.at = Some(seconds.to_bits());
-        let nodes = model.sample_anim_nodes(seconds);
-        self.fixed = nodes.is_empty();
-        // The identity is the model matrix the map takes for a circuit, kept as
-        // a multiply so the coordinates are the interleaved form's to the bit.
-        let identity = oag_core::math::Mat3::IDENTITY;
-        if nodes.is_empty() {
-            texgen::unit_normals_by(&model.vertices, &mut self.units, |v| {
-                identity * Vec3::from_array(v.normal)
-            });
-            self.animated.clear();
-            self.nodes = 0;
-            return;
-        }
-        // An animated node's vertices are in the node's space; its matrix takes the
-        // normal to the circuit's. Not an inverse transpose, as the vertex shader's
-        // own normal is not: the animated meshes under a non-uniformly scaled node
-        // are the ones this skews.
-        //
-        // Placed and mapped in one pass rather than copied into a placed list
-        // first. The arithmetic is the two-pass form's to the bit: a placed normal
-        // is renormalised, then goes through the identity the map's model matrix
-        // was, and is renormalised again.
-        let unit = |v: &oag_mesh::mesh::GpuVertex| {
-            let normal = match (v.xform as usize).checked_sub(1).and_then(|i| nodes.get(i)) {
-                Some(m) => Vec3::new(
-                    m[0] * v.normal[0] + m[4] * v.normal[1] + m[8] * v.normal[2],
-                    m[1] * v.normal[0] + m[5] * v.normal[1] + m[9] * v.normal[2],
-                    m[2] * v.normal[0] + m[6] * v.normal[1] + m[10] * v.normal[2],
-                )
-                .normalize_or_zero(),
-                None => Vec3::from_array(v.normal),
-            };
-            (identity * normal).normalize_or_zero()
-        };
-        // A vertex that rides no node has the same normal at every clock value, so once
-        // the whole list is placed only the vertices that ride a node are turned again.
-        // `animated` is read off the model once, with the whole list.
-        if self.units.len() == model.vertices.len() && self.nodes == nodes.len() {
-            for &i in &self.animated {
-                self.units[i as usize] = unit(&model.vertices[i as usize]);
+    /// Brings the normals over `spans` up to `seconds`.
+    fn refresh(&mut self, model: &Model, seconds: f32, spans: &[Range<usize>]) {
+        let whole = self.units.len() == model.vertices.len();
+        if self.at.is_none() || !whole || !(self.fixed || self.at == Some(seconds.to_bits())) {
+            self.refreshed += 1;
+            self.at = Some(seconds.to_bits());
+            let count = self.nodes.len();
+            self.nodes = model.sample_anim_nodes(seconds);
+            self.fixed = self.nodes.is_empty();
+            if self.fixed {
+                self.animated.clear();
+                // The identity is the model matrix the map takes for a circuit, kept as
+                // a multiply so the coordinates are the interleaved form's to the bit.
+                let identity = oag_core::math::Mat3::IDENTITY;
+                texgen::unit_normals_by(&model.vertices, &mut self.units, |v| {
+                    identity * Vec3::from_array(v.normal)
+                });
+                return;
             }
+            // `animated` is read off the model once, with the whole list. A vertex that rides
+            // no node has the same normal at every clock value.
+            if !whole || count != self.nodes.len() {
+                let nodes = &self.nodes;
+                self.units
+                    .refill(model.vertices.iter().map(|v| turned_normal(v, nodes)));
+                self.animated.clear();
+                self.animated.extend(
+                    model
+                        .vertices
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, v)| {
+                            (v.xform as usize)
+                                .checked_sub(1)
+                                .is_some_and(|i| i < nodes.len())
+                        })
+                        .map(|(i, _)| i as u32),
+                );
+                self.turned.clear();
+                self.turned.resize(self.animated.len(), self.refreshed);
+                return;
+            }
+        }
+        if self.fixed {
             return;
         }
-        self.units.clear();
-        self.units.extend(model.vertices.iter().map(unit));
-        self.nodes = nodes.len();
-        self.animated.clear();
-        self.animated.extend(
-            model
-                .vertices
-                .iter()
-                .enumerate()
-                .filter(|(_, v)| {
-                    (v.xform as usize)
-                        .checked_sub(1)
-                        .is_some_and(|i| i < nodes.len())
-                })
-                .map(|(i, _)| i as u32),
-        );
+        for span in spans {
+            let first = self
+                .animated
+                .partition_point(|&i| (i as usize) < span.start);
+            let count = self.animated[first..].partition_point(|&i| (i as usize) < span.end);
+            for slot in first..first + count {
+                if self.turned[slot] != self.refreshed {
+                    self.turned[slot] = self.refreshed;
+                    let i = self.animated[slot] as usize;
+                    self.units
+                        .set(i, turned_normal(&model.vertices[i], &self.nodes));
+                }
+            }
+        }
     }
 
     /// [`write_view`] for `model` at `seconds`, reusing the normals if they are current.
     pub fn write_view(&mut self, model: &Model, out: &mut Vec<[f32; 2]>, view: Mat4, seconds: f32) {
+        let all = 0..model.vertices.len();
+        self.write_view_spans(model, out, view, seconds, std::slice::from_ref(&all));
+    }
+
+    /// [`Self::write_view`] over `spans` of the vertices alone, for a view that draws only
+    /// those ([`draw_vertices`]): what `out` holds elsewhere is left as it was. Most of a
+    /// circuit's pass is out of any one view (`docs/rendering/frame-thread-cpu.md`, "The shine
+    /// passes").
+    pub fn write_view_spans(
+        &mut self,
+        model: &Model,
+        out: &mut Vec<[f32; 2]>,
+        view: Mat4,
+        seconds: f32,
+        spans: &[Range<usize>],
+    ) {
         let right = Vec3::new(view.x_axis.x, view.y_axis.x, view.z_axis.x);
         let up = Vec3::new(view.x_axis.y, view.y_axis.y, view.z_axis.y);
-        self.refresh(model, seconds);
-        texgen::environment_texcoords_from_units(&self.units, out, right, up);
+        self.refresh(model, seconds, spans);
+        out.resize(model.vertices.len(), [0.0; 2]);
+        texgen::environment_texcoords_from_units(&self.units, spans, out, right, up);
     }
+}
+
+/// For each of `model`'s draws, the span of vertices it indexes: [`build_track`] numbers a
+/// draw's vertices together, so the span is about the draw's own, longer only where it shares
+/// a vertex with an earlier draw.
+#[must_use]
+pub fn draw_vertices(model: &Model) -> Vec<Range<usize>> {
+    model
+        .draws
+        .iter()
+        .map(|draw| {
+            let indices = &model.indices[draw.range.start as usize..draw.range.end as usize];
+            let first = indices.iter().copied().min().unwrap_or(0) as usize;
+            let last = indices.iter().copied().max().map_or(0, |i| i as usize + 1);
+            first..last
+        })
+        .collect()
+}
+
+/// Sorts `spans` and joins the ones that touch, so no vertex is computed twice.
+pub fn merge_spans(spans: &mut Vec<Range<usize>>) {
+    spans.sort_unstable_by_key(|span| span.start);
+    let mut kept = 0;
+    for next in 0..spans.len() {
+        let span = spans[next].clone();
+        if kept > 0 && span.start <= spans[kept - 1].end {
+            spans[kept - 1].end = spans[kept - 1].end.max(span.end);
+        } else {
+            spans[kept] = span;
+            kept += 1;
+        }
+    }
+    spans.truncate(kept);
 }
 
 /// The vertices of `model` (a [`build`] result) with their texture coordinates

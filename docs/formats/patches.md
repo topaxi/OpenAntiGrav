@@ -20,8 +20,8 @@ matches the figure `psarc.md` already records.
 | 2048 EU `PCSF00007` | base, patch, DLC1, DLC2 | base `APP_VER` 01.00 (build 2011-12-06), patch 01.04 (build 2012-06-06), DLC1 01.01, DLC2 01.00 | `param.sfo` of each package |
 | 2048 USA `PCSA00015` | base, patch, DLC1 | base 01.00, patch 01.04, DLC1 01.00 | same |
 | Omega EU `CUSA05670` | base, patch | base 01.00 (`c_date` 2017-12-24), **patch 01.07** | `param.sfo` and `changeinfo.xml` read out of `omega-ps4-eu-patch.pkg` (confidence 95) |
-| HD EU `NPEA00057` (PSN, no Fury) | one full package | `VERSION` 03.00, `APP_VER` 01.25 | installed `PARAM.SFO`; **not an update** - see [hd-psn.md](hd-psn.md), nothing to mount ahead of a base |
-| HD/Fury EU `BCES00664` | disc only | disc `APP_VER` 02.00, `VERSION` 01.03 | `PS3_GAME/PARAM.SFO` |
+| HD EU `NPEA00057` (PSN, no Fury) | full package, six updates | base `VERSION` 03.00, `APP_VER` 01.25; updates to 02.51 | `PARAM.SFO`; [hd-updates.md](hd-updates.md) |
+| HD/Fury EU `BCES00664` | disc, four updates | disc `APP_VER` 02.00, `VERSION` 01.03; updates to 02.51 | `PS3_GAME/PARAM.SFO`, each package's `PARAM.SFO`; [hd-updates.md](hd-updates.md) |
 | Pulse, Pure | UMDs, DLC zips | no patches exist | see [dlc-pack.md](dlc-pack.md) |
 
 ## 2048 v1.04
@@ -237,7 +237,7 @@ base's material and model entries and adds HD-lineage ships - but the replaced s
 `PARAM.SFO` says `APP_VER` 02.00, `VERSION` 01.03, `PS3_SYSTEM_VER` 02.7600. The seven `DATA00`-`DATA06.PSARC`
 are the whole game. `EBOOT.elf` carries `ONL_MSG_CHECK_PATCH` / `PATCH_DOWNLOAD` and `/app_home/DLC3/...`
 literals: the patch and DLC hooks exist, with no payload on the disc (confidence 90). No later HD update was
-ever on the disc, and we hold no HD patch.
+ever on the disc. The updates are Sony's own packages: [hd-updates.md](hd-updates.md).
 
 ## Published and not held
 
@@ -245,10 +245,10 @@ Searched 2026-10-05; nothing was downloaded. Confidence is in the source, not in
 
 | Title | Item | What it is | Held? | Source |
 | --- | --- | --- | --- | --- |
-| HD Fury PS3 `BCES00664` | **patch 2.51**, said to be the last | crossplay with 2048, a fix for a rare freeze on ship select, online stats restored | **no** | PlayStationTrophies thread "Patch 2.51" via search (page not fetchable), RPCS3 wiki and forum list 2.51 for BCES00664; confidence 70 |
+| HD Fury PS3 `BCES00664` | **patch 2.51**, said to be the last | crossplay with 2048, a fix for a rare freeze on ship select, online stats restored | **yes**, with 2.10 to 2.50 | PlayStationTrophies thread "Patch 2.51" via search (page not fetchable), RPCS3 wiki and forum list 2.51 for BCES00664; confidence 70 |
 | HD PS3 | 2.00 | new statistics section, new ship and track selection screens, community and online features | no | search summary of the PlayStation Blog; confidence 55 |
-| HD PS3 | 2.10 (2009-10-28) | small front-end and audio fixes, Eliminator and Detonator score fixes, adverts no longer affect load times | no | [PlayStation Blog, "WipEout HD Patch 2.10 Incoming"](https://blog.playstation.com/archive/2009/10/28/wipeout-hd-patch-2-10-incoming); confidence 80 |
-| HD PS3 | 1.xx and 2.2x-2.5x between | not found | no | open |
+| HD PS3 | 2.10 (2009-10-28) | small front-end and audio fixes, Eliminator and Detonator score fixes, adverts no longer affect load times | yes | [PlayStation Blog, "WipEout HD Patch 2.10 Incoming"](https://blog.playstation.com/archive/2009/10/28/wipeout-hd-patch-2-10-incoming); confidence 80 |
+| HD PS3 | 1.xx | not found | no | open |
 | 2048 Vita | 1.01, 1.02, 1.03 | in the held package's changelog above | the 1.04 package contains them | the package |
 | 2048 Vita | later than 1.04 | none found in any search; Sony's changelog stops at 01.04 | n/a | confidence 65 |
 | 2048 Vita | **DLC3** | the executable names `W2048DLC3PACKAGE` and `Data/art/published/DLC3/Plugins/tracks`; no published pack of that name found | no | open; the two published add-on packs (HD, HD Fury, 2012-06-19, free to PS3 owners) are the held DLC1 and DLC2 ([PlayStation Blog](https://blog.playstation.com/2012/06/19/two-wipeout-2048-dlc-packs-on-psn-today/), [Engadget](https://www.engadget.com/2012-06-19-wipeout-hd-and-fury-come-to-vita-as-2048-dlc-free-if-you-alread.html)) |
@@ -265,7 +265,7 @@ Searched 2026-10-05; nothing was downloaded. Confidence is in the source, not in
 - Cause of the 1,156 replaced 2048 `.rcsmaterial` and 15,640 Omega `.rcsmaterial`: needs a material diff.
 - Where Orbital "Beelzedub" and Omega's "Shake It" remix live (inferred wems and music banks are unread).
 - Which of the 20 new Omega `.wem` and the changed Wwise banks implement the 3D audio.
-- 2048 DLC3 pack: existence; HD 1.xx/2.xx between 2.10 and 2.51.
+- 2048 DLC3 pack: existence; HD 1.xx.
 - The game opens only `PSP2/data.psarc`: none of the 2048 patch is read by the engine here (see
   [2048-status.md](2048-status.md)); the patch's `hdships`, `SP.xml` and grid revisions are unused.
 
@@ -277,5 +277,5 @@ The 2048 downloadable archives are mounted behind the patch and are also an `oag
 | --- | --- | --- | --- |
 | 2048 EU / USA | `patch-v104/PSP2/data1.psarc`, `data2.psarc` (identical in both regions) | **yes**, as `ArchiveCandidates::patch` | `data2`, `data1`, `data`, then `dlc1`, `dlc2`. The v1.04 executable mounts `data`, `data1`, `data2`, `dlc1`, `dlc2` at one FIOS2 mount point ([archive-mount.md](../ghidra/functions/vita-2048-eu-v104/archive-mount.md), confidence 80); the base is shadowed by the patch (Vita3K, confidence 85); `data2` over `data1` and DLC against patch are **chosen, not measured** |
 | Omega EU | patch v1.07: `data05`, `07`, `08`, `09` | yes, all four | `data09` (bulk), then `data08`, `data07`, `data05`, then base `data00` to `data04`; patch ahead of base is **chosen, not measured** (no PS4 observed). None of the 19,597 patch paths is hidden behind a base copy by this order; order among the four patch archives is unmeasured |
-| HD / Fury EU | none: `PS3_UPDATE/PS3UPDAT.PUP` on the disc is system firmware | n/a | not checkable (no game update held, disc is 1.03) |
+| HD / Fury EU | `dev_hdd0/game/<serial>`: `data07`, `data08`; PSN also `data04`-`06` | **yes**, as `ArchiveCandidates::patch` | `data08`, `data07`, then the base, read off 02.51's loader, confidence 85 ([hd-updates.md](hd-updates.md)). `PS3_UPDATE/PS3UPDAT.PUP` on the disc is system firmware |
 | Pulse (PSP, PS2), Pure | none exist | n/a | not checkable; their DLC zips are mounted as packs, see [dlc-pack.md](dlc-pack.md) |

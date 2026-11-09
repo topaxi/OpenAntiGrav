@@ -29,7 +29,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::quake)
         else {
             return false;
@@ -48,7 +48,7 @@ impl Race {
         let forward_dot_tangent = ship
             .standing
             .course_index
-            .and_then(|index| self.sim.course.as_ref()?.tangent(index as usize))
+            .and_then(|index| self.sim.course.as_deref()?.tangent(index as usize))
             .map(|tangent| tangent.dot(ship.physics.body.forward()))
             .unwrap_or(1.0);
         self.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
@@ -112,7 +112,7 @@ impl Race {
         let length = self
             .sim
             .course
-            .as_ref()
+            .as_deref()
             .map_or(0.0, |course| course.length());
         let mut wave = self.sim.world.quake;
         if let Some(live) = wave.as_mut()
@@ -133,7 +133,7 @@ impl Race {
             length,
             dt,
         );
-        let Some(course) = self.sim.course.as_ref() else {
+        let Some(course) = self.sim.course.as_deref() else {
             return;
         };
         let Some(mut wave) = wave else {
@@ -221,6 +221,7 @@ impl Race {
         for (slot, hit) in hits.iter().enumerate() {
             if hit.landed {
                 self.record_pending_hit(slot, wave.owner);
+                self.credit_hit_points(slot, wave.owner, hit.amount);
             }
         }
         self.sim.world.quake = Some(wave);
@@ -310,6 +311,7 @@ impl Race {
         // other hit - see `race::hit_sparks`.
         if report.landed {
             self.record_pending_hit(beam.target as usize, beam.owner);
+            self.credit_hit_points(beam.target as usize, beam.owner, report.asked);
             let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
             if let Some(hit) = hits.get_mut(beam.target as usize) {
                 hit.landed = true;

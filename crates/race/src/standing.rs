@@ -97,6 +97,8 @@ pub struct Standing {
     /// because place in Eliminator is not what `places` computes. See
     /// `docs/gameplay/race-modes.md#eliminator`.
     pub kills: u32,
+    /// A score Eliminator's points, [`crate::ScoreLaw`]. Zero on every other race.
+    pub score: f32,
     /// Times this craft has been destroyed and come back. Counted in every
     /// mode a craft returns in - since 2026-09-16 an opponent in a single
     /// race does, the way the original's states 5 and 6 bring it back - and
@@ -122,6 +124,7 @@ impl Default for Standing {
             best_lap_ticks: None,
             lap_splits: [None; MAX_RECORDED_LAPS],
             kills: 0,
+            score: 0.0,
             deaths: 0,
         }
     }

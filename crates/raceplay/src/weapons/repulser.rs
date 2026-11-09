@@ -19,7 +19,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::repulser)
         else {
             return false;
@@ -50,7 +50,7 @@ impl Race {
     /// raises (`+0x3c |= 4`) leads to in `MinePool_Update` and `BombPool_Update`
     /// ([mine.md](../../../../../docs/ghidra/functions/psp-pulse-usa/mine.md)).
     pub(crate) fn advance_repulsers(&mut self) {
-        let Some(course) = self.sim.course.as_ref() else {
+        let Some(course) = self.sim.course.as_deref() else {
             return;
         };
         let rules = self.sim.damage_rules();
@@ -114,6 +114,7 @@ impl Race {
         for (slot, owner) in credits {
             if hits[slot].landed {
                 self.record_pending_hit(slot, owner);
+                self.credit_hit_points(slot, owner, hits[slot].amount);
             }
         }
     }

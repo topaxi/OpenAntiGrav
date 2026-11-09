@@ -1,0 +1,51 @@
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/replay-header.tosd", version = "1.0.0" }
+title = "Wipeout Pulse"
+track = 'Data\Track\track.vex'
+mode = "time_trial"
+class = "Venom"
+team = "feisar"
+seed = 7
+tick_rate = 60
+build = "abc123"
+hash_interval = 60
+slots = [0]
+ticks = 7200
+
+[options]
+pilot_assist = "normal"
+scheme = "veteran"
+
+[ghost]
+lap = 2
+start_tick = 600
+lap_ticks = 3000
+
+[setup]
+mode = "time_trial"
+class = "Venom"
+track = 'Data\Track\track.vex'
+team = "feisar"
+hull_variant = "alt"
+skin = "Eliminator"
+opponent_teams = ["auricom", "qirex"]
+opponents = true
+no_driver_for_class = false
+people = 1
+views = 1
+laps_override = 3
+weapons_override = true
+eliminator_kill_target = 10
+eliminator_score_target = 500
+add_on_campaign = "DLC1"
+zone_model = true
+
+[fork]
+tick = 4312
+offered_at = 4300
+seats = [0]
+parent_build = "def456"
+parent_hash = "0x0123456789abcdef"
+
+[finish]
+place = 2
+ticks = 7100

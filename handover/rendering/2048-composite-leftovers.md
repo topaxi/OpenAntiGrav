@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [2048]
-updated: 2026-10-31
+updated: 2026-11-04
 summary: "2048 composite: vignette, screen tint, alphaTex, other texel programs"
 ---
 
@@ -18,6 +18,8 @@ the compare-side switch in
 
 Held at 1.15, ours' frame means are 54.9 / 61.4 / 36.7 against the original's
 60.2 / 83.1 / 48.1 (Queens Mall, Empire Climb, Vineta K): now a little darker.
+
+Omega's four-level bloom (`tonemap.md`, "The bloom chain") is **checked, differs** here: no such program in 2048's eboot and no `Bright-pass` key in its 50 `.envsettings`.
 
 ## Open
 

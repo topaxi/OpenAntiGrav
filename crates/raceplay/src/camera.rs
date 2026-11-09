@@ -7,6 +7,10 @@
 
 use super::*;
 
+/// The near plane every race projection uses, in world units.
+#[cfg(feature = "view")]
+pub const NEAR_PLANE: f32 = 1.0;
+
 /// Converts the disc's `pos_length` into the one
 /// [`ChaseParams::pos_length`] documents.
 ///
@@ -180,7 +184,21 @@ impl Race {
         if let Some(view) = self.extra_view() {
             return view;
         }
-        self.view_between(self.tick_view(), |previous| previous.view)
+        self.lens_sampled(self.view_between(self.tick_view(), |previous| previous.view))
+    }
+
+    /// `view` through the lens sample an accumulated depth of field frame is drawn with
+    /// ([`crate::photo::LensShift`]), or `view` itself with none.
+    fn lens_sampled(&self, view: Mat4) -> Mat4 {
+        match self
+            .view
+            .photo
+            .as_ref()
+            .and_then(crate::photo::Photo::shift)
+        {
+            Some(shift) => shift.apply(view),
+            None => view,
+        }
     }
 
     /// [`Self::view`] as this tick leaves it, never blended.
@@ -206,7 +224,9 @@ impl Race {
         if let Some(view) = self.extra_view_unshaken() {
             return view;
         }
-        self.view_between(self.tick_view_unshaken(), |previous| previous.unshaken)
+        self.lens_sampled(
+            self.view_between(self.tick_view_unshaken(), |previous| previous.unshaken),
+        )
     }
 
     /// [`Self::view_unshaken`] as this tick leaves it, never blended.
@@ -504,15 +524,25 @@ impl Race {
         (craft, camera)
     }
 
-    /// What may be drawn this frame: the one row of the section a station camera is placed by
-    /// ([`Self::station_camera_section`]), or the craft's and the camera's own sections with
+    /// What may be drawn this frame. **Everything while photo mode is open**, on every title
+    /// and over the director's camera too: a shot must not lose scenery to a visibility set
+    /// that was authored for a craft in a race (the draws still go through the frustum test).
+    /// Otherwise the one row of the section a station camera is placed by
+    /// ([`Self::station_camera_section`]) or the pre-race flyby's camera stands in
+    /// ([`Self::flyby_camera_section`]), or the craft's and the camera's own sections with
     /// padding for every other camera ([`Self::visibility_sections`]), narrowed to the view.
     pub(super) fn visible_set(
         &self,
         visibility: &super::visibility::TrackVisibility,
         view_projection: &Mat4,
     ) -> VisibleSet {
-        match self.station_camera_section() {
+        if self.view.photo.is_some() {
+            return VisibleSet::everything();
+        }
+        match self
+            .station_camera_section()
+            .or_else(|| self.flyby_camera_section())
+        {
             Some(section) => visibility.set_exact(section, view_projection),
             None => {
                 let (craft, camera) = self.visibility_sections();
@@ -533,11 +563,30 @@ impl Race {
     /// inside a tube whose inside the original's mask leaves out.
     #[must_use]
     pub fn station_camera_section(&self) -> Option<u8> {
-        if self.extra_viewpoint().is_some() {
+        if self.extra_viewpoint().is_some() || self.view.photo.is_some() {
             return None;
         }
         self.drawn_craft_of_a_station_camera()
             .map(|slot| self.section_of_slot(slot))
+    }
+
+    /// The section the draws are masked with during the pre-race flyby: that of the spline
+    /// sample nearest the camera, wherever on the circuit that is, `None` outside the flyby.
+    ///
+    /// The render-view publisher (`FUN_08882cbc`) locates the camera itself on the AI track
+    /// with no cursor and publishes the located section, the row the draws are masked with.
+    /// The camera flies far from the craft and the racing line, so the craft's window and
+    /// half-width test of [`Self::visibility_sections`] read [`UNPLACED`], which drew every
+    /// section: Platinum Rush's building then shows the coplanar panes of a group the
+    /// original's row leaves out (`docs/gameplay/race-intro.md`, "The flyby is masked by the
+    /// section under its camera").
+    #[must_use]
+    pub fn flyby_camera_section(&self) -> Option<u8> {
+        if !self.in_intro() {
+            return None;
+        }
+        let (_, sample, _) = self.sim.spline.nearest(self.camera_position())?;
+        Some(sample.section_id)
     }
 
     /// The craft the camera draws when it stands on an authored station: the destroy camera's
@@ -573,7 +622,33 @@ impl Race {
     /// stretch that crosses itself, and a global scan could take it to the wrong stretch (the bridge above the
     /// road): that stays *draw everything*, as [`Self::visibility_sections`] documents.
     fn located_sample(&self, ship: &oag_gameplay::Ship) -> Option<usize> {
-        let index = usize::from(ship.segment);
+        self.located_from(ship, usize::from(ship.segment))
+    }
+
+    /// The section of the craft the picture frames ([`Self::framed_slot`]), [`UNPLACED`] where
+    /// it cannot be told. A person's craft is located by the tick in `Ship::segment`; an
+    /// opponent's `segment` is never written, and its driver's index on its own line, mapped
+    /// to the sample table, is where the simulation has it (photo mode's subject is usually
+    /// one).
+    pub(super) fn section_of_framed(&self) -> u8 {
+        let slot = self.framed_slot();
+        let ship = &self.sim.world.ships[slot];
+        let index = if self.sim.world.person_flown(slot) {
+            self.located_sample(ship)
+        } else {
+            let line = usize::try_from(ship.driver.index).unwrap_or(usize::MAX);
+            self.located_from(
+                ship,
+                self.sample_index_for(slot, line).unwrap_or(usize::MAX),
+            )
+        };
+        index.map_or(UNPLACED, |index| {
+            self.section_of(index, ship.physics.body.position)
+        })
+    }
+
+    /// [`Self::located_sample`] from `index`, where the simulation last had the craft.
+    fn located_from(&self, ship: &oag_gameplay::Ship, index: usize) -> Option<usize> {
         if index < self.sim.spline.len()
             && self.section_of(index, ship.physics.body.position) != UNPLACED
         {
@@ -652,7 +727,7 @@ impl Race {
     /// fixed fov instead misregisters by 1.12-1.26x depending on the tick's speed.
     #[must_use]
     pub fn projection(&self, aspect: f32, far: f32, setting: oag_display::display::Fov) -> Mat4 {
-        oag_render::camera::projection(self.vertical_fov(aspect, setting), aspect, 1.0, far)
+        oag_render::camera::projection(self.vertical_fov(aspect, setting), aspect, NEAR_PLANE, far)
     }
 
     /// The camera the per-frame `LodGroup` switch runs from this frame: the
@@ -669,6 +744,16 @@ impl Race {
             fov_degrees: self.vertical_fov(aspect, setting).to_degrees(),
             detail: self.view.model_detail,
         }
+    }
+
+    /// The original's `g_camera_fov_degrees` for this view: the authored field plus the speed
+    /// widen, before the player's setting and the window's fit. `ViewCull_ViewDepth` multiplies
+    /// every list-B depth by this over 65 (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`,
+    /// "The list-B queue key").
+    #[must_use]
+    pub fn camera_fov_degrees(&self) -> f32 {
+        self.vertical_fov(AUTHORED_ASPECT, oag_display::display::Fov::AUTHORED)
+            .to_degrees()
     }
 
     /// The vertical field of view, in radians, that [`Self::projection`] is

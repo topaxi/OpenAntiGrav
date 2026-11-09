@@ -45,6 +45,8 @@ const ABSENCE: &[&str] = &[
     "no picture:",
     // A DLC pack that would not open, through [`dlc_problem`].
     "(not mounted)",
+    // A texture pack that is on and cannot be used (`crate::texture_pack::engage`).
+    "texture pack not used",
 ];
 
 /// The report line for a DLC pack that would not open or was skipped, so every
@@ -152,6 +154,7 @@ mod tests {
         r"Data\Mixed\Case.mip: ABSENT - Draws Nothing",
         r"WO_X: sprite of a, b did not fit the sprite sheet - drawn as the procedural profile",
         "dlc: data/images/dlc/pack.zip: invalid Zip archive: Could not find EOCD (not mounted)",
+        "texture pack not used: Pulse Upscale: its [games] does not name UCUS-98712",
     ];
 
     /// Sentences that report what loaded, which must stay out of the default log.
@@ -166,6 +169,8 @@ mod tests {
         "track audio: 7 node(s) author no bank and no cue name, an exporter default nothing was assigned to",
         r"track audio talonsj~SETREG_01: 1 node(s) are control only: ~SETREG_01 is a control cue",
         "racing on Wipeout Pulse",
+        "texture pack Pulse Upscale: 2392 key(s), pictures read as textures are decoded",
+        "texture pack Pulse Upscale: 453 texture(s) replaced",
         r"slot 0: no Data\Ships\Assegai\textures\ambient_shadow.gtf - the blob shadow falls back to a generated falloff",
         "start gantry x.vex on node Some(74): 6 draw(s) parked outside the panel are not drawn: the FINAL LAP states",
         r"billboard slot 7: /Data/Billboards/Pulse_Adverts/auricom/AURICOM_LANDSCAPE_01.vex drawn through its own camera into a 128x128 target shown on the circuit's billboard7.tga quad(s)",

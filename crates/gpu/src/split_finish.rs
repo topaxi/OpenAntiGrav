@@ -5,7 +5,7 @@
 //! is about half the frame thread on HD's Anulpha Pass (`docs/rendering/frame-thread-cpu.md`).
 //! It runs on one encoder at a time, but two encoders finish independently. So the frame loop
 //! opens a [`Frame`], the scene calls [`split`] where a run of passes is complete, and the
-//! closed encoder is finished by a worker thread while this one records the rest. The buffers
+//! closed encoder is finished by another thread while this one records the rest. The buffers
 //! go to the queue in one submission, in the order they were recorded, so what the GPU runs
 //! and every queue write it sees are what one encoder gave it.
 //!
@@ -30,14 +30,17 @@ thread_local! {
 }
 
 /// A closed encoder: finished, or being finished on the worker.
-enum Closed {
+#[derive(Debug)]
+pub enum Closed {
     Finished(wgpu::CommandBuffer),
     #[cfg(not(target_arch = "wasm32"))]
     Finishing(std::sync::mpsc::Receiver<wgpu::CommandBuffer>),
 }
 
 impl Closed {
-    fn buffer(self) -> wgpu::CommandBuffer {
+    /// Its command buffer, waiting for the worker if it is not done.
+    #[must_use]
+    pub fn buffer(self) -> wgpu::CommandBuffer {
         match self {
             Self::Finished(buffer) => buffer,
             #[cfg(not(target_arch = "wasm32"))]
@@ -61,10 +64,19 @@ impl Frame {
     /// Opens a frame on this thread when [`wanted`] says this machine gains from the split.
     pub fn begin() -> Self {
         static WANTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-        let wanted = *WANTED.get_or_init(wanted);
-        if wanted {
-            OPEN.with(|open| *open.borrow_mut() = Some(Vec::new()));
+        if *WANTED.get_or_init(wanted) {
+            Self::open()
+        } else {
+            Self {
+                _thread: std::marker::PhantomData,
+            }
         }
+    }
+
+    /// Opens a frame on this thread whatever [`wanted`] says: for a test of what a split
+    /// frame draws on a machine that would not split.
+    pub fn open() -> Self {
+        OPEN.with(|open| *open.borrow_mut() = Some(Vec::new()));
         Self {
             _thread: std::marker::PhantomData,
         }
@@ -93,6 +105,55 @@ impl Drop for Frame {
     }
 }
 
+/// Submits `last`, behind everything this thread's open frame has split off so far, in one
+/// submission; with no frame open it is `queue.submit` of `last` alone.
+///
+/// For a caller that submits part of a frame ahead of [`Frame::submit`] (a split screen's view,
+/// whose post work reads the picture its own scene pass drew): the split-off passes go out
+/// first, or `last` would run ahead of the passes it follows. The frame stays open.
+pub fn submit_with_closed(queue: &wgpu::Queue, last: wgpu::CommandBuffer) -> wgpu::SubmissionIndex {
+    let closed = OPEN
+        .with(|open| open.borrow_mut().as_mut().map(std::mem::take))
+        .unwrap_or_default();
+    let mut buffers: Vec<wgpu::CommandBuffer> = closed.into_iter().map(Closed::buffer).collect();
+    buffers.push(last);
+    queue.submit(buffers)
+}
+
+/// `encoder` closed: finished on another thread when this thread has an open [`Frame`], since
+/// the frame's work then has somewhere to wait for it, and finished here otherwise.
+#[must_use]
+pub fn close(encoder: wgpu::CommandEncoder) -> Closed {
+    if frame_open() {
+        finish_elsewhere(encoder)
+    } else {
+        Closed::Finished(encoder.finish())
+    }
+}
+
+/// Whether this thread has an open [`Frame`].
+#[must_use]
+pub fn frame_open() -> bool {
+    OPEN.with(|open| open.borrow().is_some())
+}
+
+/// Puts `closed` behind what this thread's open frame has closed so far, for [`Frame::submit`]
+/// to submit with the rest; with no frame open, submits them now. Every queue write made before
+/// that submit, for all that they are made after these commands were recorded, lands ahead of
+/// them: a caller has to know that none of what follows writes what these commands read.
+pub fn defer(queue: &wgpu::Queue, closed: Vec<Closed>) {
+    let left = OPEN.with(|open| match open.borrow_mut().as_mut() {
+        Some(frame) => {
+            frame.extend(closed);
+            Vec::new()
+        }
+        None => closed,
+    });
+    if !left.is_empty() {
+        queue.submit(left.into_iter().map(Closed::buffer));
+    }
+}
+
 /// Whether frames split their encoder: `OAG_SPLIT_FINISH` when set (`0` off, anything else
 /// on), otherwise [`uniform_cores`] over this machine's core capacities.
 #[must_use]
@@ -111,7 +172,11 @@ pub fn uniform_cores(capacities: &[u32]) -> bool {
 
 /// Each core's scheduler capacity (`/sys/devices/system/cpu/cpu<N>/cpu_capacity`, 1024 for the
 /// fastest), in core order; empty where the kernel does not report it or on another OS.
-fn core_capacities() -> Vec<u32> {
+///
+/// Empty means unreadable, not uniform: [`uniform_cores`] counts it as uniform for the split,
+/// and a caller that needs positive evidence of equal cores checks the list is not empty.
+#[must_use]
+pub fn core_capacities() -> Vec<u32> {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         (0..)
@@ -126,6 +191,26 @@ fn core_capacities() -> Vec<u32> {
     {
         Vec::new()
     }
+}
+
+/// True on native Linux with at least two cores that all report the same capacity: positive
+/// evidence of equal cores, which what has been measured only on such a machine asks for.
+#[must_use]
+pub fn known_equal_cores() -> bool {
+    #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
+    {
+        equal_cores(&core_capacities())
+    }
+    #[cfg(not(all(target_os = "linux", not(target_arch = "wasm32"))))]
+    {
+        false
+    }
+}
+
+/// A list of at least two capacities, all the same.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn equal_cores(capacities: &[u32]) -> bool {
+    capacities.len() > 1 && uniform_cores(capacities)
 }
 
 /// Closes `encoder` here and goes on in a fresh one, when this thread has an open [`Frame`];
@@ -147,47 +232,98 @@ pub fn split(device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn finish_elsewhere(encoder: wgpu::CommandEncoder) -> Closed {
+#[must_use]
+pub fn finish_elsewhere(encoder: wgpu::CommandEncoder) -> Closed {
     Closed::Finished(encoder.finish())
 }
 
-/// Sends `encoder` to the finishing thread, started on first use; finishes it here if the
-/// thread cannot be started.
+/// How many threads finish a frame's closed encoders where [`known_equal_cores`], each encoder
+/// on the one holding the fewest: encoders finish independently, and a frame closes its next
+/// while the last is still finishing, so too few threads queue them and the frame thread waits
+/// for the queue. A view of a split is a thread's worth by itself, and what follows it needs
+/// a third (`docs/rendering/split-screen.md`, "One submission"). Elsewhere one thread.
+/// `OAG_FINISH_THREADS` overrides it (an A/B switch for benches, nothing a player sets).
 #[cfg(not(target_arch = "wasm32"))]
-fn finish_elsewhere(encoder: wgpu::CommandEncoder) -> Closed {
+const FINISH_THREADS: usize = 3;
+
+/// Sends `encoder` to a finishing thread, started on first use; finishes it here if no thread
+/// can be started.
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+pub fn finish_elsewhere(encoder: wgpu::CommandEncoder) -> Closed {
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
     type Job = (wgpu::CommandEncoder, mpsc::Sender<wgpu::CommandBuffer>);
-    static WORKER: std::sync::OnceLock<Option<std::sync::Mutex<mpsc::Sender<Job>>>> =
-        std::sync::OnceLock::new();
-    let worker = WORKER.get_or_init(|| {
-        let (jobs, inbox) = mpsc::channel::<Job>();
-        std::thread::Builder::new()
-            .name("oag-finish".into())
-            .spawn(move || {
-                for (encoder, answer) in inbox {
-                    let _ = answer.send(encoder.finish());
-                }
-            })
+    /// A finishing thread: where to send it work, and how many encoders it holds.
+    struct Worker {
+        jobs: std::sync::Mutex<mpsc::Sender<Job>>,
+        held: std::sync::Arc<AtomicUsize>,
+    }
+    static WORKERS: std::sync::OnceLock<Vec<Worker>> = std::sync::OnceLock::new();
+    let workers = WORKERS.get_or_init(|| {
+        let threads = std::env::var("OAG_FINISH_THREADS")
             .ok()
-            .map(|_| std::sync::Mutex::new(jobs))
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(if known_equal_cores() {
+                FINISH_THREADS
+            } else {
+                1
+            });
+        (0..threads)
+            .filter_map(|_| {
+                let (jobs, inbox) = mpsc::channel::<Job>();
+                let held = std::sync::Arc::new(AtomicUsize::new(0));
+                let done = held.clone();
+                std::thread::Builder::new()
+                    .name("oag-finish".into())
+                    .spawn(move || {
+                        for (encoder, answer) in inbox {
+                            let _ = answer.send(encoder.finish());
+                            done.fetch_sub(1, Ordering::Release);
+                        }
+                    })
+                    .ok()
+                    .map(|_| Worker {
+                        jobs: std::sync::Mutex::new(jobs),
+                        held,
+                    })
+            })
+            .collect()
     });
-    let Some(jobs) = worker else {
+    // The thread holding the fewest: a split's small encoders must not queue behind a view's.
+    let Some(worker) = workers
+        .iter()
+        .min_by_key(|worker| worker.held.load(Ordering::Acquire))
+    else {
         return Closed::Finished(encoder.finish());
     };
+    worker.held.fetch_add(1, Ordering::AcqRel);
     let (answer, finished) = mpsc::channel();
-    let sent = jobs
+    let sent = worker
+        .jobs
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .send((encoder, answer));
     match sent {
         Ok(()) => Closed::Finishing(finished),
-        Err(mpsc::SendError((encoder, _))) => Closed::Finished(encoder.finish()),
+        Err(mpsc::SendError((encoder, _))) => {
+            worker.held.fetch_sub(1, Ordering::AcqRel);
+            Closed::Finished(encoder.finish())
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn equal_cores_takes_two_or_more_the_same() {
+        assert!(equal_cores(&[1024; 8]));
+        assert!(!equal_cores(&[]));
+        assert!(!equal_cores(&[1024]));
+        assert!(!equal_cores(&[253, 1024]));
+    }
 
     fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
         let instance = wgpu::Instance::default();
@@ -237,6 +373,58 @@ mod tests {
             .expect("a mapped buffer reads")
             .to_vec();
         assert_eq!(bytes, [0, 0, 0, 0, 1, 1, 1, 1]);
+    }
+
+    /// A part submitted ahead of the frame's own submit still runs behind what was split off
+    /// before it: a clear, then a copy over half of it submitted by `submit_with_closed`.
+    #[test]
+    fn a_part_submitted_early_runs_behind_what_was_split_off_before_it() {
+        let Some((device, queue)) = device() else {
+            return;
+        };
+        let target = buffer(
+            &device,
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+            &[9; 8],
+        );
+        let ones = buffer(&device, wgpu::BufferUsages::COPY_SRC, &[1; 4]);
+        let out = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("split test readback"),
+            size: 8,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let frame = Frame::open();
+        let mut encoder = device.create_command_encoder(&Default::default());
+        encoder.clear_buffer(&target, 0, None);
+        split(&device, &mut encoder);
+        encoder.copy_buffer_to_buffer(&ones, 0, &target, 4, 4);
+        submit_with_closed(&queue, encoder.finish());
+        let mut rest = device.create_command_encoder(&Default::default());
+        rest.copy_buffer_to_buffer(&target, 0, &out, 0, 8);
+        frame.submit(&queue, rest);
+        out.slice(..)
+            .map_async(wgpu::MapMode::Read, |r| r.expect("maps"));
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("the readback lands");
+        let bytes = out
+            .slice(..)
+            .get_mapped_range()
+            .expect("a mapped buffer reads")
+            .to_vec();
+        assert_eq!(bytes, [0, 0, 0, 0, 1, 1, 1, 1]);
+    }
+
+    /// With no frame open `submit_with_closed` is a plain submit.
+    #[test]
+    fn with_no_open_frame_it_submits_the_one_buffer() {
+        let Some((device, queue)) = device() else {
+            return;
+        };
+        let encoder = device.create_command_encoder(&Default::default());
+        submit_with_closed(&queue, encoder.finish());
+        assert!(OPEN.with(|open| open.borrow().is_none()));
     }
 
     /// The S24's capacities split nothing; the Deck's and unreadable ones split.

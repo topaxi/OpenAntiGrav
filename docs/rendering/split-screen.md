@@ -117,10 +117,11 @@ puts the player's back. Chosen, not measured:
 `Scene::render_viewports` calls the ordinary `Scene::render` once per view. Six
 things make that more than a loop:
 
-1. **One encoder and one submit per view.** `Scene::render` writes every
-   drawable's uniforms with `queue.write_buffer`, which lands before the
-   *submission's* commands. Two views in one encoder would both draw with the last
-   view's matrices.
+1. **One encoder per view, and each view's writes ahead of its commands.**
+   `Scene::render` writes every drawable's uniforms with `queue.write_buffer`, which lands
+   before the *submission's* commands. Two views in one encoder would both draw with the last
+   view's matrices. `interleaved` submits per view; a batched recording keeps a later view's
+   writes in a log and copies them just ahead of its commands ("One submission", below).
 2. **Only the first view clears.** The scene pass clears the whole attachment
    whatever the viewport is. Later views load the colour, the velocity and the
    depth (2026-10-15, rule 3; the depth was cleared each time before, which is
@@ -158,14 +159,14 @@ things make that more than a loop:
      is the load, which "Per-view blur" measures. The velocity buffer is still always
      written, setting or no setting (`hd-gpu`'s experiment to gate it is on its own branch
      and is not on `main`).
-   - *The blur runs per view, after the last, and one submission each.* A view's blur
+   - *The blur runs per view, after the last, its writes ahead of its commands.* A view's blur
      cannot run as the view is drawn for rule 4's reason (the next view's multisample
      resolve rewrites the whole resolved target). So `Scene::blur_split_views` runs the
      ordinary chain once per view over that view's rectangle: its taps clamp to the
      rectangle (the shader's own `rect_offset`/`rect_size` clamp, written for the aspect
      bars of a capture), and every intermediate target is cleared whole and drawn only
      inside the rectangle, so no view's velocity reaches another's pixels across the 2
-     pixel gap. **One encoder and one submit per view's chain**, for rule 1's reason:
+     pixel gap. **One encoder per view's chain, its writes ahead of it**, for rule 1's reason:
      `MotionBlur::render` writes one uniform buffer with `queue.write_buffer`, which lands
      before the submission's commands, so two chains in one encoder would both run with the
      last view's rectangle, tile and shake (lanes of a uniform buffer and bind groups per
@@ -228,7 +229,7 @@ things make that more than a loop:
    view's pixels (a two-player HD race drew a black top view, `hd-split-black-view`), so the
    views only fill the linear target and `Scene::run_split_post`
    (`crates/raceplay/src/scene/split_exposure.rs`) then runs the chain **once per view over
-   that view's rectangle of the finished scene**, one encoder and one submit each, for rule
+   that view's rectangle of the finished scene**, one encoder each and its writes ahead of it, for rule
    3's reason (the chain's constants are written with the queue). The chain's own pieces,
    in `oag_post::hd_bloom::Chain::run_view` and `oag_post::omega_tonemap::Chain::run_view`:
    - *Each view's own ladder and exposure.* The luminance reduction ladder is cut over the
@@ -738,8 +739,10 @@ serial, and on that machine (`powersave` governor, other lanes' builds on the E-
 scoped spawn and join between frames costs about 200 us, and a parked worker gains nothing on a
 2 x 250 us split while a spinning one halves it. A view's recording is a 0.2 to 0.4 ms burst once a
 frame, which a sleeping core does not wake and clock up for. **So the default is `interleaved`**
-(prepare, record and submit per view, as before) on every target, and `OAG_SPLIT_RECORDING=serial`,
-`reversed` or `threaded` selects the others. On the web the views always record on the page's
+(prepare, record and submit per view, as before), and `OAG_SPLIT_RECORDING=serial`,
+`reversed` or `threaded` selects the others. On the Steam Deck, whose cores are equal, threads win
+instead; the rule that picks them there only, and why it is still off, is under "Threaded
+recording on equal cores" below. On the web the views always record on the page's
 thread. Numbers in [render bench](../tools/render-bench.md#threaded-views-2026-10-15-threaded-views);
 `split_recording_ground_truth` captures one frame interleaved, reversed and threaded and fails on a
 difference, which found the one leak there was (a drawable with no slot on the shared matrix
@@ -1157,7 +1160,8 @@ evidence here.
 4. ~~**Recording the views on several threads**~~ **Built and measured, 2026-10-15**
    (`threaded-views`): the views are independent at record time, and recording them at once
    cost 10 to 100% more CPU on the notebook, so it is opt-in (`OAG_SPLIT_RECORDING=threaded`);
-   see "Prepare and record" under "Cost". The Steam Deck reading decides any other default.
+   see "Prepare and record" under "Cost". On the Deck it wins; see "Threaded recording on equal
+   cores" at the end.
 5. ~~Per-view bloom~~ **Done, 2026-10-15** (rule 4); what it costs is measured under
    "Per-view glow". ~~Motion blur~~ **Done, 2026-10-15** (rule 3), measured under "Per-view
    blur". ~~The temporal upscaler stays omitted~~ **Done, 2026-10-16** (rule 3, "Per-view
@@ -2006,3 +2010,300 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
 - Not a 2048 or Omega finding: the viewport and camera code is title-agnostic, but
   only Pulse's frames were looked at, so Pure, Pulse PS2, HD, 2048 and Omega are
   unchecked under a split.
+
+## Split finish under an interleaved split (2026-11-04)
+
+With `oag_gpu::split_finish` on (the default where every core reports the same capacity: the
+Steam Deck, a desktop Zen; `OAG_SPLIT_FINISH=1` forces it), each view's scene pass is split
+off the view's encoder and held for the frame's own submit. The interleaved loop in
+`Scene::render_slots` submits each view as it is recorded, so what followed the scene pass in
+the view (the sun flare, the glow's bright pass, the zoom, the timer resolve) went to the
+queue ahead of the pass it reads, and the passes ran after every view's tail. A two-player
+Pure race on Vineta K at the grid showed it: the first view's sun flare and the washed-out
+glow around it were missing with `OAG_SPLIT_FINISH=1` and present with `=0`, on a binary built
+before the flare's buffer change as well. The windowed run is the only place it shows (the
+split frame opens only in the window's draw loop, never in `--screenshot`), with the screen
+filter, motion blur, MSAA and reconstruction forced off so the post chain does not hide it.
+
+`oag_gpu::split_finish::submit_with_closed` submits a view's buffer behind whatever the open
+frame has split off so far, and the loop uses it. Test:
+`tests::split_finish::a_split_drawn_in_an_open_frame_is_the_picture_it_is_without_one` draws
+a blurred split with and without an open frame and compares each view's rows (red with the
+plain `queue.submit`, green with the helper); `split_finish::tests` covers the helper's order.
+The batched recordings (`Serial`, `Reversed`, `Threaded`, `Overlapped`) never call
+`Scene::render`, so they split nothing.
+
+**On the Steam Deck (2026-11-04).** Two-player Pure on Vineta K, vertical split, in a headless
+gamescope. **The "800p" rows are a 1280x800 window drawn at 1920x1200**: the Deck profile's render
+scale 150 applied there, while the 1080p and 4K rows pass `--render-scale 100` so the render size
+is the window's. Compare arms within one size, never across sizes (the 1080p rows draw fewer
+pixels than the "800p" ones). Settings: `vsync = "off"`, `frame_limit = "unlimited"`, `target_fps = "off"`, dist
+build with znver2 in the Debian container, mean of the phase line after the first six seconds,
+the Deck's lock held, arms interleaved, 4 rounds (3 for the modes). Frame-thread ms a frame
+(`scene` / `submit` / `total`): before the fix, split finish on, 4.4 / 0.83 / 6.06 (the picture
+was wrong); after the fix, split finish on, 6.3 / 0.47 / 7.65; after, `OAG_SPLIT_FINISH=0`,
+6.1 / 0.45 / 7.40. So the fix costs 1.5 ms against the build with the bug, which skipped the
+wait on the finishing thread, and 0.25 ms against no split at all: under an interleaved split
+the finish is on the critical path again and the split gains nothing there. fps was 102.6 in every arm (something
+other than this CPU time paces the frame), so these are CPU headroom numbers. The recording
+modes, same setup, `total`: `serial` 7.40, `overlapped` 7.73, **`threaded` 6.94** (6.78 to 7.18),
+against 7.65 for the interleaved default. `threaded` is the lead on this machine, the notebook
+that measured it slower being a hybrid part (`split_record`); not made the default here.
+
+Other sizes, same setup with `--render-scale 100` (2 rounds each, `total` ms; at 4K the frame
+is GPU-bound, fps 28.5 and p99 38 ms in every arm, so only the CPU headroom differs). 1080p:
+before the fix 5.69, after 7.47 (7.27 and 7.68), `OAG_SPLIT_FINISH=0` 7.20, `threaded` 7.33 (6.81
+and 7.86, noisy). 4K: before 7.71, after 10.10, `OAG_SPLIT_FINISH=0` 10.10, `threaded` 9.52.
+So the split finish costs 0.25 ms at 800p, 0.27 ms at 1080p and nothing at 4K under an
+interleaved split, and `threaded` saves 0.6 to 0.7 ms at 800p and 4K. Pure only.
+
+**Rerun at a true render size, and HD (2026-11-04).** The "800p" rows above drew at 1920x1200; these
+rerun every size with `--render-scale 100` so the render is the window (1280x800, 1920x1080,
+3840x2160), same Deck and setup, `--players 2 --split-cut vertical`, `total` ms and fps, mean of the
+rounds. "Before" is the build ahead of the fix (wrong picture, finish overlapped across views: a CPU
+upper bound only, its GPU order was wrong).
+
+| Two-player | before the fix (ceiling) | fixed, interleaved | `OAG_SPLIT_FINISH=0` | threaded |
+| --- | --- | --- | --- | --- |
+| Pure 800p | 5.33 (178 fps) | 6.62 (146 fps) | 5.84 (165 fps) | 5.73 (168 fps) |
+| Pure 1080p | 5.69 | 7.34 | 7.20 | 6.97 |
+| HD Anulpha 800p | 10.40 (91 fps) | 12.83 (76.5 fps) | 12.25 (79.8 fps) | 11.56 (84.4 fps) |
+| HD Anulpha 1080p | 11.93 | 14.91 | 14.50 | 13.59 |
+| HD Anulpha 4K | 14.60 | 18.63 | 17.51 | 16.90 |
+
+HD p99 ms (fixed / split finish off / threaded): 800p 16.5 / 15.8 / 15.6, 1080p 20.5 / 23.9 / 20.8,
+4K 54.1 / 53.8 / 53.7. Pure 800p p99: 7.8 / 7.4 / 7.4. At 4K the frame is GPU-bound (26 fps). What
+follows from it:
+- The fix costs HD two-player at 800p about 14 fps (91 to 76.5), below the Deck's 90 Hz target.
+- Turning the split finish off recovers 0.4 to 1.1 ms on HD but its p99 at 1080p is 3.4 ms worse than
+  with it on: not a policy to ship alone.
+- Threaded recording is lower than the fixed path at every size on both titles with p99 equal or
+  better: HD -1.17 / -1.42 / -1.54 ms (800p / 1080p / 4K), Pure -0.89 ms at 800p and -0.37 ms at
+  1080p (three rounds). It gets about 40 to 50% of the gap to the ceiling.
+- The ceiling is 1.3 ms on Pure at 800p and 2.4 / 3.0 / 4.0 ms on HD: about a fifth of the frame
+  thread, which is what one submission with the finish overlapped could recover (uploads recorded in
+  the encoder instead of `queue.write_buffer`, so a view's data no longer depends on its submit).
+
+||||||| 8a9d45d37
+
+
+## Threaded recording on equal cores (2026-11-04)
+
+`oag_raceplay::Recording::default_for_target` has a rule for `threaded`: native Linux, at least
+two cores, every `/sys/devices/system/cpu/cpu<N>/cpu_capacity` readable and the same. The Steam Deck
+(8 x 1024) passes; a hybrid Intel part (the Core Ultra 7 265H reads 6 x 1024, 8 x 758, 2 x 301), a
+Galaxy S24 (253 x 4, 653 x 3, 730 x 2, 1024), an unreadable list, one core, Android, Windows, macOS
+and the web do not, and keep `interleaved` whatever the rule says. Positive evidence only: an
+unreadable list counts as uniform for the split finish (`oag_gpu::split_finish::uniform_cores`) but
+not here. The rule sits behind `THREADS_ON_EQUAL_CORES` in `scene/split_record.rs`, **true
+since 2026-11-05** (see "Two views, Pulse and the release call" below). `OAG_SPLIT_RECORDING` overrides it both ways, the choice
+is logged once (`split recording: Threaded (probe, core capacities [...])`), and one view is always
+drawn interleaved. Pictures: `split_recording_ground_truth` (Pure two views, Pulse four) passes,
+and two-view `--screenshot`s of HD Anulpha Pass and Pulse at tick 900 are byte-identical threaded
+and interleaved.
+
+**Deck numbers.** Same setup as the section above (headless gamescope, `--render-scale 100` so the
+render size is the window's, vsync and frame limit off, dist build with znver2, mean of the phase
+line after the first six seconds, the Deck lock held per run, arms alternated). "Threads" is a build
+with the rule on and no variable (the production default it would be); "interleaved" is the same
+binary with `OAG_SPLIT_RECORDING=interleaved`. Frame-thread `total` ms, then mean p99 ms, then fps;
+two rounds, four for HD three views at 1080p and Pure three views at 800p, and at Pure three views
+1080p three rounds of threads and four of interleaved (the threads arm of its fourth round was cut
+short). Load 1.2 to 2.6.
+
+| Title, views, size | threads `total` | interleaved `total` | threads p99 | interleaved p99 | fps |
+| --- | ---: | ---: | ---: | ---: | --- |
+| HD, 3, 1280x800 | 14.03 | 16.72 | 16.08 | 19.87 | 70.2 / 59.1 |
+| HD, 3, 1920x1080 | 15.81 | 18.16 | 21.51 | 21.36 | 60.7 / 54.3 |
+| HD, 3, 3840x2160 | 20.04 | 24.02 | 44.21 | 44.69 | 25.6 / 25.6 (GPU) |
+| HD, 4, 1280x800 | 16.63 | 21.13 | 18.68 | 24.81 | 59.5 / 47.1 |
+| HD, 4, 1920x1080 | 18.37 | 21.93 | 23.80 | 25.72 | 52.9 / 45.2 |
+| HD, 4, 3840x2160 | 22.84 | 28.34 | 45.91 | 46.95 | 23.9 / 23.9 (GPU) |
+| Pure, 3, 1280x800 | 9.30 | 9.37 | 10.45 | 10.39 | 105.2 / 104.5 (paced) |
+| Pure, 3, 1920x1080 | 10.95 | 10.98 | 14.32 | 13.53 | 89.4 / 89.4 |
+| Pure, 3, 3840x2160 | 17.24 | 17.57 | 38.39 | 38.75 | 27.8 / 27.9 (GPU) |
+| Pure, 4, 1280x800 | 8.63 | 11.37 | 10.04 | 12.64 | 113.1 / 86.2 |
+| Pure, 4, 1920x1080 | 10.20 | 12.52 | 12.38 | 13.98 | 87.4 / 78.4 |
+| Pure, 4, 3840x2160 | 14.80 | 17.69 | 39.89 | 40.04 | 26.8 / 26.8 (GPU) |
+
+Threads take 2.3 to 5.5 ms off the frame thread at three and four views in HD and at four in Pure,
+and change nothing at Pure's three views. Why is not measured; a guess is the layout (one wide
+view over two), whose wide view, recorded on the calling thread, may be the critical path. The p99 rows within the spread of the rounds are HD three
+views at 1080p (threads 21.09 to 21.83, interleaved 21.01 to 21.82) and Pure three views at 800p.
+**Pure three views at 1080p is the one to watch**: threads 13.85 to 14.65, interleaved 13.21 to
+14.02, the ranges touching but the mean 0.8 ms worse with no gain in `total`. Per-second p99 in a
+threaded run swings more (HD three views 1080p: 18.5 to 24.7 ms against 20.1 to 22.5), so the mean
+of p99 hides a wider tail. Earlier two-view runs with `OAG_SPLIT_RECORDING=threaded` on the same
+setup: HD 12.73 to 11.56 at 800p, 15.01 to 13.59 at 1080p, 18.44 to 16.90 at 4K; Pure 6.62 to
+5.73 at 800p, 7.34 to 6.97 at 1080p, p99 equal or lower.
+
+**Two views, Pulse and the release call (2026-11-05).** Same setup, same binary (the rule on, built
+before the merges since; both arms are that binary, so the comparison stands), two rounds, Pure three
+views at 1080p four more. Load 1.3 to 2.3.
+
+| Title, views, size | threads `total` | interleaved `total` | threads p99 | interleaved p99 | fps |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Pure, 2, 1280x800 | 5.66 | 6.64 | 7.18 | 7.86 | 170.1 / 145.4 |
+| Pure, 2, 1920x1080 | 7.02 | 7.19 | 10.41 | 10.23 | 105.7 / 105.9 (paced) |
+| Pure, 2, 3840x2160 | 9.74 | 10.47 | 38.00 | 38.13 | 28.6 / 28.6 (GPU) |
+| HD, 2, 1280x800 | 11.32 | 12.81 | 15.45 | 16.66 | 85.9 / 76.6 |
+| HD, 2, 1920x1080 | 13.35 | 14.74 | 20.00 | 20.76 | 68.2 / 65.8 |
+| HD, 2, 3840x2160 | 16.55 | 18.43 | 54.53 | 54.01 | 26.1 / 26.1 (GPU) |
+| Pulse, 2, 1280x800 | 7.08 | 8.35 | 8.54 | 9.99 | 137.9 / 117.2 |
+| Pulse, 2, 1920x1080 | 8.68 | 9.46 | 12.21 | 12.93 | 95.6 / 95.4 (paced) |
+| Pure, 3, 1920x1080, rounds 5 to 8 | 10.89 | 10.93 | 14.18 | 13.51 | 89.8 / 89.7 |
+
+Threads lower `total` in every cell. p99 is worse in three: **Pure three views at 1080p is a real
+cost**, +0.53 to +0.82 ms in all four new rounds as in the four before, with no gain in `total`;
+Pure two views at 1080p reads +0.14 and +0.21 at a paced rate; HD two views at 4K reads -0.13 and
++1.19, the rounds' spread, GPU-bound. The release criterion written beforehand kept the rule off for
+any worse p99. The maintainer flipped it anyway: 14.2 ms stays inside
+the frame budget at 90 fps, and the gain is up to 1.9 ms of frame thread and 25 fps elsewhere.
+
+## One submission (2026-11-06, `uploads-encoder`)
+
+Claim: a split's uploads recorded per view let a split submit once, so the Deck's frame thread falls
+at two views at no picture change and one view loses nothing. **True, with one correction**: the
+copies live in a command buffer of their own ahead of each view, not in the view's encoder, and the
+gain is not the submission. Folding alone saved nothing. It is what lets a view's `finish` stop
+holding up everything after it.
+
+| `total` ms, base to tip | 1v 800p | 1v 1080p | 1v 4K | 2v 800p | 2v 1080p | 2v 4K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pure | 3.31 to 3.29 | 4.28 to 4.28 | 5.12 to 5.14 | 5.25 to 4.76 | 7.49 to 5.68 | 9.21 to 7.34 |
+| Pulse | 3.93 to 3.93 | 5.38 to 5.37 | 6.44 to 6.45 | 6.36 to 5.92 | 8.79 to 7.93 | 11.68 to 9.79 |
+| HD | 6.28 to 6.27 | 7.81 to 7.63 | 10.43 to 10.39 | 10.48 to 9.38 | 12.79 to 9.89 | 20.56 to 14.29 |
+
+| fps | 1v 800p | 1v 1080p | 1v 4K | 2v 800p | 2v 1080p | 2v 4K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pure | 270.4 to 271.7 | 141.2 to 142.1 | 32.7 to 32.7 | 183.2 to 195.9 | 118.4 to 118.1 | 31.1 to 31.1 |
+| Pulse | 237.1 to 236.9 | 132.2 to 132.7 | 31.3 to 31.3 | 153.3 to 162.9 | 106.8 to 108.0 | 29.1 to 29.2 |
+| HD | 146.9 to 147.0 | 100.4 to 100.7 | 34.3 to 34.2 | 92.8 to 98.4 | 73.9 to 74.5 | 29.1 to 29.5 |
+
+| p99 ms | 1v 800p | 1v 1080p | 1v 4K | 2v 800p | 2v 1080p | 2v 4K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pure | 5.04 to 5.10 | 7.83 to 7.76 | 33.10 to 33.18 | 6.65 to 6.56 | 9.81 to 9.38 | 34.94 to 34.97 |
+| Pulse | 5.74 to 5.68 | 8.95 to 8.89 | 38.79 to 39.09 | 7.77 to 7.46 | 12.06 to 10.89 | 37.97 to 37.77 |
+| HD | 9.14 to 9.06 | 11.75 to 11.45 | 31.92 to 31.94 | 14.26 to 14.55 | 20.32 to 18.11 | 49.10 to 48.77 |
+
+**Method.** Steam Deck, RADV, `dist` `znver2` `perf-probe` container builds, base `1b46f590c`, tip
+`8124187a5` (the lane's one code commit after it adds a lint `allow`). `--render-scale 100`, headless
+gamescope, the race arguments of `frame-thread-cpu.md`, 3 rounds, arm order rotated each round and
+reversed every other round, each run under the Deck's lock, mean of `frame-phases` after six lines.
+Governor off in the profile, AC every round, load 0.8 to 2.5.
+
+**Noise.** The tip under a second name, 800p, 3 rounds: `total` differs by at most 0.03 ms, fps by
+0.9, p99 by 0.11. The one-view columns are that noise, but for HD 1080p's -0.18 (rounds -0.25, -0.25,
+-0.07). With `OAG_REAP_THREAD=1` on both arms, the state if the one-view reaper rule is reverted, the
+result is the same: two views 800p Pure 5.26 to 4.75, Pulse 6.34 to 5.91, HD 10.41 to 9.39, one view
+within 0.03.
+
+**Three and four views**, 2 rounds, base to tip, `total` then fps: Pure three views 800p 8.58 to 7.45,
+113.8 to 129.3; 1080p 10.18 to 9.22, 96.2 to 102.6; four views 800p 7.85 to 7.30, 123.9 to 131.6;
+1080p 9.61 to 7.93, 96.8 to 95.3. HD three views 800p 12.73 to 11.11, 77.2 to 83.3; 1080p 15.08 to
+11.57, 64.9 to 67.9; four views 800p 15.22 to 13.59, 64.9 to 70.2; 1080p 17.11 to 14.40, 57.1 to
+59.3. Pure three views at 1080p, the p99 threaded recording paid for ("Threaded recording on equal cores"), reads 12.55 to 12.11.
+
+**How to read it.** `scene` falls by half and `submit` rises, because the wait for the views moved
+into the frame's submit: compare `total`. At 1080p and 4K a split is GPU-bound, fps holds and the
+time saved is spent in `present`, waiting for the GPU. At 800p the CPU binds and fps rises 6 to 7 %.
+HD's two-view p99 at 800p pays, +0.29 ms against 0.11 of noise, in every round. Pure four views at
+1080p pays in fps, 96.8 to 95.3 in both rounds while `total` falls 1.7 ms; a later start of the GPU in
+a frame that holds its work to one submission would do that, not measured. Pulse one view at 4K
+reads p99 +0.30 at a 39 ms p99 (rounds +0.27, +0.01, +0.61); there is no A/A at 4K.
+
+**Pictures.** Byte-identical by `cmp` on the Deck's RADV, final binary, Pure, Pulse and HD at ticks
+900, 1,500 and 2,400: 18 of 18 against base at one and two views, 9 of 9 two views against
+`interleaved`; on the notebook's NVIDIA the same against `interleaved` at ticks 900 and 1,500 and
+in a `--window-seats 1,2` race. `split_recording_ground_truth` now opens the frame a session opens
+(`OAG_SPLIT_FINISH=1`), and a capture does too, or a hybrid machine never takes this path.
+**Single frames do not reach a stale buffer.** For that: `raceplay::tests::split_frames` draws twelve
+frames with the race moving and the count of views going 2, 1, 2, 4, through each post chain, glow
+and blur, for every batched recording against interleaved under an open frame, and fails when a
+post stage's writes go to the queue. `oag_gpu::writes` tests order inside one submission, a frame
+with no writes, growth mid-frame and textures against a queue write.
+
+### What was built
+
+- **`oag_gpu::writes::Log::encode`.** A log's bytes go up as one `queue.write_buffer` into an
+  `UploadBuffer`, one buffer kept by the scene and grown on demand, and its writes become
+  `copy_buffer_to_buffer` in a command buffer the caller places ahead of the commands that read
+  them. Texture writes are repacked to a copy's row spacing. Reusing the buffer is ordered: the next
+  frame's write lands after this frame's copies.
+- **Why not the view's own encoder.** `prepare_view` records shadow maps and advert cards into it
+  while the writes are still being made, and each of those passes reads the view's last write, as
+  it did from the queue. A copy at the write's place would come after a pass that reads it.
+- **Every per-view write goes through a sink.** `finish_view`, the post chains, the glow and the blur
+  take `&dyn Writes`; the flare, the boost zoom and each chain's constants would otherwise all land
+  ahead of the first view.
+- **`Folded`.** A later view's copies, its commands, a post stage's copies and its commands, in
+  order. A later view is a few writes: 22 to 32 of them, 0.65 to 1.34 MB, none to a texture at tick
+  900, no destination written twice (Pure, Pulse, HD Anulpha).
+- **`split_finish::defer`.** The list waits for the frame's own submission, with the HUD's encoder
+  behind it. The contract: a queue write made after `render_viewports` lands ahead of the split's
+  commands, so nothing the caller writes may be what the views read. A one-view frame already lives
+  by this. A window's split does not wait: its window submits on its own (`with_frame`).
+- **The view's encoder goes to a finishing thread once recorded**, and the first view's other passes
+  before that, so they finish while the second view is prepared. Three finishing threads where
+  cores are equal, and each encoder goes to the one holding the fewest.
+- **No encoder for a view with no post pass.** It was an empty command pool to reset.
+
+`interleaved` is untouched, so a hybrid notebook, a phone and the web keep today's path and need no
+fallback. `overlapped` keeps a submission per view. `OAG_SPLIT_SUBMIT=views` is the A/B switch.
+
+### What each step gave
+
+Two views, 800p, change in mean `total` in ms against the arm before it **in the same session**, 2
+rounds. A session's absolutes do not carry to the next, so they are not listed. A/A 0.03.
+
+| Step | Pure | Pulse | HD |
+| --- | ---: | ---: | ---: |
+| fold only, submit at the split's end, against per view | -0.04 | 0.00 | +0.29 |
+| to the frame's submit, post encoders on a worker, against per view | -0.17 | -0.19 | -0.22 |
+| view encoders on a worker too | -0.17 | -0.17 | -0.04 |
+| three finishing threads, least held, no empty post encoder, against two | -0.13 | -0.06 | -0.14 |
+| the first view's other passes closed early | +0.02 | +0.02 | -0.92 |
+
+So HD's split post chains, which waited on the write log, are unblocked at -0.22, and the larger part
+for HD is the first view's shadow maps no longer queueing behind its scene pass.
+
+### What staging costs, and the belt
+
+Frame pointer profile, 14 s of race, 800p, 2 kHz, Deck, base. Share of the frame thread's samples,
+`OAG_REAP_THREAD=0` so that all of it lands there, and in ms against that run's `total`. 99.7 % of
+samples reach `oag_game::run`, so RADV having no symbols did not break the walk; its leaves count
+under their wgpu callers.
+
+| | `StagingBuffer::new` | freeing it in `maintain` | together | encoder drop in `maintain` | all of `write_buffer` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| HD 1v | 2.43 % | 1.66 % | 0.26 ms | 10.36 %, 0.66 ms | 6.2 % |
+| HD 2v | 2.13 % | 1.62 % | 0.43 ms | 10.78 %, 1.22 ms | 4.5 % |
+| Pulse 1v | 3.40 % | 2.39 % | 0.23 ms | 9.23 %, 0.37 ms | 8.3 % |
+| Pulse 2v | 2.88 % | 2.71 % | 0.38 ms | 9.73 %, 0.67 ms | 6.6 % |
+
+So staging is real, 0.2 to 0.4 ms a frame, and the encoders' command pools cost 1.6 to 2.8 times
+that. With the reaper on, the free moves with the rest of `maintain`.
+
+**Taking it away at one view loses.** A probe sent a one-view frame's writes, and a split's first
+view's, through the upload buffer: one staging buffer for all of them. It costs more than it saves:
+one view HD 6.25 to 6.50, Pulse 3.90 to 4.12, Pure 3.29 to 3.45, fps -2 to -5 %; two views Pulse and
+Pure +0.1, HD -0.06. The saving goes on the copies, an encoder to finish and reset, and copying the
+bytes twice, once into the log. A `StagingBelt` removes that last copy and adds a `map_async` per
+chunk and frame. It was not built: that copy is about 0.1 ms by estimate, not measured, and the probe's loss is 0.2. At two views a
+later view's log gained where it had to exist anyway. One view stays on `queue.write_buffer`.
+
+### Tried and dropped
+
+- **Four finishing threads**: nothing over three (Pure 4.77 and 4.78, Pulse 5.93 and 5.97).
+- **Waking the reaper before the frame's submit waits**: nothing, HD 9.49 against 9.48.
+- **Polling every 250 us**: Pulse 5.95 to 5.85, Pure 4.78 to 4.67, HD 9.48 to 9.42, `present` +0.04.
+  Small, and the reaper's interval is set by another cost (`gpu::reaper`). Open.
+- `wgpu` was neither patched nor was a PR tried: our own levers were not exhausted.
+
+### What is left
+
+Tip profile, two views, 800p: `Queue::submit` is about 19 % of the frame thread on HD and 20 % on
+Pulse, and most of that is dropping encoders, 9.5 % and 10.1 %, against 2.1 % before the fold: with
+one submission a frame the reaper catches fewer of them. `Log::encode` is 3.3 to 3.6 %. HD's `submit`
+phase is 3.8 ms, about 1.8 of it wgpu's work and the rest a wait for the finishing threads: a view's
+scene pass is one `finish`, and nothing here splits it.

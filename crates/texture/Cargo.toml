@@ -13,6 +13,8 @@ autotests = false
 # pixel format and so stays at the container layer. Nothing else.
 [dependencies]
 oag-formats.workspace = true
+# Reads a texture pack's replacement pictures (`replacer`).
+png.workspace = true
 
 # Ground-truth tests read real textures out of a disc image. Tests only: the
 # decoders themselves know nothing about discs. See `crates/tables/Cargo.toml`
@@ -23,6 +25,9 @@ oag-testdata.workspace = true
 oag-assets.workspace = true
 oag-disc.workspace = true
 oag-pulse.workspace = true
+oag-vex.workspace = true
+oag-source.workspace = true
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 
 [lints]
 workspace = true

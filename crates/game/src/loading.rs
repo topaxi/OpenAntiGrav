@@ -143,6 +143,10 @@ pub struct Screen {
     /// five below are the marks the screen is framed with - each `None` simply
     /// is not drawn. See [`Assets::art`].
     illustration: Option<[f32; 4]>,
+    /// The box of the illustration's texels that show against the screen's ground, in sheet
+    /// pixels: what the panel fit measures, since the placement is padded with ground. See
+    /// [`layout`].
+    illustration_ink: Option<[f32; 4]>,
     title_arrow: Option<[f32; 4]>,
     subtitle_arrow: Option<[f32; 4]>,
     rule: Option<[f32; 4]>,
@@ -150,6 +154,8 @@ pub struct Screen {
     /// The bar's dot, tiled across it, and the bullet before each label.
     dot: Option<[f32; 4]>,
     square: Option<[f32; 4]>,
+    /// The still in the mode icon's panel, for the mode this screen is for. `None` draws none.
+    mode_still: Option<[f32; 4]>,
     /// The four colours this source tints the screen with, when it names them.
     ///
     /// `None` keeps the palette this build chose against a near-black frame,
@@ -279,12 +285,26 @@ impl Screen {
                         .and_then(|art| art.illustrations.get(at))
                 })
                 .copied(),
+            illustration_ink: shown.and_then(|at| {
+                let art = assets.art.as_ref()?;
+                let ground = assets
+                    .palette
+                    .map_or(BACKDROP, |palette| palette.background);
+                art.sheet.ink_within(*art.illustrations.get(at)?, |texel| {
+                    shows_against(texel, ground)
+                })
+            }),
             title_arrow: assets.art.as_ref().and_then(|art| art.title_arrow),
             subtitle_arrow: assets.art.as_ref().and_then(|art| art.subtitle_arrow),
             rule: assets.art.as_ref().and_then(|art| art.rule),
             corner: assets.art.as_ref().and_then(|art| art.corner),
             dot: assets.art.as_ref().and_then(|art| art.dot),
             square: assets.art.as_ref().and_then(|art| art.square),
+            mode_still: assets
+                .art
+                .as_ref()
+                .and_then(|art| art.mode_stills.as_ref())
+                .and_then(|stills| stills.get(mode)),
             palette: assets.palette,
             circuit: None,
             feature_slot: shown
@@ -678,6 +698,19 @@ const BAR_DOTS: [f32; 4] = [0.20, 0.23, 0.28, 1.0];
 
 /// The ink a laid-out screen draws in when its title names no palette.
 const ON_BACKDROP: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+
+/// The most a texel's channel may differ from the ground, out of 255, and still read as the
+/// ground. **Chosen, not measured.**
+const GROUND_TOLERANCE: f32 = 16.0;
+
+/// Whether a texel changes what the ground shows: translucent texels and ones that are the
+/// ground's own colour do not.
+fn shows_against(texel: [u8; 4], ground: [f32; 4]) -> bool {
+    texel[3] != 0
+        && texel.iter().zip(ground).take(3).any(|(&channel, ground)| {
+            (f32::from(channel) - ground * 255.0).abs() > GROUND_TOLERANCE
+        })
+}
 
 const BACKDROP: [f32; 4] = [0.02, 0.03, 0.05, 1.0];
 

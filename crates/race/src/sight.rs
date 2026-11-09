@@ -143,6 +143,14 @@ pub const EXTENT_SNAP: f32 = 1.4;
 /// distance a frame, the other is unitless.
 pub const CHASE_STEP: f32 = 30.0;
 
+/// The chase gain of a reticle that scales the PSP's step into a larger grid:
+/// none.
+///
+/// A title whose sight update multiplies the chase by a constant says so as
+/// data (`oag_title::hud::LiveSight::chase_gain`, Wipeout HD's `4.0`); the
+/// PSP's law has no such factor.
+pub const CHASE_GAIN_NONE: f32 = 1.0;
+
 /// How much the vertical counts for, when deciding whether the reticle arrived.
 ///
 /// **Recovered, confidence 90** - the literal `0x3f333333` = `0.7`, applied to
@@ -405,6 +413,10 @@ pub struct Sight {
     leach_seen: bool,
     /// Whether a held LeachBeam runs its own law rather than the Missile's.
     leach_law: bool,
+    /// What the chase rate is multiplied by while a target is on screen, beyond
+    /// the PSP's own zoom ([`CHASE_GAIN_NONE`] for the PSP's law). It scales the
+    /// step and the arrival radius together.
+    chase_gain: f32,
     /// The square the law runs in when it is not the grid: the PS2 writes its
     /// widgets in a 512x512 buffer. `None` is the PSP's (and everyone else's)
     /// own, where the law runs in the grid itself. See [`Self::in_span`].
@@ -443,6 +455,7 @@ impl Sight {
             spin: 0.0,
             leach_seen: false,
             leach_law: false,
+            chase_gain: CHASE_GAIN_NONE,
             span: None,
             ring_phase: 0.0,
             leach_cycle: 0.0,
@@ -650,7 +663,7 @@ impl Sight {
             if self.hold > HOLD_SECONDS && was_locked {
                 rate = 15.0;
             }
-            rate *= zoom;
+            rate *= zoom * self.chase_gain;
         }
 
         if distance < step * rate {
@@ -725,6 +738,7 @@ impl Sight {
         Self {
             held: self.held,
             leach_law: self.leach_law,
+            chase_gain: self.chase_gain,
             span: self.span,
             ..Self::new(self.screen)
         }
@@ -797,6 +811,15 @@ impl Sight {
     #[must_use]
     pub fn aim(&self) -> Option<[f32; 2]> {
         self.target.map(|at| self.grid_of(at))
+    }
+
+    /// The half-extent the reticle is at this frame, in the law's own pixels:
+    /// [`EXTENT_OPEN`] with nothing, closing to [`EXTENT_SEEKING`] or, for the
+    /// LeachBeam's own law, `LEACH_EXTENT_CLOSED`. Draw-only: the concentric
+    /// dialect sizes its rings off it.
+    #[must_use]
+    pub fn extent(&self) -> f32 {
+        self.extent
     }
 
     /// The eased alpha, 0..1.

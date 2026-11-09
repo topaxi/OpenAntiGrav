@@ -19,7 +19,7 @@ them is any of these.
 | --- | --- | --- | --- |
 | `WO_PLASMA_LIGHTNING_EXPAND` | HD's plasma detonation (`WeaponExplosions_Start`) | absent | absent |
 | `WO_PLASMA_LIGHTNING_COLLAPSE` | HD, its other half, 1.3 s later | absent | absent |
-| `WO_TRAIL_HITSHIP`, `_RED` | HD's `Trail_HitShipEffect`; `oag_fx::exhaust::hd` | absent | absent |
+| `WO_TRAIL_HITSHIP`, `_RED` | HD's `Trail_HitShipEffect`; `oag_fx::exhaust::hd` | absent (HD's is lent with `graphics.trail_hits` on) | absent (same) |
 | `WO_LEACHBEAM_ABSORB` | HD's `LeachBall_Advance` | absent | absent |
 | `WO_MAGSTRIP_SPARKS`, `_ZONE` | 2048's ship constructor (`GameMode_IsHdLineage` false) | absent | absent |
 | `WO_SHIP_ENGINEFLARE` | the PS2's own authored flare | absent | **present on the disc, never requested** (`engine-trail.md`, "The engine flare is one quad") |

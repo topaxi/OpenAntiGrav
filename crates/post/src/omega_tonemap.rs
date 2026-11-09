@@ -16,10 +16,11 @@
 //!    luma, `LAvg` stepped toward it by at most `response / 60`, the Hermite
 //!    cubic and the exposure;
 //! 3. per pixel and per channel, `y = cubic(clamp(exposure * c, 0, t1))`;
-//! 4. the race composite's terms that follow the curve
-//!    ([`law::Composite`]): `ColorScale * vignette * curved + ScreenTint`, the
-//!    vignette from the circuit's `Vignette.*` keys, `ColorScale` at its rest
-//!    `(1, 1, 1)` and the tint at its rest zero;
+//! 4. the race composite's terms that follow the curve ([`law::Composite`]):
+//!    `ColorScale * vignette * (curved + BloomScale * Bloom) + ScreenTint`, the
+//!    vignette from the circuit's `Vignette.*` keys, the bloom from its
+//!    `Bloom.*` keys ([`bloom`]), `ColorScale` at its rest `(1, 1, 1)` and the
+//!    tint at its rest zero;
 //! 5. the display's encode of `y`: the piecewise sRGB curve
 //!    ([`law::scanout_encode`]). The executable scans out an `A2R10G10B10`
 //!    UNORM buffer (`0x88060000`, gamma 1.0) filled by a plain copy, so the
@@ -39,11 +40,13 @@
 //! - **No readback latency.** The executable averages luminance it reads back
 //!   from earlier frames; this keeps the history on the GPU and includes the
 //!   current frame.
-//! - **Bloom and the low-resolution additive layer** the original adds after
-//!   the curve are not drawn here: the bloom chain behind `BloomTexture` is
-//!   unread (`FUN_0177fbc0` and the bright-pass programs; the disc authors
-//!   its `Bloom.*` keys), and the particles draw into the scene, so they pass
-//!   through the curve.
+//! - **The low-resolution additive layer** the original adds after the curve is
+//!   not drawn: the particles draw into the scene, so they pass through it.
+//! - **The bloom's mask.** The bright pass adds `AlphaScale * mask`, the mask being
+//!   the scene's second target's `m_Alpha`, half-size. No draw here writes one, so
+//!   only the frame's own bright pixels bloom ([`bloom`], tonemap.md, "The bloom chain").
+//! - **The bloom reads the frame with no accumulated motion blur**: the original's
+//!   source is that blur's target when it runs; this renderer has no such target.
 //! - **Brightness** stays at the executable's middle setting, 1.0; this port
 //!   grades brightness after the frame.
 //!
@@ -54,9 +57,10 @@
 //! `docs/ghidra/functions/ps4-omega-eu/heat-haze.md`, confidence 80). Frames
 //! that drew none sample a zero texture and are byte-identical to before.
 
+pub mod bloom;
 pub mod law;
 
-pub use law::{Composite, Curve, Params};
+pub use law::{Bloom, Composite, Curve, Params};
 
 use anyhow::Result;
 
@@ -124,10 +128,38 @@ struct Uniform {
     _pad: [f32; 2],
     color_scale: [f32; 4],
     screen_tint: [f32; 4],
+    bright: [f32; 4],
+    bloom_tap: [f32; 2],
+    bloom_uv: [f32; 2],
+    bloom_scale: f32,
+    _pad_bloom: f32,
+    uv_min: [f32; 2],
+}
+
+/// Where a view sits in the bloom levels: the share of level 0 it fills, level 0's
+/// rectangle that makes in texels, and the first scene texel centre the bright pass may read.
+#[derive(Debug, Clone, Copy)]
+struct BloomView {
+    uv: [f32; 2],
+    rect: (u32, u32),
+    uv_min: [f32; 2],
+}
+
+impl BloomView {
+    /// The view of a chain with no levels.
+    const NONE: Self = Self {
+        uv: [1.0, 1.0],
+        rect: (1, 1),
+        uv_min: [0.0, 0.0],
+    };
 }
 
 impl Uniform {
-    fn new(p: Params, (uv_offset, uv_scale, uv_max): ([f32; 2], [f32; 2], [f32; 2])) -> Self {
+    fn new(
+        p: Params,
+        (uv_offset, uv_scale, uv_max): ([f32; 2], [f32; 2], [f32; 2]),
+        view: BloomView,
+    ) -> Self {
         Self {
             luminance_a: p.luminance_a,
             luminance_b: p.luminance_b,
@@ -159,6 +191,15 @@ impl Uniform {
                 p.composite.screen_tint[2],
                 0.0,
             ],
+            bright: p
+                .composite
+                .bloom
+                .map_or([0.0; 4], |b| [b.threshold, b.offset, b.scale, b.power]),
+            bloom_tap: [0.25 / view.rect.0 as f32, 0.25 / view.rect.1 as f32],
+            bloom_uv: view.uv,
+            bloom_scale: p.composite.bloom.map_or(0.0, |b| b.blend_factors[0]),
+            _pad_bloom: 0.0,
+            uv_min: view.uv_min,
         }
     }
 }
@@ -209,8 +250,9 @@ impl Seat {
     }
 }
 
-/// The rectangle last written into the uniform: its corner in the scene target and its size.
-type Drawn = ((u32, u32), (u32, u32));
+/// The rectangle last written into the uniform: its corner in the scene target, its size
+/// and the share of the frame it is.
+type Drawn = ((u32, u32), (u32, u32), [u32; 2]);
 
 /// One colour texture and its view.
 #[derive(Debug)]
@@ -296,6 +338,13 @@ pub struct Chain {
     distortion_group: super::group_cache::ViewGroup,
     sized: Sized,
     written: std::cell::Cell<Option<Drawn>>,
+    /// The bright pass, into the levels' format.
+    bright: wgpu::RenderPipeline,
+    bloom_pipelines: bloom::Pipelines,
+    /// The levels, when the circuit authors a `Bloom` block.
+    levels: Option<bloom::Levels>,
+    /// The composite's `BloomTexture` slot, a zero texture with no levels.
+    bloom_group: wgpu::BindGroup,
 }
 
 impl Chain {
@@ -399,8 +448,13 @@ impl Chain {
             }],
         });
         let plain = pipeline_layout(&[Some(&layout)]);
-        let with_curve =
-            pipeline_layout(&[Some(&layout), Some(&state_ro), Some(&distortion_layout)]);
+        let with_curve = pipeline_layout(&[
+            Some(&layout),
+            Some(&state_ro),
+            Some(&distortion_layout),
+            Some(&distortion_layout),
+        ]);
+        let reads_curve = pipeline_layout(&[Some(&layout), Some(&state_ro)]);
         let with_state = pipeline_layout(&[Some(&layout), Some(&state_rw)]);
         let render = |label: &str,
                       entry: &str,
@@ -434,6 +488,12 @@ impl Chain {
         };
         let luma = render("omega tonemap luma", "fs_luma", &plain, LADDER_FORMAT);
         let halve = render("omega tonemap halve", "fs_halve", &plain, LADDER_FORMAT);
+        let bright = render(
+            "omega bloom bright",
+            "fs_bright",
+            &reads_curve,
+            bloom::LEVEL_FORMAT,
+        );
         // The encode is written as numbers, so it targets the caller's format
         // without the sRGB suffix - the same as `hd_bloom`'s encode.
         let apply = render(
@@ -455,7 +515,11 @@ impl Chain {
             device,
             "omega tonemap uniform",
             wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            bytemuck::bytes_of(&Uniform::new(params, ([0.0, 0.0], [1.0, 1.0], [1.0, 1.0]))),
+            bytemuck::bytes_of(&Uniform::new(
+                params,
+                ([0.0, 0.0], [1.0, 1.0], [1.0, 1.0]),
+                BloomView::NONE,
+            )),
         );
         let group = |label: &str, source: &wgpu::TextureView| {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -499,6 +563,15 @@ impl Chain {
         let sized = Self::sized(device, &layout, &sampler, &uniform, size);
         let zero = Target::new(device, "omega no distortion", DISTORTION_FORMAT, (1, 1));
         let no_distortion = Self::distortion_group(device, &distortion_layout, &zero.view);
+        let no_bloom = Target::new(device, "omega no bloom", bloom::LEVEL_FORMAT, (1, 1));
+        let levels = params
+            .composite
+            .bloom
+            .as_ref()
+            .map(|authored| bloom::Levels::new(device, &layout, &sampler, authored, size));
+        let bloom_view = levels.as_ref().map_or(&no_bloom.view, |l| l.level_zero());
+        let bloom_group = Self::distortion_group(device, &distortion_layout, bloom_view);
+        let bloom_pipelines = bloom::Pipelines::new(device, &layout);
         Ok(Self {
             params,
             luma,
@@ -521,6 +594,10 @@ impl Chain {
             distortion_group: Default::default(),
             sized,
             written: std::cell::Cell::new(None),
+            bright,
+            bloom_pipelines,
+            levels,
+            bloom_group,
         })
     }
 
@@ -602,6 +679,14 @@ impl Chain {
     pub fn resize(&mut self, device: &wgpu::Device, size: (u32, u32)) {
         self.sized = Self::sized(device, &self.layout, &self.sampler, &self.uniform, size);
         self.written.set(None);
+        if let Some(authored) = self.params.composite.bloom
+            && self.levels.as_ref().is_some_and(|l| !l.fits(size))
+        {
+            let levels = bloom::Levels::new(device, &self.layout, &self.sampler, &authored, size);
+            self.bloom_group =
+                Self::distortion_group(device, &self.distortion_layout, levels.level_zero());
+            self.levels = Some(levels);
+        }
     }
 
     /// Measures the frame, steps the adaptation and writes the curved,
@@ -615,7 +700,7 @@ impl Chain {
     pub fn run(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         origin: (f32, f32),
@@ -630,35 +715,55 @@ impl Chain {
             &self.window,
             ((0, 0), origin),
             viewport,
+            [1.0, 1.0],
             distortion,
         );
     }
 
     /// [`Chain::run`] for a rectangle that starts at `placement.0` of the scene target and
-    /// lands at `placement.1` of `view`, adapting in `seat`.
+    /// lands at `placement.1` of `view`, adapting in `seat`. `share` is how much of the
+    /// frame the rectangle is: it sizes the bloom's levels, whatever the scene target's
+    /// resolution scale.
     #[allow(clippy::too_many_arguments)]
     fn run_placed(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         seat: &Seat,
         placement: ((u32, u32), (f32, f32)),
         viewport: (u32, u32),
+        share: [f32; 2],
         distortion: Option<&wgpu::TextureView>,
     ) {
         let (source, origin) = placement;
         let scene = self.sized.size;
         let viewport = (viewport.0.clamp(1, scene.0), viewport.1.clamp(1, scene.1));
-        if self.written.get() != Some((source, viewport)) {
+        let drawn_key = (source, viewport, share.map(f32::to_bits));
+        if self.written.get() != Some(drawn_key) {
             let rect = super::sub_rectangle_at(source, viewport, scene);
+            let bloom_view = self.levels.as_ref().map_or(BloomView::NONE, |levels| {
+                let filled = levels.base_filled(share);
+                let base = levels.base();
+                BloomView {
+                    uv: [
+                        filled.0 as f32 / base.0 as f32,
+                        filled.1 as f32 / base.1 as f32,
+                    ],
+                    rect: filled,
+                    uv_min: [
+                        (source.0 as f32 + 0.5) / scene.0 as f32,
+                        (source.1 as f32 + 0.5) / scene.1 as f32,
+                    ],
+                }
+            });
             queue.write_buffer(
                 &self.uniform,
                 0,
-                bytemuck::bytes_of(&Uniform::new(self.params, rect)),
+                bytemuck::bytes_of(&Uniform::new(self.params, rect, bloom_view)),
             );
-            self.written.set(Some((source, viewport)));
+            self.written.set(Some(drawn_key));
         }
         draw(
             encoder,
@@ -685,10 +790,24 @@ impl Chain {
                 label: Some("omega tonemap coefficients"),
                 timestamp_writes: None,
             });
+            oag_gpu::perfprobe::marks::mark_compute(&mut pass, "omega tonemap coefficients");
             pass.set_pipeline(&self.coefficients);
             pass.set_bind_group(0, &self.coefficients_in, &[]);
             pass.set_bind_group(1, &seat.coefficients, &[]);
             pass.dispatch_workgroups(1, 1, 1);
+            oag_gpu::perfprobe::marks::close_compute(&mut pass);
+        }
+        if let Some(levels) = &self.levels {
+            draw(
+                encoder,
+                "omega bloom bright",
+                &self.bright,
+                &[&self.sized.apply_group, &seat.curve],
+                levels.level_zero(),
+                (0.0, 0.0),
+                levels.base_filled(share),
+            );
+            levels.run(queue, encoder, &self.bloom_pipelines, share);
         }
         let drawn = distortion.map(|view| {
             self.distortion_group.get(view, || {
@@ -703,6 +822,7 @@ impl Chain {
                 &self.sized.apply_group,
                 &seat.curve,
                 drawn.as_ref().unwrap_or(&self.no_distortion),
+                &self.bloom_group,
             ],
             view,
             origin,
@@ -712,15 +832,15 @@ impl Chain {
 
     /// Runs the chain over one view of a split: the view's own mean luminance and
     /// adaptation (the seat's), the curve applied over the view's rectangle and nothing
-    /// outside it. **Call it once per view with its own encoder and submit each before the
-    /// next**: the constants are written with the queue, which lands before the submission
+    /// outside it. **Call it once per view with its own encoder, its writes landing ahead
+    /// of it**: the constants are written with the queue, which lands before the submission
     /// that follows. **The per-seat adaptation is this project's, chosen, not measured**:
     /// the original has no split screen. Draws no distortion (that pass reads the depth
     /// attachment, which holds the last view's alone).
     pub fn run_view(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         run: View,
@@ -738,9 +858,11 @@ impl Chain {
         }
         let seats = self.seats.borrow();
         let (x, y, w, h) = run.rect;
+        let scene = self.sized.size;
+        let share = [w as f32 / scene.0 as f32, h as f32 / scene.1 as f32].map(|s| s.min(1.0));
         if run.first {
             // A pass that clears and draws nothing: the apply pass loads.
-            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("omega tonemap clear"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
@@ -756,6 +878,8 @@ impl Chain {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            oag_gpu::perfprobe::marks::mark(&mut pass, "omega tonemap clear");
+            oag_gpu::perfprobe::marks::close(&mut pass);
         }
         self.run_placed(
             device,
@@ -765,6 +889,7 @@ impl Chain {
             seats[seat].as_ref().expect("built above"),
             ((x, y), (x as f32, y as f32)),
             (w, h),
+            share,
             None,
         );
     }
@@ -798,7 +923,7 @@ impl Chain {
 /// One full-screen pass with no blending, loading what is there.
 fn draw(
     encoder: &mut wgpu::CommandEncoder,
-    label: &str,
+    label: &'static str,
     pipeline: &wgpu::RenderPipeline,
     groups: &[&wgpu::BindGroup],
     target: &wgpu::TextureView,
@@ -821,14 +946,18 @@ fn draw(
         occlusion_query_set: None,
         multiview_mask: None,
     });
+    oag_gpu::perfprobe::marks::mark(&mut pass, label);
     pass.set_pipeline(pipeline);
     pass.set_viewport(origin.0, origin.1, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
     for (index, group) in groups.iter().enumerate() {
         pass.set_bind_group(index as u32, *group, &[]);
     }
     pass.draw(0..3, 0..1);
+    oag_gpu::perfprobe::marks::close(&mut pass);
 }
 
+#[cfg(test)]
+mod bloom_tests;
 #[cfg(test)]
 mod split_tests;
 #[cfg(test)]

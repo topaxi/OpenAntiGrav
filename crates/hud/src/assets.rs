@@ -4,7 +4,7 @@
 //! the sprite sheet, the font atlases and the string table - none of which a
 //! headless test of either needs.
 
-use super::Layout;
+use super::{Label, Layout};
 
 /// Everything the HUD needs off the disc.
 ///
@@ -86,6 +86,10 @@ pub struct Assets {
     /// [`Self::sheet`] before any of [`Self::vector_icons`] was put in it, `None` until the first rasterisation; kept so a
     /// change of size rasterises again over the same base rather than stacking.
     pub vector_base: Option<crate::sprite::Sheet>,
+    /// `PlrTag0` of the title's player-tag layout ([`oag_title::HudLayouts::player_tags`]),
+    /// read only for a race of two or more people. `None` for everything else, and for a
+    /// layout that is absent or refused, which is reported at load.
+    pub tag_label: Option<Label>,
 }
 
 /// A title's own split-screen HUD for two players: one layout per player.
@@ -171,6 +175,7 @@ impl Assets {
         let layout = self.layout.as_ref()?;
         Some(super::Context {
             default_border: layout.default_border(),
+            tag_label: self.tag_label.as_ref(),
             layout,
             strings: &self.strings,
             sheet: &self.sheet,

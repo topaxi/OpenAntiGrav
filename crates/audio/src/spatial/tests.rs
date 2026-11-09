@@ -413,3 +413,18 @@ fn a_placed_emitter_knows_whether_it_is_ahead_of_or_behind_the_listener() {
         "the original's law cannot tell"
     );
 }
+
+#[test]
+fn the_rear_cutoff_is_open_ahead_and_the_files_value_behind() {
+    assert_eq!(rear_occlusion_cutoff(1.0, 14_000.0), OCCLUSION_OPEN_HZ);
+    assert_eq!(rear_occlusion_cutoff(0.0, 14_000.0), OCCLUSION_OPEN_HZ);
+    assert!((rear_occlusion_cutoff(-1.0, 14_000.0) - 14_000.0).abs() < 1.0);
+    let half = rear_occlusion_cutoff((100.0_f32).to_radians().cos(), 14_000.0);
+    assert!(half > 14_000.0 && half < OCCLUSION_OPEN_HZ, "{half}");
+}
+
+#[test]
+fn a_surround_value_above_the_open_end_filters_nothing() {
+    assert_eq!(rear_occlusion_cutoff(-1.0, 24_000.0), OCCLUSION_OPEN_HZ);
+    assert_eq!(low_pass_coefficient(OCCLUSION_OPEN_HZ, 48_000), 1.0);
+}

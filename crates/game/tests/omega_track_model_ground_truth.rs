@@ -107,3 +107,40 @@ fn every_circuit_of_the_table_builds_a_model_and_a_ramp() {
     without.sort();
     assert!(without.is_empty(), "circuits with no model: {without:?}");
 }
+
+/// Track Select names every circuit the menus reach, not `NN_Track` ids: the twenty-eight numbered
+/// circuits by their own id, the ten of 2048 by the `StringTableId` their `PI_Track` authors
+/// (`Track_Altima_0`), all out of the one copy of `entries.xml` that names the whole list.
+/// Dropping the key read puts the ten back on their ids and leaves the list unnamed.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn every_circuit_a_menu_reaches_has_a_name_not_an_id() {
+    let Some(source) = omega() else {
+        return;
+    };
+    let (shell, _archives, _title) = open(&source);
+    assert_eq!(
+        shell.tracks.len(),
+        38,
+        "28 numbered circuits and 2048's ten"
+    );
+    assert_eq!(shell.circuit_names.len(), 38, "one copy names all of them");
+    for track in &shell.tracks {
+        let label = oag_raceplay::catalogue::label(
+            track,
+            &shell.circuit_names,
+            &shell.strings,
+            &shell.tracks,
+        );
+        assert!(
+            label != track.id && !label.to_ascii_lowercase().ends_with("_track"),
+            "{} reads {label:?}, an id",
+            track.id
+        );
+    }
+    let name = |id: &str| shell.circuit_names.get(id).map(str::to_string);
+    assert_eq!(name("01_Track").as_deref(), Some("VINETA K"));
+    assert_eq!(name("altima").as_deref(), Some("ALTIMA"));
+    assert_eq!(name("arena").as_deref(), Some("ROCKWAY STADIUM"));
+    assert_eq!(name("tower").as_deref(), Some("EMPIRE CLIMB"));
+}

@@ -541,6 +541,7 @@ fn no_two_live_widgets_share_an_anchor_on_any_shipped_layout() {
         let frame = hud::draw_list(
             &hud::Context {
                 default_border: layout.default_border(),
+                tag_label: None,
                 layout: &layout,
                 strings: &strings,
                 // Empty: this test reads only the label passes, and no sprite
@@ -825,5 +826,49 @@ fn the_layouts_name_at_most_one_texture() {
                 "{label}: {entry}: `Layout::atlas` should return the one it names"
             );
         }
+    }
+}
+
+/// Pure writes `BorderColor= "0x40000000"` with a space before the quote on every HUD text
+/// widget that outlines itself. Reading stopped at the space, dropped the attribute and left
+/// every label on the layout's fallback, an opaque black outline, where the original draws
+/// `0x40000000` or `0x30000000` (`docs/formats/pure-status.md`, "Pure's HUD text outline").
+/// Dropping the whitespace tolerance in `oag_tables::fexml::attributes` fails this.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pure_hud_labels_keep_the_border_colour_they_author() {
+    let Some(image) = image("data/images/pure-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pure::open(&image.display().to_string()).expect("opening Pure");
+    for entry in [
+        oag_pure::hud::layouts::ARCADE,
+        oag_pure::hud::layouts::TIME_TRIAL,
+        oag_pure::hud::layouts::ZONE,
+    ] {
+        let xml = xml_of(&mut archives, entry);
+        let authored = xml.matches("BorderColor").count();
+        let layout = Layout::from_xml(&xml);
+        let read = layout.labels.iter().filter(|l| l.border.is_some()).count();
+        assert!(authored > 0, "{entry} authors BorderColor");
+        assert_eq!(read, authored, "{entry}: labels with a read border colour");
+    }
+    let xml = xml_of(&mut archives, oag_pure::hud::layouts::TIME_TRIAL);
+    let layout = Layout::from_xml(&xml);
+    let current = layout
+        .labels
+        .iter()
+        .find(|l| l.name == "CurrentTime")
+        .expect("CurrentTime");
+    assert_eq!(current.border, Some([0.0, 0.0, 0.0, 64.0 / 255.0]));
+}
+
+/// A layout's XML text, expanded when the disc ships it in the shortened dictionary form.
+fn xml_of(archives: &mut oag_assets::Archives, entry: &str) -> String {
+    let blob = archives.read_name(entry).expect(entry);
+    if oag_tables::fexml::is_fexml(&blob) {
+        oag_tables::fexml::expand(&blob).expect(entry)
+    } else {
+        String::from_utf8(blob).expect(entry)
     }
 }

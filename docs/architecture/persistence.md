@@ -4,7 +4,8 @@ This is a map of the files this project writes to a player's own
 machine, not inside the repository or the disc image. All of them live under
 `<config dir>/oag/` - `dirs::config_dir()`'s answer, which is
 `$XDG_CONFIG_HOME/oag` (or `~/.config/oag`) on Linux, `~/Library/Application
-Support/oag` on macOS, and `%APPDATA%\oag` on Windows.
+Support/oag` on macOS, and `%APPDATA%\oag` on Windows - except the replays row,
+which is under `<data dir>/oag/` (`dirs::data_dir()`, where `photos/` already is).
 
 | File | Owner module | What it holds |
 | --- | --- | --- |
@@ -12,6 +13,7 @@ Support/oag` on macOS, and `%APPDATA%\oag` on Windows.
 | `pilots/*.toml` | `crates/raceplay/src/pilots.rs` | Player-authored AI opponents - one file per pilot, hand-editable, never rewritten wholesale. |
 | `records.toml` | `crates/game/src/records.rs` | Best lap, best total time and the last result, per circuit/mode/class. This page. |
 | `ghosts/<title>/<mode>/<class>/<track>.oagr` | `crates/game/src/ghosts.rs` | The best lap raced as a ghost in Time Trial and Speed Lap, one replay file per `records.toml` key, written only when a lap beats it. See [ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). |
+| `<data dir>/oag/replays/{auto,saved}/oag-<title>-<unix seconds>-<n>.oagr` | not built | A whole race: its inputs, hashes and pose track, one `.oagr` per race. `auto/` is a ring (the last 20 races, 32 MiB), `saved/` is the player's own and never pruned. The `<data dir>` is `dirs::data_dir()`'s, where `photos/` already is. Designed, not written yet: [ADR-0087](adr/0087-a-replay-and-photo-mode-share-one-timeline.md), "Whole-race recording and saving". |
 
 Read `settings.rs`'s and `pilots.rs`'s own module docs first if you have not -
 `records.rs` follows the first's file shape and diverges from both on error

@@ -86,14 +86,14 @@ pub(super) fn circuits() -> Vec<(String, String)> {
 /// The immutable half of a [`RaceSim`], cloned the way a snapshot would.
 fn track_half(sim: &RaceSim) -> impl Sized {
     (
-        sim.collision.clone(),
-        sim.spline.clone(),
-        sim.racing_line.clone(),
-        sim.ai_order.clone(),
-        sim.routes.clone(),
-        sim.speedup_pads.clone(),
-        sim.weapon_pads.clone(),
-        sim.weapons.clone(),
+        (*sim.collision).clone(),
+        (*sim.spline).clone(),
+        (*sim.racing_line).clone(),
+        sim.ai_order.to_vec(),
+        sim.routes.to_vec(),
+        sim.speedup_pads.to_vec(),
+        sim.weapon_pads.to_vec(),
+        sim.weapons.as_deref().cloned(),
     )
 }
 

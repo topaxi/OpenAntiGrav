@@ -4,6 +4,7 @@
 //!   the grade and the screen filter, and the composite order the window uses.
 //! - [`drs`]: dynamic resolution scaling, a pure controller that is fed a
 //!   frame time and answers with a render rectangle.
+//! - [`refresh`]: what the display can show, from its report and from frames that prove it.
 //! - [`perf`]: the frame-time meter, the cost breakdown and the overlay's
 //!   lines.
 //!
@@ -14,4 +15,5 @@
 pub mod drs;
 pub mod governor;
 pub mod perf;
+pub mod refresh;
 pub mod upscale;

@@ -120,6 +120,7 @@ fn hd_zone_and_speed_lap_draw_the_phrase_from_hds_own_table() {
             default_line_height: 34.0,
             skin_line_height: 34.0,
             default_border: layout.default_border(),
+            tag_label: None,
         };
         let mut board = oag_hud::messages::MessageBoard::default();
         board.push("ER_GMA", true);

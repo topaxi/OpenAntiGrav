@@ -530,7 +530,7 @@ impl MotionBlur {
     pub fn render(
         &mut self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         frame: &Frame<'_>,
         timestamps: Option<ChainTimestamps<'_>>,
@@ -654,11 +654,7 @@ impl MotionBlur {
                     pass.set_bind_group(index as u32, Some(*group), &[]);
                 }
                 pass.draw(0..3, 0..1);
-                if label == "motion blur copy" {
-                    oag_gpu::perfprobe::marks::mark(&mut pass, "end");
-                } else {
-                    oag_gpu::perfprobe::marks::close(&mut pass);
-                }
+                oag_gpu::perfprobe::marks::close(&mut pass);
             };
 
         let prepare_pipeline = if groups.multisampled {

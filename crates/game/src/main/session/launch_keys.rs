@@ -103,6 +103,7 @@ pub(crate) fn apply_two_source(
 ) -> bool {
     // A launch names its own track: a disc circuit, or below a CUSTOM file.
     race_options.eliminator_kill_target = None;
+    race_options.eliminator_score_target = None;
     race_options.laps_override = None;
     race_options.weapons_override = None;
     if let Some(mode) = oag_race::Mode::from_name(&inputs.mode) {

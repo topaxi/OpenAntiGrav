@@ -54,7 +54,7 @@ A Pulse race that ended on the line does not open `EndRace Results` at once. The
 | Legend | `ProceedMessage` (`FE_PRESS_TO_CONT`, y 242) and `PhotoMessage` (`ER_PRESS_SELECT_PHOTO`, y 212): `Stats` font, left-aligned at x 20, white. Strings come from the disc's language file, so `check-strings` has nothing to add | the disc |
 | Fade | straight ramp, 42 ticks, from tick 61 | measured (a photograph every second frame) |
 | Leaving | X, Start or a click, from tick 61; the press is spent before that | the clock is measured; accepting a press in the first second is moot, the original is not on the state yet |
-| SELECT | nothing (`Session::frame` spends the press instead of cycling the camera view) | photo mode is not built |
+| SELECT | nothing (`Session::frame` spends the press instead of cycling the camera view) | photo mode is not built; [photo-mode.md](photo-mode.md) is what it would be |
 | Pointer | a click anywhere, like the other two confirm-only screens | chosen |
 
 A finish by the line and a **Single Race wreck** get it (the wreck on the maintainer's 2026-10-02 decision "hold, then results", the original having no
@@ -67,7 +67,7 @@ such state there). An Eliminator target and a Zone run keep the panels at once, 
 | Widget | Draws | Why |
 | --- | --- | --- |
 | `BigTopText` (`ER_RES`) | Yes | direct idstring, resolved generically |
-| `Line1` (headline) | Yes, for `TimeTrial`/`SpeedLap`/`SingleRace` | `SingleRace` uses the finishing-position idstring (`ER_1STP`..`ER_8THP`). `Zone` and `Eliminator` have tables of their own, below; `Headline::Unresolved` remains only for HD's grid, whose populate for them is unread |
+| `Line1` (headline) | Yes, for `TimeTrial`/`SpeedLap`/`SingleRace` | `SingleRace` uses the finishing-position idstring (`ER_1STP`..`ER_8THP`). `Zone` and `Eliminator` have tables of their own, below; `Headline::Unresolved` remains for HD's Zone (HD's Eliminator is a points table: `docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`, "The results table") |
 | `lap0.0`/`lap0.1` (header) | Yes | `RC_LAP`/`PRO_TIME` |
 | `lap0.2` (header) | **No text, but the header icon draws** | the cell is blanked in the original too: `boostimg` is the header - see the `boostimg` row |
 | `lap{n}.0`/`lap{n}.1` | Yes, up to [`oag_race::MAX_RECORDED_LAPS`] (4) | off `Standing::lap_splits`, which is itself capped at 4 - see below |
@@ -716,6 +716,112 @@ DISPLAY=:1 WAYLAND_DISPLAY= XDG_CONFIG_HOME=<isolated> \
 # flyer) -> Cell Selection (click the selected hex) -> let the race run to the
 # flag -> screenshot EndRace Results, click Menu, screenshot EndRace Menu
 ```
+
+## HD's `Results` names every craft (2026-11-06, `hd-endrace-rows`)
+
+**The fault**: a Fury campaign race (`grid8_3_1`, autopilot, `--drive` through the real
+`Session`), a Wipeout HD campaign race (`grid0_3_1`) and a RACEBOX single race on HD all drew
+eight rows of place and time with the **name column empty** and `-` for every craft the race had
+not finished: no row said whose it was. The ground-truth test passed because it asserted that
+rows exist, not what they say. The campaign route, the definition copy served and the draw order
+were not at fault; every route showed the same table.
+
+**The fix**: `Grid1.r` is the record's `+0x50` string, which the executable sets through the
+localising setter and hashes to pick the row's badge: a team idstring
+([endrace-results-grid.md](../ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md), 75). So
+`oag_ui_screens::endrace::FieldRow::team` carries the grid's team for the slot, keyed as HD's
+string table spells it (`oag_game::results_tables::team_key`: a variant directory `Assegai_c1`
+is its base team, a base is spelled as `Title::teams` lists it), and the draw resolves it.
+The time of a craft still racing reads `ER_RACING` (the `+0x160 == 0` string) in place of the
+dash. A person of a split screen or a network race keeps their seat or name in that column.
+
+**Live**, `--drive` (the real `Session`, no window), 1440x816: Fury `ASSEGAI`, `MIRAGE`,
+`HARIMAU`, `ICARAS`, `AG-SYSTEMS`, `TRIAKIS`, `GOTEKI 45`, `FEISAR` in finishing order, the
+player's row highlighted, `RACING` in the seven time cells, the same in frames 60 ticks
+apart (the table does not animate); the same on HD's campaign and a RACEBOX race. Pinned by
+`crates/game/tests/hd_endrace_ground_truth.rs::a_finished_hd_race_reaches_endrace_results_with_the_field_populated`
+(every craft's team, through HD's own strings, and `RACING` for each unfinished one),
+`crates/game/src/results_tables.rs` and `crates/ui-screens/src/endrace/hd/tests/cursor.rs`.
+
+**Not changed**: ~~the table is the board taken when the race ends, so the other seven read
+`RACING` for as long as `Results` is up~~ - it now follows the field, see "The field keeps
+finishing behind `Results`" below. The badge (`Gridi.r`) is not drawn. Time Trial and Speed Lap are
+untouched.
+
+**Omega** (`checked, applies, not wired`): Omega's `Title::front_end.endrace_entry` is `None`,
+so a finished Omega race keeps the built-in `scoreboard::Overlay`, which on a 1440x816 frame
+overflows the screen (columns overlap, the fourth row is off the bottom) and names the AI
+`SLOT n`. Its HD-lineage `endrace_definition.xml` is in `data09.psarc`
+(`docs/formats/omega-status.md`); wiring it is open in the thread, not done here because which
+of Omega's copies the runtime serves is unmeasured.
+
+## The field keeps finishing behind `Results` (2026-11-08, `endrace-live-board`)
+
+**The fault**: the race runs on behind the end screens once the player crosses the line
+(`Race::runs_on_after_the_line`), but the results board was taken once, on the player's finish
+tick, so every craft still racing then read `RACING` on the screen for good.
+
+**The original most likely refreshes** (confidence 60): `0x0022e680`, the slot of
+`EndRace Results`'s vtable at `0x0087f1f0` that takes the frame's `dt` (the screen's Update),
+calls `0x0005a770` (on the `RaceManager`) and then `EndRaceResults_FillRaceRows` (`0x0022b688`,
+on the screen) on **every update** while the race-layout page is up (`g_GameState+0xe0` of `3` or
+`0x10`, `+0xc78 == 0`); `0x0005a770` itself acts on mode `3` only. It rewrites 300-byte records
+at the RaceManager's `+0x1980`: `+0x160` is `-1`/`-2` for a craft that is out, else the sum of
+its recorded lap times, `0` until every lap has one, and `+0x168` is a rank written in the same
+loop. `FillRaceRows` reads its records through a pointer the screen holds (`screen+0xb34`),
+same stride, same `+0x160` and `+0x168`, and prints `0` as `ER_RACING` and above `0` as the time.
+**Not shown: that `screen+0xb34` points at the RaceManager's `+0x1980` block** (the offsets and
+stride agree, which is why this is "likely" and not 75). Not read: the `-2` case. Static read of
+`/hdfury/EBOOT-ps3-hdfury-eu.elf`, no emulator.
+
+**The fix**: `Race::refresh_results` (`crates/raceplay/src/results.rs`), called from
+`Race::tick_finished` while the world runs on after the line, retakes the board from the world.
+It replaces the board only when it differs and bumps `Race::results_revision`; nothing is done
+once every craft has finished. The player's row, `Board::tick` and the people's names stay as
+the finish took them, so nothing read once at the finish (the place the voice speaks, the
+loyalty banked, the best lap recorded, a Tournament leg's points) can change, and the screens'
+headline, cursor, page and menu are untouched. `EndRaceRuntime::refresh_field` rebuilds only the
+rows of the two tables that list the field (HD's `Results`, Pulse's multi-person table) when
+`RaceStage::refresh_endrace_board` sees a newer revision. A craft still racing also moves
+between places as the running order changes. It is a read of the simulation: no hash moves.
+
+| Screen | Follows the field | Why |
+| --- | --- | --- |
+| HD/Fury `EndRace Results` | yes | rows rebuilt from the board |
+| Pulse multi-person `Results`, **local** split screen of 3+ (or 2 without `Results Split`) | yes | `PeopleResults` rebuilt from the board |
+| Any title's network race | no | goes through `net.step`, not `tick_finished`; the board is the server's, taken from confirmed state |
+| Built-in scoreboard (Omega and Pure: `endrace_entry` is `None`) | yes | drawn from `race.results()` every frame; a code read, no frame captured on either |
+| Pulse single-race `Results`, `Rewards` | n/a | the player's lap table only; no other craft is listed |
+| Pulse Tournament table | no, **chosen, not measured** | leg points are banked at the person's finish; a live table would show points the standings never took |
+| 2048 touch pages | n/a (checked, differs) | summarise one racer; no field list |
+| Eliminator / Zone / a race that ended on a wreck | no | the world stands still (or the player's row would move), so there is nothing to refresh; a scored race has no lap target and never runs on after the line, so **its points never change here** |
+
+A network race is untouched, HD's included: its board is the server's, taken from confirmed state,
+and the client compares it with the server's once (`net_play::check_server_board`); the refresh
+lives in `tick_finished`, which a network race does not call. The Tournament leg is banked once
+(`record_finished_leg`'s only call is in the `result_saved`-guarded finish transition), from the
+board as the finish took it.
+
+**Pinned by**: `crates/raceplay/src/results/tests.rs`
+(`a_craft_that_finishes_after_the_player_gets_its_time_on_the_board`, red with the call
+removed; `the_players_row_and_the_finish_tick_stay_as_the_finish_took_them`;
+`the_revision_moves_only_when_the_board_does`;
+`refreshing_the_board_moves_no_state_hash`, the state hash of a `tick_finished` run against a
+plain `tick` run, every tick) and, disc-backed,
+`crates/game/tests/hd_endrace_ground_truth.rs::a_craft_that_crosses_behind_the_results_screen_replaces_racing_with_its_time`
+(real circuit, real definition: a `RACING` cell becomes the time on the drawn screen). The session
+glue (`follow_board` in `build_endrace`, the call in `Session::frame`) is pinned only by the
+`--drive` frames below.
+
+**Live**, `--drive` through the real `Session` (1440x816, HD EU, RACEBOX single race, autopilot):
+every row `RACING` 5 ticks after the finish, then `QIREX` reads `1.50.88` where it read
+`RACING` 355 ticks on, the other six still `RACING`, and 45 ticks later the order of the
+three-to-eight rows has changed (`EG-X` ahead of `HARIMAU`) with the loyalty total unchanged
+(180, banked once). In an earlier run all eight rows had a time by 1,565 ticks.
+
+**Omega** and **Pure** (code read, no frame captured): both keep the built-in scoreboard, which
+draws from the board every frame, so they follow the field with this change. **2048**
+(`checked, differs`): its touch pages summarise one racer and list no other craft.
 
 ## The table's rows are the file's own, not the PSP's (2026-10-13)
 

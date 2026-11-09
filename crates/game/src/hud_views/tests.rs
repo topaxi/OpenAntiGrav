@@ -204,6 +204,7 @@ fn a_split_hud_file_draws_each_group_into_its_own_view_with_a_span() {
     let sheet = oag_hud::sprite::Sheet::default();
     let cx = oag_hud::Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,
@@ -276,4 +277,79 @@ fn a_split_hud_file_draws_each_group_into_its_own_view_with_a_span() {
             );
         }
     }
+}
+
+const TAG_XML: &str = r#"<Screen>
+<Text name="PlrTag0"><Values scale="0.5" font="Default" align="centre" vertalign="bottom"/></Text>
+</Screen>"#;
+
+/// A tag in a view's readout is drawn as its name in the `PlrTag` face, in white at the law's
+/// alpha, inside that view; the same readout without the tag draws no such text. This is the
+/// draw half of the MULTIPLAYER TAGS row: the race hands the view an empty list when it is off.
+#[test]
+fn a_readouts_tag_is_drawn_in_its_view_and_an_empty_list_draws_nothing() {
+    let layout = oag_hud::Layout::from_xml(SAMPLE);
+    let tag_layout = oag_hud::Layout::from_xml(TAG_XML);
+    let label = tag_layout
+        .label("PlrTag0")
+        .expect("the label parses")
+        .clone();
+    let strings = oag_ui::language::StringTable::default();
+    let sheet = oag_hud::sprite::Sheet::default();
+    let cx = oag_hud::Context {
+        default_border: layout.default_border(),
+        tag_label: Some(&label),
+        layout: &layout,
+        strings: &strings,
+        sheet: &sheet,
+        art: oag_pulse::hud::ART,
+        hud_line_height: 25.0,
+        small_line_height: 10.0,
+        default_line_height: 10.0,
+        skin_line_height: 10.0,
+    };
+    let names = |tags: Vec<oag_hud::PlayerTag>| -> Vec<(String, f32, [f32; 4])> {
+        let mut readouts = one_view_each(2);
+        readouts[0].player_tags = tags;
+        let views = view_draws(
+            cx,
+            None,
+            None,
+            None,
+            readouts,
+            Cut::Horizontal,
+            SCREEN,
+            Space::PSP,
+        );
+        crate::hud_overlay::views_frame(&views)
+            .default_text
+            .iter()
+            .filter_map(|draw| match draw {
+                oag_ui::frontend::Draw::Text { x, color, text, .. }
+                    if text.starts_with("Player") =>
+                {
+                    Some((text.clone(), *x, *color))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let tag = oag_hud::PlayerTag {
+        screen: [240.0, 100.0],
+        alpha: 0.5,
+        name: "Player 2".to_string(),
+    };
+    let drawn = names(vec![tag]);
+    assert!(
+        !drawn.is_empty(),
+        "the tag was dropped on the way to the draw"
+    );
+    let (text, _, color) = &drawn[drawn.len() - 1];
+    assert_eq!(text, "Player 2");
+    assert_eq!(color[..3], [1.0, 1.0, 1.0], "white");
+    assert!(
+        color[3] > 0.0 && color[3] <= 0.5,
+        "alpha follows the law: {color:?}"
+    );
+    assert!(names(Vec::new()).is_empty(), "no tag, no text");
 }

@@ -298,6 +298,28 @@ fn the_fill_is_two_passes_and_the_second_is_the_style() {
     }
 }
 
+/// A colour's own alpha scales the texel's in both passes: `Record.n.m`'s
+/// `0x7f646464` fill is half as strong as an opaque one.
+#[test]
+fn the_colours_own_alpha_scales_the_fill() {
+    let mut out = Vec::new();
+    let half = Block {
+        x: 100.0,
+        y: 200.0,
+        width: 298.0,
+        height: 64.0,
+        color: [0.4, 0.4, 0.4, 127.0 / 255.0],
+        landing: true,
+    };
+    crate::menu::block::draw_fill(&half, &art(true), (1.0, 1.0), &mut out);
+    let alphas: Vec<f32> = fills(&out).iter().map(|(_, color)| color[3]).collect();
+    let want = 110.0 / 255.0 * 127.0 / 255.0;
+    assert_eq!(alphas.len(), 4, "{alphas:?}");
+    for alpha in alphas {
+        assert!((alpha - want).abs() < 1e-6, "{alpha} against {want}");
+    }
+}
+
 /// The fill's geometry: a body inset two units from the block, and a band
 /// ten tall above it whose right end is a ten-unit cut - seventeen short of
 /// the fill on a landing block, one past it on a plain one - and whose left

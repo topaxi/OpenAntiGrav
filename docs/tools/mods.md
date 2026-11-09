@@ -23,9 +23,12 @@ Searched, in this order: `$OAG_MODS` alone when set (a path list), else `data/mo
 checkout), `assets/mods/official/` (the official mods, the [`official-mods`](https://github.com/OpenAntiGrav/official-mods)
 submodule, `oag_mod::OFFICIAL`), `assets/mods/examples/` (the example mods, the [`mod-examples`](https://github.com/OpenAntiGrav/mod-examples) submodule;
 both found when the game runs from a checkout), `mods/` beside the program (or the AppImage), and `<data dir>/oag/mods/`
-(`~/.local/share/oag/mods/` on Linux). Each directory is searched one level deep: a
-folder holding `oag-mod.toml`, or a `*.zip`, or a `*.oagmod`. `just mods-list` shows
-what the search finds and what it left out.
+(`~/.local/share/oag/mods/` on Linux), then the texture packs: `data/texture-packs/`,
+`<data dir>/oag/texture-packs/` and a PPSSPP memstick's `PSP/TEXTURES/` (under `~/.config/ppsspp` on
+Linux). Each directory is searched one level deep: a folder holding `oag-mod.toml`, or a
+`*.zip`, or a `*.oagmod`, or (a texture pack, below) a folder holding `textures.ini` or `textures.zip`.
+A path found twice (a memstick folder linked once per game serial) is one candidate.
+`just mods-list` shows what the search finds and what it left out.
 
 ## The manifest
 
@@ -52,6 +55,63 @@ version is left out and named. `titles` names the titles the mod is for, by
 `oag_title::Title::slug` (`wipeout-pulse`, `wipeout-hd`, `wipeout-omega-collection`);
 a mod's campaigns are offered only on those (empty: any). `just mods-check <path>`
 opens a mod and checks its manifest.
+
+## Texture packs
+
+A PPSSPP texture pack is a mod that starts **off**
+([`docs/formats/ppsspp-texture-pack.md`](../formats/ppsspp-texture-pack.md) has the key and
+the evidence). It needs no `oag-mod.toml`: a folder or a zip with a `textures.ini` at its root,
+or a folder holding a `textures.zip`, is **recognised** and given a manifest: `id`
+`ppsspp.<name, lower-cased and slugged>` (a bare `textures.zip` takes its folder's name), `name`
+that name, version `0.0.0`, no authors, no licence (`no license stated` on the MODS page),
+`titles` empty, and the pack's `[games]` serials. A pack's author who wants a name, release
+and licence writes an `oag-mod.toml`, which wins, and so does the one `just fetch-texture-packs` writes
+into each checkout it makes (below):
+
+```toml
+[mod]
+id = "someone.pulse-hd"
+# ... the usual keys ...
+default-enabled = false      # optional; absent means false for a mod with [texture-pack], true otherwise
+
+[texture-pack]
+format = "ppsspp"            # the one format; anything else refuses the mod by name
+# ini = "textures.ini"       # where the ini is in the mod (default)
+# serials = ["UCES00465"]    # absent: read from the ini's [games]
+```
+
+- **Generated manifest.** `just fetch-texture-packs` runs `oag-mod init-pack` on each checkout,
+  which writes the manifest `oag_mod::texture_pack::recognise` would have made (same id, name,
+  version `0.0.0`, no licence, `default-enabled = false`, `format = "ppsspp"`) from the same
+  function, so the two cannot drift; the pin's URL becomes `repository` and its owner the author
+  (the schema wants one; `unknown` when the URL names none). It names **no `serials`**, so they
+  keep following the ini when the pin moves. **An `oag-mod.toml` that is already there is never
+  rewritten**, edited or not, which is safe because nothing in the file goes stale (id and name
+  follow the folder name). The file is added to the checkout's `.git/info/exclude`, so the script's
+  clean-tree check and `--update` still pass. A pack in a PPSSPP install's `PSP/TEXTURES/<serial>/`
+  that the script did not fetch is still recognised without one (`--install-ppsspp --copy` copies
+  the manifest along with the rest). `oag-mod init-pack <folder>... [--repository URL]` is the
+  command; a folder with only a `textures.zip` is refused, since a folder manifest would shadow
+  the zip PPSSPP prefers.
+- **`default-enabled`** is the one mod key that changes the settings file: a mod that starts
+  off is switched on through `[mods] enabled = ["ppsspp.my-pack"]`, beside `disabled` for a mod
+  that starts on; an id is in at most one. The MODS page's ENABLED row writes the right one.
+  The page's ADDS line for a pack that is on reads **TEXTURES**.
+- **What it does.** A race load opens the packs that are on, takes the first whose `[games]`
+  names the disc's serial (a PSP disc only: the keys are the PSP's), and the decoders ask it as
+  they build a picture (the pack is switched off again when the load ends, so a menu preview draws
+  the disc's own): a `.vex` texture (hulls, tracks) by its key, and the whole-image `.mip`
+  textures the load reads for flares, clouds and mist; the PNG is read the first time its
+  texture is decoded, under a 192 MiB cache cap. The HUD sheet, the fonts and every other
+  atlas cut by pixel offset keep the disc's own picture. Off, a frame is byte-identical to
+  the game without the mod. Rendering only: nothing reaches `World`, a snapshot or the LAN
+  content fingerprint.
+- **The load** says `texture pack <name>: N key(s)` in the load report and, when it ends, `N texture(s)
+  replaced` in the log, both at `debug`, and `texture pack not used: <name>: <why>` at `warn` (the pack's
+  `[games]` does not name this disc, it is not a PSP disc, its `textures.ini` hashes another
+  way, or it will not open).
+- `.zip` and folder alike are read in place; PPSSPP prefers `textures.zip` to a loose tree, so
+  does the search. ZIM images (a later pack's format) are not read yet.
 
 ## Campaigns, pilots and tracks: `campaigns/`, `pilots/`, `tracks/`
 
@@ -220,12 +280,22 @@ out, so two machines that differ in one still match and can race. The filter is
 - It is stored by id as `[mods] disabled = ["oag.hillside"]` in the settings file. A mod
   installed later follows its manifest's `default-enabled` (default `true`; `false` ships it
   off); an id no installed mod has is kept. A mod that ships off and is turned on is stored
-  as `[mods] enabled = [...]`. `oag_game::settings::Mods::is_enabled(id, manifest_default)`
-  is the one resolver, and a switch that equals the default is not stored.
+  as `[mods] enabled = [...]`. `oag_game::mods::switch` writes it, and a switch that equals the default is not stored.
 - An off mod adds nothing: no menu rows, no strings, no campaigns, no pilots, no tracks on a
   CUSTOM title, and it is left out of the LAN content fingerprint (as is any mod that changes no race, below). It stays on the MODS
   page, its ADDS line reading **NOTHING, TURNED OFF**, so it can be turned back on. The gate is
   one place, `oag_game::mods::Mods` (`player()` and `build()`).
+- **A live LANGUAGE pick rebuilds the tree through the same call** (`oag_game::menu_tree::rebuilt`,
+  shared by the switch and `Session::resupply_language`), so a mod row and the MODS page
+  read the new language's `strings/<language>.toml` at once and the menus reopen on the
+  same page and row. A language the mod ships no file for reads its English, as at boot.
+  `crates/game/tests/mods_menu.rs` runs the rebuild for two languages and with a mod on and off;
+  the `Session` wiring itself has no test surface (it needs a GPU), see "Switching language
+  without relaunching" in `docs/architecture/menus.md`.
+- **Wasm extensions follow the switch at the next race load**, not at once: a race looks for
+  its rules modules through `Mods::player()` as it loads (`oag_game::mod_extensions::attach`,
+  called from `Session::launch_race` with the saved set), so an off mod's module is not found,
+  and a race already parked keeps the modules it started with.
 - **It applies at once.** The menus are rebuilt as a boot builds them and reopen on the MODS page
   with BACK leading where it led. A race parked under the menus keeps what it started with.
 - **`oag-extras` cannot be turned off**: it carries OPTIONS, this page's row and QUIT. Its

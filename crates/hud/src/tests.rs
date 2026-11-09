@@ -505,6 +505,7 @@ fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
         oag_pulse::hud::ART,
         false,
         None,
+        None,
     );
     assert_eq!(empty.len(), 2, "the fixture must author both widgets");
 
@@ -514,6 +515,7 @@ fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
         &super::ext_draws::Outputs::default(),
         oag_pulse::hud::ART,
         false,
+        None,
         None,
     )
     .iter()
@@ -527,6 +529,7 @@ fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
         &super::ext_draws::Outputs::default(),
         oag_pulse::hud::ART,
         false,
+        None,
         None,
     )
     .iter()
@@ -543,6 +546,7 @@ fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
         &super::ext_draws::Outputs::default(),
         oag_pulse::hud::ART,
         false,
+        None,
         None,
     );
     assert_eq!(absent.len(), 1);
@@ -581,6 +585,7 @@ fn the_pickup_backdrop_takes_its_weapons_own_colour_and_the_icon_keeps_its_autho
         &super::ext_draws::Outputs::default(),
         oag_pulse::hud::ART,
         false,
+        None,
         None,
     );
     assert_ne!(
@@ -638,6 +643,7 @@ fn the_2048_pickup_icon_is_uv_rewritten_and_recentred_in_its_frame() {
         oag_2048::hud::ART,
         false,
         None,
+        None,
     );
     assert_eq!(drawn.len(), 2, "the fixture must author both widgets");
     assert_eq!(drawn[0].name, "PickupBgFrame");
@@ -651,9 +657,10 @@ fn the_2048_pickup_icon_is_uv_rewritten_and_recentred_in_its_frame() {
     // The icon's uv is the table's Rocket entry, not the authored `(6, 201)`.
     assert_eq!(drawn[1].uv, [203.0, 201.0, 85.0, 86.0]);
     // The icon's rect keeps its own 85x86 size and moves to the frame's own
-    // centre: frame is (87, 400, 110, 95), icon is 85x86, so
-    // x = 87 + (110-85)/2 = 99.5, y = 400 + (95-86)/2 = 404.5.
-    assert_eq!(drawn[1].rect, [99.5, 404.5, 85.0, 86.0]);
+    // centre (plus the slot's 2 px): frame is (87, 400, 110, 95), icon is 85x86, so
+    // x = 87 + 110/2 + 2 - 85/2 = 101.5 (`Hud_BindWidgets` adds 2.0 to the slot's x),
+    // y = 400 + 95/2 - 86/2 = 404.5.
+    assert_eq!(drawn[1].rect, [101.5, 404.5, 85.0, 86.0]);
 
     // A weapon this table has no entry for draws the backdrop alone, the
     // same "draw what is held, nothing invented for what is not" rule
@@ -665,6 +672,7 @@ fn the_2048_pickup_icon_is_uv_rewritten_and_recentred_in_its_frame() {
         &super::ext_draws::Outputs::default(),
         oag_2048::hud::ART,
         false,
+        None,
         None,
     );
     assert_eq!(unimplemented.len(), 1);
@@ -684,6 +692,7 @@ fn the_2048_grant_announcement_is_the_icon_at_its_authored_rect_with_a_caption()
         &super::ext_draws::Outputs::default(),
         oag_2048::hud::ART,
         true,
+        None,
         None,
     );
     assert_eq!(announced.len(), 1, "no PickupBgFrame while announcing");
@@ -722,6 +731,76 @@ fn the_2048_grant_announcement_is_the_icon_at_its_authored_rect_with_a_caption()
     assert_eq!(text(&readout).as_deref(), Some("FE_MISSILE"));
 }
 
+/// The grant's fly: the icon moves from its authored top-centre rect to the slot along a
+/// straight line and `PickupBgFrame` draws at `y / slot y` of its width, pinned at its left edge;
+/// at or past the distance it is the settled draw. Fails if `Readout::pickup_fly` stops reaching
+/// the sprites, the frame stops following the progress, or the line stops ending at the slot.
+#[test]
+fn the_2048_grant_flies_from_the_announcement_rect_to_the_slot() {
+    use oag_tables::weapons::Weapon;
+    let layout = Layout::from_xml(SAMPLE_2048_PICKUP);
+    let at = |fly: Option<f32>| {
+        pickup_sprites(
+            &layout,
+            Weapon::Missile,
+            &super::ext_draws::Outputs::default(),
+            oag_2048::hud::ART,
+            false,
+            fly,
+            None,
+        )
+    };
+    let centre = |sprites: &[Sprite]| {
+        let icon = &sprites[1];
+        [
+            icon.rect[0] + icon.rect[2] * 0.5,
+            icon.rect[1] + icon.rect[3] * 0.5,
+        ]
+    };
+    let settled = at(None);
+    assert_eq!(
+        settled,
+        at(Some(10_000.0)),
+        "past the distance is the settled draw"
+    );
+    assert_eq!(settled[0].rect, [87.0, 400.0, 110.0, 95.0]);
+    assert_eq!(settled[1].rect, [101.5, 404.5, 85.0, 86.0]);
+
+    // From the authored rect's centre (480, 60) to the slot (144, 447.5): 387.5 px down.
+    let start = at(Some(0.0));
+    assert_eq!(centre(&start), [480.0, 60.0]);
+    let progress = 60.0 / 447.5;
+    assert!(
+        (start[0].rect[2] - 110.0 * progress).abs() < 1e-3,
+        "{start:?}"
+    );
+    assert_eq!(start[0].rect[0], 87.0, "pinned at its left edge");
+
+    let mid = at(Some(193.75));
+    let [x, y] = centre(&mid);
+    assert!(
+        (y - 253.75).abs() < 1e-3 && (x - 312.0).abs() < 1e-3,
+        "halfway: {x} {y}"
+    );
+    assert!((mid[0].rect[2] - 110.0 * 253.75 / 447.5).abs() < 1e-3);
+
+    // Every 30 px step lands further down, further left and with a wider frame, then holds once it has arrived.
+    let mut last = centre(&start);
+    let mut width = start[0].rect[2];
+    for travelled in (30..=450).step_by(30) {
+        let sprites = at(Some(travelled as f32));
+        let [x, y] = centre(&sprites);
+        let flying = ((travelled - 30) as f32) < 387.5;
+        assert_eq!(y > last[1], flying, "{travelled}: {y}");
+        assert_eq!(x < last[0], flying, "{travelled}: {x}");
+        assert_eq!(sprites[0].rect[2] > width, flying, "{travelled}");
+        last = [x, y];
+        width = sprites[0].rect[2];
+    }
+    assert_eq!(at(Some(387.5)), settled);
+    assert!(at(Some(387.4))[0].rect[2] < 110.0);
+}
+
 /// **Every Pulse weapon draws its recovered translucent word, in three groups**,
 /// and `Bomb`/`Mine` no longer fall back to `HudBGColour`. Fails if the alpha
 /// is dropped, a grouping moves, or a weapon loses its row.
@@ -748,6 +827,7 @@ fn every_pulse_weapon_draws_its_recovered_translucent_backdrop_word() {
             oag_pulse::hud::ART,
             false,
             None,
+            None,
         );
         assert_eq!(
             drawn[0].color,
@@ -762,6 +842,7 @@ fn every_pulse_weapon_draws_its_recovered_translucent_backdrop_word() {
         &super::ext_draws::Outputs::default(),
         oag_pulse::hud::ART,
         false,
+        None,
         None,
     );
     assert_ne!(
@@ -998,6 +1079,7 @@ pub(super) fn context<'a>(
 ) -> Context<'a> {
     Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout,
         strings,
         sheet: &SAMPLE_SHEET,
@@ -1080,4 +1162,60 @@ fn the_total_time_precision_follows_the_title() {
     assert!(oag_2048::hud::ART.total_time_hundredths);
     assert!(!oag_pulse::hud::ART.total_time_hundredths);
     assert!(!oag_hd::hud::ART.total_time_hundredths);
+}
+
+/// A bar cropped without its strings draws exactly what the full crop draws, flat or graded,
+/// with an authored patch or the whole texture: the bar path's `crop_geometry` and
+/// `sprite_draw_from` are `crop_horizontally` and `sprite_draw` without the copies.
+#[test]
+fn a_bar_cropped_without_its_strings_draws_the_same() {
+    let placed = crate::sprite::Placed {
+        x: 3,
+        y: 100,
+        width: 256,
+        height: 128,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+    };
+    let sheet = crate::sprite::Sheet::placed_at(&[("bar.mip", placed)]);
+    let bar = Sprite {
+        name: "SpeedBar".to_string(),
+        src: "bar.mip".to_string(),
+        rect: [10.0, 20.0, 120.0, 8.0],
+        uv: [4.0, 2.0, 96.0, 8.0],
+        color: [0.5, 0.75, 1.0, 0.8],
+        rotation: 0.0,
+        gradient: None,
+        centred: false,
+    };
+    let graded = Sprite {
+        gradient: Some([[1.0, 1.0, 0.0, 1.0], [1.0, 0.5, 0.0, 1.0]]),
+        ..bar.clone()
+    };
+    let whole = Sprite {
+        uv: [0.0, 0.0, 0.0, 0.0],
+        ..bar.clone()
+    };
+    for sprite in [&bar, &graded, &whole] {
+        for fraction in [0.0, 0.37, 1.0] {
+            let full = sprite_draw(&crop_horizontally(sprite, fraction), &sheet);
+            let bare = crop_geometry(sprite, fraction);
+            assert!(bare.name.is_empty() && bare.src.is_empty());
+            assert_eq!(
+                sprite_draw_from(&sprite.src, &bare, &sheet),
+                full,
+                "{fraction} of {sprite:?}"
+            );
+            assert!(full.is_some());
+            let tipped = sprite_draw(&super::bar_tip::crop(sprite, fraction), &sheet);
+            let bare = super::bar_tip::crop_geometry(sprite, fraction);
+            assert!(bare.name.is_empty() && bare.src.is_empty());
+            assert_eq!(
+                sprite_draw_from(&sprite.src, &bare, &sheet),
+                tipped,
+                "tipped {fraction} of {sprite:?}"
+            );
+        }
+    }
 }

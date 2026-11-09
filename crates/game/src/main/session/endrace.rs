@@ -107,6 +107,7 @@ impl Session {
         // authored `EndRace Results Split`, `docs/ui/split-end-race.md`.
         let split = stage.race.viewport_count() > 1;
         let board = stage.race.results().cloned();
+        let board_revision = stage.race.results_revision();
         // A network race several people flew names every person in its table (by the name
         // they raced under), as a split screen's does, but is otherwise this machine's own
         // race: loyalty, the medal and the menu rows are as for any other.
@@ -117,6 +118,13 @@ impl Session {
         // knows its seed (`race::load::roster`).
         let roster = stage.race.slot_teams().to_vec();
         let observation = stage.observation();
+        // A scored race (an HD Eliminator) is placed on its points, which `observation.place`
+        // already is; its headline is that place, where a race position has no Eliminator headline.
+        let scored_place = board
+            .as_ref()
+            .filter(|board| board.scored() && !split)
+            .and_then(|board| board.player())
+            .map(|row| row.place);
         let standing = &stage.race.sim.world.ships[0].standing;
         let boosts = stage.race.run_stats().boosts_by_lap;
         let laps: Vec<oag_ui_screens::endrace::LapSplit> = (0..oag_race::MAX_RECORDED_LAPS)
@@ -318,13 +326,19 @@ impl Session {
                 stage.race.run_stats(),
             ))
         } else if is_hd {
+            let rows = oag_game::results_tables::field_rows(
+                board.as_ref(),
+                &oag_game::results_tables::team_keys(title_ref, stage.race.slot_teams()),
+            );
             ResultsModel::Hd(oag_ui_screens::endrace::FieldResults {
                 headline: if split {
                     oag_ui_screens::endrace::Headline::Several
+                } else if let Some(place) = scored_place {
+                    oag_ui_screens::endrace::Headline::Position(place)
                 } else {
                     headline(mode, observation.place)
                 },
-                rows: oag_game::results_tables::field_rows(board.as_ref()),
+                rows,
                 loyalty: hd_loyalty,
             })
         } else {
@@ -333,6 +347,16 @@ impl Session {
                 laps,
                 total_ticks: observation.tick,
             })
+        };
+        // The tables that list the field are rebuilt from the board as the rest of the field
+        // finishes (`RaceStage::refresh_endrace_board`).
+        let field_roster = match &results {
+            ResultsModel::Hd(_) => Some(oag_game::results_tables::team_keys(
+                title_ref,
+                stage.race.slot_teams(),
+            )),
+            ResultsModel::PulsePeople(_) => Some(stage.race.slot_teams().to_vec()),
+            _ => None,
         };
         // The place and the medal, under the title's own law
         // (`oag_title::ResultsLaw`): Pulse's `EndRaceResults_Update` and
@@ -351,12 +375,20 @@ impl Session {
             observation.campaign_medal.map(to_campaign_medal),
         )
         .filter(|_| !split);
+        // WATCH REPLAY: a recorded race, on the dialect whose list can draw a row the disc does
+        // not author. Pulse's `<Menu>` is that list.
+        let watch_replay = matches!(&self.stage, Stage::Race(stage) if stage.auto_replay)
+            && oag_game::endrace::dialect(title_ref) == Some(oag_title::EndRaceDialect::Pulse);
         let menu = oag_ui_screens::endrace::EndRaceMenu::new(
-            menu_options(campaign, !split && self.tournament_has_next_leg()),
+            menu_options(
+                campaign,
+                !split && self.tournament_has_next_leg(),
+                watch_replay,
+            ),
             new_best_lap_ticks,
         );
 
-        let runtime = EndRaceRuntime::new(
+        let mut runtime = EndRaceRuntime::new(
             prep,
             skin,
             frame,
@@ -368,6 +400,9 @@ impl Session {
             runs_on_after_the_end,
             voice,
         );
+        if let Some(roster) = field_roster {
+            runtime.follow_board(roster, board_revision);
+        }
         if let Stage::Race(stage) = &mut self.stage {
             stage.endrace = Some(EndRace::Disc(Box::new(runtime)));
         }
@@ -481,6 +516,7 @@ impl Session {
                     endrace.view_results_again();
                 }
             }
+            MenuOption::WatchReplay => self.watch_last_race(),
             MenuOption::RaceAgain => {
                 // A LAN race ended on its server; a rematch is the lobby's, so the menus come back.
                 if self.net.is_some() {

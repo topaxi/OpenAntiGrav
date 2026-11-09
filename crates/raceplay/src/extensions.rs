@@ -1198,10 +1198,10 @@ impl crate::Race {
         own: u16,
         distance: oag_ext_abi::Distance,
     ) {
-        let Ok((to, _)) = self.point_ahead(slot, distance) else {
+        let Ok((exit, _)) = self.exit_ahead(slot, distance) else {
             return;
         };
-        let Some((_, up, at, _)) = self.road_frame(to) else {
+        let Some((_, up, at, _)) = self.road_frame(exit) else {
             return;
         };
         self.sim

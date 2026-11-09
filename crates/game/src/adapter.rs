@@ -55,6 +55,19 @@ use oag_display::display::Renderer;
 /// `docs/tools/packaging.md`.
 pub const BACKENDS: wgpu::Backends = wgpu::Backends::PRIMARY;
 
+/// Set non-empty, it keeps wgpu's debug labels and shader debug info, in any build, for a
+/// session in RenderDoc or one reading a validation message by label.
+pub const DEBUG_LABELS_VAR: &str = "OAG_WGPU_DEBUG";
+
+/// `flags` with `DEBUG` on only when asked for. Left on, naga's SPIR-V writer resolves a line
+/// and column for every statement by rescanning the shader source, about a quarter of a
+/// headless HD race load's CPU in a debug build (`docs/architecture/load-time.md`). Validation
+/// is a separate flag and stays as it was.
+fn debug_flags(mut flags: wgpu::InstanceFlags, labels: bool) -> wgpu::InstanceFlags {
+    flags.set(wgpu::InstanceFlags::DEBUG, labels);
+    flags
+}
+
 /// An instance restricted to [`BACKENDS`].
 ///
 /// Every entry point makes its instance through here rather than
@@ -65,6 +78,10 @@ pub const BACKENDS: wgpu::Backends = wgpu::Backends::PRIMARY;
 pub fn instance() -> wgpu::Instance {
     let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
     descriptor.backends = BACKENDS;
+    descriptor.flags = debug_flags(
+        descriptor.flags,
+        std::env::var_os(DEBUG_LABELS_VAR).is_some_and(|value| !value.is_empty()),
+    );
     wgpu::Instance::new(descriptor)
 }
 
@@ -245,6 +262,17 @@ pub fn choose(
 mod tests {
     use super::*;
     use wgpu::{Backend, DeviceType};
+
+    #[test]
+    fn debug_labels_are_off_unless_asked_for_and_validation_is_left_alone() {
+        let flags = wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION;
+        assert_eq!(debug_flags(flags, false), wgpu::InstanceFlags::VALIDATION);
+        assert_eq!(debug_flags(flags, true), flags);
+        assert_eq!(
+            debug_flags(wgpu::InstanceFlags::empty(), true),
+            wgpu::InstanceFlags::DEBUG
+        );
+    }
 
     /// The label is the settings file's own spelling, so what it produces is a
     /// compatibility promise rather than a display detail.

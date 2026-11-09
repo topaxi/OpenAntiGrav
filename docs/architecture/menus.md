@@ -1128,7 +1128,23 @@ a pause screen to read one off - `Skin.xml`'s `LoadXML` list is exhaustively
 and none of them is a `Pause` definition - and the one HUD string that
 names pausing, `IG_PAUSE_QUIT`, is drawn by nothing (see
 [hud.md](../ui/hud.md)'s "There is no pause"). See `PAUSE_OVERLAY` in
-`crates/game/src/main/menu_stage.rs`.
+`crates/game/src/main/menu_stage.rs`. **That held until `InGame_Definition.xml`
+was read: it is the 23rd file and carries Pulse's pause screens.** A title with
+`Title::pause_menu` draws the authored tint (`0xe8000000`) instead, on the
+screen [the pause menu](../ui/pause-menu.md) describes; `PAUSE_OVERLAY` stays
+the tint over a parked race on the other titles.
+
+**On a title with a pause screen** (`oag_title::Title::pause_menu`, Pulse) the menus open over a
+parked race on that screen, not on the main page: `Definition::open_on_pause_screen` adds a page of
+the disc's rows for the race's mode and makes it the root
+([the pause menu](../ui/pause-menu.md)). The rest of this section is the other titles' pause.
+
+**A row that is on the pause menu only while a race is held** (PHOTO MODE) is `menu::Menu::offer`'s:
+the row is in the definition, off the page from `Menu::new`, and `Session::menu_model` puts it
+back when a race with one view is held behind the menus (not a split, not a LAN or online race,
+not a build that cannot save a file). Parked, it leaves the row count, the cursor window and the
+pointer's hit-test the way a choice with nothing to offer does (`menu/hide.rs`). The row fires
+`Action::PhotoMode`, which resumes the parked race into the mode (`docs/ui/photo-mode.md`).
 
 **The race's own music already worked this way**, and is the reason the
 World's turn was safe to build the same way. Its playlist - through the
@@ -1708,6 +1724,15 @@ the RACE page's VARIANT row is (a title is fixed for the life of a boot), not gr
 setting is a flat `[graphics]` boolean rather than a per-title render profile entry: it is a
 taste switch, not a render cost, and `--race` reads it before the title is known.
 
+TRAIL HITS (GRAPHICS, `graphics.trail_hits`, `off`/`on`, default `off`, restart required)
+is the same shape: a craft flying in a rival's engine trail plays HD's `WO_TRAIL_HITSHIP`
+burst on the two titles that author none. `menu::Definition::drop_unavailable_trail_hits`
+removes the row on a title whose effect table names `Trigger::TrailHitship` (HD, 2048 and
+Omega play their own, setting or not), leaving it on Pulse and Pure. The race reads the
+effect off an HD source when one is mounted (`oag_game::launcher::trail_hit_lender`); with
+none, nothing is drawn and the loader report says so
+([`engine-trail.md`](../ghidra/functions/ps3-hdfury-eu/engine-trail.md), "The burst on every title").
+
 A row can also be **warned** rather than greyed, which is a different thing and
 the RECONSTRUCTION row is why it exists. A greyed row cannot be changed *now* because
 another row rules it out. A warned row can be changed, is stored, and simply
@@ -2111,7 +2136,7 @@ the string table, the tables built from it and the menu's own faces stayed
 whatever they were at boot, so the switch a player just made showed nowhere
 until the next launch - reported by a maintainer playing Pulse on the PSP,
 alongside a second bug this shares its root with (see below).
-`Session::resupply_language` (`main/session/menus.rs`) is the reload, and it
+`Session::resupply_language` (`main/session/language.rs`) is the reload, and it
 runs the LANGUAGE row's own `apply_setting` arm:
 
 - Re-opens the source through `boot::load_shell` - the same "cheap half of the
@@ -2123,6 +2148,13 @@ runs the LANGUAGE row's own `apply_setting` arm:
   `FrontEndStyles` onto the **already open** `Menu`, rather than building a
   new one - a title's row structure does not depend on which language draws
   its labels, so the player's cursor, page and scroll position are untouched.
+- **Builds the tree again when it has mods** (`oag_game::menu_tree::rebuilt`, the call a
+  MODS switch makes too): the title's own rows, every mod's rows and the MODS page's
+  listing are resolved against the new language, and the menu model is rebuilt on that
+  tree and reopened on the same pages and rows (`Session::reopened_menu`). A `--menu`
+  file has no mods and keeps its tree. A mod's `strings/<language>.toml` therefore
+  shows at once; the extras' own rows follow the project table's languages (English and
+  French).
 - Copies the new `nav_legend`, `ticker`, `frame` and fonts onto the live
   `MenuStage`, and pushes the new faces into the GPU-side atlases through
   `Renderer::set_face_atlas`/`set_buttons_atlas` - the same setters a fresh

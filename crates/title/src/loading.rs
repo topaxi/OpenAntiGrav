@@ -31,8 +31,9 @@ pub struct Loading {
     pub wave: Option<Wave>,
     /// The illustrated features this title rotates through, grouped by the
     /// front-end style that selects between them. Empty on both PSP titles; one
-    /// entry per style the disc ships art for, the first being what a source with
-    /// no saved choice gets. See [`FeatureStyle`] and [`Feature`].
+    /// entry per style the disc ships art for. A source with no saved choice gets the
+    /// one matching the served front end's ground ([`FeatureStyle::dark_ground`]).
+    /// See [`FeatureStyle`] and [`Feature`].
     pub features: &'static [FeatureStyle],
     /// The four front-end globals this screen draws with, when the title names
     /// them. **Names, not colours**: looked up in the source's own `FEGlobals`, so a
@@ -103,18 +104,16 @@ impl Progression {
     }
 }
 
-/// The five labels HD's loading screen writes over its regions, each behind a
+/// The four labels HD's loading screen writes over its regions, each behind a
 /// square bullet.
 ///
 /// **Drawn by the game itself, not a debug overlay.** `LoadingScreen_BuildText`
-/// (`0x002b7cd0`) resolves three from the string table by id and the fourth, the
-/// brand, is a literal in the executable; `LoadingScreen_Draw` places all five at
-/// fixed positions with `HD_Grey` and a 16 by 16 `square.gtf` bullet
+/// (`0x002b7cd0`) resolves these four from the string table by id; `LoadingScreen_Draw`
+/// places them and the brand line (a literal on HD, a string id on Omega, so it lives in
+/// the layout file) at fixed positions with `HD_Grey` and a 16 by 16 `square.gtf` bullet
 /// (`docs/ghidra/functions/ps3-hdfury-eu/loading-screen.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Labels {
-    /// The brand line over the caption: a literal in the executable (`0x007a0748`).
-    pub brand: &'static str,
     /// The string table id of the label over the feature illustration.
     pub feature_image: &'static str,
     /// The id of the label over the feature's prose.
@@ -235,6 +234,14 @@ pub enum Chrome {
 pub struct FeatureStyle {
     /// What the disc calls this style, and what a settings file stores.
     pub name: &'static str,
+    /// Whether this style is the one a front end served with a dark ground
+    /// (`HD_BG` near black) is in.
+    ///
+    /// The front end's menus have no setting to follow: they are drawn in the
+    /// style of the archive the source serves, so a source with no saved choice
+    /// takes the style whose flag matches that ground, not the first of the
+    /// list. See [`Palette::background`].
+    pub dark_ground: bool,
     /// Its five, in the order the executable names them.
     pub features: &'static [Feature],
     /// The Bink clip the mode icon's panel plays, by the race's mode id (the
@@ -242,6 +249,51 @@ pub struct FeatureStyle {
     /// no such panel. A mode with no row draws no icon: which clip each unnamed id
     /// gets is unread (`oag_hd::loading::FEATURES`).
     pub mode_icons: &'static [(u32, &'static str)],
+    /// The still the mode icon's panel shows, where the title draws a picture and not a clip.
+    /// [`ModeStills::NONE`] on a title that plays clips or has no such panel.
+    pub mode_stills: ModeStills,
+}
+
+/// The picture the mode icon's panel shows, by the race's mode id (the source
+/// executable's ids, as [`Deck::modes`] keys them).
+///
+/// Omega's constructor picks one texture per mode (`oag_omega::loading`); HD plays a clip
+/// instead ([`FeatureStyle::mode_icons`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ModeStills {
+    /// A mode's entry, or `None` for a mode that draws no picture.
+    pub modes: &'static [(u32, Option<&'static str>)],
+    /// The entry of every mode `modes` does not name; `None` draws nothing.
+    pub otherwise: Option<&'static str>,
+}
+
+impl ModeStills {
+    /// A title with no mode stills.
+    pub const NONE: Self = Self {
+        modes: &[],
+        otherwise: None,
+    };
+
+    /// The entry the panel shows for `mode`, if any.
+    #[must_use]
+    pub fn entry(&self, mode: Option<u32>) -> Option<&'static str> {
+        mode.and_then(|mode| self.modes.iter().find(|(id, _)| *id == mode))
+            .map_or(self.otherwise, |(_, entry)| *entry)
+    }
+
+    /// Every distinct entry this table can show.
+    pub fn entries(&self) -> impl Iterator<Item = &'static str> + '_ {
+        let mut seen: Vec<&'static str> = Vec::new();
+        self.modes
+            .iter()
+            .filter_map(|(_, entry)| *entry)
+            .chain(self.otherwise)
+            .filter(move |entry| {
+                let fresh = !seen.contains(entry);
+                seen.push(entry);
+                fresh
+            })
+    }
 }
 
 /// One thing the loading screen teaches while it waits: a picture, a name and a

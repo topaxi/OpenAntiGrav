@@ -667,6 +667,8 @@ impl Stage {
         // fallback when the flag was not given.
         let difficulty = setup.difficulty;
         let (mode, seed) = (setup.mode, setup.seed);
+        // Photo mode's rewind starts a second race from this when it is first used.
+        let keeper_setup = oag_game::photo::SAVES.then(|| setup.clone());
         // Started on the web's load worker already, from a copy of the same
         // setup (`race::Loaded::started`).
         let mut race = match started {
@@ -681,9 +683,15 @@ impl Stage {
         // set again whenever the cycle button or the menu row moves it - see
         // `Session::cycle_camera_view`.
         race.set_camera_view(settings.graphics.camera_view);
-        race.set_control_scheme(scheme);
-        race.set_autopilot(autopilot);
-        race.set_pilot_assist(settings.controls.pilot_assist);
+        let launch = race::Launch {
+            scheme,
+            difficulty,
+            autopilot,
+            pilot_assist: settings.controls.pilot_assist,
+            original_ai: None,
+            campaign_skill: None,
+        };
+        race.apply_launch(&launch);
         if autopilot {
             info!("--autopilot: the player's craft is being flown for them");
             let skill = autopilot_skill.unwrap_or(difficulty);
@@ -695,23 +703,26 @@ impl Stage {
                 race.set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
             }
         }
+        race.set_ghost_visible(settings.display.ghost_ship_shown(title));
+        race.set_player_tags(settings.display.multiplayer_tags_shown(title));
+        oag_game::split_screen::name_first_seat(&mut race, &settings.player, &title.profile);
+        let team = liveries.first().map_or("", |l| l.team.as_str());
+        let replay_header =
+            crate::race_stage::ghost::header_for(&result_key, team, seed, launch.to_table());
         crate::race_stage::ghost::arm(
             &mut race,
             &result_key,
             mode,
-            liveries.first().map_or("", |l| l.team.as_str()),
+            settings.display.ghost_auto_loads(title),
+            team,
             seed,
-            oag_game::ghosts::race_options(
-                scheme,
-                difficulty,
-                autopilot,
-                settings.controls.pilot_assist,
-                None,
-            ),
+            launch.to_table(),
         );
+        let keeper = keeper_setup.map(|setup| race::timeline::Keeper::new(setup, &race));
         Ok(Box::new(RaceStage {
             scene,
             race,
+            keeper,
             hud: overlay,
             scoreboard,
             countdown,
@@ -751,6 +762,9 @@ impl Stage {
             endrace_prefetch_started: false,
             endrace_cancel: std::sync::Arc::default(),
             earned_medal: None,
+            replay_header,
+            auto_replay: false,
+            watching: false,
         }))
     }
 }

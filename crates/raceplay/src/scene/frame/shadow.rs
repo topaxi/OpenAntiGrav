@@ -110,9 +110,9 @@ impl super::super::Scene {
             shadow_maps: w.shadow_maps + 1,
             ..w
         });
-        self.render_shadow_map(queue, encoder, race, shadows);
         // The frame's work serves every view of a split, and `frustum` is this view's alone.
         let frustum = frustum.filter(|_| self.layer.get() == Layer::Whole);
+        self.render_shadow_map(queue, encoder, race, shadows, frustum);
         self.render_sun_occlusion(queue, encoder, race, shadows, frustum);
     }
 
@@ -177,16 +177,23 @@ impl super::super::Scene {
     ) {
         let mut gathered = self.shadow_gathered.borrow_mut();
         if self.does_frame_work() {
-            *gathered = self.shadow_geometry(race, shadows);
+            self.shadow_geometry(race, shadows, &mut gathered);
         }
-        let (quads, hull_vertices) = &*gathered;
+        // At a tick's own alpha the hulls are the cached gather itself, read in place.
+        let cache;
+        let hull_vertices = if gathered.cached {
+            cache = self.hull_cache.borrow();
+            cache.current_vertices()
+        } else {
+            &gathered.hulls[..]
+        };
         self.shadow
             .borrow_mut()
-            .upload(queue, vp, quads, hull_vertices);
+            .upload(queue, vp, &gathered.quads, hull_vertices);
     }
 
     /// The quads and the projected hulls this frame draws, for the tier the
-    /// caller is on.
+    /// caller is on, into `into`.
     ///
     /// Both lists are empty at `off`, and each tier fills exactly one of them:
     /// they are alternatives, not layers.
@@ -194,7 +201,11 @@ impl super::super::Scene {
         &self,
         race: &Race,
         shadows: oag_display::display::Shadows,
-    ) -> (Vec<Placement>, Vec<GpuVertex>) {
+        into: &mut ShadowGathered,
+    ) {
+        into.quads.clear();
+        into.hulls.clear();
+        into.cached = false;
         // The blob shadows, gathered here with the rest of the per-frame
         // geometry and uploaded whether or not the tier is on - `upload` with
         // no placements clears the runs, which is what makes turning the row
@@ -223,14 +234,26 @@ impl super::super::Scene {
             // The quads are not drawn at all: the two tiers are alternatives,
             // not layers.
             let axis = Vec3::from_array(oag_pulse::shadow::WORLD_AXIS);
-            return (Vec::new(), self.original_hulls(race, axis));
+            into.cached = self.original_hulls(race, axis, &mut into.hulls);
+            return;
         }
         if shadows == oag_display::display::Shadows::Blob {
-            (race.shadow_placements(), Vec::new())
-        } else {
-            (Vec::new(), Vec::new())
+            into.quads = race.shadow_placements();
         }
     }
+}
+
+/// What a frame's first view gathered for the shadow upload, kept so every later view of the
+/// frame uploads the same, and kept between frames so the lists are refilled rather than made.
+#[derive(Debug, Default)]
+pub(in crate::scene) struct ShadowGathered {
+    /// The blob tier's quads.
+    quads: Vec<Placement>,
+    /// The `original` tier's projected hulls, when they are not [`Self::cached`].
+    hulls: Vec<GpuVertex>,
+    /// The hulls are the hull cache's current gather as it stands (a draw at a tick's own
+    /// alpha), uploaded from there rather than copied here.
+    cached: bool,
 }
 
 impl super::super::Scene {
@@ -289,6 +312,7 @@ impl super::super::Scene {
         encoder: &mut wgpu::CommandEncoder,
         race: &Race,
         shadows: oag_display::display::Shadows,
+        frustum: Option<&Frustum>,
     ) -> usize {
         let mut map = self.shadow_map.borrow_mut();
         if shadows == oag_display::display::Shadows::Mapped {
@@ -304,28 +328,39 @@ impl super::super::Scene {
             return 0;
         }
         let drawn = usize::from(race.ship_count());
-        let references = self.rank_references(race);
-        let models: Vec<(usize, Mat4)> = (0..drawn.min(self.ships.len()))
-            .filter(|&slot| race.ship_active(slot))
-            .map(|slot| (slot, race.ship_model_matrix_of(slot)))
-            .collect();
-        let ranked = rank_by_distance(
+        let mut lists = self.shadow_rank.borrow_mut();
+        let ShadowRank {
+            references,
+            models,
+            ranked,
+        } = &mut *lists;
+        self.rank_references(race, references);
+        models.clear();
+        models.extend(
+            (0..drawn.min(self.ships.len()))
+                .filter(|&slot| race.ship_active(slot))
+                .map(|slot| (slot, race.ship_model_matrix_of(slot))),
+        );
+        rank_by_distance(
             models
                 .iter()
                 .map(|&(slot, model)| (slot, model.transform_point3(Vec3::ZERO))),
-            &references,
+            references,
+            ranked,
         );
         let crafts: Vec<_> = ranked
             .iter()
             .enumerate()
-            .filter_map(|(rank, slot)| {
+            .filter_map(|(rank, (slot, _))| {
                 let model = models.iter().find(|(held, _)| held == slot)?.1;
+                // The box the sun-occlusion map uses, which the original
+                // shares between a ship's maps, around the craft alone.
+                let fit = craft_fit(model, &self.light);
                 Some(oag_render::shadow::map::CraftCaster {
                     slot: *slot,
                     rank,
-                    // The box the sun-occlusion map uses, which the original
-                    // shares between a ship's maps, around the craft alone.
-                    fit: craft_fit(model, &self.light),
+                    seen: craft_shadow_seen(frustum, fit.centre),
+                    fit,
                     caster: self.ships[*slot].caster(model),
                 })
             })
@@ -344,8 +379,9 @@ impl super::super::Scene {
     /// is therefore the nearest of this view's eye and every person's craft, so
     /// that each seat's own craft takes one of the two 512 squares. **Chosen,
     /// not measured**: the original has one camera.
-    fn rank_references(&self, race: &Race) -> Vec<Vec3> {
-        let mut points = vec![race.camera_position()];
+    fn rank_references(&self, race: &Race, points: &mut Vec<Vec3>) {
+        points.clear();
+        points.push(race.camera_position());
         if race.people() > 1 {
             points.extend(
                 race.sim
@@ -354,30 +390,44 @@ impl super::super::Scene {
                     .map(|slot| race.ship_model_matrix_of(slot).transform_point3(Vec3::ZERO)),
             );
         }
-        points
     }
 }
 
-/// The slots of `craft`, nearest first by squared distance to the nearest of
-/// `references`, as `Ship_RankAndAssignMapSlots` sorts them; the slot breaks a
-/// tie, so two equidistant craft keep their order frame to frame instead of
-/// trading squares.
+/// What the craft shadow map's ranking works in, kept from frame to frame.
+#[derive(Debug, Default)]
+pub(in crate::scene) struct ShadowRank {
+    references: Vec<Vec3>,
+    models: Vec<(usize, Mat4)>,
+    ranked: Vec<(usize, f32)>,
+}
+
+/// The slots of `craft` with their distances, into `ranked` (emptied first), nearest first
+/// by squared distance to the nearest of `references`, as `Ship_RankAndAssignMapSlots` sorts
+/// them; the slot breaks a tie, so two equidistant craft keep their order frame to frame
+/// instead of trading squares.
 fn rank_by_distance(
     craft: impl IntoIterator<Item = (usize, Vec3)>,
     references: &[Vec3],
-) -> Vec<usize> {
-    let mut ranked: Vec<(usize, f32)> = craft
-        .into_iter()
-        .map(|(slot, at)| {
-            let nearest = references
-                .iter()
-                .map(|point| (at - *point).length_squared())
-                .fold(f32::INFINITY, f32::min);
-            (slot, nearest)
-        })
-        .collect();
+    ranked: &mut Vec<(usize, f32)>,
+) {
+    ranked.clear();
+    ranked.extend(craft.into_iter().map(|(slot, at)| {
+        let nearest = references
+            .iter()
+            .map(|point| (at - *point).length_squared())
+            .fold(f32::INFINITY, f32::min);
+        (slot, nearest)
+    }));
     ranked.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
-    ranked.into_iter().map(|(slot, _)| slot).collect()
+}
+
+/// Whether a surface in the view `frustum` culls by can read the craft at `centre`'s square of
+/// the atlas: the receiver reads a square only within `CRAFT_CULL_RADIUS` of its craft, so a
+/// sphere clear of the frustum is one no pixel reaches. A tenth wider for the camera's jitter,
+/// which the frustum leaves out (**chosen, not measured**). Always `true` without a frustum.
+fn craft_shadow_seen(frustum: Option<&Frustum>, centre: Vec3) -> bool {
+    let reach = oag_render::shadow::map::CRAFT_CULL_RADIUS * 1.1;
+    frustum.is_none_or(|frustum| frustum.intersects_sphere(centre, reach))
 }
 
 /// The box a craft's shadow maps are fitted to: [`oag_render::shadow::map::Fit::craft`]
@@ -463,7 +513,7 @@ impl super::super::Scene {
             // hull, and a box that size is a map of the neighbourhood rather
             // than of the craft.
             let fit = craft_fit(model, &self.light);
-            maps.render(queue, encoder, slot, &fit, &track);
+            maps.render(encoder, slot, &fit, &track);
             // The craft's own depth map from the same box: its opaque ranges
             // and nothing else, so a wing shadows the fuselage and no other
             // craft shadows either. See `oag_render::shadow::self_shadow`.
@@ -476,7 +526,7 @@ impl super::super::Scene {
             } else {
                 ship.caster(model)
             };
-            maps.render_self_shadow(queue, encoder, slot, &caster);
+            maps.render_self_shadow(encoder, slot, &caster);
             if slot == 0 && std::env::var_os(DUMP_VAR).is_some() {
                 log::info!(
                     "sun occlusion layer 0: craft at {:?}, radius {:.1}, sun {:?}",
@@ -492,6 +542,9 @@ impl super::super::Scene {
                 }
             }
         }
+        // The layers' matrices, staged by the passes above: one write each for the
+        // occlusion and self-shadow buffers, ahead of the submission that draws them.
+        maps.write_uniforms(queue);
     }
 
     /// Writes every active craft's model uniform for this frame, naming the
@@ -509,6 +562,7 @@ impl super::super::Scene {
         view_projection: Mat4,
         prev_vp: Mat4,
         prev: &Snapshot,
+        frustum: Option<&Frustum>,
     ) {
         let drawn = usize::from(race.ship_count());
         for slot in 0..drawn {
@@ -517,9 +571,13 @@ impl super::super::Scene {
             }
             if let Some(drawable) = self.ships.get(slot) {
                 // The hull's environment light: the circuit's baked probes blended at the
-                // craft, one array layer per grid slot, where the circuit ships any.
+                // craft, one array layer per grid slot, where the circuit ships any. Blended
+                // only for a hull this view draws ([`Self::hull_seen`]): each view of a split
+                // writes what it draws, ahead of its own submission.
                 let env_layer = self.env_probes.as_ref().map(|probes| {
-                    probes.write(queue, slot, race.ship_probe_position(slot));
+                    if self.hull_seen(race, slot, frustum) {
+                        probes.write(queue, slot, race.ship_probe_position(slot));
+                    }
                     slot
                 });
                 drawable.write_hull(
@@ -894,10 +952,36 @@ mod tests {
     use oag_core::math::Mat4;
 
     use super::{
-        MAPPED_AHEAD, MAPPED_DEPTH_BIAS, far_depth_bias, mapped_centre, mapped_far_fit, mapped_fit,
-        mapped_light, rank_by_distance,
+        MAPPED_AHEAD, MAPPED_DEPTH_BIAS, craft_shadow_seen, far_depth_bias, mapped_centre,
+        mapped_far_fit, mapped_fit, mapped_light,
     };
     use oag_core::math::Vec3;
+    use oag_core::math::frustum::Frustum;
+
+    /// [`super::rank_by_distance`]'s slots alone.
+    fn rank_by_distance(
+        craft: impl IntoIterator<Item = (usize, Vec3)>,
+        references: &[Vec3],
+    ) -> Vec<usize> {
+        let mut ranked = Vec::new();
+        super::rank_by_distance(craft, references, &mut ranked);
+        ranked.into_iter().map(|(slot, _)| slot).collect()
+    }
+
+    /// The test takes the receiver's own reach: a craft just outside the picture still shadows
+    /// the road inside it, and one a whole reach away reads nothing.
+    #[test]
+    fn a_craft_shadow_counts_as_seen_up_to_the_receivers_reach() {
+        // The clip box itself: `x` and `y` within 1 of the origin.
+        let frustum = Frustum::from_view_projection(Mat4::IDENTITY);
+        assert!(craft_shadow_seen(None, Vec3::splat(1.0e6)));
+        assert!(craft_shadow_seen(Some(&frustum), Vec3::ZERO));
+        assert!(craft_shadow_seen(Some(&frustum), Vec3::new(60.0, 0.0, 0.0)));
+        assert!(!craft_shadow_seen(
+            Some(&frustum),
+            Vec3::new(80.0, 0.0, 0.0)
+        ));
+    }
 
     /// The rank is by squared distance to the nearest reference point, nearest
     /// first, and a tie goes to the lower slot.

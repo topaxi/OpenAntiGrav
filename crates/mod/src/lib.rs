@@ -21,14 +21,17 @@ pub mod extras;
 mod manifest;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod pack;
+pub mod rumble;
+pub mod texture_pack;
 
 pub use container::{Container, Origin};
 pub use discover::{
-    EXAMPLES, Failed, Found, Loaded, OFFICIAL, SEARCH_ENV, load, mods_search_path, search,
+    EXAMPLES, Failed, Found, Loaded, OFFICIAL, SEARCH_ENV, TEXTURE_PACKS, load, mods_search_path,
+    search, user_mods_dir,
 };
 pub use manifest::{
     Channels, Error as ManifestError, Extension, License, MANIFEST, MAX_CHANNELS, Manifest, Rules,
-    SCHEMA_KIND, SCHEMA_MAJOR, Track,
+    SCHEMA_KIND, SCHEMA_MAJOR, TexturePack, Track,
 };
 
 /// Why a mod could not be opened or read.
@@ -96,12 +99,24 @@ impl Mod {
     /// No manifest, or a wrong one.
     pub fn from_container(container: Container) -> Result<Self, Error> {
         let origin = container.label();
-        let bytes = container
-            .read(MANIFEST)?
-            .ok_or_else(|| Error::NoManifest(origin.clone()))?;
+        let Some(bytes) = container.read(MANIFEST)? else {
+            return texture_pack::recognise(&container)
+                .map(|manifest| Self {
+                    manifest,
+                    container,
+                })
+                .ok_or(Error::NoManifest(origin));
+        };
         let text = String::from_utf8_lossy(&bytes);
-        let manifest = Manifest::parse(&text, &|name| container.contains(name))
+        let mut manifest = Manifest::parse(&text, &|name| container.contains(name))
             .map_err(|source| Error::Manifest { origin, source })?;
+        if let Some(pack) = manifest
+            .texture_pack
+            .as_mut()
+            .filter(|p| p.serials.is_empty())
+        {
+            pack.serials = texture_pack::serials(&container, &pack.ini);
+        }
         Ok(Self {
             manifest,
             container,

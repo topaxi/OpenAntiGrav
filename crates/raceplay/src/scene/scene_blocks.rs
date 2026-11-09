@@ -127,6 +127,7 @@ impl Scene {
             &mut self.plasma_blast.hemisphere1,
             &mut self.plasma_blast.ball,
             &mut self.plasma_blast.shuriken,
+            &mut self.plasma_blast.missile_head,
             &mut self.bomb_blast.hemisphere,
             &mut self.bomb_blast.shockwave,
             &mut self.bomb_blast.repulser_field,
@@ -153,11 +154,11 @@ impl Scene {
         ship: &mesh_render::Scene,
         flame: &mesh_render::Scene,
     ) {
-        let blocks = &self.scene_blocks;
-        blocks.write(queue, block, SceneKind::Circuit, circuit);
-        blocks.write(queue, block, SceneKind::Ship, ship);
-        blocks.write(queue, block, SceneKind::Shine, &shine::shine_scene(ship));
-        blocks.write(queue, block, SceneKind::Flame, flame);
+        self.scene_blocks.write_view(
+            queue,
+            block,
+            [circuit, ship, &shine::shine_scene(ship), flame],
+        );
     }
 }
 

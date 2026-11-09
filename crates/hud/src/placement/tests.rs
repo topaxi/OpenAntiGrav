@@ -98,6 +98,42 @@ fn a_frame_keeps_its_lists_apart() {
     assert_eq!(both.len(), 6);
 }
 
+/// A frame given up to [`Frame::into_placed`] places exactly as [`Frame::placed`] does: the
+/// same draws moved, the same dropped, one span, the glow moved with them.
+#[test]
+fn an_owned_frame_places_as_a_borrowed_one_does() {
+    let frame = Frame {
+        sprites: vec![
+            Draw::Fill {
+                rect: [0.0, 0.0, 10.0, 10.0],
+                color: [1.0; 4],
+            },
+            Draw::Fill {
+                rect: [2000.0, 20.0, 30.0, 40.0],
+                color: [1.0; 4],
+            },
+        ],
+        hud_text: vec![text(10.0, 10.0)],
+        small_text: vec![text(10.0, 10.0), text(-900.0, 0.0)],
+        skin_text: vec![text(40.0, 30.0)],
+        spans: vec![
+            Span {
+                clip: [0.0; 4],
+                start: [0; 5],
+            };
+            2
+        ],
+        glow: vec![crate::boost_smear::GlowStamp {
+            rect: [4.0, 8.0, 16.0, 2.0],
+            value: 200,
+            colour: [1.0, 0.5, 0.0],
+            opacity: 0.5,
+        }],
+        ..Frame::default()
+    };
+    assert_eq!(frame.clone().into_placed(&HALF), frame.placed(&HALF));
+}
+
 #[test]
 fn each_extended_frame_keeps_where_its_draws_start() {
     let frame = Frame {

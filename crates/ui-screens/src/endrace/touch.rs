@@ -39,7 +39,7 @@
 //! original puts there lives in a game-mode field not traced; the pad buttons
 //! and the pointer's whole-panel tap.
 
-use oag_ui::frontend::{Align, Draw, Placed, cursor_ring};
+use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::pointer::{Pointer, contains};
 use oag_ui::screen::{Image, Screens, Text, argb_to_rgba, parse_argb};
@@ -467,7 +467,7 @@ fn image_draw(
 }
 
 /// The strip: a `Blue2048` box per tile, its icon centred at the texture's own
-/// size, and the pad cursor's ring on the selected one - the idiom
+/// size, and the selected one filled in `Orange2048`, the tile's own pressed colour - the idiom
 /// `oag_ui::frontend::Frontend::draw_tile` draws the rest of the touch front
 /// end in.
 fn tile_draws(
@@ -480,11 +480,12 @@ fn tile_draws(
     for (button, rect, src) in layouts.tiles(model) {
         out.push(Draw::Fill {
             rect,
-            color: argb_to_rgba(layouts.blue),
+            color: argb_to_rgba(if button == selected {
+                layouts.orange
+            } else {
+                layouts.blue
+            }),
         });
-        if button == selected {
-            out.extend(cursor_ring(rect, argb_to_rgba(layouts.orange)));
-        }
         if let Some(placed) = src.and_then(sprites) {
             let (w, h) = (placed.width as f32, placed.height as f32);
             out.push(Draw::Sprite {

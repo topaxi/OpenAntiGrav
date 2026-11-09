@@ -30,17 +30,23 @@ impl Race {
     /// an Eliminator race, on a title that has the law, for a craft facing back down the track.
     pub(super) fn set_wrong_way_kill(&mut self) {
         let armed = self.sim.eliminator_wrong_way_kill && self.sim.world.mode() == Mode::Eliminator;
-        for ship in &mut self.sim.world.ships {
-            ship.physics.wrong_way_kill = armed && {
-                let body = &ship.physics.body;
-                self.sim
-                    .spline
-                    .nearest(body.position)
-                    .is_some_and(|(_, sample, _)| {
-                        let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();
-                        body.forward().dot(tangent) < WRONG_WAY_DOT
-                    })
-            };
+        for slot in 0..self.sim.world.ships.len() {
+            let kill = armed && self.facing_back(slot);
+            self.sim.world.ships[slot].physics.wrong_way_kill = kill;
         }
+    }
+
+    /// Whether the craft in `slot` points back down the track: the kill's test here, and on
+    /// HD `craft+0x6ad8`, which turns the race line's marker
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`).
+    pub(super) fn facing_back(&self, slot: usize) -> bool {
+        let body = &self.sim.world.ships[slot].physics.body;
+        self.sim
+            .spline
+            .nearest(body.position)
+            .is_some_and(|(_, sample, _)| {
+                let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();
+                body.forward().dot(tangent) < WRONG_WAY_DOT
+            })
     }
 }

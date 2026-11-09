@@ -63,6 +63,19 @@ pub(super) struct RouteLine {
 }
 
 impl RouteLine {
+    /// The index and squared distance of this route's own sample (past its ring stretch)
+    /// nearest `position`; the earlier one on a tie.
+    pub(super) fn nearest_own_sample(&self, position: Vec3) -> Option<(usize, f32)> {
+        let mut best: Option<(usize, f32)> = None;
+        for i in self.kept..self.line.len() {
+            let distance = self.line.point(i).distance_squared(position);
+            if best.is_none_or(|(_, b)| distance < b) {
+                best = Some((i, distance));
+            }
+        }
+        best
+    }
+
     /// `branching` for a craft found on this route's own samples (route
     /// number `route`, `k + 1`): past the split, its fork decided. The visit
     /// count is kept, so the next coin is fresh. Ours, as
@@ -241,7 +254,9 @@ fn narrow_the_mouth(
         })
         .collect();
     let unsupported: Vec<bool> = (0..line.len()).map(|i| line.is_unsupported(i)).collect();
-    oag_ai::Line::with_corridor(points, corridor).with_unsupported(unsupported)
+    oag_ai::Line::with_corridor(points, corridor)
+        .with_unsupported(unsupported)
+        .with_strides(oag_ai::Tuning::default().curvature_span)
 }
 
 /// The line a driver on `route` follows: the ring for `0`, else that route's.
@@ -267,7 +282,7 @@ impl Race {
         self.ensure_speed_plans();
         plan_for(
             &self.sim.routes,
-            self.sim.speed_plan.as_ref(),
+            self.sim.speed_plan.as_deref(),
             super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
             self.sim.world.ships[slot].driver.branching.route,
         )
@@ -320,7 +335,7 @@ impl Race {
         if self.sim.routes.is_empty() {
             return;
         }
-        let Some(course) = self.sim.course.as_ref() else {
+        let Some(course) = self.sim.course.as_deref() else {
             return;
         };
         let n = course.len();
@@ -407,12 +422,11 @@ impl Race {
         let mut best: Option<(u16, usize, f32)> = None;
         for (k, r) in self.sim.routes.iter().enumerate() {
             let route = u16::try_from(k + 1).unwrap_or(0);
-            for i in r.kept..r.line.len() {
-                let distance = r.line.point(i).distance_squared(position);
+            if let Some((i, distance)) = r.nearest_own_sample(position)
                 // Strictly nearer, so a tie keeps the earlier candidate.
-                if best.is_none_or(|(_, _, b)| distance < b) {
-                    best = Some((route, i, distance));
-                }
+                && best.is_none_or(|(_, _, b)| distance < b)
+            {
+                best = Some((route, i, distance));
             }
         }
         best
@@ -438,7 +452,7 @@ impl Race {
     /// short of `05_Track`'s first jump onto route 1's deck kept steering at the
     /// ring 60 units above it and ground the wall until its shield was gone.
     fn recommit(&mut self, slot: usize, original: bool) {
-        let Some(n) = self.sim.course.as_ref().map(Course::len) else {
+        let Some(n) = self.sim.course.as_deref().map(Course::len) else {
             return;
         };
         let ship = &self.sim.world.ships[slot];

@@ -241,20 +241,26 @@ impl Occluder {
     /// Each edge is emitted once, from the front face's side.
     #[must_use]
     pub fn silhouette(&self, direction: [f32; 3]) -> Vec<(u16, u16)> {
+        let mut out = Vec::new();
+        self.each_silhouette_edge(direction, |from, to| out.push((from, to)));
+        out
+    }
+
+    /// [`Self::silhouette`]'s edges handed to `edge` in order, without a list.
+    fn each_silhouette_edge(&self, direction: [f32; 3], mut edge: impl FnMut(u16, u16)) {
         let faces_it = |face: &Face| {
             face.normal[0] * direction[0]
                 + face.normal[1] * direction[1]
                 + face.normal[2] * direction[2]
                 > 0.0
         };
-        let mut out = Vec::new();
         for face in &self.faces {
             if !faces_it(face) {
                 continue;
             }
             let used = (face.count as usize).clamp(1, MAX_FACE_VERTICES);
-            for edge in 0..used {
-                let across = match face.neighbour(edge) {
+            for slot in 0..used {
+                let across = match face.neighbour(slot) {
                     // No face across it: nothing can cancel this edge.
                     None => None,
                     Some(other) => self.faces.get(usize::from(other)),
@@ -262,14 +268,13 @@ impl Occluder {
                 if across.is_some_and(faces_it) {
                     continue;
                 }
-                let from = face.vertices[edge];
-                let to = face.vertices[(edge + 1) % used];
+                let from = face.vertices[slot];
+                let to = face.vertices[(slot + 1) % used];
                 if from != to {
-                    out.push((from, to));
+                    edge(from, to);
                 }
             }
         }
-        out
     }
 }
 
@@ -293,30 +298,53 @@ impl Occluder {
     /// outline in its own space.
     #[must_use]
     pub fn silhouette_loops(&self, direction: [f32; 3]) -> Vec<Loop> {
-        let edges = self.silhouette(direction);
-        // Successors by `from` vertex: one outgoing edge on a convex hull's
-        // silhouette, a `Vec` so a misbehaving hull gives short rings instead of
-        // losing edges silently.
-        let mut next: Vec<(u16, u16, bool)> =
-            edges.iter().map(|(from, to)| (*from, *to, false)).collect();
         let mut out = Vec::new();
-        for start in 0..next.len() {
-            if next[start].2 {
+        self.each_loop(
+            direction,
+            &mut Vec::new(),
+            &mut Vec::new(),
+            |ring, closed| {
+                out.push(Loop {
+                    vertices: ring.to_vec(),
+                    closed,
+                });
+            },
+        );
+        out
+    }
+
+    /// [`Self::silhouette_loops`]' rings handed to `each` in order as `(vertices, closed)`,
+    /// walked in `edges` and `ring`, which are cleared first and kept by the caller.
+    fn each_loop(
+        &self,
+        direction: [f32; 3],
+        edges: &mut Vec<(u16, u16, bool)>,
+        ring: &mut Vec<u16>,
+        mut each: impl FnMut(&[u16], bool),
+    ) {
+        // Successors by `from` vertex: one outgoing edge on a convex hull's
+        // silhouette, a list so a misbehaving hull gives short rings instead of
+        // losing edges silently.
+        edges.clear();
+        self.each_silhouette_edge(direction, |from, to| edges.push((from, to, false)));
+        for start in 0..edges.len() {
+            if edges[start].2 {
                 continue;
             }
-            let first = next[start].0;
-            let mut vertices = vec![first];
+            let first = edges[start].0;
+            ring.clear();
+            ring.push(first);
             let mut cursor = start;
             let mut closed = false;
             loop {
-                next[cursor].2 = true;
-                let to = next[cursor].1;
+                edges[cursor].2 = true;
+                let to = edges[cursor].1;
                 if to == first {
                     closed = true;
                     break;
                 }
-                vertices.push(to);
-                match next
+                ring.push(to);
+                match edges
                     .iter()
                     .position(|(from, _, used)| *from == to && !*used)
                 {
@@ -324,9 +352,8 @@ impl Occluder {
                     None => break,
                 }
             }
-            out.push(Loop { vertices, closed });
+            each(ring, closed);
         }
-        out
     }
 }
 
@@ -401,21 +428,65 @@ impl Occluder {
     /// 774 walks (129 hulls, six directions), and no fixture produces one.
     #[must_use]
     pub fn outline(&self, direction: [f32; 3]) -> Vec<Vec<u16>> {
-        let mut out: Vec<Vec<u16>> = Vec::new();
-        let mut seen: Vec<Vec<u16>> = Vec::new();
-        for ring in self.silhouette_loops(direction) {
-            if !ring.closed {
-                continue;
+        let mut scratch = OutlineScratch::default();
+        self.outline_into(direction, &mut scratch);
+        scratch.rings().map(<[u16]>::to_vec).collect()
+    }
+
+    /// [`Self::outline`] into `scratch`, whose lists are refilled rather than rebuilt: the
+    /// rings are [`OutlineScratch::rings`] until the next call. What a per-tick caller uses,
+    /// so a warm scratch outlines a hull without allocating.
+    pub fn outline_into(&self, direction: [f32; 3], scratch: &mut OutlineScratch) {
+        let OutlineScratch {
+            edges,
+            ring,
+            vertices,
+            sorted,
+            rings,
+        } = scratch;
+        vertices.clear();
+        sorted.clear();
+        rings.clear();
+        self.each_loop(direction, edges, ring, |ring, closed| {
+            if !closed {
+                return;
             }
-            let mut key = ring.vertices.clone();
-            key.sort_unstable();
-            if seen.contains(&key) {
-                continue;
+            // The ring's vertex set, sorted, beside the ring itself: a ring whose set an
+            // earlier ring already has is that ring traversed the other way.
+            let at = sorted.len();
+            sorted.extend_from_slice(ring);
+            sorted[at..].sort_unstable();
+            if rings
+                .iter()
+                .any(|kept| sorted[kept.clone()] == sorted[at..])
+            {
+                sorted.truncate(at);
+                return;
             }
-            seen.push(key);
-            out.push(ring.vertices);
-        }
-        out
+            rings.push(at..sorted.len());
+            vertices.extend_from_slice(ring);
+        });
+    }
+}
+
+/// What [`Occluder::outline_into`] walks in and leaves its rings in, kept between calls.
+#[derive(Debug, Clone, Default)]
+pub struct OutlineScratch {
+    /// The silhouette's edges, `(from, to, walked)`.
+    edges: Vec<(u16, u16, bool)>,
+    /// The ring being walked.
+    ring: Vec<u16>,
+    /// The kept rings' vertices, end to end, at [`Self::rings`]' ranges.
+    vertices: Vec<u16>,
+    /// The same rings each sorted, at the same ranges: what a duplicate is found by.
+    sorted: Vec<u16>,
+    rings: Vec<std::ops::Range<usize>>,
+}
+
+impl OutlineScratch {
+    /// The last [`Occluder::outline_into`]'s rings, in order.
+    pub fn rings(&self) -> impl Iterator<Item = &[u16]> {
+        self.rings.iter().map(|range| &self.vertices[range.clone()])
     }
 }
 

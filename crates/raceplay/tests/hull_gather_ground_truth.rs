@@ -9,10 +9,14 @@
 //! and lerps the projected vertices (`oag_raceplay::hull_gather`), which is not the
 //! same picture between ticks. This measures how far apart they are, in world
 //! units, vertex by vertex, over three stretches of Zone's circuit at three alphas.
+//!
+//! Along the way every tick's gather is also taken in a scratch that holds an older
+//! gather's lists, and must be the fresh gather bit for bit: a reused list that kept a
+//! stale vertex would be a shadow with a stray triangle in it.
 
 use oag_core::math::Vec3;
 use oag_gameplay::PlayerInputs;
-use oag_raceplay::hull_gather::HullGather;
+use oag_raceplay::hull_gather::{GatherScratch, HullGather};
 use oag_raceplay::{self as race};
 
 /// Ticks past the warm-up each window covers.
@@ -58,6 +62,8 @@ fn the_lerped_hull_agrees_with_the_one_projected_at_the_blended_pose() {
     let mut worst = 0.0f32;
     let mut errors: Vec<f32> = Vec::new();
     let (mut compared, mut unblendable) = (0usize, 0usize);
+    let mut recycled_ticks = 0usize;
+    let mut scratch = GatherScratch::default();
     let mut ticks = 0;
     for warm in WARM {
         while ticks < warm {
@@ -69,6 +75,17 @@ fn the_lerped_hull_agrees_with_the_one_projected_at_the_blended_pose() {
             race.tick(&PlayerInputs::none());
             ticks += 1;
             let current = HullGather::at_tick(&race, &hulls, axis);
+            // In the lists of the last tick's `previous`, as the cache refills the gather it
+            // lets go of.
+            let recycled = HullGather::at_tick_with(&race, &hulls, axis, &mut scratch);
+            assert_eq!(recycled.models, current.models);
+            assert_eq!(recycled.slots, current.slots);
+            assert_eq!(
+                format!("{:?}", recycled.vertices),
+                format!("{:?}", current.vertices),
+                "a gather in a reused scratch differs from a fresh one at tick {ticks}"
+            );
+            recycled_ticks += usize::from(!current.vertices.is_empty());
             for alpha in ALPHAS {
                 race.set_draw_alpha(alpha);
                 let live = HullGather::at_draw(&race, &hulls, axis);
@@ -89,8 +106,13 @@ fn the_lerped_hull_agrees_with_the_one_projected_at_the_blended_pose() {
                     worst = worst.max(error);
                 }
             }
+            scratch.recycle(previous);
         }
     }
+    assert!(
+        recycled_ticks > 100,
+        "only {recycled_ticks} ticks had a hull to gather in a reused scratch"
+    );
     errors.sort_by(f32::total_cmp);
     let at = |q: f32| errors[((errors.len() - 1) as f32 * q) as usize];
     println!(

@@ -223,6 +223,26 @@ fn the_exit_tile_swaps_to_the_tick_on_a_pass() {
     );
 }
 
+/// The pad's tile is filled `Orange2048`, the other strip tile `Blue2048`.
+#[test]
+fn the_selected_strip_tile_is_filled_orange_and_the_other_blue() {
+    let layouts = layouts();
+    let model = model(Tone::Pass);
+    let list = draws(&model);
+    let tiles = layouts.tiles(&model);
+    let (_, selected, _) = tiles.iter().find(|(b, _, _)| *b == Button::Exit).unwrap();
+    let (_, other, _) = tiles
+        .iter()
+        .find(|(b, _, _)| *b == Button::Restart)
+        .unwrap();
+    assert_eq!(
+        fill_of(&list, *selected),
+        Some(argb_to_rgba(0xffdd_580b)),
+        "Exit is the selected tile"
+    );
+    assert_eq!(fill_of(&list, *other), Some(argb_to_rgba(0xff19_295d)));
+}
+
 #[test]
 fn a_click_on_a_tile_or_the_panel_is_a_hit_and_off_them_is_none() {
     let layouts = layouts();

@@ -514,8 +514,15 @@ in `crates/ext-abi/src/tests.rs` is recorded again. The engine side is in
 **A portal on a track, not a weapon.** A track module answers `trigger-enter{slot, n}` with
 `transit{slot, ticks, Trigger(m), 1.0}`. The exit must lie on the course ring (the authored
 spline the lap counter and AI follow), not on collision geometry: two portals on disconnected
-geometry work if the spline runs through both, its connecting stretch never driven. Landing on a
-branch route, and an exit with no spline near it, are not built.
+geometry work if the spline runs through both, its connecting stretch never driven. An exit
+`Trigger(m)` whose centre is nearer a fork route's sample than the ring's lands on that route:
+the craft is put on the route's point for that ring point (`Course::route_point`) and its driver
+seated on the route's line (`Race::seat_on_route`); every other distance is a share of the ring.
+An exit with no spline near it is not built. Proof: `Course::locate_exit` names the route
+(`branch_progress_ground_truth`, every Pulse and 2048 route), `transit_ground_truth` seats the
+craft and its driver on a Pulse `05_Track` route, `track_props_ground_truth` runs a trigger pair
+on Hillside (a ring exit; a disc circuit carries no triggers, so no test names a route through
+a trigger file).
 
 **A reset is a different move.** It goes back, to a breadcrumb, and earns nothing; it shares
 only the cursor reset (`Race::reseat`), not the lap rule.

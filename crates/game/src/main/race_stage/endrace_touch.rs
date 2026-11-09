@@ -256,6 +256,11 @@ impl EndRace {
         matches!(self, Self::Disc(runtime) if runtime.is_photo())
     }
 
+    /// Whether `Race End Photo` is up and has been entered, so SELECT on it opens photo mode.
+    pub(crate) fn photo_takes_select(&self) -> bool {
+        matches!(self, Self::Disc(runtime) if runtime.is_photo() && runtime.takes_confirm())
+    }
+
     pub(crate) fn draw(
         &mut self,
         device: &wgpu::Device,

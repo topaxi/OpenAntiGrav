@@ -923,11 +923,149 @@ and kept the weapon, until 2026-10-03.
 shipped PSP discs, and `elimination_refresh_time` is `0.05`. A craft at racing
 speed clears a pad about 9.6 units long in well under half a second, so what the
 timer buys is that one crossing is one pickup - not that a collected pad goes
-away for a while. Eliminator's being an order of magnitude shorter fits a mode
-that hands weapons out far more freely.
+away for a while.
 
 Stamped on **any** hit, including one that grants nothing, because that is what
-the original does: the stamp is unconditional and the grant is not.
+Pulse's original does: the stamp is unconditional and the grant is not. (2048's
+stamp sits inside its slot checks, and HD's is unmeasured; see the next section
+for the mode that does not stamp at all.)
+
+## Eliminator and the pads, per title
+
+2026-11-07 (`eliminator-pads`, wired by `pad-nodisarm`). The question: Pulse stamps a pad with
+`elimination_refresh_time` in Eliminator, so does the pad grey for that long on
+the other titles? **Pulse yes; HD, 2048 and Omega never stamp in Eliminator, so
+their pads never disarm.** Ours disarmed them for `elimination_refresh_time`
+anyway on those three until it was wired (see "Ours" below).
+
+### The census: every class authors both numbers
+
+Read out of each title's own `handlingstats.xml` (`/data/xml/handlingstats.xml`,
+`Data\XML\HandlingStats.xml`); every `<GlobalClass>` (Pulse and HD five, 2048 and
+Omega six with `SUPERPHANTOM`) authors the same pair:
+
+| Title | `refresh_time` | `elimination_refresh_time` | Where |
+| --- | --- | --- | --- |
+| Pulse PSP USA and EU, PS2 EU | 0.55 | 0.05 | `Data.wad`, `WADS2.WAD` |
+| Pure PSP USA and EU | 0.55 | not authored | `Data.wad` |
+| HD / Fury (PS3, one disc, one file, every update) | 0.75 | 0.15 | `DATA02.PSARC` |
+| 2048 (Vita EU and USA, base) | 0.75 | 0.15 | `data.psarc`, byte-identical (4,516 bytes) with Omega's |
+| Omega (PS4 EU, base `data00.psarc`; the patch ships no copy) | 0.75 | 0.15 | `Data/xml/handlingstats.xml` |
+
+So **no title lacks `elimination_refresh_time` except Pure, which has no
+Eliminator**; `load/global.rs`'s `unwrap_or(refresh_time)` fallback never fires on a
+title that can race Eliminator. Fury is the same disc and the same file as HD.
+
+### The mode gate, per title
+
+| Title | The stamp site | What Eliminator does | How known |
+| --- | --- | --- | --- |
+| Pulse | `WeaponPads_TestCraft` `0x0888727c`, store at `0x088873dc`: `g_game_mode == 8` picks the elimination table | stamps `0.05` | read, and **run**: PPSSPP, 4 stamp hits all `f12 = 0.05` in `g_game_mode 8`; `0.55` in a single race (`g_game_mode 3`) |
+| HD / Fury | not located (the `.opd`/TOC resolution hides its readers) | **no stamp** (a grant is inferred from 2048 and Omega, not seen: the run emptied the slot every sample) | **run**: RPCS3, below |
+| 2048 | `WeaponPads_TestCraft` `0x8121f860`; `GameMode_IsEliminatorFamily` first | no stamp; grant straight away | read, not run ([`weapon-pads.md`](../ghidra/functions/vita-2048-eu-v104/weapon-pads.md): 85 for the function, 70 for campaign Eliminator events, whose mode word is a CRC and reach the family through the mode object) |
+| Omega | `WeaponPads_TestCraft` `0x01304c50`; `g_game_mode == 8 \|\| 0x14` first | no stamp | read ([`weapon-pads.md`](../ghidra/functions/ps4-omega-eu/weapon-pads.md), conf 85) |
+
+In 2048 and Omega the branch that would pick `elimination_refresh_time` tests mode 8
+*after* a test that already sent mode 8 to the no-stamp path, so the attribute is
+authored, parsed and never used. That is what the HD run below agrees with.
+
+### Pulse: how long a stamped pad shows grey
+
+PPSSPP v1.20.4, Pulse USA, `scripts/psp-weapon-pad-stamp.py` (`menu --race-type 6
+--weapons-on` for Eliminator, `--single-race --weapons-on` for the control; nine
+weapon pads on the circuit the profile's first Track Select entry gives): break on the
+stamp store, read `f12` and the pad, then read the stamped pad's timer (`+0x1a0`) and
+colour (`+0x6c`) at each of the player's `Ship_UpdateCraft` hits.
+
+| Mode | Stamped | Timer per frame | Grey frames (`0xff3f3f3f`) |
+| --- | --- | --- | --- |
+| Eliminator (`g_game_mode` 8) | `0.05` | `0.0500, 0.0333, 0.0166, -0.00005` | **2** (the stamp tick draws the old colour) |
+| Single Race (3) | `0.55` | falls by `0.01667` a frame | **32**, then the cycle resumes |
+
+`dt` is `1/60`. Ours (below) greys the stamp tick itself, so it shows **3** and **33**:
+one frame more than the original in both, a draw-order detail. Each mode seen on one
+boot (the Eliminator store was hit four times, all `0.05`; the Single Race store once).
+
+### HD: the pad is never stamped in Eliminator
+
+RPCS3, HD/Fury EU, Vineta K, `scripts/rpcs3-hd-weapon-pad-poll.py`: it finds every
+`WeaponPad_Importer` object (vtable `0x0086a730`, seven on this circuit), and samples at
+about 100 Hz, without pausing the game, each pad's refresh timer (`+0x160`), packed colour
+(`+0xf0`), eight per-craft distance caches (`+0x184..+0x1a0`) and the player's lap clock
+(`ship+0x7014`). The same instrument, the same circuit, two modes:
+
+| Run | Mode | What it did | Stamps seen |
+| --- | --- | --- | --- |
+| The player drove a lap (one boot, two runs) with its slot emptied, 200 s host, 20 passes within 12 units of a pad | Single Race | pad timer, colour | **12, all `0.75`** |
+| Player pinned on a pad 8 s host (about 2.3 game seconds), slot emptied | Single Race | pad timer, colour | **`0.75` at once, then again every 0.73 to 0.83 s** the craft stayed |
+| The same, 200 s host, 39 passes within 12 units | Eliminator | pad timer, colour | **0** |
+| Player pinned on a pad, 8 s host, slot emptied: four runs on two boots | Eliminator | in the run that kept the whole pad object, the pad's distance cache for the player read `0.0` (inside) for the whole pin | **0 in all four** |
+
+The pad is *tested* in Eliminator (the player's cache is `0.0` while pinned, the other seven
+move) and never stamped, and the colour never goes to the cooling grey `0xff3f3f3f`. In a
+Single Race the grey lasted 20 to 23 distinct game frames (`dt` 0.0333, so 0.73 to 0.83 s,
+about 45 frames at 60 Hz). A stamp elsewhere, or at a threshold below `0.05`, would have
+shown: stamps are any rise above `0.05` of the timer between samples, and `0.15`
+(`elimination_refresh_time`) is above it. The pin, not the AI, is the proof in both modes: it
+puts a craft inside the pad's box on every tick.
+
+**Confidence 75** for "HD does not stamp in Eliminator": five Eliminator runs on two boots (one lap, four pins),
+a control that stamps on the same instrument, a mechanism read in 2048 and Omega
+(same lineage). It is below 85 because HD's stamp function itself was not found, so the
+reason is inherited, not read. Fury is the HD disc.
+
+### Ours
+
+At 60 Hz `Race::tick` subtracts `dt` once per tick and the road draw greys a pad while its
+timer is above zero, the stamp tick included. Measured in ticks, not rendered frames (the real
+`Race` with a pad under the craft, `refresh` set per row), and the value each title's real
+Eliminator load hands it read through `race::load` on the discs: Pulse USA `0.05`, HD `0.15`,
+2048 `0.15`, Omega `0.15` (Single Race `0.55`, `0.75`, `0.75`, `0.75`), nine, nine, 61 and eleven
+weapon pads:
+
+| `refresh` | grey frames | Where ours takes it |
+| --- | --- | --- |
+| `0.05` | 3 | Pulse Eliminator (the original: 2) |
+| `0.15` | 10 | **HD, 2048, Omega Eliminator (the original: never grey)** |
+| `0.55` | 33 | Pulse Single Race (the original: 32) |
+| `0.75` | 46 | HD, 2048, Omega Single Race (the original, HD: about 45 at 60 Hz) |
+
+**Wired** (`Weapons::pads_stamp_in_eliminator`, resolved once in `load/global.rs` into the race's
+`weapon_pad_refresh`): Pulse keeps `0.05`; HD, Fury, 2048 and Omega carry `0.0` in an Eliminator, so a
+pad is never stamped and never greys, and the loader report says so. Every other mode, and Pulse's
+Eliminator, is as the table above. Read through `race::load` on the four discs by
+`eliminator_pad_stamp_ground_truth` (Pulse `0.05` / `0.55`, the other three `0.0` / `0.75`).
+
+**One grant per crossing, not per tick.** `Race::test_weapon_pads` grants on the entry edge
+(`weapon_pad_current`), not on containment, so a zero stamp does not hand a pickup every tick a
+craft sits inside; a craft that crosses a pad is handed one pickup, and one that leaves and comes
+back in a tick is handed another (unit test `an_unstamped_pad_pays_on_every_entry_and_never_once_per_tick`).
+What the original gates the grant on, on the no-stamp path, is the swept containment test alone:
+2048's `WeaponPads_TestCraft` is `if (hit) goto grant` every tick, behind the slot checks
+([`weapon-pads.md`](../ghidra/functions/vita-2048-eu-v104/weapon-pads.md), "What it does on a hit";
+Omega the same shape). It is the full slot that stops a second grant, so a craft that empties its
+slot (fires or absorbs) while still inside an unstamped pad is handed another there on the next
+tick, and ours is not: **the entry edge is chosen, not measured**, shared with every other pad
+law here, and the edge is only ever later than the original's. Cross-check (2048 and Omega, the
+same function): **ported**.
+
+### The method, to repeat it
+
+```sh
+# HD: boot, walk to a race on the grid (RACE TYPE: three Rights for Eliminator, none for a Single Race),
+# then, attached to the serve:
+OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-hd-weapon-pad-poll.py \
+    --out <dir> --seconds 25 --teleport-pad 3 --pin 8 --empty-slot
+# Pulse: a race up with weapons on, then
+uv run --with websocket-client python3 scripts/psp-weapon-pad-stamp.py --port <p> --pad 8 --hits 3 --frames 40
+```
+
+**The player's pickup slot is emptied** (`*(ship + 0x5edc) + 0x204`, `-1` is empty) because Pulse's
+`Ship_TestWeaponPads` asks the pad only with an empty slot and 2048's checks sit before its stamp; the
+first attempts pinned a craft that held a weapon, all in Eliminator, which says nothing either way
+about HD's slot gate. The game also moves a pinned
+craft back to the grid a few game seconds after the pin ends (the respawn), which is why the
+pin is short.
 
 ## What is not built
 
@@ -1056,4 +1194,4 @@ effect of this one.
 - [shield](../ghidra/functions/psp-pulse-usa/shield.md) - the pool absorb pays
 - [the HUD](../ui/hud.md) - the widgets
 
-**Eliminator reads `elimination_refresh_time` (since 2026-09-08):** `crates/raceplay/src/load/global.rs` uses the shorter figure (`0.05` against `0.55`) in that mode only.
+**Eliminator reads `elimination_refresh_time` on Pulse (since 2026-09-08):** `crates/raceplay/src/load/global.rs` uses the shorter figure (`0.05` against `0.55`) in that mode only; HD, Fury, 2048 and Omega never stamp a pad in Eliminator (see "Eliminator and the pads, per title").

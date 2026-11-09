@@ -349,3 +349,259 @@ fn only_an_eliminator_craft_facing_back_down_the_track_loses_its_engine() {
         "not an Eliminator race"
     );
 }
+
+/// HD's awards (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`).
+const SCORE_LAW: oag_race::ScoreLaw = oag_race::ScoreLaw {
+    damage: 0.1,
+    kill: 20.0,
+    lap: 5.0,
+    death: 5.0,
+    opponent_scale: 1.15,
+};
+
+/// A person flies the mine's layer, so nothing is scaled.
+#[test]
+fn a_tripped_mine_pays_its_layer_through_the_tick() {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::Eliminator;
+    setup.weapons = Some(one_mine_table());
+    setup.score_law = Some(SCORE_LAW);
+    setup.start_position = Some(oag_vex::track::StartPosition {
+        position: [0.0, 0.0, 0.0],
+        left: [0.0, 0.0, -1.0],
+        up: [0.0, 1.0, 0.0],
+        forward: [1.0, 0.0, 0.0],
+    });
+    let mut race = Race::start(setup);
+    race.sim.eliminator_kill_target = 1000;
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+    race.sim.world.ships[0].pickup.begin_drop(1);
+    race.tick(&PlayerInputs::none());
+    let mine = race
+        .sim
+        .world
+        .projectiles
+        .slots
+        .iter()
+        .find(|p| p.kind == Some(oag_tables::weapons::Weapon::Mine))
+        .expect("the drop laid a mine")
+        .position;
+    race.sim.world.ships[1].physics.body.position = mine;
+    race.sim.world.ships[1].physics.shield = 1.0;
+    for _ in 0..240 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert_eq!(race.sim.world.ships[0].standing.kills, 1);
+    // The table's Mine deals 20 and the blow pays in full, not capped by the one shield point
+    // left: 20 for the kill and 2 for the blow.
+    near(score_of(&race, 0), 22.0);
+}
+
+fn scored(target: u32) -> Race {
+    let mut race = eliminator();
+    race.sim.score_law = Some(SCORE_LAW);
+    race.sim.eliminator_kill_target = target;
+    race.sim.world.ships[1].active = true;
+    race
+}
+
+fn score_of(race: &Race, slot: usize) -> f32 {
+    race.sim.world.ships[slot].standing.score
+}
+
+fn near(value: f32, expected: f32) {
+    assert!(
+        (value - expected).abs() < 1e-4,
+        "{value} against {expected}"
+    );
+}
+
+#[test]
+fn a_hit_pays_the_attacker_and_the_scale_is_an_opponents_alone() {
+    let mut race = scored(200);
+    race.credit_hit_points(1, 0, 30.0);
+    near(score_of(&race, 0), 3.0);
+    race.credit_hit_points(0, 1, 80.0);
+    near(score_of(&race, 1), 9.2);
+}
+
+#[test]
+fn a_craft_earns_nothing_for_hitting_itself() {
+    let mut race = scored(200);
+    race.credit_hit_points(1, 1, 80.0);
+    near(score_of(&race, 1), 0.0);
+}
+
+#[test]
+fn a_kill_pays_twenty_on_top_of_its_count() {
+    let mut race = scored(200);
+    race.sim.last_damager[1] = Some(0);
+    race.sim.last_weapon_hit[1] = race.sim.world.tick + 1;
+    race.credit_kill(1);
+    assert_eq!(race.sim.world.ships[0].standing.kills, 1);
+    near(score_of(&race, 0), 20.0);
+}
+
+#[test]
+fn a_lap_pays_every_craft_and_nothing_outside_the_eliminator() {
+    let mut race = scored(200);
+    race.credit_lap_points(0);
+    race.credit_lap_points(1);
+    near(score_of(&race, 0), 5.0);
+    near(score_of(&race, 1), 5.75);
+
+    let mut race =
+        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_mine_table());
+    race.sim.score_law = Some(SCORE_LAW);
+    race.credit_lap_points(0);
+    near(score_of(&race, 0), 0.0);
+}
+
+#[test]
+fn a_destroyed_craft_loses_five_once_and_stops_at_zero() {
+    let mut race = scored(200);
+    race.sim.world.ships[0].standing.score = 7.0;
+    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Eliminated;
+    race.tick_destroyed_craft();
+    race.tick_destroyed_craft();
+    near(score_of(&race, 0), 2.0);
+}
+
+#[test]
+fn the_race_ends_on_the_score_target_and_not_on_kills() {
+    let mut race = scored(200);
+    race.sim.world.ships[0].standing.kills = 200;
+    race.sim.world.ships[0].standing.score = 199.99;
+    race.tick_destroyed_craft();
+    assert!(!race.sim.world.race[0].finished, "199.99 truncates to 199");
+    race.sim.world.ships[0].standing.score = 200.0;
+    race.tick_destroyed_craft();
+    assert!(race.sim.world.race[0].finished);
+}
+
+#[test]
+fn a_kill_race_scores_nothing_and_still_ends_on_kills() {
+    let mut race = eliminator();
+    race.sim.eliminator_kill_target = 1;
+    race.credit_hit_points(1, 0, 80.0);
+    race.credit_lap_points(0);
+    near(score_of(&race, 0), 0.0);
+    race.sim.world.ships[0].standing.kills = 1;
+    race.tick_destroyed_craft();
+    assert!(race.sim.world.race[0].finished);
+}
+
+mod flip {
+    use super::*;
+    use oag_gameplay::input::{Button, Input, InputSnapshot};
+    use oag_physics::flip::FlipLaw;
+
+    /// Past the countdown, on the flip law `seconds` long.
+    fn racing(law: Option<FlipLaw>) -> Race {
+        let mut race = eliminator();
+        race.sim.flip_law = law;
+        while RaceState::thrust_gated(race.sim.world.tick) {
+            race.tick(&PlayerInputs::default());
+        }
+        race
+    }
+
+    fn press(button: Button) -> PlayerInputs {
+        let mut buttons = Input::EMPTY;
+        buttons.begin_frame(button.bit());
+        PlayerInputs::single(InputSnapshot {
+            buttons,
+            ..InputSnapshot::EMPTY
+        })
+    }
+
+    fn held(button: Button) -> PlayerInputs {
+        let mut buttons = Input::EMPTY;
+        buttons.begin_frame(button.bit());
+        buttons.begin_frame(button.bit());
+        PlayerInputs::single(InputSnapshot {
+            buttons,
+            ..InputSnapshot::EMPTY
+        })
+    }
+
+    const LAW: Option<FlipLaw> = Some(FlipLaw { seconds: 0.2 });
+
+    #[test]
+    fn the_press_turns_the_craft_half_about_in_twelve_ticks_through_the_tick() {
+        let mut race = racing(LAW);
+        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        let before = race.sim.world.ships[0].physics.body.forward();
+        race.tick(&press(Button::Flip));
+        assert!(race.sim.world.ships[0].physics.flip.active);
+        for _ in 0..11 {
+            race.tick(&held(Button::Flip));
+        }
+        let physics = &race.sim.world.ships[0].physics;
+        assert!(!physics.flip.active, "twelve ticks at 60 Hz is 0.2 s");
+        assert!(
+            physics.body.forward().dot(before) < -0.95,
+            "{}",
+            physics.body.forward()
+        );
+    }
+
+    #[test]
+    fn holding_the_button_flips_once_and_a_new_press_flips_back() {
+        let mut race = racing(LAW);
+        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        let before = race.sim.world.ships[0].physics.body.forward();
+        race.tick(&press(Button::Flip));
+        for _ in 0..30 {
+            race.tick(&held(Button::Flip));
+        }
+        let turned = race.sim.world.ships[0].physics.body.forward();
+        assert!(turned.dot(before) < -0.9, "{turned} against {before}");
+        race.tick(&PlayerInputs::default());
+        race.tick(&press(Button::Flip));
+        for _ in 0..30 {
+            race.tick(&PlayerInputs::default());
+        }
+        let forward = race.sim.world.ships[0].physics.body.forward();
+        assert!(forward.dot(before) > 0.9, "{forward} against {before}");
+    }
+
+    #[test]
+    fn no_law_no_flip() {
+        let mut race = racing(None);
+        race.tick(&press(Button::Flip));
+        assert!(!race.sim.world.ships[0].physics.flip.active);
+    }
+
+    #[test]
+    fn the_grid_and_a_destroyed_craft_refuse_it() {
+        let mut race = eliminator();
+        race.sim.flip_law = LAW;
+        race.tick(&press(Button::Flip));
+        assert!(!race.sim.world.ships[0].physics.flip.active, "on the grid");
+
+        let mut race = racing(LAW);
+        race.sim.world.ships[0].physics.craft_state = oag_physics::damage::CraftState::Destroyed;
+        race.tick(&press(Button::Flip));
+        assert!(!race.sim.world.ships[0].physics.flip.active, "destroyed");
+    }
+
+    #[test]
+    fn the_left_shoulder_flips_and_does_not_brake_where_the_flip_is_armed() {
+        let shoulder = || {
+            let mut buttons = Input::EMPTY;
+            buttons.begin_frame(Button::L.bit() | Button::Flip.bit());
+            PlayerInputs::single(InputSnapshot {
+                buttons,
+                airbrake_left: 1.0,
+                ..InputSnapshot::EMPTY
+            })
+        };
+        let mut armed = racing(LAW);
+        let controls = armed.player_controls(0, shoulder().get(0));
+        assert_eq!(controls.airbrake_left, 0.0);
+        let mut plain = racing(None);
+        let controls = plain.player_controls(0, shoulder().get(0));
+        assert_eq!(controls.airbrake_left, 1.0);
+    }
+}

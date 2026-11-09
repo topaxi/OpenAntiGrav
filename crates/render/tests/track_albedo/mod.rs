@@ -19,7 +19,7 @@
 
 use std::sync::Arc;
 
-use oag_mesh::mesh::{DrawCall, Model, ModelTexture, slots};
+use oag_mesh::mesh::{DrawCall, Model, ModelTexture, Texels, slots};
 
 /// A texel is normal-like when `2c - 1` has unit length within this and points
 /// out of the surface, z-dominant.
@@ -46,15 +46,9 @@ pub enum Fault {
 /// Whether `texture`'s texels are a tangent-space normal map. `None` when they
 /// cannot be read on the CPU (an uploaded or undecodable texture).
 pub fn is_normal_map(texture: &ModelTexture) -> Option<bool> {
-    let rgba = texture.to_rgba()?;
-    let texels = rgba.len() / 4;
-    if texels == 0 {
-        return None;
-    }
-    let step = (texels / SAMPLES).max(1);
+    let sampled = sampled_texels(texture)?;
     let (mut normal, mut seen) = (0usize, 0usize);
-    for t in (0..texels).step_by(step) {
-        let p = &rgba[t * 4..t * 4 + 4];
+    for p in sampled {
         let v = [
             f32::from(p[0]) / 127.5 - 1.0,
             f32::from(p[1]) / 127.5 - 1.0,
@@ -73,6 +67,55 @@ pub fn is_normal_map(texture: &ModelTexture) -> Option<bool> {
         }
     }
     Some(normal as f32 / seen as f32 >= NORMAL_FRACTION)
+}
+
+/// [`SAMPLES`] texels spread over the base level in raster order, as
+/// `ModelTexture::to_rgba` would give them; `None` when it has none. A texture held as compressed
+/// blocks decodes only the blocks the samples fall in: all of a 4096 square
+/// BC7 level to read 4096 texels of it was most of a circuit walk's time.
+fn sampled_texels(texture: &ModelTexture) -> Option<Vec<[u8; 4]>> {
+    let (width, height) = (texture.width as usize, texture.height as usize);
+    if let Texels::Blocks { format, levels } = &texture.texels {
+        let texels = width * height;
+        if texels == 0 {
+            return None;
+        }
+        let step = (texels / SAMPLES).max(1);
+        let blocks = levels.first()?;
+        let block_len = format.block_len() as usize;
+        let across = width.div_ceil(4);
+        if blocks.len() < across * height.div_ceil(4) * block_len {
+            return None;
+        }
+        return (0..texels)
+            .step_by(step)
+            .map(|t| {
+                let (x, y) = (t % width, t / width);
+                let at = ((y / 4) * across + x / 4) * block_len;
+                let block = format.decode_level(&blocks[at..at + block_len], 4, 4)?;
+                Some(block[(y % 4) * 4 + x % 4])
+            })
+            .collect();
+    }
+    let rgba = texture.to_rgba()?;
+    let texels = rgba.len() / 4;
+    if texels == 0 {
+        return None;
+    }
+    let step = (texels / SAMPLES).max(1);
+    Some(
+        (0..texels)
+            .step_by(step)
+            .map(|t| {
+                [
+                    rgba[t * 4],
+                    rgba[t * 4 + 1],
+                    rgba[t * 4 + 2],
+                    rgba[t * 4 + 3],
+                ]
+            })
+            .collect(),
+    )
 }
 
 fn lists(model: &Model) -> [&Vec<DrawCall>; 3] {

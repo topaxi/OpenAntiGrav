@@ -269,11 +269,25 @@ fn mist_texture(
             return None;
         }
     };
-    let decoded = match oag_texture::texture::Texture::parse(&blob) {
-        Ok(texture) => Ok((texture.width, texture.height, texture.to_rgba())),
-        Err(error) => oag_texture::ps2_texture::parse(&blob)
-            .map(|texture| (texture.width, texture.height, texture.to_rgba()))
-            .map_err(|_| error),
+    let decoded = if let Some(image) = oag_texture::replacer::mip(&blob) {
+        Ok((image.width, image.height, image.rgba.clone()))
+    } else {
+        match oag_texture::texture::Texture::parse(&blob) {
+            Ok(texture) => Ok((
+                u32::from(texture.width),
+                u32::from(texture.height),
+                texture.to_rgba(),
+            )),
+            Err(error) => oag_texture::ps2_texture::parse(&blob)
+                .map(|texture| {
+                    (
+                        u32::from(texture.width),
+                        u32::from(texture.height),
+                        texture.to_rgba(),
+                    )
+                })
+                .map_err(|_| error),
+        }
     };
     match decoded {
         Ok((width, height, rgba)) => {
@@ -281,8 +295,8 @@ fn mist_texture(
                 "mist: {name}, {width}x{height}, two additive screen layers under the HUD"
             ));
             Some(oag_fx::exhaust::FlareTexture {
-                width: u32::from(width),
-                height: u32::from(height),
+                width,
+                height,
                 rgba,
             })
         }

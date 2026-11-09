@@ -299,6 +299,14 @@ pub struct CaptureOptions {
     pub hud_safe_area: Option<u8>,
     /// `[display] dynamic_hud`, which only a title with a `Dynamic HUD` option obeys.
     pub dynamic_hud: oag_display::display::DynamicHud,
+    /// `[display] ghost_ship_visible`, resolved for the title
+    /// ([`crate::settings::Display::ghost_ship_shown`]).
+    pub ghost_visible: bool,
+    /// Whether the other people's multiplayer tags are drawn
+    /// ([`crate::settings::Display::multiplayer_tags_shown`]).
+    pub player_tags: bool,
+    /// The stored player name, which names seat 1 ([`crate::split_screen::name_first_seat`]).
+    pub player: crate::settings::Player,
     /// What casts a shadow in the captured frame: `--shadows`.
     ///
     /// Honoured the same way [`Self::motion_blur`] is, and here for the same
@@ -503,18 +511,24 @@ pub fn capture(
     race.set_trail_order(options.trail_order);
     race.set_weather(options.weather);
     race.set_dynamic_hud(options.dynamic_hud);
+    race.set_ghost_visible(options.ghost_visible);
+    race.set_player_tags(options.player_tags);
+    crate::split_screen::name_first_seat(&mut race, &options.player, &title.profile);
     race.set_hull_shake(options.hull_shake);
-    race.watch_laps(
-        &hud,
-        options
-            .previous_best
-            .as_ref()
-            .and_then(|record| record.best_lap_ticks),
-    );
+    let best_lap = options
+        .previous_best
+        .as_ref()
+        .and_then(|r| r.best_lap_ticks);
+    race.watch_laps(&hud, best_lap);
     race.set_camera_view(options.camera_view);
-    race.set_control_scheme(options.scheme);
-    race.set_autopilot(options.autopilot);
-    race.set_pilot_assist(options.pilot_assist);
+    race.apply_launch(&oag_raceplay::Launch {
+        scheme: options.scheme,
+        difficulty,
+        autopilot: options.autopilot,
+        pilot_assist: options.pilot_assist,
+        original_ai: None,
+        campaign_skill: None,
+    });
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);
         if let Some(pilot) = options.autopilot_pilot {
@@ -585,7 +599,6 @@ pub fn capture(
     // **`Rgba8Unorm` on both paths now**, because every shader in this pipeline
     // writes gamma-space values and nothing may encode them again - see
     // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
-    //
     // `--presented` used to be `Rgba8UnormSrgb`; the window stopped encoding in
     // the same change, which made two captures of one frame differ by up to
     // 73/255. The non-sRGB twin keeps FSR 1 working (`remove_srgb_suffix`).
@@ -1086,12 +1099,15 @@ pub fn capture(
     // the rest read it, as the window's frame loop has them.
     let mut shared_work = false;
     for window in windows {
+        // The frame's work as the session's frame loop holds it, so a capture draws what a
+        // player sees whatever a split does with its submissions.
+        let frame_work = oag_gpu::split_finish::Frame::begin();
         let mut encoder = first_encoder.take().unwrap_or_else(|| {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("race capture window"),
             })
         });
-        // A split screen draws one scene per view, each submitted on its own: see
+        // A split screen draws one scene per view, in command buffers of its own: see
         // `Scene::render_viewports`. One view is the call below, untouched.
         let stats = if let Some(index) = window {
             // One window of a multi-window race: its seats cut up in it, the same call the
@@ -1258,22 +1274,13 @@ pub fn capture(
                 None,
             );
         }
-        // Where the HUD goes: the presentation target at the aspect rectangle when
-        // presented, else the native-size capture texture the scene drew into, so an
-        // ordinary `--screenshot` is byte-for-byte what it was.
+        // Where the HUD goes: the presentation target at the aspect rectangle when presented, else
+        // the native-size capture texture the scene drew into (an ordinary `--screenshot` as before).
         let (hud_view, hud_viewport) = match framebuffer.as_ref() {
             Some(framebuffer) => (framebuffer.output().clone(), rect),
             None => (view.clone(), viewport),
         };
-        // The mods' vector icons, rasterised at the pixels the capture draws them at (the
-        // window rasterises them on another thread, as it is resized).
-        let mut notes = Vec::new();
-        let pixels = crate::render::hud_pixels_per_grid(hud.space, hud_viewport)
-            * hud.art.safe_area_scale(options.hud_safe_area);
-        hud.rasterise_vector_icons(pixels, &mut notes);
-        for note in notes {
-            warn!("{note}");
-        }
+        crate::render::rasterise_hud_icons(&mut hud, hud_viewport, options.hud_safe_area);
         // Pure's glow lands before the panel and the HUD, so neither takes its haze
         // (`Looks::bloom_under_hud`); a no-op elsewhere.
         scene.composite_bloom_under_hud(&mut encoder, &hud_view, hud_viewport);
@@ -1461,7 +1468,7 @@ pub fn capture(
                 depth_or_array_layers: 1,
             },
         );
-        queue.submit(Some(encoder.finish()));
+        frame_work.submit(&queue, encoder);
 
         let slice = readback.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| {});

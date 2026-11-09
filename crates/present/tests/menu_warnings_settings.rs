@@ -382,9 +382,9 @@ fn a_warning_about_the_drawn_size_reads_the_floor_and_not_the_ceiling() {
 /// give up pixels to buy frames the limiter forbids.
 ///
 /// **Only where the limiter is in force.** Under `vsync = on` the display is
-/// the bound and this build cannot ask a surface what its refresh is, so
-/// neither the warning nor the clamp fires - a wrong clamp at 60 on a 144 Hz
-/// panel is worse than none.
+/// the bound, and a row condition reads settings only, so it cannot name the
+/// refresh: the warning stays off there. The controller's clamp to the display
+/// is `oag_present::refresh`, a runtime fact.
 #[test]
 fn the_target_warns_at_exactly_the_frame_limits_it_is_above() {
     let definition = built_in();
