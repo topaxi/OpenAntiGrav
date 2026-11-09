@@ -2,7 +2,7 @@
 status: measure
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-09
-summary: "HD burst draw wired; lilac gone, the white nose glow is the burst's (not a separate effect, measured 2026-11-09) and still not reproduced; HD-length trails stay blocked"
+summary: "HD burst wired, lilac gone; white nose glow needs a rival ahead, burst vs rival flare unseparated; HD-length trails blocked"
 ---
 
 # HD-length trails (opt-in) for Pulse and Pure; trail hits landed
@@ -21,15 +21,15 @@ effects.
   picture: the lilac blobs are gone and thin blue rays appear, as on the original, but the compact
   white nose glow is not reproduced (ours is blue and dim). The bar alone and the scale alone
   changed nothing a player sees.
-- **The white nose glow is the burst's, not a separate effect (2026-11-09, `hd-nose-glow-control`).** The original
-  shows none in a Time Trial or a Zone run at race speed with nothing ahead (36 frames, two restores and two
-  boots), so the glow named above is the burst's `CORE_IMPACT` and class-6 draw alone, not a second effect to wire
+- **The white nose glow is not a craft effect of its own (2026-11-09, `hd-nose-glow-control`).** The original shows
+  none in a Time Trial or a Zone run at race speed with nothing ahead (36 frames, two restores and two boots). It
+  needs a rival ahead, and whether it is the burst's `CORE_IMPACT` or the rival's engine flare and ribbon head
+  (just beyond the nose in every tuck) is **not separated**: do not wire a `CORE_IMPACT` frame to chase it before a
+  tuck with the burst names broken, keeping the frames where the rival's rear overlaps the player's nose
   (`hd-wingtip-contrails.md`, `engine-trail.md`, "Is the original's white nose glow a separate effect?").
-- **The maintainer's white contrails at the Zone ship's wing tips: not reproduced, unexplained.** HD's `wingtip`
-  locators (class `0x3ec`, two per hull on all 39 `Locators.vex`; 2048 and Omega the same) are gathered by
-  `Ship_GatherWingtipNodes` (`0x000d2d20`) and read by no code in the executable; no `.pob` or ribbon is named for
-  them. Not tried: a Zone speed class above 154 units/s, a speed-pad boost, the airbrake. Nothing to wire from
-  the locators.
+- **The maintainer's white contrails at the Zone ship's wing tips are a different effect, now found:** HD's
+  `wingtip` locators drive two ribbons while a speed pad or turbo acts. Its own thread:
+  `hd-wingtip-vortices-are-recovered-and-not-drawn.md`.
 - **Still open on the burst:** `CORE_IMPACT`'s atlas frame (drawn on its spawn frame), the render
   state `record+0xca4`, `WO_TRAIL_HITSHIP_RED`'s sprites (unlisted), and the placement (the
   simulation's). A re-shot pair after any of them.

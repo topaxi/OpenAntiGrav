@@ -22,8 +22,8 @@ wrong, and `0x002ab9d0` is not that pool's acquire. Evidence, confidence 90:
   (`FatLine_PushChains`), not an acquire.
 - Pool `+0x74` is acquired by `0x002db130`, a per-craft update (it reads
   `craft + 0x5fac`, `+0x340`, a speed ramp), and pushed with `0x002ac208`. Its
-  user is a craft effect, **unnamed** (confidence below 50); the smoke texture
-  is its own, not the Missile's.
+  user is the **wingtip vortices** (2026-11-09, [wingtip-vortices.md](wingtip-vortices.md),
+  confidence 80); the smoke texture is its own, not the Missile's.
 - Pool `+0x5c` (`ThickLine_bighalo`, 20 elements) is the Missile **explosion's**:
   `0x00155568` (the explosion init) acquires 16 of them, and `0x00154a78`
   (its update) calls `0x002ab9d0` with them.

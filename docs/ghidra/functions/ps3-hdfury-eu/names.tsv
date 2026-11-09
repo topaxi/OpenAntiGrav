@@ -906,3 +906,4 @@
 0x000d2d20	function	Ship_GatherWingtipNodes	80	wingtip-vortices.md
 0x002db500	function	ShipWingtipVortices_RegisterClass	80	wingtip-vortices.md
 0x002db5e8	function	ShipWingtipVortices_Construct	75	wingtip-vortices.md
+0x002db130	function	ShipWingtipVortices_Update	80	wingtip-vortices.md

@@ -1,16 +1,16 @@
-# HD's white nose glow: not an effect of its own, and no wingtip contrails
+# HD's white nose glow is not an effect of its own; the wingtip contrails are, and a speed pad runs them
 
 Measured 2026-11-09 (lane `hd-nose-glow-control`) on RPCS3 (EU Fury image, recompiler, Vulkan, `Write Color
-Buffers` on), four boots and restores. The claim under test, written before the first capture:
+Buffers` on): ten restores or cold boots. The claim under test, written before the first capture:
 
 > In the original, the compact white glow at the craft's nose appears at race speed with no rival trail ahead,
 > so it is an effect separate from the trail-hit burst.
 
-**It came out false.** The glow is not there in a Time Trial or a Zone run at race speed. The trail-hit page's
-reading stands: it belongs to the burst ([engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md),
-"The trail-hit burst as a matched pair"). The maintainer's white contrails at the Zone ship's wing tips were not
-reproduced, and the game's own code does not read the `wingtip` locators at all
-([wingtip-vortices.md](../ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md)).
+**It came out false.** The glow is not there in a Time Trial or a Zone run at race speed with nothing ahead. What
+the maintainer reads as white contrails at the Zone ship's wing tips is a real, separate effect, found in the
+executable: HD's `wingtip` locators drive two ribbons that run while a speed pad or a turbo acts
+([wingtip-vortices.md](../ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md)). It is not the nose glow either: the
+streaks start at the wing tips and run back, and they appear in frames with no glow at the nose.
 
 ## What would have falsified it, stated first
 
@@ -47,39 +47,67 @@ frames; the frames read at full size show track and scenery lines behind the win
 The saved Zone state (`zone-moa-therma-hd-early`) is a results screen (`ZONE SESSION COMPLETE`), so the Zone control
 was a cold boot into Zone (`rpcs3-hd-zone-probe.py`, 45 and 60 s of throttle, no steering, so the craft grazes the
 walls and the speed is ragged: 3.6 to 154 units/s). Twelve frames viewed at full size over two boots, ten of them
-at 103 to 154 units/s (about 370 to 550 km/h if the HUD's ratio holds): **no white glow or contrail at the Zone
+at 103 to 154 units/s (about 370 to 550 km/h if the HUD's ratio holds): **no white glow or streak at the Zone
 ship's nose or wing tips.** The horn tips (the forward-swept wing tips where the `wingtip` locators sit) stay dark;
-the white streaks that appear in some frames are the scenery's speed lines and cross the whole frame, not the tips.
-This does not cover Zone speeds above 154 units/s or a boost; neither was reached.
+the white streaks that appear in some frames are the scenery's speed lines and cross the whole frame. Neither run
+crossed a speed pad or used a turbo, which is why the contrails below do not show.
+
+## The wingtip contrails, with the speed-pad state up
+
+The executable reads the pad state: `ShipWingtipVortices_Update` runs on each of the craft's two `wingtip` nodes
+every frame, refills a 1.3 s timer while `craft-entry+0x2e8` (the speed pad's remaining force time) is above zero or
+a turbo flag is set, and lays a ribbon of the `+0x74` pool (the smoke-trail one) with a strength of the timer's
+fraction times a speed ramp (zero below 50 units/s, `0.3` from 100). Nothing in a plain run raises it.
+
+The A/B: in a running Time Trial, with the throttle held at about 120 units/s, `entry+0x2e8` was written `1.0` every
+40 ms (the field the pad's own code decrements, so it reads `0.93` to `1.0` through the run; a physical pad crossing
+was not made) after six frames without the write.
+
+| | Frames | Streaks from the wing tips | Node `+0xe4` (timer) | Node `+0xe0` (ribbon handle) |
+| --- | --- | --- | --- | --- |
+| write off | 6 of 6 read (restore 2) | none | `0.0` | `0` |
+| write on | 6 of 6 read (restore 2) | two thin pale streaks, one from each wing tip, running back toward the camera, in all six | `1.28` | two handles `0x70` apart |
+
+The other restore's pair (one off and one on frame read) and an earlier forced run (four on frames read) agree. The
+on-frames also show the exhaust plume longer and red where the off-frames show the orange nozzle flame and the white
+ribbon. Both restores held 111 to 126 units/s through the A/B.
+
+**What is not shown:** a natural crossing of a speed pad or a Turbo pickup; the streaks' alpha and length against a
+frame of ours; the Zone ship's pair (its locators are on the forward wings, 4.6 units behind the cannon flashes,
+where the maintainer places the contrails). The streaks here are thin and pale, not a compact glow, and sit
+behind the wing tips, so they are not the nose glow of the trail-hit pairs either.
 
 ## The burst, for contrast
 
 Five tucked frames per condition in `hd-race-talons-venom-pack` (the player placed 8 units behind the nearest rival
-along its velocity, 30 frames, `rpcs3-hd-trail-hit-pair.py`'s tuck, the whole run in one connection). The craft and the rival read
-`+0x7d2c = 1` on all ten tucks (the red variant, Fury skin), which does not match the state's table entry in
+along its velocity, 30 frames, `rpcs3-hd-trail-hit-pair.py`'s tuck, the whole run in one connection). The craft and the
+rival read `+0x7d2c = 1` on all ten tucks (the red variant, Fury skin), which does not match the state's table entry in
 [emulator-recipes.md](../reverse-engineering/emulator-recipes.md) (it says classic; the entry should be rechecked,
 not rewritten from five reads).
 
-- **Burst names intact:** white ray fans and a white glow around the player's nose in the four frames read (speed 133 to 150 units/s).
+- **Burst names intact:** white ray fans and a white glow around the player's nose in the four frames read (speed 133 to
+  150 units/s).
 - **Burst names broken** (the first byte of both bare names overwritten, `rpcs3-hd-trail-hit-names.py both`): none at
-  the player's nose in the four frames read; what white remains is the rivals' ribbons and engine flares.
+  the player's nose in the four frames read; what white remains is the rivals' ribbons and compact white engine flares
+  at the rivals' rears.
 
 The poses are not matched (the Autopilot steers the tucked craft differently each time), so this is a contrast, not
-a pair, and carries little weight on its own. Together with Control B it says the nose glow needs the burst.
+a pair, and carries little weight. It also cannot tell the burst from the rival: in every tuck the rival's nozzle
+sits 8 units ahead, just beyond the player's nose, and the 2026-11-08 nose box read more near-white with the names
+broken than with them intact. So the glow needs a rival ahead; **whether it is the burst's `CORE_IMPACT` or the
+rival's engine flare and ribbon head is not separated.** The separating capture is a tuck with the names broken from a
+fresh restore, keeping the frames where the rival's rear overlaps the player's nose.
 
 ## What this settles, and what it does not
 
 | Question | Answer | Confidence |
 | --- | --- | --- |
 | Is the white nose glow present at race speed with nothing ahead? | **No**: 0 of 26 Time Trial frames, 0 of 10 Zone frames read | 85 (two restores, two boots, one circuit and one hull per control) |
-| Is it a separate always-on, speed or Zone effect? | **No** | 85 |
-| Is it the burst's? | **Yes, by exclusion and the earlier A/B** (the emitter drop on ours, the original's names-broken frames of 2026-11-08); the matched pair is not reproduced here | 75 |
-| Do HD's `wingtip` locators draw anything? | **No code reads them** (collected into the craft, never read) | 80 |
-| What are the maintainer's white contrails? | **Unexplained.** Not seen at 150 units/s or below on the Feisar or the Zone ship | n/a |
-
-For the contrails the unmeasured conditions are what to try next: a Zone speed class above Flash, a speed-pad boost,
-and the airbrake. A frame of the same ship in the original and in ours at the
-same pose and speed would also show whether what the player sees is the engine ribbon's edge catching the light.
+| Is it a separate always-on, speed or Zone effect of the craft? | **No** | 85 |
+| Is it the burst's? | **Not separated** from the rival's flare; needs a rival ahead | 40 |
+| Do HD's `wingtip` locators draw anything? | **Yes**: two ribbons, run by the speed-pad force time or a turbo, scaled by forward speed | 80 (code read, live node fields, A/B frames) |
+| What sets it off in play? | The speed pad's force time (`entry+0x2e8`) or Turbo flags `0x20`/`0x40` | 70 (code only; the field was forced, no pad crossed) |
+| Are the maintainer's Zone contrails these? | **Probably** (wing-tip streaks while a pad or turbo acts, above 50 units/s); the Zone ship was not run with a pad | 60 |
 
 ## Reproduce
 
@@ -89,15 +117,17 @@ scripts/emu-restore-state.sh <lane> data/saves/hd-fury/hd-timetrial-talons-venom
 OAG_RPCS3_ATTACH=1 python3 <film script>   # hold cross; per frame: speed = |*(*(*(ship+0x5fac)+0x270)+0x190)|, root grab
 ```
 
-The film script is `scripts/rpcs3-hd-trail-film.py` with a speed read from `rpcs3_hd_field.field_rows` added; the
-Zone run is `scripts/rpcs3-hd-zone-probe.py` with its `drive` phase's screenshot interval cut to 6 samples and
-`trim=False`. Raw frames are game content and stay under `data/`.
+The film script is `scripts/rpcs3-hd-trail-film.py` with a speed read from `rpcs3_hd_field.field_rows` added. The
+A/B adds a writer thread (`RemoteMem.write` of the big-endian float `1.0` to `*(ship+0x5fac)+0x2e8` every 40 ms from
+the seventh frame) and finds the two nodes by a heap scan (`0x30000000..0x36000000`, one second): aligned words equal
+to the vtable `0x0086a340` whose `+0xec` is the player's ship; `+0xe0`, `+0xe4`, `+0xe8` read live. The Zone run is
+`scripts/rpcs3-hd-zone-probe.py` with its `drive` phase's screenshot interval cut to 6 samples and `trim=False`. Raw
+frames are game content and stay under `data/`.
 
 ## Other titles
 
 2048 and Omega author the same two `wingtip` locators per hull at the same coordinates as HD, and Omega's executable
-carries the importer's strings. Whether either draws anything from them was not read. Their trail-hit burst is a
-separate matter: their originals never fire it
+carries the importer's strings. Whether either runs the update was not read. Their trail-hit burst is a separate
+matter: their originals never fire it
 ([Omega](../ghidra/functions/ps4-omega-eu/trail-hits.md), [2048](../ghidra/functions/vita-2048-eu-v104/trail-hits.md)).
-Detail:
-[wingtip-vortices.md](../ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md), "The other titles".
+Detail: [wingtip-vortices.md](../ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md), "The other titles".
