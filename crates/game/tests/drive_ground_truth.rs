@@ -237,7 +237,7 @@ fn the_race_box_target_row_sets_what_an_hd_eliminator_ends_on() {
     );
     assert!(run.output.status.success(), "{}", run.why_not_success());
     let race = &run.last()["race"];
-    assert_eq!(text(&run.last(), &["race", "mode"]), Some("eliminator"));
+    assert_eq!(text(run.last(), &["race", "mode"]), Some("eliminator"));
     assert_eq!(race["target"].as_u64(), Some(400), "{race}");
 }
 
