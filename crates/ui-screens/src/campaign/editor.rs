@@ -50,6 +50,8 @@ pub struct View<'a> {
     /// The footer's two prompts beside the disc's own `Confirm` and `Back`: what the
     /// triangle does, and what the square does.
     pub legend: [&'a str; 2],
+    /// On an empty slot, the line where the fields would be: how to place an event.
+    pub hint: &'a str,
     /// The selector's pulse clock.
     pub pulse: &'a SelectorPulse,
 }
@@ -277,6 +279,11 @@ pub fn draw_list(
             value.scale *= VALUE_SCALE;
             out.push(text_draw(&label, &row.label, layout));
             out.push(text_draw(&value, &clip(&row.value), layout));
+        }
+        if view.fields.is_empty() && !view.hint.is_empty() {
+            let mut hint = label.clone();
+            hint.scale *= LABEL_SCALE;
+            out.push(text_draw(&hint, view.hint, layout));
         }
         if !view.status.is_empty() {
             let mut status = label.clone();

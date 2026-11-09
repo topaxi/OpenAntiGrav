@@ -28,6 +28,7 @@ pub(crate) struct Shown {
     selected_row: Option<usize>,
     status: String,
     legend: [String; 2],
+    hint: String,
 }
 
 impl Shown {
@@ -43,6 +44,7 @@ impl Shown {
             selected_row: self.selected_row,
             status: &self.status,
             legend: [&self.legend[0], &self.legend[1]],
+            hint: &self.hint,
             pulse,
         }
     }
@@ -109,6 +111,7 @@ impl EditorScreen {
             } else {
                 self.status.clone()
             },
+            hint: model.say("OAG_EDITOR_HINT_PLACE", "PRESS CROSS TO PLACE AN EVENT"),
             legend: [
                 model.say("OAG_EDITOR_LEGEND_CLEAR", "Clear slot"),
                 model.say("OAG_EDITOR_LEGEND_NAME", "Name"),

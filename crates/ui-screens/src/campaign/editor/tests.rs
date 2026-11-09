@@ -84,6 +84,7 @@ fn view<'a>(
         selected_row: None,
         status: "",
         legend: ["Clear", "Name"],
+        hint: "",
         pulse,
     }
 }

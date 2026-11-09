@@ -51,7 +51,7 @@ pub const AIS: [(&str, &str, &str); 2] = [
 ];
 
 /// Every other word the editor's screen and flow show: string id and English.
-pub const WORDS: [(&str, &str); 20] = [
+pub const WORDS: [(&str, &str); 21] = [
     ("OAG_EDITOR_TITLE", "CAMPAIGN EDITOR"),
     ("OAG_EDITOR_FIELD_MODE", "MODE"),
     ("OAG_EDITOR_FIELD_CIRCUIT", "CIRCUIT"),
@@ -60,7 +60,7 @@ pub const WORDS: [(&str, &str); 20] = [
     ("OAG_EDITOR_FIELD_AI", "OPPONENTS"),
     ("OAG_EDITOR_TEAM_CHOOSE", "PLAYER CHOOSES"),
     ("OAG_EDITOR_EMPTY", "EMPTY SLOT"),
-    ("OAG_EDITOR_PLACED", "EVENTS PLACED"),
+    ("OAG_EDITOR_PLACED", "EVENTS"),
     ("OAG_EDITOR_ACTION_NAME", "NAME"),
     ("OAG_EDITOR_ACTION_SAVE", "SAVE CAMPAIGN"),
     ("OAG_EDITOR_ACTION_CLEAR", "CLEAR SLOT"),
@@ -68,6 +68,7 @@ pub const WORDS: [(&str, &str); 20] = [
     ("OAG_EDITOR_NEEDS_EVENT", "PLACE AN EVENT FIRST"),
     ("OAG_EDITOR_NAME_TITLE", "NAME YOUR CAMPAIGN"),
     ("OAG_EDITOR_SAVE_FAILED", "COULD NOT SAVE THE CAMPAIGN"),
+    ("OAG_EDITOR_HINT_PLACE", "PRESS CROSS TO PLACE AN EVENT"),
     ("OAG_EDITOR_HINT_SAVE", "START SAVES"),
     ("OAG_EDITOR_LEGEND_CLEAR", "Clear slot"),
     ("OAG_EDITOR_LEGEND_NAME", "Name"),
