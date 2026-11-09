@@ -98,14 +98,29 @@ impl EditorScreen {
             .actions()
             .iter()
             .map(|&action| {
+                let key = |id: &str, english: &str| model.say(id, english);
                 let (id, english, value) = match action {
-                    Action::Page if campaign_page => {
-                        ("OAG_EDITOR_ACTION_EVENT", "EVENT FIELDS", String::new())
-                    }
-                    Action::Page => ("OAG_EDITOR_ACTION_SETTINGS", "CAMPAIGN SETTINGS", String::new()),
-                    Action::Fill => ("OAG_EDITOR_ACTION_FILL", "FILL GRID", String::new()),
+                    Action::Page if campaign_page => (
+                        "OAG_EDITOR_ACTION_EVENT",
+                        "EVENT FIELDS",
+                        key("OAG_EDITOR_KEY_SELECT", "SELECT"),
+                    ),
+                    Action::Page => (
+                        "OAG_EDITOR_ACTION_SETTINGS",
+                        "SETTINGS",
+                        key("OAG_EDITOR_KEY_SELECT", "SELECT"),
+                    ),
+                    Action::Fill => (
+                        "OAG_EDITOR_ACTION_FILL",
+                        "FILL GRID",
+                        key("OAG_EDITOR_KEY_TRIANGLE", "TRIANGLE"),
+                    ),
                     Action::Name => ("OAG_EDITOR_ACTION_NAME", "NAME", model.name().to_string()),
-                    Action::Save => ("OAG_EDITOR_ACTION_SAVE", "SAVE CAMPAIGN", String::new()),
+                    Action::Save => (
+                        "OAG_EDITOR_ACTION_SAVE",
+                        "SAVE CAMPAIGN",
+                        key("OAG_EDITOR_KEY_START", "START"),
+                    ),
                 };
                 Row {
                     label: model.say(id, english),
@@ -141,10 +156,8 @@ impl EditorScreen {
             },
             status: if !self.status.is_empty() {
                 self.status.clone()
-            } else if campaign_page {
-                model.say("OAG_EDITOR_HINT_FILL", "TRIANGLE FILLS THE GRID")
             } else {
-                model.say("OAG_EDITOR_HINT_TO_SETTINGS", "SELECT FOR SETTINGS")
+                model.say("OAG_EDITOR_HINT_SAVE", "START SAVES")
             },
             hint: model.say("OAG_EDITOR_HINT_PLACE", "CROSS PLACES AN EVENT"),
             legend: [

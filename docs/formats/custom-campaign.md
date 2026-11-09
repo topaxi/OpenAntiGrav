@@ -132,7 +132,7 @@ a hex does not move the cursor, so crossing hexes on the way to the panel keeps 
 | Team | the player chooses, or one of the roster's teams (a preset craft) |
 | Opponents | the original driver, or ours (`ai = "ours"`); the cell names no `difficulty`, the campaign's governs |
 
-SELECT (or the row CAMPAIGN SETTINGS) switches the details panel to the **campaign page**, which holds the
+SELECT (or the row SETTINGS) switches the details panel to the **campaign page**, which holds the
 settings no one event owns:
 
 | Row | Values |

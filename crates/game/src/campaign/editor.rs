@@ -71,19 +71,21 @@ pub const PROGRESSIONS: [(&str, &str, &str); 2] = [
 pub const SEED_DIGITS: usize = 9;
 
 /// Every other word the editor's screen and flow show: string id and English.
-pub const WORDS: [(&str, &str); 33] = [
+pub const WORDS: [(&str, &str); 35] = [
     ("OAG_EDITOR_FIELD_DIFFICULTY", "DIFFICULTY"),
     ("OAG_EDITOR_FIELD_PROGRESSION", "PROGRESSION"),
     ("OAG_EDITOR_FIELD_SEED", "SEED"),
     ("OAG_EDITOR_FIELD_CLASS_FROM", "CLASS FROM"),
     ("OAG_EDITOR_FIELD_CLASS_TO", "CLASS TO"),
     ("OAG_EDITOR_ACTION_FILL", "FILL GRID"),
-    ("OAG_EDITOR_ACTION_SETTINGS", "CAMPAIGN SETTINGS"),
+    ("OAG_EDITOR_ACTION_SETTINGS", "SETTINGS"),
     ("OAG_EDITOR_ACTION_EVENT", "EVENT FIELDS"),
     ("OAG_EDITOR_SEED_TITLE", "TYPE A SEED"),
     ("OAG_EDITOR_FILLED", "GRID FILLED FROM THE SEED"),
-    ("OAG_EDITOR_HINT_TO_SETTINGS", "SELECT FOR SETTINGS"),
-    ("OAG_EDITOR_HINT_FILL", "TRIANGLE FILLS THE GRID"),
+    ("OAG_EDITOR_HINT_SAVE", "START SAVES"),
+    ("OAG_EDITOR_KEY_SELECT", "SELECT"),
+    ("OAG_EDITOR_KEY_TRIANGLE", "TRIANGLE"),
+    ("OAG_EDITOR_KEY_START", "START"),
     ("OAG_EDITOR_LEGEND_FILL", "Fill grid"),
     ("OAG_EDITOR_TITLE", "CAMPAIGN EDITOR"),
     ("OAG_EDITOR_FIELD_MODE", "MODE"),
@@ -441,6 +443,7 @@ impl Editor {
     pub fn confirm(&mut self) {
         let draft = self.default_draft();
         self.events.entry(self.cursor).or_insert(draft);
+        self.page = Page::Event;
         self.editing = true;
         self.field = 0;
     }

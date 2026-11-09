@@ -489,13 +489,15 @@ OAG_EDITOR_FIELD_PROGRESSION = { text = "PROGRESSION", human = false }
 OAG_EDITOR_FIELD_SEED = { text = "SEED", human = false }
 OAG_EDITOR_FIELD_CLASS_FROM = { text = "CLASS FROM", human = false }
 OAG_EDITOR_FIELD_CLASS_TO = { text = "CLASS TO", human = false }
+OAG_EDITOR_HINT_SAVE = { text = "START SAVES", human = false }
+OAG_EDITOR_KEY_SELECT = { text = "SELECT", human = false }
+OAG_EDITOR_KEY_TRIANGLE = { text = "TRIANGLE", human = false }
+OAG_EDITOR_KEY_START = { text = "START", human = false }
 OAG_EDITOR_ACTION_FILL = { text = "FILL GRID", human = false }
-OAG_EDITOR_ACTION_SETTINGS = { text = "CAMPAIGN SETTINGS", human = false }
+OAG_EDITOR_ACTION_SETTINGS = { text = "SETTINGS", human = false }
 OAG_EDITOR_ACTION_EVENT = { text = "EVENT FIELDS", human = false }
 OAG_EDITOR_SEED_TITLE = { text = "TYPE A SEED", human = false }
 OAG_EDITOR_FILLED = { text = "GRID FILLED FROM THE SEED", human = false }
-OAG_EDITOR_HINT_TO_SETTINGS = { text = "SELECT FOR SETTINGS", human = false }
-OAG_EDITOR_HINT_FILL = { text = "TRIANGLE FILLS THE GRID", human = false }
 OAG_EDITOR_LEGEND_FILL = { text = "Fill grid", human = false }
 OAG_EDITOR_DIFFICULTY_EASY = { text = "EASY", human = false }
 OAG_EDITOR_DIFFICULTY_MEDIUM = { text = "MEDIUM", human = false }

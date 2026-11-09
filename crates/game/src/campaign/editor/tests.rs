@@ -404,3 +404,17 @@ fn a_click_on_each_row_does_what_the_row_says() {
     assert_eq!(editor.press_row(5), Pressed::Page);
     assert_eq!(editor.page(), Page::Event);
 }
+
+#[test]
+fn confirming_a_hex_from_the_campaign_page_shows_the_event_that_was_placed() {
+    let mut editor = Editor::new(wide(), "Confirm");
+    editor.toggle_page();
+    editor.confirm();
+    assert_eq!(editor.count(), 1);
+    assert_eq!(
+        editor.page(),
+        Page::Event,
+        "the placed event is on screen, not hidden behind the settings"
+    );
+    assert!(editor.editing());
+}
