@@ -1,6 +1,6 @@
 # Custom campaign (`campaigns/<id>.toml` in a mod)
 
-**Status: built (v1.0) for Wipeout Pulse, HD/Fury and Omega. Not 2048 or Pure.**
+**Status: built (v1.0) for Wipeout Pulse, HD/Fury and Omega. Not 2048 or Pure.** The in-game editor: Pulse only (below).
 The project's own format, not a disc's. Decision:
 [ADR-0077](../architecture/adr/0077-a-custom-campaign-compiles-to-the-titles-own-grid.md).
 Schema: [`schemas/v1/campaign.tosd`](../../schemas/v1/campaign.tosd). Reader:
@@ -10,8 +10,9 @@ locks). Worked example: `example-campaign/` in [`mod-examples`](https://github.c
 A mod carries any number of campaign files under `campaigns/`, pilot files under
 `pilots/`, and track files of this project's own format under `tracks/`. An event may
 also race a track another installed mod carries. An installed campaign is listed by name on the page RACE CAMPAIGN opens
-once at least one is installed. The page's first row is the disc's own campaign. With
-none installed the menu is unchanged.
+once at least one is installed, and on Pulse always, for its NEW CAMPAIGN row (the editor,
+below). The page's first row is the disc's own campaign. With none installed, a title that
+has no editor keeps RACE CAMPAIGN as it was.
 
 ## A file
 
@@ -98,9 +99,53 @@ says so, and no other team or pilot is substituted.
 - Opponent craft variants (`teams` entries with a variant), AI craft overrides (top
   speed and so on), a pilot per slot: later minors, compatible additions to `field`.
 - A flyer card shipped in the mod: only the disc's own cards are named.
-- The in-game editor: the grid itself, saving into a slot (the plan's step 9).
+- The in-game editor on **HD/Fury and Omega**, and the editor's own limits (tournaments,
+  editing a saved campaign, several tiers, unlock rules, laps, weapons, pilots): see below.
 - A track file in a zipped mod: the track reader takes a path on disk.
 - A track file as a tournament leg (a Zone `file` event is supported).
+
+## The in-game editor (Pulse)
+
+**Status: built for Wipeout Pulse (PSP and PS2). Open: HD/Fury, Omega** (their hex screens
+draw flyer cards and per-rung targets; `oag_game::campaign::custom::editor_offered` is the
+switch). The originals have no editor, and HD's `Racebox` is custom races, not this.
+
+RACE CAMPAIGN, then NEW CAMPAIGN (the picker's last row), opens the title's own `Cell
+Selection` with **every hex slot** drawn: a placed event filled, an empty slot dimmed. The
+pad moves the cursor (CROSS places an event and opens its fields; LEFT and RIGHT or CROSS step
+the selected field; UP and DOWN pick the field; TRIANGLE clears the slot; SQUARE names the
+campaign; START saves; CIRCLE closes the fields, then leaves without saving). The mouse or a
+finger clicks a hex to select it and the selected hex again to confirm it, hovers a field to move
+the panel's row and clicks a row to step it or act, and the secondary button backs out. Hovering
+a hex does not move the cursor, so crossing hexes on the way to the panel keeps the event.
+
+| Field | Values |
+| --- | --- |
+| Mode | race, time trial, speed lap, Zone, Eliminator, head to head (a tournament names legs of its own and is left to the file) |
+| Circuit | the booted disc's circuits |
+| Speed class | the title's ladder (no class on Zone) |
+| Team | the player chooses, or one of the roster's teams (a preset craft) |
+| Opponents | the original driver, or ours (`ai = "ours"`, `difficulty = "skilled"`) |
+
+SAVE writes the campaign (`CampaignDef::write`, which `parse` reads
+back equal) as a **fresh folder mod** `<data dir>/oag/mods/<campaign id>[-n]/` with a
+generated `oag-mod.toml` (id `player.<campaign id>`, `titles` this title, no licence) and
+`campaigns/<campaign id>.toml`, on a worker thread. An existing folder is never touched: a
+second save of the same name takes the next `-n`. The menus are then rebuilt the way a MODS
+page switch rebuilds them, so the campaign is in the picker at once. One tier `grid0`; every
+event is `unlock = { open = true }`. Medals: the disc's own cell for the same mode, circuit
+and class when it has one (seconds on a timed mode); for a finishing place (race, head to
+head) 1, 2, 3 when it has none; none for a timed event with no cell of its own (its screen
+reads `0:00.00` and it is never awarded, since a time exists per circuit and one invented
+would be a guess), and none for Zone and Eliminator without a same-class cell. Laps and
+weapons are the mode's own.
+
+The format and the compile path are ADR-0077's, unchanged: the editor cannot write what the
+format cannot read, and the mod author skill needed no change. Ground truth:
+`custom_campaign_ground_truth::a_campaign_built_in_the_editor_launches_on_pulse` (model to
+disc-compiled `grid0_x_y` cells that plan) and
+`campaign_cursor_ground_truth::a_campaign_made_in_the_editor_is_listed_and_its_event_launches`
+(the real session, headless: place, save, picker row, launch).
 
 ## Cross-check: 2048 and Omega
 

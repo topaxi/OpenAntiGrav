@@ -22,6 +22,8 @@ use winit::event_loop::{ControlFlow, EventLoop};
 mod app;
 #[path = "main/args.rs"]
 mod args;
+#[path = "main/campaign_editor_stage.rs"]
+mod campaign_editor_stage;
 #[path = "main/campaign_stage.rs"]
 mod campaign_stage;
 #[path = "main/clipboard.rs"]

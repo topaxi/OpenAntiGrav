@@ -33,9 +33,9 @@ use crate::language::StringTable;
 use oag_core::buttons::button_from_name;
 
 use super::{
-    Action, CAMPAIGN_PICKER_PAGE, CUSTOM_CAMPAIGN_ROW, Choice, Condition, Entry, LaunchInputs,
-    ORIGINAL_CAMPAIGN_ROW, Page, Pin, Query, QueryRef, Restart, RowMeta, Value, ValueSource,
-    Warning,
+    Action, CAMPAIGN_EDITOR_ROW, CAMPAIGN_PICKER_PAGE, CUSTOM_CAMPAIGN_ROW, Choice, Condition,
+    Entry, LaunchInputs, ORIGINAL_CAMPAIGN_ROW, Page, Pin, Query, QueryRef, Restart, RowMeta,
+    Value, ValueSource, Warning,
 };
 
 /// The schema kind a menu file declares in its `[toml-schema]` header.
@@ -769,11 +769,18 @@ impl Definition {
     /// campaign and each mod campaign in `rows` (`(key, name, description)`),
     /// ADR-0077. The page's first row is the original campaign, worded as the
     /// row was; each other row fires [`Action::OpenCustomCampaign`] and carries
-    /// `CUSTOM_CAMPAIGN_ROW` + its key as its id. With `rows` empty, or no
+    /// `CUSTOM_CAMPAIGN_ROW` + its key as its id. `editor` (`(label, subtitle)`)
+    /// adds a last row firing [`Action::OpenCampaignEditor`], and makes the page
+    /// exist with no mod campaign. With no `rows` and no `editor`, or no
     /// campaign row in the tree, nothing changes. Run once, after the title's
     /// own trimming and [`Self::rename_campaign_row`].
-    pub fn add_campaign_picker(&mut self, title: &str, rows: &[(String, String, String)]) {
-        if rows.is_empty() {
+    pub fn add_campaign_picker(
+        &mut self,
+        title: &str,
+        rows: &[(String, String, String)],
+        editor: Option<(&str, &str)>,
+    ) {
+        if rows.is_empty() && editor.is_none() {
             return;
         }
         let Some((page, row)) = self.pages.iter().enumerate().find_map(|(p, page)| {
@@ -822,6 +829,18 @@ impl Definition {
                 .push((!description.is_empty()).then(|| description.clone()));
             picker.meta.push(RowMeta {
                 id: Some(format!("{CUSTOM_CAMPAIGN_ROW}{key}")),
+                parent: None,
+            });
+        }
+        if let Some((name, description)) = editor {
+            picker.entries.push(Entry::Run {
+                label: name.to_string(),
+                action: Action::OpenCampaignEditor,
+                inputs: None,
+            });
+            picker.subtitles.push(Some(description.to_string()));
+            picker.meta.push(RowMeta {
+                id: Some(CAMPAIGN_EDITOR_ROW.to_string()),
                 parent: None,
             });
         }

@@ -246,6 +246,9 @@ pub(crate) struct CampaignStage {
     pub(crate) flyers: Option<oag_game::flyer::Flyers>,
     /// **HD only.** A circuit's emblem for `Cell Selection`, by lowercased id.
     circuit_emblems: std::collections::HashMap<String, String>,
+    /// The campaign editor, when this stage was opened for it: it takes the screen, the
+    /// pad and the pointer in place of `Grid Selection` and `Cell Selection`.
+    pub(crate) editor: Option<crate::campaign_editor_stage::EditorScreen>,
 }
 
 impl CampaignStage {
@@ -340,6 +343,7 @@ impl CampaignStage {
             cell_cursor,
             flyers,
             circuit_emblems,
+            editor: None,
         }
     }
 

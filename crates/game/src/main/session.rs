@@ -25,6 +25,8 @@ mod apply;
 mod cpu_governor;
 #[path = "session/campaign.rs"]
 mod campaign;
+#[path = "session/campaign_editor.rs"]
+mod campaign_editor;
 #[path = "session/draw.rs"]
 mod draw;
 #[path = "session/endrace.rs"]
@@ -69,6 +71,7 @@ mod mods_page;
 #[path = "session/music_pool_page.rs"]
 mod music_pool_page;
 pub(crate) use load_probe::LoadProbe;
+pub(crate) use mods_page::Rebuilt;
 #[path = "session/menus.rs"]
 pub(crate) mod menus;
 #[path = "session/pacing.rs"]

@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-29
-summary: "Custom campaigns landed (ADR-0077); Wall Penalty (first wasm sim mod) landed on wasm-extensions; open: 2048, grid editor, drag race, a turbo mod"
+updated: 2026-11-09
+summary: "Campaigns and the grid editor landed on Pulse; open: editor on HD/Omega, 2048, a drag race, a turbo mod (Wall Penalty landed)"
 size: XL (20)
 difficulty: hard (35)
 ---
@@ -166,9 +166,21 @@ Open after v1.0, in the order the maintainer raised them:
 
 - **2048** (the plan's step 7): a campaign layout of our own drawing 2048's hex art, a
   picker tile on the touch front end, `custom_campaigns = true` on its `Title`.
-- **The grid editor** (step 9, its own merge): every slot drawn, confirming a slot picks
-  track/mode/craft and saves into it, writing a generated mod through a serializer the
-  reader round-trips.
+- **The grid editor** (step 9): **landed on Pulse (2026-11-09)**, `oag_game::campaign::editor`
+  (model, writer) and `oag_ui_screens::campaign::editor` (screen, pointer), documented in
+  `docs/formats/custom-campaign.md`, "The in-game editor". RACE CAMPAIGN's page now always
+  exists on Pulse, with NEW CAMPAIGN as its last row; the editor draws every hex slot of the
+  title's own `Cell Selection`, a slot's event is circuit, mode, speed class, team and
+  opponents (original or ours), and SAVE writes a fresh folder mod under the user mods
+  directory (`<data dir>/oag/mods`) off the render thread, then rebuilds the menus so the
+  picker lists it. Open: **HD/Fury and Omega** (their hex screens, flyer cards and rung
+  targets; `oag_game::campaign::custom::editor_offered` is the switch), a **tournament**
+  event's legs, **editing a saved campaign** (the editor only makes new ones), more than one
+  tier, per-event unlock rules, `laps`/`weapons`, pilots and opponent teams, and medal
+  targets by hand (they come from the disc's own cell for the same mode, circuit and class;
+  a timed event with none gets no medals, and its screen reads `0:00.00`). The pointer
+  (click, the rows, the secondary button; a hover never moves the cursor) is unit-tested on its targets and events;
+  no headless step drives a mouse, so a live click was not run.
 - **Opponent craft variants** in `field.teams` (`{ team, variant }`): `oag_livery::load`
   paints opponent slots by team only today, so this is a livery change too.
 - **AI craft overrides** (top speed and other handling for the opponents) and a
@@ -386,8 +398,8 @@ craft that touches a wall slows far more than a normal craft.
    (mini-map or lap-delta graph); no simulation code.
 4. WebAssembly phase 2: the simulation hook, proven by moving Pulse/Pure's Pilot Assist backport
    into a mod with bit-identical replay hashes; then shared by rules and AI controllers.
-5. Custom campaigns: v1.0 landed (section 2). Still open: 2048, the grid editor, the
-   follow-ups listed there, and one built-in OAG campaign with a drag race event once the
+5. Custom campaigns: v1.0 landed (section 2), and the grid editor on Pulse. Still open: 2048,
+   the grid editor on HD/Fury and Omega, the follow-ups listed there, and one built-in OAG campaign with a drag race event once the
    drag race exists.
    **The examples are a submodule (2026-10-29):** github.com/OpenAntiGrav/mod-examples at
    `assets/mods/examples`, Pulse-only (Hillside borrows Pulse 03_Track art). NIGHT RUN

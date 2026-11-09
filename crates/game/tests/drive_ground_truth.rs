@@ -521,26 +521,26 @@ fn remix_tracks(run: &Run) -> Vec<Vec<String>> {
     seen
 }
 
-/// What RACE CAMPAIGN is on the main page, in order: `submenu` while a mod campaign puts
-/// the picker behind it, `action` (the disc's campaign) with none.
-fn campaign_row_kinds(run: &Run) -> Vec<String> {
-    let mut seen: Vec<String> = Vec::new();
+/// The labels of RACE CAMPAIGN's picker each time it was on screen, in order, one entry per
+/// distinct listing. On Pulse the page always exists (its NEW CAMPAIGN row), so what a mod adds
+/// or takes away is its own rows.
+fn campaign_picker_listings(run: &Run) -> Vec<Vec<String>> {
+    let mut seen: Vec<Vec<String>> = Vec::new();
     for state in run
         .states
         .iter()
-        .filter(|s| text(s, &["page"]) == Some("main"))
+        .filter(|s| text(s, &["page"]) == Some("campaigns"))
     {
-        let rows = state.pointer("/screen/rows").and_then(Value::as_array);
-        let kind = rows
-            .and_then(|rows| {
-                rows.iter()
-                    .find(|row| row.get("id").and_then(Value::as_str) == Some("campaign"))
-            })
-            .and_then(|row| row.get("kind").and_then(Value::as_str));
-        if let Some(kind) = kind
-            && seen.last().map(String::as_str) != Some(kind)
-        {
-            seen.push(kind.to_string());
+        let Some(rows) = state.pointer("/screen/rows").and_then(Value::as_array) else {
+            continue;
+        };
+        let labels: Vec<String> = rows
+            .iter()
+            .filter_map(|row| row.get("label").and_then(Value::as_str))
+            .map(str::to_string)
+            .collect();
+        if !labels.is_empty() && seen.last() != Some(&labels) {
+            seen.push(labels);
         }
     }
     seen
@@ -564,16 +564,22 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
     let run = drive(
         &image,
         "mods-switch",
-        "boot; select remix; press cross; until page=oag.remix/remix; \
+        "boot; select campaign; press cross; until page=campaigns; ticks 5; press circle; \
+         until page=main; \
+         select remix; press cross; until page=oag.remix/remix; \
          set mod.oag.remix.track_title=CUSTOM; ticks 120; press circle; until page=main; \
          select mods; press cross; until page=mods; \
          set mods.selected=oag.hillside; set mods.enabled=off; expect page=mods; \
          press circle; until page=main; \
+         select campaign; press cross; until page=campaigns; ticks 5; press circle; \
+         until page=main; \
          select remix; press cross; until page=oag.remix/remix; ticks 60; press circle; \
          until page=main; \
          select mods; press cross; until page=mods; \
          set mods.selected=oag.hillside; set mods.enabled=on; \
-         press circle; until page=main; ticks 5",
+         press circle; until page=main; \
+         select campaign; press cross; until page=campaigns; ticks 5; press circle; \
+         until page=main; ticks 5",
         None,
     );
     assert!(run.output.status.success(), "{}", run.stderr());
@@ -588,10 +594,18 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
         custom.last().is_some_and(|l| !has(l, "HILLSIDE")),
         "and not once it is off, the campaign's own track kept: {tracks:?}"
     );
-    assert_eq!(
-        campaign_row_kinds(&run),
-        ["submenu", "action", "submenu"],
-        "NIGHT RUN's picker goes with Hillside off (its event races Hillside) and comes back"
+    let listings = campaign_picker_listings(&run);
+    let has_night_run = |labels: &Vec<String>| labels.iter().any(|l| l == "NIGHT RUN");
+    assert_eq!(listings.len(), 3, "{listings:?}");
+    assert!(
+        has_night_run(&listings[0]) && !has_night_run(&listings[1]) && has_night_run(&listings[2]),
+        "NIGHT RUN's row goes with Hillside off (its event races Hillside) and comes back: {listings:?}"
+    );
+    assert!(
+        listings
+            .iter()
+            .all(|l| l.iter().any(|label| label == "NEW CAMPAIGN")),
+        "the editor's row stays: {listings:?}"
     );
     let why = run.stderr();
     assert!(

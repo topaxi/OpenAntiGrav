@@ -280,6 +280,7 @@ pub fn add_picker(
     definition: &mut oag_ui::menu::Definition,
     listing: &mut [crate::mods::Listing],
     installed: &Installed,
+    title: &oag_title::Title,
     strings: &oag_ui::language::StringTable,
 ) {
     for (mod_id, reason) in &installed.failed {
@@ -303,7 +304,27 @@ pub fn add_picker(
         })
         .collect();
     let (id, english) = crate::mods::words::CAMPAIGN_PICKER;
-    definition.add_campaign_picker(strings.get(id).unwrap_or(english), &rows);
+    let (row_id, row_english) = crate::mods::words::CAMPAIGN_EDITOR;
+    let (sub_id, sub_english) = crate::mods::words::CAMPAIGN_EDITOR_SUBTITLE;
+    let say = |id: &str, english: &'static str| strings.get(id).unwrap_or(english).to_string();
+    let editor =
+        editor_offered(title).then(|| (say(row_id, row_english), say(sub_id, sub_english)));
+    definition.add_campaign_picker(
+        strings.get(id).unwrap_or(english),
+        &rows,
+        editor
+            .as_ref()
+            .map(|(row, sub)| (row.as_str(), sub.as_str())),
+    );
+}
+
+/// Whether the campaign editor is offered on `title`: where mod campaigns draw on the
+/// disc's own hex screens (`Cell Selection`) and not on HD's, which draws another
+/// screen behind the same names. Pulse; HD/Fury and Omega are open
+/// (`docs/formats/custom-campaign.md`).
+#[must_use]
+pub fn editor_offered(title: &oag_title::Title) -> bool {
+    title.campaign.custom_campaigns && !title.campaign.dialect.draws_hd_screens()
 }
 
 /// The records `title` a mod campaign's medals are kept under.

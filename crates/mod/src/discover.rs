@@ -39,9 +39,7 @@ pub fn mods_search_path() -> Vec<PathBuf> {
     let appimage = std::env::var_os("APPIMAGE").map(PathBuf::from);
     let program = std::env::current_exe().ok();
     packaged_mods(appimage.as_deref(), program.as_deref(), &mut paths);
-    if let Some(data) = dirs::data_dir() {
-        paths.push(data.join("oag").join("mods"));
-    }
+    paths.extend(user_mods_dir());
     paths.push(PathBuf::from(TEXTURE_PACKS));
     if let Some(data) = dirs::data_dir() {
         paths.push(data.join("oag").join("texture-packs"));
@@ -50,6 +48,13 @@ pub fn mods_search_path() -> Vec<PathBuf> {
         paths.push(config.join("ppsspp").join("PSP").join("TEXTURES"));
     }
     paths
+}
+
+/// The folder a player's own mods live in, `<data dir>/oag/mods`: on the search path, and
+/// where the game writes the mods it makes (a campaign saved from the editor).
+#[must_use]
+pub fn user_mods_dir() -> Option<PathBuf> {
+    dirs::data_dir().map(|data| data.join("oag").join("mods"))
 }
 
 /// Adds the `mods` folders a packaged build ships: beside the AppImage file (where a

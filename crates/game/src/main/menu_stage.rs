@@ -313,6 +313,9 @@ impl MenuStage {
         if let Some(campaign) = &mut self.campaign {
             campaign.tick_ticker(dt as f32);
             campaign.tick_cards(dt as f32);
+            if let Some(editor) = campaign.editor.as_mut() {
+                editor.pulse.tick(dt as f32);
+            }
         }
         // The selected row's own pulse, measured on Pulse - see
         // `oag_title::MenuSkin::selected_pulse_period_secs`. Free-running like
@@ -712,6 +715,24 @@ impl MenuStage {
             } else {
                 // The ticker's tips draw in the `Default` role.
                 let default_measure = |text: &str| font::measure(&self.default_atlas, text);
+                if let Some(editor) = &campaign.editor {
+                    let faces = &campaign.cell_layout().faces;
+                    let mut footer_overlay = campaign.nav_legend_draw(faces);
+                    let ticker = campaign.ticker_draw(faces, &default_measure);
+                    ticker_draw = ticker.clone();
+                    footer_overlay.extend(ticker);
+                    let shown_rows = editor.shown();
+                    oag_ui_screens::campaign::editor::draw_list(
+                        &shown_rows.view(&editor.pulse, editor.model.cursor()),
+                        campaign.cell_layout(),
+                        &self.skin,
+                        &self.frame,
+                        if frozen_race { None } else { shown },
+                        frozen_race,
+                        &|src| campaign.sprites.get(src),
+                        &footer_overlay,
+                    )
+                } else {
                 match &campaign.screen {
                     // Never built for a non-HD title - see
                     // `crate::campaign_stage::Screen::Selection`'s own doc.
@@ -763,6 +784,7 @@ impl MenuStage {
                         )
                     }
                 }
+                }
             };
             let layers = oag_game::campaign::gate_glow(campaign.frontend_glow, layers);
             let split = layers.backdrop.len();
@@ -788,6 +810,11 @@ impl MenuStage {
                 .collect()
             } else {
                 flat
+            };
+            // The campaign editor's name keyboard, over the screen.
+            let list: Vec<Draw> = match &self.prompt {
+                Some(prompt) => list.into_iter().chain(prompt.draw(&self.skin)).collect(),
+                None => list,
             };
             // The pause overlay's `Fill` above shifts every index by one -
             // `clip` was found against the unshifted list, so it has to
