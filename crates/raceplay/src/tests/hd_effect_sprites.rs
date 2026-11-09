@@ -64,6 +64,7 @@ fn track_blast(listed: bool) -> Option<oag_fx::psys::Effect> {
         false,
         false,
         listed,
+        false,
     )
     .expect("the effect loads");
     Some(effect)
@@ -94,6 +95,7 @@ fn quake(extent_law: bool) -> Option<oag_fx::psys::Effect> {
         false,
         extent_law,
         true,
+        false,
     )
     .expect("the effect loads");
     Some(effect)
@@ -127,6 +129,7 @@ fn missile_head(listed: bool) -> Option<oag_fx::psys::Effect> {
         false,
         false,
         listed,
+        false,
     )
     .expect("the effect loads");
     Some(effect)
@@ -155,4 +158,62 @@ fn the_missile_head_draws_its_ring_atlas_when_listed_and_a_white_disc_when_not()
     assert_eq!(rings(&listed), 2, "both head emitters read the atlas");
     let unlisted = missile_head(false).expect("same image");
     assert_eq!(rings(&unlisted), 0);
+}
+
+fn trail_hit_burst(far_bar: bool) -> Option<oag_fx::psys::Effect> {
+    let image = oag_testdata::image("hdfury-ps3-eu-dec.iso")?;
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    let title: &Title = oag_hd::TITLE;
+    let (effect, _) = particle_effect(
+        &mut archives,
+        title.race.effect_dir_for("track"),
+        oag_title::engine_effects::TRAIL_HITSHIP_EFFECT,
+        false,
+        false,
+        false,
+        far_bar,
+    )
+    .expect("the effect loads");
+    Some(effect)
+}
+
+/// HD, 2048 and Omega list the trail-hit burst for HD's class-6 bar draw; it is a per-effect
+/// choice, not a title-wide one.
+#[test]
+fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw() {
+    use oag_title::engine_effects::{TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT};
+    for title in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
+        assert_eq!(
+            title.effects.far_bars,
+            [TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT],
+            "{}",
+            title.name
+        );
+    }
+}
+
+/// `WO_TRAIL_HITSHIP`'s two emitters are class 6 (`+0x4c8` aspect 1.0 and 2.0). Listed, both
+/// load as HD's bar with their own aspect; unlisted, both stay procedural.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_trail_hit_burst_loads_as_far_bars_when_listed_and_procedural_when_not() {
+    use oag_fx::psys::streak::StreakDraw;
+    let Some(listed) = trail_hit_burst(true) else {
+        return;
+    };
+    let draws: Vec<StreakDraw> = listed.emitters.iter().map(|e| e.streak).collect();
+    assert_eq!(
+        draws,
+        [
+            StreakDraw::FarBar { aspect: 1.0 },
+            StreakDraw::FarBar { aspect: 2.0 }
+        ]
+    );
+    let unlisted = trail_hit_burst(false).expect("same image");
+    assert!(
+        unlisted
+            .emitters
+            .iter()
+            .all(|e| e.streak == StreakDraw::Procedural)
+    );
 }

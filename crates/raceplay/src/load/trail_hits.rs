@@ -66,6 +66,7 @@ pub(super) fn lend(
         from.looks.particle_laws.applies(platform),
         from.effects.extents.contains(&name),
         from.effects.sprites.contains(&name),
+        from.effects.far_bars.contains(&name),
     );
     match loaded {
         Ok((effect, note)) => {

@@ -118,6 +118,7 @@ pub(super) fn particle_effect(
     pulse_psp: bool,
     extent_law: bool,
     gtf_sprites: bool,
+    far_bar: bool,
 ) -> std::result::Result<(psys::Effect, String), String> {
     let path = psys::effect_path_in(dir, name);
     let blob = archives
@@ -195,7 +196,11 @@ pub(super) fn particle_effect(
         if !extent_law {
             effect.without_extents();
         }
-        effect.without_pulse_psp_draw();
+        if far_bar {
+            effect.without_pulse_psp_draw_but_far_bars();
+        } else {
+            effect.without_pulse_psp_draw();
+        }
     } else if effect.name == oag_title::engine_effects::PLASMA_FLARE_EFFECT {
         effect.draw_root_under_alpha();
     }
