@@ -162,14 +162,14 @@ fn a_craft_under_a_speed_pad_lays_two_ribbons_that_fade_out() {
         race.sim.world.ships[0].physics.pad_timer = 0.0;
         race.tick(&PlayerInputs::none());
     }
-    assert_eq!(
-        race.wingtip_vertices(eye)
-            .iter()
-            .map(|v| v.colour[3])
-            .fold(0.0_f32, f32::max)
-            < 0.01,
-        true,
-        "nothing visible two seconds after the pad"
+    let peak = race
+        .wingtip_vertices(eye)
+        .iter()
+        .map(|v| v.colour[3])
+        .fold(0.0_f32, f32::max);
+    assert!(
+        peak < 0.01,
+        "nothing visible two seconds after the pad: {peak}"
     );
 }
 
