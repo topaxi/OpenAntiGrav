@@ -47,15 +47,17 @@ pub struct DrawCall {
     pub moving: bool,
     /// Whether this batch is drawn single-sided, from its own `pass_mask`.
     ///
-    /// **The original culls most of its geometry and this crate culled none of
-    /// it.** Measured on the PSP disc: `01_Track` has 1,632 of 1,734 batches
+    /// **The original culls most of its geometry.** Measured on the PSP disc: `01_Track` has 1,632 of 1,734 batches
     /// culled, `16_Track` 1,613 of 2,079, and `Assegai\Ship.vex` 12 of 14 -
     /// but `shipboost.vex` culls none of its four, so it is genuinely per
     /// batch and not a global setting. It matters most on **transparent**
     /// batches, where a back face is not hidden by the depth test but blended
     /// a second time: 119 of `01_Track`'s 142 transparent batches are
     /// single-sided in the original, so drawing them two-sided doubles their
-    /// contribution. See [`oag_vex::vex::Batch::is_culled`].
+    /// contribution. A blended draw selects its pipeline by this bit; an opaque
+    /// or cutout draw does where the model records material state (HD) or sets
+    /// [`Model::per_batch_cull`] (a Pulse circuit). See
+    /// [`oag_vex::vex::Batch::is_culled`].
     pub culled: bool,
     /// Which blend equation this batch asked for, or `None` when it is not a
     /// transparent batch at all.

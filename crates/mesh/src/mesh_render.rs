@@ -133,10 +133,11 @@ pub struct Built {
     pub cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
     /// The same opaque, prepass and cutout pipelines with back faces culled,
     /// for a draw whose [`crate::mesh::DrawCall::culled`] is set. `Some` only
-    /// for a model that records material state and has such a draw, built by a
-    /// caller that did not ask for [`build_with`]'s model-wide `cull_back`
-    /// (HD's track, whose materials author the cull in state bit 4 - see
-    /// [`crate::mesh::render_state::STATE_CULL`]). The pipelines above stay
+    /// for a model that records material state (HD's track, whose materials
+    /// author the cull in state bit 4 - see [`crate::mesh::render_state::STATE_CULL`])
+    /// or sets [`Model::per_batch_cull`] (a `.vex` circuit, whose batches author
+    /// it), and has such a draw, built by a caller that did not ask for
+    /// [`build_with`]'s model-wide `cull_back`. The pipelines above stay
     /// two-sided, for the draws that are not culled.
     pub culled: Option<SolidSet>,
     /// The sets above again with the velocity write masked, for a
@@ -799,12 +800,12 @@ pub fn build_with(
             cutout_pipelines,
         }
     };
-    // Whether the draws decide for themselves: a PS3 model (it records material
-    // state) whose opaque or cutout draws carry `culled`, on a caller that did
-    // not ask for every draw culled. Pulse's `.vex` models carry `culled` and
-    // no material state, and stay on the model-wide `cull_back`.
+    // Whether the draws decide for themselves: a model whose draws' `culled` the
+    // loader says to honour (`Model::per_batch_cull`, a `.vex` circuit's batches) or
+    // a PS3 model (it records material state), whose opaque or cutout draws carry
+    // `culled`, on a caller that did not ask for every draw culled.
     let per_draw_cull = !cull_back
-        && !model.material_state.is_empty()
+        && (model.per_batch_cull || !model.material_state.is_empty())
         && model
             .draws
             .iter()

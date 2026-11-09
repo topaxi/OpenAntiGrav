@@ -35,6 +35,7 @@ mod airtime_budget_ground_truth;
 mod asset_layers_ground_truth;
 mod autopilot_cancel_ground_truth;
 mod autopilot_original_ground_truth;
+mod batch_cull_ground_truth;
 mod between_ticks_ground_truth;
 mod billboard_adverts_ground_truth;
 mod boost_plume_ground_truth;

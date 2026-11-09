@@ -311,6 +311,7 @@ pub fn build_model(
         shield_shell: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
+        per_batch_cull: false,
         alpha_test_ref: None,
         centre,
         radius,

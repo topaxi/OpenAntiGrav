@@ -478,6 +478,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
             track_model = mesh::build_with_textures(&track, &track_blob, Some(&external))?;
             ps2_track_textures = Some(external);
         }
+        let platform = archives.layout.platform;
+        track_model.per_batch_cull = title.looks.batch_back_face_cull.applies(platform)
+            || title.looks.batch_back_face_cull_carried.applies(platform);
         track_model
     };
     // HD's zoom-streak ring on a title that draws none of its own: the player's
