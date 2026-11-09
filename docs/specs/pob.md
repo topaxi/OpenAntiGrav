@@ -109,7 +109,7 @@ the walk and reject revisits (the largest shipped tree has seven records).
 | +0x9ac | i32 | Not the frame count; reader unknown |
 | +0x9b4 | ptr | Modifier list |
 | +0x9b8 | 32 bytes | Embedded sprite header, PSP only (below) |
-| +0xc84 | f32 | Distortion strength, blend class 8 (Omega) only |
+| +0xc84 | f32 | Distortion strength, blend class 8 (Omega); on a draw class 6 emitter the `kColourScale` of its batch (`WO_TRAIL_HITSHIP`: 0.7, 1.0; Omega's reading) |
 
 Zero bytes between and after these fields (`+0x9f0`, `+0xa70`, `+0xc70`) are
 scratch the loader fills.

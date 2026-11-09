@@ -584,6 +584,7 @@ fn the_loader_draws_the_pulse_psp_heads_arcs_under_the_alpha_over_layer() {
             pulse_psp,
             pulse_psp,
             false,
+            false,
         )
         .expect("the head loads");
         effect.emitters.iter().map(|e| e.under_alpha).collect()

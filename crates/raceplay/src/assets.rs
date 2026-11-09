@@ -104,6 +104,27 @@ pub(super) fn leach_beam_texture(
 }
 
 #[cfg(feature = "view")]
+/// [`particle_effect`] with the per-effect laws a title lists for `name`
+/// (`oag_title::Effects::{sprites, extents, far_bars}`).
+pub(super) fn listed_particle_effect(
+    archives: &mut oag_assets::Archives,
+    dir: &str,
+    effects: &oag_title::Effects,
+    name: &'static str,
+    pulse_psp: bool,
+) -> std::result::Result<(psys::Effect, String), String> {
+    particle_effect(
+        archives,
+        dir,
+        name,
+        pulse_psp,
+        effects.extents.contains(&name),
+        effects.sprites.contains(&name),
+        effects.far_bars.contains(&name),
+    )
+}
+
+#[cfg(feature = "view")]
 /// Reads one `Data\Psys\<name>.POB` out of the archive set and parses it
 /// into a playable effect.
 ///
@@ -118,6 +139,7 @@ pub(super) fn particle_effect(
     pulse_psp: bool,
     extent_law: bool,
     gtf_sprites: bool,
+    far_bar: bool,
 ) -> std::result::Result<(psys::Effect, String), String> {
     let path = psys::effect_path_in(dir, name);
     let blob = archives
@@ -195,7 +217,11 @@ pub(super) fn particle_effect(
         if !extent_law {
             effect.without_extents();
         }
-        effect.without_pulse_psp_draw();
+        if far_bar {
+            effect.without_pulse_psp_draw_but_far_bars();
+        } else {
+            effect.without_pulse_psp_draw();
+        }
     } else if effect.name == oag_title::engine_effects::PLASMA_FLARE_EFFECT {
         effect.draw_root_under_alpha();
     }

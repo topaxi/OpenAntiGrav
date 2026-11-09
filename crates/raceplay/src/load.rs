@@ -851,10 +851,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let start_boost = start_boost.or(code_start_boost);
     #[cfg(feature = "view")]
     for name in craft_title.effects.names_on(archives.layout.platform) {
-        let gtf = craft_title.effects.sprites.contains(&name);
-        let extent_law = craft_title.effects.extents.contains(&name);
         let dir = title.race.effect_dir_for(&track);
-        match particle_effect(&mut archives, dir, name, particle_laws, extent_law, gtf) {
+        match listed_particle_effect(&mut archives, dir, craft_title.effects, name, particle_laws) {
             Ok((effect, note)) => {
                 report.push(note);
                 effects.insert(name, effect);

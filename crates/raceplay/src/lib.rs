@@ -395,7 +395,7 @@ pub use worker::{LoadProgress, LoadWorker};
 #[cfg(feature = "view")]
 pub use assets::{FLARE_TEXTURE, NOISE_TEXTURE};
 #[cfg(feature = "view")]
-use assets::{particle_effect, unrecovered_or_absent, untextured_note};
+use assets::{listed_particle_effect, unrecovered_or_absent, untextured_note};
 
 #[cfg(feature = "view")]
 use camera::target_of;

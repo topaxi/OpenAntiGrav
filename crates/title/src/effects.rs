@@ -362,6 +362,13 @@ pub struct Effects {
     /// effect against a matched capture of the original, never by extension to
     /// the rest of the title's `.pob` files - see `oag_fx::psys::spawn`.
     pub extents: &'static [&'static str],
+    /// Effects whose emitters' own class-6 particles are drawn as HD's view-space bar
+    /// (`oag_fx::psys::streak::StreakDraw::FarBar`) on a source that is not Pulse on the PSP:
+    /// the draw HD's `PartRender` job and Omega's CPU twin build for render mode 5, read on
+    /// `WO_TRAIL_HITSHIP` alone (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The
+    /// class-6 draw law"). An effect not listed keeps the procedural profile for every
+    /// streak; wiring one is a decision made per effect, never by extension to the title.
+    pub far_bars: &'static [&'static str],
     /// How the Quake wave is placed and washes the screen: its frame is read
     /// only for a title whose [`Self::extents`] list `WO_QUAKE`.
     pub quake_look: QuakeLook,
@@ -426,6 +433,7 @@ impl Effects {
         scenery: &[],
         sprites: &[],
         extents: &[],
+        far_bars: &[],
         quake_look: QuakeLook::track(Origin::InheritedFrom("Wipeout Pulse")),
         trail_hits_native: false,
     };
@@ -515,6 +523,7 @@ impl Effects {
         let mut e = Self::NONE;
         e.quake_look = QuakeLook::track(origin);
         e.trail_hits_native = true;
+        e.far_bars = &[n::TRAIL_HITSHIP_EFFECT, n::TRAIL_HITSHIP_RED_EFFECT];
         e.scenery = &[
             n::BLUE_WELDER_EFFECT,
             n::MODESTO_STEAM_EFFECT,
