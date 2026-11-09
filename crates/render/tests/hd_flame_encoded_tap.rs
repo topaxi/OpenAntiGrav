@@ -50,7 +50,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
 
 /// A flame triangle whose texture is one texel of grey `grey` with alpha 0, so
 /// the noise tap displaces nothing.
-fn model(grey: u8) -> Model {
+pub(crate) fn model(grey: u8) -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),

@@ -6,7 +6,9 @@
 //! `Scene::write_frame`): one `queue.write_buffer` instead of one per drawable. **A kind holds
 //! only drawables the frame wrote on every view**: the shield shells, the weapon models and the
 //! sky are never written, or written only while live, and keep a buffer of their own (holding
-//! [`mesh_render::Scene::off`], or what the live weapon last had).
+//! [`mesh_render::Scene::off`], or what the live weapon last had). The one exception is HD's
+//! absorb shell, which is written only while live but reads the craft's block, because its
+//! program needs the output scale, the fog and the clock that block carries.
 
 use super::*;
 

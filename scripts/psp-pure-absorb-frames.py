@@ -14,8 +14,8 @@ from the same state.
     ... --control --out data/scratch/<lane>/cap/pure-control
 
 Each frame is a 480x272 crop of the instance's window (set to its native size), taken with the CPU stopped on the update;
-the displayed frame lags the stop by about two updates (the page's lag). `frames.jsonl` holds the update count and the
-craft's clock step per frame.
+the displayed frame lags the stop by about two updates (the page's lag). `frames.jsonl` holds the update count, the craft's
+clock (`craft + 0x960`) and the absorb stamp (`craft + 0x9ac`, `-10.0` until the absorb) per frame.
 """
 
 import argparse
@@ -36,7 +36,8 @@ RECORD_OFFSET = 0xD0
 CONTROLLER_OFFSET = 0xC8
 BUTTONS_OFFSET = 0x48
 ABSORB_BYTE = 0x16
-FRAME_DT = 0x1C8
+CLOCK = 0x960
+STAMP = 0x9AC
 
 
 def xdo(*args):
@@ -112,7 +113,8 @@ def main():
             craft = a0(dbg)
             holder = dbg.read_u32(craft + RECORD_OFFSET)
             held = dbg.read_u32(holder + HELD_OFFSET)
-            dt = dbg.read_f32(craft + FRAME_DT)
+            clock = dbg.read_f32(craft + CLOCK)
+            stamp = dbg.read_f32(craft + STAMP)
             if args.control:
                 if hit < args.lead:
                     continue
@@ -136,7 +138,7 @@ def main():
             index = hit - zero_at
             name = "f%02d" % index
             shot(args.display, origin, args.out / (name + ".png"))
-            log.write(json.dumps({"frame": index, "hit": hit, "held": held, "dt": dt}) + "\n")
+            log.write(json.dumps({"frame": index, "hit": hit, "held": held, "clock": clock, "stamp": stamp}) + "\n")
             log.flush()
             written += 1
             if written >= args.frames:

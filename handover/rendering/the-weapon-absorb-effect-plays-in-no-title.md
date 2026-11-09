@@ -36,11 +36,11 @@ Re-paired on a second machine on 2026-11-09 (`absorb-fx-wire`); numbers and comm
      item 4, particles end on `/2` and `oag-fx` does not apply it. A `psys` change, held by `hd-trail-hit-wire`.
   3. The `DAMAGE` and `Absorb` labels beside the shield hex (absorb-only not isolated).
 - **Pulse.** The energy bar: the original alternates bright cyan (luma 207) and white (239), both bloomed, 7 to 8 frames each; ours alternates
-  normal (163) and flat white (232), no halo. Not re-measured (the Pulse Single Race state is not on this machine). Confirm at the draw call first (a GE
+  normal (163) and flat white (232), no halo. Not attempted in the last lane (budget; `time-trial-platinum-rush-white-venom-grid.ppst` exists and the same driver should reach it). Confirm at the draw call first (a GE
   dump of the bar's draw: does it stamp the glow mask for the whole window), then wire; the mechanism (`+0xf4 = 0xff`) is confidence 60.
   The first 0.3 s of the hull are one to two frames late and 20 % dim.
-- **2048 and Omega: unpaired.** The shell fix is checked, applies, not wired (neither draws a shell; whether their archives ship an
-  `AbsorbEffect` model is not censused). 2048 has no recovered held-slot or absorb address (HD's are `0x000d9398` and
+- **2048 and Omega: unpaired.** The shell fix is not checkable (neither draws a shell, their archives are not censused for an
+  `AbsorbEffect` model, and their programs are GXP and PS4 bytecode that `ps3-microcode.py` does not read). 2048 has no recovered held-slot or absorb address (HD's are `0x000d9398` and
   `ship+0x5edc`); Omega has none either and its Racebox weapons row is not walked.
 - **Not investigated:** AI absorbs, the PS2 port (VIF hull batches have no GE input coordinates to project), the Pulse overlay residuals
   (`LessEqual` for `EQUAL`, the per-mesh gate, the airbrake projection), the LeachBeam overlay (`leachbeam_surface.mip`), HD's cockpit shell

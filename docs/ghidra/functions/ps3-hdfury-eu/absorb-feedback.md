@@ -288,8 +288,10 @@ on the colour that carries the fog lerp. So the shell is halved like every scene
 ([renderer.md](renderer.md), "Every lit program ends on a /2 output scale"). `oag_mesh`'s absorb branch multiplies by
 `scene.light.output_scale` and the shell reads the craft's scene block (the output scale, the fog and the clock the `5 * time` scroll
 runs on). Craft-box luma of the shell alone at 1.0 s on the `Feisar_c1` hull: original +5.8, ours +13.1 before and +5.8 after
-(`docs/rendering/weapon-absorb-pairs.md`). Confidence 85: the scale is read for all eight blocks, the block the race draws is not seen in a draw.
-2048 and Omega: checked, applies, not wired (no shell is drawn on either; their `.rcsmaterial`s are re-cooked and are read, not assumed).
+(`docs/rendering/weapon-absorb-pairs.md`). Confidence 85: the scale is read for all eight blocks, the block the race draws is not seen in a draw; block #1 (unfogged) has no scale and
+ours halves unconditionally, so a fog-off circuit may draw it at full strength.
+2048 and Omega: not checkable (no shell is drawn on either, not censused, and their programs are GXP and PS4 bytecode that
+`ps3-microcode.py` does not read).
 
 ### Negative result: `AbsorbFader`/`AbsorbScroller` drive nothing on this disc
 

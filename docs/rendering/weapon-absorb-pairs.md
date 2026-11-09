@@ -221,7 +221,9 @@ Two causes found in the path, both from the disc:
    on the material, the scale field), like every scene program of draws 87 to 522
    (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "Every lit program ends on a /2 output scale"). `shade.wesl`'s absorb branch
    now multiplies by `scene.light.output_scale` (0.5 on HD, 1.0 elsewhere). Confidence 85 (the scale field is read for all eight
-   blocks; which block the race draws is the fogged family on Talon's Junction, not seen in a draw).
+   blocks; which block the race draws is the fogged family on Talon's Junction, not seen in a draw). The `/2` is on the fogged blocks
+   only (block #1, the unfogged one, has none) and ours halves unconditionally: a circuit with fog off could draw block #1 at full
+   strength. Talon's Junction matches (+5.8 against +5.8).
 2. **The shell was on a scene block of its own.** The shield and absorb drawables were never given a `SceneKind`, so the shell read
    `Scene::off`: no output scale, no fog, and `scene.time` zero, so the `5 * time` scroll of its texture tap never ran.
    `share_scene_blocks` now puts it on `SceneKind::Ship` (the craft's block). Test:
@@ -229,7 +231,8 @@ Two causes found in the path, both from the disc:
 
 Capture: RPCS3 (Write Color Buffers on, 1760x990 trimmed, compared at 1280x720), the same state, `scripts/rpcs3-hd-absorb-film.py`
 (grant the pickup, hold circle until `craft + 0x7a5c` rises, single game frames, `age = clock - press clock`). One absorb and one
-control (a second absorb run reached its camera on only three frames and was not scored). Craft box `(400,330)-(880,690)`.
+control: a second absorb run restored about 16 units from the first (`x` -115.8 against -132.3), so it has no control at its pose and was
+not scored. Where the pushbuffer gave no camera for a frame (the craft rests), `--camera-from` borrows the run's own (2 of 8 frames had one). Craft box `(400,330)-(880,690)`.
 
 | Age | Original | Ours before | Ours after |
 | --- | --- | --- | --- |
@@ -253,15 +256,17 @@ number for it, not a fix.
 
 ### Pulse: the energy bar (not re-measured)
 
-The Pulse state of the first capture (`race-platinum-white-single-grid.ppst`) is not on this machine and a GE dump of the bar's draw
-(the confirmation the thread asks for before wiring `+0xf4`) was not taken. Nothing changed.
+Not attempted in this lane's budget. The Single Race state of the first capture is not on this machine, but
+`time-trial-platinum-rush-white-venom-grid.ppst` is, and the Pure absorb worked from a Time Trial state, so the same driver should reach it.
+The GE dump of the bar's draw (`psp-absorb-frames.py --ge-dump`), the confirmation the thread asks for before wiring `+0xf4`, was not taken.
+Nothing changed.
 
 ### 2048 and Omega
 
-The shell fix is **checked, applies, not wired**: neither title draws the shell (their effects tables are the unread one, and whether
-their archives ship an `AbsorbEffect` model was not censused), and Omega's `.rcsmaterial` and 2048's are re-cooked, so the `/2` of
-the fogged blocks is not assumed. The Pure overlay is **not checkable** there (Pure is not their lineage). The unpaired reasons
-above stand.
+The shell fix is **not checkable** there: neither title draws a shell (their effects tables are the unread one), their archives were not
+censused for an `AbsorbEffect` model, and their shader programs are Vita GXP and PS4 bytecode, which `ps3-microcode.py` (RSX scale
+fields) does not read, so whether their shell closes on a `/2` is unknown. The Pure overlay is **not checkable** there (Pure is not their
+lineage). The unpaired reasons above stand.
 
 ## 2048 and Omega
 

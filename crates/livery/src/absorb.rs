@@ -78,7 +78,8 @@ pub(super) const LEACH: (&str, &str) = (LEACH_OVERLAY_TEXTURE, "LeachBeam");
 
 /// The hull redrawn under one of the two hull-overlay textures -
 /// `oag_fx::hull_overlay`, [`ABSORB`] or [`LEACH`] - or `None`, reported,
-/// when `wanted` is false (every title but Pulse), when the texture does not
+/// when `wanted` is false (a title with no such overlay: every one but Pulse and Pure, and Pure
+/// for the LeachBeam), when the texture does not
 /// resolve, or when the hull's batches share no one scale (every PS2 hull).
 pub(super) fn overlay(
     archives: &mut oag_assets::Archives,
