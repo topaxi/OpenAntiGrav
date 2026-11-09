@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-06
-summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles and trails; governor is on by default, undoes a useless step, skips per track"
+updated: 2026-11-09
+summary: "CPU-bound devices: GPU-driven draws parked, render bundles measured and dropped; GPU particles and trails left; governor on by default"
 categories: [rendering, tooling]
 size: XL (35)
 difficulty: medium (30)
@@ -76,12 +76,16 @@ frame-thread profile recipe in that section.
      draws per pass than HD's, where the per-draw saving could outweigh the indirect validation's
      fixed per-pass cost again. First count draws per pass on an Omega race (the perf overlay's
      DRAWS line), then A/B the parked branch there, on the workstation and the Deck where Omega runs.
-2. **Render bundles for static scenery and the circuit** (sonnet). Record once, replay per frame
-   (`wgpu-levers-for-per-view-cpu-none-used-yet.md` in this directory). Measure against lane 1: if lane 1
-   already removes the cost, close this one with its number.
-   **Expect lane 1's result**: a bundle also cuts the race pass's `finish`, which the split finish
-   already moved to the worker. Before building it, check on the Deck whether the frame thread
-   waits on that worker for the race pass (`perf --tid`, the recipe in the doc section above).
+2. ~~**Render bundles for static scenery and the circuit**~~ **Measured and not built (2026-11-09,
+   `render-bundles`)**, numbers in `docs/rendering/frame-thread-cpu.md` ("Render bundles for the
+   circuit: measured, not built"). The frame thread does wait on the race pass's `finish`, but the
+   race pass has no static draws a bundle could keep: the circuit's solid list is culled per view
+   (PVS, chunks, frustum per draw, LOD) and repeats on 26 to 29 % of racing frames on HD Anulpha, 50 %
+   on Pulse. Skipping the circuit's solid lists outright saves at most 0.20 ms (HD one view) and 0.55
+   ms (HD two views) of notebook CPU at 800p, 0.07 to 0.08 ms on Pulse; a bundle keeps the driver's
+   share and the culling (about 45 %), so about 28 us a view on HD. Dropping the frustum test lifts
+   reuse to 60 to 70 % (HD) and 94 % (Pulse) for 48 % and 36 % more GPU draws. The only lists that
+   always repeat are the uncull'd `Mesh` drawables (hulls, about 35 draws each on HD).
 3. **Particles on the GPU** (sonnet). Particle state in a storage buffer, advanced or extrapolated in the
    vertex shader (or compute) with one alpha uniform, so `.pob` effects, mist and clouds also draw between
    ticks. Shares its design with item 2 of `drawing-between-ticks-what-is-still-stepped.md`; land them
@@ -174,4 +178,4 @@ top of `park/indirect-depth-prepass` afterwards.
 ## Next Steps
 
 1. Lane 6 (governor) landed, on by default (maintainer, 2026-10-27), and undoes a step that saved nothing and remembers skips per title, track and mode for the launch ([`cpu-governor.md`](../../docs/rendering/cpu-governor.md)).
-2. Lanes 1 to 5 open the next drive in order, each with its Deck before/after.
+2. Lanes 1, 3, 4 and 5 open the next drive in order, each with its Deck before/after (lane 2, render bundles, was measured and dropped).

@@ -1859,3 +1859,108 @@ Pictures: 18 of 18 pairs byte-identical by `cmp` on the Deck, RADV, Pure, Pulse 
 views, ticks 900, 1,500 and 2,400. **Single frames**, which cannot reach a stale buffer. For that the
 evidence is the tests: every drawn vertex carries the whole call's bits, at each clock value and
 whichever view drew it first (`oag_render::shine`), and a pose the buffer holds is not written again.
+
+## Render bundles for the circuit: measured, not built (2026-11-09, `render-bundles`)
+
+Claim: recording the view-invariant race draws (circuit, static scenery, static props) into wgpu
+render bundles and replaying them lowers the frame thread's CPU on HD Anulpha Pass and the Pulse
+default circuit, one view and a two-player split, with pictures byte-identical. **False as
+stated**: the race pass has almost no view-invariant draws, and what a bundle could save is under
+the 0.3 ms resolvable floor of a split on the Deck. Nothing was built and no bundle A/B was run.
+
+**Bundles can carry what our draws use.** wgpu-core 30.0.1 records `SetImmediate` in a bundle
+(`command/bundle.rs`), so the bindless per-draw material row is no blocker. Executing a bundle still
+merges its usage scope into the pass, registers its texture init actions and replays one driver draw
+per recorded draw (`command/render.rs`, `execute_bundle`). It skips wgpu-core's per-command
+validation and tracking, and our own command recording.
+
+**Does the frame thread wait on the race pass's `finish`?** Yes, already measured: one view was bound
+by the finishing worker before the second finishing thread ("Where the frame thread goes, before the
+cuts" and "A second finishing thread" above, HD `submit` 3.48 to 2.63 ms), and in a split HD's
+`submit` phase is 3.8 ms, about 2 ms of it waiting on a view's scene pass, which is one `finish`
+(`split-screen.md`, "What is left"). So a cheaper race pass would reach the frame thread. The
+question is how much a bundle makes it cheaper.
+
+**What is view-invariant.** Nothing that is static in the claim's sense:
+
+| `Draw` kind | What varies per view or frame |
+| --- | --- |
+| `Track` (circuit, with HD's and Pulse's scenery) | PVS set, chunk set, a frustum test per draw, the `LodGroup` choice per view, the hidden set, the blended list's depth sort, the flare interleave |
+| `Culled` (pads, weapon pads, gantry) | a frustum test per draw; under one draw a frame |
+| `Mesh` (hulls, weapons, wrecks) | which ones draw (the hull's frustum test, live weapons); a drawn one's own list is fixed |
+| the sky (inside `Track`) | nothing: a few draws |
+
+**How often a view's list repeats.** A throwaway counter (not committed) hashed the sequence of draw
+calls `Drawable::draw_lists` issued for each drawable and view (the shaded opaque draws with their
+cull mode and class, the cutout draws, the blended order and the flare inserts; the prepass's depth
+order left out, since it cannot change a pixel) and counted the frames where it equalled the same
+view's previous frame. A second hash took the same lists with the frustum test left out (the PVS,
+chunk, LOD and hidden tests kept). Release build, `--race --mode single_race --seed 1 --autopilot
+--size 1280x800 --ticks 3000` through the whole-race bench path (`OAG_RENDER_BENCH_RACE`, one frame
+a tick), frames 600 to 3,000 (racing, past the grid):
+
+| Circuit list, per view | draws a frame | repeats | without the frustum test: draws | repeats |
+| --- | ---: | ---: | ---: | ---: |
+| HD Anulpha, solid (opaque + cutout), one view | 680 | 26 % | 1,004 | 60 % |
+| HD Anulpha, solid, two views (view 0 / view 1) | 700 / 706 | 27 / 29 % | 1,004 / 1,008 | 60 / 70 % |
+| HD Anulpha, blended | 72 | 84 % | | |
+| Pulse `16_Track`, solid, one view | 190 | 50 % | 258 | 94 % |
+| Pulse, solid, two views | 195 / 196 | 51 / 50 % | 258 | 94 % |
+| Pulse, blended | 26 | 16 % | | |
+| Pure default, solid, one view | 163 | 60 % | 220 | 96 % |
+
+The uncull'd `Mesh` drawables repeated on every frame: six of 32 to 41 draws on HD (hull sized),
+the rest one to eight. At 90 fps a frame moves less than a tick, so the Deck would repeat somewhat
+more often; not measured.
+
+**The ceiling: the circuit's solid lists at no cost.** A measure-only switch returned from
+`draw_lists` before the circuit's solid lists (the picture loses the circuit; the GPU work goes too,
+so only 800p is read). Same race arguments with `--ticks 2400`, `taskset -c 0-5` (the notebook's
+six P cores), arms interleaved and reversed each round, 3 rounds, load 1.1 to 3.0, mean `cpu_us` per
+frame (record plus finish and submit, all on one thread: this hybrid CPU takes no split finish, no
+reaper thread and interleaved split recording):
+
+| 800p, us | with | without | saved (per round) |
+| --- | ---: | ---: | --- |
+| HD one view | 2,271 | 2,075 | 240, 116, 234 |
+| HD two views | 3,715 | 3,165 | 521, 503, 628 |
+| Pulse one view | 1,032 | 955 | 92, 52, 88 |
+| Pulse two views | 1,616 | 1,548 | 81, 39, 83 |
+
+At 1080p and 4K the HD saving grows with the GPU work it also removes (one view 232 and 1,043 us),
+and Pulse's is inside the noise (-3 and +2 us one view).
+
+**A bundle saves about half of that ceiling on a frame that reuses it.** A flat `perf record -e
+cpu-clock:u -F 999` of both arms, HD one view, 800p, the main thread: of the 613 samples the
+switch removed, 136 were the NVIDIA driver and about 100 our own culling (`draw_lists_into`,
+`pvs::visible`, the prepass sort). A bundle replays the same driver draws and still needs the
+culling to know whether its list changed. What it removes is wgpu-core's per-draw work
+(`render_pass_draw_indexed`, `State::is_ready`, `flush_bindings_helper`, `VertexState::validate`,
+`TextureUsageScope::merge_single`) and the copies behind it, about 55 %.
+
+**So, per view on this notebook**: HD 0.55 x 197 us x 26 % = about 28 us a frame with today's
+culling; about 45 us with the frustum test dropped (60 % reuse, less the driver's replay of 324
+more draws). Pulse 21 and 40 us. The 55 % is read off a whole-process profile in which unrelated
+symbols (inflate, physics) moved by about 100 samples between the arms, so it is good to about 15
+points; even a bundle that removed the whole ceiling would give HD about 51 us a view at 26 % reuse
+and Pulse about 39 us at 50 %. A frame whose list changed records a bundle, finishes it and then
+executes it, which costs more than today's draws, so these are upper bounds. The Deck's CPU is
+several times slower (the ratio for this work is not measured); at four to five times, HD one view
+is 0.13 to 0.2 ms of CPU spread over the frame thread and the finishing threads, and a split twice
+that. The indirect lane's colour and depth halves,
+which removed more per draw over the same thousand draws, measured 0.08 to 0.30 ms in the shipped
+split and called it the floor ("Re-measured under an interleaved split").
+
+**Dropping the frustum test to make the list repeat** (draw what the PVS keeps and let the GPU clip
+what is off screen) would keep the picture, since a draw whose bounding sphere lies outside a plane
+puts no fragment down. It adds 48 % of the circuit's solid draws on HD and 36 % on Pulse to the
+GPU, which bounds the Deck at 1080p and 4K, to buy at most about 0.2 ms of CPU. Not built.
+
+**Where the frame thread's time is instead** (above, and "What is left of the frame thread on the
+Deck"): `prepare_view` (3.45 of 8.2 ms on Anulpha, uniform builds and image blends), the encoder
+drops in `maintain`, the `write_buffer` staging, the post chain's passes and 1.0 to 1.6 ms of
+system time a frame that a user-space profile cannot see.
+
+**Not measured here**: the Deck was not reachable from the lane's shell (no `deck` or `steamdeck`
+host), and this notebook has no gamescope, so `frame-phases` was not read; the bench's `cpu_us` is
+the proxy. Since nothing was built, there was no arm to run at 800p, 1080p and 4K on the Deck.
