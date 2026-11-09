@@ -43,7 +43,7 @@ rtrb = "0.4.0"
 
 # The HRTF convolver for `SpatialMode::Headphones` (`binaural`). Pure Rust; the
 # impulse responses are ours to ship (assets/audio/hrtf/README.md).
-hrtf = "0.9.0"
+hrtf = "0.10.0"
 
 # The default output's kind on Linux, pushed by PipeWire's registry
 # (`route::live`). The same version cpal's `pipewire` feature builds, since
