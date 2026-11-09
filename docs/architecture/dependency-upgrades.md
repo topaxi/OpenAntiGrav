@@ -35,16 +35,16 @@ no clean lap: []
 ```
 
 Per-lap and end-of-run shield: this test prints neither (it prints lap time,
-laps, respawns and tick count), so no shield figure is claimed. Its run time
-was 10.97 s on the baseline at load 1.7 and 6.7-6.8 s on this branch at load
-about 10 (three runs), so no simulation slowdown comes from the upgrade.
+laps, respawns and tick count), so no shield figure is claimed. The lap table
+above is the evidence; its run time is not compared across the two trees (the
+baseline run came straight after a build, the later ones warm).
 
-Suite time: `just test-data` took 476 s here against 438 s on the baseline
-(ceiling 450 s), at a 15-minute load average of 25 (a browser and a wine
-server were running). The per-test times moved both ways (some race
-simulations +10 to +23 s, some -7 to -9 s), the race test above got faster,
-and every one of the 11,633 tests passed; read the ceiling overshoot as load,
-not as a dependency.
+Suite time: `just test-data` is 438 s on the baseline (ceiling 450 s). On this
+branch the first run took 476 s at a 15-minute load average of 25 (a browser
+and a wine server were running) and failed only `check-test-budget`; a second,
+full run (`OAG_TEST_DATA_FULL=1`, all 119 binaries, 11,633 tests, all passed)
+took 432 s at 1-minute loads of 7.6 at the start and 12.7 at the end. So the
+upgrade does not push the suite past its ceiling; the 476 s was machine load.
 
 Not compiled: the optional `native-video` feature (`gstreamer` 0.25.4 and
 its `-sys` crates took lockfile bumps), `ballisticng` beyond `just lint`, and
@@ -102,7 +102,7 @@ used:
 
 ## Lockfile-only upgrades (semver-compatible)
 
-`cargo update` took 112 more packages to their newest compatible release,
+`cargo update` took 113 more packages to their newest compatible release,
 removing `defmt`, `objc2` 0.5/0.6 and `pin-utils` from the tree and adding
 none (commit `1a5547382`; `cargo check --workspace --all-targets` is clean).
 Changelogs were fetched from GitHub (`CHANGELOG.md` / release notes / the
