@@ -73,7 +73,8 @@ impl Race {
         }
     }
 
-    /// Flies every opponent as `entry`, tempered by `difficulty` - a mod
+    /// Flies every opponent as `entry`, tempered by `difficulty` (and a score race's
+    /// `crate::score_pace`) - a mod
     /// campaign event's pilot (ADR-0077), set once after [`Self::start`] and
     /// before the first tick. The pilot's digest replaces each opponent's in
     /// the world, so the state hash names the pilot as `start`'s own deal does.
@@ -82,7 +83,11 @@ impl Race {
         entry: &crate::pilots::Entry,
         difficulty: oag_ai::Difficulty,
     ) {
-        let tempered = difficulty.temper(&entry.pilot);
+        let tempered = crate::score_pace::ScorePace::temper_opponent(
+            self.sim.score_pace,
+            difficulty,
+            &entry.pilot,
+        );
         for pilot in Arc::make_mut(&mut self.sim.ai_pilots).iter_mut().skip(1) {
             *pilot = tempered;
         }
