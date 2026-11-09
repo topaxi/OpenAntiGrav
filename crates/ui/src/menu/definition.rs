@@ -907,6 +907,15 @@ impl Definition {
                 !matches!(entry.setting(), Some("race.kill_target" | "race.weapons"))
             });
         }
+        // The TARGET row is the score Eliminator's own: a title whose Eliminator ends on kills
+        // has the KILLS row (or none) and no slider to read.
+        let scores = matches!(
+            title.eliminator.value,
+            oag_title::eliminator::EliminatorRule::Score(_)
+        );
+        if !scores && let Some(page) = self.pages.iter_mut().find(|page| page.id == "race") {
+            page.retain_rows(|entry| entry.setting() != Some("race.score_target"));
+        }
         // Both screens, for a title that authors them in files of its own
         // (Wipeout HD/Fury): with only one of the two, the other pick would
         // have no screen to be made on and its row stays.

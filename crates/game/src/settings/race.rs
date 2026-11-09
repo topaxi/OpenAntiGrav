@@ -76,6 +76,11 @@ pub struct Race {
     /// Eliminator; see [`Self::eliminator_kill_target`].
     #[serde(default)]
     pub kill_target: String,
+    /// The Eliminator score target the `TARGET` row holds, as the disc's slider steps spell it
+    /// (`"200"` to `"600"` on HD), or empty for "untouched", which races the slider's minimum.
+    /// Read only in an Eliminator; see [`Self::eliminator_score_target`].
+    #[serde(default)]
+    pub score_target: String,
     /// The `WEAPONS` row's pick, as the disc's own `Weapons` list spells it
     /// (`"On"` or `"Off"`), or empty for "untouched", which is the list's
     /// authored default (`On`). Read only in a single race, the one mode whose
@@ -128,6 +133,7 @@ impl Default for Race {
             variant_chosen: false,
             skin: String::new(),
             kill_target: String::new(),
+            score_target: String::new(),
             weapons: String::new(),
             window_seats: String::new(),
             window_monitors: Vec::new(),
@@ -163,6 +169,16 @@ impl Race {
     pub fn eliminator_kill_target(&self, mode: oag_race::Mode) -> Option<u32> {
         (mode == oag_race::Mode::Eliminator)
             .then(|| self.kill_target.parse().ok())
+            .flatten()
+    }
+
+    /// The score target a launch in `mode` carries: the `TARGET` row's pick in an Eliminator,
+    /// and `None` in every other mode or while the row is untouched, which leaves the
+    /// slider's minimum to `oag_raceplay::score_law`.
+    #[must_use]
+    pub fn eliminator_score_target(&self, mode: oag_race::Mode) -> Option<u32> {
+        (mode == oag_race::Mode::Eliminator)
+            .then(|| self.score_target.parse().ok())
             .flatten()
     }
 

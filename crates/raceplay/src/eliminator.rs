@@ -108,6 +108,13 @@ pub(super) fn eliminator_respawn_delay(is_player: bool) -> f32 {
 }
 
 impl Race {
+    /// What this race's Eliminator ends on: kills on a kill rule, points on a score rule. The
+    /// kill-count default where the race was handed none.
+    #[must_use]
+    pub fn eliminator_target(&self) -> u32 {
+        self.sim.eliminator_kill_target
+    }
+
     /// Brings a destroyed craft back, on the terms its mode sets.
     ///
     /// **Only the Eliminator brings one back.** Every craft there returns after

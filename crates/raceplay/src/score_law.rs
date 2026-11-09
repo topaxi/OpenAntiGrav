@@ -91,7 +91,8 @@ fn target(
         .read_name(rule.race_setup)
         .ok()
         .and_then(|blob| oag_tables::fexml::text(&blob).ok())
-        .and_then(|xml| oag_tables::race_setup::slider_min(&xml, "Eliminations"));
+        .and_then(|xml| oag_tables::race_setup::slider(&xml, "Eliminations"))
+        .map(|slider| slider.min);
     if authored.is_none() {
         report.push(format!(
             "{}: no Eliminations slider - this Eliminator has no target",

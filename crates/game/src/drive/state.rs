@@ -114,6 +114,9 @@ pub struct Resolved {
     /// What the first person's craft holds (`Weapon::as_type`), on `stage=race`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pickup: Option<String>,
+    /// The kills or points an Eliminator ends on, on `stage=race` in that mode.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<u32>,
 }
 
 /// Everything reported after one frame.
@@ -215,7 +218,7 @@ impl State {
     /// focused row's id, setting and label, so `focus=launch` and `focus="LAUNCH RACE"` both hold.
     ///
     /// Keys: `stage`, `frontend`, `map_event`, `page`, `screen` (the overlay kind, `page` when none),
-    /// `screen.id`, `title`, `focus`, `opening_reads`, and `race.title|track|track_file|team|variant|mode|source|craft_source`.
+    /// `screen.id`, `title`, `focus`, `opening_reads`, and `race.title|track|track_file|team|variant|mode|source|craft_source|target`.
     #[must_use]
     pub fn get(&self, key: &str) -> Vec<String> {
         let screen = self.screen.as_ref();
@@ -257,6 +260,7 @@ impl State {
                     Some("team") => one(race.team.clone()),
                     Some("variant") => one(race.variant.clone()),
                     Some("mode") => vec![race.mode.clone()],
+                    Some("target") => race.target.iter().map(u32::to_string).collect(),
                     Some("source") => vec![race.source.clone()],
                     Some("craft_source") => one(race.craft_source.clone()),
                     _ => Vec::new(),
@@ -304,6 +308,7 @@ impl State {
                     | "mode"
                     | "source"
                     | "craft_source"
+                    | "target"
             )
         })
     }

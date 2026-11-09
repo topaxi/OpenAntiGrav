@@ -837,6 +837,7 @@ impl Session {
             "race.track" => self.settings.race.track = text,
             "race.variant" => self.settings.race.variant = text,
             "race.kill_target" => self.settings.race.kill_target = text,
+            "race.score_target" => self.settings.race.score_target = text,
             "race.weapons" => self.settings.race.weapons = text,
             "ai.difficulty" => self.settings.ai.difficulty = text,
             _ if setting.starts_with("mod.") => {

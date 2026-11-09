@@ -338,6 +338,18 @@ setting = "race.kill_target"
 values_from = "kill_targets"
 disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race", "head_to_head"] }
 
+# The race box's `TARGET` row, HD's Eliminator score target: the values are the steps of the
+# disc's own `Eliminations` slider (`oag_game::boot::RaceSetup::score_targets`, `200` to `600`
+# by `20`). It stands where `KILLS` does and only a title whose Eliminator ends on a score offers
+# it (`Definition::drop_rows_picked_on_screen`); the original enables it in an Eliminator alone.
+[[page.entry]]
+kind = "choice"
+label = "TARGET"
+string_id = "OAG_RACE_TARGET"
+setting = "race.score_target"
+values_from = "score_targets"
+disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race", "head_to_head"] }
+
 # Live in Zone too: every craft flies the one Zone hull, but the team is the one the race and
 # its loyalty credit use, and on some titles the paint on that hull
 # (`oag_title::ZoneTeamStep`). VARIANT below stays greyed there - the hull has no variant to pick.

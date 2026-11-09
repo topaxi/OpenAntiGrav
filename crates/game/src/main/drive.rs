@@ -420,6 +420,9 @@ fn resolved(session: &Session) -> Option<Resolved> {
         team: options.team.clone(),
         variant: options.hull_variant.clone(),
         mode: options.mode.name().to_string(),
+        target: race
+            .filter(|_| options.mode == oag_race::Mode::Eliminator)
+            .map(oag_raceplay::Race::eliminator_target),
     })
 }
 

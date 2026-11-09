@@ -201,8 +201,8 @@ impl Pending {
             // The saved KILLS row, for an Eliminator only; no CLI flag names
             // one. See `race::Options::eliminator_kill_target`.
             eliminator_kill_target: self.settings.race.eliminator_kill_target(self.mode),
-            // The campaign is its only writer.
-            eliminator_score_target: None,
+            // The saved TARGET row, for an Eliminator only; the campaign's cell overwrites it.
+            eliminator_score_target: self.settings.race.eliminator_score_target(self.mode),
             // `None` for the same reason - the campaign is the only writer
             // of this field. See `race::Options::laps_override`.
             laps_override: None,

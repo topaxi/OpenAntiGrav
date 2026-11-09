@@ -121,6 +121,10 @@ fn pulse() -> Option<PathBuf> {
     oag_testdata::image("pulse-psp-eu.chd")
 }
 
+fn hd() -> Option<PathBuf> {
+    oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")
+}
+
 fn text<'a>(state: &'a Value, path: &[&str]) -> Option<&'a str> {
     path.iter()
         .try_fold(state, |at, key| at.get(key))
@@ -209,6 +213,32 @@ fn the_race_box_launches_the_track_and_craft_it_was_told_to_pick() {
         screens.contains(&"track-select") && screens.contains(&"ship-select"),
         "{screens:?}"
     );
+}
+
+/// HD's Racebox TARGET row (its `Eliminations` slider, `200` to `600` by `20`) reaches the race:
+/// an Eliminator launched with 400 ends on 400 points, not the slider's minimum. Fails on a build
+/// that drops the row's pick on the way to the loader.
+#[test]
+#[ignore = "needs an HD disc image in data/images/"]
+fn the_race_box_target_row_sets_what_an_hd_eliminator_ends_on() {
+    let Some(image) = hd() else {
+        return;
+    };
+    let run = drive(
+        &image,
+        "hd-target",
+        "boot; select racebox; press cross; until page=race; \
+         set race.mode=eliminator; set race.score_target=400; \
+         select launch_race; press cross; \
+         until screen=picker; press cross; \
+         until screen.id=ship-select; press cross; \
+         until stage=race within 3000; ticks 5",
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let race = &run.last()["race"];
+    assert_eq!(text(&run.last(), &["race", "mode"]), Some("eliminator"));
+    assert_eq!(race["target"].as_u64(), Some(400), "{race}");
 }
 
 /// A Race Box race runs the example simulation mods in a build with the `extensions`

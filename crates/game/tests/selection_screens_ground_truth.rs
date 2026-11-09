@@ -919,6 +919,24 @@ fn the_kills_row_offers_the_discs_own_eliminations_list() {
     );
 }
 
+/// HD's `Eliminations` is a `Slider` (`minSlide` 200, `maxSlide` 600, `incSlide` 20), and the
+/// TARGET row offers its steps. Fails if the file is not read or the steps are a const here.
+#[test]
+#[ignore = "needs an HD disc image in data/images/"]
+fn the_target_row_offers_the_steps_of_hds_eliminations_slider() {
+    let Some(path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let setup = shell(&path).race_setup;
+    let want: Vec<String> = (200..=600).step_by(20).map(|n| n.to_string()).collect();
+    assert_eq!(setup.score_targets, want);
+    assert!(
+        setup.kill_targets.is_empty(),
+        "a slider is not the KILLS list: {:?}",
+        setup.kill_targets
+    );
+}
+
 /// HD and Omega author the line that asks the second person to join (`FE_GUEST_JOIN`), and the
 /// join screen says it for seat 2 in the title's own words: "PLAYER 2 PRESS START TO JOIN" on HD,
 /// "... PRESS OPTIONS TO JOIN" on Omega. Dropping the `guest` label fails both.

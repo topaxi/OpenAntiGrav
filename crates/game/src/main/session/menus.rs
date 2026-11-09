@@ -664,8 +664,8 @@ impl Session {
         // The campaign writes both fields - see
         // `Session::launch_campaign_cell` - and a RACE-page launch must
         // never inherit one left over from a campaign cell that was backed
-        // out of before racing. The kill target is then set from the KILLS
-        // row below.
+        // out of before racing. The kill and score targets are then set from
+        // the KILLS and TARGET rows below.
         race_options.eliminator_kill_target = None;
         race_options.eliminator_score_target = None;
         race_options.laps_override = None;
@@ -695,6 +695,21 @@ impl Session {
         // The KILLS row's pick, for an Eliminator only.
         race_options.eliminator_kill_target =
             self.settings.race.eliminator_kill_target(race_options.mode);
+        // The TARGET row's pick, for an Eliminator only. A stored value this disc's slider does
+        // not step through (a hand edit, a pick from another source) races the minimum, as the
+        // row shows.
+        race_options.eliminator_score_target = self
+            .settings
+            .race
+            .eliminator_score_target(race_options.mode)
+            .filter(|target| {
+                self.shell.as_ref().is_some_and(|shell| {
+                    shell
+                        .score_targets
+                        .iter()
+                        .any(|choice| choice.value == target.to_string())
+                })
+            });
         let chosen = self.shell.as_ref().and_then(|shell| {
             shell
                 .track(race_options.mode, &self.settings.race.track)
@@ -1041,6 +1056,7 @@ impl Session {
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
+        model.supply(menu::ValueSource::ScoreTargets, &shell.score_targets);
         model.supply(menu::ValueSource::Weapons, &shell.weapons);
         model.supply(
             menu::ValueSource::HudStyles,
