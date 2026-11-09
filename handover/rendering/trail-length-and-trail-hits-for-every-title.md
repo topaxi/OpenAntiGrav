@@ -26,7 +26,12 @@ effects.
   when an HD source is mounted, a title's own effect only if one is found; with neither, it draws
   nothing and says so in the loader report. Omega's twin is already "checked, applies"
   (`engine-trail.md`). It shares `advance_trail_hits` with the fidelity lane, so it starts after
-  that lane merges.
+  that lane merges. **Already title-generic:** `advance_trail_hits` and the posed-frame warm-up in
+  `Race::warm_up_field` both key on `view.hd_trail_active`, not a title name. The burst's look is
+  `WO_TRAIL_HITSHIP`'s two emitters off the disc plus the particle system's class-6 streak draw
+  (unread, not HD-specific). Each of Pulse, Pure, 2048 and Omega needs its own hit effect, or a
+  deliberate reuse of HD's, named as a `Trigger` in its effect table. Omega's `.pob` copy is not
+  parsed yet.
 
 ## Next Steps
 
