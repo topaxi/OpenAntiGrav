@@ -113,6 +113,10 @@ debt:
 threads *args:
     python3 -I scripts/handover-threads.py {{args}}
 
+# Delete data/scratch lane dirs untouched for 7 days (`--days N`, `--yes`); lists first
+clean-scratch *args:
+    python3 -I scripts/clean-scratch.py {{args}}
+
 fmt:
     cargo fmt --all
 
