@@ -379,12 +379,11 @@ pub struct Effects {
     /// [`Self::far_bars`] draws the far bar.
     pub pool_bars: &'static [&'static str],
     /// Effects whose sprite templates (`oag_fx::psys::Effect::add_templates`) play on a source
-    /// that is not Pulse on the PSP. Pure's template draw is Pulse's: `FUN_08875138` dispatches
-    /// class 3 to `FUN_08872e50`, `ParticleSystem_DrawRotatedSprite`'s twin, over a sampler and an
-    /// instance initialiser that match Pulse's step for step
-    /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw"). An effect not
-    /// listed keeps its templates muted; wiring one is a decision made per effect against a matched
-    /// capture, never by extension to the title.
+    /// that is not Pulse on the PSP. An effect not listed keeps its templates muted; wiring one is a
+    /// decision made per effect against a matched capture, never by extension to the title. No title
+    /// lists one yet: Pure's template draw, sampler and initialiser are Pulse's
+    /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw"), but its absorb burst
+    /// drew far too bright at 0.75 s with them on, and why is unread.
     pub templates: &'static [&'static str],
     /// How the Quake wave is placed and washes the screen: its frame is read
     /// only for a title whose [`Self::extents`] list `WO_QUAKE`.

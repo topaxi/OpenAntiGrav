@@ -55,11 +55,11 @@ encoding differs, and the floats carry no `x8` quantisation (Pulse's grid is `1/
 | Emitter | Role | Read |
 | --- | --- | --- |
 | `WO_WEAPON_ABSORB` | the streak: class 6, life 7 ticks, `20` ticks of `3` per tick, colour mode over-life (the table is purple `(109, 22, 167)` to magenta `(181, 14, 147)`), `res+0x4c8` aspect **2.0**, size keyframed to `0.16128`, resource flag `0x2000000` (the streak's far end stays at the spawn), spawn probability `0.1`, 64x64 sprite | drawn on Pure as the bar of this page |
-| `ring1` | a **template** (`template: true`), render mode 2 = **class 3**, additive, 64x64 sprite, size `0.96..1.152`, alpha `0..100`, life 50 ticks, stretch `+0xf0` constant, roll keyframed | played on Pure since the template draw below |
-| `glow` | a template, class 3, additive, 64x64 sprite, life 30 ticks, stretch keyframed, roll keyframed | played the same way |
+| `ring1` | a **template** (`template: true`), render mode 2 = **class 3**, additive, 64x64 sprite, size `0.96..1.152`, alpha `0..100`, life 50 ticks, stretch `+0xf0` constant, roll keyframed | muted on Pure (held off, see "What is still open") |
+| `glow` | a template, class 3, additive, 64x64 sprite, life 30 ticks, stretch keyframed, roll keyframed | muted the same way |
 
 So the earlier reading "one emitter, no `rings` emitter" (this page's predecessors, [`hull-overlay.md`](hull-overlay.md), "Pure's POB",
-and `weapon-absorb-pairs.md`) counted the streak alone: the file does author a ring and a glow, and they are played now (next section).
+and `weapon-absorb-pairs.md`) counted the streak alone: the file does author a ring and a glow, and the draw that plays them is Pulse's (next section).
 
 ## The template draw is Pulse's (static, `/pure/BOOT-psp-pure-usa.BIN`)
 
@@ -77,27 +77,42 @@ Four functions, each read against its Pulse twin (`/pulse/BOOT-psp-pulse-usa.BIN
 
 `ring1` and `glow` are both render mode 2, so class 3: the branch that is the same routine on both executables, not the inline quad of classes 1 and 2
 (`FUN_08872d18`, unread here). `oag_fx::psys::template` already plays that law (`DrawRotatedSprite` quad, roll, stretch, sprite of its own), so enabling
-it for Pure is data, not code (`oag_title::Effects::templates`).
+it for Pure is data, not code (`oag_title::Effects::templates`); **no title lists one yet**, because Pure's absorb burst with them on was
+far too bright at 0.75 s (`docs/rendering/weapon-absorb-pairs.md`) and the reason is unread.
 
 **Not read: the global byte at `0x08a8f604`.** `FUN_08875138` calls `FUN_08874090(res+0x878)` before and `FUN_08874114` after the draw when it is
 non-zero. [`quake.md`](quake.md) names the byte as the VR-build gate for `WO_QUAKE_VR`; the effect node's draw (`FUN_08872690`) saves it and clears it for a
 node whose flag `+0x140 & 8` is set. The writers are `FUN_08847a54` and `FUN_08848bf8` (the craft code). A normal race is taken to run with it clear;
 this was not watched live, and the two helpers (they change depth and blend state) are unread.
 
-**What is still open (below 50).** Where the templates spawn and how often: the pair shows ours drawing them for every one of the eight staggered
-nodes of `ABSORB_BURST` and the original showing a glow and a ring mostly in the first half second. And the ground ring: the original's ring is a flat
+**The burst's stagger is a node delay, not a late spawn (static, confidence 80).** `FUN_08925e20` (the absorb burst, `rocket-and-collision-fx.md`) loops
+eight times, writing `i * 0.1` into the global `0x08a8f5c0` and calling `ShipCollisionFx_Trigger`. The spawn `FUN_08872894` makes the instance
+(`FUN_0893af74` then `FUN_0893d848`, so the templates exist) **at once** for every node and stores the global in the node's `+0x198`. The node's update
+`FUN_08872400` counts `+0x198` down by `dt` and returns before it moves the node or calls the instance update (`FUN_0893db48`, `ParticleSystem_Update`'s twin) while it
+is above zero; the node's submit `FUN_0887206c` draws nothing while it is above zero. So node `i` ages and draws from `i * 0.1` s, which is how ours schedules it
+(`oag_title::Burst::Sequential`): the stagger is **not** the cause of the 0.75 s excess. Pulse's burst is the same shape.
+
+**What is still open (below 50).** Why the original shows one faint glow at 0.75 s where ours, with the templates on, shows two saturated wingtip glows
+(+17.0 craft-box luma against +3.1). Candidates not settled: the severity the templates are sampled at (`instance + 0x34`, read through the handle),
+what draws the original's ground ellipse, and the global byte at `0x08a8f604`. And the ground ring: the original's ring is a flat
 ellipse on the road around the craft; `ring1` is a camera-facing class-3 quad, so it cannot be that ellipse by itself, and ours shows no ring.
-Recipe to settle both: break on `FUN_08875138` (`0x08875138`) on PPSSPP with the Pure state `pure-single-vineta-feisar-race.ppst`, press the absorb, and
-log per hit `particle+0x5c` (roll), `+0x30` (size), `+0x64` (aspect), the position `+0x00..0x08` and `res+0x874` (and `*(res+0x890)` for the sprite),
-frame by frame over 45 ticks; the count of distinct positions per frame gives the spawn pattern.
+
+**Live attempts that did not read it (do not repeat as written).** On PPSSPP 1.20.4 every execution breakpoint armed after the ship-update
+loop (`FUN_08875138`, `FUN_088756bc`, `FUN_088746c8`, `FUN_0893d848`, `FUN_0893f808`, `FUN_08925e20`) delivered its first stop 1.7 to 20 craft-clock
+units late, so "no hit in the first second" says nothing about the burst; and the craft clock at `+0x960` is not seconds. The handle table at
+`*(manager + 0x4694)` (`FUN_0893892c`: records of `0xc` bytes, `ptr, id, generation`; capacity `0x200`) read empty at every stop of an absorb, and a heap scan for
+the burst's resource found no instance pointing at it, so the instance is not reachable that way. A passive recipe that should work: at each
+`Ship_UpdateWeapons` stop (the one breakpoint that fires reliably, `0x0892935c`, frames counted by hit index) screenshot the window, and scan RAM for
+`0x80`-byte template particles whose `+0x44` is the template record of `ring1` or `glow` and whose `+0x50` is `50` or `30`.
 
 ## Wired
 
 `oag_title::Effects::pool_bars` lists the effects whose class-6 emitters keep the bar on a source that does not take Pulse's PSP
 laws as a whole; Pure lists `WO_WEAPON_ABSORB` (`oag_pure::effects::EFFECTS`). Pulse's PSP is unchanged (it takes every law),
 HD, 2048 and Omega list none (their class-6 draw is HD's render-mode 5 far bar, `far_bars`).
-`oag_title::Effects::templates` lists the effects whose sprite templates play on a source that is not Pulse's PSP; Pure lists `WO_WEAPON_ABSORB`
-(`oag_fx::psys::streak::Kept`). Test: `crates/raceplay/src/tests/pure_absorb_bar.rs`
-(`pure_loads_its_absorb_burst_as_the_pool_bar_and_plays_its_templates`, fails with the list dropped).
+`oag_title::Effects::templates` lists the effects whose sprite templates play on a source that is not Pulse's PSP (`oag_fx::psys::streak::Kept`); **no
+title lists one**: Pure's absorb burst was too bright at 0.75 s with `WO_WEAPON_ABSORB` listed, and the reason is unread. Test:
+`crates/raceplay/src/tests/pure_absorb_bar.rs` (`pure_loads_its_absorb_burst_as_the_pool_bar_and_can_play_its_templates`: the table's load keeps them
+muted, `Kept { templates: true }` plays them with roll, stretch and sprite).
 
 2048 and Omega: **checked, differs** - their templates are HD's lineage (`ps3-hdfury-eu` `PartRender`), not this PSP routine, and are left muted. HD: not this engine.

@@ -235,28 +235,27 @@ no ground ring and no bloom (the muted templates), which is where the craft box'
 overlay); and at 0.75 s ours still shows streaks (+7.7) where the original has almost none (+3.1; the stagger of eight nodes at 0.1 s is the
 burst trigger, which this lane did not touch). The clear ground boxes carry about no light in this pose.
 
-#### Pure: the templates play (`pure-absorb-templates`)
+#### Pure: the templates, tried and held off (`pure-absorb-templates`)
 
 Pure's template draw is Pulse's (`FUN_08875138` over `FUN_08872e50`, `FUN_0893fc34`, `FUN_0893d848`; confidence 85, static;
-`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw"). `oag_title::Effects::templates` lists `WO_WEAPON_ABSORB` for Pure, so
-`ring1` and `glow` are played with their roll, stretch and sprite (`oag_fx::psys::streak::Kept`). Same state, flags and ticks as the table above
-(originals are the first capture's frames 18, 30 and 44 of 480x272 `n_abs1`/`n_ctl1`, which reproduce +12.7, +18.3 and +3.1).
+`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw"). With `WO_WEAPON_ABSORB` listed in a new `oag_title::Effects::templates`
+(`oag_fx::psys::streak::Kept`) `ring1` and `glow` played with their roll, stretch and sprite. Same state, flags and ticks as the table above
+(originals are the first capture's frames 18, 30 and 44 of 480x272 `n_abs1`/`n_ctl1`, which reproduce +12.7, +18.3 and +3.1):
 
-| Age | Box | Original | Ours before | Ours after |
+| Age | Box | Original | Ours, templates muted | Ours, templates on |
 | --- | --- | --- | --- | --- |
 | 0.3 s | craft `150,150,330,272` | +12.7 | +7.3 | +7.4 |
 | 0.5 s | craft | +18.3 | +11.3 | +15.2 |
 | 0.75 s | craft | +3.1 | +7.7 | +17.0 |
 
-Blue minus red: original -2.3, -5.8, -3.3; before -2.6, -2.6, -3.3; after -2.6, -4.4, -8.2.
+Blue minus red: original -2.3, -5.8, -3.3; muted -2.6, -2.6, -3.3; on -2.6, -4.4, -8.2.
 
-Read as a player (the three frames, original | before | after, cropped to the craft and enlarged): at 0.5 s the nose bloom and the two
-wingtip glows are there, in the places and about the size of the original's, and the tint moves toward its pale pink-white; at 0.3 s the glows are
-barely different from before. **Not matched:** the original's flat purple ground ellipse around the craft is not in ours at any age (`ring1` is a
-camera-facing quad, so it is not that ellipse by itself), and at 0.75 s ours is far too bright (the wingtip glows stay saturated where the
-original has one faint glow, +17.0 against +3.1), which is worse than before. The brightness at 0.75 s is the spawn pattern: ours plays the
-templates for each of the eight staggered nodes of `ABSORB_BURST` (`glow` lives 0.5 s, `ring1` 0.83 s), and how many instances the original draws,
-and at what severity, is not read. The recipe to read it is on the particle-bars page. The brief's figure, +11.3 at 0.5 s, is now +15.2.
+Read as a player (the three frames cropped to the craft): with them on, the nose bloom and the two wingtip glows at 0.5 s are in the original's places and about
+its size. **Not matched:** the original's flat purple ground ellipse is absent at every age, and at 0.75 s ours has two saturated wingtip glows where the
+original has one faint one (+17.0 against +3.1), worse than muted. The stagger is not the cause: the original's per-node delay gates the node's update and
+draw, so node `i` starts at `i * 0.1` s as ours does (`particle-bars.md`, "The burst's stagger"). **So Pure lists no templates for now** and the muted column is what
+ships; the live reads that were meant to find the cause did not work (breakpoint stops arrive late on PPSSPP 1.20.4), and the passive recipe is on the
+particle-bars page.
 
 Cross-title: **checked, differs** for 2048 and Omega (their class-6 draw is HD's render-mode 5 far bar, `far_bars`, and their absorb burst is
 HD's lineage); Pulse and HD untouched (`pulse_psp` skips the reset, `far_bars` is unchanged).
