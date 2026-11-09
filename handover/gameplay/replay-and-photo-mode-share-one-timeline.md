@@ -60,9 +60,10 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
   were narrowed from 50 to 46 units before this was checked. ~~The HUD's `current` read `0.04.7` at `0:11`~~ the HUD's
   lap clock is right: lap 1 starts at the first start-line crossing, tick 413 in a pad run (141 ticks after the 272-tick
   countdown), so tick 660 to 719 reads 4.1 to 5.1 s; a test asserts the HUD clocks after a seek equal the live race's
-  (`docs/ui/replays.md`, "The screen"). **Open, found on the way:** the bar's dark band at the bottom clips the foot of
-  the HUD's `current` time and covers the shield percentage (PSP aspect, 783 px of 816); moving it is a layout choice
-  (the top edge has the lap and position, the bottom the times and shield), so it is not made here.
+  (`docs/ui/replays.md`, "The screen"). The bar's dark band at the bottom clipped the foot of the HUD's `current` time and covered the
+  shield percentage (PSP aspect): ~~fixed~~, the bar is now under the keys at the top, inside the chip row's width
+  (`docs/ui/replays.md`, "The screen"). **Open:** the mismatch banner is full width and lies over the lap box on
+  the PS2 aspect; a key line in a language longer than English could run wider than the chip row.
 - **The Steam Deck tick is not measured.** The command is in the ADR (decision 3). The design needs `tick_sim_only` at or
   under about 280 us there.
 - **Whether a fresh `Race` derives `capture_results` and `wreck_ended_tick`** at a take-over after a finish. The plan

@@ -109,15 +109,17 @@ is set, `RaceStage::watching` keeps it out of the parked-race slot, and its reco
 `auto/`, before and after a watch to the end.
 
 **The screen** (`oag_game::replay_view`, `Session::viewer_screen`): six chips in a row along the top, centred
-(PLAY or PAUSE, -5 SEC, +5 SEC, the speed, PHOTO, EXIT) with the time and the keys under them, and a thin bar
-along the bottom edge (grey, the built part lighter, the played part blue, a white playhead).
-The chips and their two lines of keys sit between the lap box (top left) and the position (top
-right) of Pulse's HUD at 1440x816 on the PSP aspect, on the PS2 aspect and in a 1024x768 free window
-(frames read: no rectangle of one touches the other's). **The bar does touch the HUD at the bottom**
-on the PSP aspect: its dark band starts at about 783 px of the 816 px frame, which
-clips the foot of the `current` lap time (the HUD's digits end at about 790 px) and covers the shield
-percentage at bottom right. A click on the bar seeks to where it lands, a click on a chip is its
-button.
+(PLAY or PAUSE, -5 SEC, +5 SEC, the speed, PHOTO, EXIT) with the time and the keys under them, and under
+those a thin bar (grey, the built part lighter, the played part blue, a white playhead) as wide as the chip
+row less 20 units at each end. All of it is in the top band, inside the chip row's width: the bottom of the
+picture is the HUD's own (current time, speed, shield) and its lap box and position reach in from the sides,
+so nothing of ours is over any of them. Frames read on Pulse (1440x816 PSP aspect, PS2 aspect, 1024x768
+free, tick ~660): no chip, key line or bar pixel is over a HUD readout
+(`replay_view::tests::what_the_screen_draws_stays_in_the_top_band_inside_the_chip_row` holds the band and
+the width). The bar used to run the full width along the bottom edge, and its dark band cut the foot of the
+`current` time and covered the shield percentage; the mismatch banner (a state, not the normal screen) is
+still full width, just under the bar, and on the PS2 aspect lies over the lap box while it is up. A click on
+the bar seeks to where it lands, a click on a chip is its button.
 
 **Two clocks are on screen.** The viewer's `0:10 / 0:29` is the recording's tick over 60, from tick 0
 and so including the start-line countdown (`oag_race::COUNTDOWN_TICKS`, 272 ticks). The HUD's

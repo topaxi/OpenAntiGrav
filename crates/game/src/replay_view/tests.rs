@@ -46,6 +46,7 @@ fn a_click_on_the_bar_seeks_to_where_it_lands() {
     assert_eq!(tick_at(GRID, -10.0, 18_000), 0);
     // Taller to a finger than it is drawn.
     assert_eq!(control_at(GRID, (x + 10.0, y - 3.0)), Some(Control::Bar));
+    assert_eq!(control_at(GRID, (x + 10.0, y - 3.5)), None);
 }
 
 #[test]
@@ -157,4 +158,43 @@ fn past_the_last_agreeing_second_the_banner_says_pose_view_and_names_a_short_tra
         words.contains(&"OAG_REPLAY_POSE_END".to_string()),
         "{words:?}"
     );
+}
+
+/// Every title's HUD owns the bottom of the picture (times, speed, shield) and its lap box and
+/// position reach in from the sides of the top, so what the viewer draws in the normal state is
+/// the chips, their keys and the bar, in the top band and inside the chip row's own width.
+/// Fails if the bar goes back to the bottom edge, where it cut the foot of the HUD's current
+/// time and covered the shield, or a line of keys runs wider than the row (`docs/ui/replays.md`,
+/// "The screen").
+#[test]
+fn what_the_screen_draws_stays_in_the_top_band_inside_the_chip_row() {
+    let keys = [
+        "CROSS PLAY  LEFT RIGHT SKIP  UP SPEED".to_string(),
+        "L1 R1 CRAFT  SQUARE HUD  L2 R2 SCRUB  R-STICK JOG".to_string(),
+    ];
+    let first = chip_rect(CHIPS[0], GRID);
+    let last = chip_rect(CHIPS[CHIPS.len() - 1], GRID);
+    let (left, right) = (first[0], last[0] + last[2]);
+    for grid in [GRID, (362.0, 272.0), (484.0, 272.0), (640.0, 272.0)] {
+        let [row_left, row_right] = [chip_rect(CHIPS[0], grid)[0], {
+            let l = chip_rect(CHIPS[CHIPS.len() - 1], grid);
+            l[0] + l[2]
+        }];
+        for draw in draw_list(&view(), grid, &say, &keys) {
+            let Draw::Fill { rect, .. } = draw else {
+                continue;
+            };
+            assert!(rect[1] + rect[3] < 60.0, "{rect:?} is in the top band on {grid:?}");
+            assert!(
+                rect[0] >= row_left - 1.0 && rect[0] + rect[2] <= row_right + 1.0,
+                "{rect:?} is inside the chip row {row_left}..{row_right} on {grid:?}"
+            );
+        }
+        let bar = bar_rect(grid);
+        assert!(bar[0] > row_left && bar[0] + bar[2] < row_right);
+    }
+    assert!(left > 0.0 && right < GRID.0);
+    let bar = bar_rect(GRID);
+    let keys_end = first[1] + CHIP_HEIGHT + 2.0 + LINE * (KEY_LINES - 1) as f32 + LINE + 2.0;
+    assert!(bar[1] > keys_end, "the bar is under the last line of keys");
 }

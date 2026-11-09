@@ -62,6 +62,11 @@ const GAP: f32 = 4.0;
 const CHIP_WIDTH: f32 = 46.0;
 const CHIP_HEIGHT: f32 = 14.0;
 const BAR_HEIGHT: f32 = 5.0;
+/// The lines of keys under the chips, the time's line included.
+const KEY_LINES: usize = 2;
+/// How far the bar is drawn in from each end of the chip row: the HUD's lap box and position
+/// reach under the row's ends on a narrower aspect than the PSP's.
+const BAR_INSET: f32 = 20.0;
 const BAND: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
 const TRACK: [f32; 4] = [1.0, 1.0, 1.0, 0.18];
 const BUILT: [f32; 4] = [1.0, 1.0, 1.0, 0.38];
@@ -73,26 +78,32 @@ const LINE: f32 = 9.5;
 
 /// Where a chip sits on the overlay grid `grid` (width, height): `[x, y, w, h]`. The chips are a
 /// row across the top, centred, between the lap box and the position of every title's HUD; the
-/// bottom of the picture is the HUD's own (times, speed, shield), so only the bar goes there.
+/// bottom of the picture is the HUD's own (times, speed, shield), so nothing of ours goes there.
 #[must_use]
 pub fn chip_rect(chip: Control, grid: (f32, f32)) -> [f32; 4] {
     let index = CHIPS.iter().position(|&c| c == chip).unwrap_or(0);
-    let row = CHIP_WIDTH * CHIPS.len() as f32 + GAP * (CHIPS.len() - 1) as f32;
     [
-        (grid.0 - row) / 2.0 + index as f32 * (CHIP_WIDTH + GAP),
+        (grid.0 - row_width()) / 2.0 + index as f32 * (CHIP_WIDTH + GAP),
         MARGIN,
         CHIP_WIDTH,
         CHIP_HEIGHT,
     ]
 }
 
-/// Where the bar sits: `[x, y, w, h]`, a thin strip along the bottom edge.
+/// The width of the row of chips.
+fn row_width() -> f32 {
+    CHIP_WIDTH * CHIPS.len() as f32 + GAP * (CHIPS.len() - 1) as f32
+}
+
+/// Where the bar sits: `[x, y, w, h]`, a thin strip under the lines of keys, centred under the
+/// chips and inset from their ends. The top is the one band no title's HUD uses at this width
+/// on any aspect; the bottom edge is the HUD's current time and shield.
 #[must_use]
 pub fn bar_rect(grid: (f32, f32)) -> [f32; 4] {
     [
-        MARGIN,
-        grid.1 - MARGIN / 2.0 - BAR_HEIGHT,
-        grid.0 - 2.0 * MARGIN,
+        (grid.0 - row_width()) / 2.0 + BAR_INSET,
+        MARGIN + CHIP_HEIGHT + 2.0 + LINE * KEY_LINES as f32 + 5.0,
+        row_width() - 2.0 * BAR_INSET,
         BAR_HEIGHT,
     ]
 }
@@ -103,7 +114,7 @@ pub fn bar_rect(grid: (f32, f32)) -> [f32; 4] {
 pub fn control_at(grid: (f32, f32), at: (f32, f32)) -> Option<Control> {
     let inside = |[x, y, w, h]: [f32; 4]| at.0 >= x && at.0 < x + w && at.1 >= y && at.1 < y + h;
     let [x, y, w, h] = bar_rect(grid);
-    if inside([x, y - 8.0, w, h + 8.0 + MARGIN / 2.0]) {
+    if inside([x, y - 3.0, w, h + 6.0]) {
         return Some(Control::Bar);
     }
     CHIPS
@@ -189,7 +200,7 @@ pub fn draw_list(
         }
     };
     list.push(Draw::Fill {
-        rect: [0.0, y - 2.0, grid.0, grid.1 - y + 2.0],
+        rect: [x - 2.0, y - 2.0, w + 4.0, h + 4.0],
         color: BAND,
     });
     list.push(Draw::Fill {
@@ -219,6 +230,7 @@ pub fn draw_list(
         keys.first().map_or("", String::as_str)
     ))
     .chain(keys.iter().skip(1).cloned())
+    .take(KEY_LINES)
     .collect();
     for (i, line) in lines.iter().enumerate() {
         let width = line.chars().count() as f32 * 4.7 + 12.0;
@@ -229,7 +241,6 @@ pub fn draw_list(
         });
         list.push(text(centre, y + 2.0, line.clone(), Align::Centre));
     }
-    let extra = LINE * (lines.len() - 1) as f32;
     for chip in CHIPS {
         let rect = chip_rect(chip, grid);
         let label = match chip {
@@ -266,7 +277,7 @@ pub fn draw_list(
         ));
     }
     if let Some(stops) = view.mismatch {
-        let top = MARGIN + CHIP_HEIGHT + LINE + 8.0 + extra;
+        let top = y + h + 6.0;
         list.push(Draw::Fill {
             rect: [0.0, top, grid.0, 2.0 * LINE + 6.0],
             color: WARNING,
