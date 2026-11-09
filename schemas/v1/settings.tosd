@@ -354,6 +354,10 @@ optional = true
 type = "string"
 optional = true
 
+[types.race.score_target]
+type = "string"
+optional = true
+
 [types.race.weapons]
 type = "string"
 optional = true

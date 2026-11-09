@@ -559,6 +559,10 @@ fn with_served_gaps(
 pub struct RaceSetup {
     /// The `Eliminations` list (`5`, `10`, `15`, `20`, `25` on Pulse).
     pub kill_targets: Vec<String>,
+    /// The `TARGET` row's values on a title whose Eliminator ends on a score: the
+    /// `Eliminations` slider's steps (`200` to `600` by `20` on HD), read off the file the
+    /// score rule names ([`oag_title::eliminator::ScoreRule::race_setup`]). Empty elsewhere.
+    pub score_targets: Vec<String>,
     /// The `Weapons` list as `(string id, value)`: `("FE_ON", "On")` then
     /// `("FE_OFF", "Off")` on Pulse. The value is what the original's
     /// `Race_ReadSetupOptions` compares against `"On"`; the string id is the
@@ -586,10 +590,45 @@ impl RaceSetup {
 /// off [`oag_title::FrontEnd::race_setup`], read only where the title names its file.
 pub(super) fn read_race_setup(
     archives: &mut oag_assets::Archives,
+    title: &oag_title::Title,
     front_end: &oag_title::FrontEnd,
     report: &mut Vec<String>,
 ) -> RaceSetup {
-    read_setup_lists(archives, front_end.race_setup, report)
+    let mut setup = read_setup_lists(archives, front_end.race_setup, report);
+    if let oag_title::eliminator::EliminatorRule::Score(rule) = title.eliminator.value {
+        setup.score_targets = read_score_targets(archives, rule.race_setup, report);
+    }
+    setup
+}
+
+/// The steps of the `Eliminations` slider in `name`: HD's `TARGET` row. Empty, and reported, when
+/// the file will not read or authors no such slider, which leaves the row unusable rather than
+/// offering numbers nothing authored.
+fn read_score_targets(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    report: &mut Vec<String>,
+) -> Vec<String> {
+    let xml = archives
+        .read_name(name)
+        .map_err(anyhow::Error::from)
+        .and_then(|blob| {
+            fexml::text(&blob).map_err(|e| anyhow::anyhow!("reading the front-end XML: {e}"))
+        });
+    let slider = match xml {
+        Ok(xml) => oag_tables::race_setup::slider(&xml, "Eliminations"),
+        Err(error) => {
+            report.push(format!("{name}: {error:#} - no TARGET row values"));
+            return Vec::new();
+        }
+    };
+    let Some(slider) = slider else {
+        report.push(format!(
+            "{name}: no Eliminations slider - no TARGET row values"
+        ));
+        return Vec::new();
+    };
+    slider.values().iter().map(u32::to_string).collect()
 }
 
 /// The `KILLS` and `WEAPONS` lists off `name`.
@@ -613,6 +652,7 @@ fn read_setup_lists(
                 .into_iter()
                 .map(|(string, _)| string)
                 .collect(),
+            score_targets: Vec::new(),
             weapons: list_entries(&xml, "Weapons")
                 .into_iter()
                 .filter_map(|(string, value)| Some((string, value?)))

@@ -919,6 +919,51 @@ fn the_kills_row_offers_the_discs_own_eliminations_list() {
     );
 }
 
+/// HD's `Eliminations` is a `Slider` (`minSlide` 200, `maxSlide` 600, `incSlide` 20), and the
+/// TARGET row offers its steps. Fails if the file is not read or the steps are a const here.
+#[test]
+#[ignore = "needs an HD disc image in data/images/"]
+fn the_target_row_offers_the_steps_of_hds_eliminations_slider() {
+    let Some(path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let setup = shell(&path).race_setup;
+    let want: Vec<String> = (200..=600).step_by(20).map(|n| n.to_string()).collect();
+    assert_eq!(setup.score_targets, want);
+    assert!(
+        setup.kill_targets.is_empty(),
+        "a slider is not the KILLS list: {:?}",
+        setup.kill_targets
+    );
+}
+
+/// Omega's `racebox_definition.xml` authors an `Eliminations` slider of its own (50 to 600 by 25,
+/// HD's is 200 to 600 by 20), yet Omega races an Eliminator on kills (`oag_omega::TITLE.eliminator`,
+/// inherited, its score law unmeasured), so the TARGET row stays off Omega: the row follows the
+/// rule, not the file.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_authors_its_own_eliminations_slider_but_races_on_kills() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut opened =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("Omega opens");
+    let name = match oag_hd::TITLE.eliminator.value {
+        oag_title::eliminator::EliminatorRule::Score(rule) => rule.race_setup,
+        oag_title::eliminator::EliminatorRule::Kills => panic!("HD ends on a score"),
+    };
+    let xml = oag_tables::fexml::text(&opened.archives.read_name(name).expect("the racebox file"))
+        .expect("front-end XML");
+    let slider = oag_tables::race_setup::slider(&xml, "Eliminations").expect("a slider");
+    assert_eq!((slider.min, slider.max, slider.step), (50, 600, 25));
+    assert_eq!(
+        oag_omega::TITLE.eliminator.value,
+        oag_title::eliminator::EliminatorRule::Kills
+    );
+}
+
 /// HD and Omega author the line that asks the second person to join (`FE_GUEST_JOIN`), and the
 /// join screen says it for seat 2 in the title's own words: "PLAYER 2 PRESS START TO JOIN" on HD,
 /// "... PRESS OPTIONS TO JOIN" on Omega. Dropping the `guest` label fails both.

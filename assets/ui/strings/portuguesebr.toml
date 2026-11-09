@@ -143,6 +143,7 @@ OAG_RACE_SPEED_CLASS = { text = "CLASSE", human = false }
 OAG_RACE_WEAPONS = { text = "ARMAS", human = false }
 OAG_RACE_AI_DIFFICULTY = { text = "DIFICULDADE DA IA", human = false }
 OAG_RACE_KILLS = { text = "ABATES", human = false }
+OAG_RACE_TARGET = { text = "ALVO", human = false }
 OAG_RACE_TEAM = { text = "EQUIPE", human = false }
 OAG_RACE_VARIANT = { text = "VARIANTE", human = false }
 OAG_RACE_TRACK = { text = "PISTA", human = false }

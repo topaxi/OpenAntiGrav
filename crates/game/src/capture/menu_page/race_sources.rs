@@ -52,6 +52,14 @@ pub(super) fn supply(
             .collect::<Vec<_>>(),
     );
     model.supply(
+        oag_ui::menu::ValueSource::ScoreTargets,
+        &race_setup
+            .score_targets
+            .iter()
+            .map(oag_ui::menu::Choice::plain)
+            .collect::<Vec<_>>(),
+    );
+    model.supply(
         oag_ui::menu::ValueSource::Weapons,
         &race_setup.weapon_choices(strings),
     );
@@ -88,6 +96,7 @@ mod tests {
         definition.drop_rows_picked_on_screen(title);
         let setup = crate::boot::RaceSetup {
             kill_targets: ["5", "10", "15", "20", "25"].map(String::from).to_vec(),
+            score_targets: Vec::new(),
             weapons: vec![
                 ("FE_ON".into(), "On".into()),
                 ("FE_OFF".into(), "Off".into()),

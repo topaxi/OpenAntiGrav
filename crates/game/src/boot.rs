@@ -78,7 +78,7 @@ pub struct Boot {
     /// `Team SelectionSplit`'s two halves where the source authors it (Pulse's PS2
     /// pressing) - see [`oag_ui_screens::picker::Layout::read_split`].
     pub ship_select_split: Option<[oag_ui_screens::picker::Layout; 2]>,
-    /// The `KILLS` and `WEAPONS` rows' values - see [`Shell::race_setup`].
+    /// The `KILLS`, `TARGET` and `WEAPONS` rows' values - see [`Shell::race_setup`].
     pub race_setup: RaceSetup,
     /// The circuit names, for a capture's circuit labels.
     pub circuit_names: oag_ui::language::CircuitNames,
@@ -554,7 +554,7 @@ pub fn load_shell(
         &screens,
         &mut report,
     );
-    let race_setup = screens::read_race_setup(&mut archives, front_end, &mut report);
+    let race_setup = screens::read_race_setup(&mut archives, title, front_end, &mut report);
     let strings = load_strings(
         &mut archives,
         &languages,

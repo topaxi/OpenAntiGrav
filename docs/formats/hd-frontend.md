@@ -2356,7 +2356,9 @@ after AI DIFFICULTY in the authored order, with the disc's words; the cut row is
 is not); START with two people claims two devices on a two-seat join screen, then HD's own Track and Ship Select per
 seat; `SplitScreen = RB_VERT` cuts the race left and right and composes HD's `vert_splitscreen_*` HUD layouts. HD's
 `Eliminations` is a `<Slider>`, not a list, so naming this file does not switch on the `KILLS` row
-(`local_split` is a field of its own beside `race_setup`). See
+(`local_split` is a field of its own beside `race_setup`). HD's TARGET row is a separate row fed by the
+score rule's own file reference (`ScoreRule::race_setup`), not by `race_setup`; see
+[eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md). See
 [split-screen.md](../rendering/split-screen.md), "Where the entry is, per title".
 
 The online screens are a different file (`multiplayer_definition.xml` in `DATA02`: `Join Game`, `Lobby`,

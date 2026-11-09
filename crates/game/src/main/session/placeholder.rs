@@ -200,6 +200,7 @@ impl Session {
             languages: Vec::new(),
             modes: menu::mode_choices(&strings),
             kill_targets: Vec::new(),
+            score_targets: Vec::new(),
             weapons: Vec::new(),
             entries: None,
             front_end_styles: Vec::new(),

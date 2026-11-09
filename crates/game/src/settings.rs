@@ -1208,6 +1208,7 @@ pub fn menu_seeds(
         ("race.track", text(&settings.race.track)),
         ("race.variant", text(&settings.race.variant)),
         ("race.kill_target", text(&settings.race.kill_target)),
+        ("race.score_target", text(&settings.race.score_target)),
         ("race.weapons", text(&settings.race.weapons)),
         ("ai.difficulty", text(&settings.ai.difficulty)),
     ];

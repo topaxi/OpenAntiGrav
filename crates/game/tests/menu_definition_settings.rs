@@ -1109,10 +1109,22 @@ fn the_rows_the_selection_screens_pick_are_dropped_on_a_title_that_has_them() {
             "{gone} stays on Pure, which reads no such list"
         );
     }
+    // The TARGET row is the score Eliminator's: Pulse and Pure end on kills.
+    for kills in [&pulse, &pure] {
+        assert!(!settings_on_race(kills).contains(&"race.score_target".to_string()));
+    }
 
     let mut hd = built_in();
     hd.drop_rows_picked_on_screen(oag_hd::TITLE);
     let kept = settings_on_race(&hd);
+    assert!(
+        kept.contains(&"race.score_target".to_string()),
+        "TARGET stays on HD: {kept:?}"
+    );
+    assert!(
+        !kept.contains(&"race.kill_target".to_string()),
+        "KILLS goes on HD, whose Eliminations is a slider: {kept:?}"
+    );
     for gone in ["race.team", "race.track", "race.variant"] {
         assert!(
             !kept.contains(&gone.to_string()),

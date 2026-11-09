@@ -378,6 +378,11 @@ pub enum ValueSource {
     /// if the list will not read: a title that names no such list has the row
     /// dropped instead (`Definition::drop_rows_picked_on_screen`).
     KillTargets,
+    /// The score targets the race box's `TARGET` row offers, the steps of the disc's own
+    /// `Eliminations` slider (`oag_game::boot::RaceSetup::score_targets`). Empty, and the row
+    /// dropped, on a title whose Eliminator ends on kills
+    /// (`Definition::drop_rows_picked_on_screen`).
+    ScoreTargets,
     /// The two states of the race box's `WEAPONS` row, off the disc's own
     /// `Weapons` list: stored as its `On`/`Off`, shown as its `FE_ON`/`FE_OFF`
     /// strings (`oag_game::boot::RaceSetup::weapon_choices`). Empty only if the
@@ -438,6 +443,7 @@ impl ValueSource {
             Self::PilotAxisHigh => "pilot_axis_high",
             Self::ScreenFilters => "screen_filters",
             Self::KillTargets => "kill_targets",
+            Self::ScoreTargets => "score_targets",
             Self::Weapons => "weapons",
             Self::Mods => "mods",
             Self::ModSwitch => "mod_switch",
@@ -474,6 +480,7 @@ impl ValueSource {
             "pilot_axis_high" => Some(Self::PilotAxisHigh),
             "screen_filters" => Some(Self::ScreenFilters),
             "kill_targets" => Some(Self::KillTargets),
+            "score_targets" => Some(Self::ScoreTargets),
             "weapons" => Some(Self::Weapons),
             "mods" => Some(Self::Mods),
             "mod_switch" => Some(Self::ModSwitch),

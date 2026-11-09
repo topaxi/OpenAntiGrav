@@ -992,6 +992,8 @@ pub(crate) struct Shell {
     pub(crate) modes: Vec<menu::Choice>,
     /// The `KILLS` row's values, off the disc's own `Eliminations` list.
     pub(crate) kill_targets: Vec<menu::Choice>,
+    /// The `TARGET` row's values, off the disc's own `Eliminations` slider.
+    pub(crate) score_targets: Vec<menu::Choice>,
     /// The `WEAPONS` row's two states, valued by the disc's `On`/`Off` and
     /// labelled by its own `FE_ON`/`FE_OFF` strings.
     pub(crate) weapons: Vec<menu::Choice>,
@@ -1128,6 +1130,9 @@ impl Shell {
             entries: boot_shell.entries.clone(),
             modes: menu::mode_choices(&boot_shell.strings),
             kill_targets: (boot_shell.race_setup.kill_targets.iter())
+                .map(menu::Choice::plain)
+                .collect(),
+            score_targets: (boot_shell.race_setup.score_targets.iter())
                 .map(menu::Choice::plain)
                 .collect(),
             weapons: boot_shell.race_setup.weapon_choices(&boot_shell.strings),

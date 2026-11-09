@@ -53,6 +53,7 @@ fn every_fixed_name_still_parses_to_its_own_source() {
         "pilot_axis_high",
         "screen_filters",
         "kill_targets",
+        "score_targets",
         "weapons",
         "mods",
         "mod_switch",
