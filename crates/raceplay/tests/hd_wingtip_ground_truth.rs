@@ -219,3 +219,70 @@ fn the_lineage_titles_lay_the_contrail_under_a_pad_too() {
     }
     println!("lineage titles checked: {checked:?}");
 }
+
+/// Pulse and Pure carry no `wingtip` class: with `graphics.wingtip_contrails` on and Wipeout HD
+/// mounted they lay HD's ribbon from their wing-tip collision locators, and with it off they lay
+/// nothing. The texture and config are HD's, read through the lender.
+#[test]
+#[ignore = "needs Pulse's and Pure's images and HD's"]
+fn the_psp_titles_lay_hds_contrail_only_with_the_setting_on() {
+    let Some(hd) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut checked = Vec::new();
+    for image in [
+        "data/images/pulse-psp-eu.chd",
+        "data/images/pure-psp-eu.chd",
+    ] {
+        let Some(path) = oag_testdata::exact(image) else {
+            continue;
+        };
+        let options = |on: bool| race::Options {
+            source: path.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            wingtip_contrails: if on {
+                race::WingtipContrails::On {
+                    lender: Some(hd.display().to_string()),
+                }
+            } else {
+                race::WingtipContrails::Off
+            },
+            ..race::Options::default()
+        };
+        let off = race::load(&options(false)).unwrap_or_else(|why| panic!("{image}: {why}"));
+        assert!(
+            off.ribbon_textures.wingtip.is_none(),
+            "{image}: off lays none"
+        );
+        let loaded = race::load(&options(true)).unwrap_or_else(|why| panic!("{image}: {why}"));
+        let assets = loaded
+            .ribbon_textures
+            .wingtip
+            .as_ref()
+            .unwrap_or_else(|| panic!("{image}: {:?}", loaded.report));
+        assert_eq!(
+            assets.config.texture,
+            "/data/tex/smoke_trails_frame1_alpha.gtf"
+        );
+        assert!(
+            loaded
+                .report
+                .iter()
+                .any(|l| l.contains("an enhancement of this project's")),
+            "{image}: the report names it an enhancement"
+        );
+        let mut race = race::Race::start(loaded.setup);
+        for _ in 0..10 {
+            race.tick(&PlayerInputs::none());
+        }
+        assert_eq!(race.wingtip_live(), 0, "{image}: nothing laid with no pad");
+        for _ in 0..10 {
+            race.sim.world.ships[0].physics.pad_timer = 0.5;
+            race.tick(&PlayerInputs::none());
+        }
+        assert_eq!(race.wingtip_live(), 2, "{image}: one element per wing tip");
+        checked.push(image);
+    }
+    println!("PSP titles checked: {checked:?}");
+}

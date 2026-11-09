@@ -168,6 +168,10 @@ optional = true
 type = "boolean"
 optional = true
 
+[types.graphics.wingtip_contrails]
+type = "boolean"
+optional = true
+
 [types.graphics.cpu_governor]
 type = "boolean"
 optional = true

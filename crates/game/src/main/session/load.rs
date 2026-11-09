@@ -522,6 +522,10 @@ impl Session {
             self.settings.graphics.trail_hits,
             &self.titles,
         );
+        options.wingtip_contrails = oag_game::launcher::wingtip_contrails_from(
+            self.settings.graphics.wingtip_contrails,
+            &self.titles,
+        );
         // The join screen's seats, or the seats a restart kept: the load reads a
         // title's authored two-player split HUD, so it needs the view count
         // before `split_screen::seat_for_launch` cuts the screen. See `race::Options::views`.

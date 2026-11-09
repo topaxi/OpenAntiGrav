@@ -160,6 +160,9 @@ impl Pending {
                 .boost_zoom
                 .then(oag_source::title::borrowed_zoom_ring),
             trail_hits: oag_game::launcher::trail_hits(self.settings.graphics.trail_hits),
+            wingtip_contrails: oag_game::launcher::wingtip_contrails(
+                self.settings.graphics.wingtip_contrails,
+            ),
             foreign_track: self
                 .foreign_entry
                 .as_ref()

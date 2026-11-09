@@ -712,6 +712,15 @@ impl Session {
                     return;
                 }
             },
+            // Read when a race loads (`race::Options::wingtip_contrails`), so the next race.
+            "graphics.wingtip_contrails" => match text.as_str() {
+                "on" => self.settings.graphics.wingtip_contrails = true,
+                "off" => self.settings.graphics.wingtip_contrails = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
             "graphics.cpu_governor" => match text.as_str() {
                 "on" => self.settings.graphics.cpu_governor = true,
                 "off" => {

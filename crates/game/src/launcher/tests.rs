@@ -655,6 +655,30 @@ fn the_trail_hit_lender_is_hd_then_any_title_that_authors_the_burst() {
     assert!(trail_hit_lender(&[broken("enc.iso")]).is_none());
 }
 
+/// The contrails are lent from HD's row when it is mounted, else from the first title that carries
+/// them (2048, Omega); Pulse and Pure carry none and are never lenders.
+#[test]
+fn the_wingtip_contrails_lender_is_a_title_that_carries_them() {
+    let rows = vec![
+        of("pulse.chd", oag_pulse::TITLE),
+        of("2048", oag_2048::TITLE),
+        of("hd.iso", oag_hd::TITLE),
+    ];
+    assert_eq!(wingtip_lender(&rows).unwrap().name, "hd.iso");
+    assert_eq!(wingtip_lender(&rows[..2]).unwrap().name, "2048");
+    assert!(wingtip_lender(&rows[..1]).is_none());
+    assert_eq!(
+        wingtip_contrails_from(false, &rows),
+        oag_raceplay::WingtipContrails::Off
+    );
+    assert_eq!(
+        wingtip_contrails_from(true, &rows),
+        oag_raceplay::WingtipContrails::On {
+            lender: Some("data/images/hd.iso".to_string())
+        }
+    );
+}
+
 /// Off surveys nothing and lends nothing.
 #[test]
 fn the_setting_off_hands_the_race_no_lender() {

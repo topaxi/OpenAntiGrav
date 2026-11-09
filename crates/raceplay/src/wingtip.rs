@@ -17,6 +17,8 @@ use oag_physics::damage::CraftState;
 use oag_physics::hover::TARGET_GLOBAL_SCALE;
 use oag_title::wingtip::Wingtip;
 
+use crate::WingtipContrails;
+
 use crate::Race;
 
 /// What the contrails draw with: the ribbon's texture and the title's config, which sizes the
@@ -35,33 +37,29 @@ pub struct WingtipDraw {
     pub anchors: [[Option<Mat4>; 2]; MAX_SHIPS],
 }
 
-/// Reads the title's [`oag_title::Title::wingtip`] texture and each craft's locators, reporting
-/// what it found or why nothing draws. The texture and the locators are both needed: a craft
-/// without a locator lays nothing and the report names it; a texture that does not decode
-/// draws nothing.
+/// Reads the contrails' config, texture and each craft's locators, reporting what it found or why
+/// nothing draws.
+///
+/// A title that carries the class ([`oag_title::Title::wingtip`]) reads its own texture and its
+/// hulls' `wingtip` locators. Any other title (Pulse and Pure) draws them only with the player's
+/// `graphics.wingtip_contrails`, lent by a source that carries the class ([`lend`]).
 pub(crate) fn load(
     archives: &mut oag_assets::Archives,
-    config: Option<&Wingtip>,
+    craft_title: &oag_title::Title,
+    options: &crate::Options,
     liveries: &[oag_livery::Livery],
     report: &mut Vec<String>,
 ) -> Option<(WingtipAssets, WingtipDraw)> {
-    let config = *config?;
-    let platform = archives.layout.platform;
-    let texture = archives
-        .read_name(config.texture)
-        .ok()
-        .and_then(|blob| crate::load::magstrip_wake::decode(&blob, platform));
-    let Some(texture) = texture else {
-        report.push(format!(
-            "wingtip contrails: {} missing or unreadable - nothing draws",
-            config.texture
-        ));
-        return None;
+    let (config, texture, anchors) = match craft_title.wingtip {
+        Some(config) => {
+            let texture = texture(archives, config, report)?;
+            (*config, texture, own_anchors(liveries))
+        }
+        None => {
+            let (config, texture) = lend(options, craft_title, report)?;
+            (config, texture, lent_anchors(liveries))
+        }
     };
-    let mut anchors = [[None; 2]; MAX_SHIPS];
-    for (slot, livery) in liveries.iter().enumerate().take(MAX_SHIPS) {
-        anchors[slot] = livery.wingtip;
-    }
     let with = anchors
         .iter()
         .filter(|pair| pair.iter().any(Option::is_some))
@@ -84,6 +82,105 @@ pub(crate) fn load(
         WingtipAssets { texture, config },
         WingtipDraw { config, anchors },
     ))
+}
+
+fn texture(
+    archives: &mut oag_assets::Archives,
+    config: &Wingtip,
+    report: &mut Vec<String>,
+) -> Option<FlareTexture> {
+    let platform = archives.layout.platform;
+    let decoded = archives
+        .read_name(config.texture)
+        .ok()
+        .and_then(|blob| crate::load::magstrip_wake::decode(&blob, platform));
+    if decoded.is_none() {
+        report.push(format!(
+            "wingtip contrails: {} missing or unreadable - nothing draws",
+            config.texture
+        ));
+    }
+    decoded
+}
+
+fn own_anchors(liveries: &[oag_livery::Livery]) -> [[Option<Mat4>; 2]; MAX_SHIPS] {
+    let mut anchors = [[None; 2]; MAX_SHIPS];
+    for (slot, livery) in liveries.iter().enumerate().take(MAX_SHIPS) {
+        anchors[slot] = livery.wingtip;
+    }
+    anchors
+}
+
+/// A title with no `wingtip` locators of its own (Pulse, Pure) lays the contrails from the
+/// wing-tip `Ship Collision Fx` locators: on HD the two coincide on every hull checked (Feisar
+/// and Zone `ship_collision_fx2` is the `wingtip` point), and Pulse's and Pure's hulls author
+/// the same lateral pair at the same places (Assegai: Pulse `(2.69, -1.11, -2.19)` against HD's
+/// `wingtip_left` `(2.78, -1.40, -2.02)`).
+///
+/// **Chosen, not measured**: on each side the locator of greatest `|x|`, the rearmost of those
+/// within `0.1` of it, as a pure translation. Neither title authors a wing-tip locator, so no
+/// hull's pick is the original's.
+fn lent_anchors(liveries: &[oag_livery::Livery]) -> [[Option<Mat4>; 2]; MAX_SHIPS] {
+    let mut anchors = [[None; 2]; MAX_SHIPS];
+    for (slot, livery) in liveries.iter().enumerate().take(MAX_SHIPS) {
+        anchors[slot] = [1.0_f32, -1.0].map(|side| wing_tip(&livery.collision_fx, side));
+    }
+    anchors
+}
+
+fn wing_tip(anchors: &[oag_livery::SparkAnchor], side: f32) -> Option<Mat4> {
+    let on_side = || anchors.iter().filter(|a| a.position.x * side > 0.5);
+    let widest = on_side()
+        .map(|a| a.position.x.abs())
+        .fold(0.0_f32, f32::max);
+    on_side()
+        .filter(|a| a.position.x.abs() > widest - 0.1)
+        .min_by(|a, b| a.position.z.total_cmp(&b.position.z))
+        .map(|a| Mat4::from_translation(a.position))
+}
+
+/// The contrails lent to a title that has none: the config from `lender`'s title, the texture from
+/// its archives.
+fn lend(
+    options: &crate::Options,
+    craft_title: &oag_title::Title,
+    report: &mut Vec<String>,
+) -> Option<(Wingtip, FlareTexture)> {
+    let WingtipContrails::On { lender } = &options.wingtip_contrails else {
+        return None;
+    };
+    let Some(lender) = lender else {
+        report.push(format!(
+            "wingtip contrails: switched on, but no source that carries them (Wipeout HD, 2048 or \
+             Omega) is mounted, so {} lays none",
+            craft_title.name
+        ));
+        return None;
+    };
+    let opened = match oag_source::title::open_source(lender, Vec::new(), Vec::new()) {
+        Ok(opened) => opened,
+        Err(why) => {
+            report.push(format!(
+                "wingtip contrails: {lender} would not open ({why}), so none are laid"
+            ));
+            return None;
+        }
+    };
+    let (mut archives, from) = (opened.archives, opened.title);
+    let Some(config) = from.wingtip else {
+        report.push(format!(
+            "wingtip contrails: {} carries none, so {} lays none",
+            from.name, craft_title.name
+        ));
+        return None;
+    };
+    let texture = texture(&mut archives, config, report)?;
+    report.push(format!(
+        "wingtip contrails: {} read off {}, laid from the wing-tip collision locators; an \
+         enhancement of this project's, {} authors none",
+        config.texture, from.name, craft_title.name
+    ));
+    Some((*config, texture))
 }
 
 /// One locator's node: its timer, and the pool element it holds while the timer runs.
@@ -240,12 +337,16 @@ impl Race {
             };
             let rows = craft_rows(body.up(), body.forward());
             let model = self.ship_model_matrix_of(slot);
-            for side in 0..2 {
-                let Some(local) = contrails.anchors[slot][side] else {
+            for index in 0..2 {
+                let Some(local) = contrails.anchors[slot][index] else {
                     continue;
                 };
                 let tip = (model * local).w_axis.truncate();
-                contrails.step_node(slot, side, craft, tip, rows, dt);
+                // The original's `left` node (side flag `1`) is the craft's physical left, which
+                // an HD hull's `wingtip_left` lands on in this engine; read off the world so the
+                // side holds for a locator that carries no name.
+                let left = (tip - body.position).dot(body.right()) < 0.0;
+                contrails.step_node(slot, usize::from(!left), craft, tip, rows, dt);
             }
         }
         contrails.age(dt);
@@ -269,5 +370,60 @@ impl Race {
     #[must_use]
     pub fn wingtip_live(&self) -> usize {
         self.view.wingtip.as_ref().map_or(0, Contrails::live)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oag_livery::SparkAnchor;
+
+    fn anchor(x: f32, y: f32, z: f32) -> SparkAnchor {
+        SparkAnchor {
+            position: Vec3::new(x, y, z),
+            up: Vec3::Y,
+        }
+    }
+
+    /// Pulse's Triakis authors collision locators at `|x|` 2.65 twice a side (`z` -5.23 and 0.52)
+    /// and a nose pair at 2.17: the widest, rearmost one is the wing tip, as on HD's Triakis
+    /// (`wingtip_left` at `z = -5.44`).
+    #[test]
+    fn the_wing_tip_is_the_widest_rearmost_locator_on_each_side() {
+        let hull = [
+            anchor(2.65, -1.08, -5.23),
+            anchor(2.65, -0.82, 0.52),
+            anchor(-2.65, -0.82, 0.52),
+            anchor(-2.65, -1.08, -5.23),
+            anchor(2.17, -1.24, 6.96),
+            anchor(-2.17, -1.24, 6.96),
+        ];
+        let tip = |side| wing_tip(&hull, side).expect("a tip").w_axis.truncate();
+        assert_eq!(tip(1.0), Vec3::new(2.65, -1.08, -5.23));
+        assert_eq!(tip(-1.0), Vec3::new(-2.65, -1.08, -5.23));
+    }
+
+    /// A hull with locators only on the centreline has no wing tip: nothing is invented.
+    #[test]
+    fn a_hull_with_no_lateral_locator_has_no_wing_tip() {
+        let hull = [anchor(0.0, 0.0, 7.0), anchor(0.4, -0.5, 5.8)];
+        assert!(wing_tip(&hull, 1.0).is_none() && wing_tip(&hull, -1.0).is_none());
+    }
+
+    /// The setting off, or on with no lender, lends nothing; on with no lender says why.
+    #[test]
+    fn a_title_with_none_lays_them_only_with_the_setting_and_a_lender() {
+        let mut report = Vec::new();
+        let off = crate::Options::default();
+        assert!(lend(&off, oag_pulse::TITLE, &mut report).is_none() && report.is_empty());
+        let on = crate::Options {
+            wingtip_contrails: WingtipContrails::On { lender: None },
+            ..crate::Options::default()
+        };
+        assert!(lend(&on, oag_pulse::TITLE, &mut report).is_none());
+        assert!(
+            report[0].contains("no source that carries them"),
+            "{report:?}"
+        );
     }
 }

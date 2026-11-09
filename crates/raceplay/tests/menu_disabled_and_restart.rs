@@ -342,6 +342,9 @@ fn the_renderer_row_says_a_restart_is_needed() {
     //
     // `graphics.trail_hits` is the sixth, on the same terms: the lent burst is read when the
     // race loads (`race::Options::trail_hits`), so a race running keeps its own.
+    //
+    // `graphics.wingtip_contrails` is the seventh: the lent config and texture are read when the
+    // race loads (`race::Options::wingtip_contrails`).
     let deferred: Vec<&str> = definition
         .pages
         .iter()
@@ -357,7 +360,8 @@ fn the_renderer_row_says_a_restart_is_needed() {
             "graphics.msaa",
             "graphics.boost_fov_kick",
             "graphics.boost_zoom",
-            "graphics.trail_hits"
+            "graphics.trail_hits",
+            "graphics.wingtip_contrails"
         ]
     );
 }

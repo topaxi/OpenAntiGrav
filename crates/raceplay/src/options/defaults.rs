@@ -22,6 +22,7 @@ impl Default for Options {
             find_texture_packs: None,
             boost_zoom: None,
             trail_hits: TrailHits::Off,
+            wingtip_contrails: WingtipContrails::Off,
             team: None,
             hull_variant: None,
             skin: None,

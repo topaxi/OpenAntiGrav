@@ -661,6 +661,18 @@ pub struct Graphics {
     #[serde(default)]
     pub trail_hits: bool,
 
+    /// Lay HD's wingtip contrails after a speed pad on a title whose original has none: Pulse and
+    /// Pure. **Off by default**, and ignored on Wipeout HD, 2048 and Omega, which carry them.
+    ///
+    /// **An enhancement of this project's, not the original's.** The config and the ribbon's
+    /// texture are read off another source that carries them (HD's, else 2048's or Omega's), and
+    /// nothing is drawn, with the loader report saying why, when this machine has none; the
+    /// craft's wing-tip collision locators stand in for the `wingtip` ones it does not author.
+    /// Baked into the race at load, so a change applies from the next race. See
+    /// `oag_raceplay::WingtipContrails`.
+    #[serde(default)]
+    pub wingtip_contrails: bool,
+
     /// Let the CPU governor turn this project's own CPU-heavy extras down at runtime while the
     /// frame thread is over its frame budget and the GPU is not (`oag_present::governor`).
     /// It overrides in memory only: this value and every render-profile value are never
@@ -712,6 +724,7 @@ impl Default for Graphics {
             boost_fov_kick: default_boost_fov_kick(),
             boost_zoom: false,
             trail_hits: false,
+            wingtip_contrails: false,
             cpu_governor: default_cpu_governor(),
             camera_view: default_camera_view(),
         }
@@ -1172,6 +1185,14 @@ pub fn menu_seeds(
         (
             "graphics.trail_hits",
             text(if settings.graphics.trail_hits {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
+            "graphics.wingtip_contrails",
+            text(if settings.graphics.wingtip_contrails {
                 "on"
             } else {
                 "off"

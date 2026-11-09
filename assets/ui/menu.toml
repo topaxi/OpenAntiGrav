@@ -1427,6 +1427,21 @@ values = ["off", "on"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 
 
+# The white contrails HD's craft lay from their wing tips after a speed pad, on the titles whose
+# original has none: Pulse and Pure. **An enhancement of this project's, off by default.** The
+# config and the ribbon's texture are read off another source that carries them (Wipeout HD's, else
+# 2048's or Omega's), and nothing is drawn, and the loader report says so, when this machine has
+# none. The row is dropped on HD, 2048 and Omega, which lay their own, by
+# `menu::Definition::drop_unavailable_wingtip_contrails`. Read when a race loads.
+[[page.entry]]
+kind = "choice"
+label = "WINGTIP CONTRAILS"
+string_id = "OAG_GRAPHICS_WINGTIP_CONTRAILS"
+setting = "graphics.wingtip_contrails"
+values = ["off", "on"]
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
+
 # `fps` is one line of numbers; `pacing` adds the graph, which is the one that
 # shows uneven frames - an average frame rate is exactly what hides them.
 # `dev` adds a third line of scene counts (draw calls, triangles). Drawn over

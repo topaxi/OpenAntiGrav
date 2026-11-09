@@ -565,6 +565,18 @@ impl Definition {
         }
     }
 
+    /// Drops the WINGTIP CONTRAILS row on a title that carries them itself
+    /// (`oag_title::Title::wingtip`): HD, 2048 and Omega. Pulse and Pure keep it. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_wingtip_contrails(&mut self, title: &oag_title::Title) {
+        if title.wingtip.is_none() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.wingtip_contrails"));
+        }
+    }
+
     /// Drops the HUD STYLE row on a title whose disc authors no `HUD Style` list
     /// (`oag_title::HudLayouts::skins`): Pulse, Pure and 2048. Same once-before-read
     /// timing as [`Self::drop_unavailable_boost_zoom`].

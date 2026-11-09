@@ -358,7 +358,7 @@ pub use load::{export_track, load};
 pub(crate) use oag_title::Trigger;
 pub use options::{
     CameraOverride, Campaign2048Progress, CaptureHud, CaptureZone, Loaded, Options, PoseRequest,
-    SeatPick, Setup, Sighting, TrailHits,
+    SeatPick, Setup, Sighting, TrailHits, WingtipContrails,
 };
 pub use replay::{ApplyError, Launch, OriginalAi, UnknownOption, rebuild};
 #[cfg(feature = "view")]

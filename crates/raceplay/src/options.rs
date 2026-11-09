@@ -26,6 +26,25 @@ pub enum TrailHits {
     },
 }
 
+/// Whether the wingtip contrails are laid on a title whose original has none
+/// (`graphics.wingtip_contrails`, off by default: an enhancement of this project's).
+///
+/// A lender is used only where the craft's title carries no contrails of its own
+/// (`oag_title::Title::wingtip` is `None`: Pulse and Pure); HD, 2048 and Omega lay theirs whatever
+/// this holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum WingtipContrails {
+    /// Only the titles that carry them.
+    #[default]
+    Off,
+    /// Lay them off `lender`, a source whose title carries them (found by the composition root);
+    /// `None` when this machine has none, which the loader report says.
+    On {
+        /// The source to read the config and the texture from.
+        lender: Option<String>,
+    },
+}
+
 /// What to load, and which of it to draw.
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -80,6 +99,9 @@ pub struct Options {
     /// a title's trail-hit burst on a title that has none of its own (Pulse and Pure).
     /// Off by default. See [`TrailHits`].
     pub trail_hits: TrailHits,
+    /// The player's `graphics.wingtip_contrails`: whether a title with none of its own lays HD's
+    /// wingtip contrails after a speed pad. Off by default. See [`WingtipContrails`].
+    pub wingtip_contrails: WingtipContrails,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///

@@ -975,7 +975,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     let wingtip = crate::wingtip::load(
         craft_of(&mut craft, &mut archives),
-        craft_title.wingtip.as_deref(),
+        craft_title,
+        options,
         &liveries,
         &mut report,
     )

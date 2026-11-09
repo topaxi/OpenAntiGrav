@@ -282,6 +282,10 @@ impl Session {
             self.settings.graphics.trail_hits,
             &self.titles,
         );
+        options.wingtip_contrails = oag_game::launcher::wingtip_contrails_from(
+            self.settings.graphics.wingtip_contrails,
+            &self.titles,
+        );
         // The packs this machine has mounted, as the race box mounts them: the header's
         // `opponent_teams` may name a team only a pack ships, and a rebuild without the pack
         // fields another hull there. Whether the packs are the recording's is the tick-zero
