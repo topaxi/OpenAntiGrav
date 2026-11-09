@@ -801,3 +801,56 @@ about 1.7 ms of a 9.3 ms frame, with the scene pass and the FSR 3.1 chain
 unmoved. Blur draws through the render extent, so its cost falls with the
 resolution like the scene pass's; the controller budgets it as its own meter
 (`oag_present::drs`, `crates/game/src/main/session.rs` `blur_cost`).
+
+## The gather on the Deck: bisected, two exact cuts flat (2026-11-09, `deck-gpu`)
+
+The question: can the largest GPU pass of an HD Anulpha Pass race on the Steam Deck be cut with a
+byte-identical picture? **No cut was kept.** The largest single span is the circuit's shading, not
+this chain; the half-resolution gather is the second, and the two exact changes tried on it measured
+flat. The per-pass table and the two attempts are in
+[frame-thread-cpu.md](frame-thread-cpu.md), "The Deck's GPU passes on HD Anulpha"; this section
+keeps what bounds the gather and what the tiers cost.
+
+**Method.** `RADV VANGOGH`, `dist` `znver2` `perf-probe` container builds of `4cd61908c`, offscreen
+over ssh, the maintainer's HD profile (`motion_blur = "high"`, `motion_blur_resolution = "half"`,
+shadows `original`, MSAA off, `target_fps = "off"`, render scale 100). One view:
+
+```sh
+OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1 ./oag-game hdfury-ps3-eu-dec.iso \
+  --track 'Data\Environments\15_Anulpha_Pass\track.vex' --race --mode single_race --seed 1 \
+  --autopilot --no-audio --size WxH --ticks 2500 --render-scale 100 --screenshot out.png
+```
+
+Arms interleaved, 2 rounds, each run under the Deck's lock, Deck load 0.8 to 1.7. Spans are
+medians of the redraws.
+
+### What the gather is bound by
+
+A diagnostic override (not committed) changed one thing at a time, 1080p, ms, two rounds within
+0.3 %:
+
+| Variant | reconstruct (half) |
+| --- | ---: |
+| as shipped | 1.78 |
+| 5 taps instead of up to 15 | 0.74 |
+| colour tap replaced by the centre colour | 1.40 |
+| `prepared` tap replaced by the pixel's own (this also folds the depth and reach terms to constants) | 0.86 |
+| `prepared` tap kept, at an address that stays in cache | 1.63 |
+| colour tap kept, at an address that stays in cache | 1.54 |
+
+The cost is linear in the taps and is not cache misses. `RADV_DEBUG=shaderstats`: 32 VGPRs, no
+spills, full occupancy, about 210 VALU.
+
+### What a player can already buy
+
+The same bench, `--motion-blur` per run, ms, two rounds:
+
+| Tier | reconstruct 1080p | pipelined 1080p | reconstruct 4K | pipelined 4K |
+| --- | ---: | ---: | ---: | ---: |
+| `high` | 1.75 / 1.78 | 8.77 / 8.70 | 5.64 / 5.62 | 24.94 / 24.98 |
+| `medium` | 1.56 / 1.26 | 9.05 / 8.59 | 5.32 / 5.29 | 24.67 / 24.66 |
+| `off` | | 6.19 / 6.28 | | 15.51 / 15.17 |
+
+At 4K the blur costs this profile about 9.6 ms of the 24.9 ms pipelined frame, and `medium` saves
+little of it. The levers left on the gather (a 32-bit `prepared` texel instead of 64-bit, fewer
+taps) change the picture, so they are a tier decision, not a speed-up.

@@ -57,6 +57,11 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
      (`RADV_DEBUG=shaders`, count `v_log_f32`) and edit only if the `pow` is there.
    - Risk: none to the simulation. Keep the clamp for a source that holds values above 1 (an extended-range
      surface) when the grade is not neutral. Effort: 30 minutes.
+   - Deck timestamps (2026-11-09, `deck-gpu`): neither confirmed nor refuted. HD Anulpha at a 4K output,
+     `--presented --reconstruction fxaa`, read 2.6 ms serialised for FXAA plus the composite together;
+     the composite alone was not separated. Caution from the same lane: removing six quarter-rate
+     reciprocals from the motion blur gather (ISA confirmed) saved nothing, because that pass was not
+     ALU-bound. Count the `v_log_f32` and also time it.
 
 2. **A Zone race samples nine textures where three are needed.** `crates/mesh/shaders/zone.wesl:110`
    (`zone_sample`, four colour fetches) and `:206` (`zone_glow`, four band fetches), plus the visualiser lookup.
@@ -119,6 +124,9 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
      and the shadow-free path only) and `v_log_f32` (each `pow` is one). Then edit and re-count.
    - Picture: byte-identical for (a), (c), (d); (b) is a pure guard. Risk: derivative uniformity on the new
      guards, as item 2. Effort: 1 to 3 hours including the ISA.
+   - Deck timestamps (2026-11-09, `deck-gpu`), HD Anulpha Pass, one view: `track solid, shaded` 1.88 / 3.03 /
+     8.66 ms at 800p / 1080p / 4K (1.00x overdraw). That is the base to read 0 to 3 % against on this circuit
+     (0.3 ms at 4K is 3.5 %). The ISA was not dumped, so the estimate is neither confirmed nor refuted.
 
 5. **Fog computes both curves for every fragment.** `crates/mesh/shaders/fog.wesl:6` and `:13` to `:14`
    (`fogged`).
