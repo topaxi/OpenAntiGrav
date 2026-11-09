@@ -746,6 +746,16 @@ impl Race {
         }
     }
 
+    /// The original's `g_camera_fov_degrees` for this view: the authored field plus the speed
+    /// widen, before the player's setting and the window's fit. `ViewCull_ViewDepth` multiplies
+    /// every list-B depth by this over 65 (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`,
+    /// "The list-B queue key").
+    #[must_use]
+    pub fn camera_fov_degrees(&self) -> f32 {
+        self.vertical_fov(AUTHORED_ASPECT, oag_display::display::Fov::AUTHORED)
+            .to_degrees()
+    }
+
     /// The vertical field of view, in radians, that [`Self::projection`] is
     /// built from - every term that doc lists, composed in its order.
     ///

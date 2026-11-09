@@ -382,7 +382,10 @@ impl Target {
                 set,
                 chunks,
                 frustum,
-                Lists::Blended { depth_plane: None },
+                Lists::Blended {
+                    depth_plane: None,
+                    between: None,
+                },
             ));
         }
         oag_gpu::perfprobe::marks::close(&mut pass);
