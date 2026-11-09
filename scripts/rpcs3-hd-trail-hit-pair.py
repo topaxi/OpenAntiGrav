@@ -2,11 +2,12 @@
 """Matched pairs of Wipeout HD's trail-hit burst: the player tucked in a rival's trail, ours beside it (RPCS3).
 
     source data/scratch/<lane>/env.sh
-    scripts/emu-restore-state.sh <lane> data/saves/hd-fury/hd-race-talons-venom-pack.SAVESTAT.zst
+    scripts/emu-restore-state.sh <lane> data/saves/hd-fury/hd-race-talons-venom-pack.SAVESTAT.zst --pause
     OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-hd-trail-hit-pair.py OUT N \\
         [--back 8] [--frames 30] [--team feisar] [--track /data/environments/talons_junction/track.vex]
 
-N times: pause, re-arm the player's Autopilot for good (`*(ship+0x5edc)+0x200 |= 0x800`, `+0x158 = 10000`,
+Restore the state (`--pause`) before every pair: the tuck needs a rival ahead, and a few seconds of the
+Autopilot leave the player leading. N times: pause, re-arm the player's Autopilot for good (`*(ship+0x5edc)+0x200 |= 0x800`, `+0x158 = 10000`,
 docs/ghidra/functions/ps3-hdfury-eu/autopilot.md), put the player's body `--back` units behind the nearest rival
 ahead on its basis rows and at its speed (`rpcs3_place`, the tuck `rpcs3-hd-trail-tuck.py` does), re-placed so
 before each of `--frames` game frames (counted off the lap clock) so the burst, the camera and the drawn hull

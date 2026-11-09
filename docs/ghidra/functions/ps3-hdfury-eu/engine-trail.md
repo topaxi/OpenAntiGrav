@@ -718,16 +718,24 @@ warm-up that lets a posed frame carry the burst.
   the hull sits lower and nearer the camera than the body pose projected through the
   pushbuffer camera. Scenery and other craft line up.
 
-### Ours' trigger does not fire where the original's does
+### Ours' trigger fired as tucked in 1 of 9 posed pairs (not a measured reach gap)
 
-The 2026-10-29 breakpoint fired the spawn every frame with the player tucked 8 units
-behind a rival. At the same tuck, ours' anchor test (`exhaust::hd::FIN_HALF_WIDTH`, 0.5)
-fired as tucked in 1 of 9 captured pairs. The nearest authored anchor sat 0.48 to 7.2 units
-off the warm-up ribbon at the frame; at the six best tucks it was 0.48 to 0.90.
-The ribbon is laid from the rival's nozzle, and it runs 2.4 to 3.6 units to the side of
-the tucked player's centre. **Measured, not wired**: the original's test runs in the
-`Trails` SPU job, and its reach is unread. The next measurement is the breakpoint hit
-rate on `0x002e3b98` against a held lateral offset under `--interpreter`.
+At the tuck, ours' anchor test (`exhaust::hd::FIN_HALF_WIDTH`, 0.5) fired in 1 of 9
+captured pairs. The nearest authored anchor sat 0.48 to 7.2 units off ours' ribbon at the
+frame, 0.48 to 0.90 at the six best tucks. **This is not yet a measured difference in
+reach**, for three reasons:
+
+1. The original's on/off frames could not be separated (below), so whether the original
+   fired at these pairs is unknown.
+2. The distances are against ours' straight-line warm-up ribbon, not the rival's curved
+   one. The probe showed the distance drifting linearly across the warm-up, and the ribbon
+   running 2.4 to 3.6 units to the side of the player's centre, which nothing explains yet.
+3. The 2026-10-29 every-frame firing came from a different tuck, with its offset
+   unrecorded.
+
+The original's test runs in the `Trails` SPU job and is unread. **Do not widen ours' test on
+this.** The next measurement is the breakpoint hit rate on `0x002e3b98` against a held
+lateral offset, under `--interpreter`.
 
 To compare the drawing anyway, ours' player is moved onto the ribbon by the probed
 anchor-to-ribbon vector before rendering. That shift is chosen, and it is stated per pair
@@ -806,7 +814,7 @@ So the strip is built at draw time. The leads, in order:
 
 ### The pair, measured
 
-Metric stated before capture (lane report): near-white pixels (min channel >= 200) in a
+Metric stated before capture (`scripts/hd-trail-hit-box-metric.py`): near-white pixels (min channel >= 200) in a
 300x300 box on the player's nose projected through the captured camera, the largest
 8-connected component, and whether a streak (>= 20 px, aspect >= 4) exists. Ours' burst is
 exact: the same command line with both emitters dropped, subtracted. The original's is in

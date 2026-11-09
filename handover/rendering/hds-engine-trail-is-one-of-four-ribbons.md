@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-11-09
-summary: "HD trail-hit pair: ours' emitter-0 streaks draw as soft blobs (HD class-6 draw unread); our hit test misses tucks; WakeTrail unwired"
+summary: "HD trail-hit pair: ours' emitter-0 streaks draw as soft blobs (HD class-6 draw unread); ours rarely fires as tucked; WakeTrail unwired"
 ---
 
 # HD's engine trail is one of four ribbons, and a craft flying through one sparks
@@ -23,9 +23,10 @@ summary: "HD trail-hit pair: ours' emitter-0 streaks draw as soft blobs (HD clas
     strip builder exists. Next: the `particleVelocity` vertex parameter (loaded in
     `FUN_002673b0`) and `ParticleRenderer.h`'s callers `FUN_0027ff58`/`FUN_00280290`.
     See engine-trail.md, "The trail-hit burst as a matched pair";
-  - **ours' hit test misses tucks the original fires on** (nearest anchor 0.48-0.84
-    off the ribbon against a 0.5 half-width; original: every frame). Measure the
-    original's reach next: the breakpoint rate on `0x002e3b98` against a held lateral
+  - **ours fired as tucked in 1 of 9 posed pairs** (nearest anchor 0.48-0.90 off ours'
+    straight warm-up ribbon, against a 0.5 half-width). Not a measured reach gap: the
+    original's firing at those pairs is unknown. Do not widen the test on it; measure the
+    original's reach first: the breakpoint rate on `0x002e3b98` against a held lateral
     offset (`scripts/rpcs3-hd-trail-hit-pair.py` places; `rpcs3-hd-trail-hit-log.py`
     counts);
   - carrying HD's collision sparks too (`ShipCollisionFx_Trigger` writes the same
