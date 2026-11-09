@@ -242,6 +242,16 @@ pub fn borrowed_zoom_ring() -> &'static oag_title::ZoomRing {
     &oag_hd::race::ZOOM_RING
 }
 
+/// Whether `title` is the one a trail-hit burst is preferably lent from
+/// (`graphics.trail_hits`, `oag_raceplay::TrailHits`): Wipeout HD/Fury, whose
+/// `WO_TRAIL_HITSHIP` the burst is read from. Here for the reason
+/// [`borrowed_zoom_ring`] is: the one place a title package is named for another's data.
+#[must_use]
+pub fn is_preferred_trail_hit_lender(title: &Title) -> bool {
+    // By slug: a `const` title has no one address to compare.
+    title.slug() == oag_hd::TITLE.slug()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -74,6 +74,8 @@ pub fn finish_definition(
     definition.drop_unavailable_race_variant(title);
     // The BOOST ZOOM row exists where a ring can be borrowed: Pulse and Pure.
     definition.drop_unavailable_boost_zoom(title);
+    // And the TRAIL HITS row, where the title authors no such burst: Pulse and Pure.
+    definition.drop_unavailable_trail_hits(title);
     // And the HUD STYLE row, where the disc authors the list: HD and Omega.
     definition.drop_unavailable_hud_style(title);
     // And the DYNAMIC HUD row, where the options list it: Pulse.

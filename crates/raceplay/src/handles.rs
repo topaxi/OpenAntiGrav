@@ -57,6 +57,16 @@ impl EffectHandles {
         self
     }
 
+    /// Plays `effect` on `trigger` where the title's own table names none (a lent burst, the
+    /// player's `graphics.trail_hits`). `None` leaves the trigger as it was.
+    #[must_use]
+    pub fn lending(mut self, trigger: Trigger, effect: Option<Arc<Effect>>) -> Self {
+        if effect.is_some() {
+            self.slots[trigger.index()] = effect;
+        }
+        self
+    }
+
     /// The effect `index` of mod `mod_id`, if it loaded.
     #[must_use]
     pub fn own(&self, mod_id: &str, index: u16) -> Option<&crate::extension_effects::OwnEffect> {

@@ -165,6 +165,46 @@ pub fn distinct_titles(rows: &[Candidate]) -> Vec<Candidate> {
         .collect()
 }
 
+/// The source to lend a title that authors no trail-hit burst its `WO_TRAIL_HITSHIP`
+/// (`graphics.trail_hits`): Wipeout HD's when `rows` holds it, else the first playable row whose
+/// title authors the effect itself (2048, Omega). `None` when this machine has no such source.
+#[must_use]
+pub fn trail_hit_lender(rows: &[Candidate]) -> Option<&Candidate> {
+    let authors = |row: &&Candidate| {
+        row.playable()
+            .is_some_and(|title| title.effect_on(oag_title::Trigger::TrailHitship).is_some())
+    };
+    rows.iter()
+        .filter(authors)
+        .find(|row| {
+            row.playable()
+                .is_some_and(oag_source::title::is_preferred_trail_hit_lender)
+        })
+        .or_else(|| rows.iter().find(authors))
+}
+
+/// [`oag_raceplay::Options::trail_hits`] for the player's `graphics.trail_hits`, from a survey
+/// the caller already holds (the session's own).
+#[must_use]
+pub fn trail_hits_from(on: bool, rows: &[Candidate]) -> oag_raceplay::TrailHits {
+    if !on {
+        return oag_raceplay::TrailHits::Off;
+    }
+    oag_raceplay::TrailHits::On {
+        lender: trail_hit_lender(rows).map(|row| row.source.clone()),
+    }
+}
+
+/// [`trail_hits_from`] for a caller with no survey (the command line's race): surveys the
+/// machine's sources, and only when the setting is on.
+#[must_use]
+pub fn trail_hits(on: bool) -> oag_raceplay::TrailHits {
+    if !on {
+        return oag_raceplay::TrailHits::Off;
+    }
+    trail_hits_from(on, &survey(&oag_source::source::candidates()))
+}
+
 /// Whether `source` is an encrypted PS3 image no key opens, which a stated
 /// source gets the chooser's key prompt for instead of a bare error.
 ///

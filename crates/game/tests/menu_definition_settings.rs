@@ -261,6 +261,32 @@ fn the_boost_zoom_row_is_dropped_where_the_ring_cannot_be_borrowed() {
     }
 }
 
+/// The TRAIL HITS row is offered where the title authors no trail-hit burst of its own - Pulse
+/// and Pure - and absent on HD, 2048 and Omega, which play theirs whatever it holds.
+#[test]
+fn the_trail_hits_row_is_dropped_where_the_title_plays_its_own_burst() {
+    let rows = |definition: &Definition| {
+        definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter(|entry| entry.setting() == Some("graphics.trail_hits"))
+            .count()
+    };
+    for (title, offered) in [
+        (oag_pulse::TITLE, 1),
+        (oag_pure::TITLE, 1),
+        (oag_hd::TITLE, 0),
+        (oag_omega::TITLE, 0),
+        (oag_2048::TITLE, 0),
+    ] {
+        let mut definition = built_in();
+        assert_eq!(rows(&definition), 1, "the definition ships the row");
+        definition.drop_unavailable_trail_hits(title);
+        assert_eq!(rows(&definition), offered, "{}", title.name);
+    }
+}
+
 /// The TRAIL ORDER row is offered where the ribbon is the PSP preset (Pulse, Pure)
 /// and dropped where it is not (HD, Omega, 2048), and it offers every order.
 #[test]

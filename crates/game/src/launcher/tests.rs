@@ -632,3 +632,39 @@ fn the_build_hash_and_date_are_drawn() {
     );
     assert_eq!(build_label(), expected);
 }
+
+fn of(name: &str, title: &'static oag_title::Title) -> Candidate {
+    Candidate {
+        state: State::Playable(title),
+        ..playable(name)
+    }
+}
+
+/// The burst is lent from HD when this machine has it, else from the first source that authors
+/// one itself, and from nothing when only Pulse and Pure are here: no stand-in is drawn.
+#[test]
+fn the_trail_hit_lender_is_hd_then_any_title_that_authors_the_burst() {
+    let rows = vec![
+        of("pulse.chd", oag_pulse::TITLE),
+        of("2048", oag_2048::TITLE),
+        of("hd.iso", oag_hd::TITLE),
+    ];
+    assert_eq!(trail_hit_lender(&rows).unwrap().name, "hd.iso");
+    assert_eq!(trail_hit_lender(&rows[..2]).unwrap().name, "2048");
+    assert!(trail_hit_lender(&rows[..1]).is_none());
+    assert!(trail_hit_lender(&[broken("enc.iso")]).is_none());
+}
+
+/// Off surveys nothing and lends nothing.
+#[test]
+fn the_setting_off_hands_the_race_no_lender() {
+    assert_eq!(trail_hits(false), oag_raceplay::TrailHits::Off);
+    let rows = vec![of("hd.iso", oag_hd::TITLE)];
+    assert_eq!(trail_hits_from(false, &rows), oag_raceplay::TrailHits::Off);
+    assert_eq!(
+        trail_hits_from(true, &rows),
+        oag_raceplay::TrailHits::On {
+            lender: Some("data/images/hd.iso".to_string())
+        }
+    );
+}

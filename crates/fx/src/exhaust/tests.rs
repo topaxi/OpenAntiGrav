@@ -691,3 +691,52 @@ fn flare_quads_are_counted_apart_from_the_sprites() {
     assert_eq!(drawn.without_trail().count, 18);
     assert_eq!(Drawn::default().flares(), 0);
 }
+
+fn a_full_ribbon() -> Exhaust {
+    let mut exhaust = Exhaust::new();
+    for k in 0..TRAIL_SAMPLES {
+        exhaust.push_trail(Vec3::new(k as f32 * -4.0, 0.0, 0.0), Vec3::X);
+    }
+    exhaust
+}
+
+/// The centre line a craft-versus-trail test measures is segment-wise: a point between two
+/// stored samples is on the line, not half a segment from the nearer sample.
+#[test]
+fn trail_nearest_projects_onto_a_segment_rather_than_snapping_to_a_sample() {
+    let exhaust = a_full_ribbon();
+    let (on, away) = exhaust
+        .trail_nearest(Vec3::new(-6.0, 3.0, 0.0))
+        .expect("a full ring");
+    assert!((on - Vec3::new(-6.0, 0.0, 0.0)).length() < 1e-5, "{on:?}");
+    assert!((away - 3.0).abs() < 1e-5, "{away}");
+    // Past the head, the head itself.
+    let (on, _) = exhaust.trail_nearest(Vec3::new(10.0, 0.0, 0.0)).unwrap();
+    assert!((on - Vec3::ZERO).length() < 1e-5, "{on:?}");
+}
+
+/// Until the ring is full the ribbon is not drawn, so it has no line to test against.
+#[test]
+fn trail_nearest_and_bounds_wait_for_a_full_ring() {
+    let mut exhaust = Exhaust::new();
+    exhaust.push_trail(Vec3::ZERO, Vec3::X);
+    exhaust.push_trail(Vec3::X, Vec3::X);
+    assert!(exhaust.trail_nearest(Vec3::ZERO).is_none());
+    assert!(exhaust.trail_bounds().is_none());
+    let (low, high) = a_full_ribbon().trail_bounds().unwrap();
+    assert_eq!(low, Vec3::new(-36.0, 0.0, 0.0));
+    assert_eq!(high, Vec3::ZERO);
+}
+
+/// The width is the runtime scale `intensity * 0.35 + 0.2` on the widest layer.
+#[test]
+fn trail_half_width_is_the_widest_layers_runtime_width() {
+    let mut exhaust = Exhaust::new();
+    assert!((exhaust.trail_half_width() - TRAIL_WIDTH_BASE).abs() < 1e-6);
+    exhaust.snap(1.0, 0.0);
+    assert!(
+        (exhaust.trail_half_width() - (TRAIL_WIDTH_BASE + TRAIL_WIDTH_GAIN)).abs() < 1e-6,
+        "{}",
+        exhaust.trail_half_width()
+    );
+}

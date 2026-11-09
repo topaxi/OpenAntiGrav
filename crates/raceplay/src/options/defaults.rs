@@ -20,6 +20,7 @@ impl Default for Options {
             find_extensions: None,
             find_texture_packs: None,
             boost_zoom: None,
+            trail_hits: TrailHits::Off,
             team: None,
             hull_variant: None,
             skin: None,
