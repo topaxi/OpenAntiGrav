@@ -128,11 +128,13 @@ struct Constants {
     uv_scale: [f32; 2],
     uv_max: [f32; 2],
     /// [`Bloom::stamp_glow`]'s rectangles, as fractions of the drawn rectangle: `x, y, width,
-    /// height`. Only the stamp pass reads these three fields; every other pass is handed zeros.
+    /// height`. Only the stamp pass reads these four fields; every other pass is handed zeros.
     stamps: [[f32; 4]; stamps::MAX],
-    /// The stamped colour, `rgb` in `0..=1`.
-    stamp_colour: [f32; 4],
-    /// `count, value, opacity` of the stamps and a pad.
+    /// Each rectangle's colour, `rgb` in `0..=1`, and opacity.
+    stamp_colours: [[f32; 4]; stamps::MAX],
+    /// Each rectangle's mask byte in `x`.
+    stamp_values: [[f32; 4]; stamps::MAX],
+    /// `count` of the stamps and three pads.
     stamp_meta: [f32; 4],
 }
 
@@ -228,7 +230,8 @@ impl Lane {
             uv_scale: [1.0, 1.0],
             uv_max: [1.0, 1.0],
             stamps: [[0.0; 4]; stamps::MAX],
-            stamp_colour: [0.0; 4],
+            stamp_colours: [[0.0; 4]; stamps::MAX],
+            stamp_values: [[0.0; 4]; stamps::MAX],
             stamp_meta: [0.0; 4],
         };
         // The one buffer here that is not a compile-time constant: the bright
@@ -573,7 +576,8 @@ impl Bloom {
             uv_scale,
             uv_max,
             stamps: [[0.0; 4]; stamps::MAX],
-            stamp_colour: [0.0; 4],
+            stamp_colours: [[0.0; 4]; stamps::MAX],
+            stamp_values: [[0.0; 4]; stamps::MAX],
             stamp_meta: [0.0; 4],
         };
         if lane.written.get() != Some(wanted) {
@@ -722,7 +726,7 @@ impl Bloom {
 }
 
 mod stamps;
-pub use stamps::{MAX as MAX_STAMPS, Stamps};
+pub use stamps::{MAX as MAX_STAMPS, Stamp};
 
 #[cfg(test)]
 mod tests;

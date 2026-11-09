@@ -64,7 +64,8 @@ Both runs agree to within 1 unit at every age but 1.0 s.
 
 Ranked by what a player sees:
 
-1. **The energy bar's flash has no glow and no second state.** The bar fill's mean luma over the window (rows 248 to
+1. **The energy bar's flash has no glow and no second state (fixed 2026-11-09, `pulse-bar-bloom`: see "Pulse: the energy bar"; the white phase is
+   still about 14 luma dim).** The bar fill's mean luma over the window (rows 248 to
    258, x 315 to 440; normal 164, both sides): the original alternates **207** (bright cyan, with a bloom halo) and
    **239** (white, with a halo), 7 to 8 frames each, from frame 3 to frame 62, then 163. Ours alternates **163**
    (nothing changes) and **232** (flat white, no halo) with the same period; the white phases coincide with the
@@ -284,12 +285,35 @@ the texture tap and its transfer are the lead). The first page's "2.7 times" was
 +6.9 to +8.3 although the shell is now right, and the shell is about +4 of that. This page first read `renderer.md` item 4 as "particles end on `/2`"; `hd-absorb-burst-half` found that
 reading false (the section "HD burst and shell tint" below), so the factor is not a `/2`.
 
-### Pulse: the energy bar (not re-measured)
+### Pulse: the energy bar (landed 2026-11-09, `pulse-bar-bloom`)
 
-Not attempted in this lane's budget. The Single Race state of the first capture is not on this machine, but
-`time-trial-platinum-rush-white-venom-grid.ppst` is, and the Pure absorb worked from a Time Trial state, so the same driver should reach it.
-The GE dump of the bar's draw (`psp-absorb-frames.py --ge-dump`), the confirmation the thread asks for before wiring `+0xf4`, was not taken.
-Nothing changed.
+**Claim, true: the bar is bloomed for the whole window and its off phase is cyan, not unchanged.** The draw call, from three GE lists
+(`scripts/psp-absorb-frames.py --ge-dump`, then `scripts/psp-ge-dump.py census`): outside the window the fill is drawn with the stencil
+off; in the window it is drawn with `STENCILFUNC ALWAYS ref 0xff` and zpass `REPLACE`, which writes `0xff` into the framebuffer's alpha
+(the glow mask) over the fill's whole rectangle, in both halves of the 8 Hz blink. The blink is the fill's vertex alpha, `255` and `0`,
+the RGB staying `(13, 223, 221)`. **There is no white layer**: the off half is the fill at alpha zero over `ShieldBarBg` (`0x60B5D7C8`),
+and the bloom lifts that pale backdrop to white. The table of PRIMs, words and the EDRAM alpha is in
+[`shield.md`](../ghidra/functions/psp-pulse-usa/shield.md), "The absorb flash at the draw call"; confidence 90.
+
+Bar fill luma (Rec. 709, rows 248 to 258, x 315 to 440, 480x272), one value per frame, runs of frames from the press (the original's
+screen, 66 frames at 1/60 s; ours is `--give mine` with circle at tick 520, frame `f` at tick `520 + f - 2`, the same pose and flags as
+the method table):
+
+| | Original | Ours after | Ours before |
+| --- | --- | --- | --- |
+| At rest (control) | 164 | 164 | 164 |
+| On half | **207**, frames 3-9, 17-24, 32-39, 47-54, 62 | **205**, frames 3-9, 17-24, 32-39, 48-54 | 164 (nothing changes) |
+| Off half | **237 to 242**, frames 10-16, 25-31, 40-46, 55-61 | **223 to 227**, frames 10-16, 25-31, 40-47, 55-62 | 232 flat white, no halo |
+| Back at rest | frame 63 | frame 63 | frame 63 |
+
+Read as a player: the original's bar glows cyan with a halo that spreads over the panel above it and the road below, then washes to a
+white-green bar with a wider halo, eight times a second. Ours now does the same (frames 6, 12, 30 and 36 read side by side at 2x, original, before, after); the off half is a little paler and the halo a little narrower. RGB of the bar box, off half:
+original `(228, 242, 235)`, ours `(200, 231, 214)`; on half: original `(43, 252, 251)`, ours `(33, 252, 251)`.
+
+Left open (all one cause): the stamp's colour is the backdrop's own colour at its alpha, as `oag_post::bloom::stamps` documents for every
+stamp, so the scene showing through the backdrop's 62 % transparency is not in the bright pass. The original's bright pass reads the
+framebuffer under the mask, scene included. Sampling the HUD's target in the stamp pass would close this one and the boost's matching
+gap. Also not done: the PS2 (its bloom chain has no stamp pass in the port; the PS2 draw was not dumped).
 
 ### 2048 and Omega
 
@@ -389,6 +413,17 @@ New on a second machine (`absorb-fx-wire`), each script's docstring has the full
   `scripts/hd-weapon-pair.py --capture DIR --weapon mine --team feisar_c1 --button circle|none --camera-from NN --extra --variant
   concept1`, and score `theirs_NN.png` and `ours_NN.png` of the absorb run against the control's with `absorb-score.py --size 1280x720
   --box 400,330,880,690`.
+
+Pulse bar (`pulse-bar-bloom`): restore `race-platinum-white-single-grid.ppst` (`scripts/psp-state.py load 2 --file ...`), then
+`scripts/psp-absorb-frames.py --port P --out DIR --frames 66 --edram --display :N` (and `--control`) for the series (the on-screen frame is
+the window cropped from the root screenshot at `(160, 128)` and halved; `fbN` are the two EDRAM framebuffers, which alternate), and with
+`--ge-dump DIR/frame.ppdmp --ge-at 4` (blink on) or `--ge-at 12` (blink off) for the draw call; `scripts/psp-ge-dump.py census` then lists the
+fill as the PRIM of texture `0xc911d0` over `(306, 246)-(446, 258)` with `col0`, `stenciltestenable`, `stenciltest`, `stencilop` and `pmsk2`.
+Ours: `oag-game <pulse-psp-usa.chd> --race --track 'Data\Environments\13_Track\track.vex' --pose-from <pair trace> --pose-tick 0
+--pose-hold --camera-fov 60 --camera-view close --mode single_race --class venom --team Assegai --world-clock-offset 8.765 --give mine
+--input-script <(printf '520 none\n1 circle\n600 none\n') --ticks T --screenshot F.png` with the method table's other flags, T from 520 to 586.
+The disc-backed check without a pose trace is
+`crates/game/tests/hud_boost_glow_ground_truth.rs`, `an_absorb_lights_the_shield_bar_and_its_halo_in_both_blink_phases`.
 
 Earlier recipe:
 

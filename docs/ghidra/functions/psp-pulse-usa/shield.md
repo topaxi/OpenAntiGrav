@@ -1012,7 +1012,9 @@ decompile-only and so also capped at 84:**
    itself (direct decompile, unconditional every frame); confidence **60**
    for what it drives - "Plausible: a reasonable inference from surrounding
    code, could be wrong" on the rubric's own scale, not "Probable"'s
-   structural fit, because only the write side was read.
+   structural fit, because only the write side was read. **Settled
+   2026-11-09, confidence 90: it is the stencil reference of the fill's
+   draw, see "The absorb flash at the draw call" below.**
 
    **The search for the read side, and why it came up empty this pass.**
    `search_instructions(mnemonic="lw", operand_pattern="0xf4(")` across the
@@ -1062,7 +1064,11 @@ decompile-only and so also capped at 84:**
    **82** for "a white layer exists, not an alpha-reveal of the background" -
    pixel data plus the XML's own authored colour, still short of a runtime
    trace of the draw call itself; the vtable's draw slot is what would
-   settle *how* it is drawn, not whether one exists.
+   settle *how* it is drawn, not whether one exists. **Superseded
+   2026-11-09 (GE dump of the draw call): there is no white layer. The
+   white phase is the fill's alpha at zero over `ShieldBarBg`, lifted by
+   the bloom through the stencil stamp; "The absorb flash at the draw call"
+   below.**
 
    **The blink's phase does not read as zero at the absorb.** The thirteen
    in-window frames read `C C W W C C W C C W C C W` in order - a first
@@ -1091,7 +1097,10 @@ rather than a second timer - the same `0.0 <= elapsed <= WINDOW` test
 `shield_blink_phase_on` for point 2, and `oag_hud::draw::draw_list`'s
 `ShieldBar` arm for point 3 - a flat white copy of the bar's own cropped
 fill, painted underneath it, standing in for the unchased draw target named
-above. **The blink's own accumulator is ported, not approximated**:
+above. **Point 3's white copy is
+gone for Pulse (2026-11-09): the draw target was chased, see "The absorb flash
+at the draw call" below; the copy remains only for a title whose art has no
+`AbsorbGlow`.** **The blink's own accumulator is ported, not approximated**:
 `Race::view.shield_blink_timer` (`crate::race::Race::advance_shield_blink`)
 is `hud+0x1dc` itself - it advances only while
 [`Readout::shield_blinking`]'s three conditions hold and freezes rather
@@ -1105,6 +1114,52 @@ doc comment. **Chosen, not measured**: only the flash layer's own geometry
 and blend mode (point 3's own gap) remain so - the blink's phase is no
 longer one of them, unlike the equivalent gap `hud::runtime::phase_on`
 still carries for HD's own blink.
+
+## The absorb flash at the draw call (2026-11-09, `pulse-bar-bloom`)
+
+Confidence **90** (three GE lists of PPSSPP v1.20.4's software renderer, one control and two in the window, plus the framebuffer's
+alpha on 66 consecutive frames; the writer `Hud_UpdateEnergyBar` and the widget's draw method that reads `+0xf4` were not
+re-decompiled, the draw is read from its GE list). State: `race-platinum-white-single-grid.ppst`, Pulse USA, the held pickup
+written at `craft+0x1bc` and circle held 3 frames (`scripts/psp-absorb-frames.py --ge-dump`), then
+`scripts/psp-ge-dump.py census` and the PRIMs of texture `0xc911d0` whose box is `(306, 246)-(446, 258)`.
+
+| Dump (age of the dumped frame) | PRIM (command-table index) | Vertex colour (RGBA) | Stencil test | Stencil func, op | Colour write mask (alpha) |
+| --- | --- | --- | --- | --- | --- |
+| control, no absorb | backdrop 5191 | `181, 215, 200, 96` | off | unused | none |
+| control | fill 5209 | `13, 223, 221, 255` | **off** | unused | none |
+| absorb, blink on (about 0.14 s) | backdrop 5328 | `181, 215, 200, 96` | off | unused | `0xff` (alpha kept) |
+| absorb, blink on | fill 5346 | `13, 223, 221, 255` | **on** | `ALWAYS`, ref **`0xff`**, mask `0xff`; **zpass `REPLACE`** | none (alpha written) |
+| absorb, blink off (about 0.26 s) | backdrop 5175 | `181, 215, 200, 96` | off | unused | `0xff` |
+| absorb, blink off | fill 5193 | `13, 223, 221, **0**` | **on** | `ALWAYS`, ref `0xff`; zpass `REPLACE` | none |
+
+(The command words, in the order the list sets them for the fill: `PMSK2 = 0`, `STENCILEN = 1`, `STENCILOP = 0x020000`,
+`STENCILFUNC = 0xffff01`.) So:
+
+1. **`+0xf4` is the fill's stencil reference.** The fill is drawn with the stencil test on, `ALWAYS`, zpass `REPLACE`, reference
+   `0xff` while absorbing, with the test off outside the window. On the PSP the stencil is the framebuffer's alpha, and a draw
+   reaches the bloom's glow mask only through a stencil op ([glow-mask.md](../../../rendering/glow-mask.md)). EDRAM alpha over the
+   fill (`0x04000000` and `0x04088000`, rows 248 to 258, x 315 to 440, 66 frames): `4` (the scene's baseline) at ages 0 and from 1.03 s,
+   **`255` on every frame between**, in both halves of the blink. The stamp is not gated by the blink.
+2. **The blink is the fill's own alpha.** `iVar4`'s `0`/`255` reaches the fill's vertex colour (`..., 255` and `..., 0` above); the
+   fill's RGB is the authored `HudColour3` (`13, 223, 221`) in both. Nothing else covers the bar: the backdrop (`ShieldBarBg`,
+   `HudColour3A` = `0x60B5D7C8`) is drawn before, with the alpha channel masked (`PMSK2 = 0xff`) so it cannot disturb the stamp.
+3. **There is no white layer.** In the off half the fill is invisible and the stamp lights the backdrop: the bloom layer
+   (`0x04110000`) over the fill reads about `(212, 231, 214)` in the off half and `(39, 255, 255)` in the on half. The on-screen bar
+   luma (Rec. 709, rows 248 to 258, x 315 to 440) is **164** at rest, **207** in the on half and **238** in the off half, the values
+   of [weapon-absorb-pairs.md](../../../rendering/weapon-absorb-pairs.md), "Pulse PSP", item 1. This replaces the earlier reading
+   ("a same-geometry white layer", above): the probe frames saw a white pixel and no gradient, which is what a bloomed
+   backdrop under a uniform stamp also reads.
+
+**Ported** (replacing the flat white copy for Pulse): `oag_title::hud::AbsorbGlow` on `oag_pulse::hud::ART` (`fill: "ShieldBar"`,
+`backdrop: "ShieldBarBg"`, `value: 0xff`); `oag_hud::shield_bar::absorb_fill` records a `GlowStamp` over the cropped fill for the
+whole window, in the fill's colour in the on half and the backdrop's colour and alpha in the off half; `oag_hud::boost_smear` repeats
+it with its widget under a boost; `oag_game::hud_views` hands it to `oag_post::bloom::Bloom::stamp_glow`, which now takes a colour,
+opacity and mask byte per rectangle. Ours against the original, bar luma, same state and pose: on half 205 against 207, off half 223
+to 228 against 238 to 240 (the stamp lights the backdrop at its own alpha, and the scene showing through the backdrop's 62 %
+transparency is not added: the open gap named in [`oag_post::bloom::stamps`](../../../../crates/post/src/bloom/stamps.rs)), no stamp
+outside the window. PS2: the port's PS2 bloom chain has no stamp pass (`Scene::stamp_glow`), so the PS2 shows no halo; the PS2 draw
+was not dumped. Other titles keep the flat white copy (`absorb_glow: None`): Pure draws its gauge as models (`bar_models`), HD,
+2048 and Omega were not dumped (**not checkable here**, a PPSSPP lane; their draws are read on RPCS3 or Vita captures).
 
 ## `Ship_AddShield`'s four callers, and `Ship_RefillLapShield` (`0x0883de30`)
 

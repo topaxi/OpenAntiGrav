@@ -446,7 +446,7 @@ pub fn draw(
     );
 }
 
-/// Adds the glow of the HUD's stamped rectangles (a speed bar under a boost,
+/// Adds the glow of the HUD's stamped rectangles (a speed bar under a boost, a shield bar under an absorb,
 /// `oag_hud::boost_smear`) onto `view`: the bloom's bright pass ran before the HUD existed, so the
 /// original's "the bright pass reads the HUD" is a second, rectangle-only chain here
 /// (`oag_post::bloom::Bloom::stamp_glow`). Nothing without a stamp, so a frame with no boost is
@@ -462,34 +462,25 @@ fn stamp_glow(
     space: oag_display::space::Space,
     glow: &[oag_hud::boost_smear::GlowStamp],
 ) {
-    let Some(first) = glow.first() else {
+    if glow.is_empty() {
         return;
-    };
+    }
     let (hud_x, hud_y, per_x, per_y) = grid_of(viewport, space);
-    let rects: Vec<[f32; 4]> = glow
+    let stamps: Vec<oag_post::bloom::Stamp> = glow
         .iter()
-        .map(|stamp| {
-            [
+        .map(|stamp| oag_post::bloom::Stamp {
+            rect: [
                 (hud_x + stamp.rect[0] * per_x - viewport.0) / viewport.2,
                 (hud_y + stamp.rect[1] * per_y - viewport.1) / viewport.3,
                 stamp.rect[2] * per_x / viewport.2,
                 stamp.rect[3] * per_y / viewport.3,
-            ]
+            ],
+            colour: stamp.colour,
+            opacity: stamp.opacity,
+            value: stamp.value,
         })
         .collect();
-    scene.stamp_glow(
-        device,
-        queue,
-        encoder,
-        view,
-        viewport,
-        &oag_post::bloom::Stamps {
-            rects: &rects,
-            colour: first.colour,
-            opacity: first.opacity,
-            value: first.value,
-        },
-    );
+    scene.stamp_glow(device, queue, encoder, view, viewport, &stamps);
 }
 
 #[cfg(test)]

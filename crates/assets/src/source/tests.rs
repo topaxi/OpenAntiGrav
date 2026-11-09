@@ -231,6 +231,7 @@ const TITLE: &Title = &Title {
         lap_one_shift: None,
         bar_tip: None,
         boost_smear: None,
+        absorb_glow: None,
         sway: None,
         safe_area: None,
         dynamic_hud: None,

@@ -885,6 +885,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
     };
     let mut frame = Frame::default();
     let mut stamped: Vec<([f32; 4], [f32; 4])> = Vec::new();
+    let mut absorbed: Vec<super::boost_smear::Fill> = Vec::new();
 
     // An always-on name draws **once**, even where the layout authors it twice.
     // See `ONE_WIDGET_PER_NAME`.
@@ -960,7 +961,13 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
                 // function formats, `"%"` and not `"kmh"`. See
                 // `shield_bar::tint` for the three rules it applies.
                 if sprite.name == "ShieldBar" {
-                    flash = super::shield_bar::tint(&mut cropped, &sprite.src, readout, cx.sheet);
+                    flash = super::shield_bar::tint(
+                        &mut cropped,
+                        &sprite.src,
+                        readout,
+                        cx.art,
+                        cx.sheet,
+                    );
                 }
                 sprite_draw_from(&sprite.src, &cropped, cx.sheet)
             }
@@ -991,6 +998,14 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             && let Some(Draw::Sprite { rect, color, .. }) = &drawn
         {
             stamped.push((*rect, *color));
+        }
+        if let Some(law) = cx.art.absorb_glow.filter(|law| law.fill == sprite.name)
+            && readout.shield_absorbing
+            && let Some(Draw::Sprite { rect, color, .. }) = &drawn
+        {
+            absorbed.push(super::shield_bar::absorb_fill(
+                cx, readout, law, *rect, *color,
+            ));
         }
         // A bar's fill keeps its own alpha, as does the shield fill; every other lit panel scales.
         frame.sprites.extend(
@@ -1235,7 +1250,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
     // The whole HUD, sprites and text alike, slides with the drawn lean on the titles that
     // measured it - see `sway`.
     super::sway::slide(&mut frame, super::sway::offset(cx.art, readout));
-    super::boost_smear::smear(&mut frame, cx.art, cx.layout, readout, &stamped);
+    super::boost_smear::smear(&mut frame, cx.art, cx.layout, readout, &stamped, &absorbed);
     frame
 }
 

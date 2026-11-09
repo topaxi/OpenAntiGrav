@@ -70,6 +70,23 @@ pub struct GlowStamp {
     pub opacity: f32,
 }
 
+impl Fill {
+    /// One of `copies` draws of this fill, moved by `by`: the colour at `1 / copies` of its alpha.
+    fn stamp(&self, by: [f32; 2], copies: u32) -> GlowStamp {
+        GlowStamp {
+            rect: [
+                self.rect[0] + by[0],
+                self.rect[1] + by[1],
+                self.rect[2],
+                self.rect[3],
+            ],
+            value: self.value,
+            colour: [self.colour[0], self.colour[1], self.colour[2]],
+            opacity: (self.colour[3] * 255.0 / copies as f32).trunc() / 255.0,
+        }
+    }
+}
+
 /// Copy `i`'s shift along `dir`: the GE offset `base - d * i` truncated, moved to whole pixels.
 fn shift(dir: [f32; 2], i: u32, base: [f32; 2]) -> [f32; 2] {
     let step = i as f32;
@@ -169,37 +186,48 @@ fn expand(list: &mut Vec<Draw>, copies: u32, centre: [f32; 2], centres: &[[f32; 
     *list = out;
 }
 
-/// Draws every widget of `frame` `n` times for this boost and records the speed bar fill's glow
-/// stamp in [`Frame::glow`], or leaves the frame alone with no boost.
+/// A fill whose rectangle stamps the glow mask at `value`, drawn in `colour` (`rgba`, `0..=1`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fill {
+    /// The fill's rectangle in the layout's grid.
+    pub rect: [f32; 4],
+    /// The colour the bloom lights under the stamp.
+    pub colour: [f32; 4],
+    /// The mask byte it writes.
+    pub value: u8,
+}
+
+/// Draws every widget of `frame` `n` times for this boost and records the glow stamps in
+/// [`Frame::glow`]: the speed bar's fill (`speed`) while a boost runs, and the `absorb` fills,
+/// each repeated and shifted with its widget. With no boost the widgets are drawn once and only
+/// the `absorb` stamps are recorded.
 pub(super) fn smear(
     frame: &mut Frame,
     art: &oag_title::HudArt,
     layout: &crate::Layout,
     readout: &Readout,
-    fill: &[([f32; 4], [f32; 4])],
+    speed: &[([f32; 4], [f32; 4])],
+    absorb: &[Fill],
 ) {
-    let Some(law) = art.boost_smear else {
+    let n = copies(art, readout);
+    let Some(law) = art.boost_smear.filter(|_| n >= 2) else {
+        frame
+            .glow
+            .extend(absorb.iter().map(|fill| fill.stamp([0.0, 0.0], 1)));
         return;
     };
-    let n = copies(art, readout);
-    if n < 2 {
-        return;
-    }
     let centre = [f32::from(law.centre[0]), f32::from(law.centre[1])];
     let value = stamp(art, readout);
-    if value > 0 {
-        let base = [1808.0, 1912.0];
-        for (rect, colour) in fill {
-            let dir = direction([rect[0], rect[1]], centre);
-            for i in 0..n {
-                let by = shift(dir, i, base);
-                frame.glow.push(GlowStamp {
-                    rect: [rect[0] + by[0], rect[1] + by[1], rect[2], rect[3]],
-                    value,
-                    colour: [colour[0], colour[1], colour[2]],
-                    opacity: (colour[3] * 255.0 / n as f32).trunc() / 255.0,
-                });
-            }
+    let speed = speed.iter().map(|&(rect, colour)| Fill {
+        rect,
+        colour,
+        value,
+    });
+    let base = [1808.0, 1912.0];
+    for fill in speed.chain(absorb.iter().copied()).filter(|f| f.value > 0) {
+        let dir = direction([fill.rect[0], fill.rect[1]], centre);
+        for i in 0..n {
+            frame.glow.push(fill.stamp(shift(dir, i, base), n));
         }
     }
     let centres: Vec<[f32; 2]> = layout

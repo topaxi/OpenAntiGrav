@@ -37,10 +37,12 @@ struct Constants {
     // extent; see `post::sub_rectangle`.
     uv_scale: vec2<f32>,
     uv_max: vec2<f32>,
-    // `Bloom::stamp_glow`: rectangles as fractions of the drawn rectangle, the colour, and
-    // `(count, value, opacity, pad)`. Zero for every other pass.
-    stamps: array<vec4<f32>, 10>,
-    stamp_colour: vec4<f32>,
+    // `Bloom::stamp_glow`: rectangles as fractions of the drawn rectangle, each one's colour
+    // `(rgb, opacity)` and mask byte `(value, pad, pad, pad)`, and `(count, pad, pad, pad)`.
+    // Zero for every other pass.
+    stamps: array<vec4<f32>, 20>,
+    stamp_colours: array<vec4<f32>, 20>,
+    stamp_values: array<vec4<f32>, 20>,
     stamp_meta: vec4<f32>,
 }
 
@@ -101,24 +103,29 @@ fn fs_bright(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(vec3<f32>(bytes(texel.rgb) * alpha / 255u) / 255.0, 1.0);
 }
 
-// Pass 0 of `Bloom::stamp_glow`: the bright pass over rectangles alone, `colour * coverage * value`
-// where `coverage` is what `k` overlapping copies of alpha `opacity` leave of a pixel.
+// Pass 0 of `Bloom::stamp_glow`: the bright pass over rectangles alone. A pixel under several
+// rectangles shows their colours composited in order at each one's opacity (`k` copies of one
+// colour at alpha `a` leave `1 - (1 - a)^k` of it) and carries the largest mask byte among them:
+// `colour * value`.
 @fragment
 fn fs_stamp(in: VertexOutput) -> @location(0) vec4<f32> {
     let count = u32(constants.stamp_meta.x);
-    var k = 0.0;
+    var shown = vec3<f32>(0.0);
+    var value = 0u;
+    var covered = false;
     for (var i = 0u; i < count; i = i + 1u) {
         let r = constants.stamps[i];
         if in.uv.x >= r.x && in.uv.x < r.x + r.z && in.uv.y >= r.y && in.uv.y < r.y + r.w {
-            k = k + 1.0;
+            let c = constants.stamp_colours[i];
+            shown = shown * (1.0 - c.w) + c.rgb * c.w;
+            value = max(value, u32(constants.stamp_values[i].x));
+            covered = true;
         }
     }
-    if k == 0.0 {
+    if !covered {
         return vec4<f32>(0.0, 0.0, 0.0, 1.0);
     }
-    let coverage = 1.0 - pow(1.0 - constants.stamp_meta.z, k);
-    let value = u32(constants.stamp_meta.y);
-    return vec4<f32>(vec3<f32>(bytes(constants.stamp_colour.rgb * coverage) * value / 255u) / 255.0, 1.0);
+    return vec4<f32>(vec3<f32>(bytes(shown) * value / 255u) / 255.0, 1.0);
 }
 
 // Passes 1 and 2: eleven taps at -5..+5 texels along `direction`.
