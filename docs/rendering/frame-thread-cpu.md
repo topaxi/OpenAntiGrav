@@ -1991,3 +1991,58 @@ section reads 0.03 ms, far under these deltas). ms per frame:
 Commands: `run.sh`, `avg.sh` and `ab.sh` as in "The reaper at one view and the shine passes", an arm
 being a wrapper that sets `OAG_SKIP_SOLID=1` around the same binary; `ab.sh <tag> "base skip" WxH 3
 hd 2`.
+
+## The Deck's GPU passes on HD Anulpha (2026-11-09, `deck-gpu`)
+
+Claim: cutting the largest GPU pass of an HD Anulpha race on the Deck raises fps at 1080p and 4K,
+picture byte-identical or behind a named tier. **False: nothing was kept.** The largest pass is the
+circuit's shading, exact and at 1.00x overdraw; the second, the motion blur gather, took two exact
+cuts that measured flat. Bisect and tier prices: [motion-blur.md](motion-blur.md), "The gather on
+the Deck: bisected, two exact cuts flat".
+
+**Method.** `RADV VANGOGH`, `dist` `znver2` `perf-probe` container builds of `4cd61908c`, offscreen
+over ssh, the maintainer's HD profile (`motion_blur = "high"`, `motion_blur_resolution = "half"`,
+shadows `original`, MSAA off, `target_fps = "off"`, render scale 100). `OAG_RENDER_GPU_BENCH=60
+OAG_RENDER_PERF=1 oag-game hdfury-ps3-eu-dec.iso --track 'Data\Environments\15_Anulpha_Pass\track.vex'
+--race --mode single_race --seed 1 --autopilot --no-audio --size WxH --ticks 2500 --render-scale 100
+--screenshot out.png`, one view (the span bench has no split). Arms interleaved, 2 rounds, each run
+under the Deck's lock, Deck load 0.8 to 1.7. No whole-race run: with nothing kept there was no
+before and after.
+
+### Per pass, one view, ms
+
+| Span | 1280x800 | 1920x1080 | 3840x2160 |
+| --- | ---: | ---: | ---: |
+| track solid, shaded | 1.88 | 3.03 | 8.66 |
+| track solid (depth prepass) | 0.40 | 0.49 | 1.12 |
+| motion blur chain | 1.48 | 2.99 | 11.24 |
+| - reconstruct (half) | 0.79 | 1.78 | 7.15 |
+| - composite / copy | 0.26 / 0.08 | 0.52 / 0.14 | 1.89 / 0.48 |
+| - prepare / tile-max x | 0.15 / 0.08 | 0.28 / 0.17 | 0.95 / 0.63 |
+| HD bloom chain | 0.99 | 1.65 | 5.08 |
+| - hd encode | 0.38 | 0.75 | 2.60 |
+| craft, weapons, shields | 0.42 | 0.59 | 1.25 |
+| advert cards (x7) | 0.53 | 0.53 | 0.45 |
+| between passes | 0.75 | 0.71 | 0.61 |
+| pipelined per frame | | 8.0 | 24.8 |
+
+- The circuit's shading is overdrawn 1.00x (2,068,113 fragment invocations for 2,073,600 pixels
+  at 1080p): there is no overdraw left to cut, and it is held exact.
+- The 4K gather reads 5.6 ms in one session and 7.2 to 8.3 ms in another for the same binary (the
+  clock; see [which GPU passes grow](hires-gpu-levers.md), "The Deck's 4K rows are unstable"). Only
+  interleaved pairs are compared below.
+- FXAA plus the present composite at a 4K output: 2.6 ms serialised (`OAG_RESOLVE_BENCH=100
+  --presented --reconstruction fxaa`), below both spans above.
+
+### The gather's two fetches, and its divisors: both measured flat
+
+- **Fetch order.** The ISA issued the colour sample only after the `prepared` load had returned
+  and the weights were computed, so each tap made two round trips in series. Moving the sample up
+  to where its address is known put both in flight together (checked in the ISA). Reconstruct
+  1.78 to 1.77 ms at 1080p, 5.63 to 5.63 at 4K. Occupancy already hides the latency. Dropped.
+- **Invariant divisors.** The loop recomputed six reciprocals per tap (`1 / f32(taps + 1)`,
+  `rect_pixels`, `inv_size`, the centre's reach). Hoisted, the loop went from 8 to 2 `v_rcp_f32`,
+  12 to 6 transcendentals and 84 to 75 VALU. Reconstruct 1.79 to 1.77 ms at 1080p, 5.65 to 5.69
+  at 4K. Dropped.
+
+Pictures: `cmp` equal before and after for both, at 1080p and 4K, two rounds each.
