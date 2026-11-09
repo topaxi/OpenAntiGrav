@@ -20,7 +20,7 @@ Neither is uncheckable: 2048's v1.04 executable and Omega's `eboot.bin` are in G
 - **Wall point rate.** 2048 is `chosen(false)` (a hold for this engine's AI, `docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`),
   Omega `inherited(true, "Wipeout HD")`. Settles it: the `(R^T omega) x r` term of each title's contact resolver (HD's is
   `0x000f7770`). If both have it, 2048's hold is purely an AI-side choice and the doc should say so.
-- **Which difficulty picks the shield slot.** Both titles author `easyshield` 40 over `shield`, and
+- **Which difficulty picks the shield slot.** Both titles author `easyshield` above `shield`, and
   `CraftLaws::shield_by_skill` is `chosen(false)` on each (every craft starts on the medium slot; the Omega loader report
   names it on a Novice race). HD's is measured (the original's Novice field started on `easyshield`), Pulse's is read
   (`docs/ghidra/functions/psp-pulse-usa/shield.md`). Settles it: the `Ship_SetShield` counterpart in each executable (the

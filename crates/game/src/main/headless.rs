@@ -695,6 +695,7 @@ pub(crate) fn run_race(
                     pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                     original_ai: None,
                     campaign_skill: None,
+                    skill_level: None,
                 }
                 .to_table();
                 (path, header)

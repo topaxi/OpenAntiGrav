@@ -33,12 +33,18 @@ impl RaceStage {
     }
 
     /// Adds who flies the opponents to the header a recording of this race is filed under: the
-    /// original driver's request, and a campaign cell's skill scale
-    /// ([`oag_raceplay::Launch::campaign_skill`]), both written to the race before it is armed.
-    pub(crate) fn note_ai(&mut self, original: Option<oag_raceplay::OriginalAi>) {
+    /// original driver's request, a campaign cell's skill scale
+    /// ([`oag_raceplay::Launch::campaign_skill`]) and the rung it raced at
+    /// ([`oag_raceplay::Launch::skill_level`]), all written to the race before it is armed.
+    pub(crate) fn note_ai(
+        &mut self,
+        original: Option<oag_raceplay::OriginalAi>,
+        skill_level: Option<u8>,
+    ) {
         self.replay_header.options.extend(oag_raceplay::Launch::ai_table(
             original,
             self.campaign_ai_skill_scale,
+            skill_level,
         ));
     }
 

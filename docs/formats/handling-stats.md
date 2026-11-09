@@ -282,22 +282,28 @@ default race (Elite) stays on the medium slot; only Novice and an Easy campaign 
 `oag_gameplay::handling_for` takes the index and `Misc::shield_for` picks the slot; the pool is
 every craft's maximum and its start (`Ship_ResetShield`), the player's included.
 
-What each title's files and executable say, and what ours does (census of the starting pools by
-`oag_raceplay::load`, Single Race, `ribbon`, each title's own default roster):
+What each title's files and executable say, and what ours does (a census of the starting pools by
+`oag_raceplay::load`, Single Race, each title's default roster; no values are quoted, see the
+top of this page):
 
 | Title | Files author | Mapping read | Player too | Ours |
 | --- | --- | --- | --- | --- |
-| Pulse PSP (USA, EU) | `easyshield` on every team, 40 over `shield` (Qirex 145 over 105) | `Ship_SetShield` indexes `0x84 + skill * 4` (confidence 88) | yes, same global | wired: Novice starts on `easyshield`, Skilled, Elite and Ace on `shield` |
-| Pulse PS2 | same values as PSP | the parser's three slots are PS2-read; the index inherits PSP's | inherited from PSP | wired, as PSP |
-| HD / Fury | `easyshield` on every team, 40 over `shield`, no medium or hard slot | **measured live** (RPCS3, Single Race and Eliminator): the original's Novice field started at 135 to 145 and the person's Venom at 140, which are `easyshield`, not `shield` (95 to 110) | yes: the Venom is the player's | wired, `CraftLaws::shield_by_skill` measured |
+| Pulse PSP (USA, EU) | `easyshield` on every team, above `shield` by the same margin on all | `Ship_SetShield` indexes `0x84 + skill * 4` (confidence 88) | yes, same global | wired: Novice starts on `easyshield`, Skilled, Elite and Ace on `shield` |
+| Pulse PS2 | same as PSP | the parser's three slots are PS2-read; the index is inherited from PSP | inherited from PSP | wired, as PSP |
+| HD / Fury | `easyshield` on every team, same margin, no medium or hard slot | **measured live, confidence 85**: in the original's HD Eliminator at Novice (RPCS3, `scripts/rpcs3-hd-eliminator-score.py`, `data/reference/hd-eliminator-score/run2-ai-field.csv`, column `shield`) the first sample of the AI field is exactly a team's `easyshield` and above its `shield`. One run, one difficulty, Eliminator rather than Single Race | **single-source, confidence 65**: the person's own craft read at an `easyshield` value in the same capture; Pulse's code reads the one global for every entity | wired, `CraftLaws::shield_by_skill` measured |
 | Pure | no team authors a slot beyond `shield` | not read; nothing to select | not applicable | held, every rung reads the same pool |
-| 2048 (Vita) | `easyshield` (Omega re-ships 2048's craft with `easyshield` 40 over `shield`) | **not read** | not read | held on the medium slot, open |
+| 2048 (Vita) | `easyshield` (Omega re-ships 2048's craft with the same margin) | **not read** | not read | held on the medium slot, open |
 | Omega (PS4) | `easyshield` on every team | **not read** (the executable is in Ghidra, nobody has walked its `Ship_SetShield`; shadPS4 has no memory readout) | not read | held on the medium slot, open; the loader report says so on a Novice race |
 
 No shipped file authors `mediumshield` or `hardshield` (HD's test asserts it), so Skilled, Elite
 and Ace read plain `shield` on every title today. The 2048 census was not run: the Vita `.pkg`
 is PFS-encrypted and does not load (`docs/formats/vita-package.md`); the Omega row stands in
 for its craft files, which Omega re-ships at the same layout.
+
+A replay rebuilds with the rung it was recorded at: `[options] skill_level`, written for a
+campaign cell only (`docs/formats/replay-file.md`). A free race derives the rung from
+`difficulty`, which the header carries. Replays recorded before this change at Novice (or at an
+Easy cell) rebuild with the easy slot and no longer reproduce their stored hashes.
 
 Ours differs from the original in two ways: the race box opens on Elite (medium), where the
 original's row opens on Easy; and `Difficulty::Ace` and a campaign Hard cell share the hard
