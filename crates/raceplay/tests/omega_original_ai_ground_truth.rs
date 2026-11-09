@@ -212,7 +212,7 @@ fn fly(track: &str, class: &str, field_respawns: u32, field_destroyed: u32) {
     let mut last_hit = [None::<u64>; 8];
     let mut respawned = [0u32; 8];
     while seconds(&race) <= 300.0 && !(1..8).all(|s| race.sim.world.ships[s].standing.finished()) {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         let tick = race.sim.world.tick;
         for slot in 1..8 {
             let now_walls = race.wall_contact_ticks_of(slot);

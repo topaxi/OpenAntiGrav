@@ -122,6 +122,11 @@ impl Driver {
             self.session.controls.press_button(button, true);
             self.down = Some(button);
         }
+        // A window draws every frame; a drive draws the ones it is asked for, and a photo mode
+        // shot of several frames is one frame drawn at a time.
+        if self.session.photo_job_running() {
+            self.session.gpu.output.draw_next = true;
+        }
         self.session.frame()?;
         if self.session.quit {
             bail!("the game quit (the last state is below)");
@@ -159,7 +164,7 @@ impl Driver {
     }
 
     fn observe(&mut self) -> Result<()> {
-        let state = state_of(&self.session);
+        let state = state_of(&mut self.session);
         if !state.same_as(&self.last) || self.last.stage.is_empty() {
             writeln!(self.out, "{}", state.to_line())?;
             self.out.flush()?;
@@ -235,6 +240,28 @@ impl Driver {
                     self.tap(*button, oag_game::drive::script::DEFAULT_WITHIN)?;
                 }
             }
+            Step::Hold { buttons, ticks } => {
+                for button in buttons {
+                    self.session.controls.press_button(*button, true);
+                }
+                for _ in 0..*ticks {
+                    self.frame(None)?;
+                }
+                for button in buttons {
+                    self.session.controls.press_button(*button, false);
+                }
+                self.frame(None)?;
+            }
+            Step::Pad { pad, ticks } => {
+                self.session.controls.inject_pad(*pad);
+                for _ in 0..*ticks {
+                    self.frame(None)?;
+                }
+                self.session
+                    .controls
+                    .inject_pad(oag_input::view::ViewRaw::default());
+                self.frame(None)?;
+            }
             Step::Escape => {
                 self.session.escape();
                 self.frame(None)?;
@@ -270,7 +297,10 @@ impl Driver {
                     self.spend(within)?;
                     self.tap(button, within)?;
                 }
-                Next::Wait(_) => self.wait_frame()?,
+                Next::Wait(reason) => {
+                    self.spend(within).map_err(|e| anyhow!("{e}; {reason}"))?;
+                    self.wait_frame()?;
+                }
             }
         }
     }
@@ -314,7 +344,7 @@ fn stage_name(stage: &Stage) -> &'static str {
 }
 
 /// Everything the game reports after a frame.
-fn state_of(session: &Session) -> State {
+fn state_of(session: &mut Session) -> State {
     let mut state = State {
         tick: session.clock.tick(),
         stage: stage_name(&session.stage).to_string(),
@@ -328,6 +358,8 @@ fn state_of(session: &Session) -> State {
         Stage::Menu(stage) => {
             state.page = Some(stage.menu.page().id.clone());
             state.screen = Some(screen(stage));
+            let landed = session.opening_reads_landed();
+            state.opening_reads = Some(if landed { "landed" } else { "reading" }.to_string());
         }
         _ => {}
     }
@@ -337,6 +369,21 @@ fn state_of(session: &Session) -> State {
         || matches!(&session.stage, Stage::Loading(stage) if stage.race.is_some())
     {
         state.race = resolved(session);
+    }
+    (state.replay, state.replay_at) = session.replay_names();
+    (state.replay_follow, state.replay_hud) = session.replay_view_names();
+    if let Stage::Race(stage) = &session.stage {
+        state.photo = Some(session.photo_lens_name().to_string());
+        state.photo_fx = session.photo_fx_name();
+        state.photo_job = session.photo_fx_name().map(|_| session.photo_job_name());
+        state.endrace = stage.endrace.as_ref().map(|endrace| {
+            if endrace.is_photo() { "photo" } else { "other" }.to_string()
+        });
+        state.hash = Some(format!("{:016x}", stage.race.sim.state_hash()));
+        state.sim_tick = Some(stage.race.sim.world.tick);
+        state.pilot_assist = Some(stage.race.pilot_assist_level().name().to_string());
+        state.ghost_visible = Some(stage.race.ghost_visible());
+        state.recorded_events = stage.race.recorded_event_count();
     }
     state
 }
@@ -373,6 +420,9 @@ fn resolved(session: &Session) -> Option<Resolved> {
         team: options.team.clone(),
         variant: options.hull_variant.clone(),
         mode: options.mode.name().to_string(),
+        target: race
+            .filter(|_| options.mode == oag_race::Mode::Eliminator)
+            .map(oag_raceplay::Race::eliminator_target),
     })
 }
 
@@ -496,6 +546,7 @@ fn page_screen(stage: &MenuStage) -> Screen {
                 Entry::Run { .. } => ("action", None, None, Vec::new()),
                 Entry::Back { .. } => ("back", None, None, Vec::new()),
                 Entry::Binding { .. } => ("binding", None, None, Vec::new()),
+                Entry::Inert { .. } => ("inert", None, None, Vec::new()),
                 Entry::Choice {
                     setting,
                     values,

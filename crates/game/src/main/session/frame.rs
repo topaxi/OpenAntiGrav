@@ -321,6 +321,9 @@ impl Session {
                 self.controls.let_go_extra_seats();
             }
             let inputs = self.controls.player_snapshots();
+            // Taken every tick so a press made while paused or in a menu is spent there, and
+            // acted on only by the unpaused race arm below.
+            let music_input = self.controls.take_music();
             self.frame_timing.sampled(web_time::Instant::now());
             self.pad_dir = super::menu_sound::pad_direction(self.controls.buttons());
             // The pad spoke: the drawn cursor goes until the mouse moves
@@ -331,6 +334,12 @@ impl Session {
             if self.controls.pad_spoke() {
                 self.pointer.other_device();
             }
+            self.idle.update_window(
+                self.gpu.output.window.get(),
+                self.race_running(),
+                self.controls.pad_spoke(),
+                web_time::Instant::now(),
+            );
             // And the pointer's, on the same latch terms: one take per tick,
             // in window pixels until a stage says which grid it draws in.
             let pointer = self.pointer.take();
@@ -375,23 +384,53 @@ impl Session {
             // which is what persists the choice across a restart. Before the tick
             // rather than after, so the frame this tick produces is already drawn
             // from the new view.
-            // **Not on `Race End Photo`**, where the legend names this button
-            // for photo mode, which this build does not have: the press is
-            // spent and the camera stays as the spectator director has it.
-            let in_photo = matches!(&self.stage, Stage::Race(stage)
+            // A recording being watched owns the devices and the race, and nothing the loop does
+            // for a race that is driven applies to it: not the pause, not the end screens, not
+            // a record or a ghost.
+            if self.viewer.is_some() && matches!(self.stage, Stage::Race(_)) {
+                // Photo mode over the viewer owns the devices, as it does over a race; the
+                // viewer carries on from where it leaves the playhead.
+                if self.photo.is_some() {
+                    self.tick_photo(&pointer, inputs.get(0));
+                } else {
+                    self.tick_viewer(&pointer);
+                }
+                continue;
+            }
+            // Photo mode first: while it is open it owns the devices and the race stands
+            // still, and what it leaves (a press it spent, a leave) is settled before the
+            // blocks below read the pad.
+            // **The tick that leaves it is still the mode's**: `inputs` was read from the
+            // devices before the mode spent its presses, so the race that takes the next tick
+            // reads them, whatever the mode does with the button that left (CIRCLE is the
+            // absorb).
+            let photo_tick = self.photo.is_some();
+            if photo_tick {
+                self.tick_photo(&pointer, inputs.get(0));
+            }
+            // SELECT on `Race End Photo` opens photo mode, once that screen takes input; on
+            // any other race tick it is the camera cycle.
+            let at_the_finish = matches!(&self.stage, Stage::Race(stage)
                 if stage.endrace.as_ref().is_some_and(
                     crate::race_stage::endrace_touch::EndRace::is_photo));
             if matches!(self.stage, Stage::Race(_))
+                && self.photo.is_none()
                 && self.controls.buttons().is_pressed(Button::Select)
             {
                 self.controls.buttons_mut().consume_press(Button::Select);
-                if !in_photo {
+                if !at_the_finish {
                     self.cycle_camera_view();
+                } else if matches!(&self.stage, Stage::Race(stage)
+                    if stage.endrace.as_ref().is_some_and(
+                        crate::race_stage::endrace_touch::EndRace::photo_takes_select))
+                {
+                    self.open_photo_at_the_finish();
                 }
             }
             // Pause, on the same button the original spends on "leave the
             // results table" - free during a still-running race because
-            // nothing else there reads `Start` yet. **No menu, no overlay**:
+            // nothing else there reads `Start` yet. **No menu, no overlay** (where the
+            // title has no pause screen of its own, see below):
             // this only decides whether `Race::tick` below runs, so the world
             // is exactly as the freezing tick left it, the way the finished
             // race arm below already leaves it under the results table.
@@ -402,7 +441,9 @@ impl Session {
             // than one person counts down first - see `session::pause`.
             // A click on a paused race is slot 0's Start, through the same owner
             // rule: a mouse cannot lift player 2's pause inside their timeout.
-            if matches!(&self.stage, Stage::Race(stage) if !stage.race.finished()) {
+            if self.photo.is_none()
+                && matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
+            {
                 let paused = matches!(self.pause, oag_game::pause::State::Paused { .. });
                 let click = pointer.clicked && paused;
                 // A click on a further window is its first seat's Start, the same way.
@@ -410,7 +451,18 @@ impl Session {
                 let presses = self.controls.take_presses(Button::Start)
                     | u8::from(click)
                     | if paused { seat_clicks } else { 0 };
-                self.step_pause(presses);
+                // The title's own pause screen takes START (the original's pause is a menu).
+                if presses != 0
+                    && let Stage::Race(stage) = &self.stage
+                    && !paused
+                    && self.pause_screen_applies(stage)
+                {
+                    // START plays `ACCEPT` on pausing, measured.
+                    self.play_navs([oag_ui::menu::nav::Nav::Accept]);
+                    self.escape();
+                } else {
+                    self.step_pause(presses);
+                }
             }
             // Circle is "back" everywhere else on screen - the menus, the
             // front end - and a paused race is the one place a still-running
@@ -421,6 +473,7 @@ impl Session {
             // menus, exactly as `escape` does from any race.
             // Only the player who paused leaves, as for Start above.
             if matches!(self.stage, Stage::Race(_))
+                && self.photo.is_none()
                 && self.paused()
                 && oag_game::pause::leaves(self.pause, self.controls.take_presses(Button::Circle))
             {
@@ -440,7 +493,8 @@ impl Session {
             //
             // **A rising edge**, so the thrust the player was holding as they
             // crossed the line cannot dismiss the board they have not read yet.
-            if matches!(&self.stage, Stage::Race(stage)
+            if self.photo.is_none()
+                && matches!(&self.stage, Stage::Race(stage)
             if crate::race_stage::endrace::results_table_takes_confirm(
                 stage.race.finished(),
                 stage.endrace.is_some(),
@@ -465,6 +519,16 @@ impl Session {
             }
             self.poll_online();
             match &mut self.stage {
+                // Photo mode: the race does not tick, whatever state it is in (running, or
+                // finished with the end screens behind). The audio is not simulation state, so
+                // it is stepped as under the pause, which is what lets the engine note spin down
+                // while `World` stands at the tick the mode caught it on.
+                Stage::Race(stage) if photo_tick || self.photo.is_some() => {
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, true, self.controls.pad_mut());
+                    }
+                    oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
+                }
                 // Stepped in the tick loop with everything else, so the wave's
                 // heartbeat runs at the simulation's fixed 60 Hz rather than at
                 // whatever the window is managing. The original's own loading
@@ -494,7 +558,15 @@ impl Session {
                     // The language picker takes the pointer itself; every
                     // other screen in the chain waits for a button and
                     // reads a click as one. See `session::pointer`.
-                    let grid = pointer::in_grid(pointer, stage.frontend.space(), rect, 1.0);
+                    let grid = pointer::in_grid(
+                        pointer,
+                        stage.frontend.space(),
+                        rect,
+                        stage.renderer.inset(),
+                    );
+                    stage
+                        .frontend
+                        .set_pad_driving(!self.pointer.pointer_spoke_last());
                     if !stage.frontend.pointer(&grid) {
                         pointer::press_for_click(&mut self.controls, &grid);
                     }
@@ -502,6 +574,20 @@ impl Session {
                         stage
                             .frontend
                             .update(dt, self.controls.buttons_mut(), movie_playhead);
+                    // SCREEN SIZE on a touch front end: applied the tick it moves, and saved
+                    // like every other row.
+                    if let (Some(scale), Some(percent)) = (
+                        stage.frontend.screen_size_scale(),
+                        stage.frontend.screen_size_choice(),
+                    ) {
+                        stage.renderer.set_inset(scale);
+                        if self.settings.graphics.hud_safe_area != Some(percent) {
+                            self.settings.graphics.hud_safe_area = Some(percent);
+                            if let Err(e) = settings::save(&self.settings) {
+                                warn!("could not save the screen size: {e:#}");
+                            }
+                        }
+                    }
                     // One set of planes and one voice serve every movie the front
                     // end draws, so each is installed on the tick its own screen
                     // is entered - picture and sound together, which is what makes
@@ -549,7 +635,7 @@ impl Session {
                     self.play_navs(boot_navs);
                 }
                 Stage::Menu(stage) => {
-                    stage.tick(dt);
+                    stage.tick(dt, &self.audio.output().spectrum().levels());
                     self.unseat_after_split_race();
                     self.sync_multiplayer();
                     self.sync_lan();
@@ -572,7 +658,7 @@ impl Session {
                     }
                     // The Race Campaign's own screens, same shape: they take
                     // the tick whole rather than sitting behind the rows.
-                    if stage.campaign.is_some() {
+                    if stage.campaign.is_some() && stage.prompt.is_none() {
                         self.tick_campaign(&grid);
                         continue;
                     }
@@ -756,9 +842,10 @@ impl Session {
                     // opponents go on lapping and the player's craft is flown by
                     // the AI. Neutral input, because the panels consume the pad
                     // and a craft that is not the player's must not read it. The
-                    // standings and the board were frozen at the line, so
-                    // nothing the panels show moves. See
-                    // `Race::runs_on_after_the_line`.
+                    // player's standing was fixed at the line; the board keeps
+                    // up with the rest of the field finishing, and the tables
+                    // that list it are rebuilt from it. See
+                    // `Race::runs_on_after_the_line` and `Race::refresh_results`.
                     //
                     // A Single Race wreck steps the whole world too
                     // (`Race::runs_on_after_the_wreck`); any other ending (a Zone
@@ -771,7 +858,13 @@ impl Session {
                         Some(net) => {
                             net.step(&mut stage.race, oag_gameplay::InputSnapshot::EMPTY);
                         }
-                        None => stage.race.tick_finished(),
+                        None => {
+                            stage.race.tick_finished();
+                            stage.refresh_endrace_board();
+                        }
+                    }
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, false, self.controls.pad_mut());
                     }
                     oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                     // `stage`'s own last use - the reborrow inside
@@ -810,6 +903,9 @@ impl Session {
                     // reason: the audio is not simulation state, so ticking
                     // it is what keeps the engine note honest while `World`
                     // itself sits frozen at whatever tick `Start` caught it on.
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, true, self.controls.pad_mut());
+                    }
                     oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                 }
                 // **The pre-race flyby steps instead of the world**: the circuit's own
@@ -861,8 +957,18 @@ impl Session {
                             self.controls.assignment(),
                         );
                         stage.race.tick(&inputs);
+                        // Photo mode's rewind goes back through these (`session::photo_rewind`).
+                        if let Some(keeper) = &mut stage.keeper {
+                            keeper.keep(&stage.race);
+                        }
                     }
                     stage.tick_messages();
+                    oag_game::music_pad::drive(
+                        &mut self.audio,
+                        &mut stage.race,
+                        self.settings.audio.music_volume,
+                        music_input,
+                    );
                     // A server that ends a race nobody had finished (the host left, a link
                     // died) leaves a frozen world: after a second of it, back to the menus.
                     match self.net.as_ref().and_then(oag_game::net_play::NetPlay::over) {
@@ -882,7 +988,10 @@ impl Session {
                     // Immediately after the tick and inside this loop, so a cue
                     // lands on the tick that raised it whether the frame
                     // stepped once, twice or not at all. See
-                    // `oag_sound::Audio::race_tick`.
+                    // `oag_sound::Audio::race_tick`. Rumble reads the same cues first.
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, false, self.controls.pad_mut());
+                    }
                     oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                     if self.log_every > 0
                         && stage.race.sim.world.tick % u64::from(self.log_every) == 0
@@ -1027,6 +1136,7 @@ impl Session {
         self.phases.mark(super::phases::Phase::Ticks);
         self.start_endrace_prefetch();
         self.start_menu_source();
+        self.refresh_opening_reads();
         self.build_endrace();
 
         self.begin_scene_frame();

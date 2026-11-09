@@ -8225,3 +8225,11 @@ alpha = A.z                                    MOV H0.w, R0.zzzz
 **What is left on the panel: the add is linear, the original's is in gamma.** Mean RGB over a 50x80 box inside the panel (800,130): what is behind it (slot 435 skipped) `(40, 102, 123)`, the original `(118, 181, 203)`, ours after `(96, 128, 145)`. The original adds a uniform `(+78, +79, +80)` in display values, which is a `ONE`/`ONE` add on gamma-encoded values; ours adds about `0.09` grey in linear light, which shows as `(+56, +27, +22)` and leaves the panel greyer. The race target is linear for every HD blend, so this is a renderer-wide convention and was not changed for one material. The size of the original's add (about `0.31` encoded) is also larger than the program's `overlay * 0.2893 / 2` (about `0.1` encoded at this advert); what supplies the rest is not read (the frame's tone and bloom stages are the candidates, `docs/rendering/hd-track-tone.md`).
 
 **Other titles.** Omega ships `scanlinebillboard`, `_1`, `_2`, `_alphaboost*` and `_desaturate_2` under its re-shipped `talons_junction` and `tech_de_ra` (`data02.psarc`); its programs are GCN and unread, and `Program::parse` refuses them, so they do not bind: **checked, applies, not wired**. 2048 ships no `scanlinebillboard` material (name census of `data.psarc`, `data1`/`data2.psarc` and both DLC packs): **checked, differs**.
+
+## 2026-11-06: the photo-mode float at `[sp+0x7c]`
+
+Lane `photo-read`. "The correction variant's three extra colour parameters are photo mode" above left
+open which slider the one float at `[sp+0x7c]` is. There is no one float: `0x00676968`, a `sscanf`,
+rereads that slot per row. `f1` is `(Exposure - 33.3) * -0.03003`, `f2` is `Saturation * 0.05`.
+[photo-mode.md](photo-mode.md#photomode_update). `FUN_00241940` is `PhotoMode_ScreenUpdate`.
+

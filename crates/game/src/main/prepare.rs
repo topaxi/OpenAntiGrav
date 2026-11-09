@@ -95,7 +95,7 @@ impl Pending {
         let MenuSource::Mods(mods) = &self.menu_source else {
             return Ok((self.definition.clone(), Vec::new(), Default::default()));
         };
-        mods_menu(mods, self.settings.language.as_deref(), title, updated)
+        oag_game::menu_tree::mods_menu(mods, self.settings.language.as_deref(), title, updated)
     }
 
     /// The boot sequence's own options for one source.
@@ -159,6 +159,7 @@ impl Pending {
                 .graphics
                 .boost_zoom
                 .then(oag_source::title::borrowed_zoom_ring),
+            trail_hits: oag_game::launcher::trail_hits(self.settings.graphics.trail_hits),
             foreign_track: self
                 .foreign_entry
                 .as_ref()
@@ -166,6 +167,8 @@ impl Pending {
             // Filled at launch (`oag_game::mod_extensions::attach`), from the mods on then.
             extensions: Vec::new(),
             find_extensions: None,
+            // Filled at launch (`oag_game::texture_pack::attach`), from the packs on then.
+            find_texture_packs: None,
             // Passed straight through like `track` above, `None` included:
             // `race::load` resolves an unnamed team from the title it opened,
             // which is the only place the title is known. See
@@ -199,6 +202,8 @@ impl Pending {
             // The saved KILLS row, for an Eliminator only; no CLI flag names
             // one. See `race::Options::eliminator_kill_target`.
             eliminator_kill_target: self.settings.race.eliminator_kill_target(self.mode),
+            // The saved TARGET row, for an Eliminator only; the campaign's cell overwrites it.
+            eliminator_score_target: self.settings.race.eliminator_score_target(self.mode),
             // `None` for the same reason - the campaign is the only writer
             // of this field. See `race::Options::laps_override`.
             laps_override: None,
@@ -351,6 +356,9 @@ impl Pending {
                 .is_some_and(|blocks| blocks.fury),
         );
         oag_raceplay::loader_log::lines(menu_sfx.report());
+        if let Some(gap) = archives.layout.update_gap(title) {
+            log::warn!("{gap}");
+        }
         // Read before the media worker takes the archives: 2048's main menu
         // grows two tiles when its update is mounted.
         let updated = !archives.patch.is_empty();
@@ -378,7 +386,7 @@ impl Pending {
         // strings - `16_Track` and `Mantis` against their localised names,
         // which are shipped content and only ever live in memory.
         let (mut definition, mods, custom_campaigns) = self.menu_for(title, updated)?;
-        finish_definition(&mut definition, title, &boot_shell.strings);
+        oag_game::menu_tree::finish_definition(&mut definition, title, &boot_shell.strings);
         // Built through `Shell::from_boot` rather than a literal here, so
         // this boot and a live LANGUAGE-row switch
         // (`Session::resupply_language`) read the same `boot::Shell` the
@@ -463,123 +471,5 @@ pub(crate) fn definition(
                 .context("building the menu definition")?;
             Ok((built.definition, MenuSource::Mods(Box::new(mods))))
         }
-    }
-}
-
-/// The menu tree for `title` with `mods`' rows, the MODS page's listing and the mod
-/// campaigns and tracks: what a boot builds ([`Pending::menu_for`]) and what a MODS page
-/// switch rebuilds live (`Session::switch_selected_mod`). Logs what each mod did.
-///
-/// # Errors
-///
-/// The vanilla tree or the extras are wrong, which is a build defect.
-pub(crate) fn mods_menu(
-    mods: &oag_game::mods::Mods,
-    language: Option<&str>,
-    title: &'static oag_title::Title,
-    updated: bool,
-) -> Result<(
-    menu::Definition,
-    Vec<oag_game::mods::Listing>,
-    oag_game::campaign::custom::Installed,
-)> {
-    let built = mods.build(
-        menu::BUILT_IN,
-        language,
-        Some(menu::For { title, updated }),
-    )?;
-    for line in &built.report {
-        log::info!("{line}");
-    }
-    let mut definition = built.definition;
-    let mut listing = built.listing;
-    // Surveyed only when a campaign names another disc: the same survey
-    // Race Remix reads, by title slug.
-    let discs = std::cell::OnceCell::new();
-    let has_disc = |slug: &str| {
-        discs
-            .get_or_init(|| {
-                oag_game::launcher::distinct_titles(&oag_game::launcher::survey(
-                    &oag_source::source::candidates(),
-                ))
-                .iter()
-                .filter_map(|candidate| match &candidate.state {
-                    oag_game::launcher::State::Playable(title) => Some(title.slug()),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-            })
-            .iter()
-            .any(|have| have == slug)
-    };
-    let installed =
-        mods.installed_for(title, &has_disc);
-    oag_game::campaign::custom::add_picker(
-        &mut definition,
-        &mut listing,
-        &installed,
-        &strings::project_table(language),
-    );
-    Ok((definition, listing, installed))
-}
-
-/// The title's trims of a tree [`mods_menu`] built: rows this title, platform or input
-/// lacks, and the rows its own words rename. Boot and a live rebuild both run it, so a
-/// rebuilt tree has the rows a booted one has.
-pub(crate) fn finish_definition(
-    definition: &mut menu::Definition,
-    title: &'static oag_title::Title,
-    strings: &oag_ui::language::StringTable,
-) {
-    // A no-op on every title but Wipeout Pure and Wipeout Pulse, whose
-    // race defaults declare no variant axis at all - see
-    // `menu::Definition::drop_unavailable_race_variant`.
-    definition.drop_unavailable_race_variant(title);
-    // The BOOST ZOOM row exists where a ring can be borrowed: Pulse and Pure.
-    definition.drop_unavailable_boost_zoom(title);
-    // And the HUD STYLE row, where the disc authors the list: HD and Omega.
-    definition.drop_unavailable_hud_style(title);
-    // And the DYNAMIC HUD row, where the options list it: Pulse.
-    definition.drop_unavailable_dynamic_hud(title);
-    // And the TRAIL ORDER row, where the ribbon is the PSP preset: Pulse and Pure.
-    definition.drop_unavailable_trail_order(title);
-    // And the WEATHER row, where the weather is played: Pulse.
-    definition.drop_unavailable_weather(title);
-    // And the three rows the race box's own screens pick, on a title
-    // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
-    definition.drop_rows_picked_on_screen(title);
-    // The campaign row as the title's original words it (`SINGLE PLAYER` on
-    // Pure) - see `menu::Definition::rename_campaign_row`.
-    definition.rename_campaign_row(title, strings);
-    // And the MULTIPLAYER row where the title's own is worded differently (Pulse's
-    // `MULTIPLAYER & SHARING`) - see `menu::Definition::rename_multiplayer_row`.
-    definition.rename_multiplayer_row(title, strings);
-    // `auto` in the player's language; the other values are the setting's own
-    // spellings.
-    definition.relabel_choice_from(
-        "audio.spatial_audio",
-        "auto",
-        strings,
-        "OAG_AUDIO_SPATIAL_AUTO",
-    );
-    // A phone app is left, not quit - see `menu::Definition::drop_quit`.
-    if oag_mobile::MOBILE {
-        definition.drop_quit();
-    }
-    // A page has no monitor to pick and one present mode, and a desktop
-    // has no canvas: see `settings::web`.
-    if cfg!(target_arch = "wasm32") {
-        definition.drop_settings(&settings::web::HIDDEN_ROWS);
-        definition.drop_settings(&["display.window_size"]);
-        // The browser's words for the two modes.
-        definition.relabel_choice("display.window_mode", "borderless", "FULLSCREEN");
-    } else {
-        definition.drop_settings(&settings::web::WEB_ONLY_ROWS);
-    }
-    // A phone's window is the whole panel: its monitor, mode and size rows have no choice.
-    definition.drop_settings(settings::platform::hidden_rows(oag_mobile::MOBILE));
-    // Only a touchscreen has an overlay to set up.
-    if !oag_game::touch_controls::available() {
-        definition.drop_touch_controls();
     }
 }

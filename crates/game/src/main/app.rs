@@ -405,6 +405,7 @@ impl App {
         // The keyboard's own live table - a rebind changes it again, and
         // persists it, through `Session::rebind`.
         controls.set_bindings(crate::args::resolve_bindings(&self.settings));
+        controls.set_music_bindings(crate::args::resolve_music_bindings(&self.settings));
         for name in controls.pad().names() {
             info!("gamepad: {name}");
         }
@@ -464,7 +465,12 @@ impl App {
             }
         );
 
-        Ok(Some(Session {
+        let interactive_launch = self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| pending.cli.is_interactive());
+        let mut session = Session {
+            idle: Default::default(),
             gpu,
             framebuffer,
             stage,
@@ -497,7 +503,13 @@ impl App {
             present_cost: perf::Meter::new(),
             governor: oag_present::governor::Governor::new(),
             governor_gpu: None,
+            governor_gpu_at: 0,
             last_present_seconds: 0.0,
+            display: oag_present::refresh::Display::new(),
+            logged_display_hz: None,
+            display_polled: None,
+            display_mode: None,
+            display_configures: 0,
             frame_timing: Default::default(),
             phases: crate::session::phases::PhaseClock::new(self.dev.frame_log),
             drs_unreachable_said: false,
@@ -511,6 +523,13 @@ impl App {
             stalled: true,
             stutter: Default::default(),
             pause: oag_game::pause::State::Running,
+            photo: None,
+            replay_list: Vec::new(),
+            replay_refused: std::collections::BTreeMap::new(),
+            watching: None,
+            viewer: None,
+            return_to_replays: false,
+            rumbler: None,
             wall: 0.0,
             go_at: None,
             wall_origin: web_time::Instant::now(),
@@ -546,9 +565,13 @@ impl App {
             scheme: self.scheme,
             anisotropy: self.anisotropy,
             launched: false,
+            interactive_launch,
+            player_asked: false,
+            soft_keyboard: false,
             pending_event: None,
             races_launched: 0,
             menu_source: Default::default(),
+            opening_reads: Default::default(),
             settings: self.settings.clone(),
             // Loaded fresh here rather than carried on `App`: there is one
             // window per run and `App::open` only ever runs once for it, so
@@ -637,7 +660,10 @@ impl App {
                 error!("could not load pilots: {e:#}");
                 pilots::Roster::built_in()
             }),
-        }))
+        };
+        // A direct `--race` lands in a race without the load hand-over that arms it.
+        session.arm_rumble();
+        Ok(Some(session))
     }
 
     /// Waits for a conversion the window has outlived.
@@ -1021,6 +1047,7 @@ impl ApplicationHandler for App {
                 if session.too_early_for_frame(web_time::Instant::now()) {
                     return;
                 }
+                session.sync_soft_keyboard();
                 if let Err(e) = session.frame() {
                     error!("frame error: {e:#}");
                     event_loop.exit();
@@ -1052,8 +1079,11 @@ impl ApplicationHandler for App {
         // Every way out of the run ends here (window close, a menu's quit, a
         // quit from the race), so the playlist's place is saved once, whichever.
         if let Some(session) = self.state.as_mut() {
+            session.stop_rumble();
+            session.controls.silence_motors();
             session.save_race_music();
             session.keep_campaign_position();
+            session.keep_replays();
         }
         oag_game::records::finish_background_saves();
     }

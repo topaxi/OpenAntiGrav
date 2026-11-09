@@ -34,7 +34,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::missile)
         else {
             return false;
@@ -57,7 +57,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::rocket)
         else {
             return false;
@@ -132,7 +132,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::leach_beam)
         else {
             return false;
@@ -149,7 +149,7 @@ impl Race {
             ship.physics.body.forward(),
             stats.lock_min_dist,
             stats.lock_max_dist,
-            self.sim.course.as_ref().map(oag_race::Course::length),
+            self.sim.course.as_deref().map(oag_race::Course::length),
         ) else {
             return false;
         };
@@ -179,7 +179,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::plasma)
         else {
             return false;
@@ -218,7 +218,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::shuriken)
         else {
             return false;
@@ -307,6 +307,11 @@ impl Race {
         }
         // Before anything returns: it advances this craft's weapon-AI clocks.
         let decision = self.opponent_decides(slot, field);
+        if let Some(pace) = self.sim.score_pace
+            && self.sim.world.ships[slot].weapon_ai.held_ticks < pace.hold_ticks
+        {
+            return;
+        }
         let fires = decision == oag_ai::weapon_ai::Decision::Fire;
         let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
             return;
@@ -334,7 +339,7 @@ impl Race {
         let Some((simple, absorb)) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .map(|weapons| (weapons.simple(looked_up), weapons.absorb(looked_up)))
         else {
             return;
@@ -342,6 +347,12 @@ impl Race {
         // **The original's absorb half** (`WeaponAi_DecideFireOrAbsorb`): only
         // a forward weapon under `FireLaw::Original` is ever answered with it.
         if decision == oag_ai::weapon_ai::Decision::Absorb && extension.is_none() {
+            // A score Eliminator's absorb spends the weapon on the Shield, as the player's does
+            // (`crate::score_pace`).
+            if self.sim.score_pace.is_some() {
+                self.eliminator_absorb(slot);
+                return;
+            }
             self.absorb_opponent_pickup(slot, absorb);
             return;
         }
@@ -408,7 +419,7 @@ impl Race {
                 yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&ship.handling, &ship.physics.body)),
                 plan: super::routes::plan_for(
                     &self.sim.routes,
-                    self.sim.speed_plan.as_ref(),
+                    self.sim.speed_plan.as_deref(),
                     super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
                     route,
                 ),
@@ -567,7 +578,7 @@ impl Race {
         slot: usize,
         field: &oag_ai::Field,
     ) -> bool {
-        let Some(weapons) = self.sim.weapons.as_ref() else {
+        let Some(weapons) = self.sim.weapons.as_deref() else {
             return false;
         };
         let counts = self.sim.world.ships[slot].weapon_counts;
@@ -641,7 +652,7 @@ impl Race {
         forward: oag_core::math::Vec3,
         right: oag_core::math::Vec3,
     ) -> Option<oag_ai::Hazard> {
-        let radii = oag_weapons::projectile::TriggerRadii::from_table(self.sim.weapons.as_ref());
+        let radii = oag_weapons::projectile::TriggerRadii::from_table(self.sim.weapons.as_deref());
         let origin = self.sim.world.ships[slot].physics.body.position;
         // Half the hull's width, so a charge the craft would clip with a wingtip
         // counts as much as one it would drive over.

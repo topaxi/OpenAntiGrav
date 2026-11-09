@@ -89,7 +89,8 @@ word at `0x008a9f48` = `0x3f800000` = **1.0** - with `+0x50 = 1`
 `Plasma_Init` writes as a literal. Two particle systems are attached at
 `p + 0xb0`: `'PLHE'` (`WO_PLASMA_HEAD`) and `'PLCG'` (`WO_PLASMA_CHARGING`),
 both owned by the race-wide `RaceManager` instance as
-[weapons.md](weapons.md) already noted for the explosions. Rumble
+[weapons.md](weapons.md) already noted for the explosions. A camera shake,
+not controller rumble ([rumble.md](rumble.md#not-this-library)),
 `FUN_000a3528(0.07, 1.0, ...)` (`0x008aa000 = 0x3d8f5c29`, `0x008a9f48`)
 if the craft is local, and two light descriptors are registered from
 `p + 0x1a0` (`FUN_00677c78`, descriptors at `*0x008a9f40 + 4` and `+ 0x74`).

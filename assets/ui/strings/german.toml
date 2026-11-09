@@ -145,6 +145,7 @@ OAG_RACE_SPEED_CLASS = { text = "TEMPOKLASSE", human = false }
 OAG_RACE_WEAPONS = { text = "WAFFEN", human = false }
 OAG_RACE_AI_DIFFICULTY = { text = "KI-SCHWIERIGKEIT", human = false }
 OAG_RACE_KILLS = { text = "ABSCHÜSSE", human = false }
+OAG_RACE_TARGET = { text = "ZIEL", human = false }
 OAG_RACE_TEAM = { text = "TEAM", human = false }
 OAG_RACE_VARIANT = { text = "VARIANTE", human = false }
 OAG_RACE_TRACK = { text = "STRECKE", human = false }
@@ -169,9 +170,13 @@ OAG_DISPLAY_ASPECT_RATIO = { text = "SEITENVERHÄLTNIS", human = false }
 OAG_DISPLAY_FRONT_END_STYLE = { text = "MENÜSTIL", human = false }
 OAG_DISPLAY_HUD_STYLE = { text = "HUD-STIL", human = false }
 OAG_DISPLAY_DYNAMIC_HUD = { text = "DYNAMISCHES HUD", human = false }
+OAG_DISPLAY_GHOST_SHIP_VISIBLE = { text = "GEISTERSCHIFFE SICHTBAR", human = false }
+OAG_DISPLAY_AUTO_LOAD_GHOST = { text = "GEISTER AUTOMATISCH LADEN", human = false }
+OAG_DISPLAY_MULTIPLAYER_TAGS = { text = "SPIELERNAMEN", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }
 OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS = { text = "PAUSE BEI FOKUSVERLUST", human = false }
 OAG_DISPLAY_FRAME_LIMIT = { text = "BILDRATENLIMIT", human = false }
+OAG_DISPLAY_SCREEN_SIZE = { text = "BILDGRÖSSE", human = false }
 OAG_DISPLAY_BRIGHTNESS = { text = "HELLIGKEIT", human = false }
 OAG_DISPLAY_GAMMA = { text = "GAMMA", human = false }
 OAG_GRAPHICS_RENDERER = { text = "RENDERER", human = false }
@@ -195,6 +200,7 @@ OAG_GRAPHICS_CAMERA_VIEW = { text = "KAMERAANSICHT", human = false }
 OAG_GRAPHICS_FIELD_OF_VIEW = { text = "SICHTFELD", human = false }
 OAG_GRAPHICS_BOOST_FOV_KICK = { text = "SICHTFELD-RUCK BEI BOOST", human = false }
 OAG_GRAPHICS_BOOST_ZOOM = { text = "BOOST-ZOOM", human = false }
+OAG_GRAPHICS_TRAIL_HITS = { text = "TREFFER IN SPUR", human = false }
 OAG_GRAPHICS_CPU_GOVERNOR = { text = "CPU-REGLER", human = false }
 OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "LEISTUNGSANZEIGE", human = false }
 OAG_GRAPHICS_ADVANCED = { text = "ERWEITERT", human = false }
@@ -216,11 +222,13 @@ OAG_CONTROLS_PITCH_UP = { text = "NASE HOCH", human = false }
 OAG_CONTROLS_PITCH_DOWN = { text = "NASE RUNTER", human = false }
 OAG_CONTROLS_AIRBRAKE_LEFT = { text = "LUFTBREMSE LINKS", human = false }
 OAG_CONTROLS_AIRBRAKE_RIGHT = { text = "LUFTBREMSE RECHTS", human = false }
+OAG_CONTROLS_ELIMINATOR_FLIP = { text = "ELIMINATOR-WENDE", human = false }
 OAG_CONTROLS_CAMERA_VIEW = { text = "KAMERAANSICHT", human = false }
 OAG_CONTROLS_SIDESHIFT = { text = "SEITLICHE BEWEGUNG", human = false }
 OAG_CONTROLS_TRIGGERS = { text = "TRIGGER", human = false }
 OAG_CONTROLS_PILOT_ASSIST = { text = "PILOTENHILFE", human = false }
 OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "EMPFINDLICHKEIT (TRIGGER)", human = false }
+OAG_CONTROLS_RUMBLE = { text = "VIBRATION", human = false }
 OAG_CONTROLS_TOUCH_GO_ZONES = { text = "GO-BREMSZONEN", human = false }
 OAG_CONTROLS_TOUCH_SCHEME = { text = "TOUCH-SCHEMA", human = false }
 OAG_CONTROLS_TOUCH_OPACITY = { text = "DECKKRAFT DER STEUERUNG", human = false }
@@ -275,6 +283,7 @@ OAG_LOADING_COUNTS_CONVERTED = { text = "{done} / {total} konvertiert", human = 
 OAG_LOADING_COUNTS_CACHED_SUFFIX = { text = ", {cached} bereits im Cache", human = false }
 OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} fehlgeschlagen", human = false }
 OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "DER MODUS DIESES EVENTS KANN IN DIESER VERSION NOCH NICHT GEFAHREN WERDEN", human = false }
+OAG_CAMPAIGN_NOT_PLAYABLE = { text = "DIESE KAMPAGNE KANN IN DIESER VERSION NOCH NICHT GESPIELT WERDEN", human = false }
 OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "DIE STRECKE DIESES EVENTS IST NICHT AUF DIESER DISC", human = false }
 OAG_CAMPAIGN_EVENT_UNAVAILABLE = { text = "DIESES EVENT KANN MIT DEM, WAS HIER VORHANDEN IST, NICHT GEFAHREN WERDEN", human = false }
 OAG_MENU_CAMPAIGN_PICKER = { text = "KAMPAGNEN", human = false }
@@ -295,6 +304,7 @@ OAG_MODS_ADDS = { text = "FÜGT HINZU", human = false }
 OAG_MODS_NO_LICENSE = { text = "KEINE LIZENZ ANGEGEBEN", human = false }
 OAG_MODS_LICENSE_FILE = { text = "SIEHE %s", human = false }
 OAG_MODS_NOTHING = { text = "NICHTS", human = false }
+OAG_MODS_TEXTURE_PACK = { text = "TEXTUREN", human = false }
 OAG_MODS_BUILT_IN = { text = "EINGEBAUT", human = false }
 OAG_MODS_ENABLED = { text = "AKTIVIERT", human = false }
 OAG_MODS_ON = { text = "AN", human = false }
@@ -314,4 +324,148 @@ OAG_PAUSE_OPEN = { text = "SPIELER %s HAT PAUSIERT - JEDER KANN FORTSETZEN", hum
 OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSIERT - JEDER KANN FORTSETZEN", human = false }
 OAG_COUNTDOWN_GO = { text = "LOS", human = false }
 
+# Photo mode: the pause menu's row and the screen over the picture.
+OAG_MENU_PHOTO_MODE = { text = "FOTOMODUS", human = false }
+OAG_MENU_PHOTO_MODE_SUBTITLE = { text = "Die Kamera um das Rennen fliegen lassen und ein Bild speichern", human = false }
+OAG_PHOTO_CAMERA = { text = "KAMERA", human = false }
+OAG_PHOTO_INTERNAL = { text = "INNEN", human = false }
+OAG_PHOTO_CLOSE = { text = "NAH", human = false }
+OAG_PHOTO_TRACK = { text = "STRECKE", human = false }
+OAG_PHOTO_HUD = { text = "HUD", human = false }
+OAG_PHOTO_ON = { text = "AN", human = false }
+OAG_PHOTO_OFF = { text = "AUS", human = false }
+OAG_PHOTO_TAKE = { text = "FOTO MACHEN", human = false }
+OAG_PHOTO_BACK = { text = "ZURÜCK", human = false }
+OAG_PHOTO_STICK = { text = "STICK", human = false }
+OAG_PHOTO_ROTATE = { text = "DREHEN", human = false }
+OAG_PHOTO_ZOOM_TILT = { text = "ZOOM, NEIGEN", human = false }
+OAG_PHOTO_PAN = { text = "SCHWENKEN", human = false }
+OAG_PHOTO_RESET = { text = "ZURÜCKSETZEN", human = false }
+OAG_PHOTO_SHIP = { text = "SCHIFF", human = false }
+OAG_PHOTO_HELP = { text = "HILFE AUSBLENDEN", human = false }
+OAG_PHOTO_SAVED = { text = "FOTO GESPEICHERT", human = false }
+OAG_PHOTO_FAILED = { text = "FOTO NICHT GESPEICHERT", human = false }
+OAG_PHOTO_EFFECTS = { text = "EFFEKTE", human = false }
+OAG_PHOTO_EXPOSURE = { text = "BELICHTUNG", human = false }
+OAG_PHOTO_SATURATION = { text = "SÄTTIGUNG", human = false }
+OAG_PHOTO_SPEED_BLUR = { text = "SPEED-UNSCHÄRFE", human = false }
+OAG_PHOTO_DEPTH = { text = "TIEFENSCHÄRFE", human = false }
+OAG_PHOTO_APERTURE = { text = "BLENDE", human = false }
+OAG_PHOTO_FOCUS = { text = "FOKUS", human = false }
+OAG_PHOTO_PANEL_KEYS = { text = "STICK HOCH RUNTER ZEILE    LINKS RECHTS ÄNDERN", human = false }
+OAG_REPLAY_CRAFT = { text = "SCHIFF", human = false }
+OAG_REPLAY_HUD = { text = "HUD", human = false }
+OAG_REPLAY_SCRUB = { text = "SPULEN", human = false }
+OAG_REPLAY_JOG = { text = "TIPPEN", human = false }
+OAG_PHOTO_PAD_KEYS = { text = "RECHTER STICK HOCH RUNTER ZOOM    LINKS RECHTS NEIGUNG", human = false }
+OAG_PHOTO_SCRUB_KEYS = { text = "L2 / R2 SPULEN    R2 GANZ DURCH ABSPIELEN", human = false }
+OAG_PHOTO_REWIND = { text = "ZURÜCKSPULEN", human = false }
+OAG_PHOTO_MOTION_BLUR = { text = "BEWEGUNGSUNSCHÄRFE", human = false }
+OAG_PHOTO_SHUTTER = { text = "VERSCHLUSSZEIT", human = false }
+OAG_PHOTO_PROGRESS = { text = "FOTO WIRD AUFGENOMMEN", human = false }
+OAG_PHOTO_CANCELLED = { text = "FOTO ABGEBROCHEN", human = false }
+OAG_PHOTO_ANY_INPUT = { text = "JEDE TASTE BRICHT AB", human = false }
+
 OAG_MENU_RESET_TO_DEFAULT = { text = "AUF STANDARD ZURÜCKSETZEN", human = false }
+
+# The player name and tag: the OPTIONS rows and the entry screens' titles.
+OAG_OPTIONS_PLAYER_NAME = { text = "SPIELERNAME", human = false }
+OAG_OPTIONS_PLAYER_TAG = { text = "SPIELER-TAG", human = false }
+OAG_PLAYER_NAME_TITLE = { text = "GIB DEINEN NAMEN EIN", human = false }
+OAG_PLAYER_TAG_TITLE = { text = "GIB DEIN TAG EIN", human = false }
+
+[untranslated]
+ids = [
+    # The campaign editor, new with it; no translation pass yet.
+    "OAG_MENU_CAMPAIGN_EDITOR",
+    "OAG_MENU_CAMPAIGN_EDITOR_SUBTITLE",
+    "OAG_EDITOR_TITLE",
+    "OAG_EDITOR_FIELD_MODE",
+    "OAG_EDITOR_FIELD_CIRCUIT",
+    "OAG_EDITOR_FIELD_CLASS",
+    "OAG_EDITOR_FIELD_TEAM",
+    "OAG_EDITOR_FIELD_AI",
+    "OAG_EDITOR_TEAM_CHOOSE",
+    "OAG_EDITOR_EMPTY",
+    "OAG_EDITOR_PLACED",
+    "OAG_EDITOR_ACTION_NAME",
+    "OAG_EDITOR_ACTION_SAVE",
+    "OAG_EDITOR_ACTION_CLEAR",
+    "OAG_EDITOR_SAVED",
+    "OAG_EDITOR_NEEDS_EVENT",
+    "OAG_EDITOR_NAME_TITLE",
+    "OAG_EDITOR_SAVE_FAILED",
+    "OAG_EDITOR_HINT_PLACE",
+    "OAG_EDITOR_LEGEND_CLEAR",
+    "OAG_EDITOR_LEGEND_NAME",
+    "OAG_EDITOR_DEFAULT_NAME",
+    "OAG_EDITOR_FIELD_DIFFICULTY",
+    "OAG_EDITOR_FIELD_PROGRESSION",
+    "OAG_EDITOR_FIELD_SEED",
+    "OAG_EDITOR_FIELD_CLASS_FROM",
+    "OAG_EDITOR_FIELD_CLASS_TO",
+    "OAG_EDITOR_HINT_SAVE",
+    "OAG_EDITOR_KEY_SELECT",
+    "OAG_EDITOR_KEY_TRIANGLE",
+    "OAG_EDITOR_KEY_START",
+    "OAG_EDITOR_ACTION_FILL",
+    "OAG_EDITOR_ACTION_SETTINGS",
+    "OAG_EDITOR_ACTION_EVENT",
+    "OAG_EDITOR_SEED_TITLE",
+    "OAG_EDITOR_FILLED",
+    "OAG_EDITOR_LEGEND_FILL",
+    "OAG_EDITOR_DIFFICULTY_EASY",
+    "OAG_EDITOR_DIFFICULTY_MEDIUM",
+    "OAG_EDITOR_DIFFICULTY_HARD",
+    "OAG_EDITOR_PROGRESSION_FLAT",
+    "OAG_EDITOR_PROGRESSION_RAMP",
+    "OAG_EDITOR_MODE_RACE",
+    "OAG_EDITOR_MODE_TIME_TRIAL",
+    "OAG_EDITOR_MODE_SPEED_LAP",
+    "OAG_EDITOR_MODE_ZONE",
+    "OAG_EDITOR_MODE_ELIMINATOR",
+    "OAG_EDITOR_MODE_HEAD_TO_HEAD",
+    "OAG_EDITOR_AI_ORIGINAL",
+    "OAG_EDITOR_AI_OURS",
+    # The REPLAYS page and the replay viewer (ADR-0087); no translation pass yet.
+    "OAG_MENU_REPLAYS",
+    "OAG_MENU_REPLAYS_SUBTITLE",
+    "OAG_REPLAYS_PAGE_TITLE",
+    "OAG_REPLAYS_ROW",
+    "OAG_REPLAYS_WATCH",
+    "OAG_REPLAYS_KEEP",
+    "OAG_REPLAYS_DELETE",
+    "OAG_REPLAYS_NONE",
+    "OAG_REPLAYS_NONE_WHY",
+    "OAG_REPLAYS_NONE_OFF",
+    "OAG_REPLAYS_CIRCUIT",
+    "OAG_REPLAYS_MODE",
+    "OAG_REPLAYS_FINISH",
+    "OAG_REPLAYS_DATE",
+    "OAG_REPLAYS_SIZE",
+    "OAG_REPLAYS_NOTE",
+    "OAG_REPLAYS_SAVED",
+    "OAG_REPLAYS_TAKEN_OVER",
+    "OAG_REPLAYS_NOT_FINISHED",
+    "OAG_REPLAYS_NOT_VERIFIED",
+    "OAG_REPLAYS_OTHER_TITLE",
+    "OAG_REPLAYS_NEWER",
+    "OAG_REPLAYS_DAMAGED",
+    "OAG_REPLAYS_NO_SETUP",
+    "OAG_REPLAYS_NOT_THE_RACE",
+    "OAG_REPLAYS_REFUSED",
+    "OAG_REPLAY_OPENING",
+    "OAG_REPLAY_MISMATCH",
+    "OAG_REPLAY_STOPPED",
+    "OAG_REPLAY_PLAY",
+    "OAG_REPLAY_PAUSE",
+    "OAG_REPLAY_EXIT",
+    "OAG_REPLAY_PHOTO",
+    "OAG_PHOTO_PLAY",
+    "OAG_REPLAY_SPEED",
+    "OAG_REPLAY_SKIP",
+    "OAG_REPLAY_ENDED",
+    "OAG_REPLAY_POSE_VIEW",
+    "OAG_REPLAY_POSE_END",
+    "OAG_ENDRACE_WATCH_REPLAY",
+]

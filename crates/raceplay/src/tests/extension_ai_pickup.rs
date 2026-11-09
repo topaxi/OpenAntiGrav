@@ -43,7 +43,7 @@ fn turbo_table() -> oag_tables::weapons::WeaponStats {
 /// throttle, is raised a `pickup-fire` this tick.
 fn fire_raised(drives_ai_pickup: bool) -> bool {
     let mut race = race_with_a_grid();
-    race.sim.weapons = Some(turbo_table());
+    race.sim.weapons = Some(std::sync::Arc::new(turbo_table()));
     race.sim.extensions = crate::extensions::Extensions::new(prepared(&[owner(drives_ai_pickup)]));
     let slot = 1;
     assert!(race.sim.world.ships[slot].active, "no opponent on the grid");
@@ -103,7 +103,7 @@ fn a_module_reads_the_course_length_and_the_places_the_hud_shows() {
         .sim
         .course
         .as_ref()
-        .map_or(0.0, oag_race::Course::length);
+        .map_or(0.0, |course| course.length());
     assert_eq!(length, expected, "the course the lap counter uses");
     assert_eq!(
         blob[4], before[1],

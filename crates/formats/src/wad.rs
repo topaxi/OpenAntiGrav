@@ -394,15 +394,42 @@ pub fn align_up(value: u64) -> u64 {
 
 /// Inflates a [`Compression::Zlib`] blob.
 ///
-/// A thin wrapper over `miniz_oxide`, the crate's one third-party dependency,
-/// so callers reach it through this module. The error is a message:
-/// `miniz_oxide`'s own carries no more than its `Debug` output.
+/// A thin wrapper over `flate2` (its `zlib-rs` backend), the crate's one
+/// third-party dependency, so callers reach it through this module. The header
+/// and the Adler-32 are both checked. The error is `flate2`'s message.
 ///
 /// # Errors
 ///
 /// `input` is not a valid zlib stream.
 pub fn decompress_zlib(input: &[u8]) -> std::result::Result<Vec<u8>, String> {
-    miniz_oxide::inflate::decompress_to_vec_zlib(input).map_err(|e| format!("{e:?}"))
+    use flate2::{Decompress, FlushDecompress, Status};
+
+    let mut inflater = Decompress::new(true);
+    let mut out = Vec::with_capacity(input.len().saturating_mul(2).max(64));
+    loop {
+        let consumed = usize::try_from(inflater.total_in()).unwrap_or(usize::MAX);
+        let before_out = inflater.total_out();
+        let status = inflater
+            .decompress_vec(
+                input.get(consumed..).unwrap_or(&[]),
+                &mut out,
+                FlushDecompress::Finish,
+            )
+            .map_err(|e| e.to_string())?;
+        match status {
+            Status::StreamEnd => return Ok(out),
+            Status::Ok | Status::BufError => {
+                let progressed = inflater.total_out() != before_out
+                    || usize::try_from(inflater.total_in()).unwrap_or(usize::MAX) != consumed;
+                if !progressed && out.len() < out.capacity() {
+                    return Err("the zlib stream ends before its end marker".to_string());
+                }
+                if out.len() == out.capacity() {
+                    out.reserve(out.capacity().max(64));
+                }
+            }
+        }
+    }
 }
 
 /// Hashes an entry name the way the game does.

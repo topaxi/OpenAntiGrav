@@ -3,10 +3,12 @@
 //! ```text
 //! "OAGR"  u16 version  u16 reserved (0)
 //! chunk*: [u8; 4] tag, u32 length, payload
-//!   HEAD  the Header, as TOML text
+//!   HEAD  the Header, as TOML text, its first line the `toml-schema` header
 //!   INPT  one per recorded slot: u8 slot, then the codec's input stream
 //!   HASH  u64 initial hash, varint count, count x u64
+//!   EVNT  optional: varint count, then per event varint tick, u8 seat, u8 kind, varint value
 //!   GHST  optional: the ghost lap's pose track
+//!   POSE  optional: every craft's pose track (`track.rs`)
 //!   END_  u64: FNV-1a over every byte before this chunk
 //! ```
 //!
@@ -21,8 +23,10 @@ use oag_core::StateHasher;
 use oag_gameplay::{InputSnapshot, PlayerInputs};
 
 use crate::codec::{Truncated, decode_inputs, encode_inputs, put_varint};
-use crate::header::Header;
+use crate::event::Event;
+use crate::header::{Header, SCHEMA_KIND, SCHEMA_MAJOR};
 use crate::pose::GhostLap;
+use crate::track::PoseTrack;
 use oag_bytes::Reader;
 
 /// The version this build writes, and the only one it reads.
@@ -51,6 +55,9 @@ pub enum ReadError {
     /// The header is not valid TOML for a [`Header`].
     #[error("replay header: {0}")]
     Header(String),
+    /// The header's `toml-schema` line names another kind or a major this build does not read.
+    #[error("replay header: {0}")]
+    Schema(oag_schema::Error),
     /// The chunks parse but disagree with each other.
     #[error("replay is inconsistent: {0}")]
     Inconsistent(String),
@@ -80,6 +87,23 @@ pub struct Replay {
     pub hashes: Vec<u64>,
     /// The lap a ghost is drawn from, if this file carries one.
     pub ghost: Option<GhostLap>,
+    /// Every craft on the grid, a pose a tick, if the run recorded them (ADR-0087, decision 4).
+    /// A picture of the race on the build that recorded it: it plays when the inputs no longer
+    /// reproduce the run, and it never starts anything.
+    pub pose_track: Option<PoseTrack>,
+    /// The changes made to the race between ticks, in the order they were made; each applies
+    /// before the tick it names (see [`Event`]).
+    pub events: Vec<Event>,
+}
+
+/// A file read by [`Replay::read`], and what the read noticed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Read {
+    /// The recording.
+    pub replay: Replay,
+    /// Whether the header carried its `toml-schema` line. A file written before the line existed
+    /// loads without it; the caller logs that at `debug`, nobody edits a machine-written chunk.
+    pub schema_header: bool,
 }
 
 impl Replay {
@@ -105,8 +129,16 @@ impl Replay {
         inputs
     }
 
-    /// Drops everything after `ticks`: the inputs, and the hashes of ticks
-    /// that are no longer recorded.
+    /// The events that apply before tick `tick` runs.
+    #[must_use]
+    pub fn events_at(&self, tick: u64) -> &[Event] {
+        let from = self.events.partition_point(|event| event.tick < tick);
+        let to = self.events.partition_point(|event| event.tick <= tick);
+        &self.events[from..to]
+    }
+
+    /// Drops everything after `ticks`: the inputs, the events of ticks that
+    /// no longer run, and the hashes of ticks that are no longer recorded.
     ///
     /// What a ghost file is cut to - a Speed Lap session runs for as many laps
     /// as the player likes, and only the ones up to the end of the ghost's lap
@@ -119,6 +151,8 @@ impl Replay {
         let interval = u64::from(self.header.hash_interval.max(1));
         let hashes = usize::try_from(ticks / interval).unwrap_or(usize::MAX);
         self.hashes.truncate(hashes);
+        self.events.retain(|event| event.tick < ticks);
+        self.pose_track = self.pose_track.take().map(|track| track.truncated(ticks));
     }
 
     /// The file's bytes.
@@ -130,6 +164,10 @@ impl Replay {
         out.extend_from_slice(&0u16.to_le_bytes());
 
         let header = toml::to_string(&self.header).expect("a Header always serialises");
+        let header = format!(
+            "{}\n{header}",
+            oag_schema::inline(SCHEMA_KIND, SCHEMA_MAJOR)
+        );
         chunk(&mut out, *b"HEAD", header.as_bytes());
         for (&slot, stream) in self.header.slots.iter().zip(&self.inputs) {
             let mut payload = vec![slot];
@@ -143,8 +181,22 @@ impl Replay {
             hashes.extend_from_slice(&hash.to_le_bytes());
         }
         chunk(&mut out, *b"HASH", &hashes);
+        if !self.events.is_empty() {
+            let mut events = Vec::new();
+            put_varint(&mut events, self.events.len() as u64);
+            for event in &self.events {
+                put_varint(&mut events, event.tick);
+                events.push(event.seat);
+                events.push(event.kind);
+                put_varint(&mut events, u64::from(event.value));
+            }
+            chunk(&mut out, *b"EVNT", &events);
+        }
         if let Some(ghost) = &self.ghost {
             chunk(&mut out, *b"GHST", &ghost.encode());
+        }
+        if let Some(track) = &self.pose_track {
+            chunk(&mut out, *b"POSE", &track.encode());
         }
         let checksum = checksum(&out);
         chunk(&mut out, *b"END_", &checksum.to_le_bytes());
@@ -158,6 +210,16 @@ impl Replay {
     /// [`ReadError`] for anything that is not a complete, self-consistent
     /// replay of [`FORMAT_VERSION`].
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ReadError> {
+        Self::read(bytes).map(|read| read.replay)
+    }
+
+    /// [`Self::from_bytes`], and whether the header named its schema.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::from_bytes`]; a header naming another kind or a later major is
+    /// [`ReadError::Schema`], by name.
+    pub fn read(bytes: &[u8]) -> Result<Read, ReadError> {
         let mut cursor = Reader::le(bytes);
         if cursor.take(4).map_err(|_| ReadError::BadMagic)? != MAGIC {
             return Err(ReadError::BadMagic);
@@ -172,6 +234,9 @@ impl Replay {
         let mut inputs = Vec::new();
         let mut hashes = None;
         let mut ghost = None;
+        let mut pose_track = None;
+        let mut events = Vec::new();
+        let mut schema_header = true;
         let mut ended = false;
         while !cursor.is_empty() {
             let start = cursor.position();
@@ -182,10 +247,26 @@ impl Replay {
                 b"HEAD" => {
                     let text = std::str::from_utf8(payload)
                         .map_err(|e| ReadError::Header(e.to_string()))?;
-                    header = Some(
-                        toml::from_str::<Header>(text)
-                            .map_err(|e| ReadError::Header(e.to_string()))?,
-                    );
+                    let (read, named) = parse_header(text)?;
+                    header = Some(read);
+                    schema_header = named;
+                }
+                b"EVNT" => {
+                    let mut chunk = Reader::le(payload);
+                    let count = usize::try_from(chunk.varint().map_err(Truncated::from)?)
+                        .map_err(|_| Truncated(start))?;
+                    for _ in 0..count.min(payload.len()) {
+                        events.push(Event {
+                            tick: chunk.varint().map_err(Truncated::from)?,
+                            seat: chunk.u8()?,
+                            kind: chunk.u8()?,
+                            value: u32::try_from(chunk.varint().map_err(Truncated::from)?)
+                                .map_err(|_| Truncated(start))?,
+                        });
+                    }
+                    if events.len() != count || !chunk.is_empty() {
+                        return Err(Truncated(start).into());
+                    }
                 }
                 b"INPT" => {
                     let (&slot, stream) =
@@ -206,6 +287,7 @@ impl Replay {
                     hashes = Some((initial, list));
                 }
                 b"GHST" => ghost = Some(GhostLap::decode(payload)?),
+                b"POSE" => pose_track = Some(PoseTrack::decode(payload)?),
                 b"END_" => {
                     let stored = Reader::le(payload).u64()?;
                     if stored != checksum(&bytes[..start]) {
@@ -241,9 +323,47 @@ impl Replay {
             initial_hash,
             hashes,
             ghost,
+            pose_track,
+            events,
         };
         replay.check()?;
-        Ok(replay)
+        Ok(Read {
+            replay,
+            schema_header,
+        })
+    }
+
+    /// Only the header of a file: the first chunk, and not the checksum or anything after it.
+    ///
+    /// What the list of replays reads, a few hundred bytes of a file that may be hundreds of
+    /// kilobytes. A file whose header parses is listed even if its body is damaged; opening it
+    /// is what finds that out.
+    ///
+    /// # Errors
+    ///
+    /// [`ReadError`]: not a replay, another format version, a first chunk that is not the header,
+    /// or a header that does not parse; one naming another kind or a later major is
+    /// [`ReadError::Schema`].
+    pub fn read_head(bytes: &[u8]) -> Result<Header, ReadError> {
+        let mut cursor = Reader::le(bytes);
+        if cursor.take(4).map_err(|_| ReadError::BadMagic)? != MAGIC {
+            return Err(ReadError::BadMagic);
+        }
+        let version = cursor.u16()?;
+        if version != FORMAT_VERSION {
+            return Err(ReadError::Version(version));
+        }
+        let _reserved = cursor.u16()?;
+        let tag = cursor.take(4)?;
+        let len = cursor.u32()? as usize;
+        let payload = cursor.take(len)?;
+        if tag != b"HEAD" {
+            return Err(ReadError::Inconsistent(
+                "the first chunk is not the header".into(),
+            ));
+        }
+        let text = std::str::from_utf8(payload).map_err(|e| ReadError::Header(e.to_string()))?;
+        parse_header(text).map(|(header, _)| header)
     }
 
     /// The cross-chunk invariants: equal stream lengths, and no more hashes
@@ -259,6 +379,22 @@ impl Replay {
                 "input streams differ in length".into(),
             ));
         }
+        if self
+            .events
+            .windows(2)
+            .any(|pair| pair[1].tick < pair[0].tick)
+        {
+            return Err(ReadError::Inconsistent("events out of order".into()));
+        }
+        if self
+            .pose_track
+            .as_ref()
+            .is_some_and(|track| track.last_tick() > ticks)
+        {
+            return Err(ReadError::Inconsistent(
+                "pose track longer than the recorded ticks".into(),
+            ));
+        }
         if self.header.hash_interval == 0 {
             return Err(ReadError::Inconsistent("hash interval of zero".into()));
         }
@@ -269,6 +405,26 @@ impl Replay {
         }
         Ok(())
     }
+}
+
+/// The `HEAD` text as a [`Header`], and whether it named its schema.
+///
+/// The `toml-schema` line is read apart from the fields, so [`Header`] does not carry it: it is
+/// the writer's to put first and the reader's to check, once.
+fn parse_header(text: &str) -> Result<(Header, bool), ReadError> {
+    let bad = |e: toml::de::Error| ReadError::Header(e.to_string());
+    let mut table: toml::Table = text.parse().map_err(bad)?;
+    let named = table
+        .remove(oag_schema::TABLE)
+        .map(toml::Value::try_into::<oag_schema::Header>)
+        .transpose()
+        .map_err(bad)?;
+    let named = match oag_schema::check(named.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR) {
+        Ok(()) => true,
+        Err(oag_schema::Error::Missing { .. }) => false,
+        Err(e) => return Err(ReadError::Schema(e)),
+    };
+    Ok((table.try_into().map_err(bad)?, named))
 }
 
 fn chunk(out: &mut Vec<u8>, tag: [u8; 4], payload: &[u8]) {

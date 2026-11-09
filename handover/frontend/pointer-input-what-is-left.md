@@ -47,8 +47,10 @@ written ahead of them - see `oag_ui_screens::campaign::pointer` and
 - **2048 in PS TV mode.** Its cursor here is invented like the other four.
   `data/FE/Images/cursor.gxt` was checked first and is a 32x16 mark, the
   same shape as HD's strip-underline `cursor.gtf`, not a pointer - but
-  whether the Vita build draws a pointer at all under PS TV is unread, and
-  `data/FE/Images/TV.gxt` (43,760 bytes) beside it has not been decoded.
+  whether the Vita build draws a pointer at all under PS TV is unread. No PS TV
+  path was found statically, and `data/FE/Images/TV.gxt` (256x256, not looked
+  at) is named by no XML or executable string: see
+  `2048s-front-end-needs-controller-focus-on-every-screen.md`.
   If a real pointer turns up, it replaces `assets/cursors/2048.svg`.
 - **Touch scrolling is built and unit-tested; the phone pass is the
   maintainer's.** Every drag-scrolled view (long `Menu` pages, HD's two hex

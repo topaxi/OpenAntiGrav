@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+check: fmt-check lint check-ballisticng check-extensions test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -195,8 +195,10 @@ test-data *ARGS:
 # `.config/`, a `build.rs`) selects the whole workspace, and a docs-only change
 # selects nothing. The lead still runs the full `just` and `just test-data` once
 # per merge batch - see `.claude/skills/oag-drive/member-rules.md`.
+# `check-status` is left out: a member never commits `status.md`, so a stale table is
+# the lead's to regenerate, and the full `just` checks it.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+gate-affected: fmt-check lint check-ballisticng check-extensions test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas
 
 # `just test`, narrowed to what `scripts/affected.py` selects.
 test-affected:
@@ -739,12 +741,20 @@ logcat-android *ARGS:
     ./scripts/logcat-android.sh "$@"
 
 # Pick game data (disc images, DLC, unpacked 2048/Omega packages, Pure's DLC
-# keys) in an fzf multiselect, each row marked as already on the device or not,
+# keys, the PPSSPP texture packs `just fetch-texture-packs` fetched) in an fzf multiselect, each row marked as already on the device or not,
 # and copy it: `just push-data deck [user@host]` or `just push-data android`.
 # Globs instead of the picker: `just push-data android 'images/pulse-psp-*'`.
 # See scripts/push-game-data.sh
 push-data *ARGS:
     ./scripts/push-game-data.sh "$@"
+
+# Fetch the PPSSPP texture packs for Pulse and Pure into data/texture-packs/<name>/ at the
+# commit scripts/texture-packs.pin names (shallow clone; never committed, both are unlicensed
+# fan work). `--update` moves the pin to each repo's head; `--install-ppsspp ~/.config/ppsspp`
+# also links them into a PPSSPP install's PSP/TEXTURES/<serial>/. `just push-data` carries them to a
+# device. See docs/tools/texture-packs.md and scripts/fetch-texture-packs.sh
+fetch-texture-packs *ARGS:
+    ./scripts/fetch-texture-packs.sh "$@"
 
 # Run the tick loop with no renderer, no window and no disc, and print its hash
 headless-sim *ARGS:
@@ -1114,11 +1124,11 @@ compare-rerender-all *ARGS:
 compare-seed:
     python3 scripts/compare-seed.py
 
-# Rebuild data/compare/ strictly from a curated manifest directory, then upload it to the
-# separate compare Pages project with wrangler. LOCKED: refuses unless the screenshot-policy
-# ADR's status reads Accepted; never run in CI. No default: the seed set is not a publishing set.
-[doc("Publish a curated comparison page (locked until the screenshot-policy ADR is Accepted)")]
-publish-compare manifests:
+# Rebuild data/compare/ strictly from the curated manifest directory (default data/compare-curated,
+# never the seed set), then upload it to the separate compare Pages project with wrangler. Refuses
+# unless the screenshot-policy ADR's status reads Accepted; never run in CI.
+[doc("Publish the curated comparison page (data/compare-curated unless a directory is given)")]
+publish-compare *manifests:
     python3 scripts/compare-page.py {{manifests}} --publish
 
 # Build the Allegrex processor module against the installed Ghidra.
@@ -1286,6 +1296,13 @@ check-status:
 check-weapon-lineage:
     python3 -I scripts/check-weapon-lineage.py
 
+# `.config/nextest.toml`'s `gpu-vram` group lists exactly the test modules that
+# spawn the game or capture a frame through the default adapter, so a new one
+# cannot bring the NVIDIA out-of-memory failures back on a loaded run. Text
+# scan, no build, no GPU.
+check-test-groups:
+    python3 -I scripts/check-test-groups.py
+
 # Every shipped TOML validates against the TOML Schema it names (schemas/v1/), the
 # schema and its loader give the same verdict on each example, and the schemas
 # stage to the path the Pages site serves them at. docs/formats/toml-schema.md
@@ -1310,6 +1327,17 @@ blender-fixtures *ARGS:
 # Regenerate that table after a names.tsv or evidence-page change
 gen-status:
     python3 scripts/gen-re-coverage.py
+
+# A drive lead's merge: --no-ff with MESSAGE, then status.md regenerated and
+# committed if the merge changed it. MESSAGE carries the attribution trailer.
+merge-lane BRANCH MESSAGE:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    git merge --no-ff -m "$2" "$1"
+    python3 scripts/gen-re-coverage.py
+    if ! git diff --quiet -- docs/overview/status.md; then
+        git commit -m "status: regenerated" -m "$(git log -1 --format=%B | grep '^Co-Authored-By:' || true)" -- docs/overview/status.md
+    fi
 
 # docs/ghidra/captures/ is what a Ghidra database held that names.tsv does not:
 # labels, plate comments, and the structs and prototypes that turned out not to

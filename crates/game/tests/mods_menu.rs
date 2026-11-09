@@ -169,11 +169,13 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
         [
             "RACE CAMPAIGN",
             "RACEBOX",
+            "REPLAYS",
             "MULTIPLAYER",
             "OPTIONS",
             "RECORDS",
             "MODS",
-            "QUIT"
+            "QUIT",
+            "PHOTO MODE"
         ]
     );
     assert_eq!(
@@ -181,11 +183,105 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
         [
             "RACE CAMPAIGN",
             "RACEBOX",
+            "REPLAYS",
             "MULTIPLAYER",
             "OPTIONS",
             "MODS",
             "QUIT",
+            "PHOTO MODE",
             "RECORDS"
         ]
+    );
+}
+
+/// The pause menu has a PHOTO MODE row on every title, and the row is on the page only while
+/// the session offers it (a race with one view held behind the menus).
+#[test]
+fn the_pause_menu_offers_photo_mode_on_all_five_titles_and_only_when_offered() {
+    let none = scratch("photo");
+    for title in [
+        oag_pulse::TITLE,
+        oag_pure::TITLE,
+        oag_hd::TITLE,
+        oag_omega::TITLE,
+        oag_2048::TITLE,
+    ] {
+        let mods = Mods::load_from(std::slice::from_ref(&none), &Default::default()).unwrap();
+        let built = mods
+            .build(
+                oag_ui::menu::BUILT_IN,
+                None,
+                Some(oag_ui::menu::For {
+                    title,
+                    updated: false,
+                }),
+            )
+            .unwrap();
+        let mut menu = oag_ui::menu::Menu::new(built.definition);
+        let has = |menu: &oag_ui::menu::Menu| {
+            menu.page()
+                .entries
+                .iter()
+                .any(|e| e.label() == "PHOTO MODE")
+        };
+        assert!(!has(&menu), "{}: off the page until offered", title.name);
+        menu.offer(oag_ui::menu::Action::PhotoMode, true);
+        assert!(has(&menu), "{}: on the page when offered", title.name);
+        menu.offer(oag_ui::menu::Action::PhotoMode, false);
+        assert!(!has(&menu), "{}: gone when not", title.name);
+    }
+}
+
+const FRENCH: &str = "[strings]\nTEST_GARAGE = { text = \"GARAGE (du mod)\", human = true }\n";
+
+/// The rebuild a MODS switch or a LANGUAGE pick runs, over a search path of `base`: the
+/// main page's labels.
+fn rebuilt_labels(base: &Path, disabled: &[&str], language: Option<&str>) -> Vec<String> {
+    let disabled = oag_game::settings::Mods {
+        disabled: disabled.iter().map(|id| (*id).to_string()).collect(),
+        ..Default::default()
+    };
+    let (definition, _, _) = oag_game::menu_tree::rebuilt(
+        &[base.to_path_buf()],
+        &disabled,
+        language,
+        oag_pulse::TITLE,
+        false,
+        &oag_ui::strings::project_table(language),
+    )
+    .unwrap();
+    definition.pages[definition.root]
+        .entries
+        .iter()
+        .map(|e| e.label().to_string())
+        .collect()
+}
+
+#[test]
+fn a_rebuild_without_a_disabled_mod_drops_its_row_and_with_it_restores_the_row() {
+    let dir = scratch("rebuild-switch");
+    folder(&dir.join("garage"), MANIFEST, MENU);
+    let on = rebuilt_labels(&dir, &[], None);
+    assert!(on.iter().any(|l| l == "GARAGE (from the mod)"), "{on:?}");
+    let off = rebuilt_labels(&dir, &["test.garage"], None);
+    assert!(!off.iter().any(|l| l.contains("GARAGE")), "{off:?}");
+    assert_eq!(rebuilt_labels(&dir, &[], None), on);
+}
+
+#[test]
+fn a_rebuild_for_another_language_gives_a_mod_row_that_languages_text() {
+    let dir = scratch("rebuild-language");
+    folder(&dir.join("garage"), MANIFEST, MENU);
+    std::fs::write(dir.join("garage/strings/french.toml"), FRENCH).unwrap();
+    let english = rebuilt_labels(&dir, &[], Some("English"));
+    let french = rebuilt_labels(&dir, &[], Some("French"));
+    assert!(
+        english.iter().any(|l| l == "GARAGE (from the mod)"),
+        "{english:?}"
+    );
+    assert!(french.iter().any(|l| l == "GARAGE (du mod)"), "{french:?}");
+    assert!(
+        !french.iter().any(|l| l == "GARAGE (from the mod)"),
+        "{french:?}"
     );
 }

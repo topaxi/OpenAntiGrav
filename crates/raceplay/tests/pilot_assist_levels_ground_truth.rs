@@ -205,7 +205,7 @@ fn fly(race: &mut Race) -> (u32, u32, f32, f32) {
     let (mut ticks, mut contacts, mut peak) = (0, 0, 0.0f32);
     let mut touching = false;
     for _ in 0..TICKS {
-        race.tick(&inputs);
+        race.tick_sim_only(&inputs);
         let ship = &race.sim.world.ships[0].physics;
         let now = ship.wall_contact_prev;
         ticks += u32::from(now);
@@ -296,7 +296,7 @@ fn no_opponent_ever_gets_either_level() {
         race.set_pilot_assist(level);
         let inputs = thrust();
         for _ in 0..900 {
-            race.tick(&inputs);
+            race.tick_sim_only(&inputs);
         }
         assert_ne!(
             race.sim.world.ships[0].physics.pilot_assist,

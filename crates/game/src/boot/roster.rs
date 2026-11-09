@@ -274,7 +274,10 @@ fn choose_circuit_names(
         })
         .collect();
 
-    let ids: Vec<String> = tracks.iter().map(|track| track.id.clone()).collect();
+    let ids: Vec<(String, String)> = tracks
+        .iter()
+        .map(|track| (track.id.clone(), track.name_key().to_string()))
+        .collect();
     let Some(names) = CircuitNames::choose(&copies, &ids) else {
         // Said out loud rather than left to look like the table simply had no
         // entry: with several copies on the source, "none of them names all of

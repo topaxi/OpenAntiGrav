@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [hd]
-updated: 2026-10-12
-summary: "HD weapon visuals still on Pulse fallbacks in part: the Plasma explosion's remaining three things and other weapons"
+updated: 2026-11-09
+summary: "Missile film kept and paired: clearing conflict resolved; open: streak strip too wide late, bloom boost, Plasma launch, Bomb/Mine/Leach pairs"
 difficulty: medium (30)
 ---
 
@@ -38,7 +38,7 @@ dump was taken with `scripts/psarc.py list` over all seven PSARCs):
 | weapon | models | HD-only effects |
 | --- | --- | --- |
 | ~~Plasma~~ **bolt done; blast drawn** | `HD_plasma_ball` (the **bolt head**, loaded, its program routed to `RIM_EDGE` 2026-09-25, still not drawn - `HD_PLASMA_BALL_DRAWN`, held off by the cull thread below), `HD_plasma_ring`/`_sphere`/`_halo` (the explosion, ramps read: targets 100/7.1/7.0, rates 0.01/0.3/0.2, windows 1.7/1.3/1.3 s, 3.5 s life, [ps3-hdfury-eu/plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md) - **drawn since 2026-09-23, culled as authored and on HD's own right-handed basis; the scale was right all along**) | `WO_PLASMA_CHARGING`, `WO_PLASMA_LAUNCH` still unwired; `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` wired and confirmed against the disc's own `.pob` internal name field, not just the fourcc |
-| ~~Rocket / ~~Missile | ~~`hd_Rocket`~~ **model wired**, `HD_missile_ball_bloomring`, `HD_missile_explosion` still open | `WO_MISSILE_LAUNCH` |
+| ~~Rocket / ~~Missile | ~~`hd_Rocket`~~ **model wired**, ~~`HD_missile_ball_bloomring`~~ **drawn 2026-11-07, two heads per missile** (placement chosen), ~~`HD_missile_explosion`~~ drawn; the Missile's own ribbons (two `FatLine` pools, not smoke) **drawn 2026-11-07** | `WO_MISSILE_LAUNCH` |
 | ~~Mine / ~~Bomb | ~~`HD_Mine`~~, ~~`HD_Bomb`~~ **models wired**; **the Bomb's detonation drawn 2026-10-07** (`HD_bomb_sphere`, `_white`, `hd_bomb_sphere_bloomring`, `hd_bomb_shockwaves` x8 - four models, not five; `HD_bomb_halo` is the armed bomb's, `HD_Mine_halo` the Mine's); `HD_Mine_halo` still open | `WO_BOMB_RAYS` **wired 2026-10-07** (0.5 s in); `WO_BOMB_SHOCKWAVE_FLASH`, `WO_BOMB_EXPLO_DETONATOR` are the Detonator mode's |
 | ~~Cannon~~ **done 2026-09-25** | `hd_muzzleflash` **is a muzzle flash, not a round body**: drawn at the craft's `cannon_flash` locator for the round's first 0.1 s; HD's own `.gtf` bolt/flash quads drawn; `detonator_cannonbolt` (Fury) still open | `WO_CANNON_MUZZLEFLASH`, `WO_CANNON_HOTSPOT`: **no trigger exists** (named by nothing but their own files); `WO_CANNON_SPARKS_DETONATOR` Detonator-only |
 | LeachBeam | `hd_leachbeam_ball_bloomring` **drawn 2026-09-25** through its own program (`RIM_GLOW`, [hd-unlit-programs.md](../../docs/rendering/hd-unlit-programs.md)) | `WO_LEACHBEAM_ABSORB` **wired 2026-09-25** (fires each drain trip); `_LAUNCH`/`_BREAK`/`_HIT_TARGET` confirmed to have no discoverable trigger in the retail EBOOT (same shape as the Cannon's two); `_EMIT`/`_HITSHELL`/`_BALL_SPARKS`/`_CHARGING_SPARKS`/`_ENERGY_SPRAY` still unread |
@@ -143,7 +143,7 @@ The executable's own load-path strings name every model above
   (4) `FUN_001310e8`'s `0x006778c8` call looks like a per-round point
   light, unread; (5) what sets `ship+0x5f42` (the `Ship Muzzle` fallback
   branch) is unread.
-- **Missile (2026-09-23, read, not wired):** `HD_missile_ball_bloomring` is
+- ~~**Missile (2026-09-23, read, not wired):**~~ **Both models drawn (head 2026-11-07, explosion 2026-10-08).** `HD_missile_ball_bloomring` is
   the flying missile's head (`Missile.cpp` constructor `0x0011ccc8`), not an
   explosion model; `HD_missile_explosion` loads in `0x00154cf0` (from
   `MissileManager_Construct`), binds `UV_offset` and `Shockwave_scalar`, and
@@ -167,8 +167,8 @@ The executable's own load-path strings name every model above
   noise tap (needs the sun, ambient, `0x7480de6d` and the reflection probe, all
   unwired), and the ring/halo's own colour and alpha combine (the engine's
   path stands in; only the tap coordinates are the program's).
-- **Missile's detonation pair and the Bomb's five detonation models: no
-  trigger read, so nothing drawn.** `HD_missile_explosion`'s object (vtable
+- ~~**Missile's detonation pair and the Bomb's five detonation models: no
+  trigger read, so nothing drawn.**~~ **Drawn since 2026-10-07/08 (below).** `HD_missile_explosion`'s object (vtable
   `0x00864b38`, shared with the constructors at `0x00154990`/`0x00155c10`/
   `0x00155d00`; slot 5 `0x00155420` only writes the per-viewport matrix at
   `this + 0xf0`) has no found writer of `this + 0xf0` and nothing that starts
@@ -228,24 +228,38 @@ lead is closed (0.996105 is our own law at age 0.81), but ours' core still white
    retail executable never names it is still unfixed. A live RPCS3 look at
    one Cannon shot would settle the Cannon's own open points (side sense,
    spawn point, blend).
-3. Rocket/Missile/Mine/Bomb **bodies** are wired; the Bomb's detonation is
-   drawn (2026-10-07). **The Missile's explosion is the next one; it is read
-   this far** (all with Ghidra truncated at AltiVec, so use capstone over the
-   raw bytes): a pool of 16 objects at the manager's `+0xc0`, count at `+0x10c`,
-   entered through `0x00141288` (also `0x001423a8`, `0x00143580`). **Start**
-   `0x00155568` copies the matrix to `+0xf0`, builds **16 randomly rotated
-   entries at `+0x190` (stride `0x50`, `0x28c660` = a ranged random)** of
-   unknown purpose, writes the per-viewport frame like the Bomb's, calls
-   `AnimNode_UpdateTransformTree(model, 0)`, spawns `WO_MISSILE_EXPLO` (tag
-   `'MIEX'`) and lights a point light. **Draw** `0x00155420` (vtable slot 5)
-   draws the one model (`+0x184`) at `+0xf0 + viewport * 0x40`. **No per-tick
-   update was found**: the model animates by its own keys (`sphere` and `bloom`
-   scale 1 to 18 over 60 frames) on the node clock, `UV_offset` and
-   `Shockwave_scalar` its age. **Open:** the lifetime (what retires it), the
-   16 entries, and the four-plus materials' programs (`sphere`, `bloom`,
-   `rays`, `shockwave` nodes). The harness is
-   `{ppcdis,emu,runblast,spec}.py`; the camera
-   table's lane masks at `0xc47730` are runtime-initialised and must be seeded.
+3. **The Missile's explosion: lifetime, streaks and materials landed 2026-11-08
+   (`hd-missile-blast-wire`)**; read in `docs/ghidra/functions/ps3-hdfury-eu/missile-explosion.md`,
+   wired in `oag_raceplay::missile_blast` and its `streaks` module (the "Wired" section of
+   that page names what is read and what is chosen).
+   1. ~~Lifetime~~ **done**: `age > 1.0`, strict.
+   2. ~~The sixteen streaks~~ **done**: the shared 20-element pool, `Ribbon::push`'s new
+      scale argument, a view-side `Rng`, drawn after the Missile ribbons. **Film kept and
+      paired 2026-11-09 (`hd-missile-capture`)**, `data/reference/hd-capture/missile-hit/`,
+      `missile-explosion.md` "Film": the clearing-time conflict is **resolved** (a parked eye
+      against a flying one; at the film's own eye path ours clears at 0.5 s, and a held original
+      stays white to 0.75 s and clears by 0.95 s like ours' model alone). **Open (new):** at a
+      held eye ours with the streaks is +18 to +35 luma over the film at 0.83 to 0.92 s and +21
+      at 1.08 s: the strip is a wide white sheet where the film's lines are thin. Halving the
+      half-width leaves -7, +1, +14, +11 at 0.75, 0.83, 0.92, 1.08 s; reversing the node's
+      width and alpha direction matches 0.92 s on and undershoots 0.75 and 0.83 s by 20 and 18.
+      Next: read `FatLine_PushChains`'s use of `f1` and `FatLine_Update`'s `t` for the
+      streak pool (config `0x00921050`) against the film's thin lines, not tune. The strip's
+      `v` side order is untested (luma cannot see it). The 60 Hz candidate: the age moves in
+      whole 1/60 s (270 steps), so `dt` per `Update` is 1/60 s. Do not tune the law to any
+      of it. The blast's basis (the struck craft's own) is chosen.
+   3. ~~Materials~~ **done**: the `MISSILE_CORE` doc and `missile_blast.rs`'s module doc
+      cite section 3 of the page.
+   4. **Bloom boost** (confidence 80, effect not measured), **still open**: while a blast
+      lives, the HD bloom's `adaption_boost` is `6 + p (authored - 6)`, unless another live
+      Missile **or Bomb** blast already owns it (the Bomb writes the same field at
+      `0x001518f8`); restored at retirement. Wire it into `oag_post::hd_bloom`'s per-frame
+      parameters behind the blast list. Open first: `hd-whiteout`'s "gate constants
+      identical in base and hit" conflicts with this (the page's section 4 names the read
+      that settles it).
+   2048/Omega: same model and streak texture ship; checked, applies, not wired (the streak
+   path needs the title's `missile_trail`, unread there); the boost differs (neither has
+   the key).
 4. ~~Settle the Plasma explosion's scale~~ **Done 2026-09-23**. ~~Read what
    `node + 0xc0` is on the `PTR_PTR_008b3988` node class~~ **Done
    2026-09-25 at the mechanism level**: it is a generic Anim-Transform
@@ -392,3 +406,51 @@ Open, in order of what a player would notice:
 - **Whether HD's CPU `Quake_UpdateSpan` also moves what the RSX draws**; the big-endian span table
   `oag_vex::quake::spans` cannot read (every HD circuit authors the `Quake` node).
 - **A matched pair with the same ship**: the film is the Fury campaign's first event.
+
+## 2026-11-07 (`hd-weapons`): the Missile's body is its own model
+
+Audit with `--give <weapon>` on Talon's Junction: the only HD projectile that still drew a procedural
+billboard was the Missile (the closure in `scene/frame.rs` had no arm for it). `HD_missile_ball_bloomring`
+is now `WeaponModels::missile_head`, two per missile on the two flare anchors (`weapons.md`,
+"The flying Missile's head draws its own model"). Open on it, in order of what a player would notice:
+- ~~A pinned pair against the original~~ **done by `hd-weapons-2`, see its section below** (capture `viewProj`; `rpcs3-hd-weapon.py --state 1`, shot at film 6.2 s): its heads are red-orange lobes with hollow rings about six times ours in size, ours are white-hot (particle colour and bloom, and possibly the head's scale).
+- The original's per-tick placement and scale of the two nodes (`0x0011e640`, AltiVec, read with capstone
+  over the raw bytes); the head is small under the particles, so a matched frame is the way to judge it.
+- ~~The Missile's smoke ribbon (`RibbonEffects` pool `+0x74`)~~ **drawn by `hd-missile-ribbon`, and it is not pool `+0x74`**: a `FatLine` stub and helix per head (pools `+0x50`, `+0x68`).
+- Omega: the model ships and builds, held with the LeachBeam ball (PS4 program for the rim glow).
+- The `ScreenFlash` is Pulse PSP's alone, so the Missile's `flash::BLAST` runs on HD: no (checked).
+
+## 2026-11-07 (`hd-weapons-2`): the Missile's rings fixed, the pair tooling, what is still unpaired
+
+The Missile's white blob was its particles drawn without their sprite: `oag_hd::effects::SPRITES` gains
+`WO_MISSILE_HEAD`, the atlas `vandergraf_balls_1024x512_missile` (8 x 4 red filament arcs) draws, and a pinned
+pair (camera from the pushbuffer, ours at the same pose and lap-clock second) matches the original's mean colour
+and centroid (`weapons.md`, "The Missile's red rings"). Tools: `scripts/rpcs3-hd-weapon.py --shot-at T,T`
+(paused frames with camera and pose), `scripts/hd-weapon-pair.py` (ours at the same moment),
+`scripts/hd-weapon-region.py` (the box metric). Open, in order:
+- **Bomb, Mine, LeachBeam, Cannon pairs.** Fire ONE weapon per fresh grid: state 8 leaves a green shell around the craft
+  for many seconds, which ruined every shot after it (and the craft is displaced by `--teleport-back`). Restart Race from
+  the pause menu between weapons (`press start`, five `down`, `cross`, one press at a time: a host at load 30 drops
+  presses). A fire in the first second after GO fires nothing; `--fire-after 3` and `--hold 1.0` are the defaults that fired.
+- **State 8's visual**: a green-cyan shell around the whole craft, no muzzle flash, HUD "Machine Gun" damage 5. Settle
+  which weapon it is (the Shield is state 5 in `rpcs3-capture.md`) before touching the Cannon's look.
+- **Plasma's launch**: purple lightning rays and a forward blue ripple wave at 0.4 s that ours lacks (candidates
+  `WO_PLASMA_LAUNCH`, `_CHARGING`, or the wired `_LIGHTNING_EXPAND` not playing). Hold ours' button like the original's
+  (~0.5 s), film out to 3 s on one fresh grid for the growing sphere, and find the trigger before drawing anything.
+- **Rocket**: the original's smoke is blue-grey and fans wider; ours white and tight (the ribbon vertex RGB, chosen).
+- ~~**Missile ribbon**~~ **drawn** (see the next section). The heads' own scale and orbit are unread (`0x0011e640` stores the two matrices at `+0xf0`/`+0x130`); `HD_Mine_halo` unwired.
+
+## 2026-11-07 (`hd-missile-ribbon`): the Missile's ribbons are `FatLine`, drawn
+
+The brief's pool `+0x74` / `smoke_trails_frame1_ALPHA` was wrong (`rocket-trail.md` corrected): the Missile's init
+`0x0011c5d0` takes two elements of pool `+0x50` and two of `+0x68` and its update lays their nodes
+(`FatLine_PushChains`). Law, config and the vertex program: `missile-ribbon.md`; the pair and its table: `weapons.md`,
+"The Missile's ribbons". Open on it, in order:
+- **The head orbit** (ours wider, so ours' loops are bigger and the heads further apart) and the heads' own scale:
+  read `0x0011e640` (it stores the heads' matrices) with capstone; the ribbons follow whatever it fixes.
+- **Vertex tint** (`c[209]`, white here, chosen): the source `LineBuilder_BindParams_q` (`0x002ec748`) negates a global
+  vector at `[0x7378 slot] + 0x70`; read it live. The original's bands are softer and wider than ours.
+- **Helix handedness** (the Rodrigues sine sign, chosen) and the strip's `v = 1` side: a live node dump of one helix
+  (the `Ribbon_AgeSamples` method of rocket-trail.md) settles the first, the `v[4]` array the second.
+- **Pool `+0x74`**: its user is a craft-side update `0x002db130` (speed-driven), unnamed; draws nothing here.
+- **Omega / 2048** ship the same `FatLine` family (shaders and `ThickLine_*` textures): checked, applies, not wired.

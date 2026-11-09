@@ -310,7 +310,7 @@ impl Race {
         if !self.sim.world.ships[slot].pickup.is_empty() {
             return;
         }
-        let Some(weapons) = self.sim.weapons.as_ref() else {
+        let Some(weapons) = self.sim.weapons.as_deref() else {
             return;
         };
         let Some(table) = weapons.pickups_for(&self.sim.class) else {
@@ -351,8 +351,7 @@ impl Race {
         // pads, not about who crosses them - **chosen, not measured**, since
         // no consumer of this mask has been found in `eboot.elf` to read
         // otherwise.
-        let allowed =
-            (!self.sim.allowed_weapons.is_empty()).then_some(self.sim.allowed_weapons.as_slice());
+        let allowed = (!self.sim.allowed_weapons.is_empty()).then_some(&*self.sim.allowed_weapons);
         let drawn = oag_weapons::pickup::draw(&mut self.sim.world.rng, table, who, last, allowed);
         if let Some(weapon) = drawn {
             let pickup = &mut self.sim.world.ships[slot].pickup;

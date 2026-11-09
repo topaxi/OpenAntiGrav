@@ -114,7 +114,7 @@ fn an_unparseable_value_is_reported_and_the_default_kept() {
 #[test]
 fn an_unknown_key_name_in_the_file_is_silently_dropped() {
     // A newer build's candidate this one has never heard of. Not one of the
-    // eighteen this build iterates, so it is never looked at at all - the
+    // nineteen this build iterates, so it is never looked at at all - the
     // same way an unknown TOML table field already is elsewhere in
     // `settings.rs`.
     let mut pairs = Bindings::default().to_pairs();

@@ -178,7 +178,7 @@ impl Scene {
     /// once a tick; `None` draws none).
     pub(super) fn run_hd(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
@@ -205,12 +205,16 @@ impl Scene {
     pub(super) fn run_boost_zoom(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
         race: &Race,
     ) {
+        // HD's own chain draws its ring (`Self::run_hd`); a second one over it would double it.
+        if self.hd.is_some() {
+            return;
+        }
         let Some(tuning) = race.borrowed_zoom_tuning() else {
             return;
         };

@@ -28,6 +28,8 @@ pub const SEED: u64 = 0x4655_5259;
 pub struct FuryAssets {
     /// `fury.envsettings`, typed.
     pub settings: FuryBackdrop,
+    /// The front end's `HDR and Bloom` block, which the picture ends in.
+    pub bloom: oag_post::hd_bloom::Params,
     /// The twelve clouds `Load` picked, in table order.
     pub clouds: Vec<PointCloud>,
     /// Their names, for the report.
@@ -37,6 +39,26 @@ pub struct FuryAssets {
     /// Which of [`Self::clouds`] the first clip draws - `Load`'s own second
     /// roll, distinct from the previous cloud it also rolls.
     pub first: usize,
+}
+
+impl FuryAssets {
+    /// A model on `fury_path`, or the picker's, at its first frame, and how
+    /// many frames `anim_seconds` runs it on: with none asked for, as many as
+    /// it takes the picture to settle. `None` for a path not authored.
+    pub(super) fn at_start(
+        &self,
+        anim_seconds: Option<f32>,
+        fury_path: Option<usize>,
+    ) -> Option<(oag_ui::backdrop::Fury, u32)> {
+        let mut model = oag_ui::backdrop::Fury::new(self.settings.clone(), self.first, SEED)?;
+        if let Some(path) = fury_path {
+            model.force_path(path)?;
+        }
+        let frames = anim_seconds.map_or(oag_ui::backdrop::FRAMES_TO_SETTLE, |seconds| {
+            (seconds.max(0.0) * oag_ui::backdrop::FRAMES_PER_SECOND) as u32
+        });
+        Some((model, frames))
+    }
 }
 
 /// Reads the settings, twelve clouds and the tints, or says why not.
@@ -52,7 +74,9 @@ pub(super) fn load(
     skin_xml: Option<&str>,
     report: &mut Vec<String>,
 ) -> Option<Arc<FuryAssets>> {
-    use oag_hd::frontend::names::{FURY_CLOUDS, FURY_CLOUDS_LOADED, FURY_SETTINGS};
+    use oag_hd::frontend::names::{
+        FURY_BLOOM_SETTINGS, FURY_CLOUDS, FURY_CLOUDS_LOADED, FURY_SETTINGS,
+    };
     if !fury_style {
         return None;
     }
@@ -60,23 +84,21 @@ pub(super) fn load(
         report.push("menu backdrop: the skin authors no BackgroundAnimFury widget".to_string());
         return None;
     };
-    let settings = match archives.read_name(FURY_SETTINGS) {
-        Ok(bytes) => match String::from_utf8(bytes)
-            .map_err(|e| e.to_string())
-            .and_then(|text| EnvSettings::parse(&text).map_err(|e| e.to_string()))
-        {
-            Ok(parsed) => FuryBackdrop::read(&parsed),
-            Err(error) => {
-                report.push(format!(
-                    "menu backdrop: {FURY_SETTINGS} does not parse: {error}"
-                ));
-                return None;
-            }
-        },
-        Err(error) => {
-            report.push(format!("menu backdrop: {FURY_SETTINGS}: {error:#}"));
-            return None;
+    let settings = FuryBackdrop::read(&read_settings(archives, FURY_SETTINGS, report)?);
+    let bloom_table = read_settings(archives, FURY_BLOOM_SETTINGS, report)?;
+    let Some(bloom) = oag_raceplay::hd_bloom_params(&bloom_table).map(|bloom| {
+        // The backdrop ends in the final composite's quad, which reads half a texel off
+        // (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "The field reaches the screen
+        // half a texel off"): the same law as a race's, on the Fury skin that draws it.
+        oag_post::hd_bloom::Params {
+            final_half_texel: true,
+            ..bloom
         }
+    }) else {
+        report.push(format!(
+            "menu backdrop: {FURY_BLOOM_SETTINGS} has no complete HDR and Bloom block"
+        ));
+        return None;
     };
     // `Load`'s pick: `rand() % 19` into a used-set, re-rolled forward until a
     // free slot, twelve times.
@@ -131,9 +153,35 @@ pub(super) fn load(
     ));
     Some(Arc::new(FuryAssets {
         settings,
+        bloom,
         clouds,
         names,
         tints,
         first,
     }))
+}
+
+/// One `.envsettings` file parsed, or `None` with a report line.
+fn read_settings(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    report: &mut Vec<String>,
+) -> Option<EnvSettings> {
+    let bytes = match archives.read_name(name) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            report.push(format!("menu backdrop: {name}: {error:#}"));
+            return None;
+        }
+    };
+    let parsed = String::from_utf8(bytes)
+        .map_err(|e| e.to_string())
+        .and_then(|text| EnvSettings::parse(&text).map_err(|e| e.to_string()));
+    match parsed {
+        Ok(parsed) => Some(parsed),
+        Err(error) => {
+            report.push(format!("menu backdrop: {name} does not parse: {error}"));
+            None
+        }
+    }
 }

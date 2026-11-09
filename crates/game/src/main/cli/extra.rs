@@ -155,6 +155,17 @@ pub(crate) struct MenuArgs {
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_model_seconds: Option<f32>,
 
+    /// With `--menu-page`, the frame of the disc's looping menu backdrop movie
+    /// to draw behind the page, counting from zero; past the end it wraps.
+    ///
+    /// The movie runs from boot and never restarts, so where a reference still
+    /// caught it depends on how long the walk took: the streaks and the craft
+    /// that fly past are bright for about 0.3 s of the nine-second loop.
+    /// `scripts/compare-menu-movie-phase.py` finds the frame a still shows.
+    /// `None` draws frame zero. No effect on a title with no backdrop movie.
+    #[arg(long, value_name = "FRAME")]
+    pub(crate) menu_movie_frame: Option<usize>,
+
     /// With `--menu-page`, draw a modal prompt over it: `rename`,
     /// `rename-note`, `delete`, `delete-built-in` or `binding`.
     ///
@@ -180,6 +191,10 @@ pub(crate) struct MenuArgs {
     /// `docs/formats/fexml.md`'s `TagInput` section. Needs a real `--race`
     /// source open, since it reads the row's geometry live off the disc;
     /// `-typed` is the same screen after a few glyph changes.
+    ///
+    /// `player-name` and `player-tag` draw the first-run entries on Pulse's own `TagInput` row
+    /// (needs a Pulse source); `player-name-grid` and `player-tag-grid` draw the grid every other
+    /// title gets.
     #[arg(long, value_name = "PROMPT", requires = "menu_page")]
     pub(crate) menu_prompt: Option<String>,
 }
@@ -793,6 +808,23 @@ pub(crate) struct DevArgs {
     /// `--screenshot`. Dev only.
     #[arg(long, value_name = "SCRIPT")]
     pub(crate) script: Option<String>,
+
+    /// Play one rumble pattern on the connected pad and exit: a disc pattern by name
+    /// (`Missile_Fired_Rumble`, read from `--source`) or the path of a `.toml` pattern.
+    ///
+    /// Opens the pad subsystem with no window, steps the pattern at 60 Hz through the
+    /// same player and `gilrs` backend a race uses, prints every level it sends, and
+    /// silences the motors. The law is `[controls] rumble` (`ps3` or `ps4`; `original`
+    /// is the booted title's own). A looping pattern is held for `--rumble-hold` seconds.
+    /// Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(long, value_name = "NAME|FILE.toml")]
+    pub(crate) rumble_pattern: Option<String>,
+
+    /// Seconds `--rumble-pattern` holds a looping pattern before finishing it.
+    #[cfg(feature = "dev-cli")]
+    #[arg(long, default_value_t = 2.0, requires = "rumble_pattern")]
+    pub(crate) rumble_hold: f32,
 
     /// Log one line a second on every stage, menus included: stage, fps, frame/CPU/GPU/present
     /// time, target rate, window, surface and render size. `OAG_FRAME_LOG=1` does the same.

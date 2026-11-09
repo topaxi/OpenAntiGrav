@@ -240,11 +240,13 @@ impl Distort {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            oag_gpu::perfprobe::marks::mark(&mut pass, "particle distortion");
             pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, bind_group, &[]);
             pass.set_vertex_buffer(0, self.vertices.slice(..));
             pass.draw(0..count, 0..1);
+            oag_gpu::perfprobe::marks::close(&mut pass);
         }
         Some(&target.resolved)
     }

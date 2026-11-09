@@ -581,37 +581,16 @@ fn list_row(
     }
 }
 
-/// Where a list row's two step arrows are drawn: the left one first. Both
-/// `[x, y, width, height]`, in the grid being drawn in.
-///
-/// The left arrow is anchored by its right edge - it is the right one
-/// drawn mirrored from the same anchor - so its rect starts a full arrow
-/// width before `arrow_left_offset`.
+/// Where a list row's two step arrows are drawn: [`super::block::list_arrow_rects`] for the
+/// label block at `list_x`.
 fn arrow_rects(
     numbers: &oag_title::ListBlocks,
     list_x: f32,
     label_width: f32,
     y: f32,
-    (sx, sy): (f32, f32),
+    scale: (f32, f32),
 ) -> [[f32; 4]; 2] {
-    let size = numbers.arrow_size * sx;
-    let label_right = list_x + label_width;
-    let top = y + numbers.marker_offset.1 * sy;
-    let height = numbers.arrow_size * sy;
-    [
-        [
-            label_right + numbers.arrow_left_offset * sx - size,
-            top,
-            size,
-            height,
-        ],
-        [
-            label_right + numbers.arrow_right_offset * sx,
-            top,
-            size,
-            height,
-        ],
-    ]
+    super::block::list_arrow_rects(numbers, [list_x, y, label_width, 0.0], scale)
 }
 
 /// The rects a pointer can land on, for the rows on screen - the same

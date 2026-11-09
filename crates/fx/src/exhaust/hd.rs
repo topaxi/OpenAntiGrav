@@ -315,27 +315,10 @@ impl Tube {
         if !self.ready() {
             return None;
         }
-        let samples = self.samples();
-        let mut best: Option<(Vec3, f32)> = None;
-        for pair in samples.windows(2) {
-            let (a, b) = (pair[0].position, pair[1].position);
-            let span = b - a;
-            let length_squared = span.length_squared();
-            // A degenerate segment - which every one of them is at a race
-            // start, where the whole ring sits inside 0.2 units - collapses to
-            // its own endpoint rather than dividing by zero.
-            let t = if length_squared > 1e-12 {
-                ((point - a).dot(span) / length_squared).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            let on = a + span * t;
-            let distance = (point - on).length();
-            if best.is_none_or(|(_, d)| distance < d) {
-                best = Some((on, distance));
-            }
-        }
-        best
+        super::centre_line::nearest_on_polyline(
+            self.samples().iter().map(|sample| sample.position),
+            point,
+        )
     }
 
     /// Extrudes the tube: 53 segments x 3 fins x 6 vertices = 954 at a tick, the

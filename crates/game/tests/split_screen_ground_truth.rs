@@ -216,6 +216,40 @@ fn players_draws_distinct_cameras_into_distinct_rectangles() {
     );
 }
 
+/// The stored player name reaches the tag over seat 1's craft. Two captures of the same two-view
+/// race, one with `[player] name` in the settings: the bottom view (seat 2's) tags seat 1's craft,
+/// and that tag is the only thing that moves; the top view tags seat 2, who has no stored name,
+/// and is the same frame to the byte. With the name dropped on the way to the race the two
+/// bottom regions would be equal.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU adapter"]
+fn the_stored_name_is_the_tag_over_the_first_seats_craft() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let scratch = std::env::temp_dir().join(format!("oag-split-name-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let plain = frame(&image, &scratch, "plain", Some(2), "off");
+    let settings = scratch.join("config").join("oag");
+    std::fs::create_dir_all(&settings).expect("creating the settings directory");
+    std::fs::write(settings.join("settings.toml"), "[player]\nname = \"Ada\"\n")
+        .expect("writing the settings");
+    let named = frame(&image, &scratch, "named", Some(2), "off");
+    std::fs::remove_dir_all(&scratch).ok();
+
+    let (top_tag, bottom_tag): (Rect, Rect) = ((420, 105, 140, 40), (420, 455, 140, 40));
+    assert_eq!(
+        pixels(&plain, top_tag),
+        pixels(&named, top_tag),
+        "seat 2 has no stored name: its tag keeps `Player 2`"
+    );
+    let moved = differing(&pixels(&plain, bottom_tag), &pixels(&named, bottom_tag));
+    assert!(
+        moved > 0.01,
+        "seat 1's tag is the same picture with a name stored ({moved:.4} of the region moved)"
+    );
+}
+
 /// The window's default is multisampled, and a multisample resolve rewrites the
 /// whole target: the later views have to load the multisampled colour, not only
 /// the resolved one.

@@ -87,6 +87,7 @@ use oag_ui::language::StringTable;
 use oag_ui::screen::{Screen, Screens};
 
 pub mod draw;
+pub mod editor;
 pub mod flyer;
 pub mod footer;
 pub mod hd;
@@ -289,6 +290,8 @@ pub struct GridSelection {
     per_page: usize,
     /// `Selector`'s pulse clock, see [`pulse::SelectorPulse`].
     pulse: pulse::SelectorPulse,
+    /// The finger gesture in progress on HD's `Grid Selection`, see [`hd::Swipe`].
+    swipe: hd::Swipe,
 }
 
 impl GridSelection {
@@ -299,6 +302,7 @@ impl GridSelection {
             index: 0,
             per_page: GRIDS_PER_PAGE,
             pulse: pulse::SelectorPulse::default(),
+            swipe: hd::Swipe::default(),
         }
     }
 

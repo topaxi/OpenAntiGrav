@@ -140,9 +140,9 @@ arrays, so a snapshot is one copy. A mod's state follows that rule:
   and its fault flag, in a fixed array in the simulation state:
   `[ModSlot; MAX_SIM_MODS]`. No `Vec`, no pointer, no host-side map.
 - **Where:** in `World` (`crates/gameplay/src/world.rs:304`) when it is gameplay
-  state every crate may read, or in `RaceSim` (`crates/raceplay/src/sim.rs:57`)
+  state every crate may read, or in `RaceSim` (`crates/raceplay/src/sim.rs:66`)
   beside the pad caches. Either way `Race::snapshot_sim` / `Race::restore_sim`
-  (`crates/raceplay/src/reconcile.rs:32`, `:49`) clone and restore it with
+  (`crates/raceplay/src/reconcile.rs:33`, `:50`) clone and restore it with
   everything else, which is what network rollback already uses.
 - **The guest's own memory is not state.** A rollback restores what the host owns,
   never a guest's linear memory. Measured failure: a guest keeping a

@@ -58,9 +58,9 @@ pub const LEACHBEAM_TEXTURE: &str = r"Data\Weapons\Textures\pulse_leechbeam1_ADD
 /// `oag_title::flare::Flare` is: the LeachBeam is Pulse's own weapon and this
 /// is its one literal path, found and read on one binary.
 ///
-/// `own_strips` is a title with its own LeachBeam model (HD): its beam is two
-/// SPU-extruded strips of `leachbeam_triangle`, unread, so it is not asked for
-/// Pulse's texture.
+/// `own_strips` is a title with its own LeachBeam strip (HD,
+/// `WeaponModels::leach_strip`, loaded and reported beside the ribbons), so it
+/// is not asked for Pulse's texture.
 ///
 /// `authored` is whether the title's weapon table authors a LeachBeam at all.
 /// Wipeout Pure's does not (no `LeachBeam` block, no string for one in either
@@ -78,7 +78,7 @@ pub(super) fn leach_beam_texture(
         return None;
     }
     if own_strips {
-        report.push("the LeachBeam's own strips are not built - no ribbon body".into());
+        report.push("the LeachBeam draws this title's own strip (`WeaponModels::leach_strip`): Pulse's ribbon texture is not loaded".into());
         return None;
     }
     let own = platform_sibling(archives, LEACHBEAM_TEXTURE);
@@ -646,6 +646,19 @@ pub(super) fn exhaust_texture(
 /// disc from a PS2 one in the load report, and the two reach this point by
 /// different names.
 fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, String), String> {
+    if let Some(image) = oag_texture::replacer::mip(blob) {
+        return Ok((
+            FlareTexture {
+                width: image.width,
+                height: image.height,
+                rgba: image.rgba.clone(),
+            },
+            format!(
+                "{name}: {}x{} from the texture pack",
+                image.width, image.height
+            ),
+        ));
+    }
     match oag_texture::texture::Texture::parse(blob) {
         Ok(texture) => Ok((
             FlareTexture {

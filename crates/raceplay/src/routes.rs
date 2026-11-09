@@ -241,7 +241,9 @@ fn narrow_the_mouth(
         })
         .collect();
     let unsupported: Vec<bool> = (0..line.len()).map(|i| line.is_unsupported(i)).collect();
-    oag_ai::Line::with_corridor(points, corridor).with_unsupported(unsupported)
+    oag_ai::Line::with_corridor(points, corridor)
+        .with_unsupported(unsupported)
+        .with_strides(oag_ai::Tuning::default().curvature_span)
 }
 
 /// The line a driver on `route` follows: the ring for `0`, else that route's.
@@ -267,7 +269,7 @@ impl Race {
         self.ensure_speed_plans();
         plan_for(
             &self.sim.routes,
-            self.sim.speed_plan.as_ref(),
+            self.sim.speed_plan.as_deref(),
             super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
             self.sim.world.ships[slot].driver.branching.route,
         )
@@ -320,7 +322,7 @@ impl Race {
         if self.sim.routes.is_empty() {
             return;
         }
-        let Some(course) = self.sim.course.as_ref() else {
+        let Some(course) = self.sim.course.as_deref() else {
             return;
         };
         let n = course.len();
@@ -438,7 +440,7 @@ impl Race {
     /// short of `05_Track`'s first jump onto route 1's deck kept steering at the
     /// ring 60 units above it and ground the wall until its shield was gone.
     fn recommit(&mut self, slot: usize, original: bool) {
-        let Some(n) = self.sim.course.as_ref().map(Course::len) else {
+        let Some(n) = self.sim.course.as_deref().map(Course::len) else {
             return;
         };
         let ship = &self.sim.world.ships[slot];

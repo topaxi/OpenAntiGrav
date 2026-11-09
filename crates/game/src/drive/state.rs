@@ -114,6 +114,9 @@ pub struct Resolved {
     /// What the first person's craft holds (`Weapon::as_type`), on `stage=race`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pickup: Option<String>,
+    /// The kills or points an Eliminator ends on, on `stage=race` in that mode.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<u32>,
 }
 
 /// Everything reported after one frame.
@@ -135,9 +138,61 @@ pub struct State {
     /// The screen that takes input, on `stage=menu`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub screen: Option<Screen>,
+    /// `landed` once the reads a selection screen opens on are in, `reading` before, on
+    /// `stage=menu`: a script waits for it to see a screen open with nothing to wait for.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opening_reads: Option<String>,
     /// The resolved race, from the frame a launch begins loading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub race: Option<Resolved>,
+    /// Photo mode's lens (`internal`, `close`, `track`), or `none` when it is closed, on
+    /// `stage=race`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub photo: Option<String>,
+    /// Photo mode's picture controls as `exposure=33 saturation=20 speed_blur=0 dof=off
+    /// aperture=40 focus=20`, while it is open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub photo_fx: Option<String>,
+    /// A photo mode shot of several frames under way as `drawn/frames`, or `none`, while the mode
+    /// is open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub photo_job: Option<String>,
+    /// The replay viewer while a recording is being watched on `stage=race`: `opening`,
+    /// `playing`, `paused`, `ended` or `stopped` (the build stops matching the recording).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replay: Option<String>,
+    /// The tick the viewer stands at, the length of the recording and the last tick built, as
+    /// `at/length/built` (`-` before the first keyframe).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replay_at: Option<String>,
+    /// The grid slot the viewer's picture follows, while a recording is being watched.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replay_follow: Option<String>,
+    /// `on` or `off`: whether the watched race's HUD is drawn.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replay_hud: Option<String>,
+    /// The end-of-race screen on top, `photo` for `Race End Photo` and `other` for the rest,
+    /// on `stage=race` once the race has ended with an end-of-race flow built.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endrace: Option<String>,
+    /// The race's state hash, hex, on `stage=race`. It moves with every tick, so a line is
+    /// written for each tick the race steps and none while it stands still.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
+    /// The simulation's own tick count, on `stage=race`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sim_tick: Option<u64>,
+    /// The Pilot Assist level the player's craft flies with (`off`, `normal`, `extreme`), on
+    /// `stage=race`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pilot_assist: Option<String>,
+    /// Whether the race draws its ghost ship, on `stage=race`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ghost_visible: Option<bool>,
+    /// How many out-of-tick changes (a Pilot Assist switch, a handed-over weapon) the race's
+    /// recording holds, on `stage=race`; absent when the race records nothing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recorded_events: Option<usize>,
 }
 
 impl State {
@@ -163,7 +218,7 @@ impl State {
     /// focused row's id, setting and label, so `focus=launch` and `focus="LAUNCH RACE"` both hold.
     ///
     /// Keys: `stage`, `frontend`, `map_event`, `page`, `screen` (the overlay kind, `page` when none),
-    /// `screen.id`, `title`, `focus`, and `race.title|track|track_file|team|variant|mode|source|craft_source`.
+    /// `screen.id`, `title`, `focus`, `opening_reads`, and `race.title|track|track_file|team|variant|mode|source|craft_source|target`.
     #[must_use]
     pub fn get(&self, key: &str) -> Vec<String> {
         let screen = self.screen.as_ref();
@@ -173,9 +228,18 @@ impl State {
             "frontend" => one(self.frontend.clone()),
             "map_event" => one(self.map_event.clone()),
             "page" => one(self.page.clone()),
+            "opening_reads" => one(self.opening_reads.clone()),
             "screen" => one(screen.map(|s| s.kind.clone())),
             "screen.id" => one(screen.map(|s| s.id.clone())),
             "title" => one(screen.map(|s| s.title.clone())),
+            "photo" => one(self.photo.clone()),
+            "photo_fx" => one(self.photo_fx.clone()),
+            "photo_job" => one(self.photo_job.clone()),
+            "replay" => one(self.replay.clone()),
+            "replay_at" => one(self.replay_at.clone()),
+            "replay_follow" => one(self.replay_follow.clone()),
+            "replay_hud" => one(self.replay_hud.clone()),
+            "endrace" => one(self.endrace.clone()),
             "focus" => screen
                 .and_then(|s| s.focus.as_ref())
                 .map(|f| {
@@ -196,6 +260,7 @@ impl State {
                     Some("team") => one(race.team.clone()),
                     Some("variant") => one(race.variant.clone()),
                     Some("mode") => vec![race.mode.clone()],
+                    Some("target") => race.target.iter().map(u32::to_string).collect(),
                     Some("source") => vec![race.source.clone()],
                     Some("craft_source") => one(race.craft_source.clone()),
                     _ => Vec::new(),
@@ -223,6 +288,15 @@ impl State {
                 | "screen.id"
                 | "title"
                 | "focus"
+                | "photo"
+                | "photo_fx"
+                | "photo_job"
+                | "replay"
+                | "replay_at"
+                | "replay_follow"
+                | "replay_hud"
+                | "endrace"
+                | "opening_reads"
         ) || key.strip_prefix("race.").is_some_and(|rest| {
             matches!(
                 rest,
@@ -234,6 +308,7 @@ impl State {
                     | "mode"
                     | "source"
                     | "craft_source"
+                    | "target"
             )
         })
     }

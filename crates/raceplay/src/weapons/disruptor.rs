@@ -38,7 +38,7 @@ impl Race {
         if self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::disruptor)
             .is_none()
         {
@@ -53,7 +53,7 @@ impl Race {
         let missile = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::missile);
         let target = missile.and_then(|missile| {
             oag_weapons::projectile::missile::lock(
@@ -62,7 +62,7 @@ impl Race {
                 position,
                 ship.physics.body.forward(),
                 &missile,
-                self.sim.course.as_ref().map(oag_race::Course::length),
+                self.sim.course.as_deref().map(oag_race::Course::length),
             )
         });
         let roll = self.sim.world.rng.next_u32() % 8;

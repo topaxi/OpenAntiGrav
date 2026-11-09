@@ -60,7 +60,7 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
     let count = race.ship_count() as usize;
     let mut dead = vec![false; count];
     for _ in 0..TICKS {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         for (slot, flag) in dead.iter_mut().enumerate().skip(1) {
             if race.sim.world.ships[slot].physics.craft_state != CraftState::Racing {
                 *flag = true;

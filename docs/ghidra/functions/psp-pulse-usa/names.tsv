@@ -1450,3 +1450,7 @@
 0x08819458	function	Ease_CosineWithBump	90	pickup-colour.md
 0x088fa6fc	function	ParticleSystem_ApplyDrag	85	plasma.md
 0x0885c360	function	Plasma_BuildDrawMatrices	80	plasma.md
+0x0881ba58	function	Hud_UpdateMultiplayerTags	80	hud-game-options.md
+0x08ab083d	data	g_multiplayer_tags_on	88	hud-game-options.md
+0x08966848	function	MpTag_GetPlayerName	70	hud-game-options.md
+0x088e35d4	function	PauseMenu_BindRedirectForMode	85	pause-menu.md

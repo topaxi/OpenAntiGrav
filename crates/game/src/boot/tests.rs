@@ -187,7 +187,7 @@ fn a_name_that_looks_like_a_hash_is_still_a_name() {
 
 /// The tiles of 2048's grid for the mods under `bases`: the page each opens.
 fn tiles_with(bases: &[std::path::PathBuf]) -> Vec<String> {
-    let mods = crate::mods::Mods::load_from(bases, &Default::default()).unwrap();
+    let mods = crate::mods::Mods::load_from(bases, &crate::settings::Mods::default()).unwrap();
     let built = mods
         .build(
             oag_ui::menu::BUILT_IN,
@@ -208,13 +208,14 @@ fn tiles_with(bases: &[std::path::PathBuf]) -> Vec<String> {
 }
 
 #[test]
-fn wipeout_2048s_grid_gets_the_race_box_and_multiplayer_tiles_with_no_mod() {
-    // The split entry is the MULTIPLAYER tile's page, as it is a row on the other titles.
-    assert_eq!(tiles_with(&[]), ["race", "multiplayer"]);
+fn wipeout_2048s_grid_gets_the_race_box_replays_and_multiplayer_tiles_with_no_mod() {
+    // The split entry is the MULTIPLAYER tile's page, as it is a row on the other titles; the
+    // recorded races are the REPLAYS tile's, which hangs off RACEBOX.
+    assert_eq!(tiles_with(&[]), ["race", "replays", "multiplayer"]);
 }
 
 #[test]
-fn a_mods_row_under_racebox_is_a_tile_between_them() {
+fn a_mods_row_under_racebox_is_a_tile_between_them_and_replays_still_fits() {
     let official =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/mods/official");
     if !official.join("remix/oag-mod.toml").is_file() {
@@ -223,7 +224,7 @@ fn a_mods_row_under_racebox_is_a_tile_between_them() {
     }
     assert_eq!(
         tiles_with(&[official]),
-        ["race", "oag.remix/remix", "multiplayer"]
+        ["race", "replays", "oag.remix/remix", "multiplayer"]
     );
 }
 

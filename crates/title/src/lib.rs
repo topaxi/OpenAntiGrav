@@ -34,6 +34,7 @@ pub mod boot;
 pub mod campaign;
 pub mod craft_laws;
 pub mod effects;
+pub mod eliminator;
 pub mod endrace;
 pub mod engine_effects;
 pub mod exhaust;
@@ -52,12 +53,16 @@ pub mod menu;
 pub mod now_playing;
 pub mod opponent_autopilot;
 pub mod original_driver;
+pub mod pause_menu;
+pub mod photo;
 pub mod pre_race;
 pub mod pressing;
+pub mod profile;
 pub mod prompts;
 pub mod race;
 pub mod race_song;
 pub mod recovery;
+pub mod rumble;
 pub mod shadow;
 pub mod speed;
 pub mod team;
@@ -84,6 +89,7 @@ pub use menu::{
     StripBlocks,
 };
 pub use oag_disc::Platform;
+pub use pause_menu::{PauseAction, PauseLayout, PauseMenu, PauseMenuRows, PauseRow, PauseScreen};
 pub use pressing::{Pressing, Pressings};
 pub use race::sound::{
     FrontEndSounds, MedalScreen, MenuCues, ResultsLaw, ResultsVoices, StyledCue, TournamentPlace,
@@ -122,6 +128,10 @@ pub struct Title {
     pub hud: &'static hud::HudLayouts,
     /// How this title's HUD sprites reach the screen. See [`hud::HudArt`].
     pub hud_art: &'static hud::HudArt,
+    /// What an Eliminator is won on. See [`eliminator::EliminatorRule`].
+    pub eliminator: pre_race::Sourced<eliminator::EliminatorRule>,
+    /// The Eliminator flip, `None` where the title has none or nobody has wired it.
+    pub eliminator_flip: pre_race::Sourced<Option<eliminator::FlipRule>>,
     /// The team ids this title's roster names and the shared identity each is
     /// kept under, for loyalty. See [`team`].
     pub teams: team::Roster,
@@ -166,9 +176,22 @@ pub struct Title {
     /// mix is authored for a 16-bit clamp and sums to about twice full scale in a busy race; HD's
     /// authored mix has headroom and reads `0.0`.
     pub master_trim_db: pre_race::Sourced<f32>,
+    /// The child of `GlobalAudioConfig.xml`'s `<RearOcclusion>` this title's original reads to
+    /// low-pass a voice behind the listener (`Stereo` here: ours is a stereo mix), or `None` when
+    /// it does not. The frequency is the file's, never ours. Only a title that sets this plays
+    /// the law, even where its file carries the element: Omega ships one nothing reads
+    /// (`docs/ghidra/functions/ps4-omega-eu/audio-3d.md`, "`RearOcclusion` is dead on Omega").
+    pub rear_occlusion: Option<pre_race::Sourced<&'static str>>,
     /// Which codepoints in this title's strings are controller-button glyphs,
     /// and which control each depicts. See [`prompts::Prompts`].
     pub prompts: &'static prompts::Prompts,
+    /// Which name and tag entries this title has. See [`profile::Profile`].
+    pub profile: profile::Profile,
+    /// Which of photo mode's words this title's disc already says. See [`photo::Strings`].
+    pub photo: photo::Strings,
+    /// The frames its photo mode accumulates into a shot, or `None` where the original's shot is
+    /// the one frame on screen. See [`photo::Accumulation`].
+    pub photo_shot: Option<photo::Accumulation>,
     /// The plugin definition declaring what this release carries to race with:
     /// one `PI_Team` node per team, one `PI_Track` per circuit, one `PI_Music`
     /// per soundtrack track.
@@ -232,6 +255,10 @@ pub struct Title {
     /// The rows of this title's own main menu, as the disc authors them, and how a
     /// row attached to one is drawn. See [`main_menu::MainMenu`].
     pub main_menu: &'static main_menu::MainMenu,
+    /// The pause screens this title's disc authors, per game mode, or `None` where none has
+    /// been read: pausing then falls through to the front end's main page over the parked
+    /// race. Never a stand-in screen. See [`pause_menu::PauseMenu`].
+    pub pause_menu: Option<&'static pause_menu::PauseMenu>,
     /// What this title's executable resolves per pressing (the title screen's
     /// wordmark, a localised boot movie), or `None` when it resolves nothing
     /// per pressing. See [`pressing::Pressings`].
@@ -259,6 +286,9 @@ pub struct Title {
     /// Whether a circuit's rain and snow are played, and so whether the weather
     /// setting is offered. See [`weather::Weather`].
     pub weather: weather::Weather,
+    /// Whether the original plays pad patterns, and so whether the RUMBLE
+    /// setting offers `original`. See [`rumble::Rumble`].
+    pub rumble: rumble::Rumble,
 }
 
 /// Where a title keeps the music its front end and its races play.

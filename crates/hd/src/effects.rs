@@ -84,11 +84,14 @@ pub const EFFECTS: &Effects = &{
 /// The effects whose `.gtf` sprites HD plays: the Rocket's wall burst, whose
 /// nine emitters name nine entries under `/data/psys/tex/` that all decode
 /// (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's
-/// smoke"). Every other HD effect still draws the procedural profile until a
-/// matched capture says its sprite reads right.
+/// smoke"), the Quake's wave, and the Missile's two heads, whose red
+/// filament-ring atlas the colour ramp is authored against (`weapons.md`,
+/// "The Missile's red rings"). Every other HD effect still draws the
+/// procedural profile until a matched capture says its sprite reads right.
 const SPRITES: &[&str] = &[
     engine_effects::TRACK_BLAST_EFFECT,
     engine_effects::QUAKE_EFFECT,
+    engine_effects::MISSILE_FLARE_EFFECT,
 ];
 
 /// The effects whose emitters spread by the extent law on HD: the Quake's wave,
@@ -164,6 +167,15 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
+    // The last full-screen quad of a frame runs fragment program `0x01113c41` with unit 0
+    // filter `0x02022000` and TEXCOORD0 at `(0.5 / width, 0.5 / height)` of the scaled
+    // source: 23 of 23 1080p frames, 8 of them races at widths 1300, 1320 and 1660.
+    // `docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "A race's final composite
+    // is the same quad", confidence 90.
+    final_composite_half_texel: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     // The launch boost: HD authors `<StartBoost>`; the grading law is Pulse PSP's, unmeasured on
     // HD (`docs/physics/launch-boost.md`).
     start_boost: Rule {
@@ -196,6 +208,18 @@ mod tests {
         assert!(
             !Looks::unread(SHIELD)
                 .material_render_state
+                .applies_everywhere()
+        );
+    }
+
+    /// HD's final composite reads half a source texel off; an unread title's does not.
+    #[test]
+    fn hd_reads_its_final_composite_half_a_texel_off_and_an_unread_title_does_not() {
+        assert!(LOOKS.final_composite_half_texel.applies_everywhere());
+        assert_eq!(LOOKS.final_composite_half_texel.origin, Origin::Measured);
+        assert!(
+            !Looks::unread(SHIELD)
+                .final_composite_half_texel
                 .applies_everywhere()
         );
     }

@@ -111,6 +111,7 @@ fn the_first_cell_draws_four_emblems_and_a_frame_of_corner_marks() {
         &CellArt {
             next_flyer: None,
             fury: true,
+            medal_tier_rows: [0, 1, 2],
             track_emblems: &campaign.circuit_emblems,
         },
         None,

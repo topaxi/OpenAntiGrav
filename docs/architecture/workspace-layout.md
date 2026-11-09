@@ -61,7 +61,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-ai` | `crates/ai` | Opponent behaviour: a line-following driver that emits ship controls. Depends on `oag-core` and `oag-physics` only. |
 | `oag-weapons` | `crates/weapons` | Pickups, projectiles, blasts, beams, disruption and slowdown: what a craft holds, what it fires and what a hit costs. Simulation code, in `GAMEPLAY_CRATES` and the determinism scan. **Below `oag-gameplay`**: `World` and `Ship` embed its state, and it reaches a craft only through the `oag_weapons::Craft` trait, which `oag_gameplay::Ship` implements. Depends on `oag-core`, `oag-physics`, `oag-race` and `oag-tables`. |
 | `oag-gameplay` | `crates/gameplay` | The `World` struct and the input snapshot the simulation consumes. |
-| `oag-replay` | `crates/replay` | Replays: the per-slot input stream as the truth, a state hash a second to catch a desync, and a ghost lap's pose track. Created when M7 opened, per [ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). In `GAMEPLAY_CRATES`: it depends on `oag-core` and `oag-gameplay` and nothing that draws. |
+| `oag-replay` | `crates/replay` | Replays: the per-slot input stream as the truth, a state hash a second to catch a desync, and a ghost lap's pose track. Created when M7 opened, per [ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). The `Timeline` that seeks a race by keyframes ([its page](replay-timeline.md)) lives in `oag-raceplay`'s simulation half; this crate holds the event list and the pose-track chunk (`POSE`, `track.rs`) and still knows no race. In `GAMEPLAY_CRATES`: it depends on `oag-core` and `oag-gameplay` and nothing that draws. |
 | `oag-audio` | `crates/audio` | The mixer and playback device; see [ADR-0018](adr/0018-audio-mixer-architecture.md). |
 | `oag-present` | `crates/present` | The frame between the scene and the glass: `upscale` (blit, FSR/FXAA/SMAA/temporal, grade, screen filter, composite), `drs` (dynamic resolution controller) and `perf` (frame meter, cost breakdown, `SceneStats`). Depends on `oag-display`, `oag-gpu`, `oag-post` and `oag-ui`; the host passes plain data in. Its device-and-`Renderer` composite tests stay in `oag-game`. |
 | `oag-livery` | `crates/livery` | Per-slot ship assets for a race: hulls, skins (`ship_skin::apply`), shield shells, boost plumes, engine lights, wrecks, plus `entry`, the archive entry names they come from. Depends on `oag-mesh` and `oag-fx`, not `oag-render` (cut 2026-10-05). The catalogue half of skin selection (`resolve`) stays beside the race load in `oag-raceplay` (`load/skin.rs`) because it reads `catalogue`. |
@@ -291,8 +291,9 @@ of 90 and 25-36). The static build is `scripts/build-server-portable.sh musl`
 
 ## Which GPU the tests use
 
-Every GPU test gets its adapter from `oag_gpu::test_adapter` (`request` for one,
-`ordered` to walk several), never from `request_adapter` with defaults: that
+Every in-process GPU test but the capture ones below gets its adapter from
+`oag_gpu::test_adapter` (`request` for one, `ordered` to walk several), never from
+`request_adapter` with defaults: that
 takes whichever adapter the driver lists first, which on a machine with an
 integrated and a discrete GPU is usually the integrated one that also draws
 the desktop. The helper prefers the discrete GPU, and puts the integrated one
@@ -302,6 +303,103 @@ large HD scene tests. `OAG_TEST_ADAPTER=discrete|integrated|<name substring>`
 overrides the choice. The first caller in a process prints the adapter it got
 to stderr (`--no-capture`). A machine with no adapter still skips each test as
 before.
+
+Two kinds of test do not go through the helper and take the driver's default
+adapter, which on a laptop is the discrete GPU: a test that spawns `oag-game`
+(the binary's `adapter::choose` asks wgpu for its default pick) and a test that
+calls `capture_pixels_from` or `capture_from` in `oag-mesh`. Those are the
+`gpu-vram` test group below.
+
+## Test groups: the `gpu-vram` cap (2026-11-05)
+
+`.config/nextest.toml` puts the tests that open the default GPU in a test group
+`gpu-vram` of 4 threads (`max-threads = 4`). A group caps concurrency inside one
+nextest run and nothing else: it does not see a second run (the `gate.lock`
+covers that) or a game on the desktop.
+
+**Why.** On a machine whose discrete GPU does not spill device memory into system
+memory (this notebook's 8 GiB NVIDIA RTX PRO 2000 on Linux), sixteen test threads
+put a dozen games on the GPU together. A full `test-data` run before the group
+(`OAG_REQUIRE_GAME_DATA=1`, no `VK_ICD_FILENAMES`, per-process memory sampled
+every 0.5 s with `nvidia-smi -q -x`, peak RSS per test from `wait4`) peaked at
+**7,782 MiB of 8,151** with 13 processes on the GPU, and five HD scene tests failed
+with `wgpu error: Out of Memory` (`hd_weapon_scene_ground_truth` two of its five,
+`hd_plasma_ball_ground_truth`, `hd_bomb_blast_ground_truth`,
+`hd_behind_glass_frame_ground_truth`). The window of each failure sat at 7,565 to
+7,782 MiB. The HD tests are alphabetically adjacent, so nextest starts them
+together.
+
+**Per-process peaks** (81 tests held 50 MiB or more, 57 held 300 MiB or more):
+
+| Test | GPU memory |
+| --- | --- |
+| A spawned game on an HD race (14 tests) | 916 MiB (1,045 for the split and flaps ones) |
+| A spawned game on Pulse, Pure or 2048 | 462 to 788 MiB |
+| `split_screen_ground_truth::omega_two_views_each_keep_their_picture` | 2,575 MiB (the only outlier) |
+| In-process `oag-render::it` tests through `capture_pixels_from` | 73 to 713 MiB |
+| In-process tests through `oag_gpu::test_adapter` | up to about 200 MiB (a context is about 2 MiB) |
+
+**The cap.** (8,151 MiB, less the desktop's 160 to 300, less headroom) over the
+1,045 MiB of the largest ordinary member is 7; the outlier at 2,575 MiB plus six
+more would be 8.8 GiB. At 4 the worst case is 2,575 + 3 x 1,045 = 5.7 GiB plus the
+desktop and the few-hundred-MiB in-process tests, which leaves 1.4 GiB. 4 was
+chosen over 5 because it costs nothing measurable (below).
+
+**Result**, the same tree, the same command, back to back under the gate lock,
+both with the measuring wrapper on (so its overhead is equal):
+
+| Run | Wall | Tests | GPU memory peak | Load (mean of 0.5 s samples) |
+| --- | --- | --- | --- | --- |
+| no group | 981 s | 10,903 passed, 6 failed | 7,782 MiB, 13 processes of 100 MiB or more | 26.4 |
+| `gpu-vram` at 4 | 959 s | 10,909 passed | 4,005 MiB, never more than 4 of 300 MiB or more | 25.5 |
+
+The 22 s is inside the noise of a machine whose load swings 13 to 77, so the
+claim is "no cost seen", not "faster". A replay of the first run's per-test
+walls through a 16 slot scheduler with and without the cap agrees (948 s without,
+947 s at 4, 945 s at 2): the group's 156 tests sum to 1,865 s of the suite's
+14,811, so a cap of 4 leaves 466 s of group work spread over a 950 s run, and the
+other twelve threads always have other tests to start. The same replay at 24
+slots (the desktop) gives 640 s without the cap and at 4, 639 s at 3, 938 s at 2;
+at 32 slots 486 s and 485 s at 4, 626 s at 3. The cap would cost wall clock only
+if the group were most of the suite: at 4 the group's 466 s is a floor under the
+run, so a machine fast enough to finish the rest in under that would feel it.
+A third full run on the final tree, without the wrapper: 10,909 passed in 941 s at
+load 15 to 12; its only red is `check-test-budget`'s 450 s ceiling, which this
+machine always trips.
+
+**The sixth failure is not VRAM.** `campaign_cursor_ground_truth::the_2048_map_reopens_on_the_event_last_started`
+exits with `SIGSEGV` (status 139) in the first run with the GPU at 2,700 MiB,
+and alone on the idle NVIDIA GPU at 787 MiB in 3 of 8 runs; it passed 7 of 7 on
+the Intel ICD. The core dump (`coredumpctl`) shows the crash on the game's
+`race-load` thread at an instruction pointer that is not in any mapping
+(`SEGV_ACCERR`), while the main thread sits in `libnvidia-eglcore` inside an
+`ioctl`. It passed in the second full run, which says nothing about it: a cap
+does not touch it. It is open as a bug in the NVIDIA path, not a test-suite
+problem.
+
+**RAM needed no group.** The largest test by peak resident size is
+`extract_ground_truth::omega::first_circuit_reproduces` at 7.5 GiB; the next are
+the other two Omega extraction tests (7.3, 6.7 GiB), two refraction tests
+(5.1, 4.4 GiB) and `ai_roll_ground_truth` (3.7 GiB). `MemAvailable` never fell
+under 35 GiB of the notebook's 62 across either full run, so no `threads-required`
+or RAM group is set. A smaller machine would see the three Omega extraction tests
+(21 GiB together) first.
+
+**Keeping the list exact.** The group is a list of test modules, so
+`scripts/check-test-groups.py` (`just check-test-groups`, in the gate, a text scan
+with no build) fails when a module in `crates/*/tests/` spawns the game or calls
+`capture_pixels_from`/`capture_from` and is not in the group, when a listed
+module no longer does, when such a marker sits where the list cannot name it (a
+crate without `tests/it*.rs` binaries, an in-crate test module), or when a new
+`request_adapter`/`enumerate_adapters` call site appears. A new module is one line
+in the override's regex. A test that opens a GPU some other way is not caught; teach the script its
+marker (`MARKER`, `OPENERS`) when the sampler shows one.
+
+**Measuring it again.** `nextest` wrapper scripts are experimental
+(`experimental = ["wrapper-scripts"]` in the config file, not set in the repository):
+a wrapper that forks the test command, reads `wait4`'s `ru_maxrss` and writes a
+line per test, plus a sampler that walks each `nvidia-smi -q -x` process back to
+its wrapper through `/proc/<pid>/stat`, give the numbers above.
 
 ## Gameplay state
 
@@ -362,8 +460,8 @@ split is by what the loop is, not by crate ownership:
 
 | optimised | left at `opt-level = 0` |
 | --- | --- |
-| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-weapons`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test; `oag-raceplay` (the whole `race/` tick, formerly in `oag-game`, which keeps its own entry for the capture loop) and `oag-render` (the particle systems it steps), added 2026-10-01 (`oag-fx`, `oag-mesh` and `oag-post`, split out of it on 2026-10-05, carry the same entry) - see [the gate-speed section](#the-race-itself-was-the-unoptimised-cost-2026-10-01) | `oag-view`, `oag-input`, `oag-audio` |
-| `oag-disc`, `oag-formats`, `oag-assets` - LZSS, the GS and GE texture swizzles, the `.vex` node walk, and the sector-at-a-time read under them; `oag-video` - demuxing a whole movie a packet at a time; `oag-tables` - a character-at-a-time XML walk over every row on the disc; `oag-texture` - per-texel palette and block-codec loops; `oag-vex` - the node walk over a whole circuit; `oag-pob` - every particle system on a disc parsed and its bytes claimed; `oag-rcs` - the RCSMODEL geometry and material walk; `oag-unity` - the LZMA and LZ4 block decodes and a typetree walk over every object of a Unity bundle | `oag-title`, `oag-pulse`, `oag-pure`, `oag-hd`, `oag-trace`, `oag-tools` |
+| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-weapons`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test; `oag-raceplay` (the whole `race/` tick, formerly in `oag-game`, which keeps its own entry for the capture loop) and `oag-render` (the particle systems it steps), added 2026-10-01 (`oag-fx`, `oag-mesh` and `oag-post`, split out of it on 2026-10-05, carry the same entry) - see [the gate-speed section](#the-race-itself-was-the-unoptimised-cost-2026-10-01) | `oag-view`, `oag-input` |
+| `oag-disc`, `oag-formats`, `oag-assets` - LZSS, the GS and GE texture swizzles, the `.vex` node walk, and the sector-at-a-time read under them; `oag-video` - demuxing a whole movie a packet at a time; `oag-tables` - a character-at-a-time XML walk over every row on the disc; `oag-texture` - per-texel palette and block-codec loops; `oag-vex` - the node walk over a whole circuit; `oag-pob` - every particle system on a disc parsed and its bytes claimed; `oag-rcs` - the RCSMODEL geometry and material walk; `oag-unity` - the LZMA and LZ4 block decodes and a typetree walk over every object of a Unity bundle; `oag-audio`, `oag-music`, `oag-sound` - the mixer, the ATRAC3+/ATRAC9/MP3/Wwise decodes and the soundtrack's segment mixing, per-sample loops over whole songs; `oag-livery` and `oag-trackfile` - every race's hulls and skins, and every circuit's track file written and read back (all five added 2026-11-06, see "Test-data suite measurements") | `oag-title`, `oag-pulse`, `oag-pure`, `oag-hd`, `oag-trace`, `oag-tools` |
 
 The right-hand column is where a debugger actually gets pointed, so it keeps the
 debuggability the paragraph above is about.
@@ -1228,4 +1326,62 @@ Moved out of `CLAUDE.md`, which keeps the rules and the ceilings.
   A `test-data --full` after these changes: 10,506 tests, all passed, 423 s per nextest, load 16 at the start and 13 at the end (24 at the peak); the slowest test fell from 186 s to 93 s. Against the lead's reads of 423 to 458 s at load ~32 this is not a controlled suite comparison; the per-test CPU table above is the evidence.
 
   Not done: a run-time sim-only load would also drop the texture decode of the Omega extraction loads (190 `cfg(feature = "view")` sites in `oag-raceplay::load`); the `ribbon` option reaches only the track-art part and an extraction's file set must stay what the lobby reads, so these loads keep the default.
+- **Throughput-bound, not tail-bound (2026-11-05).** One full run (10,889 tests, load 20 to 30): summed test time 14,394 s over 16 threads is 900 s, against 925 s of wall clock, and the slowest test is 124 s, so priority cannot help and only less work can. 389 tests over 10 s hold 71 % of the time. Families by summed seconds: `omega_gnf` 830, `autopilot_original` 617, `omega_transparency` 591, `ai_clean_lap_gate` 541, `omega_wem` 423, `extract` 363, `vita_2048_original_ai` 347, `trackfile` 329.
+- **What the `suite-lane-b` pass measured (2026-11-06).** Summed test time falls from 14,018 s to 12,321 s (-12 %), 10,950 tests, all passed, same command both sides (`flock` on the gate lock, `just test-data --full`, Intel ICD, `OAG_REQUIRE_GAME_DATA=1`), at `8c80fb335` and at the branch: wall clock 896 s to 787 s, load 4 at the start of the first and 8 at the start of the second, 13 to 21 over the minutes before each ended (other work outside the lock ran beside both, so wall is not evidence; the sum moves less). The brief's target was under 9,000 s, so the claim is **false**; the cuts that were honest are below. The "before" column is the same-session rerun at `8c80fb335` (14 of its tests failed on a half-linked `data/` and are filled in with the 2026-11-05 run's times); the 2026-11-05 run sums to 13,895 s.
+
+  | Family | 2026-11-05 | rerun | after | Cut |
+  | --- | --- | --- | --- | --- |
+  | `omega_transparency` | 583 | 568 | 211 | `track_albedo::is_normal_map` decoded a whole 4096 square BC7 level to read 4096 texels; it decodes the blocks the samples fall in |
+  | `omega_gnf` | 806 | 793 | 586 | BC7 decoder: one monomorphised copy per mode, and the three colour lanes interpolated in one multiply |
+  | `omega_music`, `music_resume` | 388 | 400 | 183 | `oag-audio`, `oag-music`, `oag-sound` at opt-level 2 in the dev profile (they were the only hot crates left at 0) |
+  | `trackfile` | 328 | 329 | 212 | `oag-livery`, `oag-trackfile` at opt-level 2; alone the PSP USA walk went from 30 s to 9 s |
+  | `ai_clean_lap_gate` | 518 | 530 | 450 | `tick_sim_only` for the solo runs |
+  | `ai_roll`, `ai_dekonstruct_*`, `vita_2048_original_ai`, `stall_rescue`, `pilot_assist_levels`, `difficulty`, `ai_fork_split` and others | | | | `tick_sim_only`; a few percent each in a loaded run |
+  | `autopilot_original`, `omega_wem`, `extract`, `speed_plan` | 474, 370, 353, 253 | 407, 356, 351, 278 | 413, 370, 346, 276 | no cut that held |
+
+  Alone, in CPU seconds, load 2 to 7 except the decoder row (alternating before and after builds, min of 25, load 14):
+
+  | Change | Before | After |
+  | --- | --- | --- |
+  | `Texture::decode` of a 4096 square BC7 texture | 91 ms | 58 ms (the block decode alone, between two runs at falling load: 85 ms to 40 ms) |
+  | `omega_vineta_k_binds_no_more_lookups_than_known` | 23.9 s | 5.6 s |
+  | `omega_music_ground_truth::songs_slice_0_mix_to_their_segment_length` | 49-54 s CPU, 26 s wall | 27-30 s CPU, 6.3 s wall |
+  | `trackfile_ground_truth::every_pulse_psp_usa_circuit_exports_and_reads_back_the_same` | 30-31 s | 8.7-9.1 s |
+  | `ai_clean_lap_gate::track_01_flash` | 5.2 s | 3.8 s |
+
+  Why each holds. The BC7 change is byte-identical: the decoded pixels of every `.gnf` in the eight Omega archives (hash over `decode` and the first two `decode_bc7_level` levels) are the same before and after, and `bcn::bc7::tests::bc7_matches_the_spec_order_decoder_on_every_mode` passes. `is_normal_map` takes the same texels: over the 12,235 block textures that the 19 Omega circuits, the 2048 circuits and HD's water walk bind, the old (`to_rgba`) and new sample lists compared equal. `quiet_replay_ground_truth` holds `tick_sim_only` equal to `tick` on the world hash every tick for one Pulse pack (eight craft, weapons in every hand); the other converted files were not compared drawn against sim-only one by one, only checked to pass and to read simulation state. For the clean-lap gate all 240 runs (48 rows x 5 perturbed runs) gave the same best lap, contact ticks, end state and deaths drawn and sim-only. The converted tests read `RaceSim` state only (laps, places, respawns, wall contact, driver state); none reads a cue, a message, a camera or the HUD.
+
+  The opt-level 2 entries for `oag-audio`, `oag-music`, `oag-sound`, `oag-livery` and `oag-trackfile` reverse the "left at 0 for debuggability" column above for those five; the build-time cost of the extra optimisation was not measured.
+
+  Measured and dropped. Whole-row `copy_from_slice` in the block scatter: no change. `atrac9dec` at opt-level 3: 12 % on one shard, inside the noise. The `omega_wem` decode is `atrac9dec`, a third-party crate, at about 15 ns per sample (1.6 G samples in 25 s for one shard); the IMDCT in it is already an FFT-shaped butterfly.
+
+  Where the rest is (a CPU sample, in-process `SIGPROF` plus `backtrace`, since `perf` and `samply` are not available: `perf_event_paranoid` is 2 and `ptrace_scope` 1). The fork circuits' AI gate rows spend about two thirds of their CPU learning speed plans (`route_speed_plan`, `hull_ring_for`, `field_speed_plan`: 1.2 to 1.7 s per `Race::start` on `07_Track`), and the clean-lap gate learns them again for each of its five perturbed runs by design (the perturbation reaches the plans). The rest of a tick is `oag-physics` collision queries (`Aabb::overlaps`, the BVH walk, `nearest_reset`) and `oag_ai::Line::walk`. Omega-loading tests that open the `.pkg` spent a quarter of their time inflating PFSC sectors (`miniz_oxide`); fixed 2026-11-06, see the next item. Within an archive 14 to 27 % of `.gnf` texels are byte-duplicates of another entry (data02: 26.6 %); the slices split by `i % 3`, so most duplicates sit in another process.
+
+- **Omega package read and `.gnf` duplicates (suite-decoders, 2026-11-06, Ryzen 9 7900, load 2 to 6).** `oag-disc` inflates PFSC sectors with `zlib-rs` (through `flate2`, already in the build for `chd` and `zip`) instead of `miniz_oxide`, and decrypts a 4 KiB XTS sector as one batch instead of a block at a time. A direct read of `data05.psarc` (685 MB) out of `omega-ps4-eu-patch.pkg`: 365 MB/s, then 455 with the inflate change, then 552 with the batched XTS; the byte hash is the same in all three. `perf` before: `miniz_oxide` 53 %, XTS 20 %. `omega_flies_the_original_autopilot` 9.25 s to 6.86 s. Tests that read `data/extracted` instead of the `.pkg` (`extract_ground_truth`, the `.gnf` sweeps) are unchanged: 7.2 s and 7.3 s. A `.gnf` slice's CPU is 60 % BC7 block decode, 11 % `decode`, 9 % untile; PSARC reads are under 2 %. Duplicate `.gnf` memoisation is not built: see the handover thread for the numbers.
+- **What the `speed-plan` pass measured (2026-11-06).** Speed-plan learning and every race tick got cheaper with the simulation bit-identical. Same command both sides (`flock` on the gate lock, `just test-data --full`, Intel ICD, `OAG_REQUIRE_GAME_DATA=1`), at `6cfd80309` and at the branch: summed test time 12,611 s to 10,753 s, wall clock 804 s to 688 s, 10,961 and 10,966 tests, all passed. Load 6 at the start of the before run and 18 at the start of the after run, so the after run was the more contended one.
+
+  | Family, summed seconds | Before | After | Change |
+  | --- | --- | --- | --- |
+  | `ai_clean_lap_gate` | 447 | 239 | -47 % |
+  | `autopilot_original` | 372 | 256 | -31 %: the Pulse circuit tests about halve; the load-bound ones hold (`an_opponent_flies_its_autopilot_by_class_and_difficulty` 83 to 77 s, about 70 % `miniz_oxide` and AES) |
+  | `vita_2048_original_ai` | 327 | 259 | -21 %; `miniz_oxide` and PVRTC on the load stay |
+  | `speed_plan` | 280 | 142 | -49 % |
+  | `ai_roll` | 227 | 121 | -47 % |
+  | `ai_dekonstruct_*` | 234 | 104 | -56 % |
+
+  One row, `ai_clean_lap_gate::track_07_flash`, user cycles on the P cores (`perf stat -e cpu_core/cycles/u`, repeat runs agree to 0.1 G, load 2 to 4), one change at a time (the rows from `reset_colliders` to `PadVolume::contains` were read with the two dropped changes below in the tree; the branch's own tip reads 18.9 before the last row):
+
+  | Change | G cycles | Why it is bit-identical |
+  | --- | --- | --- |
+  | Base | 36.4 | |
+  | `Line::with_strides` tabulates `max_curvature_stepped` for the span a driver asks every tick (11 units, `Tuning::curvature_span`): about twenty curvature readings a tick, three walks each | 28.4 | Each entry is what the walk computes at that sample, from the same index; any other span still walks. `a_tabulated_line_reads_the_same_bits_as_the_walk` |
+  | `CollisionWorld::reset_colliders`: a reset contact asks only the reset colliders | 25.5 | The same colliders in the same ascending order; the tie rule is untouched |
+  | Dense positions for `Spline::nearest`, no root unless the square is smaller | 24.7 | A length is the root of its square, so a square no smaller cannot be strictly nearer; the comparison that decides stays on lengths |
+  | `takeoff_within` tabulated at `RUN_UP_REACH` | 24.1 | As the strides |
+  | `PadVolume::contains` stops at the first axis outside | 23.5 | The length is zero exactly when every axis's square is. `contains_agrees_with_the_distance_at_every_face` |
+  | `Raycaster::region`: a hull's ten probes share one broadphase walk, in `wall::resolve` and `plan::clearance` | 18.9 | A triangle whose box overlaps a segment inside the union overlaps the union, so each probe filters the candidates by the box test its own walk would have made, ascending. `a_region_answers_each_ray_as_its_own_walk_does` |
+  | `Positions::nearest`: spheres round runs of 32 samples rule out most of the table | 17.9 | Only a run wholly past a length some sample cannot exceed is skipped, with a slack of 1e-4 over rounding of a few parts in ten million. `the_answer_is_the_scans_to_the_bit` |
+
+  Equivalence: all 240 runs of `ai_clean_lap_gate` (48 rows, five perturbed runs each) give the same best lap, contact ticks, end state, deaths and end-of-run `RaceSim::state_hash` before and after (`diff -r` empty on a throwaway dump of those fields); `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` prints the same twelve lines. No golden hash or determinism constant moved. Measured and dropped, each within the noise on `track_07_flash` and `track_01_flash`: stored segment lengths for `Line::walk` (+0.6 G cycles alone, -0.2 G at the tip, a table load is not cheaper than a root); a BVH node holding both children's boxes (-0.1 G; the walk averages 18 nodes and 7 leaf tests a query and its cost is branch misses, 25 M queries a row); `Aabb::overlaps` without early exits (no gain). What is left on that row: the single rays (`hover`, `maglock`, `clip`, `sweep`) are 14 % in `Indices::overlapping`, `CageTrack::locate` 3 %, `PadVolume::contains` 5 %, `hull_probes` 5 %.
+- **Inflate unified on `flate2` (inflate-unify, 2026-11-06, Ryzen 9 7900, load 2 to 14).** PSARC and WAD blocks (`oag-formats`) and `.vpk` entries (`oag-disc`) inflate through `flate2`'s `zlib-rs` backend, like the PFSC sectors, so direct `miniz_oxide` 0.9 left the workspace (`cargo tree --workspace -i miniz_oxide` shows only 0.8.9: `png` asks for `flate2`'s default `rust_backend`, which keeps it in the tree; `flate2` compiles that backend in only when no zlib feature is on, and `zlib-rs` implies one). Direct measure: a scratch sweep that reads every entry of an archive through `oag_assets::psarc::Archive::read` and times the reads, release build. HD PSN (`data01` to `data04`, 6,678 entries, 2.24 GB): 4.18 to 4.31 s before, 2.94 to 2.97 s after (**-30%**; `perf stat` cycles:u 31.2 G to 24.1 G). HD Fury disc (`hdfury-ps3-eu-dec.iso`, seven archives, 11,671 entries, 4.1 GB; the corpus the earlier -9.3% was taken on): 9.2 to 10.5 s before, 6.7 to 6.8 s after at load 12 to 14 (**-27 to -35%**). 2048 `data.psarc` (18,431 entries): about 5.5 s to 3.9 s at load 4 to 9 (best of five each). `.vpk` (2048 base, patch and both DLC, 1,988 entries, 9.7 GB): 3.32 s to 1.54 s. `perf` of the old sweep: `miniz_oxide` inflate, match copy, Adler-32 and table setup were about 53% (HD) and 50% (2048) of it, the rest being the sweep's own hash. Share of a real load, after the change: a headless HD Fury race load (`--race --screenshot --ticks 1`, `target/debug/oag-game`) spends 10.4% of its CPU samples in `zlib_rs` (`inflate_fast_help_avx2` 7.9%); the same load before is about 18% by arithmetic from the sweep's 1.9 times faster inflate, not measured. The same load also spends 25% in `memchr_aligned` and `CharSearcher::next_match` (string searches): `InstanceFlags::DEBUG` in a debug build, gone since (`load-time.md`, "`memchr` and `CharSearcher` in a debug build"). Output identity: an FNV-1a hash of every entry's bytes, plus the error text of every failing entry, is identical before and after for 44 `.psarc` files under `data/extracted` (110,421 entries, 74 GB: HD PSN and PS3 update chains, Omega base and patch, 2048 base, patches and DLC), the seven Fury archives, all four `.vpk` files, and every Pulse and Pure WAD (12,789 entries). No shipped WAD sets the zlib bit (`docs/formats/wad.md`), so the WAD sweep does not exercise inflate; `decompress_zlib` is covered by the archive tests, which use real deflate output. Omega archives store almost nothing deflated and are unchanged within noise. `miniz_oxide`'s flags checked the Adler-32 and so does `zlib-rs`, and a truncated stream is refused by both: `a_block_is_inflated_only_when_its_whole_stream_checks_out` pins a bad checksum, a short stream and a block larger than its room all falling to the raw fallback.
 - **Affected gating (2026-10-07).** `scripts/affected.py` selects the packages a branch changed since its merge base with `main` plus their dependents. Each of `oag-game`'s five test binaries links the whole crate, so a lane in `oag-mesh`, `oag-render` or `oag-fx` still selects most of the suite's time; the saving lands on lanes in the format, texture, UI and title crates.

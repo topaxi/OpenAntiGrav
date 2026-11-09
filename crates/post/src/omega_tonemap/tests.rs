@@ -5,7 +5,7 @@
 use super::law::{Composite, Curve, Params, adapt, scanout_encode};
 use super::*;
 
-fn params() -> Params {
+pub(super) fn params() -> Params {
     Params {
         luminance_a: 0.18,
         luminance_b: 0.05,
@@ -123,7 +123,7 @@ fn adaptation_moves_at_most_one_step_a_frame() {
 }
 
 /// Reads one pixel of an `Rgba8Unorm` texture back.
-fn read_pixel(
+pub(super) fn read_pixel(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     mut encoder: wgpu::CommandEncoder,
@@ -369,6 +369,7 @@ fn composite() -> Composite {
         vignette_outer_intensity: 0.8,
         color_scale: [0.5, 0.75, 1.0],
         screen_tint: [0.1, 0.05, 0.0],
+        bloom: None,
     }
 }
 
@@ -384,6 +385,7 @@ fn the_composite_is_colour_scale_times_vignette_plus_tint() {
     close(c.vignette([0.5, 0.5]), 1.0, "at the centre, saturated");
     // Frame 0.4, vignette 0.5, tint 0.1, ColorScale 1.
     let probe = Composite {
+        bloom: None,
         vignette_inner_radius: 0.0,
         vignette_outer_intensity: 0.5,
         color_scale: [1.0; 3],

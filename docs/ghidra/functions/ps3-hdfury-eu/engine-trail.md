@@ -678,6 +678,455 @@ the craft's velocity times `0.016666668`, and stores `1.0 - param_1` into the sa
 slots. The strings `WO_TRAIL_HITSHIP(_RED)(.POB)` are at `0x01837a37`-`0x01837b50`.
 Ours is title-generic in `Race::advance_trail_hits`; an Omega race was not run here.
 
+## The trail-hit burst as a matched pair (2026-11-08, `hd-trail-hit-fidelity`)
+
+The 2026-10-29 pass never made a matched pair: `--trail-sparks` puts ours' burst on a
+chosen anchor. This pass makes placement a real pair, and finds that the part of the
+burst a player sees differ is **emitter 0's class-6 streaks**, whose HD draw is still
+unread. No law of the burst's drawing was wired; what landed is the harness and the
+warm-up that lets a posed frame carry the burst.
+
+### The harness
+
+- **The state.** `data/saves/hd-fury/hd-race-talons-venom-pack` was not on disk and was
+  rebuilt: `scripts/emu-hd-race-walk.sh <lane> 8 0 0` (Racebox, Single Race, weapons
+  Off, Talon's Junction, the row Team Selection opens on), then
+  `scripts/rpcs3-hd-race-hunt.py --place 3-6` (Autopilot armed, saved at a pack moment:
+  lap 1, 6th of 8). **This rebuild is classic Feisar, not Fury**: every craft reads
+  `+0x7d2c = 0`, so the burst is the blue `WO_TRAIL_HITSHIP`, not `_RED`. Its frames show
+  `Absorb` in the pickup row, so check the weapons row before trusting "weapons Off".
+- **The pair.** `scripts/rpcs3-hd-trail-hit-pair.py OUT N --frames F` restores nothing
+  itself: restore with `emu-restore-state.sh <lane> <state> --pause` before each pair.
+  It re-arms the Autopilot for good, then holds the player 8 units behind the nearest
+  rival ahead **along the rival's velocity**, sharing that velocity, re-placed before
+  each of `F` game frames (counted off the lap clock `ship+0x7014`). It then runs
+  `rpcs3-drive.py capture --field` **inside the same GDB connection** and renders ours
+  with `rpcs3-hd-pair.py --json`. Four traps, each measured here:
+  1. **The proxy resumes a target its client leaves paused** (`rpcs3_gdb_proxy.py`).
+     A capture in a second connection found the game a second or more later, the player
+     23 units past the rival.
+  2. **One placement does not hold.** Along the rival's forward row, the player slid
+     1.6 units off the ribbon in two frames. Placed once along its velocity, the
+     Autopilot still steered it 2 to 10 units off within a few frames.
+  3. **Writing the Autopilot's authored 5 s back froze the game at 1.12 s left, twice.**
+     The clock then read the same value across every resume. `rpcs3-hd-pair.py
+     --keep-autopilot` skips the write.
+  4. **RPCS3 ran this race at about a sixth of real time.** The pair's 0.12 s gap
+     between its two shots often drew no new frame, giving `camera null (no frame-unique
+     value ...)`; `--interval 0.6` fixes it.
+- **The original draws its hull about one frame behind its RAM pose.** On every pair,
+  the hull sits lower and nearer the camera than the body pose projected through the
+  pushbuffer camera. Scenery and other craft line up.
+
+### Ours' trigger fired as tucked in 1 of 9 posed pairs (not a measured reach gap)
+
+At the tuck, ours' anchor test (`exhaust::hd::FIN_HALF_WIDTH`, 0.5) fired in 1 of 9
+captured pairs. The nearest authored anchor sat 0.48 to 7.2 units off ours' ribbon at the
+frame, 0.48 to 0.90 at the six best tucks. **This is not yet a measured difference in
+reach**, for three reasons:
+
+1. The original's on/off frames could not be separated (below), so whether the original
+   fired at these pairs is unknown.
+2. The distances are against ours' straight-line warm-up ribbon, not the rival's curved
+   one. The probe showed the distance drifting linearly across the warm-up, and the ribbon
+   running 2.4 to 3.6 units to the side of the player's centre, which nothing explains yet.
+3. The 2026-10-29 every-frame firing came from a different tuck, with its offset
+   unrecorded.
+
+The original's test runs in the `Trails` SPU job and is unread. **Do not widen ours' test on
+this.** The next measurement is the breakpoint hit rate on `0x002e3b98` against a held
+lateral offset, under `--interpreter`.
+
+To compare the drawing anyway, ours' player is moved onto the ribbon by the probed
+anchor-to-ribbon vector before rendering. That shift is chosen, and it is stated per pair
+below. A pair needing more than 1 unit is not counted as a tuck.
+
+### The two emitters, and which one is the difference (confidence 85)
+
+`WO_TRAIL_HITSHIP` authors two sibling roots (parsed off the disc, `oag_fx::psys`):
+
+| emitter | flag `0x2` | per fire | life (ticks) | size | palette | draw |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 `WO_TRAIL_HITSHIP` | clear (world space) | 16 | 15 ± 7 | 0.2..0.5, to 0.31 by 17 % of life | white to purple (0.79, 0.43, 1.0) | class-6 streak, additive, no sprite, drag 0.9/tick, `+0x4d0` 0.5 |
+| 1 `CORE_IMPACT` | set (instance frame) | 1..3 | 3 ± 2 | 0.3..1.2 | near white | class-6 streak from spawn, additive |
+
+Dropping each emitter from ours' load (scratch build, pair 04) settles which is which.
+Without emitter 0, the purple blobs vanish. Without emitter 1, the white glow on the nose
+vanishes and the purple cloud stays. **The original shows the white glow at the nose and,
+when the burst is fresh, a fan of thin sharp white rays**
+(`data/reference/hd-capture/trail-hit-pair/starburst_*`, names-broken frame beside it).
+It never shows the cloud of soft purple blobs ours spreads behind and beside the hull. So
+"blurry and too big" is emitter 0, and specifically **how its class-6 streaks are drawn**.
+On HD they fall back to `StreakDraw::Procedural`, a soft profile `2 size` across that
+samples nothing. Emitter 0 has no sprite at all.
+
+### The spawn honours flag `0x2` on HD too (confidence 80)
+
+`Psys_InitParticle` (`0x00289890`, once per newborn):
+
+```text
+00289958  lwz    r11, 0x20(r9)      <- the emitter record's flags
+00289960  rlwinm r0, r11, 0, 30, 30 <- bit 0x2
+00289980  beq    0x00289d88         <- clear: through the instance matrix
+00289dc0  addi   r6, r25, 0x100     <- instance +0x100..+0x130, the matrix
+00289e1c..00289e50                  <- position = M * position
+00289e54..00289e70                  <- velocity = M * velocity (w kept)
+002899ac  addi   r11, r25, 0x160    <- the carried velocity
+002899f4  lfs    f0, 0x4d0(r10)     <- times the record's +0x4d0
+00289a10  vmaddfp v13, v13, v0, v1  <- added to the newborn's velocity
+```
+
+With the bit set, the transform is skipped and the particle stays in the instance's frame.
+`FUN_00286698` copies a parent matrix into instance `+0x100..+0x130` on every update, which
+is what a riding instance needs. This is Pulse's law (`docs/formats/pob.md`, `+0x20`), and
+the same branch shape. On HD it only affects `CORE_IMPACT`, which lives 3 ticks and is
+re-fired every frame, so whether ours rides it does not change the picture. Not wired.
+
+`Psys_UpdateParticles` (`0x0028cc10`) integrates `position(+0x20) += velocity(+0x00) *
+ctx+0x10` (`0x0028cdd0`-`0x0028cde8`). It also advances the age by `rate(+0x94) *
+ctx+0x14` (`0x0028cdec`-`0x0028ce04`) and steps the colour and the keyframes. It builds no
+vertices.
+
+### Where HD's class-6 strip is not, and where to look next
+
+HD keeps Pulse's render-mode table: the draw class is `table[record+0xb8] & 0xf0000000`,
+the table at `*(0x008b2964)+0x2c`. The three per-instance prologues `0x00281060`,
+`0x00286698` and `0x00288d98` cache it at `+0xc30`, and set the streak flag `+0xc1d` for
+classes 6 and 7. Every reader of `+0xc1d` was read, and none builds a strip:
+
+- `FUN_00285020` copies the flag into a job block (`+0x2031`, `0x00285284`-`0x002852a4`).
+  It then runs either the SPU path (`FUN_0027c6d0`, `MaintainParticlesSpu.cpp` at
+  `0x0079b348`) or the PPU update (`FUN_00281ec0` builds the context,
+  `Psys_UpdateParticles` updates).
+- `FUN_0028dc20`/`FUN_0028d650` is particle-against-geometry collision (`FUN_0028d398`'s
+  ray test, then a reflect). `+0x2031` only decides whether a streak's previous point is
+  dragged along.
+- `Psys_InitParticle` reads `+0xc1d` to seed the streak's previous point.
+
+So the strip is built at draw time. The leads, in order:
+
+1. `particleVelocity` (`0x0079a358`, TOC `0x008b2220`, loaded at `0x00267b10` in
+   `FUN_002673b0`) is a shader parameter. HD likely expands a streak in the vertex
+   shader from the particle's velocity, so the law may be in a shipped vertex program
+   rather than in the PPU code.
+2. `ParticleRenderer.h`'s assert (`0x0079b598`, TOC `0x008b295c`) is referenced from
+   `FUN_0027ff58` (`0x0028019c`) and `FUN_00280290` (`0x002804d4`).
+
+### The pair, measured
+
+Metric stated before capture (`scripts/hd-trail-hit-box-metric.py`): near-white pixels (min channel >= 200) in a
+300x300 box on the player's nose projected through the captured camera, the largest
+8-connected component, and whether a streak (>= 20 px, aspect >= 4) exists. Ours' burst is
+exact: the same command line with both emitters dropped, subtracted. The original's is in
+aggregate against the names-broken run, at the same tuck.
+
+| pair | ours' shift | ours' burst px | ours' largest component | ours' extent | streak |
+| --- | --- | --- | --- | --- | --- |
+| 06 | none (fires as tucked) | 1,919 | 50x52 | 297x223 | no |
+| 00 | 0.50 | 3,926 | 69x64 | 281x117 | yes |
+| 05 | 0.63 | 2,302 | 59x96 | 97x98 | no |
+| 04 | 0.84 | 4,403 | 80x108 | 141x112 | no |
+| 11 | 0.90 | 8,554 | 133x151 | 189x159 | no |
+| 12 | 0.79 | 1,326 | 52x28 | 294x238 | yes |
+
+**The stated metric cannot isolate the original's burst.** In the same nose box, near-white
+pixels average **2,903** over the 9 captured on frames and **3,114** over 9 names-broken
+frames at the same tuck. Hull highlights, track lines and the trails swamp a burst that
+small, so the count does not separate on from off. The original's side therefore rests on
+the frames, read at full size: the compact white glow, and the thin rays of a fresh burst
+(`data/reference/hd-capture/trail-hit-pair/`). Isolating it needs a per-frame A/B: the same
+pause captured twice, names broken and restored. A recompiled RPCS3 does not replay a frame,
+so that means the interpreter and a breakpoint stop.
+
+**Verdict: ours does not match.** Its burst is a cloud of soft blobs 50 to 150 px across,
+spread up to 300 px behind and beside the hull. The original shows a compact white glow on
+the nose, with thin rays when fresh. The maintainer's report holds on this pair, and the
+cause is narrowed to one unread law: emitter 0's class-6 draw.
+
+**Omega: not checked.** The warm-up change is title-generic: any race with HD trails
+active runs it. The emitter table and the draw are HD's file and HD's executable, and
+Omega's `WO_TRAIL_HITSHIP` was not parsed here. The 2026-10-29 verdict on the spawn
+("checked, applies") stands. (The burst's presence on Omega and 2048 is censused in
+"The burst on every title" below.)
+
+## The class-6 draw law (2026-11-09, `hd-trail-hit-draw`)
+
+The previous pass left two leads for where HD builds a class-6 streak. Both are
+closed, and the expansion is located: it runs on an SPU job, not in PPU code
+and not in a vertex program. The law is read off that job's own code, and
+Omega's CPU twin of the same code agrees with it instruction for instruction.
+
+### The two leads were not the draw (clean negatives)
+
+- **`particleVelocity` is not a psys parameter.** The TOC slot (`0x008b2220`)
+  sits in the run `position`, `normal`, `rand`, `worldViewProj`, `time`,
+  `particleColour`, `timeOffsetFactors`, `floorLevel`, `speed`,
+  `explosionFactor`, `bounceness`, `bouncePeriod`, `particleVelocity`
+  (`0x008b21f0`-`0x008b2220`). Its reader `FUN_002673b0` binds the
+  `RadioHead1_vp` program (`0x008b21d8`) and looks up these names in it. That
+  is the `RadioHead*` GPU-animated effect family (`renderer.md`, the shader
+  groups), not the particle renderer.
+- **`FUN_0027ff58` and `FUN_00280290` are ParticleManager constructors.** They
+  allocate 256 `0x1a80`-byte instance slots, register `MaintainParticles`, and
+  create the renderer object (`0x201240` bytes) through `FUN_002c5300`. They
+  draw nothing.
+
+### The psys programs take no velocity: vertices arrive expanded (confidence 85)
+
+`PartRender_RegisterShaders` (`FUN_002c7b30`) registers six program pairs from
+blocks embedded in the EBOOT:
+
+| pair | vertex block | fragment block |
+| --- | --- | --- |
+| `psys_normal` | `0x00928100` | `0x00927a80` |
+| `psys_simplegeom` | `0x00927f80` | `0x00927a00` |
+| `cloudshader` | `0x00928700` | `0x00927f00` |
+| `lineshader` | `0x00928480` | `0x00927c00` |
+| `psys_lit` | `0x00928300` | `0x00927b00` |
+| `engineflare` | `0x00928580` | `0x00927c80` |
+
+`PartRender_Construct` (`FUN_002c5300`) declares the vertex format as
+`in_position` (float3), `in_colour` (4 bytes) and `in_uv` (float2). It creates
+two `0x18000`-byte vertex buffers, double-buffered. The four psys vertex
+programs (`scripts/ps3-microcode.py vp <block>`) take only those attributes
+and `kWorldViewProj`:
+
+```text
+psys_normal_vp (0x00928100), 16 instructions:
+  o[POS]     = kWorldViewProj * v[0]
+  o[TC0].xy  = v[2].xy
+  o[COL0].w  = v[1].w
+  o[COL0].xyz = exp2(log2(v[1].xyz) * 2.2) * c[211].x    <- c467 = kColourScale
+```
+
+`0x122fbff9` is `~crc32("kColourScale")` (`scripts/ps3-sho.py hash
+kColourScale`). `psys_simplegeom_vp` applies the same 2.2 power to colour times
+0.5. No psys program reads a velocity, an offset or a corner index, so a
+streak's corners are built before the GPU sees them.
+
+### The draw chain, PPU side (confidence 75)
+
+1. `Psys_DrawInstance` (`FUN_002c9248`, 65) builds the instance's matrices.
+   It also builds, once per atlas size, the UV table: `instance+0xb4` columns
+   by `+0xb6` rows, 0x30 bytes per cell. Then it calls the job builder with the
+   view matrix.
+2. `PartRender_SubmitJob` (`FUN_002cc9b0`) looks the record's `+0xb8` render
+   mode up in `PartRender_ModeGeometry` (`0x00766c80`, below). It reserves
+   `vertices(mode) * count * 16` bytes, then builds and kicks a `PartRender`
+   SPU job. The job's parameter block (stack `0x70`-`0xdf`):
+
+   | block offset | value |
+   | --- | --- |
+   | `0x00`-`0x3f` | the view matrix (the call's `param_2`) |
+   | `0x40` | render mode, record `+0xb8` |
+   | `0x44` | record `+0x4c8` (aspect: Pulse's bar cap) |
+   | `0x48` | `-(record +0xc80)` |
+   | `0x4c` | the reserved vertex buffer |
+   | `0x50`, `0x54` | atlas columns and rows |
+   | `0x58`, `0x5c` | `1 / columns`, `1 / rows` |
+   | `0x60` | instance `+0x80`, the particle pool |
+   | `0x64`, `0x68` | paused and half-step flags |
+   | `0x6c` | instance `+0x150`, the live count |
+
+3. `PartRender_QueueDraw` (`FUN_002c39a8`) appends a 0x18-byte draw record:
+   vertex pointer, `indices(mode) * count`, the render state `record+0xca4`,
+   and the LOD. `PartRender_FlushDraws` (`FUN_002c3ca0`) drains the queue.
+   Per state (stride `0x1020`) it binds the program pair at `state+0x1c` and
+   sets `kWorldViewProj` and up to three more constants. It sets the blend by
+   `state+0xc`: case 2 is `FUNC_ADD` with `(SRC_ALPHA, ONE)`, additive; case 3
+   is `(SRC_ALPHA, ONE_MINUS_SRC_ALPHA)`. Where `kColourScale`'s value comes
+   from in this function is **unread** (a stack local the decompile does not
+   initialise).
+
+`PartRender_RegisterJob` (`FUN_002cc8b0`) registers the job: name
+`PartRender` (`0x007a1180`), image **`0x0080bb80`, `0x5ad0` bytes** (TOC
+`0x008b3bb8`/`0x008b3bbc`).
+
+### Class 6 is render mode 5, one quad per particle (confidence 80)
+
+`PartRender_ModeGeometry` (`0x00766c80`), three rows of eight words, indexed by
+render mode (draw class minus 1, `crates/pob/src/lib.rs` `draw_class`):
+
+| row | mode 0 | 1 | 2 | 3 | 4 | **5** | 6 | 7 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `+0x00` format | -1 | 0 | 0 | 0 | 0 | 0 | 0 | -1 |
+| `+0x20` vertices | 0 | 4 | 4 | 9 | 9 | **4** | 12 | 0 |
+| `+0x3c` indices | 0 | 4 | 4 | 11 | 11 | **4** | 12 | 1 |
+
+Both emitters of `WO_TRAIL_HITSHIP` are mode 5 (class 6). Read raw off DATA02's
+and DATA06's copies, which agree on these fields:
+
+| emitter | `+0xb8` | `+0xc0` blend | `+0x4c8` aspect | `+0x9a0` atlas | `+0xc80` | `+0xc84` |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 `WO_TRAIL_HITSHIP` | 5 | 2 | 1.0 | 1x1 | 0.2 | 0.7 |
+| 1 `CORE_IMPACT` | 5 | 2 | 2.0 | 4x2 | 0.2 | 1.0 |
+
+So HD draws a class-6 particle as **one 4-vertex quad**, not 12 vertices
+(mode 6, class 7, has 12). Class 7 is Pulse's capped streak.
+
+### The law: HD's SPU job and Omega's CPU twin agree (confidence 85)
+
+Omega has no SPU. Its `Particle_PushBatchByMode` (`eboot-ps4-omega-eu.bin`
+`FUN_01714de0`, see
+[trail-hits.md](../ps4-omega-eu/trail-hits.md)) switches on the same
+`+0xb8` and builds mode 5 on the CPU. Per particle, with `A` the position and
+`B` the streak's other point (the particle's `+0x20` and `+0x30`), both taken
+to view space by the view matrix:
+
+1. Cull unless both `A.z` and `B.z` are at or beyond `-1` (in front of the eye).
+2. `z = min(A.z, B.z)`: the **farther** end. Both ends are scaled along their
+   eye rays onto that depth (`A' = A * z / A.z`, `B' = B * z / B.z`).
+3. `d = (B' - A').xy`, `n = d / |d|` (a fixed default direction when `|d|` is 0).
+4. `perp = (n.y, -n.x) * size`, `cap = n * size * aspect` (`+0x4c8`).
+5. The corners, all at depth `z`: `A' - cap - perp`, `A' - cap + perp`,
+   `B' + cap + perp`, `B' + cap - perp`.
+6. Colour is the particle's 4 bytes (`+0x74`). UV is the atlas cell for frame
+   `+0x78`.
+7. The batch carries `emitter+0xc84` as its `kColourScale` (`heat-haze.md`,
+   `Particle_PushQuadBatch`).
+
+This is **Pulse's pool bar** (`crates/fx/src/psys/streak.rs`, `StreakDraw::Bar`):
+a rectangle `2 size` wide, reaching `aspect * size` past each end. One thing
+differs. Pulse's bar puts both ends on their **mean** depth; HD and Omega use the
+**farther** one.
+
+**HD's own code says the same.** The `PartRender` job
+(`scripts/ps3-spu-disasm.py 0x0080bb80 0x5ad0`; offsets below are into the
+image, local store is image `+0x4000`) was read once `spu-objdump` was
+reinstalled:
+
+```text
+56d8  ai    $9,$19,-1         mode - 1 (param block +0x40)
+56f0  clgti $5,$9,5           above 5: no draw
+5704  lqx   $4,$12,$11        jump table at image 0x5724:
+                              modes 1-4 -> 0x57e8, mode 5 -> 0x58fc, mode 6 -> 0x58f4
+58fc  brsl  $0,0x3940         mode 5: walk the pool (DMA in 0x1a80-byte blocks,
+                              0xd0 per particle), call 0x29b8 per live particle
+29bc  lqd   $34,48($4)        particle +0x30 (B)
+2a44  lqd   $32,32($4)        particle +0x20 (A); w forced to 1.0
+2a70..2aa8                    both through the view matrix (local 0x5b00..0x5b30,
+                              param block +0x00..+0x3f)
+2ab4  fcgt  $2,$3,$15         B.z > -1.0: emit a degenerate quad (0x2ac0)
+2d58  fcgt  $35,$18,$15       A.z > -1.0: likewise
+2e10  fcgt  $82,$24,$18
+2e20  selb  $82,$24,$18,$82   z = min(A.z, B.z): the farther end
+2dcc..2ea0                    z / A.z and z / B.z (frest, Newton step)
+2eb8  fm    $98,$14,$98       A' = A * z / A.z
+2ed4  fm    $83,$80,$3        B' = B * z / B.z
+2ef0  fs    $51,$83,$98       d = B' - A'
+2f10..2f64                    n = d / |d| (frsqest; a fixed direction at 0)
+2f18  fm    $73,$94,$96       size (+0x70) * aspect (local 0x5b50 = param +0x44)
+2f70  fm    $94,$37,$38       cap = n * size * aspect
+2f68..2f7c                    perp = (n.y, -n.x) * size
+2ff0  fs    $83,$98,$94       A' - cap, then the four corners
+```
+
+The particle's colour bytes (`+0x74`) are scaled by 1/255 (`0x3b808080`),
+clamped and repacked. The atlas cell comes from frame `+0x78` and the UV steps.
+`-(+0xc80)` (param `+0x48`, local `0x5b40`) is read only at `0x3efc`, on the
+modes 1-4 path (`brsl 0x3bb8` at `0x5884`), never in mode 5.
+
+**Mode 6 (class 7, the capped streak) uses the mean depth.** Its routine
+(`0x2738`-`0x29b4`) calls `0x2c0` at `0x28ec`, whose per-particle body at
+`0x0ae8` takes `0.5 * (A.z + B.z)` (`fa` at `0x0ba8`, `fm` by `0x3f000000` at
+`0x0be0`). That is the depth Pulse's class 7 and pool bar use. So on HD, class 6
+goes to the farther depth and class 7 to the mean; a class-7 wire needs exactly
+that split.
+
+Why 85: HD's own code read statically, and a second binary on another ISA
+(Omega's CPU code) agrees. No live HD capture of a vertex buffer, so not higher.
+The texture a sprite-less emitter binds is `record+0xca4`'s render state, set at
+load and still unread.
+
+### What this says about ours
+
+Ours draws HD's class 6 as `StreakDraw::Procedural`: a soft profile `2 size`
+across that samples nothing (`Effect::without_pulse_psp_draw`). The original's
+mode 5 is a hard-edged bar, `aspect * size` longer at each end, sampling its
+atlas cell, at one view depth. Two more terms are candidates for the
+white-core, faint-purple picture, **not yet checked against ours**:
+
+- `psys_normal_vp`'s `pow(rgb, 2.2)` darkens emitter 0's purple end (0.79,
+  0.43, 1.0) to about (0.60, 0.16, 1.0), while white stays white.
+- If HD binds `+0xc84` as `kColourScale` the way Omega does, emitter 0 draws
+  at 0.7 of `CORE_IMPACT`'s brightness.
+
+The scattered placement (positions, drag, carried velocity) is the
+simulation's, and nothing here changes it.
+
+### Names applied (`hd-trail-hit-draw`)
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x002c7b30` | `PartRender_RegisterShaders` | 85 |
+| `0x002cc8b0` | `PartRender_RegisterJob` | 85 |
+| `0x00766c80` (data) | `PartRender_ModeGeometry` | 80 |
+| `0x002cc9b0` | `PartRender_SubmitJob` | 75 |
+| `0x002c39a8` | `PartRender_QueueDraw` | 70 |
+| `0x002c3ca0` | `PartRender_FlushDraws` | 70 |
+| `0x002c5300` | `PartRender_Construct` | 65 |
+| `0x002c9248` | `Psys_DrawInstance` | 65 |
+
+### Cross-title
+
+- **Omega: ported** in the original's own code: the same mode-5 law on the CPU
+  (`Particle_PushBatchByMode`), above. Ours has no HD-specific draw yet.
+- **2048: open.** 2048 ships `psys_normal_vp/fp` and `psys_simplegeom_vp/fp`
+  only (strings at `0x814d34ac`-`0x814d34e0`). Start from the xrefs to
+  `psys_normal_vp` (`0x814d34ac`), then the renderer, then its `switch` on
+  `+0xb8`. Omega reads through 2048's lineage, so its pusher should have
+  Omega's mode-5 shape.
+- **Neither 2048's nor Omega's original fires the burst at all.** See "The burst
+  on every title" below.
+
+## The burst on every title (`graphics.trail_hits`)
+
+2026-11-09. Which title plays the burst, and from what, read off the loader report of
+a `--race` on each disc (`RUST_LOG=debug`, the `WO_TRAIL_HITSHIP` line):
+
+| Title | Authors its own `WO_TRAIL_HITSHIP` | The original fires it | Ours plays it |
+| --- | --- | --- | --- |
+| HD | yes, `WO_TRAIL_HITSHIP` and `_RED` (2 emitters each: `WO_TRAIL_HITSHIP`, `CORE_IMPACT`) | yes (the `Trails` SPU job) | always, HD's tube |
+| 2048 | yes, same two files, 2 emitters each, 2 sprites read (`Data\Particles2048`) | **no** (static, 65) | its own file, only with `graphics.trail_hits` on |
+| Omega | yes, same two files, 2 emitters each, 2 sprites read | **no** (static, 75) | its own file, only with `graphics.trail_hits` on |
+| Pulse, Pure | no ([pulse-absent-effects.md](../../../formats/pulse-absent-effects.md)) | no | a lent file, only with `graphics.trail_hits` on |
+
+**2048 and Omega author the burst, but their originals never spawn it.** Both keep HD's
+spawn and its per-frame caller, which tests a trail slot's hit bit `+0x6d0 & 4`. Both
+replaced HD's `Trails` SPU job with a CPU port that never sets that bit. Evidence:
+[ps4-omega-eu/trail-hits.md](../ps4-omega-eu/trail-hits.md) and
+[vita-2048-eu-v104/trail-hits.md](../vita-2048-eu-v104/trail-hits.md). Players report never
+seeing it on Omega (maintainer, 2026-11-09), which agrees. Until 2026-11-09 ours played it on
+both with no setting, from their tables inheriting the engine's `TrailHitship` and HD's
+tube. Now `oag_title::Effects::trail_hits_on_setting` marks both: with the setting off,
+`load::trail_hits::gate` drops their own handles, and with it on they play their own file.
+The row is dropped on HD alone (`menu::Definition::drop_unavailable_trail_hits`, keyed on
+`Effects::plays_trail_hits_natively`). Both stay eligible to lend their file to Pulse and Pure.
+
+On Pulse and Pure, with the setting on, the race reads HD's `WO_TRAIL_HITSHIP` through
+`oag_raceplay::TrailHits` (HD's source when mounted, else 2048's or Omega's), with the
+lender's own effect directory, colour scale and sprite laws, and places it on the trigger
+the title's table leaves empty (`EffectHandles::lending`). With no such source it plays
+nothing and the loader report says why; with the setting off nothing is read and no
+line is added. The red variant is not lent: it is chosen by HD's Fury skin flag, which a
+Pulse or Pure craft has no analogue of.
+
+**The hit test on Pulse and Pure is chosen, not measured.** There is no HD tube there; the
+test runs against the title's own ribbon (`oag_fx::exhaust::Exhaust`, a ring of 10 samples,
+`trail_nearest`), once the ring is full (the gate the ribbon is drawn on). The ribbon is a
+thin line (half-width `0.2..0.55`, `Exhaust::trail_half_width`) and Pulse's hull anchors
+(`Ship Collision Fx`: six on Assegai, a wing tip each side) are all on its edges, so HD's
+"an anchor within the ribbon's half-width" never fires for a craft flying along it. The
+test is instead the ribbon's line passing within the hull's own cross-section, the farthest
+an anchor sits from the hull's axis. A short ribbon (10 samples, about 15 units at 100
+units a second against HD's 54) means fewer hits than HD gets; the HD-length trail is a
+separate setting. The burst looks as HD's does today: the purple class-6 streaks above, not
+the original's compact white glow.
+
+Pulse frame, both ways, same posed field (player behind, a Feisar 8 units ahead, both at 100
+units a second, `--field-warmup`, a camera behind the tucked craft): with the setting on the
+tucked craft carries a white glow and purple streaks along its flanks; off, its plume alone.
+
 ## The third sampler is the lightmap slot, empty
 
 `enginetrail_bluered_triangle.rcsmodel`'s material record names a third

@@ -96,6 +96,19 @@ pub(crate) struct EndRaceRuntime {
     /// The place and medal lines this race's screens speak; `None` on a title
     /// whose triggers were not read (Wipeout HD/Fury).
     voice: endrace_voice::Speaker,
+    /// How the field table is rebuilt when the race's board is retaken (a craft crossed the line
+    /// after the person did), for the two tables that list the whole field.
+    field: Option<FieldFeed>,
+}
+
+/// What [`EndRaceRuntime::refresh_field`] needs beside the board: the grid's team column and
+/// which board the table shows.
+struct FieldFeed {
+    /// The team ids in slot order, in the shape the table's builder takes (`team_keys` for HD's
+    /// `Results`, `Race::slot_teams` for Pulse's people table).
+    roster: Vec<String>,
+    /// `Race::results_revision` of the board the table was built from.
+    revision: u32,
 }
 
 impl std::fmt::Debug for EndRaceRuntime {
@@ -227,6 +240,39 @@ impl EndRaceRuntime {
             flow,
             trophy,
             voice: endrace_voice::Speaker::new(voice),
+            field: None,
+        }
+    }
+
+    /// Arms [`Self::refresh_field`] for a race whose field table was built from `revision` of the
+    /// board with `roster` as its team column.
+    pub(crate) fn follow_board(&mut self, roster: Vec<String>, revision: u32) {
+        self.field = Some(FieldFeed { roster, revision });
+    }
+
+    /// Rebuilds the field table from `board` when it is a newer one than the table shows:
+    /// a craft that was `RACING` gets its time and place. Only the rows are replaced - the
+    /// headline, loyalty, voice, menu and flow were fixed at the finish and a screen the person
+    /// is on keeps its place. A no-op for every table that does not list the field.
+    pub(crate) fn refresh_field(&mut self, board: &oag_raceplay::scoreboard::Board, revision: u32) {
+        let Some(feed) = &mut self.field else {
+            return;
+        };
+        if feed.revision == revision {
+            return;
+        }
+        feed.revision = revision;
+        match &mut self.results {
+            ResultsModel::Hd(results) => {
+                results.rows = oag_game::results_tables::field_rows(Some(board), &feed.roster);
+            }
+            ResultsModel::PulsePeople(results) => {
+                if let Some(people) = oag_game::results_tables::people_rows(Some(board), &feed.roster)
+                {
+                    *results = people;
+                }
+            }
+            _ => {}
         }
     }
 
@@ -607,20 +653,32 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
 /// per `docs/gameplay/race-modes.md#tournament`. `false` for every
 /// non-Tournament race, and for a Tournament's own last leg.
 #[must_use]
-pub(crate) fn menu_options(campaign: bool, tournament_next_leg: bool) -> Vec<MenuOption> {
+///
+/// **`watch_replay`** adds WATCH REPLAY after VIEW RESULTS AGAIN, for a race that was recorded
+/// and a dialect that can draw a row the disc does not author (Pulse's list; HD's blocks and
+/// 2048's buttons are the disc's own and have no such row).
+pub(crate) fn menu_options(
+    campaign: bool,
+    tournament_next_leg: bool,
+    watch_replay: bool,
+) -> Vec<MenuOption> {
     let leave = if campaign {
         MenuOption::ReturnToGrid
     } else {
         MenuOption::ReturnToMenu
     };
-    if tournament_next_leg {
+    let mut options = if tournament_next_leg {
         // `EndRaceMenu_PopulateOptions` adds `ER_NEXT_RACE` first and has no
         // `ER_RACE_AGAIN` mid-Tournament, so the cursor starts on the next
         // leg; a leave row first would end the tournament on a plain confirm.
         vec![MenuOption::NextRace, leave, MenuOption::ViewResultsAgain]
     } else {
         vec![leave, MenuOption::RaceAgain, MenuOption::ViewResultsAgain]
+    };
+    if watch_replay {
+        options.push(MenuOption::WatchReplay);
     }
+    options
 }
 
 /// Pulse's own Tournament standings, off this project's `oag_race::tournament`

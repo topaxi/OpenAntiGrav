@@ -59,7 +59,7 @@ fn the_autopilot_flies_the_original_player_driver_whatever_the_opponents_fly() {
     assert!(!race.original_ai_active());
     race.set_autopilot(true);
     for _ in 0..900 {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
     }
     let autopilot = race
         .original_autopilot(0)
@@ -180,7 +180,7 @@ fn run_from(mut race: oag_raceplay::Race, ticks: u64) -> Run {
     let mut out = Run::default();
     let mut lap = race.sim.world.ships[0].standing.lap;
     for _ in 0..ticks {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         let ship = &race.sim.world.ships[0];
         if ship.standing.lap != lap {
             lap = ship.standing.lap;
@@ -246,7 +246,7 @@ fn flies_the_original_autopilot(image: &str) {
     let mut race = oag_raceplay::Race::start(loaded.setup);
     race.set_autopilot(true);
     for _ in 0..1_800 {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
     }
     let autopilot = race
         .original_autopilot(0)
@@ -458,7 +458,7 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
     let mut touching = false;
     let mut lap = race.sim.world.ships[0].standing.lap;
     for _ in 0..ticks {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         out.ticks += 1;
         let now = race.wall_contact_ticks_of(0);
         let touch = now != last;

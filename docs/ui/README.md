@@ -12,7 +12,10 @@
 > [campaign-screens.md](campaign-screens.md). A finished Pulse race's own
 > three `EndRace` screens (`Results`/`Rewards`/`Menu`) draw too; see
 > [endrace-screens.md](endrace-screens.md), and the end of a split-screen
-> race in [split-end-race.md](split-end-race.md).
+> race in [split-end-race.md](split-end-race.md). What each title's photo mode is,
+read off its binary, is in [photo-mode.md](photo-mode.md), the pause
+screen a race opens in [pause-menu.md](pause-menu.md), and this project's
+own REPLAYS page and viewer in [replays.md](replays.md).
 
 Why the raster HUD text reads poorly, and which HUD skins the later titles
 ship, are in [hud-skins.md](hud-skins.md). Every HUD file on every disc, which
@@ -22,6 +25,9 @@ unlocks, modes), is the census in [hud-assets.md](hud-assets.md).
 Which controller's button glyphs a prompt draws, and how the device is told
 apart (including under Steam Input), are in
 [button-prompts.md](button-prompts.md).
+
+The player's name and tag, and when they are asked for, are in
+[player-name.md](player-name.md).
 
 The languages this build adds on top of the disc's own, and the `human`
 flag on every string, are in [project-languages.md](project-languages.md).

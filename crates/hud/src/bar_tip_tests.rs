@@ -60,6 +60,7 @@ fn with_art<R>(art: &oag_title::HudArt, f: impl FnOnce(&Context<'_>) -> R) -> R 
     let sheet = sheet();
     let cx = Context {
         default_border: layout.default_border(),
+        tag_label: None,
         layout: &layout,
         strings: &strings,
         sheet: &sheet,

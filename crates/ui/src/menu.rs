@@ -67,6 +67,8 @@ pub const CAMPAIGN_PICKER_PAGE: &str = "campaigns";
 pub const ORIGINAL_CAMPAIGN_ROW: &str = "campaign-original";
 /// The prefix of that page's row ids for a mod campaign; the key follows.
 pub const CUSTOM_CAMPAIGN_ROW: &str = "campaign-custom:";
+/// The id of that page's last row, which opens the campaign editor.
+pub const CAMPAIGN_EDITOR_ROW: &str = "campaign-editor";
 
 mod vocabulary;
 pub use vocabulary::{Action, Query, QueryRef, ValueSource};
@@ -123,6 +125,19 @@ pub fn hud_style_choices(
         .iter()
         .filter(|skin| unlocked(skin))
         .map(|skin| Choice::plain(skin.name))
+        .collect()
+}
+
+/// The values `title`'s SCREEN SIZE slider offers ([`oag_title::hud::SafeArea::values`]), as
+/// percent text. Empty where the title has no such option.
+#[must_use]
+pub fn safe_area_choices(title: &oag_title::Title) -> Vec<Choice> {
+    title
+        .hud_art
+        .safe_area
+        .into_iter()
+        .flat_map(|area| area.value.values())
+        .map(|percent| Choice::plain(percent.to_string()))
         .collect()
 }
 
@@ -411,6 +426,12 @@ pub enum Entry {
         /// Row label.
         label: String,
     },
+    /// A row the disc authors that this build has nothing behind: drawn greyed, skipped by the
+    /// cursor, and a click on it does nothing (the pause screen's `ONL_VIEW_INV`).
+    Inert {
+        /// Row label.
+        label: String,
+    },
 }
 
 impl Entry {
@@ -423,6 +444,7 @@ impl Entry {
             | Self::Choice { label, .. }
             | Self::Toggle { label, .. }
             | Self::Binding { label, .. }
+            | Self::Inert { label }
             | Self::Back { label } => label,
         }
     }
@@ -529,7 +551,9 @@ pub use page::{Page, RowMeta};
 mod expand;
 pub use expand::RowItem;
 mod definition;
-pub use definition::{Added, Definition, Error, For, ModMenu};
+pub use definition::{
+    Added, Definition, Error, For, ModMenu, PAUSE_PAGE, PHOTO_ROW, Pause, pause_row_id,
+};
 
 /// What the menus did on a tick, for the composition root to act on.
 #[derive(Debug, Clone, PartialEq)]
@@ -606,6 +630,9 @@ pub struct Menu {
     reset_rect: Option<[f32; 4]>,
     /// The title's stand-in codepoint for the reset button. See [`Self::set_reset_glyph`].
     reset_glyph: Option<char>,
+    /// Whether this tree is a title's pause screen over a parked race. See
+    /// [`Self::set_pause_screen`].
+    pause_screen: bool,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -618,6 +645,14 @@ pub struct Menu {
 pub const DEFAULT_VISIBLE_ROWS: usize = 7;
 
 impl Menu {
+    /// Marks this tree as a pause screen over a parked race. On its root page START closes the
+    /// menus (the disc's `forward="start"` redirect resumes the race) instead of confirming a
+    /// row, and CIRCLE does nothing (`backward="none"`, a silent press, measured). ESCAPE, which
+    /// is not a button of the original, still backs out of it through [`Self::back`].
+    pub fn set_pause_screen(&mut self, pause: bool) {
+        self.pause_screen = pause;
+    }
+
     /// Opens a definition at its root page.
     #[must_use]
     pub fn new(definition: Definition) -> Self {
@@ -629,7 +664,7 @@ impl Menu {
             .iter()
             .map(|page| focus::snapped(page.entries.len(), 0))
             .collect();
-        Self {
+        let mut menu = Self {
             definition,
             stack: vec![root],
             cursor,
@@ -647,7 +682,11 @@ impl Menu {
             reset_label: String::new(),
             reset_rect: None,
             reset_glyph: None,
-        }
+            pause_screen: false,
+        };
+        // A row that is on a page only while the host offers it starts off the page.
+        menu.offer(Action::PhotoMode, false);
+        menu
     }
 
     /// Seeds every row that edits `setting` with its current value.
@@ -985,11 +1024,11 @@ impl Menu {
         let page = self.current();
         let mut moved = None;
         if input.take(Button::Down) && rows > 0 {
-            self.cursor[page] = (self.cursor[page] + 1) % rows;
+            self.cursor[page] = self.next_row(page, true);
             moved = Some(nav::Dir::Down);
         }
         if input.take(Button::Up) && rows > 0 {
-            self.cursor[page] = (self.cursor[page] + rows - 1) % rows;
+            self.cursor[page] = self.next_row(page, false);
             moved = Some(nav::Dir::Up);
         }
         // The window follows the cursor and then **stays there**. Storing it is
@@ -1036,13 +1075,19 @@ impl Menu {
             out.push(event);
         }
 
+        let pause_root = self.pause_screen && self.depth() == 1;
+        if pause_root && input.take(Button::Start) {
+            self.nav.push(nav::Nav::Accept);
+            out.push(MenuEvent::Closed);
+            return out;
+        }
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.extend(self.activate());
         }
         if input.take(Button::Square) {
             out.extend(self.reset());
         }
-        if input.take(Button::Circle) {
+        if input.take(Button::Circle) && !pause_root {
             out.extend(self.back());
         }
 
@@ -1072,7 +1117,8 @@ impl Menu {
     /// that has silently vanished has no way to find out what took it away.
     #[must_use]
     pub fn is_disabled(&self, entry: &Entry) -> bool {
-        self.pin(entry).is_some()
+        matches!(entry, Entry::Inert { .. })
+            || self.pin(entry).is_some()
             || entry
                 .disabled_by()
                 .is_some_and(|condition| condition.matches(self.held(&condition.setting).as_ref()))
@@ -1115,6 +1161,25 @@ impl Menu {
                     .iter()
                     .any(|running| Some(running) == chosen.as_ref())
         })
+    }
+
+    /// The row the cursor moves to from `page`'s current one, wrapping, past any
+    /// [`Entry::Inert`] row (a page of nothing but those stays put).
+    fn next_row(&self, page: usize, forward: bool) -> usize {
+        let entries = &self.definition.pages[page].entries;
+        let rows = entries.len();
+        let mut row = self.cursor[page];
+        for _ in 0..rows {
+            row = if forward {
+                (row + 1) % rows
+            } else {
+                (row + rows - 1) % rows
+            };
+            if !matches!(entries[row], Entry::Inert { .. }) {
+                return row;
+            }
+        }
+        self.cursor[page]
     }
 
     /// Whether the row the cursor is on is inert.

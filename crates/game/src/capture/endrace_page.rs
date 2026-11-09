@@ -148,6 +148,7 @@ fn two_person_board(online: bool) -> oag_raceplay::scoreboard::Board {
             finish_tick: (slot != 7)
                 .then(|| 120 * 60 + 4 + u64::from(places[usize::from(slot)]) * 97),
             best_lap_ticks: Some(2300 + u32::from(slot)),
+            points: None,
         })
         .collect();
     let mut board = oag_raceplay::scoreboard::build(&crafts, Some(3), 125 * 60);
@@ -653,18 +654,22 @@ fn hd_endrace_page(
                 headline: oag_ui_screens::endrace::Headline::Position(1),
                 rows: vec![
                     oag_ui_screens::endrace::FieldRow {
+                        score: None,
                         place: 1,
                         time_ticks: Some(u64::from(seconds_to_ticks(191.76))),
                         player: true,
                         seat: None,
                         name: None,
+                        team: None,
                     },
                     oag_ui_screens::endrace::FieldRow {
+                        score: None,
                         place: 2,
                         time_ticks: Some(u64::from(seconds_to_ticks(203.11))),
                         player: false,
                         seat: None,
                         name: None,
+                        team: None,
                     },
                 ],
             };
@@ -680,7 +685,7 @@ fn hd_endrace_page(
             )
         }
         EndRaceKind::PeopleResults | EndRaceKind::OnlineResults => {
-            let rows = crate::results_tables::field_rows(Some(&two_person_board(online)));
+            let rows = crate::results_tables::field_rows(Some(&two_person_board(online)), &[]);
             let model = oag_ui_screens::endrace::FieldResults {
                 loyalty: None,
                 headline: oag_ui_screens::endrace::Headline::Several,
@@ -759,10 +764,55 @@ fn hd_endrace_page(
                 "Wipeout HD/Fury's own EndRace Results authors no Tournament standings table"
             )
         }
-        // Zone's and Eliminator's tables are Pulse's own populate functions too.
-        EndRaceKind::EliminationResults | EndRaceKind::ZoneResults => {
-            anyhow::bail!(
-                "Wipeout HD/Fury's own EndRace Results authors no Zone or Eliminator table"
+        // Zone's table is Pulse's own populate function.
+        EndRaceKind::ZoneResults => {
+            anyhow::bail!("Wipeout HD/Fury's own EndRace Results authors no Zone table")
+        }
+        // The eight records the original's results frame shows
+        // (`data/reference/hd-eliminator-score/results.png`), the person second with 6 kills.
+        EndRaceKind::EliminationResults => {
+            let field = [
+                ("Harimau", 202, 7, false),
+                ("Feisar", 177, 6, true),
+                ("Goteki", 176, 5, false),
+                ("Mirage", 129, 4, false),
+                ("Qirex", 92, 3, false),
+                ("AG_Systems", 87, 3, false),
+                ("Assegai", 71, 2, false),
+                ("Piranha", 42, 1, false),
+            ];
+            let model = oag_ui_screens::endrace::FieldResults {
+                loyalty: None,
+                headline: oag_ui_screens::endrace::Headline::Position(2),
+                rows: field
+                    .iter()
+                    .enumerate()
+                    .map(|(index, &(team, points, kills, player))| {
+                        oag_ui_screens::endrace::FieldRow {
+                            score: Some(oag_ui_screens::endrace::FieldScore {
+                                points,
+                                kills,
+                                deaths: 0,
+                            }),
+                            place: index as u8 + 1,
+                            time_ticks: None,
+                            player,
+                            seat: None,
+                            name: None,
+                            team: Some(team.to_string()),
+                        }
+                    })
+                    .collect(),
+            };
+            oag_ui_screens::endrace::hd::hd_results_draw_list(
+                &model,
+                results,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
             )
         }
         EndRaceKind::SplitResults | EndRaceKind::SplitRewards => {

@@ -38,7 +38,7 @@ impl Bloom {
     pub fn stamp_glow(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
         origin: (f32, f32),
@@ -88,7 +88,7 @@ impl Bloom {
             ],
         });
         let pass = |encoder: &mut wgpu::CommandEncoder,
-                    label: &str,
+                    label: &'static str,
                     pipeline: &wgpu::RenderPipeline,
                     group: &wgpu::BindGroup,
                     to: &wgpu::TextureView| {
@@ -108,6 +108,7 @@ impl Bloom {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            oag_gpu::perfprobe::marks::mark(&mut pass, label);
             pass.set_pipeline(pipeline);
             pass.set_viewport(
                 0.0,
@@ -119,6 +120,7 @@ impl Bloom {
             );
             pass.set_bind_group(0, group, &[]);
             pass.draw(0..3, 0..1);
+            oag_gpu::perfprobe::marks::close(&mut pass);
         };
         pass(encoder, "bloom stamp", &self.stamp, &group, &lane.a.view);
         pass(

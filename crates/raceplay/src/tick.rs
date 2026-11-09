@@ -141,6 +141,7 @@ impl Race {
                 *slot_controls = self.player_controls(slot, inputs.get(slot));
             }
         }
+        self.tick_flips(inputs, &mut controls);
         #[cfg(test)]
         {
             self.last_controls = controls;
@@ -157,7 +158,10 @@ impl Race {
         // `oag_weapons::slowdown::drain`.
         oag_weapons::slowdown::drain(
             &mut self.sim.world.ships[..self.sim.world.ship_count as usize],
-            self.sim.weapons.as_ref().map(|table| table.slowdown_limit),
+            self.sim
+                .weapons
+                .as_deref()
+                .map(|table| table.slowdown_limit),
         );
 
         self.cancel_pickup_use_of_downed_crafts();
@@ -245,8 +249,8 @@ impl Race {
             &mut self.sim.world.projectiles,
             &mut self.sim.world.ships[..self.sim.world.ship_count as usize],
             self.sim.dt,
-            &self.sim.collision,
-            self.sim.weapons.as_ref(),
+            &*self.sim.collision,
+            self.sim.weapons.as_deref(),
             &self.sim.class,
             damage_rules,
             &mut hits,
@@ -260,6 +264,7 @@ impl Race {
                 self.note_weapon_hit(slot);
             }
         }
+        self.credit_impact_points(&impacts, &hits);
         // A hit that got through throws the struck hull's own sparks - the
         // victim's `Ship_Damage`, not the weapon. See `race::hit_sparks`.
         #[cfg(feature = "view")]
@@ -547,6 +552,7 @@ impl Race {
             self.advance_leach_beam_ribbon();
             self.advance_leach_strip();
             self.advance_rocket_smoke();
+            self.advance_missile_smoke();
         }
 
         // Beside them for the same reason: a Repulser's wave sweep reads every
@@ -695,6 +701,7 @@ impl Race {
         {
             let shielded = self.sim.world.ships[slot].physics.shield_pickup_timer > 0.0;
             self.raise_contact_cue(slot, evaluated.wall.impact, shielded);
+            self.note_wall_contact(slot, &evaluated.wall);
         }
         // The sparks, the shake and the shield edge are the seat's own: the
         // craft this machine's person flies, which is `primary_slot` except on a

@@ -46,6 +46,16 @@ type = "string"
 allowedvalues = ["locked", "hidden"]
 optional = true
 
+[types.campaign.difficulty]
+type = "string"
+allowedvalues = ["easy", "medium", "hard", "novice", "skilled", "elite", "ace"]
+optional = true
+
+[types.campaign.progression]
+type = "string"
+allowedvalues = ["flat", "ramp"]
+optional = true
+
 [types.grid]
 type = "table"
 

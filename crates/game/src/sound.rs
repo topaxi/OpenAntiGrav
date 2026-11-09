@@ -140,6 +140,18 @@ pub fn hold_race_song(audio: &mut Audio, title: &oag_title::Title) {
     audio.set_master_trim_db(title.master_trim_db.value);
 }
 
+/// Arms the rear low-pass of the race about to start: the layout the title's original reads
+/// (`oag_title::Title::rear_occlusion`) and whether the circuit's own `AudioConfig.xml` turns the
+/// filter off (`TrackEmitters::low_pass_off`). Called after the race is built, on every fresh start.
+pub fn arm_rear_low_pass(
+    audio: &mut Audio,
+    title: &oag_title::Title,
+    emitters: &oag_sound::sfx::TrackEmitters,
+) {
+    audio.set_rear_occlusion_layout(title.rear_occlusion.map(|layout| layout.value));
+    audio.set_circuit_low_pass_off(emitters.low_pass_off);
+}
+
 /// Starts decoding `race`'s flyby voice-over, where it has one, off this thread: the clip is ready
 /// by the time the flyby's counter reaches zero. See [`Audio::prepare_pre_race_voice`].
 pub fn prepare_intro_voice(audio: &mut Audio, discs: &oag_sound::MusicDiscs, race: &Race) {
@@ -181,6 +193,38 @@ pub fn race_tick_keeping(
     tick_effects(audio, race, keep, false);
 }
 
+/// A seek in a recorded race: every effect voice is stopped and the continuous ones are
+/// rebuilt from the race as it stands at `tick` (`Audio::rebuild_race_sfx`). The cues of the
+/// ticks the seek ran are dropped, so nothing that sounded before the target sounds late.
+pub fn rebuild(audio: &mut Audio, race: &mut Race, tick: u64) {
+    drop(race.drain_cues());
+    drop(race.drain_mod_sounds());
+    drop(race.drain_announcements());
+    drop(race.drain_class_announcements());
+    audio.rebuild_race_sfx(
+        frame_of(race, Vec::new(), Vec::new(), Vec::new(), Vec::new()),
+        tick,
+    );
+}
+
+/// The sound of one step of a replay being watched. At 1X the race sounds as a race does; at any
+/// other speed the cues of the ticks that ran are dropped and the effects stopped, and back at
+/// 1X they are rebuilt from the state at `at` (`muted` remembers it), not started cold.
+pub fn viewer_step(audio: &mut Audio, race: &mut Race, normal: bool, muted: &mut bool, at: u64) {
+    if !normal {
+        drop(race.drain_cues());
+        drop(race.drain_mod_sounds());
+        drop(race.drain_announcements());
+        drop(race.drain_class_announcements());
+        audio.stop_race_sfx();
+        *muted = true;
+    } else if std::mem::take(muted) {
+        rebuild(audio, race, at);
+    } else {
+        race_tick(audio, race);
+    }
+}
+
 /// One tick of the sound effects under a title's pre-race flyby, where its rule fades them in
 /// (`Race::intro_plays_race_sounds`): the circuit's ambience emitters from the flyby camera's
 /// ears, through the effects fade, and the craft's engines by range (inaudible until the camera
@@ -210,7 +254,26 @@ fn tick_effects(
         )
     };
     cues.retain(|event| keep(event));
-    let frame = RaceFrame {
+    let frame = frame_of(race, cues, mod_sounds, announcements, class_announcements);
+    audio.race_tick(frame);
+    if flyby {
+        return;
+    }
+    // The song-name marquee shows each race song once, off the same audio state a `--no-audio`
+    // run reaches: the selection does not wait on a device.
+    race.note_song(audio.now_playing().as_ref());
+}
+
+/// One tick of `race` as the sound effects see it, with the cues, mod sounds and announcements
+/// the caller drained from it.
+fn frame_of<'a>(
+    race: &'a Race,
+    cues: Vec<oag_gameplay::cue::CueEvent>,
+    mod_sounds: Vec<oag_gameplay::cue::ModSoundEvent>,
+    announcements: Vec<u16>,
+    class_announcements: Vec<u32>,
+) -> RaceFrame<'a> {
+    RaceFrame {
         banks: race.sounds(),
         emitters: race.track_emitters(),
         announcer: race.announcer(),
@@ -245,14 +308,7 @@ fn tick_effects(
         sight: race.sight_state(),
         quake_point: race.quake_point(),
         leach_beams: race.sim.world.leach_beams,
-    };
-    audio.race_tick(frame);
-    if flyby {
-        return;
     }
-    // The song-name marquee shows each race song once, off the same audio state a `--no-audio`
-    // run reaches: the selection does not wait on a device.
-    race.note_song(audio.now_playing().as_ref());
 }
 
 /// The listener, off the camera the frame is actually drawn from.
@@ -310,7 +366,7 @@ mod tests {
     use oag_gameplay::cue::Cue;
     use oag_ui::menu::nav::{Dir, Nav};
 
-    use super::{listener_of_view, menu_cue};
+    use super::{arm_rear_low_pass, listener_of_view, menu_cue};
 
     /// The chase camera sits behind and above its craft, so the craft is ahead
     /// of the listener and a point at the camera's back is behind it. Fails if
@@ -380,5 +436,43 @@ mod tests {
         };
         assert_eq!(bus(oag_pulse::TITLE), 0.25);
         assert_eq!(bus(oag_hd::TITLE), 1.0);
+    }
+
+    const REAR_FILE: &str = r#"<AudioConfig><RearOcclusion><Stereo max_frequency="14000.0"/></RearOcclusion>
+<ParameterMaps><ParameterMapFrontEnd><Stereo><GroupVolumes music="1" user1="1" user2="1" user3="1" user4="1" user5="1" user6="1" user7="1" user8="1" user9="1" user10="1" user11="1" user12="1"/></Stereo></ParameterMapFrontEnd></ParameterMaps></AudioConfig>"#;
+
+    /// Fails if a title's layout or a circuit's low-pass switch stops reaching the audio, or if a
+    /// title that names no layout plays the law because its file carries one.
+    #[test]
+    fn a_race_arms_the_rear_low_pass_from_its_title_and_its_circuit() {
+        let mut audio = oag_sound::Audio::open(
+            &oag_sound::settings::Settings::default(),
+            None,
+            None,
+            oag_audio::MIN_BUFFER,
+            false,
+        );
+        audio.set_hd_mix(oag_sound::hd_mix::Maps::parse(REAR_FILE));
+        let mut emitters = oag_sound::sfx::TrackEmitters::default();
+        let law = |audio: &oag_sound::Audio| audio.rear_low_pass();
+
+        arm_rear_low_pass(&mut audio, oag_hd::TITLE, &emitters);
+        assert_eq!(
+            law(&audio),
+            Some(14_000.0),
+            "HD reads its file's stereo value"
+        );
+        emitters.low_pass_off = true;
+        arm_rear_low_pass(&mut audio, oag_hd::TITLE, &emitters);
+        assert_eq!(law(&audio), None, "a circuit with its low-pass off");
+        emitters.low_pass_off = false;
+        arm_rear_low_pass(&mut audio, oag_pulse::TITLE, &emitters);
+        assert_eq!(law(&audio), None, "Pulse names no layout");
+        arm_rear_low_pass(&mut audio, oag_omega::TITLE, &emitters);
+        assert_eq!(
+            law(&audio),
+            None,
+            "Omega's file has the element and nothing reads it"
+        );
     }
 }

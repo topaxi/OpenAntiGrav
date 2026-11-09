@@ -22,7 +22,11 @@ frame, logging the camera node, its tripod, the animation's own clock and the in
 `GridCamera_RegisterClass` (`0x08908aec`, [billboards.md](billboards.md)) is the class these
 belong to. The render-view publisher is `FUN_08882cbc` (`0x08882cbc`, not renamed: the name
 would be a guess): it copies the active tripod's rows and field of view into the render node
-(`DAT_08ab10d8`) and the global view (`DAT_08ab10b0`), with the **negated** eye at `+0x70`.
+(`DAT_08ab10d8`) and the global view (`DAT_08ab10b0`), with the **negated** eye at `+0x70`. It
+ends by locating the eye on the AI track (`AiTrack_LocatePosition(2000.0, ...)`, no cursor) and
+handing the located section to `Camera_PublishSection`, so a flyby is masked by the one section
+under its camera (confidence 90, measured on two whole flybys:
+[race-intro.md](../../../gameplay/race-intro.md#the-flyby-is-masked-by-the-section-under-its-camera-measured-2026-11-07-lane-pulse-flyby-fix)).
 
 ## `RaceMode_UpdateIntro`, substate by substate
 
@@ -211,7 +215,7 @@ bijection recorded there.
 ## Not read
 
 The field of view's source (`FUN_08901954`'s tail `FUN_08908f98` binds the payload, no write to
-`+0x50` was found); `mode+0x40`; what the ScreenFlash kind 10 looks like; the body of `FUN_08882cbc` beyond the pose copy (it has a second branch keyed on `tripod+0xc0` that
+`+0x50` was found); `mode+0x40`; what the ScreenFlash kind 10 looks like; the middle of `FUN_08882cbc` (it has a second branch keyed on `tripod+0xc0` that
 looks up `"start position 1"` in the named registry, never taken in these captures).
 
 ## Every mode runs this countdown: the per-mode vtables only wrap it (2026-10-12, `pulse-race-start`)

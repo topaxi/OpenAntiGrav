@@ -13,6 +13,8 @@ See docs/reverse-engineering/rpcs3-capture.md, "Capturing one frame's draws".
 """
 import sys, glob, struct, subprocess, re, os
 LIGHT=os.environ.get('HOOK_LIGHT')=='1'
+# HOOK_MIN=30 for a front-end frame: a backdrop-only menu frame is 51 draws, under the race floor.
+MIN_DRAWS=int(os.environ.get('HOOK_MIN','200'))
 NO_HEADS=os.environ.get('HOOK_NO_HEADS')=='1'
 # HOOK_TGT=cc0000,10000 limits the index and vertex stages to draws whose render target (0x210) is listed.
 TGTS={int(x,16) for x in os.environ.get('HOOK_TGT','').split(',') if x}
@@ -54,7 +56,7 @@ def regions(out, stem, rnd):
             ST['asked'].add(a); need.append((0x40000000+a,0x40000))
         print('hook ring: %d draws, %d missing'%(len(draws),len(wk.missing)),flush=True)
         if need: return need
-        if len(draws)<200:
+        if len(draws)<MIN_DRAWS:
             print('hook: only %d draws, retry'%len(draws),flush=True)
             return None
         if os.environ.get('HOOK_NEED_SCREEN')=='1' and not post_chain_complete(draws):

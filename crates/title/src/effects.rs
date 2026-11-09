@@ -365,6 +365,12 @@ pub struct Effects {
     /// How the Quake wave is placed and washes the screen: its frame is read
     /// only for a title whose [`Self::extents`] list `WO_QUAKE`.
     pub quake_look: QuakeLook,
+    /// Whether the original fires [`Trigger::TrailHitship`] by itself. `false` on a title that
+    /// authors the burst but whose executable never spawns it (2048 and Omega: their CPU ports of
+    /// HD's `Trails` SPU job never set the hit bit,
+    /// `docs/ghidra/functions/ps4-omega-eu/trail-hits.md`), which then plays it only with the
+    /// player's `graphics.trail_hits` on, as Pulse and Pure do. See [`Self::trail_hits_on_setting`].
+    pub trail_hits_native: bool,
 }
 
 /// Where a title's Quake wave takes the `+Y` of the frame its `WO_QUAKE` is
@@ -421,6 +427,7 @@ impl Effects {
         sprites: &[],
         extents: &[],
         quake_look: QuakeLook::track(Origin::InheritedFrom("Wipeout Pulse")),
+        trail_hits_native: false,
     };
 
     /// The entry for `trigger`.
@@ -434,6 +441,22 @@ impl Effects {
     pub const fn with(mut self, trigger: Trigger, spec: EffectSpec) -> Self {
         self.table[trigger.index()] = Some(spec);
         self
+    }
+
+    /// This table with its trail-hit burst played only when the player's `graphics.trail_hits` is
+    /// on ([`Self::trail_hits_native`] `false`). The trigger keeps its own effect, so the title
+    /// plays its own file and can still lend it to a title that authors none.
+    #[must_use]
+    pub const fn trail_hits_on_setting(mut self) -> Self {
+        self.trail_hits_native = false;
+        self
+    }
+
+    /// Whether the burst plays without the player's `graphics.trail_hits`: the table names it and
+    /// the original fires it ([`Self::trail_hits_native`]).
+    #[must_use]
+    pub const fn plays_trail_hits_natively(&self) -> bool {
+        self.trail_hits_native && self.on(Trigger::TrailHitship).is_some()
     }
 
     /// This table with `trigger` answering nothing.
@@ -491,6 +514,7 @@ impl Effects {
         use engine_effects as n;
         let mut e = Self::NONE;
         e.quake_look = QuakeLook::track(origin);
+        e.trail_hits_native = true;
         e.scenery = &[
             n::BLUE_WELDER_EFFECT,
             n::MODESTO_STEAM_EFFECT,
@@ -827,6 +851,13 @@ pub struct Looks {
     /// of what is behind it (`docs/rendering/hd-track-tone.md`, "HD's blends
     /// combine encoded values").
     pub blends_encoded: Rule,
+    /// The race's final composite reads the scaled scene half a source texel
+    /// off, `(0.5 / width, 0.5 / height)` of the scaled source (so it follows the
+    /// dynamic width), bilinearly: each output pixel is the mean of four source
+    /// texels in linear light. Wipeout HD's
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "A race's final
+    /// composite is the same quad").
+    pub final_composite_half_texel: Rule,
     /// The race frame ends in the `wo_*` post chain: the scene lit in the
     /// gamma-2 space its programs square a texel into, a quarter-resolution
     /// gate and two diagonal blurs, and `wo_composite_nocc_fp` at an exposure
@@ -898,6 +929,7 @@ impl Looks {
             material_lod_bias: Rule::UNREAD,
             material_render_state: Rule::UNREAD,
             blends_encoded: Rule::UNREAD,
+            final_composite_half_texel: Rule::UNREAD,
             wo_composite: Rule::UNREAD,
         }
     }

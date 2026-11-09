@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-27
-summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles/trails/shadow rays; governor landed on by default, self-check open"
+updated: 2026-11-06
+summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles and trails; governor is on by default, undoes a useless step, skips per track"
 categories: [rendering, tooling]
 size: XL (35)
 difficulty: medium (30)
@@ -60,6 +60,18 @@ frame-thread profile recipe in that section.
    - **Parked, not dropped** (maintainer): the working implementation (feature check, `OAG_INDIRECT`
      switch, tests, byte-identical proof) is on the pushed branch `park/indirect-depth-prepass`,
      rebased on main at the time. Later steps (compute culling, colour passes) start from it.
+   - **Re-measured under an interleaved split, colour half prototyped (2026-11-04, lane
+     `indirect`)**, numbers in `docs/rendering/frame-thread-cpu.md` ("Re-measured under an
+     interleaved split"). The port to main (two depth runs per view, by cull mode) and a
+     measure-only colour half (`OAG_INDIRECT=colour`, slot as first instance, non-uniform
+     index) are byte-identical on HD, Pure and Pulse. Pure and Pulse circuits take the depth
+     path too: they have a prepass. In the shipped split (about 0.3 ms resolvable), depth
+     alone is inside the noise. The colour step is 0.08 to 0.30 ms under depth alone, at or
+     under the floor. The combination is +0.17 ms worse than none at 800p. The colour arm
+     costs 2 to 3% GPU on the Deck, so fps drops at 4K. Not worth shipping as built: on this
+     path the saving and the non-uniform index come together. The commits are `aa54e2afa`
+     (port) and `fc967bd1a` (colour), on the lane's branch.
+     Measure: the doc section's commands, `OAG_INDIRECT` in `0 1 colour`.
    - **Re-measure on Omega** (maintainer's idea, unmeasured): Omega's PS4 scenes may carry many more
      draws per pass than HD's, where the per-draw saving could outweigh the indirect validation's
      fixed per-pass cost again. First count draws per pass on an Omega race (the perf overlay's
@@ -87,6 +99,35 @@ frame-thread profile recipe in that section.
    per change; a setting to turn it off; tests on the controller's state machine. Ties into
    `graphics-settings-resolve-from-intent-and-context.md` (blocked on the maintainer) only by not
    pre-empting it: the governor overrides at runtime, never rewrites saved settings.
+
+## Open from `prepare-view` (2026-11-05)
+
+Numbers in `docs/rendering/frame-thread-cpu.md`, "What is left of the frame thread on the Deck".
+
+- **The frame thread's system time**: 1.0 ms a frame at one view, 1.6 ms at two, on HD 800p, invisible
+  to a user-space profile (`perf_event_paranoid` 2, no sudo). Unattributed: command submissions, futex
+  waits on the finish channels, the scoped thread per later view per frame. Read it with a kernel
+  profile. Measure: `/proc/<pid>/task/<tid>/stat` fields 14 and 15 over 8 s of race.
+- **Why reclaiming on another core costs one view `scene` +0.25 and the acquire +0.15**: not the snatch
+  lock, the schedule, the sibling thread, glibc's arenas or the power budget
+  (`docs/rendering/frame-thread-cpu.md`, "What the reaper costs one view, and what it is not"). Leaving one
+  view to the next submit was a trade (HD +0.8 % fps on AC, p99 up on all three titles), reverted; the
+  rule waits on the pushed branch `park/reaper-one-view`. Worth another look only if the cause turns up or
+  battery proves a bigger gain. Measure: `OAG_REAP_THREAD=0/1`, HD 800p.
+- **A split's one submission, what is left** (`docs/rendering/split-screen.md`, "What is left"): the
+  frame's submit now drops most of the encoders, 10 % of the frame thread at two views against 2.1 %
+  before, because the reaper catches fewer; polling every 250 us read Pulse -0.10, Pure -0.11, HD
+  -0.06 at `present` +0.04, not kept. `Log::encode` is 3.3 to 3.6 %: a mapped write with no second
+  copy, or the log handed to a finishing thread. A view's scene pass is one `finish` that nothing
+  splits, which is what HD's frame thread still waits for. Pure four views at 1080p lost 1.5 fps with
+  `total` -1.7: a later GPU start is the suspect, not measured. Measure: two views, 800p, Deck,
+  `OAG_SPLIT_SUBMIT=views` as the base arm.
+- **Pulse's `write_shine`**: still 10.0 % of the frame thread in a split. Left: the first view's craft
+  maps (3.4 %), which upload a whole `GpuVertex` to change eight bytes; a streamed coordinate buffer as
+  the circuit's pass has would cut the copy. Measure: frame pointer build, Pulse two views, 800p.
+- **Why the Deck ran 4 % faster for one session** on the same binary, 2026-11-05 22:26 to 23:10. Until
+  known, compare only inside a session. Candidates: battery against docked and charging, whose change just after 23:07 matches the fast session's end (one same-binary run on each would settle it); in the slow session `steamwebhelper` read 19 % of a
+  core and gamescope and Xwayland 10 % each. Measure: per-process CPU from `top` during one run.
 
 ## Also open from the Deck lane (cheap, any time)
 
@@ -130,22 +171,7 @@ top of `park/indirect-depth-prepass` afterwards.
   not emulated as a series of `draw_indexed_indirect`; without it a backend may emulate it. Check the Deck's
   adapter reports it before trusting a multi-draw number.
 
-## Open: the governor does not undo a step that saved nothing (2026-10-27, `governor-unlocked`)
-
-`oag_present::governor` records what each shed saved (`saving`, `governor.rs` around line 179) but uses it only
-to decide when a restore fits (line 202). It never reverts a step whose saving was about zero, and it keeps
-shedding the next knob. The maintainer wants a step that did not help on this device undone and skipped for
-the rest of the session. The Deck logs show the need: on HD Anulpha (unlocked, limit 165) the sequence
-`shadows original` (CPU 7.35 ms), `model detail high` (6.55), `model detail original` (6.87 to 6.90)
-reads CPU 7.2 ms at level 2 against 6.9 at level 1, so the third step bought nothing, and the knob table in
-`docs/rendering/cpu-governor.md` already measures `lod`/`texture_detail` as no saving. To build: when the
-cooldown ends and the measured saving is under a floor (chosen, for example 0.05 ms or 1 % of the period,
-above the 0.1 ms run-to-run noise), restore that level and mark the knob skipped until the session ends
-(a `[bool; MAX_LEVEL]`), so the next shed jumps over it; tests on the state machine. Measure with
-`ab.sh 3 60 anulpha` as in the doc: the Deck, `ENABLE_GAMESCOPE_WSI=0`, `vsync off`, `frame_limit 165`,
-governor on against off; the target is the same fps with fewer knobs stepped down.
-
 ## Next Steps
 
-1. Lane 6 (governor) landed, on by default (maintainer, 2026-10-27); its self-check is the open item above.
+1. Lane 6 (governor) landed, on by default (maintainer, 2026-10-27), and undoes a step that saved nothing and remembers skips per title, track and mode for the launch ([`cpu-governor.md`](../../docs/rendering/cpu-governor.md)).
 2. Lanes 1 to 5 open the next drive in order, each with its Deck before/after.

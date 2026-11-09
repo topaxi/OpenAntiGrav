@@ -126,6 +126,25 @@ pub const NOVA_PRELIT: &str = "Lighting.Nova prelit scale bias power";
 /// `(1.4, 0.2, 1.5)` (`FUN_015c2dc0`, `0x01e3de80`), not the identity.
 pub const NOVA_PRELIT_DEFAULT: [f32; 3] = [1.4, 0.2, 1.5];
 
+/// Omega's `Bloom.*` block: the bright pass and the per-level blend of the chain behind
+/// the composite's `BloomTexture` (`docs/ghidra/functions/ps4-omega-eu/tonemap.md`, "The
+/// bloom chain"). Not HD's `HDR and Bloom.*` keys, which name a different chain.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BrightPass {
+    /// `Bright-pass threshold`.
+    pub threshold: f32,
+    /// `Bright-pass offset`.
+    pub offset: f32,
+    /// `Bright-pass scale`.
+    pub scale: f32,
+    /// `Bright-pass power`.
+    pub power: f32,
+    /// `Bright-pass alpha scale`.
+    pub alpha_scale: f32,
+    /// `Blend factors`, one per level, finest first.
+    pub blend_factors: [f32; 4],
+}
+
 /// The `Tonemap.*` (or `TonemapHDR.*`) block Omega authors: the ten keys the
 /// executable registers (`FUN_015c1f20`) under both prefixes. **Read, no
 /// consumer located** (`lightmap-prelit.md`, "The `Tonemap.*` block"); nothing
@@ -379,6 +398,22 @@ impl EnvSettings {
             source_colour_end_b: key("Source color end b-coefficient")?,
             start_angle: key("Start angle")?,
             end_angle: key("End angle")?,
+        })
+    }
+
+    /// The [`BrightPass`] block under `prefix` (`"Bloom"`, `"BloomHDR"` or `"BloomVR"`), or
+    /// `None` unless all five scalars and four blend factors are present. `BloomHDR`
+    /// authors three factors, so it answers `None`.
+    #[must_use]
+    pub fn bright_pass(&self, prefix: &str) -> Option<BrightPass> {
+        let key = |leaf: &str| self.scalar(&format!("{prefix}.Bright-pass {leaf}"));
+        Some(BrightPass {
+            threshold: key("threshold")?,
+            offset: key("offset")?,
+            scale: key("scale")?,
+            power: key("power")?,
+            alpha_scale: key("alpha scale")?,
+            blend_factors: self.vec4(&format!("{prefix}.Blend factors"))?,
         })
     }
 

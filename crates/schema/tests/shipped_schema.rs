@@ -45,8 +45,13 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
         ("assets/mods/examples/tether/oag-mod.toml", "mod"),
         ("assets/mods/examples/tether/fx/lock.toml", "effect"),
         ("crates/trackfile/tests/fixtures/oval.track.toml", "track"),
+        ("crates/mod/tests/fixtures/example.rumble.toml", "rumble"),
         ("crates/game/tests/fixtures/music-state.toml", "music-state"),
         ("crates/game/tests/fixtures/settings.toml", "settings"),
+        (
+            "crates/replay/tests/fixtures/replay-header.toml",
+            "replay-header",
+        ),
         (
             "assets/fallback/Data/XML/SplitHud_Pulse.toml",
             "screen-layout",
@@ -62,6 +67,10 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
         ),
         (
             "assets/fallback/Data/XML/LoadingScreen_HD.toml",
+            "screen-layout",
+        ),
+        (
+            "assets/fallback/Data/XML/LoadingScreen_Omega.toml",
             "screen-layout",
         ),
     ]
@@ -98,4 +107,17 @@ fn every_schema_is_used_by_a_shipped_document_and_declares_the_language_version(
             path.display()
         );
     }
+}
+
+#[test]
+fn every_fallback_rumble_pattern_validates_against_the_rumble_schema() {
+    let dir = root().join("assets/fallback/Data/XML/Rumble");
+    let mut seen = 0;
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        let text = std::fs::read_to_string(&path).unwrap();
+        accepts("rumble", 1, &text).unwrap_or_else(|e| panic!("{}: {e:#?}", path.display()));
+        seen += 1;
+    }
+    assert!(seen >= 20);
 }

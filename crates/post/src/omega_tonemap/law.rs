@@ -171,9 +171,9 @@ pub fn scanout_encode(linear: f32) -> f32 {
 /// (`docs/ghidra/functions/ps4-omega-eu/tonemap.md`, "Read with the decoder").
 ///
 /// The curve's output is linear light in `[0, 1]`, so bloom, vignette and tint
-/// all act on it before [`scanout_encode`]. **`LowResAdditive` and
-/// `Bloom` are not drawn** (the bloom chain behind `BloomTexture` is unread);
-/// this holds the terms the disc and the executable author for the rest.
+/// all act on it before [`scanout_encode`]. **`LowResAdditive` is not drawn**
+/// (the particles draw into the scene); this holds the terms the disc and the
+/// executable author for the rest.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Composite {
     /// `Vignette.Inner radius`: the distance from the centre, in uv, inside
@@ -188,6 +188,8 @@ pub struct Composite {
     /// `ScreenTint.rgb`, which rests at zero (`InGame` entry resets it from the
     /// zero at `0x01fc80a0`); flash effects raise it and their triggers are unread.
     pub screen_tint: [f32; 3],
+    /// The circuit's `Bloom.*` block; `None` draws no bloom.
+    pub bloom: Option<Bloom>,
 }
 
 impl Composite {
@@ -197,6 +199,7 @@ impl Composite {
         vignette_outer_intensity: 1.0,
         color_scale: [1.0; 3],
         screen_tint: [0.0; 3],
+        bloom: None,
     };
 
     /// The circuit's vignette with the rest values for the other two terms.
@@ -239,6 +242,110 @@ impl Composite {
     /// the vignette (the base program had it inside).
     #[must_use]
     pub fn apply(&self, channel: usize, curved: f32, uv: [f32; 2]) -> f32 {
-        self.color_scale[channel] * self.vignette(uv) * curved + self.screen_tint[channel]
+        self.apply_with_bloom(channel, curved, 0.0, uv)
     }
+
+    /// [`Composite::apply`] with the chain's output `bloom` added inside the vignette:
+    /// `ColorScale * vignette * (curved + BloomScale * bloom) + ScreenTint`.
+    #[must_use]
+    pub fn apply_with_bloom(&self, channel: usize, curved: f32, bloom: f32, uv: [f32; 2]) -> f32 {
+        let scale = self.bloom.map_or(0.0, |b| b.blend_factors[0]);
+        self.color_scale[channel] * self.vignette(uv) * (curved + scale * bloom)
+            + self.screen_tint[channel]
+    }
+}
+
+/// Level 0 of the bloom chain, the executable's constant `0x3c0` by `0x21c` whatever the
+/// frame's size (`FUN_016247c0`; patch `FUN_0165d1b0`).
+pub const BLOOM_BASE: (u32, u32) = (960, 540);
+
+/// Levels on a base PS4: `(checkerboard == 0) + 3`, each half the one before.
+pub const BLOOM_LEVELS: usize = 4;
+
+/// The same-size blur's tap distances in source texels, `FUN_01784570`'s immediates: the
+/// twelfth row of Pascal's triangle folded into bilinear taps.
+pub const BLUR_OFFSETS: [f32; 4] = [0.0, 1.384_615_4, 3.230_769_2, 5.076_923];
+
+/// The weight of each [`BLUR_OFFSETS`] tap, both sides of the centre carrying the same one.
+pub const BLUR_WEIGHTS: [f32; 4] = [0.225_585_94, 0.314_208_98, 0.069_824_22, 0.003_173_828_1];
+
+/// The halving blur's `aWeights`, centre first, for taps a whole source texel apart.
+pub const DOWN_WEIGHTS: [f32; 6] = [
+    0.225_696_15,
+    0.193_453_83,
+    0.120_908_65,
+    0.053_737_17,
+    0.016_121_15,
+    0.002_931_12,
+];
+
+/// `cBrightness`, `FUN_0177f510`'s constant: the bright pass's luminance is the plain mean
+/// of the channels, not Rec.601.
+pub const BRIGHTNESS_WEIGHT: f32 = 1.0 / 3.0;
+
+/// The bright pass and the per-level blend the disc authors (`Bloom.*`), read by the
+/// programs `Shdr` `0x95fe54` and `0x95f444` and the chain `FUN_0177fbc0`
+/// (`docs/ghidra/functions/ps4-omega-eu/tonemap.md`, "The bloom chain").
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Bloom {
+    /// `Bright-pass threshold`, on the curved frame's `[0, 1]` luminance.
+    pub threshold: f32,
+    /// `Bright-pass offset`: the softening under the power term.
+    pub offset: f32,
+    /// `Bright-pass scale`.
+    pub scale: f32,
+    /// `Bright-pass power`.
+    pub power: f32,
+    /// `Bright-pass alpha scale`: the weight on the scene's `m_Alpha` mask. The disc's
+    /// number, carried for the mask's lane; nothing reads the mask yet.
+    pub alpha_scale: f32,
+    /// `Blend factors`, finest level first; level 0's is the composite's `BloomScale`.
+    pub blend_factors: [f32; 4],
+}
+
+impl Bloom {
+    /// What a pixel of luminance `l` and scene mask `mask` is multiplied by:
+    /// `Scale * p / (Offset + p) + AlphaScale * mask`, `p = max(l - Threshold, 0) ^ Power`.
+    #[must_use]
+    pub fn bright_weight(&self, l: f32, mask: f32) -> f32 {
+        let t = (l - self.threshold).max(0.0);
+        let p = if t > 0.0 { t.powf(self.power) } else { 0.0 };
+        self.scale * p / (self.offset + p) + self.alpha_scale * mask
+    }
+
+    /// The bright pass on a curved colour with no mask drawn.
+    #[must_use]
+    pub fn bright_pass(&self, c: [f32; 3]) -> [f32; 3] {
+        let l = (c[0] + c[1] + c[2]) * BRIGHTNESS_WEIGHT;
+        c.map(|channel| channel * self.bright_weight(l, 0.0))
+    }
+
+    /// The chain's blend back up, coarse to fine: each level adds the one below it scaled
+    /// by that level's factor, so `A0 + f1 (A1 + f2 (A2 + f3 A3))`. Level 0's factor is
+    /// the composite's, not this sum's.
+    #[must_use]
+    pub fn blend_up(&self, levels: [f32; BLOOM_LEVELS]) -> f32 {
+        let mut sum = levels[BLOOM_LEVELS - 1];
+        for level in (0..BLOOM_LEVELS - 1).rev() {
+            sum = levels[level] + self.blend_factors[level + 1] * sum;
+        }
+        sum
+    }
+}
+
+/// A level's size: each is the last halved, rounding down, as `FUN_0177e870` does.
+#[must_use]
+pub fn bloom_level_size(base: (u32, u32), level: usize) -> (u32, u32) {
+    ((base.0 >> level).max(1), (base.1 >> level).max(1))
+}
+
+/// Level 0 for a frame of `size`: the executable's height, and its width kept to the
+/// frame's shape so the blur reaches as far across any window as it does across 16:9.
+/// The executable only ever draws 16:9, where this is [`BLOOM_BASE`]; the width rule for
+/// any other shape is **chosen, not measured**.
+#[must_use]
+pub fn bloom_base(size: (u32, u32)) -> (u32, u32) {
+    let (width, height) = (size.0.max(1) as f32, size.1.max(1) as f32);
+    let scaled = (BLOOM_BASE.1 as f32 * width / height).round() as u32;
+    (scaled.max(2) & !1, BLOOM_BASE.1)
 }

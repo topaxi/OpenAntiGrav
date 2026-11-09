@@ -154,7 +154,7 @@ mod tests;
 pub mod cell_brackets;
 pub mod cell_emblems;
 mod cell_text;
-mod medal;
+pub mod medal;
 mod unlock;
 use unlock::{POINTS_GROUP, UnlockKind, unlock_box};
 // `hd_target_title`/`hd_tinted_medal_draw` are called below; `hd_medal_frame`/
@@ -273,7 +273,20 @@ pub fn hd_grid_draw_list(
         let Some(placed) = sprites(&image.src) else {
             continue;
         };
+        if let Some(color) = image
+            .name
+            .as_deref()
+            .and_then(|name| flyer_arrow_color(name, model.index(), model.grids().len()))
+        {
+            let mut arrow = image.clone();
+            arrow.color = color;
+            out.push(image_draw(&arrow, placed));
+            continue;
+        }
         out.push(image_draw(image, placed));
+    }
+    if unlock.is_some() {
+        out.extend(cell_brackets::draws(&screen.brackets, sprites));
     }
     let Some(selected) = model.selected() else {
         layers.body = out;
@@ -314,10 +327,38 @@ pub fn hd_grid_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
+        if matches!(name, "EventNum" | "GridNum") {
+            out.push(cell_text::draw(text, &content, layout, true));
+            continue;
+        }
         out.push(text_draw(text, &content, layout));
     }
     layers.body = out;
     layers
+}
+
+/// The colour `FlyerSelection`'s per-frame update gives a flyer arrow
+/// (`docs/ui/campaign-screens.md`, "The flyer arrows' colour"), for the
+/// arrow's widget `name` with the card at `index` of `len`: `Some` for the two
+/// arrows, `None` for any other image. The screen's authored `Color`
+/// (`0xFF8AC0CA`) is overwritten every update, so it never reaches the frame.
+///
+/// RGB is the literal `0x646464`. Alpha is `0xFF` for an arrow with a page
+/// to go to and `0x7F` for one without: the left arrow on the first card,
+/// the right arrow on the last (but never when the first card is also the
+/// last, which the original's branch leaves opaque). Confidence 90: the
+/// immediates in `FlyerSelection`'s update and the frame, whose right arrow
+/// reads `100,100,100` and whose left, on the first card, reads half of it.
+#[must_use]
+fn flyer_arrow_color(name: &str, index: usize, len: usize) -> Option<u32> {
+    const LIVE: u32 = 0xFF64_6464;
+    const SPENT: u32 = 0x7F64_6464;
+    let spent = match name {
+        "Flyer Left Arrow" => index == 0,
+        "Flyer Right Arrow" => index != 0 && index + 1 == len,
+        _ => return None,
+    };
+    Some(if spent { SPENT } else { LIVE })
 }
 
 /// `"Event {:02}/{:02}"` - `EventNum`'s own template (`"Event 01/08"`) and
@@ -340,6 +381,9 @@ pub struct CellArt<'a> {
     /// A circuit's white emblem by its lowercased id, as the `src` the sheet
     /// holds it under.
     pub track_emblems: &'a std::collections::HashMap<String, String>,
+    /// The stored row of `Hexmedal_HD`'s difficulty block that holds gold, silver and bronze:
+    /// `[0, 1, 2]` is HD's (gold on top), see [`medal::hd_medal_frame`].
+    pub medal_tier_rows: [u8; 3],
 }
 
 /// `Cell Selection`'s draw list: the same 32-position staggered hex grid
@@ -487,7 +531,13 @@ pub fn hd_cell_draw_list(
                 // guess. See [`super::CellSelection::difficulty_at`]'s own
                 // doc for when this triggers.
                 let difficulty = model.difficulty_at(x, y).unwrap_or(Difficulty::Medium);
-                out.push(hd_tinted_medal_draw(image, placed, medal, difficulty));
+                out.push(hd_tinted_medal_draw(
+                    image,
+                    placed,
+                    medal,
+                    difficulty,
+                    art.medal_tier_rows,
+                ));
             }
             continue;
         }
@@ -649,6 +699,7 @@ pub fn hd_cell_draw_list(
                     placed,
                     tier,
                     model.difficulty(),
+                    art.medal_tier_rows,
                 )),
                 // `Target Title Arrow` carries no tier of its own - draws at
                 // its authored crop unchanged.
@@ -752,9 +803,8 @@ fn hd_track_line(cell: &Cell, circuit_names: &CircuitNames, strings: &StringTabl
     let Some(id) = cell.track.as_deref() else {
         return String::new();
     };
-    // Omega's table names 17_TRACK and 18_TRACK (and the Zone and 2048 circuits) but not every
-    // circuit, so `CircuitNames::choose` finds no copy that names all 38 and leaves the list
-    // empty; the cell reads its own circuit off the served table, case folded, as `choose` does.
+    // A source whose copies name no circuit list at all leaves `circuit_names` empty; the cell
+    // then reads its own circuit off the served table, case folded, as `choose` does.
     circuit_names
         .get(id)
         .or_else(|| {
@@ -864,7 +914,8 @@ fn hd_difficulty_button_line(
 /// There is only ever one tier on screen, so a click on the page confirming
 /// it is the two-tap idiom's second tap with nothing else to select.
 /// **Chosen, not measured**, either way: the original's click region is not
-/// read. The arrows come first in the list so they win where they overlap.
+/// read. The arrows come first in the list so they win where they overlap,
+/// and their tap rects are grown past the drawn arrows ([`arrow_tap_rect`]).
 #[must_use]
 pub fn hd_grid_targets(
     layout: &Layout,
@@ -880,7 +931,10 @@ pub fn hd_grid_targets(
             _ => continue,
         };
         if let Some(rect) = image_rect(image, sprites) {
-            out.push(Target { what, rect });
+            out.push(Target {
+                what,
+                rect: arrow_tap_rect(rect, what, card),
+            });
         }
     }
     out.push(Target {
@@ -890,10 +944,46 @@ pub fn hd_grid_targets(
     out
 }
 
+/// How far a paging arrow's tap rect reaches past its drawn rect on every
+/// side, in this screen's 1920x1080 grid: the authored `32x64` and `96x64`
+/// are about 21x43 px and 64x43 px on a 1280x800 screen, too small for a
+/// finger, and this makes the left arrow 160x192 and the right 224x192 units.
+/// **Chosen, not measured.**
+pub const ARROW_TAP_MARGIN: f32 = 64.0;
+
+/// An arrow's drawn rect grown by [`ARROW_TAP_MARGIN`], cut back at the
+/// flyer card's own edge (the side `what` points away from) so that a tap on
+/// the card still confirms it. With no card drawn nothing is cut: the arrows
+/// are first in the target list, so they win over the page-wide confirm band.
+fn arrow_tap_rect(drawn: [f32; 4], what: What, card: Option<[f32; 4]>) -> [f32; 4] {
+    let [x, y, width, height] = drawn;
+    let (mut left, mut right) = (x - ARROW_TAP_MARGIN, x + width + ARROW_TAP_MARGIN);
+    if let Some([card_x, _, card_width, _]) = card {
+        match what {
+            What::Previous => right = right.min(card_x).max(x + width),
+            What::Next => left = left.max(card_x + card_width).min(x),
+            What::Hex(_) => {}
+        }
+    }
+    [
+        left,
+        y - ARROW_TAP_MARGIN,
+        right - left,
+        height + 2.0 * ARROW_TAP_MARGIN,
+    ]
+}
+
 /// Where a click confirms `Grid Selection` when no flyer card is drawn: the
 /// page between its header and footer rules, in the 1920x1080 grid this
 /// screen is authored in. Chosen, not measured.
 pub const CONFIRM_BAND: [f32; 4] = [0.0, 100.0, 1920.0, 900.0];
+
+/// How far a finger must travel up or down `Grid Selection`, in this screen's
+/// 1920x1080 grid, before the swipe steps one grid: about a ninth of the
+/// page's height. **Chosen, not measured**: the original is played on a pad.
+/// A swipe up steps to the next grid and a swipe down to the previous one,
+/// once per gesture however far it goes ([`GridSelection::hd_pointer`]).
+pub const SWIPE_STEP_TRAVEL: f32 = 120.0;
 
 /// Where an image is drawn - the same fallback [`super::pointer::grid_targets`]
 /// applies, duplicated rather than exported since [`super::pointer`]'s own
@@ -909,6 +999,37 @@ fn image_rect(image: &Image, sprites: &dyn Fn(&str) -> Option<Placed>) -> Option
     Some([image.x, image.y, width, height])
 }
 
+/// One finger gesture on `Grid Selection`, accumulated from [`Pointer::drag`]
+/// until it steps a grid or the finger lifts.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct Swipe {
+    travel: (f32, f32),
+    stepped: bool,
+}
+
+impl Swipe {
+    /// Folds in one tick and returns the step it asks for, if any: `+1` for a
+    /// swipe up, `-1` for a swipe down. A gesture steps at most once and only
+    /// when it travelled further along the page than across it; the lift
+    /// (which carries the last of the drag) forgets it, so the next gesture
+    /// starts afresh.
+    fn feed(&mut self, pointer: &Pointer) -> Option<i32> {
+        if pointer.pressed {
+            *self = Self::default();
+        }
+        self.travel.0 += pointer.drag.0;
+        self.travel.1 += pointer.drag.1;
+        let (across, along) = (self.travel.0.abs(), self.travel.1.abs());
+        let step = (!self.stepped && along >= SWIPE_STEP_TRAVEL && along > across)
+            .then_some(if self.travel.1 < 0.0 { 1 } else { -1 });
+        self.stepped |= step.is_some();
+        if pointer.released {
+            *self = Self::default();
+        }
+        step
+    }
+}
+
 impl GridSelection {
     /// Consumes a tick of pointer input on HD's own `Grid Selection` -
     /// [`super::pointer::GridSelection::pointer`]'s own shape, against
@@ -922,6 +1043,11 @@ impl GridSelection {
         }
         if pointer.scroll != 0 {
             out.extend(self.step(pointer.scroll.signum()));
+        }
+        if self.grids.len() > 1
+            && let Some(step) = self.swipe.feed(pointer)
+        {
+            out.extend(self.step(step));
         }
         if pointer.clicked
             && let Some(at) = pointer.at

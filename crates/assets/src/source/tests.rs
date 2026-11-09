@@ -106,6 +106,7 @@ const TITLE: &Title = &Title {
         zone_transition: None,
         zoom_ring: None,
         borrows_zoom_ring: false,
+        game_options: oag_title::race::GameOptions::NONE,
         zone_stage_textures: None,
         zone_sky: None,
         // Unread here too: nothing in this crate resolves a team's variant.
@@ -127,6 +128,7 @@ const TITLE: &Title = &Title {
         elimination: r"Data\XML\Nothing_HUD.xml",
         split: None,
         split_layout: None,
+        player_tags: None,
         skins: &[],
     },
     // And unread on the same terms: which widgets a HUD keeps up, and out of
@@ -142,6 +144,7 @@ const TITLE: &Title = &Title {
         },
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::chosen(true),
         autopilot_pad_grants: oag_title::pre_race::Sourced::chosen(false),
+        pads_stamp_in_eliminator: oag_title::pre_race::Sourced::chosen(true),
         opponent_fire: oag_title::pre_race::Sourced::chosen(
             oag_title::weapons::OpponentFire::PULSE,
         ),
@@ -163,6 +166,7 @@ const TITLE: &Title = &Title {
         attached: oag_title::Attached::Inline,
         origin: oag_title::Origin::Chosen,
     },
+    pause_menu: None,
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: None,
@@ -178,6 +182,8 @@ const TITLE: &Title = &Title {
         grid_archive: None,
         fury_card_gain: None,
         grid_card_pose: None,
+        selection_card_scale: None,
+        medal_tier_rows: None,
         frontend_glow: None,
         origin: oag_title::Origin::Chosen,
         custom_campaigns: false,
@@ -187,6 +193,8 @@ const TITLE: &Title = &Title {
     adverts: None,
     teams: &[],
     loyalty: None,
+    eliminator: oag_title::pre_race::Sourced::chosen(oag_title::eliminator::EliminatorRule::Kills),
+    eliminator_flip: oag_title::pre_race::Sourced::chosen(None),
     hud_art: &oag_title::HudArt {
         texture_extension: None,
         always_on: &[],
@@ -195,6 +203,7 @@ const TITLE: &Title = &Title {
         half_unit_glyph_quads: false,
         lit_alpha: None,
         text_shadow: None,
+        text_outline_alpha: None,
         sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,
         pickup_colours: None,
@@ -232,6 +241,9 @@ const TITLE: &Title = &Title {
     // this crate looks at.
     // No prompt glyph of this title's has been read; the disc's own draw unchanged.
     prompts: &oag_title::prompts::Prompts::UNREAD,
+    profile: oag_title::profile::Profile::NEITHER,
+    photo: oag_title::photo::Strings::NONE,
+    photo_shot: None,
     reset_enables: oag_title::recovery::ResetEnables::PULSE,
     effects_volume_law: oag_title::pre_race::Sourced::chosen(
         oag_title::group_volume::GroupVolumeLaw::Linear,
@@ -241,6 +253,7 @@ const TITLE: &Title = &Title {
     ),
     speech_follows_effects: oag_title::pre_race::Sourced::chosen(false),
     master_trim_db: oag_title::pre_race::Sourced::chosen(0.0),
+    rear_occlusion: None,
     plugin_definition: r"Data\Plugins\PI000\Definition.xml",
     track_plugin_definition: None,
     // This crate opens archives; nothing here draws a loading screen.
@@ -249,6 +262,7 @@ const TITLE: &Title = &Title {
     cursor: "",
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
+    rumble: oag_title::rumble::Rumble::Absent,
 };
 
 /// The bulk archive's PSP and PS2 names, as the fixture spells them.
@@ -281,6 +295,7 @@ pub(super) fn mounted(
             platform: Platform::Psp,
             data: spec.clone(),
             patch: Vec::new(),
+            update: None,
             fe: None,
             extra: Vec::new(),
             serial: None,
@@ -772,4 +787,101 @@ fn a_memoised_neighbour_is_read_once() {
     assert!(archives.read_preceding("before.bin").is_err());
     let memo = archives.read_memo.as_ref().expect("asked for");
     assert_eq!((memo.hits, memo.misses), (1, 2));
+}
+
+const UPDATED: &Title = &Title {
+    archives: ArchiveCandidates {
+        patch: &[
+            ("USRDIR/data08.psarc", Platform::Ps3),
+            ("USRDIR/data07.psarc", Platform::Ps3),
+        ],
+        data: &[("USRDIR/data00.psarc", Platform::Ps3)],
+        ..TITLE.archives
+    },
+    ..*TITLE
+};
+
+/// A `PARAM.SFO` holding one `TITLE_ID`.
+fn sfo_naming(title_id: &str) -> Vec<u8> {
+    let (key, value) = (b"TITLE_ID\0", [title_id.as_bytes(), &[0]].concat());
+    let length = u32::try_from(value.len()).unwrap().to_le_bytes();
+    let mut out = b"\0PSF".to_vec();
+    out.extend_from_slice(&0x101_u32.to_le_bytes());
+    out.extend_from_slice(&36_u32.to_le_bytes());
+    out.extend_from_slice(&45_u32.to_le_bytes());
+    out.extend_from_slice(&1_u32.to_le_bytes());
+    out.extend_from_slice(&[0, 0, 4, 2]);
+    out.extend_from_slice(&length);
+    out.extend_from_slice(&length);
+    out.extend_from_slice(&0_u32.to_le_bytes());
+    out.extend_from_slice(key);
+    out.extend_from_slice(&value);
+    out
+}
+
+fn touch(root: &std::path::Path, files: &[&str]) {
+    for file in files {
+        let path = root.join(file);
+        std::fs::create_dir_all(path.parent().expect("a parent")).expect("a directory");
+        std::fs::write(path, b"").expect("a file");
+    }
+}
+
+/// The patch role comes from the update folder of the source's own release and
+/// nothing else does, candidate order held whichever root supplies what.
+#[test]
+fn an_update_folder_of_the_same_release_fills_the_patch_role() {
+    let dir = testing::temp_dir("update-folder");
+    let (source, update) = (dir.join("base"), dir.join("update"));
+    touch(&source, &["USRDIR/data00.psarc", "USRDIR/data07.psarc"]);
+    std::fs::write(source.join("PARAM.SFO"), sfo_naming("BCES00664")).expect("a file");
+    touch(&update, &["USRDIR/data08.psarc", "USRDIR/data07.psarc"]);
+    let source = source.to_str().expect("utf-8");
+    let root = update.to_str().expect("utf-8").to_string();
+
+    let folder = |serial: &str| UpdateFolder {
+        serial: serial.to_string(),
+        root: root.clone(),
+    };
+    let (layout, _) = Layout::resolve_on(source, UPDATED, &[folder("BCES-00664")]).unwrap();
+    assert_eq!(
+        layout.patch,
+        [
+            format!("{root}/USRDIR/data08.psarc"),
+            format!("{root}/USRDIR/data07.psarc"),
+        ]
+    );
+    assert_eq!(layout.update.as_ref(), Some(&root));
+    assert_eq!(layout.update_gap(UPDATED), None);
+
+    let (other, _) = Layout::resolve_on(source, UPDATED, &[folder("NPEA-00057")]).unwrap();
+    assert_eq!(other.patch, [format!("{source}/USRDIR/data07.psarc")]);
+    assert_eq!(other.update, None);
+    assert!(
+        other.update_gap(UPDATED).is_some(),
+        "one of two update archives is a partial chain"
+    );
+}
+
+/// An update folder with no archive is the mistake worth a warning; a source with
+/// no update at all, and a title with no update role, are not.
+#[test]
+fn only_a_partial_update_is_a_gap() {
+    let dir = testing::temp_dir("update-gap");
+    let (source, update) = (dir.join("base"), dir.join("update"));
+    touch(&source, &["USRDIR/data00.psarc"]);
+    std::fs::write(source.join("PARAM.SFO"), sfo_naming("BCES00664")).expect("a file");
+    touch(&update, &["USRDIR/EBOOT.BIN"]);
+    let source = source.to_str().expect("utf-8");
+
+    let plain = Layout::resolve(source, UPDATED).unwrap();
+    assert_eq!(plain.update_gap(UPDATED), None);
+
+    let folder = UpdateFolder {
+        serial: "BCES-00664".to_string(),
+        root: update.to_str().expect("utf-8").to_string(),
+    };
+    let (empty, _) = Layout::resolve_on(source, UPDATED, &[folder]).unwrap();
+    assert!(empty.update_gap(UPDATED).is_some());
+    assert_eq!(empty.update_gap(TITLE), None);
 }

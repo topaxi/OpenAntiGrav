@@ -86,6 +86,32 @@ impl View {
     }
 }
 
+impl View {
+    /// Starts the marquee on `song`'s name; nothing for a song the disc does not name.
+    fn show(&mut self, song: &oag_sound::NowPlaying) {
+        if let Some(name) = &song.name {
+            let title = match self.title_key {
+                None => Some(name.title.clone()),
+                // The key's text is "Artist\nTitle"; a key the table lacks shows nothing.
+                Some(key) => self
+                    .strings
+                    .get(&key.replace("{}", &name.title))
+                    .and_then(|text| text.lines().last())
+                    .map(str::to_string),
+            };
+            let Some(title) = title else {
+                return;
+            };
+            let text = match &name.artist {
+                Some(artist) => format!("{artist}{}{title}", self.separator),
+                None => title,
+            };
+            let width = oag_ui::font::measure(&self.font, &text) * self.display.scale();
+            self.display.show(text, width);
+        }
+    }
+}
+
 impl Race {
     /// The race music started a song (or has not yet): shows its name the way the title does,
     /// once per song, on the tick it is told. `None` for a song the disc does not name, which
@@ -107,25 +133,22 @@ impl Race {
         if !view.hud_shown {
             return;
         }
-        if let Some(name) = &song.name {
-            let title = match view.title_key {
-                None => Some(name.title.clone()),
-                // The key's text is "Artist\nTitle"; a key the table lacks shows nothing.
-                Some(key) => view
-                    .strings
-                    .get(&key.replace("{}", &name.title))
-                    .and_then(|text| text.lines().last())
-                    .map(str::to_string),
-            };
-            let Some(title) = title else {
-                return;
-            };
-            let text = match &name.artist {
-                Some(artist) => format!("{artist}{}{title}", view.separator),
-                None => title,
-            };
-            let width = oag_ui::font::measure(&view.font, &text) * view.display.scale();
-            view.display.show(text, width);
+        view.show(song);
+    }
+
+    /// Shows the song the music is on again, on the player's request. Unlike [`Self::note_song`]
+    /// it shows a song already shown; it still shows nothing while the HUD is off, for a song
+    /// the disc does not name, or when the title has no display.
+    pub fn show_song_again(&mut self, song: Option<&oag_sound::NowPlaying>) {
+        let Some(view) = self.view.now_playing.as_mut() else {
+            return;
+        };
+        let Some(song) = song else {
+            return;
+        };
+        view.serial = song.serial;
+        if view.hud_shown {
+            view.show(song);
         }
     }
 

@@ -6,6 +6,16 @@ use oag_mesh::mesh;
 
 use super::{ChunkSet, DrawSections, Drawable, Frustum, SceneStats, ViewBlock, VisibleSet};
 
+/// What one view culls the circuit's draws by: the authored sections, the two visibility
+/// tiers and the frustum.
+#[derive(Clone, Copy)]
+pub(crate) struct TrackCull<'a> {
+    pub(crate) sections: Option<&'a DrawSections>,
+    pub(crate) set: Option<&'a VisibleSet>,
+    pub(crate) chunks: Option<&'a ChunkSet>,
+    pub(crate) frustum: Option<&'a Frustum>,
+}
+
 impl Drawable {
     /// Draws **every** list of this model through the additive pipeline,
     /// ignoring which list each batch's `pass_mask` put it in.
@@ -182,11 +192,15 @@ impl Drawable {
     }
 
     /// Uploads texture coordinates generated for the camera `view` -
-    /// [`oag_render::shine::TrackNormals::write_view`], a circuit's extra pass, whose
+    /// [`oag_render::shine::TrackNormals::write_view_spans`], a circuit's extra pass, whose
     /// coordinates follow the camera and so cannot be baked. Into the streamed
     /// coordinate buffer when this drawable has one, which is the eight bytes
     /// a vertex that change; the whole vertex is never rewritten. `normals` is the
     /// frame's turned normals, shared by every camera drawn at `seconds`.
+    ///
+    /// `spans` are the vertices this view draws, sorted. One write from the first to the last:
+    /// a write is a staging buffer, and what lies between is a coordinate no draw of this view
+    /// reads, so it may hold another view's.
     pub(crate) fn write_view_map(
         &self,
         queue: &dyn oag_gpu::writes::Writes,
@@ -194,35 +208,67 @@ impl Drawable {
         seconds: f32,
         normals: &mut oag_render::shine::TrackNormals,
         scratch: &mut Vec<[f32; 2]>,
+        spans: &[std::ops::Range<usize>],
     ) {
         let Some(texcoords) = &self.texcoords else {
             return;
         };
-        normals.write_view(&self.model, scratch, view, seconds);
-        queue.write_buffer(texcoords, 0, bytemuck::cast_slice(scratch));
+        let (Some(first), Some(last)) = (spans.first(), spans.last()) else {
+            return;
+        };
+        normals.write_view_spans(&self.model, scratch, view, seconds, spans);
+        let offset = (first.start * size_of::<[f32; 2]>()) as wgpu::BufferAddress;
+        queue.write_buffer(
+            texcoords,
+            offset,
+            bytemuck::cast_slice(&scratch[first.start..last.end]),
+        );
     }
 
-    /// Draws a circuit's extra pass: each of this model's draws when the
-    /// circuit draw `sources[i]` of `track` is drawn - its level-of-detail
-    /// child on, its section allowed, its bound in the frustum - through the
+    /// The indices into this pass's draws of those view `block` draws: each that redraws a
+    /// circuit draw `sources[i]` of `track` the view shows - its level-of-detail child on, its
+    /// section allowed, its bound in the frustum. [`Self::draw_track_shine`] draws exactly
+    /// these, and the view's coordinates are written for exactly these.
+    pub(crate) fn track_shine_shown<'a>(
+        &'a self,
+        block: ViewBlock,
+        track: &'a Drawable,
+        sources: &'a [usize],
+        cull: TrackCull<'a>,
+    ) -> impl Iterator<Item = usize> + 'a {
+        let opaque: &[u64] = cull.sections.map_or(&[], |s| &s.opaque[..]);
+        let shows = track.shows(block);
+        sources
+            .iter()
+            .enumerate()
+            .filter_map(move |(index, &source)| {
+                let circuit = &track.model.draws[source];
+                let shown = shows.draw(circuit)
+                    && oag_render::pvs::visible(
+                        circuit,
+                        DrawSections::at(opaque, source),
+                        cull.set,
+                        cull.chunks,
+                        cull.frustum,
+                    );
+                shown.then_some(index)
+            })
+    }
+
+    /// Draws a circuit's extra pass: the draws [`Self::track_shine_shown`] answers, through the
     /// pipelines built with this drawable's own blend.
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn draw_track_shine(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
         block: ViewBlock,
         track: &Drawable,
         sources: &[usize],
-        sections: Option<&DrawSections>,
-        set: Option<&VisibleSet>,
-        chunks: Option<&ChunkSet>,
-        frustum: Option<&Frustum>,
+        cull: TrackCull<'_>,
     ) -> SceneStats {
         let mut stats = SceneStats::default();
         if self.model.indices.is_empty() {
             return stats;
         }
-        let opaque: &[u64] = sections.map_or(&[], |s| &s.opaque[..]);
         let mut last_bound: Option<usize> = None;
         pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
         pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
@@ -231,20 +277,8 @@ impl Drawable {
         self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         let mut current: Option<&wgpu::RenderPipeline> = None;
-        let shows = track.shows(block);
-        for (draw, &source) in self.model.draws.iter().zip(sources) {
-            let circuit = &track.model.draws[source];
-            if !shows.draw(circuit)
-                || !oag_render::pvs::visible(
-                    circuit,
-                    DrawSections::at(opaque, source),
-                    set,
-                    chunks,
-                    frustum,
-                )
-            {
-                continue;
-            }
+        for index in self.track_shine_shown(block, track, sources, cull) {
+            let draw = &self.model.draws[index];
             let pipeline = &self.blend_pipeline[usize::from(draw.culled)];
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
                 pass.set_pipeline(pipeline);

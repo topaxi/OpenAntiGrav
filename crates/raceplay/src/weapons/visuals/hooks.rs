@@ -29,7 +29,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::leach_beam)
         else {
             return false;
@@ -76,7 +76,7 @@ impl Race {
         let Some(stats) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::quake)
         else {
             return false;

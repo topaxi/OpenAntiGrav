@@ -110,7 +110,7 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
     let mut solo = Solo::default();
     let mut run = 0u32;
     for tick in 0..ticks {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         let ship = &race.sim.world.ships[1];
         if ship.physics.craft_state != oag_physics::CraftState::Racing {
             continue;

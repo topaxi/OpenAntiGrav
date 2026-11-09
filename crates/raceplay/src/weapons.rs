@@ -26,7 +26,7 @@ pub(crate) use visuals::{CannonAssets, CannonDraw};
 // `#[cfg(test)]` any more for that reason - production code calls through
 // this path, not only `race/tests/weapons.rs`.
 #[cfg(feature = "view")]
-pub(super) use visuals::bounced_this_tick;
+pub(super) use visuals::{bounced_this_tick, missile_flare_anchors};
 // The remaining five are only reached through `crate::weapons::<name>`
 // by `race/tests/weapons.rs`, which asserts each pure gate without a disc -
 // see the doc comments on `visuals::flare_effect_for` and its neighbours.
@@ -34,8 +34,8 @@ pub(super) use visuals::bounced_this_tick;
 // path: `visuals.rs` reaches all three directly by their bare names.
 #[cfg(all(test, feature = "view"))]
 pub(super) use visuals::{
-    advance_one_flare, bounce_effect_for, flare_effect_for, flash_for, missile_flare_anchors,
-    plasma_flare_scale, plasma_ride_scale,
+    advance_one_flare, bounce_effect_for, flare_effect_for, flash_for, plasma_flare_scale,
+    plasma_ride_scale,
 };
 
 /// How far behind the body a title that lays from the craft's rear anchor
@@ -117,7 +117,7 @@ impl Race {
         if self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(|w| w.simple(oag_tables::weapons::Weapon::Turbo))
             .is_none()
         {
@@ -212,7 +212,7 @@ impl Race {
             self.sim.extensions.pickup_used(slot, kind, !fire);
             return;
         }
-        let Some(weapons) = self.sim.weapons.as_ref() else {
+        let Some(weapons) = self.sim.weapons.as_deref() else {
             return;
         };
 
@@ -522,8 +522,11 @@ impl Race {
                     // `entity+0x860 & 1`, the flag `HudSight_UpdateLeachBeam` sets
                     // when its extent reaches `6.0`, about `0.34` s after a first
                     // sighting; before that it passes `(0, -1)`, the unlocked arm.
-                    // Wipeout HD's LeachBeam reticle is a different function, so it
-                    // keeps firing off the window alone. An opponent has no reticle.
+                    // HD's own update closes its rings over the same `0.34` s and
+                    // turns them red there, so it takes the same gate (inherited
+                    // from the PSP: HD's fire path was not read for it). A title
+                    // whose reticle keeps the Missile's law fires off the window
+                    // alone. An opponent has no reticle.
                     //
                     // **Every person-flown slot holds the lock.** The
                     // [`Race::sight_target`] window is computed for `slot` itself,
@@ -668,7 +671,7 @@ impl Race {
     /// almost all of the time: [`oag_weapons::pickup::Held::advance_drop`]
     /// returns immediately on a zero counter.
     pub(super) fn lay_mines(&mut self) {
-        let Some(weapons) = self.sim.weapons.as_ref() else {
+        let Some(weapons) = self.sim.weapons.as_deref() else {
             // No table. A craft cannot have started a drop without one - the arm
             // above gates on exactly this - so there is nothing in flight to
             // abandon.
@@ -783,7 +786,7 @@ impl Race {
         let Some(cannon) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::cannon)
         else {
             // No table, or the table authors no Cannon - Pure's does not.
@@ -967,7 +970,7 @@ impl Race {
             position,
             ship.physics.body.forward(),
             stats,
-            self.sim.course.as_ref().map(oag_race::Course::length),
+            self.sim.course.as_deref().map(oag_race::Course::length),
         );
         // Only a person-flown craft needs the extra hold - see
         // "The lock test is shared; the hold is not" above. A press before the

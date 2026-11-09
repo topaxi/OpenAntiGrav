@@ -27,7 +27,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use log::warn;
+use log::{debug, warn};
 use oag_replay::{Header, Replay};
 
 use crate::records::Key;
@@ -83,41 +83,6 @@ pub fn header(key: &Key, team: &str, seed: u64) -> Header {
     header
 }
 
-/// What else a replay needs to rebuild its race, beyond the key and the seed:
-/// every input to the simulation that is not an [`oag_gameplay::InputSnapshot`].
-///
-/// **The rule ADR-0055 states, applied**: anything that changes the race from
-/// outside `Race::tick` must be recorded here or it will not reproduce. The
-/// control scheme maps the snapshot to controls; the AI difficulty tunes the
-/// opponents and the operator's autopilot; `--give` writes the pickup slot
-/// between ticks. None of them is read back by this build - the file says what
-/// the run was, so a later tool can rebuild it or refuse.
-#[must_use]
-pub fn race_options(
-    scheme: oag_gameplay::ControlScheme,
-    difficulty: oag_ai::Difficulty,
-    autopilot: bool,
-    pilot_assist: oag_physics::pilot_assist::Level,
-    give: Option<oag_tables::weapons::Weapon>,
-) -> std::collections::BTreeMap<String, String> {
-    let mut options = std::collections::BTreeMap::new();
-    options.insert("scheme".to_string(), format!("{scheme:?}").to_lowercase());
-    options.insert("difficulty".to_string(), difficulty.name().to_string());
-    if autopilot {
-        options.insert("autopilot".to_string(), "true".to_string());
-    }
-    // Pilot Assist changes the player's physics, so a replay that does not know it
-    // was on cannot reproduce the run. Absent means off, as every earlier file is;
-    // `true`, which the switch this was wrote, means Extreme.
-    if pilot_assist != oag_physics::pilot_assist::Level::Off {
-        options.insert("pilot_assist".to_string(), pilot_assist.name().to_string());
-    }
-    if let Some(weapon) = give {
-        options.insert("give".to_string(), weapon.as_type().to_string());
-    }
-    options
-}
-
 /// Whether `header` is the ghost for `key`.
 fn matches(header: &Header, key: &Key) -> bool {
     header.title == key.title
@@ -138,8 +103,18 @@ pub fn load_from(path: &Path, key: &Key) -> Option<Replay> {
             return None;
         }
     };
-    let replay = match Replay::from_bytes(&bytes) {
-        Ok(replay) => replay,
+    let replay = match Replay::read(&bytes) {
+        Ok(read) => {
+            if !read.schema_header {
+                // Written before the header existed; nobody edits a machine-written chunk, so
+                // this is not worth a warning. The next write adds the line.
+                debug!(
+                    "ghost {} has no toml-schema header (an older file); loaded as it is",
+                    path.display()
+                );
+            }
+            read.replay
+        }
         Err(e) => {
             warn!("ignoring ghost {}: {e}", path.display());
             return None;
@@ -167,6 +142,24 @@ pub fn load_from(path: &Path, key: &Key) -> Option<Replay> {
 #[must_use]
 pub fn load(key: &Key) -> Option<Replay> {
     load_from(&path_in(&dir()?, key), key)
+}
+
+/// [`load_from`] when `auto_load` is on, `None` without reading the file when it is off:
+/// Pulse's `Auto Load Ghost`. The run is still recorded and a quicker lap still saved;
+/// only the stored lap is not raced.
+#[must_use]
+pub fn auto_load_from(path: &Path, key: &Key, auto_load: bool) -> Option<Replay> {
+    if auto_load {
+        load_from(path, key)
+    } else {
+        None
+    }
+}
+
+/// [`auto_load_from`] under [`dir`].
+#[must_use]
+pub fn auto_load(key: &Key, auto_load: bool) -> Option<Replay> {
+    auto_load_from(&path_in(&dir()?, key), key, auto_load)
 }
 
 /// Writes `replay` as `key`'s ghost at `path` when its lap is quicker than

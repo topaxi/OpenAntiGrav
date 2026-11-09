@@ -71,12 +71,13 @@ in isolated worktrees.
 ## Merging a member
 
 - **Read the diff before merging**: `git diff --stat main...<branch>` and the load-bearing change. A `docs(...)` subject with no doc file in the diff has happened twice, as have findings living only in scratch.
-- **Merge with `--no-ff`** and the project's attribution trailers.
+- **Merge with `just merge-lane <branch> "<message>"`**: `--no-ff`, the message carrying the project's attribution trailers, and `status.md` regenerated and committed if it moved. A lane on another base (`slipstream`) merges from that checkout the same way.
 - **After every merge, before the next**: `cargo check --workspace --all-targets` and `cargo nextest run --workspace` (no disc data, about ten seconds once built). Members gate their branch as it is and do not merge `main` first (maintainer, 2026-10-12); when a merge conflicts, goes red or looks suspicious, send that member back to merge `main`, resolve and re-gate. Two branches that each gated green can conflict semantically (a removed `SpeedClass::from_name` vs a new call to it), and only the merged test run catches it.
 - **Run the gate separately from the merge** (chaining a sub-second merge to a multi-minute gate looks hung; a user aborted a healthy run):
   - any `.rs` logic changed: full `just` plus `OAG_REQUIRE_GAME_DATA=1 just test-data`, **once per merge batch**, and at once after a merge whose `scripts/affected.py` selection is `FULL`;
   - docs/handover only: `just check-docs`, `check-names` if `names.tsv` moved, `check-handover`, `check-captures` if captures moved.
 - **Reap**: `git worktree remove <path> -f -f`, `git branch -d <branch>`, then `TaskStop` the member (its name as `task_id`) and check `ListAgents` (a member left idle stays in the roster; maintainer, 2026-10-12). Only after the work is merged.
+- **A member's report is the final text of its turn**, delivered as its idle notification (`member-rules.md`, "Report"). In the spawn prompt, say "reply with" the path and summary, never "send" or "message" it. A `SendMessage` report plus the turn's closing text arrives twice.
 - **Never reap a worktree whose agent may still resume**: a `completed` notification is not terminal. `ListAgents` cannot tell you (a reaped lane still showed as `pane` an hour later); the member's own report is the ending signal, and `git worktree list` plus `git log --oneline main..<branch>` are ground truth.
 
 ## Who runs which gate

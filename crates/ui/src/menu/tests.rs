@@ -17,6 +17,7 @@ mod jump;
 mod launch;
 mod nav;
 mod navigation;
+mod pause;
 mod pointer;
 mod queries;
 mod relabel;

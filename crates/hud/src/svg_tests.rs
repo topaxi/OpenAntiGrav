@@ -120,6 +120,7 @@ fn a_vector_icon_is_drawn_one_texel_to_one_pixel_on_the_glyphs_centre() {
             small_line_height: 10.0,
             default_line_height: 10.0,
             skin_line_height: 10.0,
+            tag_label: None,
         };
         let Some(Draw::Sprite { rect, uv, .. }) = mod_icon_draw_for_test(&cx, SRC) else {
             panic!("draws at {pixels_per_unit}");

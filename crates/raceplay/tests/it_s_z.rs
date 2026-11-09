@@ -39,10 +39,12 @@ mod start_line_ground_truth;
 mod start_pose_ground_truth;
 #[cfg(feature = "ballisticng")]
 mod survey;
+mod texture_pack_ground_truth;
 mod texture_stream_ground_truth;
 mod track_audio_hd_ground_truth;
 mod track_props_ground_truth;
 mod trackfile_ground_truth;
+mod trail_hits_lent_ground_truth;
 mod transit_ground_truth;
 mod vita_2048_campaign_grid_ground_truth;
 mod vita_2048_countdown_ground_truth;

@@ -51,9 +51,11 @@ mod spatial_route;
 pub mod folders;
 mod listings;
 mod menu_music;
+mod music_line;
 mod now_playing;
 pub mod pool;
 mod pre_race_voice;
+mod song_control;
 pub use now_playing::NowPlaying;
 pub mod probe;
 mod race_music;
@@ -487,6 +489,8 @@ pub struct Audio {
     hd: hd_mix::Hd,
     /// The race song held until the race leaves its countdown. See [`race_song`].
     song_hold: race_song::Hold,
+    /// The race-only music control's position; see [`music_line`].
+    music_line: music_line::Line,
     /// Where `--dump-audio` writes. `None` with a device attached, because
     /// [`Output::render_tick`] refuses to pull samples the hardware callback
     /// is already draining.
@@ -563,6 +567,10 @@ pub struct Audio {
     /// banks did not load; made on the first tick with cues, so a silent source
     /// never allocates one.
     sfx: Option<sfx::SfxVoices>,
+    /// The seconds the race's engines have already been running, for the voices the next
+    /// [`Audio::race_tick`] creates: `0` for a race that is starting, the playhead for a rebuild
+    /// after a seek ([`Audio::rebuild_race_sfx`]).
+    engine_warm_ticks: u64,
     /// What [`Audio::start_race_music`] was last called with, so the
     /// advance-on-finish check in [`Audio::tick`] can fetch the next track
     /// without threading arguments through every caller. `None` outside a race.
@@ -703,6 +711,7 @@ impl Audio {
             route,
             hd: hd_mix::Hd::default(),
             song_hold: race_song::Hold::default(),
+            music_line: music_line::Line::default(),
             dump: dump.map(|path| Dump {
                 path,
                 samples: Vec::new(),
@@ -729,6 +738,7 @@ impl Audio {
             pending_restore: None,
             source_switch: None,
             sfx: None,
+            engine_warm_ticks: 0,
         };
         audio.apply(settings);
         audio
@@ -742,6 +752,7 @@ impl Audio {
     /// sliders reach `Audio_SetSfxFadeTarget`, a separate chain; see
     /// `MUSIC_MASTER_TRIM` for the evidence.
     pub fn apply(&self, settings: &crate::settings::Settings) {
+        self.reset_music_line();
         let spatial = settings.spatial_audio.resolve(self.route.kind());
         // HD sets music and effects from its authored mix every tick, so only
         // the sliders are kept here. See `hd_mix`.
@@ -887,14 +898,11 @@ impl Audio {
         Self::playlist_len(discs, booted)
     }
 
-    /// Stops the race playlist where it stands and resumes the menu voice.
-    ///
-    /// The position is saved to [`Self::race_position`] in the track's seconds
-    /// so the next [`Self::start_race_music`] resumes; [`Self::race_index`] is
-    /// untouched. The menu voice restarts from [`Self::menu_sound`] because
-    /// [`Self::start_music`] is idempotent and would do nothing. Silent when no
-    /// menu sound was ever loaded.
-    pub fn pause_race_music(&mut self) {
+    /// Stops the race playlist where it stands and leaves nothing sounding: a title's own pause
+    /// screen is silent (`docs/ui/photo-mode.md`, "What entering stops"). The position is saved
+    /// as in [`Self::pause_race_music`], so [`Self::start_race_music`] resumes it.
+    pub fn hold_race_music(&mut self) {
+        self.reset_music_line();
         if let Some(id) = self.race_voice.take() {
             self.race_position = self
                 .output
@@ -904,7 +912,17 @@ impl Audio {
         }
         self.race_from = None;
         self.race_context = None;
+    }
 
+    /// Stops the race playlist where it stands and resumes the menu voice.
+    ///
+    /// The position is saved to [`Self::race_position`] in the track's seconds
+    /// so the next [`Self::start_race_music`] resumes; [`Self::race_index`] is
+    /// untouched. The menu voice restarts from [`Self::menu_sound`] because
+    /// [`Self::start_music`] is idempotent and would do nothing. Silent when no
+    /// menu sound was ever loaded.
+    pub fn pause_race_music(&mut self) {
+        self.hold_race_music();
         if let Some(sound) = &self.menu_sound {
             self.music = self
                 .output

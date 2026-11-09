@@ -23,7 +23,7 @@ use crate::stage::Stage;
 use super::Session;
 
 /// Which source the menus' archives were opened from: a changed source or DLC set is another.
-type Key = (String, Vec<PathBuf>);
+pub(super) type Key = (String, Vec<PathBuf>);
 
 /// What the worker hands back.
 pub(crate) struct Opened {
@@ -119,7 +119,7 @@ impl Job {
             anisotropy: self.anisotropy,
         };
         for warm in &self.warm {
-            if oag_game::gpu_workers::stopping() {
+            if oag_thread::gpu_workers::stopping() {
                 return None;
             }
             if let Err(error) = crate::picker_stage::build_preview(
@@ -156,7 +156,7 @@ impl Job {
 
 impl Session {
     /// The source the menus would open now, `None` with no source chosen.
-    fn menu_source_key(&self) -> Option<Key> {
+    pub(super) fn menu_source_key(&self) -> Option<Key> {
         let options = self.race_options.as_ref()?;
         Some((options.source.clone(), options.dlc.clone()))
     }
@@ -197,9 +197,9 @@ impl Session {
                 format: self.gpu.output.config.format,
                 anisotropy: self.anisotropy,
             };
-            let guard = oag_game::gpu_workers::Guard::enter("menu-source");
+            let guard = oag_thread::gpu_workers::Guard::enter("menu-source");
             let task = oag_thread::Task::spawn("menu-source", move || {
-                let _guard = guard;
+                guard.hold_to_thread_end();
                 job.run()
             });
             self.menu_source = MenuSource::Opening(key, task);
@@ -249,6 +249,15 @@ impl Session {
             }
             _ => None,
         }
+    }
+
+    /// [`Self::menu_source`] that never waits: `None` while the worker is still running.
+    pub(super) fn landed_menu_source(&mut self) -> Option<(SharedArchives, oag_game::unlock::Gate)> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if matches!(&self.menu_source, MenuSource::Opening(_, task) if !task.is_finished()) {
+            return None;
+        }
+        self.menu_source()
     }
 
     /// Owned archives for a screen that keeps them, from the worker's spare when the menus'

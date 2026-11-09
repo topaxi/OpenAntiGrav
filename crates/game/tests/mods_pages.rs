@@ -34,7 +34,7 @@ fn folder(tag: &str, names: &[&str]) -> PathBuf {
 }
 
 fn build(dir: &Path) -> mods::Built {
-    Mods::load_from(&[dir.to_path_buf()], &Default::default())
+    Mods::load_from(&[dir.to_path_buf()], &oag_game::settings::Mods::default())
         .unwrap()
         .build(
             BUILT_IN,

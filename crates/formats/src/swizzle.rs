@@ -58,3 +58,70 @@ pub fn unswizzle(src: &[u8], row_bytes: usize, height: usize) -> Vec<u8> {
     }
     dst
 }
+
+/// The GE's 16-byte by 8-row block swizzle: `Texture_SwizzleForGe`, the inverse
+/// of [`unswizzle`].
+///
+/// `row_bytes` is the image's row stride in bytes. A row that is not a whole
+/// number of 16-byte blocks, or a `height` under 8, is left as it is, exactly as
+/// [`unswizzle`] does; rows past the last whole block row are copied through.
+#[must_use]
+pub fn swizzle(src: &[u8], row_bytes: usize, height: usize) -> Vec<u8> {
+    let mut dst = vec![0u8; src.len()];
+    if !row_bytes.is_multiple_of(SWIZZLE_BLOCK_BYTES) || row_bytes == 0 {
+        dst.copy_from_slice(src);
+        return dst;
+    }
+    let mut write = 0;
+    for block_row in 0..height / SWIZZLE_BLOCK_ROWS {
+        for block_col in 0..row_bytes / SWIZZLE_BLOCK_BYTES {
+            for row in 0..SWIZZLE_BLOCK_ROWS {
+                let at = (block_row * SWIZZLE_BLOCK_ROWS + row) * row_bytes
+                    + block_col * SWIZZLE_BLOCK_BYTES;
+                let (Some(chunk), true) = (
+                    src.get(at..at + SWIZZLE_BLOCK_BYTES),
+                    write + SWIZZLE_BLOCK_BYTES <= dst.len(),
+                ) else {
+                    return dst;
+                };
+                dst[write..write + SWIZZLE_BLOCK_BYTES].copy_from_slice(chunk);
+                write += SWIZZLE_BLOCK_BYTES;
+            }
+        }
+    }
+    let done = (height / SWIZZLE_BLOCK_ROWS) * SWIZZLE_BLOCK_ROWS * row_bytes;
+    if done < src.len() {
+        dst[done..].copy_from_slice(&src[done..]);
+    }
+    dst
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn swizzle_inverts_unswizzle() {
+        for (row_bytes, height) in [(16, 8), (32, 16), (64, 24), (48, 20), (8, 8), (128, 4)] {
+            let linear: Vec<u8> = (0..row_bytes * height)
+                .map(|i| (i * 31 % 251) as u8)
+                .collect();
+            let swizzled = swizzle(&linear, row_bytes, height);
+            assert_eq!(unswizzle(&swizzled, row_bytes, height), linear);
+            assert_eq!(
+                swizzle(&unswizzle(&linear, row_bytes, height), row_bytes, height),
+                linear
+            );
+        }
+    }
+
+    #[test]
+    fn a_block_is_eight_rows_of_sixteen_bytes() {
+        let row_bytes = 32;
+        let linear: Vec<u8> = (0..row_bytes * 8).map(|i| i as u8).collect();
+        let swizzled = swizzle(&linear, row_bytes, 8);
+        assert_eq!(&swizzled[..16], &linear[..16]);
+        assert_eq!(&swizzled[16..32], &linear[32..48]);
+        assert_eq!(&swizzled[128..144], &linear[16..32]);
+    }
+}

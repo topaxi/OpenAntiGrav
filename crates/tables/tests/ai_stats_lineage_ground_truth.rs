@@ -88,6 +88,7 @@ fn psarc_path(name: &str) -> String {
 
 /// Asserts each of `archive`'s five files carries Pulse's attributes.
 fn assert_same_as_pulse(label: &str, archive: &mut oag_assets::psarc::Archive) {
+    crate::rumble_ground_truth::census(label, archive);
     let Some(reference) = pulse() else {
         return;
     };

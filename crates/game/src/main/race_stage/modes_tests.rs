@@ -72,14 +72,25 @@ fn mid_tournament_menu_opens_on_next_race() {
     use oag_ui_screens::endrace::MenuOption;
 
     assert_eq!(
-        menu_options(true, true),
+        menu_options(true, true, false),
         [
             MenuOption::NextRace,
             MenuOption::ReturnToGrid,
             MenuOption::ViewResultsAgain
         ]
     );
-    assert_eq!(menu_options(true, false)[0], MenuOption::ReturnToGrid);
+    assert_eq!(menu_options(true, false, false)[0], MenuOption::ReturnToGrid);
+    // WATCH REPLAY follows VIEW RESULTS AGAIN, only when asked for.
+    assert_eq!(
+        menu_options(false, false, true),
+        [
+            MenuOption::ReturnToMenu,
+            MenuOption::RaceAgain,
+            MenuOption::ViewResultsAgain,
+            MenuOption::WatchReplay
+        ]
+    );
+    assert!(!menu_options(false, false, false).contains(&MenuOption::WatchReplay));
 }
 
 /// A board as a leg that ends on the person's finish leaves it: the person (slot 0) has
@@ -93,6 +104,7 @@ fn leg_board(order: [u8; 3]) -> Board {
         best_lap_ticks: None,
         player: slot == 0,
         name: None,
+        points: None,
     };
     Board {
         rows: vec![row(0, 1), row(order[0], 2), row(order[1], 3), row(order[2], 4)],

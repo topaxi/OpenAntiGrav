@@ -319,7 +319,7 @@ Recommended shape, for the maintainer to accept or change:
 5. ~~Omega's patch-1.03 3D audio is unread.~~ Read
    ([audio-3d.md](../../docs/ghidra/functions/ps4-omega-eu/audio-3d.md), "SPATIAL AUDIO against
    the originals"): object-based for VR only, nothing for this table. It did find that HD and
-   2048's `original` is short a measured rear low-pass: [hd-2048-rear-occlusion.md](hd-2048-rear-occlusion.md).
+   2048's `original` is short a measured rear low-pass (HD's is wired): [hd-2048-rear-occlusion.md](hd-2048-rear-occlusion.md).
 6. **Deck cost is measured** (`docs/ghidra/functions/psp-pulse-usa/positional-audio.md`,
    "Cost on a Steam Deck"): a headphone voice is about 41 us per 512 frames (0.38 %
    of a core), 32 voices 8.6 %, a real Pulse race 1.11 % (`original`) against

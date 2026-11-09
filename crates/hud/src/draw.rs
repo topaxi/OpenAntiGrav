@@ -71,7 +71,18 @@ pub(super) fn bar_fraction(name: &str, readout: &Readout, art: &oag_title::HudAr
 /// established is that the crop is *linear* in the value, or that it grows from
 /// the left. A reference frame at a known speed settles both.
 pub(super) fn crop_horizontally(sprite: &Sprite, fraction: f32) -> Sprite {
-    let mut out = sprite.clone();
+    Sprite {
+        name: sprite.name.clone(),
+        src: sprite.src.clone(),
+        ..crop_geometry(sprite, fraction)
+    }
+}
+
+/// [`crop_horizontally`]'s geometry alone: the cropped sprite with an empty `name` and `src`,
+/// so a bar drawn every frame copies no strings. Draw it with [`sprite_draw_from`] and the
+/// whole sprite's `src`.
+pub(super) fn crop_geometry(sprite: &Sprite, fraction: f32) -> Sprite {
+    let mut out = bare(sprite);
     out.rect[2] = sprite.rect[2] * fraction;
     out.uv[2] = sprite.uv[2] * fraction;
     // The grade belongs to the whole bar, so a part-full bar shows the part of
@@ -83,6 +94,21 @@ pub(super) fn crop_horizontally(sprite: &Sprite, fraction: f32) -> Sprite {
         *right = end;
     }
     out
+}
+
+/// `sprite` without its `name` and `src`: a copy that allocates nothing, for a crop drawn with
+/// [`sprite_draw_from`].
+pub(super) fn bare(sprite: &Sprite) -> Sprite {
+    Sprite {
+        name: String::new(),
+        src: String::new(),
+        rect: sprite.rect,
+        uv: sprite.uv,
+        color: sprite.color,
+        rotation: sprite.rotation,
+        gradient: sprite.gradient,
+        centred: sprite.centred,
+    }
 }
 
 /// Crops a sprite vertically to `fraction` of its height, anchored at the
@@ -200,7 +226,8 @@ pub(super) fn text_for(
         // prerequisite the per-lap history needed - so this is `None` outright
         // rather than a half-wired gate, until that exists.
         "PickupDamageTxt" | "PickupAbsorbTxt" | "PickupDamage" | "PickupAbsorb" => None,
-        // **Drawn nothing.** `HUD_positions.xml`'s `PositionTxt2` is the
+        // **Drawn nothing but a score Eliminator's `TARGET` header**, which the
+        // executable writes into it. `HUD_positions.xml`'s `PositionTxt2` is the
         // second of two widgets sharing `idstring="IG_HUD_POS"` - the first,
         // `PositionTxt`, is this module's own `"PositionTxt"` arm below,
         // gated on `place_shown`. `PositionTxt2` sits inside the `PosTag0`-`7`
@@ -211,7 +238,7 @@ pub(super) fn text_for(
         // through to the catch-all drew this one anyway, since text is not
         // gated by `ALWAYS_ON` the way sprites are: a second `POS` label with
         // nothing under it, floating beside the real one.
-        "PositionTxt2" => None,
+        "PositionTxt2" => super::kill_tags::target_header(readout, strings),
         // **2048's `XP` row is up only while an `SP.xml` event is being raced.**
         // `Hud_BindWidgets` (`0x81192cd0`) sets `hud+4` to the current event
         // (`DAT_81965b58`, which only the campaign's event card writes) and shows
@@ -231,8 +258,20 @@ pub(super) fn text_for(
         "ObjectiveTxt" => None,
         // The Eliminator's kill column - `PosTag0` to `PosTag7`. See
         // [`super::kill_tags`].
+        "ShipsInFront" => readout
+            .race_line
+            .as_ref()
+            .map(|line| line.in_front().to_string()),
+        "ShipsBehind" => readout
+            .race_line
+            .as_ref()
+            .map(|line| line.behind().to_string()),
         "KillsText" => super::kill_tags::header(readout, label, strings),
         name if name.starts_with("PosTag") => super::kill_tags::text(readout, name, strings),
+        name if name.starts_with("PlaceString") => label
+            .string
+            .clone()
+            .filter(|_| super::kill_tags::rank_shown(readout, name)),
         "Lap" => (readout.lap > 0).then(|| readout.lap.to_string()),
         "Lap Outof" => (readout.laps > 0).then(|| readout.laps.to_string()),
         // 2048's own name and own shape: one widget for the whole `1/3`
@@ -679,6 +718,10 @@ pub struct Context<'a> {
     /// 57 of the 84 HUD-font widgets are in that position, and the original draws
     /// an outline on them regardless - see [`BORDER_CONSTANT`].
     pub default_border: [f32; 4],
+    /// The `PlrTag` label of the title's `MPTag_HUD.xml`, which gives the multiplayer tags
+    /// their face, scale and alignment; `None` where the layout did not load or the title has
+    /// none. See [`crate::player_tags`].
+    pub tag_label: Option<&'a Label>,
 }
 
 /// One frame's worth of HUD, split by which pass draws it.
@@ -794,27 +837,42 @@ pub(super) fn top_edge(label: &Label, line_height: f32) -> f32 {
 /// too faint to see at that exposure, this rule is what to revisit.
 #[must_use]
 pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
+    list(cx, readout, Sight::Drawn)
+}
+
+/// [`draw_list`] without the lock-on reticle, for a caller that places the reticle itself
+/// (a split view's, which goes where that view's own sight is): the same frame as
+/// [`draw_list`] given the readout with `sight` taken out, without copying the readout.
+#[must_use]
+pub fn draw_list_without_sight(cx: &Context<'_>, readout: &Readout) -> Frame {
+    list(cx, readout, Sight::Left)
+}
+
+/// Whether [`list`] draws the readout's lock-on reticle.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Sight {
+    Drawn,
+    Left,
+}
+
+fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
     // The kill column is Pulse's alone - see [`oag_title::HudArt::kill_column`] -
     // and so are the message lines, [`oag_title::HudArt::message_slots`].
     let ungated;
-    let readout = if (cx.art.kill_column
-        || (readout.kill_tags.is_empty() && readout.kill_target == 0))
+    let kill_column = cx.art.kill_column || readout.score_rows;
+    let readout = if (kill_column || (readout.kill_tags.is_empty() && readout.kill_target == 0))
         && (cx.art.message_slots
             || (readout.messages.iter().all(Option::is_none) && readout.time_gap.is_none()))
     {
         readout
     } else {
         ungated = Readout {
-            kill_tags: if cx.art.kill_column {
+            kill_tags: if kill_column {
                 readout.kill_tags.clone()
             } else {
                 Vec::new()
             },
-            kill_target: if cx.art.kill_column {
-                readout.kill_target
-            } else {
-                0
-            },
+            kill_target: if kill_column { readout.kill_target } else { 0 },
             messages: if cx.art.message_slots {
                 readout.messages.clone()
             } else {
@@ -882,27 +940,29 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                 let extra = super::ext_draws::bar_extra(&readout.ext, &sprite.name);
                 // A tipped bar's cropped fill ends in the art's pointed tip, so the added
                 // share is split off that fill whole.
-                let (whole, share) = if tipped {
-                    (super::bar_tip::crop(sprite, fraction), 1.0)
-                } else {
-                    (sprite.clone(), fraction)
-                };
+                // The fill is cropped without its strings and drawn from the widget's own
+                // `src`; only a bar with an added share splits a whole copy.
                 let mut cropped = if let Some(extra) = extra {
-                    let (base, tail) = super::ext_draws::split_bar(&whole, share, extra);
+                    let (base, tail) = if tipped {
+                        let whole = super::bar_tip::crop(sprite, fraction);
+                        super::ext_draws::split_bar(&whole, 1.0, extra)
+                    } else {
+                        super::ext_draws::split_bar(sprite, fraction, extra)
+                    };
                     added = tail.and_then(|tail| sprite_draw(&tail, cx.sheet));
                     base
                 } else if tipped {
-                    whole
+                    super::bar_tip::crop_geometry(sprite, fraction)
                 } else {
-                    crop_horizontally(sprite, fraction)
+                    crop_geometry(sprite, fraction)
                 };
                 // `ShieldBar` alone: confirmed against the digits this
                 // function formats, `"%"` and not `"kmh"`. See
                 // `shield_bar::tint` for the three rules it applies.
                 if sprite.name == "ShieldBar" {
-                    flash = super::shield_bar::tint(&mut cropped, readout, cx.sheet);
+                    flash = super::shield_bar::tint(&mut cropped, &sprite.src, readout, cx.sheet);
                 }
-                sprite_draw(&cropped, cx.sheet)
+                sprite_draw_from(&sprite.src, &cropped, cx.sheet)
             }
             // `EnergyBar`/`EnergyBarDelay`, 2048 only - see
             // `dialect_2048::vertical_bar_fraction`. Both crop without
@@ -949,6 +1009,20 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             .map(|draw| lit_draw(cx, draw)),
     );
     frame.sprites.extend(super::assist::sprites(cx, readout));
+    frame.sprites.extend(
+        super::score_rows::sprites(cx.layout, readout)
+            .iter()
+            .filter_map(|sprite| sprite_draw(sprite, cx.sheet))
+            .map(|draw| lit_draw(cx, draw)),
+    );
+    if let Some(line) = &readout.race_line {
+        frame.sprites.extend(
+            super::race_line::sprites(cx.layout, line)
+                .iter()
+                .filter_map(|sprite| sprite_draw(sprite, cx.sheet))
+                .map(|draw| lit_draw(cx, draw)),
+        );
+    }
 
     // A title that draws its gauge as models (Pure) puts it where the always-on bars would be.
     frame
@@ -958,7 +1032,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     // The lock-on reticle, over the bars and under the text - it is the only
     // HUD sprite anchored on the *world* rather than on the screen, so it moves
     // across everything else and must not be under it.
-    if let Some(sight) = &readout.sight {
+    if let Some(sight) = readout.sight.as_ref().filter(|_| sight == Sight::Drawn) {
         frame
             .sprites
             .extend(super::sight_draw::sight_draws(cx, sight));
@@ -981,6 +1055,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             &readout.ext,
             cx.art,
             readout.pickup_announcing,
+            readout.pickup_fly,
             look,
         ) {
             frame
@@ -1136,7 +1211,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             border: Some(super::messages::fade_border(
                 readout,
                 &label.name,
-                label.border.unwrap_or(cx.default_border),
+                outline_colour(cx, label.border.unwrap_or(cx.default_border)),
             )),
             align: label.align,
             text,
@@ -1162,6 +1237,15 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     super::sway::slide(&mut frame, super::sway::offset(cx.art, readout));
     super::boost_smear::smear(&mut frame, cx.art, cx.layout, readout, &stamped);
     frame
+}
+
+/// `border` with its alpha replaced by [`oag_title::HudArt::text_outline_alpha`] where the title
+/// has one.
+pub(super) fn outline_colour(cx: &Context<'_>, mut border: [f32; 4]) -> [f32; 4] {
+    if let Some(outline) = cx.art.text_outline_alpha {
+        border[3] = outline.value.alpha();
+    }
+    border
 }
 
 /// `color` with its alpha taken through [`oag_title::HudArt::lit_alpha`]: the original's lit HUD
@@ -1249,7 +1333,17 @@ pub(super) fn lap_one_dx(cx: &Context<'_>, readout: &Readout, name: &str) -> f32
 /// [`super::Layout`] has already converted to a top-left corner, still turns
 /// about the position the layout authored. See [`Sprite::rotation`].
 pub fn sprite_draw(sprite: &Sprite, sheet: &crate::sprite::Sheet) -> Option<Draw> {
-    let placed = sheet.get(&sprite.src)?;
+    sprite_draw_from(&sprite.src, sprite, sheet)
+}
+
+/// [`sprite_draw`] with the sheet entry named by `src` rather than by `sprite.src`: how a
+/// sprite cropped without its strings ([`crop_geometry`]) is drawn from its widget's own.
+pub(super) fn sprite_draw_from(
+    src: &str,
+    sprite: &Sprite,
+    sheet: &crate::sprite::Sheet,
+) -> Option<Draw> {
+    let placed = sheet.get(src)?;
     // The texture is packed into a shared sheet, so its own pixel coordinates
     // are offset by wherever the packer put it. The width and height are *not*
     // offset, and may be negative: 26 of HD's sprites author a negative

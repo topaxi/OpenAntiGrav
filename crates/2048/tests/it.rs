@@ -10,6 +10,7 @@
 //! `every_test_file_is_listed` below fails until it is.
 
 mod campaign_ground_truth;
+mod loading_ground_truth;
 mod patch_ground_truth;
 mod vpk_ground_truth;
 

@@ -354,7 +354,10 @@ pub(super) fn load_hud(
         report,
     );
 
+    let tag_label = load_tag_label(archives, hud, views.people, report);
+
     let mut assets = oag_hud::Assets {
+        tag_label,
         layout,
         sheet,
         font,
@@ -379,6 +382,32 @@ pub(super) fn load_hud(
     // again (`oag_hud::Assets::rasterise_vector_icons`).
     assets.rasterise_vector_icons(1.0, report);
     assets
+}
+
+/// `PlrTag0` of the title's player-tag layout, for a race with more than one person. The eight
+/// labels share a face, so the first stands for them. Reported when the layout is named and does
+/// not read, in which case no tag draws.
+fn load_tag_label(
+    archives: &mut oag_assets::Archives,
+    hud: &oag_title::HudLayouts,
+    people: usize,
+    report: &mut Vec<String>,
+) -> Option<oag_hud::Label> {
+    let entry = hud.player_tags.filter(|_| people > 1)?;
+    let composed = oag_hud::compose(entry, |path| archives.read_name(path).ok());
+    let label = composed.and_then(|composed| {
+        composed
+            .layout
+            .labels
+            .into_iter()
+            .find(|label| label.name == "PlrTag0")
+    });
+    if label.is_none() {
+        report.push(format!(
+            "HUD {entry}: no PlrTag0; multiplayer tags draw nothing"
+        ));
+    }
+    label
 }
 
 /// This project's split-screen layout file for a race of `views` views, cut for

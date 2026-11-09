@@ -18,6 +18,7 @@ data/
   cache/        Assets converted from your originals, rebuilt on demand
   dlc/          PSN DLC packages, as downloaded - see below
   keys/         zRIF strings and F00D cache for Vita PFS decryption - see below
+  texture-packs/ PPSSPP texture packs (`just fetch-texture-packs`), one git checkout each - see docs/tools/texture-packs.md
   ghidra/       Ghidra project directory (shared analysis, not versioned)
   tools/        Built third-party tooling, e.g. the Allegrex Ghidra extension
   traces/       Runtime traces captured from PPSSPP / PCSX2
@@ -72,6 +73,7 @@ The tooling looks for these names **first**; any other `.chd`, `.iso` or `.vpk` 
 | `pure-psp-usa.chd` | Wipeout Pure | PSP | USA |
 | `hdfury-ps3-eu.iso` | WipEout HD / Fury | PS3 | Europe |
 | `data/extracted/ps3/hd-psn-eu/` | WipEout HD (no Fury) | PS3 | Europe (`NPEA00057`, v3.00), the **installed** PSN download folder (not an image) |
+| `data/extracted/ps3-update-chain/<serial>/` | HD update chains | PS3 | `BCES00664`, `NPEA00057`: `installed/` and one folder per package, written by `scripts/install-hd-updates.sh` for the chain's ground-truth tests. Outside the search path; [hd-updates.md](../docs/formats/hd-updates.md) |
 | `2048-vita-eu.pkg` | WipEout 2048 | Vita | Europe (`PCSF00007`) |
 | `2048-vita-usa.pkg` | WipEout 2048 | Vita | USA (`PCSA00015`) |
 | `omega-ps4-eu.pkg` | WipEout: Omega Collection | PS4 | Europe (`CUSA05670`), base v1.00 |

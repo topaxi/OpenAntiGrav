@@ -52,7 +52,8 @@ count) is in the executable and was **not read**.
    (`5TH PLACE`, or what the mode says), laps, the speedup-pad column (the second person's is
    blank: the race keeps the tally for the first craft alone) and a highlighted totals row.
    **Pulse with another count** keeps the multiplayer table above, every craft in place
-   order, each person named `PLAYER 1`, `PLAYER 2` by the seat they flew, each person's row
+   order, each person named `PLAYER 1`, `PLAYER 2` by the seat they flew (seat 1 by the stored player name
+   when one is set, `docs/ui/player-name.md`, "Where the name goes in a race"), each person's row
    highlighted, a craft still racing reading `RACING`. On HD the field grid with the same
    names in the column the original fills with a name, and each person's row highlighted; no
    single place is the headline. Pure and a source with no `EndRace_Definition.xml` keep the

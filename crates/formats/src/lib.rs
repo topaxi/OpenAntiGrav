@@ -24,8 +24,8 @@
 //! keeping its evidence page under `docs/formats/`.
 //!
 //! Every *Wipeout* format here is hand-rolled, as is the MD5 [`psarc`] checks
-//! its directory with. The one third-party dependency is `miniz_oxide`, for
-//! [`psarc`]'s deflate blocks: a published standard whose failure mode is silent
+//! its directory with. The one third-party dependency is `flate2`, for
+//! [`psarc`]'s and [`wad`]'s deflate blocks: a published standard whose failure mode is silent
 //! garbage. This crate has no features, so it is the only one in every
 //! combination.
 

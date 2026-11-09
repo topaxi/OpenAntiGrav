@@ -559,6 +559,10 @@ fn with_served_gaps(
 pub struct RaceSetup {
     /// The `Eliminations` list (`5`, `10`, `15`, `20`, `25` on Pulse).
     pub kill_targets: Vec<String>,
+    /// The `TARGET` row's values on a title whose Eliminator ends on a score: the
+    /// `Eliminations` slider's steps (`200` to `600` by `20` on HD), read off the file the
+    /// score rule names ([`oag_title::eliminator::ScoreRule::race_setup`]). Empty elsewhere.
+    pub score_targets: Vec<String>,
     /// The `Weapons` list as `(string id, value)`: `("FE_ON", "On")` then
     /// `("FE_OFF", "Off")` on Pulse. The value is what the original's
     /// `Race_ReadSetupOptions` compares against `"On"`; the string id is the
@@ -586,10 +590,45 @@ impl RaceSetup {
 /// off [`oag_title::FrontEnd::race_setup`], read only where the title names its file.
 pub(super) fn read_race_setup(
     archives: &mut oag_assets::Archives,
+    title: &oag_title::Title,
     front_end: &oag_title::FrontEnd,
     report: &mut Vec<String>,
 ) -> RaceSetup {
-    read_setup_lists(archives, front_end.race_setup, report)
+    let mut setup = read_setup_lists(archives, front_end.race_setup, report);
+    if let oag_title::eliminator::EliminatorRule::Score(rule) = title.eliminator.value {
+        setup.score_targets = read_score_targets(archives, rule.race_setup, report);
+    }
+    setup
+}
+
+/// The steps of the `Eliminations` slider in `name`: HD's `TARGET` row. Empty, and reported, when
+/// the file will not read or authors no such slider, which leaves the row unusable rather than
+/// offering numbers nothing authored.
+fn read_score_targets(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    report: &mut Vec<String>,
+) -> Vec<String> {
+    let xml = archives
+        .read_name(name)
+        .map_err(anyhow::Error::from)
+        .and_then(|blob| {
+            fexml::text(&blob).map_err(|e| anyhow::anyhow!("reading the front-end XML: {e}"))
+        });
+    let slider = match xml {
+        Ok(xml) => oag_tables::race_setup::slider(&xml, "Eliminations"),
+        Err(error) => {
+            report.push(format!("{name}: {error:#} - no TARGET row values"));
+            return Vec::new();
+        }
+    };
+    let Some(slider) = slider else {
+        report.push(format!(
+            "{name}: no Eliminations slider - no TARGET row values"
+        ));
+        return Vec::new();
+    };
+    slider.values().iter().map(u32::to_string).collect()
 }
 
 /// The `KILLS` and `WEAPONS` lists off `name`.
@@ -613,6 +652,7 @@ fn read_setup_lists(
                 .into_iter()
                 .map(|(string, _)| string)
                 .collect(),
+            score_targets: Vec::new(),
             weapons: list_entries(&xml, "Weapons")
                 .into_iter()
                 .filter_map(|(string, value)| Some((string, value?)))
@@ -743,4 +783,98 @@ mod race_setup_tests {
         assert_eq!(ids("NumberOfPlayers"), ["1", "2"]);
         assert_eq!(ids("SplitScreen"), ["RB_HORIZ", "RB_VERT"]);
     }
+}
+
+/// The pause screens of a title that draws them from its definition file, and the words they
+/// use: the served string table with what it lacks filled in from the archive that has it
+/// (`FE_GHOST` is in `DATA06`'s English table and in none of the base game's).
+#[derive(Debug, Clone, Default)]
+pub struct PauseScreens {
+    /// One per screen [`oag_title::PauseMenu::screens`] names that read.
+    pub screens: Vec<oag_ui_screens::pause::PauseScreen>,
+    /// The words for the rows and the chrome.
+    pub strings: StringTable,
+}
+
+/// The title's pause screens off its definition file: every screen of
+/// [`oag_title::PauseMenu::screens`] with the chrome screen behind it, laid out as the disc
+/// authors them. Empty for a title that names no layout, and for one whose file will not read
+/// (said in `report`, and the page is then the front end's own list).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each is read from a different place in `load_shell`"
+)]
+pub(super) fn read_pause_screens(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    globals: &std::collections::HashMap<String, String>,
+    served: &StringTable,
+    entries: Option<&str>,
+    faces: oag_ui_screens::picker::FaceScales,
+    space: oag_display::space::Space,
+    report: &mut Vec<String>,
+) -> PauseScreens {
+    let Some((table, layout)) = title
+        .pause_menu
+        .and_then(|table| table.layout.map(|layout| (table, layout)))
+    else {
+        return PauseScreens::default();
+    };
+    let xml = match archives
+        .read_name(layout.definition)
+        .map_err(|e| e.to_string())
+        .and_then(|blob| oag_ui::xml::expand(&blob).map_err(|e| format!("{e:#}")))
+    {
+        Ok(xml) => xml,
+        Err(error) => {
+            report.push(format!(
+                "{}: {error} - the pause page is the front end's list",
+                layout.definition
+            ));
+            return PauseScreens::default();
+        }
+    };
+    let gaps: Vec<&str> = xml
+        .split("idstring=\"")
+        .skip(1)
+        .filter_map(|rest| rest.split('"').next())
+        .filter(|id| served.get(id).is_none())
+        .collect();
+    let mut strings = served.clone();
+    if let Some(entries) = entries {
+        strings.merge(crate::campaign::hd_data06_strings(archives, entries, &gaps));
+    }
+    let fallback: Vec<(&str, &str)> = globals
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let parsed = Screens::from_xml_with_fallback_globals(&xml, &fallback);
+    let grid = [space.size.0, space.size.1];
+    let screens: Vec<_> = table
+        .screens
+        .iter()
+        .filter_map(|screen| {
+            let read = oag_ui_screens::pause::PauseScreen::read(
+                &parsed,
+                screen.name,
+                layout.chrome,
+                &strings,
+                faces,
+                grid,
+            );
+            if read.is_none() {
+                report.push(format!(
+                    "{}: no screen {:?} or {:?}",
+                    layout.definition, screen.name, layout.chrome
+                ));
+            }
+            read
+        })
+        .collect();
+    report.push(format!(
+        "pause screens: {} of {} read",
+        screens.len(),
+        table.screens.len()
+    ));
+    PauseScreens { screens, strings }
 }

@@ -93,7 +93,7 @@ fn a_boolean_vsync_still_loads_and_is_rewritten_as_a_name() {
 }
 
 /// Parses `text` the way [`load`] does, migration included.
-fn read(text: &str) -> Settings {
+pub(super) fn read(text: &str) -> Settings {
     let mut table: toml::Table = text.parse().expect("parse");
     migrate(&mut table);
     migrate_render_profiles(&mut table);
@@ -254,6 +254,9 @@ fn a_display_key_that_is_not_a_table_leaves_the_file_untouched() {
 fn every_menu_seed_names_a_key_the_settings_file_has() {
     let mut settings = Settings::default();
     ensure_known_titles(&mut settings);
+    // An unset `hud_safe_area` is not written (the title's own default), so the key is looked
+    // for in a file that has one saved, as `language` is only present once picked.
+    settings.graphics.hud_safe_area = Some(100);
     let written = toml::to_string_pretty(&settings).expect("serialise");
     let table: toml::Table = written.parse().expect("parse");
 
@@ -359,6 +362,29 @@ motion_blur = \"medium\"
 /// row get back each their *own* stored value, not one shared or averaged
 /// answer - proven at the boundary `menu_seeds` resolves through, without
 /// needing a live `Session`.
+#[test]
+fn the_rumble_row_opens_on_ps4_and_follows_the_setting() {
+    let seed = |settings: &Settings| {
+        menu_seeds(
+            settings,
+            Anisotropy::default(),
+            oag_hd::TITLE,
+            oag_disc::Platform::Psp,
+        )
+        .into_iter()
+        .find(|(setting, _)| *setting == "controls.rumble")
+        .map(|(_, value)| value)
+    };
+    let (ps4, none) = (
+        oag_ui::menu::Value::Text("ps4".to_string()),
+        oag_ui::menu::Value::Text("none".to_string()),
+    );
+    let mut settings = Settings::default();
+    assert_eq!(seed(&settings), Some(ps4), "the newest law by default");
+    settings.controls.rumble = "none".to_string();
+    assert_eq!(seed(&settings), Some(none));
+}
+
 #[test]
 fn menu_seeds_resolves_the_render_profile_by_title() {
     let mut settings = Settings::default();
@@ -612,6 +638,21 @@ msaa = \"4x\"
         oag_display::display::Reconstruction::Fsr3
     );
     assert_eq!(profile.msaa, oag_display::display::Msaa::X4);
+}
+
+/// MSAA is an opt-in on every title: it costs 27 % of HD's race pass on the Steam Deck at
+/// 1080p (`docs/rendering/hires-gpu-levers.md`). A file that says `4x` keeps it (above).
+#[test]
+fn a_fresh_profile_has_msaa_off_on_every_title() {
+    let settings = read("");
+    for (title, platform) in known_profiles() {
+        let key = profile_key(title, platform);
+        assert_eq!(
+            settings.render_profiles[&key].msaa,
+            oag_display::display::Msaa::Off,
+            "{key}"
+        );
+    }
 }
 
 /// `Bindings`'s own tests prove it round-trips through a `BTreeMap`; this is
@@ -1319,7 +1360,7 @@ fn the_reset_prompt_is_offered_only_off_default() {
         oag_disc::Platform::Ps4,
         &strings,
     );
-    assert_eq!(menu.reset_glyph(), None, "Omega's glyphs are unread");
+    assert_eq!(menu.reset_glyph(), Some('δ'), "Omega's Square stand-in");
 }
 
 /// The footer's reset prompt, as `MenuStage` and `--menu-page` ask for it: nothing while the
@@ -1377,109 +1418,4 @@ fn the_reset_prompt_sits_on_confirms_row_and_only_off_default() {
         );
     }
     assert!(rect[0] >= 0.0 && rect[0] + rect[2] <= 480.0, "{rect:?}");
-}
-
-#[test]
-fn the_player_switch_beats_the_manifest_default_and_both_sets_round_trip() {
-    let mut mods = read("[mods]\nenabled = [\"a.on\"]\ndisabled = [\"a.off\"]\n").mods;
-    assert!(
-        mods.is_enabled("a.on", false),
-        "turned on against a default-off"
-    );
-    assert!(
-        !mods.is_enabled("a.off", true),
-        "turned off against a default-on"
-    );
-    assert!(
-        !mods.is_enabled("a.new", false),
-        "no switch: the manifest default"
-    );
-    assert!(mods.is_enabled("a.new", true));
-    assert!(mods.switch("a.new", false, true));
-    assert!(!mods.switch("a.new", false, true), "already on");
-    assert!(mods.enabled.contains("a.new"));
-    assert!(mods.switch("a.new", false, false));
-    assert!(!mods.enabled.contains("a.new") && !mods.disabled.contains("a.new"));
-    let settings = Settings { mods, ..fresh() };
-    let written = toml::to_string_pretty(&settings).expect("serialise");
-    assert_eq!(read(&written).mods, settings.mods, "{written}");
-}
-
-#[test]
-fn the_mods_turned_off_round_trip_and_a_fresh_file_turns_none_off() {
-    assert!(
-        fresh().mods.disabled.is_empty(),
-        "a mod installed later is on"
-    );
-    let settings = read("[mods]\ndisabled = [\"oag.hillside\", \"a.b\"]\n");
-    let ids: Vec<&str> = settings.mods.disabled.iter().map(String::as_str).collect();
-    assert_eq!(
-        ids,
-        ["a.b", "oag.hillside"],
-        "kept sorted, for a stable rewrite"
-    );
-    let written = toml::to_string_pretty(&settings).expect("serialise");
-    assert_eq!(read(&written).mods, settings.mods, "{written}");
-    assert!(
-        read("").mods.disabled.is_empty(),
-        "an old file without [mods]"
-    );
-}
-
-#[test]
-fn a_mods_saved_picks_round_trip_and_survive_the_mod_being_turned_off() {
-    use super::mod_settings;
-    let mut settings = fresh();
-    assert!(settings.mod_settings.is_empty());
-    assert!(
-        !toml::to_string_pretty(&settings)
-            .expect("serialise")
-            .contains("mod_settings")
-    );
-
-    assert!(mod_settings::set(
-        &mut settings.mod_settings,
-        "mod.oag.example.track",
-        "Vostok"
-    ));
-    assert!(mod_settings::set(
-        &mut settings.mod_settings,
-        "mod.oag.example.team",
-        "Feisar"
-    ));
-    assert!(!mod_settings::set(
-        &mut settings.mod_settings,
-        "race.track",
-        "x"
-    ));
-    assert!(!mod_settings::set(
-        &mut settings.mod_settings,
-        "mod.nokey",
-        "x"
-    ));
-
-    let written = toml::to_string_pretty(&settings).expect("serialise");
-    assert!(
-        written.contains("[mod_settings.\"oag.example\"]"),
-        "{written}"
-    );
-    let back = read(&written);
-    assert_eq!(back.mod_settings["oag.example"]["track"], "Vostok");
-    assert_eq!(back.mod_settings, settings.mod_settings);
-
-    let mut off = back;
-    off.mods.disabled.insert("oag.example".into());
-    let again = read(&toml::to_string_pretty(&off).expect("serialise"));
-    assert!(again.mods.disabled.contains("oag.example"));
-    assert_eq!(
-        again.mod_settings["oag.example"]["team"], "Feisar",
-        "kept while off"
-    );
-    let mut on = again;
-    on.mods.disabled.clear();
-    let seeds = mod_settings::seeds(&on.mod_settings);
-    assert!(
-        seeds.iter().any(|(k, v)| k == "mod.oag.example.track"
-            && *v == oag_ui::menu::Value::Text("Vostok".into()))
-    );
 }

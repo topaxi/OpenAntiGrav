@@ -267,9 +267,16 @@ impl Frontend {
                 NATIVE_TEAMS[team], SHIP_TYPES[craft]
             ));
         }
-        if input.is_pressed(Button::Circle) {
-            input.consume_press(Button::Circle);
-            self.redirect_touch(w2048::TEAM, "select_button", "PreviousScreen");
+        // Cross and Start press the confirm tick, which the file authors as
+        // `PreviousScreen` like Circle; chosen, the original's tick is touch only.
+        for button in [Button::Circle, Button::Cross, Button::Start] {
+            if input.is_pressed(button) {
+                input.consume_press(Button::Circle);
+                input.consume_press(Button::Cross);
+                input.consume_press(Button::Start);
+                self.redirect_touch(w2048::TEAM, "select_button", "PreviousScreen");
+                break;
+            }
         }
     }
 

@@ -261,6 +261,33 @@ fn the_boost_zoom_row_is_dropped_where_the_ring_cannot_be_borrowed() {
     }
 }
 
+/// The TRAIL HITS row is offered where the original never shows the trail-hit burst - Pulse and
+/// Pure, which author none, and 2048 and Omega, which author it but never fire it - and absent on
+/// HD, which plays it whatever the row holds.
+#[test]
+fn the_trail_hits_row_is_dropped_only_where_the_original_plays_the_burst() {
+    let rows = |definition: &Definition| {
+        definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter(|entry| entry.setting() == Some("graphics.trail_hits"))
+            .count()
+    };
+    for (title, offered) in [
+        (oag_pulse::TITLE, 1),
+        (oag_pure::TITLE, 1),
+        (oag_hd::TITLE, 0),
+        (oag_omega::TITLE, 1),
+        (oag_2048::TITLE, 1),
+    ] {
+        let mut definition = built_in();
+        assert_eq!(rows(&definition), 1, "the definition ships the row");
+        definition.drop_unavailable_trail_hits(title);
+        assert_eq!(rows(&definition), offered, "{}", title.name);
+    }
+}
+
 /// The TRAIL ORDER row is offered where the ribbon is the PSP preset (Pulse, Pure)
 /// and dropped where it is not (HD, Omega, 2048), and it offers every order.
 #[test]
@@ -310,6 +337,50 @@ fn the_weather_row_is_offered_only_where_the_weather_is_played() {
         assert_eq!(rows(&definition), 1, "the definition ships the row");
         definition.drop_unavailable_weather(title);
         assert_eq!(rows(&definition), offered, "{}", title.name);
+    }
+}
+
+/// The RUMBLE row offers `original` only where the original plays patterns (HD and
+/// Omega), and every other value everywhere. Its values are `oag_input::rumble::Mode`.
+#[test]
+fn the_rumble_row_offers_original_only_where_the_original_plays_patterns() {
+    let values = |definition: &Definition| -> Vec<String> {
+        let mut found = Vec::new();
+        for entry in definition.pages.iter().flat_map(|page| page.entries.iter()) {
+            if let oag_ui::menu::Entry::Choice {
+                setting, values, ..
+            } = entry
+                && setting == "controls.rumble"
+            {
+                found.extend(values.iter().map(|choice| choice.value.clone()));
+            }
+        }
+        found
+    };
+    let every: Vec<String> = oag_input::rumble::Mode::ALL
+        .iter()
+        .map(|mode| mode.name().to_string())
+        .collect();
+    let without: Vec<String> = every
+        .iter()
+        .filter(|name| *name != "original")
+        .cloned()
+        .collect();
+    for (title, offered) in [
+        (oag_pulse::TITLE, &without),
+        (oag_pure::TITLE, &without),
+        (oag_hd::TITLE, &every),
+        (oag_omega::TITLE, &every),
+        (oag_2048::TITLE, &without),
+    ] {
+        let mut definition = built_in();
+        assert_eq!(
+            values(&definition),
+            every,
+            "the definition ships every value"
+        );
+        definition.drop_unavailable_rumble_original(title);
+        assert_eq!(&values(&definition), offered, "{}", title.name);
     }
 }
 
@@ -918,12 +989,15 @@ fn every_settings_row_is_one_the_game_seeds() {
                 continue;
             };
             // The web's own rows are dropped on a desktop and seeded only there.
+            // The REPLAYS page's REPLAY row only says which file the rows under it are about;
+            // the files are listed each time the menus open (`Session::replay_choices`).
             // The MODS page's MOD row only says which mod the rows under it are about, and
             // its ENABLED row is seeded from `[mods] disabled` for that mod
             // (`oag_game::mods::resupply_switch`), not from a key of its own.
             if PILOT_EDITOR_ROWS.contains(&setting)
                 || setting == oag_game::mods::SELECTED
                 || setting == oag_game::mods::ENABLED
+                || setting == oag_game::replays::page::SELECTED
                 || setting == oag_game::music_pool::TEMPLATE
                 || oag_game::settings::web::WEB_ONLY_ROWS.contains(&setting)
             {
@@ -1062,10 +1136,22 @@ fn the_rows_the_selection_screens_pick_are_dropped_on_a_title_that_has_them() {
             "{gone} stays on Pure, which reads no such list"
         );
     }
+    // The TARGET row is the score Eliminator's: Pulse and Pure end on kills.
+    for kills in [&pulse, &pure] {
+        assert!(!settings_on_race(kills).contains(&"race.score_target".to_string()));
+    }
 
     let mut hd = built_in();
     hd.drop_rows_picked_on_screen(oag_hd::TITLE);
     let kept = settings_on_race(&hd);
+    assert!(
+        kept.contains(&"race.score_target".to_string()),
+        "TARGET stays on HD: {kept:?}"
+    );
+    assert!(
+        !kept.contains(&"race.kill_target".to_string()),
+        "KILLS goes on HD, whose Eliminations is a slider: {kept:?}"
+    );
     for gone in ["race.team", "race.track", "race.variant"] {
         assert!(
             !kept.contains(&gone.to_string()),
@@ -1193,4 +1279,43 @@ fn zone_leaves_the_team_rows_live_and_greys_the_variant_rows() {
         .disabled_by()
         .expect("VARIANT has a condition");
     assert!(condition.values.contains(&zone), "VARIANT greys in Zone");
+}
+
+/// The GHOST SHIPS VISIBLE, AUTO LOAD GHOST and MULTIPLAYER TAGS rows are offered where the title's own options
+/// list them (Pulse) and dropped on every other title, which behaves as the rows' default.
+#[test]
+fn the_ghost_rows_are_offered_only_where_the_options_list_them() {
+    let rows = |definition: &Definition| {
+        let count = |setting: &str| {
+            definition
+                .pages
+                .iter()
+                .flat_map(|page| page.entries.iter())
+                .filter(|entry| entry.setting() == Some(setting))
+                .count()
+        };
+        (
+            count("display.ghost_ship_visible"),
+            count("display.auto_load_ghost"),
+            count("display.multiplayer_tags"),
+        )
+    };
+    for (title, offered) in [
+        (oag_pulse::TITLE, (1, 1, 1)),
+        (oag_pure::TITLE, (0, 0, 0)),
+        (oag_hd::TITLE, (1, 0, 0)),
+        // Omega's pause screen authors the `FE_GHOST` list (the ghost ship's visibility), as HD's
+        // does; its own options page was not read for the row.
+        (oag_omega::TITLE, (1, 0, 0)),
+        (oag_2048::TITLE, (0, 0, 0)),
+    ] {
+        let mut definition = built_in();
+        assert_eq!(
+            rows(&definition),
+            (1, 1, 1),
+            "the definition ships all three rows"
+        );
+        definition.drop_unavailable_game_options(title);
+        assert_eq!(rows(&definition), offered, "{}", title.name);
+    }
 }

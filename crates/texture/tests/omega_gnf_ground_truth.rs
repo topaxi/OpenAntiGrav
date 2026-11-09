@@ -420,3 +420,64 @@ fn the_known_real_holographic_glow_decodes_exactly() {
     assert_eq!(texture.height, 64);
     assert!(!texture.is_linear(), "this sample is genuinely tiled");
 }
+
+/// A micro-tiled BC1 surface (8-byte blocks) untiles with the same `Thin_1DThin` order as BC7:
+/// the terrain grass `park`, `square`, `tower` and `arena` share. The base level is 4096 square,
+/// over [`DECODE_LIMIT`], so the sweep skips its comparison; here the chain is held to its own
+/// arithmetic and level 1 to a box filter of level 0, which a wrong tile order fails by a wide
+/// margin (neighbouring texels of a mis-ordered level 0 are unrelated to level 1's).
+#[test]
+#[ignore]
+fn the_micro_tiled_bc1_grass_terrain_untiles_to_a_coherent_chain() {
+    let Some(mut archive) = open(BASE, "data00.psarc") else {
+        return;
+    };
+    let bytes = archive
+        .read_path("Data/environments2048/shared/objectlibrary/textures/grass_terrain_bc1.gnf")
+        .expect("reads");
+    let t = Texture::parse(&bytes).expect("parses");
+    assert_eq!(t.surface_format, SurfaceFormat::Bc1);
+    assert_eq!(t.tile_mode.0, 13);
+    assert_eq!((t.width, t.height), (4096, 4096));
+    let levels = t.block_levels(&bytes).expect("the chain untiles");
+    assert_eq!(levels.len(), 13);
+    for (level, blocks) in levels.iter().enumerate() {
+        let wb = (t.width >> level).max(1).div_ceil(4);
+        let hb = (t.height >> level).max(1).div_ceil(4);
+        assert_eq!(blocks.len(), (wb * hb) as usize * 8, "level {level}");
+    }
+    let drawn = t.decode(&bytes).expect("the base level decodes");
+    let dxt1 = |blocks: &[u8], w, h| {
+        oag_texture::gtf::decode_level(oag_texture::gtf::Format::Dxt1, blocks, w, h, 0, true)
+            .expect("the level decodes")
+    };
+    assert_eq!(dxt1(&levels[0], 4096, 4096), drawn);
+    let authored = dxt1(&levels[1], 2048, 2048);
+    // Level 1 against a box filter of level 0 read `shift` level-0 texels to the right: a wrong
+    // tile order moves content by more than that, and the grass's own detail is finer than 4.
+    let mad_at = |shift: u32| {
+        let mut shifted = vec![[0u8; 4]; drawn.len()];
+        for y in 0..4096usize {
+            for x in 0..4096usize {
+                shifted[y * 4096 + x] = drawn[y * 4096 + (x + shift as usize).min(4095)];
+            }
+        }
+        let filtered = box_down(&shifted, 4096, 4096);
+        let total: u64 = authored
+            .iter()
+            .zip(&filtered)
+            .flat_map(|(a, b)| a.iter().zip(b))
+            .map(|(a, b)| u64::from(a.abs_diff(*b)))
+            .sum();
+        total as f64 / (authored.len() * 4) as f64
+    };
+    let (aligned, shifted) = (mad_at(0), mad_at(4));
+    println!(
+        "grass_terrain_bc1: level 1 against level 0 filtered: MAD {aligned:.2}, 4 texels off {shifted:.2}"
+    );
+    assert!(aligned < 8.0, "MAD {aligned}");
+    assert!(
+        shifted > 2.5 * aligned,
+        "{shifted} is not apart from {aligned}"
+    );
+}

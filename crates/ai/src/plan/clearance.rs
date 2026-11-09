@@ -15,7 +15,9 @@
 //! floors.
 
 use oag_physics::collide::{Ray, Raycaster, combine_friction};
-use oag_physics::wall::{HULL_PROBES, MIN_HULL_EXTENT, SHIP_FRICTION, hull_probes, reacts};
+use oag_physics::wall::{
+    HULL_PROBES, MIN_HULL_EXTENT, SHIP_FRICTION, hull_probes, probe_bounds, reacts,
+};
 use oag_physics::{Handling, ShipState};
 
 /// How far outside the hull a wall still counts as too close, in world units.
@@ -31,12 +33,14 @@ pub(super) fn too_close<R: Raycaster + ?Sized>(
     raycaster: &R,
 ) -> bool {
     let probes: [_; HULL_PROBES] = hull_probes(&state.body, handling);
+    let region = raycaster.region(&probe_bounds(&probes, MARGIN));
     probes.iter().any(|&(origin, direction, reach)| {
         if reach <= MIN_HULL_EXTENT {
             return false;
         }
         let mut hits = [None; 4];
-        let count = raycaster.raycast_all(
+        let count = raycaster.raycast_all_in(
+            &region,
             Ray::new(origin, direction, reach + MARGIN),
             self_collider,
             false,

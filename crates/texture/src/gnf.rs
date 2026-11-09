@@ -76,8 +76,10 @@
 //! refuses the whole surface with [`Error::CorruptBlocks`]. A census of the front
 //! end's sprite sheet (`crates/texture/examples/gnf_frontend_census.rs`) finds
 //! many single-mip images clean and others (mostly multi-mip, with per-level tile
-//! padding) well into double digits. `SurfaceFormat::Bc1`/`Bc3` decode only
-//! through the linear path; no sampled `.gnf` ships either under `TileMode(13)`.
+//! padding) well into double digits. `SurfaceFormat::Bc3` decodes only
+//! through the linear path. A micro-tiled `SurfaceFormat::Bc1` untiles like BC7 with 8-byte
+//! elements (`docs/formats/gnf.md`, "BC1 under `TileMode(13)`"): the terrain grass of Omega's
+//! 2048 circuits.
 
 use std::fmt;
 

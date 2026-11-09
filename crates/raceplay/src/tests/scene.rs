@@ -280,6 +280,63 @@ fn every_projectile_is_drawn_and_the_worst_case_fits_the_buffer() {
     );
 }
 
+/// A live Missile places two heads, one on each of the two anchors its flare
+/// rides, and a Rocket in the same sky places none: the head model is the
+/// Missile's and nothing else's.
+#[test]
+fn a_missile_places_two_heads_on_its_flare_anchors() {
+    let mut race =
+        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+    assert!(
+        race.missile_head_model_matrices().is_empty(),
+        "an empty sky must place no heads"
+    );
+    race.sim.world.projectiles.spawn(
+        oag_tables::weapons::Weapon::Rocket,
+        Vec3::Z * 50.0,
+        Vec3::Z * 600.0,
+        0,
+    );
+    assert!(
+        race.missile_head_model_matrices().is_empty(),
+        "a Rocket carries no Missile head"
+    );
+    let position = Vec3::X;
+    let velocity = Vec3::new(1.0, 0.0, 2.0).normalize() * 600.0;
+    race.sim
+        .world
+        .projectiles
+        .spawn(oag_tables::weapons::Weapon::Missile, position, velocity, 0);
+    let heads = race.missile_head_model_matrices();
+    assert_eq!(heads.len(), 2, "one live missile, two heads");
+    let slot = race
+        .sim
+        .world
+        .projectiles
+        .slots
+        .iter()
+        .position(|p| p.kind == Some(oag_tables::weapons::Weapon::Missile))
+        .unwrap();
+    let projectile = &race.sim.world.projectiles.slots[slot];
+    let age = oag_weapons::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
+    let (a, b) = crate::weapons::missile_flare_anchors(projectile.position, velocity, age);
+    let body = race.projectile_matrix(oag_tables::weapons::Weapon::Missile, slot, projectile);
+    for (head, anchor) in heads.iter().zip([a, b]) {
+        let want = body.w_axis.truncate() + (anchor - projectile.position);
+        assert!(
+            head.w_axis.truncate().abs_diff_eq(want, 1e-3),
+            "a head sits on its flare anchor: {:?} against {want:?}",
+            head.w_axis
+        );
+        assert!(
+            head.z_axis
+                .truncate()
+                .abs_diff_eq(velocity.normalize(), 1e-5),
+            "forward is the velocity, like every HD body"
+        );
+    }
+}
+
 /// A rocket drawn as a model is oriented along its own velocity.
 ///
 /// The forward column is the evidenced half of `Rocket_Update`'s basis (see

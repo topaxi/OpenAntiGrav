@@ -32,10 +32,10 @@ from a static config block:
 
 | pool | elements | config | texture named by the config | user |
 | --- | --- | --- | --- | --- |
-| `+0x50` | 6 x 0x60 | `0x00920fd0` | `ThickLine_Red.gtf` | not read |
-| `+0x5c` | 20 x 0x60 | `0x00921050` | `ThickLine_bighalo.gtf` | not read |
-| `+0x68` | 6 x 0x60 | `0x00921010` | `ThickLine_Red.gtf` | not read |
-| `+0x74` | 18 x 0x70 | `0x00921090` | `smoke_trails_frame1_ALPHA.gtf` | Missile (acquire `0x002ab9d0` is called from `Missile.cpp`'s functions `0x0011d288`, and from `0x001535f8`/`0x00154a78`) |
+| `+0x50` | 6 x 0x60 | `0x00920fd0` | `ThickLine_Red.gtf` | **Missile**, a stub per head ([missile-ribbon.md](missile-ribbon.md)) |
+| `+0x5c` | 20 x 0x60 | `0x00921050` | `ThickLine_bighalo.gtf` | Missile explosion (`0x00155568` acquires 16) |
+| `+0x68` | 6 x 0x60 | `0x00921010` | `ThickLine_Red.gtf` | **Missile**, a helix per head ([missile-ribbon.md](missile-ribbon.md)) |
+| `+0x74` | 18 x 0x70 | `0x00921090` | `smoke_trails_frame1_ALPHA.gtf` | **not the Missile** (a craft-side update, `0x002db130`; corrected 2026-11-07, see [missile-ribbon.md](missile-ribbon.md): `0x002ab9d0` is a node-laying loop, not this pool's acquire, and the Missile's init takes pools `+0x50` and `+0x68`) |
 | `+0x80` | **9 x 0x190** | **`0x00766c4c`** | (model) | **Rocket** |
 | `+0x8c` | 1 x 0x60 | `0x009210d0` | `ThickLine.gtf` | not read |
 

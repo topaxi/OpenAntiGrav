@@ -85,11 +85,12 @@ impl Session {
         drs::Limits::new(
             ceiling,
             floor,
-            // Held under the limiter: aiming above a rate the loop is not
-            // allowed to produce would drop the resolution permanently to buy
-            // frames that are never presented. The menu warns about the same
-            // pairing; this is what stops it costing anything.
-            profile.target_fps.at_most(self.limiter_hz()),
+            // Held under the limiter and under the output: aiming above a rate
+            // the loop is not allowed to produce, or the display cannot show,
+            // would drop the resolution permanently to buy frames that are
+            // never presented. The menu warns about the limiter pairing; this
+            // is what stops either costing anything.
+            oag_present::refresh::held_target(profile.target_fps, self.limiter_hz(), &self.display),
         )
         // The blur rung's ceiling is the player's gather resolution, and
         // there is nothing to shed with the blur off (ADR-0075).
@@ -156,6 +157,8 @@ impl Session {
         // with. One rectangle for every stage, so a change moves the whole game
         // rather than only what happens to be on screen.
         let rect = display::viewport(self.gpu.output.size(), self.aspect());
+        let pose_view = self.pose_view_shown();
+        let viewer_hud_off = self.viewer_hud_hidden();
         // The presentation target follows the *surface*, not the render scale -
         // it is where the resolved frame and the UI meet, so it is sized in the
         // pixels a player actually has. Cheap when nothing moved; a window
@@ -243,7 +246,10 @@ impl Session {
         // (`Session::feed_windows`) and applies its scale to each window's own ceiling, while
         // every window holds one seat; with a window of several seats (a split, whose views are
         // not timed) the scale holds at the ceiling, as a split screen's does.
-        self.framebuffer.set_extent(if windowed && !self.drs_runs() {
+        // Photo mode draws at the configured render size, not the dynamic resolution's: a shot is
+        // the picture at its best, and the race is not being timed while it stands still.
+        let held_full = self.photo.is_some();
+        self.framebuffer.set_extent(if (windowed && !self.drs_runs()) || held_full {
             own_wanted
         } else {
             self.drs.extent(drs_limits)
@@ -251,7 +257,7 @@ impl Session {
         // The controller's second output, the blur's gather resolution
         // (ADR-0075), re-derived every frame the same way and held to the
         // player's own wherever the extent is held.
-        let blur_resolution = if windowed && !self.drs_runs() {
+        let blur_resolution = if (windowed && !self.drs_runs()) || held_full {
             self.render_profile().motion_blur_resolution
         } else {
             self.drs.blur_resolution(drs_limits)
@@ -276,6 +282,9 @@ impl Session {
         // the scene texture can be larger than the rectangle drawn into it.
         // Everything that normalises against this inherits the extent for
         // free, the camera jitter of ADR-0039 included.
+        // A photo mode shot of several frames stands the race at its next frame and says how far
+        // between ticks to draw it (`session::photo_rewind`).
+        let job_alpha = self.photo_job_prepare();
         let size = self.framebuffer.extent();
         let inside = (0.0, 0.0, size.0 as f32, size.1 as f32);
         let scene_target = self.framebuffer.view();
@@ -322,6 +331,14 @@ impl Session {
         // Read before `self.stage` is borrowed mutably below, for the same
         // reason `pvs_culling` is.
         let render_profile = self.governed_profile();
+        // Photo mode frames one still picture: the game's motion blur smears a frozen race
+        // (the camera the player flies moves the velocity buffer), so the mode draws none
+        // whatever the setting says, and leaving puts the player's setting back untouched.
+        let motion_blur = if self.photo.is_some() {
+            oag_display::display::MotionBlur::Off
+        } else {
+            render_profile.motion_blur
+        };
         // Diagnostic only, and read before the match for the same reason
         // `pvs_culling` is: whether this is the frame `race_ready_at` is still
         // waiting on. Splits `Session::race_ready_at`'s single "since the scene
@@ -330,6 +347,8 @@ impl Session {
         let timing_first_race_frame =
             self.race_ready_at.is_some() && matches!(self.stage, Stage::Race(_));
         let resume_art = oag_game::pause::art_seconds(self.pause, self.go_at, self.wall);
+        // Read before the match, which borrows `self.stage` mutably.
+        let stepping = self.race_stepping();
         self.phases.mark(super::phases::Phase::Setup);
         let (scene_stats, video_label) = match &mut self.stage {
             Stage::Launcher(stage) => {
@@ -370,6 +389,12 @@ impl Session {
                         .set_texture_detail(render_profile.texture_detail);
                     parked.race.set_trail_order(render_profile.trail_order);
                     parked.race.set_weather(render_profile.weather);
+                    // The pause screen's GHOST list takes hold under the menus.
+                    if let Some(shell) = &self.shell {
+                        parked
+                            .race
+                            .set_ghost_visible(self.settings.display.ghost_ship_shown(shell.title));
+                    }
                     parked
                         .scene
                         .set_blur_resolution(blur_resolution);
@@ -386,7 +411,7 @@ impl Session {
                         self.settings.graphics.frustum_culling,
                         pvs_culling,
                         self.anim_seconds,
-                        render_profile.motion_blur,
+                        motion_blur,
                         render_profile.shadows,
                         // No jitter: `temporal` below stays `None` for this
                         // stage, so there is no reconstruction pass to feed a
@@ -444,8 +469,19 @@ impl Session {
                 stage.race.set_weather(render_profile.weather);
                 // And the DYNAMIC HUD row, for the same reason.
                 stage.race.set_dynamic_hud(self.settings.display.dynamic_hud);
+                // And the GHOST SHIPS VISIBLE row.
+                if let Some(shell) = &self.shell {
+                    stage
+                        .race
+                        .set_ghost_visible(self.settings.display.ghost_ship_shown(shell.title));
+                    stage
+                        .race
+                        .set_player_tags(self.settings.display.multiplayer_tags_shown(shell.title));
+                }
                 if let Some(hud) = &mut stage.hud {
                     hud.set_dynamic_hud(self.settings.display.dynamic_hud);
+                    // And the SCREEN SIZE row.
+                    hud.set_safe_area(self.settings.graphics.hud_safe_area);
                 }
                 stage
                     .scene
@@ -458,13 +494,15 @@ impl Session {
                     // clock is into the next one, so motion is smooth at any
                     // frame rate - and the tick exactly while paused, when the
                     // race is not stepping. See `race::between_ticks`.
-                    oag_raceplay::between_ticks::frame_alpha(&self.clock, !self.pause.frozen()),
+                    job_alpha.unwrap_or_else(|| {
+                        oag_raceplay::between_ticks::frame_alpha(&self.clock, stepping)
+                    }),
                     inside,
                     self.settings.graphics.fov,
                     self.settings.graphics.frustum_culling,
                     pvs_culling,
                     self.anim_seconds,
-                    render_profile.motion_blur,
+                    motion_blur,
                     render_profile.shadows,
                     // **Derived from the upscaler, not read from the flag**,
                     // and computed here because this is the one place that
@@ -720,13 +758,28 @@ impl Session {
             // that path too. `RaceStage::draw_hud`'s `target_size` has to be
             // `view`'s real size rather than assumed from `gpu.output.config`
             // internally - see its own doc.
-            stage.draw_hud(
-                &self.gpu,
-                &mut encoder,
-                self.framebuffer.output(),
-                rect,
-                self.framebuffer.output_size(),
-            );
+            // Photo mode draws the race's HUD only when its row is on, and never the end
+            // screens or the track panel: the picture is the view.
+            match stage.race.photo().map(oag_raceplay::photo::Photo::hud) {
+                // POSE VIEW: hulls at their recorded poses, no HUD. A viewer whose SQUARE
+                // turned the HUD off draws none either.
+                None if pose_view || viewer_hud_off => {}
+                None => stage.draw_hud(
+                    &self.gpu,
+                    &mut encoder,
+                    self.framebuffer.output(),
+                    rect,
+                    self.framebuffer.output_size(),
+                ),
+                Some(true) => stage.draw_view_hud(
+                    &self.gpu,
+                    &mut encoder,
+                    self.framebuffer.output(),
+                    rect,
+                    self.framebuffer.output_size(),
+                ),
+                Some(false) => {}
+            }
             // Pulse's bloom over the HUD (PSP measured, PS2 inherited), as
             // the queue order draws it: see
             // `oag_raceplay::Scene::composite_bloom`.
@@ -738,12 +791,27 @@ impl Session {
             // reads the tick itself. See `RaceStage::render`.
             stage.race.set_draw_alpha(1.0);
         }
-        // A race parked behind the menus has no HUD; its glow still lands,
-        // before the menu rows go on.
-        if let (Stage::Menu(_), Some(parked)) = (&self.stage, self.suspended_race.as_ref()) {
+        // A race parked behind the menus has no HUD, except under a pause screen whose title
+        // keeps it (dimmed by the tint the menus draw over it); its glow still lands, before
+        // the menu rows go on.
+        let hud_under_tint = matches!(
+            &self.stage,
+            Stage::Menu(menu) if menu.pause_scrim.is_some()
+                && menu.pause_view.as_ref().is_some_and(|view| view.table.hud_under_scrim)
+        );
+        if let (Stage::Menu(_), Some(parked)) = (&self.stage, self.suspended_race.as_mut()) {
             parked
                 .scene
                 .composite_bloom_under_hud(&mut encoder, self.framebuffer.output(), rect);
+            if hud_under_tint {
+                parked.draw_view_hud(
+                    &self.gpu,
+                    &mut encoder,
+                    self.framebuffer.output(),
+                    rect,
+                    self.framebuffer.output_size(),
+                );
+            }
             parked
                 .scene
                 .composite_bloom(&mut encoder, self.framebuffer.output(), rect);
@@ -794,9 +862,18 @@ impl Session {
                 .shell
                 .as_ref()
                 .and_then(|shell| {
-                    crate::records_page::table_for(&stage.menu, shell, &self.records).or_else(|| {
-                        oag_game::mods::table_for(&stage.menu, &shell.mods, &shell.strings)
-                    })
+                    crate::records_page::table_for(&stage.menu, shell, &self.records)
+                        .or_else(|| {
+                            oag_game::mods::table_for(&stage.menu, &shell.mods, &shell.strings)
+                        })
+                        .or_else(|| {
+                            let cx = super::replays::context(
+                                shell,
+                                &self.replay_refused,
+                                self.settings.replay.record,
+                            );
+                            oag_game::replays::page::table_for(&stage.menu, &self.replay_list, &cx)
+                        })
                 })
                 .unwrap_or_default();
             // The footer ticker's own honest rotation, off `Session::records` -
@@ -960,6 +1037,10 @@ impl Session {
         ));
         // The line under a split race's pause: who paused and when it is anyone's.
         list.extend(self.pause_line(overlay_space.size));
+        // Photo mode's screen, over the surface and so not in a shot.
+        list.extend(self.photo_screen(overlay_space.size));
+        // The replay viewer's bar, controls and banner.
+        list.extend(self.viewer_screen(overlay_space.size));
         // The TOUCH CONTROLS page's picture of the overlay, over its rows.
         if let Stage::Menu(stage) = &self.stage
             && let Some(art) = oag_game::touch_controls::art::Art::from_sheet(&self.cursor_sheet)
@@ -1019,6 +1100,11 @@ impl Session {
         self.phases.mark(super::phases::Phase::Overlay);
         let submit_start = timing_first_race_frame.then(web_time::Instant::now);
         frame_work.submit(&self.gpu.queue, encoder);
+        // A photo mode shot reads the picture this frame just drew.
+        self.finish_photo_shot();
+        if let Some(reaper) = &self.gpu.reaper {
+            reaper.reap();
+        }
         self.phases.mark(super::phases::Phase::Submit);
         // **After the submit**, which is what makes it safe to start a map on
         // the buffer this frame just copied into. What comes back is a frame or
@@ -1049,6 +1135,7 @@ impl Session {
             self.present_cost.record(present_seconds);
         }
         self.last_present_seconds = present_seconds;
+        self.feed_display(frame_seconds, present_seconds);
         // `--frame-log`'s once-a-second line, on every stage.
         self.dev_log(has_scene.then(|| self.framebuffer.extent()));
         // The third and last diagnostic timestamp - see `Session::race_ready_at`.

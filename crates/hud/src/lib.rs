@@ -63,7 +63,10 @@ pub mod now_playing;
 mod pickup;
 pub mod pickup_fade;
 mod placement;
+pub mod player_tags;
+pub mod race_line;
 mod runtime;
+pub mod score_rows;
 pub mod screen_layout;
 mod shield_bar;
 mod sight_draw;
@@ -78,11 +81,13 @@ mod widget;
 
 pub use assets::{Assets, SplitAssets, split_family};
 pub use compose::{Composed, compose};
-pub use draw::{Context, Frame, Span, draw_list, sprite_draw};
+pub use draw::{Context, Frame, Span, draw_list, draw_list_without_sight, sprite_draw};
 pub use head_to_head::HeadToHead;
 pub use kill_tags::KillTag;
 pub use pickup::{IconFrame, mod_icon_size, pickup_icon_name};
 pub use placement::{Placement, place};
+pub use player_tags::PlayerTag;
+pub use race_line::RaceLine;
 pub use sight_draw::sight_draws;
 pub use sub_weapon::SubWeapon;
 pub use time_trial_pace::{PaceTier, RecordTarget, TimeTrialPace, pace_for};
@@ -743,6 +748,13 @@ pub struct Readout {
     /// [`Self::blank`], and drawn only by a title whose art carries
     /// [`oag_title::HudArt::pickup_icon_uv`].
     pub pickup_announcing: bool,
+    /// How far 2048's grant has flown the icon from the top-centre rect toward the slot, in
+    /// layout pixels along y, once the announcement is over (`Hud_UpdatePickupIcon` adds
+    /// `dt * 1800.0` a frame). `PickupBgFrame`'s width follows the flight's progress. `None`
+    /// draws the icon at the slot, as does any distance past it; `Some(0.0)` while
+    /// [`Self::pickup_announcing`]. Ported by `SlotHud::advance`; drawn only by a title whose art
+    /// carries [`oag_title::HudArt::pickup_icon_uv`].
+    pub pickup_fly: Option<f32>,
     /// The held pickup's backdrop and icon fade, on a title whose art carries
     /// [`oag_title::HudArt::pickup_fade`]: advanced per rendered tick by
     /// `oag_raceplay`'s `SlotHud` and read by the draw. Its idle default draws
@@ -799,6 +811,16 @@ pub struct Readout {
     /// The Eliminator's kill target, resolved: the number in `KILLS (5)`.
     /// Zero in every other mode. See [`kill_tags::header`].
     pub kill_target: u32,
+    /// Whether [`Self::kill_tags`] count a score and [`Self::kill_target`] is a score target:
+    /// the race's own law, not the title's. See [`score_rows`].
+    pub score_rows: bool,
+    /// The Eliminator's race line: where each craft is round the lap and the counts at either end.
+    /// `None` outside an Eliminator. See [`race_line`].
+    pub race_line: Option<RaceLine>,
+    /// The multiplayer tags over the other people's craft, projected for this view and already
+    /// at the law's alpha; empty when there are none or the option is off. Drawn with the
+    /// reticle's placement, not the layout's. See [`player_tags`].
+    pub player_tags: Vec<PlayerTag>,
     /// The message slots this frame - `Info1` to `Info4`. See [`messages`].
     pub messages: messages::Lines,
     /// The lap-line time gap this frame - `TimeDiffText` and `TimeDiffIcon`.
@@ -1064,6 +1086,8 @@ mod campaign_event_tests;
 mod curve_bar_tests;
 #[cfg(test)]
 mod ext_draw_tests;
+#[cfg(test)]
+mod outline_tests;
 #[cfg(test)]
 mod pickup_fade_tests;
 #[cfg(test)]

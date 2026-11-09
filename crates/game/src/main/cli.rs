@@ -421,8 +421,8 @@ pub(crate) struct Cli {
     pub(crate) overlay: bool,
 
     /// With `--screenshot`: leave out what this build adds to the disc's own front end
-    /// (2048's RACEBOX, REMIX and MULTIPLAYER tiles on `GameModeChoice`), so a frame can be
-    /// compared against a capture of the original's menu definition. A player always has them.
+    /// (2048's RACEBOX, REMIX and MULTIPLAYER tiles on `GameModeChoice`, and the pad focus
+    /// on its touch grids), so a frame can be compared against a capture of the original's menu definition. A player always has them.
     #[arg(long)]
     pub(crate) original_menu: bool,
 
@@ -446,6 +446,12 @@ pub(crate) struct Cli {
     /// Report what was loaded and exit, without rendering. With `--prefetch`: convert everything, write the cache manifest, then exit.
     #[arg(long)]
     pub(crate) dry_run: bool,
+
+    /// Print each connected pad's button presses with the value `[controls.music]` takes for them
+    /// (a button name, or `raw:CODE`), until stopped with Ctrl-C. Opens no window and no audio.
+    /// See docs/tools/oag-game.md, "Music controls in a race".
+    #[arg(long, conflicts_with_all = ["race", "screenshot", "dry_run", "trace_out", "launcher", "drive", "drive_file"])]
+    pub(crate) probe_pad: bool,
 
     /// Skip the front end and go straight to a ship on a track.
     ///
@@ -1172,6 +1178,34 @@ pub(crate) struct Cli {
 }
 
 impl Cli {
+    /// Whether a person is at this launch, as opposed to a capture, a script, a trace or a
+    /// comparison: only then may the first-run name prompt open. An allowlist, so a flag added
+    /// later is automation until it is listed here.
+    pub(crate) fn is_interactive(&self) -> bool {
+        let scripted = self.dev.preseat
+            || self.dev.script.is_some()
+            || self.dev.drive.is_some()
+            || self.dev.drive_file.is_some();
+        let captured = self.screenshot.is_some()
+            || self.dump_audio.is_some()
+            || self.tap_audio.is_some()
+            || self.until.is_some()
+            || self.screen.is_some()
+            || self.press.is_some()
+            || self.hold.is_some()
+            || self.loading_screen.is_some();
+        !(scripted
+            || captured
+            || self.original_menu
+            || self.race
+            || self.dry_run
+            || self.trace
+            || self.probe_pad
+            || self.prefetch
+            || self.net.connect.is_some()
+            || self.net.online.is_some())
+    }
+
     /// `--seed`; always `None` in a build without `dev-cli`.
     pub(crate) fn seed(&self) -> Option<u64> {
         #[cfg(feature = "dev-cli")]

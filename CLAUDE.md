@@ -19,7 +19,7 @@ matrix) before assuming a subsystem exists.
 ## Commands
 
 ```sh
-just              # the gate every commit must pass: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-handover check-status check-weapon-lineage
+just              # the gate every commit must pass: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-handover check-status check-weapon-lineage check-test-groups
 just fmt | lint | build | docs
 just test         # nextest, quick profile (our crates opt-level 0, examples not built)
 just test-data    # also the #[ignore]d ground-truth tests; needs data/images/; skips binaries that passed unchanged, --full runs all
@@ -35,6 +35,7 @@ just check-title-reach       # ratchet on generic crates naming a title package 
 just check-names  # every names.tsv row still matches its evidence page, offline
 just check-handover          # HANDOVER.md under 256 KiB (the Read tool's ceiling)
 just check-weapon-lineage    # docs/gameplay/weapon-lineage.md's checked axes match the title crates
+just check-test-groups       # .config/nextest.toml's gpu-vram group names every test module that spawns the game or captures a frame
 just check-schemas           # shipped TOML validates against schemas/v1/ (ADR-0064)
 just check-status # status.md's RE-coverage table matches names.tsv; `just gen-status` regenerates it
 just check-strings           # menu.toml rows have string_id + english.toml text (ratchet)
@@ -89,6 +90,13 @@ binary of its own. `oag-game` and `oag-raceplay` have five binaries
 (`every_test_file_is_listed` fails naming it). `oag-physics`, `oag-gameplay` and
 `oag-ai` keep a binary per file (CI runs `--test determinism` by name). Test
 names carry the module path; filter with `test(...)`, not `binary(...)`.
+
+**A test module that spawns `oag-game` (or calls `capture_pixels_from`/`capture_from`)
+is one name in the `gpu-vram` group's regex in `.config/nextest.toml`**: it caps
+those tests at 4 at once so a loaded run on an 8 GiB NVIDIA GPU (no spill into system
+memory) does not die with `wgpu error: Out of Memory`. `just check-test-groups`
+fails naming the module; measurements in `docs/architecture/workspace-layout.md`
+("Test groups").
 
 **A test goes in the lowest crate whose dependencies reach everything it reads.**
 `oag-game`'s binaries rerun on nearly every change. A test belongs in `oag-game`
@@ -247,6 +255,23 @@ the gap in its `[untranslated]` table, never by omitting the id. Machine
 translation may fill a gap, as `ID = { text = "...", human = false }`; `human`
 is `true` only when a human wrote or approved it (convention in
 `english.toml`'s doc comment).
+
+### GPU debugging
+
+wgpu's debug labels and shader debug info are off in every build. Set `OAG_WGPU_DEBUG=1` on `oag-game` for RenderDoc or to read a validation message by label; this leaves validation as it was (`docs/architecture/load-time.md`).
+
+### Logging
+
+Full table and how to get lines back: [`docs/architecture/logging.md`](docs/architecture/logging.md).
+The default filter shows `info` from our crates, so **every `info!` is a line each
+player reads on every launch**. Sort a line by what a player loses or wants to know:
+
+- `error`: the player loses something. `warn`: degraded but working, including every absence.
+- `info`: a lifecycle line a user wants: the disc, the renderer, a race starting, a flag they passed being acknowledged, a capture's result.
+- `debug`: what a load or a subsystem did: counts, timings, loader reports, end-of-race summaries, a subsystem arming.
+- `trace`: one line per item: per cue, pattern, ship, frame or tick.
+
+**Default a new line to `debug`.** `info` needs a reason a player cares. Statistics, "armed" or "ready" lines, and anything that repeats during play (each race, pause, pickup) are `debug` or lower, even when a line is useful while building the feature. Prefer no line over a line nothing reads. The simulation crates log nothing. Before moving an existing line, grep `crates/*/tests` and `scripts/` for its text: some tests parse them.
 
 ### Determinism
 

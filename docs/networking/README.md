@@ -209,8 +209,11 @@ fresh process, so they are approximate.
 | Rollback of 12 ticks (200 ms) | 0.77 ms | 0.71 - 0.98 ms |
 | Rollback of 24 ticks (400 ms) | 1.50 ms | 1.37 - 1.87 ms |
 | The same 6 / 12 / 24 through `Race::tick` | 0.44 / 0.82 / 1.62 ms | 0.42 - 0.60 / 0.77 - 1.09 / 1.50 - 2.11 ms |
-| `snapshot_sim()` (whole `RaceSim` clone) | 63 us, 1.7 MiB | 48 - 86 us, 1.4 - 2.6 MiB |
+| `snapshot_sim()` (whole `RaceSim` clone, as it then was) | 63 us, 1.7 MiB | 48 - 86 us, 1.4 - 2.6 MiB |
 | The immutable track half of it | 47 us, 0.74 MiB | 35 - 52 us, 0.58 - 0.84 MiB |
+
+The snapshot rows are superseded by "The snapshot since the constant half is shared",
+at the end of this section.
 
 What it says.
 
@@ -227,18 +230,60 @@ What it says.
   second of 6 ticks is 360 replayed ticks a second, about 22 ms of CPU per
   second, 2.2 percent of one core. M1 (how often a real stick forces a rollback)
   is still unmeasured.
-- **A snapshot costs as much as a tick** (63 us against 65 us). A client that
-  snapshots every tick doubles its simulation CPU; one that restores from the
-  server's snapshot and snapshots only on demand does not. The track half is 75
-  percent of the clone's time and 44 percent of its bytes, so splitting it would
-  take a snapshot from 63 to about 16 us. That is the lever to reach for if a
-  design snapshots per tick; the whole-struct clone stays until one does. A
-  24-tick window of per-tick snapshots would hold about 41 MiB.
+- **A snapshot cost as much as a tick** (63 us against 65 us) while it copied the
+  track. The split this section called for has landed: see below.
 
 Reproduce: `OAG_SWEEP=1 OAG_SWEEP_TRACKS=09_Track OAG_REQUIRE_GAME_DATA=1 cargo
 nextest run -p oag-raceplay --run-ignored all --no-capture -E 'test(/reconcile_cost/)'`
 (one circuit per process; omit `OAG_SWEEP_TRACKS` for all twelve, with heap
 figures that then read low after the first).
+
+**Re-measured with an exact allocator (2026-11-07, lane `replay-timeline`).** The "track half"
+row above is the resident-set delta of 64 copies and leaves out the speed plans, which are
+built on the first tick and make up the rest. By live-heap bytes of one `RaceSim` clone, on all
+five titles (Pulse, Pure, HD, 2048, Omega: 1.3 to 5.1 MiB), **97.8 to 99.3 percent of a
+snapshot is load-constant after the first tick** (collision, spline, racing line, pads, routes,
+weapon tables, speed and hull plans) and no tick writes it; the part that changes is the
+27.8 KiB inline struct plus 2 to 8 KiB of heap. So a snapshot that shares the constant half is
+about 30 to 35 KiB and `World::clone` alone is 0 to 2 us, against 57 to 1,132 us for the whole
+clone (release, loaded). This moves the "lever to reach for": sharing the constant half takes a
+24-tick window of per-tick snapshots from about 41 MiB (Pulse) to under 1 MiB. Method, per-title
+tables and the reproducing command:
+[ADR-0087](../architecture/adr/0087-a-replay-and-photo-mode-share-one-timeline.md), "The
+measurements this ADR rests on".
+
+### The snapshot since the constant half is shared (2026-11-07)
+
+`RaceSim` now holds its constant half behind `Arc`s (ADR-0087, decision 2, stage 1), so
+`snapshot_sim` copies the mutable half and counts references for the rest. Same sweep as the
+ADR, release, one title per process, 300 keyframes a run. Bytes are exact (inline plus heap,
+at the end of the run, where the keyframes peak); times are the median of 7 repeats of 50 clones, on a shared
+machine, so the two time columns were taken at different loads and only the order of magnitude
+compares.
+
+| Title | Snapshot before | Snapshot now | `snapshot_sim` before (load) | now (load) |
+| --- | ---: | ---: | ---: | ---: |
+| Pulse | 2,013 KiB | 26.5 KiB | 234 us (33) | 3 us (12) |
+| Pure | 1,345 KiB | 27.1 KiB | 143 us (30) | 2 us (13) |
+| HD | 3,168 KiB | 27.8 KiB | 457 us (26) | 3 us (13) |
+| 2048 | 5,238 KiB | 31.2 KiB | 477 us (23) | 1 us (11) |
+| Omega | 3,625 KiB | 27.7 KiB | 607 us (23) | 3 us (12) |
+
+All 300 keyframes of a run hold the same allocations as the race at its end, so five minutes
+of keyframes is 7.7 to 9.1 MiB of copies over one constant half, not 394 to 1,536 MiB. 2048
+and Omega: **ported**, each measured on its own data; 2048 fills `routes` on the first tick
+and Omega does not, as the ADR records, and the copy on write covers both.
+
+On the twelve Pulse circuits of the "Reconciliation cost" sweep (profile `dev`, load 14 to
+24): a snapshot 4 us (1 to 6), where the table above reads 63 us. A correction's two clones
+are no longer a cost worth counting, and a client may snapshot every tick: a 24-tick window
+holds under 1 MiB.
+
+What is still copied: `World` (20,136 B), the per-slot counters, the pad caches and the small
+laws read by value (about 1 KiB: pilot assist, the hover rig, the reset triggers, the
+reference handling and the like), where an `Arc` would save less than the struct it fills.
+A snapshot taken before the first tick has no plans, and a race restored to it learns them
+again, as a whole copy did; a viewer that wants to skip that restores a later snapshot.
 
 ## Remote-input predictability (2026-10-14, desktop)
 
@@ -623,7 +668,8 @@ second at a 1-unit threshold. A recorded pad stream would pin it.
 The same sweep as "Reconciliation cost" above, one circuit (09_Track), profile `dev`,
 AMD Ryzen 9 7900, 1-minute load average 9.0 (21.97 and 20.47 over five and fifteen
 minutes), so read as inflated: a tick 63 us (`Race::tick`) and 59 us (`tick_sim_only`),
-a 6-tick rollback 0.446 ms, 12 ticks 0.77 ms, 24 ticks 1.48 ms, a snapshot 62 us. The
+a 6-tick rollback 0.446 ms, 12 ticks 0.77 ms, 24 ticks 1.48 ms, a snapshot 62 us (since shared: "The snapshot since the constant half is
+shared" above). The
 2026-10-14 figures (65 / 60 us, 0.42 / 0.77 / 1.50 ms) hold. **Per correction**, the
 network runs above replay 7 to 11 ticks a correction, so about **0.4 to 0.65 ms a
 correction and 0.05 to 0.10 ms of CPU a second** averaged (the 4-client run's 1,019 to

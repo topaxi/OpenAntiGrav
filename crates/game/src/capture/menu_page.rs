@@ -156,7 +156,9 @@ pub(super) fn menu_page(
     definition.drop_rows_picked_on_screen(title);
     definition.drop_unavailable_trail_order(title);
     definition.drop_unavailable_weather(title);
+    definition.drop_unavailable_rumble_original(title);
     definition.drop_unavailable_dynamic_hud(title);
+    definition.drop_unavailable_game_options(title);
     definition.rename_campaign_row(title, strings);
     definition.rename_multiplayer_row(title, strings);
     definition.relabel_choice_from(
@@ -168,7 +170,7 @@ pub(super) fn menu_page(
     // A mod campaign's picker, as `crate::prepare` adds it; a cross-disc one
     // is kept here, since a still never races it.
     let installed = loaded.installed_for(title, &|_| true);
-    crate::campaign::custom::add_picker(&mut definition, &mut mods, &installed, strings);
+    crate::campaign::custom::add_picker(&mut definition, &mut mods, &installed, title, strings);
     if definition.page(page).is_none() {
         anyhow::bail!(
             "no menu page named {page:?}; this definition has {}",
@@ -520,7 +522,14 @@ pub(super) fn menu_page(
         list.extend(nav_legend_draws);
         list.extend(ticker_draws);
         let clip = ticker_clip(&list);
-        list.extend(prompt_draws(kind, &name, strings, skin, source)?);
+        list.extend(prompt_draws(
+            kind,
+            &name,
+            &settings.player,
+            strings,
+            skin,
+            source,
+        )?);
         return Ok((list, clip));
     }
     let Some(phase) = phase else {
@@ -614,6 +623,8 @@ fn records_draws(
 fn prompt_draws(
     kind: &str,
     name: &str,
+    player: &crate::settings::Player,
+
     strings: &oag_ui::language::StringTable,
     skin: &oag_ui::menu::Skin,
     source: Option<&str>,
@@ -623,23 +634,9 @@ fn prompt_draws(
     match kind {
         "tag-entry" | "tag-entry-typed" => {
             let source = source.context("tag-entry needs a --race source open")?;
-            let mut archives = oag_pulse::open(source).context("this source is not Pulse's own")?;
-            let skin_raw = archives
-                .read_name(oag_pulse::names::FRONTEND_ROOT)
-                .context("no front-end root on this disc")?;
-            let skin_xml = oag_tables::fexml::text(&skin_raw).context("front-end root text")?;
-            let globals = oag_ui::screen::Screens::from_xml(&skin_xml).globals;
-            let entry_raw = archives
-                .read_hash(oag_pulse::hashes::TAG_INPUT_SCREENS)
-                .context("no TagInput screens entry on this disc")?;
-            let xml = oag_tables::fexml::text(&entry_raw).context("TagInput entry text")?;
-            let geometry = oag_ui_screens::tag_entry::geometry(&xml, &globals, "Name")
-                .context("the Name TagInput was not found in it")?;
-            let alphabet: String = oag_pulse::tag_input::ALPHABET
-                .chars()
-                .filter(|&c| oag_ui_screens::prompt::accepts(c))
-                .collect();
-            let mut tag_entry = oag_ui_screens::tag_entry::TagEntry::new(
+            let mut tag_entry = pulse_tag_entry(
+                source,
+                "Name",
                 oag_ui_screens::tag_entry::Labels {
                     title: say("OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
                     confirm: say("OAG_KEYBOARD_ACCEPT", "OK"),
@@ -648,10 +645,9 @@ fn prompt_draws(
                         "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
                     ),
                 },
-                geometry,
-                &alphabet,
+                oag_ui_screens::prompt::accepts,
                 name,
-            );
+            )?;
             if kind == "tag-entry-typed" {
                 // A few glyph changes past what `name` opened on, so a
                 // before/after pair actually differs - the same reason
@@ -666,6 +662,83 @@ fn prompt_draws(
                 }
             }
             Ok(tag_entry.draw(skin))
+        }
+        // The first-run name and tag entries and the OPTIONS rows' prompts
+        // (`session::player_name`): Pulse's own row where the source is Pulse, the grid
+        // otherwise (`player-name-grid`, the shape every other title gets).
+        "player-name" | "player-tag" => {
+            let source = source.context("player-name needs a --race source open")?;
+            let (widget, id, english, accepts): (_, _, _, fn(char) -> bool) =
+                if kind == "player-name" {
+                    (
+                        "Name",
+                        "OAG_PLAYER_NAME_TITLE",
+                        "ENTER YOUR NAME",
+                        crate::settings::player::allowed,
+                    )
+                } else {
+                    (
+                        "Tag",
+                        "OAG_PLAYER_TAG_TITLE",
+                        "ENTER YOUR TAG",
+                        crate::settings::player::allowed_in_tag,
+                    )
+                };
+            let tag_entry = pulse_tag_entry(
+                source,
+                widget,
+                oag_ui_screens::tag_entry::Labels {
+                    title: say(id, english),
+                    confirm: say("OAG_KEYBOARD_ACCEPT", "OK"),
+                    hint: say(
+                        "OAG_TAG_ENTRY_HINT",
+                        "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
+                    ),
+                },
+                accepts,
+                if kind == "player-name" {
+                    &player.name
+                } else {
+                    &player.tag
+                },
+            )?;
+            Ok(tag_entry.draw(skin))
+        }
+        "player-name-grid" | "player-tag-grid" => {
+            let (id, english, keys, limit) = if kind == "player-name-grid" {
+                (
+                    "OAG_PLAYER_NAME_TITLE",
+                    "ENTER YOUR NAME",
+                    crate::settings::player::NAME_KEYS,
+                    crate::settings::player::MAX_NAME,
+                )
+            } else {
+                (
+                    "OAG_PLAYER_TAG_TITLE",
+                    "ENTER YOUR TAG",
+                    crate::settings::player::TAG_KEYS,
+                    crate::settings::player::MAX_TAG,
+                )
+            };
+            Ok(oag_ui_screens::prompt::Keyboard::with_keys(
+                oag_ui_screens::prompt::Labels {
+                    title: say(id, english),
+                    delete: say("OAG_KEYBOARD_DELETE", "DEL"),
+                    accept: say("OAG_KEYBOARD_ACCEPT", "OK"),
+                    hint: say(
+                        "OAG_KEYBOARD_HINT",
+                        "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
+                    ),
+                },
+                if kind == "player-name-grid" {
+                    &player.name
+                } else {
+                    &player.tag
+                },
+                limit,
+                keys,
+            )
+            .draw(skin))
         }
         "rename" | "rename-note" => {
             let mut keyboard = oag_ui_screens::prompt::Keyboard::new(
@@ -730,9 +803,39 @@ fn prompt_draws(
         )),
         other => anyhow::bail!(
             "no prompt named {other:?}; this build has rename, rename-note, delete, \
-             delete-built-in, binding"
+             delete-built-in, binding, tag-entry, player-name, player-tag, \
+             player-name-grid, player-tag-grid"
         ),
     }
+}
+
+/// Pulse's own `<TagInput name="{widget}">` row, read live off `source`.
+fn pulse_tag_entry(
+    source: &str,
+    widget: &str,
+    labels: oag_ui_screens::tag_entry::Labels,
+    accepts: impl Fn(char) -> bool,
+    text: &str,
+) -> Result<oag_ui_screens::tag_entry::TagEntry> {
+    let mut archives = oag_pulse::open(source).context("this source is not Pulse's own")?;
+    let skin_raw = archives
+        .read_name(oag_pulse::names::FRONTEND_ROOT)
+        .context("no front-end root on this disc")?;
+    let skin_xml = oag_tables::fexml::text(&skin_raw).context("front-end root text")?;
+    let globals = oag_ui::screen::Screens::from_xml(&skin_xml).globals;
+    let entry_raw = archives
+        .read_hash(oag_pulse::hashes::TAG_INPUT_SCREENS)
+        .context("no TagInput screens entry on this disc")?;
+    let xml = oag_tables::fexml::text(&entry_raw).context("TagInput entry text")?;
+    let geometry = oag_ui_screens::tag_entry::geometry(&xml, &globals, widget)
+        .with_context(|| format!("the {widget} TagInput was not found in it"))?;
+    let alphabet: String = oag_pulse::tag_input::ALPHABET
+        .chars()
+        .filter(|&c| accepts(c))
+        .collect();
+    Ok(oag_ui_screens::tag_entry::TagEntry::new(
+        labels, geometry, &alphabet, text,
+    ))
 }
 
 /// Whether a `--menu-page` name asks for the shared two-person ship page

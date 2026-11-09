@@ -9,7 +9,7 @@ lanes you must not touch, and the gate baseline. If one is missing, ask
 
 1. `cd /home/topaxi/projects/OpenAntiGrav && git worktree add ../OpenAntiGrav-worktrees/<lane> -b <lane> main`
 2. Work ONLY in `/home/topaxi/projects/OpenAntiGrav-worktrees/<lane>`: `git merge main`, then `git submodule update --init assets/mods/examples assets/mods/official` (without the examples about 19 test-data tests fail; without the official mods the RACE REMIX tests skip), then `just link-data`.
-3. Never write into the main checkout except your scratch dir `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/` (create it).
+3. Never write into the main checkout except your scratch dir `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/` (create it). **`data/` in your worktree is symlinks into the main checkout's disc images**: never `rm` under it, and in a script `rm` only absolute paths inside your scratch dir, quoted, after a guard (`case "$p" in /home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/*) ;; *) exit 1;; esac`). Under zsh an unquoted variable does not word-split, and on 2026-11-08 one `rm -rf $R` deleted four disc images and an extract.
 4. No forks, no sub-agent that can write. **Exception (maintainer, 2026-10-19): read-only haiku helpers** for scanning docs, code, logs or captures: `subagent_type: "Explore"`, `model: "haiku"`, absolute paths into your worktree or `data/`, told to write nothing and return at most 15 lines. One at a time, short-lived. Nothing a helper says is evidence until you have read the cited `path:line`.
 5. Never `git stash`: the stash list is shared by all worktrees. Commit work in progress on your branch.
 
@@ -29,6 +29,7 @@ lanes you must not touch, and the gate baseline. If one is missing, ask
     | xargs -r -n1 -I{} pactl set-sink-input-mute {} 1
   ```
 
+- **`ls` is a shell function here and runs an executable it is given**: `ls target/quick/oag-game` once put a windowed game with sound on the maintainer's desktop for nine minutes. Use `/bin/ls`.
 - **Processes.** Record the PID of everything you start; kill only by PID. Never `pkill -f <pattern>` (it once killed every member's run).
 - **Memory.** Run render loops, bisects and batch scripts sequentially, never as a parallel fan-out. Cap any batch: `systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0 -p TasksMax=64 <cmd>` (986 and 1,588 runaway `python3` processes OOM-killed the lead's session on 2026-10-22). If you see a `python3` count climbing, tell the lead.
 - **Never name a scratch script after a stdlib module** (`bisect.py`, `random.py`, `test.py`, `json.py`, `math.py`): Python puts the script's directory first on `sys.path`, so other scripts import yours (the cause of that OOM, a fork bomb). Use descriptive names (`slot_bisect.py`).
@@ -62,7 +63,7 @@ Recipes: `docs/reverse-engineering/emulator-recipes.md`.
 
   Both run every check in full and the tests of the packages you changed plus their dependents. **Quote the printed `affected:` selection in your report.** A change to `oag-core`, a simulation crate, `Cargo.lock`, the toolchain, the `justfile`, `.config/` or a `build.rs` selects the full suite by itself; that is expected. The lead runs the full pair per merge batch; run it yourself only if the brief says so.
 
-  **Which GPU the tests run on.** Use the discrete GPU by default. Switch `test-data` to the integrated GPU only on a machine whose discrete GPU can run out of memory instead of spilling into system memory (NVIDIA on Linux does; AMD on Linux spills automatically), by adding that GPU's Vulkan ICD to the `env` (e.g. `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json`). The tell is `wgpu error: Out of Memory` in the HD weapon-scene tests. Time ceilings are judged on the full-size machine: on a smaller one a red that is only `check-test-budget` time is green.
+  **Which GPU the tests run on.** Use the discrete GPU by default. The `gpu-vram` test group in `.config/nextest.toml` caps game-spawning tests at 4 at once, so `wgpu error: Out of Memory` no longer needs another GPU. A SIGSEGV at exit means a GPU-touching thread outlived `main`: register it with `oag_thread::gpu_workers`, do not switch GPU. A new test module that spawns `oag-game` goes into the group (`just check-test-groups` names it). Time ceilings are judged on the full-size machine: on a smaller one a red that is only `check-test-budget` time is green.
 
   **wgpu's GL backend is best effort** (maintainer, 2026-10-15). It must never block the default backends (Vulkan, Metal, Dx12, WebGPU): switch a feature GL cannot do off on GL and name it in the loader report. Do not gate on a GL run; if GL breaks, say so and move on.
 
@@ -70,7 +71,7 @@ Recipes: `docs/reverse-engineering/emulator-recipes.md`.
 
   Check the exit status **in the same Bash call as the pipeline** (each call is a fresh shell): append `; echo "rc=${pipestatus[1]}"` (zsh) or `${PIPESTATUS[0]}` (bash) to the gate command. Never pipe `test-data` into `tail` (it masks the exit code). **The gate may sit several minutes before it starts** because another member holds the lock; wait it out and never run the gate outside the lock.
 - **Gate your branch as it is; do not merge `main` into it first** (maintainer, 2026-10-12). Merge `main` only when the lead sends you back for a conflict or red merge, then gate again.
-- A docs/`handover/`/`HANDOVER.md`-only lane runs `just check-docs` (plus `check-names`, `check-handover`, `check-status` when those files moved) instead of the gate.
+- A docs/`handover/`/`HANDOVER.md`-only lane runs `just check-docs` (plus `check-names`, `check-handover` when those files moved) instead of the gate.
 - **A commit after your last gate that touches any `.rs` file, even a doc comment, needs `just gate-affected` re-run before you report** (a "docs plus one test line" commit once pushed a file over `check-size`'s ceiling and `main` went red).
 - The brief states the baseline failure count; anything red beyond it is yours.
 - **Never end a turn waiting for a background job to notify you**; no member has ever been woken that way. Run long commands in the foreground with a 600000 ms timeout, or poll the output file.
@@ -86,6 +87,7 @@ Recipes: `docs/reverse-engineering/emulator-recipes.md`.
 
 ## Project rules that bite members
 
+- **GPU debugging: `OAG_WGPU_DEBUG=1`.** wgpu's debug labels and shader debug info are off in every build, because they cost a debug build a quarter of a race load. Set it on `oag-game` for RenderDoc or to read a validation message by label; this leaves validation as it was.
 - **No compatibility re-exports.** No crate is published: when you move an item, update every call site in the same change; no `pub use old::path` (maintainer).
 - **The maintainer may type into your pane directly.** Act on it like the brief and name it as the maintainer's instruction in your report.
 - **Never invent what the assets author** (CLAUDE.md). Parse it and play it; if it will not parse, draw or play nothing and say so in the loader report. Anything genuinely chosen is labelled **chosen, not measured**, with no confidence score; a score means measured off the original. The label is only for a value that stands in for something the original has; where it is self-evident that the thing is ours (our own hash tag bytes, file formats, settings, tooling, a module that exists only in this engine), write no "chosen, not measured" or "this is ours" comment (maintainer, 2026-11-02).
@@ -102,7 +104,7 @@ Recipes: `docs/reverse-engineering/emulator-recipes.md`.
 - A new `menu.toml` row needs its `string_id` and `english.toml` text.
 - Findings go into `docs/` and the lane's `handover/` thread, not only scratch. Strike what closed; delete a thread file once it has fully landed (its frontmatter is the index; a new thread needs `status`, `titles`, `updated`, `summary`, see `HANDOVER.md`; when you change what is open, update the thread's `status`, `updated` and `summary` too). Nothing outside `handover/` and `HANDOVER.md` may link into `handover/`.
 - **No tracked file may cite `data/scratch/`** (maintainer, 2026-10-09): scratch is deleted after a lane merges. Put the evidence in the doc (numbers, table, reproducing command); a tool worth keeping goes to `scripts/`; a reference frame worth keeping goes to `data/reference/`.
-- **Never commit `docs/overview/status.md`.** Run `just gen-status` so your gate passes, then `git checkout docs/overview/status.md` before committing; the lead regenerates it per merge. This overrides any agent file that says to commit `gen-status`.
+- **Never commit `docs/overview/status.md`, and do not run `gen-status` or `check-status`.** `gate-affected` leaves `check-status` out; the lead regenerates the file per merge and the full `just` checks it. This overrides any agent file that says otherwise.
 - **Never write a compare-page manifest (`data/reference/compare-page/*.toml`) from your worktree**: `data/` there is a symlink into the main checkout, and a manifest pointing into a reaped worktree broke the maintainer's page (2026-10-21). Keep re-made pairs and manifests in scratch and give the lead the commands to adopt them.
 - **Do not run `scripts/compare-rerender-ours.py` on `data/reference/compare-page` from a worktree**: it rewrites the shared pairs with your branch's binary. Copy the pair dirs to `data/scratch/<lane>/pairs/` and call its `rerender(pair_json, <worktree>/target/debug/oag-game)` on the copies; the lead re-renders the page after merging.
 - **Steam Deck builds from a worktree**: `data/appimage` must be a real directory, not the `link-data` symlink (the container build breaks on it). Jobs started detached over ssh die when the session closes; run them in the foreground.
@@ -112,6 +114,8 @@ Recipes: `docs/reverse-engineering/emulator-recipes.md`.
 ## Report
 
 Write full findings to `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/report.md`: commits per step, the gate result you watched finish (counts and exit status), any regression gate quoted before and after, screenshot paths, what is still open. Quote your brief's claim and say whether it came out true, false or unknown, with the acceptance evidence. Return ONLY that path plus at most 15 lines (long returns can silently fail to arrive). A negative result reported honestly is a good outcome; "I could not determine X, here is its address" is a result.
+
+**Send each report once: as the final text of your turn, not with `SendMessage`.** The lead receives that text when your turn ends. A `SendMessage` report followed by a closing summary reaches the lead twice. Use `SendMessage` only mid-turn, for a question you must wait on or a blocker. In that case, end the turn with one line, for example "Waiting on the lead: spu-objdump." The same applies to replies to the lead: the reply is your turn's final text.
 
 **Your report is the end of the lane.** After sending it, do not commit, merge main or edit your worktree unless the lead sends you back; the lead removes the worktree as soon as the report arrives. Finish everything first.
 

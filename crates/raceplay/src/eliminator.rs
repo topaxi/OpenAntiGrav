@@ -108,6 +108,13 @@ pub(super) fn eliminator_respawn_delay(is_player: bool) -> f32 {
 }
 
 impl Race {
+    /// What this race's Eliminator ends on: kills on a kill rule, points on a score rule. The
+    /// kill-count default where the race was handed none.
+    #[must_use]
+    pub fn eliminator_target(&self) -> u32 {
+        self.sim.eliminator_kill_target
+    }
+
     /// Brings a destroyed craft back, on the terms its mode sets.
     ///
     /// **Only the Eliminator brings one back.** Every craft there returns after
@@ -153,6 +160,9 @@ impl Race {
                 self.sim.respawn_delay[slot] = delay;
                 if mode == Mode::Eliminator {
                     self.credit_kill(slot);
+                    if let Some(law) = self.sim.score_law {
+                        law.charge_death(&mut self.sim.world.ships[slot].standing);
+                    }
                 }
             }
             self.sim.respawn_delay[slot] -= self.sim.dt;
@@ -217,14 +227,21 @@ impl Race {
         }
 
         let target = self.sim.eliminator_kill_target;
+        let scored = self.sim.score_law.is_some();
         let kills = self.sim.world.ships[..self.sim.world.ship_count as usize]
             .iter()
             .filter(|ship| ship.active)
-            .map(|ship| ship.standing.kills)
+            .map(|ship| {
+                if scored {
+                    ship.standing.whole_score()
+                } else {
+                    ship.standing.kills
+                }
+            })
             .max()
             .unwrap_or(0);
-        // Every person's race ends on the same kill count; the field's leader is
-        // the event's, not a slot's.
+        // Every person's race ends on the same count; the field's leader is the
+        // event's, not a slot's.
         for slot in 0..oag_gameplay::MAX_PLAYERS {
             if self.sim.world.person_flown(slot) {
                 self.sim.world.race[slot].eliminator_finished(target, kills);
@@ -304,7 +321,7 @@ impl Race {
         let time = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Shield))
             .map(|shield| shield.time);
         self.sim.world.ships[slot].pickup.take();
@@ -351,7 +368,8 @@ impl Race {
     /// ignored, and so is one more than [`PACK_LOST`] behind, which is a craft
     /// that has come off the circuit rather than one to wait for.
     pub(super) fn eliminator_pack_scale(&self, slot: usize) -> f32 {
-        if self.sim.world.mode() != Mode::Eliminator {
+        // A score Eliminator keeps no pack (`crate::score_pace`).
+        if self.sim.world.mode() != Mode::Eliminator || self.sim.score_pace.is_some() {
             return 1.0;
         }
         let Some(course) = &self.sim.course else {
@@ -407,7 +425,67 @@ impl Race {
             && killer as usize != victim
             && self.sim.world.ships[killer as usize].active
         {
-            self.sim.world.ships[killer as usize].standing.kills += 1;
+            let killer = killer as usize;
+            self.sim.world.ships[killer].standing.kills += 1;
+            if let Some(law) = self.sim.score_law {
+                let person = self.sim.world.person_flown(killer);
+                law.credit_kill(&mut self.sim.world.ships[killer].standing, person);
+            }
+        }
+    }
+
+    /// Credits a landed weapon hit's points to its attacker, the craft's own blast apart.
+    /// A swallowed hit never reaches here: the original's award is past `Ship_ApplyDamage`'s
+    /// Shield return.
+    pub(super) fn credit_hit_points(&mut self, victim: usize, attacker: u8, amount: f32) {
+        let attacker = attacker as usize;
+        let Some(law) = self.sim.score_law else {
+            return;
+        };
+        if attacker == victim || !self.sim.world.ships[attacker].active {
+            return;
+        }
+        let person = self.sim.world.person_flown(attacker);
+        law.credit_damage(&mut self.sim.world.ships[attacker].standing, person, amount);
+    }
+
+    /// Credits this tick's projectile hits: each struck or blasted craft to the impact that
+    /// reached it, the way [`Self::credit_blast`] names an owner.
+    pub(super) fn credit_impact_points(
+        &mut self,
+        impacts: &[Option<oag_weapons::projectile::Impact>],
+        hits: &[oag_weapons::projectile::WeaponHit; MAX_SHIPS],
+    ) {
+        if self.sim.score_law.is_none() {
+            return;
+        }
+        for (slot, hit) in hits.iter().enumerate() {
+            if !hit.landed || hit.amount <= 0.0 {
+                continue;
+            }
+            let position = self.sim.world.ships[slot].physics.body.position;
+            let by = |impact: &&oag_weapons::projectile::Impact| {
+                impact.struck.is_some_and(|struck| struck as usize == slot)
+                    || oag_weapons::projectile::blast_stats(
+                        self.sim.weapons.as_deref(),
+                        impact.kind,
+                    )
+                    .is_some_and(|stats| (position - impact.point).length() <= stats.radius)
+            };
+            if let Some(owner) = impacts.iter().flatten().find(by).map(|impact| impact.owner) {
+                self.credit_hit_points(slot, owner, hit.amount);
+            }
+        }
+    }
+
+    /// A completed lap's points, Eliminator only.
+    pub(super) fn credit_lap_points(&mut self, slot: usize) {
+        if self.sim.world.mode() != Mode::Eliminator {
+            return;
+        }
+        if let Some(law) = self.sim.score_law {
+            let person = self.sim.world.person_flown(slot);
+            law.credit_lap(&mut self.sim.world.ships[slot].standing, person);
         }
     }
 
@@ -503,7 +581,7 @@ impl Race {
             return;
         }
         let Some(stats) =
-            oag_weapons::projectile::blast_stats(self.sim.weapons.as_ref(), impact.kind)
+            oag_weapons::projectile::blast_stats(self.sim.weapons.as_deref(), impact.kind)
         else {
             return;
         };

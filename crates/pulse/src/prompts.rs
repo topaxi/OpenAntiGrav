@@ -8,7 +8,7 @@
 //! twice the width of a face button). The strings carry them inline, for
 //! example `FE_PRESS_TO_CONT` ("Press ε to continue").
 //!
-//! Checked against Pure: its strings and faces were not read for this.
+//! Pure draws the same six (`oag_pure::prompts`).
 
 use oag_title::prompts::{Prompt, Prompts, Scope};
 

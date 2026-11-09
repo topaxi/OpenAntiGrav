@@ -143,6 +143,9 @@ impl Session {
     /// a rectangle. A stage that is not the front end leaves the menus where
     /// they are, which is what makes this safe to call from the frame loop.
     pub(crate) fn open_menus(&mut self) -> Result<()> {
+        // Whatever opens the menus ends photo mode, so a race parked behind them is not held by it.
+        self.leave_photo();
+        self.stop_rumble();
         self.restore_campaign_home();
         let shell = self
             .shell
@@ -169,6 +172,12 @@ impl Session {
         // selection screens' rows - the renderer below draws them with it.
         skin.set_row_ink(oag_ui::pointer::RowInk::measure(&rows_face));
         let model = self.menu_model(&shell, &skin);
+        let pause_scrim = shell
+            .title
+            .pause_menu
+            .filter(|_| model.definition().pages[model.definition().root].id == menu::PAUSE_PAGE)
+            .map(|pause| pause.scrim_argb);
+        let pause_view = pause_scrim.and_then(|_| self.pause_view());
         // **The movie planes are asked for only when there is a movie to put in
         // them.** This used to be unconditionally `None`, on the grounds that
         // wanting them would tie the menus to a stage that had played one; that
@@ -290,6 +299,8 @@ impl Session {
         // through a binding instead of being dropped in place: a race that had
         // not finished is parked below rather than lost. See
         // `Session::suspended_race`.
+        // A race left for the menus (escape, quit, results) stops its motors with it.
+        self.controls.silence_motors();
         let outgoing = std::mem::replace(
             &mut self.stage,
             Stage::Menu(Box::new(MenuStage {
@@ -298,8 +309,14 @@ impl Session {
                 skin,
                 text_atlas,
                 default_atlas: shell.font.clone(),
-                frame: shell.frame.clone(),
-                nav_legend: shell.nav_legend.clone(),
+                frame: if pause_view.is_some() {
+                    shell.frame.without_marks()
+                } else if pause_scrim.is_some() {
+                    shell.frame.without_footer(skin.space().size.1)
+                } else {
+                    shell.frame.clone()
+                },
+                nav_legend: super::player_name::tagged(shell.nav_legend.clone(), &self.settings.player, shell.title),
                 ticker: shell.ticker.clone(),
                 // Free-running from zero on every open, the same choice
                 // `CampaignStage::ticker_elapsed` already makes and for the
@@ -307,6 +324,8 @@ impl Session {
                 // its phase on a menu open, so there is nothing to seed this
                 // from instead.
                 ticker_elapsed: 0.0,
+                pause_scrim: pause_scrim.map(oag_ui::screen::argb_to_rgba),
+                pause_view,
                 marquee: marquee::Timer::default(),
                 // Opening the menus is not a page change: the front end's own
                 // hand-off already had its moment, and starting a transition
@@ -345,6 +364,7 @@ impl Session {
         if let Stage::Race(stage) = outgoing
             && !stage.race.finished()
             && !was_lan
+            && !stage.watching
         {
             self.suspended_race = Some(stage);
         }
@@ -354,8 +374,15 @@ impl Session {
             .set_title(&hints::shell_title(&strings::project_table(
                 self.settings.language.as_deref(),
             )));
+        // A recording left, or one the rebuild refused, lands on the list it came from.
+        if std::mem::take(&mut self.return_to_replays)
+            && let Stage::Menu(stage) = &mut self.stage
+        {
+            stage.menu.push(oag_game::replays::page::PAGE);
+        }
         // An online race that ended lands back in its room.
         self.online_menus_opened();
+        self.ask_player();
         Ok(())
     }
 
@@ -377,10 +404,16 @@ impl Session {
         for (key, value) in settings::menu_seeds(&self.settings, self.anisotropy, title, platform) {
             // The row reads what the game is drawn at, which under gamescope is not the stored
             // value until the player picks one.
-            let value = if key == "graphics.render_scale" {
-                menu::Value::Text(self.render_scale_for(rect).to_string())
-            } else {
-                value
+            let value = match (key, &value) {
+                ("graphics.render_scale", _) => {
+                    menu::Value::Text(self.render_scale_for(rect).to_string())
+                }
+                // An unpicked style reads as the one the menus and the loading screen are in.
+                ("display.front_end_style", menu::Value::Text(text)) if text.is_empty() => self
+                    .loading_assets
+                    .style
+                    .map_or(value, |style| menu::Value::Text(style.to_string())),
+                _ => value,
             };
             // Rows this platform drops (`prepare.rs`) are not a gap.
             let dropped = if settings::platform::hidden_rows(oag_mobile::MOBILE).contains(&key) {
@@ -499,7 +532,10 @@ impl Session {
             self.drop_split_lobby();
         }
         match event {
-            menu::MenuEvent::Changed { setting, value } => self.apply_setting(setting, value),
+            menu::MenuEvent::Changed { setting, value } => {
+                self.apply_setting(setting, value);
+                self.apply_pause_setting(setting);
+            }
             menu::MenuEvent::Fired(menu::Action::LaunchRace) => self.start_race_box(),
             // The MULTIPLAYER page's LOCAL MULTIPLAYER row (`session::multiplayer`).
             menu::MenuEvent::Fired(menu::Action::OpenMultiplayerLocal) => {
@@ -512,6 +548,9 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::OpenOnline) => self.open_online(),
             menu::MenuEvent::Fired(menu::Action::OnlineCreate) => self.open_online_create(),
             menu::MenuEvent::Fired(menu::Action::OnlineJoin) => self.open_online_join(),
+            // The OPTIONS page's PLAYER NAME and PLAYER TAG rows (`session::player_name`).
+            menu::MenuEvent::Fired(menu::Action::EditPlayerName) => self.edit_player_name(),
+            menu::MenuEvent::Fired(menu::Action::EditPlayerTag) => self.edit_player_tag(),
             // A `launch_race` row that names its inputs by setting key (`session::launch_keys`).
             menu::MenuEvent::Launch(keys) => self.launch_keyed(keys),
             // QUIT always quits, parked race or not - it is a row a player
@@ -519,6 +558,15 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::Quit) => {
                 self.quit = true;
             }
+            // The pause menu's PHOTO MODE row (`session::photo`).
+            menu::MenuEvent::Fired(menu::Action::PhotoMode) => self.open_photo_from_menu(),
+            // The pause menu's RESTART RACE and QUIT RACE rows (`session::pause_menu`).
+            menu::MenuEvent::Fired(menu::Action::RestartRace) => self.restart_parked_race(),
+            menu::MenuEvent::Fired(menu::Action::QuitRace) => self.quit_parked_race(),
+            // The REPLAYS page's three rows (`session::replays`).
+            menu::MenuEvent::Fired(menu::Action::WatchReplay) => self.watch_selected_replay(),
+            menu::MenuEvent::Fired(menu::Action::KeepReplay) => self.keep_selected_replay(),
+            menu::MenuEvent::Fired(menu::Action::DeleteReplay) => self.delete_selected_replay(),
             // The AI PILOTS page's own two actions - see `super::pilot_editor`.
             menu::MenuEvent::Fired(menu::Action::SavePilot) => self.save_pilot(),
             menu::MenuEvent::Fired(menu::Action::NewPilot) => self.new_pilot(),
@@ -532,6 +580,8 @@ impl Session {
                 self.custom_campaign = None;
                 self.open_campaign();
             }
+            // The campaign picker's NEW CAMPAIGN row (`session::campaign_editor`).
+            menu::MenuEvent::Fired(menu::Action::OpenCampaignEditor) => self.open_campaign_editor(),
             // A row of the campaign picker: the row's id names the mod campaign.
             menu::MenuEvent::Fired(menu::Action::OpenCustomCampaign) => {
                 let key = match &self.stage {
@@ -616,9 +666,10 @@ impl Session {
         // The campaign writes both fields - see
         // `Session::launch_campaign_cell` - and a RACE-page launch must
         // never inherit one left over from a campaign cell that was backed
-        // out of before racing. The kill target is then set from the KILLS
-        // row below.
+        // out of before racing. The kill and score targets are then set from
+        // the KILLS and TARGET rows below.
         race_options.eliminator_kill_target = None;
+        race_options.eliminator_score_target = None;
         race_options.laps_override = None;
         // Resolved before the circuit below, and out of its usual
         // order beneath the class and difficulty rows: which list a
@@ -646,6 +697,21 @@ impl Session {
         // The KILLS row's pick, for an Eliminator only.
         race_options.eliminator_kill_target =
             self.settings.race.eliminator_kill_target(race_options.mode);
+        // The TARGET row's pick, for an Eliminator only. A stored value this disc's slider does
+        // not step through (a hand edit, a pick from another source) races the minimum, as the
+        // row shows.
+        race_options.eliminator_score_target = self
+            .settings
+            .race
+            .eliminator_score_target(race_options.mode)
+            .filter(|target| {
+                self.shell.as_ref().is_some_and(|shell| {
+                    shell
+                        .score_targets
+                        .iter()
+                        .any(|choice| choice.value == target.to_string())
+                })
+            });
         let chosen = self.shell.as_ref().and_then(|shell| {
             shell
                 .track(race_options.mode, &self.settings.race.track)
@@ -923,7 +989,12 @@ impl Session {
     pub(crate) fn menu_model(&mut self, shell: &super::Shell, skin: &menu::Skin) -> menu::Menu {
         let mut definition = shell.definition.clone();
         oag_game::music_pool::expand(&mut definition, self.music_discs.pool(), &shell.strings);
+        let paused = self.add_pause_screen(&mut definition);
         let mut model = menu::Menu::new(definition);
+        model.set_pause_screen(paused);
+        // PHOTO MODE is a row of the pause menu: there while a race with one view is held
+        // behind the menus, and on no other page of the front end.
+        model.offer(menu::Action::PhotoMode, self.photo_available());
         // Just the first frame's own value - `MenuStage::render` refreshes
         // this every frame off whichever page is actually current, since a
         // player can navigate to a page with a different reservation need
@@ -987,12 +1058,17 @@ impl Session {
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
+        model.supply(menu::ValueSource::ScoreTargets, &shell.score_targets);
         model.supply(menu::ValueSource::Weapons, &shell.weapons);
         model.supply(
             menu::ValueSource::HudStyles,
             &menu::hud_style_choices(shell.title, |skin| {
                 oag_game::unlock::hud_skin_unlocked(skin, &self.records, shell.title)
             }),
+        );
+        model.supply(
+            menu::ValueSource::SafeAreas,
+            &menu::safe_area_choices(shell.title),
         );
         // Enumerated every time the menus open rather than kept from startup,
         // because a screen can be plugged in while the game is running and the
@@ -1067,6 +1143,10 @@ impl Session {
             &oag_game::mods::choices(&shell.mods, &shell.strings),
         );
         oag_game::mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
+        // The files are read each time the menus open, so a race that ended a moment ago is on
+        // the REPLAYS page.
+        let replays = self.replay_choices(shell);
+        model.supply(menu::ValueSource::Replays, &replays);
         self.seed_menu(&mut model, shell.title, shell.platform);
         self.resolve_menu_queries(&mut model);
         settings::supply_reset(

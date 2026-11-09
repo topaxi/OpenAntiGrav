@@ -65,12 +65,13 @@ type = "array"
 itemtype = "string"
 optional = true
 
-[types.mod.default-enabled]
-type = "boolean"
-optional = true
-
 [types.mod.oag]
 type = "string"
+optional = true
+
+# On until the player turns it off. Absent: true, except in a mod with a [texture-pack].
+[types.mod.default-enabled]
+type = "boolean"
 optional = true
 
 [elements]
@@ -257,4 +258,26 @@ type = "float"
 
 [elements.pickup]
 type = "types.pickup"
+optional = true
+
+# `[texture-pack]`: the mod is a PPSSPP texture pack (docs/tools/mods.md, "Texture packs").
+# A folder or zip with a `textures.ini` and no manifest is recognised without one.
+[types.texture-pack]
+type = "table"
+
+[types.texture-pack.format]
+type = "string"
+allowedvalues = ["ppsspp"]
+
+[types.texture-pack.ini]
+type = "string"
+optional = true
+
+[types.texture-pack.serials]
+type = "array"
+itemtype = "string"
+optional = true
+
+[elements.texture-pack]
+type = "types.texture-pack"
 optional = true

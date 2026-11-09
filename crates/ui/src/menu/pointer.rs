@@ -57,7 +57,7 @@
 use crate::kinetic::{Extent, Kinetic};
 use crate::pointer::{Pointer, contains};
 
-use super::{Frame, Menu, MenuEvent, Skin, strip};
+use super::{Entry, Frame, Menu, MenuEvent, Skin, strip};
 
 /// What a click on a region does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -159,7 +159,13 @@ impl Menu {
 
         let pointer = &self.scroll_gesture(pointer, regions);
 
-        let hit = pointer.at.and_then(|at| hit(regions, at));
+        // A row that cannot be chosen is not a target: no hover, no click, no reset.
+        let hit = pointer.at.and_then(|at| hit(regions, at)).filter(|region| {
+            !matches!(
+                self.definition.pages[page].entries.get(region.row),
+                Some(Entry::Inert { .. })
+            )
+        });
         // Whose family was revealed before this tick's hover could move the
         // cursor: a finger's tap arrives as a hover and a click in one tick.
         let revealed_before = self.page().family_of(self.cursor[page]);
@@ -305,7 +311,12 @@ impl Menu {
     /// than snapping.
     fn move_cursor(&mut self, page: usize, row: usize) {
         let rows = self.definition.pages[page].entries.len();
-        if row >= rows {
+        if row >= rows
+            || matches!(
+                self.definition.pages[page].entries[row],
+                Entry::Inert { .. }
+            )
+        {
             return;
         }
         let dir = if row > self.cursor[page] {

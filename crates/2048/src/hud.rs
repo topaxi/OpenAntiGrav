@@ -51,6 +51,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     elimination: skins::played::ELIMINATION,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
+    player_tags: None,
     skins: &[],
 };
 
@@ -73,6 +74,7 @@ pub const HD_CAMPAIGN: &oag_title::HudLayouts = &oag_title::HudLayouts {
     elimination: skins::campaign::ELIMINATION,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
+    player_tags: None,
     skins: &[],
 };
 
@@ -103,6 +105,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     half_unit_glyph_quads: false,
     lit_alpha: None,
     text_shadow: None,
+    text_outline_alpha: None,
     // **Concentric sprites, read off this title's own composed layouts, not
     // copied from HD.** Every one of the 26 layouts that authors a reticle at
     // all authors it as `<Image>` widgets named `MissileSightBG/Outer/Inner/
@@ -153,18 +156,19 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "LeachBeamSightMiddle",
             "LeachBeamSightInner",
         ]),
+        live: None,
     },
     // `None` is "draw what the layout authors", which is the conservative
     // answer for a title whose pickup backdrop colour nothing has measured -
     // Pulse's colour substitution is the one that would need evidence.
     pickup_backdrop_colour: None,
-    // Not just unmeasured: `HUD_pickups.xml`'s `PickupBackground` authors no
-    // `<Values>` at all, and the icon is one widget (`PickupIcon`) whose UV
-    // rect the runtime rewrites per weapon (see `pickup_icon_uv` below)
-    // rather than thirteen names `pickup_icon_name` can select between the
-    // way Pulse's and HD's own dialects allow. A colour table keyed by name
-    // has nothing to attach to yet - see `docs/formats/2048-hud.md`'s "What
-    // is not done".
+    // The coloured backdrop is never drawn: `HUD_pickups.xml`'s `PickupBackground`
+    // authors no `<Values>` (no texture, no size) and a held Rocket on Vita3K shows
+    // only the icon disc inside `PickupBgFrame`'s fixed grey arc. The icon is one
+    // widget (`PickupIcon`) whose UV rect the runtime rewrites per weapon (see
+    // `pickup_icon_uv` below), so there is no per-weapon name for a colour table to
+    // key on either (`docs/ghidra/functions/vita-2048-eu-v104/pickup-backdrop.md`,
+    // "What draws it").
     pickup_colours: None,
     pickup_fade: None,
     // 2048's `PickupIcon` is a single `<Image>` widget whose UV rect the
@@ -252,8 +256,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         oag_title::hud::HudSway { x_per_lean: -15 },
         "hd",
     )),
-    // Checked 2026-10-21: the patch front end (`data09.psarc`) authors no `Safe Area Setting`.
-    safe_area: None,
+    // The disc authors no `Safe Area Setting` (`docs/formats/hd-hud.md`, "SCREEN SIZE on every
+    // title"), so the shared slider stands in, drawn 1:1 until the player moves it.
+    safe_area: Some(oag_title::pre_race::Sourced::chosen(
+        oag_title::hud::SafeArea::SHARED,
+    )),
     dynamic_hud: None,
     resume_countdown: oag_title::hud::ResumeCountdown::Text,
     assist: None,

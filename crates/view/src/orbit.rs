@@ -298,6 +298,7 @@ impl Session {
             emissive_buffer: _,
             stamp_pipeline: _,
             prepass: _,
+            plain_draws: _,
             culled: _,
             unwritten: _,
         } = mesh_render::build(

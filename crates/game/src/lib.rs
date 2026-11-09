@@ -41,8 +41,11 @@ pub mod hud_countdown;
 pub mod hud_overlay;
 pub mod hud_views;
 pub mod icon;
+pub mod idle;
+pub mod music_pad;
 pub mod pause;
 pub mod pending_race;
+pub mod photo;
 pub mod touch_controls;
 /// The abstract button layer, which lives in `oag-gameplay` because the
 /// simulation owns the input snapshot type and everything that produces one
@@ -55,13 +58,13 @@ pub use oag_gameplay::input;
 /// is a device concern, and the front end is one of its consumers rather than
 /// its owner.
 pub use oag_input::keys;
-pub mod gpu_workers;
 pub mod lan_list;
 pub mod launcher;
 pub mod livery_row;
 pub mod loading;
 pub mod logfile;
 pub mod medal_watch;
+pub mod menu_tree;
 pub mod mod_extensions;
 pub mod mods;
 pub mod movie;
@@ -81,13 +84,17 @@ pub mod race_seed;
 pub mod records;
 pub mod remix;
 pub mod render;
+pub mod replay_view;
+pub mod replays;
 pub mod results_tables;
+pub mod rumble;
 pub mod scoreboard;
 pub mod screen;
 pub mod settings;
 pub mod sound;
 pub mod split_screen;
 pub mod team_hull;
+pub mod texture_pack;
 pub mod track_panel;
 pub mod unlock;
 

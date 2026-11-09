@@ -347,11 +347,13 @@ fn the_schema_and_the_loading_loader_agree_on_every_example() {
             let _ = LoadingLayouts::parse(&text);
         }
     }
-    let shipped = std::fs::read_to_string(format!(
-        "{}/../../assets/fallback/Data/XML/LoadingScreen_HD.toml",
-        env!("CARGO_MANIFEST_DIR")
-    ))
-    .unwrap();
-    oag_schema::validate::accepts("screen-layout", 1, &shipped).unwrap();
-    LoadingLayouts::parse(&shipped).unwrap();
+    for title in ["HD", "Omega"] {
+        let shipped = std::fs::read_to_string(format!(
+            "{}/../../assets/fallback/Data/XML/LoadingScreen_{title}.toml",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap();
+        oag_schema::validate::accepts("screen-layout", 1, &shipped).unwrap();
+        LoadingLayouts::parse(&shipped).unwrap();
+    }
 }

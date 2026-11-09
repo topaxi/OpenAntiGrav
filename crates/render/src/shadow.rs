@@ -258,6 +258,37 @@ pub struct Cast<'a> {
 /// *away* from the surface - up a wall, or behind the craft on a near-vertical
 /// plane - which is skipped rather than drawn folded over.
 pub fn hull_triangles(cast: &Cast, out: &mut Vec<GpuVertex>) -> usize {
+    hull_triangles_with(cast, out, &mut HullScratch::default())
+}
+
+/// The lists [`hull_triangles_with`] and [`conform_to_floor_with`] work in, kept by a caller
+/// that casts every tick so a warm scratch casts a hull without allocating. Nothing in it
+/// carries from one call to the next but its capacity.
+#[derive(Debug, Default)]
+pub struct HullScratch {
+    outline: oag_vex::shadow_occluder::OutlineScratch,
+    projected: Vec<Vec3>,
+    flat: Vec<[f32; 2]>,
+    ears: Vec<[usize; 3]>,
+    remaining: Vec<usize>,
+    coarse: Vec<GpuVertex>,
+    asked: HashMap<[u32; 6], Option<f32>>,
+}
+
+/// [`hull_triangles`], working in `scratch`.
+pub fn hull_triangles_with(
+    cast: &Cast,
+    out: &mut Vec<GpuVertex>,
+    scratch: &mut HullScratch,
+) -> usize {
+    let HullScratch {
+        outline,
+        projected,
+        flat,
+        ears,
+        remaining,
+        ..
+    } = scratch;
     let normal = cast.normal.normalize_or_zero();
     // The direction in world space is the axis, carried with the road's tilt
     // (see [`Cast::axis`]); the hull's own space sees it through the craft's
@@ -280,22 +311,21 @@ pub fn hull_triangles(cast: &Cast, out: &mut Vec<GpuVertex>) -> usize {
         return 0;
     }
     let mut rings = 0;
-    for ring in cast.hull.outline(local_axis.to_array()) {
-        let projected: Vec<Vec3> = ring
-            .iter()
-            .map(|slot| {
-                let local = cast
-                    .hull
-                    .vertices
-                    .get(usize::from(*slot))
-                    .copied()
-                    .unwrap_or([0.0; 3]);
-                let world = cast.model.transform_point3(Vec3::from_array(local));
-                // Where the ray from this vertex meets the contact plane.
-                let travel = (cast.contact - world).dot(normal) / facing;
-                world + direction * travel
-            })
-            .collect();
+    cast.hull.outline_into(local_axis.to_array(), outline);
+    for ring in outline.rings() {
+        projected.clear();
+        projected.extend(ring.iter().map(|slot| {
+            let local = cast
+                .hull
+                .vertices
+                .get(usize::from(*slot))
+                .copied()
+                .unwrap_or([0.0; 3]);
+            let world = cast.model.transform_point3(Vec3::from_array(local));
+            // Where the ray from this vertex meets the contact plane.
+            let travel = (cast.contact - world).dot(normal) / facing;
+            world + direction * travel
+        }));
         if projected.len() < 3 || projected.iter().any(|p| !p.is_finite()) {
             continue;
         }
@@ -322,11 +352,14 @@ pub fn hull_triangles(cast: &Cast, out: &mut Vec<GpuVertex>) -> usize {
             normal.any_orthonormal_pair().0,
             normal.any_orthonormal_pair().1,
         );
-        let flat: Vec<[f32; 2]> = projected
-            .iter()
-            .map(|point| [point.dot(right), point.dot(up)])
-            .collect();
-        for [a, b, c] in ear_clip(&flat) {
+        flat.clear();
+        flat.extend(
+            projected
+                .iter()
+                .map(|point| [point.dot(right), point.dot(up)]),
+        );
+        ear_clip(flat, ears, remaining);
+        for &[a, b, c] in ears.iter() {
             out.push(vertex(projected[a]));
             out.push(vertex(projected[b]));
             out.push(vertex(projected[c]));
@@ -363,16 +396,29 @@ pub fn hull_triangles(cast: &Cast, out: &mut Vec<GpuVertex>) -> usize {
 pub fn conform_to_floor(
     vertices: &mut Vec<GpuVertex>,
     first: usize,
-    mut floor: impl FnMut(Vec3, Vec3) -> Option<f32>,
+    floor: impl FnMut(Vec3, Vec3) -> Option<f32>,
 ) {
-    let coarse: Vec<GpuVertex> = vertices.drain(first..).collect();
+    conform_to_floor_with(vertices, first, floor, &mut HullScratch::default());
+}
+
+/// [`conform_to_floor`], working in `scratch`.
+pub fn conform_to_floor_with(
+    vertices: &mut Vec<GpuVertex>,
+    first: usize,
+    mut floor: impl FnMut(Vec3, Vec3) -> Option<f32>,
+    scratch: &mut HullScratch,
+) {
+    let HullScratch { coarse, asked, .. } = scratch;
+    coarse.clear();
+    coarse.extend(vertices.drain(first..));
     // One ray per distinct point: a triangle's corner and midpoints recur in
     // the three or four small triangles it splits into, and the ear-clipped
     // fan of a ring shares its corners and diagonals across neighbours.
     // `floor` is asked about the exact bits of a position and a normal, so
     // the answer for a repeat is the answer already had, bit for bit; the
     // table is looked up, never walked, and lives for this one hull.
-    let mut asked: HashMap<[u32; 6], Option<f32>> = HashMap::with_capacity(coarse.len() * 2);
+    asked.clear();
+    asked.reserve(coarse.len() * 2);
     let mut place = |vertex: GpuVertex| {
         let at = Vec3::from_array(vertex.position);
         let normal = Vec3::from_array(vertex.normal);
@@ -420,10 +466,13 @@ pub fn conform_to_floor(
 /// no hull on the disc produces - has its remainder emitted as a fan rather
 /// than dropped: some fill is closer to right than none, and the alternative
 /// is a shadow with a bite out of it.
-fn ear_clip(points: &[[f32; 2]]) -> Vec<[usize; 3]> {
-    let mut out = Vec::new();
+///
+/// The triples go to `out` and the walk is done in `remaining`, both cleared first.
+fn ear_clip(points: &[[f32; 2]], out: &mut Vec<[usize; 3]>, remaining: &mut Vec<usize>) {
+    out.clear();
+    remaining.clear();
     if points.len() < 3 {
-        return out;
+        return;
     }
     let cross = |o: [f32; 2], a: [f32; 2], b: [f32; 2]| {
         (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
@@ -440,7 +489,7 @@ fn ear_clip(points: &[[f32; 2]]) -> Vec<[usize; 3]> {
         .sum();
     let sign = if area < 0.0 { -1.0 } else { 1.0 };
 
-    let mut remaining: Vec<usize> = (0..points.len()).collect();
+    remaining.extend(0..points.len());
     while remaining.len() > 3 {
         let before = remaining.len();
         let mut at = 0;
@@ -483,7 +532,6 @@ fn ear_clip(points: &[[f32; 2]]) -> Vec<[usize; 3]> {
     for at in 1..remaining.len().saturating_sub(1) {
         out.push([remaining[0], remaining[at], remaining[at + 1]]);
     }
-    out
 }
 
 /// The alpha-over blend a shadow darkens with.
@@ -659,9 +707,63 @@ pub struct Pipeline {
     uniforms: wgpu::Buffer,
     /// Where the appended solid silhouette sits in [`Drawer`]'s list.
     solid: usize,
-    /// `(silhouette, first vertex, count)` per run, as the last
-    /// [`Pipeline::upload`] grouped them.
+    /// The last [`Pipeline::upload`]'s vertices and runs, refilled in place.
+    batch: Batch,
+}
+
+/// One upload's vertices and the runs they draw in, kept between frames.
+///
+/// A frame's shadow is a few dozen vertices against room for [`MAX_VERTICES`] (192 KiB), so
+/// the list is reserved once and refilled, never allocated per view per frame.
+#[derive(Debug)]
+struct Batch {
+    vertices: Vec<GpuVertex>,
+    /// `(silhouette, first vertex, count)` per run.
     runs: Vec<Run>,
+}
+
+impl Batch {
+    fn new() -> Self {
+        Self {
+            vertices: Vec::with_capacity(MAX_VERTICES),
+            runs: Vec::new(),
+        }
+    }
+
+    /// Replaces the batch with `placements`' quads and `hulls`' triangles.
+    ///
+    /// The blob quads first, grouped so each texture is one draw; then the `original`
+    /// tier's polygons, which all sample the solid texel (`solid`) and are therefore one
+    /// draw however many craft cast one.
+    fn refill(&mut self, solid: usize, placements: &[Placement], hulls: &[GpuVertex]) {
+        let Self { vertices, runs } = self;
+        vertices.clear();
+        runs.clear();
+        for index in 0..solid {
+            let first = vertices.len() as u32;
+            for placement in placements
+                .iter()
+                .filter(|p| p.silhouette == index && p.strength > 0.0)
+                .take(MAX_QUADS.saturating_sub(vertices.len() / 6))
+                .take(MAX_QUAD_VERTICES / 6)
+            {
+                vertices.extend(quad(placement));
+            }
+            let count = vertices.len() as u32 - first;
+            if count > 0 {
+                runs.push((index, first, count));
+            }
+        }
+        let first = vertices.len() as u32;
+        let room = MAX_VERTICES - vertices.len();
+        // Truncated at a whole triangle: a partial one is a stray wedge across
+        // the road, which is worse than a shadow that stops.
+        let kept = hulls.len().min(room) / 3 * 3;
+        vertices.extend_from_slice(&hulls[..kept]);
+        if kept > 0 {
+            runs.push((solid, first, kept as u32));
+        }
+    }
 }
 
 impl Pipeline {
@@ -842,7 +944,7 @@ impl Pipeline {
             },
             uniforms,
             solid,
-            runs: Vec::new(),
+            batch: Batch::new(),
         }
     }
 
@@ -869,37 +971,13 @@ impl Pipeline {
         block[7] = [0.0, 0.0, 0.0, 1.0];
         queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&block));
 
-        self.runs.clear();
-        let mut vertices: Vec<GpuVertex> = Vec::with_capacity(MAX_VERTICES);
-        // The blob quads first, grouped so each texture is one draw; then the
-        // `original` tier's polygons, which all sample the solid texel and are
-        // therefore one draw however many craft cast one.
-        for index in 0..self.solid {
-            let first = vertices.len() as u32;
-            for placement in placements
-                .iter()
-                .filter(|p| p.silhouette == index && p.strength > 0.0)
-                .take(MAX_QUADS.saturating_sub(vertices.len() / 6))
-                .take(MAX_QUAD_VERTICES / 6)
-            {
-                vertices.extend(quad(placement));
-            }
-            let count = vertices.len() as u32 - first;
-            if count > 0 {
-                self.runs.push((index, first, count));
-            }
-        }
-        let first = vertices.len() as u32;
-        let room = MAX_VERTICES - vertices.len();
-        // Truncated at a whole triangle: a partial one is a stray wedge across
-        // the road, which is worse than a shadow that stops.
-        let kept = hulls.len().min(room) / 3 * 3;
-        vertices.extend_from_slice(&hulls[..kept]);
-        if kept > 0 {
-            self.runs.push((self.solid, first, kept as u32));
-        }
-        if !vertices.is_empty() {
-            queue.write_buffer(&self.drawer.vertices, 0, bytemuck::cast_slice(&vertices));
+        self.batch.refill(self.solid, placements, hulls);
+        if !self.batch.vertices.is_empty() {
+            queue.write_buffer(
+                &self.drawer.vertices,
+                0,
+                bytemuck::cast_slice(&self.batch.vertices),
+            );
         }
     }
 
@@ -917,7 +995,7 @@ impl Pipeline {
     /// What the last [`Pipeline::upload`] left to draw, for [`Self::draw`].
     #[must_use]
     pub fn runs(&self) -> &[Run] {
-        &self.runs
+        &self.batch.runs
     }
 
     /// How many blob quads the last [`Pipeline::upload`] kept.
@@ -927,7 +1005,8 @@ impl Pipeline {
     /// difference needs something to read.
     #[must_use]
     pub fn quads(&self) -> usize {
-        self.runs
+        self.batch
+            .runs
             .iter()
             .filter(|(index, _, _)| *index != self.solid)
             .map(|(_, _, count)| *count as usize / 6)
@@ -937,7 +1016,8 @@ impl Pipeline {
     /// How many hull triangles it kept, the same way.
     #[must_use]
     pub fn hull_triangles(&self) -> usize {
-        self.runs
+        self.batch
+            .runs
             .iter()
             .filter(|(index, _, _)| *index == self.solid)
             .map(|(_, _, count)| *count as usize / 3)
@@ -970,6 +1050,7 @@ impl Drawer {
     }
 }
 
+mod layer_uniforms;
 pub mod map;
 pub mod occlusion;
 pub mod self_shadow;

@@ -20,9 +20,11 @@
 //!   gap: 2048 authors no `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary
 //!   anywhere, a touch-icon grid over a persistent scene instead
 //!   ([`oag_title::FrontEnd::touch`]).
-//! - [`Title::loading`] is `None` on the same terms `front_end` used to be: a
-//!   real gap rather than a structural one - a real loading screen with no
-//!   located plugin XML. [`Title::music`] is `Some` since 2026-09-25:
+//! - [`Title::loading`] is `None`: a real gap rather than a structural one. The
+//!   executable's race load is `LoadingScreen` kind 4 (the mode's event card or a
+//!   controls still, and a `Blue2048` percentage box), read and not built; the HD
+//!   feature screen (kind 7) it also carries is started by no call site. See
+//!   `docs/formats/2048-loading.md`. [`Title::music`] is `Some` since 2026-09-25:
 //!   `data/audio/sound/frontend.bnk`, the bank this thread's own evidence
 //!   first pointed at, turned out to carry no name table at all (so it
 //!   cannot be what a cue name addresses); the front end's music is instead
@@ -88,6 +90,13 @@ pub const TITLE: &Title = &Title {
     front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
+    eliminator: oag_title::pre_race::Sourced::inherited(
+        oag_title::eliminator::EliminatorRule::Kills,
+        "Wipeout Pulse",
+    ),
+    // The executable has it, off `<Misc eliminator_flip_time>` per craft and class; not wired
+    // (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Per title").
+    eliminator_flip: oag_title::pre_race::Sourced::chosen(None),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Hd,
@@ -124,6 +133,9 @@ pub const TITLE: &Title = &Title {
     }),
     // No prompt glyph of this title's has been read; the disc's own draw unchanged.
     prompts: &oag_title::prompts::Prompts::UNREAD,
+    profile: oag_title::profile::Profile::NEITHER,
+    photo: oag_title::photo::Strings::NONE,
+    photo_shot: Some(oag_title::photo::Accumulation::WIPEOUT_2048),
     // 2048's own recovery is unread; HD's, which runs Pulse's.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout HD"),
     // 2048's authored mix owns the buses.
@@ -135,6 +147,7 @@ pub const TITLE: &Title = &Title {
     ),
     speech_follows_effects: oag_title::pre_race::Sourced::chosen(false),
     master_trim_db: oag_title::pre_race::Sourced::chosen(-4.0),
+    rear_occlusion: None,
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
     loading: None,
@@ -147,6 +160,8 @@ pub const TITLE: &Title = &Title {
     // The proximity and environment shadows are not built (`docs/rendering/shadows.md`).
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
+    // Ships the 69 files and reads none (`docs/gameplay/rumble.md`).
+    rumble: oag_title::rumble::Rumble::Absent,
     // **2048's own tables, beside the HD-derived ones.** The archive carries
     // five `weaponstats*` documents: HD's three (`_Race`, `_Elimination`,
     // `_Detonator`) and two suffixed `_2048`. The suffixed pair is this
@@ -171,6 +186,9 @@ pub const TITLE: &Title = &Title {
         // HD's law, inherited: 2048's own Autopilot update and cancel are unread.
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
+        // Read in `WeaponPads_TestCraft`: the Eliminator family skips the stamp
+        // (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title").
+        pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(false),
         // Measured: 2048's `WeaponAi_DecideFireOrAbsorb` equals Omega's law
         // (`vita-2048-eu-v104/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(
@@ -233,6 +251,7 @@ pub const TITLE: &Title = &Title {
     // No campaign layout read (2048's campaign is its own event map): the
     // load path that reaches this falls through to Pulse's reader and refuses.
     main_menu: main_menu::MAIN_MENU,
+    pause_menu: None,
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: None,
@@ -249,6 +268,8 @@ pub const TITLE: &Title = &Title {
         grid_archive: None,
         fury_card_gain: None,
         grid_card_pose: None,
+        selection_card_scale: None,
+        medal_tier_rows: None,
         frontend_glow: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
         custom_campaigns: false,
@@ -272,6 +293,9 @@ pub const TITLE: &Title = &Title {
 const EFFECTS: oag_title::Effects = {
     use oag_title::{Burst, EffectSpec, Origin, Trigger, engine_effects};
     let mut effects = oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
+        // The original never spawns its own `WO_TRAIL_HITSHIP`
+        // (`docs/ghidra/functions/vita-2048-eu-v104/trail-hits.md`).
+        .trail_hits_on_setting()
         .without(Trigger::PlasmaBlast)
         .without(Trigger::EngineFlare)
         .without(Trigger::LeachbeamEnergy)

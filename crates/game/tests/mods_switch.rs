@@ -1,10 +1,10 @@
 //! The MODS page's ENABLED row: a mod turned off adds nothing and stays listed, the
 //! built-in cannot be turned off, and the row follows the MOD row.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use oag_game::mods::{self, Mods};
-use oag_game::settings::Mods as Switches;
 use oag_ui::language::StringTable;
 use oag_ui::menu::{BUILT_IN, Menu, Value, ValueSource};
 
@@ -43,15 +43,16 @@ fn base(name: &str) -> PathBuf {
     dir
 }
 
-fn off(ids: &[&str]) -> Switches {
-    Switches {
-        disabled: ids.iter().map(|id| (*id).to_string()).collect(),
-        ..Switches::default()
-    }
+fn off(ids: &[&str]) -> BTreeSet<String> {
+    ids.iter().map(|id| (*id).to_string()).collect()
 }
 
-fn load(base: &Path, switches: &Switches) -> Mods {
-    Mods::load_from(&[base.to_path_buf()], switches).unwrap()
+fn load(base: &Path, disabled: &BTreeSet<String>) -> Mods {
+    let switches = oag_game::settings::Mods {
+        disabled: disabled.clone(),
+        ..Default::default()
+    };
+    Mods::load_from(&[base.to_path_buf()], &switches).unwrap()
 }
 
 fn build(mods: &Mods) -> mods::Built {
@@ -75,7 +76,7 @@ fn has_row(built: &mods::Built, id: &str) -> bool {
 #[test]
 fn a_mod_turned_off_adds_no_row_and_stays_listed_to_be_turned_back_on() {
     let dir = base("off");
-    let on = build(&load(&dir, &Switches::default()));
+    let on = build(&load(&dir, &BTreeSet::new()));
     assert!(has_row(&on, "garage"), "{:?}", on.listing);
     let turned_off = load(&dir, &off(&["test.garage"]));
     let built = build(&turned_off);
@@ -127,14 +128,14 @@ fn the_built_in_cannot_be_turned_off() {
         "the MODS row is the built-in's; it stays"
     );
     assert_eq!(built.listing[0].enabled, Some(true));
-    let mut switches = Switches::default();
+    let mut switches = oag_game::settings::Mods::default();
     assert!(!mods::switch(
         &mut switches,
         oag_mod::extras::ID,
-        true,
-        false
+        false,
+        true
     ));
-    assert_eq!(switches, Switches::default());
+    assert!(switches.disabled.is_empty());
     let (choices, value) = mods::switch_for(&built.listing[0], &StringTable::default());
     assert_eq!(value, "on");
     assert_eq!(choices.len(), 1, "one value: nothing to step to");
@@ -147,54 +148,16 @@ fn the_built_in_cannot_be_turned_off() {
 
 #[test]
 fn the_switch_turns_a_mod_off_and_on_again_in_the_set() {
-    let mut switches = Switches::default();
-    assert!(mods::switch(&mut switches, "test.garage", true, false));
+    let mut switches = oag_game::settings::Mods::default();
+    assert!(mods::switch(&mut switches, "test.garage", false, true));
     assert!(
-        !mods::switch(&mut switches, "test.garage", true, false),
+        !mods::switch(&mut switches, "test.garage", false, true),
         "already off"
     );
-    assert_eq!(switches, off(&["test.garage"]));
+    assert_eq!(switches.disabled, off(&["test.garage"]));
     assert!(mods::switch(&mut switches, "test.garage", true, true));
-    assert_eq!(switches, Switches::default());
-}
-
-#[test]
-fn a_mod_that_ships_off_is_off_until_the_player_turns_it_on() {
-    let dir = base("default-off");
-    let manifest = dir.join("garage/oag-mod.toml");
-    let text = std::fs::read_to_string(&manifest).unwrap();
-    std::fs::write(
-        &manifest,
-        text.replace("[mod]\n", "[mod]\ndefault-enabled = false\n"),
-    )
-    .unwrap();
-
-    let none = Switches::default();
-    let shipped = load(&dir, &none);
-    assert!(
-        shipped.is_disabled("test.garage"),
-        "default-enabled = false"
-    );
-    assert!(!has_row(&build(&shipped), "garage"));
-    let listing = build(&shipped).listing;
-    let entry = listing.iter().find(|m| m.id == "test.garage").unwrap();
-    assert_eq!(entry.enabled, Some(false), "the MODS page shows it off");
-    assert!(!entry.default_enabled);
-
-    let mut switches = none;
-    assert!(mods::switch(&mut switches, "test.garage", false, true));
-    assert!(switches.enabled.contains("test.garage") && switches.disabled.is_empty());
-    let on = load(&dir, &switches);
-    assert!(!on.is_disabled("test.garage"));
-    assert!(has_row(&build(&on), "garage"), "the player's switch wins");
-
-    assert!(mods::switch(&mut switches, "test.garage", false, false));
-    assert_eq!(
-        switches,
-        Switches::default(),
-        "back at the default, nothing stored"
-    );
-    assert!(load(&dir, &switches).is_disabled("test.garage"));
+    assert!(switches.disabled.is_empty());
+    assert!(switches.enabled.is_empty());
 }
 
 #[test]
@@ -258,7 +221,7 @@ fn fingerprint_mod(dir: &Path, folder: &str, extra: &str, files: &[&str]) {
 }
 
 fn fingerprint_of(dir: &Path) -> u64 {
-    load(dir, &Switches::default()).content_fingerprint(&Default::default())
+    load(dir, &BTreeSet::new()).content_fingerprint(&Default::default())
 }
 
 fn empty_base(name: &str) -> PathBuf {
@@ -333,7 +296,7 @@ fn a_channel_nobody_loaded_sends_is_warned_about_by_name_on_the_listener() {
             .unwrap()
             .table(&strings)
     };
-    let both = build(&load(&dir, &Switches::default()));
+    let both = build(&load(&dir, &BTreeSet::new()));
     let ear = lines(&both, "test.ear");
     assert!(
         ear.contains(&("HEARS".into(), "test.mouth/hello".into())),
@@ -359,7 +322,7 @@ fn a_flat_list_front_end_with_four_lines_keeps_the_no_one_sends_warning() {
         "listens = [\"test.mouth/hello\"]\n",
     );
     let strings = StringTable::default();
-    let built = build(&load(&dir, &Switches::default()));
+    let built = build(&load(&dir, &BTreeSet::new()));
     let ear = built.listing.iter().find(|m| m.id == "test.ear").unwrap();
     let lines = ear.table_within(&strings, 4);
     assert!(lines.len() <= 4, "{lines:?}");
@@ -370,53 +333,45 @@ fn a_flat_list_front_end_with_four_lines_keeps_the_no_one_sends_warning() {
     assert!(lines.iter().any(|(l, _)| l == "ADDS"), "{lines:?}");
 }
 
-/// A simulation mod's `sim` pick is in the LAN fingerprint, so two machines on different picks
-/// are refused as having different mods; its `view` pick is not, so a Deck on Low and a desktop
-/// on High still race together.
+/// A mod that starts off (a texture pack) is off until the player turns it on, and the switch
+/// is the `enabled` list, not `disabled`: so it is a mod installed later that takes its own
+/// default, and turning it off again leaves nothing behind.
 #[test]
-fn a_sim_pick_changes_the_lan_fingerprint_and_a_view_pick_does_not() {
-    let simulation = "\n[extension]\nsimulation = true\napi = 1\nstate_bytes = 64\n\n[extension.rules]\nmodule = \"ext/rules.wasm\"\n";
-    let dir = base("fingerprint-picks");
-    fingerprint_mod(&dir, "picks", simulation, &["ext/rules.wasm"]);
+fn a_texture_pack_starts_off_and_its_switch_is_the_enabled_list() {
+    let dir = base("pack");
+    let pack = dir.join("Some Pulse Pack");
+    std::fs::create_dir_all(&pack).unwrap();
     std::fs::write(
-        dir.join("picks/menu.toml"),
-        r#"
-[[page]]
-id = "p"
-title = "P"
-[[page.entry]]
-kind = "choice"
-label = "RULES"
-setting = "mod.test.picks.rules"
-values = ["a", "b"]
-default = "a"
-[[page.entry]]
-kind = "choice"
-label = "LOOK"
-setting = "mod.test.picks.look"
-values = ["low", "high"]
-default = "high"
-scope = "view"
-"#,
+        pack.join("textures.ini"),
+        "[options]\nhash = xxh64\n[games]\nUCES00465 = textures.ini\n[hashes]\n",
     )
     .unwrap();
-    let mods = load(&dir, &Switches::default());
-    let picks = |saved: &[(&str, &str)]| {
-        let mut table = oag_game::settings::mod_settings::ModSettings::new();
-        for (key, value) in saved {
-            oag_game::settings::mod_settings::set(
-                &mut table,
-                &format!("mod.test.picks.{key}"),
-                value,
-            );
-        }
-        mods.content_fingerprint(&table)
-    };
-    let rest = picks(&[]);
-    assert_ne!(
-        picks(&[("rules", "b")]),
-        rest,
-        "a sim pick is part of the identity"
+    let id = "ppsspp.some-pulse-pack";
+
+    let mut switches = oag_game::settings::Mods::default();
+    let loaded = Mods::load_from(std::slice::from_ref(&dir), &switches).unwrap();
+    assert!(
+        loaded.is_disabled(id),
+        "off before the player says otherwise"
     );
-    assert_eq!(picks(&[("look", "low")]), rest, "a view pick is not");
+    assert!(loaded.player().all(|m| m.manifest.id != id));
+    let listing = build(&loaded).listing;
+    let entry = listing.iter().find(|l| l.id == id).expect("listed");
+    assert_eq!(entry.enabled, Some(false));
+    assert!(!entry.default_enabled);
+
+    assert!(mods::switch(&mut switches, id, true, entry.default_enabled));
+    assert!(switches.enabled.contains(id) && switches.disabled.is_empty());
+    let loaded = Mods::load_from(std::slice::from_ref(&dir), &switches).unwrap();
+    assert!(!loaded.is_disabled(id));
+    assert!(loaded.player().any(|m| m.manifest.id == id));
+
+    assert!(mods::switch(
+        &mut switches,
+        id,
+        false,
+        entry.default_enabled
+    ));
+    assert!(switches.enabled.is_empty() && switches.disabled.is_empty());
+    assert!(Mods::load_from(&[dir], &switches).unwrap().is_disabled(id));
 }

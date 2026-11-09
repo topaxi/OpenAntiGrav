@@ -200,6 +200,7 @@ impl Session {
             languages: Vec::new(),
             modes: menu::mode_choices(&strings),
             kill_targets: Vec::new(),
+            score_targets: Vec::new(),
             weapons: Vec::new(),
             entries: None,
             front_end_styles: Vec::new(),
@@ -220,6 +221,7 @@ impl Session {
             nav_legend: None,
             ticker: None,
             fury_backdrop: None,
+            pause_screens: Default::default(),
             // 2048's front end is unread, so its race launches from the
             // RACE page the way every title's did before the pickers.
             track_select: None,

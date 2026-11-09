@@ -42,13 +42,7 @@
 /// of adding it.
 #[must_use]
 pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
-    // Inside-pass timestamps and fragment counts only for `perfprobe::marks`, so a default build
-    // asks a device for exactly what it always did.
-    let probe = if cfg!(feature = "perf-probe") {
-        wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES | wgpu::Features::PIPELINE_STATISTICS_QUERY
-    } else {
-        wgpu::Features::empty()
-    };
+    let probe = probe_features();
     // The binding arrays are the `bindless` mesh variant's (`super::bindless`):
     // both or neither, since the variant needs the two together.
     let arrays = if adapter.features().contains(super::bindless::FEATURES) {
@@ -63,6 +57,17 @@ pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
             | wgpu::Features::SHADER_F16
             | probe)
         | arrays
+}
+
+/// Inside-pass timestamps and fragment counts, only for `perfprobe::marks`: a default build asks
+/// a device for exactly what it always did, so a timestamp in a pass could not even validate
+/// there, and a normal frame writes none.
+fn probe_features() -> wgpu::Features {
+    if cfg!(feature = "perf-probe") {
+        wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES | wgpu::Features::PIPELINE_STATISTICS_QUERY
+    } else {
+        wgpu::Features::empty()
+    }
 }
 
 /// The device descriptor every `request_device` in this workspace uses.
@@ -111,4 +116,18 @@ pub fn required_limits(adapter: &wgpu::Adapter) -> wgpu::Limits {
         wgpu::Limits::default().using_resolution(adapter.limits()),
         adapter,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::probe_features;
+
+    #[test]
+    fn a_default_build_asks_for_no_timestamp_inside_a_pass() {
+        assert_eq!(
+            probe_features().is_empty(),
+            !cfg!(feature = "perf-probe"),
+            "the probe's device features belong to `perf-probe` alone"
+        );
+    }
 }

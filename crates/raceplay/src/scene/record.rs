@@ -19,7 +19,8 @@
 
 use super::viewports::Layer;
 use super::*;
-use crate::drawable::draw::Lists;
+use crate::drawable::TrackCull;
+use crate::drawable::draw::{Interleave, Lists};
 
 /// One thing a view's scene pass draws, in the order the pass draws them.
 pub(super) enum Draw<'a> {
@@ -104,8 +105,9 @@ pub(super) struct EffectsDrawn {
 }
 
 /// The strip pipelines, in the order the effects draw them: the Leach beam, the magstrip wake's
-/// contact quads and arcs, the Rocket smoke and HD's Leach strip.
-const BEAMS: usize = 5;
+/// contact quads and arcs, the Missile's ribbons and explosion streaks, the Rocket smoke and
+/// HD's Leach strip.
+const BEAMS: usize = 7;
 
 /// One view's scene pass, decided: everything [`Recorder::record`] reads that is not the scene's
 /// own GPU objects.
@@ -118,6 +120,10 @@ pub(super) struct ViewPass<'a> {
     /// The fourth row of the unjittered view-projection matrix: `clip.w`, the view
     /// depth the blended list's list-B meshes are put in order by.
     pub(super) depth_plane: [f32; 4],
+    /// The queue key of each craft's engine flare that is drawn among the circuit's blended
+    /// list rather than after it (`flare_key`), in the order of the exhaust pipeline's flare
+    /// quads. Empty unless [`Self::ribbon_first`].
+    pub(super) flare_keys: Vec<u32>,
     pub(super) frustum: Option<Frustum>,
     pub(super) visible_set: Option<VisibleSet>,
     pub(super) chunk_set: Option<ChunkSet>,
@@ -131,6 +137,9 @@ pub(super) struct ViewPass<'a> {
     /// title's ribbon is the PSP preset's; see [`Recorder::draw_ribbons`].
     pub(super) ribbon_first: bool,
     pub(super) shadow_runs: Vec<oag_render::shadow::Run>,
+    /// The list the depth prepass's order is sorted into while the view records
+    /// ([`opaque_order`]), carried in so a list kept from the last frame is refilled.
+    pub(super) opaque_order: std::cell::Cell<Vec<(f32, u32)>>,
     pub(super) ghost: Option<(oag_render::ghost::Hull<'a>, oag_render::ghost::Fade)>,
     /// What the prepare already drew (the behind-the-glass target), counted in.
     pub(super) stats: SceneStats,
@@ -147,12 +156,26 @@ impl ViewPass<'_> {
         self
     }
 }
+/// A [`ViewPass`]'s lists, kept between frames by the scene.
+#[derive(Debug, Default)]
+pub(super) struct ViewLists {
+    pub(super) shadow_runs: Vec<oag_render::shadow::Run>,
+    pub(super) opaque_order: Vec<(f32, u32)>,
+}
 
 impl Scene {
     /// The strip pipelines, in [`BEAMS`]' order; `None` where the title builds none.
     fn beams(&self) -> [Option<&std::cell::RefCell<oag_fx::beam::Pipeline>>; BEAMS] {
-        let [contact, atlas, smoke, leach] = self.ribbons.cells();
-        [self.beam.as_ref(), contact, atlas, smoke, leach]
+        let [contact, atlas, fat, streaks, smoke, leach] = self.ribbons.cells();
+        [
+            self.beam.as_ref(),
+            contact,
+            atlas,
+            fat,
+            streaks,
+            smoke,
+            leach,
+        ]
     }
 
     /// What every effect pipeline's last upload left, and the handles that draw it, for the
@@ -188,6 +211,21 @@ impl Scene {
                 .map(|stage| (stage.drawer().clone(), stage.drawn())),
             shadow: self.shadow.borrow().drawer().clone(),
         }
+    }
+
+    /// The lists a recorded [`ViewPass`] carried, kept for the next view's
+    /// [`Self::take_view_lists`] so a frame refills them rather than making new ones. A pass
+    /// that is dropped instead (a split recorded in a batch) costs only new lists next time.
+    pub(super) fn keep_view_lists(&self, pass: ViewPass<'_>) {
+        *self.view_lists.borrow_mut() = ViewLists {
+            shadow_runs: pass.shadow_runs,
+            opaque_order: pass.opaque_order.into_inner(),
+        };
+    }
+
+    /// The lists [`Self::keep_view_lists`] kept, or empty ones.
+    pub(super) fn take_view_lists(&self) -> ViewLists {
+        std::mem::take(&mut *self.view_lists.borrow_mut())
     }
 
     /// The shadow pipeline's runs as the view's upload left them.
@@ -363,6 +401,7 @@ impl<'a> Recorder<'a> {
                 Draw::Effects => self.draw_effects(&mut render, pass, &mut stats),
             }
         }
+        oag_gpu::perfprobe::marks::close(&mut render);
         stats
     }
 
@@ -412,7 +451,8 @@ impl<'a> Recorder<'a> {
             match stage {
                 TrackStage::Solid => {
                     oag_gpu::perfprobe::marks::mark(render, "track solid");
-                    let order = opaque_order(self.track, pass.eye);
+                    let mut order = pass.opaque_order.take();
+                    opaque_order(self.track, pass.eye, &mut order);
                     stats.add(self.track.draw_lists(
                         render,
                         block,
@@ -424,6 +464,7 @@ impl<'a> Recorder<'a> {
                             order: Some(&order),
                         },
                     ));
+                    pass.opaque_order.set(order);
                 }
                 TrackStage::Sky => {
                     oag_gpu::perfprobe::marks::mark(render, "sky");
@@ -437,20 +478,21 @@ impl<'a> Recorder<'a> {
                 TrackStage::Shine => {
                     oag_gpu::perfprobe::marks::mark(render, "track shine");
                     if let Some((shine, sources)) = self.track_shine {
-                        stats.add(shine.draw_track_shine(
-                            render,
-                            block,
-                            self.track,
-                            sources,
-                            self.sections,
+                        let cull = TrackCull {
+                            sections: self.sections,
                             set,
                             chunks,
                             frustum,
-                        ));
+                        };
+                        stats.add(shine.draw_track_shine(render, block, self.track, sources, cull));
                     }
                 }
                 TrackStage::Blended => {
                     oag_gpu::perfprobe::marks::mark(render, "track blended");
+                    let (drawer, drawn) = &pass.effects.exhaust;
+                    let flare = |render: &mut wgpu::RenderPass<'_>, index: usize| {
+                        drawer.draw_flare(render, *drawn, index);
+                    };
                     stats.add(self.track.draw_lists(
                         render,
                         block,
@@ -458,7 +500,13 @@ impl<'a> Recorder<'a> {
                         set,
                         chunks,
                         frustum,
-                        track_blended(pass.depth_plane),
+                        track_blended(
+                            pass.depth_plane,
+                            (!pass.flare_keys.is_empty()).then_some(Interleave {
+                                keys: &pass.flare_keys,
+                                draw: &flare,
+                            }),
+                        ),
                     ));
                 }
             }
@@ -524,7 +572,6 @@ impl<'a> Recorder<'a> {
         if let Some((stage, drawn)) = &effects.mod_shaders {
             stage.draw_fill(render, drawn);
         }
-        oag_gpu::perfprobe::marks::mark(render, "end");
     }
 }
 
@@ -573,10 +620,14 @@ pub(crate) const TRACK_STAGES: [TrackStage; 4] = [
 
 /// The circuit's blended list for a view whose `depth_plane` is the fourth row of its
 /// view-projection matrix: list-B meshes far to near by view depth
-/// ([`oag_mesh::mesh::Model::blended_order`]).
-pub(crate) fn track_blended<'a>(depth_plane: [f32; 4]) -> Lists<'a> {
+/// ([`oag_mesh::mesh::Model::blended_order`]), with `between` drawn among them by queue key.
+pub(crate) fn track_blended<'a>(
+    depth_plane: [f32; 4],
+    between: Option<Interleave<'a>>,
+) -> Lists<'a> {
     Lists::Blended {
         depth_plane: Some(depth_plane),
+        between,
     }
 }
 
@@ -591,19 +642,14 @@ pub(crate) fn track_blended<'a>(depth_plane: [f32; 4]) -> Lists<'a> {
 /// integrated GPU, at the cost of 1 to 419 pixels a capture where coplanar ties resolved to the
 /// nearer batch. The prepass took that to 32.4 ms with the original's picture back; the shading
 /// that follows keeps the model's own order. `sort_by` is stable, so equal keys keep the model's
-/// order. Per view, from its own eye, while the view records.
-fn opaque_order(track: &Drawable, eye: Vec3) -> Vec<(f32, u32)> {
-    let mut order: Vec<(f32, u32)> = track
-        .opaque_draws()
-        .iter()
-        .zip(0u32..)
-        .map(|(draw, i)| {
-            let centre = Vec3::from_array(draw.bounds.centre);
-            (centre.distance(eye) - draw.bounds.radius, i)
-        })
-        .collect();
+/// order. Per view, from its own eye, while the view records, into `order`, emptied first.
+fn opaque_order(track: &Drawable, eye: Vec3, order: &mut Vec<(f32, u32)>) {
+    order.clear();
+    order.extend(track.opaque_draws().iter().zip(0u32..).map(|(draw, i)| {
+        let centre = Vec3::from_array(draw.bounds.centre);
+        (centre.distance(eye) - draw.bounds.radius, i)
+    }));
     order.sort_by(|a, b| a.0.total_cmp(&b.0));
-    order
 }
 
 // A view's recording reads only these, from a thread of its own (`Scene::render_slots`). wgpu's

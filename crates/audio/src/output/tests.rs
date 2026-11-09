@@ -253,6 +253,46 @@ fn the_render_thread_fills_the_ring_and_stops_when_dropped() {
     assert_eq!(consumer.slots(), settled, "the thread is still rendering");
 }
 
+/// Whether a mixer's published bands light up with `bus` playing at zero gain.
+fn bands_light_up(bus: Bus) -> bool {
+    let noise = (0..8_192_i32)
+        .map(|i| ((i * i * 31) % 20_011) as i16)
+        .collect();
+    let sound = Arc::new(Sound::new(noise, 2, 48_000).expect("sound"));
+    let mixer = Arc::new(Mutex::new(Mixer::new(48_000)));
+    {
+        let mut mixer = mixer.lock().unwrap();
+        mixer.play(Play::looping(sound, bus)).expect("a voice");
+        mixer.set_bus_gain(bus, 0.0);
+    }
+    let target = render::target_samples(48_000, Duration::from_millis(60));
+    let (producer, consumer) =
+        rtrb::RingBuffer::new(render::ring_capacity(48_000, Duration::from_millis(60)));
+    let spectrum = Arc::new(Spectrum::new());
+    let ahead = render::Ahead::spawn(
+        Arc::clone(&mixer),
+        producer,
+        target,
+        48_000,
+        Arc::clone(&spectrum),
+    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while consumer.slots() < target / 2 && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    drop(ahead);
+    assert!(consumer.slots() >= target / 2, "nothing rendered");
+    spectrum.levels().iter().any(|&level| level > 0.0)
+}
+
+/// The bands read the music before its fader, as the original's do, and
+/// nothing but the music.
+#[test]
+fn the_published_bands_follow_the_music_with_its_fader_down() {
+    assert!(bands_light_up(Bus::Music));
+    assert!(!bands_light_up(Bus::Sfx));
+}
+
 /// The counters a loaded machine is diagnosed with. A null output has no
 /// callback, so this is the floor rather than the behaviour under contention.
 #[test]

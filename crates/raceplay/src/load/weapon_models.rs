@@ -69,9 +69,12 @@ pub(super) fn load(
         // the cull rule below reads it the same way - inherited from HD, not
         // measured on PS4 (`oag_rcs::rcsmodel::psp2::lineage_blend`).
         if mesh::rcs::psp2::is_psp2(&geometry) {
-            return match mesh::rcs::psp2::build(entry, &geometry, None, &mut |path| {
-                archives.read_name(path).ok()
-            }) {
+            return match mesh::rcs::psp2::build(
+                entry,
+                &geometry,
+                None,
+                &mut crate::stages::reader(archives),
+            ) {
                 Ok((mut model, built)) => {
                     let states = oag_rcs::rcsmodel::psp2::parse(&geometry).map(|parsed| {
                         parsed
@@ -99,7 +102,7 @@ pub(super) fn load(
             entry,
             &blob,
             &geometry,
-            &mut |path| archives.read_name(path).ok(),
+            &mut crate::stages::reader(archives),
             |c| c.mesh,
         ) {
             Ok((mut model, built)) => {
@@ -363,6 +366,7 @@ pub(super) fn load_bodies(
             hemisphere1: one(Some(hd.halo), "a plasma blast halo", true),
             ball: None, // overwritten below
             shuriken: None,
+            missile_head: None,
             disruptor_halo: None,
         }
     } else if let Some(pulse) = models.plasma_blast_pulse {
@@ -372,6 +376,7 @@ pub(super) fn load_bodies(
             hemisphere1: one(Some(pulse.hemisphere1), "a plasma blast hemisphere", false),
             ball: None, // overwritten below
             shuriken: None,
+            missile_head: None,
             disruptor_halo: None,
         }
     } else {
@@ -444,6 +449,7 @@ pub(super) fn load_bodies(
         blast_models::PlasmaBlastModels {
             ball,
             shuriken: one(models.shuriken, "a shuriken blade", true),
+            missile_head: one(models.missile_head, "a missile's head", true),
             disruptor_halo: one(
                 models.disruptor_halo.map(|halo| halo.model),
                 "a disruptor explosion halo",

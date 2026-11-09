@@ -11,6 +11,7 @@ use oag_game::input;
 use oag_game::{loading, movie, prefetch, settings};
 use oag_gameplay::ControlScheme;
 use oag_input::bindings::Bindings;
+use oag_input::music::MusicBindings;
 use oag_input::pad::TriggerMode;
 
 use crate::cli::Cli;
@@ -102,6 +103,16 @@ pub(crate) fn resolve_bindings(settings: &settings::Settings) -> Bindings {
     let (bindings, ignored) = Bindings::from_pairs(&settings.controls.bindings);
     for name in ignored {
         warn!("ignoring [controls.bindings] {name:?}; using its default key");
+    }
+    bindings
+}
+
+/// The pad's music controls: `[controls.music]`. An entry that cannot be read, or names a game
+/// button, is reported by key and leaves that action unbound.
+pub(crate) fn resolve_music_bindings(settings: &settings::Settings) -> MusicBindings {
+    let (bindings, problems) = settings.controls.music_bindings();
+    for problem in problems {
+        warn!("ignoring [controls.music] {problem}; that action stays unbound");
     }
     bindings
 }

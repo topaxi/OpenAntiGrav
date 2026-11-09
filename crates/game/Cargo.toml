@@ -113,6 +113,13 @@ serde_json = "1"
 # where `std::time::Instant::now` panics. See docs/tools/web.md.
 web-time = "1.1.0"
 
+# Idle inhibition over winit's Wayland connection (`oag_game::idle`).
+[target.'cfg(target_os = "linux")'.dependencies]
+wayland-backend.workspace = true
+wayland-client.workspace = true
+wayland-protocols.workspace = true
+x11rb.workspace = true
+
 # Platform-native H.264 decode for the PSP `.PMF` path, behind the
 # `native-video` feature: `just build`/`just check`/CI never touch
 # GStreamer, and a Linux build that wants the accelerated path opts in
@@ -121,7 +128,6 @@ web-time = "1.1.0"
 # libav otherwise) - none of that is code this crate carries. See
 # docs/architecture/adr/0017-gstreamer-native-video.md. PS2 content always
 # uses the AV1 cache below, unaffected either way.
-[target.'cfg(target_os = "linux")'.dependencies]
 gstreamer = { version = "0.25", optional = true }
 gstreamer-app = { version = "0.25", optional = true }
 gstreamer-video = { version = "0.25", optional = true }
@@ -183,6 +189,12 @@ oag-testdata.workspace = true
 oag-pob.workspace = true
 zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 oag-weapons.workspace = true
+
+# The TOML Schema reference validator (`settings_schema` test). Cargo builds an
+# example's dev-dependencies, and the `oag_web` example is a wasm32 build where
+# `toml-schema` (`url::Url::from_file_path`) does not compile, so it is left out
+# there; no test runs on wasm32.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 oag-schema = { workspace = true, features = ["validate"] }
 
 # The Android entry point: the binary's own body again (`src/android.rs`

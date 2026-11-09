@@ -6,6 +6,33 @@
 //! so it lives with [`crate::Race`]. See that module for why a row names a grid
 //! slot and nothing else.
 
+/// What an Eliminator craft ended on: the points the race is won on and the two counts the
+/// results headline reads.
+///
+/// `points` is the truncated score (`oag_race::Standing::score`), the integer the HUD's rows and
+/// the original's results table both print.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Points {
+    /// Truncated points, [`oag_race::ScoreLaw`]'s.
+    pub points: u32,
+    /// Kills, `Standing::kills`.
+    pub kills: u32,
+    /// Destructions, `Standing::deaths`.
+    pub deaths: u32,
+}
+
+impl Points {
+    /// A craft's points off its standing (`Standing::whole_score`).
+    #[must_use]
+    pub fn of(standing: &oag_race::Standing) -> Self {
+        Self {
+            points: standing.whole_score(),
+            kills: standing.kills,
+            deaths: standing.deaths,
+        }
+    }
+}
+
 /// One craft, as the caller knows it before the board is ordered.
 ///
 /// Taken rather than a `&World` so that [`build`] is a pure function of the
@@ -26,6 +53,8 @@ pub struct Craft {
     pub finish_tick: Option<u64>,
     /// Its own quickest lap, in ticks, or `None` if it never completed one.
     pub best_lap_ticks: Option<u32>,
+    /// Its Eliminator points, `Some` for every craft of a scored race and for none other.
+    pub points: Option<Points>,
 }
 
 /// One line of the table.
@@ -50,8 +79,11 @@ pub struct Row {
     /// Whether this is a player's row: a person flew this craft. Every
     /// person-flown slot has one, so a two-person race marks two.
     pub player: bool,
-    /// The name the person raced under (a network race), `None` where the race knows none.
+    /// The name the person raced under (the lobby's, or seat 1's stored player name), `None`
+    /// where the race knows none.
     pub name: Option<String>,
+    /// Its Eliminator points, `Some` on every row of a scored race's board.
+    pub points: Option<Points>,
 }
 
 impl Row {
@@ -103,6 +135,12 @@ impl Board {
         self.rows.iter().filter(|row| row.player).count()
     }
 
+    /// Whether this board ranks on points (a scored Eliminator) rather than on race position.
+    #[must_use]
+    pub fn scored(&self) -> bool {
+        !self.rows.is_empty() && self.rows.iter().all(|row| row.points.is_some())
+    }
+
     /// Whether there is a *place* to show at all.
     ///
     /// **The HUD's own rule, deliberately the same one.** A place is a position
@@ -124,6 +162,14 @@ impl Board {
 /// the HUD's position readout cannot disagree. Two craft cannot share a place -
 /// that function breaks every tie, down to the slot index - so the sort is
 /// total.
+///
+/// **A scored race is ordered on its points instead**, by the rule the HUD's rows rank with
+/// (`oag_race::score::ranked`, `Hud_UpdateEliminatorRows`, confidence 88): highest first, and
+/// craft on equal points stack with the later grid slot on top. `place` is then the row's 1-based
+/// index, the number `EndRaceResults`' headline reads (`0x00229bf0`,
+/// `docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`, "The results table"); it is not
+/// `oag_race::places`, which an Eliminator's finish does not decide. How the original's own
+/// records are sorted for a tie is not read: chosen, not measured.
 #[must_use]
 pub fn build(crafts: &[Craft], laps_target: Option<u32>, tick: u64) -> Board {
     let mut rows: Vec<Row> = crafts
@@ -141,12 +187,32 @@ pub fn build(crafts: &[Craft], laps_target: Option<u32>, tick: u64) -> Board {
             best_lap_ticks: craft.best_lap_ticks,
             player: craft.person,
             name: None,
+            points: craft.points,
         })
         .collect();
-    rows.sort_by_key(|row| (row.place, row.slot));
+    if rows.iter().all(|row| row.points.is_some()) && !rows.is_empty() {
+        let points: Vec<u32> = rows
+            .iter()
+            .map(|row| row.points.map_or(0, |p| p.points))
+            .collect();
+        let order = oag_race::score::ranked(&points);
+        let mut slots: Vec<Option<Row>> = rows.into_iter().map(Some).collect();
+        rows = order
+            .into_iter()
+            .filter_map(|index| slots[index].take())
+            .collect();
+        for (index, row) in rows.iter_mut().enumerate() {
+            row.place = u8::try_from(index + 1).unwrap_or(u8::MAX);
+        }
+    } else {
+        rows.sort_by_key(|row| (row.place, row.slot));
+    }
     Board {
         rows,
         laps_target,
         tick,
     }
 }
+
+#[cfg(test)]
+mod tests;

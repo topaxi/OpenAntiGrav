@@ -1002,7 +1002,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     on.shader_params.clear();
     on.fov = [0.0; oag_gameplay::MAX_SHIPS];
     let region = on.region.clone();
-    let course_length = sim.course.as_ref().map_or(0.0, oag_race::Course::length);
+    let course_length = sim.course.as_ref().map_or(0.0, |course| course.length());
     let title = on.title;
     let mut commands = Vec::new();
     // Every module's checked commands, in id order, with the blob it had before the call:

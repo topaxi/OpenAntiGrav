@@ -8,6 +8,8 @@ use oag_raceplay as race;
 
 use crate::gpu::GpuContext;
 
+#[path = "race_stage/auto_replay.rs"]
+pub(crate) mod auto_replay;
 #[path = "race_stage/endrace.rs"]
 pub(crate) mod endrace;
 #[path = "race_stage/endrace_touch.rs"]
@@ -23,6 +25,9 @@ mod medal_message;
 pub(crate) struct RaceStage {
     pub(crate) scene: race::Scene,
     pub(crate) race: race::Race,
+    /// The race's keyframes since its first tick, for photo mode's rewind; `None` where photo
+    /// mode is not offered (`oag_game::photo::SAVES`).
+    pub(crate) keeper: Option<race::timeline::Keeper>,
     /// The HUD, or `None` when the disc's layout could not be read.
     pub(crate) hud: Option<oag_game::hud_overlay::Overlay>,
     /// The results table, drawn once the race has one.
@@ -183,6 +188,16 @@ pub(crate) struct RaceStage {
     /// The best medal [`Self::tick_messages`] has already announced, so a medal
     /// is raised once however many ticks it stays earned.
     pub(super) earned_medal: Option<oag_tables::race_campaign::Medal>,
+    /// The header a recording of this race is filed under: the records key, the team, the seed
+    /// and the launch settings. Kept from the build so the session can start the recording once
+    /// it has finished writing to the race.
+    pub(crate) replay_header: oag_replay::Header,
+    /// Whether this race is recorded for the REPLAYS page and not yet written
+    /// ([`Self::arm_auto_replay`]).
+    pub(crate) auto_replay: bool,
+    /// Whether this race is a recording being watched: it is never parked behind the menus, and
+    /// nothing it does is a record, a ghost or a replay.
+    pub(crate) watching: bool,
 }
 
 impl Drop for RaceStage {
@@ -191,6 +206,7 @@ impl Drop for RaceStage {
     /// SIGSEGV on leaving a race with the prefetch unfinished). Waits only for the phase the
     /// worker is in; a stage dropped off the frame thread (`drop_off_thread`) waits there.
     fn drop(&mut self) {
+        self.write_auto_replay();
         self.endrace_cancel
             .store(true, std::sync::atomic::Ordering::Relaxed);
         if let Some(mut task) = self.endrace_prefetch.take() {
@@ -273,7 +289,7 @@ impl RaceStage {
                 },
             );
         }
-        // A split screen draws one scene per view, each submitted on its own, so
+        // A split screen draws one scene per view, in command buffers of its own, so
         // `encoder` keeps only what the caller records after it: see
         // `Scene::render_viewports`. The blur runs once per view after the last, its
         // timestamp pair bracketing every chain; no scene timer. Each view jitters on its
@@ -394,6 +410,17 @@ impl RaceStage {
         self.scene.temporal(window)
     }
 
+    /// Hands the end screens the race's board when it was retaken since they were built:
+    /// [`oag_raceplay::Race::refresh_results`]'s craft that crossed after the person, now
+    /// with a time. Touches no race state; the screen keeps its page and its cursor.
+    pub(crate) fn refresh_endrace_board(&mut self) {
+        if let (Some(endrace_touch::EndRace::Disc(runtime)), Some(board)) =
+            (&mut self.endrace, self.race.results())
+        {
+            runtime.refresh_field(board, self.race.results_revision());
+        }
+    }
+
     /// Reads the player's own outcome so far, straight off [`race::Race`]'s
     /// already-public state - never from inside a tick.
     ///
@@ -405,9 +432,17 @@ impl RaceStage {
     pub(crate) fn observation(&self) -> oag_game::records::Observation {
         let standing = self.race.player_standing();
         let finished = self.race.finished();
+        // A scored race (an HD Eliminator) is placed on its points, the board's own order, which
+        // the results table, the headline, the voice and the record all read.
+        let place = self
+            .race
+            .results()
+            .filter(|board| board.scored())
+            .and_then(|board| board.player())
+            .map_or_else(|| self.race.player_place(), |row| row.place);
         oag_game::records::Observation {
             finished,
-            place: Some(self.race.player_place()),
+            place: Some(place),
             laps_completed: oag_game::records::laps_completed(
                 standing.lap,
                 finished,
@@ -618,6 +653,19 @@ impl RaceStage {
             self.race.views_drawn(),
             self.race.cut(),
         );
+        self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
+    }
+
+    /// The race's HUD alone over `view`: photo mode with its HUD row on, and a parked race under
+    /// the pause screen's tint. No end screens and no track panel, which are not part of the view.
+    pub(crate) fn draw_view_hud(
+        &mut self,
+        gpu: &impl GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
+    ) {
         self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
     }
 

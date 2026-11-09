@@ -25,6 +25,7 @@ pub mod hud;
 pub mod loading;
 pub mod main_menu;
 pub mod movies;
+pub mod pause_menu;
 pub mod pre_race;
 pub mod prompts;
 pub mod race;
@@ -51,6 +52,11 @@ pub const TITLE: &Title = &Title {
     front_end: Some(FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
+    eliminator: oag_title::pre_race::Sourced::measured(
+        oag_title::eliminator::EliminatorRule::Kills,
+    ),
+    // No flip in this executable: no `FE_FLIP`, no flip tunable, no `5 pi`.
+    eliminator_flip: oag_title::pre_race::Sourced::measured(None),
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
         law: oag_title::loyalty::LoyaltyLaw::Pulse,
@@ -71,6 +77,9 @@ pub const TITLE: &Title = &Title {
     // Measured: the six stand-in codepoints and the glyph each draws, read off
     // `pulse_text.fnt`, `Pulse_14.fnt` and `Pulse_20.fnt` - see `prompts`.
     prompts: prompts::PROMPTS,
+    profile: oag_title::profile::Profile::NAME_AND_TAG,
+    photo: oag_title::photo::Strings::PULSE,
+    photo_shot: None,
     // The reset state `FUN_088418e0` enters (`docs/gameplay/leaving-the-track.md`).
     reset_enables: oag_title::recovery::ResetEnables::PULSE,
     // `FUN_089957c0` multiplies a voice by its group volume squared; the flyby's fade reads `fade ** 2`
@@ -89,6 +98,7 @@ pub const TITLE: &Title = &Title {
     // brings the integrated loudness near HD's so the limiter works on far fewer frames
     // (`docs/ghidra/functions/psp-pulse-usa/audio-levels.md`, "Master trim").
     master_trim_db: oag_title::pre_race::Sourced::chosen(-6.0),
+    rear_occlusion: None,
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),
@@ -102,6 +112,8 @@ pub const TITLE: &Title = &Title {
         // lens); Outpost 7's is snow.
         rain_circuit: Some(r"Data\Environments\14_Track\track.vex"),
     },
+    // PSP: no motors; the PS2 level-and-timer law is documented and not played (`docs/gameplay/rumble.md`).
+    rumble: oag_title::rumble::Rumble::Absent,
     // The two tables Pulse picks between by race mode. `DAT_08b32428` is what
     // selects the file - measured `0` in a single race and `1` in Eliminator,
     // at Venom both times, so it is the *file* and not the speed class. See
@@ -124,6 +136,8 @@ pub const TITLE: &Title = &Title {
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::measured(true),
         // Read statically, confidence 80: the grant request sits behind `craft+0x1b8 & 0x800`.
         autopilot_pad_grants: oag_title::pre_race::Sourced::measured(false),
+        // Run on PPSSPP: the stamp store takes `elimination_refresh_time` in game mode 8.
+        pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(true),
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::PULSE,
         ),
@@ -135,6 +149,7 @@ pub const TITLE: &Title = &Title {
     // `docs/formats/race-campaign.md`'s `<Unlock Grid>` rows and
     // `docs/formats/race-setup.md`'s `Loyalty` unlock.
     main_menu: main_menu::MAIN_MENU,
+    pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: Some(campaign::DEFINITION_ENTRY),
@@ -150,6 +165,8 @@ pub const TITLE: &Title = &Title {
         grid_archive: None,
         fury_card_gain: None,
         grid_card_pose: None,
+        selection_card_scale: None,
+        medal_tier_rows: None,
         frontend_glow: Some(oag_title::Origin::Measured),
         origin: oag_title::Origin::Measured,
         custom_campaigns: true,

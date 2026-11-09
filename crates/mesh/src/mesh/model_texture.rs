@@ -290,7 +290,7 @@ impl ModelTexture {
 
     /// Decodes one `.gnf` blob, or says `None` for one this build cannot.
     ///
-    /// **A BC7 chain the file authors keeps its blocks**, the way
+    /// **A BC7 or BC1 chain the file authors keeps its blocks**, the way
     /// [`Self::from_gtf`] keeps a DXT one: 1 byte a texel on the CPU and on the
     /// GPU where the decoded picture is 4, and the authored chain in place of a
     /// box-filtered one. The conditions are [`Self::gtf_blocks`]'s: a chain of
@@ -322,7 +322,11 @@ impl ModelTexture {
         };
         let texels = match blocks {
             Some(levels) => Texels::Blocks {
-                format: BlockFormat::Bc7,
+                format: if parsed.surface_format == oag_texture::gnf::SurfaceFormat::Bc1 {
+                    BlockFormat::Bc1
+                } else {
+                    BlockFormat::Bc7
+                },
                 levels,
             },
             None => Texels::Rgba8(parsed.decode(blob).ok()?.into_iter().flatten().collect()),
@@ -398,6 +402,41 @@ impl ModelTexture {
             texels: Texels::Chain(levels),
             mip_count: None,
         }
+    }
+
+    /// A texture pack's picture in place of a PSP `.vex` texture that is `original` pixels with
+    /// `mip_count` levels, in the same form the disc's own would have taken: a
+    /// [`Texels::Chain`] when `chained` (so the model's slope level selection stays on for
+    /// every slot, as it is for the disc's), else straight RGBA8.
+    ///
+    /// The picture is some multiple of the original, and a level's footprint on screen is
+    /// what the original's levels were chosen for, so the chain gains the levels the scale
+    /// adds: the deepest level is as small on screen as the original's was.
+    #[must_use]
+    pub fn replaced(
+        label: String,
+        image: &oag_texture::replacer::Image,
+        original: (u32, u32),
+        mip_count: u8,
+        chained: bool,
+    ) -> Self {
+        let scale = (image.width / original.0.max(1)).max(1);
+        let levels = u32::from(mip_count.max(1)) + scale.ilog2();
+        if !chained {
+            return Self::rgba8(
+                label,
+                image.width,
+                image.height,
+                image.rgba.clone(),
+                Some(levels),
+            );
+        }
+        let chain = crate::mesh_render::texture::mip_chain(image.width, image.height, &image.rgba)
+            .into_iter()
+            .take(levels as usize)
+            .map(|(_, _, rgba)| rgba)
+            .collect();
+        Self::chain(label, image.width, image.height, chain)
     }
 
     /// Bytes of texel data this texture holds on the CPU.

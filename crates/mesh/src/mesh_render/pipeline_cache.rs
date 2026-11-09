@@ -127,20 +127,37 @@ impl Scope {
     /// Every pipeline built in this scope draws under `light`'s title rig, so
     /// the paths only another title's rig takes compile out of it.
     ///
-    /// Only Omega's nova prelit curve so far: a light that is not nova is a
-    /// title that never is, since nothing mid-race turns it on - a Zone grade
-    /// rebuilds the light from this one and carries its flag, never sets it.
+    /// Omega's nova prelit curve, and the whole authored rig: a light that is not nova is a
+    /// title that never is, and a stand-in light never becomes a rig, since nothing mid-race
+    /// turns either on - a Zone grade rebuilds the light from this one, carries its flag and
+    /// hands a stand-in back untouched (`ZoneGrade::light`).
     /// A drawable built outside the scope keeps `mesh.wesl`'s live default and
     /// shades the same, only without the saving. Call it before the first
     /// `build()`: a pipeline built earlier is cached without the constant.
     pub fn lit_by(&self, light: &super::Light) {
         if light.nova <= 0.5 {
-            CACHE.with(|cell| {
-                if let Some(cache) = cell.borrow_mut().as_mut() {
-                    cache.constants.push(("nova_prelit", 0.0));
-                }
-            });
+            self.constant("nova_prelit");
         }
+        if light.enabled == 0.0 {
+            self.constant("light_rig");
+        }
+    }
+
+    /// Every pipeline built in this scope draws a race that has no Zone grade (`zone` false), so
+    /// the Zone recolour compiles out of it. The same rules as [`Self::lit_by`].
+    pub fn zoned(&self, zone: bool) {
+        if !zone {
+            self.constant("zone_race");
+        }
+    }
+
+    /// Pins the override `name` to `0.0` on every pipeline this scope builds.
+    fn constant(&self, name: &'static str) {
+        CACHE.with(|cell| {
+            if let Some(cache) = cell.borrow_mut().as_mut() {
+                cache.constants.push((name, 0.0));
+            }
+        });
     }
 
     /// `(shader module: calls, reused)` over this scope's life so far.

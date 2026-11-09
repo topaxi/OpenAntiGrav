@@ -48,7 +48,7 @@ for _ in $(seq 1 480); do
   sleep 0.25
 done
 grep -q "^serving" "$W/serve.log" || { tail -5 "$W/serve.log" >&2; echo "restore failed" >&2; exit 1; }
-printf 'restored in %.1f s\n' "$(echo "$(date +%s.%N)-$t0" | bc)"
+awk -v a="$(date +%s.%N)" -v b="$t0" 'BEGIN { printf "restored in %.1f s\n", a - b }'
 if [ "$restart" = 1 ]; then
   export OAG_RPCS3_ATTACH=1
   uv run --with evdev python3 scripts/emu-run.py -- python3 -u scripts/rpcs3-drive.py \

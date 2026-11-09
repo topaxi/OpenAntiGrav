@@ -78,8 +78,11 @@ One question sorts a message: **what does a player lose, or want to know?**
 | `debug` | What a load did. | Counts, sizes, timings, loader reports, screen transitions, which language was picked. |
 | `trace` | One line per item. | One line per sound cue, per ship, per frame or tick. |
 
-Two things that are not obvious from the table:
+Three things that are not obvious from the table:
 
+- **A new line starts at `debug`.** `info` needs a reason a player cares. Statistics,
+  a subsystem saying it is armed or ready, and anything that repeats during play
+  (each race, pause or pickup) stay at `debug` or below.
 - **An absence stays at `warn`.** The project rule is to draw nothing and say so
   ("Never invent what the assets already author" in `CLAUDE.md`); hiding that
   statement at `debug` would hide the absence it exists to report. A message

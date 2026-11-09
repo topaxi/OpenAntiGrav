@@ -278,7 +278,11 @@ impl Show {
 /// the header's bounds, not yet decoded).
 #[must_use]
 pub fn campaign_pose(widget: &FlyerWidget, selected: bool) -> Pose {
-    campaign_pose_at(widget, target_yaw(widget, selected))
+    campaign_pose_at(
+        widget,
+        target_yaw(widget, selected),
+        widget.rotation_centre_offset_x,
+    )
 }
 
 /// The yaw a `Campaign Selection` card settles at: none when selected, the
@@ -290,17 +294,18 @@ fn target_yaw(widget: &FlyerWidget, selected: bool) -> f32 {
 
 /// [`campaign_pose`] with the card turned by `yaw` rather than at rest: the
 /// pivot composition the widget's render does every frame, so the card swings
-/// about its pivot as `yaw` moves.
+/// about its pivot as `yaw` moves. `pivot_offset` is its `RotationCentreOffsetX`
+/// at that moment: it is one of the placement floats the screen's update moves.
 #[must_use]
-pub fn campaign_pose_at(widget: &FlyerWidget, yaw: f32) -> Pose {
-    let scale = widget.ortho_scale.unwrap_or(1.0);
-    let pivot = widget.rotation_centre_offset_x / scale;
+pub fn campaign_pose_at(widget: &FlyerWidget, yaw: f32, pivot_offset: f32) -> Pose {
+    let scale = widget.ortho_scale.unwrap_or([1.0; 3]);
+    let pivot = pivot_offset / scale[0];
     // The card's centre is `pivot` from the pivot; turning it about the
     // pivot moves it by `pivot - R(yaw) * pivot`.
     let offset = [
-        widget.position[0] / scale + pivot - pivot * yaw.cos(),
-        widget.position[1] / scale + CARD_HEIGHT / 2.0,
-        widget.position[2] / scale + pivot * yaw.sin(),
+        widget.position[0] / scale[0] + pivot - pivot * yaw.cos(),
+        widget.position[1] / scale[1] + CARD_HEIGHT / 2.0,
+        widget.position[2] / scale[2] + pivot * yaw.sin(),
     ];
     Pose { yaw, offset }
 }
@@ -319,33 +324,24 @@ pub const SWING_RATE: f32 = 5.0;
 pub const SWING_SNAP: f32 = 0.05;
 
 /// A `Campaign Selection` card's turn in flight: its yaw now, and the speed it
-/// is moving at toward the selection's target. Fury's card first, then `HD`'s.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// is moving at toward the selection's target, one of each per campaign in
+/// `campaignList` order.
+#[derive(Debug, Clone, PartialEq)]
 pub struct CardSwing {
     selected: oag_ui_screens::campaign::selection::Campaign,
-    yaw: [f32; 2],
-    rate: [f32; 2],
+    /// `[yaw, RotationCentreOffsetX]` of each card.
+    state: Vec<[f32; 2]>,
+    rate: Vec<[f32; 2]>,
 }
 
-/// The two campaigns' cards, as `(campaign, flyer, widget)`.
-fn campaign_cards() -> [(
-    oag_ui_screens::campaign::selection::Campaign,
-    &'static str,
-    &'static str,
-); 2] {
-    use oag_ui_screens::campaign::selection::Campaign;
-    [
-        (
-            Campaign::Fury,
-            flyer::FURY_CAMPAIGN_FLYER,
-            flyer::FURY_CAMPAIGN_WIDGET,
-        ),
-        (
-            Campaign::Hd,
-            flyer::HD_CAMPAIGN_FLYER,
-            flyer::HD_CAMPAIGN_WIDGET,
-        ),
-    ]
+/// One campaign's card on `Campaign Selection`: the flyer folder it is drawn
+/// from and the `<Flyer>` widget that places it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CampaignCard {
+    /// `fury_campaign`, `2048_campaign`.
+    pub flyer: String,
+    /// `FuryCampaignFlyerModel`.
+    pub widget: String,
 }
 
 /// The camera and model matrices for the card on `space`'s grid.
@@ -453,6 +449,11 @@ pub struct Flyers {
     cards: RefCell<HashMap<String, Preview>>,
     /// The rectangle of each card, by `FlyerName`.
     placed: HashMap<String, Placement>,
+    /// The cards `Campaign Selection` shows, one per campaign in its
+    /// `campaignList` order; empty on a title with no such screen.
+    campaigns: Vec<CampaignCard>,
+    /// [`oag_title::campaign::Campaign::selection_card_scale`], `1.0` unset.
+    campaign_scale: f32,
     /// Where `Grid Selection`'s card stands: [`GRID_POSE`] unless the title's
     /// own pose says otherwise.
     pub grid_pose: Pose,
@@ -579,10 +580,21 @@ impl Flyers {
             waiting: RefCell::new(waiting),
             cards: RefCell::new(HashMap::new()),
             placed,
+            campaigns: Vec::new(),
+            campaign_scale: 1.0,
             grid_pose: GRID_POSE,
             anisotropy: Anisotropy::default(),
             report,
         }
+    }
+
+    /// Names the cards `Campaign Selection` shows, in `campaignList` order, and
+    /// how far their widgets' placement is scaled (`1.0` as authored).
+    #[must_use]
+    pub fn with_campaigns(mut self, campaigns: Vec<CampaignCard>, scale: f32) -> Self {
+        self.campaigns = campaigns;
+        self.campaign_scale = scale;
+        self
     }
 
     /// The card `Grid Selection` shows for the flyer named `flyer`.
@@ -610,9 +622,9 @@ impl Flyers {
         }
     }
 
-    /// The two cards `Campaign Selection` shows with `selected` chosen: each
-    /// through its own widget, the chosen one facing the camera and the other
-    /// turned as its widget authors it ([`campaign_pose`]). Empty when either
+    /// The cards `Campaign Selection` shows with `selected` chosen: each
+    /// through its own widget, the chosen one facing the camera and the others
+    /// turned as their widgets author them ([`campaign_pose`]). Empty when a
     /// widget is missing.
     #[must_use]
     pub fn selection_shows(
@@ -622,26 +634,51 @@ impl Flyers {
         self.swing_shows(&self.swing_settled(selected))
     }
 
-    /// A swing at rest on `selected`: both cards where they settle.
+    /// The `[yaw, RotationCentreOffsetX]` each campaign's card settles at with
+    /// `selected` chosen: the chosen one faces the camera on its own pivot, and
+    /// the others take the turn authored by the end card on their side of it -
+    /// an end card its own, and a middle card (Omega's `HD`, whose widget
+    /// authors `0` of both) that of whichever end it lies toward. **Chosen, not
+    /// measured**: the widgets author only the turned pose of the end cards,
+    /// and a frame with 2048 chosen shows `HD` turned the way Fury is and
+    /// standing where Fury's pivot puts it.
+    fn targets(&self, selected: oag_ui_screens::campaign::selection::Campaign) -> Vec<[f32; 2]> {
+        let widget_of = |index: usize| {
+            self.campaigns
+                .get(index)
+                .and_then(|card| self.widgets.get(&card.widget))
+        };
+        let turned = |index: usize| {
+            widget_of(index).map_or([0.0; 2], |w| [w.rotation[1], w.rotation_centre_offset_x])
+        };
+        let last = self.campaigns.len().saturating_sub(1);
+        (0..self.campaigns.len())
+            .map(|index| match index.cmp(&selected.index()) {
+                std::cmp::Ordering::Equal => [
+                    0.0,
+                    widget_of(index).map_or(0.0, |w| w.rotation_centre_offset_x),
+                ],
+                std::cmp::Ordering::Greater => turned(last),
+                std::cmp::Ordering::Less => turned(0),
+            })
+            .collect()
+    }
+
+    /// A swing at rest on `selected`: every card where it settles.
     #[must_use]
     pub fn swing_settled(
         &self,
         selected: oag_ui_screens::campaign::selection::Campaign,
     ) -> CardSwing {
-        let yaw = campaign_cards().map(|(campaign, _, widget)| {
-            self.widgets
-                .get(widget)
-                .map_or(0.0, |w| target_yaw(w, campaign == selected))
-        });
         CardSwing {
             selected,
-            yaw,
-            rate: [0.0; 2],
+            state: self.targets(selected),
+            rate: vec![[0.0; 2]; self.campaigns.len()],
         }
     }
 
     /// Advances `swing` by `dt` seconds toward `selected`'s pose. A change of
-    /// selection sets each card's speed from how far it has to go, as the
+    /// selection sets each float's speed from how far it has to go, as the
     /// original's update does ([`SWING_RATE`]).
     pub fn step_swing(
         &self,
@@ -649,41 +686,41 @@ impl Flyers {
         selected: oag_ui_screens::campaign::selection::Campaign,
         dt: f32,
     ) {
-        let targets = campaign_cards().map(|(campaign, _, widget)| {
-            self.widgets
-                .get(widget)
-                .map_or(0.0, |w| target_yaw(w, campaign == selected))
-        });
+        let targets = self.targets(selected);
         let changed = swing.selected != selected;
         swing.selected = selected;
-        for ((yaw, rate), target) in swing.yaw.iter_mut().zip(&mut swing.rate).zip(targets) {
-            if changed {
-                *rate = (*yaw - target).abs() * SWING_RATE;
-            }
-            let gap = target - *yaw;
-            *yaw += gap.signum() * (*rate * dt.max(0.0)).min(gap.abs());
-            if (*yaw - target).abs() < SWING_SNAP {
-                *yaw = target;
+        for ((state, rate), target) in swing.state.iter_mut().zip(&mut swing.rate).zip(targets) {
+            for ((value, rate), target) in state.iter_mut().zip(rate.iter_mut()).zip(target) {
+                if changed {
+                    *rate = (*value - target).abs() * SWING_RATE;
+                }
+                let gap = target - *value;
+                *value += gap.signum() * (*rate * dt.max(0.0)).min(gap.abs());
+                if (*value - target).abs() < SWING_SNAP {
+                    *value = target;
+                }
             }
         }
     }
 
-    /// The two cards `Campaign Selection` shows with `swing`'s yaws: each
-    /// through its own widget. The tint follows the selection at once, as the
-    /// colour write does.
+    /// The cards `Campaign Selection` shows with `swing`'s yaws: each through
+    /// its own widget. The tint follows the selection at once, as the colour
+    /// write does.
     #[must_use]
     pub fn swing_shows(&self, swing: &CardSwing) -> Vec<Show> {
-        campaign_cards()
-            .into_iter()
-            .zip(swing.yaw)
-            .filter_map(|((campaign, name, widget), yaw)| {
-                let pose = campaign_pose_at(self.widgets.get(widget)?, yaw);
+        self.campaigns
+            .iter()
+            .zip(&swing.state)
+            .enumerate()
+            .filter_map(|(index, (card, &[yaw, pivot]))| {
+                let mut pose = campaign_pose_at(self.widgets.get(&card.widget)?, yaw, pivot);
+                pose.offset = pose.offset.map(|axis| axis * self.campaign_scale);
                 Some(Show {
-                    flyer: name.to_string(),
+                    flyer: card.flyer.clone(),
                     side: Side::Front,
-                    widget: widget.to_string(),
+                    widget: card.widget.clone(),
                     pose,
-                    tint: if campaign == swing.selected {
+                    tint: if index == swing.selected.index() {
                         FOCUSED_TINT
                     } else {
                         UNFOCUSED_TINT
@@ -936,7 +973,7 @@ mod tests {
             position: [0.0, -33.3, -70.0],
             rotation: [0.0, -0.6],
             rotation_centre_offset_x: 30.0,
-            ortho_scale: Some(0.75),
+            ortho_scale: Some([0.75; 3]),
             ..widget()
         };
         let pose = campaign_pose(&widget, true);
@@ -955,7 +992,7 @@ mod tests {
             position: [0.0, -33.3, -70.0],
             rotation: [0.0, turn],
             rotation_centre_offset_x: pivot,
-            ortho_scale: Some(0.75),
+            ortho_scale: Some([0.75; 3]),
             ..FlyerWidget {
                 origin: [x, 450.0],
                 ..self::tests::widget()
@@ -982,15 +1019,15 @@ mod tests {
     fn a_change_of_selection_swings_the_cards_in_a_fifth_of_a_second() {
         use oag_ui_screens::campaign::selection::Campaign;
         let widgets = [
-            (flyer::FURY_CAMPAIGN_WIDGET, 0.6, -30.0),
-            (flyer::HD_CAMPAIGN_WIDGET, -0.6, 30.0),
+            ("FuryCampaignFlyerModel", 0.6, -30.0),
+            ("HDCampaignFlyerModel", -0.6, 30.0),
         ]
         .map(|(name, turn, pivot)| FlyerWidget {
             name: name.to_string(),
             position: [0.0, -33.3, -70.0],
             rotation: [0.0, turn],
             rotation_centre_offset_x: pivot,
-            ortho_scale: Some(0.75),
+            ortho_scale: Some([0.75; 3]),
             ..widget()
         });
         let flyers = Flyers {
@@ -998,11 +1035,23 @@ mod tests {
             waiting: RefCell::new(HashMap::new()),
             cards: RefCell::new(HashMap::new()),
             placed: HashMap::new(),
+            campaigns: vec![
+                CampaignCard {
+                    flyer: "fury_campaign".to_string(),
+                    widget: "FuryCampaignFlyerModel".to_string(),
+                },
+                CampaignCard {
+                    flyer: "hd_campaign".to_string(),
+                    widget: "HDCampaignFlyerModel".to_string(),
+                },
+            ],
+            campaign_scale: 1.0,
             grid_pose: GRID_POSE,
             anisotropy: Anisotropy::default(),
             report: Vec::new(),
         };
-        let mut swing = flyers.swing_settled(Campaign::Fury);
+        let (fury, hd) = (Campaign::new(0), Campaign::new(1));
+        let mut swing = flyers.swing_settled(fury);
         let yaw = |swing: &CardSwing| {
             let shows = flyers.swing_shows(swing);
             [shows[0].pose.yaw, shows[1].pose.yaw]
@@ -1011,7 +1060,7 @@ mod tests {
         let mut frames = 0;
         let mut last = yaw(&swing);
         while yaw(&swing) != [0.6, 0.0] {
-            flyers.step_swing(&mut swing, Campaign::Hd, 1.0 / 60.0);
+            flyers.step_swing(&mut swing, hd, 1.0 / 60.0);
             let now = yaw(&swing);
             assert!(now[0] >= last[0] && now[1] >= last[1], "{last:?} {now:?}");
             last = now;
@@ -1019,9 +1068,6 @@ mod tests {
             assert!(frames < 30, "never settles: {now:?}");
         }
         assert!((10..=14).contains(&frames), "{frames} frames");
-        assert_eq!(
-            flyers.swing_shows(&swing),
-            flyers.selection_shows(Campaign::Hd)
-        );
+        assert_eq!(flyers.swing_shows(&swing), flyers.selection_shows(hd));
     }
 }

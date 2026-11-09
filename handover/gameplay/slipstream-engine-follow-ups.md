@@ -33,7 +33,7 @@ The engine never names the mod.
    tracking record `progress`/`place` and the course length in the observation), item 2 (outputs:
    `screen-fill`, `fov-offset`, `fire-mod-effect-ahead`), item 3 (per-title icons
    `[pickup.titles.<title>]`, icon placed on the title's own Turbo glyph box) and item 4
-   (`default-enabled`, ADR-0084) are on branch `slipstream`. What each left open:
+   (`default-enabled`, ADR-0089) are on branch `slipstream`. What each left open:
    - **Wreck gate: landed** (main merged). A guest's `clear-pickup`, `scale-speed` and `transit` for a
      craft `may_use_pickup` refuses are ignored engine-side (`RaceSim::may_use_pickup`, which
      `Race::may_use_pickup` calls); proof `tests::extension_view`.

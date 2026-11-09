@@ -1,7 +1,5 @@
 //! [`load`]: everything a race needs, read out of one disc image, and the report
 //! of what came back.
-//!
-//! Split out of `race.rs` under the 1,000-line rule; its tests are `race/tests/load.rs`.
 
 use super::*;
 #[cfg(feature = "view")]
@@ -32,6 +30,8 @@ mod intro;
 mod lens_flare;
 #[cfg(feature = "view")]
 pub(crate) mod magstrip_wake;
+#[cfg(feature = "view")]
+mod mod_assets;
 mod muzzle;
 mod original_laws;
 #[cfg(feature = "view")]
@@ -45,9 +45,12 @@ pub(super) mod ripple;
 mod roster;
 #[cfg(feature = "view")]
 mod skin;
+mod start_boost_report;
 mod surfaces;
 mod track_inputs;
 mod track_stats;
+#[cfg(feature = "view")]
+mod trail_hits;
 pub use track_stats::authored_length;
 mod variant;
 #[cfg(feature = "view")]
@@ -56,6 +59,8 @@ mod weapon_models;
 mod zone_livery;
 #[cfg(feature = "view")]
 pub use campaign::load_event;
+#[cfg(feature = "view")]
+pub use environment::hd_bloom_params;
 #[cfg(feature = "view")]
 use environment::{cloud_layer, hd_sky_model, psp2_sky_model};
 use oag_source::remix::craft_of;
@@ -102,12 +107,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &options.dlc,
         &oag_source::cache::default_dlc_cache_dir(),
     );
-    // **Opened as whichever title the source turned out to be**, the same way the
-    // boot path already does it. This used to be `oag_pulse::open_with_packs`
-    // outright, which refused a Pure disc by name (`WrongTitle`) - so `--race`
-    // and the menus' own `Launch Game` could not reach a second title at all,
-    // however much of the rest of the path was ready for one.
-    //
+    // **Opened as whichever title the source turned out to be**, the way the boot
+    // path does, so `--race` and the menus' `Launch Game` reach every title.
     // **Two sources when `craft_source` names a Race Remix** - see
     // `oag_source::remix::Remix`. `archives`/`title` stay the track's; a
     // craft-governed load reads `craft_title` and `craft_of(&mut craft, &mut archives)` instead.
@@ -129,6 +130,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         report.push(format!("craft from {}", craft_title.name));
     }
     report.push(archives.layout.describe());
+    let _pack = crate::texture_pack::engage(options, &archives, &mut report);
     for pack in &archives.packs {
         report.push(format!("dlc: {}", pack.label()));
     }
@@ -240,7 +242,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         weapon_pad_refresh,
         pilot_assist,
         wall_restitution,
-    } = global::resolve(&mut archives, options, &stats, &mut report);
+    } = global::resolve(&mut archives, options, &stats, title, &mut report);
     // Nothing is scaled here: the four pre-scaled fields are converted exactly once and this
     // is not the place it happens, and neither `<SpeedupPads>` nor `<Special>` is one of them.
     // `None` where this team's file does not author the requested rung: a race
@@ -270,6 +272,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // Two failures, two lines, for the reason `<Global>` above gives at length.
     let weapons = assets::load_weapons(&mut archives, title, options.mode, &mut report);
     let weapon_ai = assets::load_weapon_ai(&mut archives, title, &mut report);
+    let rule = crate::score_law::of(options, title, &weapon_ai, &mut archives, &mut report);
     if options.weapons_on() && weapons.is_none() {
         // Only worth saying on a mode that would otherwise hand something out.
         report.push("weapon pads hand nothing out this run".to_string());
@@ -307,6 +310,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(not(feature = "view"))]
     let chase = chase_params(stats.external_camera_far);
 
+    stages::checkpoint()?;
     // The grid's roster - see `roster::available`.
     let available = roster::available(
         craft_of(&mut craft, &mut archives),
@@ -330,6 +334,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     )?;
     #[cfg(not(feature = "view"))]
     let slot_teams = roster::teams(craft_title, options, &team, &available, &mut report);
+    stages::checkpoint()?;
     // Each AI slot's own tuning where the title's variant family says it flies a
     // different team's file than the player's - see `family`.
     let (opponent_handling, opponent_weapon_counts) = family::opponent_handling(
@@ -401,6 +406,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         } else {
             (None, None)
         };
+    stages::checkpoint()?;
     // **Built here rather than below, because whether it built decides the
     // fallback.** A `.rcsmodel` that will not decode is the same outcome for a
     // race as none at all - the derived ribbon - and Wipeout 2048 made the
@@ -417,6 +423,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.mode == Mode::Zone,
         &mut report,
     );
+    stages::checkpoint()?;
     #[cfg(feature = "view")]
     let ribbon = options.ribbon
         || drawn.is_some()
@@ -563,6 +570,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         volumes
     };
 
+    stages::checkpoint()?;
     // The ribbon build draws an invented surface rather than the disc's art, so
     // it gets no sky either: the two belong to the same "show what shipped"
     // mode.
@@ -653,6 +661,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // the original's own order: `World_CollectNodeLists` always walks the tree
     // before anything asks whether weapons are on. The PS3 path is
     // `geometry::weapon_pad_model` - see its own doc comment for why.
+    stages::checkpoint()?;
     #[cfg(feature = "view")]
     let weapon_pad_model = if rcs_drawn {
         geometry::weapon_pad_model(ps3_weapon_pad_model, options.weapons_on(), &mut report)
@@ -735,7 +744,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let vex_geometry = !options.ribbon
         && !track.starts_with("foreign:")
         && !oag_vex::vex::geometry_is_external(&track_blob);
-    stages::reach(stages::Stage::TrackBuilt);
+    stages::reach(stages::Stage::TrackBuilt)?;
 
     let spline = Spline::from_track(&ai);
     report.push(format!(
@@ -784,7 +793,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else {
         None
     };
-    stages::reach(stages::Stage::WorldBuilt);
+    stages::reach(stages::Stage::WorldBuilt)?;
     // The player's own, and reported by `livery::load` beside the hull it was
     // read off. Sparks are slot 0's today - `oag_fx::sparks` triggers off
     // the player's contacts alone - so this takes slot 0's locators rather than
@@ -816,7 +825,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         .looks
         .start_boost_origin(archives.layout.platform);
     let start_boost = start_boost.filter(|_| start_boost_origin.is_some());
-    code_laws::report_start_boost(start_boost_origin, start_boost.is_some(), &mut report);
+    start_boost_report::say(start_boost_origin, start_boost.is_some(), &mut report);
     // A title that compiles its launch in (Pure) flies its own, measured on its own disc.
     let code_start_boost = craft_title
         .race
@@ -852,32 +861,25 @@ pub fn load(options: &Options) -> Result<Loaded> {
             Err(why) => report.push(format!("{why} - {name} will not be drawn")),
         }
     }
-    // The mods' own effects land after every title effect, so no title sprite moves.
+    // Lent before the mods' effects, so no mod sprite moves; a no-op unless `graphics.trail_hits`.
     #[cfg(feature = "view")]
-    let mod_shaders = crate::extension_shaders::load(
-        &extension_sources,
-        &title.slug(),
-        options.foreign_track.as_deref(),
-        &mut report,
+    let lent_trail_hit = trail_hits::lend(options, craft_title, &mut effects, &mut report);
+    #[cfg(feature = "view")]
+    let mods = mod_assets::ModAssets::new(&extension_sources, title, options);
+    #[cfg(feature = "view")]
+    let (mod_shaders, mod_effects) =
+        mods.shaders_and_effects(&mut archives, &mut effects, &mut report);
+    #[cfg(feature = "view")]
+    let handles = trail_hits::gate(
+        options,
+        craft_title,
+        super::EffectHandles::resolve(craft_title, &effects)
+            .with_own(mod_effects)
+            .with_shaders(mod_shaders)
+            .lending(Trigger::TrailHitship, lent_trail_hit),
     );
-    #[cfg(feature = "view")]
-    let mod_effects = crate::extension_effects::load(
-        &extension_sources,
-        &title.slug(),
-        options.foreign_track.as_deref(),
-        &mod_shaders,
-        &mut effects,
-        &mut |entry, name| {
-            crate::foreign::art::host_texture(&mut archives, entry, name)
-                .and_then(|texture| crate::extension_effects::sprite_of(&texture))
-        },
-        &mut report,
-    );
-    #[cfg(feature = "view")]
-    let handles = super::EffectHandles::resolve(craft_title, &effects)
-        .with_own(mod_effects)
-        .with_shaders(mod_shaders);
 
+    stages::checkpoint()?;
     #[cfg(feature = "view")]
     let (mut sounds, announcer, class_announcer) = audio::banks_and_announcers(
         &mut archives,
@@ -888,14 +890,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     #[cfg(feature = "view")]
-    {
-        sounds.mod_sounds = crate::extension_sounds::load(
-            &extension_sources,
-            &title.slug(),
-            options.foreign_track.as_deref(),
-            &mut report,
-        );
-    }
+    mods.sounds(&mut sounds, &mut report);
+    stages::checkpoint()?;
+    #[cfg(feature = "view")]
+    let rumble = crate::rumble_library::load(&mut archives, &mut report);
     #[cfg(feature = "view")]
     let track_emitters = audio::track_emitters(
         &mut archives,
@@ -1082,9 +1080,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         original_laws,
         &mut report,
     );
-    stages::reach(stages::Stage::CraftsBuilt);
-    #[cfg(feature = "view")]
-    let models = &craft_title.weapon_models;
+    stages::reach(stages::Stage::CraftsBuilt)?;
     #[cfg_attr(not(feature = "view"), allow(unused_mut))]
     let extensions = crate::extensions::prepare(
         &extension_sources,
@@ -1110,7 +1106,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         platform: archives.layout.platform,
         setup: Setup {
             mode: options.mode,
-            eliminator_kill_target: options.eliminator_kill_target,
+            eliminator_kill_target: rule.target,
             laps_override: options.laps_override,
             weapons_override: options.weapons_override,
             difficulty: options.difficulty,
@@ -1122,6 +1118,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             people: options.people_flying(),
             #[cfg(feature = "view")]
             trail_sparks: options.trail_sparks,
+            #[cfg(feature = "view")]
+            request: Some(options.replay_setup()),
             #[cfg(feature = "view")]
             campaign_event: false,
             seed: options.seed.unwrap_or(SEED),
@@ -1153,17 +1151,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 craft_of(&mut craft, &mut archives).layout.platform,
             ),
             #[cfg(feature = "view")]
-            hd_plasma_blast: models.plasma_blast_hd.is_some(),
+            hd_plasma_blast: wm.plasma_blast_hd.is_some(),
             #[cfg(feature = "view")]
-            plasma_blast_law: models.plasma_blast_pulse.map(|blast| blast.law),
+            plasma_blast_law: wm.plasma_blast_pulse.map(|blast| blast.law),
             #[cfg(feature = "view")]
-            disruptor_halo_law: models.disruptor_halo,
+            disruptor_halo_law: wm.disruptor_halo,
             #[cfg(feature = "view")]
-            hd_bomb_blast: models.bomb_blast_hd.is_some(),
+            hd_bomb_blast: wm.bomb_blast_hd.is_some(),
             #[cfg(feature = "view")]
-            bomb_shockwave_fades: models.bomb_blast_pulse.is_some_and(|b| b.shockwave_fades),
+            bomb_shockwave_fades: wm.bomb_blast_pulse.is_some_and(|b| b.shockwave_fades),
             #[cfg(feature = "view")]
-            hd_missile_blast: models.missile_blast_hd.is_some(),
+            hd_missile_blast: wm.missile_blast_hd.is_some(),
             #[cfg(feature = "view")]
             pulse_laid_pose: craft_title.looks.laid_pose.applies_everywhere(),
             #[cfg(feature = "view")]
@@ -1193,7 +1191,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             destroy_stations: super::destroy_camera::stations(circuit_fx, &track_blob, &mut report),
             #[cfg(feature = "view")]
-            intro_camera: intro::read(&mut archives, &track, pre_race, &mut report),
+            intro_camera: intro::read(&mut archives, &track, options, pre_race, &mut report),
             #[cfg(feature = "view")]
             intro_voice: intro::read_voice(&mut archives, title, &track, pre_race, &mut report),
             slot_teams: slot_teams.clone(),
@@ -1210,6 +1208,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             magstrip_pob: wm.magstrip_pob,
             #[cfg(feature = "view")]
             leach_strip: magstrip_wake.leach_anchors,
+            #[cfg(feature = "view")]
+            missile_trail: magstrip_wake.missile_trail,
             collision,
             handling,
             opponent_handling,
@@ -1262,6 +1262,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             announcer,
             #[cfg(feature = "view")]
             class_announcer,
+            #[cfg(feature = "view")]
+            rumble,
             zone_stages: title.race.zone_stages,
             countdown_voice: title.race.countdown_voice.is_some(),
             countdown_beat: title
@@ -1298,6 +1300,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             autopilot_pad_grants: title.weapons.autopilot_pad_grants.value,
             reset_triggers: crate::respawn::reset_triggers_for(&title.reset_enables),
             opponent_fire: title.weapons.opponent_fire.value,
+            score_law: rule.law,
+            flip_law: rule.flip,
             speedup_pads,
             weapon_pads,
             weapons,

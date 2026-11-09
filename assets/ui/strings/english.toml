@@ -191,6 +191,7 @@ OAG_RACE_SPEED_CLASS = { text = "SPEED CLASS", human = false }
 OAG_RACE_WEAPONS = { text = "WEAPONS", human = false }
 OAG_RACE_AI_DIFFICULTY = { text = "AI DIFFICULTY", human = false }
 OAG_RACE_KILLS = { text = "KILLS", human = false }
+OAG_RACE_TARGET = { text = "TARGET", human = false }
 OAG_RACE_TEAM = { text = "TEAM", human = false }
 OAG_RACE_VARIANT = { text = "VARIANT", human = false }
 OAG_RACE_TRACK = { text = "TRACK", human = false }
@@ -230,7 +231,11 @@ OAG_DISPLAY_CANVAS_SIZE = { text = "CANVAS SIZE", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "ASPECT RATIO", human = false }
 OAG_DISPLAY_FRONT_END_STYLE = { text = "FRONT END STYLE", human = false }
 OAG_DISPLAY_HUD_STYLE = { text = "HUD STYLE", human = false }
+OAG_DISPLAY_SCREEN_SIZE = { text = "SCREEN SIZE", human = false }
 OAG_DISPLAY_DYNAMIC_HUD = { text = "DYNAMIC HUD", human = false }
+OAG_DISPLAY_GHOST_SHIP_VISIBLE = { text = "GHOST SHIPS VISIBLE", human = false }
+OAG_DISPLAY_AUTO_LOAD_GHOST = { text = "AUTO LOAD GHOST", human = false }
+OAG_DISPLAY_MULTIPLAYER_TAGS = { text = "MULTIPLAYER TAGS", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }
 OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS = { text = "PAUSE ON FOCUS LOSS", human = false }
 OAG_DISPLAY_FRAME_LIMIT = { text = "FRAME LIMIT", human = false }
@@ -263,6 +268,7 @@ OAG_GRAPHICS_CAMERA_VIEW = { text = "CAMERA VIEW", human = false }
 OAG_GRAPHICS_FIELD_OF_VIEW = { text = "FIELD OF VIEW", human = false }
 OAG_GRAPHICS_BOOST_FOV_KICK = { text = "BOOST FOV KICK", human = false }
 OAG_GRAPHICS_BOOST_ZOOM = { text = "BOOST ZOOM", human = false }
+OAG_GRAPHICS_TRAIL_HITS = { text = "TRAIL HITS", human = false }
 OAG_GRAPHICS_CPU_GOVERNOR = { text = "CPU GOVERNOR", human = false }
 OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "PERFORMANCE OVERLAY", human = false }
 OAG_GRAPHICS_ADVANCED = { text = "ADVANCED", human = false }
@@ -290,11 +296,13 @@ OAG_CONTROLS_PITCH_UP = { text = "PITCH UP", human = false }
 OAG_CONTROLS_PITCH_DOWN = { text = "PITCH DOWN", human = false }
 OAG_CONTROLS_AIRBRAKE_LEFT = { text = "AIRBRAKE LEFT", human = false }
 OAG_CONTROLS_AIRBRAKE_RIGHT = { text = "AIRBRAKE RIGHT", human = false }
+OAG_CONTROLS_ELIMINATOR_FLIP = { text = "ELIMINATOR FLIP", human = false }
 OAG_CONTROLS_CAMERA_VIEW = { text = "CAMERA VIEW", human = false }
 OAG_CONTROLS_SIDESHIFT = { text = "SIDESHIFT", human = false }
 OAG_CONTROLS_TRIGGERS = { text = "TRIGGERS", human = false }
 OAG_CONTROLS_PILOT_ASSIST = { text = "PILOT ASSIST", human = false }
 OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "TRIGGER SENSITIVITY", human = false }
+OAG_CONTROLS_RUMBLE = { text = "RUMBLE", human = false }
 OAG_CONTROLS_TOUCH_GO_ZONES = { text = "GO BRAKE ZONES", human = false }
 OAG_CONTROLS_TOUCH_SCHEME = { text = "TOUCH SCHEME", human = false }
 OAG_CONTROLS_TOUCH_OPACITY = { text = "CONTROLS OPACITY", human = false }
@@ -438,10 +446,64 @@ OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} failed", human = false }
 # looking dead. `crates/game/src/main/campaign_stage.rs`.
 OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "THIS EVENT'S MODE CANNOT BE RACED IN THIS BUILD YET", human = false }
 OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "THIS EVENT'S CIRCUIT IS NOT ON THIS DISC", human = false }
+OAG_CAMPAIGN_NOT_PLAYABLE = { text = "THIS CAMPAIGN CANNOT BE PLAYED IN THIS BUILD YET", human = false }
 # A mod campaign event naming a team, pilot or disc this machine does not have
 # (ADR-0077), and the page that picks the disc's campaign or a mod's.
 OAG_CAMPAIGN_EVENT_UNAVAILABLE = { text = "THIS EVENT CANNOT BE RACED WITH WHAT THIS MACHINE HAS", human = false }
 OAG_MENU_CAMPAIGN_PICKER = { text = "CAMPAIGNS", human = false }
+
+# The campaign editor (`oag_game::campaign::editor`): the picker's NEW CAMPAIGN row and the
+# screen's own words.
+OAG_MENU_CAMPAIGN_EDITOR = { text = "NEW CAMPAIGN", human = false }
+OAG_MENU_CAMPAIGN_EDITOR_SUBTITLE = { text = "Place events on the hex grid and save them as a campaign", human = false }
+OAG_EDITOR_TITLE = { text = "CAMPAIGN EDITOR", human = false }
+OAG_EDITOR_FIELD_MODE = { text = "MODE", human = false }
+OAG_EDITOR_FIELD_CIRCUIT = { text = "CIRCUIT", human = false }
+OAG_EDITOR_FIELD_CLASS = { text = "SPEED CLASS", human = false }
+OAG_EDITOR_FIELD_TEAM = { text = "TEAM", human = false }
+OAG_EDITOR_FIELD_AI = { text = "OPPONENTS", human = false }
+OAG_EDITOR_TEAM_CHOOSE = { text = "PLAYER CHOOSES", human = false }
+OAG_EDITOR_EMPTY = { text = "EMPTY SLOT", human = false }
+OAG_EDITOR_PLACED = { text = "EVENTS", human = false }
+OAG_EDITOR_ACTION_NAME = { text = "NAME", human = false }
+OAG_EDITOR_ACTION_SAVE = { text = "SAVE CAMPAIGN", human = false }
+OAG_EDITOR_ACTION_CLEAR = { text = "CLEAR SLOT", human = false }
+OAG_EDITOR_SAVED = { text = "SAVED - FIND IT UNDER RACE CAMPAIGN", human = false }
+OAG_EDITOR_NEEDS_EVENT = { text = "PLACE AN EVENT FIRST", human = false }
+OAG_EDITOR_NAME_TITLE = { text = "NAME YOUR CAMPAIGN", human = false }
+OAG_EDITOR_SAVE_FAILED = { text = "COULD NOT SAVE THE CAMPAIGN", human = false }
+OAG_EDITOR_HINT_PLACE = { text = "CROSS PLACES AN EVENT", human = false }
+OAG_EDITOR_LEGEND_CLEAR = { text = "Clear slot", human = false }
+OAG_EDITOR_LEGEND_NAME = { text = "Name", human = false }
+OAG_EDITOR_DEFAULT_NAME = { text = "MY CAMPAIGN", human = false }
+OAG_EDITOR_MODE_RACE = { text = "RACE", human = false }
+OAG_EDITOR_MODE_TIME_TRIAL = { text = "TIME TRIAL", human = false }
+OAG_EDITOR_MODE_SPEED_LAP = { text = "SPEED LAP", human = false }
+OAG_EDITOR_MODE_ZONE = { text = "ZONE", human = false }
+OAG_EDITOR_MODE_ELIMINATOR = { text = "ELIMINATOR", human = false }
+OAG_EDITOR_MODE_HEAD_TO_HEAD = { text = "HEAD TO HEAD", human = false }
+OAG_EDITOR_AI_ORIGINAL = { text = "ORIGINAL", human = false }
+OAG_EDITOR_AI_OURS = { text = "OURS", human = false }
+OAG_EDITOR_FIELD_DIFFICULTY = { text = "DIFFICULTY", human = false }
+OAG_EDITOR_FIELD_PROGRESSION = { text = "PROGRESSION", human = false }
+OAG_EDITOR_FIELD_SEED = { text = "SEED", human = false }
+OAG_EDITOR_FIELD_CLASS_FROM = { text = "CLASS FROM", human = false }
+OAG_EDITOR_FIELD_CLASS_TO = { text = "CLASS TO", human = false }
+OAG_EDITOR_HINT_SAVE = { text = "START SAVES", human = false }
+OAG_EDITOR_KEY_SELECT = { text = "SELECT", human = false }
+OAG_EDITOR_KEY_TRIANGLE = { text = "TRIANGLE", human = false }
+OAG_EDITOR_KEY_START = { text = "START", human = false }
+OAG_EDITOR_ACTION_FILL = { text = "FILL GRID", human = false }
+OAG_EDITOR_ACTION_SETTINGS = { text = "SETTINGS", human = false }
+OAG_EDITOR_ACTION_EVENT = { text = "EVENT FIELDS", human = false }
+OAG_EDITOR_SEED_TITLE = { text = "TYPE A SEED", human = false }
+OAG_EDITOR_FILLED = { text = "GRID FILLED FROM THE SEED", human = false }
+OAG_EDITOR_LEGEND_FILL = { text = "Fill grid", human = false }
+OAG_EDITOR_DIFFICULTY_EASY = { text = "EASY", human = false }
+OAG_EDITOR_DIFFICULTY_MEDIUM = { text = "MEDIUM", human = false }
+OAG_EDITOR_DIFFICULTY_HARD = { text = "HARD", human = false }
+OAG_EDITOR_PROGRESSION_FLAT = { text = "FLAT", human = false }
+OAG_EDITOR_PROGRESSION_RAMP = { text = "RAMP", human = false }
 
 # Wipeout Pure's SINGLE PLAYER chain: our own wording around the disc's circuit,
 # tournament, class and mode names. `crates/game/src/main/pure_chain_stage.rs`.
@@ -462,6 +524,7 @@ OAG_MODS_ADDS = { text = "ADDS", human = false }
 OAG_MODS_NO_LICENSE = { text = "NO LICENSE STATED", human = false }
 OAG_MODS_LICENSE_FILE = { text = "SEE %s", human = false }
 OAG_MODS_NOTHING = { text = "NOTHING", human = false }
+OAG_MODS_TEXTURE_PACK = { text = "TEXTURES", human = false }
 OAG_MODS_BUILT_IN = { text = "BUILT IN", human = false }
 OAG_MODS_ENABLED = { text = "ENABLED", human = false }
 OAG_MODS_ON = { text = "ON", human = false }
@@ -490,6 +553,96 @@ OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSED - ANYONE CAN RESUME", human = false }
 # no string. **Chosen, not measured**.
 OAG_COUNTDOWN_GO = { text = "GO", human = false }
 
+# Photo mode: the pause menu's row and the screen over the picture.
+OAG_MENU_PHOTO_MODE = { text = "PHOTO MODE", human = false }
+OAG_MENU_PHOTO_MODE_SUBTITLE = { text = "Fly the camera round the race and save a picture", human = false }
+OAG_PHOTO_CAMERA = { text = "CAMERA", human = false }
+OAG_PHOTO_INTERNAL = { text = "INTERNAL", human = false }
+OAG_PHOTO_CLOSE = { text = "CLOSE", human = false }
+OAG_PHOTO_TRACK = { text = "TRACK", human = false }
+OAG_PHOTO_HUD = { text = "HUD", human = false }
+OAG_PHOTO_ON = { text = "ON", human = false }
+OAG_PHOTO_OFF = { text = "OFF", human = false }
+OAG_PHOTO_TAKE = { text = "TAKE PHOTO", human = false }
+OAG_PHOTO_BACK = { text = "BACK", human = false }
+OAG_PHOTO_STICK = { text = "STICK", human = false }
+OAG_PHOTO_ROTATE = { text = "ROTATE", human = false }
+OAG_PHOTO_ZOOM_TILT = { text = "ZOOM, TILT", human = false }
+OAG_PHOTO_PAN = { text = "PAN", human = false }
+OAG_PHOTO_RESET = { text = "RESET", human = false }
+OAG_PHOTO_SHIP = { text = "SHIP", human = false }
+OAG_PHOTO_HELP = { text = "HIDE HELP", human = false }
+OAG_PHOTO_SAVED = { text = "PHOTO SAVED", human = false }
+OAG_PHOTO_FAILED = { text = "PHOTO NOT SAVED", human = false }
+OAG_PHOTO_EFFECTS = { text = "EFFECTS", human = false }
+OAG_PHOTO_EXPOSURE = { text = "EXPOSURE", human = false }
+OAG_PHOTO_SATURATION = { text = "SATURATION", human = false }
+OAG_PHOTO_SPEED_BLUR = { text = "SPEED BLUR", human = false }
+OAG_PHOTO_DEPTH = { text = "DEPTH OF FIELD", human = false }
+OAG_PHOTO_APERTURE = { text = "APERTURE", human = false }
+OAG_PHOTO_FOCUS = { text = "FOCUS", human = false }
+OAG_PHOTO_PANEL_KEYS = { text = "STICK UP DOWN ROW    LEFT RIGHT CHANGE", human = false }
+OAG_REPLAY_CRAFT = { text = "CRAFT", human = false }
+OAG_REPLAY_HUD = { text = "HUD", human = false }
+OAG_REPLAY_SCRUB = { text = "SCRUB", human = false }
+OAG_REPLAY_JOG = { text = "JOG", human = false }
+OAG_PHOTO_PAD_KEYS = { text = "RIGHT STICK UP DOWN ZOOM    LEFT RIGHT TILT", human = false }
+OAG_PHOTO_SCRUB_KEYS = { text = "L2 / R2 SCRUB    R2 FULL PULL PLAY", human = false }
+OAG_PHOTO_REWIND = { text = "REWIND", human = false }
+OAG_PHOTO_PLAY = { text = "PLAY", human = false }
+OAG_PHOTO_MOTION_BLUR = { text = "MOTION BLUR", human = false }
+OAG_PHOTO_SHUTTER = { text = "SHUTTER", human = false }
+OAG_PHOTO_PROGRESS = { text = "TAKING PHOTO", human = false }
+OAG_PHOTO_CANCELLED = { text = "PHOTO CANCELLED", human = false }
+OAG_PHOTO_ANY_INPUT = { text = "ANY BUTTON CANCELS", human = false }
+
 # The hint under a settings page's rows while the selected row is off its default,
 # also what a click or a tap on it does. Ours, in no original.
 OAG_MENU_RESET_TO_DEFAULT = { text = "RESET TO DEFAULT", human = false }
+
+# The player name and tag: the OPTIONS rows and the entry screens' titles.
+OAG_OPTIONS_PLAYER_NAME = { text = "PLAYER NAME", human = false }
+OAG_OPTIONS_PLAYER_TAG = { text = "PLAYER TAG", human = false }
+OAG_PLAYER_NAME_TITLE = { text = "ENTER YOUR NAME", human = false }
+OAG_PLAYER_TAG_TITLE = { text = "ENTER YOUR TAG", human = false }
+
+# The REPLAYS page and the replay viewer (ADR-0087). Ours, in no original.
+OAG_MENU_REPLAYS = { text = "REPLAYS", human = false }
+OAG_MENU_REPLAYS_SUBTITLE = { text = "Watch, keep or delete the races you have recorded", human = false }
+OAG_REPLAYS_PAGE_TITLE = { text = "REPLAYS", human = false }
+OAG_REPLAYS_ROW = { text = "REPLAY", human = false }
+OAG_REPLAYS_WATCH = { text = "WATCH", human = false }
+OAG_REPLAYS_KEEP = { text = "KEEP", human = false }
+OAG_REPLAYS_DELETE = { text = "DELETE", human = false }
+OAG_REPLAYS_NONE = { text = "NONE YET", human = false }
+OAG_REPLAYS_NONE_WHY = { text = "EVERY RACE YOU DRIVE IS RECORDED HERE", human = false }
+OAG_REPLAYS_NONE_OFF = { text = "RECORDING IS OFF: [REPLAY] RECORD IN THE SETTINGS FILE", human = false }
+OAG_REPLAYS_CIRCUIT = { text = "CIRCUIT", human = false }
+OAG_REPLAYS_MODE = { text = "RACE", human = false }
+OAG_REPLAYS_FINISH = { text = "FINISH", human = false }
+OAG_REPLAYS_DATE = { text = "DATE", human = false }
+OAG_REPLAYS_SIZE = { text = "SIZE", human = false }
+OAG_REPLAYS_NOTE = { text = "NOTE", human = false }
+OAG_REPLAYS_SAVED = { text = "SAVED", human = false }
+OAG_REPLAYS_TAKEN_OVER = { text = "TAKEN OVER AT %s", human = false }
+OAG_REPLAYS_NOT_FINISHED = { text = "NOT FINISHED", human = false }
+OAG_REPLAYS_NOT_VERIFIED = { text = "MODE NOT VERIFIED", human = false }
+OAG_REPLAYS_OTHER_TITLE = { text = "RECORDED ON %s: OPEN THAT DISC", human = false }
+OAG_REPLAYS_NEWER = { text = "RECORDED BY A NEWER VERSION", human = false }
+OAG_REPLAYS_DAMAGED = { text = "DAMAGED FILE", human = false }
+OAG_REPLAYS_NO_SETUP = { text = "CANNOT BE REBUILT: NO LAUNCH REQUEST", human = false }
+OAG_REPLAYS_NOT_THE_RACE = { text = "NOT THE RACE THAT WAS RECORDED", human = false }
+OAG_REPLAYS_REFUSED = { text = "CANNOT BE REBUILT HERE: %s", human = false }
+OAG_REPLAY_OPENING = { text = "OPENING REPLAY", human = false }
+OAG_REPLAY_MISMATCH = { text = "THIS REPLAY WAS RECORDED ON AN EARLIER VERSION AND STOPS MATCHING AT %s", human = false }
+OAG_REPLAY_STOPPED = { text = "IT STOPS HERE: THIS VERSION CANNOT REBUILD THE REST", human = false }
+OAG_REPLAY_PLAY = { text = "PLAY", human = false }
+OAG_REPLAY_PAUSE = { text = "PAUSE", human = false }
+OAG_REPLAY_EXIT = { text = "EXIT", human = false }
+OAG_REPLAY_PHOTO = { text = "PHOTO", human = false }
+OAG_REPLAY_SPEED = { text = "SPEED", human = false }
+OAG_REPLAY_SKIP = { text = "5 SEC", human = false }
+OAG_REPLAY_ENDED = { text = "END OF REPLAY", human = false }
+OAG_ENDRACE_WATCH_REPLAY = { text = "WATCH REPLAY", human = false }
+OAG_REPLAY_POSE_VIEW = { text = "POSE VIEW: THE CRAFT ARE WHERE THEY WERE RECORDED. NO HUD, WEAPONS OR EFFECTS", human = false }
+OAG_REPLAY_POSE_END = { text = "END OF THE POSE TRACK: IT HOLDS AT MOST AN HOUR", human = false }

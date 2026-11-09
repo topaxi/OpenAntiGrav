@@ -2356,7 +2356,9 @@ after AI DIFFICULTY in the authored order, with the disc's words; the cut row is
 is not); START with two people claims two devices on a two-seat join screen, then HD's own Track and Ship Select per
 seat; `SplitScreen = RB_VERT` cuts the race left and right and composes HD's `vert_splitscreen_*` HUD layouts. HD's
 `Eliminations` is a `<Slider>`, not a list, so naming this file does not switch on the `KILLS` row
-(`local_split` is a field of its own beside `race_setup`). See
+(`local_split` is a field of its own beside `race_setup`). HD's TARGET row is a separate row fed by the
+score rule's own file reference (`ScoreRule::race_setup`), not by `race_setup`; see
+[eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md). See
 [split-screen.md](../rendering/split-screen.md), "Where the entry is, per title".
 
 The online screens are a different file (`multiplayer_definition.xml` in `DATA02`: `Join Game`, `Lobby`,
@@ -2497,7 +2499,8 @@ link to the slider rests on the value 96 matching on the same save, not on an ad
 
 Ours: `oag_game::render::inset` (one `Renderer::set_inset`, applied per draw in `render_with`,
 `MenuStage` and the headless menu-page capture), the scale from `HudArt::safe_area_scale`
-(`[graphics] hud_safe_area`, default 90 = the disc's), pointer hits moved back out in
+(`[graphics] hud_safe_area`, default 90 = the disc's, written by the SCREEN SIZE row on the DISPLAY page; the live
+Game Options screen is our `menu.toml`, the disc's `additional_definition.xml` screen is not drawn), pointer hits moved back out in
 `session::pointer::in_grid`. The `Flyer` cards (campaign cards) obey it too (`obeySafeZone="true"`
 on the widget); the scene `.vex` (`obeySafeZone="false"`) and the `.bik` (`ignoreSafeZoneFullscreen`)
 do not. Boot screens, loading and the end-of-race screens are **not** inset (unmeasured).
@@ -2508,5 +2511,6 @@ do not. Boot screens, loading and the end-of-race screens are **not** inset (unm
 8.09, with 1.0). Ship Select stat labels and the Track Select records table now draw at the authored size.
 
 Omega: **checked, differs**: Omega's original is 1:1 (`omega/menu-ship-select` theirs spans x 159..1760,
-as ours does) and authors no `Safe Area Setting` slider, so `safe_area` is `None` and nothing moves.
+as ours does) and authors no `Safe Area Setting` slider, so it takes the shared SCREEN SIZE row (default 100, nothing
+moves until it is) - see [hd-hud.md](hd-hud.md#screen-size-on-every-title).
 The row-text fix applies to Omega's picker by the same skin flag (HD's dialect), untested against a pair.

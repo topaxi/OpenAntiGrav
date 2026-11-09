@@ -1,32 +1,7 @@
-//! [`super::ranked`]'s rule and the rows' text, pinned against the live frame.
+//! The rows' text, pinned against the live frame.
 
-use super::{KillTag, ranked};
+use super::{KillTag, scale, target_header, text};
 use crate::Readout;
-
-/// The live PPSSPP frame (`AG Systems 1`, `Feisar 1`, `Qirex 1`, `AAA 0`,
-/// `Triakis 0`, `Goteki 45 0`, `Piranha 0`, `EG-X 0`, top to bottom) is the
-/// column this rule produces from a grid array in which the equal-kill craft
-/// sit in the order `EG-X`, `Piranha`, `Goteki 45`, `Triakis`, `AAA` and
-/// `Qirex`, `Feisar`, `AG Systems`: earlier in the array is lower.
-#[test]
-fn equal_kills_stack_with_the_later_craft_on_top() {
-    // Array order: 0 EG-X, 1 Piranha, 2 Goteki 45, 3 Triakis, 4 AAA,
-    // 5 Qirex, 6 Feisar, 7 AG Systems.
-    let kills = [0, 0, 0, 0, 0, 1, 1, 1];
-    assert_eq!(ranked(&kills), [7, 6, 5, 4, 3, 2, 1, 0]);
-}
-
-#[test]
-fn more_kills_rank_higher_whatever_the_array_order() {
-    // Craft 2 leads on three, craft 0 and 3 tie on one, craft 1 has none.
-    assert_eq!(ranked(&[1, 0, 3, 1]), [2, 3, 0, 1]);
-}
-
-#[test]
-fn a_lone_craft_is_row_zero() {
-    assert_eq!(ranked(&[4]), [0]);
-    assert!(ranked(&[]).is_empty());
-}
 
 fn strings() -> oag_ui::language::StringTable {
     oag_ui::language::StringTable::from_xml(
@@ -42,12 +17,12 @@ fn the_rows_read_name_then_kills_and_shrink_the_opponents() {
         kill_tags: vec![
             KillTag {
                 team: "AG_Systems".into(),
-                kills: 1,
+                count: 1,
                 player: false,
             },
             KillTag {
                 team: "Feisar".into(),
-                kills: 0,
+                count: 0,
                 player: true,
             },
         ],
@@ -93,12 +68,12 @@ fn column_readout() -> Readout {
         kill_tags: vec![
             KillTag {
                 team: "AG_Systems".into(),
-                kills: 1,
+                count: 1,
                 player: false,
             },
             KillTag {
                 team: "Feisar".into(),
-                kills: 0,
+                count: 0,
                 player: true,
             },
         ],
@@ -150,4 +125,65 @@ fn the_column_draws_in_the_default_bucket_and_only_where_the_title_has_it() {
         matches!(header.as_slice(), [Draw::Text { text, .. }] if text == "IG_HUD_KILLS"),
         "{header:?}"
     );
+}
+
+#[test]
+fn a_score_row_prints_its_score_in_brackets_and_grows_the_player() {
+    let strings = oag_ui::language::StringTable::default();
+    let readout = Readout {
+        kill_tags: vec![
+            KillTag {
+                team: "EG-X".to_string(),
+                count: 41,
+                player: false,
+            },
+            KillTag {
+                team: "PLAYER".to_string(),
+                count: 15,
+                player: true,
+            },
+        ],
+        kill_target: 200,
+        score_rows: true,
+        ..Readout::default()
+    };
+    assert_eq!(text(&readout, "PosTag0", &strings).unwrap(), "EG-X  ( 41 )");
+    assert_eq!(
+        text(&readout, "PosTag1", &strings).unwrap(),
+        "PLAYER  ( 15 )"
+    );
+    assert_eq!(scale(&readout, "PosTag0"), Some(1.0));
+    assert_eq!(scale(&readout, "PosTag1"), Some(1.2));
+    assert_eq!(
+        target_header(&readout, &strings).unwrap(),
+        "IG_HUD_TARGET ( 200 )"
+    );
+}
+
+#[test]
+fn a_kill_race_has_no_target_header() {
+    let strings = oag_ui::language::StringTable::default();
+    let readout = Readout {
+        kill_target: 5,
+        ..Readout::default()
+    };
+    assert_eq!(target_header(&readout, &strings), None);
+}
+
+#[test]
+fn a_rank_digit_draws_only_for_a_score_row_that_has_a_craft() {
+    let tag = KillTag {
+        team: "EG-X".to_string(),
+        count: 0,
+        player: false,
+    };
+    let mut readout = Readout {
+        kill_tags: vec![tag],
+        score_rows: true,
+        ..Readout::default()
+    };
+    assert!(super::rank_shown(&readout, "PlaceString0"));
+    assert!(!super::rank_shown(&readout, "PlaceString1"));
+    readout.score_rows = false;
+    assert!(!super::rank_shown(&readout, "PlaceString0"));
 }

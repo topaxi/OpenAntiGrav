@@ -35,7 +35,7 @@ pub fn safe_area_frame(frame: Frame, scale: f32, size: (f32, f32)) -> Frame {
         offset: [(1.0 - scale) * size.0 * 0.5, (1.0 - scale) * size.1 * 0.5],
         clip: [-1.0e9, -1.0e9, 2.0e9, 2.0e9],
     };
-    frame.placed(&placement)
+    frame.into_placed(&placement)
 }
 
 /// One view of a split screen: the layout it draws from, the slot's readout and
@@ -76,10 +76,23 @@ pub fn views_frame(views: &[ViewDraw<'_>]) -> Frame {
                     .filter_map(|draw| oag_hud::place(draw, at))
                     .collect()
             };
+        if view.items.is_none() && !view.readout.player_tags.is_empty() {
+            // The tags were projected into the reticle's grid, so they go where the reticle goes.
+            let at = view.sight.as_ref().unwrap_or(&view.placement);
+            let mut mine = Frame::default();
+            oag_hud::player_tags::append(&mut mine, &view.cx, &view.readout);
+            let mut mine = mine.into_placed(at);
+            mine.spans.clear();
+            mine.spans.push(Span {
+                clip: at.clip,
+                start: [0; 5],
+            });
+            frame.extend(mine);
+        }
         if let Some(grid) = view.items {
             let mut mine = Frame::default();
             oag_hud::ext_draws::append(&mut mine, &view.cx, &view.readout.ext, grid);
-            let mut mine = mine.placed(&view.placement);
+            let mut mine = mine.into_placed(&view.placement);
             mine.spans.clear();
             mine.spans.push(Span {
                 clip: view.placement.clip,
@@ -101,14 +114,13 @@ pub fn views_frame(views: &[ViewDraw<'_>]) -> Frame {
             continue;
         }
         let Some(sight_at) = &view.sight else {
-            frame.extend(draw_list(&view.cx, &view.readout).placed(&view.placement));
+            frame.extend(draw_list(&view.cx, &view.readout).into_placed(&view.placement));
             continue;
         };
-        let mut readout = view.readout.clone();
-        let sight = readout.sight.take();
-        let mut mine = draw_list(&view.cx, &readout).placed(&view.placement);
-        if let Some(sight) = sight {
-            mine.sprites.extend(sight_draws(&sight, sight_at));
+        let mut mine =
+            oag_hud::draw_list_without_sight(&view.cx, &view.readout).into_placed(&view.placement);
+        if let Some(sight) = &view.readout.sight {
+            mine.sprites.extend(sight_draws(sight, sight_at));
         }
         frame.extend(mine);
     }
@@ -157,6 +169,8 @@ pub struct Overlay {
     split: Option<oag_hud::SplitAssets>,
     split_columns: Option<oag_hud::SplitAssets>,
     split_hud: Option<oag_hud::split_hud::SplitHudAssets>,
+    /// The player-tag face, [`Assets::tag_label`].
+    tag_label: Option<oag_hud::Label>,
     /// The whole HUD's scale about the screen's centre, [`oag_title::HudArt::safe_area`] at the
     /// player's value; `1.0` for a title with no such option.
     safe_area_scale: f32,
@@ -284,6 +298,7 @@ impl Overlay {
             split: assets.split.clone(),
             split_columns: assets.split_columns.clone(),
             split_hud: assets.split_hud.clone(),
+            tag_label: assets.tag_label.clone(),
             safe_area_scale: assets.art.safe_area_scale(None),
             hud_shown: true,
             vector: assets
@@ -320,8 +335,14 @@ impl Overlay {
     /// no `Safe Area Setting` keeps its HUD at full size whatever this says.
     #[must_use]
     pub fn with_safe_area(mut self, percent: Option<u8>) -> Self {
-        self.safe_area_scale = self.art.safe_area_scale(percent);
+        self.set_safe_area(percent);
         self
+    }
+
+    /// [`Self::with_safe_area`] on a built overlay. Idempotent, so the frame loop sets it every
+    /// frame and a race resumed from the pause menu's OPTIONS takes the SCREEN SIZE row at once.
+    pub fn set_safe_area(&mut self, percent: Option<u8>) {
+        self.safe_area_scale = self.art.safe_area_scale(percent);
     }
 
     /// The placement [`Self::safe_area`] applies, or `None` at full size.
@@ -436,6 +457,7 @@ impl Overlay {
             default_line_height: self.default_line_height,
             skin_line_height: self.skin_line_height,
             default_border: self.layout.default_border(),
+            tag_label: self.tag_label.as_ref(),
         }
     }
 
@@ -462,6 +484,7 @@ impl Overlay {
         viewport: (f32, f32, f32, f32),
     ) -> Vec<oag_hud::boost_smear::GlowStamp> {
         self.retarget(device, queue, viewport);
+        oag_gpu::perfprobe::mark("hud-readout");
         let mut frame = if self.hud_shown {
             let cx = self.context();
             let mut list = draw_list(&cx, readout);
@@ -491,7 +514,9 @@ impl Overlay {
             );
         }
         let glow = frame.glow.clone();
+        oag_gpu::perfprobe::mark("hud-frame");
         self.paint(device, queue, encoder, view, frame, viewport);
+        oag_gpu::perfprobe::mark("hud-paint");
         glow
     }
 
@@ -516,6 +541,7 @@ impl Overlay {
         cut: oag_render::viewport::Cut,
         viewport: (f32, f32, f32, f32),
     ) -> Vec<oag_hud::boost_smear::GlowStamp> {
+        oag_gpu::perfprobe::mark("hud-readout");
         let count = readouts.len();
         self.retarget(device, queue, viewport);
         let mut frame = if self.hud_shown {
@@ -543,7 +569,9 @@ impl Overlay {
             ));
         }
         let glow = frame.glow.clone();
+        oag_gpu::perfprobe::mark("hud-frame");
         self.paint(device, queue, encoder, view, frame, viewport);
+        oag_gpu::perfprobe::mark("hud-paint");
         glow
     }
 

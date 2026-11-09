@@ -188,6 +188,7 @@ mod tests {
         // The row is under test, not HD's drop shadow, which doubles every string.
         let art = oag_title::HudArt {
             text_shadow: None,
+            text_outline_alpha: None,
             ..*oag_hd::hud::ART
         };
         let cx = Context {
@@ -200,6 +201,7 @@ mod tests {
             default_line_height: 10.0,
             skin_line_height: 10.0,
             default_border: layout.default_border(),
+            tag_label: None,
         };
         let mut readout = Readout::blank();
         // A minute-and-nothing lap, so its formatted time is unambiguous.

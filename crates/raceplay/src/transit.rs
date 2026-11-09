@@ -162,7 +162,7 @@ impl Race {
             let (sin, cos) = oag_core::math::sin_cos(angle);
             let direction = lateral * cos + up * sin;
             let ray = oag_physics::collide::Ray::new(centre, direction, radius);
-            oag_physics::collide::Raycaster::raycast(&self.sim.collision, ray, None, false)
+            oag_physics::collide::Raycaster::raycast(&*self.sim.collision, ray, None, false)
                 .is_some()
         });
         (!blocked, ahead)

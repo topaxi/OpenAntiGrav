@@ -288,6 +288,17 @@ impl Mode {
         Self::ALL.into_iter().find(|mode| mode.name() == name)
     }
 
+    /// The mode a recorded race names: [`Self::from_name`], and [`Self::Tournament`] too.
+    ///
+    /// A replay header records the mode its race ran, and a campaign's tournament leg is a race
+    /// like any other, so a file must be able to name it. A settings file and `--mode` keep
+    /// [`Self::from_name`], which does not.
+    #[must_use]
+    pub fn from_recorded_name(name: &str) -> Option<Self> {
+        Self::from_name(name)
+            .or_else(|| (name == Self::Tournament.name()).then_some(Self::Tournament))
+    }
+
     /// Laps the mode finishes after in `class`, or `None` when it never ends
     /// on its own.
     ///

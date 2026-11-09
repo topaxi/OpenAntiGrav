@@ -169,7 +169,7 @@ pub(super) fn touch_menus(
 }
 
 /// This build's own tiles: the rows of the menu tree built for 2048 that open the race
-/// box, every submenu a mod attaches under it (RACE REMIX with `oag.remix` on), and
+/// box, every submenu attached under it (REPLAYS, and RACE REMIX with `oag.remix` on) and
 /// MULTIPLAYER, in that order, labelled as that tree labels them (so a mod that words
 /// them differently, or the language, reaches the tile too). A row that is not there
 /// (a mod turned off) is no tile.

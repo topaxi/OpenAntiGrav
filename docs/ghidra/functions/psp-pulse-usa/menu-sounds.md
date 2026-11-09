@@ -195,8 +195,10 @@ picker plays `UPDOWN` for a step and `ACCEPT` for a confirm **by widget class, c
 
 **What the port does with the boot and the pause** (pad and pointer, `Frontend::take_nav`, `press_cue`): the movie
 skip, `Show Logo`'s press, the picker's step and confirm, and START pausing or resuming a race each play the cue above.
-The port's pause has no rows and no sub-pages, so the pause menu's `UPDOWN` and `DECLINE` have no counterpart; the
-port's Circle while paused leaves the race and plays nothing, as the original's root Circle does. The memory-stick and
+On Pulse the port's pause is the disc's own screen (`docs/ui/pause-menu.md`): START opens it and resumes with
+`ACCEPT`, the rows step with `UPDOWN`, a sub-page's Circle plays `DECLINE`, and Circle on its root does nothing and
+plays nothing, as the original's does. A split-screen race and a title without a pause screen keep the old freeze,
+whose Circle leaves the race. The memory-stick and
 profile-setup screens, the `Create Profile` flow and the in-race options pages are not in the port.
 
 **Dialogs and the grid keyboard have no counterpart on the disc.** The port's yes/no `Confirm` (DELETE PILOT) and its

@@ -6,6 +6,26 @@
 
 use super::*;
 
+/// Whether the trail-hit burst plays on a title whose original never shows it
+/// (`graphics.trail_hits`, off by default: an enhancement of this project's).
+///
+/// A lender is used only where the craft's title has no `WO_TRAIL_HITSHIP` of its own
+/// (`oag_title::Title::effect_on(Trigger::TrailHitship)` is `None`: Pulse and Pure). 2048 and Omega
+/// author it but their originals never fire it (`oag_title::Effects::trail_hits_native`), so they
+/// play their own only with this on. HD plays its own whatever this holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum TrailHits {
+    /// No burst but HD's own: nothing on Pulse and Pure, and 2048's and Omega's own are dropped.
+    #[default]
+    Off,
+    /// Play the burst off `lender`, a source whose title authors it (found by the composition
+    /// root); `None` when this machine has none, which the loader report says.
+    On {
+        /// The source to read the effect from.
+        lender: Option<String>,
+    },
+}
+
 /// What to load, and which of it to draw.
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -49,10 +69,17 @@ pub struct Options {
     /// Finds more of them on the load thread ([`crate::extensions::Finder`]); `None`
     /// looks for none.
     pub find_extensions: Option<crate::extensions::Finder>,
+    /// Opens the texture packs the player has on, on the load thread
+    /// ([`crate::texture_pack::Finder`]); `None` draws the disc's own textures.
+    pub find_texture_packs: Option<crate::texture_pack::Finder>,
     /// The ring the player's `graphics.boost_zoom` borrows, handed in by the composition
     /// root (the one place that may name HD's); `None` is off. Used only where
     /// `oag_title::RaceDefaults::borrows_zoom_ring`.
     pub boost_zoom: Option<&'static oag_title::ZoomRing>,
+    /// The player's `graphics.trail_hits`: whether a craft flying in a rival's engine trail plays
+    /// a title's trail-hit burst on a title that has none of its own (Pulse and Pure).
+    /// Off by default. See [`TrailHits`].
+    pub trail_hits: TrailHits,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///
@@ -214,6 +241,9 @@ pub struct Options {
     /// it is: a campaign loader would fill it in per cell instead of leaving
     /// it `None`.
     pub eliminator_kill_target: Option<u32>,
+    /// A campaign cell's score target. A score Eliminator takes this and never the `KILLS`
+    /// pick above, which another title's kill count may have stored.
+    pub eliminator_score_target: Option<u32>,
     /// Laps this race ends after, overriding [`Mode::laps_target`]'s own
     /// per-class table - or `None` for that table's own answer, which is
     /// every caller outside the campaign.
@@ -437,6 +467,11 @@ pub struct Setup {
     /// See [`Options::trail_sparks`] - a draw-path verification aid.
     #[cfg(feature = "view")]
     pub trail_sparks: bool,
+    /// The launch request the options described, resolved, which a recording of the race writes
+    /// into its header so the file can rebuild it ([`Options::replay_setup`]). `None` for a
+    /// setup built by hand.
+    #[cfg(feature = "view")]
+    pub request: Option<oag_replay::header::Setup>,
     /// Whether the race is an event of the title's own single-player campaign: 2048's
     /// `SP.xml`, set by [`load_event`](super::load_event) and by nothing else. It is what the HUD
     /// reads as "an event object exists" - [`oag_hud::Readout::campaign_event`]. A DLC circuit
@@ -596,6 +631,10 @@ pub struct Setup {
     /// Each slot's `arc_anchor_point` for HD's LeachBeam strip, `Some` when drawn.
     #[cfg(feature = "view")]
     pub leach_strip: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
+    /// The Missile's ribbon config where the title draws them and the texture
+    /// loaded, else `None`: see [`crate::missile_smoke`].
+    #[cfg(feature = "view")]
+    pub missile_trail: Option<oag_title::weapons::MissileTrail>,
     /// The circuit's authored cameras, where the player's camera stands once
     /// their craft is destroyed - see `race::destroy_camera`. Empty off Pulse.
     #[cfg(feature = "view")]
@@ -773,6 +812,11 @@ pub struct Setup {
     /// has one.
     #[cfg(feature = "view")]
     pub class_announcer: oag_sound::sfx::ClassAnnouncer,
+    /// The pad rumble patterns the event map fires, out of this title's archive
+    /// (`oag_input::rumble::map::pattern_names`). Empty where the title ships
+    /// none (Pulse and Pure): such a race rumbles nothing.
+    #[cfg(feature = "view")]
+    pub rumble: oag_tables::rumble::Library,
     /// This title's own zone-number-to-speed-class ladder, when it is recovered - the same
     /// [`oag_title::ZoneStages`] [`crate::zone_grade::ZoneGrade`] carries, copied here so
     /// [`Self::class_announcer`] can be triggered off the same edge without reaching into the
@@ -834,6 +878,12 @@ pub struct Setup {
     /// Which terms the opponents' fire-or-absorb decision rolls by,
     /// `oag_title::weapons::Weapons::opponent_fire`.
     pub opponent_fire: oag_title::weapons::OpponentFire,
+    /// What an Eliminator is won on, `None` for kills: `oag_title::Title::eliminator` with the
+    /// opponents' scale resolved for this race's difficulty.
+    pub score_law: Option<oag_race::ScoreLaw>,
+    /// The Eliminator flip, `None` outside an Eliminator and on a title without one:
+    /// `oag_title::Title::eliminator_flip`.
+    pub flip_law: Option<oag_physics::flip::FlipLaw>,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*
@@ -886,7 +936,9 @@ pub struct Setup {
     /// speed-pad tunables come from, stamped onto the pad by the original's
     /// `WeaponPads_TestCraft` - see [`oag_tables::handling::WeaponPad`], which
     /// records why it is a debounce rather than a respawn. Zero when the global
-    /// file could not be read.
+    /// file could not be read, and in an Eliminator on a title that never stamps a
+    /// pad there (`oag_title::weapons::Weapons::pads_stamp_in_eliminator`): the pad
+    /// stays armed.
     pub weapon_pad_refresh: f32,
     /// Where [`Options::pose`] asked for the craft to start, already resolved
     /// against the spline. `None` uses the ordinary spawn.

@@ -850,7 +850,7 @@ screens, `Main Menu`, `Team Selection` and the rest are not among its names):
 
 | Screen (HD name) | Ours | Pair |
 | --- | --- | --- |
-| `Campaign Selection` | XML (DATA06 copy), HD only; Omega refuses (`this source has no Campaign Selection screen`) | HD yes, Omega **gap** |
+| `Campaign Selection` | XML (HD's DATA06 copy, Omega's own); both read by the one `Chooser::read` | HD yes, Omega yes since 2026-11-05 (below) |
 | `Grid Selection Fury`, `Cell Selection` | XML (`grid_00.xml`, `CellMode_Definition.xml`); on Omega both `grid-select` and `grid-select-hd` draw Omega's own first grid (18 points, `01_TRACK`, no flyer card), which is none of the three campaigns the original offers | HD yes, Omega pair with the state caveat |
 | `Track Creation` (Track Select) | XML (`Track_Selection_Definition.xml`) | both |
 | `Team Selection` (Ship Select) | XML (`Team_Selection_Definition.xml`) | both |
@@ -890,13 +890,14 @@ the page shows the same numbers per pair). The most visible difference is read o
 | HD Campaign cell | `CellMode_Definition.xml` | 0.189 / 0.10 / 16.7 | closest pair; the selected hex has the white outline in the original, ours is flat grey; the original has a red particle haze right of the card |
 | HD Track Select (Vineta K) | `Track_Selection_Definition.xml` | 0.184 / 0.02 / 21.6 | no circuit photo, no length or distance values (`4.4KM`, `13.2KM` read `-`), the circuit model is smaller and turned differently, the original's red backdrop cloud is much fainter in ours |
 | HD Ship Select (Feisar) | `Team_Selection_Definition.xml` | 0.196 / 0.08 / 22.0 | the hull is drawn at a different pose and size, the red particle backdrop is much fainter, the statistic bars carry red markers the original lacks |
+| Omega Campaign Select (2048 card) | `CellMode_Definition.xml`, `Campaign Selection` | 0.369 / 0.15 / 53.1 | (`omega-chooser`, 2026-11-05, the original frame being the one kept as `gap-campaign-select`) mean grey 52.7 over the whole frame, **78.4 over the chooser's bracket** (x 160-1755, y 170-950; 61.6 over its left part, 99.1 over the right where the unselected cards stand); both images read: the title, `CAMPAIGN MODES`, `RANK` block and footer are where the original has them to within 6 px, the 2048 card's centre is about 26 px left of the original's and its art is wrong (its navy banner and wordmark do not draw), and the HD and Fury cards stand 45 and about 190 px left of the original's |
 | Omega Campaign grid | Omega's own first grid | 0.397 / 0.27 / 55.0 | state not matched: no flyer card at all (a white page with the ghosted backdrop tower), 18 points against the original's 21 |
 | Omega Campaign cell | Omega's own first grid | 0.658 / 0.10 / 129.0 | the original's dark-red panel fills about 80 % of the frame and ours is white, the largest difference of the set; `01_TRACK` against `TALON'S JUNCTION` |
 | Omega Track Select (Vineta K) | `Track_Selection_Definition.xml` | 0.204 / 0.27 / 19.7 | circuit name `01_Track` (the unresolved name of Omega's entry: the load line names `Data\Environments\01_Vineta_K\screen.xml`, so the circuit is Vineta K) and no photo (the original names it and shows the stills), no length values, the model is turned differently |
 | Omega Ship Select (Feisar) | `Team_Selection_Definition.xml` | 0.283 / 0.26 / 34.0 | hull about twice the original's size in a different livery (dark teal and yellow against pale blue and yellow), a ringed Feisar logo against the flat one, the cursor on the top hex against the third row |
 
 Gaps (no pair, the original's frame kept in `gap-*` beside the pairs with `gap.json`): HD Main Menu, Racebox setup and Options+
-(`Additional`); Omega Campaign Select, Main Menu, Racebox setup and Options. The ranked list of differences is in the
+(`Additional`); Omega Main Menu, Racebox setup and Options (Omega Campaign Select was a gap until 2026-11-05: `scripts/shadps4-omega-menu-pair.py`'s `WALK` row is now an XML page, so a re-run of `pairs` makes it a pair; adopting the pair made without the emulator from the kept frame: replace `omega/gap-campaign-select` with `omega/menu-campaign-select`, then add it to the `manifest` command below, 10 entries). The ranked list of differences is in the
 `menu-pairs-hd-omega` handover thread. Adopt: the pair directories are under `data/reference/compare-page/{hd,omega}/menu-*`;
 the manifest is built from the main checkout with `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus.toml data/reference/compare-page/hd/menu-* data/reference/compare-page/omega/menu-*`
@@ -1058,6 +1059,27 @@ separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `p
 data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
 then `just compare-page`.
 
+### The backdrop movie's phase (2026-11-05, `pulse-track-select-streaks`)
+
+Pulse's menus play a nine-second looping movie that never restarts, so a reference still catches
+whatever frame the walk's length landed on, and a craft's fly-by is bright. `--menu-page` draws
+frame zero unless `--menu-movie-frame N` says otherwise. To line a pair up:
+
+```sh
+python3 scripts/compare-menu-movie-phase.py <pair-dir>...   # records --menu-movie-frame in pair.json
+```
+
+Then re-render that pair with `scripts/compare-rerender-ours.py`. The script scores every frame of
+the movie against `theirs.png` on the pixels of `ours.png` that are bare movie, and keeps frame zero
+unless the best frame beats it by a grey level (`--min-gain`): a dark stretch names no frame. It
+runs no emulator and reads the transcoded movie from `~/.cache/oag/movies/`. A re-capture of a pair
+changes the phase, so run it again after one. `pulse-psp/menu-track` needs 38: mean grey 13.89 -> 4.46
+(`docs/ui/selection-screens.md`, "The teal streaks behind the panel are the backdrop movie").
+
+`compare-rerender-ours.py` now gives a menu or loading pair an empty `$OAG_DLC`, as the pair scripts
+always have: without it a re-render counted the maintainer's DLC packs (Track Select `1 / 11`, not
+`1 / 3`; Ship Select `1 / 12`, not `1 / 8`).
+
 ## Menu pairs: Wipeout Pulse (PS2) front-end screens (2026-10-29, `pulse-ps2-hex-align`)
 
 `scripts/pcsx2-menu-pair.py pairs --slot S --out D` makes Grid Selection and Cell Selection pairs (`menu-grid`, `menu-cell`) from
@@ -1147,7 +1169,7 @@ be an accepted exception, a pair script never makes one silently). `check-docs` 
 cites a disposable `data/` directory; it also refuses one that names another lane's worktree. A re-made
 `argv` that names `{scratch}` is refused by `compare-rerender` until that flag is remapped.
 
-## Publishing is locked
+## Publishing
 
 `just publish-compare` uploads the built `data/compare/` with `wrangler pages deploy`
 to a **separate** Cloudflare Pages project (`openantigrav-compare`, never the main
@@ -1159,10 +1181,20 @@ It **refuses to run** unless the screenshot-policy ADR,
 has a `## Status` line that **starts with** `Accepted` (markdown emphasis ignored). Its number is one
 constant, `POLICY_ADR` in `scripts/compare-page.py`. A missing or non-Accepted ADR prints the reason and
 exits 2. The lock is checked before `wrangler` is looked up, so the refusal is what you see.
-`just publish-compare <dir>` rebuilds the page strictly from the curated manifest directory it is
-given first, so a missing `platform` refuses it before anything uploads. The directory is required:
-the seed and live manifests are developer material, ADR-0074 wants every published image picked by
-a person, and a default would publish them. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
+`just publish-compare` rebuilds the page strictly from the curated manifest directory first, so a
+missing `platform` refuses it before anything uploads. With no argument it publishes
+`data/compare-curated/`, the maintainer's curated set; `just publish-compare <dir>` publishes another.
+The default is never the seed or live manifests (`data/reference/compare-page/`): they are developer
+material, and ADR-0074 wants every published image picked by a person. A missing
+`data/compare-curated/` refuses by name.
+
+The curated set picks the pairs and may reword them; `just compare-rerender-all` writes only into
+`data/reference/compare-page/`. So with no argument, publishing first carries newer re-renders across.
+For each curated entry whose id has a later `rendered_at` in the reference set, with the same `ours`
+and `original` paths and a byte-identical original image, it copies `ours.png`, `side.png` and
+`pair.json` and the entry's `rmse`, `edge_ncc`, `mean_grey`, `build`, `binary` and `rendered_at`
+lines. Every other curated line (title, note, setting) stays as curated, and each carried entry is
+printed. A directory named on the command line is published as it is. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
 ADR-0074 Accepted it reads `unlocked`. The maintainer runs the command.
 
 A curated page should carry only frames the policy covers; the seed and live

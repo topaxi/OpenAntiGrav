@@ -37,7 +37,7 @@ the main checkout and follow it. Then read `CLAUDE.md`, `docs/README.md` and
   (`just gen-status`), so never hand-edit it, and never commit it: the lead
   regenerates it per merge.
 - A docs-only change runs `just check-docs`, plus `check-names`,
-  `check-handover` and `check-status` as they apply. If you find you need to
+  `check-handover` as they apply. If you find you need to
   touch a `.rs` file beyond a doc comment, stop and tell the lead: that is a
   different lane.
 - Write plainly: short sentences, and no em or en dashes.

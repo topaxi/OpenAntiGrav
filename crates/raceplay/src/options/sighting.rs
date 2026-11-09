@@ -29,6 +29,9 @@ pub struct Sighting {
     /// Whether a held LeachBeam runs its own law (Pulse) rather than the
     /// Missile's. `oag_title::hud::Sights::runs_leach_law`.
     pub leach_law: bool,
+    /// What the Missile's chase rate is multiplied by while a target is on
+    /// screen. `oag_title::hud::Sights::chase_gain`.
+    pub chase_gain: f32,
     /// The square the law runs in when it is not the grid (the PS2's 512x512
     /// buffer), or `None`. See [`oag_race::sight::Sight::in_span`].
     pub span: Option<[f32; 2]>,
@@ -43,6 +46,7 @@ impl Default for Sighting {
             view_screen: oag_race::sight::SCREEN,
             columns_screen: None,
             leach_law: false,
+            chase_gain: oag_race::sight::CHASE_GAIN_NONE,
             span: None,
         }
     }
@@ -62,6 +66,7 @@ impl Sighting {
                 .as_ref()
                 .map(|columns| [columns.view.0, columns.view.1]),
             leach_law: hud.art.sights.runs_leach_law(),
+            chase_gain: hud.art.sights.chase_gain(),
             span: span_of(hud.space.size),
         }
     }
@@ -79,6 +84,7 @@ impl Sighting {
             view_screen: [size.0, size.1],
             columns_screen: None,
             leach_law: art.sights.runs_leach_law(),
+            chase_gain: art.sights.chase_gain(),
             span: span_of(size),
         }
     }
@@ -88,6 +94,7 @@ impl Sighting {
     pub fn view_sight(&self) -> Sight {
         let mut sight = Sight::new(self.view_screen);
         sight.set_leach_law(self.leach_law);
+        sight.set_chase_gain(self.chase_gain);
         self.spanned(sight)
     }
 
@@ -96,6 +103,7 @@ impl Sighting {
     pub fn lock_sight(&self) -> Sight {
         let mut sight = Sight::new(self.lock_screen);
         sight.set_leach_law(self.leach_law);
+        sight.set_chase_gain(self.chase_gain);
         self.spanned(sight)
     }
 

@@ -27,6 +27,7 @@ fn batch_with(primitive_type: u8, vertex_count: usize) -> Batch {
         declared_vertex_count: u16::try_from(vertex_count).unwrap_or(u16::MAX),
         bounds: ([0.0; 3], [0.0; 3]),
         header_flags: 0,
+        depth_bias: 0,
     }
 }
 
@@ -74,6 +75,7 @@ fn classifies_pass_masks() {
         declared_vertex_count: 0,
         bounds: ([0.0; 3], [0.0; 3]),
         header_flags: 0,
+        depth_bias: 0,
     };
     assert!(batch(0x0101).is_transparent());
     assert!(!batch(0x0021).is_transparent());
@@ -108,6 +110,7 @@ fn decodes_the_additive_blend_flag() {
         declared_vertex_count: 0,
         bounds: ([0.0; 3], [0.0; 3]),
         header_flags,
+        depth_bias: 0,
     };
     assert!(batch(0x00).is_additive_blend());
     assert!(!batch(0x10).is_additive_blend());

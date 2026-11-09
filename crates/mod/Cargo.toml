@@ -12,6 +12,7 @@ publish = false
 oag-ext-abi.workspace = true
 oag-schema.workspace = true
 oag-tables.workspace = true
+oag-texture.workspace = true
 dirs = "7"
 semver = "1"
 serde.workspace = true

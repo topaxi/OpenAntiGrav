@@ -99,8 +99,8 @@ Trial / Speed Lap one: on a race, `EndRaceResults_LayoutGrid` (`0x0022c068`)
 stretches the side bars to `443`, drops the bottom bar to `487` and hides
 `GridBottomBlock`, and `EndRaceResults_FillRaceRows` (`0x0022b688`) puts row
 `r` at `y = 96 + 45 r` with columns at `x = 40`/`200`/`545` - so the time
-is `Grid2`, not `Grid1`, and `Grid1` is a per-racer string not yet
-identified. Confidence 75 for "mode 3 is a single race", 78-80 for the
+is `Grid2`, not `Grid1`, and `Grid1` is a per-racer string (a team
+idstring, identified 2026-11-06, confidence 75: see the grid page). Confidence 75 for "mode 3 is a single race", 78-80 for the
 numbers. Full reading:
 [endrace-results-grid.md](../ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md).
 

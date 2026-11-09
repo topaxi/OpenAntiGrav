@@ -147,8 +147,13 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
         "the caption is `FE_LOADINGDOT` out of the disc's own English table"
     );
 
-    // The default styling is the base game's, and the feature is the one both
-    // observations of the running game showed.
+    // The default styling is the one the menus are drawn in (see
+    // `an_unpicked_style_is_the_one_the_menus_are_drawn_in`), and the feature is the one
+    // both observations of the running game showed.
+    let drawn = oag_hd::loading::FEATURES
+        .iter()
+        .find(|style| Some(style.name) == assets.style)
+        .expect("the style the assets hold is one HD ships");
     // **All five**, because the original draws one per screen and this is read
     // once per disc.
     assert_eq!(assets.features.len(), 5, "HD ships five features");
@@ -158,11 +163,7 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
         5,
         "and five illustrations for them"
     );
-    for (_, entry) in oag_hd::loading::FEATURES[0]
-        .features
-        .iter()
-        .map(|f| ((), f.image))
-    {
+    for entry in drawn.features.iter().map(|f| f.image) {
         assert!(
             art.sheet.get(entry).is_some(),
             "{entry} is in the one sheet the screen draws from"
@@ -218,9 +219,8 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
     let dot = art.dot.expect("checked above");
     assert_eq!((dot[2], dot[3]), (8.0, 8.0), "dot.gtf is an 8x8 tile");
 
-    // The five labels are the game's own: four string ids and one literal.
+    // The four labels are the game's own string ids.
     let labels = assets.labels.as_ref().expect("HD draws its labels");
-    assert_eq!(labels.brand, "WIPEOUT\u{ae} HD");
     assert_eq!(labels.feature_image.as_deref(), Some("FEATURE IMAGE"));
     assert_eq!(
         labels.feature_description.as_deref(),
@@ -316,6 +316,7 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
         "asking for Fury's styling gets Fury's art"
     );
     assert_eq!(fury.features.len(), assets.features.len());
+    assert_eq!(fury.style, Some(oag_hd::loading::STYLE_FURY));
 
     // And the two entries a wave would need really are absent, so this reads as
     // "cut" rather than "not looked for". The running game agrees: its own
@@ -330,6 +331,170 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
             "{entry} is on an HD archive after all; the cut finding needs re-reading"
         );
     }
+}
+
+/// A style chosen against the served front end's ground takes its colours from the skin file
+/// whose ground matches: HD's white pictures get the white ground, Fury's black ones keep the
+/// served black. Without it the white picture met a black ground mid-way down the feature's name
+/// row. Reading the globals from the served copy alone again fails the first assertion.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_style_takes_the_ground_its_own_pictures_were_drawn_for() {
+    let Some(image) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let source = image.display().to_string();
+    let (table, entries) = table_and_entries(&image);
+    let ground = |style: &str| {
+        let assets = Assets::load(&source, &table, entries.as_deref(), Some(style));
+        assert_eq!(
+            assets.style,
+            Some(if style == "HD" { "HD" } else { "FURY" })
+        );
+        assets.palette.expect("the four globals resolve").background
+    };
+    assert_eq!(ground(oag_hd::loading::STYLE_HD), [1.0, 1.0, 1.0, 1.0]);
+    assert_eq!(ground(oag_hd::loading::STYLE_FURY), [0.0, 0.0, 0.0, 1.0]);
+}
+
+/// An unpicked style is the style the menus are drawn in, and the whole screen follows it:
+/// the pictures, the mode icon's clip and the four globals.
+///
+/// The menus never read `display.front_end_style`: they are in the style of the archive the
+/// source serves (`oag_game::boot`'s block art). The loading deck used to take HD's first
+/// entry instead, so a player who never touched OPTIONS saw HD's white art on Fury's black
+/// page. Taking the first entry again fails the first assertion.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_unpicked_style_is_the_one_the_menus_are_drawn_in() {
+    let Some(image) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let source = image.display().to_string();
+    let menus_are_fury = super::hd_menu_ground_truth::shell(&image)
+        .frame
+        .blocks
+        .expect("the nine-patch decoded, so the frame carries block art")
+        .fury;
+    let menus = oag_hd::loading::FEATURES
+        .iter()
+        .find(|style| style.dark_ground == menus_are_fury)
+        .expect("HD ships a style for the menus' ground");
+    let (table, entries) = table_and_entries(&image);
+
+    let unpicked = Assets::load(&source, &table, entries.as_deref(), None);
+    assert_eq!(
+        unpicked.style,
+        Some(menus.name),
+        "the deck and the menus agree"
+    );
+    assert_eq!(
+        menus.name,
+        oag_hd::loading::STYLE_FURY,
+        "DATA00 serves Fury"
+    );
+
+    let art = unpicked.art.as_ref().expect("HD ships art");
+    for feature in menus.features {
+        assert!(
+            art.sheet.get(feature.image).is_some(),
+            "{} is in the sheet",
+            feature.image
+        );
+    }
+    let icons: Vec<&str> = unpicked
+        .mode_icons
+        .iter()
+        .map(|i| i.entry.as_str())
+        .collect();
+    let expected: Vec<&str> = menus.mode_icons.iter().map(|(_, entry)| *entry).collect();
+    assert_eq!(
+        icons, expected,
+        "the mode icon's clips are the menus' style's"
+    );
+    let palette = unpicked.palette.expect("HD names four globals");
+    assert!(
+        palette.background[..3].iter().sum::<f32>() < 1.5,
+        "the globals are the served black page's: {:?}",
+        palette.background
+    );
+
+    // The same as asking for it by name, and a different pick is honoured.
+    let named = Assets::load(&source, &table, entries.as_deref(), Some(menus.name));
+    assert_eq!(named.style, unpicked.style);
+    assert_eq!(
+        named.features.len(),
+        unpicked.features.len(),
+        "the same prose behind either"
+    );
+    let other = oag_hd::loading::FEATURES
+        .iter()
+        .find(|style| style.name != menus.name)
+        .expect("HD ships two styles");
+    let picked = Assets::load(&source, &table, entries.as_deref(), Some(other.name));
+    assert_eq!(picked.style, Some(other.name));
+
+    // And the pictures of either style land in their panel on every screen shape.
+    features_lie_inside_their_panel(&unpicked, menus.name);
+    features_lie_inside_their_panel(&picked, other.name);
+}
+
+/// Every feature picture of `assets`, on a 16:10, 16:9, 21:9 and 20:9 screen: what shows of it
+/// (its texels that differ from the screen's ground) is inside the feature panel, 160 to 950 by
+/// 155 to 655 in HD's 1920x1080 grid. A picture cut at the panel's edge passes; so does Fury's,
+/// whose quad overhangs in the screen's own black.
+fn features_lie_inside_their_panel(assets: &Assets, style: &str) {
+    const PANEL: [f32; 4] = [160.0, 155.0, 950.0, 655.0];
+    let art = assets.art.as_ref().expect("HD ships art");
+    let ground = assets.palette.expect("HD names four globals").background;
+    let differs = |texel: [u8; 4]| {
+        texel[3] != 0
+            && (0..3)
+                .any(|channel| (f32::from(texel[channel]) - ground[channel] * 255.0).abs() > 16.0)
+    };
+    let mut shown = 0;
+    for draw in 0..40 {
+        for aspect in [1280.0 / 800.0, 16.0 / 9.0, 2560.0 / 1080.0, 20.0 / 9.0] {
+            let mut screen = oag_game::loading::Screen::for_mode(assets, 33.0, draw, None, Some(8));
+            screen.set_surface_aspect(aspect);
+            let list = screen.draw_list(
+                oag_game::loading::Phase::Prefetch,
+                &oag_game::prefetch::Progress::default(),
+                &oag_ui::font::Atlas::build(),
+            );
+            for item in &list {
+                let oag_ui::frontend::Draw::Sprite { rect, uv, .. } = item else {
+                    continue;
+                };
+                if rect[2] < 200.0 || rect[3] < 200.0 {
+                    continue;
+                }
+                let ink = art
+                    .sheet
+                    .ink_within(*uv, differs)
+                    .expect("a feature picture shows something");
+                let (kx, ky) = (rect[2] / uv[2], rect[3] / uv[3]);
+                let seen = [
+                    rect[0] + (ink[0] - uv[0]) * kx,
+                    rect[1] + (ink[1] - uv[1]) * ky,
+                    rect[0] + (ink[0] + ink[2] - uv[0]) * kx,
+                    rect[1] + (ink[1] + ink[3] - uv[1]) * ky,
+                ];
+                assert!(
+                    seen[0] >= PANEL[0] - 0.5
+                        && seen[1] >= PANEL[1] - 0.5
+                        && seen[2] <= PANEL[2] + 0.5
+                        && seen[3] <= PANEL[3] + 0.5,
+                    "{style}, aspect {aspect:.2}, draw {draw}: shows at {seen:?}, panel {PANEL:?}"
+                );
+                shown += 1;
+            }
+        }
+    }
+    assert!(
+        shown >= 160,
+        "{style}: a picture on every screen, saw {shown}"
+    );
 }
 
 /// Pulse still gets exactly what it always got: tips, a real strip, no still.
@@ -487,4 +652,201 @@ fn the_circuit_load_runs_on_a_worker_and_names_what_it_is_reading() {
         worker.join().is_none(),
         "joining twice is a no-op rather than a panic"
     );
+}
+
+fn omega() -> Option<PathBuf> {
+    oag_testdata::exact("data/extracted/ps4")
+}
+
+/// Omega's `Title` names a loading screen, and every file it names is in the package pair and
+/// decodes: the five illustrations (1024 by 512, the size the layout's picture window is cut
+/// from) and the six marks.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_names_a_loading_screen_whose_files_are_on_the_disc() {
+    let Some(source) = omega() else { return };
+    let loading = oag_omega::TITLE
+        .loading
+        .expect("Omega names a loading screen");
+    assert!(loading.wave.is_none(), "a still, not Pulse's wave");
+    assert_eq!(loading.features.len(), 1, "one styling: WOHD_Colours");
+    let mut archives = oag_omega::open(&source.display().to_string()).expect("Omega opens");
+    let entries = loading.features[0]
+        .features
+        .iter()
+        .map(|feature| (feature.image, true))
+        .chain(loading.chrome.iter().map(|(_, entry)| (*entry, false)));
+    let mut count = 0;
+    for (entry, illustration) in entries {
+        let blob = archives
+            .read_name(entry)
+            .unwrap_or_else(|e| panic!("{entry}: {e}"));
+        let texture =
+            oag_texture::gnf::Texture::parse(&blob).unwrap_or_else(|e| panic!("{entry}: {e}"));
+        texture
+            .decode(&blob)
+            .unwrap_or_else(|e| panic!("{entry} does not decode: {e}"));
+        if illustration {
+            assert_eq!((texture.width, texture.height), (1024, 512), "{entry}");
+        }
+        count += 1;
+    }
+    assert_eq!(count, 11);
+}
+
+/// The screen Omega draws is built from its own files: five features whose pictures are in the
+/// sheet, the six marks, the four menu colours through `WOHD_Colours`, the caption and brand out
+/// of Omega's own English table, and a layout in which nothing is skipped but the mode clip.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_draws_its_loading_screen_from_its_own_files() {
+    let Some(source) = omega() else { return };
+    let (table, entries) = table_and_entries(&source);
+    let assets = Assets::load(
+        &source.display().to_string(),
+        &table,
+        entries.as_deref(),
+        None,
+    );
+    for note in &assets.notes {
+        println!("{note}");
+    }
+    assert!(!assets.wave);
+    assert_eq!(assets.style, Some("HD"));
+    assert_eq!(assets.caption.as_deref(), Some("LOADING..."));
+    assert_eq!(assets.features.len(), 5, "all five features resolve");
+    let art = assets.art.as_ref().expect("Omega ships art");
+    assert_eq!(art.illustrations.len(), assets.features.len());
+    for mark in [
+        art.title_arrow,
+        art.subtitle_arrow,
+        art.rule,
+        art.corner,
+        art.dot,
+        art.square,
+    ] {
+        assert!(mark.is_some(), "a mark is missing from the sheet");
+    }
+    assert!(
+        assets
+            .notes
+            .iter()
+            .all(|note| !note.contains("did not decode") && !note.contains("would not reverse")),
+        "{:?}",
+        assets.notes
+    );
+
+    // `WOHD_Colours`: white ground, and the ink it overwrites `HD_Grey` with.
+    let palette = assets.palette.expect("the four globals resolve");
+    assert_eq!(palette.background, [1.0, 1.0, 1.0, 1.0]);
+    assert_eq!(palette.ink[..3], [1.0 / 255.0, 0.0, 1.0 / 255.0]);
+
+    let layouts = assets.layout.as_ref().expect("Omega's layout loads");
+    let layout = layouts
+        .for_race("single_race", 16.0 / 9.0)
+        .expect("it answers a single race");
+    let brand = layout
+        .elements
+        .iter()
+        .find(|element| element.id == "label-title")
+        .and_then(|element| element.string_id.as_deref())
+        .expect("the brand is a string id");
+    assert_eq!(brand, "MSC_WOOM_CAPS");
+    assert!(
+        assets
+            .layout_strings
+            .iter()
+            .any(|(id, text)| id == brand && text.contains("OMEGA COLLECTION")),
+        "{:?}",
+        assets.layout_strings
+    );
+    assert!(assets.mode_icons.is_empty(), "no .bik ships on Omega");
+
+    // The mode icon is a still per mode, every one of the six pictures decoded.
+    let stills = art.mode_stills.as_ref().expect("Omega names mode stills");
+    assert!(stills.get(Some(3)).is_some(), "a single race has its flag");
+    for mode in [4, 5, 6, 8, 10, 0x11, 0x14] {
+        assert!(stills.get(Some(mode)).is_some(), "mode {mode}");
+    }
+    for mode in [0xd, 0xe, 0x15] {
+        assert!(stills.get(Some(mode)).is_none(), "mode {mode} draws none");
+    }
+    assert_ne!(
+        stills.get(Some(5)),
+        stills.get(Some(8)),
+        "one picture per mode"
+    );
+}
+
+/// A `.gnf` the front end lists as bottom-up is drawn the way up HD's `.gtf` of the same stem
+/// is: the loading sheet's corner, rule and square cover the pixels HD's do. (The colour
+/// channels and the near-zero alpha differ: Omega re-cooked them.)
+#[test]
+#[ignore = "needs the decrypted PS4 package pair and the HD disc image"]
+fn omega_marks_are_drawn_the_way_up_hd_draws_them() {
+    let (Some(source), Some(hd)) = (omega(), image("hdfury-ps3-eu-dec.iso")) else {
+        return;
+    };
+    let load = |path: &Path| {
+        let (table, entries) = table_and_entries(path);
+        Assets::load(
+            &path.display().to_string(),
+            &table,
+            entries.as_deref(),
+            None,
+        )
+    };
+    let (omega, hd) = (load(&source), load(&hd));
+    let rect_pixels = |assets: &Assets, rect: [f32; 4]| -> Vec<u8> {
+        let sheet = &assets.art.as_ref().expect("art").sheet;
+        let (x, y, w, h) = (
+            rect[0] as usize,
+            rect[1] as usize,
+            rect[2] as usize,
+            rect[3] as usize,
+        );
+        let stride = sheet.width as usize * 4;
+        (y..y + h)
+            .flat_map(|row| sheet.rgba[row * stride + x * 4..row * stride + (x + w) * 4].to_vec())
+            .collect()
+    };
+    for (name, ours, theirs) in [
+        (
+            "corner",
+            omega.art.as_ref().unwrap().corner,
+            hd.art.as_ref().unwrap().corner,
+        ),
+        (
+            "rule",
+            omega.art.as_ref().unwrap().rule,
+            hd.art.as_ref().unwrap().rule,
+        ),
+        (
+            "square",
+            omega.art.as_ref().unwrap().square,
+            hd.art.as_ref().unwrap().square,
+        ),
+    ] {
+        let (ours, theirs) = (ours.expect(name), theirs.expect(name));
+        assert_eq!((ours[2], ours[3]), (theirs[2], theirs[3]), "{name} size");
+        let mask = |assets: &Assets, rect: [f32; 4]| -> String {
+            rect_pixels(assets, rect)
+                .chunks_exact(4 * rect[2] as usize)
+                .map(|row| {
+                    row.as_chunks::<4>()
+                        .0
+                        .iter()
+                        .map(|px| if px[3] > 127 { '#' } else { '.' })
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        assert_eq!(
+            mask(&omega, ours),
+            mask(&hd, theirs),
+            "{name}: Omega's opaque pixels are where HD's are (the corner is an L, so a flipped \
+             sheet fails)"
+        );
+    }
 }

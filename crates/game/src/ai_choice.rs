@@ -145,12 +145,23 @@ pub fn decide(choice: AiChoice, opponents: bool, humans: usize, source: Source) 
 /// whether the original driver flies (`false` for the reasons in [`Reason`]
 /// and for [`Race::use_original_ai`]'s own fallbacks, which it logs itself).
 pub fn apply(race: &mut Race, choice: AiChoice, source: Source) -> bool {
+    apply_noting(race, choice, source).0
+}
+
+/// [`apply`], and what a recording must carry to rebuild it: the original driver's request,
+/// `None` when this project's flies or when a 2048 event's own skills went with it (those are
+/// not in a replay's header, so a rebuild of that race is refused at tick zero by name).
+pub fn apply_noting(
+    race: &mut Race,
+    choice: AiChoice,
+    source: Source,
+) -> (bool, Option<oag_raceplay::OriginalAi>) {
     let opponents = race.sim.world.ship_count > 1;
     let humans = race.sim.world.human_slots().count();
     match decide(choice, opponents, humans, source) {
         Decision::Ours(reason) => {
             log::info!("AI: this project's driver flies ({})", reason.text());
-            false
+            (false, None)
         }
         Decision::Original {
             skill,
@@ -161,7 +172,9 @@ pub fn apply(race: &mut Race, choice: AiChoice, source: Source) -> bool {
             if flies && let Some((pad_tracking, weapon_avoidance)) = event {
                 race.set_original_event_ai_skills(pad_tracking, weapon_avoidance);
             }
-            flies
+            let note =
+                (flies && event.is_none()).then_some(oag_raceplay::OriginalAi { skill, level });
+            (flies, note)
         }
     }
 }

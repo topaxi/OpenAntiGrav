@@ -33,9 +33,9 @@ use crate::language::StringTable;
 use oag_core::buttons::button_from_name;
 
 use super::{
-    Action, CAMPAIGN_PICKER_PAGE, CUSTOM_CAMPAIGN_ROW, Choice, Condition, Entry, LaunchInputs,
-    ORIGINAL_CAMPAIGN_ROW, Page, Pin, Query, QueryRef, Restart, RowMeta, Value, ValueSource,
-    Warning,
+    Action, CAMPAIGN_EDITOR_ROW, CAMPAIGN_PICKER_PAGE, CUSTOM_CAMPAIGN_ROW, Choice, Condition,
+    Entry, LaunchInputs, ORIGINAL_CAMPAIGN_ROW, Page, Pin, Query, QueryRef, Restart, RowMeta,
+    Value, ValueSource, Warning,
 };
 
 /// The schema kind a menu file declares in its `[toml-schema]` header.
@@ -126,7 +126,9 @@ pub enum Error {
 
 mod build;
 mod mod_setting;
+mod pause;
 pub use build::{Added, For, ModMenu};
+pub use pause::{PAUSE_PAGE, PHOTO_ROW, Pause, row_id as pause_row_id};
 
 impl From<&raw::Launch> for LaunchInputs {
     fn from(keys: &raw::Launch) -> Self {
@@ -554,6 +556,19 @@ impl Definition {
         }
     }
 
+    /// Drops the TRAIL HITS row on a title whose original plays the trail-hit burst by itself
+    /// (`oag_title::Effects::plays_trail_hits_natively`): Wipeout HD alone. 2048 and Omega author
+    /// the burst but never fire it, so they keep the row, as Pulse and Pure do. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_trail_hits(&mut self, title: &oag_title::Title) {
+        if !title.effects.plays_trail_hits_natively() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.trail_hits"));
+        }
+    }
+
     /// Drops the HUD STYLE row on a title whose disc authors no `HUD Style` list
     /// (`oag_title::HudLayouts::skins`): Pulse, Pure and 2048. Same once-before-read
     /// timing as [`Self::drop_unavailable_boost_zoom`].
@@ -575,6 +590,42 @@ impl Definition {
         }
         for page in &mut self.pages {
             page.retain_rows(|entry| entry.setting() != Some("display.dynamic_hud"));
+        }
+    }
+
+    /// Drops the PLAYER NAME and PLAYER TAG rows a title does not use
+    /// (`oag_title::profile::Profile`): 2048 and Omega keep neither, HD only the name. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_player_rows(&mut self, title: &oag_title::Title) {
+        let profile = title.profile;
+        for page in &mut self.pages {
+            page.retain_rows(|entry| match entry {
+                Entry::Run {
+                    action: Action::EditPlayerName,
+                    ..
+                } => profile.asks_for_name(),
+                Entry::Run {
+                    action: Action::EditPlayerTag,
+                    ..
+                } => profile.asks_for_tag(),
+                _ => true,
+            });
+        }
+    }
+
+    /// Drops the GHOST SHIPS VISIBLE, AUTO LOAD GHOST and MULTIPLAYER TAGS rows a title's own
+    /// options list lacks (`oag_title::race::RaceDefaults::game_options`): Pulse's list has the
+    /// first on both pressings and the others on the PSP's, so it offers all three. Same once-before-read
+    /// timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_game_options(&mut self, title: &oag_title::Title) {
+        let offered = title.race.game_options;
+        for page in &mut self.pages {
+            page.retain_rows(|entry| match entry.setting() {
+                Some("display.ghost_ship_visible") => offered.ship_visible,
+                Some("display.auto_load_ghost") => offered.auto_load,
+                Some("display.multiplayer_tags") => offered.multiplayer_tags,
+                _ => true,
+            });
         }
     }
 
@@ -600,6 +651,26 @@ impl Definition {
         }
         for page in &mut self.pages {
             page.retain_rows(|entry| entry.setting() != Some("graphics.weather"));
+        }
+    }
+
+    /// Drops the RUMBLE row's `original` value on a title whose original plays
+    /// no pattern rumble (`oag_title::rumble::Rumble::is_played`): Pulse, Pure
+    /// and 2048. Same once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_rumble_original(&mut self, title: &oag_title::Title) {
+        if title.rumble.is_played() {
+            return;
+        }
+        for page in &mut self.pages {
+            for entry in &mut page.entries {
+                if let Entry::Choice {
+                    setting, values, ..
+                } = entry
+                    && setting == "controls.rumble"
+                {
+                    values.retain(|choice| choice.value != "original");
+                }
+            }
         }
     }
 
@@ -702,11 +773,18 @@ impl Definition {
     /// campaign and each mod campaign in `rows` (`(key, name, description)`),
     /// ADR-0077. The page's first row is the original campaign, worded as the
     /// row was; each other row fires [`Action::OpenCustomCampaign`] and carries
-    /// `CUSTOM_CAMPAIGN_ROW` + its key as its id. With `rows` empty, or no
+    /// `CUSTOM_CAMPAIGN_ROW` + its key as its id. `editor` (`(label, subtitle)`)
+    /// adds a last row firing [`Action::OpenCampaignEditor`], and makes the page
+    /// exist with no mod campaign. With no `rows` and no `editor`, or no
     /// campaign row in the tree, nothing changes. Run once, after the title's
     /// own trimming and [`Self::rename_campaign_row`].
-    pub fn add_campaign_picker(&mut self, title: &str, rows: &[(String, String, String)]) {
-        if rows.is_empty() {
+    pub fn add_campaign_picker(
+        &mut self,
+        title: &str,
+        rows: &[(String, String, String)],
+        editor: Option<(&str, &str)>,
+    ) {
+        if rows.is_empty() && editor.is_none() {
             return;
         }
         let Some((page, row)) = self.pages.iter().enumerate().find_map(|(p, page)| {
@@ -755,6 +833,18 @@ impl Definition {
                 .push((!description.is_empty()).then(|| description.clone()));
             picker.meta.push(RowMeta {
                 id: Some(format!("{CUSTOM_CAMPAIGN_ROW}{key}")),
+                parent: None,
+            });
+        }
+        if let Some((name, description)) = editor {
+            picker.entries.push(Entry::Run {
+                label: name.to_string(),
+                action: Action::OpenCampaignEditor,
+                inputs: None,
+            });
+            picker.subtitles.push(Some(description.to_string()));
+            picker.meta.push(RowMeta {
+                id: Some(CAMPAIGN_EDITOR_ROW.to_string()),
                 parent: None,
             });
         }
@@ -852,6 +942,15 @@ impl Definition {
             page.retain_rows(|entry| {
                 !matches!(entry.setting(), Some("race.kill_target" | "race.weapons"))
             });
+        }
+        // The TARGET row is the score Eliminator's own: a title whose Eliminator ends on kills
+        // has the KILLS row (or none) and no slider to read.
+        let scores = matches!(
+            title.eliminator.value,
+            oag_title::eliminator::EliminatorRule::Score(_)
+        );
+        if !scores && let Some(page) = self.pages.iter_mut().find(|page| page.id == "race") {
+            page.retain_rows(|entry| entry.setting() != Some("race.score_target"));
         }
         // Both screens, for a title that authors them in files of its own
         // (Wipeout HD/Fury): with only one of the two, the other pick would

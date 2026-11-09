@@ -205,13 +205,41 @@ this build already had changes appearance.
   (`race-box-screens.md`); not wired (open).
 - **Lap record / Race record are this build's own store**, keyed the way
   the RECORDS page keys them - circuit, mode and the RACE page's class.
-- **The counter is `n / 32` on a fresh profile**, not `1 / 3`: this build
-  offers every circuit the definition authors, by design
-  ([menus.md](../architecture/menus.md#unlocks-pulses-circuits-and-craft-variants-gate)).
-- **The outline is darker than the original's.** It is drawn through the
-  ordinary mesh pipeline with the stand-in light; the original's has a
-  teal glow whose source (a blend class on the ribbon, a second pass, a
-  bloom) is unread.
+- **The counter is `1 / 3` on a fresh profile**, as the original's: circuits gate since 2026-10-02
+  ([menus.md](../architecture/menus.md#unlocks-pulses-circuits-and-craft-variants-gate)). A debug
+  build unlocks everything and a mounted DLC pack adds circuits, which is what `1 / 11` on the
+  compare page was.
+- **The outline's sheen differs slightly.** It is drawn through the ordinary mesh pipeline with
+  the stand-in light. With the backdrop at the reference's frame the ribbon reads the same darkness
+  as the original's over the bright streaks, and the highlights fall in different places. The
+  "teal glow" this bullet used to describe was the movie behind the ribbon, read against frame zero.
+
+### The teal streaks behind the panel are the backdrop movie (2026-11-05)
+
+The bright radial streaks and the blurred craft behind the info panel on the `pulse-psp/menu-track`
+reference are **`Data\Movies\Backdrop.PMF` at a different moment, not a layer this build was
+missing** (confidence 95). The screen authors no streak widget. The movie is the 270-frame loop
+every menu plays over. Its right half is bright for frames 34 to 42 (about 0.3 s of nine seconds,
+peak at 35), with two short flashes at 105-106 and 160-163. The reference caught the long pass; a
+`--menu-page` still drew frame zero, a dark stretch.
+
+Scoring every frame against `theirs.png` on the pixels no widget covers:
+
+| Pair | Best frame | Error there | Frame 0 | Whole-frame `mean_grey`, before -> after |
+| --- | --- | --- | --- | --- |
+| `pulse-psp/menu-track` | 38 | 2.43 | 13.15 | 13.89 -> 4.46 |
+| `pulse-psp/menu-team` | 134 | 1.03 | 1.45 | 6.00 -> 5.90 (stays at frame 0; the move is the DLC list) |
+| `pulse-psp/menu-grid` | 169 | 0.45 | 0.47 | 3.60 -> 3.60 |
+| `pulse-psp/menu-cell` | 117 | 0.99 | 1.18 | 4.64 -> 4.64 |
+
+The match is exact to the frame: rendering frame 37 scores 13.54 and frame 39 scores 12.53 against
+4.47 at frame 38. The three PS2 pairs also show a dark stretch (best frame beats frame zero by
+under one grey level), and PS2 plays its own disc's `BG640.IPF` through the same path, so nothing
+differs there; PS2 has no Track Select pair yet.
+
+`--menu-movie-frame N` draws a `--menu-page` still at a frame of the movie, and
+`scripts/compare-menu-movie-phase.py` finds N for a pair
+([compare-page.md](../tools/compare-page.md#the-backdrop-movies-phase-2026-11-05-pulse-track-select-streaks)).
 
 ## `Team Selection` (the title bar reads `SHIP SELECT`)
 

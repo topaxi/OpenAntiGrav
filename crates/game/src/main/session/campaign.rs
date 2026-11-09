@@ -21,13 +21,19 @@ impl Session {
     /// own doc. A source with no campaign at all logs why and leaves the
     /// menus exactly as they were.
     pub(crate) fn open_campaign(&mut self) {
+        self.open_campaign_screens(false);
+    }
+
+    /// [`Self::open_campaign`], or the campaign editor over the same screens.
+    pub(super) fn open_campaign_screens(&mut self, editing: bool) {
         let Some(mut archives) = self.open_title_archives("RACE CAMPAIGN") else {
             return;
         };
-        if self
-            .shell
-            .as_ref()
-            .is_some_and(|shell| shell.title.campaign.list_entry.is_some())
+        if !editing
+            && self
+                .shell
+                .as_ref()
+                .is_some_and(|shell| shell.title.campaign.list_entry.is_some())
         {
             self.open_pure_chain(archives);
             return;
@@ -129,7 +135,17 @@ impl Session {
                     }
                     campaign.grids.clone_from(&custom.grids);
                     campaign.selection_layout = None;
-                    campaign.grid_layout_fury = None;
+                    campaign.chooser = None;
+                }
+                // The editor builds its own grid, one slot at a time: the disc's tiers are
+                // not its to show.
+                let editor = editing
+                    .then(|| self.editor_for(campaign.cell_layout.hex_slots(), &campaign.grids))
+                    .flatten();
+                if editing {
+                    campaign.grids.clear();
+                    campaign.selection_layout = None;
+                    campaign.chooser = None;
                 }
                 // The extended sheet - `hex_filled.mip`/`hex_outline.mip`,
                 // neither of which `Skin.xml`'s own sheet carries - has to
@@ -144,9 +160,9 @@ impl Session {
                         campaign.grid_layout,
                         campaign.cell_layout,
                         campaign.selection_layout,
-                        campaign.grid_layout_fury,
+                        campaign.chooser,
                         campaign.cell_help,
-                        campaign.nav_legend,
+                        super::player_name::tagged(campaign.nav_legend, &self.settings.player, title_ref),
                         campaign.ticker,
                         strings,
                         campaign.sprites,
@@ -159,6 +175,7 @@ impl Session {
                         custom,
                     );
                     stage.resume_selector(phases);
+                    stage.editor = editor;
                     menu_stage.campaign = Some(stage);
                 }
             }
@@ -234,6 +251,10 @@ impl Session {
         let Some(campaign) = stage.campaign.as_mut() else {
             return;
         };
+        if campaign.editor.is_some() {
+            self.tick_campaign_editor(pointer);
+            return;
+        }
         let mut events = match &mut campaign.screen {
             Screen::Selection(model) => model.update(self.controls.buttons_mut()),
             Screen::Grid(model) => model.update(self.controls.buttons_mut()),
@@ -251,6 +272,13 @@ impl Session {
     /// `Confirm` on **either** input, and gating only inside `update` would
     /// leave a mouse two-tap launching a cell the pad cannot.
     pub(crate) fn handle_campaign(&mut self, event: Event) {
+        if event == Event::Back
+            && matches!(&self.stage, Stage::Menu(stage)
+                if stage.campaign.as_ref().is_some_and(|campaign| campaign.editor.is_some()))
+        {
+            self.editor_back();
+            return;
+        }
         let nav = self.campaign_nav(event);
         self.play_navs(nav);
         // Whatever cell was just confirmed, read out here and acted on
@@ -259,6 +287,8 @@ impl Session {
         // which cannot start while `stage`/`campaign` still borrow `self.stage`.
         let mut confirmed_cell = None;
         let mut confirmed_difficulty = None;
+        // A campaign the chooser offers whose grids this source does not carry.
+        let mut campaign_unplayable = false;
         {
             let Stage::Menu(stage) = &mut self.stage else {
                 return;
@@ -269,11 +299,11 @@ impl Session {
             // A refusal line lasts until the player does anything else.
             campaign.notice = None;
             match (&campaign.screen, event) {
-                // **HD only** - `Campaign Selection` ahead of `Grid
+                // `Campaign Selection` (HD and Omega) ahead of `Grid
                 // Selection`. See `crate::campaign_stage`'s own module doc.
                 (Screen::Selection(model), Event::Confirmed) => {
                     let chosen = model.selected();
-                    campaign.open_grid_selection(chosen);
+                    campaign_unplayable = !campaign.open_grid_selection(chosen);
                 }
                 (Screen::Selection(_), Event::Back) => {
                     keep_cursor(&mut self.records, &mut self.selector_phases, campaign);
@@ -300,7 +330,7 @@ impl Session {
                         warn!("grid {index} has no cells - staying on Grid Selection");
                     }
                 }
-                // **HD only, when `Campaign Selection` was read at all**:
+                // **When `Campaign Selection` was read at all** (HD, Omega):
                 // `Grid Selection`'s own `Back` returns to it rather than
                 // closing the campaign outright. Every other title, and an
                 // HD source missing `DATA06`'s own copy of the screen, keeps
@@ -337,6 +367,10 @@ impl Session {
                         confirmed_difficulty = confirmed_cell.as_ref().map(|_| model.difficulty());
                     }
                 }
+                (Screen::Cell { .. }, Event::Back) if campaign.skips_grid_selection() => {
+                    keep_cursor(&mut self.records, &mut self.selector_phases, campaign);
+                    stage.campaign = None;
+                }
                 (Screen::Cell { .. }, Event::Back) => campaign.back_to_grid_selection(),
                 // `DifficultyChanged` is HD-only, ours, and needs nothing
                 // from the composition root - `CellSelection::cycle_difficulty`
@@ -353,6 +387,12 @@ impl Session {
                 }
                 (_, Event::DifficultyChanged) => {}
             }
+        }
+        if campaign_unplayable {
+            self.campaign_notice(
+                "OAG_CAMPAIGN_NOT_PLAYABLE",
+                "THIS CAMPAIGN CANNOT BE PLAYED IN THIS BUILD YET",
+            );
         }
         if let Some(cell) = confirmed_cell {
             self.launch_campaign_cell(cell, confirmed_difficulty);
@@ -548,6 +588,13 @@ impl Session {
             }
         }
         race_options.eliminator_kill_target = plan.eliminator_kill_target;
+        // A score Eliminator's cell authors its target per rung, `SPElimination_UpdateTarget`'s
+        // `cell+0xd4 + difficulty * 4` (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`).
+        race_options.eliminator_score_target = cell
+            .nitro_elimination_target_for_difficulty(
+                difficulty.unwrap_or(oag_tables::race_campaign::Difficulty::Easy),
+            )
+            .and_then(|target| u32::try_from(target).ok());
         race_options.laps_override = plan.laps_override;
         let leg_entries = plan.leg_entries;
         // `AI_ResolveSkillScale`'s campaign-cell branch

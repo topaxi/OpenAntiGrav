@@ -329,6 +329,23 @@ impl Session {
                     return;
                 }
             },
+            // Applied on the spot to the menus: the inset is set here, and the pointer reads it
+            // back out of the same renderer. A race parked behind the menus takes it from the
+            // settings on the first frame after it resumes.
+            "graphics.hud_safe_area" => match text.parse::<u8>() {
+                Ok(percent) => {
+                    self.settings.graphics.hud_safe_area = Some(percent);
+                    if let (Some(shell), Stage::Menu(stage)) = (&self.shell, &mut self.stage) {
+                        stage.renderer.set_inset(
+                            shell.title.hud_art.safe_area_scale(Some(percent)),
+                        );
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             // Applied on the spot: the mixer reads the mode on its next block.
             "audio.spatial_audio" => match text.parse::<oag_audio::SpatialChoice>() {
                 Ok(choice) => {
@@ -586,6 +603,34 @@ impl Session {
                     return;
                 }
             },
+            // Applied by the next frame the race draws: the session hands the choice to the race
+            // every frame.
+            "display.ghost_ship_visible" => match text.as_str() {
+                "on" => self.settings.display.ghost_ship_visible = true,
+                "off" => self.settings.display.ghost_ship_visible = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
+            // Read when the next race loads.
+            "display.auto_load_ghost" => match text.as_str() {
+                "on" => self.settings.display.auto_load_ghost = true,
+                "off" => self.settings.display.auto_load_ghost = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
+            // Applied by the next frame the race draws.
+            "display.multiplayer_tags" => match text.as_str() {
+                "on" => self.settings.display.multiplayer_tags = true,
+                "off" => self.settings.display.multiplayer_tags = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
             "display.pause_on_focus_loss" => match text.as_str() {
                 // Read at the next focus event; nothing to apply now.
                 "on" => self.settings.display.pause_on_focus_loss = true,
@@ -611,6 +656,7 @@ impl Session {
                     // assume it is broken, and the frame limiter that comes
                     // with it would then look broken too.
                     self.gpu.output.set_vsync(&self.gpu.device, vsync);
+                    self.display.reset();
                     // The frames either side of a surface reconfigure are not
                     // frames anyone is going to present at that rate.
                     self.stalled = true;
@@ -652,6 +698,15 @@ impl Session {
             "graphics.boost_zoom" => match text.as_str() {
                 "on" => self.settings.graphics.boost_zoom = true,
                 "off" => self.settings.graphics.boost_zoom = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
+            // Read when a race loads (`race::Options::trail_hits`), so the next race.
+            "graphics.trail_hits" => match text.as_str() {
+                "on" => self.settings.graphics.trail_hits = true,
+                "off" => self.settings.graphics.trail_hits = false,
                 _ => {
                     warn!("ignoring {setting} = {text:?}: expected on or off");
                     return;
@@ -710,6 +765,19 @@ impl Session {
                 }
                 Err(e) => {
                     warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            // Applies now: the next pattern played reads it; what is sounding
+            // stops, so a change to NONE is felt at once.
+            "controls.rumble" => match oag_input::rumble::Mode::from_name(&text) {
+                Some(mode) => {
+                    self.settings.controls.rumble = mode.name().to_string();
+                    self.controls.silence_motors();
+                    self.arm_rumble();
+                }
+                None => {
+                    warn!("ignoring {setting} = {text:?}: not none, original, ps3 or ps4");
                     return;
                 }
             },
@@ -778,6 +846,7 @@ impl Session {
             "race.track" => self.settings.race.track = text,
             "race.variant" => self.settings.race.variant = text,
             "race.kill_target" => self.settings.race.kill_target = text,
+            "race.score_target" => self.settings.race.score_target = text,
             "race.weapons" => self.settings.race.weapons = text,
             "ai.difficulty" => self.settings.ai.difficulty = text,
             _ if setting.starts_with("mod.") => {
@@ -815,6 +884,8 @@ impl Session {
                 self.resupply_mod_switch();
                 return;
             }
+            // The REPLAY row moves the detail lines; nothing is stored.
+            oag_game::replays::page::SELECTED => return,
             // Saved by the switch itself, into `[mods] disabled`, and rebuilt live.
             oag_game::mods::ENABLED => {
                 self.switch_selected_mod(text == "on");

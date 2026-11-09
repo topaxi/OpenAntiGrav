@@ -64,7 +64,7 @@ impl super::super::Scene {
         &self,
         omega: &oag_post::omega_tonemap::Chain,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),

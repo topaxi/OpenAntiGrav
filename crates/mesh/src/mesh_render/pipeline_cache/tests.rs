@@ -301,20 +301,44 @@ fn lit_by_compiles_the_nova_curve_out_only_under_a_rig_that_never_takes_it() {
         "no scope, no constants"
     );
 
+    let authored =
+        mesh_render::Light::authored([0.0, 1.0, 0.0], [1.0; 3], [0.0; 3], [1.0; 3], [1.0; 3], 1.0);
     let scope = Scope::open();
-    scope.lit_by(&mesh_render::Light::stand_in().with_nova_prelit(1.4, 0.2, 1.5));
+    scope.lit_by(&authored.with_nova_prelit(1.4, 0.2, 1.5));
     assert_eq!(super::scope_constants(), Vec::new());
     drop(scope);
 
     let scope = Scope::open();
-    scope.lit_by(&mesh_render::Light::stand_in());
+    scope.lit_by(&authored);
     assert_eq!(super::scope_constants(), vec![("nova_prelit", 0.0)]);
+    drop(scope);
+
+    // A stand-in light has no rig at all, so that path goes as well.
+    let scope = Scope::open();
+    scope.lit_by(&mesh_render::Light::stand_in());
+    assert_eq!(
+        super::scope_constants(),
+        vec![("nova_prelit", 0.0), ("light_rig", 0.0)]
+    );
     drop(scope);
     assert_eq!(
         super::scope_constants(),
         Vec::new(),
         "closed with its scope"
     );
+}
+
+/// A race with no Zone grade compiles the recolour out; a Zone race keeps the uniform deciding.
+#[test]
+fn zoned_compiles_the_recolour_out_only_outside_a_zone_race() {
+    let scope = Scope::open();
+    scope.zoned(true);
+    assert_eq!(super::scope_constants(), Vec::new());
+    drop(scope);
+
+    let scope = Scope::open();
+    scope.zoned(false);
+    assert_eq!(super::scope_constants(), vec![("zone_race", 0.0)]);
 }
 
 /// A PS3 model whose draw carries `culled` gets the culling twin of the opaque,
@@ -386,4 +410,38 @@ fn a_kept_cache_defers_to_an_open_scope() {
 
     assert!(in_scope > 0, "the build went to the open scope");
     assert_eq!(kept.pipelines(), 0, "and not to the kept cache");
+}
+
+/// A build stops between its pipeline sets once the process is exiting, instead of making the
+/// rest for a scene nobody will see (`oag_thread::gpu_workers`). The stop is process-wide and
+/// one-way, so this is the only test here that sets it (nextest runs each in a process of its
+/// own).
+#[test]
+fn a_build_ends_between_pipeline_sets_once_the_process_is_exiting() {
+    let Some((device, queue)) = device() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let model = triangle_model();
+    let _worker = oag_thread::gpu_workers::Guard::enter("pipeline-cache-test");
+    assert!(!oag_thread::gpu_workers::finish_within(
+        std::time::Duration::ZERO
+    ));
+    let error = mesh_render::build(
+        &device,
+        &queue,
+        &model,
+        FORMAT,
+        Anisotropy::Off,
+        1,
+        mesh_render::Depth::Scene,
+        mesh_render::TRANSPARENT_BLEND,
+        mesh_render::GlowMask::Protected,
+        mesh_render::Velocity::Write,
+        &mesh_render::zone::StageArt::NONE,
+        mesh_render::ShadowMaps::NONE,
+        mesh_render::ShadowReceiver::Never,
+    )
+    .expect_err("a build in a process that is exiting ends early");
+    assert!(error.to_string().contains("exiting"), "{error:#}");
 }

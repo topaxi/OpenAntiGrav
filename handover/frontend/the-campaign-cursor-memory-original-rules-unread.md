@@ -21,6 +21,11 @@ and 2048's event map file the event started in the same row. Every session save
   (`GridSelection_PopulateGrids` `0x088de380` resets `+0x114`; `+0xe0` untraced).
   Pure's and 2048's reboot behaviour is unread too; theirs is ours, not measured.
 
+- **Cursor cases never measured on the original**: a cell whose lock glyph a medal cleared (the screen's predicate is the glyph,
+  not the `Locked` byte), a slot the new grid lacks, a grid reached by the game's own unlock path (`grid1` was opened by writing
+  its `Locked` byte), and HD/Fury's cursor (chosen from Pulse's law). Pulse's one shared slot is measured
+  (`docs/ui/campaign-screens.md`, "Where the cursor lives").
+
 ## Next Steps
 
 1. Trace `+0xe0` in `GridSelection_OnEnter`'s callers to settle the Grid Selection index (an hour in Ghidra).

@@ -19,6 +19,24 @@ against exactly the same data.
 | `omega-ps4-eu.pkg` | `c8cbd2c2063efb41f6c881b601d4643f20236608ef5a347554f278035456a022` | PS4 | `CUSA05670` | n/a (PKG, not a disc) |
 | `omega-ps4-eu-patch.pkg` | `16140a67fdfd8c6c367e56568218adb2d370ca7cd16cf82221b9352abd3f357d` | PS4 | `CUSA05670` | n/a (PKG, not a disc) |
 
+### HD update packages
+
+Sony's own packages, under `data/images/hdfury-updates/` and `data/images/hd-psn-updates/`,
+[hd-updates.md](../formats/hd-updates.md).
+
+| File | SHA-256 | Serial |
+| --- | --- | --- |
+| `hdfury-updates/update-02.10.pkg` | `5318268258d2bb25754f1988d357ee31d1d46b7bac135354227fd45b4f6889cc` | `BCES00664` |
+| `hdfury-updates/update-02.30.pkg` | `d320aefa83779343d041f7ce24ea1a6c79ae605937795d03713a12486b2e094b` | `BCES00664` |
+| `hdfury-updates/update-02.50.pkg` | `35a553d4a0ab0e1cced2bb6d9630a571c943c91df809337c71644eb34abcedd8` | `BCES00664` |
+| `hdfury-updates/update-02.51.pkg` | `e55d4a3ef05b557685c6ccb9c15d2ce25f9c2c35a6fc61d07ea3361c9983bcb9` | `BCES00664` |
+| `hd-psn-updates/update-02.01.pkg` | `b16415b7601c7bcec0aae58d8fd0c88f9e3f7f8d054c0d7a780d8d473d653db7` | `NPEA00057` |
+| `hd-psn-updates/update-02.10.pkg` | `723bc9b04f55e8348dbdfa94cbc7989afae6616cea87d03c5ead717c5142f35f` | `NPEA00057` |
+| `hd-psn-updates/update-02.20.pkg` | `1037718fd85f38258606619288a77ee159f96da8ef1c8c07984e04949ea2e60b` | `NPEA00057` |
+| `hd-psn-updates/update-02.30.pkg` | `3ffd98f866d8b0fe4b1cfd191970ac4d3d3a75be9dee2a48111716fe9742b84f` | `NPEA00057` |
+| `hd-psn-updates/update-02.50.pkg` | `283f2c818e864aec82ce54b6755ba2542f12d22011bc5b3a32a6bcb1b3f8c1e6` | `NPEA00057` |
+| `hd-psn-updates/update-02.51.pkg` | `6c06c86edf0bebce6d8bbeaf8d0072879671beb5ff889108282072f667ca858e` | `NPEA00057` |
+
 Reproduce with `just hash-images`. It hashes everything in `data/images/`, so it
 also reports any *derived* file kept there - a decrypted copy, a disc key - which
 the table above deliberately does not list. Only source images belong in it.

@@ -214,7 +214,7 @@ pub fn hd_results_draw_list(
         .filter(|(_, row)| row.player)
         .map(|(index, _)| index)
         .collect();
-    let race = RaceGrid::of(model.headline, screen);
+    let race = RaceGrid::of(model, screen);
     for fill in &screen.fills {
         // `0x00223f50`, the grid reset every mode's layout runs first,
         // hides `GridStrikeThrough` and nothing this build drives shows it
@@ -267,7 +267,7 @@ pub fn hd_results_draw_list(
                 continue;
             };
             let mut positioned = text.clone();
-            positioned.x = race.origin.0 + RACE_COLUMN_X[col];
+            positioned.x = race.origin.0 + race.column_x(col);
             positioned.y = race.origin.1 + RACE_ROW_TOP + row as f32 * RACE_ROW_PITCH;
             if player_rows.contains(&row) {
                 positioned.color = 0xffff_ffff;
@@ -297,6 +297,31 @@ pub fn hd_results_draw_list(
         // label inside it, which is what makes the white `POS`/`TIME`
         // readable at all. `GridHead3`/`GridHead4` are `width="0"` with the
         // placeholder label `X`, and `0x0022c068` hides both on a race.
+        if let Some(race) = &race
+            && race.scored
+            && let Some(&(_, x, width, caption)) =
+                SCORED_HEADS.iter().find(|(head, ..)| *head == name)
+        {
+            if let Some(block) = find_block(screen, name) {
+                let mut moved = block.clone();
+                moved.x = race.origin.0 + x;
+                moved.width = width;
+                let content = caption.map_or_else(
+                    || text.string.clone().unwrap_or_default(),
+                    |id| strings.get_or_id(id).to_string(),
+                );
+                block_draw(
+                    &moved,
+                    Some((text, content.as_str())),
+                    None,
+                    0.0,
+                    frame,
+                    layout,
+                    &mut out,
+                );
+            }
+            continue;
+        }
         if matches!(name, "GridHead1" | "GridHead2") {
             if let Some(block) = find_block(screen, name)
                 && let Some(content) = text.string.as_deref()
@@ -337,6 +362,9 @@ pub fn hd_results_draw_list(
             continue;
         }
         let content = match name {
+            "Line1" if model.scored() && model.headline != Headline::Several => {
+                scored_headline(model, strings)
+            }
             "Line1" => hd_headline_text(model.headline, strings),
             // Online-only - see the module doc.
             "DelayPostMsg" | "RecordsCycleButton" | "RecordsCycle" => None,
@@ -415,6 +443,8 @@ fn row_y(row: usize) -> f32 {
 /// own `357` footer block is what the old chosen pitch ran row eight into.
 struct RaceGrid {
     origin: (f32, f32),
+    /// An Eliminator's points table: the columns and headers of `0x00229bf0`.
+    scored: bool,
 }
 
 /// `0x0022b688`'s three row columns: `Grid0.r` at `x = 40` (`0x42200000`),
@@ -423,6 +453,19 @@ struct RaceGrid {
 /// (`x = 0`) and `GridHead2` (`x = 505`) caption columns 0 and 2 exactly -
 /// the cross-check that these are the columns the captions mean.
 const RACE_COLUMN_X: [f32; 4] = [40.0, 200.0, 545.0, 0.0];
+/// The Eliminator filler's three row columns (`0x00229bf0`): `Grid0.r` at `x = 40`
+/// (`0x42200000`), the team `Grid1.r` at `250` (`0x437a0000`), the points `Grid2.r` at `556`
+/// (`0x440b0000`).
+const SCORED_COLUMN_X: [f32; 4] = [40.0, 250.0, 556.0, 0.0];
+/// The same function's header blocks, inside the grid's `Item`: `GridHead1` keeps its `x` and is
+/// `152` wide (`0x43180000`); `GridHead2` is `ER_TEAM` at `160` (`0x43200000`), `348` wide
+/// (`0x43ae0000`); `GridHead3` is `ER_POINTS` at `516` (`0x44010000`), `275` wide (`0x43898000`).
+/// `GridHead1`'s caption is the one the screen was laid out with (`IG_HUD_POS`).
+const SCORED_HEADS: [(&str, f32, f32, Option<&str>); 3] = [
+    ("GridHead1", 0.0, 152.0, None),
+    ("GridHead2", 160.0, 348.0, Some("ER_TEAM")),
+    ("GridHead3", 516.0, 275.0, Some("ER_POINTS")),
+];
 const RACE_ROW_TOP: f32 = 96.0;
 const RACE_ROW_PITCH: f32 = 45.0;
 const RACE_HIGHLIGHT_TOP: f32 = 94.0;
@@ -437,9 +480,9 @@ impl RaceGrid {
     /// with no `GridHead1`. The grid's origin is `GridHead1`'s own
     /// position less its `y = 24` - `0x0022c068` moves it to `x = 0` and
     /// leaves the file's `y`, so the block itself is the anchor.
-    fn of(headline: Headline, screen: &Screen) -> Option<Self> {
+    fn of(model: &FieldResults, screen: &Screen) -> Option<Self> {
         if !matches!(
-            headline,
+            model.headline,
             Headline::Position(_) | Headline::NoPosition | Headline::Several
         ) {
             return None;
@@ -447,7 +490,17 @@ impl RaceGrid {
         let head = find_block(screen, "GridHead1")?;
         Some(Self {
             origin: (head.x, head.y - GRID_HEAD_Y),
+            scored: model.scored(),
         })
+    }
+
+    /// Column `col`'s `x` inside the grid.
+    fn column_x(&self, col: usize) -> f32 {
+        if self.scored {
+            SCORED_COLUMN_X[col]
+        } else {
+            RACE_COLUMN_X[col]
+        }
     }
 
     /// A frame fill as the race layout draws it: `Some(vec![])` for one it
@@ -483,11 +536,12 @@ const GRID_HEAD_Y: f32 = 24.0;
 /// A race-layout cell's content: column 0 the place (`0x0022b688` formats
 /// the entry's `+0x168` position), column 2 the finish time. **Column 1 is
 /// drawn only for a person of a race several people flew**: `0x0022b688` fills
-/// it from a string at the entry's own `+0x50`, a field this pass did not identify
-/// (the podium's slot setter reads the same field as the name it prints, so in a
-/// multiplayer race it is the player's name), and a guess is not drawn for an
-/// opponent. A person's seat, `PLAYER 1`, is ours, **chosen, not measured**.
-/// Column 3 is never written on a race.
+/// it from the idstring at the entry's own `+0x50`, localised, and the same string
+/// hashed picks the row's `Gridi` badge off the loaded ship badges, so it names a
+/// team, which is the grid's own team here. A person's seat, `PLAYER 1`, is ours,
+/// **chosen, not measured**. Column 2 reads `ER_RACING` for a craft still racing
+/// (`+0x160` of `0`) and `ER_DNF` for `-1`, which nothing here produces. Column 3 is
+/// never written on a race.
 fn race_cell_text(
     col: usize,
     row: usize,
@@ -495,20 +549,92 @@ fn race_cell_text(
     strings: &StringTable,
 ) -> Option<String> {
     let entry = model.rows.get(row)?;
+    if let Some(score) = entry.score {
+        return match col {
+            0 => Some(shown_rank(model, row).to_string()),
+            1 => entry
+                .name
+                .clone()
+                .or_else(|| {
+                    entry
+                        .team
+                        .as_deref()
+                        .map(|team| strings.get_or_id(team).to_string())
+                })
+                .or_else(|| {
+                    entry
+                        .seat
+                        .map(|seat| format!("{} {seat}", strings.get_or_id("OAG_JOIN_PLAYER")))
+                }),
+            2 => Some(score.points.to_string()),
+            _ => None,
+        };
+    }
     match col {
         0 => Some(entry.place.to_string()),
-        1 => entry.name.clone().or_else(|| {
-            entry
-                .seat
-                .map(|seat| format!("{} {seat}", strings.get_or_id("OAG_JOIN_PLAYER")))
-        }),
+        1 => entry
+            .name
+            .clone()
+            .or_else(|| {
+                entry
+                    .seat
+                    .map(|seat| format!("{} {seat}", strings.get_or_id("OAG_JOIN_PLAYER")))
+            })
+            .or_else(|| {
+                entry
+                    .team
+                    .as_deref()
+                    .map(|team| strings.get_or_id(team).to_string())
+            }),
         2 => Some(
             entry
                 .time_ticks
-                .map_or_else(|| "-".to_string(), format_ticks),
+                .map_or_else(|| strings.get_or_id("ER_RACING").to_string(), format_ticks),
         ),
         _ => None,
     }
+}
+
+/// The number `Grid0.r` shows on a points table (`0x00229bf0`): rows on the same points share a
+/// number and the next distinct one is its row's own position, so 202, 177, 177, 129 read
+/// 1, 2, 2, 4.
+fn shown_rank(model: &FieldResults, row: usize) -> usize {
+    let points = |index: usize| {
+        model
+            .rows
+            .get(index)
+            .and_then(|r| r.score)
+            .map(|s| s.points)
+    };
+    let mut rank = 1;
+    for index in 0..row {
+        if points(index) != points(index + 1) {
+            rank = (rank + 1).max(index + 2);
+        }
+    }
+    rank
+}
+
+/// A points table's `Line1`: `"%s - %s: %d %s: %d "` (`0x008b0810`) of the person's place
+/// (`ER_%dPLACE`), `IG_HUD_KILLS`, their kills, `ER_DEATHS` and their deaths, written when the
+/// loop reaches the person's row (`0x00229bf0`). The place is that row's position, not its shown
+/// number. `ER_DEATHS` ends in a colon of its own on the disc and the format adds one, where the
+/// original's frame shows one: the string's is dropped, **chosen, not measured** (how the
+/// original avoids the second is not read). `None` with no person on the board.
+fn scored_headline(model: &FieldResults, strings: &StringTable) -> Option<String> {
+    let row = model.rows.iter().position(|row| row.player)?;
+    let score = model.rows[row].score?;
+    let place = u8::try_from(row + 1)
+        .ok()
+        .filter(|place| (1..=8).contains(place))?;
+    Some(format!(
+        "{} - {}: {} {}: {} ",
+        strings.get_or_id(&format!("ER_{place}PLACE")),
+        strings.get_or_id("IG_HUD_KILLS"),
+        score.kills,
+        strings.get_or_id("ER_DEATHS").trim_end_matches(':'),
+        score.deaths
+    ))
 }
 
 /// `EndRace Rewards`' draw list, off `DATA02`-`05`'s own copy of the screen

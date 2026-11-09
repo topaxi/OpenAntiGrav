@@ -111,6 +111,7 @@ const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     lit_alpha: None,
     // Unmeasured on the retro skins (`hd-hud-leftovers` item 3 asks it): no shadow, authored quads.
     text_shadow: None,
+    text_outline_alpha: None,
     half_unit_glyph_quads: false,
     bar_tip: None,
     boost_smear: None,
@@ -126,6 +127,7 @@ const BASE: oag_title::HudLayouts = oag_title::HudLayouts {
     elimination: r"Data\XML\Elimination_HUD.xml",
     split: Some(SPLIT),
     split_layout: None,
+    player_tags: None,
     skins: &[],
 };
 
@@ -225,7 +227,8 @@ pub const PICKUP_COLOURS: [Option<u32>; 14] = {
     ]
 };
 
-/// The pickup fade's timer rate. **Inherited from HD** (`1.5`): Omega's HUD update `FUN_0125e9b0` was not read for it, and Omega's front end and HUD are HD's lineage.
+/// The pickup fade's timer rate: `FUN_0125e9b0` steps the timer by `param_1 * 1.5`, as HD does
+/// (`docs/ghidra/functions/ps4-omega-eu/omega-pickup-table.md`, "The fade").
 pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 
 /// How Omega's HUD sprites reach the screen, [`oag_title::Title::hud_art`].
@@ -255,6 +258,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         oag_title::hud::TextShadow { dx: -1, dy: -1 },
         "hd",
     )),
+    text_outline_alpha: None,
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &[
             "MissileSightBG",
@@ -269,6 +273,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "LeachBeamSightMiddle",
             "LeachBeamSightInner",
         ]),
+        live: None,
     },
     pickup_backdrop_colour: None,
     pickup_colours: Some(PICKUP_COLOURS),
@@ -330,8 +335,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         oag_title::hud::HudSway { x_per_lean: -15 },
         "hd",
     )),
-    // Checked 2026-10-21: the patch front end (`data09.psarc`) authors no `Safe Area Setting`.
-    safe_area: None,
+    // The disc authors no `Safe Area Setting` (`docs/formats/hd-hud.md`, "SCREEN SIZE on every
+    // title"), so the shared slider stands in, drawn 1:1 until the player moves it.
+    safe_area: Some(oag_title::pre_race::Sourced::chosen(
+        oag_title::hud::SafeArea::SHARED,
+    )),
     dynamic_hud: None,
     // The four widgets are Omega's own: `Data\XML\HUD_assist_indicator.xml`
     // (`HUD_Elim_assist_indicator.xml` in Elimination) is included by Arcade,

@@ -41,6 +41,9 @@ pub struct Assets {
     /// The four colours this source's own front end tints the screen with, when
     /// the title names them. See [`oag_title::loading::Palette`].
     pub palette: Option<Palette>,
+    /// The front-end style whose illustrations, mode icons and prose this holds, by the name
+    /// the disc and the settings file give it. `None` on a title with no styles.
+    pub style: Option<&'static str>,
     /// Every illustrated feature this title teaches, in its own order.
     ///
     /// Empty on a title with none. The screen draws one of them; which is
@@ -95,8 +98,6 @@ pub struct ModeIcon {
 /// the id would put `FE_PROG_BAR` on screen.
 #[derive(Debug, Clone, Default)]
 pub struct Labels {
-    /// The brand line over the caption: a literal of the executable's.
-    pub brand: String,
     /// Over the feature illustration.
     pub feature_image: Option<String>,
     /// Over the feature's prose.
@@ -179,6 +180,27 @@ pub struct Art {
     pub dot: Option<[f32; 4]>,
     /// The square bullet before each label.
     pub square: Option<[f32; 4]>,
+    /// The mode icon's pictures, where the title draws stills. See [`ModeStills`].
+    pub mode_stills: Option<ModeStills>,
+}
+
+/// Where each mode's icon still sits in the sheet: `None` for a mode that draws none, or
+/// whose picture did not decode.
+#[derive(Debug)]
+pub struct ModeStills {
+    /// By mode id.
+    pub modes: Vec<(u32, Option<[f32; 4]>)>,
+    /// Every mode not in `modes`.
+    pub otherwise: Option<[f32; 4]>,
+}
+
+impl ModeStills {
+    /// The picture for `mode`, as [`oag_title::loading::ModeStills::entry`] picks it.
+    #[must_use]
+    pub fn get(&self, mode: Option<u32>) -> Option<[f32; 4]> {
+        mode.and_then(|mode| self.modes.iter().find(|(id, _)| *id == mode))
+            .map_or(self.otherwise, |(_, rect)| *rect)
+    }
 }
 
 impl Default for Assets {
@@ -201,6 +223,7 @@ impl Default for Assets {
             wave: true,
             art: None,
             palette: None,
+            style: None,
             features: Vec::new(),
             deck: None,
             progression: None,
@@ -225,8 +248,8 @@ impl Assets {
     ///
     /// `style` names which front-end styling to take the illustrations from -
     /// `HD` or `FURY` on Wipeout HD, which ships every one of them twice. An
-    /// unknown or absent name takes the title's first, which is the base game's;
-    /// see [`oag_title::loading::FeatureStyle`].
+    /// unknown name takes the title's first, and an absent one the style of the front end the
+    /// source serves; see [`oag_title::loading::FeatureStyle`].
     ///
     /// Nothing here is worth refusing to boot over: without the strip the wave
     /// has nothing to sample, without the tips there is no tip line, without a
@@ -315,7 +338,65 @@ impl Assets {
         // `Draw::Sprite` indexes it. All five illustrations rather than one,
         // because the original draws a feature per screen and this is read once
         // per disc - see `Screen::new`.
-        let chosen = pick_style(loading.features, style, &mut notes);
+        // **The served front end, read first**: with no saved choice the style is the one
+        // the menus are drawn in, which is the ground this archive clears to.
+        // Read through the title's own colour template, as its front end is, so the four
+        // globals are the ones the menus resolve (Omega's `WOHD_Colours` overwrites
+        // `HD_Grey`); a title with no template reads the file as it stands.
+        let screens = |blob: &[u8], template| {
+            let xml = oag_ui::xml::expand(blob).ok()?;
+            Some(oag_ui::screen::Screens::from_xml_with_fallbacks(
+                &xml,
+                &[],
+                &[],
+                template,
+            ))
+        };
+        let mut served = loading.palette.and_then(|_| {
+            let front_end = title.front_end?;
+            let blob = archives.read_name(front_end.root).ok()?;
+            screens(&blob, front_end.boot.colour_template)
+        });
+        let dark_ground = loading
+            .palette
+            .zip(served.as_ref())
+            .is_some_and(|(names, served)| served.global_is_dark(names.background));
+        let chosen = pick_style(loading.features, style, dark_ground, &mut notes);
+        // **The chosen style's own ground.** A style chosen against the served front end's
+        // ground (HD's white pictures on the black archive) takes the four globals from the copy
+        // of the front-end file whose ground matches, as the original does with a skin file per
+        // style; without one the served copy stands.
+        if let (Some(names), Some(style), Some(front_end)) =
+            (loading.palette, chosen, title.front_end)
+            && served
+                .as_ref()
+                .is_some_and(|served| served.global_is_dark(names.background) != style.dark_ground)
+        {
+            let own = archives
+                .read_every_name(front_end.root)
+                .into_iter()
+                .filter_map(|(label, blob)| {
+                    Some((label, screens(&blob, front_end.boot.colour_template)?))
+                })
+                .find(|(_, copy)| {
+                    copy.globals.contains_key(names.background)
+                        && copy.global_is_dark(names.background) == style.dark_ground
+                });
+            match own {
+                Some((label, copy)) => {
+                    notes.push(format!(
+                        "loading screen: {} style takes its colours from {label}",
+                        style.name
+                    ));
+                    served = Some(copy);
+                }
+                None => notes.push(format!(
+                    "loading screen: no copy of {} has a {} ground; the served colours stand",
+                    front_end.root,
+                    if style.dark_ground { "dark" } else { "light" }
+                )),
+            }
+        }
         // **The copy that carries every feature's prose, which is not the one
         // the front end is served.** Two of Wipeout HD's five descriptions -
         // `FE_ABSORB_INST` and `FE_FLIP_INST`, the two Fury mechanics - are in
@@ -352,8 +433,27 @@ impl Assets {
         // but this one and is what a miss falls back to.
         let prose = prose.as_ref().unwrap_or(strings);
 
+        // A `.gnf` stored in HD's `.gtf` row order is reversed on the way into the sheet, the
+        // way the front end's own sheet does it (`boot::sprites`); empty on every title but
+        // Omega, so every other title's sheet is built as it was.
+        let bottom_up = title
+            .front_end
+            .map_or(&[][..], |front_end| front_end.bottom_up_gnf);
         let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut reversed: Vec<oag_hud::sprite::DecodedImage> = Vec::new();
         let mut read = |entry: &str, notes: &mut Vec<String>| match archives.read_name(entry) {
+            Ok(blob) if crate::boot::sprites::is_bottom_up(entry, bottom_up) => {
+                match crate::boot::sprites::bottom_up_rows(entry, &blob) {
+                    Some(image) => {
+                        reversed.push(image);
+                        true
+                    }
+                    None => {
+                        notes.push(format!("{entry}: .gnf rows would not reverse"));
+                        false
+                    }
+                }
+            }
             Ok(blob) => {
                 blobs.push((entry.to_string(), blob));
                 true
@@ -402,7 +502,17 @@ impl Assets {
         for (_, entry) in loading.chrome {
             read(entry, &mut notes);
         }
+        let mode_stills = chosen.map(|style| style.mode_stills);
+        for entry in mode_stills.iter().flat_map(|stills| stills.entries()) {
+            read(entry, &mut notes);
+        }
         let mut mode_icons = Vec::new();
+        if chosen.is_some_and(|style| style.mode_icons.is_empty()) {
+            notes.push(
+                "loading screen: this style names no mode icon clip; the mode icon panel stays empty"
+                    .to_string(),
+            );
+        }
         for (mode, entry) in chosen.map(|style| style.mode_icons).unwrap_or_default() {
             match archives.read_name(entry) {
                 Ok(blob) => mode_icons.push(ModeIcon {
@@ -414,9 +524,12 @@ impl Assets {
             }
         }
 
-        let art = (!blobs.is_empty()).then(|| {
+        // The features whose picture was read but did not decode into the sheet: they leave
+        // `features` too, so a feature's index stays its illustration's.
+        let mut undecoded: Vec<usize> = Vec::new();
+        let art = (!blobs.is_empty() || !reversed.is_empty()).then(|| {
             let mut sheet_notes = Vec::new();
-            let sheet = oag_hud::sprite::Sheet::build(&blobs, &mut sheet_notes);
+            let sheet = oag_hud::sprite::Sheet::build_with(&blobs, reversed, &mut sheet_notes);
             notes.append(&mut sheet_notes);
             // A sheet that decoded nothing is `Sheet::default` - one
             // transparent texel - and every lookup below misses, which draws
@@ -439,8 +552,23 @@ impl Assets {
                     .and_then(|(_, entry)| at(entry))
             };
             use oag_title::loading::Chrome;
+            let placed: Vec<Option<[f32; 4]>> = illustrated.iter().map(|entry| at(entry)).collect();
+            undecoded = placed
+                .iter()
+                .enumerate()
+                .filter_map(|(at, rect)| rect.is_none().then_some(at))
+                .collect();
+            let still = |entry: Option<&str>| entry.and_then(at);
             Art {
-                illustrations: illustrated.iter().filter_map(|entry| at(entry)).collect(),
+                mode_stills: mode_stills.map(|stills| ModeStills {
+                    modes: stills
+                        .modes
+                        .iter()
+                        .map(|(mode, entry)| (*mode, still(*entry)))
+                        .collect(),
+                    otherwise: still(stills.otherwise),
+                }),
+                illustrations: placed.into_iter().flatten().collect(),
                 title_arrow: mark(Chrome::TitleArrow),
                 subtitle_arrow: mark(Chrome::SubtitleArrow),
                 rule: mark(Chrome::Rule),
@@ -451,6 +579,17 @@ impl Assets {
             }
         });
 
+        if art.is_none() {
+            undecoded = (0..features.len()).collect();
+        }
+        for at in undecoded.iter().rev() {
+            features.remove(*at);
+            notes.push(format!(
+                "{}: its picture did not decode; the feature is not offered",
+                illustrated[*at]
+            ));
+        }
+
         // **The source's own tint**, read out of the front end it actually
         // ships rather than spelled here: `HD_BG` and its three neighbours are
         // `FEGlobals`, and Wipeout HD's differ between archives - the served
@@ -459,9 +598,7 @@ impl Assets {
         // four names were read out of.
         let palette = loading.palette.and_then(|names| {
             let root = title.front_end?.root;
-            let blob = archives.read_name(root).ok()?;
-            let xml = oag_ui::xml::expand(&blob).ok()?;
-            let globals = oag_ui::screen::Screens::from_xml(&xml).globals;
+            let globals = &served.as_ref()?.globals;
             let colour = |name: &str| {
                 let raw = globals.get(name)?;
                 let hex = raw.trim().trim_start_matches("0x").trim_start_matches("0X");
@@ -499,7 +636,6 @@ impl Assets {
                 found
             };
             Labels {
-                brand: ids.brand.to_string(),
                 feature_image: text(ids.feature_image, &mut notes),
                 feature_description: text(ids.feature_description, &mut notes),
                 progression_bar: text(ids.progression_bar, &mut notes),
@@ -525,6 +661,7 @@ impl Assets {
             wave: loading.wave.is_some(),
             art,
             palette,
+            style: chosen.map(|style| style.name),
             features,
             deck: loading.deck,
             progression: loading.progression,
@@ -545,11 +682,15 @@ impl Assets {
 /// ships every illustration twice. Which *feature* is up is drawn per screen by
 /// the original and per screen here too; see [`super::Screen::new`].
 ///
-/// An unknown style name falls back to the title's first and says so, the same
-/// way a saved language this source does not carry falls through.
-fn pick_style<'a>(
+/// No saved name takes the style matching the served front end's ground
+/// (`dark_ground`), so the loading screen is in the style the menus are; a title
+/// with none matching takes its first. An unknown style name falls back to the
+/// title's first and says so, the same way a saved language this source does not
+/// carry falls through.
+pub(super) fn pick_style<'a>(
     styles: &'a [oag_title::loading::FeatureStyle],
     style: Option<&str>,
+    dark_ground: bool,
     notes: &mut Vec<String>,
 ) -> Option<&'a oag_title::loading::FeatureStyle> {
     let chosen = match style {
@@ -564,7 +705,10 @@ fn pick_style<'a>(
                 ));
                 Some(first)
             }),
-        None => styles.first(),
+        None => styles
+            .iter()
+            .find(|style| style.dark_ground == dark_ground)
+            .or_else(|| styles.first()),
     }?;
     notes.push(format!(
         "loading screen: {} style, {} feature(s)",

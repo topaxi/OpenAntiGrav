@@ -107,6 +107,18 @@ optional = true
 type = "boolean"
 optional = true
 
+[types.display.ghost_ship_visible]
+type = "boolean"
+optional = true
+
+[types.display.auto_load_ghost]
+type = "boolean"
+optional = true
+
+[types.display.multiplayer_tags]
+type = "boolean"
+optional = true
+
 # [graphics]: how the picture is drawn, whatever the source.
 [types.graphics]
 type = "table"
@@ -149,6 +161,10 @@ type = "integer"
 optional = true
 
 [types.graphics.boost_zoom]
+type = "boolean"
+optional = true
+
+[types.graphics.trail_hits]
 type = "boolean"
 optional = true
 
@@ -342,6 +358,10 @@ optional = true
 type = "string"
 optional = true
 
+[types.race.score_target]
+type = "string"
+optional = true
+
 [types.race.weapons]
 type = "string"
 optional = true
@@ -376,7 +396,19 @@ optional = true
 type = "string"
 optional = true
 
-# [controls]: scheme, triggers, touch and key bindings.
+# [player]: the name every title shares and the tag Pulse and Pure use.
+[types.player]
+type = "table"
+
+[types.player.name]
+type = "string"
+optional = true
+
+[types.player.tag]
+type = "string"
+optional = true
+
+# [controls]: scheme, triggers, rumble, touch and key bindings.
 [types.controls]
 type = "table"
 
@@ -385,6 +417,10 @@ type = "string"
 optional = true
 
 [types.controls.triggers]
+type = "string"
+optional = true
+
+[types.controls.rumble]
 type = "string"
 optional = true
 
@@ -418,6 +454,11 @@ optional = true
 oneof = ["string", "boolean"]
 optional = true
 
+# Race music action to a pad control: a button name or raw:CODE.
+[types.controls.music]
+type = "types.string-map"
+optional = true
+
 # [ai]: what the opponents are like.
 [types.ai]
 type = "table"
@@ -447,9 +488,18 @@ type = "array"
 itemtype = "string"
 optional = true
 
+# Mods that start off (a texture pack) and the player turned on.
 [types.mods.enabled]
 type = "array"
 itemtype = "string"
+optional = true
+
+# [replay]: whether a race is recorded for the REPLAYS page. On unless turned off.
+[types.replay]
+type = "table"
+
+[types.replay.record]
+type = "boolean"
 optional = true
 
 # [dev]: developer switches, read in debug builds only.
@@ -499,6 +549,10 @@ optional = true
 type = "types.online"
 optional = true
 
+[elements.player]
+type = "types.player"
+optional = true
+
 [elements.controls]
 type = "types.controls"
 optional = true
@@ -513,6 +567,10 @@ optional = true
 
 [elements.mods]
 type = "types.mods"
+optional = true
+
+[elements.replay]
+type = "types.replay"
 optional = true
 
 [elements.mod_settings]

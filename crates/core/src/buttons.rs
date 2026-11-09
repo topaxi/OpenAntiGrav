@@ -41,6 +41,9 @@ pub enum Button {
     L = 8,
     /// Right shoulder.
     R = 9,
+    /// The Eliminator flip: L1 on a pad, its own row among the bindings. Not in the original's
+    /// layout, where it is an action on a rebindable button, not an index.
+    Flip = 10,
     /// START. The intro skip tests this index, and it is `0xe`, not a mask.
     Start = 14,
     /// SELECT.
@@ -63,6 +66,7 @@ impl Button {
             7 => Button::Square,
             8 => Button::L,
             9 => Button::R,
+            10 => Button::Flip,
             14 => Button::Start,
             15 => Button::Select,
             _ => Button::Any,
@@ -99,6 +103,7 @@ impl Display for Button {
             Button::Square => "square",
             Button::L => "l",
             Button::R => "r",
+            Button::Flip => "flip",
             Button::Start => "start",
             Button::Select => "select",
             Button::Any => "any",
@@ -139,6 +144,7 @@ pub fn button_from_name(name: &str) -> Option<Button> {
         "square" => Button::Square,
         "l" => Button::L,
         "r" => Button::R,
+        "flip" => Button::Flip,
         "start" => Button::Start,
         "select" => Button::Select,
         "any" => Button::Any,

@@ -15,9 +15,13 @@ pub mod android;
 pub mod bindings;
 pub mod keys;
 pub mod lobby;
+pub mod music;
 pub mod pad;
+pub mod probe;
 pub mod prompt;
+pub mod rumble;
 pub mod touch;
+pub mod view;
 
 use oag_gameplay::InputSnapshot;
 use oag_gameplay::input::{Button, Input};
@@ -293,6 +297,15 @@ pub struct Controls {
     /// Buttons the window's key events pressed since the last tick, as distinct from a click
     /// or a touch tap, which arrive through the same latch.
     window_pressed: u32,
+    /// The buttons a screen that only looks at a race acts on: the keyboard's and the pad's own,
+    /// without the shoulder or CROSS a trigger raises, so L2 is not L1 there
+    /// ([`Self::view_take`], [`view`]). One per tick, for the keyboard's slot.
+    view_buttons: Input,
+    /// The right stick and the triggers, for the same screens.
+    view: view::ViewReading,
+    /// A pad that is not there, for a run with no device (`--drive`, a test): read like a real
+    /// one, its triggers raising their buttons in the snapshot as a trigger does.
+    injected: view::ViewRaw,
 }
 
 /// What a keyboard seat after the first holds.
@@ -334,6 +347,9 @@ impl Controls {
             raw_edges: Vec::new(),
             raw_seen: false,
             window_pressed: 0,
+            view_buttons: Input::new(),
+            view: view::ViewReading::default(),
+            injected: view::ViewRaw::default(),
         }
     }
 
@@ -707,6 +723,27 @@ impl Controls {
         &self.pad
     }
 
+    /// Stops every motor on every pad. See [`rumble::MotorOutput::silence`].
+    pub fn silence_motors(&mut self) {
+        rumble::MotorOutput::silence(&mut self.pad);
+    }
+
+    /// What the pads did with the music controls since the last call (see [`music`]). Spends
+    /// the presses; call once a frame in a race, and not at all elsewhere.
+    pub fn take_music(&mut self) -> music::MusicInput {
+        self.pad.take_music()
+    }
+
+    /// Binds the pad's music controls. See [`Pad::set_music_bindings`].
+    pub fn set_music_bindings(&mut self, bindings: music::MusicBindings) {
+        self.pad.set_music_bindings(bindings);
+    }
+
+    /// The pad, to drive its motors.
+    pub fn pad_mut(&mut self) -> &mut Pad {
+        &mut self.pad
+    }
+
     /// Binds the pad's analog triggers. See [`Pad::set_trigger_mode`].
     pub fn set_trigger_mode(&mut self, mode: pad::TriggerMode) {
         self.pad.set_trigger_mode(mode);
@@ -785,6 +822,24 @@ impl Controls {
         } else if let Some(family) = self.pad.first_family() {
             self.prompt.seed_pad(family);
         }
+        let mut raw = self.pad.view_raw();
+        if self.injected != view::ViewRaw::default() {
+            let injected = self.injected;
+            let slot = self.keyboard_slot();
+            let resolved = pad::resolve(
+                Reading {
+                    stick_x: injected.left.0,
+                    stick_y: injected.left.1,
+                    throttle: injected.r2,
+                    brake: injected.l2,
+                    ..Reading::default()
+                },
+                self.pad.triggers(),
+            );
+            pads[slot] = pad::merge_states(pads[slot], resolved);
+            raw = raw.merge(injected);
+        }
+        self.view = raw.read(self.pad.triggers());
         let inputs = self.merge_players(pads);
         self.pad_spoke |= std::mem::take(&mut self.android_spoke);
         inputs
@@ -856,6 +911,9 @@ impl Controls {
                     .find(|seat| seat.slot == slot)
                     .map_or(0, |seat| seat.keys.held_mask() | seat.keys.take_taps())
             };
+            if slot == keyboard_slot {
+                self.view_buttons.begin_frame(keys | pad.digital);
+            }
             inputs.set(slot, self.merge(slot, keys, pad));
         }
         inputs
@@ -900,6 +958,36 @@ impl Controls {
             airbrake_right: shoulder(Button::R).max(pad.airbrake_right),
         }
         .sanitised()
+    }
+
+    /// What the right stick and the triggers read at the last
+    /// [`Self::player_snapshots`]. View-side only: nothing here is in an
+    /// [`InputSnapshot`].
+    #[must_use]
+    pub fn view(&self) -> view::ViewReading {
+        self.view
+    }
+
+    /// Sets the pad that is not there, until it is set again (`ViewRaw::default()` takes it away).
+    pub fn inject_pad(&mut self, pad: view::ViewRaw) {
+        self.injected = pad;
+    }
+
+    /// Whether `button` went down this tick on a device that is not a trigger, and spends the
+    /// press everywhere (so the race it parks does not see it either). What the replay viewer and
+    /// photo mode read their buttons through.
+    pub fn view_take(&mut self, button: Button) -> bool {
+        let pressed = self.view_buttons.take(button);
+        if pressed {
+            self.buttons_mut().consume_press(button);
+        }
+        pressed
+    }
+
+    /// Whether `button` is down on a device that is not a trigger.
+    #[must_use]
+    pub fn view_held(&self, button: Button) -> bool {
+        self.view_buttons.is_held(button)
     }
 
     /// The button state as of the last [`Self::snapshot`], which is what the

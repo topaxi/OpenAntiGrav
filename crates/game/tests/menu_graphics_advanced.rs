@@ -36,7 +36,7 @@ fn rows(definition: &Definition, id: &str) -> Vec<String> {
         .collect()
 }
 
-fn advanced(pulse_like: bool, weather: bool) -> Vec<&'static str> {
+fn advanced(pulse_like: bool, weather: bool, trail_hits: bool) -> Vec<&'static str> {
     let mut rows = vec![
         "graphics.motion_blur",
         "graphics.motion_blur_resolution",
@@ -59,6 +59,9 @@ fn advanced(pulse_like: bool, weather: bool) -> Vec<&'static str> {
     if pulse_like {
         rows.push("graphics.boost_zoom");
     }
+    if trail_hits {
+        rows.push("graphics.trail_hits");
+    }
     rows.extend(["graphics.cpu_governor", "graphics.perf_overlay", "back"]);
     rows
 }
@@ -68,6 +71,7 @@ fn the_graphics_page_keeps_the_original_and_performance_rows_and_opens_advanced(
     for title in [oag_pulse::TITLE, oag_pure::TITLE, oag_hd::TITLE] {
         let mut definition = built_in();
         definition.drop_unavailable_boost_zoom(title);
+        definition.drop_unavailable_trail_hits(title);
         definition.drop_unavailable_trail_order(title);
         definition.drop_unavailable_weather(title);
         assert_eq!(rows(&definition, "graphics"), TOP, "{}", title.name);
@@ -76,20 +80,22 @@ fn the_graphics_page_keeps_the_original_and_performance_rows_and_opens_advanced(
 
 #[test]
 fn advanced_holds_the_look_extras_and_the_mixed_rows_in_order() {
-    for (title, pulse_like) in [
-        (oag_pulse::TITLE, true),
-        (oag_pure::TITLE, true),
-        (oag_hd::TITLE, false),
-        (oag_omega::TITLE, false),
-        (oag_2048::TITLE, false),
+    // TRAIL HITS stays on every title whose original never shows the burst: all but HD.
+    for (title, pulse_like, trail_hits) in [
+        (oag_pulse::TITLE, true, true),
+        (oag_pure::TITLE, true, true),
+        (oag_hd::TITLE, false, false),
+        (oag_omega::TITLE, false, true),
+        (oag_2048::TITLE, false, true),
     ] {
         let mut definition = built_in();
         definition.drop_unavailable_boost_zoom(title);
+        definition.drop_unavailable_trail_hits(title);
         definition.drop_unavailable_trail_order(title);
         definition.drop_unavailable_weather(title);
         assert_eq!(
             rows(&definition, "graphics_advanced"),
-            advanced(pulse_like, title.weather.is_played()),
+            advanced(pulse_like, title.weather.is_played(), trail_hits),
             "{}",
             title.name
         );

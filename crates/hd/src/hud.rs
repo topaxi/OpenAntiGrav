@@ -118,6 +118,7 @@ const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     lit_alpha: None,
     // Unmeasured on the retro skins (`hd-hud-leftovers` item 3 asks it): no shadow, authored quads.
     text_shadow: None,
+    text_outline_alpha: None,
     half_unit_glyph_quads: false,
     bar_tip: None,
     boost_smear: None,
@@ -133,6 +134,7 @@ const BASE: oag_title::HudLayouts = oag_title::HudLayouts {
     elimination: layouts::ELIMINATION,
     split: Some(SPLIT),
     split_layout: Some(r"Data\XML\SplitHud_HD.toml"),
+    player_tags: None,
     skins: &[],
 };
 
@@ -226,7 +228,7 @@ pub const PICKUP_COLOURS: [Option<u32>; 14] = {
     ]
 };
 
-/// The pickup fade's timer rate. HD's `Hud_UpdatePickupBar` (`0x0008df30`) scales `dt` by the float at `0x008a776c`, `0x3fc00000` = `1.5` (static read, confidence 80); the cap `0.5`, the `x3` and `pi` it shares with Pulse's law, and the bump's `-25.0` sits at `0x008a780c`. The hold threshold and the fade-out branch's constants are **inherited from Pulse**, not read.
+/// The pickup fade's timer rate. HD's `Hud_UpdatePickupBar` (`0x0008df30`) scales `dt` by the float at `0x008a776c`, `0x3fc00000` = `1.5`; the cap `0.5`, the icon gate `0.4`, the hold threshold `0.1` and the fade-out's `(2 - 2T) * 1.5` are read in the executable and followed live on RPCS3 (`docs/ghidra/functions/ps3-hdfury-eu/hd-pickup-table.md`, "The fade constants").
 pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 
 /// How HD's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]
@@ -255,6 +257,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     text_shadow: Some(oag_title::pre_race::Sourced::measured(
         oag_title::hud::TextShadow { dx: -1, dy: -1 },
     )),
+    text_outline_alpha: None,
     // **Concentric sprites, not brackets.** HD's arcade HUD composes to zero
     // `<Mode3D>` models; its reticle is six `<Image>` widgets off
     // `Data\HUD\Textures\missile_reticule.gtf`, authored at 128, 108, 80 and
@@ -292,6 +295,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "LeachBeamSightMiddle",
             "LeachBeamSightInner",
         ]),
+        live: Some(oag_title::hud::LiveSight {
+            missile_extent_unit: 30.0 / 2.65625,
+            leach_extent_unit: 30.0 / 3.40909,
+            chase_gain: 4.0,
+        }),
     },
     // **Not Pulse's substitution.** HD's `PickupBackground` is a hexagon
     // *outline* rather than a filled white one, so the icon on it is visible in
@@ -309,7 +317,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // whole pulse is the executable's `Hud_UpdatePickupBar` tail, not a substitution of a
     // colour the layout lacks.
     pickup_colours: Some(PICKUP_COLOURS),
-    // No size pulse: HD's store of it is unread.
+    // No size pulse: the update touches the backdrop image only through its vertex colours.
     pickup_fade: Some(oag_title::hud::PickupFade {
         rate_percent: PICKUP_FADE_RATE_PERCENT,
         size_pulse: false,
@@ -552,6 +560,10 @@ pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
 /// [`rpcs3-debugger.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/reverse-engineering/rpcs3-debugger.md
 pub const ALWAYS_ON: &[&str] = &[
     "LapPanel",
+    // The hexagon round the lap number in the Eliminator's lap counter
+    // (`HUD_Elim_lap_counters.xml`, with its split-screen twin): up in every RPCS3 frame of
+    // an Eliminator, from the grid on. Authored by the Eliminator roots alone.
+    "LapPanel2",
     "PositionPanel",
     "TotalTimeBG",
     "PickupFarBackground",

@@ -52,6 +52,35 @@ impl Race {
         ));
     }
 
+    /// Records `slot`'s wall contact for the pad: its size and which side the
+    /// wall is on. **Chosen, not measured**: the original's contact measure
+    /// (`ship+0x5f78` on HD, `+0x64d4` on Omega) is unread, so this stands in
+    /// with the impulse the response applied
+    /// (`docs/gameplay/rumble.md`, "Contact and landing").
+    pub(crate) fn note_wall_contact(
+        &mut self,
+        slot: usize,
+        wall: &oag_physics::wall::WallResponse,
+    ) {
+        let Some(reading) = self.sim.wall_contact.get_mut(slot) else {
+            return;
+        };
+        *reading = wall.resolved.map(|contact| {
+            let ship = &self.sim.world.ships[slot].physics.body;
+            let wall_on_left = contact.normal.dot(ship.right()) > 0.0;
+            crate::sim::WallContactReading {
+                size: wall.impulse_sum,
+                side: if wall_on_left { -1.0 } else { 1.0 },
+            }
+        });
+    }
+
+    /// `slot`'s wall contact this tick, for the pad.
+    #[must_use]
+    pub fn wall_contact_of(&self, slot: usize) -> Option<crate::sim::WallContactReading> {
+        self.sim.wall_contact.get(slot).copied().flatten()
+    }
+
     /// Takes the one-shot sound cues this tick raised, leaving the queue empty.
     ///
     /// The seam ADR-0018 asks for: cues are a per-tick *output*, so the caller
@@ -115,6 +144,24 @@ impl Race {
     /// empty. Same per-tick-output shape as [`Self::drain_cues`].
     pub fn drain_announcements(&mut self) -> Vec<u16> {
         std::mem::take(&mut self.sim.announcements)
+    }
+
+    /// Whether a locked Leech beam is fastened to `slot`, at either end. The
+    /// level the pad's `leeching_energy_rumble` holds on; which end the original
+    /// rumbles is unread (`docs/gameplay/rumble.md`, "Triggers").
+    #[must_use]
+    pub fn leach_beam_on(&self, slot: usize) -> bool {
+        self.sim.world.leach_beams_iter().any(|beam| {
+            beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked
+                && (usize::from(beam.owner) == slot || usize::from(beam.target) == slot)
+        })
+    }
+
+    #[cfg(feature = "view")]
+    /// The rumble patterns this race's title ships, for the pad.
+    #[must_use]
+    pub fn rumble_library(&self) -> &oag_tables::rumble::Library {
+        &self.view.rumble
     }
 
     #[cfg(feature = "view")]

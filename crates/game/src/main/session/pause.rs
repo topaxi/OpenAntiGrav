@@ -118,6 +118,7 @@ impl super::Session {
         }
         self.pause = after;
         debug!("pause: {before:?} -> {after:?}");
+        self.controls.silence_motors();
         // Measured on Pulse (USA): START plays `ACCEPT` both on pausing a race
         // and on resuming it (`ConfirmButton_Update`). Only a press: the
         // countdown running out is not one.

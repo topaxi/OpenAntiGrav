@@ -115,9 +115,12 @@ pub(super) fn track_model(
         // `oag_mesh::mesh::rcs::psp2`.
         Some(geometry) if mesh::rcs::psp2::is_psp2(geometry) => {
             let animation = psp2_animation(archives, track, model_name, report);
-            match mesh::rcs::psp2::build(track, geometry, animation.as_ref(), &mut |path| {
-                archives.read_name(path).ok()
-            }) {
+            match mesh::rcs::psp2::build(
+                track,
+                geometry,
+                animation.as_ref(),
+                &mut crate::stages::reader(archives),
+            ) {
                 Ok((mut model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));
                     // 2048 and Omega draw a mesh named `wohdmeshrefract` only into their
@@ -173,9 +176,13 @@ pub(super) fn track_model(
             }
         }
         Some(geometry) => {
-            match mesh::rcs::build_scene_views(track, track_blob, geometry, &mut |path| {
-                archives.read_name(path).ok()
-            }) {
+            let built = mesh::rcs::build_scene_views(
+                track,
+                track_blob,
+                geometry,
+                &mut crate::stages::reader(archives),
+            );
+            match built {
                 Ok((model, mut groups, built)) => {
                     groups.alternate_fog = groups.alternate_fog.map(biased);
                     groups.primary_fog = groups.primary_fog.map(biased);

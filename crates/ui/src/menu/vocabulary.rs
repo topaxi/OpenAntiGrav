@@ -56,6 +56,9 @@ pub enum Action {
     /// ([`super::CUSTOM_CAMPAIGN_ROW`] and the campaign's key). Never written in
     /// a menu file: the picker exists only when a mod adds a campaign.
     OpenCustomCampaign,
+    /// The campaign picker's NEW CAMPAIGN row: opens the campaign editor over the
+    /// title's `Cell Selection` (`oag_game::campaign::editor`).
+    OpenCampaignEditor,
     /// The MULTIPLAYER page's LOCAL MULTIPLAYER row: starts the multiplayer flow, which seats
     /// the people ("press a button to join"), lays out the windows and goes on to the RACE
     /// page and Track and Ship Select - see `oag_ui_screens::join` and
@@ -75,6 +78,29 @@ pub enum Action {
     OnlineCreate,
     /// The ONLINE page's JOIN GAME row: Ship Select, then the lobby's list of rooms.
     OnlineJoin,
+    /// The OPTIONS page's PLAYER NAME row: opens the name entry on the stored name
+    /// (`crate::main::session::player_name` in `oag-game`).
+    EditPlayerName,
+    /// The OPTIONS page's PLAYER TAG row, on titles that use a tag.
+    EditPlayerTag,
+    /// The pause menu's PHOTO MODE row: resumes the parked race into the one photo mode
+    /// (`crate::main::session::photo` in `oag-game`). The row is on the page only while a
+    /// race with one view is parked ([`super::Menu::offer`]).
+    PhotoMode,
+    /// The pause menu's RESTART RACE row: the parked race again from the grid, on the options
+    /// it ran with (`crate::main::session::pause_menu` in `oag-game`).
+    RestartRace,
+    /// The pause menu's QUIT RACE row: leaves the parked race for the front end, or for the
+    /// campaign cell it was launched from.
+    QuitRace,
+    /// The REPLAYS page's WATCH row: opens the replay the REPLAY row is on in the viewer
+    /// (`crate::main::session::replays` in `oag-game`).
+    WatchReplay,
+    /// The REPLAYS page's KEEP row: copies an automatic replay into the player's own folder,
+    /// where the ring never reaches it.
+    KeepReplay,
+    /// The REPLAYS page's DELETE row: removes the replay the REPLAY row is on.
+    DeleteReplay,
 }
 
 impl Action {
@@ -90,12 +116,21 @@ impl Action {
             Self::DeletePilot => "delete_pilot",
             Self::OpenCampaign => "open_campaign",
             Self::OpenCustomCampaign => "open_custom_campaign",
+            Self::OpenCampaignEditor => "open_campaign_editor",
             Self::OpenMultiplayerLocal => "multiplayer_local",
             Self::HostLan => "lan_host",
             Self::JoinLan => "lan_join",
             Self::OpenOnline => "online_open",
             Self::OnlineCreate => "online_create",
             Self::OnlineJoin => "online_join",
+            Self::EditPlayerName => "edit_player_name",
+            Self::EditPlayerTag => "edit_player_tag",
+            Self::PhotoMode => "photo_mode",
+            Self::RestartRace => "restart_race",
+            Self::QuitRace => "quit_race",
+            Self::WatchReplay => "watch_replay",
+            Self::KeepReplay => "keep_replay",
+            Self::DeleteReplay => "delete_replay",
         }
     }
 
@@ -122,19 +157,28 @@ impl Action {
             "delete_pilot" => Some(Self::DeletePilot),
             "open_campaign" => Some(Self::OpenCampaign),
             "open_custom_campaign" => Some(Self::OpenCustomCampaign),
+            "open_campaign_editor" => Some(Self::OpenCampaignEditor),
             "multiplayer_local" => Some(Self::OpenMultiplayerLocal),
             "lan_host" => Some(Self::HostLan),
             "lan_join" => Some(Self::JoinLan),
             "online_open" => Some(Self::OpenOnline),
             "online_create" => Some(Self::OnlineCreate),
             "online_join" => Some(Self::OnlineJoin),
+            "edit_player_name" => Some(Self::EditPlayerName),
+            "edit_player_tag" => Some(Self::EditPlayerTag),
+            "photo_mode" => Some(Self::PhotoMode),
+            "restart_race" => Some(Self::RestartRace),
+            "quit_race" => Some(Self::QuitRace),
+            "watch_replay" => Some(Self::WatchReplay),
+            "keep_replay" => Some(Self::KeepReplay),
+            "delete_replay" => Some(Self::DeleteReplay),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 14] {
+    pub fn all() -> [Self; 23] {
         [
             Self::LaunchRace,
             Self::Quit,
@@ -144,12 +188,21 @@ impl Action {
             Self::DeletePilot,
             Self::OpenCampaign,
             Self::OpenCustomCampaign,
+            Self::OpenCampaignEditor,
             Self::OpenMultiplayerLocal,
             Self::HostLan,
             Self::JoinLan,
             Self::OpenOnline,
             Self::OnlineCreate,
             Self::OnlineJoin,
+            Self::EditPlayerName,
+            Self::EditPlayerTag,
+            Self::PhotoMode,
+            Self::RestartRace,
+            Self::QuitRace,
+            Self::WatchReplay,
+            Self::KeepReplay,
+            Self::DeleteReplay,
         ]
     }
 }
@@ -230,6 +283,11 @@ pub enum ValueSource {
     /// the reason [`Self::FrontEndStyles`] is; a title that lists none has the row dropped
     /// (`Definition::drop_unavailable_hud_style`).
     HudStyles,
+    /// The values of the title's `Safe Area Setting` slider (`oag_title::hud::SafeArea`), in
+    /// percent, lowest first: HD's own 80 to 100 in steps of 2, and the shared slider of the
+    /// titles whose disc authors none. Supplied rather than spelled so the row's range is the
+    /// title's data.
+    SafeAreas,
     /// The teams this source offers, from its own plugin definition and from
     /// any `crate::dlc` mounted behind it.
     ///
@@ -326,6 +384,11 @@ pub enum ValueSource {
     /// if the list will not read: a title that names no such list has the row
     /// dropped instead (`Definition::drop_rows_picked_on_screen`).
     KillTargets,
+    /// The score targets the race box's `TARGET` row offers, the steps of the disc's own
+    /// `Eliminations` slider (`oag_game::boot::RaceSetup::score_targets`). Empty, and the row
+    /// dropped, on a title whose Eliminator ends on kills
+    /// (`Definition::drop_rows_picked_on_screen`).
+    ScoreTargets,
     /// The two states of the race box's `WEAPONS` row, off the disc's own
     /// `Weapons` list: stored as its `On`/`Off`, shown as its `FE_ON`/`FE_OFF`
     /// strings (`oag_game::boot::RaceSetup::weapon_choices`). Empty only if the
@@ -343,6 +406,9 @@ pub enum ValueSource {
     /// A template row that expands to one row per music source
     /// ([`super::Definition::expand_rows`]; `oag_sound::pool`). Never supplied as a list.
     MusicPool,
+    /// The recorded races under the data directory, `saved/` then `auto/`, newest first: the
+    /// REPLAYS page's REPLAY row, whose detail lines are the file's (`oag_game::replays`).
+    Replays,
 }
 
 impl ValueSource {
@@ -369,6 +435,7 @@ impl ValueSource {
             Self::MusicSources => "music_sources",
             Self::FrontEndStyles => "front_end_styles",
             Self::HudStyles => "hud_styles",
+            Self::SafeAreas => "safe_areas",
             Self::Teams => "teams",
             Self::Titles => "titles",
             Self::CraftTitles => "craft_titles",
@@ -382,10 +449,12 @@ impl ValueSource {
             Self::PilotAxisHigh => "pilot_axis_high",
             Self::ScreenFilters => "screen_filters",
             Self::KillTargets => "kill_targets",
+            Self::ScoreTargets => "score_targets",
             Self::Weapons => "weapons",
             Self::Mods => "mods",
             Self::ModSwitch => "mod_switch",
             Self::MusicPool => "music_pool",
+            Self::Replays => "replays",
         }
     }
 
@@ -403,6 +472,7 @@ impl ValueSource {
             "music_sources" => Some(Self::MusicSources),
             "front_end_styles" => Some(Self::FrontEndStyles),
             "hud_styles" => Some(Self::HudStyles),
+            "safe_areas" => Some(Self::SafeAreas),
             "teams" => Some(Self::Teams),
             "titles" => Some(Self::Titles),
             "craft_titles" => Some(Self::CraftTitles),
@@ -416,10 +486,12 @@ impl ValueSource {
             "pilot_axis_high" => Some(Self::PilotAxisHigh),
             "screen_filters" => Some(Self::ScreenFilters),
             "kill_targets" => Some(Self::KillTargets),
+            "score_targets" => Some(Self::ScoreTargets),
             "weapons" => Some(Self::Weapons),
             "mods" => Some(Self::Mods),
             "mod_switch" => Some(Self::ModSwitch),
             "music_pool" => Some(Self::MusicPool),
+            "replays" => Some(Self::Replays),
             _ => None,
         }
     }

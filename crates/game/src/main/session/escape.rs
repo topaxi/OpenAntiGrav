@@ -96,6 +96,7 @@ impl Session {
         // menus - see `Session::launch_race`, which resets this for the same
         // reason on a fresh race.
         self.pause = oag_game::pause::State::Running;
+        self.arm_rumble();
         // The playlist's own resume: `pause_race_music` (called on the way
         // into the menus) saved the position and left `race_index` alone, so
         // this continues the same track rather than starting a new one - see
@@ -137,13 +138,15 @@ impl Session {
     /// than the default cell the Head2Head reading saw
     /// (`campaign_cursor_ground_truth`).
     ///
-    /// **Chosen, not measured:** this build has no pause menu, so escape is
+    /// **Chosen, not measured:** on a title without a pause screen escape is
     /// the pause menu's QUIT RACE row and the race is discarded rather than
     /// parked - a campaign race cannot be resumed from the menus the way a
-    /// custom one can. The result capture at the top of [`Session::escape`]
+    /// custom one can. Where the title has one (`Title::pause_menu`) escape
+    /// opens it and its QUIT RACE row comes here
+    /// ([`Session::quit_parked_race`]). The result capture at the top of [`Session::escape`]
     /// has already run, so a Speed Lap or Time Trial best is kept. HD and
     /// Fury keep the raced cell under the cursor (chosen, nothing measured).
-    fn quit_campaign_race(
+    pub(super) fn quit_campaign_race(
         &mut self,
         cell: &str,
         difficulty: Option<oag_tables::race_campaign::Difficulty>,
@@ -193,6 +196,17 @@ impl Session {
     /// rather than a track, and nothing there to resume into, so that one is
     /// still discarded the way every race used to be.
     pub(crate) fn escape(&mut self) {
+        // Photo mode is a level of its own: escape leaves it, back to the race it holds, and
+        // goes no further. **Chosen, not measured.**
+        if self.photo.is_some() {
+            self.leave_photo();
+            return;
+        }
+        // A recording being watched is left for the REPLAYS page: nothing to save, nothing parked.
+        if self.viewer.is_some() {
+            self.leave_viewer();
+            return;
+        }
         // **The other capture site** - see `oag_game::records`'s own module
         // doc for why there have to be two. This one exists for the three
         // modes `Session::frame`'s finish-transition arm can never reach:
@@ -272,7 +286,7 @@ impl Session {
         }
         // The Race Campaign's own screens, same rule: `Cell Selection` steps
         // back to `Grid Selection`, which steps back to the menus.
-        if matches!(&self.stage, Stage::Menu(stage) if stage.campaign.is_some()) {
+        if matches!(&self.stage, Stage::Menu(stage) if stage.campaign.is_some() && stage.prompt.is_none()) {
             self.handle_campaign(oag_ui_screens::campaign::Event::Back);
             return;
         }
@@ -328,6 +342,7 @@ impl Session {
 
         if self.shell.is_some()
             && let Stage::Race(stage) = &self.stage
+            && !self.pause_screen_applies(stage)
             && let RaceExit::CellSelection { cell, difficulty } =
                 race_exit(stage.campaign_cell.as_ref(), stage.campaign_difficulty)
         {
@@ -339,8 +354,13 @@ impl Session {
             info!("leaving the race");
             // Before `open_menus`, not after: the menu voice this resumes has
             // to be sounding by the time the menus themselves draw. See
-            // `Audio::pause_race_music`.
-            self.audio.pause_race_music();
+            // `Audio::pause_race_music`. A title's own pause screen is silent
+            // instead (`Audio::hold_race_music`).
+            if matches!(&self.stage, Stage::Race(stage) if self.pause_screen_applies(stage)) {
+                self.audio.hold_race_music();
+            } else {
+                self.audio.pause_race_music();
+            }
             self.save_race_music();
             // The engine is a *held* voice - `~ENGINE` - so leaving the race
             // has to release it. Without this the menus hum.

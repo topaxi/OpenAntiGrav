@@ -129,7 +129,7 @@ fn runs_of(race: &mut Race, slots: &[usize], ticks: u64) -> Vec<Run> {
                 )
             })
             .collect();
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         for (i, &slot) in slots.iter().enumerate() {
             let ship = &race.sim.world.ships[slot];
             let lost = before[i].0 - ship.physics.shield;

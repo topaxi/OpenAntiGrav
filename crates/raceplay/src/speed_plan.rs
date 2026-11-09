@@ -90,6 +90,18 @@ impl RaceSim {
     }
 
     /// Takes the plans a thread learned on a copy of this race.
+    /// Takes the plans a later copy of this race learned, so a snapshot from before the first
+    /// tick does not learn them again when it is restored. Nothing else of `learned` is read.
+    pub(crate) fn share_plans_of(&mut self, learned: &RaceSim) {
+        self.plans_built = learned.plans_built;
+        self.speed_plan.clone_from(&learned.speed_plan);
+        self.plan_reference.clone_from(&learned.plan_reference);
+        self.hull_plans = Arc::clone(&learned.hull_plans);
+        self.ship_plan = learned.ship_plan;
+        self.plan_steps = Arc::clone(&learned.plan_steps);
+        self.routes = Arc::clone(&learned.routes);
+    }
+
     fn adopt_plans(&mut self, learned: LearnedPlans) {
         self.plans_built = true;
         self.speed_plan = learned.speed_plan;
@@ -97,7 +109,10 @@ impl RaceSim {
         self.hull_plans = learned.hull_plans;
         self.ship_plan = learned.ship_plan;
         self.plan_steps = learned.plan_steps;
-        for (route, plan) in self.routes.iter_mut().zip(learned.route_plans) {
+        for (route, plan) in Arc::make_mut(&mut self.routes)
+            .iter_mut()
+            .zip(learned.route_plans)
+        {
             route.plan = plan;
         }
     }
@@ -123,7 +138,7 @@ impl RaceSim {
 /// speed plan".
 pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
     sim.plans_built = true;
-    sim.speed_plan = Race::field_speed_plan(sim);
+    sim.speed_plan = Race::field_speed_plan(sim).map(Arc::new);
     let hulls = Race::other_hulls(sim);
     let (learned, rings) = {
         let shared = &*sim;
@@ -137,10 +152,12 @@ pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
             },
         )
     };
-    sim.plan_steps.routes = learned.iter().map(|(_, steps)| *steps).collect();
-    sim.plan_steps.routes_clean = learned.iter().map(|(plan, _)| plan.is_some()).collect();
+    let plan_steps = Arc::make_mut(&mut sim.plan_steps);
+    plan_steps.routes = learned.iter().map(|(_, steps)| *steps).collect();
+    plan_steps.routes_clean = learned.iter().map(|(plan, _)| plan.is_some()).collect();
+    let routes = Arc::make_mut(&mut sim.routes);
     for (route, (plan, _)) in learned.into_iter().enumerate() {
-        sim.routes[route].plan = plan;
+        routes[route].plan = plan;
     }
     if sim.speed_plan.is_some() && sim.plan_reference.is_some() {
         let shared = &*sim;
@@ -158,7 +175,7 @@ pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
             .collect();
         sim.ship_plan = hulls.1;
     }
-    sim.plan_steps.hull_routes = sim
+    Arc::make_mut(&mut sim.plan_steps).hull_routes = sim
         .hull_plans
         .iter()
         .map(|h| h.route_steps.clone())
@@ -171,21 +188,23 @@ pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
 #[cfg(test)]
 pub(super) fn learn_speed_plans_serially(sim: &mut RaceSim) {
     sim.plans_built = true;
-    sim.speed_plan = Race::field_speed_plan(sim);
+    sim.speed_plan = Race::field_speed_plan(sim).map(Arc::new);
     let learned: Vec<_> = (0..sim.routes.len())
         .map(|k| Race::route_speed_plan(sim, k))
         .collect();
-    sim.plan_steps.routes = learned.iter().map(|(_, steps)| *steps).collect();
-    sim.plan_steps.routes_clean = learned.iter().map(|(plan, _)| plan.is_some()).collect();
+    let plan_steps = Arc::make_mut(&mut sim.plan_steps);
+    plan_steps.routes = learned.iter().map(|(_, steps)| *steps).collect();
+    plan_steps.routes_clean = learned.iter().map(|(plan, _)| plan.is_some()).collect();
+    let routes = Arc::make_mut(&mut sim.routes);
     for (route, (plan, _)) in learned.into_iter().enumerate() {
-        sim.routes[route].plan = plan;
+        routes[route].plan = plan;
     }
     let (Some(reference_plan), Some(_)) = (sim.speed_plan.clone(), sim.plan_reference) else {
         return;
     };
     let (hulls, owner) = Race::other_hulls(sim);
     let shared = &*sim;
-    sim.hull_plans = par_map(&hulls, |&handling| {
+    let hull_plans = par_map(&hulls, |&handling| {
         let ring = Race::hull_ring_for(shared, &reference_plan, handling);
         let (routes, route_steps) = Race::hull_routes_for(shared, handling);
         HullPlans {
@@ -194,8 +213,9 @@ pub(super) fn learn_speed_plans_serially(sim: &mut RaceSim) {
             route_steps,
         }
     });
+    sim.hull_plans = hull_plans.into();
     sim.ship_plan = owner;
-    sim.plan_steps.hull_routes = sim
+    Arc::make_mut(&mut sim.plan_steps).hull_routes = sim
         .hull_plans
         .iter()
         .map(|h| h.route_steps.clone())
@@ -205,18 +225,18 @@ pub(super) fn learn_speed_plans_serially(sim: &mut RaceSim) {
 /// What [`learn_speed_plans`] wrote into a [`RaceSim`], and nothing else of it.
 #[derive(Debug, PartialEq)]
 pub(super) struct LearnedPlans {
-    speed_plan: Option<oag_ai::SpeedPlan>,
+    speed_plan: Option<Arc<oag_ai::SpeedPlan>>,
     plan_reference: Option<oag_physics::Handling>,
-    hull_plans: Vec<HullPlans>,
+    hull_plans: Arc<[HullPlans]>,
     ship_plan: [Option<u8>; oag_gameplay::MAX_SHIPS],
     route_plans: Vec<Option<oag_ai::SpeedPlan>>,
-    plan_steps: PlanSteps,
+    plan_steps: Arc<PlanSteps>,
 }
 
 impl LearnedPlans {
     #[cfg(test)]
     pub(super) fn speed_plan(&self) -> Option<&oag_ai::SpeedPlan> {
-        self.speed_plan.as_ref()
+        self.speed_plan.as_deref()
     }
 
     /// How many route plans verified. For the tests.
@@ -234,7 +254,7 @@ impl LearnedPlans {
             hull_plans: sim.hull_plans,
             ship_plan: sim.ship_plan,
             plan_steps: sim.plan_steps,
-            route_plans: sim.routes.into_iter().map(|route| route.plan).collect(),
+            route_plans: sim.routes.iter().map(|route| route.plan.clone()).collect(),
         }
     }
 }
@@ -512,11 +532,11 @@ impl Race {
             report,
             rows,
             stages: None,
-            order: self.sim.ai_order.clone(),
+            order: self.sim.ai_order.to_vec(),
             kept: self.sim.racing_line.len(),
             merge: 0,
             ring_len: self.sim.racing_line.len(),
-            line: self.sim.racing_line.clone(),
+            line: (*self.sim.racing_line).clone(),
         }
     }
 
@@ -604,7 +624,7 @@ impl Race {
         let course = oag_ai::plan::Course {
             line,
             samples: &samples,
-            raycaster: &sim.collision,
+            raycaster: &*sim.collision,
             env: Environment {
                 class_gravity_scale: sim.class_gravity_scale,
                 class_gravity_term: sim.class_gravity_term,
@@ -849,7 +869,7 @@ impl Race {
     ) {
         let mut hulls: Vec<oag_physics::Handling> = Vec::new();
         let mut owner: [Option<u8>; oag_gameplay::MAX_SHIPS] = [None; oag_gameplay::MAX_SHIPS];
-        let (Some(_), Some(reference)) = (sim.speed_plan.as_ref(), sim.plan_reference) else {
+        let (Some(_), Some(reference)) = (sim.speed_plan.as_deref(), sim.plan_reference) else {
             return (hulls, owner);
         };
         for (slot, chosen) in owner
@@ -1094,7 +1114,7 @@ impl Race {
     #[must_use]
     pub fn speed_plan(&mut self) -> Option<&oag_ai::SpeedPlan> {
         self.ensure_speed_plans();
-        self.sim.speed_plan.as_ref()
+        self.sim.speed_plan.as_deref()
     }
 
     /// What learning this race's route plans cost, learned first if nothing

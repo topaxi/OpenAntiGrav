@@ -39,6 +39,18 @@ use crate::stage::Stage;
 
 use super::Session;
 
+/// The name the lobby's name field opens on: the shared player name (the lobby's keys are lower
+/// case), else what the last connection went by, else the login name.
+fn lobby_name(saved: &str, player: &crate::settings::Player) -> String {
+    if let Some(name) = player.name() {
+        name.to_ascii_lowercase()
+    } else if !saved.is_empty() {
+        saved.to_string()
+    } else {
+        super::lan::player_name()
+    }
+}
+
 /// How often the room list is asked for again while it is on screen. **Chosen.**
 const REFRESH: Duration = Duration::from_millis(1000);
 
@@ -122,11 +134,8 @@ impl Session {
             lobby: None,
             address: saved.address,
             hash: saved.hash,
-            name: if saved.name.is_empty() {
-                super::lan::player_name()
-            } else {
-                saved.name
-            },
+            name: lobby_name(&saved.name, &self.settings.player),
+            // See `lobby_name`.
             editions,
             team: String::new(),
             pick_sent: false,
@@ -1131,4 +1140,37 @@ impl Session {
 enum Rows {
     Rooms(Vec<oag_net::wire::online::RoomInfo>),
     Room(oag_net::wire::online::Snapshot, bool),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lobby_name;
+    use crate::settings::Player;
+
+    fn player(name: &str) -> Player {
+        Player {
+            name: name.into(),
+            tag: String::new(),
+        }
+    }
+
+    #[test]
+    fn the_lobby_name_field_opens_on_the_stored_player_name() {
+        assert_eq!(lobby_name("", &player("Zoe-7")), "zoe-7");
+    }
+
+    #[test]
+    fn the_player_name_wins_over_the_name_the_last_connection_used() {
+        assert_eq!(lobby_name("bob", &player("Zoe")), "zoe");
+    }
+
+    #[test]
+    fn with_no_player_name_the_last_connections_name_is_kept() {
+        assert_eq!(lobby_name("bob", &player("")), "bob");
+    }
+
+    #[test]
+    fn with_no_player_name_the_login_name_is_the_default() {
+        assert_eq!(lobby_name("", &player("")), super::super::lan::player_name());
+    }
 }

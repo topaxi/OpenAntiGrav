@@ -39,6 +39,20 @@ impl Race {
         self.sim.ai_tuning = tuning;
     }
 
+    /// Races a campaign cell at its resolved skill scale (`AI_ResolveSkillScale`'s cell branch,
+    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`): the field's tuning at that
+    /// position ([`oag_ai::Difficulty::tune_at_scale`], which replaces the one [`Self::start`]
+    /// took from the difficulty) and the finished player's thrust, which reads the same scale.
+    /// Before the first tick; both are simulation state a recording's rebuild must repeat
+    /// ([`crate::Launch::campaign_skill`]).
+    pub fn apply_campaign_skill(&mut self, scale: f32) {
+        self.set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
+            scale,
+            &oag_ai::Tuning::default(),
+        ));
+        self.set_finished_thrust_skill(scale);
+    }
+
     /// Replaces the character one slot is flying, mid-race.
     ///
     /// **For measurement, exactly as [`Self::set_ai_tuning`] is**, and it exists
@@ -54,12 +68,13 @@ impl Race {
     /// temper it too. It is not a difficulty setting and nothing in the game
     /// calls it.
     pub fn set_ai_pilot(&mut self, slot: usize, pilot: oag_ai::Pilot) {
-        if let Some(entry) = self.sim.ai_pilots.get_mut(slot) {
+        if let Some(entry) = Arc::make_mut(&mut self.sim.ai_pilots).get_mut(slot) {
             *entry = pilot;
         }
     }
 
-    /// Flies every opponent as `entry`, tempered by `difficulty` - a mod
+    /// Flies every opponent as `entry`, tempered by `difficulty` (and a score race's
+    /// `crate::score_pace`) - a mod
     /// campaign event's pilot (ADR-0077), set once after [`Self::start`] and
     /// before the first tick. The pilot's digest replaces each opponent's in
     /// the world, so the state hash names the pilot as `start`'s own deal does.
@@ -68,8 +83,12 @@ impl Race {
         entry: &crate::pilots::Entry,
         difficulty: oag_ai::Difficulty,
     ) {
-        let tempered = difficulty.temper(&entry.pilot);
-        for pilot in self.sim.ai_pilots.iter_mut().skip(1) {
+        let tempered = crate::score_pace::ScorePace::temper_opponent(
+            self.sim.score_pace,
+            difficulty,
+            &entry.pilot,
+        );
+        for pilot in Arc::make_mut(&mut self.sim.ai_pilots).iter_mut().skip(1) {
             *pilot = tempered;
         }
         let world = &mut self.sim.world;
@@ -501,7 +520,7 @@ impl Race {
         let Some(time) = self
             .sim
             .weapons
-            .as_ref()
+            .as_deref()
             .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Autopilot))
             .map(|simple| simple.time)
         else {
@@ -602,7 +621,7 @@ impl Race {
                 air_trim: oag_ai::air_trim(&ship.handling, ship.physics.air_pitch_bias),
                 plan: super::routes::plan_for(
                     &self.sim.routes,
-                    self.sim.speed_plan.as_ref(),
+                    self.sim.speed_plan.as_deref(),
                     super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
                     route,
                 ),
@@ -795,7 +814,7 @@ impl Race {
                         yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&handling, &ship.physics.body)),
                         plan: super::routes::plan_for(
                             &self.sim.routes,
-                            self.sim.speed_plan.as_ref(),
+                            self.sim.speed_plan.as_deref(),
                             super::speed_plan::hull_of(
                                 &self.sim.hull_plans,
                                 self.sim.ship_plan[slot],
@@ -882,7 +901,7 @@ impl Race {
                 &controls,
                 &handling,
                 &env,
-                &self.sim.collision,
+                &*self.sim.collision,
                 self.sim.dt,
             );
             let reset_contact = self.reset_zone_contact(slot, &env, position);
@@ -1034,8 +1053,15 @@ impl Race {
         // a `Vec` copy per frame for nothing.
         let finished_before: [bool; oag_gameplay::MAX_PLAYERS] =
             std::array::from_fn(|slot| self.sim.world.ships[slot].standing.finished());
+        let laps_before: [u32; MAX_SHIPS] =
+            std::array::from_fn(|slot| self.sim.world.ships[slot].standing.lap);
         if let Some(course) = &self.sim.course {
             advance_standings(&mut self.sim.world, course);
+        }
+        for (slot, &before) in laps_before.iter().enumerate() {
+            if self.sim.world.ships[slot].standing.lap > before {
+                self.credit_lap_points(slot);
+            }
         }
         // The tick a person crosses the line for the last time is the tick
         // their craft is handed to the driver, which has never run for them:
@@ -1151,7 +1177,7 @@ impl Race {
     /// The lap counter's ring, for a caller that wants to measure against it.
     #[must_use]
     pub fn course(&self) -> Option<&Course> {
-        self.sim.course.as_ref()
+        self.sim.course.as_deref()
     }
 
     /// The player's own race position, `1`-based.

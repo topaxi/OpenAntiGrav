@@ -1,7 +1,7 @@
 ---
 status: blocked-hardware
 titles: [all]
-updated: 2026-10-16
+updated: 2026-11-07
 summary: "Deck frame-rate drop on CUT to VERTICAL not reproduced; maintainer's Steam launch with --frame-log; server nightly asset"
 categories: [rendering, frontend]
 ---
@@ -866,7 +866,8 @@ what any of those games do.
    **Desktop done 2026-10-14:** 63 us and 1.7 MiB whole, of which the track half
    is 47 us and 0.74 MiB. A snapshot costs as much as a tick, so a per-tick
    snapshot doubles sim CPU and the split is worth taking only for a design that
-   does that; whole-struct clone stands until then. S24 open.
+   does that. **The split landed 2026-11-07 (ADR-0087 stage 1):** 1 to 6 us and
+   about 30 KiB, `docs/networking/README.md`. S24 open.
 4. **M4, what a correction looks like.** A scripted contact scene with the
    renderer-side smoothing, judged by eye.
    **Done 2026-10-14** (`Race::reconcile`, `oag-game --force-remote-correction`, method

@@ -1,56 +1,52 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [hd, 2048]
-size: S (65)
+size: S (60)
 difficulty: easy (60)
 updated: 2026-11-04
-summary: "HD and 2048 low-pass a voice behind the listener (14 kHz, 10 kHz, two binaries); `original` plays none of it; filter shape unread"
+summary: "HD rear low-pass wired under `original` (one-pole, per-tick smoothing chosen); 2048 flags unread; axis, rate, `auto` default open"
 ---
 
 # HD and 2048's rear low-pass under `original`
 
-2026-11-04, lane `omega-3d-audio-read`. Evidence, with the law and every value:
-[audio-3d.md](../../docs/ghidra/functions/ps4-omega-eu/audio-3d.md), "The rear low-pass". Confidence 80 on HD, 70 on 2048, decompile
-on two binaries that agree, no live run. **2048 is the weaker half:** one voice kind's filter setter is an empty stub and the other
-reaches an unread request (page, "Where the result goes"), so read `FUN_8134bde4`'s flags before wiring 2048, or ship HD alone.
+2026-11-04, lane `hd-rear-occlusion`. **HD is wired**; the law and every value are on
+[audio-3d.md](../../docs/ghidra/functions/ps4-omega-eu/audio-3d.md), "The rear low-pass" and "Wired on HD", which also records the
+measured effect on HD's real voices (a trim, not a thinned mix). Pulse, Pure and Omega stay bit-identical or off; 2048 is not wired.
 
-Our `original` is Pulse's pan on every title (`oag_audio::SpatialMode::Original`), so on HD and 2048 it is missing a
-behaviour the original has. The Pulse and Pure pan stays bit-identical; Omega stays out (`RearOcclusion` is dead there, its
-front/back is Wwise data).
+## What landed
 
-## What a wiring needs
-
-1. **Data, not a const.** Read `RearOcclusion` from the title's own `GlobalAudioConfig.xml`, the way `oag_tables` reads
-   its other XML: HD `<Stereo max_frequency="14000.0"/>` (ours is a stereo mix, so that child; `<Surround>` is 24,000,
-   which is off), 2048 `max_frequency="10000.0"`. `None` on Pulse, Pure and Omega through a `Title` field with provenance.
-   Check the 2048 DLC and HD extras' copies carry the same value before assuming one.
-2. **The law.** Ramp over azimuth 90..110 and 250..270 degrees (`|angle from forward| > 90`, forward inferred, see Open), `rear = r * max + (1 - r) *
-   23999`, smoothed `0.05 / 0.95` per update. `Placed.front` is `cos(angle)` already, so the listener's forward from
-   `spatial-audio-wire` is all the geometry it needs. Per-update smoothing is per original update, not per sample.
-3. **In the mixer.** A branch under `SpatialMode::Original` on a per-voice cutoff, with Pulse's path untouched (a test that
-   Pulse stays bit-identical, a test that drops the law and fails). Fix the `rear_cue` doc comment in `crates/audio/src/mixer.rs`,
-   whose "the original cannot tell front from back" is true of Pulse alone, and the same line in `spatial.rs`.
-4. **DistanceFilter is not needed yet, except Moa Therma:** near and far are both 23,999 on the other circuits, so the term is
-   open. Moa Therma alone has `near_cutoff="0.0" far_cutoff="999.0" low_pass="0"` (HD, the 2048 DLC, Omega), which reads as a
-   high-pass: skip the rear low-pass there until it is traced.
+- ~~Data, not a const~~: `Title::rear_occlusion` (HD `Stereo`, `None` elsewhere), the value from `GlobalAudioConfig.xml` through
+  `oag_tables::audio_config` and `hd_mix::Maps`; both on-disc copies (`DATA00`, `DATA01`) carry 14,000; no HD extras pack is under `data/dlc`, so none beyond the disc was checked.
+- ~~The law and the mixer branch~~: `Mixer::set_rear_occlusion`, `spatial::rear_occlusion_cutoff`; the Pulse path is the existing
+  `original_ignores_where_a_voice_is_along_the_forward_axis` and `without_the_law_original_stays_bit_identical_front_and_back`.
+- ~~Doc comments~~ on `rear_cue`, `Play::front`, `Listener::forward`, `SpatialMode::Original`.
+- ~~Moa Therma~~: `TrackEmitters::low_pass_off`, read off the circuit's `AudioConfig.xml` (`03_track` alone).
 
 ## Open
 
-- **The filter's order and shape.** HD's result goes to `FUN_003146e8`, sub-voice `+0x48..+0x54`; the consumer is unread
-  (recipe on the evidence page, about an hour). A one-pole until then is **chosen, not measured**.
-- **The axis.** That the angle's `+Z` is the camera's forward is inferred from the XML comment and the band. Recipe: the writer of
-  `*(0x008b4aa4) + 0x50..0x7c` on HD. If it were backward the law would flip.
-- **The rate.** 0.05/0.95 runs per emitter update, and updates run on a frame counter modulo the divisor behind TOC slot
-  `0x008b4af0`. Read its runtime value (1 in the file) to get a time constant on our tick.
-- **The DistanceFilter default.** `GlobalAudioConfig.xml` has none, so a track with no block uses `g_sound_system + 0xf8`, unread.
-- **`auto` and `rear_cue` on these titles.** With `original` carrying a real law, whether `auto`'s speaker default stays
-  `rear_cue` (2.5 kHz, far stronger than the original's) is the maintainer's call; audio clarity comes first
+- **2048.** Same law at 10,000 Hz, but one voice kind's filter setter is an empty stub and the other reaches `FUN_8134bde4`'s flags,
+  unread. Read the flags, then set `oag_2048::TITLE.rear_occlusion` to `Some(Sourced::measured(...))` and check its
+  `GlobalAudioConfig.xml` has a `Stereo` child: Omega's copy is self-closing with `max_frequency` on `<RearOcclusion>` itself, and
+  `audio_config::rear_occlusion_max_frequency` would then scan to the end of the file for `<Stereo `, so 2048's own spelling needs a look. Checked, applies, not wired.
+- **The filter's order and shape.** HD's result goes to `FUN_003146e8`, sub-voice `+0x48..+0x54`; the consumer is unread (about an
+  hour). The one-pole is **chosen, not measured** and cuts at most 2.8 dB (Nyquist), so how hard the original bites is unknown until this
+  is read; it also decides `auto`'s default below. Do this one first.
+- **The axis.** That the angle's `+Z` is the camera's forward is inferred, not traced (recipe: the writer of `*(0x008b4aa4) + 0x50..0x7c`
+  on HD). If it were backward the law would flip.
+- **The rate.** The `0.05/0.95` smoothing runs once per tick here (**chosen**); the original runs it per emitter update on a frame
+  counter modulo the divisor behind TOC slot `0x008b4af0`, 1 in the file, run-time value unread.
+- **The DistanceFilter default** for a circuit with no block (`g_sound_system + 0xf8`), and Moa Therma's high-pass reading, are
+  unread; the rear low-pass is simply off there.
+- **Mixed library.** `Audio::set_hd_mix` keeps the first source's `GlobalAudioConfig.xml` for the session, as the group volumes
+  always did; a session that read 2048's or Omega's file before racing HD would apply that file's value. Not reachable while
+  only HD sets a layout and HD's own disc is the source of its race, but it is a trap.
+- **`auto` and `rear_cue` on HD.** `auto`'s speaker default is still `rear_cue` (2.5 kHz, far stronger than the original's 14 kHz);
+  whether it moves to `original` on HD is the maintainer's call. Audio clarity comes first
   (`docs/ghidra/functions/psp-pulse-usa/audio-levels.md`).
-- **Omega's `original`** is Pulse's pan as a stand-in (its lineage is HD) until Wwise pan, the pass-by switches and the NPC engine's
-  Azimuth curve play. That belongs to the Wwise SFX thread, not this one.
+- **Omega's `original`** is Pulse's pan as a stand-in until Wwise pan, the pass-by switches and the NPC engine's Azimuth curve play;
+  that belongs to the Wwise SFX thread.
 
 ## Next Steps
 
-1. Read the consumer (an hour), or take the one-pole as chosen.
-2. One `oag-wire` lane, S: steps 1-3 above, a WAV pair front and behind per title for the lead, no listening from spawned
-   processes.
+1. 2048: read `FUN_8134bde4`'s flags (the evidence page's recipe) and wire its title field, or write down why not.
+2. Read the HD consumer (an hour) and replace the one-pole.

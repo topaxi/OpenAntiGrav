@@ -6,7 +6,7 @@
 // black.
 
 import package::alpha_test::{alpha_test_ref};
-import package::bindings::{anims, emissives, node_anims, scene, uniforms};
+import package::bindings::{anims, emissive_scale, emissive_tint, node_anims, scene, uniforms};
 import package::fog::{fogged};
 import package::glow::{stamp_discards, stamp_value, stamped_alpha};
 import package::quake::{quake_lifted};
@@ -111,12 +111,12 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // table is a vertex-stage binding and the coordinate is linear in `uv`.
     let chevron_entry = (in.slots >> 24u) & 127u;
     if (in.slots & 2147483648u) != 0u && chevron_entry != 0u
-        && emissives.scale[chevron_entry].z > 2.5 && emissives.scale[chevron_entry].z < 3.5 {
-        let row = u32(emissives.tint_offset[chevron_entry].w + 0.5);
+        && emissive_scale(chevron_entry).z > 2.5 && emissive_scale(chevron_entry).z < 3.5 {
+        let row = u32(emissive_tint(chevron_entry).w + 0.5);
         let offset = anims.transform[min(row, 63u)].z;
         out.lightmap_texcoord = vec4<f32>(
             in.lightmap_texcoord,
-            in.texcoord * emissives.scale[chevron_entry].x + vec2<f32>(offset),
+            in.texcoord * emissive_scale(chevron_entry).x + vec2<f32>(offset),
         );
     }
     // `uv * scale + offset`, the GE's own `TEXSCALE`/`TEXOFFSET` arithmetic -

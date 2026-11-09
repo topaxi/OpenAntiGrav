@@ -13,6 +13,7 @@ pub const PRE_RACE: PreRace = PreRace {
     // The directory holds one file; a reversed circuit flies the forward file's path
     // (Metropia matched `02_Track`'s to 0.02 units over its first 100 frames).
     grid_reversed: None,
+    by_mode: &[],
     // The original's render view, both circuits captured; not derivable from the file.
     fov_degrees: Sourced::measured(54.308_994),
     // The camera node waits `1.0` s of its own clock; the animation clock first read non-zero at
