@@ -120,7 +120,7 @@ impl EditorScreen {
             } else {
                 self.status.clone()
             },
-            hint: model.say("OAG_EDITOR_HINT_PLACE", "PRESS CROSS TO PLACE AN EVENT"),
+            hint: model.say("OAG_EDITOR_HINT_PLACE", "CROSS PLACES AN EVENT"),
             legend: [
                 model.say("OAG_EDITOR_LEGEND_CLEAR", "Clear slot"),
                 model.say("OAG_EDITOR_LEGEND_NAME", "Name"),
