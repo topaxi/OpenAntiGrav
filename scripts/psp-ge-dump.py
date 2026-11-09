@@ -27,7 +27,10 @@ second (151 of 157); a batch it misses is one the two sides split differently.
 Each record also carries the texture and target state in force at the PRIM, raw
 24-bit payloads: `fbptr` (the target being drawn into), `texsize0`, `texmode`
 (max mip level in bits 16..18), `texfilter` (min bits 0..2, mag bits 8..10),
-`texwrap` (bit 0 U clamp, bit 8 V clamp, 0 = repeat), `texscale_*`, `blendenable`,
+`texwrap` (bit 0 U clamp, bit 8 V clamp, 0 = repeat), `texscale_*`, `blendenable`, `col0` (the
+first vertex's RGBA where the vertices carry an 8888 colour, a blinking widget's alpha),
+`stenciltestenable`, `stenciltest`, `stencilop` and the colour write masks `pmsk1`/`pmsk2` (a draw that
+stamps the framebuffer's alpha, the bloom's glow mask, is a stencil replace with `pmsk2` clear),
 and the vertex UV range `uv_mn`/`uv_mx` (before TEXSCALE). A draw that samples
 a render target is one whose `tex` equals an `fbptr` other draws used.
 
@@ -165,6 +168,26 @@ def _read_uvs(vtype, buf, stride, count):
     ]
 
 
+def _first_colour(vtype, buf):
+    """The first vertex's RGBA when the vertices carry an 8888 colour, else None.
+
+    The colour sits after the weights and the texture coordinates, aligned to its own size
+    (the same walk as `_layout`). It is a draw's tint: a blinking widget's alpha is read here.
+    """
+    if (vtype >> 2) & 7 != 7:
+        return None
+    wgt = (vtype >> 9) & 3
+    wcount = ((vtype >> 14) & 7) + 1
+    size = {0: 0, 1: 1, 2: 2, 3: 4}
+    offset = size[wgt] * wcount if wgt else 0
+    tex = vtype & 3
+    if tex:
+        unit = {1: 1, 2: 2, 3: 4}[tex]
+        offset = (offset + unit - 1) // unit * unit + {1: 2, 2: 4, 3: 8}[tex]
+    offset = (offset + 3) // 4 * 4
+    return list(buf[offset : offset + 4]) if len(buf) >= offset + 4 else None
+
+
 def _read_pos(buf, at, fmt):
     if fmt == 1:
         return tuple(v / 128.0 for v in struct.unpack_from("<bbb", buf, at))
@@ -264,6 +287,7 @@ def census(path):
                                 "nv": count,
                                 "vt": vtype,
                                 "tex": state.get("tex", 0),
+                                "col0": _first_colour(vtype, vertices),
                                 # Texture and target state in force at the PRIM, raw
                                 # 24-bit command payloads (see TEX_STATE_OPS).
                                 **{k: state.get(k) for k in TEX_STATE_OPS.values()},

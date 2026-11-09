@@ -115,6 +115,7 @@ const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     half_unit_glyph_quads: false,
     bar_tip: None,
     boost_smear: None,
+    absorb_glow: None,
     ..*ART
 };
 
@@ -328,6 +329,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     lap_one_shift: None,
     bar_tip: None,
     boost_smear: None,
+    absorb_glow: None,
     // Inherited from HD: Omega's race HUD is HD's own files, whose roots are `<Screen name="HUD">`
     // (read off `data00.psarc`, both the default and the `2048_hud` sets). The consumer in the
     // PS4 executable is not located, and no shadPS4 capture of the sway has been made.

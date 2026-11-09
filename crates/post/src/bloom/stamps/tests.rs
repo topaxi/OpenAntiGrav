@@ -4,7 +4,7 @@ const SIZE: (u32, u32) = (512, 272);
 
 /// The target after `stamp_glow` of `stamps` over black: the red byte at `(x, y)` for each probe,
 /// or `None` with no adapter to run on.
-fn glow_at(stamps: &Stamps<'_>, probes: &[(u32, u32)]) -> Option<Vec<u8>> {
+fn glow_at(stamps: &[Stamp], probes: &[(u32, u32)]) -> Option<Vec<u8>> {
     let instance = wgpu::Instance::default();
     let adapter = oag_gpu::test_adapter::ordered(&instance)
         .into_iter()
@@ -92,13 +92,16 @@ fn glow_at(stamps: &Stamps<'_>, probes: &[(u32, u32)]) -> Option<Vec<u8>> {
     )
 }
 
-fn stamps(rects: &[[f32; 4]], value: u8) -> Stamps<'_> {
-    Stamps {
-        rects,
-        colour: [0.49, 0.94, 0.75],
-        opacity: 1.0,
-        value,
-    }
+fn stamps(rects: &[[f32; 4]], value: u8) -> Vec<Stamp> {
+    rects
+        .iter()
+        .map(|&rect| Stamp {
+            rect,
+            colour: [0.49, 0.94, 0.75],
+            opacity: 1.0,
+            value,
+        })
+        .collect()
 }
 
 /// A stamped rectangle glows inside and a little past its edge, and nowhere far from it; a mask of
@@ -121,4 +124,34 @@ fn a_stamp_glows_in_its_rectangle_and_scales_with_its_mask() {
     );
     assert_eq!(glow_at(&stamps(&rect, 0), &probes).unwrap(), [0; 4]);
     assert_eq!(glow_at(&stamps(&[], 255), &probes).unwrap(), [0; 4]);
+}
+
+/// Two rectangles in one call keep their own colour and mask byte: the red one glows in the red
+/// channel, the green one adds nothing there, and a weaker mask on the second rectangle does not
+/// dim the first.
+#[test]
+fn each_stamp_keeps_its_own_colour_and_mask() {
+    let both = [
+        Stamp {
+            rect: [0.1, 0.25, 0.3, 0.25],
+            colour: [1.0, 0.0, 0.0],
+            opacity: 1.0,
+            value: 255,
+        },
+        Stamp {
+            rect: [0.6, 0.25, 0.3, 0.25],
+            colour: [0.0, 1.0, 0.0],
+            opacity: 1.0,
+            value: 51,
+        },
+    ];
+    let probes = [(133, 100), (358, 100)];
+    let Some(read) = glow_at(&both, &probes) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    assert!(read[0] > 100, "the red stamp glows red: {read:?}");
+    assert_eq!(read[1], 0, "the green stamp adds no red: {read:?}");
+    let alone = glow_at(&both[..1], &probes).expect("the same adapter");
+    assert_eq!(read[0], alone[0], "the second stamp leaves the first alone");
 }

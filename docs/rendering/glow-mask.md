@@ -96,7 +96,10 @@ every fragment, transparent texels included (`LeachBeam_SubmitStrip`, REPLACE
 with the alpha test off). That last one is read statically, not measured out
 of EDRAM - see
 [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
-The PSP boost plume's batches are `0x1232`: transparent, no `0xc0`, so the
+The HUD stamps it too: the speed bar's fill under a boost
+([hud-boost-smear.md](../ghidra/functions/psp-pulse-usa/hud-boost-smear.md)) and the shield bar's fill for the whole of an absorb's
+second, `0xff` in both halves of the blink ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md), "The absorb flash at the draw
+call"). The PSP boost plume's batches are `0x1232`: transparent, no `0xc0`, so the
 plume **does not** write the mask.
 
 ## What this changes in the port

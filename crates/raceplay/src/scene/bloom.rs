@@ -80,7 +80,7 @@ impl Scene {
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
         rect: (f32, f32, f32, f32),
-        stamps: &oag_post::bloom::Stamps<'_>,
+        stamps: &[oag_post::bloom::Stamp],
     ) {
         if let Some(bloom) = &self.bloom {
             bloom.stamp_glow(

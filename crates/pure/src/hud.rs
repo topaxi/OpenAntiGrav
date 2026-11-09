@@ -231,6 +231,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     lap_one_shift: None,
     bar_tip: None,
     boost_smear: None,
+    absorb_glow: None,
     sway: None,
     // The disc authors no `Safe Area Setting` (`docs/formats/hd-hud.md`, "SCREEN SIZE on every
     // title"), so the shared slider stands in, drawn 1:1 until the player moves it.

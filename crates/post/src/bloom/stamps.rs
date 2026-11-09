@@ -7,6 +7,9 @@
 //! resolution, so the scene's chain cannot see it. This runs the same three passes over the
 //! rectangles alone, in a lane of its own, and adds the result onto the HUD's target.
 //!
+//! Each rectangle carries its own colour, opacity and mask byte, so a boost's speed bar and an
+//! absorb's shield bar share one pass.
+//!
 //! The scene's own glow under the bar is not added to the bar's: the mask there is the scene's
 //! baseline `4`, which the bright pass and the blurs truncate to nothing, and the stamp replaces
 //! it in the original. What is missed is the scene's colour showing through a bar whose copies
@@ -14,17 +17,17 @@
 
 use super::*;
 
-/// The most rectangles one stamp covers: the boost's ten copies.
-pub const MAX: usize = 10;
+/// The most rectangles one call stamps: ten copies each of the speed bar and the shield bar.
+pub const MAX: usize = 20;
 
-/// What to stamp: up to [`MAX`] overlapping rectangles of one colour and one mask byte.
-#[derive(Debug, Clone, Copy)]
-pub struct Stamps<'a> {
-    /// `x, y, width, height` of each, as fractions of the rectangle the frame was drawn into.
-    pub rects: &'a [[f32; 4]],
+/// One rectangle to stamp: where, in what colour and with which mask byte.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Stamp {
+    /// `x, y, width, height`, as fractions of the rectangle the frame was drawn into.
+    pub rect: [f32; 4],
     /// The colour the widget is drawn in, `rgb` in `0..=1`.
     pub colour: [f32; 3],
-    /// Each copy's alpha, `0..=1`: a pixel under `k` copies shows the colour at `1 - (1 - a)^k`.
+    /// This copy's alpha, `0..=1`: a pixel under `k` copies shows the colour at `1 - (1 - a)^k`.
     pub opacity: f32,
     /// The mask byte the stamp writes.
     pub value: u8,
@@ -33,7 +36,7 @@ pub struct Stamps<'a> {
 impl Bloom {
     /// Blurs the glow of `stamps` and adds it onto `target` over the rectangle at `origin` of
     /// size `viewport`: the bright pass, two blurs and the composite, for rectangles alone.
-    /// Nothing is drawn for no rectangle or a mask of zero.
+    /// Nothing is drawn for no rectangle or only masks of zero.
     #[allow(clippy::too_many_arguments)]
     pub fn stamp_glow(
         &self,
@@ -43,15 +46,26 @@ impl Bloom {
         target: &wgpu::TextureView,
         origin: (f32, f32),
         viewport: (u32, u32),
-        stamps: &Stamps<'_>,
+        stamps: &[Stamp],
     ) {
-        let count = stamps.rects.len().min(MAX);
-        if count == 0 || stamps.value == 0 {
+        let stamps = &stamps[..stamps.len().min(MAX)];
+        if stamps.iter().all(|stamp| stamp.value == 0) {
             return;
         }
         let lane = &self.stamp_lane;
         let mut rects = [[0.0; 4]; MAX];
-        rects[..count].copy_from_slice(&stamps.rects[..count]);
+        let mut colours = [[0.0; 4]; MAX];
+        let mut values = [[0.0; 4]; MAX];
+        for (at, stamp) in stamps.iter().enumerate() {
+            rects[at] = stamp.rect;
+            colours[at] = [
+                stamp.colour[0],
+                stamp.colour[1],
+                stamp.colour[2],
+                stamp.opacity,
+            ];
+            values[at][0] = f32::from(stamp.value);
+        }
         let wanted = Constants {
             texel: [1.0 / lane.extent.0 as f32, 1.0 / lane.extent.1 as f32],
             direction: [0.0, 0.0],
@@ -61,8 +75,9 @@ impl Bloom {
             uv_scale: [1.0, 1.0],
             uv_max: [1.0, 1.0],
             stamps: rects,
-            stamp_colour: [stamps.colour[0], stamps.colour[1], stamps.colour[2], 0.0],
-            stamp_meta: [count as f32, f32::from(stamps.value), stamps.opacity, 0.0],
+            stamp_colours: colours,
+            stamp_values: values,
+            stamp_meta: [stamps.len() as f32, 0.0, 0.0, 0.0],
         };
         if lane.written.get() != Some(wanted) {
             queue.write_buffer(&lane.constants_bright, 0, bytemuck::bytes_of(&wanted));

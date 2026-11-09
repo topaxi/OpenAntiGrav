@@ -218,6 +218,7 @@ fn a_centred_widgets_copies_step_away_from_its_authored_point() {
         &layout,
         &boosting(0.5),
         &[],
+        &[],
     );
     let pickup = copies_of(&frame, 66.0);
     assert_eq!(pickup.len(), 10);

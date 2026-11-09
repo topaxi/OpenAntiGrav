@@ -18,6 +18,9 @@ use super::*;
 /// read as a literal so the test needs no constant table - a light cyan.
 const AUTHORED_ARGB: u32 = 0xFF0D_DFDD;
 
+/// `ShieldBarBg`'s colour in `Arcade_HUD.xml`, `FEConst->HudColour3A`: a pale green-cyan at 38 %.
+const BACKDROP_ARGB: u32 = 0x60B5_D7C8;
+
 fn strings() -> oag_ui::language::StringTable {
     oag_ui::language::StringTable::default()
 }
@@ -32,6 +35,12 @@ fn layout() -> Layout {
                <Values x="0" y="0" width="100" height="10" U="0" V="0"
                        TxtrWidth="100" TxtrHeight="10"
                        Color="0x{AUTHORED_ARGB:08X}"
+                       Src="Data\HUD\Textures\PulseHUD.mip"/>
+             </Image>
+             <Image name="ShieldBarBg">
+               <Values x="0" y="40" width="100" height="10" U="0" V="40"
+                       TxtrWidth="100" TxtrHeight="10"
+                       Color="0x{BACKDROP_ARGB:08X}"
                        Src="Data\HUD\Textures\PulseHUD.mip"/>
              </Image>
              <Image name="SpeedBar">
@@ -102,6 +111,22 @@ fn drawn_colour(readout: &Readout, name: &str) -> Option<[f32; 4]> {
             Draw::Sprite { rect, color, .. } if rect[1] == layout_rect_y(&cx, name) => Some(color),
             _ => None,
         })
+}
+
+/// The rectangles `draw_list` puts on the named sprite this frame, in draw order.
+fn drawn_rects(readout: &Readout, name: &str) -> Vec<[f32; 4]> {
+    let layout = layout();
+    let strings = strings();
+    let sheet = sheet();
+    let cx = context(&layout, &strings, &sheet);
+    draw_list(&cx, readout)
+        .sprites
+        .into_iter()
+        .filter_map(|s| match s {
+            Draw::Sprite { rect, .. } if rect[1] == layout_rect_y(&cx, name) => Some(rect),
+            _ => None,
+        })
+        .collect()
 }
 
 /// `ShieldBar` and `SpeedBar` differ only in `y`, which is what
@@ -209,15 +234,140 @@ fn absorbing_blinks_even_when_healthy() {
     assert_eq!(bar[3], 0.0, "the off phase zeroes the bar's own alpha");
 }
 
-/// The `+0xf4` highlight: a flat white copy of the same crop, painted before
-/// (under) the bar's own colour, present only while absorbing.
-#[test]
-fn absorbing_draws_a_white_flash_under_the_bar() {
+/// The glow stamps `draw_list` records for `readout`, under `art`.
+fn glow_of(
+    readout: &Readout,
+    art: &'static oag_title::HudArt,
+) -> Vec<crate::boost_smear::GlowStamp> {
+    let layout = layout();
+    let strings = strings();
+    let sheet = sheet();
+    let cx = Context {
+        art,
+        ..context(&layout, &strings, &sheet)
+    };
+    draw_list(&cx, readout).glow
+}
+
+fn absorbing(phase: f32) -> Readout {
     let mut readout = readout_with(90.0, 100.0, false);
     readout.shield_absorbing = true;
+    readout.shield_blink_phase = phase;
+    readout
+}
+
+/// `Hud_UpdateEnergyBar`'s `+0xf4` is the stencil reference of the fill's draw: while absorbing,
+/// the fill writes `0xff` into the glow mask over its whole rectangle, in the blink's on half
+/// (the fill's own colour lit) and in its off half (the fill's alpha is zero, so the mask lights
+/// the backdrop's colour at the backdrop's alpha). `docs/ghidra/functions/psp-pulse-usa/shield.md`,
+/// "The absorb flash at the draw call".
+#[test]
+fn absorbing_stamps_the_glow_mask_under_the_fill_in_both_blink_phases() {
+    let art = oag_pulse::hud::ART;
+    let on = glow_of(&absorbing(0.0), art);
+    assert_eq!(on.len(), 1, "one stamp for the one fill: {on:?}");
+    assert_eq!(on[0].value, 0xff);
+    let fill = drawn_rects(&absorbing(0.0), "ShieldBar");
+    assert_eq!(
+        on[0].rect,
+        *fill.last().expect("the fill is drawn"),
+        "the fill's own rectangle"
+    );
+    assert_eq!(on[0].opacity, 1.0);
+    let cyan = argb_to_rgba(AUTHORED_ARGB);
+    assert_eq!(
+        on[0].colour,
+        [cyan[0], cyan[1], cyan[2]],
+        "the fill's colour, lit"
+    );
+
+    let off = glow_of(&absorbing(0.2), art);
+    assert_eq!(off.len(), 1, "the off half stamps too: {off:?}");
+    assert_eq!(off[0].value, 0xff);
+    assert_eq!(off[0].rect, on[0].rect);
+    let pale = argb_to_rgba(BACKDROP_ARGB);
+    assert_eq!(
+        off[0].colour,
+        [pale[0], pale[1], pale[2]],
+        "the backdrop's colour"
+    );
+    assert_eq!(
+        off[0].opacity,
+        f32::from(0x60u8) / 255.0,
+        "at the backdrop's alpha"
+    );
+}
+
+/// The original draws no white layer: the off half is the fill at alpha zero over its backdrop,
+/// and the bloom does the rest.
+#[test]
+fn absorbing_draws_no_white_layer_where_the_fill_stamps_the_mask() {
+    let readout = absorbing(0.2);
     let colours = drawn_colours(&readout, "ShieldBar");
+    assert_eq!(colours.len(), 1, "the fill alone: {colours:?}");
+    assert_eq!(colours[0][3], 0.0, "invisible in the off half");
+}
+
+/// A title with no [`oag_title::hud::AbsorbGlow`] keeps the flat white copy of the crop, painted
+/// before (under) the bar's own colour, and stamps nothing.
+#[test]
+fn a_title_without_the_law_keeps_the_white_flash() {
+    static ART: oag_title::HudArt = oag_title::HudArt {
+        absorb_glow: None,
+        ..*oag_pulse::hud::ART
+    };
+    let readout = absorbing(0.0);
+    assert!(glow_of(&readout, &ART).is_empty());
+    let layout = layout();
+    let strings = strings();
+    let sheet = sheet();
+    let cx = Context {
+        art: &ART,
+        ..context(&layout, &strings, &sheet)
+    };
+    let colours: Vec<[f32; 4]> = draw_list(&cx, &readout)
+        .sprites
+        .into_iter()
+        .filter_map(|s| match s {
+            Draw::Sprite { rect, color, .. } if rect[1] == layout_rect_y(&cx, "ShieldBar") => {
+                Some(color)
+            }
+            _ => None,
+        })
+        .collect();
     assert_eq!(colours.len(), 2, "the flash layer plus the bar itself");
     assert_eq!(colours[0], [1.0, 1.0, 1.0, 1.0], "the flash is flat white");
+}
+
+/// Outside the window the fill is drawn with the stencil off: no stamp.
+#[test]
+fn nothing_stamps_outside_the_absorb_window() {
+    let readout = readout_with(90.0, 100.0, false);
+    assert!(glow_of(&readout, oag_pulse::hud::ART).is_empty());
+}
+
+/// A speed pad's boost smears every widget, the shield fill's stamp with it: `n` shifted copies at
+/// `1 / n` of the alpha, each carrying the mask byte whole.
+#[test]
+fn a_boost_during_an_absorb_smears_the_shield_stamp_with_its_widget() {
+    let mut readout = absorbing(0.0);
+    readout.boost_phase = 0.45;
+    let glow = glow_of(&readout, oag_pulse::hud::ART);
+    let copies = crate::boost_smear::copies(oag_pulse::hud::ART, &readout);
+    assert!(copies >= 2, "a boost is running: {copies}");
+    // The speed bar's fill stamps at `copies / peak` of the byte; the shield fill's is whole.
+    let shield: Vec<_> = glow.iter().filter(|stamp| stamp.value == 0xff).collect();
+    let speed = glow.len() - shield.len();
+    assert_eq!(shield.len(), copies as usize, "{glow:?}");
+    assert_eq!(
+        speed, copies as usize,
+        "the speed bar's own copies are still there"
+    );
+    assert!(
+        shield
+            .iter()
+            .all(|stamp| (stamp.opacity - 1.0 / copies as f32).abs() < 1.0 / 255.0 + 1e-6)
+    );
 }
 
 /// Outside the absorb window, no second sprite - every test above this one

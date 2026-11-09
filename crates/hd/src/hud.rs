@@ -122,6 +122,7 @@ const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     half_unit_glyph_quads: false,
     bar_tip: None,
     boost_smear: None,
+    absorb_glow: None,
     ..*ART
 };
 
@@ -392,6 +393,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     lap_one_shift: None,
     bar_tip: None,
     boost_smear: None,
+    absorb_glow: None,
     // Measured on RPCS3 under player input, `docs/ghidra/functions/ps3-hdfury-eu/ship-lean.md`,
     // "The HUD sway": `Hud_Update` slides the `"HUD"` and `"InGame"` screens by
     // `-15 * ship+0x6a58`, and a held stick moved every widget of the frame alike. The y term
