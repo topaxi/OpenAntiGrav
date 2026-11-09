@@ -1,11 +1,11 @@
 //! The title's LOD bias on the material textures of the models a circuit's own
-//! geometry does not build: the craft hulls, the speedup and weapon pads, and the
-//! mine and bomb bodies. `geometry::track_model` sets it on the track and what the
+//! geometry does not build: the craft hulls and the mine and bomb bodies. `geometry::track_model` sets it on the track and what the
 //! track draws behind its glass; HD's original reads the same filter word on these
 //! (`docs/rendering/hd-track-tone.md`, "The LOD bias on hulls, pads and weapons").
 //!
-//! Left at 0: the sky, the shadow hulls, every shield, absorb, leach, flare and
-//! wreck model, and the other weapon models, none of which that census read.
+//! Left at 0: the speedup and weapon pads (no stored frame shows one), the sky, the
+//! shadow hulls, every shield, absorb, leach, flare and wreck model, and the other
+//! weapon models, none of which that census read.
 
 use super::Loaded;
 use oag_mesh::mesh::Model;
@@ -18,14 +18,9 @@ pub(super) fn finish(loaded: &mut Loaded, bias: f32) {
         return;
     }
     let hulls = loaded.liveries.iter_mut().map(|livery| &mut livery.hull);
-    let others = [
-        &mut loaded.pad_model,
-        &mut loaded.weapon_pad_model,
-        &mut loaded.mine_model,
-        &mut loaded.bomb_model,
-    ]
-    .into_iter()
-    .flatten();
+    let others = [&mut loaded.mine_model, &mut loaded.bomb_model]
+        .into_iter()
+        .flatten();
     apply(hulls.chain(others), bias);
 }
 

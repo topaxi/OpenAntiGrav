@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-10-27
-summary: "HD fidelity queue: bitangent sign wired 2026-10-27 (Omega read, 2048 open), Bomb, weapon taps, Amphiseum scene, scenery clock, exposure"
+updated: 2026-11-09
+summary: "HD fidelity queue: bitangent sign and hull/mine/bomb LOD bias wired (pads open), Bomb, weapon taps, Amphiseum scene, exposure"
 difficulty: medium (35)
 ---
 
@@ -113,8 +113,8 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
   of it: the 0.5-level gap against the RPCS3 fit (-0.75 matched, the filter word says -1.5; RPCS3's LOD computation or our
   `textureSampleBias` with derivative scaling), the warm light pool on the Vineta K kerb, and the Tech de Ra glass grid (missing content,
   not blur). Open: a bias on the glass sheen's grid tap alone. Anisotropy: the original asks for none, the default is 16x.
-  **2026-11-09 (`hd-material-lod-bias-reach`): the word is also on the hull, pad, mine and bomb units and now wired there**
-  (`docs/rendering/hd-track-tone.md`, "The LOD bias on hulls, pads and weapons"). Open: the rocket, cannon, plasma, leach ball, wreck and
+  **2026-11-09 (`hd-material-lod-bias-reach`): the word is also on the hull, mine and bomb units and now wired there; the pads read it by inference only**
+  (`docs/rendering/hd-track-tone.md`, "The LOD bias on hulls, pads and weapons"). Open: the pads (a frame with one on screen), the rocket, cannon, plasma, leach ball, wreck and
   the shield/absorb overlays were not read; Omega's and 2048's sampler-state word (`+0x20`) is the next step for their rule.
 - **Glass road mid and far brightness** (Tech de Ra, Talon's): the original's pixel implies the facing
   ramp read at `u` about 0.36-0.5 where ours reads 0.10-0.20. Next: dump draw 354's vertex constant

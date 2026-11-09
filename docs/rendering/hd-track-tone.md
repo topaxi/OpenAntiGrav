@@ -620,7 +620,7 @@ apply; the maintainer's impression there is the simpler textures.
 `Origin::Measured`). **The request is read off the original (the filter word); choosing it over the -0.75 fit to RPCS3 is the maintainer's
 decision**, made after comparing full frames at -0.75 and -1.5 against the original; it is not a fitted value. It reaches only circuit
 materials: `material_lod_levels()` is read once, in `oag_raceplay::load::geometry::track_model`, and set on the track and behind-glass
-models (`Model::material_lod_bias`), so the HUD, shadow and sky samplers never see it. Nothing else gates it (no setting). Hulls, pads, mine and bomb followed on 2026-11-09, see "The LOD bias on hulls, pads and weapons" below.
+models (`Model::material_lod_bias`), so the HUD, shadow and sky samplers never see it. Nothing else gates it (no setting). Hulls, mine and bomb followed on 2026-11-09, see "The LOD bias on hulls, pads and weapons" below.
 
 Re-render of the 13 cold race pairs (`compare-rerender-ours --only hd/`, into a scratch copy), band metric from `scripts/texture-sharpness.py`:
 median over pairs of the per-pair ratio ours/original, **fine near 1.11, fine far 1.16, mid near 0.97, mid far 1.02** (before: 0.81 near, 0.98
@@ -696,7 +696,7 @@ HD-style resolve measured).
 
 **Claim**: the `0x02063e80` filter word (trilinear, LOD bias -1.5) is read on the track's own units only; hulls, pads and weapons
 ask for something else, so they stay at bias 0. **False for hulls, mine and bomb bodies (measured) and for the pads
-(inferred); the bias is now wired on them.**
+(inferred, not wired); the bias is now wired on the hulls, mine and bomb.**
 
 **What would have falsified it**: a hull, pad or weapon draw whose albedo or normal unit read `0x02062000` (bias 0) or
 `0x02022000` (no mip). None does, on any of 10 stored frames with a craft on screen.
@@ -742,13 +742,18 @@ unit 0 is the 1024x1024 livery. A program is shared by many materials, so a matc
   tied to the material by anything but its program and its place in the frame); scenery props **85**; wreck **unknown**.
 
 **Wired** (`oag_raceplay::load::lod_bias`, called from `load` through `Looks::material_lod_levels()`): the bias goes onto
-`Loaded::liveries[*].hull`, `pad_model`, `weapon_pad_model`, `mine_model` and `bomb_model`. A title whose rule is unread
-(Pulse, Pure, Omega, 2048) passes 0 and changes nothing. Left at 0 because this census did not read them: the sky, shadow
+`Loaded::liveries[*].hull`, `mine_model` and `bomb_model`. **The pads are not wired**: the tally above says every material
+texture bind reads the word, but no stored frame shows a pad on screen and the program match is shared, so the item stays at
+confidence 60 and below the bar for an implementation; a frame with a pad in it closes it. A title whose rule is unread
+(Pulse, Pure, Omega, 2048) passes 0 and changes nothing. Left at 0 because this census did not read them: the pads, the sky, shadow
 hulls, the shield, absorb, leach, flare, boost and wreck models (several are `oag_fx::hull_overlay`'s), and the rocket, cannon,
 plasma and leach-ball models. The shader needed nothing: the hull's albedo, normal and pad reads already go through
 `material_sample` in `shade.wesl`, which is why setting the field is enough.
 
-**Acceptance** (hull box on `hd/sol-2`, 450x305 at (740, 595) of the 1920x1080 pair; our side re-rendered on a copy,
+**Acceptance: none was reachable, and the box below is a no-regression check.** The Sol 2 hull is near and magnified, so its
+mip level is already about 0 and a -1.5 bias is clamped; the box could not move by construction (and its fine ratio went away
+from the original, 1.035 to 1.044, by noise). The bias shows on minified surfaces (a distant opponent), and the only pair with
+one, `hd-race/talons-pack`, is not pose-aligned (its two sides fly different lines), so no far-hull box was measured. The no-regression box is the hull on `hd/sol-2` (450x305 at (740, 595) of the 1920x1080 pair; our side re-rendered on a copy,
 `compare-rerender-ours`'s `rerender`, before and after the wire; `scripts/texture-sharpness.py`'s two bands on that box
 alone, since the script skips the craft):
 
@@ -757,21 +762,18 @@ alone, since the script skips the craft):
 | bias 0 | 1.035 | 1.054 | 6.46 | 0.0616 |
 | bias -1.5 | 1.044 | 1.056 | 6.39 | 0.0617 |
 
-The whole-frame mean grey moved 4.78 to 4.78. **The hull is a small, magnified 1024 texture, so the bias reads one level
-finer on a few pixels: the hull box moves by 0.01 in the fine band and 0.07 grey, which is at the noise.** It is wired
-because the original's request is measured, not because the picture needs it, and the hull was already at 1.03 of the
-original's detail. On the pack pair (`hd-race/talons-pack`) the same wire moved the whole frame by 0.01 grey; its hull box
-(player, 260x256) fine ratio 0.675 to 0.744 reads the near hull against an original with the autopilot's lightning over it
-and is not an acceptance number.
+The whole-frame mean grey moved 4.78 to 4.78 and the box by 0.07 grey: no regression. It is wired because the original's
+request is measured, not because this picture needs it. On the pack pair the wire moved the whole frame by 0.01 grey; its
+player hull box (260x256) fine ratio 0.675 to 0.744 reads the near hull against an original with the autopilot's lightning
+over it and is not a number to cite.
 
-**Omega and 2048.** Not checked in this lane, and not closed. Omega's `.rcsmaterial` sampler entries carry a state word
-(`+0x20`, mostly `0x522800`, [omega-status.md](../formats/omega-status.md), "The material uniform and sampler table") whose
-meaning is unread and has no HD counterpart to calibrate against; the GCN sampler descriptor is built at runtime by the
-`eboot.bin` from it (a LOD bias would be the low 14 bits of descriptor word 2, signed 8.8 fixed point, so -1.5 is
-`0x3e80`, which is **from memory of the GCN layout and unverified**). Reading it needs the sampler-state word decoded and a
-search of `eboot.bin` for the descriptor builder; no Ghidra instance was up. 2048's Vita sampler words are unread too.
-Both stay `Rule::UNREAD`. Status: **checked, applies, not wired** (the files carry a state word per sampler; its LOD field
-is the open step).
+**Omega and 2048: not checkable here, with a reason.** Omega's `.rcsmaterial` sampler entries carry a state word (`+0x20`,
+mostly `0x522800`, [omega-status.md](../formats/omega-status.md), "The material uniform and sampler table") whose meaning is
+unread, and HD's sampler record is `(name hash, texture unit)` only ([rcsmaterial.md](../formats/rcsmaterial.md)), so the word
+has no HD counterpart to calibrate it against. The sampler descriptor itself is built at runtime in `eboot.bin`; locating that
+builder is reverse engineering beyond this lane (headless Ghidra would do it). 2048's Vita sampler words are unread for the same
+reason. Both stay `Rule::UNREAD`. Open next step: decode `+0x20` (a census of its values per material class, hulls against
+track) and find the descriptor builder.
 
 ## Anulpha's missing start-grid glow is the bloom chain's strength, not a material (2026-10-27, `hd-bloom-deficit`)
 
