@@ -1042,6 +1042,22 @@ Race length is the leading opponent's completed laps when the race ends; a race 
 | Skilled | 1 (0-2) | 90 s | 7.5 (2-23); seed 5 never reached 200 | 350 s |
 | Elite | 1 (0-1) | 71 s | 6 (4-13) | 289 s |
 
+Those rows were measured with every craft on the medium shield slot. Novice now starts on its
+`easyshield` slot ([handling-stats.md](../formats/handling-stats.md), "Which difficulty picks the
+shield slot"), which moves the pace; Skilled and Elite read the plain shield as before. The same
+twelve seeds, one binary (`Options::skill_level` `1` for the medium slot, unset for the
+difficulty's own), the leading opponent's completed laps when the race ends:
+
+| Tier | Medium slot: laps, median (range) | Medium slot: time, median | Difficulty's slot: laps, median (range) | Difficulty's slot: time, median |
+| --- | --- | --- | --- | --- |
+| Novice | 10 (2-19); seed 9 still running at 1,000 s | 517 s | 8 (2-17), every seed reaches 200 | 433 s |
+| Elite | 6 (4-13) | 289 s | 6 (4-13), the same slot | 289 s |
+
+The original's nine laps (n = 1) sit between the two medians. Novice's sorted laps on the
+difficulty's slot: 2, 3, 6, 7, 7, 7, 9, 10, 12, 12, 15, 17. Seed 1 alone read 11 laps on the medium
+slot and 7 on the difficulty's: a single seed moved by the shield, which is why the pin takes the
+median over all twelve.
+
 Opponents' points by award kind, pooled. Per completed lap, then per craft-minute:
 
 | Run | Damage | Kill | Death | Lap | All |
@@ -1069,15 +1085,22 @@ the fire odds by 0.2 moved neither the hold time nor the race length; why is unv
 
 - Our opponents lap Vineta K in about 48 s at Novice. The original's took 80 to 100 s in these
   runs.
-- Ours reads every HD craft's medium shield slot (`DEFAULT_SKILL_LEVEL`, `shield="105"` for
-  Qirex). The original's Novice field starts on `easyshield` (`145`; 135 to 145 live).
 - The spread is wide: seeds of one tier range from 2 to 19 laps, because one craft's run of kills
   decides a race.
 
 Reproduce: the `OAG_SWEEP` test `hd_eliminator_hud_ground_truth::sweep_score_changes` writes one
 race's CSV (`OAG_SWEEP_OUT`, `OAG_SWEEP_SEED`, `OAG_SWEEP_DIFFICULTY`). `scripts/hd-eliminator-award-rates.py`
-pools the award table off ours or the original's CSVs. The pin is
-`hd_eliminator_hud_ground_truth::a_score_eliminator_reaches_its_target_at_about_the_originals_pace`.
+pools the award table off ours or the original's CSVs. `sweep_race_length` (`OAG_SWEEP`,
+`OAG_SWEEP_DIFFICULTY`, `OAG_SWEEP_RUNG`, `OAG_SWEEP_SEEDS`, `OAG_SWEEP_OUT`) writes one line per
+seed for the length table.
+
+The pins take the median over the twelve seeds, not one seed's race. Novice
+(`hd_eliminator_hud_ground_truth::a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace`):
+every seed reaches 200 and the median is 6 to 12 laps, a third either way of the original's 9
+(measured 8). Elite
+(`an_elite_score_eliminator_takes_more_than_a_few_laps`): every seed reaches 200 and the median is
+at least 4 (measured 6; 1 before the hold). Between seeds the same tier spans 2 to 17 laps, so a
+single seed's bound fell out when the shield moved one seed from 11 laps to 7.
 
 ### Firing on the original's law (2026-10-03)
 
