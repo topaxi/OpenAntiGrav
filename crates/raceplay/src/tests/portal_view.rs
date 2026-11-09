@@ -457,6 +457,18 @@ fn a_portal_view_to_a_forks_route_is_framed_from_the_route() {
         centre.distance(route_point)
     );
 
+    // It faces the way the route runs, not the way the ring does there.
+    let frame = frame.unwrap();
+    let ahead = course
+        .route_point(0, course.advance(exit.to, 30.0))
+        .expect("the route runs on");
+    let along = (ahead - route_point).normalize();
+    assert!(
+        frame.z_axis.truncate().dot(along) > 0.9,
+        "the exit looks down the route: {}",
+        frame.z_axis.truncate().dot(along)
+    );
+
     let projection = race.projection(1.0, 4000.0, Fov::AUTHORED);
     let shot = race.portal_shot(&request, projection).expect("in the view");
     let eye = shot.view.inverse().w_axis.truncate();
