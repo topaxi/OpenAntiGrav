@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-09
-summary: "Absorb differences measured on Pulse, Pure, HD: Pulse bar glow, Pure hull overlay and crackle burst, HD shell tint and tail. 2048, Omega unpaired"
+summary: "Pure overlay and HD shell /2 landed. Open: Pure burst softness and rings, HD shell tint and burst /2, Pulse bar glow"
 ---
 
 # The weapon-absorb effect: built on every title, what a player still sees differently
@@ -16,49 +16,40 @@ thread cited are gone.
 
 ## Open
 
-A wire lane can take these in order, per title. Each has its number in the page above.
+Re-paired on a second machine on 2026-11-09 (`absorb-fx-wire`); numbers and commands are in
+[`weapon-absorb-pairs.md`](../../docs/rendering/weapon-absorb-pairs.md), "Fixes and re-pairs on a second machine".
 
-- **Pulse.** The hull overlay, the burst and the ground ring match (peak +41 against +43, within the original's own
-  run spread). Left:
-  1. The energy bar. During the window the original's fill alternates bright cyan (luma 207) and white (239, both with
-     a bloom halo), 7 to 8 frames each; ours alternates normal (163) and flat white (232), no halo. Period and window
-     are right. The bar needs to enter the glow mask for the whole window, and its off phase is the bloomed bar.
-     Mechanism (`+0xf4 = 0xff` feeds the glow mask) is confidence 60, read from frames; confirm at the draw call first.
-  2. The first 0.3 s are one to two frames late and 20 % dim on the hull.
-  - Closed here: "short crackles against long streaks" is not reproduced at the chase view.
-- **Pure.** Nothing of the hull overlay is drawn: `oag_title::Effects` for Pure is the all-unread table.
-  1. The hull flash: pale pink-white over the whole hull at its 0.5 s peak (+17 against ours +7, tint -6 against
-     0). The disc ships `absorb_surface.mip`; the Pure draw call and its gate are unread (static first: the absorb path
-     is `Ship_UpdateWeapons` `0x0892935c` -> `FUN_08925e20`, the held id is at weapon record `+0x1d8`).
-  2. The burst: ours draws 30 to 60 px star spikes, the original short crackles and a bright bloom at nose and wings.
-  3. A purple ground ring at 0.33 s to 0.5 s.
-  4. The HUD flash: `FUN_08925f4c` writes `*(_DAT_0005364c + 0x98) = 0xff` on an absorb, Pulse's `+0xf4`
-     counterpart; what it draws is unread, the original's frames show orange bars at the top centre.
-- **HD.** The shell and its timing are right (live fade matches, both sides decay alike after 1.0 s); its strength and
-  colour are not. The controls agree in exposure (mean luma 91.9 on both), so this is the shell, not the pair.
-  1. The shell is about 2.7 times too bright and too white: shell alone +17.7 luma on ours against +6.5 on the original
-     (RGB gain `(+16, +18, +24)` against `(+4, +6, +14)`); the original keeps a blue hull with the livery showing.
-     Check `ShieldColour` and the shell's blend first.
-  2. The burst is about half as strong (about +7 against +15 once the shell is taken out): the wingtip balls are larger
-     and brighter in the original and light the floor from 0.3 s to 0.75 s.
+- **Landed.**
+  - Pure draws the hull overlay (`FUN_0886e954`, Pulse's law; craft-box luma at 0.5 s: original +12.9 and +14.5, ours +6.6 before and +14.3 after).
+  - HD's shell is halved by the program's `/2` and reads the craft's scene block (shell alone at 1.0 s: original +5.8, ours +13.1 before and +5.8 after).
+- **Pure.**
+  1. The burst's shape: the original's streaks are wide, soft, dim purple; ours are thin hard white-cored lines (same total light).
+     The draw is in `crates/fx/src/psys`, held by another lane.
+  2. The ground-ring halos at the wingtips: Pure's `WO_WEAPON_ABSORB.POB` has one streak emitter and no `rings` emitter, so the
+     source of the rings is unread (not the POB; candidates: another effect `FUN_08925e20`'s `ShipCollisionFx_Trigger` kind 1 starts, or the
+     bloom of the streaks).
+  3. The HUD flash: `FUN_08925f4c` writes `*(_DAT_0005364c + 0x98) = 0xff`; what it draws is unread.
+- **HD.** The state's player is the `Feisar_c1` concept hull; ours needs `--team feisar_c1 --variant concept1` to be the same ship.
+  1. The shell's colour: pale lavender-white against the original's saturated blue (blue minus red at 1.0 s: original +10.8, ours +6.7).
+     Check the texture tap's transfer and the scroll against a draw capture of the shell.
+  2. The burst is about twice too strong (+11.8 to +15.9 against +6.9 to +8.3 at 0.3 to 0.75 s with the shell right): `renderer.md`
+     item 4, particles end on `/2` and `oag-fx` does not apply it. A `psys` change, held by `hd-trail-hit-wire`.
   3. The `DAMAGE` and `Absorb` labels beside the shield hex (absorb-only not isolated).
-- **2048 and Omega: unpaired.** 2048 has no recovered held-slot or absorb address (HD's are `0x000d9398` and
-  `ship+0x5edc`); Omega has none either, and its Racebox weapons row is not walked. Both take HD's burst (ported); neither draws the shell (their effects tables are the unread one) and whether
-  their archives ship an `AbsorbEffect` model was not censused; the HD items above are not checkable until a live frame
-  exists. Details and what would unblock each are in the page's last section.
-- **Not investigated:** AI absorbs (an AI craft's hull lights on Pulse; the path is the same call), the PS2 port (VIF
-  hull batches have no GE input coordinates to project), the Pulse overlay residuals (`LessEqual` for `EQUAL`, the
-  per-mesh gate, the airbrake projection), the LeachBeam overlay (`leachbeam_surface.mip`, fade source read statically,
-  not wired), HD's cockpit shell (`vr_absorbinternal_cockpit`, placed at `(0, 0, 7)`), and the sound gate (Pulse plays
-  `ABSORB` only when the hull has collision-fx nodes, the port always).
+- **Pulse.** The energy bar: the original alternates bright cyan (luma 207) and white (239), both bloomed, 7 to 8 frames each; ours alternates
+  normal (163) and flat white (232), no halo. Not re-measured (the Pulse Single Race state is not on this machine). Confirm at the draw call first (a GE
+  dump of the bar's draw: does it stamp the glow mask for the whole window), then wire; the mechanism (`+0xf4 = 0xff`) is confidence 60.
+  The first 0.3 s of the hull are one to two frames late and 20 % dim.
+- **2048 and Omega: unpaired.** The shell fix is checked, applies, not wired (neither draws a shell; whether their archives ship an
+  `AbsorbEffect` model is not censused). 2048 has no recovered held-slot or absorb address (HD's are `0x000d9398` and
+  `ship+0x5edc`); Omega has none either and its Racebox weapons row is not walked.
+- **Not investigated:** AI absorbs, the PS2 port (VIF hull batches have no GE input coordinates to project), the Pulse overlay residuals
+  (`LessEqual` for `EQUAL`, the per-mesh gate, the airbrake projection), the LeachBeam overlay (`leachbeam_surface.mip`), HD's cockpit shell
+  (`vr_absorbinternal_cockpit`), and the sound gate (Pulse plays `ABSORB` only when the hull has collision-fx nodes, the port always).
 
 ## Next Steps
 
-1. Pulse bar: bloom the energy bar through the window and draw its off phase bright; compare the bar's rows 248 to 258
-   against 207 and 239.
-2. Pure hull overlay: read the draw of `absorb_surface.mip` on Pure (the Pulse overlay's path is
-   `HullOverlay_Submit`), fill `hull_overlay` in Pure's `Effects`, then re-pair at 0.5 s (target +17).
-3. HD shell: cut its strength to the original's (about 0.4x at full fade) and move its tint to blue-lavender; re-pair, then
-   the burst ball size.
-4. 2048: read `Ship_PlayAbsorbFeedback` and the pickup slot in the 2048 eboot, then the HD recipe with a `/proc` write.
-   Omega: walk the Racebox weapons row and read the same two on the eboot.
+1. Pulse bar: GE-dump the bar's draw inside the window, then bloom it through the window and draw its off phase bright (rows 248 to 258 against 207 and 239).
+2. HD shell tint: capture the shell's own draw (constants, texture, blend) and compare the texture tap; then re-pair at 0.5 s and 1.0 s.
+3. HD and Pure burst: with `psys`'s holder, apply the `/2` to HD's effects and look at the streak softness against Pure's frames.
+4. Pure rings: find what draws them (`ShipCollisionFx_Trigger` kind 1's other effects, or the bloom).
+5. 2048: read `Ship_PlayAbsorbFeedback` and the pickup slot in the 2048 eboot, then the HD recipe with a `/proc` write. Omega: walk the Racebox weapons row and read the same two on the eboot.

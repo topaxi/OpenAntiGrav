@@ -110,7 +110,7 @@ Tint (blue minus red) at 0.5 s: original -5.8 and -6.1 (pink), ours -0.4.
 
 Ranked:
 
-1. **Ours draws no hull flash on Pure.** The original's hull goes pale pink-white at 0.5 s over the whole hull and
+1. **Ours drew no hull flash on Pure (fixed: see "Fixes and re-pairs on a second machine").** The original's hull goes pale pink-white at 0.5 s over the whole hull and
    nose, ours only gets the light of its own streaks: peak +7 against +17, tint flat against pink. Pure's disc ships
    `absorb_surface.mip` (see [`weapons.md`](../ghidra/functions/psp-pure-usa/weapons.md)), the texture Pulse's overlay
    and HD's shell use; ours does not draw it on Pure (Pure's `oag_title::Effects` is the all-`UNREAD` table, `hull_overlay` included). Frame: the 0.5 s pair of the reference set.
@@ -152,7 +152,7 @@ original and about +7 on ours.
 
 Ranked:
 
-1. **The shell is about 2.7 times too bright and too white.** The same craft box, shell alone: +6.5 against +17.7 luma,
+1. **The shell is about 2.7 times too bright and too white (brightness fixed, tint open: see "Fixes and re-pairs on a second machine").** The same craft box, shell alone: +6.5 against +17.7 luma,
    blue-minus-red +10 against +7, red gain 4 against 16. A player sees the hull bleach to white-cyan where the original
    keeps a blue hull with the gold livery showing (frames at 0.5 s and 1.0 s). The thread's "ours reads bluer than the
    original's white-lavender" is the other way round on this pair.
@@ -169,6 +169,99 @@ Ranked:
    `--give` artefact). Whether those labels are absorb-only was not isolated: the control shows a faint `DAMAGE` too.
 
 The cockpit shell (`vr_absorbinternal_cockpit`) is not exercised: the camera is the chase view.
+
+## Fixes and re-pairs on a second machine (`absorb-fx-wire`, 2026-11-09)
+
+The originals were captured again with the scripts named under "Reproducing"; every number below is the box mean luma of the
+absorb frame minus the control frame, Rec. 709, on the page's boxes. A whole-frame delta under 1 grey is noise. The numbers
+above (the first capture) and these differ in what the original did, not only in ours: see each item.
+
+### Pure: the hull overlay is drawn (landed)
+
+`FUN_0886e954` is Pure's `HullOverlay_Submit` and `FUN_08924998` its `HullOverlay_AbsorbFade`: texture `absorb_surface.mip`, state
+`0x282`, `10.0` repeats, `-1.5 * pulse` scroll, the pulse folded at `1.0`, and `(clock + 0x960 - stamp + 0x9ac) * 2` inside one
+second, read at instruction level and the fade live (`docs/ghidra/functions/psp-pure-usa/hull-overlay.md`, confidence 85 for
+the draw, 90 for the fade). `oag_pure::effects::LOOKS.hull_overlay` is on; the shared `oag_fx::hull_overlay` does the rest.
+Test: `absorb_ground_truth.rs`, `pure_lights_the_hull_for_one_second_after_a_pickup_absorb` (fails with the rule off).
+
+Capture: Pure USA on PPSSPP 1.20.4 (software renderer), the Time Trial state `time-trial-vineta-vector-feisar-restart.ppst`
+(Vineta K, Vector, Feisar, craft at rest; the Single Race state of the first capture is not on this machine, and the
+absorb needs only the weapon record), held id 1 at record `+0x1d8`, circle held until it reads 0, 30 updates per second. Two
+absorbs and one control; ours with `--give mine`, circle at tick 780, shot at `780 + 2 * frame - 2`. Craft box `(150,150)-(330,272)`.
+
+| Age | Original (run 1 / run 2) | Ours before | Ours after |
+| --- | --- | --- | --- |
+| 0.17 s | +0.4 / +0.9 | +1.0 | +1.8 |
+| 0.33 s | +8.7 / +11.4 | +3.3 | +10.2 |
+| 0.50 s | **+12.9 / +14.5** | **+6.6** | **+14.3** |
+| 0.73 s | +5.0 / +12.2 | +4.7 | +10.2 |
+| 1.00 s | -1.6 / +1.9 | 0.0 | +0.1 |
+
+Blue minus red at 0.5 s: original -4.2 and -3.9, ours before -0.3, after -3.1. Read as a player: the hull goes pale pink-white over
+its whole surface in both, with the same decay. The first page's +17 at 0.5 s was a Single Race state (rivals, a different pose);
+this capture's peak is +13 to +15.
+
+**Still open on Pure (the burst and the ring, blocked, not fixed).** Pure's `WO_WEAPON_ABSORB.POB` is not Pulse's: one emitter (the
+streak one, class 6, life 7 ticks, colour mode 0 over a purple `(109, 22, 167)` to magenta `(181, 14, 147)` table) and **no `rings`
+emitter**. The ground-ring halos the original draws round the wingtips are therefore not in that file; their source is unread.
+The burst's total light matches (ground boxes either side of the craft at 0.5 s: original +8.4 and +8.3, ours +7.3 and +13.8, both
+carrying the same tint), so what differs is its shape: the original's streaks are wide, soft and dim purple; ours are 1 to 2 px
+hard lines with a white core. That is the streak draw in `crates/fx/src/psys`, which another lane holds, and it was not touched.
+
+### HD: the shell is halved and reads the craft's block (landed); the tint is open
+
+The player of `hd-racebox-talons-venom-weapons-grid` is **`Feisar_c1`** (read from the craft array: `*(*(craft + 0x6298) + 0x1b4)`
+is `Data\Ships\Feisar_c1`), the dark concept hull with blue wingtips, not the standard Feisar: ours is run with
+`--team feisar_c1 --variant concept1`. The first page's "blue hull with the gold livery showing" is the standard hull; the numbers
+there were taken against it.
+
+Two causes found in the path, both from the disc:
+
+1. **The shell had no `/2`.** `hd_absorbinternal`'s fogged blocks #2 to #9 all close on `MAD /2 H0.xyz` (`ps3-microcode.py fp-file`
+   on the material, the scale field), like every scene program of draws 87 to 522
+   (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "Every lit program ends on a /2 output scale"). `shade.wesl`'s absorb branch
+   now multiplies by `scene.light.output_scale` (0.5 on HD, 1.0 elsewhere). Confidence 85 (the scale field is read for all eight
+   blocks; which block the race draws is the fogged family on Talon's Junction, not seen in a draw).
+2. **The shell was on a scene block of its own.** The shield and absorb drawables were never given a `SceneKind`, so the shell read
+   `Scene::off`: no output scale, no fog, and `scene.time` zero, so the `5 * time` scroll of its texture tap never ran.
+   `share_scene_blocks` now puts it on `SceneKind::Ship` (the craft's block). Test:
+   `tests::scene_blocks::the_absorb_shell_reads_the_craft_scene_block`.
+
+Capture: RPCS3 (Write Color Buffers on, 1760x990 trimmed, compared at 1280x720), the same state, `scripts/rpcs3-hd-absorb-film.py`
+(grant the pickup, hold circle until `craft + 0x7a5c` rises, single game frames, `age = clock - press clock`). One absorb and one
+control (a second absorb run reached its camera on only three frames and was not scored). Craft box `(400,330)-(880,690)`.
+
+| Age | Original | Ours before | Ours after |
+| --- | --- | --- | --- |
+| 0.08 s | -0.4 | +1.2 | +1.2 |
+| 0.13 s | -0.2 | +4.5 | +4.6 |
+| 0.21 s | +2.8 | +7.9 | +2.6 |
+| 0.33 s | +6.9 | +11.4 | +11.8 |
+| 0.53 s | +7.7 | +15.3 | +15.9 |
+| 0.76 s | +8.3 | +17.3 | +13.6 |
+| 1.02 s | **+5.8** | **+13.1** | **+5.8** |
+| 1.24 s | +3.4 | +4.5 | +2.9 |
+
+At 1.0 s the shell is alone (the burst is gone): ours drops from 2.3 times the original to equal. Blue minus red at 1.0 s: original
++10.8, ours +6.7: **the colour is still pale lavender-white where the original is a saturated blue** (seen in the pair, not fixed;
+the texture tap and its transfer are the lead). The first page's "2.7 times" was this factor over a different hull.
+
+**The burst on HD is about twice too strong, not half as strong.** At 0.3 s to 0.75 s ours is +11.8 to +15.9 against the original's
++6.9 to +8.3 although the shell is now right, and the shell is about +4 of that. `renderer.md` item 4 already says particles and
+effects (draws 444 to 522) end on `/2` and `oag-fx` does not apply it: the burst is `psys`, held by another lane, so this is the
+number for it, not a fix.
+
+### Pulse: the energy bar (not re-measured)
+
+The Pulse state of the first capture (`race-platinum-white-single-grid.ppst`) is not on this machine and a GE dump of the bar's draw
+(the confirmation the thread asks for before wiring `+0xf4`) was not taken. Nothing changed.
+
+### 2048 and Omega
+
+The shell fix is **checked, applies, not wired**: neither title draws the shell (their effects tables are the unread one, and whether
+their archives ship an `AbsorbEffect` model was not censused), and Omega's `.rcsmaterial` and 2048's are re-cooked, so the `/2` of
+the fogged blocks is not assumed. The Pure overlay is **not checkable** there (Pure is not their lineage). The unpaired reasons
+above stand.
 
 ## 2048 and Omega
 
@@ -212,6 +305,21 @@ The frames behind every number are derived game data, not in this tree. The orig
 `data/reference/absorb-pairs/<title>/`; ours' frames and the side sheets regenerate from the poses and flags above.
 
 ## Reproducing
+
+New on a second machine (`absorb-fx-wire`), each script's docstring has the full line:
+
+- Pure original: `scripts/psp-pure-absorb-frames.py --port P --display :N --home $PP_HOME --state <ppst> --out DIR [--control]`; ours:
+  `scripts/absorb-ours-frames.py --circle-tick 780 --frames 5,10,15,22,30 --step-ticks 2 --lag-ticks 2 --out DIR -- <oag-game
+  command with --pose-from the pair trace of scripts/psp-pure-pair.py>` (and `--control`); score with `scripts/absorb-score.py --box
+  150,150,330,272 absorb.png control.png ...`.
+- HD original: `scripts/emu-restore-state.sh <lane> data/saves/hd-fury/hd-racebox-talons-venom-weapons-grid.SAVESTAT.zst --pause`, then
+  `OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-hd-absorb-film.py --image data/images/hdfury-ps3-eu-dec.iso --out DIR
+  [--control]`; fill each `NN.json`'s `track` by hand (`/data/environments/talons_junction/track.vex`), then
+  `scripts/hd-weapon-pair.py --capture DIR --weapon mine --team feisar_c1 --button circle|none --camera-from NN --extra --variant
+  concept1`, and score `theirs_NN.png` and `ours_NN.png` of the absorb run against the control's with `absorb-score.py --size 1280x720
+  --box 400,330,880,690`.
+
+Earlier recipe:
 
 Pulse: restore the state, `scripts/psp-absorb-frames.py --port P --frames 66 --edram --display $DISPLAY` (and
 `--control`), then `oag-game ... --pose-from <pair trace> --give mine --input-script <(tick none, 1 circle)` at ticks
