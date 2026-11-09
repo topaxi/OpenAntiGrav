@@ -110,47 +110,58 @@ pub fn apply_pending_impulse(state: &mut ShipState) {
     state.pending_impulse = Vec3::ZERO;
 }
 
+/// How far ahead of a craft's position its nose point sits: `T+0x50` in the node-transform
+/// object `Weapon_PostBlastImpulse` and `Plasma_ApplyBlastForce` measure from.
+///
+/// Measured 4.875 on two single-craft states (length and projection on the forward row both
+/// exactly `4.875`; `T+0xd0` is the tail point, the same distance behind). Confidence 75;
+/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "`T+0x50` is not `body+0x50`".
+/// One hull was measured: `4.875` equals `0.375` of a `13`-long hull, so it may be derived from
+/// the hull rather than a constant.
+pub const NOSE_OFFSET: f32 = 4.875;
+
+/// The point a weapon blast measures its distance and direction from: the craft's position
+/// plus [`NOSE_OFFSET`] along its forward axis.
+#[must_use]
+pub fn nose_point(state: &ShipState) -> Vec3 {
+    state.body.position + state.body.forward() * NOSE_OFFSET
+}
+
 /// A weapon blast's distance-falloff impulse, posted onto a target's
 /// [`ShipState::pending_impulse`] for [`apply_pending_impulse`] to consume.
 ///
 /// `Weapon_PostBlastImpulse_q` (`0x0886794c`), read at instruction level 2026-08-19
-/// (`contact-response.md`). The original reads `target_position` from `target+0x50`, which
-/// a live breakpoint check confirmed *is* the target's `RigidBody` (by pointer equality
-/// against craft enumerated off `Ship_ApplyCollisionImpulse`) and held a live, track-scale
-/// value matching [`crate::ship::Body::position`]. (That check also found a tension with
-/// `rigid-body.md`'s reading of `body+0x40..0x70` as inertia storage; see its "Open
-/// contradiction" note. It does not affect this substitution.) In the original's order:
+/// (`contact-response.md`). The original measures from the target's **nose point**
+/// ([`nose_point`]), not its centre: `T+0x50` is a node transform (a different object from
+/// the rigid body), and `T+0x110` is the pending slot. In the original's order:
 ///
-/// 1. `d = |target_position - source_position|`.
+/// 1. `d = |nose - source_position|`.
 /// 2. `falloff = 1.0 - d / radius`, **not clamped**: a target beyond `radius` gets a negative
 ///    falloff, which pulls it *toward* the source. The original does not guard this and
-///    neither does this port; whether its caller always gates by distance is unread.
-/// 3. `direction = normalize(target_position - source_position)`, zero-guarded
+///    neither does this port; a caller gates by distance first
+///    ([`nose_point`] gives it the point to gate on).
+/// 3. `direction = normalize(nose - source_position)`, zero-guarded
 ///    ([`Vec3::normalize_or_zero`]) as the original substitutes `MaxFloat` before its
-///    reciprocal: a target exactly at the source gets no push, not a `NaN` one.
+///    reciprocal: a nose exactly at the source gets no push, not a `NaN` one.
 /// 4. `pending_impulse += direction * (falloff * power)`, **accumulated**, so two blasts on
 ///    one ship in one tick stack.
+///
+/// `Missile_ApplyBlastForce` (`0x08868ea4`), `Plasma_ApplyBlastForce` (`0x0886ae08`),
+/// `Rocket_ApplyBlastForce` (`0x0886ee88`) and `Bomb_ApplyBlast` (`0x088643d0`) write the same
+/// slot with the same arithmetic off their own weapon's `blastradius` and `blastforce`;
+/// `oag_weapons::projectile::blast` calls this for all of them.
 ///
 /// # Not ported
 ///
 /// The original also adds `stats->0xe8` to an accumulator at `target+0x120` and `stats->0xfc`
 /// to one at `target+0x130`, writes a literal `4` to `target+0x138`, records the source's
 /// weapon-stat index at `target+0x13c`, and conditionally sets a byte at `target+0x124` off a
-/// three-state field of the weapon's stats. None feeds anything this crate reads, and none is
-/// understood well enough to name a Rust field; porting them would be inventing what they do
-/// (`CLAUDE.md`, "Never invent what the assets already author").
-///
-/// # Nothing calls this yet
-///
-/// The original's caller `Mine_SweepCraftTrigger` sweeps *every* craft as a candidate target
-/// for a source craft index, box-then-sphere range-checks each against a per-weapon-type
-/// radius, and calls this once per qualifier. Its caller `MinePool_Update` decrements a
-/// per-craft countdown each tick and fires the sweep on expiry, a shape fitting a proximity
-/// mine better than a rocket or missile (unconfirmed). Open: what arms that timer, what feeds
-/// `MinePool_Update`, and the `radius`/`power` table, unparsed (`contact-response.md`). So
-/// this is a correct, tested pure function with no wiring.
+/// three-state field of the weapon's stats. The damage and slowdown credits are ported on the
+/// weapon side (`oag_weapons::projectile::blast`); the rest feeds nothing this crate reads, and
+/// porting it would be inventing what it does (`CLAUDE.md`, "Never invent what the assets
+/// already author").
 pub fn post_blast_impulse(target: &mut ShipState, source_position: Vec3, radius: f32, power: f32) {
-    let diff = target.body.position - source_position;
+    let diff = nose_point(target) - source_position;
     let distance = diff.length();
     let falloff = 1.0 - distance / radius;
     let direction = diff.normalize_or_zero();
@@ -173,6 +184,14 @@ mod tests {
             },
             ..ShipState::default()
         }
+    }
+
+    /// A ship whose nose point (not its centre) is at `nose`, the point
+    /// `post_blast_impulse` measures from.
+    fn ship_with_nose_at(nose: Vec3) -> ShipState {
+        let mut state = ship();
+        state.body.position = nose - state.body.forward() * NOSE_OFFSET;
+        state
     }
 
     /// A default ship has nothing pending, and this must leave it exactly
@@ -274,8 +293,7 @@ mod tests {
     /// scaled by both the linear falloff and the weapon's own power.
     #[test]
     fn well_inside_the_radius_the_impulse_pushes_away_from_the_source() {
-        let mut target = ship();
-        target.body.position = Vec3::new(4.0, 0.0, 0.0);
+        let mut target = ship_with_nose_at(Vec3::new(4.0, 0.0, 0.0));
 
         post_blast_impulse(&mut target, Vec3::ZERO, 10.0, 20.0);
 
@@ -290,8 +308,7 @@ mod tests {
     /// `1.0` here, but a zero direction still posts a zero impulse.
     #[test]
     fn at_the_source_s_own_position_the_impulse_is_zero_not_nan() {
-        let mut target = ship();
-        target.body.position = Vec3::ZERO;
+        let mut target = ship_with_nose_at(Vec3::ZERO);
 
         post_blast_impulse(&mut target, Vec3::ZERO, 10.0, 20.0);
 
@@ -302,8 +319,7 @@ mod tests {
     /// regardless of direction or power.
     #[test]
     fn at_the_edge_of_the_radius_the_falloff_is_zero() {
-        let mut target = ship();
-        target.body.position = Vec3::new(10.0, 0.0, 0.0);
+        let mut target = ship_with_nose_at(Vec3::new(10.0, 0.0, 0.0));
 
         post_blast_impulse(&mut target, Vec3::ZERO, 10.0, 20.0);
 
@@ -316,8 +332,7 @@ mod tests {
     /// function's own doc for why the original leaves it this way.
     #[test]
     fn beyond_the_radius_the_falloff_goes_negative_and_pulls_inward() {
-        let mut target = ship();
-        target.body.position = Vec3::new(20.0, 0.0, 0.0);
+        let mut target = ship_with_nose_at(Vec3::new(20.0, 0.0, 0.0));
 
         post_blast_impulse(&mut target, Vec3::ZERO, 10.0, 20.0);
 
@@ -326,12 +341,28 @@ mod tests {
         assert_eq!(target.pending_impulse, Vec3::new(-20.0, 0.0, 0.0));
     }
 
+    /// The distance and direction come from the nose point, not the centre: a craft
+    /// whose centre sits on the source still takes a push, ahead along its own
+    /// forward axis, scaled by the nose's distance.
+    #[test]
+    fn the_blast_measures_from_the_nose_point_not_the_centre() {
+        let mut target = ship();
+        target.body.position = Vec3::ZERO;
+
+        post_blast_impulse(&mut target, Vec3::ZERO, 10.0, 20.0);
+
+        // Nose at (0, 0, -4.875): distance 4.875, falloff 0.5125, direction -z.
+        assert_eq!(
+            target.pending_impulse,
+            Vec3::new(0.0, 0.0, -(1.0 - NOSE_OFFSET / 10.0) * 20.0)
+        );
+    }
+
     /// Two blasts in the same tick accumulate rather than the second
     /// overwriting the first - `vadd.q`, not a plain store, in the original.
     #[test]
     fn two_blasts_in_the_same_tick_accumulate() {
-        let mut target = ship();
-        target.body.position = Vec3::new(4.0, 0.0, 0.0);
+        let mut target = ship_with_nose_at(Vec3::new(4.0, 0.0, 0.0));
 
         post_blast_impulse(&mut target, Vec3::ZERO, 10.0, 20.0);
         post_blast_impulse(&mut target, Vec3::new(4.0, 0.0, 4.0), 10.0, 20.0);

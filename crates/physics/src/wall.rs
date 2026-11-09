@@ -99,7 +99,9 @@ use crate::ship::{Body, ShipState};
 mod clip;
 pub use clip::{CLIP_BACKOFF, CLIP_PROBE_REACH, Clip, pre_integration_clip};
 mod impulse;
-pub use impulse::{STUN_PER_CONTACT, apply_pending_impulse, post_blast_impulse};
+pub use impulse::{
+    NOSE_OFFSET, STUN_PER_CONTACT, apply_pending_impulse, nose_point, post_blast_impulse,
+};
 
 /// The ship collider's own friction, for [`combine_friction`].
 ///

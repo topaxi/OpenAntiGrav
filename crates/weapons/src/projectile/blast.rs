@@ -141,27 +141,35 @@ pub fn blast<S: Craft>(
             oag_physics::damage::apply_weapon(ship.physics_mut(), &dimensions, stats.damage, rules);
         super::hit::record(hits, slot, stats.weapon, &report);
 
-        // A craft on the blast centre has no direction: push up, which depends on
-        // no axis of the craft or track.
-        let direction = if distance > 1e-4 {
-            offset.normalize()
-        } else {
-            Vec3::Y
-        };
-        // Falloff `1.0 - d / blastradius`, as `Weapon_PostBlastImpulse_q`
-        // (`0x0886794c`) computes it; the damage above has none. The original does
-        // not clamp it, but the range test already skips anything further out. A
-        // zero `radius` is guarded: it admits only `d <= 0`.
-        let falloff = if radius > 0.0 {
-            1.0 - distance / radius
-        } else {
-            1.0
-        };
-        ship.physics_mut()
-            .body
-            .apply_impulse(direction * (falloff * stats.force));
+        post_impulse(ship, point, stats);
     }
     reached
+}
+
+/// Posts one blast's push on a craft: [`oag_physics::wall::post_blast_impulse`] onto
+/// [`oag_physics::ShipState::pending_impulse`], which the craft's next physics step drains
+/// as `Ship_ApplyCollisionImpulse` does (a forward-axis push and the collision stun).
+///
+/// **Recovered.** Every blast function the original has writes the pending slot at
+/// `entity+0x110`, measured from the struck craft's nose point (`T+0x50`), with this
+/// falloff and no clamp: `Weapon_PostBlastImpulse` (`0x0886794c`, the Mine),
+/// `Bomb_ApplyBlast` (`0x088643d0`), `Plasma_ApplyBlastForce` (`0x0886ae08`),
+/// `Rocket_ApplyBlastForce` (`0x0886ee88`), `Missile_ApplyBlastForce` (`0x08868ea4`). See
+/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "Weapon_PostBlastImpulse".
+///
+/// The reach is tested on the nose point too, so the falloff is never negative here
+/// (`Plasma_ApplyBlastForce` gates on `d < blastradius` off the same point). A zero
+/// `radius` reaches nothing. Every title runs this: Pure's Bomb push is the same arithmetic
+/// (`psp-pure-usa/weapons.md`); HD, 2048 and Omega are unread and inherit Pulse's,
+/// `docs/gameplay/weapon-lineage.md`. The Shuriken, whose blast law is unread, takes the
+/// Mine's as it always did.
+fn post_impulse<S: Craft>(ship: &mut S, point: Vec3, stats: &BlastStats) {
+    let state = ship.physics_mut();
+    let reach = (oag_physics::wall::nose_point(state) - point).length();
+    if reach >= stats.radius {
+        return;
+    }
+    oag_physics::wall::post_blast_impulse(state, point, stats.radius, stats.force);
 }
 
 /// Spends a tripped mine on the one craft that tripped it.
@@ -185,10 +193,8 @@ pub(super) fn blast_mine_trip<S: Craft>(
     let Some(ship) = ships.get_mut(struck as usize).filter(|s| s.active()) else {
         return;
     };
-    let offset = ship.physics().body.position - point;
-    let distance = offset.length();
-    let radius = stats.radius;
-    if distance >= radius {
+    let distance = (ship.physics().body.position - point).length();
+    if distance >= stats.radius {
         return;
     }
     *ship.pending_slowdown_mut() += stats.slowdown_time;
@@ -196,19 +202,7 @@ pub(super) fn blast_mine_trip<S: Craft>(
     let report =
         oag_physics::damage::apply_weapon(ship.physics_mut(), &dimensions, stats.damage, rules);
     super::hit::record(hits, struck as usize, stats.weapon, &report);
-    let direction = if distance > 1e-4 {
-        offset.normalize()
-    } else {
-        Vec3::Y
-    };
-    let falloff = if radius > 0.0 {
-        1.0 - distance / radius
-    } else {
-        1.0
-    };
-    ship.physics_mut()
-        .body
-        .apply_impulse(direction * (falloff * stats.force));
+    post_impulse(ship, point, stats);
 }
 
 /// Spends a Plasma or Rocket direct craft hit: full [`BlastStats::damage`] and
@@ -247,29 +241,11 @@ pub(super) fn blast_direct_hit<S: Craft>(
         super::hit::record(hits, struck as usize, stats.weapon, &report);
     }
 
-    let radius = stats.radius;
     for (slot, ship) in ships.iter_mut().enumerate() {
         if !ship.active() || slot as u8 == owner {
             continue;
         }
-        let offset = ship.physics().body.position - point;
-        let distance = offset.length();
-        if distance > radius {
-            continue;
-        }
-        let direction = if distance > 1e-4 {
-            offset.normalize()
-        } else {
-            Vec3::Y
-        };
-        let falloff = if radius > 0.0 {
-            1.0 - distance / radius
-        } else {
-            1.0
-        };
-        ship.physics_mut()
-            .body
-            .apply_impulse(direction * (falloff * stats.force));
+        post_impulse(ship, point, stats);
     }
 }
 

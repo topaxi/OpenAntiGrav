@@ -419,8 +419,9 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
         world.ships[2].pending_slowdown, 0.0,
         "a bystander inside the radius took slowdown the direct hit never spends on it"
     );
-    assert!(
-        world.ships[2].physics.body.linear_velocity.length() > 0.0,
+    assert_ne!(
+        world.ships[2].physics.pending_impulse,
+        Vec3::ZERO,
         "a bystander inside the radius took no impulse at all"
     );
 
@@ -433,8 +434,8 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
         "the firer took slowdown from its own bolt"
     );
     assert_eq!(
-        world.ships[0].physics.body.linear_velocity.length(),
-        0.0,
+        world.ships[0].physics.pending_impulse,
+        Vec3::ZERO,
         "the firer is excluded from the impulse sweep, even though it sits inside the radius"
     );
 }
