@@ -17,7 +17,7 @@
 use super::*;
 
 impl Scene {
-    /// Blurs each of `rects` (view `i` follows `slots[i]`) with `strength`, the finished picture
+    /// Blurs each of `rects` (view `i` follows `slots[i]`) at the `blur` tier, the finished picture
     /// in `view`. Returns whether a chain ran. `timestamps` brackets all the chains with one
     /// pair: its opening half rides the first view's first pass and its closing half the last
     /// view's last, so the overlay's BLUR row reads the whole.
@@ -29,11 +29,11 @@ impl Scene {
         view: &wgpu::TextureView,
         slots: &[usize],
         rects: &[(f32, f32, f32, f32)],
-        strength: f32,
+        blur: oag_display::display::MotionBlur,
         timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
         mut folded: Option<&mut super::split_record::Folded>,
     ) -> bool {
-        if strength <= 0.0 || self.motion_blur.is_none() {
+        if blur.shutter() <= 0.0 || self.motion_blur.is_none() {
             return false;
         }
         let (mut begin, mut end) = timestamps
@@ -63,7 +63,7 @@ impl Scene {
                             &self.attachment_views.depth,
                         ],
                         rect,
-                        strength,
+                        blur,
                         lens,
                         Some(stamps),
                     );

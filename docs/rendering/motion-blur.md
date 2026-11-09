@@ -128,7 +128,8 @@ every frame, so a reader never sees the last frame's), and a new reader is a new
 ([hd-gpu-cost](hd-gpu-cost.md)). The cost when read is still one `Rg16Float` write per fragment.
 
 **The setting is strength, not technique.** `off | low | medium | high`, mapping
-to a shutter fraction of the drawn frame's travel (a tick, in a capture). Offering `camera` and `full` as user-facing
+to a shutter fraction of the drawn frame's travel (a tick, in a capture) and to
+a cap on the gather's taps (`MotionBlur::taps`, see "Fewer taps" below). Offering `camera` and `full` as user-facing
 values would ship a value with no implementation behind it, which
 `crates/display/src/display.rs` and ADR-0013 both refuse: *a row for infrastructure
 that is not there is worse than no row*. It also means that if the cheap tier is

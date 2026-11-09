@@ -243,7 +243,7 @@ impl Scene {
             encoder,
             [view, velocity_view, depth_view],
             viewport,
-            motion_blur.shutter(),
+            motion_blur,
             blur_lens,
             blur_timestamps,
         );

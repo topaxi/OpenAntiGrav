@@ -65,6 +65,13 @@ use oag_core::math::Mat4;
 /// respawn - to a bounded smear rather than a whole-frame streak.
 pub const MAX_STRETCH: f32 = 0.08;
 
+/// The most taps the gather was tuned at, and what `high` spent before the
+/// tiers chose their own count ([`Frame::taps`]).
+pub const MAX_TAPS: u32 = 15;
+
+/// The fewest taps a moving pixel gets, whatever [`Frame::taps`] asks for.
+pub const MIN_TAPS: u32 = 5;
+
 /// The shader's uniform. `repr(C)`, 112 bytes, no implicit padding.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
@@ -76,7 +83,8 @@ struct Constants {
     max_px: f32,
     inv_size: [f32; 2],
     tile: u32,
-    _pad: f32,
+    /// [`Frame::taps`], odd and at least [`MIN_TAPS`].
+    max_taps: u32,
     /// [`Frame::lens_motion`], column-major.
     lens: [[f32; 4]; 4],
 }
@@ -90,6 +98,7 @@ impl Constants {
         viewport: (f32, f32, f32, f32),
         size: (u32, u32),
         strength: f32,
+        taps: u32,
         tile: u32,
         lens: Mat4,
     ) -> Self {
@@ -102,7 +111,7 @@ impl Constants {
             max_px: max_px(viewport),
             inv_size: [1.0 / w, 1.0 / h],
             tile,
-            _pad: 0.0,
+            max_taps: taps.max(MIN_TAPS) | 1,
             lens: lens.to_cols_array_2d(),
         }
     }
@@ -188,6 +197,12 @@ pub struct Frame<'a> {
     /// does nothing at all, which is how "off" reaches it: the caller's
     /// setting is a strength, read fresh every frame.
     pub strength: f32,
+    /// The most taps the gather spends on one pixel, odd and at least
+    /// [`MIN_TAPS`] (a smaller or even count is raised to the next odd one
+    /// that is). The smear's length does not depend on it: fewer taps sample
+    /// the same span more coarsely. [`MAX_TAPS`] is the finest the chain was
+    /// tuned at.
+    pub taps: u32,
     /// How far the camera's lens moved the picture since the previous frame -
     /// a race's impact shake and its changing field of view - as a clip-space
     /// map: a pixel's clip position goes to where the same direction sat then
@@ -563,6 +578,7 @@ impl MotionBlur {
             frame.viewport,
             frame.size,
             frame.strength,
+            frame.taps,
             tile,
             frame.lens_motion,
         );
