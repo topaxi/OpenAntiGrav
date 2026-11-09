@@ -368,7 +368,8 @@ impl Race {
     /// ignored, and so is one more than [`PACK_LOST`] behind, which is a craft
     /// that has come off the circuit rather than one to wait for.
     pub(super) fn eliminator_pack_scale(&self, slot: usize) -> f32 {
-        if self.sim.world.mode() != Mode::Eliminator {
+        // A score Eliminator keeps no pack (`crate::score_pace`).
+        if self.sim.world.mode() != Mode::Eliminator || self.sim.score_pace.is_some() {
             return 1.0;
         }
         let Some(course) = &self.sim.course else {

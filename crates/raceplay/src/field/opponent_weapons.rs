@@ -307,6 +307,11 @@ impl Race {
         }
         // Before anything returns: it advances this craft's weapon-AI clocks.
         let decision = self.opponent_decides(slot, field);
+        if let Some(pace) = self.sim.score_pace
+            && self.sim.world.ships[slot].weapon_ai.held_ticks < pace.hold_ticks
+        {
+            return;
+        }
         let fires = decision == oag_ai::weapon_ai::Decision::Fire;
         let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
             return;
@@ -334,6 +339,12 @@ impl Race {
         // **The original's absorb half** (`WeaponAi_DecideFireOrAbsorb`): only
         // a forward weapon under `FireLaw::Original` is ever answered with it.
         if decision == oag_ai::weapon_ai::Decision::Absorb && !extension {
+            // A score Eliminator's absorb spends the weapon on the Shield, as the player's does
+            // (`crate::score_pace`).
+            if self.sim.score_pace.is_some() {
+                self.eliminator_absorb(slot);
+                return;
+            }
             self.absorb_opponent_pickup(slot, absorb);
             return;
         }

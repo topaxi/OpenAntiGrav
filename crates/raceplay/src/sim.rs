@@ -408,6 +408,8 @@ pub struct RaceSim {
     pub(super) fire_terms: oag_ai::weapon_ai::Law,
     /// What an Eliminator is won on - see [`Setup::score_law`].
     pub(super) score_law: Option<oag_race::ScoreLaw>,
+    /// How a score Eliminator's opponents spend weapons - see [`crate::score_pace`].
+    pub(super) score_pace: Option<crate::score_pace::ScorePace>,
     /// The Eliminator flip - see [`Setup::flip_law`].
     pub(super) flip_law: Option<oag_physics::flip::FlipLaw>,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].

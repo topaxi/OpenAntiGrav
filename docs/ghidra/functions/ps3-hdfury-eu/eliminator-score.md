@@ -160,6 +160,11 @@ points go to the first impact whose radius reached the craft (`credit_blast`'s o
 `HighlightBar` keeps its authored width, because the HUD's draw list has no font to measure the
 row with, where `Hud_PlaceHighlightBar` fits its left edge to the text.
 
+**Pace.** How the opponents spend their weapons in a score Eliminator is ours, chosen, not measured.
+It is tuned so a Novice race lasts about the original's nine completed laps; ours' median is ten
+over twelve seeds ([race-modes.md](../../../gameplay/race-modes.md#the-pace-of-a-score-eliminator-2026-11-09)).
+The awards above are untouched. Run 4's leader reached 200 on lap 10, which is the reference.
+
 **Open:** the lap refill for an opponent:
 ours refills every craft, HD's reads as the person's alone (an AI's shield did not move on any lap);
 `ScoreFeedBack` above; the person's name in a row is the team's, not a profile's, and `--race` with

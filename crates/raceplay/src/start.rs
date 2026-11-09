@@ -202,6 +202,7 @@ impl Race {
             extensions,
             ..
         } = setup;
+        let score_pace = crate::score_pace::ScorePace::of(score_law, difficulty);
 
         // The mode gate, applied once at construction rather than on every tick,
         // because that is where the original applies it: `World_CollectNodeLists`
@@ -571,7 +572,11 @@ impl Race {
                 // The level scales how a pilot treats other craft and leaves
                 // the line it drives alone, so a shy pilot at novice is still
                 // shy rather than generically slow.
-                ai_pilots[slot as usize] = difficulty.temper(&entry.pilot);
+                ai_pilots[slot as usize] = crate::score_pace::ScorePace::temper_opponent(
+                    score_pace,
+                    difficulty,
+                    &entry.pilot,
+                );
                 pilot_names[slot as usize].clone_from(&entry.name);
                 // **The digest, into the world snapshot.** A pilot can come out
                 // of the player's own config directory, so two machines running
@@ -773,6 +778,7 @@ impl Race {
                 autopilot_pad_grants,
                 reset_triggers,
                 score_law,
+                score_pace,
                 flip_law,
                 fire_terms: crate::field::fire_terms(opponent_fire, weapon_ai.as_ref(), difficulty),
                 autopilot: false,
@@ -795,7 +801,12 @@ impl Race {
                 weapon_pad_current: [None; MAX_SHIPS],
                 weapon_pad_refresh,
                 weapon_pad_line: weapon_pad_line.into(),
-                pad_seeking: super::PadSeeking::for_mode(mode),
+                // A score Eliminator steers for no pad (`crate::score_pace`).
+                pad_seeking: if score_pace.is_some() {
+                    super::PadSeeking::Off
+                } else {
+                    super::PadSeeking::for_mode(mode)
+                },
                 fire_law: if weapon_ai.is_some() {
                     super::FireLaw::Original
                 } else {
