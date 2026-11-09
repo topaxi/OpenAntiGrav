@@ -620,7 +620,7 @@ apply; the maintainer's impression there is the simpler textures.
 `Origin::Measured`). **The request is read off the original (the filter word); choosing it over the -0.75 fit to RPCS3 is the maintainer's
 decision**, made after comparing full frames at -0.75 and -1.5 against the original; it is not a fitted value. It reaches only circuit
 materials: `material_lod_levels()` is read once, in `oag_raceplay::load::geometry::track_model`, and set on the track and behind-glass
-models (`Model::material_lod_bias`), so the HUD, shadow and sky samplers never see it. Nothing else gates it (no setting).
+models (`Model::material_lod_bias`), so the HUD, shadow and sky samplers never see it. Nothing else gates it (no setting). Hulls, pads, mine and bomb followed on 2026-11-09, see "The LOD bias on hulls, pads and weapons" below.
 
 Re-render of the 13 cold race pairs (`compare-rerender-ours --only hd/`, into a scratch copy), band metric from `scripts/texture-sharpness.py`:
 median over pairs of the per-pair ratio ours/original, **fine near 1.11, fine far 1.16, mid near 0.97, mid far 1.02** (before: 0.81 near, 0.98
@@ -691,6 +691,87 @@ out's ([tonemap.md](../ghidra/functions/ps4-omega-eu/tonemap.md), "Read with the
 HD's sRGB encode law is HD's alone; `oag_post::omega_tonemap` already ends on the scanout encode. What the patch changes is
 the composite after the curve (a `ColorScale` and the tint's placement, same section), not wired. 2048 not checkable (no
 HD-style resolve measured).
+
+## The LOD bias on hulls, pads and weapons (2026-11-09, `hd-material-lod-bias-reach`)
+
+**Claim**: the `0x02063e80` filter word (trilinear, LOD bias -1.5) is read on the track's own units only; hulls, pads and weapons
+ask for something else, so they stay at bias 0. **False for hulls, mine and bomb bodies (measured) and for the pads
+(inferred); the bias is now wired on them.**
+
+**What would have falsified it**: a hull, pad or weapon draw whose albedo or normal unit read `0x02062000` (bias 0) or
+`0x02022000` (no mip). None does, on any of 10 stored frames with a craft on screen.
+
+**Method.** Stored RPCS3 draw-hook dumps (`scripts/rpcs3_draw_hook.py`, a paused frame with the craft on screen; no fresh
+capture was needed). `scripts/rsx-draw-list.py <dir> <stem> --samplers` lists every draw's units with the filter word;
+`scripts/rsx-fp-match-material.py` matches each draw's fragment program (microcode, constants dropped) against the
+`.rcsmaterial`s of `data/materials/ships/`, `data/materials/`, `data/weapons/materials/` and the circuit's own
+`environments/<circuit>/materials/`, extracted with `just psarc cat`. A hull draw is a draw in the main colour target
+(`tgt 00f50000`) whose program matches `diffuse_vcol` (block 17) or `diffuse_with_specular_from_alpha_n[_vcol]` and whose
+unit 0 is the 1024x1024 livery. A program is shared by many materials, so a match names a family, not a file.
+
+| Class | Circuit, frame, draws | Material (family) | Units: filter word |
+| --- | --- | --- | --- |
+| hull, spec variant | Talon's Junction (`hd-flame-tap/gantry-w1`), #593, #595, #597, #599 (10 draws) | `diffuse_with_specular_from_alpha_n_vcol` (prefix match, first 12 instructions) | u0 livery `0x02063e80`, u1 normal `0x02063e80`, u2-u3 shadow maps `0x02022000`, u4-u5 IBL probes `0x02062000` |
+| hull, vcol variant | same, #594, #596, #600 (35 draws) | `diffuse_vcol` (full match) | u0 livery `0x02063e80`, u1-u2 shadow `0x02022000`, u3-u5 probes `0x02062000` |
+| hull, both | Sol 2 (`hd-sol2-bay/sol2dump`), #616-#648 (33 draws, one livery) | the same two programs | the same words unit for unit |
+| mine, bomb | Talon's Junction, `gantry-w1` #640-#649 (two sets of five: body, emissive, beacon, rays, halo) | `hd_mine`, `hd_bomb`, `hd_mine_beacon[_rays]`, `hd_*_halo` (full matches, one weapon each) | u0 `0x02063e80`, u1-u2 shadow `0x02022000`, u3-u5 probes `0x02062000` |
+| weapon pad, speedup pad | `gantry-w1` #155, #156, #159, #163, #236; `sol2dump` #551, #562, #563, #567 | `weapon_pads` / `speedup_material` (the program is shared with two other materials: **inferred**) | u0-u4 (u5) `0x02063e80`, the shadow unit `0x02022000`, the probe `0x02062000` |
+| scenery prop | every main-pass draw whose program matches a circuit material (floor, wall, glass and prop chunks are not told apart by program) | the circuit's `.rcsmaterial`s | every material texture `0x02063e80` |
+| opponent hull | three craft in one frame (a pack; `u0` three liveries, 25, 26 and 34 draws) | the same programs | u0 and u1 `0x02063e80` on all three |
+| wreck | not on screen in any stored frame | `glass_texture_wrecked` has one 12-instruction prefix hit (4 draws), no full match | **not measured** |
+
+- **The pattern is a role, not a class.** Over the 11 listed frames' main-colour-target draws (the ten with a craft and
+  Vineta K), 22,658 unit binds read `0x02063e80`, 3,912 read `0x02062000` and 1,726 read `0x02022000`; every bind that is not
+  `0x02063e80` is a probe (formats `0x8529`/`0xa52a`, address word `0x60730303`; 33 more on `0xa429`) or a shadow map (`0xb229`,
+  `0xa129`). So every unit bound to a material texture (livery, normal, specular map, emissive, mask)
+  reads `0x02063e80`. The units that do not are exactly the render targets: the shadow maps `0x02022000` (linear, no mip, so
+  a bias is moot) and the IBL probes `0x02062000` (bias 0). That is the same split the track's glass shows
+  ("Claim B" above), and ours already leaves the probe `textureSampleLevel` reads at 0.
+- **Scenery props are already biased.** A circuit's `.rcsmodel` is one scene; its props, floor, wall and glass chunks are the
+  one `track_model`, which has carried the bias since 2026-10-27. The pads (`pads::ps3_pad_models`), the hulls, the mine and
+  the bomb were built apart from it and kept 0.
+- **Counts across frames** (10 hull frames, each its own capture; the scratch dumps are not citable, the recipe is
+  above): a hull's livery unit `0x02063e80` on 10 of 10 frames (Sebenco Climb, Talon's Junction, Sol 2, The Amphiseum and
+  three whose circuit the dump does not name; Talon's is named by the circuit's own materials matching 365 of the frame's
+  454 programs), the normal map on every frame whose hull draws the
+  specular variant. The mine and bomb: one frame (`gantry-w1`); `bomb-blast` holds no fragment-program dumps, so its draws
+  cannot be named. The pads: five frames, but only by an ambiguous program.
+- **Confidence** (`docs/reverse-engineering/confidence-rubric.md`): hull livery and normal **90** (10 frames, 4 named
+  circuits, a full or 12-instruction program match, and the filter word is the game's own pushbuffer word); opponent hull
+  **85** (one frame, three craft); mine and bomb **70** (one frame); pads **60** (the program is shared, the draw is not
+  tied to the material by anything but its program and its place in the frame); scenery props **85**; wreck **unknown**.
+
+**Wired** (`oag_raceplay::load::lod_bias`, called from `load` through `Looks::material_lod_levels()`): the bias goes onto
+`Loaded::liveries[*].hull`, `pad_model`, `weapon_pad_model`, `mine_model` and `bomb_model`. A title whose rule is unread
+(Pulse, Pure, Omega, 2048) passes 0 and changes nothing. Left at 0 because this census did not read them: the sky, shadow
+hulls, the shield, absorb, leach, flare, boost and wreck models (several are `oag_fx::hull_overlay`'s), and the rocket, cannon,
+plasma and leach-ball models. The shader needed nothing: the hull's albedo, normal and pad reads already go through
+`material_sample` in `shade.wesl`, which is why setting the field is enough.
+
+**Acceptance** (hull box on `hd/sol-2`, 450x305 at (740, 595) of the 1920x1080 pair; our side re-rendered on a copy,
+`compare-rerender-ours`'s `rerender`, before and after the wire; `scripts/texture-sharpness.py`'s two bands on that box
+alone, since the script skips the craft):
+
+| Hull box | fine band ours/original | mid band | mean abs grey difference | rmse |
+| --- | ---: | ---: | ---: | ---: |
+| bias 0 | 1.035 | 1.054 | 6.46 | 0.0616 |
+| bias -1.5 | 1.044 | 1.056 | 6.39 | 0.0617 |
+
+The whole-frame mean grey moved 4.78 to 4.78. **The hull is a small, magnified 1024 texture, so the bias reads one level
+finer on a few pixels: the hull box moves by 0.01 in the fine band and 0.07 grey, which is at the noise.** It is wired
+because the original's request is measured, not because the picture needs it, and the hull was already at 1.03 of the
+original's detail. On the pack pair (`hd-race/talons-pack`) the same wire moved the whole frame by 0.01 grey; its hull box
+(player, 260x256) fine ratio 0.675 to 0.744 reads the near hull against an original with the autopilot's lightning over it
+and is not an acceptance number.
+
+**Omega and 2048.** Not checked in this lane, and not closed. Omega's `.rcsmaterial` sampler entries carry a state word
+(`+0x20`, mostly `0x522800`, [omega-status.md](../formats/omega-status.md), "The material uniform and sampler table") whose
+meaning is unread and has no HD counterpart to calibrate against; the GCN sampler descriptor is built at runtime by the
+`eboot.bin` from it (a LOD bias would be the low 14 bits of descriptor word 2, signed 8.8 fixed point, so -1.5 is
+`0x3e80`, which is **from memory of the GCN layout and unverified**). Reading it needs the sampler-state word decoded and a
+search of `eboot.bin` for the descriptor builder; no Ghidra instance was up. 2048's Vita sampler words are unread too.
+Both stay `Rule::UNREAD`. Status: **checked, applies, not wired** (the files carry a state word per sampler; its LOD field
+is the open step).
 
 ## Anulpha's missing start-grid glow is the bloom chain's strength, not a material (2026-10-27, `hd-bloom-deficit`)
 

@@ -29,6 +29,8 @@ mod intro;
 #[cfg(feature = "view")]
 mod lens_flare;
 #[cfg(feature = "view")]
+mod lod_bias;
+#[cfg(feature = "view")]
 pub(crate) mod magstrip_wake;
 mod muzzle;
 mod original_laws;
@@ -438,18 +440,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // ribbon build, and reported the same way: absent, not invented.
     #[cfg(feature = "view")]
     let vex_geometry = !ribbon && rcs_model.is_none();
-    // Whether the `.rcsmodel` *built*, not merely whether one was found - the
-    // report below says which surface is on screen, and since a sibling that
-    // will not decode now falls back to the ribbon, "found" is the wrong
-    // question to ask.
+    // Whether the `.rcsmodel` *built*, not merely whether one was found: a sibling
+    // that will not decode falls back to the ribbon.
     #[cfg(feature = "view")]
     let rcs_drawn = rcs_model.is_some();
-    // Both pad classes, decoded once and shared between the two blocks below -
-    // mirrors `sky_model`'s own HD/Wipeout 2048 split just past it, since only
-    // HD's node tree has a recovered `Speedup Pad`/`Weapon Pad` class id;
-    // Wipeout 2048's `.rcsmodel` carries no comparable node tree yet, so a
-    // 2048 source stays `(None, None)` here exactly as it did before this
-    // pair existed.
+    // Both pad classes, decoded once and shared between the two blocks below. Only
+    // HD's node tree has a recovered `Speedup Pad`/`Weapon Pad` class id; a 2048
+    // source stays `(None, None)`, as `sky_model`'s own HD/2048 split just past it.
     #[cfg(feature = "view")]
     let (ps3_pad_model, ps3_weapon_pad_model) = match &ps3_geometry {
         Some(geometry) if rcs_drawn && !mesh::rcs::psp2::is_psp2(geometry) => {
@@ -1488,6 +1485,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 .push("hull lights: the track file's ambient and sun, the host's GE rig".into());
         }
     }
+    #[cfg(feature = "view")]
+    lod_bias::finish(&mut loaded, title.looks.material_lod_levels());
     #[cfg(feature = "view")]
     pulse_ps2::finish(
         &mut loaded,
