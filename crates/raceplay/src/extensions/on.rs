@@ -1101,6 +1101,24 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     }
 }
 
+/// The course point a `portal-view` exit names, as a `transit` to it resolves it.
+fn portal_exit(
+    course: &oag_race::Course,
+    extensions: &super::Extensions,
+    exit: oag_ext_abi::Distance,
+) -> Option<crate::transit::Exit> {
+    match exit {
+        oag_ext_abi::Distance::Progress(progress) => course
+            .index_at_progress(progress)
+            .map(crate::transit::Exit::ring),
+        oag_ext_abi::Distance::Trigger(index) => {
+            let centre = extensions.trigger_centre(usize::from(index))?;
+            crate::transit::Exit::at(course, centre)
+        }
+        _ => None,
+    }
+}
+
 fn apply(sim: &mut RaceSim, index: usize, command: Command) {
     match command {
         Command::Emit {
@@ -1184,6 +1202,10 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
             update,
             generation,
         } => {
+            let exit = sim
+                .course
+                .as_ref()
+                .and_then(|course| portal_exit(course, &sim.extensions, exit));
             sim.extensions.on.portal_views[slot.index()] = Some(super::PortalRequest {
                 entrance,
                 exit,

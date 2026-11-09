@@ -50,6 +50,30 @@ impl ViewUpdate {
     }
 }
 
+/// The sign bit of a `portal-view` exit word: set, the word is a trigger index in its low 16
+/// bits. A progress is never negative, so a sign bit is free to say which it is.
+const EXIT_IS_TRIGGER: u32 = 1 << 31;
+
+/// A `portal-view` exit's word: a progress as its `f32` bits, a trigger as
+/// [`EXIT_IS_TRIGGER`] and the index. `None` for any other kind of distance.
+fn exit_word(exit: Distance) -> Option<u32> {
+    match exit {
+        Distance::Progress(progress) => Some(progress.to_bits()),
+        Distance::Trigger(index) => Some(EXIT_IS_TRIGGER | u32::from(index)),
+        _ => None,
+    }
+}
+
+/// The exit a word names; `None` for a set sign bit with anything above the index (a negative
+/// progress, negative zero apart: that reads as trigger 0).
+fn exit_of(word: u32) -> Option<Distance> {
+    if word & EXIT_IS_TRIGGER == 0 {
+        return Some(Distance::Progress(f32::from_bits(word)));
+    }
+    (word & !EXIT_IS_TRIGGER <= u32::from(u16::MAX))
+        .then(|| Distance::Trigger((word & 0xffff) as u16))
+}
+
 /// A shader in the byte `screen-fill` and `draw-beam` carry it in: 0 for none, else its
 /// place plus one.
 fn shader_byte(shader: Option<u16>) -> u16 {
@@ -98,7 +122,7 @@ pub(crate) fn encode(command: &Command) -> Option<(u16, u32, u32)> {
         } => (
             update.code() | u16::from(generation) << 2 | u16::from(radius) << 8,
             entrance.to_bits(),
-            exit.to_bits(),
+            exit_word(exit)?,
         ),
         _ => return None,
     })
@@ -160,12 +184,15 @@ pub(crate) fn decode(
             })
         }
         crate::CommandKind::PortalView => {
-            let exit = f32::from_bits(word);
             let on_a_lap = |progress: f32| progress.is_finite() && progress >= 0.0;
             let radius = (arg >> 8) as u8;
             let update = ViewUpdate::from_code(arg & 3);
-            let (Some(update), true, true) =
-                (update, on_a_lap(value) && on_a_lap(exit), radius > 0)
+            let exit = exit_of(word).filter(|exit| match *exit {
+                Distance::Progress(progress) => on_a_lap(progress),
+                _ => true,
+            });
+            let (Some(update), Some(exit), true, true) =
+                (update, exit, on_a_lap(value), radius > 0)
             else {
                 return Err(bad);
             };

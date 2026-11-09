@@ -41,6 +41,14 @@ fn pair_ahead(race: &Race) -> (f32, f32) {
     )
 }
 
+/// The ring exit a progress names.
+fn ring_exit(race: &Race, progress: f32) -> Option<crate::transit::Exit> {
+    let course = race.sim.course.as_ref()?;
+    course
+        .index_at_progress(progress)
+        .map(crate::transit::Exit::ring)
+}
+
 fn portal_view(
     slot: usize,
     (entrance, exit): (f32, f32),
@@ -50,7 +58,7 @@ fn portal_view(
     Command::PortalView {
         slot: Slot::new(slot).unwrap(),
         entrance,
-        exit,
+        exit: oag_ext_abi::Distance::Progress(exit),
         radius: 8,
         update,
         generation,
@@ -154,7 +162,7 @@ fn the_view_stands_behind_the_exit_and_looks_down_the_road() {
     let race = race(&[]);
     let request = crate::extensions::PortalRequest {
         entrance,
-        exit,
+        exit: ring_exit(&race, exit),
         radius: 8.0,
         update: ViewUpdate::Continuous,
         generation: 0,
@@ -237,7 +245,7 @@ fn a_new_generation_draws_the_snapshot_again() {
     assert_eq!(frames(&gpu, &scene, &mut race, 3), 1);
     let again = crate::extensions::PortalRequest {
         entrance: portals.0,
-        exit: portals.1,
+        exit: ring_exit(&race, portals.1),
         radius: 8.0,
         update: ViewUpdate::Once,
         generation: 4,
@@ -333,4 +341,151 @@ fn a_split_screen_draws_one_extra_scene_a_frame_for_all_its_seats() {
     );
     race.reset_viewpoint();
     assert!(scene.portal_engine_of(&race).is_some());
+}
+
+/// Pulse PSP EU's `05_Track`: a fork whose first route runs on a deck above the ring.
+const FORKED: &str = "Data\\Environments\\05_Track\\track.vex";
+
+/// The setup of a `05_Track` race, the disc's. `None` without the image.
+fn forked_setup() -> Option<Setup> {
+    let image = oag_testdata::image("data/images/pulse-psp-eu.chd")?;
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        track: Some(FORKED.to_string()),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        no_driver_for_class: true,
+        ..crate::Options::default()
+    })
+    .expect("loading the race");
+    Some(loaded.setup)
+}
+
+/// A `05_Track` race with the mod's shader and a trigger volume standing on route 0 of the fork,
+/// whose guest asks for a view from a ring point ahead of the player's camera to `exit` (a
+/// progress, or trigger 0), its chase camera settled. `None` without the disc image.
+fn forked_race(exit: oag_ext_abi::Distance) -> Option<(Race, crate::extensions::PortalRequest)> {
+    let mut bare = Race::start(forked_setup()?);
+    for _ in 0..90 {
+        bare.tick(&PlayerInputs::none());
+    }
+    let entrance = pair_ahead(&bare).0;
+    let mut setup = forked_setup()?;
+    let course = setup.course.take().expect("a course");
+    let route = &course.routes()[0];
+    let span = (course.progress_at(route.merge).unwrap()
+        - course.progress_at(route.split).unwrap())
+    .rem_euclid(course.length());
+    let ring_index = course.advance(route.split, span * 0.4);
+    let on_route = course.route_point(0, ring_index).expect("a route point");
+    let mut to_world = oag_ext_abi::track::IDENTITY;
+    to_world[12..15].copy_from_slice(&on_route.to_array());
+    let props = crate::extensions::TrackProps {
+        triggers: vec![oag_trackfile::props::Trigger {
+            name: "exit".into(),
+            to_world,
+            min: [-1.0; 3],
+            max: [1.0; 3],
+            props: Default::default(),
+            emits: None,
+        }],
+        ..Default::default()
+    };
+    let command = Command::PortalView {
+        slot: Slot::new(0).unwrap(),
+        entrance,
+        exit,
+        radius: 8,
+        update: ViewUpdate::Continuous,
+        generation: 0,
+    };
+    let source = shaded(&[command]);
+    let mut report = Vec::new();
+    setup.extensions = crate::extensions::prepare(
+        std::slice::from_ref(&source),
+        "wipeout-pulse",
+        None,
+        crate::extensions::Track {
+            name: "05_Track",
+            props: &props,
+            speedup_pads: &[],
+            weapon_pads: &[],
+            paths: &[],
+            routes: course.routes(),
+        },
+        None,
+        &mut report,
+    );
+    setup.course = Some(course);
+    let mut race = Race::start(setup);
+    for _ in 0..90 {
+        race.tick(&PlayerInputs::none());
+    }
+    let request = race.extension_portal_view(0).expect("the guest asked");
+    Some((race, request))
+}
+
+/// A portal whose exit is a trigger standing on a fork's route frames that route, not the ring.
+/// Acceptance: the exit frame is on the route's deck (the ring is tens of units under it), the
+/// view's eye is on the route's side of the ring point, and a ring exit's camera is the one the
+/// ring formula gives, to the bit.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn a_portal_view_to_a_forks_route_is_framed_from_the_route() {
+    use crate::transit::Exit;
+    use oag_ext_abi::Distance;
+
+    let Some((race, request)) = forked_race(Distance::Trigger(0)) else {
+        return;
+    };
+    let course = race.sim.course.as_ref().unwrap();
+    let exit = request.exit.expect("the trigger is on the course");
+    assert_eq!(exit.route, 1, "the trigger resolves onto the fork's route");
+    let route_point = course.route_point(0, exit.to).unwrap();
+    let ring_point = course.position(exit.to).unwrap();
+    assert!(
+        route_point.distance(ring_point) > 30.0,
+        "the route is above the ring here: {}",
+        route_point.distance(ring_point)
+    );
+
+    let frame = race.portal_frame(exit, oag_render::camera::portal::Face::Departing);
+    let centre = frame.expect("a frame").w_axis.truncate();
+    assert!(
+        centre.distance(route_point) < 5.0,
+        "the exit stands on the route: {} from it",
+        centre.distance(route_point)
+    );
+
+    let projection = race.projection(1.0, 4000.0, Fov::AUTHORED);
+    let shot = race.portal_shot(&request, projection).expect("in the view");
+    let eye = shot.view.inverse().w_axis.truncate();
+    assert!(
+        eye.distance(route_point) * 1.2 < eye.distance(ring_point),
+        "the eye is {} from the route's point and {} from the ring's",
+        eye.distance(route_point),
+        eye.distance(ring_point)
+    );
+
+    // A ring exit at the same ring point: the camera of the ring formula, bit for bit.
+    let ring_progress = course.progress_at(exit.to).unwrap();
+    let (race, request) = forked_race(Distance::Progress(ring_progress)).unwrap();
+    let course = race.sim.course.as_ref().unwrap();
+    let ring = request.exit.unwrap();
+    assert_eq!(ring, Exit::ring(exit.to));
+    let shot = race.portal_shot(&request, projection).expect("in the view");
+    let frame_of = |index: usize, face| {
+        let (_, up, centre, _) = race.road_frame(Exit::ring(index)).unwrap();
+        oag_render::camera::portal::frame(centre, course.tangent(index).unwrap(), up, face).unwrap()
+    };
+    let entrance = course.index_at_progress(request.entrance).unwrap();
+    let through = oag_render::camera::portal::through(
+        frame_of(entrance, oag_render::camera::portal::Face::Oncoming),
+        frame_of(exit.to, oag_render::camera::portal::Face::Departing),
+    );
+    let view = oag_render::camera::portal::view(race.view(), through);
+    assert_eq!(
+        shot.view.to_cols_array().map(f32::to_bits),
+        view.to_cols_array().map(f32::to_bits)
+    );
 }

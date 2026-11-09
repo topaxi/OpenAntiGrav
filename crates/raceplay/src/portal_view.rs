@@ -4,11 +4,12 @@
 //! goes through a portal in `crate::transit`, which shares the road frame and nothing else.
 
 use oag_core::math::frustum::Frustum;
-use oag_core::math::{Mat4, Vec4};
+use oag_core::math::{Mat4, Vec3, Vec4};
 use oag_render::camera::portal::{self, Face};
 
 use crate::Race;
 use crate::extensions::PortalRequest;
+use crate::transit::Exit;
 
 /// A portal pair as the view being drawn sees it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -23,13 +24,18 @@ pub(crate) struct PortalShot {
 }
 
 impl Race {
-    /// A portal's frame at the course point at lap `progress`, on the road's own up: the spline
-    /// sample's banking, not the course's tangent alone.
-    fn portal_frame(&self, progress: f32, face: Face) -> Option<Mat4> {
+    /// A portal's frame at `exit`, on the road's own up: the spline sample's banking, not the
+    /// course's tangent alone. A ring point faces along the ring; a route's exit faces along the
+    /// route's own deck, which leaves the ring's direction at a fork.
+    pub(crate) fn portal_frame(&self, exit: Exit, face: Face) -> Option<Mat4> {
         let course = self.sim.course.as_ref()?;
-        let index = course.index_at_progress(progress)?;
-        let (_, up, centre, _) = self.road_frame(crate::transit::Exit::ring(index))?;
-        portal::frame(centre, course.tangent(index)?, up, face)
+        let (_, up, centre, _) = self.road_frame(exit)?;
+        let along = if exit.route == 0 {
+            course.tangent(exit.to)?
+        } else {
+            Vec3::from_array(self.road_sample(exit)?.tangent)
+        };
+        portal::frame(centre, along, up, face)
     }
 
     /// `request` as the view being drawn sees it through `projection`; `None` when a progress
@@ -40,8 +46,10 @@ impl Race {
         request: &PortalRequest,
         projection: Mat4,
     ) -> Option<PortalShot> {
-        let entrance = self.portal_frame(request.entrance, Face::Oncoming)?;
-        let exit = self.portal_frame(request.exit, Face::Departing)?;
+        let course = self.sim.course.as_ref()?;
+        let entrance = Exit::ring(course.index_at_progress(request.entrance)?);
+        let entrance = self.portal_frame(entrance, Face::Oncoming)?;
+        let exit = self.portal_frame(request.exit?, Face::Departing)?;
         let main = self.view();
         let centre = entrance.w_axis.truncate();
         let facing = (self.camera_position() - centre).dot(entrance.z_axis.truncate()) > 0.0;

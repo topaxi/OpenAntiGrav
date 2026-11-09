@@ -225,8 +225,10 @@ pub struct Beam {
 pub struct PortalRequest {
     /// The entrance's progress on the lap, in track units.
     pub entrance: f32,
-    /// The exit's progress on the lap, in track units.
-    pub exit: f32,
+    /// Where the exit is: a ring point from a progress, or a trigger's, on a fork's route
+    /// when the trigger stands on one. `None` for a progress off the lap or a trigger the
+    /// track lacks or that is off the course: the request asks for nothing.
+    pub exit: Option<crate::transit::Exit>,
     /// How far the surface reaches from the entrance's centre, in world units.
     pub radius: f32,
     /// When the texture is drawn.

@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 34] {
+fn every_command() -> [Command; 35] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -170,10 +170,18 @@ fn every_command() -> [Command; 34] {
         Command::PortalView {
             slot: slot(11),
             entrance: 1234.5,
-            exit: 0.0,
+            exit: crate::Distance::Progress(0.0),
             radius: 255,
             update: crate::ViewUpdate::Once,
             generation: crate::MAX_VIEW_GENERATION - 1,
+        },
+        Command::PortalView {
+            slot: slot(11),
+            entrance: 12.5,
+            exit: crate::Distance::Trigger(u16::MAX),
+            radius: 8,
+            update: crate::ViewUpdate::Continuous,
+            generation: 0,
         },
     ]
 }
@@ -418,7 +426,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0x6033_185c_4f5c_4d2a);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0xd7fd_0d49_79a2_62b6);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -1179,7 +1187,7 @@ fn a_scene_command_out_of_its_ranges_is_malformed() {
         Command::PortalView {
             slot: slot(1),
             entrance: f32::NAN,
-            exit: 10.0,
+            exit: crate::Distance::Progress(10.0),
             radius: 8,
             update: crate::ViewUpdate::Continuous,
             generation: 0,
@@ -1187,7 +1195,7 @@ fn a_scene_command_out_of_its_ranges_is_malformed() {
         Command::PortalView {
             slot: slot(1),
             entrance: 10.0,
-            exit: -1.0,
+            exit: crate::Distance::Progress(-1.0),
             radius: 8,
             update: crate::ViewUpdate::Continuous,
             generation: 0,
@@ -1195,7 +1203,7 @@ fn a_scene_command_out_of_its_ranges_is_malformed() {
         Command::PortalView {
             slot: slot(1),
             entrance: 10.0,
-            exit: 20.0,
+            exit: crate::Distance::Progress(20.0),
             radius: 0,
             update: crate::ViewUpdate::Continuous,
             generation: 0,
@@ -1294,4 +1302,35 @@ fn a_mod_sound_round_trips_each_mode_and_refuses_a_mode_the_abi_lacks() {
         Command::decode(&record),
         Err(Malformed::ModSound { word: 3, .. })
     ));
+}
+
+/// `portal-view`'s exit word is a progress's `f32` bits, or a trigger: the sign bit and the
+/// index. The progress form is the word it always was.
+#[test]
+fn a_portal_views_exit_is_a_progress_or_a_trigger() {
+    let view = |exit| Command::PortalView {
+        slot: slot(2),
+        entrance: 10.0,
+        exit,
+        radius: 8,
+        update: crate::ViewUpdate::Continuous,
+        generation: 1,
+    };
+    let progress = view(crate::Distance::Progress(20.0));
+    let trigger = view(crate::Distance::Trigger(7));
+    assert_eq!(hex(&progress.encode()), "24020608000020410000a041");
+    assert_eq!(hex(&trigger.encode()), "240206080000204107000080");
+    for command in [progress, trigger] {
+        assert_eq!(Command::decode(&command.encode()), Ok(command));
+    }
+    for exit in [
+        crate::Distance::Units(5.0),
+        crate::Distance::Lap(0.5),
+        crate::Distance::Progress(-1.0),
+    ] {
+        assert!(
+            Command::decode(&view(exit).encode()).is_err(),
+            "{exit:?} is not a portal's exit"
+        );
+    }
 }
