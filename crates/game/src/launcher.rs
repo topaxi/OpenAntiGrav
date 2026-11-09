@@ -178,7 +178,7 @@ pub fn trail_hit_lender(rows: &[Candidate]) -> Option<&Candidate> {
         .filter(authors)
         .find(|row| {
             row.playable()
-                .is_some_and(|t| std::ptr::eq(t, oag_hd::TITLE))
+                .is_some_and(oag_source::title::is_preferred_trail_hit_lender)
         })
         .or_else(|| rows.iter().find(authors))
 }
