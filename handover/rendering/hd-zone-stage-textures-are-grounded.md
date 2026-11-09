@@ -1,7 +1,7 @@
 ---
 status: measure
-titles: [hd]
-updated: 2026-09-15
+titles: [hd, omega, 2048]
+updated: 2026-11-09
 summary: "HD Zone palette arrays at 0x00c81330 (zoneAnisoPalette, GradientColour0..3) have no known fill; zoneMode*.gtf are fifteen identical blanks"
 ---
 
@@ -397,6 +397,7 @@ unblocks - see Next Steps below for what implementing it needs.
 
 ## Open
 
+- **Omega and 2048 too (maintainer, 2026-11-09):** if the Zone palette fill is found and it applies to Omega or 2048 (lineage check), wire them in the same lane, extending HD's path.
 - ~~What the Zone shader does with the six-plus Zone parameters.~~ **Read**,
   see [zone-shader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md)
   and the visualiser glow section above.
