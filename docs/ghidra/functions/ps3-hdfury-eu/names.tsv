@@ -903,3 +903,6 @@
 0x002c3ca0	function	PartRender_FlushDraws	70	engine-trail.md
 0x002c5300	function	PartRender_Construct	65	engine-trail.md
 0x002c9248	function	Psys_DrawInstance	65	engine-trail.md
+0x000d2d20	function	Ship_GatherWingtipNodes	80	wingtip-vortices.md
+0x002db500	function	ShipWingtipVortices_RegisterClass	80	wingtip-vortices.md
+0x002db5e8	function	ShipWingtipVortices_Construct	75	wingtip-vortices.md

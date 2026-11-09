@@ -1190,6 +1190,17 @@ Pulse frame, both ways, same posed field (player behind, a Feisar 8 units ahead,
 units a second, `--field-warmup`, a camera behind the tucked craft): with the setting on the
 tucked craft carries a white glow and purple streaks along its flanks; off, its plume alone.
 
+### Is the original's white nose glow a separate effect? No (2026-11-09, `hd-nose-glow-control`)
+
+The one reading the passes above left open: whether the compact white glow at the nose appears without a trail hit.
+A Time Trial on Talon's Junction (Feisar, no craft ahead) at 100 to 125 units/s, 26 frames over two restores, and a
+Zone run at 103 to 154 units/s, ten frames over two boots, show **no white glow at the nose or the wing tips**. The
+glow needs the burst; confidence 85 that it is not an always-on, speed or Zone effect, 75 that it is the burst's own
+(`CORE_IMPACT`'s frame, above). The `wingtip` locators HD's hulls author are collected by `Ship_GatherWingtipNodes`
+(`0x000d2d20`) and read by no code. Frames, metric and the maintainer's unexplained Zone contrails:
+[hd-wingtip-contrails.md](../../../rendering/hd-wingtip-contrails.md); addresses:
+[wingtip-vortices.md](wingtip-vortices.md).
+
 ## The third sampler is the lightmap slot, empty
 
 `enginetrail_bluered_triangle.rcsmodel`'s material record names a third
