@@ -1,10 +1,14 @@
-//! A trail-hit burst lent to a title that authors none (`graphics.trail_hits`).
+//! The trail-hit burst behind the player's `graphics.trail_hits`.
 //!
 //! Pulse and Pure have no `WO_TRAIL_HITSHIP` of their own (`docs/formats/pulse-absent-effects.md`).
 //! With the player's setting on, the race reads the effect off another source that does author
 //! it, through that source's own title data (effect directory, colour scale, sprite and extent
 //! laws), and plays it for a craft flying in a rival's trail. With no such source it plays
 //! nothing and the loader report says so: no stand-in is drawn.
+//!
+//! 2048 and Omega author the burst, but their executables never spawn it
+//! (`docs/ghidra/functions/ps4-omega-eu/trail-hits.md`): [`gate`] keeps their own effect off the
+//! race unless the setting is on. Wipeout HD plays it whatever the setting.
 
 use std::sync::Arc;
 
@@ -81,6 +85,22 @@ pub(super) fn lend(
     }
 }
 
+/// `handles` without the title's own trail-hit burst when the title's original never fires it
+/// (`oag_title::Effects::trail_hits_native`) and the player's setting is off. A lent burst only
+/// exists with the setting on, so it is never taken back here.
+pub(super) fn gate(
+    options: &Options,
+    craft_title: &oag_title::Title,
+    handles: crate::EffectHandles,
+) -> crate::EffectHandles {
+    if craft_title.effects.trail_hits_native || matches!(options.trail_hits, TrailHits::On { .. }) {
+        return handles;
+    }
+    handles
+        .without(Trigger::TrailHitship)
+        .without(Trigger::TrailHitshipRed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,7 +158,54 @@ mod tests {
         assert!(report[0].contains("would not open"), "{report:?}");
     }
 
-    /// A title that plays its own burst ignores the setting entirely.
+    fn both_bursts() -> crate::EffectHandles {
+        let mut handles = crate::EffectHandles::default();
+        for trigger in [Trigger::TrailHitship, Trigger::TrailHitshipRed] {
+            let pob = crate::tests::respawn::one_emitter_pob("WO_TRAIL_HITSHIP", 0);
+            let effect = psys::Effect::parse(&pob, psys::ColourScale::Full).expect("parses");
+            handles.insert(trigger, effect);
+        }
+        handles
+    }
+
+    fn plays(handles: &crate::EffectHandles) -> [bool; 2] {
+        [Trigger::TrailHitship, Trigger::TrailHitshipRed].map(|t| handles.get(t).is_some())
+    }
+
+    /// 2048 and Omega author the burst but never fire it: their own effect plays only with the
+    /// setting on.
+    #[test]
+    fn a_title_whose_original_never_fires_the_burst_plays_it_only_with_the_setting() {
+        for title in [oag_2048::TITLE, oag_omega::TITLE] {
+            assert!(!title.effects.plays_trail_hits_natively(), "{}", title.name);
+            let off = gate(&Options::default(), title, both_bursts());
+            assert_eq!(
+                plays(&off),
+                [false, false],
+                "{} with the setting off",
+                title.name
+            );
+            let on = gate(&on(None), title, both_bursts());
+            assert_eq!(
+                plays(&on),
+                [true, true],
+                "{} with the setting on",
+                title.name
+            );
+        }
+    }
+
+    /// Wipeout HD fires the burst itself, so the setting changes nothing.
+    #[test]
+    fn hd_plays_its_burst_whatever_the_setting() {
+        assert!(oag_hd::TITLE.effects.plays_trail_hits_natively());
+        for options in [Options::default(), on(None)] {
+            let handles = gate(&options, oag_hd::TITLE, both_bursts());
+            assert_eq!(plays(&handles), [true, true]);
+        }
+    }
+
+    /// A title that authors its own burst is never lent another's, whatever the setting.
     #[test]
     fn a_title_with_its_own_burst_ignores_the_setting() {
         for title in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {

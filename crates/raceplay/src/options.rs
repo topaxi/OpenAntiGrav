@@ -6,15 +6,16 @@
 
 use super::*;
 
-/// Whether a title that authors no trail-hit burst plays another source's
-/// (`graphics.trail_hits`, off by default: an enhancement, neither original has it).
+/// Whether the trail-hit burst plays on a title whose original never shows it
+/// (`graphics.trail_hits`, off by default: an enhancement of this project's).
 ///
-/// Honoured only where the craft's title has no `WO_TRAIL_HITSHIP` of its own
-/// (`oag_title::Title::effect_on(Trigger::TrailHitship)` is `None`: Pulse and Pure); HD, 2048 and
-/// Omega play theirs whatever this holds.
+/// A lender is used only where the craft's title has no `WO_TRAIL_HITSHIP` of its own
+/// (`oag_title::Title::effect_on(Trigger::TrailHitship)` is `None`: Pulse and Pure). 2048 and Omega
+/// author it but their originals never fire it (`oag_title::Effects::trail_hits_native`), so they
+/// play their own only with this on. HD plays its own whatever this holds.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum TrailHits {
-    /// The title plays what it authors, which on Pulse and Pure is nothing.
+    /// No burst but HD's own: nothing on Pulse and Pure, and 2048's and Omega's own are dropped.
     #[default]
     Off,
     /// Play the burst off `lender`, a source whose title authors it (found by the composition

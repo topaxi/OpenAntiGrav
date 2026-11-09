@@ -67,6 +67,14 @@ impl EffectHandles {
         self
     }
 
+    /// Plays nothing on `trigger`: a title's own trail-hit burst with the player's
+    /// `graphics.trail_hits` off, on a title whose original never fires it.
+    #[must_use]
+    pub fn without(mut self, trigger: Trigger) -> Self {
+        self.slots[trigger.index()] = None;
+        self
+    }
+
     /// The effect `index` of mod `mod_id`, if it loaded.
     #[must_use]
     pub fn own(&self, mod_id: &str, index: u16) -> Option<&crate::extension_effects::OwnEffect> {
