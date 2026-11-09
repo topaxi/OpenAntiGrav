@@ -30,12 +30,12 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
   orbit, SQUARE pans, right stick Y zooms; right stick X tilt is chosen), in one function (`oag_raceplay::photo::roles`).
   The scrub speeds, the jog and PLAY on a full R2 are chosen. A scrub seeks every frame, so a held trigger runs at the seek's
   cost. Not run on a real pad (the right stick and triggers are injected by `--drive`: `rstick`, `lstick`, `pull`).
-- **A rewind whose pre-roll starts from the first keyframe hashes differently from the live run** (landing at 101 with
-  `--autopilot`, 102 with the throttle held, a Pulse Single Race, no mod mounted; landings from 131 on matched). Probably the
-  first keyframe's plans (it is cut before the first tick learns them); not shown. Found by the PLAY test, which scrubs
-  past it; the viewer verifies every stored hash. **Also:** the stage-6 rewind hash test replays no recording while the
-  repository's mods are mounted (the race records nothing, `recorded_events` absent), so only keyframes are checked.
-  `docs/ui/photo-mode.md`, "Not done, named". Find why before a rewind to the start is offered as exact.
+- **A rewind into the first second of pre-roll: fixed** (`photo-mode-rewind-hash`). The live keyframe 0 was cut at the
+  race stage's build, before the AI choice, so `original_ai` was `None` in it and `Some` live; a landing under 120
+  ticks pre-rolled with another driver (diverged at 101 with `--autopilot`, 102 with the throttle held). It is cut
+  just before the first tick now (`Keeper::recut_first`). The stage-6 hash test and the PLAY test run with no mod
+  mounted. **Open:** `--give` writes the pickup outside the tick and outside the recording, so a pre-roll from keyframe
+  0 does not see it.
 - **Over a live race PLAY is photo mode's playback, not the viewer's screen** (ADR-0088, decision 1); a viewer over a
   live race is not built.
 - **The viewer's photo mode** offers no blur rows (no keyframes of the race it moves) and is refused in POSE VIEW.
