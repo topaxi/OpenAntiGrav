@@ -1092,7 +1092,7 @@ per claim; no name is applied (nothing here is above 70 that was not already nam
   burst that does not use this pool (unresolved, not the Quake's wave in the film either way);
   state 10 does nothing at the grid.
 - **The picture, original only.** `m5` (known firer, rival 12 units ahead, a scratch directory, not kept,
-  contact sheet `burst.png`, 30 fps frames `f/h_*.png`): the count rose at host 4.47 s, which is video
+  contact sheet `burst.png`, 30 fps frames `f/h_*.png`; **the same regime was re-filmed and kept 2026-11-09**, [missile-explosion.md](missile-explosion.md) "Film"): the count rose at host 4.47 s, which is video
   9.6 s (offset +5.1 s), and the frame's mean luma goes 135 (9.60 s) to 218 (9.67), 246 (9.80), 241
   (9.93), 209 (10.00), 162 (10.13), 150 (10.20). So the white-out starts within 0.1 s of the rise, is
   white to the frame edge for about 0.3 s with the struck rival's red-and-black hull in the middle of it
