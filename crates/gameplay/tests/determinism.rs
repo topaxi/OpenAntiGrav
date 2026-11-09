@@ -625,9 +625,20 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   these runs do not reach. Isolated the same way: with that one write removed
 ///   the previous constants reproduced bit for bit. Replaces `0xeaa8_47a2_289e_87cf` /
 ///   `0x4134_e0d4_2589_124b` at 60 ticks and `0x2f1c_7e70_2e92_c262` / `0x9191_035b_9d0d_e5a6` at 600.
+///
+/// - **Moved 2026-11-09, and this one is a real behaviour move.** A weapon blast
+///   used to change the struck craft's velocity at once, radially from the centre.
+///   The original posts it into `entity+0x110` from the craft's nose point instead
+///   (`Weapon_PostBlastImpulse` and the Bomb, Plasma, Rocket and Missile twins), and
+///   `Ship_ApplyCollisionImpulse` drains it as a forward-axis push and a stun, so
+///   `oag_weapons::projectile::blast` now writes `pending_impulse` and this scenario,
+///   which never runs the physics step, leaves it pending in the hash. The commit
+///   before held the previous constants. Replaces `0xec9c_ccdb_5f5d_773f` /
+///   `0x5ed8_b4a2_3d57_436b` at 60 ticks and `0xa7f6_6ad8_5049_aa72` /
+///   `0x019e_23aa_20c7_ec46` at 600. [`REFERENCE_VOLLEY`] did not move.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xec9c_ccdb_5f5d_773f, 0x5ed8_b4a2_3d57_436b),
-    (600, 0xa7f6_6ad8_5049_aa72, 0x019e_23aa_20c7_ec46),
+    (60, 0x27b9_91db_22fd_3d95, 0x3be2_4ce2_78f2_ab41),
+    (600, 0x4996_f89b_62a9_6614, 0x3918_3127_bf43_42f4),
 ];
 
 #[test]
