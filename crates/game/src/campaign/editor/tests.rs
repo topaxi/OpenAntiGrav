@@ -12,6 +12,12 @@ fn choices() -> Choices {
             .to_vec(),
         slots,
         title: "wipeout-pulse".to_string(),
+        authored: vec![Authored {
+            mode: "time_trial".to_string(),
+            track: "02_Track".to_string(),
+            class: "venom".to_string(),
+            targets: [150.0, 165.0, 180.0],
+        }],
     }
 }
 
@@ -89,4 +95,51 @@ fn clearing_a_slot_empties_it() {
     editor.clear();
     assert_eq!(editor.count(), 0);
     assert!(!editor.editing());
+}
+
+#[test]
+fn a_timed_event_takes_the_discs_own_targets_for_its_circuit_and_none_otherwise() {
+    let mut editor = Editor::new(choices(), "Timed");
+    editor.select((0, 0));
+    editor.confirm();
+    editor.select_field(Field::Mode);
+    editor.cycle(1);
+    let none = editor.to_def().unwrap();
+    assert_eq!(none.grids[0].events[0].medals, None, "no cell on 01_Track");
+    editor.select_field(Field::Circuit);
+    editor.cycle(1);
+    let def = editor.to_def().unwrap();
+    let medals = def.grids[0].events[0].medals.as_ref().unwrap();
+    assert_eq!(
+        (medals.gold, medals.silver, medals.bronze),
+        (Some(150.0), Some(165.0), Some(180.0))
+    );
+}
+
+#[test]
+fn a_race_without_an_authored_cell_is_awarded_by_finishing_place() {
+    let mut editor = Editor::new(choices(), "Places");
+    editor.confirm();
+    let def = editor.to_def().unwrap();
+    let medals = def.grids[0].events[0].medals.as_ref().unwrap();
+    assert_eq!(
+        (medals.gold, medals.silver, medals.bronze),
+        (Some(1.0), Some(2.0), Some(3.0))
+    );
+}
+
+#[test]
+fn the_screens_words_are_all_in_the_english_strings() {
+    let english = include_str!("../../../../../assets/ui/strings/english.toml");
+    for (id, text) in WORDS
+        .iter()
+        .copied()
+        .chain(MODES.iter().map(|m| (m.1, m.2)))
+        .chain(AIS.iter().map(|a| (a.1, a.2)))
+    {
+        assert!(
+            english.contains(&format!("{id} = {{ text = \"{text}\"")),
+            "{id}"
+        );
+    }
 }

@@ -393,3 +393,6 @@ pub fn pointer(view: &View, pointer: &Pointer, targets: &[Target]) -> Vec<Event>
     }
     out
 }
+
+#[cfg(test)]
+mod tests;

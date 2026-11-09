@@ -140,7 +140,7 @@ impl Session {
                 // The editor builds its own grid, one slot at a time: the disc's tiers are
                 // not its to show.
                 let editor = editing
-                    .then(|| self.editor_for(campaign.cell_layout.hex_slots()))
+                    .then(|| self.editor_for(campaign.cell_layout.hex_slots(), &campaign.grids))
                     .flatten();
                 if editing {
                     campaign.grids.clear();

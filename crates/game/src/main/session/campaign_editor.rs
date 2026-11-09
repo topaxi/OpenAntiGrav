@@ -13,7 +13,7 @@
 use log::{debug, error, info};
 
 use oag_core::buttons::Button;
-use oag_game::campaign::editor::{Choices, Editor, Field, Pick};
+use oag_game::campaign::editor::{Authored, Choices, Editor, Field, Pick};
 use oag_ui::menu::nav::Nav;
 use oag_ui_screens::campaign::editor::{self as view, Event};
 use oag_ui_screens::prompt;
@@ -49,7 +49,11 @@ impl Session {
     }
 
     /// The editor over the screens just loaded: choices from the booted title and disc.
-    pub(super) fn editor_for(&self, slots: Vec<(u32, u32)>) -> Option<EditorScreen> {
+    pub(super) fn editor_for(
+        &self,
+        slots: Vec<(u32, u32)>,
+        disc: &[oag_tables::race_campaign::Grid],
+    ) -> Option<EditorScreen> {
         let shell = self.shell.as_ref()?;
         let pick = |value: &str, label: &str| Pick {
             value: value.to_string(),
@@ -76,6 +80,11 @@ impl Session {
                 .collect(),
             slots,
             title: shell.title.slug(),
+            authored: disc
+                .iter()
+                .flat_map(|grid| &grid.cells)
+                .filter_map(Authored::of)
+                .collect(),
         };
         let strings = &shell.strings;
         let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();

@@ -228,6 +228,12 @@ fn check_editor(title: &'static oag_title::Title, source: &std::path::Path) {
         classes: ladder.iter().map(|name| Pick::plain(name)).collect(),
         slots: disc.cell_layout.hex_slots(),
         title: title.slug(),
+        authored: disc
+            .grids
+            .iter()
+            .flat_map(|grid| &grid.cells)
+            .filter_map(oag_game::campaign::editor::Authored::of)
+            .collect(),
     };
     let mut editor = Editor::new(choices, "Editor Run");
     let slot = *editor.choices().slots.first().expect("a slot");

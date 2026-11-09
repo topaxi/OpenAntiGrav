@@ -74,6 +74,44 @@ pub const WORDS: [(&str, &str); 20] = [
     ("OAG_EDITOR_DEFAULT_NAME", "MY CAMPAIGN"),
 ];
 
+/// The medal targets one of the disc's own cells authors for a mode, circuit and class,
+/// in the campaign file's units (seconds on a timed mode).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Authored {
+    /// The campaign file's mode word.
+    pub mode: String,
+    /// The circuit id.
+    pub track: String,
+    /// The speed class, lowercase.
+    pub class: String,
+    /// Gold, silver, bronze.
+    pub targets: [f64; 3],
+}
+
+impl Authored {
+    /// What `cell` authors, when it is one of the modes the editor offers and names a
+    /// circuit.
+    #[must_use]
+    pub fn of(cell: &oag_tables::race_campaign::Cell) -> Option<Self> {
+        let mode = MODES.iter().map(|m| m.0).find(|word| {
+            super::custom::MODES
+                .iter()
+                .any(|(w, m)| w == word && *m == cell.mode)
+        })?;
+        let scale = if matches!(mode, "time_trial" | "speed_lap") {
+            100.0
+        } else {
+            1.0
+        };
+        Some(Self {
+            mode: mode.to_string(),
+            track: cell.track.clone()?,
+            class: cell.class.to_ascii_lowercase(),
+            targets: [cell.gold, cell.silver, cell.bronze].map(|t| t as f64 / scale),
+        })
+    }
+}
+
 /// What the title and its disc offer a slot to be set to.
 #[derive(Debug, Clone)]
 pub struct Choices {
@@ -87,6 +125,9 @@ pub struct Choices {
     pub slots: Vec<(u32, u32)>,
     /// The title's slug, for the mod's `titles`.
     pub title: String,
+    /// The medal targets the disc's own cells author: a placed event takes those of the
+    /// cell with its mode, circuit and class.
+    pub authored: Vec<Authored>,
 }
 
 /// A field of one event, in the order the panel lists them.
@@ -436,6 +477,50 @@ impl Editor {
         Ok(CampaignDef::new(info, vec![grid]))
     }
 
+    /// The medal targets of an event: the disc's own cell for the same mode, circuit and
+    /// class; for a mode whose targets do not depend on the circuit (a finishing place, a
+    /// zone or kill count), that of the same mode and class on any circuit. A timed mode
+    /// with no cell of its own on the disc gets none: a time can only be authored per
+    /// circuit, and one invented would be a guess.
+    fn medals(&self, mode: &str, draft: &Draft) -> Option<MedalsDef> {
+        let track = self
+            .choices
+            .tracks
+            .get(draft.track)
+            .map(|p| p.value.as_str());
+        let class = if mode == "zone" {
+            "zone".to_string()
+        } else {
+            self.choices
+                .classes
+                .get(draft.class)
+                .map(|p| p.value.to_ascii_lowercase())?
+        };
+        let timed = matches!(mode, "time_trial" | "speed_lap");
+        let found = self
+            .choices
+            .authored
+            .iter()
+            .find(|a| a.mode == mode && a.class == class && Some(a.track.as_str()) == track)
+            .or_else(|| {
+                self.choices
+                    .authored
+                    .iter()
+                    .find(|a| !timed && a.mode == mode && a.class == class)
+            });
+        let [gold, silver, bronze] = match found {
+            Some(a) => a.targets,
+            None if matches!(mode, "race" | "head2head") => [1.0, 2.0, 3.0],
+            None => return None,
+        };
+        Some(MedalsDef {
+            gold: Some(gold),
+            silver: Some(silver),
+            bronze: Some(bronze),
+            ..MedalsDef::default()
+        })
+    }
+
     fn event(&self, slot: (u32, u32), draft: &Draft) -> EventDef {
         let mode = MODES[draft.mode].0;
         let ours = AIS[draft.ai].0 == "ours";
@@ -475,12 +560,7 @@ impl Editor {
                 pilot: None,
                 teams: Vec::new(),
             }),
-            medals: matches!(mode, "race" | "head2head").then(|| MedalsDef {
-                gold: Some(1.0),
-                silver: Some(2.0),
-                bronze: Some(3.0),
-                ..MedalsDef::default()
-            }),
+            medals: self.medals(mode, draft),
             unlock: Some(UnlockDef {
                 open: true,
                 requires: Vec::new(),
