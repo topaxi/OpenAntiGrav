@@ -431,7 +431,7 @@ tint moves toward blue. **False as stated; no code changed.**
 5. **Shell tint: the lead is the unit's gamma nibble, unread.** The flame and the bomb-blast fireball read their colour tap with
    gamma nibble 7 on unit 0 (RGB decoded on fetch, the packer encoding the output): `enc(dec(t) * k / 2)` (`engine-trail.md`, "The
    flame's colour tap is decoded on fetch"; `hd-unlit-programs.md`, the bomb-blast table, where one unit of four read 0). Ours reads the
-   shell tap raw (`texture * 0.5`). Whether `hd_absorbinternal`'s unit 0 carries 7 is the open value. Read recipe:
+   shell tap raw (`texture * 0.5`). ~~Whether `hd_absorbinternal`'s unit 0 carries 7 is the open value.~~ It does, and decoding it does not close the tint: see "HD: the shell's unit 0 reads gamma nibble 7" below. Read recipe:
    `scripts/rpcs3-hd-absorb-film.py` with the pushbuffer hook, then `scripts/rsx-draw-list.py DIR NAME --samplers` on the shell's draw
    (blend `SrcAlpha`/`One`, the absorbeffect mesh): bits 20-23 of `SET_TEXTURE_ADDRESS` on unit 0. If it is 7 the shell is
    `enc(dec(t) * 0.5)`, 1.46 times ours at a mid texel and bluer by that factor (blue minus red +6.7 to about +9.8 against the
@@ -439,6 +439,64 @@ tint moves toward blue. **False as stated; no code changed.**
    already matches, on an unread value.
 6. **2048 and Omega: not checkable.** Their particle programs are Vita GXP and PS4 bytecode; whether they close on a scale is not
    read, and neither draws the shell.
+
+## HD: the shell's unit 0 reads gamma nibble 7; decoding it does not close the tint (`hd-absorb-tint-2`, 2026-11-09)
+
+**Claim, half true: N is 7, and wiring the decode moves the 1.0 s tint the wrong way. Nothing landed in the renderer.**
+
+Falsifier written before the capture: bits 20-23 of unit 0's `SET_TEXTURE_ADDRESS` word on the shell's draw are not 7.
+
+**The read (confidence 85, one boot, one frame).** `scripts/rpcs3-hd-absorb-film.py --dump-at 0.5` (new: the target stays paused at that shot's age while
+`rpcs3_draw_hook.py` dumps the frame's RSX draws; `HOOK_LIGHT=1 HOOK_NO_HEADS=1`, ring seeded `0x40000000:0x20000`), then
+`scripts/rsx-draw-list.py DIR d00 --samplers`. The frame is the absorb at age 0.50 s on Talon's Junction (832 draws) and the control at the same lap-clock
+offset (755 draws, same pose to 0.01 units).
+
+| What | Value |
+| --- | --- |
+| The shell's draws | draws 644 to 657 of the absorb frame: 14 draws on the scene target, blend `SrcAlpha`/`One`, one fragment program, **absent from the control** (0 draws with it) |
+| Its program (disassembled live with `scripts/ps3-fp-live.py`) | the listing of `absorb-feedback.md`, "The material": `TEX R0.w` at `(TC3.yz)`, `MAD uv + 0.5 * alpha`, `MAD + 5 * time`, `TEX H1.xyz`, fog `EX2_SAT` lerp, **`MAD /2 H0.xyz`** |
+| Unit 0 on all 14 draws | `SET_TEXTURE_ADDRESS` `0x60710101`: bits 20-23 are **7** (RGB decoded on fetch, alpha raw); format word `0x00098829`, rect `0x01000100` |
+| The same draws, units 1 and 2 | `0x60030303`: nibble **0**, so the field discriminates within one draw |
+| The texture, statically | `data/weapons/textures/hd_absorbinternal.gtf` (`DATA02.PSARC`): 256 x 256, DXT4/5 (`0x88`), 9 mips, which is the draw's format word |
+
+So the shell's colour tap is read in the flame's way (`engine-trail.md`, "The flame's colour tap is decoded on fetch"): the packer encodes the program's output,
+so the console adds `enc(dec(t) * k / 2)`. A second boot did not repeat the draw dump: three more boots stalled in `rsx_fifo.Walk` at 27 draws on every retry
+(the walk stops after the page at `0x74100` that the first dump's last JUMP names; cause not found), where the first two boots walked a whole frame. Read as seen
+once. The 1.0 s frame of the first run is also incomplete (317 draws, no shell draw), so only age 0.5 s is read. `--dump-attempts 1` keeps a stalled attempt's age from drifting
+(each retry runs the game 0.3 s on).
+
+**Wiring it** (two lines of `shade.wesl`'s absorb branch: the flame's `mix(tap, decode(tap), encoded_out * linear_out)` on the second tap's RGB, the
+alpha-offset tap raw) and re-pairing on this run's own frames, ours on one driver before and after (craft box `(400,330)-(880,690)` at 1280x720, absorb minus control,
+`hd-weapon-pair.py --team feisar_c1 --camera-from 01 --extra --variant concept1`; the camera is the control's 1.0 s read, the craft rests):
+
+| Age | Original (this run) | Ours before | Ours with the decode | Ours, decode and no `/2` (diagnostic) |
+| --- | --- | --- | --- | --- |
+| 0.5 s luma / blue minus red | +15.9 / +14.2 | +17.4 / +7.2 | +11.6 / +11.1 | +15.3 / +11.8 |
+| 1.0 s luma / blue minus red | **+7.0 / +9.8** | **+5.8 / +6.8** | **+1.8 / +4.4** | +2.5 / +5.5 |
+
+The target was blue minus red at 1.0 s of at least +9.0, with luma re-paired against the original's: ours falls to +4.4 and +1.8. **That part is false, so the change was reverted.**
+At 0.5 s, where the burst is most of the box, the decode is bluer (+7.2 to +11.1) and dimmer, nearer the original on both. Read as a player (the craft crops at 0.5 s and
+1.0 s, original, before, decode, side by side): the original at 1.0 s is a hull in a saturated blue sheen with a blue ring on the pad; ours before is a faint lavender
+rim and the decode makes it fainter, so the shell does **not** read as saturated blue after the change. The decoded shell is `enc(0.5 dec(t))`, always darker than
+`enc(0.5 t)`; the original is brighter than either, so the missing light is not the tap's encoding.
+
+**What is open (leads, none measured):**
+
+1. **Framing.** The craft in ours is about 1.5 times the original's width in this pair (same pose and camera, by eye; the first capture had it near 2 times), so the box holds a
+   different share of hull, track and shell. A like-for-like score needs the craft's own pixel mask, or a camera solved from the craft's projected size.
+2. **The shell mesh.** The original's 14 draws sum to 20,076 indices (6,692 triangles); `absorb-feedback.md` reads 12,977 triangles for Feisar's `LeachEffectShape`.
+   This hull is `Feisar_c1`; which mesh its `AbsorbEffect.vex` names was not read.
+3. **The original's tint moved between captures** on the same state: +10.8 (first), +9.8 (this one, RPCS3 0.0.43-20574); luma +5.8 and +7.0. Controls were equal; the spread is
+   about the size of the effect, so the +9.0 target sat inside it.
+4. The `/2` was matched on luma alone (+5.8) before the nibble was known; with the decode in, that match is gone, and dropping the `/2` is not it either (table). Re-read the shell's alpha
+   (`ShieldColour` times the vertex ramp) against the draw's constants before touching either factor.
+
+RPCS3 0.0.43-20574 does not load the October save states (`No savestate file found or savestate not compatible`): the weapons grid was rebuilt with
+`OAG_WEAPONS_ON=1 scripts/emu-hd-race-walk.sh <lane> 8 0 0` and `scripts/emu-save-state.sh` (`emulator-recipes.md`).
+
+**2048 and Omega: not checkable.** Neither title draws a shell (their effects tables are the unread one), and a unit's gamma nibble is runtime sampler state: it needs a live
+frame, which neither has (no absorb frame exists for either, see the next section). HD's shell program and its nibble are not evidence about theirs: Omega's
+shaders are PS4 bytecode and 2048's Vita GXP.
 
 ## 2048 and Omega
 
