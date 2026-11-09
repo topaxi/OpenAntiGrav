@@ -853,9 +853,8 @@ Omega's `WO_TRAIL_HITSHIP` was not parsed here. The 2026-10-29 verdict on the sp
 
 The previous pass left two leads for where HD builds a class-6 streak. Both are
 closed, and the expansion is located: it runs on an SPU job, not in PPU code
-and not in a vertex program. The law is read off Omega's CPU twin of the same
-code. On HD it is still a hypothesis, backed by HD's own job inputs and vertex
-counts.
+and not in a vertex program. The law is read off that job's own code, and
+Omega's CPU twin of the same code agrees with it instruction for instruction.
 
 ### The two leads were not the draw (clean negatives)
 
@@ -965,7 +964,7 @@ and DATA06's copies, which agree on these fields:
 So HD draws a class-6 particle as **one 4-vertex quad**, not 12 vertices
 (mode 6, class 7, has 12). Class 7 is Pulse's capped streak.
 
-### The law, read on Omega's CPU twin (confidence 70 for the shape on HD)
+### The law: HD's SPU job and Omega's CPU twin agree (confidence 85)
 
 Omega has no SPU. Its `Particle_PushBatchByMode` (`eboot-ps4-omega-eu.bin`
 `FUN_01714de0`, see
@@ -988,20 +987,51 @@ to view space by the view matrix:
 
 This is **Pulse's pool bar** (`crates/fx/src/psys/streak.rs`, `StreakDraw::Bar`):
 a rectangle `2 size` wide, reaching `aspect * size` past each end. One thing
-differs. Pulse's bar puts both ends on their **mean** depth; Omega uses the
+differs. Pulse's bar puts both ends on their **mean** depth; HD and Omega use the
 **farther** one.
 
-Why 70 and not higher on HD: four static sources agree on the shape. They are
-Omega's CPU code, HD's job inputs (the view matrix, the mode, `+0x4c8`), HD's
-4-vertex row, and Pulse's bar. None is a live HD capture. Two things stay
-inside the unread SPU job:
+**HD's own code says the same.** The `PartRender` job
+(`scripts/ps3-spu-disasm.py 0x0080bb80 0x5ad0`; offsets below are into the
+image, local store is image `+0x4000`) was read once `spu-objdump` was
+reinstalled:
 
-- **the depth choice** (farther, as on Omega, or the mean, as on Pulse);
-- **what `-(+0xc80)` (0.2 on both emitters) does in the job**. On Omega,
-  `-(+0xc80)` is read by mode 4, not mode 5.
+```text
+56d8  ai    $9,$19,-1         mode - 1 (param block +0x40)
+56f0  clgti $5,$9,5           above 5: no draw
+5704  lqx   $4,$12,$11        jump table at image 0x5724:
+                              modes 1-4 -> 0x57e8, mode 5 -> 0x58fc, mode 6 -> 0x58f4
+58fc  brsl  $0,0x3940         mode 5: walk the pool (DMA in 0x1a80-byte blocks,
+                              0xd0 per particle), call 0x29b8 per live particle
+29bc  lqd   $34,48($4)        particle +0x30 (B)
+2a44  lqd   $32,32($4)        particle +0x20 (A); w forced to 1.0
+2a70..2aa8                    both through the view matrix (local 0x5b00..0x5b30,
+                              param block +0x00..+0x3f)
+2ab4  fcgt  $2,$3,$15         B.z > -1.0: emit a degenerate quad (0x2ac0)
+2d58  fcgt  $35,$18,$15       A.z > -1.0: likewise
+2e10  fcgt  $82,$24,$18
+2e20  selb  $82,$24,$18,$82   z = min(A.z, B.z): the farther end
+2dcc..2ea0                    z / A.z and z / B.z (frest, Newton step)
+2eb8  fm    $98,$14,$98       A' = A * z / A.z
+2ed4  fm    $83,$80,$3        B' = B * z / B.z
+2ef0  fs    $51,$83,$98       d = B' - A'
+2f10..2f64                    n = d / |d| (frsqest; a fixed direction at 0)
+2f18  fm    $73,$94,$96       size (+0x70) * aspect (local 0x5b50 = param +0x44)
+2f70  fm    $94,$37,$38       cap = n * size * aspect
+2f68..2f7c                    perp = (n.y, -n.x) * size
+2ff0  fs    $83,$98,$94       A' - cap, then the four corners
+```
 
+The particle's colour bytes (`+0x74`) are scaled by 1/255 (`0x3b808080`),
+clamped and repacked. The atlas cell comes from frame `+0x78` and the UV steps.
+`-(+0xc80)` (param `+0x48`, local `0x5b40`) is read only at `0x3efc`, in another
+mode's routine, never in mode 5. The mean-depth routine at `0x0ae8`
+(`fa` then `fm` by 0.5, the shape of Pulse's bar) belongs to the modes 1-4 path,
+not to mode 5.
+
+Why 85: HD's own code read statically, and a second binary on another ISA
+(Omega's CPU code) agrees. No live HD capture of a vertex buffer, so not higher.
 The texture a sprite-less emitter binds is `record+0xca4`'s render state, set at
-load and also unread.
+load and still unread.
 
 ### What this says about ours
 
@@ -1032,20 +1062,10 @@ simulation's, and nothing here changes it.
 | `0x002c5300` | `PartRender_Construct` | 65 |
 | `0x002c9248` | `Psys_DrawInstance` | 65 |
 
-### The SPU read, for whoever has the tool
-
-```sh
-scripts/ps3-spu-disasm.py 0x0080bb80 0x5ad0     # needs spu-objdump (ps3-spu-binutils)
-```
-
-Look for the mode-5 case's use of parameter-block `0x44` (aspect) and `0x48`
-(`-(+0xc80)`), and a `min` of the two endpoints' view depths. `spu-objdump` was
-not installed on this machine on 2026-11-09, so this was not read.
-
 ### Cross-title
 
-- **Omega: checked, applies** to the shape. Same mode table semantics and the
-  same record fields; the CPU code is the source of the law above.
+- **Omega: ported** in the original's own code: the same mode-5 law on the CPU
+  (`Particle_PushBatchByMode`), above. Ours has no HD-specific draw yet.
 - **2048: not checked for the draw.** 2048 ships `psys_normal_vp/fp` and
   `psys_simplegeom_vp/fp` only (strings at `0x814d34ac`-`0x814d34e0`). Its
   pusher was not located.
