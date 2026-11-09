@@ -1131,6 +1131,30 @@ compare-seed:
 publish-compare *manifests:
     python3 scripts/compare-page.py {{manifests}} --publish
 
+# Pull the private comparison repo (data/reference), re-render our side of every pair at this tree,
+# commit and push that re-render there so every host shares it, then publish the curated page.
+# Refuses if data/reference has uncommitted changes, so another run's re-render is never mixed in.
+[doc("Pull data/reference, re-render ours, commit and push it there, then publish the curated page")]
+compare-publish:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ref=data/reference
+    if [ -n "$(git -C "$ref" status --porcelain)" ]; then
+        echo "compare-publish: $ref has uncommitted changes; commit or discard them first" >&2
+        git -C "$ref" status --short | head -20 >&2
+        exit 1
+    fi
+    git -C "$ref" pull --ff-only
+    python3 scripts/compare-rerender-ours.py
+    tree="$(git rev-parse --short HEAD)"
+    if [ -n "$(git -C "$ref" status --porcelain)" ]; then
+        git -C "$ref" add -A compare-page
+        git -C "$ref" commit -q -m "Comparison pairs: ours re-rendered at $tree"
+        git -C "$ref" push -q
+        echo "compare-publish: $ref committed and pushed ($(git -C "$ref" rev-parse --short HEAD))"
+    fi
+    python3 scripts/compare-page.py --publish
+
 # Build the Allegrex processor module against the installed Ghidra.
 # Stock Ghidra mis-decodes PSP vector code; see docs/psp/allegrex-vfpu.md.
 build-allegrex *ARGS:

@@ -1194,7 +1194,15 @@ For each curated entry whose id has a later `rendered_at` in the reference set, 
 and `original` paths and a byte-identical original image, it copies `ours.png`, `side.png` and
 `pair.json` and the entry's `rmse`, `edge_ncc`, `mean_grey`, `build`, `binary` and `rendered_at`
 lines. Every other curated line (title, note, setting) stays as curated, and each carried entry is
-printed. A directory named on the command line is published as it is. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
+printed. A directory named on the command line is published as it is.
+
+**In one go: `just compare-publish`.** It pulls `data/reference` (the private repository,
+[ADR-0085](../architecture/adr/0085-comparison-originals-live-in-a-private-repository.md)) fast-forward
+only, re-renders our side of every pair at this tree (`compare-rerender-ours`), commits and pushes that
+re-render there (`Comparison pairs: ours re-rendered at <sha>`), then runs `publish-compare`. It refuses
+when `data/reference` has uncommitted changes, so one host's re-render is never mixed into another's;
+commit or discard them first. Originals are untouched; a pair that needs a new original is still
+`compare-rerender` or `compare-rerender-all`. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
 ADR-0074 Accepted it reads `unlocked`. The maintainer runs the command.
 
 A curated page should carry only frames the policy covers; the seed and live
