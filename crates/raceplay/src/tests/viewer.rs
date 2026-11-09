@@ -128,6 +128,50 @@ fn a_seek_lands_on_the_recorded_run_wherever_it_goes() {
     }
 }
 
+/// The clocks a HUD reads at tick `k` of the recorded run, at index `k`: `(lap_ticks, race_ticks)`.
+fn clocks(ticks: u64) -> Vec<(u64, u64)> {
+    let mut race = Race::start(fixture());
+    let at = |race: &Race| {
+        let readout = race.readout();
+        (readout.lap_ticks, readout.race_ticks)
+    };
+    let mut clocks = vec![at(&race)];
+    for tick in 0..ticks {
+        race.tick(&inputs(tick));
+        race.drain_cues();
+        clocks.push(at(&race));
+    }
+    clocks
+}
+
+/// What the viewer's HUD shows for the lap and the race at a tick is what the live race showed
+/// at that tick, forwards and back, so the viewer's `current` is the lap clock (not the
+/// recording's own clock, which counts the start-line countdown too). Fails if a seek leaves a
+/// clock of the view side from another moment.
+#[test]
+fn the_hud_clocks_after_a_seek_are_the_live_races_at_that_tick() {
+    let (replay, _) = recording(TICKS);
+    let live = clocks(TICKS);
+    assert!(
+        live[TICKS as usize].1 > 0 && live[TICKS as usize].1 < TICKS,
+        "the race clock starts after the countdown: {:?}",
+        live[TICKS as usize]
+    );
+    let (mut viewer, mut race) = open(replay);
+    assert_eq!(pass_ended(&mut viewer), Pass::Complete);
+    let mut targets: Vec<u64> = (0..=TICKS).step_by(13).collect();
+    targets.sort_by_key(|tick| (tick * 97) % 397);
+    for target in targets {
+        viewer.seek(&mut race, target);
+        let readout = race.readout();
+        assert_eq!(
+            (readout.lap_ticks, readout.race_ticks),
+            live[target as usize],
+            "the HUD's clocks after a seek to tick {target}"
+        );
+    }
+}
+
 /// A seek past the built prefix is held at it, and the recording's end is the last tick.
 #[test]
 fn a_seek_past_the_end_stops_at_the_end() {
