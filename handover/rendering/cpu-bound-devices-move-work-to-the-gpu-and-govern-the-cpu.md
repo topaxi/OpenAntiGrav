@@ -178,4 +178,4 @@ top of `park/indirect-depth-prepass` afterwards.
 ## Next Steps
 
 1. Lane 6 (governor) landed, on by default (maintainer, 2026-10-27), and undoes a step that saved nothing and remembers skips per title, track and mode for the launch ([`cpu-governor.md`](../../docs/rendering/cpu-governor.md)).
-2. Lanes 1 to 5 open the next drive in order, each with its Deck before/after.
+2. Lanes 1, 3, 4 and 5 open the next drive in order, each with its Deck before/after (lane 2, render bundles, was measured and dropped).

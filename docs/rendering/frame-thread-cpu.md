@@ -1874,8 +1874,9 @@ merges its usage scope into the pass, registers its texture init actions and rep
 per recorded draw (`command/render.rs`, `execute_bundle`). It skips wgpu-core's per-command
 validation and tracking, and our own command recording.
 
-**Does the frame thread wait on the race pass's `finish`?** Yes, already measured: one view is bound
-by the finishing worker ("Where the frame thread goes, before the cuts" above), and in a split HD's
+**Does the frame thread wait on the race pass's `finish`?** Yes, already measured: one view was bound
+by the finishing worker before the second finishing thread ("Where the frame thread goes, before the
+cuts" and "A second finishing thread" above, HD `submit` 3.48 to 2.63 ms), and in a split HD's
 `submit` phase is 3.8 ms, about 2 ms of it waiting on a view's scene pass, which is one `finish`
 (`split-screen.md`, "What is left"). So a cheaper race pass would reach the frame thread. The
 question is how much a bundle makes it cheaper.
@@ -1939,7 +1940,10 @@ culling to know whether its list changed. What it removes is wgpu-core's per-dra
 
 **So, per view on this notebook**: HD 0.55 x 197 us x 26 % = about 28 us a frame with today's
 culling; about 45 us with the frustum test dropped (60 % reuse, less the driver's replay of 324
-more draws). Pulse 21 and 40 us. A frame whose list changed records a bundle, finishes it and then
+more draws). Pulse 21 and 40 us. The 55 % is read off a whole-process profile in which unrelated
+symbols (inflate, physics) moved by about 100 samples between the arms, so it is good to about 15
+points; even a bundle that removed the whole ceiling would give HD about 51 us a view at 26 % reuse
+and Pulse about 39 us at 50 %. A frame whose list changed records a bundle, finishes it and then
 executes it, which costs more than today's draws, so these are upper bounds. The Deck's CPU is
 several times slower (the ratio for this work is not measured); at four to five times, HD one view
 is 0.13 to 0.2 ms of CPU spread over the frame thread and the finishing threads, and a split twice

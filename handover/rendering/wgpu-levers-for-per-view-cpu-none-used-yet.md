@@ -75,8 +75,7 @@ per-view mutable state.
 
 ## Next Steps
 
-1. Read `encoder-finish`'s result (levers 3 and 4, and 1 if it got there) and strike what
-   landed.
+1. ~~Read `encoder-finish`'s result and strike what landed~~: levers 1, 3 and 4 are struck above.
 2. ~~Render bundles for the circuit and static scenery~~: measured and dropped (Open item 1).
 3. Push constants for per-draw matrices on native, with the web path unchanged.
 4. Measure each on the Deck (the notebook's hybrid CPU needs pinned, interleaved A/B runs).
