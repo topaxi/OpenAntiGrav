@@ -54,6 +54,10 @@
   lets one table carry both authored forms), and checked against HD's own
   `Anim Transform`s on the twelve circuits both titles ship. See
   [`2048-animation.md`](../formats/2048-animation.md)
+- **Pulse's circuit culls each batch's back faces, and a Moa Therma board stipples without it** (2026-11-09,
+  `moa-ad-flicker`): a front copy and a back copy of a trackside board share a plane; two-sided they z-fight
+  frame to frame, the original shows one clean side; wired per title rule, 13 of 29 Pulse pairs closer, 1 worse by 0.0001 - see
+  [`batch-cull.md`](batch-cull.md)
 - **Pulse's frame against the original's, matched and ranked** (2026-09-30): sky,
   fog and tone agree within 5 %; scenery textures now use the disc's mip levels picked by the GE slope law, as the
   original's do. See [`frame-audit.md`](frame-audit.md)

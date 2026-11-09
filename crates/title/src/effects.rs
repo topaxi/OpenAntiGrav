@@ -871,6 +871,15 @@ pub struct Looks {
     /// state with bit 2 writes depth. Wipeout HD's, read off
     /// `Material_ApplyRenderState` and a live race frame.
     pub material_render_state: Rule,
+    /// A `.vex` circuit's batch is drawn single-sided when its own `pass_mask`
+    /// bit `0x20` is clear (`GU_CULL_FACE` on), so the back-to-back front and
+    /// back copies of a trackside board never fight for one plane. Wipeout
+    /// Pulse PSP's, read off `Mesh_SetBatchDrawState` and a matched Moa Therma
+    /// frame (`docs/rendering/batch-cull.md`).
+    pub batch_back_face_cull: Rule,
+    /// [`Self::batch_back_face_cull`] on a disc that carries the same `.vex` batch
+    /// state but was not measured: the platform's law is the measured one.
+    pub batch_back_face_cull_carried: Rule,
     /// The race scene stores display-encoded values, so a blended draw adds or
     /// mixes encoded values rather than linear light. Wipeout HD's: every scene
     /// draw of three live race frames has `SET_SHADER_PACKER` 1 into an
@@ -955,6 +964,8 @@ impl Looks {
             lit_output_halved: Rule::UNREAD,
             material_lod_bias: Rule::UNREAD,
             material_render_state: Rule::UNREAD,
+            batch_back_face_cull: Rule::UNREAD,
+            batch_back_face_cull_carried: Rule::UNREAD,
             blends_encoded: Rule::UNREAD,
             final_composite_half_texel: Rule::UNREAD,
             wo_composite: Rule::UNREAD,

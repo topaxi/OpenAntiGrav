@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [pulse]
-updated: 2026-11-07
+updated: 2026-11-09
 summary: "Pulse flyby leftovers: authored Batch::depth_bias unapplied, the fade-in from white, weather under the flyby's section"
 categories: [rendering, gameplay]
 difficulty: medium (35)
@@ -23,7 +23,10 @@ The stipple itself is fixed: the flyby is masked by the section under its camera
   Not chased; it is visible on every circuit.
 - **Depth precision stays different**: coplanar copies drawn inside one section row would stipple in
   ours and tie cleanly in the original's 16-bit strict test. No opening shot shows one now; the
-  later shots were not swept with the blend probe.
+  later shots were not swept with the blend probe. One such pair is found and handled: a board's
+  front and back copy on Moa Therma, separated by the per-batch back-face cull
+  ([batch-cull.md](../../docs/rendering/batch-cull.md)); two front copies a ULP apart (nodes 868 and
+  929) still draw twice there, identical, so harmless.
 - **The weather under the flyby**: `Weather_Update` reads the same published section, and
   `Race::advance_weather` does not take the flyby's. Unmeasured whether a player can tell.
 

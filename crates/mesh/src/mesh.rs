@@ -214,6 +214,17 @@ pub struct Model {
     /// honours is a title's rule (`oag_title::Looks::material_render_state`),
     /// applied by [`Self::honour_render_state`].
     pub material_state: Vec<u32>,
+    /// Whether each draw's own [`DrawCall::culled`] picks the culling twin of the
+    /// opaque and cutout pipelines ([`mesh_render::Built::culled`]) although the
+    /// model records no [`Self::material_state`].
+    ///
+    /// **A `.vex` circuit's batches author their own cull bit**
+    /// (`oag_vex::vex::Batch::is_culled`, `pass_mask & 0x20 == 0`), and a board
+    /// built as a front copy and a back copy lies in one plane: drawn two-sided the
+    /// copies z-fight. Whether a title's circuit may act on the bit is its rule
+    /// (`oag_title::Looks::batch_back_face_cull`); the loader sets this where it
+    /// does. `false` leaves a model two-sided except under HD's material rule.
+    pub per_batch_cull: bool,
     /// The alpha-test reference [`Self::alpha_tested_draws`] is compared
     /// against, when the model's own materials author one.
     ///
@@ -321,6 +332,7 @@ impl Model {
             shield_shell: false,
             material_lod_bias: 0.0,
             material_state: Vec::new(),
+            per_batch_cull: false,
             alpha_test_ref: None,
             centre: [0.0; 3],
             radius: 0.0,
@@ -1022,6 +1034,7 @@ fn build_class(
         shield_shell: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
+        per_batch_cull: false,
         alpha_test_ref: None,
         centre,
         radius,

@@ -582,3 +582,34 @@ fn the_psp_bloom_belongs_to_pulse_and_pure_and_only_pure_lands_it_under_the_hud(
         );
     }
 }
+
+/// A Pulse circuit's batches cull per their own bit: measured on the PSP, carried to the PS2,
+/// and Pure's, which nothing measured, keep drawing two-sided.
+#[test]
+fn pulse_culls_a_circuits_batches_by_their_own_bit_and_nothing_else_does() {
+    let psp = |t: &Title| t.looks.batch_back_face_cull.applies(Platform::Psp);
+    let ps2 = |t: &Title| t.looks.batch_back_face_cull_carried.applies(Platform::Ps2);
+    assert!(psp(oag_pulse::TITLE) && ps2(oag_pulse::TITLE));
+    assert_eq!(
+        oag_pulse::TITLE.looks.batch_back_face_cull.origin,
+        Origin::Measured
+    );
+    assert_eq!(
+        oag_pulse::TITLE.looks.batch_back_face_cull_carried.origin,
+        Origin::InheritedFrom("Wipeout Pulse (PSP)")
+    );
+    assert!(
+        !oag_pulse::TITLE
+            .looks
+            .batch_back_face_cull
+            .applies(Platform::Ps2)
+    );
+    for other in [
+        oag_pure::TITLE,
+        oag_hd::TITLE,
+        oag_2048::TITLE,
+        oag_omega::TITLE,
+    ] {
+        assert!(!psp(other) && !ps2(other), "{}", other.name);
+    }
+}

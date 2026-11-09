@@ -478,7 +478,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             track_model = mesh::build_with_textures(&track, &track_blob, Some(&external))?;
             ps2_track_textures = Some(external);
         }
-        track_model
+        geometry::with_batch_cull(track_model, title.looks, archives.layout.platform)
     };
     // HD's zoom-streak ring on a title that draws none of its own: the player's
     // `graphics.boost_zoom`, honoured only where the title offers it. Chosen, not

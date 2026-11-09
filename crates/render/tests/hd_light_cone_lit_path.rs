@@ -102,6 +102,7 @@ fn model(noise: u8, ramp: u8, entry: Emissive) -> Model {
         shield_shell: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
+        per_batch_cull: false,
         alpha_test_ref: None,
         centre: [0.0, 0.0, 0.5],
         radius: 2.0,

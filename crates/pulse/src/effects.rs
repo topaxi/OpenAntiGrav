@@ -198,6 +198,19 @@ pub const LOOKS: &Looks = &Looks {
     // The GE selects the level by its slope law (`oag_mesh::mesh_render::PSP_TEXLOD_SLOPE`), not a bias.
     material_lod_bias: Rule::UNREAD,
     material_render_state: Rule::UNREAD,
+    // `Mesh_SetBatchDrawState` enables `GU_CULL_FACE` when `pass_mask & 0x20` is clear
+    // (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "The plume is two-sided"), and a
+    // Moa Therma frame at a matched pose draws one ornament where two-sided draws two
+    // (`docs/rendering/batch-cull.md`).
+    batch_back_face_cull: Rule {
+        on: PSP,
+        origin: Origin::Measured,
+    },
+    // The PS2 disc authors the same batch word; the PSP's law is carried over, unmeasured there.
+    batch_back_face_cull_carried: Rule {
+        on: Platforms::Only(&[Platform::Ps2]),
+        origin: Origin::InheritedFrom("Wipeout Pulse (PSP)"),
+    },
     blends_encoded: Rule::UNREAD,
     final_composite_half_texel: Rule::UNREAD,
     // Pulse ends its frame in its own bloom (`oag_post::bloom`), not the `wo_*` chain.

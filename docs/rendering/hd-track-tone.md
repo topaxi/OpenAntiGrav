@@ -1784,7 +1784,8 @@ coverage trees moved to the cutouts. `mesh_render::build` then builds a culling 
 prepass, shaded half, default and per-reference cutout pipelines with `cull_mode: Some(Face::Back)`) for a model that
 records material state and has a culled opaque or cutout draw, and `Drawable` switches between the two only when a draw's
 flag changes. The blended pipelines already keyed on `culled`. A bit-4-clear material stays two-sided. Pulse's `.vex`
-models carry `culled` and no material state and keep the model-wide `cull_back`, so nothing moved there. The prepass's depth
+models carry `culled` and no material state and keep the model-wide `cull_back`, so nothing moved there
+(a Pulse circuit's batches cull through `Model::per_batch_cull` instead, [batch-cull.md](batch-cull.md)). The prepass's depth
 half culls exactly as the shaded half (a slab drawn two-sided into depth would hold back the culled shading behind it).
 Shadow passes are unchanged: `shadow/map.rs` and `self_shadow.rs` carry their own measured cull choices. The
 `reversed_indices` buffer reverses triangle order, not the vertices of a triangle, so winding survives.

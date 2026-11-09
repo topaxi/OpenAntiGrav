@@ -1116,8 +1116,8 @@ state-index table it depends on is the same one this page already scores 95.
 **Corrected in the same change, 2026-08-09** - the predicate is now
 `pass_mask & 0x0020 == 0` and its tests are flipped.
 
-**It had no effect on any picture, and the reason is worth recording** so the
-next reader does not go looking for one: **nothing in the workspace consumes
+**It had no effect on any picture when it was corrected, and the reason is worth recording** so the
+next reader does not go looking for one: **nothing in the workspace consumed
 that predicate**, and every `mesh_render` pipeline sets `cull_mode: None`
 deliberately (strip winding is reconstructed rather than read from the file, so
 culling would turn a winding mistake into missing geometry). The
@@ -1126,6 +1126,12 @@ original by accident rather than by reading this bit. The first consumer would
 have culled exactly the surfaces the original draws two-sided - on the boost
 plume, all 32 of its batches - which is why it is fixed now rather than left as
 a comment.
+
+**Consumed since 2026-11-09 (`moa-ad-flicker`).** A Pulse circuit's opaque and cutout draws select a
+culling pipeline by this predicate (`Model::per_batch_cull`, set by the title rule
+`Looks::batch_back_face_cull`), and the boost plume stays two-sided: a Moa Therma board that is a
+front copy and a back copy in one plane no longer z-fights, and a matched original frame draws the
+same single ornament. Evidence, per-pair numbers and lineage: [batch-cull.md](../../../rendering/batch-cull.md).
 
 ### Environment-generated UVs do not suppress the orange rim
 
