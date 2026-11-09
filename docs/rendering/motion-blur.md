@@ -855,3 +855,101 @@ The same bench, `--motion-blur` per run, ms, two rounds:
 At 4K the blur costs this profile about 9.6 ms of the 24.9 ms pipelined frame, and `medium` saves
 little of it. The levers left on the gather (a 32-bit `prepared` texel instead of 64-bit, fewer
 taps) change the picture, so they are a tier decision, not a speed-up.
+The fewer-taps lever is now built as the tiers' own caps: "Fewer taps: each tier caps the
+gather" below.
+
+## Fewer taps: each tier caps the gather (2026-11-10, `blur-taps`)
+
+**Desktop numbers, not Deck numbers.** Everything below was measured on a notebook (Core Ultra 7
+265H) on its NVIDIA RTX PRO 2000 Blackwell Laptop GPU and its Arrow Lake iGPU (`Intel(R)
+Graphics (ARL)`, Mesa ANV, selected with
+`VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json`). The iGPU is the closer proxy for the
+Deck; the Deck itself was not available.
+
+**Why the tiers cost the same.** A tier only changed the shutter. The tap count follows the
+neighbourhood's reach (one tap per `TAP_SPACING_PX`, 4 px), capped at 15, and the reach is capped
+at `MAX_STRETCH` (8 %) of the viewport height: 86 px at 1080p, 173 px at 4K. A racing frame is
+mostly fast pixels, so most of them hit the 15-tap cap under `medium` and `high` alike. That is
+why `medium` saved almost nothing on the Deck at 4K (the table above).
+
+**What changed.** `MotionBlur::taps` gives each tier its own cap, `high` 11, `medium` 9, `low` 7,
+carried to the shader in the uniform's spare slot (`motion_blur::Frame::taps`). The blur keeps its
+length at any count: the taps spread over the whole reach, each jittered inside its own
+`1 / taps` share of a fixed `SPAN` (15/16 of the reach, which at 15 taps is the old placement up
+to rounding). Before that change the outermost tap sat at `taps / (taps + 1)` of the reach, so
+7 taps drew a smear 2 rows short of 15's at 60 px of reach; now both reach 27 rows
+(`lattice_tests::fewer_taps_keep_the_smears_length`). Fewer taps sample the same span more
+coarsely: the per-pixel dither turns the wider spacing into a slightly coarser speckle along a
+streak, not into a shorter or banded one.
+
+### Cost per tier
+
+`OAG_RENDER_GPU_BENCH=150 OAG_RENDER_PERF=1`, HD Anulpha Pass, one view, the Deck's profile (blur
+`half`), base `b56d129a3` against this change, both `release` `perf-probe`. Arms interleaved, 3
+rounds, every run under the gate lock, load 1.4 to 3.5. Medians of the redraws, then the median of
+the rounds, ms:
+
+```sh
+OAG_RENDER_GPU_BENCH=150 OAG_RENDER_PERF=1 oag-game hdfury-ps3-eu-dec.iso \
+  --track 'Data\Environments\15_Anulpha_Pass\track.vex' --race --mode single_race --seed 1 \
+  --autopilot --no-audio --size WxH --ticks 2500 --render-scale 100 \
+  --motion-blur <tier> --motion-blur-resolution half --screenshot out.png
+```
+
+| GPU | Size | Tier | gather (half), before -> after | blur chain | whole frame |
+| --- | --- | --- | --- | --- | --- |
+| NVIDIA | 1280x800 | high | 0.10 -> 0.08 | 0.32 -> 0.30 | 2.25 -> 2.26 |
+| NVIDIA | 1280x800 | medium | 0.08 -> 0.07 | 0.31 -> 0.29 | 2.25 -> 2.25 |
+| NVIDIA | 1920x1080 | high | 0.25 -> 0.21 | 0.64 -> 0.59 | 3.15 -> 3.10 |
+| NVIDIA | 1920x1080 | medium | 0.23 -> 0.18 | 0.62 -> 0.56 | 3.12 -> 3.02 |
+| NVIDIA | 3840x2160 | high | 1.55 -> 1.31 | 3.03 -> 2.75 | 8.78 -> 8.46 |
+| NVIDIA | 3840x2160 | medium | 1.47 -> 1.05 | 2.92 -> 2.50 | 8.55 -> 8.15 |
+| NVIDIA | 3840x2160 | low | 1.24 -> 0.82 | 2.69 -> 2.23 | 8.36 -> 7.87 |
+| Intel | 1280x800 | high | 0.50 -> 0.36 | 1.44 -> 1.31 | 10.49 -> 10.51 |
+| Intel | 1280x800 | medium | 0.41 -> 0.27 | 1.35 -> 1.12 | 10.44 -> 9.71 |
+| Intel | 1920x1080 | high | 0.92 -> 0.71 | 2.40 -> 2.15 | 13.21 -> 13.06 |
+| Intel | 1920x1080 | medium | 0.83 -> 0.66 | 2.32 -> 2.21 | 13.03 -> 12.74 |
+| Intel | 3840x2160 | high | 1.96 -> 1.39 | 5.02 -> 4.25 | 19.60 -> 17.51 |
+| Intel | 3840x2160 | medium | 1.70 -> 1.15 | 4.39 -> 3.87 | 17.50 -> 15.44 |
+| Intel | 3840x2160 | low | 1.46 -> 0.89 | 4.21 -> 3.61 | 17.17 -> 15.86 |
+
+- NVIDIA rounds agree within 0.01 ms at 800p and 1080p and 0.05 ms at 4K. The Intel rounds
+  scatter by 10 to 20 % (its clock), so its whole-frame column is noise below about 1 ms; the
+  gather column moved the same way in every round.
+- `medium` now costs clearly less than `high`: at 4K the gather is 1.05 against 1.31 ms (NVIDIA)
+  and 1.15 against 1.39 ms (Intel), where before it was 1.47 against 1.55 and 1.70 against 1.96.
+- 800p did not regress on either GPU.
+- On the Deck the gather is linear in the taps (the bisect above), so the expected saving at
+  `high` is about a fifth of its 1.78 / 7.15 ms at 1080p / 4K. That is an estimate, not a
+  measurement.
+
+### The picture
+
+Same race, ticks 2500 to 2502 (578 to 580 km/h, autopilot, in the tunnel past the start), 1920x1080, both gather
+resolutions. Metric as in "Grain" above: RMS of the 5x5 high-passed difference from a
+reference, over the pixels the blur changed (about 1.36 million). The reference is the same
+build with the cap at 63 (23 taps at 1080p, the count the 4 px spacing asks for).
+
+| Taps (cap) | half: hp-RMS / mean diff | full: hp-RMS / mean diff |
+| --- | --- | --- |
+| before, `high` (15, old placement) | 0.55 / 0.35 | 1.03 / 0.52 |
+| 15 | 0.44 / 0.24 | 0.76 / 0.35 |
+| **11 (`high`)** | 0.62 / 0.46 | 1.18 / 0.66 |
+| **9 (`medium`)** | 0.78 / 0.67 | 1.53 / 0.95 |
+| **7 (`low`)** | 1.06 / 1.02 | 2.18 / 1.44 |
+
+Read as a player would, crops at full size and three consecutive frames: the streaks keep their
+length and direction at every count. 11 and 9 differ from 15 only by a slightly coarser speckle
+along the brightest streaks (the blue track-edge light, the red advert wall) that does not
+change from frame to frame in a way the eye picks out at speed. 7 makes that speckle visible on a
+still frame and leaves a ragged edge where a wall's smear meets the dark; acceptable for `low`,
+whose short shutter rarely reaches the cap. With the blur `off`, the base and this change capture
+byte-identical frames at all six of those captures (both gather resolutions, three ticks): no
+other pass changed.
+
+### Measured and dropped
+
+- **Tap spacing as a fraction of the reach cap** (`max(4 px, max_px / 21.6)`, which is 4 px at
+  1080p and 8 px at 4K) to cut 4K's mid-length smears: the gather at 4K, NVIDIA, 15 taps
+  1.57 -> 1.49 ms, and nothing at 11. Most 4K pixels are already at the cap, so the spacing
+  rule is not what the gather pays for. Not kept.
