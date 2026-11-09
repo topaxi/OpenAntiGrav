@@ -40,6 +40,7 @@ mod hd_shield_colour_ground_truth;
 mod hd_sky_tint_ground_truth;
 mod hd_tiny_sun_direction_ground_truth;
 mod hd_trackwall_ground_truth;
+mod hd_wingtip_ground_truth;
 mod hd_zone_hover_ground_truth;
 mod head_to_head_people_ground_truth;
 mod hillside_rain_ground_truth;
