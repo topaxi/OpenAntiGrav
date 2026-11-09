@@ -192,7 +192,7 @@ aes = "0.9"
 # Held at 0.4: 0.5 only splits the `rand` features, and `num-rational` (through
 # `av-data`, the AV1 decoder's) still takes 0.4, so 0.5 would be a second copy for
 # nothing (`docs/architecture/dependency-upgrades.md`).
-num-bigint = "0.4"
+num-bigint = "0.5"
 bytemuck = "1"
 # Reads an author's own PNG beside a track manifest (ADR-0076); already in the
 # lockfile through resvg.
