@@ -140,9 +140,17 @@ the name. Next: a frame burst across one of the person's hits, reading `hud+0x3d
 `oag_title::Title::eliminator` states the rule; `oag_raceplay::score_law` resolves it once at load
 into a plain `oag_race::ScoreLaw` on the race's setup, and nothing during a race reads a title. The
 HUD follows that value too (`Readout::score_rows`), so the rule is free to move off the title later.
-A Racebox target is `<Slider name="Eliminations">`'s `minSlide` off `DATA00`; a campaign cell's is
-its `NitroElim*` number for the rung, on `Options::eliminator_score_target`. A score race ignores the
-`KILLS` pick, which another title may have stored. The law is `None` outside an Eliminator, as the
+A Racebox target is the TARGET row's pick, one of the steps of `<Slider name="Eliminations">` off
+`DATA00` (`minSlide` 200, `maxSlide` 600, `incSlide` 20: 21 values, read by
+`oag_tables::race_setup::slider`, never a const), else the slider's `minSlide`; a campaign cell's is
+its `NitroElim*` number for the rung. Both ride `Options::eliminator_score_target`. The row is
+`race.score_target` (`assets/ui/menu.toml`), offered only where `Title::eliminator` is a score rule
+(`Definition::drop_rows_picked_on_screen`), enabled in an Eliminator and greyed elsewhere like the
+kill row; a stored value the slider does not step through races the minimum, as the row shows.
+`--drive` reports the loaded race's `race.target`, which is what
+`drive_ground_truth::the_race_box_target_row_sets_what_an_hd_eliminator_ends_on` pins (400 picked, 400
+raced; with the launch wiring dropped it reads 200). A score race ignores the `KILLS` pick, which
+another title may have stored. The law is `None` outside an Eliminator, as the
 original's awards all sit behind `mode == 8`. `Standing::score` enters the state hash only once it is not
 zero, so a kill race hashes as before.
 
@@ -152,8 +160,7 @@ points go to the first impact whose radius reached the craft (`credit_blast`'s o
 `HighlightBar` keeps its authored width, because the HUD's draw list has no font to measure the
 row with, where `Hud_PlaceHighlightBar` fits its left edge to the text.
 
-**Open:** the Racebox's TARGET row (`race_setup`
-is `None` on HD, and the disc's row is a `Slider`, not a list); the lap refill for an opponent:
+**Open:** the lap refill for an opponent:
 ours refills every craft, HD's reads as the person's alone (an AI's shield did not move on any lap);
 `ScoreFeedBack` above; the person's name in a row is the team's, not a profile's, and `--race` with
 no `--team` keeps the lowercase default id, upper-cased, because the HUD has no roster to look it up
@@ -166,12 +173,20 @@ in.
   screens'. The score law: **checked, applies, not wired.** The executable names `IG_HUD_TARGET`, `ScoreFeedBack%d`,
   `MPWeaponIcon%d`, `%s ( %d )` and the three score scales, and its `WeaponAIStats2048.xml` carries
   the row. Whether its awards are HD's is unread: the writer of its score was not looked for, and
-  its Elimination campaign objective reads kills (`crates/2048/src/campaign.rs`).
+  its Elimination campaign objective reads kills (`crates/2048/src/campaign.rs`). The Racebox
+  TARGET row: **checked, differs.** The disc authors no Racebox (its RACEBOX tile is this build's own,
+  `docs/formats/2048-frontend.md`), so there is no slider to read, and `oag_2048::TITLE` ends an
+  Eliminator on kills (inherited), so the row is dropped there.
 - **Omega:** the results table: **checked, applies, not wired.** The same format string and
   `ER_DEATHS` sit together at `0x018241f9`/`0x018241ef`, beside its `Grid%d.%d`; its front end does
   not load the screen yet (`docs/ui/endrace-screens.md`). The score law: **checked, applies, not
   wired.** The same strings, including the row's two-space
   `%s  ( %d )` (`FUN_0125e9b0`). Its named `weaponaistats.xml` has no `<EliminatorAIStats>` row and
   its loader defaults every scale to `1.0`, so an opponent there would score flat if the law holds.
+  The Racebox TARGET row: **checked, differs, not wired.** Omega's `racebox_definition.xml` (`DATA09`)
+  authors an `Eliminations` slider of its own, `minSlide` 50, `maxSlide` 600, `incSlide` 25, not
+  HD's 200 to 600 by 20 (`selection_screens_ground_truth::omega_authors_its_own_eliminations_slider_but_races_on_kills`).
+  `oag_omega::TITLE` ends an Eliminator on kills (inherited, its score law unmeasured), so the row
+  follows the rule and stays off Omega until the awards are read there; the slider is ready to feed it.
 - **Fury against the base game:** the `<EliminatorAIStats>` row is in `DATA00`'s copy alone
   ([race-modes.md](../../../gameplay/race-modes.md)). `DATA02`'s Racebox has no Eliminator.
