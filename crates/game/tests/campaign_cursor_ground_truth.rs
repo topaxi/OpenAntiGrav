@@ -604,3 +604,60 @@ fn a_one_grid_campaign_opens_on_its_cells_and_back_returns_to_the_picker() {
         "Pulse's own sixteen-grid campaign still opens Grid Selection"
     );
 }
+
+/// The campaign page through the real session: SELECT opens it, the pad sets the difficulty, the
+/// progression and the class bounds, TRIANGLE fills the grid from the seed, START saves. The same
+/// seed saved twice writes the same grid, another seed another, and the file carries the setting.
+/// Drops the page, the fill or the setting's write and the first assertion fails.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn a_grid_filled_from_a_seed_in_the_editor_is_saved_with_its_setting() {
+    let Some(image) = oag_testdata::image("pulse-psp-eu.chd") else {
+        return;
+    };
+    let profile = Profile::fresh("editor-fill");
+    let mods = profile.0.join("data").join("oag").join("mods");
+    std::fs::create_dir_all(&mods).expect("a mods directory");
+    // Hard, a ramp, the seed as it is (or one on), classes Flash to Rapier.
+    let script = |seed_steps: &str| {
+        format!(
+            "boot; until stage=menu within 3000; select campaign; press cross; \
+             until page=campaigns; select campaign-editor; press cross; until screen=campaign; \
+             ticks 20; press select; press right; press down; press right; press down; {seed_steps} \
+             press down; press right; press down; press left; press triangle; ticks 5; \
+             press start; until page=campaigns within 600; ticks 10"
+        )
+    };
+    profile.drive_with_mods(&image, &script(""), "fill-a.jsonl", &mods);
+    profile.drive_with_mods(&image, &script(""), "fill-b.jsonl", &mods);
+    profile.drive_with_mods(&image, &script("press right;"), "fill-c.jsonl", &mods);
+    let read = |folder: &str| {
+        oag_mod::campaign::CampaignDef::parse(
+            &std::fs::read_to_string(mods.join(folder).join("campaigns/my-campaign.toml"))
+                .expect("the campaign file"),
+        )
+        .expect("the written file reads back")
+    };
+    let (a, b, c) = (
+        read("my-campaign"),
+        read("my-campaign-2"),
+        read("my-campaign-3"),
+    );
+    assert_eq!(a.campaign.difficulty.as_deref(), Some("hard"));
+    assert_eq!(a.campaign.progression, oag_mod::campaign::Progression::Ramp);
+    assert_eq!(a.grids[0].events.len(), 32, "every hex of Pulse's grid");
+    assert_eq!(a.grids, b.grids, "the same seed rebuilds the same grid");
+    assert_ne!(a.grids, c.grids, "another seed builds another");
+    let classes: std::collections::BTreeSet<_> = a.grids[0]
+        .events
+        .iter()
+        .filter_map(|e| e.class.as_ref().map(|c| c.to_ascii_lowercase()))
+        .collect();
+    assert!(
+        classes
+            .iter()
+            .all(|c| ["flash", "rapier"].contains(&c.as_str()))
+            && classes.len() == 2,
+        "{classes:?}"
+    );
+}

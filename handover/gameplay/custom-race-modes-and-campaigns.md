@@ -181,6 +181,12 @@ Open after v1.0, in the order the maintainer raised them:
   a timed event with none gets no medals, and its screen reads `0:00.00`). The pointer
   (click, the rows, the secondary button; a hover never moves the cursor) is unit-tested on its targets and events;
   no headless step drives a mouse, so a live click was not run.
+  **Landed after it (2026-11-09):** a campaign-wide `[campaign] difficulty` with a `flat` or `ramp`
+  `progression` (a cell's own `field.difficulty` wins), the editor's campaign page (SELECT: difficulty,
+  progression, an editable seed, a speed-class range) and FILL GRID, which draws every hex's mode, circuit and
+  class from `oag_core::Rng`. Open there: a progression per tier or with a ceiling below the ladder's top, and the
+  seed is not stored in the file (the filled grid is). An editor campaign always writes the difficulty, so on
+  Pulse the Cell Selection difficulty button no longer changes the opponents in such a campaign.
 - **Opponent craft variants** in `field.teams` (`{ team, variant }`): `oag_livery::load`
   paints opponent slots by team only today, so this is a livery change too.
 - **AI craft overrides** (top speed and other handling for the opponents) and a

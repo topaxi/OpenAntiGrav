@@ -182,11 +182,16 @@ fn the_example_campaign_is_for_no_other_title() {
     }
 }
 
-/// A campaign built through the editor's model on a disc: saved as a folder mod
-/// under a user mods directory, found by the mod search, compiled for the title,
-/// and every event plans as the race the editor set.
-fn check_editor(title: &'static oag_title::Title, source: &std::path::Path) {
-    use oag_game::campaign::editor::{Choices, Editor, Field, Pick};
+/// What the editor offers on the disc at `source`: its circuits, teams, speed classes, the
+/// hexes its Cell Selection draws and the medals its own cells author.
+fn editor_choices(
+    title: &'static oag_title::Title,
+    source: &std::path::Path,
+) -> (
+    oag_game::campaign::editor::Choices,
+    oag_game::remix::Catalogue,
+) {
+    use oag_game::campaign::editor::{Choices, Pick};
     let catalogue = oag_game::remix::catalogue(&source.display().to_string())
         .unwrap_or_else(|e| panic!("cataloguing {}: {e:#}", source.display()));
     let mut archives =
@@ -235,6 +240,19 @@ fn check_editor(title: &'static oag_title::Title, source: &std::path::Path) {
             .filter_map(oag_game::campaign::editor::Authored::of)
             .collect(),
     };
+    (choices, catalogue)
+}
+
+/// A campaign built through the editor's model on a disc: saved as a folder mod
+/// under a user mods directory, found by the mod search, compiled for the title,
+/// and every event plans as the race the editor set.
+fn check_editor(title: &'static oag_title::Title, source: &std::path::Path) {
+    use oag_game::campaign::editor::{Editor, Field};
+    let (choices, catalogue) = editor_choices(title, source);
+    let ladder = title
+        .race
+        .speed_classes
+        .map_or(&[][..], |classes| classes.names);
     let mut editor = Editor::new(choices, "Editor Run");
     let slot = *editor.choices().slots.first().expect("a slot");
     editor.select(slot);
@@ -297,4 +315,108 @@ fn a_campaign_built_in_the_editor_launches_on_ps2_pulse() {
         return;
     };
     check_editor(oag_pulse::TITLE, &image);
+}
+
+/// A grid filled from a seed through the editor's model on a disc: saved, found, compiled for
+/// the title, and every one of its cells plans. The same seed fills the same grid, another seed
+/// another, every class is inside the bounds, more than one class is drawn, and the campaign's
+/// ramp reaches every original-driver cell as a rung that never steps down.
+fn check_filled_editor(title: &'static oag_title::Title, source: &std::path::Path) {
+    use oag_game::campaign::editor::{Editor, Setting};
+    let (choices, catalogue) = editor_choices(title, source);
+    let ladder = title
+        .race
+        .speed_classes
+        .map_or(&[][..], |classes| classes.names);
+    let slots = choices.slots.len();
+    let root = oag_testdata::repo_root()
+        .join("target")
+        .join(format!("editor-fill-ground-truth-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let fill = |seed: u32| {
+        let mut editor = Editor::new(choices.clone(), "Filled Run");
+        editor.select_setting(Setting::Progression);
+        editor.cycle_setting(1);
+        editor.set_seed(seed);
+        editor.fill();
+        editor
+    };
+    let reference = fill(1).to_def().unwrap();
+    assert_eq!(
+        reference,
+        fill(1).to_def().unwrap(),
+        "the same seed, the same grid"
+    );
+    assert_ne!(
+        reference,
+        fill(2).to_def().unwrap(),
+        "another seed, another grid"
+    );
+    let mut classes = std::collections::BTreeSet::new();
+    for seed in [1, 2, 3] {
+        let editor = fill(seed);
+        let folder = editor.save(&root).expect("saved");
+        let module = oag_mod::Mod::open(&folder).expect("opens");
+        let installed = Installed::for_title(&[module], &[], title, &|_| false);
+        assert!(
+            installed.failed.is_empty(),
+            "seed {seed}: {:?}",
+            installed.failed
+        );
+        let [custom]: [Custom; 1] = installed.campaigns.try_into().expect("one campaign");
+        let cells = &custom.grids[0].cells;
+        assert_eq!(cells.len(), slots, "seed {seed}: every hex is filled");
+        let mut level = 0;
+        for cell in cells {
+            assert!(
+                ladder
+                    .iter()
+                    .any(|name| name.eq_ignore_ascii_case(&cell.class))
+                    || cell.class == "Zone",
+                "seed {seed} {}: class {}",
+                cell.name,
+                cell.class
+            );
+            classes.insert(cell.class.clone());
+            let plan = launch::plan_cell_for(cell, "venom", ladder, |_, id| {
+                catalogue
+                    .track(id)
+                    .map(oag_raceplay::catalogue::Track::entry_name)
+            })
+            .unwrap_or_else(|refusal| panic!("seed {seed} {}: {refusal}", cell.name));
+            assert!(!plan.leg_entries.is_empty(), "seed {seed} {}", cell.name);
+            let rung = custom
+                .event(&cell.name)
+                .unwrap()
+                .level
+                .expect("the ramp sets a rung");
+            assert!(
+                rung >= level,
+                "seed {seed} {}: the ramp stepped down",
+                cell.name
+            );
+            level = rung;
+        }
+        assert_eq!(level, 2, "seed {seed}: a ramp from medium ends on hard");
+    }
+    assert!(classes.len() > 1, "cells draw their own class: {classes:?}");
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_grid_filled_from_a_seed_launches_on_pulse() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    check_filled_editor(oag_pulse::TITLE, &image);
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn a_grid_filled_from_a_seed_launches_on_ps2_pulse() {
+    let Some(image) = oag_testdata::image("data/images/pulse-ps2-eu.chd") else {
+        return;
+    };
+    check_filled_editor(oag_pulse::TITLE, &image);
 }

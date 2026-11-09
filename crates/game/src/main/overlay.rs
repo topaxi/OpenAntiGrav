@@ -34,6 +34,8 @@ pub(crate) enum Purpose {
     },
     /// The campaign editor's campaign name (`session::campaign_editor`).
     CampaignName,
+    /// The campaign editor's seed (`session::campaign_editor`).
+    CampaignSeed,
     /// The player's name, shared by every title (`session::player_name`).
     PlayerName,
     /// The player's tag, on the titles that use one.

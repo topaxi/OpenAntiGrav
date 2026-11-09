@@ -13,7 +13,7 @@
 use log::{debug, error, info};
 
 use oag_core::buttons::Button;
-use oag_game::campaign::editor::{Authored, Choices, Editor, Field, Pick};
+use oag_game::campaign::editor::{Pressed, SEED_DIGITS, Authored, Choices, Editor, Field, Page, Pick, Setting};
 use oag_ui::menu::nav::Nav;
 use oag_ui_screens::campaign::editor::{self as view, Event};
 use oag_ui_screens::prompt;
@@ -39,6 +39,7 @@ struct Pad {
     triangle: bool,
     square: bool,
     start: bool,
+    select: bool,
 }
 
 impl Session {
@@ -103,6 +104,7 @@ impl Session {
     /// One tick of the open editor: a save that finished, the pad, then the pointer.
     pub(crate) fn tick_campaign_editor(&mut self, pointer: &oag_ui::pointer::Pointer) {
         self.poll_editor_save();
+        let filled = self.word("OAG_EDITOR_FILLED", "GRID FILLED FROM THE SEED");
         let buttons = self.controls.buttons_mut();
         let pad = Pad {
             up: buttons.take(Button::Up),
@@ -114,6 +116,7 @@ impl Session {
             triangle: buttons.take(Button::Triangle),
             square: buttons.take(Button::Square),
             start: buttons.take(Button::Start),
+            select: buttons.take(Button::Select),
         };
         let Stage::Menu(stage) = &mut self.stage else {
             return;
@@ -140,11 +143,49 @@ impl Session {
         };
         let mut nav = None;
         let (mut save, mut rename, mut leave) = (false, false, false);
+        let mut seed = false;
         let model = &mut screen.model;
-        if !screen.status.is_empty() && (pad.up || pad.down || pad.left || pad.right || pad.cross) {
+        if !screen.status.is_empty()
+            && (pad.up || pad.down || pad.left || pad.right || pad.cross || pad.select)
+        {
             screen.status.clear();
         }
-        if model.editing() {
+        if pad.select {
+            model.toggle_page();
+            nav = Some(Nav::Accept);
+        } else if model.page() == Page::Campaign {
+            if pad.up {
+                model.move_setting(-1);
+                nav = Some(Nav::Moved(None));
+            }
+            if pad.down {
+                model.move_setting(1);
+                nav = Some(Nav::Moved(None));
+            }
+            if pad.left {
+                model.cycle_setting(-1);
+                nav = Some(Nav::Stepped(None));
+            }
+            if pad.right {
+                model.cycle_setting(1);
+                nav = Some(Nav::Stepped(None));
+            }
+            if pad.cross {
+                match model.press_setting() {
+                    Pressed::Seed => seed = true,
+                    _ => nav = Some(Nav::Stepped(None)),
+                }
+            }
+            if pad.triangle {
+                model.fill();
+                screen.status = filled.clone();
+                nav = Some(Nav::Accept);
+            }
+            if pad.circle {
+                model.set_page(Page::Event);
+                nav = Some(Nav::Decline);
+            }
+        } else if model.editing() {
             if pad.up {
                 model.move_field(-1);
                 nav = Some(Nav::Moved(None));
@@ -186,7 +227,7 @@ impl Session {
             }
             leave = pad.circle;
         }
-        if pad.triangle && model.has(model.cursor()) {
+        if pad.triangle && model.page() == Page::Event && model.has(model.cursor()) {
             model.clear();
             nav = Some(Nav::Decline);
         }
@@ -195,7 +236,7 @@ impl Session {
         for event in events {
             match event {
                 Event::Select(at) => {
-                    if model.cursor() != at {
+                    if model.cursor() != at || model.page() == Page::Campaign {
                         model.select(at);
                         nav = Some(Nav::Moved(None));
                     }
@@ -204,25 +245,30 @@ impl Session {
                     model.confirm();
                     nav = Some(Nav::Accept);
                 }
+                Event::Field(index) if model.page() == Page::Campaign => {
+                    model.select_setting(Setting::ALL[index]);
+                }
                 Event::Field(index) => {
                     model.begin_edit();
                     model.select_field(Field::ALL[index]);
                 }
-                Event::Row(index) => {
-                    let fields = if model.has(model.cursor()) { Field::ALL.len() } else { 0 };
-                    if index < fields {
-                        model.begin_edit();
-                        model.select_field(Field::ALL[index]);
-                        model.cycle(1);
-                        nav = Some(Nav::Stepped(None));
-                    } else if index == fields {
-                        rename = true;
-                    } else {
-                        save = true;
+                Event::Row(index) => match model.press_row(index) {
+                    Pressed::Stepped => nav = Some(Nav::Stepped(None)),
+                    Pressed::Page => nav = Some(Nav::Accept),
+                    Pressed::Filled => {
+                        screen.status = filled.clone();
+                        nav = Some(Nav::Accept);
                     }
-                }
+                    Pressed::Name => rename = true,
+                    Pressed::Save => save = true,
+                    Pressed::Seed => seed = true,
+                    Pressed::Nothing => {}
+                },
                 Event::Back => {
-                    if model.back() {
+                    if model.page() == Page::Campaign {
+                        model.set_page(Page::Event);
+                        nav = Some(Nav::Decline);
+                    } else if model.back() {
                         nav = Some(Nav::Decline);
                     } else {
                         leave = true;
@@ -233,6 +279,8 @@ impl Session {
         self.play_navs(nav);
         if rename {
             self.editor_rename();
+        } else if seed {
+            self.editor_seed();
         } else if save {
             self.editor_save();
         } else if leave {
@@ -357,6 +405,46 @@ impl Session {
             && !text.trim().is_empty()
         {
             screen.model.set_name(text);
+        }
+    }
+}
+
+impl Session {
+    /// The SEED row: the keyboard on the digits of the seed.
+    fn editor_seed(&mut self) {
+        let labels = prompt::Labels {
+            title: self.word("OAG_EDITOR_SEED_TITLE", "TYPE A SEED"),
+            delete: self.word("OAG_KEYBOARD_DELETE", "DEL"),
+            accept: self.word("OAG_KEYBOARD_ACCEPT", "OK"),
+            hint: self.word(
+                "OAG_KEYBOARD_HINT",
+                "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
+            ),
+        };
+        let Stage::Menu(stage) = &mut self.stage else {
+            return;
+        };
+        let Some(screen) = stage.campaign.as_ref().and_then(|c| c.editor.as_ref()) else {
+            return;
+        };
+        let keyboard = prompt::Keyboard::with_keys(
+            labels,
+            &screen.model.seed().to_string(),
+            SEED_DIGITS,
+            "0123456789",
+        );
+        stage.prompt = Some(Prompt::typing(Purpose::CampaignSeed, keyboard));
+    }
+
+    /// The seed keyboard was accepted: an empty answer keeps the seed.
+    pub(crate) fn campaign_seeded(&mut self, text: &str) {
+        let Stage::Menu(stage) = &mut self.stage else {
+            return;
+        };
+        if let Some(screen) = stage.campaign.as_mut().and_then(|c| c.editor.as_mut())
+            && let Ok(seed) = text.trim().parse::<u32>()
+        {
+            screen.model.set_seed(seed);
         }
     }
 }
