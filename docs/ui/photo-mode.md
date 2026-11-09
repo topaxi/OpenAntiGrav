@@ -429,8 +429,13 @@ tick 100, so the first 100 ticks agreed. The first keyframe is now cut just befo
 `photo_mode_ground_truth::a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without` checks it for
 the autopilot and the throttle with no mod mounted. **The stage-6 rewind hash test now runs with no mod mounted
 too**: with this repository's mods the race records nothing and a landing falls on whole keyframes, so only the
-keyframes were checked. Unrecorded writers before the first tick that stay open: `--give` tops the pickup up
-outside the tick, so a pre-roll from keyframe 0 does not see it. The shot is 8-bit frames averaged, so a dark gradient the blur flattens shows
+keyframes were checked. ~~`--give` tops the pickup up outside the tick, so a rewind does not see it~~ (fixed): the
+session's top-up wrote the slot directly, so nothing in the recording said it had happened; a pre-roll
+that replayed a second shot found the slot empty and the hash diverged (tick 376 on a Pulse Single Race
+with the rocket fired at about tick 300 and again 30 ticks later). It goes through `Race::give_weapon`
+now, one `give` event for each top-up, and
+`photo_mode_ground_truth::a_race_handed_a_pickup_hashes_the_same_at_every_tick_after_a_rewind` checks the events
+and every rewound tick against a race never visited. The shot is 8-bit frames averaged, so a dark gradient the blur flattens shows
 contour bands; the single plain frame shows them in the same places (a rewound shot of the start
 tunnel does), so they are the frame's. Rewind is not offered from `Race End Photo` or in a split
 screen. Omega's blur and 2048's own depth of field law (`(a * 0.01)^2 * 900 + 100`; HD's focus curve

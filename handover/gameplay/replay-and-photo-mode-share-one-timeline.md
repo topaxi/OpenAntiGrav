@@ -34,8 +34,8 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
   race stage's build, before the AI choice, so `original_ai` was `None` in it and `Some` live; a landing under 120
   ticks pre-rolled with another driver (diverged at 101 with `--autopilot`, 102 with the throttle held). It is cut
   just before the first tick now (`Keeper::recut_first`). The stage-6 hash test and the PLAY test run with no mod
-  mounted. **Open:** `--give` writes the pickup outside the tick and outside the recording, so a pre-roll from keyframe
-  0 does not see it.
+  mounted. ~~`--give` writes the pickup outside the tick and outside the recording~~ fixed (`give-outside-tick`): the
+  session's top-up goes through `Race::give_weapon`, one `give` event each; a rewound `--give` race hashes as the live one.
 - **Over a live race PLAY is photo mode's playback, not the viewer's screen** (ADR-0088, decision 1); a viewer over a
   live race is not built.
 - **The viewer's photo mode** offers no blur rows (no keyframes of the race it moves) and is refused in POSE VIEW.
