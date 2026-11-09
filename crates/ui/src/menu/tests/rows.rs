@@ -431,7 +431,10 @@ fn the_editor_row_makes_the_picker_exist_and_comes_last() {
         &page.entries[1],
         Entry::Run { label, action: Action::OpenCampaignEditor, .. } if label == "NEW CAMPAIGN"
     ));
-    assert_eq!(page.meta[1].id.as_deref(), Some(crate::menu::CAMPAIGN_EDITOR_ROW));
+    assert_eq!(
+        page.meta[1].id.as_deref(),
+        Some(crate::menu::CAMPAIGN_EDITOR_ROW)
+    );
 
     let mut both = built_in;
     both.add_campaign_picker(
@@ -441,7 +444,13 @@ fn the_editor_row_makes_the_picker_exist_and_comes_last() {
     );
     let page = both.page(crate::menu::CAMPAIGN_PICKER_PAGE).unwrap();
     assert_eq!(page.entries.len(), 3);
-    assert!(matches!(&page.entries[2], Entry::Run { action: Action::OpenCampaignEditor, .. }));
+    assert!(matches!(
+        &page.entries[2],
+        Entry::Run {
+            action: Action::OpenCampaignEditor,
+            ..
+        }
+    ));
 }
 
 /// What a blooming title's vertical `<Menu>` stamps into the glow mask (Pulse PSP's `Main Menu`,

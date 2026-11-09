@@ -348,7 +348,12 @@ fn every_committed_example_campaign_survives_a_write() {
         let text = std::fs::read_to_string(entry.path()).unwrap();
         let def = CampaignDef::parse(&text).unwrap();
         let again = def.write().unwrap();
-        assert_eq!(CampaignDef::parse(&again).unwrap(), def, "{}", entry.path().display());
+        assert_eq!(
+            CampaignDef::parse(&again).unwrap(),
+            def,
+            "{}",
+            entry.path().display()
+        );
         seen += 1;
     }
     assert!(seen > 0);

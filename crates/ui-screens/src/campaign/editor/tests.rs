@@ -118,7 +118,10 @@ fn every_slot_the_layout_draws_is_a_target_placed_or_not() {
         .collect();
     assert_eq!(hexes, [(0, 0), (0, 1), (1, 0)]);
     assert_eq!(
-        targets.iter().filter(|t| matches!(t.what, What::Row(_))).count(),
+        targets
+            .iter()
+            .filter(|t| matches!(t.what, What::Row(_)))
+            .count(),
         2
     );
 }
@@ -157,9 +160,21 @@ fn a_click_on_a_row_names_it_and_the_secondary_button_backs_out() {
     let actions = [row("NAME", "MINE"), row("SAVE", "")];
     let v = view(&pulse, (0, 0), &[(0, 0)], &fields, &actions);
     let ts = targets(&v, &layout, &sprites, &|_| None);
-    let rows = |n: usize| ts.iter().find(|t| t.what == What::Row(n)).map(|t| centre(t.rect)).unwrap();
-    assert_eq!(pointer(&v, &pointer_at(rows(1), true), &ts), [Event::Field(1), Event::Row(1)]);
-    assert_eq!(pointer(&v, &pointer_at(rows(3), true), &ts), [Event::Row(3)], "SAVE is the last row");
+    let rows = |n: usize| {
+        ts.iter()
+            .find(|t| t.what == What::Row(n))
+            .map(|t| centre(t.rect))
+            .unwrap()
+    };
+    assert_eq!(
+        pointer(&v, &pointer_at(rows(1), true), &ts),
+        [Event::Field(1), Event::Row(1)]
+    );
+    assert_eq!(
+        pointer(&v, &pointer_at(rows(3), true), &ts),
+        [Event::Row(3)],
+        "SAVE is the last row"
+    );
     let back = Pointer {
         back: true,
         ..Pointer::default()
@@ -188,7 +203,11 @@ fn the_actions_stand_in_the_same_place_on_an_empty_slot_and_a_placed_one() {
 fn a_placed_event_draws_a_fill_under_its_outline_and_an_empty_one_does_not() {
     let layout = layout();
     let pulse = SelectorPulse::default();
-    let skin = Skin::new(oag_pulse::FRONT_END.menu.unwrap(), oag_display::space::Space::PSP, 22.0);
+    let skin = Skin::new(
+        oag_pulse::FRONT_END.menu.unwrap(),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
     let frame = Frame::default();
     let sprites_for = |src: &str| sprites(src);
     let count = |placed: &[(u32, u32)]| {
@@ -196,7 +215,9 @@ fn a_placed_event_draws_a_fill_under_its_outline_and_an_empty_one_does_not() {
         draw_list(&v, &layout, &skin, &frame, None, false, &sprites_for, &[])
             .body
             .iter()
-            .filter(|d| matches!(d, Draw::Sprite { color, .. } if *color == argb_to_rgba(PLACED_HEX)))
+            .filter(
+                |d| matches!(d, Draw::Sprite { color, .. } if *color == argb_to_rgba(PLACED_HEX)),
+            )
             .count()
     };
     assert_eq!(count(&[]), 0);

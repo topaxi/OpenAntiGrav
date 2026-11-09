@@ -33,9 +33,9 @@ use crate::language::StringTable;
 use oag_core::buttons::button_from_name;
 
 use super::{
-    Action, CAMPAIGN_EDITOR_ROW, CAMPAIGN_PICKER_PAGE, CUSTOM_CAMPAIGN_ROW, Choice, Condition, Entry, LaunchInputs,
-    ORIGINAL_CAMPAIGN_ROW, Page, Pin, Query, QueryRef, Restart, RowMeta, Value, ValueSource,
-    Warning,
+    Action, CAMPAIGN_EDITOR_ROW, CAMPAIGN_PICKER_PAGE, CUSTOM_CAMPAIGN_ROW, Choice, Condition,
+    Entry, LaunchInputs, ORIGINAL_CAMPAIGN_ROW, Page, Pin, Query, QueryRef, Restart, RowMeta,
+    Value, ValueSource, Warning,
 };
 
 /// The schema kind a menu file declares in its `[toml-schema]` header.

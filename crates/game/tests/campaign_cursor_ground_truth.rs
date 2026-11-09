@@ -504,7 +504,8 @@ fn a_campaign_made_in_the_editor_is_listed_and_its_event_launches() {
     );
     let saved = mods.join("my-campaign");
     let def = oag_mod::campaign::CampaignDef::parse(
-        &std::fs::read_to_string(saved.join("campaigns/my-campaign.toml")).expect("the campaign file"),
+        &std::fs::read_to_string(saved.join("campaigns/my-campaign.toml"))
+            .expect("the campaign file"),
     )
     .expect("the written file reads back");
     assert_eq!(def.grids[0].events.len(), 2);
@@ -525,7 +526,11 @@ fn a_campaign_made_in_the_editor_is_listed_and_its_event_launches() {
     let race = states
         .iter()
         .rev()
-        .find_map(|state| state.get("race").filter(|race| race["mode"] == "single_race"))
+        .find_map(|state| {
+            state
+                .get("race")
+                .filter(|race| race["mode"] == "single_race")
+        })
         .expect("a single race started");
     assert_eq!(race["team"], "Assegai");
 }

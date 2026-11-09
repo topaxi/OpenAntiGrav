@@ -149,7 +149,10 @@ fn row_rect(rows: &Rows, index: usize, layout: &Layout) -> [f32; 4] {
 
 /// The draw list.
 #[must_use]
-#[allow(clippy::too_many_arguments, reason = "the same facts `cell_draw_list` takes")]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the same facts `cell_draw_list` takes"
+)]
 pub fn draw_list(
     view: &View,
     layout: &Layout,
@@ -183,7 +186,10 @@ pub fn draw_list(
     let screen = &layout.screen;
     let mut out = Vec::new();
     for fill in &screen.fills {
-        let keep = fill.name.as_deref().is_none_or(|n| !n.starts_with("linebg"));
+        let keep = fill
+            .name
+            .as_deref()
+            .is_none_or(|n| !n.starts_with("linebg"));
         if keep {
             out.push(fill.draw());
         }
@@ -201,10 +207,12 @@ pub fn draw_list(
         .find(|image| image.name.as_deref() == Some("Target0 Image"))
         .and_then(|image| sprites(&image.src))
         .and_then(|placed| {
-            let outline = screen
-                .images
-                .iter()
-                .find(|image| image.name.as_deref().is_some_and(|n| n.starts_with("Outline_")))?;
+            let outline = screen.images.iter().find(|image| {
+                image
+                    .name
+                    .as_deref()
+                    .is_some_and(|n| n.starts_with("Outline_"))
+            })?;
             let size = hex_rect(screen, 0, 0, sprites).or_else(|| {
                 let (x, y) = hex_slot_xy(outline.name.as_deref()?, "Outline_")?;
                 hex_rect(screen, x as usize, y as usize, sprites)
@@ -227,7 +235,12 @@ pub fn draw_list(
                 if let Some(fill) = fill_sprite {
                     out.push(Draw::Sprite {
                         rect: [image.x, image.y, fill.1, fill.2],
-                        uv: [fill.0.x as f32, fill.0.y as f32, fill.0.width as f32, fill.0.height as f32],
+                        uv: [
+                            fill.0.x as f32,
+                            fill.0.y as f32,
+                            fill.0.width as f32,
+                            fill.0.height as f32,
+                        ],
                         color: argb_to_rgba(PLACED_HEX),
                     });
                 }
@@ -240,10 +253,24 @@ pub fn draw_list(
         if name == "Selector" {
             if let Some(hex) = slots
                 .contains(&view.cursor)
-                .then(|| hex_rect(screen, view.cursor.0 as usize, view.cursor.1 as usize, sprites))
+                .then(|| {
+                    hex_rect(
+                        screen,
+                        view.cursor.0 as usize,
+                        view.cursor.1 as usize,
+                        sprites,
+                    )
+                })
                 .flatten()
             {
-                push_selector(&mut out, image, placed, hex, view.pulse, skin.selector_origin());
+                push_selector(
+                    &mut out,
+                    image,
+                    placed,
+                    hex,
+                    view.pulse,
+                    skin.selector_origin(),
+                );
             }
             continue;
         }
@@ -293,7 +320,11 @@ pub fn draw_list(
         }
     }
     for text in &screen.texts {
-        let content = match (text.name.as_deref(), text.idstring.as_deref(), text.string.as_deref()) {
+        let content = match (
+            text.name.as_deref(),
+            text.idstring.as_deref(),
+            text.string.as_deref(),
+        ) {
             (None, None, Some(glyph @ ("\u{3b2}" | "\u{3b4}"))) => glyph,
             (None, Some("FE_HELP"), _) => view.legend[0],
             (Some("DifficultyButton"), _, _) => view.legend[1],
@@ -344,7 +375,9 @@ pub fn targets(
         });
     }
     for at in layout.hex_slots() {
-        if let Some(rect) = super::pointer::hex_hit_rect(screen, at.0 as usize, at.1 as usize, sprites, extent) {
+        if let Some(rect) =
+            super::pointer::hex_hit_rect(screen, at.0 as usize, at.1 as usize, sprites, extent)
+        {
             out.push(Target {
                 what: What::Hex(at),
                 rect,
@@ -378,9 +411,7 @@ pub fn pointer(view: &View, pointer: &Pointer, targets: &[Target]) -> Vec<Event>
     {
         match target.what {
             What::Hex(at) if at != view.cursor => out.push(Event::Hover(at)),
-            What::Row(index)
-                if index < view.fields.len() && view.selected_row != Some(index) =>
-            {
+            What::Row(index) if index < view.fields.len() && view.selected_row != Some(index) => {
                 out.push(Event::Field(index));
             }
             _ => {}
