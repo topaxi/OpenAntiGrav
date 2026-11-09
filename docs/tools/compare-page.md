@@ -1186,7 +1186,15 @@ missing `platform` refuses it before anything uploads. With no argument it publi
 `data/compare-curated/`, the maintainer's curated set; `just publish-compare <dir>` publishes another.
 The default is never the seed or live manifests (`data/reference/compare-page/`): they are developer
 material, and ADR-0074 wants every published image picked by a person. A missing
-`data/compare-curated/` refuses by name. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
+`data/compare-curated/` refuses by name.
+
+The curated set picks the pairs and may reword them; `just compare-rerender-all` writes only into
+`data/reference/compare-page/`. So with no argument, publishing first carries newer re-renders across.
+For each curated entry whose id has a later `rendered_at` in the reference set, with the same `ours`
+and `original` paths and a byte-identical original image, it copies `ours.png`, `side.png` and
+`pair.json` and the entry's `rmse`, `edge_ncc`, `mean_grey`, `build`, `binary` and `rendered_at`
+lines. Every other curated line (title, note, setting) stays as curated, and each carried entry is
+printed. A directory named on the command line is published as it is. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
 ADR-0074 Accepted it reads `unlocked`. The maintainer runs the command.
 
 A curated page should carry only frames the policy covers; the seed and live
