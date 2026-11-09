@@ -452,6 +452,39 @@ OAG_CAMPAIGN_NOT_PLAYABLE = { text = "THIS CAMPAIGN CANNOT BE PLAYED IN THIS BUI
 OAG_CAMPAIGN_EVENT_UNAVAILABLE = { text = "THIS EVENT CANNOT BE RACED WITH WHAT THIS MACHINE HAS", human = false }
 OAG_MENU_CAMPAIGN_PICKER = { text = "CAMPAIGNS", human = false }
 
+# The campaign editor (`oag_game::campaign::editor`): the picker's NEW CAMPAIGN row and the
+# screen's own words.
+OAG_MENU_CAMPAIGN_EDITOR = { text = "NEW CAMPAIGN", human = false }
+OAG_MENU_CAMPAIGN_EDITOR_SUBTITLE = { text = "Place events on the hex grid and save them as a campaign", human = false }
+OAG_EDITOR_TITLE = { text = "CAMPAIGN EDITOR", human = false }
+OAG_EDITOR_FIELD_MODE = { text = "MODE", human = false }
+OAG_EDITOR_FIELD_CIRCUIT = { text = "CIRCUIT", human = false }
+OAG_EDITOR_FIELD_CLASS = { text = "SPEED CLASS", human = false }
+OAG_EDITOR_FIELD_TEAM = { text = "TEAM", human = false }
+OAG_EDITOR_FIELD_AI = { text = "OPPONENTS", human = false }
+OAG_EDITOR_TEAM_CHOOSE = { text = "PLAYER CHOOSES", human = false }
+OAG_EDITOR_EMPTY = { text = "EMPTY SLOT", human = false }
+OAG_EDITOR_PLACED = { text = "EVENTS PLACED", human = false }
+OAG_EDITOR_ACTION_NAME = { text = "NAME", human = false }
+OAG_EDITOR_ACTION_SAVE = { text = "SAVE CAMPAIGN", human = false }
+OAG_EDITOR_ACTION_CLEAR = { text = "CLEAR SLOT", human = false }
+OAG_EDITOR_SAVED = { text = "SAVED - FIND IT UNDER RACE CAMPAIGN", human = false }
+OAG_EDITOR_NEEDS_EVENT = { text = "PLACE AN EVENT FIRST", human = false }
+OAG_EDITOR_NAME_TITLE = { text = "NAME YOUR CAMPAIGN", human = false }
+OAG_EDITOR_SAVE_FAILED = { text = "COULD NOT SAVE THE CAMPAIGN", human = false }
+OAG_EDITOR_HINT_SAVE = { text = "START SAVES", human = false }
+OAG_EDITOR_LEGEND_CLEAR = { text = "Clear slot", human = false }
+OAG_EDITOR_LEGEND_NAME = { text = "Name", human = false }
+OAG_EDITOR_DEFAULT_NAME = { text = "MY CAMPAIGN", human = false }
+OAG_EDITOR_MODE_RACE = { text = "RACE", human = false }
+OAG_EDITOR_MODE_TIME_TRIAL = { text = "TIME TRIAL", human = false }
+OAG_EDITOR_MODE_SPEED_LAP = { text = "SPEED LAP", human = false }
+OAG_EDITOR_MODE_ZONE = { text = "ZONE", human = false }
+OAG_EDITOR_MODE_ELIMINATOR = { text = "ELIMINATOR", human = false }
+OAG_EDITOR_MODE_HEAD_TO_HEAD = { text = "HEAD TO HEAD", human = false }
+OAG_EDITOR_AI_ORIGINAL = { text = "ORIGINAL", human = false }
+OAG_EDITOR_AI_OURS = { text = "OURS", human = false }
+
 # Wipeout Pure's SINGLE PLAYER chain: our own wording around the disc's circuit,
 # tournament, class and mode names. `crates/game/src/main/pure_chain_stage.rs`.
 OAG_MENU_SINGLE_PLAYER = { text = "SINGLE PLAYER", human = false }

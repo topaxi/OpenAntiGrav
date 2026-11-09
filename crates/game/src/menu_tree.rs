@@ -55,6 +55,7 @@ pub fn mods_menu(
         &mut definition,
         &mut listing,
         &installed,
+        title,
         &strings::project_table(language),
     );
     Ok((definition, listing, installed))

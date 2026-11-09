@@ -56,6 +56,9 @@ pub enum Action {
     /// ([`super::CUSTOM_CAMPAIGN_ROW`] and the campaign's key). Never written in
     /// a menu file: the picker exists only when a mod adds a campaign.
     OpenCustomCampaign,
+    /// The campaign picker's NEW CAMPAIGN row: opens the campaign editor over the
+    /// title's `Cell Selection` (`oag_game::campaign::editor`).
+    OpenCampaignEditor,
     /// The MULTIPLAYER page's LOCAL MULTIPLAYER row: starts the multiplayer flow, which seats
     /// the people ("press a button to join"), lays out the windows and goes on to the RACE
     /// page and Track and Ship Select - see `oag_ui_screens::join` and
@@ -113,6 +116,7 @@ impl Action {
             Self::DeletePilot => "delete_pilot",
             Self::OpenCampaign => "open_campaign",
             Self::OpenCustomCampaign => "open_custom_campaign",
+            Self::OpenCampaignEditor => "open_campaign_editor",
             Self::OpenMultiplayerLocal => "multiplayer_local",
             Self::HostLan => "lan_host",
             Self::JoinLan => "lan_join",
@@ -153,6 +157,7 @@ impl Action {
             "delete_pilot" => Some(Self::DeletePilot),
             "open_campaign" => Some(Self::OpenCampaign),
             "open_custom_campaign" => Some(Self::OpenCustomCampaign),
+            "open_campaign_editor" => Some(Self::OpenCampaignEditor),
             "multiplayer_local" => Some(Self::OpenMultiplayerLocal),
             "lan_host" => Some(Self::HostLan),
             "lan_join" => Some(Self::JoinLan),
@@ -173,7 +178,7 @@ impl Action {
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 22] {
+    pub fn all() -> [Self; 23] {
         [
             Self::LaunchRace,
             Self::Quit,
@@ -183,6 +188,7 @@ impl Action {
             Self::DeletePilot,
             Self::OpenCampaign,
             Self::OpenCustomCampaign,
+            Self::OpenCampaignEditor,
             Self::OpenMultiplayerLocal,
             Self::HostLan,
             Self::JoinLan,

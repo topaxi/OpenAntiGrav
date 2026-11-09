@@ -286,7 +286,7 @@ impl Session {
         }
         // The Race Campaign's own screens, same rule: `Cell Selection` steps
         // back to `Grid Selection`, which steps back to the menus.
-        if matches!(&self.stage, Stage::Menu(stage) if stage.campaign.is_some()) {
+        if matches!(&self.stage, Stage::Menu(stage) if stage.campaign.is_some() && stage.prompt.is_none()) {
             self.handle_campaign(oag_ui_screens::campaign::Event::Back);
             return;
         }

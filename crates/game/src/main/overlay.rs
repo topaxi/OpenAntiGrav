@@ -32,6 +32,8 @@ pub(crate) enum Purpose {
         /// Whose file.
         name: String,
     },
+    /// The campaign editor's campaign name (`session::campaign_editor`).
+    CampaignName,
     /// The player's name, shared by every title (`session::player_name`).
     PlayerName,
     /// The player's tag, on the titles that use one.

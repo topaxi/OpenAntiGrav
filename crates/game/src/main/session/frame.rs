@@ -658,7 +658,7 @@ impl Session {
                     }
                     // The Race Campaign's own screens, same shape: they take
                     // the tick whole rather than sitting behind the rows.
-                    if stage.campaign.is_some() {
+                    if stage.campaign.is_some() && stage.prompt.is_none() {
                         self.tick_campaign(&grid);
                         continue;
                     }

@@ -580,6 +580,8 @@ impl Session {
                 self.custom_campaign = None;
                 self.open_campaign();
             }
+            // The campaign picker's NEW CAMPAIGN row (`session::campaign_editor`).
+            menu::MenuEvent::Fired(menu::Action::OpenCampaignEditor) => self.open_campaign_editor(),
             // A row of the campaign picker: the row's id names the mod campaign.
             menu::MenuEvent::Fired(menu::Action::OpenCustomCampaign) => {
                 let key = match &self.stage {

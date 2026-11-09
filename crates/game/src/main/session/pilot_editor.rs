@@ -548,6 +548,10 @@ impl Session {
             self.lan_address_entered(&finished.text);
             return;
         }
+        if finished.purpose == Purpose::CampaignName {
+            self.campaign_named(&finished.text);
+            return;
+        }
         if matches!(finished.purpose, Purpose::PlayerName | Purpose::PlayerTag) {
             self.player_entered(&finished.purpose, &finished.text);
             return;
@@ -600,7 +604,11 @@ impl Session {
                 // better to land on than the top.
                 self.reload_pilot_roster(None);
             }
-            Purpose::LanAddress | Purpose::Online(_) | Purpose::PlayerName | Purpose::PlayerTag => {}
+            Purpose::LanAddress
+            | Purpose::Online(_)
+            | Purpose::CampaignName
+            | Purpose::PlayerName
+            | Purpose::PlayerTag => {}
         }
     }
 

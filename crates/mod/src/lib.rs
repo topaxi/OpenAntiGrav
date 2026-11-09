@@ -27,7 +27,7 @@ pub mod texture_pack;
 pub use container::{Container, Origin};
 pub use discover::{
     EXAMPLES, Failed, Found, Loaded, OFFICIAL, SEARCH_ENV, TEXTURE_PACKS, load, mods_search_path,
-    search,
+    search, user_mods_dir,
 };
 pub use manifest::{
     Channels, Error as ManifestError, Extension, License, MANIFEST, MAX_CHANNELS, Manifest, Rules,

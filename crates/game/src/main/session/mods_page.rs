@@ -51,12 +51,13 @@ impl Session {
         if let Err(e) = oag_game::settings::save(&self.settings) {
             error!("could not save settings: {e:#}");
         }
-        self.rebuild_mod_menus(&id);
+        self.rebuild_menus(Some(&id));
     }
 
     /// Builds the tree, listing, campaigns and tracks again for the switches in
-    /// `self.settings`, and reopens the menus where they were with `id` on the MOD row.
-    fn rebuild_mod_menus(&mut self, id: &str) {
+    /// `self.settings`, and reopens the menus where they were; with `select`, that mod
+    /// is on the MOD row. A campaign saved from the editor is found this way.
+    pub(super) fn rebuild_menus(&mut self, select: Option<&str>) {
         let Some(mut shell) = self.shell.clone() else {
             return;
         };
@@ -87,8 +88,10 @@ impl Session {
             self.shell = Some(shell);
             return;
         };
-        model.seed(mods::SELECTED, &menu::Value::Text(id.to_string()));
-        mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
+        if let Some(id) = select {
+            model.seed(mods::SELECTED, &menu::Value::Text(id.to_string()));
+            mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
+        }
         model.settle();
         if let Stage::Menu(stage) = &mut self.stage {
             stage.menu = model;

@@ -67,6 +67,8 @@ pub const CAMPAIGN_PICKER_PAGE: &str = "campaigns";
 pub const ORIGINAL_CAMPAIGN_ROW: &str = "campaign-original";
 /// The prefix of that page's row ids for a mod campaign; the key follows.
 pub const CUSTOM_CAMPAIGN_ROW: &str = "campaign-custom:";
+/// The id of that page's last row, which opens the campaign editor.
+pub const CAMPAIGN_EDITOR_ROW: &str = "campaign-editor";
 
 mod vocabulary;
 pub use vocabulary::{Action, Query, QueryRef, ValueSource};

@@ -33,19 +33,46 @@ impl Pick {
     }
 }
 
-/// The modes the editor offers: the campaign file's word and the label.
-/// Tournament names legs of its own and is left to the file.
-pub const MODES: [(&str, &str); 6] = [
-    ("race", "RACE"),
-    ("time_trial", "TIME TRIAL"),
-    ("speed_lap", "SPEED LAP"),
-    ("zone", "ZONE"),
-    ("elimination", "ELIMINATOR"),
-    ("head2head", "HEAD TO HEAD"),
+/// The modes the editor offers: the campaign file's word, and the string id and English
+/// of its label. Tournament names legs of its own and is left to the file.
+pub const MODES: [(&str, &str, &str); 6] = [
+    ("race", "OAG_EDITOR_MODE_RACE", "RACE"),
+    ("time_trial", "OAG_EDITOR_MODE_TIME_TRIAL", "TIME TRIAL"),
+    ("speed_lap", "OAG_EDITOR_MODE_SPEED_LAP", "SPEED LAP"),
+    ("zone", "OAG_EDITOR_MODE_ZONE", "ZONE"),
+    ("elimination", "OAG_EDITOR_MODE_ELIMINATOR", "ELIMINATOR"),
+    ("head2head", "OAG_EDITOR_MODE_HEAD_TO_HEAD", "HEAD TO HEAD"),
 ];
 
-/// Whose driver flies the opponents.
-pub const AIS: [(&str, &str); 2] = [("original", "ORIGINAL"), ("ours", "OURS")];
+/// Whose driver flies the opponents: the file's word, then the label's id and English.
+pub const AIS: [(&str, &str, &str); 2] = [
+    ("original", "OAG_EDITOR_AI_ORIGINAL", "ORIGINAL"),
+    ("ours", "OAG_EDITOR_AI_OURS", "OURS"),
+];
+
+/// Every other word the editor's screen and flow show: string id and English.
+pub const WORDS: [(&str, &str); 20] = [
+    ("OAG_EDITOR_TITLE", "CAMPAIGN EDITOR"),
+    ("OAG_EDITOR_FIELD_MODE", "MODE"),
+    ("OAG_EDITOR_FIELD_CIRCUIT", "CIRCUIT"),
+    ("OAG_EDITOR_FIELD_CLASS", "SPEED CLASS"),
+    ("OAG_EDITOR_FIELD_TEAM", "TEAM"),
+    ("OAG_EDITOR_FIELD_AI", "OPPONENTS"),
+    ("OAG_EDITOR_TEAM_CHOOSE", "PLAYER CHOOSES"),
+    ("OAG_EDITOR_EMPTY", "EMPTY SLOT"),
+    ("OAG_EDITOR_PLACED", "EVENTS PLACED"),
+    ("OAG_EDITOR_ACTION_NAME", "NAME"),
+    ("OAG_EDITOR_ACTION_SAVE", "SAVE CAMPAIGN"),
+    ("OAG_EDITOR_ACTION_CLEAR", "CLEAR SLOT"),
+    ("OAG_EDITOR_SAVED", "SAVED - FIND IT UNDER RACE CAMPAIGN"),
+    ("OAG_EDITOR_NEEDS_EVENT", "PLACE AN EVENT FIRST"),
+    ("OAG_EDITOR_NAME_TITLE", "NAME YOUR CAMPAIGN"),
+    ("OAG_EDITOR_SAVE_FAILED", "COULD NOT SAVE THE CAMPAIGN"),
+    ("OAG_EDITOR_HINT_SAVE", "START SAVES"),
+    ("OAG_EDITOR_LEGEND_CLEAR", "Clear slot"),
+    ("OAG_EDITOR_LEGEND_NAME", "Name"),
+    ("OAG_EDITOR_DEFAULT_NAME", "MY CAMPAIGN"),
+];
 
 /// What the title and its disc offer a slot to be set to.
 #[derive(Debug, Clone)]
@@ -102,6 +129,7 @@ pub struct Editor {
     cursor: (u32, u32),
     field: usize,
     editing: bool,
+    words: BTreeMap<String, String>,
 }
 
 /// Where a slot's hex stands, in hex-widths and hex-heights: odd columns half a
@@ -122,7 +150,45 @@ impl Editor {
             cursor,
             field: 0,
             editing: false,
+            words: BTreeMap::new(),
         }
+    }
+
+    /// Takes the words the screen shows from `say` (a string id and its English).
+    #[must_use]
+    pub fn with_words(mut self, say: &dyn Fn(&str, &str) -> String) -> Self {
+        for (id, english) in WORDS
+            .iter()
+            .copied()
+            .chain(MODES.iter().map(|m| (m.1, m.2)))
+            .chain(AIS.iter().map(|a| (a.1, a.2)))
+        {
+            self.words.insert(id.to_string(), say(id, english));
+        }
+        self
+    }
+
+    /// The words for `id`: the string table's if [`Self::with_words`] was given one,
+    /// else `english`.
+    #[must_use]
+    pub fn say(&self, id: &str, english: &str) -> String {
+        self.words
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| english.to_string())
+    }
+
+    /// The name of `field`.
+    #[must_use]
+    pub fn field_name(&self, field: Field) -> String {
+        let (id, english) = match field {
+            Field::Mode => ("OAG_EDITOR_FIELD_MODE", "MODE"),
+            Field::Circuit => ("OAG_EDITOR_FIELD_CIRCUIT", "CIRCUIT"),
+            Field::Class => ("OAG_EDITOR_FIELD_CLASS", "SPEED CLASS"),
+            Field::Team => ("OAG_EDITOR_FIELD_TEAM", "TEAM"),
+            Field::Ai => ("OAG_EDITOR_FIELD_AI", "OPPONENTS"),
+        };
+        self.say(id, english)
     }
 
     /// The campaign's name.
@@ -221,6 +287,13 @@ impl Editor {
         self.field = 0;
     }
 
+    /// Opens the field panel on the selected slot when it holds an event.
+    pub fn begin_edit(&mut self) {
+        if self.has(self.cursor) {
+            self.editing = true;
+        }
+    }
+
     /// Closes the panel; with it closed, `false` (nothing to back out of here).
     pub fn back(&mut self) -> bool {
         std::mem::take(&mut self.editing)
@@ -274,17 +347,18 @@ impl Editor {
     #[must_use]
     pub fn label(&self, slot: (u32, u32), field: Field) -> Option<String> {
         let draft = self.events.get(&slot)?;
-        let pick = |list: &[Pick], at: usize| list.get(at).map_or("-".to_string(), |p| p.label.clone());
+        let pick =
+            |list: &[Pick], at: usize| list.get(at).map_or("-".to_string(), |p| p.label.clone());
         Some(match field {
-            Field::Mode => MODES[draft.mode].1.to_string(),
+            Field::Mode => self.say(MODES[draft.mode].1, MODES[draft.mode].2),
             Field::Circuit => pick(&self.choices.tracks, draft.track),
             Field::Class if MODES[draft.mode].0 == "zone" => "-".to_string(),
             Field::Class => pick(&self.choices.classes, draft.class),
             Field::Team => match draft.team {
-                0 => "PLAYER CHOOSES".to_string(),
+                0 => self.say("OAG_EDITOR_TEAM_CHOOSE", "PLAYER CHOOSES"),
                 n => pick(&self.choices.teams, n - 1),
             },
-            Field::Ai => AIS[draft.ai].1.to_string(),
+            Field::Ai => self.say(AIS[draft.ai].1, AIS[draft.ai].2),
         })
     }
 
@@ -363,18 +437,27 @@ impl Editor {
     }
 
     fn event(&self, slot: (u32, u32), draft: &Draft) -> EventDef {
-        let (mode, _) = MODES[draft.mode];
+        let mode = MODES[draft.mode].0;
         let ours = AIS[draft.ai].0 == "ours";
         EventDef {
             slot: [slot.0, slot.1],
             id: None,
             name: String::new(),
             mode: mode.to_string(),
-            track: self.choices.tracks.get(draft.track).map(|p| p.value.clone()),
+            track: self
+                .choices
+                .tracks
+                .get(draft.track)
+                .map(|p| p.value.clone()),
             tracks: Vec::new(),
             file: None,
             class: (mode != "zone")
-                .then(|| self.choices.classes.get(draft.class).map(|p| p.value.clone()))
+                .then(|| {
+                    self.choices
+                        .classes
+                        .get(draft.class)
+                        .map(|p| p.value.clone())
+                })
                 .flatten(),
             laps: None,
             weapons: None,

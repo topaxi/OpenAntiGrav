@@ -25,6 +25,8 @@ mod apply;
 mod cpu_governor;
 #[path = "session/campaign.rs"]
 mod campaign;
+#[path = "session/campaign_editor.rs"]
+mod campaign_editor;
 #[path = "session/draw.rs"]
 mod draw;
 #[path = "session/endrace.rs"]

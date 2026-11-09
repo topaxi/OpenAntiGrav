@@ -7,7 +7,9 @@ fn choices() -> Choices {
     Choices {
         tracks: vec![Pick::plain("01_Track"), Pick::plain("02_Track")],
         teams: vec![Pick::plain("Feisar"), Pick::plain("Qirex")],
-        classes: ["Venom", "Flash", "Rapier", "Phantom"].map(Pick::plain).to_vec(),
+        classes: ["Venom", "Flash", "Rapier", "Phantom"]
+            .map(Pick::plain)
+            .to_vec(),
         slots,
         title: "wipeout-pulse".to_string(),
     }
@@ -68,7 +70,10 @@ fn the_cursor_walks_the_staggered_grid_and_stops_at_its_edge() {
     editor.step(-1, 0);
     editor.step(0, -1);
     assert_eq!(editor.cursor(), (0, 0));
-    assert!(!editor.select((9, 9)), "a slot the title draws no hex at is refused");
+    assert!(
+        !editor.select((9, 9)),
+        "a slot the title draws no hex at is refused"
+    );
 }
 
 #[test]
