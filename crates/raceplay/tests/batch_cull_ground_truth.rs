@@ -9,7 +9,7 @@
 //! past it (`docs/rendering/batch-cull.md`).
 
 use oag_raceplay as race;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn image(name: &str) -> Option<PathBuf> {
     oag_testdata::image(name)
@@ -27,7 +27,7 @@ const BACK_COPY: u32 = 928;
 /// Moa Therma White, `psp-trace.py --camera`, 2 placements agree).
 const EYE: [f32; 3] = [344.3, 6.91, 303.4];
 
-fn load(path: &PathBuf, track: Option<&str>) -> race::Loaded {
+fn load(path: &Path, track: Option<&str>) -> race::Loaded {
     race::load(&race::Options {
         source: path.display().to_string(),
         class: "VENOM".to_string(),
