@@ -116,7 +116,7 @@ the same way, between the same two ticks ([the timeline](../architecture/replay-
 | Kind | Code | Value | Writer |
 | --- | --- | --- | --- |
 | `pilot_assist` | 1 | the level's index in `Level::ALL` (off 0, normal 1, extreme 2) | `Race::change_pilot_assist`, called by the pause menu (`Session::apply_pause_setting`); one event per person-flown seat, each applied as the writer does, to every seat |
-| `give` | 2 | the weapon's index in `Weapon::ALL` | `Race::give_weapon`, the capture flag `--give` (writes only an empty pickup slot) |
+| `give` | 2 | the weapon's index in `Weapon::ALL`, 14 for a mod's `Extension` pickup | `Race::give_weapon`, the flag `--give`, from the session and from a capture alike (writes only an empty pickup slot, and records only a write) |
 | `controller` | 3 | `0` the opponent driver, `1` a person at this machine | `Race::set_controller`, called by `oag_game::split_screen::follow_devices` when a pad leaves or returns to a seat; applied idempotently. ADR-0087's fork hands a seat nobody took to the driver the same way |
 
 A mid-race Pilot Assist change used to stop the recording (`Race::stop_recording`, removed); it is an

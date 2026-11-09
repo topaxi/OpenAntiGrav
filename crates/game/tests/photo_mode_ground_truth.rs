@@ -322,6 +322,7 @@ fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &P
                  until photo=internal within 200; press start; \
                  hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; \
                  hold left 90; ticks 5; hold right 20; ticks 5; press cross; ticks 5; \
+             screenshot SHOTS/rewound.png; \
                  screenshot SHOTS/rewound.png; hold left 90; ticks 60; \
                  escape; until photo=none within 50; ticks 600"
             ),
@@ -331,6 +332,66 @@ fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &P
         assert!(rewound.status.success(), "{}", rewound.stderr);
         a_rewound_visit_hashes_as_the_control(tag, &control, &rewound);
     }
+}
+
+/// A pickup `--give` hands out enters the race through the recording (ADR-0087, decision 7): the
+/// throttle held, the pickup fired twice after GO (each time the slot is empty `--give` tops it up
+/// again), then a visit to photo mode that rewinds into the first second and goes forward. Every
+/// tick the visit reports hashes as the same tick of a race that was never visited, and the
+/// recording holds one `give` event for each top-up and rebuilds, from its header, to the same
+/// hash at every stored tick.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_race_handed_a_pickup_hashes_the_same_at_every_tick_after_a_rewind() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-give-shots");
+    let to_the_race = TO_THE_TIME_TRIAL.replace(
+        "ticks 400; ",
+        "hold cross 300; hold cross square 2; hold cross 30; hold cross square 2; hold cross 66; ",
+    );
+    let args = ["--give", "rocket"];
+    let control = drive_unmodded(
+        &image,
+        "give-control",
+        &format!("{to_the_race} ticks 200"),
+        &shots,
+        &args,
+    );
+    assert!(control.status.success(), "{}", control.stderr);
+    let recorded = control
+        .states
+        .iter()
+        .filter_map(|state| state.get("recorded_events").and_then(Value::as_u64))
+        .max();
+    assert!(
+        recorded.is_some_and(|events| events >= 3),
+        "the first top-up and the two after a shot are events in the recording: {recorded:?}"
+    );
+    // The file rebuilds the race from its header with the slot empty: only the events put the
+    // rocket there, and every stored hash must agree with the rebuilt race's.
+    let replay = oag_replay::Replay::from_bytes(&the_recording(&control)).expect("it reads back");
+    let verified = super::replay_viewer_ground_truth::verify(&image, &replay)
+        .unwrap_or_else(|desync| panic!("the recording desyncs at tick {}", desync.tick));
+    assert!(verified > 400, "only {verified} ticks verified");
+    let rewound = drive_unmodded(
+        &image,
+        "give-rewind",
+        &format!(
+            "{to_the_race} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=internal within 200; press start; \
+             hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; \
+             hold left 90; ticks 5; hold right 20; ticks 5; press cross; ticks 5; \
+             screenshot SHOTS/rewound.png; \
+             hold left 90; ticks 60; \
+             escape; until photo=none within 50; ticks 200"
+        ),
+        &shots,
+        &args,
+    );
+    assert!(rewound.status.success(), "{}", rewound.stderr);
+    a_rewound_visit_hashes_as_the_control("give", &control, &rewound);
 }
 
 /// The checks of [`a_visit_that_rewinds_leaves_every_live_tick_as_it_was`] over one control and

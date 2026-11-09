@@ -522,7 +522,7 @@ fn a_campaign_race_recorded_from_the_menus_reproduces() {
 }
 
 /// Rebuilds `replay` from its header over `image`, as WATCH does, and checks every stored hash.
-fn verify(image: &Path, replay: &oag_replay::Replay) -> Result<u64, oag_replay::Desync> {
+pub(crate) fn verify(image: &Path, replay: &oag_replay::Replay) -> Result<u64, oag_replay::Desync> {
     let mut options =
         oag_raceplay::Options::for_replay(&replay.header, &image.display().to_string())
             .expect("the header rebuilds");

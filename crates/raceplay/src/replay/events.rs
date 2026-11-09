@@ -27,6 +27,19 @@ pub enum ApplyError {
     },
 }
 
+/// The weapons a `give` event can name, by the index it stores: [`Weapon::ALL`] in order, then
+/// the pickup a simulation mod owns, which `--give extension` can hand out (inert without
+/// such a mod).
+const STORED_WEAPONS: [Weapon; 15] = {
+    let mut stored = [Weapon::Extension; 15];
+    let mut at = 0;
+    while at < Weapon::ALL.len() {
+        stored[at] = Weapon::ALL[at];
+        at += 1;
+    }
+    stored
+};
+
 impl Race {
     #[cfg(feature = "view")]
     /// Switches Pilot Assist to `level` for every seat, as the pause menu does, and records it
@@ -47,7 +60,7 @@ impl Race {
         if !self.write_weapon(slot, weapon) {
             return false;
         }
-        self.record_event(slot, Kind::Give, ordinal(&Weapon::ALL, weapon));
+        self.record_event(slot, Kind::Give, ordinal(&STORED_WEAPONS, weapon));
         true
     }
 
@@ -109,7 +122,7 @@ impl Race {
             Some(Kind::Give) => {
                 let weapon = usize::try_from(event.value)
                     .ok()
-                    .and_then(|at| Weapon::ALL.get(at))
+                    .and_then(|at| STORED_WEAPONS.get(at))
                     .ok_or(bad)?;
                 self.write_weapon(seat, *weapon);
             }
@@ -158,4 +171,17 @@ fn ordinal<T: PartialEq>(all: &[T], value: T) -> u32 {
         .position(|candidate| *candidate == value)
         .and_then(|at| u32::try_from(at).ok())
         .expect("every value is in its own list")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_weapon_a_session_can_give_has_an_index_and_the_pool_keeps_its_place() {
+        assert_eq!(STORED_WEAPONS[..Weapon::ALL.len()], Weapon::ALL);
+        assert_eq!(STORED_WEAPONS[Weapon::ALL.len()], Weapon::Extension);
+        assert_eq!(ordinal(&STORED_WEAPONS, Weapon::Extension), 14);
+        assert_eq!(ordinal(&STORED_WEAPONS, Weapon::Rocket), 0);
+    }
 }
