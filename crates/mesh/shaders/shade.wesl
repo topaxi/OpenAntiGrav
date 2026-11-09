@@ -1300,7 +1300,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // scrolled coordinate, and the alpha is the vertex ramp times the fade the
     // caller writes into it. `texel.a` does not reach the output. Not decoded
     // on the linear target, for the reason the flame gives: the program
-    // applies no transfer function.
+    // applies no transfer function. The fogged blocks the race draws close on
+    // `MAD /2` (`ps3-microcode.py fp-file hd_absorbinternal.rcsmaterial`,
+    // blocks #2 to #9), so the colour is halved like every scene program's
+    // (`scene.light.output_scale`, 1.0 where a title has no such scale).
     // Branched on its `override` for the flame's reason.
     var absorb = vec4<f32>(0.0);
     if absorb_shading != 0.0 {
@@ -1311,7 +1314,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             albedo_sampler,
             in.texcoord + vec2<f32>(absorb_offset, absorb_offset),
         ).rgb;
-        absorb = vec4<f32>(absorb_rgb, in.colour.a);
+        absorb = vec4<f32>(absorb_rgb * scene.light.output_scale, in.colour.a);
     }
     let composed_plain = mix(mix(cone_or_floor, flame, flame_shading), absorb, absorb_shading);
     let composed = vec4<f32>(
