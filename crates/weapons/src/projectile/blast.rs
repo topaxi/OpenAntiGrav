@@ -151,11 +151,13 @@ pub fn blast<S: Craft>(
 /// as `Ship_ApplyCollisionImpulse` does (a forward-axis push and the collision stun).
 ///
 /// **Recovered.** Every blast function the original has writes the pending slot at
-/// `entity+0x110`, measured from the struck craft's nose point (`T+0x50`), with this
-/// falloff and no clamp: `Weapon_PostBlastImpulse` (`0x0886794c`, the Mine),
-/// `Bomb_ApplyBlast` (`0x088643d0`), `Plasma_ApplyBlastForce` (`0x0886ae08`),
-/// `Rocket_ApplyBlastForce` (`0x0886ee88`), `Missile_ApplyBlastForce` (`0x08868ea4`). See
-/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "Weapon_PostBlastImpulse".
+/// `entity+0x110` with this falloff and no clamp: `Weapon_PostBlastImpulse` (`0x0886794c`,
+/// the Mine), `Bomb_ApplyBlast` (`0x088643d0`), `Plasma_ApplyBlastForce` (`0x0886ae08`),
+/// `Rocket_ApplyBlastForce` (`0x0886ee88`), `Missile_ApplyBlastForce` (`0x08868ea4`). The
+/// Mine's and the Plasma's measure from the struck craft's nose point (`T+0x50`); the other
+/// three write the same object's `+0x110` and are taken to read the same point (their
+/// pages say only "position"). See `docs/ghidra/functions/psp-pulse-usa/contact-response.md`,
+/// "Wired: every blast posts its push".
 ///
 /// The reach is tested on the nose point too, so the falloff is never negative here
 /// (`Plasma_ApplyBlastForce` gates on `d < blastradius` off the same point). A zero

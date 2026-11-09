@@ -2382,3 +2382,62 @@ contradiction came from two different structs. **Not generalised to all eight
 craft**: the race-time pointer `0x08b3bf88` pointed at a different 0x1f0-stride
 pool in the eight-craft run and the pattern search for `T` per craft found nothing
 in that race, so the layout is read off the single-craft states only.
+
+## Wired 2026-11-09: every blast posts its push through the pending impulse, from the nose point
+
+**Claim** (`pulse-blast-impulse` lane): a weapon blast pushes the struck craft
+through `ShipState::pending_impulse`, measured from the craft's nose point, as the
+original does, instead of changing velocity at once from the centre. **True, wired;
+the nose point itself stays at confidence 75** (see above) and the writers beyond the
+Mine's are an inference.
+
+**Which weapons reach `+0x110`, settled from the docs, no new breakpoint.** Every
+blast function the original has writes the slot with the identical
+`(1 - d / blastradius) * blastforce` and no clamp:
+
+| Function | Address | Weapon | Page | Conf. |
+| --- | --- | --- | --- | --- |
+| `Weapon_PostBlastImpulse` | `0x0886794c` | Mine trip (one caller, `Mine_SweepCraftTrigger`) | this page | 82 |
+| `Bomb_ApplyBlast` | `0x088643d0` | Bomb, tripper included | [mine.md](mine.md) | 85 |
+| `Plasma_ApplyBlastForce` | `0x0886ae08` | Plasma craft hit, all but the firer | [plasma.md](plasma.md) | 88 |
+| `Rocket_ApplyBlastForce` | `0x0886ee88` | Rocket craft hit, all but the firer | [rocket-visuals.md](rocket-visuals.md) | 90 |
+| `Missile_ApplyBlastForce` | `0x08868ea4` | Missile, all but the struck | [missile.md](missile.md) | 88 |
+
+**`FUN_08868ea4` is `Missile_ApplyBlastForce`** (confidence 88, `names.tsv`); the "under 50,
+unnamed" account of it above is superseded. Its callers `FUN_08868a10`
+(`MissilePool_DestroyRemote_q`) and `FUN_088690fc` are the missile's. The Wipeout
+Pure `Bomb_ApplyHit` is the same arithmetic ([weapons.md](../psp-pure-usa/weapons.md)).
+
+**What the port does.** `oag_physics::wall::post_blast_impulse` measures from
+`oag_physics::wall::nose_point` (position + `NOSE_OFFSET` = `4.875` x forward) and
+accumulates into `pending_impulse`; `oag_weapons::projectile::blast::post_impulse` is the one
+helper all of `blast`, `blast_mine_trip` and `blast_direct_hit` call (they carried
+three inline copies of a radial `apply_impulse`). `wall::apply_pending_impulse`, already
+ported, drains it on the craft's next physics step: a push along the craft's own
+forward axis (sign from the vector's side of it, magnitude its length), `+0.5 s` of
+stun (no thrust, no lateral grip), and **nothing at all under a running Shield**. That is
+the player-visible change: a hit craft loses its engine for half a second per blast, a
+shielded one is not shoved.
+
+**Departures, labelled.** (a) The reach: `Plasma_ApplyBlastForce` gates on `d <
+blastradius` off the nose point, so the push uses the nose distance for the gate as well
+as the falloff (never a negative falloff). Damage and slowdown keep their existing
+gate on the craft's position, which no page contradicts. (b) The three twins other
+than the Mine's and Plasma's are taken to read the same `T+0x50` (their pages say
+"position" without an offset); chosen, not measured. (c) The Shuriken's blast law is
+unread and keeps taking the Mine's through `blast`. (d) A blast centred exactly on a
+nose point posts nothing (the original's zero-guarded normalise), where ours used to
+push up.
+
+**Other titles: Pulse's law inherited, unmeasured.** Pure's Bomb push is the same
+arithmetic (read), its stun consumer unread; HD's blast-radius loop
+(`FUN_00146470`) is unread, 2048 and Omega unread. All run Pulse's, per the
+inherit-Pulse rule, recorded in `weapon-lineage.md`, "Blast push". A 2048/Omega
+census against the checked-in blast tables was not needed: the delivery takes the
+title's own `blastradius` and `blastforce` and moves no number.
+
+**Open.** The nose offset is measured on one hull (`4.875 = 0.375 * 13`, may be
+hull-derived); whether the Missile, Rocket and Bomb twins read `T+0x50` (a Ghidra
+`program=` read of each position load settles it); the Shuriken. The collision stun
+is `+0.5 s` per hit and adds, so two blasts in a tick stun for a second: confirmed in
+the consumer's code, not watched in a race.

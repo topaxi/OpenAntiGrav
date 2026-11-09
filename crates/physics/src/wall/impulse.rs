@@ -11,7 +11,7 @@ use crate::ship::ShipState;
 /// 0.5` in `Ship_ApplyCollisionImpulse` (`0x0883f274`). **Added, not assigned**, so repeated
 /// hits accumulate. Confidence 85; `docs/ghidra/functions/psp-pulse-usa/engine.md`.
 ///
-/// # Nothing in this crate arms it, and that is a correction
+/// # Only a posted impulse arms it, and that is a correction
 ///
 /// [`super::resolve`] once armed it on the first frame of every inward contact. Wrong, on
 /// three legs:
@@ -28,9 +28,9 @@ use crate::ship::ShipState;
 /// - `data/traces/talons-junction-standing-start.csv` (300 ticks, 230 of one wall scrape)
 ///   has it **`0.0` on every tick** too.
 ///
-/// So the timer belongs to being hit by a rival or weapon, not touching the track. The gate
-/// it feeds is real ([`ShipState::stun_timer`] cuts thrust and lateral grip); only the
-/// arming site is absent, as for [`ShipState::slowdown_timer`].
+/// So the timer belongs to being hit by a weapon blast, not touching the track or a rival
+/// (a craft-to-craft hit arms nothing, measured). The gate it feeds is real
+/// ([`ShipState::stun_timer`] cuts thrust and lateral grip).
 ///
 /// **What the mistake cost:** once the hull had ten sample points it fired on `2,045` of a
 /// `3,146`-tick open-loop run, `65 %` of the race with no engine, and the craft crawled
@@ -51,19 +51,17 @@ use crate::ship::ShipState;
 /// # The writers (2026-08-19)
 ///
 /// A live write breakpoint during a driven Single Race found two, both in the weapon-code
-/// region. `Weapon_PostBlastImpulse_q` (`0x0886794c`) **accumulates** a distance-falloff
-/// impulse off a per-weapon stats table (ported as [`post_blast_impulse`]; a rocket, mine or
-/// missile explosion is the unconfirmed guess for its caller, `Mine_SweepCraftTrigger`). A
-/// second, unnamed writer loops over what reads like a short entity list doing the same
-/// accumulate (no port). All callers are found and none read, so nothing calls the ported
-/// writer: this crate has no weapon trigger, no `radius`/`power` table and no settled
-/// `source`/`target` selection. `Ship_ApplyCollisionImpulse` overwrites the pending vector's
-/// storage with its forward-axis projection before applying it through
-/// `Body_ApplyImpulseAtPoint` (`0x0884d64c`), the math [`super::resolve`] reproduces. (Finding
-/// that call target needed a live memory read plus the image base: Ghidra's *static*
-/// disassembly of a `jal` operand here is the unrelocated `R_MIPS_26` field, a documented
-/// trap that also silences `get_xrefs_to`; the fix for both is image-relative
-/// `search_instructions`.) See `contact-response.md`.
+/// region: `Weapon_PostBlastImpulse_q` (`0x0886794c`, the Mine's, ported as
+/// [`post_blast_impulse`]) and `Missile_ApplyBlastForce` (`0x08868ea4`). The Bomb, Plasma and
+/// Rocket blasts have twins writing the same slot, and
+/// `oag_weapons::projectile::blast` posts all of them through [`post_blast_impulse`].
+/// `Ship_ApplyCollisionImpulse` overwrites the pending vector's storage with its
+/// forward-axis projection before applying it through `Body_ApplyImpulseAtPoint`
+/// (`0x0884d64c`), the math [`super::resolve`] reproduces. (Finding that call target needed a
+/// live memory read plus the image base: Ghidra's *static* disassembly of a `jal` operand
+/// here is the unrelocated `R_MIPS_26` field, a documented trap that also silences
+/// `get_xrefs_to`; the fix for both is image-relative `search_instructions`.) See
+/// `contact-response.md`.
 pub const STUN_PER_CONTACT: f32 = 0.5;
 
 /// Drains [`ShipState::pending_impulse`] as `Ship_ApplyCollisionImpulse` (`0x0883f274`) does.
@@ -83,8 +81,9 @@ pub const STUN_PER_CONTACT: f32 = 0.5;
 /// 5. **The timer arm**: [`STUN_PER_CONTACT`] onto [`ShipState::stun_timer`], skipped under
 ///    the Shield as 3-4.
 ///
-/// Nothing writes [`ShipState::pending_impulse`] yet, so this is a correct no-op today: the
-/// consumer half of the stun path, testable alone by setting the field.
+/// [`post_blast_impulse`] is the producer: every weapon blast posts through it
+/// (`oag_weapons::projectile::blast`). A craft-to-craft contact does not (it arms nothing,
+/// `contact-response.md`, "a craft-to-craft hit arms nothing"), and neither does a wall.
 pub fn apply_pending_impulse(state: &mut ShipState) {
     if state.pending_impulse == Vec3::ZERO {
         return;
