@@ -462,7 +462,7 @@ fn only_the_far_bar_reset_keeps_class_6_and_never_class_7() {
             .all(|e| e.streak == StreakDraw::Procedural)
     );
     let mut kept = base();
-    kept.without_pulse_psp_draw_but(streak::KeptBar::Far);
+    kept.without_pulse_psp_draw_but(streak::Kept::bar(streak::KeptBar::Far));
     let draws: Vec<StreakDraw> = kept.emitters.iter().map(|e| e.streak).collect();
     assert_eq!(
         draws,
@@ -484,7 +484,7 @@ fn only_the_pool_bar_reset_keeps_class_6_as_the_mean_depth_bar() {
     effect.emitters[0].streak = StreakDraw::Bar { aspect: 0.5 };
     effect.emitters[1].streak = StreakDraw::Capped;
     effect.emitters[2].streak = StreakDraw::Wedge;
-    effect.without_pulse_psp_draw_but(streak::KeptBar::Mean);
+    effect.without_pulse_psp_draw_but(streak::Kept::bar(streak::KeptBar::Mean));
     let draws: Vec<StreakDraw> = effect.emitters.iter().map(|e| e.streak).collect();
     assert_eq!(
         draws,
@@ -493,6 +493,38 @@ fn only_the_pool_bar_reset_keeps_class_6_as_the_mean_depth_bar() {
             StreakDraw::Procedural,
             StreakDraw::Procedural
         ]
+    );
+}
+
+/// The templates are the third opt-in: a listed effect keeps a template emitting and rolling, an unlisted
+/// one mutes it and takes its rotation, and the listing never reaches an emitter's own rotation.
+#[test]
+fn only_the_kept_templates_reset_keeps_templates_emitting_and_rolling() {
+    let base = || {
+        let mut effect = (*effect("pure", false, 10.0)).clone();
+        let spec = effect.emitters[0].clone();
+        effect.emitters = vec![spec.clone(), spec];
+        effect.emitters[0].rotation = Some(roll::Rotation::emitter(1.0, constant(1.0), 0));
+        effect.emitters[1].template = true;
+        effect.emitters[1].per_emission = (3, 3);
+        effect.emitters[1].rotation = Some(roll::Rotation::emitter(1.7, constant(1.0), 0));
+        effect
+    };
+    let mut muted = base();
+    muted.without_pulse_psp_draw();
+    assert_eq!(muted.emitters[1].per_emission, (0, 0));
+    assert!(muted.emitters.iter().all(|e| e.rotation.is_none()));
+
+    let mut kept = base();
+    kept.without_pulse_psp_draw_but(streak::Kept {
+        bar: streak::KeptBar::No,
+        templates: true,
+    });
+    assert_eq!(kept.emitters[1].per_emission, (3, 3));
+    assert!(kept.emitters[1].rotation.is_some());
+    assert!(
+        kept.emitters[0].rotation.is_none(),
+        "an emitter's own particle stays unrotated"
     );
 }
 

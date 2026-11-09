@@ -378,6 +378,13 @@ pub struct Effects {
     /// matched capture, never by extension to the title. An effect in both this list and
     /// [`Self::far_bars`] draws the far bar.
     pub pool_bars: &'static [&'static str],
+    /// Effects whose sprite templates (`oag_fx::psys::Effect::add_templates`) play on a source
+    /// that is not Pulse on the PSP. An effect not listed keeps its templates muted; wiring one is a
+    /// decision made per effect against a matched capture, never by extension to the title. No title
+    /// lists one yet: Pure's template draw, sampler and initialiser are Pulse's
+    /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw"), but its absorb burst
+    /// drew far too bright at 0.75 s with them on, and why is unread.
+    pub templates: &'static [&'static str],
     /// How the Quake wave is placed and washes the screen: its frame is read
     /// only for a title whose [`Self::extents`] list `WO_QUAKE`.
     pub quake_look: QuakeLook,
@@ -444,6 +451,7 @@ impl Effects {
         extents: &[],
         far_bars: &[],
         pool_bars: &[],
+        templates: &[],
         quake_look: QuakeLook::track(Origin::InheritedFrom("Wipeout Pulse")),
         trail_hits_native: false,
     };
