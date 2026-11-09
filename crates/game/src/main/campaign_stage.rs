@@ -314,7 +314,7 @@ impl CampaignStage {
             }
             Screen::Grid(model)
         };
-        Self {
+        let mut stage = Self {
             frontend_glow: title_ref.campaign.frontend_glow.is_some(),
             medal_tier_rows: title_ref.campaign.medal_rows(),
             grids,
@@ -344,7 +344,20 @@ impl CampaignStage {
             flyers,
             circuit_emblems,
             editor: None,
+        };
+        // A one-grid campaign has no grid to choose: it opens on that grid's cells.
+        if stage.skips_grid_selection() && stage.grid_is_unlocked(0) {
+            stage.open_cell_selection(0);
         }
+        stage
+    }
+
+    /// Whether `Grid Selection` is left out: a campaign of exactly one grid, with no
+    /// `Campaign Selection` ahead of it, has nothing for it to offer. `Back` from its
+    /// `Cell Selection` closes the campaign instead. The editor builds its own grid and is
+    /// not a campaign being picked.
+    pub(crate) fn skips_grid_selection(&self) -> bool {
+        grid_selection_is_skipped(self.grids.len(), self.has_selection(), self.editor.is_some())
     }
 
 
@@ -1025,9 +1038,14 @@ impl CampaignStage {
     }
 }
 
+/// [`CampaignStage::skips_grid_selection`]'s decision over its three facts.
+pub(crate) fn grid_selection_is_skipped(grids: usize, has_selection: bool, editing: bool) -> bool {
+    grids == 1 && !has_selection && !editing
+}
+
 #[cfg(test)]
 mod tests {
-    use super::CellCursor;
+    use super::{CellCursor, grid_selection_is_skipped};
     use oag_tables::race_campaign::{Cell, Mode};
     use oag_ui_screens::campaign::CellSelection;
 
@@ -1165,5 +1183,17 @@ mod tests {
         let mut model = CellSelection::new(vec![locked_cell("grid0_2_1"), cell("grid0_3_1")]);
         CellCursor::default().restore(&mut model);
         assert_eq!(selected(&model), "grid0_3_1");
+    }
+
+    /// One grid with nothing ahead of it skips `Grid Selection`, on any title; several grids,
+    /// HD/Omega's `Campaign Selection`, an empty campaign and the editor keep it.
+    #[test]
+    fn only_a_lone_grid_without_a_chooser_skips_grid_selection() {
+        assert!(grid_selection_is_skipped(1, false, false));
+        assert!(!grid_selection_is_skipped(0, false, false));
+        assert!(!grid_selection_is_skipped(2, false, false));
+        assert!(!grid_selection_is_skipped(16, false, false));
+        assert!(!grid_selection_is_skipped(1, true, false));
+        assert!(!grid_selection_is_skipped(1, false, true));
     }
 }

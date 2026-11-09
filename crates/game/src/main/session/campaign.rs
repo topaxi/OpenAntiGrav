@@ -367,6 +367,10 @@ impl Session {
                         confirmed_difficulty = confirmed_cell.as_ref().map(|_| model.difficulty());
                     }
                 }
+                (Screen::Cell { .. }, Event::Back) if campaign.skips_grid_selection() => {
+                    keep_cursor(&mut self.records, &mut self.selector_phases, campaign);
+                    stage.campaign = None;
+                }
                 (Screen::Cell { .. }, Event::Back) => campaign.back_to_grid_selection(),
                 // `DifficultyChanged` is HD-only, ours, and needs nothing
                 // from the composition root - `CellSelection::cycle_difficulty`
