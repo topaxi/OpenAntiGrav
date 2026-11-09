@@ -106,6 +106,10 @@
 - **A struck craft's hull sparks, measured per locator against the original**
   (2026-09-30): three causes named and two fixed, the gap closed from 1.3-2.6x
   to within 10 % - see [`hull-sparks.md`](hull-sparks.md)
+- **A weapon absorb on the player's craft, ours against the original** (2026-11-09): matched pairs on Pulse, Pure and
+  HD scored on the craft box against a no-absorb control, ranked differences per title (Pulse's bar glow, Pure's missing
+  hull overlay, HD's shell tint and tail), 2048 and Omega unpaired - see
+  [`weapon-absorb-pairs.md`](weapon-absorb-pairs.md)
 - Lighting and shadow: five authored light classes plus
   `Dynamic Shadow Occluder` and `lensflare` - none implemented. The prelit path
   exists (`GpuVertex.lit`), so this is about which surfaces are which.
