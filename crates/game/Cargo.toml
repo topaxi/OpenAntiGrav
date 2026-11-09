@@ -100,7 +100,7 @@ bytemuck = { workspace = true, features = ["derive"] }
 # Rasterises the SVGs under `assets/icons/` into the window/taskbar icon - see
 # `oag_game::icon`. No `<text>` node in either source SVG, so the `text`
 # feature (and the fontdb/rustybuzz/ttf-parser it drags in) is off.
-resvg = { version = "0.48", default-features = false }
+resvg = { version = "0.49", default-features = false }
 wgpu.workspace = true
 winit.workspace = true
 pollster.workspace = true
@@ -144,10 +144,10 @@ oag-video = { workspace = true, features = ["av1"] }
 # The browser: wasm-bindgen glue, the WebGPU adapter request (async on the
 # web), and the console as the log sink. See docs/tools/web.md.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2.129"
-wasm-bindgen-futures = "0.4.79"
-js-sys = "0.3.106"
-web-sys = { version = "0.3.106", features = ["console", "Window", "Document", "Element", "HtmlCanvasElement", "Storage"] }
+wasm-bindgen = "0.2.130"
+wasm-bindgen-futures = "0.4.80"
+js-sys = "0.3.107"
+web-sys = { version = "0.3.107", features = ["console", "Window", "Document", "Element", "HtmlCanvasElement", "Storage"] }
 
 [features]
 # Only the web build turns this on (`just web`): the `oag_web` example below,
@@ -187,7 +187,7 @@ workspace = true
 [dev-dependencies]
 oag-testdata.workspace = true
 oag-pob.workspace = true
-zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
+zip = { version = "9.5.0", default-features = false, features = ["deflate"] }
 oag-weapons.workspace = true
 
 # The TOML Schema reference validator (`settings_schema` test). Cargo builds an

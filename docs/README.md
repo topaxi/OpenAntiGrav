@@ -60,6 +60,7 @@ Then, depending on what you are here to do:
 | Run the game | [Front-end boot](architecture/frontend-boot.md) |
 | Keep the loading screen from freezing | [Load-to-race transition](architecture/race-load-transition.md) |
 | Know where a load spends its time | [Load time](architecture/load-time.md) |
+| See what each dependency upgrade changed, and what is held back and why | [Dependency upgrades](architecture/dependency-upgrades.md) |
 | Know which thread reads and decodes music | [Music threads](architecture/music-threads.md) |
 | Add or change a menu | [Menus](architecture/menus.md) |
 | Persist something to a player's own machine | [Persistence](architecture/persistence.md) |

@@ -142,6 +142,9 @@ wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 # The live refresh of an X11 window's output (`oag_game::x11_refresh`): winit's monitor report
 # freezes after window creation on X11, so RandR is asked directly over a connection of our own.
 # Already in the lockfile through winit.
+# Held at 0.13: winit 0.30 takes 0.13, so 0.14 would be a second copy for nothing we use
+# (0.14 drops abstract unix socket connections, as libxcb did, and bumps its MSRV and
+# `raw-window-handle`; `docs/architecture/dependency-upgrades.md`).
 x11rb = { version = "0.13", default-features = false, features = ["randr"] }
 pollster = "1"
 
@@ -182,10 +185,13 @@ chd = "0.4"
 # AES block cipher for the PS3 disc layer (CBC chained by hand in `oag-disc`) and the
 # Vita/PS4 package layers. MIT OR Apache-2.0, RustCrypto, pure Rust with AES-NI/ARMv8
 # acceleration picked at runtime. Not in the simulation crates.
-aes = "0.8"
+aes = "0.9"
 # Big-integer modular exponentiation for the PS4 package's two RSA-2048 key
 # unwraps (`oag-disc`'s `ps4_pkg`), two exponentiations per package. Already in the
 # lock file as a transitive dependency, so this adds no crate. MIT OR Apache-2.0.
+# Held at 0.4: 0.5 only splits the `rand` features, and `num-rational` (through
+# `av-data`, the AV1 decoder's) still takes 0.4, so 0.5 would be a second copy for
+# nothing (`docs/architecture/dependency-upgrades.md`).
 num-bigint = "0.4"
 bytemuck = "1"
 # Reads an author's own PNG beside a track manifest (ADR-0076); already in the
@@ -238,7 +244,7 @@ atrac9dec = "0.9"
 # inflater: about 30 % faster than `miniz_oxide` on a whole HD PSARC read.
 # `default-features = false` only drops this edge's request for the
 # `miniz_oxide` backend; `png` asks for `flate2`'s default `rust_backend`, so
-# `flate2 -> miniz_oxide` 0.8 stays in the tree (`cargo tree -i miniz_oxide`).
+# `flate2 -> miniz_oxide` 0.9 stays in the tree beside the 0.8 `png` uses (`cargo tree -i miniz_oxide`).
 # It is not the inflater in use: `flate2` compiles `miniz_oxide` in only when no
 # zlib backend feature is on, and `zlib-rs` implies one (`any_zlib`).
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }

@@ -18,7 +18,7 @@ wasmtime = { version = "=50.0.1", default-features = false, features = ["runtime
 
 [dev-dependencies]
 # The tests' guests are written in the text format.
-wat = "1.262.0"
+wat = "1.263.0"
 
 [lints]
 workspace = true
