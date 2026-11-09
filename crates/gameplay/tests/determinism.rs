@@ -710,7 +710,7 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
         "the blast reached nobody, so the damage path is not covered"
     );
     assert!(
-        world.ships[1].physics.body.linear_velocity.length() > 0.0,
+        world.ships[1].physics.pending_impulse.length() > 0.0,
         "the blast pushed nobody, so the impulse path is not covered"
     );
 
