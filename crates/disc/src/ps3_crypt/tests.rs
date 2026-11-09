@@ -78,9 +78,9 @@ fn a_table_that_does_not_tile_the_image_is_refused() {
 /// a one-block CBC with an all-zero IV is plain ECB.
 #[test]
 fn the_block_cipher_matches_the_fips_197_vector() {
-    let key: Vec<u8> = (0u8..16).collect();
-    let cipher = Aes128::new(GenericArray::from_slice(&key));
-    let mut block = GenericArray::clone_from_slice(&hex16("00112233445566778899aabbccddeeff"));
+    let key: [u8; 16] = std::array::from_fn(|i| i as u8);
+    let cipher = Aes128::new(Array::cast_from_core(&key));
+    let mut block = Array::try_from(hex16("00112233445566778899aabbccddeeff").as_slice()).unwrap();
     cipher.encrypt_block(&mut block);
     assert_eq!(block.as_slice(), hex16("69c4e0d86a7b0430d8cdb78070b4c55a"));
 }
@@ -99,7 +99,7 @@ fn encrypt_sector(cipher: &Aes128, lba: u32, plain: &[u8]) -> Vec<u8> {
     previous[12..].copy_from_slice(&lba.to_be_bytes());
     let mut out = Vec::new();
     for block in plain.chunks_exact(16) {
-        let mut b = GenericArray::clone_from_slice(block);
+        let mut b = Array::try_from(block).unwrap();
         for (x, p) in b.iter_mut().zip(previous) {
             *x ^= p;
         }
@@ -112,7 +112,7 @@ fn encrypt_sector(cipher: &Aes128, lba: u32, plain: &[u8]) -> Vec<u8> {
 
 #[test]
 fn a_sector_round_trips_with_the_absolute_lba_as_iv() {
-    let cipher = Aes128::new(GenericArray::from_slice(&[7u8; 16]));
+    let cipher = Aes128::new(Array::cast_from_core(&[7u8; 16]));
     let plain: Vec<u8> = (0..SECTOR_SIZE).map(|i| (i * 31 % 251) as u8).collect();
     let mut sector = encrypt_sector(&cipher, 0xed040, &plain);
     assert_ne!(sector, plain);

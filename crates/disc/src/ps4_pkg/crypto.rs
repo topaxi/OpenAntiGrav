@@ -4,9 +4,9 @@
 //! crate already uses for the PS3 layer.
 
 use aes::Aes128;
-use aes::cipher::generic_array::GenericArray;
+use aes::cipher::array::Array;
 use aes::cipher::inout::InOutBuf;
-use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
+use aes::cipher::{BlockCipherDecrypt, BlockCipherEncrypt, KeyInit};
 use num_bigint::BigUint;
 
 const K: [u32; 64] = [
@@ -126,11 +126,11 @@ pub fn rsa_public(m: &[u8], n: &[u8]) -> Vec<u8> {
 
 /// AES-128-CBC decryption, no padding.
 pub fn aes_cbc_decrypt(data: &mut [u8], key: &[u8; 16], iv: &[u8; 16]) {
-    let cipher = Aes128::new(GenericArray::from_slice(key));
+    let cipher = Aes128::new(Array::cast_from_core(key));
     let mut prev = *iv;
     for block in data.as_chunks_mut::<16>().0 {
         let cipher_block = *block;
-        cipher.decrypt_block(GenericArray::from_mut_slice(&mut block[..]));
+        cipher.decrypt_block(Array::cast_from_core_mut(block));
         for (b, p) in block.iter_mut().zip(prev) {
             *b ^= p;
         }
@@ -157,8 +157,8 @@ impl Xts {
     /// `tweak_key` encrypts the sector number, `data_key` the data.
     pub fn new(tweak_key: &[u8; 16], data_key: &[u8; 16]) -> Self {
         Self {
-            data: Aes128::new(GenericArray::from_slice(data_key)),
-            tweak: Aes128::new(GenericArray::from_slice(tweak_key)),
+            data: Aes128::new(Array::cast_from_core(data_key)),
+            tweak: Aes128::new(Array::cast_from_core(tweak_key)),
         }
     }
 
@@ -166,8 +166,7 @@ impl Xts {
     pub fn decrypt_sector(&self, sector: &mut [u8], number: u64) {
         let mut t = [0u8; 16];
         t[..8].copy_from_slice(&number.to_le_bytes());
-        self.tweak
-            .encrypt_block(GenericArray::from_mut_slice(&mut t));
+        self.tweak.encrypt_block(Array::cast_from_core_mut(&mut t));
         // The tweak sequence is data-independent, so the whole sector is masked,
         // decrypted as one batch (the cipher pipelines blocks) and unmasked.
         assert!(
