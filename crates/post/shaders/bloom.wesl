@@ -37,11 +37,11 @@ struct Constants {
     // extent; see `post::sub_rectangle`.
     uv_scale: vec2<f32>,
     uv_max: vec2<f32>,
-    // `Bloom::stamp_glow`: rectangles as fractions of the drawn rectangle, each one's colour
-    // `(rgb, opacity)` and mask byte `(value, pad, pad, pad)`, and `(count, pad, pad, pad)`.
-    // Zero for every other pass.
+    // `Bloom::stamp_glow`: rectangles as fractions of the drawn rectangle, the drawn rectangle
+    // in target pixels `(x, y, width, height)`, each rectangle's mask byte `(value, pad, pad,
+    // pad)` and `(count, pad, pad, pad)`. Zero for every other pass.
     stamps: array<vec4<f32>, 20>,
-    stamp_colours: array<vec4<f32>, 20>,
+    stamp_view: vec4<f32>,
     stamp_values: array<vec4<f32>, 20>,
     stamp_meta: vec4<f32>,
 }
@@ -103,29 +103,25 @@ fn fs_bright(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(vec3<f32>(bytes(texel.rgb) * alpha / 255u) / 255.0, 1.0);
 }
 
-// Pass 0 of `Bloom::stamp_glow`: the bright pass over rectangles alone. A pixel under several
-// rectangles shows their colours composited in order at each one's opacity (`k` copies of one
-// colour at alpha `a` leave `1 - (1 - a)^k` of it) and carries the largest mask byte among them:
-// `colour * value`.
+// Pass 0 of `Bloom::stamp_glow`: the bright pass over rectangles alone, reading the target the
+// HUD was drawn into. The original draws the HUD into the framebuffer before the bright pass, so a
+// stamped pixel brightens with whatever the framebuffer holds there - the widget at its own alpha
+// over the scene showing through it - times the largest mask byte of the rectangles over it.
+// Outside every rectangle the mask is the scene's baseline, which the chain truncates to nothing.
 @fragment
 fn fs_stamp(in: VertexOutput) -> @location(0) vec4<f32> {
     let count = u32(constants.stamp_meta.x);
-    var shown = vec3<f32>(0.0);
     var value = 0u;
-    var covered = false;
     for (var i = 0u; i < count; i = i + 1u) {
         let r = constants.stamps[i];
         if in.uv.x >= r.x && in.uv.x < r.x + r.z && in.uv.y >= r.y && in.uv.y < r.y + r.w {
-            let c = constants.stamp_colours[i];
-            shown = shown * (1.0 - c.w) + c.rgb * c.w;
             value = max(value, u32(constants.stamp_values[i].x));
-            covered = true;
         }
     }
-    if !covered {
-        return vec4<f32>(0.0, 0.0, 0.0, 1.0);
-    }
-    return vec4<f32>(vec3<f32>(bytes(shown) * value / 255u) / 255.0, 1.0);
+    let size = vec2<f32>(textureDimensions(source_tex));
+    let at = (constants.stamp_view.xy + in.uv * constants.stamp_view.zw) / size;
+    let texel = textureSampleLevel(source_tex, source_sampler, at, 0.0);
+    return vec4<f32>(vec3<f32>(bytes(texel.rgb) * value / 255u) / 255.0, 1.0);
 }
 
 // Passes 1 and 2: eleven taps at -5..+5 texels along `direction`.

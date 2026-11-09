@@ -126,8 +126,6 @@ fn an_owned_frame_places_as_a_borrowed_one_does() {
         glow: vec![crate::boost_smear::GlowStamp {
             rect: [4.0, 8.0, 16.0, 2.0],
             value: 200,
-            colour: [1.0, 0.5, 0.0],
-            opacity: 0.5,
         }],
         ..Frame::default()
     };

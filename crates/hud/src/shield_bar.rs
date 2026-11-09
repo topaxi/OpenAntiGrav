@@ -2,8 +2,8 @@
 //! already applies to every bar: the forced-red override, the shared blink,
 //! and the absorb flash layer underneath both.
 //!
-//! [`absorb_fill`] is the measured form of the absorb flash, where a title has an
-//! [`oag_title::hud::AbsorbGlow`]: the glow mask under the fill, not a white layer.
+//! The measured form of the absorb flash, where a title has an [`oag_title::hud::AbsorbGlow`], is
+//! the glow mask under the fill (recorded in `super::draw::draw_list`), not a white layer.
 //!
 //! Split out of [`super::draw`] under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change, along the
@@ -30,7 +30,7 @@ use super::{Draw, Readout, Sprite};
 ///   second field of the same widget (`+0xf4`) in lock-step with
 ///   [`Readout::shield_absorbing`], with no blink applied to it. It is the
 ///   stencil reference of the fill's draw: the fill stamps the bloom's glow
-///   mask, which [`absorb_fill`] records where the title's art has an
+///   mask, which `draw_list` records where the title's art has an
 ///   [`oag_title::hud::AbsorbGlow`], and no white layer is drawn. Where it
 ///   has none (the draw is unmeasured), this substitutes a flat white copy
 ///   of the bar's own asset painted separately from `cropped`, **chosen, not
@@ -64,32 +64,4 @@ pub(super) fn tint(
         cropped.color[3] = 0.0;
     }
     flash
-}
-
-/// What the absorb window stamps into the glow mask for a shield bar whose fill was drawn at
-/// `rect` in `color`: the whole fill, at the law's byte, in both halves of the blink.
-///
-/// The bloom reads the framebuffer's colour times the mask. In the blink's on half that colour is
-/// the fill's; in the off half the fill's alpha is zero and the pixel is the backdrop's, so the
-/// stamp carries the backdrop's colour at its alpha (the scene showing through the backdrop is
-/// not added, as in [`crate::boost_smear`]).
-pub(super) fn absorb_fill(
-    cx: &super::draw::Context<'_>,
-    readout: &Readout,
-    law: oag_title::hud::AbsorbGlow,
-    rect: [f32; 4],
-    color: [f32; 4],
-) -> super::boost_smear::Fill {
-    let colour = if readout.shield_blinking() && !readout.shield_blink_phase_on() {
-        cx.layout
-            .sprite(law.backdrop)
-            .map_or(color, |backdrop| backdrop.color)
-    } else {
-        color
-    };
-    super::boost_smear::Fill {
-        rect,
-        colour,
-        value: law.value,
-    }
 }

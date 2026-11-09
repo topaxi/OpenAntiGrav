@@ -273,28 +273,23 @@ fn absorbing_stamps_the_glow_mask_under_the_fill_in_both_blink_phases() {
         *fill.last().expect("the fill is drawn"),
         "the fill's own rectangle"
     );
-    assert_eq!(on[0].opacity, 1.0);
+    let lit = drawn_colours(&absorbing(0.0), "ShieldBar");
     let cyan = argb_to_rgba(AUTHORED_ARGB);
     assert_eq!(
-        on[0].colour,
-        [cyan[0], cyan[1], cyan[2]],
-        "the fill's colour, lit"
+        lit.last().copied(),
+        Some(cyan),
+        "the fill is drawn in its own colour, lit"
     );
 
     let off = glow_of(&absorbing(0.2), art);
     assert_eq!(off.len(), 1, "the off half stamps too: {off:?}");
     assert_eq!(off[0].value, 0xff);
     assert_eq!(off[0].rect, on[0].rect);
-    let pale = argb_to_rgba(BACKDROP_ARGB);
+    let dark = drawn_colours(&absorbing(0.2), "ShieldBar");
     assert_eq!(
-        off[0].colour,
-        [pale[0], pale[1], pale[2]],
-        "the backdrop's colour"
-    );
-    assert_eq!(
-        off[0].opacity,
-        f32::from(0x60u8) / 255.0,
-        "at the backdrop's alpha"
+        dark.last().map(|colour| colour[3]),
+        Some(0.0),
+        "the fill is drawn at alpha zero, the framebuffer under the mask is the backdrop's"
     );
 }
 
@@ -346,8 +341,8 @@ fn nothing_stamps_outside_the_absorb_window() {
     assert!(glow_of(&readout, oag_pulse::hud::ART).is_empty());
 }
 
-/// A speed pad's boost smears every widget, the shield fill's stamp with it: `n` shifted copies at
-/// `1 / n` of the alpha, each carrying the mask byte whole.
+/// A speed pad's boost smears every widget, the shield fill's stamp with it: `n` shifted copies,
+/// each carrying the mask byte whole.
 #[test]
 fn a_boost_during_an_absorb_smears_the_shield_stamp_with_its_widget() {
     let mut readout = absorbing(0.0);
@@ -362,11 +357,6 @@ fn a_boost_during_an_absorb_smears_the_shield_stamp_with_its_widget() {
     assert_eq!(
         speed, copies as usize,
         "the speed bar's own copies are still there"
-    );
-    assert!(
-        shield
-            .iter()
-            .all(|stamp| (stamp.opacity - 1.0 / copies as f32).abs() < 1.0 / 255.0 + 1e-6)
     );
 }
 

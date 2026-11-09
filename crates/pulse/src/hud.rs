@@ -186,7 +186,6 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // absorb flash at the draw call": the fill's stencil replace with reference `0xff`.
     absorb_glow: Some(oag_title::hud::AbsorbGlow {
         fill: "ShieldBar",
-        backdrop: "ShieldBarBg",
         value: 0xff,
     }),
     // Nobody has read a sway in this title's `Hud_Update`: the HUD stays fixed.
