@@ -715,6 +715,40 @@ fn the_motion_commands_refuse_what_the_host_would_fault_on() {
     assert_eq!(reply.len(), 3);
 }
 
+/// A portal's exit is a progress or a trigger: the trigger form sends the trigger, not a progress.
+#[test]
+fn a_portal_view_names_its_exit_by_progress_or_trigger() {
+    use oag_ext_abi::{Distance, ViewUpdate};
+    struct Window;
+    impl Extension for Window {
+        type State = u32;
+        fn tick(obs: &Observation<'_>, _: &mut u32, reply: &mut Reply<'_>) {
+            let craft = obs.craft(slot(1)).expect("the craft is on the grid");
+            let once = ViewUpdate::Once;
+            assert_eq!(
+                reply.portal_view(&craft, (10.0, -0.0), 8, once, 0),
+                Err(Refused::Range),
+                "a negative zero would read as trigger 0"
+            );
+            assert_eq!(reply.portal_view(&craft, (10.0, 20.0), 8, once, 0), Ok(()));
+            assert_eq!(
+                reply.portal_view_to_trigger(&craft, (10.0, 7), 8, once, 0),
+                Ok(())
+            );
+        }
+    }
+    let mut race = crate::test::Race::<Window>::new().with_craft(slot(1), racer(1.0));
+    let sent = race.tick();
+    let exits: Vec<_> = sent
+        .iter()
+        .filter_map(|c| match c {
+            Command::PortalView { exit, .. } => Some(*exit),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(exits, [Distance::Progress(20.0), Distance::Trigger(7)]);
+}
+
 #[test]
 fn the_test_harness_hands_a_guest_its_course_and_place() {
     struct Reader;

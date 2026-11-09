@@ -123,6 +123,23 @@ shader of the race reads it. Re-sent each tick it should hold, never hashed, abs
 `oag_raceplay::portal_view` (the frames, off the road), `Scene::draw_portal_view`
 (`scene/portal_view.rs`).
 
+**The exit is a progress or a trigger.** `reply.portal_view_to_trigger(&craft, (entrance, trigger),
+..)` names the exit by a track trigger's index, the numbering of `trigger-enter`: the same point a
+`transit` to `Distance::Trigger` comes out at (`transit::Exit::at`, shared by both). A progress is
+always on the ring; a trigger standing nearer a fork route's line than the ring's is on that route
+(`Course::locate_exit`), so the view is framed from the route's own deck, facing along it, which is
+what the craft lands on. The wire carries the trigger as the sign bit of the exit word and the index
+below it, so a progress exit is the same bytes it always was (`ext-abi`
+`a_portal_views_exit_is_a_progress_or_a_trigger`). The request resolves the exit once, when the
+command lands; a progress off the lap, or a trigger the track lacks or that is off the course, asks
+for nothing. The entrance is still a ring progress (a firer already on a route is open).
+Proof: `tests::portal_view::a_portal_view_to_a_forks_route_is_framed_from_the_route` (Pulse PSP EU
+`05_Track`, a trigger on route 0; with the exit forced back onto the ring the frame stands 61.4 units
+from the route's point, the test's bound is 5). **2048 and Omega: checked, applies, not wired
+separately**: their forks are in the same `Course` (`branch_progress_ground_truth` covers every 2048
+route's `route_point`), the resolution and frame code are title-blind, and no portal-view test runs on
+a 2048 or Omega fork.
+
 ```wgsl
 let view = engine_texture(engine_uv(input.world)).rgb;   // stays on the surface under both updates
 ```

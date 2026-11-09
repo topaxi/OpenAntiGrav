@@ -220,7 +220,7 @@ returns `Err(Refused)` where the host would fault:
 | `fire-mod-effect-ahead{slot, index, distance}` (32) | `FireModEffectAhead` | `fire_mod_effect_ahead(&craft, index, distance)` | a distance the host would not accept; counts toward the 16 effects a tick |
 | `draw-beam{slot, to, rgba, half_width, shader?}` (34) | `DrawBeam` | `draw_beam(&craft, to, rgba, half_width, shader)` | a beam to its own slot, a width outside `(0, 32]`, past 16 a tick |
 | `set-shader-param{slot, shader, index, value}` (35) | `SetShaderParam` | `set_shader_param(&craft, shader, index, value)` | an `index` from 4 up, a value that is not finite |
-| `portal-view{slot, entrance, exit, radius, update, generation}` (36) | `PortalView` | `portal_view(&craft, (entrance, exit), radius, update, generation)` | a progress not a number or below zero, a `radius` of 0, an unknown `update` |
+| `portal-view{slot, entrance, exit, radius, update, generation}` (36) | `PortalView` | `portal_view(&craft, (entrance, exit), radius, update, generation)` | a progress not a number or below zero (`portal_view_to_trigger` names the exit by a trigger index instead), a `radius` of 0, an unknown `update` |
 | `play-mod-sound{slot, index, mode}` (33) | `PlayModSound` | `play_mod_sound(&craft, index, mode)` | |
 | `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | the `Pickup` element (`Refused::PickupTint`; use `pickup_look`); the host decodes one as malformed |
 | `pickup-look{slot, icon, colour}` (22) | `PickupLook` | `pickup_look(&craft, icon, colour)` | |

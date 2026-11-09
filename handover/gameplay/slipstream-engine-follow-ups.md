@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-09
-summary: "oag.slipstream, mod shaders, portal-view, route exits landed; open: mesh portal, island exit, route-aware portal-view, wall occlusion, loops."
+summary: "slipstream, mod shaders, portal-view and route exits landed; open: mesh portal, island exit, wall occlusion, loops, a firer on a route."
 categories: [tooling, frontend]
 size: L (50)
 difficulty: medium (50)
@@ -61,10 +61,14 @@ The engine never names the mod.
    ring: only a trigger can name a route, and a craft already on a route that jumps forward by
    units still comes out on the ring. Proof: `transit_ground_truth::an_exit_on_a_forks_route_...`
    (Pulse `05_Track`; red with the seat dropped) and `branch_progress_ground_truth` (every
-   Pulse and 2048 route's `route_point` stands at its share of the route). Open from it, small:
-   a portal's view (`portal-view` takes a progress, so it frames the ring) is not route-aware;
-   2048 and Omega: checked, applies, not wired (their forks are in the same `Course`, the 2048
-   routes are covered by the `route_point` check, no transit test on them).
+   Pulse and 2048 route's `route_point` stands at its share of the route). The portal's view is
+   route-aware too: `portal-view`'s exit is a progress or a trigger (`reply.portal_view_to_trigger`),
+   a trigger on a route is framed from the route's deck (`mod-shaders.md`, "The engine texture";
+   proof `tests::portal_view::a_portal_view_to_a_forks_route_is_framed_from_the_route`). 2048 and
+   Omega: checked, applies, not wired (their forks are in the same `Course`, the 2048 routes are
+   covered by the `route_point` check, no transit or portal-view test on them). Open from it,
+   small: the entrance is still a ring progress, so a firer already on a route frames its portal
+   from the ring; the official `oag.slipstream` exits by progress and does not use the trigger form.
 3. **Exit with no spline near it (a floating island).** No lap fix, no AI line, and the
    distance reset would fire. Recommended rule for our track format: the author gives the
    island its own spline path that rejoins the circuit, which makes it item 5. An engine
@@ -215,7 +219,7 @@ right in the smaller hex (the raster itself stays one texel to one pixel; a PNG 
 
 1. Open item 3 (an island exit) is a design question first; the recommended rule is the author's
    own spline path that rejoins the circuit, which a trigger exit on that route already reads.
-2. Make `portal-view` route-aware (its progress frames the ring).
+2. ~~Make `portal-view` route-aware.~~ Landed (exit by trigger). A route-aware entrance, for a firer on a route, is open and small.
 3. Quote `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
    before and after any change that touches racing.
 4. **The next merge of main into this branch will not compile as is.** Main's `give` replay event

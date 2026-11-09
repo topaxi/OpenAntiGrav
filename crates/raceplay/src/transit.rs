@@ -43,6 +43,15 @@ impl Exit {
     pub fn ring(to: usize) -> Self {
         Self { to, route: 0 }
     }
+
+    /// The exit a point `centre` (a track trigger's) names: the route when a route's sample is
+    /// nearer to it than the ring's ([`oag_race::Course::locate_exit`]). `None` off the course.
+    #[must_use]
+    pub fn at(course: &oag_race::Course, centre: Vec3) -> Option<Self> {
+        let (to, route) = course.locate_exit(centre)?;
+        let route = route.map_or(0, |route| u16::try_from(route + 1).unwrap_or(0));
+        Some(Self { to, route })
+    }
 }
 
 /// How many rays a clearance probe casts round its half disc, end to end. Chosen.
@@ -158,11 +167,9 @@ impl Race {
                     .extensions
                     .trigger_centre(usize::from(index))
                     .ok_or_else(|| format!("the track has no trigger {index}"))?;
-                let (to, route) = course
-                    .locate_exit(centre)
+                let exit = Exit::at(course, centre)
                     .ok_or_else(|| format!("trigger {index} is off the course"))?;
-                let route = route.map_or(0, |route| u16::try_from(route + 1).unwrap_or(0));
-                return Ok((Exit { to, route }, on(to)));
+                return Ok((exit, on(exit.to)));
             }
         };
         let to = course
@@ -208,12 +215,17 @@ impl Race {
         }
     }
 
+    /// The spline sample under `exit`: the route's own deck for a route exit.
+    pub(crate) fn road_sample(&self, exit: Exit) -> Option<&oag_vex::track::Sample> {
+        let target = self.exit_position(exit)?;
+        self.sim.spline.nearest(target).map(|(_, at, _)| at)
+    }
+
     /// The road at `exit`: its lateral and up directions, the middle of its width lifted
     /// [`CLEARANCE_LIFT`] off the surface, and its width. `None` with no course position
     /// or spline near it. What a portal's probe and its drawn disc stand on.
     pub(crate) fn road_frame(&self, exit: Exit) -> Option<(Vec3, Vec3, Vec3, f32)> {
-        let target = self.exit_position(exit)?;
-        let (_, at, _) = self.sim.spline.nearest(target)?;
+        let at = self.road_sample(exit)?;
         let lateral = Vec3::from_array(at.lateral);
         let up = -Vec3::from_array(at.down);
         let centre = Vec3::from_array(at.pos)

@@ -193,7 +193,7 @@ fn shader_draws_never_reach_the_hash() {
     let portal = Command::PortalView {
         slot: slot(0),
         entrance: 10.0,
-        exit: 40.0,
+        exit: oag_ext_abi::Distance::Progress(40.0),
         radius: 8,
         update: oag_ext_abi::ViewUpdate::Continuous,
         generation: 0,

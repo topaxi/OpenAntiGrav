@@ -694,8 +694,11 @@ pub enum Command {
         slot: Slot,
         /// The entrance, its progress on the lap in track units.
         entrance: f32,
-        /// The exit, its progress on the lap in track units.
-        exit: f32,
+        /// The exit: [`Distance::Progress`], a place on the lap in track units, or
+        /// [`Distance::Trigger`], the point of the course (or of the fork route) the track
+        /// file's trigger volume of that index stands on, as a `transit` to it resolves. Any
+        /// other kind is not a portal's exit.
+        exit: Distance,
         /// How far from the entrance's centre the surface reaches, in whole world units,
         /// from 1: what decides whether the view has the portal in it.
         radius: u8,

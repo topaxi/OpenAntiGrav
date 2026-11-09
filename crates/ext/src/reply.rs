@@ -398,9 +398,59 @@ impl<'a> Reply<'a> {
         update: oag_ext_abi::ViewUpdate,
         generation: u8,
     ) -> Result<(), Refused> {
+        if exit.is_sign_negative() {
+            return Err(Refused::Range);
+        }
+        self.portal_view_to(
+            craft,
+            (entrance, oag_ext_abi::Distance::Progress(exit)),
+            radius,
+            update,
+            generation,
+        )
+    }
+
+    /// [`Self::portal_view`] with the exit where the track file's trigger volume `trigger` stands
+    /// (the numbering of `trigger-enter`): the point a `transit` to
+    /// [`oag_ext_abi::Distance::Trigger`] comes out at, on a fork's route when the trigger stands
+    /// on one, so the view shows what the craft lands on. A trigger the track lacks, or one off
+    /// the course, asks for nothing.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::portal_view`].
+    pub fn portal_view_to_trigger(
+        &mut self,
+        craft: &Craft<'_>,
+        (entrance, trigger): (f32, u16),
+        radius: u8,
+        update: oag_ext_abi::ViewUpdate,
+        generation: u8,
+    ) -> Result<(), Refused> {
+        self.portal_view_to(
+            craft,
+            (entrance, oag_ext_abi::Distance::Trigger(trigger)),
+            radius,
+            update,
+            generation,
+        )
+    }
+
+    fn portal_view_to(
+        &mut self,
+        craft: &Craft<'_>,
+        (entrance, exit): (f32, oag_ext_abi::Distance),
+        radius: u8,
+        update: oag_ext_abi::ViewUpdate,
+        generation: u8,
+    ) -> Result<(), Refused> {
         let on_a_lap = |progress: f32| progress.is_finite() && progress >= 0.0;
+        let exit_ok = match exit {
+            oag_ext_abi::Distance::Progress(progress) => on_a_lap(progress),
+            _ => true,
+        };
         if !on_a_lap(entrance)
-            || !on_a_lap(exit)
+            || !exit_ok
             || radius == 0
             || generation >= oag_ext_abi::MAX_VIEW_GENERATION
         {
