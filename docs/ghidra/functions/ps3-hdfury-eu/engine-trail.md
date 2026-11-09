@@ -1023,10 +1023,15 @@ reinstalled:
 
 The particle's colour bytes (`+0x74`) are scaled by 1/255 (`0x3b808080`),
 clamped and repacked. The atlas cell comes from frame `+0x78` and the UV steps.
-`-(+0xc80)` (param `+0x48`, local `0x5b40`) is read only at `0x3efc`, in another
-mode's routine, never in mode 5. The mean-depth routine at `0x0ae8`
-(`fa` then `fm` by 0.5, the shape of Pulse's bar) belongs to the modes 1-4 path,
-not to mode 5.
+`-(+0xc80)` (param `+0x48`, local `0x5b40`) is read only at `0x3efc`, on the
+modes 1-4 path (`brsl 0x3bb8` at `0x5884`), never in mode 5.
+
+**Mode 6 (class 7, the capped streak) uses the mean depth.** Its routine
+(`0x2738`-`0x29b4`) calls `0x2c0` at `0x28ec`, whose per-particle body at
+`0x0ae8` takes `0.5 * (A.z + B.z)` (`fa` at `0x0ba8`, `fm` by `0x3f000000` at
+`0x0be0`). That is the depth Pulse's class 7 and pool bar use. So on HD, class 6
+goes to the farther depth and class 7 to the mean; a class-7 wire needs exactly
+that split.
 
 Why 85: HD's own code read statically, and a second binary on another ISA
 (Omega's CPU code) agrees. No live HD capture of a vertex buffer, so not higher.
@@ -1066,9 +1071,11 @@ simulation's, and nothing here changes it.
 
 - **Omega: ported** in the original's own code: the same mode-5 law on the CPU
   (`Particle_PushBatchByMode`), above. Ours has no HD-specific draw yet.
-- **2048: not checked for the draw.** 2048 ships `psys_normal_vp/fp` and
-  `psys_simplegeom_vp/fp` only (strings at `0x814d34ac`-`0x814d34e0`). Its
-  pusher was not located.
+- **2048: open.** 2048 ships `psys_normal_vp/fp` and `psys_simplegeom_vp/fp`
+  only (strings at `0x814d34ac`-`0x814d34e0`). Start from the xrefs to
+  `psys_normal_vp` (`0x814d34ac`), then the renderer, then its `switch` on
+  `+0xb8`. Omega reads through 2048's lineage, so its pusher should have
+  Omega's mode-5 shape.
 - **Neither 2048's nor Omega's original fires the burst at all.** See "The burst
   on every title" below.
 
