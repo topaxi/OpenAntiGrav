@@ -328,31 +328,18 @@ fn an_oriented_instance_emits_along_its_own_up() {
     );
 }
 
-/// A held surface or a burst is oriented the same way (`Fired::OwnAt`'s `up`, a mod effect's
-/// rear axis): `orient` went through the attached-only lookup and did nothing for them.
+/// A held surface takes the `up` it is given (`Fired::OwnAt`'s, the road's own): `orient` is
+/// for attached instances and did nothing for it, so a banked road's portal stood square to
+/// world up. A plain `play` is left to `orient` as ever, which still ignores it.
 #[test]
-fn a_played_or_held_instance_takes_its_orientation_too() {
+fn a_held_surface_takes_its_orientation() {
     let mut rng = Rng::new(5);
     let mut spec = (*effect("aimed", true, 10.0)).clone();
     spec.emitters[0].speed_per_tick = (1.0, 0.0);
     let aimed = std::sync::Arc::new(spec);
-    for held in [false, true] {
-        let mut stage = Stage::new();
-        let handle = if held {
-            stage.play_held(&aimed, Vec3::ZERO, 1.0)
-        } else {
-            stage.play(&aimed, Vec3::ZERO, 1.0)
-        }
-        .expect("play");
-        assert_eq!(
-            stage.up_of(handle),
-            Some(Vec3::Y),
-            "world up until oriented"
-        );
-        stage.orient(handle, Vec3::X);
-        assert_eq!(stage.up_of(handle), Some(Vec3::X), "held {held}");
+    let emitted_along_x = |stage: &mut Stage, rng: &mut Rng| {
         for _ in 0..8 {
-            stage.advance(DT, &mut rng);
+            stage.advance(DT, rng);
         }
         let (additive, _) = stage.vertices(Vec3::Z, Vec3::Y);
         assert!(!additive.is_empty(), "nothing was emitted");
@@ -360,11 +347,20 @@ fn a_played_or_held_instance_takes_its_orientation_too() {
             .iter()
             .fold(Vec3::ZERO, |sum, v| sum + Vec3::from_array(v.position))
             / additive.len() as f32;
-        assert!(
-            centre.x > 1.0 && centre.y.abs() < 0.5,
-            "held {held}: particles did not travel along +X: {centre:?}"
-        );
-    }
+        centre.x > 1.0 && centre.y.abs() < 0.5
+    };
+    let mut stage = Stage::new();
+    let held = stage.play_held(&aimed, Vec3::ZERO, 1.0).expect("play_held");
+    stage.orient_surface(held, Vec3::X);
+    assert!(emitted_along_x(&mut stage, &mut rng), "a held surface");
+
+    let mut stage = Stage::new();
+    let burst = stage.play(&aimed, Vec3::ZERO, 1.0).expect("play");
+    stage.orient(burst, Vec3::X);
+    assert!(
+        !emitted_along_x(&mut stage, &mut rng),
+        "orient is still attached-only"
+    );
 }
 
 /// One live streak particle, head at `position` and tail at `origin`.

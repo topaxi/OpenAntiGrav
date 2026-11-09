@@ -492,6 +492,19 @@ impl Course {
         ))
     }
 
+    /// Where an exit placed at `position` is: the ring point nearest it, and the route (its
+    /// index in [`Self::routes`]) when a route's sample is nearer than the ring's, as a
+    /// trigger standing on a detour is. The ring point is the route sample's ring stand-in
+    /// then ([`Self::route_point`] maps it back). `None` for a course with no points.
+    #[must_use]
+    pub fn locate_exit(&self, position: Vec3) -> Option<(usize, Option<usize>)> {
+        let ring = self.locate(position, None)?;
+        Some(match self.nearest_route_sample(position, None) {
+            Some((route, fix)) if fix.offset < ring.offset => (fix.index, Some(route)),
+            _ => (ring.index, None),
+        })
+    }
+
     /// The ring distance a route stands in for, from its `split` to its `merge`.
     fn route_ring_span(&self, route: &Route) -> f32 {
         (self.distance[route.merge] - self.distance[route.split]).rem_euclid(self.length)

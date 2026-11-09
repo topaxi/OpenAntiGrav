@@ -57,7 +57,7 @@ The engine never names the mod.
    the state hash only while a transit runs). `Course::route_point` maps the ring point onto the
    route (the inverse of `locate_on_route`), `Race::move_to` places the craft there, and
    `Race::seat_on_route` (shared with `locate_player_driver`) puts the driver on the route's
-   line. A reset and every other distance (units, seconds, lap share, progress) stay on the
+   line; `Course::locate_exit` decides ring or route. A reset and every other distance (units, seconds, lap share, progress) stay on the
    ring: only a trigger can name a route, and a craft already on a route that jumps forward by
    units still comes out on the ring. Proof: `transit_ground_truth::an_exit_on_a_forks_route_...`
    (Pulse `05_Track`; red with the seat dropped) and `branch_progress_ground_truth` (every
@@ -152,11 +152,14 @@ Open from it, each small:
    either way. The burst is a title effect and was not touched.
 2. **A wall between the camera and the portal does not skip the view**: only the frustum and the
    face do. Testing the entrance's section against the main view's PVS is the cheap answer. Size S (50).
-3. ~~**`Stage::orient` is a no-op on an effect from `play` or `play_held`**~~ Landed:
-   `orient` and `up_of` address an instance by its generation, not through the attached-only
-   lookup (`psys::tests::a_played_or_held_instance_takes_its_orientation_too`, red before).
-   A mod effect fired with `fire-effect` now takes the craft's up (or its rear) as its
-   `axis` says; before it always emitted about world up.
+3. ~~**`Stage::orient` is a no-op on an effect from `play_held`**~~ Landed for `Fired::OwnAt`:
+   `Stage::orient_surface` addresses a held surface by its generation
+   (`psys::tests::a_held_surface_takes_its_orientation`, red before). `Stage::orient` itself
+   stays attached-only, on purpose: the wreck debris and smoke (`wreck_fx`) `play` then `orient`
+   and today ignore it, so widening `orient` would change a title visual nobody measured. Open,
+   small: a mod effect fired by `fire-effect` (`Fired::Own`, `play` + `orient`) still ignores
+   its `axis` (`wall-penalty`'s `sputter.toml` is `rear`); fix it on `orient_surface` and look
+   at a frame.
 4. **A float target's values above 1 clamp in `engine_texture`**: `fs_main` clamps a shader's output,
    so HD's and Omega's brightest highlights in a portal stop at white. Size S (40).
 5. **The texture is a fixed 960x540** at every window size; a configurable rate and size are later

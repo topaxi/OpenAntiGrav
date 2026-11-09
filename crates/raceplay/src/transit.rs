@@ -158,17 +158,11 @@ impl Race {
                     .extensions
                     .trigger_centre(usize::from(index))
                     .ok_or_else(|| format!("the track has no trigger {index}"))?;
-                let ring = course
-                    .locate(centre, None)
+                let (to, route) = course
+                    .locate_exit(centre)
                     .ok_or_else(|| format!("trigger {index} is off the course"))?;
-                let exit = match course.nearest_route_sample(centre, None) {
-                    Some((route, fix)) if fix.offset < ring.offset => Exit {
-                        to: fix.index,
-                        route: u16::try_from(route + 1).unwrap_or(0),
-                    },
-                    _ => Exit::ring(ring.index),
-                };
-                return Ok((exit, on(exit.to)));
+                let route = route.map_or(0, |route| u16::try_from(route + 1).unwrap_or(0));
+                return Ok((Exit { to, route }, on(to)));
             }
         };
         let to = course

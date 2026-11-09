@@ -166,7 +166,9 @@ its fallback; a shader must have one.
 **The surface.** A mod's effect placed by `fire-mod-effect-ahead` holds its particle slot until it
 ends (`Stage::play_held`, at most 4): a burst recycles the instance with the fewest particles, the
 one quad a surface is. On Omega's grid all 32 slots were `WO_TRAIL_HITSHIP` and the surface drew on
-no frame. 2048: **checked, differs**: before the slot was held its surface reached 0.148 of the view at
+no frame; since the burst is gated behind `graphics.trail_hits` (off by default) the pool holds
+the surface alone, and with the setting on 31 slots are the burst and the 32nd the held surface
+(measured at tick 480, Omega EU, `oag.window`). 2048: **checked, differs**: before the slot was held its surface reached 0.148 of the view at
 tick 1230 of `PCSF00007`, so its pool does not fill there.
 
 Evidence, 960x544, `mod_shader_frame_ground_truth`, inside the surface, mean difference of a channel

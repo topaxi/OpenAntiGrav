@@ -1296,12 +1296,19 @@ impl Stage {
         }
     }
 
-    /// Points an instance's emitter-frame `+Y` along `up` - the Rocket's flare
-    /// frame is quarter-turned so its `+Y` is the direction of travel
-    /// (`rocket-visuals.md`, 2026-09-24). Any instance a handle still names:
-    /// attached, or one of [`Self::play`] and [`Self::play_held`]. A no-op on a
-    /// stale handle.
+    /// Points an attached instance's emitter-frame `+Y` along `up` - the
+    /// Rocket's flare frame is quarter-turned so its `+Y` is the direction of
+    /// travel (`rocket-visuals.md`, 2026-09-24). A no-op on a stale handle.
     pub fn orient(&mut self, playing: Playing, up: Vec3) {
+        if let Some(instance) = self.get_mut(playing) {
+            instance.up = up;
+        }
+    }
+
+    /// [`Self::orient`] for a handle from [`Self::play_held`] (`orient` addresses attached
+    /// instances alone, which a held surface is not): a mod's portal or marker standing square
+    /// to the road rather than to world up. A no-op on a stale handle.
+    pub fn orient_surface(&mut self, playing: Playing, up: Vec3) {
         if let Some(instance) = self
             .instances
             .get_mut(usize::from(playing.index))

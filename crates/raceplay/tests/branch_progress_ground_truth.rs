@@ -115,6 +115,30 @@ fn every_route_reads_progress_on_the_ring(id: &str, course: &Course) -> usize {
                 route.paths,
             );
         }
+        // A trigger standing on this route's deck names the route, and one on the ring in the
+        // same span names none (`Course::locate_exit`, which a transit's `Trigger` exit asks).
+        // Routes that share their first path share samples, so the route named is any that has
+        // the sample.
+        let mid = route.positions[route.len() / 2];
+        let (_, named) = course
+            .locate_exit(mid)
+            .unwrap_or_else(|| panic!("{id} route {k}: its middle is not on the course"));
+        let named = named.unwrap_or_else(|| panic!("{id} route {k}: its middle names no route"));
+        assert!(
+            course.routes()[named]
+                .positions
+                .iter()
+                .any(|p| p.distance(mid) < 0.01),
+            "{id} route {k}: the middle names route {named}, which does not stand there"
+        );
+        let on_ring = course
+            .position(course.advance(route.split, ring_span * 0.5))
+            .expect("a ring point");
+        assert_eq!(
+            course.locate_exit(on_ring).map(|(_, route)| route),
+            Some(None),
+            "{id} route {k}: a ring point in its span names a route"
+        );
         // The whole drive covers the ring's own split-to-merge span plus the
         // eighty ring samples either side, within a generous margin.
         let span = step(
