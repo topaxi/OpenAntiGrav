@@ -40,6 +40,11 @@ of ours accounts for most of the dark bias on `2048-empire-climb-grid`, `2048-ma
 
 ## Next Steps
 
+0. **First, rule out the chase camera's distance setting** (maintainer, 2026-11-09): the original offers a close and a far
+   chase camera, and ours drawing the craft about 1.3x (2048 grids) to 1.5x (HD absorb pair) larger than the original
+   looks like the two captures used different settings, not a model or lighting gap. Read the setting each capture ran
+   with (the original's options or save, ours' camera flag) and re-pair on the same one before any craft-box number.
+
 1. Match the craft's pose on the three pairs (the recorded 1.31 x 1.35 size difference is the first suspect) and identify the
    white ring under the original's craft; re-measure the hull box's bias and the pair's impact (method in exposure.md).
 2. Then read the 2048 craft's pixel program from Vita3K's SPIR-V by the container's SHA-256 (`scripts/vita-gxp.py`,

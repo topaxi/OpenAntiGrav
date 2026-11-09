@@ -58,6 +58,11 @@ Re-paired on a second machine on 2026-11-09 (`absorb-fx-wire`); numbers and comm
 
 ## Next Steps
 
+0. **First, rule out the chase camera's distance setting** (maintainer, 2026-11-09): the original offers a close and a far
+   chase camera, and ours drawing the craft about 1.3x (2048 grids) to 1.5x (HD absorb pair) larger than the original
+   looks like the two captures used different settings, not a model or lighting gap. Read the setting each capture ran
+   with (the original's options or save, ours' camera flag) and re-pair on the same one before any craft-box number.
+
 1. ~~Pulse bar: let the stamp pass read the HUD target's colour under the mask~~ (landed, `pulse-stamp-scene`; off half 223 to 226 -> 239 to 244).
 2. ~~HD shell tint: read unit 0's gamma nibble~~ (read, 7; the decode makes the shell bluer and dimmer, the gap is level). Next: a pixel-mask or size-solved craft box for the pair, then the shell mesh and alpha reads (leads 1, 2 and 4 of the section above).
 3. HD burst: re-shoot the original (three absorbs, one control, one boot) to settle +7.7 against +21.4 at 0.5 s; then read what writes `kColourScale` (`c467`) per psys draw. No `/2`.
