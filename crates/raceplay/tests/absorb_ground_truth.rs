@@ -251,6 +251,12 @@ fn pulse_lights_the_hull_for_one_second_after_a_pickup_absorb() {
             .any(|line| line.contains("Assegai") && line.contains("absorb overlay over")),
         "the race built no absorb overlay for Assegai"
     );
+    assert_overlay_window(loaded);
+}
+
+/// A pickup absorbed on the player's craft lights the hull overlay for one second, and
+/// not a tick before or after.
+fn assert_overlay_window(loaded: race::Loaded) {
     let mut race = race::Race::start(loaded.setup);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle(0)));
@@ -275,6 +281,25 @@ fn pulse_lights_the_hull_for_one_second_after_a_pickup_absorb() {
         "the pulse never reached the end of its window ({peak})"
     );
     assert_eq!(pulses[70], None, "still lit past the window");
+}
+
+/// Pure draws the same overlay as Pulse (`FUN_0886e954`, `docs/ghidra/functions/psp-pure-usa/hull-overlay.md`): its
+/// `Looks::hull_overlay` builds one over the hull and an absorb lights it for one second. Dropping the rule
+/// reports no overlay and lights nothing.
+#[test]
+#[ignore = "needs data/images/pure-psp-eu.chd"]
+fn pure_lights_the_hull_for_one_second_after_a_pickup_absorb() {
+    let Some(loaded) = single_race("data/images/pure-psp-eu.chd", Some("Feisar")) else {
+        return;
+    };
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.contains("Feisar") && line.contains("absorb overlay over")),
+        "the race built no absorb overlay for Feisar"
+    );
+    assert_overlay_window(loaded);
 }
 
 /// Wipeout HD's absorb shell: every team on the grid loads its own

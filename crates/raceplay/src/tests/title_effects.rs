@@ -463,7 +463,7 @@ fn the_flags_the_loader_derived_from_a_name_are_the_titles() {
     };
     assert_eq!(every(oag_pulse::TITLE), [true, true, true, false]);
     assert_eq!(every(oag_hd::TITLE), [false, false, false, true]);
-    assert_eq!(every(oag_pure::TITLE), [false, true, false, false]);
+    assert_eq!(every(oag_pure::TITLE), [true, true, false, false]);
     for other in [oag_2048::TITLE, oag_omega::TITLE] {
         assert_eq!(every(other), [false; 4], "{}", other.name);
     }
