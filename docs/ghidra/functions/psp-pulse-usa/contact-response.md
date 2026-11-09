@@ -2383,9 +2383,9 @@ craft**: the race-time pointer `0x08b3bf88` pointed at a different 0x1f0-stride
 pool in the eight-craft run and the pattern search for `T` per craft found nothing
 in that race, so the layout is read off the single-craft states only.
 
-## Wired 2026-11-09: every blast posts its push through the pending impulse, from the nose point
+## Wired: every blast posts its push through the pending impulse from the nose point
 
-**Claim** (`pulse-blast-impulse` lane): on Pulse, a weapon blast pushes the struck craft
+2026-11-09. **Claim** (`pulse-blast-impulse` lane): on Pulse, a weapon blast pushes the struck craft
 through `ShipState::pending_impulse`, measured from the craft's nose point, as the
 original does, instead of changing velocity at once from the centre. **True, wired;
 the nose point itself stays at confidence 75** (see above) and the writers beyond the
