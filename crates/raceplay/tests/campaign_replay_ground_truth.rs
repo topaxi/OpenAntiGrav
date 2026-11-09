@@ -12,6 +12,14 @@
 //! out of git all the same: the test reads them from `OAG_CAMPAIGN_REPLAYS` (a directory) or
 //! `data/reference/replays/pulse-tournament/`, and skips without them.
 //!
+//! **They desync, and that is expected.** A recording reproduces only the physics that wrote it.
+//! Pulse's weapon blasts now post their push through `pending_impulse` from the craft's nose
+//! point (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "Wired: every blast posts
+//! its push"), which the recordings predate, so each leg diverges at the first blast that
+//! reaches a craft; the maintainer accepts that a physics change desyncs old recordings. Each
+//! leg names its first diverging tick ([`Expect::Desync`]): a leg that stops diverging, or
+//! diverges elsewhere, fails. Re-recorded files go back to [`Expect::Complete`].
+//!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay --run-ignored all campaign_replay_ground_truth
 //! ```
@@ -70,9 +78,18 @@ fn source() -> Option<PathBuf> {
     None
 }
 
+/// What a recording's opening pass is expected to do on this build.
+#[derive(Clone, Copy)]
+enum Expect {
+    /// Reproduce every stored hash to the last tick.
+    Complete,
+    /// Diverge from the stored hashes first at this tick.
+    Desync(u64),
+}
+
 /// Opens `name` as WATCH does, plays the opening pass to its end and seeks the race on screen
-/// to the last tick.
-fn watches_to_the_end(name: &str) {
+/// to the last tick, or checks the tick it diverges at when `expect` says it must.
+fn watches_to_the_end(name: &str, expect: Expect) {
     let (Some(mut replay), Some(source)) = (recording(name), source()) else {
         return;
     };
@@ -95,6 +112,17 @@ fn watches_to_the_end(name: &str) {
             done => break done,
         }
     };
+    if let Expect::Desync(tick) = expect {
+        match pass {
+            Pass::Desynced(desync) => assert_eq!(
+                desync.tick, tick,
+                "{name}: the opening pass over {ticks} ticks diverges elsewhere"
+            ),
+            other => panic!("{name}: expected a desync at tick {tick}, got {other:?}"),
+        }
+        println!("{name}: desyncs at tick {tick}, as expected");
+        return;
+    }
     assert_eq!(
         pass,
         Pass::Complete,
@@ -112,19 +140,19 @@ fn watches_to_the_end(name: &str) {
 }
 
 macro_rules! deck_tests {
-    ($($test:ident: $file:literal;)*) => {$(
+    ($($test:ident: $file:literal, $expect:expr;)*) => {$(
         #[test]
         #[ignore = "needs data/images/pulse-psp-eu.chd and the recorded files"]
         fn $test() {
-            watches_to_the_end($file);
+            watches_to_the_end($file, $expect);
         }
     )*};
 }
 
 deck_tests! {
-    leg_1_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126092-1.oagr";
-    leg_2_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126226-1.oagr";
-    leg_3_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126364-1.oagr";
-    leg_4_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126501-1.oagr";
-    leg_5_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126656-1.oagr";
+    leg_1_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126092-1.oagr", Expect::Desync(1260);
+    leg_2_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126226-1.oagr", Expect::Desync(1320);
+    leg_3_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126364-1.oagr", Expect::Desync(960);
+    leg_4_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126501-1.oagr", Expect::Desync(1020);
+    leg_5_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126656-1.oagr", Expect::Desync(1500);
 }
