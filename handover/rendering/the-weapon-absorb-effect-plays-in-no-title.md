@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-09
-summary: "Pure overlay and HD shell /2 landed. Open: Pure burst softness and rings, HD shell tint and burst /2, Pulse bar glow"
+summary: "Open: Pure burst and rings, HD shell tint (gamma nibble unread), HD burst needs a re-shot original (no /2), Pulse bar glow"
 ---
 
 # The weapon-absorb effect: built on every title, what a player still sees differently
@@ -31,9 +31,12 @@ Re-paired on a second machine on 2026-11-09 (`absorb-fx-wire`); numbers and comm
   3. The HUD flash: `FUN_08925f4c` writes `*(_DAT_0005364c + 0x98) = 0xff`; what it draws is unread.
 - **HD.** The state's player is the `Feisar_c1` concept hull; ours needs `--team feisar_c1 --variant concept1` to be the same ship.
   1. The shell's colour: pale lavender-white against the original's saturated blue (blue minus red at 1.0 s: original +10.8, ours +6.7).
-     Check the texture tap's transfer and the scroll against a draw capture of the shell.
-  2. The burst is about twice too strong (+11.8 to +15.9 against +6.9 to +8.3 at 0.3 to 0.75 s with the shell right): `renderer.md`
-     item 4, particles end on `/2` and `oag-fx` does not apply it. A `psys` change, held by `hd-trail-hit-wire`.
+     The lead is unit 0's gamma nibble on the shell's draw (7 would make the tap `enc(dec(t) * 0.5)`, as the flame and the bomb-blast fireball read);
+     unread, read recipe in `weapon-absorb-pairs.md`, "HD burst and shell tint".
+  2. The burst: "twice too strong" rests on one capture (+6.9 to +8.3 at 0.3 to 0.75 s); the first capture read the original at +13 to +21.
+     **`renderer.md` item 4 was misread: HD's `psys_*` fragment programs carry no `/2`** (a blanket `/2` is wrong), and the absorb emitters'
+     `kColourScale` word is 1.0. Needs a fresh original capture (three absorbs and a control on one boot) before any gain. Lead for the
+     missile blast: the `+0xc84` word reads 0.5 on its mode-2 emitter and `oag_pob::Emitter::colour_scale` reads mode 5 only.
   3. The `DAMAGE` and `Absorb` labels beside the shield hex (absorb-only not isolated).
 - **Pulse.** The energy bar: the original alternates bright cyan (luma 207) and white (239), both bloomed, 7 to 8 frames each; ours alternates
   normal (163) and flat white (232), no halo. Not attempted in the last lane (budget; `time-trial-platinum-rush-white-venom-grid.ppst` exists and the same driver should reach it). Confirm at the draw call first (a GE
@@ -49,7 +52,7 @@ Re-paired on a second machine on 2026-11-09 (`absorb-fx-wire`); numbers and comm
 ## Next Steps
 
 1. Pulse bar: GE-dump the bar's draw inside the window, then bloom it through the window and draw its off phase bright (rows 248 to 258 against 207 and 239).
-2. HD shell tint: capture the shell's own draw (constants, texture, blend) and compare the texture tap; then re-pair at 0.5 s and 1.0 s.
-3. HD and Pure burst: with `psys`'s holder, apply the `/2` to HD's effects and look at the streak softness against Pure's frames.
+2. HD shell tint: read unit 0's gamma nibble on the shell's draw (`rsx-draw-list.py --samplers`); if 7, decode the tap on HD's encoded store as the flame does, then re-pair at 0.5 s and 1.0 s.
+3. HD burst: re-shoot the original (three absorbs, one control, one boot) to settle +7.7 against +21.4 at 0.5 s; then read what writes `kColourScale` (`c467`) per psys draw. No `/2`.
 4. Pure rings: find what draws them (`ShipCollisionFx_Trigger` kind 1's other effects, or the bloom).
 5. 2048: read `Ship_PlayAbsorbFeedback` and the pickup slot in the 2048 eboot, then the HD recipe with a `/proc` write. Omega: walk the Racebox weapons row and read the same two on the eboot.

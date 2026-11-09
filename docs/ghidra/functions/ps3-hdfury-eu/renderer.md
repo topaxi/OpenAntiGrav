@@ -7923,7 +7923,18 @@ reads the same `adapted`, so the bloom is a little weaker at steady state; that 
    nothing either way; whether its vertex-lit and emissive surfaces match is open.
 3. Non-road families still read 1.1-1.4: the sun and specular terms (`x8` on the specular) and per-draw saturation are not
    matched term by term outside the road.
-4. Particles and effects (draws 444-522) also end on `/2`; `oag-fx` does not apply it.
+4. ~~Particles and effects (draws 444-522) also end on `/2`; `oag-fx` does not apply it.~~ **Corrected 2026-11-09
+   (`hd-absorb-burst-half`): the `psys_*` programs have no `/2`.** `scripts/ps3-microcode.py fp` on the EBOOT's particle
+   fragment blocks (`psys_normal` `0x00927a80`, `psys_simplegeom` `0x00927a00`, `cloudshader` `0x00927f00`, `lineshader`
+   `0x00927c00`, `psys_lit` `0x00927b00`) prints a plain `MUL H0, f[COL0], R0` or `MOV H0, f[COL0]` with no scale field, where
+   the same disassembler prints `/2` on `hd_absorbinternal`'s fogged blocks and on every material program. The census line
+   "every program of draws 87-522 ends scaled" therefore counts material-driven effect draws (the absorb shell, the flame, the
+   weapon models), not `psys` batches; the `psys` batches are probably in the late blended draws 523-547, which carry none
+   (not matched draw by draw: the bound fragment block per draw was not read). The only brightness terms a particle has are in
+   the vertex programs: `psys_normal_vp` multiplies the decoded colour by `kColourScale` (`c467`) and `psys_simplegeom_vp`
+   halves the colour **before** its 2.2 power (`(0.5 c)^2.2`, a factor 0.218, not 0.5). Which state binds which program
+   (`state+0x1c`, set from `record+0xca4` at load) and the value written to `c467` are unread. Nothing here licenses a
+   blanket `/2` on `oag-fx`'s psys draws.
 
 **Ported to ours:** `Looks::lit_output_halved` (a `Rule`, HD `Measured`, every other title `UNREAD`) sets
 `Light::output_scale` to 0.5 in the loader; `shade.wesl` multiplies the whole authored lit sum by it (specular and glows
