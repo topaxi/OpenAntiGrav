@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-16
-summary: "Render bundles for the circuit and static scenery and the remaining wgpu levers, judged on the finish probe span"
+updated: 2026-11-09
+summary: "Remaining wgpu levers: push constants for per-draw matrices; render bundles measured and dropped, dynamic offsets and bindless landed"
 categories: [rendering]
 difficulty: medium (35)
 ---
@@ -24,7 +24,12 @@ readings of how wgpu works, not measurements.
 
 ## Open
 
-1. **Render bundles for view-independent draws.** A bundle is validated once when it is
+1. ~~**Render bundles for view-independent draws.**~~ **Measured and not built (2026-11-09,
+   `render-bundles`)**: no circuit, scenery or prop list is view-independent, and a view's circuit
+   list repeats on 26 to 29 % of HD Anulpha's racing frames (50 % on Pulse), so a bundle saves about
+   28 us a view on the notebook. Numbers in `docs/rendering/frame-thread-cpu.md` ("Render bundles
+   for the circuit: measured, not built"). What follows is the reasoning as first written.
+   **Render bundles for view-independent draws.** A bundle is validated once when it is
    recorded; executing it inside a pass skips most per-command validation. The circuit,
    scenery and static props do not change between frames, so recording them once and
    replaying them every frame and every view goes straight at `finish`. Prerequisite: a draw
@@ -72,7 +77,6 @@ per-view mutable state.
 
 1. Read `encoder-finish`'s result (levers 3 and 4, and 1 if it got there) and strike what
    landed.
-2. Render bundles for the circuit and static scenery, judged by what they remove from the
-   `finish` probe span, one view and 2h, pictures byte-identical.
+2. ~~Render bundles for the circuit and static scenery~~: measured and dropped (Open item 1).
 3. Push constants for per-draw matrices on native, with the web path unchanged.
 4. Measure each on the Deck (the notebook's hybrid CPU needs pinned, interleaved A/B runs).
