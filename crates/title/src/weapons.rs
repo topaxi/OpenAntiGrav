@@ -195,13 +195,12 @@ pub enum BlastPush {
     /// Pulse's: the blast adds `(1 - d / blastradius) * blastforce` to the craft's pending
     /// impulse, measured from its nose point, and `Ship_ApplyCollisionImpulse` drains it as a
     /// push along the craft's forward axis plus the `0.5` s collision stun, nothing under a
-    /// running Shield (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "Wired
-    /// 2026-11-09"). See `oag_weapons::projectile::blast`.
+    /// running Shield (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "Wired:
+    /// every blast posts its push"). See `oag_weapons::projectile::blast`.
     Posted,
-    /// The velocity change this project applied before the pending impulse was wired: the same
-    /// falloff, radially away from the craft's centre, at once, with no stun. Where a title's
-    /// own consumer is unread and a measured pace disagrees with the stun
-    /// (`docs/gameplay/weapon-lineage.md`, "Blast push").
+    /// A velocity change at once, with the same falloff, radially away from the craft's
+    /// centre, and no stun. For a title whose own consumer is unread and whose measured pace
+    /// disagrees with the stun (`docs/gameplay/weapon-lineage.md`, "Blast push").
     Immediate,
 }
 

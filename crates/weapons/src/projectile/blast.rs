@@ -155,8 +155,8 @@ pub enum BlastPush {
     /// which its next physics step drains as `Ship_ApplyCollisionImpulse` does (a forward-axis
     /// push, the collision stun, nothing under a running Shield). See [`post_impulse`].
     Posted,
-    /// A velocity change at once, radially from the craft's centre, with no stun: what
-    /// this crate did before the pending impulse was wired. See [`immediate_impulse`].
+    /// A velocity change at once, radially from the craft's centre, with no stun. See
+    /// [`immediate_impulse`].
     Immediate,
 }
 
@@ -179,7 +179,7 @@ fn push<S: Craft>(ship: &mut S, point: Vec3, stats: &BlastStats, how: BlastPush)
 /// Mine's and the Plasma's measure from the struck craft's nose point (`T+0x50`); the other
 /// three write the same object's `+0x110` and are taken to read the same point (their
 /// pages say only "position"). See `docs/ghidra/functions/psp-pulse-usa/contact-response.md`,
-/// "Wired 2026-11-09".
+/// "Wired: every blast posts its push".
 ///
 /// The reach is tested on the nose point too, so the falloff is never negative here
 /// (`Plasma_ApplyBlastForce` gates on `d < blastradius` off the same point). A zero
@@ -194,8 +194,8 @@ fn post_impulse<S: Craft>(ship: &mut S, point: Vec3, stats: &BlastStats) {
     oag_physics::wall::post_blast_impulse(state, point, stats.radius, stats.force);
 }
 
-/// The velocity change this crate applied before [`post_impulse`]: the same
-/// `1.0 - d / blastradius` falloff, away from the craft's centre, at once.
+/// The velocity change at once: the `1.0 - d / blastradius` falloff of [`post_impulse`],
+/// away from the craft's centre.
 ///
 /// A craft on the blast centre has no direction: push up, which depends on no axis of the
 /// craft or track. A zero `radius` is guarded: it admits only `d <= 0`.
