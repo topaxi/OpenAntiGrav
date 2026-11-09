@@ -294,6 +294,9 @@ pub const TITLE: &Title = &Title {
 const EFFECTS: oag_title::Effects = {
     use oag_title::{Burst, EffectSpec, Origin, Trigger, engine_effects};
     let mut effects = oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
+        // The original never spawns its own `WO_TRAIL_HITSHIP`
+        // (`docs/ghidra/functions/ps4-omega-eu/trail-hits.md`).
+        .trail_hits_on_setting()
         .without(Trigger::PlasmaBlast)
         .without(Trigger::EngineFlare)
         .without(Trigger::LeachbeamEnergy)

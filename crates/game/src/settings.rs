@@ -648,15 +648,16 @@ pub struct Graphics {
     #[serde(default)]
     pub boost_zoom: bool,
 
-    /// Play Wipeout HD's trail-hit burst for a craft flying in a rival's engine trail on a
-    /// title that authors none (Pulse and Pure; a title whose table names no
-    /// `Trigger::TrailHitship`). **Off by default**, and ignored on every other title, which
-    /// play their own.
+    /// Play the trail-hit burst for a craft flying in a rival's engine trail on a title whose
+    /// original never shows it: Pulse and Pure, which author none and borrow Wipeout HD's, and
+    /// 2048 and Omega, which author it but never fire it and play their own
+    /// (`oag_title::Effects::trail_hits_native`). **Off by default**, and ignored on Wipeout HD,
+    /// which always plays it.
     ///
-    /// **An enhancement of this project's, not the original's:** neither Pulse nor Pure has the
-    /// burst. The effect is read off another source that authors it, and drawn with nothing
-    /// substituted when this machine has none. Baked into the race at load, so a change applies
-    /// from the next race. See `oag_raceplay::TrailHits`.
+    /// **An enhancement of this project's, not the original's.** A borrowed effect is read off
+    /// another source that authors it, and drawn with nothing substituted when this machine has
+    /// none. Baked into the race at load, so a change applies from the next race. See
+    /// `oag_raceplay::TrailHits`.
     #[serde(default)]
     pub trail_hits: bool,
 

@@ -261,10 +261,11 @@ fn the_boost_zoom_row_is_dropped_where_the_ring_cannot_be_borrowed() {
     }
 }
 
-/// The TRAIL HITS row is offered where the title authors no trail-hit burst of its own - Pulse
-/// and Pure - and absent on HD, 2048 and Omega, which play theirs whatever it holds.
+/// The TRAIL HITS row is offered where the original never shows the trail-hit burst - Pulse and
+/// Pure, which author none, and 2048 and Omega, which author it but never fire it - and absent on
+/// HD, which plays it whatever the row holds.
 #[test]
-fn the_trail_hits_row_is_dropped_where_the_title_plays_its_own_burst() {
+fn the_trail_hits_row_is_dropped_only_where_the_original_plays_the_burst() {
     let rows = |definition: &Definition| {
         definition
             .pages
@@ -277,8 +278,8 @@ fn the_trail_hits_row_is_dropped_where_the_title_plays_its_own_burst() {
         (oag_pulse::TITLE, 1),
         (oag_pure::TITLE, 1),
         (oag_hd::TITLE, 0),
-        (oag_omega::TITLE, 0),
-        (oag_2048::TITLE, 0),
+        (oag_omega::TITLE, 1),
+        (oag_2048::TITLE, 1),
     ] {
         let mut definition = built_in();
         assert_eq!(rows(&definition), 1, "the definition ships the row");

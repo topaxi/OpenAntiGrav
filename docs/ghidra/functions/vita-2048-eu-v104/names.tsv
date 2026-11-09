@@ -292,3 +292,6 @@
 0x8121f860	function	WeaponPads_TestCraft	85	weapon-pads.md
 0x818a63ac	data	g_weapon_pad_refresh_time	90	weapon-pads.md
 0x818a63c0	data	g_weapon_pad_elimination_refresh_time	90	weapon-pads.md
+0x81299798	function	TrailHit_Spawn	85	trail-hits.md
+0x812a100e	function	Trail_SpawnHitBursts	80	trail-hits.md
+0x812a119c	function	Trail_UpdateRing	60	trail-hits.md

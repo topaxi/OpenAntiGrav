@@ -552,11 +552,12 @@ impl Definition {
         }
     }
 
-    /// Drops the TRAIL HITS row on a title that plays its own trail-hit burst
-    /// (`oag_title::Trigger::TrailHitship` named in its effect table): every title but Pulse and
-    /// Pure. Same once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    /// Drops the TRAIL HITS row on a title whose original plays the trail-hit burst by itself
+    /// (`oag_title::Effects::plays_trail_hits_natively`): Wipeout HD alone. 2048 and Omega author
+    /// the burst but never fire it, so they keep the row, as Pulse and Pure do. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
     pub fn drop_unavailable_trail_hits(&mut self, title: &oag_title::Title) {
-        if title.effect_on(oag_title::Trigger::TrailHitship).is_none() {
+        if !title.effects.plays_trail_hits_natively() {
             return;
         }
         for page in &mut self.pages {
