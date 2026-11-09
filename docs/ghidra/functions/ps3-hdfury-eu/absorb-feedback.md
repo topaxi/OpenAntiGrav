@@ -280,6 +280,17 @@ is a horizontal blue band and its alpha is cloud noise, so the picture is a
 blue band sweeping over the shell, broken up by the noise. Confidence **90**
 for the program, which is read instruction by instruction.
 
+### The fogged blocks close on `/2` (2026-11-09, `absorb-fx-wire`)
+
+The listing above is block #1 only. Re-run with the scale field printed (`scripts/ps3-microcode.py fp-file hd_absorbinternal.rcsmaterial`),
+blocks #2 to #9 (the fogged variants a race draws) all end on `MAD /2 H0.xyz, ...`: block #1 has no scale, every fogged block has `/2`
+on the colour that carries the fog lerp. So the shell is halved like every scene program
+([renderer.md](renderer.md), "Every lit program ends on a /2 output scale"). `oag_mesh`'s absorb branch multiplies by
+`scene.light.output_scale` and the shell reads the craft's scene block (the output scale, the fog and the clock the `5 * time` scroll
+runs on). Craft-box luma of the shell alone at 1.0 s on the `Feisar_c1` hull: original +5.8, ours +13.1 before and +5.8 after
+(`docs/rendering/weapon-absorb-pairs.md`). Confidence 85: the scale is read for all eight blocks, the block the race draws is not seen in a draw.
+2048 and Omega: checked, applies, not wired (no shell is drawn on either; their `.rcsmaterial`s are re-cooked and are read, not assumed).
+
 ### Negative result: `AbsorbFader`/`AbsorbScroller` drive nothing on this disc
 
 `FUN_003ea368` (and its one-entity twin `FUN_003eb890`) is where those names
