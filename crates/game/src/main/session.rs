@@ -71,6 +71,7 @@ mod mods_page;
 #[path = "session/music_pool_page.rs"]
 mod music_pool_page;
 pub(crate) use load_probe::LoadProbe;
+pub(crate) use mods_page::Rebuilt;
 #[path = "session/menus.rs"]
 pub(crate) mod menus;
 #[path = "session/pacing.rs"]

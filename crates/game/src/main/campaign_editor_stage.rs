@@ -7,14 +7,23 @@ use oag_game::campaign::editor::{Editor, Field};
 use oag_ui_screens::campaign::editor::{FIELD_ROWS, Row, View};
 use oag_ui_screens::campaign::pulse::SelectorPulse;
 
+/// What a save came to: the folder written and the rebuilt menus, or why not.
+pub(crate) type Saved = Result<
+    (
+        std::path::PathBuf,
+        Result<crate::session::Rebuilt, String>,
+    ),
+    String,
+>;
+
 /// The screen, open.
 pub(crate) struct EditorScreen {
     pub(crate) model: Editor,
     pub(crate) pulse: SelectorPulse,
     /// What the last save did, shown under the rows.
     pub(crate) status: String,
-    /// The campaign being written, off the render thread.
-    pub(crate) saving: Option<oag_thread::Task<Result<std::path::PathBuf, String>>>,
+    /// The campaign being written and the menus rebuilt to list it, off the render thread.
+    pub(crate) saving: Option<oag_thread::Task<Saved>>,
 }
 
 /// What the screen shows, owned so a [`View`] can borrow it.

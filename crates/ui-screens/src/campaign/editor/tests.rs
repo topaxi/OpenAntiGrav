@@ -127,7 +127,7 @@ fn every_slot_the_layout_draws_is_a_target_placed_or_not() {
 }
 
 #[test]
-fn pointing_at_an_empty_hex_selects_it_and_a_second_click_confirms() {
+fn a_click_on_an_empty_hex_selects_it_and_a_second_click_confirms() {
     let layout = layout();
     let pulse = SelectorPulse::default();
     let actions = [row("NAME", "MINE"), row("SAVE", "")];
@@ -138,13 +138,13 @@ fn pointing_at_an_empty_hex_selects_it_and_a_second_click_confirms() {
         .find(|t| t.what == What::Hex((1, 0)))
         .map(|t| centre(t.rect))
         .unwrap();
-    assert_eq!(
-        pointer(&at((0, 0)), &pointer_at(empty, false), &ts),
-        [Event::Hover((1, 0))]
+    assert!(
+        pointer(&at((0, 0)), &pointer_at(empty, false), &ts).is_empty(),
+        "hovering a hex does not move the cursor, so crossing hexes on the way to the panel keeps the event"
     );
     assert_eq!(
         pointer(&at((0, 0)), &pointer_at(empty, true), &ts),
-        [Event::Hover((1, 0)), Event::Select((1, 0))]
+        [Event::Select((1, 0))]
     );
     assert_eq!(
         pointer(&at((1, 0)), &pointer_at(empty, true), &ts),

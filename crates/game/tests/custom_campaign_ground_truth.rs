@@ -289,3 +289,12 @@ fn a_campaign_built_in_the_editor_launches_on_pulse() {
     };
     check_editor(oag_pulse::TITLE, &image);
 }
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn a_campaign_built_in_the_editor_launches_on_ps2_pulse() {
+    let Some(image) = oag_testdata::image("data/images/pulse-ps2-eu.chd") else {
+        return;
+    };
+    check_editor(oag_pulse::TITLE, &image);
+}

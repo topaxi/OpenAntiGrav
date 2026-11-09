@@ -115,8 +115,9 @@ Selection` with **every hex slot** drawn: a placed event filled, an empty slot d
 pad moves the cursor (CROSS places an event and opens its fields; LEFT and RIGHT or CROSS step
 the selected field; UP and DOWN pick the field; TRIANGLE clears the slot; SQUARE names the
 campaign; START saves; CIRCLE closes the fields, then leaves without saving). The mouse or a
-finger hovers a hex or a row, clicks a selected hex to confirm it, clicks a row to step it,
-and the secondary button backs out.
+finger clicks a hex to select it and the selected hex again to confirm it, hovers a field to move
+the panel's row and clicks a row to step it or act, and the secondary button backs out. Hovering
+a hex does not move the cursor, so crossing hexes on the way to the panel keeps the event.
 
 | Field | Values |
 | --- | --- |

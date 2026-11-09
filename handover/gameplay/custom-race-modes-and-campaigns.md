@@ -179,7 +179,7 @@ Open after v1.0, in the order the maintainer raised them:
   tier, per-event unlock rules, `laps`/`weapons`, pilots and opponent teams, and medal
   targets by hand (they come from the disc's own cell for the same mode, circuit and class;
   a timed event with none gets no medals, and its screen reads `0:00.00`). The pointer
-  (hover, click, the rows, the secondary button) is unit-tested on its targets and events;
+  (click, the rows, the secondary button; a hover never moves the cursor) is unit-tested on its targets and events;
   no headless step drives a mouse, so a live click was not run.
 - **Opponent craft variants** in `field.teams` (`{ team, variant }`): `oag_livery::load`
   paints opponent slots by team only today, so this is a livery change too.

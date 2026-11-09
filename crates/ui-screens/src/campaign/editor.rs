@@ -68,8 +68,6 @@ pub enum What {
 /// What the pointer did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
-    /// The pointer moved onto a hex.
-    Hover((u32, u32)),
     /// A second click on the selected hex.
     Confirm,
     /// A click on a hex other than the selected one.
@@ -396,9 +394,11 @@ pub fn hit(targets: &[Target], at: (f32, f32)) -> Option<Target> {
     })
 }
 
-/// What `pointer` did this tick against `targets`, with `view` the state before it:
-/// hover moves the cursor or the panel's row, a click confirms a selected hex, selects
-/// another, steps a row's value or saves.
+/// What `pointer` did this tick against `targets`, with `view` the state before it: a click
+/// selects a hex, a second click on it confirms it, a click on a row steps it or acts, and
+/// hovering a field moves the panel's row. **A hover never moves the cursor**: reaching the
+/// panel from a hex crosses the hexes between, and a cursor that followed them would have
+/// left the event being edited.
 #[must_use]
 pub fn pointer(view: &View, pointer: &Pointer, targets: &[Target]) -> Vec<Event> {
     let mut out = Vec::new();
@@ -410,7 +410,6 @@ pub fn pointer(view: &View, pointer: &Pointer, targets: &[Target]) -> Vec<Event>
         && let Some(target) = under
     {
         match target.what {
-            What::Hex(at) if at != view.cursor => out.push(Event::Hover(at)),
             What::Row(index) if index < view.fields.len() && view.selected_row != Some(index) => {
                 out.push(Event::Field(index));
             }

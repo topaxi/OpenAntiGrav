@@ -194,7 +194,7 @@ impl Session {
         save |= pad.start;
         for event in events {
             match event {
-                Event::Hover(at) | Event::Select(at) => {
+                Event::Select(at) => {
                     if model.cursor() != at {
                         model.select(at);
                         nav = Some(Nav::Moved(None));
@@ -249,6 +249,9 @@ impl Session {
         let Some(campaign) = stage.campaign.as_mut() else {
             return;
         };
+        if campaign.editor.as_ref().is_some_and(|screen| screen.saving.is_some()) {
+            return;
+        }
         if campaign.editor.as_mut().is_some_and(|screen| screen.model.back()) {
             self.play_navs(Some(Nav::Decline));
             return;
@@ -260,6 +263,7 @@ impl Session {
 
     /// SAVE: writes the campaign as a folder mod, off the render thread.
     fn editor_save(&mut self) {
+        let job = self.rebuild_job();
         let empty = self.word("OAG_EDITOR_NEEDS_EVENT", "PLACE AN EVENT FIRST");
         let failed = self.word("OAG_EDITOR_SAVE_FAILED", "COULD NOT SAVE THE CAMPAIGN");
         let Stage::Menu(stage) = &mut self.stage else {
@@ -281,8 +285,13 @@ impl Session {
             return;
         };
         let model = screen.model.clone();
+        let Some(job) = job else {
+            screen.status = failed;
+            return;
+        };
         screen.saving = Some(oag_thread::Task::spawn("campaign-save", move || {
-            model.save(&root)
+            let folder = model.save(&root)?;
+            Ok((folder, job.run().map_err(|e| format!("{e:#}"))))
         }));
         self.play_navs(Some(Nav::Accept));
     }
@@ -302,10 +311,10 @@ impl Session {
         let result = task.join();
         screen.saving = None;
         match result {
-            Some(Ok(Ok(folder))) => {
+            Some(Ok(Ok((folder, built)))) => {
                 info!("campaign saved to {}", folder.display());
                 stage.campaign = None;
-                self.rebuild_menus(None);
+                self.apply_rebuilt(built, None);
             }
             Some(Ok(Err(why))) => {
                 error!("cannot save the campaign: {why}");
