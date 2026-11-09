@@ -81,9 +81,9 @@ behind the wing tips, so they are not the nose glow of the trail-hit pairs eithe
 
 Five tucked frames per condition in `hd-race-talons-venom-pack` (the player placed 8 units behind the nearest rival
 along its velocity, 30 frames, `rpcs3-hd-trail-hit-pair.py`'s tuck, the whole run in one connection). The craft and the
-rival read `+0x7d2c = 1` on all ten tucks (the red variant, Fury skin), which does not match the state's table entry in
-[emulator-recipes.md](../reverse-engineering/emulator-recipes.md) (it says classic; the entry should be rechecked,
-not rewritten from five reads).
+rival read `+0x7d2c = 1` on all ten tucks (the red variant, Fury skin). A fresh restore of the same state on 2026-11-09
+read `+0x7d2c = 0` on all eight craft, as [emulator-recipes.md](../reverse-engineering/emulator-recipes.md) says
+(classic), so the recipe stands; the tuck runs' `1` came after their own setup, not from the state.
 
 - **Burst names intact:** white ray fans and a white glow around the player's nose in the four frames read (speed 133 to
   150 units/s).
@@ -106,8 +106,24 @@ fresh restore, keeping the frames where the rival's rear overlaps the player's n
 | Is it a separate always-on, speed or Zone effect of the craft? | **No** | 85 |
 | Is it the burst's? | **Not separated** from the rival's flare; needs a rival ahead | 40 |
 | Do HD's `wingtip` locators draw anything? | **Yes**: two ribbons, run by the speed-pad force time or a turbo, scaled by forward speed | 80 (code read, live node fields, A/B frames) |
-| What sets it off in play? | The speed pad's force time (`entry+0x2e8`) or Turbo flags `0x20`/`0x40` | 70 (code only; the field was forced, no pad crossed) |
-| Are the maintainer's Zone contrails these? | **Probably** (wing-tip streaks while a pad or turbo acts, above 50 units/s); the Zone ship was not run with a pad | 60 |
+| What sets it off in play? | The speed pad's force time (`entry+0x2e8`): **60 natural refills on all eight craft, each with a pad crossing** (2026-11-09, below); Turbo flags `0x20`/`0x40` code only | 90 (pad); 80 (Turbo) |
+| Are the maintainer's Zone contrails these? | **Probably**: the Zone ship's two nodes refill on Zone's pads at 75 to 137 units/s and lay the ribbon at strength up to `0.3` (below); a frame isolating the streaks from wall-scrape sparks was not taken | 75 |
+
+## Measured live: the natural trigger and the Zone ship (2026-11-09, lane `hd-wingtip-vortices`)
+
+RPCS3, EU Fury image, recompiler, audio Null. `scripts/rpcs3-hd-wingtip-poll.py` finds every craft's two `wingtip` nodes
+(vtable `0x0086a340`) and samples them without pausing.
+
+- **Race** (`hd-race-talons-venom-pack` restored, eight craft on the Autopilot, 60 s): 60 timer refills to `1.267`
+  to `1.283` (`1.3` less a frame or two), on all eight craft, both nodes of a craft in the same sample, **every one with
+  the pad force time above zero** (`0.10` to `0.25`) and no flag `0x20`/`0x40` set. The strength the ribbon holds
+  (`element+0x60`) sat on `ramp(speed) * timer / 1.3` in 2,018 of 2,019 samples; 35 fresh ribbon nodes matched the
+  push's drift law to `1e-4` ([wingtip-vortices.md](../ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md), "The push").
+- **Zone** (cold boot, Single Player Zone, Vineta K, cross held, no steering, 150 s): the Zone ship's two nodes refilled
+  on three pad crossings (pad time `0.10` to `0.24`, 75 to 137 units/s), strength `0.15` to `0.30`. The frames at those
+  moments are not decisive: one shows white streaks off the right wing, but the craft was grazing the right wall, and
+  they read as scrape sparks; the ribbon is born `0.05` wide at most `0.3` opacity, so a single frame at the moment of
+  the crossing shows little.
 
 ## Reproduce
 

@@ -98,6 +98,9 @@ def main():
             if nodes or time.time() - waited > args.wait:
                 break
             print("no wingtip nodes yet", flush=True)
+            if session.guard is not None:
+                session.guard.stage("wait-race")
+                session.guard.beat()
             time.sleep(3.0)
         if not nodes:
             sys.exit("no wingtip nodes: not in a race")
@@ -115,6 +118,9 @@ def main():
         t0 = time.time()
         while time.time() - t0 < args.seconds:
             host = time.time() - t0
+            if session.guard is not None:
+                session.guard.stage("capture")
+                session.guard.beat()
             sample = {"t": host, "nodes": {}}
             for node, craft in nodes:
                 blob = m.rd(node + 0xE0, 12)

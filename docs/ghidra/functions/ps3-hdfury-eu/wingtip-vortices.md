@@ -322,13 +322,25 @@ The `_c1` and `_n1` variants repeat the base hull's pair with small offsets (Fei
 
 - **2048** (`data.psarc`, `hdships/*/Locators.vex`, little-endian): the same two
   nodes at the same coordinates on Feisar and Zone (checked bit for bit against
-  HD's). **Checked, applies, not wired**: its executable is an encrypted
-  `eboot.bin`, so the importer and the update were not read here.
+  HD's). The decrypted v1.04 `eboot.elf` (in Ghidra, `/2048/eboot-vita-2048-eu-v104.elf`)
+  carries the importer strings and **pool `+0x74`'s config byte for byte** (at
+  `0x81521db8`, little-endian): colour zero in the file, widths `0.05`/`1.5`, life `0.7`,
+  scale `0.025`, texture `data/Tex/smoke_trails_frame1_ALPHA.gxt` (`0x814ca5e8`), 3 chains,
+  100 nodes, step `0.06`, radius `0.8`. Two functions reference it, `FUN_81275c78` (passes
+  it, the manager's constructor's place) and `FUN_81276566` (writes it, the colour
+  initializer's). **Checked, applies, not wired** for the ribbon; the update and push
+  were not read (`0.006`, the speed ramp's slope, is not in the image, so the ramp is
+  written differently or lives elsewhere; the next lane starts from the importer string).
 - **Omega** (`data03.psarc`): the same two nodes at the same coordinates on Feisar and
-  Zone. `eboot.bin` carries `ShipWingtipVortices_Importer.cpp`/`.h` and the string
-  `wingtip`. **Checked, applies, not wired**: the update was not read on the x86-64
-  image; the next lane that opens it in Ghidra starts from the importer string, and
-  the update's constants (`50`, `100`, `0.3`, `0.006`, `1.3`) are the search key.
+  Zone. `eboot.bin` carries `ShipWingtipVortices_Importer.cpp`/`.h`, the string
+  `wingtip` and `smoke_trails_frame1`, and **the ribbon's colour and first four floats**
+  at `0x017fd0a0`: `(1, 1, 1, 0.3)` already in the file (no boot-time write), then
+  `0.05`, `1.5`, `0.7`, `0.025`. The layout differs: the next 16 bytes are the
+  `ThickLine` block's colour `(0.729, 1, 1, 1)`, so the texture, counts, step and radius
+  are held elsewhere. Its one reader is `FUN_016fb470` (`0x016fb5b0`, `0x016fb81e`).
+  `0.006` is not in the image either. **Checked, applies, not wired** for the ribbon's
+  colour, widths and life; **not read** for the update, the push, the counts and the
+  radius (next address: `FUN_016fb470`).
 - **Pulse** authors none: its class table stops at `0x3eb` ([vex-classes.md](vex-classes.md)).
 
 ## Names
