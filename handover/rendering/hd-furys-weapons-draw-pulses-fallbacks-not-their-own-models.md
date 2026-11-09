@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-08
-summary: "Missile explosion streaks drawn, film-unpaired; open: bloom boost, Plasma launch, state 8 shell, Bomb/Mine/Leach pairs, Mine halo"
+updated: 2026-11-09
+summary: "Missile film kept and paired: clearing conflict resolved; open: streak strip too wide late, bloom boost, Plasma launch, Bomb/Mine/Leach pairs"
 difficulty: medium (30)
 ---
 
@@ -234,14 +234,20 @@ lead is closed (0.996105 is our own law at age 0.81), but ours' core still white
    that page names what is read and what is chosen).
    1. ~~Lifetime~~ **done**: `age > 1.0`, strict.
    2. ~~The sixteen streaks~~ **done**: the shared 20-element pool, `Ribbon::push`'s new
-      scale argument, a view-side `Rng`, drawn after the Missile ribbons. Open: the pair
-      against film `m5` (its frames were not kept; a fresh RPCS3 capture of one hit at a
-      known camera is the next step), and **a measured conflict**: in the
-      `--force-missile-hit` scenario the whole-frame luma is back to its pre-hit level at
-      0.92 s with the model alone and 1.0 s with the streaks, against the film's about
-      0.6 s (`missile-explosion.md`, "Seen"). Candidates, unresolved: eye distance, the
-      width read as a half-width, the shared `v` side order, the assumed 60 Hz. Do not tune
-      the law to it. The blast's basis (the struck craft's own) is chosen.
+      scale argument, a view-side `Rng`, drawn after the Missile ribbons. **Film kept and
+      paired 2026-11-09 (`hd-missile-capture`)**, `data/reference/hd-capture/missile-hit/`,
+      `missile-explosion.md` "Film": the clearing-time conflict is **resolved** (a parked eye
+      against a flying one; at the film's own eye path ours clears at 0.5 s, and a held original
+      stays white to 0.75 s and clears by 0.95 s like ours' model alone). **Open (new):** at a
+      held eye ours with the streaks is +18 to +35 luma over the film at 0.83 to 0.92 s and +21
+      at 1.08 s: the strip is a wide white sheet where the film's lines are thin. Halving the
+      half-width leaves -7, +1, +14, +11 at 0.75, 0.83, 0.92, 1.08 s; reversing the node's
+      width and alpha direction matches 0.92 s on and undershoots 0.75 and 0.83 s by 20 and 18.
+      Next: read `FatLine_PushChains`'s use of `f1` and `FatLine_Update`'s `t` for the
+      streak pool (config `0x00921050`) against the film's thin lines, not tune. The strip's
+      `v` side order is untested (luma cannot see it). The 60 Hz candidate: the age moves in
+      whole 1/60 s (270 steps), so `dt` per `Update` is 1/60 s. Do not tune the law to any
+      of it. The blast's basis (the struck craft's own) is chosen.
    3. ~~Materials~~ **done**: the `MISSILE_CORE` doc and `missile_blast.rs`'s module doc
       cite section 3 of the page.
    4. **Bloom boost** (confidence 80, effect not measured), **still open**: while a blast

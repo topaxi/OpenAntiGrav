@@ -216,16 +216,192 @@ it when its last node dies.
   numbers, against 97.8 before the hit, is 229/233/228/189/141/103 at ticks
   296/302/310/325/345/355 (ages 0.1, 0.2, 0.33, 0.58, 0.92 and 1.08 s) with the streaks
   and 226/229/220/169/94/95 without them. So the model alone is back at its pre-hit
-  level by 0.92 s and the streaks hold it 44 above until about 1.0 s. **Conflict, open:**
-  the film (`m5`) is back within 15 of its pre-hit 135 by about 0.6 s (162 at 0.5 s, 150
-  at 0.6 s), so ours clears later than the film with the model alone (169 against 98 at
-  0.58 s) and later still with the streaks. The law was read at confidence 80 and is not
-  tuned to this. Candidates, unresolved: the scenario's eye is farther from the centre
-  than the film's (12 units behind the rival), the config's width `2.0` read as a
-  half-width (the Missile ribbons' `half_width` convention), the strip's `v` side order
-  shared with the Missile ribbons (**chosen**), and the 60 Hz update rate (assumed).
-  **Not paired against the film `m5`**: its frames were a scratch directory that was not
-  kept (section 1), so there is no frame-for-frame pair.
+  level by 0.92 s and the streaks hold it 44 above until about 1.0 s. **The conflict this
+  raised (the lost film `m5` back within 15 of its pre-hit 135 by about 0.6 s) is resolved
+  by the kept film of 2026-11-09 ("Film", below):** the conflict was a parked eye (ours,
+  19 to 22 units from the centre throughout) against a flying one (`m5`'s player passed
+  through the blast at 100+ units/s). An original held at a parked eye also stays white to
+  about 0.75 s and clears by 0.95 s. What the film leaves open is the streaks' strength
+  late in the life, not the clearing time.
+
+### Film (2026-11-09, `hd-missile-capture`): the original's Missile hit, frame by frame, kept
+
+**Question.** Ours clears to its pre-hit luma at about 0.92 s (model alone) or 1.0 s
+(with the streaks) from the player's own camera; the lost film `m5` was within 15 of
+its pre-hit luma by about 0.6 s. Which is right, and which candidate explains the gap?
+**Falsification, written before the first capture:** with `e = (L - L_pre) / (L_peak - L_pre)`
+(ours, model alone, at 0.58 s: 0.54; with the streaks 0.67), the conflict is confirmed if the
+original's `e(0.6 s)` is under 0.2 on two or more hits, and resolved (`m5` wrong or not
+comparable) if it is 0.4 or more on both. It could have gone either way.
+
+**Method.** `scripts/rpcs3-hd-missile-film.py` (new) on RPCS3, Talon's Junction, Racebox Single
+Race, Venom, Feisar, **Weapons On** (`hd-racebox-talons-venom-weapons-grid`, rebuilt by
+`scripts/emu-hd-race-walk.sh` with `OAG_WEAPONS_ON=1`). It gives the player a Missile
+(`*(ship + 0x5edc) + 0x204`, state 1), holds the player 12 units behind the nearest rival
+ahead along the rival's velocity (re-placed before every game frame), holds TRIANGLE until the
+explosion pool at `MissileManager + 0x10c` rises, then steps one game frame at a time (the lap
+clock, `ship + 0x7014`). At each requested age it waits 2 s for the RSX to present the frame it
+was handed, takes the screenshot and, in the same pause, the pushbuffer camera
+(`ps3_pose.pick_camera`), the blast centre (`pool[0] + 0xd0`), the pool age (`pool[0] + 0x170`,
+the authority for "age") and every craft's pose. After the entry retires (the field resets) the
+age is the lap clock since the hit. Two modes: **fly-through** (the player flies on freely, as
+`m5` did: it passes through the blast at 104 to 110 units/s) and `--hold-after-hit` (the player is
+re-placed at its pose at the hit with zero velocity before every frame, so the eye stays near the
+blast the way ours' parked scenario's does). Metric: whole-frame mean luma (Rec. 601) of the
+screenshot, `scripts/hd-missile-film-table.py`. **Every frame is kept** under
+`data/reference/hd-capture/missile-hit/` (gitignored): `hit0`, `hit1`, `hit2` (fly-through),
+`hold0`, `hold1` (held), each with `pre.png`, `aNNNN.png` (NNNN the requested age in ms),
+`aNNNN.json` (camera, pool age, centre, poses) and `steps.json`; ours' renders in `ours-*`.
+
+**A trap: the `hd-race-talons-venom-pack` state has Weapons Off.** `emu-hd-race-walk.sh` presses
+the WEAPONS row to Off (its own header says so). The Missile pickup state written there is
+never consumed, whatever the pad does (3.5 game seconds of TRIANGLE held, the Autopilot flag
+cleared, no fire): the first attempt wasted 900 frames on it. Its HUD shows `Absorb` regardless.
+Fire needs a Weapons-On race.
+
+**1. The film, fly-through, three hits (three fresh restores).** Pre-hit luma 100.0 to 102.5,
+the peak 231 to 244 at pool age 0.20 to 0.25 s. `e` at pool age:
+
+| hit | pre L | peak L | 0.1 | 0.2 | 0.33 | 0.5 | 0.58 | 0.6 | 0.75 | 0.92 | 1.08 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `hit0` | 102.2 | 234.7 | 0.78 | 0.98 | 0.74 | 0.21 | 0.15 | 0.13 | 0.03 | 0.01 | - |
+| `hit1` | 100.0 | 231.4 | 0.82 | 1.00 | 0.81 | 0.17 | 0.11 | 0.09 | 0.09 | 0.09 | - |
+| `hit2` | 102.5 | 244.2 | 0.78 | 1.00 | 0.70 | 0.17 | 0.15 | 0.12 | 0.07 | 0.01 | 0.07 |
+
+(`L = pre L + e (peak L - pre L)`.)
+
+The falsification line comes out **confirmed for `m5`'s regime**: `e(0.6 s)` is 0.13, 0.09, 0.12
+(`m5` by its own numbers, 150 at 0.6 s against 135 before and a peak of 246: 0.14). The eye
+leaves the blast fast: `hit2`'s pushbuffer eye is 21.5, 16.3, 12.8, 4.1 (inside the core), 11.6,
+22.6, 37.7, 49.9, 55.3, 62.5 and 74.1 units from the centre at ages 0.08, 0.13, 0.15, 0.25, 0.33,
+0.42, 0.6, 0.68, 0.8, 0.85 and 0.93 s (`hit0`: 28.4, 19.7, 4.6, 14.2, 19.0, 30.7, 41.1, 46.3, 58.9,
+64.4 at 0.03, 0.15, 0.33, 0.45, 0.5, 0.6, 0.68, 0.77, 0.88, 0.93 s).
+
+**2. The film, held eye, two boots.** The eye sits 26.7 (`hold0`) and 24.9 (`hold1`) units from
+the centre for the whole second (ours' parked scenario: 19 to 22):
+
+| film | pre L | peak L | 0.1 | 0.2 | 0.33 | 0.5 | 0.58 | 0.6 | 0.7 | 0.75 | 0.83 | 0.92 | 1.08 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `hold0` `e` | 101.4 | 229.9 | 0.68 | 0.96 | 1.00 | 0.94 | 0.80 | 0.76 | 0.53 | 0.35 | 0.23 | 0.08 | 0.01 |
+| `hold1` `e` | 103.8 | 229.8 | 0.86 | 0.94 | 1.00 | 0.93 | 0.81 | 0.78 | 0.49 | 0.42 | 0.19 | 0.03 | -0.03 |
+
+So with the eye parked the original **also** stays white to about 0.6 s (`e` 0.76 to 0.78),
+fades through 0.75, and is back at its pre-hit luma by 0.92 to 0.95 s. The two boots agree to
+0.05 at every age but 0.1.
+
+**3. Ours, paired by the eye's place relative to the blast** (`scripts/hd-missile-film-pair.py`,
+Talon's Junction, `--force-missile-hit 289:1`, age `a` is tick `290 + round(60 a)`, the blast at
+`(-121.987, -50.615, -175.324)`; the camera is the film's pushbuffer eye, forward, up and field of
+view with the eye moved to the same offset from ours' blast; a frame with no pushbuffer camera
+borrows the nearest frame's, moved by the player's displacement; the fly-through offsets are
+turned about the vertical onto ours' road direction, +x there; ours renders with motion blur
+off). Excess luma over ours' own backdrop (the same camera at tick 289) and over the film's
+`pre.png`, so the two backdrops do not enter:
+
+| age (s) | 0.1 | 0.2 | 0.33 | 0.5 | 0.58 | 0.6 | 0.7 | 0.75 | 0.83 | 0.92 | 1.08 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| film `hold0` | 88 | 124 | 128 | 121 | 103 | 98 | 68 | 45 | 30 | 10 | 2 |
+| film `hold1` | 109 | 118 | 126 | 117 | 102 | 98 | 62 | 52 | 24 | 4 | -4 |
+| ours as wired (streaks) | 110 | 128 | 134 | 110 | 93 | 87 | 62 | 53 | 45 | 42 | 20 |
+| ours without the streaks | 108 | 125 | 130 | 103 | 83 | 75 | 37 | 23 | 5 | 1 | -2 |
+| ours, streak width halved | | | | | | | | 42 | 28 | 21 | 10 |
+| ours, streaks born wide and bright | | | | | | | | 29 | 9 | 3 | -2 |
+
+and fly-through, `hit0` and `hit2` against ours at each film's own eye path (the streaks add no
+pixel from 0.33 s, so with and without are equal there; `hit0`'s 0.1 s is the one frame, 113 against
+the film's 103):
+
+| age (s) | 0.1 | 0.2 | 0.33 | 0.5 | 0.58 | 0.6 | 0.7 | 0.83 | 0.92 | 1.08 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| film `hit0` | 103 | 130 | 98 | 28 | 20 | 17 | 7 | 2 | 1 | - |
+| ours at `hit0`'s path | 113 | 128 | 102 | 8 | 2 | 0 | 0 | 1 | 1 | - |
+| film `hit2` | 111 | 142 | 100 | 24 | 21 | 17 | 10 | 5 | 2 | 10 |
+| ours at `hit2`'s path | 114 | 135 | 113 | 5 | 3 | 2 | 0 | 0 | 1 | 1 |
+
+**What the film says.** *The film says the original clears to within 0.15 of its pre-hit luma (in `e`) by 0.58 s when
+the player flies through the blast, and by 0.95 s when the eye is held 25 to 27 units away.
+Ours differs by +0.4 to +0.5 in `e` at 0.58 s in its parked scenario (eye 19 to 22 units, against
+a flying original); at the film's own eye path it differs by -15 to -20 luma (ours clears sooner)
+at 0.5 to 0.6 s in flight, and with the streaks by up to +35 luma late (0.83 to 1.08 s) at a held
+eye. The eye's distance explains the first; the streak strip's width explains part of the
+second.*
+
+**Candidates.**
+
+- **Eye distance: ruled in** as the cause of the conflict (confidence 78, "probable": paired on two
+  fly-through films and one held film, each ours render a placed camera over a different
+  backdrop; the original's side is measured, three and two boots at 90). Ours at the film's eye
+  path clears at 0.5 s (excess 5 and 8 against the film's 24 and 28); the film at a held eye stays
+  white as ours does. The earlier comparison set a parked ours against a flying original.
+- **The update rate, 60 Hz: ruled in, not as a rate but as the age's quantum** (90 that the age
+  moves in whole 1/60 s, a runtime observation of 270 steps; 75 that `dt` per `Update` is 1/60 s). Each of 270
+  age steps over the five films (one game frame asked for) is a whole multiple of 1/60 s, 0 to 4 of
+  them, 77 of exactly 1/60 s, so `dt` per `Update` is 1/60 s, not the frame's own variable time. Whether the
+  manager runs `Update` once per 1/60 s frame (rather than twice with 1/120) is not
+  distinguishable from the age alone; the lap clock and the age advance 1 s per second.
+- **The width read as a half-width: ruled in as a contributor, not sufficient** (55, "plausible": ours paired on one held film; the experiments are local
+  switches, not the original's own numbers). At a
+  parked eye, ours as wired is +5, +18, +35 and +21 luma over the mean of the two films at 0.75,
+  0.83, 0.92 and 1.08 s; halving the half-width leaves -7, +1, +14 and +11. In the film's late
+  frames the lines are thin; in ours the strip is a wide white sheet that crosses the frame
+  (`pair_hold0_orig_with_without.png`, middle column). The same experiment with the node's width
+  and alpha running the other way (wide and bright when born, thin and clear at death) matches
+  0.92 s on (3 against 4 to 10) and 1.08 s, and undershoots 0.75 and 0.83 s by 20 and 18. Neither
+  is the answer; the film sits between them.
+- **The strip's `v` side order: not tested.** It changes which edge of the texture each side
+  samples, a thin-line texture's own shape; mean luma cannot see it.
+- **The model alone is too short at a parked eye** (ours without the streaks is 22 to 28 luma
+  under the film's mean at 0.7 to 0.83 s): the film's tail there needs something the model does not
+  give. The streaks are right to exist; their late strength is what is wrong.
+
+**Seen, not measured.** The film's late frames (0.7 to 0.95 s, held) show orange and red
+concentric shockwave rings round the whole frame, stronger than ours', which are pale yellow;
+ours' camera there is also rolled against the film's (the track bank at ours' blast differs).
+Not pursued.
+
+**Caveats.** (1) With the game paused and 2 s given, the
+screenshot is the last frame the game handed over, but its drawn age may be one or two
+`Update`s behind the pool age (the onset reads 109 at pool age 0.033 to 0.05 and 213 at 0.083 to
+0.117 in all five films, while ours at tick 292 is already 179): the film's luma at an age is a
+frame one or two ticks (0.017 to 0.033 s) older. (2) The pushbuffer gave no camera for about a
+third of the frames (the white-out frames, mostly: "no frame-unique value loaded into both
+register 256 and 260"); the borrowed camera is marked in `luma.json` (`camera_source`). (3) Each
+original frame carries RPCS3's "Press and hold the START button to resume" pause overlay, top
+left, the same in every frame. (4) Ours' blast orientation is the struck craft's own (chosen) and
+the track around ours' blast is not the original's: the backdrop is removed by the excess
+metric, not matched. (5) Held-eye: two boots, one geometry (the player's own hit pose); the
+fly-through three boots. Each original number was seen on 2 to 3 boots; ours is deterministic.
+
+**Reproduce.** Restore the state, then `scripts/rpcs3-hd-missile-film.py [--hold-after-hit]
+--out data/reference/hd-capture/missile-hit/<name>`; `scripts/hd-missile-film-pair.py --film
+<dir> --out <ours dir>`; `scripts/hd-missile-film-table.py <dirs>`. The *without*, *half* and
+*wide-when-born* columns come from a local, uncommitted build with these switches (the committed
+engine has none):
+
+```rust
+// crates/raceplay/src/missile_blast.rs, spawn_hd_missile_blast: start no streaks
+if let Some(pool) = self.view.hd_missile_streaks.as_mut()
+    && std::env::var_os("OAG_SCRATCH_NO_STREAKS").is_none() { pool.start(slot, position, orientation); }
+// crates/fx/src/fat_line.rs, Ribbon::advance, after `node.fade = 1.0 - t;`
+if self.spec.width == [0.0, 2.0] {
+    match std::env::var("OAG_SCRATCH_STREAK_MODE").as_deref() {
+        Ok("natural") => { node.half_width = t * (death - birth) + birth; node.fade = t; }
+        Ok("half") => node.half_width *= 0.5,
+        _ => {}
+    }
+}
+```
+
+**2048 / Omega.** Not checkable: the measurement needs the pool age and the blast centre read
+from live memory, and no readout was used for 2048 (Vita) or Omega (shadPS4, which has no
+memory readout). The streaks are wired for HD alone, so nothing here moves them.
+
+**Next.** Not tuned: the law stays as read (confidence 80), and the width and the
+alpha direction stay as the config reads them until a node-level read (`FatLine_PushChains`'s
+`f1` use, `FatLine_Update`'s `t`) explains why the film's lines are thinner than `2 (1 - t)`
+half-widths. Captures that would settle the rest: a held eye in front of the blast (so the streaks
+cross the frame) at ages 0.4 to 1.2 s, and the draw's own `c[464].x` age per frame to remove the
+one-or-two tick caveat.
 
 ## 3. Which node draws which material
 
