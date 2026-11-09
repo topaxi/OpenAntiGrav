@@ -430,6 +430,14 @@ already uses for every other `LoadXML` include. `Grid Selection`'s own copy
 of `Outline_x_y` authors no `FEGlobals->` reference at all, so its colour is
 unaffected by this fix and stays the authored default.
 
+### Pulse PS2: the hex cell textures need the `.mip` to `.pct` rewrite (commit `f1898a640`)
+
+The PS2 pressing drew both grid screens' lock icons with no hex cell shape under them: `hex_filled.mip` and `hex_outline.mip`
+never resolved, because `crates/game/src/campaign.rs` read them with `archives.read_name`, which tries only the PSP-declared name.
+They now go through `oag_pulse::read_image`, which retries the PS2 build's `.mip` to `.pct` rewrite every other Pulse texture load
+already gets. PSP output is unchanged. Nothing else on these two screens has been audited on PS2 beyond the selector position
+(below) and the ticker clip (above).
+
 ## Captures
 
 `--menu-page grid-select` / `--menu-page cell-select`
