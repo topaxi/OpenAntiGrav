@@ -349,9 +349,10 @@ The recipe is the previous section's (`--give mine`, circle at tick 520, frame `
 before and after (`oag-game` built at `main` 6bf65111d and at this change; 480x272, SwiftShader Vulkan: the sandbox hides the GPU ICDs, and
 a before-and-after pair through one software driver is what the comparison needs). The original column is the previous section's: its
 frames and the `race-platinum-white-single-grid.ppst` state are no longer on disk, so the original numbers below are that section's, not
-re-captured. Ours' pose is the section's pose (position, forward, up) with the engine's own `--camera-view close` camera: with the
-camera columns invented from the pose, the control reads 164 and the before off half reads `(204, 232, 225)` against the section's
-`(200, 231, 214)`; with no camera columns it reads `(199, 230, 215)`, so those are the numbers below.
+re-captured. Ours' pose is the section's printed pose (position, forward, up) rebuilt as a one-row `--pose-from` trace (`right_*` columns are the ship's
+left, `up x forward`; speed and velocity zero) with **no camera columns**, so the engine's own `--camera-view close` chase camera draws (the
+original trace's camera row is gone): with a camera invented from the pose, the control reads 164 and the before off half reads
+`(204, 232, 225)` against the section's `(200, 231, 214)`; with no camera columns it reads `(199, 230, 215)`, so those are the numbers below.
 
 | Bar fill luma (Rec. 709) | Original | Ours before | Ours after |
 | --- | --- | --- | --- |
@@ -370,7 +371,8 @@ Read as a player (frames 6, 12, 30 and 36 at 2x over the bar's corner, before th
 comparison is against the previous section's description of them and the numbers above): the off half was a pale mint bar with a
 narrow halo and is now a white bar with a wide soft halo spreading over the panel above and the road under it, the on half's cyan bar
 carries a stronger halo. That is the "white-green bar with a wider halo" the section describes; the on and off halves differ the way the
-original's do. **One more thing this made visible:** the halo is lit by the target as it stands when the stamp runs, so everything the HUD
+original's do. At 1920x1080 the same frame (frame 12) has the same smooth halo, no speckle from the scene seen through the backdrop (the
+bright pass is one bilinear tap per 240x136 lane texel of the presentation-size target, as `fs_bright`'s). **One more thing this made visible:** the halo is lit by the target as it stands when the stamp runs, so everything the HUD
 draws before the stamp (the panel, the road through the backdrop) feeds it, and nothing drawn after does.
 
 **The boost's speed bar**, same change (`talons-boost`, the compare page's boosting pair: the original's `theirs.png`, ours re-rendered
