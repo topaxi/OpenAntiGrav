@@ -14,14 +14,14 @@ built, run or timed**: the scout may not run cargo, and `deck-gpu` owns the Deck
 reasoning shown. A lane that takes an item measures before and after with the command given.
 
 Already written down and not re-reported: the track-solid folds (`slots_present`, the plain-draw pipeline, the
-emissive, light-rig and Zone folds, byte-identical, Deck 8.2 to 7.65 ms HD) in
+emissive, light-rig and Zone folds, byte-identical; on the Deck HD's track solid shaded went 7.13 to 3.46 ms at 1080p and `Scene::render` is 21.6 ms at 4K after them) in
 `docs/rendering/hires-gpu-levers.md`; HD's bloom floor in `docs/rendering/hd-gpu-cost.md`; the half-res blur rung
 in `docs/rendering/motion-blur-half-rung.md`; the `lit_texel` split and the FSR 3 helper fold in
 [wesl-shaders-semantic-errors-point-at-generated-text.md](wesl-shaders-semantic-errors-point-at-generated-text.md)
 (its "828-line" figure is stale: `lit_texel` runs from `shade.wesl:68` to the end of the 1,581-line file).
 Untimed HUD passes and bind-group churn: [render-perf-opportunities-2026-10-19.md](render-perf-opportunities-2026-10-19.md).
 
-**The ranking is by expected Deck milliseconds at 4K, for the race type where the pass runs.** At 1080p and 4K the
+**The ranking is expected Deck milliseconds at 4K, weighted by how often a player is in the mode that runs the pass:** item 1 runs on every frame, item 2 only in a Zone race, so a larger Zone saving still ranks second. The Deck baselines below are the post-fold ones (`hires-gpu-levers.md`, "The Deck's verdict on the 2026-11-04 work": HD track solid shaded 3.46 ms at 1080p and 10.5 ms at 4K, bloom and encode 4.4 ms at 4K), not the earlier span tables. At 1080p and 4K the
 Deck is GPU-bound (`docs/rendering/frame-thread-cpu.md`, "The ceiling on the Deck"), so a fragment-side saving
 shows as frame time; at 800p the frame thread is the limit and these do not move the frame.
 
@@ -53,6 +53,8 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
      quarter of it.
    - Measure: `--presented` with `OAG_RESOLVE_BENCH=60` at `--size 3840x2160` (the "present composite" row of
      the span tables); the number to move is the composite's serialised CPU plus GPU time.
+   - Whether ACO keeps both arms of a uniform-condition `select` is a reading: dump the ISA first
+     (`RADV_DEBUG=shaders`, count `v_log_f32`) and edit only if the `pow` is there.
    - Risk: none to the simulation. Keep the clamp for a source that holds values above 1 (an extended-range
      surface) when the grade is not neutral. Effort: 30 minutes.
 
@@ -69,8 +71,10 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
      comment above `zone_to_eye` in `shade.wesl:860` already measures the nine fetches at "about a fifth of the
      race pass on an integrated GPU".
    - Picture: byte-identical (the same texel is read, only the redundant ones are dropped).
-   - Win (estimate): six of nine fetches gone, so about 13 % of the race pass in a Zone race, 1 to 3 ms at
-     native 4K on the Deck HD, 0.3 to 0.8 ms at 1080p. Zero in Time Trial, which is what `bench-render` runs.
+   - Win (estimate): six of nine fetches gone, so about 13 % of a Zone race's track pass if the nine are "a fifth"
+     of it, on a base that is at least the post-fold 10.5 ms at 4K and 3.46 ms at 1080p: 1 to 2 ms at native 4K
+     on the Deck HD, 0.3 to 0.5 ms at 1080p. The fifth was read on an iGPU before the folds, so the Deck share
+     is unmeasured. Zero in Time Trial, which is what `bench-render` runs.
    - Measure: the two `--mode zone` races the fold lane used (HD and Pulse, tick 2,400), same span command as
      above; `RADV_DEBUG=shaderstats` for `image_sample` count and VGPRs; `cmp` against the binary before.
    - Risk: naga's and Tint's uniformity analysis on the new branch (use the same `@diagnostic(off,
@@ -108,32 +112,15 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
      in every pipeline that keeps bit 131072: six `pow` for a constant 0.
      (d) `normalize(scene.fog.camera - in.world)` is written three times (452, 878, 904) and fog takes
      `length(world - camera)` again.
-   - Win (estimate): 0 to 3 % of the track pass, 0 to 0.8 ms at 4K HD on the Deck; zero if the compiler already
-     folds them. The previous folds read as -20 to -50 %, so some of this was never folded by hand-written
+   - Win (estimate): 0 to 3 % of the track pass, 0 to 0.3 ms at 4K HD on the Deck (10.5 ms base); zero if the
+     compiler already folds them. The previous folds read as -20 to -50 %, so some of this was never folded by hand-written
      `select`s; that is why it is worth ten minutes of ISA before any edit.
    - Measure: `RADV_DEBUG=shaders` on the HD plain pipeline, count `image_sample` (expect albedo, lightmap atlas,
      and the shadow-free path only) and `v_log_f32` (each `pow` is one). Then edit and re-count.
    - Picture: byte-identical for (a), (c), (d); (b) is a pure guard. Risk: derivative uniformity on the new
      guards, as item 2. Effort: 1 to 3 hours including the ISA.
 
-5. **HD's bloom blur takes nine taps where five bilinear taps give the same filter.**
-   `crates/post/shaders/hd_bloom.wesl:265` to `:285` (`fs_blur`, weights `0.1 0.2 0.5 0.8 1.0 0.8 0.5 0.2 0.1`
-   over 4.2).
-   - What: merge each adjacent pair of taps into one bilinear fetch at the weighted centre: offsets +-3.333 and
-     +-1.385 texels with weights 0.3 and 1.3, plus the centre with 1.0. `omega_bloom.wesl:34` to `:48` already
-     does exactly this (offsets `1.3846154 3.2307692 5.0769229`). Nine fetches become five per pass, two passes
-     per bloom.
-   - How often: per pixel of the quarter-resolution ladder, two passes a frame, HD and Omega-style HD chain only.
-   - **The picture changes.** Interior pixels agree to the sampler's weight precision (8 bits of the fractional
-     weight, about 1/256 of a tap), the drawn-rectangle clamp acts on a merged coordinate instead of on each
-     texel, and the 8-bit source rounds differently. `hires-gpu-levers.md` holds HD's bloom "to exactness", so
-     this needs the maintainer's ACK and must be reported as a change, not an optimisation.
-   - Win (estimate): HD bloom is 0.94 ms at 1080p and 2.98 ms at 4K on the Deck, the blur a part of it that has no
-     span of its own; 9 to 5 taps on two passes saves 0.1 to 0.3 ms at 4K.
-   - Measure: HD `OAG_RENDER_GPU_BENCH` bloom span at 4K, then `cmp` and an rmse of the two frames.
-   - Effort: 1 hour plus the ACK.
-
-6. **Fog computes both curves for every fragment.** `crates/mesh/shaders/fog.wesl:6` and `:13` to `:14`
+5. **Fog computes both curves for every fragment.** `crates/mesh/shaders/fog.wesl:6` and `:13` to `:14`
    (`fogged`).
    - What: `length(world - camera)` (a square root) and `exp(-s * s)` both run, then `mix(linear, authored,
      scene.fog.curve)` keeps one. `curve` is a uniform that `uniforms.rs:305` documents as 1.0 for HD's curve and
@@ -142,11 +129,28 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
    - How often: per fragment of every opaque, blended and cutout draw, on every title.
    - Picture: byte-identical when `curve` is 0 or 1 (`mix` with an exact 0 or 1 returns an operand).
    - Win (estimate): one sqrt (HD) or one exp (the rest), about 6 to 10 of a 1,400 to 3,900 instruction shader:
-     0.2 to 0.5 %, under 0.15 ms at 4K. Small and safe; do it with item 4.
+     0.2 to 0.5 % of a 10.5 ms pass, under 0.05 ms at 4K. Small and safe; do it with item 4.
    - Measure: the track solid span, 3 processes interleaved. It may not resolve; the `shaderstats` count will.
    - Effort: 30 minutes.
 
 ### Later
+
+6. **HD's bloom blur takes nine taps; five bilinear taps would match only if the authored spacing is one texel.**
+   `crates/post/shaders/hd_bloom.wesl:265` to `:285` (`fs_blur`, weights `0.1 0.2 0.5 0.8 1.0 0.8 0.5 0.2 0.1`
+   over 4.2).
+   - What: merging each adjacent pair of taps into one bilinear fetch at the weighted centre (offsets +-3.333 and
+     +-1.385 texels, weights 0.3 and 1.3, centre 1.0) is exact only when `step` is one texel. HD's `step` is
+     `Bloom vertical/horizontal size` over the quarter buffer (`hd_bloom.rs:815` to `:821`), an **authored value**
+     (`tables/src/envsettings.rs:276`); `hd_bloom/tests.rs` uses both 1.0 and 4.0. At 4.0 the taps are four texels
+     apart and a bilinear footprint cannot stand in for two of them, so the merge is a different filter. **Read
+     every circuit's authored size first** (the `.envsettings` census); drop the item if any is not 1.0.
+     `omega_bloom.wesl:34` to `:48` merges because its step is `step.texel`.
+   - If all are 1.0: nine fetches become five per pass, two passes. The picture still changes at rounding (8-bit
+     weight precision, the drawn-rectangle clamp acting on a merged coordinate), and `hires-gpu-levers.md` holds
+     HD's bloom "to exactness", so it needs the maintainer's ACK and is reported as a change.
+   - Win (estimate): bloom and encode is 4.4 ms at 4K on the Deck after the folds, the blur a part of it with no
+     span of its own: 0.1 to 0.3 ms.
+   - Measure: HD bloom span at 4K, `cmp` and an rmse of the two frames. Effort: 1 hour plus the census and the ACK.
 
 7. **Particle sprites compute the procedural blob too.** `crates/fx/shaders/psys.wesl:126` to `:138` (`fs_main`).
    `procedural` (a `length`, a `pow(shape, 1.2)`) and the sheet fetch both run, then `select(procedural, sprite,
@@ -165,17 +169,18 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 9. **The vertex stage does fixed work for every vertex.** `crates/mesh/shaders/mesh.wesl:55` to `:60` builds a
    cofactor matrix (three cross products and a dot) and `spu_light.wesl:26` loops over every scene light, up to
    128, with a `length` and a divide each, for every vertex of every draw; the comment at `spu_light.wesl:16` says
-   the per-chunk cull is not done. On HD at 800p the Deck's track solid span is 4.62 ms against 8.22 at 1080p and
-   26.3 at 4K: a straight line through the three points leaves about 1.6 ms that does not scale with pixels, which
-   is vertex, setup and draw cost. The light loop's share of it is **unknown**. Two options: a pipeline `override`
+   the per-chunk cull is not done. On the Deck after the folds HD's track solid shaded is 3.46 ms at 1080p and 10.5 ms at 4K (no 800p row
+   exists after the folds): a line through those two points leaves about 1.1 ms that does not scale with pixels,
+   good to perhaps 0.5 ms because the Deck's 4K rows move 15 % with the clock, and that is vertex, setup and draw
+   cost. The light loop's share of it is **unknown**. Two options: a pipeline `override`
    `moving` that skips the cofactor for static geometry (node slot 0), and a per-draw light list on the CPU (the
    original's `LightCulling`; the sum is the same, as the comment states). Measure first: set
-   `scene.spu_lights.count` to 0 in a diagnostic run and read the 800p track span on the Deck. Estimate 0 to 0.8
+   `scene.spu_lights.count` to 0 in a diagnostic run and read the 800p track span on the Deck. Estimate 0 to 0.6
    ms flat across sizes, so it helps 800p and 1080p more than 4K. Effort: the override 1 hour, the CPU list 4
    hours and Rust.
 
 10. **Opt-in passes with cheap tap or trig savings.** `omega_bloom.wesl:51` to `:59` (`fs_down`: eleven taps from
-    six weights, mergeable to six bilinear taps; picture changes at rounding, same ACK as item 5).
+    six weights, mergeable to six bilinear taps; picture changes at rounding, same census and ACK as item 6).
     `photo_fx.wesl:80` to `:81` computes `cos(a)`, `sin(a)` and `sqrt(t)` per tap per pixel from the loop index
     alone; a `const` table of the unit-disc offsets removes them (the `round()` of the offset can differ in
     a rare tie, so `cmp`). `motion_blur.wesl` (`gather`, line 308 onward) divides by `constants.inv_size` and
@@ -215,8 +220,10 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 
 ## Checked, no finding
 
-- **Every entry point is loaded.** All 146 `@vertex`/`@fragment`/`@compute` names (minus the 32 `vs_main` and 23
-  `fs_main`, which share a name by convention) appear as a string literal in Rust. No dead entry point.
+- **Every entry point is loaded.** Each of the 146 `@vertex`/`@fragment`/`@compute` names appears as a string literal
+  in a `.rs` file of its own crate. Names shared by several files of one crate (`fs_copy`, `fs_blur`, `fs_composite`,
+  `fs_stamp`, `fs_gate`) are satisfied by any of them, so a dead copy of those would not show; no dead
+  uniquely-named entry point.
 - **The depth prepass pays no fragment cost.** `fs_depth_only` writes a constant; its unused varyings are linked
   out.
 - **`shadowed` is skipped where it should be**: `receives_shadow` is an `override`, and the track's pipelines
@@ -225,15 +232,15 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 - **Duplicated `fs_blur`, `fs_copy`, `fs_composite` names** are separate passes with separate bindings, not
   copies. `drawn()` (`hd_bloom`, `hd_zoom`, `omega_tonemap`) is one line over three different `Constants`
   structs; sharing it needs the fields passed as arguments and gains nothing.
-- **f16.** No shader here would gain from f16 that the Deck's RADV does not already narrow, and the web path
-  (Tint) needs `shader-f16` per device. Not recommended.
+- **f16: not assessed.** It needs `enable f16`, wgpu's `SHADER_F16` feature and `shader-f16` on the web, and it risks the
+  exactness the lit paths are held to; no shader here was judged for it.
 
 ## Next Steps
 
-1. Item 1 and item 6 as one 1-hour change in `present` and `mesh`, `cmp` before and after, quote the 4K
+1. Item 1 and item 5 as one 1-hour change in `present` and `mesh`, `cmp` before and after, quote the 4K
    composite span (`OAG_RESOLVE_BENCH=60 --presented`) on the host and, when the Deck is free, on it.
 2. Item 2 (Zone fetches) with the two Zone races, then item 3 (HUD fetches) after a span for the HUD exists.
 3. Item 4: dump the ISA of the HD plain pipeline with `RADV_DEBUG=shaders` first; edit only what it shows.
-4. Ask the maintainer about item 5 (bloom blur taps change the picture at rounding) before any edit.
+4. Item 6 only after the `.envsettings` census shows every authored bloom size is 1.0, and the maintainer agrees.
 5. Maintenance 11 to 14 as one docs-and-comments lane; run `oag-shader-check` (the build), `just check-docs` and
    the comment-history ratchet.
