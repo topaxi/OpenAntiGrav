@@ -1,40 +1,44 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-09
-summary: "HD wingtip locators run two smoke ribbons while a speed pad or turbo acts; trigger read, ribbon push law unread, ours draws none"
+summary: "HD wingtip vortices read and measured live (pad trigger, drift, opacity, colour, blend, texture); ours draws none"
 ---
 
-# HD's wingtip vortices: recovered trigger and data, no ribbon drawn
+# HD's wingtip vortices: recovered and measured, not drawn
 
-Found 2026-11-09 (lane `hd-nose-glow-control`) while checking whether the original's white nose glow is its own effect
-(it is not). A player reports white contrails at the Zone ship's wing tips; this is them, probably. Evidence:
-[`wingtip-vortices.md`](../../docs/ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md) (the update, read in full, and
-the live node fields) and [`hd-wingtip-contrails.md`](../../docs/rendering/hd-wingtip-contrails.md) (frames: six with the
-speed-pad state up show a thin pale streak from each wing tip, six without show none).
+Evidence: [`wingtip-vortices.md`](../../docs/ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md) (the update, the
+`VortexLine` push, update, opacity, config, colour, blend; live reads) and
+[`hd-wingtip-contrails.md`](../../docs/rendering/hd-wingtip-contrails.md) (frames and the live trigger runs).
 
 ## Open
 
-- **Data and trigger, named.**
-  - Two `wingtip_left`/`wingtip_right` locators (class `0x3ec`) on every hull's `Locators.vex`; the same in 2048 and
-    Omega at the same coordinates; Pulse has none.
-  - `ShipWingtipVortices_Update` (`0x002db130`) refills a 1.3 s timer while `craft-entry+0x2e8` (the speed pad's
-    remaining force time) is above zero or Turbo flag `0x20`/`0x40` is set. It lays a ribbon of pool `+0x74`
-    (`smoke_trails_frame1_ALPHA`: widths `0.05` to `1.5`, life `0.7` s, three chains, 100 nodes, helix radius `0.8`)
-    with a strength of the timer's fraction times a speed ramp (zero below 50 units/s, `0.3` from 100).
-- **Unread, and the reason this is not ready to wire:** what `0x002ac208` (the push) and the pool's element class
-  `0x002ac070` do with the strength and the side byte (`node+0xe8`, `1` on the left node), and the helix handedness.
-  Read recipe: disassemble both with capstone over `EBOOT.elf` (`scripts/ps3-toc.py` resolves the TOC; the `FatLine`
-  base is read in `missile-ribbon.md` and implemented as `crates/fx/src/fat_line.rs`), then confirm live: the node's
-  `+0xe0` handle is the pool element, its fields move with the timer.
-- **Not shown:** a natural speed-pad or Turbo crossing (the field was forced); the Zone ship's pair; the same update on
-  Omega (find it from the importer string `ShipWingtipVortices_Importer.cpp` in `eboot.bin`, search key the constants
-  `50`, `100`, `0.3`, `0.006`, `1.3`) and on 2048 (encrypted `eboot.bin`).
-- **Ours** draws none of it: no `wingtip` locator is read (`oag_vex::vex::class_names` names it, nothing consumes it).
+- **Ours draws none of it**: no `wingtip` locator is read (`oag_vex::vex::class_names` names it, nothing consumes it).
+- **Turbo half is code-only (80)**: no craft held a Turbo in the live runs; flag `0x40` is unnamed.
+- **The Zone picture** is not isolated: the Zone ship's nodes run the effect on pads (live, 75), but no frame separates
+  the streaks from wall-scrape sparks.
+- **2048 and Omega**: the ribbon's config ships in both (2048 byte for byte; Omega colour and floats, other layout);
+  their update and push are not read (2048: importer string; Omega: `FUN_016fb470`).
 
 ## Next Steps
 
-1. RE lane: read `0x002ac208` and `0x002ac070`, name them, finish the law (an hour or two with the Missile's `FatLine`
-   page open).
-2. Measure lane: a Time Trial pad crossing on Talon's Junction and a Zone run over a pad, frames at 0.1 s steps from the
-   crossing, ours rendered at the same pose; then wire the two ribbons on the craft's wingtip locators.
+1. **Wire lane (HD), the exact wire**, everything below measured unless marked:
+   - Per craft, the two `wingtip_left`/`wingtip_right` locators of the hull's `Locators.vex` (class `0x3ec`); left is
+     side `1` (`+phase`), right side `0` (`-phase`).
+   - Per locator a 1.3 s timer: refilled to `1.3` every tick the craft's speed-pad force time is above zero (ours: the
+     pad force window; or the Turbo flag, code-only), not while the craft state is 4, 5 or 6; counts down by `dt`.
+   - While the timer is above zero, every tick: strength `= ramp(forward speed) * timer / 1.3`, ramp `0` below 50,
+     `(v - 50) * 0.006` to 100, `0.3` from 100 (units/s); push 3 nodes at the locator's world position, each with life
+     `0.7` s, width `0.05` growing linearly to `1.5` at death, and a constant drift velocity
+     `-2.5 * normalize(cos(th) * row1 + sin(th) * (row2 x row1))`, `th = s * phase + i * pi/3`, `s = +1` left, `-1`
+     right, rows the locator's world basis as stored (they carry the craft's 0.75 scale; `row2` the forward axis);
+     then `phase += 0.18` (`0.06` per chain). Phase starts at `0` when the ribbon is taken; the ribbon is dropped when
+     the timer runs out and its nodes live out their 0.7 s.
+   - Draw: `oag_fx::fat_line`'s camera-facing two-sided strip, one strip per chain, texture
+     `/data/tex/smoke_trails_frame1_alpha.gtf` (`DATA02.PSARC`, not the `ribboneffects/textures/` copy),
+     `u = arc length * 0.025`, colour `(1, 1, 1)` times the texture, alpha `= tex.a * t * strength` with
+     `t = life / 0.7` and the strength the **current** one (whole ribbon), the two end nodes and the two second-from-end
+     nodes of each chain at alpha 0, blend `SRC_ALPHA, ONE_MINUS_SRC_ALPHA`.
+   - A pool of 18 ribbons (two per craft).
+   - Test: a fixture that drops the 2.5 drift, the side mirror or the `t * strength` opacity fails.
+2. RE lane (later): the Turbo half live (give a craft the Turbo, poll `+0xe4`), and 2048's and Omega's update.

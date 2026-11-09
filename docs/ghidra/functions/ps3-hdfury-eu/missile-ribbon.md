@@ -145,6 +145,10 @@ channels would do) bloomed the ribbons white where the original's are red; the
 pair's table below carries both. The tint `c[209]` comes from a global vector the
 builder's bind function `0x002ec748` negates (`-[g + 0x70]`); its value was **not
 read**. Against the film it is white or near it (the texture is red already).
+**Corrected 2026-11-09** ([wingtip-vortices.md](wingtip-vortices.md), "The colour"): the
+negated global is `vCameraPos` (`c[210]`); `c[209]` is `vBaseColour`, the config's first
+16 bytes, which a static initializer writes at boot: `(1, 0.2, 0, 1)` for pool `+0x50`
+and `(1, 0.2, 0.1, 1)` for `+0x68`. Confidence 85.
 
 ## Named here
 
