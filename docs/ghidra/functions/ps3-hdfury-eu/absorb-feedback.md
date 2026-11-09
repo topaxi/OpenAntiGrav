@@ -280,6 +280,13 @@ is a horizontal blue band and its alpha is cloud noise, so the picture is a
 blue band sweeping over the shell, broken up by the noise. Confidence **90**
 for the program, which is read instruction by instruction.
 
+### The shell's draw, live (2026-11-09, `hd-absorb-tint-2`)
+
+A paused RSX frame 0.5 s into an absorb on Talon's Junction holds 14 draws of this program's fogged variant (the listing above with the fog lerp and `MAD /2 H0.xyz`),
+blend `SrcAlpha`/`One`, none of them in the control frame. Unit 0 of all 14 reads `SET_TEXTURE_ADDRESS` `0x60710101` (gamma nibble 7), format `0x00098829`
+(256 x 256, DXT4/5, 9 mips: `hd_absorbinternal.gtf`'s own header). Confidence 85, one boot; the draws sum to 20,076 indices, not the 38,931 that 12,977 triangles
+would give. Numbers and the pair that followed: `docs/rendering/weapon-absorb-pairs.md`, "HD: the shell's unit 0 reads gamma nibble 7".
+
 ### The fogged blocks close on `/2` (2026-11-09, `absorb-fx-wire`)
 
 The listing above is block #1 only. Re-run with the scale field printed (`scripts/ps3-microcode.py fp-file hd_absorbinternal.rcsmaterial`),
