@@ -250,9 +250,8 @@ At 1.0 s the shell is alone (the burst is gone): ours drops from 2.3 times the o
 the texture tap and its transfer are the lead). The first page's "2.7 times" was this factor over a different hull.
 
 **The burst on HD is about twice too strong, not half as strong.** At 0.3 s to 0.75 s ours is +11.8 to +15.9 against the original's
-+6.9 to +8.3 although the shell is now right, and the shell is about +4 of that. `renderer.md` item 4 already says particles and
-effects (draws 444 to 522) end on `/2` and `oag-fx` does not apply it: the burst is `psys`, held by another lane, so this is the
-number for it, not a fix.
++6.9 to +8.3 although the shell is now right, and the shell is about +4 of that. This page first read `renderer.md` item 4 as "particles end on `/2`"; `hd-absorb-burst-half` found that
+reading false (the section "HD burst and shell tint" below), so the factor is not a `/2`.
 
 ### Pulse: the energy bar (not re-measured)
 
@@ -267,6 +266,42 @@ The shell fix is **not checkable** there: neither title draws a shell (their eff
 censused for an `AbsorbEffect` model, and their shader programs are Vita GXP and PS4 bytecode, which `ps3-microcode.py` (RSX scale
 fields) does not read, so whether their shell closes on a `/2` is unknown. The Pure overlay is **not checkable** there (Pure is not their
 lineage). The unpaired reasons above stand.
+
+## HD burst and shell tint: the `/2` does not apply to particles (`hd-absorb-burst-half`, 2026-11-09)
+
+Claim tried: HD's particle draws close on the programs' `/2`, so the absorb burst falls into the original's range and the shell
+tint moves toward blue. **False as stated; no code changed.**
+
+1. **HD's `psys_*` fragment programs carry no `/2`.** `scripts/ps3-microcode.py fp` on the five particle blocks of the EBOOT
+   (`0x00927a80`, `0x00927a00`, `0x00927f00`, `0x00927c00`, `0x00927b00`) prints `MUL H0, f[COL0], R0` or `MOV H0, f[COL0]`, no
+   scale (the same disassembler prints `/2` on the shell's fogged blocks). `renderer.md` item 4 is corrected. Confidence 90 for the
+   program text.
+2. **The burst's own `kColourScale` is 1.0.** `WO_WEAPON_ABSORB` has two emitters, render mode 5 (blend 2, 32 live) and mode 2
+   (blend 2, 10 live), and the word at `+0xc84` reads `1.0` on both, raw, whatever the mode. Pinned by
+   `pob_ground_truth::hd_absorb_burst_authors_a_unit_colour_scale_on_both_emitters`. So `psys_normal_vp`'s multiply (`c467`) cannot
+   halve the burst if the PPU writes the emitter's word, which is itself unread for HD (inherited from Omega, `engine-trail.md`).
+   Side finding: the word is not a mode-5 field. `WO_MISSILE_EXPLO`'s mode-2 emitter reads `0.5`; `WO_ROCKET_EXPLO_TRACK`'s mode-2
+   emitters read `0.6`, `0.8`, `0.2` and `1.0`; `oag_pob::Emitter::colour_scale` reads it for mode 5 only. If `c467` follows the word on
+   every mode, the missile blast's overbright streak strip is a candidate lead; not tested.
+3. **The two original captures disagree about the burst.** The first capture (this page's first HD table) reads the original at
+   +13.2 / +21.4 / +20.2 at 0.3 / 0.5 / 0.75 s; the second (the `absorb-fx-wire` table) reads +6.9 / +7.7 / +8.3. Same state, same
+   boxes. The "twice too strong" reading rests on the second alone, whose frames are no longer on disk; against the first, ours before
+   the shell fix (+24.4 at 0.5 s) was close. Which is representative is not settled: it needs a fresh original capture (three absorbs
+   and a control on one boot) before any burst gain is tuned.
+4. **The first capture's frames do not frame the craft like ours.** Re-rendered with `hd-weapon-pair.py --team feisar_c1 --extra
+   --variant concept1` on that capture's poses and cameras, ours draws the craft about twice the original's size, so a craft-box score
+   compares different pixels. No number was taken from them.
+5. **Shell tint: the lead is the unit's gamma nibble, unread.** The flame and the bomb-blast fireball read their colour tap with
+   gamma nibble 7 on unit 0 (RGB decoded on fetch, the packer encoding the output): `enc(dec(t) * k / 2)` (`engine-trail.md`, "The
+   flame's colour tap is decoded on fetch"; `hd-unlit-programs.md`, the bomb-blast table, where one unit of four read 0). Ours reads the
+   shell tap raw (`texture * 0.5`). Whether `hd_absorbinternal`'s unit 0 carries 7 is the open value. Read recipe:
+   `scripts/rpcs3-hd-absorb-film.py` with the pushbuffer hook, then `scripts/rsx-draw-list.py DIR NAME --samplers` on the shell's draw
+   (blend `SrcAlpha`/`One`, the absorbeffect mesh): bits 20-23 of `SET_TEXTURE_ADDRESS` on unit 0. If it is 7 the shell is
+   `enc(dec(t) * 0.5)`, 1.46 times ours at a mid texel and bluer by that factor (blue minus red +6.7 to about +9.8 against the
+   original's +10.8); its luma at 1.0 s (+5.8, equal now) would need a re-pair. Not changed: the fix would move a number the page
+   already matches, on an unread value.
+6. **2048 and Omega: not checkable.** Their particle programs are Vita GXP and PS4 bytecode; whether they close on a scale is not
+   read, and neither draws the shell.
 
 ## 2048 and Omega
 
