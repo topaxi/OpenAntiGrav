@@ -668,3 +668,22 @@ fn a_difficulty_neither_driver_knows_is_refused_by_name() {
     assert!(err.contains("mod m campaign ladder"), "{err}");
     assert!(err.contains("brutal") && err.contains("novice"), "{err}");
 }
+
+#[test]
+fn the_example_starts_its_opponents_at_medium_and_a_cells_own_rung_wins() {
+    needs_examples!();
+    let custom = example();
+    let cells: Vec<&Cell> = custom.grids.iter().flat_map(|grid| &grid.cells).collect();
+    let rung = |cell: &Cell| custom.event(&cell.name).unwrap().level;
+    // Warm-up is the first event listed and names no field: the campaign's base, medium.
+    assert_eq!(rung(cells[0]), Some(1));
+    // Clean Race is the sixth listed, ramped to medium too, and names `hard` itself.
+    assert_eq!(custom.event("grid0_4_1").unwrap().level, Some(2));
+    // Every other event flown by the original driver follows the ramp: medium or above.
+    for cell in cells
+        .iter()
+        .filter(|cell| custom.event(&cell.name).unwrap().ai == Ai::Original)
+    {
+        assert!(rung(cell) >= Some(1), "{}: {:?}", cell.name, rung(cell));
+    }
+}
