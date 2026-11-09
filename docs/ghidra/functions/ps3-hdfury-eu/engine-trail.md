@@ -1054,6 +1054,60 @@ white-core, faint-purple picture, **not yet checked against ours**:
 The scattered placement (positions, drag, carried velocity) is the
 simulation's, and nothing here changes it.
 
+### The wire, and the pair re-shot (2026-11-09, `hd-trail-hit-wire`)
+
+**Wired.** `StreakDraw::FarBar { aspect }` (`crates/fx/src/psys/streak.rs`): Pulse's pool bar with
+both ends on the **farther** view depth. `Effect::without_pulse_psp_draw_but_far_bars` keeps an
+emitter's class 6 as it where a title lists the effect (`oag_title::Effects::far_bars`,
+`WO_TRAIL_HITSHIP` and `_RED` on HD, 2048, Omega, and on the lent burst); class 7 stays procedural.
+Pulse's `Bar` keeps the mean. With no sprite placed (HD's own burst: its list does not name the
+effect's sprites, and the texture the original binds, `record+0xca4`, is unread) the corners are the
+bar's and the shading is the procedural profile, **chosen, not measured**, standing in for that
+texture alone. Tests: `psys::tests::hd_class_6_bar_is_built_at_the_farther_depth_with_no_sprite`
+and four siblings in `oag-fx`; `the_trail_hit_burst_loads_as_far_bars_when_listed_and_procedural_when_not`
+(disc-backed) in `oag-raceplay`.
+
+**The two colour terms, checked against ours.**
+
+| term | ours before | now |
+| --- | --- | --- |
+| `psys_normal_vp`'s `pow(rgb, 2.2)` | **already applied**: `psys.wesl` decodes the authored colour with `gamma_to_target` (the 2.2 power) on HD's linear scene and `target_out` re-encodes it for the encoded store, the original's decode and sRGB pack pair (`hd-track-tone.md`, "HD's blends combine encoded values") | unchanged; adding it again would square it |
+| `kColourScale` (`emitter+0xc84`) | not applied (`oag_pob::Emitter::distort_strength` reads the word for blend class 8 only) | `oag_pob::Emitter::colour_scale` reads it on class 6 (0.7 on emitter 0, 1.0 on `CORE_IMPACT`, parsed off DATA02), applied as `colour * scale^(1/2.2)` (the same product through the 2.2 decode) to a `FarBar` only. **Inherited from Omega** (`Particle_PushQuadBatch`); HD's own reader of the word is unread |
+
+**The pair, re-shot.** Six usable pairs of `hd-trail-hit-fidelity` (00, 04, 05, 06, 11, 12), ours
+rendered at the same fired shifts and field with the binary before the wire, after the bar, and
+after the bar and the scale. The `before` frames reproduce the previous pass's byte for byte.
+Metric stated before reading a frame: a 300 px box on the player's projected nose, ours burst-on
+minus burst-off (the original's burst is not separable by threshold, above), summed positive
+luminance difference ("energy"):
+
+| pair | before | bar | bar + scale |
+| --- | --- | --- | --- |
+| 00 | 1,082,159 | 1,127,370 | 995,361 |
+| 04 | 869,156 | 875,878 | 786,110 |
+| 05 | 475,970 | 489,044 | 432,547 |
+| 06 | 471,432 | 522,350 | 465,546 |
+| 11 | 2,404,385 | 2,451,838 | 2,300,666 |
+| 12 | 586,166 | 589,522 | 513,161 |
+
+The bar moves the energy by +0.6 to +10.8 %, the scale takes 5 to 15 % off it, and the radius
+holding 90 % of it (150 to 170 px, the box's edge) does not move on any pair.
+
+**Read as a player, on pairs 04, 06 and 11: no difference.** Ours still draws the lilac blobs
+beside and below the hull and the white glow on the nozzle; the original shows one compact white
+glow on the nose and none of the lilac. **The claim is false for HD's pair.** The cause is not the
+bar's geometry: emitter 0's aspect is 1.0 and `half` is the bar's `size`, so its bar is nearly the
+procedural quad's footprint. What is left is the unread texture (a hard-edged bar sampling it
+against our soft procedural profile), and the placement, which is the simulation's
+(positions, drag, carried velocity). The HD-length-trail item stays blocked.
+
+**2048 and Omega: the draw does change.** Both load both emitters' own sprites (2 read each) and
+the bar now samples them: with `graphics.trail_hits` on and `--trail-sparks`, the soft lilac haze
+beside a stationary hull becomes small blue specks. Neither original fires the burst, so there is no
+original frame to compare. **Pulse and Pure** with the setting on draw the lent burst (HD's
+effect, no sprite) as the bar with the procedural shading: a purple glow at the nozzle, seen on
+both.
+
 ### Names applied (`hd-trail-hit-draw`)
 
 | Address | Name | Confidence |
@@ -1070,8 +1124,10 @@ simulation's, and nothing here changes it.
 ### Cross-title
 
 - **Omega: ported** in the original's own code: the same mode-5 law on the CPU
-  (`Particle_PushBatchByMode`), above. Ours has no HD-specific draw yet.
-- **2048: open.** 2048 ships `psys_normal_vp/fp` and `psys_simplegeom_vp/fp`
+  (`Particle_PushBatchByMode`), above. Ours draws it for the listed burst (the wire section above).
+- **2048: checked, applies, wired as inherited; its own executable still unread.** The burst's draw
+  is HD's law applied to 2048's own `WO_TRAIL_HITSHIP` (sprites read, bar samples them; its
+  `+0xc84` values were not censused). 2048 ships `psys_normal_vp/fp` and `psys_simplegeom_vp/fp`
   only (strings at `0x814d34ac`-`0x814d34e0`). Start from the xrefs to
   `psys_normal_vp` (`0x814d34ac`), then the renderer, then its `switch` on
   `+0xb8`. Omega reads through 2048's lineage, so its pusher should have
