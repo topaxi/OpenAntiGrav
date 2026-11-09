@@ -142,11 +142,15 @@ above zero and the craft is racing, strength `ramp(speed) * timer / 1.3`, a pool
   off the world so a locator with no name (Pulse's, Pure's) mirrors the same way.
 - **Frames** (Talon's Junction, Venom, the autopilot's first pad crossing, the pad force time `0.25 s`, the crossing
   at tick 525 on HD and 523 on Pulse; 1280x720). An A/B of the same tick with the contrails left out
-  (`race.wingtip_vertices` returning nothing) changes 11,700 pixels at tick 535, 10,400 at 550 and 4,700 at 565 on HD, all in a band from the two wing tips toward the camera (a diff of the two frames, times 8, is two thin straight
+  (a local, uncommitted patch that made `race.wingtip_vertices` return nothing; the Pulse and Pure pairs below toggle the setting instead) changes 11,700 pixels at tick 535, 10,400 at 550 and 4,700 at 565 on HD, all in a band from the two wing tips toward the camera (a diff of the two frames, times 8, is two thin straight
   streaks from the wing tips, widening toward the bottom of the frame). Read at full size and as a crop the streaks are
   thin and pale, at most `0.3` opaque over a blue road, which is what the original's frames read as ("two thin pale
   streaks, one from each wing tip, running back toward the camera", the A/B above). That is the same description, not
-  a matched pair: no RPCS3 frame at our tick and pose was taken for the metric on a wing-tip box.
+  a matched pair: no RPCS3 frame at our tick and pose was taken for the metric on a wing-tip box. The original's own
+  natural-crossing frames (the stage-1 poller's timer-refill grabs on the same circuit and class, two of the four read at
+  full size and as crops) show no streak readable at the wing tips either, which fits the ribbon being born `0.05` wide at
+  most `0.3` opaque: at the moment of the crossing neither side's picture reads at 1:1, so the match on screen is **unknown**,
+  not shown.
 - **Cold-run check.** HD, 2048 and Omega each load the ribbon and 8 of 8 craft carry both locators; a pad force time on
   slot 0 takes exactly two pool elements and releasing it frees them within the timer's 1.3 s and a node's 0.7 s
   (`crates/raceplay/tests/hd_wingtip_ground_truth.rs`).

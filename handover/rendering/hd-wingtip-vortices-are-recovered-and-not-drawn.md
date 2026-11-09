@@ -20,7 +20,8 @@ lineage (labelled), Pulse and Pure behind `graphics.wingtip_contrails` (off by d
 
 ## Open
 
-- **No matched pair against the original.** Our frames were read against the original's description
+- **No matched pair against the original** (the on-screen match is unknown; the original's natural-crossing frames show no
+  readable streak either). Our frames were read against the original's description
   (two thin pale streaks from the wing tips running back toward the camera) and against ours with the contrails left out;
   no RPCS3 frame at our pose with a metric on a wing-tip box was taken (`scripts/rpcs3-hd-wingtip-poll.py` finds the nodes;
   the pad force time forced as in the doc's A/B).
