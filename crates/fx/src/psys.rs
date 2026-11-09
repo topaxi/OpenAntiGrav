@@ -307,6 +307,10 @@ pub struct EmitterSpec {
     pub blend: Blend,
     /// A [`Blend::Distort`] emitter's strength, [`pob::Emitter::distort_strength`].
     pub distort_strength: f32,
+    /// A class 6 emitter's `kColourScale`, [`pob::Emitter::colour_scale`]; applied only to a
+    /// [`StreakDraw::FarBar`], whose effect a title lists
+    /// (`oag_title::Effects::far_bars`).
+    pub colour_scale: f32,
     /// A system attached to each particle this emitter spawns, as an index
     /// into [`Effect::emitters`].
     pub particle_child: Option<usize>,
@@ -576,6 +580,7 @@ impl EmitterSpec {
             streak: StreakDraw::of(record.draw_class(), record.aspect),
             blend,
             distort_strength: record.distort_strength,
+            colour_scale: record.colour_scale,
             particle_child: record.particle_child,
             death_child: record.death_child,
             spawn_probability: record.child_spawn_probability.clamp(0.0, 1.0),

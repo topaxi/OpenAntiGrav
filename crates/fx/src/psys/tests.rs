@@ -47,6 +47,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             streak: StreakDraw::Procedural,
             blend: Blend::Additive,
             distort_strength: 0.0,
+            colour_scale: 1.0,
             particle_child: None,
             death_child: None,
             spawn_probability: 1.0,
@@ -471,6 +472,46 @@ fn only_the_far_bar_reset_keeps_class_6_and_never_class_7() {
             StreakDraw::Procedural
         ]
     );
+}
+
+/// `kColourScale` (`+0xc84`) is applied to HD's bar alone, as the authored colour times
+/// `scale^(1/2.2)`, which our 2.2 decode turns back into `scale` in linear light.
+#[test]
+fn only_the_far_bar_takes_the_colour_scale() {
+    let gain = StreakDraw::FarBar { aspect: 1.0 }.colour_gain(0.7);
+    assert!((gain - 0.7_f32.powf(1.0 / 2.2)).abs() < 1e-6);
+    assert!((gain.powf(2.2) - 0.7).abs() < 1e-5);
+    for draw in [
+        StreakDraw::Procedural,
+        StreakDraw::Bar { aspect: 1.0 },
+        StreakDraw::Wedge,
+        StreakDraw::Capped,
+    ] {
+        assert_eq!(draw.colour_gain(0.7), 1.0);
+    }
+}
+
+/// The gain reaches the vertices a playing far-bar streak builds, and a plain streak off the
+/// same emitter keeps its authored colour.
+#[test]
+fn a_playing_far_bar_streak_is_drawn_at_its_colour_scale() {
+    let drawn = |draw| {
+        let mut spec = effect("hit", false, 10.0).emitters[0].clone();
+        spec.render = Render::Streak { from_spawn: false };
+        spec.streak = draw;
+        spec.colour_scale = 0.5;
+        let mut effect = (*effect("hit", false, 10.0)).clone();
+        effect.emitters = vec![spec];
+        let effect = std::sync::Arc::new(effect);
+        let mut system = System::new();
+        system.ignite(&effect, Vec3::ZERO, 1.0);
+        run(&mut system, &effect, 3, &mut Rng::new(1));
+        let (additive, _) = system.vertices(&effect, Vec3::X, Vec3::Y);
+        assert!(!additive.is_empty());
+        additive[0].colour[0]
+    };
+    assert!((drawn(StreakDraw::FarBar { aspect: 1.0 }) - 0.5_f32.powf(1.0 / 2.2)).abs() < 1e-5);
+    assert_eq!(drawn(StreakDraw::Procedural), 1.0);
 }
 
 /// `ParticleSystem_DrawStreak`'s third vertex sits by the particle, not

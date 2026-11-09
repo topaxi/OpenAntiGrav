@@ -165,6 +165,21 @@ impl StreakDraw {
 }
 
 impl StreakDraw {
+    /// What an emitter's authored colour is multiplied by for this draw, given its
+    /// `kColourScale` (`+0xc84`): HD's vertex program decodes the colour with a 2.2 power and
+    /// multiplies the linear result by the scale, so the same product through our 2.2 decode
+    /// (`target.wesl`'s `decode`) is the authored colour times `scale^(1/2.2)`. Only a
+    /// [`Self::FarBar`] takes it. **Inherited from Omega**, whose CPU renderer reads the word
+    /// as `kColourScale`; HD's own reader of it is unread
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The class-6 draw law").
+    #[must_use]
+    pub fn colour_gain(self, scale: f32) -> f32 {
+        match self {
+            Self::FarBar { .. } => scale.max(0.0).powf(1.0 / 2.2),
+            _ => 1.0,
+        }
+    }
+
     /// The same class drawn as a template (`ParticleSystem_DrawParticle`), whose
     /// class 6 is the wedge.
     #[must_use]

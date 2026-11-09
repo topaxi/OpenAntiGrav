@@ -690,6 +690,12 @@ pub struct Emitter {
     /// word is not this field, and for a record too short to hold it. See
     /// `docs/ghidra/functions/ps4-omega-eu/heat-haze.md`.
     pub distort_strength: f32,
+    /// `+0xc84` on a draw class 6 emitter: the `kColourScale` the particle renderer binds for
+    /// the emitter's batch (`0.7` on `WO_TRAIL_HITSHIP`'s first emitter, `1.0` on `CORE_IMPACT`).
+    /// Omega's CPU renderer reads it so (`docs/ghidra/functions/ps4-omega-eu/heat-haze.md`,
+    /// `Particle_PushQuadBatch`); HD's own reader of the word is unread. `1.0` for every other
+    /// class, where the word is not this field, and for a record too short to hold it.
+    pub colour_scale: f32,
     /// `+0x778`: how fast the sprite-atlas frame advances, frames per tick.
     /// The fourth channel the load-time baker `FUN_088f9024` merges, after
     /// alpha, size and roll; see `docs/formats/pob.md`, "The frame-rate
@@ -881,6 +887,11 @@ fn parse_emitter(
             float(0xc84)
         } else {
             0.0
+        },
+        colour_scale: if word(0xb8) == 5 && record.len() >= 0xc88 {
+            float(0xc84)
+        } else {
+            1.0
         },
         frame_rate: parse_channel(record, order, 0x778)?,
         emission_scale: parse_channel(record, order, 0x858)?,

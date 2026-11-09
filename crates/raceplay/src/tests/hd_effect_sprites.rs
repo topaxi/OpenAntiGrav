@@ -209,6 +209,8 @@ fn the_trail_hit_burst_loads_as_far_bars_when_listed_and_procedural_when_not() {
             StreakDraw::FarBar { aspect: 2.0 }
         ]
     );
+    let scales: Vec<f32> = listed.emitters.iter().map(|e| e.colour_scale).collect();
+    assert_eq!(scales, [0.7, 1.0], "`+0xc84` of the two class-6 emitters");
     let unlisted = trail_hit_burst(false).expect("same image");
     assert!(
         unlisted
