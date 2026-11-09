@@ -133,6 +133,8 @@ impl Setup {
             #[cfg(feature = "view")]
             missile_trail: None,
             #[cfg(feature = "view")]
+            wingtip: None,
+            #[cfg(feature = "view")]
             destroy_stations: Vec::new(),
             finished_thrust: None,
             original_tables: None,

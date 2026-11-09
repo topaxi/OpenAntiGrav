@@ -1,44 +1,42 @@
 ---
-status: ready-to-wire
-titles: [hd, 2048, omega]
+status: measure
+titles: [hd, 2048, omega, pulse, pure]
 updated: 2026-11-09
-summary: "HD wingtip vortices read and measured live (pad trigger, drift, opacity, colour, blend, texture); ours draws none"
+summary: "Wingtip contrails drawn on every title; open: a matched RPCS3 pair, the Turbo half, 2048 and Omega's own update"
 ---
 
-# HD's wingtip vortices: recovered and measured, not drawn
+# HD's wingtip contrails: drawn; the matched pair and the Turbo half are open
 
 Evidence: [`wingtip-vortices.md`](../../docs/ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md) (the update, the
 `VortexLine` push, update, opacity, config, colour, blend; live reads) and
-[`hd-wingtip-contrails.md`](../../docs/rendering/hd-wingtip-contrails.md) (frames and the live trigger runs).
+[`hd-wingtip-contrails.md`](../../docs/rendering/hd-wingtip-contrails.md) (frames, the live trigger runs, and "Wired in
+ours").
+
+## Landed (lane `hd-wingtip-wire`)
+
+`oag_fx::fat_line::Vortex`, `Style::vortex_line`, `oag_raceplay::wingtip`, `oag_title::wingtip::Wingtip`, the livery's
+`wingtip` pair (`locator_pair`), `crates/raceplay/tests/hd_wingtip_ground_truth.rs`. HD measured, 2048 and Omega by
+lineage (labelled), Pulse and Pure behind `graphics.wingtip_contrails` (off by default).
 
 ## Open
 
-- **Ours draws none of it**: no `wingtip` locator is read (`oag_vex::vex::class_names` names it, nothing consumes it).
-- **Turbo half is code-only (80)**: no craft held a Turbo in the live runs; flag `0x40` is unnamed.
-- **The Zone picture** is not isolated: the Zone ship's nodes run the effect on pads (live, 75), but no frame separates
-  the streaks from wall-scrape sparks.
-- **2048 and Omega**: the ribbon's config ships in both (2048 byte for byte; Omega colour and floats, other layout);
-  their update and push are not read (2048: importer string; Omega: `FUN_016fb470`).
+- **No matched pair against the original** (the on-screen match is unknown; the original's natural-crossing frames show no
+  readable streak either). Our frames were read against the original's description
+  (two thin pale streaks from the wing tips running back toward the camera) and against ours with the contrails left out;
+  no RPCS3 frame at our pose with a metric on a wing-tip box was taken (`scripts/rpcs3-hd-wingtip-poll.py` finds the nodes;
+  the pad force time forced as in the doc's A/B).
+- **Turbo half is code-only (80)**: no craft held a Turbo in the live runs; flag `0x40` is unnamed. Ours triggers on
+  `turbo_timer > 0` (the flag `0x20` half).
+- **The Zone picture** is not isolated: no frame separates the streaks from wall-scrape sparks.
+- **2048 and Omega**: the update and push are not read (2048: importer string; Omega: `FUN_016fb470`); ours runs HD's by
+  lineage and nobody has watched either title lay them.
+- **The Pulse and Pure anchor is chosen**: the widest, rearmost lateral `Ship Collision Fx` locator per side. No
+  original draws it, so no picture can settle it; the speed ramp is HD's units on a title that never ran it.
+- **Craft states**: only `Destroyed` and `Eliminated` (the original's 4 and 5) gate the trigger here; state 6 and the
+  others are unmodelled.
 
 ## Next Steps
 
-1. **Wire lane (HD), the exact wire**, everything below measured unless marked:
-   - Per craft, the two `wingtip_left`/`wingtip_right` locators of the hull's `Locators.vex` (class `0x3ec`); left is
-     side `1` (`+phase`), right side `0` (`-phase`).
-   - Per locator a 1.3 s timer: refilled to `1.3` every tick the craft's speed-pad force time is above zero (ours: the
-     pad force window; or the Turbo flag, code-only), not while the craft state is 4, 5 or 6; counts down by `dt`.
-   - While the timer is above zero, every tick: strength `= ramp(forward speed) * timer / 1.3`, ramp `0` below 50,
-     `(v - 50) * 0.006` to 100, `0.3` from 100 (units/s); push 3 nodes at the locator's world position, each with life
-     `0.7` s, width `0.05` growing linearly to `1.5` at death, and a constant drift velocity
-     `-2.5 * normalize(cos(th) * row1 + sin(th) * (row2 x row1))`, `th = s * phase + i * pi/3`, `s = +1` left, `-1`
-     right, rows the locator's world basis as stored (they carry the craft's 0.75 scale; `row2` the forward axis);
-     then `phase += 0.18` (`0.06` per chain). Phase starts at `0` when the ribbon is taken; the ribbon is dropped when
-     the timer runs out and its nodes live out their 0.7 s.
-   - Draw: `oag_fx::fat_line`'s camera-facing two-sided strip, one strip per chain, texture
-     `/data/tex/smoke_trails_frame1_alpha.gtf` (`DATA02.PSARC`, not the `ribboneffects/textures/` copy),
-     `u = arc length * 0.025`, colour `(1, 1, 1)` times the texture, alpha `= tex.a * t * strength` with
-     `t = life / 0.7` and the strength the **current** one (whole ribbon), the two end nodes and the two second-from-end
-     nodes of each chain at alpha 0, blend `SRC_ALPHA, ONE_MINUS_SRC_ALPHA`.
-   - A pool of 18 ribbons (two per craft).
-   - Test: a fixture that drops the 2.5 drift, the side mirror or the `t * strength` opacity fails.
-2. RE lane (later): the Turbo half live (give a craft the Turbo, poll `+0xe4`), and 2048's and Omega's update.
+1. RE lane: the Turbo half live (give a craft the Turbo, poll `+0xe4`), and 2048's and Omega's update (`FUN_016fb470`).
+2. Capture lane: a matched RPCS3 pair on a wing-tip box (pad force time written as in the doc's A/B, pose from
+   `scripts/ps3_pose.py`, ours through `--camera-pose`).

@@ -73,6 +73,14 @@ pub const CLASS_ABSORB: u32 = 0x3ee;
 /// `docs/ghidra/functions/ps3-hdfury-eu/cannon.md`.
 pub const CLASS_CANNON_FLASH: u32 = 0x3eb;
 
+/// Class ID of a `wingtip` node: the two locators (`wingtip_left`, `wingtip_right`) every Wipeout
+/// HD hull authors, each of which drives a contrail ribbon while a speed pad acts.
+///
+/// **From HD's executable.** `ShipWingtipVortices_RegisterClass` (`0x002db500`) loads `0x3ec`
+/// and stamps the importer name `ShipWingtipVortices_Importer.h`. All 39 HD `Locators.vex`
+/// carry exactly two. Confidence 85; see `docs/ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md`.
+pub const CLASS_WINGTIP: u32 = 0x3ec;
+
 /// One format version's class-ID assignments.
 ///
 /// `None` means not recovered. A decoder that needs one and finds `None` should

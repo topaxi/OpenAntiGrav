@@ -968,7 +968,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     let magstrip_wake = magstrip_wake::load(
         craft_of(&mut craft, &mut archives),
-        wm,
+        (wm, craft_title, options),
         &liveries,
         &mut report,
     );
@@ -1212,6 +1212,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             leach_strip: magstrip_wake.leach_anchors,
             #[cfg(feature = "view")]
             missile_trail: magstrip_wake.missile_trail,
+            #[cfg(feature = "view")]
+            wingtip: magstrip_wake.wingtip,
             collision,
             handling,
             opponent_handling,

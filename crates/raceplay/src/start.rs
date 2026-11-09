@@ -192,6 +192,8 @@ impl Race {
             #[cfg(feature = "view")]
             missile_trail,
             #[cfg(feature = "view")]
+            wingtip,
+            #[cfg(feature = "view")]
             destroy_stations,
             #[cfg(feature = "view")]
             intro_camera,
@@ -955,6 +957,7 @@ impl Race {
                     .and_then(|trail| trail.blast_streak)
                     .map(missile_blast::streaks::Streaks::new),
                 missile_smoke: missile_trail.map(crate::missile_smoke::Smoke::new),
+                wingtip: wingtip.map(crate::wingtip::Contrails::new),
                 leach_ball_elapsed: [0.0; oag_weapons::projectile::leach_beam::POOL_SIZE],
                 plasma_blasts: [None; blast_models::PLASMA_BLAST_SLOTS],
                 bomb_blasts: [None; bomb_blast::BOMB_BLAST_SLOTS],

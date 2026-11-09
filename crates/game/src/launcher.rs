@@ -170,10 +170,15 @@ pub fn distinct_titles(rows: &[Candidate]) -> Vec<Candidate> {
 /// title authors the effect itself (2048, Omega). `None` when this machine has no such source.
 #[must_use]
 pub fn trail_hit_lender(rows: &[Candidate]) -> Option<&Candidate> {
-    let authors = |row: &&Candidate| {
-        row.playable()
-            .is_some_and(|title| title.effect_on(oag_title::Trigger::TrailHitship).is_some())
-    };
+    lender(rows, |title| {
+        title.effect_on(oag_title::Trigger::TrailHitship).is_some()
+    })
+}
+
+/// Wipeout HD's row when `rows` holds it and `authors` holds for its title, else the first
+/// playable row whose title does.
+fn lender(rows: &[Candidate], authors: impl Fn(&oag_title::Title) -> bool) -> Option<&Candidate> {
+    let authors = |row: &&Candidate| row.playable().is_some_and(&authors);
     rows.iter()
         .filter(authors)
         .find(|row| {
@@ -181,6 +186,35 @@ pub fn trail_hit_lender(rows: &[Candidate]) -> Option<&Candidate> {
                 .is_some_and(oag_source::title::is_preferred_trail_hit_lender)
         })
         .or_else(|| rows.iter().find(authors))
+}
+
+/// The source to lend a title that has no wingtip contrails its config and texture
+/// (`graphics.wingtip_contrails`): Wipeout HD's when `rows` holds it, else the first playable row
+/// whose title carries them (2048, Omega). `None` when this machine has no such source.
+#[must_use]
+pub fn wingtip_lender(rows: &[Candidate]) -> Option<&Candidate> {
+    lender(rows, |title| title.wingtip.is_some())
+}
+
+/// [`oag_raceplay::Options::wingtip_contrails`] for the player's `graphics.wingtip_contrails`,
+/// from a survey the caller already holds.
+#[must_use]
+pub fn wingtip_contrails_from(on: bool, rows: &[Candidate]) -> oag_raceplay::WingtipContrails {
+    if !on {
+        return oag_raceplay::WingtipContrails::Off;
+    }
+    oag_raceplay::WingtipContrails::On {
+        lender: wingtip_lender(rows).map(|row| row.source.clone()),
+    }
+}
+
+/// [`wingtip_contrails_from`] for a caller with no survey (the command line's race).
+#[must_use]
+pub fn wingtip_contrails(on: bool) -> oag_raceplay::WingtipContrails {
+    if !on {
+        return oag_raceplay::WingtipContrails::Off;
+    }
+    wingtip_contrails_from(on, &survey(&oag_source::source::candidates()))
 }
 
 /// [`oag_raceplay::Options::trail_hits`] for the player's `graphics.trail_hits`, from a survey
