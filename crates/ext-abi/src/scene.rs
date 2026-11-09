@@ -71,7 +71,7 @@ fn exit_of(word: u32) -> Option<Distance> {
         return Some(Distance::Progress(f32::from_bits(word)));
     }
     (word & !EXIT_IS_TRIGGER <= u32::from(u16::MAX))
-        .then(|| Distance::Trigger((word & 0xffff) as u16))
+        .then_some(Distance::Trigger((word & 0xffff) as u16))
 }
 
 /// A shader in the byte `screen-fill` and `draw-beam` carry it in: 0 for none, else its
