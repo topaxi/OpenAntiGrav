@@ -50,7 +50,7 @@ ramp  = speed < 50  ? 0                      # 0x42480000, TOC 0x008b40a8
       : (speed - 50) * 0.006                 # 0x3bc49ba6
 if node+0xe4 > 0:                            # 0x002db1bc
     if node+0xe0 == 0: take a free element of pool +0x74 of RaceManager+0x2dcc, flag byte = 3, node+0xe0 = it
-    0x002ac208(node+0xe0, node+0x38, ramp * node+0xe4 * 0.7692, node+0xe8 byte)     # 0x3f44ec4f = 1/1.3
+    0x002ac208(node+0xe0, *(node+0x38), ramp * node+0xe4 * 0.7692, node+0xe8 byte)  # 0x3f44ec4f = 1/1.3; lwz r4, 0x38(r29) @0x002db1f8
     node+0xe4 -= dt
 else:
     node+0xe0 = 0                            # 0x002db290
@@ -75,6 +75,17 @@ spin.
 and the node's live fields match it: `+0xe4` read `1.283` with two handles `0x70` apart
 (`0x342c95a0`, `0x342c9610`) while the pad time was forced above zero, and `0` with
 handles `0` before; `-0.017`, one frame time below zero, in a run that never forced it).
+**The natural trigger, live (2026-11-09, lane `hd-wingtip-vortices`), confidence 90.**
+Restored `hd-race-talons-venom-pack` (eight craft, the player on the Autopilot, every
+craft `+0x7d2c = 0`) and polled all 16 nodes for 60 s without pausing
+(`scripts/rpcs3-hd-wingtip-poll.py`, about 9 samples a second): **60 timer refills, on
+all eight craft, every one with `entry+0x2e8 > 0`** (the pad force time, read `0.10` to
+`0.25` at the refill) and none with it zero; no craft had flag `0x20` or `0x40` (the flag
+words read `0x9` and `0xd`), so every refill was a natural speed-pad crossing. The two
+nodes of a craft refill in the same sample. The timer then runs down to zero at frame
+rate (`-0.000` to `-0.032` read, one frame's overshoot) and the handle clears. The Turbo
+half stays code-only (80): no craft held a Turbo.
+
 What the push does with the strength and the side byte is the next section (it is an
 opacity scale, not a life scale). **Not read:** what flag `0x40` is.
 
@@ -148,9 +159,11 @@ lower-cased; the loader's case folding is assumed, not read).
 
 ### The push: `VortexLine_PushChains` (`0x002ac208`)
 
-Called once per frame per wingtip node, `r3 = element`, `r4 = node+0x38` (the node's
-4 x 4 world matrix: rows 0, 1, 2 the basis, row 3 the position; the locator is a pure
-translation, so the basis is the craft's), `f1 = strength`, `r6 = side byte`:
+Called once per frame per wingtip node, `r3 = element`, `r4 = *(node+0x38)` (a pointer
+to the node's 4 x 4 world matrix, `lwz r4, 0x38(r29)` at `0x002db1f8`: rows 0, 1, 2 the
+basis, row 3 the position; the locator is a pure translation, so the basis is the
+craft's, and live it carries the craft's scale, `|row| = 0.75` on every node read),
+`f1 = strength`, `r6 = side byte`:
 
 ```text
 element+0x60 = strength                                     # stfs f1, 0x60(r3)     @0x002ac284
@@ -188,6 +201,15 @@ o = c v + s (a x v) + (1 - c)(a . v) a          with v = row1 * 0.8, a = row2
 ```
 
 the right-handed rotation by `+theta` about `row2` in the matrix's own coordinates.
+Because the rows carry the craft's scale (`|row1| = |row2| = 0.75` live) and `row1 . row2
+= 0`, the skew term is scaled too: the drift direction is
+
+```text
+v = -2.5 * normalize( cos(theta) * row1 + sin(theta) * (row2 x row1) )
+```
+
+with the rows as stored, so the fan's spacing is `atan2(0.75 sin, cos)`, not exactly
+60 degrees, on HD's 0.75-scaled craft.
 `f31` (the phase) is loaded once before the loop (`0x002ac2e0`) and not reloaded, so
 the three chains of one push sit at `theta = phase, phase + pi/3, phase + 2pi/3`:
 **a 120-degree fan, not a full circle**. The stored phase still advances `0.06` per
@@ -199,10 +221,16 @@ velocity is `-row1`; HD's `row1` points down on a level track
 `0` (`FatLine_Init`, `stw r0, 0x10(r27)` at `0x002ab3a8`) when the element is taken and
 keeps running while the element is held.
 
-Confidence 82: read instruction by instruction, every constant resolved, and the
-node offsets agree with `RibbonNode_Advance` and `FatLine_Render` (position at
-`+0x30`, width `+0x68`, `u` `+0x6c`). The velocity's sign and the turn per frame are
-the parts a live node dump would lift above 84.
+**Confidence 92, measured live** (2026-11-09, RPCS3, `hd-race-talons-venom-pack`, all
+eight craft flying, `scripts/rpcs3-hd-wingtip-poll.py`): 35 newest ribbon nodes (the
+newest of each chain, same push, from 12 dumps of six craft, both sides) read
+`|node+0x40| = 2.500`, `node+0x40 . row2 = 0` to four places, a position equal to the
+copied row 3 (the wing tip) plus the drift since birth, `life0 = 0.7`, width `0.05`; and
+the formula above, with `theta = (side ? 1 : -1) * (phase - 0.18) + i * pi/3`
+(`phase` read after the push, so minus its three steps), predicts every one of the 35
+velocities to within `1e-4`. Each of the three other sign choices (side sign, rotation
+sign) misses by 4.6 to 5.0 units/s. The newest and second-newest nodes read alpha `0`,
+as the updates clear them. Short of 95: no second binary.
 
 ### The update and the opacity
 
@@ -229,8 +257,11 @@ fades with it; the last push leaves the strength at about `ramp * dt / 1.3`, so 
 still alive after the last push are all but invisible. Width grows from `0.05` at
 birth to `1.5` at death.
 
-Confidence 84 (static; the live check is the strength at `element+0x60` against the
-node's timer).
+**Confidence 90.** Live, the same run: 2,018 of 2,019 samples of a held element's
+`+0x60` lie within `0.01` of `ramp(speed) * timer / 1.3` (`timer` read after the update's
+decrement, so the push used up to one frame more); the one outlier is a read straddling
+a frame. The alpha itself was not dumped mid-chain, so the `t *` half rests on the
+three instructions and on `FatLine_Update`'s call.
 
 ### The draw state
 
@@ -304,13 +335,13 @@ The `_c1` and `_n1` variants repeat the base hull's pair with small offsets (Fei
 
 | Address | Name | Confidence |
 | --- | --- | --- |
-| `0x002db130` | `ShipWingtipVortices_Update` | 80 |
+| `0x002db130` | `ShipWingtipVortices_Update` | 90 |
 | `0x000d2d20` | `Ship_GatherWingtipNodes` | 80 |
 | `0x002db500` | `ShipWingtipVortices_RegisterClass` | 80 |
 | `0x002db5e8` | `ShipWingtipVortices_Construct` | 75 |
-| `0x002ac208` | `VortexLine_PushChains` | 82 |
+| `0x002ac208` | `VortexLine_PushChains` | 92 |
 | `0x002ac0f0` | `VortexLine_Update` | 82 |
-| `0x002abfb8` | `VortexLine_AlphaOverLife` | 84 |
+| `0x002abfb8` | `VortexLine_AlphaOverLife` | 88 |
 | `0x002ac070` | `VortexLine_Construct` | 80 |
 | `0x002ac010` | `VortexLine_Destruct` | 72 |
 | `0x002abfc8` | `VortexLine_Delete` | 72 |

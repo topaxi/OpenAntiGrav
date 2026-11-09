@@ -906,11 +906,11 @@
 0x000d2d20	function	Ship_GatherWingtipNodes	80	wingtip-vortices.md
 0x002db500	function	ShipWingtipVortices_RegisterClass	80	wingtip-vortices.md
 0x002db5e8	function	ShipWingtipVortices_Construct	75	wingtip-vortices.md
-0x002db130	function	ShipWingtipVortices_Update	80	wingtip-vortices.md
+0x002db130	function	ShipWingtipVortices_Update	90	wingtip-vortices.md
 # 2026-11-09 hd-wingtip-vortices: pool +0x74's VortexLine element (wingtip-vortices.md)
-0x002ac208	function	VortexLine_PushChains	82	wingtip-vortices.md
+0x002ac208	function	VortexLine_PushChains	92	wingtip-vortices.md
 0x002ac0f0	function	VortexLine_Update	82	wingtip-vortices.md
-0x002abfb8	function	VortexLine_AlphaOverLife	84	wingtip-vortices.md
+0x002abfb8	function	VortexLine_AlphaOverLife	88	wingtip-vortices.md
 0x002ac070	function	VortexLine_Construct	80	wingtip-vortices.md
 0x002ac010	function	VortexLine_Destruct	72	wingtip-vortices.md
 0x002abfc8	function	VortexLine_Delete	72	wingtip-vortices.md
