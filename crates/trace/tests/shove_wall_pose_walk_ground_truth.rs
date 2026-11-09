@@ -55,6 +55,7 @@ fn wall_contacts_along_a_shove_capture() {
         CLASS,
         handling::SpeedupPads::default(),
         handling::Special::default(),
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
     )
     .expect("class");
     let text = std::fs::read_to_string(capture).expect("reading the capture");

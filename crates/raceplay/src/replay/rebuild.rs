@@ -47,6 +47,7 @@ impl Options {
             class: setup.class.clone(),
             mode,
             difficulty: launch.difficulty,
+            skill_level: launch.skill_level,
             seed: Some(header.seed),
             ..Self::default()
         })

@@ -180,18 +180,16 @@ pub fn airbrake_graphics_for(stats: &fmt::Stats) -> AirbrakeGraphics {
 /// The four pre-scaled fields are converted here; every other field is moved
 /// unchanged, both of these included. See the module docs.
 /// The `SkillLevel` race option's own default, which is what picks a ship's
-/// shield pool out of `<Misc>`'s three slots.
+/// shield pool out of `<Misc>`'s three slots when a race names no rung.
 ///
 /// `Race_ReadSetupOptions` (`0x08896b84`) sets `g_skill_level` to **1** whenever
 /// the setup carries no `SkillLevel` key, and 1 is the middle rung - the one no
 /// shipped file authors, so it falls back to plain `<Misc shield>`. See
 /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
 ///
-/// **A constant rather than a parameter, deliberately.** Nothing selects a skill
-/// level yet: there is no menu row for it and no race option carrying it, so a
-/// parameter would be four call sites all passing the same literal. Wiring the
-/// option is the follow-up, and `oag_tables::handling::Misc::shield_for` already
-/// takes the index so that when it lands, only this line moves.
+/// A race takes its rung from `oag_raceplay::Options::skill_level`, else
+/// `oag_ai::Difficulty::level`; this is what a caller with no race (a trace
+/// harness, a fixture) passes.
 pub const DEFAULT_SKILL_LEVEL: u8 = 1;
 
 /// The pitch response used for a `<Class>` block that authors no `<pitch>`.
@@ -225,6 +223,13 @@ pub const PITCH_STAND_IN: Pitch = Pitch {
     antigrav_height_adjust: 1.0,
 };
 
+/// # The rung's shield pool
+///
+/// `skill_level` is the original's integer difficulty, `0` Easy to `2` Hard,
+/// and picks the shield pool out of `<Misc>`'s three slots
+/// ([`oag_tables::handling::Misc::shield_for`]). Nothing else in the result
+/// depends on it.
+///
 /// # The class arrives as a **name**, not as [`SpeedClass`]
 ///
 /// The rung is looked up with [`fmt::Stats::class_named`], which reaches a
@@ -252,6 +257,7 @@ pub fn handling_for(
     class: &str,
     speedup_pads: fmt::SpeedupPads,
     special: fmt::Special,
+    skill_level: u8,
 ) -> Option<Handling> {
     let block = stats.class_named(class)?;
     Some(Handling {
@@ -323,7 +329,7 @@ pub fn handling_for(
             height: stats.misc.height,
             length: stats.misc.length,
             width: stats.misc.width,
-            shield: stats.misc.shield_for(DEFAULT_SKILL_LEVEL),
+            shield: stats.misc.shield_for(skill_level),
             // Absent before Pulse added it; `oag_physics::Dimensions` already
             // defaults it to 0.0, so an earlier schema lands on that default
             // rather than on a value invented here.

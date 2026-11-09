@@ -1163,7 +1163,7 @@ campaign) keeps the absorb.
 switch keys on it: the race box's `AI DIFFICULTY` row (`assets/ui/menu.toml`,
 setting `ai.difficulty`) offers all four by these names, Elite the default. A
 title's own `Easy`/`Medium`/`Hard` exist only as campaign rungs and reach only
-the original's pack shuffle (`oag_game::ai_choice::free_level`: Novice easy,
+the original's pack shuffle (`oag_ai::Difficulty::level`: Novice easy,
 Skilled and Elite medium, Ace hard, chosen).
 
 **One later change this sweep does not cover (2026-10-26, `autopilot-wire`):** a craft

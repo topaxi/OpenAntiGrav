@@ -245,8 +245,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // is not the place it happens, and neither `<SpeedupPads>` nor `<Special>` is one of them.
     // `None` where this team's file does not author the requested rung: a race
     // that cannot be set up, rather than one run on somebody else's tuning.
-    let mut handling =
-        handling_for(&stats, &options.class, pad_tunables, special).with_context(|| {
+    let skill_level = family::skill_level(options, craft_title, &mut report);
+    let mut handling = handling_for(&stats, &options.class, pad_tunables, special, skill_level)
+        .with_context(|| {
             let (class, ladder) = (&options.class, stats.ladder());
             format!("{stats_name} authors no <Class name=\"{class}\"> - it carries {ladder}")
         })?;
@@ -339,9 +340,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
         craft_of(&mut craft, &mut archives),
         craft_title.race,
         &slot_teams,
-        &options.class,
-        pad_tunables,
-        special,
+        &family::Shared {
+            class: &options.class,
+            pad_tunables,
+            special,
+            skill_level,
+        },
         &mut report,
     );
     #[cfg(feature = "view")]

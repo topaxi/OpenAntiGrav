@@ -248,6 +248,7 @@ impl Pending {
             // uses. Same shape as the scheme: an unrecognised token is reported
             // and the default is used rather than failing the boot.
             difficulty: resolve_difficulty(&self.settings),
+            skill_level: None,
             opponents: self.cli.opponents || self.cli.driver.people() > 1,
             // The load reads a title's authored split HUD for two views. Windows are not
             // views: each shows the whole-screen HUD, which is the sheet one view packs.

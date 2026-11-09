@@ -64,6 +64,23 @@ impl Difficulty {
             .map_or("elite", |(name, _)| *name)
     }
 
+    /// The original's integer difficulty (`g_skill_level`: `0` Easy, `1` Medium, `2` Hard) this
+    /// level stands for. It indexes everything the original keys on that integer: the pack
+    /// shuffle's row and a craft's shield pool (`Misc::shield_for`).
+    ///
+    /// **Chosen, not measured.** The original's integer exists only as the campaign's three
+    /// rungs; this project's four named levels have no counterpart, so Novice is the easy rung,
+    /// Ace the hard one, and the default (Elite) and Skilled sit on Medium so an untouched race
+    /// box flies the rung a campaign cell with none authored does.
+    #[must_use]
+    pub const fn level(self) -> usize {
+        match self {
+            Self::Novice => 0,
+            Self::Skilled | Self::Elite => 1,
+            Self::Ace => 2,
+        }
+    }
+
     /// A level by name, or `None`, so a caller reading a config file can decide
     /// whether an unrecognised value is worth a message (`oag-game`'s settings
     /// path falls back and says so; a test would rather fail).

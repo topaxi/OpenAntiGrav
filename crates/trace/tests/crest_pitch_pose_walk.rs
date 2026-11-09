@@ -178,6 +178,7 @@ fn the_crest_stepped_once_per_row() {
         &class,
         handling::SpeedupPads::default(),
         handling::Special::default(),
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
     )
     .expect("class handling");
     // `OAG_CREST_OURS_GATE`: the stick goes in ungated and our own
@@ -385,6 +386,7 @@ fn the_crest_rolled_forward_with_one_component_restored() {
         &class,
         handling::SpeedupPads::default(),
         handling::Special::default(),
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
     )
     .expect("class handling");
     let env = Environment::default();

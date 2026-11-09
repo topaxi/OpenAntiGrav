@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, omega, 2048]
 updated: 2026-11-09
-summary: "HD Eliminator is scored, drawn, ranked on POINTS, sets its target and runs at the original's pace; ScoreFeedBack popups and difficulty shield are open"
+summary: "HD Eliminator is scored, drawn, ranked on POINTS, sets its target and runs at the original's pace; ScoreFeedBack popups are open"
 ---
 
 # HD's Eliminator: what is left after the score law
@@ -17,15 +17,6 @@ summary: "HD Eliminator is scored, drawn, ranked on POINTS, sets its target and 
 - ~~**Racebox TARGET row.**~~ Landed 2026-11-09: `race.score_target` offers the slider's 21 steps and
   reaches `Options::eliminator_score_target` (`eliminator-score.md`, "What ours does"). Omega's own
   slider is `50..600` by `25` and its rule is kills, so the row is HD's alone until Omega's awards are read.
-- **Shield by difficulty: a measured cross-mode defect, not wired here.**
-  - The data: HD's `DATA02.PSARC` `/data/ships/<team>/handlingstats.xml` authors
-    `<Misc shield easyshield>`. For Qirex those are `105` and `145`.
-  - What ours does: `oag_gameplay::handling` reads `Misc::shield_for(DEFAULT_SKILL_LEVEL)` with
-    `DEFAULT_SKILL_LEVEL = 1`, the medium slot, at every difficulty.
-  - What the original does: its Novice field started at 135 to 145 live
-    (`docs/formats/handling-stats.md`, "Ours races every difficulty on the medium slot").
-  - Wiring the race difficulty into `shield_for` moves every mode, Single Race included, so it is
-    its own lane, to be raised with the maintainer. Pulse authors `easyshield` too.
 - **`ScoreFeedBack0-15`.** Authored and read, never caught in a frame.
 - **Opponent lap refill.** Ours refills every craft; on HD an AI's shield did not move on any lap.
 - **Not captured:** the split-screen Eliminator pair (`splitscreen_elimination_hud_{0,1}.xml`, same

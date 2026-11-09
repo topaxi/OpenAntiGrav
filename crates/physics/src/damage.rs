@@ -31,8 +31,6 @@
 //!   damage half only.
 //! - **The respawn cost**: `Ship_SetState`'s state-3 branch stores `clamp(shield - 1, 0, 5)`;
 //!   its consumer is unread.
-//! - **The `SkillLevel` race option**: the pool arrives resolved
-//!   (`oag_gameplay::handling::DEFAULT_SKILL_LEVEL`).
 //!
 //! [`shield.md`]: ../../../docs/ghidra/functions/psp-pulse-usa/shield.md
 

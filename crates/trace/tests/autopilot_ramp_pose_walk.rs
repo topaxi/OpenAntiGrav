@@ -219,7 +219,14 @@ fn the_original_s_autopilot_stepped_once_per_row() {
         .unwrap()
         .expect("<Global>");
     let (pads, gravity_mul, _) = global.class_named(&class).expect("class");
-    let handling = handling_for(&stats, &class, pads, global.special).expect("class handling");
+    let handling = handling_for(
+        &stats,
+        &class,
+        pads,
+        global.special,
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
+    )
+    .expect("class handling");
     let env = Environment {
         class_gravity_scale: gravity_mul.airborne,
         engine_flags: if player {

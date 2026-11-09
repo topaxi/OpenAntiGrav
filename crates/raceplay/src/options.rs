@@ -195,6 +195,15 @@ pub struct Options {
     /// Applied by degrading the measured tuning rather than by boosting a weak
     /// one, and it never reads the player - see [`oag_ai::Difficulty`].
     pub difficulty: oag_ai::Difficulty,
+    /// The original's integer difficulty (`g_skill_level`: `0` Easy, `1` Medium, `2` Hard) the
+    /// race flies at, where it has a rung of its own (a campaign cell's); `None` takes
+    /// [`oag_ai::Difficulty::level`] of [`Self::difficulty`].
+    ///
+    /// It picks every craft's shield pool out of `<Misc>`'s three slots
+    /// (`oag_tables::handling::Misc::shield_for`). The original reads one global for the
+    /// player and the opponents alike (`docs/formats/handling-stats.md`, "Which difficulty
+    /// picks the shield slot").
+    pub skill_level: Option<u8>,
     /// Which mode's rules the race runs under.
     ///
     /// Also selects the HUD layout: a Zone run draws `Zone_HUD.xml`, the other

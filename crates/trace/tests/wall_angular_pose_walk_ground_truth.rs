@@ -85,6 +85,7 @@ fn load() -> (CollisionWorld, Handling) {
         CLASS,
         handling::SpeedupPads::default(),
         handling::Special::default(),
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
     )
     .expect("class");
     (collision_world(&nodes), handling)

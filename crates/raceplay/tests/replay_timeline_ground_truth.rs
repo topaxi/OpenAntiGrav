@@ -51,6 +51,7 @@ fn launch() -> Launch {
         pilot_assist: Level::Off,
         original_ai: None,
         campaign_skill: None,
+        skill_level: None,
     }
 }
 

@@ -555,6 +555,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     cage_from_track_header: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
     // Not read: the view matrix is Pulse's orthonormal look-at until measured.
     chase_view_sheared: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    // The skill-indexed pool read is Wipeout HD's measured Novice field (`easyshield`), and
+    // nothing here has been measured: the Medium slot until it is
+    // (`docs/formats/handling-stats.md`, "Which difficulty picks the shield slot").
+    shield_by_skill: oag_title::pre_race::Sourced::chosen(false),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,

@@ -528,6 +528,7 @@ pub fn capture(
         pilot_assist: options.pilot_assist,
         original_ai: None,
         campaign_skill: None,
+        skill_level: None,
     });
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);

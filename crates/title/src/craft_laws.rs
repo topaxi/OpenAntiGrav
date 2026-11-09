@@ -78,6 +78,12 @@ pub struct CraftLaws {
     /// (`oag_race::chase_rig::ChaseParams::view_sheared`). Wipeout Pure's, read off its GE view
     /// matrix and its camera tripod live; Pulse's camera node is orthonormal.
     pub chase_view_sheared: Sourced<bool>,
+    /// A craft's shield pool is the `<Misc>` slot of the race's difficulty (`easyshield` on
+    /// Easy, `mediumshield` on Medium, `hardshield` on Hard, plain `shield` filling any a file
+    /// leaves out; `oag_tables::handling::Misc::shield_for`), as Pulse's `Ship_SetShield` indexes
+    /// it. Off: the Medium slot whatever the difficulty. A title with no `CraftLaws` (Pulse)
+    /// runs it.
+    pub shield_by_skill: Sourced<bool>,
     /// The pitch response a title compiles into its engine, used where a `<Class>` authors no
     /// `<pitch>`: Wipeout Pure's. `None`: the file's own block, or the stand-in.
     pub code_pitch: Option<Sourced<CodePitch>>,
