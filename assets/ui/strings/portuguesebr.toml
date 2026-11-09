@@ -455,8 +455,8 @@ OAG_EDITOR_ACTION_SETTINGS = { text = "AJUSTES DA CAMPANHA", human = false }
 OAG_EDITOR_ACTION_EVENT = { text = "CAMPOS DO EVENTO", human = false }
 OAG_EDITOR_SEED_TITLE = { text = "DIGITE UMA SEMENTE", human = false }
 OAG_EDITOR_FILLED = { text = "GRADE PREENCHIDA PELA SEMENTE", human = false }
-OAG_EDITOR_HINT_SETTINGS = { text = "START SALVA   SELECT AJUSTES", human = false }
-OAG_EDITOR_HINT_EVENT = { text = "TRIÂNGULO PREENCHE   SELECT EVENTOS", human = false }
+OAG_EDITOR_HINT_TO_SETTINGS = { text = "SELECT ABRE OS AJUSTES", human = false }
+OAG_EDITOR_HINT_FILL = { text = "TRIÂNGULO PREENCHE A GRADE", human = false }
 OAG_EDITOR_LEGEND_FILL = { text = "Preencher grade", human = false }
 OAG_EDITOR_DIFFICULTY_EASY = { text = "FÁCIL", human = false }
 OAG_EDITOR_DIFFICULTY_MEDIUM = { text = "MÉDIO", human = false }

@@ -336,3 +336,35 @@ fn the_actions_of_each_page_end_in_save_and_start_with_the_page_switch() {
     editor.toggle_page();
     assert_eq!(editor.actions(), [Action::Page, Action::Fill, Action::Save]);
 }
+
+#[test]
+fn a_tier_the_disc_leaves_at_zero_is_left_out_and_a_cell_of_zeros_has_no_medals() {
+    let mut choices = choices();
+    choices.authored = vec![
+        Authored {
+            mode: "time_trial".to_string(),
+            track: "01_Track".to_string(),
+            class: "venom".to_string(),
+            targets: [90.0, 0.0, 0.0],
+        },
+        Authored {
+            mode: "time_trial".to_string(),
+            track: "02_Track".to_string(),
+            class: "venom".to_string(),
+            targets: [0.0, 0.0, 0.0],
+        },
+    ];
+    let mut editor = Editor::new(choices, "Zeros");
+    editor.confirm();
+    editor.select_field(Field::Mode);
+    editor.cycle(1);
+    let def = editor.to_def().unwrap();
+    let medals = def.grids[0].events[0].medals.as_ref().unwrap();
+    assert_eq!(
+        (medals.gold, medals.silver, medals.bronze),
+        (Some(90.0), None, None)
+    );
+    editor.select_field(Field::Circuit);
+    editor.cycle(1);
+    assert_eq!(editor.to_def().unwrap().grids[0].events[0].medals, None);
+}

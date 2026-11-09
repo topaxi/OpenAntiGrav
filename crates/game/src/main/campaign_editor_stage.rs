@@ -114,17 +114,17 @@ impl EditorScreen {
             })
             .collect();
         let heading = if campaign_page {
-            model.say("OAG_EDITOR_ACTION_SETTINGS", "CAMPAIGN SETTINGS")
+            String::new()
         } else if model.has(cursor) {
-            format!("{}, {}", cursor.0, cursor.1)
+            format!("{}, {}   ", cursor.0, cursor.1)
         } else {
-            model.say("OAG_EDITOR_EMPTY", "EMPTY SLOT")
+            format!("{}   ", model.say("OAG_EDITOR_EMPTY", "EMPTY SLOT"))
         };
         Shown {
             title: model.say("OAG_EDITOR_TITLE", "CAMPAIGN EDITOR"),
             name: model.name().to_string(),
             heading: format!(
-                "{heading}   {} {}",
+                "{heading}{} {}",
                 model.say("OAG_EDITOR_PLACED", "EVENTS PLACED"),
                 model.count()
             ),
@@ -142,9 +142,9 @@ impl EditorScreen {
             status: if !self.status.is_empty() {
                 self.status.clone()
             } else if campaign_page {
-                model.say("OAG_EDITOR_HINT_EVENT", "TRIANGLE FILLS   SELECT EVENTS")
+                model.say("OAG_EDITOR_HINT_FILL", "TRIANGLE FILLS THE GRID")
             } else {
-                model.say("OAG_EDITOR_HINT_SETTINGS", "START SAVES   SELECT SETTINGS")
+                model.say("OAG_EDITOR_HINT_TO_SETTINGS", "SELECT FOR SETTINGS")
             },
             hint: model.say("OAG_EDITOR_HINT_PLACE", "CROSS PLACES AN EVENT"),
             legend: [

@@ -82,8 +82,8 @@ pub const WORDS: [(&str, &str); 33] = [
     ("OAG_EDITOR_ACTION_EVENT", "EVENT FIELDS"),
     ("OAG_EDITOR_SEED_TITLE", "TYPE A SEED"),
     ("OAG_EDITOR_FILLED", "GRID FILLED FROM THE SEED"),
-    ("OAG_EDITOR_HINT_SETTINGS", "START SAVES   SELECT SETTINGS"),
-    ("OAG_EDITOR_HINT_EVENT", "TRIANGLE FILLS   SELECT EVENTS"),
+    ("OAG_EDITOR_HINT_TO_SETTINGS", "SELECT FOR SETTINGS"),
+    ("OAG_EDITOR_HINT_FILL", "TRIANGLE FILLS THE GRID"),
     ("OAG_EDITOR_LEGEND_FILL", "Fill grid"),
     ("OAG_EDITOR_TITLE", "CAMPAIGN EDITOR"),
     ("OAG_EDITOR_FIELD_MODE", "MODE"),
@@ -774,12 +774,16 @@ impl Editor {
             None if matches!(mode, "race" | "head2head") => [1.0, 2.0, 3.0],
             None => return None,
         };
-        Some(MedalsDef {
-            gold: Some(gold),
-            silver: Some(silver),
-            bronze: Some(bronze),
+        // A disc cell may leave a tier at 0, which the format refuses as a target: that
+        // tier is left out, and is never awarded.
+        let tier = |target: f64| (target > 0.0).then_some(target);
+        let medals = MedalsDef {
+            gold: tier(gold),
+            silver: tier(silver),
+            bronze: tier(bronze),
             ..MedalsDef::default()
-        })
+        };
+        (!medals.all().is_empty()).then_some(medals)
     }
 
     fn event(&self, slot: (u32, u32), draft: &Draft) -> EventDef {
