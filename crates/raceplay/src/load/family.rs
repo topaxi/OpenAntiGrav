@@ -63,23 +63,35 @@ pub(super) fn follow_player(
     ));
 }
 
+/// What the race fixes for every craft's handling whatever its team: the class, the pad
+/// tunables, `<Special>` and the shield slot of the difficulty.
+pub(super) struct Shared<'a> {
+    pub class: &'a str,
+    pub pad_tunables: handling::SpeedupPads,
+    pub special: handling::Special,
+    pub skill_level: u8,
+}
+
 /// Each AI slot's own handling and weapon counts on every title, `None` where it flies the
 /// player's (the slot's team is the player's, or its file would not load - said
-/// in the report, never invented). The class, pad tunables and `<Special>` are the
+/// in the report, never invented). The class, pad tunables, `<Special>` and shield slot are the
 /// race's, as they are for the player.
 pub(super) fn opponent_handling(
     archives: &mut oag_assets::Archives,
     race: &oag_title::RaceDefaults,
     slot_teams: &[String],
-    class: &str,
-    pad_tunables: handling::SpeedupPads,
-    special: handling::Special,
-    skill_level: u8,
+    shared: &Shared,
     report: &mut Vec<String>,
 ) -> (
     Vec<Option<oag_physics::Handling>>,
     Vec<Option<oag_weapons::counts::WeaponCounts>>,
 ) {
+    let Shared {
+        class,
+        pad_tunables,
+        special,
+        skill_level,
+    } = *shared;
     let mut out = vec![None; slot_teams.len()];
     let mut counts = vec![None; slot_teams.len()];
     let Some(player) = slot_teams.first() else {

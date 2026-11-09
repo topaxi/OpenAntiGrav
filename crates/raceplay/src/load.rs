@@ -357,10 +357,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
         craft_of(&mut craft, &mut archives),
         craft_title.race,
         &slot_teams,
-        &options.class,
-        pad_tunables,
-        special,
-        skill_level,
+        &family::Shared {
+            class: &options.class,
+            pad_tunables,
+            special,
+            skill_level,
+        },
         &mut report,
     );
     #[cfg(feature = "view")]
