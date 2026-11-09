@@ -6,7 +6,9 @@
 //! `Scene::write_frame`): one `queue.write_buffer` instead of one per drawable. **A kind holds
 //! only drawables the frame wrote on every view**: the shield shells, the weapon models and the
 //! sky are never written, or written only while live, and keep a buffer of their own (holding
-//! [`mesh_render::Scene::off`], or what the live weapon last had).
+//! [`mesh_render::Scene::off`], or what the live weapon last had). The one exception is HD's
+//! absorb shell, which is written only while live but reads the craft's block, because its
+//! program needs the output scale, the fog and the clock that block carries.
 
 use super::*;
 
@@ -46,6 +48,12 @@ impl Scene {
             drawable.share_scene(device, blocks, SceneKind::Ship);
         }
         self.wrecks.share_scene(device, blocks);
+        // HD's absorb shell is a craft's own scene model (`ShipAbsorbShell_Load` links it under the craft), drawn by
+        // the programs that close on `MAD /2` with the fog lerp inside it, so it reads the craft's block: the
+        // output scale, the fog and the clock its texture scrolls on.
+        for drawable in self.absorb_shell.iter_mut().flatten() {
+            drawable.share_scene(device, blocks, SceneKind::Ship);
+        }
         for drawable in self.shine.iter_mut().flatten() {
             drawable.share_scene(device, blocks, SceneKind::Shine);
         }

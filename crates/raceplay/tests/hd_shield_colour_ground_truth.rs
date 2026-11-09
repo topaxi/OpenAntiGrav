@@ -46,6 +46,7 @@ fn every_hd_team_shield_settles_to_its_authored_shield_colour() {
                 mode: oag_race::Mode::SingleRace,
                 flare: oag_hd::TITLE.flare,
                 hull_overlay: false,
+                leach_overlay: false,
                 hull_shine: false,
                 hull_wreck: false,
                 absorb_shell: false,

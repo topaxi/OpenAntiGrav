@@ -48,6 +48,7 @@ fn load(wreck: bool, mode: Mode) -> Option<(Vec<livery::Livery>, Vec<String>)> {
             mode,
             flare: oag_pulse::TITLE.flare,
             hull_overlay: false,
+            leach_overlay: false,
             hull_shine: true,
             hull_wreck: wreck,
             absorb_shell: false,

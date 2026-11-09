@@ -245,6 +245,18 @@ impl Drawable {
         self.scene_kind = Some(kind);
     }
 
+    /// Puts this drawable back on a block of its own, for tests.
+    #[cfg(test)]
+    pub(crate) fn clear_scene_kind_for_tests(&mut self) {
+        self.scene_kind = None;
+    }
+
+    /// The kind of scene block this drawable reads, for tests.
+    #[cfg(test)]
+    pub(crate) fn scene_kind_for_tests(&self) -> Option<SceneKind> {
+        self.scene_kind
+    }
+
     /// The dynamic offset of the block this drawable binds in `view`.
     pub(super) fn scene_offset(&self, view: ViewBlock) -> [u32; 1] {
         [self.scene_kind.map_or(0, |kind| {

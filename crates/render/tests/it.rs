@@ -26,6 +26,7 @@ mod bloom_gain;
 mod collision_capture;
 mod gantry_mount_ground_truth;
 mod glow_mask_ground_truth;
+mod hd_absorb_shell_output_scale;
 mod hd_airbrake_flaps_ground_truth;
 mod hd_ambient_role_census_ground_truth;
 mod hd_amphiseum_wall_material_ground_truth;
