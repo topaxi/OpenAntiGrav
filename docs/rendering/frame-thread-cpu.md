@@ -1961,6 +1961,33 @@ Deck"): `prepare_view` (3.45 of 8.2 ms on Anulpha, uniform builds and image blen
 drops in `maintain`, the `write_buffer` staging, the post chain's passes and 1.0 to 1.6 ms of
 system time a frame that a user-space profile cannot see.
 
-**Not measured here**: the Deck was not reachable from the lane's shell (no `deck` or `steamdeck`
-host), and this notebook has no gamescope, so `frame-phases` was not read; the bench's `cpu_us` is
-the proxy. Since nothing was built, there was no arm to run at 800p, 1080p and 4K on the Deck.
+### The ceiling on the Deck (2026-11-09)
+
+The same measure-only switch (`OAG_SKIP_SOLID`, never committed) in a `dist` `znver2` container
+build of `b09619fde`, HD Anulpha two players, vertical split, headless gamescope, `--render-scale
+100`, the race arguments of "What is left of the frame thread on the Deck", vsync and frame limit
+off, governor off, each run under the Deck's lock, mean of `frame-phases` after the first six lines,
+3 rounds per size, Deck load 1.5 to 2.7. The skip arm ran first in every round (the A/A in that
+section reads 0.03 ms, far under these deltas). ms per frame:
+
+| Two views | `total` with | without | saved per round | `submit` with / without | fps with / without | `present_ms` with / without |
+| --- | ---: | ---: | --- | --- | --- | --- |
+| 1280x800 | 10.14 | 8.47 | 1.42, 1.65, 1.93 | 3.61 / 2.75 | 93.5 / 112.9 | 0.62 / 0.46 |
+| 1920x1080 | 11.01 | 10.00 | 1.07, 0.97, 0.97 | 3.30 / 3.13 | 74.0 / 93.9 | 2.58 / 0.78 |
+| 3840x2160 | 15.50 | 14.29 | 1.41, 0.93, 1.29 | 4.37 / 3.65 | 29.2 / 40.5 | 18.98 / 10.62 |
+
+- **The ceiling is real CPU at every size**: 1.0 to 1.7 ms of frame thread for both views, about
+  what the notebook's 0.55 ms times four to five predicts.
+- **Most of the fps above 800p is GPU, which a bundle keeps.** At 1080p and 4K the frame waits on
+  the GPU (`present_ms` 2.6 and 19 ms with the circuit), and skipping the circuit's solid lists also
+  takes their GPU work away. A bundle draws the same triangles, so at those sizes it cannot raise fps
+  whatever it saves on the CPU. Only 800p is CPU-bound.
+- **What a bundle would save at 800p**: about 55 % of 1.67 ms on a frame that reuses it, on 27 to 29 %
+  of frames at one frame a tick: about 0.25 ms, and 0.47 ms if it removed the whole ceiling. At 90
+  fps a frame moves less than a tick, so reuse is somewhat higher (not measured on the Deck). A frame
+  that misses records, finishes and executes a bundle, which costs more than today. That is at the
+  0.3 ms split floor, as the estimate above said. The verdict stands: not built.
+
+Commands: `run.sh`, `avg.sh` and `ab.sh` as in "The reaper at one view and the shine passes", an arm
+being a wrapper that sets `OAG_SKIP_SOLID=1` around the same binary; `ab.sh <tag> "base skip" WxH 3
+hd 2`.

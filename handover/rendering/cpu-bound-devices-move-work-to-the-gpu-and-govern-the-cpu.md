@@ -85,7 +85,10 @@ frame-thread profile recipe in that section.
    ms (HD two views) of notebook CPU at 800p, 0.07 to 0.08 ms on Pulse; a bundle keeps the driver's
    share and the culling (about 45 %), so about 28 us a view on HD. Dropping the frustum test lifts
    reuse to 60 to 70 % (HD) and 94 % (Pulse) for 48 % and 36 % more GPU draws. The only lists that
-   always repeat are the uncull'd `Mesh` drawables (hulls, about 35 draws each on HD).
+   always repeat are the uncull'd `Mesh` drawables (hulls, about 35 draws each on HD). On the Deck (HD
+   Anulpha, two views) skipping the solid lists saves 1.67, 1.01 and 1.21 ms of frame-thread `total`
+   at 800p, 1080p and 4K; a bundle would get about 0.25 ms of that at 800p, and at 1080p and 4K the
+   frame is GPU-bound, so CPU saved there does not raise fps.
 3. **Particles on the GPU** (sonnet). Particle state in a storage buffer, advanced or extrapolated in the
    vertex shader (or compute) with one alpha uniform, so `.pob` effects, mist and clouds also draw between
    ticks. Shares its design with item 2 of `drawing-between-ticks-what-is-still-stepped.md`; land them
