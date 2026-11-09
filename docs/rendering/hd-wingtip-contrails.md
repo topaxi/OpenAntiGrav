@@ -125,6 +125,46 @@ RPCS3, EU Fury image, recompiler, audio Null. `scripts/rpcs3-hd-wingtip-poll.py`
   they read as scrape sparks; the ribbon is born `0.05` wide at most `0.3` opacity, so a single frame at the moment of
   the crossing shows little.
 
+## Wired in ours (2026-11-09, lane `hd-wingtip-wire`)
+
+HD's craft lay the contrails as the evidence page reads them: `oag_fx::fat_line`'s `Vortex` element (nodes born at the
+wing tip drifting at `2.5` along `-normalize(cos(theta) row1 + sin(theta) (row2 x row1))` with the craft's `0.75` in the
+rows, a 120-degree fan, `+phase` left and `-phase` right, alpha `t * strength`, two clear nodes at each end),
+`Style::vortex_line` (pool `+0x74`'s `SRC_ALPHA, ONE_MINUS_SRC_ALPHA`, drawn between the Missile ribbons and the Rocket
+smoke), and `oag_raceplay::wingtip` (a 1.3 s timer per locator refilled while `ShipState::pad_timer` or `turbo_timer` is
+above zero and the craft is racing, strength `ramp(speed) * timer / 1.3`, a pool of 18). The config is
+`oag_title::wingtip::Wingtip::hd_lineage`; the texture `/data/tex/smoke_trails_frame1_alpha.gtf` (1024x128).
+
+- **Speed units.** Ours and the original's agree: the autopilot's craft crosses its pads at 125 to 146 units/s on HD,
+  Pulse and Pure (above the ramp's 100, so the ribbons hold their `0.3` ceiling at the crossing and fade with the timer).
+- **The side.** The `wingtip_left` locator lands on the craft's physical left in this engine (`-2.08` along the hull's
+  right axis on slots 0 to 2), so the original's side flag `1` (`+phase`) is the world's left; the race reads the side
+  off the world so a locator with no name (Pulse's, Pure's) mirrors the same way.
+- **Frames** (Talon's Junction, Venom, the autopilot's first pad crossing, the pad force time `0.25 s`, the crossing
+  at tick 525 on HD and 523 on Pulse; 1280x720). An A/B of the same tick with the contrails left out
+  (`race.wingtip_vertices` returning nothing) changes 11,700 pixels at tick 535, 10,400 at 550 and 4,700 at 565 on HD, all in a band from the two wing tips toward the camera (a diff of the two frames, times 8, is two thin straight
+  streaks from the wing tips, widening toward the bottom of the frame). Read at full size and as a crop the streaks are
+  thin and pale, at most `0.3` opaque over a blue road, which is what the original's frames read as ("two thin pale
+  streaks, one from each wing tip, running back toward the camera", the A/B above). That is the same description, not
+  a matched pair: no RPCS3 frame at our tick and pose was taken for the metric on a wing-tip box.
+- **Cold-run check.** HD, 2048 and Omega each load the ribbon and 8 of 8 craft carry both locators; a pad force time on
+  slot 0 takes exactly two pool elements and releasing it frees them within the timer's 1.3 s and a node's 0.7 s
+  (`crates/raceplay/tests/hd_wingtip_ground_truth.rs`).
+
+### Pulse and Pure behind `graphics.wingtip_contrails` (off by default)
+
+Pulse's and Pure's class tables stop at `0x3eb`, so neither authors a `wingtip` locator. Both hulls do author the
+lateral pair of `Ship Collision Fx` locators the HD contrails' points coincide with (HD Feisar and Zone:
+`ship_collision_fx2` is the `wingtip` point): Pulse's Assegai has `(2.69, -1.11, -2.19)` where HD's `wingtip_left` is
+`(2.78, -1.40, -2.02)`, Pure's Assegai the same pair, Triakis `(2.65, -1.08, -5.23)` against HD's `(2.54, -0.73, -5.44)`.
+With the setting on and an HD-lineage source mounted (`oag_game::launcher::wingtip_lender`: HD, else 2048, else Omega)
+the race lays HD's ribbon (the lender's config and texture, read through its own archives) from, on each side, the
+locator of greatest `|x|`, the rearmost of those within `0.1` of it, as a pure translation. **That anchor is chosen, not
+measured**, and so is running HD's speed ramp on a title that never ran it; the report names the line an enhancement.
+With no lender the report says so and nothing is drawn. A/B at tick 540 (Pulse) and 556 (Pure) with the setting on and
+off changes 8,300 and 4,300 pixels in the same band under the wings; read as crops the streaks are thin and pale, the
+Pulse craft's much hidden by its own bright exhaust plume.
+
 ## Reproduce
 
 ```sh
@@ -143,7 +183,10 @@ frames are game content and stay under `data/`.
 ## Other titles
 
 2048 and Omega author the same two `wingtip` locators per hull at the same coordinates as HD, and Omega's executable
-carries the importer's strings. Whether either runs the update was not read. Their trail-hit burst is a separate
+carries the importer's strings. Whether either runs the update was not read: **wired by lineage** (labelled
+`InheritedFrom("Wipeout HD")` in `oag_2048::TITLE` and `oag_omega::TITLE`), each with its own container's texture
+(`/data/tex/smoke_trails_frame1_alpha.gxt` on 2048, `.gnf` on Omega, both 1024x128 and decoded). Both load and lay the two
+elements under a pad force time in `hd_wingtip_ground_truth`. Unconfirmed: that either executable runs it. Their trail-hit burst is a separate
 matter: their originals never fire it
 ([Omega](../ghidra/functions/ps4-omega-eu/trail-hits.md), [2048](../ghidra/functions/vita-2048-eu-v104/trail-hits.md)).
 Detail: [wingtip-vortices.md](../ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md), "The other titles".

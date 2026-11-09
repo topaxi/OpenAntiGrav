@@ -328,7 +328,8 @@ The `_c1` and `_n1` variants repeat the base hull's pair with small offsets (Fei
   scale `0.025`, texture `data/Tex/smoke_trails_frame1_ALPHA.gxt` (`0x814ca5e8`), 3 chains,
   100 nodes, step `0.06`, radius `0.8`. Two functions reference it, `FUN_81275c78` (passes
   it, the manager's constructor's place) and `FUN_81276566` (writes it, the colour
-  initializer's). **Checked, applies, not wired** for the ribbon; the update and push
+  initializer's). **Ported** (2026-11-09, `hd-wingtip-wire`): the config, locators and `.gxt` texture
+  are wired by lineage, labelled inherited from HD; the update and push
   were not read (`0.006`, the speed ramp's slope, is not in the image, so the ramp is
   written differently or lives elsewhere; the next lane starts from the importer string).
 - **Omega** (`data03.psarc`): the same two nodes at the same coordinates on Feisar and
@@ -338,10 +339,13 @@ The `_c1` and `_n1` variants repeat the base hull's pair with small offsets (Fei
   `0.05`, `1.5`, `0.7`, `0.025`. The layout differs: the next 16 bytes are the
   `ThickLine` block's colour `(0.729, 1, 1, 1)`, so the texture, counts, step and radius
   are held elsewhere. Its one reader is `FUN_016fb470` (`0x016fb5b0`, `0x016fb81e`).
-  `0.006` is not in the image either. **Checked, applies, not wired** for the ribbon's
-  colour, widths and life; **not read** for the update, the push, the counts and the
-  radius (next address: `FUN_016fb470`).
-- **Pulse** authors none: its class table stops at `0x3eb` ([vex-classes.md](vex-classes.md)).
+  `0.006` is not in the image either. **Ported** (2026-11-09, `hd-wingtip-wire`) for the ribbon, by lineage and
+  labelled inherited from HD (`/data/tex/smoke_trails_frame1_alpha.gnf` loads, 1024x128); **not read** for the
+  update, the push, the counts and the radius (next address: `FUN_016fb470`).
+- **Pulse** authors none: its class table stops at `0x3eb` ([vex-classes.md](vex-classes.md)). **Pure** likewise.
+  Both ship the lateral `Ship Collision Fx` pair at the HD wing-tip points, so ours lends HD's ribbon from them behind
+  `graphics.wingtip_contrails` (off by default; **chosen, not measured**,
+  [`hd-wingtip-contrails.md`](../../../rendering/hd-wingtip-contrails.md), "Pulse and Pure behind").
 
 ## Names
 

@@ -1733,6 +1733,14 @@ effect off an HD source when one is mounted (`oag_game::launcher::trail_hit_lend
 none, nothing is drawn and the loader report says so
 ([`engine-trail.md`](../ghidra/functions/ps3-hdfury-eu/engine-trail.md), "The burst on every title").
 
+WINGTIP CONTRAILS (GRAPHICS ADVANCED, `graphics.wingtip_contrails`, `off`/`on`, default `off`,
+restart required) is the same shape for HD's wingtip contrails
+([`hd-wingtip-contrails.md`](../rendering/hd-wingtip-contrails.md)):
+`menu::Definition::drop_unavailable_wingtip_contrails` removes the row on a title that carries the
+class (`oag_title::Title::wingtip`: HD, 2048, Omega), leaving it on Pulse and Pure. The race reads the config
+and the texture off an HD-lineage source (`oag_game::launcher::wingtip_lender`) and lays the ribbon from the
+craft's wing-tip `Ship Collision Fx` locators; with no source, nothing is drawn and the loader report says so.
+
 A row can also be **warned** rather than greyed, which is a different thing and
 the RECONSTRUCTION row is why it exists. A greyed row cannot be changed *now* because
 another row rules it out. A warned row can be changed, is stored, and simply
