@@ -80,26 +80,31 @@ impl Effect {
     /// off Pulse's PSP `BOOT.BIN` alone, and Pure's is a different
     /// executable that ships sprites of its own.
     pub fn without_pulse_psp_draw(&mut self) {
-        self.reset_pulse_psp_draw(false);
+        self.reset_pulse_psp_draw(KeptBar::No);
     }
 
     /// [`Self::without_pulse_psp_draw`], except that an emitter's own class-6
-    /// particle is drawn as HD's view-space bar ([`StreakDraw::FarBar`]), the
-    /// draw HD's `PartRender` job and Omega's CPU twin build for render mode 5
-    /// (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The class-6
-    /// draw law"). Per effect, for the ones a title lists
-    /// (`oag_title::Effects::far_bars`): the law was read on `WO_TRAIL_HITSHIP`
-    /// alone.
-    pub fn without_pulse_psp_draw_but_far_bars(&mut self) {
-        self.reset_pulse_psp_draw(true);
+    /// particle keeps the bar `bars` names: HD's view-space bar
+    /// ([`StreakDraw::FarBar`], [`KeptBar::Far`]), the draw HD's `PartRender` job
+    /// and Omega's CPU twin build for render mode 5
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The class-6 draw
+    /// law"), or the pool bar Pulse's and Pure's PSP executables build
+    /// ([`StreakDraw::Bar`], [`KeptBar::Mean`]; Pure's `FUN_088746c8` reads
+    /// `ParticleSystem_DrawPoolBars`'s strip law,
+    /// `docs/ghidra/functions/psp-pure-usa/particle-bars.md`). Per effect, for the
+    /// ones a title lists (`oag_title::Effects::{far_bars, pool_bars}`): each law
+    /// was read on a named effect alone.
+    pub fn without_pulse_psp_draw_but(&mut self, bars: KeptBar) {
+        self.reset_pulse_psp_draw(bars);
     }
 
-    fn reset_pulse_psp_draw(&mut self, far_bars: bool) {
+    fn reset_pulse_psp_draw(&mut self, bars: KeptBar) {
         self.rides_owner_frame = false;
         for spec in &mut self.emitters {
             spec.under_alpha = false;
-            spec.streak = match spec.streak {
-                StreakDraw::Bar { aspect } if far_bars => StreakDraw::FarBar { aspect },
+            spec.streak = match (spec.streak, bars) {
+                (StreakDraw::Bar { aspect }, KeptBar::Far) => StreakDraw::FarBar { aspect },
+                (StreakDraw::Bar { aspect }, KeptBar::Mean) => StreakDraw::Bar { aspect },
                 _ => StreakDraw::Procedural,
             };
             spec.frames = super::FrameAdvance::Still;
@@ -108,6 +113,18 @@ impl Effect {
         self.mute_templates();
         self.mute_rotation();
     }
+}
+
+/// Which class-6 bar an effect keeps when [`Effect::without_pulse_psp_draw_but`] takes every other
+/// Pulse PSP law away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeptBar {
+    /// None: every streak is procedural.
+    No,
+    /// The pool bar, both ends on the mean of their two view depths ([`StreakDraw::Bar`]).
+    Mean,
+    /// HD's bar, both ends on the farther depth ([`StreakDraw::FarBar`]).
+    Far,
 }
 
 impl Effect {

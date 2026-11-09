@@ -369,6 +369,15 @@ pub struct Effects {
     /// class-6 draw law"). An effect not listed keeps the procedural profile for every
     /// streak; wiring one is a decision made per effect, never by extension to the title.
     pub far_bars: &'static [&'static str],
+    /// Effects whose emitters' own class-6 particles are drawn as the PSP engine's pool bar
+    /// (`oag_fx::psys::streak::StreakDraw::Bar`: both ends on the mean of their two view depths)
+    /// on a source that is not Pulse on the PSP: Pure's `FUN_088746c8` is
+    /// `ParticleSystem_DrawPoolBars`'s strip law
+    /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`). An effect not listed keeps the
+    /// procedural profile for every streak; wiring one is a decision made per effect against a
+    /// matched capture, never by extension to the title. An effect in both this list and
+    /// [`Self::far_bars`] draws the far bar.
+    pub pool_bars: &'static [&'static str],
     /// How the Quake wave is placed and washes the screen: its frame is read
     /// only for a title whose [`Self::extents`] list `WO_QUAKE`.
     pub quake_look: QuakeLook,
@@ -434,6 +443,7 @@ impl Effects {
         sprites: &[],
         extents: &[],
         far_bars: &[],
+        pool_bars: &[],
         quake_look: QuakeLook::track(Origin::InheritedFrom("Wipeout Pulse")),
         trail_hits_native: false,
     };

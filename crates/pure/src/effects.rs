@@ -143,9 +143,16 @@ pub const EFFECTS: &Effects = &{
         .without(Trigger::MagstripSparks)
         .without(Trigger::MagstripZone);
     effects.extents = EXTENTS;
+    effects.pool_bars = POOL_BARS;
     effects.quake_look = QUAKE_LOOK;
     effects
 };
+
+/// The effects whose class-6 emitters draw as the pool bar on Pure: the absorb burst, whose one
+/// emitter is class 6. `FUN_088746c8`, the handler `FUN_088756bc` (`ParticleSystem_DrawEmitterPool`'s
+/// counterpart) dispatches index 5 to, builds `ParticleSystem_DrawPoolBars`' strip
+/// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`).
+const POOL_BARS: &[&str] = &[engine_effects::ABSORB_EFFECT];
 
 /// The effects whose emitters spread by the extent law on Pure: the Quake's
 /// wave. `Quake_Update` (`0x08879d54`) writes `edge distance / 50` into slot 1

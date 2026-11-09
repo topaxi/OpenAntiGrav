@@ -7,6 +7,7 @@
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 use super::*;
+use oag_fx::psys::streak::KeptBar;
 
 /// Only the Rocket, the Missile, the Plasma and the Shuriken ride a flare, and
 /// each rides its **own**: four separate authored files, not one generic
@@ -584,7 +585,7 @@ fn the_loader_draws_the_pulse_psp_heads_arcs_under_the_alpha_over_layer() {
             pulse_psp,
             pulse_psp,
             false,
-            false,
+            KeptBar::No,
         )
         .expect("the head loads");
         effect.emitters.iter().map(|e| e.under_alpha).collect()
