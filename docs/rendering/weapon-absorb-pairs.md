@@ -64,8 +64,8 @@ Both runs agree to within 1 unit at every age but 1.0 s.
 
 Ranked by what a player sees:
 
-1. **The energy bar's flash has no glow and no second state (fixed 2026-11-09, `pulse-bar-bloom`: see "Pulse: the energy bar"; the white phase is
-   still about 14 luma dim).** The bar fill's mean luma over the window (rows 248 to
+1. **The energy bar's flash has no glow and no second state (fixed 2026-11-09, `pulse-bar-bloom`, then the white phase matched by
+   `pulse-stamp-scene`: see "Pulse: the energy bar" and "Pulse: the stamp's bright pass reads the framebuffer").** The bar fill's mean luma over the window (rows 248 to
    258, x 315 to 440; normal 164, both sides): the original alternates **207** (bright cyan, with a bloom halo) and
    **239** (white, with a halo), 7 to 8 frames each, from frame 3 to frame 62, then 163. Ours alternates **163**
    (nothing changes) and **232** (flat white, no halo) with the same period; the white phases coincide with the
@@ -331,10 +331,71 @@ Read as a player: the original's bar glows cyan with a halo that spreads over th
 white-green bar with a wider halo, eight times a second. Ours now does the same (frames 6, 12, 30 and 36 read side by side at 2x, original, before, after); the off half is a little paler and the halo a little narrower. RGB of the bar box, off half:
 original `(228, 242, 235)`, ours `(200, 231, 214)`; on half: original `(43, 252, 251)`, ours `(33, 252, 251)`.
 
-Left open (all one cause): the stamp's colour is the backdrop's own colour at its alpha, as `oag_post::bloom::stamps` documents for every
-stamp, so the scene showing through the backdrop's 62 % transparency is not in the bright pass. The original's bright pass reads the
-framebuffer under the mask, scene included. Sampling the HUD's target in the stamp pass would close this one and the boost's matching
-gap. Also not done: the PS2 (its bloom chain has no stamp pass in the port; the PS2 draw was not dumped).
+Left open (all one cause, ~~the stamp's colour is the backdrop's own colour at its alpha~~ closed the same day: see "Pulse: the stamp's
+bright pass reads the framebuffer", below). Also not done: the PS2 (its bloom chain has no stamp pass in the port; the PS2 draw was not dumped).
+
+### Pulse: the stamp's bright pass reads the framebuffer (landed 2026-11-09, `pulse-stamp-scene`)
+
+**Claim, true: `Bloom::stamp_glow` feeds the bright pass with the HUD target under the stamped rectangle (HUD at its own alpha over the
+scene showing through it), as the original's bright pass reads its framebuffer, not with the stamp's own backdrop colour.** The shader
+(`fs_stamp`, `crates/post/shaders/bloom.wesl`) samples the target the HUD was drawn into, times the largest mask byte of the rectangles
+over the pixel; `Stamp` and `oag_hud::boost_smear::GlowStamp` lose their `colour` and `opacity` (the HUD's own draw already carries
+the blink's alpha and the boost's `1 / n` copies), `AbsorbGlow` loses its `backdrop`. The stamp pass writes the lane and the composite
+is a later pass, so reading the target it then adds to is no hazard. Pinned by `oag_post`'s
+`a_stamp_glows_in_the_colour_the_target_holds_under_it` (red under one rectangle, green under another, black under a third, one mask
+byte: each halo is its own colour and the black one adds nothing; with the target binding dropped, all three stamp tests fail).
+
+The recipe is the previous section's (`--give mine`, circle at tick 520, frame `f` at tick `520 + f - 2`), re-taken on the same tree
+before and after (`oag-game` built at `main` 6bf65111d and at this change; 480x272, SwiftShader Vulkan: the sandbox hides the GPU ICDs, and
+a before-and-after pair through one software driver is what the comparison needs). The original column is the previous section's: its
+frames and the `race-platinum-white-single-grid.ppst` state are no longer on disk, so the original numbers below are that section's, not
+re-captured. Ours' pose is the section's printed pose (position, forward, up) rebuilt as a one-row `--pose-from` trace (`right_*` columns are the ship's
+left, `up x forward`; speed and velocity zero) with **no camera columns**, so the engine's own `--camera-view close` chase camera draws (the
+original trace's camera row is gone): with a camera invented from the pose, the control reads 164 and the before off half reads
+`(204, 232, 225)` against the section's `(200, 231, 214)`; with no camera columns it reads `(199, 230, 215)`, so those are the numbers below.
+
+| Bar fill luma (Rec. 709) | Original | Ours before | Ours after |
+| --- | --- | --- | --- |
+| At rest (control) | 164 | 163.6 | **163.6** (frame 63: 163.7) |
+| On half | 207 | 205.1 to 205.7 (frames 3, 6, 9, 17, 24, 36) | **207.2 to 207.9** |
+| Off half | 237 to 242 | 222.3 to 226.4 (frames 10, 16, 25, 30, 31, 40, 46, 47) | **238.7 to 243.9** (240.6 at frame 16, 243.9 at frame 46) |
+| Off half RGB (frame 10) | `(228, 242, 235)` | `(199, 230, 215)` | **`(228, 242, 236)`** |
+| On half RGB (frame 6) | `(43, 252, 251)` | `(33, 252, 251)` | **`(43, 252, 251)`** |
+| Band under the bar (x 330-420, rows 259-265), frame 12 | not measured | 98.8 | 113.0 |
+
+Ours' frames 3-9, 17-24, 32-39 are on and 10-16, 25-31, 40-47 off before and after, as before: the window's phase did not move. (Frame 62
+still reads off on ours and on in the original; the section above has that, it is the blink's last half.) The bar's off half now sits in the
+original's range, the on half within 0.9 of 207, the control unchanged, and the off half's RGB equals the original's to a unit.
+
+Read as a player (frames 6, 12, 30 and 36 at 2x over the bar's corner, before then after; the original frames are gone, so the
+comparison is against the previous section's description of them and the numbers above): the off half was a pale mint bar with a
+narrow halo and is now a white bar with a wide soft halo spreading over the panel above and the road under it, the on half's cyan bar
+carries a stronger halo. That is the "white-green bar with a wider halo" the section describes; the on and off halves differ the way the
+original's do. At 1920x1080 the same frame (frame 12) has the same smooth halo, no speckle from the scene seen through the backdrop (the
+bright pass is one bilinear tap per 240x136 lane texel of the presentation-size target, as `fs_bright`'s). **One more thing this made visible:** the halo is lit by the target as it stands when the stamp runs, so everything the HUD
+draws before the stamp (the panel, the road through the backdrop) feeds it, and nothing drawn after does.
+
+**The boost's speed bar**, same change (`talons-boost`, the compare page's boosting pair: the original's `theirs.png`, ours re-rendered
+from `pair.json`'s argv, `--hud-boost-phase 0.457010`, on both binaries; the thread had no numbers to quote):
+
+| | Original | Ours before | Ours after |
+| --- | --- | --- | --- |
+| Speed fill (x 310-420, rows 224-242), mean luma | 252.5 | 250.2 | **252.0** |
+| Speed fill, mean RGB | `(243, 255, 255)` | `(233, 255, 253)` | **`(241, 255, 254)`** |
+| RMSE vs the original, speed bar box (306,218)-(446,248) | 0 | 19.1 | **14.7** |
+| RMSE, whole frame | 0 | 26.2 | 26.9 |
+| RMSE, shield bar box (306,246)-(446,262) | 0 | 120.6 | 129.8 |
+
+The speed bar's white core and halo now match; the glow gap there is closed to a unit of red. The shield bar's box and the whole frame
+read slightly worse: the original's shield bar is red in this frame (a state ours does not reproduce, `pulse-hud-boost-smear-leftovers`),
+ours is cyan, and the boost's smeared copies of the speed bar now light the cyan bar below them more, so the existing 120 RMSE of the wrong
+colour grows with the glow. Not a regression of the stamp; it is the open red bar.
+
+Titles: only Pulse PSP stamps (`oag_pulse::hud::ART` is the only `boost_smear` and `absorb_glow` that is `Some`; Pure, HD, 2048 and Omega
+are `None`). The PS2 shares the art but `Scene::stamp_glow` runs only on the PSP bloom (`Scene::bloom`; the PS2 has `Ps2Bloom`, no stamp
+pass), so the PS2 draws the copies and no stamp glow, as before: not changed, **not checkable** (no PS2 draw dump). **2048 and Omega:
+checked, differs**: their HUD is HD's (`boost_smear` and `absorb_glow` are `None`, no stamp pass in their bloom), so there is no PSP-style
+HUD stamp to read the framebuffer for; HD's HUD glow, where it has one, is a separate path.
 
 ### 2048 and Omega
 

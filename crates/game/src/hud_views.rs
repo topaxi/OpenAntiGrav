@@ -449,7 +449,8 @@ pub fn draw(
 /// Adds the glow of the HUD's stamped rectangles (a speed bar under a boost, a shield bar under an absorb,
 /// `oag_hud::boost_smear`) onto `view`: the bloom's bright pass ran before the HUD existed, so the
 /// original's "the bright pass reads the HUD" is a second, rectangle-only chain here
-/// (`oag_post::bloom::Bloom::stamp_glow`). Nothing without a stamp, so a frame with no boost is
+/// (`oag_post::bloom::Bloom::stamp_glow`) that reads `view` as the HUD left it, scene and HUD
+/// together, as the original's bright pass reads its framebuffer. Nothing without a stamp, so a frame with no boost is
 /// untouched.
 #[allow(clippy::too_many_arguments)]
 fn stamp_glow(
@@ -475,8 +476,6 @@ fn stamp_glow(
                 stamp.rect[2] * per_x / viewport.2,
                 stamp.rect[3] * per_y / viewport.3,
             ],
-            colour: stamp.colour,
-            opacity: stamp.opacity,
             value: stamp.value,
         })
         .collect();

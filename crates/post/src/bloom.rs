@@ -130,8 +130,9 @@ struct Constants {
     /// [`Bloom::stamp_glow`]'s rectangles, as fractions of the drawn rectangle: `x, y, width,
     /// height`. Only the stamp pass reads these four fields; every other pass is handed zeros.
     stamps: [[f32; 4]; stamps::MAX],
-    /// Each rectangle's colour, `rgb` in `0..=1`, and opacity.
-    stamp_colours: [[f32; 4]; stamps::MAX],
+    /// Where the stamp pass reads the target: the drawn rectangle's `x, y, width, height` in
+    /// target pixels. Zero for every other pass.
+    stamp_view: [f32; 4],
     /// Each rectangle's mask byte in `x`.
     stamp_values: [[f32; 4]; stamps::MAX],
     /// `count` of the stamps and three pads.
@@ -230,7 +231,7 @@ impl Lane {
             uv_scale: [1.0, 1.0],
             uv_max: [1.0, 1.0],
             stamps: [[0.0; 4]; stamps::MAX],
-            stamp_colours: [[0.0; 4]; stamps::MAX],
+            stamp_view: [0.0; 4],
             stamp_values: [[0.0; 4]; stamps::MAX],
             stamp_meta: [0.0; 4],
         };
@@ -576,7 +577,7 @@ impl Bloom {
             uv_scale,
             uv_max,
             stamps: [[0.0; 4]; stamps::MAX],
-            stamp_colours: [[0.0; 4]; stamps::MAX],
+            stamp_view: [0.0; 4],
             stamp_values: [[0.0; 4]; stamps::MAX],
             stamp_meta: [0.0; 4],
         };

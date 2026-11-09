@@ -223,8 +223,8 @@ fn an_absorb_lights_the_shield_bar_and_its_halo_in_both_blink_phases() {
         bar(&on)
     );
     assert!(
-        bar(&off) > 215.0,
-        "the off half washes toward white: {}",
+        (232.0..250.0).contains(&bar(&off)),
+        "the off half washes to the original's 237 to 242, which needs the scene under the backdrop in the bright pass: {}",
         bar(&off)
     );
     for (name, frame) in [("on", &on), ("off", &off)] {

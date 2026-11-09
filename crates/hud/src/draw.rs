@@ -884,8 +884,8 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
         &ungated
     };
     let mut frame = Frame::default();
-    let mut stamped: Vec<([f32; 4], [f32; 4])> = Vec::new();
-    let mut absorbed: Vec<super::boost_smear::Fill> = Vec::new();
+    let mut stamped: Vec<[f32; 4]> = Vec::new();
+    let mut absorbed: Vec<super::boost_smear::GlowStamp> = Vec::new();
 
     // An always-on name draws **once**, even where the layout authors it twice.
     // See `ONE_WIDGET_PER_NAME`.
@@ -995,17 +995,18 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             .art
             .boost_smear
             .is_some_and(|law| law.stamp == sprite.name)
-            && let Some(Draw::Sprite { rect, color, .. }) = &drawn
+            && let Some(Draw::Sprite { rect, .. }) = &drawn
         {
-            stamped.push((*rect, *color));
+            stamped.push(*rect);
         }
         if let Some(law) = cx.art.absorb_glow.filter(|law| law.fill == sprite.name)
             && readout.shield_absorbing
-            && let Some(Draw::Sprite { rect, color, .. }) = &drawn
+            && let Some(Draw::Sprite { rect, .. }) = &drawn
         {
-            absorbed.push(super::shield_bar::absorb_fill(
-                cx, readout, law, *rect, *color,
-            ));
+            absorbed.push(super::boost_smear::GlowStamp {
+                rect: *rect,
+                value: law.value,
+            });
         }
         // A bar's fill keeps its own alpha, as does the shield fill; every other lit panel scales.
         frame.sprites.extend(
