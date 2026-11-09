@@ -183,6 +183,8 @@ pub fn build_track(track: &Model) -> Option<TrackPass> {
         .map(|(i, t)| used.contains(&i).then(|| t.clone()).flatten())
         .collect();
     model.anim_nodes = track.anim_nodes.clone();
+    // The pass lays over the circuit's own batches, so it culls them the way the circuit does.
+    model.per_batch_cull = track.per_batch_cull;
     model.centre = track.centre;
     model.radius = track.radius;
     // The circuit's weighted batches (`Batch::weights_extra_pass_by_alpha`) paired

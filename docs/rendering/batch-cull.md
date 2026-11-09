@@ -56,8 +56,11 @@ the same tick, the reference being the board drawn from node 928 alone.
 **Discrimination** (the same box, hide by scene node, scratch hook not kept): hide 929: no change; hide 928:
 none of the stipple (868 and 929 never visibly fight, the same picture); hide 868: steady 12 % (928
 alone, the mirrored ornament); a blanket back-face cull: identical to hiding 868 and 929. **What it is not:** a
-PVS toggle (all three nodes are drawn every tick of 1880 to 1953; the set changes once, at tick 1954), a UV
-animation (a fixed pose with the tick running does not stipple), or a sort order (opaque list, one pipeline).
+PVS toggle (all three nodes are drawn every tick of 1880 to 1953; the set changes once, at tick 1954), an
+animation, or a sort order (opaque list, one pipeline). A second, independent run holds the pose
+(`--pose 333.8,3.5,306.7,0`, craft at rest, ticks 300 to 307): with two-sided drawing 1 to 9 % of the box changes
+between consecutive ticks (6.9 8.6 2.1 1.1 1.5 1.8 6.7), with the cull 0.08 to 0.18 %, so the fight reacts to
+sub-pixel camera settling, not to a clock.
 
 **The original** (PPSSPP v1.20.4, software renderer, Moa Therma White time trial state, `psp-drive.py place`
 then `psp-trace.py --camera --shot-every 1`): a craft placed at `(333.8, 3.5, 306.7)` facing the track
@@ -72,7 +75,8 @@ steady, with no speckle. A third run after a reload came up with the camera tumb
 PS2, inherited from the PSP): where either applies, the loader sets `Model::per_batch_cull` on the circuit's
 model, and `mesh_render::build_with` builds the culling twin of the opaque, depth-prepass and cutout
 pipelines for it, which the draws select by their own `culled` (the way HD's per-material cull has worked
-since `hd-backface-cull`). Only the circuit: the hulls, pads, plume, gantry and weapon models are untouched,
+since `hd-backface-cull`). The circuit's shine pass, a second `Drawable` over copies of its batches, carries the
+flag so it culls what the base pass culls. Only the circuit: the hulls, pads, plume, gantry and weapon models are untouched,
 and blended draws already selected a culled or two-sided pipeline by `culled`.
 
 **Before and after, 29 race pairs** (26 Pulse PSP time-trial and Zone, 2 PSP single race, the PS2 pair;
@@ -87,9 +91,14 @@ than "better" pixels in a 100 by 70 region, and the frames show a stray speckle 
 ## Lineage
 
 - **Pulse PS2**: carried from the PSP (the same `.vex` batch word), unmeasured there; labelled inherited.
-- **Pure**: off (`Rule::UNREAD`). The same batch word is there but nothing of Pure's draw state was read
-  (`Mesh_InitBatch` is unread on Pure); the rule is chosen to stay off, not measured. Open: a Pure circuit
-  with a back-to-back board, and `Mesh_InitBatch` on Pure.
+  Checked on our side only: 53 % or more of the circuit's batches author the bit, the grid pair moves 2
+  pixels, two autopilot frames on `03_Track` (ticks 1300 and 1917) move 1,918 and 11 pixels with no hole in a
+  wall or the road, and the PS2 frame at the reported pose shows no stipple to remove (11 pixels). Not
+  captured from PCSX2.
+- **Pure**: off (`Rule::UNREAD`), checked and not wired. With the rule on, the four Pure race pairs move
+  10, 34, 167 and 401 pixels and nothing vanishes, but vineta's rmse worsens 0.0699 to 0.0724 (a yellow `eur`
+  sign, 333 pixels worse, 68 better) and nothing of Pure's draw state was read (`Mesh_InitBatch` is unread
+  there). Open: a Pure circuit with a back-to-back board, and `Mesh_InitBatch` on Pure.
 - **HD, 2048, Omega**: not applicable. They cull per material (`STATE_CULL`, `Model::honour_cull`), which is
   already wired; the circuit's boards there are not batch copies.
 

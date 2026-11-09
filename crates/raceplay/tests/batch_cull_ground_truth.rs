@@ -23,8 +23,8 @@ const BOARD_TEXTURE: &str = "concentration shuuchuu2.tga";
 const FRONT_COPIES: [u32; 2] = [868, 929];
 const BACK_COPY: u32 = 928;
 
-/// The original's chase camera a craft's length before the player's reported pose (PPSSPP,
-/// Moa Therma White, `psp-trace.py --camera`, 2 placements agree).
+/// The original's chase camera at a placed craft a few units from the player's reported pose
+/// (PPSSPP, Moa Therma White, `psp-trace.py --camera`, tick 0 of one static placement).
 const EYE: [f32; 3] = [344.3, 6.91, 303.4];
 
 fn load(path: &Path, track: Option<&str>) -> race::Loaded {
