@@ -92,6 +92,7 @@ const SPRITES: &[&str] = &[
     engine_effects::TRACK_BLAST_EFFECT,
     engine_effects::QUAKE_EFFECT,
     engine_effects::MISSILE_FLARE_EFFECT,
+    engine_effects::TRAIL_HITSHIP_EFFECT,
 ];
 
 /// The effects whose emitters spread by the extent law on HD: the Quake's wave,

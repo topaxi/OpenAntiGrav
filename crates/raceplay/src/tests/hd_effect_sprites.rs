@@ -23,6 +23,7 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
             oag_title::engine_effects::TRACK_BLAST_EFFECT,
             oag_title::engine_effects::QUAKE_EFFECT,
             oag_title::engine_effects::MISSILE_FLARE_EFFECT,
+            oag_title::engine_effects::TRAIL_HITSHIP_EFFECT,
         ]
     );
     let names = oag_hd::TITLE.effects.names();
@@ -160,7 +161,7 @@ fn the_missile_head_draws_its_ring_atlas_when_listed_and_a_white_disc_when_not()
     assert_eq!(rings(&unlisted), 0);
 }
 
-fn trail_hit_burst(far_bar: bool) -> Option<oag_fx::psys::Effect> {
+fn trail_hit_burst(listed: bool) -> Option<oag_fx::psys::Effect> {
     let image = oag_testdata::image("hdfury-ps3-eu-dec.iso")?;
     let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
     let title: &Title = oag_hd::TITLE;
@@ -170,8 +171,8 @@ fn trail_hit_burst(far_bar: bool) -> Option<oag_fx::psys::Effect> {
         oag_title::engine_effects::TRAIL_HITSHIP_EFFECT,
         false,
         false,
-        false,
-        far_bar,
+        listed,
+        listed,
     )
     .expect("the effect loads");
     Some(effect)
@@ -209,6 +210,10 @@ fn the_trail_hit_burst_loads_as_far_bars_when_listed_and_procedural_when_not() {
             StreakDraw::FarBar { aspect: 2.0 }
         ]
     );
+    assert!(
+        listed.emitters.iter().all(|e| e.sprite.is_some()),
+        "HD authors both emitters' sprites, and the list reads them"
+    );
     let scales: Vec<f32> = listed.emitters.iter().map(|e| e.colour_scale).collect();
     assert_eq!(scales, [0.7, 1.0], "`+0xc84` of the two class-6 emitters");
     let unlisted = trail_hit_burst(false).expect("same image");
@@ -216,6 +221,6 @@ fn the_trail_hit_burst_loads_as_far_bars_when_listed_and_procedural_when_not() {
         unlisted
             .emitters
             .iter()
-            .all(|e| e.streak == StreakDraw::Procedural)
+            .all(|e| e.streak == StreakDraw::Procedural && e.sprite.is_none())
     );
 }
