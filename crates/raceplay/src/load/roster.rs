@@ -345,6 +345,9 @@ pub(super) fn grid(
             flare: craft_title.flare,
             hull_overlay: oag_fx::hull_overlay::DRAWN
                 && craft_title.looks.hull_overlay.applies_everywhere(),
+            leach_overlay: craft_title
+                .effect_on(oag_title::Trigger::LeachbeamEnergy)
+                .is_some(),
             hull_shine: oag_render::shine::DRAWN
                 && options.hull_shine
                 && craft_title

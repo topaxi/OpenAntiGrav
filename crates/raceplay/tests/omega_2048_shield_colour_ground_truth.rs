@@ -54,6 +54,7 @@ fn shield_of(
             mode: oag_race::Mode::SingleRace,
             flare: title.flare,
             hull_overlay: false,
+            leach_overlay: false,
             hull_shine: false,
             hull_wreck: false,
             absorb_shell: false,

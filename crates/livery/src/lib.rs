@@ -203,6 +203,9 @@ pub struct LoadContext<'a> {
     /// Whether to build the absorb hull overlay - Pulse's alone, and only
     /// while `oag_fx::hull_overlay::DRAWN` says so. See [`absorb::overlay`].
     pub hull_overlay: bool,
+    /// Whether to build the LeachBeam hull overlay too - on where the title has a LeachBeam and
+    /// [`Self::hull_overlay`] is: Pure draws the absorb overlay and ships no `leachbeam_surface.mip`.
+    pub leach_overlay: bool,
     /// Whether to build the hull's extra pass - Pulse's alone, and only while
     /// `oag_render::shine::DRAWN` says so. See `oag_render::shine`.
     pub hull_shine: bool,
@@ -639,8 +642,11 @@ fn one(
     } else {
         None
     };
-    let [absorb_overlay, leach_overlay] = [absorb::ABSORB, absorb::LEACH]
-        .map(|which| absorb::overlay(archives, &hull, &blob, which, ctx.hull_overlay, report));
+    let [absorb_overlay, leach_overlay] = [
+        (absorb::ABSORB, ctx.hull_overlay),
+        (absorb::LEACH, ctx.hull_overlay && ctx.leach_overlay),
+    ]
+    .map(|(which, wanted)| absorb::overlay(archives, &hull, &blob, which, wanted, report));
     let shine = if ctx.hull_shine {
         let shine = mesh::shine_pass::build(&hull);
         report.push(match &shine {

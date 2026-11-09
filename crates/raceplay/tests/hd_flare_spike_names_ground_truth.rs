@@ -63,6 +63,7 @@ fn every_hd_and_fury_flare_draws_every_spike_it_authors() {
                     mode: oag_race::Mode::SingleRace,
                     flare: oag_hd::TITLE.flare,
                     hull_overlay: false,
+                    leach_overlay: false,
                     hull_shine: false,
                     hull_wreck: false,
                     absorb_shell: false,

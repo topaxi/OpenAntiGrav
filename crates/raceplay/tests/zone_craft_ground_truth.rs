@@ -121,6 +121,7 @@ fn omega_zone_hull_wears_the_livery_its_definition_names() {
                 mode: Mode::Zone,
                 flare: oag_omega::TITLE.flare,
                 hull_overlay: false,
+                leach_overlay: false,
                 hull_shine: false,
                 hull_wreck: false,
                 absorb_shell: false,
