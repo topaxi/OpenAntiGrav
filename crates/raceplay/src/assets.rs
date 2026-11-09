@@ -104,6 +104,27 @@ pub(super) fn leach_beam_texture(
 }
 
 #[cfg(feature = "view")]
+/// [`particle_effect`] with the per-effect laws a title lists for `name`
+/// (`oag_title::Effects::{sprites, extents, far_bars}`).
+pub(super) fn listed_particle_effect(
+    archives: &mut oag_assets::Archives,
+    dir: &str,
+    effects: &oag_title::Effects,
+    name: &'static str,
+    pulse_psp: bool,
+) -> std::result::Result<(psys::Effect, String), String> {
+    particle_effect(
+        archives,
+        dir,
+        name,
+        pulse_psp,
+        effects.extents.contains(&name),
+        effects.sprites.contains(&name),
+        effects.far_bars.contains(&name),
+    )
+}
+
+#[cfg(feature = "view")]
 /// Reads one `Data\Psys\<name>.POB` out of the archive set and parses it
 /// into a playable effect.
 ///
