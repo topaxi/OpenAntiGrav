@@ -365,3 +365,30 @@ fn example_dir(path: &str) -> Option<std::path::PathBuf> {
         None
     }
 }
+
+#[test]
+fn a_written_mod_is_found_opened_and_lists_its_campaign() {
+    let root = std::env::temp_dir().join(format!("oag-campaign-write-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let def = built();
+    let first = write_mod(&root, &def, &["wipeout-pulse"]).unwrap();
+    let second = write_mod(&root, &def, &["wipeout-pulse"]).unwrap();
+    assert_ne!(first, second, "a saved campaign never overwrites another");
+    let found = crate::search(std::slice::from_ref(&root));
+    assert_eq!(found.len(), 2);
+    let opened = crate::Mod::open(&first).unwrap();
+    assert_eq!(opened.manifest.id, "player.small");
+    assert!(opened.is_for("wipeout-pulse") && !opened.is_for("wipeout-hd"));
+    let campaigns = opened.campaigns();
+    assert_eq!(campaigns.len(), 1);
+    assert_eq!(campaigns[0].def.as_ref().unwrap(), &def);
+    let again = crate::Mod::open(&second).unwrap();
+    assert_eq!(again.manifest.id, "player.small-2");
+    oag_schema::validate::accepts(
+        crate::SCHEMA_KIND,
+        crate::SCHEMA_MAJOR,
+        &std::fs::read_to_string(first.join(crate::MANIFEST)).unwrap(),
+    )
+    .unwrap();
+    std::fs::remove_dir_all(&root).unwrap();
+}

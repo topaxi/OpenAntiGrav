@@ -459,6 +459,86 @@ impl CampaignDef {
     }
 }
 
+/// The mod id a campaign saved by the game carries: `player.<campaign id>`.
+#[must_use]
+pub fn saved_mod_id(campaign_id: &str) -> String {
+    format!("player.{campaign_id}")
+}
+
+/// Writes `def` as a fresh folder mod under `root` (the user mods directory):
+/// `<root>/<campaign id>[-n]/oag-mod.toml` and `campaigns/<campaign id>.toml`, for the
+/// titles named (their lowercased hyphenated names). An existing folder is never touched:
+/// the next free `-n` suffix is used. Returns the folder written.
+///
+/// # Errors
+///
+/// The definition does not check, or a file cannot be written.
+pub fn write_mod(
+    root: &std::path::Path,
+    def: &CampaignDef,
+    titles: &[&str],
+) -> Result<std::path::PathBuf, crate::Error> {
+    #[derive(Serialize)]
+    struct ModTable<'a> {
+        id: String,
+        name: &'a str,
+        version: &'a str,
+        authors: [&'a str; 1],
+        description: &'a str,
+        titles: &'a [&'a str],
+    }
+    #[derive(Serialize)]
+    struct Manifest<'a> {
+        #[serde(rename = "toml-schema")]
+        header: oag_schema::Header,
+        r#mod: ModTable<'a>,
+    }
+    let io = |path: &std::path::Path| {
+        let origin = path.display().to_string();
+        move |source| crate::Error::Io { origin, source }
+    };
+    let other = |path: &std::path::Path, why: String| crate::Error::Io {
+        origin: path.display().to_string(),
+        source: std::io::Error::other(why),
+    };
+    let campaign_text = def.write().map_err(|e| other(root, e.to_string()))?;
+    let id = &def.campaign.id;
+    let mut folder = root.join(id);
+    let mut mod_id = saved_mod_id(id);
+    let mut n = 1_u32;
+    while folder.exists() {
+        n += 1;
+        folder = root.join(format!("{id}-{n}"));
+        mod_id = saved_mod_id(&format!("{id}-{n}"));
+    }
+    let campaigns = folder.join(DIRECTORY);
+    std::fs::create_dir_all(&campaigns).map_err(io(&campaigns))?;
+    let manifest = Manifest {
+        header: oag_schema::Header {
+            location: oag_schema::location(crate::SCHEMA_KIND, crate::SCHEMA_MAJOR),
+            version: oag_schema::LANGUAGE_VERSION.to_string(),
+        },
+        r#mod: ModTable {
+            id: mod_id,
+            name: &def.campaign.name,
+            version: "1.0.0",
+            authors: ["Player"],
+            description: if def.campaign.description.trim().is_empty() {
+                "A campaign made in the in-game editor."
+            } else {
+                &def.campaign.description
+            },
+            titles,
+        },
+    };
+    let manifest_text = toml::to_string(&manifest).map_err(|e| other(&folder, e.to_string()))?;
+    let manifest_path = folder.join(crate::MANIFEST);
+    std::fs::write(&manifest_path, manifest_text).map_err(io(&manifest_path))?;
+    let file = campaigns.join(format!("{id}.toml"));
+    std::fs::write(&file, campaign_text).map_err(io(&file))?;
+    Ok(folder)
+}
+
 /// A campaign found in a mod: where it came from, and what it is or why not.
 #[derive(Debug, Clone)]
 pub struct Found {
