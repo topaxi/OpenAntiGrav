@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-09
-summary: "Open: Pure ring and glow templates (streak landed), HD shell tint (gamma nibble unread), HD burst needs a re-shot original (no /2), Pulse bar glow"
+summary: "Open: Pure ground ring and template spawn pattern (0.75 s too bright), HD shell tint, HD burst re-shot, Pulse bar glow"
 ---
 
 # The weapon-absorb effect: built on every title, what a player still sees differently
@@ -26,10 +26,11 @@ Re-paired on a second machine on 2026-11-09 (`absorb-fx-wire`); numbers and comm
   1. ~~The burst's shape~~ (landed): Pure's class-6 streak is Pulse's pool bar (`oag_title::Effects::pool_bars`,
      `psp-pure-usa/particle-bars.md`); wide soft purple shafts now, not 1 to 2 px white-cored lines. Still different: ours radiate where the
      original's rise mostly vertically, ours are more magenta, and ours lingers at 0.75 s (+7.7 against +3.1, the node stagger).
-  2. The ground-ring halos and the nose and wingtip bloom: **the POB does author them**. `WO_WEAPON_ABSORB.POB` parses to three emitters,
-     the streak and two template billboards, `ring1` and `glow`; ours mutes templates on every source but Pulse's PSP and Pure's template draw
-     is unread. Read it (Pulse's is `ParticleSystem_DrawParticle`, `0x089186bc`; find Pure's twin from
-     the template path of `psp-pure-usa/particle-bars.md`), then list the two as templates for Pure. The craft box's missing light (11.3 against 18.3 at 0.5 s) is the likely share.
+  2. ~~The nose and wingtip bloom~~ (landed): `ring1` and `glow` play on Pure (`oag_title::Effects::templates`; the template draw is Pulse's,
+     `FUN_08875138` and three more, static 85, `psp-pure-usa/particle-bars.md`, "The template draw"). Craft box at 0.5 s: original +18.3, ours +11.3
+     before and +15.2 after. **Open:** the original's flat ground ellipse is still missing, and 0.75 s is now far too bright (+17.0 against +3.1):
+     ours plays the templates for each of `ABSORB_BURST`'s eight staggered nodes. Break on Pure's `FUN_08875138` on PPSSPP over the absorb and log
+     roll, size, aspect, position per hit (recipe on the particle-bars page) to read how many template instances the original draws and where.
   3. The HUD flash: `FUN_08925f4c` writes `*(_DAT_0005364c + 0x98) = 0xff`; what it draws is unread.
 - **HD.** The state's player is the `Feisar_c1` concept hull; ours needs `--team feisar_c1 --variant concept1` to be the same ship.
   1. The shell's colour: pale lavender-white against the original's saturated blue (blue minus red at 1.0 s: original +10.8, ours +6.7).
@@ -56,5 +57,5 @@ Re-paired on a second machine on 2026-11-09 (`absorb-fx-wire`); numbers and comm
 1. Pulse bar: GE-dump the bar's draw inside the window, then bloom it through the window and draw its off phase bright (rows 248 to 258 against 207 and 239).
 2. HD shell tint: read unit 0's gamma nibble on the shell's draw (`rsx-draw-list.py --samplers`); if 7, decode the tap on HD's encoded store as the flame does, then re-pair at 0.5 s and 1.0 s.
 3. HD burst: re-shoot the original (three absorbs, one control, one boot) to settle +7.7 against +21.4 at 0.5 s; then read what writes `kColourScale` (`c467`) per psys draw. No `/2`.
-4. Pure ring and glow: read Pure's template draw (the counterpart of `ParticleSystem_DrawParticle`), then unmute `ring1` and `glow` for Pure and re-pair at 0.3, 0.5 and 0.75 s.
+4. Pure ring and template spawn: the `FUN_08875138` hit log of the recipe on the particle-bars page, then fit the spawn pattern and re-pair at 0.3, 0.5 and 0.75 s.
 5. 2048: read `Ship_PlayAbsorbFeedback` and the pickup slot in the 2048 eboot, then the HD recipe with a `/proc` write. Omega: walk the Racebox weapons row and read the same two on the eboot.

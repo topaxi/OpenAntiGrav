@@ -15,9 +15,13 @@
 //! have to start with that child's own instances, and no consumer here carries
 //! that. [`Effect::skipped_templates`] counts them.
 //!
-//! **Pulse on the PSP only**, the layout being read off that executable alone:
-//! every other source calls [`Effect::without_pulse_psp_draw`], which mutes the
-//! templates it added.
+//! **Pulse on the PSP, and the effects a title lists**
+//! (`oag_title::Effects::templates`): every other source calls
+//! [`Effect::without_pulse_psp_draw`], which mutes the templates it added, and
+//! [`Effect::without_pulse_psp_draw_but`] keeps them for a listed effect with the
+//! roll and stretch they author. Pure's absorb burst is listed; its draw, sampler
+//! and instance initialiser are Pulse's
+//! (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw").
 //!
 //! The sprite is the template record's own, at `+0x890`
 //! (`FUN_08928b10` binds it for a template particle): on the collision sparks it is

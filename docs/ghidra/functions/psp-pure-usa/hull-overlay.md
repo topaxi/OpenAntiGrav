@@ -61,5 +61,5 @@ Pairs and scores: [`weapon-absorb-pairs.md`](../../../rendering/weapon-absorb-pa
 
 `Data\Psys\WO_WEAPON_ABSORB.POB` on Pure (27,872 bytes) is not Pulse's (24,688). Its streak emitter is `shape 4`, `20` ticks, `3`
 per tick, `-0.4998` speed, life `7`, class 6, colour mode **0** walking a purple `(109, 22, 167)` to magenta `(181, 14, 147)` table. It
-also authors two template billboards, `ring1` and `glow`, which ours does not draw (the template draw is unread on Pure): see
+also authors two template billboards, `ring1` and `glow`, which ours now draws (the template draw is Pulse's, read): see
 [`particle-bars.md`](particle-bars.md). Pulse's file has the `rings` emitter (class 3, zero speed) and a cyan table.

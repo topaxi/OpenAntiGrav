@@ -80,29 +80,29 @@ impl Effect {
     /// off Pulse's PSP `BOOT.BIN` alone, and Pure's is a different
     /// executable that ships sprites of its own.
     pub fn without_pulse_psp_draw(&mut self) {
-        self.reset_pulse_psp_draw(KeptBar::No);
+        self.reset_pulse_psp_draw(Kept::NONE);
     }
 
-    /// [`Self::without_pulse_psp_draw`], except that an emitter's own class-6
-    /// particle keeps the bar `bars` names: HD's view-space bar
-    /// ([`StreakDraw::FarBar`], [`KeptBar::Far`]), the draw HD's `PartRender` job
-    /// and Omega's CPU twin build for render mode 5
-    /// (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The class-6 draw
-    /// law"), or the pool bar Pulse's and Pure's PSP executables build
-    /// ([`StreakDraw::Bar`], [`KeptBar::Mean`]; Pure's `FUN_088746c8` reads
+    /// [`Self::without_pulse_psp_draw`], except for the laws `kept` names: an emitter's own
+    /// class-6 particle keeps the bar [`Kept::bar`] names (HD's view-space bar,
+    /// [`StreakDraw::FarBar`], [`KeptBar::Far`], the draw HD's `PartRender` job and Omega's CPU
+    /// twin build for render mode 5, `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The
+    /// class-6 draw law"; or the pool bar Pulse's and Pure's PSP executables build,
+    /// [`StreakDraw::Bar`], [`KeptBar::Mean`], Pure's `FUN_088746c8` reading
     /// `ParticleSystem_DrawPoolBars`'s strip law,
-    /// `docs/ghidra/functions/psp-pure-usa/particle-bars.md`). Per effect, for the
-    /// ones a title lists (`oag_title::Effects::{far_bars, pool_bars}`): each law
-    /// was read on a named effect alone.
-    pub fn without_pulse_psp_draw_but(&mut self, bars: KeptBar) {
-        self.reset_pulse_psp_draw(bars);
+    /// `docs/ghidra/functions/psp-pure-usa/particle-bars.md`), and the sprite templates play when
+    /// [`Kept::templates`] is set. Per effect, for the ones a title lists
+    /// (`oag_title::Effects::{far_bars, pool_bars, templates}`): each law was read on a named
+    /// effect alone.
+    pub fn without_pulse_psp_draw_but(&mut self, kept: Kept) {
+        self.reset_pulse_psp_draw(kept);
     }
 
-    fn reset_pulse_psp_draw(&mut self, bars: KeptBar) {
+    fn reset_pulse_psp_draw(&mut self, kept: Kept) {
         self.rides_owner_frame = false;
         for spec in &mut self.emitters {
             spec.under_alpha = false;
-            spec.streak = match (spec.streak, bars) {
+            spec.streak = match (spec.streak, kept.bar) {
                 (StreakDraw::Bar { aspect }, KeptBar::Far) => StreakDraw::FarBar { aspect },
                 (StreakDraw::Bar { aspect }, KeptBar::Mean) => StreakDraw::Bar { aspect },
                 _ => StreakDraw::Procedural,
@@ -110,13 +110,41 @@ impl Effect {
             spec.frames = super::FrameAdvance::Still;
             spec.short_run = false;
         }
-        self.mute_templates();
-        self.mute_rotation();
+        if !kept.templates {
+            self.mute_templates();
+        }
+        self.mute_rotation(kept.templates);
     }
 }
 
-/// Which class-6 bar an effect keeps when [`Effect::without_pulse_psp_draw_but`] takes every other
-/// Pulse PSP law away.
+/// Which Pulse PSP draw laws an effect keeps when [`Effect::without_pulse_psp_draw_but`] takes
+/// the rest away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Kept {
+    /// The class-6 bar.
+    pub bar: KeptBar,
+    /// The sprite templates, played with their own roll and stretch.
+    pub templates: bool,
+}
+
+impl Kept {
+    /// Nothing: [`Effect::without_pulse_psp_draw`].
+    pub const NONE: Self = Self {
+        bar: KeptBar::No,
+        templates: false,
+    };
+
+    /// Only the class-6 bar `bar` names.
+    #[must_use]
+    pub const fn bar(bar: KeptBar) -> Self {
+        Self {
+            bar,
+            templates: false,
+        }
+    }
+}
+
+/// Which class-6 bar an effect keeps: see [`Kept`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeptBar {
     /// None: every streak is procedural.

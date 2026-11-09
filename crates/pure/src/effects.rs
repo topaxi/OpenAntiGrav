@@ -144,6 +144,7 @@ pub const EFFECTS: &Effects = &{
         .without(Trigger::MagstripZone);
     effects.extents = EXTENTS;
     effects.pool_bars = POOL_BARS;
+    effects.templates = TEMPLATES;
     effects.quake_look = QUAKE_LOOK;
     effects
 };
@@ -153,6 +154,13 @@ pub const EFFECTS: &Effects = &{
 /// counterpart) dispatches index 5 to, builds `ParticleSystem_DrawPoolBars`' strip
 /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`).
 const POOL_BARS: &[&str] = &[engine_effects::ABSORB_EFFECT];
+
+/// The effects whose sprite templates play on Pure: the absorb burst's `ring1` and `glow`, both
+/// class 3. `FUN_08875138` is `ParticleSystem_DrawParticle`'s counterpart, `FUN_08872e50` its
+/// `ParticleSystem_DrawRotatedSprite`, `FUN_0893d848` `ParticleSystem_InitInstance` and
+/// `FUN_0893fc34` `ParticleSystem_UpdateParticleFields`
+/// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw").
+const TEMPLATES: &[&str] = &[engine_effects::ABSORB_EFFECT];
 
 /// The effects whose emitters spread by the extent law on Pure: the Quake's
 /// wave. `Quake_Update` (`0x08879d54`) writes `edge distance / 50` into slot 1
