@@ -90,6 +90,33 @@ pub struct Info {
     /// How an unopened cell shows.
     #[serde(default)]
     pub reveal: Reveal,
+    /// The opponents' base difficulty for every cell that names none of its own:
+    /// a rung of the original driver (`easy`, `medium`, `hard`) or a level of ours
+    /// (`novice`, `skilled`, `elite`, `ace`). Absent: the screen's rung, as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub difficulty: Option<String>,
+    /// How [`Self::difficulty`] moves across the cells.
+    #[serde(default, skip_serializing_if = "Progression::is_flat")]
+    pub progression: Progression,
+}
+
+/// How a campaign's base difficulty moves from cell to cell. A cell is later when
+/// its tier is later, or its tier is the same and it is listed later.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Progression {
+    /// Every cell at the base.
+    #[default]
+    Flat,
+    /// The first cell at the base, the last at the top of the driver's ladder, the
+    /// cells between stepping up evenly. Without a base it starts at the bottom.
+    Ramp,
+}
+
+impl Progression {
+    fn is_flat(&self) -> bool {
+        *self == Self::Flat
+    }
 }
 
 /// `[[grid]]`: one tier.

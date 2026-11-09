@@ -465,6 +465,8 @@ impl Editor {
             description: String::new(),
             titles: vec![self.choices.title.clone()],
             reveal: Reveal::Locked,
+            difficulty: None,
+            progression: oag_mod::campaign::Progression::Flat,
         };
         let grid = GridDef {
             id: "grid0".to_string(),

@@ -188,6 +188,30 @@ fn the_schema_and_the_reader_agree_on_every_example() {
             false,
         ),
         (
+            "a ramp from a base",
+            with_header(&SMALL.replace(
+                "name = \"Small\"",
+                "name = \"Small\"\ndifficulty = \"hard\"\nprogression = \"ramp\"",
+            )),
+            true,
+        ),
+        (
+            "our driver's base",
+            with_header(&SMALL.replace(
+                "name = \"Small\"",
+                "name = \"Small\"\ndifficulty = \"skilled\"",
+            )),
+            true,
+        ),
+        (
+            "an unknown progression",
+            with_header(&SMALL.replace(
+                "name = \"Small\"",
+                "name = \"Small\"\nprogression = \"spiral\"",
+            )),
+            false,
+        ),
+        (
             "three slot numbers",
             with_header(&SMALL.replace("[1, 2]", "[1, 2, 3]")),
             false,
@@ -243,6 +267,13 @@ fn the_schema_and_the_reader_agree_on_every_example() {
     ));
     assert!(oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &typo).is_err());
     assert!(CampaignDef::parse(&typo).is_ok());
+    // A difficulty word is a name the game checks when the campaign compiles.
+    let brutal = with_header(&SMALL.replace(
+        "name = \"Small\"",
+        "name = \"Small\"\ndifficulty = \"brutal\"",
+    ));
+    assert!(oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &brutal).is_err());
+    assert!(CampaignDef::parse(&brutal).is_ok());
     for (what, text, accepted) in cases {
         let schema = oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &text);
         let reader = CampaignDef::parse(&text);
@@ -277,6 +308,24 @@ fn a_written_campaign_reads_back_as_the_same_definition() {
 }
 
 #[test]
+fn a_difficulty_setting_survives_a_write_and_validates_against_the_schema() {
+    let mut def = built();
+    def.campaign.difficulty = Some("medium".to_string());
+    def.campaign.progression = Progression::Ramp;
+    let text = def.write().unwrap();
+    assert!(text.contains("difficulty = \"medium\""), "{text}");
+    assert!(text.contains("progression = \"ramp\""), "{text}");
+    assert_eq!(CampaignDef::parse(&text).unwrap(), def);
+    oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &text)
+        .unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+    let flat = built().write().unwrap();
+    assert!(
+        !flat.contains("progression") && !flat.contains("[campaign]\ndifficulty"),
+        "{flat}"
+    );
+}
+
+#[test]
 fn a_definition_built_in_code_writes_with_the_header() {
     let info = Info {
         id: "mine".to_string(),
@@ -284,6 +333,8 @@ fn a_definition_built_in_code_writes_with_the_header() {
         description: String::new(),
         titles: Vec::new(),
         reveal: Reveal::Locked,
+        difficulty: None,
+        progression: Progression::Flat,
     };
     let event = EventDef {
         slot: [3, 2],

@@ -524,3 +524,147 @@ fn a_campaign_racing_a_mod_turned_off_is_left_out_saying_so() {
         gone.failed
     );
 }
+
+/// `n` race events in one tier, every other one flown by our driver, under the
+/// given `[campaign]` lines and with `extra` appended to the third event.
+fn ladder_campaign(setting: &str, n: usize, extra: &str) -> Result<Custom, String> {
+    let mut text = format!(
+        "toml-schema = {{ location = \"https://oag.topaxi.com/mods/schemas/v1/campaign.tosd\", version = \"1.0.0\" }}\n\
+         [campaign]\nid = \"ladder\"\nname = \"Ladder\"\n{setting}\n[[grid]]\nid = \"g0\"\n"
+    );
+    for i in 0..n {
+        let ai = if i % 2 == 0 { "original" } else { "ours" };
+        let own = if i == 2 { extra } else { "" };
+        text.push_str(&format!(
+            "[[grid.event]]\nslot = [{}, {}]\nmode = \"race\"\ntrack = \"01_Track\"\nclass = \"venom\"\n\
+             unlock = {{ open = true }}\nfield = {{ ai = \"{ai}\"{own} }}\n",
+            i % 10,
+            i / 10
+        ));
+    }
+    let def = CampaignDef::parse(&text).map_err(|e| e.to_string())?;
+    compile(&def, "m", oag_pulse::TITLE, &pilots(), &files)
+}
+
+/// The original rung and our level of each event of a `ladder_campaign`, in order.
+fn rungs(custom: &Custom) -> Vec<(Option<usize>, Option<oag_ai::Difficulty>)> {
+    custom.grids[0]
+        .cells
+        .iter()
+        .map(|cell| {
+            let event = custom.event(&cell.name).unwrap();
+            (event.level, event.difficulty)
+        })
+        .collect()
+}
+
+#[test]
+fn a_flat_campaign_runs_every_cell_at_the_base_on_either_driver() {
+    use oag_ai::Difficulty::{Ace, Novice, Skilled};
+    let hard = ladder_campaign("difficulty = \"hard\"", 4, "").unwrap();
+    assert_eq!(
+        rungs(&hard),
+        [
+            (Some(2), None),
+            (None, Some(Ace)),
+            (Some(2), None),
+            (None, Some(Ace))
+        ]
+    );
+    let easy = ladder_campaign("difficulty = \"easy\"\nprogression = \"flat\"", 2, "").unwrap();
+    assert_eq!(rungs(&easy), [(Some(0), None), (None, Some(Novice))]);
+    // Named in our driver's words, the base keeps its place on the original's three rungs.
+    let skilled = ladder_campaign("difficulty = \"skilled\"", 2, "").unwrap();
+    assert_eq!(rungs(&skilled), [(Some(1), None), (None, Some(Skilled))]);
+}
+
+#[test]
+fn no_setting_leaves_the_screens_rung_alone() {
+    let custom = ladder_campaign("", 3, "").unwrap();
+    assert_eq!(rungs(&custom), [(None, None); 3]);
+}
+
+#[test]
+fn a_ramp_never_steps_down_and_reaches_the_top_of_the_ladder() {
+    for base in [
+        "easy", "medium", "hard", "novice", "skilled", "elite", "ace",
+    ] {
+        for n in [2, 3, 5, 12] {
+            let setting = format!("difficulty = \"{base}\"\nprogression = \"ramp\"");
+            let custom = ladder_campaign(&setting, n, "").unwrap();
+            let events = rungs(&custom);
+            let original: Vec<usize> = events.iter().filter_map(|e| e.0).collect();
+            let ours: Vec<u8> = events.iter().filter_map(|e| e.1).map(|d| d as u8).collect();
+            assert!(
+                original.windows(2).all(|w| w[0] <= w[1]),
+                "{base} {n}: {original:?}"
+            );
+            assert!(
+                ours.windows(2).all(|w| w[0] <= w[1]),
+                "{base} {n}: {ours:?}"
+            );
+            // The last cell is at the top of whichever ladder its driver climbs.
+            let last = events.last().unwrap();
+            assert!(
+                *last == (Some(2), None) || *last == (None, Some(oag_ai::Difficulty::Ace)),
+                "{base} {n}: the last cell is {last:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_ramp_with_no_base_starts_at_the_bottom() {
+    use oag_ai::Difficulty::{Ace, Skilled};
+    let custom = ladder_campaign("progression = \"ramp\"", 4, "").unwrap();
+    let events = rungs(&custom);
+    assert_eq!(events[0], (Some(0), None));
+    assert_eq!(events[1].1, Some(Skilled));
+    assert_eq!(events[3].1, Some(Ace));
+}
+
+#[test]
+fn a_ramp_steps_up_with_the_cell_order_across_tiers() {
+    let text = "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/campaign.tosd\", version = \"1.0.0\" }\n\
+        [campaign]\nid = \"t\"\nname = \"T\"\ndifficulty = \"easy\"\nprogression = \"ramp\"\n\
+        [[grid]]\nid = \"a\"\n[[grid.event]]\nslot = [0, 0]\nmode = \"race\"\ntrack = \"01_Track\"\nclass = \"venom\"\n\
+        [[grid.event]]\nslot = [1, 0]\nmode = \"race\"\ntrack = \"01_Track\"\nclass = \"venom\"\n\
+        [[grid]]\nid = \"b\"\n[[grid.event]]\nslot = [0, 0]\nmode = \"race\"\ntrack = \"01_Track\"\nclass = \"venom\"\n";
+    let custom = compile(
+        &CampaignDef::parse(text).unwrap(),
+        "m",
+        oag_pulse::TITLE,
+        &pilots(),
+        &files,
+    )
+    .unwrap();
+    let level = |cell: &str| custom.event(cell).unwrap().level;
+    assert_eq!(
+        [level("grid0_0_0"), level("grid0_1_0"), level("grid1_0_0")],
+        [Some(0), Some(1), Some(2)]
+    );
+}
+
+#[test]
+fn a_cells_own_difficulty_wins_over_the_ramp() {
+    // The third event (index 2, flown by the original driver) names `easy`: on a
+    // ramp it would be partway up.
+    let setting = "difficulty = \"easy\"\nprogression = \"ramp\"";
+    let ramped = ladder_campaign(setting, 5, "").unwrap();
+    assert_eq!(rungs(&ramped)[2].0, Some(1));
+    let own = ladder_campaign(setting, 5, ", difficulty = \"hard\"").unwrap();
+    assert_eq!(rungs(&own)[2].0, Some(2));
+    assert_eq!(
+        rungs(&own)[0].0,
+        Some(0),
+        "the cells beside it still follow the ramp"
+    );
+    assert_eq!(rungs(&own)[4].0, ramped.event("grid0_4_0").unwrap().level);
+}
+
+#[test]
+fn a_difficulty_neither_driver_knows_is_refused_by_name() {
+    let err = ladder_campaign("difficulty = \"brutal\"", 2, "").unwrap_err();
+    assert!(err.contains("mod m campaign ladder"), "{err}");
+    assert!(err.contains("brutal") && err.contains("novice"), "{err}");
+}

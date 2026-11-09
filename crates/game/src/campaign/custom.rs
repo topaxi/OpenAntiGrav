@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use oag_mod::campaign::{CampaignDef, EventDef, MedalsDef, PilotDef, Reveal, Targets};
+use oag_mod::campaign::{CampaignDef, EventDef, MedalsDef, PilotDef, Progression, Reveal, Targets};
 use oag_tables::race_campaign::{Cell, DifficultyTargets, Grid, Medal, MedalTargets, Mode};
 
 /// The mode words a campaign file may use, and what each runs as.
@@ -33,6 +33,75 @@ pub enum Ai {
     Original,
     /// This project's driver (`oag_ai::Driver`).
     Ours,
+}
+
+/// The original driver's rungs, easiest first. Our driver's levels are
+/// `oag_ai::Difficulty::ALL`.
+const ORIGINAL_RUNGS: [&str; 3] = ["easy", "medium", "hard"];
+
+/// A campaign's difficulty setting (`[campaign] difficulty` and `progression`),
+/// resolved against the rungs of whichever driver an event flies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Setting {
+    /// The base as a rung of the ladder it was named in: its place and that
+    /// ladder's length. `None`: the bottom of either ladder.
+    base: Option<(usize, usize)>,
+    progression: Progression,
+    /// How many events the campaign has.
+    count: usize,
+}
+
+impl Setting {
+    /// Reads the campaign's words; a difficulty neither driver knows is an error.
+    fn of(info: &oag_mod::campaign::Info, count: usize) -> Result<Option<Self>, String> {
+        let base = match info.difficulty.as_deref() {
+            None => None,
+            Some(word) => {
+                let ours = oag_ai::Difficulty::ALL.map(|(name, _)| name);
+                let place = |ladder: &[&str]| {
+                    ladder
+                        .iter()
+                        .position(|name| name.eq_ignore_ascii_case(word))
+                        .map(|at| (at, ladder.len()))
+                };
+                Some(place(&ORIGINAL_RUNGS).or_else(|| place(&ours)).ok_or_else(|| {
+                    format!(
+                        "[campaign] difficulty {word:?}: one of {} (the original driver's) or {} (ours)",
+                        ORIGINAL_RUNGS.join(", "),
+                        ours.join(", ")
+                    )
+                })?)
+            }
+        };
+        Ok(
+            (base.is_some() || info.progression != Progression::Flat).then_some(Self {
+                base,
+                progression: info.progression,
+                count,
+            }),
+        )
+    }
+
+    /// The rung of a ladder `len` long that the event listed `ordinal`th (counting
+    /// from 0, tier by tier) runs at. The base keeps its relative place when the
+    /// ladder is the other driver's, rounding down on a tie (**chosen**:
+    /// `medium` is our `skilled`, `hard` our `ace`). A ramp climbs from there to
+    /// the top, evenly and never down.
+    fn rung(&self, len: usize, ordinal: usize) -> usize {
+        let top = len - 1;
+        let base = match self.base {
+            Some((at, from)) if from > 1 => (2 * at * top + from - 2) / (2 * (from - 1)),
+            _ => 0,
+        };
+        match self.progression {
+            Progression::Ramp if self.count > 1 => {
+                let climb = top - base;
+                let span = self.count - 1;
+                base + (2 * climb * ordinal.min(span) + span - 1) / (2 * span)
+            }
+            _ => base,
+        }
+    }
 }
 
 /// What an event asks of its race beyond what a [`Cell`] carries.
@@ -62,6 +131,25 @@ pub struct Event {
     /// Each event that must have a medal first, by cell name, with the least
     /// medal it needs (`None`: any).
     pub requires: Vec<(String, Option<Medal>)>,
+}
+
+impl Event {
+    /// Takes the campaign's difficulty for the driver this event flies, unless the
+    /// event named a rung of its own.
+    fn follow(&mut self, setting: &Setting, ordinal: usize) {
+        if self.level.is_some() || self.difficulty.is_some() {
+            return;
+        }
+        match self.ai {
+            Ai::Original => {
+                self.level = Some(setting.rung(ORIGINAL_RUNGS.len(), ordinal));
+            }
+            Ai::Ours => {
+                let ladder = oag_ai::Difficulty::ALL;
+                self.difficulty = Some(ladder[setting.rung(ladder.len(), ordinal)].1);
+            }
+        }
+    }
 }
 
 /// A track file of this project's own format (`<name>.track.toml` and the
@@ -358,14 +446,21 @@ pub fn compile(
         .race
         .speed_classes
         .map_or(&[][..], |classes| classes.names);
+    let setting = Setting::of(info, def.grids.iter().map(|grid| grid.events.len()).sum())
+        .map_err(|problem| format!("{prefix}: {problem}"))?;
     let mut grids = Vec::with_capacity(def.grids.len());
     let mut events = BTreeMap::new();
+    let mut ordinal = 0;
     for (index, grid_def) in def.grids.iter().enumerate() {
         let mut cells = Vec::with_capacity(grid_def.events.len());
         for event_def in &grid_def.events {
             let at = format!("{prefix} grid {:?} event {:?}", grid_def.id, event_def.slot);
-            let (cell, event) = compile_event(index, event_def, &names, ladder, pilots, files)
+            let (cell, mut event) = compile_event(index, event_def, &names, ladder, pilots, files)
                 .map_err(|problem| format!("{at}: {problem}"))?;
+            if let Some(setting) = &setting {
+                event.follow(setting, ordinal);
+            }
+            ordinal += 1;
             events.insert(cell.name.clone(), event);
             cells.push(cell);
         }
