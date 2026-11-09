@@ -252,6 +252,9 @@ pub struct Transit {
     pub ticks_left: u16,
     /// The course ring point it comes out at, resolved when it entered.
     pub to: u32,
+    /// The fork route it comes out on, as its index in the course's routes plus one; `0`
+    /// for the ring.
+    pub route: u16,
     /// Its speed coming out, track units a second.
     pub exit_speed: f32,
 }

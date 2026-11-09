@@ -28,7 +28,7 @@ impl Race {
     fn portal_frame(&self, progress: f32, face: Face) -> Option<Mat4> {
         let course = self.sim.course.as_ref()?;
         let index = course.index_at_progress(progress)?;
-        let (_, up, centre, _) = self.road_frame(index)?;
+        let (_, up, centre, _) = self.road_frame(crate::transit::Exit::ring(index))?;
         portal::frame(centre, course.tangent(index)?, up, face)
     }
 

@@ -27,6 +27,24 @@ use crate::Race;
 pub use oag_ext_abi::Distance;
 use oag_ext_abi::{MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS};
 
+/// A course point a transit comes out at: a ring point, and the fork route it is on when it
+/// is on one (`oag_race::Course::route_point` maps the ring point onto the route).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Exit {
+    /// The ring point, the stand-in for how far round the lap it is.
+    pub to: usize,
+    /// The route's index in [`oag_race::Course::routes`] plus one; `0` for the ring.
+    pub route: u16,
+}
+
+impl Exit {
+    /// An exit on the ring itself.
+    #[must_use]
+    pub fn ring(to: usize) -> Self {
+        Self { to, route: 0 }
+    }
+}
+
 /// How many rays a clearance probe casts round its half disc, end to end. Chosen.
 const CLEARANCE_RAYS: usize = 9;
 /// How far above the track surface a clearance probe's rays start, so the floor under
@@ -67,11 +85,12 @@ impl Race {
                 "exit speed factor {exit_factor} is not within [0, {MAX_SPEED_FACTOR}]"
             ));
         }
-        let (to, _) = self.point_ahead(slot, distance)?;
+        let (exit, _) = self.exit_ahead(slot, distance)?;
         let speed = self.speed_of(slot);
         self.sim.world.ships[slot].transit = Some(Transit {
             ticks_left: ticks,
-            to: u32::try_from(to).unwrap_or(u32::MAX),
+            to: u32::try_from(exit.to).unwrap_or(u32::MAX),
+            route: exit.route,
             exit_speed: speed * exit_factor,
         });
         Ok(())
@@ -93,6 +112,18 @@ impl Race {
     /// Why it does not resolve: no course, an amount that is a lap or more on (or not
     /// above zero), a progress off the lap, a trigger the track does not have.
     pub fn point_ahead(&self, slot: usize, distance: Distance) -> Result<(usize, f32), String> {
+        self.exit_ahead(slot, distance)
+            .map(|(exit, ahead)| (exit.to, ahead))
+    }
+
+    /// [`Self::point_ahead`] with the route the point is on. Only a track trigger can name a
+    /// route: it is on the route when a route's sample is nearer to its centre than the
+    /// ring's, and the other distances are shares of the ring.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::point_ahead`].
+    pub fn exit_ahead(&self, slot: usize, distance: Distance) -> Result<(Exit, f32), String> {
         let Some(course) = &self.sim.course else {
             return Err("the track has no course to move along".into());
         };
@@ -119,7 +150,7 @@ impl Race {
                 let to = course.index_at_progress(progress).ok_or_else(|| {
                     format!("progress {progress} is not within [0, {length}), the lap")
                 })?;
-                return Ok((to, on(to)));
+                return Ok((Exit::ring(to), on(to)));
             }
             Distance::Trigger(index) => {
                 let centre = self
@@ -127,17 +158,23 @@ impl Race {
                     .extensions
                     .trigger_centre(usize::from(index))
                     .ok_or_else(|| format!("the track has no trigger {index}"))?;
-                let to = course
+                let ring = course
                     .locate(centre, None)
-                    .ok_or_else(|| format!("trigger {index} is off the course"))?
-                    .index;
-                return Ok((to, on(to)));
+                    .ok_or_else(|| format!("trigger {index} is off the course"))?;
+                let exit = match course.nearest_route_sample(centre, None) {
+                    Some((route, fix)) if fix.offset < ring.offset => Exit {
+                        to: fix.index,
+                        route: u16::try_from(route + 1).unwrap_or(0),
+                    },
+                    _ => Exit::ring(ring.index),
+                };
+                return Ok((exit, on(exit.to)));
             }
         };
         let to = course
             .jump(from, units)
             .ok_or_else(|| format!("a move of {units} units is not within (0, {length}), a lap"))?;
-        Ok((to, units))
+        Ok((Exit::ring(to), units))
     }
 
     /// Whether a half disc of `radius`, standing on the track across its width at the
@@ -148,10 +185,10 @@ impl Race {
     /// distance does not resolve or there is no course or spline to probe.
     #[must_use]
     pub fn clearance(&self, slot: usize, distance: Distance, radius: f32) -> (bool, f32) {
-        let Ok((to, ahead)) = self.point_ahead(slot, distance) else {
+        let Ok((exit, ahead)) = self.exit_ahead(slot, distance) else {
             return (false, 0.0);
         };
-        let Some((lateral, up, centre, width)) = self.road_frame(to) else {
+        let Some((lateral, up, centre, width)) = self.road_frame(exit) else {
             return (false, ahead);
         };
         if width < radius * 2.0 {
@@ -168,11 +205,20 @@ impl Race {
         (!blocked, ahead)
     }
 
-    /// The road at course point `to`: its lateral and up directions, the middle of its
-    /// width lifted [`CLEARANCE_LIFT`] off the surface, and its width. `None` with no
-    /// course position or spline near it. What a portal's probe and its drawn disc stand on.
-    pub(crate) fn road_frame(&self, to: usize) -> Option<(Vec3, Vec3, Vec3, f32)> {
-        let target = self.sim.course.as_ref().and_then(|c| c.position(to))?;
+    /// Where `exit` is: the ring's point, or the route's point that stands for it.
+    fn exit_position(&self, exit: Exit) -> Option<Vec3> {
+        let course = self.sim.course.as_ref()?;
+        match usize::from(exit.route).checked_sub(1) {
+            Some(route) => course.route_point(route, exit.to),
+            None => course.position(exit.to),
+        }
+    }
+
+    /// The road at `exit`: its lateral and up directions, the middle of its width lifted
+    /// [`CLEARANCE_LIFT`] off the surface, and its width. `None` with no course position
+    /// or spline near it. What a portal's probe and its drawn disc stand on.
+    pub(crate) fn road_frame(&self, exit: Exit) -> Option<(Vec3, Vec3, Vec3, f32)> {
+        let target = self.exit_position(exit)?;
         let (_, at, _) = self.sim.spline.nearest(target)?;
         let lateral = Vec3::from_array(at.lateral);
         let up = -Vec3::from_array(at.down);
@@ -200,16 +246,25 @@ impl Race {
             if transit.ticks_left > 0 {
                 continue;
             }
-            let Transit { to, exit_speed, .. } = *transit;
+            let Transit {
+                to,
+                route,
+                exit_speed,
+                ..
+            } = *transit;
             self.sim.world.ships[slot].transit = None;
-            self.move_to(slot, to as usize, exit_speed);
+            let exit = Exit {
+                to: to as usize,
+                route,
+            };
+            self.move_to(slot, exit, exit_speed);
             out |= 1 << slot;
         }
         out
     }
 
-    /// Puts slot `slot`'s craft at course ring point `to`, which must be forward of it and
-    /// less than a lap on ([`Self::point_ahead`] gives one), at the width midpoint facing
+    /// Puts slot `slot`'s craft at `exit`, a course point forward of it and less than a lap
+    /// on ([`Self::exit_ahead`] gives one), at the width midpoint facing
     /// down the track (the reset's own placement, [`crate::breadcrumbs::relocate`]),
     /// moving at `speed`. The ground between counts as driven: the lap counters credit a
     /// crossing of the line in it now ([`oag_race::Standing::jumped`],
@@ -218,11 +273,12 @@ impl Race {
     /// crumb ring ([`Self::reseat`]). Not a respawn: nothing is counted and nothing is
     /// charged. `false` when the course or the spline has nothing to place on, and the
     /// craft stays where it is.
-    pub fn move_to(&mut self, slot: usize, to: usize, speed: f32) -> bool {
+    pub fn move_to(&mut self, slot: usize, exit: Exit, speed: f32) -> bool {
         let Some(course) = &self.sim.course else {
             return false;
         };
-        let Some(target) = course.position(to) else {
+        let to = exit.to;
+        let Some(target) = self.exit_position(exit) else {
             return false;
         };
         let Some(relocation) = crate::breadcrumbs::relocate(&self.sim.spline, target, speed) else {
@@ -252,6 +308,10 @@ impl Race {
         self.sim.breadcrumbs[slot] =
             crate::breadcrumbs::Breadcrumbs::seeded(relocation.pose.position);
         self.reseat(slot, relocation.pose.position);
+        // Told which line it is on, as a route's own samples are the nearest to a craft there.
+        if let Some(route) = usize::from(exit.route).checked_sub(1) {
+            self.seat_on_route(slot, route);
+        }
         true
     }
 

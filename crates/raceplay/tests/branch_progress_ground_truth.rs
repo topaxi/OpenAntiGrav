@@ -82,6 +82,39 @@ fn every_route_reads_progress_on_the_ring(id: &str, course: &Course) -> usize {
             }
             last = Some(located.progress);
         }
+        // A transit's exit on this route (`Course::route_point`) stands where the ring point
+        // it was asked for does on the route: the same share of the way, to within the
+        // sample spacing. Read off the route's own samples, as routes that share their
+        // first path claim the same samples under `locate_on_route`.
+        let ring_span = step(
+            course.progress_at(route.split).unwrap_or(0.0),
+            course.progress_at(route.merge).unwrap_or(0.0),
+            length,
+        )
+        .rem_euclid(length);
+        for tenth in 1..10 {
+            let share = tenth as f32 / 10.0;
+            let ring_index = course.advance(route.split, ring_span * share);
+            let at = course
+                .route_point(k, ring_index)
+                .unwrap_or_else(|| panic!("{id} route {k}: no point at tenth {tenth}"));
+            let nearest = (0..route.len())
+                .min_by(|&a, &b| {
+                    let (da, db) = (
+                        route.positions[a].distance(at),
+                        route.positions[b].distance(at),
+                    );
+                    da.total_cmp(&db)
+                })
+                .expect("a route has samples");
+            let off = (route.fraction(nearest) - share) * ring_span;
+            assert!(
+                off.abs() <= 60.0 && route.positions[nearest].distance(at) <= 25.0,
+                "{id} route {k} (paths {:?}): the exit at tenth {tenth} stands {off:.1} units \
+                 of the ring span from its share of the route",
+                route.paths,
+            );
+        }
         // The whole drive covers the ring's own split-to-merge span plus the
         // eighty ring samples either side, within a generous margin.
         let span = step(

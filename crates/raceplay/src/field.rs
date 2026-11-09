@@ -241,20 +241,46 @@ impl Race {
         let route = self
             .nearest_route_sample(position)
             .filter(|&(_, _, distance)| distance < ring);
-        let ship = &mut self.sim.world.ships[slot];
         match route {
-            Some((route, at, _)) => {
-                ship.driver.index = u32::try_from(at).unwrap_or(0);
-                ship.driver.branching =
-                    self.sim.routes[usize::from(route) - 1].entered(ship.driver.branching, route);
-            }
+            Some((route, at, _)) => self.seat_on_route_line(slot, route, at),
             None => {
+                let ship = &mut self.sim.world.ships[slot];
                 ship.driver.index = u32::try_from(index).unwrap_or(0);
                 // Located on the ring, so it is on the ring. See
                 // `oag_ai::branch::Branching::on_ring`.
                 ship.driver.branching = ship.driver.branching.on_ring();
             }
         }
+    }
+
+    /// Puts slot `slot`'s driver on the line of the course's route `course_route` (its
+    /// index in `Course::routes`), at the line's sample nearest the craft. Nothing for a
+    /// route the AI has no line for.
+    pub(super) fn seat_on_route(&mut self, slot: usize, course_route: usize) {
+        let position = self.sim.world.ships[slot].physics.body.position;
+        let found = self
+            .sim
+            .routes
+            .iter()
+            .enumerate()
+            .find(|(_, r)| r.course_route == course_route)
+            .and_then(|(k, r)| {
+                Some((
+                    u16::try_from(k + 1).ok()?,
+                    r.nearest_own_sample(position)?.0,
+                ))
+            });
+        if let Some((route, at)) = found {
+            self.seat_on_route_line(slot, route, at);
+        }
+    }
+
+    /// Slot `slot`'s driver at sample `at` of route line `route` (`k + 1`).
+    fn seat_on_route_line(&mut self, slot: usize, route: u16, at: usize) {
+        let ship = &mut self.sim.world.ships[slot];
+        ship.driver.index = u32::try_from(at).unwrap_or(0);
+        ship.driver.branching =
+            self.sim.routes[usize::from(route) - 1].entered(ship.driver.branching, route);
     }
 
     /// Whether slot `slot` is being flown for its person this tick, by any of

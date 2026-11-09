@@ -201,12 +201,14 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     if let Some(Transit {
         ticks_left,
         to,
+        route,
         exit_speed,
     }) = transit
     {
         hasher.write_u8(0x7a);
         hasher.write_u32(u32::from(*ticks_left));
         hasher.write_u32(*to);
+        hasher.write_u32(u32::from(*route));
         hasher.write_f32(*exit_speed);
     }
 }

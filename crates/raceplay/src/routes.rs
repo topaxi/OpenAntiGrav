@@ -63,6 +63,19 @@ pub(super) struct RouteLine {
 }
 
 impl RouteLine {
+    /// The index and squared distance of this route's own sample (past its ring stretch)
+    /// nearest `position`; the earlier one on a tie.
+    pub(super) fn nearest_own_sample(&self, position: Vec3) -> Option<(usize, f32)> {
+        let mut best: Option<(usize, f32)> = None;
+        for i in self.kept..self.line.len() {
+            let distance = self.line.point(i).distance_squared(position);
+            if best.is_none_or(|(_, b)| distance < b) {
+                best = Some((i, distance));
+            }
+        }
+        best
+    }
+
     /// `branching` for a craft found on this route's own samples (route
     /// number `route`, `k + 1`): past the split, its fork decided. The visit
     /// count is kept, so the next coin is fresh. Ours, as
@@ -409,12 +422,11 @@ impl Race {
         let mut best: Option<(u16, usize, f32)> = None;
         for (k, r) in self.sim.routes.iter().enumerate() {
             let route = u16::try_from(k + 1).unwrap_or(0);
-            for i in r.kept..r.line.len() {
-                let distance = r.line.point(i).distance_squared(position);
+            if let Some((i, distance)) = r.nearest_own_sample(position)
                 // Strictly nearer, so a tie keeps the earlier candidate.
-                if best.is_none_or(|(_, _, b)| distance < b) {
-                    best = Some((route, i, distance));
-                }
+                && best.is_none_or(|(_, _, b)| distance < b)
+            {
+                best = Some((route, i, distance));
             }
         }
         best
