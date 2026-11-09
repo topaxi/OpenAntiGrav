@@ -218,3 +218,9 @@ right in the smaller hex (the raster itself stays one texel to one pixel; a PNG 
 2. Make `portal-view` route-aware (its progress frames the ring).
 3. Quote `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
    before and after any change that touches racing.
+4. **The next merge of main into this branch will not compile as is.** Main's `give` replay event
+   (`give-outside-tick`, origin/main 373c562d1) stores a single `Weapon::Extension` as index 14
+   (`STORED_WEAPONS` in `crates/raceplay/src/replay/events.rs`); here a mod adds more than one pickup
+   (`Weapon::Extension(kind)`, hashed as `u8::MAX - kind.index()`). Resolve it by storing
+   `Extension(k)` as `14 + k.index()` (the event's `u8` payload holds it), extend the event's unit test
+   to more than one kind, and update `docs/formats/replay-file.md` (v1 in place).
