@@ -20,7 +20,7 @@
 use super::viewports::Layer;
 use super::*;
 use crate::drawable::TrackCull;
-use crate::drawable::draw::Lists;
+use crate::drawable::draw::{Interleave, Lists};
 
 /// One thing a view's scene pass draws, in the order the pass draws them.
 pub(super) enum Draw<'a> {
@@ -119,6 +119,10 @@ pub(super) struct ViewPass<'a> {
     /// The fourth row of the unjittered view-projection matrix: `clip.w`, the view
     /// depth the blended list's list-B meshes are put in order by.
     pub(super) depth_plane: [f32; 4],
+    /// The queue key of each craft's engine flare that is drawn among the circuit's blended
+    /// list rather than after it (`flare_key`), in the order of the exhaust pipeline's flare
+    /// quads. Empty unless [`Self::ribbon_first`].
+    pub(super) flare_keys: Vec<u32>,
     pub(super) frustum: Option<Frustum>,
     pub(super) visible_set: Option<VisibleSet>,
     pub(super) chunk_set: Option<ChunkSet>,
@@ -463,6 +467,10 @@ impl Recorder<'_> {
                 }
                 TrackStage::Blended => {
                     oag_gpu::perfprobe::marks::mark(render, "track blended");
+                    let (drawer, drawn) = &pass.effects.exhaust;
+                    let flare = |render: &mut wgpu::RenderPass<'_>, index: usize| {
+                        drawer.draw_flare(render, *drawn, index);
+                    };
                     stats.add(self.track.draw_lists(
                         render,
                         block,
@@ -470,7 +478,13 @@ impl Recorder<'_> {
                         set,
                         chunks,
                         frustum,
-                        track_blended(pass.depth_plane),
+                        track_blended(
+                            pass.depth_plane,
+                            (!pass.flare_keys.is_empty()).then_some(Interleave {
+                                keys: &pass.flare_keys,
+                                draw: &flare,
+                            }),
+                        ),
                     ));
                 }
             }
@@ -578,10 +592,14 @@ pub(crate) const TRACK_STAGES: [TrackStage; 4] = [
 
 /// The circuit's blended list for a view whose `depth_plane` is the fourth row of its
 /// view-projection matrix: list-B meshes far to near by view depth
-/// ([`oag_mesh::mesh::Model::blended_order`]).
-pub(crate) fn track_blended<'a>(depth_plane: [f32; 4]) -> Lists<'a> {
+/// ([`oag_mesh::mesh::Model::blended_order`]), with `between` drawn among them by queue key.
+pub(crate) fn track_blended<'a>(
+    depth_plane: [f32; 4],
+    between: Option<Interleave<'a>>,
+) -> Lists<'a> {
     Lists::Blended {
         depth_plane: Some(depth_plane),
+        between,
     }
 }
 

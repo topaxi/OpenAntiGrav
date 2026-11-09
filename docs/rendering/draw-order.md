@@ -99,9 +99,10 @@ Measured: the order this key predicts for nodes 261, 267, 878, 258, 875, 293 and
 294 of `03_Track` is the order of GE prims 413-425 of a recorded Moa frame, and
 that frame is not in layer order (`0x45` and `0x4a` meshes alternate).
 Implemented as `Model::blended_order`, per view, from the unjittered
-view-projection's `w`; the units are the model's own (**chosen, not measured**:
-the original multiplies `z` by `display+0x4310 / 65`, unread, which moves only the
-3,000-unit clamp). Of `03_Track`'s 131 transparent draws all 131 carry the key and
+view-projection's `w`; the scene multiplies that plane by `fov / 65` (the original
+multiplies `z` by `g_camera_fov_degrees / 65`, measured 2026-11-09, `mesh-draw.md`
+"The list-B queue key"), which moves only the 3,000-unit clamp between two meshes and
+the rank against a flare. Of `03_Track`'s 131 transparent draws all 131 carry the key and
 5 sit under an `Anim Transform`: those are keyed from the **time-zero** pose of their
 anchor (**chosen, not measured**: whether the original refreshes `mesh+0xb0` as the
 node moves turns on the `0x40000` flag, whose setter was not read). The order is held
@@ -136,7 +137,7 @@ circuit mesh near the craft draws over it: the floor patch under the player remo
 colour at the tail box (replay bisection, [exhaust.md](../ghidra/functions/psp-pulse-usa/exhaust.md), "The ribbon is
 queued first"). Implemented as `Recorder::draw_ribbons` and `Draw::TrackBlended`: the hulls, then the ribbons, then the
 circuit's blended list, then the flares. HD's tube keeps the old order, its key unread. The flare, which carries its own
-depth, is still drawn after the whole blended list; interleaving it is open.
+depth, is drawn among the blended list by that depth (below, "The flares are wired").
 
 Re-verified independently on 2026-10-21 (`trail-order-option`) on three states, two circuits and one fresh GE-replay
 removal; the key's 20-bit depth can be overridden by `display+0x1180` (inactive in every read), and six non-`Trail`
@@ -215,21 +216,48 @@ bump reproducing); the depth states, **85** (the GE command words of the same fr
 the original, **80** (inferred from order and depth state, not seen as a pair frame). Not measured: the plume's, the shield
 shell's, the weapon bodies' and the wrecks' keys, the Rocket ribbon's, PS2, the ship object's prims.
 
-**Proposed rule, as data, for the flares (not wired, not needed for hull and pads on PSP).** Draw by queue key, ascending:
-a flare is a list-B entry whose depth is `0xfffff - trunc(-z * 349.525)` over the flare node's world point (the formula
-above), sorted among the blended list's meshes in `Model::blended_order`'s own depth units (those units are chosen, not
-measured, and would have to be made the original's `display+0x4310 / 65` factor first). Knock-on by class:
+**The flares are wired (2026-11-09, `pulse-flares`).** With `Race::ribbons_first()` a craft's engine flare quad is
+queued with the list-B meshes by the original's key: `0x4d000000 | 0xfffff - trunc(-z * 349.525)`, `z` the
+view-space depth of the nozzle (`oag_mesh::mesh::flare_key`, unscaled, as `Gfx_ViewDepth` has it) against a list-B
+mesh's `z * fov / 65` (`Scene::prepare_view` multiplies the blended list's depth plane by
+`Race::camera_fov_degrees() / 65` under `ribbons_first()` only, so nothing else moves; the scale is `ViewCull_BuildViewProjection`'s argument,
+`mesh-draw.md` "The list-B queue key"). `Model::blended_sorted` returns the sorted keys with the order and
+`BlendedOrder::position_of(key)` places a flare in it (an equal key draws the mesh first, ours: the original's `qsort`
+is not stable); `Drawable::draw_lists`' blended loop (`Interleave`) draws each flare before the mesh it ranks
+under, then re-binds its own pipeline, groups and buffers; a flare keyed past every mesh draws after the glow stamps,
+where every flare drew before. Held by `crates/mesh/src/mesh/order/tests.rs` (a nearer mesh after a farther flare, a
+farther mesh before it, the fov scale), `crates/fx/src/exhaust/tests.rs` and `crates/raceplay/src/scene/scratch.rs`
+(the flare quad is in the interleave and out of the sprite draw). Off `ribbons_first()` (`over-floors`, HD's tube,
+Omega, 2048) the flares stay in the sprite buffer and draw after the blended list, as before. Not moved, key unread:
+boost plumes, the Rocket ribbon, weapon bodies, wrecks, shield shells (they draw after the flares now, where the
+flares used to be last); the HD flare meshes (`Scene::flares`) are a separate path and untouched.
 
-| Class | Key | Today in ours | Moves |
+**Seen in ours, not in the original.** `platinum-s2b80`'s first frame (Pulse PSP, Platinum Rush White, a craft placed on the track
+with trees on the hillside to its left) rendered at 480x272 with the original's own field and camera
+(`psp-pulse-pair.py --field`), one opponent's pose edited in the field CSV to sit 80 units out behind a pine crown: before
+this change the flare glows over the crown, after it the crown covers the flare and the hull is already behind it. The
+differing pixels are the flare's alone, 282 (a 20x18 box) and 411 (22x23) on two placements out of 130,560, since a craft's flare
+at that range is a three-pixel glow. On the original's real fields the two builds render identically (zero differing pixels): the pairs at 6.0 s
+(the player alone in view), 9.0 s and 18.9 s of race clock, and the grid at 4.02 s. **Not matched against the original:**
+no frame of a run showed an AI flare behind a nearer tree (four runs of the original with the pack passing the player,
+`--run-ticks` 150 to 206), and the original does not accept an opponent placed by hand: `psp-drive.py place --craft <AI craft>`
+wrote the body and two ticks later the craft was 366 units away (at `(506, 164, 32)`), so the order is established by the
+queue read above (one frame, two boots, confidence 80) and the picture is ours alone. A frame of the original with an AI flare
+behind a tree is still wanted.
+
+| Class | Key | In ours | Moves |
 | --- | --- | --- | --- |
-| Flares | `0x4d` + depth, measured | after all of list B | each flare into list B by depth; a nearer tree covers a farther craft's flare |
-| `Trail` ribbons | `0x4d000000`, measured | before list B, wired | nothing |
+| Flares | `0x4d` + depth, measured | among list B by depth, under `ribbons_first()` | a nearer tree covers a farther craft's flare |
+| `Trail` ribbons | `0x4d000000`, measured | before list B | nothing |
 | Boost plumes | key unread | after list B, over everything | not touched until read |
 | Rocket ribbon, weapon bodies, wrecks, shield shells | key unread | after list B | not touched until read |
 | Blob and hull shadows | no key in the original (ours) | before the hulls | not touched |
 
-**Cross-title check (CLAUDE.md).** Pure: **checked, applies, not wired** - the same `trail_order` path and flare
-interleaving, its queue keys unread. HD: **checked, differs** - by code, `hd_trail_active` sends the circuit whole through
+**Cross-title check (CLAUDE.md).** Pure: **checked, applies, inherited** - the same `trail_order` path moves with it
+(`ribbons_first()` is not per title). Its executable carries the same key (`349.525` and `0x4d000000`) in six node submit
+functions (`0x0882cd50`, `0x0886ae14`, `0x08870db4`, `0x0887206c`, `0x08889274`, `0x0888bdd8` of the USA `BOOT.BIN`;
+`0x0886ae14` is the shape of `ExhaustFlare_Submit`: the node's world point through the view-depth helper, `0xfffff` minus
+the key, `| 0x4d000000`); which of them is the engine flare was not read, so it is not measured on Pure. HD: **checked, differs** - by code, `hd_trail_active` sends the circuit whole through
 `Draw::Track`, so its blended list precedes the hulls and pads (its queue is a different pass, `trail-ribbon.md`; its
 keys are unread). 2048 and Omega: **not checkable here** - no queue read; they share HD's `ribbons_first() == false`
 path, so any translucent scenery with no depth write goes down before the craft there too.

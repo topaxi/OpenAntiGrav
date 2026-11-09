@@ -1132,5 +1132,6 @@ pub use flame::Flame;
 pub mod glow;
 mod merge;
 mod order;
+pub use order::{BlendedOrder, LIST_B_LAYER, flare_key};
 pub mod render_state;
 pub use merge::merge;

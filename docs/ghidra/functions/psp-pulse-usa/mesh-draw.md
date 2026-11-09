@@ -2516,7 +2516,16 @@ if (mesh_flags & 2) {                           // list B
 `ViewCull_BuildViewProjection` (`0x0890296c`) caches at `0x08af2540` (the display's
 current view matrix) and returns `z * DAT_08b62380 * 0.015384615`, the global
 being that function's argument (`65.0` from `VexCamera_Submit`; the race
-camera passes `display+0x4310`, not read). `mesh+0xa0` is the centre of the
+camera passes **`g_camera_fov_degrees`** (`0x08b34310`): `Camera_SubmitScene`
+(`0x08878874`) ends with `ViewCull_BuildViewProjection(g_camera_fov_degrees)`,
+and the page's earlier "`display+0x4310`" was that global's address misread as an
+offset into the display, read 2026-11-09, confidence 88: static reading of the
+decompile and of the call's argument, one binary). So a list-B key is
+`0xfffff - trunc(-z * fov / 65 * 349.525)`, the same `fov / 65` scale
+`LodGroup_SelectChild` applies to a group's depth. `Gfx_ViewDepth` (`0x0890486c`),
+which `ExhaustFlare_Submit` keys a flare with, reads the **same view matrix**
+(`0x08b32d00`, which `Camera_SubmitScene` also copies to `display+0x1410`) with **no
+scale**, so a flare and a list-B mesh at the same distance rank apart by `fov / 65`. `mesh+0xa0` is the centre of the
 payload's `+0x10`/`+0x20` box over the last batch's position scale, set at the end
 of `Mesh_InitFromPayload`. `mesh+0xc8` is `0x4d000000` for a scene mesh.
 

@@ -463,6 +463,7 @@ impl Scene {
         scratch.clear();
         let super::Scratch {
             vertices,
+            flares,
             trail,
             additive,
             alpha,
@@ -972,6 +973,26 @@ impl Scene {
         // which skips the *hull* because a hull drawn around the camera really
         // does put polygons across the middle of the screen.
         oag_gpu::perfprobe::mark("pre-exhaust");
+        // With the ribbons first the engine flares are queued among the circuit's blended list,
+        // by the depth of the nozzle (`ExhaustFlare_Submit`), and the pass draws them there;
+        // otherwise they stay in the sprite buffer and draw after it.
+        let ribbon_first = race.ribbons_first();
+        let plane = [
+            section_view.x_axis.w,
+            section_view.y_axis.w,
+            section_view.z_axis.w,
+            section_view.w_axis.w,
+        ];
+        // The list-B depth the circuit's meshes are keyed at is scaled by `fov / 65`; a flare's
+        // is not. `depth_plane` below carries the scale, `plane` here does not. The scale only
+        // matters to the picture where the flares are queued among the list-B meshes, so it is
+        // applied there alone.
+        let list_b_depth_scale = if ribbon_first {
+            race.camera_fov_degrees() / oag_mesh::mesh::REFERENCE_FOV_DEGREES
+        } else {
+            1.0
+        };
+        let mut flare_keys = Vec::new();
         for slot in 0..drawn {
             // Per craft, unlike the nozzle check below - an inactive slot is
             // out of the race regardless of what its model authors. `continue`
@@ -997,7 +1018,13 @@ impl Scene {
                 && !race.engine_flare_effect()
                 && !self.is_wrecked(race, slot)
             {
-                vertices.extend_from_slice(&exhaust.vertices(nozzle, right, up));
+                super::scratch::queue_flare(
+                    ribbon_first,
+                    &exhaust.vertices(nozzle, right, up),
+                    oag_mesh::mesh::flare_key(plane, nozzle.to_array()),
+                    vertices,
+                    (flares, &mut flare_keys),
+                );
             }
             // HD's sprite flare - Engine_Flare_Rich.gtf, enabled by the
             // disc's own tuning file - is the bright core the exhaust's
@@ -1035,9 +1062,14 @@ impl Scene {
         // Shared by every upload below - `to_cols_array_2d` is otherwise
         // recomputed once per pipeline for the same one matrix.
         let vp = view_projection.to_cols_array_2d();
-        self.exhaust
-            .borrow_mut()
-            .upload(queue, &vp, race.camera_position(), vertices, trail);
+        self.exhaust.borrow_mut().upload(
+            queue,
+            &vp,
+            race.camera_position(),
+            vertices,
+            flares,
+            trail,
+        );
         self.clouds.borrow_mut().upload(
             queue,
             &vp,
@@ -1117,7 +1149,6 @@ impl Scene {
         // ribbon to be occluded by; the weapon bodies, wrecks and flares keep their place after
         // the blended list, as before. HD's tube keeps the old order: its queue key is unread.
         // `trail_order = "over-floors"` puts the PSP ribbons back there too (chosen, not measured).
-        let ribbon_first = race.ribbons_first();
         draws.ribbons_then_blended(ribbon_first);
         draws.mark("wrecks, weapon bodies");
         self.draw_wrecks(race, &mut draws);
@@ -1243,12 +1274,8 @@ impl Scene {
             block,
             viewport,
             eye: race.camera_position(),
-            depth_plane: [
-                section_view.x_axis.w,
-                section_view.y_axis.w,
-                section_view.z_axis.w,
-                section_view.w_axis.w,
-            ],
+            depth_plane: plane.map(|row| row * list_b_depth_scale),
+            flare_keys,
             frustum,
             visible_set,
             chunk_set,

@@ -1102,6 +1102,7 @@ pub struct Pipeline {
     /// Vertices actually uploaded by the last [`Pipeline::upload`].
     count: u32,
     trail_count: u32,
+    flare_count: u32,
 }
 
 impl Pipeline {
@@ -1342,6 +1343,7 @@ impl Pipeline {
             uniforms,
             count: 0,
             trail_count: 0,
+            flare_count: 0,
         }
     }
 
@@ -1357,6 +1359,7 @@ impl Pipeline {
         view_projection: &[[f32; 4]; 4],
         camera: Vec3,
         vertices: &[GpuVertex],
+        flares: &[GpuVertex],
         trail: &[GpuVertex],
     ) {
         // The vertex shader reads only `model`'s fourth column, which carries
@@ -1378,6 +1381,17 @@ impl Pipeline {
             bytemuck::cast_slice(&vertices[..n]),
         );
         self.count = n as u32;
+        // The flare quads follow the sprites in the same buffer, so [`Drawer::draw`]'s sprite
+        // range leaves them out and [`Drawer::draw_flare`] picks them one by one.
+        let f = flares.len().min(MAX_VERTICES - n) / 6 * 6;
+        if f > 0 {
+            queue.write_buffer(
+                &self.drawer.vertices,
+                (n * std::mem::size_of::<GpuVertex>()) as u64,
+                bytemuck::cast_slice(&flares[..f]),
+            );
+        }
+        self.flare_count = f as u32;
 
         let t = trail.len().min(MAX_TRAIL_VERTICES);
         if t > 0 {
@@ -1396,6 +1410,7 @@ impl Pipeline {
         Drawn {
             count: self.count,
             trail_count: self.trail_count,
+            flare_count: self.flare_count,
         }
     }
 
@@ -1441,6 +1456,23 @@ impl Drawer {
             pass.set_vertex_buffer(0, self.vertices.slice(..));
             pass.draw(0..drawn.count, 0..1);
         }
+    }
+}
+
+impl Drawer {
+    /// Draws flare quad `index` of the `flares` the last upload took, over whatever the pass
+    /// has drawn. Binds the pipeline, the texture and the buffer it needs and leaves them
+    /// bound: a caller drawing a mesh next re-binds its own.
+    pub fn draw_flare(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn, index: usize) {
+        let first = drawn.count + (index * 6) as u32;
+        if index >= drawn.flares() {
+            return;
+        }
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(1, &self.texture, &[]);
+        pass.set_vertex_buffer(0, self.vertices.slice(..));
+        pass.draw(first..first + 6, 0..1);
     }
 }
 

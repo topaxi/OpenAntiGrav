@@ -122,7 +122,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
         .take(exhaust::MAX_TRAIL_VERTICES)
         .collect();
     assert_eq!(trail.len(), exhaust::MAX_TRAIL_VERTICES);
-    pipeline.upload(&queue, &identity, Vec3::ZERO, &vertices, &trail);
+    pipeline.upload(&queue, &identity, Vec3::ZERO, &vertices, &[], &trail);
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("exhaust target"),
@@ -200,6 +200,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
         &identity,
         Vec3::ZERO,
         &cold.vertices(Vec3::ZERO, Vec3::X, Vec3::Y),
+        &[],
         &cold.trail_vertices(Vec3::X, Vec3::Y, oag_fx::exhaust::TrailLaw::Ramped),
     );
     device

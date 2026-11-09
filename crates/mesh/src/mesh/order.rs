@@ -68,18 +68,46 @@ impl Model {
     ///
     /// `depth_plane` is the fourth row of the view-projection matrix
     /// (`clip.w = -z_view` for a perspective projection), as `[x, y, z, w]`.
-    /// **Chosen, not measured:** the key is taken in the units of the model's own
-    /// positions; the original multiplies the transformed `z` by
-    /// `display+0x4310 / 65`, a scale not read, which moves only where the
-    /// 3,000-unit clamp falls.
+    /// **The original scales `z` before the key** (`ViewCull_ViewDepth`,
+    /// `0x08902b24`): by `g_camera_fov_degrees / 65`, the fov handed to
+    /// `ViewCull_BuildViewProjection` by `Camera_SubmitScene`. It moves nothing between
+    /// two meshes but where the 3,000-unit clamp falls and how a list-B mesh ranks against a
+    /// flare, whose `z` is not scaled ([`flare_key`]); the caller multiplies the plane by
+    /// `fov / `[`REFERENCE_FOV_DEGREES`] to make it the original's.
     #[must_use]
     pub fn blended_order(&self, depth_plane: [f32; 4]) -> Option<Vec<u32>> {
+        self.blended_sorted(depth_plane).map(|sorted| sorted.order)
+    }
+
+    /// [`Self::blended_order`] with the key each draw sorts at, so a drawable that is not in the
+    /// list (a craft's flare) can be placed among it ([`BlendedOrder::position_of`]).
+    #[must_use]
+    pub fn blended_sorted(&self, depth_plane: [f32; 4]) -> Option<BlendedOrder> {
         order_blended(&self.transparent_draws, depth_plane)
     }
 }
 
-/// [`Model::blended_order`] over a draw list.
-fn order_blended(draws: &[DrawCall], depth_plane: [f32; 4]) -> Option<Vec<u32>> {
+/// The blended list in draw order, and the key of each entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlendedOrder {
+    /// Indices into [`Model::transparent_draws`], far to near.
+    pub order: Vec<u32>,
+    /// `keys[at]` is the queue key of `order[at]`, ascending.
+    keys: Vec<u32>,
+}
+
+impl BlendedOrder {
+    /// How many entries draw before something queued at `key`: its place in [`Self::order`].
+    /// An entry with an equal key draws first (the original's `qsort` is not stable, so a tie
+    /// is our choice).
+    #[must_use]
+    pub fn position_of(&self, key: u32) -> usize {
+        self.keys.partition_point(|&at| at <= key)
+    }
+}
+
+/// [`Model::blended_sorted`] over a draw list.
+fn order_blended(draws: &[DrawCall], depth_plane: [f32; 4]) -> Option<BlendedOrder> {
     if !draws.iter().any(|d| d.depth_point.is_some()) {
         return None;
     }
@@ -94,7 +122,23 @@ fn order_blended(draws: &[DrawCall], depth_plane: [f32; 4]) -> Option<Vec<u32>> 
         })
         .collect();
     keyed.sort_unstable();
-    Some(keyed.into_iter().map(|(_, index)| index).collect())
+    Some(BlendedOrder {
+        keys: keyed.iter().map(|&(key, _)| key).collect(),
+        order: keyed.into_iter().map(|(_, index)| index).collect(),
+    })
+}
+
+/// The layer of a scene mesh's list-B batches and of a craft's flare: `0x4d000000`.
+pub const LIST_B_LAYER: u32 = 0x4d00_0000;
+
+/// The queue key `ExhaustFlare_Submit` (`0x0890490c`) enqueues a flare at: [`LIST_B_LAYER`] plus
+/// the twenty-bit depth of `point`, `plane` being the fourth row of the view-projection matrix
+/// with **no** scale (`Gfx_ViewDepth` does not scale `z`). A list-B mesh's depth is the same
+/// formula over `z * fov / 65` instead; scale the plane given to [`Model::blended_sorted`] by
+/// that factor to make the two comparable. See `docs/rendering/draw-order.md`.
+#[must_use]
+pub fn flare_key(plane: [f32; 4], point: [f32; 3]) -> u32 {
+    LIST_B_LAYER | view_depth_key(plane, point)
 }
 
 /// The low twenty bits of a list-B key: `0xfffff - trunc(-z * 349.525)`, so a

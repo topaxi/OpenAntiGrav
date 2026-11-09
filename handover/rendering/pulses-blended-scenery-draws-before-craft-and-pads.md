@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [pulse]
-updated: 2026-11-07
-summary: "Ours matches the original on hull, pads, list B; flares are the measured gap (they sort into list B by depth). Hull and pad report not reproduced"
+updated: 2026-11-09
+summary: "Hull, pads, list B match the original; flares now sort into list B by depth (landed). Open: a pad reproduction, HD/Omega/2048 keys unread"
 ---
 
 # Pulse's blended scenery draws before craft and pads
@@ -19,11 +19,17 @@ Measured on PPSSPP; the numbers, the method and the confidence are on
   Ours does the same whenever `Race::ribbons_first()` holds (PSP ribbon, `trail_order = original`, the
   maintainer's own setting). The symptom as reported is the other order: `over-floors`, or the HD tube
   path (HD, Omega, 2048). Not reproduced on White: three matched poses and one synthetic pose.
-- **Flares are the measured gap, ready to wire.** The original keys a flare `0x4d` plus depth, so list-B
-  meshes nearer than a flare draw after it: in the logged frame all twelve list-B meshes outrank the
-  three AI flares and none outranks the player's. Ours draws every flare after the whole blended list,
-  so a nearer tree is under a farther craft's flare. Rule and knock-on table on the page; plumes,
-  shield shells, weapon bodies, wrecks and the Rocket ribbon have no key read and stay where they are.
+- **Flares: landed 2026-11-09 (`pulse-flares`).** Under `ribbons_first()` a craft's engine flare quad is queued among
+  the list-B meshes by the original's key (`0x4d` plus the nozzle's depth, unscaled) against a mesh's `z * fov / 65`
+  (the scale is `g_camera_fov_degrees`, read off `Camera_SubmitScene`: the page's `display+0x4310` was that global's
+  address). Plumes, shield shells, weapon bodies, wrecks and the Rocket ribbon have no key read and stay where they
+  are, so they now draw after the flares. Rule and held-by on `docs/rendering/draw-order.md`, "The flares are wired".
+  **Picture is ours only:** an AI flare behind a nearer tree was never caught in the original (four runs of the pack
+  passing a placed player), and the original does not take an opponent placed by hand (`psp-drive.py place --craft` on an
+  AI: back on its own line 366 units away in two ticks). A matched pair is still wanted: a frame of a race with an
+  opponent a few tens of units ahead beside a tree-lined section. `psp-race-field.py hunt --place 3-6` Autopilots the
+  original into a mid-pack frame and stops there (Autopilot is fine for getting somewhere), then `psp-pulse-pair.py
+  --field`, with a base-against-branch render of ours as the overlap detector.
 - **Open on the original:** the maintainer's spot (their settings hold `camera_view = "far"`; the
   disc was Pulse PSP, they confirmed 2026-11-07, so the PS2 path is not the cause), which of
   White and Black each Track Select press landed on (`--track-down 18` and `19` gave the same start
@@ -33,8 +39,7 @@ Measured on PPSSPP; the numbers, the method and the confidence are on
 
 ## Next Steps
 
-1. Wire the flares into the blended list by depth, in `Model::blended_order`'s units made the
-   original's first (`display+0x4310 / 65`); pair at a frame with an AI flare behind a nearer tree.
+1. ~~Wire the flares into the blended list by depth~~ (landed, see Open).
 2. Reproduce with a **speed or weapon pad**, not a craft. The maintainer specifically saw a pad and
    may have misremembered the ship (2026-11-07). The measured poses and the synthetic one used a
    craft. Use far camera, Pulse PSP, Platinum Rush White, and a tree between the eye and a pad. If it

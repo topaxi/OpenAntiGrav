@@ -669,9 +669,25 @@ fn the_ribbon_and_the_flare_draw_apart() {
     let all = Drawn {
         count: 12,
         trail_count: 648,
+        flare_count: 0,
     };
     let ribbon = all.trail_only();
     assert_eq!((ribbon.count, ribbon.trail_count), (0, 648));
     let flare = all.without_trail();
     assert_eq!((flare.count, flare.trail_count), (12, 0));
+}
+
+/// The flare quads uploaded after the sprites are counted in quads, and the sprite draw's range
+/// stops where they begin: a quad drawn by the sprite range as well as by `draw_flare` is a
+/// flare drawn twice.
+#[test]
+fn flare_quads_are_counted_apart_from_the_sprites() {
+    let drawn = Drawn {
+        count: 18,
+        trail_count: 0,
+        flare_count: 18,
+    };
+    assert_eq!(drawn.flares(), 3);
+    assert_eq!(drawn.without_trail().count, 18);
+    assert_eq!(Drawn::default().flares(), 0);
 }
