@@ -77,6 +77,7 @@ in isolated worktrees.
   - any `.rs` logic changed: full `just` plus `OAG_REQUIRE_GAME_DATA=1 just test-data`, **once per merge batch**, and at once after a merge whose `scripts/affected.py` selection is `FULL`;
   - docs/handover only: `just check-docs`, `check-names` if `names.tsv` moved, `check-handover`, `check-captures` if captures moved.
 - **Reap**: `git worktree remove <path> -f -f`, `git branch -d <branch>`, then `TaskStop` the member (its name as `task_id`) and check `ListAgents` (a member left idle stays in the roster; maintainer, 2026-10-12). Only after the work is merged.
+- **A member's report is the final text of its turn**, delivered as its idle notification (`member-rules.md`, "Report"). In the spawn prompt, say "reply with" the path and summary, never "send" or "message" it. A `SendMessage` report plus the turn's closing text arrives twice.
 - **Never reap a worktree whose agent may still resume**: a `completed` notification is not terminal. `ListAgents` cannot tell you (a reaped lane still showed as `pane` an hour later); the member's own report is the ending signal, and `git worktree list` plus `git log --oneline main..<branch>` are ground truth.
 
 ## Who runs which gate
