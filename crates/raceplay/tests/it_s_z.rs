@@ -21,6 +21,7 @@ mod sfx_xfade_2048_ground_truth;
 mod sfx_xfade_ground_truth;
 mod shadow_ground_truth;
 mod shadow_stability_ground_truth;
+mod shield_difficulty_ground_truth;
 mod ship_spawn_ground_truth;
 mod shuriken_ground_truth;
 mod sol_ground_truth;

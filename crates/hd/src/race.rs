@@ -1050,6 +1050,9 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     cage_from_track_header: oag_title::pre_race::Sourced::measured(false),
     // Not read: the view matrix is Pulse's orthonormal look-at until measured.
     chase_view_sheared: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    // The original's Novice field started on each team's `easyshield`, read live off RPCS3
+    // (`docs/formats/handling-stats.md`, "Which difficulty picks the shield slot").
+    shield_by_skill: oag_title::pre_race::Sourced::measured(true),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,

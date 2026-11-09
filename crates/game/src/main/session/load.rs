@@ -465,6 +465,19 @@ impl Session {
         // A fresh seed per race; `--seed` (already in the options) and a network race's server
         // seed (`NetPlay::race_options`, below) replace it.
         options.seed = Some(oag_game::race_seed::for_launch(options.seed));
+        // A campaign cell races at its own rung, which the shield pool follows as the original
+        // driver's pack shuffle does (`advance_race_build`); any other launch takes `[ai]
+        // difficulty`.
+        options.skill_level = self
+            .campaign_cell
+            .is_some()
+            .then(|| {
+                campaign_level(
+                    self.campaign_custom.as_ref().and_then(|launch| launch.level),
+                    self.campaign_difficulty,
+                )
+            })
+            .map(|level| u8::try_from(level).unwrap_or(u8::MAX));
         let options_mode = options.mode;
         let options_track = options.foreign_track.clone();
         // **Refreshed here, not trusted from whenever `race_options` was last
@@ -843,9 +856,10 @@ impl Session {
                     } else if race_stage.campaign_cell.is_some() {
                         Some(oag_game::ai_choice::Source::Campaign {
                             skill: race_stage.campaign_ai_skill_scale,
-                            level: custom.as_ref().and_then(|c| c.level).unwrap_or_else(|| {
-                                race_stage.campaign_difficulty.map_or(1, rung_level)
-                            }),
+                            level: campaign_level(
+                                custom.as_ref().and_then(|c| c.level),
+                                race_stage.campaign_difficulty,
+                            ),
                         })
                     } else if let Some(event) = race_stage.campaign_2048_event.as_ref() {
                         Some(oag_game::ai_choice::Source::Event2048(event.ai))
@@ -1100,6 +1114,15 @@ impl Session {
             )));
         Ok(())
     }
+}
+
+/// The integer rung a campaign cell races at: a mod event's own, else the cell's rung, else
+/// Medium (**chosen, not measured**: a cell that authors none).
+fn campaign_level(
+    custom: Option<usize>,
+    rung: Option<oag_tables::race_campaign::Difficulty>,
+) -> usize {
+    custom.unwrap_or_else(|| rung.map_or(1, rung_level))
 }
 
 /// A campaign rung as the original's integer `g_skill_level`: Easy `0`,

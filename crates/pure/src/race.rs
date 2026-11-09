@@ -624,6 +624,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // = the craft's own (`docs/ghidra/functions/psp-pure-usa/camera.md`, "The view matrix is a
     // shear"). Read live on PPSSPP at the grid.
     chase_view_sheared: oag_title::pre_race::Sourced::measured(true),
+    // No Pure team authors a slot beyond `shield`, so every rung reads the same pool; the
+    // executable's own read is not looked at (`docs/formats/handling-stats.md`, "Which
+    // difficulty picks the shield slot").
+    shield_by_skill: oag_title::pre_race::Sourced::chosen(false),
     // Measured (`CODE_PITCH`), in place of Pulse's `<pitch>` stand-in, with its grid damping
     // (`docs/physics/pure-physics.md`).
     code_pitch: Some(oag_title::pre_race::Sourced::measured(CODE_PITCH)),

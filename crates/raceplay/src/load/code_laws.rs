@@ -86,6 +86,7 @@ mod tests {
             wall_point_rate_body_local: Sourced::chosen(false),
             cage_from_track_header: Sourced::chosen(true),
             chase_view_sheared: Sourced::chosen(false),
+            shield_by_skill: Sourced::chosen(true),
             code_pitch,
             code_sideshift: None,
             code_start_boost: None,

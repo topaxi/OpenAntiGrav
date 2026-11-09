@@ -74,6 +74,7 @@ pub(super) fn opponent_handling(
     class: &str,
     pad_tunables: handling::SpeedupPads,
     special: handling::Special,
+    skill_level: u8,
     report: &mut Vec<String>,
 ) -> (
     Vec<Option<oag_physics::Handling>>,
@@ -94,8 +95,9 @@ pub(super) fn opponent_handling(
             .map_err(|e| e.to_string())
             .and_then(|blob| handling::from_blob(&blob).map_err(|e| e.to_string()))
             .and_then(|stats| {
-                let mut handling = oag_gameplay::handling_for(&stats, class, pad_tunables, special)
-                    .ok_or_else(|| format!("authors no <Class name=\"{class}\">"))?;
+                let mut handling =
+                    oag_gameplay::handling_for(&stats, class, pad_tunables, special, skill_level)
+                        .ok_or_else(|| format!("authors no <Class name=\"{class}\">"))?;
                 super::code_laws::apply(&mut handling, &stats, class, race.craft_laws);
                 Ok((
                     handling,

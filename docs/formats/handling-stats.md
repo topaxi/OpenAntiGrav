@@ -262,6 +262,49 @@ element and every attribute with no defaults, and
 session, 8 teams and 32 parameter sets on each disc. What is still open is *which
 PSP function* writes `0x78`..`0x90`; see the question added below.
 
+### Which difficulty picks the shield slot
+
+`Ship_SetShield` and `Ship_ResetShield` index the three `<Misc>` slots by one global,
+`g_skill_level` (`0` easy, `1` medium, `2` hard), for **every** craft: the player's and the
+opponents' alike (Pulse PSP, `docs/ghidra/functions/psp-pulse-usa/shield.md`, "The pool is
+`entity + 0x88`", confidence 88). The global is the race setup's `SkillLevel` key: the Single
+Player screen's `Difficulty` row writes it (Easy, Medium, Hard; the row opens on Easy,
+`docs/formats/race-setup.md`) and Cell Selection's commit writes the cell's browsed rung
+(`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`). With no key `Race_ReadSetupOptions`
+(`0x08896b84`) leaves it at `1`.
+
+Ours reads the same index from the race: `oag_raceplay::Options::skill_level` where the launch
+names a rung (a campaign cell's, or a mod event's `level`; a cell with none reads Medium), else
+`oag_ai::Difficulty::level` of the race box's `[ai] difficulty`: Novice `0`, Skilled and Elite `1`,
+Ace `2` (**chosen, not measured**: the original has three rungs and this project four names). It
+is the same integer the original driver's pack shuffle gets, so one race has one rung. The
+default race (Elite) stays on the medium slot; only Novice and an Easy campaign cell move.
+`oag_gameplay::handling_for` takes the index and `Misc::shield_for` picks the slot; the pool is
+every craft's maximum and its start (`Ship_ResetShield`), the player's included.
+
+What each title's files and executable say, and what ours does (census of the starting pools by
+`oag_raceplay::load`, Single Race, `ribbon`, each title's own default roster):
+
+| Title | Files author | Mapping read | Player too | Ours |
+| --- | --- | --- | --- | --- |
+| Pulse PSP (USA, EU) | `easyshield` on every team, 40 over `shield` (Qirex 145 over 105) | `Ship_SetShield` indexes `0x84 + skill * 4` (confidence 88) | yes, same global | wired: Novice starts on `easyshield`, Skilled, Elite and Ace on `shield` |
+| Pulse PS2 | same values as PSP | the parser's three slots are PS2-read; the index inherits PSP's | inherited from PSP | wired, as PSP |
+| HD / Fury | `easyshield` on every team, 40 over `shield`, no medium or hard slot | **measured live** (RPCS3, Single Race and Eliminator): the original's Novice field started at 135 to 145 and the person's Venom at 140, which are `easyshield`, not `shield` (95 to 110) | yes: the Venom is the player's | wired, `CraftLaws::shield_by_skill` measured |
+| Pure | no team authors a slot beyond `shield` | not read; nothing to select | not applicable | held, every rung reads the same pool |
+| 2048 (Vita) | `easyshield` (Omega re-ships 2048's craft with `easyshield` 40 over `shield`) | **not read** | not read | held on the medium slot, open |
+| Omega (PS4) | `easyshield` on every team | **not read** (the executable is in Ghidra, nobody has walked its `Ship_SetShield`; shadPS4 has no memory readout) | not read | held on the medium slot, open; the loader report says so on a Novice race |
+
+No shipped file authors `mediumshield` or `hardshield` (HD's test asserts it), so Skilled, Elite
+and Ace read plain `shield` on every title today. The 2048 census was not run: the Vita `.pkg`
+is PFS-encrypted and does not load (`docs/formats/vita-package.md`); the Omega row stands in
+for its craft files, which Omega re-ships at the same layout.
+
+Ours differs from the original in two ways: the race box opens on Elite (medium), where the
+original's row opens on Easy; and `Difficulty::Ace` and a campaign Hard cell share the hard
+slot, which no title fills differently from `shield`. `oag_raceplay::finished_thrust::rung`
+maps Elite to Hard for the finished player's thrust law, which reads a different original
+integer (`AI_ResolveSkillScale`) and is left as it is.
+
 ## The self-check: completeness
 
 Most formats here were settled by arithmetic - a correct parse accounts for every
