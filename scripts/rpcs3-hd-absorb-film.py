@@ -17,9 +17,11 @@ the record shape `scripts/hd-weapon-pair.py` reads (`camera`, `ship.pos/rows/rac
 import argparse
 import importlib.util
 import json
+import os
 import struct
 import sys
 import time
+import types
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -57,10 +59,22 @@ def main():
     ap.add_argument("--flush", type=float, default=2.0)
     ap.add_argument("--step-timeout", type=float, default=8.0)
     ap.add_argument("--control", action="store_true")
+    ap.add_argument("--dump-at", default="",
+                    help="comma list of ages (each also in --ages): while the target is paused at that age, dump the frame's RSX "
+                         "draws with `rpcs3_draw_hook.py` to OUT/dNN-*.bin, read back with `scripts/rsx-draw-list.py OUT dNN --samplers`")
+    ap.add_argument("--dump-attempts", type=int, default=3,
+                    help="how often a dump that came back incomplete is retried (each retry runs the game 0.3 s on)")
     args = ap.parse_args()
     out = args.out
     out.mkdir(parents=True, exist_ok=True)
     ages = sorted(float(a) for a in args.ages.split(","))
+    dump_ages = {float(a) for a in args.dump_at.split(",") if a}
+    if dump_ages - set(ages):
+        sys.exit("--dump-at ages must also be in --ages")
+    os.environ.setdefault("HOOK_LIGHT", "1")
+    os.environ.setdefault("HOOK_NO_HEADS", "1")
+    dump_args = types.SimpleNamespace(dump=["0x40000000:0x20000"], dump_attempts=args.dump_attempts, dump_gap=0.3,
+                                      hook=str(HERE / "rpcs3_draw_hook.py"))
     port = int(drive.GDB_SERVER.rsplit(":", 1)[1])
 
     with drive.Session(args.image, str(out / "logs")) as session:
@@ -150,6 +164,8 @@ def main():
                     candidates.extend(ps3_pose.packet_candidates(blob, base=at))
                 print("%s: want %.3f age %.4f timer %.3f fade %.3f, %d camera candidate(s)"
                       % (stem, want[0], pose["age"], pose["timer"], pose["fade"], len(candidates)), flush=True)
+                if want[0] in dump_ages:
+                    drive.dump_frame(gdb, out, "d" + stem, dump_args)
                 shots.append((stem, shot, candidates, pose, want.pop(0)))
             if want:
                 step()
