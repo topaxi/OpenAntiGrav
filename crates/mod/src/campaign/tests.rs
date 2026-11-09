@@ -250,3 +250,118 @@ fn the_schema_and_the_reader_agree_on_every_example() {
         assert_eq!(reader.is_ok(), accepted, "reader, {what}: {reader:?}");
     }
 }
+
+fn built() -> CampaignDef {
+    let mut def = CampaignDef::parse(&with_header(SMALL)).unwrap();
+    def.grids[0].events[0].craft = Some(CraftDef {
+        team: "Feisar".to_string(),
+    });
+    def.grids[0].events[0].field = Some(FieldDef {
+        ai: Some("original".to_string()),
+        difficulty: Some("hard".to_string()),
+        skill: Some(1.75),
+        pilot: None,
+        teams: vec!["Qirex".to_string(), "Piranha".to_string()],
+    });
+    def.grids[0].events[1].weapons = Some(false);
+    def.grids[0].events[1].laps = Some(4);
+    def
+}
+
+#[test]
+fn a_written_campaign_reads_back_as_the_same_definition() {
+    for def in [CampaignDef::parse(&with_header(SMALL)).unwrap(), built()] {
+        let text = def.write().unwrap();
+        assert_eq!(CampaignDef::parse(&text).unwrap(), def, "{text}");
+    }
+}
+
+#[test]
+fn a_definition_built_in_code_writes_with_the_header() {
+    let info = Info {
+        id: "mine".to_string(),
+        name: "Mine".to_string(),
+        description: String::new(),
+        titles: Vec::new(),
+        reveal: Reveal::Locked,
+    };
+    let event = EventDef {
+        slot: [3, 2],
+        id: None,
+        name: String::new(),
+        mode: "race".to_string(),
+        track: Some("01_Track".to_string()),
+        tracks: Vec::new(),
+        file: None,
+        class: Some("venom".to_string()),
+        laps: None,
+        weapons: None,
+        craft: None,
+        field: None,
+        medals: None,
+        unlock: None,
+    };
+    let grid = GridDef {
+        id: "grid0".to_string(),
+        name: String::new(),
+        required_points: 0,
+        unlock_grid: None,
+        reveal: None,
+        flyer: None,
+        events: vec![event],
+    };
+    let def = CampaignDef::new(info, vec![grid]);
+    let text = def.write().unwrap();
+    assert!(text.starts_with("[toml-schema]"), "{text}");
+    assert_eq!(CampaignDef::parse(&text).unwrap(), def);
+}
+
+#[test]
+fn every_written_campaign_validates_against_the_schema() {
+    let mut texts = vec![built().write().unwrap()];
+    if let Some(base) = example_dir("example-campaign/campaigns") {
+        for entry in std::fs::read_dir(base).unwrap().flatten() {
+            let def = CampaignDef::parse(&std::fs::read_to_string(entry.path()).unwrap()).unwrap();
+            texts.push(def.write().unwrap());
+        }
+    }
+    for text in texts {
+        oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &text)
+            .unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+    }
+}
+
+#[test]
+fn a_definition_that_would_not_read_back_is_not_written() {
+    let mut def = built();
+    def.grids[0].events[1].slot = def.grids[0].events[0].slot;
+    assert!(def.write().is_err());
+}
+
+#[test]
+fn every_committed_example_campaign_survives_a_write() {
+    let Some(base) = example_dir("example-campaign/campaigns") else {
+        return;
+    };
+    let mut seen = 0;
+    for entry in std::fs::read_dir(base).unwrap().flatten() {
+        let text = std::fs::read_to_string(entry.path()).unwrap();
+        let def = CampaignDef::parse(&text).unwrap();
+        let again = def.write().unwrap();
+        assert_eq!(CampaignDef::parse(&again).unwrap(), def, "{}", entry.path().display());
+        seen += 1;
+    }
+    assert!(seen > 0);
+}
+
+fn example_dir(path: &str) -> Option<std::path::PathBuf> {
+    let full = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/mods/examples")
+        .join(path);
+    if full.is_dir() {
+        Some(full)
+    } else {
+        eprintln!("skipped: {} is not checked out", full.display());
+        None
+    }
+}
