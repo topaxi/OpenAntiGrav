@@ -13,7 +13,7 @@
 use log::{debug, error, info};
 
 use oag_core::buttons::Button;
-use oag_game::campaign::editor::{Action, SEED_DIGITS, Authored, Choices, Editor, Field, Page, Pick, Setting};
+use oag_game::campaign::editor::{Pressed, SEED_DIGITS, Authored, Choices, Editor, Field, Page, Pick, Setting};
 use oag_ui::menu::nav::Nav;
 use oag_ui_screens::campaign::editor::{self as view, Event};
 use oag_ui_screens::prompt;
@@ -143,7 +143,7 @@ impl Session {
         };
         let mut nav = None;
         let (mut save, mut rename, mut leave) = (false, false, false);
-        let (mut fill, mut seed) = (false, false);
+        let mut seed = false;
         let model = &mut screen.model;
         if !screen.status.is_empty()
             && (pad.up || pad.down || pad.left || pad.right || pad.cross || pad.select)
@@ -171,15 +171,15 @@ impl Session {
                 nav = Some(Nav::Stepped(None));
             }
             if pad.cross {
-                if model.setting() == Setting::Seed {
-                    seed = true;
-                } else {
-                    model.cycle_setting(1);
-                    nav = Some(Nav::Stepped(None));
+                match model.press_setting() {
+                    Pressed::Seed => seed = true,
+                    _ => nav = Some(Nav::Stepped(None)),
                 }
             }
             if pad.triangle {
-                fill = true;
+                model.fill();
+                screen.status = filled.clone();
+                nav = Some(Nav::Accept);
             }
             if pad.circle {
                 model.set_page(Page::Event);
@@ -252,41 +252,18 @@ impl Session {
                     model.begin_edit();
                     model.select_field(Field::ALL[index]);
                 }
-                Event::Row(index) => {
-                    let on_campaign = model.page() == Page::Campaign;
-                    let fields = if on_campaign {
-                        Setting::ALL.len()
-                    } else if model.has(model.cursor()) {
-                        Field::ALL.len()
-                    } else {
-                        0
-                    };
-                    if index < fields && on_campaign {
-                        model.select_setting(Setting::ALL[index]);
-                        if model.setting() == Setting::Seed {
-                            seed = true;
-                        } else {
-                            model.cycle_setting(1);
-                            nav = Some(Nav::Stepped(None));
-                        }
-                    } else if index < fields {
-                        model.begin_edit();
-                        model.select_field(Field::ALL[index]);
-                        model.cycle(1);
-                        nav = Some(Nav::Stepped(None));
-                    } else {
-                        match model.actions().get(index - fields) {
-                            Some(Action::Page) => {
-                                model.toggle_page();
-                                nav = Some(Nav::Accept);
-                            }
-                            Some(Action::Fill) => fill = true,
-                            Some(Action::Name) => rename = true,
-                            Some(Action::Save) => save = true,
-                            None => {}
-                        }
+                Event::Row(index) => match model.press_row(index) {
+                    Pressed::Stepped => nav = Some(Nav::Stepped(None)),
+                    Pressed::Page => nav = Some(Nav::Accept),
+                    Pressed::Filled => {
+                        screen.status = filled.clone();
+                        nav = Some(Nav::Accept);
                     }
-                }
+                    Pressed::Name => rename = true,
+                    Pressed::Save => save = true,
+                    Pressed::Seed => seed = true,
+                    Pressed::Nothing => {}
+                },
                 Event::Back => {
                     if model.page() == Page::Campaign {
                         model.set_page(Page::Event);
@@ -298,11 +275,6 @@ impl Session {
                     }
                 }
             }
-        }
-        if fill {
-            model.fill();
-            screen.status = filled;
-            nav = Some(Nav::Accept);
         }
         self.play_navs(nav);
         if rename {

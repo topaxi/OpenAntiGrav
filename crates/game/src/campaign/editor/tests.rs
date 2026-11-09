@@ -368,3 +368,39 @@ fn a_tier_the_disc_leaves_at_zero_is_left_out_and_a_cell_of_zeros_has_no_medals(
     editor.cycle(1);
     assert_eq!(editor.to_def().unwrap().grids[0].events[0].medals, None);
 }
+
+#[test]
+fn a_click_on_each_row_does_what_the_row_says() {
+    let mut editor = Editor::new(wide(), "Rows");
+    editor.select((0, 0));
+    editor.confirm();
+    // The event page: five fields, then the page switch, the name, the save.
+    assert_eq!(editor.field_rows(), 5);
+    assert_eq!(editor.press_row(0), Pressed::Stepped, "mode");
+    assert_eq!(editor.label((0, 0), Field::Mode).unwrap(), "TIME TRIAL");
+    assert_eq!(editor.press_row(6), Pressed::Name);
+    assert_eq!(editor.press_row(7), Pressed::Save);
+    assert_eq!(editor.press_row(8), Pressed::Nothing);
+    assert_eq!(editor.press_row(5), Pressed::Page);
+    // The campaign page: five settings, then the page switch, the fill, the save.
+    assert_eq!(editor.page(), Page::Campaign);
+    assert_eq!(editor.field_rows(), 5);
+    assert_eq!(editor.press_row(0), Pressed::Stepped);
+    assert_eq!(editor.setting_label(Setting::Difficulty), "HARD");
+    assert_eq!(editor.press_row(1), Pressed::Stepped);
+    assert_eq!(editor.setting_label(Setting::Progression), "RAMP");
+    assert_eq!(editor.press_row(2), Pressed::Seed, "the seed is typed");
+    assert_eq!(editor.seed(), 1);
+    assert_eq!(editor.press_row(3), Pressed::Stepped);
+    assert_eq!(editor.setting_label(Setting::ClassFrom), "FLASH");
+    assert_eq!(editor.count(), 1);
+    assert_eq!(
+        editor.press_row(6),
+        Pressed::Filled,
+        "the fill row is not the save row"
+    );
+    assert_eq!(editor.count(), wide().slots.len());
+    assert_eq!(editor.press_row(7), Pressed::Save);
+    assert_eq!(editor.press_row(5), Pressed::Page);
+    assert_eq!(editor.page(), Page::Event);
+}

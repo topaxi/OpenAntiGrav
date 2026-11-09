@@ -231,6 +231,25 @@ pub enum Action {
     Save,
 }
 
+/// What a press on a panel row asked of the screen, beyond what the model did itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pressed {
+    /// Nothing more.
+    Nothing,
+    /// A value stepped.
+    Stepped,
+    /// The page switched.
+    Page,
+    /// The grid was filled from the seed.
+    Filled,
+    /// The campaign's name is to be typed.
+    Name,
+    /// The campaign is to be saved.
+    Save,
+    /// The seed is to be typed.
+    Seed,
+}
+
 /// One slot's event as the editor holds it: an index into each list of
 /// [`Choices`] (`team` is `0` for the player's own pick, then `1 +` a team).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -527,6 +546,58 @@ impl Editor {
         match self.page {
             Page::Event => [Action::Page, Action::Name, Action::Save],
             Page::Campaign => [Action::Page, Action::Fill, Action::Save],
+        }
+    }
+
+    /// How many rows the open page lists above its actions: the campaign's settings, or the
+    /// selected event's fields (none on an empty slot).
+    #[must_use]
+    pub fn field_rows(&self) -> usize {
+        if self.page == Page::Campaign {
+            Setting::ALL.len()
+        } else if self.has(self.cursor) {
+            Field::ALL.len()
+        } else {
+            0
+        }
+    }
+
+    /// A press on the selected setting: the seed is typed, any other steps on.
+    pub fn press_setting(&mut self) -> Pressed {
+        if self.setting() == Setting::Seed {
+            Pressed::Seed
+        } else {
+            self.cycle_setting(1);
+            Pressed::Stepped
+        }
+    }
+
+    /// A click on panel row `index` (the fields, then the actions): a field or setting is
+    /// selected and stepped, an action runs.
+    pub fn press_row(&mut self, index: usize) -> Pressed {
+        let fields = self.field_rows();
+        if index < fields && self.page == Page::Campaign {
+            self.select_setting(Setting::ALL[index]);
+            return self.press_setting();
+        }
+        if index < fields {
+            self.begin_edit();
+            self.select_field(Field::ALL[index]);
+            self.cycle(1);
+            return Pressed::Stepped;
+        }
+        match self.actions().get(index - fields) {
+            Some(Action::Page) => {
+                self.toggle_page();
+                Pressed::Page
+            }
+            Some(Action::Fill) => {
+                self.fill();
+                Pressed::Filled
+            }
+            Some(Action::Name) => Pressed::Name,
+            Some(Action::Save) => Pressed::Save,
+            None => Pressed::Nothing,
         }
     }
 
