@@ -25,9 +25,30 @@ pub(super) struct Loaded {
     pub(super) leach_anchors: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
     /// The Missile's ribbon config, `Some` only where its texture loaded.
     pub(super) missile_trail: Option<oag_title::weapons::MissileTrail>,
+    /// The wingtip contrails' config and locators, `Some` only where the texture loaded; its
+    /// texture is in [`Self::textures`].
+    pub(super) wingtip: Option<crate::wingtip::WingtipDraw>,
 }
 
+/// What the race's ribbon effects are loaded against: the weapon models, the craft's title and the
+/// player's options (the contrails are lent by a setting).
+pub(super) type Against<'a> = (&'a WeaponModels, &'a oag_title::Title, &'a crate::Options);
+
 pub(super) fn load(
+    archives: &mut oag_assets::Archives,
+    (models, title, options): Against<'_>,
+    liveries: &[Livery],
+    report: &mut Vec<String>,
+) -> Loaded {
+    let mut loaded = wake(archives, models, liveries, report);
+    if let Some((assets, draw)) = crate::wingtip::load(archives, title, options, liveries, report) {
+        loaded.textures.wingtip = Some(assets);
+        loaded.wingtip = Some(draw);
+    }
+    loaded
+}
+
+fn wake(
     archives: &mut oag_assets::Archives,
     models: &WeaponModels,
     liveries: &[Livery],
@@ -64,6 +85,7 @@ pub(super) fn load(
                 textures: only_smoke(),
                 leach_anchors,
                 missile_trail,
+                wingtip: None,
             };
         }
         let mut anchors = [None; oag_gameplay::MAX_SHIPS];
@@ -80,6 +102,7 @@ pub(super) fn load(
             textures: only_smoke(),
             leach_anchors,
             missile_trail,
+            wingtip: None,
         };
     };
     let platform = archives.layout.platform;
@@ -109,6 +132,7 @@ pub(super) fn load(
         },
         leach_anchors,
         missile_trail,
+        wingtip: None,
     }
 }
 

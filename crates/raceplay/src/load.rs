@@ -966,24 +966,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
 
     #[cfg(feature = "view")]
-    let mut magstrip_wake = magstrip_wake::load(
+    let magstrip_wake = magstrip_wake::load(
         craft_of(&mut craft, &mut archives),
-        wm,
+        (wm, craft_title, options),
         &liveries,
         &mut report,
     );
-    #[cfg(feature = "view")]
-    let wingtip = crate::wingtip::load(
-        craft_of(&mut craft, &mut archives),
-        craft_title,
-        options,
-        &liveries,
-        &mut report,
-    )
-    .map(|(assets, draw)| {
-        magstrip_wake.textures.wingtip = Some(assets);
-        draw
-    });
 
     // The plugin list is the craft's title's, and an empty one is a real
     // answer: a title whose front end is unrecovered declares no languages, so
@@ -1225,7 +1213,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             missile_trail: magstrip_wake.missile_trail,
             #[cfg(feature = "view")]
-            wingtip,
+            wingtip: magstrip_wake.wingtip,
             collision,
             handling,
             opponent_handling,
