@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-09
-summary: "HD's wingtip vortices fully read and measured live (pad trigger, drift law, opacity, colour, blend, texture); ours draws none: wire two VortexLine ribbons per craft on the wingtip locators"
+summary: "HD wingtip vortices read and measured live (pad trigger, drift, opacity, colour, blend, texture); ours draws none"
 ---
 
 # HD's wingtip vortices: recovered and measured, not drawn
