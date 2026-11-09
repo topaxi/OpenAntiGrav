@@ -50,7 +50,7 @@ table keeps its keys open (ADR-0087 decision 8).
 | --- | --- |
 | top level | the key (`title`, `track`, `mode`, `class`, `team`; the records key, so lower case), `seed` (**the 64 bits as an `i64`**: a TOML integer is signed and a seed is drawn over all of `u64`; a seed above `i64::MAX` written as it stood made the header unreadable), `tick_rate`, `build` (informational, never compared), `hash_interval`, `slots`, `ticks` (the length, written with the file so the REPLAYS list reads it from `HEAD`) |
 | `[finish]` | how the player's craft finished, when the race ended with a result: `place`, `ticks` (written with `ticks`) |
-| `[options]` | the launch settings: `scheme`, `difficulty`, `autopilot`, `pilot_assist`, and the original driver's request `ai = "original"`, `ai_level`, `ai_skill` (`oag_raceplay::Launch`; the session flies a front-end race's opponents with it, so a rebuild must). **Read back** by a rebuild; an absent key is the default, an unknown value is refused by name |
+| `[options]` | the launch settings: `scheme`, `difficulty`, `autopilot`, `pilot_assist`, and the original driver's request `ai = "original"`, `ai_level`, `ai_skill` (`oag_raceplay::Launch`; the session flies a front-end race's opponents with it, so a rebuild must), and `campaign_skill`, a campaign cell's resolved skill scale (a float), written only for a campaign race, whichever driver flies it. It tunes the field (`oag_ai::Difficulty::tune_at_scale`) and the finished player's thrust, both simulation state, so `Race::apply_launch` repeats it before the first tick (`Race::apply_campaign_skill`); it is its own key because a campaign cell is tuned whichever driver flies it, and a 2048 event's driver skill tunes nothing. **Read back** by a rebuild; an absent key is the default, an unknown value is refused by name |
 | `[setup]` | the resolved launch request (`oag_replay::header::Setup`): mode, class, track, team, hull variant, skin, opponent teams, opponents, people, views, lap/weapon/Eliminator overrides, add-on campaign, Zone model. Written by `Race::start_recording` from the request the race was loaded with, so no caller can forget it |
 | `[ghost]` | the lap a file's ghost is |
 | `[fork]` | read, never yet written (stage 7): `tick`, `offered_at`, `seats`, `parent_build`, `parent_hash` |
@@ -79,7 +79,7 @@ every title, so the table is what the rebuild uses.
 | Omega (PS4) | proved | proved | proved |
 
 **Not claimed** (a recording of these may be written, and its rebuild is then not promised; the
-tick-zero hash refuses a rebuild that does not match): Zone, Eliminator, Tournament; Head to Head
+tick-zero hash refuses a rebuild that does not match): Zone, Eliminator, Tournament on any title but Pulse and beyond the files named below; Head to Head
 and split-screen beyond the one setup [the timeline's page](../architecture/replay-timeline.md)
 proves (two people, Pulse); multi-window
 races (`seat_picks`); Race Remix (`craft_source`); DLC and
@@ -88,6 +88,20 @@ foreign tracks (`dlc`, `foreign_track`); campaign events (`grid_teams`); capture
 returns early). None of these is in `[setup]` yet. [The viewer](../ui/replays.md) lists a mode outside the table as MODE NOT
 VERIFIED and tries it: Zone, Eliminator and Head to Head with one person each reproduced 752
 ticks on Pulse through WATCH.
+
+**Tournament** is a mode a header names, and `[setup] mode` is read through `Mode::from_recorded_name`,
+not `Mode::from_name`: `from_name` is the settings file's and `--mode`'s reader and does not list
+Tournament (a campaign's tournament leg is launched by `Session::launch_campaign_cell`, never
+chosen), while a replay header records the mode its race ran, so a file must be able to name it. A
+campaign recording rebuilds only with its `[options] campaign_skill`; without it the field flies at
+another tuning and the file stops matching within seconds (five Pulse EU Flash tournament races
+from a Steam Deck, written before the key existed, desynced at tick 360 or 420). Proved on Pulse
+only, not in the table above: `crates/raceplay/tests/campaign_replay_ground_truth.rs` (those five
+files, with the key inserted by name; local, never committed) and
+`replay_viewer_ground_truth::a_campaign_race_recorded_from_the_menus_reproduces` (the campaign's
+first cell, a Single Race against the original driver, recorded from the menus: it records the key,
+reproduces every stored hash, and desyncs without it). 2048's event
+campaign (`Launch::Event`, `grid_teams`) is still refused by the tick-zero hash.
 
 The four titles' 7,200-tick Time Trial recordings are re-driven through the rebuild, not through a
 hand-made setup (`*_replays_reproduce...`).

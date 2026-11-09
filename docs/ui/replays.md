@@ -109,11 +109,28 @@ is set, `RaceStage::watching` keeps it out of the parked-race slot, and its reco
 `auto/`, before and after a watch to the end.
 
 **The screen** (`oag_game::replay_view`, `Session::viewer_screen`): six chips in a row along the top, centred
-(PLAY or PAUSE, -5 SEC, +5 SEC, the speed, PHOTO, EXIT) with the time and the keys under them, and a thin bar
-along the bottom edge (grey, the built part lighter, the played part blue, a white playhead).
-The top and bottom are where every title's HUD leaves room (lap box top left, position top
-right, times and speed bottom). A click on the bar seeks to where it lands, a click on a chip is
-its button.
+(PLAY or PAUSE, -5 SEC, +5 SEC, the speed, PHOTO, EXIT) with the time and the keys under them, and under
+those a thin bar (grey, the built part lighter, the played part blue, a white playhead) as wide as the chip
+row less 20 units at each end. All of it is in the top band, inside the chip row's width: the bottom of the
+picture is the HUD's own (current time, speed, shield) and its lap box and position reach in from the sides,
+so nothing of ours is over any of them. Frames read on Pulse (1440x816 PSP aspect, PS2 aspect, 1024x768
+free, tick ~660): no chip, key line or bar pixel is over a HUD readout
+(`replay_view::tests::what_the_screen_draws_stays_in_the_top_band_inside_the_chip_row` holds the band and
+the width). The bar used to run the full width along the bottom edge, and its dark band cut the foot of the
+`current` time and covered the shield percentage; the mismatch banner (a state, not the normal screen) is
+still full width, just under the bar, and on the PS2 aspect lies over the lap box while it is up. A click on
+the bar seeks to where it lands, a click on a chip is its button.
+
+**Two clocks are on screen.** The viewer's `0:10 / 0:29` is the recording's tick over 60, from tick 0
+and so including the start-line countdown (`oag_race::COUNTDOWN_TICKS`, 272 ticks). The HUD's
+`current` is the lap clock the live race shows (`Race::readout`, `lap_ticks`): ticks since the
+player's craft first crossed the start line, which on lap 1 is later than the release (Pulse
+Venom, a pad-flown Single Race: the line is crossed at tick 413, 141 ticks after the release; a
+second run crossed at about tick 406). So `0:11` on the bar (tick 660 to 719) reads `0.04.1` to
+`0.05.1` on the HUD, not 11 s, and that is right: `crates/raceplay/src/tests/viewer.rs`
+(`the_hud_clocks_after_a_seek_are_the_live_races_at_that_tick`) and
+`replay_timeline_ground_truth` (`*_seeks_reproduce_a_pad_flown_race`, on Pulse) assert the HUD's lap
+and race clocks after a seek equal the live race's at that tick.
 
 | Input | Does |
 | --- | --- |

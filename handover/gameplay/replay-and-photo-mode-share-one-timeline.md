@@ -2,7 +2,7 @@
 status: ready-to-wire
 categories: [frontend, tooling]
 titles: [pulse, pure, hd, 2048, omega]
-updated: 2026-11-08
+updated: 2026-11-09
 summary: "ADR-0087: stages 1 to 6 landed, the viewer and photo mode switch both ways and share their keys (ADR-0088); stage 7 take-over is next"
 size: XL
 difficulty: hard
@@ -50,13 +50,20 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
   (unreleased; the maintainer deletes the old files). `campaign_replay_ground_truth` verifies the five Deck files with the key
   inserted by name, from `data/reference/replays/pulse-tournament/` (local, never committed).
   `replay_viewer_ground_truth::a_campaign_race_recorded_from_the_menus_reproduces` passes with `data/dlc` mounted.
-  **Docs not updated:** `docs/formats/replay-file.md` does not yet name `campaign_skill` or Tournament as claimed.
+  `docs/formats/replay-file.md` names `campaign_skill` and Tournament.
 - **Viewer blur (fixed, `replay-fix`).** "LOD and blur all over the place" was motion blur history surviving a seek, so the
   landing frame smeared the whole screen. A seek now restarts the history and counts as a camera cut. No LOD difference
   was found. Open: at 2X and 4X a frame spans 2 to 4 ticks, so blur is stronger there. The maintainer's idea of rendering
   the landing frame from ticks X-3 to X is not built: the frame lands sharp instead.
-- **Seen in the viewer's frames, unchecked:** the transport rows (PAUSE, -5 SEC and the rest) overlap the HUD's lap and
-  position readouts. The HUD's `current` lap time read `0.04.7` at replay time `0:11 / 0:29`; confirm which clock each shows.
+- **Seen in the viewer's frames (checked, `replay-polish-docs`):** ~~the transport rows overlap the HUD's lap and
+  position readouts~~ they do not on Pulse at 1440x816 (PSP aspect), on the PS2 aspect or at 1024x768 free; the chips
+  were narrowed from 50 to 46 units before this was checked. ~~The HUD's `current` read `0.04.7` at `0:11`~~ the HUD's
+  lap clock is right: lap 1 starts at the first start-line crossing, tick 413 in a pad run (141 ticks after the 272-tick
+  countdown), so tick 660 to 719 reads 4.1 to 5.1 s; a test asserts the HUD clocks after a seek equal the live race's
+  (`docs/ui/replays.md`, "The screen"). The bar's dark band at the bottom clipped the foot of the HUD's `current` time and covered the
+  shield percentage (PSP aspect): ~~fixed~~, the bar is now under the keys at the top, inside the chip row's width
+  (`docs/ui/replays.md`, "The screen"). **Open:** the mismatch banner is full width and lies over the lap box on
+  the PS2 aspect; a key line in a language longer than English could run wider than the chip row.
 - **The Steam Deck tick is not measured.** The command is in the ADR (decision 3). The design needs `tick_sim_only` at or
   under about 280 us there.
 - **Whether a fresh `Race` derives `capture_results` and `wreck_ended_tick`** at a take-over after a finish. The plan
@@ -95,6 +102,6 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
    replay file still claims only the table in its page.
 2. ~~Stage 6 `photo-rewind`~~ landed.
 3. Stage 7 `take-over`, as the ADR orders it.
-4. ~~The photo-mode rewind ADR~~ landed as ADR-0088; `replay-file.md` for `campaign_skill` and Tournament is still owed.
+4. ~~The photo-mode rewind ADR~~ landed as ADR-0088; ~~`replay-file.md` for `campaign_skill` and Tournament~~ landed.
 5. ~~Leaving photo mode with CIRCLE reaches the race as an absorb press~~ fixed (ADR-0088, decision 5).
 6. ~~The binding lane~~ landed; then stage 7.

@@ -77,6 +77,9 @@ pub(crate) struct Run {
     /// Every craft's drawn pose after tick `k`, at index `k`: the truth a pose track is judged
     /// against.
     pub(crate) truth: Vec<Vec<Pose>>,
+    /// The HUD's `(lap_ticks, race_ticks)` after tick `k`, at index `k`: what a viewer's HUD
+    /// must read after a seek to `k`.
+    clocks: Vec<(u64, u64)>,
 }
 
 fn watch(run: &mut Run, race: &Race) {
@@ -87,6 +90,8 @@ fn watch(run: &mut Run, race: &Race) {
             .map(|slot| race.craft_pose(slot))
             .collect(),
     );
+    let readout = race.readout();
+    run.clocks.push((readout.lap_ticks, readout.race_ticks));
     if TEXT_AT.contains(&tick) {
         run.text.push((tick, format!("{:?}", race.sim)));
     }
@@ -128,6 +133,7 @@ pub(crate) fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::Path
         hashes: Vec::new(),
         text: Vec::new(),
         truth: Vec::new(),
+        clocks: Vec::new(),
     };
     watch(&mut run, &race);
     let mut pad = Pad::new(title);
@@ -240,7 +246,18 @@ fn seeks_reproduce(title: &str, timeline: &mut Timeline, run: &Run) {
             run.hashes[target as usize],
             "{title}: the hash at tick {target} after a seek"
         );
+        let readout = timeline.probe().readout();
+        assert_eq!(
+            (readout.lap_ticks, readout.race_ticks),
+            run.clocks[target as usize],
+            "{title}: the HUD's lap and race clocks at tick {target} after a seek"
+        );
     }
+    let lap_began = run.clocks.iter().position(|(lap, race)| lap != race);
+    println!(
+        "{title}: the HUD's lap clock leaves the race clock at tick {lap_began:?} (the countdown is {})",
+        oag_race::COUNTDOWN_TICKS
+    );
     for (tick, recorded) in &run.text {
         assert_eq!(timeline.seek(*tick), Ok(*tick), "{title}");
         same_text(title, *tick, timeline, recorded);
@@ -468,6 +485,7 @@ fn a_split_screen_recording_reproduces() {
         hashes: Vec::new(),
         text: Vec::new(),
         truth: Vec::new(),
+        clocks: Vec::new(),
     };
     watch(&mut run, &race);
     let mut pads = [Pad::new(title), Pad::new(title)];
