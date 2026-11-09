@@ -229,25 +229,16 @@ difficulty-scaled shield pool" from an inference into a reading: there are three
 difficulty slots, the files set the easy one explicitly and let `shield` cover the
 other two.
 
-**Ours races every difficulty on the medium slot: a measured cross-mode defect, not wired
-(2026-11-09, `eliminator-pace`).**
-- **The data.** HD's team files author both values. `DATA02.PSARC`
-  `/data/ships/qirex/handlingstats.xml` carries
-  `<Misc height="3.5" length="13" shield="105" easyshield="145" .../>`.
-- **What ours does.** `oag_gameplay::handling` builds `Dimensions::shield` from
-  `Misc::shield_for(DEFAULT_SKILL_LEVEL)`, and `DEFAULT_SKILL_LEVEL` is `1`. Every race at every
-  difficulty therefore gets `shield` (105 for Qirex), never `easyshield`.
-- **What the original does.** At Novice on RPCS3 (HD Fury EU, Racebox Eliminator, Vineta K,
-  Venom), the field's live shields read 135 to 145. `scripts/rpcs3-hd-eliminator-score.py` reads
-  them at `*(craft+0x5fac)+0x78`, then `+0x90 + difficulty * 4`. The person's craft refilled 28.0
-  a lap, `0.2 * 140` ([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md)).
-  The same run in ours started the field at 90 to 110.
-- **Confidence.** 85 that the original's Novice pool is the easy slot: the authored 145 and the
-  live 135 to 145 agree. The medium and hard slots were not read live.
-- **Scope.** Wiring the race's difficulty into `shield_for` moves every mode, Single Race
-  included, and it is open as its own lane.
-- **Pulse.** Pulse authors `easyshield` too, so the same constant holds there. Not re-measured
-  here.
+**Ours used to race every difficulty on the medium slot; it follows the difficulty now**
+(`hd-difficulty-shield`; see [Which difficulty picks the shield slot](#which-difficulty-picks-the-shield-slot)).
+The defect was measured on HD: `DATA02.PSARC` `/data/ships/<team>/handlingstats.xml` authors both
+`shield` and `easyshield`, and at Novice on RPCS3 (HD Fury EU, Racebox Eliminator, Vineta K,
+Venom) the field's live shields read at the authored `easyshield`, not `shield`.
+`scripts/rpcs3-hd-eliminator-score.py` reads them at `*(craft+0x5fac)+0x78`, then
+`+0x90 + difficulty * 4`; the person's craft refilled a lap at 0.2 of an `easyshield` pool
+([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md)). Confidence 85 that
+the original's Novice pool is the easy slot; the medium and hard slots were not read live. Pulse
+authors `easyshield` too and is wired the same way.
 
 Three things follow, and they are why this element is worth its own section.
 
