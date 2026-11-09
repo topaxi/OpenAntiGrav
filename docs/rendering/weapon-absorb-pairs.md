@@ -11,24 +11,36 @@ differently.
 
 ## What would have falsified it
 
-Written before the captures. For each title, "ours already matches": the original's craft-box delta at about 0.5 s
+Recorded after the first captures and before any scoring (the lane's brief named the question, the box and the control, not
+the threshold). For each title, "ours already matches": the original's craft-box delta at about 0.5 s
 (the overlay's peak) would be inside the noise of two controls, or ours' delta would be within 10 % of it with the same
 tint. The noise floor is the original's own control-to-absorb mean absolute difference before the effect starts (Pulse
 and Pure, frame 3, 2 to 4 luma units; HD 8 to 11 because the rivals move between runs). The tint is the mean
 blue-minus-red of the same difference. Pulse's luma passed, its HUD bar did not; Pure and HD failed on luma, tint or
-tail. A control is rendered the same way on both sides: the original from the same state without the press, ours with
-the pickup given and no press (`--input-script` holding `none`), so a held-pickup icon in ours cancels.
+tail. The control is the same state without the press on the original. Ours' control differs by title: HD's is ours with the
+pickup given and `--button none` (so the held-pickup icon cancels); Pulse's and Pure's are ours with no `--give` at all,
+so ours' absorb frames carry the held-pickup icon (a `--give` artefact: a purple hexagon with four dots at the top centre
+of the frame on Pulse, the top box of Pure's table reads -8 from it) that the original's do not. Every box scored
+excludes it except Pure's `hud_top`, which is not ranked.
 
 ## Method
 
 | | Pulse (PSP, USA) | Pure (PSP, USA) | HD (PS3, EU) |
 | --- | --- | --- | --- |
 | Original | PPSSPP v1.20.4, software renderer, 480x272 | same | RPCS3, Write Color Buffers on, 1278x718 |
-| State | `race-platinum-white-single-grid` (Platinum Rush, Assegai, 8th of 8, weapons on, at rest) | a Single Race made for this lane: Vineta K, Vector, Feisar, 8th of 8, at rest | `hd-racebox-talons-venom-weapons-grid`, START RACE, 5 s of lap clock, craft held at rest |
+| State | `race-platinum-white-single-grid.ppst` (Platinum Rush, Assegai, 8th of 8, weapons on, at rest) | `pure-single-vineta-feisar-race.ppst` (made for this lane: Vineta K, Vector, Feisar, Single Race, 8th of 8, at rest) | `hd-racebox-talons-venom-weapons-grid`, START RACE, 5 s of lap clock, craft held at rest |
 | Press | the held pickup written at `craft+0x1bc` of the weapon record while stopped, circle held 3 frames (`scripts/psp-absorb-frames.py`) | the held id written at `weapon record+0x1d8`, circle held until it reads 0 (the absorb), see below | pickup state 1 written at `*(ship+0x5edc)+0x204` (mirrored `+0x208`), circle held until `craft+0x7a5c` rises to 1.0 |
 | Frame clock | `craft+0x830` minus the absorb stamp `craft+0x878`, one frame per hit of `Weapons_DispatchFire`; the screenshot lags the stop by about 2 frames | frames counted from the first player frame whose held id is back at 0; lag about 2 frames, unmeasured on Pure | single game frames stepped off the lap clock, `age = lap clock - stamp`, the timer read live (`1.0 - timer`) |
 | Ours | `--pose-from` the original's pose row, `--camera-view close`, `--camera-fov 60`, `--give mine`, circle at tick 520 (race clock 4.2 s), ticks 520 + frame - 2 | same flags, Pure, circle at tick 780 (HUD 8.4 s, the original's clock at frame 0), ticks 780 + frame - 2 | `scripts/hd-weapon-pair.py --button circle` on the original's pose and RSX camera, fired at the stamp clock; a second run with `--button none` is ours' control |
 | Repeats | 2 absorbs, 1 control, 1 boot | 2 absorbs, 1 control, 1 boot | 2 absorbs, 1 control, 3 restores of one state |
+
+Ours' pose (the original's, read at the state's first stop, `psp-trace.py --camera`, world units): Pulse position
+`(-542.789, 2.901, -292.866)`, forward `(0.9984, -0.0166, 0.0542)`, up `(0.0141, 0.9988, 0.0472)`, camera `(-553.980,
+6.084, -293.325)`, race clock 4.02 s at the stop; Pure position `(177.199, 37.171, -116.810)`, forward `(-1.0, 0.0022,
+0.0026)`, up `(0.0022, 1.0, 0.0)`, camera `(188.456, 40.147, -116.839)`, race clock 7.02 s at the stop (HUD 8.4 s at frame 0).
+Pulse: `--track Data\Environments\13_Track\track.vex --team Assegai --class venom`; Pure: `--track
+Data\Environments\01_Vineta_K\track.vex --team Feisar --class vector`; both `--mode single_race --camera-view close
+--camera-fov 60 --size 480x272`, `--world-clock-offset 8.765` on Pulse.
 
 The original's frames are paired by age, not by wall time, because the original runs a variable timestep. Ours is at
 60 Hz. A one-frame error in the lag (0.017 s) is inside every number below.
@@ -131,25 +143,30 @@ the shell's, not the burst's.
 The original's own craft-box mean absolute difference is 8 to 12 even before the effect (the rivals and the craft's
 hover move between runs), so differences under about 3 luma units are not read.
 
+The controls agree: the original's and ours' control craft boxes read mean RGB `(68.0, 97.5, 106.6)` and `(67.2, 97.6,
+107.2)` at 0.5 s, luma 91.9 on both, so the difference is not exposure. At 1.0 s the shell is at full fade on the
+original (fade 0.998, timer 0, read live) and the craft box is only +6.5 over its control, RGB `(+3.6, +5.8, +14.1)`:
+lavender-blue, the livery showing. Ours at 1.0 s is `(+16.1, +17.8, +23.8)`, +17.7. The 0.5 s to 0.75 s peak is the
+shell plus the burst; with the shell at about +6.5 on the original and +17.7 on ours, the burst is about +15 on the
+original and about +7 on ours.
+
 Ranked:
 
-1. **The shell's colour.** The original's hull stays dark blue and the gold livery shows through at 0.5 s and 1.0 s;
-   ours washes the whole hull to white-cyan, its blue-minus-red delta half the original's (+9.4 against +18.4) at the
-   peak. The thread's "ours reads bluer than the original's white-lavender" is the other way round on this pair.
-   Exposure is not matched between the two sides (ours is the 1920x1080 composite, the original RPCS3's), so part of
-   this may be tone mapping, not the shell; the shell's own colour, `ShieldColour`, is the first thing to check.
-2. **The tail.** Ours is still at +17.8 at 1.0 s, the original's has fallen to +6.5: about 0.25 s longer. Unexplained
-   on the original's side: its shell fade still reads 0.998 at that frame, so the picture dims before the fade does (the
-   presented frame's lag against the stop was not measured on this state).
-3. **The burst.** The original's wingtip locators throw large bright balls with electric streaks that also light the floor
-   (0.3 s to 0.75 s); ours draws a smaller white glow at the same places.
-4. **The rise.** Ours is brighter early (+13.4 against +6 at 0.2 s) though the tint is right: the shell fades in
-   faster than the original's picture does, or the 3-tick lag assumed for ours is one frame short.
-5. **HUD.** Both blink the shield hex between its blue `100` state and a pale state (blue minus red, hex box:
-   original 41 to 23, ours 37 to 18); with eight ages sampled the phase cannot be told apart. The original's frames
-   carry the `DAMAGE` and `Absorb` labels beside the hex, which ours does not (ours prints the held pickup's name
-   there, a `--give` artefact). Whether those labels are absorb-only was not isolated: the control shows a faint `DAMAGE`
-   too.
+1. **The shell is about 2.7 times too bright and too white.** The same craft box, shell alone: +6.5 against +17.7 luma,
+   blue-minus-red +10 against +7, red gain 4 against 16. A player sees the hull bleach to white-cyan where the original
+   keeps a blue hull with the gold livery showing (frames at 0.5 s and 1.0 s). The thread's "ours reads bluer than the
+   original's white-lavender" is the other way round on this pair.
+2. **The burst is about half as strong.** The original's wingtip locators throw large bright balls with electric
+   streaks that also light the floor from 0.3 s to 0.75 s (gone by 1.0 s); ours draws a smaller white glow at the same
+   places (about +7 against +15 once the shell is taken out).
+3. **Timing matches.** The original's shell fade rose `0.19, 0.34, 0.65, 0.89, 0.95, 0.99` at ages 0.07, 0.10, 0.20, 0.30,
+   0.50, 0.75 s (live), and after 1.0 s both sides decay at a similar rate (original 6.5 to 2.8, ours 17.8 to 6.8). The
+   +13.4 against +6 at 0.2 s is the same shell gain showing earlier, not a faster rise. There is no tail or rise
+   difference to wire.
+4. **HUD.** Both blink the shield hex between its blue `100` state and a pale state (blue minus red, hex box: original
+   41 to 23, ours 37 to 18); with eight ages sampled the phase cannot be told apart. The original's frames carry
+   the `DAMAGE` and `Absorb` labels beside the hex, which ours does not (ours prints the held pickup's name there, a
+   `--give` artefact). Whether those labels are absorb-only was not isolated: the control shows a faint `DAMAGE` too.
 
 The cockpit shell (`vr_absorbinternal_cockpit`) is not exercised: the camera is the chase view.
 
@@ -160,26 +177,39 @@ Not paired. Exactly where it stopped:
 - **Omega (shadPS4 0.20).** `scripts/shadps4-omega-pair.py` reaches the grid and stops before the countdown. A held
   pickup needs: the Racebox Weapons row turned on (HD's Racebox default is off, `emu-hd-race-walk.sh` presses the row;
   the Omega walk does not), a race driven to a pad with no steering feedback, and an absorb press timed on a frame clock
-  shadPS4 does not expose (no memory readout). No Omega held-slot or absorb address is recovered in
-  `docs/ghidra/functions/ps4-omega-eu/` (the shell colour is, in `shield.md`). Unblocks it: the Omega Racebox weapons walk,
+  shadPS4 does not expose (no memory readout). No Omega absorb function or player pickup record is recovered in
+  `docs/ghidra/functions/ps4-omega-eu/` (the shell colour is, in `shield.md`; `weapon-ai-fire.md` has the AI object's held
+  id at `+0x44`, a lead). Unblocks it: the Omega Racebox weapons walk,
   or the native port's `/proc/<pid>/mem` (`docs/tools/compare-page.md`, "Omega") with the HD held-slot offsets
   checked against the eboot.
 - **2048 (Vita3K).** `scripts/vita-2048-pair.py --walk` reaches the grid before GO; Vita3K has no state channel, and its
   guest `/proc/<pid>/mem` can be written (the hull-shake patch does) but no 2048 held-slot or absorb address is read
-  (`docs/ghidra/functions/vita-2048-eu-v104/` has `weapon-ai-fire.md`, `autopilot.md` and the loading screen only).
+  (the AI's `weapon-ai-fire.md` in that folder reads a held id and clock from the AI's own object, which is a lead, not
+  the player's pickup record or the absorb function).
   Unblocks it: read `Ship_PlayAbsorbFeedback` and the pickup slot in the 2048 eboot (HD's are `0x000d9398` and
   `ship+0x5edc`), then the HD recipe above with a write through `/proc`.
 
 Cross-title status (CLAUDE.md, "A 2048 finding is checked against Omega"): the burst is **ported** (both ship the six
-`absorb` locators and HD's three mirrored pairs, `hull-sparks.md`); the shell colour, tail and tint measured on HD
-are **checked, applies, not wired** for both: both take HD's `absorb_shell` and Omega's `shield.md` records the same
-`ShieldColour`, but no live frame of either exists, so the HD differences above are inherited unmeasured, not shown.
+`absorb` locators and HD's three mirrored pairs, `hull-sparks.md`). The HD shell is **not wired** on either: `oag_hd`'s
+effects table sets `absorb_shell` and the 2048 and Omega tables are the all-unread one, so neither draws a shell; whether
+their archives ship an `AbsorbEffect` model was not censused (named open in the thread). The HD tint and brightness
+differences above are **not checkable** on 2048 and Omega until a live absorb frame exists for them.
+
+## Confidence
+
+Per `docs/reverse-engineering/confidence-rubric.md`, measured frames, not decompiled claims; each is two absorb runs on one
+emulator boot (Pulse, Pure) or three restores of one state on one boot (HD), so "seen once" on the boot level:
+Pulse's bar finding 75 (both runs show the same two phases and period); Pulse's overlay match 75; Pure's missing hull
+overlay and burst look 75; Pure's held-id and consume reading 80 (live on two runs, decompile read); Pure's `+0x98` HUD
+write 60 (read, effect not seen); HD's shell ratio and tint 70 (controls equal, run to run spread of the original
+small, ours seen once); HD's burst ratio 60 (derived by subtracting the shell). Pose and lag: one frame of lag
+uncertainty on every age.
 
 ## Reference set
 
-The frames behind every number (original, original control, ours, ours' control at 0.1, 0.5 and 1.0 s, per title, with
-side sheets) are derived game data and live in `data/reference/absorb-pairs/<title>/` once the lead adopts them; they are
-not in this tree.
+The frames behind every number are derived game data, not in this tree. The original's frames (`theirs_*` and
+`theirs-control_*`, 0.1, 0.5 and 1.0 s per title) are the ones `data/reference` admits, for the lead to adopt as
+`data/reference/absorb-pairs/<title>/`; ours' frames and the side sheets regenerate from the poses and flags above.
 
 ## Reproducing
 

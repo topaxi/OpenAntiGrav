@@ -367,6 +367,15 @@ question first. Scored **80**: the same evidence class as the section above
 disc data) minus one leg - this reading, unlike `Sound_Play`'s, has not had
 its callee bodies (`func_0x0012010c`, the gate) read at all.
 
+## A live leg for the absorb trigger (2026-11-09, `absorb-fx-measure`)
+
+`FUN_08925e20` runs on a real absorb on PPSSPP (USA, Vineta K, Single Race): writing a held id 1 at the player's weapon
+record `+0x1d8` (record `= *(entity + 0xd0)`, entity `= *(Ship_UpdateCraft.a0 + 0x1c4)`, the one with `+0x488 == 0`) and
+holding circle took the id back to 0 three frames later on two runs, and the burst, the pink hull flash and the cue's
+frames followed (`docs/rendering/weapon-absorb-pairs.md`). The absorb button is `*(*(entity + 0xc8) + 0x48) + 0x16`
+as `Ship_UpdateWeapons` (`0x0892935c`) reads it. Confidence 80 for the trigger and the consume; the "no PPSSPP leg" line
+below stands for every other trigger on this page.
+
 ## What is not verified
 
 - **No call site for `Rocket_Init`, `Rocket_SpawnCraftExplosion` or
