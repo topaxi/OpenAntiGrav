@@ -552,6 +552,10 @@ impl Session {
             self.campaign_named(&finished.text);
             return;
         }
+        if finished.purpose == Purpose::CampaignSeed {
+            self.campaign_seeded(&finished.text);
+            return;
+        }
         if matches!(finished.purpose, Purpose::PlayerName | Purpose::PlayerTag) {
             self.player_entered(&finished.purpose, &finished.text);
             return;
@@ -607,6 +611,7 @@ impl Session {
             Purpose::LanAddress
             | Purpose::Online(_)
             | Purpose::CampaignName
+            | Purpose::CampaignSeed
             | Purpose::PlayerName
             | Purpose::PlayerTag => {}
         }

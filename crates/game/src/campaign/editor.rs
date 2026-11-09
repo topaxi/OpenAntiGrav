@@ -8,8 +8,10 @@
 
 use std::collections::BTreeMap;
 
+use oag_core::Rng;
 use oag_mod::campaign::{
-    CampaignDef, CraftDef, EventDef, FieldDef, GridDef, Info, MedalsDef, Reveal, UnlockDef,
+    CampaignDef, CraftDef, EventDef, FieldDef, GridDef, Info, MedalsDef, Progression, Reveal,
+    UnlockDef,
 };
 
 /// One thing a field can be set to: the word the file carries, and the words a
@@ -50,8 +52,39 @@ pub const AIS: [(&str, &str, &str); 2] = [
     ("ours", "OAG_EDITOR_AI_OURS", "OURS"),
 ];
 
+/// The base difficulties the editor offers, the original driver's rungs: the file's word,
+/// then the label's id and English. Our driver takes the rung at the same place on its own
+/// ladder (`docs/formats/custom-campaign.md`, "Difficulty").
+pub const DIFFICULTIES: [(&str, &str, &str); 3] = [
+    ("easy", "OAG_EDITOR_DIFFICULTY_EASY", "EASY"),
+    ("medium", "OAG_EDITOR_DIFFICULTY_MEDIUM", "MEDIUM"),
+    ("hard", "OAG_EDITOR_DIFFICULTY_HARD", "HARD"),
+];
+
+/// How the difficulty moves across the cells: the file's word, then the label's id and English.
+pub const PROGRESSIONS: [(&str, &str, &str); 2] = [
+    ("flat", "OAG_EDITOR_PROGRESSION_FLAT", "FLAT"),
+    ("ramp", "OAG_EDITOR_PROGRESSION_RAMP", "RAMP"),
+];
+
+/// The longest seed the keyboard takes: nine digits always fit a `u32`.
+pub const SEED_DIGITS: usize = 9;
+
 /// Every other word the editor's screen and flow show: string id and English.
-pub const WORDS: [(&str, &str); 21] = [
+pub const WORDS: [(&str, &str); 33] = [
+    ("OAG_EDITOR_FIELD_DIFFICULTY", "DIFFICULTY"),
+    ("OAG_EDITOR_FIELD_PROGRESSION", "PROGRESSION"),
+    ("OAG_EDITOR_FIELD_SEED", "SEED"),
+    ("OAG_EDITOR_FIELD_CLASS_FROM", "CLASS FROM"),
+    ("OAG_EDITOR_FIELD_CLASS_TO", "CLASS TO"),
+    ("OAG_EDITOR_ACTION_FILL", "FILL GRID"),
+    ("OAG_EDITOR_ACTION_SETTINGS", "CAMPAIGN SETTINGS"),
+    ("OAG_EDITOR_ACTION_EVENT", "EVENT FIELDS"),
+    ("OAG_EDITOR_SEED_TITLE", "TYPE A SEED"),
+    ("OAG_EDITOR_FILLED", "GRID FILLED FROM THE SEED"),
+    ("OAG_EDITOR_HINT_SETTINGS", "START SAVES   SELECT SETTINGS"),
+    ("OAG_EDITOR_HINT_EVENT", "TRIANGLE FILLS   SELECT EVENTS"),
+    ("OAG_EDITOR_LEGEND_FILL", "Fill grid"),
     ("OAG_EDITOR_TITLE", "CAMPAIGN EDITOR"),
     ("OAG_EDITOR_FIELD_MODE", "MODE"),
     ("OAG_EDITOR_FIELD_CIRCUIT", "CIRCUIT"),
@@ -69,7 +102,6 @@ pub const WORDS: [(&str, &str); 21] = [
     ("OAG_EDITOR_NAME_TITLE", "NAME YOUR CAMPAIGN"),
     ("OAG_EDITOR_SAVE_FAILED", "COULD NOT SAVE THE CAMPAIGN"),
     ("OAG_EDITOR_HINT_PLACE", "CROSS PLACES AN EVENT"),
-    ("OAG_EDITOR_HINT_SAVE", "START SAVES"),
     ("OAG_EDITOR_LEGEND_CLEAR", "Clear slot"),
     ("OAG_EDITOR_LEGEND_NAME", "Name"),
     ("OAG_EDITOR_DEFAULT_NAME", "MY CAMPAIGN"),
@@ -151,6 +183,54 @@ impl Field {
     pub const ALL: [Self; 5] = [Self::Mode, Self::Circuit, Self::Class, Self::Team, Self::Ai];
 }
 
+/// Which page of the details panel is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Page {
+    /// The selected event's fields.
+    Event,
+    /// The campaign's own settings: difficulty, the seed and the class bounds.
+    Campaign,
+}
+
+/// A row of the campaign page, in the order the panel lists them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Setting {
+    /// The base difficulty of the opponents.
+    Difficulty,
+    /// How the difficulty moves across the cells.
+    Progression,
+    /// The seed [`Editor::fill`] draws from.
+    Seed,
+    /// The slowest speed class a filled cell may draw.
+    ClassFrom,
+    /// The fastest speed class a filled cell may draw.
+    ClassTo,
+}
+
+impl Setting {
+    /// The rows, top to bottom.
+    pub const ALL: [Self; 5] = [
+        Self::Difficulty,
+        Self::Progression,
+        Self::Seed,
+        Self::ClassFrom,
+        Self::ClassTo,
+    ];
+}
+
+/// A row under the fields that acts on the campaign.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    /// Switches between the event's fields and the campaign's settings.
+    Page,
+    /// Fills the grid from the seed (the campaign page).
+    Fill,
+    /// Names the campaign (the event page).
+    Name,
+    /// Saves it.
+    Save,
+}
+
 /// One slot's event as the editor holds it: an index into each list of
 /// [`Choices`] (`team` is `0` for the player's own pick, then `1 +` a team).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -172,6 +252,13 @@ pub struct Editor {
     field: usize,
     editing: bool,
     words: BTreeMap<String, String>,
+    page: Page,
+    setting: usize,
+    difficulty: usize,
+    progression: usize,
+    seed: u32,
+    /// The lowest and highest class index a filled cell draws, inclusive.
+    bounds: (usize, usize),
 }
 
 /// Where a slot's hex stands, in hex-widths and hex-heights: odd columns half a
@@ -185,6 +272,7 @@ impl Editor {
     #[must_use]
     pub fn new(choices: Choices, name: &str) -> Self {
         let cursor = choices.slots.first().copied().unwrap_or((0, 0));
+        let classes = choices.classes.len();
         Self {
             choices,
             name: name.to_string(),
@@ -193,6 +281,12 @@ impl Editor {
             field: 0,
             editing: false,
             words: BTreeMap::new(),
+            page: Page::Event,
+            setting: 0,
+            difficulty: 1,
+            progression: 0,
+            seed: 1,
+            bounds: (0, classes.saturating_sub(1)),
         }
     }
 
@@ -204,6 +298,8 @@ impl Editor {
             .copied()
             .chain(MODES.iter().map(|m| (m.1, m.2)))
             .chain(AIS.iter().map(|a| (a.1, a.2)))
+            .chain(DIFFICULTIES.iter().map(|d| (d.1, d.2)))
+            .chain(PROGRESSIONS.iter().map(|p| (p.1, p.2)))
         {
             self.words.insert(id.to_string(), say(id, english));
         }
@@ -293,6 +389,7 @@ impl Editor {
         }
         self.cursor = slot;
         self.editing = false;
+        self.page = Page::Event;
         true
     }
 
@@ -404,6 +501,164 @@ impl Editor {
         })
     }
 
+    /// The page of the panel that is open.
+    #[must_use]
+    pub fn page(&self) -> Page {
+        self.page
+    }
+
+    /// Opens `page`; the event's field panel closes with it.
+    pub fn set_page(&mut self, page: Page) {
+        self.page = page;
+        self.editing = false;
+    }
+
+    /// Switches between the event page and the campaign page.
+    pub fn toggle_page(&mut self) {
+        self.set_page(match self.page {
+            Page::Event => Page::Campaign,
+            Page::Campaign => Page::Event,
+        });
+    }
+
+    /// The rows under the fields on the open page.
+    #[must_use]
+    pub fn actions(&self) -> [Action; 3] {
+        match self.page {
+            Page::Event => [Action::Page, Action::Name, Action::Save],
+            Page::Campaign => [Action::Page, Action::Fill, Action::Save],
+        }
+    }
+
+    /// The selected row of the campaign page.
+    #[must_use]
+    pub fn setting(&self) -> Setting {
+        Setting::ALL[self.setting]
+    }
+
+    /// Selects the campaign page's row `delta` on.
+    pub fn move_setting(&mut self, delta: i32) {
+        let n = Setting::ALL.len() as i32;
+        self.setting = (self.setting as i32 + delta).rem_euclid(n) as usize;
+    }
+
+    /// Selects `setting`.
+    pub fn select_setting(&mut self, setting: Setting) {
+        self.setting = Setting::ALL.iter().position(|&s| s == setting).unwrap_or(0);
+    }
+
+    /// Steps the selected setting `delta` values on, wrapping. The seed steps by one; a
+    /// class bound that passes the other drags it along, so the range is never empty.
+    pub fn cycle_setting(&mut self, delta: i32) {
+        let classes = self.choices.classes.len().max(1) as i32;
+        let wrap = |at: usize, n: i32| (at as i32 + delta).rem_euclid(n) as usize;
+        match self.setting() {
+            Setting::Difficulty => {
+                self.difficulty = wrap(self.difficulty, DIFFICULTIES.len() as i32)
+            }
+            Setting::Progression => {
+                self.progression = wrap(self.progression, PROGRESSIONS.len() as i32);
+            }
+            Setting::Seed => self.seed = self.seed.wrapping_add_signed(delta),
+            Setting::ClassFrom => {
+                self.bounds.0 = wrap(self.bounds.0, classes);
+                self.bounds.1 = self.bounds.1.max(self.bounds.0);
+            }
+            Setting::ClassTo => {
+                self.bounds.1 = wrap(self.bounds.1, classes);
+                self.bounds.0 = self.bounds.0.min(self.bounds.1);
+            }
+        }
+    }
+
+    /// The name of `setting`.
+    #[must_use]
+    pub fn setting_name(&self, setting: Setting) -> String {
+        let (id, english) = match setting {
+            Setting::Difficulty => ("OAG_EDITOR_FIELD_DIFFICULTY", "DIFFICULTY"),
+            Setting::Progression => ("OAG_EDITOR_FIELD_PROGRESSION", "PROGRESSION"),
+            Setting::Seed => ("OAG_EDITOR_FIELD_SEED", "SEED"),
+            Setting::ClassFrom => ("OAG_EDITOR_FIELD_CLASS_FROM", "CLASS FROM"),
+            Setting::ClassTo => ("OAG_EDITOR_FIELD_CLASS_TO", "CLASS TO"),
+        };
+        self.say(id, english)
+    }
+
+    /// What `setting` is set to.
+    #[must_use]
+    pub fn setting_label(&self, setting: Setting) -> String {
+        let class = |at: usize| {
+            self.choices
+                .classes
+                .get(at)
+                .map_or("-".to_string(), |pick| pick.label.clone())
+        };
+        match setting {
+            Setting::Difficulty => {
+                let (_, id, english) = DIFFICULTIES[self.difficulty];
+                self.say(id, english)
+            }
+            Setting::Progression => {
+                let (_, id, english) = PROGRESSIONS[self.progression];
+                self.say(id, english)
+            }
+            Setting::Seed => self.seed.to_string(),
+            Setting::ClassFrom => class(self.bounds.0),
+            Setting::ClassTo => class(self.bounds.1),
+        }
+    }
+
+    /// The seed [`Self::fill`] draws from.
+    #[must_use]
+    pub fn seed(&self) -> u32 {
+        self.seed
+    }
+
+    /// Sets the seed.
+    pub fn set_seed(&mut self, seed: u32) {
+        self.seed = seed;
+    }
+
+    /// The slowest and fastest class a filled cell draws, as places on the title's ladder.
+    #[must_use]
+    pub fn class_bounds(&self) -> (usize, usize) {
+        self.bounds
+    }
+
+    /// Sets the class bounds, as places on the title's ladder, in either order.
+    pub fn set_class_bounds(&mut self, a: usize, b: usize) {
+        let top = self.choices.classes.len().saturating_sub(1);
+        self.bounds = (a.min(b).min(top), a.max(b).min(top));
+    }
+
+    /// Fills every slot the title draws from the seed, replacing what was placed. Each
+    /// cell draws its mode, circuit and speed class (inside the bounds) in that order from
+    /// `oag_core::Rng` seeded with [`Self::seed`], so the same seed and choices give the
+    /// same grid whatever was placed before. A cell is an event like any other afterwards.
+    pub fn fill(&mut self) {
+        let mut rng = Rng::new(u64::from(self.seed));
+        let top = self.choices.classes.len().saturating_sub(1);
+        let (low, high) = (self.bounds.0.min(top), self.bounds.1.min(top));
+        let below = |rng: &mut Rng, n: usize| rng.below(n.max(1) as u32) as usize;
+        self.events.clear();
+        for &slot in &self.choices.slots {
+            let mode = below(&mut rng, MODES.len());
+            let track = below(&mut rng, self.choices.tracks.len());
+            let class = low + below(&mut rng, high - low + 1);
+            self.events.insert(
+                slot,
+                Draft {
+                    mode,
+                    track,
+                    class,
+                    team: 0,
+                    ai: 0,
+                },
+            );
+        }
+        self.editing = false;
+    }
+
     fn default_draft(&self) -> Draft {
         let class = self
             .choices
@@ -465,8 +720,11 @@ impl Editor {
             description: String::new(),
             titles: vec![self.choices.title.clone()],
             reveal: Reveal::Locked,
-            difficulty: None,
-            progression: oag_mod::campaign::Progression::Flat,
+            difficulty: Some(DIFFICULTIES[self.difficulty].0.to_string()),
+            progression: match PROGRESSIONS[self.progression].0 {
+                "ramp" => Progression::Ramp,
+                _ => Progression::Flat,
+            },
         };
         let grid = GridDef {
             id: "grid0".to_string(),
@@ -558,7 +816,7 @@ impl Editor {
                 }),
             field: ours.then(|| FieldDef {
                 ai: Some("ours".to_string()),
-                difficulty: Some("skilled".to_string()),
+                difficulty: None,
                 skill: None,
                 pilot: None,
                 teams: Vec::new(),

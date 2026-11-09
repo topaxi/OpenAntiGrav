@@ -1,4 +1,5 @@
 use super::*;
+use oag_mod::campaign::Progression;
 
 fn choices() -> Choices {
     let slots = (0..7)
@@ -136,10 +137,202 @@ fn the_screens_words_are_all_in_the_english_strings() {
         .copied()
         .chain(MODES.iter().map(|m| (m.1, m.2)))
         .chain(AIS.iter().map(|a| (a.1, a.2)))
+        .chain(DIFFICULTIES.iter().map(|d| (d.1, d.2)))
+        .chain(PROGRESSIONS.iter().map(|p| (p.1, p.2)))
     {
         assert!(
             english.contains(&format!("{id} = {{ text = \"{text}\"")),
             "{id}"
         );
     }
+}
+
+/// The title's seven-class-wide ladder, so a bound has room to matter.
+fn wide() -> Choices {
+    let mut choices = choices();
+    choices.tracks = (1..=9)
+        .map(|n| Pick::plain(&format!("{n:02}_Track")))
+        .collect();
+    choices.classes = ["Venom", "Flash", "Rapier", "Phantom", "Spectre"]
+        .map(Pick::plain)
+        .to_vec();
+    choices
+}
+
+fn filled(seed: u32) -> Editor {
+    let mut editor = Editor::new(wide(), "Filled");
+    editor.set_seed(seed);
+    editor.fill();
+    editor
+}
+
+#[test]
+fn the_same_seed_fills_the_same_grid_and_another_seed_a_different_one() {
+    let a = filled(7).to_def().unwrap();
+    assert_eq!(a, filled(7).to_def().unwrap());
+    assert_ne!(a, filled(8).to_def().unwrap());
+    assert_eq!(
+        a.grids[0].events.len(),
+        wide().slots.len(),
+        "every slot is filled"
+    );
+}
+
+#[test]
+fn a_fill_does_not_depend_on_what_was_placed_or_where_the_cursor_stood() {
+    let clean = filled(11).to_def().unwrap();
+    let mut editor = Editor::new(wide(), "Filled");
+    editor.select((3, 2));
+    editor.confirm();
+    editor.select_field(Field::Mode);
+    editor.cycle(2);
+    editor.set_seed(11);
+    editor.fill();
+    assert_eq!(editor.to_def().unwrap().grids, clean.grids);
+}
+
+#[test]
+fn every_filled_cell_draws_its_own_class_inside_the_bounds() {
+    let mut editor = Editor::new(wide(), "Bounded");
+    editor.set_class_bounds(1, 3);
+    let mut seen = std::collections::BTreeSet::new();
+    for seed in 1..=4 {
+        editor.set_seed(seed);
+        editor.fill();
+        for event in &editor.to_def().unwrap().grids[0].events {
+            if event.mode == "zone" {
+                assert_eq!(event.class, None);
+                continue;
+            }
+            let class = event.class.clone().unwrap();
+            assert!(
+                ["Flash", "Rapier", "Phantom"].contains(&class.as_str()),
+                "{class} is outside Flash..=Phantom"
+            );
+            seen.insert(class);
+        }
+    }
+    assert_eq!(
+        seen.len(),
+        3,
+        "each cell draws its own class, not one for all: {seen:?}"
+    );
+}
+
+#[test]
+fn a_one_class_range_gives_every_cell_that_class() {
+    let mut editor = Editor::new(wide(), "Single");
+    editor.set_class_bounds(2, 2);
+    editor.fill();
+    assert!(
+        editor.to_def().unwrap().grids[0]
+            .events
+            .iter()
+            .all(|e| e.class.as_deref().is_none_or(|c| c == "Rapier"))
+    );
+}
+
+#[test]
+fn a_filled_cell_is_edited_like_any_other() {
+    let mut editor = filled(5);
+    let before = editor.to_def().unwrap();
+    editor.select((2, 1));
+    editor.confirm();
+    editor.select_field(Field::Circuit);
+    editor.cycle(1);
+    editor.clear();
+    editor.select((0, 0));
+    editor.confirm();
+    editor.select_field(Field::Team);
+    editor.cycle(1);
+    let after = editor.to_def().unwrap();
+    assert_eq!(
+        after.grids[0].events.len(),
+        before.grids[0].events.len() - 1
+    );
+    assert!(after.grids[0].events.iter().all(|e| e.slot != [2, 1]));
+    let first = &after.grids[0].events[0];
+    assert_eq!(first.craft.as_ref().unwrap().team, "Feisar");
+    assert_eq!(
+        first.track, before.grids[0].events[0].track,
+        "only the team changed"
+    );
+}
+
+#[test]
+fn a_bound_that_passes_the_other_drags_it_along() {
+    let mut editor = Editor::new(wide(), "Bounds");
+    assert_eq!(
+        editor.class_bounds(),
+        (0, 4),
+        "the whole ladder to start with"
+    );
+    editor.select_setting(Setting::ClassTo);
+    editor.cycle_setting(-1);
+    editor.cycle_setting(-1);
+    assert_eq!(editor.class_bounds(), (0, 2));
+    editor.select_setting(Setting::ClassFrom);
+    for _ in 0..3 {
+        editor.cycle_setting(1);
+    }
+    assert_eq!(editor.class_bounds(), (3, 3));
+    editor.select_setting(Setting::ClassTo);
+    editor.cycle_setting(-1);
+    assert_eq!(editor.class_bounds(), (2, 2));
+    assert_eq!(editor.setting_label(Setting::ClassFrom), "RAPIER");
+}
+
+#[test]
+fn the_campaign_page_edits_the_setting_the_file_carries() {
+    let mut editor = Editor::new(wide(), "Settings");
+    editor.confirm();
+    let first = editor.to_def().unwrap();
+    assert_eq!(first.campaign.difficulty.as_deref(), Some("medium"));
+    assert_eq!(first.campaign.progression, Progression::Flat);
+    editor.toggle_page();
+    assert_eq!(editor.page(), Page::Campaign);
+    editor.select_setting(Setting::Difficulty);
+    editor.cycle_setting(1);
+    editor.select_setting(Setting::Progression);
+    editor.cycle_setting(1);
+    editor.select_setting(Setting::Seed);
+    editor.cycle_setting(-1);
+    assert_eq!(editor.seed(), 0);
+    let def = editor.to_def().unwrap();
+    assert_eq!(def.campaign.difficulty.as_deref(), Some("hard"));
+    assert_eq!(def.campaign.progression, Progression::Ramp);
+    let text = def.write().unwrap();
+    assert_eq!(oag_mod::campaign::CampaignDef::parse(&text).unwrap(), def);
+    oag_schema::validate::accepts(
+        oag_mod::campaign::SCHEMA_KIND,
+        oag_mod::campaign::SCHEMA_MAJOR,
+        &text,
+    )
+    .unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+    editor.select((0, 0));
+    assert_eq!(
+        editor.page(),
+        Page::Event,
+        "a click on a hex leaves the settings"
+    );
+}
+
+#[test]
+fn a_cell_flown_by_our_driver_names_no_difficulty_of_its_own() {
+    let mut editor = Editor::new(wide(), "Ours");
+    editor.confirm();
+    editor.select_field(Field::Ai);
+    editor.cycle(1);
+    let event = &editor.to_def().unwrap().grids[0].events[0];
+    let field = event.field.as_ref().unwrap();
+    assert_eq!(field.ai.as_deref(), Some("ours"));
+    assert_eq!(field.difficulty, None, "the campaign's setting governs it");
+}
+
+#[test]
+fn the_actions_of_each_page_end_in_save_and_start_with_the_page_switch() {
+    let mut editor = Editor::new(wide(), "Actions");
+    assert_eq!(editor.actions(), [Action::Page, Action::Name, Action::Save]);
+    editor.toggle_page();
+    assert_eq!(editor.actions(), [Action::Page, Action::Fill, Action::Save]);
 }

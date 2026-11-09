@@ -434,7 +434,6 @@ OAG_EDITOR_NEEDS_EVENT = { text = "COLOQUE UM EVENTO PRIMEIRO", human = false }
 OAG_EDITOR_NAME_TITLE = { text = "DÊ UM NOME À CAMPANHA", human = false }
 OAG_EDITOR_SAVE_FAILED = { text = "NÃO FOI POSSÍVEL SALVAR A CAMPANHA", human = false }
 OAG_EDITOR_HINT_PLACE = { text = "CRUZ COLOCA UM EVENTO", human = false }
-OAG_EDITOR_HINT_SAVE = { text = "START SALVA", human = false }
 OAG_EDITOR_LEGEND_CLEAR = { text = "Limpar espaço", human = false }
 OAG_EDITOR_LEGEND_NAME = { text = "Nome", human = false }
 OAG_EDITOR_DEFAULT_NAME = { text = "MINHA CAMPANHA", human = false }
@@ -446,6 +445,24 @@ OAG_EDITOR_MODE_ELIMINATOR = { text = "ELIMINADOR", human = false }
 OAG_EDITOR_MODE_HEAD_TO_HEAD = { text = "FRENTE A FRENTE", human = false }
 OAG_EDITOR_AI_ORIGINAL = { text = "ORIGINAL", human = false }
 OAG_EDITOR_AI_OURS = { text = "NOSSO", human = false }
+OAG_EDITOR_FIELD_DIFFICULTY = { text = "DIFICULDADE", human = false }
+OAG_EDITOR_FIELD_PROGRESSION = { text = "PROGRESSÃO", human = false }
+OAG_EDITOR_FIELD_SEED = { text = "SEMENTE", human = false }
+OAG_EDITOR_FIELD_CLASS_FROM = { text = "CLASSE DE", human = false }
+OAG_EDITOR_FIELD_CLASS_TO = { text = "CLASSE ATÉ", human = false }
+OAG_EDITOR_ACTION_FILL = { text = "PREENCHER GRADE", human = false }
+OAG_EDITOR_ACTION_SETTINGS = { text = "AJUSTES DA CAMPANHA", human = false }
+OAG_EDITOR_ACTION_EVENT = { text = "CAMPOS DO EVENTO", human = false }
+OAG_EDITOR_SEED_TITLE = { text = "DIGITE UMA SEMENTE", human = false }
+OAG_EDITOR_FILLED = { text = "GRADE PREENCHIDA PELA SEMENTE", human = false }
+OAG_EDITOR_HINT_SETTINGS = { text = "START SALVA   SELECT AJUSTES", human = false }
+OAG_EDITOR_HINT_EVENT = { text = "TRIÂNGULO PREENCHE   SELECT EVENTOS", human = false }
+OAG_EDITOR_LEGEND_FILL = { text = "Preencher grade", human = false }
+OAG_EDITOR_DIFFICULTY_EASY = { text = "FÁCIL", human = false }
+OAG_EDITOR_DIFFICULTY_MEDIUM = { text = "MÉDIO", human = false }
+OAG_EDITOR_DIFFICULTY_HARD = { text = "DIFÍCIL", human = false }
+OAG_EDITOR_PROGRESSION_FLAT = { text = "CONSTANTE", human = false }
+OAG_EDITOR_PROGRESSION_RAMP = { text = "CRESCENTE", human = false }
 
 [untranslated]
 ids = [
