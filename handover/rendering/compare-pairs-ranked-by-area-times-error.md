@@ -105,7 +105,7 @@ move is the region's impact, not the frame mean.
 
 ## Next Steps
 
-1. Lead: the 2048 tone rows are the first lane: a luma-band check on one 2048 pair (ours darker by 11 to 18 at the bottom third), fog and bloom on and off. Read-only first; the impact of rows 3, 4 and 6 should fall.
+1. ~~Lead: the 2048 tone rows are the first lane: a luma-band check ... fog and bloom on and off.~~ **Done 2026-11-09 (`tone-2048-grid`)**: no frame term closes them; the bottom third is the craft, and a display gain recovers at most 8 % of impact (`2048-grid-dark-bias-is-the-craft-not-a-frame-term.md`, `exposure.md`). Rows 3, 4 and 6 are spatial error.
 2. HD gantry GO board: not a new lane. Its phase stays open per `hd-render-gaps-ranked-by-pixel-impact.md`; do not chase it from this list.
 3. Pulse PS2 grid (rank 2): match the camera first. If the craft's screen position moves between the pair, it is camera; if not, geometry.
 4. Talon's pack (rank 1): re-check the hue shift on the matched pair before any lane; the affine fit leaves most of its error.

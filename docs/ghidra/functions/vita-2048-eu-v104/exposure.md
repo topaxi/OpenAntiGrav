@@ -269,6 +269,82 @@ Omega, so an Omega race builds only its `Tonemap` chain, and the Omega pairs on
 Vineta K and Anulpha Pass draw 0 differing pixels against the binary before the
 change (as do HD's two, Pulse PSP and PS2 and Pure).
 
+## Where ours is darker than the original: not a frame term (2026-11-09, `tone-2048-grid`)
+
+Claim tested: one frame-wide term of ours (fog, bloom, exposure, sky or lighting scale) accounts for most of the dark bias
+on the three 2048 grid pairs, and correcting it closes half of Empire Climb's bottom-third bias. **Result: false.**
+Confidence 80 that no single frame-wide term does it; 55 that the part no frame term reaches is the craft's own light
+(below). Read-only measure, ours rendered headless on SwiftShader (the only Vulkan driver on that machine; the stored RADV
+render and the SwiftShader one of the same binary differ by 0.44 / 255 mean on Empire Climb, and the three baselines
+agree to 0.2 luma and 0.05 M impact). Every toggle is a scratch environment multiplier on the loaded values (`Lighting.*`
+read in `envsettings_exposure`, `envsettings_light`, `envsettings_fog`), built off the lane's tree and not landed.
+A repeat render of one toggle (ambient x3, Empire Climb) is byte-identical.
+
+**Falsifier written before the renders.** A frame-wide term darkens hull and road together, so a toggle that closes the
+bottom third only by pushing the road past the original, or that leaves the pair's impact flat, is not the term.
+
+**Method.** Luma bias is ours minus original (`0.2126 R + 0.7152 G + 0.0722 B`, unblurred, 8-bit), per third of the
+960x544 frame. The bottom third splits into the hull box `(290,240)-(680,544)` (the craft and the road under it, minus the
+HUD), the HUD boxes, and the scenery that is left (37 %, 28 % and 35 % of the band's pixels). Impact is the scout's
+measure (Gaussian sigma 7, 32 blocks across, hot at mean error 6, 8-connected, px x err), re-implemented, so the
+baselines differ a little from the scout's 9.67 / 7.33 / 5.22 M: 9.78 / 7.38 / 6.33 M on the same pair files (Vineta K
+is 0.9 M off the scout's and was not reconciled; every change below is against this method's own baseline).
+
+| Toggle (Empire Climb) | top | mid | bottom | bottom hull box | bottom scenery | impact (change) |
+| --- | --- | --- | --- | --- | --- | --- |
+| baseline | -11.2 | -12.2 | -16.5 | -43.1 | -2.0 | 9.78 M |
+| E 1.4 (`--hold-exposure`) | -5.0 | -0.4 | -0.9 | -28.1 | +16.7 | 9.28 M (-5 %) |
+| BloomFactor x0 / x3 | -15.7 / -4.7 | -23.2 / +4.2 | -35.0 / +9.4 | -62.5 / -17.5 | -21.8 / +27.8 | 13.81 M (+41 %) / 10.77 M (+10 %) |
+| BloomGate 0 | -8.2 | -6.3 | -8.5 | -34.9 | +7.4 | 8.85 M (-10 %) |
+| fog off / density x2 | -11.3 / -10.7 | -12.2 / -12.3 | -16.5 / -16.5 | -43.1 | -2.0 | 9.84 M / 9.73 M (+-1 %) |
+| sun diffuse x2 | -8.8 | +26.8 | +36.7 | +8.9 | +64.4 | 17.08 M (+75 %) |
+| lightmap scale x1.5 | -5.3 | -0.4 | -4.4 | -36.3 | +14.9 | 9.88 M (+1 %) |
+| ambient x2 / x3 / x4 / x6 | -10.8 / -10.3 / -9.8 / -8.8 | -11.0 / -10.0 / -9.2 / -8.0 | -10.6 / -6.3 / -3.3 / +0.8 | -27.3 / -15.7 / -7.5 / +3.4 | -2.0 | 8.94 / 8.81 / 8.94 / 9.37 M (-9 / -10 / -9 / -4 %) |
+
+Queens Mall (baseline -4.5 / -5.7 / -8.3, hull box -24.8, impact 7.38 M): E 1.4 +23 % impact; bloom x3 0 %, gate 0 +9 %,
+lightmap x1.5 +27 %, fog off 0 %; **ambient x2 / x3 / x4 / x6: bottom -5.3 / -2.6 / -0.2 / +3.7, hull box -16.9 / -9.5 /
+-3.0 / +7.3, impact 6.77 / 6.32 / 6.07 / 6.16 M (-8 / -14 / -18 / -17 %)**, scenery unchanged.
+Vineta K (baseline -1.3 / -10.1 / -6.9, hull box -13.4, impact 6.33 M): E 1.4 +11 %, bloom x3 +14 %, gate 0 +3 %,
+lightmap x1.5 +6 %, fog off 0 %; ambient x2 / x3 / x4 / x6: bottom -5.3 / -3.7 / -1.9 / +1.5, hull box -9.8 / -6.3 / -2.5 /
++5.0, impact 5.89 / 5.73 / 6.15 / 7.74 M (-7 / -9 / -3 / +22 %), but the top third goes -1.3 to +3.6 / +8.4 / +12.2 / +19.1.
+
+What it says:
+
+- **The bottom third's bias is the craft, not the frame.** On Empire Climb the hull box is 37 % of the band at -43.1,
+  which is -15.9 of the band's -16.5; Queens Mall's is -9.2 of -8.3; Vineta K's -5.0 of -6.9. The scenery of the band is
+  -2.0 / +2.4 / -2.0. The original's craft is a saturated, bright yellow with a white shield ring and a glow on the road
+  around it; ours is dark and desaturated, so a frame gain cannot be the cause. The craft's pose also differs (the pair
+  records the original's hull 1.31 x wider), which this measure does not remove.
+- **The top and middle thirds' scenery is 10 to 15 luma dark on Empire Climb and Vineta K, and no one term owns it.** The
+  original's top third carries the sun's lens-flare streak and a bright haze round it that ours has neither of
+  ([lens-flare.md](../../../rendering/lens-flare.md): 2048 "checked, differs, not wired"). Lightmap scale x1.5 closes the middle
+  scenery (-11.7 to -0.5) but pushes the bottom scenery to +14.9; exposure x1.2 does the same sort of thing.
+- **Fog is nothing here.** Empire Climb's density is 0.001, so `exp(-(0.001 d)^2)` is above 0.9 to 300 units: off or x2
+  moves no band by more than 0.6 luma and impact by 1 %. The inherited curve is not the cause of any dark bias.
+- **Bloom is already large in ours and is not what is missing.** Zeroing it darkens by 15 to 35 luma on Empire Climb; x3
+  overshoots the road by 28. Its gate at 0 helps Empire Climb (-10 %) and hurts Queens Mall (+9 %).
+- **Exposure is not a correction.** E = 1.15 is what the original draws at (read live, above). The flag sweep is a proxy for an
+  upstream light gain, and it closes the band means by overshooting the road (+16.7 at E 1.4) with impact -5 %, +23 %, +11 %.
+- **A display gain recovers nothing worth having.** Scaling ours' output by a constant g (1.0 to 1.4): Empire Climb's best is
+  g 1.1 at 9.03 M (-8 %); Queens Mall and Vineta K rise at every g. A per-band per-channel affine fit leaves 9.06 / 8.53 /
+  6.59 M. So the pairs' impact is spatial (texture, light pattern, the craft, the flare), and the tone rows of the ranking
+  cannot be closed by a tone term.
+- **The one toggle that helps on all three is the ambient light, and it acts on the craft.** Ambient x3 closes 62 / 69 / 46 %
+  of the bottom third on Empire Climb / Queens Mall / Vineta K and lowers impact 10 / 14 / 9 %, with the bottom scenery
+  unchanged (Empire Climb, Queens Mall); the hull box reaches zero bias at about x4.5 to x5.5. Ours lights a no-lightmap material (the craft's
+  included, its program unread) as the `constantAmbientColour` family, `(ambient + sunDiffuse * max(0, N.L)) * D^2` ([2048-material-params.md](../../../formats/2048-material-params.md),
+  "The ambient family"). A factor of 3 to 5 on three circuits with different authored ambients (Empire Climb `0.31 0.47 0.70`)
+  says the original's craft is lit by something ours does not have (an extra term, or a different decode), not that
+  ambient is authored three times too low. On Vineta K the same multiplier also lifts the top third (+9.7), so ambient is
+  read by more than the craft. **chosen probe, not a law; no score.** Texel decode of x instead of x^2 on every draw
+  (the other candidate, the craft program's decode being unread) overshoots everything (+31.6 hull box, +87.8 scenery) and does not isolate the craft.
+
+**Lineage (Omega).** The fog, bloom, exposure and vignette terms are **checked, differs** (Omega runs `Tonemap.*` and its own
+`Bloom.*` chain, see above). The craft's ambient term: **checked, applies, not wired**. Omega's craft materials declare the
+same `constantAmbientColour` (4,337 unique Omega pixel shaders do, none with a lightmap:
+[lightmap-prelit.md](../ps4-omega-eu/lightmap-prelit.md)), and `shield.md` records the scene's value as not read. The factor
+is **not checkable on Omega**: shadPS4 race frames are untrusted, so there is no Omega pair to fit it against.
+
 ## Open
 
 - The vignette: `wo_composite_vp`'s third output and the `vignetteTint`
@@ -285,3 +361,6 @@ change (as do HD's two, Pulse PSP and PS2 and Pure).
   ours lights it with the base's.
 - Every number above on a real Vita: the readback is the one step Vita3K does
   not perform.
+- **The craft is darker than the original's by a factor the authored ambient does not explain** (2026-11-09, section above):
+  read the 2048 craft's pixel program (`constantAmbientColour`, the texel decode, any reflection or rim term) before any
+  lighting multiplier is wired.
