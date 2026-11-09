@@ -63,6 +63,31 @@ pub(super) fn follow_player(
     ));
 }
 
+/// The shield slot every craft of the race starts on: [`Options::skill_level`] where the title
+/// reads the difficulty into the slot (`CraftLaws::shield_by_skill`), else the Medium slot, said
+/// in the report when the difficulty would have moved it.
+pub(super) fn skill_level(
+    options: &super::Options,
+    title: &oag_title::Title,
+    report: &mut Vec<String>,
+) -> u8 {
+    if title
+        .race
+        .craft_laws
+        .is_none_or(|laws| laws.shield_by_skill.value)
+    {
+        return options.skill_level();
+    }
+    if options.skill_level() != oag_gameplay::handling::DEFAULT_SKILL_LEVEL {
+        report.push(format!(
+            "shield: {} has not measured which difficulty picks the shield slot; every craft \
+             starts on the Medium slot",
+            title.name
+        ));
+    }
+    oag_gameplay::handling::DEFAULT_SKILL_LEVEL
+}
+
 /// What the race fixes for every craft's handling whatever its team: the class, the pad
 /// tunables, `<Special>` and the shield slot of the difficulty.
 pub(super) struct Shared<'a> {

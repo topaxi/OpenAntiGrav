@@ -245,24 +245,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // is not the place it happens, and neither `<SpeedupPads>` nor `<Special>` is one of them.
     // `None` where this team's file does not author the requested rung: a race
     // that cannot be set up, rather than one run on somebody else's tuning.
-    // The title's own read of the difficulty into the shield slot: `craft_laws.shield_by_skill`.
-    // A title that has not measured it keeps the Medium slot and says so.
-    let skill_level = if craft_title
-        .race
-        .craft_laws
-        .is_none_or(|laws| laws.shield_by_skill.value)
-    {
-        options.skill_level()
-    } else {
-        if options.skill_level() != oag_gameplay::handling::DEFAULT_SKILL_LEVEL {
-            report.push(format!(
-                "shield: {} has not measured which difficulty picks the shield slot; every craft \
-                 starts on the Medium slot",
-                craft_title.name
-            ));
-        }
-        oag_gameplay::handling::DEFAULT_SKILL_LEVEL
-    };
+    let skill_level = family::skill_level(options, craft_title, &mut report);
     let mut handling = handling_for(&stats, &options.class, pad_tunables, special, skill_level)
         .with_context(|| {
             let (class, ladder) = (&options.class, stats.ladder());
