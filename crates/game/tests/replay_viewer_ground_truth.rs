@@ -426,6 +426,8 @@ fn a_race_a_capture_builds_leaves_no_replay() {
 
 /// A recording whose rebuild is not the recorded race is refused by name, in the list, and never
 /// played wrong: the tick-zero hash is the judge (decision 7).
+/// The script waits for the load to start and to end rather than for a number of ticks: a load
+/// on a busy machine takes as long as it takes.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
 fn a_recording_this_build_cannot_rebuild_is_refused_by_name() {
@@ -447,8 +449,9 @@ fn a_recording_this_build_cannot_rebuild_is_refused_by_name() {
     let (status, states) = profile.drive(
         &image,
         &format!(
-            "{TO_THE_LIST} ticks 20; select watch_replay; press cross; ticks 600; \
-             screenshot DIR/shots/refused.png; quit"
+            "{TO_THE_LIST} ticks 20; select watch_replay; press cross; \
+             until stage=loading within 600; until stage=menu page=replays within 600; \
+             ticks 20; screenshot DIR/shots/refused.png; quit"
         ),
         &[],
     );
