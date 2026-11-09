@@ -195,3 +195,23 @@ impl Race {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oag_race::Mode;
+
+    /// The TARGET row reaches a launch only in an Eliminator, and only once touched.
+    #[test]
+    fn the_target_pick_is_an_eliminator_launch_option_only() {
+        let untouched = Race::default();
+        assert_eq!(untouched.eliminator_score_target(Mode::Eliminator), None);
+        let picked = Race {
+            score_target: "400".to_string(),
+            ..Race::default()
+        };
+        assert_eq!(picked.eliminator_score_target(Mode::Eliminator), Some(400));
+        assert_eq!(picked.eliminator_score_target(Mode::SingleRace), None);
+        assert_eq!(picked.eliminator_kill_target(Mode::Eliminator), None);
+    }
+}
