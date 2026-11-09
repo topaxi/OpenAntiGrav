@@ -678,6 +678,176 @@ the craft's velocity times `0.016666668`, and stores `1.0 - param_1` into the sa
 slots. The strings `WO_TRAIL_HITSHIP(_RED)(.POB)` are at `0x01837a37`-`0x01837b50`.
 Ours is title-generic in `Race::advance_trail_hits`; an Omega race was not run here.
 
+## The trail-hit burst as a matched pair (2026-11-08, `hd-trail-hit-fidelity`)
+
+The 2026-10-29 pass never made a matched pair: `--trail-sparks` puts ours' burst on a
+chosen anchor. This pass makes placement a real pair, and finds that the part of the
+burst a player sees differ is **emitter 0's class-6 streaks**, whose HD draw is still
+unread. No law of the burst's drawing was wired; what landed is the harness and the
+warm-up that lets a posed frame carry the burst.
+
+### The harness
+
+- **The state.** `data/saves/hd-fury/hd-race-talons-venom-pack` was not on disk and was
+  rebuilt: `scripts/emu-hd-race-walk.sh <lane> 8 0 0` (Racebox, Single Race, weapons
+  Off, Talon's Junction, the row Team Selection opens on), then
+  `scripts/rpcs3-hd-race-hunt.py --place 3-6` (Autopilot armed, saved at a pack moment:
+  lap 1, 6th of 8). **This rebuild is classic Feisar, not Fury**: every craft reads
+  `+0x7d2c = 0`, so the burst is the blue `WO_TRAIL_HITSHIP`, not `_RED`. Its frames show
+  `Absorb` in the pickup row, so check the weapons row before trusting "weapons Off".
+- **The pair.** `scripts/rpcs3-hd-trail-hit-pair.py OUT N --frames F` restores nothing
+  itself: restore with `emu-restore-state.sh <lane> <state> --pause` before each pair.
+  It re-arms the Autopilot for good, then holds the player 8 units behind the nearest
+  rival ahead **along the rival's velocity**, sharing that velocity, re-placed before
+  each of `F` game frames (counted off the lap clock `ship+0x7014`). It then runs
+  `rpcs3-drive.py capture --field` **inside the same GDB connection** and renders ours
+  with `rpcs3-hd-pair.py --json`. Four traps, each measured here:
+  1. **The proxy resumes a target its client leaves paused** (`rpcs3_gdb_proxy.py`).
+     A capture in a second connection found the game a second or more later, the player
+     23 units past the rival.
+  2. **One placement does not hold.** Along the rival's forward row, the player slid
+     1.6 units off the ribbon in two frames. Placed once along its velocity, the
+     Autopilot still steered it 2 to 10 units off within a few frames.
+  3. **Writing the Autopilot's authored 5 s back froze the game at 1.12 s left, twice.**
+     The clock then read the same value across every resume. `rpcs3-hd-pair.py
+     --keep-autopilot` skips the write.
+  4. **RPCS3 ran this race at about a sixth of real time.** The pair's 0.12 s gap
+     between its two shots often drew no new frame, giving `camera null (no frame-unique
+     value ...)`; `--interval 0.6` fixes it.
+- **The original draws its hull about one frame behind its RAM pose.** On every pair,
+  the hull sits lower and nearer the camera than the body pose projected through the
+  pushbuffer camera. Scenery and other craft line up.
+
+### Ours' trigger fired as tucked in 1 of 9 posed pairs (not a measured reach gap)
+
+At the tuck, ours' anchor test (`exhaust::hd::FIN_HALF_WIDTH`, 0.5) fired in 1 of 9
+captured pairs. The nearest authored anchor sat 0.48 to 7.2 units off ours' ribbon at the
+frame, 0.48 to 0.90 at the six best tucks. **This is not yet a measured difference in
+reach**, for three reasons:
+
+1. The original's on/off frames could not be separated (below), so whether the original
+   fired at these pairs is unknown.
+2. The distances are against ours' straight-line warm-up ribbon, not the rival's curved
+   one. The probe showed the distance drifting linearly across the warm-up, and the ribbon
+   running 2.4 to 3.6 units to the side of the player's centre, which nothing explains yet.
+3. The 2026-10-29 every-frame firing came from a different tuck, with its offset
+   unrecorded.
+
+The original's test runs in the `Trails` SPU job and is unread. **Do not widen ours' test on
+this.** The next measurement is the breakpoint hit rate on `0x002e3b98` against a held
+lateral offset, under `--interpreter`.
+
+To compare the drawing anyway, ours' player is moved onto the ribbon by the probed
+anchor-to-ribbon vector before rendering. That shift is chosen, and it is stated per pair
+below. A pair needing more than 1 unit is not counted as a tuck.
+
+### The two emitters, and which one is the difference (confidence 85)
+
+`WO_TRAIL_HITSHIP` authors two sibling roots (parsed off the disc, `oag_fx::psys`):
+
+| emitter | flag `0x2` | per fire | life (ticks) | size | palette | draw |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 `WO_TRAIL_HITSHIP` | clear (world space) | 16 | 15 ± 7 | 0.2..0.5, to 0.31 by 17 % of life | white to purple (0.79, 0.43, 1.0) | class-6 streak, additive, no sprite, drag 0.9/tick, `+0x4d0` 0.5 |
+| 1 `CORE_IMPACT` | set (instance frame) | 1..3 | 3 ± 2 | 0.3..1.2 | near white | class-6 streak from spawn, additive |
+
+Dropping each emitter from ours' load (scratch build, pair 04) settles which is which.
+Without emitter 0, the purple blobs vanish. Without emitter 1, the white glow on the nose
+vanishes and the purple cloud stays. **The original shows the white glow at the nose and,
+when the burst is fresh, a fan of thin sharp white rays**
+(`data/reference/hd-capture/trail-hit-pair/starburst_*`, names-broken frame beside it).
+It never shows the cloud of soft purple blobs ours spreads behind and beside the hull. So
+"blurry and too big" is emitter 0, and specifically **how its class-6 streaks are drawn**.
+On HD they fall back to `StreakDraw::Procedural`, a soft profile `2 size` across that
+samples nothing. Emitter 0 has no sprite at all.
+
+### The spawn honours flag `0x2` on HD too (confidence 80)
+
+`Psys_InitParticle` (`0x00289890`, once per newborn):
+
+```text
+00289958  lwz    r11, 0x20(r9)      <- the emitter record's flags
+00289960  rlwinm r0, r11, 0, 30, 30 <- bit 0x2
+00289980  beq    0x00289d88         <- clear: through the instance matrix
+00289dc0  addi   r6, r25, 0x100     <- instance +0x100..+0x130, the matrix
+00289e1c..00289e50                  <- position = M * position
+00289e54..00289e70                  <- velocity = M * velocity (w kept)
+002899ac  addi   r11, r25, 0x160    <- the carried velocity
+002899f4  lfs    f0, 0x4d0(r10)     <- times the record's +0x4d0
+00289a10  vmaddfp v13, v13, v0, v1  <- added to the newborn's velocity
+```
+
+With the bit set, the transform is skipped and the particle stays in the instance's frame.
+`FUN_00286698` copies a parent matrix into instance `+0x100..+0x130` on every update, which
+is what a riding instance needs. This is Pulse's law (`docs/formats/pob.md`, `+0x20`), and
+the same branch shape. On HD it only affects `CORE_IMPACT`, which lives 3 ticks and is
+re-fired every frame, so whether ours rides it does not change the picture. Not wired.
+
+`Psys_UpdateParticles` (`0x0028cc10`) integrates `position(+0x20) += velocity(+0x00) *
+ctx+0x10` (`0x0028cdd0`-`0x0028cde8`). It also advances the age by `rate(+0x94) *
+ctx+0x14` (`0x0028cdec`-`0x0028ce04`) and steps the colour and the keyframes. It builds no
+vertices.
+
+### Where HD's class-6 strip is not, and where to look next
+
+HD keeps Pulse's render-mode table: the draw class is `table[record+0xb8] & 0xf0000000`,
+the table at `*(0x008b2964)+0x2c`. The three per-instance prologues `0x00281060`,
+`0x00286698` and `0x00288d98` cache it at `+0xc30`, and set the streak flag `+0xc1d` for
+classes 6 and 7. Every reader of `+0xc1d` was read, and none builds a strip:
+
+- `FUN_00285020` copies the flag into a job block (`+0x2031`, `0x00285284`-`0x002852a4`).
+  It then runs either the SPU path (`FUN_0027c6d0`, `MaintainParticlesSpu.cpp` at
+  `0x0079b348`) or the PPU update (`FUN_00281ec0` builds the context,
+  `Psys_UpdateParticles` updates).
+- `FUN_0028dc20`/`FUN_0028d650` is particle-against-geometry collision (`FUN_0028d398`'s
+  ray test, then a reflect). `+0x2031` only decides whether a streak's previous point is
+  dragged along.
+- `Psys_InitParticle` reads `+0xc1d` to seed the streak's previous point.
+
+So the strip is built at draw time. The leads, in order:
+
+1. `particleVelocity` (`0x0079a358`, TOC `0x008b2220`, loaded at `0x00267b10` in
+   `FUN_002673b0`) is a shader parameter. HD likely expands a streak in the vertex
+   shader from the particle's velocity, so the law may be in a shipped vertex program
+   rather than in the PPU code.
+2. `ParticleRenderer.h`'s assert (`0x0079b598`, TOC `0x008b295c`) is referenced from
+   `FUN_0027ff58` (`0x0028019c`) and `FUN_00280290` (`0x002804d4`).
+
+### The pair, measured
+
+Metric stated before capture (`scripts/hd-trail-hit-box-metric.py`): near-white pixels (min channel >= 200) in a
+300x300 box on the player's nose projected through the captured camera, the largest
+8-connected component, and whether a streak (>= 20 px, aspect >= 4) exists. Ours' burst is
+exact: the same command line with both emitters dropped, subtracted. The original's is in
+aggregate against the names-broken run, at the same tuck.
+
+| pair | ours' shift | ours' burst px | ours' largest component | ours' extent | streak |
+| --- | --- | --- | --- | --- | --- |
+| 06 | none (fires as tucked) | 1,919 | 50x52 | 297x223 | no |
+| 00 | 0.50 | 3,926 | 69x64 | 281x117 | yes |
+| 05 | 0.63 | 2,302 | 59x96 | 97x98 | no |
+| 04 | 0.84 | 4,403 | 80x108 | 141x112 | no |
+| 11 | 0.90 | 8,554 | 133x151 | 189x159 | no |
+| 12 | 0.79 | 1,326 | 52x28 | 294x238 | yes |
+
+**The stated metric cannot isolate the original's burst.** In the same nose box, near-white
+pixels average **2,903** over the 9 captured on frames and **3,114** over 9 names-broken
+frames at the same tuck. Hull highlights, track lines and the trails swamp a burst that
+small, so the count does not separate on from off. The original's side therefore rests on
+the frames, read at full size: the compact white glow, and the thin rays of a fresh burst
+(`data/reference/hd-capture/trail-hit-pair/`). Isolating it needs a per-frame A/B: the same
+pause captured twice, names broken and restored. A recompiled RPCS3 does not replay a frame,
+so that means the interpreter and a breakpoint stop.
+
+**Verdict: ours does not match.** Its burst is a cloud of soft blobs 50 to 150 px across,
+spread up to 300 px behind and beside the hull. The original shows a compact white glow on
+the nose, with thin rays when fresh. The maintainer's report holds on this pair, and the
+cause is narrowed to one unread law: emitter 0's class-6 draw.
+
+**Omega: not checked.** The warm-up change is title-generic: any race with HD trails
+active runs it. The emitter table and the draw are HD's file and HD's executable, and
+Omega's `WO_TRAIL_HITSHIP` was not parsed here. The 2026-10-29 verdict on the spawn
+("checked, applies") stands.
+
 ## The third sampler is the lightmap slot, empty
 
 `enginetrail_bluered_triangle.rcsmodel`'s material record names a third

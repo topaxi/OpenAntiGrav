@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-10-29
-summary: "HD WakeTrail documented but unwired; 61 particle systems with no recovered trigger need one-at-a-time reads"
+updated: 2026-11-09
+summary: "HD trail-hit pair: ours' emitter-0 streaks draw as soft blobs (HD class-6 draw unread); ours rarely fires as tucked; WakeTrail unwired"
 ---
 
 # HD's engine trail is one of four ribbons, and a craft flying through one sparks
@@ -16,7 +16,19 @@ summary: "HD WakeTrail documented but unwired; 61 particle systems with no recov
   velocity are read and wired; see engine-trail.md, "The trail-hit burst, measured".
   Still open, each with its address there:
   - what instance `+0x40`/`+0x4c` (`1 - f1`, f1 = contact sample over 54) do on HD;
-  - HD's class-6 streak draw (ours draws the procedural profile);
+  - HD's class-6 streak draw (ours draws the procedural profile). **Narrowed
+    2026-11-09 (`hd-trail-hit-fidelity`)**: the matched pair shows this is *the*
+    visible difference. Emitter 0's 16 purple streaks per fire draw as soft blobs
+    trailing the hull, where the original shows a compact glow and thin rays. No PPU
+    strip builder exists. Next: the `particleVelocity` vertex parameter (loaded in
+    `FUN_002673b0`) and `ParticleRenderer.h`'s callers `FUN_0027ff58`/`FUN_00280290`.
+    See engine-trail.md, "The trail-hit burst as a matched pair";
+  - **ours fired as tucked in 1 of 9 posed pairs** (nearest anchor 0.48-0.90 off ours'
+    straight warm-up ribbon, against a 0.5 half-width). Not a measured reach gap: the
+    original's firing at those pairs is unknown. Do not widen the test on it; measure the
+    original's reach first: the breakpoint rate on `0x002e3b98` against a held lateral
+    offset (`scripts/rpcs3-hd-trail-hit-pair.py` places; `rpcs3-hd-trail-hit-log.py`
+    counts);
   - carrying HD's collision sparks too (`ShipCollisionFx_Trigger` writes the same
     velocity);
   - what the purple lightning arcs over Talon's Junction are. They are not this

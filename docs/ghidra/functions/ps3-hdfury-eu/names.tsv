@@ -893,3 +893,5 @@
 0x00154cf0	function	MissileExplosion_Construct	80	missile-explosion.md
 0x00143580	function	MissileManager_Update	75	missile-explosion.md
 0x0028c660	function	Random_RangeFloat	80	missile-explosion.md
+0x00289890	function	Psys_InitParticle	80	engine-trail.md
+0x0028cc10	function	Psys_UpdateParticles	72	engine-trail.md

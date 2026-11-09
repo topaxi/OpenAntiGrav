@@ -227,3 +227,31 @@ fn the_trail_hit_burst_inherits_half_the_intruders_velocity() {
         "drifted {drift} units in six ticks"
     );
 }
+
+/// **A posed field frame carries the burst a racing frame would.** `--field-warmup` puts a craft
+/// the original caught inside a rival's ribbon on its pose with a replayed exhaust; the original
+/// re-raises the hit every frame it stays inside, so its frame has a live burst on the nose. The
+/// warm-up runs the trigger and the stage per replayed tick: without them a matched pair compares
+/// the original's burst against an empty frame of ours.
+#[test]
+fn a_field_warm_up_leaves_a_live_burst_on_a_craft_tucked_in_a_ribbon() {
+    let mut race = race_with_only_the_red_burst();
+    // Slot 0 owns the ribbon and flies along +X; slot 1 sits eight units behind it, in its wake.
+    race.view.nozzles = vec![Some(Vec3::ZERO); oag_gameplay::MAX_SHIPS];
+    race.sim.world.ships[0].physics.body.position = Vec3::new(0.0, 0.0, 0.0);
+    race.sim.world.ships[1].physics.body.position = Vec3::new(-8.0, 0.0, 0.0);
+    let velocities = [Vec3::new(60.0, 0.0, 0.0); 2];
+    race.warm_up_field(&velocities, 120, None);
+    assert_ne!(
+        race.view.trail_inside[0] & 0b10,
+        0,
+        "the tucked craft is inside"
+    );
+    let mean = particles_mean_x(&race).expect("the warm-up left no live burst");
+    // Carried at half the craft's speed, a burst's older particles trail the craft that left
+    // them: behind -8, by a fraction of a second's slip, and nowhere near the owner at 0.
+    assert!(
+        (-16.0..=-7.0).contains(&mean),
+        "the burst is at {mean}, not on the tucked craft at -8"
+    );
+}
