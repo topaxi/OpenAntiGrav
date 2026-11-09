@@ -293,6 +293,7 @@ fn setup(handling: Handling) -> Setup {
         magstrip_pob: false,
         leach_strip: None,
         missile_trail: None,
+        wingtip: None,
         destroy_stations: Vec::new(),
         finished_thrust: None,
         original_tables: None,

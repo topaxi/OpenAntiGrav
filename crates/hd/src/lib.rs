@@ -138,6 +138,10 @@ pub const TITLE: &Title = &Title {
     // `{1.166, 0.033, 0, 1}` and `{1.656, 0.041, 0, 1}` on two pads of
     // `01_vineta_k`, whose material authors cyan. Every number below is read
     // out of the executable (`docs/rendering/pads.md`, "The red is a cycle").
+    wingtip: Some(&oag_title::wingtip::Wingtip::hd_lineage(
+        "/data/tex/smoke_trails_frame1_alpha.gtf",
+        oag_title::Origin::Measured,
+    )),
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Cycle(oag_title::weapon_pad::Cycle {
         // The 6 keyframes at `0x008c26a0`, 12 bytes each.
         keyframes: &[

@@ -644,6 +644,10 @@ pub struct Setup {
     /// loaded, else `None`: see [`crate::missile_smoke`].
     #[cfg(feature = "view")]
     pub missile_trail: Option<oag_title::weapons::MissileTrail>,
+    /// The wingtip contrails' config and each slot's locators where the race draws them and the
+    /// texture loaded, else `None`: see [`crate::wingtip`].
+    #[cfg(feature = "view")]
+    pub wingtip: Option<crate::wingtip::WingtipDraw>,
     /// The circuit's authored cameras, where the player's camera stands once
     /// their craft is destroyed - see `race::destroy_camera`. Empty off Pulse.
     #[cfg(feature = "view")]

@@ -77,6 +77,7 @@ pub(super) fn livery() -> Livery {
         engine_light: None,
         cannon_flash: [None, None],
         arc_anchor: None,
+        wingtip: [None, None],
     }
 }
 

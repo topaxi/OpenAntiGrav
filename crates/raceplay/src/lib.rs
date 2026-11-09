@@ -321,6 +321,8 @@ mod visibility;
 mod weapon_light;
 mod weapons;
 #[cfg(feature = "view")]
+pub mod wingtip;
+#[cfg(feature = "view")]
 mod wreck_fx;
 mod wrong_way_kill;
 #[cfg(feature = "view")]

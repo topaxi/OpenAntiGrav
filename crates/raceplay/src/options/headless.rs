@@ -132,6 +132,7 @@ impl Setup {
             leach_strip: None,
             #[cfg(feature = "view")]
             missile_trail: None,
+            wingtip: None,
             #[cfg(feature = "view")]
             destroy_stations: Vec::new(),
             finished_thrust: None,

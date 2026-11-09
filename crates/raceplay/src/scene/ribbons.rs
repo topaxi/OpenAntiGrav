@@ -33,6 +33,15 @@ fn streak_vertices(streak: &oag_title::weapons::BlastStreak) -> usize {
         * 6
 }
 
+/// Vertices the wingtip contrails' buffer holds: the pool full, every element at its builder's
+/// capacity, six vertices a segment.
+fn wingtip_vertices(config: &oag_title::wingtip::Wingtip) -> usize {
+    config.pool
+        * config.line.chains as usize
+        * (config.line.capacity as usize).saturating_sub(1)
+        * 6
+}
+
 #[derive(Debug)]
 pub(super) struct Ribbons {
     pub(super) magstrip: Option<super::magstrip_wake::Magstrip>,
@@ -40,6 +49,7 @@ pub(super) struct Ribbons {
     missile_smoke: Option<MissileSmoke>,
     missile_streaks: Option<MissileSmoke>,
     leach_strip: Option<std::cell::RefCell<oag_fx::beam::Pipeline>>,
+    wingtip: Option<std::cell::RefCell<oag_fx::beam::Pipeline>>,
 }
 
 #[derive(Debug)]
@@ -128,12 +138,25 @@ pub(super) fn build(
             Style::leach_strip(crate::leach_strip::VERTICES),
         ))
     });
+    let wingtip = textures.wingtip.as_ref().map(|assets| {
+        std::cell::RefCell::new(oag_fx::beam::Pipeline::with_style(
+            device,
+            queue,
+            format,
+            store,
+            &assets.texture,
+            sample_count,
+            super::mesh_render::Velocity::Write,
+            Style::vortex_line(wingtip_vertices(&assets.config)),
+        ))
+    });
     Ribbons {
         magstrip,
         rocket_smoke,
         missile_smoke,
         missile_streaks,
         leach_strip,
+        wingtip,
     }
 }
 
@@ -141,9 +164,10 @@ impl Ribbons {
     /// The pipelines in the order the effects draw them: the wake's contact quads under its
     /// arcs, then the Missile's additive ribbons (pools 0 and 2, the stub and the helix) and
     /// the explosion's streaks (pool 1), the Rocket's smoke over them
-    /// (`RibbonEffects_Render` blends pools 0, 2, 1, 5 additively before 3 and 4), then HD's
-    /// Leach strip.
-    pub(super) fn cells(&self) -> [Option<&std::cell::RefCell<oag_fx::beam::Pipeline>>; 6] {
+    /// (`RibbonEffects_Render` blends pools 0, 2, 1, 5 additively before 3 and 4), the wingtip
+    /// contrails (pool `+0x74`, the first of the alpha-blended pools), then the Rocket smoke
+    /// and HD's Leach strip.
+    pub(super) fn cells(&self) -> [Option<&std::cell::RefCell<oag_fx::beam::Pipeline>>; 7] {
         let (contact, atlas) = self
             .magstrip
             .as_ref()
@@ -153,6 +177,7 @@ impl Ribbons {
             atlas,
             self.missile_smoke.as_ref().map(|smoke| &smoke.pipeline),
             self.missile_streaks.as_ref().map(|smoke| &smoke.pipeline),
+            self.wingtip.as_ref(),
             self.rocket_smoke.as_ref().map(|smoke| &smoke.pipeline),
             self.leach_strip.as_ref(),
         ]
@@ -192,6 +217,15 @@ impl super::Scene {
                 .pipeline
                 .borrow_mut()
                 .upload_with_eye(queue, vp, eye.to_array(), &vertices);
+        }
+        if let Some(contrails) = &self.ribbons.wingtip {
+            let eye = race.view().inverse().w_axis.truncate();
+            contrails.borrow_mut().upload_with_eye(
+                queue,
+                vp,
+                eye.to_array(),
+                &race.wingtip_vertices(eye),
+            );
         }
         if let Some(strip) = &self.ribbons.leach_strip {
             let eye = race.view().inverse().w_axis.truncate();

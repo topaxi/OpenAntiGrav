@@ -115,6 +115,10 @@ pub const TITLE: &Title = &Title {
     // **Per team, on HD's shape**: `EngineFlare.vex` beside each hull and the
     // two groups its tree hangs, `EF_Main` and `EF_Boost`, read off every
     // shipped file. The sprite literal is the executable's own.
+    wingtip: Some(&oag_title::wingtip::Wingtip::hd_lineage(
+        "/data/tex/smoke_trails_frame1_alpha.gxt",
+        oag_title::Origin::InheritedFrom("Wipeout HD"),
+    )),
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::PerTeam(oag_title::flare::Authored {
         stem: "engineflare",

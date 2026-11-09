@@ -54,6 +54,7 @@ pub(super) fn load(
         rocket_smoke: rocket_smoke.clone(),
         missile_smoke: missile_smoke.clone(),
         leach_strip: leach_strip.clone(),
+        wingtip: None,
     };
     let Some(wake) = models.magstrip_wake else {
         // The `.pob` side needs only the anchors: it draws no arc.
@@ -104,6 +105,7 @@ pub(super) fn load(
             rocket_smoke,
             missile_smoke,
             leach_strip,
+            wingtip: None,
         },
         leach_anchors,
         missile_trail,

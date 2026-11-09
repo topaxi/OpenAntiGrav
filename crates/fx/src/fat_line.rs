@@ -12,6 +12,10 @@
 //! is built from the eye each frame (the vertex program's two cross products), so
 //! [`Ribbon::extend_vertices`] takes the camera.
 //!
+//! Wipeout HD's wingtip contrails are the same element class with a different
+//! push and alpha (`VortexLine`, `docs/ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md`):
+//! see [`Vortex`] and [`Ribbon::push_vortex`].
+//!
 //! **Chosen, not measured**, each labelled where used: the helix's handedness
 //! ([`Ribbon::push`]), the vertex tint ([`TINT`]) and which strip side carries
 //! `v = 1`.
@@ -52,10 +56,26 @@ pub struct Spec {
 /// **Chosen, not measured**: white.
 pub const TINT: [f32; 3] = [1.0, 1.0, 1.0];
 
+/// What turns a [`Ribbon`] into HD's `VortexLine` (the wingtip contrail's element): its nodes are
+/// born at the anchor and drift, its chains fan over `pi` rather than circling the anchor, its
+/// alpha is `t * strength` with the strength rewritten by every push, and two nodes at each end of
+/// a chain are clear (`VortexLine_PushChains` `0x002ac208`, `VortexLine_Update` `0x002ac0f0`,
+/// `VortexLine_AlphaOverLife` `0x002abfb8`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Vortex {
+    /// Units per second a node moves away from the anchor along its chain's direction
+    /// (`|node+0x40|`, read `2.500` live).
+    pub drift: f32,
+    /// The vertex colour's RGB (`vBaseColour`, white).
+    pub colour: [f32; 3],
+}
+
 /// One laid node.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Node {
     pub position: Vec3,
+    /// World units per second the node moves by; zero for every element but a [`Vortex`].
+    pub velocity: Vec3,
     /// Seconds left.
     pub life: f32,
     pub half_width: f32,
@@ -73,6 +93,9 @@ pub struct Ribbon {
     spec: Spec,
     chains: Vec<VecDeque<Node>>,
     phase: f32,
+    /// `Some` for a `VortexLine`: the config and the element-wide opacity scale the last push
+    /// left (`element+0x60`).
+    vortex: Option<(Vortex, f32)>,
 }
 
 impl Ribbon {
@@ -82,6 +105,58 @@ impl Ribbon {
             spec,
             chains: vec![VecDeque::new(); spec.chains],
             phase: 0.0,
+            vortex: None,
+        }
+    }
+
+    /// An element of the wingtip contrail's class (`VortexLine_Construct` `0x002ac070`, strength
+    /// starting at `1.0`).
+    #[must_use]
+    pub fn new_vortex(spec: Spec, vortex: Vortex) -> Self {
+        Self {
+            vortex: Some((vortex, 1.0)),
+            ..Self::new(spec)
+        }
+    }
+
+    /// `VortexLine_PushChains`: one node per chain, born **at** `position`, each drifting at
+    /// `vortex.drift` along `-normalize(cos(theta) * row1 + sin(theta) * (row2 x row1))` with
+    /// `theta = pi / chains * i + phase`, the phase loaded once for the push (a fan over `pi`,
+    /// not a circle) and then stepping `phase_step` per chain. `left` mirrors the spin
+    /// (`+phase` against `-phase`). `strength` becomes the whole element's opacity scale.
+    ///
+    /// The rows are the anchor matrix's as stored, **with the craft's scale in them**: the
+    /// skew term `row2 x row1` carries it squared, which is what spaces the fan.
+    ///
+    /// # Panics
+    ///
+    /// If the ribbon was not built by [`Self::new_vortex`].
+    pub fn push_vortex(
+        &mut self,
+        position: Vec3,
+        row1: Vec3,
+        row2: Vec3,
+        left: bool,
+        strength: f32,
+    ) {
+        let (vortex, scale) = self.vortex.as_mut().expect("a vortex element");
+        *scale = strength;
+        let step = PI / self.spec.chains as f32;
+        let across = row2.cross(row1);
+        let phase = if left { self.phase } else { -self.phase };
+        for (i, chain) in self.chains.iter_mut().enumerate() {
+            let theta = step * i as f32 + phase;
+            let (sin, cos) = theta.sin_cos();
+            let direction = (row1 * cos + across * sin).normalize_or_zero();
+            chain.push_back(Node {
+                position,
+                velocity: direction * -vortex.drift,
+                life: self.spec.lifetime,
+                half_width: self.spec.width[0],
+                fade: 0.0,
+                u: None,
+            });
+            self.phase += self.spec.phase_step;
         }
     }
 
@@ -103,6 +178,7 @@ impl Ribbon {
             let (sin, cos) = theta.sin_cos();
             chain.push_back(Node {
                 position: position + (reference * cos + across * sin) * self.spec.radius,
+                velocity: Vec3::ZERO,
                 life: self.spec.lifetime * scale,
                 half_width: self.spec.width[0],
                 fade: 0.0,
@@ -130,6 +206,7 @@ impl Ribbon {
                 node.half_width = t * (birth - death) + death;
                 node.fade = 1.0 - t;
                 node.life -= dt;
+                node.position += node.velocity * dt;
                 if let Some(previous) = previous {
                     arc += (node.position - previous).length();
                 }
@@ -154,20 +231,35 @@ impl Ribbon {
 
     /// A node's alpha as the update leaves it: `FatLine_AlphaOverLife`, except that
     /// both ends of the chain are cleared after the walk.
-    fn alpha(&self, chain: &VecDeque<Node>, index: usize, ramp: &OpacityRamp) -> f32 {
+    fn alpha(&self, chain: &VecDeque<Node>, index: usize, ramp: Option<&OpacityRamp>) -> f32 {
         if index == 0 || index + 1 >= chain.len() {
             return 0.0;
         }
         let fade = chain[index].fade;
-        if self.spec.ramp {
-            f32::from(ramp.lookup(fade)) / 255.0
-        } else {
-            fade
+        if let Some((_, strength)) = self.vortex {
+            // `VortexLine_Update` clears the second node from each end as well.
+            if index == 1 || index + 2 >= chain.len() {
+                return 0.0;
+            }
+            return (1.0 - fade) * strength;
+        }
+        match ramp {
+            Some(ramp) if self.spec.ramp => f32::from(ramp.lookup(fade)) / 255.0,
+            _ => fade,
         }
     }
 
     /// Appends the triangle list of every chain's strip as `FatLine_vp` draws it.
     pub fn extend_vertices(&self, out: &mut Vec<GpuVertex>, eye: Vec3, ramp: &OpacityRamp) {
+        self.extend_with(out, eye, Some(ramp));
+    }
+
+    /// [`Self::extend_vertices`] for an element that reads no opacity ramp, a [`Vortex`].
+    pub fn extend_vortex_vertices(&self, out: &mut Vec<GpuVertex>, eye: Vec3) {
+        self.extend_with(out, eye, None);
+    }
+
+    fn extend_with(&self, out: &mut Vec<GpuVertex>, eye: Vec3, ramp: Option<&OpacityRamp>) {
         for chain in &self.chains {
             let samples: Vec<(&Node, f32)> = chain
                 .iter()
@@ -198,7 +290,8 @@ impl Ribbon {
         let after = to_eye.cross(cur.position - next.position);
         let side = (before + after).normalize_or_zero();
         let u = cur.u.unwrap_or(0.0) * self.spec.u_per_unit;
-        let colour = [TINT[0], TINT[1], TINT[2], alpha];
+        let [red, green, blue] = self.vortex.map_or(TINT, |(vortex, _)| vortex.colour);
+        let colour = [red, green, blue, alpha];
         let vertex = |sign: f32| GpuVertex {
             position: (cur.position + side * (cur.half_width * sign)).to_array(),
             normal: side.to_array(),

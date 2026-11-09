@@ -46,6 +46,7 @@ const TITLE: &Title = &Title {
     exhaust: &oag_title::exhaust::Exhaust::Unread,
     // `Unread` on the same terms as the ribbon beside it: this crate resolves
     // archives and never draws an exhaust.
+    wingtip: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Unread,
     // Present for the same reason and equally unread: resolving archives has

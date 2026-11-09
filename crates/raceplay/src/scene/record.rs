@@ -104,9 +104,9 @@ pub(super) struct EffectsDrawn {
 }
 
 /// The strip pipelines, in the order the effects draw them: the Leach beam, the magstrip wake's
-/// contact quads and arcs, the Missile's ribbons and explosion streaks, the Rocket smoke and
-/// HD's Leach strip.
-const BEAMS: usize = 7;
+/// contact quads and arcs, the Missile's ribbons and explosion streaks, the wingtip contrails,
+/// the Rocket smoke and HD's Leach strip.
+const BEAMS: usize = 8;
 
 /// One view's scene pass, decided: everything [`Recorder::record`] reads that is not the scene's
 /// own GPU objects.
@@ -157,13 +157,14 @@ pub(super) struct ViewLists {
 impl Scene {
     /// The strip pipelines, in [`BEAMS`]' order; `None` where the title builds none.
     fn beams(&self) -> [Option<&std::cell::RefCell<oag_fx::beam::Pipeline>>; BEAMS] {
-        let [contact, atlas, fat, streaks, smoke, leach] = self.ribbons.cells();
+        let [contact, atlas, fat, streaks, vortex, smoke, leach] = self.ribbons.cells();
         [
             self.beam.as_ref(),
             contact,
             atlas,
             fat,
             streaks,
+            vortex,
             smoke,
             leach,
         ]
