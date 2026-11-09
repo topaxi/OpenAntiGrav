@@ -497,8 +497,8 @@ fn a_campaign_made_in_the_editor_is_listed_and_its_event_launches() {
          ticks 20; press cross; press down; press down; press down; press right; press circle; \
          press right; press down; press cross; press right; press circle; \
          press start; until page=campaigns within 600; ticks 30; \
-         select \"MY CAMPAIGN\"; press cross; until screen.id=grid; press cross; \
-         until screen.id=cell; ticks 10; press cross; until stage=race within 6000",
+         select \"MY CAMPAIGN\"; press cross; until screen.id=cell; ticks 10; press cross; \
+         until stage=race within 6000",
         "editor.jsonl",
         &mods,
     );
@@ -533,4 +533,74 @@ fn a_campaign_made_in_the_editor_is_listed_and_its_event_launches() {
         })
         .expect("a single race started");
     assert_eq!(race["team"], "Assegai");
+}
+
+/// A campaign of one grid opens straight on that grid's `Cell Selection`, `Back` there returns to
+/// the picker it came from (never a one-entry `Grid Selection`), and Pulse's own sixteen-grid
+/// campaign still opens `Grid Selection`. Drops the skip and the first assertion fails; drops the
+/// `Back` arm and the campaign reopens on `Grid Selection`.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn a_one_grid_campaign_opens_on_its_cells_and_back_returns_to_the_picker() {
+    let Some(image) = oag_testdata::image("pulse-psp-eu.chd") else {
+        return;
+    };
+    let profile = Profile::fresh("single-grid");
+    let mods = profile.0.join("data").join("oag").join("mods");
+    std::fs::create_dir_all(&mods).expect("a mods directory");
+    let states = profile.drive_with_mods(
+        &image,
+        "boot; until stage=menu within 3000; select campaign; press cross; \
+         until page=campaigns; select campaign-editor; press cross; until screen=campaign; \
+         ticks 20; press cross; press down; press down; press down; press right; press circle; \
+         press right; press down; press cross; press right; press circle; \
+         press start; until page=campaigns within 600; ticks 30; \
+         select \"MY CAMPAIGN\"; press cross; until screen.id=cell; ticks 10; \
+         press circle; until page=campaigns within 600; ticks 10; \
+         select campaign-original; press cross; until screen.id=grid; ticks 5",
+        "single.jsonl",
+        &mods,
+    );
+    let level = |state: &Value| -> Option<String> {
+        state
+            .get("screen")
+            .filter(|s| s["kind"] == "campaign")
+            .map(|s| s["id"].as_str().unwrap_or_default().to_string())
+    };
+    let on_picker =
+        |state: &Value| state["page"] == "campaigns" && state["screen"]["kind"] == "page";
+    let first_cell = states
+        .iter()
+        .position(|state| level(state).as_deref() == Some("cell") && !on_picker(state))
+        .expect("Cell Selection opened");
+    // From the last time the picker was up before that cell, no `Grid Selection` came between.
+    let picker_before = states[..first_cell]
+        .iter()
+        .rposition(on_picker)
+        .expect("the picker was up before the cell");
+    assert!(
+        !states[picker_before..first_cell]
+            .iter()
+            .any(|state| level(state).as_deref() == Some("grid")),
+        "a one-grid campaign must not show Grid Selection between the picker and its cells"
+    );
+    // Back from the cells returned to the picker, with no `Grid Selection` in between.
+    let back_to = states[first_cell..]
+        .iter()
+        .position(|state| level(state).as_deref() != Some("cell") && !on_picker(state))
+        .map(|at| at + first_cell);
+    let picker_after = states[first_cell..]
+        .iter()
+        .position(on_picker)
+        .map(|at| at + first_cell)
+        .expect("Back returned to the campaigns picker");
+    assert!(
+        back_to.is_none_or(|at| at > picker_after),
+        "Back from Cell Selection must reach the picker before any other campaign screen"
+    );
+    let (level, _) = last_campaign(&states);
+    assert_eq!(
+        level, "grid",
+        "Pulse's own sixteen-grid campaign still opens Grid Selection"
+    );
 }
