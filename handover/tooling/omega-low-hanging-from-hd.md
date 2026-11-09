@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
-titles: [omega]
-updated: 2026-10-26
+titles: [omega, 2048]
+updated: 2026-11-09
 summary: "Omega adverts: reader landed, pass off until PS4 material curves are read; plume flags, hit-effect triggers, Looks, shadows still open"
 difficulty: hard (35)
 ---
@@ -21,6 +21,8 @@ Provenance rule for every entry: inherited from Wipeout HD unless Omega's own
 data proves it.
 
 ## Open
+
+- **2048 in the same lane, reuse HD's path (maintainer, 2026-11-09):** any Omega item that lands here is wired for 2048 too (`.gxt` spellings, 2048's own evidence), with "ported" on its doc page unless 2048 is shown to differ. HD/Fury definitely wires much of this already and 2048 may, so extend the existing HD/2048 path to Omega rather than building a parallel one.
 
 ### Landed by the wire lane (nothing left to do)
 

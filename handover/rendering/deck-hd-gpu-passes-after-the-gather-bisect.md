@@ -33,6 +33,7 @@ proposed as a default.
 
 ## Open
 
+- **Motion blur is ours (maintainer, 2026-11-09):** the blur is our own graphics setting, so a cut that changes its picture (fewer taps, cheaper composite or copy) needs a capture diff that names the change, not byte-identity and not a design decision. Every other pass stays byte-identical.
 - **The 64-bit `prepared` texel.** Each gather tap loads `Rgba16Float` (velocity xy, depth, an
   unused w). Not cache misses (bisect). Untested: whether the 64-bit load's rate is the cost. A
   diag loading a 32-bit texture at the same cache-local addresses, compared with the 1.63 ms
