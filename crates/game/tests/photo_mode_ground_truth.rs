@@ -338,7 +338,8 @@ fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &P
 /// throttle held, the pickup fired twice after GO (each time the slot is empty `--give` tops it up
 /// again), then a visit to photo mode that rewinds into the first second and goes forward. Every
 /// tick the visit reports hashes as the same tick of a race that was never visited, and the
-/// recording holds one `give` event for each top-up.
+/// recording holds one `give` event for each top-up and rebuilds, from its header, to the same
+/// hash at every stored tick.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_race_handed_a_pickup_hashes_the_same_at_every_tick_after_a_rewind() {
@@ -368,6 +369,12 @@ fn a_race_handed_a_pickup_hashes_the_same_at_every_tick_after_a_rewind() {
         recorded.is_some_and(|events| events >= 3),
         "the first top-up and the two after a shot are events in the recording: {recorded:?}"
     );
+    // The file rebuilds the race from its header with the slot empty: only the events put the
+    // rocket there, and every stored hash must agree with the rebuilt race's.
+    let replay = oag_replay::Replay::from_bytes(&the_recording(&control)).expect("it reads back");
+    let verified = super::replay_viewer_ground_truth::verify(&image, &replay)
+        .unwrap_or_else(|desync| panic!("the recording desyncs at tick {}", desync.tick));
+    assert!(verified > 400, "only {verified} ticks verified");
     let rewound = drive_unmodded(
         &image,
         "give-rewind",
