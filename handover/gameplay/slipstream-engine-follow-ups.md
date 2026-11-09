@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-09
-summary: "oag.slipstream, mod shaders, portal-view, route exits and route-aware portal-view landed; open: mesh portal, island exit, wall occlusion, loops, a firer on a route."
+summary: "slipstream, mod shaders, portal-view and route exits landed; open: mesh portal, island exit, wall occlusion, loops, a firer on a route."
 categories: [tooling, frontend]
 size: L (50)
 difficulty: medium (50)
