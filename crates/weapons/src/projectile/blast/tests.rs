@@ -125,7 +125,10 @@ fn a_shielded_craft_keeps_its_energy_and_banks_no_shove() {
         Vec3::ZERO,
         "the shield let the shove through"
     );
-    assert_eq!(grid[0].physics.stun_timer, 0.0, "the shield let the stun in");
+    assert_eq!(
+        grid[0].physics.stun_timer, 0.0,
+        "the shield let the stun in"
+    );
     assert_eq!(grid[0].physics.pending_impulse, Vec3::ZERO);
 }
 
