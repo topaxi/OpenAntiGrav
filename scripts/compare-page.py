@@ -37,6 +37,8 @@ import compare_env  # noqa: E402  (the metric explanations live beside the metri
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = ROOT / "data" / "compare"
+# The maintainer's curated publishing set: `just publish-compare` with no argument publishes it.
+CURATED = ROOT / "data" / "compare-curated"
 
 # The screenshot-policy ADR that allows publishing curated screenshots, and the
 # Pages project it may go to. The number is filled in once the ADR exists; until
@@ -369,6 +371,67 @@ def publish_lock() -> str | None:
     return None
 
 
+# Where `just compare-rerender-all` writes, and the fields a re-render rewrites in an entry.
+REFERENCE = ROOT / "data" / "reference" / "compare-page"
+RERENDER_FIELDS = ("rmse", "edge_ncc", "mean_grey", "build", "binary", "rendered_at")
+RERENDER_FILES = ("ours.png", "side.png", "pair.json")
+
+
+def entry_blocks(text: str) -> list[str]:
+    """The manifest split at each `[[entry]]`; block 0 is the `[page]` header."""
+    return re.split(r"(?m)^(?=\[\[entry\]\]\s*$)", text)
+
+
+def block_field(block: str, key: str) -> str | None:
+    m = re.search(rf'(?m)^{key} = "(.*)"$', block)
+    return m.group(1) if m else None
+
+
+def refresh_curated(curated: Path, reference: Path = REFERENCE) -> None:
+    """Carry newer re-renders from `reference` into the curated set, entry by entry.
+
+    The curated set chooses which pairs are published and may reword them; a re-render writes
+    only into `reference`. For each curated entry whose id has a newer `rendered_at` there and
+    whose original image is byte-identical, the re-render's metric fields and files are copied.
+    Titles, notes and every other curated line stay as curated."""
+    fresh: dict[str, tuple[str, Path]] = {}
+    for m in sorted(reference.glob("*.toml")):
+        for block in entry_blocks(m.read_text())[1:]:
+            if (eid := block_field(block, "id")):
+                fresh[eid] = (block, reference)
+    for m in sorted(curated.glob("*.toml")):
+        blocks = entry_blocks(m.read_text())
+        changed = False
+        for i, block in enumerate(blocks[1:], 1):
+            eid = block_field(block, "id")
+            if eid not in fresh:
+                continue
+            ref_block, ref_root = fresh[eid]
+            if (block_field(ref_block, "rendered_at") or "") <= (block_field(block, "rendered_at") or ""):
+                continue
+            ours, ref_ours = block_field(block, "ours"), block_field(ref_block, "ours")
+            original, ref_original = block_field(block, "original"), block_field(ref_block, "original")
+            if not ours or ours != ref_ours or original != ref_original:
+                continue
+            if (curated / original).read_bytes() != (ref_root / ref_original).read_bytes():
+                print(f"publish-compare: {eid}: original differs from the re-render's, kept as curated")
+                continue
+            for key in RERENDER_FIELDS:
+                value = block_field(ref_block, key)
+                if value is not None and block_field(block, key) is not None:
+                    block = re.sub(rf'(?m)^{key} = ".*"$', f'{key} = "{value}"', block)
+            pair_dir = Path(ours).parent
+            for name in RERENDER_FILES:
+                src = ref_root / pair_dir / name
+                if src.is_file():
+                    shutil.copy2(src, curated / pair_dir / name)
+            blocks[i] = block
+            changed = True
+            print(f"publish-compare: {eid}: re-render of {block_field(ref_block, 'rendered_at')} taken")
+        if changed:
+            m.write_text("".join(blocks))
+
+
 def publish(manifests: list[Path], out: Path):
     why = publish_lock()
     if why:
@@ -414,8 +477,13 @@ def main():
         return
     if not a.manifest:
         if a.publish:
-            ap.error("--publish needs the curated manifest directory; the seed set is not a publishing set")
-        a.manifest = [str(ROOT / "data" / "reference" / "compare-page")]
+            if not CURATED.is_dir():
+                ap.error(f"--publish with no manifest publishes {CURATED}, which does not exist; "
+                         "copy the frames to publish there (the seed set is not a publishing set)")
+            refresh_curated(CURATED)
+            a.manifest = [str(CURATED)]
+        else:
+            a.manifest = [str(ROOT / "data" / "reference" / "compare-page")]
     try:
         if a.publish:
             publish(manifest_files(a.manifest), a.out.resolve())

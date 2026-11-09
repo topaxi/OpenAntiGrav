@@ -170,7 +170,7 @@ pub(super) fn menu_page(
     // A mod campaign's picker, as `crate::prepare` adds it; a cross-disc one
     // is kept here, since a still never races it.
     let installed = loaded.installed_for(title, &|_| true);
-    crate::campaign::custom::add_picker(&mut definition, &mut mods, &installed, strings);
+    crate::campaign::custom::add_picker(&mut definition, &mut mods, &installed, title, strings);
     if definition.page(page).is_none() {
         anyhow::bail!(
             "no menu page named {page:?}; this definition has {}",

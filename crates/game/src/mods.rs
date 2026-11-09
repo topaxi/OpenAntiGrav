@@ -135,6 +135,13 @@ pub mod words {
     pub const NO_ONE_SENDS: (&str, &str) = ("OAG_MODS_NO_ONE_SENDS", "NO ONE SENDS");
     /// The page RACE CAMPAIGN opens once a mod adds a campaign (ADR-0077).
     pub const CAMPAIGN_PICKER: (&str, &str) = ("OAG_MENU_CAMPAIGN_PICKER", "CAMPAIGNS");
+    /// The campaign picker's last row, which opens the campaign editor.
+    pub const CAMPAIGN_EDITOR: (&str, &str) = ("OAG_MENU_CAMPAIGN_EDITOR", "NEW CAMPAIGN");
+    /// That row's second line.
+    pub const CAMPAIGN_EDITOR_SUBTITLE: (&str, &str) = (
+        "OAG_MENU_CAMPAIGN_EDITOR_SUBTITLE",
+        "Place events on the hex grid and save them as a campaign",
+    );
     /// The built-in mod's mark after its name.
     pub const BUILT_IN: (&str, &str) = ("OAG_MODS_BUILT_IN", "BUILT IN");
 }

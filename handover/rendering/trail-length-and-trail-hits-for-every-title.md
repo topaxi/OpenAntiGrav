@@ -1,8 +1,8 @@
 ---
-status: re-first
-titles: [pulse, pure, hd]
+status: ready-to-wire
+titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-09
-summary: "Trail hits landed (graphics.trail_hits: Pulse, Pure); HD-length trails for Pulse and Pure wait until HD's burst matches"
+summary: "Wire HD's class-6 bar (PartRender SPU job read, 85); 2048 and Omega now behind graphics.trail_hits; HD-length trails wait on the burst"
 ---
 
 # HD-length trails (opt-in) for Pulse and Pure; trail hits landed
@@ -13,25 +13,40 @@ effects.
 
 ## Open
 
+- **The burst's draw (ready to wire, HD).** `engine-trail.md`, "The class-6 draw law":
+  class 6 is render mode 5, one 4-vertex quad per particle. It is built by the `PartRender`
+  SPU job (`0x0080bb80`, mode 5 at image `0x29b8`), which was read, and Omega's CPU twin
+  (`0x01714de0`) agrees with it. It is Pulse's pool bar in view space: `2 size` wide,
+  `aspect * size` (`+0x4c8`) past each end, both ends on the **farther** view depth, sampling
+  the atlas cell. Confidence 85. The wire: replace `StreakDraw::Procedural` with
+  `StreakDraw::Bar { aspect }` for HD's class 6 (`Effect::without_pulse_psp_draw`), at the
+  farther depth rather than Pulse's mean. Then compare the pair again (`engine-trail.md`,
+  "The trail-hit burst as a matched pair").
+- **Two candidate colour terms, unchecked against ours.** `psys_normal_vp` raises rgb to the
+  power 2.2 and multiplies by `kColourScale`. Omega's batch takes `kColourScale` from
+  `emitter+0xc84`, which is 0.7 on emitter 0 and 1.0 on `CORE_IMPACT`. On HD, where
+  `kColourScale` comes from is unread (`PartRender_FlushDraws`, `0x002c3ca0`). Check whether
+  ours applies either term to HD particles before wiring.
+- **Still unread:** the texture a sprite-less emitter binds (`record+0xca4`'s render state).
 - **Trail length.** Pulse and Pure get a setting that lengthens their engine trails to HD's
-  length. HD's ribbon is read in `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md` (54
-  samples, "The tuning file is the parameter block"). Waits until HD's trail-hit burst matches
-  the original, so the hit test the longer trail feeds is the right one. It does not match yet:
-  the 2026-11-08 pair (`engine-trail.md`, "The trail-hit burst as a matched pair") shows emitter
-  0's purple class-6 streaks scattered behind ours where the original draws a compact white glow
-  on the nose; the class-6 draw law is unread (`FUN_002673b0`, `0x00267b10`). The Pulse and Pure
-  hit test (below) runs against their 10-sample ribbon; a longer ribbon would reuse it through
-  `Exhaust::trail_nearest`, and the length setting must lengthen that ring, not add a second one.
-- **Trail hits: landed**, with what remains. `graphics.trail_hits` (off by default) lends HD's
-  `WO_TRAIL_HITSHIP` to Pulse and Pure (`oag_raceplay::TrailHits`, `load/trail_hits.rs`,
-  `EffectHandles::lending`); 2048 and Omega already play their own disc's copy with no setting
-  (`engine-trail.md`, "The burst on every title"). Remaining: (1) the Pulse/Pure hit test is
-  chosen, not measured (the ribbon's line inside the hull's cross-section); (2) the burst's look
-  is the shared class-6 draw, so it mends with the burst fix above; (3) a Pulse or Pure race on a
-  machine with no HD, 2048 or Omega source plays nothing, by design; (4) the lent burst is the
-  blue variant only (the red one follows HD's Fury skin flag).
+  length (54 samples, `engine-trail.md`, "The tuning file is the parameter block"). It waits
+  until the burst matches the original. The Pulse and Pure hit test runs against their
+  10-sample ribbon through `Exhaust::trail_nearest`, so the length setting must lengthen that
+  ring, not add a second one.
+- **Trail hits: landed.** `graphics.trail_hits` is off by default.
+  - It lends HD's `WO_TRAIL_HITSHIP` to Pulse and Pure.
+  - Since 2026-11-09 it also gates 2048's and Omega's own copy: their originals never fire it
+    (`ps4-omega-eu/trail-hits.md`, `vita-2048-eu-v104/trail-hits.md`).
+  - HD alone plays it always (`oag_title::Effects::trail_hits_native`).
+
+  Remaining:
+  1. The Pulse/Pure hit test is chosen, not measured.
+  2. The burst's look mends with the draw above.
+  3. A Pulse or Pure race on a machine with no HD, 2048 or Omega source plays nothing, by
+     design.
+  4. The lent burst is the blue variant only.
 
 ## Next Steps
 
-1. Recover HD's class-6 draw law and fix the burst (opus), then the trail-length setting for
-   Pulse and Pure.
+1. Wire lane: HD's class-6 bar (above), then a matched pair against the original.
+2. Then the trail-length setting for Pulse and Pure.

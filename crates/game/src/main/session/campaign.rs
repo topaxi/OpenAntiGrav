@@ -21,13 +21,19 @@ impl Session {
     /// own doc. A source with no campaign at all logs why and leaves the
     /// menus exactly as they were.
     pub(crate) fn open_campaign(&mut self) {
+        self.open_campaign_screens(false);
+    }
+
+    /// [`Self::open_campaign`], or the campaign editor over the same screens.
+    pub(super) fn open_campaign_screens(&mut self, editing: bool) {
         let Some(mut archives) = self.open_title_archives("RACE CAMPAIGN") else {
             return;
         };
-        if self
-            .shell
-            .as_ref()
-            .is_some_and(|shell| shell.title.campaign.list_entry.is_some())
+        if !editing
+            && self
+                .shell
+                .as_ref()
+                .is_some_and(|shell| shell.title.campaign.list_entry.is_some())
         {
             self.open_pure_chain(archives);
             return;
@@ -131,6 +137,16 @@ impl Session {
                     campaign.selection_layout = None;
                     campaign.chooser = None;
                 }
+                // The editor builds its own grid, one slot at a time: the disc's tiers are
+                // not its to show.
+                let editor = editing
+                    .then(|| self.editor_for(campaign.cell_layout.hex_slots(), &campaign.grids))
+                    .flatten();
+                if editing {
+                    campaign.grids.clear();
+                    campaign.selection_layout = None;
+                    campaign.chooser = None;
+                }
                 // The extended sheet - `hex_filled.mip`/`hex_outline.mip`,
                 // neither of which `Skin.xml`'s own sheet carries - has to
                 // reach the renderer once before anything drawn from it is
@@ -159,6 +175,7 @@ impl Session {
                         custom,
                     );
                     stage.resume_selector(phases);
+                    stage.editor = editor;
                     menu_stage.campaign = Some(stage);
                 }
             }
@@ -234,6 +251,10 @@ impl Session {
         let Some(campaign) = stage.campaign.as_mut() else {
             return;
         };
+        if campaign.editor.is_some() {
+            self.tick_campaign_editor(pointer);
+            return;
+        }
         let mut events = match &mut campaign.screen {
             Screen::Selection(model) => model.update(self.controls.buttons_mut()),
             Screen::Grid(model) => model.update(self.controls.buttons_mut()),
@@ -251,6 +272,13 @@ impl Session {
     /// `Confirm` on **either** input, and gating only inside `update` would
     /// leave a mouse two-tap launching a cell the pad cannot.
     pub(crate) fn handle_campaign(&mut self, event: Event) {
+        if event == Event::Back
+            && matches!(&self.stage, Stage::Menu(stage)
+                if stage.campaign.as_ref().is_some_and(|campaign| campaign.editor.is_some()))
+        {
+            self.editor_back();
+            return;
+        }
         let nav = self.campaign_nav(event);
         self.play_navs(nav);
         // Whatever cell was just confirmed, read out here and acted on
@@ -338,6 +366,10 @@ impl Session {
                         // "The `DifficultyRC` persisted rung" section.
                         confirmed_difficulty = confirmed_cell.as_ref().map(|_| model.difficulty());
                     }
+                }
+                (Screen::Cell { .. }, Event::Back) if campaign.skips_grid_selection() => {
+                    keep_cursor(&mut self.records, &mut self.selector_phases, campaign);
+                    stage.campaign = None;
                 }
                 (Screen::Cell { .. }, Event::Back) => campaign.back_to_grid_selection(),
                 // `DifficultyChanged` is HD-only, ours, and needs nothing

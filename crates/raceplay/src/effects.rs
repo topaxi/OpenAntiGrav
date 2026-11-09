@@ -406,10 +406,10 @@ impl Race {
         self.view.hull_reach[slot]
     }
 
-    /// Whether this race plays the trail-hit burst: HD's tube (HD, 2048 and Omega, which author
-    /// the effect), or a burst lent to a title that authors none (`graphics.trail_hits`, see
-    /// `load::trail_hits`). With the setting off a Pulse or Pure race has neither, so the whole
-    /// path is inert.
+    /// Whether this race tests for trail hits: HD's tube (HD, 2048 and Omega), or a burst lent to
+    /// a title that authors none (`graphics.trail_hits`, see `load::trail_hits`). With the setting
+    /// off a Pulse or Pure race has neither, so the whole path is inert. 2048 and Omega keep the
+    /// test but, with the setting off, have no handle to play (`load::trail_hits::gate`).
     fn trail_hits_on(&self) -> bool {
         self.view.hd_trail_active || self.view.handles.get(Trigger::TrailHitship).is_some()
     }

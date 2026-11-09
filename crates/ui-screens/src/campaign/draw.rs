@@ -728,7 +728,7 @@ pub(super) fn push_text(
 /// transparent texels included (alpha test off at the original's draw), at
 /// [`super::pulse::SelectorPulse::stamp`]. The title gates whether the frame blooms; see
 /// `oag_title::Campaign::frontend_glow`.
-fn push_selector(
+pub(super) fn push_selector(
     out: &mut Vec<Draw>,
     image: &Image,
     placed: Placed,

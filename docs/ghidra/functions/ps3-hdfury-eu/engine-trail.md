@@ -849,24 +849,259 @@ Omega's `WO_TRAIL_HITSHIP` was not parsed here. The 2026-10-29 verdict on the sp
 ("checked, applies") stands. (The burst's presence on Omega and 2048 is censused in
 "The burst on every title" below.)
 
+## The class-6 draw law (2026-11-09, `hd-trail-hit-draw`)
+
+The previous pass left two leads for where HD builds a class-6 streak. Both are
+closed, and the expansion is located: it runs on an SPU job, not in PPU code
+and not in a vertex program. The law is read off that job's own code, and
+Omega's CPU twin of the same code agrees with it instruction for instruction.
+
+### The two leads were not the draw (clean negatives)
+
+- **`particleVelocity` is not a psys parameter.** The TOC slot (`0x008b2220`)
+  sits in the run `position`, `normal`, `rand`, `worldViewProj`, `time`,
+  `particleColour`, `timeOffsetFactors`, `floorLevel`, `speed`,
+  `explosionFactor`, `bounceness`, `bouncePeriod`, `particleVelocity`
+  (`0x008b21f0`-`0x008b2220`). Its reader `FUN_002673b0` binds the
+  `RadioHead1_vp` program (`0x008b21d8`) and looks up these names in it. That
+  is the `RadioHead*` GPU-animated effect family (`renderer.md`, the shader
+  groups), not the particle renderer.
+- **`FUN_0027ff58` and `FUN_00280290` are ParticleManager constructors.** They
+  allocate 256 `0x1a80`-byte instance slots, register `MaintainParticles`, and
+  create the renderer object (`0x201240` bytes) through `FUN_002c5300`. They
+  draw nothing.
+
+### The psys programs take no velocity: vertices arrive expanded (confidence 85)
+
+`PartRender_RegisterShaders` (`FUN_002c7b30`) registers six program pairs from
+blocks embedded in the EBOOT:
+
+| pair | vertex block | fragment block |
+| --- | --- | --- |
+| `psys_normal` | `0x00928100` | `0x00927a80` |
+| `psys_simplegeom` | `0x00927f80` | `0x00927a00` |
+| `cloudshader` | `0x00928700` | `0x00927f00` |
+| `lineshader` | `0x00928480` | `0x00927c00` |
+| `psys_lit` | `0x00928300` | `0x00927b00` |
+| `engineflare` | `0x00928580` | `0x00927c80` |
+
+`PartRender_Construct` (`FUN_002c5300`) declares the vertex format as
+`in_position` (float3), `in_colour` (4 bytes) and `in_uv` (float2). It creates
+two `0x18000`-byte vertex buffers, double-buffered. The four psys vertex
+programs (`scripts/ps3-microcode.py vp <block>`) take only those attributes
+and `kWorldViewProj`:
+
+```text
+psys_normal_vp (0x00928100), 16 instructions:
+  o[POS]     = kWorldViewProj * v[0]
+  o[TC0].xy  = v[2].xy
+  o[COL0].w  = v[1].w
+  o[COL0].xyz = exp2(log2(v[1].xyz) * 2.2) * c[211].x    <- c467 = kColourScale
+```
+
+`0x122fbff9` is `~crc32("kColourScale")` (`scripts/ps3-sho.py hash
+kColourScale`). `psys_simplegeom_vp` applies the same 2.2 power to colour times
+0.5. No psys program reads a velocity, an offset or a corner index, so a
+streak's corners are built before the GPU sees them.
+
+### The draw chain, PPU side (confidence 75)
+
+1. `Psys_DrawInstance` (`FUN_002c9248`, 65) builds the instance's matrices.
+   It also builds, once per atlas size, the UV table: `instance+0xb4` columns
+   by `+0xb6` rows, 0x30 bytes per cell. Then it calls the job builder with the
+   view matrix.
+2. `PartRender_SubmitJob` (`FUN_002cc9b0`) looks the record's `+0xb8` render
+   mode up in `PartRender_ModeGeometry` (`0x00766c80`, below). It reserves
+   `vertices(mode) * count * 16` bytes, then builds and kicks a `PartRender`
+   SPU job. The job's parameter block (stack `0x70`-`0xdf`):
+
+   | block offset | value |
+   | --- | --- |
+   | `0x00`-`0x3f` | the view matrix (the call's `param_2`) |
+   | `0x40` | render mode, record `+0xb8` |
+   | `0x44` | record `+0x4c8` (aspect: Pulse's bar cap) |
+   | `0x48` | `-(record +0xc80)` |
+   | `0x4c` | the reserved vertex buffer |
+   | `0x50`, `0x54` | atlas columns and rows |
+   | `0x58`, `0x5c` | `1 / columns`, `1 / rows` |
+   | `0x60` | instance `+0x80`, the particle pool |
+   | `0x64`, `0x68` | paused and half-step flags |
+   | `0x6c` | instance `+0x150`, the live count |
+
+3. `PartRender_QueueDraw` (`FUN_002c39a8`) appends a 0x18-byte draw record:
+   vertex pointer, `indices(mode) * count`, the render state `record+0xca4`,
+   and the LOD. `PartRender_FlushDraws` (`FUN_002c3ca0`) drains the queue.
+   Per state (stride `0x1020`) it binds the program pair at `state+0x1c` and
+   sets `kWorldViewProj` and up to three more constants. It sets the blend by
+   `state+0xc`: case 2 is `FUNC_ADD` with `(SRC_ALPHA, ONE)`, additive; case 3
+   is `(SRC_ALPHA, ONE_MINUS_SRC_ALPHA)`. Where `kColourScale`'s value comes
+   from in this function is **unread** (a stack local the decompile does not
+   initialise).
+
+`PartRender_RegisterJob` (`FUN_002cc8b0`) registers the job: name
+`PartRender` (`0x007a1180`), image **`0x0080bb80`, `0x5ad0` bytes** (TOC
+`0x008b3bb8`/`0x008b3bbc`).
+
+### Class 6 is render mode 5, one quad per particle (confidence 80)
+
+`PartRender_ModeGeometry` (`0x00766c80`), three rows of eight words, indexed by
+render mode (draw class minus 1, `crates/pob/src/lib.rs` `draw_class`):
+
+| row | mode 0 | 1 | 2 | 3 | 4 | **5** | 6 | 7 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `+0x00` format | -1 | 0 | 0 | 0 | 0 | 0 | 0 | -1 |
+| `+0x20` vertices | 0 | 4 | 4 | 9 | 9 | **4** | 12 | 0 |
+| `+0x3c` indices | 0 | 4 | 4 | 11 | 11 | **4** | 12 | 1 |
+
+Both emitters of `WO_TRAIL_HITSHIP` are mode 5 (class 6). Read raw off DATA02's
+and DATA06's copies, which agree on these fields:
+
+| emitter | `+0xb8` | `+0xc0` blend | `+0x4c8` aspect | `+0x9a0` atlas | `+0xc80` | `+0xc84` |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 `WO_TRAIL_HITSHIP` | 5 | 2 | 1.0 | 1x1 | 0.2 | 0.7 |
+| 1 `CORE_IMPACT` | 5 | 2 | 2.0 | 4x2 | 0.2 | 1.0 |
+
+So HD draws a class-6 particle as **one 4-vertex quad**, not 12 vertices
+(mode 6, class 7, has 12). Class 7 is Pulse's capped streak.
+
+### The law: HD's SPU job and Omega's CPU twin agree (confidence 85)
+
+Omega has no SPU. Its `Particle_PushBatchByMode` (`eboot-ps4-omega-eu.bin`
+`FUN_01714de0`, see
+[trail-hits.md](../ps4-omega-eu/trail-hits.md)) switches on the same
+`+0xb8` and builds mode 5 on the CPU. Per particle, with `A` the position and
+`B` the streak's other point (the particle's `+0x20` and `+0x30`), both taken
+to view space by the view matrix:
+
+1. Cull unless both `A.z` and `B.z` are at or beyond `-1` (in front of the eye).
+2. `z = min(A.z, B.z)`: the **farther** end. Both ends are scaled along their
+   eye rays onto that depth (`A' = A * z / A.z`, `B' = B * z / B.z`).
+3. `d = (B' - A').xy`, `n = d / |d|` (a fixed default direction when `|d|` is 0).
+4. `perp = (n.y, -n.x) * size`, `cap = n * size * aspect` (`+0x4c8`).
+5. The corners, all at depth `z`: `A' - cap - perp`, `A' - cap + perp`,
+   `B' + cap + perp`, `B' + cap - perp`.
+6. Colour is the particle's 4 bytes (`+0x74`). UV is the atlas cell for frame
+   `+0x78`.
+7. The batch carries `emitter+0xc84` as its `kColourScale` (`heat-haze.md`,
+   `Particle_PushQuadBatch`).
+
+This is **Pulse's pool bar** (`crates/fx/src/psys/streak.rs`, `StreakDraw::Bar`):
+a rectangle `2 size` wide, reaching `aspect * size` past each end. One thing
+differs. Pulse's bar puts both ends on their **mean** depth; HD and Omega use the
+**farther** one.
+
+**HD's own code says the same.** The `PartRender` job
+(`scripts/ps3-spu-disasm.py 0x0080bb80 0x5ad0`; offsets below are into the
+image, local store is image `+0x4000`) was read once `spu-objdump` was
+reinstalled:
+
+```text
+56d8  ai    $9,$19,-1         mode - 1 (param block +0x40)
+56f0  clgti $5,$9,5           above 5: no draw
+5704  lqx   $4,$12,$11        jump table at image 0x5724:
+                              modes 1-4 -> 0x57e8, mode 5 -> 0x58fc, mode 6 -> 0x58f4
+58fc  brsl  $0,0x3940         mode 5: walk the pool (DMA in 0x1a80-byte blocks,
+                              0xd0 per particle), call 0x29b8 per live particle
+29bc  lqd   $34,48($4)        particle +0x30 (B)
+2a44  lqd   $32,32($4)        particle +0x20 (A); w forced to 1.0
+2a70..2aa8                    both through the view matrix (local 0x5b00..0x5b30,
+                              param block +0x00..+0x3f)
+2ab4  fcgt  $2,$3,$15         B.z > -1.0: emit a degenerate quad (0x2ac0)
+2d58  fcgt  $35,$18,$15       A.z > -1.0: likewise
+2e10  fcgt  $82,$24,$18
+2e20  selb  $82,$24,$18,$82   z = min(A.z, B.z): the farther end
+2dcc..2ea0                    z / A.z and z / B.z (frest, Newton step)
+2eb8  fm    $98,$14,$98       A' = A * z / A.z
+2ed4  fm    $83,$80,$3        B' = B * z / B.z
+2ef0  fs    $51,$83,$98       d = B' - A'
+2f10..2f64                    n = d / |d| (frsqest; a fixed direction at 0)
+2f18  fm    $73,$94,$96       size (+0x70) * aspect (local 0x5b50 = param +0x44)
+2f70  fm    $94,$37,$38       cap = n * size * aspect
+2f68..2f7c                    perp = (n.y, -n.x) * size
+2ff0  fs    $83,$98,$94       A' - cap, then the four corners
+```
+
+The particle's colour bytes (`+0x74`) are scaled by 1/255 (`0x3b808080`),
+clamped and repacked. The atlas cell comes from frame `+0x78` and the UV steps.
+`-(+0xc80)` (param `+0x48`, local `0x5b40`) is read only at `0x3efc`, on the
+modes 1-4 path (`brsl 0x3bb8` at `0x5884`), never in mode 5.
+
+**Mode 6 (class 7, the capped streak) uses the mean depth.** Its routine
+(`0x2738`-`0x29b4`) calls `0x2c0` at `0x28ec`, whose per-particle body at
+`0x0ae8` takes `0.5 * (A.z + B.z)` (`fa` at `0x0ba8`, `fm` by `0x3f000000` at
+`0x0be0`). That is the depth Pulse's class 7 and pool bar use. So on HD, class 6
+goes to the farther depth and class 7 to the mean; a class-7 wire needs exactly
+that split.
+
+Why 85: HD's own code read statically, and a second binary on another ISA
+(Omega's CPU code) agrees. No live HD capture of a vertex buffer, so not higher.
+The texture a sprite-less emitter binds is `record+0xca4`'s render state, set at
+load and still unread.
+
+### What this says about ours
+
+Ours draws HD's class 6 as `StreakDraw::Procedural`: a soft profile `2 size`
+across that samples nothing (`Effect::without_pulse_psp_draw`). The original's
+mode 5 is a hard-edged bar, `aspect * size` longer at each end, sampling its
+atlas cell, at one view depth. Two more terms are candidates for the
+white-core, faint-purple picture, **not yet checked against ours**:
+
+- `psys_normal_vp`'s `pow(rgb, 2.2)` darkens emitter 0's purple end (0.79,
+  0.43, 1.0) to about (0.60, 0.16, 1.0), while white stays white.
+- If HD binds `+0xc84` as `kColourScale` the way Omega does, emitter 0 draws
+  at 0.7 of `CORE_IMPACT`'s brightness.
+
+The scattered placement (positions, drag, carried velocity) is the
+simulation's, and nothing here changes it.
+
+### Names applied (`hd-trail-hit-draw`)
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x002c7b30` | `PartRender_RegisterShaders` | 85 |
+| `0x002cc8b0` | `PartRender_RegisterJob` | 85 |
+| `0x00766c80` (data) | `PartRender_ModeGeometry` | 80 |
+| `0x002cc9b0` | `PartRender_SubmitJob` | 75 |
+| `0x002c39a8` | `PartRender_QueueDraw` | 70 |
+| `0x002c3ca0` | `PartRender_FlushDraws` | 70 |
+| `0x002c5300` | `PartRender_Construct` | 65 |
+| `0x002c9248` | `Psys_DrawInstance` | 65 |
+
+### Cross-title
+
+- **Omega: ported** in the original's own code: the same mode-5 law on the CPU
+  (`Particle_PushBatchByMode`), above. Ours has no HD-specific draw yet.
+- **2048: open.** 2048 ships `psys_normal_vp/fp` and `psys_simplegeom_vp/fp`
+  only (strings at `0x814d34ac`-`0x814d34e0`). Start from the xrefs to
+  `psys_normal_vp` (`0x814d34ac`), then the renderer, then its `switch` on
+  `+0xb8`. Omega reads through 2048's lineage, so its pusher should have
+  Omega's mode-5 shape.
+- **Neither 2048's nor Omega's original fires the burst at all.** See "The burst
+  on every title" below.
+
 ## The burst on every title (`graphics.trail_hits`)
 
 2026-11-09. Which title plays the burst, and from what, read off the loader report of
 a `--race` on each disc (`RUST_LOG=debug`, the `WO_TRAIL_HITSHIP` line):
 
-| Title | Authors its own `WO_TRAIL_HITSHIP` | Trigger |
-| --- | --- | --- |
-| HD | yes, `WO_TRAIL_HITSHIP` and `_RED` (2 emitters each: `WO_TRAIL_HITSHIP`, `CORE_IMPACT`) | always, HD's tube |
-| 2048 | yes, same two files, 2 emitters each, 2 sprites read (`Data\Particles2048`) | always, HD's tube path (`hd_trail_active`) |
-| Omega | yes, same two files, 2 emitters each, 2 sprites read | always, HD's tube path |
-| Pulse, Pure | no ([pulse-absent-effects.md](../../../formats/pulse-absent-effects.md)) | only with `graphics.trail_hits` on |
+| Title | Authors its own `WO_TRAIL_HITSHIP` | The original fires it | Ours plays it |
+| --- | --- | --- | --- |
+| HD | yes, `WO_TRAIL_HITSHIP` and `_RED` (2 emitters each: `WO_TRAIL_HITSHIP`, `CORE_IMPACT`) | yes (the `Trails` SPU job) | always, HD's tube |
+| 2048 | yes, same two files, 2 emitters each, 2 sprites read (`Data\Particles2048`) | **no** (static, 65) | its own file, only with `graphics.trail_hits` on |
+| Omega | yes, same two files, 2 emitters each, 2 sprites read | **no** (static, 75) | its own file, only with `graphics.trail_hits` on |
+| Pulse, Pure | no ([pulse-absent-effects.md](../../../formats/pulse-absent-effects.md)) | no | a lent file, only with `graphics.trail_hits` on |
 
-So **2048 and Omega already play the burst with no setting** (the title-generic path: their
-tables inherit the engine's `TrailHitship` name and both ships carry HD's tube). That
-is the ported verdict for both: **ported**, each its own disc's effect, the same emitter
-count and names as HD's (byte equality of the files not compared). The setting exists for
-the two titles that author nothing, and the row is dropped on the other three
-(`menu::Definition::drop_unavailable_trail_hits`).
+**2048 and Omega author the burst, but their originals never spawn it.** Both keep HD's
+spawn and its per-frame caller, which tests a trail slot's hit bit `+0x6d0 & 4`. Both
+replaced HD's `Trails` SPU job with a CPU port that never sets that bit. Evidence:
+[ps4-omega-eu/trail-hits.md](../ps4-omega-eu/trail-hits.md) and
+[vita-2048-eu-v104/trail-hits.md](../vita-2048-eu-v104/trail-hits.md). Players report never
+seeing it on Omega (maintainer, 2026-11-09), which agrees. Until 2026-11-09 ours played it on
+both with no setting, from their tables inheriting the engine's `TrailHitship` and HD's
+tube. Now `oag_title::Effects::trail_hits_on_setting` marks both: with the setting off,
+`load::trail_hits::gate` drops their own handles, and with it on they play their own file.
+The row is dropped on HD alone (`menu::Definition::drop_unavailable_trail_hits`, keyed on
+`Effects::plays_trail_hits_natively`). Both stay eligible to lend their file to Pulse and Pure.
 
 On Pulse and Pure, with the setting on, the race reads HD's `WO_TRAIL_HITSHIP` through
 `oag_raceplay::TrailHits` (HD's source when mounted, else 2048's or Omega's), with the

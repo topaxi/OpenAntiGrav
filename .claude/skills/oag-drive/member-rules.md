@@ -115,6 +115,8 @@ Recipes: `docs/reverse-engineering/emulator-recipes.md`.
 
 Write full findings to `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/report.md`: commits per step, the gate result you watched finish (counts and exit status), any regression gate quoted before and after, screenshot paths, what is still open. Quote your brief's claim and say whether it came out true, false or unknown, with the acceptance evidence. Return ONLY that path plus at most 15 lines (long returns can silently fail to arrive). A negative result reported honestly is a good outcome; "I could not determine X, here is its address" is a result.
 
+**Send each report once: as the final text of your turn, not with `SendMessage`.** The lead receives that text when your turn ends. A `SendMessage` report followed by a closing summary reaches the lead twice. Use `SendMessage` only mid-turn, for a question you must wait on or a blocker. In that case, end the turn with one line, for example "Waiting on the lead: spu-objdump." The same applies to replies to the lead: the reply is your turn's final text.
+
 **Your report is the end of the lane.** After sending it, do not commit, merge main or edit your worktree unless the lead sends you back; the lead removes the worktree as soon as the report arrives. Finish everything first.
 
 **If a message wakes you after your report**, your worktree is gone or belongs to someone else. Answer in text only: never `cd` into another lane's worktree, rename a branch or commit. If it asks for more work, say so and stop; the lead spawns a fresh member.

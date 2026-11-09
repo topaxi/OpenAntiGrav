@@ -895,3 +895,11 @@
 0x0028c660	function	Random_RangeFloat	80	missile-explosion.md
 0x00289890	function	Psys_InitParticle	80	engine-trail.md
 0x0028cc10	function	Psys_UpdateParticles	72	engine-trail.md
+0x002c7b30	function	PartRender_RegisterShaders	85	engine-trail.md
+0x002cc8b0	function	PartRender_RegisterJob	85	engine-trail.md
+0x00766c80	data	PartRender_ModeGeometry	80	engine-trail.md
+0x002cc9b0	function	PartRender_SubmitJob	75	engine-trail.md
+0x002c39a8	function	PartRender_QueueDraw	70	engine-trail.md
+0x002c3ca0	function	PartRender_FlushDraws	70	engine-trail.md
+0x002c5300	function	PartRender_Construct	65	engine-trail.md
+0x002c9248	function	Psys_DrawInstance	65	engine-trail.md

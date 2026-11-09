@@ -16,6 +16,7 @@ use oag_ui_screens::picker::FaceScales;
 use oag_hud::sprite::Sheet;
 
 pub mod custom;
+pub mod editor;
 mod emblems;
 pub mod hit;
 pub mod launch;

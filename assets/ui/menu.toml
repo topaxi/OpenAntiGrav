@@ -1411,11 +1411,12 @@ values = ["off", "on"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 
 
-# The burst a craft flying in a rival's engine trail plays, on the titles that author none:
-# Pulse and Pure. **An enhancement of this project's, off by default** - neither original has
-# it. The effect is read off another source that authors it (Wipeout HD's, else 2048's or
+# The burst a craft flying in a rival's engine trail plays, on the titles whose original never
+# shows it: Pulse and Pure, which author none, and 2048 and Omega, which author it but never
+# fire it. **An enhancement of this project's, off by default.** 2048 and Omega play their own
+# file; Pulse and Pure read it off another source that authors it (Wipeout HD's, else 2048's or
 # Omega's), and nothing is drawn, and the loader report says so, when this machine has none.
-# The row is dropped on every title that plays its own, by
+# The row is dropped on Wipeout HD, which always plays it, by
 # `menu::Definition::drop_unavailable_trail_hits`. Read when a race loads.
 [[page.entry]]
 kind = "choice"

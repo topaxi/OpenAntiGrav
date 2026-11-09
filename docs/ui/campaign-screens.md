@@ -430,6 +430,14 @@ already uses for every other `LoadXML` include. `Grid Selection`'s own copy
 of `Outline_x_y` authors no `FEGlobals->` reference at all, so its colour is
 unaffected by this fix and stays the authored default.
 
+### Pulse PS2: the hex cell textures need the `.mip` to `.pct` rewrite (commit `f1898a640`)
+
+The PS2 pressing drew both grid screens' lock icons with no hex cell shape under them: `hex_filled.mip` and `hex_outline.mip`
+never resolved, because `crates/game/src/campaign.rs` read them with `archives.read_name`, which tries only the PSP-declared name.
+They now go through `oag_pulse::read_image`, which retries the PS2 build's `.mip` to `.pct` rewrite every other Pulse texture load
+already gets. PSP output is unchanged. Nothing else on these two screens has been audited on PS2 beyond the selector position
+(below) and the ticker clip (above).
+
 ## Captures
 
 `--menu-page grid-select` / `--menu-page cell-select`
@@ -2781,6 +2789,15 @@ on persist per campaign in `records.toml`, so the rule holds after a relaunch to
   Selection` opens on the campaign that grid belongs to and its `Grid Selection` on the grid). Opening a grid lands
   on the shared slot, which is that grid's last cell when it is the grid last left. **Not per-grid memory**: that was
   falsified against the original (rows A, B1) and the original's rule is kept where it was measured.
+- **A campaign of one grid skips `Grid Selection`** (maintainer ask, 2026-11-09): picking it opens that grid's `Cell
+  Selection` and `Back` there closes the campaign to the picker it came from (`CampaignStage::skips_grid_selection`:
+  one grid, no `Campaign Selection`, not the editor). It applies on every title and every source (mod campaigns, the
+  editor's saves; HD/Omega mods draw the HD screens with no chooser, so the same rule). A disc campaign never has one
+  grid (Pulse 16; HD/Fury 8 each behind `Campaign Selection`). The cursor memory needs nothing: the grid slot is
+  still filed on entry (`open_cell_selection`) but a one-grid campaign has no `Grid Selection` to land on it.
+  Tests: `campaign_cursor_ground_truth::a_one_grid_campaign_opens_on_its_cells_and_back_returns_to_the_picker`
+  (Pulse; also asserts the 16-grid campaign still opens `Grid Selection`) and
+  `campaign_stage::tests::only_a_lone_grid_without_a_chooser_skips_grid_selection` (the decision, any title).
 - Written when the campaign closes or launches a race (`session/campaign.rs`, `keep_cursor`) and when the process
   ends with a campaign screen open (`Session::keep_campaign_position`), never per move.
   **Off the render thread**: `records::save_in_background` clones the store and writes it on an `oag_thread::Task`

@@ -87,6 +87,7 @@ use oag_ui::language::StringTable;
 use oag_ui::screen::{Screen, Screens};
 
 pub mod draw;
+pub mod editor;
 pub mod flyer;
 pub mod footer;
 pub mod hd;

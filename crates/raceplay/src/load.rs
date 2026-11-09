@@ -880,9 +880,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     #[cfg(feature = "view")]
-    let handles = super::EffectHandles::resolve(craft_title, &effects)
-        .with_own(mod_effects)
-        .lending(Trigger::TrailHitship, lent_trail_hit);
+    let handles = trail_hits::gate(
+        options,
+        craft_title,
+        super::EffectHandles::resolve(craft_title, &effects)
+            .with_own(mod_effects)
+            .lending(Trigger::TrailHitship, lent_trail_hit),
+    );
 
     stages::checkpoint()?;
     #[cfg(feature = "view")]

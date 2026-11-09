@@ -33,6 +33,11 @@ impl Profile {
 
     /// One launch of the title at `image` on `script`; the states it reported.
     fn drive_on(&self, image: &Path, script: &str, log: &str) -> Vec<Value> {
+        self.drive_with_mods(image, script, log, &self.0.join("no-mods"))
+    }
+
+    /// [`Self::drive_on`] with `mods` as the whole mod search path.
+    fn drive_with_mods(&self, image: &Path, script: &str, log: &str, mods: &Path) -> Vec<Value> {
         let log = self.0.join(log);
         let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
             .arg(image)
@@ -46,7 +51,7 @@ impl Profile {
             // The repository's example mods sit on the default search path when their submodule
             // is checked out; a mod campaign puts a picker behind RACE CAMPAIGN, and this test is
             // about the disc's own campaign.
-            .env("OAG_MODS", self.0.join("no-mods"))
+            .env("OAG_MODS", mods)
             .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
             .env_remove("WAYLAND_DISPLAY")
             .env_remove("DISPLAY")
@@ -66,9 +71,11 @@ impl Profile {
     }
 }
 
-/// RACE CAMPAIGN is open, on `Grid Selection`.
-const OPEN: &str =
-    "boot; until stage=menu within 3000; select campaign; press cross; until screen=campaign";
+/// RACE CAMPAIGN is open, on `Grid Selection`. On Pulse the row opens the campaign picker (its
+/// NEW CAMPAIGN row, and any mod campaign), whose first row is the disc's own.
+const OPEN: &str = "boot; until stage=menu within 3000; select campaign; press cross; \
+                    until page=campaigns; select campaign-original; press cross; \
+                    until screen=campaign";
 
 /// The level and the name under the cursor in the last state a run reported.
 fn last_campaign(states: &[Value]) -> (String, String) {
@@ -85,6 +92,10 @@ fn last_campaign(states: &[Value]) -> (String, String) {
             .to_string(),
     )
 }
+
+/// RACE CAMPAIGN is open on a title that has no campaign picker (no mod campaign, no editor).
+const OPEN_DIRECT: &str =
+    "boot; until stage=menu within 3000; select campaign; press cross; until screen=campaign";
 
 fn pulse_present() -> bool {
     oag_testdata::image("pulse-psp-eu.chd").is_some()
@@ -103,7 +114,7 @@ fn grid_selection_opens_on_the_last_grid_and_survives_a_relaunch() {
         &format!(
             "{OPEN}; expect screen.id=grid; expect focus=grid0; press right; press right; \
              expect focus=grid2; press circle; until screen!=campaign; \
-             select campaign; press cross; until screen=campaign; ticks 10"
+             select campaign-original; press cross; until screen=campaign; ticks 10"
         ),
         "a.jsonl",
     );
@@ -363,7 +374,7 @@ fn the_selector_pulse_resumes_where_the_screen_was_left() {
              press cross; until screen.id=cell; ticks 5; \
              press circle; until screen.id=grid; ticks 5; \
              press circle; until screen!=campaign; ticks 120; \
-             select campaign; press cross; until screen=campaign; ticks 5"
+             select campaign-original; press cross; until screen=campaign; ticks 5"
         ),
         "a.jsonl",
     );
@@ -425,7 +436,7 @@ fn omegas_chooser_opens_hd_and_fury_and_keeps_2048_on_the_chooser() {
     let states = profile.drive_on(
         &image,
         &format!(
-            "{OPEN}; press right; ticks 5; press cross; ticks 20; press circle; ticks 5; \
+            "{OPEN_DIRECT}; press right; ticks 5; press cross; ticks 20; press circle; ticks 5; \
              press right; ticks 5; press cross; ticks 20; press circle; ticks 5; \
              press left; press left; ticks 5; press cross; ticks 30"
         ),
@@ -463,4 +474,133 @@ fn omegas_chooser_opens_hd_and_fury_and_keeps_2048_on_the_chooser() {
         .map(|(a, b)| (a.as_str(), b.as_str()))
         .collect();
     assert_eq!(got, want);
+}
+
+/// A campaign built in the editor is saved as a folder mod under the user mods directory, is
+/// listed in RACE CAMPAIGN's picker, and its first event launches with the mode and team the editor set.
+/// Drops the editor's wiring (the NEW CAMPAIGN row, the pad, the save, the menu rebuild) and this
+/// fails.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn a_campaign_made_in_the_editor_is_listed_and_its_event_launches() {
+    let Some(image) = oag_testdata::image("pulse-psp-eu.chd") else {
+        return;
+    };
+    let profile = Profile::fresh("editor");
+    // The user mods directory is `<XDG_DATA_HOME>/oag/mods`; pinned as the whole search path.
+    let mods = profile.0.join("data").join("oag").join("mods");
+    std::fs::create_dir_all(&mods).expect("a mods directory");
+    let states = profile.drive_with_mods(
+        &image,
+        "boot; until stage=menu within 3000; select campaign; press cross; \
+         until page=campaigns; select campaign-editor; press cross; until screen=campaign; \
+         ticks 20; press cross; press down; press down; press down; press right; press circle; \
+         press right; press down; press cross; press right; press circle; \
+         press start; until page=campaigns within 600; ticks 30; \
+         select \"MY CAMPAIGN\"; press cross; until screen.id=cell; ticks 10; press cross; \
+         until stage=race within 6000",
+        "editor.jsonl",
+        &mods,
+    );
+    let saved = mods.join("my-campaign");
+    let def = oag_mod::campaign::CampaignDef::parse(
+        &std::fs::read_to_string(saved.join("campaigns/my-campaign.toml"))
+            .expect("the campaign file"),
+    )
+    .expect("the written file reads back");
+    assert_eq!(def.grids[0].events.len(), 2);
+    assert_eq!(def.grids[0].events[0].slot, [0, 0]);
+    assert!(
+        oag_mod::Mod::open(&saved).is_ok(),
+        "the written folder is a mod"
+    );
+    // The picker listed it after the save.
+    let listed = states.iter().any(|state| {
+        state["page"] == "campaigns"
+            && state["screen"]["rows"]
+                .as_array()
+                .is_some_and(|rows| rows.iter().any(|row| row["label"] == "MY CAMPAIGN"))
+    });
+    assert!(listed, "MY CAMPAIGN is in the picker after the save");
+    // And the event it launches is the one the editor set: its mode and its preset team.
+    let race = states
+        .iter()
+        .rev()
+        .find_map(|state| {
+            state
+                .get("race")
+                .filter(|race| race["mode"] == "single_race")
+        })
+        .expect("a single race started");
+    assert_eq!(race["team"], "Assegai");
+}
+
+/// A campaign of one grid opens straight on that grid's `Cell Selection`, `Back` there returns to
+/// the picker it came from (never a one-entry `Grid Selection`), and Pulse's own sixteen-grid
+/// campaign still opens `Grid Selection`. Drops the skip and the first assertion fails; drops the
+/// `Back` arm and the campaign reopens on `Grid Selection`.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn a_one_grid_campaign_opens_on_its_cells_and_back_returns_to_the_picker() {
+    let Some(image) = oag_testdata::image("pulse-psp-eu.chd") else {
+        return;
+    };
+    let profile = Profile::fresh("single-grid");
+    let mods = profile.0.join("data").join("oag").join("mods");
+    std::fs::create_dir_all(&mods).expect("a mods directory");
+    let states = profile.drive_with_mods(
+        &image,
+        "boot; until stage=menu within 3000; select campaign; press cross; \
+         until page=campaigns; select campaign-editor; press cross; until screen=campaign; \
+         ticks 20; press cross; press down; press down; press down; press right; press circle; \
+         press right; press down; press cross; press right; press circle; \
+         press start; until page=campaigns within 600; ticks 30; \
+         select \"MY CAMPAIGN\"; press cross; until screen.id=cell; ticks 10; \
+         press circle; until page=campaigns within 600; ticks 10; \
+         select campaign-original; press cross; until screen.id=grid; ticks 5",
+        "single.jsonl",
+        &mods,
+    );
+    let level = |state: &Value| -> Option<String> {
+        state
+            .get("screen")
+            .filter(|s| s["kind"] == "campaign")
+            .map(|s| s["id"].as_str().unwrap_or_default().to_string())
+    };
+    let on_picker =
+        |state: &Value| state["page"] == "campaigns" && state["screen"]["kind"] == "page";
+    let first_cell = states
+        .iter()
+        .position(|state| level(state).as_deref() == Some("cell") && !on_picker(state))
+        .expect("Cell Selection opened");
+    // From the last time the picker was up before that cell, no `Grid Selection` came between.
+    let picker_before = states[..first_cell]
+        .iter()
+        .rposition(on_picker)
+        .expect("the picker was up before the cell");
+    assert!(
+        !states[picker_before..first_cell]
+            .iter()
+            .any(|state| level(state).as_deref() == Some("grid")),
+        "a one-grid campaign must not show Grid Selection between the picker and its cells"
+    );
+    // Back from the cells returned to the picker, with no `Grid Selection` in between.
+    let back_to = states[first_cell..]
+        .iter()
+        .position(|state| level(state).as_deref() != Some("cell") && !on_picker(state))
+        .map(|at| at + first_cell);
+    let picker_after = states[first_cell..]
+        .iter()
+        .position(on_picker)
+        .map(|at| at + first_cell)
+        .expect("Back returned to the campaigns picker");
+    assert!(
+        back_to.is_none_or(|at| at > picker_after),
+        "Back from Cell Selection must reach the picker before any other campaign screen"
+    );
+    let (level, _) = last_campaign(&states);
+    assert_eq!(
+        level, "grid",
+        "Pulse's own sixteen-grid campaign still opens Grid Selection"
+    );
 }

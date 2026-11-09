@@ -1124,11 +1124,11 @@ compare-rerender-all *ARGS:
 compare-seed:
     python3 scripts/compare-seed.py
 
-# Rebuild data/compare/ strictly from a curated manifest directory, then upload it to the
-# separate compare Pages project with wrangler. LOCKED: refuses unless the screenshot-policy
-# ADR's status reads Accepted; never run in CI. No default: the seed set is not a publishing set.
-[doc("Publish a curated comparison page (locked until the screenshot-policy ADR is Accepted)")]
-publish-compare manifests:
+# Rebuild data/compare/ strictly from the curated manifest directory (default data/compare-curated,
+# never the seed set), then upload it to the separate compare Pages project with wrangler. Refuses
+# unless the screenshot-policy ADR's status reads Accepted; never run in CI.
+[doc("Publish the curated comparison page (data/compare-curated unless a directory is given)")]
+publish-compare *manifests:
     python3 scripts/compare-page.py {{manifests}} --publish
 
 # Build the Allegrex processor module against the installed Ghidra.

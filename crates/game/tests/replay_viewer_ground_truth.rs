@@ -488,7 +488,8 @@ fn a_campaign_race_recorded_from_the_menus_reproduces() {
     // The campaign's first cell (a Single Race against the original driver), throttle for 25 s.
     let (status, states) = profile.drive(
         &image,
-        "boot; until stage=menu within 3000; select campaign; press cross; until screen=campaign; \
+        "boot; until stage=menu within 3000; select campaign; press cross; until page=campaigns; \
+         select campaign-original; press cross; until screen=campaign; \
          ticks 10; press cross; ticks 60; press cross; ticks 60; press cross; \
          until stage=race within 4000; ticks 280; hold cross 1500; quit",
         &[],

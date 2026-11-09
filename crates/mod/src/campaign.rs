@@ -9,7 +9,7 @@
 
 use std::collections::BTreeSet;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// The folder a mod keeps its campaigns in.
 pub const DIRECTORY: &str = "campaigns";
@@ -50,7 +50,7 @@ fn bad(at: impl Into<String>, problem: impl Into<String>) -> Error {
 }
 
 /// How a cell that is not open yet shows.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Reveal {
     /// Drawn with its lock, as Pulse and HD draw theirs.
@@ -61,10 +61,10 @@ pub enum Reveal {
 }
 
 /// A whole campaign file.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CampaignDef {
-    #[serde(rename = "toml-schema")]
+    #[serde(rename = "toml-schema", skip_serializing_if = "Option::is_none")]
     header: Option<oag_schema::Header>,
     /// Who the campaign is.
     pub campaign: Info,
@@ -74,7 +74,7 @@ pub struct CampaignDef {
 }
 
 /// `[campaign]`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Info {
     /// Unique within the mod.
@@ -82,10 +82,10 @@ pub struct Info {
     /// The picker row.
     pub name: String,
     /// One or two sentences, the picker row's second line.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
     /// The titles it is for; narrows the mod's own list. Empty means the mod's.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub titles: Vec<String>,
     /// How an unopened cell shows.
     #[serde(default)]
@@ -93,25 +93,28 @@ pub struct Info {
 }
 
 /// `[[grid]]`: one tier.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GridDef {
     /// Unique within the campaign; what `unlock_grid` and an event reference name.
     pub id: String,
     /// The tier's name, for the report.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub name: String,
     /// Medal points needed on `unlock_grid` to open this tier.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub required_points: u32,
     /// The tier whose points open this one. Absent: open from the start.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub unlock_grid: Option<String>,
     /// How this tier's unopened cells show; the campaign's [`Info::reveal`]
     /// when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reveal: Option<Reveal>,
     /// The disc's own flyer card for this tier, by the name the title's grids
     /// give it (`01_uplift` on Wipeout HD); drawn on a title whose grid shows
     /// cards, ignored on one that does not. Absent: no card.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub flyer: Option<String>,
     /// The events, one per hex slot.
     #[serde(rename = "event", default)]
@@ -119,42 +122,52 @@ pub struct GridDef {
 }
 
 /// `[[grid.event]]`: one cell.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct EventDef {
     /// The hex slot `[x, y]`, each `0..=9`.
     #[serde(deserialize_with = "pair")]
     pub slot: [u32; 2],
     /// What `unlock.requires` names it by; `<grid id>/<x>-<y>` when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     /// The event's own name, for the report.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub name: String,
     /// One of the race modes the engine already runs.
     pub mode: String,
     /// The circuit: a disc circuit id, or `<title>:<id>` for another disc's.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub track: Option<String>,
     /// A tournament's legs, in order.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tracks: Vec<String>,
     /// A track file of this project's own format, raced instead of a disc
     /// circuit: a path inside the mod (`tracks/lagoon.track.toml`), or
     /// `<mod id>:<path>` inside another installed mod
     /// (`oag.hillside:tracks/hillside.track.toml`).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
     /// The speed class. Absent on a Zone event.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub class: Option<String>,
     /// Laps; the mode's own default when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub laps: Option<u32>,
     /// Weapons on or off; the mode's own default when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub weapons: Option<bool>,
     /// The player's craft. Absent: the player picks on Team Selection.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub craft: Option<CraftDef>,
     /// The opponents.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub field: Option<FieldDef>,
     /// Medal targets.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub medals: Option<MedalsDef>,
     /// What opens the event.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub unlock: Option<UnlockDef>,
 }
 
@@ -169,7 +182,7 @@ impl EventDef {
 }
 
 /// `[grid.event.craft]`.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CraftDef {
     /// The team the player flies; Team Selection is skipped.
@@ -177,26 +190,30 @@ pub struct CraftDef {
 }
 
 /// `[grid.event.field]`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FieldDef {
     /// `"original"` (the recovered driver, the default) or `"ours"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ai: Option<String>,
     /// The original's rung (`easy`, `medium`, `hard`) or our driver's level
     /// (`novice`, `skilled`, `elite`, `ace`).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub difficulty: Option<String>,
     /// The original's position on the track's skill curve, as Pulse's `skill`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub skill: Option<f32>,
     /// Our driver's personality for every opponent: a pilot by name, or one
     /// written out here with the pilot file's own keys.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pilot: Option<PilotDef>,
     /// The opponents' teams, grid slot 1 first.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub teams: Vec<String>,
 }
 
 /// A pilot named or written out.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum PilotDef {
     /// A pilot of the roster, built-in or the player's.
@@ -206,20 +223,26 @@ pub enum PilotDef {
 }
 
 /// `[grid.event.medals]`: one triple for every rung, or one per rung.
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct MedalsDef {
     /// Gold for any rung that names none of its own.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub gold: Option<f64>,
     /// Silver, as [`Self::gold`].
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub silver: Option<f64>,
     /// Bronze, as [`Self::gold`].
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bronze: Option<f64>,
     /// The easy rung.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub easy: Option<Targets>,
     /// The medium rung.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub medium: Option<Targets>,
     /// The hard rung.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hard: Option<Targets>,
 }
 
@@ -237,14 +260,17 @@ impl MedalsDef {
 
 /// One rung's targets: a place, a time in seconds, or a count, by mode. An
 /// absent tier is never awarded.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Targets {
     /// Gold.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub gold: Option<f64>,
     /// Silver.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub silver: Option<f64>,
     /// Bronze.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bronze: Option<f64>,
 }
 
@@ -257,19 +283,19 @@ impl Targets {
 }
 
 /// `[grid.event.unlock]`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct UnlockDef {
     /// Open from the start.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub open: bool,
     /// Every one of these must hold.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requires: Vec<Requirement>,
 }
 
 /// One event finished with at least a medal.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Requirement {
     /// The event, by [`EventDef::reference`].
@@ -287,6 +313,10 @@ fn pair<'de, D: serde::Deserializer<'de>>(d: D) -> Result<[u32; 2], D::Error> {
         .map_err(|v| serde::de::Error::invalid_length(v.len(), &"an array of exactly two numbers"))
 }
 
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
 fn any() -> String {
     "any".to_string()
 }
@@ -294,6 +324,36 @@ fn any() -> String {
 const MEDALS: [&str; 4] = ["any", "bronze", "silver", "gold"];
 
 impl CampaignDef {
+    /// A definition ready to be written, carrying the schema header
+    /// [`Self::parse`] requires.
+    #[must_use]
+    pub fn new(campaign: Info, grids: Vec<GridDef>) -> Self {
+        Self {
+            header: Some(oag_schema::Header {
+                location: oag_schema::location(SCHEMA_KIND, SCHEMA_MAJOR),
+                version: oag_schema::LANGUAGE_VERSION.to_string(),
+            }),
+            campaign,
+            grids,
+        }
+    }
+
+    /// Checks the definition as [`Self::parse`] would and writes it as a
+    /// campaign file: [`Self::parse`] of the text gives this definition back.
+    ///
+    /// # Errors
+    ///
+    /// The same [`Error`]s [`Self::parse`] gives for the shape, or the
+    /// serialiser's own reason in [`Error::Bad`].
+    pub fn write(&self) -> Result<String, Error> {
+        self.check()?;
+        let mut def = self.clone();
+        if def.header.is_none() {
+            def = Self::new(def.campaign, def.grids);
+        }
+        toml::to_string(&def).map_err(|e| bad("write", e.to_string()))
+    }
+
     /// Reads and checks a campaign file's shape.
     ///
     /// # Errors
@@ -397,6 +457,86 @@ impl CampaignDef {
         }
         Ok(())
     }
+}
+
+/// The mod id a campaign saved by the game carries: `player.<campaign id>`.
+#[must_use]
+pub fn saved_mod_id(campaign_id: &str) -> String {
+    format!("player.{campaign_id}")
+}
+
+/// Writes `def` as a fresh folder mod under `root` (the user mods directory):
+/// `<root>/<campaign id>[-n]/oag-mod.toml` and `campaigns/<campaign id>.toml`, for the
+/// titles named (their lowercased hyphenated names). An existing folder is never touched:
+/// the next free `-n` suffix is used. Returns the folder written.
+///
+/// # Errors
+///
+/// The definition does not check, or a file cannot be written.
+pub fn write_mod(
+    root: &std::path::Path,
+    def: &CampaignDef,
+    titles: &[&str],
+) -> Result<std::path::PathBuf, crate::Error> {
+    #[derive(Serialize)]
+    struct ModTable<'a> {
+        id: String,
+        name: &'a str,
+        version: &'a str,
+        authors: [&'a str; 1],
+        description: &'a str,
+        titles: &'a [&'a str],
+    }
+    #[derive(Serialize)]
+    struct Manifest<'a> {
+        #[serde(rename = "toml-schema")]
+        header: oag_schema::Header,
+        r#mod: ModTable<'a>,
+    }
+    let io = |path: &std::path::Path| {
+        let origin = path.display().to_string();
+        move |source| crate::Error::Io { origin, source }
+    };
+    let other = |path: &std::path::Path, why: String| crate::Error::Io {
+        origin: path.display().to_string(),
+        source: std::io::Error::other(why),
+    };
+    let campaign_text = def.write().map_err(|e| other(root, e.to_string()))?;
+    let id = &def.campaign.id;
+    let mut folder = root.join(id);
+    let mut mod_id = saved_mod_id(id);
+    let mut n = 1_u32;
+    while folder.exists() {
+        n += 1;
+        folder = root.join(format!("{id}-{n}"));
+        mod_id = saved_mod_id(&format!("{id}-{n}"));
+    }
+    let campaigns = folder.join(DIRECTORY);
+    std::fs::create_dir_all(&campaigns).map_err(io(&campaigns))?;
+    let manifest = Manifest {
+        header: oag_schema::Header {
+            location: oag_schema::location(crate::SCHEMA_KIND, crate::SCHEMA_MAJOR),
+            version: oag_schema::LANGUAGE_VERSION.to_string(),
+        },
+        r#mod: ModTable {
+            id: mod_id,
+            name: &def.campaign.name,
+            version: "1.0.0",
+            authors: ["Player"],
+            description: if def.campaign.description.trim().is_empty() {
+                "A campaign made in the in-game editor."
+            } else {
+                &def.campaign.description
+            },
+            titles,
+        },
+    };
+    let manifest_text = toml::to_string(&manifest).map_err(|e| other(&folder, e.to_string()))?;
+    let manifest_path = folder.join(crate::MANIFEST);
+    std::fs::write(&manifest_path, manifest_text).map_err(io(&manifest_path))?;
+    let file = campaigns.join(format!("{id}.toml"));
+    std::fs::write(&file, campaign_text).map_err(io(&file))?;
+    Ok(folder)
 }
 
 /// A campaign found in a mod: where it came from, and what it is or why not.

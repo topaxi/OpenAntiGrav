@@ -311,3 +311,138 @@ fn a_score_race_ignores_a_stored_kill_pick() {
     .expect("loading an HD Eliminator");
     assert_eq!(cell.setup.eliminator_kill_target, Some(260));
 }
+
+/// Scratch sweep: one CSV row per change of a craft's score, kills, deaths or lap, in the columns
+/// of `scripts/rpcs3-hd-eliminator-score.py`, so ours and the original's runs split by award kind
+/// through one script. Runs only with `OAG_SWEEP` set; `OAG_SWEEP_OUT` names the file,
+/// `OAG_SWEEP_SEED` and `OAG_SWEEP_DIFFICULTY` (`novice`, `skilled`, `elite`) the race.
+#[test]
+#[ignore = "a scratch sweep; set OAG_SWEEP"]
+fn sweep_score_changes() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(image) = image() else { return };
+    let seed: u64 = std::env::var("OAG_SWEEP_SEED").map_or(1, |s| s.parse().expect("a seed"));
+    let difficulty = match std::env::var("OAG_SWEEP_DIFFICULTY").as_deref() {
+        Ok("skilled") => oag_ai::Difficulty::Skilled,
+        Ok("elite") => oag_ai::Difficulty::Elite,
+        _ => oag_ai::Difficulty::Novice,
+    };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Eliminator,
+        difficulty,
+        seed: Some(seed),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading an HD Eliminator");
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    race.set_autopilot(true);
+    let mut out =
+        String::from("t,craft,score,kills,w6f78,shield,lap,lap2,state,attacker,dmgcause,lastdmg\n");
+    let mut last = [(f32::NAN, 0u32, 0u32, 0u32); 8];
+    let mut held = [None; 8];
+    let mut events = String::new();
+    for tick in 0..60_000u32 {
+        race.tick(&PlayerInputs::none());
+        for (slot, ship) in race.sim.world.ships.iter().enumerate().take(8) {
+            let now = ship.pickup.weapon;
+            if now != held[slot] {
+                events.push_str(&format!(
+                    "{:.3},{slot},{:?},{:?}\n",
+                    f64::from(tick) / 60.0,
+                    held[slot],
+                    now
+                ));
+                held[slot] = now;
+            }
+        }
+        for (slot, ship) in race.sim.world.ships.iter().enumerate().take(8) {
+            let s = &ship.standing;
+            let now = (s.score, s.kills, s.deaths, s.lap);
+            if now.0.to_bits() != last[slot].0.to_bits()
+                || now.1 != last[slot].1
+                || now.2 != last[slot].2
+                || now.3 != last[slot].3
+            {
+                last[slot] = now;
+                out.push_str(&format!(
+                    "{:.3},{slot},{},{},{},{},{},0,1,-1,0,0\n",
+                    f64::from(tick) / 60.0,
+                    s.score,
+                    s.kills,
+                    s.deaths,
+                    ship.physics.shield,
+                    s.lap
+                ));
+            }
+        }
+        if race.results().is_some() {
+            break;
+        }
+    }
+    let path = std::env::var("OAG_SWEEP_OUT").expect("OAG_SWEEP_OUT");
+    std::fs::write(format!("{path}.pickups"), events).expect("writing the pickups");
+    std::fs::write(path, out).expect("writing the sweep");
+}
+
+/// Runs an HD Racebox Eliminator to its target under autopilot and answers the tick it ended on
+/// and the laps the leading opponent had completed, `None` if it never ended.
+fn race_to_target(
+    image: &std::path::Path,
+    difficulty: oag_ai::Difficulty,
+    seed: u64,
+) -> Option<(u64, u32)> {
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Eliminator,
+        difficulty,
+        seed: Some(seed),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading an HD Eliminator");
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    assert_eq!(
+        race.pad_seeking(),
+        oag_raceplay::PadSeeking::Off,
+        "a score Eliminator's opponents steer for no pad"
+    );
+    race.set_autopilot(true);
+    for tick in 0..60_000u64 {
+        race.tick(&PlayerInputs::none());
+        if race.results().is_some() {
+            let world = &race.sim.world;
+            let leader = (1..world.ship_count as usize)
+                .max_by(|&a, &b| {
+                    world.ships[a]
+                        .standing
+                        .score
+                        .total_cmp(&world.ships[b].standing.score)
+                })
+                .expect("an opponent");
+            return Some((tick, world.ships[leader].standing.lap - 1));
+        }
+    }
+    None
+}
+
+/// A score Eliminator lasts about as long as the original's (ten laps to 200 at Novice on Vineta K,
+/// `docs/gameplay/race-modes.md`, "The pace of a score Eliminator"), on the seeds the pace was tuned
+/// on. Novice reaches its target, which it never did while a Novice opponent held a Mine for good;
+/// it takes more than eight laps, which it did not while opponents steered for pads and bunched;
+/// and Elite, whose opponent keeps a pickup twenty seconds, takes more than three.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_score_eliminator_reaches_its_target_at_about_the_originals_pace() {
+    let Some(image) = image() else { return };
+    let (tick, laps) =
+        race_to_target(&image, oag_ai::Difficulty::Novice, 1).expect("a Novice race reaches 200");
+    assert!(tick < 40_000, "Novice ended at tick {tick}");
+    assert!(laps >= 8, "Novice's leader had completed {laps} laps");
+    let (_, laps) =
+        race_to_target(&image, oag_ai::Difficulty::Elite, 1).expect("an Elite race reaches 200");
+    assert!(laps >= 4, "Elite's leader had completed {laps} laps");
+}
