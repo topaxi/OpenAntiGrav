@@ -416,6 +416,22 @@ impl Keeper {
         keep_in(&self.shared, race);
     }
 
+    /// Cuts the first keyframe again from `race`, which stands at the tick it was started at
+    /// and has had every writer a session applies before its first tick (the AI choice, a
+    /// campaign's skill, the opponent pilot). A [`Self::new`] made at the race's build misses
+    /// those, and a rewind that pre-rolls from that keyframe flies the pre-roll with another
+    /// driver. Does nothing once the race has ticked: later keyframes are cut by
+    /// [`Self::keep`].
+    pub fn recut_first(&mut self, race: &Race) {
+        let mut built = self.shared.built();
+        let tick = race.sim.world.tick;
+        if built.keyframes.frames.len() == 1 && built.keyframes.frames[0].0 == tick {
+            built.keyframes.frames.clear();
+            built.keyframes.bytes = 0;
+            built.keyframes.push(tick, race.snapshot_sim());
+        }
+    }
+
     /// The timeline over the keyframes so far, with its probe at the live race's tick
     /// ([`Timeline::visit`]). The first visit starts the probe.
     pub fn visit(&mut self, race: &Race) -> &mut Timeline {

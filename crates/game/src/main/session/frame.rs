@@ -952,6 +952,12 @@ impl Session {
                         // devices are all on slot 0 under the default assignment.
                         net.step(&mut stage.race, *inputs.get(0));
                     } else {
+                        // The first keyframe is cut here, after every writer that ran at
+                        // the race's build and before the first tick's events, so a rewind
+                        // that pre-rolls from it flies the race that was flown.
+                        if let Some(keeper) = &mut stage.keeper {
+                            keeper.recut_first(&stage.race);
+                        }
                         oag_game::split_screen::follow_devices(
                             &mut stage.race,
                             self.controls.assignment(),

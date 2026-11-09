@@ -296,34 +296,51 @@ fn a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without() {
 /// recording replays) hashes as the same tick of a race that was never visited, and the race
 /// resumes at the tick it left.
 fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &Path) {
-    let control = drive_with(
-        image,
-        "hash-control-tt",
-        &format!("{TO_THE_TIME_TRIAL} ticks 600"),
-        shots,
-        &["--autopilot"],
-    );
-    assert!(control.status.success(), "{}", control.stderr);
-    let rewound = drive_with(
-        image,
-        "hash-rewind",
-        &format!(
-            "{TO_THE_TIME_TRIAL} escape; until stage=menu; select photo_mode; press cross; \
-             until photo=internal within 200; press start; \
-             hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; \
-             hold left 90; ticks 5; hold right 20; ticks 5; press cross; ticks 5; \
-             screenshot SHOTS/rewound.png; hold left 90; ticks 60; \
-             escape; until photo=none within 50; ticks 600"
-        ),
-        shots,
-        &["--autopilot"],
-    );
-    assert!(rewound.status.success(), "{}", rewound.stderr);
-    let held: BTreeMap<u64, String> = ticks(&control)
+    // No mod is mounted (`drive_unmodded`): a modded race records nothing, so its rewind stops at
+    // whole keyframes and never plays the pre-roll from the first one. Both ways of flying are
+    // checked: the autopilot, and the throttle held with no `--autopilot`.
+    for (tag, throttle) in [("hash", false), ("hash-throttle", true)] {
+        let to_the_race = if throttle {
+            TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 400; ")
+        } else {
+            TO_THE_TIME_TRIAL.to_string()
+        };
+        let args: &[&str] = if throttle { &[] } else { &["--autopilot"] };
+        let control = drive_unmodded(
+            image,
+            &format!("{tag}-control-tt"),
+            &format!("{to_the_race} ticks 600"),
+            shots,
+            args,
+        );
+        assert!(control.status.success(), "{}", control.stderr);
+        let rewound = drive_unmodded(
+            image,
+            &format!("{tag}-rewind"),
+            &format!(
+                "{to_the_race} escape; until stage=menu; select photo_mode; press cross; \
+                 until photo=internal within 200; press start; \
+                 hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; \
+                 hold left 90; ticks 5; hold right 20; ticks 5; press cross; ticks 5; \
+                 screenshot SHOTS/rewound.png; hold left 90; ticks 60; \
+                 escape; until photo=none within 50; ticks 600"
+            ),
+            shots,
+            args,
+        );
+        assert!(rewound.status.success(), "{}", rewound.stderr);
+        a_rewound_visit_hashes_as_the_control(tag, &control, &rewound);
+    }
+}
+
+/// The checks of [`a_visit_that_rewinds_leaves_every_live_tick_as_it_was`] over one control and
+/// one rewound run.
+fn a_rewound_visit_hashes_as_the_control(tag: &str, control: &Run, rewound: &Run) {
+    let held: BTreeMap<u64, String> = ticks(control)
         .into_iter()
         .map(|(tick, hash, _)| (tick, hash))
         .collect();
-    let seen = ticks(&rewound);
+    let seen = ticks(rewound);
     let mut compared = 0;
     for (tick, hash, _) in &seen {
         // The control's log starts after the first tick it steps, so the state before it (the
@@ -331,12 +348,12 @@ fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &P
         if let Some(control) = held.get(tick) {
             assert_eq!(
                 hash, control,
-                "tick {tick} hashes differently after a rewind"
+                "{tag}: tick {tick} hashes differently after a rewind"
             );
             compared += 1;
         }
     }
-    assert!(compared > 600, "only {compared} ticks compared");
+    assert!(compared > 600, "{tag}: only {compared} ticks compared");
     let under: Vec<u64> = seen
         .iter()
         .filter(|(_, _, lens)| lens != "none")
@@ -344,6 +361,13 @@ fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &P
         .collect();
     let live = *under.first().expect("the mode opened");
     let lowest = *under.iter().min().expect("the mode opened");
+    // The scrub lands in the first second of pre-roll, which starts from the first keyframe
+    // (a landing under 120): the case the first keyframe's state decides. The tick it reports
+    // is compared with the control above; tick 0, where the scrub also lands, has no control line.
+    assert!(
+        under.iter().any(|tick| (60..120).contains(tick)),
+        "{tag}: the scrub never landed in the first keyframe's reach: {under:?}"
+    );
     assert!(
         under.iter().all(|tick| *tick <= live),
         "the visit went past the live tick {live}: {under:?}"
@@ -368,7 +392,7 @@ fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &P
         &after[..after.len().min(4)]
     );
     assert!(after.contains(&(live + 1)), "and it goes on from there");
-    assert_eq!(the_photos(&rewound).len(), 1, "one shot, one file");
+    assert_eq!(the_photos(rewound).len(), 1, "{tag}: one shot, one file");
 }
 
 /// A moving race (an autopilot Single Race) that visits photo mode and leaves by `leave` hashes at
@@ -449,7 +473,7 @@ fn a_live_race_played_from_a_scrub_and_left_hashes_as_it_was() {
     // The throttle is held so the craft moves and every hash is sensitive. No mod is mounted
     // (`drive_unmodded`): a modded race records nothing, and a rewind of a race that records
     // nothing stops at whole keyframes, so it would never play the recording
-    // (`docs/ui/photo-mode.md`, "Not done, named").
+    // (`docs/ui/photo-mode.md`, "Accumulated shots and rewind").
     let to_the_throttle = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 400; ");
     let control = drive_unmodded(
         &image,
@@ -497,9 +521,6 @@ fn a_live_race_played_from_a_scrub_and_left_hashes_as_it_was() {
     let live = *under.first().expect("the mode opened");
     let lowest = *under.iter().min().expect("the mode opened");
     assert!(lowest + 100 < live, "the rewind never went back");
-    // A landing whose pre-roll starts from the first keyframe does not hash as the live run did;
-    // the scrub here stays out of it (`docs/ui/photo-mode.md`, "Not done, named").
-    assert!(lowest > 130, "the scrub went to {lowest}");
     assert!(
         under.iter().all(|tick| *tick <= live),
         "past the live tick: {under:?}"
@@ -1134,9 +1155,6 @@ fn the_right_stick_and_the_triggers_move_the_view_and_never_the_race() {
         .collect();
     let live = *rewind.first().expect("the mode opened");
     let lowest = *rewind.iter().min().expect("rewind ticks");
-    // A landing under about 130 ticks starts from the first keyframe and does not hash as the live
-    // run did (`docs/ui/photo-mode.md`, "Not done, named"): the scrub stays above it.
-    assert!(lowest > 130, "the scrub went to {lowest}");
     assert!(lowest + 100 < live, "L2 never scrubbed back: {rewind:?}");
     assert!(
         fx_values(&visited, "play").iter().any(|p| p == "1"),
