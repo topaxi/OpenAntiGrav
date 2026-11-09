@@ -1169,7 +1169,7 @@ be an accepted exception, a pair script never makes one silently). `check-docs` 
 cites a disposable `data/` directory; it also refuses one that names another lane's worktree. A re-made
 `argv` that names `{scratch}` is refused by `compare-rerender` until that flag is remapped.
 
-## Publishing is locked
+## Publishing
 
 `just publish-compare` uploads the built `data/compare/` with `wrangler pages deploy`
 to a **separate** Cloudflare Pages project (`openantigrav-compare`, never the main
@@ -1181,10 +1181,12 @@ It **refuses to run** unless the screenshot-policy ADR,
 has a `## Status` line that **starts with** `Accepted` (markdown emphasis ignored). Its number is one
 constant, `POLICY_ADR` in `scripts/compare-page.py`. A missing or non-Accepted ADR prints the reason and
 exits 2. The lock is checked before `wrangler` is looked up, so the refusal is what you see.
-`just publish-compare <dir>` rebuilds the page strictly from the curated manifest directory it is
-given first, so a missing `platform` refuses it before anything uploads. The directory is required:
-the seed and live manifests are developer material, ADR-0074 wants every published image picked by
-a person, and a default would publish them. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
+`just publish-compare` rebuilds the page strictly from the curated manifest directory first, so a
+missing `platform` refuses it before anything uploads. With no argument it publishes
+`data/compare-curated/`, the maintainer's curated set; `just publish-compare <dir>` publishes another.
+The default is never the seed or live manifests (`data/reference/compare-page/`): they are developer
+material, and ADR-0074 wants every published image picked by a person. A missing
+`data/compare-curated/` refuses by name. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
 ADR-0074 Accepted it reads `unlocked`. The maintainer runs the command.
 
 A curated page should carry only frames the policy covers; the seed and live

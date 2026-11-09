@@ -37,6 +37,8 @@ import compare_env  # noqa: E402  (the metric explanations live beside the metri
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = ROOT / "data" / "compare"
+# The maintainer's curated publishing set: `just publish-compare` with no argument publishes it.
+CURATED = ROOT / "data" / "compare-curated"
 
 # The screenshot-policy ADR that allows publishing curated screenshots, and the
 # Pages project it may go to. The number is filled in once the ADR exists; until
@@ -414,8 +416,12 @@ def main():
         return
     if not a.manifest:
         if a.publish:
-            ap.error("--publish needs the curated manifest directory; the seed set is not a publishing set")
-        a.manifest = [str(ROOT / "data" / "reference" / "compare-page")]
+            if not CURATED.is_dir():
+                ap.error(f"--publish with no manifest publishes {CURATED}, which does not exist; "
+                         "copy the frames to publish there (the seed set is not a publishing set)")
+            a.manifest = [str(CURATED)]
+        else:
+            a.manifest = [str(ROOT / "data" / "reference" / "compare-page")]
     try:
         if a.publish:
             publish(manifest_files(a.manifest), a.out.resolve())
