@@ -972,15 +972,14 @@ pub struct BoostSmear {
 /// For the whole window the bar's fill is drawn with the stencil on, replacing the framebuffer's
 /// alpha - the glow mask the bloom's bright pass reads - with `0xff` over the fill's rectangle,
 /// in both halves of the 8 Hz blink: the fill's own alpha goes to zero in the off half, which
-/// leaves the pale backdrop under the mask, and the bloom lifts that to near white. Outside the
+/// leaves the pale backdrop under the mask, and the bloom lifts that (and the scene behind the
+/// backdrop) to near white. Outside the
 /// window the fill is drawn with the stencil off. `docs/ghidra/functions/psp-pulse-usa/shield.md`,
 /// "The absorb flash at the draw call".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AbsorbGlow {
     /// The widget whose fill stamps the glow mask.
     pub fill: &'static str,
-    /// The widget under the fill, whose colour is what the mask lights in the blink's off half.
-    pub backdrop: &'static str,
     /// The mask byte the fill writes: `0xff`.
     pub value: u8,
 }

@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-09
-summary: "Open: Pure templates held off (0.75 s too bright), Pure ground ring, HD shell tint and burst re-shot, Pulse bar off half dim"
+summary: "Open: Pure templates held off (0.75 s too bright), Pure ground ring, HD shell tint and burst re-shot, Pulse PS2 bar unstamped"
 ---
 
 # The weapon-absorb effect: built on every title, what a player still sees differently
@@ -41,10 +41,10 @@ Re-paired on a second machine on 2026-11-09 (`absorb-fx-wire`); numbers and comm
      `kColourScale` word is 1.0. Needs a fresh original capture (three absorbs and a control on one boot) before any gain. Lead for the
      missile blast: the `+0xc84` word reads 0.5 on its mode-2 emitter and `oag_pob::Emitter::colour_scale` reads mode 5 only.
   3. The `DAMAGE` and `Absorb` labels beside the shield hex (absorb-only not isolated).
-- **Pulse.** ~~The energy bar~~ (landed, `weapon-absorb-pairs.md`, "Pulse: the energy bar"): the GE dump settled it, the fill stamps the glow mask
-  (`0xff`, both blink halves) and there is no white layer; ours reads 205 and 223 to 227 against 207 and 237 to 242. Open: the stamp lacks the scene
-  showing through the backdrop (`oag_post::bloom::stamps`), which is the 14 luma the off half is short; sampling the HUD target in the stamp pass
-  would close it and the boost's gap. The PS2 draw is undumped and its bloom chain has no stamp pass. HD, 2048 and Omega keep the flat white copy
+- **Pulse.** ~~The energy bar~~ (landed, `weapon-absorb-pairs.md`, "Pulse: the energy bar" and "Pulse: the stamp's bright pass reads the framebuffer"):
+  the GE dump settled it, the fill stamps the glow mask (`0xff`, both blink halves) and there is no white layer, and the stamp pass reads the
+  HUD target under the rectangle; ours reads 207 and 239 to 244 against 207 and 237 to 242, off-half RGB `(228, 242, 236)` against `(228, 242, 235)`
+  (the original frames are gone: the original column is the earlier section's). The PS2 draw is undumped and its bloom chain has no stamp pass. HD, 2048 and Omega keep the flat white copy
   (`AbsorbGlow` is `None` for them; their draws are undumped).
   The first 0.3 s of the hull are one to two frames late and 20 % dim.
 - **2048 and Omega: unpaired.** The shell fix is not checkable (neither draws a shell, their archives are not censused for an
@@ -56,7 +56,7 @@ Re-paired on a second machine on 2026-11-09 (`absorb-fx-wire`); numbers and comm
 
 ## Next Steps
 
-1. Pulse bar (optional): let the stamp pass read the HUD target's colour under the mask, so the backdrop's scene show-through reaches the bloom (off half 224 to 238).
+1. ~~Pulse bar: let the stamp pass read the HUD target's colour under the mask~~ (landed, `pulse-stamp-scene`; off half 223 to 226 -> 239 to 244).
 2. HD shell tint: read unit 0's gamma nibble on the shell's draw (`rsx-draw-list.py --samplers`); if 7, decode the tap on HD's encoded store as the flame does, then re-pair at 0.5 s and 1.0 s.
 3. HD burst: re-shoot the original (three absorbs, one control, one boot) to settle +7.7 against +21.4 at 0.5 s; then read what writes `kColourScale` (`c467`) per psys draw. No `/2`.
 4. Pure templates: the passive RAM scan on the particle-bars page to read how many template particles the original keeps at 0.5 and 0.75 s, then list `WO_WEAPON_ABSORB` in `Effects::templates` and re-pair.

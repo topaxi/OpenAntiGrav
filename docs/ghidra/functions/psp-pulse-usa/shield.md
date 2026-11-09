@@ -1151,13 +1151,13 @@ written at `craft+0x1bc` and circle held 3 frames (`scripts/psp-absorb-frames.py
    backdrop under a uniform stamp also reads.
 
 **Ported** (replacing the flat white copy for Pulse): `oag_title::hud::AbsorbGlow` on `oag_pulse::hud::ART` (`fill: "ShieldBar"`,
-`backdrop: "ShieldBarBg"`, `value: 0xff`); `oag_hud::shield_bar::absorb_fill` records a `GlowStamp` over the cropped fill for the
-whole window, in the fill's colour in the on half and the backdrop's colour and alpha in the off half; `oag_hud::boost_smear` repeats
-it with its widget under a boost; `oag_game::hud_views` hands it to `oag_post::bloom::Bloom::stamp_glow`, which now takes a colour,
-opacity and mask byte per rectangle. Ours against the original, bar luma, same state and pose: on half 205 against 207, off half 223
-to 228 against 238 to 240 (the stamp lights the backdrop at its own alpha, and the scene showing through the backdrop's 62 %
-transparency is not added: the open gap named in [`oag_post::bloom::stamps`](../../../../crates/post/src/bloom/stamps.rs)), no stamp
-outside the window. PS2: the port's PS2 bloom chain has no stamp pass (`Scene::stamp_glow`), so the PS2 shows no halo; the PS2 draw
+`value: 0xff`); `oag_hud::draw` records a `GlowStamp` (rectangle and mask byte) over the cropped fill for the
+whole window, in both halves of the blink; `oag_hud::boost_smear` repeats it with its widget under a boost; `oag_game::hud_views`
+hands it to `oag_post::bloom::Bloom::stamp_glow`, whose bright pass reads the HUD's target under each rectangle times the mask byte
+(the first port gave each rectangle a colour and an opacity of its own and so missed the scene showing through the backdrop's 62 %
+transparency; replaced by the framebuffer read, `docs/rendering/weapon-absorb-pairs.md`, "Pulse: the stamp's bright pass reads the
+framebuffer"). Ours against the original, bar luma, ours from a reconstructed pose (the original column is the earlier section's): on half 207 against 207, off half 239 to 244 against 237 to
+242, no stamp outside the window. PS2: the port's PS2 bloom chain has no stamp pass (`Scene::stamp_glow`), so the PS2 shows no halo; the PS2 draw
 was not dumped. Other titles keep the flat white copy (`absorb_glow: None`): Pure draws its gauge as models (`bar_models`), HD,
 2048 and Omega were not dumped (**not checkable here**, a PPSSPP lane; their draws are read on RPCS3 or Vita captures).
 

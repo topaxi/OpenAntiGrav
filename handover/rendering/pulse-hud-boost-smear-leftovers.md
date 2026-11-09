@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [pulse, pure]
-updated: 2026-11-03
-summary: "Pulse boost HUD: text direction byte unread, PS2 glow, Pure unwired; Centred copy direction wired"
+updated: 2026-11-09
+summary: "Pulse boost HUD: text direction byte unread, red shield bar in boost frames, PS2 glow, Pure unwired; stamp reads the HUD target"
 categories: [rendering]
 difficulty: hard (30)
 ---
@@ -24,7 +24,10 @@ stamp under the speed bar's fill, driven by the exhaust flare's 0.8 s boost time
   (hud-boost-smear.md, "Ours now matches"); the pickup's copies step `(0, -1)`.
 - Pure's `FUN_088c9ce8` has no copy loop (it is `Mode3D_DrawQueued`); Pure's real 2D copy loop and its count's source
   are unread, so `boost_smear` is `None` there.
-- The glow chain adds the bar's colour alone; the scene's colour under a half-covered bar copy is not mixed in.
+- ~~The glow chain adds the bar's colour alone; the scene's colour under a half-covered bar copy is not mixed in.~~ Closed
+  (`pulse-stamp-scene`): the stamp pass reads the HUD's target; the boosting pair's speed bar RMSE is `19.1 -> 14.7` and its fill
+  reads `(241, 255, 254)` against the original's `(243, 255, 255)`. The shield bar's box reads worse (`120.6 -> 129.8`) because
+  the cyan bar below the smeared copies glows more: the red-bar item below is now the largest gap there.
 - A pair at the boost's first and last frames (`n = 0, 1`) and at its middle (`n = 10`) against the original; the
   maintainer's page should carry a boosting pair (below).
 - The shield bar is red in the original's boost frames (`ShieldBar` vertex colour `ff0000ff` in the GE lists) and

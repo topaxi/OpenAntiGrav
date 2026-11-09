@@ -99,7 +99,8 @@ of EDRAM - see
 The HUD stamps it too: the speed bar's fill under a boost
 ([hud-boost-smear.md](../ghidra/functions/psp-pulse-usa/hud-boost-smear.md)) and the shield bar's fill for the whole of an absorb's
 second, `0xff` in both halves of the blink ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md), "The absorb flash at the draw
-call"). The PSP boost plume's batches are `0x1232`: transparent, no `0xc0`, so the
+call"); the bloom's bright pass reads the framebuffer under each of those stamps, HUD at its own alpha over the scene showing through it,
+which ours' stamp pass (`Bloom::stamp_glow`) reproduces by sampling the HUD's target under the rectangle. The PSP boost plume's batches are `0x1232`: transparent, no `0xc0`, so the
 plume **does not** write the mask.
 
 ## What this changes in the port
