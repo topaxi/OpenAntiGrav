@@ -119,6 +119,10 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Pulse's law, inherited: Pure's own drain is unread.
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        blast_push: oag_title::pre_race::Sourced::inherited(
+            oag_title::weapons::BlastPush::Posted,
+            "Wipeout Pulse",
+        ),
         // Pure ships no LeachBeam, so this is never read; the value matches the other titles.
         leach_beams: oag_title::pre_race::Sourced::chosen(8),
         // The gate is Pulse's law, inherited: Pure's own is unread (`psp-pure-usa/quake.md`).

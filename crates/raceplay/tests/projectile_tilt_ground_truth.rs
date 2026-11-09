@@ -298,7 +298,12 @@ fn assert_laid_on_a_bank(title: (&str, &str), weapon: Weapon, judge_pose: bool) 
     let mut input: Option<Input> = None;
     let mut next_drop = 200;
     let (mut tilted, mut worst_offset, mut worst_pose) = (0, 0.0_f32, 1.0_f32);
+    // Restored every tick, as `ride`'s is: a laid Bomb that a rival trips on the tick it
+    // lands blasts the firer too, and on a title that stuns the hit craft (Pulse's posted
+    // blast push) a run of them drains the pool and parks the craft on the flat.
+    let shield = race.sim.world.ships[0].physics.shield;
     for tick in 0..9_000_u32 {
+        race.sim.world.ships[0].physics.shield = shield;
         // Pressed and released on alternate ticks: a held button is one edge.
         let dropping = tick >= next_drop && (tick - next_drop) % 2 == 0;
         race.set_autopilot(true);

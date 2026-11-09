@@ -123,6 +123,7 @@ pub const TITLE: &Title = &Title {
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        blast_push: oag_title::pre_race::Sourced::measured(oag_title::weapons::BlastPush::Posted),
         // **Chosen, not measured** (maintainer, 2026-10-31: eight everywhere). Pulse measures one
         // (`Weapon_FireLeachBeam`'s `pool->live != 0`, `cannon-quake-leachbeam.md`); it takes the
         // later titles' pool of eight as an intended divergence.

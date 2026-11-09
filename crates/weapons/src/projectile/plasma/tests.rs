@@ -249,6 +249,7 @@ fn a_timed_out_plasma_bolt_damages_nobody_standing_in_it() {
             &empty,
             Some(&table),
             "VENOM",
+            crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
         );
@@ -353,6 +354,7 @@ fn a_plasma_bolt_that_strikes_a_craft_credits_it_directly() {
             &empty,
             Some(&table),
             "VENOM",
+            crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
         );
@@ -401,6 +403,7 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
             &empty,
             Some(&table),
             "VENOM",
+            crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 3],
         );

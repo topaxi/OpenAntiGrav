@@ -111,6 +111,7 @@ pub fn blast<S: Craft>(
     ships: &mut [S],
     point: Vec3,
     stats: &BlastStats,
+    how: BlastPush,
     rules: oag_physics::DamageRules,
     hits: &mut [super::WeaponHit],
 ) -> usize {
@@ -141,9 +142,30 @@ pub fn blast<S: Craft>(
             oag_physics::damage::apply_weapon(ship.physics_mut(), &dimensions, stats.damage, rules);
         super::hit::record(hits, slot, stats.weapon, &report);
 
-        post_impulse(ship, point, stats);
+        push(ship, point, stats, how);
     }
     reached
+}
+
+/// How a blast's push reaches a craft; the title's choice,
+/// `oag_title::weapons::Weapons::blast_push`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlastPush {
+    /// Posted into [`oag_physics::ShipState::pending_impulse`] from the craft's nose point,
+    /// which its next physics step drains as `Ship_ApplyCollisionImpulse` does (a forward-axis
+    /// push, the collision stun, nothing under a running Shield). See [`post_impulse`].
+    Posted,
+    /// A velocity change at once, radially from the craft's centre, with no stun: what
+    /// this crate did before the pending impulse was wired. See [`immediate_impulse`].
+    Immediate,
+}
+
+/// One blast's push on one craft, by the title's [`BlastPush`].
+fn push<S: Craft>(ship: &mut S, point: Vec3, stats: &BlastStats, how: BlastPush) {
+    match how {
+        BlastPush::Posted => post_impulse(ship, point, stats),
+        BlastPush::Immediate => immediate_impulse(ship, point, stats),
+    }
 }
 
 /// Posts one blast's push on a craft: [`oag_physics::wall::post_blast_impulse`] onto
@@ -157,14 +179,12 @@ pub fn blast<S: Craft>(
 /// Mine's and the Plasma's measure from the struck craft's nose point (`T+0x50`); the other
 /// three write the same object's `+0x110` and are taken to read the same point (their
 /// pages say only "position"). See `docs/ghidra/functions/psp-pulse-usa/contact-response.md`,
-/// "Wired: every blast posts its push".
+/// "Wired 2026-11-09".
 ///
 /// The reach is tested on the nose point too, so the falloff is never negative here
 /// (`Plasma_ApplyBlastForce` gates on `d < blastradius` off the same point). A zero
-/// `radius` reaches nothing. Every title runs this: Pure's Bomb push is the same arithmetic
-/// (`psp-pure-usa/weapons.md`); HD, 2048 and Omega are unread and inherit Pulse's,
-/// `docs/gameplay/weapon-lineage.md`. The Shuriken, whose blast law is unread, takes the
-/// Mine's as it always did.
+/// `radius` reaches nothing. The Shuriken, whose blast law is unread, takes the Mine's as
+/// it always did.
 fn post_impulse<S: Craft>(ship: &mut S, point: Vec3, stats: &BlastStats) {
     let state = ship.physics_mut();
     let reach = (oag_physics::wall::nose_point(state) - point).length();
@@ -172,6 +192,32 @@ fn post_impulse<S: Craft>(ship: &mut S, point: Vec3, stats: &BlastStats) {
         return;
     }
     oag_physics::wall::post_blast_impulse(state, point, stats.radius, stats.force);
+}
+
+/// The velocity change this crate applied before [`post_impulse`]: the same
+/// `1.0 - d / blastradius` falloff, away from the craft's centre, at once.
+///
+/// A craft on the blast centre has no direction: push up, which depends on no axis of the
+/// craft or track. A zero `radius` is guarded: it admits only `d <= 0`.
+fn immediate_impulse<S: Craft>(ship: &mut S, point: Vec3, stats: &BlastStats) {
+    let offset = ship.physics().body.position - point;
+    let distance = offset.length();
+    if distance > stats.radius {
+        return;
+    }
+    let direction = if distance > 1e-4 {
+        offset.normalize()
+    } else {
+        Vec3::Y
+    };
+    let falloff = if stats.radius > 0.0 {
+        1.0 - distance / stats.radius
+    } else {
+        1.0
+    };
+    ship.physics_mut()
+        .body
+        .apply_impulse(direction * (falloff * stats.force));
 }
 
 /// Spends a tripped mine on the one craft that tripped it.
@@ -189,6 +235,7 @@ pub(super) fn blast_mine_trip<S: Craft>(
     point: Vec3,
     stats: &BlastStats,
     struck: u8,
+    how: BlastPush,
     rules: oag_physics::DamageRules,
     hits: &mut [super::WeaponHit],
 ) {
@@ -204,7 +251,7 @@ pub(super) fn blast_mine_trip<S: Craft>(
     let report =
         oag_physics::damage::apply_weapon(ship.physics_mut(), &dimensions, stats.damage, rules);
     super::hit::record(hits, struck as usize, stats.weapon, &report);
-    post_impulse(ship, point, stats);
+    push(ship, point, stats, how);
 }
 
 /// Spends a Plasma or Rocket direct craft hit: full [`BlastStats::damage`] and
@@ -226,12 +273,17 @@ pub(super) fn blast_mine_trip<S: Craft>(
 /// excluded (a bolt cannot hit its own firer's hull, see
 /// [`super::Projectiles::advance`], but a bystander near the firer can be inside
 /// `radius`). Called from [`apply_impacts`] for these two with `struck: Some(_)`.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the seven facts of a direct hit it always took, and the title's push"
+)]
 pub(super) fn blast_direct_hit<S: Craft>(
     ships: &mut [S],
     point: Vec3,
     stats: &BlastStats,
     struck: u8,
     owner: u8,
+    how: BlastPush,
     rules: oag_physics::DamageRules,
     hits: &mut [super::WeaponHit],
 ) {
@@ -247,7 +299,7 @@ pub(super) fn blast_direct_hit<S: Craft>(
         if !ship.active() || slot as u8 == owner {
             continue;
         }
-        post_impulse(ship, point, stats);
+        push(ship, point, stats, how);
     }
 }
 
@@ -257,6 +309,7 @@ pub(super) fn apply_impacts<S: Craft>(
     ships: &mut [S],
     weapons: Option<&WeaponStats>,
     impacts: &[Option<super::Impact>],
+    how: BlastPush,
     rules: oag_physics::DamageRules,
     hits: &mut [super::WeaponHit],
 ) {
@@ -297,7 +350,7 @@ pub(super) fn apply_impacts<S: Craft>(
         if impact.kind == Weapon::Mine
             && let Some(struck) = impact.struck
         {
-            blast_mine_trip(ships, impact.point, &stats, struck, rules, hits);
+            blast_mine_trip(ships, impact.point, &stats, struck, how, rules, hits);
             continue;
         }
         if matches!(impact.kind, Weapon::Plasma | Weapon::Rocket)
@@ -309,12 +362,13 @@ pub(super) fn apply_impacts<S: Craft>(
                 &stats,
                 struck,
                 impact.owner,
+                how,
                 rules,
                 hits,
             );
             continue;
         }
-        blast(ships, impact.point, &stats, rules, hits);
+        blast(ships, impact.point, &stats, how, rules, hits);
     }
 }
 

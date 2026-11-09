@@ -2385,7 +2385,7 @@ in that race, so the layout is read off the single-craft states only.
 
 ## Wired 2026-11-09: every blast posts its push through the pending impulse, from the nose point
 
-**Claim** (`pulse-blast-impulse` lane): a weapon blast pushes the struck craft
+**Claim** (`pulse-blast-impulse` lane): on Pulse, a weapon blast pushes the struck craft
 through `ShipState::pending_impulse`, measured from the craft's nose point, as the
 original does, instead of changing velocity at once from the centre. **True, wired;
 the nose point itself stays at confidence 75** (see above) and the writers beyond the
@@ -2429,12 +2429,19 @@ unread and keeps taking the Mine's through `blast`. (d) A blast centred exactly 
 nose point posts nothing (the original's zero-guarded normalise), where ours used to
 push up.
 
-**Other titles: Pulse's law inherited, unmeasured.** Pure's Bomb push is the same
-arithmetic (read), its stun consumer unread; HD's blast-radius loop
-(`FUN_00146470`) is unread, 2048 and Omega unread. All run Pulse's, per the
-inherit-Pulse rule, recorded in `weapon-lineage.md`, "Blast push". A 2048/Omega
-census against the checked-in blast tables was not needed: the delivery takes the
-title's own `blastradius` and `blastforce` and moves no number.
+**Other titles: gated per title, `Weapons::blast_push`.** Pulse (PSP and PS2) is
+`Posted`, measured. Pure is `Posted`, inherited: its Bomb push is the same arithmetic
+([weapons.md](../psp-pure-usa/weapons.md)) and no Pure test moved. **HD, 2048 and Omega
+keep the previous immediate velocity change, chosen.** The first attempt inherited
+Pulse's law everywhere, and `hd_eliminator_hud_ground_truth::a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace`
+(a pace measured against HD's own original) stopped reaching 200 in 1,000 s, and HD's
+Bomb-laying ground truth lost its craft: the stun is unmeasured on HD (its blast loop
+`FUN_00146470` and its collision-impulse consumer are unread). The maintainer's
+"inherit Pulse's law where a title has none measured" rule and that measured test
+disagree; the axis keeps the test's evidence and lets a title flip by data once its
+consumer is read. Flipping HD is one line in `crates/hd/src/lib.rs` plus that test's
+bound. 2048 and Omega follow HD because their craft and weapon lineage is HD's; a
+2048/Omega census against their blast tables was not run (the delivery moves no number).
 
 **Open.** The nose offset is measured on one hull (`4.875 = 0.375 * 13`, may be
 hull-derived); whether the Missile, Rocket and Bomb twins read `T+0x50` (a Ghidra

@@ -83,6 +83,7 @@ fn run_volley(ticks: u32) -> (u64, u64) {
             &world_geometry,
             Some(&weapon_stats()),
             "VENOM",
+            oag_weapons::projectile::BlastPush::Posted,
             DamageRules::default(),
             &mut [],
         );

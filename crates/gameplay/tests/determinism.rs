@@ -87,6 +87,7 @@ fn run(ticks: u32) -> (u64, u64) {
             &world_geometry,
             Some(&stats),
             "VENOM",
+            oag_weapons::projectile::BlastPush::Posted,
             DamageRules::default(),
             &mut [],
         );
@@ -705,6 +706,7 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
             &world_geometry,
             Some(&stats),
             "VENOM",
+            oag_weapons::projectile::BlastPush::Posted,
             DamageRules::default(),
             &mut [],
         );

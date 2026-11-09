@@ -39,6 +39,7 @@ fn a_blast_reaches_inside_the_radius_and_stops_at_it() {
             force: 100.0,
             slowdown_time: 0.0,
         },
+        BlastPush::Posted,
         oag_physics::DamageRules::default(),
         &mut [],
     );
@@ -107,6 +108,7 @@ fn a_shielded_craft_keeps_its_energy_and_banks_no_shove() {
             force: 10.0,
             slowdown_time: 1.0,
         },
+        BlastPush::Posted,
         oag_physics::DamageRules::default(),
         &mut [],
     );
@@ -150,6 +152,7 @@ fn a_blast_shoves_along_the_forward_axis_and_stuns() {
             force: 100.0,
             slowdown_time: 0.0,
         },
+        BlastPush::Posted,
         oag_physics::DamageRules::default(),
         &mut [],
     );
@@ -196,6 +199,7 @@ fn a_direct_hit_sweep_reaches_by_the_nose_point_not_the_centre() {
         },
         0,
         3,
+        BlastPush::Posted,
         oag_physics::DamageRules::default(),
         &mut [],
     );
@@ -232,6 +236,7 @@ fn a_tripped_mine_spends_itself_on_the_tripping_craft_only() {
         Vec3::ZERO,
         &stats,
         0,
+        BlastPush::Posted,
         oag_physics::DamageRules::default(),
         &mut [],
     );
@@ -257,6 +262,7 @@ fn a_tripped_mine_spends_itself_on_the_tripping_craft_only() {
         Vec3::ZERO,
         &stats,
         2,
+        BlastPush::Posted,
         oag_physics::DamageRules::default(),
         &mut [],
     );
@@ -264,4 +270,32 @@ fn a_tripped_mine_spends_itself_on_the_tripping_craft_only() {
         grid[2].physics.shield, 100.0,
         "a craft that tripped the mine from outside blastradius took damage"
     );
+}
+
+/// The title that keeps the pre-wiring law (`BlastPush::Immediate`) changes the
+/// velocity at once, radially from the centre, and posts nothing to drain.
+#[test]
+fn an_immediate_blast_moves_the_velocity_at_once_and_posts_nothing() {
+    let mut grid = ships(&[(true, Vec3::new(0.0, 0.0, 8.0))]);
+    grid[0].physics.body.mass = 2.0;
+
+    blast(
+        &mut grid,
+        Vec3::ZERO,
+        &BlastStats {
+            weapon: oag_tables::weapons::Weapon::Rocket,
+            radius: 10.0,
+            damage: 0.0,
+            force: 100.0,
+            slowdown_time: 0.0,
+        },
+        BlastPush::Immediate,
+        oag_physics::DamageRules::default(),
+        &mut [],
+    );
+
+    // `dv = J / m`, four fifths out so `falloff = 0.2`: 20 units on a mass of 2.
+    let pushed = grid[0].physics.body.linear_velocity;
+    assert!((pushed.z - 10.0).abs() < 1e-3, "pushed {pushed:?}");
+    assert_eq!(grid[0].physics.pending_impulse, Vec3::ZERO);
 }
