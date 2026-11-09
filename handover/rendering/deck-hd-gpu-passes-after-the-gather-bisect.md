@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-09
-summary: "Deck HD Anulpha GPU: track shading is the largest pass (exact, 1.00x overdraw); the blur gather bisected, two exact cuts flat; open: 32-bit prepared texel, blur composite+copy, HD encode's four decodes"
+summary: "Deck HD Anulpha: blur gather bisected, two exact cuts flat; open: 32-bit prepared texel, composite+copy, HD encode decodes"
 categories: [rendering]
 ---
 
