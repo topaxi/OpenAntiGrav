@@ -846,7 +846,51 @@ cause is narrowed to one unread law: emitter 0's class-6 draw.
 **Omega: not checked.** The warm-up change is title-generic: any race with HD trails
 active runs it. The emitter table and the draw are HD's file and HD's executable, and
 Omega's `WO_TRAIL_HITSHIP` was not parsed here. The 2026-10-29 verdict on the spawn
-("checked, applies") stands.
+("checked, applies") stands. (The burst's presence on Omega and 2048 is censused in
+"The burst on every title" below.)
+
+## The burst on every title (`graphics.trail_hits`)
+
+2026-11-09. Which title plays the burst, and from what, read off the loader report of
+a `--race` on each disc (`RUST_LOG=debug`, the `WO_TRAIL_HITSHIP` line):
+
+| Title | Authors its own `WO_TRAIL_HITSHIP` | Trigger |
+| --- | --- | --- |
+| HD | yes, `WO_TRAIL_HITSHIP` and `_RED` (2 emitters each: `WO_TRAIL_HITSHIP`, `CORE_IMPACT`) | always, HD's tube |
+| 2048 | yes, same two files, 2 emitters each, 2 sprites read (`Data\Particles2048`) | always, HD's tube path (`hd_trail_active`) |
+| Omega | yes, same two files, 2 emitters each, 2 sprites read | always, HD's tube path |
+| Pulse, Pure | no ([pulse-absent-effects.md](../../../formats/pulse-absent-effects.md)) | only with `graphics.trail_hits` on |
+
+So **2048 and Omega already play the burst with no setting** (the title-generic path: their
+tables inherit the engine's `TrailHitship` name and both ships carry HD's tube). That
+is the ported verdict for both: **ported**, each its own disc's effect, the same emitter
+count and names as HD's (byte equality of the files not compared). The setting exists for
+the two titles that author nothing, and the row is dropped on the other three
+(`menu::Definition::drop_unavailable_trail_hits`).
+
+On Pulse and Pure, with the setting on, the race reads HD's `WO_TRAIL_HITSHIP` through
+`oag_raceplay::TrailHits` (HD's source when mounted, else 2048's or Omega's), with the
+lender's own effect directory, colour scale and sprite laws, and places it on the trigger
+the title's table leaves empty (`EffectHandles::lending`). With no such source it plays
+nothing and the loader report says why; with the setting off nothing is read and no
+line is added. The red variant is not lent: it is chosen by HD's Fury skin flag, which a
+Pulse or Pure craft has no analogue of.
+
+**The hit test on Pulse and Pure is chosen, not measured.** There is no HD tube there; the
+test runs against the title's own ribbon (`oag_fx::exhaust::Exhaust`, a ring of 10 samples,
+`trail_nearest`), once the ring is full (the gate the ribbon is drawn on). The ribbon is a
+thin line (half-width `0.2..0.55`, `Exhaust::trail_half_width`) and Pulse's hull anchors
+(`Ship Collision Fx`: six on Assegai, a wing tip each side) are all on its edges, so HD's
+"an anchor within the ribbon's half-width" never fires for a craft flying along it. The
+test is instead the ribbon's line passing within the hull's own cross-section, the farthest
+an anchor sits from the hull's axis. A short ribbon (10 samples, about 15 units at 100
+units a second against HD's 54) means fewer hits than HD gets; the HD-length trail is a
+separate setting. The burst looks as HD's does today: the purple class-6 streaks above, not
+the original's compact white glow.
+
+Pulse frame, both ways, same posed field (player behind, a Feisar 8 units ahead, both at 100
+units a second, `--field-warmup`, a camera behind the tucked craft): with the setting on the
+tucked craft carries a white glow and purple streaks along its flanks; off, its plume alone.
 
 ## The third sampler is the lightmap slot, empty
 

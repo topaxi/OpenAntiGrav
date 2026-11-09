@@ -57,7 +57,7 @@ fn advanced(pulse_like: bool, weather: bool) -> Vec<&'static str> {
         "graphics.boost_fov_kick",
     ]);
     if pulse_like {
-        rows.push("graphics.boost_zoom");
+        rows.extend(["graphics.boost_zoom", "graphics.trail_hits"]);
     }
     rows.extend(["graphics.cpu_governor", "graphics.perf_overlay", "back"]);
     rows
@@ -68,6 +68,7 @@ fn the_graphics_page_keeps_the_original_and_performance_rows_and_opens_advanced(
     for title in [oag_pulse::TITLE, oag_pure::TITLE, oag_hd::TITLE] {
         let mut definition = built_in();
         definition.drop_unavailable_boost_zoom(title);
+        definition.drop_unavailable_trail_hits(title);
         definition.drop_unavailable_trail_order(title);
         definition.drop_unavailable_weather(title);
         assert_eq!(rows(&definition, "graphics"), TOP, "{}", title.name);
@@ -85,6 +86,7 @@ fn advanced_holds_the_look_extras_and_the_mixed_rows_in_order() {
     ] {
         let mut definition = built_in();
         definition.drop_unavailable_boost_zoom(title);
+        definition.drop_unavailable_trail_hits(title);
         definition.drop_unavailable_trail_order(title);
         definition.drop_unavailable_weather(title);
         assert_eq!(

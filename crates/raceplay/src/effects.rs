@@ -264,12 +264,12 @@ impl Race {
     /// A craft is never tested against its own trail: its nozzle *is* the head
     /// sample, so it would be permanently inside it.
     pub(super) fn advance_trail_hits(&mut self) {
-        if !self.view.hd_trail_active {
+        if !self.trail_hits_on() {
             return;
         }
         self.force_trail_sparks();
         for owner in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[owner].active || !self.view.hd_trail[owner].ready() {
+            if !self.sim.world.ships[owner].active || !self.trail_ready(owner) {
                 continue;
             }
             for intruder in 0..self.sim.world.ship_count as usize {
@@ -308,9 +308,7 @@ impl Race {
                 // takes the point on the craft's own bounding sphere facing the
                 // contact - the place the nearest of ten hull nodes would be -
                 // and re-spawns it every tick, which is what makes it follow.
-                let contact = self.view.hd_trail[owner]
-                    .nearest(at)
-                    .map_or(at, |(on, _)| on);
+                let contact = self.trail_nearest(owner, at).map_or(at, |(on, _)| on);
                 let point = self.spark_anchor_of(intruder, owner).unwrap_or_else(|| {
                     hull_contact_point(at, contact, self.view.hull_reach[intruder])
                 });
@@ -408,27 +406,84 @@ impl Race {
         self.view.hull_reach[slot]
     }
 
+    /// Whether this race plays the trail-hit burst: HD's tube (HD, 2048 and Omega, which author
+    /// the effect), or a burst lent to a title that authors none (`graphics.trail_hits`, see
+    /// `load::trail_hits`). With the setting off a Pulse or Pure race has neither, so the whole
+    /// path is inert.
+    fn trail_hits_on(&self) -> bool {
+        self.view.hd_trail_active || self.view.handles.get(Trigger::TrailHitship).is_some()
+    }
+
+    /// Whether `owner`'s trail has a centre line to test against: HD's tube once seeded, or the
+    /// title's own ribbon once its ring is full.
+    fn trail_ready(&self, owner: usize) -> bool {
+        if self.view.hd_trail_active {
+            self.view.hd_trail[owner].ready()
+        } else {
+            self.view.exhaust[owner].trail_ready()
+        }
+    }
+
+    /// The closest point on `owner`'s trail centre line to `point`, and how far it is. **The
+    /// title's own trail**: HD's tube where the race draws it, the PSP-preset ribbon otherwise.
+    fn trail_nearest(&self, owner: usize, point: Vec3) -> Option<(Vec3, f32)> {
+        if self.view.hd_trail_active {
+            self.view.hd_trail[owner].nearest(point)
+        } else {
+            self.view.exhaust[owner].trail_nearest(point)
+        }
+    }
+
+    /// How far `owner`'s trail reaches either side of its centre line: HD's measured half-width,
+    /// or the PSP ribbon's drawn width at its head.
+    fn trail_half_width(&self, owner: usize) -> f32 {
+        if self.view.hd_trail_active {
+            exhaust::hd::FIN_HALF_WIDTH
+        } else {
+            self.view.exhaust[owner].trail_half_width()
+        }
+    }
+
     fn trail_touches(&self, slot: usize, owner: usize) -> bool {
-        let tube = &self.view.hd_trail[owner];
-        let Some((low, high)) = tube.bounds() else {
+        let bounds = if self.view.hd_trail_active {
+            self.view.hd_trail[owner].bounds()
+        } else {
+            self.view.exhaust[owner].trail_bounds()
+        };
+        let Some((low, high)) = bounds else {
             return false;
         };
+        let half_width = self.trail_half_width(owner);
         // A point farther than `reach` from the box holding the whole ribbon is farther than
         // `reach` from the ribbon, so `nearest` (53 segments) is asked only of a point that
         // could pass: the same answer, and most pairs on a spread-out field are far apart.
         // The unit of slack keeps float rounding in `nearest` on the same side.
         let near = |point: Vec3, reach: f32| {
             (point.clamp(low, high) - point).length() <= reach + 1.0
-                && tube.nearest(point).is_some_and(|(_, away)| away <= reach)
+                && self
+                    .trail_nearest(owner, point)
+                    .is_some_and(|(_, away)| away <= reach)
         };
         let at = self.sim.world.ships[slot].physics.body.position;
         let Some(anchors) = self.view.spark_anchors.get(slot).filter(|a| !a.is_empty()) else {
-            return near(at, self.view.hull_reach[slot] + exhaust::hd::FIN_HALF_WIDTH);
+            return near(at, self.view.hull_reach[slot] + half_width);
         };
+        if !self.view.hd_trail_active {
+            // A PSP-preset ribbon is a thin line (0.2..0.55 wide) down the middle of where the
+            // owner flew, and a hull's authored anchors are its edges: a craft flying along it
+            // has the line through its middle and no anchor within a ribbon's width of it. So
+            // the craft is in the trail when the line passes within the hull's own cross-section,
+            // the farthest an anchor sits from the hull's axis. **Chosen, not measured**: no
+            // test is read for this ribbon.
+            let radius = anchors
+                .iter()
+                .fold(0.0f32, |far, a| far.max(a.x.hypot(a.y)));
+            return near(at, radius + half_width);
+        }
         let matrix = model_matrix_of(&self.sim.world.ships[slot]);
         anchors
             .iter()
-            .any(|local| near(matrix.transform_point3(*local), exhaust::hd::FIN_HALF_WIDTH))
+            .any(|local| near(matrix.transform_point3(*local), half_width))
     }
 
     /// The craft's own authored hull spark anchor nearest `contact`, in world
@@ -472,7 +527,7 @@ impl Race {
         // sparking from its own exhaust.
         let body = self.sim.world.ships[slot].physics.body;
         let nose = body.position + body.forward() * self.view.hull_reach[slot];
-        let contact = self.view.hd_trail[owner].nearest(nose)?.0;
+        let contact = self.trail_nearest(owner, nose)?.0;
         anchors
             .iter()
             .map(|local| matrix.transform_point3(*local))
@@ -861,7 +916,7 @@ impl Race {
                 ship.body.linear_velocity = velocities[slot];
                 ship.thrust = Self::FULL_THRUST;
             }
-            if self.view.hd_trail_active {
+            if self.trail_hits_on() {
                 self.view
                     .stage
                     .advance(self.sim.dt, &mut self.view.stage_rng);

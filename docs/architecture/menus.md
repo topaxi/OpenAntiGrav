@@ -1724,6 +1724,15 @@ the RACE page's VARIANT row is (a title is fixed for the life of a boot), not gr
 setting is a flat `[graphics]` boolean rather than a per-title render profile entry: it is a
 taste switch, not a render cost, and `--race` reads it before the title is known.
 
+TRAIL HITS (GRAPHICS, `graphics.trail_hits`, `off`/`on`, default `off`, restart required)
+is the same shape: a craft flying in a rival's engine trail plays HD's `WO_TRAIL_HITSHIP`
+burst on the two titles that author none. `menu::Definition::drop_unavailable_trail_hits`
+removes the row on a title whose effect table names `Trigger::TrailHitship` (HD, 2048 and
+Omega play their own, setting or not), leaving it on Pulse and Pure. The race reads the
+effect off an HD source when one is mounted (`oag_game::launcher::trail_hit_lender`); with
+none, nothing is drawn and the loader report says so
+([`engine-trail.md`](../ghidra/functions/ps3-hdfury-eu/engine-trail.md), "The burst on every title").
+
 A row can also be **warned** rather than greyed, which is a different thing and
 the RECONSTRUCTION row is why it exists. A greyed row cannot be changed *now* because
 another row rules it out. A warned row can be changed, is stored, and simply

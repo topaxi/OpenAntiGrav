@@ -552,6 +552,18 @@ impl Definition {
         }
     }
 
+    /// Drops the TRAIL HITS row on a title that plays its own trail-hit burst
+    /// (`oag_title::Trigger::TrailHitship` named in its effect table): every title but Pulse and
+    /// Pure. Same once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_trail_hits(&mut self, title: &oag_title::Title) {
+        if title.effect_on(oag_title::Trigger::TrailHitship).is_none() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.trail_hits"));
+        }
+    }
+
     /// Drops the HUD STYLE row on a title whose disc authors no `HUD Style` list
     /// (`oag_title::HudLayouts::skins`): Pulse, Pure and 2048. Same once-before-read
     /// timing as [`Self::drop_unavailable_boost_zoom`].

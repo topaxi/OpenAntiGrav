@@ -510,6 +510,7 @@ impl Session {
             .graphics
             .boost_zoom
             .then(oag_source::title::borrowed_zoom_ring);
+        options.trail_hits = oag_game::launcher::trail_hits(self.settings.graphics.trail_hits);
         // The join screen's seats, or the seats a restart kept: the load reads a
         // title's authored two-player split HUD, so it needs the view count
         // before `split_screen::seat_for_launch` cuts the screen. See `race::Options::views`.

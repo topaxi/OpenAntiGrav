@@ -278,6 +278,7 @@ impl Session {
             .graphics
             .boost_zoom
             .then(oag_source::title::borrowed_zoom_ring);
+        options.trail_hits = oag_game::launcher::trail_hits(self.settings.graphics.trail_hits);
         // The packs this machine has mounted, as the race box mounts them: the header's
         // `opponent_teams` may name a team only a pack ships, and a rebuild without the pack
         // fields another hull there. Whether the packs are the recording's is the tick-zero

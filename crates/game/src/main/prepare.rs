@@ -159,6 +159,7 @@ impl Pending {
                 .graphics
                 .boost_zoom
                 .then(oag_source::title::borrowed_zoom_ring),
+            trail_hits: oag_game::launcher::trail_hits(self.settings.graphics.trail_hits),
             foreign_track: self
                 .foreign_entry
                 .as_ref()

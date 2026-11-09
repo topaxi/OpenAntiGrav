@@ -42,6 +42,7 @@ mod texture_stream_ground_truth;
 mod track_audio_hd_ground_truth;
 mod track_props_ground_truth;
 mod trackfile_ground_truth;
+mod trail_hits_lent_ground_truth;
 mod vita_2048_campaign_grid_ground_truth;
 mod vita_2048_countdown_ground_truth;
 mod vita_2048_hud_event_ground_truth;

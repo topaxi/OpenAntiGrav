@@ -1046,6 +1046,7 @@ pub const MAX_TRAIL_VERTICES: usize = MAX_TRAILS
         hd::MAX_VERTICES_PER_CRAFT
     };
 
+mod centre_line;
 /// The flare's draw pipeline: the first blended, depth-tested pipeline in this
 /// crate.
 ///

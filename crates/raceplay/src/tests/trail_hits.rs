@@ -255,3 +255,112 @@ fn a_field_warm_up_leaves_a_live_burst_on_a_craft_tucked_in_a_ribbon() {
         "the burst is at {mean}, not on the tucked craft at -8"
     );
 }
+
+/// The burst `WO_TRAIL_HITSHIP` is, reduced to a one-shot emitter with the record's `+0x4d0`.
+fn a_one_shot_burst(name: &str) -> oag_fx::psys::Effect {
+    let mut blob = super::respawn::one_emitter_pob(name, 0);
+    let record = blob.len() - oag_pob::EMITTER_LEN;
+    blob[record + 0x24..record + 0x28].copy_from_slice(&1.0f32.to_bits().to_le_bytes());
+    blob[record + 0x4d0..record + 0x4d4].copy_from_slice(&0.5f32.to_bits().to_le_bytes());
+    oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+        .expect("the hand-laid effect parses")
+}
+
+/// A Pulse-shaped grid: the PSP ribbon, no HD tube, slot 0's ribbon laid along -X (ten samples,
+/// the ring the title's own trail holds), and `burst` lent to the trigger when given.
+fn a_pulse_race_with_a_ribbon(burst: bool) -> Race {
+    let mut race = race_with_a_grid();
+    assert!(!race.view.hd_trail_active, "a Pulse race draws no HD tube");
+    race.view.hull_reach = [2.0; oag_gameplay::MAX_SHIPS];
+    for k in 0..oag_fx::exhaust::TRAIL_SAMPLES {
+        race.view.exhaust[0].push_trail(Vec3::new(k as f32 * -4.0, 0.0, 0.0), Vec3::X);
+    }
+    if burst {
+        let effect = a_one_shot_burst(oag_title::engine_effects::TRAIL_HITSHIP_EFFECT);
+        race.view.handles = std::mem::take(&mut race.view.handles)
+            .lending(Trigger::TrailHitship, Some(std::sync::Arc::new(effect)));
+    }
+    race
+}
+
+/// **The lent burst, red to green.** A Pulse race has no HD tube; with the burst lent, a craft
+/// inside the title's own ribbon raises it, once per tick it stays inside.
+#[test]
+fn a_lent_burst_plays_for_a_craft_flying_in_a_pulse_ribbon() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+    assert_ne!(race.view.trail_inside[0] & 0b10, 0, "inside the ribbon");
+    assert_eq!(race.view.stage.playing_count(), 1, "the burst played");
+    place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+    assert_eq!(
+        race.view.stage.playing_count(),
+        2,
+        "and again the next tick"
+    );
+}
+
+/// **Off is inert.** The same ribbon and the same craft, nothing lent: no latch, no burst.
+#[test]
+fn without_a_lent_burst_a_pulse_race_tests_and_plays_nothing() {
+    let mut race = a_pulse_race_with_a_ribbon(false);
+    place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+    assert_eq!(race.view.trail_inside[0], 0);
+    assert_eq!(race.view.stage.playing_count(), 0);
+}
+
+/// The test is the title's own ribbon: the sphere fallback's reach plus the ribbon's width, and
+/// no more. A craft a few units off the line is clear, as it is on HD.
+#[test]
+fn a_craft_beside_a_pulse_ribbon_is_clear_of_it() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    place_and_step(&mut race, Vec3::new(-18.0, 6.0, 0.0));
+    assert_eq!(race.view.trail_inside[0] & 0b10, 0);
+    assert_eq!(race.view.stage.playing_count(), 0);
+    // Just inside the reach: the hull reach plus the ribbon's head width at zero intensity.
+    let reach = 2.0 + race.view.exhaust[0].trail_half_width();
+    place_and_step(&mut race, Vec3::new(-18.0, reach - 0.01, 0.0));
+    assert_ne!(race.view.trail_inside[0] & 0b10, 0, "just inside");
+    place_and_step(&mut race, Vec3::new(-18.0, reach + 0.01, 0.0));
+    assert_eq!(race.view.trail_inside[0] & 0b10, 0, "just outside");
+}
+
+/// A ribbon whose ring is not full is not drawn and is not tested - the grid's opening ticks
+/// latch nothing.
+#[test]
+fn a_ribbon_that_is_not_full_is_not_tested() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    race.view.exhaust[0].clear_trail();
+    for k in 0..oag_fx::exhaust::TRAIL_SAMPLES - 1 {
+        race.view.exhaust[0].push_trail(Vec3::new(k as f32 * -4.0, 0.0, 0.0), Vec3::X);
+    }
+    place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+    assert_eq!(race.view.trail_inside[0], 0);
+    assert_eq!(race.view.stage.playing_count(), 0);
+}
+
+/// **A craft flying along a Pulse ribbon is in it.** The hull's authored anchors are its edges
+/// (a wing tip each side, a point at the nose), so the HD test - an anchor within the ribbon's
+/// width - never fires for a craft with the line through its middle. The ribbon test is the line
+/// passing inside the hull's own cross-section.
+#[test]
+fn a_craft_with_a_pulse_ribbon_through_its_middle_is_inside_and_one_beside_it_is_not() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    race.view.spark_anchors = vec![Vec::new(); oag_gameplay::MAX_SHIPS];
+    race.view.spark_anchors[1] = vec![
+        Vec3::new(2.6, -1.0, 0.0),
+        Vec3::new(-2.6, -1.0, 0.0),
+        Vec3::new(0.0, -0.5, 6.0),
+    ];
+    place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+    assert_ne!(
+        race.view.trail_inside[0] & 0b10,
+        0,
+        "the line is through the hull"
+    );
+    place_and_step(&mut race, Vec3::new(-18.0, 4.0, 0.0));
+    assert_eq!(
+        race.view.trail_inside[0] & 0b10,
+        0,
+        "the line is clear of the hull"
+    );
+}

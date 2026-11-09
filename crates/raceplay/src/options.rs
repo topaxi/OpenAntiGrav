@@ -6,6 +6,25 @@
 
 use super::*;
 
+/// Whether a title that authors no trail-hit burst plays another source's
+/// (`graphics.trail_hits`, off by default: an enhancement, neither original has it).
+///
+/// Honoured only where the craft's title has no `WO_TRAIL_HITSHIP` of its own
+/// (`oag_title::Title::effect_on(Trigger::TrailHitship)` is `None`: Pulse and Pure); HD, 2048 and
+/// Omega play theirs whatever this holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum TrailHits {
+    /// The title plays what it authors, which on Pulse and Pure is nothing.
+    #[default]
+    Off,
+    /// Play the burst off `lender`, a source whose title authors it (found by the composition
+    /// root); `None` when this machine has none, which the loader report says.
+    On {
+        /// The source to read the effect from.
+        lender: Option<String>,
+    },
+}
+
 /// What to load, and which of it to draw.
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -56,6 +75,10 @@ pub struct Options {
     /// root (the one place that may name HD's); `None` is off. Used only where
     /// `oag_title::RaceDefaults::borrows_zoom_ring`.
     pub boost_zoom: Option<&'static oag_title::ZoomRing>,
+    /// The player's `graphics.trail_hits`: whether a craft flying in a rival's engine trail plays
+    /// a title's trail-hit burst on a title that has none of its own (Pulse and Pure).
+    /// Off by default. See [`TrailHits`].
+    pub trail_hits: TrailHits,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///

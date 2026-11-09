@@ -703,6 +703,15 @@ impl Session {
                     return;
                 }
             },
+            // Read when a race loads (`race::Options::trail_hits`), so the next race.
+            "graphics.trail_hits" => match text.as_str() {
+                "on" => self.settings.graphics.trail_hits = true,
+                "off" => self.settings.graphics.trail_hits = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
             "graphics.cpu_governor" => match text.as_str() {
                 "on" => self.settings.graphics.cpu_governor = true,
                 "off" => {

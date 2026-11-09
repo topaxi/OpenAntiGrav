@@ -164,6 +164,10 @@ optional = true
 type = "boolean"
 optional = true
 
+[types.graphics.trail_hits]
+type = "boolean"
+optional = true
+
 [types.graphics.cpu_governor]
 type = "boolean"
 optional = true

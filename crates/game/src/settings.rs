@@ -648,6 +648,18 @@ pub struct Graphics {
     #[serde(default)]
     pub boost_zoom: bool,
 
+    /// Play Wipeout HD's trail-hit burst for a craft flying in a rival's engine trail on a
+    /// title that authors none (Pulse and Pure; a title whose table names no
+    /// `Trigger::TrailHitship`). **Off by default**, and ignored on every other title, which
+    /// play their own.
+    ///
+    /// **An enhancement of this project's, not the original's:** neither Pulse nor Pure has the
+    /// burst. The effect is read off another source that authors it, and drawn with nothing
+    /// substituted when this machine has none. Baked into the race at load, so a change applies
+    /// from the next race. See `oag_raceplay::TrailHits`.
+    #[serde(default)]
+    pub trail_hits: bool,
+
     /// Let the CPU governor turn this project's own CPU-heavy extras down at runtime while the
     /// frame thread is over its frame budget and the GPU is not (`oag_present::governor`).
     /// It overrides in memory only: this value and every render-profile value are never
@@ -698,6 +710,7 @@ impl Default for Graphics {
             pvs_culling: default_pvs_culling(),
             boost_fov_kick: default_boost_fov_kick(),
             boost_zoom: false,
+            trail_hits: false,
             cpu_governor: default_cpu_governor(),
             camera_view: default_camera_view(),
         }
@@ -1150,6 +1163,14 @@ pub fn menu_seeds(
         (
             "graphics.boost_zoom",
             text(if settings.graphics.boost_zoom {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
+            "graphics.trail_hits",
+            text(if settings.graphics.trail_hits {
                 "on"
             } else {
                 "off"

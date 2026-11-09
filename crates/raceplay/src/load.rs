@@ -43,9 +43,12 @@ pub(super) mod ripple;
 mod roster;
 #[cfg(feature = "view")]
 mod skin;
+mod start_boost_report;
 mod surfaces;
 mod track_inputs;
 mod track_stats;
+#[cfg(feature = "view")]
+mod trail_hits;
 pub use track_stats::authored_length;
 mod variant;
 #[cfg(feature = "view")]
@@ -820,23 +823,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         .looks
         .start_boost_origin(archives.layout.platform);
     let start_boost = start_boost.filter(|_| start_boost_origin.is_some());
-    match (start_boost_origin, &start_boost) {
-        (Some(oag_title::Origin::Measured), Some(_)) => {
-            report.push("<StartBoost>: the launch law is measured on this title".to_string());
-        }
-        (Some(oag_title::Origin::InheritedFrom(from)), Some(_)) => {
-            report.push(format!(
-                "<StartBoost>: the launch law is inherited from {from}, not measured on this title"
-            ));
-        }
-        (Some(oag_title::Origin::Chosen), Some(_)) => {
-            report.push("<StartBoost>: the launch law is chosen, not measured".to_string());
-        }
-        (None, _) => {
-            report.push("<StartBoost>: this title flies no authored launch boost".to_string());
-        }
-        (Some(_), None) => {}
-    }
+    start_boost_report::say(start_boost_origin, start_boost.is_some(), &mut report);
     // A title that compiles its launch in (Pure) flies its own, measured on its own disc.
     let code_start_boost = craft_title
         .race
@@ -872,6 +859,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
             Err(why) => report.push(format!("{why} - {name} will not be drawn")),
         }
     }
+    // Lent before the mods' effects, so no mod sprite moves; a no-op unless `graphics.trail_hits`.
+    #[cfg(feature = "view")]
+    let lent_trail_hit = trail_hits::lend(options, craft_title, &mut effects, &mut report);
     // The mods' own effects land after every title effect, so no title sprite moves.
     #[cfg(feature = "view")]
     let mod_effects = crate::extension_effects::load(
@@ -886,7 +876,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     #[cfg(feature = "view")]
-    let handles = super::EffectHandles::resolve(craft_title, &effects).with_own(mod_effects);
+    let handles = super::EffectHandles::resolve(craft_title, &effects)
+        .with_own(mod_effects)
+        .lending(Trigger::TrailHitship, lent_trail_hit);
 
     stages::checkpoint()?;
     #[cfg(feature = "view")]
