@@ -183,17 +183,26 @@ pub fn trail_hit_lender(rows: &[Candidate]) -> Option<&Candidate> {
         .or_else(|| rows.iter().find(authors))
 }
 
-/// [`oag_raceplay::Options::trail_hits`] for the player's `graphics.trail_hits`: surveys the
-/// machine's sources only when the setting is on.
+/// [`oag_raceplay::Options::trail_hits`] for the player's `graphics.trail_hits`, from a survey
+/// the caller already holds (the session's own).
+#[must_use]
+pub fn trail_hits_from(on: bool, rows: &[Candidate]) -> oag_raceplay::TrailHits {
+    if !on {
+        return oag_raceplay::TrailHits::Off;
+    }
+    oag_raceplay::TrailHits::On {
+        lender: trail_hit_lender(rows).map(|row| row.source.clone()),
+    }
+}
+
+/// [`trail_hits_from`] for a caller with no survey (the command line's race): surveys the
+/// machine's sources, and only when the setting is on.
 #[must_use]
 pub fn trail_hits(on: bool) -> oag_raceplay::TrailHits {
     if !on {
         return oag_raceplay::TrailHits::Off;
     }
-    let rows = survey(&oag_source::source::candidates());
-    oag_raceplay::TrailHits::On {
-        lender: trail_hit_lender(&rows).map(|row| row.source.clone()),
-    }
+    trail_hits_from(on, &survey(&oag_source::source::candidates()))
 }
 
 /// Whether `source` is an encrypted PS3 image no key opens, which a stated

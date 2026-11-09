@@ -659,4 +659,12 @@ fn the_trail_hit_lender_is_hd_then_any_title_that_authors_the_burst() {
 #[test]
 fn the_setting_off_hands_the_race_no_lender() {
     assert_eq!(trail_hits(false), oag_raceplay::TrailHits::Off);
+    let rows = vec![of("hd.iso", oag_hd::TITLE)];
+    assert_eq!(trail_hits_from(false, &rows), oag_raceplay::TrailHits::Off);
+    assert_eq!(
+        trail_hits_from(true, &rows),
+        oag_raceplay::TrailHits::On {
+            lender: Some("data/images/hd.iso".to_string())
+        }
+    );
 }

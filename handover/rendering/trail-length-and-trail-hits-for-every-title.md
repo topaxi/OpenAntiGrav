@@ -1,5 +1,5 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [pulse, pure, hd]
 updated: 2026-11-09
 summary: "Trail hits landed (graphics.trail_hits: Pulse, Pure); HD-length trails for Pulse and Pure wait until HD's burst matches"
