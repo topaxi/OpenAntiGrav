@@ -262,11 +262,13 @@ Fire needs a Weapons-On race.
 **1. The film, fly-through, three hits (three fresh restores).** Pre-hit luma 100.0 to 102.5,
 the peak 231 to 244 at pool age 0.20 to 0.25 s. `e` at pool age:
 
-| hit | 0.1 | 0.2 | 0.33 | 0.5 | 0.58 | 0.6 | 0.75 | 0.92 | 1.08 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `hit0` | 0.78 | 0.98 | 0.74 | 0.21 | 0.15 | 0.13 | 0.03 | 0.01 | - |
-| `hit1` | 0.82 | 1.00 | 0.81 | 0.17 | 0.11 | 0.09 | 0.09 | 0.09 | - |
-| `hit2` | 0.78 | 1.00 | 0.70 | 0.17 | 0.15 | 0.12 | 0.07 | 0.01 | 0.07 |
+| hit | pre L | peak L | 0.1 | 0.2 | 0.33 | 0.5 | 0.58 | 0.6 | 0.75 | 0.92 | 1.08 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `hit0` | 102.2 | 234.7 | 0.78 | 0.98 | 0.74 | 0.21 | 0.15 | 0.13 | 0.03 | 0.01 | - |
+| `hit1` | 100.0 | 231.4 | 0.82 | 1.00 | 0.81 | 0.17 | 0.11 | 0.09 | 0.09 | 0.09 | - |
+| `hit2` | 102.5 | 244.2 | 0.78 | 1.00 | 0.70 | 0.17 | 0.15 | 0.12 | 0.07 | 0.01 | 0.07 |
+
+(`L = pre L + e (peak L - pre L)`.)
 
 The falsification line comes out **confirmed for `m5`'s regime**: `e(0.6 s)` is 0.13, 0.09, 0.12
 (`m5` by its own numbers, 150 at 0.6 s against 135 before and a peak of 246: 0.14). The eye
@@ -278,10 +280,10 @@ leaves the blast fast: `hit2`'s pushbuffer eye is 21.5, 16.3, 12.8, 4.1 (inside 
 **2. The film, held eye, two boots.** The eye sits 26.7 (`hold0`) and 24.9 (`hold1`) units from
 the centre for the whole second (ours' parked scenario: 19 to 22):
 
-| film | 0.1 | 0.2 | 0.33 | 0.5 | 0.58 | 0.6 | 0.7 | 0.75 | 0.83 | 0.92 | 1.08 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `hold0` `e` | 0.68 | 0.96 | 1.00 | 0.94 | 0.80 | 0.76 | 0.53 | 0.35 | 0.23 | 0.08 | 0.01 |
-| `hold1` `e` | 0.86 | 0.94 | 1.00 | 0.93 | 0.81 | 0.78 | 0.49 | 0.42 | 0.19 | 0.03 | -0.03 |
+| film | pre L | peak L | 0.1 | 0.2 | 0.33 | 0.5 | 0.58 | 0.6 | 0.7 | 0.75 | 0.83 | 0.92 | 1.08 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `hold0` `e` | 101.4 | 229.9 | 0.68 | 0.96 | 1.00 | 0.94 | 0.80 | 0.76 | 0.53 | 0.35 | 0.23 | 0.08 | 0.01 |
+| `hold1` `e` | 103.8 | 229.8 | 0.86 | 0.94 | 1.00 | 0.93 | 0.81 | 0.78 | 0.49 | 0.42 | 0.19 | 0.03 | -0.03 |
 
 So with the eye parked the original **also** stays white to about 0.6 s (`e` 0.76 to 0.78),
 fades through 0.75, and is back at its pre-hit luma by 0.92 to 0.95 s. The two boots agree to
@@ -296,22 +298,25 @@ turned about the vertical onto ours' road direction, +x there; ours renders with
 off). Excess luma over ours' own backdrop (the same camera at tick 289) and over the film's
 `pre.png`, so the two backdrops do not enter:
 
-| age (s) | 0.5 | 0.58 | 0.6 | 0.7 | 0.75 | 0.83 | 0.92 | 1.08 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| film `hold0` | 121 | 103 | 98 | 68 | 45 | 30 | 10 | 2 |
-| film `hold1` | 117 | 102 | 98 | 62 | 52 | 24 | 4 | -4 |
-| ours as wired (streaks) | 110 | 93 | 87 | 62 | 53 | 45 | 42 | 20 |
-| ours without the streaks | 103 | 83 | 75 | 37 | 23 | 5 | 1 | -2 |
-| ours, streak width halved | | | | | 42 | 28 | 21 | 10 |
-| ours, streaks born wide and bright | | | | | 29 | 9 | 3 | -2 |
+| age (s) | 0.1 | 0.2 | 0.33 | 0.5 | 0.58 | 0.6 | 0.7 | 0.75 | 0.83 | 0.92 | 1.08 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| film `hold0` | 88 | 124 | 128 | 121 | 103 | 98 | 68 | 45 | 30 | 10 | 2 |
+| film `hold1` | 109 | 118 | 126 | 117 | 102 | 98 | 62 | 52 | 24 | 4 | -4 |
+| ours as wired (streaks) | 110 | 128 | 134 | 110 | 93 | 87 | 62 | 53 | 45 | 42 | 20 |
+| ours without the streaks | 108 | 125 | 130 | 103 | 83 | 75 | 37 | 23 | 5 | 1 | -2 |
+| ours, streak width halved | | | | | | | | 42 | 28 | 21 | 10 |
+| ours, streaks born wide and bright | | | | | | | | 29 | 9 | 3 | -2 |
 
-and fly-through, `hit2` against ours at the film's eye path (with and without the streaks are
-equal from 0.33 s: no streak pixel is in the frame): 
+and fly-through, `hit0` and `hit2` against ours at each film's own eye path (the streaks add no
+pixel from 0.33 s, so with and without are equal there; `hit0`'s 0.1 s is the one frame, 113 against
+the film's 103):
 
-| age (s) | 0.1 | 0.2 | 0.33 | 0.5 | 0.58 | 0.6 | 0.7 | 0.83 | 0.92 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| film `hit2` | 111 | 142 | 100 | 24 | 21 | 17 | 10 | 5 | 2 |
-| ours | 114 | 135 | 113 | 5 | 3 | 2 | 0 | 0 | 0 |
+| age (s) | 0.1 | 0.2 | 0.33 | 0.5 | 0.58 | 0.6 | 0.7 | 0.83 | 0.92 | 1.08 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| film `hit0` | 103 | 130 | 98 | 28 | 20 | 17 | 7 | 2 | 1 | - |
+| ours at `hit0`'s path | 113 | 128 | 102 | 8 | 2 | 0 | 0 | 1 | 1 | - |
+| film `hit2` | 111 | 142 | 100 | 24 | 21 | 17 | 10 | 5 | 2 | 10 |
+| ours at `hit2`'s path | 114 | 135 | 113 | 5 | 3 | 2 | 0 | 0 | 1 | 1 |
 
 **What the film says.** *The film says the original clears to within 0.15 of its pre-hit luma (in `e`) by 0.58 s when
 the player flies through the blast, and by 0.95 s when the eye is held 25 to 27 units away.
@@ -323,15 +328,19 @@ second.*
 
 **Candidates.**
 
-- **Eye distance: ruled in** as the cause of the conflict (confidence 80). Ours at the film's eye
-  path clears at 0.5 s (excess 5, the film's 24); the film at a held eye stays white as ours
-  does. The earlier comparison set a parked ours against a flying original.
-- **The update rate, 60 Hz: ruled in, not as a rate but as the age's quantum** (75). Each of 270
+- **Eye distance: ruled in** as the cause of the conflict (confidence 78, "probable": paired on two
+  fly-through films and one held film, each ours render a placed camera over a different
+  backdrop; the original's side is measured, three and two boots at 90). Ours at the film's eye
+  path clears at 0.5 s (excess 5 and 8 against the film's 24 and 28); the film at a held eye stays
+  white as ours does. The earlier comparison set a parked ours against a flying original.
+- **The update rate, 60 Hz: ruled in, not as a rate but as the age's quantum** (90 that the age
+  moves in whole 1/60 s, a runtime observation of 270 steps; 75 that `dt` per `Update` is 1/60 s). Each of 270
   age steps over the five films (one game frame asked for) is a whole multiple of 1/60 s, 0 to 4 of
   them, 77 of exactly 1/60 s, so `dt` per `Update` is 1/60 s, not the frame's own variable time. Whether the
   manager runs `Update` once per 1/60 s frame (rather than twice with 1/120) is not
   distinguishable from the age alone; the lap clock and the age advance 1 s per second.
-- **The width read as a half-width: ruled in as a contributor, not sufficient** (55). At a
+- **The width read as a half-width: ruled in as a contributor, not sufficient** (55, "plausible": ours paired on one held film; the experiments are local
+  switches, not the original's own numbers). At a
   parked eye, ours as wired is +5, +18, +35 and +21 luma over the mean of the two films at 0.75,
   0.83, 0.92 and 1.08 s; halving the half-width leaves -7, +1, +14 and +11. In the film's late
   frames the lines are thin; in ours the strip is a wide white sheet that crosses the frame
@@ -383,9 +392,9 @@ if self.spec.width == [0.0, 2.0] {
 }
 ```
 
-**2048 / Omega.** Not checkable: the measurement is HD's own RPCS3 frames; 2048 (Vita) has no
-emulator here with a memory readout and Omega (shadPS4) has no memory readout, so no pool age
-or blast centre can be read. The streaks are wired for HD alone, so nothing here moves them.
+**2048 / Omega.** Not checkable: the measurement needs the pool age and the blast centre read
+from live memory, and no readout was used for 2048 (Vita) or Omega (shadPS4, which has no
+memory readout). The streaks are wired for HD alone, so nothing here moves them.
 
 **Next.** Not tuned: the law stays as read (confidence 80), and the width and the
 alpha direction stay as the config reads them until a node-level read (`FatLine_PushChains`'s
