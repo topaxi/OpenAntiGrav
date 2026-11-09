@@ -184,7 +184,10 @@ fn what_the_screen_draws_stays_in_the_top_band_inside_the_chip_row() {
             let Draw::Fill { rect, .. } = draw else {
                 continue;
             };
-            assert!(rect[1] + rect[3] < 60.0, "{rect:?} is in the top band on {grid:?}");
+            assert!(
+                rect[1] + rect[3] < 60.0,
+                "{rect:?} is in the top band on {grid:?}"
+            );
             assert!(
                 rect[0] >= row_left - 1.0 && rect[0] + rect[2] <= row_right + 1.0,
                 "{rect:?} is inside the chip row {row_left}..{row_right} on {grid:?}"
