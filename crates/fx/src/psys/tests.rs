@@ -328,6 +328,45 @@ fn an_oriented_instance_emits_along_its_own_up() {
     );
 }
 
+/// A held surface or a burst is oriented the same way (`Fired::OwnAt`'s `up`, a mod effect's
+/// rear axis): `orient` went through the attached-only lookup and did nothing for them.
+#[test]
+fn a_played_or_held_instance_takes_its_orientation_too() {
+    let mut rng = Rng::new(5);
+    let mut spec = (*effect("aimed", true, 10.0)).clone();
+    spec.emitters[0].speed_per_tick = (1.0, 0.0);
+    let aimed = std::sync::Arc::new(spec);
+    for held in [false, true] {
+        let mut stage = Stage::new();
+        let handle = if held {
+            stage.play_held(&aimed, Vec3::ZERO, 1.0)
+        } else {
+            stage.play(&aimed, Vec3::ZERO, 1.0)
+        }
+        .expect("play");
+        assert_eq!(
+            stage.up_of(handle),
+            Some(Vec3::Y),
+            "world up until oriented"
+        );
+        stage.orient(handle, Vec3::X);
+        assert_eq!(stage.up_of(handle), Some(Vec3::X), "held {held}");
+        for _ in 0..8 {
+            stage.advance(DT, &mut rng);
+        }
+        let (additive, _) = stage.vertices(Vec3::Z, Vec3::Y);
+        assert!(!additive.is_empty(), "nothing was emitted");
+        let centre = additive
+            .iter()
+            .fold(Vec3::ZERO, |sum, v| sum + Vec3::from_array(v.position))
+            / additive.len() as f32;
+        assert!(
+            centre.x > 1.0 && centre.y.abs() < 0.5,
+            "held {held}: particles did not travel along +X: {centre:?}"
+        );
+    }
+}
+
 /// One live streak particle, head at `position` and tail at `origin`.
 fn streak_particle(position: Vec3, origin: Vec3) -> Particle {
     Particle {
