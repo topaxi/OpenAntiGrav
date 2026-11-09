@@ -65,6 +65,7 @@ mod people_grid;
 mod perfect_start;
 mod photo;
 mod photo_rewind;
+mod pure_absorb_bar;
 mod quake_armed;
 mod quake_lift;
 mod reconcile;

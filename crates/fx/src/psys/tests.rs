@@ -462,12 +462,34 @@ fn only_the_far_bar_reset_keeps_class_6_and_never_class_7() {
             .all(|e| e.streak == StreakDraw::Procedural)
     );
     let mut kept = base();
-    kept.without_pulse_psp_draw_but_far_bars();
+    kept.without_pulse_psp_draw_but(streak::KeptBar::Far);
     let draws: Vec<StreakDraw> = kept.emitters.iter().map(|e| e.streak).collect();
     assert_eq!(
         draws,
         [
             StreakDraw::FarBar { aspect: 1.0 },
+            StreakDraw::Procedural,
+            StreakDraw::Procedural
+        ]
+    );
+}
+
+/// The pool bar is the other opt-in: it keeps class 6 as [`StreakDraw::Bar`] (the mean-depth rectangle
+/// Pulse's and Pure's PSP engines build), and the wedge and the capped bar still go procedural.
+#[test]
+fn only_the_pool_bar_reset_keeps_class_6_as_the_mean_depth_bar() {
+    let mut effect = (*effect("pure", false, 10.0)).clone();
+    let spec = effect.emitters[0].clone();
+    effect.emitters = vec![spec.clone(), spec.clone(), spec];
+    effect.emitters[0].streak = StreakDraw::Bar { aspect: 0.5 };
+    effect.emitters[1].streak = StreakDraw::Capped;
+    effect.emitters[2].streak = StreakDraw::Wedge;
+    effect.without_pulse_psp_draw_but(streak::KeptBar::Mean);
+    let draws: Vec<StreakDraw> = effect.emitters.iter().map(|e| e.streak).collect();
+    assert_eq!(
+        draws,
+        [
+            StreakDraw::Bar { aspect: 0.5 },
             StreakDraw::Procedural,
             StreakDraw::Procedural
         ]

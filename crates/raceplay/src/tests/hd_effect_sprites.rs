@@ -3,6 +3,7 @@
 //! law, which Pulse on the PSP applies to every effect, is lifted for HD per
 //! effect the same way.
 
+use oag_fx::psys::streak::KeptBar;
 use oag_title::Title;
 
 use crate::assets::particle_effect;
@@ -65,7 +66,7 @@ fn track_blast(listed: bool) -> Option<oag_fx::psys::Effect> {
         false,
         false,
         listed,
-        false,
+        KeptBar::No,
     )
     .expect("the effect loads");
     Some(effect)
@@ -96,7 +97,7 @@ fn quake(extent_law: bool) -> Option<oag_fx::psys::Effect> {
         false,
         extent_law,
         true,
-        false,
+        KeptBar::No,
     )
     .expect("the effect loads");
     Some(effect)
@@ -130,7 +131,7 @@ fn missile_head(listed: bool) -> Option<oag_fx::psys::Effect> {
         false,
         false,
         listed,
-        false,
+        KeptBar::No,
     )
     .expect("the effect loads");
     Some(effect)
@@ -172,7 +173,7 @@ fn trail_hit_burst(listed: bool) -> Option<oag_fx::psys::Effect> {
         false,
         false,
         listed,
-        listed,
+        if listed { KeptBar::Far } else { KeptBar::No },
     )
     .expect("the effect loads");
     Some(effect)

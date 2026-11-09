@@ -116,7 +116,7 @@ Ranked:
    and HD's shell use; ours does not draw it on Pure (Pure's `oag_title::Effects` is the all-`UNREAD` table, `hull_overlay` included). Frame: the 0.5 s pair of the reference set.
 2. **The burst is long spikes on ours and a short crackle plus a glow on the original.** At 0.5 s ours draws pink
    star-shaped streaks 30 to 60 px long from the wing and tail locators; the original draws short crackles and one bright
-   pink bloom at the nose and wings. Visible in every frame from 0.17 s to 0.75 s.
+   pink bloom at the nose and wings. Visible in every frame from 0.17 s to 0.75 s. (The streak draw is now Pure's bar; the bloom and ring are template emitters, still muted: see "Pure: the burst's streak is the pool bar".)
 3. **A purple ground ring at 0.33 s to 0.5 s** under the craft in the original, none in ours.
 4. **HUD.** The original draws two orange bars at the top centre at 0.33 s and 0.5 s (the pickup notice) and its energy
    bar brightens around 0.75 s (`+12` in run 2, `+5` in run 1: run to run noise, not settled). Ours shows its own
@@ -201,12 +201,43 @@ Blue minus red at 0.5 s: original -4.2 and -3.9, ours before -0.3, after -3.1. R
 its whole surface in both, with the same decay. The first page's +17 at 0.5 s was a Single Race state (rivals, a different pose);
 this capture's peak is +13 to +15.
 
-**Still open on Pure (the burst and the ring, blocked, not fixed).** Pure's `WO_WEAPON_ABSORB.POB` is not Pulse's: one emitter (the
-streak one, class 6, life 7 ticks, colour mode 0 over a purple `(109, 22, 167)` to magenta `(181, 14, 147)` table) and **no `rings`
-emitter**. The ground-ring halos the original draws round the wingtips are therefore not in that file; their source is unread.
-The burst's total light matches (ground boxes either side of the craft at 0.5 s: original +8.4 and +8.3, ours +7.3 and +13.8, both
-carrying the same tint), so what differs is its shape: the original's streaks are wide, soft and dim purple; ours are 1 to 2 px
-hard lines with a white core. That is the streak draw in `crates/fx/src/psys`, which another lane holds, and it was not touched.
+### Pure: the burst's streak is the pool bar (landed); the ring and the glow are open
+
+**The streak.** Ours drew Pure's burst with the procedural profile (1 to 2 px hard lines with a white core) because `oag_raceplay` keeps
+Pulse's PSP draw laws for Pulse alone. Pure's pool dispatcher routes class 6 to a bar that is Pulse's `ParticleSystem_DrawPoolBars` step for
+step (mean depth, `(d.y, -d.x) * size` across, `d * size * aspect` past each end; `docs/ghidra/functions/psp-pure-usa/particle-bars.md`,
+confidence 85, static, not hit live). `oag_title::Effects::pool_bars` lists `WO_WEAPON_ABSORB` for Pure, `oag_fx::psys::streak::KeptBar::Mean`
+keeps that emitter's `StreakDraw::Bar { aspect: 2.0 }` and its embedded 64x64 sprite. Test:
+`crates/raceplay/src/tests/pure_absorb_bar.rs` (`pure_loads_its_absorb_burst_as_the_pool_bar`, fails with the list dropped).
+
+**The file is not one emitter.** `WO_WEAPON_ABSORB.POB` parses to three: the streak, and two template billboards, `ring1` (additive, alpha 0 to
+100, size about 1) and `glow`. Ours mutes every template on a source that is not Pulse's PSP (`mute_templates`), and Pure's template draw is
+unread, so neither draws. They are the likeliest source of the purple ground ring and the pale bloom at the nose and wingtips the original
+draws (hypothesis, below 50: the ring and bloom seen in the pair are not matched to the two files' draws). Earlier text on this page and in
+`hull-overlay.md` that said "one emitter, no rings emitter" counted the streak only.
+
+Pair: Single Race state (Vineta K, Feisar, `pure-single-vineta-feisar-race.ppst`), the first capture's original frames at the 0.3, 0.5 and 0.75 s
+frames (`age 9, 15, 22`; the file index in the raw capture is twice the age), ours with the recipe under "Reproducing". Box mean luma,
+absorb minus control, 480x272. The Time Trial state of the previous table is not on this machine, and the ground boxes that table's
+"+8.4 and +8.3" were taken on were never written down, so that figure is not reproduced here.
+
+| Age | Box | Original | Ours before | Ours after |
+| --- | --- | --- | --- | --- |
+| 0.3 s | craft `150,150,330,272` | +12.7 | +9.0 | +7.3 |
+| 0.5 s | craft | +18.3 | +14.5 | +11.3 |
+| 0.75 s | craft | +3.1 | +10.0 | +7.7 |
+| 0.5 s | ground left `60,170,150,272` | +0.6 | +0.7 | +0.3 |
+| 0.5 s | ground right `330,170,420,272` | +0.9 | +0.9 | +0.4 |
+
+Blue minus red in the craft box at 0.5 s: original -5.8, before -3.2, after -2.6. Read as a player (`ours` against `original`, three frames
+each): the white core and the 1 to 2 px lines are gone, the streaks are now wide soft purple-magenta shafts, as the original's are. Still
+different: ours are radiating rays where the original's shafts rise mostly vertically; ours are more magenta than the original's purple; ours has
+no ground ring and no bloom (the muted templates), which is where the craft box's light is short (11.3 against 18.3, the box also holds the
+overlay); and at 0.75 s ours still shows streaks (+7.7) where the original has almost none (+3.1; the stagger of eight nodes at 0.1 s is the
+burst trigger, which this lane did not touch). The clear ground boxes carry about no light in this pose.
+
+Cross-title: **checked, differs** for 2048 and Omega (their class-6 draw is HD's render-mode 5 far bar, `far_bars`, and their absorb burst is
+HD's lineage); Pulse and HD untouched (`pulse_psp` skips the reset, `far_bars` is unchanged).
 
 ### HD: the shell is halved and reads the craft's block (landed); the tint is open
 
