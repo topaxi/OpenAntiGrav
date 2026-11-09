@@ -36,6 +36,11 @@ with `OAG_SWEEP=1 OAG_SWEEP_TITLE=<title>`.
   just before the first tick now (`Keeper::recut_first`). The stage-6 hash test and the PLAY test run with no mod
   mounted. **Open:** `--give` writes the pickup outside the tick and outside the recording, so a pre-roll from keyframe
   0 does not see it.
+- **Storage gaps (maintainer, 2026-11-09: recorded, not scheduled).** `auto/` is the 20-file, 32 MiB ring and
+  `saved/` (KEEP) is never pruned; a pose track is about 1.4 KB/s for 8 craft at Venom, 2 KB/s at Phantom, so a race
+  is about 200-300 KB and the one-hour cap about 7 MB (`docs/formats/replay-file.md`). Open: (1) **no KEEP on a phone
+  or the web** (`replays::SAVES` is false there, so only the ring exists); (2) **the ring's limits are fixed**, no
+  setting raises the 20 files.
 - **Over a live race PLAY is photo mode's playback, not the viewer's screen** (ADR-0088, decision 1); a viewer over a
   live race is not built.
 - **The viewer's photo mode** offers no blur rows (no keyframes of the race it moves) and is refused in POSE VIEW.
