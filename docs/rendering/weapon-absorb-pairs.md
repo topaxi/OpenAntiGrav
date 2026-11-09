@@ -442,7 +442,7 @@ tint moves toward blue. **False as stated; no code changed.**
 
 ## HD: the shell's unit 0 reads gamma nibble 7; decoding it does not close the tint (`hd-absorb-tint-2`, 2026-11-09)
 
-**Claim, half true: N is 7, and wiring the decode moves the 1.0 s tint the wrong way. Nothing landed in the renderer.**
+**Claim, half true: N is 7, and wiring the decode makes the shell bluer and dimmer, which misses the brief's 1.0 s blue-minus-red target because the level falls, not because the hue moves away. Nothing landed in the renderer; landing the decode is the lead's call.**
 
 Falsifier written before the capture: bits 20-23 of unit 0's `SET_TEXTURE_ADDRESS` word on the shell's draw are not 7.
 
@@ -474,8 +474,9 @@ alpha-offset tap raw) and re-pairing on this run's own frames, ours on one drive
 | 0.5 s luma / blue minus red | +15.9 / +14.2 | +17.4 / +7.2 | +11.6 / +11.1 | +15.3 / +11.8 |
 | 1.0 s luma / blue minus red | **+7.0 / +9.8** | **+5.8 / +6.8** | **+1.8 / +4.4** | +2.5 / +5.5 |
 
-The target was blue minus red at 1.0 s of at least +9.0, with luma re-paired against the original's: ours falls to +4.4 and +1.8. **That part is false, so the change was reverted.**
-At 0.5 s, where the burst is most of the box, the decode is bluer (+7.2 to +11.1) and dimmer, nearer the original on both. Read as a player (the craft crops at 0.5 s and
+The target was blue minus red at 1.0 s of at least +9.0, with luma re-paired against the original's: ours falls to +4.4 and +1.8. **That target is missed, so the change was reverted.**
+Blue minus red is a level, not a hue, so the box's own RGB deltas give the hue as blue over red: original 2.2 (0.5 s) and 3.1 (1.0 s), before 1.5 and 2.8, decode 2.3 and 6.6 (red under 1 grey, noisy).
+On hue the decode lands on the original at 0.5 s and overshoots toward blue at 1.0 s; the gap at 1.0 s is the shell's level. At 0.5 s, where the burst is most of the box, the decode is bluer (+7.2 to +11.1) and dimmer, nearer the original on both. Read as a player (the craft crops at 0.5 s and
 1.0 s, original, before, decode, side by side): the original at 1.0 s is a hull in a saturated blue sheen with a blue ring on the pad; ours before is a faint lavender
 rim and the decode makes it fainter, so the shell does **not** read as saturated blue after the change. The decoded shell is `enc(0.5 dec(t))`, always darker than
 `enc(0.5 t)`; the original is brighter than either, so the missing light is not the tap's encoding.
@@ -483,12 +484,15 @@ rim and the decode makes it fainter, so the shell does **not** read as saturated
 **What is open (leads, none measured):**
 
 1. **Framing.** The craft in ours is about 1.5 times the original's width in this pair (same pose and camera, by eye; the first capture had it near 2 times), so the box holds a
-   different share of hull, track and shell. A like-for-like score needs the craft's own pixel mask, or a camera solved from the craft's projected size.
+   different share of hull, track and shell. Ours' craft being larger means its shell covers more of the box, so ours reads high, not low: the level deficit at 1.0 s is at least what the table shows.
+   A like-for-like score needs the craft's own pixel mask, or a camera solved from the craft's projected size.
 2. **The shell mesh.** The original's 14 draws sum to 20,076 indices (6,692 triangles); `absorb-feedback.md` reads 12,977 triangles for Feisar's `LeachEffectShape`.
    This hull is `Feisar_c1`; which mesh its `AbsorbEffect.vex` names was not read.
 3. **The original's tint moved between captures** on the same state: +10.8 (first), +9.8 (this one, RPCS3 0.0.43-20574); luma +5.8 and +7.0. Controls were equal; the spread is
    about the size of the effect, so the +9.0 target sat inside it.
-4. The `/2` was matched on luma alone (+5.8) before the nibble was known; with the decode in, that match is gone, and dropping the `/2` is not it either (table). Re-read the shell's alpha
+4. **The original's 1.0 s frame may hold more than the shell.** It shows a blue ring on the pad around the craft, outside the hull. An absorb-minus-control difference of the two 1.0 s frames is
+   dominated by the camera and pose differing between runs (the whole scene lights up), so the ring is not isolated; the page's "at 1.0 s the shell is alone" is not shown for the original's frame.
+5. The `/2` was matched on luma alone (+5.8) before the nibble was known; with the decode in, that match is gone, and dropping the `/2` is not it either (table). Re-read the shell's alpha
    (`ShieldColour` times the vertex ramp) against the draw's constants before touching either factor.
 
 RPCS3 0.0.43-20574 does not load the October save states (`No savestate file found or savestate not compatible`): the weapons grid was rebuilt with

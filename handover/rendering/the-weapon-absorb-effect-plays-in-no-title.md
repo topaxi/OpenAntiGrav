@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-09
-summary: "Open: Pure templates held off, Pure ground ring, HD shell tint (nibble 7 read, decode alone worse), HD burst re-shot, PS2 bar"
+summary: "Open: Pure templates held off, Pure ground ring, HD shell tint (nibble 7 read, decode bluer but dimmer), HD burst re-shot, PS2 bar"
 ---
 
 # The weapon-absorb effect: built on every title, what a player still sees differently
@@ -35,7 +35,7 @@ Re-paired on a second machine on 2026-11-09 (`absorb-fx-wire`); numbers and comm
 - **HD.** The state's player is the `Feisar_c1` concept hull; ours needs `--team feisar_c1 --variant concept1` to be the same ship.
   1. The shell's colour: pale lavender-white against the original's saturated blue (blue minus red at 1.0 s: original +9.8 to +10.8, ours +6.8).
      **Read, 2026-11-09 (`hd-absorb-tint-2`): unit 0's gamma nibble is 7** on all 14 shell draws (`0x60710101`, confidence 85, one boot), but **decoding the tap
-     makes the 1.0 s pair worse** (blue minus red +4.4, luma +1.8 against +9.8 and +7.0), so it was not wired. Open: the pair's framing (ours' craft is about 1.5 times the
+     makes the shell bluer and dimmer** (1.0 s blue minus red +4.4 and luma +1.8 against +9.8 and +7.0: the hue lands on the original at 0.5 s, the gap is level), so it was not wired; landing it is the lead's call. Open: the pair's framing (ours' craft is about 1.5 times the
      original's width, so the craft box compares different pixels), which mesh Feisar_c1's `AbsorbEffect.vex` names (the original draws 6,692 triangles, the page reads 12,977),
      and the shell's alpha; `weapon-absorb-pairs.md`, "HD: the shell's unit 0 reads gamma nibble 7".
   2. The burst: "twice too strong" rests on one capture (+6.9 to +8.3 at 0.3 to 0.75 s); the first capture read the original at +13 to +21.
@@ -59,7 +59,7 @@ Re-paired on a second machine on 2026-11-09 (`absorb-fx-wire`); numbers and comm
 ## Next Steps
 
 1. ~~Pulse bar: let the stamp pass read the HUD target's colour under the mask~~ (landed, `pulse-stamp-scene`; off half 223 to 226 -> 239 to 244).
-2. ~~HD shell tint: read unit 0's gamma nibble~~ (read, 7; the decode alone moves 1.0 s the wrong way). Next: a pixel-mask or size-solved craft box for the pair, then the shell mesh and alpha reads (leads 1, 2 and 4 of the section above).
+2. ~~HD shell tint: read unit 0's gamma nibble~~ (read, 7; the decode makes the shell bluer and dimmer, the gap is level). Next: a pixel-mask or size-solved craft box for the pair, then the shell mesh and alpha reads (leads 1, 2 and 4 of the section above).
 3. HD burst: re-shoot the original (three absorbs, one control, one boot) to settle +7.7 against +21.4 at 0.5 s; then read what writes `kColourScale` (`c467`) per psys draw. No `/2`.
 4. Pure templates: the passive RAM scan on the particle-bars page to read how many template particles the original keeps at 0.5 and 0.75 s, then list `WO_WEAPON_ABSORB` in `Effects::templates` and re-pair.
 5. 2048: read `Ship_PlayAbsorbFeedback` and the pickup slot in the 2048 eboot, then the HD recipe with a `/proc` write. Omega: walk the Racebox weapons row and read the same two on the eboot.
