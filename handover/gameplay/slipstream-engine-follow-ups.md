@@ -250,10 +250,12 @@ Looked at frame by frame at 1280x720 on Pulse PSP EU `16_Track` (High and Low), 
 8. **The extra seats of a split** get the same camera and backdrop; not looked at.
 9. **The sounds were not touched**: the three synthesised placeholders still start and stop on
    the entrance and the exit, with no rise into the tunnel.
-10. `drive_ground_truth::a_race_box_race_runs_the_simulation_mods_only_with_the_extensions_feature`
-    fails on this branch under the quick profile with `thread 'race-build' has overflowed its
-    stack`, and `check-size` names `crates/game/src/race_capture.rs` at 1501 lines: both with
-    and without this change.
+10. `check-size` names `crates/game/src/race_capture.rs` at 1501 lines, with and without this
+    change. The `race-build` stack overflow that two commit messages of 2026-11-10 call red on
+    the branch is not a defect of it: a disc-backed test that spawns the game overflows that
+    thread under `--cargo-profile quick` (opt-level 0) and passes under the ground-truth
+    profile (`drive_ground_truth::a_race_box_race_runs_the_simulation_mods_only_with_the_extensions_feature`
+    and `pause_menu_ground_truth::a_speed_lap_pauses_into_the_speed_lap_screen`, both checked).
 
 ## SVG icons (lane svg-assets, 2026-11-04)
 

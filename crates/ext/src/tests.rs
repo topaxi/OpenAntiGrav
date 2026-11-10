@@ -872,3 +872,58 @@ fn a_guest_reads_where_another_craft_sits_in_its_own_frame() {
         "quantised to 2 units"
     );
 }
+
+#[test]
+fn a_place_ahead_and_a_gap_are_taken_round_the_lap() {
+    use crate::lap::{ahead, gap};
+    assert_eq!(ahead(3900.0, 30.0, 4000.0), 3930.0);
+    assert_eq!(ahead(3990.0, 30.0, 4000.0), 20.0, "over the line");
+    assert_eq!(ahead(10.0, -30.0, 4000.0), 3980.0, "back over it");
+    assert_eq!(
+        ahead(-5.0, 0.0, 4000.0),
+        3995.0,
+        "the grid is behind the line"
+    );
+    assert_eq!(ahead(12.0, 30.0, 0.0), 12.0, "no lap to take it round");
+    assert_eq!(
+        gap(3995.0, 20.0, 4000.0),
+        25.0,
+        "the short way, over the line"
+    );
+    assert_eq!(gap(21.0, 20.0, 4000.0), -1.0, "past it");
+    assert_eq!(gap(100.0, 300.0, 0.0), 200.0);
+}
+
+#[test]
+fn a_crafts_speed_is_its_kmh_in_units_and_a_test_flies_it_on() {
+    struct Reads;
+    impl Extension for Reads {
+        type State = NoState;
+        fn tick(obs: &Observation<'_>, _: &mut Self::State, reply: &mut Reply<'_>) {
+            let craft = obs.craft(Slot::new(0).unwrap()).unwrap();
+            // 360 km/h is 100 units a second.
+            let _ = reply.scale_thrust(&craft, craft.speed() / 100.0);
+            let _ = reply.scale_speed(&craft, craft.progress().unwrap() / 1000.0);
+        }
+    }
+    let me = slot(0);
+    let mut race = Race::<Reads>::new()
+        .with_craft(
+            me,
+            CraftRecord {
+                racing: true,
+                speed_kmh: 360.0,
+                ..CraftRecord::default()
+            },
+        )
+        .with_course(4000.0, me, Some(500.0), 3);
+    assert!(race.tick().contains(&Command::ScaleThrust {
+        slot: me,
+        factor: 1.0
+    }));
+    race.set_progress(me, Some(1500.0));
+    assert!(race.tick().contains(&Command::ScaleSpeed {
+        slot: me,
+        factor: 1.5
+    }));
+}

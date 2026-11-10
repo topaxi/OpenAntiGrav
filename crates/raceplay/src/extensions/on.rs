@@ -7,6 +7,9 @@ use super::{Drops, Report};
 use crate::extension_pickup::pickup;
 use crate::sim::RaceSim;
 
+// A guest's `Craft::speed` undoes the factor the host's own speed readouts use.
+const _: () = assert!(oag_ext_abi::SPEED_TO_KMH == oag_core::math::SPEED_TO_KMH);
+
 #[derive(Debug, Clone)]
 pub(super) struct Slot {
     pub(super) mod_id: String,
@@ -661,8 +664,7 @@ fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<oag_ext_abi
                     .map_or(0, |n| u8::try_from(n).unwrap_or(u8::MAX)),
                 shield: ship.physics.shield,
                 shield_max: ship.handling.dimensions.shield,
-                speed_kmh: ship.physics.body.linear_velocity.length()
-                    * oag_core::math::SPEED_TO_KMH,
+                speed_kmh: ship.physics.body.linear_velocity.length() * oag_ext_abi::SPEED_TO_KMH,
             }
         })
         .collect()

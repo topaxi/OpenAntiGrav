@@ -55,6 +55,14 @@ pub struct Craft {
     pub speed_kmh: f32,
 }
 
+/// Km/h in a track unit a second: what the host multiplies a body's speed by for
+/// [`Craft::speed_kmh`], and a guest divides by to have units back.
+pub const SPEED_TO_KMH: f32 = 3.6;
+
+/// The simulation's ticks a second: what a count of ticks (a transit's, an effect's life) is
+/// a time in, and a speed in units a second is a distance a tick by.
+pub const TICKS_PER_SECOND: f32 = 60.0;
+
 impl Craft {
     /// The record.
     #[must_use]

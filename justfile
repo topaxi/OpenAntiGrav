@@ -1339,6 +1339,13 @@ check-weapon-lineage:
 check-test-groups:
     python3 -I scripts/check-test-groups.py
 
+# Every mod guest crate under assets/mods passes its own tests, and each committed
+# `ext/*.wasm` is what its guest builds: the gate compiles neither, a guest being a workspace
+# of its own. A stale module is reported; `just check-guests --strict` fails on one. Needs
+# `rustup target add wasm32-unknown-unknown` to compare modules. Not in the gate.
+check-guests *ARGS:
+    python3 -I scripts/check-mod-guests.py "$@"
+
 # Every shipped TOML validates against the TOML Schema it names (schemas/v1/), the
 # schema and its loader give the same verdict on each example, and the schemas
 # stage to the path the Pages site serves them at. docs/formats/toml-schema.md

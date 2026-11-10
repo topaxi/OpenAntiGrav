@@ -37,6 +37,7 @@ just check-handover          # HANDOVER.md under 256 KiB (the Read tool's ceilin
 just check-weapon-lineage    # docs/gameplay/weapon-lineage.md's checked axes match the title crates
 just check-test-groups       # .config/nextest.toml's gpu-vram group names every test module that spawns the game or captures a frame
 just check-schemas           # shipped TOML validates against schemas/v1/ (ADR-0064)
+just check-guests            # every mod guest's own tests, and each committed ext/*.wasm against a fresh build (--strict fails a stale one); needs the wasm32 target, not in the gate
 just check-status # status.md's RE-coverage table matches names.tsv; `just gen-status` regenerates it
 just check-strings           # menu.toml rows have string_id + english.toml text (ratchet)
 just check-test-budget       # no test-data suite over 450s, no test over 300s (ratchet)

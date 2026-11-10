@@ -131,6 +131,13 @@ impl<E: Extension> Race<E> {
         self
     }
 
+    /// Puts `slot` at `progress` along the lap (`None`: no fix), its place and the course's
+    /// length as they are: a craft flown on between two ticks of a test.
+    pub fn set_progress(&mut self, slot: Slot, progress: Option<f32>) -> &mut Self {
+        self.tracking[slot.index()].progress = progress;
+        self
+    }
+
     /// Sets where `target` sits in `observer`'s frame, in world units ahead, to the right and
     /// above: what [`Craft::aim_at`](crate::Craft::aim_at) reads.
     #[must_use]
