@@ -307,12 +307,9 @@ pub struct CaptureOptions {
     pub player_tags: bool,
     /// The stored player name, which names seat 1 ([`crate::split_screen::name_first_seat`]).
     pub player: crate::settings::Player,
-    /// What casts a shadow in the captured frame: `--shadows`.
-    ///
-    /// Honoured the same way [`Self::motion_blur`] is, and here for the same
-    /// reason: two captures differing only by this flag are how the tier gets
-    /// compared against itself off. Unlike the blur it needs no primer frame -
-    /// a blob is placed from the tick's own pose, with no history.
+    /// What casts a shadow in the captured frame: `--shadows`. Two captures differing only by
+    /// this flag compare the tier against itself off; unlike [`Self::motion_blur`] it needs no
+    /// primer frame, a blob being placed from the tick's own pose.
     pub shadows: oag_display::display::Shadows,
     /// How far out authored `LodGroup`s switch in the captured frame -
     /// `[render_profiles.<title>] model_detail`, or `--lod`'s preset.

@@ -1351,3 +1351,6 @@ mod tests;
 
 #[cfg(test)]
 mod ghost_tests;
+
+#[cfg(test)]
+mod trail_length_tests;
