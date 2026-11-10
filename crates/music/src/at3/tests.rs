@@ -276,6 +276,77 @@ fn a_cache_file_that_is_not_whole_frames_is_rejected() {
     assert!(from_s16le(&[0, 1], stereo).is_none());
 }
 
+/// A source that hands out at most `step` bytes a call, as a pipe or a busy
+/// disk can, and so splits a sample across two reads.
+struct Dribble<'a> {
+    rest: &'a [u8],
+    step: usize,
+}
+
+impl std::io::Read for Dribble<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.step.min(buf.len()).min(self.rest.len());
+        buf[..n].copy_from_slice(&self.rest[..n]);
+        self.rest = &self.rest[n..];
+        Ok(n)
+    }
+}
+
+/// The streaming read gives the samples the whole-slice conversion gives, on a
+/// file longer than one read chunk with a short read that ends mid-sample, and
+/// reads a real file back the same way.
+#[test]
+fn reading_in_chunks_gives_the_same_samples_as_converting_in_one() {
+    let stereo = Format {
+        channels: 2,
+        sample_rate: 44_100,
+        block_align: 560,
+    };
+    let frames = READ_CHUNK / 4 * 3 + 5;
+    let bytes: Vec<u8> = (0..frames * 4)
+        .map(|i| u8::try_from((i * 7 + i / 251) % 256).expect("a byte"))
+        .collect();
+    let whole = from_s16le(&bytes, stereo).expect("whole frames");
+    let reference: Vec<i16> = bytes
+        .chunks_exact(2)
+        .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
+        .collect();
+    assert_eq!(whole.samples, reference);
+    assert_eq!(
+        whole.samples.capacity(),
+        whole.samples.len(),
+        "one allocation"
+    );
+
+    let dribbled = read_s16le(
+        Dribble {
+            rest: &bytes,
+            step: 3,
+        },
+        bytes.len(),
+        stereo,
+    );
+    assert_eq!(dribbled.as_ref(), Some(&whole));
+
+    let short = read_s16le(
+        Dribble {
+            rest: &bytes[..bytes.len() - 2],
+            step: 4096,
+        },
+        bytes.len(),
+        stereo,
+    );
+    assert!(short.is_none(), "a source that ends early is a miss");
+
+    let dir = std::env::temp_dir().join(format!("oag-at3-chunk-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let path = dir.join("track.s16le");
+    std::fs::write(&path, &bytes).expect("write");
+    let from_disk = read_cached(&path, stereo);
+    std::fs::remove_dir_all(&dir).expect("cleanup");
+    assert_eq!(from_disk, Some(whole));
+}
+
 /// The cache file a run never wrote is a miss, not a panic.
 #[test]
 fn an_absent_cache_file_is_a_miss() {

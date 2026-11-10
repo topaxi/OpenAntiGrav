@@ -27,6 +27,31 @@ fn a_placed_sprite_lands_on_the_sheet_where_its_rect_says() {
 }
 
 #[test]
+fn the_sheet_holds_only_the_rows_its_sprites_reach() {
+    let mut sheet = Sheet::default();
+    assert_eq!(sheet.rows(), 0);
+    sheet.place(&sprite(64, 40, 7)).expect("fits");
+    assert_eq!(sheet.rows(), 40);
+    let row_bytes = SHEET_SIZE as usize * 4;
+    assert_eq!(sheet.pixels().expect("placed").len(), 40 * row_bytes);
+
+    // A wider sprite than is left on the shelf opens the next one, below the
+    // first shelf's tallest sprite and the pad.
+    let wide = u16::try_from(SHEET_SIZE).expect("fits a u16");
+    sheet.place(&sprite(wide, 10, 9)).expect("fits");
+    assert_eq!(sheet.rows(), 40 + PAD + 10);
+
+    // What the grown list holds is what a full-size list would, zero below.
+    let pixels = sheet.pixels().expect("placed");
+    let mut full = vec![0_u8; SHEET_SIZE as usize * row_bytes];
+    full[..pixels.len()].copy_from_slice(pixels);
+    assert_eq!(full[39 * row_bytes], 7);
+    assert_eq!(full[(40 + PAD as usize) * row_bytes], 9);
+    assert!(full[(52 * row_bytes)..].iter().all(|&byte| byte == 0));
+    assert_eq!(pixels[..64 * 4], full[..64 * 4]);
+}
+
+#[test]
 fn an_identical_sprite_is_placed_once() {
     let mut sheet = Sheet::default();
     let a = sheet.place(&sprite(32, 32, 1)).expect("fits");

@@ -1,15 +1,15 @@
 ---
 status: measure
 titles: [all]
-updated: 2026-11-07
-summary: "Print the psys sprite-sheet fill for one race; measure original-tier hull clone and net correction rate"
+updated: 2026-11-10
+summary: "Items 1-3 closed with numbers; open: psys GPU texture still 64 MiB, net correction rate, HUD per-view strings"
 ---
 
 # Allocation opportunities, ranked (2026-10-19)
 
 A read-only scout of heap churn and peak memory across a race: load, the
-per-frame path, the per-view path and the net client's snapshot copies. Nothing
-here is implemented. Each item names its place, how often it runs, an estimated
+per-frame path, the per-view path and the net client's snapshot copies. Items 1
+to 3 are closed below with their measured numbers; the rest is not implemented. Each item names its place, how often it runs, an estimated
 saving (labelled), the command that measures it, and the risk. **Measured** means
 a number from this machine. **Reading** means it comes from the code and is not
 yet isolated.
@@ -40,7 +40,41 @@ Setup: `--race` on Talon's Junction (`data/images/pulse-psp-usa.chd`), `--ticks
 - **Capture frame at tick 600:** 942 allocations, 1,044 KiB. The 377-allocation
   gap to the bench frame is outside `Scene::render`. Not isolated.
 
-## Worth a lane now
+## Closed
+
+- **Item 1, the psys sprite sheet (CPU copy and upload): landed.** `Sheet` grows its
+  pixel list by whole rows as shelves reach down instead of allocating
+  4096 x 4096 x 4 bytes on the first placement, and `sync_sheet` uploads only
+  those rows (`Sheet::rows`). The fill is small: Pulse 128 of 4096 rows (3 percent,
+  52 sprites, 16_Track and 09_Track alike), HD 1538 of 4096 rows (38 percent,
+  10 sprites). Heaptrack (same build profile before and after, `--ticks 600`, Pulse
+  09_Track, three rounds): peak 300.98 / 303.92 / 303.92 MB before, 239.19 /
+  236.98 / 238.78 MB after. HD (`--ticks 300`, Talon's Junction): peak
+  723.60 MB before, 682.21 MB after. Screenshots byte-identical on Pulse (two
+  tracks) and HD; the pixel list is the old one with the zero rows cut off, pinned
+  by `the_sheet_holds_only_the_rows_its_sprites_reach`. **Still open:** the GPU
+  texture is created at 4096 x 4096 (64 MiB of VRAM); sizing it to the rows needs
+  the UV normalisation in `sprite.rs` (`SHEET_SIZE`) to change with it.
+- **Item 2, music decode: landed.** `read_cached` opens the file, takes its length
+  from the metadata and reads 64 KiB chunks straight into a `Vec<i16>` with that
+  capacity (`read_s16le`), so the raw bytes are never held beside the samples.
+  Decode-only harness: peak 66.30 MB before, 33.20 MB after, 616 vs 615 allocation
+  calls. In Pulse `--no-audio` still decodes the music (67.34 MB over 2 calls at
+  the old `at3.rs:410`). Samples are bit-identical, pinned by
+  `reading_in_chunks_gives_the_same_samples_as_converting_in_one` (an independent
+  per-pair reference, a 3-byte-step reader that splits samples, a short source,
+  a real file).
+- **Item 3, the hull clone: already landed before this lane**, in `4919d9750` and
+  `3bce7e3c5` (2026-11-04): `original_hulls` reads the cache's current gather in
+  place and blends into a kept list (`blend_into`). Perf probe, quick build, Pulse
+  16_Track, `OAG_RENDER_PERF=1 OAG_RENDER_BENCH=50`: the `shadow-gather` mark is
+  20 allocs and 990 bytes per frame with the cache hit
+  (`OAG_RENDER_BENCH_FRAMES_PER_TICK=1000`) and 21 allocs and 1,046 bytes when the
+  gather is redone every frame (`FRAMES_PER_TICK=1`), against 23 allocs and 213 KB
+  and 56 allocs and 279 KB before. The first frame still pays 71 allocs and 95 KB
+  for the cold lists. The remaining 20 allocations are not the hull path.
+
+## Worth a lane (original scout text, items 1 to 3 as found)
 
 1. **The particle sprite sheet is a 64 MiB CPU image and a 64 MiB GPU texture,
    4096 squared whatever is placed on it.** Measured: 68.6 MB of the 254.9 MB
@@ -188,11 +222,6 @@ blocked a wrapper shell for 550 seconds in one run. Unset `DISPLAY` and
 
 ## Open
 
-- **The sprite-sheet fill is not measured.** A one-off, uncommitted print of
-  `max(y + h)` in `Sheet::place` on one race settles item 1: a small fill means
-  shrink or drop the sheet; a large one means it is not the win it looks like.
-- **The `original` tier's clone share is not measured** (item 3). A mark between
-  the clone and the blend would count it.
 - **The correction rate is not measured** (item 4). It needs a two-seat session
   and the one-line-a-second log.
 - The release peak is one run on one circuit. Repeat on a second circuit before
@@ -200,8 +229,6 @@ blocked a wrapper shell for 550 seconds in one run. Unset `DISPLAY` and
 
 ## Next Steps
 
-1. Print the sprite-sheet fill for one race (open, item 1). That decides shrink or drop.
-2. Make the music decode read straight into `i16` with a capacity (item 2). Measure
-   on the release heaptrack run.
-3. Split the hull clone and the blend allocation (item 3), with the perf-probe
-   before and after.
+1. Size the psys GPU texture to the rows placed (64 MiB of VRAM; UV scale follows).
+2. Count net corrections in a two-seat session (item 4).
+3. Add a perf-probe mark around the HUD `draw_list` and `paint` (item 5).
