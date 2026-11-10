@@ -53,7 +53,8 @@ A selected package runs in full unless one of these holds:
 
 `oag-core` and the simulation crates are not escalated: everything that links
 one is selected by the rule above, which is every test that can see a
-determinism slip, and `check-determinism` runs in full on every gate.
+determinism slip, and `check-determinism` runs in full on every gate. Such a
+change is named on stderr, and the lead gates that merge at once.
 
 # Changes that select nothing
 
@@ -92,6 +93,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# A change here selects by the same rule as any other, and is also named on
+# stderr, because the lead gates such a merge at once rather than per batch.
+SIMULATION_PACKAGES = {
+    "oag-core",
+    "oag-physics",
+    "oag-gameplay",
+    "oag-ai",
+    "oag-race",
+    "oag-formats",
+}
 
 ESCALATING_FILES = {
     "Cargo.toml",
@@ -525,9 +537,20 @@ class Selection:
         return [*out, "-E", self.filterset()]
 
 
-def needles(path: str) -> list[str]:
+def needles(path: str, inside: str | None = None) -> list[str]:
+    """The texts that name a file: its path, then each parent directory.
+
+    Outside a crate, down to two components. Inside the crate at `inside`,
+    relative to the crate's parent (another crate reads it as
+    `crates/game/tests/fixtures/x` or `../game/tests/fixtures/x`) and down to
+    the directory below the crate's `tests/` or `src/`, because the crate's
+    own name alone is in every other comment.
+    """
     parts = path.split("/")
-    return ["/".join(parts[:n]) for n in range(len(parts), 1, -1)] or [path]
+    if inside is None:
+        return ["/".join(parts[:n]) for n in range(len(parts), 1, -1)] or [path]
+    skip = len(inside.split("/")) - 1
+    return ["/".join(parts[skip:n]) for n in range(len(parts), skip + 2, -1)]
 
 
 def lock_packages(text: str | None) -> dict[str, str]:
@@ -585,9 +608,12 @@ class Classifier:
         self.full = True
 
     def readers(self, path: str, skip: str | None = None) -> bool:
-        """Select what names `path`; whether anything did."""
+        """Select what names `path`; whether anything did.
+
+        `skip` is the package that owns the file, already selected.
+        """
         found = []
-        wanted = needles(path)
+        wanted = needles(path, self.ws.packages[skip].directory if skip else None)
         for name, package in self.ws.packages.items():
             if name == skip:
                 continue
@@ -763,6 +789,12 @@ def main() -> int:
         print("affected: no package selected, no tests to run", file=log)
         print("none")
         return 0
+    if simulation := sorted(changed & SIMULATION_PACKAGES):
+        print(
+            f"affected: core or simulation changed ({' '.join(simulation)});"
+            " the lead runs the full gate at once after this merge",
+            file=log,
+        )
     whole = sorted(p for p, u in selection.packages.items() if u is None)
     print(
         f"affected: {len(changed)} changed package(s), "

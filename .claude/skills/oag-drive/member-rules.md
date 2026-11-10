@@ -65,7 +65,7 @@ Recipes: `docs/reverse-engineering/emulator-recipes.md`.
     | tee /home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/test-data.log
   ```
 
-  Both run every check in full and the tests of the packages you changed plus their dependents. **Quote the printed `affected:` selection in your report.** A change to `oag-core`, a simulation crate, `Cargo.lock`, the toolchain, the `justfile`, `.config/` or a `build.rs` selects the full suite by itself; that is expected. The lead runs the full pair per merge batch; run it yourself only if the brief says so.
+  Both run every check in full and the tests that link your change: the packages that link a changed one, narrowed to the test modules that do (`docs/architecture/affected-gate.md`). **Quote the printed `affected:` selection in your report.** The root `Cargo.toml`, the toolchain or `.cargo/` selects the full suite by itself, and a change to `oag-core` or a simulation crate selects most of it; that is expected. The lead runs the full pair per merge batch; run it yourself only if the brief says so.
 
   **Which GPU the tests run on.** Use the discrete GPU by default. The `gpu-vram` test group in `.config/nextest.toml` caps game-spawning tests at 4 at once, so `wgpu error: Out of Memory` no longer needs another GPU. A SIGSEGV at exit means a GPU-touching thread outlived `main`: register it with `oag_thread::gpu_workers`, do not switch GPU. A new test module that spawns `oag-game` goes into the group (`just check-test-groups` names it). Time ceilings are judged on the full-size machine: on a smaller one a red that is only `check-test-budget` time is green.
 

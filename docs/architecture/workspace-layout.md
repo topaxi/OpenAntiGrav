@@ -815,6 +815,11 @@ retries or slow-timeout, so all three are nextest's defaults. A release-profile
 test build was not tried, because every crate on these tests' hot path has
 been at `opt-level = 2` in the dev profile since 2026-10-01.
 
+**The selector was rewritten on 2026-11-10** to follow what a test links, down
+to the test module; its rules, what each could miss and the replay of 50
+merges are in [`affected-gate.md`](affected-gate.md). The paragraph below is
+still the reason a render lane gains little.
+
 **Why the affected gate helps a render lane less than its test count says.**
 Selection is per package, and every `oag-game` test binary links all of
 `oag-game`, so a change in `oag-mesh`, `oag-render` or `oag-fx` selects

@@ -42,16 +42,12 @@ priority = 50
 #   cargo nextest run -E 'rdeps(oag-rcs)'          # oag-rcs and its dependents
 #   cargo nextest run -p oag-raceplay ai_roll_ground_truth::  # one ground-truth file
 #
-# A member's gate is a selection too, since 2026-10-07: `just gate-affected` and
-# `just test-data-affected` hand `cargo nextest` the packages
-# `scripts/affected.py` picks - those a branch changed and every package that
-# depends on one, which is what `rdeps()` above selects (checked: an `oag-mesh`
-# change, 2,904 tests either way). That is why the cross-crate surprise this
-# comment used to warn with is still caught: narrowing
-# `VertexDecl::vertex_colour()` in `oag-rcs` broke `hd_engine_flare_ground_truth`
-# in `oag-game`, and `oag-game` is among `oag-rcs`'s dependents. What a
-# selection cannot see is two branches that are each green on their own and red
-# together, which is what the lead's full `just test-data` per merge batch is for.
+# A member's gate is a selection too: `just gate-affected` and
+# `just test-data-affected` hand `cargo nextest` what `scripts/affected.py`
+# picks - the packages that link a changed one, narrowed to the test modules
+# that do (`docs/architecture/affected-gate.md`). What a selection cannot see
+# is two branches that are each green on their own and red together, which is
+# what the lead's full `just test-data` per merge batch is for.
 
 # Test groups cap how many tests of a kind run at once, inside one nextest run.
 #
