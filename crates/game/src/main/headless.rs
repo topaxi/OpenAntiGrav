@@ -787,6 +787,7 @@ pub(crate) fn run_race(
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,
                 trail_order: render_profile.trail_order,
+                trail_length: render_profile.trail_length,
                 weather: render_profile.weather,
                 hull_shake: !cli.no_hull_shake,
                 camera_jitter: cli.camera_jitter,

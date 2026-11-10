@@ -49,6 +49,7 @@ fn advanced(pulse_like: bool, weather: bool, trail_hits: bool) -> Vec<&'static s
     ];
     if pulse_like {
         rows.push("graphics.trail_order");
+        rows.push("graphics.trail_length");
     }
     if weather {
         rows.push("graphics.weather");
@@ -80,6 +81,7 @@ fn the_graphics_page_keeps_the_original_and_performance_rows_and_opens_advanced(
         definition.drop_unavailable_trail_hits(title);
         definition.drop_unavailable_wingtip_contrails(title);
         definition.drop_unavailable_trail_order(title);
+        definition.drop_unavailable_trail_length(title);
         definition.drop_unavailable_weather(title);
         assert_eq!(rows(&definition, "graphics"), TOP, "{}", title.name);
     }
@@ -100,6 +102,7 @@ fn advanced_holds_the_look_extras_and_the_mixed_rows_in_order() {
         definition.drop_unavailable_trail_hits(title);
         definition.drop_unavailable_wingtip_contrails(title);
         definition.drop_unavailable_trail_order(title);
+        definition.drop_unavailable_trail_length(title);
         definition.drop_unavailable_weather(title);
         assert_eq!(
             rows(&definition, "graphics_advanced"),

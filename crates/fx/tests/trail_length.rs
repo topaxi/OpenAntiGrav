@@ -6,7 +6,10 @@
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_fx::exhaust::{Exhaust, SUBSTEP_DT, TRAIL_SAMPLES, TrailHead, TrailLaw};
+use oag_fx::exhaust::{
+    Exhaust, LAYERS, LONG_TRAIL_SAMPLES, SUBSTEP_DT, TRAIL_FINS, TRAIL_MAX_VERTICES_PER_CRAFT,
+    TRAIL_SAMPLES, TrailHead, TrailLaw,
+};
 use oag_mesh::mesh::GpuVertex;
 
 /// The vertex count, then the sum of every position, colour and texture coordinate component.
@@ -116,3 +119,51 @@ const GOLDEN: [[f64; 10]; 8] = [
         719.9928,
     ],
 ];
+
+/// The longer ribbon: more segments, and a colour past the ninth sample, where the original's
+/// fade has long since reached nothing.
+#[test]
+fn the_long_length_is_a_longer_ribbon_with_its_own_tail() {
+    let mut original = flown(LONG_TRAIL_SAMPLES + 6, usize::MAX);
+    let mut long = original;
+    long.set_trail_samples(LONG_TRAIL_SAMPLES);
+    assert!(!long.trail_ready(), "a change of length clears the ring");
+    for tick in 0..LONG_TRAIL_SAMPLES {
+        long.push_trail(Vec3::new(0.0, 1.0, tick as f32 * 2.0), -Vec3::Z);
+    }
+    assert!(long.trail_ready());
+    original.set_trail_samples(TRAIL_SAMPLES);
+
+    let short = vertices(&original, None, TrailLaw::Ramped);
+    let long = vertices(&long, None, TrailLaw::Ramped);
+    let per_segment = TRAIL_FINS * 6;
+    assert_eq!(short.len(), LAYERS * (TRAIL_SAMPLES - 1) * per_segment);
+    assert_eq!(long.len(), LAYERS * (LONG_TRAIL_SAMPLES - 1) * per_segment);
+    assert!(long.len() <= TRAIL_MAX_VERTICES_PER_CRAFT);
+
+    // The innermost layer's segments, head first: the head is as bright as the original's, the
+    // middle of the long ring is still lit where the original's fade is under a hundredth, and
+    // the last segment is dark as the original's last.
+    let layer = &long[2 * (LONG_TRAIL_SAMPLES - 1) * per_segment..];
+    let at = |segment: usize| layer[segment * per_segment].colour[0];
+    let head = vertices(&original, None, TrailLaw::Ramped)[2 * (TRAIL_SAMPLES - 1) * per_segment]
+        .colour[0];
+    assert!((at(0) - head).abs() < 1e-5, "{} against {head}", at(0));
+    assert!(at(LONG_TRAIL_SAMPLES / 2) > 0.05 * at(0));
+    assert!(at(LONG_TRAIL_SAMPLES - 2) < 0.01 * at(0));
+    // Monotone: the fade never rises along the ribbon.
+    assert!((1..LONG_TRAIL_SAMPLES - 1).all(|k| at(k) <= at(k - 1)));
+}
+
+/// Switching back restores the original ribbon exactly.
+#[test]
+fn setting_the_length_is_idempotent_and_reversible() {
+    let mut exhaust = flown(3 * TRAIL_SAMPLES + 4, usize::MAX);
+    let before = exhaust;
+    exhaust.set_trail_samples(TRAIL_SAMPLES);
+    assert_eq!(exhaust, before, "the same length leaves the ring alone");
+    exhaust.set_trail_samples(LONG_TRAIL_SAMPLES);
+    exhaust.set_trail_samples(TRAIL_SAMPLES);
+    assert_eq!(exhaust.trail_samples_kept(), TRAIL_SAMPLES);
+    assert!(!exhaust.trail_ready());
+}

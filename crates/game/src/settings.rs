@@ -1262,6 +1262,10 @@ pub fn menu_seeds(
             "graphics.trail_order",
             text(&profile.trail_order.to_string()),
         ));
+        out.push((
+            "graphics.trail_length",
+            text(&profile.trail_length.to_string()),
+        ));
     }
     // Offered only where the weather is played; elsewhere the row is dropped
     // (`Definition::drop_unavailable_weather`) and nothing seeds it.

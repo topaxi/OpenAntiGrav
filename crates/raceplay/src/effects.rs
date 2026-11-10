@@ -836,7 +836,7 @@ impl Race {
         if let Some(nozzle) = self.nozzle() {
             let back = -self.ship().physics.body.forward();
             self.view.exhaust[0].clear_trail();
-            for k in (0..exhaust::TRAIL_SAMPLES).rev() {
+            for k in (0..self.view.exhaust[0].trail_samples_kept()).rev() {
                 let behind = back * (speed * self.sim.dt * k as f32);
                 self.view.exhaust[0].push_trail(nozzle + behind, back);
             }

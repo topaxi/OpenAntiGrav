@@ -388,6 +388,7 @@ impl Session {
                         .race
                         .set_texture_detail(render_profile.texture_detail);
                     parked.race.set_trail_order(render_profile.trail_order);
+                    parked.race.set_trail_length(render_profile.trail_length);
                     parked.race.set_weather(render_profile.weather);
                     // The pause screen's GHOST list takes hold under the menus.
                     if let Some(shell) = &self.shell {
@@ -466,6 +467,7 @@ impl Session {
                 stage.race.set_model_detail(render_profile.model_detail);
                 stage.race.set_texture_detail(render_profile.texture_detail);
                 stage.race.set_trail_order(render_profile.trail_order);
+                stage.race.set_trail_length(render_profile.trail_length);
                 stage.race.set_weather(render_profile.weather);
                 // And the DYNAMIC HUD row, for the same reason.
                 stage.race.set_dynamic_hud(self.settings.display.dynamic_hud);

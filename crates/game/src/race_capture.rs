@@ -321,6 +321,8 @@ pub struct CaptureOptions {
     pub texture_detail: oag_mesh::mesh_render::TextureDetail,
     /// `[render_profiles.<title>] trail_order`, or `--trail-order`.
     pub trail_order: oag_display::display::TrailOrder,
+    /// `[render_profiles.<title>] trail_length`, or `--trail-length`.
+    pub trail_length: oag_display::display::TrailLength,
     /// `[render_profiles.<title>] weather`, or `--weather`.
     pub weather: oag_display::display::Weather,
     /// Whether the drawn hulls shake, `Race::set_hull_shake`; `--no-hull-shake` turns it off.
@@ -509,6 +511,7 @@ pub fn capture(
     race.set_model_detail(options.model_detail);
     race.set_texture_detail(options.texture_detail);
     race.set_trail_order(options.trail_order);
+    race.set_trail_length(options.trail_length);
     race.set_weather(options.weather);
     race.set_dynamic_hud(options.dynamic_hud);
     race.set_ghost_visible(options.ghost_visible);
