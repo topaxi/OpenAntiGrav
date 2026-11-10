@@ -282,7 +282,9 @@ pub fn fault_test(what: &str) {
             panic!("fault test: a deliberate panic on a worker");
         })),
         "worker-trap" => {
-            std::mem::forget(oag_thread::Task::spawn("fault-test", || std::process::abort()));
+            std::mem::forget(oag_thread::Task::spawn("fault-test", || {
+                std::process::abort()
+            }));
         }
         "gpu-out-of-memory" => {
             page::uncaptured_error(&wgpu::Error::OutOfMemory { source: source() });

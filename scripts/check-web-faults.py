@@ -9,7 +9,7 @@ Each case drives `scripts/web-screenshot.py --expect-fault KIND`: the run must e
 with the one report of that kind on the page (`#oag-fault`, `web/fault.js`), exactly
 one `oag:` console error and no uncaught page error (a cascade fails it). A
 screenshot (`fault.png`) and the copy-details text (`fault-details.txt`) land in
-`<out>/<browser>-<case>/`. The module cases (panic, trap, GPU errors) need a build made
+`<out>/<browser>-<case>/` with the run's whole console (`run.log`). The module cases (panic, trap, GPU errors) need a build made
 with `OAG_WEB_FAULT_TEST=1` (the hook `oagFaultTest`); a published build has none, and
 those cases say so and are skipped. Not part of `just`: it wants browsers and a disc
 image. See docs/tools/web.md, "Troubleshooting".
@@ -107,6 +107,8 @@ def run(case: Case, browser: str, args, pulse: Path, boot: float) -> tuple[str, 
         done = subprocess.run(command, capture_output=True, text=True, timeout=400)
     except subprocess.TimeoutExpired:
         return "FAIL", "timed out"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "run.log").write_text(done.stdout + done.stderr)
     tail = (done.stdout + done.stderr).strip().splitlines()
     note = next((line for line in reversed(tail) if line.startswith(("report:", "fault ", "other console"))), "")
     if done.returncode == 0:
