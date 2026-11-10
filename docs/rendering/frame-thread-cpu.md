@@ -2046,3 +2046,83 @@ before and after.
   at 4K. Dropped.
 
 Pictures: `cmp` equal before and after for both, at 1080p and 4K, two rounds each.
+
+## Scenery node animation: the head upload, the key bisection and the exact wrap (2026-11-10, `scenery-anim`)
+
+Claim: scenery animation sampling in `prepare_view` costs less frame-thread CPU with every picture
+byte-identical, on Pulse, HD and Pure. **True on this machine** (desktop numbers, an Intel Core Ultra
+7 265H with a discrete NVIDIA GPU, the process pinned to the P-cores with `taskset -c 0-5`; the Deck
+was off, so its 0.3 to 0.4 ms above is not re-measured). Per frame at 1280x800, one view:
+
+| | before | after |
+| --- | --- | --- |
+| `write_scenery_anims` inclusive, Pulse (perf, us per frame) | 59 | 38 |
+| `write_scenery_anims` inclusive, HD (perf, us per frame) | 67 | 31 |
+| `record_us` p50, Pulse / HD / Pure (bench, us) | 616 / 875 / 276 | 579 / 802 / 261 |
+| `cpu_us` p50, Pulse / HD / Pure (bench, us) | 940 / 1,775 / 481 | 905 / 1,685 / 448 |
+
+The bench is `just bench-render --binary` on two release builds of one tree, three rounds
+interleaved base then new (`--size 1280x800`, medians of the three round medians; load 3 to 20 on a
+machine other lanes were using). 1080p and 4K, from an earlier build of the same change (the head
+upload and the key bisection, before the clock wrap moved), `record_us` p50: 1080p Pulse 641 to 615,
+HD 924 to 840, Pure 281 to 271; 4K Pulse 644 to 620, HD 1,695 to 1,542, Pure 357 to 345. `cpu_us`
+at 4K HD does not move (3,297 to 3,290 us): the frame is GPU-bound there and the saving is inside the
+wait. Single round medians swing by 20 to 40 us at 1080p on Pulse, so a row under that is noise;
+`record_us` p50 was lower in every round pair at 800p and 4K.
+
+What the profile said (`perf record -e cpu-clock:u -F 999 --user-callchains --call-graph fp`, frame
+pointers, one three-lap race per title; `NodeAnims::sample_started` was 1.5 to 2.5% of all samples,
+the whole `write_scenery_anims` 3.0% on Pulse and 1.25% on HD):
+
+1. **The node table was uploaded whole.** `write_node_anims_started` built a 384-matrix
+   `NodeAnims` (a 24 KiB identity fill, a `Vec` of the live matrices, a copy) and sent all 24 KiB
+   to wgpu every sampled frame, whatever the model's node count (Pulse's busiest circuit has 74, HD's
+   259). Every slot past the model's nodes is the identity the buffer was built with, and nothing
+   else writes it, so `NodeAnims::head_started` returns slot 0 and the live matrices only and the
+   drawable uploads that head. The GPU's table is byte-for-byte what a full upload leaves
+   (`mesh_render::tables::tests`, over 1 to 400 nodes and a clock sweep including negative
+   clocks). `wgpu_core::Queue::write_buffer` self samples fell from 474 to 298 on HD.
+2. **The key search was a linear scan.** `AnimChannel::at` walked the key times from the start for
+   every channel of every node every frame; on HD (259 nodes on `modesto_heights`, long key arrays)
+   `AnimChannel::sample` was 0.9% of all samples, the largest single piece after the upload. Key times
+   that never decrease (decided once, at construction, by `AnimChannel::new`) are bisected with
+   `partition_point`; any other channel keeps the scan. Same key pair and blend factor to the bit,
+   NaN clock included (`the_key_search_is_the_scan_to_the_bit`).
+3. **The clock wrap was a libcall that did nothing most frames and cost a stall.** A node wraps its
+   clock at its own `LoopEnd` (`seconds % period`); the race clock passes most periods in the first
+   minute, so a skip when the clock is inside one period almost never fires. `wrap_clock` takes the
+   remainder in `f64` instead (exact: `x`, `p` and a quotient under 2^28 fit a double, so only the
+   quotient's rounding can be one off, fixed by one conditional add or subtract) and falls back to
+   `%` for NaN, infinity, a non-positive period and a huge quotient. Tested against `%` bit for bit
+   over three million random clock and period pairs plus their neighbours and a hand-picked edge
+   list. `TexTransform::sample` (the per-material texture scroll) uses the same wrap. This one is
+   below the bench's noise: the same perf run with and without it reads 1.4% `AnimTransform::sample`
+   self either way. Kept because it is exact, covered, and removes a libcall per texture track.
+
+**Not the cause: `feclearexcept` (0.35 to 0.6% of samples).** It looked like `fmodf`'s fenv
+traffic and survives the wrap change. Its caller is a driver library frame, not our code.
+
+**What is left in `AnimTransform::sample`.** 43% of its samples sit on the loads of a node's boxed
+transform (`translation_quantum`, `translation_base`): a cache miss per node, because each node is a
+`Box<AnimTransform>` whose three channels own three `Vec`s each. A flat per-model layout (one
+array of the constants, one of the keys) would turn those into sequential reads; it moves the load
+path of every model and was not attempted. The other candidates the Deck note listed were checked and
+are already done or not there: the per-tick cache is `remember` (`daddbef7e`, 2026-10-21, before the
+Deck profile, so the Deck's 0.3 to 0.4 ms includes it; at 90 Hz over 60 Hz ticks a third of the
+Deck's frames still resample), and `AnimTrack::sample` builds no `Vec` any more.
+
+**Pictures and the simulation.** `--race --screenshot --ticks 500` on Pulse, HD and Pure with the live
+clock and with `--anim-seconds` 0, 7.3 and 95.1: 12 PNG pairs, base and new binary, `cmp` identical
+(the new binary after each of the three changes). The three titles' final state hashes are identical
+in every bench pair (`bench-compare` reads them). No simulation crate changed.
+
+Commands (one tree, two binaries; the base build is `main`'s `2a244f1ac`):
+
+```sh
+cargo build --release -p oag-game && cp target/release/oag-game /path/oag-game-new
+# base: the same on main. Wrap each binary as: exec taskset -c 0-5 /path/oag-game-X "$@"
+python3 scripts/bench-render.py run pulse hd pure --binary /path/run-base.sh --size 1280x800 --out /path/base-r1
+python3 scripts/bench-render.py run pulse hd pure --binary /path/run-new.sh  --size 1280x800 --out /path/new-r1
+# profile: a frame-pointer build (RUSTFLAGS=-Cforce-frame-pointers=yes CARGO_PROFILE_RELEASE_DEBUG=line-tables-only,
+# its own CARGO_TARGET_DIR) behind a wrapper running perf record, passed to --binary the same way
+```

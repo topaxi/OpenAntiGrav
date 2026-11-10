@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-09
+updated: 2026-11-10
 summary: "CPU-bound devices: GPU-driven draws parked, render bundles measured and dropped; GPU particles and trails left; governor on by default"
 categories: [rendering, tooling]
 size: XL (35)
@@ -38,7 +38,10 @@ resolution controller (`crates/present/src/drs`), which does nothing while the G
 uniform builds and CPU image blends, not culling: culling, LOD and sorting are under 0.05 ms on Anulpha,
 HD default and Pulse (`docs/rendering/frame-thread-cpu.md`, "What prepare_view spends on the Deck").
 Before lane 1 step 2 (compute culling), do two CPU lanes: the hull environment-probe blend (about
-0.9 ms on Anulpha) and scenery animation sampling (0.3 to 0.4 ms, every title). Measure with the
+0.9 ms on Anulpha) and ~~scenery animation sampling~~ (landed 2026-11-10, `scenery-anim`: the node table
+uploads only its live head, ascending key times are bisected; 20 to 35 us per frame on the desktop, `record_us`
+-4 to -9%, pictures identical; the Deck is not re-measured, and what is left is cache misses on the boxed per-node
+transforms, `docs/rendering/frame-thread-cpu.md`, "Scenery node animation"). Measure with the
 frame-thread profile recipe in that section.
 
 1. **GPU-driven drawing** (opus). Indirect multi-draw per pass with a compute pass culling (PVS, frustum,
