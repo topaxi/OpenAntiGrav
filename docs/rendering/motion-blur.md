@@ -933,8 +933,8 @@ OAG_RENDER_GPU_BENCH=150 OAG_RENDER_PERF=1 oag-game hdfury-ps3-eu-dec.iso \
 --binary <base|cand> --tag <tag>` (the bench's own HD race, not Anulpha), plus
 `just bench-render pulse --size 1920x1080` with the same blur flags for a no-worse check. Arms
 interleaved, 2 rounds, under the gate lock, load 1.6 to 5.7 except two 800p runs at 9 to 13 (another
-member's build; its numbers sit inside the others'). p50 of every frame, mean of the two rounds,
-ms. `blur` is the chain's GPU timestamps; a split leaves it empty. The final state hash matched
+member's build; its numbers sit inside the others'). p50 of every frame, mean of the rounds
+(2 for one view and Pulse, 3 for `2h`), ms. `blur` is the chain's GPU timestamps; a split leaves it empty. The final state hash matched
 base on every run.
 
 | GPU | Case | Size | blur, before -> after | GPU frame | frame |
@@ -942,17 +942,20 @@ base on every run.
 | NVIDIA | HD, one view | 1280x800 | 0.33 -> 0.32 | 1.58 -> 1.50 | 2.46 -> 2.38 |
 | NVIDIA | HD, one view | 1920x1080 | 0.92 -> 0.89 | 3.00 -> 3.01 | 3.73 -> 3.73 |
 | NVIDIA | HD, one view | 3840x2160 | 4.80 -> 4.33 | 12.59 -> 11.95 | 13.38 -> 12.72 |
-| NVIDIA | HD, `2h` | 1280x800 | | 1.44 -> 1.41 | 3.95 -> 3.92 |
-| NVIDIA | HD, `2h` | 1920x1080 | | 2.11 -> 2.14 | 4.77 -> 4.84 |
-| NVIDIA | HD, `2h` | 3840x2160 | | 6.21 -> 6.25 | 13.22 -> 12.95 |
+| NVIDIA | HD, `2h` | 1280x800 | | 1.43 -> 1.44 | 3.92 -> 3.95 |
+| NVIDIA | HD, `2h` | 1920x1080 | | 2.11 -> 2.13 | 4.77 -> 4.80 |
+| NVIDIA | HD, `2h` | 3840x2160 | | 6.22 -> 6.26 | 13.22 -> 12.95 |
 | Intel | HD, one view | 1920x1080 | 1.12 -> 1.05 | 4.46 -> 4.38 | 5.92 -> 5.86 |
-| Intel | HD, `2h` | 1920x1080 | | 3.93 -> 3.84 | 9.00 -> 8.87 |
+| Intel | HD, `2h` | 1280x800 | | 3.15 -> 3.15 | 7.30 -> 7.34 |
+| Intel | HD, `2h` | 1920x1080 | | 3.89 -> 3.81 | 8.96 -> 8.84 |
 | NVIDIA | Pulse, one view | 1920x1080 | 0.75 -> 0.70 | 1.08 -> 1.01 | 1.42 -> 1.36 |
 
 At 1080p on the NVIDIA card the frame is bound elsewhere and the gather's 0.04 ms does not
-show; the `2h` 1080p row moved 0.07 ms the other way, inside its own round-to-round spread
-(4.72 / 4.81 before). At 4K one view gains 0.66 ms of a 13.4 ms frame. Nothing got worse beyond
-noise at 800p.
+show. The split at 800p and 1080p is CPU-bound (CPU p50 about 3.6 to 3.9 ms on NVIDIA, 4.4 to
+4.6 on Intel), and its rows moved 0.02 to 0.04 ms either way: NVIDIA 1080p rounds 4.72 / 4.81 /
+4.77 before against 4.83 / 4.84 / 4.71 after, Intel 800p 7.22 / 7.44 / 7.25 against 7.37 /
+7.38 / 7.27. That is inside the rounds' spread, so no gain and no loss there. At 4K one view
+gains 0.66 ms of a 13.4 ms frame and the split 0.27 ms.
 
 ### The picture
 
