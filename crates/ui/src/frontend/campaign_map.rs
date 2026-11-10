@@ -706,11 +706,23 @@ impl Frontend {
             for column in [0.0, 1.0] {
                 let x = (origin.0 + column * columns * across.0 + line * slip).round();
                 let y = (origin.1 + line * lines * down.1).round();
-                out.push(Self::sprite_at(
-                    [x * scale.0, y * scale.1, width, height],
-                    picture,
-                    [1.0; 4],
-                ));
+                // One texel in from the picture's edge, so a filtered draw
+                // never reads the sheet's neighbour along a seam.
+                out.push(Draw::Sprite {
+                    rect: [
+                        (x + 1.0) * scale.0,
+                        (y + 1.0) * scale.1,
+                        width - 2.0 * scale.0,
+                        height - 2.0 * scale.1,
+                    ],
+                    uv: [
+                        picture.x as f32 + 1.0,
+                        picture.y as f32 + 1.0,
+                        picture.width as f32 - 2.0,
+                        picture.height as f32 - 2.0,
+                    ],
+                    color: [1.0; 4],
+                });
             }
         }
     }

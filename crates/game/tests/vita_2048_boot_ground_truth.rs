@@ -394,8 +394,11 @@ fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
         .iter()
         .filter(|draw| {
             matches!(draw, frontend::Draw::Sprite { uv, .. }
-                if (uv[2], uv[3])
-                    == (canvas_lattice::VIEWPORT[0] as f32, canvas_lattice::VIEWPORT[1] as f32))
+            if (uv[2], uv[3])
+                == (
+                    canvas_lattice::VIEWPORT[0] as f32 - 2.0,
+                    canvas_lattice::VIEWPORT[1] as f32 - 2.0,
+                ))
         })
         .count();
     assert_eq!(
