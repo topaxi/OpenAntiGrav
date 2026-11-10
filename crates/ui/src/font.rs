@@ -748,8 +748,9 @@ impl Atlas {
         picture: &oag_texture::replacer::Image,
     ) -> Result<Self, String> {
         let (width, source_height) = (u32::from(font.width), u32::from(font.height));
-        let whole =
-            |picture: u32, atlas: u32| (atlas > 0 && picture % atlas == 0).then(|| picture / atlas);
+        let whole = |picture: u32, atlas: u32| {
+            (atlas > 0 && picture.is_multiple_of(atlas)).then(|| picture / atlas)
+        };
         let (Some(fx), Some(fy)) = (
             whole(picture.width, width),
             whole(picture.height, source_height),
@@ -779,7 +780,14 @@ impl Atlas {
         let mut luma = vec![0u8; rows];
         let mut first_ink: Option<u8> = None;
         let mut outlined = false;
-        for (at, texel) in picture.rgba.chunks_exact(4).take(pixels).enumerate() {
+        for (at, texel) in picture
+            .rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .take(pixels)
+            .enumerate()
+        {
             coverage[at] = texel[3];
             luma[at] = texel[0];
             if texel[3] > 0 {

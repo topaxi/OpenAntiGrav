@@ -118,11 +118,15 @@ pub fn decode(bytes: &[u8]) -> Result<Image, Error> {
     let rgba = match format {
         0 => level0,
         1 => level0
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .flat_map(|pixel| rgba4444(u16::from_le_bytes([pixel[0], pixel[1]])))
             .collect(),
         _ => level0
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .flat_map(|pixel| rgb565(u16::from_le_bytes([pixel[0], pixel[1]])))
             .collect(),
     };

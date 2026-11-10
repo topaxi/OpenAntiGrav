@@ -40,8 +40,20 @@ fn ppsspps_own_zim_files_decode_to_their_declared_size() {
         let image = zim::decode(&bytes).unwrap_or_else(|why| panic!("{name}: {why}"));
         assert_eq!((image.width, image.height), (width, height), "{name}");
         assert_eq!(image.rgba.len(), (width * height * 4) as usize, "{name}");
-        let opaque = image.rgba.chunks_exact(4).filter(|p| p[3] == 255).count();
-        let clear = image.rgba.chunks_exact(4).filter(|p| p[3] == 0).count();
+        let opaque = image
+            .rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|p| p[3] == 255)
+            .count();
+        let clear = image
+            .rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|p| p[3] == 0)
+            .count();
         eprintln!(
             "{name}: {opaque} opaque, {clear} clear of {}",
             width * height
