@@ -11,17 +11,24 @@ HD's own shell is the visual reference only (`weapon-absorb-pairs.md`, `shield.m
 
 ## How it is built
 
-- **Geometry** (`oag_livery::own_shield::shell`): the craft's own hull, first level of detail, cloned with its
-  textures and materials dropped and every batch moved to the blended list, so the shell adds to the hull instead of
-  replacing it. Each vertex is pushed `0.8` world units out along its normal in the vertex stage. Hull-shaped, as HD's
-  shell is; the disc's own shell (`shipshield.vex`, or `Data\Weapons\shield.vex` on Pure) is not loaded for the slot.
-  The cockpit sphere (`vr_shield_cockpit.vex`) keeps the disc's geometry and takes the same shader, at its authored
-  size.
+- **Geometry** (`oag_livery::own_shield::shell`, `own_shield/offset_surface.rs`): a closed surface standing `0.26`
+  model units (`STAND_OFF`) off the craft's own hull, so the shell is hull-shaped, as HD's is, with a gap between the
+  two. The hull's first level of detail (less any triangle an `Anim Transform` moves) is turned into a distance field
+  on a grid of `0.11`-unit cubes, and the surface where the distance crosses `0.26` is extracted with one vertex per
+  straddling cube and one quad per straddling grid edge (naive surface nets). Only the surface the outside can reach is
+  kept, so a hollow inside the hull grows no second shell. The result is one two-sided batch on the blended list, drawn
+  after the hull and depth-tested against it. The disc's own shell (`shipshield.vex`, or `Data\Weapons\shield.vex` on
+  Pure) is not loaded for the slot. The cockpit sphere (`vr_shield_cockpit.vex`) keeps the disc's geometry and takes
+  the same shader, at its authored size.
 - **Shader** (`crates/mesh/shaders/own_shield.wesl`): selected by the `own_shield_shading` pipeline override, which
-  `oag_mesh::mesh::Model::own_shield` sets. A rim term (`(1 - |n . v|)^2.2`), a hexagon lattice in the craft's own
-  frame (triplanar, so it rides the hull and does not slide through it) with per-cell shimmer, and a bright band
-  travelling nose to tail. The colour is the vertex colour the race writes each frame, exactly as for the disc's shell.
-  With the setting off no model carries the override, so no other shader changes.
+  `oag_mesh::mesh::Model::own_shield` sets; fragment stage only, the vertex stage is untouched. Four terms: facets
+  (the flat normal of the triangle under the fragment, from screen-space derivatives), a hexagon lattice in the craft's
+  own frame (triplanar, so it rides the hull) with per-cell shimmer, a bright band travelling nose to tail, and a
+  bright line along the shell's silhouette. The line is `0.035` world units wide at any resolution: the smooth
+  normal's `n . v` over its own screen-space rate of change is the distance to the silhouette in pixels, and a pixel's
+  world size at that depth converts the width. A plain rim term cannot do this job: it lights a wing seen at a grazing
+  angle whole and leaves the true silhouette a pixel wide. The colour is the vertex colour the race writes each frame,
+  exactly as for the disc's shell. With the setting off no model carries the override, so no other shader changes.
 - **Animation**: the shared `oag_render::shield::ShipShield` law (fade up, swell, hit bulge, fade-out with a swelling
   scale) under `OWN_PALETTE`: it fades up from deep blue, settles to an ice blue `(0.45, 0.80, 1.0)` and flashes
   amber `(1.0, 0.55, 0.10)` on an absorbed hit.
@@ -36,15 +43,29 @@ file with `[graphics] own_shield = true` for "on".
 - **Off is byte-identical.** Thirteen ticks (334 to 880: just raised, settled, fading, gone) on Pulse USA and Pure USA,
   captured with the binary before the change and the one after with the setting off: all 26 PNGs compare equal with
   `cmp`. After the shield has expired, on and off are also identical (no residue).
-- **On reads like HD's.** Pulse with the setting on beside an HD shield frame (HD: ours rendering HD's own shell
-  on Talon's Junction): an ice-blue faceted glow over the livery, which stays visible through it. No original-HD
-  capture of a raised shield exists in the repo, so the HD frame is ours rendering HD's data, with the limit stated in
-  `crates/livery/src/shield.rs` (it is brighter and flatter than the disc's material).
+- **The shell stands off the hull.** At the chase camera, `960x544`, tick 400, measured from three captures of the
+  same tick (nothing, hull alone, shell alone; the last two against the first give the two silhouettes):
+
+  | | nose | wing tips | sides (median per row) |
+  | --- | --- | --- | --- |
+  | Pulse USA | 7 px | 17 px | 12 px |
+  | Pure USA | 7 px | 12 px | 12 px |
+
+  The hull-alone and shell-alone captures need the player's hull draw skipped, a local edit to
+  `Scene`'s craft loop that is not in the tree.
+- **A trap this page exists to record:** the first version pushed the hull's own vertices out along their normals in
+  the vertex stage by a pipeline constant. `mesh_render::build` hands pipeline constants to the fragment stage only, so
+  the push was always zero and the shell drew on the hull's surface as a tint, at any distance asked for. A per-vertex
+  push is also the wrong tool on a hard-edged hull: faces split apart at every crease.
+- **On reads like HD's.** Pulse and Pure with the setting on beside an HD shield frame (HD: ours rendering HD's own
+  shell on Talon's Junction): an icy, faceted shell around the craft with a bright edge and the livery visible through
+  it. No original-HD capture of a raised shield exists in the repo, so the HD frame is ours rendering HD's data, with
+  the limit stated in `crates/livery/src/shield.rs` (it is brighter and flatter than the disc's material).
 - **A hit**: `--force-hit 400:0` flashes the shell amber with the swell, and it settles back to blue. The amber wash over the whole view in that frame is Pulse's own hit burst: the frame with the setting off carries the same wash, and it is not the shell.
-- **Legibility**: the first version drew too faint to tell from no shield; the rim, lattice and a 0.8 push (the shell stands past the hull's silhouette) were raised until the shell is clearly visible at race distance with the livery still showing through. `just gate` captures are at 960x544 and read at 1x and 2x.
-- Tests: `crates/mesh/tests/own_shield_lit_path.rs` (the flag reaches the pipeline and reads no texture),
+- Tests: `own_shield::offset_surface::tests` (the surface is closed, the asked distance off every triangle, outside
+  only), `crates/mesh/tests/own_shield_lit_path.rs` (the flag reaches the pipeline and reads no texture),
   `crates/raceplay/tests/own_shield_ground_truth.rs` (Pulse PSP and PS2, Pure PSP: off keeps the disc's shell, palette
-  and sphere; on swaps all three; HD ignores it) and `menu_definition_settings::the_own_shield_row_is_offered_only_where_the_original_draws_another_look`.
+  and sphere; on swaps all three and the shell's box holds the hull's with room on every side; HD ignores it) and `menu_definition_settings::the_own_shield_row_is_offered_only_where_the_original_draws_another_look`.
 
 ## Open
 
@@ -54,9 +75,12 @@ file with `[graphics] own_shield = true` for "on".
   appearance from inside the hull is unjudged. From inside, the rim term is near zero by construction.
 - A hull whose meshes do not map back to its file draws no shield with the setting on (reported), never the disc's shell
   under our palette. Pulse PSP, Pulse PS2 and Pure PSP all build for every grid slot (the test).
-- The shell draws the hull's zero-alpha LOD children too and re-uploads a hull-sized vertex buffer per raised shield each
-  frame; dropping the draws outside the first level of detail in `own_shield::shell` would cut the fragment cost.
-- A frame at speed (364 km/h, ticks 380 and 430): no smear and the airbrake flaps do not poke through.
+- The shell is 13,000 to 22,000 vertices a craft on Pulse, and its vertex buffer is rewritten each frame a shield is
+  up (the tint). Larger cubes cut that at the cost of coarser facets; a per-draw colour uniform would remove the
+  rewrite.
+- The airbrake flaps are not part of the shell's shape (their triangles are authored in their node's space), and a
+  deflected flap was not checked against the shell at speed.
+- The silhouette line follows the shell's facets, so it wavers by a pixel or two along a long edge.
 - **Cross-title check (CLAUDE.md "2048 and Omega")**: checked, differs. HD, 2048 and Omega draw the HD-style shield
   from their own `shipshield.rcsmodel`, so the setting does nothing there and the row is dropped. Not wired for them
   by design.
