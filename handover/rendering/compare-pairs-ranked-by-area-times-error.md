@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse, pure, 2048]
 updated: 2026-11-10
-summary: "Race pairs by area x error: HD gantry GO boards and the top-right RECORD band lead; 2048 tone runs dark; frame-wide PS2 and Talon's rows unexplained"
+summary: "Race pairs by area x error: HD GO boards and RECORD band lead; 2048 dark; PS2 frame-wide unexplained; Talon's pack re-made, tick offset open"
 ---
 
 # Race compare pairs ranked by area x error
@@ -46,9 +46,10 @@ Read px with the title in mind. A Pulse PSP frame is 480x272 and an HD frame
   weapon effect, pause banner and a classic-hull state RPCS3 can no longer load.
   Re-made from a regenerated state, the pair's grey difference fell 47.6 to 17
   and the opponent aligns to 4 px (`docs/tools/compare-page.md`, "A moving HD
-  craft"). Still open there: the player's hull is drawn about 1.3 times larger
-  and lower in the original than the recorded body and camera project it. The
-  hue shift (ours greener) of the old frame was not looked at again.
+  craft"). Still open there: the original's player hull is about 1 tick older
+  than its camera on both re-made samples (a timing offset between the craft
+  rows and the push-buffer camera, not a hull-only view). The hue shift (ours
+  greener) of the old frame was not looked at again.
 - Tight boxes: for 20 of the top 31 regions the pixels above 15 grey levels
   fill the whole region, so the box is the error, not one banner inside it.
   The labels below use the box's visual centre, not a measured sub-rectangle.

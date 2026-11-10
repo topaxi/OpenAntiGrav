@@ -220,8 +220,8 @@ def backfill_pair(rec, rel):
             ck, cbasis = "savestate_restore", ("inferred: the state is a SAVESTAT and compare-rerender-all restored it (its --hd-cold "
                                                "arrived afterwards); pair.json predates the capture_path field")
         lag = {"value": 3, "unit": "ticks", "basis": "measured",
-               "what": "HUD clock text vs RAM (13 grid pairs); picture not corrected: the RSX had presented the paused frame "
-                       "(hull check on hd-race/talons-pack), per-tick picture lag not measured"}
+               "what": "HUD clock text vs RAM (13 grid pairs); picture not corrected; on a moving craft the frame was measured 0 to 3 ticks "
+                       "older than the RAM read (docs/tools/compare-page.md, \"A moving HD craft\")"}
     elif profile == "pulse-ps2":
         ck, cbasis = "savestate_restore", "pcsx2-pulse-pair.py always loads the .p2s state"
         lag = {"value": 4.25, "unit": "seconds", "basis": "measured",

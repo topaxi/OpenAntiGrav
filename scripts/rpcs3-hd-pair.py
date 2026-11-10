@@ -231,8 +231,8 @@ def main():
         args.ours_ticks = GO_TICK + round(clock * 60) - HUD_LAG_TICKS
     pair.rec["original"]["race_clock_s"] = clock
     pair.rec["original"]["capture_path"] = os.environ.get("OAG_HD_CAPTURE_PATH", "restored savestate (RPCS3 paints garbage on the glass of a restored state)")
-    pair.rec["original"]["presented_lag"] = {"hud_clock_ticks": HUD_LAG_TICKS, "picture": "no correction to the picture: the RSX had presented the paused frame "
-                                              "(hull check on hd-race/talons-pack), not measured per tick; ours' ticks and gantry pin take the lag"}
+    pair.rec["original"]["presented_lag"] = {"hud_clock_ticks": HUD_LAG_TICKS, "picture": "no correction to the picture; on a moving craft the presented frame was measured 0 to 3 ticks older than the RAM read "
+                                              "(`hd-pair-lag-scan.py`, docs/tools/compare-page.md, \"A moving HD craft\"); ours' ticks and gantry pin take the HUD lag"}
     note = ship.get("autopilot_timer")
     if args.field and args.keep_autopilot:
         pair.caveat("the player's Autopilot is armed for good (--keep-autopilot): the HUD's pickup row prints its "
@@ -250,7 +250,7 @@ def main():
     capture_kind = os.environ.get("OAG_HD_CAPTURE_KIND", "unknown")  # cold_boot | savestate_restore, set by compare-rerender-all
     cp.build(pair, args, "zone" if args.zone else "race" if args.field else "scenery", capture_kind, args.state,
              {"value": HUD_LAG_TICKS, "unit": "ticks", "basis": "measured",
-              "what": "HUD clock text vs RAM; the picture is not corrected (the RSX presented the paused frame), per-tick picture lag not measured"})
+              "what": "HUD clock text vs RAM; the picture is not corrected; on a moving craft it was measured 0 to 3 ticks older than the RAM read (hd-pair-lag-scan.py)"})
     gantry = ship.get("gantry_seconds")
     pair.rec["original"]["gantry_seconds"] = gantry
     world = ship.get("scenery_clock")

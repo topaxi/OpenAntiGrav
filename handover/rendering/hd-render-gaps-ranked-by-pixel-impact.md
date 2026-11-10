@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-05
+updated: 2026-11-10
 summary: "HD gaps by tile; 2026-11-05: 16-19% of grid score is the original being softer (unclosable), named closable items under 6 points"
 ---
 
