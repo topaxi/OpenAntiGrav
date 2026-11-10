@@ -35,9 +35,9 @@ the pair copies, and the one law that moved it, are in `docs/rendering/start-gan
   Metropia (a law, wired: `mesh-draw.md`, "The extra pass's colour is the light the hull stands
   in"); fixing it took the whole-frame signed grey from +0.97 to +0.90 on Metropia White and +0.76
   to +0.67 on Black and moved nothing on the other four best pairs, whose frames are bit-identical.
-  On craft-box pixels the pass does not touch, the original minus ours reads -0.2 to -2.2 levels
-  across the six pairs, the same sign and size as the frame's lift, so the lift is on the hull's
-  base colour too and is not a sheen term.
+  On craft-box pixels the pass does not touch, the original minus ours reads -2.2 to +0.5 levels
+  across the six pairs (five of six negative), about the frame's lift, so the lift is on the
+  hull's base colour too and is not a sheen term.
 
 ## Next Steps
 
