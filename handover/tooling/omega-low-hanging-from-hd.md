@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [omega, 2048]
-updated: 2026-11-09
-summary: "Omega adverts: reader landed, pass off until PS4 material curves are read; plume flags, hit-effect triggers, Looks, shadows still open"
+updated: 2026-11-10
+summary: "Omega adverts pass on for the node-driven board, the HD board waits on PS4 curves; plume flags, hit effects, Looks, shadows open"
 difficulty: hard (35)
 ---
 
@@ -57,16 +57,13 @@ data proves it.
 
 ### Worth a lane now (tier B)
 
-4. **Adverts pass is off on Omega: the reader landed, the look did not.**
-   `gantry::build` reads Omega's `321Go_*.vex` through `mesh::rcs::psp2::build_with_vex`
-   (landed 2026-10-26, `start_gantry_omega_ground_truth.rs`). `adverts: None` stays
-   because the Vineta K start-grid pair against shadPS4 does not match: placement does,
-   the look does not. Open: (a) read the PS4 materials' texture curves (the countdown
-   digits; the GO-edge finder reports no animated texture), tier C, `crates/mesh` and
-   `oag_rcs::rcsmodel::psp2`; (b) add `.gnf` spellings of `billboard1-8` and `fx350_nomip`
-   to `oag_render::gantry` (`SLOT_PLACEHOLDER_TEXTURES`, `mount()`, `FX350_TEXTURE`), which
-   also strips Omega's `?` icons, so only together with the pass; (c) set `adverts` to HD's
-   values (inherited) and repeat the pair. Details: `docs/formats/omega-status.md`, "Adverts".
+4. **Adverts pass: on, playing the node-driven board; the HD-lineage board is blocked on the PS4 material curves.**
+   Landed 2026-11-10 (`omega-gantry`): `.gxt`/`.gnf` spellings in `oag_render::gantry`, `adverts` set to HD's values
+   (inherited) with `gantry_boards` naming `321Go_2048.vex`, which counts down by node motion. Open: (a) read the PS4
+   materials' texture curves (`crates/mesh`, `oag_rcs::rcsmodel::psp2`; tier C) so `321Go_StartFinish.vex` and the Zone,
+   Zone Battle and detonator boards can play, then add them to `gantry_boards` or drop the field; (b) the digits' phase is
+   chosen (frame 0 on tick 73): shadPS4 draws the card's face blank white, so a reference needs another renderer.
+   Details: `docs/rendering/start-gantry.md`, "Omega and 2048"; `docs/formats/omega-status.md`, "Adverts".
 5. **Engine light and front-face flags on the plume.** `crates/omega/src/lib.rs`
    sets `engine_light: false` and `front_faces_only: false` ("Off, chosen, not
    measured, as on 2048"); HD sets both `true`. Omega reads `EngineLightData.xml`
@@ -124,8 +121,7 @@ data proves it.
 
 ## Next Steps
 
-1. Item 4: read the PS4 material curves, add the `.gnf` spellings, then repeat the
-   Vineta K pair and set `adverts`.
+1. Item 4: read the PS4 material curves, then add the HD-lineage boards to `gantry_boards`.
 2. Item 6: read the call sites of the six functions above, in the order
    `ShipCollisionFx_Trigger`, `FUN_016f3ef0`, `FUN_01722810`.
 3. Item 5: read the consumer of `ship+0xbc`/`ship+0xc0`, then the thrust frame pair.

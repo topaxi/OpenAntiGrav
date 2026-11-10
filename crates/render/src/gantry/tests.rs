@@ -328,6 +328,32 @@ fn mount_finds_hds_full_path_billboard8_label() {
 }
 
 #[test]
+fn mount_finds_the_vita_and_ps4_billboard8_labels() {
+    for label in [
+        "data/art/published/environments/altima/textures/billboard8.gxt",
+        "data/environments2048/altima/texturesps4/billboard8.gnf",
+    ] {
+        let model = textured_draws(label);
+        assert_eq!(mount(&model).expect(label).node, Some(74), "{label}");
+        assert_eq!(slot_number(label), Some(8), "{label}");
+    }
+}
+
+#[test]
+fn slot7_fx350_art_is_found_in_every_containers_spelling() {
+    for label in [
+        "data/billboards/hd_adverts/321go/fx350_nomip.gtf",
+        "data/billboards/hd_adverts/321go/Fx350_nomip.gxt",
+        "Data/billboards/HD_Adverts/321Go/Fx350_nomip.gnf",
+    ] {
+        let mut model = textured_draws(label);
+        assert_eq!(strip_fx350_art(&mut model), 1, "{label}");
+    }
+    assert!(!is_fx350_texture("fx350_nomip.png"));
+    assert!(!is_fx350_texture("fx350.gnf"));
+}
+
+#[test]
 fn the_placement_matrix_never_mirrors_the_glyphs() {
     // **The question this answers, and why it is an assertion rather than a
     // screenshot.** Pulse's digits are squared-off enough that a `3` renders as

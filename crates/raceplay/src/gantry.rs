@@ -502,7 +502,9 @@ fn native_clock(
 ) -> Clock {
     let clock = Clock::assembled_at_release(board.assembly_ticks);
     report.push(format!(
-        "start gantry clock: {name} counts down by its nodes' own motion, so its frame 0 is tick {}          and `GO` slides in on the release (frame {}); the timeline runs on after it, and what the          board shows then is chosen, not measured",
+        "start gantry clock: {name} counts down by its nodes' own motion, so its frame 0 is \
+         tick {} and `GO` slides in on the release (frame {}); the timeline runs on after it, \
+         and what the board shows then is chosen, not measured",
         clock.start_tick, board.assembly_ticks,
     ));
     clock

@@ -123,7 +123,7 @@ shipped pair stays the reference. Largest differences left on the 13: Tech de Ra
   project) and Omega's are GNM (no capture path), so neither title's alpha lane can be read. Their `rcsmodel` readers do not go through `mesh::rcs::build`, so the new flag is not set on
   them and nothing changed.
 - **Sky colour's fourth byte: checked, applies, not wired.** The HD-lineage `.envsettings` of 2048 and Omega carry the same key; whether their sky draws write it is not checkable (no live frame).
-- **The gantry pin: checked, differs.** 2048 and Omega place no gantry (start-gantry.md).
+- **The gantry pin: checked, differs.** The HD pin is a race-manager window on HD's own `GO` edge; 2048 and Omega play the node-driven `321Go_2048.vex` on a clock from the release instead (start-gantry.md, "Omega and 2048").
 - **Does the bloom finding transfer to Pulse (Fort Gale White's tunnel halo)?** Not directly. The finding is that HD's programs write the mask and ours did not; Pulse's mask is the GE stencil
   stamp and ours already writes it (`GlowMask::Stamped`, glow-mask.md), and Fort Gale's note says the original's mask there is 255 on the halo's pixels. The open question there is whether
   ours' own stamp covers the same pixels, which needs a dump of our mask (`OAG_DUMP_GLOW_MASK` dumps the final frame's alpha only); it is a mask question, as here, and the method (read the
