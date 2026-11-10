@@ -34,12 +34,14 @@ in isolated worktrees.
    `oag-docs`) first and hold any freed slot empty until it merges, so later
    members start on the compacted instruction files.
 
-4. **Set up the recurring check.** Invoke the `loop` skill at one hour
-   (iterations are slow, and a member's own report wakes the lead regardless of
-   the tick) with a prompt that re-enters this skill:
+4. **Set up the recurring check.** Invoke the `loop` skill at 30 minutes
+   with a prompt that re-enters this skill. A member's report wakes the lead
+   regardless of the tick, but **a member whose session dies sends nothing**:
+   the tick is the only thing that notices, so it must check liveness:
 
-   > `1h Check subagent slot occupation and status. Run ListAgents and total the
-   > running cost (read-only haiku oag-scout 0, other haiku 0.5, sonnet 1, opus 2, budget N). For each finished member:
+   > `30m Check subagent slot occupation and status. Run ListAgents and total the
+   > running cost (read-only haiku oag-scout 0, other haiku 0.5, sonnet 1, opus 2, budget N).
+   > Run member-liveness.sh on every running member; replace a DEAD one at once on its worktree. For each finished member:
    > verify its diff, merge into main, run the right gate, then remove its
    > worktree and branch. Only spawn a replacement when usage is under N, then
    > fill to N - never replace one-for-one. Keep lanes disjoint by Ghidra binary
@@ -51,12 +53,12 @@ in isolated worktrees.
    **Try a debounce instead first (maintainer, 2026-10-26).** Wanted: a check
    only after an hour with no member message, not one every hour. Run the
    `loop` skill with no interval (dynamic mode) and call `ScheduleWakeup`
-   (3600 s, the same prompt) at the end of **every** lead turn, so each member
-   report pushes the wake-up an hour out. Unverified: whether a new
+   (1800 s, the same prompt) at the end of **every** lead turn, so each member
+   report pushes the wake-up 30 minutes out. Unverified: whether a new
    `ScheduleWakeup` replaces the pending one or stacks. If wake-ups stack
-   (checks arrive closer than an hour after activity), fall back to the fixed
-   1h cron above, and have each tick do nothing when the lead acted in the last
-   hour.
+   (checks arrive closer than 30 minutes after activity), fall back to the fixed
+   30m cron above. A tick may skip merging and filling when the lead acted in
+   the last 30 minutes, **never the liveness check**.
 
 5. **Then start**: check state, draw threads, fill to budget.
 
@@ -64,9 +66,13 @@ in isolated worktrees.
 
 1. `ListAgents`; total the running cost. **Peer sessions are not yours**; only subagents you spawned count.
 2. `git log --oneline -1`, `git status --porcelain`, and per branch `git log --oneline main..<branch> | wc -l`.
-3. For each finished member: verify, merge, gate, reap (below).
-4. Only if under budget, fill to budget (a finished opus frees two slots and may become two sonnets).
-5. Report: slot usage, what merged, what is running, anything needing the user.
+3. **Liveness, every member, every tick**: `.claude/skills/oag-drive/member-liveness.sh <member>[=<worktree-dir>] ...`. `ListAgents` keeps showing a dead member as `pane`, and uncommitted edits or a quiet branch say nothing either way: on 2026-11-10 a member's session died at 03:57 and sat dead for 2.5 h because a tick read its uncommitted diff as "mid-implementation". The transcript's age is the signal.
+   - `DEAD` (transcript idle 30+ min, no process in its worktree): `TaskStop` it at once and spawn a successor on the **same worktree** (keep the uncommitted edits), briefed with what its transcript and scratch show it finished (`jq` over the transcript the script names: last text blocks and last commands).
+   - `SUSPECT` (idle 90+ min with processes, possibly a dead session's orphans): `SendMessage` it; no reply by the next tick counts as `DEAD`.
+   - **While any member runs, the fallback tick is 30 minutes, not an hour**, so a death costs at most one tick plus the 30-minute window.
+4. For each finished member: verify, merge, gate, reap (below).
+5. Only if under budget, fill to budget (a finished opus frees two slots and may become two sonnets).
+6. Report: slot usage, what merged, what is running, each member's liveness line, anything needing the user.
 
 ## Merging a member
 
