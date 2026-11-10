@@ -923,6 +923,33 @@ OAG_RENDER_GPU_BENCH=150 OAG_RENDER_PERF=1 oag-game hdfury-ps3-eu-dec.iso \
   `high` is about a fifth of its 1.78 / 7.15 ms at 1080p / 4K. That is an estimate, not a
   measurement.
 
+### Whole race
+
+`just bench-render hd --views 1,2h --size WxH --motion-blur high --motion-blur-resolution half
+--binary <base|cand> --tag <tag>` (the bench's own HD race, not Anulpha), plus
+`just bench-render pulse --size 1920x1080` with the same blur flags for a no-worse check. Arms
+interleaved, 2 rounds, under the gate lock, load 1.6 to 3.8 except one round at 9 to 13 (another
+member's build; its numbers sit inside the others'). p50 of every frame, mean of the two rounds,
+ms. `blur` is the chain's GPU timestamps; a split leaves it empty. The final state hash matched
+base on every run.
+
+| GPU | Case | Size | blur, before -> after | GPU frame | frame |
+| --- | --- | --- | --- | --- | --- |
+| NVIDIA | HD, one view | 1280x800 | 0.33 -> 0.32 | 1.58 -> 1.50 | 2.46 -> 2.38 |
+| NVIDIA | HD, one view | 1920x1080 | 0.92 -> 0.89 | 3.00 -> 3.01 | 3.73 -> 3.73 |
+| NVIDIA | HD, one view | 3840x2160 | 4.80 -> 4.33 | 12.59 -> 11.95 | 13.38 -> 12.72 |
+| NVIDIA | HD, `2h` | 1280x800 | | 1.44 -> 1.41 | 3.95 -> 3.92 |
+| NVIDIA | HD, `2h` | 1920x1080 | | 2.11 -> 2.14 | 4.77 -> 4.84 |
+| NVIDIA | HD, `2h` | 3840x2160 | | 6.21 -> 6.25 | 13.22 -> 12.95 |
+| Intel | HD, one view | 1920x1080 | 1.12 -> 1.05 | 4.46 -> 4.38 | 5.92 -> 5.86 |
+| Intel | HD, `2h` | 1920x1080 | | 3.93 -> 3.84 | 9.00 -> 8.87 |
+| NVIDIA | Pulse, one view | 1920x1080 | 0.75 -> 0.70 | 1.08 -> 1.01 | 1.42 -> 1.36 |
+
+At 1080p on the NVIDIA card the frame is bound elsewhere and the gather's 0.04 ms does not
+show; the `2h` 1080p row moved 0.07 ms the other way, inside its own round-to-round spread
+(4.72 / 4.81 before). At 4K one view gains 0.66 ms of a 13.4 ms frame. Nothing got worse beyond
+noise at 800p.
+
 ### The picture
 
 Same race, ticks 2500 to 2502 (578 to 580 km/h, autopilot, in the tunnel past the start), 1920x1080, both gather
