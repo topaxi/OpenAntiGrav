@@ -230,9 +230,12 @@ Three things now stand in its way:
   the built module: the stack pointer must start at the linked size, and no
   function's frame may be over an eighth of it (1 MiB). `build-web.sh` runs it
   before `wasm-opt`, so the Pages job, which has no image, refuses to publish a
-  module that fails it. The 1 MiB module of `1aacef762` fails it on both counts.
-  It checks single frames, not a call chain's depth, so it is a margin and not a
-  proof: the walk below is what proves a boot.
+  module that fails it. What each half catches: the stack-pointer check, a
+  build whose `-zstack-size` did not take (the module of `1aacef762` fails it);
+  the frame check, one frame growing past 1 MiB, about 30 % over today's
+  largest (766 KiB). The old 813 KiB `open_with` frame would pass the frame
+  check at this stack size. Neither measures a call chain's depth, so the walk
+  below is what proves a boot.
 - **A trap reaches the stopped page.** `web/main.js` shows the first uncaught
   `WebAssembly.RuntimeError` through `oagFatal` (a page `error` or
   `unhandledrejection`), with its message and wasm offset, instead of a frozen
@@ -241,9 +244,12 @@ Three things now stand in its way:
 
 `web-screenshot.py` prints each uncaught error's stack (function names survive
 in an `OAG_WEB_NO_OPT=1` build) and **exits non-zero on any**; it used to print
-three traps under a zero exit. After the fix, the Pulse PSP EU walk to Language
+three traps under a zero exit. After the fix, the Pulse PSP EU boot to Language
 Selection and on to ENTER YOUR NAME ran clean in headless Chromium 154 and
-Playwright's Firefox (build 1572), `dist` build, no page error.
+Playwright's Firefox (build 1572), `dist` build, no page error, and the walk in
+"Verifying it" raced at 60.2 fps in Chromium. **A worker's stack is not
+covered**: wasm-bindgen allocates it from the heap, so an overflow there would
+corrupt memory silently rather than trap; not measured.
 
 ### Disc keys
 
@@ -440,13 +446,15 @@ claims rest on, from Language Selection to a race on Moa Therma White:
 just web
 uv run --with playwright python3 scripts/web-screenshot.py \
     --image data/images/pulse-psp-eu.chd --out data/web-shots \
-    --at 32,64,72,80 --press Enter@8 --press Enter@11 --press Space@14 \
+    --at 80,86,95,110 --press Enter@8 --press Enter@11 --press Space@14 \
     --press Enter@18 --press Enter@22 --press Enter@26 --press Enter@30 \
-    --down x@52 --down ArrowLeft@74 --up ArrowLeft@76 --fps 5
+    --press Enter@74 --press Enter@78 --press Enter@82 --down x@88 --fps 5
 ```
 
 The first Enter skips the intro movie, which plays since 2026-10-09
-("Movies"); before that the walk was one press shorter.
+("Movies"). Since the name prompt (ENTER YOUR NAME) the walk reaches Ship
+Select at 72 s and needs the three later presses to race (2026-11-10, Moa
+Therma at 60.2 fps in Chromium 154).
 
 The encrypted HD image takes its key from the same command with
 `--key data/images/hdfury-ps3-eu.dkey --key-mode drop` (or `pick`, `hex`,

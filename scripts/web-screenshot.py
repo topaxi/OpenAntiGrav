@@ -327,7 +327,7 @@ def main() -> None:
             page.on("console", lambda m: print(f"console.{m.type}: {m.text}", flush=True))
             # The stack names the wasm function a trap is in (a module built without
             # wasm-opt keeps its names, `OAG_WEB_NO_OPT=1`). Any uncaught error
-            # fails the run: three traps once printed here under a zero exit.
+            # fails the run, so a trapped boot is never a green walk.
             def page_error(error) -> None:
                 page_errors.append(str(error))
                 print(f"pageerror: {error}\n{error.stack or ''}", flush=True)

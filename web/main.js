@@ -73,7 +73,7 @@ window.oagFatal = (cause, software) => {
 };
 // A wasm trap is not a panic, so the panic hook never reports it, and it leaves
 // the module's stack pointer where the trap left it: every later callback then
-// traps too, and the page froze on its last frame. A stack overflow traps as
+// traps too, and the canvas stays on its last frame. A stack overflow traps as
 // "memory access out of bounds" (docs/tools/web.md, "The page's stack"). The
 // first trap is shown; the rest are fallout.
 const shownTrap = (error) => {

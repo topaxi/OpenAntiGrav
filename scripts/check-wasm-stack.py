@@ -13,9 +13,8 @@ than publish a module that cannot boot.
 A frame is read off each function's prologue (`global.get $sp; i32.const N;
 i32.sub`), which is how LLVM reserves one. Two checks: the stack pointer's
 initial value is `--stack` (the link argument took), and no single frame is
-over `--stack / --share` bytes. The boot's chain that overflowed was three
-frames (813, 398 and 105 KiB) on a 1 MiB stack; a call chain's depth is not
-computed, so the share is a margin, not a proof. `--top N` lists the largest.
+over `--stack / --share` bytes. A call chain's depth is not computed, so the
+share is a margin, not a proof. `--top N` lists the largest.
 """
 
 from __future__ import annotations

@@ -364,10 +364,10 @@ impl Stage {
     /// exactly the case that would let it ship looking correct.
     ///
     /// Never inlined: the `RaceStage` it builds (about 350 KiB) and its
-    /// temporaries sit on the stack before they are boxed, and inlined into
-    /// `App::open_with` they made that frame 813 KiB on every leg, the
-    /// browser's front end included, which never takes this one
-    /// (`docs/tools/web.md`, "The page's stack").
+    /// temporaries sit on the stack before they are boxed, and inlined they
+    /// would sit in `App::open_with`'s frame on every leg, the browser's front
+    /// end included, which never takes this one (`docs/tools/web.md`, "The
+    /// page's stack").
     #[allow(clippy::too_many_arguments)]
     #[inline(never)]
     pub(crate) fn race(

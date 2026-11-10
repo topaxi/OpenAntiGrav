@@ -47,10 +47,10 @@ fi
 # Shared, imported memory up to wasm32's whole 4 GiB, and the TLS exports
 # wasm-bindgen sets each thread up with. rustc does not pass these for the
 # atomics feature alone (nightly-2026-10-08 linked an unshared memory).
-# The page's thread runs on the linker's stack, 1 MiB unless told otherwise,
-# where a native main thread has 8 MiB; the boot's call chain needed more than
-# 1 MiB in the `dist` build, and an overflow runs below address 0 and traps as
-# "memory access out of bounds" (docs/tools/web.md, "The page's stack").
+# The page's thread runs on the linker's stack, 1 MiB unless told otherwise;
+# this is a native main thread's 8 MiB. The boot's call chain is over 1 MiB in
+# the `dist` build, and an overflow runs below address 0 and traps as "memory
+# access out of bounds" (docs/tools/web.md, "The page's stack").
 stack_size=8388608
 link=""
 for arg in --shared-memory --import-memory --max-memory=4294967296 -zstack-size=$stack_size \
