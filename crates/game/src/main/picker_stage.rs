@@ -162,7 +162,7 @@ struct ReadJob {
 enum ShowRead {
     /// The entry did not change, or the title draws no stills.
     Unchanged,
-    Loaded(Slideshow, Sheet),
+    Loaded(Box<Slideshow>, Sheet),
     Failed,
 }
 
@@ -245,7 +245,7 @@ fn read_slideshow(
                 sheet.width,
                 sheet.height
             );
-            ShowRead::Loaded(show, sheet)
+            ShowRead::Loaded(Box::new(show), sheet)
         }
         Err(error) => {
             warn!("{error:#} - the hexagonal window draws nothing");
@@ -606,7 +606,7 @@ impl PickerStage {
         match show {
             ShowRead::Unchanged => {}
             ShowRead::Loaded(show, sheet) => {
-                self.slideshow = Some(show);
+                self.slideshow = Some(*show);
                 self.sheet = Some(sheet);
                 self.sheet_uploaded = false;
             }
