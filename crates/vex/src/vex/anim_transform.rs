@@ -123,8 +123,11 @@ impl AnimChannel {
         // above `t` come first, so the bisection lands on the same key the scan does, for a
         // NaN `t` too (no key is above it; both give the last).
         let first_above = if self.ascending {
-            Some(self.times.partition_point(|&key| !(t < f32::from(key))))
-                .filter(|&i| i < self.times.len())
+            Some(
+                self.times
+                    .partition_point(|&key| f32::from(key) <= t || t.is_nan()),
+            )
+            .filter(|&i| i < self.times.len())
         } else {
             self.times.iter().position(|&key| t < f32::from(key))
         };
