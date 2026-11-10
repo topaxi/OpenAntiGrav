@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-10
-summary: "Deck HD Anulpha: tap caps and blur composite copy-free landed on desktop; open: Deck re-measure of both, 32-bit prepared texel, HD encode"
+summary: "Deck HD Anulpha: four desktop GPU cuts measured on the Deck (all win); open: 32-bit prepared texel, HD encode, unused scratch target"
 categories: [rendering]
 ---
 
@@ -22,7 +22,7 @@ from the bisect's linear tap cost (15 to 5 taps saved 1.04 ms at 1080p; 4K scale
 
 | Option | Saves at 1080p / 4K (estimate) | What the picture loses |
 | --- | --- | --- |
-| ~~Fewer taps: `TAPS` 15 to 9 (or `TAP_SPACING_PX` 4 to about 7)~~ | landed as per-tier caps (`high` 11, `medium` 9, `low` 7), measured on the desktop only: `docs/rendering/motion-blur.md`, "Fewer taps: each tier caps the gather" | Same length (the taps stratify a fixed span); a slightly coarser speckle along bright streaks. Spacing tied to the reach cap was measured and dropped. |
+| ~~Fewer taps: `TAPS` 15 to 9 (or `TAP_SPACING_PX` 4 to about 7)~~ | landed as per-tier caps (`high` 11, `medium` 9, `low` 7); the Deck gather fell 19 to 22 % at `high` (1.77 to 1.40 ms at 1080p, 8.20 to 6.42 ms at 4K) and 26 to 32 % at `medium`: `docs/rendering/motion-blur.md`, "Fewer taps: each tier caps the gather" | Same length (the taps stratify a fixed span); a slightly coarser speckle along bright streaks. Spacing tied to the reach cap was measured and dropped. |
 | 32-bit `prepared` texel (`[reach, depth]` in `Rg16Float`) | unmeasured; at most 0.9 / 3.7 ms (the bisect's no-load row, which also folded the weights), likely far less | Reach rounded to f16 before the cone weights: sub-level differences at silhouettes, likely invisible; needs a frame-compare to say. |
 | A quarter-resolution gather rung | about 1.3 / 5.4 ms (three quarters of the gather) | Smears resolved at a quarter of the pixels each way: thin moving objects (a craft's fin, a weapon trail) smear less or not at all, and silhouettes of a still surface over a moving background soften. |
 | `medium` instead of `high` (exists today) | measured before the tap caps: little at 4K (pipelined 24.9 to 24.7 ms), 1080p within noise. With the caps `medium` gathers 9 taps against 11 (desktop: gather 1.05 against 1.31 ms at 4K, NVIDIA) | Shorter shutter: less smear. |
@@ -33,10 +33,9 @@ proposed as a default.
 
 ## Open
 
-- **Re-measure the tap caps on the Deck.** Desktop only so far. Expected from the bisect's linear
-  tap cost: about a fifth off the 1.78 / 7.15 ms gather at `high`, more at `medium`. Command:
-  the per-pass one in `docs/rendering/frame-thread-cpu.md`, `--motion-blur high` and `medium`,
-  `base` (`b56d129a3`) against the merge, 1080p and 4K, 2 rounds interleaved.
+- ~~**Re-measure the tap caps on the Deck.**~~ Done (`deck-remeasure`): `high` 725 to 587, 1770 to
+  1399, 8199 to 6424 us and `medium` 644 to 478, 1660 to 1158, 7932 to 5399 us at 800p, 1080p, 4K
+  (`docs/rendering/motion-blur.md`, "The tap caps on the Deck"). The estimate of a fifth was right.
 
 - **Motion blur is ours (maintainer, 2026-11-09):** the blur is our own graphics setting, so a cut that changes its picture (fewer taps, cheaper composite or copy) needs a capture diff that names the change, not byte-identity and not a design decision. Every other pass stays byte-identical.
 - **The 64-bit `prepared` texel.** Each gather tap loads `Rgba16Float` (velocity xy, depth, an
@@ -48,7 +47,8 @@ proposed as a default.
   onto the scene (`SMEAR_OVER`), no copy pass; desktop -15 to -31% of composite + copy at 800p,
   1080p, 4K on NVIDIA and Intel, pictures differ by 1 of 255 (details:
   `docs/rendering/motion-blur.md`, "The half-size composite blends onto the scene"). **Deck
-  re-measure owed** (expected: the 0.14 / 0.48 ms copy, minus a little). Not done: in half mode the
+  re-measured** (`deck-remeasure`): composite + copy 305 to 224, 673 to 503, 2587 to 1981 us at 800p,
+  1080p, 4K (-23 to -26 %), `docs/rendering/motion-blur.md`, "On the Deck". Not done: in half mode the
   full-size `scratch` target is still allocated though unused (66 MB at 4K); drop it when the
   resolution is half, rebuilding it on a switch to full.
 - **HD encode decodes each scene texel four times** (`final_half_texel` puts every pixel on a
@@ -59,11 +59,10 @@ proposed as a default.
 
 ## Next Steps
 
-1. The Deck re-measure of the tap caps above, when the Deck is back.
-2. The 32-bit diag above: `OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1`, 1080p and 4K, interleaved
+1. The 32-bit diag above: `OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1`, 1080p and 4K, interleaved
    with `base`, 2 rounds.
-3. If it pays: render the tier's pictures and diff them (`docs/tools/frame-compare.md`) before
+2. If it pays: render the tier's pictures and diff them (`docs/tools/frame-compare.md`) before
    proposing it.
-4. Whole race for any kept change: `ab.sh <tag> "base cand" "1280x800 1920x1080 3840x2160" 3 hd
+3. Whole race for any kept change: `ab.sh <tag> "base cand" "1280x800 1920x1080 3840x2160" 3 hd
    "1 2"`, plus Pulse's default circuit.
-5. The maintainer picks a row of the options table, or none.
+4. The maintainer picks a row of the options table, or none.

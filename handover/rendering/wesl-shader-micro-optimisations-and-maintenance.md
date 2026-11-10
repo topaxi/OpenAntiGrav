@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-10
-summary: "WESL sweep: present pow landed, Zone and HUD fetches closed flat; lit_texel guards, fog branch, bloom blur taps open"
+summary: "WESL sweep: present pow landed, Zone fetches landed on the Deck numbers, HUD fetches closed flat; lit_texel guards, fog branch, bloom blur taps open"
 categories: [rendering]
 ---
 
@@ -42,16 +42,20 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
    800p and 1080p fall 24 to 38 % too. Both passes run every presented frame. Byte-identical (`cmp`) on both GPUs
    for Pulse and HD at 800p, 1080p (FXAA, FSR 1) and 4K, and at `brightness 110, gamma 130`. The assignment form of
    the `pow` skip measured **slower** than no skip on Intel (695 against 645 us), so the early return is the form
-   to keep. Deck not run (desktop numbers). Table, method and the pin test:
+   to keep. **Deck (`deck-remeasure`): -54 to -57 % on both passes** (`resolve_scene` 1178 to 513 us and `composite`
+   1193 to 516 us at 4K; 1.34 ms a frame at a 4K output, 0.34 ms at 1080p), but 59 to 452 pixels of 1 to 8 million
+   differ by 1 of 255 on RADV (identical on NVIDIA and Intel). Table, method and the pin test:
    `docs/rendering/hires-gpu-levers.md`, "The present composite's two dead `pow`".
 
-2. ~~**A Zone race samples nine textures where three are needed.**~~ **Closed, flat; not landed**
-   (`zone.wesl`, `zone_sample`, `zone_glow`). Built as a per-lane layer `select` (4 fetches to 2) and as that plus a
-   flat branch (to 1). An upper bound with every Zone fetch removed moves `track solid, shaded` by 0 % at 800p and
+2. ~~**A Zone race samples nine textures where three are needed.**~~ **Closed flat on the desktop, reopened by the
+   Deck and landed** (`zone.wesl`, `zone_sample`, `zone_glow`): on the Deck `track solid, shaded` on a Zone frame falls
+   7.4 % at 800p and 5.7 % at 1080p (0.15 and 0.20 ms; 4K unresolved, the Deck's 4K rows swing 10 to 19 %), and the
+   Deck's pictures are byte-identical on 16 frames. Desktop result as first measured: built as a per-lane layer
+   `select` (4 fetches to 2) and as that plus a flat branch (to 1). An upper bound with every Zone fetch removed moves `track solid, shaded` by 0 % at 800p and
    1080p and -9.5 % (0.2 ms) at 4K on NVIDIA, and -16 % at 800p on Intel with 30 % process-to-process swings at 1080p
    and 4K. The rewrite is **not byte-identical on Intel** (39 to 123 pixels off by 1 to 2 levels on HD Zone frames),
-   so it was dropped. Numbers: `docs/rendering/hires-gpu-levers.md`, "Zone textures, 9 fetches to 3". The Deck might
-   still differ; only a Deck run reopens this.
+   so it was dropped on the desktop. Numbers, including the Deck's: `docs/rendering/hires-gpu-levers.md`, "Zone
+   textures, 9 fetches to 3".
 
 3. ~~**Every HUD and menu fragment fetches four textures and keeps one.**~~ **Closed, flat; not landed**
    (`ui.wesl`, `fs_main`). A flat-`mode` branch (with the derivative diagnostic off) moved the HUD frame pass by
