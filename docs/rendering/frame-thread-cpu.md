@@ -2047,82 +2047,96 @@ before and after.
 
 Pictures: `cmp` equal before and after for both, at 1080p and 4K, two rounds each.
 
-## Scenery node animation: the head upload, the key bisection and the exact wrap (2026-11-10, `scenery-anim`)
+## Scenery node animation: the head upload and the key bisection (2026-11-10, `scenery-anim`)
 
 Claim: scenery animation sampling in `prepare_view` costs less frame-thread CPU with every picture
-byte-identical, on Pulse, HD and Pure. **True on this machine** (desktop numbers, an Intel Core Ultra
+byte-identical, on Pulse, HD and Pure. **True on this machine** (desktop numbers: an Intel Core Ultra
 7 265H with a discrete NVIDIA GPU, the process pinned to the P-cores with `taskset -c 0-5`; the Deck
-was off, so its 0.3 to 0.4 ms above is not re-measured). Per frame at 1280x800, one view:
+was off, so its 0.3 to 0.4 ms above is not re-measured).
+
+**Direct, from the profiler** (`perf record -e cpu-clock:u -F 999`, no call graph, release builds of
+`main` and of this tree back to back at load 3.2 to 4.1, 1280x800, one view, one three-lap race
+each). Self samples per frame (1 sample = 1 ms; 6,884 Pulse frames, 6,947 HD frames) summed over
+`AnimTransform::sample`, `AnimChannel::sample`, `NodeAnims::*`, `matrix::multiply`,
+`Model::sample_anim_nodes*` and `wgpu_core::Queue::write_buffer` (which every uniform write passes
+through, so the delta, not the level, is ours):
 
 | | before | after |
 | --- | --- | --- |
-| `write_scenery_anims` inclusive, Pulse (perf, us per frame) | 59 | 38 |
-| `write_scenery_anims` inclusive, HD (perf, us per frame) | 67 | 31 |
-| `record_us` p50, Pulse / HD / Pure (bench, us) | 616 / 875 / 276 | 579 / 802 / 261 |
-| `cpu_us` p50, Pulse / HD / Pure (bench, us) | 940 / 1,775 / 481 | 905 / 1,685 / 448 |
+| Pulse (`16_Track`) | 137 us per frame (946 samples) | 97 us (671) |
+| HD (`talons_junction`) | 166 us (1,151) | 68 us (472) |
 
-The bench is `just bench-render --binary` on two release builds of one tree, three rounds
-interleaved base then new (`--size 1280x800`, medians of the three round medians; load 3 to 20 on a
-machine other lanes were using). 1080p and 4K, from an earlier build of the same change (the head
-upload and the key bisection, before the clock wrap moved), `record_us` p50: 1080p Pulse 641 to 615,
-HD 924 to 840, Pure 281 to 271; 4K Pulse 644 to 620, HD 1,695 to 1,542, Pure 357 to 345. `cpu_us`
-at 4K HD does not move (3,297 to 3,290 us): the frame is GPU-bound there and the saving is inside the
-wait. Single round medians swing by 20 to 40 us at 1080p on Pulse, so a row under that is noise;
-`record_us` p50 was lower in every round pair at 800p and 4K.
+**Bench**, `just bench-render --binary` on two release builds of one tree, three rounds interleaved
+base then new, `record_us` p50 in us (median of the three round medians) and `cpu_us` p50 beside it.
+Load 3.5 to 6.0 at 800p, 3.4 to 4.7 at 1080p, 2.7 to 4.8 at 4K (`load_average_start` and `_end` of
+the 18 result files of each size):
 
-What the profile said (`perf record -e cpu-clock:u -F 999 --user-callchains --call-graph fp`, frame
-pointers, one three-lap race per title; `NodeAnims::sample_started` was 1.5 to 2.5% of all samples,
-the whole `write_scenery_anims` 3.0% on Pulse and 1.25% on HD):
+| | 800p `record_us` | 800p `cpu_us` | 1080p `record_us` | 1080p `cpu_us` | 4K `record_us` | 4K `cpu_us` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Pulse | 647 to 589 (-9.0%) | 978 to 938 (-4.2%) | 655 to 652 (-0.5%) | 987 to 1,018 (+3.2%) | 678 to 631 (-6.9%) | 1,016 to 947 (-6.7%) |
+| HD | 922 to 831 (-9.9%) | 1,921 to 1,813 (-5.6%) | 988 to 914 (-7.4%) | 2,046 to 1,990 (-2.7%) | 1,929 to 1,758 (-8.9%) | 3,869 to 3,784 (-2.2%) |
+| Pure | 282 to 264 (-6.3%) | 483 to 456 (-5.5%) | 286 to 272 (-5.0%) | 485 to 470 (-3.1%) | 373 to 362 (-2.8%) | 602 to 611 (+1.4%) |
+
+Pulse at 1080p is inside the noise in this series (its rounds read 649, 655, 666 before and 623, 665,
+652 after), and in two earlier series of the same change that row read +13 us and -26 us: no claim
+there. Pure's 4K `cpu_us` is likewise within the round-to-round spread (589 to 625). Everywhere else
+the sign of `record_us` held in every round pair. At 4K HD `cpu_us` moves less than `record_us`
+because the frame is GPU-bound and part of the saving is inside the wait.
+
+What the profile said (frame-pointer build, call graph, same races; `NodeAnims::sample_started` was
+1.5 to 2.5% of all samples, the whole `write_scenery_anims` 3.0% on Pulse and 1.25% on HD):
 
 1. **The node table was uploaded whole.** `write_node_anims_started` built a 384-matrix
    `NodeAnims` (a 24 KiB identity fill, a `Vec` of the live matrices, a copy) and sent all 24 KiB
-   to wgpu every sampled frame, whatever the model's node count (Pulse's busiest circuit has 74, HD's
-   259). Every slot past the model's nodes is the identity the buffer was built with, and nothing
-   else writes it, so `NodeAnims::head_started` returns slot 0 and the live matrices only and the
+   to wgpu every sampled frame, whatever the model's node count (Pulse's busiest circuit has 74).
+   Every slot past the model's nodes is the identity the buffer was built with, and nothing else
+   writes it, so `NodeAnims::head_started` returns slot 0 and the live matrices only and the
    drawable uploads that head. The GPU's table is byte-for-byte what a full upload leaves
-   (`mesh_render::tables::tests`, over 1 to 400 nodes and a clock sweep including negative
-   clocks). `wgpu_core::Queue::write_buffer` self samples fell from 474 to 298 on HD.
+   (`mesh_render::tables::tests`, over 1 to 400 nodes and a clock sweep including negative clocks).
 2. **The key search was a linear scan.** `AnimChannel::at` walked the key times from the start for
-   every channel of every node every frame; on HD (259 nodes on `modesto_heights`, long key arrays)
-   `AnimChannel::sample` was 0.9% of all samples, the largest single piece after the upload. Key times
-   that never decrease (decided once, at construction, by `AnimChannel::new`) are bisected with
-   `partition_point`; any other channel keeps the scan. Same key pair and blend factor to the bit,
-   NaN clock included (`the_key_search_is_the_scan_to_the_bit`).
-3. **The clock wrap was a libcall that did nothing most frames and cost a stall.** A node wraps its
-   clock at its own `LoopEnd` (`seconds % period`); the race clock passes most periods in the first
-   minute, so a skip when the clock is inside one period almost never fires. `wrap_clock` takes the
-   remainder in `f64` instead (exact: `x`, `p` and a quotient under 2^28 fit a double, so only the
-   quotient's rounding can be one off, fixed by one conditional add or subtract) and falls back to
-   `%` for NaN, infinity, a non-positive period and a huge quotient. Tested against `%` bit for bit
-   over three million random clock and period pairs plus their neighbours and a hand-picked edge
-   list. `TexTransform::sample` (the per-material texture scroll) uses the same wrap. This one is
-   below the bench's noise: the same perf run with and without it reads 1.4% `AnimTransform::sample`
-   self either way. Kept because it is exact, covered, and removes a libcall per texture track.
+   every channel of every node every frame; on HD `AnimChannel::sample` was 0.9 to 1.1% of all
+   samples (423 samples against Pulse's 62), the largest single piece after the upload. Key times
+   that never decrease (decided once, at construction, by `AnimChannel::new`, for channels of two or
+   more keys) are bisected with `partition_point`; any other channel keeps the scan. Same key pair
+   and blend factor to the bit, NaN clock included (`the_key_search_is_the_scan_to_the_bit`). No code
+   writes `AnimChannel::times` after construction (`rg` over the workspace).
+
+**Measured and dropped: an exact `f64` clock wrap.** A node wraps its clock at its own `LoopEnd`
+(`seconds % period`, an `fmodf` libcall). A skip when the clock is inside one period never fires
+(the race clock passes most periods in the first minute), so the wrap was rewritten in `f64`
+(`x - floor(x / p) * p`, exact for a quotient under 2^28, tested against `%` bit for bit over three
+million random pairs). `AnimTransform::sample` self time read 1.36%, 1.32%, 1.39% and 1.35% of all
+samples across the base, the skip, the `f64` wrap and the wrap on `TexTransform` too: flat, so it was
+removed again.
 
 **Not the cause: `feclearexcept` (0.35 to 0.6% of samples).** It looked like `fmodf`'s fenv
-traffic and survives the wrap change. Its caller is a driver library frame, not our code.
+traffic and survives every wrap variant. Its caller is an unresolved frame in another shared
+library, not our code.
 
 **What is left in `AnimTransform::sample`.** 43% of its samples sit on the loads of a node's boxed
-transform (`translation_quantum`, `translation_base`): a cache miss per node, because each node is a
-`Box<AnimTransform>` whose three channels own three `Vec`s each. A flat per-model layout (one
-array of the constants, one of the keys) would turn those into sequential reads; it moves the load
-path of every model and was not attempted. The other candidates the Deck note listed were checked and
-are already done or not there: the per-tick cache is `remember` (`daddbef7e`, 2026-10-21, before the
-Deck profile, so the Deck's 0.3 to 0.4 ms includes it; at 90 Hz over 60 Hz ticks a third of the
-Deck's frames still resample), and `AnimTrack::sample` builds no `Vec` any more.
+transform (`translation_quantum`, `translation_base`; `perf annotate -l`, source line
+`translation[k] * quantum + base`): a cache miss per node, because each node is a
+`Box<AnimTransform>` whose three channels own three `Vec`s each. A flat per-model layout (one array
+of the constants, one of the keys) would turn those into sequential reads; it touches the load path
+of every model and was not attempted. The other candidates the Deck note listed were checked: the
+per-tick cache is `remember` (`daddbef7e`, 2026-10-21, before the Deck profile, so the Deck's 0.3 to
+0.4 ms includes it; at 90 Hz over 60 Hz ticks a third of the Deck's frames still resample), and
+`AnimTrack::sample` builds no `Vec` any more.
 
-**Pictures and the simulation.** `--race --screenshot --ticks 500` on Pulse, HD and Pure with the live
-clock and with `--anim-seconds` 0, 7.3 and 95.1: 12 PNG pairs, base and new binary, `cmp` identical
-(the new binary after each of the three changes). The three titles' final state hashes are identical
-in every bench pair (`bench-compare` reads them). No simulation crate changed.
+**Pictures and the simulation.** `--race --screenshot --ticks 500` on Pulse, HD and Pure with the
+live clock and with `--anim-seconds` 0, 7.3 and 95.1: 12 PNG pairs, `main` binary against this
+tree's, `cmp` identical. The three titles' final state hashes are identical in every bench pair
+(`bench-compare` reads them). No simulation crate changed.
 
-Commands (one tree, two binaries; the base build is `main`'s `2a244f1ac`):
+Commands (one tree, two binaries; the base is `main` at `2a244f1ac`):
 
 ```sh
-cargo build --release -p oag-game && cp target/release/oag-game /path/oag-game-new
-# base: the same on main. Wrap each binary as: exec taskset -c 0-5 /path/oag-game-X "$@"
+cargo build --release -p oag-game && cp target/release/oag-game /path/oag-game-new   # base: the same on main
+# wrap each as: exec taskset -c 0-5 /path/oag-game-X "$@"   (run-base.sh, run-new.sh)
 python3 scripts/bench-render.py run pulse hd pure --binary /path/run-base.sh --size 1280x800 --out /path/base-r1
 python3 scripts/bench-render.py run pulse hd pure --binary /path/run-new.sh  --size 1280x800 --out /path/new-r1
-# profile: a frame-pointer build (RUSTFLAGS=-Cforce-frame-pointers=yes CARGO_PROFILE_RELEASE_DEBUG=line-tables-only,
-# its own CARGO_TARGET_DIR) behind a wrapper running perf record, passed to --binary the same way
+# direct: wrap as: exec taskset -c 0-5 perf record -e cpu-clock:u -F 999 -o "$PERF_OUT" -- /path/oag-game-X "$@"
+# then: perf report -i $PERF_OUT --no-children -n --sort sym --stdio
+# call-graph profile: RUSTFLAGS=-Cforce-frame-pointers=yes CARGO_PROFILE_RELEASE_DEBUG=line-tables-only,
+# its own CARGO_TARGET_DIR, perf record ... --user-callchains --call-graph fp
 ```
