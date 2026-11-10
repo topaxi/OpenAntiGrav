@@ -109,6 +109,8 @@ fn a_titles_code_pitch_carries_its_grid_damping_into_the_laws() {
         wall_one_sided: Sourced::chosen(false),
         wall_steer_away: Sourced::chosen(false),
         wall_point_rate_body_local: Sourced::chosen(false),
+        body_linear_damping: Sourced::chosen(0.0),
+        body_angular_damping: Sourced::chosen(0.0),
         cage_from_track_header: Sourced::chosen(true),
         chase_view_sheared: Sourced::chosen(false),
         shield_by_skill: Sourced::chosen(true),
@@ -135,6 +137,29 @@ fn a_titles_code_pitch_carries_its_grid_damping_into_the_laws() {
     );
     assert_eq!(physics_laws(Some(&laws(None))).pitch_damping_grid, None);
     assert_eq!(physics_laws(None).pitch_damping_grid, None);
+}
+
+/// HD's measured body damping reaches the physics' laws, with Omega's own and 2048's inherited
+/// pair; Pulse (no laws) and Pure fly none.
+#[test]
+fn the_body_damping_follows_the_title() {
+    let damped = oag_physics::laws::BodyDamping {
+        linear: 0.01,
+        angular: 0.01,
+    };
+    for laws in [
+        &oag_hd::race::CRAFT_LAWS,
+        &oag_omega::race::CRAFT_LAWS,
+        &oag_2048::race::CRAFT_LAWS,
+    ] {
+        assert_eq!(physics_laws(Some(laws)).body_damping, damped);
+    }
+    let none = oag_physics::laws::BodyDamping::NONE;
+    assert_eq!(
+        physics_laws(Some(&oag_pure::race::CRAFT_LAWS)).body_damping,
+        none
+    );
+    assert_eq!(physics_laws(None).body_damping, none);
 }
 
 /// HD's measured one-sided contact reaches the physics' laws, inherited by Omega and 2048;

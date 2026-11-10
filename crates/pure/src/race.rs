@@ -617,6 +617,11 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     wall_one_sided: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     wall_steer_away: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     wall_point_rate_body_local: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    // Pure's `Craft_Construct` passes `0.01`, `0.01` to a `Body_Integrate` that is Pulse's loop
+    // (`docs/physics/pure-physics.md`), but the term stays off here as on Pulse until both are
+    // re-measured with it (`docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`).
+    body_linear_damping: oag_title::pre_race::Sourced::inherited(0.0, "Pulse"),
+    body_angular_damping: oag_title::pre_race::Sourced::inherited(0.0, "Pulse"),
     // Pure's binary is not read for the cage; its own headers clear the flag on all 16 tracks.
     cage_from_track_header: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     // The player camera update (`0x08849970`) copies the tripod matrix into the camera node and

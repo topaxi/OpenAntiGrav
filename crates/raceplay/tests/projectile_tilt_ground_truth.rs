@@ -54,6 +54,8 @@ const HEIGHT_TOLERANCE: f32 = 2.0;
 /// The release tick and the three updates after it, in which a Plasma does not ride; see `plasma::UNPINNED_SECONDS`.
 const PLASMA_UNRIDDEN_UPDATES: u32 = 4;
 const ANGLE_TOLERANCE_DEGREES: f32 = 20.0;
+/// The reattach update and the four after it, in which a Plasma's ride overshoots and decays.
+const PLASMA_REATTACH_RIPPLE_UPDATES: u32 = 5;
 
 fn snapshot(bits: u32, previous: Option<&Input>) -> oag_gameplay::InputSnapshot {
     let mut buttons = previous.copied().unwrap_or_else(Input::new);
@@ -121,6 +123,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
         next_shot = tick + 30;
         let mut flown = 0_u32;
         let mut was_airborne = false;
+        let mut reattach_ripple = 0_u32;
         for k in 0..span {
             let bits = if k == 0 {
                 Button::Cross.bit() | Button::Square.bit()
@@ -208,7 +211,18 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
             // overshoots for two updates before it settles, the law's own shape. So the
             // height is judged from the third update after the first ride.
             let settling = weapon == Weapon::Plasma && flown <= PLASMA_UNRIDDEN_UPDATES + 2;
-            if !reattaching && !settling {
+            // A Plasma that finds the floor again after a miss rides a period-2 overshoot
+            // that decays in five updates, the ride law's own shape: over the 3-unit dip at
+            // `01_Vineta_K` (770, -131, 370) it reads 9.1, 6.2, 3.4, 6.0, 3.6 against 4.0
+            // (`docs/gameplay/projectile-floor.md`, "HD Plasma, launch boost on"). Which
+            // update reaches the dip moves with the firing point, so the ripple is left
+            // out of the height rather than caught or missed by the line the craft flew.
+            if reattaching && weapon == Weapon::Plasma {
+                reattach_ripple = PLASMA_REATTACH_RIPPLE_UPDATES;
+            }
+            let rippling = reattach_ripple > 0;
+            reattach_ripple = reattach_ripple.saturating_sub(1);
+            if !reattaching && !settling && !rippling {
                 out.worst_height_error = out
                     .worst_height_error
                     .max((floor.distance - ride_height).abs());

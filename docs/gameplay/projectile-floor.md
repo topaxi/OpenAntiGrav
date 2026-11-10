@@ -321,3 +321,11 @@ The pin stays. Not measured: whether the original's Plasma shows the same ripple
 that dip (needs an HD capture at that stretch, not taken; confidence the ripple is the
 original's own: 55, from the ride law matching on flat road, 0.00 error in 16-tick
 runs). Ran on two of two HD runs only (one seed each; the sim is deterministic).
+
+**2026-11-10 (`hd-late-speed`): the ripple is left out of the height.** HD's body damping
+(`docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`) slowed the craft by under a percent and
+the same dip came up again with the boost off: tick 2420, reattach at 9.09 and then 6.16 (2.16
+off) on update 10, outside the settling window. The test now skips the height for the reattach
+update and the four after it on a Plasma (`PLASMA_REATTACH_RIPPLE_UPDATES`), the five updates
+the ripple takes to decay; HD's worst is then 1.17, at the other dip (-644, -139, 390). The
+angle is still judged on every one of those ticks.

@@ -121,8 +121,8 @@ every other `rand` caller, so a sequence match is not on offer.
 - The mask order at `0x00c47730`.
 - How the constructor seeds `P0..P3` and `obj+0x80`.
 - Whether any other code reads the 60-slot history.
-- Whether body `+0x4c4` is speed (taken, above) or thrust: a live read just after a throttle release
-  at speed settles it. Thrust drops at once, speed does not.
+- ~~Whether body `+0x4c4` is speed (taken, above) or thrust~~: speed. `Body_Integrate` stores
+  `|velocity|` there every step (`0x000f7024`..`0x000f706c`, [body-damping.md](body-damping.md)).
 - Whether opponents run the same block. It is inside the per-ship update, but no branch above
   `0x000ebb28` was read for a player test.
 

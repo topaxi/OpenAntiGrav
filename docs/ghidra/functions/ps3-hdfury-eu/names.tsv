@@ -928,3 +928,5 @@
 0x00c81b08	data	g_SceneWidthLevel	92	scene-width-throttle.md
 0x00c81da4	data	g_SceneWidthThrottleEnabled	90	scene-width-throttle.md
 0x00c81a88	data	g_SceneColourTargets	85	scene-width-throttle.md
+0x000f5878	function	Body_Init	82	body-damping.md
+0x008a92f4	data	Body_DefaultDamping	90	body-damping.md
