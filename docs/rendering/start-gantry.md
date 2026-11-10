@@ -2898,12 +2898,17 @@ too (`gantry/tests.rs`), and `Title::adverts` of both titles is HD's pass, inher
 
 **The card carries Omega's and 2048's slot 1-7 adverts too** (the same pass): on Omega's Vineta K the side cards now show
 the Harimau logo card the shadPS4 frame shows (`omega-status.md` had them "dark teal with no logo": that was the `.gnf`
-spelling of `fx350_nomip`). Not otherwise compared.
+spelling of `fx350_nomip`). Not otherwise compared. On 2048 the same pass now draws the slot 1-7 cards on the HD-ported circuits
+(Vineta K shows the Harimau card): inherited from HD, not compared against a Vita frame.
 
 **Clock: chosen, not measured.** `321Go_2048.vex` has no texture track, so `go_edge` has nothing to find. The node motion
 authors `GO` sliding in at frame 200 (the key times `[198, 199, 200, ...]`), so frame 0 is tick `273 - 200 = 73`
 (`Clock::assembled_at_release`, `GantryBoard::assembly_ticks`), as HD's `GO` is lit on the release. What the board shows after
 the `GO` leaves at 6.000 s is the asset's own timeline running on. The digits' phase is unmeasured on either title (below).
+**After the `GO`** (Omega Altima at ticks 450, 700 and 3700, 1920x1080): the board shows the authored `A·G·R·C` logo state from tick
+about 600 and holds it for the rest of the race, because a clock with no `laps` is clamped at `CLOCK_LIMIT`. **FINAL LAP (9.333 s) and
+the chequered flag (12.333 s) are never played on these two titles**; HD plays them through `HD_LAP_WINDOWS`, whose beats the
+2048 file shares (three-beat section above). Open, not measured on either title.
 
 **Evidence: shadPS4 cannot show this card's face.** `scripts/shadps4-omega-countdown.py` walks Omega to Race Box, sets GAME
 MODE to WipEout 2048 (one Right), takes Track Select's first circuit (Altima) and the first craft, and grabs frames across the

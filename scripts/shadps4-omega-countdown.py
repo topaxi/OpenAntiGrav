@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A run of frames across Wipeout Omega Collection's start countdown on shadPS4, with throttle held through the release.
+"""A run of frames across Wipeout Omega Collection's start countdown on shadPS4.
 
     python3 scripts/shadps4-omega-pair.py prepare-game --game data/scratch/<lane>/omega-game       # once
     uv run --with evdev python3 scripts/emu-run.py --child-status <log-dir>/status.json -- \\
@@ -8,8 +8,10 @@
 
 Uses the rig of `shadps4-omega-pair.py` (headless `sway`, muted SDL audio, one uinput pad). The walk is RACEBOX, one Right on
 GAME MODE (WipEout 2048), Track Select (the first circuit, ALTIMA), Ship Select (the first craft), the loading screen and
-START RACE. Throttle (cross) is then held, so the first frame the hull moves is the release; every grab is stamped with the
-monotonic clock in `frames.json`, so the frame a digit or `GO` shows on can be set against it.
+START RACE; Omega's 2048 mode then plays a flyby, and a further confirm every 30 frames skips it until the grid shows. Every grab
+is stamped with the monotonic clock in `frames.json`. The emulator runs at about 0.4x real time, so frame numbers are not game
+time: read the HUD's TOTAL clock off the frames (it holds 0.00.00 through the countdown and starts at the release, about frame 56
+in the 2026-11-10 run). The board's face is a blank white card in every frame of that run, so the digits are not on these frames.
 """
 
 import argparse
@@ -32,7 +34,6 @@ def main():
     ap.add_argument("--game", required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--seconds", type=float, default=26.0, help="how long to grab after START RACE")
-    ap.add_argument("--hold", type=float, default=22.0, help="seconds to hold throttle from START RACE")
     args = ap.parse_args()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -70,20 +71,15 @@ def main():
         rig.grab(out / "loading.png")
         time.sleep(14)  # the START RACE prompt waits for the confirm
         rig.press("cross", 0.2)
-        frames, t0, held_at = [], time.monotonic(), None
+        frames, t0 = [], time.monotonic()
         while time.monotonic() - t0 < args.seconds:
             at = time.monotonic() - t0
-            path = rig.grab(out / ("f%03d.png" % len(frames)))
+            rig.grab(out / ("f%03d.png" % len(frames)))
             frames.append({"frame": len(frames), "t": round(at, 3)})
-            if held_at is None and len(frames) % 30 == 0 and len(frames) <= 120:
-                # Omega's 2048 mode plays a flyby after START RACE; a further confirm skips it
+            if len(frames) % 30 == 0 and len(frames) <= 120:
+                # a confirm skips the 2048 mode's flyby; after the grid shows it does nothing
                 rig.hold.write(b"a press cross\n")
-            if held_at is None and op.hud_up(path):
-                # the HUD is up: the countdown has begun, hold the throttle through the release
-                rig.hold.write(b"a hold cross %.1f\n" % args.hold)
-                held_at = len(frames) - 1
-        frames_meta = {"hud_first_frame": held_at}
-        (out / "frames.json").write_text(json.dumps({"seconds": args.seconds, "hold": args.hold, **frames_meta, "frames": frames}, indent=1))
+        (out / "frames.json").write_text(json.dumps({"seconds": args.seconds, "frames": frames}, indent=1))
         op.log("%d frames in %.1f s" % (len(frames), time.monotonic() - t0))
     finally:
         rig.stop()

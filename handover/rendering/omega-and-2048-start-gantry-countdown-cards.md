@@ -21,6 +21,8 @@ categories: [rendering]
   field), then the Zone, Zone Battle and detonator boards through `zone_gantry`.
 - **The digits' phase is chosen.** shadPS4 draws this card's face blank white through the whole countdown, so only the board's
   place is measured. A frame that draws the card is needed: Vita3K for 2048 (`scripts/vita3k-drive.py`), nothing known for Omega.
+- **FINAL LAP and the chequered flag** are never played: the clock has no `laps`, so it holds the `A·G·R·C` logo state at
+  `CLOCK_LIMIT`. HD's `HD_LAP_WINDOWS` land on the 2048 file's own 9.333 and 12.333 s beats (start-gantry.md, three-beat section).
 - **2048's `park`** ships no `billboard8.gxt` in the base package; the v1.04 patch is not mounted (`oag_2048::open`), Omega's
   copy ships one.
 - The wipe bars between digits (a white rectangle over `2` and `1` at the changeover) rest on the positional node-to-submesh
