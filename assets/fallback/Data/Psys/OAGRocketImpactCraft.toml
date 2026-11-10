@@ -19,18 +19,32 @@ colour = [[0.0, "#fffbe8"], [0.4, "#ffc050"], [1.0, "#ff6a18"]]
 
 [[emitter]]
 name = "fireball"
-duration = 3
-per-emission = [5, 7]
-lifetime = [22, 8]
-speed = [0.9, 0.7]
+duration = 4
+per-emission = [8, 10]
+lifetime = [26, 8]
+speed = [1.0, 0.8]
 spread = 80
 drag = 0.9
 gravity = 0.002
-live-cap = 40
-size = [[0.0, 1.6], [0.3, 4.4], [1.0, 6.0]]
-alpha = [[0.0, 0.9], [0.4, 0.6], [1.0, 0.0]]
-colour = [[0.0, "#fff0a0"], [0.25, "#ff9a20"], [0.6, "#d83c08"], [1.0, "#5a1002"]]
+live-cap = 48
+size = [[0.0, 2.2], [0.3, 6.0], [1.0, 8.0]]
+alpha = [[0.0, 1.0], [0.4, 0.8], [1.0, 0.0]]
+colour = [[0.0, "#ffe890"], [0.2, "#ff9818"], [0.6, "#e8480a"], [1.0, "#6a1402"]]
 texture = "Data\\Psys\\Tex\\OAGRocketPuff3.oagmask"
+
+# The white-hot heart of the blast.
+[[emitter]]
+name = "core"
+duration = 2
+per-emission = [3, 4]
+lifetime = [12, 4]
+speed = [0.4, 0.3]
+spread = 90
+drag = 0.88
+live-cap = 12
+size = [[0.0, 2.5], [0.4, 5.0], [1.0, 3.0]]
+alpha = [[0.0, 1.0], [0.5, 0.7], [1.0, 0.0]]
+colour = [[0.0, "#fffbe0"], [0.5, "#ffd060"], [1.0, "#ff8a20"]]
 
 [[emitter]]
 name = "sparks"

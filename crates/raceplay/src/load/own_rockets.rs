@@ -123,11 +123,21 @@ mod tests {
     fn on_takes_the_three_rocket_triggers_on_pulse_and_pure_alone() {
         for title in [oag_pulse::TITLE, oag_pure::TITLE] {
             let (mut effects, mut report) = (psys::Library::new(), Vec::new());
-            let loaded = load(&options(true), title, &mut tracked, &mut effects, &mut report);
+            let loaded = load(
+                &options(true),
+                title,
+                &mut tracked,
+                &mut effects,
+                &mut report,
+            );
             let triggers: Vec<Trigger> = loaded.iter().map(|(trigger, _)| *trigger).collect();
             assert_eq!(
                 triggers,
-                [Trigger::RocketFlare, Trigger::TrackBlast, Trigger::CraftBlast],
+                [
+                    Trigger::RocketFlare,
+                    Trigger::TrackBlast,
+                    Trigger::CraftBlast
+                ],
                 "{}: {report:?}",
                 title.name
             );
@@ -183,8 +193,16 @@ mod tests {
             &mut effects,
             &mut report,
         );
-        assert!(loaded.iter().all(|(trigger, _)| *trigger != Trigger::RocketFlare));
+        assert!(
+            loaded
+                .iter()
+                .all(|(trigger, _)| *trigger != Trigger::RocketFlare)
+        );
         assert_eq!(loaded.len(), 2);
-        assert!(report.iter().any(|line| line.contains("OAGRocketFlight.toml left out")));
+        assert!(
+            report
+                .iter()
+                .any(|line| line.contains("OAGRocketFlight.toml left out"))
+        );
     }
 }

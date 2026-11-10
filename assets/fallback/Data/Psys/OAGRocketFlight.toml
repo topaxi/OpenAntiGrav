@@ -55,20 +55,21 @@ size = [[0.0, 3.8], [1.0, 2.2]]
 alpha = [[0.0, 0.6], [1.0, 0.0]]
 colour = [[0.0, "#ffb850"], [1.0, "#ff6a18"]]
 
-# The exhaust flame: a tail of shrinking blobs, white-yellow to orange to red.
+# The exhaust flame: a long tail of shrinking fire, white-yellow to orange to deep red,
+# which is what marks the rocket from behind.
 [[emitter]]
 name = "flame"
 duration = 1
 looping = true
-per-emission = 4
-lifetime = [10, 3]
+per-emission = 3
+lifetime = [17, 4]
 speed = [-1.85, 1.85]
 spread = 3
 drag = 0.6
-live-cap = 56
-size = [[0.0, 1.4], [1.0, 0.35]]
-alpha = [[0.0, 0.95], [0.5, 0.75], [1.0, 0.0]]
-colour = [[0.0, "#fff2b0"], [0.3, "#ffa030"], [1.0, "#c81e04"]]
+live-cap = 66
+size = [[0.0, 1.7], [0.5, 1.1], [1.0, 0.4]]
+alpha = [[0.0, 1.0], [0.5, 0.8], [1.0, 0.0]]
+colour = [[0.0, "#fff2b0"], [0.2, "#ffa428"], [0.6, "#f05a0c"], [1.0, "#b01c04"]]
 
 # The smoke trail: lumpy puffs laid along the flight line that swell and thin out. They
 # start warm, lit by the flame, and cool to a pale grey. Two emitters, so two puff shapes

@@ -1747,6 +1747,11 @@ nothing from another disc, so it has no lender: `menu::Definition::drop_unavaila
 on a title whose `oag_title::Looks::own_shield` rule is unread (HD, 2048, Omega draw the HD-style shield
 themselves), leaving it on Pulse and Pure.
 
+OWN ROCKETS (GRAPHICS ADVANCED, `graphics.own_rockets`, `off`/`on`, default `off`, restart required) plays our
+own rocket effect in place of the disc's rocket flare and blasts ([`own-rockets.md`](../rendering/own-rockets.md)).
+It reads nothing from any disc, so it has no lender: `menu::Definition::drop_unavailable_own_rockets` removes the
+row on a title whose `oag_title::Looks::own_rockets` rule is unread (HD, 2048, Omega), leaving it on Pulse and Pure.
+
 A row can also be **warned** rather than greyed, which is a different thing and
 the RECONSTRUCTION row is why it exists. A greyed row cannot be changed *now* because
 another row rules it out. A warned row can be changed, is stored, and simply
