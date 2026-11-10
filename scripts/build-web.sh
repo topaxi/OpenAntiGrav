@@ -57,11 +57,16 @@ for arg in --shared-memory --import-memory --max-memory=4294967296 -zstack-size=
   --export=__wasm_init_tls --export=__tls_size --export=__tls_align --export=__tls_base; do
   link+=" -C link-arg=$arg"
 done
+# OAG_WEB_FAULT_TEST=1 adds the module's `fault_test` hook, which raises each
+# failure the page reports on demand (docs/tools/web.md, "Troubleshooting").
+# Never set in pages.yml: a published module has no such export.
+features=web
+[[ -n ${OAG_WEB_FAULT_TEST:-} ]] && features+=,fault-test
 CARGO_TARGET_DIR=$target_dir \
   RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals $link" \
   cargo "+$toolchain" build -Z build-std=std,panic_abort \
   --target wasm32-unknown-unknown --profile "$profile" \
-  -p oag-game --no-default-features --example oag_web --features web
+  -p oag-game --no-default-features --example oag_web --features "$features"
 dir=$profile
 [[ $profile == dev ]] && dir=debug
 wasm="$target_dir/wasm32-unknown-unknown/$dir/examples/oag_web.wasm"
@@ -92,7 +97,7 @@ fi
 # with an old module: the page's one import is rewritten to name it.
 hash=$(cat "$out/pkg/oag_web.js" "$out/pkg/oag_web_bg.wasm" | sha256sum | cut -c1-16)
 mv "$out/pkg" "$out/$hash" && mkdir "$out/pkg" && mv "$out/$hash" "$out/pkg/$hash"
-cp web/index.html web/style.css web/worker.js web/audio.js web/audio-worklet.js web/movie.js web/_headers "$out/"
+cp web/index.html web/style.css web/worker.js web/fault.js web/audio.js web/audio-worklet.js web/movie.js web/_headers "$out/"
 sed "s#\"./pkg/oag_web.js\"#\"./pkg/$hash/oag_web.js\"#" web/main.js > "$out/main.js"
 grep -q "./pkg/$hash/oag_web.js" "$out/main.js" || { echo "main.js import not rewritten" >&2; exit 1; }
 # The TOML Schemas every project file names in its [toml-schema] header, served at

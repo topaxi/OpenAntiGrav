@@ -47,6 +47,7 @@ pub mod pause;
 pub mod pending_race;
 pub mod photo;
 pub mod touch_controls;
+pub mod web_fault;
 /// The abstract button layer, which lives in `oag-gameplay` because the
 /// simulation owns the input snapshot type and everything that produces one
 /// depends on it. Re-exported here so call sites that predate `oag-ui`
