@@ -212,8 +212,8 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 
 13. ~~**History in `.wesl` comments, under the ratchet.**~~ **Landed**: every dated, "maintainer" or "used to" line the
     scout named, plus `mesh.wesl`, `quake.wesl`, `ui.wesl` and `shading_modes.wesl` narration, is rewritten as what and
-    why; the `oag-mesh` row fell 46 to 35, `oag-post` 13 to 9, `oag-fx` 62 to 60 (59 with `exhaust.wesl`'s line, a
-    separate commit). `oag-game` has no `.wesl` dated line, so its row did not move. No `.wesl`/`.wgsl` line is
+    why; the `oag-mesh` row fell 46 to 35, `oag-post` 13 to 9, `oag-fx` 62 to 59 (`exhaust.wesl`'s one line is its
+    own commit). `oag-game` has no `.wesl` dated line, so its row did not move. No `.wesl`/`.wgsl` line is
     counted any more.
 
 14. **Magic numbers with no page.** `shade.wesl:1552` (`0.45` and `(0.16, 0.18, 0.21)` for the `grade-sky`
