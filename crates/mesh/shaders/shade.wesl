@@ -16,6 +16,24 @@ import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGH
 import package::types::{VertexOutput};
 import package::zone::{zone_base_term, zone_glow, zone_sample, zone_set};
 
+// The largest finite half-precision float. The original's half registers turn the
+// `RCP` of a zero divisor into an infinity; it is held here instead, rather than
+// let an infinity into the float target and its bloom: **chosen, not measured**
+// (`docs/rendering/hd-unlit-programs.md`, "What they compute"). The `c / (1 - c)`
+// expansions of the Bomb's fireball and of the rim glow use it.
+const HALF_MAX: f32 = 65504.0;
+
+// The Bomb halo's `0.1` literal, the half-precision value nearest it (`0x2e66`):
+// the last factor of its alpha, `hd_bomb_halo` block `@0x19c0`
+// (`docs/rendering/hd-unlit-programs.md`, "The Bomb's fireball and shockwaves").
+const BOMB_HALO_ALPHA_SCALE: f32 = 0.099975586;
+
+// `grade-sky`'s overcast: the sky's luma times `SKY_OVERCAST_LUMA` plus
+// `SKY_OVERCAST_TINT` - darker, desaturated, slightly cool. See the `grade-sky`
+// entry of `docs/architecture/wasm-extensions/README.md`.
+const SKY_OVERCAST_LUMA: f32 = 0.45;
+const SKY_OVERCAST_TINT: vec3<f32> = vec3<f32>(0.16, 0.18, 0.21);
+
 // **Where a normal looks in Wipeout HD's environment probe**: the dual paraboloid the
 // hull's `IBL` programs address, read off the live microcode (confidence 85,
 // `docs/rendering/hd-ship-materials.md`, "Finding 4"). `x > 0` is the right-hand
@@ -1385,10 +1403,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let fire_rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
         let fire_rim_5 = fire_rim * fire_rim * fire_rim * fire_rim * fire_rim;
         let fire_h = pow(clamp(0.86 - 0.86 * fire_rim_5, 0.0, 1.0), 50.0);
-        // `RCP` of a half register: held at the largest finite half where the
-        // divisor reaches zero, **chosen, not measured**, as the LeachBall's is.
-        let fire_expand = min(vec3<f32>(1.0) / (vec3<f32>(1.0) - fire_c_rgb), vec3<f32>(65504.0));
-        let fire_boost = min(1.0 / (1.0 - uniforms.model_colour), 65504.0);
+        // `RCP` of a half register: held at `HALF_MAX` where the divisor reaches
+        // zero, as the LeachBall's is.
+        let fire_expand = min(vec3<f32>(1.0) / (vec3<f32>(1.0) - fire_c_rgb), vec3<f32>(HALF_MAX));
+        let fire_boost = min(1.0 / (1.0 - uniforms.model_colour), HALF_MAX);
         let fire_rgb = (fire_b_rgb + vec3<f32>(100.0 * fire_h, 100.0 * fire_h, 0.0))
             * fire_expand * fire_boost;
         // `DIV_SAT`: a divisor of zero is `AlphaAnim` = 1, the blast's first
@@ -1430,7 +1448,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let halo_ramp = textureSample(albedo, albedo_sampler, in.texcoord);
         let halo_rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
         let halo_alpha = halo_ramp.a * 50.0 * pow(max(halo_rim, 1.0e-6), 10.0 - 10.0 * halo_ramp.a)
-            * halo_ramp.a * 0.099975586;
+            * halo_ramp.a * BOMB_HALO_ALPHA_SCALE;
         return vec4<f32>(halo_ramp.rgb, min(halo_alpha, 1.0));
     }
     // **The Missile blast's three programs** (`hd_missile_explosion_*_glow`,
@@ -1545,7 +1563,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // toward an overcast grey, darker and slightly cool, keeping its own structure.
         if uniforms.sky_grey > 0.0 {
             let luma = dot(composed.rgb, vec3<f32>(0.299, 0.587, 0.114));
-            let overcast = vec3<f32>(luma * 0.45) + vec3<f32>(0.16, 0.18, 0.21);
+            let overcast = vec3<f32>(luma * SKY_OVERCAST_LUMA) + SKY_OVERCAST_TINT;
             return vec4<f32>(mix(composed.rgb, overcast, uniforms.sky_grey), composed.a);
         }
         return composed;
@@ -1565,10 +1583,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     let rim_fade_base = clamp(0.9 - 0.9 * rim_5, 0.0, 1.0);
     let rim_fade = rim_fade_base * rim_fade_base * rim_fade_base * rim_fade_base * rim_fade_base;
     // `c / (1 - c)` through three `RCP`s of half registers. A texel at 255
-    // makes that `1 / 0`; **chosen, not measured**: it is held at the largest
-    // finite half, 65504, rather than let an infinity into the float target
-    // and its bloom.
-    let rim_expand = min(vec3<f32>(1.0) / (vec3<f32>(1.0) - rim_c), vec3<f32>(65504.0));
+    // makes that `1 / 0`; it is held at `HALF_MAX`.
+    let rim_expand = min(vec3<f32>(1.0) / (vec3<f32>(1.0) - rim_c), vec3<f32>(HALF_MAX));
     let rim_glow = vec4<f32>(rim_fade * rim_c * rim_expand, rim_fade);
     // RIM_EDGE: `MUL H1.w, rim^5, 1000`, times the tap; the alpha is the
     // material's `0x7611a2d8`, which `rim_glow::classify` only routes at 1.0.

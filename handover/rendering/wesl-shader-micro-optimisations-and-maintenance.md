@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-09
-summary: "WESL sweep: present-composite pow, Zone fetches 9 to 3, HUD fetches 4 to 1, bloom blur taps, fog branch; duplicate sRGB helpers, orphaned comments"
+updated: 2026-11-10
+summary: "WESL sweep: present-composite pow, Zone fetches 9 to 3, HUD fetches 4 to 1, bloom blur taps, fog branch (maintenance items 11-14 landed)"
 categories: [rendering]
 ---
 
@@ -216,11 +216,13 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
     own commit). `oag-game` has no `.wesl` dated line, so its row did not move. No `.wesl`/`.wgsl` line is
     counted any more.
 
-14. **Magic numbers with no page.** `shade.wesl:1552` (`0.45` and `(0.16, 0.18, 0.21)` for the `grade-sky`
-    overcast: ours, unlabelled and uncited; cite the track-module doc that adds `sky_grey`); `65504.0` appears in
-    four weapon branches of `shade.wesl` (a half-float max, labelled "chosen, not measured" once, at the first use,
-    not at the others); `0.099975586` at the bomb halo; `0.340088` in `game/shaders/scene.wesl:46`. Add a named `const` and
-    the citation. 30 minutes.
+14. ~~**Magic numbers with no page.**~~ **Landed**: `shade.wesl` names `HALF_MAX` (65504, labelled "chosen, not measured"
+    once, in `docs/rendering/hd-unlit-programs.md`, "What they compute"), `BOMB_HALO_ALPHA_SCALE` (`0.099975586`, the
+    half nearest `0.1`, the Bomb halo's factor) and `SKY_OVERCAST_LUMA`/`SKY_OVERCAST_TINT` (cited to the `grade-sky`
+    entry of `docs/architecture/wasm-extensions/README.md`); `game/shaders/scene.wesl` names `EDGE_SUM_SCALE`
+    (`0.340088`, the half nearest `0.34`, cited to `menu-backdrop-scene.md`). Pictures byte-identical; the scene
+    edge pass and `grade-sky` are not reached by a headless capture (the first needs Omega's unpacked data, the
+    second a track module), so those two are exact by construction only.
 
 ## Checked, no finding
 
@@ -246,5 +248,3 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 2. Item 2 (Zone fetches) with the two Zone races, then item 3 (HUD fetches) after a span for the HUD exists.
 3. Item 4: dump the ISA of the HD plain pipeline with `RADV_DEBUG=shaders` first; edit only what it shows.
 4. Item 6 only after the `.envsettings` census shows every authored bloom size is 1.0, and the maintainer agrees.
-5. Maintenance 11 to 14 as one docs-and-comments lane; run `oag-shader-check` (the build), `just check-docs` and
-   the comment-history ratchet.
