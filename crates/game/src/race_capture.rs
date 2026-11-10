@@ -1275,8 +1275,7 @@ pub fn capture(
                 None,
             );
         }
-        // Where the HUD goes: the presentation target at the aspect rectangle when presented, else
-        // the native-size capture texture the scene drew into (an ordinary `--screenshot` as before).
+        // The HUD goes on the presentation target's aspect rectangle, else on the scene's texture.
         let (hud_view, hud_viewport) = match framebuffer.as_ref() {
             Some(framebuffer) => (framebuffer.output().clone(), rect),
             None => (view.clone(), viewport),

@@ -228,7 +228,7 @@ fn a_press_where_the_portal_does_not_fit_keeps_the_pickup() {
 
 #[test]
 #[ignore = "needs data/images/pulse-psp-eu.chd, the official mods and --features extensions"]
-fn a_fire_is_a_second_out_of_the_world_and_two_seconds_on_at_a_slower_speed() {
+fn a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed() {
     let Some(source) = slipstream() else { return };
     let Some(mut race) = race_on(&source, false) else {
         return;
@@ -272,14 +272,14 @@ fn a_fire_is_a_second_out_of_the_world_and_two_seconds_on_at_a_slower_speed() {
     assert!((59..=61).contains(&out), "a second out: {out} ticks");
     let after = progress(&race);
     let exit_speed = kmh(&race);
-    let expected = speed / oag_core::math::SPEED_TO_KMH * 2.0;
+    let expected = speed / oag_core::math::SPEED_TO_KMH * 4.0;
     println!(
-        "progress {before:.0} -> {after:.0} (+{:.0}, two seconds at {speed:.0} km/h is {expected:.0}); exit speed {exit_speed:.0}",
+        "progress {before:.0} -> {after:.0} (+{:.0}, four seconds at {speed:.0} km/h is {expected:.0}); exit speed {exit_speed:.0}",
         after - before
     );
     assert!(
         (after - before - expected).abs() < expected * 0.2,
-        "two seconds further"
+        "four seconds further"
     );
     assert!(
         (0.8..0.97).contains(&(exit_speed / speed)),

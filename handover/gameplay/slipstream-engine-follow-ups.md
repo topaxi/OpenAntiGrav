@@ -97,8 +97,11 @@ found, for the engine:
   the default gate (`drives_ai_pickup` false): the gate already needs a straight and a clear road,
   and the guest adds the portal-room check on the same event.
 - **The half-way gate still applies to a jump**: a jump over the line from a lap whose half-way
-  gate is shut (a lap entered by a late jump) is no lap and no finish. Right for a mod; a mod
-  that wants "skip the lap" needs a separate command.
+  gate is shut (the grid's first crossing, a craft shoved back over the line) is no lap and no
+  finish. A lap entered by a jump that landed past half-way has both halves behind it, the ground
+  from the line to the landing being driven ground (`Standing::jumped`, `RaceState::update`;
+  `standing::jump_tests`), so the crossing after it, driven or jumped, is a lap. Before that fix
+  the driven crossing earned nothing and the craft sat a lap behind where it was.
 - **Pulse PSP and PS2 are one title to a manifest**, so one icon (PS2's, the larger) is shipped.
 - 2048 and Omega: checked, the same guest, icon and fill run on both. To see it:
   `OAG_MODS=assets/mods/official oag-game <disc or folder> --race --no-audio --mode single_race --give extension --autopilot --input-script fire.inputs --ticks 730 --screenshot out.png`
@@ -181,7 +184,7 @@ guest as `Observation::option` (new ABI bytes, `mod-shaders.md` "A mod's quality
 2. **A queued fire whose clearance fails at its turn is dropped** (the pickup is kept), where a Quake's armed
    press stays armed. Chosen, kept.
 3. ~~Online a server's guest has no pick~~: a `view` row reads its default there by construction; a `sim` pick has no receiver yet, as no network race runs a guest (`hooks.md`, "Picks: sim and view").
-4. 2048 and HD windows look like a continuation of the scene (the exit is two seconds on, same scenery).
+4. 2048 and HD windows look like a continuation of the scene (the exit is four seconds on, same scenery).
 5. ~~`Observation::option` is not part of a race's identity~~: a menu row declares `scope = "sim"` or `"view"`; sim picks are in the state hash and the LAN fingerprint, view picks reach only a second, outputs-only call (`tests::extension_picks`). Open from it: carry sim picks in `RaceParams` once a network race loads modules; a MODDED race records no replay.
 6. ~~Question: should the firer see the window?~~ Done, the guest's approach phase. The portal and
    its sound open at the press, the craft keeps flying and goes through when its progress reaches
@@ -189,7 +192,9 @@ guest as `Observation::option` (new ABI bytes, `mod-shaders.md` "A mod's quality
    fill, FOV jump and hum start there. **Chosen, not measured:** a craft that has not arrived 50 ticks
    after the press (stopped, wall-hit, wrecked, pickup lost) closes the portal and keeps the pickup;
    50 is under the portal effect's 60 tick life. The exit stays where the view looks (entrance
-   plus two seconds of the press speed). No course fix: through on the press, as before. Another
+   plus four seconds of the press speed); a craft that arrives with the exit not ahead of it (a
+   press at a standstill) closes the portal and keeps the pickup too. No course fix: through on the
+   press, as before. Another
    craft cannot enter a held portal (the transit is per craft); a fire while the portal is held queues
    as before. The AI goes through the same path (`the_ai_fires_it_and_only_one_portal_is_open_at_a_time`).
    Seen at the player's size on `16_Track`: window ahead for about 13 ticks with no fill, then the
