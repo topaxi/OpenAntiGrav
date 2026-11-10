@@ -5,7 +5,7 @@
 // .envsettings "HDR and Bloom" block; the inline constants are the
 // executable's verbatim.
 
-import oag_shaders::colour::srgb_encode;
+import oag_shaders::colour::{srgb_decode, srgb_encode};
 import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
 
 struct Constants {
@@ -165,7 +165,7 @@ override scene_encoded: f32 = 0.0;
 // A tap of the scene target, in linear light.
 fn scene_tap(texel: vec4<f32>) -> vec4<f32> {
     let c = surface(texel);
-    return vec4<f32>(mix(c.rgb, pow(c.rgb, vec3<f32>(2.2)), scene_encoded), c.a);
+    return vec4<f32>(mix(c.rgb, srgb_decode(c.rgb), scene_encoded), c.a);
 }
 
 // The luminance reduction's halving step, in two forms.

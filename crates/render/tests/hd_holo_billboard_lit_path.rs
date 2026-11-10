@@ -210,9 +210,10 @@ fn the_billboard_is_an_overlay_of_the_advert_layer_product_under_the_scanlines()
 /// console's units are (gamma nibble 7 on `scanlinebillboard`'s live draws,
 /// `docs/rendering/hd-track-tone.md`, "The holographic taps are decoded on
 /// fetch"), and the scene stores the encoded result. Advert and layer `128`
-/// decode to `0.2195` each and the scanline red to the same, so the overlay is
-/// `2 * 0.0482 * 0.2195 = 0.0212`, stored as `0.0212^(1/2.2) = 0.173`. Raw taps
-/// would store `0.252^(1/2.2) = 0.534`.
+/// decode to `0.2159` each on the sRGB curve and the scanline red to the same, so
+/// the overlay is `2 * 0.0466 * 0.2159 = 0.0201`, stored sRGB-encoded as `0.152`.
+/// The `2.2` power would decode to `0.2195` and store `0.173`; raw taps would
+/// store `0.539`.
 #[test]
 fn on_the_race_target_the_taps_are_decoded_before_the_overlay() {
     let instance = wgpu::Instance::default();
@@ -235,7 +236,7 @@ fn on_the_race_target_the_taps_are_decoded_before_the_overlay() {
         SCENE_FORMAT,
         SceneStore::Encoded,
     );
-    assert!((stored[0] - 0.173).abs() < 0.01, "{stored:?}");
+    assert!((stored[0] - 0.152).abs() < 0.005, "{stored:?}");
 }
 
 /// The second entry of a holographic slot: tint 1, scales 1, no boost, no

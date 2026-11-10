@@ -9,7 +9,7 @@ import package::glow::{glow_first, glow_pad, glow_second};
 import package::holo::{holo_billboard};
 import package::hull_normal::{hull_normal};
 import package::pad::{pad_normal};
-import oag_shaders::target::{decode, encoded_out, linear_out, square_decode};
+import oag_shaders::target::{decode, encode, encoded_out, linear_out};
 import package::shading_modes::{colour_is_light, light_rig, nova_prelit, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, sample_at_slope_level, texlod_bias, texlod_slope};
@@ -535,7 +535,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // vertex colour itself (`TC1 * (ambient + sun * sat(N.L))`), kept in
         // the gamma domain the branch below decodes. The light is set where
         // `authored` is built.
-        picture = vec4<f32>(pow(max(in.colour.rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), picture.a);
+        picture = vec4<f32>(encode(in.colour.rgb), picture.a);
     } else if (in.slots & 4194304u) != 0u {
         let ice_slot = (in.slots >> 24u) & 127u;
         let deep = decode(row_tint.rgb);
@@ -566,8 +566,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let w = (fade * fade) * (fade * fade);
         let bars = decode(material_sample(MATERIAL_WAVE_MAP, in.lightmap_texcoord.zw).rgb);
         let linear = bars * mix(decode(first.rgb), decode(second.rgb), vec3<f32>(w));
-        let gamma = select(1.0 / 2.2, 0.5, square_decode > 0.5);
-        picture = vec4<f32>(pow(max(linear, vec3<f32>(0.0)), vec3<f32>(gamma)), first.a);
+        picture = vec4<f32>(encode(linear), first.a);
     }
     // **Omega's `2048_shipshield_old` shell** (`Emissive::program` mode 11,
     // `oag_mesh::mesh::rcs::psp2::shield_lightning`), read off its pixel program:
@@ -638,8 +637,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let advert = material_sample(MATERIAL_LIGHTMAP, vec2<f32>(in.texcoord.x + holo.x * scene.time.x, in.texcoord.y));
         let noise = material_sample(MATERIAL_PAD_MASK, vec2<f32>(in.texcoord.x, in.texcoord.y + holo.y * scene.time.x));
         let linear = scene.light.output_scale * (decode(advert.rgb) + decode(noise.rgb));
-        let gamma = select(1.0 / 2.2, 0.5, square_decode > 0.5);
-        picture = vec4<f32>(pow(max(linear, vec3<f32>(0.0)), vec3<f32>(gamma)), picture.a);
+        picture = vec4<f32>(encode(linear), picture.a);
         coverage = vec4<f32>(decode(vec3<f32>(first.r)).r * holo.z);
     }
     let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
@@ -712,7 +710,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // `0x0` on the normal maps, so the arithmetic below runs on linear values
     // and so does the output alpha (`MOV H0.w, H6.x`).
     let ramp_linear = decode(first.rgb);
-    let grid_linear = pow(sheen_grid, 2.2);
+    let grid_linear = decode(vec3<f32>(sheen_grid)).r;
     // **Times the program's output scale**, as the authored path above is: block #7 ends on
     // `ADD /2 H0.xyz, R0, H2` (read live on Tech de Ra, fragment `0x76fac0`), so the scene holds
     // half of the sum. The output alpha, `MOV H0.w, H6.x`, is not scaled.
@@ -842,7 +840,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             vec3<f32>(1.0),
         );
     }
-    let mag_glow_gamma = pow(mag_glow, vec3<f32>(1.0 / 2.2));
+    let mag_glow_gamma = encode(mag_glow);
 
     // **HD's chevron pulse** (`Emissive::program` mode 3 on a `slots::LIT_ALPHA` slot,
     // `oag_mesh::mesh::rcs::chevron_pulse`): the emask `e` (fifth binding) adds to the
