@@ -781,7 +781,7 @@ every `oag-game` selection. Three changes, none to an assertion:
   `hd_water_ground_truth` opened `hdfury-ps3-eu-dec.iso` **153,293 times**
   (`strace -e openat`, 76 s user and 63 s system time). The race never does
   this; its loader reads through `oag_assets::Archives`. A test-side cache,
-  `crates/render/tests/archive_cache/`, keeps each `Container` and each entry
+  `archive_cache/` beside the tests (`crates/mesh/tests/`, with a copy in `crates/render/tests/`), keeps each `Container` and each entry
   read for the life of the test. The 20 HD render binaries went from **2,389 s
   of test time to 126 s** (`hd_water` alone 932 s to 15 s).
 - **`ai_roll`'s six full-grid tests and `ram` raced their races in series.**

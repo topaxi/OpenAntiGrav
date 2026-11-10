@@ -26,7 +26,7 @@ path Pulse's and HD's `Anim Transform`s already ride
 used for the spline: 2048's DLC re-ships twelve Wipeout HD circuits and four
 Zone ones, HD's `Anim Transform` decode is validated, and on those circuits
 HD's evaluator is ground truth for 2048's rig - node by node, at four times,
-`crates/render/tests/psp2_scenery_animation_ground_truth.rs`. What it
+`crates/mesh/tests/psp2_scenery_animation_ground_truth.rs`. What it
 established, in order of what a renderer needs:
 
 1. **A node-bound mesh's vertices are in its node's space**, not the world's
@@ -364,7 +364,7 @@ transpose too** (`mesh.wgsl`, the cofactor of its upper 3 by 3, since
 **51 of them, over the fourteen race circuits, carry a mesh and move** (none on
 Anulpha Pass, Chenghou Project, Moa Therma, Park or Sol; ten each on Bridge and
 Subway), and those 51 meshes used to be lit off a skewed normal.
-`crates/render/tests/moving_normal_inverse_transpose.rs` shades one oblique
+`crates/mesh/tests/moving_normal_inverse_transpose.rs` shades one oblique
 quad both ways - moved by the node table under `scale (0.5, 1, 1)`, and baked
 with the CPU inverse transpose - and the two differed by up to 8 in a channel
 (7,968 summed over the frame) before and by 0 after. Uniform scales and
@@ -458,7 +458,7 @@ showed sky only, so its picture has not been seen either.
 
 - `crates/rcs/tests/psp2_animation_ground_truth.rs` - the corpus figures
   and the bind-matrix composition, `just test-data`.
-- `crates/render/tests/psp2_scenery_animation_ground_truth.rs` - the
+- `crates/mesh/tests/psp2_scenery_animation_ground_truth.rs` - the
   twelve circuits against Wipeout HD, one test each.
 - `crates/game/examples/vita_2048_anim_hd_oracle.rs` - dumps an HD
   `track.vex`'s `Anim Transform` nodes, keys and world matrices at fourteen

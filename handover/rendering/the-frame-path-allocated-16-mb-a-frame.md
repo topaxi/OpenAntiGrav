@@ -509,7 +509,7 @@ Three findings that cost time:
   select between the two `pow`s blocks the fold. An override folds the select
   at compile time and keeps HD's expression as it was. **The Omega capture
   does not exercise the curve** (its race reads no lightmaps yet), so its
-  guard is the live default plus `crates/render/tests/omega_nova_prelit.rs`;
+  guard is the live default plus `crates/mesh/tests/omega_nova_prelit.rs`;
   re-capture Omega once its lightmaps draw.
 - **The plain path cannot be branched past byte-exactly.** Skipping it where
   `light.enabled * lit == 1` (a dynamic branch, no override needed - `lit` is

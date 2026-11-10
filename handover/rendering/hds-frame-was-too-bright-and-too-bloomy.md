@@ -618,7 +618,7 @@ pow(in.colour.rgb, scene.light.prelit_power)` - no sRGB predecode, matching
 the vertex program's own raw `LG2/EX2` read. `IleLightmap` chunks lose the
 flat ambient too (their own curve, `prelit`, already stood unchanged); the
 existing `EMISSIVE` branch is untouched, additive only. A new ground-truth
-test, `crates/render/tests/hd_ambient_role_census_ground_truth.rs`, pins the
+test, `crates/mesh/tests/hd_ambient_role_census_ground_truth.rs`, pins the
 split on Amphiseum's own resolved materials: 641 slots total, 553
 `NO_AMBIENT`, 68 of those also `EMISSIVE` (excluded from the curve).
 

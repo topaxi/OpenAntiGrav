@@ -110,7 +110,7 @@ now in the shader:
   texture on its mode-0 branch may not follow this rule. The two constants are
   recovered (confidence 85 on the emitter, and the values are read off the
   call), the mapping to our depth is not.
-- **Proof.** `crates/render/tests/psp_slope_lod.rs` draws one quad with a
+- **Proof.** `crates/mesh/tests/psp_slope_lod.rs` draws one quad with a
   red/green/blue three-level chain at view depths 64, 128, 256, 512 and 100,000
   and reads levels 0, 0, 1, 2, 2; a model without `Texels::Chain` stays on level
   0. Disabling the constants fails it at depth 256.
@@ -183,7 +183,7 @@ walls by up to 16x the footprint; sizing it from `pmax / w` leaves everything a
 texel or narrower alone. The same pose, `--anisotropy off` against `16x`, now
 differs in 22156 of 130560 pixels at 480x272 (72975 of 921600 at 1280x720),
 concentrated on far edges and grazing floor; near surfaces are unchanged.
-`crates/render/tests/psp_slope_lod.rs` asserts the level under every anisotropy
+`crates/mesh/tests/psp_slope_lod.rs` asserts the level under every anisotropy
 setting with a stretched footprint (so a level that drifts fails), that 16x moves
 a foreshortened striped surface, and that it moves nothing when the footprint is
 under a texel.

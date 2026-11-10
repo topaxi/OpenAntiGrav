@@ -9,7 +9,7 @@ reading (a static evaluator, checked against the live frame on the sign, the sky
 
 Code: `oag_rcs::rcsmaterial::fragment::Program::output_alpha` reads the alpha lane of a program, `oag_mesh::mesh::rcs::glow` turns it
 into `GpuVertex::glow`, and `mesh_render::GlowMask::StampedByProgram` writes it. Tests: `crates/rcs/src/rcsmaterial/fragment/glow_alpha/tests.rs`,
-`crates/render/tests/hd_program_glow_mask.rs` (fails if the model flag, the write mask, the override or the decode is dropped) and the
+`crates/mesh/tests/hd_program_glow_mask.rs` (fails if the model flag, the write mask, the override or the decode is dropped) and the
 disc-backed `hd_program_glow_ground_truth.rs` and `crates/raceplay/tests/hd_sky_tint_ground_truth.rs`.
 
 ## What the original does (RPCS3, Metropia Harimau time trial start, 2026-10-21)

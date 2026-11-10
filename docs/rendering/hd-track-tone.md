@@ -398,7 +398,7 @@ original's chromaticity to 0.01.
   `m_diffuse_normal_constantspecular` 94. 29,049 chunks read `Colour`; 24,927
   carry no prelit or ambient patch (emissive, glass, hull families) and keep
   their own paths. Pinned by `rcsmaterial_ground_truth.rs` and
-  `crates/render/tests/hd_lit_alpha_ground_truth.rs` (Anulpha's slots by number).
+  `crates/mesh/tests/hd_lit_alpha_ground_truth.rs` (Anulpha's slots by number).
 
 ### Before and after
 
@@ -490,7 +490,7 @@ at bias 0, as unmeasured: the environment probes and every `textureSampleLevel`
 read (the census shows the probes at filter word `0x02062000`, bias 0), the
 flame, absorb and fire programs, the Zone stage, the shadow maps, and every
 hull (the census named track draws only; a hull's units are unread). Test:
-`oag-render::it psp_slope_lod::a_material_lod_bias_reads_a_finer_level_than_the_samplers_own`
+`oag-mesh::it psp_slope_lod::a_material_lod_bias_reads_a_finer_level_than_the_samplers_own`
 (a minified stripe texture, contrast 0 at bias 0, 117 at `-1.5`) and
 `oag-hd effects::tests::the_material_lod_bias_follows_its_rule`.
 
@@ -1564,7 +1564,7 @@ at its two taps (the first downsample and the resolve), so opaque surfaces round
 unchanged (a 400x300 opaque box of `hd/talons` is identical to the decimal). Tests:
 `oag-fx::it encoded_blend` (a grey flash lifts `0.2, 0.5, 0.8` by `0.3` each, encoded, and by
 `0.3^2.2` stored as computed), `oag-post hd_bloom::tests::an_encoded_scene_resolves_as_the_light_it_encodes`,
-`oag-render::it hd_holo_billboard_lit_path::on_the_race_target_the_taps_are_decoded_before_the_overlay`,
+`oag-mesh::it hd_holo_billboard_lit_path::on_the_race_target_the_taps_are_decoded_before_the_overlay`,
 `oag-hd effects::tests::hd_blends_encoded_and_an_unread_title_does_not`.
 
 Whole-frame mean grey difference against the cold originals (the compare page's metric,
@@ -2147,7 +2147,7 @@ the same curve, and the 5-6-5 card stores with it. Every other title's path is u
 Omega pairs and the three 2048 pairs render byte-identical. Tests:
 `oag-post hd_bloom::tests::a_dark_encoded_scene_value_resolves_to_itself` (stored level 41
 resolves to 41; with the power decode it resolves to 37) and
-`oag-render::it hd_holo_billboard_lit_path::on_the_race_target_the_taps_are_decoded_before_the_overlay`
+`oag-mesh::it hd_holo_billboard_lit_path::on_the_race_target_the_taps_are_decoded_before_the_overlay`
 (0.152 stored; the power gives 0.173).
 
 **Before and after**, ours re-drawn on copies of the stored pairs (1920x1080, Resolution Scale 100

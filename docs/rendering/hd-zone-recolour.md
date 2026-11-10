@@ -140,7 +140,7 @@ line, which is what settling gives.
   **Confirmed wired, not confirmed visible.** A live log at the rebind call
   site shows the exact right pair bound at Talon's Junction zone 2's step
   (`track=zonemodetrack2.gtf track_outer=zonemodetrack1.gtf`), and
-  `crates/render/tests/zone_recolour.rs`'s
+  `crates/mesh/tests/zone_recolour.rs`'s
   `the_transition_sphere_samples_the_inner_texture_inside_and_the_outer_outside`
   proves the shader selection on a real adapter with two solid-colour
   textures. But `hd_zone_wavefront_zone2_k150.png` and `..._k300.png`,

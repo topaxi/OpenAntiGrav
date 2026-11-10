@@ -131,7 +131,7 @@ reason, and `only_an_upscaled_frame_is_read_whole` is the only guard there is.
 
 ### MSAA resolves the whole attachment, and that is the safe answer
 
-Measured, not reasoned: `crates/render/tests/msaa_resolve_viewport.rs` primes a
+Measured, not reasoned: `crates/mesh/tests/msaa_resolve_viewport.rs` primes a
 resolve target blue, clears a 4x multisampled attachment red, draws green into
 a quarter-sized viewport of it and reads the resolve back. Inside the viewport
 it is green; **outside it, red** - the pass's own clear, not the blue that was

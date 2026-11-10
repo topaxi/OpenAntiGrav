@@ -485,7 +485,7 @@ chosen, since only the PSP function was read. No group anywhere is nested
 under another (confidence 90, asserted on every file above).
 
 **HD and 2048 have nothing to switch** (confidence 90 for both counts,
-`crates/render/tests/hd_lod_ground_truth.rs` for HD's). HD's 64 groups are in
+`crates/mesh/tests/hd_lod_ground_truth.rs` for HD's). HD's 64 groups are in
 six files. The four `talons_junction/start_grid*.vex` carry eight each: four
 that declare two children but hold one, at the positions and distances
 Pulse's `16_Track` groups use, one that declares and holds one, and three
