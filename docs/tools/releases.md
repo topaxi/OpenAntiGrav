@@ -117,8 +117,12 @@ and run through `python3 scripts/check-leakage.py --dir <unpacked>`, the same
 extension list `just audit-leakage` applies to the git tree, so the repository and
 the packages are held to one definition. `scripts/build-appimage.sh` calls the
 same mode on its AppDir (it used to keep a shorter hand-copied list that lacked
-`psarc` among others). The one allowance is the generated window icon
-`oag-game.png`, by path rather than by extension.
+`psarc` among others). The allowances, each by path or by provenance rather than by extension:
+
+- the generated window and launcher icons (`oag-game.png` and the Android and iOS sizes);
+- a screenshot a packaged mod's `README.md` names, beside its `oag-mod.toml`;
+- a `.png` inside a mod folder whose source `src/<stem>.svg` sits beside it: the mod's own
+  vector art, rendered (official-mods' `slipstream/icons/`).
 
 ### Cutting a release
 

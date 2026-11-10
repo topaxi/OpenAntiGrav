@@ -113,9 +113,29 @@ def directory_leaks(root: Path) -> list[str]:
         if not path.is_file() and not path.is_symlink():
             continue
         rel = path.relative_to(root).as_posix()
-        if pattern.search(rel) and rel not in ARTIFACT_ALLOWED and not mod_readme_shot(path):
+        if (
+            pattern.search(rel)
+            and rel not in ARTIFACT_ALLOWED
+            and not mod_readme_shot(path)
+            and not mod_rendered_art(path)
+        ):
             leaks.append(rel)
     return leaks
+
+
+def mod_rendered_art(path: Path) -> bool:
+    """Whether `path` is a mod's own art, rendered from a vector source it ships.
+
+    A `.png` inside a mod folder (an ancestor holds `oag-mod.toml`) with its
+    hand-authored source at `src/<stem>.svg` beside it, as official-mods'
+    `slipstream/icons/` keeps them. The SVG is the original; the PNG is only
+    its render, so it is ours, not a frame or texture of a game.
+    """
+    if path.suffix.lower() != ".png":
+        return False
+    if not (path.parent / "src" / f"{path.stem}.svg").is_file():
+        return False
+    return any((folder / "oag-mod.toml").is_file() for folder in path.parents)
 
 
 def mod_readme_shot(path: Path) -> bool:
