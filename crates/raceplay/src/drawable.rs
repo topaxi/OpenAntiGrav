@@ -841,12 +841,12 @@ impl Drawable {
         if !channel_driven && !remember(&self.node_anims_at, seconds) {
             return;
         }
-        let anims = mesh_render::NodeAnims::sample_started(&self.model, seconds, started);
+        let head = mesh_render::NodeAnims::head_started(&self.model, seconds, started);
         oag_gpu::perfprobe::write_buffer(
             queue,
             &self.node_anims,
             self.offsets.node_anims,
-            bytemuck::bytes_of(&anims),
+            bytemuck::cast_slice(&head),
         );
     }
 

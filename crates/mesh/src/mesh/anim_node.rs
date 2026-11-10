@@ -111,6 +111,21 @@ impl Model {
         started: &dyn Fn(Start) -> Option<f32>,
     ) -> Vec<[f32; 16]> {
         let mut out: Vec<[f32; 16]> = Vec::with_capacity(self.anim_nodes.len());
+        self.sample_anim_nodes_after(seconds, started, &mut out);
+        out
+    }
+
+    /// [`Self::sample_anim_nodes_started`] appended to `out`, whose entries before the call are
+    /// left alone: a node's parent is found `out.len()` entries earlier than its own slot, so a
+    /// caller can put the table's identity slot 0 in front.
+    pub fn sample_anim_nodes_after(
+        &self,
+        seconds: f32,
+        started: &dyn Fn(Start) -> Option<f32>,
+        out: &mut Vec<[f32; 16]>,
+    ) {
+        let base = out.len();
+        out.reserve(self.anim_nodes.len().min(NODE_ANIM_LIMIT - 1));
         for node in self.anim_nodes.iter().take(NODE_ANIM_LIMIT - 1) {
             let local = node.transform.sample_started(seconds, started);
             // A parent always precedes its child in `anim_nodes`, because
@@ -118,14 +133,13 @@ impl Model {
             // that order - so the parent's world matrix is already resolved.
             let parent = node
                 .parent
-                .and_then(|p| out.get(p).copied())
+                .and_then(|p| out.get(base + p).copied())
                 .unwrap_or(vex::IDENTITY);
             out.push(vex::multiply(
                 &vex::multiply(&local, &node.static_above),
                 &parent,
             ));
         }
-        out
     }
 }
 

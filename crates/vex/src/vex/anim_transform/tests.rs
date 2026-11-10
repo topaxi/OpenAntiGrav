@@ -330,12 +330,12 @@ fn a_whole_float_quaternion_key_is_w_first() {
 /// lerp passes through the identity half way.
 #[test]
 fn keys_that_differ_by_sign_blend_to_the_same_rotation() {
-    let channel = AnimChannel {
-        times: vec![0, 10],
-        values: vec![[0.0, -30738.0, 11351.0], [0.0, 30738.0, -11351.0]],
-        w: Vec::new(),
-        wide: false,
-    };
+    let channel = AnimChannel::new(
+        vec![0, 10],
+        vec![[0.0, -30738.0, 11351.0], [0.0, 30738.0, -11351.0]],
+        Vec::new(),
+        false,
+    );
     let at_key = channel.sample_rotation(0.0, false);
     for t in [1.0, 5.0, 9.0] {
         let q = channel.sample_rotation(t, false);
@@ -343,5 +343,176 @@ fn keys_that_differ_by_sign_blend_to_the_same_rotation() {
         assert!(dot.abs() > 0.999, "t={t}: {q:?} is not {at_key:?}");
         let length: f32 = q.iter().map(|c| c * c).sum();
         assert!((length - 1.0).abs() < 1e-4, "t={t}: not a unit quaternion");
+    }
+}
+
+/// The clock wrap is `fmod` bit for bit: inside the first loop, on its edge, past it, negative,
+/// signed zero, huge, infinite and NaN.
+#[test]
+fn the_clock_wrap_is_fmod_to_the_bit() {
+    let periods = [
+        DEFAULT_LOOP_SECONDS,
+        1.0 / 60.0,
+        3.5,
+        12.0,
+        359.0 / 60.0,
+        f32::INFINITY,
+    ];
+    for period in periods {
+        let mut clocks = vec![
+            0.0,
+            -0.0,
+            period,
+            -period,
+            f32::MAX,
+            f32::MIN,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            f32::NAN,
+            f32::MIN_POSITIVE,
+        ];
+        for edge in [period, 1.0, 3.5, 12.0] {
+            let bits = edge.to_bits();
+            for step in 0..4 {
+                clocks.push(f32::from_bits(bits.wrapping_sub(step)));
+                clocks.push(f32::from_bits(bits.wrapping_add(step)));
+                clocks.push(-f32::from_bits(bits.wrapping_sub(step)));
+            }
+        }
+        clocks.extend((0..4000).map(|tick| tick as f32 / 60.0));
+        clocks.extend((0..400).map(|tick| -(tick as f32) / 7.0));
+        for clock in clocks {
+            assert_eq!(
+                wrap_clock(clock, period).to_bits(),
+                (clock % period).to_bits(),
+                "clock {clock} period {period}"
+            );
+        }
+    }
+}
+
+/// The key search the scan and the bisection share: the pair of keys and the factor are the
+/// scan's, to the bit, on ascending times (with repeats), on times that fall back, and for a
+/// clock that is before, between, on, past or not a number.
+#[test]
+fn the_key_search_is_the_scan_to_the_bit() {
+    let scan = |channel: &AnimChannel, t: f32, step: bool| {
+        let last = channel.values.len() - 1;
+        let hold = |i: usize| (i, i, 0.0);
+        let Some(&first_time) = channel.times.first() else {
+            return hold(0);
+        };
+        if t < f32::from(first_time) {
+            return hold(0);
+        }
+        if t >= f32::from(channel.times[channel.times.len() - 1]) {
+            return hold(last);
+        }
+        let i = channel
+            .times
+            .iter()
+            .position(|&key| t < f32::from(key))
+            .unwrap_or(last)
+            .max(1);
+        let (t0, t1) = (f32::from(channel.times[i - 1]), f32::from(channel.times[i]));
+        if step || t1 <= t0 {
+            return hold(i - 1);
+        }
+        (i - 1, i, (t - t0) / (t1 - t0))
+    };
+    let cases: [Vec<u16>; 8] = [
+        vec![0],
+        vec![5],
+        vec![0, 1],
+        vec![0, 60, 60, 61, 300, 300, 301, 7000],
+        vec![3, 3, 3, 3],
+        (0..400).map(|i| i * 7).collect(),
+        vec![0, 60, 30, 90, 90, 10],
+        vec![65535, 0],
+    ];
+    for times in cases {
+        let values = (0..times.len()).map(|i| [i as f32, 0.5, -1.0]).collect();
+        let channel = AnimChannel::new(times.clone(), values, Vec::new(), false);
+        let ascending = times.windows(2).all(|pair| pair[0] <= pair[1]);
+        assert_eq!(channel.ascending, ascending, "{times:?}");
+        let top = f32::from(*times.iter().max().unwrap());
+        let mut clocks = vec![
+            f32::NAN,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            -0.0,
+            0.0,
+            -1.0,
+            top,
+        ];
+        clocks.extend(times.iter().flat_map(|&k| {
+            let k = f32::from(k);
+            [
+                k,
+                k - 0.5,
+                k + 0.5,
+                f32::from_bits(k.to_bits().wrapping_add(1)),
+            ]
+        }));
+        clocks.extend((0..2000).map(|i| i as f32 * top / 1999.0 * 1.1));
+        for t in clocks {
+            for step in [false, true] {
+                // `at` panics on the NaN of a one-key scan; the scan above would too.
+                if t.is_nan() && times.len() == 1 {
+                    continue;
+                }
+                let (a, b, f) = channel.at(t, step);
+                let (ra, rb, rf) = scan(&channel, t, step);
+                assert_eq!(
+                    (a, b, f.to_bits()),
+                    (ra, rb, rf.to_bits()),
+                    "{times:?} t={t}"
+                );
+            }
+        }
+    }
+}
+
+/// The same wrap over a long deterministic sweep of clocks and periods: every ratio from just
+/// past one loop to far past the exact range, the periods nodes author (whole and fractional
+/// seconds, multiples of 1/60) and random bit patterns.
+#[test]
+fn the_clock_wrap_is_fmod_over_a_long_sweep() {
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut next = || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    let check = |clock: f32, period: f32| {
+        assert_eq!(
+            wrap_clock(clock, period).to_bits(),
+            (clock % period).to_bits(),
+            "clock {clock} ({:#x}) period {period} ({:#x})",
+            clock.to_bits(),
+            period.to_bits()
+        );
+    };
+    for _ in 0..3_000_000 {
+        let bits = next();
+        let period = match bits % 4 {
+            0 => f32::from_bits((bits >> 8) as u32 & 0x7fff_ffff),
+            1 => (1 + (bits >> 8) % 20_000) as f32 / 60.0,
+            2 => (1 + (bits >> 8) % 600) as f32 * 0.125,
+            _ => f32::from_bits(0x3f80_0000 + ((bits >> 8) as u32 & 0x00ff_ffff)),
+        };
+        let clock = match (bits >> 40) % 4 {
+            0 => f32::from_bits((next() >> 16) as u32),
+            1 => (next() % 1_000_000) as f32 / 60.0,
+            2 => (next() % 1_000_000) as f32 / 60.0 * period,
+            _ => -((next() % 4_000_000) as f32) / 60.0,
+        };
+        check(clock, period);
+        check(-clock, period);
+        let nearest = (clock / period).round() * period;
+        check(nearest, period);
+        check(f32::from_bits(nearest.to_bits().wrapping_add(1)), period);
+        check(f32::from_bits(nearest.to_bits().wrapping_sub(1)), period);
     }
 }
