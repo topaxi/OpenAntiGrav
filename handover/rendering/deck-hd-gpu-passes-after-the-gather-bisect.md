@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-09
-summary: "Deck HD Anulpha: blur gather bisected, two exact cuts flat; open: 32-bit prepared texel, composite+copy, HD encode decodes"
+updated: 2026-11-10
+summary: "Deck HD Anulpha: per-tier blur tap caps landed (desktop-measured); open: Deck re-measure, 32-bit prepared texel, composite+copy, HD encode"
 categories: [rendering]
 ---
 
@@ -22,16 +22,21 @@ from the bisect's linear tap cost (15 to 5 taps saved 1.04 ms at 1080p; 4K scale
 
 | Option | Saves at 1080p / 4K (estimate) | What the picture loses |
 | --- | --- | --- |
-| Fewer taps: `TAPS` 15 to 9 (or `TAP_SPACING_PX` 4 to about 7) | about 0.6 / 2.4 ms | A long smear is sampled every 7 px or so instead of 4: more visible banding or grain along fast streaks, mostly at the frame's edges at full boost. Short smears unchanged (already 5 to 9 taps). |
+| ~~Fewer taps: `TAPS` 15 to 9 (or `TAP_SPACING_PX` 4 to about 7)~~ | landed as per-tier caps (`high` 11, `medium` 9, `low` 7), measured on the desktop only: `docs/rendering/motion-blur.md`, "Fewer taps: each tier caps the gather" | Same length (the taps stratify a fixed span); a slightly coarser speckle along bright streaks. Spacing tied to the reach cap was measured and dropped. |
 | 32-bit `prepared` texel (`[reach, depth]` in `Rg16Float`) | unmeasured; at most 0.9 / 3.7 ms (the bisect's no-load row, which also folded the weights), likely far less | Reach rounded to f16 before the cone weights: sub-level differences at silhouettes, likely invisible; needs a frame-compare to say. |
 | A quarter-resolution gather rung | about 1.3 / 5.4 ms (three quarters of the gather) | Smears resolved at a quarter of the pixels each way: thin moving objects (a craft's fin, a weapon trail) smear less or not at all, and silhouettes of a still surface over a moving background soften. |
-| `medium` instead of `high` (exists today) | measured: little at 4K (pipelined 24.9 to 24.7 ms), 1080p within noise | Shorter shutter: less smear. |
+| `medium` instead of `high` (exists today) | measured before the tap caps: little at 4K (pipelined 24.9 to 24.7 ms), 1080p within noise. With the caps `medium` gathers 9 taps against 11 (desktop: gather 1.05 against 1.31 ms at 4K, NVIDIA) | Shorter shutter: less smear. |
 | Blur `off` (exists today) | measured: pipelined 8.7 to 6.2 ms at 1080p, 24.9 to 15.3 ms at 4K | All of it. |
 
 None is built. A tier needs frame-compare pictures (`docs/tools/frame-compare.md`) before it is
 proposed as a default.
 
 ## Open
+
+- **Re-measure the tap caps on the Deck.** Desktop only so far. Expected from the bisect's linear
+  tap cost: about a fifth off the 1.78 / 7.15 ms gather at `high`, more at `medium`. Command:
+  the per-pass one in `docs/rendering/frame-thread-cpu.md`, `--motion-blur high` and `medium`,
+  `base` (`b56d129a3`) against the merge, 1080p and 4K, 2 rounds interleaved.
 
 - **Motion blur is ours (maintainer, 2026-11-09):** the blur is our own graphics setting, so a cut that changes its picture (fewer taps, cheaper composite or copy) needs a capture diff that names the change, not byte-identity and not a design decision. Every other pass stays byte-identical.
 - **The 64-bit `prepared` texel.** Each gather tap loads `Rgba16Float` (velocity xy, depth, an
@@ -51,10 +56,11 @@ proposed as a default.
 
 ## Next Steps
 
-1. The 32-bit diag above: `OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1`, 1080p and 4K, interleaved
+1. The Deck re-measure of the tap caps above, when the Deck is back.
+2. The 32-bit diag above: `OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1`, 1080p and 4K, interleaved
    with `base`, 2 rounds.
-2. If it pays: render the tier's pictures and diff them (`docs/tools/frame-compare.md`) before
+3. If it pays: render the tier's pictures and diff them (`docs/tools/frame-compare.md`) before
    proposing it.
-3. Whole race for any kept change: `ab.sh <tag> "base cand" "1280x800 1920x1080 3840x2160" 3 hd
+4. Whole race for any kept change: `ab.sh <tag> "base cand" "1280x800 1920x1080 3840x2160" 3 hd
    "1 2"`, plus Pulse's default circuit.
-4. The maintainer picks a row of the options table, or none.
+5. The maintainer picks a row of the options table, or none.

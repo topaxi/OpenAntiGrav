@@ -539,7 +539,7 @@ impl Scene {
             view,
             slots,
             rects,
-            effects.motion_blur.shutter(),
+            effects.motion_blur,
             effects.blur_timestamps,
             folded.as_mut(),
         );

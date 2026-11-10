@@ -1205,7 +1205,8 @@ title_string_id = "OAG_GRAPHICS_ADVANCED"
 
 
 # A strength, not a boolean - each value is a shutter fraction of one
-# simulation tick, and the technique underneath can improve without this row
+# simulation tick and a tap budget for the gather (`high` 11, `medium` 9,
+# `low` 7: a lower tier is cheaper, not only shorter), and the technique underneath can improve without this row
 # or anyone's settings file moving; it already has once, camera reprojection
 # to `docs/rendering/motion-blur.md`'s per-object velocity buffer, with no
 # migration. Applies live: `Scene::render` reads it fresh each frame, so no

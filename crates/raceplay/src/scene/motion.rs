@@ -580,7 +580,8 @@ impl super::Scene {
 
     /// Encodes the motion blur over the finished frame, `false` when the
     /// pass is absent or off. `views` are the frame, the velocity attachment
-    /// and the depth attachment. `lens_motion` is
+    /// and the depth attachment; `blur` is the tier, its shutter and its tap
+    /// count. `lens_motion` is
     /// [`Race::lens_screen_motion`], which the pass takes out of every
     /// velocity it reads.
     #[allow(clippy::too_many_arguments)]
@@ -591,7 +592,7 @@ impl super::Scene {
         encoder: &mut wgpu::CommandEncoder,
         views: [&wgpu::TextureView; 3],
         viewport: (f32, f32, f32, f32),
-        strength: f32,
+        blur: oag_display::display::MotionBlur,
         lens_motion: Mat4,
         timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
     ) -> bool {
@@ -613,7 +614,8 @@ impl super::Scene {
                 sample_count: self.msaa.samples(),
                 size: (size.width, size.height),
                 viewport,
-                strength,
+                strength: blur.shutter(),
+                taps: blur.taps(),
                 lens_motion,
             },
             timestamps,
