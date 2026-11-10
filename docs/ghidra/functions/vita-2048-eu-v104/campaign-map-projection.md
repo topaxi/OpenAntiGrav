@@ -225,23 +225,46 @@ to 85 on the same live evidence; its row stays on that page.
 
 ## Wired
 
-`oag_ui::frontend::canvas_camera` is the camera and the scroll law, `oag_2048::campaign::MAP_NODES`
-the quad, and `frontend::campaign_map` places every tile through them, draws the lattice behind
-them from the same baked picture as the title page, and opens on the two-step centring above.
+`oag_ui::frontend::canvas_camera` is the camera and the scroll law, `oag_2048::campaign::tier::MAP`
+and `event_cell` the quad, and `frontend::campaign_map` places every tile through them: the disc's
+hex art stretched over the prism's top face, the lattice beneath from the picture the title page
+bakes (shifted to the view's phase by whole lattice periods), the map opening where the two-step
+centring comes to rest, and a selection scrolling by the tap's law. The downloadable tiers go
+through the same camera with their own `(3, 2)` step and grid offsets.
+
+Tile centres, ours (the hexagon of the drawn sprite) against the reference frames' top faces:
+
+| View | Event | Theirs | Ours | Delta |
+| --- | --- | --- | --- | --- |
+| frame 13, the opening view | 3 | (412.0, 174.7) | (411.7, 174.3) | (-0.3, -0.4) |
+| same | 4 | (527.0, 268.0) | (526.6, 269.8) | (-0.4, +1.8) |
+| frame 12, Event 1 tapped | 1 | (500.0, 269.7) | (498.5, 269.8) | (-1.5, +0.1) |
+| same | 2 | (614.5, 365.7) | (613.4, 365.2) | (-1.1, -0.5) |
+| same | 3 | (729.5, 460.7) | (728.3, 460.7) | (-1.2, 0.0) |
+
+The other tiles of those frames are cut by the screen edge or covered by a notification banner;
+their visible edges agree to 2 px in `x`. The lattice under the map: row lines at 344, 392, 440,
+487, 535 against the frame's 343, 391, 439, 487, 535, and the diagonals' crossings on row 452 at
+25, 68, 85, 128, 144, 188 against 25, 68, 85, 128, 145, 187.
+
 Pinned by `crates/ui/src/frontend/canvas_camera/tests.rs` (the law against the live reads) and
 `the_campaign_map_puts_its_tiles_where_the_canvas_camera_does` in
-`crates/game/tests/vita_2048_boot_ground_truth.rs` (the disc's events at the two reference scroll
-states).
+`crates/game/tests/vita_2048_boot_ground_truth.rs` (the disc's events at the two reference views;
+red on the even grid).
 
-Not wired, with what each needs: the prism's shaded wall and the neighbours' occlusion shade (the
-vertex program of [canvas3d-lattice.md](canvas3d-lattice.md)), the ring and path cells (`0x81073aee`
-and the fill types), the season cards and the other item classes, the state table above (ours keeps
-its own four progress colours and draws every event), the ground relief, the scroll bounds.
+Not wired, with what each needs: the prism's wall and the canvas's shading (the tile is flat art
+whose coloured body covers 78 % of the face), the ring and path cells (`0x81073aee` and the fill
+types), the season cards and the other item classes, the state table above (ours keeps its four
+progress colours and draws every event), the ground relief, the scroll bounds, the wait and the
+eases (ours arrives at once).
 
 ## Omega
 
-**Checked, applies, not wired.** The PS4 `eboot.bin` ships the same item
-([canvas3d-lattice.md](canvas3d-lattice.md): `3dCanvas_Item.cpp`, `FE3DCanvas`, the reset angles at
-`0x018086ec`) and the same scroll item. Whether Omega's 2048 campaign branch is reachable and
-whether its quad is `(4, 2, 55, 25)` was looked for by pattern in `eboot.bin`; see the census at
-the end of this page. A live Omega value is not checkable (shadPS4 has no memory readout).
+**Checked, applies, not wired.** Census of the PS4 `eboot.bin` (base and patch 1.07): it carries
+`"2048 - Event 1"` (`0x82d8ac` / `0x8910e1` in the file), `TouchCampaign_Item.cpp`,
+`TouchCampaignHD_Item.cpp` and `canvasTexture`, beside the canvas item and its reset angles
+([canvas3d-lattice.md](canvas3d-lattice.md)), so the same map code ships. The quad was looked for
+as the four floats within 160 bytes of each other and not found (nine `55.0` words, none beside
+`25.0` and `4.0`): its stores are not laid out as on ARM, and the value is unconfirmed. A live
+Omega value is **not checkable** (shadPS4 has no memory readout), and whether Omega's front end
+(HD's) ever shows this map was not established.

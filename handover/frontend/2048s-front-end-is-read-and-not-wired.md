@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [2048]
-updated: 2026-10-27
-summary: "2048 front end DLC campaigns wired; Select Team panel and hull drawn; DLC circuit card names and further screens still open"
+updated: 2026-11-10
+summary: "2048 front end: DLC campaigns, Select Team and campaign map tile placement wired; canvas cell painting, further screens open"
 difficulty: hard (30)
 ---
 
@@ -112,82 +112,46 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   `movie::open` returns a `Movie` for `ftyp`, and the AAC track plays through
   `MovieAudioKind::Container`. The screen paces the 99.57 s picture and fires
   its `AutoRedirect` at the end, or leaves on any of its six buttons.
-- **The campaign map's cell-to-pixel mapping is chosen, not measured.** An
-  even grid (`oag_ui::frontend::campaign_map::PITCH`/`ORIGIN`) over the
-  shell's own `<TouchScroll>` canvas, plain `Blue2048`
-  markers. **Narrowed 2026-09-21**: `M_X`/
-  `M_Y` *are* real `GameModeBase` fields the executable deserialises
-  (`0x2c4`/`0x2c8`, an earlier reading of this pass's own decompile missed
-  them - two `FUN_812dab08` registrations Ghidra never auto-stringified),
-  but the DLC tiers' own hotspots read a different, still-unfound cached
-  position (`+0x15c`/`+0x160`) that something uncaught this pass must derive
-  from them - `frontend-campaign-map.md`'s dated section. A live Vita3K
-  capture confirms the real map is a hexagonal tile tessellation with a
-  season title card, not this square grid or a 3D city
-  (`data/reference/2048-frontend/README.md` frames `12`-`14`). Neither
-  the real per-event anchor nor the season card's own asset was found - the
-  base tier's own `TouchCampaign_Item` class is now named
-  (`frontend-campaign-map.md`) but nothing calls its constructor statically,
-  the same open item the DLC tier pair already had. The unlock graph is not
-  walked: every event is offered, there being no save.
-  **2026-09-25: the grid's own scale, not the per-event formula, is now
-  measured.** The 1920x1088 canvas above was a wrong reading of the shell's
-  declared `MaxScrollX="960" maxscrolly="544"` as the whole canvas; frames
-  `12`/`13`'s own scrollbar thumbs measure a canvas roughly 5.3x-5.4x the
-  view instead (~5207x2873), and `CANVAS`/`PITCH`/`ORIGIN` are rescaled by
-  that factor, with `MARKER` set directly off a real hex tile's own
-  measured bounding box (122x117 px, frame `13`). See
-  `docs/formats/2048-frontend.md`'s campaign-map row for the full pixel
-  evidence. A full archive-wide `.xml` grep for every plausible asset name
-  (`hex_filled.gxt`, `Hexagon_HD*.gxt`, `Cup2048.gxt`, `TinyCallout_*.gxt`,
-  every `medals/`/`trophy/` icon) found none of them referenced by any
-  widget - **but referenced by no widget is not the same as absent from the
-  archive**, and every name in that list is real. **Resolved 2026-09-27: the
-  hex tile art and the four per-kind icons are decoded and drawn.**
-  `hex_filled.gxt`/`hex_outline.gxt`/`hex_select.gxt` and `callout/
-  {race,speed,zone,combat}_mode.gxt` (all base package) open as real pixels -
-  a gloss-filled hexagon, a thin outline, a glow ring, and a chequered flag /
-  stopwatch / radar-target / crosshair - confirmed against frames `12`/`13`'s
-  own green/grey tiles carrying exactly the flag and stopwatch glyphs.
-  `oag_ui::frontend::campaign_map` now draws them, tinted by the same four
-  progress colours a flat square always was, gated on `EventKind`;
-  `crates/game/tests/vita_2048_boot_ground_truth.rs::
-  the_campaign_map_draws_the_discs_own_hex_tiles_not_flat_squares` pins it
-  against the real package. Still unmeasured: the per-event `M_X`/`M_Y`
-  formula itself (the grid is still an even square, just drawn with hex art
-  now), the 3D bevel/drop-shadow the real tile carries, the striped/dotted
-  path texture connecting a season's own tiles, the background, the header
-  and the season card - all still native-code-driven and needing a Ghidra
-  pass, not another data sweep (the sweep this time was pixels, not text,
-  and still did not place them). **A dead end worth recording**: correlating
-  the 47
-  `linkedevent`-carrying `<CanvasLabel>`s' own `x`/`y` against their event's
-  `M_X`/`M_Y` looks like a projection at first (a least-squares fit lands
-  `y` almost exactly), but the file's own `MPSeason01`-`20` labels - no
-  `linkedevent`, no relation to `SP.xml` at all - occupy the identical small
-  coordinate range, so the fit is spurious: the whole `<CanvasLabel>` set is
-  a small corner widget, not hotspots correlated to the map grid, confirming
-  `2048-frontend.md`'s existing reading rather than overturning it.
-  **2026-09-25: the invented bottom panel is removed** (it covered ~15% of
-  the screen and the real base map shows nothing like it -
-  `oag_ui::frontend::campaign_map`'s own "The bottom panel is gone" doc
-  section has the full account). A tap on a node in the real game opens a
-  separate event card instead (`data/reference/2048-frontend/
-  14-campaign-map-event-card-unity-square.png`: photo backdrop, name, kind,
-  `PASS`/objective line, lap arrows, pagination dots, three buttons - and it
-  opens for a **locked** node too). That card was searched for as an
-  authored `NEWGUI` screen this pass and is not one: `<TouchCampaign>`'s
-  only child redirects straight to `Launch 2048`, which is nothing but
-  `<BackendController task="Launch">` into `InGame2048` in both the base
-  package and the `v1.04` patch, no confirm step; the only tick/cross
-  confirm dialogs in the archive (`StartEventConfirm`/
-  `FriendStartEventConfirm`, `Community_Definition.xml`) are a small
-  two-button online-only box, nothing like the card. Native-code-driven and
-  unlocated, same as the hex tile art/background/header/season card above -
-  not stood in for, per this project's "never invent" rule. A player who
-  selects an event today sees only the marker's own cursor ring, no name or
-  objective text anywhere on screen; `MapEvent::detail`/`selected_event()`
-  still carry the real text for whenever the card is recovered.
+- **The campaign map: tile places, lattice and opening view are the original's
+  (2026-11-10, lane `2048-campaign-map`); the canvas's own painting is open.**
+  An event is six cells of the `Canvas3D` lattice (`col = 55 + 4 M_X + tweak`,
+  `row = 25 + 2 M_Y + tweak`) and its screen place is the canvas camera's:
+  [campaign-map-projection.md](../../docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md).
+  Wired: `oag_ui::frontend::canvas_camera` (camera, scroll-to-pan, the two
+  centring laws), `oag_2048::campaign::tier::event_cell`, tiles placed through
+  them, the baked lattice picture under the map at the view's phase, the map
+  opening where the original comes to rest. Tile centres against frames `12`
+  and `13`: within 1.8 px on the five unoccluded tiles
+  (`the_campaign_map_puts_its_tiles_where_the_canvas_camera_does`). The even
+  grid (`PITCH`/`ORIGIN`/`CANVAS`) is gone. A `<CanvasLabel>`'s `x`/`y` are
+  canvas cells too, which is why the old fit against `M_X`/`M_Y` half worked.
+  Open, each with its address on that page:
+  1. **The tile is flat hex art, not the prism.** The art's coloured body
+     covers 78 % of the top face (93 of 119 px) inside its own white ring, with
+     no wall and no shade, and `hex_filled.gxt`'s faint alpha over its whole
+     square shows as a pale box on the lattice. The real thing is the canvas
+     mesh with painted cells (colour, height in alpha, atlas shift): port it as
+     a draw of its own (as `Draw::FuryBackdrop` is), from the mesh and the two
+     programs in `canvas3d-lattice.md`. That one port also gives items 2 and 3.
+  2. **The striped and dotted cells** around and between tiles: the button's
+     ring (`CanvasButton_PaintIconAndRing` `0x8106fbd8`, cell writer
+     `0x81073aee`, the chain walk `0x810ef5fe`), fill types as atlas shifts.
+  3. **The season cards**: one canvas item (vtable `0x8150ad08`) of 14 x 3 cells
+     at cell (51, 29) with atlas origin `v` = 0.4785; the three cards are in
+     `canvasTexture.gxt`. The other item classes are unread.
+  4. **Which events get a tile.** The original raises the passed (green) and
+     the open (grey) events and gives a locked one no tile (`0x810ef78c`); ours
+     draws every event in its own four colours. Changing it needs a rule for
+     the pad cursor on an event with no tile.
+  5. **The scroll's limits** (`0x810ef98c`, 650 px margin; sign and origin not
+     read): ours are chosen. The one-second wait and the ease at the open, and
+     the ease after a tap, are not played: ours arrives at once.
+  6. The header (home button, badges) and the notification banners: not read.
+  7. Seen once, not chased: a `--drive` capture on a profile whose
+     `records.toml` was written by hand (three `bronze` rows) restored the
+     cursor but drew no passed tile. The lib-level test colours them.
+  8. **Omega**: the item and `"2048 - Event 1"` ship in `eboot.bin`; the quad
+     was not found by pattern and no live value is readable.
 - **Resolved 2026-09-21: `Home`'s five destinations draw.** See the top of
   this file and `2048-frontend.md`'s own "Wired" section for the full
   account. `team`'s own team/craft-slot picker feeds `settings.race.team`/
@@ -402,4 +366,4 @@ shape, not by screen, and would have mis-fired on `Team`'s own
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-2026-09-17, updated 2026-09-21. **The boot walks it now**: `just play 2048` runs the five declared screens off their own redirects, draws `GameModeChoice`/`Home`/the campaign map off the disc's own widgets and `SP.xml` (pad and pointer), and a tap on an event races it through `race::load_event`; two tiles the disc does not author (`RACEBOX`, `REMIX`) sit after the authored four as this build's own. Earlier: [ADR-0054](../../docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) made `FrontEnd::menu` `Option` and added the `touch` axis (`menu: None`, `touch: Some`); the HUD's `IG_HUD_*` fallback is a role-name mismatch (`2048HUD` vs `"HUD"`), not a missing plugin; the six-vs-four tiles are DLC-gated `FE3DCanvas` hotspots; the 69 `CanvasLabel`s cluster in one corner. Open: the MP4 intro's length and picture (`lane/2048-intro-mp4`), the map's chosen cell-to-pixel grid (2026-09-21: `M_X`/`M_Y` are real fields after all, but the copy/scale into the DLC tiers' own cached position is unfound, and live capture shows a hex tessellation regardless), the `BootFlowCanvas` art, `team`'s own icon grid and ship preview, the campaign-event functions' caller, `frontend.bnk`'s cues, the per-title HUD-font-role axis
+2026-09-17, updated 2026-09-21. **The boot walks it now**: `just play 2048` runs the five declared screens off their own redirects, draws `GameModeChoice`/`Home`/the campaign map off the disc's own widgets and `SP.xml` (pad and pointer), and a tap on an event races it through `race::load_event`; two tiles the disc does not author (`RACEBOX`, `REMIX`) sit after the authored four as this build's own. Earlier: [ADR-0054](../../docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) made `FrontEnd::menu` `Option` and added the `touch` axis (`menu: None`, `touch: Some`); the HUD's `IG_HUD_*` fallback is a role-name mismatch (`2048HUD` vs `"HUD"`), not a missing plugin; the six-vs-four tiles are DLC-gated `FE3DCanvas` hotspots; the 69 `CanvasLabel`s cluster in one corner. Open: the MP4 intro's length and picture (`lane/2048-intro-mp4`), the map's painted cells (2026-11-10: tile places, lattice and opening view are the original's; the prism, the ring cells and the season cards are not drawn), the `BootFlowCanvas` art, `team`'s own icon grid and ship preview, the campaign-event functions' caller, `frontend.bnk`'s cues, the per-title HUD-font-role axis
