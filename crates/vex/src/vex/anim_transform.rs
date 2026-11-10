@@ -303,7 +303,7 @@ impl AnimTransform {
 /// add or subtract puts right. The remainder is below `p` on `p`'s own grid, so it converts
 /// back exactly, and takes the sign of `seconds` as `fmod`'s does. NaN, infinity, a zero or
 /// negative or infinite period and a huge quotient take the `fmod`.
-fn wrap_clock(seconds: f32, period: f32) -> f32 {
+pub(super) fn wrap_clock(seconds: f32, period: f32) -> f32 {
     const MOST_LOOPS: f64 = 268_435_456.0;
     let magnitude = seconds.abs();
     if magnitude < period {

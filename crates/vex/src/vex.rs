@@ -858,7 +858,7 @@ impl TexTransform {
         } else {
             1.0 / 60.0
         };
-        let t = (seconds % period) / unit;
+        let t = anim_transform::wrap_clock(seconds, period) / unit;
         let scale = if self.scale.times.is_empty() {
             [1.0, 1.0]
         } else {
