@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-10
-summary: "Deck HD Anulpha: four desktop GPU cuts measured on the Deck (all win); open: 32-bit prepared texel, HD encode, unused scratch target"
+summary: "Deck HD Anulpha: four desktop cuts won on the Deck, HD encode cuts dropped; open: 32-bit prepared texel, unused scratch target"
 categories: [rendering]
 ---
 
@@ -51,9 +51,17 @@ proposed as a default.
   1080p, 4K (-23 to -26 %), `docs/rendering/motion-blur.md`, "On the Deck". Not done: in half mode the
   full-size `scratch` target is still allocated though unused (66 MB at 4K); drop it when the
   resolution is half, rebuilding it on a switch to full.
-- **HD encode decodes each scene texel four times** (`final_half_texel` puts every pixel on a
-  2x2 average; 12 `pow` for the decode plus 3 for the encode): 0.75 ms at 1080p, 2.6 ms at 4K.
-  Quad sharing through subgroup ops would cut the worst lane from 4 decodes to 3, exactly. Not built.
+- ~~**HD encode decodes each scene texel four times**~~ Measured and closed with nothing kept
+  (`hd-encode`): `docs/rendering/frame-thread-cpu.md`, "HD encode: three exact cuts measured, none
+  kept". Since the sRGB-curve decode (`79f28d611`) the pass reads 451 / 989 / 3891 us on the Deck at
+  800p / 1080p / 4K, not 0.75 / 2.6 ms. Half of that is the four decodes.
+  - Quad sharing is exact (`cmp` equal on the Deck and NVIDIA) but slower. With the per-quad check
+    it costs +10 % at every size on the Deck; without it, +0.5 %. The selects that assemble each
+    lane's texels eat the saved decode.
+  - A GPU-built decode table (4,819 f16 entries) is slower too: 1455 against 989 us at 1080p.
+  - Still open, not tried: a compute encode with workgroup-shared texels (about 1.1 decodes per
+    pixel). It needs the caller's canvas as a storage texture, which `oag-post` does not own.
+    Measure with the recipe on that page.
 - **No whole-race `2h` baseline was taken**: the Deck went back to the maintainer. Earlier Deck
   numbers are vertical split.
 
