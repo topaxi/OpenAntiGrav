@@ -8,7 +8,7 @@
 // saturation are applied in linear light and encoded again, and only when the colour flag is
 // on, so a depth-of-field-only frame is never round-tripped through the transfer curve.
 
-import oag_shaders::colour::{luma_rec709, srgb_encode};
+import oag_shaders::colour::{luma_rec709, srgb_decode, srgb_encode};
 import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
 
 struct Constants {
@@ -98,12 +98,6 @@ fn gather(pixel: vec2<i32>, own_d: f32, own_radius: f32) -> vec4<f32> {
     return vec4<f32>(sum.rgb / weight, centre.a);
 }
 
-fn decode(c: vec3<f32>) -> vec3<f32> {
-    let lo = c / 12.92;
-    let hi = pow((max(c, vec3<f32>(0.0)) + vec3<f32>(0.055)) / 1.055, vec3<f32>(2.4));
-    return select(hi, lo, c <= vec3<f32>(0.04045));
-}
-
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let pixel = vec2<i32>(in.position.xy);
@@ -113,7 +107,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         colour = gather(pixel, d, radius_of(d));
     }
     if constants.grade.w > 0.5 {
-        var linear = decode(colour.rgb) * constants.grade.x;
+        var linear = srgb_decode(colour.rgb) * constants.grade.x;
         let grey = vec3<f32>(luma_rec709(linear));
         linear = max(mix(grey, linear, constants.grade.y), vec3<f32>(0.0));
         colour = vec4<f32>(srgb_encode(clamp(linear, vec3<f32>(0.0), vec3<f32>(1.0))), colour.a);

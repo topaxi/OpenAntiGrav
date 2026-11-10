@@ -197,13 +197,13 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 
 ## Maintenance
 
-11. **Five copies of the sRGB curve.** Decode: `upscale.wesl:44`, `photo_fx.wesl:101` and `beam.wesl:72`
-    (`srgb_to_linear`); `target.wesl` has no copy (its `decode` is the 2.2 power, a different curve on purpose).
-    Encode: `omega_tonemap.wesl:228` (`scanout_encode`) and `occlusion.wesl:69` repeat
-    `colour.wesl:11` (`srgb_encode`). Add `srgb_decode` to `crates/shader-check/shaders/colour.wesl` and import it.
-    Check: `omega_tonemap` and `occlusion` omit the `max(c, 1e-6)` guard that `srgb_encode` has; the lower branch
-    is taken first, so the result is the same, but `cmp` it. Gain: one place to fix a curve bug. Measure: the
-    build's `oag-shader-check` validation, then `cmp` on an Omega frame and an occlusion capture. 1 hour.
+11. ~~**Five copies of the sRGB curve.**~~ **Landed**: `colour.wesl` holds `srgb_decode_channel`, `srgb_decode` and
+    `srgb_encode`; `upscale`, `photo_fx`, `beam`, `omega_tonemap`, `occlusion` and `target.wesl`'s `pack_565` (a sixth
+    copy the scout missed) import them. Byte-identical on every pass: HD, Pulse and Pure race frames, `--presented`,
+    photo mode's nine frames, the HD leach ribbon, and sweeps of the upscale decode arm and grade, Omega's encode,
+    the sun-occlusion map and HD's 5-6-5 card. A vector `pow` in place of beam's scalar one moved one ribbon pixel
+    by one level, so `srgb_decode` is built from the scalar form. `omega_tonemap` and `occlusion` dropped no guard
+    that mattered: their inputs are in `0..1` and the `1e-6` guard only touches the arm `select` discards.
 
 12. **Misplaced and dangling comments.** `shadow.wesl:5` to `:20` documents HD's engine-flare overrides, which
     live in `flame.wesl` (imported at `shade.wesl:7`); `shadow.wesl:23` to `:33` is the GE fog ramp, which belongs

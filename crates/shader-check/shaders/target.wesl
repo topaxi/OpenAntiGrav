@@ -1,5 +1,7 @@
 // What the render target holds, as the draws into it need to know it.
 
+import package::colour::srgb_decode;
+
 // 1.0 when the render target holds linear light - Wipeout HD's float scene
 // target, where the bloom gate reads pre-exposure luminance and the encode
 // happens in `post::hd_bloom`'s own pass - and 0.0 for every gamma target,
@@ -54,11 +56,7 @@ public override packed_out: f32 = 0.0;
 public fn pack_565(encoded: vec3<f32>) -> vec3<f32> {
     let levels = vec3<f32>(31.0, 63.0, 31.0);
     let c = clamp(encoded, vec3<f32>(0.0), vec3<f32>(1.0));
-    let linear = select(
-        pow((c + vec3<f32>(0.055)) / 1.055, vec3<f32>(2.4)),
-        c / 12.92,
-        c <= vec3<f32>(0.04045),
-    );
+    let linear = srgb_decode(c);
     return pow(floor(linear * levels + vec3<f32>(0.5)) / levels, vec3<f32>(1.0 / 2.2));
 }
 
