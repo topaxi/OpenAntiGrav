@@ -11,7 +11,7 @@
 //! ```
 //!
 //! The law itself (`pow(lightmap, power) * scale + bias`, no constant ambient)
-//! is checked through the mesh pipeline in `oag-render`'s `omega_nova_prelit`;
+//! is checked through the mesh pipeline in `oag-mesh`'s `omega_nova_prelit`;
 //! what is checked here is that Omega's real file reaches it, that the
 //! `Tonemap` block reads, and that 2048, which shares the container family and
 //! authors the key too, does not.

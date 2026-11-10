@@ -325,7 +325,7 @@ geometric fallback never sees the new matrix - measured, not assumed
 `mesh::NODE_ANIM_LIMIT` went 128 to 384 for the busiest file. `mesh::rcs` now
 takes the same anchor split `mesh::build_class` already had, so the geometry
 moves rather than merely landing correctly.
-`crates/render/tests/hd_scenery_animation_ground_truth.rs` is the harness.
+`crates/mesh/tests/hd_scenery_animation_ground_truth.rs` is the harness.
 
 ### A widened key form, which Pulse never exercises
 

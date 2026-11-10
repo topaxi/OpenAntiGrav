@@ -108,6 +108,7 @@ impl Race {
             zoom_borrowed,
             weapon_pad_glow,
             leach_drain,
+            blast_push,
             leach_beams,
             quake_hit,
             autopilot_absorb_cancels,
@@ -191,6 +192,8 @@ impl Race {
             leach_strip,
             #[cfg(feature = "view")]
             missile_trail,
+            #[cfg(feature = "view")]
+            wingtip,
             #[cfg(feature = "view")]
             destroy_stations,
             #[cfg(feature = "view")]
@@ -774,6 +777,7 @@ impl Race {
                 weapon_pad_glow,
                 leach_beams: leach_beams.min(oag_weapons::projectile::leach_beam::POOL_SIZE as u8),
                 leach_drain,
+                blast_push,
                 quake_hit,
                 autopilot_absorb_cancels,
                 autopilot_pad_grants,
@@ -957,6 +961,7 @@ impl Race {
                     .and_then(|trail| trail.blast_streak)
                     .map(missile_blast::streaks::Streaks::new),
                 missile_smoke: missile_trail.map(crate::missile_smoke::Smoke::new),
+                wingtip: wingtip.map(crate::wingtip::Contrails::new),
                 leach_ball_elapsed: [0.0; oag_weapons::projectile::leach_beam::POOL_SIZE],
                 plasma_blasts: [None; blast_models::PLASMA_BLAST_SLOTS],
                 bomb_blasts: [None; bomb_blast::BOMB_BLAST_SLOTS],

@@ -12,7 +12,7 @@ difficulty: medium (30)
 glow (119 slots) was already wired; this lane wired the **vertex** half,
 `uv + time * rate` with the rate authored on the material, as
 `mesh::AnimTrack::Scroll` (76 materials on 12 circuits, pinned per circuit by
-`crates/render/tests/hd_vertex_scroll_ground_truth.rs`). Law and census:
+`crates/mesh/tests/hd_vertex_scroll_ground_truth.rs`). Law and census:
 `docs/formats/rcsmaterial.md`, "HD's vertex programs scroll the texture
 coordinate". `crates/render/examples/hd_anim_family_census.rs` lists every family.
 

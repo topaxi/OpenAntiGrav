@@ -162,6 +162,10 @@ Two structural facts to expect, both different from every other binary here:
   transparency difference), the strip's `ItemWidth` default of 298 and its
   selected-entry bonus of 70, and the one-sixth-per-frame easing all three
   menu classes grow with.
+- [scene-width-throttle.md](scene-width-throttle.md) - the 1080p scene width:
+  32 prebuilt targets from 1920 down to 1300, the level at
+  `g_RenderGlobals + 0x88`, and the end-of-frame controller that moves it one
+  step on the RSX's frame time and a missed vblank. Read live.
 - [shield.md](shield.md) - `Shield.cpp`: the fired pickup's shell, read and
   cross-checked field for field against `psp-pulse-usa/shield-pickup.md` - the
   same law (colour lerp, swell lerp, 60 Hz substep, cockpit-vs-shell camera

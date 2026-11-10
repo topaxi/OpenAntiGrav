@@ -328,6 +328,8 @@ mod visibility;
 mod weapon_light;
 mod weapons;
 #[cfg(feature = "view")]
+pub mod wingtip;
+#[cfg(feature = "view")]
 mod wreck_fx;
 mod wrong_way_kill;
 #[cfg(feature = "view")]
@@ -363,7 +365,7 @@ pub use load::{export_track, load};
 pub(crate) use oag_title::Trigger;
 pub use options::{
     CameraOverride, Campaign2048Progress, CaptureHud, CaptureZone, Loaded, Options, PoseRequest,
-    SeatPick, Setup, Sighting, TrailHits,
+    SeatPick, Setup, Sighting, TrailHits, WingtipContrails,
 };
 pub use replay::{ApplyError, Launch, OriginalAi, UnknownOption, rebuild};
 #[cfg(feature = "view")]
@@ -402,7 +404,7 @@ pub use worker::{LoadProgress, LoadWorker};
 #[cfg(feature = "view")]
 pub use assets::{FLARE_TEXTURE, NOISE_TEXTURE};
 #[cfg(feature = "view")]
-use assets::{particle_effect, unrecovered_or_absent, untextured_note};
+use assets::{listed_particle_effect, unrecovered_or_absent, untextured_note};
 
 #[cfg(feature = "view")]
 use camera::target_of;

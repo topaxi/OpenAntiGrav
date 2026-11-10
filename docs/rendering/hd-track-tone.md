@@ -251,7 +251,7 @@ seconds apart starting five seconds after the walk returned, then one frame of R
 - **The 1080p path renders a reduced, dynamic width.** Scene surface (`0x148`, which decodes to `A8R8G8B8` + `Z24S8`, no antialias, not FP16: [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md) has the allocator, and a pitch of `0x2000` could not hold 1300 pixels at 8 bytes each; pitch `0x2000`) clip at 1920x1080/100: **1300x1080** (Anulpha, three
   frames of one boot; Talon's; Moa Therma's second boot), **1320x1080** (Anulpha, second boot), **1660x1080** (Moa Therma, first boot). The final stage
   (27 draws) is 1920x1080. So the width of the original's scene is not fixed: it changed between boots of one circuit (Moa Therma 1660 and 1300) and
-  stayed put inside a boot (three dumps of Anulpha, all 1300). **Corrected 2026-11-05:** it does not stay put. Scanning the live ring through an attract race on one boot (02.00, 1920x1080, scale 100) over 25 s found 16 widths: 1300, 1320, 1340, 1380, 1420, 1460, 1500, 1580, 1600, 1620, 1660, 1680, 1860, 1880, 1900, 1920, and a single dumped frame drew all 393 of its scene draws at 1460. Every one is a multiple of 20 and the bottom seen is 1300, so a 20-pixel step with `1280` as the likely floor (`1920 - 32 * 20`), confidence 75. A third party quotes Digital Foundry's 2009 interview as 32-pixel steps from 1920 to 1280: 32 is the number of steps here, not their size, on this evidence. The article itself could not be fetched to check the wording. The controller is unlocated: the option `Debug.Enable Frame Buffer Throttling` is registered at `0x003a9464`/`0x003a9fd4` and has no direct reader at its offset. At 1280x720 the scene surface is 1280x720 at both scales: at 150 the game still draws 1280x720 and RPCS3
+  stayed put inside a boot (three dumps of Anulpha, all 1300). **Corrected 2026-11-05:** it does not stay put. Scanning the live ring through an attract race on one boot (02.00, 1920x1080, scale 100) over 25 s found 16 widths: 1300, 1320, 1340, 1380, 1420, 1460, 1500, 1580, 1600, 1620, 1660, 1680, 1860, 1880, 1900, 1920, and a single dumped frame drew all 393 of its scene draws at 1460. Every one is a multiple of 20 and the bottom seen is 1300, so a 20-pixel step with `1280` as the likely floor (`1920 - 32 * 20`), confidence 75. A third party quotes Digital Foundry's 2009 interview as 32-pixel steps from 1920 to 1280: 32 is the number of steps here, not their size, on this evidence. The article itself could not be fetched to check the wording. The controller is unlocated: the option `Debug.Enable Frame Buffer Throttling` is registered at `0x003a9464`/`0x003a9fd4` and has no direct reader at its offset. **Located 2026-11-10:** the width is `1920 - 20 * level`, level 0 to 31 at `g_RenderGlobals + 0x88`, so the floor is 1300 and not 1280; the end of `Render_FinishFrame` (`0x003e3320`) moves it one level a frame, narrower when the RSX's timed frame is 16112 us or more or the flip missed its vblank, wider under 15556 us ([scene-width-throttle.md](../ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md)). Both inputs are wall-clock, so a loaded host pins RPCS3 at 1300; each pair now records its frame's width (`pair.json` `original.scene_width`). At 1280x720 the scene surface is 1280x720 at both scales: at 150 the game still draws 1280x720 and RPCS3
   scales the surface, which is where the exposure's readback goes wrong.
 - **What it costs.** The pair's original is 1300 to 1660 px of real horizontal resolution upscaled to 1920 (full 1080 lines), a little
   soft and different from boot to boot in the horizontal axis; 1280x720/100 would be a fixed 1280x720. The maintainer's rule was to keep 1080p if the
@@ -398,7 +398,7 @@ original's chromaticity to 0.01.
   `m_diffuse_normal_constantspecular` 94. 29,049 chunks read `Colour`; 24,927
   carry no prelit or ambient patch (emissive, glass, hull families) and keep
   their own paths. Pinned by `rcsmaterial_ground_truth.rs` and
-  `crates/render/tests/hd_lit_alpha_ground_truth.rs` (Anulpha's slots by number).
+  `crates/mesh/tests/hd_lit_alpha_ground_truth.rs` (Anulpha's slots by number).
 
 ### Before and after
 
@@ -490,7 +490,7 @@ at bias 0, as unmeasured: the environment probes and every `textureSampleLevel`
 read (the census shows the probes at filter word `0x02062000`, bias 0), the
 flame, absorb and fire programs, the Zone stage, the shadow maps, and every
 hull (the census named track draws only; a hull's units are unread). Test:
-`oag-render::it psp_slope_lod::a_material_lod_bias_reads_a_finer_level_than_the_samplers_own`
+`oag-mesh::it psp_slope_lod::a_material_lod_bias_reads_a_finer_level_than_the_samplers_own`
 (a minified stripe texture, contrast 0 at bias 0, 117 at `-1.5`) and
 `oag-hd effects::tests::the_material_lod_bias_follows_its_rule`.
 
@@ -620,7 +620,7 @@ apply; the maintainer's impression there is the simpler textures.
 `Origin::Measured`). **The request is read off the original (the filter word); choosing it over the -0.75 fit to RPCS3 is the maintainer's
 decision**, made after comparing full frames at -0.75 and -1.5 against the original; it is not a fitted value. It reaches only circuit
 materials: `material_lod_levels()` is read once, in `oag_raceplay::load::geometry::track_model`, and set on the track and behind-glass
-models (`Model::material_lod_bias`), so the HUD, shadow and sky samplers never see it. Nothing else gates it (no setting).
+models (`Model::material_lod_bias`), so the HUD, shadow and sky samplers never see it. Nothing else gates it (no setting). Hulls, mine and bomb followed on 2026-11-09, see "The LOD bias on hulls, pads and weapons" below.
 
 Re-render of the 13 cold race pairs (`compare-rerender-ours --only hd/`, into a scratch copy), band metric from `scripts/texture-sharpness.py`:
 median over pairs of the per-pair ratio ours/original, **fine near 1.11, fine far 1.16, mid near 0.97, mid far 1.02** (before: 0.81 near, 0.98
@@ -691,6 +691,89 @@ out's ([tonemap.md](../ghidra/functions/ps4-omega-eu/tonemap.md), "Read with the
 HD's sRGB encode law is HD's alone; `oag_post::omega_tonemap` already ends on the scanout encode. What the patch changes is
 the composite after the curve (a `ColorScale` and the tint's placement, same section), not wired. 2048 not checkable (no
 HD-style resolve measured).
+
+## The LOD bias on hulls, pads and weapons (2026-11-09, `hd-material-lod-bias-reach`)
+
+**Claim**: the `0x02063e80` filter word (trilinear, LOD bias -1.5) is read on the track's own units only; hulls, pads and weapons
+ask for something else, so they stay at bias 0. **False for hulls, mine and bomb bodies (measured) and for the pads
+(inferred, not wired); the bias is now wired on the hulls, mine and bomb.**
+
+**What would have falsified it**: a hull, pad or weapon draw whose albedo or normal unit read `0x02062000` (bias 0) or
+`0x02022000` (no mip). None does, on any of 10 stored frames with a craft on screen.
+
+**Method.** Stored RPCS3 draw-hook dumps (`scripts/rpcs3_draw_hook.py`, a paused frame with the craft on screen; no fresh
+capture was needed). `scripts/rsx-draw-list.py <dir> <stem> --samplers` lists every draw's units with the filter word;
+`scripts/rsx-fp-match-material.py` matches each draw's fragment program (microcode, constants dropped) against the
+`.rcsmaterial`s of `data/materials/ships/`, `data/materials/`, `data/weapons/materials/` and the circuit's own
+`environments/<circuit>/materials/`, extracted with `just psarc cat`. A hull draw is a draw in the main colour target
+(`tgt 00f50000`) whose program matches `diffuse_vcol` (block 17) or `diffuse_with_specular_from_alpha_n[_vcol]` and whose
+unit 0 is the 1024x1024 livery. A program is shared by many materials, so a match names a family, not a file.
+
+| Class | Circuit, frame, draws | Material (family) | Units: filter word |
+| --- | --- | --- | --- |
+| hull, spec variant | Talon's Junction (`hd-flame-tap/gantry-w1`), #593, #595, #597, #599 (10 draws) | `diffuse_with_specular_from_alpha_n_vcol` (prefix match, first 12 instructions) | u0 livery `0x02063e80`, u1 normal `0x02063e80`, u2-u3 shadow maps `0x02022000`, u4-u5 IBL probes `0x02062000` |
+| hull, vcol variant | same, #594, #596, #600 (35 draws) | `diffuse_vcol` (full match) | u0 livery `0x02063e80`, u1-u2 shadow `0x02022000`, u3-u5 probes `0x02062000` |
+| hull, both | Sol 2 (`hd-sol2-bay/sol2dump`), #616-#648 (33 draws, one livery) | the same two programs | the same words unit for unit |
+| mine, bomb | Talon's Junction, `gantry-w1` #640-#649 (two sets of five: body, emissive, beacon, rays, halo) | `hd_mine`, `hd_bomb`, `hd_mine_beacon[_rays]`, `hd_*_halo` (full matches, one weapon each) | u0 `0x02063e80`, u1-u2 shadow `0x02022000`, u3-u5 probes `0x02062000` |
+| weapon pad, speedup pad | `gantry-w1` #155, #156, #159, #163, #236; `sol2dump` #551, #562, #563, #567 | `weapon_pads` / `speedup_material` (the program is shared with two other materials: **inferred**) | u0-u4 (u5) `0x02063e80`, the shadow unit `0x02022000`, the probe `0x02062000` |
+| scenery prop | every main-pass draw whose program matches a circuit material (floor, wall, glass and prop chunks are not told apart by program) | the circuit's `.rcsmaterial`s | every material texture `0x02063e80` |
+| opponent hull | three craft in one frame (a pack; `u0` three liveries, 25, 26 and 34 draws) | the same programs | u0 and u1 `0x02063e80` on all three |
+| wreck | not on screen in any stored frame | `glass_texture_wrecked` has one 12-instruction prefix hit (4 draws), no full match | **not measured** |
+
+- **The pattern is a role, not a class.** Over the 11 listed frames' main-colour-target draws (the ten with a craft and
+  Vineta K), 22,658 unit binds read `0x02063e80`, 3,912 read `0x02062000` and 1,726 read `0x02022000`; every bind that is not
+  `0x02063e80` is a probe (formats `0x8529`/`0xa52a`, address word `0x60730303`; 33 more on `0xa429`) or a shadow map (`0xb229`,
+  `0xa129`). So every unit bound to a material texture (livery, normal, specular map, emissive, mask)
+  reads `0x02063e80`. The units that do not are exactly the render targets: the shadow maps `0x02022000` (linear, no mip, so
+  a bias is moot) and the IBL probes `0x02062000` (bias 0). That is the same split the track's glass shows
+  ("Claim B" above), and ours already leaves the probe `textureSampleLevel` reads at 0.
+- **Scenery props are already biased.** A circuit's `.rcsmodel` is one scene; its props, floor, wall and glass chunks are the
+  one `track_model`, which has carried the bias since 2026-10-27. The pads (`pads::ps3_pad_models`), the hulls, the mine and
+  the bomb were built apart from it and kept 0.
+- **Counts across frames** (10 hull frames, each its own capture; the scratch dumps are not citable, the recipe is
+  above): a hull's livery unit `0x02063e80` on 10 of 10 frames (Sebenco Climb, Talon's Junction, Sol 2, The Amphiseum and
+  three whose circuit the dump does not name; Talon's is named by the circuit's own materials matching 365 of the frame's
+  454 programs), the normal map on every frame whose hull draws the
+  specular variant. The mine and bomb: one frame (`gantry-w1`); `bomb-blast` holds no fragment-program dumps, so its draws
+  cannot be named. The pads: five frames, but only by an ambiguous program.
+- **Confidence** (`docs/reverse-engineering/confidence-rubric.md`): hull livery and normal **90** (10 frames, 4 named
+  circuits, a full or 12-instruction program match, and the filter word is the game's own pushbuffer word); opponent hull
+  **85** (one frame, three craft); mine and bomb **70** (one frame); pads **60** (the program is shared, the draw is not
+  tied to the material by anything but its program and its place in the frame); scenery props **85**; wreck **unknown**.
+
+**Wired** (`oag_raceplay::load::lod_bias`, called from `load` through `Looks::material_lod_levels()`): the bias goes onto
+`Loaded::liveries[*].hull`, `mine_model` and `bomb_model`. **The pads are not wired**: the tally above says every material
+texture bind reads the word, but no stored frame shows a pad on screen and the program match is shared, so the item stays at
+confidence 60 and below the bar for an implementation; a frame with a pad in it closes it. A title whose rule is unread
+(Pulse, Pure, Omega, 2048) passes 0 and changes nothing. Left at 0 because this census did not read them: the pads, the sky, shadow
+hulls, the shield, absorb, leach, flare, boost and wreck models (several are `oag_fx::hull_overlay`'s), and the rocket, cannon,
+plasma and leach-ball models. The shader needed nothing: the hull's albedo, normal and pad reads already go through
+`material_sample` in `shade.wesl`, which is why setting the field is enough.
+
+**Acceptance: none was reachable, and the box below is a no-regression check.** The Sol 2 hull is near and magnified, so its
+mip level is already about 0 and a -1.5 bias is clamped; the box could not move by construction (and its fine ratio went away
+from the original, 1.035 to 1.044, by noise). The bias shows on minified surfaces (a distant opponent), and the only pair with
+one, `hd-race/talons-pack`, is not pose-aligned (its two sides fly different lines), so no far-hull box was measured. The no-regression box is the hull on `hd/sol-2` (450x305 at (740, 595) of the 1920x1080 pair; our side re-rendered on a copy,
+`compare-rerender-ours`'s `rerender`, before and after the wire; `scripts/texture-sharpness.py`'s two bands on that box
+alone, since the script skips the craft):
+
+| Hull box | fine band ours/original | mid band | mean abs grey difference | rmse |
+| --- | ---: | ---: | ---: | ---: |
+| bias 0 | 1.035 | 1.054 | 6.46 | 0.0616 |
+| bias -1.5 | 1.044 | 1.056 | 6.39 | 0.0617 |
+
+The whole-frame mean grey moved 4.78 to 4.78 and the box by 0.07 grey: no regression. It is wired because the original's
+request is measured, not because this picture needs it. On the pack pair the wire moved the whole frame by 0.01 grey; its
+player hull box (260x256) fine ratio 0.675 to 0.744 reads the near hull against an original with the autopilot's lightning
+over it and is not a number to cite.
+
+**Omega and 2048: not checkable here, with a reason.** Omega's `.rcsmaterial` sampler entries carry a state word (`+0x20`,
+mostly `0x522800`, [omega-status.md](../formats/omega-status.md), "The material uniform and sampler table") whose meaning is
+unread, and HD's sampler record is `(name hash, texture unit)` only ([rcsmaterial.md](../formats/rcsmaterial.md)), so the word
+has no HD counterpart to calibrate it against. The sampler descriptor itself is built at runtime in `eboot.bin`; locating that
+builder is reverse engineering beyond this lane (headless Ghidra would do it). 2048's Vita sampler words are unread for the same
+reason. Both stay `Rule::UNREAD`. Open next step: decode `+0x20` (a census of its values per material class, hulls against
+track) and find the descriptor builder.
 
 ## Anulpha's missing start-grid glow is the bloom chain's strength, not a material (2026-10-27, `hd-bloom-deficit`)
 
@@ -1481,7 +1564,7 @@ at its two taps (the first downsample and the resolve), so opaque surfaces round
 unchanged (a 400x300 opaque box of `hd/talons` is identical to the decimal). Tests:
 `oag-fx::it encoded_blend` (a grey flash lifts `0.2, 0.5, 0.8` by `0.3` each, encoded, and by
 `0.3^2.2` stored as computed), `oag-post hd_bloom::tests::an_encoded_scene_resolves_as_the_light_it_encodes`,
-`oag-render::it hd_holo_billboard_lit_path::on_the_race_target_the_taps_are_decoded_before_the_overlay`,
+`oag-mesh::it hd_holo_billboard_lit_path::on_the_race_target_the_taps_are_decoded_before_the_overlay`,
 `oag-hd effects::tests::hd_blends_encoded_and_an_unread_title_does_not`.
 
 Whole-frame mean grey difference against the cold originals (the compare page's metric,
@@ -1701,7 +1784,8 @@ coverage trees moved to the cutouts. `mesh_render::build` then builds a culling 
 prepass, shaded half, default and per-reference cutout pipelines with `cull_mode: Some(Face::Back)`) for a model that
 records material state and has a culled opaque or cutout draw, and `Drawable` switches between the two only when a draw's
 flag changes. The blended pipelines already keyed on `culled`. A bit-4-clear material stays two-sided. Pulse's `.vex`
-models carry `culled` and no material state and keep the model-wide `cull_back`, so nothing moved there. The prepass's depth
+models carry `culled` and no material state and keep the model-wide `cull_back`, so nothing moved there
+(a Pulse circuit's batches cull through `Model::per_batch_cull` instead, [batch-cull.md](batch-cull.md)). The prepass's depth
 half culls exactly as the shaded half (a slab drawn two-sided into depth would hold back the culled shading behind it).
 Shadow passes are unchanged: `shadow/map.rs` and `self_shadow.rs` carry their own measured cull choices. The
 `reversed_indices` buffer reverses triangle order, not the vertices of a triangle, so winding survives.
@@ -2005,3 +2089,119 @@ measured on two** (confidence 85 for the law, 70 for "starts at world load": inf
   from RAM afterwards: their capture waits are unrecorded, so they must be re-made cold with this script.
 - **Omega / 2048**: not checked. Omega's front end and tables are HD's, but its `MeshImporter` advance was not located
   in its eboot (`eboot.elf` in Ghidra); open.
+
+## The texture unit's decode is the sRGB curve (2026-11-10, `hd-contrast`)
+
+**Claim**: "ours' contrast excess on HD's best race pairs comes from a named step of HD's
+post/grade/encode chain that ours does differently, and with that step matched the per-channel
+stddev bias (ours minus theirs) is under 0.3 grey on all four pairs, with each pair's whole-frame
+mean grey falling." **The step is named and wired, the mean grey falls on all four (and on all 14
+HD race pairs), and the stddev threshold holds on one pair of four**: the bias fell by 55 to 100 %
+and two pairs keep +0.4 to +0.7. So the claim as worded is **false on the threshold, true on the
+cause**.
+
+**The step.** Ours decoded every gamma-authored texel (albedo, glow, the holographic taps) with a
+`2.2` power and encoded the final frame with the piecewise sRGB curve. The original's texture units
+(gamma nibble 7, "Claim B: the sampler") decode with the sRGB curve and its packer encodes with the
+same one, so a lit texel goes through one curve both ways. `srgb_encode(a^2.2)` against `a` is 8
+levels darker at level 12, equal near level 96 and 1.5 brighter at level 160: darker darks and
+brighter brights, which is a wider spread at an unchanged mean. Confidence 85 for the reference
+frames (below); the console's own unit is the same documented sRGB decode, not watched.
+
+**Evidence.**
+
+1. *Not sharpness, not the dynamic scene width.* The stddev bias survives a Gaussian blur of the
+   pair: `hd/talons` +1.00, +1.12, +1.14 unblurred and +1.15, +1.31, +1.38 at sigma 32;
+   `hd/chenghou-project` +1.16, +0.97, +0.70 and +1.12, +0.78, +0.51. A narrower, upscaled
+   original would lose its excess under a blur.
+2. *It follows the pixel's level, not its surround.* Binned by the symmetric level
+   (`(ours + theirs) / 2` at sigma 4) and by the surround (sigma 80), ours minus theirs is -1.5 to
+   -4.5 under level 32 and +1 to +2.6 above level 96 in every surround column of all four pairs.
+3. *One curve on all pairs.* Rank-matched transfer (the level theirs holds at the rank of ours'
+   level), median over the 13 time-trial pairs: theirs is +2.0 at ours' level 4 to 12, +0.3 at 32,
+   -0.8 at 96, -1.8 at 160 to 192. A shared curve is the chain, not a circuit's lighting.
+4. *The original's resolve is an identity.* One cold boot at 1280x720, Resolution Scale 100,
+   the comparison profile otherwise, Talon's Junction at rest after GO: the scene target
+   (`0x40cc0000`, 1280x720 `A8R8G8B8`) and the screenshot of the same pause, over the 10 % of
+   pixels that are smooth and outside the HUD, final minus scene by scene level: -0.25 to +0.01
+   from level 4 to 128 on G (n = 785 to 30,196 per band), +0.70 at 128 to 160 and +3.0 at 160 to
+   192 (the bloom). So nothing after the scene lifts the darks, and the difference is in the scene.
+5. *RPCS3's two curves, read.* `RSXFragmentPrologue.glsl`: `srgb_to_linear` is
+   `cs / 12.92` below `0.04045` and `((cs + 0.055) / 1.055)^2.4` above, applied by
+   `_process_texel` (`RSXFragmentTextureOps.glsl`) to each channel whose gamma bit is set, after
+   the sampler's filter; `linear_to_srgb` is the inverse, applied by `RSXROPEpilogue.glsl` under
+   `_ENABLE_FRAMEBUFFER_SRGB`. Its video-out pass adds nothing at `Use full RGB output range:
+   true`, and item 4 shows the frame leaves the chain as the scene went in. So the emulator's
+   output path is ruled out as the cause.
+6. *A second sighting already in the tree.* The 5-6-5 advert card's red reads 0.267 live against
+   0.281 through the sRGB decode and 0.139 through the power
+   ([start-gantry.md](start-gantry.md), "The card is 5-6-5 in linear light").
+7. *The prediction held.* Written before the render: with the decode swapped, the dark end of the
+   transfer goes to zero and no pair's mean grey rises. Table below.
+
+**Wired.** On HD's scene (`SceneStore::Encoded`) `decode` in
+`crates/shader-check/shaders/target.wesl` is `srgb_decode`, its new inverse `encode` serves the
+values `shade.wesl` builds in the gamma domain and decodes later (the water, wave and holographic
+pictures, the mag-strip glow), `target_out` / `target_in` and `hd_bloom.wesl`'s `scene_tap` are
+the same curve, and the 5-6-5 card stores with it. Every other title's path is unchanged: both
+Omega pairs and the three 2048 pairs render byte-identical. Tests:
+`oag-post hd_bloom::tests::a_dark_encoded_scene_value_resolves_to_itself` (stored level 41
+resolves to 41; with the power decode it resolves to 37) and
+`oag-mesh::it hd_holo_billboard_lit_path::on_the_race_target_the_taps_are_decoded_before_the_overlay`
+(0.152 stored; the power gives 0.173).
+
+**Before and after**, ours re-drawn on copies of the stored pairs (1920x1080, Resolution Scale 100
+originals); stddev bias is ours minus theirs per channel, PIL `ImageStat`:
+
+| pair | mean grey | RMSE | edge corr | stddev bias R G B, before | after |
+| --- | --- | --- | --- | --- | --- |
+| `hd/chenghou-project` | 2.87 -> 2.57 | 0.0305 -> 0.0301 | 0.40 -> 0.40 | +1.16 +0.97 +0.70 | +0.50 +0.49 +0.39 |
+| `hd/vineta-k` | 2.92 -> 2.76 | 0.0345 -> 0.0340 | 0.44 -> 0.43 | +0.62 +0.32 +0.25 | -0.20 -0.29 -0.38 |
+| `hd/talons` | 3.49 -> 3.00 | 0.0362 -> 0.0356 | 0.43 -> 0.43 | +1.00 +1.12 +1.14 | -0.06 -0.00 +0.13 |
+| `hd/talons-assegai-c1` | 3.65 -> 3.07 | 0.0395 -> 0.0380 | 0.43 -> 0.43 | +1.46 +1.59 +1.61 | +0.44 +0.55 +0.68 |
+| `hd/anulpha-pass` | 3.90 -> 3.79 | 0.0440 -> 0.0438 | 0.43 -> 0.43 | +0.17 +0.10 +0.39 | -0.28 -0.25 +0.13 |
+| `hd/metropia` | 6.01 -> 5.68 | 0.0622 -> 0.0615 | 0.42 -> 0.42 | +2.41 +2.71 +1.64 | +1.88 +2.26 +1.03 |
+| `hd/moa-therma` | 7.04 -> 6.88 | 0.0567 -> 0.0563 | 0.43 -> 0.43 | +0.57 -0.12 +0.09 | -0.74 -1.11 -0.87 |
+| `hd/modesto-heights` | 5.57 -> 5.40 | 0.0558 -> 0.0553 | 0.41 -> 0.41 | +1.15 +1.07 +0.75 | +0.73 +0.59 +0.09 |
+| `hd/sebenco-climb` | 5.65 -> 5.11 | 0.0540 -> 0.0534 | 0.39 -> 0.39 | +2.65 +1.82 +0.04 | +1.81 +0.98 -0.82 |
+| `hd/sol-2` | 4.65 -> 4.50 | 0.0545 -> 0.0545 | 0.43 -> 0.43 | -0.03 -0.12 +0.05 | -0.42 -0.45 -0.34 |
+| `hd/tech-de-ra` | 5.90 -> 5.41 | 0.0511 -> 0.0505 | 0.44 -> 0.44 | +1.48 +1.75 +1.54 | +0.26 +0.53 +0.19 |
+| `hd/the-amphiseum` | 4.97 -> 4.67 | 0.0540 -> 0.0534 | 0.43 -> 0.43 | +1.01 +0.67 +1.25 | +0.43 +0.17 +0.79 |
+| `hd/ubermall` | 4.33 -> 3.79 | 0.0378 -> 0.0369 | 0.45 -> 0.45 | +1.06 +1.47 +0.72 | -0.04 +0.28 +0.07 |
+| `hd-race/talons-pack` | 47.93 -> 47.60 | 0.2700 -> 0.2694 | 0.01 -> 0.01 | -7.67 +2.00 -7.11 | -8.05 +1.63 -7.25 |
+
+No pair's mean grey or RMSE rose. Three pairs' spread moved through zero to the other side
+(Moa Therma -0.74 to -1.11, Sol 2 about -0.4, Vineta K -0.2 to -0.4): those carried an opposite
+term the power decode had been hiding (Moa Therma's is its road grime, "Moa Therma's road" above).
+The rank-matched transfer after the change, median over seven pairs: +0.2 to +1.0 under level 16,
+within 0.3 from 32 to 96, -0.5 to -1.0 above 128. By eye at the page's size the change is a slight
+lift of the deepest shadows, nothing else.
+
+**Left, named.**
+
+- **The adaptation's encode is still the `2.2` power** (`fs_reduce_first`). The bytes the
+  original averages are sRGB-encoded, so the same curve belongs there; tried, it raises the bloom
+  on the circuits whose fade is not saturated: Anulpha Pass mean bias -0.13, -0.66, -1.43 to
+  +0.43, -0.04, -0.83 with mean grey 3.79 to 4.09, Chenghou 2.57 to 2.61, Metropia 5.68 to 5.79,
+  the other eleven within 0.05. Not shipped: the mean bias and the mean grey disagree, and the
+  adapted value was not read off the original in this lane.
+- **Three CPU-side encodes still use the power** and are shared with Omega and 2048:
+  `sky_cube::tint_in_texel_domain`, `rcs::picture_tint::tinted`, `rcs::skin::raw_to_texel`. Each
+  writes a value the shader's `decode` reads back. On HD the round trip is now off by under 1.5
+  levels above linear 0.05 and by up to +39 % in linear light under 0.01 (`raw_to_texel(0.01)`).
+- **Chenghou and the Assegai pair keep +0.4 to +0.7** of spread, and Metropia and Sebenco +1 to
+  +2.3; not a shared curve any more (the transfer is flat), so per circuit.
+
+**Cross-title.**
+
+- **Omega: checked, applies, not wired.** Its textures are `ChannelType::Srgb` GNFs
+  ([gnf.md](../formats/gnf.md)), which the PS4's sampler decodes with the sRGB curve, its lightmap
+  atlases are UNORM, and its scanout encode is the sRGB curve
+  ([tonemap.md](../ghidra/functions/ps4-omega-eu/tonemap.md), "The output encode"); ours decodes
+  its texels with the `2.2` power. Tried with the decode swapped on Omega's scene: `omega/anulpha-pass`
+  mean grey 33.00 to 31.95 (mean bias -9.9, -15.9, -11.8 to -8.4, -13.7, -10.2), `omega/vineta-k`
+  28.36 to 27.94. Not wired: a per-texture channel-type census has not been run, and the pairs'
+  error is dominated by other terms.
+- **2048: checked, differs.** Its lit programs decode a texel by squaring it and the composite's
+  square root is the encode ([exposure.md](../ghidra/functions/vita-2048-eu-v104/exposure.md)):
+  already one curve both ways, and no hardware sRGB unit is involved.

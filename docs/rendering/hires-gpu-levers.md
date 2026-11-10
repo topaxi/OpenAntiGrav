@@ -446,3 +446,171 @@ into still tiles). Counted with a marker colour on that branch (diagnostic, not 
 (160 km/h), 600, 1200, 1800 (a full-speed corner), 2500 and 3000, against 75 % on the stationary
 grid at tick 60. In a race every neighbourhood moves, so a skip saves nothing; prediction 0 ms,
 not implemented.
+
+## The present composite's two dead `pow` (2026-11-10, `wesl-items`)
+
+`upscale.wesl` runs once per presented frame in `resolve_scene` (the blit into the presentation
+target) and once in `composite` (the graded copy to the surface), both over every output pixel.
+Before, `fs_main` evaluated `srgb_decode` (three scalar `pow` a channel) for every pixel and threw
+it away with a `select`, because `decode` is 0 on every real call site (ADR-0020 forces a non-sRGB
+target, so the sampler or the pass before it has already decoded), and it raised the colour to
+`grade.exponent` with a `pow` that is the identity at the neutral gamma.
+
+**Result.** The decode sits behind `if grade.decode > 0.5` and the `pow` behind
+`if grade.exponent == 1.0 { return ... }`. Pictures are byte-identical on both GPUs
+(`cmp`, below); at a non-neutral grade the `pow` still runs.
+
+GPU time of the pass, `Rgba8Unorm` target, microseconds, median of 4 interleaved processes of 95
+timed runs each (`before` is `main` at `5feb0a961`; host load 1.7 to 2.9; **desktop GPUs, not the
+Deck**). Intel is the Arrow Lake iGPU under Mesa ANV (the Deck proxy), NVIDIA the RTX PRO 2000
+Blackwell laptop dGPU:
+
+| Pass, output size | Intel before | Intel after | NVIDIA before | NVIDIA after |
+|---|---|---|---|---|
+| `resolve_scene` 1280x800 | 108.1 | 82.5 (-24 %) | 15.4 | 10.8 (-30 %) |
+| `resolve_scene` 1920x1080 | 202.7 | 147.8 (-27 %) | 32.7 | 22.3 (-32 %) |
+| `resolve_scene` 3840x2160 | 725.1 | 529.6 (-27 %) | 131.1 | 91.8 (-30 %) |
+| `composite` 1280x800 | 116.3 | 88.7 (-24 %) | 16.6 | 10.6 (-36 %) |
+| `composite` 1920x1080 | 206.0 | 149.2 (-28 %) | 34.3 | 21.4 (-38 %) |
+| `composite` 3840x2160 | 756.0 | 528.0 (-30 %) | 140.6 | 90.0 (-36 %) |
+
+A presented frame runs both passes, so at a 4K output the saving is about 0.42 ms a frame on the
+Intel iGPU and 0.09 ms on the NVIDIA dGPU. The scout's estimate was 0.2 to 0.5 ms on the Deck;
+the Deck measures more than that, below.
+
+**On the Deck (2026-11-10, `deck-remeasure`).** `RADV VANGOGH`, AC, `powersave`, load 0.6 to 1.7,
+HD Anulpha Pass, `--presented --ticks 60 --render-scale 100`, the throwaway timer below on both
+arms, `dist` `znver2` builds of `59900b483` with and without this change's `upscale.wesl`. Arms
+interleaved, 3 rounds, median of the 95 timed runs per process, us; the rounds agree within 0.5 %.
+Method:
+[frame-thread-cpu.md](frame-thread-cpu.md), "Four desktop GPU cuts on the Deck".
+
+| Pass, output size | before | after |
+|---|---|---|
+| `resolve_scene` 1280x800 | 141.8 | 65.2 (-54 %) |
+| `resolve_scene` 1920x1080 | 303.5 | 135.4 (-55 %) |
+| `resolve_scene` 3840x2160 | 1178.2 | 513.2 (-56 %) |
+| `composite` 1280x800 | 156.0 | 70.6 (-55 %) |
+| `composite` 1920x1080 | 306.8 | 135.4 (-56 %) |
+| `composite` 3840x2160 | 1193.2 | 515.6 (-57 %) |
+
+Both passes run each presented frame, so the Deck saves 0.16 ms at 800p, 0.34 ms at 1080p and
+**1.34 ms at a 4K output**. That is more than twice the scout's top estimate and three times
+the Intel iGPU's saving.
+
+**The Deck's picture is not byte-identical.** Same two builds, `cmp` of the `--presented`
+screenshots: 452 of 1,024,000 pixels differ at 800p, 59 of 2,073,600 at 1080p and 387 of 8,294,400
+at 4K, **every one by 1 of 255** (spread over the whole frame), identical across three runs of
+each build. NVIDIA and Intel gave byte-identical frames (above). The likely cause is the skipped
+`pow(x, 1.0)`, which RADV evaluates as `exp2(log2(x))` with the hardware's approximate
+instructions, so the old picture carried a one-level rounding error the new one does not; the cause
+was not isolated. 0.004 % of the pixels by 1 level is invisible; it matters only to a test that
+compares a Deck capture byte for byte against one taken before this change.
+
+**The form of the `pow` skip matters on Intel.** Three shapes of the same arithmetic, Intel 4K,
+`resolve_scene` / `composite`: decode skipped and the `pow` left in 644.7 / 667.5; `var graded =
+clamp(..); if exponent != 1.0 { graded = pow(..) }` **695.0 / 715.5 (slower than leaving the `pow` in)**;
+the early return that landed 529.6 / 528.0. NVIDIA does not tell the three apart (4K `composite`
+89.4, 86.6, 90.0). The shape is a code generation choice of the driver compiler, so a change here is
+timed on a second vendor.
+
+**Picture.** `cmp` of `--presented` captures, Pulse and HD, before against after: 1280x800, 3840x2160,
+1920x1080 with `--reconstruction fsr1 --render-scale 67`, 1920x1080 with `fxaa`, a 4K capture with
+`[display] brightness = 110, gamma = 130` (integers; a string value is ignored with a warning, and
+the capture is then silently neutral, which is how a first attempt proved nothing), and a plain
+non-presented capture. All byte-identical on NVIDIA and on Intel, so `exp2(log2(x))` and the skipped
+`pow` agree on these frames. The `decode` arm is reached by no real call site; the existing sRGB
+tests in `upscale/tests.rs` cover it. The new test
+`the_neutral_grade_is_exact_and_a_gamma_off_neutral_follows_its_curve` pins the neutral levels
+exactly and a gamma of 60 and 140 against the CPU curve.
+
+**Method (throwaway, not committed).** The present crate has no GPU span for these two passes and
+the HUD has none either. A static `QuerySet` that `present_view` and the UI renderer's frame pass
+put in their `timestamp_writes`, and a loop in `race_capture.rs` that re-encodes the pass 100
+times, each submit waited for, read the pairs back. Each reading is the pass's own GPU time, not a
+serialised wall time.
+
+### Zone textures, 9 fetches to 3: flat on the desktop, 6 to 7 % on the Deck, landed
+
+`zone_sample` and `zone_glow` fetch the track and scene textures at both layers and `select`. Two
+rewrites were built and timed: the layer picked with a per-lane `select(1i, 0i, inside)` (a
+fetch each for the track and scene texture), and that plus a flat branch on `zone_is_track(slots)`
+(one fetch). Neither paid on the desktop GPUs; the Deck run below reopened the second, which
+landed.
+
+- **Picture.** NVIDIA: byte-identical on five HD frames (four of them Zone) and on a Pulse Zone frame. Intel: **39 to 123 pixels of
+  1 to 2 million differ by one or two levels** on all four HD Zone frames (ticks 1260, 1350, 1500;
+  with and without `--zone-spectrum-test`), so the rewrite is not byte-identical there. The cause was not
+  determined (a per-lane layer at the sphere boundary, or the driver re-scheduling the lighting
+  arithmetic around the fetches, are both open). The differing pixels sit in one blob mid-frame, e.g.
+  x 531 to 758, y 442 to 684 at tick 1260 (1280x800) and x 739 to 1066, y 493 to 809 at tick 1500
+  (1920x1080); the two rewrites differ from `before` identically.
+- **Time.** An upper bound was built to see whether the fetches matter at all: a binary whose
+  `zone_sample` and band fetch return a constant (wrong picture on purpose), HD Talon's Junction, tick
+  1500, `OAG_RENDER_GPU_BENCH=100`, `track solid, shaded`, median of process medians, microseconds:
+
+  | | before | rewrite (flat branch, except where stated) | no Zone fetches (bound) |
+  |---|---|---|---|
+  | NVIDIA 1280x800 | 599 | 605 | 602 |
+  | NVIDIA 1920x1080 | 552 | 545 | 543 |
+  | NVIDIA 3840x2160 | 2165 | 2061 (-4.8 %) | 1959 (-9.5 %) |
+  | Intel 1280x800 | 2504 | 2270 (-9 %) | 2099 (-16 %) |
+  | Intel 1920x1080, batch of 8 | 3232 (spread 2911 to 4261) | 2887 (-11 %, layer select only) and 3368 (+4 %, flat branch) | |
+  | Intel 1920x1080, bound batch of 5 | 3045 (spread 2443 to 4045) | | 2824 (-7 %) |
+  | Intel 3840x2160 | 4790 (2 runs) | 4944 | 5507 (spread 3772 to 7241) |
+
+  Removing every Zone fetch moves NVIDIA by 0 % at 800p and 1080p and 0.2 ms at 4K. The Intel iGPU
+  swings 30 % between processes at the same size (clock state), more than any step here, and its
+  1080p and 4K rows do not order. The "about a fifth of the race pass" comment in `shade.wesl` was
+  read on an integrated GPU before the folds; the nine fetches are cached, small textures, and the
+  pass is bound by other things now. The 0.3 to 2 ms the scout estimated is not there on these two
+  GPUs, and the picture is not identical where it was tried (Intel). The Deck is below.
+
+**On the Deck (2026-11-10, `deck-remeasure`).** `RADV VANGOGH`, AC, `powersave`, load 0.4 to 1.6,
+HD Talon's Junction in Zone mode (`--mode zone --zone-spectrum-test`, tick 1500, `--render-scale
+100`, `OAG_RENDER_GPU_BENCH=100`), `dist` `znver2` builds of `59900b483` with and without the
+flat-branch rewrite (the layer a per-lane `select`, a branch on the chunk's flat track bit, one
+fetch in `zone_sample` and one in `zone_glow`). Arms interleaved, 6 rounds (3 for the first
+batch, then 3 more for 4K), medians of the 100 redraws, us. Method:
+[frame-thread-cpu.md](frame-thread-cpu.md), "Four desktop GPU cuts on the Deck".
+
+| Span | 800p before / after | 1080p before / after | 4K before / after |
+|---|---|---|---|
+| `track solid, shaded` | 2014 / 1864 (-7.4 %) | 3525 / 3323 (-5.7 %) | 8187 / 8131 (-0.7 %, noise) |
+| race pass | 4188 / 4023 (-3.9 %) | 7602 / 7342 (-3.4 %) | 18650 / 18937 (+1.5 %, noise) |
+
+At 800p and 1080p all six rounds order the same way (before 1995 to 2038 us against after 1848 to
+1893 at 800p; before 3517 to 3532 against after 3320 to 3331 at 1080p), a saving of 0.15 and 0.20
+ms on the Deck's frame, where the NVIDIA bound found nothing at these sizes and Intel showed 0.23
+ms at 800p. The 4K row is not resolved: the Deck's 4K Zone rows swing 10 to 19 % between rounds (the
+paired deltas run -1154, +235, -58, -37, +638, -167 us), more than the saving, as "The Deck's 4K
+rows are unstable" says. The Deck's own 4K output is drawn at about 1906x1080
+(`GAMESCOPE_PIXEL_BUDGET`), so the 1080p row is the nearer to what a player gets.
+
+**The Deck's picture is byte-identical.** `cmp` (`md5sum`) of the screenshots of the two builds,
+HD Talon's Junction at ticks 1260, 1350 and 1500, each with and without `--zone-spectrum-test`, at
+1280x800 and 1920x1080 (12 frames), the tick 1500 spectrum frame at 3840x2160 in six rounds, and
+Pulse's Zone-mode frame (tick 2400) with and without the spectrum test at both sizes (4 frames,
+which hash the same with and without the test, so they add little): every one equal, so the Intel difference (39 to 123 pixels by 1 to 2 levels) is the Intel driver's, not
+the rewrite's arithmetic on RADV. The frames are real Zone frames (the Zone grid and glow are
+drawn; the spectrum test changes tick 1350 and 1500, not 1260). NVIDIA was byte-identical too.
+**Landed** as the flat-branch form: the Deck is the device this pass costs most on, both reopen
+conditions held (a saving beyond the round spread, a byte-identical Deck picture). It is not
+byte-identical on the Intel iGPU, where up to 123 of 1 to 2 million Zone pixels change by 1 or 2
+levels.
+
+### HUD fetches, 4 to 1: closed, flat
+
+`ui.wesl`'s `fs_main` fetches the glyph atlas, sprite sheet, face atlas and buttons atlas for every
+fragment. A version that branched on the flat `mode` (with `@diagnostic(off, derivative_uniformity)`)
+compiled and was timed on the real race HUD, presented, tick 200, GPU time of the UI frame pass (the
+sum of its passes), microseconds, median of 3 processes of 95 timed runs:
+
+| | Pulse 800p | Pulse 1080p | Pulse 4K | HD 800p | HD 1080p | HD 4K |
+|---|---|---|---|---|---|---|
+| Intel before / after | 72.7 / 69.4 | 108.2 / 107.4 | 319.1 / 319.4 | 94.2 / 87.0 | 151.0 / 143.4 | 429.6 / 439.2 |
+| NVIDIA before / after | 8.5 / 8.6 | 13.2 / 14.1 | 41.6 / 42.0 | 10.5 / 10.9 | 17.4 / 17.4 | 59.8 / 59.9 |
+
+The whole HUD pass is 0.32 to 0.43 ms on the Intel iGPU at 4K and 0.04 to 0.06 ms on NVIDIA, so even
+a free HUD cannot reach the scout's 0.05 to 0.3 ms; the change moved it by -7 to +10 microseconds in
+both directions. Reverted. Pictures were not compared, since nothing landed.

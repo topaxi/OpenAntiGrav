@@ -252,6 +252,12 @@ impl Race {
             &*self.sim.collision,
             self.sim.weapons.as_deref(),
             &self.sim.class,
+            match self.sim.blast_push {
+                oag_title::weapons::BlastPush::Posted => oag_weapons::projectile::BlastPush::Posted,
+                oag_title::weapons::BlastPush::Immediate => {
+                    oag_weapons::projectile::BlastPush::Immediate
+                }
+            },
             damage_rules,
             &mut hits,
         );
@@ -553,6 +559,7 @@ impl Race {
             self.advance_leach_strip();
             self.advance_rocket_smoke();
             self.advance_missile_smoke();
+            self.advance_wingtip();
         }
 
         // Beside them for the same reason: a Repulser's wave sweep reads every

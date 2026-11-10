@@ -91,23 +91,6 @@ impl Reason {
     }
 }
 
-/// The pack-shuffle level (`0` Easy, `1` Medium, `2` Hard) a race with no
-/// campaign rung flies at, from the `[ai] difficulty` the race box carries.
-///
-/// **Chosen, not measured.** The original's level exists only as the
-/// campaign's three rungs; this project's four named difficulties have no
-/// original counterpart, so Novice is the easy rung, Ace the hard one, and
-/// the default (Elite) and Skilled sit on Medium so an untouched race box
-/// flies the rung a campaign cell with none authored does.
-#[must_use]
-pub const fn free_level(difficulty: oag_ai::Difficulty) -> usize {
-    match difficulty {
-        oag_ai::Difficulty::Novice => 0,
-        oag_ai::Difficulty::Skilled | oag_ai::Difficulty::Elite => 1,
-        oag_ai::Difficulty::Ace => 2,
-    }
-}
-
 /// The rules: `opponents` is whether the grid holds any, `humans` how many
 /// slots a person drives.
 #[must_use]
@@ -135,7 +118,7 @@ pub fn decide(choice: AiChoice, opponents: bool, humans: usize, source: Source) 
         Source::Event2048(None) => Decision::Ours(Reason::EventWithoutAi),
         Source::Free(difficulty) => Decision::Original {
             skill: None,
-            level: free_level(difficulty),
+            level: difficulty.level(),
             event: None,
         },
     }

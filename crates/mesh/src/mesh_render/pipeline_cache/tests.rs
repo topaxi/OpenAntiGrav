@@ -91,6 +91,7 @@ pub(in crate::mesh_render) fn triangle_model() -> Model {
         shield_shell: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
+        per_batch_cull: false,
         alpha_test_ref: None,
         centre: [0.0, 0.0, 0.5],
         radius: 2.0,
@@ -342,11 +343,12 @@ fn zoned_compiles_the_recolour_out_only_outside_a_zone_race() {
 }
 
 /// A PS3 model whose draw carries `culled` gets the culling twin of the opaque,
-/// prepass and cutout pipelines; a model without material state (Pulse's
-/// `.vex`, which authors `culled` on most batches) and one with no culled draw
-/// do not, so those stay on the model-wide `cull_back` and nothing else changes.
+/// prepass and cutout pipelines, and so does a `.vex` model whose loader said to
+/// honour its batches' own bit (`Model::per_batch_cull`); a `.vex` model left at
+/// the default and one with no culled draw do not, so those stay on the
+/// model-wide `cull_back` and nothing else changes.
 #[test]
-fn only_a_model_with_state_and_a_culled_draw_builds_the_culling_twin() {
+fn only_a_model_with_state_or_batch_cull_and_a_culled_draw_builds_the_culling_twin() {
     let Some((device, queue)) = device() else {
         eprintln!("no GPU adapter: skipping");
         return;
@@ -356,8 +358,20 @@ fn only_a_model_with_state_and_a_culled_draw_builds_the_culling_twin() {
     model.draws[0].culled = true;
     assert!(
         build_once(&device, &queue, &model).culled.is_none(),
-        "no material state: a `.vex` model keeps the model-wide switch"
+        "no material state and no per-batch cull: a `.vex` model keeps the model-wide switch"
     );
+    model.per_batch_cull = true;
+    assert!(
+        build_once(&device, &queue, &model).culled.is_some(),
+        "a `.vex` circuit whose title honours the batch bit gets the culling twin"
+    );
+    model.draws[0].culled = false;
+    assert!(
+        build_once(&device, &queue, &model).culled.is_none(),
+        "with no culled draw there is nothing for the twin to draw"
+    );
+    model.per_batch_cull = false;
+    model.draws[0].culled = true;
     model.material_state = vec![0x10];
     assert!(build_once(&device, &queue, &model).culled.is_some());
     model.draws[0].culled = false;

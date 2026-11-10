@@ -4,6 +4,7 @@
 // texture sample tinted by the vertex colour the geometry half already
 // computed (white, faded by the disconnect linger, zeroed at both ends).
 
+import oag_shaders::colour::srgb_decode_channel;
 import oag_shaders::scene_vertex::{Uniforms, VertexInput};
 import oag_shaders::target::{linear_out, gamma_to_target, target_out};
 
@@ -56,8 +57,10 @@ override smoke: f32 = 0.0;
 // **The noise's red is decoded.** The draw's unit-0 address word reads
 // `0x60710101`: the gamma field (bits 20-22) is `7`, so the sampler decodes
 // R, G and B from sRGB before the program sees them (measured live on RPCS3,
-// 2026-10-08, `hd-leach-bright`). The program's `2 *` then scales the decoded
-// value, so the lookup is offset by about a third of what the raw byte gives.
+// `docs/ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md`, "why the strip read
+// faint, and what the live draw says"). The program's `2 *` then scales the
+// decoded value, so the lookup is offset by about a third of what the raw byte
+// gives.
 // The glow's colour is left as `decode_source` has it for every HD ribbon.
 override leach: f32 = 0.0;
 
@@ -68,13 +71,6 @@ override leach: f32 = 0.0;
 //
 // drawn `SRC_ALPHA, ONE`, so the alpha leaves here unweighted for the blend.
 override fat: f32 = 0.0;
-
-fn srgb_to_linear(value: f32) -> f32 {
-    if value <= 0.04045 {
-        return value / 12.92;
-    }
-    return pow((value + 0.055) / 1.055, 2.4);
-}
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
@@ -114,7 +110,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if leach > 0.5 {
         let u = in.texcoord.x;
         let v = in.texcoord.y;
-        let n = 2.0 * srgb_to_linear(textureSample(noise_texture, beam_sampler, vec2<f32>(u + 2.0 * in.clock, v)).r);
+        let noise = textureSample(noise_texture, beam_sampler, vec2<f32>(u + 2.0 * in.clock, v)).r;
+        let n = 2.0 * srgb_decode_channel(noise);
         let glow = textureSample(beam_texture, beam_sampler, vec2<f32>(u + in.clock + n, v));
         let facing = abs(dot(normalize(in.normal), normalize(in.view)));
         let alpha = glow.a * facing * in.colour.a * saturate(in.clip.z * 0.75);

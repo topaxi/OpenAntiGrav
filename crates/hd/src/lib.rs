@@ -138,6 +138,10 @@ pub const TITLE: &Title = &Title {
     // `{1.166, 0.033, 0, 1}` and `{1.656, 0.041, 0, 1}` on two pads of
     // `01_vineta_k`, whose material authors cyan. Every number below is read
     // out of the executable (`docs/rendering/pads.md`, "The red is a cycle").
+    wingtip: Some(&oag_title::wingtip::Wingtip::hd_lineage(
+        "/data/tex/smoke_trails_frame1_alpha.gtf",
+        oag_title::Origin::Measured,
+    )),
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Cycle(oag_title::weapon_pad::Cycle {
         // The 6 keyframes at `0x008c26a0`, 12 bytes each.
         keyframes: &[
@@ -224,6 +228,7 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Read off HD's own EBOOT: one transfer per ball trip.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
+        blast_push: oag_title::pre_race::Sourced::chosen(oag_title::weapons::BlastPush::Immediate),
         // **Chosen, not measured**: HD measures one (`LeachBeamManager_Fire`, `weapon-instance-limits.md`);
         // it takes 2048's and Omega's eight as an intended divergence (maintainer, 2026-10-31).
         leach_beams: oag_title::pre_race::Sourced::chosen(8),
@@ -291,7 +296,7 @@ pub const TITLE: &Title = &Title {
         zone_shares_one_texture: true,
         gantry_card: true,
         adverts_unlit: true,
-        card_565: true,
+        card_store: oag_title::adverts::CardStore::R5G6B5Linear,
         card_unlit: true,
         zone_gantry: Some(oag_title::adverts::ZoneGantry {
             entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",

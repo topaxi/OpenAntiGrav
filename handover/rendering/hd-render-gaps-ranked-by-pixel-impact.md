@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-05
+updated: 2026-11-10
 summary: "HD gaps by tile; 2026-11-05: 16-19% of grid score is the original being softer (unclosable), named closable items under 6 points"
 ---
 
@@ -13,9 +13,10 @@ original by pixels a player sees, so the next HD lane aims at the biggest gap.
 ## Open
 
 **Set.** 13 HD pairs under `compare-page/hd/` (Harimau classic, Time Trial start,
-1920x1080, chase cam). `talons-pack` (`hd-race/`) is excluded: its frame is a
-different moment with an imposed HUD and a warm-up exhaust path, so a per-pixel
-diff ranks nothing there.
+1920x1080, chase cam). `talons-pack` (`hd-race/`) is excluded: its stored frame was a
+different moment (confirmed 2026-11-10, `hd-talons-pack-align`; a re-made pair
+at one instant exists in `docs/tools/compare-page.md`, "A moving HD craft"), with an imposed HUD and a warm-up exhaust path, so a per-pixel
+diff ranks nothing there until it is adopted.
 
 **Method (reproducible).** For each pair, per pixel: mean abs RGB difference
 (0-255) between `theirs.png` and `ours.png`; signed luma `ours - theirs`. Tile
@@ -251,7 +252,7 @@ geometry. **Guess, not measured:** the no-LG2 stand-in specular in
 
 1. **Gantry card panels: DONE 2026-10-26 (`hd-card-panels`), partly.** The cause was the card's format, not the
    board's program: the original's card is `R5G6B5` holding linear light, so the dark red rounds to 0
-   (`oag_title::adverts::Adverts::card_565`, `SceneStore::Packed565`; `docs/rendering/start-gantry.md`, "The card is 5-6-5
+   (`oag_title::adverts::Adverts::card_store`, `CardStore::R5G6B5Linear`, `SceneStore::Packed565`; `docs/rendering/start-gantry.md`, "The card is 5-6-5
    in linear light"). Panel (teal pixels of the card mask) red bias +11.1 to +6.3 and panel error 7.34 to 6.14 on the 13
    pairs, no pair worse; card-mask error 9.77 to 9.06 (the glyph's phase is the rest). Acceptance **not met**: the panel red
    is not within +2 of the scenery's on any of the four named pairs (Chenghou +7.7, Sebenco +9.4, Vineta K +7.6, Metropia

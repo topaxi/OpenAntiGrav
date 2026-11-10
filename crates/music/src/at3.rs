@@ -163,7 +163,7 @@ pub fn decode(at3: &[u8], cache_dir: &Path) -> Result<Pcm> {
 /// none of them, and reading each one back would be 0.70 GB of PCM through
 /// memory to be dropped a line later. Returns the cache file's path.
 ///
-/// The already-cached test is the same rule [`from_s16le`] applies - not empty,
+/// The already-cached test is the same rule [`is_whole_frames`] applies - not empty,
 /// a whole number of frames - taken off the file's metadata rather than its
 /// contents, so a resumed run costs one `stat` per stream instead of one read.
 ///
@@ -203,7 +203,7 @@ pub fn is_cached(at3: &[u8], cache_dir: &Path) -> bool {
     read_format(at3).is_ok_and(|format| is_usable(&cache_path(at3, format, cache_dir), format))
 }
 
-/// The same shape rule [`from_s16le`] applies - not empty, a whole number of
+/// The same shape rule [`is_whole_frames`] applies - not empty, a whole number of
 /// frames - read off the file's metadata rather than its contents.
 ///
 /// Metadata rather than a read because the answer is wanted for all 93 streams
@@ -485,32 +485,61 @@ fn transcode_with_ffmpeg(riff: &[u8], out: &Path, format: Format) -> Result<()> 
 /// it catches the case that actually happens: an `ffmpeg` killed partway
 /// through leaves a truncated file behind, and a truncated file must be
 /// re-decoded rather than played as a shorter track.
+///
+/// The file is read through a small buffer straight into the `i16` list, whose
+/// capacity is the file's length from its metadata, so the raw bytes are never
+/// held beside the samples.
 fn read_cached(path: &Path, format: Format) -> Option<Pcm> {
-    from_s16le(&std::fs::read(path).ok()?, format)
+    let file = std::fs::File::open(path).ok()?;
+    let len = usize::try_from(file.metadata().ok()?.len()).ok()?;
+    read_s16le(file, len, format)
 }
 
-/// Turns raw little-endian `s16le` into a [`Pcm`], or `None` if it is not a
-/// whole number of frames.
-///
-/// Split from [`read_cached`] so the shape rule is testable without a
-/// filesystem - the same split `oag_game::movie::frame_at` gets from its own
-/// loop.
-fn from_s16le(bytes: &[u8], format: Format) -> Option<Pcm> {
-    let per_frame = usize::from(format.channels) * 2;
-    if bytes.is_empty() || per_frame == 0 || !bytes.len().is_multiple_of(per_frame) {
+/// Turns `len` bytes of raw little-endian `s16le` read from `source` into a
+/// [`Pcm`], or `None` if `len` is not a whole number of frames, empty, or the
+/// source ends or fails before `len` bytes.
+fn read_s16le(mut source: impl std::io::Read, len: usize, format: Format) -> Option<Pcm> {
+    if !is_whole_frames(len, format) {
         return None;
     }
-    let samples = bytes
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
-        .collect();
+    let mut samples = Vec::with_capacity(len / 2);
+    let mut chunk = [0_u8; READ_CHUNK];
+    let mut remaining = len;
+    while remaining > 0 {
+        let take = remaining.min(READ_CHUNK);
+        source.read_exact(&mut chunk[..take]).ok()?;
+        samples.extend(
+            chunk[..take]
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| i16::from_le_bytes(*pair)),
+        );
+        remaining -= take;
+    }
     Some(Pcm {
         samples,
         channels: format.channels,
         sample_rate: format.sample_rate,
     })
+}
+
+/// How many bytes [`read_s16le`] takes from its source at a time. Even, so a
+/// chunk never splits a sample.
+const READ_CHUNK: usize = 64 * 1024;
+
+/// Whether `len` bytes are a non-empty whole number of `format`'s frames.
+fn is_whole_frames(len: usize, format: Format) -> bool {
+    let per_frame = usize::from(format.channels) * 2;
+    len != 0 && per_frame != 0 && len.is_multiple_of(per_frame)
+}
+
+/// [`read_s16le`] over bytes already in memory, so the shape rule is testable
+/// without a filesystem - the same split `oag_game::movie::frame_at` gets from
+/// its own loop.
+#[cfg(test)]
+fn from_s16le(bytes: &[u8], format: Format) -> Option<Pcm> {
+    read_s16le(bytes, bytes.len(), format)
 }
 
 /// FNV-1a over the bytes, as sixteen hex digits.

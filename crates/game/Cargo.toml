@@ -144,15 +144,20 @@ oag-video = { workspace = true, features = ["av1"] }
 # The browser: wasm-bindgen glue, the WebGPU adapter request (async on the
 # web), and the console as the log sink. See docs/tools/web.md.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2.129"
-wasm-bindgen-futures = "0.4.79"
-js-sys = "0.3.106"
-web-sys = { version = "0.3.106", features = ["console", "Window", "Document", "Element", "HtmlCanvasElement", "Storage"] }
+wasm-bindgen = "0.2.130"
+wasm-bindgen-futures = "0.4.80"
+js-sys = "0.3.107"
+web-sys = { version = "0.3.107", features = ["console", "Window", "Document", "Element", "HtmlCanvasElement", "Storage"] }
 
 [features]
 # Only the web build turns this on (`just web`): the `oag_web` example below,
 # the same arrangement as `android`.
 web = []
+# Adds `fault_test` to the web module: a hook that panics, traps, overflows the
+# stack or raises a GPU error on demand, so the page's error reports can be
+# looked at in a browser (`OAG_WEB_FAULT_TEST=1 just web`, docs/tools/web.md,
+# "Troubleshooting"). Never in a published build.
+fault-test = ["web"]
 # Only the Android build turns this on (`just apk`): it is what makes the
 # `oag_android` example below exist, so a desktop `--all-targets` neither builds
 # nor links a second copy of the binary.
@@ -187,7 +192,7 @@ workspace = true
 [dev-dependencies]
 oag-testdata.workspace = true
 oag-pob.workspace = true
-zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
+zip = { version = "9.5.0", default-features = false, features = ["deflate"] }
 oag-weapons.workspace = true
 
 # The TOML Schema reference validator (`settings_schema` test). Cargo builds an

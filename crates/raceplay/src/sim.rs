@@ -396,6 +396,8 @@ pub struct RaceSim {
     pub(super) weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// When a locked LeachBeam moves energy - see [`Setup::leach_drain`].
     pub(super) leach_drain: oag_title::weapons::LeachDrain,
+    /// How a weapon blast's push reaches a craft - see [`Setup::blast_push`].
+    pub(super) blast_push: oag_title::weapons::BlastPush,
     /// How many LeachBeams may be live at once - see [`Setup::leach_beams`].
     pub(super) leach_beams: u8,
     /// How a Quake's wave reaches a craft - see [`Setup::quake_hit`].

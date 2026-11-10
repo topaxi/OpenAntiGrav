@@ -363,6 +363,7 @@ fn cube(
         shield_shell: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
+        per_batch_cull: false,
         alpha_test_ref: None,
         centre: [0.0; 3],
         radius: HALF_EXTENT * 3.0f32.sqrt(),

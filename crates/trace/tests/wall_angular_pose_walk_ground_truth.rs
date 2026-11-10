@@ -85,6 +85,7 @@ fn load() -> (CollisionWorld, Handling) {
         CLASS,
         handling::SpeedupPads::default(),
         handling::Special::default(),
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
     )
     .expect("class");
     (collision_world(&nodes), handling)
@@ -256,7 +257,12 @@ fn gates_at_the_clean_lap_redirect() {
     let _ =
         oag_physics::forces::evaluate(&mut state, &controls, &handling, &environment, &world, dt);
     let before = state.body.position;
-    oag_physics::integrate(&mut state.body, state.inertia_frame, dt);
+    oag_physics::integrate(
+        &mut state.body,
+        state.inertia_frame,
+        environment.laws.body_damping,
+        dt,
+    );
     if let Some((correction, _)) = oag_physics::hover::sweep(&state, &environment, &world, before) {
         println!("hover sweep correction {}", fmt(correction));
     }

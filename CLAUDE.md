@@ -106,9 +106,13 @@ decoder's crate.
 
 ### Gates by change
 
-- **Affected-only gating**: a change to `oag-core`, a simulation crate,
-  `Cargo.toml`/`Cargo.lock`, the toolchain, the `justfile`, `.config/` or a
-  `build.rs` selects the full suite; a docs-only change selects no tests.
+- **Affected-only gating**: `scripts/affected.py` selects the tests that link
+  the change: every package that links a changed one, narrowed to the test
+  modules whose code names a crate that does. A change only under a crate's
+  `tests/` stays in that crate; a docs-only or comments-only change selects no
+  tests; the root `Cargo.toml`, the toolchain or `.cargo/` selects the full
+  suite. Rules, misses and measurements:
+  [`docs/architecture/affected-gate.md`](docs/architecture/affected-gate.md).
   Drive members use `gate-affected`; the lead runs the full `just` and
   `test-data` once per merge batch (the only full disc-backed run; CI has no
   images). See `.claude/skills/oag-drive/SKILL.md`.

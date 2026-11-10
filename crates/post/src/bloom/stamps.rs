@@ -1,39 +1,40 @@
 //! [`Bloom::stamp_glow`]: the glow of rectangles that carry a mask of their own.
 //!
-//! Pulse PSP's speed bar, while a boost runs, stamps the glow mask under its fill
-//! (`oag_hud::boost_smear`): the original draws the HUD into the framebuffer before the bright
-//! pass, so the bright pass reads the bar's colour times that stamp and the ordinary blurs and
-//! composite make it glow. Ours draws the HUD after the scene's bright pass, at presentation
-//! resolution, so the scene's chain cannot see it. This runs the same three passes over the
-//! rectangles alone, in a lane of its own, and adds the result onto the HUD's target.
+//! Pulse PSP's speed bar, while a boost runs, and its shield bar, while an absorb runs, stamp the
+//! glow mask under their fill (`oag_hud::boost_smear`): the original draws the HUD into the
+//! framebuffer before the bright pass, so the bright pass reads the framebuffer under the
+//! rectangle - the HUD at its own alpha over the scene showing through it - times that stamp, and
+//! the ordinary blurs and composite make it glow. Ours draws the HUD after the scene's bright
+//! pass, at presentation resolution, so the scene's chain cannot see it. This runs the same three
+//! passes over the rectangles alone, in a lane of its own, reading the HUD's target for the
+//! bright pass, and adds the result onto that target.
+//!
+//! Each rectangle carries its own mask byte, so a boost's speed bar and an absorb's shield bar
+//! share one pass.
 //!
 //! The scene's own glow under the bar is not added to the bar's: the mask there is the scene's
 //! baseline `4`, which the bright pass and the blurs truncate to nothing, and the stamp replaces
-//! it in the original. What is missed is the scene's colour showing through a bar whose copies
-//! cover under all of a pixel (`1 - (1 - a)^k`): `rgb` here is the bar's colour alone.
+//! it in the original.
 
 use super::*;
 
-/// The most rectangles one stamp covers: the boost's ten copies.
-pub const MAX: usize = 10;
+/// The most rectangles one call stamps: ten copies each of the speed bar and the shield bar.
+pub const MAX: usize = 20;
 
-/// What to stamp: up to [`MAX`] overlapping rectangles of one colour and one mask byte.
-#[derive(Debug, Clone, Copy)]
-pub struct Stamps<'a> {
-    /// `x, y, width, height` of each, as fractions of the rectangle the frame was drawn into.
-    pub rects: &'a [[f32; 4]],
-    /// The colour the widget is drawn in, `rgb` in `0..=1`.
-    pub colour: [f32; 3],
-    /// Each copy's alpha, `0..=1`: a pixel under `k` copies shows the colour at `1 - (1 - a)^k`.
-    pub opacity: f32,
+/// One rectangle to stamp: where, and with which mask byte.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Stamp {
+    /// `x, y, width, height`, as fractions of the rectangle the frame was drawn into.
+    pub rect: [f32; 4],
     /// The mask byte the stamp writes.
     pub value: u8,
 }
 
 impl Bloom {
     /// Blurs the glow of `stamps` and adds it onto `target` over the rectangle at `origin` of
-    /// size `viewport`: the bright pass, two blurs and the composite, for rectangles alone.
-    /// Nothing is drawn for no rectangle or a mask of zero.
+    /// size `viewport`: the bright pass, two blurs and the composite, for rectangles alone. The
+    /// bright pass reads `target` itself, so it must be sampleable and already hold the HUD.
+    /// Nothing is drawn for no rectangle or only masks of zero.
     #[allow(clippy::too_many_arguments)]
     pub fn stamp_glow(
         &self,
@@ -43,15 +44,19 @@ impl Bloom {
         target: &wgpu::TextureView,
         origin: (f32, f32),
         viewport: (u32, u32),
-        stamps: &Stamps<'_>,
+        stamps: &[Stamp],
     ) {
-        let count = stamps.rects.len().min(MAX);
-        if count == 0 || stamps.value == 0 {
+        let stamps = &stamps[..stamps.len().min(MAX)];
+        if stamps.iter().all(|stamp| stamp.value == 0) {
             return;
         }
         let lane = &self.stamp_lane;
         let mut rects = [[0.0; 4]; MAX];
-        rects[..count].copy_from_slice(&stamps.rects[..count]);
+        let mut values = [[0.0; 4]; MAX];
+        for (at, stamp) in stamps.iter().enumerate() {
+            rects[at] = stamp.rect;
+            values[at][0] = f32::from(stamp.value);
+        }
         let wanted = Constants {
             texel: [1.0 / lane.extent.0 as f32, 1.0 / lane.extent.1 as f32],
             direction: [0.0, 0.0],
@@ -61,21 +66,22 @@ impl Bloom {
             uv_scale: [1.0, 1.0],
             uv_max: [1.0, 1.0],
             stamps: rects,
-            stamp_colour: [stamps.colour[0], stamps.colour[1], stamps.colour[2], 0.0],
-            stamp_meta: [count as f32, f32::from(stamps.value), stamps.opacity, 0.0],
+            stamp_view: [origin.0, origin.1, viewport.0 as f32, viewport.1 as f32],
+            stamp_values: values,
+            stamp_meta: [stamps.len() as f32, 0.0, 0.0, 0.0],
         };
         if lane.written.get() != Some(wanted) {
             queue.write_buffer(&lane.constants_bright, 0, bytemuck::bytes_of(&wanted));
             lane.written.set(Some(wanted));
         }
-        // The stamp pass reads no texture, but the layout has one: B, which it does not write.
+        // The bright pass reads the target; the composite that writes it is a later pass.
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bloom stamp"),
             layout: &self.layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&lane.b.view),
+                    resource: wgpu::BindingResource::TextureView(target),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,

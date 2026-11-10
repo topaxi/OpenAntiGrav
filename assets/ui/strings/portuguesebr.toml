@@ -190,6 +190,7 @@ OAG_GRAPHICS_SHADOWS = { text = "SOMBRAS", human = false }
 OAG_GRAPHICS_MODEL_DETAIL = { text = "DETALHE DOS MODELOS", human = false }
 OAG_GRAPHICS_TEXTURE_DETAIL = { text = "DETALHE DAS TEXTURAS", human = false }
 OAG_GRAPHICS_TRAIL_ORDER = { text = "ORDEM DO RASTRO", human = false }
+OAG_GRAPHICS_TRAIL_LENGTH = { text = "COMPRIMENTO DO RASTRO", human = false }
 OAG_GRAPHICS_WEATHER = { text = "CLIMA", human = false }
 OAG_GRAPHICS_SCREEN_FILTER = { text = "FILTRO DE TELA", human = false }
 OAG_GRAPHICS_SCREEN_FILTER_STRENGTH = { text = "INTENSIDADE DO FILTRO DE TELA", human = false }
@@ -199,6 +200,7 @@ OAG_GRAPHICS_FIELD_OF_VIEW = { text = "CAMPO DE VISÃO", human = false }
 OAG_GRAPHICS_BOOST_FOV_KICK = { text = "IMPULSO DO CAMPO DE VISÃO NO TURBO", human = false }
 OAG_GRAPHICS_BOOST_ZOOM = { text = "ZOOM DO TURBO", human = false }
 OAG_GRAPHICS_TRAIL_HITS = { text = "ACERTOS NO RASTRO", human = false }
+OAG_GRAPHICS_WINGTIP_CONTRAILS = { text = "RASTROS DAS ASAS", human = false }
 OAG_GRAPHICS_CPU_GOVERNOR = { text = "REGULADOR DE CPU", human = false }
 OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "INDICADOR DE DESEMPENHO", human = false }
 OAG_GRAPHICS_ADVANCED = { text = "AVANÇADO", human = false }

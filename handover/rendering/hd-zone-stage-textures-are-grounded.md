@@ -1,7 +1,7 @@
 ---
 status: measure
-titles: [hd]
-updated: 2026-09-15
+titles: [hd, omega, 2048]
+updated: 2026-11-09
 summary: "HD Zone palette arrays at 0x00c81330 (zoneAnisoPalette, GradientColour0..3) have no known fill; zoneMode*.gtf are fifteen identical blanks"
 ---
 
@@ -397,6 +397,7 @@ unblocks - see Next Steps below for what implementing it needs.
 
 ## Open
 
+- **Omega and 2048 too (maintainer, 2026-11-09):** if the Zone palette fill is found and it applies to Omega or 2048 (lineage check), wire them in the same lane, extending HD's path.
 - ~~What the Zone shader does with the six-plus Zone parameters.~~ **Read**,
   see [zone-shader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md)
   and the visualiser glow section above.
@@ -614,7 +615,7 @@ unblocks - see Next Steps below for what implementing it needs.
   `oag_mesh::mesh_render::zone::write_vis` builds the 256-wide lookup from
   them, tinted by the showing stage's own `EQ colour tint`. `mesh.wgsl`'s
   `zone_glow` draws the term end to end - pixel-tested in
-  `crates/render/tests/zone_recolour.rs`, and checked against real HD disc
+  `crates/mesh/tests/zone_recolour.rs`, and checked against real HD disc
   data with `--zone-spectrum-test` (`--screenshot`'s own audio device is
   null, so this is the only way a capture shows the glow at all): 476,000 of
   1,175,040 pixels move by more than a nudge against the same frame without

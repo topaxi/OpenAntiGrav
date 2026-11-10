@@ -40,7 +40,7 @@ independent causes, none a real regression in the simulation:
    - `talons-junction-clean-lap.csv` was never tracked, so three `oag-trace` tests
      panicked on a runner ([ADR-0046](../architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md));
      it is tracked now.
-   - `oag-render`'s `psp_slope_lod` read a no-GPU sentinel (`usize::MAX`) as a pixel
+   - `oag-mesh`'s `psp_slope_lod` read a no-GPU sentinel (`usize::MAX`) as a pixel
      count; it now skips without an adapter like the rest of the file. If the
      runner image has lavapipe those GPU tests run there instead of skipping.
    - Raising `rust-version` to 1.97.1 turns on clippy's `manual_isolate_lowest_one`;

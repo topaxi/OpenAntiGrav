@@ -1116,8 +1116,8 @@ state-index table it depends on is the same one this page already scores 95.
 **Corrected in the same change, 2026-08-09** - the predicate is now
 `pass_mask & 0x0020 == 0` and its tests are flipped.
 
-**It had no effect on any picture, and the reason is worth recording** so the
-next reader does not go looking for one: **nothing in the workspace consumes
+**It had no effect on any picture when it was corrected, and the reason is worth recording** so the
+next reader does not go looking for one: **nothing in the workspace consumed
 that predicate**, and every `mesh_render` pipeline sets `cull_mode: None`
 deliberately (strip winding is reconstructed rather than read from the file, so
 culling would turn a winding mistake into missing geometry). The
@@ -1126,6 +1126,12 @@ original by accident rather than by reading this bit. The first consumer would
 have culled exactly the surfaces the original draws two-sided - on the boost
 plume, all 32 of its batches - which is why it is fixed now rather than left as
 a comment.
+
+**Consumed since 2026-11-09 (`moa-ad-flicker`).** A Pulse circuit's opaque and cutout draws select a
+culling pipeline by this predicate (`Model::per_batch_cull`, set by the title rule
+`Looks::batch_back_face_cull`), and the boost plume stays two-sided: a Moa Therma board that is a
+front copy and a back copy in one plane no longer z-fights, and a matched original frame draws the
+same single ornament. Evidence, per-pair numbers and lineage: [batch-cull.md](../../../rendering/batch-cull.md).
 
 ### Environment-generated UVs do not suppress the orange rim
 
@@ -1269,9 +1275,10 @@ RTTI type tokens rather than real functions.
   writes the boost model's `+0x8` parent link to the `FUN_08a6bfc0`-class
   ancestor it just found, immediately before calling `Vex_LoadModel`, so the
   ancestor walk matches on its first step. Evidence in the env-map section
-  above. **The other half of this item stays open**: whether
-  `SceneLight_Rebuild` writes an accumulated light colour or a hard
-  `0xffffffff` into the `+0xd0` material list was not revisited, and
+  above. The other half is closed (2026-11-10): `SceneLight_Rebuild`
+  writes the accumulated light colour the builder returns, `0xffffffff` only
+  for a model without `+0x1a8` ("The extra pass's colour is the light the
+  hull stands in"); whether the plume's own list is ever rebuilt is not read, and
   `FUN_08a6bfc0`'s class is still identified only by the team-name field
   `ExhaustFlare_Init` reads off it, not by a `.vex` class name.
 - **The `Vex_LoadModel` list-B divergence.** *Fact, instruction level* at
@@ -2327,7 +2334,8 @@ false of the running game. Confidence **92**.
 
 ### What the pass does to a pixel
 
-Five replace batches: the pass writes `env(u, v)` (texture x white, lighting off,
+Five replace batches: the pass writes `env(u, v)` (texture x the material colour, which is the
+light the hull stands in and white on most circuits, see below; lighting off,
 alpha masked by `Gu_PixelMask` `0xff000000`) over the hull and writes depth; the
 batch's own pass then **adds** `lit * texture` at equal depth. The canopy adds
 both. Either way the pixel is `env + lit * texture`, clamped once. The two
@@ -2448,6 +2456,123 @@ Runtime trace; one title, one team, one circuit.
   and ours, so the pass's own term is small and equal; the neon is something else
   (an additive or glow batch we under-draw, or a texture the ordinary pass samples
   differently). Left open.
+
+### The extra pass's colour is the light the hull stands in
+
+2026-11-10, lane `pulse-hull-sheen`. PPSSPP v1.20.4, software renderer, `pulse-psp-usa.chd`, the
+compare page's own grid save states, `scripts/psp-ge-dump.py dump` once each on Metropia White and
+Tech de Ra Black, read with every register initialised from the dump's own state block. Runtime
+trace plus decompile; one team (Assegai), two circuits, and a prediction checked on four more.
+
+**Claim: the hull's extra pass is not drawn white. Its primary colour is the colour
+`SceneLight_BuildLightingList` returns, which `SceneLight_Rebuild` writes into the model's material
+list and `Mesh_BeginTransparentPass` replays. Confidence 90.**
+
+**How it was found.** Over the 24 Pulse PSP grid pairs, ours was rendered with and without the
+pass, and `original - ours without` regressed on `ours with - ours without` over the craft box
+(180,150)-(300,240), 3x3 box-blurred, plume masked. The slope is the original's sheen as a fraction
+of ours. It read 0.91 to 1.02 on 19 pairs and **0.57 and 0.60 on Metropia White and Black**,
+0.85 on De Konstruct White (Basilico Black 0.36 and Fort Gale Black 1.17 sit on base-colour errors
+of 13 and 3.5 levels and are not this). So the pass's strength was right nearly everywhere and
+about 40 % too high on one circuit, in both directions of travel.
+
+**The register.** Per hull PRIM, the two dumps differ in one register on the `TEXMAPMODE` 2 draws:
+
+| Register at the PRIM | Metropia White | Tech de Ra Black |
+| --- | --- | --- |
+| `MATERIALAMBIENT` (`0x55`), three `shipShape` batches, both flaps, canopy | **`0x72a6b7`** (R 183, G 166, B 114) | `0xffffff` |
+| `MATERIALDIFFUSE`/`SPECULAR` (`0x56`/`0x57`) | the same word | `0xffffff` |
+| `MATERIALALPHA` (`0x58`) | 255 | 255 |
+| `LIGHTING` (`0x17`), vertex type | off, `0x0121` (normals, no colour) | the same |
+| `TEXFUNC` (`0xc9`) | `0x000100` (modulate, RGBA, no colour double) | the same |
+| texture, palette | `envtest4bit`, 16 greys ending `0xe8` | the same bytes |
+| blend, fog, depth | as "Re-read on a second dump" | the same |
+
+Lighting is off and the vertices carry no colour, so the GE's primary colour is the material
+ambient, and modulate multiplies the glint map by it. The word is written inside the pass's own
+prologue: the command stream reads `cf:000000 17:000000 5b:3f8000 c0:000002 c1:000100 21:000001
+55:72a6b7 58:0000ff 56:.. 57:..`, which is `Mesh_BeginTransparentPass` up to and including its
+`Gu_CallList(model+0xb0+0xd0)`. The circuit's own mode-2 draws in the same frame (vertex colour
+format 6) carry `0xffffff`. The ordinary passes are preceded by `Gu_Color(white)` and read white.
+
+**The law, from the decompile.** `SceneLight_Rebuild` (`0x08879b14`) stores the builder's return
+value in `list+0xcc`, overwrites it with `0xffffffff` when `model+0x1a8 == 0` (a circuit model,
+whose pass is the view-matrix matcap), and writes it as `0x55`, `0x58` (the top byte), `0x56`,
+`0x57`, `RET` at `list+0xd0`. `SceneLight_BuildLightingList` (`0x0887a4f0`) keeps a float RGB
+accumulator beside the GE words it emits and returns it truncated and clamped:
+
+```text
+sum  = 0
+sum += (sum of every AmbientLight's colour) * ambient_scale          context +0x3c/+0x54
+sum += colour_i * directional_scale     for each DirectionalLight, four at most     +0x40/+0x7c
+sum += colour_j * strength_j * 255 * point_scale (or spot_scale)     each light given a slot
+sum += (255, 255, 255)                  instead of all of that when the context has no light list
+return min(255, trunc(sum.r)) | min(255, trunc(sum.g)) << 8 | min(255, trunc(sum.b)) << 16 | 0xff000000
+```
+
+The colours are the nodes' floats as their `+0x8c` method returns them, **not** the clamped bytes
+the GE lights get, and the scales are the craft's four spline bytes (`model+0x44..+0x47`,
+`scene-light.md`, "The scales") converted to float as they are, `0..=255`, with no shift. A point
+or spot light's term carries both the `* 255` of its strength and the unshifted scale, so one that
+reaches the craft at all saturates every channel it has.
+
+**The numbers agree to the unit.** `02_Track` authors one `AmbientLight` `(0.12356, 0.16053,
+0.20662)` and two `DirectionalLight`s `(1.1025, 0.84914, 0.29988)` and `(0.17587, 0.23362,
+0.28926)`. The hull's own light list in the Metropia dump pins the scales: `AMBIENTCOLOR`
+`(24, 31, 40)` needs an ambient scale of 199 to 201, and light 0's diffuse red `123` (the clamped
+`255 * s >> 8`) needs exactly 124. Then
+
+```text
+R = 0.12356 * 200 + (1.1025  + 0.17587) * 124 = 183.2 -> 183    (0xb7)
+G = 0.16053 * 200 + (0.84914 + 0.23362) * 124 = 166.4 -> 166    (0xa6)
+B = 0.20662 * 200 + (0.29988 + 0.28926) * 124 = 114.4 -> 114    (0x72)
+```
+
+for every ambient scale in 199..=201. The red is the discriminating channel: the lit passes clamp
+that directional's `1.1025` to 255 before scaling, which would give 169 to 172; the returned colour
+does not, and reads 183. Tech de Ra's three directionals sum past 255 on every channel at its
+grid's 249, and a `wopoint` holds its fourth slot: `0xffffff`, as recorded.
+`crates/render/tests/hull_lights_ground_truth.rs` holds both.
+
+**Why it is white almost everywhere.** At the usual scale of about 250 a circuit needs light
+colours summing below 1.02 on a channel to leave it unsaturated. Metropia's grid sits under spline
+points that author about half scale; De Konstruct and Outpost 7 author dim rigs. A craft in a
+tunnel that authors `127` loses about half the sheen with the rest of its light.
+
+**Wired.** `oag_mesh::mesh_render::HullPassColour` (the terms off the circuit's nodes),
+`HullPointLights::accumulated` (the chosen point and spot lights' share), `Race::ship_shine_colour`
+(per craft, under its spline bytes) and `oag_render::shine::write`, which multiplies the pass's
+white vertices by it. Behind `Looks::hull_shine_lit`.
+
+**Checked against the original after wiring**, the same regression, nothing fitted: Metropia White
+0.57 to **0.94**, Metropia Black 0.60 to **0.99**, De Konstruct White 0.85 to **0.97**, Outpost 7
+Black and White 0.98 and 0.97 to **1.00**; the other 19 frames are bit-identical. Craft box mean
+absolute RGB difference (hull only in brackets, plume masked): Metropia White 4.21 to 3.38 (4.03
+to 3.03), Metropia Black 7.81 to 6.80 (5.22 to 4.03), De Konstruct White 8.31 to 7.65 (4.79 to
+3.99), Outpost 7 Black 5.51 to 5.41, White 7.27 to 7.16. The spine box's blue excess of ours on
+Metropia White falls from +6.6 to +1.4, which is the colour, not only the strength. No pair's
+whole-frame error rises.
+
+**Other titles and platforms.**
+
+- **Pulse PS2: inherited from PSP**, unmeasured there. The PS2 circuits author the same light
+  nodes and the pass is the same batches; `pulse-ps2/moa-therma-white` renders bit-identical
+  (Moa Therma saturates).
+- **Pure: checked, applies in structure, not wired.** `/pure/BOOT-psp-pure-usa.BIN` `FUN_08840cac`
+  is `SceneLight_Rebuild` statement for statement: the return of Pure's
+  `SceneLight_BuildLightingList` (`0x08841648`) goes to `list+0xcc`, is replaced by `0xffffffff`
+  when `model+0x228 == 0`, and is written as `0x55`/`0x58`/`0x56`/`0x57`. The accumulator inside
+  Pure's builder was not read, and Pure's four recorded lists all read `0xffffff`
+  ([hull-shine.md](../psp-pure-usa/hull-shine.md)), which the law allows but does not test. Pure's
+  rule stays unread until a Pure circuit whose sum falls short of 255 is dumped.
+- **A track file under a Pulse host** keeps a white pass: `foreign::art` builds the lit rig from
+  the file's light but not these terms.
+
+**Not tested.** A craft in a tunnel (a dump with the scale at 127); an AI craft's colour; a frame
+with a point light weak enough to leave a channel unsaturated (the law says there is none above a
+strength of about 0.004). The boost plume's model also has `+0x1a8` set and replays its own
+material list through the same prologue, so if its list is rebuilt the plume takes this colour
+too: not read, and the plume is not changed here.
 
 ### Names
 

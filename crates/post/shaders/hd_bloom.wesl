@@ -5,7 +5,7 @@
 // .envsettings "HDR and Bloom" block; the inline constants are the
 // executable's verbatim.
 
-import oag_shaders::colour::srgb_encode;
+import oag_shaders::colour::{srgb_decode, srgb_encode};
 import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
 
 struct Constants {
@@ -136,7 +136,7 @@ fn fs_copy(in: VertexOutput) -> @location(0) vec4<f32> {
 // one.** Every buffer the original's chain touches is
 // `CELL_GCM_SURFACE_A8R8G8B8`: the scene target created at `0x003e17a0` and
 // all seven ladder buffers `FUN_003af980` allocates - `li r6, 8` at seven
-// separate call sites, read off `EBOOT.elf` on 2026-08-20 together with the
+// separate call sites, read off `EBOOT.elf` together with the
 // surface-format word builder (`FUN_005c9a50`) and the render-target factory
 // (`FUN_005a6ce0`), whose `+0x24` field is confirmed as the raw RSX enum by
 // its own `32`/`64` depth branch. Only one `F_W16Z16Y16X16` surface exists in
@@ -165,7 +165,7 @@ override scene_encoded: f32 = 0.0;
 // A tap of the scene target, in linear light.
 fn scene_tap(texel: vec4<f32>) -> vec4<f32> {
     let c = surface(texel);
-    return vec4<f32>(mix(c.rgb, pow(c.rgb, vec3<f32>(2.2)), scene_encoded), c.a);
+    return vec4<f32>(mix(c.rgb, srgb_decode(c.rgb), scene_encoded), c.a);
 }
 
 // The luminance reduction's halving step, in two forms.
@@ -199,7 +199,7 @@ fn reduce_sum(pixel: vec2<i32>, first: bool) -> vec4<f32> {
                 // The adaptation averages encoded values: RPCS3's readback of the
                 // original is the mean of the encoded per-pixel luma, not the
                 // encode of the linear mean (docs/rendering/hd-track-tone.md,
-                // "Decide the adaptation law"; maintainer's choice 2026-10-27).
+                // "Decide the adaptation law").
                 value = pow(clamp(value, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
             }
             rgb = rgb + value * share;
@@ -327,8 +327,9 @@ fn resolve_scene_tap(uv: vec2<f32>) -> vec3<f32> {
 // float; no circuit file authors the key, default 0) and the persistent
 // `fullscreenTintColour` (an event tint this renderer does not model).
 //
-// The `pow` at the end is the ROP's sRGB encode on write (`SET_SHADER_PACKER`
-// is 1 on the scene and ladder draws), approximated by one `1/2.2` curve; it is
+// The encode at the end is the ROP's sRGB encode on write (`SET_SHADER_PACKER`
+// is 1 on the scene and ladder draws), the same piecewise curve `scene_tap`
+// decodes with, so a scene value no bloom reaches resolves to itself; it is
 // not an exposure stage. The original's resolve itself ends on the ADD_SAT.
 @fragment
 fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {

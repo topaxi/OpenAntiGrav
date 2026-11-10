@@ -234,6 +234,23 @@ impl Style {
     }
 }
 
+impl Style {
+    /// Wipeout HD's wingtip contrail, `capacity` vertices of triangle list: `FatLine_fp` (the
+    /// same fragment as [`Self::fat_line`]) under the blend `RibbonEffects_Render` switches to
+    /// before pool `+0x74` (`0x00678248(0x302, 0x303, 0, 0x303)` at `0x002a6980`), which is the
+    /// Rocket smoke's: `SRC_ALPHA, ONE_MINUS_SRC_ALPHA` for colour and `ZERO, ONE_MINUS_SRC_ALPHA`
+    /// for alpha, so the contrail is drawn over the frame rather than added to it
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/wingtip-vortices.md`, "The draw state").
+    #[must_use]
+    pub const fn vortex_line(capacity: usize) -> Self {
+        let mut style = Self::rocket_smoke(capacity);
+        style.label = "vortex line";
+        style.smoke = false;
+        style.fat = true;
+        style
+    }
+}
+
 /// What the last upload left to draw, as a value: a split screen records its views at once, so
 /// each view keeps its own while a later view's upload refills the pipeline. `draw` draws it.
 #[derive(Clone, Copy, Debug, Default)]

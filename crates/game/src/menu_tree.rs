@@ -77,6 +77,7 @@ pub fn finish_definition(
     definition.drop_unavailable_boost_zoom(title);
     // And the TRAIL HITS row, where the title authors no such burst: Pulse and Pure.
     definition.drop_unavailable_trail_hits(title);
+    definition.drop_unavailable_wingtip_contrails(title);
     // And the HUD STYLE row, where the disc authors the list: HD and Omega.
     definition.drop_unavailable_hud_style(title);
     // And the DYNAMIC HUD row, where the options list it: Pulse.
@@ -86,6 +87,7 @@ pub fn finish_definition(
     definition.drop_unavailable_player_rows(title);
     // And the TRAIL ORDER row, where the ribbon is the PSP preset: Pulse and Pure.
     definition.drop_unavailable_trail_order(title);
+    definition.drop_unavailable_trail_length(title);
     // And the WEATHER row, where the weather is played: Pulse.
     definition.drop_unavailable_weather(title);
     // And the RUMBLE row's `original` value, where the original plays patterns: HD and Omega.

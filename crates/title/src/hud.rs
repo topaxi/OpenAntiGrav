@@ -681,6 +681,9 @@ pub struct HudArt {
     /// The boost's multi-copy smear and the glow stamp under the speed bar: `None` where
     /// unmeasured, which draws each widget once and stamps nothing. See [`BoostSmear`].
     pub boost_smear: Option<BoostSmear>,
+    /// The glow mask the shield bar's fill stamps through the absorb window: `None` where
+    /// unmeasured, which keeps the flat white copy under the bar. See [`AbsorbGlow`].
+    pub absorb_glow: Option<AbsorbGlow>,
     /// The whole HUD sliding with the drawn lean: `None` where unmeasured, which leaves the
     /// HUD fixed on the screen. See [`HudSway`].
     pub sway: Option<crate::pre_race::Sourced<HudSway>>,
@@ -962,6 +965,23 @@ pub struct BoostSmear {
     pub centre: [i16; 2],
     /// The widget whose fill stamps the glow mask.
     pub stamp: &'static str,
+}
+
+/// What a pickup absorb does to the shield bar (Pulse PSP, `Hud_UpdateEnergyBar`).
+///
+/// For the whole window the bar's fill is drawn with the stencil on, replacing the framebuffer's
+/// alpha - the glow mask the bloom's bright pass reads - with `0xff` over the fill's rectangle,
+/// in both halves of the 8 Hz blink: the fill's own alpha goes to zero in the off half, which
+/// leaves the pale backdrop under the mask, and the bloom lifts that (and the scene behind the
+/// backdrop) to near white. Outside the
+/// window the fill is drawn with the stencil off. `docs/ghidra/functions/psp-pulse-usa/shield.md`,
+/// "The absorb flash at the draw call".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AbsorbGlow {
+    /// The widget whose fill stamps the glow mask.
+    pub fill: &'static str,
+    /// The mask byte the fill writes: `0xff`.
+    pub value: u8,
 }
 
 /// One bar of a [`BarTip`] law.

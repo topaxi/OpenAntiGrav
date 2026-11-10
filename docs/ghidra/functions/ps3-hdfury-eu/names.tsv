@@ -903,3 +903,30 @@
 0x002c3ca0	function	PartRender_FlushDraws	70	engine-trail.md
 0x002c5300	function	PartRender_Construct	65	engine-trail.md
 0x002c9248	function	Psys_DrawInstance	65	engine-trail.md
+0x000d2d20	function	Ship_GatherWingtipNodes	80	wingtip-vortices.md
+0x002db500	function	ShipWingtipVortices_RegisterClass	80	wingtip-vortices.md
+0x002db5e8	function	ShipWingtipVortices_Construct	75	wingtip-vortices.md
+0x002db130	function	ShipWingtipVortices_Update	90	wingtip-vortices.md
+# 2026-11-09 hd-wingtip-vortices: pool +0x74's VortexLine element (wingtip-vortices.md)
+0x002ac208	function	VortexLine_PushChains	92	wingtip-vortices.md
+0x002ac0f0	function	VortexLine_Update	82	wingtip-vortices.md
+0x002abfb8	function	VortexLine_AlphaOverLife	88	wingtip-vortices.md
+0x002ac070	function	VortexLine_Construct	80	wingtip-vortices.md
+0x002ac010	function	VortexLine_Destruct	72	wingtip-vortices.md
+0x002abfc8	function	VortexLine_Delete	72	wingtip-vortices.md
+0x002a5ce0	function	RibbonEffects_InitConfigColours	80	wingtip-vortices.md
+0x002ec408	function	LineBuilder_Init	60	wingtip-vortices.md
+
+# 2026-11-10 hd-scene-width: the 1080p scene width controller (scene-width-throttle.md)
+0x003e3268	function	Render_FinishFrame	75	scene-width-throttle.md
+0x003de3c8	function	Render_SetSceneWidthThrottle	88	scene-width-throttle.md
+0x005c1b80	function	Rsx_EmitSurfaceBlock	88	scene-width-throttle.md
+0x005c766c	function	Rsx_SetReport	86	scene-width-throttle.md
+0x005cc710	function	Gcm_AllocReports	74	scene-width-throttle.md
+0x005cb7b8	function	Gcm_Flip	72	scene-width-throttle.md
+0x005cb500	function	Gcm_FlipOnTime	74	scene-width-throttle.md
+0x00c81b08	data	g_SceneWidthLevel	92	scene-width-throttle.md
+0x00c81da4	data	g_SceneWidthThrottleEnabled	90	scene-width-throttle.md
+0x00c81a88	data	g_SceneColourTargets	85	scene-width-throttle.md
+0x000f5878	function	Body_Init	82	body-damping.md
+0x008a92f4	data	Body_DefaultDamping	90	body-damping.md

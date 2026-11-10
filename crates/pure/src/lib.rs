@@ -68,6 +68,7 @@ pub const TITLE: &Title = &Title {
     exhaust: &oag_title::exhaust::Exhaust::Named(r"Data\Tex\engineFlare\Engine_noise.mip"),
     // The same sprite Pulse names, and found under the same name on Pure's
     // disc - see `oag_pulse`'s note for the literal it was read from.
+    wingtip: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     // Measured: the six glyphs of `FX300ANG.fnt` - see `prompts`.
@@ -119,6 +120,10 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Pulse's law, inherited: Pure's own drain is unread.
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        blast_push: oag_title::pre_race::Sourced::inherited(
+            oag_title::weapons::BlastPush::Posted,
+            "Wipeout Pulse",
+        ),
         // Pure ships no LeachBeam, so this is never read; the value matches the other titles.
         leach_beams: oag_title::pre_race::Sourced::chosen(8),
         // The gate is Pulse's law, inherited: Pure's own is unread (`psp-pure-usa/quake.md`).

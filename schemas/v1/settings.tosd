@@ -168,6 +168,10 @@ optional = true
 type = "boolean"
 optional = true
 
+[types.graphics.wingtip_contrails]
+type = "boolean"
+optional = true
+
 [types.graphics.cpu_governor]
 type = "boolean"
 optional = true
@@ -237,6 +241,10 @@ type = "string"
 optional = true
 
 [types.render-profile.trail_order]
+type = "string"
+optional = true
+
+[types.render-profile.trail_length]
 type = "string"
 optional = true
 

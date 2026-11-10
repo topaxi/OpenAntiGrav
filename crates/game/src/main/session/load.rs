@@ -465,6 +465,14 @@ impl Session {
         // A fresh seed per race; `--seed` (already in the options) and a network race's server
         // seed (`NetPlay::race_options`, below) replace it.
         options.seed = Some(oag_game::race_seed::for_launch(options.seed));
+        // A campaign cell races at its own rung, which the shield pool follows as the original
+        // driver's pack shuffle does (`advance_race_build`); any other launch takes `[ai]
+        // difficulty`.
+        options.skill_level = campaign_skill_level(
+            self.campaign_cell.is_some(),
+            self.campaign_custom.as_ref().and_then(|launch| launch.level),
+            self.campaign_difficulty,
+        );
         let options_mode = options.mode;
         let options_track = options.foreign_track.clone();
         // **Refreshed here, not trusted from whenever `race_options` was last
@@ -512,6 +520,10 @@ impl Session {
             .then(oag_source::title::borrowed_zoom_ring);
         options.trail_hits = oag_game::launcher::trail_hits_from(
             self.settings.graphics.trail_hits,
+            &self.titles,
+        );
+        options.wingtip_contrails = oag_game::launcher::wingtip_contrails_from(
+            self.settings.graphics.wingtip_contrails,
             &self.titles,
         );
         // The join screen's seats, or the seats a restart kept: the load reads a
@@ -838,6 +850,13 @@ impl Session {
                     // A mod campaign event's own AI (ADR-0077): its pilot for
                     // every opponent, and whose driver flies.
                     let custom = race_stage.campaign_custom.clone();
+                    // The rung the load took for the shield pools, recorded so a rebuild
+                    // repeats it.
+                    let shield_rung = campaign_skill_level(
+                        race_stage.campaign_cell.is_some(),
+                        custom.as_ref().and_then(|c| c.level),
+                        race_stage.campaign_difficulty,
+                    );
                     if let Some(pilot) = custom.as_ref().and_then(|c| c.pilot.as_ref()) {
                         race_stage.race.set_opponent_pilot(pilot, ai_difficulty);
                     }
@@ -848,9 +867,10 @@ impl Session {
                     } else if race_stage.campaign_cell.is_some() {
                         Some(oag_game::ai_choice::Source::Campaign {
                             skill: race_stage.campaign_ai_skill_scale,
-                            level: custom.as_ref().and_then(|c| c.level).unwrap_or_else(|| {
-                                race_stage.campaign_difficulty.map_or(1, rung_level)
-                            }),
+                            level: campaign_level(
+                                custom.as_ref().and_then(|c| c.level),
+                                race_stage.campaign_difficulty,
+                            ),
                         })
                     } else if let Some(event) = race_stage.campaign_2048_event.as_ref() {
                         Some(oag_game::ai_choice::Source::Event2048(event.ai))
@@ -866,10 +886,10 @@ impl Session {
                                 ai_choice,
                                 source,
                             );
-                            race_stage.note_ai(original);
+                            race_stage.note_ai(original, shield_rung);
                         }
                         None => {
-                            race_stage.note_ai(None);
+                            race_stage.note_ai(None, shield_rung);
                             log::info!(
                                 "AI: this project's driver flies (the campaign event asks for it)"
                             );
@@ -1105,6 +1125,25 @@ impl Session {
             )));
         Ok(())
     }
+}
+
+/// The integer rung a campaign cell races at: a mod event's own, else the cell's rung, else
+/// Medium (**chosen, not measured**: a cell that authors none).
+fn campaign_level(
+    custom: Option<usize>,
+    rung: Option<oag_tables::race_campaign::Difficulty>,
+) -> usize {
+    custom.unwrap_or_else(|| rung.map_or(1, rung_level))
+}
+
+/// The rung a launch names for the shield pools: a campaign cell's, `None` for any other
+/// launch (which takes `[ai] difficulty`).
+fn campaign_skill_level(
+    campaign: bool,
+    custom: Option<usize>,
+    rung: Option<oag_tables::race_campaign::Difficulty>,
+) -> Option<u8> {
+    campaign.then(|| u8::try_from(campaign_level(custom, rung)).unwrap_or(u8::MAX))
 }
 
 /// A campaign rung as the original's integer `g_skill_level`: Easy `0`,

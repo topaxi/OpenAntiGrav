@@ -117,6 +117,7 @@ fn shipped_handling() -> Handling {
         CLASS,
         handling::SpeedupPads::default(),
         handling::Special::default(),
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
     )
     .expect("this team's file authors the class under test")
 }

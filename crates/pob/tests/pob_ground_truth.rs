@@ -577,6 +577,54 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
     );
 }
 
+/// The word at `+0xc84` of every emitter of HD's `WO_WEAPON_ABSORB`, `WO_MISSILE_EXPLO` and
+/// `WO_TRAIL_HITSHIP`, read raw whatever the emitter's render mode.
+///
+/// HD's `psys_normal_vp` multiplies the decoded colour by `kColourScale` (`c467`) and its
+/// fragment programs carry no `/2` (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The
+/// psys programs", and `absorb-feedback.md`), so this word is the only authored brightness term a
+/// particle draw has. The absorb burst's two emitters (render mode 5 and 2) both read `1.0`:
+/// nothing in the file halves the burst. `WO_MISSILE_EXPLO`'s mode-2 emitter reads `0.5`, a word
+/// [`Emitter::colour_scale`] does not surface (it reads mode 5 only).
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn hd_absorb_burst_authors_a_unit_colour_scale_on_both_emitters() {
+    let Some(path) = image(HD_IMAGE) else { return };
+    let mut seen = std::collections::BTreeMap::new();
+    for spec in hd_psarc_specs(&path) {
+        let mut archive = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+        let paths: Vec<String> = archive
+            .paths()
+            .iter()
+            .filter(|entry| entry.to_ascii_lowercase().ends_with(".pob"))
+            .cloned()
+            .collect();
+        for entry in paths {
+            let blob = archive.read_path(&entry).expect("the entry reads");
+            let system = ParticleSystem::parse(&blob).expect("parse");
+            if !["WO_WEAPON_ABSORB", "WO_MISSILE_EXPLO", "WO_TRAIL_HITSHIP"]
+                .contains(&system.name.as_str())
+            {
+                continue;
+            }
+            let words: Vec<(u32, u32, f32)> = system
+                .emitters(&blob)
+                .expect("emitters")
+                .iter()
+                .map(|e| {
+                    let at = system.resource_base() + e.offset + 0xc84;
+                    let word = f32::from_be_bytes(blob[at..at + 4].try_into().unwrap());
+                    (e.render_mode, e.blend_class, word)
+                })
+                .collect();
+            seen.entry(system.name.clone()).or_insert(words);
+        }
+    }
+    assert_eq!(seen["WO_WEAPON_ABSORB"], [(5, 2, 1.0), (2, 2, 1.0)]);
+    assert_eq!(seen["WO_MISSILE_EXPLO"], [(2, 2, 0.5)]);
+    assert_eq!(seen["WO_TRAIL_HITSHIP"], [(5, 2, 0.7), (5, 2, 1.0)]);
+}
+
 /// An emitter's own texture-path string, resolved through whichever slot
 /// names `emitter.offset + 0x4c4` as its fixup site - this project already
 /// reads that field as "an emitter's own texture slot" on PSP, see

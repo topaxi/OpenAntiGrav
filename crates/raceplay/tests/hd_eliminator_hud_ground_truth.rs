@@ -394,6 +394,7 @@ fn race_to_target(
     image: &std::path::Path,
     difficulty: oag_ai::Difficulty,
     seed: u64,
+    skill_level: Option<u8>,
 ) -> Option<(u64, u32)> {
     let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
@@ -401,6 +402,7 @@ fn race_to_target(
         mode: oag_race::Mode::Eliminator,
         difficulty,
         seed: Some(seed),
+        skill_level,
         ..oag_raceplay::Options::default()
     })
     .expect("loading an HD Eliminator");
@@ -429,20 +431,100 @@ fn race_to_target(
     None
 }
 
-/// A score Eliminator lasts about as long as the original's (ten laps to 200 at Novice on Vineta K,
-/// `docs/gameplay/race-modes.md`, "The pace of a score Eliminator"), on the seeds the pace was tuned
-/// on. Novice reaches its target, which it never did while a Novice opponent held a Mine for good;
-/// it takes more than eight laps, which it did not while opponents steered for pads and bunched;
-/// and Elite, whose opponent keeps a pickup twenty seconds, takes more than three.
+/// The seeds the pace was tuned and measured on (`docs/gameplay/race-modes.md`, "The pace of a
+/// score Eliminator"). One seed's race is a draw from a spread of 2 to 17 laps, so a claim about
+/// the pace is made on the median over all twelve.
+const PACE_SEEDS: std::ops::RangeInclusive<u64> = 1..=12;
+
+/// Runs `PACE_SEEDS` four at a time and answers the sorted laps the leading opponent had completed
+/// when each race reached its target, `None` if one never did.
+fn pace_laps(image: &std::path::Path, difficulty: oag_ai::Difficulty) -> Option<Vec<u32>> {
+    let seeds: Vec<u64> = PACE_SEEDS.collect();
+    let mut laps = Vec::new();
+    for chunk in seeds.chunks(4) {
+        std::thread::scope(|scope| {
+            let races: Vec<_> = chunk
+                .iter()
+                .map(|&seed| scope.spawn(move || race_to_target(image, difficulty, seed, None)))
+                .collect();
+            for race in races {
+                laps.push(race.join().expect("a race thread").map(|(_, laps)| laps));
+            }
+        });
+    }
+    let mut laps = laps.into_iter().collect::<Option<Vec<u32>>>()?;
+    laps.sort_unstable();
+    Some(laps)
+}
+
+/// The median of an even count of sorted laps, rounded down.
+fn median_laps(sorted: &[u32]) -> u32 {
+    let mid = sorted.len() / 2;
+    (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+/// A Novice score Eliminator lasts about as long as the original's (nine laps to 200 on Vineta K,
+/// n = 1), a third either way, as the median over `PACE_SEEDS`: eight measured, ten before
+/// Novice started on `easyshield`. Every seed reaches its target, which none did while a Novice
+/// opponent held a Mine for good (seed 9 of twelve still ran at 1,000 s); and the median is more
+/// than six laps, which it was not (one to three) while opponents steered for pads and bunched.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_score_eliminator_reaches_its_target_at_about_the_originals_pace() {
+fn a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace() {
     let Some(image) = image() else { return };
-    let (tick, laps) =
-        race_to_target(&image, oag_ai::Difficulty::Novice, 1).expect("a Novice race reaches 200");
-    assert!(tick < 40_000, "Novice ended at tick {tick}");
-    assert!(laps >= 8, "Novice's leader had completed {laps} laps");
-    let (_, laps) =
-        race_to_target(&image, oag_ai::Difficulty::Elite, 1).expect("an Elite race reaches 200");
-    assert!(laps >= 4, "Elite's leader had completed {laps} laps");
+    let laps = pace_laps(&image, oag_ai::Difficulty::Novice)
+        .expect("every Novice race reaches 200 within 1,000 s");
+    let median = median_laps(&laps);
+    assert!(
+        (6..=12).contains(&median),
+        "Novice's leader completed a median of {median} laps (sorted: {laps:?})"
+    );
+}
+
+/// An Elite score Eliminator takes more than three laps at the median over `PACE_SEEDS` (six
+/// measured; one while the opponent spent every pickup the moment the law let it, which the
+/// twenty-second hold of a fresh pickup stops), and every seed reaches its target.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_elite_score_eliminator_takes_more_than_a_few_laps() {
+    let Some(image) = image() else { return };
+    let laps = pace_laps(&image, oag_ai::Difficulty::Elite)
+        .expect("every Elite race reaches 200 within 1,000 s");
+    let median = median_laps(&laps);
+    assert!(
+        median >= 4,
+        "Elite's leader completed a median of {median} laps (sorted: {laps:?})"
+    );
+}
+
+/// Scratch sweep: the leading opponent's completed laps at the tick a race ends, one line per
+/// seed. Runs only with `OAG_SWEEP` set; `OAG_SWEEP_DIFFICULTY` (`novice`, `skilled`, `elite`),
+/// `OAG_SWEEP_RUNG` (`0`, `1`, `2`; absent is the difficulty's own) and `OAG_SWEEP_SEEDS`
+/// (`1-12`) pick the races, `OAG_SWEEP_OUT` the file.
+#[test]
+#[ignore = "a scratch sweep; set OAG_SWEEP"]
+fn sweep_race_length() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(image) = image() else { return };
+    let difficulty = match std::env::var("OAG_SWEEP_DIFFICULTY").as_deref() {
+        Ok("skilled") => oag_ai::Difficulty::Skilled,
+        Ok("elite") => oag_ai::Difficulty::Elite,
+        _ => oag_ai::Difficulty::Novice,
+    };
+    let rung = std::env::var("OAG_SWEEP_RUNG")
+        .ok()
+        .map(|r| r.parse().expect("a rung"));
+    let seeds = std::env::var("OAG_SWEEP_SEEDS").unwrap_or_else(|_| "1-12".to_string());
+    let (first, last) = seeds.split_once('-').expect("seeds as first-last");
+    let path = std::env::var("OAG_SWEEP_OUT").expect("OAG_SWEEP_OUT");
+    let mut out = String::new();
+    for seed in first.parse::<u64>().expect("a seed")..=last.parse::<u64>().expect("a seed") {
+        match race_to_target(&image, difficulty, seed, rung) {
+            Some((tick, laps)) => out.push_str(&format!("{seed} {tick} {laps}\n")),
+            None => out.push_str(&format!("{seed} never -\n")),
+        }
+        std::fs::write(&path, &out).expect("writing the sweep");
+    }
 }

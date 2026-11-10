@@ -609,8 +609,10 @@ Frame-thread CPU and `prepare_view` in ms per frame:
   work is in the other rows, not a row of its own.
 
 **Anulpha specific.** Rows 1 and 2 are Anulpha's extra 1.8 ms: the circuit ships baked environment
-probes, so every hull blends two images per frame (the HD default circuit may ship none; not checked),. HD's default
-circuit pays 0.23 ms for the hull uniforms and Pulse none. Row 4 is on every title and is the
+probes, so every hull blends two images per frame. HD's default circuit (Talon's Junction) ships
+them too, 862 of them, as every HD circuit does (`hd_env_probes_ground_truth.rs`, checked
+2026-11-10); it pays 0.23 ms for the hull uniforms because fewer hulls are in its picture, and Pulse
+pays none. Row 4 is on every title and is the
 largest on HD default.
 
 **What the stack walk cannot say.** With frame pointers, the walk drops some inlined frames, so the
@@ -626,7 +628,9 @@ the `gpu-driven-submit` lane showed that a worker saving does not shorten the De
 frame thread's `prepare_view` is made of uniform builds, uploads and a few CPU image blends, none of
 which a culling pass touches. A CPU-side fix is cheaper and bigger. Top two:
 
-1. **Blend the hull's environment probes on the GPU, or not every frame** (Anulpha-like circuits
+1. ~~**Blend the hull's environment probes on the GPU, or not every frame**~~ **Done 2026-11-10**
+   (`probe-blend`): one compute pass, byte-identical, see "The hull probe blend in a compute pass"
+   at the end of this page. The text as written: (Anulpha-like circuits
    only, about 0.9 ms, 11% of the frame thread's 8.2). `EnvProbes::write` already skips an unchanged
    tap set, but the weights move with the craft, so it remixes each craft's two images
    every frame (decode, `Vec<u8>` accumulate, allocate, `write_texture`). Either upload the
@@ -1859,3 +1863,447 @@ Pictures: 18 of 18 pairs byte-identical by `cmp` on the Deck, RADV, Pure, Pulse 
 views, ticks 900, 1,500 and 2,400. **Single frames**, which cannot reach a stale buffer. For that the
 evidence is the tests: every drawn vertex carries the whole call's bits, at each clock value and
 whichever view drew it first (`oag_render::shine`), and a pose the buffer holds is not written again.
+
+## Render bundles for the circuit: measured, not built (2026-11-09, `render-bundles`)
+
+Claim: recording the view-invariant race draws (circuit, static scenery, static props) into wgpu
+render bundles and replaying them lowers the frame thread's CPU on HD Anulpha Pass and the Pulse
+default circuit, one view and a two-player split, with pictures byte-identical. **False as
+stated**: the race pass has almost no view-invariant draws, and what a bundle could save is under
+the 0.3 ms resolvable floor of a split on the Deck. Nothing was built and no bundle A/B was run.
+
+**Bundles can carry what our draws use.** wgpu-core 30.0.1 records `SetImmediate` in a bundle
+(`command/bundle.rs`), so the bindless per-draw material row is no blocker. Executing a bundle still
+merges its usage scope into the pass, registers its texture init actions and replays one driver draw
+per recorded draw (`command/render.rs`, `execute_bundle`). It skips wgpu-core's per-command
+validation and tracking, and our own command recording.
+
+**Does the frame thread wait on the race pass's `finish`?** Yes, already measured: one view was bound
+by the finishing worker before the second finishing thread ("Where the frame thread goes, before the
+cuts" and "A second finishing thread" above, HD `submit` 3.48 to 2.63 ms), and in a split HD's
+`submit` phase is 3.8 ms, about 2 ms of it waiting on a view's scene pass, which is one `finish`
+(`split-screen.md`, "What is left"). So a cheaper race pass would reach the frame thread. The
+question is how much a bundle makes it cheaper.
+
+**What is view-invariant.** Nothing that is static in the claim's sense:
+
+| `Draw` kind | What varies per view or frame |
+| --- | --- |
+| `Track` (circuit, with HD's and Pulse's scenery) | PVS set, chunk set, a frustum test per draw, the `LodGroup` choice per view, the hidden set, the blended list's depth sort, the flare interleave |
+| `Culled` (pads, weapon pads, gantry) | a frustum test per draw; under one draw a frame |
+| `Mesh` (hulls, weapons, wrecks) | which ones draw (the hull's frustum test, live weapons); a drawn one's own list is fixed |
+| the sky (inside `Track`) | nothing: a few draws |
+
+**How often a view's list repeats.** A throwaway counter (not committed) hashed the sequence of draw
+calls `Drawable::draw_lists` issued for each drawable and view (the shaded opaque draws with their
+cull mode and class, the cutout draws, the blended order and the flare inserts; the prepass's depth
+order left out, since it cannot change a pixel) and counted the frames where it equalled the same
+view's previous frame. A second hash took the same lists with the frustum test left out (the PVS,
+chunk, LOD and hidden tests kept). Release build, `--race --mode single_race --seed 1 --autopilot
+--size 1280x800 --ticks 3000` through the whole-race bench path (`OAG_RENDER_BENCH_RACE`, one frame
+a tick), frames 600 to 3,000 (racing, past the grid):
+
+| Circuit list, per view | draws a frame | repeats | without the frustum test: draws | repeats |
+| --- | ---: | ---: | ---: | ---: |
+| HD Anulpha, solid (opaque + cutout), one view | 680 | 26 % | 1,004 | 60 % |
+| HD Anulpha, solid, two views (view 0 / view 1) | 700 / 706 | 27 / 29 % | 1,004 / 1,008 | 60 / 70 % |
+| HD Anulpha, blended | 72 | 84 % | | |
+| Pulse `16_Track`, solid, one view | 190 | 50 % | 258 | 94 % |
+| Pulse, solid, two views | 195 / 196 | 51 / 50 % | 258 | 94 % |
+| Pulse, blended | 26 | 16 % | | |
+| Pure default, solid, one view | 163 | 60 % | 220 | 96 % |
+
+The uncull'd `Mesh` drawables repeated on every frame: six of 32 to 41 draws on HD (hull sized),
+the rest one to eight. At 90 fps a frame moves less than a tick, so the Deck would repeat somewhat
+more often; not measured.
+
+**The ceiling: the circuit's solid lists at no cost.** A measure-only switch returned from
+`draw_lists` before the circuit's solid lists (the picture loses the circuit; the GPU work goes too,
+so only 800p is read). Same race arguments with `--ticks 2400`, `taskset -c 0-5` (the notebook's
+six P cores), arms interleaved and reversed each round, 3 rounds, load 1.1 to 3.0, mean `cpu_us` per
+frame (record plus finish and submit, all on one thread: this hybrid CPU takes no split finish, no
+reaper thread and interleaved split recording):
+
+| 800p, us | with | without | saved (per round) |
+| --- | ---: | ---: | --- |
+| HD one view | 2,271 | 2,075 | 240, 116, 234 |
+| HD two views | 3,715 | 3,165 | 521, 503, 628 |
+| Pulse one view | 1,032 | 955 | 92, 52, 88 |
+| Pulse two views | 1,616 | 1,548 | 81, 39, 83 |
+
+At 1080p and 4K the HD saving grows with the GPU work it also removes (one view 232 and 1,043 us),
+and Pulse's is inside the noise (-3 and +2 us one view).
+
+**A bundle saves about half of that ceiling on a frame that reuses it.** A flat `perf record -e
+cpu-clock:u -F 999` of both arms, HD one view, 800p, the main thread: of the 613 samples the
+switch removed, 136 were the NVIDIA driver and about 100 our own culling (`draw_lists_into`,
+`pvs::visible`, the prepass sort). A bundle replays the same driver draws and still needs the
+culling to know whether its list changed. What it removes is wgpu-core's per-draw work
+(`render_pass_draw_indexed`, `State::is_ready`, `flush_bindings_helper`, `VertexState::validate`,
+`TextureUsageScope::merge_single`) and the copies behind it, about 55 %.
+
+**So, per view on this notebook**: HD 0.55 x 197 us x 26 % = about 28 us a frame with today's
+culling; about 45 us with the frustum test dropped (60 % reuse, less the driver's replay of 324
+more draws). Pulse 21 and 40 us. The 55 % is read off a whole-process profile in which unrelated
+symbols (inflate, physics) moved by about 100 samples between the arms, so it is good to about 15
+points; even a bundle that removed the whole ceiling would give HD about 51 us a view at 26 % reuse
+and Pulse about 39 us at 50 %. A frame whose list changed records a bundle, finishes it and then
+executes it, which costs more than today's draws, so these are upper bounds. The Deck's CPU is
+several times slower (the ratio for this work is not measured); at four to five times, HD one view
+is 0.13 to 0.2 ms of CPU spread over the frame thread and the finishing threads, and a split twice
+that. The indirect lane's colour and depth halves,
+which removed more per draw over the same thousand draws, measured 0.08 to 0.30 ms in the shipped
+split and called it the floor ("Re-measured under an interleaved split").
+
+**Dropping the frustum test to make the list repeat** (draw what the PVS keeps and let the GPU clip
+what is off screen) would keep the picture, since a draw whose bounding sphere lies outside a plane
+puts no fragment down. It adds 48 % of the circuit's solid draws on HD and 36 % on Pulse to the
+GPU, which bounds the Deck at 1080p and 4K, to buy at most about 0.2 ms of CPU. Not built.
+
+**Where the frame thread's time is instead** (above, and "What is left of the frame thread on the
+Deck"): `prepare_view` (3.45 of 8.2 ms on Anulpha, uniform builds and image blends), the encoder
+drops in `maintain`, the `write_buffer` staging, the post chain's passes and 1.0 to 1.6 ms of
+system time a frame that a user-space profile cannot see.
+
+### The ceiling on the Deck (2026-11-09)
+
+The same measure-only switch (`OAG_SKIP_SOLID`, never committed) in a `dist` `znver2` container
+build of `b09619fde`, HD Anulpha two players, vertical split, headless gamescope, `--render-scale
+100`, the race arguments of "What is left of the frame thread on the Deck", vsync and frame limit
+off, governor off, each run under the Deck's lock, mean of `frame-phases` after the first six lines,
+3 rounds per size, Deck load 1.5 to 2.7. The skip arm ran first in every round (the A/A in that
+section reads 0.03 ms, far under these deltas). ms per frame:
+
+| Two views | `total` with | without | saved per round | `submit` with / without | fps with / without | `present_ms` with / without |
+| --- | ---: | ---: | --- | --- | --- | --- |
+| 1280x800 | 10.14 | 8.47 | 1.42, 1.65, 1.93 | 3.61 / 2.75 | 93.5 / 112.9 | 0.62 / 0.46 |
+| 1920x1080 | 11.01 | 10.00 | 1.07, 0.97, 0.97 | 3.30 / 3.13 | 74.0 / 93.9 | 2.58 / 0.78 |
+| 3840x2160 | 15.50 | 14.29 | 1.41, 0.93, 1.29 | 4.37 / 3.65 | 29.2 / 40.5 | 18.98 / 10.62 |
+
+- **The ceiling is real CPU at every size**: 1.0 to 1.7 ms of frame thread for both views, about
+  what the notebook's 0.55 ms times four to five predicts.
+- **Most of the fps above 800p is GPU, which a bundle keeps.** At 1080p and 4K the frame waits on
+  the GPU (`present_ms` 2.6 and 19 ms with the circuit), and skipping the circuit's solid lists also
+  takes their GPU work away. A bundle draws the same triangles, so at those sizes it cannot raise fps
+  whatever it saves on the CPU. Only 800p is CPU-bound.
+- **What a bundle would save at 800p**: about 55 % of 1.67 ms on a frame that reuses it, on 27 to 29 %
+  of frames at one frame a tick: about 0.25 ms, and 0.47 ms if it removed the whole ceiling. At 90
+  fps a frame moves less than a tick, so reuse is somewhat higher (not measured on the Deck). A frame
+  that misses records, finishes and executes a bundle, which costs more than today. That is at the
+  0.3 ms split floor, as the estimate above said. The verdict stands: not built.
+
+Commands: `run.sh`, `avg.sh` and `ab.sh` as in "The reaper at one view and the shine passes", an arm
+being a wrapper that sets `OAG_SKIP_SOLID=1` around the same binary; `ab.sh <tag> "base skip" WxH 3
+hd 2`.
+
+## The Deck's GPU passes on HD Anulpha (2026-11-09, `deck-gpu`)
+
+Claim: cutting the largest GPU pass of an HD Anulpha race on the Deck raises fps at 1080p and 4K,
+picture byte-identical or behind a named tier. **False: nothing was kept.** The largest pass is the
+circuit's shading, exact and at 1.00x overdraw; the second, the motion blur gather, took two exact
+cuts that measured flat. Bisect and tier prices: [motion-blur.md](motion-blur.md), "The gather on
+the Deck: bisected, two exact cuts flat".
+
+**Method.** `RADV VANGOGH`, `dist` `znver2` `perf-probe` container builds of `4cd61908c`, offscreen
+over ssh, the maintainer's HD profile (`motion_blur = "high"`, `motion_blur_resolution = "half"`,
+shadows `original`, MSAA off, `target_fps = "off"`, render scale 100). `OAG_RENDER_GPU_BENCH=60
+OAG_RENDER_PERF=1 oag-game hdfury-ps3-eu-dec.iso --track 'Data\Environments\15_Anulpha_Pass\track.vex'
+--race --mode single_race --seed 1 --autopilot --no-audio --size WxH --ticks 2500 --render-scale 100
+--screenshot out.png`, one view (the span bench has no split). Arms interleaved, 2 rounds, each run
+under the Deck's lock, Deck load 0.8 to 1.7. No whole-race run: with nothing kept there was no
+before and after.
+
+### Per pass, one view, ms
+
+| Span | 1280x800 | 1920x1080 | 3840x2160 |
+| --- | ---: | ---: | ---: |
+| track solid, shaded | 1.88 | 3.03 | 8.66 |
+| track solid (depth prepass) | 0.40 | 0.49 | 1.12 |
+| motion blur chain | 1.48 | 2.99 | 11.24 |
+| - reconstruct (half) | 0.79 | 1.78 | 7.15 |
+| - composite / copy | 0.26 / 0.08 | 0.52 / 0.14 | 1.89 / 0.48 |
+| - prepare / tile-max x | 0.15 / 0.08 | 0.28 / 0.17 | 0.95 / 0.63 |
+| HD bloom chain | 0.99 | 1.65 | 5.08 |
+| - hd encode | 0.38 | 0.75 | 2.60 |
+| craft, weapons, shields | 0.42 | 0.59 | 1.25 |
+| advert cards (x7) | 0.53 | 0.53 | 0.45 |
+| between passes | 0.75 | 0.71 | 0.61 |
+| pipelined per frame | | 8.0 | 24.8 |
+
+- The circuit's shading is overdrawn 1.00x (2,068,113 fragment invocations for 2,073,600 pixels
+  at 1080p): there is no overdraw left to cut, and it is held exact.
+- The 4K gather reads 5.6 ms in one session and 7.2 to 8.3 ms in another for the same binary (the
+  clock; see [which GPU passes grow](hires-gpu-levers.md), "The Deck's 4K rows are unstable"). Only
+  interleaved pairs are compared below.
+- FXAA plus the present composite at a 4K output: 2.6 ms serialised (`OAG_RESOLVE_BENCH=100
+  --presented --reconstruction fxaa`), below both spans above.
+
+### The gather's two fetches, and its divisors: both measured flat
+
+- **Fetch order.** The ISA issued the colour sample only after the `prepared` load had returned
+  and the weights were computed, so each tap made two round trips in series. Moving the sample up
+  to where its address is known put both in flight together (checked in the ISA). Reconstruct
+  1.78 to 1.77 ms at 1080p, 5.63 to 5.63 at 4K. Occupancy already hides the latency. Dropped.
+- **Invariant divisors.** The loop recomputed six reciprocals per tap (`1 / f32(taps + 1)`,
+  `rect_pixels`, `inv_size`, the centre's reach). Hoisted, the loop went from 8 to 2 `v_rcp_f32`,
+  12 to 6 transcendentals and 84 to 75 VALU. Reconstruct 1.79 to 1.77 ms at 1080p, 5.65 to 5.69
+  at 4K. Dropped.
+
+Pictures: `cmp` equal before and after for both, at 1080p and 4K, two rounds each.
+
+## Scenery node animation: the head upload and the key bisection (2026-11-10, `scenery-anim`)
+
+Claim: scenery animation sampling in `prepare_view` costs less frame-thread CPU with every picture
+byte-identical, on Pulse, HD and Pure. **True on this machine** (desktop numbers: an Intel Core Ultra
+7 265H with a discrete NVIDIA GPU, the process pinned to the P-cores with `taskset -c 0-5`; the Deck
+was off, so its 0.3 to 0.4 ms above is not re-measured).
+
+**Direct, from the profiler** (`perf record -e cpu-clock:u -F 999`, no call graph, release builds of
+`main` and of this tree back to back at load 3.2 to 4.1, 1280x800, one view, one three-lap race
+each). Self samples per frame (1 sample = 1 ms; 6,884 Pulse frames, 6,947 HD frames) summed over
+`AnimTransform::sample`, `AnimChannel::sample`, `NodeAnims::*`, `matrix::multiply`,
+`Model::sample_anim_nodes*` and `wgpu_core::Queue::write_buffer` (which every uniform write passes
+through, so the delta, not the level, is ours):
+
+| | before | after |
+| --- | --- | --- |
+| Pulse (`16_Track`) | 137 us per frame (946 samples) | 97 us (671) |
+| HD (`talons_junction`) | 166 us (1,151) | 68 us (472) |
+
+**Bench**, `just bench-render --binary` on two release builds of one tree, three rounds interleaved
+base then new, `record_us` p50 in us (median of the three round medians) and `cpu_us` p50 beside it.
+Load 3.5 to 6.0 at 800p, 3.4 to 4.7 at 1080p, 2.7 to 4.8 at 4K (`load_average_start` and `_end` of
+the 18 result files of each size):
+
+| | 800p `record_us` | 800p `cpu_us` | 1080p `record_us` | 1080p `cpu_us` | 4K `record_us` | 4K `cpu_us` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Pulse | 647 to 589 (-9.0%) | 978 to 938 (-4.2%) | 655 to 652 (-0.5%) | 987 to 1,018 (+3.2%) | 678 to 631 (-6.9%) | 1,016 to 947 (-6.7%) |
+| HD | 922 to 831 (-9.9%) | 1,921 to 1,813 (-5.6%) | 988 to 914 (-7.4%) | 2,046 to 1,990 (-2.7%) | 1,929 to 1,758 (-8.9%) | 3,869 to 3,784 (-2.2%) |
+| Pure | 282 to 264 (-6.3%) | 483 to 456 (-5.5%) | 286 to 272 (-5.0%) | 485 to 470 (-3.1%) | 373 to 362 (-2.8%) | 602 to 611 (+1.4%) |
+
+Pulse at 1080p is inside the noise in this series (its rounds read 649, 655, 666 before and 623, 665,
+652 after), and in two earlier series of the same change that row read +13 us and -26 us: no claim
+there. Pure's 4K `cpu_us` is likewise within the round-to-round spread (589 to 625). Everywhere else
+the sign of `record_us` held in every round pair. At 4K HD `cpu_us` moves less than `record_us`
+because the frame is GPU-bound and part of the saving is inside the wait.
+
+What the profile said (frame-pointer build, call graph, same races; `NodeAnims::sample_started` was
+1.5 to 2.5% of all samples, the whole `write_scenery_anims` 3.0% on Pulse and 1.25% on HD):
+
+1. **The node table was uploaded whole.** `write_node_anims_started` built a 384-matrix
+   `NodeAnims` (a 24 KiB identity fill, a `Vec` of the live matrices, a copy) and sent all 24 KiB
+   to wgpu every sampled frame, whatever the model's node count (Pulse's busiest circuit has 74).
+   Every slot past the model's nodes is the identity the buffer was built with, and nothing else
+   writes it, so `NodeAnims::head_started` returns slot 0 and the live matrices only and the
+   drawable uploads that head. The GPU's table is byte-for-byte what a full upload leaves
+   (`mesh_render::tables::tests`, over 1 to 400 nodes and a clock sweep including negative clocks).
+2. **The key search was a linear scan.** `AnimChannel::at` walked the key times from the start for
+   every channel of every node every frame; on HD `AnimChannel::sample` was 0.9 to 1.1% of all
+   samples (423 samples against Pulse's 62), the largest single piece after the upload. Key times
+   that never decrease (decided once, at construction, by `AnimChannel::new`, for channels of two or
+   more keys) are bisected with `partition_point`; any other channel keeps the scan. Same key pair
+   and blend factor to the bit, NaN clock included (`the_key_search_is_the_scan_to_the_bit`). No code
+   writes `AnimChannel::times` after construction (`rg` over the workspace).
+
+**Measured and dropped: an exact `f64` clock wrap.** A node wraps its clock at its own `LoopEnd`
+(`seconds % period`, an `fmodf` libcall). A skip when the clock is inside one period never fires
+(the race clock passes most periods in the first minute), so the wrap was rewritten in `f64`
+(`x - floor(x / p) * p`, exact for a quotient under 2^28, tested against `%` bit for bit over three
+million random pairs). `AnimTransform::sample` self time read 1.36%, 1.32%, 1.39% and 1.35% of all
+samples across the base, the skip, the `f64` wrap and the wrap on `TexTransform` too: flat, so it was
+removed again.
+
+**Not the cause: `feclearexcept` (0.35 to 0.6% of samples).** It looked like `fmodf`'s fenv
+traffic and survives every wrap variant. Its caller is an unresolved frame in another shared
+library, not our code.
+
+**What is left in `AnimTransform::sample`.** 43% of its samples sit on the loads of a node's boxed
+transform (`translation_quantum`, `translation_base`; `perf annotate -l`, source line
+`translation[k] * quantum + base`): a cache miss per node, because each node is a
+`Box<AnimTransform>` whose three channels own three `Vec`s each. A flat per-model layout (one array
+of the constants, one of the keys) would turn those into sequential reads; it touches the load path
+of every model and was not attempted. The other candidates the Deck note listed were checked: the
+per-tick cache is `remember` (`daddbef7e`, 2026-10-21, before the Deck profile, so the Deck's 0.3 to
+0.4 ms includes it; at 90 Hz over 60 Hz ticks a third of the Deck's frames still resample), and
+`AnimTrack::sample` builds no `Vec` any more.
+
+**Pictures and the simulation.** `--race --screenshot --ticks 500` on Pulse, HD and Pure with the
+live clock and with `--anim-seconds` 0, 7.3 and 95.1: 12 PNG pairs, `main` binary against this
+tree's, `cmp` identical. The three titles' final state hashes are identical in every bench pair
+(`bench-compare` reads them). No simulation crate changed.
+
+Commands (one tree, two binaries; the base is `main` at `2a244f1ac`):
+
+```sh
+cargo build --release -p oag-game && cp target/release/oag-game /path/oag-game-new   # base: the same on main
+# wrap each as: exec taskset -c 0-5 /path/oag-game-X "$@"   (run-base.sh, run-new.sh)
+python3 scripts/bench-render.py run pulse hd pure --binary /path/run-base.sh --size 1280x800 --out /path/base-r1
+python3 scripts/bench-render.py run pulse hd pure --binary /path/run-new.sh  --size 1280x800 --out /path/new-r1
+# direct: wrap as: exec taskset -c 0-5 perf record -e cpu-clock:u -F 999 -o "$PERF_OUT" -- /path/oag-game-X "$@"
+# then: perf report -i $PERF_OUT --no-children -n --sort sym --stdio
+# call-graph profile: RUSTFLAGS=-Cforce-frame-pointers=yes CARGO_PROFILE_RELEASE_DEBUG=line-tables-only,
+# its own CARGO_TARGET_DIR, perf record ... --user-callchains --call-graph fp
+```
+
+## Four desktop GPU cuts on the Deck (2026-11-10, `deck-remeasure`)
+
+Claim: the blur composite without its copy, the motion blur tap caps, the present composite's
+dead `pow` and the Zone texture rewrite each have a Deck row at 800p, 1080p and 4K from
+interleaved rounds, and the Zone rewrite has a Deck picture verdict. **True.** Per-item rows and
+verdicts: [motion-blur.md](motion-blur.md) ("The tap caps on the Deck", "The half-size composite
+blends onto the scene", "On the Deck"), [hires-gpu-levers.md](hires-gpu-levers.md) ("The present
+composite's two dead `pow`", "Zone textures, 9 fetches to 3"). One line each, GPU medians of the
+redraws, one view:
+
+| Item | Span | 800p | 1080p | 4K |
+| --- | --- | --- | --- | --- |
+| Tap caps, `high` | `reconstruct (half)` us | 725 to 587 | 1770 to 1399 | 8199 to 6424 |
+| Tap caps, `medium` | `reconstruct (half)` us | 644 to 478 | 1660 to 1158 | 7932 to 5399 |
+| Composite without copy | composite + copy us | 305 to 224 | 673 to 503 | 2587 to 1981 |
+| Present composite skip | `resolve_scene` + `composite` us | 298 to 136 | 610 to 271 | 2371 to 1029 |
+| Zone texture rewrite | `track solid, shaded` us, Zone frame | 2014 to 1864 | 3525 to 3323 | 8187 to 8131 (noise) |
+
+**Method.** `RADV VANGOGH`, on AC, `powersave` governor, Deck load 0.4 to 2.0 (every run records
+`/proc/loadavg` before and after). `dist` `znver2` `perf-probe` builds from the container recipe
+above (`cargo build --profile dist -p oag-game --no-default-features --features
+extensions,dev-cli,perf-probe`), stripped and copied to a scratch directory on the Deck, nothing
+else installed, removed after. The game ran offscreen over ssh with a fresh `XDG_*` profile (MSAA
+off, vsync irrelevant), the disc read from `~/.local/share/oag/images/`, `--no-audio`,
+`--render-scale 100`, `--size WxH`; at 4K the span log shows 8.2 million shaded fragments, so the
+extent is really 3840x2160. Each run was one `ssh` under the workstation's `deck.lock` and the
+Deck's own `deck-run.sh` wrapper (it refuses while a Steam game runs or the Deck is reserved).
+Arms interleaved, the order rotated each round and reversed on even rounds, the size loop inside
+the round:
+
+```sh
+# per run, on the Deck (blur items; ENV is OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1)
+env $ENV ./oag-game hdfury-ps3-eu-dec.iso --track 'Data\Environments\15_Anulpha_Pass\track.vex' \
+  --race --mode single_race --seed 1 --autopilot --no-audio --size WxH --ticks 2500 \
+  --render-scale 100 --motion-blur high|medium --motion-blur-resolution half --screenshot out.png
+# present composite: the throwaway timer (OAG_TS_RESOLVE=100 OAG_TS_COMPOSITE=100), --presented
+#   --ticks 60, the rest as above
+# Zone: OAG_RENDER_GPU_BENCH=100, hdfury iso, --mode zone --zone-spectrum-test
+#   --track /data/environments/talons_junction/track.vex --ticks 1500
+```
+
+Round to round the 800p and 1080p rows agree within 0.1 to 1 %; the 4K blur and present rows
+agree within 1 % across rounds taken minutes apart, but the 4K Zone row swings 10 to 19 % between
+rounds (two clock states, as "The Deck's 4K rows are unstable" in
+[hires-gpu-levers.md](hires-gpu-levers.md) found), so it is read pair by pair. Bases: the blur
+composite `95ca568b1`, the tap caps `b56d129a3` against `59900b483`, the present and Zone items
+`59900b483` with and without the change (the old `upscale.wesl`, the old `zone.wesl`).
+
+## The hull probe blend in a compute pass (2026-11-10, `probe-blend`)
+
+Claim: the hull environment-probe blend no longer costs the frame thread about 0.9 ms per frame on
+HD Anulpha: the Deck's frame-thread time drops by most of that at 800p, the GPU time it adds is
+measured, and every picture stays byte-identical. **True in part.** The blend is off the frame
+thread and the pictures are identical, but at 800p the Deck gains 0.33 ms, not 0.9: the
+`prepare-view` lane had already cut the blend to the hulls in view ("The hull probes" above), so
+on today's main it cost about 0.3 ms there. At 4K, where the GPU holds the frame, the same blend
+cost 0.85 ms and that is what comes off.
+
+**What changed.** The decoded probes sit in a source array on the GPU (64 slots, `Rgba8Uint`, each
+probe uploaded once when a craft first reaches it). One compute pass a frame
+(`oag_render::probe_blend`, `shaders/probe_blend.wesl`) writes the two layers of every craft whose
+weights moved, into the array the hull shader already samples. The hull shader is untouched. The
+frame thread keeps the probe lookup (`Probes::locate`), a 48-byte job per craft and one pass of one
+dispatch; `probes::mix`, its two `Vec` builds per craft and the two texture uploads per craft are
+gone. `OAG_PROBE_BLEND=cpu` keeps the frame-thread blend, for an A/B; wgpu's GL backend gets it
+too (the pass was not run there). That path lost its per-frame allocations as well
+(`probes::mix_into` into kept buffers, no `Arc` clones, no `Vec` of taps).
+
+**Why the bytes are exact.** The array is `Rgba8Unorm` with an sRGB view (a storage texture cannot
+be sRGB), so the hull reads the same bytes decoded the same way. The pass does `mix`'s `f32`
+arithmetic on the bits, in integers: a byte times a 24-bit significand, three adds and the `+ 0.5`,
+each rounded to nearest even by hand. A plain float version was wrong: naga emits no
+`NoContraction`, Mesa treats such operations as inexact, and Intel's driver gave 3 bytes off by one
+level in one blend of eight. With the integer version `probe_blend::tests` and the
+`probe_blend_check` example compare the array against `mix` byte for byte over random probes and
+the weights `locate` gives, on and off a cell's edges:
+
+| Adapter | Bytes compared | Differing | GPU time of a pass of 8 crafts (median of 200) |
+| --- | ---: | ---: | ---: |
+| Steam Deck, `RADV VANGOGH`, Mesa 26.2.0-devel | 32,768,000 | 0 | 140 us |
+| Intel Arrow Lake iGPU, Mesa 26.2.6 | 32,768,000 | 0 | 150 us |
+| NVIDIA RTX PRO 2000 (laptop), 615.78.08 | 32,768,000 | 0 | 23 us |
+
+That GPU time is the whole of what the pass adds, on an otherwise idle GPU and for a full field in
+view; a race blends only the hulls in the picture.
+
+**The Deck, HD Anulpha Pass.** `dist` `znver2` container builds of `4d5e00ae2` (base) and
+`39d84ce84`, headless gamescope, render scale 100, the recipe of "Re-measured under an interleaved
+split" above (`--script 36:quit`, first six seconds dropped), the settings copy that section used
+(HD: FXAA, blur `high` at half resolution, shadows `original`, vsync off, no frame limit), two
+rounds with the order flipped, Deck load 1.3 to 2.2. Means of the two rounds, ms per frame;
+`gpu` is `frame-log`'s scene-pass time, which does not hold the compute pass:
+
+| Size | `total` | `scene` | `submit` | fps | p99 | `gpu` |
+| --- | --- | --- | --- | --- | --- | --- |
+| 800p | 6.37 to 6.04 | 2.77 to 2.61 | 2.71 to 2.54 | 142.5 to 144.8 | 10.08 to 9.44 | 3.10 to 3.11 |
+| 1080p | 8.44 to 7.96 | 3.76 to 3.35 | 3.33 to 3.28 | 98.3 to 98.3 | 13.79 to 12.71 | 4.49 to 4.50 |
+| 4K | 10.22 to 9.37 | 4.58 to 3.73 | 3.29 to 3.28 | 33.9 to 33.8 | 41.2 to 43.1 | 12.49 to 12.56 |
+
+The two rounds of an arm agree within 0.06 ms of `total` at every size. 1080p and 4K are held by
+the GPU, so their fps does not move; the 4K fps and p99 differences are inside the spread of the
+rounds (33.8 to 34.0 against 33.7 to 33.9). A flat `perf` profile at 800p (`cpu-clock:u`, 999 Hz,
+from second 15) has `oag_vex::probes::mix` at 1.90 % of all samples on the base, about 0.2 ms of
+the frame thread's 6.4, and absent on the new build. `probes::decode` stays (0.29 % against
+0.31 %): a craft at speed reaches new probes about eight sections a second, and each is decoded
+once.
+
+**Desktop, HD Anulpha Pass.** The whole-race bench's mode (`OAG_RENDER_BENCH_RACE`) with
+`--track` Anulpha and `--ticks 3000`, release builds, pinned to the P-cores, gate lock held, load
+1.7 to 3.7, two rounds with the order flipped, p50 in us (mean of the rounds). The final state hash
+is `a100dfcbdee398f0` in all 24 runs. `gpu` is the scene pass, without the compute pass:
+
+| Adapter | Size | `record` | `cpu` | `gpu` | `frame` |
+| --- | --- | --- | --- | --- | --- |
+| NVIDIA | 800p | 938 to 692 | 2044 to 1753 | 984 to 1014 | 2259 to 2086 |
+| NVIDIA | 1080p | 975 to 725 | 2136 to 1911 | 1850 to 1934 | 2857 to 2833 |
+| NVIDIA | 4K | 1766 to 1432 | 3830 to 3800 | 7099 to 7101 | 7972 to 8008 |
+| Intel | 800p | 962 to 721 | 2511 to 2279 | 2340 to 2372 | 4162 to 4189 |
+| Intel | 1080p | 1005 to 778 | 2620 to 2459 | 3385 to 3389 | 5216 to 5214 |
+| Intel | 4K | 1929 to 1543 | 4785 to 4677 | 8685 to 8691 | 10564 to 10566 |
+
+`record` falls 0.23 to 0.39 ms in every cell. `frame` gains 7.7 % on NVIDIA at 800p, where the CPU
+binds, and stays within 0.7 % elsewhere, where the GPU does (the Intel rows are GPU-bound at every
+size). NVIDIA's scene pass reads 30 to 84 us longer at 800p and 1080p and the same at 4K; the pass
+before it is the likely cause (its work overlaps the timed span), not the hull shader, which did
+not change.
+
+**Pictures.** `--screenshot` at 1280x800, seed 1, autopilot: Anulpha at ticks 600 and 1500 (the
+player's craft and others in view), HD's default circuit and Pulse's at tick 900; base, the new
+build, and the new build with `OAG_PROBE_BLEND=cpu`.
+
+- **Deck and NVIDIA: byte-identical**, all four scenes, all three arms (`sha256sum`).
+- **Intel: Pulse identical; the HD scenes are not repeatable on the base build itself.** Three runs
+  of the unchanged binary gave three hashes. Over six runs of each arm on Anulpha tick 600: base
+  against base differs in 1 to 5 pixels by one level, new against new in 0 to 7, base against new
+  in 0 to 7 (one pair identical), and the 1,023,990 pixels that never vary inside an arm are equal
+  between the arms. So no difference from this change is visible there, and the array itself is
+  exact on that adapter (table above). The run-to-run noise on Intel's HD hull pixels is older
+  than this lane and not explained.
+
+**Cross-title.** Only Wipeout HD ships `.probes` in a layout this reader takes; Pulse and Pure load
+none and draw as before (identical captures above). 2048 and Omega name their probes as another
+layout (`a_2048_circuit_names_its_probes_as_another_layout`) and build no `EnvProbes`, so the pass
+never runs for them: not checkable until that layout is read.
+
+Commands:
+
+```sh
+# exactness and GPU time on an adapter (no disc needed)
+OAG_TEST_ADAPTER=discrete|integrated cargo run --release -p oag-render --example probe_blend_check -- 100
+# the Deck: container builds as in "Re-measured under an interleaved split", then per run
+env ENABLE_GAMESCOPE_WSI=0 gamescope --backend headless -W $W -H $H -w $W -h $H -r 90 -- \
+  ./oag-game ~/.local/share/oag/images/hdfury-ps3-eu-dec.iso --race --mode single_race --seed 1 \
+  --track 'Data\Environments\15_Anulpha_Pass\track.vex' --autopilot --no-audio --no-intro \
+  --frame-log --render-scale 100 --script "36:quit"
+# desktop, per run (VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json for Intel)
+OAG_RENDER_BENCH_RACE=<stem> taskset -c 0-5 oag-game hdfury-ps3-eu-dec.iso --race --mode single_race \
+  --seed 1 --autopilot --no-audio --log-every 0 --track 'Data\Environments\15_Anulpha_Pass\track.vex' \
+  --size WxH --ticks 3000 --screenshot unused.png
+# pictures: the same race with --size 1280x800 --ticks N --screenshot out.png, and
+# OAG_PROBE_BLEND=cpu for the frame-thread arm
+```

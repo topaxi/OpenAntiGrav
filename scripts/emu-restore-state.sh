@@ -3,8 +3,9 @@
 # pad, GDB proxy and /proc memory, in about 10 s.
 #
 #   scripts/emu-restore-state.sh <lane> <state-file> [--restart] [--no-gdb] [--interpreter] [--pause] [--serial BCES00664]
-#   --pause holds the game on the state's own tick as soon as the stub answers (a mid-race state
-#   otherwise runs on for the 10 s the script takes to return); a capture then resumes for a moment.
+#   --pause holds the game as soon as the stub answers (a mid-race state otherwise runs on for the 10 s the
+#   script takes to return); it lands a variable game time after the load, not on the state's own tick (one
+#   HD race state stopped at race clocks 11.2 s and 7.3 s on two restores); a capture then resumes for a moment.
 #
 # <lane> is the scratch dir of a private tree (scripts/emu-env.sh <lane> ...).
 # --restart then runs the pause menu's Restart Race (another ~8 s), which prints

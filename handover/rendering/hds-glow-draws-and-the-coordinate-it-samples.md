@@ -20,7 +20,7 @@ variant's own microcode (`fragment::Program::accumulates`), the tint and the two
 coordinate constants ride a per-material table written once at build, and
 `mesh.wgsl` samples unit 1 at `(u, (v + a) * b + time)` and adds it. **119 slots
 across the 16 circuits**, 62,904 of Modesto Heights' 1,151,776 vertices.
-`crates/render/tests/hd_emissive_glow_ground_truth.rs` measures the glow's own
+`crates/mesh/tests/hd_emissive_glow_ground_truth.rs` measures the glow's own
 pixel contribution by rendering the same model with the bit cleared.
 
 **A material that accumulates is not necessarily one that scrolls**, and the

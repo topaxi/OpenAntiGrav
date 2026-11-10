@@ -22,8 +22,8 @@ wrong, and `0x002ab9d0` is not that pool's acquire. Evidence, confidence 90:
   (`FatLine_PushChains`), not an acquire.
 - Pool `+0x74` is acquired by `0x002db130`, a per-craft update (it reads
   `craft + 0x5fac`, `+0x340`, a speed ramp), and pushed with `0x002ac208`. Its
-  user is a craft effect, **unnamed** (confidence below 50); the smoke texture
-  is its own, not the Missile's.
+  user is the **wingtip vortices** (2026-11-09, [wingtip-vortices.md](wingtip-vortices.md),
+  confidence 80); the smoke texture is its own, not the Missile's.
 - Pool `+0x5c` (`ThickLine_bighalo`, 20 elements) is the Missile **explosion's**:
   `0x00155568` (the explosion init) acquires 16 of them, and `0x00154a78`
   (its update) calls `0x002ab9d0` with them.
@@ -145,6 +145,10 @@ channels would do) bloomed the ribbons white where the original's are red; the
 pair's table below carries both. The tint `c[209]` comes from a global vector the
 builder's bind function `0x002ec748` negates (`-[g + 0x70]`); its value was **not
 read**. Against the film it is white or near it (the texture is red already).
+**Corrected 2026-11-09** ([wingtip-vortices.md](wingtip-vortices.md), "The colour"): the
+negated global is `vCameraPos` (`c[210]`); `c[209]` is `vBaseColour`, the config's first
+16 bytes, which a static initializer writes at boot: `(1, 0.2, 0, 1)` for pool `+0x50`
+and `(1, 0.2, 0.1, 1)` for `+0x68`. Confidence 85.
 
 ## Named here
 

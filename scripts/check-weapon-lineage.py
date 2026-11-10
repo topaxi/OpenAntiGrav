@@ -217,6 +217,12 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
             raise SystemExit(f"check-weapon-lineage: {title}: `opponent_fire` is not a `Sourced` OpponentFire")
         cells.setdefault("weapons.opponent_fire", {})[title] = (fire.group(2), fire.group(1))
 
+        # `Sourced::inherited(BlastPush::Posted, "...")`: the variant is the value.
+        push = re.search(r"Sourced::(\w+)\(\s*[\w:]*BlastPush::(\w+)", weapons["blast_push"])
+        if push is None:
+            raise SystemExit(f"check-weapon-lineage: {title}: `blast_push` is not a `Sourced` BlastPush")
+        cells.setdefault("weapons.blast_push", {})[title] = (push.group(2), push.group(1))
+
         models = models_block(title)
         for field, value in models.items():
             if field.startswith("."):

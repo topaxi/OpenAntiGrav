@@ -23,6 +23,7 @@ mod psys_ground_truth;
 mod psys_layer_order;
 mod psys_omega_ground_truth;
 mod psys_template_ground_truth;
+mod trail_length;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

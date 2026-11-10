@@ -182,6 +182,12 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         centre: [240, 136],
         stamp: "SpeedBar",
     }),
+    // Measured at the draw call on PPSSPP, `docs/ghidra/functions/psp-pulse-usa/shield.md`, "The
+    // absorb flash at the draw call": the fill's stencil replace with reference `0xff`.
+    absorb_glow: Some(oag_title::hud::AbsorbGlow {
+        fill: "ShieldBar",
+        value: 0xff,
+    }),
     // Nobody has read a sway in this title's `Hud_Update`: the HUD stays fixed.
     sway: None,
     // The disc authors no `Safe Area Setting` (`docs/formats/hd-hud.md`, "SCREEN SIZE on every

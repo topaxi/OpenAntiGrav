@@ -55,6 +55,18 @@ pub(super) fn sibling_model(
     }
 }
 
+/// A `.vex` circuit's model with its batches' own cull bit honoured where the title's rule says
+/// so (`oag_title::Looks::batch_back_face_cull`, `docs/rendering/batch-cull.md`).
+pub(super) fn with_batch_cull(
+    mut model: Model,
+    looks: &oag_title::Looks,
+    platform: oag_title::Platform,
+) -> Model {
+    model.per_batch_cull = looks.batch_back_face_cull.applies(platform)
+        || looks.batch_back_face_cull_carried.applies(platform);
+    model
+}
+
 /// The circuit's authored geometry, or `None` when the caller should draw the
 /// derived ribbon instead.
 ///

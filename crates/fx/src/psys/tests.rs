@@ -47,6 +47,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             streak: StreakDraw::Procedural,
             blend: Blend::Additive,
             distort_strength: 0.0,
+            colour_scale: 1.0,
             particle_child: None,
             death_child: None,
             spawn_probability: 1.0,
@@ -430,6 +431,216 @@ fn a_pool_bar_is_built_at_the_mean_depth_of_its_ends_when_the_eye_is_known() {
     // The origin's screen point (10 / 20) is kept: x 7.5 at depth 15, plus the cap and half.
     let max_x = out.iter().map(|v| v.position[0]).fold(f32::MIN, f32::max);
     assert!((max_x - 8.5).abs() < 1e-3, "{max_x}");
+}
+
+fn eye_at_origin() -> guard::GuardBand {
+    guard::GuardBand {
+        eye: Vec3::ZERO,
+        right: Vec3::X,
+        up: Vec3::Y,
+        forward: Vec3::NEG_Z,
+    }
+}
+
+fn streak_vertices_seen(spec: &EmitterSpec, particle: &Particle) -> Vec<GpuVertex> {
+    let mut out = Vec::new();
+    streak::extend(
+        &mut out,
+        spec,
+        particle,
+        1.0,
+        [1.0; 4],
+        (Vec3::X, Vec3::Y),
+        Some(&eye_at_origin()),
+    );
+    out
+}
+
+/// HD's class 6 (render mode 5, `engine-trail.md`, "The class-6 draw law"): both ends go onto
+/// the farther view depth, where Pulse's pool bar takes the mean. The bar is `2 size` wide and
+/// reaches `aspect * size` past each end. `WO_TRAIL_HITSHIP`'s first emitter has no sprite, so
+/// this holds with none placed: the corners are the bar's, the shading the procedural profile.
+#[test]
+fn hd_class_6_bar_is_built_at_the_farther_depth_with_no_sprite() {
+    let spec = streak_spec(StreakDraw::FarBar { aspect: 2.0 }, None);
+    let particle = streak_particle(Vec3::new(0.0, 0.0, -10.0), Vec3::new(10.0, 0.0, -20.0));
+    let out = streak_vertices_seen(&spec, &particle);
+    assert_eq!(out.len(), 6);
+    assert!(
+        out.iter().all(|v| (v.position[2] + 20.0).abs() < 1e-4),
+        "one depth, the farther -20: {:?}",
+        out.iter().map(|v| v.position[2]).collect::<Vec<_>>()
+    );
+    // The position's screen point is kept (x 0); the origin is already at -20 (x 10). The
+    // bar reaches 2 * size past each end.
+    let mut xs: Vec<f32> = out.iter().map(|v| v.position[0]).collect();
+    xs.sort_by(f32::total_cmp);
+    xs.dedup_by(|a, b| (*a - *b).abs() < 1e-4);
+    assert_eq!(xs.len(), 2, "{xs:?}");
+    assert!(
+        (xs[0] + 2.0).abs() < 1e-4 && (xs[1] - 12.0).abs() < 1e-4,
+        "{xs:?}"
+    );
+    assert!(
+        out.iter().all(|v| (v.position[1].abs() - 1.0).abs() < 1e-4),
+        "2 size wide"
+    );
+    assert!(
+        out.iter().all(|v| v.normal[0] == 0.0),
+        "no sprite: the procedural profile shades it"
+    );
+}
+
+/// With a sprite placed the same bar samples its cell, as Pulse's does.
+#[test]
+fn hd_class_6_bar_samples_its_sprite_when_one_is_placed() {
+    let spec = streak_spec(
+        StreakDraw::FarBar { aspect: 1.0 },
+        Some([0.0, 0.0, 1.0, 1.0]),
+    );
+    let particle = streak_particle(Vec3::new(0.0, 0.0, -10.0), Vec3::new(10.0, 0.0, -20.0));
+    let out = streak_vertices_seen(&spec, &particle);
+    assert_eq!(out.len(), 6);
+    assert!(out.iter().all(|v| v.normal[0] == 1.0), "samples the sheet");
+    assert!(out.iter().all(|v| (v.position[2] + 20.0).abs() < 1e-4));
+}
+
+/// Pulse's pool bar keeps the mean depth beside HD's farther one.
+#[test]
+fn pulses_pool_bar_and_hds_bar_differ_only_in_depth() {
+    let particle = streak_particle(Vec3::new(0.0, 0.0, -10.0), Vec3::new(10.0, 0.0, -20.0));
+    let rect = Some([0.0, 0.0, 1.0, 1.0]);
+    let depth = |draw| streak_vertices_seen(&streak_spec(draw, rect), &particle)[0].position[2];
+    assert!((depth(StreakDraw::Bar { aspect: 1.0 }) + 15.0).abs() < 1e-4);
+    assert!((depth(StreakDraw::FarBar { aspect: 1.0 }) + 20.0).abs() < 1e-4);
+}
+
+/// The far bar is opted into per effect: `without_pulse_psp_draw` still turns every
+/// streak procedural, and the far-bar variant of it keeps only class 6.
+#[test]
+fn only_the_far_bar_reset_keeps_class_6_and_never_class_7() {
+    let base = || {
+        let mut effect = (*effect("hd", false, 10.0)).clone();
+        let spec = effect.emitters[0].clone();
+        effect.emitters = vec![spec.clone(), spec.clone(), spec];
+        effect.emitters[0].streak = StreakDraw::Bar { aspect: 1.0 };
+        effect.emitters[1].streak = StreakDraw::Capped;
+        effect.emitters[2].streak = StreakDraw::Wedge;
+        effect
+    };
+    let mut plain = base();
+    plain.without_pulse_psp_draw();
+    assert!(
+        plain
+            .emitters
+            .iter()
+            .all(|e| e.streak == StreakDraw::Procedural)
+    );
+    let mut kept = base();
+    kept.without_pulse_psp_draw_but(streak::Kept::bar(streak::KeptBar::Far));
+    let draws: Vec<StreakDraw> = kept.emitters.iter().map(|e| e.streak).collect();
+    assert_eq!(
+        draws,
+        [
+            StreakDraw::FarBar { aspect: 1.0 },
+            StreakDraw::Procedural,
+            StreakDraw::Procedural
+        ]
+    );
+}
+
+/// The pool bar is the other opt-in: it keeps class 6 as [`StreakDraw::Bar`] (the mean-depth rectangle
+/// Pulse's and Pure's PSP engines build), and the wedge and the capped bar still go procedural.
+#[test]
+fn only_the_pool_bar_reset_keeps_class_6_as_the_mean_depth_bar() {
+    let mut effect = (*effect("pure", false, 10.0)).clone();
+    let spec = effect.emitters[0].clone();
+    effect.emitters = vec![spec.clone(), spec.clone(), spec];
+    effect.emitters[0].streak = StreakDraw::Bar { aspect: 0.5 };
+    effect.emitters[1].streak = StreakDraw::Capped;
+    effect.emitters[2].streak = StreakDraw::Wedge;
+    effect.without_pulse_psp_draw_but(streak::Kept::bar(streak::KeptBar::Mean));
+    let draws: Vec<StreakDraw> = effect.emitters.iter().map(|e| e.streak).collect();
+    assert_eq!(
+        draws,
+        [
+            StreakDraw::Bar { aspect: 0.5 },
+            StreakDraw::Procedural,
+            StreakDraw::Procedural
+        ]
+    );
+}
+
+/// The templates are the third opt-in: a listed effect keeps a template emitting and rolling, an unlisted
+/// one mutes it and takes its rotation, and the listing never reaches an emitter's own rotation.
+#[test]
+fn only_the_kept_templates_reset_keeps_templates_emitting_and_rolling() {
+    let base = || {
+        let mut effect = (*effect("pure", false, 10.0)).clone();
+        let spec = effect.emitters[0].clone();
+        effect.emitters = vec![spec.clone(), spec];
+        effect.emitters[0].rotation = Some(roll::Rotation::emitter(1.0, constant(1.0), 0));
+        effect.emitters[1].template = true;
+        effect.emitters[1].per_emission = (3, 3);
+        effect.emitters[1].rotation = Some(roll::Rotation::emitter(1.7, constant(1.0), 0));
+        effect
+    };
+    let mut muted = base();
+    muted.without_pulse_psp_draw();
+    assert_eq!(muted.emitters[1].per_emission, (0, 0));
+    assert!(muted.emitters.iter().all(|e| e.rotation.is_none()));
+
+    let mut kept = base();
+    kept.without_pulse_psp_draw_but(streak::Kept {
+        bar: streak::KeptBar::No,
+        templates: true,
+    });
+    assert_eq!(kept.emitters[1].per_emission, (3, 3));
+    assert!(kept.emitters[1].rotation.is_some());
+    assert!(
+        kept.emitters[0].rotation.is_none(),
+        "an emitter's own particle stays unrotated"
+    );
+}
+
+/// `kColourScale` (`+0xc84`) is applied to HD's bar alone, as the authored colour times
+/// `scale^(1/2.2)`, which our 2.2 decode turns back into `scale` in linear light.
+#[test]
+fn only_the_far_bar_takes_the_colour_scale() {
+    let gain = StreakDraw::FarBar { aspect: 1.0 }.colour_gain(0.7);
+    assert!((gain - 0.7_f32.powf(1.0 / 2.2)).abs() < 1e-6);
+    assert!((gain.powf(2.2) - 0.7).abs() < 1e-5);
+    for draw in [
+        StreakDraw::Procedural,
+        StreakDraw::Bar { aspect: 1.0 },
+        StreakDraw::Wedge,
+        StreakDraw::Capped,
+    ] {
+        assert_eq!(draw.colour_gain(0.7), 1.0);
+    }
+}
+
+/// The gain reaches the vertices a playing far-bar streak builds, and a plain streak off the
+/// same emitter keeps its authored colour.
+#[test]
+fn a_playing_far_bar_streak_is_drawn_at_its_colour_scale() {
+    let drawn = |draw| {
+        let mut spec = effect("hit", false, 10.0).emitters[0].clone();
+        spec.render = Render::Streak { from_spawn: false };
+        spec.streak = draw;
+        spec.colour_scale = 0.5;
+        let mut effect = (*effect("hit", false, 10.0)).clone();
+        effect.emitters = vec![spec];
+        let effect = std::sync::Arc::new(effect);
+        let mut system = System::new();
+        system.ignite(&effect, Vec3::ZERO, 1.0);
+        run(&mut system, &effect, 3, &mut Rng::new(1));
+        let (additive, _) = system.vertices(&effect, Vec3::X, Vec3::Y);
+        assert!(!additive.is_empty());
+        additive[0].colour[0]
+    };
+    assert!((drawn(StreakDraw::FarBar { aspect: 1.0 }) - 0.5_f32.powf(1.0 / 2.2)).abs() < 1e-5);
+    assert_eq!(drawn(StreakDraw::Procedural), 1.0);
 }
 
 /// `ParticleSystem_DrawStreak`'s third vertex sits by the particle, not

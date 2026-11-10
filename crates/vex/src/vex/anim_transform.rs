@@ -75,9 +75,25 @@ pub struct AnimChannel {
     /// Whether the file stored `f32` keys rather than `s16` ones (the node's
     /// `+0x34` flag).
     pub wide: bool,
+    /// Whether [`times`](Self::times) holds two or more keys that never decrease, which lets the
+    /// key search bisect; set by [`Self::new`], false on a default channel.
+    ascending: bool,
 }
 
 impl AnimChannel {
+    /// A channel over these keys.
+    #[must_use]
+    pub fn new(times: Vec<u16>, values: Vec<[f32; 3]>, w: Vec<f32>, wide: bool) -> Self {
+        let ascending = times.len() > 1 && times.windows(2).all(|pair| pair[0] <= pair[1]);
+        Self {
+            times,
+            values,
+            w,
+            wide,
+            ascending,
+        }
+    }
+
     /// Whether this channel has anything to evaluate.
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -103,12 +119,19 @@ impl AnimChannel {
         if t >= f32::from(self.times[self.times.len() - 1]) {
             return hold(last);
         }
-        let i = self
-            .times
-            .iter()
-            .position(|&key| t < f32::from(key))
-            .unwrap_or(last)
-            .max(1);
+        // The first key above `t`, else the last. On times that never decrease the keys not
+        // above `t` come first, so the bisection lands on the same key the scan does, for a
+        // NaN `t` too (no key is above it; both give the last).
+        let first_above = if self.ascending {
+            Some(
+                self.times
+                    .partition_point(|&key| f32::from(key) <= t || t.is_nan()),
+            )
+            .filter(|&i| i < self.times.len())
+        } else {
+            self.times.iter().position(|&key| t < f32::from(key))
+        };
+        let i = first_above.unwrap_or(last).max(1);
         let (t0, t1) = (f32::from(self.times[i - 1]), f32::from(self.times[i]));
         if step || t1 <= t0 {
             return hold(i - 1);
@@ -362,17 +385,17 @@ pub fn anim_transform(payload: &[u8], order: oag_formats::ByteOrder) -> Option<A
                 Key::Float4 => std::array::from_fn(|k| f32_at(at + 4 + k * 4)),
             }
         };
-        Some(AnimChannel {
-            times: (0..count).map(|i| u16_at(times + i * 2)).collect(),
-            values: (0..count).map(|i| read(values + i * key.width())).collect(),
-            w: match key {
+        Some(AnimChannel::new(
+            (0..count).map(|i| u16_at(times + i * 2)).collect(),
+            (0..count).map(|i| read(values + i * key.width())).collect(),
+            match key {
                 Key::Float4 => (0..count)
                     .map(|i| f32_at(values + i * key.width()))
                     .collect(),
                 Key::Short | Key::Float3 => Vec::new(),
             },
-            wide: key != Key::Short,
-        })
+            key != Key::Short,
+        ))
     };
 
     let translation_key = if flags & TRANSLATION_IS_FLOAT != 0 {

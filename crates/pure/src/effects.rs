@@ -143,9 +143,16 @@ pub const EFFECTS: &Effects = &{
         .without(Trigger::MagstripSparks)
         .without(Trigger::MagstripZone);
     effects.extents = EXTENTS;
+    effects.pool_bars = POOL_BARS;
     effects.quake_look = QUAKE_LOOK;
     effects
 };
+
+/// The effects whose class-6 emitters draw as the pool bar on Pure: the absorb burst, whose one
+/// emitter is class 6. `FUN_088746c8`, the handler `FUN_088756bc` (`ParticleSystem_DrawEmitterPool`'s
+/// counterpart) dispatches index 5 to, builds `ParticleSystem_DrawPoolBars`' strip
+/// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`).
+const POOL_BARS: &[&str] = &[engine_effects::ABSORB_EFFECT];
 
 /// The effects whose emitters spread by the extent law on Pure: the Quake's
 /// wave. `Quake_Update` (`0x08879d54`) writes `edge distance / 50` into slot 1
@@ -180,6 +187,15 @@ const QUAKE_LOOK: QuakeLook = QuakeLook {
 /// unmeasured title runs Pulse's (`docs/formats/pure-status.md` measures none
 /// of the shell).
 pub const LOOKS: &Looks = &Looks {
+    // The weapon-absorb hull overlay, `FUN_0886e954` (Pulse's `HullOverlay_Submit`): batch state `0x282`, texture
+    // `absorb_surface.mip` read from its own global (`0x08ac9a00`, stored by the loader at `0x0886d664`), `10.0`
+    // repeats (`0x08a8f510`), `-1.5 * pulse` on the second axis and the pulse folded at `1.0`; its gate `0x08924998`
+    // is `(clock + 0x960 - stamp + 0x9ac) * 2` inside one second. Pulse's law constant for constant
+    // (`docs/ghidra/functions/psp-pure-usa/hull-overlay.md`).
+    hull_overlay: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     // The Mine's pose is Pulse's code: `Mine_Construct` (`0x0885bab4`) writes
     // the same `0.6` scale, `Mine_Init` (`0x0885bd0c`) rolls the same random
     // axis, and its pose node (`0x0885bf4c`) turns it by `4 x` the fuse.

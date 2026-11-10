@@ -617,6 +617,11 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     wall_one_sided: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     wall_steer_away: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     wall_point_rate_body_local: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    // Pure's `Craft_Construct` passes `0.01`, `0.01` to a `Body_Integrate` that is Pulse's loop
+    // (`docs/physics/pure-physics.md`), but the term stays off here as on Pulse until both are
+    // re-measured with it (`docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`).
+    body_linear_damping: oag_title::pre_race::Sourced::inherited(0.0, "Pulse"),
+    body_angular_damping: oag_title::pre_race::Sourced::inherited(0.0, "Pulse"),
     // Pure's binary is not read for the cage; its own headers clear the flag on all 16 tracks.
     cage_from_track_header: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     // The player camera update (`0x08849970`) copies the tripod matrix into the camera node and
@@ -624,6 +629,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // = the craft's own (`docs/ghidra/functions/psp-pure-usa/camera.md`, "The view matrix is a
     // shear"). Read live on PPSSPP at the grid.
     chase_view_sheared: oag_title::pre_race::Sourced::measured(true),
+    // No Pure team authors a slot beyond `shield`, so every rung reads the same pool; the
+    // executable's own read is not looked at (`docs/formats/handling-stats.md`, "Which
+    // difficulty picks the shield slot").
+    shield_by_skill: oag_title::pre_race::Sourced::chosen(false),
     // Measured (`CODE_PITCH`), in place of Pulse's `<pitch>` stand-in, with its grid damping
     // (`docs/physics/pure-physics.md`).
     code_pitch: Some(oag_title::pre_race::Sourced::measured(CODE_PITCH)),

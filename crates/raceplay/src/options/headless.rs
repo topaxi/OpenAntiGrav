@@ -133,6 +133,8 @@ impl Setup {
             #[cfg(feature = "view")]
             missile_trail: None,
             #[cfg(feature = "view")]
+            wingtip: None,
+            #[cfg(feature = "view")]
             destroy_stations: Vec::new(),
             finished_thrust: None,
             original_tables: None,
@@ -217,6 +219,7 @@ impl Setup {
             zoom_borrowed: false,
             weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
             leach_drain: oag_title::weapons::LeachDrain::PerTick,
+            blast_push: oag_title::weapons::BlastPush::Posted,
             leach_beams: 8,
             quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
                 origin: oag_title::Origin::Chosen,

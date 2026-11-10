@@ -442,6 +442,7 @@ fn a_rocket_fired_at_a_parked_craft_takes_its_energy() {
             &empty,
             Some(&stats),
             "VENOM",
+            crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [],
         );
@@ -484,6 +485,7 @@ fn without_rocket_stats_an_impact_only_frees_its_slot() {
             &wall,
             None,
             "VENOM",
+            crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [],
         );
@@ -883,6 +885,7 @@ fn a_self_detonating_missile_damages_nobody_standing_in_it() {
             &empty,
             Some(&table),
             "VENOM",
+            crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
         );

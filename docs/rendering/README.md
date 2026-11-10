@@ -54,6 +54,10 @@
   lets one table carry both authored forms), and checked against HD's own
   `Anim Transform`s on the twelve circuits both titles ship. See
   [`2048-animation.md`](../formats/2048-animation.md)
+- **Pulse's circuit culls each batch's back faces, and a Moa Therma board stipples without it** (2026-11-09,
+  `moa-ad-flicker`): a front copy and a back copy of a trackside board share a plane; two-sided they z-fight
+  frame to frame, the original shows one clean side; wired per title rule, 13 of 29 Pulse pairs closer, 1 worse by 0.0001 - see
+  [`batch-cull.md`](batch-cull.md)
 - **Pulse's frame against the original's, matched and ranked** (2026-09-30): sky,
   fog and tone agree within 5 %; scenery textures now use the disc's mip levels picked by the GE slope law, as the
   original's do. See [`frame-audit.md`](frame-audit.md)
@@ -106,6 +110,10 @@
 - **A struck craft's hull sparks, measured per locator against the original**
   (2026-09-30): three causes named and two fixed, the gap closed from 1.3-2.6x
   to within 10 % - see [`hull-sparks.md`](hull-sparks.md)
+- **A weapon absorb on the player's craft, ours against the original** (2026-11-09): matched pairs on Pulse, Pure and
+  HD scored on the craft box against a no-absorb control, ranked differences per title (Pulse's bar glow, Pure's missing
+  hull overlay, HD's shell tint and tail), 2048 and Omega unpaired - see
+  [`weapon-absorb-pairs.md`](weapon-absorb-pairs.md)
 - Lighting and shadow: five authored light classes plus
   `Dynamic Shadow Occluder` and `lensflare` - none implemented. The prelit path
   exists (`GpuVertex.lit`), so this is about which surfaces are which.

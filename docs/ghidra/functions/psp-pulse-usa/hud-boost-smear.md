@@ -93,10 +93,10 @@ SpeedBar.+0xf4 = n >= 2 ? trunc(n / 10 * 255) : 0
 `draw_list`, driven by `oag_title::HudArt::boost_smear` (`oag_pulse::hud::ART`, shared by the PSP and PS2
 pressings). `Frame::glow` carries the speed bar's stamped rectangles; `oag_game::hud_views::draw` hands them
 to `Scene::stamp_glow` and `oag_post::bloom::Bloom::stamp_glow`, which runs the bloom's bright pass, two blurs
-and composite over those rectangles alone in a lane of its own and adds the result onto the HUD's target. The
-scene's bright pass ran before the HUD existed in our order, so it cannot see the bar; a chain over the
-rectangles is what its read of the HUD comes to, because the scene's own mask under the bar is the baseline
-`4` and truncates to nothing in the original's blurs. A frame with no boost is byte-identical.
+and composite over those rectangles alone in a lane of its own (the bright pass reads the HUD's target under
+each rectangle) and adds the result onto the HUD's target. The scene's bright pass ran before the HUD existed
+in our order, so it cannot see the bar; a chain over the rectangles is what its read of the HUD comes to,
+because the scene's own mask under the bar is the baseline `4` and truncates to nothing in the original's blurs. A frame with no boost is byte-identical.
 
 **Measured against the original** (`talons-alongside`, Single Race, Assegai, `scripts/psp-pulse-pair.py --field
 --run-ticks 28`, the flare's timer read at the pose's stop as `0.457` of its length, `n = 9`; ours posed with
@@ -116,9 +116,10 @@ where `main` moved on from the binary compared. A timer of zero draws the plain 
   Image direction on three widgets, the stamp's value and rectangle in EDRAM.
 - **Chosen, not measured:** a text widget's direction is the line from the centre to its anchor (the original
   quantises it to one of 32 table entries by a byte whose writer was not read); every draw of the frame is
-  smeared, the lock-on reticle included; the glow chain adds the bar's colour alone (`1 - (1 - a)^k` of it, the
-  scene's colour under a half-covered bar is not added), and for a split screen the stamps take the whole
-  target.
+  smeared, the lock-on reticle included; and for a split screen the stamps take the whole target. (The glow chain
+  used to add the bar's colour alone; it now reads the HUD's target under each stamped copy, so a half-covered copy
+  brings the scene's colour in, as the original's bright pass does: `weapon-absorb-pairs.md`, "Pulse: the stamp's
+  bright pass reads the framebuffer", speed bar RMSE `19.1 -> 14.7` on the boosting pair.)
 - **Open:** the shake gate of the text copies (`+0x3c/+0x40`) is not modelled because ours has no shake; the
   shield bar's colour in the glow frame; a frame at the boost's start and end (`n = 0, 1`) against the original;
   whether a `Model` widget smears: moot on Pulse, whose pickup icon is an Image (last section).

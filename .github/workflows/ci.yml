@@ -139,6 +139,9 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - run: cargo +${{ steps.web-toolchain.outputs.name }} check --target wasm32-unknown-unknown -p oag-game --no-default-features --example oag_web --features web
+      # The fault hook (docs/tools/web.md, "Reproducing every message") is built by no
+      # published module, so only this check keeps it compiling.
+      - run: cargo +${{ steps.web-toolchain.outputs.name }} check --target wasm32-unknown-unknown -p oag-game --no-default-features --example oag_web --features web,fault-test
 
   # Every WGSL module the web build emits goes through a real browser's shader
   # compiler (scripts/check-web-shaders.py, docs/tools/web.md "Shaders").

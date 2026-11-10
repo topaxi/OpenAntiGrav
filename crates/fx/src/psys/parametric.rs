@@ -352,6 +352,7 @@ fn build(
             BlendName::AlphaOver => Blend::AlphaOver,
         },
         distort_strength: 0.0,
+        colour_scale: 1.0,
         particle_child: None,
         death_child: None,
         spawn_probability: 1.0,

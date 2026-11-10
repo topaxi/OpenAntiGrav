@@ -46,6 +46,7 @@ const TITLE: &Title = &Title {
     exhaust: &oag_title::exhaust::Exhaust::Unread,
     // `Unread` on the same terms as the ribbon beside it: this crate resolves
     // archives and never draws an exhaust.
+    wingtip: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Unread,
     // Present for the same reason and equally unread: resolving archives has
@@ -138,6 +139,7 @@ const TITLE: &Title = &Title {
         elimination: None,
         ai: None,
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        blast_push: oag_title::pre_race::Sourced::chosen(oag_title::weapons::BlastPush::Posted),
         leach_beams: oag_title::pre_race::Sourced::chosen(8),
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::Chosen,
@@ -230,6 +232,7 @@ const TITLE: &Title = &Title {
         lap_one_shift: None,
         bar_tip: None,
         boost_smear: None,
+        absorb_glow: None,
         sway: None,
         safe_area: None,
         dynamic_hud: None,

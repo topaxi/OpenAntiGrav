@@ -34,12 +34,14 @@ in isolated worktrees.
    `oag-docs`) first and hold any freed slot empty until it merges, so later
    members start on the compacted instruction files.
 
-4. **Set up the recurring check.** Invoke the `loop` skill at one hour
-   (iterations are slow, and a member's own report wakes the lead regardless of
-   the tick) with a prompt that re-enters this skill:
+4. **Set up the recurring check.** Invoke the `loop` skill at 30 minutes
+   with a prompt that re-enters this skill. A member's report wakes the lead
+   regardless of the tick, but **a member whose session dies sends nothing**:
+   the tick is the only thing that notices, so it must check liveness:
 
-   > `1h Check subagent slot occupation and status. Run ListAgents and total the
-   > running cost (read-only haiku oag-scout 0, other haiku 0.5, sonnet 1, opus 2, budget N). For each finished member:
+   > `30m Check subagent slot occupation and status. Run ListAgents and total the
+   > running cost (read-only haiku oag-scout 0, other haiku 0.5, sonnet 1, opus 2, budget N).
+   > Run member-liveness.sh on every running member; replace a DEAD one at once on its worktree. For each finished member:
    > verify its diff, merge into main, run the right gate, then remove its
    > worktree and branch. Only spawn a replacement when usage is under N, then
    > fill to N - never replace one-for-one. Keep lanes disjoint by Ghidra binary
@@ -51,22 +53,26 @@ in isolated worktrees.
    **Try a debounce instead first (maintainer, 2026-10-26).** Wanted: a check
    only after an hour with no member message, not one every hour. Run the
    `loop` skill with no interval (dynamic mode) and call `ScheduleWakeup`
-   (3600 s, the same prompt) at the end of **every** lead turn, so each member
-   report pushes the wake-up an hour out. Unverified: whether a new
+   (1800 s, the same prompt) at the end of **every** lead turn, so each member
+   report pushes the wake-up 30 minutes out. Unverified: whether a new
    `ScheduleWakeup` replaces the pending one or stacks. If wake-ups stack
-   (checks arrive closer than an hour after activity), fall back to the fixed
-   1h cron above, and have each tick do nothing when the lead acted in the last
-   hour.
+   (checks arrive closer than 30 minutes after activity), fall back to the fixed
+   30m cron above. A tick may skip merging and filling when the lead acted in
+   the last 30 minutes, **never the liveness check**.
 
 5. **Then start**: check state, draw threads, fill to budget.
 
 ## The loop, every cycle
 
-1. `ListAgents`; total the running cost. **Peer sessions are not yours**; only subagents you spawned count.
+1. `ListAgents`; total the running cost. **Peer sessions are not yours**; only subagents you spawned count, plus any mechanical-writer helper a member announced (`member-rules.md` rule 4: sonnet 1, haiku 0.5; it works inside the member's worktree and ends before the member reports).
 2. `git log --oneline -1`, `git status --porcelain`, and per branch `git log --oneline main..<branch> | wc -l`.
-3. For each finished member: verify, merge, gate, reap (below).
-4. Only if under budget, fill to budget (a finished opus frees two slots and may become two sonnets).
-5. Report: slot usage, what merged, what is running, anything needing the user.
+3. **Liveness, every member, every tick**: `.claude/skills/oag-drive/member-liveness.sh <member>[=<worktree-dir>] ...`. `ListAgents` keeps showing a dead member as `pane`, and uncommitted edits or a quiet branch say nothing either way: on 2026-11-10 a member's session died at 03:57 and sat dead for 2.5 h because a tick read its uncommitted diff as "mid-implementation". The transcript's age is the signal.
+   - `DEAD` (transcript idle 30+ min, no process in its worktree): `TaskStop` it at once and spawn a successor on the **same worktree** (keep the uncommitted edits), briefed with what its transcript and scratch show it finished (`jq` over the transcript the script names: last text blocks and last commands).
+   - `SUSPECT` (idle 90+ min with processes, possibly a dead session's orphans): `SendMessage` it; no reply by the next tick counts as `DEAD`.
+   - **While any member runs, the fallback tick is 30 minutes, not an hour**, so a death costs at most one tick plus the 30-minute window.
+4. For each finished member: verify, merge, gate, reap (below).
+5. Only if under budget, fill to budget (a finished opus frees two slots and may become two sonnets).
+6. Report: slot usage, what merged, what is running, each member's liveness line, anything needing the user.
 
 ## Merging a member
 
@@ -74,9 +80,9 @@ in isolated worktrees.
 - **Merge with `just merge-lane <branch> "<message>"`**: `--no-ff`, the message carrying the project's attribution trailers, and `status.md` regenerated and committed if it moved. A lane on another base (`slipstream`) merges from that checkout the same way.
 - **After every merge, before the next**: `cargo check --workspace --all-targets` and `cargo nextest run --workspace` (no disc data, about ten seconds once built). Members gate their branch as it is and do not merge `main` first (maintainer, 2026-10-12); when a merge conflicts, goes red or looks suspicious, send that member back to merge `main`, resolve and re-gate. Two branches that each gated green can conflict semantically (a removed `SpeedClass::from_name` vs a new call to it), and only the merged test run catches it.
 - **Run the gate separately from the merge** (chaining a sub-second merge to a multi-minute gate looks hung; a user aborted a healthy run):
-  - any `.rs` logic changed: full `just` plus `OAG_REQUIRE_GAME_DATA=1 just test-data`, **once per merge batch**, and at once after a merge whose `scripts/affected.py` selection is `FULL`;
+  - any `.rs` logic changed: full `just` plus `OAG_REQUIRE_GAME_DATA=1 just test-data`, **once per merge batch**, and at once after a merge whose `scripts/affected.py` selection is `FULL` or carries its `core or simulation` notice;
   - docs/handover only: `just check-docs`, `check-names` if `names.tsv` moved, `check-handover`, `check-captures` if captures moved.
-- **Reap**: `git worktree remove <path> -f -f`, `git branch -d <branch>`, then `TaskStop` the member (its name as `task_id`) and check `ListAgents` (a member left idle stays in the roster; maintainer, 2026-10-12). Only after the work is merged.
+- **Reap**: `git worktree remove <path> -f -f`, `git branch -d <branch>`, then `TaskStop` the member (its name as `task_id`) and check `ListAgents` (a member left idle stays in the roster; maintainer, 2026-10-12). Only after the work is merged. Then `rm -rf` the lane's `data/scratch/<lane>/` (absolute path, quoted, guarded as in `member-rules.md` rule 3) once its findings are in `docs/` or `handover/`; a lane's cargo `target` dir in scratch goes with it. At the end of each merge batch run `just clean-scratch` (7 days, protects open worktrees and branches) so a lane that never reaped cannot pile up: scratch reached 506 GiB by 2026-11-09 with no sweep.
 - **A member's report is the final text of its turn**, delivered as its idle notification (`member-rules.md`, "Report"). In the spawn prompt, say "reply with" the path and summary, never "send" or "message" it. A `SendMessage` report plus the turn's closing text arrives twice.
 - **Never reap a worktree whose agent may still resume**: a `completed` notification is not terminal. `ListAgents` cannot tell you (a reaped lane still showed as `pane` an hour later); the member's own report is the ending signal, and `git worktree list` plus `git log --oneline main..<branch>` are ground truth.
 
@@ -91,8 +97,8 @@ The gate is the most expensive thing this skill does.
   flock -o "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data-affected
   ```
 
-  `scripts/affected.py` selects the packages changed since the merge base with `main` plus their dependents and prints what and why. Every `check-*`, `fmt-check` and `lint` still run in full. A change to `oag-core`, a simulation crate (`oag-physics`, `oag-gameplay`, `oag-ai`, `oag-race`, `oag-formats`), `Cargo.toml`, `Cargo.lock`, the toolchain, the `justfile`, `.config/` or any `build.rs` selects the full suite by itself; a docs-only change selects no tests, and the member still gates.
-- **The lead runs the full gate once per merge batch**, on merged `main`, in the `lead-gate` worktree: `flock -o ... just` and `flock -o ... env OAG_REQUIRE_GAME_DATA=1 just test-data`. It is the only place the whole suite runs with disc images (each member was green only on its selection), so it is not skippable. At once, without waiting for a batch, after merging a branch whose selection was `FULL`.
+  `scripts/affected.py` selects the tests that link what changed since the merge base with `main` and prints what and why: every package that links a changed one (a dev-dependency ends at the package that has it), narrowed to the test modules whose code names a crate that links the change. Every `check-*`, `fmt-check` and `lint` still run in full. The root `Cargo.toml`, the toolchain and `.cargo/` select the full suite; a change to `oag-core` or a simulation crate (`oag-physics`, `oag-gameplay`, `oag-ai`, `oag-race`, `oag-formats`) selects everything that links it and prints a `core or simulation` notice; a docs-only or comments-only change selects no tests, and the member still gates. What each rule could miss is in `docs/architecture/affected-gate.md`; the batch gate below is what catches it.
+- **The lead runs the full gate once per merge batch**, on merged `main`, in the `lead-gate` worktree: `flock -o ... just` and `flock -o ... env OAG_REQUIRE_GAME_DATA=1 just test-data`. It is the only place the whole suite runs with disc images (each member was green only on its selection), so it is not skippable. At once, without waiting for a batch, after merging a branch whose selection was `FULL` or printed the `core or simulation` notice.
 - **A red batch gate is bisected by branch**, not by commit: re-gate `main` at the merge before the newest member's; the failure names its lane. Send it back as a fix lane.
 - **CI** (`.github/workflows/ci.yml`) runs `fmt`, `clippy` and the non-disc `cargo nextest run --workspace`; `nightly.yml` builds binaries and runs no tests. **No CI job can run `test-data`** (no images); the lead's batch gate is the only full run.
 

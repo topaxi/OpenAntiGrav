@@ -260,6 +260,7 @@ OAG_GRAPHICS_SHADOWS = { text = "SHADOWS", human = false }
 OAG_GRAPHICS_MODEL_DETAIL = { text = "MODEL DETAIL", human = false }
 OAG_GRAPHICS_TEXTURE_DETAIL = { text = "TEXTURE DETAIL", human = false }
 OAG_GRAPHICS_TRAIL_ORDER = { text = "TRAIL ORDER", human = false }
+OAG_GRAPHICS_TRAIL_LENGTH = { text = "TRAIL LENGTH", human = false }
 OAG_GRAPHICS_WEATHER = { text = "WEATHER", human = false }
 OAG_GRAPHICS_SCREEN_FILTER = { text = "SCREEN FILTER", human = false }
 OAG_GRAPHICS_SCREEN_FILTER_STRENGTH = { text = "SCREEN FILTER STRENGTH", human = false }
@@ -269,6 +270,7 @@ OAG_GRAPHICS_FIELD_OF_VIEW = { text = "FIELD OF VIEW", human = false }
 OAG_GRAPHICS_BOOST_FOV_KICK = { text = "BOOST FOV KICK", human = false }
 OAG_GRAPHICS_BOOST_ZOOM = { text = "BOOST ZOOM", human = false }
 OAG_GRAPHICS_TRAIL_HITS = { text = "TRAIL HITS", human = false }
+OAG_GRAPHICS_WINGTIP_CONTRAILS = { text = "WINGTIP CONTRAILS", human = false }
 OAG_GRAPHICS_CPU_GOVERNOR = { text = "CPU GOVERNOR", human = false }
 OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "PERFORMANCE OVERLAY", human = false }
 OAG_GRAPHICS_ADVANCED = { text = "ADVANCED", human = false }

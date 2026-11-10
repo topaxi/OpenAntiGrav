@@ -42,6 +42,9 @@ pub struct Launch {
     /// A campaign cell's resolved skill scale, which tunes the field and the finished player's
     /// thrust ([`Race::apply_campaign_skill`]). `None` outside a campaign cell.
     pub campaign_skill: Option<f32>,
+    /// The rung a campaign cell raced at ([`crate::Options::skill_level`]), which picks every
+    /// craft's shield slot. `None`: the rung [`Self::difficulty`] stands for.
+    pub skill_level: Option<u8>,
 }
 
 /// Why a header's `options` table did not read.
@@ -71,7 +74,11 @@ impl Launch {
                 self.pilot_assist.name().to_string(),
             );
         }
-        table.extend(Self::ai_table(self.original_ai, self.campaign_skill));
+        table.extend(Self::ai_table(
+            self.original_ai,
+            self.campaign_skill,
+            self.skill_level,
+        ));
         table
     }
 
@@ -80,11 +87,13 @@ impl Launch {
     /// the AI choice is made.
     ///
     /// `campaign_skill` is its own key, not `ai_skill`: a campaign cell is tuned whichever driver
-    /// flies it, and a 2048 event's driver skill tunes nothing.
+    /// flies it, and a 2048 event's driver skill tunes nothing. `skill_level` is its own key
+    /// too: it picks the shield pools, and the rung is not the driver's when `--ai ours` flies.
     #[must_use]
     pub fn ai_table(
         original_ai: Option<OriginalAi>,
         campaign_skill: Option<f32>,
+        skill_level: Option<u8>,
     ) -> BTreeMap<String, String> {
         let mut table = BTreeMap::new();
         if let Some(ai) = original_ai {
@@ -96,6 +105,9 @@ impl Launch {
         }
         if let Some(scale) = campaign_skill {
             table.insert("campaign_skill".to_string(), scale.to_string());
+        }
+        if let Some(level) = skill_level {
+            table.insert("skill_level".to_string(), level.to_string());
         }
         table
     }
@@ -157,6 +169,10 @@ impl Launch {
                     .map_err(|_| unknown("campaign_skill", value))?,
             ),
         };
+        let skill_level = match get("skill_level") {
+            None => None,
+            Some(value) => Some(value.parse().map_err(|_| unknown("skill_level", value))?),
+        };
         Ok(Self {
             scheme,
             difficulty,
@@ -164,6 +180,7 @@ impl Launch {
             pilot_assist,
             original_ai,
             campaign_skill,
+            skill_level,
         })
     }
 }
@@ -193,6 +210,7 @@ mod tests {
             pilot_assist: Level::Normal,
             original_ai,
             campaign_skill: None,
+            skill_level: None,
         }
     }
 
@@ -255,5 +273,53 @@ mod tests {
             Launch::from_table(&table).unwrap_err().key,
             "campaign_skill"
         );
+    }
+
+    /// The rung a campaign cell raced at picks the shield pools, so a rebuild must repeat it
+    /// whichever driver flew and whatever `difficulty` says; a file without it raced the rung
+    /// `difficulty` stands for.
+    #[test]
+    fn the_skill_level_round_trips_apart_from_the_difficulty_and_the_driver() {
+        assert!(!launch(None).to_table().contains_key("skill_level"));
+        for skill_level in [None, Some(0), Some(1), Some(2)] {
+            let launch = Launch {
+                skill_level,
+                difficulty: oag_ai::Difficulty::Ace,
+                ..launch(None)
+            };
+            assert_eq!(
+                Launch::from_table(&launch.to_table()),
+                Ok(launch),
+                "{launch:?}"
+            );
+        }
+        let mut table = launch(None).to_table();
+        table.insert("skill_level".into(), "easy".into());
+        assert_eq!(Launch::from_table(&table).unwrap_err().key, "skill_level");
+    }
+
+    /// A rebuild loads with the recorded rung, not the one `difficulty` stands for: an Easy
+    /// campaign cell raced under Elite starts every craft on the easy shield slot.
+    #[test]
+    fn a_rebuild_loads_with_the_recorded_rung() {
+        let mut header =
+            oag_replay::Header::new("pulse", "default", "single_race", "venom", "default", 7);
+        header.setup = Some(oag_replay::header::Setup {
+            mode: "single_race".to_string(),
+            ..Default::default()
+        });
+        let mut rebuilt = |skill_level| {
+            header.options = Launch {
+                skill_level,
+                difficulty: oag_ai::Difficulty::Elite,
+                ..launch(None)
+            }
+            .to_table();
+            crate::Options::for_replay(&header, "disc")
+                .expect("rebuilds")
+                .skill_level()
+        };
+        assert_eq!(rebuilt(Some(0)), 0);
+        assert_eq!(rebuilt(None), 1);
     }
 }

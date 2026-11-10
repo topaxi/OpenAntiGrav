@@ -773,6 +773,12 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) trail_order: Option<oag_display::display::TrailOrder>,
 
+    /// How long the PSP engine ribbons are: `original` or `hd`, overriding
+    /// `[render_profiles.<title>] trail_length` for this run only. See
+    /// `oag_display::display::TrailLength`.
+    #[arg(long)]
+    pub(crate) trail_length: Option<oag_display::display::TrailLength>,
+
     /// What a played weather adds: `original` or `enhanced`, overriding
     /// `[render_profiles.<title>] weather` for this run only. See
     /// `oag_display::display::Weather`.

@@ -44,6 +44,7 @@ pub mod collision;
 pub mod gantry;
 pub mod ghost;
 pub mod loading;
+pub mod probe_blend;
 pub mod pvs;
 pub mod ripple;
 pub mod roll;

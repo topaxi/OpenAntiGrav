@@ -229,25 +229,16 @@ difficulty-scaled shield pool" from an inference into a reading: there are three
 difficulty slots, the files set the easy one explicitly and let `shield` cover the
 other two.
 
-**Ours races every difficulty on the medium slot: a measured cross-mode defect, not wired
-(2026-11-09, `eliminator-pace`).**
-- **The data.** HD's team files author both values. `DATA02.PSARC`
-  `/data/ships/qirex/handlingstats.xml` carries
-  `<Misc height="3.5" length="13" shield="105" easyshield="145" .../>`.
-- **What ours does.** `oag_gameplay::handling` builds `Dimensions::shield` from
-  `Misc::shield_for(DEFAULT_SKILL_LEVEL)`, and `DEFAULT_SKILL_LEVEL` is `1`. Every race at every
-  difficulty therefore gets `shield` (105 for Qirex), never `easyshield`.
-- **What the original does.** At Novice on RPCS3 (HD Fury EU, Racebox Eliminator, Vineta K,
-  Venom), the field's live shields read 135 to 145. `scripts/rpcs3-hd-eliminator-score.py` reads
-  them at `*(craft+0x5fac)+0x78`, then `+0x90 + difficulty * 4`. The person's craft refilled 28.0
-  a lap, `0.2 * 140` ([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md)).
-  The same run in ours started the field at 90 to 110.
-- **Confidence.** 85 that the original's Novice pool is the easy slot: the authored 145 and the
-  live 135 to 145 agree. The medium and hard slots were not read live.
-- **Scope.** Wiring the race's difficulty into `shield_for` moves every mode, Single Race
-  included, and it is open as its own lane.
-- **Pulse.** Pulse authors `easyshield` too, so the same constant holds there. Not re-measured
-  here.
+**Ours used to race every difficulty on the medium slot; it follows the difficulty now**
+(`hd-difficulty-shield`; see [Which difficulty picks the shield slot](#which-difficulty-picks-the-shield-slot)).
+The defect was measured on HD: `DATA02.PSARC` `/data/ships/<team>/handlingstats.xml` authors both
+`shield` and `easyshield`, and at Novice on RPCS3 (HD Fury EU, Racebox Eliminator, Vineta K,
+Venom) the field's live shields read at the authored `easyshield`, not `shield`.
+`scripts/rpcs3-hd-eliminator-score.py` reads them at `*(craft+0x5fac)+0x78`, then
+`+0x90 + difficulty * 4`; the person's craft refilled a lap at 0.2 of an `easyshield` pool
+([eliminator-score.md](../ghidra/functions/ps3-hdfury-eu/eliminator-score.md)). Confidence 85 that
+the original's Novice pool is the easy slot; the medium and hard slots were not read live. Pulse
+authors `easyshield` too and is wired the same way.
 
 Three things follow, and they are why this element is worth its own section.
 
@@ -281,6 +272,55 @@ element and every attribute with no defaults, and
 `crates/tables/tests/handling_ground_truth.rs` parses all eight - re-run this
 session, 8 teams and 32 parameter sets on each disc. What is still open is *which
 PSP function* writes `0x78`..`0x90`; see the question added below.
+
+### Which difficulty picks the shield slot
+
+`Ship_SetShield` and `Ship_ResetShield` index the three `<Misc>` slots by one global,
+`g_skill_level` (`0` easy, `1` medium, `2` hard), for **every** craft: the player's and the
+opponents' alike (Pulse PSP, `docs/ghidra/functions/psp-pulse-usa/shield.md`, "The pool is
+`entity + 0x88`", confidence 88). The global is the race setup's `SkillLevel` key: the Single
+Player screen's `Difficulty` row writes it (Easy, Medium, Hard; the row opens on Easy,
+`docs/formats/race-setup.md`) and Cell Selection's commit writes the cell's browsed rung
+(`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`). With no key `Race_ReadSetupOptions`
+(`0x08896b84`) leaves it at `1`.
+
+Ours reads the same index from the race: `oag_raceplay::Options::skill_level` where the launch
+names a rung (a campaign cell's, or a mod event's `level`; a cell with none reads Medium), else
+`oag_ai::Difficulty::level` of the race box's `[ai] difficulty`: Novice `0`, Skilled and Elite `1`,
+Ace `2` (**chosen, not measured**: the original has three rungs and this project four names). It
+is the same integer the original driver's pack shuffle gets, so one race has one rung. The
+default race (Elite) stays on the medium slot; only Novice and an Easy campaign cell move.
+`oag_gameplay::handling_for` takes the index and `Misc::shield_for` picks the slot; the pool is
+every craft's maximum and its start (`Ship_ResetShield`), the player's included.
+
+What each title's files and executable say, and what ours does (a census of the starting pools by
+`oag_raceplay::load`, Single Race, each title's default roster; no values are quoted, see the
+top of this page):
+
+| Title | Files author | Mapping read | Player too | Ours |
+| --- | --- | --- | --- | --- |
+| Pulse PSP (USA, EU) | `easyshield` on every team, above `shield` by the same margin on all | `Ship_SetShield` indexes `0x84 + skill * 4` (confidence 88) | yes, same global | wired: Novice starts on `easyshield`, Skilled, Elite and Ace on `shield` |
+| Pulse PS2 | same as PSP | the parser's three slots are PS2-read; the index is inherited from PSP | inherited from PSP | wired, as PSP |
+| HD / Fury | `easyshield` on every team, same margin, no medium or hard slot | **measured live, confidence 85**: the original's HD Eliminator at Novice (RPCS3, Vineta K, Venom; `scripts/rpcs3-hd-eliminator-score.py`, `data/reference/hd-eliminator-score/run2-ai-field.csv`, column `shield`) reads the AI field's shields at an authored `easyshield` and above `shield`, through `*(craft+0x5fac)+0x78`, then `+0x90 + difficulty * 4` (the same `0x84 + skill * 4` index as Pulse, rebased). One run, one difficulty; the medium and hard slots were not read live | **confidence 80**: the person's own craft refilled a lap at 0.2 of an `easyshield` pool (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`); single run | wired, `CraftLaws::shield_by_skill` measured |
+| Pure | no team authors a slot beyond `shield` | not read; nothing to select | not applicable | held, every rung reads the same pool |
+| 2048 (Vita) | `easyshield` (Omega re-ships 2048's craft with the same margin) | **not read** | not read | held on the medium slot, open |
+| Omega (PS4) | `easyshield` on every team | **not read** (the executable is in Ghidra, nobody has walked its `Ship_SetShield`; shadPS4 has no memory readout) | not read | held on the medium slot, open; the loader report says so on a Novice race |
+
+No shipped file authors `mediumshield` or `hardshield` (HD's test asserts it), so Skilled, Elite
+and Ace read plain `shield` on every title today. The 2048 census was not run: the Vita `.pkg`
+is PFS-encrypted and does not load (`docs/formats/vita-package.md`); the Omega row stands in
+for its craft files, which Omega re-ships at the same layout.
+
+A replay rebuilds with the rung it was recorded at: `[options] skill_level`, written for a
+campaign cell only (`docs/formats/replay-file.md`). A free race derives the rung from
+`difficulty`, which the header carries. Replays recorded before this change at Novice (or at an
+Easy cell) rebuild with the easy slot and no longer reproduce their stored hashes.
+
+Ours differs from the original in two ways: the race box opens on Elite (medium), where the
+original's row opens on Easy; and `Difficulty::Ace` and a campaign Hard cell share the hard
+slot, which no title fills differently from `shield`. `oag_raceplay::finished_thrust::rung`
+maps Elite to Hard for the finished player's thrust law, which reads a different original
+integer (`AI_ResolveSkillScale`) and is left as it is.
 
 ## The self-check: completeness
 

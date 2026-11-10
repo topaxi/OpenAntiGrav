@@ -47,16 +47,26 @@ fi
 # Shared, imported memory up to wasm32's whole 4 GiB, and the TLS exports
 # wasm-bindgen sets each thread up with. rustc does not pass these for the
 # atomics feature alone (nightly-2026-10-08 linked an unshared memory).
+# The page's thread runs on the linker's stack, 1 MiB unless told otherwise;
+# this is a native main thread's 8 MiB. The boot's call chain is over 1 MiB in
+# the `dist` build, and an overflow runs below address 0 and traps as "memory
+# access out of bounds" (docs/tools/web.md, "The page's stack").
+stack_size=8388608
 link=""
-for arg in --shared-memory --import-memory --max-memory=4294967296 \
+for arg in --shared-memory --import-memory --max-memory=4294967296 -zstack-size=$stack_size \
   --export=__wasm_init_tls --export=__tls_size --export=__tls_align --export=__tls_base; do
   link+=" -C link-arg=$arg"
 done
+# OAG_WEB_FAULT_TEST=1 adds the module's `fault_test` hook, which raises each
+# failure the page reports on demand (docs/tools/web.md, "Troubleshooting").
+# Never set in pages.yml: a published module has no such export.
+features=web
+[[ -n ${OAG_WEB_FAULT_TEST:-} ]] && features+=,fault-test
 CARGO_TARGET_DIR=$target_dir \
   RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals $link" \
   cargo "+$toolchain" build -Z build-std=std,panic_abort \
   --target wasm32-unknown-unknown --profile "$profile" \
-  -p oag-game --no-default-features --example oag_web --features web
+  -p oag-game --no-default-features --example oag_web --features "$features"
 dir=$profile
 [[ $profile == dev ]] && dir=debug
 wasm="$target_dir/wasm32-unknown-unknown/$dir/examples/oag_web.wasm"
@@ -68,6 +78,8 @@ wasm-bindgen --target web --no-typescript --out-dir "$out/pkg" "$wasm"
 # build that lost the atomics flags would boot and then fail on its first
 # worker, so it fails here instead.
 grep -q thread_stack_size "$out/pkg/oag_web.js" || { echo "the module has no shared memory: the threads flags did not apply" >&2; exit 1; }
+# The stack the module was linked with, and no frame a large share of it.
+python3 scripts/check-wasm-stack.py "$out/pkg/oag_web_bg.wasm" --stack "$stack_size"
 # OAG_WEB_NO_OPT=1 skips wasm-opt, so the module keeps its function names for
 # a browser CPU profile (`web-screenshot.py --profile`).
 if [[ $profile != dev && -z ${OAG_WEB_NO_OPT:-} ]]; then
@@ -85,7 +97,7 @@ fi
 # with an old module: the page's one import is rewritten to name it.
 hash=$(cat "$out/pkg/oag_web.js" "$out/pkg/oag_web_bg.wasm" | sha256sum | cut -c1-16)
 mv "$out/pkg" "$out/$hash" && mkdir "$out/pkg" && mv "$out/$hash" "$out/pkg/$hash"
-cp web/index.html web/style.css web/worker.js web/audio.js web/audio-worklet.js web/movie.js web/_headers "$out/"
+cp web/index.html web/style.css web/worker.js web/fault.js web/audio.js web/audio-worklet.js web/movie.js web/_headers "$out/"
 sed "s#\"./pkg/oag_web.js\"#\"./pkg/$hash/oag_web.js\"#" web/main.js > "$out/main.js"
 grep -q "./pkg/$hash/oag_web.js" "$out/main.js" || { echo "main.js import not rewritten" >&2; exit 1; }
 # The TOML Schemas every project file names in its [toml-schema] header, served at

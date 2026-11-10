@@ -67,6 +67,11 @@ pub struct CraftLaws {
     /// `v + (R^T omega) x r`, where Pulse's is textbook: Wipeout HD's, measured live
     /// (`oag_physics::laws::Laws::wall_point_rate_body_local`).
     pub wall_point_rate_body_local: Sourced<bool>,
+    /// The rigid body's linear velocity damping per second, `velocity -= velocity * h * c` in
+    /// `Body_Integrate` (`oag_physics::laws::BodyDamping`): Wipeout HD's body carries `0.01`.
+    pub body_linear_damping: Sourced<f32>,
+    /// The angular twin of [`Self::body_linear_damping`], the same `0.01` on Wipeout HD.
+    pub body_angular_damping: Sourced<f32>,
     /// The track header's flag turns on the collision cage, Pulse's `AiTrack_CageEnabled`
     /// (`*(track + 4) + 0x18 & 1`, `oag_gameplay::cage`). Wipeout HD runs no cage off it
     /// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cage.md`). A title with no `CraftLaws`
@@ -78,6 +83,12 @@ pub struct CraftLaws {
     /// (`oag_race::chase_rig::ChaseParams::view_sheared`). Wipeout Pure's, read off its GE view
     /// matrix and its camera tripod live; Pulse's camera node is orthonormal.
     pub chase_view_sheared: Sourced<bool>,
+    /// A craft's shield pool is the `<Misc>` slot of the race's difficulty (`easyshield` on
+    /// Easy, `mediumshield` on Medium, `hardshield` on Hard, plain `shield` filling any a file
+    /// leaves out; `oag_tables::handling::Misc::shield_for`), as Pulse's `Ship_SetShield` indexes
+    /// it. Off: the Medium slot whatever the difficulty. A title with no `CraftLaws` (Pulse)
+    /// runs it.
+    pub shield_by_skill: Sourced<bool>,
     /// The pitch response a title compiles into its engine, used where a `<Class>` authors no
     /// `<pitch>`: Wipeout Pure's. `None`: the file's own block, or the stand-in.
     pub code_pitch: Option<Sourced<CodePitch>>,

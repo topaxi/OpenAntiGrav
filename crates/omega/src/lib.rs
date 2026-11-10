@@ -103,6 +103,10 @@ pub const TITLE: &Title = &Title {
     exhaust: &oag_title::exhaust::Exhaust::Authored(
         "/data/ribboneffects/enginetrail_bluered_triangle.rcsmodel",
     ),
+    wingtip: Some(&oag_title::wingtip::Wingtip::hd_lineage(
+        "/data/tex/smoke_trails_frame1_alpha.gnf",
+        oag_title::Origin::InheritedFrom("Wipeout HD"),
+    )),
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     // **Per team, on 2048's shape**: an `EngineFlare.vex` + `.rcsmodel`
     // beside each hull with `EF_Main`/`EF_Boost` groups. The sprite is the
@@ -177,6 +181,7 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // HD's law, inherited: Omega's own executable is not checkable here.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
+        blast_push: oag_title::pre_race::Sourced::chosen(oag_title::weapons::BlastPush::Immediate),
         // Measured: eight entries in `LeachBeamManager_Update`'s pool (`weapon-instance-limits.md`).
         leach_beams: oag_title::pre_race::Sourced::measured(8),
         // HD's law, inherited: Omega's own executable is not checkable here.

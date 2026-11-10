@@ -72,6 +72,7 @@ pub const TITLE: &Title = &Title {
     // The flare's own texture, a second literal in the same executable -
     // `Texture_LoadEngineFlare` at `0x08a84c80`. Note the directory case
     // differs from the noise map's; the WAD hash is case-insensitive.
+    wingtip: None,
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     // Measured: the six stand-in codepoints and the glyph each draws, read off
@@ -123,6 +124,7 @@ pub const TITLE: &Title = &Title {
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        blast_push: oag_title::pre_race::Sourced::measured(oag_title::weapons::BlastPush::Posted),
         // **Chosen, not measured** (maintainer, 2026-10-31: eight everywhere). Pulse measures one
         // (`Weapon_FireLeachBeam`'s `pool->live != 0`, `cannon-quake-leachbeam.md`); it takes the
         // later titles' pool of eight as an intended divergence.
@@ -196,7 +198,7 @@ pub const TITLE: &Title = &Title {
         // advert passes share the gantry's 128 x 128 target and every prim of every run has
         // `LIGHTINGENABLE` 0, as the gantry's own pass does.
         adverts_unlit: true,
-        card_565: false,
+        card_store: oag_title::adverts::CardStore::R5G6B5Gamma,
         card_unlit: true,
         zone_gantry: None,
         origin: oag_title::Origin::Measured,

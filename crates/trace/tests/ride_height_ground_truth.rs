@@ -68,6 +68,7 @@ fn load() -> Option<(
         CLASS,
         handling::SpeedupPads::default(),
         handling::Special::default(),
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
     )
     .expect("this team's file authors the class under test");
     let cage = oag_trace::replay::cage_of(&track_blob).expect("16_Track runs the cage");

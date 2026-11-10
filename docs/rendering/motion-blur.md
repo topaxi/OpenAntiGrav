@@ -128,7 +128,8 @@ every frame, so a reader never sees the last frame's), and a new reader is a new
 ([hd-gpu-cost](hd-gpu-cost.md)). The cost when read is still one `Rg16Float` write per fragment.
 
 **The setting is strength, not technique.** `off | low | medium | high`, mapping
-to a shutter fraction of the drawn frame's travel (a tick, in a capture). Offering `camera` and `full` as user-facing
+to a shutter fraction of the drawn frame's travel (a tick, in a capture) and to
+a cap on the gather's taps (`MotionBlur::taps`, see "Fewer taps" below). Offering `camera` and `full` as user-facing
 values would ship a value with no implementation behind it, which
 `crates/display/src/display.rs` and ADR-0013 both refuse: *a row for infrastructure
 that is not there is worse than no row*. It also means that if the cheap tier is
@@ -786,7 +787,7 @@ after (no boost); with the forced boost, 907 before and 250 after. The crops
 read as the flame sharp again, no smear into the floor. Pulse's plume on a hard
 steer (tick 240, forced boost) changes by 6 pixels of 5356: its saturated white
 plume hides a smear that is already small, so that frame is not evidence either
-way. `crates/render/tests/velocity_target.rs` pins the mechanism: `Write` leaves
+way. `crates/mesh/tests/velocity_target.rs` pins the mechanism: `Write` leaves
 a blended draw masked, `Attached` writes its motion weighted by alpha.
 
 **Not checked**: both 2026-10-10 fixes were judged on headless captures, where
@@ -801,3 +802,301 @@ about 1.7 ms of a 9.3 ms frame, with the scene pass and the FSR 3.1 chain
 unmoved. Blur draws through the render extent, so its cost falls with the
 resolution like the scene pass's; the controller budgets it as its own meter
 (`oag_present::drs`, `crates/game/src/main/session.rs` `blur_cost`).
+
+## The gather on the Deck: bisected, two exact cuts flat (2026-11-09, `deck-gpu`)
+
+The question: can the largest GPU pass of an HD Anulpha Pass race on the Steam Deck be cut with a
+byte-identical picture? **No cut was kept.** The largest single span is the circuit's shading, not
+this chain; the half-resolution gather is the second, and the two exact changes tried on it measured
+flat. The per-pass table and the two attempts are in
+[frame-thread-cpu.md](frame-thread-cpu.md), "The Deck's GPU passes on HD Anulpha"; this section
+keeps what bounds the gather and what the tiers cost.
+
+**Method.** `RADV VANGOGH`, `dist` `znver2` `perf-probe` container builds of `4cd61908c`, offscreen
+over ssh, the maintainer's HD profile (`motion_blur = "high"`, `motion_blur_resolution = "half"`,
+shadows `original`, MSAA off, `target_fps = "off"`, render scale 100). One view:
+
+```sh
+OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1 ./oag-game hdfury-ps3-eu-dec.iso \
+  --track 'Data\Environments\15_Anulpha_Pass\track.vex' --race --mode single_race --seed 1 \
+  --autopilot --no-audio --size WxH --ticks 2500 --render-scale 100 --screenshot out.png
+```
+
+Arms interleaved, 2 rounds, each run under the Deck's lock, Deck load 0.8 to 1.7. Spans are
+medians of the redraws.
+
+### What the gather is bound by
+
+A diagnostic override (not committed) changed one thing at a time, 1080p, ms, two rounds within
+0.3 %:
+
+| Variant | reconstruct (half) |
+| --- | ---: |
+| as shipped | 1.78 |
+| 5 taps instead of up to 15 | 0.74 |
+| colour tap replaced by the centre colour | 1.40 |
+| `prepared` tap replaced by the pixel's own (this also folds the depth and reach terms to constants) | 0.86 |
+| `prepared` tap kept, at an address that stays in cache | 1.63 |
+| colour tap kept, at an address that stays in cache | 1.54 |
+
+The cost is linear in the taps and is not cache misses. `RADV_DEBUG=shaderstats`: 32 VGPRs, no
+spills, full occupancy, about 210 VALU.
+
+### What a player can already buy
+
+The same bench, `--motion-blur` per run, ms, two rounds:
+
+| Tier | reconstruct 1080p | pipelined 1080p | reconstruct 4K | pipelined 4K |
+| --- | ---: | ---: | ---: | ---: |
+| `high` | 1.75 / 1.78 | 8.77 / 8.70 | 5.64 / 5.62 | 24.94 / 24.98 |
+| `medium` | 1.56 / 1.26 | 9.05 / 8.59 | 5.32 / 5.29 | 24.67 / 24.66 |
+| `off` | | 6.19 / 6.28 | | 15.51 / 15.17 |
+
+At 4K the blur costs this profile about 9.6 ms of the 24.9 ms pipelined frame, and `medium` saves
+little of it. The levers left on the gather (a 32-bit `prepared` texel instead of 64-bit, fewer
+taps) change the picture, so they are a tier decision, not a speed-up.
+The fewer-taps lever is now built as the tiers' own caps: "Fewer taps: each tier caps the
+gather" below.
+
+## Fewer taps: each tier caps the gather (2026-11-10, `blur-taps`)
+
+**Desktop numbers, not Deck numbers.** Everything below was measured on a notebook (Core Ultra 7
+265H) on its NVIDIA RTX PRO 2000 Blackwell Laptop GPU and its Arrow Lake iGPU (`Intel(R)
+Graphics (ARL)`, Mesa ANV, selected with
+`VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json`). The iGPU is the closer proxy for the
+Deck; the Deck itself was not available.
+
+**Why the tiers cost the same.** A tier only changed the shutter. The tap count follows the
+neighbourhood's reach (one tap per `TAP_SPACING_PX`, 4 px), capped at 15, and the reach is capped
+at `MAX_STRETCH` (8 %) of the viewport height: 86 px at 1080p, 173 px at 4K. A racing frame is
+mostly fast pixels, so most of them hit the 15-tap cap under `medium` and `high` alike. That is
+why `medium` saved almost nothing on the Deck at 4K (the table above).
+
+**What changed.** `MotionBlur::taps` gives each tier its own cap, `high` 11, `medium` 9, `low` 7,
+carried to the shader in the uniform's spare slot (`motion_blur::Frame::taps`). The blur keeps its
+length at any count: the taps spread over the whole reach, each jittered inside its own
+`1 / taps` share of a fixed `SPAN` (15/16 of the reach, which at 15 taps is the old placement up
+to rounding). Before that change the outermost tap sat at `taps / (taps + 1)` of the reach, so
+7 taps drew a smear 2 rows short of 15's at 60 px of reach; now both reach 27 rows
+(`lattice_tests::fewer_taps_keep_the_smears_length`). Fewer taps sample the same span more
+coarsely: the per-pixel dither turns the wider spacing into a slightly coarser speckle along a
+streak, not into a shorter or banded one.
+
+### Cost per tier
+
+`OAG_RENDER_GPU_BENCH=150 OAG_RENDER_PERF=1`, HD Anulpha Pass, one view, the Deck's profile (blur
+`half`), base `b56d129a3` against this change, both `release` `perf-probe`. Arms interleaved, 3
+rounds, every run under the gate lock, load 1.4 to 3.5. Medians of the redraws, then the median of
+the rounds, ms:
+
+```sh
+OAG_RENDER_GPU_BENCH=150 OAG_RENDER_PERF=1 oag-game hdfury-ps3-eu-dec.iso \
+  --track 'Data\Environments\15_Anulpha_Pass\track.vex' --race --mode single_race --seed 1 \
+  --autopilot --no-audio --size WxH --ticks 2500 --render-scale 100 \
+  --motion-blur <tier> --motion-blur-resolution half --screenshot out.png
+```
+
+| GPU | Size | Tier | gather (half), before -> after | blur chain | whole frame |
+| --- | --- | --- | --- | --- | --- |
+| NVIDIA | 1280x800 | high | 0.10 -> 0.08 | 0.32 -> 0.30 | 2.25 -> 2.26 |
+| NVIDIA | 1280x800 | medium | 0.08 -> 0.07 | 0.31 -> 0.29 | 2.25 -> 2.25 |
+| NVIDIA | 1280x800 | low | 0.06 -> 0.05 | 0.29 -> 0.27 | 2.26 -> 2.22 |
+| NVIDIA | 1920x1080 | high | 0.25 -> 0.21 | 0.64 -> 0.59 | 3.15 -> 3.10 |
+| NVIDIA | 1920x1080 | medium | 0.23 -> 0.18 | 0.62 -> 0.56 | 3.12 -> 3.02 |
+| NVIDIA | 1920x1080 | low | 0.18 -> 0.13 | 0.56 -> 0.51 | 3.07 -> 3.00 |
+| NVIDIA | 3840x2160 | high | 1.55 -> 1.31 | 3.03 -> 2.75 | 8.78 -> 8.46 |
+| NVIDIA | 3840x2160 | medium | 1.47 -> 1.05 | 2.92 -> 2.50 | 8.55 -> 8.15 |
+| NVIDIA | 3840x2160 | low | 1.24 -> 0.82 | 2.69 -> 2.23 | 8.36 -> 7.87 |
+| Intel | 1280x800 | high | 0.50 -> 0.36 | 1.44 -> 1.31 | 10.49 -> 10.51 |
+| Intel | 1280x800 | medium | 0.41 -> 0.27 | 1.35 -> 1.12 | 10.44 -> 9.71 |
+| Intel | 1280x800 | low | 0.31 -> 0.24 | 1.25 -> 1.18 | 10.25 -> 9.92 |
+| Intel | 1920x1080 | high | 0.92 -> 0.71 | 2.40 -> 2.15 | 13.21 -> 13.06 |
+| Intel | 1920x1080 | medium | 0.83 -> 0.66 | 2.32 -> 2.21 | 13.03 -> 12.74 |
+| Intel | 1920x1080 | low | 0.65 -> 0.47 | 2.09 -> 1.93 | 12.31 -> 12.66 |
+| Intel | 3840x2160 | high | 1.96 -> 1.39 | 5.02 -> 4.25 | 19.60 -> 17.51 |
+| Intel | 3840x2160 | medium | 1.70 -> 1.15 | 4.39 -> 3.87 | 17.50 -> 15.44 |
+| Intel | 3840x2160 | low | 1.46 -> 0.89 | 4.21 -> 3.61 | 17.17 -> 15.86 |
+
+- NVIDIA rounds agree within 0.01 ms at 800p and 1080p and 0.05 ms at 4K. The Intel rounds
+  scatter by 10 to 20 % (its clock), so its whole-frame column is noise below about 1 ms; the
+  gather column moved the same way in every round.
+- `medium` now costs clearly less than `high`: at 4K the gather is 1.05 against 1.31 ms (NVIDIA)
+  and 1.15 against 1.39 ms (Intel), where before it was 1.47 against 1.55 and 1.70 against 1.96.
+- 800p did not regress on either GPU.
+- On the Deck the gather is linear in the taps (the bisect above), so the saving at `high` was
+  expected to be about a fifth of its 1.78 / 7.15 ms at 1080p / 4K. "The tap caps on the Deck"
+  below measures it.
+
+### The tap caps on the Deck
+
+Steam Deck (`RADV VANGOGH`, AC, `powersave`, load 0.4 to 2.0), HD Anulpha Pass, one view, blur
+`half`, `OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1`, `dist` `znver2` builds of `b56d129a3` (base,
+before the caps) and `59900b483` (main). Arms interleaved, 2 rounds, medians of the 60 redraws;
+the two rounds agree within 0.5 % at every size. Method and command:
+[frame-thread-cpu.md](frame-thread-cpu.md), "Four desktop GPU cuts on the Deck". `reconstruct
+(half)` is the gather, us (the other chain passes read the same within 7 us: prepare, tile-max,
+neighbour-max):
+
+| Tier | 800p | 1080p | 4K |
+| --- | --- | --- | --- |
+| `high` (15 to 11 taps) | 725 to 587 (-19.0 %) | 1770 to 1399 (-21.0 %) | 8199 to 6424 (-21.7 %) |
+| `medium` (15 to 9 taps) | 644 to 478 (-25.8 %) | 1660 to 1158 (-30.3 %) | 7932 to 5399 (-31.9 %) |
+
+The estimate was right: a fifth off `high`'s gather (1.77 to 1.40 ms at 1080p; at 4K 8.2 ms to 6.4 ms, where the
+bisect's session read 7.15 ms for the base), and `medium` is now 0.24 ms (1080p) and
+1.0 ms (4K) cheaper than `high` where before it was 0.11 and 0.27 ms. The gather's whole-chain
+share falls with it: the chain (`motion blur` total) went 1401 to 1160 us at 800p, 3015 to 2470
+at 1080p and 12706 to 10293 at 4K at `high`; that includes the composite change below, which the
+base predates. The Deck's pictures were not compared; the capture diff is the desktop's, "The
+picture" above.
+
+### Whole race
+
+`just bench-render hd --views 1,2h --size WxH --motion-blur high --motion-blur-resolution half
+--binary <base|cand> --tag <tag>` (the bench's own HD race, not Anulpha), plus
+`just bench-render pulse --size 1920x1080` with the same blur flags for a no-worse check. Arms
+interleaved, 2 rounds, under the gate lock, load 1.6 to 5.7 except two 800p runs at 9 to 13 (another
+member's build; its numbers sit inside the others'). p50 of every frame, mean of the rounds
+(2 for one view and Pulse, 3 for `2h`), ms. `blur` is the chain's GPU timestamps; a split leaves it empty. The final state hash matched
+base on every run.
+
+| GPU | Case | Size | blur, before -> after | GPU frame | frame |
+| --- | --- | --- | --- | --- | --- |
+| NVIDIA | HD, one view | 1280x800 | 0.33 -> 0.32 | 1.58 -> 1.50 | 2.46 -> 2.38 |
+| NVIDIA | HD, one view | 1920x1080 | 0.92 -> 0.89 | 3.00 -> 3.01 | 3.73 -> 3.73 |
+| NVIDIA | HD, one view | 3840x2160 | 4.80 -> 4.33 | 12.59 -> 11.95 | 13.38 -> 12.72 |
+| NVIDIA | HD, `2h` | 1280x800 | | 1.43 -> 1.44 | 3.92 -> 3.95 |
+| NVIDIA | HD, `2h` | 1920x1080 | | 2.11 -> 2.13 | 4.77 -> 4.80 |
+| NVIDIA | HD, `2h` | 3840x2160 | | 6.22 -> 6.26 | 13.22 -> 12.95 |
+| Intel | HD, one view | 1920x1080 | 1.12 -> 1.05 | 4.46 -> 4.38 | 5.92 -> 5.86 |
+| Intel | HD, `2h` | 1280x800 | | 3.15 -> 3.15 | 7.30 -> 7.34 |
+| Intel | HD, `2h` | 1920x1080 | | 3.89 -> 3.81 | 8.96 -> 8.84 |
+| NVIDIA | Pulse, one view | 1920x1080 | 0.75 -> 0.70 | 1.08 -> 1.01 | 1.42 -> 1.36 |
+
+At 1080p on the NVIDIA card the frame is bound elsewhere and the gather's 0.04 ms does not
+show. The split at 800p and 1080p is CPU-bound (CPU p50 about 3.6 to 3.9 ms on NVIDIA, 4.4 to
+4.6 on Intel), and its rows moved 0.02 to 0.04 ms either way: NVIDIA 1080p rounds 4.72 / 4.81 /
+4.77 before against 4.83 / 4.84 / 4.71 after, Intel 800p 7.22 / 7.44 / 7.25 against 7.37 /
+7.38 / 7.27. That is inside the rounds' spread, so no gain and no loss there. At 4K one view
+gains 0.66 ms of a 13.4 ms frame and the split 0.27 ms.
+
+### The picture
+
+Same race, ticks 2500 to 2502 (578 to 580 km/h, autopilot, in the tunnel past the start), 1920x1080, both gather
+resolutions. Metric as in "Grain" above: RMS of the 5x5 high-passed difference from a
+reference, over the pixels the blur changed (about 1.36 million at `high`). The reference is
+the same build at the same tier's shutter with the cap at 63 (23 taps at 1080p, the count the
+4 px spacing asks for).
+
+The cap swept at `high`'s shutter, tick 2500:
+
+| Taps (cap), at `high`'s shutter | half: hp-RMS / mean diff | full: hp-RMS / mean diff |
+| --- | --- | --- |
+| before (15, old placement) | 0.55 / 0.35 | 1.03 / 0.52 |
+| 15 | 0.44 / 0.24 | 0.76 / 0.35 |
+| **11 (`high`)** | 0.62 / 0.46 | 1.18 / 0.66 |
+| 9 | 0.78 / 0.67 | 1.53 / 0.95 |
+| 7 | 1.06 / 1.02 | 2.18 / 1.44 |
+
+Each tier against its own reference, tick 2500:
+
+| Tier | half, before -> after | full, before -> after |
+| --- | --- | --- |
+| `high` (15 -> 11) | 0.55 -> 0.62 | 1.03 -> 1.18 |
+| `medium` (15 -> 9) | 0.51 -> 0.67 | 0.96 -> 1.30 |
+| `low` (15 -> 7) | 0.47 -> 0.60 | 0.82 -> 1.16 |
+
+Read as a player would, crops at full size and three consecutive frames: the streaks keep their
+length and direction at every count. 11 and 9 differ from 15 only by a slightly coarser speckle
+along the brightest streaks (the blue track-edge light, the red advert wall) that does not
+change from frame to frame in a way the eye picks out at speed. 7 taps at `high`'s shutter
+makes that speckle visible on a still frame and leaves a ragged edge where a wall's smear meets
+the dark. At `low`'s own quarter shutter the smear is a third as long, so 7 taps sample it about
+as densely as 11 sample `high`'s: the crop reads like its reference, with a hint of speckle on the
+blue light. Many `low` pixels still asked for more than 7 taps (the gather fell 0.18 -> 0.13 ms
+at 1080p on NVIDIA), so the cap does bind there.
+
+`just frame-compare` scales its first image to the PSP's 480x272 to put it beside the original,
+so it does not fit an A/B of two of our own 1080p frames; the metric and crops here stand in for
+it. With the blur `off`, the base and this change capture
+byte-identical frames at all six of those captures (both gather resolutions, three ticks): no
+other pass changed.
+
+### Measured and dropped
+
+- **Tap spacing as a fraction of the reach cap** (`max(4 px, max_px / 21.6)`, which is 4 px at
+  1080p and 8 px at 4K) to cut 4K's mid-length smears: the gather at 4K, NVIDIA, 15 taps
+  1.57 -> 1.49 ms, and nothing at 11. Most 4K pixels are already at the cap, so the spacing
+  rule is not what the gather pays for. Not kept.
+
+## The half-size composite blends onto the scene: no copy (2026-11-10, `blur-composite`)
+
+Claim: the composite plus copy costs measurably less GPU time on desktop NVIDIA and Intel at
+`--motion-blur high` on HD Anulpha. **True.** At half resolution the composite's output was
+`scene * (1 - smear.a) + smear.rgb` into a scratch target, and `fs_copy` carried scratch home.
+The expression is a premultiplied "over", so the composite now returns the smear and the
+pipeline's blend (`SMEAR_OVER` in `crates/post/src/motion_blur.rs`: colour `One` + `OneMinusSrcAlpha`,
+alpha `Zero` + `One` so the scene's glow-mask alpha stays) lays it on `frame.scene` directly.
+The scene is now the composite's render target, so the group no longer binds it as a texture
+(the unused `tile_tex` slot holds `tile_b`). The half path has no copy pass; the full-size gather
+still reconstructs into scratch and copies home, because its taps sample the scene's neighbours.
+The chain's closing timestamp moved to the composite on the half path.
+
+### Measured
+
+Per pass, GPU median, microseconds, `OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1`, one view,
+`--race --mode single_race --seed 1 --autopilot --ticks 600 --render-scale 100 --motion-blur high
+--motion-blur-resolution half`, release plus `perf-probe`, 2 rounds interleaved base/candidate
+(base = `95ca568b1`). The machine was loaded (load 18 to 50 from other members, recorded per run), so
+the absolute numbers are noisy and only the interleaved pairs mean anything. Before = composite +
+copy; after = composite. Mean of the two rounds.
+
+| GPU, title | 800p | 1080p | 4K |
+| --- | ---: | ---: | ---: |
+| NVIDIA RTX PRO 2000 Blackwell, HD Anulpha | 57.4 -> 44.2 (-23%) | 128.8 -> 109.7 (-15%) | 771 -> 608 (-21%) |
+| NVIDIA, Pulse default circuit | 53.6 -> 40.9 (-24%) | 134.3 -> 98.9 (-26%) | 808 -> 632 (-22%) |
+| Intel (Vulkan), HD Anulpha | 346 -> 249 (-28%) | 738 -> 549 (-26%) | 1458 -> 1004 (-31%) |
+| Intel, Pulse default circuit | 346 -> 254 (-27%) | 770 -> 565 (-27%) | 2955 -> 1630 to 2165 (-27 to -45%) |
+
+The saving is the copy (NVIDIA 11 / 25 / 146 us, Intel 79 / 165 / 382 us on HD) plus a smaller
+composite on Intel (Intel Graphics ARL, integrated), which no longer loads the scene. On NVIDIA the composite itself got slightly
+slower (HD 1080p 103 -> 110 us, 4K 620 -> 634 us in round one: the blend reads the target back), and the copy's removal more than pays for it.
+One row stayed unexplained: the untouched `reconstruct (half)` read 180 -> 196 us on NVIDIA HD 1080p in both rounds, and did not move on Pulse
+or Intel; the chain total still fell. Whole-chain medians: NVIDIA HD 290 -> 264
+(800p), 529 -> 510 (1080p), 2608 -> 2542 (4K) in round one, Intel HD 1309 -> 1190, 2487 -> 2233,
+4008 -> 3609. On the desktop NVIDIA part this is tens of microseconds at 1080p, so below a frame's
+noise; the Deck number is the one that matters (copy 0.15 / 0.53 ms there, measured below).
+
+### On the Deck
+
+Steam Deck (`RADV VANGOGH`, AC, `powersave`, load 0.5 to 1.6), HD Anulpha Pass, one view,
+`--motion-blur high --motion-blur-resolution half`, `OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1`,
+`--ticks 2500`, `dist` `znver2` builds of `95ca568b1` (base) and `59900b483` (this change). Arms
+interleaved, 2 rounds, medians of the 60 redraws, us; the rounds agree within 0.5 %. Method:
+[frame-thread-cpu.md](frame-thread-cpu.md), "Four desktop GPU cuts on the Deck".
+
+| Size | composite + copy, before | composite, after | blur chain | `reconstruct (half)` | pipelined frame |
+| --- | --- | --- | --- | --- | --- |
+| 1280x800 | 236 + 68 = 305 | 224 (-26 %) | 1267 to 1176 | 589 to 589 | 5666 to 5554 |
+| 1920x1080 | 528 + 146 = 673 | 503 (-25 %) | 2665 to 2485 | 1408 to 1409 | 8123 to 7947 |
+| 3840x2160 | 2056 + 531 = 2587 | 1981 (-23 %) | 10935 to 10316 | 6446 to 6419 | 24179 to 23712 |
+
+**The Deck agrees with the desktop**: composite plus copy fell 23 to 26 % (the desktop's range was
+15 to 31 %), 0.18 ms of an 8.1 ms pipelined frame at 1080p and 0.47 ms of 24.2 ms at 4K. Unlike
+NVIDIA the Deck's composite did not get slower; it got 4 to 5 % faster as well, so the copy's
+whole 0.15 / 0.53 ms (1080p / 4K) is saved and a little more. The untouched `reconstruct (half)`
+read the same in both arms. The 2026-11-09 session read 0.66 ms at 1080p and 2.37 ms at 4K for
+the pair; this session's base reads 0.67 and 2.59 ms (the 4K rows drift between sessions).
+
+### The picture
+
+Blur is our own effect, so this changes pixels. Base against candidate, 8-bit screenshots, same
+seed and tick: HD 1080p 1,105,239 of 2,073,600 pixels differ, **every one by 1** (the 4K frame has
+one pixel off by 2); Pulse 1080p 1,078,501 differ, 1,077,619 by 1 and 882 by 2; Pulse 4K 272 pixels
+by 3 of 8.3 million; HD 1080p at tick 2500: 1,133,632 differ, all by 1. The screenshots carry no scene alpha (every pixel is 255), so the scene's alpha is
+kept by construction (the blend's alpha factors are `Zero` and `One`), not by a picture. The streaks, the sharp craft and the HUD read the same
+in the candidate frame at full size. The cause is rounding: the blend hardware
+multiplies and adds in its own order and rounds once to the target format, where the shader did it
+in f32. Some of the changed pixels carry a smear below one 8-bit step, which the
+shader's version rounded away. With the blur `off`, HD and Pulse 1080p frames are byte-identical
+to base (`cmp`), and so is HD with `--motion-blur-resolution full` (that path is unchanged).

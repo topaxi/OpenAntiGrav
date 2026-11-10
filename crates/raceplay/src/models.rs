@@ -185,6 +185,29 @@ impl Race {
             .at([at.x, at.y, at.z], seconds, [point, spot])
     }
 
+    /// The colour a craft's hull extra pass is drawn in, `0..=1`: white for every title but
+    /// Pulse, and on Pulse the light the craft stands in -
+    /// `oag_mesh::mesh_render::HullPassColour::at` under the craft's spline scale bytes
+    /// (`255` where the course has not located it) with its point and spot lights' share.
+    /// `seconds` is the scenery clock, as for [`Self::ship_hull_points`].
+    ///
+    /// # Panics
+    ///
+    /// If `slot` is not a ship slot.
+    #[must_use]
+    pub fn ship_shine_colour(&self, slot: usize, seconds: f32) -> [f32; 3] {
+        let Some(pass) = &self.view.hull_points.pass else {
+            return [1.0; 3];
+        };
+        let at = self.ship_model_matrix_of(slot).w_axis;
+        let [ambient, directional, point, spot] = self.hull_light_scale(slot).unwrap_or([255; 4]);
+        let points = self
+            .view
+            .hull_points
+            .accumulated([at.x, at.y, at.z], seconds, [point, spot]);
+        pass.at([ambient, directional], points)
+    }
+
     /// Where a craft's environment probes are blended: its body, one tick back.
     ///
     /// The original's SPU job takes the previous frame's position (one tick fits best

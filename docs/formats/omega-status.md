@@ -1012,7 +1012,7 @@ read, see [2048-material-params.md](2048-material-params.md#what-scrolls-and-wha
 admitted by name and authored rate hashes, labelled inherited from HD in the load
 report (Omega's GCN is unread, so no program confirms `time` there); 11 materials
 on Anulpha Pass, up to 15 on Amphiseum, 0 on any `environments2048` circuit
-(`crates/render/tests/psp2_glow_ground_truth.rs`).
+(`crates/mesh/tests/psp2_glow_ground_truth.rs`).
 Frames at ticks 120, 180, 240 and 300, against a tick-300 frame from before the change (not kept). Before, the panels the glow layer lights are
 dull grey; after, they glow. The only pixels that differ from main's build at
 tick 300 are those surfaces (438 pixels over a threshold of 24, all inside one

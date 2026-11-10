@@ -160,6 +160,9 @@ impl Pending {
                 .boost_zoom
                 .then(oag_source::title::borrowed_zoom_ring),
             trail_hits: oag_game::launcher::trail_hits(self.settings.graphics.trail_hits),
+            wingtip_contrails: oag_game::launcher::wingtip_contrails(
+                self.settings.graphics.wingtip_contrails,
+            ),
             foreign_track: self
                 .foreign_entry
                 .as_ref()
@@ -248,6 +251,7 @@ impl Pending {
             // uses. Same shape as the scheme: an unrecognised token is reported
             // and the default is used rather than failing the boot.
             difficulty: resolve_difficulty(&self.settings),
+            skill_level: None,
             opponents: self.cli.opponents || self.cli.driver.people() > 1,
             // The load reads a title's authored split HUD for two views. Windows are not
             // views: each shows the whole-screen HUD, which is the sheet one view packs.

@@ -857,6 +857,7 @@ pub(crate) mod web {
 
     use anyhow::{Context, Result};
     use oag_game::adapter;
+    use oag_game::web_fault::{self, Failure, Kind};
 
     /// The id of the `<canvas>` the page draws into.
     pub(crate) const CANVAS_ID: &str = "oag-canvas";
@@ -868,25 +869,32 @@ pub(crate) mod web {
         queue: wgpu::Queue,
     }
 
+    #[cfg(feature = "fault-test")]
     thread_local! {
-        static PREPARED: RefCell<Option<Prepared>> = const { RefCell::new(None) };
-        /// Whether the browser handed out a CPU adapter, which is what the page's
-        /// message names the Chrome flags for.
-        static SOFTWARE: Cell<bool> = const { Cell::new(false) };
+        /// The device the fault hook (`fault_test`) aims a real validation
+        /// error at; `PREPARED` is emptied once the renderer takes it.
+        pub(crate) static TEST_DEVICE: RefCell<Option<wgpu::Device>> = const { RefCell::new(None) };
     }
 
-    /// Shows `cause` on the page, through the `oagFatal` function `web/main.js`
-    /// defines, instead of leaving a white canvas. A missing function (a page
-    /// that is not ours) is ignored: the console already has the line.
-    pub(crate) fn fatal(cause: &str) {
-        use wasm_bindgen::JsCast;
-        let global = js_sys::global();
-        let Ok(show) = js_sys::Reflect::get(&global, &"oagFatal".into()) else {
-            return;
-        };
-        if let Ok(show) = show.dyn_into::<js_sys::Function>() {
-            let _ = show.call2(&global, &cause.into(), &SOFTWARE.with(Cell::get).into());
-        }
+    thread_local! {
+        static PREPARED: RefCell<Option<Prepared>> = const { RefCell::new(None) };
+        /// Validation errors seen so far: the first is logged as an error, the
+        /// rest at debug, because one bad pipeline repeats every frame.
+        static VALIDATION_ERRORS: Cell<u32> = const { Cell::new(0) };
+    }
+
+    /// Stops the page and shows `kind` on it, through the `oagFatal` function
+    /// `web/fault.js` defines, instead of leaving a white canvas. A missing
+    /// function (a page that is not ours) is ignored and reported as `false`,
+    /// for a caller that must still put the line on the console.
+    pub(crate) fn fatal(kind: Kind, detail: &str) -> bool {
+        call("oagFatal", &[kind.tag().into(), detail.into()]).is_some()
+    }
+
+    /// Tells the page about a failure the game survives (a validation error),
+    /// through `oagNotice`: shown once, dismissable, nothing stopped.
+    pub(crate) fn notice(kind: Kind, detail: &str) {
+        call("oagNotice", &[kind.tag().into(), detail.into()]);
     }
 
     /// Tells the page the player quit, through the `oagQuit` function
@@ -950,31 +958,40 @@ pub(crate) mod web {
                 ..Default::default()
             })
             .await
-            .context("no WebGPU adapter (does this browser have WebGPU enabled?)")?;
+            .context(Failure::new(
+                Kind::NoAdapter,
+                "no WebGPU adapter (does this browser have WebGPU enabled?)",
+            ))?;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 ..oag_mesh::mesh_render::device_descriptor("oag-game", &adapter)
             })
             .await
-            .context("requesting the device")?;
+            .context(Failure::new(
+                Kind::DeviceRequest,
+                "the adapter would not give the device the game asks for",
+            ))?;
         oag_gpu::init_buffer::set_web_queue(queue.clone());
         let info = adapter.get_info();
         log::info!("web: adapter {:?} ({:?})", info.name, info.device_type);
-        SOFTWARE.with(|cell| cell.set(info.device_type == wgpu::DeviceType::Cpu));
-        device.set_device_lost_callback(|reason, message| {
-            log::error!("web: the WebGPU device was lost ({reason:?}): {message}");
-            if reason != wgpu::DeviceLostReason::Destroyed {
-                fatal(&format!("The GPU device was lost ({reason:?}): {message}"));
-            }
-        });
-        device.on_uncaptured_error(std::sync::Arc::new(|error: wgpu::Error| match error {
-            wgpu::Error::Validation { .. } => log::error!("web: WebGPU validation: {error}"),
-            _ => {
-                log::error!("web: WebGPU error: {error}");
-                fatal(&format!("The GPU reported an error: {error}"));
-            }
+        call(
+            "oagAdapter",
+            &[
+                format!(
+                    "{:?} ({:?}, {:?}, driver {:?})",
+                    info.name, info.device_type, info.backend, info.driver
+                )
+                .into(),
+                (info.device_type == wgpu::DeviceType::Cpu).into(),
+            ],
+        );
+        device.set_device_lost_callback(|reason, message| device_lost(reason, &message));
+        device.on_uncaptured_error(std::sync::Arc::new(|error: wgpu::Error| {
+            uncaptured_error(&error);
         }));
+        #[cfg(feature = "fault-test")]
+        TEST_DEVICE.with(|cell| *cell.borrow_mut() = Some(device.clone()));
         PREPARED.with(|cell| {
             *cell.borrow_mut() = Some(Prepared {
                 instance,
@@ -984,6 +1001,38 @@ pub(crate) mod web {
             });
         });
         Ok(())
+    }
+
+    /// What the device-lost callback does: the page shows it, unless the game
+    /// destroyed the device itself.
+    pub(crate) fn device_lost(reason: wgpu::DeviceLostReason, message: &str) {
+        log::debug!("web: the WebGPU device was lost ({reason:?}): {message}");
+        if let Some(kind) = web_fault::device_lost(reason) {
+            fatal(kind, &format!("device lost ({reason:?}): {message}"));
+        }
+    }
+
+    /// What the uncaptured-error callback does. A validation error is shown
+    /// once and the game runs on, and only the first is logged above debug (one
+    /// bad pipeline repeats every frame); any other kind stops the page. The
+    /// page's report is the console's one error line.
+    pub(crate) fn uncaptured_error(error: &wgpu::Error) {
+        let kind = web_fault::gpu_error(error);
+        if kind == Kind::GpuValidation {
+            let seen = VALIDATION_ERRORS.with(|count| {
+                count.set(count.get().saturating_add(1));
+                count.get()
+            });
+            if seen == 1 {
+                log::warn!("web: WebGPU validation: {error}");
+            } else {
+                log::debug!("web: WebGPU validation (#{seen}): {error}");
+            }
+            notice(kind, &format!("{error}"));
+        } else {
+            log::debug!("web: WebGPU error: {error}");
+            fatal(kind, &format!("{error}"));
+        }
     }
 
     /// The instance [`prepare`] made the adapter from: a surface must come

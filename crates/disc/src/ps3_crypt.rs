@@ -28,8 +28,8 @@
 use std::path::{Path, PathBuf};
 
 use aes::Aes128;
-use aes::cipher::generic_array::GenericArray;
-use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
+use aes::cipher::array::Array;
+use aes::cipher::{BlockCipherDecrypt, BlockCipherEncrypt, KeyInit};
 
 use crate::error::Result;
 use crate::iso9660::Entry;
@@ -116,13 +116,13 @@ impl DiscKey {
     /// redump `.dkey`), or `data1` run through the public secret. The oracle
     /// decides which.
     fn candidates(&self) -> [Aes128; 2] {
-        let direct = Aes128::new(GenericArray::from_slice(&self.0));
+        let direct = Aes128::new(Array::cast_from_core(&self.0));
         // One CBC block: encrypt `data1 XOR iv`.
-        let mut block = GenericArray::clone_from_slice(&self.0);
+        let mut block = Array::from(self.0);
         for (byte, iv) in block.iter_mut().zip(DATA1_IV) {
             *byte ^= iv;
         }
-        Aes128::new(GenericArray::from_slice(&DATA1_SECRET)).encrypt_block(&mut block);
+        Aes128::new(Array::cast_from_core(&DATA1_SECRET)).encrypt_block(&mut block);
         let derived = Aes128::new(&block);
         [direct, derived]
     }
@@ -176,9 +176,7 @@ fn decrypt_sector(cipher: &Aes128, lba: u32, sector: &mut [u8]) {
     debug_assert_eq!(sector.len(), SECTOR_SIZE);
     let mut chain = [0u8; SECTOR_SIZE];
     chain.copy_from_slice(sector);
-    for block in sector.chunks_exact_mut(16) {
-        cipher.decrypt_block(GenericArray::from_mut_slice(block));
-    }
+    cipher.decrypt_blocks(Array::slice_as_chunks_mut(sector).0);
     let mut previous = [0u8; 16];
     previous[12..].copy_from_slice(&lba.to_be_bytes());
     for (block, cipher_block) in sector.chunks_exact_mut(16).zip(chain.chunks_exact(16)) {

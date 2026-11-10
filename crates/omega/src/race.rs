@@ -408,9 +408,19 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     wall_one_sided: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     wall_steer_away: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     wall_point_rate_body_local: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+    // Omega's own: its integrator (`FUN_013463f0`) takes `v * dt * body+0x4b0` off the velocity
+    // at `0x013467d9` and reads `body+0x4ac` for the angular twin, and its body constructors
+    // store a packed `0.01, 0.01` at `+0x4ac` (`0x012e529b`, `0x01331a26`, `0x0133680e`). Read,
+    // no live value (`docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`). Confidence 80.
+    body_linear_damping: oag_title::pre_race::Sourced::measured(0.01),
+    body_angular_damping: oag_title::pre_race::Sourced::measured(0.01),
     cage_from_track_header: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
     // Not read: the view matrix is Pulse's orthonormal look-at until measured.
     chase_view_sheared: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    // The skill-indexed pool read is Wipeout HD's measured Novice field (`easyshield`), and
+    // nothing here has been measured: the Medium slot until it is
+    // (`docs/formats/handling-stats.md`, "Which difficulty picks the shield slot").
+    shield_by_skill: oag_title::pre_race::Sourced::chosen(false),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,

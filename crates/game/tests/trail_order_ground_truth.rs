@@ -1,4 +1,4 @@
-//! TRAIL ORDER reaches the frame a player sees.
+//! TRAIL ORDER and TRAIL LENGTH reach the frame a player sees.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs a Pulse disc image under
 //! `data/images/` and a GPU adapter.
@@ -25,7 +25,15 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn capture(image: &Path, scratch: &Path, order: Option<&str>) -> Vec<u8> {
-    let out = scratch.join(format!("trail-{}.png", order.unwrap_or("default")));
+    capture_with(image, scratch, order.map(|o| ["--trail-order", o]))
+}
+
+/// A posed capture with one extra `--flag value` pair, or none.
+fn capture_with(image: &Path, scratch: &Path, flag: Option<[&str; 2]>) -> Vec<u8> {
+    let name = flag.map_or("default".to_string(), |[flag, value]| {
+        format!("{}-{value}", flag.trim_start_matches('-'))
+    });
+    let out = scratch.join(format!("trail-{name}.png"));
     let mut command = Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
@@ -50,11 +58,11 @@ fn capture(image: &Path, scratch: &Path, order: Option<&str>) -> Vec<u8> {
         .env("XDG_CONFIG_HOME", scratch.join("config"))
         .env("XDG_STATE_HOME", scratch.join("state"))
         .env("XDG_DATA_HOME", scratch.join("data"));
-    if let Some(order) = order {
-        command.args(["--trail-order", order]);
+    if let Some(flag) = flag {
+        command.args(flag);
     }
     let status = command.status().expect("running oag-game");
-    assert!(status.success(), "oag-game --trail-order {order:?}");
+    assert!(status.success(), "oag-game {flag:?}");
     std::fs::read(&out).expect("reading the screenshot")
 }
 
@@ -81,4 +89,23 @@ fn each_trail_order_draws_its_own_picture_over_a_translucent_floor() {
         original, over_floors,
         "over-floors must draw the ribbon after the floor patch"
     );
+}
+
+/// `--trail-length hd` reaches the ribbon the frame draws, and `original` is the default: a run
+/// with no flag is byte-identical to it. The posed capture fills the ring at the length the
+/// race holds, so a length that never reached the race draws the same picture as `original`.
+#[test]
+#[ignore = "needs a Pulse disc image in data/images/ and a GPU adapter"]
+fn the_hd_trail_length_draws_a_longer_ribbon() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let scratch = scratch();
+    let default = capture_with(&image, &scratch, None);
+    let original = capture_with(&image, &scratch, Some(["--trail-length", "original"]));
+    let hd = capture_with(&image, &scratch, Some(["--trail-length", "hd"]));
+    std::fs::remove_dir_all(&scratch).ok();
+
+    assert_eq!(default, original, "original is the default length");
+    assert_ne!(original, hd, "hd must draw the longer ribbon");
 }

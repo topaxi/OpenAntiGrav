@@ -369,6 +369,8 @@ pub struct RaceView {
     /// The Missile's ribbons, `None` where the title draws none - see
     /// [`crate::missile_smoke`].
     pub(super) missile_smoke: Option<crate::missile_smoke::Smoke>,
+    /// The wingtip contrails, `None` where the race draws none - see [`crate::wingtip`].
+    pub(super) wingtip: Option<crate::wingtip::Contrails>,
     /// The Plasma's own render-side detonation instances, one per
     /// [`blast_models::PLASMA_BLAST_SLOTS`] - see that module's own doc
     /// comment for why this lives here rather than in `World`, and

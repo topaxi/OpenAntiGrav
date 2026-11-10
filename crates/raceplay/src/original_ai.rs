@@ -52,7 +52,7 @@ impl Race {
     /// (`Session::resolve_campaign_ai_skill_scale`), `None` for a race with
     /// none, which reads the race's ambient value the load resolved; `level`
     /// the integer rung, `0` Easy to `2` Hard, which the pack shuffle reads: a
-    /// campaign cell's own, else the one `oag_game::ai_choice::free_level`
+    /// campaign cell's own, else the one `oag_ai::Difficulty::level`
     /// chooses from `[ai] difficulty` (chosen, not measured).
     ///
     /// `false`, with the reason logged, when the class's AI tables did not

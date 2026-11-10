@@ -5,6 +5,7 @@
 // and the seam a two-triangle quad would have down its diagonal does not
 // exist.
 
+import oag_shaders::colour::srgb_decode;
 import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
 
 @vertex
@@ -36,18 +37,6 @@ struct Grade {
 @group(0) @binding(1) var frame_sampler: sampler;
 @group(0) @binding(2) var<uniform> grade: Grade;
 
-// The sRGB EOTF, exactly - the piecewise curve, not a `pow(c, 2.2)` standing in
-// for it. The values being decoded here were encoded by the hardware using the
-// exact curve on the way into the offscreen target, so anything else would not
-// round-trip and would tint the darks, which is where the two curves differ
-// most and where a racing game spends much of its frame.
-fn srgb_decode(c: vec3<f32>) -> vec3<f32> {
-    let v = clamp(c, vec3<f32>(0.0), vec3<f32>(1.0));
-    let lo = v / 12.92;
-    let hi = pow((v + vec3<f32>(0.055)) / 1.055, vec3<f32>(2.4));
-    return select(hi, lo, v <= vec3<f32>(0.04045));
-}
-
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // The drawn rectangle, not the whole texture. At `uv_scale == 1` and
@@ -62,7 +51,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // it works in that space throughout; the offscreen target arrives through an
     // sRGB view the sampler has already decoded. Everything below wants linear,
     // so the two are brought together here rather than in two shader variants.
-    let linear = select(frame_color.rgb, srgb_decode(frame_color.rgb), grade.decode > 0.5);
+    //
+    // A uniform `if`, not a `select`: `select` evaluates both arms for every
+    // pixel and the decode (three `pow` per channel) is dead on every real
+    // call site, where the sampler has already decoded.
+    var linear = frame_color.rgb;
+    if grade.decode > 0.5 {
+        linear = srgb_decode(clamp(linear, vec3<f32>(0.0), vec3<f32>(1.0)));
+    }
     // Gamma first, then brightness. The other order raises the value the curve
     // is applied to, so turning brightness up would also flatten the curve and
     // the two rows would stop being independent.
@@ -70,6 +66,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Clamped before `pow`, which is undefined for a negative base. Nothing
     // this project draws produces one, but an extended-range surface format
     // could, and a NaN here would be a black frame with no message.
-    let graded = pow(clamp(linear, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(grade.exponent));
+    let clamped = clamp(linear, vec3<f32>(0.0), vec3<f32>(1.0));
+    // The neutral gamma (`Gamma::NEUTRAL`, exponent exactly 1.0) skips the `pow`.
+    // An early return rather than an assignment inside an `if`: the two compile
+    // to the same colours, but on Intel's compiler the assignment form measured
+    // slower than leaving the `pow` in (`docs/rendering/hires-gpu-levers.md`,
+    // "The present composite's two dead `pow`").
+    if grade.exponent == 1.0 {
+        return vec4<f32>(clamped * grade.brightness, frame_color.a);
+    }
+    let graded = pow(clamped, vec3<f32>(grade.exponent));
     return vec4<f32>(graded * grade.brightness, frame_color.a);
 }

@@ -139,7 +139,14 @@ fn every_row_stepped_once_and_its_height_miss_split() {
         let stats =
             handling::from_blob(&archives.read_name(&handling::entry_name(team)).unwrap()).unwrap();
         let (pads, gravity_mul, _) = global.class_named(class).expect("class");
-        let handling = handling_for(&stats, class, pads, global.special).expect("class handling");
+        let handling = handling_for(
+            &stats,
+            class,
+            pads,
+            global.special,
+            oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
+        )
+        .expect("class handling");
         let timers = ground_timers(&trace.frames, handling.antigrav.rebound_jump_time);
         let stick = column(&text, &["stick_pitch"]);
         let downs = column(&text, &["spline_down_x", "spline_down_y", "spline_down_z"]);

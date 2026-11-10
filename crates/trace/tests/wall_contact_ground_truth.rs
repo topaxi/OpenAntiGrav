@@ -172,6 +172,7 @@ fn load() -> (Handling, oag_physics::CollisionWorld, Trace) {
         CLASS,
         handling::SpeedupPads::default(),
         handling::Special::default(),
+        oag_gameplay::handling::DEFAULT_SKILL_LEVEL,
     );
 
     let text = std::fs::read_to_string(capture_path).expect("reading the capture");

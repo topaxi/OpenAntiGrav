@@ -9,6 +9,7 @@ impl Default for Options {
             source: oag_source::source::DEFAULT_IMAGE.to_string(),
             craft_source: None,
             difficulty: oag_ai::Difficulty::default(),
+            skill_level: None,
             // Empty rather than the search path: a default that read the
             // filesystem would make two runs of the same test differ by what
             // the developer happens to have downloaded. The composition root
@@ -21,6 +22,7 @@ impl Default for Options {
             find_texture_packs: None,
             boost_zoom: None,
             trail_hits: TrailHits::Off,
+            wingtip_contrails: WingtipContrails::Off,
             team: None,
             hull_variant: None,
             skin: None,

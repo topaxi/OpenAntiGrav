@@ -59,13 +59,12 @@ pub(super) fn lend(
     };
     let platform = archives.layout.platform;
     let name = spec.effect;
-    let loaded = assets::particle_effect(
+    let loaded = assets::listed_particle_effect(
         &mut archives,
         from.race.effect_dir_for(""),
+        from.effects,
         name,
         from.looks.particle_laws.applies(platform),
-        from.effects.extents.contains(&name),
-        from.effects.sprites.contains(&name),
     );
     match loaded {
         Ok((effect, note)) => {

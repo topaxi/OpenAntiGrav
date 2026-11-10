@@ -930,14 +930,13 @@ impl Session {
                     oag_game::sound::flyby_tick(&mut self.audio, &mut stage.race);
                 }
                 Stage::Race(stage) => {
-                    // Outside `Race::tick`, so this cannot reach the hash: it
-                    // tops the slot up the way a pad grant would, and only when
-                    // the slot is already empty, so firing still spends it.
+                    // Tops the slot up the way a pad grant would, and only when
+                    // the slot is already empty, so firing still spends it. It
+                    // writes between ticks, so it is recorded as an event: a
+                    // replay or a rewind that did not hear of it would hold an
+                    // empty slot where the live race held the weapon.
                     if let Some(weapon) = self.give {
-                        let ship = &mut stage.race.sim.world.ships[0];
-                        if ship.pickup.weapon.is_none() {
-                            ship.pickup.weapon = Some(weapon);
-                        }
+                        stage.race.give_weapon(0, weapon);
                     }
                     // Every slot's snapshot, straight off the devices'
                     // assignment - see `oag_input::pad::Assignment`. Under its
@@ -952,6 +951,12 @@ impl Session {
                         // devices are all on slot 0 under the default assignment.
                         net.step(&mut stage.race, *inputs.get(0));
                     } else {
+                        // The first keyframe is cut here, after every writer that ran at
+                        // the race's build and before the first tick's events, so a rewind
+                        // that pre-rolls from it flies the race that was flown.
+                        if let Some(keeper) = &mut stage.keeper {
+                            keeper.recut_first(&stage.race);
+                        }
                         oag_game::split_screen::follow_devices(
                             &mut stage.race,
                             self.controls.assignment(),

@@ -82,12 +82,12 @@ SOFTWARE_FLAGS = {
 }
 
 
-def serve(directory: Path, port: int) -> http.server.ThreadingHTTPServer:
+def serve(directory: Path, port: int, isolated: bool = True) -> http.server.ThreadingHTTPServer:
     # The same server `just web --serve` runs, COOP/COEP included.
     sys.path.insert(0, str(Path(__file__).parent))
     import importlib
 
-    server = importlib.import_module("serve-web").server(directory, port)
+    server = importlib.import_module("serve-web").server(directory, port, isolated)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 
@@ -146,6 +146,14 @@ def report_profile(session, path: Path) -> None:
 
 def deliver(page, args) -> None:
     """Hands the image (and the key, by --key-mode) to the page."""
+    if args.truncate is not None:
+        # A cut-short copy of the image under its own name (a damaged download).
+        with args.image.open("rb") as f:
+            cut = f.read(args.truncate)
+        page.set_input_files("#file", files=[{
+            "name": args.image.name, "mimeType": "application/octet-stream", "buffer": cut}])
+        print(f"handed {args.truncate} bytes of {args.image.name}", flush=True)
+        return
     mode = args.key_mode if args.key or args.key_mode == "drop-image" else "none"
     if mode in ("drop", "drop-image", "key-first"):
         # A real drop needs real File objects: a hidden input yields them.
@@ -176,6 +184,34 @@ def deliver(page, args) -> None:
         page.fill("#keyhex", key_hex_text(args.key))
         page.screenshot(path=str(args.out / "keybox-filled.png"))
         page.click("#keygo")
+
+
+def check_fault(page, args, console_errors: list[str], page_errors: list[str]) -> None:
+    """Fails unless the page shows one report of the expected kind and nothing cascaded."""
+    try:
+        page.wait_for_selector("#oag-fault", timeout=30000)
+    except Exception:  # noqa: BLE001 - reported below with the screenshot
+        pass
+    page.wait_for_timeout(1500)  # a cascade, if any, arrives after the first report
+    kinds = page.evaluate("[...document.querySelectorAll('#oag-fault')].map(n => n.dataset.kind)")
+    page.screenshot(path=str(args.out / "fault.png"))
+    shown = page.evaluate("window.oagLastFault ? window.oagLastFault.text : ''")
+    (args.out / "fault-details.txt").write_text(shown)
+    title = page.evaluate("document.querySelector('#oag-fault h2')?.textContent ?? ''")
+    print(f"report: kinds={kinds} title={title!r}", flush=True)
+    problems = []
+    if kinds != [args.expect_fault]:
+        problems.append(f"expected one report of kind {args.expect_fault!r}, found {kinds}")
+    ours = [line for line in console_errors if line.startswith("oag:")]
+    if len(ours) != args.expect_reports:
+        problems.append(f"expected {args.expect_reports} `oag:` console error(s), found {len(ours)}")
+    if page_errors:
+        problems.append(f"{len(page_errors)} uncaught page error(s): {page_errors[0]}")
+    for line in console_errors:
+        if not line.startswith("oag:"):
+            print(f"other console error: {line[:160]}", flush=True)
+    if problems:
+        sys.exit("; ".join(problems))
 
 
 def main() -> None:
@@ -250,6 +286,50 @@ def main() -> None:
         "key-first (the key alone dropped, then the image), none (the image alone, through its input)",
     )
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument(
+        "--expect-fault",
+        metavar="KIND",
+        help="the run must end with the page's one error report of this kind (web/fault.js, "
+        "the overlay's data-kind), exactly one `oag:` console error and no uncaught page error; "
+        "writes <out>/fault.png and <out>/fault-details.txt. Then `uncaught page error` is "
+        "the failure, not the expected outcome",
+    )
+    parser.add_argument(
+        "--expect-reports", type=int, default=1,
+        help="with --expect-fault: how many `oag:` console errors (reports) the run may raise; "
+        "2 for a notice followed by the failure that replaces it",
+    )
+    parser.add_argument(
+        "--no-isolation", action="store_true",
+        help="serve without COOP/COEP, the page a host that drops them gets",
+    )
+    parser.add_argument(
+        "--plain", action="store_true",
+        help="launch the browser as a player's would be with no WebGPU switches: Chromium on Linux "
+        "then has navigator.gpu and no adapter, Firefox has no navigator.gpu",
+    )
+    parser.add_argument(
+        "--lose-image", type=float, metavar="SECONDS",
+        help="delete --image then, so the browser's later reads of it fail "
+        "(a file that went away under the page); refuses anything under data/images",
+    )
+    parser.add_argument(
+        "--init-script", action="append", default=[],
+        help="JS run in the page before its own scripts, repeatable "
+        "(delete navigator.gpu, make requestAdapter() resolve null)",
+    )
+    parser.add_argument(
+        "--block", action="append", default=[], metavar="GLOB",
+        help="fail every request whose URL matches this glob (a missing module), repeatable",
+    )
+    parser.add_argument(
+        "--truncate", type=int, metavar="BYTES",
+        help="hand the page only the first BYTES of --image, under its own name",
+    )
+    parser.add_argument(
+        "--crash-gpu", type=float, metavar="SECONDS",
+        help="Chromium: crash the browser's GPU process then (Browser.crashGpuProcess), a real lost device",
+    )
     parser.add_argument("--url", default="", help="a page already served elsewhere")
     parser.add_argument("--size", default="960x544")
     parser.add_argument("--dpr", type=float, default=1.0, help="the page's devicePixelRatio")
@@ -295,22 +375,27 @@ def main() -> None:
         + keyed(args.resize, "resize")
         + [(float(at), "reload", "") for at in args.reload]
         + [(float(at), "pick", "") for at in args.pick]
+        + ([(args.crash_gpu, "crashgpu", "")] if args.crash_gpu is not None else [])
+        + ([(args.lose_image, "lose", "")] if args.lose_image is not None else [])
         + keyed(args.eval, "eval")
         + [(float(w.split("-")[0]), "profstart", w) for w in args.profile]
         + [(float(w.split("-")[1]), "profstop", w) for w in args.profile]
     )
     width, height = (int(v) for v in args.size.split("x"))
     args.out.mkdir(parents=True, exist_ok=True)
-    server = None if args.url else serve(args.dist, args.port)
+    server = None if args.url else serve(args.dist, args.port, not args.no_isolation)
+    page_errors: list[str] = []
     url = args.url or f"http://127.0.0.1:{args.port}/"
     try:
         with sync_playwright() as p:
             if args.browser == "firefox":
-                browser = p.firefox.launch(headless=True, firefox_user_prefs=FIREFOX_PREFS)
+                prefs = {"media.volume_scale": "0.0"} if args.plain else FIREFOX_PREFS
+                browser = p.firefox.launch(headless=True, firefox_user_prefs=prefs)
             else:
+                flags = ["--mute-audio", "--disable-audio-output"] if args.plain else (
+                    SOFTWARE_FLAGS[args.software] if args.software else FLAGS)
                 browser = p.chromium.launch(
-                    executable_path=args.chromium, headless=True,
-                    args=(SOFTWARE_FLAGS[args.software] if args.software else FLAGS) + args.flag,
+                    executable_path=args.chromium, headless=True, args=flags + args.flag,
                 )
             page = browser.new_page(
                 viewport={"width": width, "height": height}, device_scale_factor=args.dpr
@@ -323,8 +408,26 @@ def main() -> None:
                     " window.oagFrames.push(t); requestAnimationFrame(tick); };"
                     " requestAnimationFrame(tick);"
                 )
-            page.on("console", lambda m: print(f"console.{m.type}: {m.text}", flush=True))
-            page.on("pageerror", lambda e: print(f"pageerror: {e}", flush=True))
+            console_errors: list[str] = []
+
+            def console_line(message) -> None:
+                print(f"console.{message.type}: {message.text}", flush=True)
+                if message.type == "error":
+                    console_errors.append(message.text)
+
+            page.on("console", console_line)
+            for script in args.init_script:
+                page.add_init_script(script)
+            for pattern in args.block:
+                page.route(pattern, lambda route: route.abort())
+            # The stack names the wasm function a trap is in (a module built without
+            # wasm-opt keeps its names, `OAG_WEB_NO_OPT=1`). Any uncaught error
+            # fails the run, so a trapped boot is never a green walk.
+            def page_error(error) -> None:
+                page_errors.append(str(error))
+                print(f"pageerror: {error}\n{error.stack or ''}", flush=True)
+
+            page.on("pageerror", page_error)
             query = "&".join(q for q in (
                 args.log and f"log={args.log}",
                 args.read and f"read={args.read}",
@@ -363,6 +466,14 @@ def main() -> None:
                     page.wait_for_selector("#file", state="attached")
                     page.set_input_files("#file", str(args.image))
                     print(f"picked again at {at:g}s", flush=True)
+                elif kind == "lose":
+                    if "data/images" in str(args.image.resolve()):
+                        sys.exit("--lose-image deletes the file: give it a copy, not data/images")
+                    args.image.unlink()
+                    print(f"deleted {args.image.name} at {at:g}s", flush=True)
+                elif kind == "crashgpu":
+                    browser.new_browser_cdp_session().send("Browser.crashGpuProcess")
+                    print(f"crashed the GPU process at {at:g}s", flush=True)
                 elif kind == "eval":
                     print(f"eval {key!r} at {at:g}s: {page.evaluate(key)}", flush=True)
                 elif kind == "resize":
@@ -401,6 +512,8 @@ def main() -> None:
                 else:
                     getattr(page.keyboard, kind)(key)
                     print(f"{kind} {key} at {at:g}s", flush=True)
+            if args.expect_fault:
+                check_fault(page, args, console_errors, page_errors)
             if args.fps > 0:
                 frames = page.evaluate(
                     """(ms) => new Promise((done) => {
@@ -428,6 +541,10 @@ def main() -> None:
     finally:
         if server:
             server.shutdown()
+    if page_errors:
+        sys.exit(f"{len(page_errors)} uncaught page error(s), the first: {page_errors[0]}")
+    if args.expect_fault:
+        print(f"fault {args.expect_fault}: {args.expect_reports} report(s), no cascade", flush=True)
 
 
 if __name__ == "__main__":

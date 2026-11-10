@@ -54,10 +54,10 @@ use entry::{boost_entry_name, ps2_texture_set};
 
 mod absorb;
 mod arc_anchor;
-mod cannon_flash;
 pub mod engine_light;
 pub mod entry;
 mod flare;
+mod locator_pair;
 pub use flare::{Scale, Spike};
 mod shield;
 pub mod ship_skin;
@@ -156,8 +156,11 @@ pub struct Livery {
     /// [`engine_light::load`].
     pub engine_light: Option<engine_light::EngineLight>,
     /// Wipeout HD's `cannon_flash` locators, model space, `[left, right]` -
-    /// both `None` on every source that authors none. See [`cannon_flash`].
+    /// both `None` on every source that authors none. See [`locator_pair`].
     pub cannon_flash: [Option<oag_core::math::Mat4>; 2],
+    /// Wipeout HD's `wingtip` locators (`wingtip_left`, `wingtip_right`), model space,
+    /// `[left, right]` - both `None` on every source that authors none. See [`locator_pair`].
+    pub wingtip: [Option<oag_core::math::Mat4>; 2],
     /// The `arc_anchor_point` locator the magstrip arc wake hangs on, model
     /// space. `None` where the hull authors none. See [`arc_anchor`].
     pub arc_anchor: Option<oag_core::math::Mat4>,
@@ -200,9 +203,13 @@ pub struct LoadContext<'a> {
     /// This title's own engine-flare mechanism - geometry, a sprite, or
     /// unread. See [`oag_title::flare::Flare`].
     pub flare: &'a oag_title::flare::Flare,
-    /// Whether to build the absorb hull overlay - Pulse's alone, and only
-    /// while `oag_fx::hull_overlay::DRAWN` says so. See [`absorb::overlay`].
+    /// Whether to build the absorb hull overlay - the titles whose `Looks::hull_overlay` rule
+    /// applies (Pulse, Pure), and only while `oag_fx::hull_overlay::DRAWN` says so. See
+    /// [`absorb::overlay`].
     pub hull_overlay: bool,
+    /// Whether to build the LeachBeam hull overlay too - on where the title has a LeachBeam and
+    /// [`Self::hull_overlay`] is: Pure draws the absorb overlay and ships no `leachbeam_surface.mip`.
+    pub leach_overlay: bool,
     /// Whether to build the hull's extra pass - Pulse's alone, and only while
     /// `oag_render::shine::DRAWN` says so. See `oag_render::shine`.
     pub hull_shine: bool,
@@ -339,6 +346,7 @@ pub fn load(
                 shield_colour: source.shield_colour,
                 engine_light: source.engine_light,
                 cannon_flash: source.cannon_flash,
+                wingtip: source.wingtip,
                 arc_anchor: source.arc_anchor,
             };
             report.push(format!(
@@ -388,6 +396,7 @@ pub fn load(
                     shield_colour: player.shield_colour,
                     engine_light: player.engine_light,
                     cannon_flash: player.cannon_flash,
+                    wingtip: player.wingtip,
                     arc_anchor: player.arc_anchor,
                 });
             }
@@ -502,6 +511,7 @@ fn one(
                     shield_colour: None,
                     engine_light: None,
                     cannon_flash: [None, None],
+                    wingtip: [None, None],
                     arc_anchor: None,
                 });
             }
@@ -519,7 +529,15 @@ fn one(
         }
         let (nozzle, nozzle_axis, collision_fx) = locators(archives, &hull_name, &blob, report);
         let absorb = absorb::locators(archives, &hull_name, &blob, report);
-        let cannon_flash = cannon_flash::locators(archives, &hull_name, &blob, report);
+        let cannon_flash = locator_pair::locators(
+            locator_pair::CANNON_FLASH,
+            archives,
+            &hull_name,
+            &blob,
+            report,
+        );
+        let wingtip =
+            locator_pair::locators(locator_pair::WINGTIP, archives, &hull_name, &blob, report);
         let arc_anchor = arc_anchor::locator(archives, &hull_name, &blob, report);
         let (light_dir, light_team) = entry::model_directory_with(
             archives,
@@ -594,6 +612,7 @@ fn one(
             shield: shield.map(|(model, _)| model),
             engine_light,
             cannon_flash,
+            wingtip,
             arc_anchor,
         });
     }
@@ -639,8 +658,11 @@ fn one(
     } else {
         None
     };
-    let [absorb_overlay, leach_overlay] = [absorb::ABSORB, absorb::LEACH]
-        .map(|which| absorb::overlay(archives, &hull, &blob, which, ctx.hull_overlay, report));
+    let [absorb_overlay, leach_overlay] = [
+        (absorb::ABSORB, ctx.hull_overlay),
+        (absorb::LEACH, ctx.hull_overlay && ctx.leach_overlay),
+    ]
+    .map(|(which, wanted)| absorb::overlay(archives, &hull, &blob, which, wanted, report));
     let shine = if ctx.hull_shine {
         let shine = mesh::shine_pass::build(&hull);
         report.push(match &shine {
@@ -686,6 +708,7 @@ fn one(
         shield_colour,
         engine_light,
         cannon_flash: [None, None],
+        wingtip: [None, None],
         arc_anchor: None,
     })
 }

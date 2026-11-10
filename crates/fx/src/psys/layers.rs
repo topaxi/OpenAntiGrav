@@ -132,7 +132,8 @@ impl System {
                 Blend::AlphaOver => alpha_over,
                 Blend::Distort => continue,
             };
-            let rgb = [colour[0], colour[1], colour[2]];
+            let gain = spec.streak.colour_gain(spec.colour_scale);
+            let rgb = [colour[0] * gain, colour[1] * gain, colour[2] * gain];
             if let Render::Streak { .. } = spec.render {
                 streak::extend(
                     out,

@@ -42,6 +42,7 @@ pub(super) fn emitter_placeholder() -> Emitter {
         stretch: None,
         aspect: 1.0,
         distort_strength: 0.0,
+        colour_scale: 1.0,
         frame_rate: channel(),
         emission_scale: channel(),
         playback_rate: 0.0,

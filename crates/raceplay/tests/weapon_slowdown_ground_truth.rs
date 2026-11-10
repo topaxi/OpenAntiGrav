@@ -157,6 +157,7 @@ fn detonate_behind_the_player(race: &mut race::Race, stats: &BlastStats) {
         &mut race.sim.world.ships[..count],
         point,
         stats,
+        oag_weapons::projectile::BlastPush::Posted,
         rules,
         &mut [],
     );

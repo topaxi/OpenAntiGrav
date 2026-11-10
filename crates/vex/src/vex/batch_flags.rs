@@ -95,11 +95,11 @@ impl Batch {
     /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "The plume is
     /// two-sided".
     ///
-    /// Nothing consumes this yet (every `mesh_render` pipeline sets `cull_mode:
-    /// None`, since strip winding is reconstructed and culling would turn a
-    /// winding mistake into missing geometry), so the old inversion never reached
-    /// a picture. The first consumer would have culled the surfaces the original
-    /// draws two-sided: on the boost plume, all 32 batches.
+    /// A blended draw selects a culled or two-sided pipeline by this bit; an
+    /// opaque or cutout draw does where its title's rule says so
+    /// (`oag_title::Looks::batch_back_face_cull`, `docs/rendering/batch-cull.md`).
+    /// The boost plume, whose 32 batches all set the bit, is drawn two-sided as the
+    /// original does.
     #[must_use]
     pub fn is_culled(&self) -> bool {
         self.pass_mask & 0x0020 == 0

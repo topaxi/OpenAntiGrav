@@ -307,12 +307,9 @@ pub struct CaptureOptions {
     pub player_tags: bool,
     /// The stored player name, which names seat 1 ([`crate::split_screen::name_first_seat`]).
     pub player: crate::settings::Player,
-    /// What casts a shadow in the captured frame: `--shadows`.
-    ///
-    /// Honoured the same way [`Self::motion_blur`] is, and here for the same
-    /// reason: two captures differing only by this flag are how the tier gets
-    /// compared against itself off. Unlike the blur it needs no primer frame -
-    /// a blob is placed from the tick's own pose, with no history.
+    /// What casts a shadow in the captured frame: `--shadows`. Two captures differing only by
+    /// this flag compare the tier against itself off; unlike [`Self::motion_blur`] it needs no
+    /// primer frame, a blob being placed from the tick's own pose.
     pub shadows: oag_display::display::Shadows,
     /// How far out authored `LodGroup`s switch in the captured frame -
     /// `[render_profiles.<title>] model_detail`, or `--lod`'s preset.
@@ -321,6 +318,8 @@ pub struct CaptureOptions {
     pub texture_detail: oag_mesh::mesh_render::TextureDetail,
     /// `[render_profiles.<title>] trail_order`, or `--trail-order`.
     pub trail_order: oag_display::display::TrailOrder,
+    /// `[render_profiles.<title>] trail_length`, or `--trail-length`.
+    pub trail_length: oag_display::display::TrailLength,
     /// `[render_profiles.<title>] weather`, or `--weather`.
     pub weather: oag_display::display::Weather,
     /// Whether the drawn hulls shake, `Race::set_hull_shake`; `--no-hull-shake` turns it off.
@@ -509,6 +508,7 @@ pub fn capture(
     race.set_model_detail(options.model_detail);
     race.set_texture_detail(options.texture_detail);
     race.set_trail_order(options.trail_order);
+    race.set_trail_length(options.trail_length);
     race.set_weather(options.weather);
     race.set_dynamic_hud(options.dynamic_hud);
     race.set_ghost_visible(options.ghost_visible);
@@ -528,6 +528,7 @@ pub fn capture(
         pilot_assist: options.pilot_assist,
         original_ai: None,
         campaign_skill: None,
+        skill_level: None,
     });
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);

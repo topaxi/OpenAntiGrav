@@ -35,15 +35,16 @@ pub(super) fn frame(
     strength: f32,
     pixel: &dyn Fn(u32, u32) -> Pixel,
 ) -> Vec<u8> {
-    frames(device, queue, strength, pixel, 1).remove(0)
+    frames(device, queue, (strength, MAX_TAPS), pixel, 1).remove(0)
 }
 
 /// `count` consecutive frames of the same still scene through one chain, the
-/// way a player's run feeds it, as RGBA bytes each.
-pub(super) fn frames(
+/// way a player's run feeds it, as RGBA bytes each. `shutter` is the strength
+/// and the tap count.
+fn frames(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    strength: f32,
+    shutter: (f32, u32),
     pixel: &dyn Fn(u32, u32) -> Pixel,
     count: usize,
 ) -> Vec<Vec<u8>> {
@@ -119,7 +120,7 @@ pub(super) fn frames(
         .map(|_| {
             upload(&scene, &pixels);
             render_once(
-                device, queue, &mut blur, &scene, &velocity, &depth, strength, extent,
+                device, queue, &mut blur, &scene, &velocity, &depth, shutter, extent,
             )
         })
         .collect()
@@ -133,7 +134,7 @@ fn render_once(
     scene: &wgpu::Texture,
     velocity: &wgpu::Texture,
     depth: &wgpu::Texture,
-    strength: f32,
+    (strength, taps): (f32, u32),
     extent: wgpu::Extent3d,
 ) -> Vec<u8> {
     let mut encoder = device.create_command_encoder(&Default::default());
@@ -149,6 +150,7 @@ fn render_once(
             size: (W, H),
             viewport: (0.0, 0.0, W as f32, H as f32),
             strength,
+            taps,
             lens_motion: Mat4::IDENTITY,
         },
         None,
@@ -291,4 +293,69 @@ fn the_tile_lookup_leaves_neither_a_lattice_nor_grain_on_a_ramp() {
             found.peak_phase
         );
     }
+}
+
+/// The red channel of a bright block on black, moving straight up at about 60
+/// px of reach at `high`'s shutter, through a chain gathering `taps` at most.
+fn block_frame(device: &wgpu::Device, queue: &wgpu::Queue, taps: u32) -> Vec<u8> {
+    let rgba = frames(
+        device,
+        queue,
+        (0.75, taps),
+        &|_, y| {
+            let value = if BLOCK.contains(&y) { 255 } else { 0 };
+            ([value; 3], [0.0, 0.075], 0.5)
+        },
+        1,
+    )
+    .remove(0);
+    rgba.iter().step_by(4).copied().collect()
+}
+
+/// The mean of each row of the block's smear above it, columns 200 to 1700,
+/// from 80 rows above the block to its top edge.
+fn smear_profile(red: &[u8]) -> Vec<f32> {
+    ((BLOCK.start - 80)..BLOCK.start)
+        .map(|y| {
+            (200..1700)
+                .map(|x| f32::from(red[(y * W + x) as usize]))
+                .sum::<f32>()
+                / 1500.0
+        })
+        .collect()
+}
+
+/// **Fewer taps sample the same smear, not a shorter one.** The taps spread
+/// over the whole reach whatever their count, so a tier's lower cap moves
+/// where the samples fall and leaves the smear's length and its fall-off
+/// alone: the row profile above a moving block at 7 taps reaches as far as
+/// the 15-tap one, and its ramp sits at most about 12 levels brighter (the
+/// skipped centre tap's share of the span is wider at fewer taps). **Skips when there is no
+/// adapter.**
+#[test]
+fn fewer_taps_keep_the_smears_length() {
+    let Some((device, queue)) = gpu() else {
+        return;
+    };
+    let fine = smear_profile(&block_frame(&device, &queue, MAX_TAPS));
+    let coarse = smear_profile(&block_frame(&device, &queue, 7));
+    // How far up the smear reaches: the first row, from the top, above 8 levels.
+    let reach = |p: &[f32]| p.len() - p.iter().position(|&v| v > 8.0).unwrap_or(p.len());
+    eprintln!("reach {} / {} rows", reach(&fine), reach(&coarse));
+    assert!(reach(&fine) > 20, "the block did not smear: {fine:?}");
+    assert!(
+        reach(&fine).abs_diff(reach(&coarse)) <= 1,
+        "7 taps changed the smear's length: {} rows against {}",
+        reach(&coarse),
+        reach(&fine)
+    );
+    let worst = fine
+        .iter()
+        .zip(&coarse)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0f32, f32::max);
+    assert!(
+        worst < 16.0,
+        "7 taps changed the smear's fall-off by {worst:.1} levels: {fine:?} against {coarse:?}"
+    );
 }

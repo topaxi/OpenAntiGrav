@@ -27,6 +27,13 @@ probe started only on the first `visit` (from the recording's header when there 
 the difficulty and the seats are the race's). A race that never rewinds pays the keyframes alone and no
 second `Race`.
 
+**The live race's keyframe 0 is cut at the first tick, not at the build** (`Keeper::recut_first`, called
+by the session just before the first tick's events). A race stage is built, then written to before its
+first tick: the AI choice (`use_original_ai`), a campaign's skill scale, the opponent pilot. A keyframe cut
+at the build lacks them, and a rewind landing under 120 ticks pre-rolls from keyframe 0, so it flew the
+race with this project's driver for the opponents while the live race flew the original's. The recording
+rebuilds the race from its header, which has them, so only the live keyframe was wrong.
+
 **A keyframe is a `RaceSim`.** A clone is the mutable half plus a reference count per constant field
 (`sim.rs`, "Why it is `Clone`"), so decision 5's "owns the shared constant half" needs no handle of
 its own. A probe restored from a keyframe drops the copy `Race::start` made and shares the half.

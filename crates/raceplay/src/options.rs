@@ -26,6 +26,25 @@ pub enum TrailHits {
     },
 }
 
+/// Whether the wingtip contrails are laid on a title whose original has none
+/// (`graphics.wingtip_contrails`, off by default: an enhancement of this project's).
+///
+/// A lender is used only where the craft's title carries no contrails of its own
+/// (`oag_title::Title::wingtip` is `None`: Pulse and Pure); HD, 2048 and Omega lay theirs whatever
+/// this holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum WingtipContrails {
+    /// Only the titles that carry them.
+    #[default]
+    Off,
+    /// Lay them off `lender`, a source whose title carries them (found by the composition root);
+    /// `None` when this machine has none, which the loader report says.
+    On {
+        /// The source to read the config and the texture from.
+        lender: Option<String>,
+    },
+}
+
 /// What to load, and which of it to draw.
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -80,6 +99,9 @@ pub struct Options {
     /// a title's trail-hit burst on a title that has none of its own (Pulse and Pure).
     /// Off by default. See [`TrailHits`].
     pub trail_hits: TrailHits,
+    /// The player's `graphics.wingtip_contrails`: whether a title with none of its own lays HD's
+    /// wingtip contrails after a speed pad. Off by default. See [`WingtipContrails`].
+    pub wingtip_contrails: WingtipContrails,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///
@@ -195,6 +217,15 @@ pub struct Options {
     /// Applied by degrading the measured tuning rather than by boosting a weak
     /// one, and it never reads the player - see [`oag_ai::Difficulty`].
     pub difficulty: oag_ai::Difficulty,
+    /// The original's integer difficulty (`g_skill_level`: `0` Easy, `1` Medium, `2` Hard) the
+    /// race flies at, where it has a rung of its own (a campaign cell's); `None` takes
+    /// [`oag_ai::Difficulty::level`] of [`Self::difficulty`].
+    ///
+    /// It picks every craft's shield pool out of `<Misc>`'s three slots
+    /// (`oag_tables::handling::Misc::shield_for`). The original reads one global for the
+    /// player and the opponents alike (`docs/formats/handling-stats.md`, "Which difficulty
+    /// picks the shield slot").
+    pub skill_level: Option<u8>,
     /// Which mode's rules the race runs under.
     ///
     /// Also selects the HUD layout: a Zone run draws `Zone_HUD.xml`, the other
@@ -635,6 +666,10 @@ pub struct Setup {
     /// loaded, else `None`: see [`crate::missile_smoke`].
     #[cfg(feature = "view")]
     pub missile_trail: Option<oag_title::weapons::MissileTrail>,
+    /// The wingtip contrails' config and each slot's locators where the race draws them and the
+    /// texture loaded, else `None`: see [`crate::wingtip`].
+    #[cfg(feature = "view")]
+    pub wingtip: Option<crate::wingtip::WingtipDraw>,
     /// The circuit's authored cameras, where the player's camera stands once
     /// their craft is destroyed - see `race::destroy_camera`. Empty off Pulse.
     #[cfg(feature = "view")]
@@ -860,6 +895,9 @@ pub struct Setup {
     /// When a locked LeachBeam moves energy,
     /// `oag_title::weapons::Weapons::leach_drain`.
     pub leach_drain: oag_title::weapons::LeachDrain,
+    /// How a weapon blast's push reaches a craft,
+    /// `oag_title::weapons::Weapons::blast_push`.
+    pub blast_push: oag_title::weapons::BlastPush,
     /// How many LeachBeams may be live at once,
     /// `oag_title::weapons::Weapons::leach_beams`.
     pub leach_beams: u8,

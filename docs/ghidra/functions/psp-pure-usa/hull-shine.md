@@ -57,6 +57,17 @@ coordinates are Pulse's. `envtest4`'s texels in the list equal our decode of the
 differs from Pulse is one word: Pulse's ordinary pass reads `0xaa` with `FIXB` white
 (`src + dst`), Pure's reads `0x2a`, destination times **source alpha**.
 
+**The material colour, checked against Pulse (2026-11-10, `pulse-hull-sheen`): applies in
+structure, not wired.** On Pulse the `0xffffff` in the table above is not a constant: it is the
+light the hull stands in, white only where the circuit's lights sum past 255
+([mesh-draw.md](../psp-pulse-usa/mesh-draw.md), "The extra pass's colour is the light the hull
+stands in"; Metropia's grid reads `0x72a6b7`). Pure's `FUN_08840cac` is Pulse's
+`SceneLight_Rebuild` statement for statement (the builder's return to `list+0xcc`, `0xffffffff`
+when `model+0x228 == 0`, then `0x55`/`0x58`/`0x56`/`0x57`), so the same is expected here; the
+accumulator inside Pure's builder was not read and all four lists above saturate, so
+`oag_pure`'s `hull_shine_lit` stays unread. What settles it: one GE list on a Pure circuit or
+tunnel whose light sum falls short of 255.
+
 ## Measured: the weight is the hull texture's alpha
 
 The Blue Ridge list replayed in PPSSPP reproduces the pair's original frame (MAE 7.7 grey, the

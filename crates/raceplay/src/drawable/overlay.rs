@@ -163,21 +163,24 @@ impl Drawable {
     /// craft posed by `ship` - [`oag_render::shine::write`], the environment-mapped
     /// shine pass, whose coordinates follow the craft's rotation and so cannot be
     /// baked, with the airbrake flaps at `flaps` radians (the hull's own base draw
-    /// swings the same two). From the model's own vertices every time, like
-    /// [`Self::write_overlay`].
+    /// swings the same two), every vertex colour multiplied by `colour`
+    /// ([`crate::Race::ship_shine_colour`]). From the model's own vertices every
+    /// time, like [`Self::write_overlay`].
     pub(crate) fn write_environment_map(
         &self,
         queue: &dyn oag_gpu::writes::Writes,
         ship: oag_core::math::Mat4,
         flaps: [f32; 2],
+        colour: [f32; 3],
         scratch: &mut Vec<mesh::GpuVertex>,
     ) {
-        // The coordinates are a function of the pose and the flaps alone, and nothing else writes
-        // this buffer: a craft that has not moved (a paused race, the grid) has them already.
-        let mut pose = [0_u32; 18];
+        // The vertices are a function of the pose, the flaps and the colour alone, and nothing
+        // else writes this buffer: a craft that has not moved (a paused race, the grid) has
+        // them already.
+        let mut pose = [0_u32; 21];
         for (bits, value) in pose
             .iter_mut()
-            .zip(ship.to_cols_array().into_iter().chain(flaps))
+            .zip(ship.to_cols_array().into_iter().chain(flaps).chain(colour))
         {
             *bits = value.to_bits();
         }
@@ -187,7 +190,7 @@ impl Drawable {
             }
             *last = Some(pose);
         }
-        oag_render::shine::write(&self.model, scratch, ship, flaps);
+        oag_render::shine::write(&self.model, scratch, ship, flaps, colour);
         queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(scratch));
     }
 

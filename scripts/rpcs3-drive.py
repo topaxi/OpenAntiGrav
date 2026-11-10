@@ -1320,8 +1320,8 @@ def cmd_serve(args):
             print("gdb proxy on %d (stub on %d)" % (public, public + 1000), flush=True)
             if args.load_state and args.pause_after_load:
                 # The restored game is still on RPCS3's linking splash for several seconds; a pause
-                # now holds it on the state's own tick, so a capture taken afterwards (resume, a
-                # short interval, pause) is the state itself and not 10 s of racing later.
+                # now holds it near the state's tick (it can land seconds after the load), so a capture taken afterwards (resume, a
+                # short interval, pause) is not 10 s of racing later.
                 from rpcs3_debugger import Debugger as _Dbg
                 for attempt in range(40):
                     try:
@@ -1756,6 +1756,13 @@ def cmd_capture(args):
                     ship_pose["race_clock_s"] = struct.unpack(">f", gdb.read(player_ship + 0x7014, 4))[0]
                     if autopilot_note:
                         ship_pose["autopilot_timer"] = autopilot_note
+                    try:
+                        # The scene's width level in the same pause; the presented frame can be two steps
+                        # older while the controller moves (`hd_scene_width`).
+                        import hd_scene_width
+                        ship_pose["scene_width"] = hd_scene_width.live(gdb.read)
+                    except Exception as error:  # noqa: BLE001 - the level is a bonus
+                        print("  %s: no scene width level (%s)" % (stem, error), flush=True)
                     try:
                         # The gantry node's animation time, so ours can show the board's phase (`--gantry-seconds`).
                         import rpcs3_hd_field
@@ -2562,8 +2569,9 @@ def main(argv=None):
     cap.add_argument("--first-at-pause", action="store_true",
                      help="the first shot is taken where the emulator already stands, without running "
                           "for `--interval` first: a state restored with `emu-restore-state.sh --pause` "
-                          "is then captured on its own tick, and the frame, the pose, the field and the "
-                          "HUD record are one instant (the later shots still run, for the camera pick)")
+                          "is then captured where the pause landed (not the state's own tick), with the pose, the field and "
+                          "the HUD record read in that one pause; the presented frame can still be 0 to 3 ticks older "
+                          "than they are on a moving craft (`hd-pair-lag-scan.py`); the later shots still run, for the camera pick")
     cap.add_argument("--autopilot-timer", type=float, metavar="SECONDS",
                      help="a state saved with the Autopilot pickup's timer armed for good (`ship+0x5edc` slot `+0x158` "
                           "reads thousands of seconds, which the HUD prints) gets this authored timer written back, "

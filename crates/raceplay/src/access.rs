@@ -133,6 +133,24 @@ impl Race {
     }
 
     #[cfg(feature = "view")]
+    /// How long the PSP ribbons are - `[render_profiles.<title>] trail_length`. Render-only
+    /// and idempotent: the frame loop sets it every frame, and a change of length restarts
+    /// every ring, so the ribbons draw again once they are full. HD's tube has its own length
+    /// and ignores it.
+    pub fn set_trail_length(&mut self, length: oag_display::display::TrailLength) {
+        if self.view.hd_trail_active {
+            return;
+        }
+        let samples = match length {
+            oag_display::display::TrailLength::Original => oag_fx::exhaust::TRAIL_SAMPLES,
+            oag_display::display::TrailLength::Hd => oag_fx::exhaust::LONG_TRAIL_SAMPLES,
+        };
+        for exhaust in &mut self.view.exhaust {
+            exhaust.set_trail_samples(samples);
+        }
+    }
+
+    #[cfg(feature = "view")]
     /// Whether this frame records the ribbons ahead of the circuit's blended
     /// list (`Recorder::draw_ribbons`): the original's order for the PSP
     /// preset unless the player chose [`oag_display::display::TrailOrder::OverFloors`].

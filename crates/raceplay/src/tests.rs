@@ -17,6 +17,7 @@ use oag_vex::track;
 mod autopilot;
 mod between_ticks;
 mod bindless;
+mod blast_push;
 mod camera;
 mod campaign_event;
 mod cannon_draw;
@@ -86,6 +87,7 @@ mod photo;
 mod photo_rewind;
 #[cfg(feature = "extensions")]
 mod portal_view;
+mod pure_absorb_bar;
 mod quake_armed;
 mod quake_lift;
 mod reconcile;
@@ -123,6 +125,7 @@ mod timeline;
 mod title_effects;
 mod track_stages;
 mod trail_hits;
+mod trail_length;
 mod trail_order;
 mod transit;
 mod velocity_gate;
@@ -186,6 +189,7 @@ fn model(slots: usize, decoded: usize) -> Model {
         shield_shell: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
+        per_batch_cull: false,
         alpha_test_ref: None,
         centre: [0.0; 3],
         radius: 1.0,
@@ -315,6 +319,7 @@ fn setup(handling: Handling) -> Setup {
         magstrip_pob: false,
         leach_strip: None,
         missile_trail: None,
+        wingtip: None,
         destroy_stations: Vec::new(),
         finished_thrust: None,
         original_tables: None,
@@ -416,6 +421,7 @@ fn setup(handling: Handling) -> Setup {
         zoom_borrowed: false,
         weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        blast_push: oag_title::weapons::BlastPush::Posted,
         leach_beams: 8,
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::Chosen,

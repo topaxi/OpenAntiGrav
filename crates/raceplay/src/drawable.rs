@@ -115,7 +115,7 @@ pub(super) struct Drawable {
     node_anims_at: std::sync::atomic::AtomicU64,
     /// The craft pose and flap angles (as bits) a hull's shine pass last wrote its coordinates
     /// for, so a craft that has not moved since the last frame uploads nothing.
-    shine_pose: std::sync::Mutex<Option<[u32; 18]>>,
+    shine_pose: std::sync::Mutex<Option<[u32; 21]>>,
     /// The glow table's own buffer, binding 2 of the same group 3. Rewritten
     /// by [`Self::glow_weapon_pads`] only; every other drawable leaves what
     /// [`mesh_render::Emissives::of`] wrote at build time.
@@ -841,12 +841,12 @@ impl Drawable {
         if !channel_driven && !remember(&self.node_anims_at, seconds) {
             return;
         }
-        let anims = mesh_render::NodeAnims::sample_started(&self.model, seconds, started);
+        let head = mesh_render::NodeAnims::head_started(&self.model, seconds, started);
         oag_gpu::perfprobe::write_buffer(
             queue,
             &self.node_anims,
             self.offsets.node_anims,
-            bytemuck::bytes_of(&anims),
+            bytemuck::cast_slice(&head),
         );
     }
 

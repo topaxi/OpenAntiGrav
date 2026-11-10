@@ -70,6 +70,7 @@ pub mod touch;
 pub mod weapon_pad;
 pub mod weapons;
 pub mod weather;
+pub mod wingtip;
 pub mod zone_handling;
 pub mod zoom;
 
@@ -154,6 +155,9 @@ pub struct Title {
     /// Where this title keeps the **engine flare**, the light at the nozzle (not
     /// the ribbon [`Self::exhaust`]). See [`flare::Flare`].
     pub flare: &'static flare::Flare,
+    /// The wingtip contrails this title's craft lay after a speed pad, or `None` for a title that
+    /// has none of its own. See [`wingtip::Wingtip`].
+    pub wingtip: Option<&'static wingtip::Wingtip>,
     /// What colours a weapon pad's light bars at run time. See
     /// [`weapon_pad::WeaponPadGlow`]: HD overwrites the material's authored value
     /// with a per-pad cycle, every other title keeps it.

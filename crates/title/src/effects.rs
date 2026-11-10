@@ -362,6 +362,29 @@ pub struct Effects {
     /// effect against a matched capture of the original, never by extension to
     /// the rest of the title's `.pob` files - see `oag_fx::psys::spawn`.
     pub extents: &'static [&'static str],
+    /// Effects whose emitters' own class-6 particles are drawn as HD's view-space bar
+    /// (`oag_fx::psys::streak::StreakDraw::FarBar`) on a source that is not Pulse on the PSP:
+    /// the draw HD's `PartRender` job and Omega's CPU twin build for render mode 5, read on
+    /// `WO_TRAIL_HITSHIP` alone (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The
+    /// class-6 draw law"). An effect not listed keeps the procedural profile for every
+    /// streak; wiring one is a decision made per effect, never by extension to the title.
+    pub far_bars: &'static [&'static str],
+    /// Effects whose emitters' own class-6 particles are drawn as the PSP engine's pool bar
+    /// (`oag_fx::psys::streak::StreakDraw::Bar`: both ends on the mean of their two view depths)
+    /// on a source that is not Pulse on the PSP: Pure's `FUN_088746c8` is
+    /// `ParticleSystem_DrawPoolBars`'s strip law
+    /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`). An effect not listed keeps the
+    /// procedural profile for every streak; wiring one is a decision made per effect against a
+    /// matched capture, never by extension to the title. An effect in both this list and
+    /// [`Self::far_bars`] draws the far bar.
+    pub pool_bars: &'static [&'static str],
+    /// Effects whose sprite templates (`oag_fx::psys::Effect::add_templates`) play on a source
+    /// that is not Pulse on the PSP. An effect not listed keeps its templates muted; wiring one is a
+    /// decision made per effect against a matched capture, never by extension to the title. No title
+    /// lists one yet: Pure's template draw, sampler and initialiser are Pulse's
+    /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw"), but its absorb burst
+    /// drew far too bright at 0.75 s with them on, and why is unread.
+    pub templates: &'static [&'static str],
     /// How the Quake wave is placed and washes the screen: its frame is read
     /// only for a title whose [`Self::extents`] list `WO_QUAKE`.
     pub quake_look: QuakeLook,
@@ -426,6 +449,9 @@ impl Effects {
         scenery: &[],
         sprites: &[],
         extents: &[],
+        far_bars: &[],
+        pool_bars: &[],
+        templates: &[],
         quake_look: QuakeLook::track(Origin::InheritedFrom("Wipeout Pulse")),
         trail_hits_native: false,
     };
@@ -515,6 +541,7 @@ impl Effects {
         let mut e = Self::NONE;
         e.quake_look = QuakeLook::track(origin);
         e.trail_hits_native = true;
+        e.far_bars = &[n::TRAIL_HITSHIP_EFFECT, n::TRAIL_HITSHIP_RED_EFFECT];
         e.scenery = &[
             n::BLUE_WELDER_EFFECT,
             n::MODESTO_STEAM_EFFECT,
@@ -802,6 +829,11 @@ pub struct Looks {
     /// craft's hull, scaled per craft by the spline's light scale (so it
     /// darkens in a tunnel). Keyed on the race's own archive.
     pub hull_lights: Rule,
+    /// The hull's extra pass drawn in the circuit's accumulated light colour
+    /// rather than white: the sheen dims and tints where the craft's light
+    /// scale is low. Needs `hull_shine` and `hull_lights`. Keyed on the race's
+    /// own archive.
+    pub hull_shine_lit: Rule,
     /// The sun's lens flare: ten additive quads along the line through the screen
     /// centre, drawn where a circuit authors a `lensflare` node
     /// (`docs/rendering/lens-flare.md`). Pure's. The rule is the law, the node is the
@@ -844,6 +876,15 @@ pub struct Looks {
     /// state with bit 2 writes depth. Wipeout HD's, read off
     /// `Material_ApplyRenderState` and a live race frame.
     pub material_render_state: Rule,
+    /// A `.vex` circuit's batch is drawn single-sided when its own `pass_mask`
+    /// bit `0x20` is clear (`GU_CULL_FACE` on), so the back-to-back front and
+    /// back copies of a trackside board never fight for one plane. Wipeout
+    /// Pulse PSP's, read off `Mesh_SetBatchDrawState` and a matched Moa Therma
+    /// frame (`docs/rendering/batch-cull.md`).
+    pub batch_back_face_cull: Rule,
+    /// [`Self::batch_back_face_cull`] on a disc that carries the same `.vex` batch
+    /// state but was not measured: the platform's law is the measured one.
+    pub batch_back_face_cull_carried: Rule,
     /// The race scene stores display-encoded values, so a blended draw adds or
     /// mixes encoded values rather than linear light. Wipeout HD's: every scene
     /// draw of three live race frames has `SET_SHADER_PACKER` 1 into an
@@ -920,6 +961,7 @@ impl Looks {
             circuit_effects: Rule::UNREAD,
             road_ripple: Rule::UNREAD,
             hull_lights: Rule::UNREAD,
+            hull_shine_lit: Rule::UNREAD,
             lens_flare: Rule::UNREAD,
             track_shine: Rule::UNREAD,
             track_shine_weighted: Rule::UNREAD,
@@ -928,6 +970,8 @@ impl Looks {
             lit_output_halved: Rule::UNREAD,
             material_lod_bias: Rule::UNREAD,
             material_render_state: Rule::UNREAD,
+            batch_back_face_cull: Rule::UNREAD,
+            batch_back_face_cull_carried: Rule::UNREAD,
             blends_encoded: Rule::UNREAD,
             final_composite_half_texel: Rule::UNREAD,
             wo_composite: Rule::UNREAD,

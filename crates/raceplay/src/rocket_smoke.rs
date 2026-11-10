@@ -41,6 +41,8 @@ pub struct RibbonTextures {
     pub missile_smoke: Option<crate::missile_smoke::MissileSmokeAssets>,
     /// HD's LeachBeam strip - see [`crate::leach_strip`].
     pub leach_strip: Option<crate::leach_strip::LeachStripAssets>,
+    /// The wingtip contrails - see [`crate::wingtip`].
+    pub wingtip: Option<crate::wingtip::WingtipAssets>,
 }
 
 /// Reads the title's [`WeaponModels::rocket_trail`] entries, reporting what

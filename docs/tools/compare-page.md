@@ -266,12 +266,43 @@ A screenshot is the last PRESENTED frame, which is a little older than the RAM r
   the grab's offset from it is not (it moved with the machine's load).
   The profile's PS2 aspect was `ps2` (4:3), which fits the picture inside a 16:9 window with black bars: ours came out pillarboxed against an original that fills the 1280x720 frame (mean grey difference 13.4 to 27.6 on that alone);
   it is `wide` now.
-- **HD: the picture needs no correction after the wait for the RSX, the HUD clock text lags RAM by 3 ticks.** `rpcs3-drive.py capture` reads the pose in the pause and `OAG_CAPTURE_FLUSH=3` lets the RSX present what it was handed: the
-  existing `hd-race/talons-pack` hull check (holding the player back by one tick, 2.4 units, already makes the hull far too large) says frame and pose are one instant. The HUD lap-clock text is not: on the 13 refreshed grid pairs the tenths digit the
+- **HD: the HUD clock text lags RAM by 3 ticks; on a still craft the picture needs no correction, on a moving one it can (2026-11-10, `hd-talons-pack-align`).** `rpcs3-drive.py capture` reads the pose in the pause and `OAG_CAPTURE_FLUSH=3` lets the RSX present what it was handed. The 13 grid pairs are at 0 km/h, where an older frame looks the same, so they never tested "frame and pose are one instant"; the `hd-race/talons-pack` hull check that stood here was not evidence for it (see "A moving HD craft: the frame is not always the RAM instant" below). The HUD lap-clock text is not one instant either: on the 13 refreshed grid pairs the tenths digit the
   frame shows is one tenth below `trunc(RAM clock * 10)` on **9 of 13** (chenghou 14.149 shows 14.0, metropia 13.417 shows 13.3, talons 13.134 shows 13.0, ...) and equals it on 4, and the fractional tenths of the two sets bracket the lag between
   **0.054 s** (modesto-heights, 13.354 shows 13.2) and **0.055 s** (anulpha-pass, 13.955 shows 13.9): 3.3 ticks, so `rpcs3-hd-pair.py` runs ours `HUD_LAG_TICKS = 3` ticks short of the RAM clock (and the race pair's imposed clock),
   recorded in `pair.json` `original.presented_lag`. The set in `data/reference` made before this carries the uncorrected clock. Per-tick picture lag on RPCS3 is not measured (no per-tick stepping).
   HD's window opens at x = 240 on the 2000-pixel Xvfb, so a 1920-wide frame was clipped to 1760 and every pair refused ("original image size 1760x1080"); `rpcs3-hd-pair.py` waits for the resize to land and moves the window to the origin.
+- **HD: a pair names the width its original's scene was drawn at** (2026-11-10). The 1080p path draws the scene 1300 to 1920 px wide in 20 px levels and stretches it, and the level moves a step a frame on wall-clock timing
+  ([scene-width-throttle.md](../ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md)). `pair.json` `original.scene_width` is `px`, `level`, `method`, and for a race frame the `score`, the `peak` it had to reach and the
+  `runner_up`; a new pair also carries `at_pause` (the level and the enable byte read in the capture's pause, up to two steps from the frame's while the level moves). The stored set, measured off each `theirs.png` by
+  `scripts/hd_scene_width.py --record`: **1300** on chenghou-project, metropia, moa-therma, modesto-heights, sebenco-climb, talons, talons-assegai-c1, tech-de-ra and ubermall (scores 15.0 to 38.3), **1400** on sol-2 (12.6),
+  **1920** on anulpha-pass, the-amphiseum and vineta-k (no peak: 4.3, 3.4, 2.9 against the 5.5 bar; the weakest stretched frame of known width scored 6.7), and 1920 on the five menu pairs and the loading pair from how the
+  front end is drawn (their scores are kept as `frame_score_unused`: the loading screen's dot grid reads 1840 at 9.1). So nine of thirteen race originals are 68 percent of full width horizontally, which bears on edge sharpness and
+  fine texture, not on tone ([hd-track-tone.md](../rendering/hd-track-tone.md)).
+
+## A moving HD craft: the frame is not always the RAM instant (2026-11-10, `hd-talons-pack-align`)
+
+**Claim tested:** `hd-race/talons-pack` shows the same instant on both sides, so its remaining difference is rendering. **False for the pair as stored; partly false for the re-made pairs** (below).
+
+**The stored pair (state of 2026-10-20, classic Feisar, 1280x720 at scale 150, captured 2026-10-21).** Edge correlation 0.014, RMSE 0.270, mean grey 47.6, against 0.39 to 0.45 on every other HD pair. The original's own HUD says its frame is older than the RAM it was paired with, with two independent clocks: the lap clock reads `0.14.3` where RAM 14.531 less the 3-tick text lag reads 14.48 (text 14.4), and the Autopilot readout `4.95` against RAM 4.817 (0.13 s, 8 ticks, 5 if it shares the text's 3-tick lag). At 502 km/h that is 18 units or more, a different stretch of road under the craft (ours showed green pad strips the original's road does not). The original's frame also carried a weapon-like purple lightning, a `+4.8` pickup readout, the DAMAGE and Absorb strips, a `0.46.64` BEST and RPCS3's own pause banner. Ours projected its own recorded state correctly: the recorded player and opponent positions through the recorded `view_proj` land where ours draws them (player (972, 571), Icaras (834, 380), EGX (1072, 243)); it is the original's picture that did not match its metadata. Confidence 90.
+
+**The state file could not be reused.** RPCS3 0.0.43-20574 refuses the 2026-10-20 file (`No savestate file found or savestate not compatible`, in `serve/loaded.SAVESTAT.zst`'s log), so the pair could not be re-made from it. The state was regenerated (`scripts/emu-hd-race-walk.sh <lane> 8 0 0`, then `scripts/rpcs3-hd-race-hunt.py --place 3-6 --pin-scene-width`, a flag added here: it clears `0x00c81da4` after the race loads and again at the match, so the state draws its scene 1920 px wide). It is not the old file's circuit moment: lap 2 on Talon's Junction, 6th of 8. **Its player is `Feisar` (the Fury hull) where the old state's was `Feisar_c1` (classic).** The sidecar (`.zst.json`) says `Feisar` now; the old one said `Feisar_c1`, and a pair command line copied from the old pair drew the wrong hull. `scripts/rpcs3-hd-pair.py --field` now refuses a `--team` that is not the player's team name read from RAM.
+
+**A restore with `--pause` does not land on the state's own tick.** Three restores of the one file stopped at race clocks 11.21, 7.31 and a third pose (590, -10, 79): the pause lands a variable game time after the load (about 4 s apart here). Two captures of one state are therefore two samples of two moments, not a twin pair.
+
+**Presented lag on a moving craft, two samples, the same boot recipe.** `scripts/hd-pair-lag-scan.py <pair>` renders ours with the camera eye moved back along the player's recorded velocity and every craft back along its own, by whole or fractional 60 Hz ticks, and scores each against `theirs.png`:
+
+| capture | race clock | best camera : craft rewind | opponent (green craft, colour mask) centroid, original / ours at that rewind | edge correlation 0:0 -> best |
+| --- | --- | --- | --- | --- |
+| `run1` | 11.206 s | **2.0 : 3.0 ticks** (camera 1.75, 2.0, 2.25 and craft 2.5 to 3.25 tried; the scenery peaks at camera 2.0, the opponent at craft 2.75 to 3.0) | (1299.8, 567.3) / (1300.1, 567.3); at 0:0 ours (1285.2, 560.4), 14.6 px off | 0.107 -> 0.189 |
+| `run2` | 7.313 s | **0 : 0** for the scenery and the opponent (rewinds of 1 to 3 ticks put the opponent 8 to 17 px away); the hull wants about 0:1 | (1176.9, 534.1) / (1181.3, 533.8) | 0.091 at 0:0 |
+
+So the frame is **2 ticks (camera) and 3 ticks (craft) older than the RAM read on one pause and, for the camera and the opponent, not older on the other**: the presented lag is not a constant, and RAM read in the pause is not the picture's instant on a moving craft without a check. Three ticks is the HUD text's own lag (3.3), which fits the craft term; the camera's 2 is not explained (the push-buffer matrix is built a tick after the craft update, not read). Confidence 60: two pauses, one state, one boot recipe; the metric is a whole-frame edge score (0.107 at 0:0, 0.185 at 2:2, 0.189 at 2:3, 0.127 at 3:3) and the opponent centroid agrees to 0.3 px. The per-frame pick: a pair whose opponent centroid is within 8 px at 0:0 is one instant (`run2`, 4.4 px for the near craft; the far one, 126 units from the camera, a speck about 12 px wide, reads (980, 484) against ours (982, 480) off a 4x crop, by eye); it is not `run1`. `rpcs3-hd-pair.py` does not yet record this (open: a recorded `presented_lag` per pair from the scan).
+
+**What is left after the lag is accounted for.**
+
+- **The player's hull is about 1.3 times larger and lower in the original than ours draws it at the recorded state, and it is a timing offset, not a hull-only view** (read off 1:1 crops of the original against `hd-pair-lag-scan.py` renders; width read by eye, +-10 px, not measured to the brief's 4 px). `run1` at its fitted rewind (camera 2, craft 3 ticks): the hull is 375 px wide against the original's 370 and sits where the original's does, where at 2:1 and 2:0 it is 270 px wide and high; the unrewound `ours.png` is 285 px against 383. `run2`: the hull is 270 px at 0:0 against 370 and matches at about **0:1** (380 px, same position) while its opponent is 4.4 px off at 0:0 and about 17 px off at 0:1 (centroid (1192.2, 541.1) against (1176.9, 534.1)). So the player's hull wants to be about **1 tick older than the camera on both samples**; the opponents want 1 tick older than the camera on `run1` and the same tick on `run2`. One tick is 2.3 units at 138 u/s, a sixth of the 13.9-unit eye to body distance, which is the whole size difference. The drawn node matrix is not the cause: `ship+0x40` (copy `+0x80`) of the player at 132.6 u/s holds the body's position to the printed digit (590.024, -9.925, 78.729), rows scaled 0.743, shake object zero. The eye to body distance reads 13.9 units on both (the grid pairs 12.7). Open: which tick the push-buffer camera matrix (`rpcs3-drive.py`'s pick) and the craft rows belong to (the pause can land between the update of the craft and the camera's build), not a hull-only view; a 482-draw RSX dump (`hd-draw-dump.py`) of the state was made and not read.
+- **State differences** (not ours to import): the RPCS3 pause banner, the Autopilot readout (the state's own, 9949.49 s and 9953.36 s, because the timer is armed for good rather than the authored 5 s written back, so the pause lands on the state's tick with nothing run after it), the DAMAGE and Absorb strips, the BEST row `0.44.24` against ours' `0.00.00` (the HUD record `--hud-state` does not carry), the pickup row and sight, the original's own speed blur on the road edges.
+- **Render differences:** edge correlation stays near 0.1 with the picture aligned (run2): the original's radial speed blur on a 495 km/h frame (ours is off in the profile), hue and bloom. The 0.30 acceptance bound is **not reached and not reachable by alignment**: 0.19 is the best seen, and the grid pairs that score 0.4 are still frames.
 
 ## Re-rendering ours only (2026-10-21)
 
@@ -733,9 +764,8 @@ counter (the pickup row), HD's `Absorb` and `DAMAGE` strips and its best-lap lin
 that animate (the billboards).
 
 **The player's hull in a race shot.** Checked 2026-10-20 (`race-shot-trails`), the hull's size against the camera read at the same stop:
-on **HD** (`hd-race/talons-pack`) ours matches: the hull is 170 px wide in a 560 x 420 crop of the 1920 x 1080 frame on both sides and starts at the same
-row; holding the player back by one tick (2.4 units at 141 u/s) already makes it far too large, so there is no body/camera instant skew
-there, and the "lower and larger" look was the original's bright plume and bloom around it. On **Pulse PSP** the original hull is
+on **HD** (`hd-race/talons-pack`) this was read as "ours matches" (the hull 170 px wide in a 560 x 420 crop on both sides) **and is withdrawn** (2026-11-10): on the pair as it stood the
+original's frame was not the recorded instant, and on the re-made pairs the original's hull is about 1.3 times larger and lower than ours (see "A moving HD craft: the frame is not always the RAM instant" below). On **Pulse PSP** the original hull is
 larger and lower than ours (about 1.5x across): holding the body back one tick of its velocity (1.8 units at 106 u/s) lands close to the original's size
 and two ticks is already far too large, so on PSP the drawn hull matches a body about a tick older than the one read at the stop (or a camera a tick
 ahead). The display matrix (`entity+0x8b0`, two hops) is not the cause of a position offset: its translation equals the body's to the
@@ -1194,7 +1224,15 @@ For each curated entry whose id has a later `rendered_at` in the reference set, 
 and `original` paths and a byte-identical original image, it copies `ours.png`, `side.png` and
 `pair.json` and the entry's `rmse`, `edge_ncc`, `mean_grey`, `build`, `binary` and `rendered_at`
 lines. Every other curated line (title, note, setting) stays as curated, and each carried entry is
-printed. A directory named on the command line is published as it is. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
+printed. A directory named on the command line is published as it is.
+
+**In one go: `just compare-publish`.** It pulls `data/reference` (the private repository,
+[ADR-0085](../architecture/adr/0085-comparison-originals-live-in-a-private-repository.md)) fast-forward
+only, re-renders our side of every pair at this tree (`compare-rerender-ours`), commits and pushes that
+re-render there (`Comparison pairs: ours re-rendered at <sha>`), then runs `publish-compare`. It refuses
+when `data/reference` has uncommitted changes, so one host's re-render is never mixed into another's;
+commit or discard them first. Originals are untouched; a pair that needs a new original is still
+`compare-rerender` or `compare-rerender-all`. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
 ADR-0074 Accepted it reads `unlocked`. The maintainer runs the command.
 
 A curated page should carry only frames the policy covers; the seed and live

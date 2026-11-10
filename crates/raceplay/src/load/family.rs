@@ -63,22 +63,60 @@ pub(super) fn follow_player(
     ));
 }
 
+/// The shield slot every craft of the race starts on: [`Options::skill_level`] where the title
+/// reads the difficulty into the slot (`CraftLaws::shield_by_skill`), else the Medium slot, said
+/// in the report when the difficulty would have moved it.
+pub(super) fn skill_level(
+    options: &super::Options,
+    title: &oag_title::Title,
+    report: &mut Vec<String>,
+) -> u8 {
+    if title
+        .race
+        .craft_laws
+        .is_none_or(|laws| laws.shield_by_skill.value)
+    {
+        return options.skill_level();
+    }
+    if options.skill_level() != oag_gameplay::handling::DEFAULT_SKILL_LEVEL {
+        report.push(format!(
+            "shield: {} has not measured which difficulty picks the shield slot; every craft \
+             starts on the Medium slot",
+            title.name
+        ));
+    }
+    oag_gameplay::handling::DEFAULT_SKILL_LEVEL
+}
+
+/// What the race fixes for every craft's handling whatever its team: the class, the pad
+/// tunables, `<Special>` and the shield slot of the difficulty.
+pub(super) struct Shared<'a> {
+    pub class: &'a str,
+    pub pad_tunables: handling::SpeedupPads,
+    pub special: handling::Special,
+    pub skill_level: u8,
+}
+
 /// Each AI slot's own handling and weapon counts on every title, `None` where it flies the
 /// player's (the slot's team is the player's, or its file would not load - said
-/// in the report, never invented). The class, pad tunables and `<Special>` are the
+/// in the report, never invented). The class, pad tunables, `<Special>` and shield slot are the
 /// race's, as they are for the player.
 pub(super) fn opponent_handling(
     archives: &mut oag_assets::Archives,
     race: &oag_title::RaceDefaults,
     slot_teams: &[String],
-    class: &str,
-    pad_tunables: handling::SpeedupPads,
-    special: handling::Special,
+    shared: &Shared,
     report: &mut Vec<String>,
 ) -> (
     Vec<Option<oag_physics::Handling>>,
     Vec<Option<oag_weapons::counts::WeaponCounts>>,
 ) {
+    let Shared {
+        class,
+        pad_tunables,
+        special,
+        skill_level,
+    } = *shared;
     let mut out = vec![None; slot_teams.len()];
     let mut counts = vec![None; slot_teams.len()];
     let Some(player) = slot_teams.first() else {
@@ -94,8 +132,9 @@ pub(super) fn opponent_handling(
             .map_err(|e| e.to_string())
             .and_then(|blob| handling::from_blob(&blob).map_err(|e| e.to_string()))
             .and_then(|stats| {
-                let mut handling = oag_gameplay::handling_for(&stats, class, pad_tunables, special)
-                    .ok_or_else(|| format!("authors no <Class name=\"{class}\">"))?;
+                let mut handling =
+                    oag_gameplay::handling_for(&stats, class, pad_tunables, special, skill_level)
+                        .ok_or_else(|| format!("authors no <Class name=\"{class}\">"))?;
                 super::code_laws::apply(&mut handling, &stats, class, race.craft_laws);
                 Ok((
                     handling,

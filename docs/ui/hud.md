@@ -635,6 +635,9 @@ pair of the 26 code-only keys; the other 25 are not read.
   [`Readout::shield_blinking`]/[`Readout::shield_blink_phase_on`], driven off
   the pool, the post-hit flash, and absorbing together - see
   [shield.md](../ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-the-absorb-flash-2026-09-25).
+  **The absorb's glow was settled 2026-11-09**: the fill stamps the bloom's glow mask (`0xff`) for the whole window, in both
+  halves of the blink, and the original draws no white layer
+  ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md#the-absorb-flash-at-the-draw-call-2026-11-09-pulse-bar-bloom)).
   The low-shield **icon** itself (a separate widget from `ShieldBar`,
   `Hud_SetEnergyBar`'s own two-tier blink) is a different gap and still not
   reproduced.

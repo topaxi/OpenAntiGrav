@@ -15,7 +15,7 @@
 //! box's `AI DIFFICULTY` row (`assets/ui/menu.toml`, `ai.difficulty`) offers
 //! all four by these names. A title's own `Easy`/`Medium`/`Hard` exist only
 //! as campaign rungs and reach only the original's pack shuffle
-//! (`oag_game::ai_choice::free_level`); the original-AI field (the campaign)
+//! (`oag_ai::Difficulty::level`); the original-AI field (the campaign)
 //! keeps absorbing the pickup.
 //! Data, not a comparison on a title's, class's or level's name (ADR-0058).
 

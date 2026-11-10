@@ -29,6 +29,8 @@ mod intro;
 #[cfg(feature = "view")]
 mod lens_flare;
 #[cfg(feature = "view")]
+mod lod_bias;
+#[cfg(feature = "view")]
 pub(crate) mod magstrip_wake;
 #[cfg(feature = "view")]
 mod mod_assets;
@@ -247,8 +249,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // is not the place it happens, and neither `<SpeedupPads>` nor `<Special>` is one of them.
     // `None` where this team's file does not author the requested rung: a race
     // that cannot be set up, rather than one run on somebody else's tuning.
-    let mut handling =
-        handling_for(&stats, &options.class, pad_tunables, special).with_context(|| {
+    let skill_level = family::skill_level(options, craft_title, &mut report);
+    let mut handling = handling_for(&stats, &options.class, pad_tunables, special, skill_level)
+        .with_context(|| {
             let (class, ladder) = (&options.class, stats.ladder());
             format!("{stats_name} authors no <Class name=\"{class}\"> - it carries {ladder}")
         })?;
@@ -341,9 +344,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
         craft_of(&mut craft, &mut archives),
         craft_title.race,
         &slot_teams,
-        &options.class,
-        pad_tunables,
-        special,
+        &family::Shared {
+            class: &options.class,
+            pad_tunables,
+            special,
+            skill_level,
+        },
         &mut report,
     );
     #[cfg(feature = "view")]
@@ -436,18 +442,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // ribbon build, and reported the same way: absent, not invented.
     #[cfg(feature = "view")]
     let vex_geometry = !ribbon && rcs_model.is_none();
-    // Whether the `.rcsmodel` *built*, not merely whether one was found - the
-    // report below says which surface is on screen, and since a sibling that
-    // will not decode now falls back to the ribbon, "found" is the wrong
-    // question to ask.
+    // Whether the `.rcsmodel` *built*, not merely whether one was found: a sibling
+    // that will not decode falls back to the ribbon.
     #[cfg(feature = "view")]
     let rcs_drawn = rcs_model.is_some();
-    // Both pad classes, decoded once and shared between the two blocks below -
-    // mirrors `sky_model`'s own HD/Wipeout 2048 split just past it, since only
-    // HD's node tree has a recovered `Speedup Pad`/`Weapon Pad` class id;
-    // Wipeout 2048's `.rcsmodel` carries no comparable node tree yet, so a
-    // 2048 source stays `(None, None)` here exactly as it did before this
-    // pair existed.
+    // Both pad classes, decoded once and shared between the two blocks below. Only
+    // HD's node tree has a recovered `Speedup Pad`/`Weapon Pad` class id; a 2048
+    // source stays `(None, None)`, as `sky_model`'s own HD/2048 split just past it.
     #[cfg(feature = "view")]
     let (ps3_pad_model, ps3_weapon_pad_model) = match &ps3_geometry {
         Some(geometry) if rcs_drawn && !mesh::rcs::psp2::is_psp2(geometry) => {
@@ -479,7 +480,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             track_model = mesh::build_with_textures(&track, &track_blob, Some(&external))?;
             ps2_track_textures = Some(external);
         }
-        track_model
+        geometry::with_batch_cull(track_model, title.looks, archives.layout.platform)
     };
     // HD's zoom-streak ring on a title that draws none of its own: the player's
     // `graphics.boost_zoom`, honoured only where the title offers it. Chosen, not
@@ -849,10 +850,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let start_boost = start_boost.or(code_start_boost);
     #[cfg(feature = "view")]
     for name in craft_title.effects.names_on(archives.layout.platform) {
-        let gtf = craft_title.effects.sprites.contains(&name);
-        let extent_law = craft_title.effects.extents.contains(&name);
         let dir = title.race.effect_dir_for(&track);
-        match particle_effect(&mut archives, dir, name, particle_laws, extent_law, gtf) {
+        match listed_particle_effect(&mut archives, dir, craft_title.effects, name, particle_laws) {
             Ok((effect, note)) => {
                 report.push(note);
                 effects.insert(name, effect);
@@ -966,7 +965,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     let magstrip_wake = magstrip_wake::load(
         craft_of(&mut craft, &mut archives),
-        wm,
+        (wm, craft_title, options),
         &liveries,
         &mut report,
     );
@@ -1210,6 +1209,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             leach_strip: magstrip_wake.leach_anchors,
             #[cfg(feature = "view")]
             missile_trail: magstrip_wake.missile_trail,
+            #[cfg(feature = "view")]
+            wingtip: magstrip_wake.wingtip,
             collision,
             handling,
             opponent_handling,
@@ -1294,6 +1295,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             zoom_borrowed: borrowed_zoom.is_some(),
             weapon_pad_glow: title.weapon_pad_glow,
             leach_drain: title.weapons.leach_drain,
+            blast_push: title.weapons.blast_push.value,
             leach_beams: title.weapons.leach_beams.value,
             quake_hit: title.weapons.quake_hit,
             autopilot_absorb_cancels: title.weapons.autopilot_absorb_cancels.value,
@@ -1442,7 +1444,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         psp_glow_mask,
         track_shine,
         &track_blob,
-        (&mut archives, &track),
+        (&mut archives, &track, title),
     );
     #[cfg(feature = "view")]
     {
@@ -1483,6 +1485,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 .push("hull lights: the track file's ambient and sun, the host's GE rig".into());
         }
     }
+    #[cfg(feature = "view")]
+    lod_bias::finish(&mut loaded, title.looks.material_lod_levels());
     #[cfg(feature = "view")]
     pulse_ps2::finish(
         &mut loaded,

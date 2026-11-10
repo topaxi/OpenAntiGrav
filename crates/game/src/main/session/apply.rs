@@ -546,6 +546,19 @@ impl Session {
                 }
             },
             // Applied by the next frame the race draws: the session hands the
+            // length to `Race::set_trail_length` every frame.
+            "graphics.trail_length" => match text.parse::<oag_display::display::TrailLength>() {
+                Ok(length) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.trail_length = length;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            // Applied by the next frame the race draws: the session hands the
             // setting to `Race::set_weather` every frame.
             "graphics.weather" => match text.parse::<oag_display::display::Weather>() {
                 Ok(weather) => {
@@ -707,6 +720,15 @@ impl Session {
             "graphics.trail_hits" => match text.as_str() {
                 "on" => self.settings.graphics.trail_hits = true,
                 "off" => self.settings.graphics.trail_hits = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
+            // Read when a race loads (`race::Options::wingtip_contrails`), so the next race.
+            "graphics.wingtip_contrails" => match text.as_str() {
+                "on" => self.settings.graphics.wingtip_contrails = true,
+                "off" => self.settings.graphics.wingtip_contrails = false,
                 _ => {
                     warn!("ignoring {setting} = {text:?}: expected on or off");
                     return;

@@ -250,7 +250,7 @@ page always refused was picking a clock to make the digits line up, and
 reusing the clock the model's own node animations already use is not that,
 it is the one clock this project already had evidence for. Verified end to
 end against the real disc,
-[`hd_gantry_curve_replay_ground_truth.rs`](../../crates/render/tests/hd_gantry_curve_replay_ground_truth.rs):
+[`hd_gantry_curve_replay_ground_truth.rs`](../../crates/mesh/tests/hd_gantry_curve_replay_ground_truth.rs):
 all four curved materials reach `AnimTrack::Rcs`, a vertex of each selects
 one, and the sampled table differs between two points in time.
 

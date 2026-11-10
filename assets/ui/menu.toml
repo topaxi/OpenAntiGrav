@@ -1205,7 +1205,8 @@ title_string_id = "OAG_GRAPHICS_ADVANCED"
 
 
 # A strength, not a boolean - each value is a shutter fraction of one
-# simulation tick, and the technique underneath can improve without this row
+# simulation tick and a tap budget for the gather (`high` 11, `medium` 9,
+# `low` 7: a lower tier is cheaper, not only shorter), and the technique underneath can improve without this row
 # or anyone's settings file moving; it already has once, camera reprojection
 # to `docs/rendering/motion-blur.md`'s per-object velocity buffer, with no
 # migration. Applies live: `Scene::render` reads it fresh each frame, so no
@@ -1315,6 +1316,22 @@ string_id = "OAG_GRAPHICS_TRAIL_ORDER"
 setting = "graphics.trail_order"
 values = ["original", "over-floors"]
 
+# How long a craft's engine ribbon is. `original` is the default: the PSP
+# preset's ten samples, byte-identical to a build without the row. `hd` keeps
+# Wipeout HD's 54 samples (one a frame) on the preset's own head width, fade
+# and taper, stretched along the longer ribbon: an enhancement of this
+# project's, a departure from the original. Only a title whose ribbon is the
+# PSP preset (Pulse, Pure) has a choice; the row is dropped elsewhere
+# (`Definition::drop_unavailable_trail_length`). Applies live; a change restarts
+# the rings, so the ribbon is missing for the 0.9 s the longer ring takes to
+# fill. See `docs/rendering/trail-ribbon.md`, "A longer ribbon".
+[[page.entry]]
+kind = "choice"
+label = "TRAIL LENGTH"
+string_id = "OAG_GRAPHICS_TRAIL_LENGTH"
+setting = "graphics.trail_length"
+values = ["original", "hd"]
+
 # What a circuit's rain and snow add to the original's. `original` is the
 # default and draws the weather exactly as the original does; `enhanced` adds
 # splashes where a drop meets the track and flakes that settle on it, this
@@ -1423,6 +1440,21 @@ kind = "choice"
 label = "TRAIL HITS"
 string_id = "OAG_GRAPHICS_TRAIL_HITS"
 setting = "graphics.trail_hits"
+values = ["off", "on"]
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
+
+# The white contrails HD's craft lay from their wing tips after a speed pad, on the titles whose
+# original has none: Pulse and Pure. **An enhancement of this project's, off by default.** The
+# config and the ribbon's texture are read off another source that carries them (Wipeout HD's, else
+# 2048's or Omega's), and nothing is drawn, and the loader report says so, when this machine has
+# none. The row is dropped on HD, 2048 and Omega, which lay their own, by
+# `menu::Definition::drop_unavailable_wingtip_contrails`. Read when a race loads.
+[[page.entry]]
+kind = "choice"
+label = "WINGTIP CONTRAILS"
+string_id = "OAG_GRAPHICS_WINGTIP_CONTRAILS"
+setting = "graphics.wingtip_contrails"
 values = ["off", "on"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 

@@ -167,3 +167,24 @@ fn a_views_four_blocks_are_one_write() {
         [3.0; 4]
     );
 }
+
+/// HD's absorb shell reads the craft's scene block, where the program's closing `/2`
+/// (`Light::output_scale`), the fog and the texture's scroll clock live: left on the
+/// drawable's own block (`Scene::off`) the shell draws at twice the original's strength,
+/// unfogged, on a frozen texture. Drop the shell's loop in `share_scene_blocks` and it
+/// keeps no kind.
+#[test]
+fn the_absorb_shell_reads_the_craft_scene_block() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut scene = bare_scene(&device, &queue);
+    scene.give_a_shell_for_tests(&device);
+    assert_eq!(
+        scene.shell_scene_kind_for_tests(),
+        None,
+        "a fresh copy has no kind"
+    );
+    scene.share_scene_blocks_for_tests(&device);
+    assert_eq!(scene.shell_scene_kind_for_tests(), Some(SceneKind::Ship));
+}

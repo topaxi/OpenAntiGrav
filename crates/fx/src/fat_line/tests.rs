@@ -129,12 +129,12 @@ fn alpha_follows_one_minus_t_without_the_ramp_and_the_ramp_with_it() {
     let chain = &plain.chains[0];
     let mid = chain.len() / 2;
     let expected = chain[mid].fade;
-    assert!((plain.alpha(chain, mid, &ramp) - expected).abs() < 1e-6);
+    assert!((plain.alpha(chain, mid, Some(&ramp)) - expected).abs() < 1e-6);
     let ramped = flown(HELIX, 30);
     let chain = &ramped.chains[0];
     let mid = chain.len() / 2;
     let byte = ramp.lookup(chain[mid].fade);
-    assert!((ramped.alpha(chain, mid, &ramp) - f32::from(byte) / 255.0).abs() < 1e-6);
+    assert!((ramped.alpha(chain, mid, Some(&ramp)) - f32::from(byte) / 255.0).abs() < 1e-6);
 }
 
 #[test]
@@ -142,9 +142,9 @@ fn both_ends_of_a_chain_are_transparent() {
     let ramp = identity_ramp();
     let ribbon = flown(HELIX, 40);
     let chain = &ribbon.chains[0];
-    assert_eq!(ribbon.alpha(chain, 0, &ramp), 0.0);
-    assert_eq!(ribbon.alpha(chain, chain.len() - 1, &ramp), 0.0);
-    assert!(ribbon.alpha(chain, chain.len() / 2, &ramp) > 0.0);
+    assert_eq!(ribbon.alpha(chain, 0, Some(&ramp)), 0.0);
+    assert_eq!(ribbon.alpha(chain, chain.len() - 1, Some(&ramp)), 0.0);
+    assert!(ribbon.alpha(chain, chain.len() / 2, Some(&ramp)) > 0.0);
 }
 
 #[test]
@@ -209,7 +209,7 @@ fn a_streak_node_is_born_at_t_equal_to_its_scale() {
             chain[1].half_width
         );
         assert!(
-            (ribbon.alpha(chain, 1, &ramp) - (1.0 - scale)).abs() < 1e-5,
+            (ribbon.alpha(chain, 1, Some(&ramp)) - (1.0 - scale)).abs() < 1e-5,
             "alpha at scale {scale}"
         );
     }
@@ -229,7 +229,7 @@ fn a_streak_node_widens_and_brightens_as_it_dies() {
     let chain = &ribbon.chains[0];
     let t = (0.6 - 0.3) / 1.2;
     assert!((chain[1].half_width - 2.0 * (1.0 - t)).abs() < 1e-4);
-    assert!((ribbon.alpha(chain, 1, &ramp) - (1.0 - t)).abs() < 1e-4);
+    assert!((ribbon.alpha(chain, 1, Some(&ramp)) - (1.0 - t)).abs() < 1e-4);
 }
 
 /// A node of scale `s` outlives the push by `1.2 s`, not the config's whole second life.
@@ -245,4 +245,171 @@ fn a_scaled_node_dies_on_its_own_shorter_life() {
     }
     // 0.6 s runs to -0.025 over five updates; the sixth frees it.
     assert_eq!(updates, 6);
+}
+
+const VORTEX: Spec = Spec {
+    width: [0.05, 1.5],
+    lifetime: 0.7,
+    u_per_unit: 0.025,
+    chains: 3,
+    capacity: 100,
+    phase_step: 0.06,
+    radius: 0.8,
+    ramp: false,
+};
+
+const WHITE: Vortex = Vortex {
+    drift: 2.5,
+    colour: [1.0, 1.0, 1.0],
+};
+
+/// The craft's rows as the original's matrix carries them: `row1` down, `row2` forward, both
+/// `0.75` long (`g_craft_scale`).
+const ROW1: Vec3 = Vec3::new(0.0, -0.75, 0.0);
+const ROW2: Vec3 = Vec3::new(0.0, 0.0, 0.75);
+
+/// The law written out in the test, from the evidence page, not from the code under test.
+fn drift_at(theta: f32) -> Vec3 {
+    -2.5 * (ROW1 * theta.cos() + ROW2.cross(ROW1) * theta.sin()).normalize()
+}
+
+fn velocities(ribbon: &Ribbon) -> Vec<Vec3> {
+    ribbon
+        .chains
+        .iter()
+        .map(|chain| chain.back().expect("a node").velocity)
+        .collect()
+}
+
+#[test]
+fn a_vortex_node_is_born_at_the_anchor_and_drifts_away() {
+    let mut ribbon = Ribbon::new_vortex(VORTEX, WHITE);
+    let tip = Vec3::new(2.7, -0.7, -4.2);
+    ribbon.push_vortex(tip, ROW1, ROW2, true, 0.3);
+    for chain in &ribbon.chains {
+        assert_eq!(chain[0].position, tip, "born at the wing tip, not offset");
+        assert!((chain[0].velocity.length() - 2.5).abs() < 1e-5);
+        assert!(
+            chain[0].velocity.dot(ROW2).abs() < 1e-5,
+            "never along the craft"
+        );
+    }
+    for _ in 0..12 {
+        ribbon.advance(DT);
+    }
+    let moved = ribbon.chains[0][0].position - tip;
+    assert!(
+        (moved - ribbon.chains[0][0].velocity * 12.0 * DT).length() < 1e-4,
+        "{moved}"
+    );
+    assert!(moved.length() > 0.45, "2.5 units/s for 0.2 s");
+}
+
+#[test]
+fn a_push_fans_three_chains_over_a_hundred_and_twenty_degrees_of_the_scaled_rows() {
+    let mut ribbon = Ribbon::new_vortex(VORTEX, WHITE);
+    ribbon.push_vortex(Vec3::ZERO, ROW1, ROW2, true, 1.0);
+    for (i, velocity) in velocities(&ribbon).into_iter().enumerate() {
+        let expected = drift_at(PI / 3.0 * i as f32);
+        assert!(
+            (velocity - expected).length() < 1e-4,
+            "chain {i}: {velocity} vs {expected}"
+        );
+    }
+    // Chain 0 at theta 0 drifts along `-row1`: up on a level track.
+    assert!(velocities(&ribbon)[0].y > 2.4);
+}
+
+#[test]
+fn the_phase_turns_the_left_wing_one_way_and_the_right_the_other() {
+    let mut left = Ribbon::new_vortex(VORTEX, WHITE);
+    let mut right = Ribbon::new_vortex(VORTEX, WHITE);
+    for _ in 0..4 {
+        left.push_vortex(Vec3::ZERO, ROW1, ROW2, true, 1.0);
+        right.push_vortex(Vec3::ZERO, ROW1, ROW2, false, 1.0);
+    }
+    // Three pushes have stepped the phase by 3 chains * 0.06 each; the fourth lays at 0.54.
+    let phase = 0.54;
+    for (i, (l, r)) in velocities(&left)
+        .into_iter()
+        .zip(velocities(&right))
+        .enumerate()
+    {
+        let theta = PI / 3.0 * i as f32;
+        assert!(
+            (l - drift_at(theta + phase)).length() < 1e-4,
+            "left chain {i}"
+        );
+        assert!(
+            (r - drift_at(theta - phase)).length() < 1e-4,
+            "right chain {i}"
+        );
+        assert!((l - r).length() > 0.1, "mirrored, not equal: chain {i}");
+    }
+}
+
+fn alphas(ribbon: &Ribbon, chain: usize) -> Vec<f32> {
+    let mut out = Vec::new();
+    ribbon.extend_vortex_vertices(&mut out, Vec3::new(0.0, 0.0, 50.0));
+    // Every segment is six vertices; its first is the older node's left vertex, so the
+    // chain's node alphas are the segments' starting ones. Chains are walked in order.
+    let per_chain = ribbon.chains[0].len().saturating_sub(2) * 6;
+    out.chunks(per_chain.max(1))
+        .nth(chain)
+        .map(|c| c.iter().step_by(6).map(|v| v.colour[3]).collect())
+        .unwrap_or_default()
+}
+
+#[test]
+fn a_vortex_node_is_as_opaque_as_its_age_and_the_last_push_strength() {
+    let mut ribbon = Ribbon::new_vortex(VORTEX, WHITE);
+    for tick in 0..30 {
+        let strength = if tick < 20 { 0.3 } else { 0.1 };
+        ribbon.push_vortex(Vec3::new(0.0, 0.0, tick as f32), ROW1, ROW2, true, strength);
+        ribbon.advance(DT);
+    }
+    let chain = &ribbon.chains[1];
+    let got = alphas(&ribbon, 1);
+    assert!(!got.is_empty());
+    // Samples skip the first node (a segment starts at the second); node index = k + 1.
+    for (k, alpha) in got.iter().enumerate() {
+        let node = &chain[k + 1];
+        let t = 1.0 - node.fade;
+        let ends = k + 1 == 1 || k + 1 + 2 >= chain.len();
+        let expected = if ends { 0.0 } else { t * 0.1 };
+        assert!(
+            (alpha - expected).abs() < 1e-5,
+            "node {}: {alpha} vs {expected}",
+            k + 1
+        );
+    }
+    assert!(
+        got.iter().any(|a| *a > 0.05),
+        "the older, fuller nodes show: {got:?}"
+    );
+    assert!(
+        got.iter().all(|a| *a <= 0.1 + 1e-5),
+        "all scaled by the current 0.1, not 0.3"
+    );
+}
+
+#[test]
+fn a_vortex_chain_clears_two_nodes_at_each_end() {
+    let mut ribbon = Ribbon::new_vortex(VORTEX, WHITE);
+    for tick in 0..10 {
+        ribbon.push_vortex(Vec3::new(0.0, 0.0, tick as f32), ROW1, ROW2, false, 0.3);
+        ribbon.advance(DT);
+    }
+    let chain = &ribbon.chains[0];
+    let alpha = |i: usize| ribbon.alpha(chain, i, None);
+    assert_eq!(
+        [
+            alpha(0),
+            alpha(1),
+            alpha(chain.len() - 2),
+            alpha(chain.len() - 1)
+        ],
+        [0.0; 4]
+    );
+    assert!(alpha(chain.len() / 2) > 0.0);
 }
