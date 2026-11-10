@@ -1005,3 +1005,54 @@ other pass changed.
   1080p and 8 px at 4K) to cut 4K's mid-length smears: the gather at 4K, NVIDIA, 15 taps
   1.57 -> 1.49 ms, and nothing at 11. Most 4K pixels are already at the cap, so the spacing
   rule is not what the gather pays for. Not kept.
+
+## The half-size composite blends onto the scene: no copy (2026-11-10, `blur-composite`)
+
+Claim: the composite plus copy costs measurably less GPU time on desktop NVIDIA and Intel at
+`--motion-blur high` on HD Anulpha. **True.** At half resolution the composite's output was
+`scene * (1 - smear.a) + smear.rgb` into a scratch target, and `fs_copy` carried scratch home.
+The expression is a premultiplied "over", so the composite now returns the smear and the
+pipeline's blend (`SMEAR_OVER` in `crates/post/src/motion_blur.rs`: colour `One` + `OneMinusSrcAlpha`,
+alpha `Zero` + `One` so the scene's glow-mask alpha stays) lays it on `frame.scene` directly.
+The scene is now the composite's render target, so the group no longer binds it as a texture
+(the unused `tile_tex` slot holds `tile_b`). The half path has no copy pass; the full-size gather
+still reconstructs into scratch and copies home, because its taps sample the scene's neighbours.
+The chain's closing timestamp moved to the composite on the half path.
+
+### Measured
+
+Per pass, GPU median, microseconds, `OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1`, one view,
+`--race --mode single_race --seed 1 --autopilot --ticks 600 --render-scale 100 --motion-blur high
+--motion-blur-resolution half`, release plus `perf-probe`, 2 rounds interleaved base/candidate
+(base = `95ca568b1`). The machine was loaded (load 18 to 50 from other members, recorded per run), so
+the absolute numbers are noisy and only the interleaved pairs mean anything. Before = composite +
+copy; after = composite. Mean of the two rounds.
+
+| GPU, title | 800p | 1080p | 4K |
+| --- | ---: | ---: | ---: |
+| NVIDIA RTX PRO 2000 Blackwell, HD Anulpha | 57.4 -> 44.2 (-23%) | 128.8 -> 109.7 (-15%) | 771 -> 608 (-21%) |
+| NVIDIA, Pulse default circuit | 53.6 -> 40.9 (-24%) | 134.3 -> 98.9 (-26%) | 808 -> 632 (-22%) |
+| Intel (Vulkan), HD Anulpha | 346 -> 249 (-28%) | 738 -> 549 (-26%) | 1458 -> 1004 (-31%) |
+| Intel, Pulse default circuit | 346 -> 254 (-27%) | 770 -> 565 (-27%) | 2955 -> 1630 to 2165 (-27 to -45%) |
+
+The saving is the copy (NVIDIA 11 / 25 / 146 us, Intel 79 / 165 / 382 us on HD) plus a smaller
+composite on Intel (Intel Graphics ARL, integrated), which no longer loads the scene. On NVIDIA the composite itself got slightly
+slower (HD 1080p 103 -> 110 us, 4K 620 -> 634 us in round one: the blend reads the target back), and the copy's removal more than pays for it.
+One row stayed unexplained: the untouched `reconstruct (half)` read 180 -> 196 us on NVIDIA HD 1080p in both rounds, and did not move on Pulse
+or Intel; the chain total still fell. Whole-chain medians: NVIDIA HD 290 -> 264
+(800p), 529 -> 510 (1080p), 2608 -> 2542 (4K) in round one, Intel HD 1309 -> 1190, 2487 -> 2233,
+4008 -> 3609. On the desktop NVIDIA part this is tens of microseconds at 1080p, so below a frame's
+noise; the Deck number is the one that matters (copy 0.14 / 0.48 ms there). **Deck re-measure owed.**
+
+### The picture
+
+Blur is our own effect, so this changes pixels. Base against candidate, 8-bit screenshots, same
+seed and tick: HD 1080p 1,105,239 of 2,073,600 pixels differ, **every one by 1** (the 4K frame has
+one pixel off by 2); Pulse 1080p 1,078,501 differ, 1,077,619 by 1 and 882 by 2; Pulse 4K 272 pixels
+by 3 of 8.3 million; HD 1080p at tick 2500: 1,133,632 differ, all by 1. The screenshots carry no scene alpha (every pixel is 255), so the scene's alpha is
+kept by construction (the blend's alpha factors are `Zero` and `One`), not by a picture. The streaks, the sharp craft and the HUD read the same
+in the candidate frame at full size. The cause is rounding: the blend hardware
+multiplies and adds in its own order and rounds once to the target format, where the shader did it
+in f32. Some of the changed pixels carry a smear below one 8-bit step, which the
+shader's version rounded away. With the blur `off`, HD and Pulse 1080p frames are byte-identical
+to base (`cmp`), and so is HD with `--motion-blur-resolution full` (that path is unchanged).
