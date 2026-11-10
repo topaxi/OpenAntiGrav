@@ -492,8 +492,9 @@ fn fs_reconstruct_half(half_res: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>((found.colour / total).rgb * amount, amount);
 }
 
-// The half-size blend `fs_reconstruct` wrote, laid over the scene at full
-// resolution into the scratch target `fs_copy` then carries home.
+// The half-size blend `fs_reconstruct_half` wrote, upsampled to full
+// resolution and laid over the scene by the pipeline's blend (`SMEAR_OVER` in
+// `motion_blur.rs`), so no copy follows.
 //
 // **Upsampled by depth as well as by distance.** Each of the four half-size
 // texels around this pixel is weighted bilinearly *and* by how near the depth
@@ -506,13 +507,12 @@ fn fs_reconstruct_half(half_res: VertexOutput) -> @location(0) vec4<f32> {
 //
 // The blend is premultiplied, so a texel with no smear pulls toward nothing
 // rather than toward black. Bound differently from the gather: the blend is
-// `colour_tex`, the full-size depths are `prepared_tex`, and the scene is read
-// exactly through `tile_tex`'s load slot. Alpha is the scene's own - the glow
-// mask the bloom has already read.
+// `colour_tex` and the full-size depths are `prepared_tex`; the scene is the
+// render target, so no slot holds it. The pipeline keeps the scene's own
+// alpha - the glow mask the bloom has already read.
 @fragment
 fn fs_composite(in: VertexOutput) -> @location(0) vec4<f32> {
     let pixel = vec2<i32>(in.position.xy);
-    let scene = textureLoad(tile_tex, pixel, 0);
     let depth = textureLoad(prepared_tex, pixel, 0).z;
     let half_last = vec2<i32>(textureDimensions(colour_tex)) - vec2<i32>(1);
     let full_last = vec2<i32>(textureDimensions(prepared_tex)) - vec2<i32>(1);
@@ -540,7 +540,7 @@ fn fs_composite(in: VertexOutput) -> @location(0) vec4<f32> {
         }
     }
     let smear = select(nearest, sum / max(total, 1.0e-6), total > 1.0e-4);
-    return vec4<f32>(scene.rgb * (1.0 - smear.a) + smear.rgb, scene.a);
+    return smear;
 }
 
 // The result back onto the scene target: the gather cannot sample the

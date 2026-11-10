@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-10
-summary: "Deck HD Anulpha: per-tier blur tap caps landed (desktop-measured); open: Deck re-measure, 32-bit prepared texel, composite+copy, HD encode"
+summary: "Deck HD Anulpha: tap caps and blur composite copy-free landed on desktop; open: Deck re-measure of both, 32-bit prepared texel, HD encode"
 categories: [rendering]
 ---
 
@@ -44,10 +44,13 @@ proposed as a default.
   diag loading a 32-bit texture at the same cache-local addresses, compared with the 1.63 ms
   cache-local 64-bit row. A 32-bit `[reach, depth]` texel would change the picture (reach rounded
   to f16), so it is a tier or a measured-diff decision for the maintainer.
-- **The blur's composite plus copy**: 0.66 ms at 1080p, 2.37 ms at 4K. The copy is an identity
-  carry-home (`copy_texture_to_texture` when the formats match), and a premultiplied blend could
-  draw the composite straight onto the target. The copy alone (0.14 / 0.48 ms) will not show in
-  whole-race fps; the blend is not proven byte-identical.
+- ~~**The blur's composite plus copy**~~ Landed (`blur-composite`): the half-size composite blends
+  onto the scene (`SMEAR_OVER`), no copy pass; desktop -15 to -31% of composite + copy at 800p,
+  1080p, 4K on NVIDIA and Intel, pictures differ by 1 of 255 (details:
+  `docs/rendering/motion-blur.md`, "The half-size composite blends onto the scene"). **Deck
+  re-measure owed** (expected: the 0.14 / 0.48 ms copy, minus a little). Not done: in half mode the
+  full-size `scratch` target is still allocated though unused (66 MB at 4K); drop it when the
+  resolution is half, rebuilding it on a switch to full.
 - **HD encode decodes each scene texel four times** (`final_half_texel` puts every pixel on a
   2x2 average; 12 `pow` for the decode plus 3 for the encode): 0.75 ms at 1080p, 2.6 ms at 4K.
   Quad sharing through subgroup ops would cut the worst lane from 4 decodes to 3, exactly. Not built.

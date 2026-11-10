@@ -33,7 +33,9 @@
 //!    the object's path and receives its smear.
 //! 5. **reconstruct** - the depth- and velocity-weighted gather itself.
 //! 6. **copy** - the result back onto the scene target, which the gather
-//!    cannot read and write at once.
+//!    cannot read and write at once. Only the full-size gather needs it: the
+//!    half-size gather's composite blends onto the scene itself (the scene is
+//!    its render target, not one of its inputs), so it has no copy.
 //!
 //! **All six rasterise the render extent, not the allocation.** The scene
 //! target is allocated at the render-scale ceiling and dynamic resolution
@@ -176,8 +178,9 @@ pub struct ChainTimestamps<'a> {
 #[derive(Debug)]
 pub struct Frame<'a> {
     /// The finished frame, sampled and then overwritten - legal because the
-    /// gather lands in a scratch target and the copy pass carries it back,
-    /// the same read-then-write shape `bloom` uses.
+    /// full-size gather lands in a scratch target and the copy pass carries it
+    /// back, the same read-then-write shape `bloom` uses; the half-size
+    /// gather's composite never samples it, and blends onto it.
     pub scene: &'a wgpu::TextureView,
     /// The scene's velocity attachment - [`oag_gpu::formats::VELOCITY_FORMAT`],
     /// at the scene's own sample count.
@@ -228,6 +231,22 @@ const TILE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Float;
 /// float so the smear's colour keeps its range on HD's linear target - see
 /// `fs_reconstruct`.
 const GATHERED_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+
+/// The composite's blend onto the scene: the smear is premultiplied, so the
+/// scene keeps `1 - smear.a` of itself and the smear's colour is added. The
+/// alpha channel is left as the scene had it.
+const SMEAR_OVER: wgpu::BlendState = wgpu::BlendState {
+    color: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::One,
+        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+        operation: wgpu::BlendOperation::Add,
+    },
+    alpha: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::Zero,
+        dst_factor: wgpu::BlendFactor::One,
+        operation: wgpu::BlendOperation::Add,
+    },
+};
 
 /// The gather target's size for a full-size `size`: half each way, rounded up
 /// so it covers every full-size pixel.
@@ -411,7 +430,8 @@ impl MotionBlur {
         let pipeline = |label: &str,
                         entry: &str,
                         pipeline_layout: &wgpu::PipelineLayout,
-                        target: wgpu::TextureFormat| {
+                        target: wgpu::TextureFormat,
+                        blend: Option<wgpu::BlendState>| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
                 layout: Some(pipeline_layout),
@@ -426,7 +446,7 @@ impl MotionBlur {
                     entry_point: Some(entry),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: target,
-                        blend: None,
+                        blend,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                     compilation_options: Default::default(),
@@ -443,50 +463,58 @@ impl MotionBlur {
             "fs_prepare",
             &prepare_pipe_layout,
             PREPARED_FORMAT,
+            None,
         );
         let prepare_ms = pipeline(
             "motion blur prepare (msaa)",
             "fs_prepare_ms",
             &prepare_ms_pipe_layout,
             PREPARED_FORMAT,
+            None,
         );
         let tile_max_x = pipeline(
             "motion blur tile-max (x)",
             "fs_tile_max_x",
             &chain_layout,
             TILE_FORMAT,
+            None,
         );
         let tile_max_y = pipeline(
             "motion blur tile-max (y)",
             "fs_tile_max_y",
             &chain_layout,
             TILE_FORMAT,
+            None,
         );
         let neighbour_max = pipeline(
             "motion blur neighbour-max",
             "fs_neighbour_max",
             &chain_layout,
             TILE_FORMAT,
+            None,
         );
         let reconstruct = pipeline(
             "motion blur reconstruct",
             "fs_reconstruct",
             &chain_layout,
             format,
+            None,
         );
         let reconstruct_half = pipeline(
             "motion blur reconstruct (half)",
             "fs_reconstruct_half",
             &chain_layout,
             GATHERED_FORMAT,
+            None,
         );
         let composite = pipeline(
             "motion blur composite",
             "fs_composite",
             &chain_layout,
             format,
+            Some(SMEAR_OVER),
         );
-        let copy = pipeline("motion blur copy", "fs_copy", &chain_layout, format);
+        let copy = pipeline("motion blur copy", "fs_copy", &chain_layout, format, None);
 
         let constants = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("motion blur constants"),
@@ -728,7 +756,8 @@ impl MotionBlur {
             wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
             None,
         );
-        // 5: the gather, into scratch.
+        // 5: the gather - half: into `gathered`, then composited onto the scene;
+        // full: into scratch, carried home by the copy below.
         if self.half {
             pass(
                 "motion blur reconstruct (half)",
@@ -746,10 +775,10 @@ impl MotionBlur {
                 "motion blur composite",
                 &self.composite,
                 &[&groups.merge],
-                &scratch.view,
+                frame.scene,
                 full_rect,
                 wgpu::LoadOp::Load,
-                None,
+                closing.take(),
             );
         } else {
             pass(
@@ -762,16 +791,18 @@ impl MotionBlur {
                 None,
             );
         }
-        // 6: home.
-        pass(
-            "motion blur copy",
-            &self.copy,
-            &[&groups.home],
-            frame.scene,
-            full_rect,
-            wgpu::LoadOp::Load,
-            closing.take(),
-        );
+        // 6: home. The half path's composite already blended onto the scene.
+        if !self.half {
+            pass(
+                "motion blur copy",
+                &self.copy,
+                &[&groups.home],
+                frame.scene,
+                full_rect,
+                wgpu::LoadOp::Load,
+                closing.take(),
+            );
+        }
         true
     }
 
@@ -792,6 +823,8 @@ impl MotionBlur {
     /// | neighbour-max | tile_a         | tile (4)              | tile_b    |
     /// | reconstruct   | scene, prepared, tile_b | 0, 3, 4      | scratch   |
     /// | copy          | scratch        | colour (0)            | scene     |
+    /// | reconstruct (half) | scene, prepared, tile_b | 0, 3, 4 | gathered  |
+    /// | composite     | gathered, prepared, tile_b | 0, 3, 4    | scene (blended) |
     fn build_groups(&self, device: &wgpu::Device, frame: &Frame<'_>, key: Key) -> Groups {
         // Every caller has already checked these, and a `render` that reached
         // here without them would have returned; `expect` rather than a second
@@ -912,13 +945,14 @@ impl MotionBlur {
                 &prepared.view,
                 &tile_b.view,
             ),
-            // The blend, the full-size depths and the scene through the
-            // three slots - see `fs_composite`.
+            // The half-size smear and the full-size depths; the scene is the
+            // composite's render target, so the tile slot holds a view that
+            // is not it.
             merge: group(
                 "motion blur composite",
                 &gathered.view,
                 &prepared.view,
-                frame.scene,
+                &tile_b.view,
             ),
             home: group(
                 "motion blur copy",

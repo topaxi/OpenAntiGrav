@@ -40,12 +40,12 @@ fn moving_quad(xform: u32) -> Model {
         tangent: 0,
     };
     // Two keys, one second apart: `z` runs 0 to 3 over 60 frames.
-    let translation = vex::AnimChannel {
-        times: vec![0, 60],
-        values: vec![[0.0, 0.0, 0.0], [0.0, 0.0, 3.0]],
-        w: Vec::new(),
-        wide: false,
-    };
+    let translation = vex::AnimChannel::new(
+        vec![0, 60],
+        vec![[0.0, 0.0, 0.0], [0.0, 0.0, 3.0]],
+        Vec::new(),
+        false,
+    );
     Model {
         label: "moving quad".to_string(),
         vertices: vec![

@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-09
+updated: 2026-11-10
 summary: "CPU-bound devices: GPU-driven draws parked, render bundles measured and dropped; GPU particles and trails left; governor on by default"
 categories: [rendering, tooling]
 size: XL (35)
@@ -38,7 +38,10 @@ resolution controller (`crates/present/src/drs`), which does nothing while the G
 uniform builds and CPU image blends, not culling: culling, LOD and sorting are under 0.05 ms on Anulpha,
 HD default and Pulse (`docs/rendering/frame-thread-cpu.md`, "What prepare_view spends on the Deck").
 Before lane 1 step 2 (compute culling), do two CPU lanes: the hull environment-probe blend (about
-0.9 ms on Anulpha) and scenery animation sampling (0.3 to 0.4 ms, every title). Measure with the
+0.9 ms on Anulpha) and ~~scenery animation sampling~~ (landed 2026-11-10, `scenery-anim`: the node table
+uploads only its live head, ascending key times are bisected; 40 us (Pulse) and 98 us (HD) per frame on the
+desktop by perf, `record_us` -3 to -10%, pictures identical; the Deck is not re-measured, and what is left is cache misses on the boxed per-node
+transforms, `docs/rendering/frame-thread-cpu.md`, "Scenery node animation"). Measure with the
 frame-thread profile recipe in that section.
 
 1. **GPU-driven drawing** (opus). Indirect multi-draw per pass with a compute pass culling (PVS, frustum,
@@ -182,3 +185,12 @@ top of `park/indirect-depth-prepass` afterwards.
 
 1. Lane 6 (governor) landed, on by default (maintainer, 2026-10-27), and undoes a step that saved nothing and remembers skips per title, track and mode for the launch ([`cpu-governor.md`](../../docs/rendering/cpu-governor.md)).
 2. Lanes 1, 3, 4 and 5 open the next drive in order, each with its Deck before/after (lane 2, render bundles, was measured and dropped).
+3. Scenery animation sampling (`scenery-anim`, 2026-11-10) is done on the desktop; two items stay open:
+   - **Deck re-measure.** The Deck's 0.3 to 0.4 ms is from before the head upload and the key bisection.
+     Measure with the Deck recipe in `docs/rendering/frame-thread-cpu.md` ("What `prepare_view` spends
+     on the Deck": `perf record -g --call-graph fp`, the frame thread's samples under `write_scenery_anims`).
+   - **Flat per-model animation layout.** 43% of `AnimTransform::sample`'s remaining samples are cache
+     misses on each node's boxed constants. Measure the share with `perf annotate -l -s
+     '<oag_vex::vex::anim_transform::AnimTransform>::sample'` on a frame-pointer build of a Pulse bench
+     race (`just bench-render pulse`, wrapped in `perf record`); a flat layout would change the
+     `Motion::Vex` load path of every model.
