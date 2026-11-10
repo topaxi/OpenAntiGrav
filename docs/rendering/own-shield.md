@@ -13,7 +13,7 @@ HD's own shell is the visual reference only (`weapon-absorb-pairs.md`, `shield.m
 
 - **Geometry** (`oag_livery::own_shield::shell`): the craft's own hull, first level of detail, cloned with its
   textures and materials dropped and every batch moved to the blended list, so the shell adds to the hull instead of
-  replacing it. Each vertex is pushed `0.4` world units out along its normal in the vertex stage. Hull-shaped, as HD's
+  replacing it. Each vertex is pushed `0.8` world units out along its normal in the vertex stage. Hull-shaped, as HD's
   shell is; the disc's own shell (`shipshield.vex`, or `Data\Weapons\shield.vex` on Pure) is not loaded for the slot.
   The cockpit sphere (`vr_shield_cockpit.vex`) keeps the disc's geometry and takes the same shader, at its authored
   size.
@@ -40,7 +40,8 @@ file with `[graphics] own_shield = true` for "on".
   on Talon's Junction): an ice-blue faceted glow over the livery, which stays visible through it. No original-HD
   capture of a raised shield exists in the repo, so the HD frame is ours rendering HD's data, with the limit stated in
   `crates/livery/src/shield.rs` (it is brighter and flatter than the disc's material).
-- **A hit**: `--force-hit 400:0` flashes the shell amber with the swell, and it settles back to blue.
+- **A hit**: `--force-hit 400:0` flashes the shell amber with the swell, and it settles back to blue. The amber wash over the whole view in that frame is Pulse's own hit burst: the frame with the setting off carries the same wash, and it is not the shell.
+- **Legibility**: the first version drew too faint to tell from no shield; the rim, lattice and a 0.8 push (the shell stands past the hull's silhouette) were raised until the shell is clearly visible at race distance with the livery still showing through. `just gate` captures are at 960x544 and read at 1x and 2x.
 - Tests: `crates/mesh/tests/own_shield_lit_path.rs` (the flag reaches the pipeline and reads no texture),
   `crates/raceplay/tests/own_shield_ground_truth.rs` (Pulse PSP and PS2, Pure PSP: off keeps the disc's shell, palette
   and sphere; on swaps all three; HD ignores it) and `menu_definition_settings::the_own_shield_row_is_offered_only_where_the_original_draws_another_look`.

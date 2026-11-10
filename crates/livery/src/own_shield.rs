@@ -7,9 +7,9 @@
 
 use oag_mesh::mesh::Model;
 
-/// How far each vertex of the shell stands off the hull, in world units: about three percent of a
+/// How far each vertex of the shell stands off the hull, in world units: about a ninth of a
 /// craft's length.
-const INFLATE: f32 = 0.4;
+const INFLATE: f32 = 0.8;
 
 /// The shell off `hull`, or `None`, reported, when the hull's meshes do not map back to its file:
 /// that craft then draws no shield, never the disc's shell under our palette.

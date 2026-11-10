@@ -78,10 +78,12 @@ fn own_shield(in: VertexOutput) -> vec4<f32> {
     let along = fract(local.z * 0.045 + 0.5) - sweep;
     let band = exp(-along * along * 260.0);
 
-    let body = 0.10 + 1.1 * rim;
-    let lattice = hex.x * (0.55 + 1.0 * rim + 0.9 * band) + hex.y * 0.35 * (0.25 + rim);
+    let body = 0.10 + 1.3 * rim;
+    let lattice = hex.x * (0.9 + 1.0 * rim + 1.0 * band) + hex.y * 0.35 * (0.3 + rim);
     let glow = body + lattice + 0.8 * band * rim;
-    return vec4<f32>(in.colour.rgb * glow, in.colour.a * clamp(0.25 + 0.7 * (rim + hex.x), 0.0, 0.95));
+    let edge = pow(rim, 3.0);
+    let rgb = in.colour.rgb * glow + in.colour.rgb * vec3<f32>(0.2, 0.5, 0.5) * edge;
+    return vec4<f32>(rgb, in.colour.a * clamp(0.30 + 0.6 * (rim + hex.x), 0.0, 0.95));
 }
 
 // The vertex stage's push out along the normal.
