@@ -56,9 +56,11 @@ override smoke: f32 = 0.0;
 //
 // **The noise's red is decoded.** The draw's unit-0 address word reads
 // `0x60710101`: the gamma field (bits 20-22) is `7`, so the sampler decodes
-// R, G and B from sRGB before the program sees them (measured live on RPCS3).
-// The program's `2 *` then scales the decoded
-// value, so the lookup is offset by about a third of what the raw byte gives.
+// R, G and B from sRGB before the program sees them (measured live on RPCS3,
+// `docs/ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md`, "why the strip read
+// faint, and what the live draw says"). The program's `2 *` then scales the
+// decoded value, so the lookup is offset by about a third of what the raw byte
+// gives.
 // The glow's colour is left as `decode_source` has it for every HD ribbon.
 override leach: f32 = 0.0;
 

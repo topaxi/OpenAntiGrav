@@ -163,8 +163,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // seven degrees off the horizon, not scaled by `N.L` itself. Read on the hull's own
     // `diffuse_with_specular_from_alpha_*` and the track's (`@0x3d` of `track_surface`'s lit block, live
     // on Modesto Heights' disc copy), which share the snippet. On the track, with the road's bump
-    // in `N`, using it in place of `N.L` moves Vineta K's bottom band 17.59 to 14.16 and no pair the
-    // wrong way by more than 0.03.
+    // in `N`, using it in place of `N.L` moves Vineta K's bottom band 17.74 to 14.29 and no pair the
+    // wrong way by more than 0.03 (`docs/formats/rcsmaterial.md`, "The track's road and the
+    // lightmapped glass", item 5).
     let ndl_spec = clamp(8.0 * ndl_raw, 0.0, 1.0);
 
     // **Everything from here to `authored` is the authored rig's, and only
@@ -337,7 +338,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         //
         // **A sun term belongs here**, though the general block #8/#9 formula
         // above has none: that formula is the read of two materials, and seven
-        // read variant-by-variant say otherwise. `diffuse_with_specular_from_alpha` (86 chunks of
+        // read variant-by-variant say otherwise (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`,
+        // "The darkness gap does not reduce to an offset, a scale, or a single curve").
+        // `diffuse_with_specular_from_alpha` (86 chunks of
         // Talon's Junction), `..._scalar` (80), `diffusewithalphachannel` (43),
         // `track_wall` (33) and `glasstest` (33) - **275 of Talon's Junction's
         // 301 drawn materials, against `track_surface`'s 15** - each normalise

@@ -37,6 +37,8 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 
 1. **The present composite pays three `pow` it does not need on every output pixel.**
    `crates/present/shaders/upscale.wesl:65` and `:73` (`fs_main`).
+   - Since item 11 `srgb_decode` lives in `crates/shader-check/shaders/colour.wesl` and is three scalar `pow` branches,
+     not one vector `pow`; `upscale.wesl` calls it as `srgb_decode(clamp(frame_color.rgb, 0, 1))`. Count the ISA on that.
    - What: `select(frame_color.rgb, srgb_decode(frame_color.rgb), grade.decode > 0.5)` evaluates `srgb_decode`
      (a `pow(_, 2.4)` on three channels) for every pixel and then discards it, because `select` is not a branch.
      `decode` is 0 whenever the sampler already decoded (the offscreen sRGB view; `upscale.rs:686` to `:701`).
