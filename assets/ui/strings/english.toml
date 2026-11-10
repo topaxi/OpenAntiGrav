@@ -272,6 +272,7 @@ OAG_GRAPHICS_BOOST_ZOOM = { text = "BOOST ZOOM", human = false }
 OAG_GRAPHICS_TRAIL_HITS = { text = "TRAIL HITS", human = false }
 OAG_GRAPHICS_WINGTIP_CONTRAILS = { text = "WINGTIP CONTRAILS", human = false }
 OAG_GRAPHICS_OWN_SHIELD = { text = "OWN SHIELD", human = false }
+OAG_GRAPHICS_OWN_ROCKETS = { text = "OWN ROCKETS", human = false }
 OAG_GRAPHICS_CPU_GOVERNOR = { text = "CPU GOVERNOR", human = false }
 OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "PERFORMANCE OVERLAY", human = false }
 OAG_GRAPHICS_ADVANCED = { text = "ADVANCED", human = false }

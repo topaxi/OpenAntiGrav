@@ -176,6 +176,10 @@ optional = true
 type = "boolean"
 optional = true
 
+[types.graphics.own_rockets]
+type = "boolean"
+optional = true
+
 [types.graphics.cpu_governor]
 type = "boolean"
 optional = true

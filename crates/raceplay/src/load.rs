@@ -35,6 +35,8 @@ pub(crate) mod magstrip_wake;
 mod muzzle;
 mod original_laws;
 #[cfg(feature = "view")]
+mod own_rockets;
+#[cfg(feature = "view")]
 mod pads;
 mod pose;
 #[cfg(feature = "view")]
@@ -861,6 +863,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // Lent before the mods' effects, so no mod sprite moves; a no-op unless `graphics.trail_hits`.
     #[cfg(feature = "view")]
     let lent_trail_hit = trail_hits::lend(options, craft_title, &mut effects, &mut report);
+    // Ours for the Rocket, after every title effect too; nothing unless `graphics.own_rockets`.
+    #[cfg(feature = "view")]
+    let own_rockets = own_rockets::load(
+        options,
+        craft_title,
+        &mut |name| archives.read_name(name).ok(),
+        &mut effects,
+        &mut report,
+    );
     // The mods' own effects land after every title effect, so no title sprite moves.
     #[cfg(feature = "view")]
     let mod_effects = crate::extension_effects::load(
@@ -882,6 +893,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
             .with_own(mod_effects)
             .lending(Trigger::TrailHitship, lent_trail_hit),
     );
+    #[cfg(feature = "view")]
+    let handles = own_rockets
+        .into_iter()
+        .fold(handles, |handles, (trigger, effect)| {
+            handles.lending(trigger, Some(effect))
+        });
 
     stages::checkpoint()?;
     #[cfg(feature = "view")]

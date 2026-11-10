@@ -1,0 +1,63 @@
+# Our own rocket impact on a craft, played by `graphics.own_rockets` on Pulse and
+# Pure in place of the disc's blast (docs/rendering/own-rockets.md): a flash, a fireball, sparks
+# and smoke that lingers. Units: ticks (60 a second), world units per tick, degrees.
+# Format: docs/formats/mod-effect.md. A texture is a fallback-layer entry of ours
+# (scripts/gen-fallback-rocket-art.py).
+
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/effect.tosd", version = "1.0.0" }
+
+axis = "up"
+
+[[emitter]]
+name = "flash"
+duration = 1
+per-emission = 1
+lifetime = [8, 0]
+size = [[0.0, 3.0], [0.25, 13.0], [1.0, 16.0]]
+alpha = [[0.0, 1.0], [0.3, 0.6], [1.0, 0.0]]
+colour = [[0.0, "#fffbe8"], [0.4, "#ffc050"], [1.0, "#ff6a18"]]
+
+[[emitter]]
+name = "fireball"
+duration = 3
+per-emission = [5, 7]
+lifetime = [22, 8]
+speed = [0.9, 0.7]
+spread = 80
+drag = 0.9
+gravity = 0.002
+live-cap = 40
+size = [[0.0, 1.6], [0.3, 4.4], [1.0, 6.0]]
+alpha = [[0.0, 0.9], [0.4, 0.6], [1.0, 0.0]]
+colour = [[0.0, "#fff0a0"], [0.25, "#ff9a20"], [0.6, "#d83c08"], [1.0, "#5a1002"]]
+texture = "Data\\Psys\\Tex\\OAGRocketPuff3.oagmask"
+
+[[emitter]]
+name = "sparks"
+duration = 2
+per-emission = [14, 18]
+lifetime = [26, 10]
+speed = [3.0, 2.2]
+spread = 85
+drag = 0.93
+gravity = -0.012
+live-cap = 48
+size = [[0.0, 0.4], [1.0, 0.1]]
+alpha = [[0.0, 1.0], [0.7, 0.9], [1.0, 0.0]]
+colour = [[0.0, "#fff4b0"], [0.4, "#ffa028"], [1.0, "#c82c06"]]
+
+[[emitter]]
+name = "smoke"
+duration = 6
+per-emission = [2, 3]
+lifetime = [95, 25]
+speed = [0.44, 0.32]
+spread = 70
+drag = 0.95
+gravity = 0.0012
+live-cap = 40
+blend = "alpha-over"
+size = [[0.0, 1.8], [0.2, 4.2], [1.0, 6.5]]
+alpha = [[0.0, 0.0], [0.1, 0.6], [0.5, 0.4], [1.0, 0.0]]
+colour = [[0.0, "#8a6040"], [0.15, "#5a5a5e"], [1.0, "#48484e"]]
+texture = "Data\\Psys\\Tex\\OAGRocketPuff4.oagmask"

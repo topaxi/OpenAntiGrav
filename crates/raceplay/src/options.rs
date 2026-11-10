@@ -105,6 +105,10 @@ pub struct Options {
     /// The player's `graphics.own_shield`: whether a title offered it (`oag_title::Looks::own_shield`:
     /// Pulse and Pure) draws our own HD/Fury-style shield in place of the disc's. Off by default.
     pub own_shield: bool,
+    /// The player's `graphics.own_rockets`: whether a title offered it (`oag_title::Looks::own_rockets`:
+    /// Pulse and Pure) draws our own rocket effect in place of the disc's flare and blasts. Off by
+    /// default. See `load::own_rockets`.
+    pub own_rockets: bool,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///

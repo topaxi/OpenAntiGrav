@@ -1,0 +1,108 @@
+# Our own rocket in flight, played by `graphics.own_rockets` on Pulse and Pure in place of the
+# disc's rocket flare (docs/rendering/own-rockets.md). It rides the rocket: the emitter's axis is
+# the rocket's velocity, so a negative speed throws a particle back along the flight line, and a
+# particle stays in the world where it was put, which strings the flame and the smoke out behind.
+# Units: ticks (60 a second), world units per tick, degrees. Format: docs/formats/mod-effect.md.
+# A texture is a fallback-layer entry of ours (scripts/gen-fallback-rocket-art.py).
+
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/effect.tosd", version = "1.0.0" }
+
+# The launch flash: one bright bloom at the muzzle, once.
+[[emitter]]
+name = "launch-flash"
+duration = 1
+per-emission = 1
+lifetime = [8, 0]
+size = [[0.0, 1.5], [0.3, 6.0], [1.0, 7.5]]
+alpha = [[0.0, 1.0], [0.3, 0.7], [1.0, 0.0]]
+colour = [[0.0, "#fff6d8"], [0.4, "#ffb040"], [1.0, "#ff5a10"]]
+
+# Launch sparks, thrown ahead with the rocket.
+[[emitter]]
+name = "launch-sparks"
+duration = 1
+per-emission = [8, 12]
+lifetime = [14, 5]
+speed = [2.6, 1.6]
+spread = 34
+drag = 0.88
+gravity = -0.006
+size = [[0.0, 0.3], [1.0, 0.1]]
+alpha = [[0.0, 1.0], [0.6, 0.9], [1.0, 0.0]]
+colour = [[0.0, "#fff0a0"], [0.5, "#ff9a28"], [1.0, "#d83a08"]]
+
+# The hot core at the nozzle.
+[[emitter]]
+name = "core"
+duration = 1
+looping = true
+per-emission = 1
+lifetime = [2, 0]
+live-cap = 4
+size = [[0.0, 2.2], [1.0, 1.5]]
+alpha = [[0.0, 1.0], [1.0, 0.6]]
+colour = [[0.0, "#fffbe8"], [1.0, "#ffd070"]]
+
+# A wide orange halo around the nozzle, so the rocket reads from far behind it.
+[[emitter]]
+name = "halo"
+duration = 1
+looping = true
+per-emission = 1
+lifetime = [4, 0]
+live-cap = 8
+size = [[0.0, 3.8], [1.0, 2.2]]
+alpha = [[0.0, 0.6], [1.0, 0.0]]
+colour = [[0.0, "#ffb850"], [1.0, "#ff6a18"]]
+
+# The exhaust flame: a tail of shrinking blobs, white-yellow to orange to red.
+[[emitter]]
+name = "flame"
+duration = 1
+looping = true
+per-emission = 4
+lifetime = [10, 3]
+speed = [-1.85, 1.85]
+spread = 3
+drag = 0.6
+live-cap = 56
+size = [[0.0, 1.4], [1.0, 0.35]]
+alpha = [[0.0, 0.95], [0.5, 0.75], [1.0, 0.0]]
+colour = [[0.0, "#fff2b0"], [0.3, "#ffa030"], [1.0, "#c81e04"]]
+
+# The smoke trail: lumpy puffs laid along the flight line that swell and thin out. They
+# start warm, lit by the flame, and cool to a pale grey. Two emitters, so two puff shapes
+# alternate along the trail.
+[[emitter]]
+name = "smoke"
+duration = 1
+looping = true
+per-emission = 1
+lifetime = [60, 10]
+speed = [-1.85, 1.85]
+spread = 4
+drag = 0.5
+gravity = 0.0008
+live-cap = 86
+blend = "alpha-over"
+size = [[0.0, 0.5], [0.12, 1.1], [1.0, 2.3]]
+alpha = [[0.0, 0.0], [0.05, 0.7], [0.45, 0.45], [1.0, 0.0]]
+colour = [[0.0, "#ffc070"], [0.07, "#ece4d8"], [0.5, "#ccc8cc"], [1.0, "#a8a8b4"]]
+texture = "Data\\Psys\\Tex\\OAGRocketPuff1.oagmask"
+
+[[emitter]]
+name = "smoke-b"
+duration = 1
+looping = true
+per-emission = 1
+lifetime = [60, 10]
+speed = [-1.85, 1.85]
+spread = 4
+drag = 0.5
+gravity = 0.0008
+live-cap = 86
+blend = "alpha-over"
+size = [[0.0, 0.5], [0.12, 1.1], [1.0, 2.3]]
+alpha = [[0.0, 0.0], [0.05, 0.7], [0.45, 0.45], [1.0, 0.0]]
+colour = [[0.0, "#ffc070"], [0.07, "#ece4d8"], [0.5, "#ccc8cc"], [1.0, "#a8a8b4"]]
+texture = "Data\\Psys\\Tex\\OAGRocketPuff2.oagmask"
