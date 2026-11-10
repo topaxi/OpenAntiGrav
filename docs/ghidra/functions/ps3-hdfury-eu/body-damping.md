@@ -113,7 +113,7 @@ between the two runs' first thrust step.
   `-0.19` at tick 185, where without it it drifts from `-0.91` to `+0.73`; the replay's largest
   speed error over the capture falls from `3.88` to `1.25` units/s. So Pulse has it live as well
   as on paper (confidence 88). It is not flown there yet: with it on, the committed state hashes
-  move and ten disc-backed tests that ride a Pulse trajectory change verdict (the AI's clean-lap
+  move and eight disc-backed tests that ride a Pulse trajectory change verdict (the AI's clean-lap
   gate on one circuit at Phantom, its speed plan, the original Autopilot's rescue count on one
   circuit, the plasma's tick timing among them), each of which has to be re-measured rather
   than re-pinned. `oag_physics::laws::Laws::PULSE` carries `BodyDamping::NONE` until then.
