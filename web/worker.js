@@ -1,6 +1,11 @@
 // One thread of the game: the module's own code on the page's shared memory,
 // running the closure `id` names (`oag_thread::web`). Started by
 // `oagSpawnWorker` in main.js. See docs/tools/web.md, "Threads".
+// The stack a worker runs on, as large as the page's (`stack_size` in
+// scripts/build-web.sh): wasm-bindgen's own is 1 MiB, and an overflow on a worker
+// corrupts memory without trapping. See docs/tools/web.md, "The page's stack".
+const STACK_BYTES = 8 * 1024 * 1024;
+
 self.onmessage = async ({ data: { glue, module, memory, id, file } }) => {
   // The disc reader for this thread: FileReaderSync, which a worker may use
   // and which hands back the bytes as they are (web_image.rs reads it).
@@ -23,7 +28,8 @@ self.onmessage = async ({ data: { glue, module, memory, id, file } }) => {
   let exports, glueModule;
   try {
     glueModule = await import(glue);
-    exports = await glueModule.default({ module_or_path: module, memory });
+    exports = await glueModule.default({
+      module_or_path: module, memory, thread_stack_size: STACK_BYTES });
     glueModule.oag_worker_entry(id);
   } catch (error) {
     // A trap or a failed start-up on a worker: an async handler's rejection

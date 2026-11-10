@@ -58,20 +58,55 @@ fn an_error_keeps_its_kind_under_more_context() {
         .context(Failure::new(Kind::NoAdapter, "no WebGPU adapter"))
         .context("starting the web build");
     let error = tagged.unwrap_err();
-    assert_eq!(kind_of(&error), Kind::NoAdapter);
+    assert_eq!(classify(&error), Kind::NoAdapter);
     assert!(format!("{error:#}").contains("requestAdapter resolved null"));
-    assert_eq!(kind_of(&anyhow::anyhow!("anything else")), Kind::Startup);
+    assert_eq!(classify(&anyhow::anyhow!("anything else")), Kind::Startup);
+}
+
+fn disc(error: oag_disc::Error) -> anyhow::Error {
+    anyhow::Error::new(error).context("opening the archives in /web/image.iso")
 }
 
 #[test]
-fn a_cut_short_image_is_unreadable_and_a_foreign_one_unsupported() {
-    let cut = anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))
-        .context("reading sector 40");
-    assert_eq!(disc_error(&cut), Kind::DiscUnreadable);
-    assert_eq!(
-        disc_error(&anyhow::anyhow!("not a recognised image")),
-        Kind::DiscUnsupported
-    );
+fn a_file_that_is_no_disc_image_is_unsupported() {
+    for error in [
+        oag_disc::Error::NoPrimaryVolumeDescriptor { searched: 64 },
+        oag_disc::Error::UnknownContainer {
+            path: "x.iso".into(),
+        },
+    ] {
+        assert_eq!(classify(&disc(error)), Kind::DiscUnsupported);
+    }
+    let no_game = anyhow::Error::new(oag_assets::Error::NoArchive {
+        looked_in: "/web/x.iso".into(),
+        platform: "unknown".into(),
+        looked_for: vec!["Data.wad".into()],
+    })
+    .context("opening the archives in /web/x.iso");
+    assert_eq!(classify(&no_game), Kind::DiscUnsupported);
+}
+
+#[test]
+fn an_image_cut_short_or_damaged_is_unreadable() {
+    for error in [
+        oag_disc::Error::SectorOutOfRange {
+            sector: 90,
+            total: 40,
+        },
+        oag_disc::Error::MalformedFilesystem {
+            sector: 20,
+            reason: "bad record".into(),
+        },
+        oag_disc::Error::BareIo(std::io::Error::from(std::io::ErrorKind::UnexpectedEof)),
+    ] {
+        assert_eq!(classify(&disc(error)), Kind::DiscUnreadable);
+    }
+    // The same through `oag-assets`, which wraps the disc's error.
+    let wrapped = anyhow::Error::new(oag_assets::Error::from(oag_disc::Error::SectorOutOfRange {
+        sector: 90,
+        total: 40,
+    }));
+    assert_eq!(classify(&wrapped), Kind::DiscUnreadable);
 }
 
 /// The `KINDS` rows of `web/fault.js`: lines of the form `  "tag": {`.

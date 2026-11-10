@@ -71,7 +71,7 @@ pub fn inspect(
     let path = mount_image(&name, &image)?;
     let probed = probe(std::path::Path::new(&path), key.as_deref()).map_err(|why| {
         let why = anyhow::Error::from(why);
-        rejection(&why, oag_game::web_fault::disc_error(&why))
+        rejection(&why, oag_game::web_fault::classify(&why))
     })?;
     let (state, key_hex) = match &probed.check {
         KeyCheck::NotNeeded => ("ready", None),
@@ -147,7 +147,7 @@ pub fn start(
                 let why = anyhow::Error::from(why);
                 return js_sys::Promise::reject(&rejection(
                     &why,
-                    oag_game::web_fault::disc_error(&why),
+                    oag_game::web_fault::classify(&why),
                 ));
             }
         }
@@ -159,7 +159,7 @@ pub fn start(
         };
         started
             .map(|()| wasm_bindgen::JsValue::UNDEFINED)
-            .map_err(|why| rejection(&why, oag_game::web_fault::kind_of(&why)))
+            .map_err(|why| rejection(&why, oag_game::web_fault::classify(&why)))
     })
 }
 
@@ -198,8 +198,8 @@ mod web_log {
         fn flush(&self) {}
     }
 
-    /// Installs the console logger and a panic hook that logs through it and puts
-    /// the panic on the page.
+    /// Installs the console logger and a panic hook that puts the panic on the
+    /// page.
     pub(super) fn install(ours: Option<LevelFilter>) {
         let ours = ours.unwrap_or(LevelFilter::Info);
         if log::set_logger(Box::leak(Box::new(Console { ours }))).is_ok() {
@@ -207,8 +207,11 @@ mod web_log {
         }
         std::panic::set_hook(Box::new(|info| {
             let text = format!("panic: {info}");
-            web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&text));
-            crate::gpu::web::fatal(oag_game::web_fault::Kind::Panic, &text);
+            // The page's report puts the text on the console once; a page
+            // that is not ours has no report, so the hook does.
+            if !crate::gpu::web::fatal(oag_game::web_fault::Kind::Panic, &text) {
+                web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&text));
+            }
         }));
     }
 }
@@ -216,9 +219,12 @@ mod web_log {
 /// Raises one failure the page reports, on demand, to look at its message in a
 /// browser. Only in a module built with `OAG_WEB_FAULT_TEST=1`
 /// (`scripts/build-web.sh`): `panic`, `trap` (an `unreachable`), `stack` (the
-/// real overflow of the page's stack), `gpu-validation` (an invalid buffer on
-/// the live device), and `gpu-out-of-memory`, `gpu-internal`, `gpu-lost`
-/// (the error handed to the callbacks the browser's would reach).
+/// real overflow of the page's stack), `recursion` (the engine's stack),
+/// `worker-stack` (the overflow on a Web Worker), `memory` (the module's whole 4 GiB
+/// reserved, then one allocation more), `worker-panic` and `worker-trap` (the
+/// same on a Web Worker), `gpu-validation` (an invalid buffer on the live
+/// device), and `gpu-out-of-memory`, `gpu-internal`, `gpu-lost` (the error
+/// handed to the callbacks the browser's would reach).
 #[cfg(feature = "fault-test")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn fault_test(what: &str) {
@@ -228,19 +234,30 @@ pub fn fault_test(what: &str) {
         Box::new(std::fmt::Error)
     }
 
+    /// Never returns: each call keeps `N` bytes live on the module's own stack
+    /// (the linear-memory one `-zstack-size` sets) and calls itself again.
     #[allow(unconditional_recursion)]
-    fn recurse(depth: u64) -> u64 {
-        let pad = [depth as u8; 512];
+    fn recurse<const N: usize>(depth: u64) -> u64 {
+        let pad = [depth as u8; N];
         std::hint::black_box(&pad);
-        recurse(depth + 1) + u64::from(pad[0])
+        recurse::<N>(depth + 1) + u64::from(pad[0])
     }
 
     match what {
         "panic" => panic!("fault test: a deliberate panic"),
         "trap" => std::process::abort(),
+        // 64 KiB a frame: the module's own stack runs out long before the
+        // engine's, as the boot's did.
         "stack" => {
-            std::hint::black_box(recurse(std::hint::black_box(0)));
+            std::hint::black_box(recurse::<65536>(std::hint::black_box(0)));
         }
+        // 64 bytes a frame: the engine's call stack runs out first.
+        "recursion" => {
+            std::hint::black_box(recurse::<64>(std::hint::black_box(0)));
+        }
+        "worker-stack" => std::mem::forget(oag_thread::Task::spawn("fault-test", || {
+            std::hint::black_box(recurse::<65536>(std::hint::black_box(0)));
+        })),
         "gpu-validation" => page::TEST_DEVICE.with_borrow(|device| {
             if let Some(device) = device {
                 let _ = device.create_buffer(&wgpu::BufferDescriptor {
@@ -251,6 +268,22 @@ pub fn fault_test(what: &str) {
                 });
             }
         }),
+        "memory" => {
+            // Reserves 256 MiB at a time, never touched, until the 4 GiB the
+            // module may have is spoken for: the allocation that then fails
+            // aborts the module.
+            let mut held = Vec::new();
+            loop {
+                held.push(Vec::<u8>::with_capacity(256 << 20));
+                std::hint::black_box(&held);
+            }
+        }
+        "worker-panic" => std::mem::forget(oag_thread::Task::spawn("fault-test", || {
+            panic!("fault test: a deliberate panic on a worker");
+        })),
+        "worker-trap" => {
+            std::mem::forget(oag_thread::Task::spawn("fault-test", || std::process::abort()));
+        }
         "gpu-out-of-memory" => {
             page::uncaptured_error(&wgpu::Error::OutOfMemory { source: source() });
         }

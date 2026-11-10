@@ -10,7 +10,11 @@
 // hook), and a worker through a message `main.js` forwards. Every `kind` the
 // module can send has a row in KINDS (`crates/game/tests/web_fault_kinds.rs`).
 
-const GLUE_HASH = (/\/pkg\/([0-9a-f]{16})\//.exec(import.meta.url) ?? [])[1];
+// The content hash of the module the page loaded (`pkg/<hash>/`), for a report.
+let buildHash;
+export function setBuild(glueUrl) {
+  buildHash = (/\/pkg\/([0-9a-f]{16})\//.exec(glueUrl) ?? [])[1];
+}
 
 const REPO = "https://github.com/topaxi/OpenAntiGrav";
 const RELOAD = "Reload the page and pick the disc image again.";
@@ -178,8 +182,12 @@ const state = {
 const MEMORY_CEILING = 4096;
 const workers = new Set();
 
+// A trap, or the engine's own stack or memory limit (Chromium's RangeError,
+// Firefox's InternalError "too much recursion"): either way the module's state
+// is not to be trusted.
 const isTrap = (error) => error instanceof WebAssembly.RuntimeError
-  || (error instanceof RangeError && /call stack|out of memory/i.test(error.message));
+  || ((error instanceof RangeError || error?.name === "InternalError")
+    && /call stack|too much recursion|out of memory/i.test(error.message));
 
 // Wraps the instance's exports so that once the module has trapped, no later
 // callback (a frame, a key press, a resize, a promise) can enter it. After a
@@ -238,12 +246,14 @@ function stop() {
 function died(error) {
   if (state.dead) return;
   stop();
-  // A stack overflow and a memory limit both look like an out-of-bounds trap
-  // or an `unreachable` after an allocation failure: near the ceiling it is
-  // memory, whatever the trap said.
+  // A failed allocation aborts the module (an `unreachable`) and says nothing
+  // else: it is memory when the stack names the allocator's failure (a build
+  // with function names) or the module sits near its ceiling, since the
+  // request that failed is as large as what was left.
   const used = memoryMiB();
-  const nearCeiling = used !== null && used >= MEMORY_CEILING * 0.97;
-  report(nearCeiling ? "out-of-memory" : "trap", `${error.name}: ${error.message}\n${error.stack ?? ""}`);
+  const nearCeiling = used !== null && used >= MEMORY_CEILING * 0.9;
+  const failedAlloc = /handle_alloc_error|rust_oom/.test(error.stack ?? "");
+  report(nearCeiling || failedAlloc ? "out-of-memory" : "trap", `${error.name}: ${error.message}\n${error.stack ?? ""}`);
 }
 
 const el = (tag, text, className) => {
@@ -287,7 +297,7 @@ function detailsText(kind, detail) {
   return [
     "OpenAntiGrav web error report",
     `kind: ${kind}`,
-    `build: ${GLUE_HASH ?? "unknown (not a hashed build)"}`,
+    `build: ${buildHash ?? "unknown (not a hashed build)"}`,
     `page: ${location.origin}${location.pathname}`,
     `browser: ${navigator.userAgent}`,
     `cross-origin isolated: ${window.crossOriginIsolated}`,
@@ -330,7 +340,7 @@ function report(kind, detail, fatal) {
   if (fatal !== undefined) row.fatal = fatal;
   state.shown = true;
   installStyle();
-  console.error(`oag: ${id}: ${String(detail ?? "").split("\n")[0]}`);
+  console.error(`oag: ${id}: ${String(detail ?? "").split("\n").slice(0, 12).join("\n")}`);
   const text = detailsText(id, detail);
   window.oagLastFault = { kind: id, fatal: row.fatal, text };
 
@@ -468,6 +478,7 @@ export function kindOfFailure(error) {
   const message = String(error?.message ?? error);
   if (error instanceof WebAssembly.CompileError || error instanceof WebAssembly.LinkError) return "wasm-unsupported";
   if (error instanceof RangeError && /memory/i.test(message)) return "wasm-memory";
+  if (/dynamically imported module|module script failed/i.test(message)) return "module-load";
   if (name === "TypeError" && /fetch|network|load failed/i.test(message)) return "module-load";
   if (/failed to fetch Wasm/i.test(message)) return "module-load";
   return "startup";

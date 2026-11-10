@@ -2,7 +2,7 @@
 // the game. Nothing is sent anywhere. See docs/tools/web.md.
 // Reporting every way the game can fail, and stopping the module after a trap
 // (fault.js). First, so its guard is in place before the module loads.
-import { watchWorker, kindOfFailure, failureText, preflight } from "./fault.js";
+import { setBuild, watchWorker, kindOfFailure, failureText, preflight } from "./fault.js";
 // Sound: the AudioContext and its worklet (audio.js).
 import "./audio.js";
 // Movies: the WebCodecs decoder the module feeds (movie.js).
@@ -11,16 +11,22 @@ import "./movie.js";
 // The same glue again, for the workers `oagSpawnWorker` starts. build-web.sh
 // rewrites both names to the content-hashed directory.
 const GLUE = new URL("./pkg/oag_web.js", import.meta.url).href;
+setBuild(GLUE);
 
 // The module's glue, imported here and not statically so that a fetch that
 // fails (offline, a deploy half way) is a message and not a picker that does
 // nothing.
 let init, inspect, start;
 try {
-  ({ default: init, inspect, start } = await import(GLUE));
+  const glue = await import(GLUE);
+  ({ default: init, inspect, start } = glue);
+  // Only a module built with OAG_WEB_FAULT_TEST=1 has the hook that raises each
+  // failure on demand (scripts/build-web.sh).
+  window.oagFaultTest = glue.fault_test;
 } catch (error) {
   window.oagReport(kindOfFailure(error), failureText(error));
-  throw error;
+  // Nothing after this can run without the module: wait here, quietly.
+  await new Promise(() => {});
 }
 
 const picker = document.getElementById("picker");

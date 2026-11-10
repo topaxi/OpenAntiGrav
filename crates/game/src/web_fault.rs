@@ -113,29 +113,58 @@ impl fmt::Display for Failure {
 
 impl std::error::Error for Failure {}
 
-/// The kind `error` was tagged with, or [`Kind::Startup`].
+/// The kind of a failure to open or read a disc image, read off the typed
+/// errors of `oag-disc` and `oag-assets`; `None` for an error that is not about
+/// the image. A file that read and is no disc the game plays is
+/// [`Kind::DiscUnsupported`]; one that is cut short or damaged, or whose
+/// reads failed, is [`Kind::DiscUnreadable`].
 #[must_use]
-pub fn kind_of(error: &anyhow::Error) -> Kind {
-    error.downcast_ref::<Failure>().map_or(Kind::Startup, |f| f.kind)
+pub fn disc_kind(error: &anyhow::Error) -> Option<Kind> {
+    use oag_assets::Error as Assets;
+    use oag_disc::Error as Disc;
+
+    fn of_disc(error: &Disc) -> Kind {
+        match error {
+            Disc::Io { .. }
+            | Disc::BareIo(_)
+            | Disc::Chd(_)
+            | Disc::MalformedFilesystem { .. }
+            | Disc::SectorOutOfRange { .. }
+            | Disc::TooDeep { .. } => Kind::DiscUnreadable,
+            _ => Kind::DiscUnsupported,
+        }
+    }
+
+    error.chain().find_map(|cause| {
+        if let Some(disc) = cause.downcast_ref::<Disc>() {
+            return Some(of_disc(disc));
+        }
+        match cause.downcast_ref::<Assets>()? {
+            Assets::Disc(disc) => Some(of_disc(disc)),
+            Assets::Io(_)
+            | Assets::BadDirectory { .. }
+            | Assets::BadPsarcDirectory { .. }
+            | Assets::BadBlob { .. }
+            | Assets::BadSparse { .. } => Some(Kind::DiscUnreadable),
+            Assets::NoArchive { .. }
+            | Assets::WrongTitle { .. }
+            | Assets::EncryptedDisc { .. }
+            | Assets::BadSpec(_)
+            | Assets::NotOnDisc { .. } => Some(Kind::DiscUnsupported),
+            _ => None,
+        }
+    })
 }
 
-/// Whether `error` is a disc image that is cut short or cannot be read, as
-/// against a file that read fine and is not a disc the game plays.
+/// The kind a failure of the start-up reports: the kind it was tagged with,
+/// else the disc's, else [`Kind::Startup`].
 #[must_use]
-pub fn disc_error(error: &anyhow::Error) -> Kind {
-    let short = error.chain().any(|cause| {
-        cause.downcast_ref::<std::io::Error>().is_some_and(|io| {
-            matches!(
-                io.kind(),
-                std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::NotFound
-            )
-        })
-    });
-    if short {
-        Kind::DiscUnreadable
-    } else {
-        Kind::DiscUnsupported
-    }
+pub fn classify(error: &anyhow::Error) -> Kind {
+    error
+        .downcast_ref::<Failure>()
+        .map(|failure| failure.kind)
+        .or_else(|| disc_kind(error))
+        .unwrap_or(Kind::Startup)
 }
 
 #[cfg(test)]

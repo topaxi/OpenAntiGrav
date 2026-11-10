@@ -885,10 +885,10 @@ pub(crate) mod web {
 
     /// Stops the page and shows `kind` on it, through the `oagFatal` function
     /// `web/fault.js` defines, instead of leaving a white canvas. A missing
-    /// function (a page that is not ours) is ignored: the console already has
-    /// the line.
-    pub(crate) fn fatal(kind: Kind, detail: &str) {
-        call("oagFatal", &[kind.tag().into(), detail.into()]);
+    /// function (a page that is not ours) is ignored and reported as `false`,
+    /// for a caller that must still put the line on the console.
+    pub(crate) fn fatal(kind: Kind, detail: &str) -> bool {
+        call("oagFatal", &[kind.tag().into(), detail.into()]).is_some()
     }
 
     /// Tells the page about a failure the game survives (a validation error),
@@ -1006,15 +1006,16 @@ pub(crate) mod web {
     /// What the device-lost callback does: the page shows it, unless the game
     /// destroyed the device itself.
     pub(crate) fn device_lost(reason: wgpu::DeviceLostReason, message: &str) {
-        log::error!("web: the WebGPU device was lost ({reason:?}): {message}");
+        log::debug!("web: the WebGPU device was lost ({reason:?}): {message}");
         if let Some(kind) = web_fault::device_lost(reason) {
             fatal(kind, &format!("device lost ({reason:?}): {message}"));
         }
     }
 
     /// What the uncaptured-error callback does. A validation error is shown
-    /// once and the game runs on; the first is logged as an error and the rest
-    /// at debug; any other kind stops the page.
+    /// once and the game runs on, and only the first is logged above debug (one
+    /// bad pipeline repeats every frame); any other kind stops the page. The
+    /// page's report is the console's one error line.
     pub(crate) fn uncaptured_error(error: &wgpu::Error) {
         let kind = web_fault::gpu_error(error);
         if kind == Kind::GpuValidation {
@@ -1023,13 +1024,13 @@ pub(crate) mod web {
                 count.get()
             });
             if seen == 1 {
-                log::error!("web: WebGPU validation: {error}");
+                log::warn!("web: WebGPU validation: {error}");
             } else {
                 log::debug!("web: WebGPU validation (#{seen}): {error}");
             }
             notice(kind, &format!("{error}"));
         } else {
-            log::error!("web: WebGPU error: {error}");
+            log::debug!("web: WebGPU error: {error}");
             fatal(kind, &format!("{error}"));
         }
     }
