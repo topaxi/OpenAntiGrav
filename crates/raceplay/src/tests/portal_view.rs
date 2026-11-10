@@ -205,6 +205,47 @@ fn the_view_stands_behind_the_exit_and_looks_down_the_road() {
     );
 }
 
+/// A craft's own flight through a pair: frozen off the road's middle, its camera eases onto
+/// its seat (`crate::transit_camera`), so the view through the pair at its own progress and its
+/// exit is, on the last tick out of the world, the camera it has on the tick it is out. With
+/// the camera left on the frozen craft the two stand the craft's offset apart; with the spring
+/// left to cross the gap at the exit they stand most of the jump apart.
+#[test]
+fn a_view_through_a_transits_own_pair_ends_on_the_camera_the_craft_comes_out_with() {
+    let mut race = race(&[]);
+    let ship = &mut race.sim.world.ships[0];
+    ship.physics.body.position.z += 2.0;
+    ship.physics.body.linear_velocity = Vec3::new(30.0, 0.0, 4.0);
+    race.begin_transit(0, 40, crate::transit::Distance::Units(25.0), 0.9)
+        .expect("the player is racing on the course");
+    let transit = race.sim.world.ships[0].transit.expect("in a transit");
+    for _ in 1..40 {
+        race.tick(&PlayerInputs::none());
+    }
+    let ship = &race.sim.world.ships[0];
+    assert!(ship.transit.is_some(), "the last tick out of the world");
+    let request = crate::extensions::PortalRequest {
+        entrance: ship.standing.progress.expect("a fix"),
+        exit: Some(crate::transit::Exit {
+            to: transit.to as usize,
+            route: transit.route,
+        }),
+        radius: 8.0,
+        update: ViewUpdate::Continuous,
+        generation: 0,
+    };
+    let projection = race.projection(1.0, 2000.0, Fov::AUTHORED);
+    let shot = race.portal_shot(&request, projection).expect("in the view");
+    let through = shot.view.inverse();
+    race.tick(&PlayerInputs::none());
+    assert_eq!(race.sim.world.ships[0].transit, None, "out");
+    let out = race.view().inverse();
+    let apart = through.w_axis.truncate().distance(out.w_axis.truncate());
+    assert!(apart < 0.25, "the eyes stand {apart} apart");
+    let turned = through.z_axis.truncate().distance(out.z_axis.truncate());
+    assert!(turned < 0.02, "the two look {turned} apart");
+}
+
 /// Acceptance: a race with a loaded shader that asks for no view renders no extra scene and
 /// builds no target.
 #[test]

@@ -317,6 +317,8 @@ pub mod tournament;
 #[cfg(feature = "view")]
 pub mod track_panel;
 pub mod transit;
+#[cfg(feature = "view")]
+mod transit_camera;
 mod view;
 #[cfg(feature = "view")]
 pub mod viewer;

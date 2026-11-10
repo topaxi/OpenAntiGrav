@@ -18,6 +18,9 @@ struct ModInput {
     colour: vec4<f32>,
     // Seconds on the race's world clock.
     time: f32,
+    // How far short of this tick the frame is drawn, in ticks: -1..0, and 0 on the tick itself.
+    // A scalar a module steps once a tick reads smoothly as `value + rate * between`.
+    between: f32,
 };
 
 struct ModFrame {
@@ -119,7 +122,7 @@ fn vs_fill(@builtin(vertex_index) index: u32) -> Varying {
 @fragment
 fn fs_main(in: Varying) -> @location(0) vec4<f32> {
     let screen_uv = in.screen.xy / in.screen.w * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5);
-    let shaded = mod_fragment(ModInput(in.uv, screen_uv, in.world, in.colour, oag_frame.time));
+    let shaded = mod_fragment(ModInput(in.uv, screen_uv, in.world, in.colour, oag_frame.time, oag_frame.between));
     let rgb = gamma_to_target(clamp(shaded.rgb, vec3<f32>(0.0), vec3<f32>(1.0)), linear_out);
     return vec4<f32>(target_out(rgb), shaded.a);
 }

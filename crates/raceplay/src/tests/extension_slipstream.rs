@@ -458,7 +458,8 @@ fn the_real_module_draws_each_quality_as_specified_and_plays_the_same_race() {
     };
     assert!(kinds(&medium).len() >= 24 && kinds(&medium).iter().all(|u| *u == ViewUpdate::Once));
     assert!(kinds(&high).len() >= 24 && kinds(&high).iter().all(|u| *u == ViewUpdate::Continuous));
-    // The same generation every tick, so a held snapshot is taken once per portal.
+    // Two generations, so a held snapshot is taken twice per portal: as it opens, and for the
+    // far end of the craft's tunnel once its camera is seated.
     let generations: std::collections::BTreeSet<u8> = views(&medium)
         .iter()
         .filter_map(|c| match c {
@@ -466,7 +467,7 @@ fn the_real_module_draws_each_quality_as_specified_and_plays_the_same_race() {
             _ => None,
         })
         .collect();
-    assert_eq!(generations.len(), 1);
+    assert_eq!(generations.len(), 2);
     assert_eq!(
         rest(&low),
         rest(&medium),

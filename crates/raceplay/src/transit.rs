@@ -207,7 +207,7 @@ impl Race {
     }
 
     /// Where `exit` is: the ring's point, or the route's point that stands for it.
-    fn exit_position(&self, exit: Exit) -> Option<Vec3> {
+    pub(crate) fn exit_position(&self, exit: Exit) -> Option<Vec3> {
         let course = self.sim.course.as_ref()?;
         match usize::from(exit.route).checked_sub(1) {
             Some(route) => course.route_point(route, exit.to),
@@ -271,8 +271,8 @@ impl Race {
 
     /// Puts slot `slot`'s craft at `exit`, a course point forward of it and less than a lap
     /// on ([`Self::exit_ahead`] gives one), at the width midpoint facing
-    /// down the track (the reset's own placement, [`crate::breadcrumbs::relocate`]),
-    /// moving at `speed`. The ground between counts as driven: the lap counters credit a
+    /// down the track at the height it flies at (the reset's placement without its drop,
+    /// [`crate::breadcrumbs::emerge`]), moving at `speed`. The ground between counts as driven: the lap counters credit a
     /// crossing of the line in it now ([`oag_race::Standing::jumped`],
     /// [`oag_race::RaceState::jumped`]), a finish included. Everything a race keys on where
     /// the craft is goes with it: the driver's index, the dwells, the pad sweep and the
@@ -287,7 +287,7 @@ impl Race {
         let Some(target) = self.exit_position(exit) else {
             return false;
         };
-        let Some(relocation) = crate::breadcrumbs::relocate(&self.sim.spline, target, speed) else {
+        let Some(relocation) = crate::breadcrumbs::emerge(&self.sim.spline, target, speed) else {
             return false;
         };
         // The stamp a crossing driven in this tick's step gets: the lap counters run

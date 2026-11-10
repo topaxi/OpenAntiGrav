@@ -46,6 +46,11 @@ pub struct RaceView {
     /// `tests::cycling_the_camera_changes_no_simulation_state`.
     pub(super) camera_view: oag_display::display::CameraView,
     pub(super) camera: Chase,
+    /// The followed craft's moves along the circuit ([`Race::move_to`]) as of the camera's
+    /// last step: a change seats the camera behind the craft where it came out.
+    pub(super) camera_jumps: u32,
+    /// Where each craft in a transit is followed from. See [`super::transit_camera`].
+    pub(super) transit_seats: [Option<super::transit_camera::Seat>; oag_gameplay::MAX_SHIPS],
     /// The previous tick's draw poses and the alpha a draw blends them by.
     /// See [`super::between_ticks`].
     pub(super) poses: super::between_ticks::Poses,

@@ -40,12 +40,20 @@ struct ModInput {
     world: vec3<f32>,      // zero on a screen fill
     colour: vec4<f32>,     // straight alpha, gamma-authored
     time: f32,             // seconds of race time
+    between: f32,          // how far short of this tick the frame is drawn, ticks: -1..0
 }
 fn mod_texture(uv: vec2<f32>) -> vec4<f32>      // the header's PNG, opaque white with none
 fn engine_texture(uv: vec2<f32>) -> vec4<f32>   // the engine's picture for this view, gamma-authored and opaque; transparent black with none
 fn engine_texture_bound() -> bool               // whether this view has one
 fn engine_uv(world: vec3<f32>) -> vec2<f32>     // world to engine_texture, for a surface at the entrance
 ```
+
+`time` runs with the frames. A scalar a module sets is stepped once a tick, so one that moves
+(a count of ticks, a radius) is read as `param_x() + rate * input.between`, `rate` being what it
+gains a tick: `between` is the draw alpha less one, `0` on the tick itself and in a `--screenshot`,
+and the frame between two ticks then shows the value between them, as the camera and the crafts
+are drawn (`oag_raceplay::between_ticks`). `fx/wormhole.wgsl` of `oag.slipstream` reads its tick
+count this way.
 
 Both textures sample at level 0 with a repeating linear sampler, so they may be read anywhere,
 inside an `if` too. `mod_fragment` returns straight alpha in gamma space, like every colour a mod
@@ -158,6 +166,23 @@ forward at the exit, up the spline sample's own (banking and all: the same `Race
 `16_Track` turns over between progress 1750 and 2180. What stands behind the exit's plane is clipped with an oblique
 near plane (`portal::oblique_near`, the 0..1 depth form); the frustum and the sky keep the plain
 matrix, because the swing tilts the far plane and the sky rides on the eye, behind that plane.
+
+**A craft's own transit.** A craft in a `transit` is frozen where it went in and comes out on
+the road's middle, facing down it. Its camera would be cut across that difference at the exit, and
+a view through a pair would show the exit from where the camera never stands. So while a craft is
+out of the world its chase camera eases, over 12 ticks and with its spring four times as fast
+(settled by tick 16), onto the pose the craft has on its exit
+tick carried back through the pair of frames at the craft's own lap progress and at the transit's
+exit (`oag_raceplay::transit_camera`, the player's camera and a split's seats), and on the exit
+tick it is seated behind the craft with no spring to cross the gap. A `portal-view` from
+`Craft::progress()` of the craft in the transit to the transit's exit therefore shows, by the last
+tick out of the world, the picture the camera has a tick later: measured on Pulse PSP EU
+`16_Track` (2026-11-10, exit at tick 774), the two eyes stand 0.12 units apart and look 0.0002
+apart; before the seat, 3.5 units and 17 degrees. A screen fill reads it as
+`engine_texture(input.screen_uv)` under `Continuous`, or under a `Once` taken after the camera
+has settled. Proof: `tests::portal_view::a_view_through_a_transits_own_pair_ends_on_the_camera_the_craft_comes_out_with`.
+**2048 and Omega: checked, applies, wired by the same code**: the seat reads the `Course` and the
+spline alone; a frame of each read, no test of its own.
 
 **`update`:** `ViewUpdate::Continuous` draws every frame the portal is in the view. `ViewUpdate::Once`
 draws one snapshot, the first frame it is, and again when `generation` changes. The transform,

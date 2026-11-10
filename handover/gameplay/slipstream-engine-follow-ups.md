@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-09
-summary: "slipstream, mod shaders, portal-view and route exits landed; open: mesh portal, island exit, wall occlusion, loops, a firer on a route."
+updated: 2026-11-10
+summary: "slipstream, mod shaders, portal-view, route exits, tunnel flight landed; open: mesh portal, island exit, wall occlusion, loops, a firer on a route."
 categories: [tooling, frontend]
 size: L (50)
 difficulty: medium (50)
@@ -195,6 +195,53 @@ guest as `Observation::option` (new ABI bytes, `mod-shaders.md` "A mod's quality
    Seen at the player's size on `16_Track`: window ahead for about 13 ticks with no fill, then the
    craft is gone at the entrance and the fill ramps over 10 ticks. At 500 km/h the window is on
    screen for about 0.2 s before the fill.
+
+## The flight through the tunnel (2026-11-10)
+
+A person's own flight through the portal is one move with no cut, a short tunnel (maintainer's
+picture, 2026-11-10: the border stretches out with the craft's speed, the exit stays the same size
+but looks further off, then is closed on and flown through like a portal in Portal 2). Going
+through the entrance draws the portal's border out into the wall; the exit stands at the far end
+at a held size, the road there at its own size, the wall's rings crowding towards it; then it
+comes up at the craft's speed and the craft flies out through it; the tunnel is gone 24 ticks
+after (`fx/wormhole.wgsl`, the guest's `Flight`; README, "What you see of your own flight"). The
+field of view rides one curve (24 degrees at its widest), no step at either end. What the engine
+gained for it, all title-blind:
+
+- **A transit comes out at flying height** (`breadcrumbs::emerge`: the reset's placement without
+  its 5 unit drop). Before, the craft fell for about 15 ticks after every exit. A simulation
+  change, for modded races only: a vanilla race has no transit.
+- **The camera** is seated behind the craft on the exit tick (`RaceView::camera_jumps`; the spring
+  used to sweep it across the jump for about 15 ticks) and, while the craft is out of the world,
+  eases onto the exit's framing carried back through the pair (`transit_camera`), so a view
+  through the craft's own pair ends on the camera's own picture (`mod-shaders.md`, "A craft's own
+  transit": 0.12 units and 0.0002 apart on Pulse `16_Track`, from 3.5 units and 17 degrees).
+- **`fov-offset` is drawn between ticks** for the player's view, and a shader has
+  `input.between` for a scalar that moves.
+
+Looked at frame by frame at 1280x720 on Pulse PSP EU `16_Track` (High and Low), HD, Omega and
+2048, autopilot, fire at tick 700: entrance 714, exit 774 on Pulse. Open from it, each small:
+
+1. **Nobody has watched it move.** Every judgement is off stills a tick or a few apart; how fast
+   the tunnel comes up (`WH_IN`), the held size of the far end (`WH_HOLD`), the rings' spacing
+   (`WH_RINGS`: 12 units is 0.19 of a ring a frame at 490 km/h, and strobes above about 1,300)
+   and the light at the exit (`WH_FLASH`) want a pair of eyes at 60 Hz and above.
+2. **The craft is not in the far end's picture** (it is out of the world until the exit tick), so
+   it appears in the light at the middle of the far end. Drawing it in the secondary view on the
+   last ticks is an engine piece.
+3. **The far end's picture has no post chain** (no bloom, no shadows, 960x540), so on HD it is a
+   little flatter than the frame after it.
+4. **Low and the second seat of a split** have light at the far end and go from it to the road on
+   the exit tick: a whiteout, not a match. The shader cannot tell a view with no picture from one
+   about to lose it after the exit, so the light has one strength for both.
+5. **Medium's far end changes picture 16 ticks in**, from the snapshot the portal opened with to
+   the one taken once the camera is seated.
+6. **The extra seats of a split fly the far rig** and get the same seat; not looked at.
+7. **The sounds were not touched**: the three synthesised placeholders still start and stop on
+   the entrance and the exit, with no rise into the tunnel.
+8. `drive_ground_truth::a_race_box_race_runs_the_simulation_mods_only_with_the_extensions_feature`
+   fails on this branch under the quick profile with `thread 'race-build' has overflowed its
+   stack`, with and without this change (checked by reverting the engine diff).
 
 ## SVG icons (lane svg-assets, 2026-11-04)
 

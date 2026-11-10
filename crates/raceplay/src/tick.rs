@@ -579,10 +579,19 @@ impl Race {
 
         #[cfg(feature = "view")]
         if self.draws() {
+            self.advance_transit_seats();
             let target = self.camera_target();
-            self.view
-                .camera
-                .advance(target, &self.view.chase_params, self.sim.dt);
+            // A craft put further round (`Race::move_to`) takes its camera with it, settled:
+            // the spring would sweep the eye across the gap.
+            let jumps = self.sim.jumps[self.player_slot()];
+            if std::mem::replace(&mut self.view.camera_jumps, jumps) == jumps {
+                let step = self.camera_step(self.player_slot());
+                self.view
+                    .camera
+                    .advance(target, &self.view.chase_params, step);
+            } else {
+                self.view.camera = Chase::snapped(target, &self.view.chase_params);
+            }
             // The split-screen views' own cameras, view-side: a no-op with one view.
             self.advance_viewpoints();
             // After the chase camera and before the eye is read: behind the end-race panels the

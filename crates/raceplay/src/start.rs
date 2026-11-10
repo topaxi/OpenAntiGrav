@@ -851,6 +851,8 @@ impl Race {
                 // with no screen. `set_camera_view` is what applies the player's.
                 camera_view,
                 camera,
+                camera_jumps: 0,
+                transit_seats: [None; oag_gameplay::MAX_SHIPS],
                 poses: Default::default(),
                 correction: [Vec3::ZERO; MAX_SHIPS],
                 correction_smoothing: true,

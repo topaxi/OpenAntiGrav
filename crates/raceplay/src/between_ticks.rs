@@ -173,6 +173,8 @@ pub(super) struct CameraPose {
     /// The two speed terms [`Race::vertical_fov`] widens the field by.
     pub(super) forward_speed: f32,
     pub(super) boost_kick: f32,
+    /// A module's `fov-offset` for the player's view, degrees.
+    pub(super) fov_offset: f32,
     key: CameraKey,
 }
 
@@ -346,6 +348,7 @@ impl Race {
                 unshaken: self.tick_view_unshaken(),
                 forward_speed: self.tick_forward_speed(),
                 boost_kick: self.view.boost_kick,
+                fov_offset: self.extension_fov_offset(self.player_slot()),
                 key: self.camera_key(),
             },
             ships: std::array::from_fn(|slot| {

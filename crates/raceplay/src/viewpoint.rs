@@ -347,7 +347,8 @@ impl Race {
         for slot in 0..MAX_SHIPS {
             let boosting = self.sim.world.ships[slot].physics.pad_timer > 0.0;
             let respawns = self.placements_of(slot);
-            let target = target_of(&self.sim.world.ships[slot]);
+            let target = self.seated(slot, target_of(&self.sim.world.ships[slot]));
+            let step = self.camera_step(slot);
             let Some(cam) = self.view.viewpoints.cams[slot].as_mut() else {
                 continue;
             };
@@ -355,7 +356,7 @@ impl Race {
                 cam.chase = Chase::snapped(target, &params);
                 cam.respawns = respawns;
             } else {
-                cam.chase.advance(target, &params, dt);
+                cam.chase.advance(target, &params, step);
             }
             if kicks {
                 cam.boost_kick = super::tick::step_boost_kick(cam.boost_kick, boosting, dt);
