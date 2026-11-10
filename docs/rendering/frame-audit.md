@@ -202,7 +202,7 @@ The change applies to every title that loads a `.vex` with embedded textures:
 `crates/render/tests/psp_texture_levels_ground_truth.rs` fails if a circuit's
 textures stop arriving as the disc's own chain.
 
-## 2. The hull's sheen (drawn, gap partly closed)
+## 2. The hull's sheen (drawn; gap closed 2026-11-10)
 
 What was ruled out: the hull's light list (it is the recovered `AmbientLight` and
 three `DirectionalLight` nodes, and the wings match to 1 %), bloom (toggling it
@@ -245,6 +245,19 @@ flaps (they are now, see `mesh-draw.md`). Re-read 2026-10-01 on `07_Track`
 second dump"): one additive redraw **is** the original's replace-then-add sum, and
 the pass is fogged to black, as the original's is. A circuit's own `*_shinemap`
 batches are drawn under the view-matrix matcap the same day.
+
+**Re-measured 2026-11-10 (`pulse-hull-sheen`): the gap is closed, and the pass was too strong on
+one circuit, not too weak.** Against today's renderer the `talon-mid2` spine box (215,160)-(265,205)
+reads `(111.2, 129.5, 119.5)` in the original and `(111.1, 129.9, 118.9)` in ours (`(104.3, 123.2,
+112.2)` without the pass); the whole craft box still differs by about 8 levels, which is the
+original's road glow around a craft at 146 km/h against ours held at rest, not the hull. On the six
+best PSP grid pairs 80 to 94 % of the hull's remaining error sits on edge pixels (a 4-neighbour step
+over 14 levels in either frame) and the flat pixels differ by 0.8 to 1.8 levels, ours the brighter.
+What was left was a law: the pass is drawn in the light the hull stands in, not white
+(`MATERIALAMBIENT` `0x72a6b7` on Metropia's grid), recovered and wired the same day -
+[mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md), "The extra pass's colour is the
+light the hull stands in". The original's sheen as a fraction of ours went from 0.57 and 0.60 to
+0.94 and 0.99 on the two Metropia pairs.
 
 ## 3. The factory roofs (fixed)
 

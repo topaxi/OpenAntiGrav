@@ -408,8 +408,12 @@ Mirrored in [`names.tsv`](names.tsv).
 | `0x0892ca04` | function | `WoPoint_Init` | 85 |
 | `0x0892cd00` | function | `WoPoint_Update` | 85 |
 
-`SceneLight_BuildLightingList` loses its `_q`: its return value is still not
-read, but the list it writes is now matched to the disc field by field.
+`SceneLight_BuildLightingList` loses its `_q`: the list it writes is matched
+to the disc field by field. Its return value is read too (2026-11-10): the
+float sum of every light's colour times its scale byte, truncated and clamped,
+which `SceneLight_Rebuild` makes the material colour of the hull's extra pass.
+Law, evidence and the Metropia numbers: [mesh-draw.md](mesh-draw.md), "The
+extra pass's colour is the light the hull stands in".
 
 ## Open
 
