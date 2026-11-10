@@ -110,6 +110,10 @@ pub(crate) fn physics_laws(laws: Option<&CraftLaws>) -> oag_physics::laws::Laws 
         wall_one_sided: laws.wall_one_sided.value,
         wall_steer_away: laws.wall_steer_away.value,
         wall_point_rate_body_local: laws.wall_point_rate_body_local.value,
+        body_damping: oag_physics::laws::BodyDamping {
+            linear: laws.body_linear_damping.value,
+            angular: laws.body_angular_damping.value,
+        },
         pitch_damping_grid: laws.code_pitch.map(|pitch| pitch.value.grid_damping),
         // Data, not a craft law: the race overwrites it from the disc's `<Collision>`.
         wall_restitution: pulse.wall_restitution,

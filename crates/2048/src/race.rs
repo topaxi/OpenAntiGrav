@@ -552,6 +552,8 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // `the_field_finishes_tower`'s whole field a lap down at 300 s (292.3 s to finish without it),
     // and the gate has no row to regenerate; the inherited air bias is held the same way.
     wall_point_rate_body_local: oag_title::pre_race::Sourced::chosen(false),
+    body_linear_damping: oag_title::pre_race::Sourced::inherited(0.01, "Wipeout HD"),
+    body_angular_damping: oag_title::pre_race::Sourced::inherited(0.01, "Wipeout HD"),
     cage_from_track_header: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
     // Not read: the view matrix is Pulse's orthonormal look-at until measured.
     chase_view_sheared: oag_title::pre_race::Sourced::inherited(false, "Pulse"),

@@ -295,7 +295,12 @@ pub fn stages<R: Raycaster + ?Sized>(
     let mag_lock = evaluated.mag_lock;
     let escape = evaluated.hover.escape;
     let before_integration = state.body.position;
-    oag_physics::integrate(&mut state.body, state.inertia_frame, dt);
+    oag_physics::integrate(
+        &mut state.body,
+        state.inertia_frame,
+        env.laws.body_damping,
+        dt,
+    );
     note("integrate", state);
     if let Some((correction, velocity)) =
         oag_physics::hover::sweep(state, &env, course.raycaster, before_integration)

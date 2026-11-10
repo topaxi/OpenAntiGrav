@@ -43,6 +43,7 @@ use oag_core::math::{Quat, Vec3};
 use crate::collide::Raycaster;
 use crate::forces::{self, Environment, Evaluated};
 use crate::hover;
+use crate::laws::BodyDamping;
 use crate::params::Handling;
 use crate::ship::{Body, InertiaFrame, MAX_DT, SUBSTEPS, ShipControls, ShipState};
 use crate::wall;
@@ -129,7 +130,14 @@ pub fn clamp_dt(measured_dt: f32) -> f32 {
 /// three sub-steps would put the error into the next sub-step's `up` axis. `sin`/`cos` of the
 /// angle would be more accurate but transcendentals resolve to the platform's libm, a
 /// portability risk (`docs/architecture/determinism.md`).
-pub fn integrate(body: &mut Body, frame: InertiaFrame, dt: f32) {
+///
+/// # The body's own damping
+///
+/// After the forces, each sub-step takes `damping` off both velocities, `v -= v * h * c`, as
+/// the original's `Body_Integrate` does with the pair of coefficients its body carries
+/// ([`BodyDamping`]). A zero coefficient skips the subtraction, so a title without it
+/// integrates bit for bit as before.
+pub fn integrate(body: &mut Body, frame: InertiaFrame, damping: BodyDamping, dt: f32) {
     // A `NaN` or infinite delta is a no-op, not a body full of `NaN`. `clamp_dt` preserves a
     // `NaN` so a broken clock is visible at the boundary; past this point it would poison the
     // snapshot with no way back to its cause.
@@ -158,7 +166,7 @@ pub fn integrate(body: &mut Body, frame: InertiaFrame, dt: f32) {
         let angular_velocity = body.angular_velocity;
 
         body.position += velocity * h;
-        body.linear_velocity = velocity + acceleration * h;
+        body.linear_velocity = damped(velocity + acceleration * h, h, damping.linear);
 
         let spin = Quat::from_xyzw(
             angular_velocity.x,
@@ -168,7 +176,20 @@ pub fn integrate(body: &mut Body, frame: InertiaFrame, dt: f32) {
         );
         let derivative = spin * body.orientation * 0.5;
         body.orientation = normalise_or_identity(body.orientation + derivative * h);
-        body.angular_velocity = angular_velocity + angular_acceleration * h;
+        body.angular_velocity = damped(
+            angular_velocity + angular_acceleration * h,
+            h,
+            damping.angular,
+        );
+    }
+}
+
+/// `v - v * h * c`, in the original's order; `v` untouched for a zero coefficient.
+fn damped(velocity: Vec3, h: f32, coefficient: f32) -> Vec3 {
+    if coefficient == 0.0 {
+        velocity
+    } else {
+        velocity - velocity * h * coefficient
     }
 }
 
@@ -247,7 +268,12 @@ pub fn step<R: Raycaster + ?Sized>(
     let mut evaluated = forces::evaluate(state, controls, handling, env, raycaster, dt);
 
     let before_integration = state.body.position;
-    integrate(&mut state.body, state.inertia_frame, dt);
+    integrate(
+        &mut state.body,
+        state.inertia_frame,
+        env.laws.body_damping,
+        dt,
+    );
 
     // **Ours, the only mechanism this crate adds rather than reproduces.** The recovered
     // contact test casts downward only, so a hull that crosses a surface between ticks stays
@@ -311,7 +337,7 @@ mod tests {
             force: Vec3::new(0.0, 3.0, 0.0),
             ..Body::default()
         };
-        integrate(&mut body, InertiaFrame::World, 3.0);
+        integrate(&mut body, InertiaFrame::World, BodyDamping::NONE, 3.0);
 
         // Three sub-steps of h = 1.0 at an acceleration of 3. Position advances by
         // the velocity the sub-step *started* with, so by 0, then 3, then 6: nine
@@ -331,7 +357,7 @@ mod tests {
             ..Body::default()
         };
         let mut after = before;
-        integrate(&mut after, InertiaFrame::World, 0.0);
+        integrate(&mut after, InertiaFrame::World, BodyDamping::NONE, 0.0);
         assert_eq!(after, before);
     }
 
@@ -342,7 +368,7 @@ mod tests {
             ..Body::default()
         };
         let mut after = before;
-        integrate(&mut after, InertiaFrame::World, -0.5);
+        integrate(&mut after, InertiaFrame::World, BodyDamping::NONE, -0.5);
         assert_eq!(after, before);
     }
 
@@ -353,7 +379,12 @@ mod tests {
             force: Vec3::new(0.0, 1.0, 0.0),
             ..Body::default()
         };
-        integrate(&mut body, InertiaFrame::World, 1.0 / 60.0);
+        integrate(
+            &mut body,
+            InertiaFrame::World,
+            BodyDamping::NONE,
+            1.0 / 60.0,
+        );
         assert_eq!(body.linear_velocity, Vec3::ZERO);
         assert!(body.position.is_finite());
     }
@@ -365,7 +396,12 @@ mod tests {
             torque: Vec3::new(0.0, 1.0, 0.0),
             ..Body::default()
         };
-        integrate(&mut body, InertiaFrame::World, 1.0 / 60.0);
+        integrate(
+            &mut body,
+            InertiaFrame::World,
+            BodyDamping::NONE,
+            1.0 / 60.0,
+        );
         assert_eq!(body.angular_velocity, Vec3::ZERO);
         assert_eq!(body.orientation, Quat::IDENTITY);
     }
@@ -377,7 +413,12 @@ mod tests {
             ..Body::default()
         };
         for _ in 0..6000 {
-            integrate(&mut body, InertiaFrame::World, 1.0 / 60.0);
+            integrate(
+                &mut body,
+                InertiaFrame::World,
+                BodyDamping::NONE,
+                1.0 / 60.0,
+            );
         }
         assert!(
             (body.orientation.length() - 1.0).abs() < 1e-4,
@@ -392,7 +433,12 @@ mod tests {
             angular_velocity: Vec3::new(0.0, 1.0, 0.0),
             ..Body::default()
         };
-        integrate(&mut body, InertiaFrame::World, 1.0 / 60.0);
+        integrate(
+            &mut body,
+            InertiaFrame::World,
+            BodyDamping::NONE,
+            1.0 / 60.0,
+        );
         assert_eq!(body.angular_velocity, Vec3::new(0.0, 1.0, 0.0));
     }
 
@@ -407,11 +453,16 @@ mod tests {
         };
 
         let mut one_frame = start;
-        integrate(&mut one_frame, InertiaFrame::World, 0.03);
+        integrate(&mut one_frame, InertiaFrame::World, BodyDamping::NONE, 0.03);
 
         let mut three_frames = start;
         for _ in 0..3 {
-            integrate(&mut three_frames, InertiaFrame::World, 0.01);
+            integrate(
+                &mut three_frames,
+                InertiaFrame::World,
+                BodyDamping::NONE,
+                0.01,
+            );
         }
 
         assert_ne!(one_frame.position, three_frames.position);

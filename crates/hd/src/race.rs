@@ -1042,6 +1042,17 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // match the geometry on 16 of 16 hits this way and miss on three with the textbook form
     // (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Confidence 85.
     wall_point_rate_body_local: oag_title::pre_race::Sourced::measured(true),
+    // `Body_Integrate` (`0x000f6870`) ends its linear update with `v -= v * dt * body+0x4bc`
+    // (`0x000f6fd8`-`0x000f6ff8`), and the body initialiser (`0x000f5878`) writes `0.01`
+    // (`0x008a92f4`) there. Live under held throttle, one step of ours without it lands
+    // `1.65e-4` to `1.77e-4` of the speed fast per frame at twenty speeds from 8 to 121 units/s,
+    // `0.01 / 60`; with it the residual is under `2e-4` units/s
+    // (`docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`). Confidence 92.
+    body_linear_damping: oag_title::pre_race::Sourced::measured(0.01),
+    // The angular twin, `w -= w * dt * body+0x4b8` (`0x000f70f8`-`0x000f7118`), written by the
+    // same store of the same `0.01`. Read, not isolated live: it is `0.2 %` of the craft's own
+    // yaw damping (same page). Confidence 85.
+    body_angular_damping: oag_title::pre_race::Sourced::measured(0.01),
     // No cage from the track header: HD's `CollisionCageFx` module (`0x0007bf40`-`0x0007d0f0`,
     // Pulse's literals) has no static caller, the track's `collisionCageEnabled` definition
     // attribute (`+0x1b7`, default `0`) is set by no HD definition, and on Chenghou Project, the
