@@ -123,6 +123,24 @@ impl NodeAnims {
         }
         out
     }
+
+    /// The live head of the table [`Self::sample_started`] builds: slot 0 (the identity) and
+    /// then one matrix per node, no further. Every slot past it holds the identity the buffer
+    /// was built with and nothing writes it, so uploading only this head at the buffer's start
+    /// leaves the GPU's table byte-for-byte what a full upload leaves, for the cost of
+    /// `model.anim_nodes.len() + 1` matrices rather than [`crate::mesh::NODE_ANIM_LIMIT`].
+    #[must_use]
+    pub fn head_started(
+        model: &Model,
+        seconds: f32,
+        started: &dyn Fn(crate::mesh::Start) -> Option<f32>,
+    ) -> Vec<[f32; 16]> {
+        let live = model.anim_nodes.len().min(crate::mesh::NODE_ANIM_LIMIT - 1);
+        let mut out = Vec::with_capacity(live + 1);
+        out.push(oag_vex::vex::IDENTITY);
+        model.sample_anim_nodes_after(seconds, started, &mut out);
+        out
+    }
 }
 
 /// Size, in bytes, of the [`NodeAnims`] uniform buffer.
@@ -183,3 +201,6 @@ impl Emissives {
 
 /// Size, in bytes, of the [`Emissives`] uniform buffer.
 pub const EMISSIVES_SIZE: u64 = std::mem::size_of::<Emissives>() as u64;
+
+#[cfg(test)]
+mod tests;
