@@ -44,7 +44,8 @@ fn effect(
             .and_then(|blob| psys::sprite::Sprite::from_mask(&blob))
             .ok_or_else(|| "missing or not an OAGMASK".to_string())
     };
-    parametric::parse(&text, &mut texture)
+    let mut shader = |name: &str| Err(format!("{name}: our rocket effects name no shader"));
+    parametric::parse(&text, &mut texture, &mut shader)
         .map(|parsed| parsed.effect)
         .map_err(|e| e.to_string())
 }
