@@ -128,6 +128,55 @@ fn a_pack_that_is_on_replaces_track_textures_with_larger_pictures_and_off_change
     );
 }
 
+const HUD_SHEET: &str = "Data\\HUD\\Textures\\PulseHUD.mip";
+
+#[test]
+#[ignore = "needs pulse-psp-eu.chd and the Pulse pack"]
+fn a_pack_that_is_on_draws_the_hud_sheet_and_fonts_at_its_own_size_and_off_changes_nothing() {
+    let Some(dir) = pack_dir() else { return };
+    let (Some(off), Some(on)) = (load(&dir, false, None), load(&dir, true, None)) else {
+        return;
+    };
+    let (off, on) = (&off.hud, &on.hud);
+
+    assert_eq!(off.sheet.scale(HUD_SHEET), [1.0, 1.0]);
+    let [sx, sy] = on.sheet.scale(HUD_SHEET);
+    assert!(sx > 1.0 && sx == sy, "the HUD sheet was drawn at {sx}x{sy}");
+    let (disc, pack) = (
+        off.sheet.get(HUD_SHEET).unwrap(),
+        on.sheet.get(HUD_SHEET).unwrap(),
+    );
+    assert_eq!(
+        (disc.width, disc.height),
+        (pack.width, pack.height),
+        "the placement stays in the disc's pixels"
+    );
+    assert_eq!(on.sheet.width as f32, off.sheet.width as f32 * sx);
+
+    for (name, disc, pack) in [
+        ("HUD", &off.font, &on.font),
+        ("small", &off.small_font, &on.small_font),
+    ] {
+        assert_eq!(disc.texel_scale, 1.0, "{name}");
+        let factor = pack.width / disc.width;
+        assert!(factor > 1, "{name} atlas is {}px wide", pack.width);
+        assert_eq!(pack.texel_scale, 1.0 / factor as f32, "{name}");
+        assert_eq!(pack.line_height, disc.line_height, "{name}: grid units");
+        for ch in ['0', 'A', 'k'] {
+            let (a, b) = (disc.cell(ch).unwrap(), pack.cell(ch).unwrap());
+            assert_eq!(
+                (b.width, b.height, b.advance),
+                (
+                    a.width * factor,
+                    a.height * factor,
+                    a.advance * factor as f32
+                ),
+                "{name} {ch:?}: the same glyph on a {factor}x atlas"
+            );
+        }
+    }
+}
+
 #[test]
 #[ignore = "needs pulse-psp-eu.chd and the Pulse pack"]
 fn a_pack_that_does_not_name_the_discs_serial_is_not_used_and_says_so() {

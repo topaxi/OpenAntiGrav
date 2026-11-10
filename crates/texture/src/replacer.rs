@@ -264,6 +264,15 @@ pub fn mip(blob: &[u8]) -> Option<Arc<Image>> {
     pack.find(&Stored::from_mip(blob).ok()?)
 }
 
+/// The active pack's picture for a `.fnt`'s glyph atlas, `None` when no pack is on, the blob has
+/// no embedded atlas (a PS2 face keeps it in the next archive entry), or the pack has nothing for
+/// it. The picture is the whole atlas: the caller scales every glyph box by its factor.
+#[must_use]
+pub fn font(blob: &[u8]) -> Option<Arc<Image>> {
+    let pack = active()?;
+    pack.find(&Stored::from_font_atlas(blob).ok()?)
+}
+
 /// [`Replacements::find`] on the active pack.
 #[must_use]
 pub fn find(texture: &Stored) -> Option<Arc<Image>> {

@@ -352,12 +352,7 @@ pub fn append(
             if let Some(placed) = sheet.get(src) {
                 frame.sprites.push(Draw::Sprite {
                     rect: marquee.bar,
-                    uv: [
-                        placed.x as f32 + uv[0],
-                        placed.y as f32 + uv[1],
-                        uv[2],
-                        uv[3],
-                    ],
+                    uv: sheet.sheet_rect(src, placed, *uv),
                     color: marquee.bar_color,
                 });
             }
