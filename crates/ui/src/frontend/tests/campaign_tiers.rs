@@ -29,11 +29,13 @@ fn patched_xml() -> String {
     )
 }
 
+/// A downloadable campaign's node, `x` and `y` in its cell steps from 1: three
+/// columns and two rows of the canvas a step, from the bias.
 fn cell(name: &str, x: f32, y: f32) -> MapEvent {
     MapEvent {
         name: name.to_string(),
-        x,
-        y,
+        x: 55.0 + 3.0 * (x - 1.0),
+        y: 25.0 + 2.0 * (y - 1.0),
         detail: "circuit / mode".to_string(),
         requires: None,
         kind: EventIcon::Race,
@@ -111,7 +113,9 @@ fn a_pointer_opens_a_tier_from_its_tile_and_launches_one_of_its_cells() {
         .draw_list()
         .iter()
         .find_map(|draw| match draw {
-            Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(*rect),
+            Draw::Fill { rect, color } if (rect[2] - 119.4).abs() < 0.1 && color[3] == 1.0 => {
+                Some(*rect)
+            }
             _ => None,
         })
         .expect("a node on the map");

@@ -123,18 +123,32 @@ pub(super) fn map_events(
             ),
             None => (None, Vec::new()),
         };
+        let tweak = |tag: &str| {
+            doc.instance(event.instance_id)
+                .and_then(|instance| instance.field(tag))
+                .and_then(oag_tables::mjolnir::Field::int)
+                .and_then(|value| i32::try_from(value).ok())
+                .unwrap_or(0)
+        };
+        let Some((col, row)) = oag_2048::campaign::tier::event_cell(
+            (x, y),
+            (tweak("M_CANVASTWEAK_X"), tweak("M_CANVASTWEAK_Y")),
+        ) else {
+            without_cell += 1;
+            continue;
+        };
         out.push(MapEvent {
             name: event.name.clone(),
             #[expect(
                 clippy::cast_precision_loss,
-                reason = "a map cell is a small integer in the file"
+                reason = "a canvas cell is under 401 across and 120 down"
             )]
-            x: x as f32,
+            x: col as f32,
             #[expect(
                 clippy::cast_precision_loss,
-                reason = "a map cell is a small integer in the file"
+                reason = "a canvas cell is under 401 across and 120 down"
             )]
-            y: y as f32,
+            y: row as f32,
             detail,
             requires,
             kind,

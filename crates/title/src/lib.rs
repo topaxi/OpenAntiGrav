@@ -786,8 +786,8 @@ pub struct AddOn {
 }
 
 /// Where a downloadable campaign's cells land on the campaign map: a node's
-/// position in canvas units is the bias, plus the offset of its grid, plus the
-/// cell's own `(x, y)` scaled. The numbers are the title's, read off its
+/// position in canvas units (the column and row of a lattice cell) is the bias,
+/// plus the offset of its grid, plus the cell's own `(x, y)` scaled. The numbers are the title's, read off its
 /// executable; this is the arithmetic alone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodeMap {
@@ -807,22 +807,6 @@ impl NodeMap {
         Some((
             self.bias.0 + dx + self.scale.0 * cell.0,
             self.bias.1 + dy + self.scale.1 * cell.1,
-        ))
-    }
-
-    /// A node's position in cell steps, with the first row and column at `1`, as
-    /// a single-player event's coordinates are: [`Self::node`] less the bias, over
-    /// the scale, plus one. `None` as [`Self::node`].
-    #[must_use]
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "canvas units are a few hundred at most"
-    )]
-    pub fn step(&self, group: usize, cell: (u32, u32)) -> Option<(f32, f32)> {
-        let (x, y) = self.node(group, cell)?;
-        Some((
-            (x - self.bias.0) as f32 / self.scale.0 as f32 + 1.0,
-            (y - self.bias.1) as f32 / self.scale.1 as f32 + 1.0,
         ))
     }
 }

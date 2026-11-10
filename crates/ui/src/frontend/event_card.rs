@@ -240,9 +240,11 @@ impl Frontend {
         self.campaign.card.is_some()
     }
 
-    /// Puts the campaign map's cursor on the event called `name`, bringing the
-    /// downloadable campaign's map on screen first when that is where it is.
-    /// `false` when there is none. A capture-harness hook (`--until card:N:NAME`).
+    /// Puts the campaign map's cursor on the event called `name` and the view
+    /// where the map opens for it, bringing the downloadable campaign's map on
+    /// screen first when that is where it is. `false` when there is none. What
+    /// a relaunch restores the cursor with, and a capture-harness hook
+    /// (`--until card:N:NAME`).
     pub fn select_campaign_event(&mut self, name: &str) -> bool {
         let named = |events: &[MapEvent]| events.iter().position(|event| event.name == name);
         if named(&self.campaign.events).is_none() {
@@ -261,7 +263,7 @@ impl Frontend {
             return false;
         };
         self.campaign.selected = index;
-        self.campaign.follow(self.space.size);
+        self.campaign.open();
         true
     }
 

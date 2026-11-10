@@ -161,11 +161,10 @@ pub struct Event {
     pub pass_objective: Option<Reference>,
     /// `M_ELITEOBJECTIVE`, as [`Event::pass_objective`] for the harder target.
     pub elite_objective: Option<Reference>,
-    /// `M_X`/`M_Y`: the event's map-grid position. **Not the campaign map's
-    /// pixel projection**: `docs/ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md`'s
-    /// scale/bias/offset tables belong to the DLC tiers' `FE3DCanvas` hotspots,
-    /// a different node set. Nothing in `SP.xml` authors how `(x, y)` becomes a
-    /// screen position, and this module does not guess one.
+    /// `M_X`/`M_Y`: the event's step on the campaign map. The title's
+    /// executable scales it to a cell of its lattice canvas
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md`,
+    /// "The law"); this module only reads the pair.
     pub x: Option<i32>,
     /// See [`Event::x`].
     pub y: Option<i32>,

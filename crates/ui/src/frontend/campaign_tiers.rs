@@ -123,8 +123,7 @@ impl Frontend {
         self.campaign.closed = incoming.closed;
         self.campaign.selected = incoming.selected;
         self.campaign.card = None;
-        self.campaign.scroll = Default::default();
-        self.campaign.follow(self.space.size);
+        self.campaign.open();
         true
     }
 

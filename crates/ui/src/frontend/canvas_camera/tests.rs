@@ -68,9 +68,18 @@ fn the_tiles_land_on_the_reference_frames_boxes() {
     ];
     for ((m_x, m_y), view, (left, right, top)) in cases {
         let (ours_left, ours_right, ours_top) = face_box(base_cell(m_x, m_y), view);
-        assert!((ours_left - left).abs() < 2.0, "({m_x}, {m_y}) left {ours_left}");
-        assert!((ours_right - right).abs() < 3.0, "({m_x}, {m_y}) right {ours_right}");
-        assert!((ours_top - top).abs() < 2.0, "({m_x}, {m_y}) top {ours_top}");
+        assert!(
+            (ours_left - left).abs() < 2.0,
+            "({m_x}, {m_y}) left {ours_left}"
+        );
+        assert!(
+            (ours_right - right).abs() < 3.0,
+            "({m_x}, {m_y}) right {ours_right}"
+        );
+        assert!(
+            (ours_top - top).abs() < 2.0,
+            "({m_x}, {m_y}) top {ours_top}"
+        );
     }
 }
 

@@ -140,7 +140,7 @@ fn node(
     names: &CircuitNames,
     strings: &StringTable,
 ) -> Option<MapEvent> {
-    let (x, y) = nodes.step(grid, cell.grid_coords()?)?;
+    let (x, y) = nodes.node(grid, cell.grid_coords()?)?;
     let track = cell
         .track
         .as_deref()
@@ -158,8 +158,16 @@ fn node(
     }
     Some(MapEvent {
         name: cell.name.clone(),
-        x,
-        y,
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a canvas cell is under 401 across and 120 down"
+        )]
+        x: x as f32,
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a canvas cell is under 401 across and 120 down"
+        )]
+        y: y as f32,
         detail,
         requires: None,
         kind,

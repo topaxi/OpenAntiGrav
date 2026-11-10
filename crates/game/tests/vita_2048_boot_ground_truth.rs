@@ -324,6 +324,103 @@ fn the_campaign_map_draws_the_discs_own_hex_tiles_not_flat_squares() {
     );
 }
 
+/// Every tile of the base campaign map sits where the original's canvas
+/// camera puts it, on the reference save (Events 1 to 3 passed) at the two
+/// views of the committed reference frames: the view the map opens on, and
+/// the view after a tap on Event 1's tile. The expected centres are the top
+/// faces measured in those frames (left and right edge, top edge plus half the
+/// face), not this build's own arithmetic
+/// (`docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md`,
+/// "Evidence"). An even grid of cells puts none of them within 100 px.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
+    use oag_ui::frontend::EarnedTier;
+    use oag_ui::frontend::canvas_lattice;
+    use oag_ui::pointer::Pointer;
+
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    frontend.refresh_campaign_progress(|name| {
+        matches!(name, "2048 - Event 1" | "2048 - Event 2" | "2048 - Event 3")
+            .then_some(EarnedTier::Pass)
+    });
+    // The original opens on the first event of the chain that is not passed.
+    assert!(frontend.select_campaign_event("2048 - Event 4"));
+    assert!(drive_until(
+        &mut frontend,
+        &[Button::Cross],
+        w2048::NEW_FE_SHELL
+    ));
+    // Where the hexagon sits in the 128 x 128 hex art: 2..116 across, 12..115 down.
+    let centres = |frontend: &frontend::Frontend| -> Vec<(f32, f32)> {
+        frontend
+            .draw_list()
+            .iter()
+            .filter_map(|draw| match draw {
+                frontend::Draw::Sprite { rect, uv, .. } if uv[2] == 128.0 && uv[3] == 128.0 => {
+                    Some((
+                        rect[0] + rect[2] * 59.0 / 128.0,
+                        rect[1] + rect[3] * 63.5 / 128.0,
+                    ))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let assert_tiles = |frontend: &frontend::Frontend, view: &str, expected: &[(f32, f32)]| {
+        let ours = centres(frontend);
+        for want in expected {
+            let nearest = ours
+                .iter()
+                .map(|at| (at.0 - want.0).abs().max((at.1 - want.1).abs()))
+                .fold(f32::INFINITY, f32::min);
+            assert!(
+                nearest <= 4.0,
+                "{view}: no tile within 4 px of {want:?} (nearest is {nearest} px off): {ours:?}"
+            );
+        }
+    };
+    // Frame 13: Event 3 (green) and Event 4 (grey, the current one).
+    assert_tiles(
+        &frontend,
+        "the opening view",
+        &[(412.0, 174.7), (527.0, 268.0)],
+    );
+    // The canvas lattice is under the tiles: the baked picture, repeated.
+    let lattice = frontend
+        .draw_list()
+        .iter()
+        .filter(|draw| {
+            matches!(draw, frontend::Draw::Sprite { uv, .. }
+                if (uv[2], uv[3])
+                    == (canvas_lattice::VIEWPORT[0] as f32, canvas_lattice::VIEWPORT[1] as f32))
+        })
+        .count();
+    assert_eq!(
+        lattice, 4,
+        "four copies of the lattice picture cover the view"
+    );
+    // A tap on Event 1's tile, whose lower half shows at the top left.
+    assert!(frontend.pointer(&Pointer {
+        at: Some((185.0, 20.0)),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    }));
+    assert_eq!(
+        frontend.selected_event().map(|event| event.name.as_str()),
+        Some("2048 - Event 1")
+    );
+    // Frame 12: Events 1, 2 and 3 down the diagonal.
+    assert_tiles(
+        &frontend,
+        "Event 1 selected",
+        &[(500.0, 269.7), (614.5, 365.7), (729.5, 460.7)],
+    );
+}
+
 /// The pale triangle lattice is one picture baked off `canvasTexture.gxt` with
 /// the tilted camera and laid over the title screen and the game mode page.
 #[test]
