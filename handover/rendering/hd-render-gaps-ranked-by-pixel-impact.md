@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-05
+updated: 2026-11-10
 summary: "HD gaps by tile; 2026-11-05: 16-19% of grid score is the original being softer (unclosable), named closable items under 6 points"
 ---
 
@@ -13,9 +13,10 @@ original by pixels a player sees, so the next HD lane aims at the biggest gap.
 ## Open
 
 **Set.** 13 HD pairs under `compare-page/hd/` (Harimau classic, Time Trial start,
-1920x1080, chase cam). `talons-pack` (`hd-race/`) is excluded: its frame is a
-different moment with an imposed HUD and a warm-up exhaust path, so a per-pixel
-diff ranks nothing there.
+1920x1080, chase cam). `talons-pack` (`hd-race/`) is excluded: its stored frame was a
+different moment (confirmed 2026-11-10, `hd-talons-pack-align`; a re-made pair
+at one instant exists in `docs/tools/compare-page.md`, "A moving HD craft"), with an imposed HUD and a warm-up exhaust path, so a per-pixel
+diff ranks nothing there until it is adopted.
 
 **Method (reproducible).** For each pair, per pixel: mean abs RGB difference
 (0-255) between `theirs.png` and `ours.png`; signed luma `ours - theirs`. Tile
