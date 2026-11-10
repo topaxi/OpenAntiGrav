@@ -673,6 +673,16 @@ pub struct Graphics {
     #[serde(default)]
     pub wingtip_contrails: bool,
 
+    /// Draw our own HD/Fury-style shield in place of the disc's, on Pulse and Pure. **Off by
+    /// default**, and the row is dropped on Wipeout HD, 2048 and Omega, which draw their own.
+    ///
+    /// **An enhancement of this project's, not the original's.** The shell is procedural, built off
+    /// the craft's own hull, and reads nothing from any other disc. Baked into the race at load, so
+    /// a change applies from the next race. See `oag_raceplay::Options::own_shield` and
+    /// `docs/rendering/own-shield.md`.
+    #[serde(default)]
+    pub own_shield: bool,
+
     /// Let the CPU governor turn this project's own CPU-heavy extras down at runtime while the
     /// frame thread is over its frame budget and the GPU is not (`oag_present::governor`).
     /// It overrides in memory only: this value and every render-profile value are never
@@ -725,6 +735,7 @@ impl Default for Graphics {
             boost_zoom: false,
             trail_hits: false,
             wingtip_contrails: false,
+            own_shield: false,
             cpu_governor: default_cpu_governor(),
             camera_view: default_camera_view(),
         }
@@ -1193,6 +1204,14 @@ pub fn menu_seeds(
         (
             "graphics.wingtip_contrails",
             text(if settings.graphics.wingtip_contrails {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
+            "graphics.own_shield",
+            text(if settings.graphics.own_shield {
                 "on"
             } else {
                 "off"

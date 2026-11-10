@@ -203,6 +203,7 @@ OAG_GRAPHICS_BOOST_FOV_KICK = { text = "SICHTFELD-RUCK BEI BOOST", human = false
 OAG_GRAPHICS_BOOST_ZOOM = { text = "BOOST-ZOOM", human = false }
 OAG_GRAPHICS_TRAIL_HITS = { text = "TREFFER IN SPUR", human = false }
 OAG_GRAPHICS_WINGTIP_CONTRAILS = { text = "KONDENSSTREIFEN", human = false }
+OAG_GRAPHICS_OWN_SHIELD = { text = "EIGENER SCHILD", human = false }
 OAG_GRAPHICS_CPU_GOVERNOR = { text = "CPU-REGLER", human = false }
 OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "LEISTUNGSANZEIGE", human = false }
 OAG_GRAPHICS_ADVANCED = { text = "ERWEITERT", human = false }

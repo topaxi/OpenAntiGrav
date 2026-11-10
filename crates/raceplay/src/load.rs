@@ -1137,18 +1137,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             ps2_trail: title.looks.ps2_trail.applies(archives.layout.platform),
             #[cfg(feature = "view")]
-            shield_targets: {
-                let palette = roster::shield_palette(
-                    craft_title,
-                    craft_of(&mut craft, &mut archives).layout.platform,
-                );
-                liveries
-                    .iter()
-                    .map(|l| roster::shield_target(l.shield_colour, shield_cockpit_alpha, &palette))
-                    .collect()
-            },
+            shield_targets: roster::shield_targets(
+                options,
+                craft_title,
+                craft_of(&mut craft, &mut archives).layout.platform,
+                (&liveries, shield_cockpit_alpha),
+            ),
             #[cfg(feature = "view")]
             shield_palette: roster::shield_palette(
+                options,
                 craft_title,
                 craft_of(&mut craft, &mut archives).layout.platform,
             ),
@@ -1395,7 +1392,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         #[cfg(feature = "view")]
         leach_ball_model,
         #[cfg(feature = "view")]
-        shield_cockpit,
+        shield_cockpit: roster::own_cockpit(shield_cockpit, options, craft_title),
         #[cfg(feature = "view")]
         countdown_model,
         #[cfg(feature = "view")]

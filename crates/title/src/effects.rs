@@ -853,6 +853,10 @@ pub struct Looks {
     pub track_shine_weighted: Rule,
     /// The shield tint.
     pub shield_palette: ShieldPalettes,
+    /// Our own HD/Fury-style shield, offered as the player's `graphics.own_shield` on a title
+    /// whose original draws a different one: Pulse and Pure. Unread on the titles whose original
+    /// draws the HD-style shield itself (HD, 2048, Omega), which drop the row.
+    pub own_shield: Rule,
     /// The front end never waits at its language picker on a fresh run: the
     /// original leaves `Language Selection` within milliseconds, so this build
     /// defaults to English instead of stopping there. Not a race look, but the
@@ -966,6 +970,7 @@ impl Looks {
             track_shine: Rule::UNREAD,
             track_shine_weighted: Rule::UNREAD,
             shield_palette,
+            own_shield: Rule::UNREAD,
             skips_language_picker: Rule::UNREAD,
             lit_output_halved: Rule::UNREAD,
             material_lod_bias: Rule::UNREAD,

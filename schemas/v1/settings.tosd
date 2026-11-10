@@ -172,6 +172,10 @@ optional = true
 type = "boolean"
 optional = true
 
+[types.graphics.own_shield]
+type = "boolean"
+optional = true
+
 [types.graphics.cpu_governor]
 type = "boolean"
 optional = true

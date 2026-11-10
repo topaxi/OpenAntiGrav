@@ -444,6 +444,9 @@ pub fn build_with(
     if model.shield_shell {
         constants.push(("shield_shading", 1.0));
     }
+    if model.own_shield {
+        constants.push(("own_shield_shading", 1.0));
+    }
     let present = specialise::slots_present(model);
     constants.push(("slots_present", f64::from(present)));
     constants.push((

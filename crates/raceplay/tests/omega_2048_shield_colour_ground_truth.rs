@@ -58,6 +58,7 @@ fn shield_of(
             hull_shine: false,
             hull_wreck: false,
             absorb_shell: false,
+            own_shield: false,
             zone_liveries: &[],
             forced_skins: &[],
         },

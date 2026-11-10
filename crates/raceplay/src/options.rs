@@ -102,6 +102,9 @@ pub struct Options {
     /// The player's `graphics.wingtip_contrails`: whether a title with none of its own lays HD's
     /// wingtip contrails after a speed pad. Off by default. See [`WingtipContrails`].
     pub wingtip_contrails: WingtipContrails,
+    /// The player's `graphics.own_shield`: whether a title offered it (`oag_title::Looks::own_shield`:
+    /// Pulse and Pure) draws our own HD/Fury-style shield in place of the disc's. Off by default.
+    pub own_shield: bool,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///

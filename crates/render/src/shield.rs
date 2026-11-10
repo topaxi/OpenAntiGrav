@@ -291,6 +291,29 @@ pub const OMEGA_PALETTE: Palette = Palette {
     ..HD_PALETTE
 };
 
+/// Our own HD/Fury-style shield's colours (`graphics.own_shield`, `docs/rendering/own-shield.md`):
+/// it fades up from a deep blue, settles to an ice blue and flashes amber on an absorbed hit,
+/// the three moments HD's shell colours by.
+pub const OWN_ACTIVATION_COLOUR: [f32; 4] = [0.10, 0.25, 0.80, 0.0];
+
+/// What our own shell settles to while the shield is up.
+pub const OWN_TARGET_COLOUR: [f32; 4] = [0.45, 0.80, 1.0, 1.0];
+
+/// What an absorbed hit flashes our own shell to.
+pub const OWN_HIT_COLOUR: [f32; 4] = [1.0, 0.55, 0.10, 1.0];
+
+/// The palette of our own shield: the animation law is the shared one, the colours are
+/// [`OWN_ACTIVATION_COLOUR`], [`OWN_TARGET_COLOUR`] and [`OWN_HIT_COLOUR`]. The shell's own shader
+/// takes the colour as its tint on every platform, so it always reaches the shell.
+pub const OWN_PALETTE: Palette = Palette {
+    activation: OWN_ACTIVATION_COLOUR,
+    target: OWN_TARGET_COLOUR,
+    hit: OWN_HIT_COLOUR,
+    tints_shell: true,
+    colour_rate: COLOUR_RATE,
+    target_alpha_from_cockpit: false,
+};
+
 /// The substep the update runs its two lerps at, `1.0 / 60.0` as the original
 /// spells it.
 ///

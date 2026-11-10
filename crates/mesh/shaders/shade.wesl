@@ -8,6 +8,7 @@ import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, fl
 import package::glow::{glow_first, glow_pad, glow_second};
 import package::holo::{holo_billboard};
 import package::hull_normal::{hull_normal};
+import package::own_shield::{own_shield, own_shield_shading};
 import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encode, encoded_out, linear_out};
 import package::shading_modes::{colour_is_light, light_rig, nova_prelit, zone_race};
@@ -84,6 +85,10 @@ override slots_present: u32 = 4294967295u;
 
 @diagnostic(off, derivative_uniformity)
 fn lit_texel(raw: VertexOutput) -> vec4<f32> {
+    // Our own shield draws no texture and takes none of the lighting below.
+    if own_shield_shading != 0.0 {
+        return own_shield(raw);
+    }
     var in = raw;
     in.slots = raw.slots & slots_present;
     let rig_on = select(0.0, scene.light.enabled, light_rig != 0.0);
