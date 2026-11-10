@@ -590,8 +590,8 @@ rows are unstable" says. The Deck's own 4K output is drawn at about 1906x1080
 **The Deck's picture is byte-identical.** `cmp` (`md5sum`) of the screenshots of the two builds,
 HD Talon's Junction at ticks 1260, 1350 and 1500, each with and without `--zone-spectrum-test`, at
 1280x800 and 1920x1080 (12 frames), the tick 1500 spectrum frame at 3840x2160 in six rounds, and
-Pulse's Zone frame (tick 2400) with and without the spectrum test at both sizes (4 frames): every
-one equal, so the Intel difference (39 to 123 pixels by 1 to 2 levels) is the Intel driver's, not
+Pulse's Zone-mode frame (tick 2400) with and without the spectrum test at both sizes (4 frames,
+which hash the same with and without the test, so they add little): every one equal, so the Intel difference (39 to 123 pixels by 1 to 2 levels) is the Intel driver's, not
 the rewrite's arithmetic on RADV. The frames are real Zone frames (the Zone grid and glow are
 drawn; the spectrum test changes tick 1350 and 1500, not 1260). NVIDIA was byte-identical too.
 **Landed** as the flat-branch form: the Deck is the device this pass costs most on, both reopen

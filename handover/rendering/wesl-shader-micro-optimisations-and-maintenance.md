@@ -50,7 +50,7 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 2. ~~**A Zone race samples nine textures where three are needed.**~~ **Closed flat on the desktop, reopened by the
    Deck and landed** (`zone.wesl`, `zone_sample`, `zone_glow`): on the Deck `track solid, shaded` on a Zone frame falls
    7.4 % at 800p and 5.7 % at 1080p (0.15 and 0.20 ms; 4K unresolved, the Deck's 4K rows swing 10 to 19 %), and the
-   Deck's pictures are byte-identical on 16 frames. Desktop result as first measured: built as a per-lane layer
+   Deck's pictures are byte-identical on 12 HD Zone frames (and 4 Pulse ones). Desktop result as first measured: built as a per-lane layer
    `select` (4 fetches to 2) and as that plus a flat branch (to 1). An upper bound with every Zone fetch removed moves `track solid, shaded` by 0 % at 800p and
    1080p and -9.5 % (0.2 ms) at 4K on NVIDIA, and -16 % at 800p on Intel with 30 % process-to-process swings at 1080p
    and 4K. The rewrite is **not byte-identical on Intel** (39 to 123 pixels off by 1 to 2 levels on HD Zone frames),

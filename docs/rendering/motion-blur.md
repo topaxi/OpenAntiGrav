@@ -942,8 +942,8 @@ neighbour-max):
 | `high` (15 to 11 taps) | 725 to 587 (-19.0 %) | 1770 to 1399 (-21.0 %) | 8199 to 6424 (-21.7 %) |
 | `medium` (15 to 9 taps) | 644 to 478 (-25.8 %) | 1660 to 1158 (-30.3 %) | 7932 to 5399 (-31.9 %) |
 
-The estimate was right: a fifth off `high`'s gather (1.78 to 1.40 ms at 1080p; 7.15 ms in the
-bisect's session, 8.2 ms in this one, to 6.4 ms at 4K), and `medium` is now 0.24 ms (1080p) and
+The estimate was right: a fifth off `high`'s gather (1.77 to 1.40 ms at 1080p; at 4K 8.2 ms to 6.4 ms, where the
+bisect's session read 7.15 ms for the base), and `medium` is now 0.24 ms (1080p) and
 1.0 ms (4K) cheaper than `high` where before it was 0.11 and 0.27 ms. The gather's whole-chain
 share falls with it: the chain (`motion blur` total) went 1401 to 1160 us at 800p, 3015 to 2470
 at 1080p and 12706 to 10293 at 4K at `high`; that includes the composite change below, which the
@@ -1065,7 +1065,7 @@ One row stayed unexplained: the untouched `reconstruct (half)` read 180 -> 196 u
 or Intel; the chain total still fell. Whole-chain medians: NVIDIA HD 290 -> 264
 (800p), 529 -> 510 (1080p), 2608 -> 2542 (4K) in round one, Intel HD 1309 -> 1190, 2487 -> 2233,
 4008 -> 3609. On the desktop NVIDIA part this is tens of microseconds at 1080p, so below a frame's
-noise; the Deck number is the one that matters (copy 0.14 / 0.53 ms there, measured below).
+noise; the Deck number is the one that matters (copy 0.15 / 0.53 ms there, measured below).
 
 ### On the Deck
 
