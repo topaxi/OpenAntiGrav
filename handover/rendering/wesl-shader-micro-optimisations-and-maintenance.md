@@ -210,12 +210,11 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
     (it was there all along, in the `Fog` struct, but "above" was another file); `shade.wesl`'s stand-in light now
     cites `uniforms/light.rs`'s module doc, which is where the rig is explained.
 
-13. **History in `.wesl` comments, under the ratchet.** `python3 -I scripts/check-comment-history.py --table` counts
-    them per crate; `shade.wesl` has six dated lines (`2026-10-05`, `2026-08-20`, `2026-08-24`, `2026-10-21`),
-    `types.wesl` four, `hd_bloom.wesl` and `bloom.wesl` two each, one each in `zone`, `psys`, `exhaust`, `beam`;
-    "used to" / "prior version" narration at `shade.wesl:319`, `:340`, `:1054`, `:1123`; `psys.wesl:107`, `ui.wesl:84`, `:285`,
-    `motion_blur.wesl:349`. Rewrite each as what and why with a `docs/` page citation, then lower the `oag-mesh`,
-    `oag-post`, `oag-fx`, `oag-game` rows. The ratchet fails if a row is left above the count. 1 to 2 hours.
+13. ~~**History in `.wesl` comments, under the ratchet.**~~ **Landed**: every dated, "maintainer" or "used to" line the
+    scout named, plus `mesh.wesl`, `quake.wesl`, `ui.wesl` and `shading_modes.wesl` narration, is rewritten as what and
+    why; the `oag-mesh` row fell 46 to 35, `oag-post` 13 to 9, `oag-fx` 62 to 60 (59 with `exhaust.wesl`'s line, a
+    separate commit). `oag-game` has no `.wesl` dated line, so its row did not move. No `.wesl`/`.wgsl` line is
+    counted any more.
 
 14. **Magic numbers with no page.** `shade.wesl:1552` (`0.45` and `(0.16, 0.18, 0.21)` for the `grade-sky`
     overcast: ours, unlabelled and uncited; cite the track-module doc that adds `sky_grey`); `65504.0` appears in

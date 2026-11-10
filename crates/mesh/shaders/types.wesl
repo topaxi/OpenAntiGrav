@@ -17,15 +17,14 @@ struct Uniforms {
     sun_occlusion_layer: f32,
     // The model's own animation clock, seconds: what an HD material's
     // `UV_offset` is bound to (`slots::CLOCK_SCROLL_RING`/`_HALO`). Zero for
-    // every other draw. Was padding until 2026-10-05.
+    // every other draw.
     model_clock: f32,
     // A second per-draw scalar: `ColourAnim` on the Bomb's fireball
     // (`slots::BOMB_FIRE`), a float the blast owns. Zero for every other draw.
-    // Was padding until 2026-10-07.
     model_colour: f32,
     // Pulse's hull light scales, packed `ambient | directional << 8` as an
     // integer-valued float; `0.0` is the default `255` for both. Written for a
-    // craft's hull alone. Was padding until 2026-10-17.
+    // craft's hull alone.
     hull_scale: f32,
     // Which layer of the per-craft environment-probe array this model's hull is
     // lit from, **plus one** - `0.0` for none. Wipeout HD's hull draws its
@@ -39,7 +38,7 @@ struct Uniforms {
     env_desat: f32,
     // A track module's `grade-sky`: how far this draw's colour is mixed toward a grey,
     // rainy one, `0.0..=1.0`. Written for the sky alone; `0.0` is the identity and
-    // skips the branch. Was padding until 2026-10-30.
+    // skips the branch.
     sky_grey: f32,
     // Pulse's point and spot lights for a hull, `mesh_render::HullPointLights`:
     // per slot the unit vector towards the light, `.w` its colour bytes packed

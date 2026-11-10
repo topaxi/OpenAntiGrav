@@ -45,9 +45,9 @@ struct Uniforms {
     face_atlas: vec2<f32>,
     // The buttons atlas's own size in pixels, the same idiom as `face_atlas`
     // one field up - HD/Fury's `ps_buttons.fnt`/`PS_BUTTONS.fnt` once loaded,
-    // a 1x1 placeholder otherwise. Occupies the slot a plain `_padding` field
-    // held before this existed: WGSL still rounds `Uniforms` to 64 bytes
-    // either way, so this is a real field rather than appended bytes.
+    // a 1x1 placeholder otherwise. Fits in what would be `Uniforms` padding:
+    // WGSL rounds the struct to 64 bytes either way, so this is a real field
+    // rather than appended bytes.
     buttons_atlas: vec2<f32>,
     // The HUD stretch: x is output pixels per grid unit, y is 1 when the HUD
     // is drawn sharp-bilinear and 0 for everything else.
@@ -81,9 +81,8 @@ struct Instance {
     // like mode 3 (`Draw::GradientSprite`). Every mode is tested by
     // range rather than by an open-ended `>`, because a higher mode sorts
     // above every earlier one and an open-ended test would silently catch
-    // it too - the trap `is_face` used to have before `MODE_BUTTONS_ATLAS`
-    // existed to catch it: `mode > 3.5` alone would have counted every
-    // buttons-atlas quad as a face-atlas one.
+    // it too - the trap an `is_face` of `mode > 3.5` alone would have: it
+    // counts every buttons-atlas quad as a face-atlas one.
     @location(4) mode: f32,
     // Clockwise turn about the quad's own centre, in radians. Zero for
     // everything but the lock-on reticle's corner brackets, which are four
@@ -282,8 +281,8 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
 
     // **Premultiplied on the way out**, because the pipeline blends
     // premultiplied alpha - see `render.rs`'s colour target. `src.rgb * src.a`
-    // here is exactly the `SrcAlpha` factor the ROP used to apply, so every
-    // quad that was drawn before this existed composites identically.
+    // here is exactly the `SrcAlpha` factor a straight-alpha blend applies, so
+    // every ordinary quad composites as it would under one.
     //
     // An **additive** quad returns an alpha of zero instead, which leaves the
     // destination factor `1 - 0` at one: `src.rgb * src.a + dst.rgb`. That is

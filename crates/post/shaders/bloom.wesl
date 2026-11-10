@@ -73,13 +73,13 @@ const WEIGHTS = array<u32, 11>(20u, 30u, 40u, 50u, 64u, 64u, 64u, 50u, 40u, 30u,
 // pass leaves at most 3, and the vertical pass turns 3 into `floor(3 * 64 /
 // 255) = 0`. The stamp's whole contribution is exactly zero in the original,
 // while a float chain carries it at 3.43 x 0.686 of the stamp. Measured against
-// PPSSPP's software renderer on 2026-10-02 (`docs/ghidra/functions/psp-pulse-usa/bloom.md`,
+// PPSSPP's software renderer (`docs/ghidra/functions/psp-pulse-usa/bloom.md`,
 // "Is ours stronger"): the bloom's mean-luma contribution outside the craft on
 // a racing straight was `0.33` in the original, `4.52` here as floats and
 // `0.37` truncated.
 //
 // **The tap's arithmetic is `(v * (w + 1)) >> 8`, not `floor(v * w / 255)`**:
-// measured on 2026-10-08 against the original's own scratch buffers (EDRAM
+// measured against the original's own scratch buffers (EDRAM
 // `0x132000` -> `0x110000`, `docs/ghidra/functions/psp-pulse-usa/bloom.md`,
 // "Racing strength against the original's own scratch buffers"): the vertical
 // pass reproduces the original's output byte for byte on 99 % of pixels with

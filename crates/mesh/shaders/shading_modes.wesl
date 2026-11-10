@@ -26,6 +26,6 @@ override zone_race: f32 = 1.0;
 //
 // A separate override from `linear_out` on purpose: that one is the *target's*
 // colour space and this is the *model's* vertex semantics. Keying this off
-// `linear_out` was tried and rendered HD dark wherever it draws into a gamma
-// target - the capture and viewer paths both do.
+// `linear_out` renders HD dark wherever it draws into a gamma target - the
+// capture and viewer paths both do.
 override colour_is_light: f32 = 0.0;

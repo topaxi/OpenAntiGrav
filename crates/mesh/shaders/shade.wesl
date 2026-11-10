@@ -144,9 +144,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // `N.L` (`MUL R1.w, pow, sat(8 N.L)`), so the highlight is full strength from about
     // seven degrees off the horizon, not scaled by `N.L` itself. Read on the hull's own
     // `diffuse_with_specular_from_alpha_*` and the track's (`@0x3d` of `track_surface`'s lit block, live
-    // on Modesto Heights' disc copy), which share the snippet. The track kept `N.L` here until its
-    // normal map was read (2026-10-21, `hd-track-surface`): with the road's bump in `N` the original's
-    // term moved Vineta K's bottom band 17.59 to 14.16 and no pair the wrong way by more than 0.03.
+    // on Modesto Heights' disc copy), which share the snippet. On the track, with the road's bump
+    // in `N`, using it in place of `N.L` moves Vineta K's bottom band 17.59 to 14.16 and no pair the
+    // wrong way by more than 0.03.
     let ndl_spec = clamp(8.0 * ndl_raw, 0.0, 1.0);
 
     // **Everything from here to `authored` is the authored rig's, and only
@@ -200,7 +200,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             (in.slots & 1u) != 0u,
         );
 
-        // The authored rig, and the combination is no longer this project's: it is
+        // The authored rig, and the combination is the disc's, not this project's: it is
         // the one every lit variant of an HD circuit `.rcsmaterial` computes,
         // read out of the fragment microcode
         // (docs/ghidra/functions/ps3-hdfury-eu/renderer.md, "The lit track
@@ -224,12 +224,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // that material's interpolator and not a convention: the same closer
         // arrives on `f[TC0]` in `talons_junction/bluemetal`, so a per-material
         // path will have to read which varying carries it.
-        // **Raw, no sRGB decode (2026-10-05).** Block #9 is `TEX` then
+        // **Raw, no sRGB decode.** Block #9 is `TEX` then
         // `LG2`/`MUL`/`EX2` then `MAD` by the scale, and the RSX decodes no texture
         // on the disc (renderer.md, "HD's lightmap is read raw"), so the curve
-        // runs on the stored byte, exactly as Omega's does below. The `pow(_,
-        // 2.2)` that stood here was ADR-0026's decode of every sample and was
-        // the darkness: on Amphiseum (power 3.5) it compounded to a 7.7 power.
+        // runs on the stored byte, exactly as Omega's does below. A `pow(_, 2.2)`
+        // decode of every sample (ADR-0026's) would darken it: on Amphiseum
+        // (power 3.5) it compounds to a 7.7 power.
         let baked_linear = baked.rgb;
         // **Wipeout: Omega Collection's combination, on a lightmapped draw.** Read
         // out of its circuit pixel shaders (ps4-omega-eu/lightmap-prelit.md):
@@ -306,7 +306,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let vertex_light_term = select(vertex_light, vertex_light_curved, no_ambient && !emissive);
         let ambient_term = select(scene.light.ambient, vec3<f32>(0.0), no_ambient || nova);
 
-        // **The sun-occlusion mask, restored 2026-08-20.** Two independently
+        // **The sun-occlusion mask.** Two independently
         // decoded carriers of the same scalar: a lightmapped chunk's shadow lives
         // in its lightmap's own alpha, and a vertex-lit chunk's lives in its
         // colour set's fourth byte - `in.sun_mask`, from
@@ -317,10 +317,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // default for a chunk with no colour set. So the product reads whichever
         // side is real and is the identity where neither is.
         //
-        // **A prior version of this comment said no sun term belonged here at
-        // all**, because the general block #8/#9 formula above has none. That
-        // was the read on two materials; seven read variant-by-variant on
-        // 2026-08-20 refute it. `diffuse_with_specular_from_alpha` (86 chunks of
+        // **A sun term belongs here**, though the general block #8/#9 formula
+        // above has none: that formula is the read of two materials, and seven
+        // read variant-by-variant say otherwise. `diffuse_with_specular_from_alpha` (86 chunks of
         // Talon's Junction), `..._scalar` (80), `diffusewithalphachannel` (43),
         // `track_wall` (33) and `glasstest` (33) - **275 of Talon's Junction's
         // 301 drawn materials, against `track_surface`'s 15** - each normalise
@@ -333,13 +332,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // 15-of-301 minority it is wrong for reads unlit rather than lit, which
         // this project has not yet measured against the frame.
         //
-        // **What this replaces.** A `sun * (ndl * baked.a)` summand once stood
-        // here with `baked.a` fixed at the no-lightmap placeholder's `1.0` -
-        // full sun, unoccluded, everywhere - measured at 14.3 % of the frame
-        // clipped to white against the reference's 5.8 %, worse than the sun
-        // term being absent entirely, which is why it was removed rather than
-        // left wrong. `mesh/rcs.rs` used to take only `.rgb` from the colour set
-        // and this mask did not exist yet.
+        // **Why the mask is not optional.** A `sun * (ndl * baked.a)` summand with
+        // `baked.a` fixed at the no-lightmap placeholder's `1.0` is full sun,
+        // unoccluded, everywhere: measured at 14.3 % of the frame clipped to
+        // white against the reference's 5.8 %, worse than no sun term at all.
         // **Times the road's mask under a craft**, `sun_occlusion` above: 1.0 on
         // every draw that is not a hull with a map, so nothing else here moves.
         // **Not even called on the track's pipelines** (`receives_shadow` 2,
@@ -356,14 +352,13 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // **`scene.light.ambient` and `vertex_light` are gated above** (`ambient_term`,
         // `vertex_light_term`), on `slots::NO_AMBIENT` - 251 of Anulpha Pass's 309
         // drawn materials, 922 of its 1,101 chunks. Gating `scene.light.ambient`
-        // on that bit *alone* was tried on 2026-08-24 and was a regression: the
+        // on that bit *alone* is a regression: the
         // materials without an ambient are three families, not one, and
         // `sign_emissive` and its kin (declaring only `fogColour`) went black
         // when multiplied by an `authored` with the ambient simply dropped. The
         // fix above is the drop *and* the vertex-colour curve together, which is
         // what keeps the `IleLightmap`/`IleVertex` families lit; `EMISSIVE`
-        // below is the third family, excluded from both terms the same way it
-        // always was.
+        // below is the third family, excluded from both terms the same way.
         //
         // **A program fed no scene light is emissive, and the rig must not touch
         // it.** `slots::EMISSIVE` is the material's own declaration: neither
@@ -458,7 +453,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // (`slots::CLOCK_SCROLL_RING`/`_HALO`): their programs' `UV_offset` is
     // `node + 0xc0`, the blast's age, not the scene's `time`. Read off the
     // two programs' own microcode (docs/ghidra/functions/ps3-hdfury-eu/
-    // plasma.md, 2026-10-05) - ring: `n = tex(u, v + 0.01 t).a`, then
+    // plasma.md) - ring: `n = tex(u, v + 0.01 t).a`, then
     // `uv + 0.15 n + 0.1 t` on both axes; halo: `n = tex(u, v + 0.4 t).a`,
     // then `(2u + 0.1 t, v + 0.14 t + 0.1 n)`. **Only where the colour tap
     // samples**; the programs' own colour and alpha combine is not
@@ -1052,12 +1047,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // variants, no exceptions - so the accumulate reads a value the light has
         // already multiplied, and a glow is not itself lit.
         //
-        // **`glow_linear` belongs here and used to reach only `plain`**, which is
-        // what made HD's emissive layer very nearly invisible: this fragment
+        // **`glow_linear` belongs here, not only on `plain`**: this fragment
         // resolves `mix(plain_rgb, authored_rgb, enabled * in.lit)` and HD's rig is
         // always enabled, so every `in.lit == 1` chunk - the track, the tubes, the
-        // signs, everything near the camera - dropped it. Only the far background
-        // and the hull ever saw it.
+        // signs, everything near the camera - would drop a glow added to `plain`
+        // alone. Only the far background and the hull would see it, and HD's
+        // emissive layer would be very nearly invisible.
         // **Times the program's own output scale.** The final instruction of every
         // lit HD program carries `/2` in its scale field (renderer.md, "Every lit
         // program ends on a /2 output scale"), so the sum below is what the
@@ -1121,10 +1116,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // `.envsettings` fails to yield a rig - would multiply by a baked light
     // that is zero wherever no colour set exists, and render black.
     //
-    // **This used to key on `linear_out` and that was wrong twice.** It missed
+    // **Keying this on `linear_out` would be wrong twice.** It would miss
     // HD's capture and viewer paths, which draw the same models into a gamma
-    // target - an earlier model render found them rendering dark, 1,062 lit pixels of a
-    // 1024x1024 frame against 6,988 once fixed. And it over-fired on the race
+    // target and render dark (1,062 lit pixels of a 1024x1024 frame against
+    // 6,988 with the guard). And it would over-fire on the race
     // target, forcing *every* model's tint to white there including the sky
     // cube, whose vertex colour genuinely is a tint because `mesh/sky_cube.rs`
     // builds it rather than the HD loader. `colour_is_light` is a property of

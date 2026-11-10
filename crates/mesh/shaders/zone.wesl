@@ -23,8 +23,8 @@ import package::types::{ZoneSet};
 // carries the `blackMask` literal at all; and a `zoneAnisoPalette` shape of
 // 130 blocks which always does. All twelve racing circuits are 100% this
 // shape; the other lives only in `zone_1`..`zone_4`, HD's Zone arenas. The
-// `albedo + zoneCol * (1 - blackMask)` rule this file used to carry was the
-// arena shape, read correctly from an arena material and generalised.
+// `albedo + zoneCol * (1 - blackMask)` rule is the arena shape's and is not
+// applied here.
 //
 // The zone texture is sampled at the *mesh's own* UV, not in screen space and
 // not projected through `zoneOrigin` - which is the counter-intuitive half of
@@ -144,15 +144,13 @@ fn zone_base_term(rim: f32, colours: ZoneSet) -> vec3<f32> {
 
 // The visualiser glow: `saturate(N.y - 0.5) * (1 - windowDepth) * E.w *
 // zoneTexVis[band].rgb`, read out of the Zone shader's own fragment microcode
-// - `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`. Re-read
-// instruction by instruction against the project's own fixed decoder on
-// 2026-08-31 (the condition-code and parameter-patch defects that page's own
-// "Two `ps3-microcode.py` defects" section fixed the same day) and found
-// **complete**: every register in the block traces to a named parameter, a
-// known texture unit or the fog term already read elsewhere in this file, so
-// nothing multiplies into it that this project has not already read.
-// Confidence 84 on the structure, unchanged by the re-read since it only
-// confirmed rather than moved it.
+// - `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`. Read
+// instruction by instruction against the project's decoder as fixed by that
+// page's "Two `ps3-microcode.py` defects" section (the condition-code and
+// parameter-patch defects) and found **complete**: every register in the
+// block traces to a named parameter, a known texture unit or the fog term
+// already read elsewhere in this file, so nothing multiplies into it that
+// this project has not already read. Confidence 84 on the structure.
 //
 //     band = zoneTex<I|O>Nearest(zoneUV).a
 //     glow = max( saturate(N.y - 0.5) * (1 - windowDepth) * E.w
