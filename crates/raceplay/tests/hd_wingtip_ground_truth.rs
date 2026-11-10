@@ -157,11 +157,25 @@ fn a_craft_under_a_speed_pad_lays_two_ribbons_that_fade_out() {
             .any(|v| (Vec3::from(v.position) - craft).length() < 20.0),
         "the strip sits at the craft"
     );
-    // Release the pad: the 1.3 s timer, then a node's 0.7 s.
-    for _ in 0..140 {
+    // Release the pad: the 1.3 s timer, then a node's 0.7 s. The pool is the whole grid's and
+    // the field crosses the circuit's own pads, so the two seconds are counted from the last
+    // tick any craft's pad force time was up.
+    let mut quiet = 0;
+    for _ in 0..3000 {
         race.sim.world.ships[0].physics.pad_timer = 0.0;
         race.tick(&PlayerInputs::none());
+        let on_a_pad = race
+            .sim
+            .world
+            .ships
+            .iter()
+            .any(|ship| ship.physics.pad_timer > 0.0);
+        quiet = if on_a_pad { 0 } else { quiet + 1 };
+        if quiet == 140 {
+            break;
+        }
     }
+    assert_eq!(quiet, 140, "the field never left the pads for two seconds");
     let peak = race
         .wingtip_vertices(eye)
         .iter()

@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-10
-summary: "HD late speed closed (the body's 0.01 velocity damping, flown on HD, Omega and 2048); open: the AI field on Talon's Junction (808 contact ticks), Omega's craft laws, 2048's integrator read"
+summary: "HD late speed closed (body damping 0.01); open: AI field on Talon's (808 contact ticks), Omega craft laws, 2048 integrator read"
 size: M (40)
 difficulty: medium (40)
 ---
