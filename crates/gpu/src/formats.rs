@@ -41,8 +41,11 @@ pub enum SceneStore {
     /// The value as computed: Omega's float scene, and any gamma target.
     #[default]
     Computed,
-    /// Clamped to `[0, 1]` and encoded with the `2.2` power the HD chain
-    /// decodes with where it reads the scene.
+    /// Clamped to `[0, 1]` and encoded with the piecewise sRGB curve, the
+    /// console's packer, which the HD chain decodes with where it reads the
+    /// scene. A draw into it also decodes its gamma-authored texels with that
+    /// curve, as the console's texture units do (`docs/rendering/hd-track-tone.md`,
+    /// "The texture unit's decode is the sRGB curve").
     Encoded,
     /// The value as computed, in the gamma-2 space Wipeout 2048's programs
     /// light in: a draw decodes a gamma-authored colour by squaring it, not with

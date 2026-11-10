@@ -2089,3 +2089,119 @@ measured on two** (confidence 85 for the law, 70 for "starts at world load": inf
   from RAM afterwards: their capture waits are unrecorded, so they must be re-made cold with this script.
 - **Omega / 2048**: not checked. Omega's front end and tables are HD's, but its `MeshImporter` advance was not located
   in its eboot (`eboot.elf` in Ghidra); open.
+
+## The texture unit's decode is the sRGB curve (2026-11-10, `hd-contrast`)
+
+**Claim**: "ours' contrast excess on HD's best race pairs comes from a named step of HD's
+post/grade/encode chain that ours does differently, and with that step matched the per-channel
+stddev bias (ours minus theirs) is under 0.3 grey on all four pairs, with each pair's whole-frame
+mean grey falling." **The step is named and wired, the mean grey falls on all four (and on all 14
+HD race pairs), and the stddev threshold holds on one pair of four**: the bias fell by 55 to 100 %
+and two pairs keep +0.4 to +0.7. So the claim as worded is **false on the threshold, true on the
+cause**.
+
+**The step.** Ours decoded every gamma-authored texel (albedo, glow, the holographic taps) with a
+`2.2` power and encoded the final frame with the piecewise sRGB curve. The original's texture units
+(gamma nibble 7, "Claim B: the sampler") decode with the sRGB curve and its packer encodes with the
+same one, so a lit texel goes through one curve both ways. `srgb_encode(a^2.2)` against `a` is 8
+levels darker at level 12, equal near level 96 and 1.5 brighter at level 160: darker darks and
+brighter brights, which is a wider spread at an unchanged mean. Confidence 85 for the reference
+frames (below); the console's own unit is the same documented sRGB decode, not watched.
+
+**Evidence.**
+
+1. *Not sharpness, not the dynamic scene width.* The stddev bias survives a Gaussian blur of the
+   pair: `hd/talons` +1.00, +1.12, +1.14 unblurred and +1.15, +1.31, +1.38 at sigma 32;
+   `hd/chenghou-project` +1.16, +0.97, +0.70 and +1.12, +0.78, +0.51. A narrower, upscaled
+   original would lose its excess under a blur.
+2. *It follows the pixel's level, not its surround.* Binned by the symmetric level
+   (`(ours + theirs) / 2` at sigma 4) and by the surround (sigma 80), ours minus theirs is -1.5 to
+   -4.5 under level 32 and +1 to +2.6 above level 96 in every surround column of all four pairs.
+3. *One curve on all pairs.* Rank-matched transfer (the level theirs holds at the rank of ours'
+   level), median over the 13 time-trial pairs: theirs is +2.0 at ours' level 4 to 12, +0.3 at 32,
+   -0.8 at 96, -1.8 at 160 to 192. A shared curve is the chain, not a circuit's lighting.
+4. *The original's resolve is an identity.* One cold boot at 1280x720, Resolution Scale 100,
+   the comparison profile otherwise, Talon's Junction at rest after GO: the scene target
+   (`0x40cc0000`, 1280x720 `A8R8G8B8`) and the screenshot of the same pause, over the 10 % of
+   pixels that are smooth and outside the HUD, final minus scene by scene level: -0.25 to +0.01
+   from level 4 to 128 on G (n = 785 to 30,196 per band), +0.70 at 128 to 160 and +3.0 at 160 to
+   192 (the bloom). So nothing after the scene lifts the darks, and the difference is in the scene.
+5. *RPCS3's two curves, read.* `RSXFragmentPrologue.glsl`: `srgb_to_linear` is
+   `cs / 12.92` below `0.04045` and `((cs + 0.055) / 1.055)^2.4` above, applied by
+   `_process_texel` (`RSXFragmentTextureOps.glsl`) to each channel whose gamma bit is set, after
+   the sampler's filter; `linear_to_srgb` is the inverse, applied by `RSXROPEpilogue.glsl` under
+   `_ENABLE_FRAMEBUFFER_SRGB`. Its video-out pass adds nothing at `Use full RGB output range:
+   true`, and item 4 shows the frame leaves the chain as the scene went in. So the emulator's
+   output path is ruled out as the cause.
+6. *A second sighting already in the tree.* The 5-6-5 advert card's red reads 0.267 live against
+   0.281 through the sRGB decode and 0.139 through the power
+   ([start-gantry.md](start-gantry.md), "The card is 5-6-5 in linear light").
+7. *The prediction held.* Written before the render: with the decode swapped, the dark end of the
+   transfer goes to zero and no pair's mean grey rises. Table below.
+
+**Wired.** On HD's scene (`SceneStore::Encoded`) `decode` in
+`crates/shader-check/shaders/target.wesl` is `srgb_decode`, its new inverse `encode` serves the
+values `shade.wesl` builds in the gamma domain and decodes later (the water, wave and holographic
+pictures, the mag-strip glow), `target_out` / `target_in` and `hd_bloom.wesl`'s `scene_tap` are
+the same curve, and the 5-6-5 card stores with it. Every other title's path is unchanged: both
+Omega pairs and the three 2048 pairs render byte-identical. Tests:
+`oag-post hd_bloom::tests::a_dark_encoded_scene_value_resolves_to_itself` (stored level 41
+resolves to 41; with the power decode it resolves to 37) and
+`oag-render::it hd_holo_billboard_lit_path::on_the_race_target_the_taps_are_decoded_before_the_overlay`
+(0.152 stored; the power gives 0.173).
+
+**Before and after**, ours re-drawn on copies of the stored pairs (1920x1080, Resolution Scale 100
+originals); stddev bias is ours minus theirs per channel, PIL `ImageStat`:
+
+| pair | mean grey | RMSE | edge corr | stddev bias R G B, before | after |
+| --- | --- | --- | --- | --- | --- |
+| `hd/chenghou-project` | 2.87 -> 2.57 | 0.0305 -> 0.0301 | 0.40 -> 0.40 | +1.16 +0.97 +0.70 | +0.50 +0.49 +0.39 |
+| `hd/vineta-k` | 2.92 -> 2.76 | 0.0345 -> 0.0340 | 0.44 -> 0.43 | +0.62 +0.32 +0.25 | -0.20 -0.29 -0.38 |
+| `hd/talons` | 3.49 -> 3.00 | 0.0362 -> 0.0356 | 0.43 -> 0.43 | +1.00 +1.12 +1.14 | -0.06 -0.00 +0.13 |
+| `hd/talons-assegai-c1` | 3.65 -> 3.07 | 0.0395 -> 0.0380 | 0.43 -> 0.43 | +1.46 +1.59 +1.61 | +0.44 +0.55 +0.68 |
+| `hd/anulpha-pass` | 3.90 -> 3.79 | 0.0440 -> 0.0438 | 0.43 -> 0.43 | +0.17 +0.10 +0.39 | -0.28 -0.25 +0.13 |
+| `hd/metropia` | 6.01 -> 5.68 | 0.0622 -> 0.0615 | 0.42 -> 0.42 | +2.41 +2.71 +1.64 | +1.88 +2.26 +1.03 |
+| `hd/moa-therma` | 7.04 -> 6.88 | 0.0567 -> 0.0563 | 0.43 -> 0.43 | +0.57 -0.12 +0.09 | -0.74 -1.11 -0.87 |
+| `hd/modesto-heights` | 5.57 -> 5.40 | 0.0558 -> 0.0553 | 0.41 -> 0.41 | +1.15 +1.07 +0.75 | +0.73 +0.59 +0.09 |
+| `hd/sebenco-climb` | 5.65 -> 5.11 | 0.0540 -> 0.0534 | 0.39 -> 0.39 | +2.65 +1.82 +0.04 | +1.81 +0.98 -0.82 |
+| `hd/sol-2` | 4.65 -> 4.50 | 0.0545 -> 0.0545 | 0.43 -> 0.43 | -0.03 -0.12 +0.05 | -0.42 -0.45 -0.34 |
+| `hd/tech-de-ra` | 5.90 -> 5.41 | 0.0511 -> 0.0505 | 0.44 -> 0.44 | +1.48 +1.75 +1.54 | +0.26 +0.53 +0.19 |
+| `hd/the-amphiseum` | 4.97 -> 4.67 | 0.0540 -> 0.0534 | 0.43 -> 0.43 | +1.01 +0.67 +1.25 | +0.43 +0.17 +0.79 |
+| `hd/ubermall` | 4.33 -> 3.79 | 0.0378 -> 0.0369 | 0.45 -> 0.45 | +1.06 +1.47 +0.72 | -0.04 +0.28 +0.07 |
+| `hd-race/talons-pack` | 47.93 -> 47.60 | 0.2700 -> 0.2694 | 0.01 -> 0.01 | -7.67 +2.00 -7.11 | -8.05 +1.63 -7.25 |
+
+No pair's mean grey or RMSE rose. Three pairs' spread moved through zero to the other side
+(Moa Therma -0.74 to -1.11, Sol 2 about -0.4, Vineta K -0.2 to -0.4): those carried an opposite
+term the power decode had been hiding (Moa Therma's is its road grime, "Moa Therma's road" above).
+The rank-matched transfer after the change, median over seven pairs: +0.2 to +1.0 under level 16,
+within 0.3 from 32 to 96, -0.5 to -1.0 above 128. By eye at the page's size the change is a slight
+lift of the deepest shadows, nothing else.
+
+**Left, named.**
+
+- **The adaptation's encode is still the `2.2` power** (`fs_reduce_first`). The bytes the
+  original averages are sRGB-encoded, so the same curve belongs there; tried, it raises the bloom
+  on the circuits whose fade is not saturated: Anulpha Pass mean bias -0.13, -0.66, -1.43 to
+  +0.43, -0.04, -0.83 with mean grey 3.79 to 4.09, Chenghou 2.57 to 2.61, Metropia 5.68 to 5.79,
+  the other eleven within 0.05. Not shipped: the mean bias and the mean grey disagree, and the
+  adapted value was not read off the original in this lane.
+- **Three CPU-side encodes still use the power** and are shared with Omega and 2048:
+  `sky_cube::tint_in_texel_domain`, `rcs::picture_tint::tinted`, `rcs::skin::raw_to_texel`. Each
+  writes a value the shader's `decode` reads back. On HD the round trip is now off by under 1.5
+  levels above linear 0.05 and by up to +39 % in linear light under 0.01 (`raw_to_texel(0.01)`).
+- **Chenghou and the Assegai pair keep +0.4 to +0.7** of spread, and Metropia and Sebenco +1 to
+  +2.3; not a shared curve any more (the transfer is flat), so per circuit.
+
+**Cross-title.**
+
+- **Omega: checked, applies, not wired.** Its textures are `ChannelType::Srgb` GNFs
+  ([gnf.md](../formats/gnf.md)), which the PS4's sampler decodes with the sRGB curve, its lightmap
+  atlases are UNORM, and its scanout encode is the sRGB curve
+  ([tonemap.md](../ghidra/functions/ps4-omega-eu/tonemap.md), "The output encode"); ours decodes
+  its texels with the `2.2` power. Tried with the decode swapped on Omega's scene: `omega/anulpha-pass`
+  mean grey 33.00 to 31.95 (mean bias -9.9, -15.9, -11.8 to -8.4, -13.7, -10.2), `omega/vineta-k`
+  28.36 to 27.94. Not wired: a per-texture channel-type census has not been run, and the pairs'
+  error is dominated by other terms.
+- **2048: checked, differs.** Its lit programs decode a texel by squaring it and the composite's
+  square root is the encode ([exposure.md](../ghidra/functions/vita-2048-eu-v104/exposure.md)):
+  already one curve both ways, and no hardware sRGB unit is involved.
