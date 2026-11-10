@@ -167,7 +167,7 @@ makes no request after loading itself.
   derivatives (`textureSample`, `dpdx`, `dpdy`) and is reached from `lit_texel`
   past its `holo` early return needs the attribute itself.**
   `just check-web-shaders` is what finds the next one; see "Verifying it".
-- **Logging.**- **Logging.** The console, through a small `log` sink in `web.rs`: `warn` and
+- **Logging.** The console, through a small `log` sink in `web.rs`: `warn` and
   above from everything, `info` from this project's own crates. `?log=debug` or
   `?log=trace` on the page's URL widens it, which is how the loader reports
   are read here. There is no log file.
@@ -196,6 +196,54 @@ makes no request after loading itself.
   every element carrying `hidden` with `display: none !important`: an author
   `display` rule otherwise outranks the browser's own, which once drew that
   button empty beside the other two with nothing to replay.
+
+### The page's stack
+
+The page's thread runs on the stack the linker lays out at the bottom of the
+module's memory, below its data, with `__stack_pointer` starting at its top. Its
+size is the link argument `-zstack-size`; without one it is 1 MiB, where a
+native main thread on Linux has 8 MiB. `build-web.sh` links **8 MiB**
+(`stack_size`), the native figure. A worker's stack is wasm-bindgen's own and
+was not changed.
+
+**What happened when it was 1 MiB** (2026-11-10, the nightly of `1aacef762`,
+deployed as `pkg/616e98a94ed1f513`). Every Pulse PSP boot stopped right after
+`renderer: webgpu:` in Chromium and Firefox alike, on a hardware adapter or a
+CPU one: the boot's call chain needed about 1.35 MB of stack in the `dist`
+build, fat LTO having inlined `Stage::race` into `App::open_with`
+(`open_with` 813 KiB, `oag_web::run` 398 KiB, `resumed` 105 KiB, read off the
+modules' function prologues). The overflow ran below address 0, which traps as
+`memory access out of bounds` (Chromium) or `index out of bounds` (Firefox). A
+trap is not a panic, so the panic hook never saw it, and it left the stack
+pointer where it was: every later callback trapped too, the first of them
+wasm-bindgen-futures' task queue, whose closure shares code with a `GpuError`
+callback and so is named for one in the console. There was no GPU error. The
+`dev` build did not overflow and booted, which is why a `--dev` walk showed
+nothing.
+
+Three things now stand in its way:
+
+- **The stack and the frame.** 8 MiB, and `Stage::race` is `#[inline(never)]`
+  (the `RaceStage` it builds, about 350 KiB, sits on the stack before it is
+  boxed), which takes `open_with` out of the largest frames.
+- **The build fails on it, with no disc.** `scripts/check-wasm-stack.py` reads
+  the built module: the stack pointer must start at the linked size, and no
+  function's frame may be over an eighth of it (1 MiB). `build-web.sh` runs it
+  before `wasm-opt`, so the Pages job, which has no image, refuses to publish a
+  module that fails it. The 1 MiB module of `1aacef762` fails it on both counts.
+  It checks single frames, not a call chain's depth, so it is a margin and not a
+  proof: the walk below is what proves a boot.
+- **A trap reaches the stopped page.** `web/main.js` shows the first uncaught
+  `WebAssembly.RuntimeError` through `oagFatal` (a page `error` or
+  `unhandledrejection`), with its message and wasm offset, instead of a frozen
+  last frame. Checked by serving the new page over the old module: "OpenAntiGrav
+  stopped", `memory access out of bounds`, the offset.
+
+`web-screenshot.py` prints each uncaught error's stack (function names survive
+in an `OAG_WEB_NO_OPT=1` build) and **exits non-zero on any**; it used to print
+three traps under a zero exit. After the fix, the Pulse PSP EU walk to Language
+Selection and on to ENTER YOUR NAME ran clean in headless Chromium 154 and
+Playwright's Firefox (build 1572), `dist` build, no page error.
 
 ### Disc keys
 
@@ -510,7 +558,7 @@ simulation code can observe on one thread.
 
 ## Troubleshooting
 
-**The page shows "OpenAntiGrav stopped".** A Rust panic, a lost GPU device or a
+**The page shows "OpenAntiGrav stopped".** A wasm trap ("The page's stack"), a Rust panic, a lost GPU device or a
 GPU out-of-memory/internal error lands on the page instead of a white canvas
 (`web/main.js`, `window.oagFatal`, called from `gpu::web::fatal` and the panic
 hook). It prints the cause and, when the adapter is a CPU one, the flags below.

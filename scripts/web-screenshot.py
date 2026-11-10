@@ -302,6 +302,7 @@ def main() -> None:
     width, height = (int(v) for v in args.size.split("x"))
     args.out.mkdir(parents=True, exist_ok=True)
     server = None if args.url else serve(args.dist, args.port)
+    page_errors: list[str] = []
     url = args.url or f"http://127.0.0.1:{args.port}/"
     try:
         with sync_playwright() as p:
@@ -324,7 +325,14 @@ def main() -> None:
                     " requestAnimationFrame(tick);"
                 )
             page.on("console", lambda m: print(f"console.{m.type}: {m.text}", flush=True))
-            page.on("pageerror", lambda e: print(f"pageerror: {e}", flush=True))
+            # The stack names the wasm function a trap is in (a module built without
+            # wasm-opt keeps its names, `OAG_WEB_NO_OPT=1`). Any uncaught error
+            # fails the run: three traps once printed here under a zero exit.
+            def page_error(error) -> None:
+                page_errors.append(str(error))
+                print(f"pageerror: {error}\n{error.stack or ''}", flush=True)
+
+            page.on("pageerror", page_error)
             query = "&".join(q for q in (
                 args.log and f"log={args.log}",
                 args.read and f"read={args.read}",
@@ -428,6 +436,8 @@ def main() -> None:
     finally:
         if server:
             server.shutdown()
+    if page_errors:
+        sys.exit(f"{len(page_errors)} uncaught page error(s), the first: {page_errors[0]}")
 
 
 if __name__ == "__main__":

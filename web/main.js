@@ -71,6 +71,17 @@ window.oagFatal = (cause, software) => {
   add("p", "The full text is in the browser console (F12).");
   document.body.append(box);
 };
+// A wasm trap is not a panic, so the panic hook never reports it, and it leaves
+// the module's stack pointer where the trap left it: every later callback then
+// traps too, and the page froze on its last frame. A stack overflow traps as
+// "memory access out of bounds" (docs/tools/web.md, "The page's stack"). The
+// first trap is shown; the rest are fallout.
+const shownTrap = (error) => {
+  if (!(error instanceof WebAssembly.RuntimeError)) return;
+  window.oagFatal(`${error.message}\n${error.stack ?? ""}`, false);
+};
+window.addEventListener("error", (event) => shownTrap(event.error));
+window.addEventListener("unhandledrejection", (event) => shownTrap(event.reason));
 // The player quit. winit's web loop cannot be started a second time in one
 // page and wasm memory never shrinks, so the page reloads and shows the picker
 // again; a Chromium remembered handle then offers "Play <name> again". Settings
