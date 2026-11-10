@@ -302,7 +302,7 @@ mod tests {
         }
         // Closed: every edge is shared by exactly two triangles, once in each direction.
         let mut edges = std::collections::HashMap::new();
-        for t in surface.indices.chunks_exact(3) {
+        for t in surface.indices.as_chunks::<3>().0 {
             for (a, b) in [(t[0], t[1]), (t[1], t[2]), (t[2], t[0])] {
                 *edges.entry((a, b)).or_insert(0i32) += 1;
                 *edges.entry((b, a)).or_insert(0i32) -= 1;

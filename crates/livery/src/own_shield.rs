@@ -37,9 +37,11 @@ pub(super) fn shell(hull: &Model, blob: &[u8], report: &mut Vec<String>) -> Opti
     };
     let triangles: Vec<[Vec3; 3]> = hull
         .indices
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .filter(|triangle| triangle.iter().all(|index| fixed(*index)))
-        .map(|triangle| [0, 1, 2].map(|n| Vec3::from(hull.vertices[triangle[n] as usize].position)))
+        .map(|triangle| triangle.map(|index| Vec3::from(hull.vertices[index as usize].position)))
         .collect();
     let Some(surface) = offset_surface::around(&triangles, STAND_OFF, FACET) else {
         report.push(format!(
