@@ -13,6 +13,7 @@ names one by its place in **name order**, an effect file by its name.
 
 ```wgsl
 //! blend = "alpha"            # or "add"; "alpha" with none
+//! fill = "over"              # or "backdrop": where a screen fill through it draws; "over" with none
 //! texture = "fx/noise.png"   # optional, read by mod_texture
 //!
 //! [[param]]                  # up to 4: fn param_<name>() -> f32
@@ -46,7 +47,15 @@ fn mod_texture(uv: vec2<f32>) -> vec4<f32>      // the header's PNG, opaque whit
 fn engine_texture(uv: vec2<f32>) -> vec4<f32>   // the engine's picture for this view, gamma-authored and opaque; transparent black with none
 fn engine_texture_bound() -> bool               // whether this view has one
 fn engine_uv(world: vec3<f32>) -> vec2<f32>     // world to engine_texture, for a surface at the entrance
+fn craft_frame() -> mat4x4<f32>                 // the view's own craft in eye space: right, up, back, place
+fn eye_ray(screen_uv: vec2<f32>) -> vec3<f32>   // the ray through that point of the view, eye space, z -1
 ```
+
+`craft_frame` and `eye_ray` are what a shader needs to cut geometry of its own round the craft:
+eye space has the eye at the origin looking down `-z`, so a point `d` units ahead through a texel
+is `eye_ray(input.screen_uv) * d`, and the craft's frame is rigid (no scale, lean or shake). For a
+craft in a transit the frame is the line it is flown along ("A craft's own transit" below).
+`fx/wormhole.wgsl` of `oag.slipstream` draws a tunnel round the craft with the two.
 
 `time` runs with the frames. A scalar a module sets is stepped once a tick, so one that moves
 (a count of ticks, a radius) is read as `param_x() + rate * input.between`, `rate` being what it
@@ -70,7 +79,21 @@ across; a fill, the view.
 | --- | --- | --- | --- |
 | An effect's particles | `shader = "<name>"` on an emitter of its TOML ([`mod-effect.md`](../../formats/mod-effect.md)) | the particle's | Depth tested, with the effects |
 | A screen fill | `screen_fill_shaded(&craft, rgba, shader)` (`screen-fill` with `arg` the place plus one) | `rgba` | After the flash, over the world, under the HUD. The slot's view alone |
+| A backdrop | the same call, through a shader whose header says `fill = "backdrop"` | `rgba` | After the circuit and the shadows, before the crafts. See below |
 | A beam | `draw_beam(&craft, to, rgba, half_width, Some(shader))` (`draw-beam`) | `rgba` | Depth tested, with the effects. Nothing while either craft is out of the world |
+
+**A backdrop stands in for the world behind the view's own craft.** Where it is at least half
+there (alpha 0.5) it is drawn before the crafts and writes a depth nearer than anything else in the
+pass (`BACKDROP_DEPTH`), so every layer drawn after it, the other crafts, the weapons and the
+effects, is hidden where it stands; the view's own craft is drawn in a slice of the depth range
+nearer still (`Draw::Depth`, `NEAR_SLICE`), so it flies in front of the backdrop. The texels under
+half alpha, a glow or something fading out, are drawn where an ordinary fill is, over everything,
+and hide nothing. With a backdrop up, a craft in a transit is drawn for its own view although it
+is out of the world ("A craft's own transit"). Proof: `oag_fx`'s
+`a_header_says_a_fill_through_the_shader_is_a_backdrop`,
+`tests::portal_view::a_craft_in_a_transit_is_flown_and_drawn_for_its_own_view_under_a_backdrop`.
+Open: a flown craft has its hull and its flame shapes, not the boost plume, the particle exhaust
+or the trail, which belong to a craft in the world.
 
 `draw-beam` with `None` draws the flat colour, alpha over. `set_shader_param(&craft, shader, index,
 value)` sets a scalar for the view of that craft's slot this tick; unset it is the header's default.
@@ -168,21 +191,31 @@ near plane (`portal::oblique_near`, the 0..1 depth form); the frustum and the sk
 matrix, because the swing tilts the far plane and the sky rides on the eye, behind that plane.
 
 **A craft's own transit.** A craft in a `transit` is frozen where it went in and comes out on
-the road's middle, facing down it. Its camera would be cut across that difference at the exit, and
-a view through a pair would show the exit from where the camera never stands. So while a craft is
-out of the world its chase camera eases, over 12 ticks and with its spring four times as fast
-(settled by tick 16), onto the pose the craft has on its exit
-tick carried back through the pair of frames at the craft's own lap progress and at the transit's
-exit (`oag_raceplay::transit_camera`, the player's camera and a split's seats), and on the exit
-tick it is seated behind the craft with no spring to cross the gap. A `portal-view` from
-`Craft::progress()` of the craft in the transit to the transit's exit therefore shows, by the last
-tick out of the world, the picture the camera has a tick later: measured on Pulse PSP EU
-`16_Track` (2026-11-10, exit at tick 774), the two eyes stand 0.12 units apart and look 0.0002
-apart; before the seat, 3.5 units and 17 degrees. A screen fill reads it as
-`engine_texture(input.screen_uv)` under `Continuous`, or under a `Once` taken after the camera
-has settled. Proof: `tests::portal_view::a_view_through_a_transits_own_pair_ends_on_the_camera_the_craft_comes_out_with`.
+the road's middle, facing down it. Three things follow from one pose, its *seat*: the pose it has
+on its exit tick carried back through the pair of frames at the craft's own lap progress and at the
+transit's exit (`oag_raceplay::transit_camera`, the player's camera and a split's seats).
+
+- **Its camera flies on.** The camera's target eases from the frozen craft onto the seat, over 12
+  ticks and with its spring four times as fast, and keeps going along the seat's heading at the
+  speed the craft went in at. The world does not stop at the entrance: the camera goes through
+  where the craft did. On the exit tick it is seated behind the craft, with no spring to cross
+  the gap.
+- **Its pair is seen from the seat.** A `portal-view` of a slot whose craft is in a transit is
+  framed by that camera carried back by the distance flown (`Race::pair_view`). From
+  `Craft::progress()` of the craft to the transit's exit it shows, once the camera is on its
+  line (16 ticks in), the picture the camera has on the exit tick: measured on Pulse PSP EU
+  `16_Track` (2026-11-10, exit at tick 774), the two eyes stand 0.12 units apart and look
+  0.0002 apart; before the seat, 3.5 units and 17 degrees. A screen fill reads it as
+  `engine_texture(input.screen_uv)` under `Continuous`, or under a `Once` taken from then on.
+- **It is drawn for its own view under a backdrop**, where the camera follows it
+  (`Race::ship_drawn`), and for no other view: it is out of the world. `craft_frame` for it is
+  the line it is flown along, the seat flown on, which the drawn hull eases onto over those first
+  ticks.
+
+Proof: `tests::portal_view::a_view_through_a_transits_own_pair_ends_on_the_camera_the_craft_comes_out_with`
+and `a_craft_in_a_transit_is_flown_and_drawn_for_its_own_view_under_a_backdrop`.
 **2048 and Omega: checked, applies, wired by the same code**: the seat reads the `Course` and the
-spline alone; a frame of each read, no test of its own.
+spline alone; a strip of frames of each read (2026-11-10), no test of its own.
 
 **`update`:** `ViewUpdate::Continuous` draws every frame the portal is in the view. `ViewUpdate::Once`
 draws one snapshot, the first frame it is, and again when `generation` changes. The transform,

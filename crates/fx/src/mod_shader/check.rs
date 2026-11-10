@@ -16,7 +16,7 @@ const MAX_ARRAY_BYTES: u64 = 64 * 1024;
 const HOST_BINDINGS: std::ops::RangeInclusive<u32> = 0..=3;
 
 /// The host's entry points: a mod's would be unreachable.
-const HOST_ENTRY_POINTS: usize = 3;
+const HOST_ENTRY_POINTS: usize = 5;
 
 fn has_loop(block: &Block) -> bool {
     block.iter().any(|statement| match statement {

@@ -49,11 +49,16 @@ impl Scene {
         let right = Vec3::new(camera.x_axis.x, camera.y_axis.x, camera.z_axis.x);
         let up = Vec3::new(camera.x_axis.y, camera.y_axis.y, camera.z_axis.y);
         let eye = camera.inverse().w_axis.truncate();
+        // The projection alone, for `eye_ray`: what is left of `vp` once the view is out.
+        let projection = oag_core::math::Mat4::from_cols_array_2d(vp) * camera.inverse();
+        let lens = [1.0 / projection.x_axis.x, 1.0 / projection.y_axis.y];
         stage.upload(
             queue,
             &oag_fx::mod_shader::Frame {
                 view_projection: *vp,
                 engine_view_projection: self.portal_engine_of(race),
+                craft: (camera * race.craft_frame()).to_cols_array_2d(),
+                lens,
                 // The offset and the flyby are the world meshes' epoch; a mod counts race time.
                 time: self.anim_clock.get() - race.world_clock_offset() - race.flyby_seconds(),
                 draw_alpha: race.draw_alpha(),

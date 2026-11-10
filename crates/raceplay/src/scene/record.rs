@@ -44,9 +44,21 @@ pub(super) enum Draw<'a> {
     Overlay(&'a Drawable),
     /// The blob and hull shadows, [`ViewPass::shadow_runs`].
     Shadow,
+    /// A mod's backdrop fill ([`oag_fx::mod_shader::Drawer::draw_backdrop`]): over the world
+    /// drawn so far and before the crafts, hiding what is drawn after it where it stands.
+    Backdrop,
+    /// The depth range the draws after it land in, of the pass's `0..1`: a craft flown through
+    /// a backdrop is drawn in a slice nearer than the backdrop's own depth
+    /// ([`NEAR_SLICE`]), every other draw in the whole range.
+    Depth(f32, f32),
     /// The blended effects over everything solid ([`Recorder::draw_effects`]).
     Effects,
 }
+
+/// The slice of the depth range a craft flown through a backdrop is drawn in: nearer than
+/// `mod_shader.wesl`'s `BACKDROP_DEPTH`, so the backdrop does not hide it, and a range of its
+/// own, so the hull still hides its own far side.
+pub(super) const NEAR_SLICE: (f32, f32) = (0.0, 0.001);
 
 /// The draws one view decided, built by its prepare.
 pub(super) struct DrawList<'a>(pub(super) Vec<Draw<'a>>);
@@ -83,6 +95,18 @@ impl<'a> DrawList<'a> {
 
     pub(super) fn push(&mut self, draw: Draw<'a>) {
         self.0.push(draw);
+    }
+
+    /// `draws` in the near slice when `flown`, the craft being one flown through a backdrop;
+    /// as they stand otherwise.
+    pub(super) fn flown(&mut self, flown: bool, draws: impl FnOnce(&mut Self)) {
+        if flown {
+            self.0.push(Draw::Depth(NEAR_SLICE.0, NEAR_SLICE.1));
+        }
+        draws(self);
+        if flown {
+            self.0.push(Draw::Depth(0.0, 1.0));
+        }
     }
 }
 
@@ -399,6 +423,12 @@ impl<'a> Recorder<'a> {
                 Draw::Additive(drawable) => stats.add(drawable.draw_additive(&mut render, block)),
                 Draw::Overlay(drawable) => stats.add(drawable.draw_overlay(&mut render, block)),
                 Draw::Shadow => pass.effects.shadow.draw(&mut render, &pass.shadow_runs),
+                Draw::Backdrop => {
+                    if let Some((stage, drawn)) = &pass.effects.mod_shaders {
+                        stage.draw_backdrop(&mut render, drawn);
+                    }
+                }
+                Draw::Depth(near, far) => render.set_viewport(x, y, w, h, *near, *far),
                 Draw::Effects => self.draw_effects(&mut render, pass, &mut stats),
             }
         }

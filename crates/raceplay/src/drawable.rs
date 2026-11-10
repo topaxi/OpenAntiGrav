@@ -1140,6 +1140,25 @@ pub(super) fn shaken_model_matrix_of(ship: &Ship, shake: Mat4) -> Mat4 {
         * Mat4::from_scale(Vec3::splat(oag_fx::exhaust::CRAFT_ROW_SCALE))
 }
 
+/// The model matrix of a hull posed at `target` rather than on a body: level on the target's
+/// frame, with [`model_matrix_of`]'s model-space yaw and scale. What a craft in a transit is
+/// drawn with for its own view (`crate::transit_camera`).
+#[cfg(feature = "view")]
+pub(super) fn posed_model_matrix(target: &oag_race::chase_rig::Target) -> Mat4 {
+    let forward = target.forward.normalize_or_zero();
+    let right = forward.cross(target.up).normalize_or_zero();
+    let up = right.cross(forward);
+    let frame = Mat4::from_cols(
+        right.extend(0.0),
+        up.extend(0.0),
+        (-forward).extend(0.0),
+        target.position.extend(1.0),
+    );
+    frame
+        * Mat4::from_rotation_y(MODEL_YAW)
+        * Mat4::from_scale(Vec3::splat(oag_fx::exhaust::CRAFT_ROW_SCALE))
+}
+
 /// The drawn hull's rotation: the body's orientation with the barrel roll and the
 /// steering lean turned about its nose ([`model_matrix_of`] without the model-space
 /// yaw and scale). Its local `+X` is the hull's right wingtip, `-Z` its nose.

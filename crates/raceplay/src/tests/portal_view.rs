@@ -65,16 +65,21 @@ fn portal_view(
     }
 }
 
-fn shaded(commands: &[Command]) -> Source {
+fn shaded(commands: &[Command], text: &'static str) -> Source {
     let mut source = scripted("test.portal", "", commands, &[]);
     source.shaders = vec![("a-window".to_string(), "a.wgsl".to_string())];
-    source.files = std::sync::Arc::new(|_| Ok(GOOD.as_bytes().to_vec()));
+    source.files = std::sync::Arc::new(move |_| Ok(text.as_bytes().to_vec()));
     source
 }
 
 /// A race with the mod's shader, sending `commands` every tick, its chase camera settled.
 fn race(commands: &[Command]) -> Race {
-    let source = shaded(commands);
+    race_with(commands, GOOD)
+}
+
+/// [`race`] with `text` for the mod's shader.
+fn race_with(commands: &[Command], text: &'static str) -> Race {
+    let source = shaded(commands, text);
     let mut race = grid(prepared(std::slice::from_ref(&source)));
     let shaders = crate::extension_shaders::load(
         std::slice::from_ref(&source),
@@ -244,6 +249,68 @@ fn a_view_through_a_transits_own_pair_ends_on_the_camera_the_craft_comes_out_wit
     assert!(apart < 0.25, "the eyes stand {apart} apart");
     let turned = through.z_axis.truncate().distance(out.z_axis.truncate());
     assert!(turned < 0.02, "the two look {turned} apart");
+}
+
+/// A fill through a shader whose header says `fill = "backdrop"` stands behind the view's own
+/// craft: in a transit that craft is out of the world and still drawn for its own view, where
+/// its camera follows it, and for no other; its camera flies on at the speed it went in at,
+/// and its pair is still seen from its seat. A fill that is no backdrop draws no such craft.
+#[test]
+fn a_craft_in_a_transit_is_flown_and_drawn_for_its_own_view_under_a_backdrop() {
+    const BEHIND: &str = "//! fill = \"backdrop\"\nfn mod_fragment(input: ModInput) -> vec4<f32> { return input.colour; }\n";
+    let fill = Command::ScreenFill {
+        slot: Slot::new(0).unwrap(),
+        rgba: oag_ext_abi::Rgba::new(255, 255, 255, 255),
+        shader: Some(0),
+    };
+    let flown = |text: &'static str| {
+        let mut race = race_with(&[fill], text);
+        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(30.0, 0.0, 0.0);
+        let before = race.view().inverse().w_axis.truncate();
+        race.begin_transit(0, 40, crate::transit::Distance::Units(25.0), 0.9)
+            .expect("the player is racing on the course");
+        for _ in 0..20 {
+            race.tick(&PlayerInputs::none());
+        }
+        (race, before)
+    };
+    let (mut race, before) = flown(BEHIND);
+    assert!(!race.ship_active(0), "out of the world");
+    assert!(race.ship_drawn(0) && race.ship_flown_in_view(0));
+    // A second seat's view of the same race.
+    assert_eq!(race.set_viewport_count(2), 2);
+    race.set_viewpoint(1);
+    assert_eq!(race.viewed_slot(), 1);
+    assert!(!race.ship_drawn(0), "no other view draws it");
+    race.reset_viewpoint();
+    // 30 units a second, and 19 ticks since the tick the seat was opened on: the camera and
+    // the hull are 9.5 units on from the seat, and the pair is seen from where the camera
+    // would stand had it stayed on it.
+    let eye = race.view().inverse().w_axis.truncate();
+    assert!(
+        eye.x - before.x > 8.0,
+        "the camera flew on: {before} to {eye}"
+    );
+    let hull = race.ship_model_matrix_of(0).w_axis.truncate();
+    let frozen = race.sim.world.ships[0].physics.body.position;
+    assert!(
+        hull.x - frozen.x > 8.0,
+        "the hull flew on: {frozen} to {hull}"
+    );
+    let pair = race.pair_view().inverse().w_axis.truncate();
+    assert!((eye.x - pair.x - 9.5).abs() < 0.01, "{pair} against {eye}");
+    let frame = race.craft_frame();
+    assert!(
+        frame.z_axis.x < -0.99,
+        "the frame's back is against the flight"
+    );
+    assert!(frame.w_axis.truncate().distance(hull) < 0.5);
+
+    let (race, _) = flown(GOOD);
+    assert!(
+        !race.ship_drawn(0),
+        "a fill over the picture hides the craft with the rest"
+    );
 }
 
 /// Acceptance: a race with a loaded shader that asks for no view renders no extra scene and
@@ -440,7 +507,7 @@ fn forked_race(exit: oag_ext_abi::Distance) -> Option<(Race, crate::extensions::
         update: ViewUpdate::Continuous,
         generation: 0,
     };
-    let source = shaded(&[command]);
+    let source = shaded(&[command], GOOD);
     let mut report = Vec::new();
     setup.extensions = crate::extensions::prepare(
         std::slice::from_ref(&source),

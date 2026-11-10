@@ -850,7 +850,7 @@ impl Scene {
             let Some(flare) = flare else {
                 continue;
             };
-            if !race.ship_active(slot) {
+            if !race.ship_drawn(slot) {
                 continue;
             }
             // HD breathes the flame with the craft: `EngineFlare_PlaceShapes`
@@ -872,7 +872,7 @@ impl Scene {
         // The five spikes, each on its own flicker scale: split out of the
         // groups above, so they get no part of those groups' length scale.
         for (slot, spikes) in self.flare_spikes.iter().enumerate().take(drawn) {
-            if !race.ship_active(slot) {
+            if !race.ship_drawn(slot) {
                 continue;
             }
             for spike in spikes {
@@ -1168,6 +1168,9 @@ impl Scene {
         // original's own draw-order key has no layer for a blob, because no
         // title in the lineage draws one. See `docs/rendering/draw-order.md`.
         draws.push(Draw::Shadow);
+        // A mod's backdrop: over the circuit and before the hulls, so the view's own craft is
+        // drawn in front of it. Nothing with no such fill.
+        draws.push(Draw::Backdrop);
         // Skipped outright in the cockpit view rather than moved or scaled away:
         // the original sets one flag on the craft and draws no hull, and a draw
         // call not issued is the only version of that with no chance of a stray
@@ -1176,7 +1179,7 @@ impl Scene {
         // in front are exactly what a cockpit view is for.
         draws.mark("craft, weapons, shields");
         for (index, drawable) in self.ships.iter().take(drawn).enumerate() {
-            if self.hull_skipped(race, index) {
+            if self.hull_skipped(race, index) || !race.ship_drawn(index) {
                 continue;
             }
             let (centre, radius) = drawable.bound();
@@ -1186,7 +1189,7 @@ impl Scene {
                 centre,
                 radius,
             ) {
-                draws.mesh(drawable);
+                draws.flown(race.ship_flown_in_view(index), |draws| draws.mesh(drawable));
             }
         }
         // The ribbons, then the circuit's blended list over them: the original's queue order
@@ -1241,25 +1244,27 @@ impl Scene {
             let Some(flare) = flare else {
                 continue;
             };
-            if !race.ship_active(slot) {
+            if !race.ship_drawn(slot) {
                 continue;
             }
             // `draw`, not `draw_additive`: every batch of this model already
             // carries its material's own factor pair, so the ordinary path
             // routes it through the authored pipeline. The override the plume
             // needs is for a model that authors none.
-            draws.mesh(flare);
+            draws.flown(race.ship_flown_in_view(slot), |draws| draws.mesh(flare));
         }
         for (slot, spikes) in self.flare_spikes.iter().enumerate().take(drawn) {
-            if !race.ship_active(slot) {
+            if !race.ship_drawn(slot) {
                 continue;
             }
-            for spike in spikes {
-                if spike.boost && !spike_boost_visible(race, slot) {
-                    continue;
+            draws.flown(race.ship_flown_in_view(slot), |draws| {
+                for spike in spikes {
+                    if spike.boost && !spike_boost_visible(race, slot) {
+                        continue;
+                    }
+                    draws.mesh(&spike.drawable);
                 }
-                draws.mesh(&spike.drawable);
-            }
+            });
         }
         draws.mark("boost plumes");
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {

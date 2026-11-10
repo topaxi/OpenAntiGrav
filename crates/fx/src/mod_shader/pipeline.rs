@@ -17,12 +17,15 @@ const MAX_VERTICES: usize = 16 * 1024;
 struct Uniforms {
     view_projection: [[f32; 4]; 4],
     engine_view_projection: [[f32; 4]; 4],
+    craft: [[f32; 4]; 4],
     fill: [f32; 4],
     params: [f32; MAX_PARAMS],
     time: f32,
     between: f32,
     engine_bound: f32,
     pad: f32,
+    lens: [f32; 2],
+    pad_lens: [f32; 2],
 }
 
 const IDENTITY: [[f32; 4]; 4] = [
@@ -60,6 +63,10 @@ pub struct Frame<'a> {
     pub draw_alpha: f32,
     /// What `engine_uv` projects with in this view; `None` is no picture for this view.
     pub engine_view_projection: Option<[[f32; 4]; 4]>,
+    /// `craft_frame`: the view's own craft in eye space, rigid, as it is drawn.
+    pub craft: [[f32; 4]; 4],
+    /// `eye_ray`'s scale: the tangents of half the view's field, across and up.
+    pub lens: [f32; 2],
     /// The view's fill.
     pub fill: Option<Fill>,
     /// Triangles per shader.
@@ -75,12 +82,16 @@ pub struct Frame<'a> {
 pub struct Drawn {
     runs: Vec<(usize, Range<u32>)>,
     fill: Option<usize>,
+    /// The fill's shader is a backdrop's (`fill = "backdrop"`).
+    backdrop: bool,
 }
 
 #[derive(Debug, Clone)]
 struct Built {
     surface: wgpu::RenderPipeline,
     fill: wgpu::RenderPipeline,
+    backdrop: wgpu::RenderPipeline,
+    fringe: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
 }
 
@@ -107,13 +118,38 @@ impl Drawer {
         }
     }
 
-    /// The fill, after every world layer.
+    /// The fill, after every world layer. Of a backdrop, what [`Self::draw_backdrop`] left: the
+    /// texels under half alpha, which hide nothing.
     pub fn draw_fill(&self, pass: &mut wgpu::RenderPass<'_>, drawn: &Drawn) {
         if let Some(Some(built)) = drawn.fill.and_then(|shader| self.built.get(shader)) {
-            pass.set_pipeline(&built.fill);
+            pass.set_pipeline(if drawn.backdrop {
+                &built.fringe
+            } else {
+                &built.fill
+            });
             pass.set_bind_group(0, &built.bind_group, &[]);
             pass.draw(0..3, 0..1);
         }
+    }
+
+    /// A backdrop fill, before the crafts: over the world drawn so far, writing a depth
+    /// nearer than any of it where it is at least half there, so the world's later layers
+    /// stay behind it.
+    pub fn draw_backdrop(&self, pass: &mut wgpu::RenderPass<'_>, drawn: &Drawn) {
+        if !drawn.backdrop {
+            return;
+        }
+        if let Some(Some(built)) = drawn.fill.and_then(|shader| self.built.get(shader)) {
+            pass.set_pipeline(&built.backdrop);
+            pass.set_bind_group(0, &built.bind_group, &[]);
+            pass.draw(0..3, 0..1);
+        }
+    }
+
+    /// Whether the last upload left a backdrop to draw.
+    #[must_use]
+    pub fn has_backdrop(drawn: &Drawn) -> bool {
+        drawn.backdrop && drawn.fill.is_some()
     }
 }
 
@@ -123,6 +159,7 @@ struct Slot {
     uniforms: wgpu::Buffer,
     mod_texture: wgpu::TextureView,
     defaults: [f32; MAX_PARAMS],
+    backdrop: bool,
 }
 
 /// Every shader of a race. A place that did not build draws nothing.
@@ -233,7 +270,7 @@ fn pipelines(
     shader: &wgpu::ShaderModule,
     blend: Blend,
     target: Pass,
-) -> (wgpu::RenderPipeline, wgpu::RenderPipeline) {
+) -> [wgpu::RenderPipeline; 4] {
     let mut targets = vec![Some(wgpu::ColorTargetState {
         format: target.format,
         blend: Some(state(blend)),
@@ -241,7 +278,10 @@ fn pipelines(
         write_mask: wgpu::ColorWrites::COLOR,
     })];
     targets.extend(target.velocity.target(true));
-    let build = |label, entry, buffers: &[Option<wgpu::VertexBufferLayout<'_>>], compare| {
+    let build = |label,
+                 (entry, fragment): (&str, &str),
+                 buffers: &[Option<wgpu::VertexBufferLayout<'_>>],
+                 (compare, write)| {
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(label),
             layout: Some(layout),
@@ -253,7 +293,7 @@ fn pipelines(
             },
             fragment: Some(wgpu::FragmentState {
                 module: shader,
-                entry_point: Some("fs_main"),
+                entry_point: Some(fragment),
                 targets: &targets,
                 compilation_options: fragment_options(target.format, target.store),
             }),
@@ -263,7 +303,7 @@ fn pipelines(
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: DEPTH_FORMAT,
-                depth_write_enabled: Some(false),
+                depth_write_enabled: Some(write),
                 depth_compare: Some(compare),
                 stencil: Default::default(),
                 bias: Default::default(),
@@ -278,21 +318,33 @@ fn pipelines(
     };
     let surface = build(
         "mod shader surface",
-        "vs_surface",
+        ("vs_surface", "fs_main"),
         &[Some(wgpu::VertexBufferLayout {
             array_stride: size_of::<GpuVertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &crate::psys::SURFACE_ATTRIBUTES,
         })],
-        wgpu::CompareFunction::Less,
+        (wgpu::CompareFunction::Less, false),
     );
     let fill = build(
         "mod shader fill",
-        "vs_fill",
+        ("vs_fill", "fs_main"),
         &[],
-        wgpu::CompareFunction::Always,
+        (wgpu::CompareFunction::Always, false),
     );
-    (surface, fill)
+    let backdrop = build(
+        "mod shader backdrop",
+        ("vs_fill", "fs_backdrop"),
+        &[],
+        (wgpu::CompareFunction::Always, true),
+    );
+    let fringe = build(
+        "mod shader backdrop fringe",
+        ("vs_fill", "fs_fringe"),
+        &[],
+        (wgpu::CompareFunction::Always, false),
+    );
+    [surface, fill, backdrop, fringe]
 }
 
 impl Stage {
@@ -351,7 +403,7 @@ impl Stage {
                     target,
                 )
             });
-            let (surface, fill) = match made {
+            let [surface, fill, backdrop, fringe] = match made {
                 Ok(pair) => pair,
                 Err(why) => {
                     failures.push(format!("shader {place} left out: {why}; draws nothing"));
@@ -374,11 +426,14 @@ impl Stage {
                 uniforms,
                 mod_texture,
                 defaults: shader.compiled.defaults,
+                backdrop: shader.compiled.backdrop,
             };
             let bind_group = bind(device, &layout, &sampler, &slot, &fallback);
             built.push(Some(Built {
                 surface,
                 fill,
+                backdrop,
+                fringe,
                 bind_group,
             }));
             slots.push(Some(slot));
@@ -436,6 +491,10 @@ impl Stage {
             at += count;
         }
         drawn.fill = frame.fill.map(|fill| fill.shader);
+        drawn.backdrop = drawn
+            .fill
+            .and_then(|place| self.slots.get(place)?.as_ref())
+            .is_some_and(|slot| slot.backdrop);
         let colour = frame.fill.map_or([0.0; 4], |fill| fill.colour);
         for (place, slot) in self.slots.iter().enumerate() {
             let Some(slot) = slot else { continue };
@@ -446,12 +505,15 @@ impl Stage {
             let uniforms = Uniforms {
                 view_projection: frame.view_projection,
                 engine_view_projection: frame.engine_view_projection.unwrap_or(IDENTITY),
+                craft: frame.craft,
                 fill: colour,
                 params: std::array::from_fn(|i| sent[i].unwrap_or(slot.defaults[i])),
                 time: frame.time,
                 between: frame.draw_alpha - 1.0,
                 engine_bound: f32::from(u8::from(frame.engine_view_projection.is_some())),
                 pad: 0.0,
+                lens: frame.lens,
+                pad_lens: [0.0; 2],
             };
             queue.write_buffer(&slot.uniforms, 0, bytemuck::bytes_of(&uniforms));
         }

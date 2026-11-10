@@ -50,9 +50,11 @@ impl Race {
         let entrance = Exit::ring(course.index_at_progress(request.entrance)?);
         let entrance = self.portal_frame(entrance, Face::Oncoming)?;
         let exit = self.portal_frame(request.exit?, Face::Departing)?;
-        let main = self.view();
+        // A craft in a transit has flown on past its entrance; its pair is seen from its seat.
+        let main = self.pair_view();
         let centre = entrance.w_axis.truncate();
-        let facing = (self.camera_position() - centre).dot(entrance.z_axis.truncate()) > 0.0;
+        let eye = main.inverse().w_axis.truncate();
+        let facing = (eye - centre).dot(entrance.z_axis.truncate()) > 0.0;
         let in_view = Frustum::from_view_projection(projection * main)
             .intersects_sphere(centre, request.radius);
         if !facing || !in_view {

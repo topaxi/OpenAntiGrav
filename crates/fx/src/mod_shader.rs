@@ -46,11 +46,26 @@ pub enum Blend {
     Add,
 }
 
+/// Where a screen fill through a shader draws.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum FillLayer {
+    /// After every world layer, under the HUD.
+    #[default]
+    Over,
+    /// Before the crafts, taking the world behind it out of the picture: where it is at least
+    /// half there, what is drawn after it is hidden, but for the view's own craft. Its texels
+    /// under half alpha are drawn as [`Self::Over`] is.
+    Backdrop,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Header {
     #[serde(default)]
     blend: Blend,
+    #[serde(default)]
+    fill: FillLayer,
     /// A PNG of the mod, read by `mod_texture`.
     texture: Option<String>,
     #[serde(default)]
@@ -77,6 +92,8 @@ pub struct Compiled {
     pub texture: Option<String>,
     /// Its scalars' defaults, unset ones zero.
     pub defaults: [f32; MAX_PARAMS],
+    /// Its header's `fill = "backdrop"`: a screen fill through it draws before the crafts.
+    pub backdrop: bool,
 }
 
 /// The module with `body` where the host's own fragment was. The host's stays as a function
@@ -100,6 +117,7 @@ pub fn flat() -> Compiled {
         blend: Blend::Alpha,
         texture: None,
         defaults: [0.0; MAX_PARAMS],
+        backdrop: false,
     }
 }
 
@@ -151,6 +169,7 @@ pub fn compile(path: &str, source: &str) -> Result<Compiled, String> {
         blend: header.blend,
         texture: header.texture,
         defaults,
+        backdrop: header.fill == FillLayer::Backdrop,
     })
 }
 

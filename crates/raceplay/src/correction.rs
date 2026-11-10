@@ -149,6 +149,10 @@ impl Race {
     /// `slot`'s craft model matrix as drawn at this tick: the simulation's, moved by
     /// the correction glide.
     pub(super) fn drawn_model(&self, slot: usize) -> Mat4 {
+        // A craft in a transit is where its camera follows it (`crate::transit_camera`).
+        if let Some(flown) = self.flown_model(slot) {
+            return flown;
+        }
         let model = shaken_model_matrix_of(&self.sim.world.ships[slot], self.hull_shake_of(slot));
         match self.view.correction[slot] {
             offset if offset == Vec3::ZERO => model,

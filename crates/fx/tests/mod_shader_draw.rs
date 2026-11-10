@@ -149,6 +149,8 @@ fn frame<'a>(
         time: 2.0,
         draw_alpha: 1.0,
         engine_view_projection: None,
+        craft: IDENTITY,
+        lens: [1.0, 1.0],
         fill,
         surfaces,
         params,

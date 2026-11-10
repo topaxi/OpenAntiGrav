@@ -149,13 +149,10 @@ impl Race {
     /// The craft the chase camera follows, at the pose it is drawn at: the simulation's plus
     /// the correction glide ([`crate::correction`]), so the hull and the camera that frames it
     /// move together. The camera follows this machine's seat ([`Self::player_slot`]), not
-    /// slot 0. A craft in a transit is followed from where it will be put
+    /// slot 0. A craft in a transit is followed onto its seat and on from there
     /// ([`crate::transit_camera`]).
     pub(super) fn camera_target(&self) -> Target {
-        let slot = self.player_slot();
-        let mut target = target_of(&self.sim.world.ships[slot]);
-        target.position = self.drawn_position(slot);
-        self.seated(slot, target)
+        self.followed(self.player_slot())
     }
 
     /// Where the camera is and what it is aimed at, as a view matrix.

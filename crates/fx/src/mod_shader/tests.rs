@@ -12,6 +12,10 @@ fn the_host_text_has_the_one_fragment_a_mod_replaces() {
         "fn engine_texture(",
         "fn engine_uv(",
         "fn engine_texture_bound(",
+        "fn craft_frame(",
+        "fn eye_ray(",
+        "fn fs_backdrop(",
+        "fn fs_fringe(",
     ] {
         assert!(HOST.contains(helper), "the link dropped {helper}");
     }
@@ -24,6 +28,20 @@ fn a_shader_reads_its_header_and_builds_on_the_contract() {
     assert_eq!(shader.texture.as_deref(), Some("fx/x.png"));
     assert_eq!(shader.defaults, [2.5, 0.0, 0.0, 0.0]);
     assert!(shader.wgsl.starts_with("//! blend"), "the mod's text first");
+}
+
+#[test]
+fn a_header_says_a_fill_through_the_shader_is_a_backdrop() {
+    assert!(
+        !compile("fx/x.wgsl", GOOD).unwrap().backdrop,
+        "over with none"
+    );
+    let behind = format!("//! fill = \"backdrop\"\n{GOOD}");
+    assert!(compile("fx/x.wgsl", &behind).unwrap().backdrop);
+    let unknown = format!("//! fill = \"under\"\n{GOOD}");
+    assert!(compile("fx/x.wgsl", &unknown).is_err());
+    let reads = "fn mod_fragment(input: ModInput) -> vec4<f32> {\n    let at = craft_frame()[3].xyz + eye_ray(input.screen_uv);\n    return vec4<f32>(at, 1.0);\n}\n";
+    compile("fx/x.wgsl", reads).expect("the craft's frame and the eye's ray are there to read");
 }
 
 #[test]

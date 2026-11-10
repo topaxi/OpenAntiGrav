@@ -347,7 +347,7 @@ impl Race {
         for slot in 0..MAX_SHIPS {
             let boosting = self.sim.world.ships[slot].physics.pad_timer > 0.0;
             let respawns = self.placements_of(slot);
-            let target = self.seated(slot, target_of(&self.sim.world.ships[slot]));
+            let target = self.followed(slot);
             let step = self.camera_step(slot);
             let Some(cam) = self.view.viewpoints.cams[slot].as_mut() else {
                 continue;
