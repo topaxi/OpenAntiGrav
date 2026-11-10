@@ -412,44 +412,6 @@ impl Report {
     }
 }
 
-/// The `.rcsskeleton` and `.rcsanimclip` a Wipeout 2048 circuit ships beside
-/// its `.vex`, in that order - the pair [`Animation::parse`] takes.
-///
-/// Same stem rule as [`super::sibling_name`]. Wipeout HD ships neither (its scenery
-/// animation is in the `.vex` itself), so a caller reads them where they
-/// resolve and passes `None` where they do not.
-#[must_use]
-pub fn animation_names(vex_name: &str) -> Option<(String, String)> {
-    animation_names_beside(&super::sibling_name(vex_name)?)
-}
-
-/// The `.rcsskeleton` and `.rcsanimclip` that sit beside an `.rcsmodel`
-/// already found, whatever its spelling - `track.rcsmodel` gives
-/// `track.rcsskeleton`, and the Omega Collection's `track.final.rcsmodel`
-/// gives `track.final.rcsskeleton`. See [`super::sibling_name_cooked`].
-#[must_use]
-pub fn animation_names_beside(model_name: &str) -> Option<(String, String)> {
-    let stem = model_name.strip_suffix(".rcsmodel")?;
-    Some((format!("{stem}.rcsskeleton"), format!("{stem}.rcsanimclip")))
-}
-
-/// The Zone-mode model that sits beside a 2048 circuit's `track.vex`:
-/// `trackZone.rcsmodel`, whose `.rcsskeleton`, `.rcsanimclip` and `.pvs`
-/// carry the same stem.
-///
-/// **A model of its own, not a second skeleton for `track.rcsmodel`**: on
-/// `altima` it is 37 MB against the race model's 17, with its own PVS. The
-/// reversed circuit ships no Zone model, so both directions map to the same
-/// file. `None` for a name that is not a `.vex`.
-#[must_use]
-pub fn zone_model_name(vex_name: &str) -> Option<String> {
-    let dir_end = vex_name.rfind(['\\', '/']).map_or(0, |at| at + 1);
-    vex_name[dir_end..]
-        .to_ascii_lowercase()
-        .ends_with(".vex")
-        .then(|| format!("{}trackZone.rcsmodel", &vex_name[..dir_end]))
-}
-
 /// Whether a blob is 2048's container rather than Wipeout HD's.
 ///
 /// Cheap and exact: the two containers disagree on their very first word, and

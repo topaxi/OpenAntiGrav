@@ -47,44 +47,13 @@ mod report;
 
 pub use report::Report;
 
-/// The `.rcsmodel` entry name beside a `.vex` one.
-///
-/// A path rewrite rather than a lookup, because that is how the disc pairs
-/// them: `/data/ships/assegai/ship.vex` sits beside
-/// `/data/ships/assegai/ship.rcsmodel`, and every pair on the disc is spelled
-/// that way. Returns `None` for a name that does not end in `.vex`, since there
-/// is then no pairing rule to apply.
+/// The `.rcsmodel` entry name beside a `.vex` one: the plain model of
+/// [`siblings::Siblings::plain`], for the callers that read nothing else (a
+/// ship's hull, a weapon, a preview). `None` for a name that does not end in
+/// `.vex`, since there is then no pairing rule to apply.
 #[must_use]
 pub fn sibling_name(vex_name: &str) -> Option<String> {
-    let stem = vex_name.strip_suffix(".vex").or_else(|| {
-        // The game's own spelling is case-insensitive in both containers, and a
-        // PSP-shaped name reaches here through `oag_hd`'s tables.
-        vex_name
-            .len()
-            .checked_sub(4)
-            .filter(|&at| vex_name[at..].eq_ignore_ascii_case(".vex"))
-            .map(|at| &vex_name[..at])
-    })?;
-    Some(format!("{stem}.rcsmodel"))
-}
-
-/// The Omega Collection's spelling of [`sibling_name`]: `<stem>.final.rcsmodel`.
-///
-/// **Its circuits ship their baked outputs under a `.final` infix** -
-/// `Data\environments\tech_de_ra\track.vex` sits beside
-/// `track.final.rcsmodel`, `track.final.rcsskeleton`, `track.final.rcsanimclip`
-/// and `track.final.pvs`, and `track.rcsmodel` does not exist. Measured over
-/// the whole PS4 package pair: all 22 of its own and 2048-derived circuits
-/// (and every `track_reversed` one) use the `.final` spelling, and the four
-/// `zone_N` circuits use the plain one - never both in one directory. So a
-/// caller that tries [`sibling_name`] first and this second can never read the
-/// wrong file, and every other title, none of which ships a `.final` name, is
-/// untouched.
-#[must_use]
-pub fn sibling_name_cooked(vex_name: &str) -> Option<String> {
-    let plain = sibling_name(vex_name)?;
-    let stem = plain.strip_suffix(".rcsmodel")?;
-    Some(format!("{stem}.final.rcsmodel"))
+    siblings::Siblings::plain(vex_name).map(|set| set.model)
 }
 
 /// The `.rcsmodel` beside `name`, when this `.vex` needs one and the archive
@@ -208,6 +177,7 @@ mod ice;
 mod probe_lit;
 pub mod psp2;
 mod rim_glow;
+pub mod siblings;
 mod skin;
 mod vertex_scroll;
 mod water;
