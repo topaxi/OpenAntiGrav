@@ -1256,11 +1256,16 @@ pub fn menu_seeds(
         ("ai.difficulty", text(&settings.ai.difficulty)),
     ];
     // Offered only where the ribbon is the PSP preset; elsewhere the row is
-    // dropped (`Definition::drop_unavailable_trail_order`) and nothing seeds it.
+    // dropped (`Definition::drop_unavailable_trail_order`, `drop_unavailable_trail_length`)
+    // and nothing seeds it.
     if title.exhaust.is_psp_preset() {
         out.push((
             "graphics.trail_order",
             text(&profile.trail_order.to_string()),
+        ));
+        out.push((
+            "graphics.trail_length",
+            text(&profile.trail_length.to_string()),
         ));
     }
     // Offered only where the weather is played; elsewhere the row is dropped
@@ -1347,3 +1352,6 @@ mod tests;
 
 #[cfg(test)]
 mod ghost_tests;
+
+#[cfg(test)]
+mod trail_length_tests;

@@ -650,6 +650,18 @@ impl Definition {
         }
     }
 
+    /// Drops the TRAIL LENGTH row on a title whose engine ribbon is not the PSP preset: HD/Fury
+    /// draws its own 54-sample tube, and Omega and 2048 reuse it. The same titles as
+    /// [`Self::drop_unavailable_trail_order`].
+    pub fn drop_unavailable_trail_length(&mut self, title: &oag_title::Title) {
+        if title.exhaust.is_psp_preset() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.trail_length"));
+        }
+    }
+
     /// Drops the WEATHER row on a title whose weather is not played
     /// (`oag_title::weather::Weather::is_played`): every title but Pulse. Same
     /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].

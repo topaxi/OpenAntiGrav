@@ -155,6 +155,7 @@ pub(super) fn menu_page(
     definition.drop_unavailable_race_variant(title);
     definition.drop_rows_picked_on_screen(title);
     definition.drop_unavailable_trail_order(title);
+    definition.drop_unavailable_trail_length(title);
     definition.drop_unavailable_weather(title);
     definition.drop_unavailable_rumble_original(title);
     definition.drop_unavailable_dynamic_hud(title);

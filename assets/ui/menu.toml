@@ -1316,6 +1316,22 @@ string_id = "OAG_GRAPHICS_TRAIL_ORDER"
 setting = "graphics.trail_order"
 values = ["original", "over-floors"]
 
+# How long a craft's engine ribbon is. `original` is the default: the PSP
+# preset's ten samples, byte-identical to a build without the row. `hd` keeps
+# Wipeout HD's 54 samples (one a frame) on the preset's own head width, fade
+# and taper, stretched along the longer ribbon: an enhancement of this
+# project's, a departure from the original. Only a title whose ribbon is the
+# PSP preset (Pulse, Pure) has a choice; the row is dropped elsewhere
+# (`Definition::drop_unavailable_trail_length`). Applies live; a change restarts
+# the rings, so the ribbon is missing for the 0.9 s the longer ring takes to
+# fill. See `docs/rendering/trail-ribbon.md`, "A longer ribbon".
+[[page.entry]]
+kind = "choice"
+label = "TRAIL LENGTH"
+string_id = "OAG_GRAPHICS_TRAIL_LENGTH"
+setting = "graphics.trail_length"
+values = ["original", "hd"]
+
 # What a circuit's rain and snow add to the original's. `original` is the
 # default and draws the weather exactly as the original does; `enhanced` adds
 # splashes where a drop meets the track and flakes that settle on it, this

@@ -87,6 +87,7 @@ pub fn finish_definition(
     definition.drop_unavailable_player_rows(title);
     // And the TRAIL ORDER row, where the ribbon is the PSP preset: Pulse and Pure.
     definition.drop_unavailable_trail_order(title);
+    definition.drop_unavailable_trail_length(title);
     // And the WEATHER row, where the weather is played: Pulse.
     definition.drop_unavailable_weather(title);
     // And the RUMBLE row's `original` value, where the original plays patterns: HD and Omega.
