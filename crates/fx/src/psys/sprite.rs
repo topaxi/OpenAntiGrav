@@ -288,8 +288,11 @@ pub fn map_to_cell(corners: &mut [oag_mesh::mesh::GpuVertex], cell: [f32; 4]) {
 /// Every placed sprite's texels on one [`SHEET_SIZE`]-square RGBA8 image.
 #[derive(Debug, Clone, Default)]
 pub struct Sheet {
-    /// Allocated on the first placement; shared rather than copied when a
-    /// [`super::Library`] is cloned.
+    /// The rows placed so far, `SHEET_SIZE * 4` bytes each, top row first:
+    /// grown as shelves reach down rather than allocated whole, and shared
+    /// rather than copied when a [`super::Library`] is cloned. A row below the
+    /// last one placed is transparent, as the uploaded texture is before a
+    /// sync.
     pixels: Option<Arc<Vec<u8>>>,
     /// Each distinct sprite once, with where it went.
     placed: Vec<(Sprite, [f32; 4])>,
@@ -322,10 +325,12 @@ impl Sheet {
             return None;
         }
         let side = SHEET_SIZE as usize;
-        let pixels = Arc::make_mut(
-            self.pixels
-                .get_or_insert_with(|| Arc::new(vec![0; side * side * 4])),
-        );
+        let pixels = Arc::make_mut(self.pixels.get_or_insert_with(Arc::default));
+        let needed = (y + h) as usize * side * 4;
+        if pixels.len() < needed {
+            pixels.reserve_exact(needed - pixels.len());
+            pixels.resize(needed, 0);
+        }
         let row = usize::from(sprite.width) * 4;
         for line in 0..usize::from(sprite.height) {
             let to = ((y as usize + line) * side + x as usize) * 4;
@@ -344,11 +349,20 @@ impl Sheet {
         Some(rect)
     }
 
-    /// The sheet's texels, `SHEET_SIZE * SHEET_SIZE * 4` bytes, or `None`
-    /// while nothing is placed.
+    /// The sheet's texels down to the last row any sprite reaches
+    /// ([`Self::rows`] rows of `SHEET_SIZE * 4` bytes), or `None` while nothing
+    /// is placed. Every row below is transparent.
     #[must_use]
     pub fn pixels(&self) -> Option<&[u8]> {
         self.pixels.as_deref().map(Vec::as_slice)
+    }
+
+    /// How many rows [`Self::pixels`] holds, 0 while nothing is placed.
+    #[must_use]
+    pub fn rows(&self) -> u32 {
+        self.pixels.as_ref().map_or(0, |pixels| {
+            (pixels.len() / (SHEET_SIZE as usize * 4)) as u32
+        })
     }
 
     /// Changes whenever [`Self::pixels`] does.

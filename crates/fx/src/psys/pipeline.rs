@@ -355,7 +355,7 @@ impl Pipeline {
         if self.sheet_generation == Some(sheet.generation()) {
             return;
         }
-        if let Some(pixels) = sheet.pixels() {
+        if let Some(pixels) = sheet.pixels().filter(|_| sheet.rows() > 0) {
             queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
                     texture: &self.sheet,
@@ -367,11 +367,11 @@ impl Pipeline {
                 wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(SHEET_SIZE * 4),
-                    rows_per_image: Some(SHEET_SIZE),
+                    rows_per_image: Some(sheet.rows()),
                 },
                 wgpu::Extent3d {
                     width: SHEET_SIZE,
-                    height: SHEET_SIZE,
+                    height: sheet.rows(),
                     depth_or_array_layers: 1,
                 },
             );
