@@ -148,14 +148,6 @@ def main() -> None:
     sys.path.insert(0, str(HERE))
     (scratch / "empty.iso").write_bytes(empty_iso())
     # A real image the case deletes while the game runs: a copy, never the original.
-    if not args.only or "disc-lost-mid-run" in args.only:
-        # A hard link, not a copy: deleting it takes the path away from the page and
-        # leaves the original image alone.
-        try:
-            os.link(args.pulse, scratch / "changing.chd")
-        except OSError:  # another filesystem
-            (scratch / "changing.chd").write_bytes(args.pulse.read_bytes())
-
     browsers = ("chromium", "firefox") if args.browser == "both" else (args.browser,)
     results = []
     for browser in browsers:
@@ -165,12 +157,26 @@ def main() -> None:
                 continue
             if browser not in case.browsers:
                 continue
+            if case.name == "disc-lost-mid-run":
+                restore_image(args.pulse, scratch / "changing.chd")
             verdict, note = run(case, browser, args, args.pulse, boot)
             label = "real" if case.real else "synthetic"
             print(f"{verdict:4} {browser:8} {case.name:22} {case.kind:18} {label:9} {note}", flush=True)
             results.append(verdict)
-    (scratch / "changing.chd").unlink(missing_ok=True)
     sys.exit(1 if "FAIL" in results else 0)
+
+
+def restore_image(original: Path, copy: Path) -> None:
+    """A path the case may delete while the game runs, to the same bytes as `original`.
+
+    A hard link, not a copy: removing the link takes the path away from the page and leaves
+    the original image alone.
+    """
+    copy.unlink(missing_ok=True)
+    try:
+        os.link(original, copy)
+    except OSError:  # another filesystem
+        copy.write_bytes(original.read_bytes())
 
 
 def empty_iso() -> bytes:
