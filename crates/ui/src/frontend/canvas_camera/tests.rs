@@ -14,7 +14,7 @@ fn close(a: (f32, f32), b: (f32, f32), within: f32) -> bool {
 }
 
 /// The view of the committed frame 13: the save's opening view.
-const OPENING: (f32, f32) = (746.614, 2000.560);
+const OPENING: (f32, f32) = (746.614, 2000.56);
 /// The view of the committed frame 12: Event 1 selected from the opening view.
 const EVENT_1_SELECTED: (f32, f32) = (425.094, 1714.214);
 
