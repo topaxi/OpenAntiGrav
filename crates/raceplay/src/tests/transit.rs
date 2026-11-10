@@ -156,6 +156,33 @@ fn a_craft_in_transit_has_its_reset_triggers_held() {
     assert_eq!(race.sim.stalled_ticks[1], 0);
 }
 
+/// A transit that begins on the tick the last one ended (a guest answering `transit-end`
+/// with another) is followed from a seat of its own: the camera starts on the craft again,
+/// not twenty ticks down the line of the transit before.
+#[cfg(feature = "view")]
+#[test]
+fn a_transit_begun_as_the_last_one_ended_is_followed_from_its_own_seat() {
+    let mut race = moving();
+    race.begin_transit(1, 30, Distance::Units(20.0), 1.0)
+        .unwrap();
+    for _ in 0..20 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(race.view.transit_seats[1].is_some(), "the fixture seats it");
+    let craft = race.sim.world.ships[1].physics.body.position;
+    let flown_on = (race.followed(1).position - craft).length();
+    assert!(flown_on > 5.0, "the first camera has flown on: {flown_on}");
+    // What the seats see when a second transit took the place of the first inside a tick.
+    let first = race.sim.world.ships[1].transit.unwrap();
+    race.sim.world.ships[1].transit = Some(oag_gameplay::Transit {
+        ticks_left: 30,
+        ..first
+    });
+    race.tick(&PlayerInputs::none());
+    let restarted = (race.followed(1).position - craft).length();
+    assert!(restarted < 2.0, "back on the craft: {restarted}");
+}
+
 /// The fixture's straight track is 24 units wide and has no geometry: a half disc of
 /// radius 8 fits, one of 13 is wider than the track.
 #[test]
@@ -232,6 +259,61 @@ mod guest {
         // Landed at tick N's call, the craft is out for the steps of N..N+19 and comes out
         // at N+20's, before its step: twenty ticks end with it out.
         assert_eq!(out, 20, "out of the world for its twenty ticks");
+    }
+
+    /// Marks each event kind it is sent in its blob (byte `kind`) and asks for nothing.
+    fn listener() -> crate::extensions::Source {
+        let mut source = module(
+            "test.listener",
+            &format!(
+                "(local $i i32)
+                 (block $done (loop $next
+                   (br_if $done (i32.ge_u (local.get $i) (i32.load (i32.const {count}))))
+                   (i32.store8
+                     (i32.add (i32.const {STATE})
+                       (i32.load8_u (i32.add (i32.const {EVENTS}) (i32.mul (local.get $i) (i32.const 16)))))
+                     (i32.const 1))
+                   (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                   (br $next)))
+                 i32.const 0",
+                count = 1024 + oag_ext_abi::EVENT_COUNT_AT,
+            ),
+        );
+        source.state_bytes = 16;
+        source
+    }
+
+    /// A probe's answer is the prober's: a module that asked nothing about the craft is
+    /// sent no `clearance`, though it is sent the craft's `transit-end`.
+    #[test]
+    fn a_clearance_answer_goes_to_the_module_that_probed_alone() {
+        let mut race = grid(prepared(&[listener(), porter()]));
+        for _ in 0..600 {
+            race.tick(&PlayerInputs::none());
+        }
+        let (listened, probed) = (
+            race.extension_state(0).unwrap().to_vec(),
+            race.extension_state(1).unwrap().to_vec(),
+        );
+        assert_eq!(probed[12], 1, "the prober has its answer: {probed:?}");
+        assert_eq!(listened[12], 0, "and nobody else has it: {listened:?}");
+        assert_eq!(listened[11], 1, "transit-end is everyone's: {listened:?}");
+    }
+
+    /// Two modules send slot 1 out on the same call. Both saw it in the world, so the
+    /// second's transit is dropped and neither is faulted.
+    #[test]
+    fn a_transit_for_a_craft_another_module_took_out_on_that_call_is_no_fault() {
+        let mut second = porter();
+        second.mod_id = "test.porter-two".to_string();
+        let mut race = grid(prepared(&[porter(), second]));
+        for _ in 0..600 {
+            race.tick(&PlayerInputs::none());
+        }
+        let reports = race.extension_reports();
+        assert_eq!(reports[0].faulted, None);
+        assert_eq!(reports[1].faulted, None, "the craft was already out");
+        assert_eq!(race.extension_state(1).unwrap()[11], 1, "it still runs");
     }
 
     /// Every call stops slot 1 dead (`scale-speed` 0): it keeps only the one tick of

@@ -78,5 +78,14 @@ checked, applies, not wired** to a race test: the path is the engine's own cue p
 title's craft cues play on `Cue::bus()` (`Bus::Sfx`), as mod sounds do; HD's authored mix
 groups (`Banks::group_bus`) carry the engines and ambience, not cues. No race test runs a
 mod sound on those titles; `Race::tick_sim_only` (a predicting client's replay) drops the
-sounds of a replayed tick, as it does cues, and a server that never drains keeps at most
-1,024 queued one-shots.
+sounds of a replayed tick, as it does cues, and a host that never drains keeps at most
+1,024 queued events of any mode.
+
+**A loop is state, not only an event.** The race keeps the loops its modules hold
+(`Race::mod_sound_loops`, the frame's `mod_loops`) and the playing side brings its voices to
+that set every tick (`oag_sound::sfx::mod_sound::Voices::play`): a loop whose `Loop` was
+never heard is started, one whose `Stop` was never heard is stopped, and one the voice pool
+took back is started again. So a start or a stop raised in a tick that ran silently (a seek, a
+replayed tick), dropped from a full queue, or lost with the cues of a seek cannot leave a hum
+running or missing. Tests: `the_loops_are_brought_to_the_ones_the_race_wants` (mixer),
+`tests::extension_sounds::the_wanted_loops_survive_a_silent_tick_and_the_queue_is_bounded`.

@@ -1,6 +1,6 @@
 //! `play-mod-sound` on the simulation side: it queues `ModSoundEvent`s beside the
-//! cues for the playing side to drain, and remembers which loops a module started so a
-//! fault can stop them. Plain data only; nothing here knows a mixer exists, and nothing
+//! cues for the playing side to drain, and remembers which loops a module started: a
+//! fault stops them, and the playing side brings its voices to that set. Plain data only; nothing here knows a mixer exists, and nothing
 //! is hashed.
 
 use oag_ext_abi::SoundMode;
@@ -38,13 +38,25 @@ pub(super) fn apply(sim: &mut RaceSim, module: usize, slot: u8, index: u16, mode
         ModSoundMode::Loop => loops.push(key),
         ModSoundMode::Stop => loops.retain(|held| *held != key),
     }
-    // A host that never drains (a server) keeps a bounded queue; loop bookkeeping above
-    // is unaffected, only a one-shot is dropped.
-    if sim.mod_sounds.len() >= MAX_QUEUED && mode == ModSoundMode::Once {
+    // A host that never drains keeps a bounded queue. A loop's start or stop that is
+    // dropped here is still heard: what plays follows `sound_loops` (`wanted`).
+    if sim.mod_sounds.len() >= MAX_QUEUED {
         return;
     }
     let queued = event(sim, module, index, slot, mode);
     sim.mod_sounds.push(queued);
+}
+
+/// The loops the modules hold, by mod id: what the playing side brings its voices to.
+pub(super) fn wanted(on: &super::on::On) -> Vec<oag_gameplay::cue::ModSoundLoop> {
+    on.sound_loops
+        .iter()
+        .map(|&(module, index, slot)| oag_gameplay::cue::ModSoundLoop {
+            mod_id: on.slots[module].mod_id.clone(),
+            index,
+            slot,
+        })
+        .collect()
 }
 
 /// A module is off for the race: its loops stop.

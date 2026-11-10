@@ -100,6 +100,12 @@ impl Viewpoints {
         self.portal.set(view);
     }
 
+    /// Whether the view being drawn is the one through a portal pair: the world at the
+    /// exit, which wears nothing of the viewer's screen.
+    pub(super) fn through_portal(&self) -> bool {
+        self.portal.get().is_some()
+    }
+
     /// The shake on extra slot `slot`'s camera, `None` for a slot with no view.
     pub(super) fn shake_of(&self, slot: usize) -> Option<&oag_render::camera::shake::Shake> {
         self.contact.get(slot)?.as_ref().map(|fx| &fx.shake)

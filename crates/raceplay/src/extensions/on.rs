@@ -129,9 +129,9 @@ pub(super) struct On {
     /// This call's `transit` and `probe-clearance` commands with their module's index,
     /// for `Race` to run once the call is done.
     pub(super) motion: Vec<(usize, Command)>,
-    /// Each slot's `probe-clearance` answer (fits, units ahead), for the next call's
-    /// `clearance` event: race state, hashed.
-    pub(super) clearance: [Option<(bool, f32)>; oag_gameplay::MAX_SHIPS],
+    /// Each module's `probe-clearance` answers by slot (fits, units ahead), for its next
+    /// call's `clearance` events: a module is told its own probes alone. Race state, hashed.
+    pub(super) clearance: Vec<[Option<(bool, f32)>; oag_gameplay::MAX_SHIPS]>,
 }
 
 /// A `screen-fill` of this tick: its colour, and the shader as the sending module and the
@@ -369,7 +369,7 @@ impl On {
             sky: super::Sky::default(),
             transit_ends: 0,
             motion: Vec::new(),
-            clearance: [None; oag_gameplay::MAX_SHIPS],
+            clearance: vec![[None; oag_gameplay::MAX_SHIPS]; modules_len],
         }
     }
 
@@ -569,8 +569,8 @@ impl On {
             hasher.write_u64(*mask);
         }
         self.prefer.hash_into(hasher);
-        for answer in self.clearance {
-            match answer {
+        for answer in self.clearance.iter().flatten() {
+            match *answer {
                 None => hasher.write_u8(0),
                 Some((fits, ahead)) => {
                     hasher.write_u8(1 + u8::from(fits));
@@ -594,6 +594,10 @@ impl On {
                 }
             }
         }
+    }
+
+    pub(super) fn sound_loops(&self) -> Vec<oag_gameplay::cue::ModSoundLoop> {
+        super::sound::wanted(self)
     }
 
     pub(super) fn reports(&self) -> Vec<Report> {
@@ -850,13 +854,14 @@ fn release(sim: &mut RaceSim, index: usize) {
 /// cannot crowd out a mod's.
 fn events(
     on: &On,
+    module: usize,
     mail: &[super::channel::Mail],
     kind: Option<oag_tables::weapons::ModKind>,
 ) -> (Vec<Event>, usize) {
     let mut all: Vec<Event> = mail
         .iter()
         .filter_map(|m| m.event())
-        .chain(engine_events(on, kind))
+        .chain(engine_events(on, module, kind))
         .collect();
     let dropped = all.len().saturating_sub(MAX_EVENTS);
     all.truncate(MAX_EVENTS);
@@ -865,6 +870,7 @@ fn events(
 
 fn engine_events(
     on: &On,
+    module: usize,
     kind: Option<oag_tables::weapons::ModKind>,
 ) -> impl Iterator<Item = Event> + '_ {
     (0..oag_gameplay::MAX_SHIPS)
@@ -876,7 +882,7 @@ fn engine_events(
             let triggers = |mask: u64| (0..64_u16).filter(move |t| mask & (1 << t) != 0);
             [
                 bit(on.transit_ends).then_some(Event::TransitEnd { slot }),
-                on.clearance[i].map(|(fits, ahead)| Event::Clearance { slot, fits, ahead }),
+                on.clearance[module][i].map(|(fits, ahead)| Event::Clearance { slot, fits, ahead }),
                 bit(on.walls).then_some(Event::WallContact { slot }),
                 kind.filter(|kind| bit(on.fires[kind.index()]))
                     .map(|_| Event::PickupFire { slot }),
@@ -961,8 +967,9 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     let views: Vec<(Vec<Event>, Vec<oag_ext_abi::Craft>)> = on
         .module_kind
         .iter()
-        .map(|&kind| {
-            let (events, dropped) = events(on, &mail, kind);
+        .enumerate()
+        .map(|(module, &kind)| {
+            let (events, dropped) = events(on, module, &mail, kind);
             engine_dropped = engine_dropped.max(dropped);
             let own = kind.map(|kind| Pickup::Other(kind.index() as u8));
             let crafts = crafts
@@ -984,7 +991,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
         .note(tick, mods_dropped, track_dropped, engine_dropped);
     on.walls = 0;
     on.transit_ends = 0;
-    on.clearance = [None; oag_gameplay::MAX_SHIPS];
+    on.clearance.fill([None; oag_gameplay::MAX_SHIPS]);
     on.hit_amount = [0.0; oag_gameplay::MAX_SHIPS];
     on.hit_weapon = [None; oag_gameplay::MAX_SHIPS];
     on.fires = [0; oag_tables::weapons::ModKind::MAX];

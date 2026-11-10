@@ -1112,6 +1112,19 @@ impl Extensions {
         }
     }
 
+    /// The loops of their own sounds the modules hold, by mod id.
+    #[must_use]
+    pub fn sound_loops(&self) -> Vec<oag_gameplay::cue::ModSoundLoop> {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.sound_loops()
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            Vec::new()
+        }
+    }
+
     /// Each module's numbers after the last tick, in id order.
     #[must_use]
     pub fn reports(&self) -> Vec<Report> {
@@ -1144,8 +1157,9 @@ impl crate::Race {
     }
 
     /// The call's `transit` and `probe-clearance` commands, in module then reply order: a
-    /// transit the race refuses ([`Race::begin_transit`]) faults its module; a probe's
-    /// answer waits for the next call's `clearance` event.
+    /// transit the race refuses ([`Race::begin_transit`]) faults its module, but for a craft
+    /// an earlier module's transit took first, which is dropped; a probe's answer waits for
+    /// the next call's `clearance` event.
     #[cfg(feature = "extensions")]
     fn run_motion(&mut self) {
         let motion = std::mem::take(&mut self.sim.extensions.on.motion);
@@ -1153,9 +1167,12 @@ impl crate::Race {
             if on::faulted(&self.sim, index) {
                 continue;
             }
-            // A craft that may not use its pickup is not moved by a module (a wreck).
+            // Not moved by a module: a craft that may not use its pickup (a wreck), and one
+            // an earlier module took out of the world in this call, which no observation
+            // could have shown the later one.
             if let oag_ext_abi::Command::Transit { slot, .. } = command
-                && !self.may_use_pickup(slot.index())
+                && (!self.may_use_pickup(slot.index())
+                    || self.sim.world.ships[slot.index()].transit.is_some())
             {
                 continue;
             }
@@ -1177,7 +1194,7 @@ impl crate::Race {
                     radius,
                 } => {
                     let answer = self.clearance(slot.index(), distance, radius);
-                    self.sim.extensions.on.clearance[slot.index()] = Some(answer);
+                    self.sim.extensions.on.clearance[index][slot.index()] = Some(answer);
                 }
                 oag_ext_abi::Command::FireModEffectAhead {
                     slot,

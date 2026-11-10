@@ -125,15 +125,24 @@ never ends holds the GPU until the driver's watchdog resets the device (`TDR` on
 on Linux), which ends the race and can take the desktop's compositor with it.
 
 **Covered:** every loop is refused. WGSL's `for`, `while` and `loop` all parse to one statement,
-which `oag_fx::mod_shader`'s check finds in every function, and WGSL has no recursion. So a shader's
-run time on one pixel is bounded by its length, which is bounded by the 64 KiB ceiling. Repeating a
+which `oag_fx::mod_shader`'s check finds in every function, and WGSL has no recursion. Repeating a
 step, such as the octaves of a noise, is written out or put in a helper called several times.
+
+**Covered: helpers that multiply.** A file with no loop is not bounded by its length: a helper that
+calls the next one twice, thirty deep, is a billion calls in two kilobytes. So the check counts each
+function's *work* through its calls: its own expressions and statements in naga's IR, plus each
+callee's work once per call site, both arms of a branch counted. A function over 32,768
+(`check::MAX_WORK`) is refused by name. The heaviest shader shipped, `oag.slipstream`'s tunnel, is
+1,291; a noise of 115 called for eight octaves from three places is under 3,000. Proof:
+`mod_shader::tests::helpers_that_multiply_through_their_calls_are_refused` (the doubling chain is
+refused, sixty calls in a row are not).
 
 **Not covered:**
 
-- **A long shader over a big surface.** The bound is on instructions a pixel, not on the frame: a
-  64 KiB shader of texture reads over a 4K fill is a slideshow, possibly long enough for a watchdog
-  on a weak GPU. Nothing measures a shader's cost.
+- **A long shader over a big surface.** The bound is on work a pixel, not on the frame, and it
+  counts a texture read as it counts an add: a shader at the bound made of texture reads over a 4K
+  fill is a slideshow, possibly long enough for a watchdog on a weak GPU. Nothing measures a
+  shader's cost on the device.
 - **A bounded loop is refused too.** A `for` to a constant would be safe; proving one means
   recognising the counter's shape in naga's IR and folding the bounds, and is left open.
 - **A driver's own compiler** taking long or crashing on a legal shader. wgpu's validation sits in
@@ -189,6 +198,12 @@ forward at the exit, up the spline sample's own (banking and all: the same `Race
 `16_Track` turns over between progress 1750 and 2180. What stands behind the exit's plane is clipped with an oblique
 near plane (`portal::oblique_near`, the 0..1 depth form); the frustum and the sky keep the plain
 matrix, because the swing tilts the far plane and the sky rides on the eye, behind that plane.
+
+**Nothing of the viewer's screen is in it.** The second scene is the world at the exit: it draws
+no mod surface or fill, no lens mist, and none of the viewer's own screen wash (a detonation's
+flash, a flat `screen-fill`) or cockpit hit static, which are drawn once, over the view the
+portal's surface is in (`Race::screen_wash`, `Race::cockpit_hit_strips`;
+`tests::craft_flash::the_view_through_a_portal_wears_no_wash`).
 
 **A craft's own transit.** A craft in a `transit` is frozen where it went in and comes out on
 the road's middle, facing down it. Three things follow from one pose, its *seat*: the pose it has

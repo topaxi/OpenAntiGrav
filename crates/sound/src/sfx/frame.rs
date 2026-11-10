@@ -24,6 +24,8 @@ pub struct RaceFrame<'a> {
     pub cues: Vec<CueEvent>,
     /// The mods' own sounds the race asked for this tick, drained.
     pub mod_sounds: Vec<oag_gameplay::cue::ModSoundEvent>,
+    /// The loops of the mods' own sounds the race wants now, whatever events were heard.
+    pub mod_loops: Vec<oag_gameplay::cue::ModSoundLoop>,
     /// The Zone milestones raised this tick, drained.
     pub announcements: Vec<u16>,
     /// The Zone speed-class stages raised this tick, drained.

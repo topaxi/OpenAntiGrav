@@ -33,6 +33,7 @@ fn step(audio: &mut Audio, gated: bool) {
         class_announcer: &class_announcer,
         cues: Vec::new(),
         mod_sounds: Vec::new(),
+        mod_loops: Vec::new(),
         announcements: Vec::new(),
         class_announcements: Vec::new(),
         listener: oag_audio::Listener::at_origin(),

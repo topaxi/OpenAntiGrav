@@ -18,8 +18,8 @@ pub const TRACKING_PROGRESS: usize = 0;
 pub const TRACKING_PLACE: usize = 4;
 /// Within a tracking record: the flags byte.
 pub const TRACKING_FLAGS: usize = 5;
-/// A flag: the craft has a course fix, so `progress` means something. Distance is
-/// negative on the grid behind the line, so no number can stand for "no fix".
+/// A flag: the craft has a course fix, so `progress` means something. Every number in
+/// `0..length` is a place on the lap, so none can stand for "no fix".
 pub const TRACKING_FIXED: u8 = 1;
 
 /// Where the title key is written, after the tracking records: [`crate::channel_key`] of the
@@ -34,8 +34,10 @@ pub const OPTIONS_LEN: usize = 4;
 /// Where the module's options are written, after the aiming matrix: one byte each, the
 /// index of the player's pick on the mod's own choice rows (a mod page's `choice` row whose
 /// `setting` is `mod.<id>.<key>`, in the order the manifest's menu lists them), 0 for a row
-/// that has none and for a race the host reads no settings for. A drawn choice only: a module
-/// that let one steer the simulation would make a setting race-changing.
+/// that has none and for a race the host reads no settings for. A row's `scope` says what a
+/// pick may steer: a `sim` row's is simulation input (hashed, in the LAN fingerprint), a
+/// `view` row's is its default in the simulation call and the device's pick only in the call
+/// whose outputs are drawn.
 pub const OPTIONS_AT: usize = crate::AIM_AT + crate::AIM_TOTAL;
 
 const _: () = assert!(OPTIONS_AT + OPTIONS_LEN <= crate::IO_LEN);

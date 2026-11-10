@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use oag_audio::{Bus, Mixer, Play, Sound, VoiceId};
 use oag_core::math::Vec3;
-use oag_gameplay::cue::{ModSoundEvent, ModSoundMode};
+use oag_gameplay::cue::{ModSoundEvent, ModSoundLoop, ModSoundMode};
 
 use super::{Placed, Placement, place_on_craft};
 
@@ -52,51 +52,26 @@ pub(super) struct Voices {
 }
 
 impl Voices {
-    /// Starts, stops and moves this tick's mod sounds. A finished race (`!running`) ends
-    /// every loop: a module in the middle of one has stopped being called.
+    /// Starts, stops and moves this tick's mod sounds, then brings the loops to the ones
+    /// the race wants (`wanted`): one whose event never came is started, one the race no
+    /// longer wants is stopped, and one the pool took back is started again. A finished
+    /// race (`!running`) ends every loop: a module in the middle of one has stopped being
+    /// called.
     pub(super) fn play(
         &mut self,
-        events: &[ModSoundEvent],
+        (events, wanted): (&[ModSoundEvent], &[ModSoundLoop]),
         sounds: &ModSounds,
         mixer: &mut Mixer,
-        (listener, craft, player_slot): Ears<'_>,
+        ears: Ears<'_>,
         running: bool,
     ) {
         for event in events {
-            let slot = usize::from(event.slot);
             match event.mode {
                 ModSoundMode::Stop => self.stop(&event.mod_id, event.index, event.slot, mixer),
                 ModSoundMode::Once | ModSoundMode::Loop => {
+                    let which = (event.mod_id.as_str(), event.index, event.slot);
                     let looping = event.mode == ModSoundMode::Loop;
-                    if looping && self.holds(&event.mod_id, event.index, event.slot) {
-                        continue;
-                    }
-                    let Some(sound) = sounds.get(&event.mod_id, event.index) else {
-                        continue;
-                    };
-                    // A one-shot out of range is not started, as a title cue is not; a
-                    // loop starts silent and is moved into range by `follow`.
-                    let placed = place_on_craft(PLACEMENT, slot, listener, craft, player_slot);
-                    let at = match placed {
-                        Some(at) => at,
-                        None if looping => SILENT,
-                        None => continue,
-                    };
-                    let play = if looping {
-                        Play::looping(Arc::clone(sound), Bus::Sfx)
-                    } else {
-                        Play::once(Arc::clone(sound), Bus::Sfx)
-                    };
-                    let id = mixer.play(Play {
-                        gain: at.gain,
-                        pan: at.pan,
-                        front: at.front,
-                        ..play
-                    });
-                    if let (true, Some(id)) = (looping, id) {
-                        self.held
-                            .push((event.mod_id.clone(), event.index, event.slot, id));
-                    }
+                    self.start(which, looping, sounds, mixer, ears);
                 }
             }
         }
@@ -104,7 +79,67 @@ impl Voices {
             self.stop_all(mixer);
             return;
         }
+        let (listener, craft, player_slot) = ears;
         self.follow(mixer, listener, craft, player_slot);
+        self.held.retain(|(mod_id, index, slot, id)| {
+            let keep = wanted
+                .iter()
+                .any(|w| w.mod_id == *mod_id && w.index == *index && w.slot == *slot);
+            if !keep {
+                mixer.stop(*id);
+            }
+            keep
+        });
+        for want in wanted {
+            // A loop whose craft is gone stays ended (`follow`).
+            if craft
+                .get(usize::from(want.slot))
+                .is_some_and(Option::is_some)
+            {
+                let which = (want.mod_id.as_str(), want.index, want.slot);
+                self.start(which, true, sounds, mixer, ears);
+            }
+        }
+    }
+
+    /// Plays a mod's sound (its id, the sound's index, the slot) from the slot's craft; a
+    /// loop already running is left.
+    fn start(
+        &mut self,
+        (mod_id, index, slot): (&str, u16, u8),
+        looping: bool,
+        sounds: &ModSounds,
+        mixer: &mut Mixer,
+        (listener, craft, player_slot): Ears<'_>,
+    ) {
+        if looping && self.holds(mod_id, index, slot) {
+            return;
+        }
+        let Some(sound) = sounds.get(mod_id, index) else {
+            return;
+        };
+        // A one-shot out of range is not started, as a title cue is not; a loop starts
+        // silent and is moved into range by `follow`.
+        let placed = place_on_craft(PLACEMENT, usize::from(slot), listener, craft, player_slot);
+        let at = match placed {
+            Some(at) => at,
+            None if looping => SILENT,
+            None => return,
+        };
+        let play = if looping {
+            Play::looping(Arc::clone(sound), Bus::Sfx)
+        } else {
+            Play::once(Arc::clone(sound), Bus::Sfx)
+        };
+        let id = mixer.play(Play {
+            gain: at.gain,
+            pan: at.pan,
+            front: at.front,
+            ..play
+        });
+        if let (true, Some(id)) = (looping, id) {
+            self.held.push((mod_id.to_string(), index, slot, id));
+        }
     }
 
     fn holds(&self, mod_id: &str, index: u16, slot: u8) -> bool {
@@ -210,6 +245,8 @@ mod tests {
         voices: Voices,
         sounds: ModSounds,
         listener: oag_audio::Listener,
+        /// The loops the race wants, kept from the events as the race keeps them.
+        wanted: Vec<ModSoundLoop>,
     }
 
     impl Rig {
@@ -219,6 +256,7 @@ mod tests {
                 voices: Voices::default(),
                 sounds: sounds(sound),
                 listener: oag_audio::Listener::at_origin(),
+                wanted: Vec::new(),
             }
         }
 
@@ -228,8 +266,21 @@ mod tests {
             craft: &[Option<(Vec3, f32)>; SLOTS],
             running: bool,
         ) -> (f32, f32) {
+            for event in events {
+                let key = ModSoundLoop {
+                    mod_id: event.mod_id.clone(),
+                    index: event.index,
+                    slot: event.slot,
+                };
+                match event.mode {
+                    ModSoundMode::Once => {}
+                    ModSoundMode::Loop if self.wanted.contains(&key) => {}
+                    ModSoundMode::Loop => self.wanted.push(key),
+                    ModSoundMode::Stop => self.wanted.retain(|held| *held != key),
+                }
+            }
             self.voices.play(
-                events,
+                (events, &self.wanted),
                 &self.sounds,
                 &mut self.mixer,
                 (&self.listener, craft, 0),
@@ -345,6 +396,49 @@ mod tests {
         rig.tick(&[event(0, 1, ModSoundMode::Loop)], &both, true);
         rig.voices.stop_all(&mut rig.mixer);
         assert_eq!(rig.voices.count(), 0, "leaving the race ends it");
+    }
+
+    /// The race's set is what plays: a loop whose start was never heard is started, one
+    /// whose stop was never heard is stopped, and one the pool took back comes back.
+    #[test]
+    fn the_loops_are_brought_to_the_ones_the_race_wants() {
+        let mut rig = Rig::new(&tone(100));
+        let near = craft(&[(0, [0.0; 3]), (1, [60.0, 0.0, -60.0])]);
+        let hum = ModSoundLoop {
+            mod_id: "test.sound".to_string(),
+            index: 0,
+            slot: 1,
+        };
+
+        // Wanted, with no event: a tick that ran silently started it.
+        rig.wanted.push(hum.clone());
+        let (l, r) = rig.tick(&[], &near, true);
+        assert!(l + r > 0.0, "started from the set: {l} {r}");
+        assert_eq!(rig.voices.count(), 1);
+
+        // The pool takes the voice back: it is started again.
+        let id = rig.voices.held[0].3;
+        rig.mixer.stop(id);
+        for _ in 0..8 {
+            rig.tick(&[], &near, true);
+        }
+        assert_eq!(rig.voices.count(), 1, "back after the pool took it");
+        assert_eq!(rig.mixer.active_voices(), 1, "and only the one");
+
+        // No longer wanted, with no event: a stop raised in a silent tick.
+        rig.wanted.clear();
+        rig.tick(&[], &near, true);
+        assert_eq!(rig.voices.count(), 0);
+        let mut tail = (1.0, 1.0);
+        for _ in 0..8 {
+            tail = rig.tick(&[], &near, true);
+        }
+        assert_eq!(tail, (0.0, 0.0), "silent");
+
+        // A loop that did not load is asked for every tick and never held.
+        rig.wanted.push(ModSoundLoop { index: 1, ..hum });
+        rig.tick(&[], &near, true);
+        assert_eq!((rig.voices.count(), rig.mixer.active_voices()), (0, 0));
     }
 
     #[test]

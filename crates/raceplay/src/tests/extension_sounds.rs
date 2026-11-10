@@ -82,6 +82,44 @@ fn a_loop_is_queued_once_a_one_shot_every_time_and_a_stop_ends_it() {
     );
 }
 
+/// What plays is brought to the loops the race wants, so a start raised in a tick that ran
+/// silently is still in that set, a fault empties it, and a queue nobody drains stays bounded.
+#[test]
+fn the_wanted_loops_survive_a_silent_tick_and_the_queue_is_bounded() {
+    let want = |index, slot| oag_gameplay::cue::ModSoundLoop {
+        mod_id: "test.sound".to_string(),
+        index,
+        slot,
+    };
+    let source = scripted(
+        "test.sound",
+        "",
+        &[sound(1, 3, SoundMode::Loop), sound(2, 5, SoundMode::Loop)],
+        &[],
+    );
+    let mut race = grid(prepared(&[source]));
+    assert!(race.mod_sound_loops().is_empty());
+    race.tick_sim_only(&oag_gameplay::PlayerInputs::none());
+    assert!(
+        race.drain_mod_sounds().is_empty(),
+        "a silent tick is unheard"
+    );
+    assert_eq!(race.mod_sound_loops(), [want(3, 1), want(5, 2)]);
+    crate::extensions::fault_for_tests(&mut race, 0);
+    assert!(race.mod_sound_loops().is_empty(), "a faulted module's stop");
+
+    // A start and a stop every tick, never drained: 1,200 events asked for.
+    let churn = scripted(
+        "test.sound",
+        "",
+        &[sound(1, 3, SoundMode::Loop), sound(1, 3, SoundMode::Stop)],
+        &[],
+    );
+    let (mut race, _) = run(grid(prepared(&[churn])), 600);
+    assert_eq!(race.drain_mod_sounds().len(), 1024);
+    assert!(race.mod_sound_loops().is_empty());
+}
+
 #[test]
 fn a_faulted_module_stops_the_loops_it_started() {
     let source = scripted(

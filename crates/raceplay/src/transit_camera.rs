@@ -40,6 +40,9 @@ pub(super) struct Seat {
     ticks: f32,
     /// What the craft went in at, units a tick.
     speed: f32,
+    /// The transit's count as last seen: it only runs down, so one that has not is another
+    /// transit, begun on the tick the one before it ended.
+    left: u16,
 }
 
 impl crate::Race {
@@ -50,12 +53,13 @@ impl crate::Race {
             let ship = &self.sim.world.ships[slot];
             let seat = match (ship.transit, self.view.transit_seats[slot]) {
                 (None, _) => None,
-                (Some(_), Some(seat)) => Some(Seat {
+                (Some(transit), Some(seat)) if transit.ticks_left < seat.left => Some(Seat {
                     share: (seat.share + 1.0 / SEAT_TICKS).min(1.0),
                     ticks: seat.ticks + 1.0,
+                    left: transit.ticks_left,
                     ..seat
                 }),
-                (Some(transit), None) => self.transit_seat(slot, transit),
+                (Some(transit), _) => self.transit_seat(slot, transit),
             };
             self.view.transit_seats[slot] = seat;
         }
@@ -105,6 +109,7 @@ impl crate::Race {
             share: 1.0 / SEAT_TICKS,
             ticks: 0.0,
             speed,
+            left: transit.ticks_left,
         })
     }
 

@@ -280,6 +280,7 @@ fn frame_of<'a>(
         class_announcer: race.class_announcer(),
         cues,
         mod_sounds,
+        mod_loops: race.mod_sound_loops(),
         announcements,
         class_announcements,
         listener: listener_of(race),

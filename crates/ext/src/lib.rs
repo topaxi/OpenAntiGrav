@@ -167,9 +167,10 @@ impl Craft<'_> {
         self.speed_kmh() / oag_ext_abi::SPEED_TO_KMH
     }
 
-    /// Its distance along the circuit, units, negative on the grid behind the line; `None`
-    /// before its first course fix. Divide by [`Observation::course_length`] for a share
-    /// of the lap.
+    /// Its distance along the circuit from the start line, units, in `0..course_length`;
+    /// `None` before its first course fix. A craft on the grid behind the line reads just
+    /// under a lap, not a negative number ([`lap::gap`] gives the short way to a place).
+    /// Divide by [`Observation::course_length`] for a share of the lap.
     #[must_use]
     pub fn progress(&self) -> Option<f32> {
         oag_ext_abi::Tracking::decode(self.tracking).progress
@@ -238,8 +239,11 @@ impl<'a> Observation<'a> {
     }
 
     /// The player's `n`-th pick among the mod's own choice rows, as the index in that
-    /// row's list (0 for the first value, for a row with none and past the fourth). Use it
-    /// for what is drawn only: it is not simulation input.
+    /// row's list (0 for the first value, for a row with none and past the fourth). What
+    /// it may steer is the row's `scope`: a `sim` row's pick (the default) is simulation
+    /// input, in the state hash and the LAN fingerprint; a `view` row's reads its default
+    /// in the simulation call and the device's own pick only in the call whose outputs are
+    /// drawn, so use a `view` row for what is drawn only.
     #[must_use]
     pub fn option(&self, n: usize) -> u8 {
         Sections::option(self.records, n)

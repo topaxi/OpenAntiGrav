@@ -1072,8 +1072,14 @@ impl Race {
     /// own events and camera (its falloff is measured from the player's eye), so another local
     /// seat's view does not wear it: before, the player's explosion or respawn washed every
     /// view of a split. **Chosen, not measured**: a seat has no wash of its own yet.
+    ///
+    /// **Never the view through a portal pair**: that is the world at the exit, and the
+    /// wash is drawn once, over the view the portal's surface is in.
     #[must_use]
     pub fn screen_wash(&self) -> Option<[f32; 4]> {
+        if self.view.viewpoints.through_portal() {
+            return None;
+        }
         let flash = match self.extra_viewpoint() {
             Some(_) => None,
             None => self.view.screen_flash.as_ref().and_then(|f| f.colour()),

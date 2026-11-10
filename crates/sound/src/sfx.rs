@@ -227,6 +227,7 @@ impl Audio {
             class_announcer,
             cues,
             mod_sounds,
+            mod_loops,
             announcements,
             class_announcements,
             listener,
@@ -684,7 +685,7 @@ impl Audio {
 
             voices.magstrip.follow(mixer, &listener, &craft);
             voices.mod_sounds.play(
-                &mod_sounds,
+                (&mod_sounds, &mod_loops),
                 &banks.mod_sounds,
                 mixer,
                 (&listener, &mod_craft, player_slot),
