@@ -1,0 +1,247 @@
+# The 2048 campaign map: an event is six painted cells of the `Canvas3D` lattice
+
+Functions in `eboot.elf` (Wipeout 2048, Vita, `PCSF00007` patch v1.04), image base `0x81000000`,
+Ghidra program `/2048/eboot-vita-2048-eu-v104.elf`. 2026-11-10, lane `2048-campaign-map`.
+
+Question: where does the original put each event tile of the base campaign map, and what does the
+map draw behind them. [frontend-campaign-map.md](frontend-campaign-map.md) left the writer of the
+"cached position" unfound and [canvas3d-lattice.md](canvas3d-lattice.md) left the scroll writer at
+confidence 55. Both are answered here: **there is no pixel law of its own**. A tile is a block of
+cells of the `Canvas3D` triangle lattice, raised and coloured, and the screen position falls out of
+the canvas camera.
+
+## The law
+
+1. **Cell** (confidence 92). For an event with `m_x`, `m_y` (`GameModeBase+0x2c4/+0x2c8`) and
+   `m_canvasTweak_x/_y` (`+0x314/+0x318`):
+
+   ```text
+   col = uint(55.0 + 4.0 * m_x + tweak_x)        row = uint(25.0 + 2.0 * m_y + tweak_y)
+   ```
+
+   The quad `(4.0, 2.0, 55.0, 25.0)` is `.bss` at `0x81880448..0x81880454`, stored by the static
+   initialiser at `0x810f3f3c..0x810f3f68` (`movt #0x4080`, `#0x40000000`, `movt #0x425c`,
+   `movt #0x41c8`) and read back live as `[4.0, 2.0, 55.0, 25.0]`. The DLC tiers use `(3.0, 2.0,
+   55.0, 25.0)` plus a per-grid offset ([frontend-campaign-map.md](frontend-campaign-map.md)): the
+   same canvas, the same bias, a narrower column step.
+2. **Tile** (confidence 90). The event's canvas button (`event+0x1ec`, vtable `0x8150abb8`) owns
+   the six cells `(col .. col+2) x (row, row+1)` (`+0x1c/+0x20` = col, row; `+0x24/+0x28` = 3, 2;
+   cell list at `+0x44`, read live on four buttons). `col + row` is always even (`55 + 25` even,
+   steps 4 and 2, and every authored tweak pair keeps the parity), so the six triangles are the
+   hexagon around the lattice vertex
+
+   ```text
+   centre = ((col + 1) * 0.5, (row + 0.5) * 0.8660254)
+   ```
+
+   with corners one unit away. Its cells carry the state colour and alpha `0xfa` (height 0.98;
+   `0xf7` while it settles), so the tile is a hexagonal prism 0.98 high.
+3. **Screen** (confidence 90). The canvas camera of [canvas3d-lattice.md](canvas3d-lattice.md),
+   with `ax = cos(0.1) / 8`, `bx = -sin(0.1) sin(0.45) / 8`, `zx = -sin(0.1) cos(0.45) / 8`,
+   `by = -cos(0.45) / (8 * 5/9)`, `zy = sin(0.45) / (8 * 5/9)` and the pan `(px, py)`
+   (`canvas+0xb8/+0xbc`):
+
+   ```text
+   x' = ax (X - px) + bx (Y + py) + zx (Z - 8)        sx = (x' + 1) * 480
+   y' =               by (Y + py) + zy (Z - 8)        sy = (1 - y') * 272
+   ```
+
+   This is the matrix at `canvas+0x5ec90` written out: its translation row is
+   `(-ax px + bx py - 8 zx, by py - 8 zy)`, checked on three live pans (reset, title, map: rows
+   `(-3.29062, -0.86307)`, `(-9.56032, 4.65163)`, `(-4.69069, 6.49192)`).
+4. **Pan from scroll** (confidence 90, [canvas3d-lattice.md](canvas3d-lattice.md) and re-read
+   live). With the parent `FeShellTouchScroll` at `(Sx, Sy)` and the reset pan `(27.16266,
+   0.395522)`: `px = 27.16266 - Sx / 960 * 16.5112`, `py = 0.395522 + Sy / 544 * 9.8716`. The span
+   `(16.5112, 9.8716)` is twice the plane distance from the screen centre to the bottom right
+   corner, so it carries the camera's shear: a scroll of `d` moves the picture by
+   `(1.02684 dx - 0.047296 dy, dy)` pixels, not by `d`.
+
+One cell step of `m_x` is 4 columns = 2 units = 119.4 px; one of `m_y` is 2 rows = 1.732 units =
+95.4 px down and 4.5 px left. A tile's top face is 119.4 px wide and 95.4 px tall, its front wall
+26.1 px (`0.98 * 272 * zy`).
+
+## Evidence
+
+**Static.** Four functions compute the same expression (the `uint` conversions, then `X = col *
+DAT_81732ab4` (0.5), `Y = row * DAT_81732ab8` (0.866), the four rows of `canvas+0x5ec90`, the
+perspective divide, `(x/w + 1) * 0.5 * 960`, `(2 - (y/w + 1)) * 0.5 * 544`): `0x810ef98c`,
+`0x810efc4a`, `0x810efff6`, `0x810eecb4`.
+
+**Live** (Vita3K 0.2.1, EU v1.04, private profile, `scripts/vita3k-mem.py`; the guest stopped for
+each read and the window grabbed in the same stop). Save: Events 1 to 3 passed.
+
+| Read | Value |
+| --- | --- |
+| `0x81880448..54` | 4.0, 2.0, 55.0, 25.0 |
+| event list `0x81965b60` (`+4` begin, `+8` end) | 120 `GameModeBase` pointers |
+| `2048 - Event 3`'s button (`m` = (5, 5)) | `+0x1c/+0x20` = (75, 35), cells (75..77, 35..36), colour `0xff00d020` |
+| `canvasTex` at those six cells | `20 d0 00 fa` (the neighbours `ff ff ff 01..22`) |
+
+Tile boxes, predicted from the law against the frame of the same stop and against the committed
+reference frames (`data/reference/2048-frontend/`, 960 x 544). "Top" is the top face's bounding
+box; the measured box is the connected saturated-green region, which adds the lit wall below it.
+
+| View | Event (`m`) | Predicted top face `x`, `y` | Measured |
+| --- | --- | --- | --- |
+| frame 13 = the opening view, scroll (-746.61, -2000.56) | (5, 5) | 352.0..471.4 (+2.3 shear), 126.7..222.1 | 352..472, 127.. |
+| frame 12 = Event 1 selected, scroll (-425.09, -1714.21) | (3, 3) | 438.7..560.4, 222.0..317.4 | 439..561, 222.. |
+| same | (4, 4) | 553.6..675.3, 317.5..412.9 | 554..675, 318.. |
+| same | (5, 5) | 668.5..790.2, 412.9..508.3 | 669..790, 413.. |
+
+Both reference frames were re-taken on 2026-11-10 from a fresh boot of the same save: the boxes
+agree with the committed frames to the pixel (frame 13: 352..472 and 126..245 on both), so the
+committed frames are these two scroll states.
+
+## The scroll: one centring law, used three ways
+
+`TouchScroll_SetScroll(x, y, 480, 272)` (`0x811042ae`) stores `pos = (480 - x, 272 - y)` at
+`scroll+0xa0/+0xa4`; `TouchScroll_SetTarget` (`0x81104294`) stores the same difference at
+`+0xe0/+0xe4` with a rate at `+0xe8` and a flag at `+0xdc`, and the scroll's update eases towards
+it by `rate * dt` of the remaining distance each frame (measured: 13 steps of 8.19 to 8.71 % at
+rate 5.0, confidence 80). Every caller passes
+
+```text
+(x, y) = screen(cell ground point) - item position
+```
+
+where the ground point is `(col * 0.5, row * 0.866, 0)` (the centre of the tile's first cell, not
+the hexagon's centre) and the item position (`TouchCampaign_Item+0x48/+0x4c`) is the item's place
+under the scroll, which equals the scroll position one frame later.
+
+| Use | Function | Live |
+| --- | --- | --- |
+| Map opens | `0x810efff6`, `0x810efc4a`: reset the camera (`Canvas3D_ResetCamera`), zero the scroll, then set it directly | scroll (0, 0) -> (-695.175, -2000.557), stored `x, y` = (1175.175, 2272.557): the reset camera's projection of cell (79, 37) |
+| One second later | `TouchCampaign_Update` `0x810f2f04`, state 1 -> 2 (timer `+0x154`, 1.0 s): the same expression under the moved camera, as a target at rate 5.0 | target (-771.135, -2000.561); the ease stops at (-746.615, -2000.560) |
+| A tap on a tile | `0x810eecb4` (sounds `newGUI_select`, `newGUI_trans03`, then the target, then the card's page list) | target (-425.094, -1714.214) from (-746.614, -2000.560) for cell (67, 31); reached in full |
+
+**Why the second step exists and where it stops (confidence 85).** Because of the shear in the
+span, centring is not exact in `x`: after the direct set the cell sits at `(555.96, 272)`, not
+`(480, 272)`. The re-centre aims `75.96 px` further, and state 2 ends as soon as
+`TouchScroll_IsNearTarget(25.0)` (`0x811042ca`: `dx^2 + dy^2 <= 25^2`) holds: at 60 Hz the
+remaining distance is `75.96 * (11/12)^n`, 26.76 at `n = 12` and 24.53 at `n = 13`, and the live
+stop is 24.52 short. Three boots (2026-09-21, two on 2026-11-10) stop on the same value to 0.001.
+The current event's ground point therefore rests 23 px right of centre in the opening view. Which
+event that is: the first of the chain from `"2048 - Event 1"` (`FUN_812b3a6a` = next) whose
+progress word `+0x2d8` is below 3, or the event named at `*(0x81545468)+0x32588` when one is set.
+
+**The title's (-3000, -1500)** ([canvas3d-lattice.md](canvas3d-lattice.md)) is state 0 of the same
+item: `0x810f2d18` sweeps a scroll target from (300, 1600) to (3000, 3350) and the half-width from
+6 to 15 over about 7.3 s (`t = clamp(0.137 * elapsed, 0, 1)`; statics `0x81880560..6c`). Read, not
+executed (confidence 55); the settled title value was not re-derived from it.
+
+**Scroll bounds.** `0x810ef98c` runs every frame of the map: it takes the minimum and maximum of
+the events' projected positions and widens them by 650 px each way (`TouchScroll_ResetBounds`,
+`TouchScroll_ExtendBounds`). Live: `x` -28.8..5197.8, `y` 1495.3..4386.1 at the opening view. The
+decompile's vector code was not followed lane by lane, so which sign and which origin those are in
+is not read (confidence 45).
+
+## What the canvas draws behind and around the tiles
+
+The map is the same `Canvas3D` mesh as the title's lattice, with cells painted by up to 700 canvas
+items (`canvas+0x5e0d0`, 283 live). `Canvas3D_PaintItems` (`0x810712d2`) calls each item's paint
+slot when the dirty byte `canvas+0x5e0a4` is set (`Canvas3D_PrepareDraw` `0x810739a4`).
+
+| Vtable | Live count | What | Confidence |
+| --- | --- | --- | --- |
+| `0x8150abb8` | 212 | The hex button: 3 x 2 cells, colour `+0x38`, state `+0x3c`, ring mode `+0x34`, icon `u` at `+0x48` (0.415 = the flag, 0.507 = the stopwatch in `canvasTexture.gxt`) | 85 |
+| `0x8150ad08` | 1 | 14 x 3 cells at (51, 29), atlas origin `v` = 0.4785: the `A-G-R-C 2048` season card | 70 |
+| `0x8150ac48` | 3 | 7 x 4 footprints of 16 cells, colour `0xfaf3f3` | 50 |
+| `0x8150acd8`, `0x8150abe8`, `0x8150aca8`, `0x8150ac78`, `0x8150ac18` | 40, 11, 10, 5, 1 | not read | - |
+
+`CanvasItem_Paint` (`0x8106fae2`): for a state 1 or 2 item, every cell of its list gets the item's
+colour where the cell's priority (`canvas+0x2f0c4`, 6 for state 1, 7 for state 2) is not higher,
+keeping the cell's alpha, or alpha `0xff` on the first paint. The button's own slot
+(`0x8106fbd8`) then writes its icon (`0x81072702`) and, when `+0x34` is not 0, the 18 cells that
+ring the hexagon (`0x81073aee`, fill type `+0x34`): columns `col-2, col-1, col+3, col+4` on `row`
+and `row+1`, and `col-1 .. col+3` on `row-1` and `row+2`. Those are the striped and dotted cells
+around and between tiles in the captures; the fill types are atlas shifts in `canvasTex2`
+(half-float pairs, live: `(188, 0)`, `(94, 0)`, `(47, 82)`, `(141, 82)` atlas pixels, 619, 335,
+60 and 28 cells), i.e. the other outlined triangles in the top left of `canvasTexture.gxt`.
+
+**State to colour** (`0x810ef78c`, per event, off the progress word `+0x2d8`; colours at
+`0x817327c4..d4`, read live as RGBA `e0e0e9`, `f3f3fa`, `909090`, `20d000`, `d0d000`):
+
+| `+0x2d8` | Button | Colour |
+| --- | --- | --- |
+| 0, and vtable `+0x74` says locked | state 0: not painted | - |
+| 0, open | state 1 | `0x817327c4` |
+| 1 | state 3 (the ring blinks between fill 3 and 4) | - |
+| 2 | state 2 | `0x817327cc` (drawn `b5b5b5` / `c3c3c3` live: grey) |
+| 3 | state 2 | `0x817327d0`, green `20d000` |
+| 4 | state 2 | `0x817327d4`, yellow `d0d000` |
+
+On the measured save the three passed events are 3 and the three events open next are 2: **an
+open, unpassed event is the grey tile**, and an event that is not yet reachable has no tile.
+Confidence 75 for the table (one save).
+
+**Ground relief.** Unpainted cells carry alpha `0x01..0x22` that changes from frame to frame
+(`Canvas3D_UpdateCellHeights`, the music spectrum and the ripple): the faint shaded triangles of the
+captures. Not read further.
+
+**The Home page's blurred backdrop is this canvas.** A capture of Home taken from the map shows the
+map's own tiles, blurred, behind the five tiles (the parked question of
+[canvas3d-lattice.md](canvas3d-lattice.md)'s neighbours). Seen once, confidence 70.
+
+## Names
+
+| Address | Name | Conf | Evidence |
+| --- | --- | --- | --- |
+| `0x810efff6` | `TouchCampaign_SetMapActive` | 70 | Shows or hides 48 named widgets, stores the flag at `+0x168`; on show: clear cells, apply states, reset camera, centre, state 2 |
+| `0x810efc4a` | `TouchCampaign_CentreOnCurrentEvent` | 80 | The arithmetic above; its stored `x, y` read live |
+| `0x810eecb4` | `TouchCampaign_SelectEvent` | 85 | Live target reproduced to 0.05 px |
+| `0x810f2f04` | `TouchCampaign_Update` | 75 | Timer and states at `+0x150/+0x154`; live 1 -> 2 -> 4 with the timings above. Ghidra's decompile fails on it; read as disassembly |
+| `0x810f2d18` | `TouchCampaign_UpdateIntroSweep` | 55 | The 300..3000 sweep, read only |
+| `0x810ef98c` | `TouchCampaign_UpdateScrollBounds` | 70 | Min and max of the projections, 650 px margin |
+| `0x810ef3f8` | `TouchCampaign_ClearCanvasCells` | 75 | Fills the 401 x 120 colours with `0xffffff`, zeroes priorities and `canvasTex2` |
+| `0x810ef78c` | `TouchCampaign_ApplyEventStates` | 70 | The state table |
+| `0x810ef5fe` | `TouchCampaign_PaintChainRings` | 60 | Walks the chain from Event 1 setting ring mode 3 or 4 and colour |
+| `0x8106fa8c` | `CanvasItem_SetState` | 80 | Stores `+0x3c`, raises the dirty byte |
+| `0x8106fae2` | `CanvasItem_Paint` | 80 | Above |
+| `0x8106fbd8` | `CanvasButton_PaintIconAndRing` | 70 | Above |
+| `0x81071560` | `Canvas3D_AddItem` | 80 | First free of 700 slots at `+0x5e0d0`, count at `+0x5ebc0` |
+| `0x810712d2` | `Canvas3D_PaintItems` | 80 | Above |
+| `0x810739a4` | `Canvas3D_PrepareDraw` | 75 | Matrix, mesh window, repaint when dirty |
+| `0x81104294` | `TouchScroll_SetTarget` | 85 | Live target and ease |
+| `0x811042ca` | `TouchScroll_IsNearTarget` | 85 | Decompile is four lines; the live stop distance |
+| `0x81104228` | `TouchScroll_ExtendBounds` | 80 | Four compares and stores |
+| `0x81104272` | `TouchScroll_ResetBounds` | 85 | Stores +-10000 |
+| `0x81880448` | `g_CampaignCellScaleBias` | 90 | Initialiser, live read, the frames |
+| `0x81965b60` | `g_CampaignEventList` | 75 | 120 events live; begin and end at `+4/+8` |
+| `0x817327c4` | `g_CanvasStateColours` | 70 | Five RGBA words, live |
+
+`TouchScroll_SetScroll` (`0x811042ae`, [canvas3d-lattice.md](canvas3d-lattice.md)) rises from 65
+to 85 on the same live evidence; its row stays on that page.
+
+## Withdrawn
+
+- "`+0x15c/+0x160` is a cached position some unfound step derives from `m_x`/`m_y`"
+  ([frontend-campaign-map.md](frontend-campaign-map.md), 2026-09-21): on the base tier the event's
+  position is recomputed from `m_x`/`m_y` at every use. The DLC tier functions' `+0x15c/+0x160`
+  are fields of their own node records, not of `GameModeBase`.
+- "`TouchCampaign_Item`'s constructor has no caller, so `.init_array`": the item lives at
+  `0x820cf880` at run time with vtable `0x8150e958` and its `+0xf0` pointing at the shell's scroll;
+  how it is created was not chased (the `Create` functions are reached through the item factory's
+  table, the usual shape for `NEWGUI` tags).
+
+## Wired
+
+`oag_ui::frontend::canvas_camera` is the camera and the scroll law, `oag_2048::campaign::MAP_NODES`
+the quad, and `frontend::campaign_map` places every tile through them, draws the lattice behind
+them from the same baked picture as the title page, and opens on the two-step centring above.
+Pinned by `crates/ui/src/frontend/canvas_camera/tests.rs` (the law against the live reads) and
+`the_campaign_map_puts_its_tiles_where_the_canvas_camera_does` in
+`crates/game/tests/vita_2048_boot_ground_truth.rs` (the disc's events at the two reference scroll
+states).
+
+Not wired, with what each needs: the prism's shaded wall and the neighbours' occlusion shade (the
+vertex program of [canvas3d-lattice.md](canvas3d-lattice.md)), the ring and path cells (`0x81073aee`
+and the fill types), the season cards and the other item classes, the state table above (ours keeps
+its own four progress colours and draws every event), the ground relief, the scroll bounds.
+
+## Omega
+
+**Checked, applies, not wired.** The PS4 `eboot.bin` ships the same item
+([canvas3d-lattice.md](canvas3d-lattice.md): `3dCanvas_Item.cpp`, `FE3DCanvas`, the reset angles at
+`0x018086ec`) and the same scroll item. Whether Omega's 2048 campaign branch is reachable and
+whether its quad is `(4, 2, 55, 25)` was looked for by pattern in `eboot.bin`; see the census at
+the end of this page. A live Omega value is not checkable (shadPS4 has no memory readout).

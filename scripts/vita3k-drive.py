@@ -89,6 +89,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -151,11 +152,21 @@ def _is_process(pid, name_substring):
 
 
 def display_up(display_num):
-    """Whether an X server already answers on `:{display_num}`."""
-    probe = subprocess.run(
-        ["xdpyinfo", "-display", ":%d" % display_num],
-        capture_output=True,
-    )
+    """Whether an X server already answers on `:{display_num}`.
+
+    `xdpyinfo` where it is installed, else `xdotool` (which every other step
+    here needs anyway) asked for the display's geometry.
+    """
+    if shutil.which("xdpyinfo"):
+        probe = subprocess.run(
+            ["xdpyinfo", "-display", ":%d" % display_num],
+            capture_output=True,
+        )
+    else:
+        env = os.environ.copy()
+        env.pop("WAYLAND_DISPLAY", None)
+        env["DISPLAY"] = ":%d" % display_num
+        probe = subprocess.run(["xdotool", "getdisplaygeometry"], capture_output=True, env=env)
     return probe.returncode == 0
 
 
