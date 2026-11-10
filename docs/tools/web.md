@@ -453,8 +453,8 @@ uv run --with playwright python3 scripts/web-screenshot.py \
 
 The first Enter skips the intro movie, which plays since 2026-10-09
 ("Movies"). Since the name prompt (ENTER YOUR NAME) the walk reaches Ship
-Select at 72 s and needs the three later presses to race (2026-11-10, Moa
-Therma at 60.2 fps in Chromium 154).
+Select at 72 s and needs the three later presses to race (2026-11-10, a race at
+60.2 fps in Chromium 154).
 
 The encrypted HD image takes its key from the same command with
 `--key data/images/hdfury-ps3-eu.dkey --key-mode drop` (or `pick`, `hex`,
