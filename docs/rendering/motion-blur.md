@@ -900,15 +900,19 @@ OAG_RENDER_GPU_BENCH=150 OAG_RENDER_PERF=1 oag-game hdfury-ps3-eu-dec.iso \
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA | 1280x800 | high | 0.10 -> 0.08 | 0.32 -> 0.30 | 2.25 -> 2.26 |
 | NVIDIA | 1280x800 | medium | 0.08 -> 0.07 | 0.31 -> 0.29 | 2.25 -> 2.25 |
+| NVIDIA | 1280x800 | low | 0.06 -> 0.05 | 0.29 -> 0.27 | 2.26 -> 2.22 |
 | NVIDIA | 1920x1080 | high | 0.25 -> 0.21 | 0.64 -> 0.59 | 3.15 -> 3.10 |
 | NVIDIA | 1920x1080 | medium | 0.23 -> 0.18 | 0.62 -> 0.56 | 3.12 -> 3.02 |
+| NVIDIA | 1920x1080 | low | 0.18 -> 0.13 | 0.56 -> 0.51 | 3.07 -> 3.00 |
 | NVIDIA | 3840x2160 | high | 1.55 -> 1.31 | 3.03 -> 2.75 | 8.78 -> 8.46 |
 | NVIDIA | 3840x2160 | medium | 1.47 -> 1.05 | 2.92 -> 2.50 | 8.55 -> 8.15 |
 | NVIDIA | 3840x2160 | low | 1.24 -> 0.82 | 2.69 -> 2.23 | 8.36 -> 7.87 |
 | Intel | 1280x800 | high | 0.50 -> 0.36 | 1.44 -> 1.31 | 10.49 -> 10.51 |
 | Intel | 1280x800 | medium | 0.41 -> 0.27 | 1.35 -> 1.12 | 10.44 -> 9.71 |
+| Intel | 1280x800 | low | 0.31 -> 0.24 | 1.25 -> 1.18 | 10.25 -> 9.92 |
 | Intel | 1920x1080 | high | 0.92 -> 0.71 | 2.40 -> 2.15 | 13.21 -> 13.06 |
 | Intel | 1920x1080 | medium | 0.83 -> 0.66 | 2.32 -> 2.21 | 13.03 -> 12.74 |
+| Intel | 1920x1080 | low | 0.65 -> 0.47 | 2.09 -> 1.93 | 12.31 -> 12.66 |
 | Intel | 3840x2160 | high | 1.96 -> 1.39 | 5.02 -> 4.25 | 19.60 -> 17.51 |
 | Intel | 3840x2160 | medium | 1.70 -> 1.15 | 4.39 -> 3.87 | 17.50 -> 15.44 |
 | Intel | 3840x2160 | low | 1.46 -> 0.89 | 4.21 -> 3.61 | 17.17 -> 15.86 |
@@ -954,23 +958,41 @@ noise at 800p.
 
 Same race, ticks 2500 to 2502 (578 to 580 km/h, autopilot, in the tunnel past the start), 1920x1080, both gather
 resolutions. Metric as in "Grain" above: RMS of the 5x5 high-passed difference from a
-reference, over the pixels the blur changed (about 1.36 million). The reference is the same
-build with the cap at 63 (23 taps at 1080p, the count the 4 px spacing asks for).
+reference, over the pixels the blur changed (about 1.36 million at `high`). The reference is
+the same build at the same tier's shutter with the cap at 63 (23 taps at 1080p, the count the
+4 px spacing asks for).
 
-| Taps (cap) | half: hp-RMS / mean diff | full: hp-RMS / mean diff |
+The cap swept at `high`'s shutter, tick 2500:
+
+| Taps (cap), at `high`'s shutter | half: hp-RMS / mean diff | full: hp-RMS / mean diff |
 | --- | --- | --- |
-| before, `high` (15, old placement) | 0.55 / 0.35 | 1.03 / 0.52 |
+| before (15, old placement) | 0.55 / 0.35 | 1.03 / 0.52 |
 | 15 | 0.44 / 0.24 | 0.76 / 0.35 |
 | **11 (`high`)** | 0.62 / 0.46 | 1.18 / 0.66 |
-| **9 (`medium`)** | 0.78 / 0.67 | 1.53 / 0.95 |
-| **7 (`low`)** | 1.06 / 1.02 | 2.18 / 1.44 |
+| 9 | 0.78 / 0.67 | 1.53 / 0.95 |
+| 7 | 1.06 / 1.02 | 2.18 / 1.44 |
+
+Each tier against its own reference, tick 2500:
+
+| Tier | half, before -> after | full, before -> after |
+| --- | --- | --- |
+| `high` (15 -> 11) | 0.55 -> 0.62 | 1.03 -> 1.18 |
+| `medium` (15 -> 9) | 0.51 -> 0.67 | 0.96 -> 1.30 |
+| `low` (15 -> 7) | 0.47 -> 0.60 | 0.82 -> 1.16 |
 
 Read as a player would, crops at full size and three consecutive frames: the streaks keep their
 length and direction at every count. 11 and 9 differ from 15 only by a slightly coarser speckle
 along the brightest streaks (the blue track-edge light, the red advert wall) that does not
-change from frame to frame in a way the eye picks out at speed. 7 makes that speckle visible on a
-still frame and leaves a ragged edge where a wall's smear meets the dark; acceptable for `low`,
-whose short shutter rarely reaches the cap. With the blur `off`, the base and this change capture
+change from frame to frame in a way the eye picks out at speed. 7 taps at `high`'s shutter
+makes that speckle visible on a still frame and leaves a ragged edge where a wall's smear meets
+the dark. At `low`'s own quarter shutter the smear is a third as long, so 7 taps sample it about
+as densely as 11 sample `high`'s: the crop reads like its reference, with a hint of speckle on the
+blue light. Many `low` pixels still asked for more than 7 taps (the gather fell 0.18 -> 0.13 ms
+at 1080p on NVIDIA), so the cap does bind there.
+
+`just frame-compare` scales its first image to the PSP's 480x272 to put it beside the original,
+so it does not fit an A/B of two of our own 1080p frames; the metric and crops here stand in for
+it. With the blur `off`, the base and this change capture
 byte-identical frames at all six of those captures (both gather resolutions, three ticks): no
 other pass changed.
 
