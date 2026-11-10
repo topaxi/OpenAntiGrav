@@ -64,7 +64,7 @@ in isolated worktrees.
 
 ## The loop, every cycle
 
-1. `ListAgents`; total the running cost. **Peer sessions are not yours**; only subagents you spawned count.
+1. `ListAgents`; total the running cost. **Peer sessions are not yours**; only subagents you spawned count, plus any mechanical-writer helper a member announced (`member-rules.md` rule 4: sonnet 1, haiku 0.5; it works inside the member's worktree and ends before the member reports).
 2. `git log --oneline -1`, `git status --porcelain`, and per branch `git log --oneline main..<branch> | wc -l`.
 3. **Liveness, every member, every tick**: `.claude/skills/oag-drive/member-liveness.sh <member>[=<worktree-dir>] ...`. `ListAgents` keeps showing a dead member as `pane`, and uncommitted edits or a quiet branch say nothing either way: on 2026-11-10 a member's session died at 03:57 and sat dead for 2.5 h because a tick read its uncommitted diff as "mid-implementation". The transcript's age is the signal.
    - `DEAD` (transcript idle 30+ min, no process in its worktree): `TaskStop` it at once and spawn a successor on the **same worktree** (keep the uncommitted edits), briefed with what its transcript and scratch show it finished (`jq` over the transcript the script names: last text blocks and last commands).
