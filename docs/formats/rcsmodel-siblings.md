@@ -56,8 +56,10 @@ answers with **candidates in the order a loader tries them**:
 every archive of each title (no blob read) and, for every `.vex`, in a Zone and
 a non-Zone race, compares the resolver's model, skeleton, clip and PVS names
 with what the old rules answered (taken before they were deleted), asserts they
-are identical, and now asserts that every companion a model names exists where
-the title ships one. Measured on this machine:
+are identical (run once, before the old functions were deleted). It is kept as
+the resolver's ground truth: it pins the counts below, asserts that the set
+beside a found model is that model's own set, and that no directory holds both
+a plain and a `.final` model. Measured on this machine:
 
 | title | `.vex` entries | with a model | skeleton | clip | pvs | Zone model answers |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -67,6 +69,10 @@ the title ships one. Measured on this machine:
 
 Old and new answers were identical on every `.vex` of all three titles, in
 both modes.
+
+Omega's 50 "Zone model answers" are existence only: the loader's content check
+(`is_psp2` and not `is_ps4`) passes Omega's PS4 Zone models over, so an Omega
+Zone race draws the plain or `.final` set, as it did before.
 
 One deliberate narrowing: the old `animation_names_beside` matched the
 `.rcsmodel` suffix case-sensitively and the old PVS rewrite case-insensitively;

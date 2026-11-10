@@ -150,13 +150,13 @@ fn census(title: &Title) -> Counts {
     counts
 }
 
-/// The counts the scattered rules gave on every `.vex` before the resolver
-/// replaced them; the resolver was checked entry by entry against those rules
-/// (identical on all of them, in both modes) before they were deleted
-/// (`docs/formats/rcsmodel-siblings.md`, "Census").
+/// What each title's `.vex` entries resolve to, pinned: how many have a model,
+/// and how many of those name a skeleton, clip and PVS the title holds
+/// (`docs/formats/rcsmodel-siblings.md`, "Census"). Dropping the `.final` or
+/// `trackZone` candidate, or the stem rule, moves these counts.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn hd_resolves_as_the_scattered_rules_did() {
+fn every_hd_vex_resolves_to_its_pinned_companions() {
     let Some(title) = hd() else { return };
     assert_eq!(
         census(&title),
@@ -174,7 +174,7 @@ fn hd_resolves_as_the_scattered_rules_did() {
 
 #[test]
 #[ignore = "needs data/extracted/vita"]
-fn wipeout_2048_resolves_as_the_scattered_rules_did() {
+fn every_2048_vex_resolves_to_its_pinned_companions() {
     let Some(title) = vita() else { return };
     assert_eq!(
         census(&title),
@@ -192,7 +192,7 @@ fn wipeout_2048_resolves_as_the_scattered_rules_did() {
 
 #[test]
 #[ignore = "needs data/extracted/ps4"]
-fn omega_resolves_as_the_scattered_rules_did() {
+fn every_omega_vex_resolves_to_its_pinned_companions() {
     let Some(title) = omega() else { return };
     assert_eq!(
         census(&title),
