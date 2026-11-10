@@ -396,7 +396,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     //
     // **Two spellings are tried, in this order: `track.rcsmodel`, then the
     // Omega Collection's `track.final.rcsmodel`.** No circuit ships both (see
-    // `mesh::rcs::sibling_name_cooked`), so the order only decides which title's
+    // `mesh::rcs::siblings`), so the order only decides which title's
     // lookup pays a second, failing read - every other title's pays none.
     #[cfg(feature = "view")]
     let (ps3_geometry, geometry_name) =

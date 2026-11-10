@@ -10,7 +10,7 @@
 use std::path::PathBuf;
 
 use oag_assets::psarc::Archive;
-use oag_mesh::mesh::rcs::siblings::Siblings;
+use oag_mesh::mesh::rcs::siblings::{Siblings, Spelling};
 
 /// One title's archives, opened by table of contents.
 struct Title {
@@ -95,97 +95,115 @@ fn omega() -> Option<Title> {
     ])?)
 }
 
-/// What the scattered rules answered before the resolver: `sibling_name`, then
-/// `sibling_name_cooked`, with `zone_model_name` first in a Zone race;
-/// `animation_names_beside` and the PVS rewrite on the model found, or on the
-/// `.vex` when none is.
-fn before(vex: &str, zone: bool, exists: &dyn Fn(&str) -> bool) -> [String; 4] {
-    use oag_mesh::mesh::rcs;
-    let zone_model = zone
-        .then(|| rcs::psp2::zone_model_name(vex))
-        .flatten()
-        .filter(|name| exists(name));
-    let found = zone_model.or_else(|| {
-        [rcs::sibling_name(vex), rcs::sibling_name_cooked(vex)]
-            .into_iter()
-            .flatten()
-            .find(|name| exists(name))
-    });
-    let pvs = |model: &str| format!("{}.pvs", &model[..model.len() - ".rcsmodel".len()]);
-    match found {
-        Some(model) => {
-            let (skeleton, clip) = rcs::psp2::animation_names_beside(&model).unwrap();
-            let pvs = pvs(&model);
-            [model, skeleton, clip, pvs]
-        }
-        None => {
-            let (skeleton, clip) = rcs::psp2::animation_names(vex).unwrap_or_default();
-            let model = rcs::sibling_name(vex).unwrap_or_default();
-            [String::new(), skeleton, clip, pvs(&model)]
-        }
-    }
+/// What one title's `.vex` entries resolve to.
+#[derive(Debug, PartialEq, Eq)]
+struct Counts {
+    vex: usize,
+    with_model: usize,
+    skeletons: usize,
+    clips: usize,
+    pvs: usize,
+    /// Zone-race answers that are a `trackZone` model.
+    zone_models: usize,
+    /// Directories holding both a plain and a `.final` model.
+    both_spellings: usize,
 }
 
-/// What the resolver answers for the same question.
-fn after(vex: &str, zone: bool, exists: &dyn Fn(&str) -> bool) -> [String; 4] {
-    let found = Siblings::probe(vex, zone)
-        .into_iter()
-        .find(|set| exists(&set.model));
-    match found {
-        Some(s) => [s.model, s.skeleton, s.clip, s.pvs],
-        None => {
-            let s = Siblings::plain(vex).expect("a .vex name");
-            [String::new(), s.skeleton, s.clip, s.pvs]
-        }
-    }
-}
-
-fn census(name: &str, title: &Title) {
+/// Resolves every `.vex` in a Zone and a non-Zone race, as the loader does:
+/// the first candidate whose model the title holds, then the companions beside
+/// that model.
+fn census(title: &Title) -> Counts {
     let vexes = title.vex_names();
-    assert!(!vexes.is_empty(), "{name}: no .vex entries");
-    let exists = |n: &str| title.exists(n);
-    let (mut found, mut zone_found, mut skeletons, mut clips, mut pvs) = (0, 0, 0, 0, 0);
+    let mut counts = Counts {
+        vex: vexes.len(),
+        with_model: 0,
+        skeletons: 0,
+        clips: 0,
+        pvs: 0,
+        zone_models: 0,
+        both_spellings: 0,
+    };
     for vex in &vexes {
+        let held =
+            |spelling| Siblings::spelled(vex, spelling).is_some_and(|set| title.exists(&set.model));
+        counts.both_spellings += usize::from(held(Spelling::Plain) && held(Spelling::Cooked));
         for zone in [false, true] {
-            let old = before(vex, zone, &exists);
-            let new = after(vex, zone, &exists);
-            assert_eq!(old, new, "{name}: {vex} (zone {zone})");
-            if !zone && !new[0].is_empty() {
-                found += 1;
-                skeletons += usize::from(exists(&new[1]));
-                clips += usize::from(exists(&new[2]));
-                pvs += usize::from(exists(&new[3]));
+            let found = Siblings::probe(vex, zone)
+                .into_iter()
+                .find(|set| title.exists(&set.model));
+            let Some(set) = found else { continue };
+            assert_eq!(
+                Siblings::beside(&set.model).as_ref(),
+                Some(&set),
+                "{vex}: the companions follow the model found"
+            );
+            if zone {
+                counts.zone_models += usize::from(set.spelling == Spelling::Zone);
+            } else {
+                counts.with_model += 1;
+                counts.skeletons += usize::from(title.exists(&set.skeleton));
+                counts.clips += usize::from(title.exists(&set.clip));
+                counts.pvs += usize::from(title.exists(&set.pvs));
             }
-            zone_found += usize::from(zone && new[0].contains("trackZone"));
         }
     }
-    println!(
-        "{name}: {} .vex, {found} with a model, {skeletons} skeleton, {clips} clip, \
-         {pvs} pvs, {zone_found} Zone models",
-        vexes.len()
-    );
+    counts
 }
 
+/// The counts the scattered rules gave on every `.vex` before the resolver
+/// replaced them; the resolver was checked entry by entry against those rules
+/// (identical on all of them, in both modes) before they were deleted
+/// (`docs/formats/rcsmodel-siblings.md`, "Census").
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn hd_resolves_as_the_scattered_rules_did() {
-    if let Some(title) = hd() {
-        census("HD", &title);
-    }
+    let Some(title) = hd() else { return };
+    assert_eq!(
+        census(&title),
+        Counts {
+            vex: 721,
+            with_model: 623,
+            skeletons: 0,
+            clips: 0,
+            pvs: 28,
+            zone_models: 0,
+            both_spellings: 0
+        }
+    );
 }
 
 #[test]
 #[ignore = "needs data/extracted/vita"]
 fn wipeout_2048_resolves_as_the_scattered_rules_did() {
-    if let Some(title) = vita() {
-        census("2048", &title);
-    }
+    let Some(title) = vita() else { return };
+    assert_eq!(
+        census(&title),
+        Counts {
+            vex: 1182,
+            with_model: 974,
+            skeletons: 58,
+            clips: 58,
+            pvs: 38,
+            zone_models: 40,
+            both_spellings: 0
+        }
+    );
 }
 
 #[test]
 #[ignore = "needs data/extracted/ps4"]
 fn omega_resolves_as_the_scattered_rules_did() {
-    if let Some(title) = omega() {
-        census("Omega", &title);
-    }
+    let Some(title) = omega() else { return };
+    assert_eq!(
+        census(&title),
+        Counts {
+            vex: 1385,
+            with_model: 1183,
+            skeletons: 58,
+            clips: 58,
+            pvs: 34,
+            zone_models: 50,
+            both_spellings: 0
+        }
+    );
 }

@@ -5,6 +5,7 @@
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 use super::*;
+use oag_mesh::mesh::rcs::siblings::Siblings;
 
 /// The track's authored visibility partition, and where this track's geometry
 /// sits in it.
@@ -87,7 +88,17 @@ impl TrackVisibility {
         model_chunks: Option<usize>,
         report: &mut Vec<String>,
     ) -> Option<Self> {
-        let name = pvs_name(track, geometry_name);
+        // Beside the `.rcsmodel` that was actually found when there is one,
+        // else the `.vex`'s own plain set.
+        let Some(Siblings { pvs: name, .. }) = geometry_name
+            .and_then(Siblings::beside)
+            .or_else(|| Siblings::plain(track))
+        else {
+            report.push(format!(
+                "{track}: no .pvs name for it - drawing every chunk"
+            ));
+            return None;
+        };
         let blob = match archives.read_name(&name) {
             Ok(blob) => blob,
             Err(_) => {
@@ -260,56 +271,6 @@ pub(super) fn visible(
     frustum: Option<&Frustum>,
 ) -> bool {
     oag_render::pvs::visible(draw, sections, set, chunks, frustum)
-}
-
-/// The `.pvs` entry name for a circuit.
-///
-/// **Beside the `.rcsmodel` that was actually found when there is one**, the
-/// way `psp2_animation` finds the skeleton: the Omega Collection's
-/// `track.final.rcsmodel` is paired with `track.final.pvs`, and
-/// `track_reversed.vex`'s own is `track_reversed.final.pvs`. Deriving it from
-/// the `.vex` name asked for `track.pvs` and `track_reversed.pvs`, which that
-/// archive does not have, so neither direction of any circuit was ever read.
-/// HD's `track.rcsmodel` gives `track.pvs`, the name the `.vex` gave.
-///
-/// Without a model name it is a path rewrite of the `.vex` one, as before.
-fn pvs_name(vex_name: &str, geometry_name: Option<&str>) -> String {
-    let beside = geometry_name.and_then(|model| {
-        let at = model.len().checked_sub(".rcsmodel".len())?;
-        model[at..]
-            .eq_ignore_ascii_case(".rcsmodel")
-            .then(|| format!("{}.pvs", &model[..at]))
-    });
-    beside.unwrap_or_else(|| match vex_name.rsplit_once('.') {
-        Some((stem, _)) => format!("{stem}.pvs"),
-        None => format!("{vex_name}.pvs"),
-    })
-}
-
-#[cfg(test)]
-mod name_tests {
-    use super::pvs_name;
-
-    #[test]
-    fn the_pvs_sits_beside_the_model_that_was_found() {
-        // Omega's baked outputs carry a `.final` infix, forward and reversed.
-        assert_eq!(
-            pvs_name(
-                r"Data\environments\tech_de_ra\track_reversed.vex",
-                Some(r"Data\environments\tech_de_ra\track_reversed.final.rcsmodel"),
-            ),
-            r"Data\environments\tech_de_ra\track_reversed.final.pvs"
-        );
-        // HD and 2048 use the plain name, which the `.vex` gave as well.
-        assert_eq!(
-            pvs_name("a/track.vex", Some("a/track.rcsmodel")),
-            pvs_name("a/track.vex", None)
-        );
-        assert_eq!(pvs_name("a/track.vex", None), "a/track.pvs");
-        // A model name that is not a `.rcsmodel` falls back to the `.vex`.
-        assert_eq!(pvs_name("a/track.vex", Some("a/track.bin")), "a/track.pvs");
-        assert_eq!(pvs_name("a/track.vex", Some("l")), "a/track.pvs");
-    }
 }
 
 #[cfg(test)]

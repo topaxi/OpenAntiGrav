@@ -874,7 +874,7 @@ The three changes, each with what it rests on:
    fact.** 22 circuits use the `.final` spelling for the model, skeleton, clip,
    `.pvs`, audio and checkpoint files, four (`zone_1`..`zone_4`) use the plain
    one, and none ships both. The game tries the plain sibling first and the
-   `.final` one only when it is absent (`oag_mesh::mesh::rcs::sibling_name_cooked`),
+   `.final` one only when it is absent (`oag_mesh::mesh::rcs::siblings::Siblings::probe`, [rcsmodel-siblings.md](rcsmodel-siblings.md)),
    so no other title's lookup changes.
 3. **A PS4 `.rcsmodel` is 2048's container with 64-bit pointers.**
    - *Same container, told apart by header word `+0x04` - confidence 95:* 0 on

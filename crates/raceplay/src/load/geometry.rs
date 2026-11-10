@@ -5,14 +5,17 @@
 //! absent, one that will not decode, and one in a container this build reads
 //! are three outcomes with one fallback between them.
 
+use oag_mesh::mesh::rcs::siblings::{Siblings, Spelling};
 use oag_mesh::mesh::{self, Model};
 
 /// The `.rcsmodel` beside a circuit's `.vex`, and the name it was found under.
 ///
-/// Tried in this order: **`trackZone.rcsmodel` in a Zone race on Wipeout
-/// 2048, only when [`super::Options::zone_model`] asks for it** (its road
-/// is `fc01_dummy`, drawn as the fog colour), then `track.rcsmodel`, then the Omega Collection's
-/// `track.final.rcsmodel` (see `mesh::rcs::sibling_name_cooked`). The Zone
+/// Tried in the order `oag_mesh::mesh::rcs::siblings::Siblings::probe` lists
+/// them: **`trackZone.rcsmodel` in a Zone race on Wipeout 2048, only when
+/// [`super::Options::zone_model`] asks for it** (its road is `fc01_dummy`,
+/// drawn as the fog colour), then `track.rcsmodel`, then the Omega Collection's
+/// `track.final.rcsmodel`. No circuit ships both of the last two, so the order
+/// only decides which title's lookup pays a second, failing read. The Zone
 /// model is its own circuit art with its own skeleton, clip and PVS, found
 /// by the same stem rule, so everything downstream that follows
 /// `geometry_name` follows it too. A Zone model in any other container (the
@@ -24,35 +27,26 @@ pub(super) fn sibling_model(
     zone: bool,
     report: &mut Vec<String>,
 ) -> (Option<Vec<u8>>, Option<String>) {
-    if zone
-        && let Some(name) = mesh::rcs::psp2::zone_model_name(track)
-        && let Ok(blob) = archives.read_name(&name)
-        && mesh::rcs::psp2::is_psp2(&blob)
-        && !oag_rcs::rcsmodel::psp2::is_ps4(&blob)
-    {
-        report.push(format!(
-            "zone: {name} is this circuit's Zone model, drawn in place of track.rcsmodel"
-        ));
-        return (Some(blob), Some(name));
-    }
-    let names = [
-        mesh::rcs::sibling_name(track),
-        mesh::rcs::sibling_name_cooked(track),
-    ];
-    let found = names
-        .into_iter()
-        .flatten()
-        .find_map(|name| archives.read_name(&name).ok().map(|blob| (name, blob)));
-    match found {
-        Some((name, blob)) => (Some(blob), Some(name)),
-        None => {
+    for set in Siblings::probe(track, zone) {
+        let Ok(blob) = archives.read_name(&set.model) else {
+            continue;
+        };
+        if set.spelling == Spelling::Zone {
+            if !mesh::rcs::psp2::is_psp2(&blob) || oag_rcs::rcsmodel::psp2::is_ps4(&blob) {
+                continue;
+            }
             report.push(format!(
-                "{track}: a PS3 .vex with no .rcsmodel beside it - drawing the \
-                 derived ribbon instead, as --ribbon does"
+                "zone: {} is this circuit's Zone model, drawn in place of track.rcsmodel",
+                set.model
             ));
-            (None, None)
         }
+        return (Some(blob), Some(set.model));
     }
+    report.push(format!(
+        "{track}: a PS3 .vex with no .rcsmodel beside it - drawing the \
+         derived ribbon instead, as --ribbon does"
+    ));
+    (None, None)
 }
 
 /// A `.vex` circuit's model with its batches' own cull bit honoured where the title's rule says
@@ -244,9 +238,13 @@ fn psp2_animation(
     // Beside the `.rcsmodel` that was actually found, so the Omega Collection's
     // `track.final.rcsmodel` reads `track.final.rcsskeleton` and not a
     // `track.rcsskeleton` that does not exist.
-    let (skeleton_name, clip_name) = match model_name {
-        Some(model) => mesh::rcs::psp2::animation_names_beside(model)?,
-        None => mesh::rcs::psp2::animation_names(track)?,
+    let Siblings {
+        skeleton: skeleton_name,
+        clip: clip_name,
+        ..
+    } = match model_name {
+        Some(model) => Siblings::beside(model)?,
+        None => Siblings::plain(track)?,
     };
     let Ok(skeleton) = archives.read_name(&skeleton_name) else {
         report.push(format!(
