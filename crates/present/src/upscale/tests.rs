@@ -363,6 +363,37 @@ fn the_grade_moves_the_picture_in_the_direction_the_setting_names() {
     assert!(darker[0].abs_diff(32) <= 1, "half of 0.25: {darker:?}");
 }
 
+/// The shader skips its `pow` at the neutral gamma, so this pins both arms:
+/// the neutral grade hands every level back exactly (the skipped `pow` was
+/// never an identity on a GPU's `exp2(log2(x))`, so the exactness is the claim),
+/// and a gamma off neutral still lands on the curve the CPU computes.
+#[test]
+fn the_neutral_grade_is_exact_and_a_gamma_off_neutral_follows_its_curve() {
+    for level in [0u8, 1, 17, 64, 128, 200, 254, 255] {
+        let value = f32::from(level) / 255.0;
+        let Some(out) = graded(
+            [value, value, value, 1.0],
+            Brightness::NEUTRAL,
+            Gamma::NEUTRAL,
+        ) else {
+            eprintln!("no GPU adapter; skipping");
+            return;
+        };
+        assert_eq!(out[..3], [level; 3], "neutral changed level {level}");
+    }
+    for percent in [60u32, 140] {
+        let gamma: Gamma = percent.to_string().parse().expect("parse");
+        let value = 0.5_f32;
+        let out = graded([value, value, value, 1.0], Brightness::NEUTRAL, gamma)
+            .expect("an adapter");
+        let want = (value.powf(100.0 / percent as f32) * 255.0).round() as u8;
+        assert!(
+            out[0].abs_diff(want) <= 1,
+            "gamma {percent}: {out:?}, the curve says {want}"
+        );
+    }
+}
+
 /// The uniform has to be the size a uniform binding may be, and the
 /// neutral grade has to be the one that changes nothing - `set_grade`
 /// compares against it to decide whether to write at all, so a wrong
