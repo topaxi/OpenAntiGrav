@@ -549,6 +549,18 @@ it, HD's tube ignores it) and `trail_order_ground_truth`'s
 `the_hd_trail_length_draws_a_longer_ribbon` (flag to frame: default equals `original`, `hd` differs).
 Whole-race captures of Pulse at `original` are byte-identical to the build before the setting.
 
+Reproducing the pictures (`oag-game`, `--no-audio`, 960x544, render scale 100, MSAA, blur and screen
+filter off, a private `XDG_*` profile):
+
+- Side view, same pose both runs: `oag-game pulse-psp-eu.chd --race --track 'Data\Environments\16_Track\track.vex'
+  --ticks 0 --pose=-118.39,-49.24,-702.05 --pose-boost 0.5 --pose-speed 120
+  --camera-pose=-58.39,-39.24,-732.05,-0.96,-0.16,0.2,0,1,0 --trail-length original|hd --screenshot out.png`.
+  The streak behind the nozzle is about 20 px long at `original` and about 100 px at `hd`, with
+  the same head width, until the circuit's geometry occludes it.
+- Off is the old build: the same `--race --autopilot --ticks 700` (and `760`) on a binary built
+  before the setting and on this one with no flag, compared with `cmp`; identical on Pulse, and on
+  Pure at 700.
+
 **Cross-title (CLAUDE.md).** Pure: ported, the same PSP-preset path (`Exhaust::Named`). 2048 and
 Omega: checked, differs - both already draw HD's 54-sample tube, so there is nothing to lengthen.
 HD: it is the source of the length.

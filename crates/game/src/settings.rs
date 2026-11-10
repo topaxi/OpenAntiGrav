@@ -1256,7 +1256,8 @@ pub fn menu_seeds(
         ("ai.difficulty", text(&settings.ai.difficulty)),
     ];
     // Offered only where the ribbon is the PSP preset; elsewhere the row is
-    // dropped (`Definition::drop_unavailable_trail_order`) and nothing seeds it.
+    // dropped (`Definition::drop_unavailable_trail_order`, `drop_unavailable_trail_length`)
+    // and nothing seeds it.
     if title.exhaust.is_psp_preset() {
         out.push((
             "graphics.trail_order",

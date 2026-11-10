@@ -298,7 +298,7 @@ pub struct RenderProfile {
     ///
     /// **`original` is the default**: the frame is byte-identical to a build without the row.
     /// `hd` is an enhancement of this project's and a departure from the original. Only the
-    /// titles whose ribbon is the PSP preset offer it (`Definition::drop_unavailable_trail_order`
+    /// titles whose ribbon is the PSP preset offer it (`Definition::drop_unavailable_trail_length`
     /// drops the row elsewhere), and elsewhere the value is ignored. See
     /// [`oag_display::display::TrailLength`]. Read fresh every frame, so the row applies live; a
     /// change restarts the rings.
