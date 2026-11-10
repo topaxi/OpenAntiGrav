@@ -609,8 +609,10 @@ Frame-thread CPU and `prepare_view` in ms per frame:
   work is in the other rows, not a row of its own.
 
 **Anulpha specific.** Rows 1 and 2 are Anulpha's extra 1.8 ms: the circuit ships baked environment
-probes, so every hull blends two images per frame (the HD default circuit may ship none; not checked),. HD's default
-circuit pays 0.23 ms for the hull uniforms and Pulse none. Row 4 is on every title and is the
+probes, so every hull blends two images per frame. HD's default circuit (Talon's Junction) ships
+them too, 862 of them, as every HD circuit does (`hd_env_probes_ground_truth.rs`, checked
+2026-11-10); it pays 0.23 ms for the hull uniforms because fewer hulls are in its picture, and Pulse
+pays none. Row 4 is on every title and is the
 largest on HD default.
 
 **What the stack walk cannot say.** With frame pointers, the walk drops some inlined frames, so the
@@ -626,7 +628,9 @@ the `gpu-driven-submit` lane showed that a worker saving does not shorten the De
 frame thread's `prepare_view` is made of uniform builds, uploads and a few CPU image blends, none of
 which a culling pass touches. A CPU-side fix is cheaper and bigger. Top two:
 
-1. **Blend the hull's environment probes on the GPU, or not every frame** (Anulpha-like circuits
+1. ~~**Blend the hull's environment probes on the GPU, or not every frame**~~ **Done 2026-11-10**
+   (`probe-blend`): one compute pass, byte-identical, see "The hull probe blend in a compute pass"
+   at the end of this page. The text as written: (Anulpha-like circuits
    only, about 0.9 ms, 11% of the frame thread's 8.2). `EnvProbes::write` already skips an unchanged
    tap set, but the weights move with the craft, so it remixes each craft's two images
    every frame (decode, `Vec<u8>` accumulate, allocate, `write_texture`). Either upload the
@@ -2188,3 +2192,118 @@ rounds (two clock states, as "The Deck's 4K rows are unstable" in
 [hires-gpu-levers.md](hires-gpu-levers.md) found), so it is read pair by pair. Bases: the blur
 composite `95ca568b1`, the tap caps `b56d129a3` against `59900b483`, the present and Zone items
 `59900b483` with and without the change (the old `upscale.wesl`, the old `zone.wesl`).
+
+## The hull probe blend in a compute pass (2026-11-10, `probe-blend`)
+
+Claim: the hull environment-probe blend no longer costs the frame thread about 0.9 ms per frame on
+HD Anulpha: the Deck's frame-thread time drops by most of that at 800p, the GPU time it adds is
+measured, and every picture stays byte-identical. **True in part.** The blend is off the frame
+thread and the pictures are identical, but at 800p the Deck gains 0.33 ms, not 0.9: the
+`prepare-view` lane had already cut the blend to the hulls in view ("The hull probes" above), so
+on today's main it cost about 0.3 ms there. At 4K, where the GPU holds the frame, the same blend
+cost 0.85 ms and that is what comes off.
+
+**What changed.** The decoded probes sit in a source array on the GPU (64 slots, `Rgba8Uint`, each
+probe uploaded once when a craft first reaches it). One compute pass a frame
+(`oag_render::probe_blend`, `shaders/probe_blend.wesl`) writes the two layers of every craft whose
+weights moved, into the array the hull shader already samples. The hull shader is untouched. The
+frame thread keeps the probe lookup (`Probes::locate`), a 48-byte job per craft and one pass of one
+dispatch; `probes::mix`, its two `Vec` builds per craft and the two texture uploads per craft are
+gone. `OAG_PROBE_BLEND=cpu` keeps the frame-thread blend, for an A/B; wgpu's GL backend gets it
+too (the pass was not run there). That path lost its per-frame allocations as well
+(`probes::mix_into` into kept buffers, no `Arc` clones, no `Vec` of taps).
+
+**Why the bytes are exact.** The array is `Rgba8Unorm` with an sRGB view (a storage texture cannot
+be sRGB), so the hull reads the same bytes decoded the same way. The pass does `mix`'s `f32`
+arithmetic on the bits, in integers: a byte times a 24-bit significand, three adds and the `+ 0.5`,
+each rounded to nearest even by hand. A plain float version was wrong: naga emits no
+`NoContraction`, Mesa treats such operations as inexact, and Intel's driver gave 3 bytes off by one
+level in one blend of eight. With the integer version `probe_blend::tests` and the
+`probe_blend_check` example compare the array against `mix` byte for byte over random probes and
+the weights `locate` gives, on and off a cell's edges:
+
+| Adapter | Bytes compared | Differing | GPU time of a pass of 8 crafts (median of 200) |
+| --- | ---: | ---: | ---: |
+| Steam Deck, `RADV VANGOGH`, Mesa 26.2.0-devel | 32,768,000 | 0 | 140 us |
+| Intel Arrow Lake iGPU, Mesa 26.2.6 | 32,768,000 | 0 | 150 us |
+| NVIDIA RTX PRO 2000 (laptop), 615.78.08 | 32,768,000 | 0 | 23 us |
+
+That GPU time is the whole of what the pass adds, on an otherwise idle GPU and for a full field in
+view; a race blends only the hulls in the picture.
+
+**The Deck, HD Anulpha Pass.** `dist` `znver2` container builds of `4d5e00ae2` (base) and
+`39d84ce84`, headless gamescope, render scale 100, the recipe of "Re-measured under an interleaved
+split" above (`--script 36:quit`, first six seconds dropped), the settings copy that section used
+(HD: FXAA, blur `high` at half resolution, shadows `original`, vsync off, no frame limit), two
+rounds with the order flipped, Deck load 1.3 to 2.2. Means of the two rounds, ms per frame;
+`gpu` is `frame-log`'s scene-pass time, which does not hold the compute pass:
+
+| Size | `total` | `scene` | `submit` | fps | p99 | `gpu` |
+| --- | --- | --- | --- | --- | --- | --- |
+| 800p | 6.37 to 6.04 | 2.77 to 2.61 | 2.71 to 2.54 | 142.5 to 144.8 | 10.08 to 9.44 | 3.10 to 3.11 |
+| 1080p | 8.44 to 7.96 | 3.76 to 3.35 | 3.33 to 3.28 | 98.3 to 98.3 | 13.79 to 12.71 | 4.49 to 4.50 |
+| 4K | 10.22 to 9.37 | 4.58 to 3.73 | 3.29 to 3.28 | 33.9 to 33.8 | 41.2 to 43.1 | 12.49 to 12.56 |
+
+The two rounds of an arm agree within 0.06 ms of `total` at every size. 1080p and 4K are held by
+the GPU, so their fps does not move; the 4K fps and p99 differences are inside the spread of the
+rounds (33.8 to 34.0 against 33.7 to 33.9). A flat `perf` profile at 800p (`cpu-clock:u`, 999 Hz,
+from second 15) has `oag_vex::probes::mix` at 1.90 % of all samples on the base, about 0.2 ms of
+the frame thread's 6.4, and absent on the new build. `probes::decode` stays (0.29 % against
+0.31 %): a craft at speed reaches new probes about eight sections a second, and each is decoded
+once.
+
+**Desktop, HD Anulpha Pass.** The whole-race bench's mode (`OAG_RENDER_BENCH_RACE`) with
+`--track` Anulpha and `--ticks 3000`, release builds, pinned to the P-cores, gate lock held, load
+1.7 to 3.7, two rounds with the order flipped, p50 in us (mean of the rounds). The final state hash
+is `a100dfcbdee398f0` in all 24 runs. `gpu` is the scene pass, without the compute pass:
+
+| Adapter | Size | `record` | `cpu` | `gpu` | `frame` |
+| --- | --- | --- | --- | --- | --- |
+| NVIDIA | 800p | 938 to 692 | 2044 to 1753 | 984 to 1014 | 2259 to 2086 |
+| NVIDIA | 1080p | 975 to 725 | 2136 to 1911 | 1850 to 1934 | 2857 to 2833 |
+| NVIDIA | 4K | 1766 to 1432 | 3830 to 3800 | 7099 to 7101 | 7972 to 8008 |
+| Intel | 800p | 962 to 721 | 2511 to 2279 | 2340 to 2372 | 4162 to 4189 |
+| Intel | 1080p | 1005 to 778 | 2620 to 2459 | 3385 to 3389 | 5216 to 5214 |
+| Intel | 4K | 1929 to 1543 | 4785 to 4677 | 8685 to 8691 | 10564 to 10566 |
+
+`record` falls 0.23 to 0.39 ms in every cell. `frame` gains 7.7 % on NVIDIA at 800p, where the CPU
+binds, and stays within 0.7 % elsewhere, where the GPU does (the Intel rows are GPU-bound at every
+size). NVIDIA's scene pass reads 30 to 84 us longer at 800p and 1080p and the same at 4K; the pass
+before it is the likely cause (its work overlaps the timed span), not the hull shader, which did
+not change.
+
+**Pictures.** `--screenshot` at 1280x800, seed 1, autopilot: Anulpha at ticks 600 and 1500 (the
+player's craft and others in view), HD's default circuit and Pulse's at tick 900; base, the new
+build, and the new build with `OAG_PROBE_BLEND=cpu`.
+
+- **Deck and NVIDIA: byte-identical**, all four scenes, all three arms (`sha256sum`).
+- **Intel: Pulse identical; the HD scenes are not repeatable on the base build itself.** Three runs
+  of the unchanged binary gave three hashes. Over six runs of each arm on Anulpha tick 600: base
+  against base differs in 1 to 5 pixels by one level, new against new in 0 to 7, base against new
+  in 0 to 7 (one pair identical), and the 1,023,990 pixels that never vary inside an arm are equal
+  between the arms. So no difference from this change is visible there, and the array itself is
+  exact on that adapter (table above). The run-to-run noise on Intel's HD hull pixels is older
+  than this lane and not explained.
+
+**Cross-title.** Only Wipeout HD ships `.probes` in a layout this reader takes; Pulse and Pure load
+none and draw as before (identical captures above). 2048 and Omega name their probes as another
+layout (`a_2048_circuit_names_its_probes_as_another_layout`) and build no `EnvProbes`, so the pass
+never runs for them: not checkable until that layout is read.
+
+Commands:
+
+```sh
+# exactness and GPU time on an adapter (no disc needed)
+OAG_TEST_ADAPTER=discrete|integrated cargo run --release -p oag-render --example probe_blend_check -- 100
+# the Deck: container builds as in "Re-measured under an interleaved split", then per run
+env ENABLE_GAMESCOPE_WSI=0 gamescope --backend headless -W $W -H $H -w $W -h $H -r 90 -- \
+  ./oag-game ~/.local/share/oag/images/hdfury-ps3-eu-dec.iso --race --mode single_race --seed 1 \
+  --track 'Data\Environments\15_Anulpha_Pass\track.vex' --autopilot --no-audio --no-intro \
+  --frame-log --render-scale 100 --script "36:quit"
+# desktop, per run (VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json for Intel)
+OAG_RENDER_BENCH_RACE=<stem> taskset -c 0-5 oag-game hdfury-ps3-eu-dec.iso --race --mode single_race \
+  --seed 1 --autopilot --no-audio --log-every 0 --track 'Data\Environments\15_Anulpha_Pass\track.vex' \
+  --size WxH --ticks 3000 --screenshot unused.png
+# pictures: the same race with --size 1280x800 --ticks N --screenshot out.png, and
+# OAG_PROBE_BLEND=cpu for the frame-thread arm
+```

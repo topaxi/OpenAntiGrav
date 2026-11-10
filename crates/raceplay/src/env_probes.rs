@@ -12,12 +12,11 @@
 //! uniform; the shader reads layer `2 * craft` for the ambient and `2 * craft + 1` for the
 //! reflection of the materials that declare one.
 
-use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::cell::RefCell;
 
 use oag_gpu::writes::Writes;
 use oag_mesh::mesh_render::{ENV_PROBE_FORMAT, ENV_PROBE_LAYERS, ENV_PROBE_SIZE};
+use oag_render::probe_blend::{self, Job, ProbeBlend};
 use oag_vex::probes::{self, IRRADIANCE_SIZE, Probes, REFLECTION_SIZE, Taps};
 
 /// The engine's probe tint, parameter `0x7480de6d` (`iblScalePower`): what both probe maps
@@ -65,18 +64,48 @@ impl ProbeTint {
 #[derive(Debug)]
 pub struct EnvProbes {
     probes: Probes,
+    blend: Blend,
+    /// What each craft's layers were last written from, so a craft that has not moved
+    /// blends nothing.
+    written: RefCell<[Option<Taps>; CRAFTS]>,
+}
+
+/// How many crafts the array has layers for.
+const CRAFTS: usize = ENV_PROBE_LAYERS as usize / 2;
+
+/// Set to `cpu` to blend on the frame thread, as a picture to hold the GPU blend against.
+const BLEND_VAR: &str = "OAG_PROBE_BLEND";
+
+/// Where the blend runs. Both write the same bytes into the same array layout
+/// (`oag_render::probe_blend`'s tests), so a hull cannot tell them apart.
+#[derive(Debug)]
+enum Blend {
+    /// One compute pass a frame over probes uploaded once each.
+    Gpu(Gpu),
+    /// [`probes::mix_into`] on the frame thread and an upload per craft: asked for by
+    /// [`BLEND_VAR`], and what wgpu's GL backend gets (best effort there; its storage
+    /// textures and reinterpreted views are not ones this pass was run on).
+    Cpu(Cpu),
+}
+
+#[derive(Debug)]
+struct Gpu {
+    pass: ProbeBlend,
+    /// Which probe each slot of the pass's source array holds.
+    slots: RefCell<Kept<()>>,
+    /// The crafts to blend at the next [`EnvProbes::flush`].
+    jobs: RefCell<Vec<Job>>,
+}
+
+#[derive(Debug)]
+struct Cpu {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
-    /// Decoded probes, by index: a craft blends the same few every frame, and decoding a
-    /// probe costs more than blending it. Holds [`CACHE_LIMIT`], the one blended longest ago
-    /// going first: the field keeps moving onto new probes, and clearing the lot would decode
-    /// every probe in use again.
-    decoded: RefCell<HashMap<usize, Kept>>,
-    /// Counts blends, so a kept probe says how recently it was used.
-    blends: Cell<u64>,
-    /// What each craft's layers were last written from, so a craft that has not moved
-    /// uploads nothing.
-    written: RefCell<[Option<Taps>; ENV_PROBE_LAYERS as usize / 2]>,
+    /// Decoded probes: a craft blends the same few every frame, and decoding a probe costs
+    /// more than blending it.
+    decoded: RefCell<Kept<Decoded>>,
+    /// [`probes::mix_into`]'s accumulator and its output, kept so a blend allocates nothing.
+    scratch: RefCell<(Vec<f32>, Vec<u8>)>,
 }
 
 /// One probe's two images decoded to `RGBA8`.
@@ -86,43 +115,166 @@ struct Decoded {
     reflection: Vec<u8>,
 }
 
-/// A decoded probe, and the blend that last used it.
-#[derive(Debug)]
-struct Kept {
-    decoded: Arc<Decoded>,
-    used: u64,
+impl Decoded {
+    fn of(probes: &Probes, probe: usize) -> Self {
+        Self {
+            irradiance: probes.irradiance(probe),
+            reflection: probes.reflection(probe),
+        }
+    }
 }
 
-/// How many decoded probes to keep: 8 crafts blend four each, and 64 probes are 2.5 MB.
-const CACHE_LIMIT: usize = 64;
+/// Up to [`probe_blend::SLOTS`] probes in numbered slots, the one used longest ago giving
+/// its slot up for a new one: the field keeps moving onto new probes, and clearing the lot
+/// would decode every probe in use again. Eight crafts use at most 32 in a frame, so a probe
+/// a blend of this frame names is never the one that goes.
+#[derive(Debug)]
+struct Kept<T> {
+    slots: Vec<Slot<T>>,
+    /// Counts uses, so a slot says how recently it was named.
+    uses: u64,
+}
 
-/// `probe` out of `cache`, decoded if it is not kept, marked used by blend `blend`. A cache at
-/// [`CACHE_LIMIT`] drops the probe used longest ago to make room.
-fn keep(
-    cache: &mut HashMap<usize, Kept>,
+#[derive(Debug)]
+struct Slot<T> {
     probe: usize,
-    blend: u64,
-    decode: impl FnOnce() -> Decoded,
-) -> Arc<Decoded> {
-    if cache.len() >= CACHE_LIMIT && !cache.contains_key(&probe) {
-        let oldest = cache
-            .iter()
-            .min_by_key(|(_, kept)| kept.used)
-            .map(|(&probe, _)| probe);
-        oldest.map(|probe| cache.remove(&probe));
+    used: u64,
+    value: T,
+}
+
+impl<T> Default for Kept<T> {
+    fn default() -> Self {
+        Self {
+            slots: Vec::with_capacity(probe_blend::SLOTS as usize),
+            uses: 0,
+        }
     }
-    let kept = cache.entry(probe).or_insert_with(|| Kept {
-        decoded: Arc::new(decode()),
-        used: blend,
-    });
-    kept.used = blend;
-    Arc::clone(&kept.decoded)
+}
+
+impl<T> Kept<T> {
+    /// The slot `probe` is in, taking one (and calling `fill` with it) if it is in none.
+    fn slot(&mut self, probe: usize, fill: impl FnOnce(usize) -> T) -> usize {
+        self.uses += 1;
+        let uses = self.uses;
+        if let Some(at) = self.slots.iter().position(|slot| slot.probe == probe) {
+            self.slots[at].used = uses;
+            return at;
+        }
+        let at = if self.slots.len() < probe_blend::SLOTS as usize {
+            self.slots.len()
+        } else {
+            let oldest = self
+                .slots
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, slot)| slot.used);
+            oldest.map_or(0, |(at, _)| at)
+        };
+        let slot = Slot {
+            probe,
+            used: uses,
+            value: fill(at),
+        };
+        if at < self.slots.len() {
+            self.slots[at] = slot;
+        } else {
+            self.slots.push(slot);
+        }
+        at
+    }
 }
 
 impl EnvProbes {
-    /// An array of [`ENV_PROBE_LAYERS`] layers, undefined until a craft writes its own.
+    /// The array of [`ENV_PROBE_LAYERS`] layers, undefined until a craft writes its own.
     #[must_use]
     pub fn new(device: &wgpu::Device, probes: Probes) -> Self {
+        let asked_cpu = std::env::var(BLEND_VAR).is_ok_and(|value| value == "cpu");
+        let blend = if asked_cpu || device.adapter_info().backend == wgpu::Backend::Gl {
+            log::debug!("environment probes: blended on the frame thread");
+            Blend::Cpu(Cpu::new(device))
+        } else {
+            Blend::Gpu(Gpu {
+                pass: ProbeBlend::new(device),
+                slots: RefCell::default(),
+                jobs: RefCell::new(Vec::with_capacity(CRAFTS)),
+            })
+        };
+        Self {
+            probes,
+            blend,
+            written: RefCell::new(Default::default()),
+        }
+    }
+
+    /// The array, for `ShadowMaps::env_probes`.
+    #[must_use]
+    pub fn view(&self) -> &wgpu::TextureView {
+        match &self.blend {
+            Blend::Gpu(gpu) => gpu.pass.view(),
+            Blend::Cpu(cpu) => &cpu.view,
+        }
+    }
+
+    /// Blends the probes at `position` into the craft's two layers; `craft` is its grid slot.
+    /// The layers hold the blend once [`Self::flush`] has run and its pass is submitted.
+    ///
+    /// The irradiance map goes into the corner of its layer at its own 64x32 size and the
+    /// shader addresses it there, so nothing is resized.
+    pub fn write(&self, queue: &dyn Writes, craft: usize, position: [f32; 3]) {
+        if craft >= CRAFTS {
+            return;
+        }
+        let taps = self.probes.locate(position);
+        if self.written.borrow()[craft].as_ref() == Some(&taps) {
+            return;
+        }
+        match &self.blend {
+            Blend::Gpu(gpu) => gpu.queue(queue, &self.probes, craft, &taps),
+            Blend::Cpu(cpu) => cpu.blend(queue, &self.probes, craft, &taps),
+        }
+        self.written.borrow_mut()[craft] = Some(taps);
+    }
+
+    /// Records the pass that blends every craft [`Self::write`] took since the last flush,
+    /// into `encoder`: ahead of the scene pass that samples the layers, in the same
+    /// submission or an earlier one.
+    pub fn flush(&self, queue: &dyn Writes, encoder: &mut wgpu::CommandEncoder) {
+        if let Blend::Gpu(gpu) = &self.blend {
+            let mut jobs = gpu.jobs.borrow_mut();
+            gpu.pass.blend(queue, encoder, &jobs);
+            jobs.clear();
+        }
+    }
+}
+
+impl Gpu {
+    fn queue(&self, queue: &dyn Writes, probes: &Probes, craft: usize, taps: &Taps) {
+        let mut slots = self.slots.borrow_mut();
+        let scales = taps.scales();
+        let mut job = Job {
+            craft: craft as u32,
+            slots: [0; 4],
+            scales,
+        };
+        for ((slot, &probe), scale) in job.slots.iter_mut().zip(&taps.probes).zip(scales) {
+            if scale > 0.0 {
+                *slot = slots.slot(probe, |at| {
+                    let decoded = Decoded::of(probes, probe);
+                    self.pass.write_source(
+                        queue,
+                        at as u32,
+                        &decoded.irradiance,
+                        &decoded.reflection,
+                    );
+                }) as u32;
+            }
+        }
+        self.jobs.borrow_mut().push(job);
+    }
+}
+
+impl Cpu {
+    fn new(device: &wgpu::Device) -> Self {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("environment probes"),
             size: wgpu::Extent3d {
@@ -142,65 +294,43 @@ impl EnvProbes {
             ..Default::default()
         });
         Self {
-            probes,
             texture,
             view,
             decoded: RefCell::default(),
-            blends: Cell::new(0),
-            written: RefCell::new(Default::default()),
+            scratch: RefCell::default(),
         }
     }
 
-    /// The array, for `ShadowMaps::env_probes`.
-    #[must_use]
-    pub fn view(&self) -> &wgpu::TextureView {
-        &self.view
-    }
-
-    fn decoded(&self, probe: usize) -> Arc<Decoded> {
-        let mut cache = self.decoded.borrow_mut();
-        keep(&mut cache, probe, self.blends.get(), || Decoded {
-            irradiance: self.probes.irradiance(probe),
-            reflection: self.probes.reflection(probe),
-        })
-    }
-
-    /// Blends the probes at `position` into the craft's two layers; `craft` is its grid slot.
-    ///
-    /// The irradiance map goes into the corner of its layer at its own 64x32 size and the
-    /// shader addresses it there, so nothing is resized.
-    pub fn write(&self, queue: &dyn Writes, craft: usize, position: [f32; 3]) {
-        if craft * 2 + 1 >= ENV_PROBE_LAYERS as usize {
-            return;
+    fn blend(&self, queue: &dyn Writes, probes: &Probes, craft: usize, taps: &Taps) {
+        let mut decoded = self.decoded.borrow_mut();
+        // Every tap is in a slot before any is read: taking a slot may move another.
+        let mut used = [(0usize, 0.0f32); 4];
+        let mut count = 0;
+        for (&probe, &weight) in taps.probes.iter().zip(&taps.weights) {
+            if weight > 0.0 {
+                used[count] = (probe, weight);
+                count += 1;
+            }
         }
-        let taps = self.probes.locate(position);
-        if self.written.borrow()[craft].as_ref() == Some(&taps) {
-            return;
+        let mut at = [0usize; 4];
+        for (at, &(probe, _)) in at.iter_mut().zip(&used[..count]) {
+            *at = decoded.slot(probe, |_| Decoded::of(probes, probe));
         }
-        self.blends.set(self.blends.get() + 1);
-        let used: Vec<(Arc<Decoded>, f32)> = taps
-            .probes
-            .iter()
-            .zip(&taps.weights)
-            .filter(|(_, weight)| **weight > 0.0)
-            .map(|(&probe, &weight)| (self.decoded(probe), weight))
-            .collect();
-        let irradiance: Vec<(&[u8], f32)> = used
-            .iter()
-            .map(|(d, w)| (d.irradiance.as_slice(), *w))
-            .collect();
-        let reflection: Vec<(&[u8], f32)> = used
-            .iter()
-            .map(|(d, w)| (d.reflection.as_slice(), *w))
-            .collect();
-        self.upload(queue, craft * 2, &probes::mix(&irradiance), IRRADIANCE_SIZE);
-        self.upload(
-            queue,
-            craft * 2 + 1,
-            &probes::mix(&reflection),
-            REFLECTION_SIZE,
-        );
-        self.written.borrow_mut()[craft] = Some(taps);
+        let scratch = &mut *self.scratch.borrow_mut();
+        let (acc, out) = (&mut scratch.0, &mut scratch.1);
+        let images: [fn(&Decoded) -> &[u8]; 2] = [|d| &d.irradiance, |d| &d.reflection];
+        for (which, (image, size)) in images
+            .into_iter()
+            .zip([IRRADIANCE_SIZE, REFLECTION_SIZE])
+            .enumerate()
+        {
+            let mut taps = [(&[][..], 0.0f32); 4];
+            for ((tap, &at), &(_, weight)) in taps.iter_mut().zip(&at).zip(&used[..count]) {
+                *tap = (image(&decoded.slots[at].value), weight);
+            }
+            probes::mix_into(&taps[..count], acc, out);
+            self.upload(queue, craft * 2 + which, out, size);
+        }
     }
 
     fn upload(&self, queue: &dyn Writes, layer: usize, texels: &[u8], size: (usize, usize)) {
@@ -237,26 +367,23 @@ impl EnvProbes {
 mod tests {
     use super::*;
 
-    fn decoded() -> Decoded {
-        Decoded {
-            irradiance: Vec::new(),
-            reflection: Vec::new(),
-        }
-    }
-
-    /// The field moves onto one new probe: only that one is decoded, and the probes still in
-    /// use survive the eviction.
+    /// The field moves onto one new probe: only that one is filled, it takes the slot of the
+    /// probe used longest ago, and the probes still in use keep theirs.
     #[test]
-    fn a_full_cache_drops_the_probe_used_longest_ago() {
-        let mut cache = HashMap::new();
-        for probe in 0..CACHE_LIMIT {
-            keep(&mut cache, probe, probe as u64 + 1, decoded);
+    fn a_full_cache_gives_up_the_slot_of_the_probe_used_longest_ago() {
+        let limit = probe_blend::SLOTS as usize;
+        let mut kept = Kept::default();
+        for probe in 0..limit {
+            assert_eq!(kept.slot(probe, |at| at), probe);
         }
-        keep(&mut cache, 0, 100, || panic!("probe 0 is kept"));
-        keep(&mut cache, CACHE_LIMIT, 101, decoded);
-        assert_eq!(cache.len(), CACHE_LIMIT);
-        assert!(cache.contains_key(&0));
-        assert!(!cache.contains_key(&1));
-        assert!(cache.contains_key(&2));
+        assert_eq!(kept.slot(0, |_| panic!("probe 0 is kept")), 0);
+        assert_eq!(kept.slot(limit, |at| at), 1, "probe 1 was used longest ago");
+        assert_eq!(kept.slots.len(), limit);
+        assert_eq!(kept.slot(2, |_| panic!("probe 2 is kept")), 2);
+        assert_eq!(
+            kept.slot(1, |at| at),
+            3,
+            "probe 1 comes back into probe 3's slot"
+        );
     }
 }

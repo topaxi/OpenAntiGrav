@@ -111,3 +111,42 @@ fn the_blend_is_the_weighted_sum_of_the_decoded_probes() {
     assert_eq!(refl.len(), 128 * 64 * 4);
     assert_eq!(&refl[..4], &[150, 50, 0, 255]);
 }
+
+/// A tap's scale is what `mix` multiplies its texels by: a blend from the scales alone lands
+/// on `mix`'s bytes, with the taps of weight zero left out of the sum.
+#[test]
+fn the_scales_of_a_tap_set_are_the_factors_mix_uses() {
+    let taps = Taps {
+        probes: [0, 1, 2, 3],
+        weights: [0.0, 0.3, 0.0, 0.9],
+    };
+    let scales = taps.scales();
+    let norm = 1.0 / (0.3f32 + 0.9);
+    assert_eq!(scales, [0.0, 0.3 * norm, 0.0, 0.9 * norm]);
+    let images: [Vec<u8>; 4] =
+        std::array::from_fn(|i| (0..=255u8).map(|b| b ^ (i as u8 * 37)).collect());
+    let used = [(images[1].as_slice(), 0.3), (images[3].as_slice(), 0.9)];
+    let by_scale: Vec<u8> = (0..256)
+        .map(|at| {
+            let mut sum = 0.0f32;
+            for (image, scale) in images.iter().zip(scales) {
+                sum += f32::from(image[at]) * scale;
+            }
+            if at % 4 == 3 { 255 } else { (sum + 0.5) as u8 }
+        })
+        .collect();
+    assert_eq!(mix(&used), by_scale);
+}
+
+/// `mix_into` reuses what it is handed and leaves `mix`'s bytes, whatever the buffers held.
+#[test]
+fn mixing_into_kept_buffers_gives_the_same_bytes() {
+    let a: Vec<u8> = (0..64u8).collect();
+    let b: Vec<u8> = (0..64u8).rev().collect();
+    let images = [(a.as_slice(), 0.25), (b.as_slice(), 0.5)];
+    let (mut acc, mut out) = (vec![9.0; 300], vec![7; 300]);
+    mix_into(&images, &mut acc, &mut out);
+    assert_eq!(out, mix(&images));
+    mix_into(&[], &mut acc, &mut out);
+    assert!(out.is_empty());
+}
