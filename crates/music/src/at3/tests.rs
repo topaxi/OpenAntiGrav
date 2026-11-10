@@ -308,8 +308,10 @@ fn reading_in_chunks_gives_the_same_samples_as_converting_in_one() {
         .collect();
     let whole = from_s16le(&bytes, stereo).expect("whole frames");
     let reference: Vec<i16> = bytes
-        .chunks_exact(2)
-        .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| i16::from_le_bytes(*pair))
         .collect();
     assert_eq!(whole.samples, reference);
     assert_eq!(
