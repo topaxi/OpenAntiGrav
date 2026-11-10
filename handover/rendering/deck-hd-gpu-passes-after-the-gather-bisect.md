@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-11-10
-summary: "Deck HD Anulpha: per-tier blur tap caps landed (desktop-measured); open: Deck re-measure, 32-bit prepared texel, HD encode; composite+copy landed (Deck re-measure owed)"
+summary: "Deck HD Anulpha: tap caps and blur composite copy-free landed on desktop; open: Deck re-measure of both, 32-bit prepared texel, HD encode"
 categories: [rendering]
 ---
 
