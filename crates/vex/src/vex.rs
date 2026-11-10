@@ -718,7 +718,7 @@ mod error;
 pub use error::Error;
 
 mod external;
-pub use external::geometry_is_external;
+pub use external::{external_mesh_hash, external_mesh_tex_transforms, geometry_is_external};
 
 mod mesh_header;
 pub use mesh_header::{
@@ -880,7 +880,7 @@ impl TexTransform {
 /// ([`mesh_tex_transforms`] returns all); most animated meshes have one.
 #[must_use]
 pub fn mesh_tex_transform(payload: &[u8]) -> Option<TexTransform> {
-    mesh_tex_transform_at(payload, 0)
+    mesh_tex_transform_at(payload, MATERIALS_AT, 0)
 }
 
 /// Every material's texture-transform block, in material order.
@@ -895,9 +895,13 @@ pub fn mesh_tex_transforms(payload: &[u8]) -> Vec<Option<TexTransform>> {
     }
     let material_count = usize::from(u16_at(payload, 2));
     (0..material_count)
-        .map(|i| mesh_tex_transform_at(payload, i))
+        .map(|i| mesh_tex_transform_at(payload, MATERIALS_AT, i))
         .collect()
 }
+
+/// Where a mesh payload's material array starts when the geometry is in the
+/// file. An external-geometry payload ([`external`]) starts it four bytes on.
+const MATERIALS_AT: usize = 0x30;
 
 /// One material's block; layout in [`mesh_tex_transforms`], field map in
 /// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`.
@@ -910,8 +914,12 @@ pub fn mesh_tex_transforms(payload: &[u8]) -> Vec<Option<TexTransform>> {
 /// non-mesh payloads (a `Skycube` is a Mesh payload) parse this far, and
 /// arbitrary bytes often read as a plausible block. Both predicates agree on
 /// everything measured, per `crates/render/tests/authored_uv_ground_truth.rs`.
-fn mesh_tex_transform_at(payload: &[u8], material_index: usize) -> Option<TexTransform> {
-    if payload.len() < 0x30 {
+fn mesh_tex_transform_at(
+    payload: &[u8],
+    materials_at: usize,
+    material_index: usize,
+) -> Option<TexTransform> {
+    if payload.len() < materials_at {
         return None;
     }
     let material_count = usize::from(u16_at(payload, 2));
@@ -919,11 +927,11 @@ fn mesh_tex_transform_at(payload: &[u8], material_index: usize) -> Option<TexTra
         return None;
     }
     // The engine's gate.
-    let material = 0x30 + material_index * 0x14;
+    let material = materials_at + material_index * 0x14;
     if material + 2 > payload.len() || u16_at(payload, material) & 0x10 == 0 {
         return None;
     }
-    let base = 0x30 + material_count * 0x14;
+    let base = materials_at + material_count * 0x14;
     let block = base + material_index * 0x40;
     if block + 0x30 > payload.len() {
         return None;

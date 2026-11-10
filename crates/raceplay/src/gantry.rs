@@ -701,7 +701,7 @@ fn build(
     // pointers): it carries its own materials and needs no `.vex` to build, so
     // it goes through `mesh::rcs::psp2` as the weapon bodies and the hull do.
     if mesh::rcs::psp2::is_psp2(&geometry) {
-        let (model, built) = mesh::rcs::psp2::build_with_vex(name, &geometry, blob, &mut |path| {
+        let (model, built) = mesh::rcs::psp2::build_billboard(name, &geometry, blob, &mut |path| {
             archives.read_name(path).ok()
         })
         .with_context(|| format!("{name}: {sibling} does not build"))?;
