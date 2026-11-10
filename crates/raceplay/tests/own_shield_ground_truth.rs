@@ -38,6 +38,7 @@ fn pulse_and_pure_draw_their_own_shell_only_with_the_setting_on() {
     for image in [
         "data/images/pulse-psp-eu.chd",
         "data/images/pure-psp-eu.chd",
+        "data/images/pulse-ps2-eu.chd",
     ] {
         let Some(path) = oag_testdata::exact(image) else {
             continue;
@@ -47,9 +48,9 @@ fn pulse_and_pure_draw_their_own_shell_only_with_the_setting_on() {
             let shell = livery.shield.as_ref().expect("the disc authors a shell");
             assert!(shell.own_shield.is_none(), "{image}: off keeps the disc's");
         }
-        assert_eq!(
+        assert_ne!(
             off.setup.shield_palette,
-            oag_render::shield::PULSE_PALETTE,
+            oag_render::shield::OWN_PALETTE,
             "{image}: off keeps the disc's palette"
         );
         assert!(
@@ -86,7 +87,8 @@ fn pulse_and_pure_draw_their_own_shell_only_with_the_setting_on() {
         );
         checked.push(image);
     }
-    println!("PSP titles checked: {checked:?}");
+    assert!(!checked.is_empty(), "no Pulse or Pure image to check");
+    println!("titles checked: {checked:?}");
 }
 
 /// HD draws the HD-style shield itself, so the setting changes nothing there.

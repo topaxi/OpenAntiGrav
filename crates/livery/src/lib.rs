@@ -649,16 +649,15 @@ fn one(
         engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
 
     let (boost, boost_uv) = plume(archives, team, ships, ctx.mode, report);
-    let (shield, shield_colour) = match ctx
-        .own_shield
-        .then(|| own_shield::shell(&hull, &blob, report))
-        .flatten()
-    {
-        Some(model) => (Some(model), None),
-        None => match shell(archives, team, ships.dir, team_model, report) {
+    // With our own shield on, a hull that cannot give one draws no shield (reported) rather than
+    // the disc's shell under our palette.
+    let (shield, shield_colour) = if ctx.own_shield {
+        (own_shield::shell(&hull, &blob, report), None)
+    } else {
+        match shell(archives, team, ships.dir, team_model, report) {
             Some((model, colour)) => (Some(model), colour),
             None => (None, None),
-        },
+        }
     };
     // Nothing on a title whose flare is a sprite, which is every source that
     // reaches this branch today - the match is here rather than at the PS3

@@ -11,11 +11,12 @@ use oag_mesh::mesh::Model;
 /// craft's length.
 const INFLATE: f32 = 0.4;
 
-/// The shell off `hull`, or `None`, reported, when the hull's meshes do not map back to its file.
+/// The shell off `hull`, or `None`, reported, when the hull's meshes do not map back to its file:
+/// that craft then draws no shield, never the disc's shell under our palette.
 pub(super) fn shell(hull: &Model, blob: &[u8], report: &mut Vec<String>) -> Option<Model> {
     let Some(ranges) = oag_fx::hull_overlay::overlaid_meshes(hull, blob) else {
         report.push(format!(
-            "{}: meshes that do not map back to the file - no own shield",
+            "{}: meshes that do not map back to the file - no shield shell on this craft",
             hull.label
         ));
         return None;
