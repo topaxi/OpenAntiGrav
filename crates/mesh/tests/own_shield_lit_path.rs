@@ -19,7 +19,7 @@ fn a_model_with_the_own_shield_flag_is_drawn_by_the_own_shield_shader() {
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .expect("requesting the device");
-    let at = |grey: u8, own_shield: Option<f32>| {
+    let at = |grey: u8, own_shield: bool| {
         let mut shell = model(grey);
         shell.flame = None;
         shell.own_shield = own_shield;
@@ -37,9 +37,9 @@ fn a_model_with_the_own_shield_flag_is_drawn_by_the_own_shield_shader() {
             SceneStore::Computed,
         )
     };
-    let plain = at(128, None);
-    let own = at(128, Some(0.0));
+    let plain = at(128, false);
+    let own = at(128, true);
     assert_ne!(plain, own, "the flag changes the shading");
     assert!(own[0] > 0.0, "the shell draws something: {own:?}");
-    assert_eq!(own, at(250, Some(0.0)), "the own shield reads no texture");
+    assert_eq!(own, at(250, true), "the own shield reads no texture");
 }

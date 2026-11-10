@@ -1,18 +1,26 @@
-//! Our own HD/Fury-style shield's shell: the craft's own hull, drawn procedurally.
+//! Our own HD/Fury-style shield's shell: a closed surface standing off the craft's own hull.
 //!
 //! Built when the player's `graphics.own_shield` is on, on a title whose `Looks::own_shield` rule
-//! offers it (Pulse, Pure), in place of the shell the disc authors. The geometry is the hull's
-//! first level of detail, so the shell is hull-shaped as HD's is; nothing is read from any other
-//! disc and no texture is used. See `docs/rendering/own-shield.md`.
+//! offers it (Pulse, Pure), in place of the shell the disc authors. The geometry is computed from
+//! the hull's first level of detail, so the shell is hull-shaped as HD's is, with a gap between
+//! the two; nothing is read from any other disc and no texture is used. See
+//! `docs/rendering/own-shield.md`.
 
-use oag_mesh::mesh::Model;
+mod offset_surface;
 
-/// How far each vertex of the shell stands off the hull, in world units: about a ninth of a
-/// craft's length.
-const INFLATE: f32 = 0.8;
+use oag_core::math::Vec3;
+use oag_mesh::mesh::{self, Bounds, DrawCall, GpuVertex, Model};
+use oag_vex::vex;
 
-/// The shell off `hull`, or `None`, reported, when the hull's meshes do not map back to its file:
-/// that craft then draws no shield, never the disc's shell under our palette.
+/// How far the shell stands off the hull, in model units: the gap a player sees between the two
+/// in the chase view.
+pub const STAND_OFF: f32 = 0.26;
+
+/// The size of the cubes the shell is cut from, which is the size of its facets.
+const FACET: f32 = 0.11;
+
+/// The shell off `hull`, or `None`, reported, when the hull's meshes do not map back to its file
+/// or give no shell: that craft then draws no shield, never the disc's shell under our palette.
 pub(super) fn shell(hull: &Model, blob: &[u8], report: &mut Vec<String>) -> Option<Model> {
     let Some(ranges) = oag_fx::hull_overlay::overlaid_meshes(hull, blob) else {
         report.push(format!(
@@ -21,52 +29,86 @@ pub(super) fn shell(hull: &Model, blob: &[u8], report: &mut Vec<String>) -> Opti
         ));
         return None;
     };
-    let mut model = hull.clone();
-    model.label = format!("{} (own shield)", hull.label);
-    for (index, vertex) in model.vertices.iter_mut().enumerate() {
-        let lit = ranges.iter().any(|range| range.contains(&(index as u32)));
-        vertex.colour = if lit { [1.0; 4] } else { [0.0; 4] };
-        vertex.lit = 0.0;
-        vertex.anim = 0;
-    }
-    for draw in model
-        .draws
-        .iter_mut()
-        .chain(&mut model.alpha_tested_draws)
-        .chain(&mut model.transparent_draws)
-    {
-        draw.texture = None;
-        draw.blend = None;
-    }
-    // Every batch draws through the blended list, so the shell adds to the hull it wraps rather
-    // than replacing it.
-    let all: Vec<_> = model
-        .draws
-        .drain(..)
-        .chain(model.alpha_tested_draws.drain(..))
-        .chain(model.transparent_draws.drain(..))
+    // The first level of detail's own triangles, less any an `Anim Transform` moves: those are
+    // authored in their node's space, not the hull's.
+    let fixed = |index: u32| {
+        ranges.iter().any(|range| range.contains(&index))
+            && hull.vertices[index as usize].xform == 0
+    };
+    let triangles: Vec<[Vec3; 3]> = hull
+        .indices
+        .chunks_exact(3)
+        .filter(|triangle| triangle.iter().all(|index| fixed(*index)))
+        .map(|triangle| [0, 1, 2].map(|n| Vec3::from(hull.vertices[triangle[n] as usize].position)))
         .collect();
-    model.transparent_draws = all;
-    model.textures.clear();
-    model.lightmaps.clear();
-    model.material_slots.clear();
-    model.material_specular_exponent.clear();
-    model.material_glow.clear();
-    model.glow_from_program = false;
-    model.material_variants.clear();
-    model.material_anim.clear();
-    model.anim_tracks.clear();
-    model.emissive.clear();
-    model.vertex_colour_is_light = false;
-    model.stamps_glow = false;
-    model.flame = None;
-    model.own_shield = Some(INFLATE);
+    let Some(surface) = offset_surface::around(&triangles, STAND_OFF, FACET) else {
+        report.push(format!(
+            "{}: {} fixed triangle(s) give no surface - no shield shell on this craft",
+            hull.label,
+            triangles.len()
+        ));
+        return None;
+    };
+    let mut model = Model::none(&format!("{} (own shield)", hull.label));
+    model.vertices = surface
+        .positions
+        .iter()
+        .zip(&surface.normals)
+        .map(|(position, normal)| vertex(*position, *normal))
+        .collect();
+    model.indices = surface.indices;
+    // One batch through the blended list, so the shell adds to the hull it wraps; two-sided, as
+    // the far wall of the shell shows through the near one.
+    model.transparent_draws = vec![DrawCall {
+        writes_depth: false,
+        range: 0..model.indices.len() as u32,
+        texture: None,
+        bounds: Bounds {
+            centre: hull.centre,
+            radius: hull.radius + STAND_OFF + FACET,
+        },
+        moving: false,
+        culled: false,
+        blend: None,
+        blend_state: None,
+        depth_point: None,
+        layer: vex::LAYER_DEFAULT,
+        node: None,
+        chunk: None,
+        alpha_test_ref: None,
+    }];
+    model.centre = hull.centre;
+    model.radius = hull.radius + STAND_OFF + FACET;
+    model.mesh_count = 1;
+    model.own_shield = true;
     report.push(format!(
-        "{}: {} mesh(es) of the hull as our own shield shell",
+        "{}: our own shield shell, {} triangle(s) standing {STAND_OFF} off {} of the hull's",
         hull.label,
-        ranges.len()
+        model.indices.len() / 3,
+        triangles.len()
     ));
     Some(model)
+}
+
+/// A shell vertex: white, so the shield's colour is the whole tint, and unlit.
+fn vertex(position: Vec3, normal: Vec3) -> GpuVertex {
+    GpuVertex {
+        quake: 0.0,
+        position: position.into(),
+        normal: normal.into(),
+        colour: [1.0; 4],
+        texcoord: [0.0; 2],
+        lit: 0.0,
+        anim: 0,
+        lightmap_texcoord: [0.0; 2],
+        xform: 0,
+        sun_mask: 1.0,
+        slots: mesh::slots::DEFAULT,
+        specular_exponent: mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
+        texcoord2: [0.0; 2],
+        tangent: 0,
+    }
 }
 
 /// The sphere the player sees from inside the cockpit, themed to match: the disc's own sphere
@@ -76,5 +118,5 @@ pub fn cockpit(model: &mut Model) {
     for vertex in &mut model.vertices {
         vertex.colour = [1.0; 4];
     }
-    model.own_shield = Some(0.0);
+    model.own_shield = true;
 }

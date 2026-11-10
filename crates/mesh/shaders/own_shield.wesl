@@ -3,16 +3,13 @@
 //
 // Off by default and on only for the model `oag_livery` builds from a Pulse or
 // Pure hull when the player's `graphics.own_shield` is set
-// (`oag_mesh::mesh::Model::own_shield`). Both overrides are constant-folded
+// (`oag_mesh::mesh::Model::own_shield`). The override is constant-folded
 // away with the setting off, so no other model's shader changes.
 
 import package::bindings::{scene, uniforms};
 import package::types::{VertexOutput};
 
 override own_shield_shading: f32 = 0.0;
-// How far each vertex is pushed out along its normal, in world units, so the
-// shell stands clear of the hull it copies.
-override own_shield_inflate: f32 = 0.0;
 
 const HEX_SCALE: f32 = 0.9;
 const SQRT3: f32 = 1.7320508;
@@ -49,13 +46,36 @@ fn hex_layer(p: vec2<f32>, clock: f32) -> vec2<f32> {
     return vec2<f32>(line, shimmer);
 }
 
+// The width of the bright line along the shell's silhouette, in world units.
+const EDGE_WIDTH: f32 = 0.035;
+
 // `in.colour` carries the shield's animated colour in `rgb` and its flickering
 // alpha in `a`, written every frame as the Pulse shell's own is.
+//
+// The interpolated normal is the shell's smooth one (`oag_livery::own_shield`);
+// the facets come from the flat normal of the triangle under the fragment.
 fn own_shield(in: VertexOutput) -> vec4<f32> {
     let n = normalize(in.normal);
     let to_eye = normalize(scene.fog.camera - in.world);
-    let rim = pow(1.0 - clamp(abs(dot(n, to_eye)), 0.0, 1.0), 2.2);
+    let facing = clamp(abs(dot(n, to_eye)), 0.0, 1.0);
+    let fresnel = pow(1.0 - facing, 3.0);
+    let dx = dpdx(in.world);
+    let dy = dpdy(in.world);
+    let flat = normalize(cross(dx, dy));
+    let facet = pow(1.0 - clamp(abs(dot(flat, to_eye)), 0.0, 1.0), 1.5);
     let clock = scene.time.x;
+
+    // The silhouette: where the smooth normal turns edge-on to the eye within
+    // `EDGE_WIDTH` of the outline. `facing / fwidth(facing)` is the distance to
+    // that turn in pixels, and a pixel's own world size at this depth converts
+    // the width, so a wing seen at a grazing angle, where `facing` is small but
+    // steady, is not lit up whole.
+    let pixel = max(
+        length(dx - to_eye * dot(dx, to_eye)),
+        length(dy - to_eye * dot(dy, to_eye)),
+    );
+    let reach = max(EDGE_WIDTH / max(pixel, 1e-6), 1.5);
+    let outline = 1.0 - smoothstep(0.4 * reach, reach, facing / max(fwidth(facing), 1e-5));
 
     // The craft's own frame, so the pattern rides the hull rather than
     // sliding through it as the craft moves: the model matrix is a rotation and
@@ -78,15 +98,9 @@ fn own_shield(in: VertexOutput) -> vec4<f32> {
     let along = fract(local.z * 0.045 + 0.5) - sweep;
     let band = exp(-along * along * 260.0);
 
-    let body = 0.10 + 1.3 * rim;
-    let lattice = hex.x * (0.9 + 1.0 * rim + 1.0 * band) + hex.y * 0.35 * (0.3 + rim);
-    let glow = body + lattice + 0.8 * band * rim;
-    let edge = pow(rim, 3.0);
-    let rgb = in.colour.rgb * glow + in.colour.rgb * vec3<f32>(0.2, 0.5, 0.5) * edge;
-    return vec4<f32>(rgb, in.colour.a * clamp(0.30 + 0.6 * (rim + hex.x), 0.0, 0.95));
-}
-
-// The vertex stage's push out along the normal.
-fn own_shield_inflated(world: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
-    return world + normalize(normal) * own_shield_inflate;
+    let lattice = hex.x * (0.2 + 0.5 * fresnel + 0.8 * band) + hex.y * 0.2 * (0.3 + fresnel);
+    let glow = 0.10 + 0.45 * facet + 0.5 * fresnel + lattice + 0.5 * band * fresnel + 2.2 * outline;
+    let rgb = in.colour.rgb * glow + in.colour.rgb * vec3<f32>(0.2, 0.5, 0.5) * outline;
+    let cover = clamp(0.10 + 0.3 * facet + 0.4 * fresnel + 0.25 * hex.x + outline, 0.0, 0.95);
+    return vec4<f32>(rgb, in.colour.a * cover);
 }

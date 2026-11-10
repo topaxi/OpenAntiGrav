@@ -24,6 +24,46 @@ fn load(path: &std::path::Path, own_shield: bool) -> race::Loaded {
     .expect("loading the race")
 }
 
+/// The shell is around the hull and clear of it: its box holds the hull's with room on every
+/// side, and none of its vertices is near any of the hull's. The bounds are fractions of the
+/// stand-off because the hull's vertices here include the levels of detail and blended-only
+/// meshes the shell is not measured from.
+fn stands_off(shell: &oag_mesh::mesh::Model, hull: &oag_mesh::mesh::Model, image: &str) {
+    let gap = oag_livery::own_shield::STAND_OFF / 2.0;
+    let fixed = || hull.vertices.iter().filter(|v| v.xform == 0);
+    for axis in 0..3 {
+        let of = |vertices: &mut dyn Iterator<Item = f32>| {
+            vertices.fold((f32::MAX, f32::MIN), |(low, high), v| {
+                (low.min(v), high.max(v))
+            })
+        };
+        let (hull_low, hull_high) = of(&mut fixed().map(|v| v.position[axis]));
+        let (low, high) = of(&mut shell.vertices.iter().map(|v| v.position[axis]));
+        assert!(
+            low < hull_low - gap && high > hull_high + gap,
+            "{image}: axis {axis} shell {low}..{high} hull {hull_low}..{hull_high}"
+        );
+    }
+    let near = shell
+        .vertices
+        .iter()
+        .filter(|vertex| {
+            fixed().any(|v| {
+                (0..3)
+                    .map(|axis| (v.position[axis] - vertex.position[axis]).powi(2))
+                    .sum::<f32>()
+                    < gap * gap
+            })
+        })
+        .count();
+    eprintln!("{image}: {near} of {} near", shell.vertices.len());
+    assert!(
+        near * 50 < shell.vertices.len(),
+        "{image}: {near} of {} shell vertices are on the hull",
+        shell.vertices.len()
+    );
+}
+
 #[test]
 fn the_setting_is_off_by_default() {
     assert!(!race::Options::default().own_shield);
@@ -46,7 +86,7 @@ fn pulse_and_pure_draw_their_own_shell_only_with_the_setting_on() {
         let off = load(&path, false);
         for livery in &off.liveries {
             let shell = livery.shield.as_ref().expect("the disc authors a shell");
-            assert!(shell.own_shield.is_none(), "{image}: off keeps the disc's");
+            assert!(!shell.own_shield, "{image}: off keeps the disc's");
         }
         assert_ne!(
             off.setup.shield_palette,
@@ -54,35 +94,21 @@ fn pulse_and_pure_draw_their_own_shell_only_with_the_setting_on() {
             "{image}: off keeps the disc's palette"
         );
         assert!(
-            off.shield_cockpit
-                .as_ref()
-                .is_some_and(|m| m.own_shield.is_none()),
+            off.shield_cockpit.as_ref().is_some_and(|m| !m.own_shield),
             "{image}: off keeps the disc's sphere"
         );
 
         let on = load(&path, true);
         for (own, hull) in on.liveries.iter().map(|l| (l.shield.as_ref(), &l.hull)) {
             let own = own.expect("a shell");
-            assert!(
-                own.own_shield.is_some_and(|inflate| inflate > 0.0),
-                "{image}"
-            );
-            assert_eq!(
-                own.vertices.len(),
-                hull.vertices.len(),
-                "{image}: the hull's shape"
-            );
+            assert!(own.own_shield, "{image}");
+            stands_off(own, hull, image);
             assert!(own.textures.is_empty(), "{image}: no texture is read");
         }
         assert_eq!(on.setup.shield_palette, oag_render::shield::OWN_PALETTE);
-        assert_eq!(
-            on.shield_cockpit.as_ref().and_then(|m| m.own_shield),
-            Some(0.0)
-        );
+        assert_eq!(on.shield_cockpit.as_ref().map(|m| m.own_shield), Some(true));
         assert!(
-            on.report
-                .iter()
-                .any(|l| l.contains("as our own shield shell")),
+            on.report.iter().any(|l| l.contains("our own shield shell")),
             "{image}: the report names it"
         );
         checked.push(image);
@@ -102,7 +128,7 @@ fn hd_ignores_the_setting() {
     assert!(
         on.liveries
             .iter()
-            .all(|l| l.shield.as_ref().is_none_or(|m| m.own_shield.is_none()))
+            .all(|l| l.shield.as_ref().is_none_or(|m| !m.own_shield))
     );
     assert_eq!(on.setup.shield_palette, oag_render::shield::HD_PALETTE);
 }
