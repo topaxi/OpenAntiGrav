@@ -1757,6 +1757,13 @@ def cmd_capture(args):
                     if autopilot_note:
                         ship_pose["autopilot_timer"] = autopilot_note
                     try:
+                        # The scene's width level in the same pause; the presented frame can be two steps
+                        # older while the controller moves (`hd_scene_width`).
+                        import hd_scene_width
+                        ship_pose["scene_width"] = hd_scene_width.live(gdb.read)
+                    except Exception as error:  # noqa: BLE001 - the level is a bonus
+                        print("  %s: no scene width level (%s)" % (stem, error), flush=True)
+                    try:
                         # The gantry node's animation time, so ours can show the board's phase (`--gantry-seconds`).
                         import rpcs3_hd_field
                         ship_pose["gantry_seconds"] = rpcs3_hd_field.gantry_seconds(

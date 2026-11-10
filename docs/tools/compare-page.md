@@ -272,6 +272,13 @@ A screenshot is the last PRESENTED frame, which is a little older than the RAM r
   **0.054 s** (modesto-heights, 13.354 shows 13.2) and **0.055 s** (anulpha-pass, 13.955 shows 13.9): 3.3 ticks, so `rpcs3-hd-pair.py` runs ours `HUD_LAG_TICKS = 3` ticks short of the RAM clock (and the race pair's imposed clock),
   recorded in `pair.json` `original.presented_lag`. The set in `data/reference` made before this carries the uncorrected clock. Per-tick picture lag on RPCS3 is not measured (no per-tick stepping).
   HD's window opens at x = 240 on the 2000-pixel Xvfb, so a 1920-wide frame was clipped to 1760 and every pair refused ("original image size 1760x1080"); `rpcs3-hd-pair.py` waits for the resize to land and moves the window to the origin.
+- **HD: a pair names the width its original's scene was drawn at** (2026-11-10). The 1080p path draws the scene 1300 to 1920 px wide in 20 px levels and stretches it, and the level moves a step a frame on wall-clock timing
+  ([scene-width-throttle.md](../ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md)). `pair.json` `original.scene_width` is `px`, `level`, `method`, and for a race frame the `score`, the `peak` it had to reach and the
+  `runner_up`; a new pair also carries `at_pause` (the level and the enable byte read in the capture's pause, up to two steps from the frame's while the level moves). The stored set, measured off each `theirs.png` by
+  `scripts/hd_scene_width.py --record`: **1300** on chenghou-project, metropia, moa-therma, modesto-heights, sebenco-climb, talons, talons-assegai-c1, tech-de-ra and ubermall (scores 15.0 to 38.3), **1400** on sol-2 (12.6),
+  **1920** on anulpha-pass, the-amphiseum and vineta-k (no peak: 4.3, 3.4, 2.9 against the 5.5 bar; the weakest stretched frame of known width scored 6.7), and 1920 on the five menu pairs and the loading pair from how the
+  front end is drawn (their scores are kept as `frame_score_unused`: the loading screen's dot grid reads 1840 at 9.1). So nine of thirteen race originals are 68 percent of full width horizontally, which bears on edge sharpness and
+  fine texture, not on tone ([hd-track-tone.md](../rendering/hd-track-tone.md)).
 
 ## Re-rendering ours only (2026-10-21)
 

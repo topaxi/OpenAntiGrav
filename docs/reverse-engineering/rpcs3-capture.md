@@ -1444,7 +1444,9 @@ game's 1080p path draws its scene at a reduced, variable width (1300, 1320 and 1
 (`FunkLayer + 0x25c`) agrees with 1280x720/100 on three circuits within 3.5 percent and exposure 1.0; at 150 it read 9 to 35 percent low and put Anulpha at
 exposure 1.22. Numbers and method: `docs/rendering/hd-track-tone.md`, "The capture profile moves to 1920x1080". Reading a scene surface's
 size off a frame: the clip registers `0x200` (horizontal, `x | width << 16`) and `0x204` (vertical) in the draw state `scripts/hd-draw-dump.py`
-dumps; `scripts/rsx-draw-list.py`'s `SURF` line does not print them.
+dumps; `scripts/rsx-draw-list.py`'s `SURF` line does not print them. The level behind the width is four bytes at `0x00c81b08` (width `1920 - 20 * level`),
+`scripts/hd_scene_width.py <frame.png>` reads the width off a grabbed frame, and clearing the byte at `0x00c81da4` in a loaded race pins 1920
+([scene-width-throttle.md](../ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md)).
 
 **Overlays.** RPCS3's `Press and hold the START button to resume` toast fades in a moment after the GDB stub pauses the game and stays until it
 resumes (screenshots 0.3, 1.5, 4, 8 and 15 s after the pause: it is there from 1.5 s on); the grey box with a spinner at the bottom left is the PPU/shader
