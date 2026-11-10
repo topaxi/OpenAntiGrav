@@ -47,6 +47,24 @@ public override encoded_out: f32 = 0.0;
 // gamma target; 0.0 everywhere else, which leaves every output as it was.
 public override packed_out: f32 = 0.0;
 
+// 1.0 together with `packed_out` when the 5-6-5 card holds gamma-encoded values the
+// way the PSP writes them: Wipeout Pulse's 128 x 128 advert and gantry card
+// (`FRAMEBUFPIXFORMAT` 0 on target `0x154000` in a live GE dump, dither matrix zero), whose
+// 8-bit result is truncated to 5, 6 and 5 bits and expanded back by replicating the high
+// bits (docs/rendering/start-gantry.md, "Pulse's card is 5-6-5, truncated").
+public override packed_gamma: f32 = 0.0;
+
+// A gamma-encoded colour as the PSP's 5-6-5 target stores it: the 8-bit value truncated
+// to its high bits and read back with the high bits replicated into the low ones.
+public fn pack_565_gamma(encoded: vec3<f32>) -> vec3<f32> {
+    let c = clamp(encoded, vec3<f32>(0.0), vec3<f32>(1.0));
+    let eight = floor(c * 255.0 + vec3<f32>(0.5));
+    let step = vec3<f32>(8.0, 4.0, 8.0);
+    let kept = floor(eight / step);
+    let top = vec3<f32>(4.0, 16.0, 4.0);
+    return (kept * step + floor(kept / top)) / 255.0;
+}
+
 // A gamma-encoded colour rounded to the levels of a 5-6-5 target holding linear
 // light. The decode is the sRGB curve the console's texture unit applies (a piecewise
 // one, not the 2.2 power: against the live card it reproduces the red's mean level,
@@ -65,7 +83,8 @@ public fn pack_565(encoded: vec3<f32>) -> vec3<f32> {
 // rounded to a 5-6-5 card's levels when `packed_out` is.
 public fn target_out(rgb: vec3<f32>) -> vec3<f32> {
     let stored = mix(rgb, pow(clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2)), encoded_out);
-    return mix(stored, pack_565(stored), packed_out);
+    let packed = mix(pack_565(stored), pack_565_gamma(stored), packed_gamma);
+    return mix(stored, packed, packed_out);
 }
 
 // What a draw reads back from a scene-format target (the behind-glass grab),

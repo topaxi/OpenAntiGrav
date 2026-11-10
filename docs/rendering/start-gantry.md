@@ -1032,8 +1032,7 @@ Metropia's card read the same panel means (0.267, 4.348, 2.697), so the card is 
 A card read does not come back from a hooked frame's dump (the older note in `rpcs3-capture.md`); with the
 game paused after a state restore it did, on the second pause of a retry loop on Metropia (the first read all zeros).
 
-**What ours does now.** `oag_title::adverts::Adverts::card_565` (HD `true`, measured; Pulse `false`, its card
-format unmeasured) makes `oag_raceplay::adverts::Cards` draw the card with `SceneStore::Packed565`, which sets
+**What ours does now.** `oag_title::adverts::Adverts::card_store` (HD `R5G6B5Linear`, measured; Pulse `Rgba8` until 2026-11-10, see "Pulse's card is 5-6-5, truncated" below) makes `oag_raceplay::adverts::Cards` draw the card with `SceneStore::Packed565`, which sets
 the shader override `packed_out`; `oag_shaders::target::target_out` (the one place every colour fragment
 stage ends on) then rounds the colour to the 5-6-5 levels in linear light by the sRGB curve and stores it encoded with
 the 2.2 power the track quad's sampler decodes with, so the quad receives the rounded level itself. Test:
@@ -2818,3 +2817,60 @@ at 59.87 Hz, so its loop is 0.2 % longer in clock seconds), with no scatter. The
 because they predate `GO_TICK` 272; with it (`psp-pulse-pair.py`) ours is within about 2 ticks and Moa Therma
 White's board matches. What is left needs the node time read at the capture and handed to `--gantry-seconds`
 (the HD pair script does this): a one-tick phase error is 0.3 of this pair's mean grey difference.
+
+## Pulse's card is 5-6-5, truncated (2026-11-10, `psp-blue-bias`)
+
+**Claim: Pulse PSP's gantry and advert card target is a 16-bit R5G6B5 buffer and the GE truncates the 8-bit result to it,
+so the track quad sees 5-bit red and blue and 6-bit green levels. Confidence 90 for the format (read live, two frames),
+85 for truncation over rounding (the original's panel blue sits at the truncated level, below).** Found while hunting
+the "systematic blue lift" of ours against Pulse PSP's race pairs: most of the blue-specific excess is the green `GO`
+panel, 4 to 6 % of the frame, which ours drew 4 higher in blue than the original (11 or 12 against 8).
+
+**Evidence.**
+
+- PPSSPP v1.20.4 software renderer, `pulse-psp-usa.chd`, Metropia White grid state, `psp-ge-dump.py dump` twice (identical):
+  every one of the 22 PRIMs into the 128 x 128 target (`FRAMEBUFPTR` `0x154000`, `FRAMEBUFWIDTH` `0x80`) has
+  `FRAMEBUFPIXFORMAT` (`0xD2`) **0** (`GE_FORMAT_565`); the main target (`0`, 512 wide) and the two bloom targets (`0x110000`,
+  `0x132000`) read 3 (8888). `DTE` (dither enable) is set on those prims but the four dither matrix registers
+  (`0xE2` to `0xE5`) are **zero**, so the write is a plain truncation, not dither.
+- The panel's modal colour in the six best pairs (R, G, B, `theirs.png`, the green panel after the release or the
+  red one before): blue **8** in five of six (9 on Metropia), where ours drew **11 or 12** and the 5-bit expansion of the
+  truncated level is 8. A rounding quantiser (tried first, `floor(c * 31 + 0.5)`) put the quad's blue at 13: wrong way.
+- Ours after the change draws blue **8** (9 on Metropia) on all six; green still reads 2 higher than the original (77 against 75),
+  not explained here (open below).
+
+**What ours does now.** `oag_title::adverts::CardStore` replaces the `card_565` flag: `Rgba8`, `R5G6B5Linear` (HD) and
+`R5G6B5Gamma` (Pulse). `SceneStore::Packed565Gamma` sets the shader overrides `packed_out` and `packed_gamma`;
+`oag_shaders::target::pack_565_gamma` truncates the 8-bit value to its high 5, 6 and 5 bits and reads it back with the
+high bits replicated into the low ones (`(v >> 3 << 3) | (v >> 5)`), in gamma space (the PSP does no sRGB decode).
+Pulse PSP and PS2 share `oag_pulse::TITLE`, so PS2 carries it **inherited from PSP, not measured**. Test:
+`pulse_gantry_card_holds_truncated_565_levels` (disc-backed, GPU; fails with the title's `card_store` set back to `Rgba8`).
+
+**Result, 28 Pulse PSP pairs** (grid, zone and race shots, `ours.png` re-rendered on copies from each pair's recorded flags,
+`theirs.png` kept; whole-frame mean of ours minus theirs, PIL RGB):
+
+| | before | after |
+| --- | ---: | ---: |
+| mean blue bias, the six best pairs | +0.88 | +0.56 |
+| mean absolute blue bias, all 28 pairs | 1.62 | 1.49 |
+| blue stddev bias (ours flatter), six best | -0.62 | -0.27 |
+| mean grey difference | every pair within -0.10 to +0.02 of its old value; 26 of 28 fall or hold |
+| pairs without a gantry in frame (race shots, zone) | unchanged to the byte |
+
+The claim "per-channel bias under 0.3 on R, G and B" is **false** for the six: after the card, blue is under 0.3 on two of them
+(Tech de Ra Black -0.23, Talon's Black +0.11) and red and green are untouched (+0.4 to +0.6 on average). What remains is not blue-specific.
+
+**Open, measured the same day.**
+
+- With the GO board and the craft's plume box masked, the six pairs' bias is a uniform **+0.7 on all three channels**
+  (R +0.73, G +0.75, B +0.73), not a blue lift: the plume and hull glow near the craft (white blob in the difference
+  image on four pairs) and structured texture detail carry it. Flat regions agree exactly (63 to 65 % of the pixels flat in both
+  frames differ by 0).
+- The panel is drawn through the blend pipeline here, so the texel's alpha (about 0.97) scales the stored level; the original's
+  panel prims have `ABE` 0. Ours' green reads 2 higher than the original's after the card and the opposite sign to what an
+  opaque panel would give: the quad's own lighting or the card sampler is the next thing to read.
+- The original's panel carries a fine 4 to 5 px pattern (blue 3 to 9, green 74 to 78) that ours' panel does not. The `GO` letters
+  read 21 higher in blue and 12 higher in green in ours than in the original on Metropia White and the other way round on
+  Talon's Black: the letters' fade phase at the captured tick, not the format.
+- **Other titles:** HD already carries its own measured 5-6-5 (linear light, rounded). 2048 and Omega draw no Pulse-style card
+  target; not checkable against this PSP read.

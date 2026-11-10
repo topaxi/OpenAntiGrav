@@ -498,18 +498,23 @@ fn hd_and_pulse_draw_their_gantry_as_a_card() {
     );
 }
 
-/// HD's cards are 5-6-5 targets and Pulse's are not measured to be.
+/// HD's cards are 5-6-5 targets in linear light and Pulse's are 5-6-5 in gamma.
 #[test]
-fn hd_declares_its_cards_565_and_pulse_does_not() {
+fn hd_and_pulse_declare_their_cards_565_each_its_own_way() {
     let hd = oag_hd::TITLE.adverts.expect("HD measured its advert pass");
     let pulse = oag_pulse::TITLE
         .adverts
         .expect("Pulse measured its advert pass");
-    assert!(
-        hd.card_565,
+    assert_eq!(
+        hd.card_store,
+        oag_title::adverts::CardStore::R5G6B5Linear,
         "RPCS3 2026-10-26: the card reads R5G6B5 in linear light"
     );
-    assert!(!pulse.card_565, "Pulse's card format is unmeasured");
+    assert_eq!(
+        pulse.card_store,
+        oag_title::adverts::CardStore::R5G6B5Gamma,
+        "PPSSPP GE dump: the card target is FRAMEBUFPIXFORMAT 0, dither matrix zero"
+    );
 }
 
 /// The share of pixels of `rgba` (gamma 8-bit, as the card holds them) whose decoded linear
@@ -533,7 +538,7 @@ fn on_the_565_grid(rgba: &[u8]) -> f32 {
 /// target (`0x02ae0000`, RPCS3, 2026-10-26, Chenghou Project) is the panel texture decoded and
 /// rounded to the nearest level, 89 % of its red, 86 % of its green and 90 % of its blue texels
 /// equal to that rounding of ours. A card that kept the 8-bit gamma texel puts few pixels on the
-/// grid in all three channels at once; dropping the title's `card_565` fails this.
+/// grid in all three channels at once; dropping the title's `card_store` fails this.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU"]
 fn hd_gantry_card_holds_565_levels_of_linear_light() {
@@ -703,6 +708,46 @@ fn pulse_psp_gantry_card_counts_down() {
 #[ignore = "needs data/images/pulse-ps2-eu.chd and a GPU"]
 fn pulse_ps2_gantry_card_counts_down() {
     assert_the_gantry_card_counts_down("data/images/pulse-ps2-eu.chd");
+}
+
+/// Whether a gamma 8-bit value is one a 5-bit (`bits` 5) or 6-bit (`bits` 6) PSP colour channel
+/// reads back as: the kept high bits with themselves replicated into the low ones.
+fn is_a_16_bit_level(value: u8, bits: u32) -> bool {
+    let shift = 8 - bits;
+    (value >> shift << shift) | (value >> bits) == value
+}
+
+/// Pulse's gantry card target is 5-6-5 and the GE truncates to it: a PPSSPP GE dump of the grid
+/// has every prim into the 128 x 128 target at `0x154000` with `FRAMEBUFPIXFORMAT` 0 and a zero
+/// dither matrix, and the original's green `GO` panel reads blue 8 on the quad where a full
+/// 8-bit card holds 11 to 12. Blue is checked, not green: the panel is drawn through the blend
+/// pipeline here, so its texel alpha scales the stored level, where the original's panel
+/// prims have blending off. Dropping the title's `card_store` puts the panel's blue off the grid.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
+fn pulse_gantry_card_holds_truncated_565_levels() {
+    let Some(frames) = gantry_card_at("data/images/pulse-psp-usa.chd", &[4.5]) else {
+        return;
+    };
+    let mut seen = std::collections::BTreeMap::new();
+    for p in frames[0].as_chunks::<4>().0 {
+        *seen.entry([p[0], p[1], p[2]]).or_insert(0_u32) += 1;
+    }
+    let (panel, _) = seen
+        .iter()
+        .max_by_key(|(_, n)| **n)
+        .expect("the card has pixels");
+    assert!(
+        is_a_16_bit_level(panel[0], 5) && is_a_16_bit_level(panel[2], 5),
+        "the green panel's red and blue are {} and {}, not 5-bit levels",
+        panel[0],
+        panel[2]
+    );
+    assert!(
+        (5..=10).contains(&panel[2]),
+        "the panel's blue is {}, the original's quad reads 8",
+        panel[2]
+    );
 }
 
 #[test]
