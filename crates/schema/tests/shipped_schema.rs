@@ -73,6 +73,15 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
             "assets/fallback/Data/XML/LoadingScreen_Omega.toml",
             "screen-layout",
         ),
+        ("assets/fallback/Data/Psys/OAGRocketFlight.toml", "effect"),
+        (
+            "assets/fallback/Data/Psys/OAGRocketImpactTrack.toml",
+            "effect",
+        ),
+        (
+            "assets/fallback/Data/Psys/OAGRocketImpactCraft.toml",
+            "effect",
+        ),
     ]
 }
 

@@ -683,6 +683,16 @@ pub struct Graphics {
     #[serde(default)]
     pub own_shield: bool,
 
+    /// Draw our own rocket effect on Pulse and Pure: an exhaust flame, a smoke trail, a launch
+    /// flash and an impact burst, in place of the disc's rocket flare and blasts. Off by default.
+    ///
+    /// **An enhancement of this project's, not the original's.** The effect is authored here
+    /// (`assets/fx/own-rocket/`) and reads nothing from any disc. Baked into the race at load,
+    /// so a change applies from the next race. See `oag_raceplay::Options::own_rockets` and
+    /// `docs/rendering/own-rockets.md`.
+    #[serde(default)]
+    pub own_rockets: bool,
+
     /// Let the CPU governor turn this project's own CPU-heavy extras down at runtime while the
     /// frame thread is over its frame budget and the GPU is not (`oag_present::governor`).
     /// It overrides in memory only: this value and every render-profile value are never
@@ -736,6 +746,7 @@ impl Default for Graphics {
             trail_hits: false,
             wingtip_contrails: false,
             own_shield: false,
+            own_rockets: false,
             cpu_governor: default_cpu_governor(),
             camera_view: default_camera_view(),
         }
@@ -1212,6 +1223,14 @@ pub fn menu_seeds(
         (
             "graphics.own_shield",
             text(if settings.graphics.own_shield {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
+            "graphics.own_rockets",
+            text(if settings.graphics.own_rockets {
                 "on"
             } else {
                 "off"

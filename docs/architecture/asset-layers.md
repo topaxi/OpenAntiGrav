@@ -63,6 +63,11 @@ Besides the Pilot Assist art and the layouts it carries `Data\Psys\Tex\OAGSplash
 (2026-10-29): the ring and dot the enhanced weather's splashes draw, 64 x 32, made by
 `scripts/gen-fallback-splash-art.py`; see `docs/ghidra/functions/psp-pulse-usa/weather.md`.
 
+It also carries this project's own rocket effect (2026-11-10), read only with `graphics.own_rockets` on:
+`Data\Psys\OAGRocketFlight.toml`, `OAGRocketImpactTrack.toml` and `OAGRocketImpactCraft.toml` (effect files in
+the mods' format) and `Data\Psys\Tex\OAGRocketPuff1..4.oagmask`, the puff sprites they name, made by
+`scripts/gen-fallback-rocket-art.py`; see [own-rockets.md](../rendering/own-rockets.md).
+
 ### The `OAGMASK` art format
 
 A plain-text alpha mask (`oag_texture::mask`): the header `OAGMASK <w> <h>`, then one

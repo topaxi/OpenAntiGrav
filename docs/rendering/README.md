@@ -116,6 +116,9 @@
   [`weapon-absorb-pairs.md`](weapon-absorb-pairs.md)
 - **Our own HD/Fury-style shield for Pulse and Pure** (opt-in `graphics.own_shield`, off by default): a procedural,
   texture-free shell over the craft's own hull, nothing read from any other disc - see [`own-shield.md`](own-shield.md)
+- **Our own rocket effect for Pulse and Pure** (opt-in `graphics.own_rockets`, off by default): flame, smoke trail,
+  launch flash and impact burst as effect files and puff sprites of ours in the fallback layer, nothing read from
+  any disc - see [`own-rockets.md`](own-rockets.md)
 - Lighting and shadow: five authored light classes plus
   `Dynamic Shadow Occluder` and `lensflare` - none implemented. The prelit path
   exists (`GpuVertex.lit`), so this is about which surfaces are which.

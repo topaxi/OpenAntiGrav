@@ -204,6 +204,11 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Chosen,
     },
+    // The opt-in rocket effect, `graphics.own_rockets`: `docs/rendering/own-rockets.md`.
+    own_rockets: Rule {
+        on: Platforms::Any,
+        origin: Origin::Chosen,
+    },
     // Pulse shows its picker; this build waits at it too.
     skips_language_picker: Rule::UNREAD,
     // Pulse lights on the GE; no fragment-program output scale exists there.

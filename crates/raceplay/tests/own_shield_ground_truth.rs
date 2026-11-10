@@ -10,15 +10,20 @@
 //! ```
 //!
 //! The picture is `docs/rendering/own-shield.md`.
+//!
+//! `graphics.own_rockets` rides the same loads (a race load is the whole cost of this file):
+//! [`rockets_are_the_discs_or_ours`], `docs/rendering/own-rockets.md`.
 
 use oag_raceplay as race;
 
+/// A race with both of our opt-in looks off, or both on.
 fn load(path: &std::path::Path, own_shield: bool) -> race::Loaded {
     race::load(&race::Options {
         source: path.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         own_shield,
+        own_rockets: own_shield,
         ..race::Options::default()
     })
     .expect("loading the race")
@@ -67,6 +72,65 @@ fn stands_off(shell: &oag_mesh::mesh::Model, hull: &oag_mesh::mesh::Model, image
 #[test]
 fn the_setting_is_off_by_default() {
     assert!(!race::Options::default().own_shield);
+    assert!(!race::Options::default().own_rockets);
+}
+
+/// The Rocket's three triggers and the fallback-layer effect of ours each plays with
+/// `graphics.own_rockets` on.
+const OWN_ROCKET: [(oag_title::Trigger, &str); 3] = [
+    (
+        oag_title::Trigger::RocketFlare,
+        r"Data\Psys\OAGRocketFlight.toml",
+    ),
+    (
+        oag_title::Trigger::TrackBlast,
+        r"Data\Psys\OAGRocketImpactTrack.toml",
+    ),
+    (
+        oag_title::Trigger::CraftBlast,
+        r"Data\Psys\OAGRocketImpactCraft.toml",
+    ),
+];
+
+/// Off, the race holds none of our rocket effects and says nothing of them, so every rocket
+/// trigger plays what the disc authors and the picture is the one it was. On, each of the
+/// three triggers plays ours, whatever the disc authors there (Pure authors no track blast).
+fn rockets_are_the_discs_or_ours(off: &race::Loaded, on: &race::Loaded, image: &str) {
+    for (trigger, name) in OWN_ROCKET {
+        assert!(
+            off.setup.effects.get(name).is_none(),
+            "{image}: off loaded {name}"
+        );
+        let ours = on
+            .setup
+            .effects
+            .get(name)
+            .unwrap_or_else(|| panic!("{image}: on did not load {name}"));
+        let playing = on.setup.handles.get(trigger);
+        assert!(
+            playing.is_some_and(|effect| std::sync::Arc::ptr_eq(effect, ours)),
+            "{image}: {trigger:?} does not play {name}"
+        );
+        assert!(
+            off.setup
+                .handles
+                .get(trigger)
+                .is_none_or(|effect| !std::sync::Arc::ptr_eq(effect, ours)),
+            "{image}: off plays ours on {trigger:?}"
+        );
+        assert!(
+            ours.unplaced_sprites().next().is_none(),
+            "{image}: a puff sprite of {name} did not fit the sheet"
+        );
+    }
+    let named = |loaded: &race::Loaded| loaded.report.iter().any(|l| l.contains("own rockets"));
+    assert!(!named(off), "{image}: off names our rockets in the report");
+    assert!(named(on), "{image}: the report names our rockets");
+    assert!(
+        on.report.iter().all(|l| !l.contains("left out")),
+        "{image}: {:?}",
+        on.report
+    );
 }
 
 /// Off, every craft's shell is the disc's (no own-shield shader, the disc's palette); on, it is the
@@ -111,6 +175,7 @@ fn pulse_and_pure_draw_their_own_shell_only_with_the_setting_on() {
             on.report.iter().any(|l| l.contains("our own shield shell")),
             "{image}: the report names it"
         );
+        rockets_are_the_discs_or_ours(&off, &on, image);
         checked.push(image);
     }
     assert!(!checked.is_empty(), "no Pulse or Pure image to check");
@@ -131,4 +196,8 @@ fn hd_ignores_the_setting() {
             .all(|l| l.shield.as_ref().is_none_or(|m| !m.own_shield))
     );
     assert_eq!(on.setup.shield_palette, oag_render::shield::HD_PALETTE);
+    for (_, name) in OWN_ROCKET {
+        assert!(on.setup.effects.get(name).is_none(), "HD loaded {name}");
+    }
+    assert!(on.report.iter().all(|l| !l.contains("own rockets")));
 }

@@ -164,6 +164,7 @@ impl Pending {
                 self.settings.graphics.wingtip_contrails,
             ),
             own_shield: self.settings.graphics.own_shield,
+            own_rockets: self.settings.graphics.own_rockets,
             foreign_track: self
                 .foreign_entry
                 .as_ref()

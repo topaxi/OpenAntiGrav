@@ -527,6 +527,7 @@ impl Session {
             &self.titles,
         );
         options.own_shield = self.settings.graphics.own_shield;
+        options.own_rockets = self.settings.graphics.own_rockets;
         // The join screen's seats, or the seats a restart kept: the load reads a
         // title's authored two-player split HUD, so it needs the view count
         // before `split_screen::seat_for_launch` cuts the screen. See `race::Options::views`.

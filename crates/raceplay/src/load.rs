@@ -877,6 +877,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
             .with_shaders(mod_shaders)
             .lending(Trigger::TrailHitship, lent_trail_hit),
     );
+    #[cfg(feature = "view")]
+    let handles = own_rockets::load(options, craft_title, &mut archives, &mut effects)
+        .lend(handles, &mut report);
 
     stages::checkpoint()?;
     #[cfg(feature = "view")]

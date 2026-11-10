@@ -743,6 +743,15 @@ impl Session {
                     return;
                 }
             },
+            // Read when a race loads (`race::Options::own_rockets`), so the next race.
+            "graphics.own_rockets" => match text.as_str() {
+                "on" => self.settings.graphics.own_rockets = true,
+                "off" => self.settings.graphics.own_rockets = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
             "graphics.cpu_governor" => match text.as_str() {
                 "on" => self.settings.graphics.cpu_governor = true,
                 "off" => {

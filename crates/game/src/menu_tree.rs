@@ -80,6 +80,8 @@ pub fn finish_definition(
     definition.drop_unavailable_wingtip_contrails(title);
     // And the OWN SHIELD row, where the original draws a shield of its own look: HD, 2048, Omega.
     definition.drop_unavailable_own_shield(title);
+    // And the OWN ROCKETS row, on the same titles.
+    definition.drop_unavailable_own_rockets(title);
     // And the HUD STYLE row, where the disc authors the list: HD and Omega.
     definition.drop_unavailable_hud_style(title);
     // And the DYNAMIC HUD row, where the options list it: Pulse.

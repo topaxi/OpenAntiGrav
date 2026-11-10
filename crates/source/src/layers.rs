@@ -121,6 +121,40 @@ pub const RUMBLE_PATTERNS: &[(&str, &[u8])] = rumble_patterns![
     "wrong_way",
 ];
 
+/// This project's own rocket effect behind `graphics.own_rockets`: three effect files in
+/// the format a mod's effect is written in, and the puff sprites they name
+/// (`docs/rendering/own-rockets.md`).
+const OWN_ROCKET: [(&str, &[u8]); 7] = [
+    (
+        "Data\\Psys\\OAGRocketFlight.toml",
+        include_bytes!("../../../assets/fallback/Data/Psys/OAGRocketFlight.toml"),
+    ),
+    (
+        "Data\\Psys\\OAGRocketImpactTrack.toml",
+        include_bytes!("../../../assets/fallback/Data/Psys/OAGRocketImpactTrack.toml"),
+    ),
+    (
+        "Data\\Psys\\OAGRocketImpactCraft.toml",
+        include_bytes!("../../../assets/fallback/Data/Psys/OAGRocketImpactCraft.toml"),
+    ),
+    (
+        "Data\\Psys\\Tex\\OAGRocketPuff1.oagmask",
+        include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGRocketPuff1.oagmask"),
+    ),
+    (
+        "Data\\Psys\\Tex\\OAGRocketPuff2.oagmask",
+        include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGRocketPuff2.oagmask"),
+    ),
+    (
+        "Data\\Psys\\Tex\\OAGRocketPuff3.oagmask",
+        include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGRocketPuff3.oagmask"),
+    ),
+    (
+        "Data\\Psys\\Tex\\OAGRocketPuff4.oagmask",
+        include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGRocketPuff4.oagmask"),
+    ),
+];
+
 /// This project's own substitutes, carried in the binary.
 ///
 /// Every entry is **art or layout this project drew**, named for the entry a
@@ -173,6 +207,9 @@ pub fn fallback_layer() -> Layer {
         "Data\\Psys\\Tex\\OAGSplash.oagmask",
         include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGSplash.oagmask"),
     );
+    for (name, bytes) in OWN_ROCKET {
+        layer.insert_bytes(name, bytes);
+    }
     for (name, bytes) in RUMBLE_PATTERNS {
         layer.insert_bytes(name, bytes);
     }

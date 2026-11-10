@@ -24,6 +24,7 @@ impl Default for Options {
             trail_hits: TrailHits::Off,
             wingtip_contrails: WingtipContrails::Off,
             own_shield: false,
+            own_rockets: false,
             team: None,
             hull_variant: None,
             skin: None,

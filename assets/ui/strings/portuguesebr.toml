@@ -202,6 +202,7 @@ OAG_GRAPHICS_BOOST_ZOOM = { text = "ZOOM DO TURBO", human = false }
 OAG_GRAPHICS_TRAIL_HITS = { text = "ACERTOS NO RASTRO", human = false }
 OAG_GRAPHICS_WINGTIP_CONTRAILS = { text = "RASTROS DAS ASAS", human = false }
 OAG_GRAPHICS_OWN_SHIELD = { text = "ESCUDO PRÓPRIO", human = false }
+OAG_GRAPHICS_OWN_ROCKETS = { text = "FOGUETES PRÓPRIOS", human = false }
 OAG_GRAPHICS_CPU_GOVERNOR = { text = "REGULADOR DE CPU", human = false }
 OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "INDICADOR DE DESEMPENHO", human = false }
 OAG_GRAPHICS_ADVANCED = { text = "AVANÇADO", human = false }

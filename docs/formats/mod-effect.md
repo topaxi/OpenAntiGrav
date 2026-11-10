@@ -43,6 +43,9 @@ texture = "fx/glow.png"  # optional: a PNG of the mod, or a disc texture by name
 # none draws the soft round default
 ```
 
+`speed` is signed: a negative centre throws a particle against the cone axis (this project's own rocket effect lays
+its trail that way, [own-rockets.md](../rendering/own-rockets.md)).
+
 Ranges are the loader's (`parametric.rs`); the schema carries the shape. A file that fails to
 read, parse or validate **draws nothing**, the load report names it
 (`mod <id>: effect <name> left out: <why>; draws nothing`) and the race runs

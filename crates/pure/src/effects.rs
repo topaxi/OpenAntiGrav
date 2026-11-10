@@ -276,6 +276,11 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Chosen,
     },
+    // The opt-in rocket effect, `graphics.own_rockets`: `docs/rendering/own-rockets.md`.
+    own_rockets: Rule {
+        on: Platforms::Any,
+        origin: Origin::Chosen,
+    },
     ..Looks::unread(ShieldPalettes {
         ps2: ShieldPalette::Ps2Pulse,
         elsewhere: ShieldPalette::Pulse,
