@@ -93,12 +93,9 @@ pub struct Adverts {
     /// What the target the cards are drawn into stores of a card's colour: HD's linear-light
     /// 5-6-5, Pulse's truncated gamma 5-6-5, or the full 8 bits. See [`CardStore`].
     pub card_store: CardStore,
-    /// The slot 8 boards this title's card pass plays, or `None` where every board a
-    /// manifest names is played on HD's clock.
-    ///
-    /// A board whose digits are material curves is left out where the title's material
-    /// container does not read its curves: the card would stay on its first frame, so it
-    /// is not drawn and the loader says why.
+    /// The slot 8 boards whose countdown is their nodes' own motion, or `None` where
+    /// the title has none. Any board not listed plays HD's clock off its own `GO`
+    /// edge.
     pub gantry_boards: Option<&'static [GantryBoard]>,
     /// The board slot 8 shows instead of the circuit's own while the race is a
     /// Zone race, or `None` where the title keeps one gantry for every mode.

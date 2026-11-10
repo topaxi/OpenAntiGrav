@@ -62,3 +62,33 @@ and results banks), and `crowd_NGP.bnk` (`0x814a9308`) with
 `speech_PreRaceChatter.bnk` (`0x814a9438`) among the race banks. No
 `voppler.bnk` literal exists on 2048 (HD has one), so 2048's `voppler` nodes
 dangle: see [`2048-audio.md`](../../../formats/2048-audio.md).
+
+## The `Billboard` arm substitutes the start board by mode (2026-11-10, `omega-billboards`)
+
+**Confidence: 80** (decompile only; the same substitution, with the same file
+names, is read at the instruction level on `ps4-omega-eu`'s
+`TrackStartup_Load`, `0x01391130`).
+
+After a `Billboard` element's attributes are read, `TrackStartup_Read`
+(`0x8121b688`) tests the `Location` string:
+
+```c
+if (GameMode_Current() == 0) {
+    if (GameMode_IsZoneFamily_q(&DAT_8153fc40)
+        && (p = strstr(location, "321Go_StartFinish.vex")) != 0) {
+        if (FUN_81001982(&DAT_8153fc40) != 0) strcpy(p, "321Go_HD_Zone_Battle.vex");
+        else if (DAT_8153fd24 == 0xe)         strcpy(p, "321go_hd_detonator.vex");
+        else                                  strcpy(p, "321Go_Zone.vex");
+    }
+} else {
+    p = strstr(location, "321Go_2048.vex");
+    if (FUN_812b0880(mode, 1) != 0 && p != 0) strcpy(p, "321Go_2048_Combat.vex");
+}
+```
+
+So a Zone race on an HD-ported circuit shows `321Go_Zone.vex` on slot 8, a
+Zone Battle `321Go_HD_Zone_Battle.vex` and a Detonator race
+`321go_hd_detonator.vex`, as on Omega. `FUN_81001982` (the Zone Battle test)
+and `FUN_812b0880` (the Combat test) are unread and keep their addresses.
+`oag_2048::TITLE.adverts.zone_gantry` carries the Zone case; the other three
+have no carrier in this engine yet.

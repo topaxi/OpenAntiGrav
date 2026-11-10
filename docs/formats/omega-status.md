@@ -1970,8 +1970,10 @@ container's curves are unread, and the side cards drew dark teal because `fx350_
 - `.gxt` and `.gnf` spellings are in `oag_render::gantry` (`SLOT_PLACEHOLDER_TEXTURES`, `mount`, `is_fx350_texture`).
 - `adverts` is HD's pass, inherited, with `gantry_boards` naming `321Go_2048.vex` (the node-driven board: frame 0 on tick 73, so
   `GO` slides in on the release, chosen). The side cards show their logos on Vineta K.
-- The HD-lineage board `321Go_StartFinish.vex` stays withheld with a loader line: **still blocked on the PS4 material
-  curves** (2048's and Omega's `.rcsmodel` carry them in a container `oag_rcs::rcsmodel::psp2` does not parse).
+- The HD-lineage board `321Go_StartFinish.vex` **plays** (2026-11-10, `omega-billboards`): its digits ride UV keys
+  authored in the `.vex` `Mesh` nodes, not a curve in the `.rcsmodel` (`TexAnim_UpdateTransform`, `0x0172ba00`,
+  confidence 88; `docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys"). A Zone race shows `321Go_Zone.vex`.
+  `docs/rendering/start-gantry.md`, "Omega and 2048: the HD-lineage board counts down".
 - shadPS4 draws this card's face blank white throughout the countdown on Altima (Race Box, GAME MODE WipEout 2048,
   `scripts/shadps4-omega-countdown.py`), so the digits and their phase are not measurable on it; the board's place is.
   Evidence, numbers and the box: `docs/rendering/start-gantry.md`, "Omega and 2048".

@@ -53,6 +53,7 @@ mod shield_lightning;
 mod static_hologram;
 mod transparency;
 mod twin_blend;
+mod uv_keys;
 
 pub use normal_map::Census as NormalMapCensus;
 pub use twin_blend::INHERITED_RATE as TWIN_BLEND_RATE;
@@ -222,6 +223,8 @@ pub struct Report {
     pub refraction_bound: usize,
     /// Of that family, materials without the grab's weight or a table slot.
     pub refraction_unread: usize,
+    /// Meshes whose `.vex` node authors UV keys (`psp2::uv_keys`), a billboard build only.
+    pub uv_keyed_meshes: usize,
 }
 
 /// The vertex colour of a `fc01_dummy` submesh before the loader knows the
@@ -404,9 +407,17 @@ impl Report {
                 self.alpha_product_materials
             )
         };
+        let uv_keys = if self.uv_keyed_meshes == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} mesh(es) ride the UV keys their .vex node authors",
+                self.uv_keyed_meshes
+            )
+        };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}{lightning}{refraction}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}{lightning}{refraction}{uv_keys}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -493,6 +504,7 @@ pub fn build(
         label,
         model_blob,
         &|scene| placement::plan(scene, animation),
+        None,
         textures,
     )
 }
@@ -514,6 +526,32 @@ pub fn build_with_vex(
         label,
         model_blob,
         &|scene| placement::plan_from_vex(scene, vex_blob),
+        None,
+        textures,
+    )
+}
+
+/// [`build_with_vex`] for a billboard: its meshes also ride the UV keys their
+/// `.vex` nodes author, which is how 2048 and Omega play what Wipeout HD
+/// authors as a material curve - see [`uv_keys`].
+///
+/// A billboard build alone, because the engine points a material's
+/// `uvOffset`/`uvScale` at the keyed instance in its billboard loader.
+///
+/// # Errors
+///
+/// Propagates [`psp2::parse`].
+pub fn build_billboard(
+    label: &str,
+    model_blob: &[u8],
+    vex_blob: &[u8],
+    textures: Textures<'_>,
+) -> Result<(Model, Report)> {
+    build_planned(
+        label,
+        model_blob,
+        &|scene| placement::plan_from_vex(scene, vex_blob),
+        Some(vex_blob),
         textures,
     )
 }
@@ -537,6 +575,7 @@ fn build_planned(
     label: &str,
     model_blob: &[u8],
     planner: &dyn Fn(&psp2::nodes::Scene) -> placement::Plan,
+    billboard_vex: Option<&[u8]>,
     textures: Textures<'_>,
 ) -> Result<(Model, Report)> {
     let decoded = psp2::parse(model_blob)
@@ -590,6 +629,9 @@ fn build_planned(
     let normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
     model.emissive = glow.emissive.clone();
     model.anim_tracks = glow.tracks.clone();
+    let uv_keys = billboard_vex.map_or_else(uv_keys::Plan::default, |vex_blob| {
+        uv_keys::plan(&decoded, vex_blob, &mut model.anim_tracks, &mut report)
+    });
     // Every draw is pushed in submesh order below, and `bind_textures`
     // zips on that; a hidden submesh still gets its draw, empty, so the
     // zip stays a binding.
@@ -793,7 +835,12 @@ fn build_planned(
                 texcoord,
                 lit,
                 lightmap_texcoord,
-                anim: glow.anim(submesh.material),
+                anim: uv_keys
+                    .anim(
+                        submesh.mesh,
+                        submesh.material.and_then(|m| decoded.materials.get(m)),
+                    )
+                    .unwrap_or_else(|| glow.anim(submesh.material)),
                 slots: (if submesh.lightmap_texcoords.is_empty() && twin_here.is_none() {
                     role | glow.role(submesh.material)
                 } else {

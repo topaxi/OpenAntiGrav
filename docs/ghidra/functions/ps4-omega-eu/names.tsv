@@ -205,3 +205,7 @@
 0x016f60e0	function	Trail_SpawnHitBursts	80	trail-hits.md
 0x016f6e00	function	Trail_UpdateRing	70	trail-hits.md
 0x016f6320	function	Trail_UpdateAll	65	trail-hits.md
+0x0172ba00	function	TexAnim_UpdateTransform	88	billboards.md
+0x0172bb00	function	TexAnim_EvalKeyframes	88	billboards.md
+0x0170c8b0	function	Mesh_Update	72	billboards.md
+0x0170cce0	function	Mesh_Load	72	billboards.md

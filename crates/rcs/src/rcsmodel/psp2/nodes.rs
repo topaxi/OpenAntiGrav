@@ -37,7 +37,9 @@
 //!
 //! one mesh object:
 //!   +0x00  u32   `~crc32` of the shape's full path (`...:RiverBoat4Shape`)
-//!   +0x04  u32   unread - unique per mesh, matches no hash tried
+//!   +0x04  u32   the hash the `.vex` beside the model names this mesh by:
+//!                the word at `+0x30` of its `Mesh` node's payload
+//!                ([`MeshObject::vex_hash`])
 //!   +0x08  u16   node index into the table above, or 0xffff for a static
 //!                mesh authored in world space
 //!   +0x0a  u16   unread flags: 0x0101 or 0x0201 on a node-bound mesh,
@@ -168,6 +170,11 @@ pub struct MeshObject {
     pub name: String,
     /// `~crc32` of [`Self::name`], as the file carries it.
     pub name_hash: u32,
+    /// The word at `+0x04`: what the `Mesh` node of the `.vex` beside the model
+    /// carries at `+0x30` of its payload (`oag_vex::vex::external_mesh_hash`).
+    /// Omega's `Billboard_ConstructResource` (`0x016e53a0`) joins the two by it;
+    /// 19 of 19 on `321go_startfinish`, Vita and PS4.
+    pub vex_hash: u32,
     /// Index into [`Scene::nodes`], or `None` for a static mesh.
     pub node: Option<usize>,
     /// The unread `+0x0a` word.
@@ -246,6 +253,7 @@ pub fn read(cpu: &[u8], layout: Layout) -> Option<Scene> {
     for m in 0..mesh_count {
         let at = pointer_at(cpu, table.checked_add(m * layout.pointer)?, layout)?;
         let name_hash = u32_at(cpu, at)?;
+        let vex_hash = u32_at(cpu, at + 4)?;
         let node = u16_at(cpu, at + MESH_NODE)?;
         let flags = u16_at(cpu, at + MESH_FLAGS)?;
         let name = cstr_at(cpu, pointer_at(cpu, at + layout.mesh_name, layout)?)?;
@@ -268,6 +276,7 @@ pub fn read(cpu: &[u8], layout: Layout) -> Option<Scene> {
         meshes.push(MeshObject {
             name,
             name_hash,
+            vex_hash,
             node,
             flags,
             submesh_records,
