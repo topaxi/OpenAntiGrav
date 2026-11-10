@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-09
-summary: "WESL sweep: present-composite pow, Zone fetches 9 to 3, HUD fetches 4 to 1, bloom blur taps, fog branch; duplicate sRGB helpers, orphaned comments"
+updated: 2026-11-10
+summary: "WESL sweep: present-composite pow, Zone fetches 9 to 3, HUD fetches 4 to 1, bloom blur taps, fog branch (maintenance items 11-14 landed)"
 categories: [rendering]
 ---
 
@@ -37,6 +37,8 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 
 1. **The present composite pays three `pow` it does not need on every output pixel.**
    `crates/present/shaders/upscale.wesl:65` and `:73` (`fs_main`).
+   - Since item 11 `srgb_decode` lives in `crates/shader-check/shaders/colour.wesl` and is three scalar `pow` branches,
+     not one vector `pow`; `upscale.wesl` calls it as `srgb_decode(clamp(frame_color.rgb, 0, 1))`. Count the ISA on that.
    - What: `select(frame_color.rgb, srgb_decode(frame_color.rgb), grade.decode > 0.5)` evaluates `srgb_decode`
      (a `pow(_, 2.4)` on three channels) for every pixel and then discards it, because `select` is not a branch.
      `decode` is 0 whenever the sampler already decoded (the offscreen sRGB view; `upscale.rs:686` to `:701`).
@@ -197,34 +199,32 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 
 ## Maintenance
 
-11. **Five copies of the sRGB curve.** Decode: `upscale.wesl:44`, `photo_fx.wesl:101` and `beam.wesl:72`
-    (`srgb_to_linear`); `target.wesl` has no copy (its `decode` is the 2.2 power, a different curve on purpose).
-    Encode: `omega_tonemap.wesl:228` (`scanout_encode`) and `occlusion.wesl:69` repeat
-    `colour.wesl:11` (`srgb_encode`). Add `srgb_decode` to `crates/shader-check/shaders/colour.wesl` and import it.
-    Check: `omega_tonemap` and `occlusion` omit the `max(c, 1e-6)` guard that `srgb_encode` has; the lower branch
-    is taken first, so the result is the same, but `cmp` it. Gain: one place to fix a curve bug. Measure: the
-    build's `oag-shader-check` validation, then `cmp` on an Omega frame and an occlusion capture. 1 hour.
+11. ~~**Five copies of the sRGB curve.**~~ **Landed**: `colour.wesl` holds `srgb_decode_channel`, `srgb_decode` and
+    `srgb_encode`; `upscale`, `photo_fx`, `beam`, `omega_tonemap`, `occlusion` and `target.wesl`'s `pack_565` (a sixth
+    copy the scout missed) import them. Byte-identical on every pass: HD, Pulse and Pure race frames, `--presented`,
+    photo mode's nine frames, the HD leach ribbon, and sweeps of the upscale decode arm and grade, Omega's encode,
+    the sun-occlusion map and HD's 5-6-5 card. A vector `pow` in place of beam's scalar one moved one ribbon pixel
+    by one level, so `srgb_decode` is built from the scalar form. `omega_tonemap` and `occlusion` dropped no guard
+    that mattered: their inputs are in `0..1` and the `1e-6` guard only touches the arm `select` discards.
 
-12. **Misplaced and dangling comments.** `shadow.wesl:5` to `:20` documents HD's engine-flare overrides, which
-    live in `flame.wesl` (imported at `shade.wesl:7`); `shadow.wesl:23` to `:33` is the GE fog ramp, which belongs
-    in `fog.wesl`, whose own `:10` points at "`Fog::curve` above" that is not there (nor at `types.wesl:342`);
-    `shade.wesl:135` says "See this file's header" for the stand-in light and the header (line 1) says nothing
-    of it. Move the first two, point the last three at `docs/rendering/` or `uniforms.rs:305`. Gain: a reader of
-    the shadow module is not told about flames. No picture change; `oag-shader-check` and `just check-docs`. 30
-    minutes.
+12. ~~**Misplaced and dangling comments.**~~ **Landed**: HD's engine-flare comment moved from `shadow.wesl` to
+    `flame.wesl`, the GE fog ramp comment to `fog.wesl`, whose pointer now names `Fog::curve` in `types.wesl`
+    (it was there all along, in the `Fog` struct, but "above" was another file); `shade.wesl`'s stand-in light now
+    cites `uniforms/light.rs`'s module doc, which is where the rig is explained.
 
-13. **History in `.wesl` comments, under the ratchet.** `python3 -I scripts/check-comment-history.py --table` counts
-    them per crate; `shade.wesl` has six dated lines (`2026-10-05`, `2026-08-20`, `2026-08-24`, `2026-10-21`),
-    `types.wesl` four, `hd_bloom.wesl` and `bloom.wesl` two each, one each in `zone`, `psys`, `exhaust`, `beam`;
-    "used to" / "prior version" narration at `shade.wesl:319`, `:340`, `:1054`, `:1123`; `psys.wesl:107`, `ui.wesl:84`, `:285`,
-    `motion_blur.wesl:349`. Rewrite each as what and why with a `docs/` page citation, then lower the `oag-mesh`,
-    `oag-post`, `oag-fx`, `oag-game` rows. The ratchet fails if a row is left above the count. 1 to 2 hours.
+13. ~~**History in `.wesl` comments, under the ratchet.**~~ **Landed**: every dated, "maintainer" or "used to" line the
+    scout named, plus `mesh.wesl`, `quake.wesl`, `ui.wesl` and `shading_modes.wesl` narration, is rewritten as what and
+    why; the `oag-mesh` row fell 46 to 35, `oag-post` 13 to 9, `oag-fx` 62 to 59 (`exhaust.wesl`'s one line is its
+    own commit). `oag-game` has no `.wesl` dated line, so its row did not move. No `.wesl`/`.wgsl` line is
+    counted any more.
 
-14. **Magic numbers with no page.** `shade.wesl:1552` (`0.45` and `(0.16, 0.18, 0.21)` for the `grade-sky`
-    overcast: ours, unlabelled and uncited; cite the track-module doc that adds `sky_grey`); `65504.0` appears in
-    four weapon branches of `shade.wesl` (a half-float max, labelled "chosen, not measured" once, at the first use,
-    not at the others); `0.099975586` at the bomb halo; `0.340088` in `game/shaders/scene.wesl:46`. Add a named `const` and
-    the citation. 30 minutes.
+14. ~~**Magic numbers with no page.**~~ **Landed**: `shade.wesl` names `HALF_MAX` (65504, labelled "chosen, not measured"
+    once, in `docs/rendering/hd-unlit-programs.md`, "What they compute"), `BOMB_HALO_ALPHA_SCALE` (`0.099975586`, the
+    half nearest `0.1`, the Bomb halo's factor) and `SKY_OVERCAST_LUMA`/`SKY_OVERCAST_TINT` (cited to the `grade-sky`
+    entry of `docs/architecture/wasm-extensions/README.md`); `game/shaders/scene.wesl` names `EDGE_SUM_SCALE`
+    (`0.340088`, the half nearest `0.34`, cited to `menu-backdrop-scene.md`). Pictures byte-identical; the scene
+    edge pass and `grade-sky` are not reached by a headless capture (the first needs Omega's unpacked data, the
+    second a track module), so those two are exact by construction only.
 
 ## Checked, no finding
 
@@ -250,5 +250,3 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 2. Item 2 (Zone fetches) with the two Zone races, then item 3 (HUD fetches) after a span for the HUD exists.
 3. Item 4: dump the ISA of the HD plain pipeline with `RADV_DEBUG=shaders` first; edit only what it shows.
 4. Item 6 only after the `.envsettings` census shows every authored bloom size is 1.0, and the maintainer agrees.
-5. Maintenance 11 to 14 as one docs-and-comments lane; run `oag-shader-check` (the build), `just check-docs` and
-   the comment-history ratchet.

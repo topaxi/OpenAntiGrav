@@ -351,12 +351,12 @@ fn gather(position: vec4<f32>) -> Gathered {
     // That lattice is anchored to the window rather than to the world, so the
     // scene flows through a stationary grid and the eye reads squares.
     //
-    // This used to offset the lookup by up to +/-half a tile with a per-pixel
-    // hash, trading the lattice for noise. Measured in
-    // `docs/rendering/motion-blur.md` that wobble was most of the grain in a
-    // smear: every pixel landed on a different tile, so neighbours gathered
-    // along different spans. Interpolating makes the span a continuous
-    // function of the pixel instead, so there is neither a lattice nor noise.
+    // Offsetting the lookup by up to +/-half a tile with a per-pixel hash would
+    // trade the lattice for noise: measured in `docs/rendering/motion-blur.md`,
+    // that wobble is most of the grain in a smear, because every pixel lands on
+    // a different tile and neighbours gather along different spans.
+    // Interpolating makes the span a continuous function of the pixel instead,
+    // so there is neither a lattice nor noise.
     // Each of the four tiles is a neighbour-max, so the blend still covers a
     // pixel's own neighbourhood wherever motion is smooth; at a real edge of a
     // fast object it falls to a fraction of the object's reach over the tile's

@@ -106,7 +106,7 @@ fn shade(in: VertexOutput) -> vec4<f32> {
     // that differ only by the noise. The value is
     // `EngineFlare_PlaceShapes`' wrapping phase accumulator, which the trail
     // manager's constructor binds to the material parameter by address.
-    // Read 2026-08-24; docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
+    // See docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
     let displaced = vec2<f32>(in.texcoord.x + texel.a, in.texcoord.y);
     let authored = textureSample(trail_shape_texture, flare_sampler, displaced);
     // HD's program reads the *red* texture's colour at the same displaced

@@ -7,6 +7,7 @@
 // per-channel cubic the MSAA resolve applies (blob 0x0196aa70). `law.rs` is
 // the same arithmetic in Rust; its tests hold this file to it.
 
+import oag_shaders::colour::srgb_encode;
 import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
 
 struct Params {
@@ -195,7 +196,7 @@ fn fs_bright(in: VertexOutput) -> @location(0) vec4<f32> {
 }
 
 // The curve resolve, per channel, then the video out's encode of its linear
-// [0, 1] (`scanout_encode` below).
+// [0, 1] (the encode at the end of `fs_apply`).
 @fragment
 fn fs_apply(in: VertexOutput) -> @location(0) vec4<f32> {
     // wo_composite*: `uv' = uv + 0.0100021 * (Aspect * d.x, d.y)` with `d` the
@@ -218,17 +219,9 @@ fn fs_apply(in: VertexOutput) -> @location(0) vec4<f32> {
     let vignette = clamp(params.vignette.x + params.vignette.y * dot(d_uv, d_uv), 0.0, 1.0);
     let composed = params.color_scale.rgb * vignette * (y + params.bloom_scale * bloom)
         + params.screen_tint.rgb;
-    return vec4<f32>(scanout_encode(clamp(composed, vec3<f32>(0.0), vec3<f32>(1.0))), 1.0);
-}
-
-// The video-out encode of the curve's linear [0, 1]: the scanout buffer is
-// `A2R10G10B10` UNORM (`0x88060000`, `sceVideoOutSetBufferAttribute` in
-// `FUN_016134d0`, gamma 1.0), written by a plain copy, so the encode is the
-// display's: the piecewise sRGB curve - tonemap.md, "The output encode".
-fn scanout_encode(c: vec3<f32>) -> vec3<f32> {
-    return select(
-        1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - vec3<f32>(0.055),
-        c * 12.92,
-        c <= vec3<f32>(0.0031308),
-    );
+    // The video-out encode of the curve's linear [0, 1]: the scanout buffer is
+    // `A2R10G10B10` UNORM (`0x88060000`, `sceVideoOutSetBufferAttribute` in
+    // `FUN_016134d0`, gamma 1.0), written by a plain copy, so the encode is the
+    // display's: the piecewise sRGB curve - tonemap.md, "The output encode".
+    return vec4<f32>(srgb_encode(clamp(composed, vec3<f32>(0.0), vec3<f32>(1.0))), 1.0);
 }

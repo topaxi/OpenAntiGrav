@@ -20,7 +20,7 @@ import package::bindings::{scene};
 // along the track and the falloff clips it to a disc of `radius` around the
 // midpoint. The normal is not touched, and neither is anything with
 // `amplitude == 0`, which is how a race with no wave in flight draws exactly
-// what it drew before this existed.
+// as it would without the wave.
 fn quake_lifted(world: vec3<f32>) -> vec3<f32> {
     let wave = scene.quake;
     let amplitude = wave.point_b.w;

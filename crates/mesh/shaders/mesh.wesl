@@ -192,7 +192,7 @@ fn fs_main_blend_velocity(in: VertexOutput) -> BlendMrtOutput {
 // the vertex colour's, per `lit_texel` above; measured directly against every
 // alpha-tested batch on `01_Track`/`16_Track` that no vertex reference in
 // this path carries baked alpha at or below `ALPHA_TEST_THRESHOLD`, so this
-// fold-in does not newly discard any fragment that used to pass on real
+// fold-in discards no fragment the texture's alpha alone would pass on real
 // track data.
 @fragment
 fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
