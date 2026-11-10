@@ -37,8 +37,7 @@ packs; `just push-data` carries them.
   `Placed` rects and `alpha_at` work in the original's pixels), `.fnt` fonts, menu and boot art, the
   loading screen, `.pob` particle textures and ship skins. Each needs its UV or rect scaled by the
   picture's own factor (1x to 16x, sometimes per axis) and a frame judged at the size a player sees.
-- **The 2026 `textures.zip` has not been drawn**: it sits inside `data/GitHub - WipEout Mods.zip`
-  (553 MB); the frames used the 2020 reTokyo folder. The zip route is covered by a synthetic zip.
+- ~~The 2026 `textures.zip` has not been drawn~~: drawn 2026-11-10 (578 replaced, hull, track and walls read as the pack's art; `docs/formats/ppsspp-texture-pack.md`, "Wired").
 - **ZIM images** (a later pack's format, layout on the doc page) are not read, and **Pure** is not
   wired (a runtime-palette font must never be replaced by data hash alone).
 - **One pack at a time**: with two on that name the disc, the first in search order is used and the
@@ -56,8 +55,7 @@ packs; `just push-data` carries them.
 
 ## Next Steps
 
-1. Unpack the 2026 `textures.zip` into its own empty directory outside the repo, point a pack
-   folder's `textures.zip` at it, and judge a race on it (hull, track, walls) against the 2020 pack.
+1. ~~Unpack the 2026 `textures.zip` and judge a race on it.~~ Done.
 2. Take the HUD sheet: scale each `Placed` rect and `alpha_at` by the replacement's factor, or keep
    the logical size and upload at the picture's, then judge the HUD and the fonts in a race.
 3. Read ZIM (`flate2` is in the workspace; zstd needs a decoder) and take a Pure oracle dump the

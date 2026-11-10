@@ -378,9 +378,15 @@ the active one, and the decoders ask it:
   places, and the HUD is untouched. Test:
   `crates/raceplay/tests/texture_pack_ground_truth.rs` (slots grow by a multiple, off
   changes nothing, a pack for another serial is not used and says so).
-- **Not exercised**: the 2026 `textures.zip` itself (553 MB, inside the `GitHub - WipEout Mods`
-  download) was not unpacked for the frames; the zip route is covered by a synthetic zip in
-  `oag-mod` and the folder route by the real snapshot. ZIM images and Pure are not wired.
+- **The 2026 `textures.zip` drawn** (2026-11-10, same race and seed, `--size 1280x720`, packs under
+  `OAG_MODS`, the zip extracted alone out of the `GitHub - WipEout Mods` download and read in place):
+  7,646 keys against the 2020 folder's 2,392, and 578 textures replaced at load against 455.
+  At tick 600 and tick 1500 the hull is the 2026 art (green-yellow panels with hull lettering, where
+  the disc's is blue and yellow), the track surface is the same glass-and-panel reading as the 2020
+  pack but sharper, and the grandstand wall carries painted lettering the 2020 pack
+  leaves as the disc's blocks; the flare ("m" card) and the HUD are unchanged. The zip route is also
+  covered by a synthetic zip in `oag-mod` and the folder route by the real snapshot. The 2026 zip
+  holds no `.zim`. Pure is not wired.
 
 ### What the wiring was built from
 
