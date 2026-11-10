@@ -207,6 +207,7 @@ fn an_extension_table_names_its_rules_module_and_opens_nothing() {
             api: 1,
             memory_pages: 16,
             state_bytes: 64,
+            drives_ai_pickup: false,
             rules: Some(Rules {
                 module: "ext/curse.wasm".to_string()
             }),
@@ -262,23 +263,54 @@ fn a_track_module_names_its_module_and_its_track_file() {
 }
 
 #[test]
-fn a_manifest_carries_icons_that_are_pngs_in_the_mod() {
+fn a_manifest_carries_icons_that_are_pngs_or_svgs_in_the_mod() {
     let text = format!("{MANIFEST_TEXT}\n[icons]\nbadge = \"ui/badge.png\"\n");
     let parsed = Manifest::parse(&text, &|path| path == "ui/badge.png").unwrap();
     assert_eq!(parsed.icons["badge"], "ui/badge.png");
     let missing = Manifest::parse(&text, &|_| false).unwrap_err().to_string();
     assert!(
-        missing.contains("badge") && missing.contains("not a .png in the mod"),
+        missing.contains("badge") && missing.contains("not a .png or .svg in the mod"),
         "{missing}"
     );
     let wrong = text.replace("ui/badge.png", "ui/badge.jpg");
-    assert!(Manifest::parse(&wrong, &|_| true).is_err(), "only a PNG");
+    assert!(
+        Manifest::parse(&wrong, &|_| true).is_err(),
+        "only a PNG or SVG"
+    );
+    let vector = text.replace("ui/badge.png", "ui/badge.SVG");
+    let parsed = Manifest::parse(&vector, &|_| true).unwrap();
+    assert_eq!(
+        parsed.icons["badge"], "ui/badge.SVG",
+        "a vector icon, any case"
+    );
     let spaced = text.replace("badge =", "\"bad name\" =");
     assert!(Manifest::parse(&spaced, &|_| true).is_err());
     assert!(
         Manifest::parse(MANIFEST_TEXT, &|_| true)
             .unwrap()
             .icons
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_manifest_carries_shaders_that_are_wgsl_or_wesl_in_the_mod() {
+    let text =
+        format!("{MANIFEST_TEXT}\n[shaders]\nglow = \"fx/glow.wgsl\"\nrim = \"fx/rim.wesl\"\n");
+    let parsed = Manifest::parse(&text, &|_| true).unwrap();
+    assert_eq!(parsed.shaders["glow"], "fx/glow.wgsl");
+    assert_eq!(parsed.shaders["rim"], "fx/rim.wesl");
+    let missing = Manifest::parse(&text, &|_| false).unwrap_err().to_string();
+    assert!(
+        missing.contains("not a .wgsl or .wesl in the mod"),
+        "{missing}"
+    );
+    let wrong = text.replace("glow.wgsl", "glow.png");
+    assert!(Manifest::parse(&wrong, &|_| true).is_err(), "only a shader");
+    assert!(
+        Manifest::parse(MANIFEST_TEXT, &|_| true)
+            .unwrap()
+            .shaders
             .is_empty()
     );
 }
@@ -301,6 +333,28 @@ fn a_manifest_carries_effects_that_are_tomls_in_the_mod() {
         Manifest::parse(MANIFEST_TEXT, &|_| true)
             .unwrap()
             .effects
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_manifest_carries_sounds_that_are_wavs_in_the_mod() {
+    let text = format!("{MANIFEST_TEXT}\n[sounds]\nhum = \"snd/hum.wav\"\n");
+    let parsed = Manifest::parse(&text, &|path| path == "snd/hum.wav").unwrap();
+    assert_eq!(parsed.sounds["hum"], "snd/hum.wav");
+    let missing = Manifest::parse(&text, &|_| false).unwrap_err().to_string();
+    assert!(
+        missing.contains("hum") && missing.contains("not a .wav in the mod"),
+        "{missing}"
+    );
+    let wrong = text.replace("hum.wav", "hum.ogg");
+    assert!(Manifest::parse(&wrong, &|_| true).is_err(), "only a WAV");
+    let spaced = text.replace("hum =", "\"bad name\" =");
+    assert!(Manifest::parse(&spaced, &|_| true).is_err());
+    assert!(
+        Manifest::parse(MANIFEST_TEXT, &|_| true)
+            .unwrap()
+            .sounds
             .is_empty()
     );
 }
@@ -463,4 +517,67 @@ fn a_plain_program_searches_beside_itself_once() {
     discover::packaged_mods(None, Some(Path::new("/opt/oag/oag-game")), &mut paths);
     discover::packaged_mods(None, Some(Path::new("/opt/oag/oag-game")), &mut paths);
     assert_eq!(paths, [PathBuf::from("/opt/oag/mods")]);
+}
+
+/// `[[pickup.odds]]` rows read into the manifest; a negative or non-finite weight is
+/// refused by name; no rows is no pad odds.
+#[test]
+fn a_manifest_pickup_reads_its_pad_odds_and_refuses_a_bad_weight() {
+    let with = |odds: &str| {
+        let text = format!(
+            "{MANIFEST_TEXT}\n[pickup]\nicon = {{ title = \"turbo\" }}\ncolour = {{ rgba = \"E0202080\" }}\n{odds}"
+        );
+        Manifest::parse(&text, &|_| true).map(|m| m.pickup_odds)
+    };
+    assert_eq!(with("").unwrap(), Vec::new());
+    let rows = with(
+        "[[pickup.odds]]\nai = 2.0\nhuman = 3.0\nfront = 1.0\nback = 4.0\n\n\
+         [[pickup.odds]]\ntitle = \"2048\"\nclass = \"Speed\"\nai = 1.0\nhuman = 1.0\nfront = 0.0\nback = 0.0\n",
+    )
+    .unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].odds.back, 4.0);
+    assert_eq!(rows[1].class.as_deref(), Some("Speed"));
+    let bad = with("[[pickup.odds]]\nai = -1.0\nhuman = 1.0\nfront = 0.0\nback = 0.0\n");
+    assert!(bad.unwrap_err().to_string().contains("pickup.odds"));
+}
+
+#[test]
+fn a_manifest_is_on_by_default_and_default_enabled_false_ships_it_off() {
+    let dir = scratch("default-enabled");
+    let on = dir.join("on");
+    let off = dir.join("off");
+    std::fs::create_dir_all(&on).unwrap();
+    std::fs::create_dir_all(&off).unwrap();
+    folder(&on, MANIFEST_TEXT);
+    folder(
+        &off,
+        &MANIFEST_TEXT.replace("[mod]\n", "[mod]\ndefault-enabled = false\n"),
+    );
+    assert!(Mod::open(&on).unwrap().manifest.default_enabled);
+    assert!(!Mod::open(&off).unwrap().manifest.default_enabled);
+}
+
+#[test]
+fn a_pickup_title_row_overrides_the_icon_and_colour_it_names_and_inherits_the_rest() {
+    let text = format!(
+        "{MANIFEST_TEXT}\n[icons]\nmain = \"icon.png\"\nhd = \"icon.png\"\n\n[pickup]\nicon = {{ mod = \"main\" }}\ncolour = {{ rgba = \"11223344\" }}\n\n[pickup.titles.wipeout-hd]\nicon = {{ mod = \"hd\" }}\n\n[pickup.titles.wipeout-pure]\ncolour = {{ title = \"shield\" }}\n"
+    );
+    let manifest = Manifest::parse(&text, &|path| path == "icon.png").unwrap();
+    let icon = |title| manifest.pickup_for(title).map(|look| look.icon.clone());
+    use oag_tables::pickup_look::{Colour, Icon};
+    assert_eq!(icon("wipeout-pulse"), Some(Icon::Mod("main".into())));
+    assert_eq!(icon("wipeout-hd"), Some(Icon::Mod("hd".into())));
+    assert_eq!(
+        manifest.pickup_for("wipeout-hd").unwrap().colour,
+        Colour::Rgba([0x11, 0x22, 0x33, 0x44]),
+        "the colour it leaves out is the base's"
+    );
+    assert_eq!(icon("wipeout-pure"), Some(Icon::Mod("main".into())));
+    assert!(matches!(
+        manifest.pickup_for("wipeout-pure").unwrap().colour,
+        Colour::Title(_)
+    ));
+    let missing = text.replace("icon = { mod = \"hd\" }", "icon = { mod = \"nope\" }");
+    assert!(Manifest::parse(&missing, &|path| path == "icon.png").is_err());
 }

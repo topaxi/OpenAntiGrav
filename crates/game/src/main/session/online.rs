@@ -155,7 +155,7 @@ impl Session {
                 .map_or_else(String::new, |s| s.platform.to_string()),
             content: oag_game::mods::Mods::load(&self.settings.mods)
                 .ok()
-                .map_or(0, |mods| mods.content_fingerprint()),
+                .map_or(0, |mods| mods.content_fingerprint(&self.settings.mod_settings)),
             build: oag_net::BUILD_VERSION.to_string(),
         }
     }

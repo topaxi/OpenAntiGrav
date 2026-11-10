@@ -1,0 +1,348 @@
+//! A craft's jump along the circuit ([`crate::transit`]): out of the world for its ticks,
+//! frozen, undrawn and untargetable, then put further round at the speed asked for; the
+//! refusals; the clearance probe; and, with the `extensions` feature, the same through a
+//! guest's `transit` and `probe-clearance` commands and their events.
+
+use super::extensions::grid;
+use super::*;
+use crate::extensions::Prepared;
+use crate::transit::Distance;
+use oag_gameplay::PlayerInputs;
+
+/// The fixture grid with slot 1 put ten units down the fixture's 70-unit straight (its
+/// grid slot is past the end, where the ring closes on itself), run until it has a fix,
+/// then given 30 units a second down the track (it sits through the countdown).
+fn moving() -> Race {
+    let mut race = grid(Prepared::default());
+    let ship = &mut race.sim.world.ships[1];
+    ship.physics.body.position.x = 10.0;
+    ship.physics.body.position.z = 0.0;
+    ship.standing = oag_race::Standing::default();
+    for _ in 0..60 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(race.sim.world.ships[1].standing.course_index.is_some());
+    race.sim.world.ships[1].physics.body.linear_velocity =
+        oag_core::math::Vec3::new(30.0, 0.0, 0.0);
+    race
+}
+
+fn speed(race: &Race, slot: usize) -> f32 {
+    race.sim.world.ships[slot]
+        .physics
+        .body
+        .linear_velocity
+        .length()
+}
+
+#[test]
+fn a_craft_in_transit_is_out_of_the_world_then_comes_out_further_round() {
+    let mut race = moving();
+    let entry = race.sim.world.ships[1].physics.body.position;
+    let entry_speed = speed(&race, 1);
+    let entry_progress = race.sim.world.ships[1].standing.progress.unwrap();
+    let length = race.sim.course.as_ref().unwrap().length();
+    assert!(entry_speed > 1.0, "slot 1 is moving: {entry_speed}");
+    let drawn = race.ship_model_matrices().len();
+    let placements = race.placements_of(1);
+    let respawns = race.respawns_of(1);
+    let ai_clock = race.sim.world.race.get(1).cloned();
+    race.begin_transit(1, 30, Distance::Units(20.0), 0.5)
+        .unwrap();
+    for tick in 1..30 {
+        race.tick(&PlayerInputs::none());
+        let ship = &race.sim.world.ships[1];
+        assert!(ship.transit.is_some(), "tick {tick}");
+        assert_eq!(ship.physics.body.position, entry, "frozen on tick {tick}");
+        assert!(!race.ship_active(1), "not drawn");
+        assert!(
+            !oag_weapons::Craft::active(ship),
+            "nothing hits or locks it"
+        );
+        assert_eq!(race.ship_model_matrices().len(), drawn - 1);
+        assert!(ship.active, "the slot still holds its craft");
+    }
+    race.tick(&PlayerInputs::none());
+    let ship = &race.sim.world.ships[1];
+    assert_eq!(ship.transit, None, "out on the 30th tick");
+    // A cut for the cameras and the between-ticks blend, and not a respawn.
+    assert_eq!(race.placements_of(1), placements + 1);
+    assert_eq!(race.respawns_of(1), respawns);
+    // An AI slot's own clock is never run, so the move leaves it alone.
+    assert_eq!(race.sim.world.race.get(1).cloned(), ai_clock);
+    assert!(race.ship_active(1));
+    // Twenty units further round, give or take the ring's point spacing and a tick.
+    let on = (ship.standing.progress.unwrap() - entry_progress).rem_euclid(length);
+    assert!(
+        (15.0..25.0).contains(&on),
+        "came out {on} units further round"
+    );
+    assert_ne!(ship.physics.body.position, entry);
+    // Out at half its entry speed, then one tick of the force law.
+    let out = speed(&race, 1);
+    assert!(
+        (out - entry_speed * 0.5).abs() < entry_speed * 0.1,
+        "{out} against {entry_speed}"
+    );
+}
+
+#[test]
+fn a_transit_the_course_or_the_craft_cannot_take_is_refused_and_changes_nothing() {
+    let mut race = moving();
+    let lap = race.sim.course.as_ref().unwrap().length();
+    for (ticks, distance, factor) in [
+        (0, Distance::Units(10.0), 1.0),
+        (601, Distance::Units(10.0), 1.0),
+        (30, Distance::Units(lap), 1.0),
+        (30, Distance::Lap(1.0), 1.0),
+        (30, Distance::Progress(lap + 1.0), 1.0),
+        (30, Distance::Trigger(0), 1.0),
+        (30, Distance::Units(-1.0), 1.0),
+        (30, Distance::Units(10.0), 2.5),
+    ] {
+        assert!(
+            race.begin_transit(1, ticks, distance, factor).is_err(),
+            "{ticks} {distance:?} {factor}"
+        );
+        assert_eq!(race.sim.world.ships[1].transit, None);
+    }
+    race.begin_transit(1, 30, Distance::Seconds(0.1), 1.0)
+        .unwrap();
+    assert!(
+        race.begin_transit(1, 30, Distance::Units(10.0), 1.0)
+            .is_err(),
+        "already in one"
+    );
+}
+
+/// A transit to a fixed place on the lap (a portal's other end) comes out there, however
+/// far round that is from where the craft went in.
+#[test]
+fn a_transit_to_a_place_on_the_lap_comes_out_there() {
+    let mut race = moving();
+    let course = race.sim.course.clone().unwrap();
+    let entry = race.sim.world.ships[1].standing.progress.unwrap();
+    // A ring point just past the start line, behind the craft: reached forward, that is
+    // most of a lap on (the fixture's ring closes over one 68-unit step, so the target is
+    // a ring point rather than a share of the lap).
+    let target = course.progress_at(2).unwrap();
+    assert!(target < entry, "{target} behind {entry}");
+    let (to, ahead) = race.point_ahead(1, Distance::Progress(target)).unwrap();
+    assert!(ahead > course.length() * 0.5, "{ahead} on");
+    race.begin_transit(1, 2, Distance::Progress(target), 1.0)
+        .unwrap();
+    race.tick(&PlayerInputs::none());
+    race.tick(&PlayerInputs::none());
+    let ship = &race.sim.world.ships[1];
+    assert_eq!(ship.transit, None);
+    let at = course.progress_at(to).unwrap();
+    let off = (ship.standing.progress.unwrap() - at).abs();
+    assert!(off < 4.0, "came out {off} units from the place asked");
+}
+
+/// Its triggers are held: a craft frozen out of the world banks no dwell.
+#[test]
+fn a_craft_in_transit_has_its_reset_triggers_held() {
+    let mut race = moving();
+    race.begin_transit(1, 100, Distance::Units(20.0), 1.0)
+        .unwrap();
+    let respawns = race.sim.respawns[1];
+    for _ in 0..90 {
+        race.tick(&PlayerInputs::none());
+        assert!(race.reset_held(1));
+        assert!(!race.armed(1, race.sim.reset_triggers.cage));
+    }
+    assert_eq!(race.sim.respawns[1], respawns);
+    assert_eq!(race.sim.stalled_ticks[1], 0);
+}
+
+/// A transit that begins on the tick the last one ended (a guest answering `transit-end`
+/// with another) is followed from a seat of its own: the camera starts on the craft again,
+/// not twenty ticks down the line of the transit before.
+#[cfg(feature = "view")]
+#[test]
+fn a_transit_begun_as_the_last_one_ended_is_followed_from_its_own_seat() {
+    let mut race = moving();
+    race.begin_transit(1, 30, Distance::Units(20.0), 1.0)
+        .unwrap();
+    for _ in 0..20 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(race.view.transit_seats[1].is_some(), "the fixture seats it");
+    let craft = race.sim.world.ships[1].physics.body.position;
+    let flown_on = (race.followed(1).position - craft).length();
+    assert!(flown_on > 5.0, "the first camera has flown on: {flown_on}");
+    // What the seats see when a second transit took the place of the first inside a tick.
+    let first = race.sim.world.ships[1].transit.unwrap();
+    race.sim.world.ships[1].transit = Some(oag_gameplay::Transit {
+        ticks_left: 30,
+        ..first
+    });
+    race.tick(&PlayerInputs::none());
+    let restarted = (race.followed(1).position - craft).length();
+    assert!(restarted < 2.0, "back on the craft: {restarted}");
+}
+
+/// The fixture's straight track is 24 units wide and has no geometry: a half disc of
+/// radius 8 fits, one of 13 is wider than the track.
+#[test]
+fn a_clearance_probe_reads_the_width_and_the_geometry() {
+    let race = moving();
+    let (fits, ahead) = race.clearance(1, Distance::Units(20.0), 8.0);
+    assert!(fits);
+    assert_eq!(ahead, 20.0);
+    assert!(!race.clearance(1, Distance::Units(20.0), 13.0).0);
+    assert_eq!(race.clearance(1, Distance::Lap(1.5), 8.0), (false, 0.0));
+}
+
+#[cfg(feature = "extensions")]
+mod guest {
+    use super::super::extensions::on::{REPLY, STATE, module, prepared};
+    use super::*;
+
+    const EVENTS: i32 = 1024 + oag_ext_abi::EVENTS_AT as i32;
+
+    /// On its first call with slot 1 racing (past the countdown) sends it a 20-tick transit of 10 units and a clearance probe;
+    /// every call marks each event kind it is sent in the blob (byte `kind`).
+    fn porter() -> crate::extensions::Source {
+        let mut source = module(
+            "test.porter",
+            &format!(
+                "(local $i i32)
+                 (block $done (loop $next
+                   (br_if $done (i32.ge_u (local.get $i) (i32.load (i32.const {count}))))
+                   (i32.store8
+                     (i32.add (i32.const {STATE})
+                       (i32.load8_u (i32.add (i32.const {EVENTS}) (i32.mul (local.get $i) (i32.const 16)))))
+                     (i32.const 1))
+                   (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                   (br $next)))
+                 (if (i32.and (i32.eqz (i32.load8_u (i32.const {STATE})))
+                              (i32.ne (i32.and (i32.load8_u (i32.const {flags})) (i32.const 4)) (i32.const 0)))
+                   (then
+                     (i32.store8 (i32.const {STATE}) (i32.const 1))
+                     (i32.store (i32.const {REPLY}) (i32.const 2))
+                     (i32.store8 (i32.const {c0}) (i32.const 27))
+                     (i32.store8 (i32.add (i32.const {c0}) (i32.const 1)) (i32.const 1))
+                     (i32.store16 (i32.add (i32.const {c0}) (i32.const 2)) (i32.const 20))
+                     (f32.store (i32.add (i32.const {c0}) (i32.const 4)) (f32.const 10.0))
+                     (i32.store (i32.add (i32.const {c0}) (i32.const 8)) (i32.const {exit}))
+                     (i32.store8 (i32.const {c1}) (i32.const 29))
+                     (i32.store8 (i32.add (i32.const {c1}) (i32.const 1)) (i32.const 1))
+                     (f32.store (i32.add (i32.const {c1}) (i32.const 4)) (f32.const 10.0))
+                     (f32.store (i32.add (i32.const {c1}) (i32.const 8)) (f32.const 4.0))))
+                 i32.const 0",
+                count = 1024 + oag_ext_abi::EVENT_COUNT_AT,
+                flags = 1024 + oag_ext_abi::CRAFTS_AT + oag_ext_abi::CRAFT_LEN + oag_ext_abi::CRAFT_FLAGS,
+                c0 = REPLY + 4,
+                c1 = REPLY + 4 + 12,
+                exit = 10_000_u32 << 16,
+            ),
+        );
+        source.state_bytes = 16;
+        source
+    }
+
+    #[test]
+    fn a_guest_transit_takes_the_craft_out_and_says_when_it_is_back() {
+        let mut race = grid(prepared(&[porter()]));
+        let mut out = 0;
+        for _ in 0..600 {
+            race.tick(&PlayerInputs::none());
+            out += u32::from(race.sim.world.ships[1].transit.is_some());
+        }
+        let blob = race.extension_state(0).unwrap().to_vec();
+        assert_eq!(race.extension_reports()[0].faulted, None);
+        assert_eq!(blob[11], 1, "transit-end was sent: {blob:?}");
+        assert_eq!(blob[12], 1, "clearance was sent: {blob:?}");
+        assert_eq!(race.sim.world.ships[1].transit, None);
+        // Landed at tick N's call, the craft is out for the steps of N..N+19 and comes out
+        // at N+20's, before its step: twenty ticks end with it out.
+        assert_eq!(out, 20, "out of the world for its twenty ticks");
+    }
+
+    /// Marks each event kind it is sent in its blob (byte `kind`) and asks for nothing.
+    fn listener() -> crate::extensions::Source {
+        let mut source = module(
+            "test.listener",
+            &format!(
+                "(local $i i32)
+                 (block $done (loop $next
+                   (br_if $done (i32.ge_u (local.get $i) (i32.load (i32.const {count}))))
+                   (i32.store8
+                     (i32.add (i32.const {STATE})
+                       (i32.load8_u (i32.add (i32.const {EVENTS}) (i32.mul (local.get $i) (i32.const 16)))))
+                     (i32.const 1))
+                   (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                   (br $next)))
+                 i32.const 0",
+                count = 1024 + oag_ext_abi::EVENT_COUNT_AT,
+            ),
+        );
+        source.state_bytes = 16;
+        source
+    }
+
+    /// A probe's answer is the prober's: a module that asked nothing about the craft is
+    /// sent no `clearance`, though it is sent the craft's `transit-end`.
+    #[test]
+    fn a_clearance_answer_goes_to_the_module_that_probed_alone() {
+        let mut race = grid(prepared(&[listener(), porter()]));
+        for _ in 0..600 {
+            race.tick(&PlayerInputs::none());
+        }
+        let (listened, probed) = (
+            race.extension_state(0).unwrap().to_vec(),
+            race.extension_state(1).unwrap().to_vec(),
+        );
+        assert_eq!(probed[12], 1, "the prober has its answer: {probed:?}");
+        assert_eq!(listened[12], 0, "and nobody else has it: {listened:?}");
+        assert_eq!(listened[11], 1, "transit-end is everyone's: {listened:?}");
+    }
+
+    /// Two modules send slot 1 out on the same call. Both saw it in the world, so the
+    /// second's transit is dropped and neither is faulted.
+    #[test]
+    fn a_transit_for_a_craft_another_module_took_out_on_that_call_is_no_fault() {
+        let mut second = porter();
+        second.mod_id = "test.porter-two".to_string();
+        let mut race = grid(prepared(&[porter(), second]));
+        for _ in 0..600 {
+            race.tick(&PlayerInputs::none());
+        }
+        let reports = race.extension_reports();
+        assert_eq!(reports[0].faulted, None);
+        assert_eq!(reports[1].faulted, None, "the craft was already out");
+        assert_eq!(race.extension_state(1).unwrap()[11], 1, "it still runs");
+    }
+
+    /// Every call stops slot 1 dead (`scale-speed` 0): it keeps only the one tick of
+    /// thrust each step gives it.
+    #[test]
+    fn a_guest_scale_speed_scales_the_velocity_at_the_call() {
+        let stopper = module(
+            "test.stopper",
+            &format!(
+                "(i32.store (i32.const {REPLY}) (i32.const 1))
+                 (i32.store8 (i32.const {c}) (i32.const 28))
+                 (i32.store8 (i32.add (i32.const {c}) (i32.const 1)) (i32.const 1))
+                 (f32.store (i32.add (i32.const {c}) (i32.const 4)) (f32.const 0.0))
+                 i32.const 0",
+                c = REPLY + 4,
+            ),
+        );
+        let (vanilla, _) = super::super::extensions::run(grid(Prepared::default()), 600);
+        let (stopped, _) = super::super::extensions::run(grid(prepared(&[stopper])), 600);
+        assert_eq!(stopped.extension_reports()[0].faulted, None);
+        let (v, s) = (speed(&vanilla, 1), speed(&stopped, 1));
+        assert!(v > 1.0 && s < v * 0.1, "{s} against {v}");
+    }
+
+    #[test]
+    fn a_guest_transit_is_the_same_twice() {
+        let (a, ha) = super::super::extensions::run(grid(prepared(&[porter()])), 600);
+        let (b, hb) = super::super::extensions::run(grid(prepared(&[porter()])), 600);
+        assert_eq!(ha, hb);
+        assert_eq!(a.sim.world.ships, b.sim.world.ships);
+    }
+}

@@ -116,6 +116,7 @@ impl Race {
             self.sim.cues.len(),
             self.sim.announcements.len(),
             self.sim.class_announcements.len(),
+            self.sim.mod_sounds.len(),
         );
         let was_quiet = std::mem::replace(&mut self.quiet, true);
         let evaluations = self.tick(inputs);
@@ -123,6 +124,7 @@ impl Race {
         self.sim.cues.truncate(queued.0);
         self.sim.announcements.truncate(queued.1);
         self.sim.class_announcements.truncate(queued.2);
+        self.sim.mod_sounds.truncate(queued.3);
         evaluations
     }
 

@@ -209,6 +209,10 @@ pub mod env_probes;
 pub mod extension_effects;
 #[cfg(feature = "extensions")]
 mod extension_pickup;
+#[cfg(feature = "view")]
+pub mod extension_shaders;
+#[cfg(feature = "view")]
+pub mod extension_sounds;
 pub mod extensions;
 mod field;
 #[cfg(feature = "view")]
@@ -267,6 +271,8 @@ pub mod pilots;
 pub mod player_step;
 #[cfg(feature = "view")]
 mod player_tags;
+#[cfg(feature = "view")]
+mod portal_view;
 mod reconcile;
 pub mod replay;
 #[cfg(feature = "view")]
@@ -310,6 +316,9 @@ pub mod timeline;
 pub mod tournament;
 #[cfg(feature = "view")]
 pub mod track_panel;
+pub mod transit;
+#[cfg(feature = "view")]
+mod transit_camera;
 mod view;
 #[cfg(feature = "view")]
 pub mod viewer;

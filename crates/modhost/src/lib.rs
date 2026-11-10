@@ -229,6 +229,8 @@ pub struct Observation<'a> {
     pub events: &'a [Event],
     /// Each grid slot, in slot order.
     pub crafts: &'a [Craft],
+    /// The course's length and each slot's progress and place.
+    pub course: oag_ext_abi::Course<'a>,
     /// The track region (`oag_ext_abi::track`), as many bytes of it as were used: the
     /// same every tick of a race. Written only to a guest exporting `oag_track`.
     pub track: &'a [u8],
@@ -430,6 +432,7 @@ impl Module {
                 observation.active,
                 observation.events,
                 observation.crafts,
+                &observation.course,
                 state,
             );
             memory.write(&mut store, io, &buffer[..]).map_err(|e| {

@@ -50,13 +50,19 @@ fn energy_turbo() -> Option<race::extensions::Source> {
         api: extension.api,
         memory_pages: extension.memory_pages,
         state_bytes: extension.state_bytes,
+        drives_ai_pickup: false,
         scope: race::extensions::Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
         effects: Vec::new(),
+        shaders: Vec::new(),
+        sounds: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: module.manifest.pickup.clone(),
+        pickup_titles: Vec::new(),
+        pickup_odds: module.manifest.pickup_odds.clone(),
+        options: Default::default(),
         channels: race::extensions::Declared {
             publishes: module.manifest.channels.publishes.clone(),
             listens: module.manifest.channels.listens.clone(),
@@ -89,7 +95,7 @@ fn race_on(
     let ship = &mut race.sim.world.ships[0];
     ship.physics.shield = ship.handling.dimensions.shield * 0.5;
     if turbo {
-        ship.pickup.weapon = Some(Weapon::Extension);
+        ship.pickup.weapon = Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
     }
     Some(race)
 }
@@ -174,7 +180,7 @@ fn holding_fire_boosts_on_shield_and_an_absorb_pays_back_at_most_half() {
     assert!(a[479].shield < b[479].shield, "and paid for in shield");
     assert_eq!(
         boosted.sim.world.ships[0].pickup.weapon,
-        Some(Weapon::Extension),
+        Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)),
         "firing keeps it"
     );
 
@@ -293,7 +299,7 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
             player.push(weapon);
             match weapon {
                 Weapon::Turbo => turbos += 1,
-                Weapon::Extension => energy += 1,
+                Weapon::Extension(oag_tables::weapons::ModKind::FIRST) => energy += 1,
                 _ => {}
             }
         }
@@ -303,7 +309,7 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
             if carried[slot].is_none() {
                 match now {
                     Some(Weapon::Turbo) => turbos += 1,
-                    Some(Weapon::Extension) => energy += 1,
+                    Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)) => energy += 1,
                     _ => {}
                 }
             }
@@ -311,7 +317,9 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
             // the pool on most ticks: a drop of that size while carrying it is a boost.
             let drop = prior[slot] - ship.physics.shield;
             let drain = ship.handling.dimensions.shield * DRAIN_SHARE;
-            if now == Some(Weapon::Extension) && (drop - drain).abs() < 1e-4 {
+            if now == Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
+                && (drop - drain).abs() < 1e-4
+            {
                 boost_ticks += 1;
             }
             carried[slot] = now;
@@ -353,16 +361,20 @@ fn the_discharge_finds_the_discs_energy_glow_by_name() {
     let mut archives =
         oag_assets::Archives::open(&image.to_string_lossy(), oag_pulse::TITLE).expect("archives");
     let mut asked = Vec::new();
-    let parsed = oag_fx::psys::parametric::parse(&text, &mut |wanted| match *wanted {
-        oag_fx::psys::parametric::TextureRef::Host { entry, name } => {
-            asked.push(name.to_string());
-            race::foreign::art::host_texture(&mut archives, entry, name)
-                .and_then(|texture| race::extension_effects::sprite_of(&texture))
-        }
-        oag_fx::psys::parametric::TextureRef::Mod(path) => {
-            Err(format!("{path}: no mod files here"))
-        }
-    })
+    let parsed = oag_fx::psys::parametric::parse(
+        &text,
+        &mut |wanted| match *wanted {
+            oag_fx::psys::parametric::TextureRef::Host { entry, name } => {
+                asked.push(name.to_string());
+                race::foreign::art::host_texture(&mut archives, entry, name)
+                    .and_then(|texture| race::extension_effects::sprite_of(&texture))
+            }
+            oag_fx::psys::parametric::TextureRef::Mod(path) => {
+                Err(format!("{path}: no mod files here"))
+            }
+        },
+        &mut |name| Err(format!("{name}: no shaders here")),
+    )
     .expect("the example's effect parses with its disc texture");
     assert_eq!(asked, ["energy_GLOW.tga"]);
     let sprite = parsed

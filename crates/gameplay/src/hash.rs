@@ -36,7 +36,7 @@ use oag_core::hash::StateHasher;
 use oag_race::{LapGate, Mode, RaceState};
 use oag_tables::weapons::{DisruptorEffectKind, Weapon};
 
-use crate::world::{Controller, Ship, World};
+use crate::world::{Controller, Ship, Transit, World};
 use oag_weapons::pickup::Held;
 use oag_weapons::projectile::leach_beam::{Beam, Kind as BeamKind};
 use oag_weapons::projectile::quake::Wave;
@@ -141,6 +141,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         disruption,
         muzzle,
         active,
+        transit,
     } = ship;
 
     oag_physics::probe::hash_state(hasher, physics);
@@ -196,6 +197,20 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // time this struct has done that. See `oag_weapons::disruption`.
     write_disruption(hasher, disruption);
     hasher.write_u8(u8::from(*active));
+    // Only while a jump runs, so every race without one hashes as before.
+    if let Some(Transit {
+        ticks_left,
+        to,
+        route,
+        exit_speed,
+    }) = transit
+    {
+        hasher.write_u8(0x7a);
+        hasher.write_u32(u32::from(*ticks_left));
+        hasher.write_u32(*to);
+        hasher.write_u32(u32::from(*route));
+        hasher.write_f32(*exit_speed);
+    }
 }
 
 fn write_disruption(hasher: &mut StateHasher, disruption: &oag_weapons::disruption::Disruption) {
@@ -458,8 +473,9 @@ fn write_weapon(hasher: &mut StateHasher, weapon: Option<Weapon>) {
     let discriminant = match weapon {
         None => 0,
         // A mod's pickup: outside the titles' pool, so a code no position in it reaches
-        // (no vanilla race holds one, so no committed hash moves).
-        Some(Weapon::Extension) => u8::MAX,
+        // (no vanilla race holds one, so no committed hash moves). The first kind keeps the
+        // byte a race with one pickup mod always wrote; the next count down from it.
+        Some(Weapon::Extension(kind)) => u8::MAX - kind.index() as u8,
         Some(weapon) => Weapon::ALL
             .iter()
             .position(|&candidate| candidate == weapon)

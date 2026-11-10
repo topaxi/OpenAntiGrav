@@ -183,6 +183,10 @@ pub struct RaceSim {
     /// How many times each craft has been respawned this race, for tests and
     /// for the load report.
     pub(super) respawns: [u32; oag_gameplay::MAX_SHIPS],
+    /// How many times each craft has been moved along the circuit (`Race::move_to`): a
+    /// cut for the cameras and the between-ticks blend, as a respawn is. Bookkeeping
+    /// outside `state_hash`, like [`Self::respawns`].
+    pub(super) jumps: [u32; oag_gameplay::MAX_SHIPS],
     /// Which trigger fired the most recent respawn of each craft, `None` before
     /// the first. Bookkeeping outside `state_hash`, read by survey tests through
     /// [`Race::last_respawn_cause_of`].
@@ -529,6 +533,9 @@ pub struct RaceSim {
     /// deliberately absent from [`Self::state_hash`]: a race that made no sound
     /// and one that made every sound must hash alike. See [`Race::drain_cues`].
     pub(super) cues: Vec<oag_gameplay::cue::CueEvent>,
+    /// The mods' own sounds this tick asked for, awaiting a drain: an output like
+    /// [`Self::cues`], never hashed.
+    pub(super) mod_sounds: Vec<oag_gameplay::cue::ModSoundEvent>,
     /// Zone milestone numbers reached this tick, awaiting a drain.
     ///
     /// Kept apart from [`Self::cues`] rather than folded into [`Cue`](oag_gameplay::cue::Cue):
@@ -574,6 +581,24 @@ const _: () = {
 };
 
 impl RaceSim {
+    /// [`Race::may_use_pickup`]'s check, for the paths that hold a `RaceSim` alone (a
+    /// module's commands): only a racing craft uses a pickup.
+    pub(super) fn may_use_pickup(&self, slot: usize) -> bool {
+        self.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing
+    }
+
+    /// Every slot's place, as [`oag_race::places`] orders the field: the one ordering the
+    /// HUD, the results and a mod's observation read. Everyone is first on a track with
+    /// no closed ring.
+    pub(super) fn places(&self) -> [u8; oag_gameplay::MAX_SHIPS] {
+        let Some(course) = &self.course else {
+            return [1; oag_gameplay::MAX_SHIPS];
+        };
+        let standings: [oag_race::Standing; oag_gameplay::MAX_SHIPS] =
+            std::array::from_fn(|slot| self.world.ships[slot].standing);
+        oag_race::places(&standings, course)
+    }
+
     /// What one snapshot holds of its own: the struct and the heap of its mutable half. An
     /// estimate, for a budget (`timeline`): the shared half is not in it, and it counts lengths,
     /// not what an allocator rounded them to.

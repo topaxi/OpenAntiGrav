@@ -37,12 +37,31 @@ mod distance_reset;
 mod eliminator;
 mod energy_bar_delay;
 #[cfg(feature = "extensions")]
+mod extension_ai_pickup;
+#[cfg(feature = "extensions")]
+mod extension_aiming;
+#[cfg(feature = "extensions")]
 mod extension_armor;
 mod extension_channels;
 #[cfg(feature = "extensions")]
 mod extension_examples;
 #[cfg(feature = "extensions")]
 mod extension_faults;
+#[cfg(feature = "extensions")]
+mod extension_odds;
+
+#[cfg(feature = "extensions")]
+mod extension_picks;
+#[cfg(feature = "extensions")]
+mod extension_pickup_kinds;
+#[cfg(feature = "extensions")]
+mod extension_shaders;
+#[cfg(feature = "extensions")]
+mod extension_slipstream;
+#[cfg(feature = "extensions")]
+mod extension_sounds;
+#[cfg(feature = "extensions")]
+mod extension_view;
 mod extensions;
 mod field;
 mod hash;
@@ -66,6 +85,8 @@ mod people_grid;
 mod perfect_start;
 mod photo;
 mod photo_rewind;
+#[cfg(feature = "extensions")]
+mod portal_view;
 mod pure_absorb_bar;
 mod quake_armed;
 mod quake_lift;
@@ -106,6 +127,7 @@ mod track_stages;
 mod trail_hits;
 mod trail_length;
 mod trail_order;
+mod transit;
 mod velocity_gate;
 mod viewer;
 mod viewpoint;

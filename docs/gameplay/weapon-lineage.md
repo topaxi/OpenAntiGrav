@@ -219,10 +219,10 @@ has it; only its table moves.
 | Repulser | `projectile::repulser` (+ `fork`); `oag_raceplay::repulser_field` | the table; `WeaponModels.repulser_field`; `Effects` `RepulserBlast`, `Repulser` |
 | Shuriken | `projectile::shuriken` on the `flight` follower | the table; `WeaponModels.shuriken`; `Effects` `Shuriken*` |
 | Disruptor | `projectile::disruptor`, `oag_weapons::disruption`; `oag_raceplay::weapons::disruptor` | the table (Pure ships the only one); no field of its own |
-| Pickup draw | `oag_weapons::pickup` | the table's `<Pickupodds>`; `Title.weapon_pad_glow` for the pad's look |
+| Pickup draw | `oag_weapons::pickup` | the table's `<Pickupodds>`; `Title.weapon_pad_glow` for the pad's look; a mod's own pickup (`Weapon::Extension`) is walked after the title's weapons only when the race's table carries a `[[pickup.odds]]` row for it (chosen: the mod's weights, outside an event's weapon set), so a vanilla draw is unchanged |
 | Absorb | `oag_physics::damage` absorb branch | the table's `absorb`; `Effects` `ShieldAbsorb` with its burst |
 | Slowdown stacking | `oag_weapons::slowdown`, clamped to the table's `Global slowdown_limit` | the table's `slowdown_time` per weapon |
-| Fire law | `oag_ai::weapon_ai`, `oag_raceplay::field::fire_law` (`FireLaw`) | **`Weapons.ai`** (the odds file); `FireLaw::Ours` when it is missing |
+| Fire law | `oag_ai::weapon_ai`, `oag_raceplay::field::fire_law` (`FireLaw`) | **`Weapons.ai`** (the odds file); `FireLaw::Ours` when it is missing; a mod's own pickup (`Weapon::Extension`) fires through the Turbo's gate, and a module whose manifest sets `[extension] drives_ai_pickup` is raised nothing and decides itself |
 | Sound | `oag_sound::sfx::cue`, push sites in `oag_raceplay::weapons` and `field/opponent_weapons.rs` | the title's `weapons.bnk` path (`SOUND_BANKS` in its `race.rs`) |
 | EMP, Light Barrier, GiftCannon | none | none: authored, nothing reads them |
 

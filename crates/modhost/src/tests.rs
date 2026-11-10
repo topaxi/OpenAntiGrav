@@ -42,6 +42,7 @@ fn observe(tick: u64) -> Observation<'static> {
         active: 0b11,
         events: &[],
         crafts: &[],
+        course: Default::default(),
         track: &[],
         speed_pads: 0,
         routes: 0,
@@ -177,6 +178,7 @@ fn a_slot_with_no_craft_is_refused() {
         active: 0b1,
         events: &[],
         crafts: &[],
+        course: Default::default(),
         track: &[],
         speed_pads: 0,
         routes: 0,
@@ -215,6 +217,7 @@ fn events_reach_the_guest() {
                 active: 0xff,
                 events: &events,
                 crafts: &[],
+                course: Default::default(),
                 track: &[],
                 speed_pads: 0,
                 routes: 0,
@@ -534,4 +537,61 @@ fn a_reply_past_the_fire_effect_cap_is_a_fault_and_the_cap_itself_is_fine() {
         matches!(&fault, Fault::Reply(e) if e.contains("fire-effect")),
         "{fault}"
     );
+}
+
+/// A guest that sends one raw command record every tick.
+fn sender(kind: u8, slot: u8, arg: u16, value: u32, word: u32) -> Vec<u8> {
+    guest(&format!(
+        "(i32.store (i32.const {REPLY}) (i32.const 1))
+         (i32.store8 (i32.const {cmd}) (i32.const {kind}))
+         (i32.store8 (i32.const {s}) (i32.const {slot}))
+         (i32.store16 (i32.const {a}) (i32.const {arg}))
+         (i32.store (i32.const {v}) (i32.const {value}))
+         (i32.store (i32.const {w}) (i32.const {word}))
+         i32.const 0",
+        cmd = REPLY + 4,
+        s = REPLY + 5,
+        a = REPLY + 6,
+        v = REPLY + 8,
+        w = REPLY + 12,
+    ))
+}
+
+fn sends(wasm: &[u8]) -> Result<Vec<Command>, Fault> {
+    let module = Module::compile(wasm, Limits::default()).unwrap();
+    let mut commands = Vec::new();
+    module
+        .tick(&observe(0), &mut [0; 8], &mut commands)
+        .map(|_| commands)
+        .map_err(|(fault, _)| fault)
+}
+
+#[test]
+fn the_view_commands_for_a_craft_land_and_for_an_empty_slot_or_out_of_range_are_faults() {
+    let fov = |slot, degrees: f32| sender(31, slot, 0, degrees.to_bits(), 0);
+    assert_eq!(
+        sends(&fov(1, 12.0)),
+        Ok(vec![Command::FovOffset {
+            slot: Slot::new(1).unwrap(),
+            degrees: 12.0
+        }])
+    );
+    for bad in [
+        fov(5, 12.0),
+        fov(1, oag_ext_abi::MAX_FOV_OFFSET_DEG * 2.0),
+        fov(1, f32::NAN),
+        sender(30, 5, 0, 0, 0x80ff_0000),
+        sender(32, 1, 0, 0.0_f32.to_bits(), 0),
+        sender(32, 5, 0, 20.0_f32.to_bits(), 0),
+    ] {
+        assert!(matches!(sends(&bad), Err(Fault::Reply(_))));
+    }
+    assert!(matches!(
+        sends(&sender(30, 1, 0, 0, 0x80ff_0000)),
+        Ok(commands) if commands.len() == 1
+    ));
+    assert!(matches!(
+        sends(&sender(32, 1, 3, 20.0_f32.to_bits(), 0)),
+        Ok(commands) if commands.len() == 1
+    ));
 }

@@ -32,6 +32,8 @@ mod lens_flare;
 mod lod_bias;
 #[cfg(feature = "view")]
 pub(crate) mod magstrip_wake;
+#[cfg(feature = "view")]
+mod mod_assets;
 mod muzzle;
 mod original_laws;
 #[cfg(feature = "view")]
@@ -861,31 +863,24 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // Lent before the mods' effects, so no mod sprite moves; a no-op unless `graphics.trail_hits`.
     #[cfg(feature = "view")]
     let lent_trail_hit = trail_hits::lend(options, craft_title, &mut effects, &mut report);
-    // The mods' own effects land after every title effect, so no title sprite moves.
     #[cfg(feature = "view")]
-    let mod_effects = crate::extension_effects::load(
-        &extension_sources,
-        &title.slug(),
-        options.foreign_track.as_deref(),
-        &mut effects,
-        &mut |entry, name| {
-            crate::foreign::art::host_texture(&mut archives, entry, name)
-                .and_then(|texture| crate::extension_effects::sprite_of(&texture))
-        },
-        &mut report,
-    );
+    let mods = mod_assets::ModAssets::new(&extension_sources, title, options);
+    #[cfg(feature = "view")]
+    let (mod_shaders, mod_effects) =
+        mods.shaders_and_effects(&mut archives, &mut effects, &mut report);
     #[cfg(feature = "view")]
     let handles = trail_hits::gate(
         options,
         craft_title,
         super::EffectHandles::resolve(craft_title, &effects)
             .with_own(mod_effects)
+            .with_shaders(mod_shaders)
             .lending(Trigger::TrailHitship, lent_trail_hit),
     );
 
     stages::checkpoint()?;
     #[cfg(feature = "view")]
-    let (sounds, announcer, class_announcer) = audio::banks_and_announcers(
+    let (mut sounds, announcer, class_announcer) = audio::banks_and_announcers(
         &mut archives,
         title.race,
         title.hud_art.lap_hud,
@@ -893,6 +888,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &slot_teams,
         &mut report,
     );
+    #[cfg(feature = "view")]
+    mods.sounds(&mut sounds, &mut report);
     stages::checkpoint()?;
     #[cfg(feature = "view")]
     let rumble = crate::rumble_library::load(&mut archives, &mut report);

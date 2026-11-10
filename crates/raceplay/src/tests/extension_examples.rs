@@ -46,6 +46,7 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
             fire_held: slot == 0,
             racing: true,
             shielded: false,
+            in_transit: false,
             // One craft on its final lap, so a track module that starts there is measured
             // on its busy ticks.
             lap: if slot == 7 { 3 } else { 2 },
@@ -101,6 +102,7 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
                 active: 0xff,
                 events,
                 crafts: &crafts,
+                course: Default::default(),
                 track: &region[..used],
                 speed_pads: 2,
                 routes: 1,

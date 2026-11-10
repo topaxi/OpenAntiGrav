@@ -66,15 +66,16 @@ added to the engine and the ABI, each its own commit with the vanilla fold uncha
 | Craft records | observation | One 16-byte record per slot (`oag_ext_abi::Craft`): the held pickup (its place in `Weapon::ALL` plus one, 255 for the mod's own), flags (person-flown, fire button held, racing past GO), shield, its maximum, speed. Copies; the held input is the `InputSnapshot` the tick already has |
 | `scale-thrust` up to 2.0 | command | Above 1.0 through a new `Environment::extension_thrust` (`oag-physics`, applied to the engine's thrust after the Leach Beam's scale; `1.0` skips the multiply, so no vanilla bit moves). Below 1.0 still the Leach Beam's path |
 | `shield-delta{slot, amount}` | command | A loss through `oag_physics::damage::apply_weapon` at its full amount, so the destroyed edge, the Shield pickup's immunity and the critical crossing are a hit's (a drained pool wrecks: proven); a gain through `damage::add`'s clamp. `|amount|` at most the slot's maximum; refused where the mode takes no damage |
-| The mod's own pickup | engine | `oag_tables::weapons::Weapon::Extension` (7.5): a fieldless arm outside `Weapon::ALL`, so `Option<Weapon>` stays one byte and the World snapshot does not grow; hashed as 255, which no vanilla race writes. The engine never fires or absorbs it: a person's press (`Race::spend_pickup`) and the AI's fire (`Race::spend_opponent_pickup`, through the Turbo's gate; the AI never absorbs it) raise **`pickup-fire{slot}`** / **`pickup-absorbed{slot}`**; an absorb clears it and pays no pool. The HUD draws the look the mod declares for it: its manifest's `[pickup]`, or this tick's `pickup-look` (below). A mod that hands one out with no `[pickup]` is faulted for the race on its first `give-pickup` or `pickup-roll`, naming the missing table |
+| The mod's own pickup | engine | `oag_tables::weapons::Weapon::Extension` (7.5): an arm outside `Weapon::ALL` carrying a `ModKind` (one per mod that declares a `[pickup]`, in module id order, at most 32; a 33rd such mod is left out of the race by name in the load report); hashed as 255 for kind 0, 254 for kind 1 and so on, which no vanilla race writes. The engine never fires or absorbs it: a person's press (`Race::spend_pickup`) and the AI's fire (`Race::spend_opponent_pickup`, through the Turbo's gate; the AI never absorbs it) raise **`pickup-fire{slot}`** / **`pickup-absorbed{slot}`**; an absorb clears it and pays no pool. The HUD draws the look the mod declares for it: its manifest's `[pickup]`, or this tick's `pickup-look` (below). A mod that gives, rolls or clears one with no `[pickup]` is faulted for the race on its first such command, naming the missing table. A module sees its own kind in a craft record as `Pickup::Ours` (code 255) and another mod's as `Pickup::Other(kind)` (codes 15 to 46); `pickup-fire` and `pickup-absorbed` are raised to the module of the kind the craft held, no other |
 | `give-pickup{slot}` / `clear-pickup{slot}` | command | Puts the mod's pickup in an empty slot / takes it out of a slot holding it (a fault otherwise). A race without weapons gives nothing. The slot's last-granted weapon is left alone, so the title's repeat rule is unchanged |
-| `pickup-roll{weapon, every}` | command | Race-wide (sent on slot 0): every `every`-th time a weapon pad (`Race::test_weapon_pads`) draws that weapon, it hands out the mod's pickup instead, with the drawn weapon still the slot's last grant. The count is hashed; re-sending the same rule keeps it. The first module to send any of the three pickup commands owns the kind for the race; another one faults |
+| `pickup-roll{weapon, every}` | command | Race-wide (sent on slot 0): every `every`-th time a weapon pad (`Race::test_weapon_pads`) draws that weapon, it hands out the mod's pickup instead, with the drawn weapon still the slot's last grant. The count is hashed; re-sending the same rule keeps it. Each module's rule is its own (per kind): the first grant of the weapon that turns, in module id order, takes it. Each module gives, rolls and clears only its own kind |
 | `scale-pad{slot, 0}` and **`speed-pad{slot, pad}`** | command, event | The turbo holds its slot's speed pads at 0 while carried, so a pad gives no push, plume or pad sound, and pays the pool on the `speed-pad` the entry raises ([track properties](#and-track-properties-2026-10-30)) |
 | `play-cue{slot, cue}` | output | One of six of the engine's cues (`oag_ext_abi::Cue`, matched to the engine's in `oag_raceplay::extensions`), pushed beside the tick's own |
+| `play-mod-sound{slot, index, mode}` | output | The sending mod's own sound (`[sounds]` of its manifest, `docs/formats/mod-sound.md`) once, as a loop that follows the craft, or a loop's stop; placed like a title cue on the craft through the mixer, limiter and spatial path. One that did not load plays nothing and the load report says so |
 | `fire-effect{slot, effect}` | output | The title's own `CollisionSpark` or `HitSpark` `.pob`, at the hull's back end, drawn by the view half; a title without it draws nothing. A module may send at most `MAX_FIRE_EFFECTS_PER_TICK` = **16** (`MAX_CRAFTS`: two for each of the grid's eight craft) `fire-effect`s of either kind a tick (**chosen, not measured**); the 17th faults the module, because a full stage evicts the title's own one-shot sparks. SDK: `Refused::Effects` |
 | `fire-effect{slot, own index}` | output | The sending mod's own particle effect (`[effects]` of its manifest, `docs/formats/mod-effect.md`), arg bit 15 set, at the hull's back end; one that did not load draws nothing |
 | `hud-tint{slot, element, rgba}` | output | Recolours a HUD element of that slot. `Pickup` is **not** tintable any more: a `hud-tint` of it is a malformed record (`pickup-look` colours the pickup). Elements are title-agnostic (`Speed`, `Thrust`, `Energy`, `Pickup`, `Position`, `Lap`, `Time`) and `oag_hud::ext_draws::element_of` maps each to the title's widgets; an element the title has no widget for draws nothing |
-| `pickup-look{slot, icon, colour}` | output | Command 22. The look of that slot's held mod pickup: `icon` is `{title: weapon}` (the title's own icon sprite for the weapon; a title with none draws none) or `{mod: name}` (a PNG of the mod's `[icons]`), `colour` is `{title: weapon}` (the title's own backdrop row for the weapon: Pulse's recovered table, HD's and Omega's own) or `{rgba}` (a colour of the mod's own). Re-sent each tick it should hold; with none sent the manifest's `[pickup]` is the look, and the last look is kept while the pickup fades out after use. The title's fade-in, overshoot, size pulse, hold and fade-out (Pulse, HD, Omega) play on any look. **Per title:** Pulse, HD and Omega draw both colour kinds; **Pure has no backdrop widget, so both colour kinds draw nothing there** (its icon is the title's model for the weapon, or nothing for a mod icon); 2048 has no backdrop colour table, so its backdrop stays as authored and a `rgba` or title colour draws nothing there (its icon goes through the UV table, a mod icon is fitted inside `PickupBgFrame`). A mod icon is fitted, aspect kept, in the slot the title's weapon icons share (**chosen, not measured**). An output: drawn, never hashed |
+| `pickup-look{slot, icon, colour}` | output | Command 22. The look of that slot's held mod pickup: `icon` is `{title: weapon}` (the title's own icon sprite for the weapon; a title with none draws none) or `{mod: name}` (a PNG or SVG of the mod's `[icons]`; an SVG is rasterised at load, off the render thread, at the pixel size its slot is drawn at, and again when that changes: `oag_hud::svg`, `oag_game::hud_overlay`; `<text>` draws nothing and `<image>` is never read, `resvg` being built without its text and raster-image features), `colour` is `{title: weapon}` (the title's own backdrop row for the weapon: Pulse's recovered table, HD's and Omega's own) or `{rgba}` (a colour of the mod's own). Re-sent each tick it should hold; with none sent the manifest's `[pickup]` is the look, and the last look is kept while the pickup fades out after use. The title's fade-in, overshoot, size pulse, hold and fade-out (Pulse, HD, Omega) play on any look. **Per title:** Pulse, HD and Omega draw both colour kinds; **Pure has no backdrop widget, so both colour kinds draw nothing there** (its icon is the title's model for the weapon; a mod icon is a PNG drawn at its own size, centred on the backdrop grid's quad, so ship the glyph alone); 2048 has no backdrop colour table, so its backdrop stays as authored and a `rgba` or title colour draws nothing there (its icon goes through the UV table, a mod icon is fitted inside `PickupBgFrame`). A mod icon is scaled, aspect kept, to the box the title's own Turbo glyph fills and centred on it: the loader measures the PNG's drawn pixels (alpha above 16, so a margin never counts) and the HUD reads the title's glyph off the HUD sheet (alpha above 32 in the Turbo icon's own region; for 2048 the Turbo row of its UV table, centred in `PickupBgFrame`), then both are shrunk to the backdrop frame if they would not fit it (**chosen, not measured**; where the title's glyph cannot be read the art is drawn at its own size on the frame). A title with a different look per title names it in `[pickup.titles.<title>]` (below). An output: drawn, never hashed |
 | `hud-shake{slot, element, amplitude}` | output | Jitters the element's widgets by up to `amplitude` HUD pixels (at most 16) this tick. The offset is an integer hash of tick, slot and element, never zero while `amplitude` is above 0 (chosen, not measured) |
 | `hud-bar-extra{slot, element, extra, rgba}` | output | A bar shows `extra` times its value on top: it is rescaled so value x (1 + extra) fills it, the base share keeps the bar's colour and the added share (`extra / (1 + extra)` of the fill, 47 % at 0.9) blends from the bar's colour into `rgba`. Each element means the same on every title: `Thrust` is the thrust bar and draws nothing on a title without one (Pulse); `Speed` is the speed bar |
 | `hud-text{slot, anchor, x, y, text, rgba, size}` | output | Text in the title's HUD font at one of nine anchors of the HUD layout grid, offset `x`, `y` HUD pixels (12-bit signed), `size` in quarters of the title's own text height. The string is at most 48 bytes, carried in the reply's string pool |
@@ -490,6 +491,92 @@ a wall-clock one), *lazy* (only the latest value per channel and slot is kept, f
 need not queue) and a *priority* that decides what is dropped past the cap, in place of today's
 sort order. Each stays deterministic by the same rule: delivery order and drops are a function of
 the queued events alone, never of which module ran first.
+
+### And the pieces of a portal weapon (2026-11-03)
+
+What a guest needs to build a portal-teleport pickup (the official mod `oag.slipstream`
+is its first user; the engine names no mod). ABI 1 is edited in place; the layout fold
+in `crates/ext-abi/src/tests.rs` is recorded again. The engine side is in
+[hooks.md](hooks.md#built-for-a-portal-weapon-transit-scale-speed-probe-clearance-2026-11-03).
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| `transit{slot, ticks, distance, exit_factor}` | command 27 | Out of the world for `ticks` (1 to `MAX_TRANSIT_TICKS` = 600): frozen where it was, not stepped, not drawn, not collided with, not hit or locked, controls and pickup presses ignored, reset triggers held. Then moved forward to `distance`, on the road's middle at the height a craft flies at (the reset's placement without its 5 unit drop, `breadcrumbs::emerge`), and stepped from there the same tick, at `exit_factor` (0 to 2, steps of 1/10,000) times its entry speed. Laps count through the jump (not across a shut half-way gate, as for a driven crossing); a finish in it is timed at the exit tick. Refused (a fault) for a craft not racing or already out, or a distance that does not resolve; a craft another module took out on the same call is dropped with no fault |
+| `Distance` | vocabulary | `Units(u)` on, `Seconds(s)` at the speed it has when the command lands, `Lap(share)`, `Progress(p)` (a place on the lap, units from the start line), `Trigger(n)` (the course point nearest track trigger `n`'s centre: a portal's other end). Always forward, under a lap |
+| `transit-end{slot}` | event 11 | On the exit tick's own call |
+| `scale-speed{slot, factor}` | command 28 | Velocity times `factor` (0 to 2), once, at the call |
+| `probe-clearance{slot, distance, radius}` | command 29 | Does a half disc of `radius` (up to 64) standing across the track at `distance` fit: width at least `2r` and no geometry on nine rays from its centre to its rim. Answered next call |
+| `clearance{slot, fits, ahead}` | event 12 | The answer, sent to the module that probed alone, with how far on it probed; a distance that does not resolve answers "does not fit" with `ahead` 0 |
+| `in-transit` | craft flag 16 | The craft is out of the world |
+| `[pickup.titles.<title>]` | manifest | `icon` and/or `colour` (the `[pickup]` shapes) for one title (its lowercased hyphenated name), each over `[pickup]` for what it leaves out: one mod icon per title (`oag_mod::Manifest::pickup_for`, resolved when the race prepares its modules). Pulse's PSP and PS2 pressings are one title here and share a row |
+| `[[pickup.odds]]` | manifest | Rows `{ title?, class?, ai, human, front, back }` inside `[pickup]`: the weapon pads draw the mod's pickup beside the title's weapons at the most specific row's weights (title and class, then title, then class, then neither), so a title with per-class tables (2048's five) gives each its own row. The declaring module owns the mod pickup for the race; a second mod's rows are left out with a load report line; a fault ends the odds |
+
+**A portal on a track, not a weapon.** A track module answers `trigger-enter{slot, n}` with
+`transit{slot, ticks, Trigger(m), 1.0}`. The exit must lie on the course ring (the authored
+spline the lap counter and AI follow), not on collision geometry: two portals on disconnected
+geometry work if the spline runs through both, its connecting stretch never driven. An exit
+`Trigger(m)` whose centre is nearer a fork route's sample than the ring's lands on that route:
+the craft is put on the route's point for that ring point (`Course::route_point`) and its driver
+seated on the route's line (`Race::seat_on_route`); every other distance is a share of the ring.
+An exit with no spline near it is not built. Proof: `Course::locate_exit` names the route
+(`branch_progress_ground_truth`, every Pulse and 2048 route), `transit_ground_truth` seats the
+craft and its driver on a Pulse `05_Track` route, `track_props_ground_truth` runs a trigger pair
+on Hillside (a ring exit; a disc circuit carries no triggers, so no test names a route through
+a trigger file).
+
+**A reset is a different move.** It goes back, to a breadcrumb, and earns nothing; it shares
+only the cursor reset (`Race::reseat`), not the lap rule.
+
+Proof: `oag_race`'s `standing::jump_tests` (a move over the line is a lap on its tick, most of a
+lap is one lap, a finish by a move is timed there), `oag_raceplay`'s `tests::transit` (frozen,
+undrawn, untargetable, triggers held, out at the asked place and speed; a guest's transit
+raises `transit-end` and its probe `clearance`; two runs hash alike; `scale-speed`),
+`tests::extension_odds`, `oag_weapons`' `a_mod_pickup_row_is_drawn_at_its_weight_and_absent_changes_nothing`,
+`oag_tables`' `odds_tests`, `oag_mod`'s manifest test, and the byte pins in `oag_ext_abi`.
+
+**An AI craft that holds the mod's pickup.** By default the engine raises `pickup-fire` for it
+wherever the driver would fire a Turbo (the Turbo's own gate, on the Turbo's boost time). A
+mod whose module decides for itself sets `[extension] drives_ai_pickup = true` (default
+`false`): the engine then raises nothing for an AI craft, and the module decides from the
+observation and clears the pickup itself with `clear-pickup` (and does what it fires, such as
+a `transit`). The observation carries what such a decision reads:
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| tracking record | observation | A second per-craft record at `TRACKING_AT` (8 bytes a slot, `oag_ext_abi::Tracking`): `progress` (`f32`, units along the circuit from the start line, in `[0, length)`: a craft on the grid behind the line reads just under a lap), `place` (`u8`, 1-based, 0 for an empty slot; the one ordering the HUD shows, `RaceSim::places`), a flags byte whose bit 0 says `progress` is a fix (no number stands for "no fix yet") |
+| course length | observation | `f32` units at header offset 4 (`COURSE_LENGTH_AT`), 0 without a closed course: `progress / length` is the lap share |
+| title key | observation | `u32` at `TITLE_AT` (after the tracking records): `channel_key` of the title's lowercased hyphenated name (`wipeout-hd`, the slug a manifest's `titles` uses), 0 when the host says none. SDK `Observation::title()` and the compile-time `title!("wipeout-hd")`; `test::Race::with_title`. A guest that looks different per title (a portal's colour) reads it; PSP and PS2 Pulse are one title. Appended after the last region, so no offset moves |
+| aiming | observation | `AIM_SLOTS` (8) x `AIM_SLOTS` pairs of three `i8` at `AIM_AT` (after the title key): where target `t` sits ahead of, to the right of and above observer `o`, along `o`'s own forward, right and up axes, in `AIM_STEP` (2) world units, saturating at 127 steps; a craft with itself or an empty slot reads zero (the active mask says which). The whole matrix, not one chosen slot, so a guest can gate every holder's fire in the same call. Observation only, never hashed; computed with `f32` dot products and a hand-rounded quantiser. SDK `Craft::aim_at(slot) -> Aim` with `Aim::{ahead, across, above, in_cone(range, spread)}`; `test::Race::with_aim`. Appended after the title key, so no offset moves. Proof: `tests::extension_aiming` and `aiming_ground_truth` (Pulse `16_Track` grid) |
+| `drives_ai_pickup` | manifest | `[extension]`, boolean, default `false` |
+
+The observation is built before the tick's step, so `progress` and `place` are last tick's.
+The mod pickup's fire path for a person is unchanged. Proof: `oag_raceplay`'s
+`tests::extension_ai_pickup` (the default raises `pickup-fire` for an AI craft, the flag
+raises nothing, a module reads the course length and the HUD's place), `oag_ext_abi`'s
+tracking round trip (title key included) and the recorded fold.
+
+**A second camera for a portal:** `portal-view` (command 36), the scene through a portal pair in the
+texture a mod shader reads: [`mod-shaders.md`](mod-shaders.md), "The engine texture".
+
+**View outputs for a portal (outputs, never hashed).** Three commands draw into a view; each
+is re-sent every tick it should hold, and a slot with no craft is a fault.
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| `screen-fill{slot, rgba}` | command 30 | Washes the slot's own view. It joins `Race::screen_wash`, the one wash the screen flash draws through: the colour times its alpha is added over the picture (an additive wash, as the title's flash is), and beside a running flash the two are summed into the same one pass. A split-screen seat wears only its own slot's fill; the flash stays the player's |
+| `fov-offset{slot, degrees}` | command 31 | Added to the slot's vertical field of view, `[-30, 30]` degrees (`MAX_FOV_OFFSET_DEG`), inside `camera::finish_vertical_fov` after the player's setting and before the boost kick and the aspect fit. Zero skips the arithmetic, so a race with none is bit-identical. Two modules add. The player's view draws it at the draw alpha between two ticks' values, as the speed widen is, so a ramp does not step at 60 Hz |
+| `fire-mod-effect-ahead{slot, index, distance}` | command 32 | The sending mod's own effect number `index` (its `[effects]`), played at the middle of the road `distance` ahead of the craft (the same `Distance` and `Race::point_ahead` as `transit`, lifted off the surface as `probe-clearance` lifts its disc). It stands in the world for the effect's own lifetime (up to 600 ticks): a mod PNG as a camera-facing sprite, the half disc of a portal, centred on the point (a half disc's art belongs in the PNG's upper half, its flat edge on the middle row). It is a sprite, not a mesh: a disc that stands across the road is a later piece; the sprite can run a shader of the mod's ([`mod-shaders.md`](mod-shaders.md)). Counts toward `MAX_FIRE_EFFECTS_PER_TICK`; a distance that does not resolve, or a road with no spline there, draws nothing |
+
+Proof: `oag_ext_abi`'s byte pins and range tests, `oag_modhost`'s refusal test,
+`oag_raceplay`'s `tests::extension_view` (the fill is its slot's view's alone, beside a flash it
+adds, a zero offset is bit-identical, the effect lands on the road ahead) and the
+`outputter` test (a module's fill and offset leave the state hash alone).
+
+### And a mod's own shaders (2026-11-04)
+
+A mod ships WGSL fragment shaders (`[shaders]`), drawn on an effect's particles, a screen fill and a
+beam between two crafts (`draw-beam`). Contract, refusals and what a hung GPU is still open to:
+[`mod-shaders.md`](mod-shaders.md). Example: `oag.tether` in the mod examples.
 
 ## Keeping the mod author skill current
 
@@ -1290,13 +1377,13 @@ with wasmtime's own switches left on as a second line
   a trap (out of fuel, `unreachable`, out-of-bounds memory, stack overflow) or a
   refused command **turns the module off for the rest of the race**. That call's
   commands are discarded (a rule only the apply step can check, an emit past its cap, on
-  a channel the mod does not publish, or a pickup command that breaks the ownership or
+  a channel the mod does not publish, or a pickup command that breaks the
   `[pickup]` rule, discards the whole reply, whichever command is first), the blob keeps
   its value from before the call, every later call is skipped.
 - **What a fault gives back.** Held race-wide state goes back to the title's at the
   fault: the module's `scale-pad`s return to 1.0, and if it owned the mod pickup, the
-  `pickup-roll` ends, the kind is free for another module, and every craft still
-  holding the mod pickup is handed the title's: a pickup that came from a roll becomes
+  `pickup-roll` ends, and every craft still holding that module's pickup kind (the other
+  mods' kinds stay) is handed the title's: a pickup that came from a roll becomes
   the weapon the pad drew (the craft's `last`; the AI and the person use it as if no
   module had run), and one that came from `give-pickup` replaced nothing and is taken
   away. Per-tick outputs (`scale-thrust`, HUD, sky) end because the module is no longer

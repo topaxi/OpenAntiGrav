@@ -73,6 +73,7 @@ mod sight_draw;
 pub mod split_hud;
 pub mod sprite;
 mod sub_weapon;
+pub mod svg;
 mod sway;
 pub mod time_gap;
 mod time_trial_pace;
@@ -83,7 +84,7 @@ pub use compose::{Composed, compose};
 pub use draw::{Context, Frame, Span, draw_list, draw_list_without_sight, sprite_draw};
 pub use head_to_head::HeadToHead;
 pub use kill_tags::KillTag;
-pub use pickup::pickup_icon_name;
+pub use pickup::{IconFrame, mod_icon_size, pickup_icon_name};
 pub use placement::{Placement, place};
 pub use player_tags::PlayerTag;
 pub use race_line::RaceLine;
@@ -1105,6 +1106,8 @@ mod sprite_pack_tests;
 mod state_2048_tests;
 #[cfg(test)]
 mod sub_weapon_tests;
+#[cfg(test)]
+mod svg_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

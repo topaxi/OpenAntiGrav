@@ -198,9 +198,13 @@ pub fn race_tick_keeping(
 /// ticks the seek ran are dropped, so nothing that sounded before the target sounds late.
 pub fn rebuild(audio: &mut Audio, race: &mut Race, tick: u64) {
     drop(race.drain_cues());
+    drop(race.drain_mod_sounds());
     drop(race.drain_announcements());
     drop(race.drain_class_announcements());
-    audio.rebuild_race_sfx(frame_of(race, Vec::new(), Vec::new(), Vec::new()), tick);
+    audio.rebuild_race_sfx(
+        frame_of(race, Vec::new(), Vec::new(), Vec::new(), Vec::new()),
+        tick,
+    );
 }
 
 /// The sound of one step of a replay being watched. At 1X the race sounds as a race does; at any
@@ -209,6 +213,7 @@ pub fn rebuild(audio: &mut Audio, race: &mut Race, tick: u64) {
 pub fn viewer_step(audio: &mut Audio, race: &mut Race, normal: bool, muted: &mut bool, at: u64) {
     if !normal {
         drop(race.drain_cues());
+        drop(race.drain_mod_sounds());
         drop(race.drain_announcements());
         drop(race.drain_class_announcements());
         audio.stop_race_sfx();
@@ -238,17 +243,18 @@ fn tick_effects(
     keep: impl Fn(&oag_gameplay::cue::CueEvent) -> bool,
     flyby: bool,
 ) {
-    let (mut cues, announcements, class_announcements) = if flyby {
-        (Vec::new(), Vec::new(), Vec::new())
+    let (mut cues, mod_sounds, announcements, class_announcements) = if flyby {
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new())
     } else {
         (
             race.drain_cues(),
+            race.drain_mod_sounds(),
             race.drain_announcements(),
             race.drain_class_announcements(),
         )
     };
     cues.retain(|event| keep(event));
-    let frame = frame_of(race, cues, announcements, class_announcements);
+    let frame = frame_of(race, cues, mod_sounds, announcements, class_announcements);
     audio.race_tick(frame);
     if flyby {
         return;
@@ -258,11 +264,12 @@ fn tick_effects(
     race.note_song(audio.now_playing().as_ref());
 }
 
-/// One tick of `race` as the sound effects see it, with the cues and announcements the caller
-/// drained from it.
+/// One tick of `race` as the sound effects see it, with the cues, mod sounds and announcements
+/// the caller drained from it.
 fn frame_of<'a>(
     race: &'a Race,
     cues: Vec<oag_gameplay::cue::CueEvent>,
+    mod_sounds: Vec<oag_gameplay::cue::ModSoundEvent>,
     announcements: Vec<u16>,
     class_announcements: Vec<u32>,
 ) -> RaceFrame<'a> {
@@ -272,10 +279,13 @@ fn frame_of<'a>(
         announcer: race.announcer(),
         class_announcer: race.class_announcer(),
         cues,
+        mod_sounds,
+        mod_loops: race.mod_sound_loops(),
         announcements,
         class_announcements,
         listener: listener_of(race),
-        craft: craft_positions(race),
+        craft: craft_positions(race, false),
+        mod_craft: craft_positions(race, true),
         slot_teams: std::array::from_fn(|slot| race.slot_team(slot)),
         player_slot: race.player_slot(),
         // The local player's throttle, `0..=100`: what
@@ -335,15 +345,20 @@ pub fn listener_of_view(view: oag_core::math::Mat4) -> oag_audio::Listener {
 ///
 /// [`None`] for a slot the race did not field. Read once per tick rather than
 /// per cue, because eight cues from one craft must all agree on where it was.
-fn craft_positions(race: &oag_raceplay::Race) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
+fn craft_positions(
+    race: &oag_raceplay::Race,
+    in_transit: bool,
+) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
     std::array::from_fn(|slot| {
         let ship = race.sim.world.ships.get(slot)?;
-        (slot < race.ship_count() as usize && ship.active).then(|| {
-            (
-                ship.physics.body.position,
-                ship.physics.body.linear_velocity.length(),
-            )
-        })
+        (slot < race.ship_count() as usize && (ship.in_world() || in_transit && ship.active)).then(
+            || {
+                (
+                    ship.physics.body.position,
+                    ship.physics.body.linear_velocity.length(),
+                )
+            },
+        )
     })
 }
 

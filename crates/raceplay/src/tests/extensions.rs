@@ -67,7 +67,7 @@ pub(super) mod on {
     use std::sync::Arc;
 
     use super::*;
-    use crate::extensions::{Prepared, Source, prepare};
+    use crate::extensions::{IconSource, Prepared, Source, prepare};
 
     pub(in crate::tests) const STATE: i32 = 1024 + oag_ext_abi::STATE_AT as i32;
     pub(in crate::tests) const REPLY: i32 = 1024 + oag_ext_abi::REPLY_AT as i32;
@@ -90,13 +90,19 @@ pub(super) mod on {
             api: 1,
             memory_pages: 1,
             state_bytes: 8,
+            drives_ai_pickup: false,
             scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
             strings: Arc::new(|_| Default::default()),
             icons: Vec::new(),
             effects: Vec::new(),
+            shaders: Vec::new(),
+            sounds: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
+            pickup_titles: Vec::new(),
+            pickup_odds: Vec::new(),
+            options: Default::default(),
             channels: crate::extensions::Declared::default(),
         }
     }
@@ -258,7 +264,7 @@ pub(super) mod on {
         race.tick(&PlayerInputs::none()); // the give
         assert_eq!(
             race.sim.world.ships[0].pickup.weapon,
-            Some(Weapon::Extension)
+            Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
         );
         assert_eq!(
             race.sim.world.ships[0].pickup.last, None,
@@ -267,7 +273,7 @@ pub(super) mod on {
         race.tick(&pressed(Button::Square));
         assert_eq!(
             race.sim.world.ships[0].pickup.weapon,
-            Some(Weapon::Extension),
+            Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)),
             "fire does not spend it"
         );
         assert_eq!(
@@ -298,7 +304,7 @@ pub(super) mod on {
         use oag_tables::weapons::Weapon;
         let mut race = grid(prepared(&[roller()]));
         assert!(
-            !race.sim.extensions.rolls(0, Weapon::Turbo),
+            race.sim.extensions.rolls(0, Weapon::Turbo).is_none(),
             "no rule before the first call"
         );
         race.tick(&PlayerInputs::none());
@@ -310,7 +316,7 @@ pub(super) mod on {
             Weapon::Turbo,
         ]
         .into_iter()
-        .map(|weapon| race.sim.extensions.rolls(0, weapon))
+        .map(|weapon| race.sim.extensions.rolls(0, weapon).is_some())
         .collect();
         assert_eq!(
             rolled,
@@ -319,25 +325,8 @@ pub(super) mod on {
         );
         // Re-sent every tick, the same rule keeps its count.
         race.tick(&PlayerInputs::none());
-        assert!(!race.sim.extensions.rolls(0, Weapon::Turbo));
-        assert!(race.sim.extensions.rolls(0, Weapon::Turbo));
-    }
-
-    #[test]
-    fn a_second_module_reaching_for_the_mods_pickup_faults_and_the_first_keeps_it() {
-        let mut race = grid(prepared(&[giver("test.a"), giver("test.b")]));
-        race.tick(&PlayerInputs::none());
-        let reports = race.extension_reports();
-        assert!(reports[0].faulted.is_none(), "{:?}", reports[0].faulted);
-        let (_, why) = reports[1]
-            .faulted
-            .clone()
-            .expect("the second giver faulted");
-        assert!(why.contains("test.a"), "{why}");
-        assert_eq!(
-            race.sim.world.ships[0].pickup.weapon,
-            Some(oag_tables::weapons::Weapon::Extension)
-        );
+        assert!(race.sim.extensions.rolls(0, Weapon::Turbo).is_none());
+        assert!(race.sim.extensions.rolls(0, Weapon::Turbo).is_some());
     }
 
     #[test]
@@ -387,12 +376,18 @@ pub(super) mod on {
         let mut source = giver("test.giver");
         source.pickup = Some(declared.clone());
         let mut race = grid(prepared(&[source]));
-        assert_eq!(race.sim.extensions.pickup_look(0), None, "no owner yet");
+        let first = oag_tables::weapons::ModKind::FIRST;
+        let second = oag_tables::weapons::ModKind::new(1).unwrap();
+        assert_eq!(
+            race.sim.extensions.pickup_look(0, second),
+            None,
+            "no module has the second kind"
+        );
         race.tick(&PlayerInputs::none());
         let mut resolved = declared;
         resolved.icon = Icon::Mod(crate::extensions::mod_icon_src("test.giver", "bolt"));
         assert_eq!(
-            race.sim.extensions.pickup_look(0),
+            race.sim.extensions.pickup_look(0, first),
             Some(resolved.clone()),
             "the manifest's icon key is the HUD sheet's key"
         );
@@ -490,7 +485,7 @@ pub(super) mod on {
                     w = POOL + 5,
                 );
             format!(
-                "(i32.store (i32.const {REPLY}) (i32.const 10))
+                "(i32.store (i32.const {REPLY}) (i32.const 12))
                  (i32.store8 (i32.const {c0}) (i32.const 5)) (i32.store8 (i32.const {s0}) (i32.const 1))
                  (i32.store16 (i32.const {a0}) (i32.const 1))
                  (i32.store8 (i32.const {c1}) (i32.const 6)) (i32.store8 (i32.const {s1}) (i32.const 1))
@@ -499,7 +494,7 @@ pub(super) mod on {
                  (i32.store16 (i32.const {a2}) (i32.const 6))
                  (i32.store (i32.const {b2}) (i32.const 0xff0000ff))
                  {weather} {sun} {grade}
-                 {shake} {extra} {text} {icon} {pool}
+                 {shake} {extra} {text} {icon} {fill} {fov} {pool}
                  i32.const 0",
                 c0 = REPLY + 4,
                 s0 = REPLY + 5,
@@ -515,6 +510,8 @@ pub(super) mod on {
                 extra = hud(7, 18, 2, 0.5_f32.to_bits(), 0xff20_20e0),
                 text = hud(8, 19, 0, 0x0050_0344, 0xffff_ffff),
                 icon = hud(9, 20, 3, 0x0050_0344, 0xffff_ffff),
+                fill = hud(10, 30, 0, 0, 0x80ff_2010),
+                fov = hud(11, 31, 0, 8.0_f32.to_bits(), 0),
                 weather = race_wide(3, 10, 0.5),
                 sun = race_wide(4, 11, 0.5),
                 grade = race_wide(5, 12, 0.25),
@@ -551,6 +548,17 @@ pub(super) mod on {
                 crate::extension_effects::Fired::Title(oag_title::effects::Trigger::CollisionSpark)
             )]
         );
+        // The view outputs reach the race's readers for slot 1 alone, and the quiet race has
+        // none: the same equal hashes above show they are never state.
+        assert_eq!(
+            loud.extension_fill(1),
+            Some([16.0 / 255.0, 32.0 / 255.0, 1.0, 128.0 / 255.0])
+        );
+        assert_eq!(loud.extension_fill(0), None);
+        assert_eq!(loud.extension_fov_offset(1), 8.0);
+        assert_eq!(loud.extension_fov_offset(0), 0.0);
+        assert_eq!(quiet.extension_fill(1), None);
+        assert_eq!(quiet.extension_fov_offset(1), 0.0);
         let tick = loud.sim.world.tick;
         let hud = loud.sim.extensions.hud(1, tick);
         assert_eq!(
@@ -723,18 +731,57 @@ pub(super) mod on {
     fn a_mods_icons_are_read_and_decoded_for_the_sheet_and_a_bad_one_is_named() {
         let png = oag_texture::png::encode_rgba(2, 1, &[255, 0, 0, 255, 0, 0, 255, 128]);
         let mut source = namer();
+        let icon = |name: &str, path: &str, read: crate::extensions::Reader| IconSource {
+            name: name.to_string(),
+            path: path.to_string(),
+            read,
+        };
         source.icons = vec![
-            ("badge".to_string(), Arc::new(move || Ok(png.clone()))),
-            ("broken".to_string(), Arc::new(|| Ok(b"not a png".to_vec()))),
-            (
-                "gone".to_string(),
+            icon("badge", "ui/badge.png", Arc::new(move || Ok(png.clone()))),
+            icon(
+                "broken",
+                "ui/broken.png",
+                Arc::new(|| Ok(b"not a png".to_vec())),
+            ),
+            icon(
+                "gone",
+                "ui/gone.png",
                 Arc::new(|| Err("no such file".to_string())),
+            ),
+            icon(
+                "vector",
+                "ui/vector.svg",
+                Arc::new(|| {
+                    Ok(
+                        br#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>"#
+                            .to_vec(),
+                    )
+                }),
+            ),
+            icon(
+                "torn",
+                "ui/torn.svg",
+                Arc::new(|| Ok(b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=".to_vec())),
             ),
         ];
         let mut report = Vec::new();
-        let icons =
+        let all =
             crate::extensions::mod_icons(&[source.clone()], "wipeout-pulse", None, &mut report);
+        let icons = all.raster;
         assert_eq!(icons.len(), 1);
+        assert_eq!(
+            all.vector
+                .iter()
+                .map(|v| v.src.as_str())
+                .collect::<Vec<_>>(),
+            ["mod:test.names/vector"],
+            "an .svg is parsed, not decoded as a PNG; a torn one is left out"
+        );
+        let said = report.join("\n");
+        assert!(
+            said.contains("icon torn (ui/torn.svg) left out:") && said.contains("draws nothing"),
+            "the file and the parser's error: {said}"
+        );
         assert_eq!(icons[0].src, "mod:test.names/badge");
         assert_eq!((icons[0].width, icons[0].height), (2, 1));
         assert_eq!(icons[0].rgba, [255, 0, 0, 255, 0, 0, 255, 128]);
@@ -748,6 +795,7 @@ pub(super) mod on {
         other.titles = vec!["wipeout-pulse".to_string()];
         assert!(
             crate::extensions::mod_icons(&[other], "wipeout-pure", None, &mut Vec::new())
+                .raster
                 .is_empty(),
             "a mod for another title loads none of its icons"
         );
@@ -808,6 +856,7 @@ colour = "#ff2010"
             &[source.clone()],
             "wipeout-pulse",
             None,
+            &Default::default(),
             &mut library,
             &mut |entry, name| match (entry, name) {
                 ("Track.vex", "spark.tga") => Ok(oag_fx::psys::sprite::Sprite {
@@ -857,6 +906,7 @@ colour = "#ff2010"
             &[other],
             "wipeout-pure",
             None,
+            &Default::default(),
             &mut oag_fx::psys::Library::new(),
             &mut |_, _| Err("none".to_string()),
             &mut Vec::new(),
@@ -929,6 +979,10 @@ colour = "#ff2010"
     }
 
     pub(in crate::tests) fn prepared(sources: &[Source]) -> Prepared {
+        prepared_for("wipeout-pulse", sources)
+    }
+
+    pub(in crate::tests) fn prepared_for(title: &str, sources: &[Source]) -> Prepared {
         let mut report = Vec::new();
         let props = crate::extensions::TrackProps::default();
         let track = crate::extensions::Track {
@@ -939,7 +993,7 @@ colour = "#ff2010"
             paths: &[],
             routes: &[],
         };
-        let prepared = prepare(sources, "wipeout-pulse", None, track, None, &mut report);
+        let prepared = prepare(sources, title, None, track, None, &mut report);
         assert!(
             report.iter().all(|line| !line.contains("left out")),
             "{report:?}"
@@ -1055,13 +1109,19 @@ mod triggers {
             api: 1,
             memory_pages: 1,
             state_bytes: 8,
+            drives_ai_pickup: false,
             scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
             strings: Arc::new(|_| Default::default()),
             icons: Vec::new(),
             effects: Vec::new(),
+            shaders: Vec::new(),
+            sounds: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
+            pickup_titles: Vec::new(),
+            pickup_odds: Vec::new(),
+            options: Default::default(),
             channels: crate::extensions::Declared::default(),
         }
     }

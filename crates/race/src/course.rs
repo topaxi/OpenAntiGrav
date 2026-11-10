@@ -447,13 +447,28 @@ impl Course {
     /// leaves it, or already back as it rejoins, finds the route.
     #[must_use]
     pub fn locate_on_route(&self, position: Vec3, around: usize) -> Option<Located> {
+        self.nearest_route_sample(position, Some(around))
+            .map(|(_, located)| located)
+    }
+
+    /// The nearest sample on any route (with `around`, only the routes whose stretch it is
+    /// in, as [`Self::locate_on_route`]; without, every route), as the route's index in
+    /// [`Self::routes`] and the point located on the ring.
+    #[must_use]
+    pub fn nearest_route_sample(
+        &self,
+        position: Vec3,
+        around: Option<usize>,
+    ) -> Option<(usize, Located)> {
         let count = self.positions.len();
         let mut best: Option<(usize, usize, f32)> = None;
         for (r, route) in self.routes.iter().enumerate() {
-            let from = (route.split + count - Self::WINDOW.min(count)) % count;
-            let span = (route.merge + count - from) % count + Self::WINDOW;
-            if (around + count - from) % count > span {
-                continue;
+            if let Some(around) = around {
+                let from = (route.split + count - Self::WINDOW.min(count)) % count;
+                let span = (route.merge + count - from) % count + Self::WINDOW;
+                if (around + count - from) % count > span {
+                    continue;
+                }
             }
             for (i, point) in route.positions.iter().enumerate() {
                 let distance = (*point - position).length();
@@ -464,16 +479,63 @@ impl Course {
         }
         let (r, i, offset) = best?;
         let route = &self.routes[r];
-        let ring_span =
-            (self.distance[route.merge] - self.distance[route.split]).rem_euclid(self.length);
-        let along = route.fraction(i) * ring_span;
+        let along = route.fraction(i) * self.route_ring_span(route);
         let raw = self.distance[route.split] + along;
         let start = self.distance[self.start_index];
-        Some(Located {
-            index: self.advance(route.split, along),
-            progress: (raw - start).rem_euclid(self.length),
-            offset,
+        Some((
+            r,
+            Located {
+                index: self.advance(route.split, along),
+                progress: (raw - start).rem_euclid(self.length),
+                offset,
+            },
+        ))
+    }
+
+    /// Where an exit placed at `position` is: the ring point nearest it, and the route (its
+    /// index in [`Self::routes`]) when a route's sample is nearer than the ring's, as a
+    /// trigger standing on a detour is. The ring point is the route sample's ring stand-in
+    /// then ([`Self::route_point`] maps it back). `None` for a course with no points.
+    #[must_use]
+    pub fn locate_exit(&self, position: Vec3) -> Option<(usize, Option<usize>)> {
+        let ring = self.locate(position, None)?;
+        Some(match self.nearest_route_sample(position, None) {
+            Some((route, fix)) if fix.offset < ring.offset => (fix.index, Some(route)),
+            _ => (ring.index, None),
         })
+    }
+
+    /// The ring distance a route stands in for, from its `split` to its `merge`.
+    fn route_ring_span(&self, route: &Route) -> f32 {
+        (self.distance[route.merge] - self.distance[route.split]).rem_euclid(self.length)
+    }
+
+    /// The point of route `route` (its index in [`Self::routes`]) that stands for ring
+    /// point `ring_index`: the inverse of [`Self::locate_on_route`], so a point located on
+    /// the route reads the same ring index back. `None` for an unknown route or a ring
+    /// point outside the route's span.
+    #[must_use]
+    pub fn route_point(&self, route: usize, ring_index: usize) -> Option<Vec3> {
+        let route = self.routes.get(route)?;
+        let span = self.route_ring_span(route);
+        let along =
+            (self.distance.get(ring_index)? - self.distance[route.split]).rem_euclid(self.length);
+        if span <= 0.0 || along > span {
+            return None;
+        }
+        let at = along / span * route.length;
+        let after = route.distance.partition_point(|&d| d <= at);
+        let (from, to) = (
+            after.saturating_sub(1),
+            after.min(route.positions.len() - 1),
+        );
+        let (a, b) = (route.distance[from], route.distance[to]);
+        let t = if b > a {
+            ((at - a) / (b - a)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        Some(route.positions[from].lerp(route.positions[to], t))
     }
 
     /// Ring indices where one path hands over to the next.
@@ -519,6 +581,36 @@ impl Course {
             }
         }
         order
+    }
+
+    /// The ring point a forward move of `by` units from `from` lands on, for a
+    /// relocation along the circuit (a mod's `transit`): `None` unless `0 < by` and it is
+    /// under a lap ([`Self::max_jump`]). [`crate::Standing::jumped`] and
+    /// [`crate::RaceState::jumped`] credit a crossing of the line in it.
+    #[must_use]
+    pub fn jump(&self, from: usize, by: f32) -> Option<usize> {
+        let ok = by.is_finite() && by > 0.0 && by < self.length;
+        (ok && !self.positions.is_empty()).then(|| self.advance(from, by))
+    }
+
+    /// The longest forward move [`Self::jump`] takes: just under a lap.
+    #[must_use]
+    pub fn max_jump(&self) -> f32 {
+        self.length
+    }
+
+    /// The ring point nearest `progress` units from the start line, for a move to a fixed
+    /// place on the lap: `None` outside `[0, length)` or on an empty ring.
+    #[must_use]
+    pub fn index_at_progress(&self, progress: f32) -> Option<usize> {
+        if !(progress.is_finite() && (0.0..self.length).contains(&progress)) {
+            return None;
+        }
+        let from = self.start_index;
+        if progress == 0.0 {
+            return Some(from);
+        }
+        self.jump(from, progress)
     }
 
     /// The ring point `by` units further along than `from`.

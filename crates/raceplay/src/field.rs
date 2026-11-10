@@ -241,20 +241,46 @@ impl Race {
         let route = self
             .nearest_route_sample(position)
             .filter(|&(_, _, distance)| distance < ring);
-        let ship = &mut self.sim.world.ships[slot];
         match route {
-            Some((route, at, _)) => {
-                ship.driver.index = u32::try_from(at).unwrap_or(0);
-                ship.driver.branching =
-                    self.sim.routes[usize::from(route) - 1].entered(ship.driver.branching, route);
-            }
+            Some((route, at, _)) => self.seat_on_route_line(slot, route, at),
             None => {
+                let ship = &mut self.sim.world.ships[slot];
                 ship.driver.index = u32::try_from(index).unwrap_or(0);
                 // Located on the ring, so it is on the ring. See
                 // `oag_ai::branch::Branching::on_ring`.
                 ship.driver.branching = ship.driver.branching.on_ring();
             }
         }
+    }
+
+    /// Puts slot `slot`'s driver on the line of the course's route `course_route` (its
+    /// index in `Course::routes`), at the line's sample nearest the craft. Nothing for a
+    /// route the AI has no line for.
+    pub(super) fn seat_on_route(&mut self, slot: usize, course_route: usize) {
+        let position = self.sim.world.ships[slot].physics.body.position;
+        let found = self
+            .sim
+            .routes
+            .iter()
+            .enumerate()
+            .find(|(_, r)| r.course_route == course_route)
+            .and_then(|(k, r)| {
+                Some((
+                    u16::try_from(k + 1).ok()?,
+                    r.nearest_own_sample(position)?.0,
+                ))
+            });
+        if let Some((route, at)) = found {
+            self.seat_on_route_line(slot, route, at);
+        }
+    }
+
+    /// Slot `slot`'s driver at sample `at` of route line `route` (`k + 1`).
+    fn seat_on_route_line(&mut self, slot: usize, route: u16, at: usize) {
+        let ship = &mut self.sim.world.ships[slot];
+        ship.driver.index = u32::try_from(at).unwrap_or(0);
+        ship.driver.branching =
+            self.sim.routes[usize::from(route) - 1].entered(ship.driver.branching, route);
     }
 
     /// Whether slot `slot` is being flown for its person this tick, by any of
@@ -719,7 +745,8 @@ impl Race {
             // A craft a person flies is stepped by `Race::tick`'s player step,
             // not here. With one person in slot 0 this skips slot 0, which the
             // loop used to start past.
-            if !self.sim.world.ships[slot].active || self.sim.world.person_flown(slot) {
+            // A craft in a transit is out of the world and not stepped (`crate::transit`).
+            if !self.sim.world.ships[slot].in_world() || self.sim.world.person_flown(slot) {
                 continue;
             }
             self.seed_vacated_driver(slot);
@@ -1083,14 +1110,7 @@ impl Race {
     /// reads [`Self::ship_count`] first.
     #[must_use]
     pub fn places(&self) -> [u8; MAX_SHIPS] {
-        let Some(course) = &self.sim.course else {
-            // No closed ring, so no positions. Everyone is first, which is the
-            // honest answer for a track that cannot count a lap at all.
-            return [1; MAX_SHIPS];
-        };
-        let standings: [oag_race::Standing; MAX_SHIPS] =
-            std::array::from_fn(|slot| self.sim.world.ships[slot].standing);
-        oag_race::places(&standings, course)
+        self.sim.places()
     }
 
     /// What slot `slot` can see of the rest of the grid.
@@ -1113,7 +1133,7 @@ impl Race {
             return oag_ai::Field::EMPTY;
         };
         let mine = &self.sim.world.ships[slot];
-        if !mine.active {
+        if !mine.in_world() {
             return oag_ai::Field::EMPTY;
         }
         let body = &mine.physics.body;
@@ -1131,7 +1151,7 @@ impl Race {
             (f32::INFINITY, f32::INFINITY, f32::INFINITY);
 
         for other in 0..self.sim.world.ship_count as usize {
-            if other == slot || !self.sim.world.ships[other].active {
+            if other == slot || !self.sim.world.ships[other].in_world() {
                 continue;
             }
             let them = &self.sim.world.ships[other];
@@ -1233,7 +1253,7 @@ impl Race {
         let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
         for a in 0..self.sim.world.ship_count as usize {
             for b in (a + 1)..self.sim.world.ship_count as usize {
-                if !self.sim.world.ships[a].active || !self.sim.world.ships[b].active {
+                if !self.sim.world.ships[a].in_world() || !self.sim.world.ships[b].in_world() {
                     continue;
                 }
                 if !oag_physics::damage::solid_to_craft(

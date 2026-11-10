@@ -458,7 +458,7 @@ impl Pending {
 pub(crate) fn definition(
     cli: &Cli,
     language: Option<&str>,
-    switches: &crate::settings::Mods,
+    switches: &oag_game::settings::Mods,
 ) -> Result<(menu::Definition, MenuSource)> {
     match cli.menu_args.menu.as_deref() {
         Some(path) => {

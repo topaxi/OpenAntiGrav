@@ -42,6 +42,8 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
             "assets/mods/examples/energy-turbo/fx/discharge.toml",
             "effect",
         ),
+        ("assets/mods/examples/tether/oag-mod.toml", "mod"),
+        ("assets/mods/examples/tether/fx/lock.toml", "effect"),
         ("crates/trackfile/tests/fixtures/oval.track.toml", "track"),
         ("crates/mod/tests/fixtures/example.rumble.toml", "rumble"),
         ("crates/game/tests/fixtures/music-state.toml", "music-state"),

@@ -126,6 +126,10 @@ impl Race {
         }
         self.set_wrong_way_kill();
         self.set_hover_caps();
+        // A transit whose count ran out puts its craft further round before anything
+        // reads where it is: its controls, its autopilot's lane snap, the modules' call
+        // (whose `transit-end` this is) and its step all see it out.
+        let transited = self.advance_transits();
         // Every craft a person is flying this tick. Slot 0 alone under
         // `World::SINGLE_PLAYER`, which is every session this engine starts
         // today; a second `Local` or `Remote` slot is stepped the same way and
@@ -166,7 +170,10 @@ impl Race {
         // duration rather than a tick less, and so the cancel-on-absorb branch
         // inside `spend_pickup` is not immediately undone by a decrement.
         for slot in 0..MAX_PLAYERS {
-            if self.sim.world.person_flown(slot) {
+            // A press in a transit is not heard: the craft is out of the world.
+            if self.sim.world.person_flown(slot) && self.sim.world.ships[slot].transit.is_some() {
+                self.tick_autopilot(slot);
+            } else if self.sim.world.person_flown(slot) {
                 self.spend_pickup(slot, inputs.get(slot));
                 self.tick_autopilot(slot);
             } else if self.sim.opponent_autopilot {
@@ -189,7 +196,7 @@ impl Race {
         // above consumes - see `Race::advance_cannons`'s own doc comment.
         self.advance_cannons(inputs);
         // Phase C: each simulation mod's one call, its commands into the steps below.
-        self.tick_extensions(inputs);
+        self.tick_extensions(inputs, transited);
 
         // Each person's craft, in slot order, against the same unmoved
         // projectile pool and the same unspent field-wide effects: the force law
@@ -572,10 +579,19 @@ impl Race {
 
         #[cfg(feature = "view")]
         if self.draws() {
+            self.advance_transit_seats();
             let target = self.camera_target();
-            self.view
-                .camera
-                .advance(target, &self.view.chase_params, self.sim.dt);
+            // A craft put further round (`Race::move_to`) takes its camera with it, settled:
+            // the spring would sweep the eye across the gap.
+            let jumps = self.sim.jumps[self.player_slot()];
+            if std::mem::replace(&mut self.view.camera_jumps, jumps) == jumps {
+                let step = self.camera_step(self.player_slot());
+                self.view
+                    .camera
+                    .advance(target, &self.view.chase_params, step);
+            } else {
+                self.view.camera = Chase::snapped(target, &self.view.chase_params);
+            }
             // The split-screen views' own cameras, view-side: a no-op with one view.
             self.advance_viewpoints();
             // After the chase camera and before the eye is read: behind the end-race panels the

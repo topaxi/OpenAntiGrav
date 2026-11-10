@@ -1,6 +1,6 @@
 //! `oag-mod.toml`: who a mod is, and under what licence it travels.
 
-use oag_tables::pickup_look::{Colour, Icon, PickupLook};
+use oag_tables::pickup_look::{Colour, Icon, OddsRow, PickupLook};
 use serde::Deserialize;
 
 /// The manifest's name at a mod's root.
@@ -53,7 +53,7 @@ impl License {
 }
 
 /// A checked manifest.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Manifest {
     /// Unique and stable: `topaxi.example`.
     pub id: String,
@@ -79,16 +79,31 @@ pub struct Manifest {
     pub oag: Option<semver::VersionReq>,
     /// `[extension]`: the WebAssembly modules the mod runs, if any.
     pub extension: Option<Extension>,
-    /// `[icons]`: the mod's own PNGs by name, as paths in the mod. A module's `hud-icon`
+    /// `[icons]`: the mod's own PNGs or SVGs by name, as paths in the mod. A module's `hud-icon`
     /// may name one.
     pub icons: std::collections::BTreeMap<String, String>,
     /// `[effects]`: the mod's own particle effects by name, as `.toml` paths in the mod
     /// (`schemas/v1/effect.tosd`). A module's `fire-mod-effect` names one by its index in
     /// this map's name order.
     pub effects: std::collections::BTreeMap<String, String>,
+    /// `[shaders]`: the mod's own fragment shaders by name, as `.wgsl` or `.wesl` paths in
+    /// the mod (`docs/architecture/wasm-extensions/mod-shaders.md`). A module's draws and an
+    /// effect's `shader` key name one, the module by its index in this map's name order.
+    pub shaders: std::collections::BTreeMap<String, String>,
+    /// `[sounds]`: the mod's own sounds by name, as `.wav` paths in the mod
+    /// (`docs/formats/mod-sound.md`). A module's `play-mod-sound` names one by its index
+    /// in this map's name order.
+    pub sounds: std::collections::BTreeMap<String, String>,
     /// `[pickup]`: the look of the mod's own pickup, required of a simulation mod that
     /// hands one out.
     pub pickup: Option<PickupLook>,
+    /// `[pickup.titles.<title>]`: the look on one title (its lowercased hyphenated name),
+    /// each over `[pickup]` for what it leaves out: a mod's own art per title.
+    pub pickup_titles: Vec<(String, PickupLook)>,
+    /// `[[pickup.odds]]`: the weights the weapon pads hand the mod's own pickup out with,
+    /// per title and class (`oag_tables::pickup_look::odds_for`). Empty: the pads never
+    /// do, and only a module's `give-pickup` or `pickup-roll` hands it out.
+    pub pickup_odds: Vec<OddsRow>,
     /// `[channels]`: the event channels the mod's modules publish and listen to.
     pub channels: Channels,
     /// `[texture-pack]`: the mod is a PPSSPP texture pack drawn in place of the disc's
@@ -138,6 +153,10 @@ pub struct Extension {
     pub memory_pages: u32,
     /// The host-owned state blob's length, bytes.
     pub state_bytes: u32,
+    /// `drives_ai_pickup`: the module decides when an AI craft uses the mod's pickup, so
+    /// the engine never raises `pickup-fire` for one (default `false`: it does, wherever
+    /// the AI would fire a Turbo).
+    pub drives_ai_pickup: bool,
     /// `[extension.rules]`: a rules module, which may act on every craft of a race.
     pub rules: Option<Rules>,
     /// `[extension.track]`: a module that runs only on one track file the mod ships.
@@ -180,6 +199,10 @@ struct File {
     icons: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     effects: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    shaders: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    sounds: std::collections::BTreeMap<String, String>,
     pickup: Option<PickupTable>,
 }
 
@@ -197,6 +220,54 @@ struct TexturePackTable {
 struct PickupTable {
     icon: IconTable,
     colour: ColourTable,
+    #[serde(default)]
+    odds: Vec<OddsTable>,
+    #[serde(default)]
+    titles: std::collections::BTreeMap<String, TitleLookTable>,
+}
+
+/// `[pickup.titles.<title>]`: what differs on one title, over `[pickup]`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TitleLookTable {
+    icon: Option<IconTable>,
+    colour: Option<ColourTable>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OddsTable {
+    title: Option<String>,
+    class: Option<String>,
+    ai: f32,
+    human: f32,
+    front: f32,
+    back: f32,
+}
+
+/// `[[pickup.odds]]` checked: every weight finite and not negative.
+fn odds(rows: Vec<OddsTable>) -> Result<Vec<OddsRow>, Error> {
+    rows.into_iter()
+        .map(|row| {
+            let weights = [row.ai, row.human, row.front, row.back];
+            if weights.iter().any(|w| !w.is_finite() || *w < 0.0) {
+                return Err(bad(
+                    "pickup.odds",
+                    format!("weights {weights:?}: each finite and not below 0"),
+                ));
+            }
+            Ok(OddsRow {
+                title: row.title,
+                class: row.class,
+                odds: oag_tables::weapons::PickupOdds {
+                    ai: row.ai,
+                    human: row.human,
+                    front: row.front,
+                    back: row.back,
+                },
+            })
+        })
+        .collect()
 }
 
 #[derive(Deserialize)]
@@ -235,8 +306,39 @@ fn weapon(key: &'static str, name: &str) -> Result<oag_tables::weapons::Weapon, 
 fn pickup(
     table: PickupTable,
     icons: &std::collections::BTreeMap<String, String>,
+) -> Result<(PickupLook, Vec<(String, PickupLook)>), Error> {
+    let base = look(table.icon, table.colour, icons)?;
+    let mut titles = Vec::new();
+    for (title, over) in table.titles {
+        let icon = match over.icon {
+            Some(icon) => look_icon(icon, icons)?,
+            None => base.icon.clone(),
+        };
+        let colour = match over.colour {
+            Some(colour) => look_colour(colour)?,
+            None => base.colour,
+        };
+        titles.push((title, PickupLook { icon, colour }));
+    }
+    Ok((base, titles))
+}
+
+fn look(
+    icon: IconTable,
+    colour: ColourTable,
+    icons: &std::collections::BTreeMap<String, String>,
 ) -> Result<PickupLook, Error> {
-    let icon = match (table.icon.title, table.icon.module) {
+    Ok(PickupLook {
+        icon: look_icon(icon, icons)?,
+        colour: look_colour(colour)?,
+    })
+}
+
+fn look_icon(
+    icon: IconTable,
+    icons: &std::collections::BTreeMap<String, String>,
+) -> Result<Icon, Error> {
+    Ok(match (icon.title, icon.module) {
         (Some(title), None) => Icon::Title(weapon("pickup.icon", &title)?),
         (None, Some(name)) if icons.contains_key(&name) => Icon::Mod(name),
         (None, Some(name)) => {
@@ -251,8 +353,11 @@ fn pickup(
                 "exactly one of `title = \"<weapon>\"` and `mod = \"<icon>\"`",
             ));
         }
-    };
-    let colour = match (table.colour.title, table.colour.rgba) {
+    })
+}
+
+fn look_colour(colour: ColourTable) -> Result<Colour, Error> {
+    Ok(match (colour.title, colour.rgba) {
         (Some(title), None) => Colour::Title(weapon("pickup.colour", &title)?),
         (None, Some(hex)) => {
             let digits = hex.len() == 8 && hex.bytes().all(|b| b.is_ascii_hexdigit());
@@ -273,8 +378,7 @@ fn pickup(
                 "exactly one of `title = \"<weapon>\"` and `rgba = \"RRGGBBAA\"`",
             ));
         }
-    };
-    Ok(PickupLook { icon, colour })
+    })
 }
 
 #[derive(Deserialize)]
@@ -296,6 +400,8 @@ struct ExtensionTable {
     memory_pages: u32,
     #[serde(default)]
     state_bytes: u32,
+    #[serde(default)]
+    drives_ai_pickup: bool,
     rules: Option<RulesTable>,
     track: Option<TrackTable>,
 }
@@ -348,6 +454,17 @@ fn bad(key: &'static str, problem: impl Into<String>) -> Error {
 }
 
 impl Manifest {
+    /// The look of the mod's own pickup on `title` (a lowercased hyphenated title name):
+    /// its `[pickup.titles.<title>]` row, else `[pickup]`.
+    #[must_use]
+    pub fn pickup_for(&self, title: &str) -> Option<&PickupLook> {
+        self.pickup_titles
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(title))
+            .map(|(_, look)| look)
+            .or(self.pickup.as_ref())
+    }
+
     /// Reads and checks a manifest. `has` says whether the mod holds a path,
     /// for `license-file`.
     ///
@@ -358,10 +475,14 @@ impl Manifest {
         let file: File = toml::from_str(text)?;
         oag_schema::check(file.header.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)?;
         let extension = file.extension.map(|e| extension(e, has)).transpose()?;
-        let pickup = file
-            .pickup
-            .map(|table| pickup(table, &file.icons))
-            .transpose()?;
+        let (pickup, pickup_titles, pickup_odds) = match file.pickup {
+            Some(mut table) => {
+                let rows = odds(std::mem::take(&mut table.odds))?;
+                let (base, titles) = pickup(table, &file.icons)?;
+                (Some(base), titles, rows)
+            }
+            None => (None, Vec::new(), Vec::new()),
+        };
         let t = file.module;
         for (name, path) in &file.icons {
             if name.len() > oag_ext_abi::MAX_HUD_TEXT {
@@ -379,10 +500,11 @@ impl Manifest {
                     format!("{name:?} is not a name: letters, digits, '-', '_'"),
                 ));
             }
-            if !path.to_ascii_lowercase().ends_with(".png") || !has(path) {
+            let lower = path.to_ascii_lowercase();
+            if !(lower.ends_with(".png") || lower.ends_with(".svg")) || !has(path) {
                 return Err(bad(
                     "icons",
-                    format!("{name}: {path:?} is not a .png in the mod"),
+                    format!("{name}: {path:?} is not a .png or .svg in the mod"),
                 ));
             }
         }
@@ -405,6 +527,49 @@ impl Manifest {
             return Err(bad(
                 "effects",
                 format!("{} effects, at most {MAX_EFFECTS}", file.effects.len()),
+            ));
+        }
+
+        for (name, path) in &file.shaders {
+            if !valid_key(name) {
+                return Err(bad(
+                    "shaders",
+                    format!("{name:?} is not a name: letters, digits, '-', '_'"),
+                ));
+            }
+            let lower = path.to_ascii_lowercase();
+            if !(lower.ends_with(".wgsl") || lower.ends_with(".wesl")) || !has(path) {
+                return Err(bad(
+                    "shaders",
+                    format!("{name}: {path:?} is not a .wgsl or .wesl in the mod"),
+                ));
+            }
+        }
+        if file.shaders.len() > MAX_SHADERS {
+            return Err(bad(
+                "shaders",
+                format!("{} shaders, at most {MAX_SHADERS}", file.shaders.len()),
+            ));
+        }
+
+        for (name, path) in &file.sounds {
+            if !valid_key(name) {
+                return Err(bad(
+                    "sounds",
+                    format!("{name:?} is not a name: letters, digits, '-', '_'"),
+                ));
+            }
+            if !path.to_ascii_lowercase().ends_with(".wav") || !has(path) {
+                return Err(bad(
+                    "sounds",
+                    format!("{name}: {path:?} is not a .wav in the mod"),
+                ));
+            }
+        }
+        if file.sounds.len() > MAX_SOUNDS {
+            return Err(bad(
+                "sounds",
+                format!("{} sounds, at most {MAX_SOUNDS}", file.sounds.len()),
             ));
         }
 
@@ -485,7 +650,11 @@ impl Manifest {
             extension,
             icons: file.icons,
             effects: file.effects,
+            shaders: file.shaders,
+            sounds: file.sounds,
             pickup,
+            pickup_titles,
+            pickup_odds,
             channels,
             texture_pack,
             default_enabled,
@@ -658,6 +827,7 @@ fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension,
         api: e.api,
         memory_pages: e.memory_pages,
         state_bytes: e.state_bytes,
+        drives_ai_pickup: e.drives_ai_pickup,
         rules,
         track,
     })
@@ -665,6 +835,11 @@ fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension,
 
 /// What `fire-mod-effect`'s index (15 bits of an argument) can name, kept well inside it.
 const MAX_EFFECTS: usize = 256;
+/// Every place `oag_ext_abi::MAX_SHADER_INDEX` can name.
+const MAX_SHADERS: usize = oag_ext_abi::MAX_SHADER_INDEX as usize + 1;
+
+/// What `play-mod-sound`'s index can name.
+const MAX_SOUNDS: usize = 64;
 
 /// A string key or icon name: letters, digits, '-', '_'.
 fn valid_key(key: &str) -> bool {

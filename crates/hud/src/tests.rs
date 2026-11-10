@@ -818,7 +818,7 @@ fn every_pulse_weapon_draws_its_recovered_translucent_backdrop_word() {
     };
     for weapon in Weapon::ALL
         .into_iter()
-        .filter(|w| oag_pulse::hud::PICKUP_COLOURS[*w as usize].is_some())
+        .filter(|w| oag_pulse::hud::PICKUP_COLOURS[w.index()].is_some())
     {
         let drawn = pickup_sprites(
             &layout,

@@ -67,6 +67,8 @@ pub struct Banks {
     /// HD's authored group volumes, read with the engine tables and gated the
     /// same way. See [`crate::hd_mix`].
     pub(super) mix: Option<Arc<crate::hd_mix::Maps>>,
+    /// The sounds the race's mods ship, loaded by the race (`oag_raceplay::extension_sounds`).
+    pub mod_sounds: super::ModSounds,
     /// The start a title's own events play, decoded beside the named pair and
     /// held until [`Banks::use_event_start`].
     pub(super) event_start: Option<Box<StagedStart>>,

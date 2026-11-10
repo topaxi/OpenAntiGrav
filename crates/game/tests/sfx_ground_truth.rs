@@ -560,6 +560,37 @@ fn the_decoded_cues_are_audio_and_not_silence() {
             cue.name()
         );
     }
+    slipstream_is_no_louder_than_the_turbo_cue(&banks);
+}
+
+/// The official mod Slipstream's three sounds, through the same mixer, peak below the
+/// quietest of the Turbo cue's alternates and not clipping: a mod's placeholder must not
+/// be the loudest thing in a race. Skipped without the official-mods submodule.
+fn slipstream_is_no_louder_than_the_turbo_cue(banks: &Banks) {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/mods/official/slipstream");
+    if !root.join("oag-mod.toml").is_file() {
+        eprintln!("slipstream: the official-mods submodule is not checked out; skipped");
+        return;
+    }
+    let module = oag_mod::Mod::open(&root).expect("the mod opens");
+    let mut rng = oag_core::Rng::new(3);
+    let turbo = (0..16)
+        .map(|_| render(banks.pick(Cue::Turbo, &mut rng).expect("turbo").0).0)
+        .fold(f32::MAX, f32::min);
+    for (name, path) in &module.manifest.sounds {
+        let bytes = module.read(path).unwrap().expect("in the mod");
+        let sound = std::sync::Arc::new(oag_audio::wav::decode(&bytes).expect("decodes"));
+        let (peak, rms) = render(sound);
+        println!(
+            "slipstream {name:<12} peak {peak:.3}  rms {rms:.4}  (Turbo's quietest peak {turbo:.3})"
+        );
+        assert!(peak > 0.01, "{name} rendered silence");
+        assert!(
+            peak < turbo,
+            "{name} peaks at {peak:.3}, over the Turbo cue's {turbo:.3}"
+        );
+        assert!(peak < 1.0, "{name} clips");
+    }
 }
 
 #[test]
@@ -1000,4 +1031,170 @@ fn a_loaded_race_reports_what_its_banks_did() {
         !loaded.setup.sounds.is_empty(),
         "a real disc loaded no cues"
     );
+}
+
+/// Slipstream (`assets/mods/official/slipstream`) heard through the whole pipeline: the
+/// real mod loaded with a real Pulse race (its three sounds in the race's banks and named
+/// in the loader report), the player's press, the composition root's `race_tick` into a
+/// real `Audio` on the null backend. The entry opens voices (the whoosh and the transit
+/// hum), the exit ends the hum, and nothing clips or limits.
+#[cfg(feature = "extensions")]
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and the official mods"]
+fn slipstream_is_heard_when_a_craft_goes_through_the_portal() {
+    let Some(path) = image("pulse-psp-eu.chd") else {
+        return;
+    };
+    let Some((_, with)) = slipstream_pass(&path, true) else {
+        return;
+    };
+    let (_, without) = slipstream_pass(&path, false).expect("the same race without the fire");
+    // Not a like-for-like bound: the fired run has the craft out of the world for a
+    // second (its engine silent), so the two trajectories differ. Printed for the record;
+    // the loudness evidence is the peak comparison against the Turbo cue and no clipping.
+    println!(
+        "limiter frames: {} with the portal, {} without",
+        with.1, without.1
+    );
+    assert_eq!(with.0, 0, "nothing clips");
+}
+
+/// One drive of `16_Track` with Slipstream on: the same ticks whether or not the player
+/// fires. Returns the loops running during the transit and `(clipped, limited)` frames.
+#[cfg(feature = "extensions")]
+fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
+    use oag_gameplay::input::Button;
+    use oag_tables::weapons::Weapon;
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/mods/official/slipstream");
+    if !root.join("oag-mod.toml").is_file() {
+        eprintln!("slipstream: the official-mods submodule is not checked out; skipped");
+        return None;
+    }
+    let module = oag_mod::Mod::open(&root).expect("the mod opens");
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        track: Some("Data\\Environments\\16_Track\\track.vex".to_string()),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        no_driver_for_class: true,
+        extensions: oag_game::mod_extensions::sources([&module]),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let report = loaded.report.join("\n");
+    for name in ["portal-exit", "portal-open", "transit"] {
+        assert!(
+            report.contains(&format!("sound {name}: ")) && report.contains("loaded"),
+            "{name} is in the loader report:\n{report}"
+        );
+    }
+    let mut race = race::Race::start(loaded.setup);
+    assert!(
+        !race.sounds().mod_sounds.is_empty(),
+        "the mod's sounds reached the race's banks"
+    );
+    race.set_autopilot(true);
+
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
+        // `OAG_SLIPSTREAM_DUMP=<file.wav>` keeps the fired run for listening to.
+        Some(
+            std::env::var_os("OAG_SLIPSTREAM_DUMP")
+                .filter(|_| fire)
+                .map_or_else(|| std::path::PathBuf::from("/dev/null"), Into::into),
+        ),
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+    let held = |buttons: &[Button], pressed: &[Button]| {
+        let mut input = oag_gameplay::input::Input::new();
+        let held = buttons.iter().fold(0, |bits, b| bits | b.bit());
+        let pressed_bits = pressed.iter().fold(0, |bits, b| bits | b.bit());
+        input.begin_frame(held & !pressed_bits);
+        input.begin_frame(held);
+        PlayerInputs::single(oag_gameplay::InputSnapshot {
+            buttons: input,
+            ..oag_gameplay::InputSnapshot::new()
+        })
+    };
+    let voices =
+        |audio: &oag_sound::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
+    fn step(audio: &mut oag_sound::Audio, race: &mut race::Race, inputs: &PlayerInputs) {
+        race.tick(inputs);
+        oag_game::sound::race_tick(audio, race);
+        audio.tick();
+    }
+
+    let throttle = held(&[Button::Cross], &[]);
+    for _ in 0..3000 {
+        if race.sim.world.ships[0].standing.lap_start_tick.is_some() {
+            break;
+        }
+        step(&mut audio, &mut race, &throttle);
+    }
+    for _ in 0..400 {
+        step(&mut audio, &mut race, &throttle);
+    }
+    if fire {
+        race.sim.world.ships[0].pickup.weapon =
+            Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
+    }
+    for _ in 0..4 {
+        step(&mut audio, &mut race, &throttle);
+    }
+    let before = voices(&audio);
+    let before_loops = audio.mod_sound_loops();
+    step(
+        &mut audio,
+        &mut race,
+        &held(&[Button::Cross, Button::Square], &[Button::Square]),
+    );
+    for _ in 0..3 {
+        step(&mut audio, &mut race, &throttle);
+    }
+    // The craft flies to the portal first and goes through at the entrance.
+    for _ in 0..40 {
+        if !fire || race.sim.world.ships[0].transit.is_some() {
+            break;
+        }
+        step(&mut audio, &mut race, &throttle);
+    }
+    if !fire {
+        for _ in 0..70 {
+            step(&mut audio, &mut race, &throttle);
+        }
+        return Some((0, stats(&audio)));
+    }
+    assert!(
+        race.sim.world.ships[0].transit.is_some(),
+        "the fire went through"
+    );
+    let during = voices(&audio);
+    println!(
+        "voices: {before} before the fire, {during} during the transit; mod loops {}",
+        audio.mod_sound_loops()
+    );
+    assert_eq!(audio.mod_sound_loops(), 1, "the transit hum is running");
+    assert_eq!(before_loops, 0, "none before the fire");
+    for _ in 0..70 {
+        step(&mut audio, &mut race, &throttle);
+    }
+    assert!(
+        race.sim.world.ships[0].transit.is_none(),
+        "back in the world"
+    );
+    assert_eq!(audio.mod_sound_loops(), 0, "the hum ended with the transit");
+    println!("voices: {} after the exit", voices(&audio));
+    let result = Some((1, stats(&audio)));
+    let _ = audio.finish();
+    result
+}
+
+#[cfg(feature = "extensions")]
+fn stats(audio: &oag_sound::Audio) -> (u64, u64) {
+    audio
+        .output()
+        .with_mixer(|mixer| (mixer.clipped(), mixer.limited()))
 }

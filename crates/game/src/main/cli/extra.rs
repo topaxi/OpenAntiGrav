@@ -733,7 +733,10 @@ impl NetArgs {
             platform: opened.archives.layout.platform.to_string(),
             content: oag_game::mods::Mods::load_for_profile()
                 .ok()
-                .map_or(0, |mods| mods.content_fingerprint()),
+                .map_or(0, |mods| {
+                    let picks = oag_game::settings::load().unwrap_or_default().mod_settings;
+                    mods.content_fingerprint(&picks)
+                }),
             build: oag_net::BUILD_VERSION.to_string(),
         };
         let action = if self.online_create {

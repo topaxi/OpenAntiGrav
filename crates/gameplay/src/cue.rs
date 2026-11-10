@@ -746,6 +746,44 @@ impl Cue {
     ];
 }
 
+/// What a mod's `play-mod-sound` asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModSoundMode {
+    /// Once, from the craft.
+    Once,
+    /// A loop that follows the craft until a [`Self::Stop`].
+    Loop,
+    /// Ends the loop of the same sound and slot.
+    Stop,
+}
+
+/// One of a mod's own sounds asked for, and the craft it comes from: a per-tick output
+/// beside [`CueEvent`], never `World` state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModSoundEvent {
+    /// The mod that asked.
+    pub mod_id: String,
+    /// The sound's place in the mod's `[sounds]`, in name order.
+    pub index: u16,
+    /// The grid slot whose emitter plays it.
+    pub slot: u8,
+    /// Once, start a loop or stop one.
+    pub mode: ModSoundMode,
+}
+
+/// A loop of a mod's own sound that is wanted now: a `play-mod-sound` `Loop` no `Stop` has
+/// ended. What plays is brought to this set, so an event that was never heard (a tick re-run
+/// silently, a seek) leaves no loop running and none missing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModSoundLoop {
+    /// The mod that asked.
+    pub mod_id: String,
+    /// The sound's place in the mod's `[sounds]`, in name order.
+    pub index: u16,
+    /// The grid slot whose emitter plays it.
+    pub slot: u8,
+}
+
 /// A cue and the craft that raised it.
 ///
 /// The slot is the original's own: `Sound_Play` takes an emitter first and

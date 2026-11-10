@@ -149,12 +149,10 @@ impl Race {
     /// The craft the chase camera follows, at the pose it is drawn at: the simulation's plus
     /// the correction glide ([`crate::correction`]), so the hull and the camera that frames it
     /// move together. The camera follows this machine's seat ([`Self::player_slot`]), not
-    /// slot 0.
+    /// slot 0. A craft in a transit is followed onto its seat and on from there
+    /// ([`crate::transit_camera`]).
     pub(super) fn camera_target(&self) -> Target {
-        let slot = self.player_slot();
-        let mut target = target_of(&self.sim.world.ships[slot]);
-        target.position = self.drawn_position(slot);
-        target
+        self.followed(self.player_slot())
     }
 
     /// Where the camera is and what it is aimed at, as a view matrix.
@@ -817,8 +815,14 @@ impl Race {
         }
         .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
         let authored = setting.apply(widened_deg.to_radians());
+        // At the draw alpha with the speed terms, so a module's ramp does not step at the tick.
+        let offset = self
+            .camera_scalar_between(self.extension_fov_offset(self.player_slot()), |previous| {
+                previous.fov_offset
+            });
         finish_vertical_fov(
             authored,
+            offset,
             boost_kick,
             self.view.boost_fov_kick.gain(),
             aspect,
@@ -834,7 +838,20 @@ impl Race {
 /// input untouched rather than through `atan(tan(x))`, for the reason `Fov::apply` gives:
 /// every capture taken before this effect existed has to stay bit-identical.
 #[cfg(feature = "view")]
-pub(super) fn finish_vertical_fov(authored: f32, kick: f32, gain: f32, aspect: f32) -> f32 {
+pub(super) fn finish_vertical_fov(
+    authored: f32,
+    offset_deg: f32,
+    kick: f32,
+    gain: f32,
+    aspect: f32,
+) -> f32 {
+    // A module's `fov-offset`: zero skips the arithmetic, so a race with none is bit-identical.
+    let authored = if offset_deg == 0.0 {
+        authored
+    } else {
+        (authored + offset_deg.to_radians())
+            .clamp(FOV_GUARD_DEG.0.to_radians(), FOV_GUARD_DEG.1.to_radians())
+    };
     let kicked = if kick == 0.0 {
         authored
     } else {

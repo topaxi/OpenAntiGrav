@@ -19,6 +19,7 @@ pub struct EffectHandles {
     slots: [Option<Arc<Effect>>; Trigger::COUNT],
     quake_look: oag_title::QuakeLook,
     own: crate::extension_effects::ModEffects,
+    shaders: crate::extension_shaders::ModShaders,
 }
 
 impl Default for EffectHandles {
@@ -27,6 +28,7 @@ impl Default for EffectHandles {
             slots: std::array::from_fn(|_| None),
             quake_look: oag_title::QuakeLook::track(oag_title::Origin::Measured),
             own: crate::extension_effects::ModEffects::default(),
+            shaders: crate::extension_shaders::ModShaders::default(),
         }
     }
 }
@@ -55,6 +57,19 @@ impl EffectHandles {
     pub fn with_own(mut self, own: crate::extension_effects::ModEffects) -> Self {
         self.own = own;
         self
+    }
+
+    /// Adds the shaders the race's mods ship.
+    #[must_use]
+    pub fn with_shaders(mut self, shaders: crate::extension_shaders::ModShaders) -> Self {
+        self.shaders = shaders;
+        self
+    }
+
+    /// The race's mod shaders.
+    #[must_use]
+    pub fn shaders(&self) -> &crate::extension_shaders::ModShaders {
+        &self.shaders
     }
 
     /// Plays `effect` on `trigger` where the title's own table names none (a lent burst, the

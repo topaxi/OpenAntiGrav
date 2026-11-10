@@ -9,7 +9,7 @@
 
 /// What a module's `fire-effect` asked for: a title's trigger, or the sending mod's own
 /// effect by its place in the mod's `[effects]`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Fired {
     /// The title's own effect for a trigger.
     Title(oag_title::effects::Trigger),
@@ -19,6 +19,18 @@ pub enum Fired {
         mod_id: String,
         /// Its place in the mod's `[effects]`, in name order.
         index: u16,
+    },
+    /// The sending mod's own effect, played at a point of the road ahead of a craft
+    /// (`fire-mod-effect-ahead`) rather than at its nozzle.
+    OwnAt {
+        /// The sending mod.
+        mod_id: String,
+        /// Its place in the mod's `[effects]`, in name order.
+        index: u16,
+        /// Where, in the world.
+        at: oag_core::math::Vec3,
+        /// The road's up there.
+        up: oag_core::math::Vec3,
     },
 }
 
@@ -108,13 +120,22 @@ mod view {
         sources: &[Source],
         title: &str,
         foreign_track: Option<&std::path::Path>,
+        shaders: &crate::extension_shaders::ModShaders,
         library: &mut Library,
         host: &mut dyn FnMut(&str, &str) -> Result<Sprite, String>,
         report: &mut Vec<String>,
     ) -> ModEffects {
         #[cfg(not(feature = "extensions"))]
         {
-            let _ = (sources, title, foreign_track, library, host, report);
+            let _ = (
+                sources,
+                title,
+                foreign_track,
+                shaders,
+                library,
+                host,
+                report,
+            );
             ModEffects::default()
         }
         #[cfg(feature = "extensions")]
@@ -128,7 +149,14 @@ mod view {
                 let mut loaded = Vec::new();
                 for (name, path) in &source.effects {
                     let label = format!("mod {}: effect {name}", source.mod_id);
-                    match read(source, path, library, host, &key(&source.mod_id, name)) {
+                    match read(
+                        source,
+                        path,
+                        shaders,
+                        library,
+                        host,
+                        &key(&source.mod_id, name),
+                    ) {
                         Ok(own) => {
                             report.push(format!("{label}: {path} loaded"));
                             report.extend(crate::assets::sheet_note(
@@ -155,6 +183,7 @@ mod view {
     fn read(
         source: &Source,
         path: &str,
+        shaders: &crate::extension_shaders::ModShaders,
         library: &mut Library,
         host: &mut dyn FnMut(&str, &str) -> Result<Sprite, String>,
         key: &str,
@@ -175,7 +204,9 @@ mod view {
                 parametric::TextureRef::Host { entry, name } => host(entry, name),
             }
         };
-        let parsed = parametric::parse(&text, &mut texture).map_err(|e| format!("{path}: {e}"))?;
+        let mut shader = |name: &str| shaders.place_by_name(source, name);
+        let parsed = parametric::parse(&text, &mut texture, &mut shader)
+            .map_err(|e| format!("{path}: {e}"))?;
         library.insert(key, parsed.effect);
         let effect = library
             .get(key)
@@ -194,7 +225,7 @@ mod view {
         pub(crate) fn play_fired(&mut self, slot: usize, fired: &Fired) {
             let (effect, axis) = match fired {
                 Fired::Title(trigger) => (self.view.handles.get(*trigger).cloned(), Axis::Up),
-                Fired::Own { mod_id, index } => {
+                Fired::Own { mod_id, index } | Fired::OwnAt { mod_id, index, .. } => {
                     let own = self.view.handles.own(mod_id, *index);
                     (
                         own.map(|own| own.effect.clone()),
@@ -205,6 +236,12 @@ mod view {
             let Some(effect) = effect else {
                 return;
             };
+            if let Fired::OwnAt { at, up, .. } = fired {
+                if let Some(playing) = self.view.stage.play_held(&effect, *at, 1.0) {
+                    self.view.stage.orient_surface(playing, *up);
+                }
+                return;
+            }
             let ship = &self.sim.world.ships[slot];
             // The nozzle is the hull's back end along the body's heading; a mod's rear
             // effect points its cone axis away from the nose.

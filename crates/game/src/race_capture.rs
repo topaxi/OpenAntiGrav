@@ -413,7 +413,7 @@ pub fn capture(
         shadows,
         shadow_hulls,
         setup,
-        hud,
+        mut hud,
         track_panel,
         track_model,
         behind_glass,
@@ -671,6 +671,7 @@ pub fn capture(
     );
     scene.attach_bloom_order(race.scenery_fx().bloom_under_hud());
     scene.attach_lens_flare(&device, &queue, format, race.scenery_fx().lens_flare());
+    scene.attach_mod_shaders(&device, &queue, race.mod_shaders());
     scene.prepare_ghost(
         &device,
         &queue,
@@ -1274,13 +1275,12 @@ pub fn capture(
                 None,
             );
         }
-        // Where the HUD goes: the presentation target at the aspect rectangle when
-        // presented, else the native-size capture texture the scene drew into, so an
-        // ordinary `--screenshot` is byte-for-byte what it was.
+        // The HUD goes on the presentation target's aspect rectangle, else on the scene's texture.
         let (hud_view, hud_viewport) = match framebuffer.as_ref() {
             Some(framebuffer) => (framebuffer.output().clone(), rect),
             None => (view.clone(), viewport),
         };
+        crate::render::rasterise_hud_icons(&mut hud, hud_viewport, options.hud_safe_area);
         // Pure's glow lands before the panel and the HUD, so neither takes its haze
         // (`Looks::bloom_under_hud`); a no-op elsewhere.
         scene.composite_bloom_under_hud(&mut encoder, &hud_view, hud_viewport);

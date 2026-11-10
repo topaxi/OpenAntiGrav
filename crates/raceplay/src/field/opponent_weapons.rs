@@ -319,8 +319,16 @@ impl Race {
         // A simulation mod's own pickup: the driver asks to fire it wherever it would
         // fire a Turbo (the Turbo's own gate below, on the Turbo's boost time), every tick
         // that gate passes, and never absorbs it. What a fire does is the mod's.
-        let extension = weapon == oag_tables::weapons::Weapon::Extension;
-        let looked_up = if extension {
+        let extension = match weapon {
+            oag_tables::weapons::Weapon::Extension(kind) => Some(kind),
+            _ => None,
+        };
+        // A module that drives its own AI decision is raised nothing: it reads the
+        // observation (progress, place, course) and clears the pickup itself.
+        if extension.is_some_and(|kind| self.sim.extensions.guest_drives_ai_pickup(kind)) {
+            return;
+        }
+        let looked_up = if extension.is_some() {
             oag_tables::weapons::Weapon::Turbo
         } else {
             weapon
@@ -338,7 +346,7 @@ impl Race {
         };
         // **The original's absorb half** (`WeaponAi_DecideFireOrAbsorb`): only
         // a forward weapon under `FireLaw::Original` is ever answered with it.
-        if decision == oag_ai::weapon_ai::Decision::Absorb && !extension {
+        if decision == oag_ai::weapon_ai::Decision::Absorb && extension.is_none() {
             // A score Eliminator's absorb spends the weapon on the Shield, as the player's does
             // (`crate::score_pace`).
             if self.sim.score_pace.is_some() {
@@ -420,8 +428,8 @@ impl Race {
             if !ship.driver.affords_boost(&context, boosted, ticks) {
                 return;
             }
-            if extension {
-                self.sim.extensions.pickup_used(slot, false);
+            if let Some(kind) = extension {
+                self.sim.extensions.pickup_used(slot, kind, false);
                 return;
             }
             self.sim.world.ships[slot].physics.turbo_timer = simple.time;

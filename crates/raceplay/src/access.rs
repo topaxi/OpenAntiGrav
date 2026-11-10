@@ -288,7 +288,7 @@ impl Race {
             .as_ref()
             .map_or(0, intro_camera::IntroCamera::cuts);
         let photo = self.view.photo.as_ref().map_or(0, photo::Photo::cuts);
-        self.sim.respawns[0]
+        self.placements_of(0)
             .wrapping_add(self.view.destroy_camera.cuts)
             .wrapping_add(spectator)
             .wrapping_add(intro)
@@ -311,6 +311,15 @@ impl Race {
     #[must_use]
     pub fn respawns_of(&self, slot: usize) -> u32 {
         self.sim.respawns.get(slot).copied().unwrap_or(0)
+    }
+
+    /// How many times `slot`'s craft has been put somewhere else on the circuit: its
+    /// respawns and its moves along it (`crate::transit`). What a camera or the
+    /// between-ticks blend cuts on rather than sweeping across the gap.
+    #[must_use]
+    pub fn placements_of(&self, slot: usize) -> u32 {
+        let jumps = self.sim.jumps.get(slot).copied().unwrap_or(0);
+        self.respawns_of(slot).wrapping_add(jumps)
     }
 
     /// The speed a reset would launch `slot` at now: its speed latched on its

@@ -539,7 +539,12 @@ impl Session {
             let vanilla = (self.campaign_cell.is_some() && self.campaign_custom.is_none())
                 || self.pending_event.is_some()
                 || self.net.is_some();
-            oag_game::mod_extensions::attach(&mut options, &self.settings.mods, vanilla);
+            oag_game::mod_extensions::attach(
+                &mut options,
+                &self.settings.mods,
+                &self.settings.mod_settings,
+                vanilla,
+            );
         }
         oag_game::texture_pack::attach(&mut options, &self.settings.mods);
         self.seat_the_windows(&mut options);

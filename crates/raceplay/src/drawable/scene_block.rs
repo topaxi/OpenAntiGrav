@@ -82,8 +82,9 @@ pub(crate) struct SceneBlocks {
 }
 
 impl SceneBlocks {
-    /// A view per craft slot, because a view is named by the craft it follows.
-    pub(crate) const VIEWS: usize = GRID_SLOTS as usize;
+    /// A view per craft slot, because a view is named by the craft it follows, and the
+    /// secondary view ([`Self::portal`]).
+    pub(crate) const VIEWS: usize = GRID_SLOTS as usize + 1;
 
     /// Every block holding [`mesh_render::Scene::off`], so a drawable drawn before its kind is
     /// first written reads what its own buffer held.
@@ -114,7 +115,16 @@ impl SceneBlocks {
 
     /// The first blocks of the view following craft `slot`.
     pub(crate) fn view(slot: usize) -> ViewBlock {
-        let view = slot.min(Self::VIEWS - 1) as u64;
+        Self::at(slot.min(GRID_SLOTS as usize - 1))
+    }
+
+    /// The blocks of the secondary view: no craft's.
+    pub(crate) fn portal() -> ViewBlock {
+        Self::at(Self::VIEWS - 1)
+    }
+
+    fn at(view: usize) -> ViewBlock {
+        let view = view as u64;
         ViewBlock {
             scene: (view * SceneKind::COUNT as u64 * mesh_render::SCENE_STRIDE) as u32,
             uniforms: (view * UniformBlocks::SLOTS as u64 * mesh_render::UNIFORMS_STRIDE) as u32,

@@ -1,4 +1,5 @@
 
+
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
 use log::{info, warn};
@@ -554,7 +555,7 @@ fn run(cli: Cli) -> Result<()> {
         #[cfg(feature = "extensions")]
         {
             let vanilla = net.is_some() || cli.wreck.campaign_cell.is_some() || cli.event.is_some();
-            oag_game::mod_extensions::attach(&mut options, &settings.mods, vanilla);
+            oag_game::mod_extensions::attach(&mut options, &settings.mods, &settings.mod_settings, vanilla);
         }
         oag_game::texture_pack::attach(&mut options, &settings.mods);
         let options = match &net {

@@ -215,6 +215,13 @@ returns `Err(Refused)` where the host would fault:
 | `scale-pad{slot, factor}` | `ScaleSlotPads` | `scale_slot_pads(&craft, factor)` | a factor outside `[0, 2]` or not finite; a second for the craft this tick |
 | `play-cue{slot, cue}` | `PlayCue` | `play_cue(&craft, cue)` | |
 | `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)` | a 17th `fire-effect` or `fire-mod-effect` in one tick (`Refused::Effects`; the host faults the module) |
+| `screen-fill{slot, rgba, shader?}` (30) | `ScreenFill` | `screen_fill(&craft, rgba)`, `screen_fill_shaded(&craft, rgba, shader)` | a shader past `MAX_SHADER_INDEX` |
+| `fov-offset{slot, degrees}` (31) | `FovOffset` | `fov_offset(&craft, degrees)` | `degrees` outside `[-30, 30]` or not finite |
+| `fire-mod-effect-ahead{slot, index, distance}` (32) | `FireModEffectAhead` | `fire_mod_effect_ahead(&craft, index, distance)` | a distance the host would not accept; counts toward the 16 effects a tick |
+| `draw-beam{slot, to, rgba, half_width, shader?}` (34) | `DrawBeam` | `draw_beam(&craft, to, rgba, half_width, shader)` | a beam to its own slot, a width outside `(0, 32]`, past 16 a tick |
+| `set-shader-param{slot, shader, index, value}` (35) | `SetShaderParam` | `set_shader_param(&craft, shader, index, value)` | an `index` from 4 up, a value that is not finite |
+| `portal-view{slot, entrance, exit, radius, update, generation}` (36) | `PortalView` | `portal_view(&craft, (entrance, exit), radius, update, generation)` | a progress not a number or below zero (`portal_view_to_trigger` names the exit by a trigger index instead), a `radius` of 0, an unknown `update` |
+| `play-mod-sound{slot, index, mode}` (33) | `PlayModSound` | `play_mod_sound(&craft, index, mode)` | |
 | `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | the `Pickup` element (`Refused::PickupTint`; use `pickup_look`); the host decodes one as malformed |
 | `pickup-look{slot, icon, colour}` (22) | `PickupLook` | `pickup_look(&craft, icon, colour)` | |
 | `hud-shake{slot, element, amplitude}` | `HudShake` | `hud_shake(&craft, element, amplitude)` | `amplitude` outside `[0, 16]` or not finite |
@@ -327,7 +334,8 @@ the backstop for a guest written without the SDK.
 - **`pickup-fire{slot}` / `pickup-absorbed{slot}`**: raised in `Race::spend_pickup`
   (`crates/raceplay/src/weapons.rs`, a person's fire or absorb press) and
   `Race::spend_opponent_pickup` (`crates/raceplay/src/field/opponent_weapons.rs`, the
-  driver's fire wherever the Turbo's gate passes; it never absorbs) for a slot holding
+  driver's fire wherever the Turbo's gate passes; it never absorbs, and raises nothing
+  when the mod's `[extension] drives_ai_pickup` is set) for a slot holding
   the mod's own pickup (`Weapon::Extension`). Delivered at the same tick's call (phase
   2 is before C).
 - **`speed-pad{slot, pad}`** / **`weapon-pad{slot, pad}`**: raised at the entry edge
@@ -345,12 +353,14 @@ the backstop for a guest written without the SDK.
 - **`shield-delta`** lands at C: a loss through `oag_physics::damage::apply_weapon`, a
   gain through `damage::add`.
 - **`give-pickup` / `clear-pickup`** write the slot's pickup at C. **`pickup-roll`**
-  is host state (`RaceSim::extensions`: the rule, its count and the owning module),
+  is host state (`RaceSim::extensions`: each module's rule and its count),
   hashed, and is read at the weapon pad's grant in `Race::test_weapon_pads`
   (`crates/raceplay/src/pads.rs`).
 - **`scale-thrust` above 1.0** lands in `Environment::extension_thrust`, taken by the
   step (`player_step.rs`, `field.rs`).
-- **`play-cue`** pushes onto `RaceSim::cues`. **`fire-effect`** queues for
+- **`play-mod-sound`** pushes a `ModSoundEvent` onto `RaceSim::mod_sounds`, drained by the
+  host beside the cues; a loop's stop is queued when its module faults
+  (`docs/formats/mod-sound.md`). **`play-cue`** pushes onto `RaceSim::cues`. **`fire-effect`** queues for
   `Race::draw_extension_effects` (`tick.rs`'s drawn-tick block, beside the hit sparks).
   The five **`hud-*`** commands are collected per tick in `Extensions` and become one
   `oag_hud::ext_draws::Outputs` per slot in `Race::readout_for`
@@ -437,6 +447,24 @@ lands there, for person slots, before the step, carrying what
 `pilot_assist_input` computes today. The README's command list must carry it, or
 the phase 2 proof has no sink.
 
+### Built for a portal weapon: `transit`, `scale-speed`, `probe-clearance` (2026-11-03)
+
+The engine pieces a portal-teleport pickup needs (a mod's, `oag.slipstream`; the engine
+names no mod). All three are per slot, from a rules or a track module.
+
+| What | Where | Notes |
+| --- | --- | --- |
+| The primitive: a forward move to a course point under a lap | `Race::move_to`, `crates/raceplay/src/transit.rs` | Pose by the reset's placement without its drop (`breadcrumbs::emerge`: the width midpoint at the hover height, facing down the track) at the ring point or the fork route's point for it; cursors reset through `Race::reseat` (`respawn.rs`), shared with `put_back`, then an exit on a route seats the driver on that route's line (`Race::seat_on_route`). No respawn counted, nothing charged. View-side, the craft's chase camera is seated behind it on that tick (`RaceView::camera_jumps`); through the transit before it the camera flies on along the exit's framing carried back, a `portal-view` of that slot is seen from that seat, and under a backdrop fill the craft is drawn for its own view (`transit_camera`; `mod-shaders.md`, "A craft's own transit") |
+| A crossing of the line in the move | `Standing::jumped`, `crates/race/src/standing.rs:278`; `RaceState::jumped`, `crates/race/src/state.rs:511` | The standing credits it at once (lap, spawn crossing, deficit, finish), unless the lap's half-way gate is still shut (`Standing::gate`), when it is no lap and no finish as for a driven crossing, and a move that lands past half-way has driven both halves of the lap it lands on; the person's clock seeds its previous reading so that tick's `update` reads one forward wrap, and its `Outcome` flows as for a driven crossing |
+| Resolving a distance | `Race::exit_ahead` (`Race::point_ahead` without the route), `transit.rs` | Units, seconds at the current speed, lap share, a place on the lap (`Course::index_at_progress`), or a track trigger's centre located on the course; a trigger nearer a fork route's sample than the ring's names that route (`Exit::route`, kept in `Transit::route`), the others are ring points |
+| `transit{slot, ticks, distance, exit_factor}` lands | `Race::run_motion`, `crates/raceplay/src/extensions.rs:891`, after the call | `Race::begin_transit` (`transit.rs`); a refusal faults the module. The host refuses earlier a craft not racing or already out (`modhost/src/reply.rs`) |
+| Out of the world | `Ship::in_world`, `crates/gameplay/src/world.rs:259` | `Craft::active` (weapons), `resolve_craft_pairs`, `fire_law` targeting, the draw (`Race::ship_active`, model matrices, shadow, exhaust), `step_opponents` skip; `step_player` returns an idle step (`player_step.rs:144`); pickup presses unheard (`tick.rs:165`) |
+| Reset triggers held | `Race::reset_held`, `transit.rs`, read by `Race::armed` (`respawn.rs:116`) and `rescue_player` | Independent of each trigger's gates, so cage and airborne are held too; no dwell banks |
+| Exit | `Race::advance_transits`, `transit.rs`, called at `tick.rs:191` before the call | Moved and stepped the same tick; `transit-end{slot}` is in that very call's events |
+| `scale-speed{slot, factor}` | `apply`, `crates/raceplay/src/extensions/on.rs:902` | Velocity times `factor`, once, at the call; before any `transit` of the same tick, so a transit's exit speed is taken after it |
+| `probe-clearance{slot, distance, radius}` | `Race::clearance`, `transit.rs` | Half disc standing across the track at the width midpoint: width at least `2r`, nine rays centre to rim (`Raycaster::raycast`, Reset volumes skipped). The answer is `clearance{slot, fits, ahead}` at the next call (hashed while pending) |
+| Pad odds for the mod's pickup | `[[pickup.odds]]`, read at `crates/raceplay/src/pads.rs:321` | Every declaring module has its own kind from the start; `oag_weapons::pickup::draw` walks each `Weapon::Extension(kind)` row after the title's weapons, in kind order, so a table without the row draws as ever; an event's weapon set does not reach it; a fault ends it |
+
 ## `race-start`: the grid
 
 `race-start` runs once after the grid is placed: `Race::start`
@@ -446,6 +474,43 @@ or the spline's start sample) and `grid_poses` (`spawn.rs:274`). It sees the gri
 it cannot move it (README: no grid changes). An arena's authored spawn points, and a
 respawn at a point rather than a spline sample (`Race::respawn` places a craft on a
 sample), are engine changes in the track file and `respawn.rs` first.
+
+## Picks: sim and view
+
+A `choice` row of a mod's `menu.toml` declares `scope = "sim"` (the default) or `scope = "view"`
+(`oag_ui::menu` refuses another value, or a `scope` on a row that is not a `choice`;
+`schemas/v1/mod-menu.tosd`). The guest reads either with `Observation::option(n)`, `n` the row's place
+among the mod's own choice rows in file order, so adding a scope renumbers nothing.
+
+| | `sim` row | `view` row |
+| --- | --- | --- |
+| Reaches | the simulation tick | only the call whose outputs are drawn |
+| State hash | yes (`On::hash_into`: row and pick, only a pick off index 0, nothing for a mod with none) | never |
+| LAN and lobby fingerprint | yes (`Mods::content_fingerprint`: `id@version#row=pick`) | never: a Deck on Low and a desktop on High still race together |
+| Replay | in the state hash, so a replay run on another pick desyncs at tick 0 (a MODDED race records no replay yet, README 4.4) | stays per device |
+| Server's or host's guest | the host's or lobby's pick (owner: whoever builds the race; none is carried yet, see below) | the row's default: no device draws there |
+
+How a `view` row cannot steer the race (`crates/raceplay/src/extensions/view_pass.rs`):
+
+- The **simulation call** (every tick, every device) reads a `view` row's **default**, so what it
+  returns is the same on every device.
+- When a device's view picks differ from the defaults (`Picks::differs`) the host makes a **second
+  call** with the real picks, on a copy of the blob the first call started from, and keeps only its
+  **outputs** (`view_pass::is_output`: `fire-effect`, `fire-mod-effect`, `screen-fill`, `fov-offset`,
+  `draw-beam`, `set-shader-param`, `portal-view` and the `hud-*` and `pickup-look` commands). Its blob,
+  its other commands, its fuel and its faults are dropped: a trap in the view call draws nothing and
+  never faults the module. The first call's own outputs are replaced by the view call's.
+- `is_output` is an exhaustive `match`: a new command cannot compile until it is classed. A command is
+  an output if it writes a field cleared every tick that no simulated state, hash or reply reads.
+- Cost: one more wasm call a tick while a view pick is off its default (none on the default).
+- A guest cannot tell which call it is in; a view pick only ever shows in the call whose commands are
+  filtered.
+
+**Online.** No network race runs a guest today (`oag_net::race::load` opens none, a client races
+vanilla, the lobby advertises `NO_MODS`), so no server has a pick to receive. When one does, the owner
+of a `sim` pick is the host (LAN) or the lobby (online): carried in `RaceParams` beside the mode and
+seed, applied by `oag_net::race::options` on every end, so the tick-0 state hash already refuses a
+mismatch; a `view` pick is never sent.
 
 ## Render side: the `hud` world
 

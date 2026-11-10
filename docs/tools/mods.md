@@ -46,7 +46,7 @@ license = "CC-BY-4.0"        # an SPDX expression ("MIT OR Apache-2.0"), or:
 # license-file = "LICENSE"   # a file in the mod (not both)
 description = "What it adds."
 repository = "https://example.org/example"   # optional
-# homepage, keywords = [...], titles = ["wipeout-pulse"], oag = ">=0.1"
+# homepage, keywords = [...], titles = ["wipeout-pulse"], oag = ">=0.1", default-enabled = false (optional)
 ```
 
 A mod **with no licence loads**, and the mods list and the load report print `no license
@@ -281,7 +281,9 @@ out, so two machines that differ in one still match and can race. The filter is
 **Turning a mod off** ([ADR-0078](../architecture/adr/0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md)):
 
 - It is stored by id as `[mods] disabled = ["oag.hillside"]` in the settings file. A mod
-  installed later is on; an id no installed mod has is kept.
+  installed later follows its manifest's `default-enabled` (default `true`; `false` ships it
+  off); an id no installed mod has is kept. A mod that ships off and is turned on is stored
+  as `[mods] enabled = [...]`. `oag_game::mods::switch` writes it, and a switch that equals the default is not stored.
 - An off mod adds nothing: no menu rows, no strings, no campaigns, no pilots, no tracks on a
   CUSTOM title, and it is left out of the LAN content fingerprint (as is any mod that changes no race, below). It stays on the MODS
   page, its ADDS line reading **NOTHING, TURNED OFF**, so it can be turned back on. The gate is
@@ -369,9 +371,13 @@ and may send the same commands as a rules module, including the race-wide `set-w
 `set-sun` and `grade-sky` outputs. Hillside's rain is one.
 
 A mod may ship text and images for its module's HUD: its own `strings/<language>.toml`
-(the same files its menu rows use, English the fallback) and `[icons]` (`name = "path/in/the/mod.png"`). A module's
-`hud_string` and `hud_mod_icon` name them; a PNG that is missing or unreadable draws
-nothing and the load report says so.
+(the same files its menu rows use, English the fallback) and `[icons]` (`name = "path/in/the/mod.png"` or `.svg`). A module's
+`hud_string` and `hud_mod_icon` name them; an icon that is missing or unreadable draws
+nothing and the load report names the file and the error. An SVG is rasterised at load, on the
+load thread, and again on a worker when the window size or Safe Area changes, at the
+pixel size the pickup slot is drawn at (`oag_hud::svg`); nothing is drawn as a vector per
+frame. `<text>` draws nothing (the text stack is not built in; convert it to paths) and an
+`<image>` is never read. Pixel-art icons stay PNGs: a PNG is drawn as authored.
 
 A simulation module can also change the title's HUD through outputs that are never
 hashed: `hud-tint`, `hud-shake` and `hud-bar-extra` on a HUD element (`Speed`, `Thrust`,
@@ -384,7 +390,9 @@ thrust bar, and `Thrust` draws nothing there) and shakes the energy bar while it
 [docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md).
 
 A mod that hands out a pickup of its own (`give-pickup`, `pickup-roll`) declares its look in
-`oag-mod.toml`, and is faulted for the race at the first such command without it:
+`oag-mod.toml`, and is faulted for the race at the first such command without it. Each mod
+with a `[pickup]` has its own pickup kind (at most 32 a race), so two such mods run side by
+side:
 
 ```toml
 [pickup]

@@ -8,11 +8,23 @@
 
 use std::sync::Arc;
 
-use oag_raceplay::extensions::{Scope, Source};
+use oag_raceplay::extensions::{Picks, Scope, Source};
 
-/// The rules and track modules of `mods`, in id order. The race load keeps the ones for its title.
+use crate::settings::mod_settings::ModSettings;
+
+/// The rules and track modules of `mods`, in id order, with no saved picks. The race load keeps
+/// the ones for its title.
 #[must_use]
 pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Source> {
+    sources_with(mods, &ModSettings::new())
+}
+
+/// [`sources`] with the picks the mods' own menu rows saved ([`options_of`]).
+#[must_use]
+pub fn sources_with<'a>(
+    mods: impl IntoIterator<Item = &'a oag_mod::Mod>,
+    settings: &ModSettings,
+) -> Vec<Source> {
     let mut found: Vec<Source> = mods
         .into_iter()
         .flat_map(|m| {
@@ -26,6 +38,7 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                 api: extension.api,
                 memory_pages: extension.memory_pages,
                 state_bytes: extension.state_bytes,
+                drives_ai_pickup: extension.drives_ai_pickup,
                 scope,
                 read: reader(m, module),
                 strings: strings_reader(m),
@@ -33,7 +46,11 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                     .manifest
                     .icons
                     .iter()
-                    .map(|(name, path)| (name.clone(), reader(m, path)))
+                    .map(|(name, path)| oag_raceplay::extensions::IconSource {
+                        name: name.clone(),
+                        path: path.clone(),
+                        read: reader(m, path),
+                    })
                     .collect(),
                 effects: m
                     .manifest
@@ -41,8 +58,23 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                     .iter()
                     .map(|(name, path)| (name.clone(), path.clone()))
                     .collect(),
+                shaders: m
+                    .manifest
+                    .shaders
+                    .iter()
+                    .map(|(name, path)| (name.clone(), path.clone()))
+                    .collect(),
+                sounds: m
+                    .manifest
+                    .sounds
+                    .iter()
+                    .map(|(name, path)| (name.clone(), path.clone()))
+                    .collect(),
                 files: files_reader(m),
+                options: options_of(m, settings),
                 pickup: m.manifest.pickup.clone(),
+                pickup_titles: m.manifest.pickup_titles.clone(),
+                pickup_odds: m.manifest.pickup_odds.clone(),
                 channels: oag_raceplay::extensions::Declared {
                     publishes: m.manifest.channels.publishes.clone(),
                     listens: m.manifest.channels.listens.clone(),
@@ -61,6 +93,56 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
         .collect();
     found.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
     found
+}
+
+/// The player's picks on the mod's own `choice` rows, as indices into each row's `values`:
+/// the rows of its `menu.toml` pages whose `setting` is `mod.<id>.<key>`, in file order, the
+/// first [`oag_raceplay::extensions::OPTIONS`] of them. A row with nothing saved takes its `default`,
+/// and a value the row does not list is index 0. What `Observation::option` reads.
+///
+/// A row's `scope` is `sim` (the default) or `view`: the simulation call reads a `view` row's
+/// default, only the view call reads the saved pick ([`oag_raceplay::extensions::Picks`]).
+pub fn options_of(module: &oag_mod::Mod, settings: &ModSettings) -> Picks {
+    let mut picks = Picks::default();
+    let Ok(Some(text)) = module.menu() else {
+        return picks;
+    };
+    let Ok(menu) = text.parse::<toml::Table>() else {
+        return picks;
+    };
+    let id = &module.manifest.id;
+    let prefix = format!("mod.{id}.");
+    let rows = menu
+        .get("page")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|page| page.get("entry")?.as_array())
+        .flatten()
+        .filter(|row| row.get("kind").and_then(toml::Value::as_str) == Some("choice"))
+        .filter_map(|row| {
+            let key = row.get("setting")?.as_str()?.strip_prefix(&prefix)?;
+            let values = row.get("values")?.as_array()?;
+            let default = row.get("default").and_then(toml::Value::as_str);
+            let view = row.get("scope").and_then(toml::Value::as_str) == Some("view");
+            Some((key, values, default, view))
+        });
+    for (row, (key, values, default, view)) in
+        rows.take(oag_raceplay::extensions::OPTIONS).enumerate()
+    {
+        let index = |name: Option<&str>| {
+            values
+                .iter()
+                .position(|value| value.as_str() == name)
+                .map_or(0, |at| u8::try_from(at).unwrap_or(0))
+        };
+        let saved = settings.get(id).and_then(|keys| keys.get(key));
+        let pick = index(saved.map(String::as_str).or(default));
+        picks.view[row] = pick;
+        picks.sim[row] = if view { index(default) } else { pick };
+        picks.view_rows |= u8::from(view) << row;
+    }
+    picks
 }
 
 /// The mod's own text for a language: `strings/english.toml` with `strings/<language>.toml`
@@ -123,18 +205,20 @@ fn files_reader(module: &oag_mod::Mod) -> oag_raceplay::extensions::Files {
 }
 
 /// Sets `options.find_extensions` for a race: the load thread searches the mods that are
-/// on (switched off by `disabled`) for rules modules, or none for a race that stays
+/// on (as `switches` has them) for rules modules, or none for a race that stays
 /// `vanilla` (an original campaign, a network race). Nothing is read here.
 pub fn attach(
     options: &mut oag_raceplay::Options,
     switches: &crate::settings::Mods,
+    picks: &ModSettings,
     vanilla: bool,
 ) {
     options.find_extensions = (!vanilla).then(|| {
         let switches = switches.clone();
+        let picks = picks.clone();
         oag_raceplay::extensions::Finder(Arc::new(move || {
             crate::mods::Mods::load(&switches)
-                .map(|mods| sources(mods.player()))
+                .map(|mods| sources_with(mods.player(), &picks))
                 .map_err(|e| format!("{e:#}"))
         }))
     });
@@ -227,8 +311,109 @@ badge = "ui/badge.png"
         );
         assert_eq!(text(Some("german"), "nope"), None);
         assert_eq!(found[0].icons.len(), 1);
-        assert_eq!(found[0].icons[0].0, "badge");
-        assert_eq!((found[0].icons[0].1)().unwrap(), b"png bytes");
+        assert_eq!(found[0].icons[0].name, "badge");
+        assert_eq!((found[0].icons[0].read)().unwrap(), b"png bytes");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A mod's choice rows reach its source as indices into each row's `values`: the saved
+    /// value, else the row's `default`, else the first value for one the row does not list.
+    #[test]
+    fn a_mods_choice_rows_reach_its_source_as_indices_into_their_values() {
+        let dir = std::env::temp_dir().join(format!("oag-modopt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("ext")).unwrap();
+        std::fs::write(dir.join("ext/m.wasm"), b"\0asm").unwrap();
+        std::fs::write(
+            dir.join("menu.toml"),
+            r#"
+[[page]]
+id = "p"
+title = "P"
+[[page.entry]]
+kind = "choice"
+label = "A"
+setting = "mod.test.opt.quality"
+values = ["low", "medium", "high"]
+default = "high"
+[[page.entry]]
+kind = "toggle"
+label = "B"
+setting = "mod.test.opt.flag"
+[[page.entry]]
+kind = "choice"
+label = "C"
+setting = "mod.test.opt.mode"
+values = ["x", "y"]
+scope = "view"
+[[page.entry]]
+kind = "choice"
+label = "Other mod's"
+setting = "mod.other.thing"
+values = ["a", "b"]
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("oag-mod.toml"),
+            r#"
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod.tosd", version = "1.0.0" }
+[mod]
+id = "test.opt"
+name = "Opt"
+version = "1.0.0"
+authors = ["x"]
+license = "MIT"
+description = "d"
+[extension]
+simulation = true
+api = 1
+memory_pages = 2
+state_bytes = 8
+[extension.rules]
+module = "ext/m.wasm"
+"#,
+        )
+        .unwrap();
+        let module = oag_mod::Mod::open(&dir).unwrap();
+        let picks = |saved: &[(&str, &str)]| {
+            let mut table = ModSettings::new();
+            for (key, value) in saved {
+                crate::settings::mod_settings::set(
+                    &mut table,
+                    &format!("mod.test.opt.{key}"),
+                    value,
+                );
+            }
+            sources_with([&module], &table)[0].options
+        };
+        assert_eq!(
+            picks(&[]).sim,
+            [2, 0, 0, 0],
+            "high by default, the other rows first"
+        );
+        assert!(!picks(&[]).differs(), "nothing saved: no view call");
+        // Row 1 (`mode`) is a view row: the simulation reads its default, the view call the pick.
+        let both = picks(&[("quality", "low"), ("mode", "y")]);
+        assert_eq!(both.sim, [0, 0, 0, 0]);
+        assert_eq!(both.view, [0, 1, 0, 0]);
+        assert_eq!(both.view_rows, 0b10);
+        assert_eq!(
+            both.identity().collect::<Vec<_>>(),
+            Vec::<(usize, u8)>::new()
+        );
+        assert_eq!(picks(&[("quality", "medium")]).sim, [1, 0, 0, 0]);
+        assert_eq!(
+            picks(&[("quality", "medium")])
+                .identity()
+                .collect::<Vec<_>>(),
+            [(0, 1)]
+        );
+        assert_eq!(
+            picks(&[("quality", "gone")]).sim,
+            [0, 0, 0, 0],
+            "a value the row does not list"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

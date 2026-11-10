@@ -449,7 +449,10 @@ fn gated_weight(
     weapon: Weapon,
     allowed: Option<&[Weapon]>,
 ) -> f32 {
-    if allowed.is_some_and(|allowed| !allowed.contains(&weapon)) {
+    // A mod's own pickup is the mod's to weigh: an event's weapon set names the title's.
+    if !matches!(weapon, Weapon::Extension(_))
+        && allowed.is_some_and(|allowed| !allowed.contains(&weapon))
+    {
         return 0.0;
     }
     driver.weight(table, weapon).max(0.0)
@@ -463,16 +466,27 @@ fn draw_once(
     driver: Driver,
     allowed: Option<&[Weapon]>,
 ) -> Option<Weapon> {
-    let total: f32 = IMPLEMENTED
-        .iter()
-        .map(|&weapon| gated_weight(driver, table, weapon, allowed))
+    // The title's weapons, then each mod's own pickup the table carries a row for
+    // (`oag_raceplay`'s race table, in kind order): a table without one walks exactly as
+    // before.
+    let walk = || {
+        IMPLEMENTED.iter().copied().chain(
+            table
+                .odds
+                .iter()
+                .map(|(weapon, _)| *weapon)
+                .filter(|weapon| matches!(weapon, Weapon::Extension(_))),
+        )
+    };
+    let total: f32 = walk()
+        .map(|weapon| gated_weight(driver, table, weapon, allowed))
         .sum();
     if total <= 0.0 || !total.is_finite() {
         return None;
     }
 
     let mut roll = rng.next_f32() * total;
-    for &weapon in IMPLEMENTED {
+    for weapon in walk() {
         let weight = gated_weight(driver, table, weapon, allowed);
         if weight <= 0.0 {
             continue;
@@ -484,10 +498,8 @@ fn draw_once(
     }
     // Float slack only (`next_f32` is half-open on `1.0`); the last weighted
     // weapon is the right answer.
-    IMPLEMENTED
-        .iter()
+    walk()
         .rev()
-        .copied()
         .find(|&weapon| gated_weight(driver, table, weapon, allowed) > 0.0)
 }
 

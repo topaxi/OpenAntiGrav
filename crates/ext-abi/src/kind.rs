@@ -52,11 +52,31 @@ pub enum CommandKind {
     HoldShield = 25,
     /// `clear-shield`, code 26.
     ClearShield = 26,
+    /// `transit`, code 27.
+    Transit = 27,
+    /// `scale-speed`, code 28.
+    ScaleSpeed = 28,
+    /// `probe-clearance`, code 29.
+    ProbeClearance = 29,
+    /// `screen-fill`, code 30.
+    ScreenFill = 30,
+    /// `fov-offset`, code 31.
+    FovOffset = 31,
+    /// `fire-mod-effect-ahead`, code 32.
+    FireModEffectAhead = 32,
+    /// `play-mod-sound`, code 33.
+    PlayModSound = 33,
+    /// `draw-beam`, code 34.
+    DrawBeam = 34,
+    /// `set-shader-param`, code 35.
+    SetShaderParam = 35,
+    /// `portal-view`, code 36.
+    PortalView = 36,
 }
 
 impl CommandKind {
     /// Every kind, in code order.
-    pub const ALL: [Self; 23] = [
+    pub const ALL: [Self; 33] = [
         Self::ScaleThrust,
         Self::ShieldDelta,
         Self::GivePickup,
@@ -80,6 +100,16 @@ impl CommandKind {
         Self::GiveShield,
         Self::HoldShield,
         Self::ClearShield,
+        Self::Transit,
+        Self::ScaleSpeed,
+        Self::ProbeClearance,
+        Self::ScreenFill,
+        Self::FovOffset,
+        Self::FireModEffectAhead,
+        Self::PlayModSound,
+        Self::DrawBeam,
+        Self::SetShaderParam,
+        Self::PortalView,
     ];
 
     /// The kind byte.
@@ -121,6 +151,16 @@ impl CommandKind {
             Self::GiveShield => "give-shield",
             Self::HoldShield => "hold-shield",
             Self::ClearShield => "clear-shield",
+            Self::Transit => "transit",
+            Self::ScaleSpeed => "scale-speed",
+            Self::ProbeClearance => "probe-clearance",
+            Self::ScreenFill => "screen-fill",
+            Self::FovOffset => "fov-offset",
+            Self::FireModEffectAhead => "fire-mod-effect-ahead",
+            Self::PlayModSound => "play-mod-sound",
+            Self::DrawBeam => "draw-beam",
+            Self::SetShaderParam => "set-shader-param",
+            Self::PortalView => "portal-view",
         }
     }
 

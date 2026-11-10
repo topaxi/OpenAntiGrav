@@ -220,12 +220,17 @@ impl Race {
             let thrust = ship.physics.thrust.clamp(0.0, 100.0);
             let absorbing = self.absorb_window_active(slot);
             let held = self.held_for_hud(slot);
-            let look = self.sim.extensions.pickup_look(slot);
+            let look = match held {
+                Some(oag_tables::weapons::Weapon::Extension(kind)) => {
+                    self.sim.extensions.pickup_look(slot, kind)
+                }
+                _ => None,
+            };
             let acting = ship.physics.pilot_assist.acting;
             let (shown, dt) = (self.pilot_assist_shown(slot), self.sim.dt);
             let hud = &mut self.view.huds[slot];
             hud.advance(percent, fraction, thrust, absorbing, held, dt);
-            if held == Some(oag_tables::weapons::Weapon::Extension) && look.is_some() {
+            if look.is_some() {
                 hud.pickup_look = look;
             }
             hud.assist_indicator.advance(shown, acting, dt);

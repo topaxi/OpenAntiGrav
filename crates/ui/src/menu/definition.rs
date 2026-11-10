@@ -215,6 +215,10 @@ mod raw {
         pub values_from: Option<ValuesFrom>,
         /// A choice row's value while nothing is saved for it; read for `mod.<id>.<key>` rows.
         pub default: Option<String>,
+        /// A mod's choice row: `"sim"` (the default) or `"view"`. A `sim` pick reaches the
+        /// module's simulation tick and travels with the race; a `view` pick reaches only
+        /// what the module draws and stays on this device.
+        pub scope: Option<String>,
         pub button: Option<String>,
         /// `{ setting = "...", value = ... }`: what makes this row inert. Only
         /// `choice` and `toggle` rows may carry it.
@@ -1094,6 +1098,17 @@ fn resolve(
             context: context.to_string(),
             problem: format!(
                 "a {:?} entry cannot be disabled_by anything; only choice and toggle can",
+                entry.kind
+            ),
+        });
+    }
+    if let Some(scope) = entry.scope.as_deref()
+        && (entry.kind != "choice" || !matches!(scope, "sim" | "view"))
+    {
+        return Err(Error::BadEntry {
+            context: context.to_string(),
+            problem: format!(
+                "a {:?} entry has scope {scope:?}; only a choice row takes \"sim\" or \"view\"",
                 entry.kind
             ),
         });

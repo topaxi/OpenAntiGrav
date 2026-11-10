@@ -221,7 +221,7 @@ fn fingerprint_mod(dir: &Path, folder: &str, extra: &str, files: &[&str]) {
 }
 
 fn fingerprint_of(dir: &Path) -> u64 {
-    load(dir, &BTreeSet::new()).content_fingerprint()
+    load(dir, &BTreeSet::new()).content_fingerprint(&Default::default())
 }
 
 fn empty_base(name: &str) -> PathBuf {
@@ -255,7 +255,8 @@ fn a_simulation_track_or_campaign_mod_changes_the_lan_fingerprint() {
         let dir = base(&format!("fingerprint-{folder}"));
         fingerprint_mod(&dir, folder, extra, files);
         assert_ne!(fingerprint_of(&dir), none, "a {folder} mod changes a race");
-        let off = load(&dir, &off(&[&format!("test.{folder}")])).content_fingerprint();
+        let off =
+            load(&dir, &off(&[&format!("test.{folder}")])).content_fingerprint(&Default::default());
         assert_eq!(off, none, "and does not when it is off");
     }
 }

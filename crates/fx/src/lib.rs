@@ -18,6 +18,7 @@
 //!   [`cockpit_hit`] the static a weapon hit throws over the cockpit view and
 //!   [`weapon_quads`] the Cannon's hand-built quads.
 //! - [`lens_flare`] is Pure's sun flare.
+//! - [`mod_shader`] draws a mod's own WGSL fragment on the surfaces a mod can name.
 //! - [`hull_overlay`] and [`absorb_shell`] are the weapon-absorb effect drawn
 //!   over a hull.
 
@@ -33,6 +34,7 @@ pub mod leach_strip;
 pub mod lens_flare;
 pub mod magstrip;
 pub mod mist;
+pub mod mod_shader;
 pub mod psys;
 pub mod ranrot;
 pub mod rocket_smoke;

@@ -36,6 +36,28 @@ use resources::{
 };
 
 use hud_scale::HudStretch;
+
+/// Screen pixels per unit of `space`'s grid once it is letterboxed into `viewport`, as the
+/// renderer measures it for the HUD stretch.
+#[must_use]
+pub fn hud_pixels_per_grid(space: Space, viewport: (f32, f32, f32, f32)) -> f32 {
+    HudStretch::measure(space, viewport)
+}
+
+/// The mods' vector icons, rasterised at the pixels `hud` is drawn at in `viewport` (the
+/// window rasterises them on another thread, as it is resized); a refusal is warned.
+pub fn rasterise_hud_icons(
+    hud: &mut oag_hud::Assets,
+    viewport: (f32, f32, f32, f32),
+    safe_area: Option<u8>,
+) {
+    let mut notes = Vec::new();
+    let pixels = hud_pixels_per_grid(hud.space, viewport) * hud.art.safe_area_scale(safe_area);
+    hud.rasterise_vector_icons(pixels, &mut notes);
+    for note in notes {
+        log::warn!("{note}");
+    }
+}
 use quad::{
     MODE_ATLAS, MODE_BUTTONS_ATLAS, MODE_FACE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE,
     MODE_SPRITE_GRADIENT, Quad, Uniforms,

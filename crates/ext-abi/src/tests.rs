@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 24] {
+fn every_command() -> [Command; 35] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -120,10 +120,73 @@ fn every_command() -> [Command; 24] {
             channel: channel_key("oag.example/gate"),
             value: -2.5,
         },
+        Command::Transit {
+            slot: slot(2),
+            ticks: 60,
+            distance: crate::Distance::Seconds(2.0),
+            exit_factor: 0.9,
+        },
+        Command::ScaleSpeed {
+            slot: slot(3),
+            factor: 0.5,
+        },
+        Command::ProbeClearance {
+            slot: slot(4),
+            distance: crate::Distance::Units(120.0),
+            radius: 8.0,
+        },
+        Command::ScreenFill {
+            slot: slot(5),
+            rgba: Rgba::new(0x10, 0x20, 0x30, 0x40),
+            shader: Some(7),
+        },
+        Command::FovOffset {
+            slot: slot(6),
+            degrees: 12.5,
+        },
+        Command::FireModEffectAhead {
+            slot: slot(7),
+            index: 3,
+            distance: crate::Distance::Units(100.0),
+        },
+        Command::PlayModSound {
+            slot: slot(8),
+            index: 5,
+            mode: crate::SoundMode::Loop,
+        },
+        Command::DrawBeam {
+            slot: slot(9),
+            to: slot(2),
+            rgba: Rgba::new(1, 2, 3, 4),
+            half_width: 1.5,
+            shader: Some(MAX_SHADER_INDEX),
+        },
+        Command::SetShaderParam {
+            slot: slot(10),
+            shader: 3,
+            index: MAX_SHADER_PARAMS - 1,
+            value: -0.25,
+        },
+        Command::PortalView {
+            slot: slot(11),
+            entrance: 1234.5,
+            exit: crate::Distance::Progress(0.0),
+            radius: 255,
+            update: crate::ViewUpdate::Once,
+            generation: crate::MAX_VIEW_GENERATION - 1,
+        },
+        Command::PortalView {
+            slot: slot(11),
+            entrance: 12.5,
+            exit: crate::Distance::Trigger(u16::MAX),
+            radius: 8,
+            update: crate::ViewUpdate::Continuous,
+            generation: 0,
+        },
     ]
 }
 
-fn every_event() -> [Event; 9] {
+fn every_event() -> [Event; 11] {
     [
         Event::WallContact { slot: slot(0) },
         Event::PickupFire { slot: slot(1) },
@@ -155,6 +218,12 @@ fn every_event() -> [Event; 9] {
             channel: channel_key("oag.example/gate"),
             value: 4.25,
         },
+        Event::TransitEnd { slot: slot(5) },
+        Event::Clearance {
+            slot: slot(6),
+            fits: true,
+            ahead: 250.0,
+        },
     ]
 }
 
@@ -163,6 +232,7 @@ fn a_craft() -> Craft {
         pickup: Pickup::Weapon(Weapon::Disruptor),
         person: true,
         fire_held: false,
+        in_transit: true,
         racing: true,
         shielded: true,
         lap: 3,
@@ -214,6 +284,7 @@ fn layout_fold() -> u64 {
         COMMAND_LEN as u32,
         CRAFTS_AT as u32,
         CRAFT_LEN as u32,
+        TITLE_AT as u32,
         EVENT_KIND as u32,
         EVENT_SLOT as u32,
         EVENT_INDEX as u32,
@@ -266,6 +337,13 @@ fn layout_fold() -> u64 {
         CRAFT_SHIELD as u32,
         CRAFT_SHIELD_MAX as u32,
         CRAFT_SPEED as u32,
+        COURSE_LENGTH_AT as u32,
+        TRACKING_AT as u32,
+        TRACKING_LEN as u32,
+        TRACKING_PROGRESS as u32,
+        TRACKING_PLACE as u32,
+        TRACKING_FLAGS as u32,
+        u32::from(TRACKING_FIXED),
         u32::from(CRAFT_PERSON),
         u32::from(CRAFT_FIRE_HELD),
         u32::from(CRAFT_RACING),
@@ -282,6 +360,19 @@ fn layout_fold() -> u64 {
         Cue::ALL.len() as u32,
         Effect::ALL.len() as u32,
         u32::from(Pickup::Ours.code()),
+        u32::from(crate::MAX_TRANSIT_TICKS),
+        crate::MAX_SPEED_FACTOR.to_bits(),
+        crate::MAX_PROBE_RADIUS.to_bits(),
+        crate::MAX_FOV_OFFSET_DEG.to_bits(),
+        crate::motion::EXIT_FACTOR_STEPS.to_bits(),
+        u32::from(crate::CRAFT_IN_TRANSIT),
+        AIM_AT as u32,
+        AIM_SLOTS as u32,
+        AIM_LEN as u32,
+        AIM_STEP.to_bits(),
+        u32::from(MAX_PICKUP_KINDS),
+        u32::from(Pickup::Other(0).code()),
+        u32::from(Pickup::Other(MAX_PICKUP_KINDS - 1).code()),
     ];
     // Each code by name: a reordered variant moves a byte's meaning on the wire.
     let codes = [
@@ -316,19 +407,26 @@ fn layout_fold() -> u64 {
     .chain([Effect::CollisionSpark, Effect::HitSpark].map(|effect| u32::from(effect.code())))
     .chain([WeatherKind::Rain].map(|kind| u32::from(kind.code())))
     .chain(HudElement::ALL.iter().map(|e| u32::from(e.code())))
-    .chain(Anchor::ALL.iter().map(|a| u32::from(a.code())));
+    .chain(Anchor::ALL.iter().map(|a| u32::from(a.code())))
+    .chain(SoundMode::ALL.iter().map(|m| m.code()));
     let commands = every_command().into_iter().flat_map(|c| c.encode_pooled(0));
     let events = every_event().into_iter().flat_map(Event::encode);
     let craft = a_craft().encode();
-    fnv(consts
-        .into_iter()
-        .chain(codes)
-        .chain(commands.chain(events).chain(craft).map(u32::from)))
+    let tracking = a_tracking().encode();
+    let aim = Aim::from_offset(61.0, -3.0, 0.4).encode();
+    fnv(consts.into_iter().chain(codes).chain(
+        commands
+            .chain(events)
+            .chain(craft)
+            .chain(tracking)
+            .chain(aim)
+            .map(u32::from),
+    ))
 }
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0x0a8d_d83a_48a9_ad8a);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0xd7fd_0d49_79a2_62b6);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -491,6 +589,32 @@ fn a_record_breaking_its_own_rules_is_malformed() {
     assert_eq!(Command::decode(&unknown), Err(Malformed::Kind(200)));
 }
 
+fn a_tracking() -> Tracking {
+    Tracking {
+        progress: Some(-12.5),
+        place: 3,
+    }
+}
+
+#[test]
+fn a_negative_progress_is_a_fix_and_no_fix_is_a_flag_not_a_number() {
+    let grid = Tracking {
+        progress: Some(-40.0),
+        place: 8,
+    };
+    assert_eq!(Tracking::decode(&grid.encode()), grid);
+    let none = Tracking {
+        progress: None,
+        place: 1,
+    };
+    assert_eq!(Tracking::decode(&none.encode()), none);
+    assert_eq!(
+        Tracking::decode(&Tracking::default().encode()).progress,
+        None,
+        "an empty record has no fix"
+    );
+}
+
 #[test]
 fn the_observation_reads_back_through_the_guest_sections() {
     let mut io = [0; IO_LEN];
@@ -501,6 +625,13 @@ fn the_observation_reads_back_through_the_guest_sections() {
         0b11,
         &every_event(),
         &crafts,
+        &Course {
+            length: 5120.0,
+            tracking: &[Tracking::default(), a_tracking()],
+            title: channel_key("wipeout-hd"),
+            aiming: None,
+            options: [3, 2, 1, 0],
+        },
         &[9, 8, 7],
     );
     let sections = Sections::split(&mut io);
@@ -508,12 +639,21 @@ fn the_observation_reads_back_through_the_guest_sections() {
     assert_eq!(Sections::active(sections.head), 0b11);
     assert_eq!(Sections::state_len(sections.head), 3);
     assert_eq!(&sections.state[..3], &[9, 8, 7]);
-    let events: [Option<Event>; 9] =
+    let events: [Option<Event>; 11] =
         core::array::from_fn(|i| Sections::event_record(sections.head, i).and_then(Event::decode));
     assert_eq!(events, every_event().map(Some));
-    assert_eq!(Sections::event_count(sections.head), 9);
+    assert_eq!(Sections::event_count(sections.head), 11);
     let craft = Sections::craft_record(sections.crafts, slot(1)).map(Craft::decode);
     assert_eq!(craft, Some(a_craft()));
+    assert_eq!(Sections::course_length(sections.head), 5120.0);
+    assert_eq!(Sections::title(sections.crafts), channel_key("wipeout-hd"));
+    assert_eq!(
+        [0, 1, 2, 3, 4].map(|n| Sections::option(sections.crafts, n)),
+        [3, 2, 1, 0, 0]
+    );
+    let tracking = |s| Sections::tracking_record(sections.crafts, slot(s)).map(Tracking::decode);
+    assert_eq!(tracking(1), Some(a_tracking()));
+    assert_eq!(tracking(0), Some(Tracking::default()), "no fix, no place");
     Sections::put_command(sections.reply, 0, &every_command()[4]);
     Sections::put_count(sections.reply, 1);
     assert_eq!(reply_count(&io), Ok(1));
@@ -826,7 +966,7 @@ fn a_channel_name_is_a_mod_id_a_slash_and_a_name() {
 
 /// The bytes of one of every command, in `every_command`'s order, as hex. Spelled out so a
 /// layout change shows in the diff, and so a refactor of the encoder is held to today's bytes.
-const COMMAND_BYTES: [&str; 24] = [
+const COMMAND_BYTES: [&str; 33] = [
     "010100000000803e00000000",
     "02020000000060c000000000",
     "030300000000000000000000",
@@ -851,10 +991,19 @@ const COMMAND_BYTES: [&str; 24] = [
     "1a0a00000000000000000000",
     "150b03000000000000000000",
     "170c0000000020c064a50f37",
+    "1b023c000000004001002823",
+    "1c0300000000003f00000000",
+    "1d0400000000f04200000041",
+    "1e0508000000000010203040",
+    "1f0600000000484100000000",
+    "200703000000c84200000000",
+    "210805000000000001000000",
+    "220902ff0000c03f01020304",
+    "230a0300000080be03000000",
 ];
 
 /// The bytes of one of every event, in `every_event`'s order, as hex.
-const EVENT_BYTES: [&str; 9] = [
+const EVENT_BYTES: [&str; 11] = [
     "01000000000000000000000000000000",
     "02010000000000000000000000000000",
     "03020000000000000000000000000000",
@@ -864,6 +1013,8 @@ const EVENT_BYTES: [&str; 9] = [
     "08050100000000000000000000000000",
     "0906040000008c410000000000000000",
     "0a0700000000884064a50f37ce86334d",
+    "0b050000000000000000000000000000",
+    "0c06010000007a430000000000000000",
 ];
 
 fn hex(bytes: &[u8]) -> std::string::String {
@@ -918,6 +1069,268 @@ fn the_kind_table_agrees_with_the_commands() {
             kind.race_wide(),
             "{}",
             kind.name()
+        );
+    }
+}
+
+/// The motion commands' own ranges: each out-of-range record is malformed, never clamped.
+#[test]
+fn a_motion_command_out_of_its_ranges_is_malformed() {
+    let transit = |ticks, distance, exit_factor| Command::Transit {
+        slot: slot(1),
+        ticks,
+        distance,
+        exit_factor,
+    };
+    let bad = [
+        transit(0, crate::Distance::Units(10.0), 1.0),
+        transit(
+            crate::MAX_TRANSIT_TICKS + 1,
+            crate::Distance::Units(10.0),
+            1.0,
+        ),
+        transit(60, crate::Distance::Lap(0.0), 1.0),
+        transit(60, crate::Distance::Seconds(f32::NAN), 1.0),
+        transit(60, crate::Distance::Units(10.0), 2.5),
+        Command::ScaleSpeed {
+            slot: slot(1),
+            factor: -0.1,
+        },
+        Command::ProbeClearance {
+            slot: slot(1),
+            distance: crate::Distance::Units(10.0),
+            radius: crate::MAX_PROBE_RADIUS * 2.0,
+        },
+    ];
+    for command in bad {
+        assert!(
+            matches!(
+                Command::decode(&command.encode()),
+                Err(Malformed::Motion { .. })
+            ),
+            "{command:?}"
+        );
+    }
+    for (kind, amount) in [(3, -1.0), (4, 2.5), (4, 70_000.0), (0, 0.0)] {
+        assert_eq!(crate::Distance::join(kind, amount), None, "{kind} {amount}");
+    }
+    assert_eq!(
+        crate::Distance::join(3, 0.0),
+        Some(crate::Distance::Progress(0.0))
+    );
+    assert_eq!(
+        crate::Distance::join(4, 3.0),
+        Some(crate::Distance::Trigger(3))
+    );
+    let portal = transit(30, crate::Distance::Trigger(5), 1.0);
+    assert_eq!(Command::decode(&portal.encode()), Ok(portal));
+    let mut unknown = transit(60, crate::Distance::Units(10.0), 1.0).encode();
+    unknown[COMMAND_WORD] = 7;
+    assert!(Command::decode(&unknown).is_err(), "distance kind 7");
+}
+
+/// The view commands' own ranges: each out-of-range record is malformed, never clamped.
+#[test]
+fn a_scene_command_out_of_its_ranges_is_malformed() {
+    let bad = [
+        Command::FovOffset {
+            slot: slot(1),
+            degrees: crate::MAX_FOV_OFFSET_DEG * 1.5,
+        },
+        Command::FovOffset {
+            slot: slot(1),
+            degrees: f32::NAN,
+        },
+        Command::FireModEffectAhead {
+            slot: slot(1),
+            index: 0,
+            distance: crate::Distance::Units(0.0),
+        },
+        Command::FireModEffectAhead {
+            slot: slot(1),
+            index: 0,
+            distance: crate::Distance::Units(f32::NAN),
+        },
+        Command::DrawBeam {
+            slot: slot(1),
+            to: slot(1),
+            rgba: Rgba::new(1, 2, 3, 4),
+            half_width: 1.0,
+            shader: None,
+        },
+        Command::DrawBeam {
+            slot: slot(1),
+            to: slot(2),
+            rgba: Rgba::new(1, 2, 3, 4),
+            half_width: 0.0,
+            shader: None,
+        },
+        Command::DrawBeam {
+            slot: slot(1),
+            to: slot(2),
+            rgba: Rgba::new(1, 2, 3, 4),
+            half_width: crate::MAX_BEAM_HALF_WIDTH * 2.0,
+            shader: None,
+        },
+        Command::SetShaderParam {
+            slot: slot(1),
+            shader: 0,
+            index: MAX_SHADER_PARAMS,
+            value: 1.0,
+        },
+        Command::SetShaderParam {
+            slot: slot(1),
+            shader: 0,
+            index: 0,
+            value: f32::INFINITY,
+        },
+        Command::PortalView {
+            slot: slot(1),
+            entrance: f32::NAN,
+            exit: crate::Distance::Progress(10.0),
+            radius: 8,
+            update: crate::ViewUpdate::Continuous,
+            generation: 0,
+        },
+        Command::PortalView {
+            slot: slot(1),
+            entrance: 10.0,
+            exit: crate::Distance::Progress(-1.0),
+            radius: 8,
+            update: crate::ViewUpdate::Continuous,
+            generation: 0,
+        },
+        Command::PortalView {
+            slot: slot(1),
+            entrance: 10.0,
+            exit: crate::Distance::Progress(20.0),
+            radius: 0,
+            update: crate::ViewUpdate::Continuous,
+            generation: 0,
+        },
+    ];
+    for command in bad {
+        assert!(
+            matches!(
+                Command::decode(&command.encode()),
+                Err(Malformed::Scene { .. })
+            ),
+            "{command:?}"
+        );
+    }
+    let mut unknown = Command::FireModEffectAhead {
+        slot: slot(1),
+        index: 0,
+        distance: crate::Distance::Units(10.0),
+    }
+    .encode();
+    unknown[COMMAND_WORD] = 9;
+    assert!(Command::decode(&unknown).is_err(), "distance kind 9");
+}
+
+/// Another mod's pickup has a code of its own per kind: never a title weapon's, never the
+/// reader's own, and back to the same kind.
+#[test]
+fn another_mods_pickup_codes_are_one_per_kind_and_collide_with_nothing() {
+    let mut seen = [false; 256];
+    for weapon in Weapon::ALL {
+        seen[usize::from(weapon.code())] = true;
+    }
+    seen[usize::from(Pickup::None.code())] = true;
+    seen[usize::from(Pickup::Ours.code())] = true;
+    for kind in 0..MAX_PICKUP_KINDS {
+        let code = Pickup::Other(kind).code();
+        assert!(!seen[usize::from(code)], "kind {kind} reuses code {code}");
+        seen[usize::from(code)] = true;
+        assert_eq!(Pickup::from_code(code), Some(Pickup::Other(kind)));
+    }
+}
+
+#[test]
+fn an_aim_quantises_to_steps_saturates_and_survives_the_buffer() {
+    let aim = Aim::from_offset(61.0, -3.0, 0.4);
+    assert_eq!((aim.forward, aim.right, aim.up), (31, -2, 0));
+    assert_eq!((aim.ahead(), aim.across(), aim.above()), (62.0, -4.0, 0.0));
+    let far = Aim::from_offset(1.0e9, -1.0e9, f32::NAN);
+    assert_eq!((far.forward, far.right, far.up), (127, -127, 0));
+    assert_eq!(Aim::decode(&aim.encode()), aim);
+
+    let mut aiming = Aiming::default();
+    aiming.set(2, 5, aim);
+    aiming.set(AIM_SLOTS, 0, aim);
+    let mut io = [0; IO_LEN];
+    aiming.write(&mut io);
+    let sections = Sections::split(&mut io);
+    assert_eq!(read_aim(sections.crafts, 2, 5), aim);
+    assert_eq!(
+        read_aim(sections.crafts, 5, 2),
+        Aim::default(),
+        "not symmetric"
+    );
+    assert_eq!(read_aim(sections.crafts, AIM_SLOTS, 0), Aim::default());
+}
+
+#[test]
+fn a_cone_is_in_front_inside_the_range_and_within_its_spread() {
+    let at = |forward, right, up| Aim::from_offset(forward, right, up);
+    assert!(at(50.0, 10.0, 0.0).in_cone(100.0, 0.3));
+    assert!(!at(50.0, 20.0, 0.0).in_cone(100.0, 0.3), "too far across");
+    assert!(!at(50.0, 0.0, 20.0).in_cone(100.0, 0.3), "too far up");
+    assert!(!at(150.0, 0.0, 0.0).in_cone(100.0, 0.3), "out of range");
+    assert!(!at(-50.0, 0.0, 0.0).in_cone(100.0, 0.3), "behind");
+    assert!(!at(0.0, 0.0, 0.0).in_cone(100.0, 0.3), "on top of it");
+}
+
+#[test]
+fn a_mod_sound_round_trips_each_mode_and_refuses_a_mode_the_abi_lacks() {
+    for mode in SoundMode::ALL {
+        let command = Command::PlayModSound {
+            slot: slot(3),
+            index: 700,
+            mode,
+        };
+        assert_eq!(Command::decode(&command.encode()), Ok(command));
+    }
+    let mut record = Command::PlayModSound {
+        slot: slot(1),
+        index: 0,
+        mode: SoundMode::Once,
+    }
+    .encode();
+    record[COMMAND_WORD] = 3;
+    assert!(matches!(
+        Command::decode(&record),
+        Err(Malformed::ModSound { word: 3, .. })
+    ));
+}
+
+/// `portal-view`'s exit word is a progress's `f32` bits, or a trigger: the sign bit and the
+/// index. The progress form is the word it always was.
+#[test]
+fn a_portal_views_exit_is_a_progress_or_a_trigger() {
+    let view = |exit| Command::PortalView {
+        slot: slot(2),
+        entrance: 10.0,
+        exit,
+        radius: 8,
+        update: crate::ViewUpdate::Continuous,
+        generation: 1,
+    };
+    let progress = view(crate::Distance::Progress(20.0));
+    let trigger = view(crate::Distance::Trigger(7));
+    assert_eq!(hex(&progress.encode()), "24020608000020410000a041");
+    assert_eq!(hex(&trigger.encode()), "240206080000204107000080");
+    for command in [progress, trigger] {
+        assert_eq!(Command::decode(&command.encode()), Ok(command));
+    }
+    for exit in [
+        crate::Distance::Units(5.0),
+        crate::Distance::Lap(0.5),
+        crate::Distance::Progress(-1.0),
+    ] {
+        assert!(
+            Command::decode(&view(exit).encode()).is_err(),
+            "{exit:?} is not a portal's exit"
         );
     }
 }

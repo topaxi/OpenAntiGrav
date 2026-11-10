@@ -44,9 +44,21 @@ pub(super) enum Draw<'a> {
     Overlay(&'a Drawable),
     /// The blob and hull shadows, [`ViewPass::shadow_runs`].
     Shadow,
+    /// A mod's backdrop fill ([`oag_fx::mod_shader::Drawer::draw_backdrop`]): over the world
+    /// drawn so far and before the crafts, hiding what is drawn after it where it stands.
+    Backdrop,
+    /// The depth range the draws after it land in, of the pass's `0..1`: a craft flown through
+    /// a backdrop is drawn in a slice nearer than the backdrop's own depth
+    /// ([`NEAR_SLICE`]), every other draw in the whole range.
+    Depth(f32, f32),
     /// The blended effects over everything solid ([`Recorder::draw_effects`]).
     Effects,
 }
+
+/// The slice of the depth range a craft flown through a backdrop is drawn in: nearer than
+/// `mod_shader.wesl`'s `BACKDROP_DEPTH`, so the backdrop does not hide it, and a range of its
+/// own, so the hull still hides its own far side.
+pub(super) const NEAR_SLICE: (f32, f32) = (0.0, 0.001);
 
 /// The draws one view decided, built by its prepare.
 pub(super) struct DrawList<'a>(pub(super) Vec<Draw<'a>>);
@@ -84,6 +96,18 @@ impl<'a> DrawList<'a> {
     pub(super) fn push(&mut self, draw: Draw<'a>) {
         self.0.push(draw);
     }
+
+    /// `draws` in the near slice when `flown`, the craft being one flown through a backdrop;
+    /// as they stand otherwise.
+    pub(super) fn flown(&mut self, flown: bool, draws: impl FnOnce(&mut Self)) {
+        if flown {
+            self.0.push(Draw::Depth(NEAR_SLICE.0, NEAR_SLICE.1));
+        }
+        draws(self);
+        if flown {
+            self.0.push(Draw::Depth(0.0, 1.0));
+        }
+    }
 }
 
 /// What each effect pipeline's upload left to draw for one view, and the handles that draws
@@ -100,6 +124,7 @@ pub(super) struct EffectsDrawn {
     clouds: Option<(oag_fx::cloud::Drawer, oag_fx::cloud::Drawn)>,
     weapon_quads: (oag_fx::weapon_quads::Drawer, oag_fx::weapon_quads::Drawn),
     mist: Option<(oag_fx::mist::Drawer, oag_fx::mist::Drawn)>,
+    mod_shaders: Option<(oag_fx::mod_shader::Drawer, oag_fx::mod_shader::Drawn)>,
     shadow: oag_render::shadow::Drawer,
 }
 
@@ -147,6 +172,14 @@ pub(super) struct ViewPass<'a> {
     pub(super) blur_lens: Mat4,
 }
 
+impl ViewPass<'_> {
+    /// The pass without what belongs to a screen: a mod's shaded surfaces and the lens mist.
+    pub(super) fn without_view_surfaces(mut self) -> Self {
+        self.effects.mod_shaders = None;
+        self.effects.mist = None;
+        self
+    }
+}
 /// A [`ViewPass`]'s lists, kept between frames by the scene.
 #[derive(Debug, Default)]
 pub(super) struct ViewLists {
@@ -196,6 +229,11 @@ impl Scene {
                 .borrow()
                 .as_ref()
                 .map(|mist| (mist.drawer().clone(), mist.drawn())),
+            mod_shaders: self
+                .mod_shaders
+                .borrow()
+                .as_ref()
+                .map(|stage| (stage.drawer().clone(), stage.drawn())),
             shadow: self.shadow.borrow().drawer().clone(),
         }
     }
@@ -245,7 +283,15 @@ pub(super) struct Recorder<'a> {
     attachments: &'a motion::Attachments,
 }
 
-impl Recorder<'_> {
+impl<'a> Recorder<'a> {
+    /// The recorder, drawing into `attachments`: a target of a size of its own.
+    pub(super) fn into_attachments(self, attachments: &'a motion::Attachments) -> Self {
+        Self {
+            attachments,
+            ..self
+        }
+    }
+
     /// Records `pass`'s scene pass into `encoder`, and returns what it drew.
     pub(super) fn record(
         &self,
@@ -377,6 +423,12 @@ impl Recorder<'_> {
                 Draw::Additive(drawable) => stats.add(drawable.draw_additive(&mut render, block)),
                 Draw::Overlay(drawable) => stats.add(drawable.draw_overlay(&mut render, block)),
                 Draw::Shadow => pass.effects.shadow.draw(&mut render, &pass.shadow_runs),
+                Draw::Backdrop => {
+                    if let Some((stage, drawn)) = &pass.effects.mod_shaders {
+                        stage.draw_backdrop(&mut render, drawn);
+                    }
+                }
+                Draw::Depth(near, far) => render.set_viewport(x, y, w, h, *near, *far),
                 Draw::Effects => self.draw_effects(&mut render, pass, &mut stats),
             }
         }
@@ -531,6 +583,9 @@ impl Recorder<'_> {
         for (beam, drawn) in effects.beams.iter().flatten() {
             beam.draw(render, *drawn);
         }
+        if let Some((stage, drawn)) = &effects.mod_shaders {
+            stage.draw_surfaces(render, drawn);
+        }
         if let Some((clouds, drawn)) = &effects.clouds {
             clouds.draw(render, *drawn);
         }
@@ -545,6 +600,9 @@ impl Recorder<'_> {
             mist.draw(render, *drawn);
         }
         effects.sparks.0.draw_flash(render, effects.sparks.1);
+        if let Some((stage, drawn)) = &effects.mod_shaders {
+            stage.draw_fill(render, drawn);
+        }
     }
 }
 

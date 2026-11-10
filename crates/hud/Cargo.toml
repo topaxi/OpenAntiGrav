@@ -18,6 +18,7 @@ oag-texture.workspace = true
 oag-title.workspace = true
 oag-ui.workspace = true
 oag-vex.workspace = true
+resvg.workspace = true
 log.workspace = true
 serde.workspace = true
 thiserror.workspace = true

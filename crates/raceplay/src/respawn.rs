@@ -114,10 +114,11 @@ impl Race {
     /// Whether `trigger` may fire for this craft now: on, and past the gates it honours.
     /// Every trigger reads its gates here.
     pub(super) fn armed(&self, slot: usize, trigger: oag_race::recovery::Trigger) -> bool {
-        trigger.armed(
-            self.sim.respawn_cooldown[slot],
-            self.sim.respawn_disabled[slot],
-        )
+        !self.reset_held(slot)
+            && trigger.armed(
+                self.sim.respawn_cooldown[slot],
+                self.sim.respawn_disabled[slot],
+            )
     }
 
     /// Whether this opponent is on the ground more than [`BENEATH_LINE`] below
@@ -377,13 +378,11 @@ impl Race {
         }
     }
 
-    /// What every way back shares: the pose and the launch velocity, the
-    /// driver told where it now is, and the respawn bookkeeping.
-    fn put_back(&mut self, slot: usize, pose: Pose, velocity: Vec3) {
+    /// What any move of a craft to somewhere else on the circuit shares, a way back
+    /// ([`Self::put_back`]) or a jump (`crate::transit`): the driver told where it now
+    /// is, the dwells restarted and the trails cut.
+    pub(super) fn reseat(&mut self, slot: usize, position: Vec3) {
         let ship = &mut self.sim.world.ships[slot];
-        ship.place_at(pose);
-        ship.physics.body.linear_velocity = velocity;
-
         // **The driver has to be told where it has been put.** `Driver::drive`
         // locates a craft in a 48-sample window around its last index, so a
         // teleport of more than that leaves the driver steering at the piece of
@@ -391,18 +390,12 @@ impl Race {
         // `Driver::index` started at zero, except mid-race and invisible,
         // because a craft that recovered and then drove into the scenery reads
         // as bad driving rather than as a lost index.
-        ship.driver.index =
-            self.sim
-                .racing_line
-                .nearest(pose.position, 0, self.sim.racing_line.len()) as u32;
+        ship.driver.index = self
+            .sim
+            .racing_line
+            .nearest(position, 0, self.sim.racing_line.len()) as u32;
         // Put back on the ring, so off any route. See `oag_ai::branch::Branching::on_ring`.
         ship.driver.branching = ship.driver.branching.on_ring();
-
-        #[cfg(feature = "view")]
-        self.flash_player_reset(slot);
-        self.sim.respawns[slot] += 1;
-        self.sim.respawns_in_a_row[slot] += 1;
-        self.sim.respawn_cooldown[slot] = self.sim.reset_triggers.cooldown_ticks;
         // The craft is back on its line by definition, so the dwell starts
         // again rather than carrying over and rescuing it a second time on the
         // tick the cooldown expires. Both dwells, for the same reason: a craft
@@ -422,6 +415,21 @@ impl Race {
             self.view.exhaust[slot].clear_trail();
             self.view.hd_trail[slot].clear();
         }
+    }
+
+    /// What every way back shares: the pose and the launch velocity, the
+    /// driver told where it now is, and the respawn bookkeeping.
+    fn put_back(&mut self, slot: usize, pose: Pose, velocity: Vec3) {
+        let ship = &mut self.sim.world.ships[slot];
+        ship.place_at(pose);
+        ship.physics.body.linear_velocity = velocity;
+        self.reseat(slot, pose.position);
+
+        #[cfg(feature = "view")]
+        self.flash_player_reset(slot);
+        self.sim.respawns[slot] += 1;
+        self.sim.respawns_in_a_row[slot] += 1;
+        self.sim.respawn_cooldown[slot] = self.sim.reset_triggers.cooldown_ticks;
 
         if self.sim.respawns_in_a_row[slot] >= RESPAWN_GIVE_UP {
             self.sim.respawn_disabled[slot] = true;

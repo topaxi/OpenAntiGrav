@@ -488,11 +488,43 @@ impl RaceState {
                 outcome.first_crossing = self.lap_start_tick == 0;
                 self.lap_start_tick = tick;
             }
-            self.lap_gate = LapGate::NeedsNearHalf;
+            // A driven wrap lands a few units past the line. Only a move over the line
+            // ([`Self::jumped`]) lands past half-way, and both halves of the new lap are
+            // then behind the craft.
+            self.lap_gate = if located.progress >= half {
+                LapGate::Ready
+            } else {
+                LapGate::NeedsNearHalf
+            };
         } else if wrapped_backward(delta, half) {
             self.uncomplete_lap();
         }
         outcome
+    }
+
+    /// The craft was moved forward along the circuit, less than a lap, to ring point
+    /// `index` ([`Course::jump`]): the next [`Self::update`] sees the move as one forward
+    /// step and credits a crossing of the line in it on its own tick, through its own
+    /// [`Outcome`] (a finish included). Its previous reading is set so that update reads
+    /// exactly one forward wrap when the move crossed the line and none when it did not,
+    /// whatever the distance. Before the first fix, only the search moves.
+    pub fn jumped(&mut self, course: &Course, index: usize) {
+        self.course_index = u32::try_from(index).ok();
+        let (Some(from), Some(to)) = (self.progress, course.progress_at(index)) else {
+            return;
+        };
+        let half = course.length() * 0.5;
+        self.lap_gate = self.lap_gate.advanced(from, half);
+        if to >= from {
+            self.lap_gate = self.lap_gate.advanced(to, half);
+            self.progress = Some(to);
+        } else {
+            self.lap_gate = self.lap_gate.advanced(half, half);
+            // Only the next update's difference reads this: past `to` by nine tenths of a
+            // lap, so the craft's own step before that update (a few units) still leaves
+            // the difference a forward wrap (below minus half a lap).
+            self.progress = Some(to + course.length() * 0.9);
+        }
     }
 
     /// Steps the zone counter, and pays out a zone that ended clean.

@@ -353,6 +353,10 @@ pub struct EmitterSpec {
     /// emitter whose draw the original issues ahead of an alpha-over draw of
     /// its own effect ([`Effect::draw_root_under_alpha`]).
     pub under_alpha: bool,
+    /// The place in the race's [`crate::mod_shader::Stage`] that draws this emitter's
+    /// particles, each a quad with a `0..1` uv, instead of either blend class
+    /// ([`System::extend_shaded`]). A mod's alone.
+    pub shader: Option<u16>,
     /// Spawn offsets and velocities skip the emitter node's matrix -
     /// [`pob::flags::WORLD_SPACE`], so [`System::set_frame_scale`] does not reach them.
     pub world_space: bool,
@@ -599,6 +603,7 @@ impl EmitterSpec {
             sheet_rect: None,
             short_run: true,
             under_alpha: false,
+            shader: None,
             world_space: record.flags & pob::flags::WORLD_SPACE != 0,
             template: false,
             rotation: roll::Rotation::of_emitter(record),
@@ -1123,6 +1128,9 @@ pub const MAX_INSTANCES: usize = 32;
 /// looking at - would be the ones dropped.
 const RESERVED_FOR_BURSTS: usize = 6;
 
+/// How many instances [`Stage::play_held`] keeps at once; past it, it is [`Stage::play`].
+const MAX_HELD: usize = 4;
+
 /// A [`Stage`] instance a caller still owns.
 ///
 /// Carries the instance's generation, so a handle kept past
@@ -1146,6 +1154,8 @@ struct Instance {
     /// Set while a caller owns this instance. An attached instance is never
     /// recycled out from under its owner.
     attached: bool,
+    /// Not recycled by a burst while it runs: see [`Stage::play_held`].
+    held: bool,
     /// Bumped every time the slot is claimed.
     generation: u32,
     /// The emitter frame's `+Y` in world space - see [`Stage::orient`].
@@ -1158,6 +1168,7 @@ impl Instance {
         system: System::new(),
         anchor: Vec3::ZERO,
         attached: false,
+        held: false,
         generation: 0,
         up: Vec3::Y,
     };
@@ -1227,11 +1238,33 @@ impl Stage {
             self.instances
                 .iter()
                 .enumerate()
-                .filter(|(_, instance)| !instance.attached)
+                .filter(|(_, instance)| {
+                    !instance.attached && !(instance.held && instance.system.is_running())
+                })
                 .min_by_key(|(_, instance)| instance.system.alive_count())
                 .map(|(index, _)| index)
         })?;
         Some(self.claim(index, effect, point, scale, false))
+    }
+
+    /// [`Self::play`] for a surface that stands somewhere, a mod's portal or marker: it holds
+    /// its slot until it ends. A burst recycles the live instance with the fewest particles,
+    /// which is the one lone quad a surface is, and a pool full of a title's sparks would take
+    /// it on the next tick. At most [`MAX_HELD`], so bursts always have the rest.
+    pub fn play_held(
+        &mut self,
+        effect: &std::sync::Arc<Effect>,
+        point: Vec3,
+        scale: f32,
+    ) -> Option<Playing> {
+        let held = self
+            .instances
+            .iter()
+            .filter(|instance| instance.held && instance.system.is_running())
+            .count();
+        let playing = self.play(effect, point, scale)?;
+        self.instances[usize::from(playing.index)].held = held < MAX_HELD;
+        Some(playing)
     }
 
     /// Starts `effect` at `point` and hands the caller a handle to keep it
@@ -1273,6 +1306,19 @@ impl Stage {
     /// travel (`rocket-visuals.md`, 2026-09-24). A no-op on a stale handle.
     pub fn orient(&mut self, playing: Playing, up: Vec3) {
         if let Some(instance) = self.get_mut(playing) {
+            instance.up = up;
+        }
+    }
+
+    /// [`Self::orient`] for a handle from [`Self::play_held`] (`orient` addresses attached
+    /// instances alone, which a held surface is not): a mod's portal or marker standing square
+    /// to the road rather than to world up. A no-op on a stale handle.
+    pub fn orient_surface(&mut self, playing: Playing, up: Vec3) {
+        if let Some(instance) = self
+            .instances
+            .get_mut(usize::from(playing.index))
+            .filter(|instance| instance.generation == playing.generation)
+        {
             instance.up = up;
         }
     }
@@ -1368,6 +1414,7 @@ impl Stage {
         instance.system = System::new();
         instance.anchor = point;
         instance.attached = attached;
+        instance.held = false;
         instance.up = Vec3::Y;
         instance.system.ignite(effect, point, scale);
         Playing {
@@ -1395,6 +1442,7 @@ use direction::{direction_for, signed_unit};
 use sample::{channel_sample, random_range};
 mod frame;
 mod pipeline;
+pub(crate) use pipeline::SURFACE_ATTRIBUTES;
 pub use pipeline::{BLEND, BLEND_ALPHA_OVER, Drawer, Drawn, MAX_VERTICES, Pipeline};
 
 mod between_ticks;

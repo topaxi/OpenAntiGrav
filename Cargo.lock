@@ -3107,6 +3107,7 @@ name = "oag-fx"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "naga",
  "oag-assets",
  "oag-core",
  "oag-formats",
@@ -3225,6 +3226,7 @@ name = "oag-gpu"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "naga",
  "pollster",
  "wgpu",
 ]
@@ -3270,6 +3272,7 @@ dependencies = [
  "oag-title",
  "oag-ui",
  "oag-vex",
+ "resvg",
  "serde",
  "thiserror 2.0.21",
  "toml",
@@ -3455,7 +3458,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytemuck",
- "naga",
  "oag-core",
  "oag-gpu",
  "oag-shader-check",

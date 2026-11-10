@@ -66,7 +66,11 @@ pub fn recognise(container: &Container) -> Option<Manifest> {
         extension: None,
         icons: std::collections::BTreeMap::new(),
         effects: std::collections::BTreeMap::new(),
+        shaders: std::collections::BTreeMap::new(),
+        sounds: std::collections::BTreeMap::new(),
         pickup: None,
+        pickup_titles: Vec::new(),
+        pickup_odds: Vec::new(),
         channels: crate::Channels::default(),
         texture_pack: Some(TexturePack {
             ini: INI.to_string(),

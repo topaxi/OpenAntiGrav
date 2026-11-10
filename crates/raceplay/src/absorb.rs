@@ -149,7 +149,7 @@ impl Race {
                 .absorb_anchors
                 .get(burst.slot)
                 .and_then(|anchors| anchors.get(burst.node));
-            let (true, Some(local)) = (ship.active, local) else {
+            let (true, Some(local)) = (ship.in_world(), local) else {
                 if let Some(playing) = burst.playing {
                     self.view.stage.detach(playing);
                 }

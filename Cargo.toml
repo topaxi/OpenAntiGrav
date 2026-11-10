@@ -197,6 +197,10 @@ bytemuck = "1"
 # Reads an author's own PNG beside a track manifest (ADR-0076); already in the
 # lockfile through resvg.
 png = "0.18"
+# Rasterises a mod's `.svg` icons at load (`oag_hud::svg`) and the window icon
+# (`oag_game::icon`). `text` stays off in both: no fontdb, no shaper, and a `<text>` node
+# draws nothing.
+resvg = { version = "0.49", default-features = false }
 
 # The MPEG decoder, for the container Wipeout HD keeps its music in. Reads how
 # long a track is, its channel count and its rate, and decodes it to PCM.

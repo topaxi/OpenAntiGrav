@@ -554,12 +554,21 @@ impl Mods {
     /// game runs from a checkout) are left out: they change no race a LAN session plays, and an
     /// installed joiner has none.
     #[must_use]
-    pub fn content_fingerprint(&self) -> u64 {
+    ///
+    /// A simulation module's `sim` picks (`picks`) are part of what it fingerprints, as
+    /// `id@version#row=pick` for each off index 0; a `view` pick never is.
+    pub fn content_fingerprint(&self, picks: &crate::settings::mod_settings::ModSettings) -> u64 {
         let named: Vec<String> = self
             .player()
             .filter(|m| !std::path::Path::new(&m.label()).starts_with(oag_mod::EXAMPLES))
             .filter(|m| changes_a_race(m))
-            .map(|m| format!("{}@{}", m.manifest.id, m.manifest.version))
+            .map(|m| {
+                let picked: String = crate::mod_extensions::options_of(m, picks)
+                    .identity()
+                    .map(|(row, pick)| format!("#{row}={pick}"))
+                    .collect();
+                format!("{}@{}{picked}", m.manifest.id, m.manifest.version)
+            })
             .collect();
         oag_net::discovery::content_fingerprint(&named)
     }
@@ -855,8 +864,13 @@ impl Mods {
             .filter(|m| self.disabled.contains(&m.manifest.id))
         {
             lines.push(format!(
-                "mod {} - turned off on the MODS page",
-                module.describe()
+                "mod {} - {}",
+                module.describe(),
+                if module.manifest.default_enabled {
+                    "turned off on the MODS page"
+                } else {
+                    "off until turned on on the MODS page (its manifest's default-enabled is false)"
+                }
             ));
         }
         lines.extend(self.failed.iter().map(|p| format!("mod problem: {p}")));

@@ -139,7 +139,7 @@ impl Race {
     /// reaches the mod only through those two fire paths. A mod adding a weapon
     /// handles nothing itself.
     pub(crate) fn may_use_pickup(&self, slot: usize) -> bool {
-        self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing
+        self.sim.may_use_pickup(slot)
     }
 
     /// Ends the use in progress of every craft that may not use its pickup: a mine
@@ -205,11 +205,11 @@ impl Race {
         };
         // A simulation mod's own pickup (`Weapon::Extension`): the button is the mod's,
         // and an absorb takes the pickup away with no energy paid (`crate::extensions`).
-        if weapon == oag_tables::weapons::Weapon::Extension {
+        if let oag_tables::weapons::Weapon::Extension(kind) = weapon {
             if !fire {
                 self.sim.world.ships[slot].pickup.take();
             }
-            self.sim.extensions.pickup_used(slot, !fire);
+            self.sim.extensions.pickup_used(slot, kind, !fire);
             return;
         }
         let Some(weapons) = self.sim.weapons.as_deref() else {
@@ -223,7 +223,7 @@ impl Race {
         if fire {
             match weapon {
                 // Routed to its mod above, before any table is read.
-                oag_tables::weapons::Weapon::Extension => {}
+                oag_tables::weapons::Weapon::Extension(_) => {}
                 oag_tables::weapons::Weapon::Turbo => {
                     let Some(simple) = weapons.simple(weapon) else {
                         // The file authors no Turbo. Nothing to fire *with*, so
@@ -678,7 +678,7 @@ impl Race {
             return;
         };
         for slot in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[slot].active
+            if !self.sim.world.ships[slot].in_world()
                 || !self.sim.world.ships[slot].pickup.is_dropping()
             {
                 continue;
@@ -842,7 +842,7 @@ impl Race {
     /// One craft's Cannon countdown, and the round it puts in the air when the
     /// countdown reaches zero. See [`Self::advance_cannons`] for the gate.
     fn advance_one_cannon(&mut self, slot: usize, cannon: &oag_tables::weapons::CannonStats) {
-        if !self.sim.world.ships[slot].active
+        if !self.sim.world.ships[slot].in_world()
             || self.sim.world.ships[slot].pickup.weapon != Some(oag_tables::weapons::Weapon::Cannon)
         {
             return;

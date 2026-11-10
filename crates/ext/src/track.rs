@@ -158,3 +158,14 @@ macro_rules! channel {
         KEY
     }};
 }
+
+/// A title's key, hashed at compile time: `title!("wipeout-hd")` is what
+/// [`Observation::title`](crate::Observation::title) returns in a Wipeout HD race. The
+/// names are a manifest's `titles` slugs.
+#[macro_export]
+macro_rules! title {
+    ($name:literal) => {{
+        const KEY: u32 = $crate::channel_key($name);
+        KEY
+    }};
+}

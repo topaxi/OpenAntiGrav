@@ -566,7 +566,7 @@ impl super::super::Scene {
     ) {
         let drawn = usize::from(race.ship_count());
         for slot in 0..drawn {
-            if !race.ship_active(slot) {
+            if !race.ship_drawn(slot) {
                 continue;
             }
             if let Some(drawable) = self.ships.get(slot) {

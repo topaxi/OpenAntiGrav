@@ -318,6 +318,9 @@ pub struct Sheet {
     /// beside [`Self::placed`] so a [`Placed`] stays the disc's own measure: the layout's
     /// rects are in the original's pixels.
     scales: Vec<(String, [f32; 2])>,
+    /// Texels per layout unit of the entries rasterised for one size (a vector icon);
+    /// an entry not listed is drawn at one texel per unit.
+    density: Vec<(String, f32)>,
 }
 
 impl Default for Sheet {
@@ -332,6 +335,7 @@ impl Default for Sheet {
             rgba: vec![0, 0, 0, 0],
             placed: Vec::new(),
             scales: Vec::new(),
+            density: Vec::new(),
         }
     }
 }
@@ -558,6 +562,7 @@ impl Sheet {
             rgba,
             placed,
             scales,
+            density: Vec::new(),
         }
     }
 
@@ -645,7 +650,26 @@ impl Sheet {
             rgba,
             placed,
             scales,
+            density: self.density.clone(),
         }
+    }
+
+    /// This sheet with `src` marked as rasterised at `density` texels per layout unit.
+    #[must_use]
+    pub fn with_texel_density(mut self, src: &str, density: f32) -> Self {
+        self.density.retain(|(name, _)| name != src);
+        self.density.push((src.to_string(), density));
+        self
+    }
+
+    /// Texels per layout unit `src` was rasterised at; `None` for an entry that was not
+    /// (one texel per unit).
+    #[must_use]
+    pub fn texel_density(&self, src: &str) -> Option<f32> {
+        self.density
+            .iter()
+            .find(|(name, _)| name == src)
+            .map(|(_, density)| *density)
     }
 
     /// Where `src` sits, if it was loaded.

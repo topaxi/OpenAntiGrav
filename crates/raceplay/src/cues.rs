@@ -96,6 +96,20 @@ impl Race {
         std::mem::take(&mut self.sim.cues)
     }
 
+    /// The mods' own sounds asked for since the last drain (`play-mod-sound`), oldest
+    /// first. Like [`Self::drain_cues`], an output the composition root drains.
+    pub fn drain_mod_sounds(&mut self) -> Vec<oag_gameplay::cue::ModSoundEvent> {
+        std::mem::take(&mut self.sim.mod_sounds)
+    }
+
+    /// The loops of the mods' own sounds that are wanted now (`play-mod-sound`'s `Loop` with
+    /// no `Stop` since): what plays is brought to this each tick, so a start or a stop raised
+    /// in a tick that ran silently ([`Self::tick_sim_only`]) is still heard.
+    #[must_use]
+    pub fn mod_sound_loops(&self) -> Vec<oag_gameplay::cue::ModSoundLoop> {
+        self.sim.extensions.sound_loops()
+    }
+
     /// The cues raised so far and not yet drained, for tests.
     #[must_use]
     pub fn pending_cues(&self) -> &[oag_gameplay::cue::CueEvent] {

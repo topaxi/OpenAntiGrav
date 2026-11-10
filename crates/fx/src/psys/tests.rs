@@ -62,6 +62,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             sheet_rect: None,
             short_run: false,
             under_alpha: false,
+            shader: None,
             world_space: false,
             template: false,
             rotation: None,
@@ -155,6 +156,45 @@ fn a_burst_never_recycles_an_attached_instance() {
             "a burst evicted an attached flare"
         );
     }
+}
+
+/// A mod's surface is one quad, the fewest particles in a pool a title's sparks have filled, so
+/// a plain burst would take its slot on the next tick (Omega's grid: all 32 were
+/// `WO_TRAIL_HITSHIP`, and the surface drew on no frame).
+#[test]
+fn a_full_pool_of_bursts_leaves_a_held_surface_standing() {
+    let mut stage = Stage::new();
+    let burst = effect("burst", false, 4.0);
+    let surface = effect("surface", false, 1.0);
+    let standing = |stage: &Stage| {
+        stage
+            .instances
+            .iter()
+            .filter(|instance| {
+                instance
+                    .effect
+                    .as_ref()
+                    .is_some_and(|e| e.name == "surface")
+            })
+            .count()
+    };
+    for _ in 0..MAX_INSTANCES {
+        stage.play(&burst, Vec3::ZERO, 1.0);
+    }
+    assert!(stage.play_held(&surface, Vec3::ZERO, 1.0).is_some());
+    for _ in 0..MAX_INSTANCES * 2 {
+        assert!(stage.play(&burst, Vec3::ZERO, 1.0).is_some());
+    }
+    assert_eq!(standing(&stage), 1, "a burst took the surface's slot");
+
+    // The cap: bursts always have the rest of the pool.
+    for _ in 0..MAX_HELD * 2 {
+        stage.play_held(&surface, Vec3::ZERO, 1.0);
+    }
+    for _ in 0..MAX_INSTANCES * 2 {
+        stage.play(&burst, Vec3::ZERO, 1.0);
+    }
+    assert_eq!(standing(&stage), MAX_HELD);
 }
 
 #[test]
@@ -286,6 +326,41 @@ fn an_oriented_instance_emits_along_its_own_up() {
     assert!(
         centre.y.abs() < 0.5,
         "particles drifted along world up: {centre:?}"
+    );
+}
+
+/// A held surface takes the `up` it is given (`Fired::OwnAt`'s, the road's own): `orient` is
+/// for attached instances and did nothing for it, so a banked road's portal stood square to
+/// world up. A plain `play` is left to `orient` as ever, which still ignores it.
+#[test]
+fn a_held_surface_takes_its_orientation() {
+    let mut rng = Rng::new(5);
+    let mut spec = (*effect("aimed", true, 10.0)).clone();
+    spec.emitters[0].speed_per_tick = (1.0, 0.0);
+    let aimed = std::sync::Arc::new(spec);
+    let emitted_along_x = |stage: &mut Stage, rng: &mut Rng| {
+        for _ in 0..8 {
+            stage.advance(DT, rng);
+        }
+        let (additive, _) = stage.vertices(Vec3::Z, Vec3::Y);
+        assert!(!additive.is_empty(), "nothing was emitted");
+        let centre = additive
+            .iter()
+            .fold(Vec3::ZERO, |sum, v| sum + Vec3::from_array(v.position))
+            / additive.len() as f32;
+        centre.x > 1.0 && centre.y.abs() < 0.5
+    };
+    let mut stage = Stage::new();
+    let held = stage.play_held(&aimed, Vec3::ZERO, 1.0).expect("play_held");
+    stage.orient_surface(held, Vec3::X);
+    assert!(emitted_along_x(&mut stage, &mut rng), "a held surface");
+
+    let mut stage = Stage::new();
+    let burst = stage.play(&aimed, Vec3::ZERO, 1.0).expect("play");
+    stage.orient(burst, Vec3::X);
+    assert!(
+        !emitted_along_x(&mut stage, &mut rng),
+        "orient is still attached-only"
     );
 }
 

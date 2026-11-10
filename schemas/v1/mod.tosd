@@ -103,6 +103,10 @@ optional = true
 type = "integer"
 optional = true
 
+[types.extension.drives_ai_pickup]
+type = "boolean"
+optional = true
+
 [types.extension.rules]
 type = "table"
 optional = true
@@ -146,9 +150,10 @@ optional = true
 type = "types.channels"
 optional = true
 
-# `[icons]`: name = "path.png". The keys are the author's, so the schema says "any"; the
-# loader checks that every icon is a .png in the mod and every name is letters, digits,
-# '-', '_'. A mod's text is its `strings/<language>.toml`, not the manifest.
+# `[icons]`: name = "path.png" or "path.svg". The keys are the author's, so the schema says
+# "any"; the loader checks that every icon is a .png or .svg in the mod and every name is
+# letters, digits, '-', '_'. An .svg is rasterised at load at the pixel size it is drawn at;
+# a `<text>` node draws nothing and an `<image>` is never read. A mod's text is its `strings/<language>.toml`, not the manifest.
 
 [elements.icons]
 type = "any"
@@ -159,6 +164,22 @@ optional = true
 # mod; the file itself is read, and refused by name, when a race loads it.
 
 [elements.effects]
+type = "any"
+optional = true
+
+# `[shaders]`: name = "path.wgsl", the mod's own fragment shaders, `.wgsl` or `.wesl`
+# (docs/architecture/wasm-extensions/mod-shaders.md). The loader checks the names and that each
+# is such a file in the mod; the file itself is read, and refused by name, when a race loads it.
+
+[elements.shaders]
+type = "any"
+optional = true
+
+# `[sounds]`: name = "path.wav", the mod's own sounds (PCM16, docs/formats/mod-sound.md).
+# The loader checks the names and that each is a .wav in the mod; the file itself is read,
+# and refused by name, when a race loads it.
+
+[elements.sounds]
 type = "any"
 optional = true
 
@@ -193,6 +214,47 @@ optional = true
 [types.pickup.colour.rgba]
 type = "string"
 optional = true
+
+# `[[pickup.odds]]`: the weights the weapon pads draw the mod's own pickup with, beside
+# the title's weapons (ai, human, front, back, as a title's <Pickupodds>). `title` (a
+# lowercased hyphenated title name) and `class` (a pickup table's class, any case) are
+# optional; the most specific row that matches a race is used. Weights finite, >= 0.
+
+[types.pickup.odds]
+type = "array"
+itemtype = "types.pickup-odds"
+optional = true
+
+# `[pickup.titles.<title>]`: what differs on one title (its lowercased hyphenated name),
+# the same `icon` and `colour` shapes, each over `[pickup]` for what it leaves out: a
+# mod's own icon art per title. The loader checks the shapes as `[pickup]` does.
+
+[types.pickup.titles]
+type = "any"
+optional = true
+
+[types.pickup-odds]
+type = "table"
+
+[types.pickup-odds.title]
+type = "string"
+optional = true
+
+[types.pickup-odds.class]
+type = "string"
+optional = true
+
+[types.pickup-odds.ai]
+type = "float"
+
+[types.pickup-odds.human]
+type = "float"
+
+[types.pickup-odds.front]
+type = "float"
+
+[types.pickup-odds.back]
+type = "float"
 
 [elements.pickup]
 type = "types.pickup"

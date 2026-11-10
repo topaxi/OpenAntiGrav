@@ -68,6 +68,9 @@ pub(super) struct Viewpoints {
     /// The extra slot the scene is being drawn for right now, `None` for the
     /// player's own view. Set by the draw through `&Race`, so a [`Cell`].
     drawing: Cell<Option<u8>>,
+    /// The camera through a portal pair while the secondary view draws, over every other
+    /// camera. Set through `&Race`, so a [`Cell`].
+    portal: Cell<Option<Mat4>>,
     /// Indexed by slot. Slot 0 stays `None`: the player's camera is
     /// `RaceView::camera`.
     cams: [Option<Cam>; MAX_SHIPS],
@@ -92,6 +95,17 @@ pub struct WindowViews {
 }
 
 impl Viewpoints {
+    /// See [`Race::set_portal_camera`](crate::Race::set_portal_camera).
+    pub(super) fn set_portal(&self, view: Option<Mat4>) {
+        self.portal.set(view);
+    }
+
+    /// Whether the view being drawn is the one through a portal pair: the world at the
+    /// exit, which wears nothing of the viewer's screen.
+    pub(super) fn through_portal(&self) -> bool {
+        self.portal.get().is_some()
+    }
+
     /// The shake on extra slot `slot`'s camera, `None` for a slot with no view.
     pub(super) fn shake_of(&self, slot: usize) -> Option<&oag_render::camera::shake::Shake> {
         self.contact.get(slot)?.as_ref().map(|fx| &fx.shake)
@@ -323,7 +337,7 @@ impl Race {
                 chase,
                 previous: view,
                 current: view,
-                respawns: self.respawns_of(slot),
+                respawns: self.placements_of(slot),
                 boost_kick: 0.0,
             });
         }
@@ -338,8 +352,9 @@ impl Race {
         let kicks = self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF;
         for slot in 0..MAX_SHIPS {
             let boosting = self.sim.world.ships[slot].physics.pad_timer > 0.0;
-            let respawns = self.respawns_of(slot);
-            let target = target_of(&self.sim.world.ships[slot]);
+            let respawns = self.placements_of(slot);
+            let target = self.followed(slot);
+            let step = self.camera_step(slot);
             let Some(cam) = self.view.viewpoints.cams[slot].as_mut() else {
                 continue;
             };
@@ -347,7 +362,7 @@ impl Race {
                 cam.chase = Chase::snapped(target, &params);
                 cam.respawns = respawns;
             } else {
-                cam.chase.advance(target, &params, dt);
+                cam.chase.advance(target, &params, step);
             }
             if kicks {
                 cam.boost_kick = super::tick::step_boost_kick(cam.boost_kick, boosting, dt);
@@ -406,7 +421,7 @@ impl Race {
     #[must_use]
     pub fn viewed_camera_cuts(&self) -> u32 {
         match self.extra_viewpoint() {
-            Some(slot) => self.respawns_of(slot).wrapping_add(self.view.restores),
+            Some(slot) => self.placements_of(slot).wrapping_add(self.view.restores),
             None => self.camera_cuts(),
         }
     }
@@ -421,6 +436,9 @@ impl Race {
     /// own. The shake is the seat's state this tick, turned about the blended view as the
     /// player's is ([`oag_render::camera::shake::Shake::apply`]).
     pub(super) fn extra_view(&self) -> Option<Mat4> {
+        if let Some(view) = self.view.viewpoints.portal.get() {
+            return Some(view);
+        }
         let slot = self.extra_viewpoint()?;
         let base = self.view.viewpoints.view(slot, self.draw_alpha());
         Some(match self.view.viewpoints.shake_of(slot) {
@@ -431,6 +449,9 @@ impl Race {
 
     /// [`Self::extra_view`] without the shake: where the seat's camera is really pointed.
     pub(super) fn extra_view_unshaken(&self) -> Option<Mat4> {
+        if let Some(view) = self.view.viewpoints.portal.get() {
+            return Some(view);
+        }
         self.extra_viewpoint()
             .map(|slot| self.view.viewpoints.view(slot, self.draw_alpha()))
     }
@@ -473,6 +494,7 @@ impl Race {
         let kick = self.view.viewpoints.cams[slot].map_or(0.0, |cam| cam.boost_kick);
         Some(super::camera::finish_vertical_fov(
             authored,
+            self.extension_fov_offset(slot),
             kick,
             self.view.boost_fov_kick.gain(),
             aspect,

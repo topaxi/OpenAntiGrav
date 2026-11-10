@@ -413,6 +413,20 @@ impl Scene {
     ) -> SceneStats {
         let mut stats = SceneStats::default();
         self.reuse_frame_work.set(shared);
+        let settings = super::frame::ViewSettings {
+            fov,
+            cull,
+            pvs_cull,
+            anim_seconds,
+            shadows,
+            camera_jitter: effects.camera_jitter,
+            zone_spectrum,
+            portal: None,
+        };
+        if !shared {
+            let views: Vec<_> = slots.iter().copied().zip(rects.iter().copied()).collect();
+            self.draw_portal_view(device, queue, race, &views, &settings);
+        }
         // The blur of a split runs after its last view, so its strength opens the velocity
         // gate for every view (`Scene::render` is told `Off` for each).
         self.split_blur_reads
@@ -489,15 +503,6 @@ impl Scene {
                 oag_gpu::perfprobe::mark("submit");
             }
         } else {
-            let settings = super::frame::ViewSettings {
-                fov,
-                cull,
-                pvs_cull,
-                anim_seconds,
-                shadows,
-                camera_jitter: effects.camera_jitter,
-                zone_spectrum,
-            };
             folded = folds(recording).then(|| Folded::begin(self));
             stats = self.render_slots_batched(
                 device,

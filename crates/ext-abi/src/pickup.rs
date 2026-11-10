@@ -3,7 +3,47 @@
 //! Both name their source outright: the title's own, or the mod's. Nothing is implied
 //! by the pickup being a mod's.
 
-use crate::{HudStr, Rgba, Weapon};
+use crate::{HudStr, PICKUP_OTHER_FIRST, PICKUP_OTHER_LAST, PICKUP_OURS, Rgba, Weapon};
+
+/// What a craft holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Pickup {
+    /// Nothing.
+    #[default]
+    None,
+    /// One of the title's weapons.
+    Weapon(Weapon),
+    /// The reading mod's own pickup (`give-pickup`).
+    Ours,
+    /// Another mod's pickup, by that mod's kind in the race (below [`crate::MAX_PICKUP_KINDS`], in
+    /// module id order among the mods that declare a `[pickup]`). A module sees its own
+    /// kind as [`Self::Ours`], never as this.
+    Other(u8),
+}
+
+impl Pickup {
+    /// Its code in a craft record.
+    #[must_use]
+    pub const fn code(self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::Weapon(weapon) => weapon.code(),
+            Self::Ours => PICKUP_OURS,
+            Self::Other(kind) => PICKUP_OTHER_FIRST + kind,
+        }
+    }
+
+    /// The pickup a code names, if any.
+    #[must_use]
+    pub fn from_code(code: u8) -> Option<Self> {
+        match code {
+            0 => Some(Self::None),
+            PICKUP_OURS => Some(Self::Ours),
+            PICKUP_OTHER_FIRST..=PICKUP_OTHER_LAST => Some(Self::Other(code - PICKUP_OTHER_FIRST)),
+            _ => Weapon::from_code(code).map(Self::Weapon),
+        }
+    }
+}
 
 /// The name of one of the mod's own `[icons]`, at most `MAX_HUD_TEXT` bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

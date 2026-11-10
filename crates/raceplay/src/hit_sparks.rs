@@ -294,7 +294,7 @@ impl Race {
             return;
         };
         let ship = &self.sim.world.ships[slot];
-        if anchors.is_empty() || !ship.active {
+        if anchors.is_empty() || !ship.in_world() {
             return;
         }
         let Some(effect) = self.view.handles.get(Trigger::WeaponSpark).cloned() else {
@@ -351,7 +351,7 @@ impl Race {
         damaged: bool,
     ) {
         let ship = &self.sim.world.ships[slot];
-        if !ship.active || ship.physics.shield_pickup_timer > 0.0 {
+        if !ship.in_world() || ship.physics.shield_pickup_timer > 0.0 {
             return;
         }
         let Some(anchors) = self.view.hit_sparks.anchors.get(slot) else {
@@ -485,7 +485,7 @@ impl Race {
         let mut riding = std::mem::take(&mut self.view.hit_sparks.riding);
         riding.retain(|spark| {
             let ship = &self.sim.world.ships[spark.slot];
-            if !ship.active || !self.view.stage.is_emitting(spark.playing) {
+            if !ship.in_world() || !self.view.stage.is_emitting(spark.playing) {
                 self.view.stage.detach(spark.playing);
                 return false;
             }

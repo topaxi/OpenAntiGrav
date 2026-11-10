@@ -117,7 +117,8 @@ impl Race {
     /// If `slot` is not a ship slot.
     #[must_use]
     pub fn ship_active(&self, slot: usize) -> bool {
-        self.sim.world.ships[slot].active
+        // In the world: a craft in a transit is not drawn (`crate::transit`).
+        self.sim.world.ships[slot].in_world()
     }
 
     /// The word a craft's hull-light scale is written to the model uniform as -
@@ -236,7 +237,7 @@ impl Race {
             .iter()
             .take(self.sim.world.ship_count as usize)
             .enumerate()
-            .filter(|(_, ship)| ship.active)
+            .filter(|(_, ship)| ship.in_world())
             .map(|(slot, _)| self.ship_model_matrix_of(slot))
             .collect()
     }

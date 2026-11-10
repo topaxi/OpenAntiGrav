@@ -153,7 +153,7 @@ impl Race {
     pub(super) fn advance_exhausts(&mut self) {
         self.advance_zoom();
         for slot in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[slot].active {
+            if !self.sim.world.ships[slot].in_world() {
                 continue;
             }
             let ship = &self.sim.world.ships[slot].physics;
@@ -269,11 +269,11 @@ impl Race {
         }
         self.force_trail_sparks();
         for owner in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[owner].active || !self.trail_ready(owner) {
+            if !self.sim.world.ships[owner].in_world() || !self.trail_ready(owner) {
                 continue;
             }
             for intruder in 0..self.sim.world.ship_count as usize {
-                if intruder == owner || !self.sim.world.ships[intruder].active {
+                if intruder == owner || !self.sim.world.ships[intruder].in_world() {
                     continue;
                 }
                 let at = self.sim.world.ships[intruder].physics.body.position;
@@ -1072,12 +1072,30 @@ impl Race {
     /// own events and camera (its falloff is measured from the player's eye), so another local
     /// seat's view does not wear it: before, the player's explosion or respawn washed every
     /// view of a split. **Chosen, not measured**: a seat has no wash of its own yet.
+    ///
+    /// **Never the view through a portal pair**: that is the world at the exit, and the
+    /// wash is drawn once, over the view the portal's surface is in.
     #[must_use]
     pub fn screen_wash(&self) -> Option<[f32; 4]> {
-        if self.extra_viewpoint().is_some() {
+        if self.view.viewpoints.through_portal() {
             return None;
         }
-        self.view.screen_flash.as_ref()?.colour()
+        let flash = match self.extra_viewpoint() {
+            Some(_) => None,
+            None => self.view.screen_flash.as_ref().and_then(|f| f.colour()),
+        };
+        // A module's `screen-fill` is the view's own slot's, so a seat wears its own.
+        let fill = self.extension_fill(self.viewed_slot());
+        match (flash, fill) {
+            (flash, None) => flash,
+            (None, fill) => fill,
+            // Both are additive washes (colour times alpha added over the picture), so
+            // together they are the sum, at full alpha.
+            (Some(flash), Some(fill)) => {
+                let add = |c: usize| flash[c] * flash[3] + fill[c] * fill[3];
+                Some([add(0).min(1.0), add(1).min(1.0), add(2).min(1.0), 1.0])
+            }
+        }
     }
 
     /// Whether the player's shield pickup is currently up.

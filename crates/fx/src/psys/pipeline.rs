@@ -9,6 +9,28 @@ use oag_mesh::mesh::GpuVertex;
 
 mod distort;
 
+/// A mod shader's surface (`mod_shader.wesl`'s `SurfaceVertex`): the vertices a particle
+/// pipeline draws, read by a stage that wants position, colour, texcoord and the tick move.
+pub(crate) const SURFACE_ATTRIBUTES: [wgpu::VertexAttribute; 5] = [
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32x3,
+        offset: std::mem::offset_of!(GpuVertex, position) as u64,
+        shader_location: 0,
+    },
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32x4,
+        offset: std::mem::offset_of!(GpuVertex, colour) as u64,
+        shader_location: 2,
+    },
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32x2,
+        offset: std::mem::offset_of!(GpuVertex, texcoord) as u64,
+        shader_location: 3,
+    },
+    SHIFT_ATTRIBUTES[0],
+    SHIFT_ATTRIBUTES[1],
+];
+
 /// The additive blend - the original's blend class 2, `BlendFunc(ADD,
 /// SRC_ALPHA, FIX 0xffffff)`, used by the three bright emitters. The same
 /// shape [`crate::exhaust::BLEND`] uses, and for the same reason: additive

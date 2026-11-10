@@ -255,7 +255,7 @@ pub struct HoverProbe {
 
 impl HoverProbe {
     /// A probe that found nothing.
-    fn miss(point: Vec3) -> Self {
+    pub(crate) fn miss(point: Vec3) -> Self {
         Self {
             point,
             force: Vec3::ZERO,
