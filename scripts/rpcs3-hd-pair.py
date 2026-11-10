@@ -274,6 +274,12 @@ def main():
                    % (clock, (args.ours_ticks - GO_TICK) / 60, args.ours_ticks, GO_TICK))
     shutil_copy(record["screenshot"], out / "theirs.png")
     pair.check_size("original", out / "theirs.png")
+    # The width the frame's scene was drawn at (1300 to 1920 on the 1080p path), read off the frame, with the
+    # level the game held in the capture's pause beside it (`hd_scene_width`).
+    import hd_scene_width
+    pair.rec["original"]["scene_width"] = hd_scene_width.measure(out / "theirs.png")
+    if ship.get("scene_width"):
+        pair.rec["original"]["scene_width"]["at_pause"] = ship["scene_width"]
     if args.field:
         # the player goes in as slot 0 of the field file, an exact pose: no yaw solve, no tilt left uncarried
         yaw, agree, our_up = 0.0, 1.0, ship["rows"][1]
