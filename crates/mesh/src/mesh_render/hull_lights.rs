@@ -138,6 +138,72 @@ pub fn ge_byte(byte: u8, scale: u16) -> f32 {
     ((u32::from(byte) * u32::from(scale)) >> 8) as f32 / 255.0
 }
 
+/// The colour a Pulse hull's extra pass is drawn in: what
+/// `SceneLight_BuildLightingList` returns and `SceneLight_Rebuild` writes into
+/// the material list `Mesh_BeginTransparentPass` replays, so the unlit pass's
+/// primary colour is the light the craft stands in rather than white
+/// (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "The extra pass's
+/// colour is the light the hull stands in").
+///
+/// ```text
+/// sum     = ambient * ambient_scale + sum(directional_i * directional_scale)
+///           + sum(point_j * strength_j * 255 * point_or_spot_scale)
+/// channel = min(255, trunc(sum))
+/// ```
+///
+/// The colours are the nodes' own floats, **not** clamped to a byte first (a
+/// directional above `1.0` counts in full), and the scales are the craft's
+/// spline bytes as plain numbers, `0..=255`. At the usual scale of about 250
+/// nearly every circuit's sum passes 255 on every channel and the pass is
+/// white; it dims and tints where the scale is low.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HullPassColour {
+    /// The sum of every `AmbientLight`'s colour.
+    ambient: [f32; 3],
+    /// Each `DirectionalLight`'s colour, the four the GE list takes at most.
+    directional: Vec<[f32; 3]>,
+}
+
+impl HullPassColour {
+    /// The terms a circuit's `track.vex` authors, `None` when it authors
+    /// neither light class (the original then adds 255 to every channel, so the
+    /// pass is white).
+    #[must_use]
+    pub fn from_track(data: &[u8], nodes: &[vex::Node]) -> Option<Self> {
+        let ambients = lighting::ambient_lights(data, nodes);
+        let directionals = lighting::directional_lights(data, nodes);
+        if ambients.is_empty() && directionals.is_empty() {
+            return None;
+        }
+        let ambient = ambients.iter().fold([0.0f32; 3], |acc, light| {
+            [0, 1, 2].map(|k| acc[k] + light.colour[k])
+        });
+        let directional = directionals
+            .iter()
+            .take(HULL_LIGHTS)
+            .map(|light| light.colour)
+            .collect();
+        Some(Self {
+            ambient,
+            directional,
+        })
+    }
+
+    /// The pass's colour, `0..=1`, for a craft under the `ambient` and
+    /// `directional` scale bytes, with `points` the point and spot lights'
+    /// share ([`super::HullPointLights::accumulated`]).
+    #[must_use]
+    pub fn at(&self, [ambient, directional]: [u8; 2], points: [f32; 3]) -> [f32; 3] {
+        let mut sum = self.ambient.map(|c| c * f32::from(ambient));
+        for light in &self.directional {
+            for k in 0..3 {
+                sum[k] += light[k] * f32::from(directional);
+            }
+        }
+        [0, 1, 2].map(|k| ((sum[k] + points[k]) as u32).min(255) as f32 / 255.0)
+    }
+}
+
 /// A craft's two hull-light scale bytes as the one float `mesh.wesl` reads
 /// from the model uniform: `ambient | directional << 8`, integer-valued so it
 /// survives the trip exactly. `0.0` means the default `255` for both.
@@ -169,6 +235,24 @@ mod tests {
         // 16_Track's first light, 255 bare, at the tunnel's 127: 127 * 255 >> 8.
         assert_eq!((ge_channel(1.0, 127) * 255.0).round() as u32, 126);
         assert_eq!((ge_channel(1.0, 256) * 255.0).round() as u32, 255);
+    }
+
+    #[test]
+    fn the_pass_colour_is_the_scaled_sum_truncated_and_clamped() {
+        let pass = HullPassColour {
+            ambient: [0.1, 0.2, 0.0],
+            directional: vec![[1.5, 0.25, 0.0], [0.5, 0.25, 0.0]],
+        };
+        // 0.1 * 200 + 2.0 * 100 = 220; 0.2 * 200 + 0.5 * 100 = 90; nothing.
+        assert_eq!(
+            pass.at([200, 100], [0.0; 3]),
+            [220.0 / 255.0, 90.0 / 255.0, 0.0]
+        );
+        // The point lights' share is added before the clamp, and a channel stops at 255.
+        assert_eq!(
+            pass.at([200, 100], [40.0, 0.9, 3.5]),
+            [1.0, 90.0 / 255.0, 3.0 / 255.0]
+        );
     }
 
     #[test]

@@ -187,7 +187,8 @@ impl Scene {
             for (slot, shine) in self.shines(race, mapped) {
                 let ship = race.ship_model_matrix_of(slot);
                 let flaps = race.airbrake_flaps_of(slot);
-                shine.write_environment_map(queue, ship, flaps, scratch);
+                let colour = race.ship_shine_colour(slot, self.anim_clock.get());
+                shine.write_environment_map(queue, ship, flaps, colour, scratch);
             }
             self.frame_work.update(|w| super::FrameWork {
                 shine_maps: w.shine_maps + 1,

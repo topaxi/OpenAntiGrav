@@ -829,6 +829,11 @@ pub struct Looks {
     /// craft's hull, scaled per craft by the spline's light scale (so it
     /// darkens in a tunnel). Keyed on the race's own archive.
     pub hull_lights: Rule,
+    /// The hull's extra pass drawn in the circuit's accumulated light colour
+    /// rather than white: the sheen dims and tints where the craft's light
+    /// scale is low. Needs `hull_shine` and `hull_lights`. Keyed on the race's
+    /// own archive.
+    pub hull_shine_lit: Rule,
     /// The sun's lens flare: ten additive quads along the line through the screen
     /// centre, drawn where a circuit authors a `lensflare` node
     /// (`docs/rendering/lens-flare.md`). Pure's. The rule is the law, the node is the
@@ -956,6 +961,7 @@ impl Looks {
             circuit_effects: Rule::UNREAD,
             road_ripple: Rule::UNREAD,
             hull_lights: Rule::UNREAD,
+            hull_shine_lit: Rule::UNREAD,
             lens_flare: Rule::UNREAD,
             track_shine: Rule::UNREAD,
             track_shine_weighted: Rule::UNREAD,

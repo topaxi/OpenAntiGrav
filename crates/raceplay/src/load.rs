@@ -1242,6 +1242,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             spu_vertex_lights,
             #[cfg(feature = "view")]
             hull_points: oag_mesh::mesh_render::HullPointLights::none(),
+            #[cfg(feature = "view")]
+            hull_pass: None,
             // Positions only: this list feeds the trail-hit sparks' nearest-of search
             // (`RaceView::spark_anchor_of`), which has no live hull orientation to aim along today
             // - see `collision_fx` below for the field that does.
@@ -1443,7 +1445,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     pulse_psp::finish(
         &mut loaded,
-        (circuit_fx, road_ripple, hull_lights),
+        (
+            circuit_fx,
+            road_ripple,
+            hull_lights,
+            title.looks.hull_shine_lit.applies(archives.layout.platform),
+        ),
         psp_glow_mask,
         track_shine,
         &track_blob,

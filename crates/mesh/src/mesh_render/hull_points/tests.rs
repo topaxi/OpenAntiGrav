@@ -123,3 +123,27 @@ fn none_and_no_free_slot_light_nothing() {
     };
     assert!(full.is_empty());
 }
+
+/// The builder's returned colour takes each chosen light as colour x strength x 255 x the
+/// scale byte, not shifted down: a light that reaches the craft at all saturates.
+#[test]
+fn a_chosen_light_adds_its_unshifted_product_to_the_pass_colour() {
+    let lights = HullPointLights {
+        lights: vec![fixed([0.0, 0.0, 11.0])],
+        slots: 1,
+    };
+    // 11 units from a light of radii 7 and 15: t = 0.5, strength 0.5.
+    let sum = lights.accumulated([0.0; 3], 0.0, [200, 100]);
+    let want = [0.388, 0.907, 1.0].map(|c: f32| c * (0.5 * 255.0) * 200.0);
+    for k in 0..3 {
+        assert!((sum[k] - want[k]).abs() < 1.0, "{sum:?} against {want:?}");
+    }
+    assert_eq!(
+        lights.accumulated([0.0, 0.0, 40.0], 0.0, [200, 100]),
+        [0.0; 3]
+    );
+    assert_eq!(
+        HullPointLights::none().accumulated([0.0; 3], 0.0, [255, 255]),
+        [0.0; 3]
+    );
+}

@@ -28,7 +28,7 @@ pub(super) fn is_pulse_psp(title: &oag_title::Title, archives: &oag_assets::Arch
 /// ripple and hull lights follow their own rules, which the PS2 shares.
 pub(super) fn finish(
     loaded: &mut Loaded,
-    (circuit_fx, road_ripple, hull_lights): (bool, bool, bool),
+    (circuit_fx, road_ripple, hull_lights, hull_shine_lit): (bool, bool, bool, bool),
     psp_glow_mask: bool,
     track_shine: bool,
     track_blob: &[u8],
@@ -54,7 +54,7 @@ pub(super) fn finish(
     }
     // A foreign track has no blob; its file's own light is `foreign::art`'s.
     if hull_lights && !track_blob.is_empty() {
-        light_hulls(loaded, track_blob, &nodes);
+        light_hulls(loaded, track_blob, &nodes, hull_shine_lit);
     }
     if track_shine {
         loaded
@@ -89,8 +89,14 @@ pub(super) fn finish(
 #[cfg(feature = "view")]
 /// Lights the hulls with the circuit's own light nodes, built at the bare
 /// colour bytes: the craft's own scale is applied in the shader. See
-/// `oag_mesh::mesh_render::HullLights`.
-fn light_hulls(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::vex::Node]) {
+/// `oag_mesh::mesh_render::HullLights`. With `shine_lit` the same nodes also
+/// colour the hull's extra pass (`oag_mesh::mesh_render::HullPassColour`).
+fn light_hulls(
+    loaded: &mut Loaded,
+    track_blob: &[u8],
+    nodes: &[oag_vex::vex::Node],
+    shine_lit: bool,
+) {
     match mesh_render::HullLights::from_track(track_blob, nodes, 256) {
         Some(hull) => {
             loaded.report.push(format!(
@@ -106,6 +112,12 @@ fn light_hulls(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::vex::No
                 4 - directionals.min(4),
             ));
             loaded.light.hull = hull;
+            if shine_lit {
+                loaded.setup.hull_pass = mesh_render::HullPassColour::from_track(track_blob, nodes);
+                loaded.report.push(
+                    "hull shine: drawn in the circuit's accumulated light colour, per craft".into(),
+                );
+            }
         }
         None => loaded
             .report

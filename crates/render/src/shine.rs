@@ -20,7 +20,12 @@
 //!   and [`crate::texgen::ENV_BASIS_1`] - `model+0x1a8` was read as `1` on the
 //!   live hull and its `+0x1ac..+0x1c0` held exactly those six floats. So the
 //!   coordinates follow the ship's rotation and never the camera.
-//! - **Lighting is off** and the texture is drawn as it is, white vertex colour.
+//! - **Lighting is off** and the vertices carry no colour, so the texture is
+//!   modulated by the GE's material colour: the model's own material list,
+//!   which `SceneLight_Rebuild` fills with the colour the hull's light list
+//!   builder returns ([`oag_mesh::mesh_render::HullPassColour`]; white at the
+//!   usual light scale, dimmer and tinted where the craft's scale bytes are
+//!   low, as on Metropia's grid). [`write`] takes it per craft.
 //! - **Blending** is `Mesh_SetBatchDrawState`'s, chosen by header byte 3 bit
 //!   `0x10`, which the *loader* sets: `Mesh_CountBatchesPerList` (`0x0890e7a8`)
 //!   ORs it into every list-A batch with `0x2000` and without `0x0800`. The
@@ -410,7 +415,19 @@ pub fn merge_spans(spans: &mut Vec<Range<usize>>) {
 /// swung by [`oag_mesh::mesh::Flap::swung`], the same call the hull's base draw
 /// makes, *before* the coordinates are generated: the swung normal is what the
 /// glint reads. `[0.0, 0.0]` leaves every vertex where the file put it.
-pub fn write(model: &Model, out: &mut Vec<GpuVertex>, ship: Mat4, flaps: [f32; 2]) {
+///
+/// **`colour` multiplies every vertex colour**: the pass is unlit and its
+/// vertices author none, so the GE's primary colour is the material colour
+/// `Mesh_BeginTransparentPass` replays, which for a hull is the light it stands
+/// in ([`oag_mesh::mesh_render::HullPassColour`]) and the texture is modulated
+/// by it. White leaves the texture as it is.
+pub fn write(
+    model: &Model,
+    out: &mut Vec<GpuVertex>,
+    ship: Mat4,
+    flaps: [f32; 2],
+    colour: [f32; 3],
+) {
     texgen::environment_map(
         &model.vertices,
         out,
@@ -436,6 +453,13 @@ pub fn write(model: &Model, out: &mut Vec<GpuVertex>, ship: Mat4, flaps: [f32; 2
             texgen::ENV_BASIS_1,
         );
         out[span].copy_from_slice(&mapped);
+    }
+    if colour != [1.0; 3] {
+        for vertex in out.iter_mut() {
+            for (channel, scale) in vertex.colour.iter_mut().zip(colour) {
+                *channel *= scale;
+            }
+        }
     }
 }
 
