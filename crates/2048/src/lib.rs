@@ -297,14 +297,16 @@ pub const TITLE: &Title = &Title {
         adverts_unlit: true,
         card_store: oag_title::adverts::CardStore::R5G6B5Linear,
         card_unlit: true,
-        // `321Go_2048.vex` counts down by moving nodes. The HD-lineage boards
-        // (`321Go_StartFinish.vex` and the rest) drive their digits with material
-        // curves this title's container does not yet give up
-        // (`docs/formats/omega-status.md`, "Adverts").
+        // `321Go_2048.vex` counts down by moving nodes. Any other board
+        // (`321Go_StartFinish.vex`) plays HD's clock on the UV keys its `.vex`
+        // authors (`docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys").
         gantry_boards: Some(&[oag_title::adverts::GantryBoard {
             entry: "/Data/Billboards/HD_Adverts/321Go/321Go_2048.vex",
             assembly_ticks: 200,
         }]),
+        // The board is this title's own substitution in a Zone race
+        // (`TrackStartup_Read`, `docs/ghidra/functions/vita-2048-eu-v104/track-startup-sound-bank.md`);
+        // the assembly ticks are HD's, inherited.
         zone_gantry: Some(oag_title::adverts::ZoneGantry {
             entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
             assembly_ticks: 210,

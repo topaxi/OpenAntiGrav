@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [omega, 2048]
 updated: 2026-11-10
-summary: "Omega adverts pass on for the node-driven board, the HD board waits on PS4 curves; plume flags, hit effects, Looks, shadows open"
+summary: "Omega and 2048 countdown boards play (UV keys read from the .vex); mode boards, plume flags, hit effects, Looks, shadows open"
 difficulty: hard (35)
 ---
 
@@ -57,13 +57,18 @@ data proves it.
 
 ### Worth a lane now (tier B)
 
-4. **Adverts pass: on, playing the node-driven board; the HD-lineage board is blocked on the PS4 material curves.**
-   Landed 2026-11-10 (`omega-gantry`): `.gxt`/`.gnf` spellings in `oag_render::gantry`, `adverts` set to HD's values
-   (inherited) with `gantry_boards` naming `321Go_2048.vex`, which counts down by node motion. Open: (a) read the PS4
-   materials' texture curves (`crates/mesh`, `oag_rcs::rcsmodel::psp2`; tier C) so `321Go_StartFinish.vex` and the Zone,
-   Zone Battle and detonator boards can play, then add them to `gantry_boards` or drop the field; (b) the digits' phase is
-   chosen (frame 0 on tick 73): shadPS4 draws the card's face blank white, so a reference needs another renderer.
-   Details: `docs/rendering/start-gantry.md`, "Omega and 2048"; `docs/formats/omega-status.md`, "Adverts".
+4. **Adverts pass: the countdown boards play; three mode boards have no carrier.**
+   Landed 2026-11-10 (`omega-gantry`, `omega-billboards`): `321Go_2048.vex` by node motion, `321Go_StartFinish.vex` on HD's
+   clock off the UV keys its `.vex` `Mesh` nodes author (Omega `TexAnim_UpdateTransform` `0x0172ba00`, confidence 88;
+   the PS4 and Vita `.rcsmodel` carry no curve), and `321Go_Zone.vex` in a Zone race on both titles. Open: (a) the Zone
+   Battle, Detonator and 2048 Combat boards build and their substitution is read on both executables, but
+   `oag_title::adverts::ZoneGantry` is Zone only, so nothing selects them; (b) the digits' phase against the original is
+   unmeasured (shadPS4 draws the card blank white; Vita3K untried); (c) HD's race-manager windows run inherited, not re-read
+   on either executable; (d) a stippled triangle crosses the board's quad on 2048 (Tech De Ra), as on other 2048 surfaces
+   in the same frame. Lead, not chased: `omega-status.md` holds a chevron `offset` at its authored value because "the PS4
+   material curves are unread"; that motion may be a `.vex` UV key block too (`psp2::build_billboard` is the reader).
+   Details: `docs/rendering/start-gantry.md`, "Omega and 2048: the HD-lineage board counts down";
+   `docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys".
 5. **Engine light and front-face flags on the plume.** `crates/omega/src/lib.rs`
    sets `engine_light: false` and `front_faces_only: false` ("Off, chosen, not
    measured, as on 2048"); HD sets both `true`. Omega reads `EngineLightData.xml`
@@ -121,7 +126,7 @@ data proves it.
 
 ## Next Steps
 
-1. Item 4: read the PS4 material curves, then add the HD-lineage boards to `gantry_boards`.
+1. Item 4: give the Zone Battle, Detonator and Combat boards a mode carrier, or measure the digits' phase on Vita3K.
 2. Item 6: read the call sites of the six functions above, in the order
    `ShipCollisionFx_Trigger`, `FUN_016f3ef0`, `FUN_01722810`.
 3. Item 5: read the consumer of `ship+0xbc`/`ship+0xc0`, then the thrust frame pair.

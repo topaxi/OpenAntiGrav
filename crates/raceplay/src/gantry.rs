@@ -379,11 +379,17 @@ pub(super) fn place_card(
         unlit(&mut card.model);
     }
     let fx350 = oag_render::gantry::panel::fx350_draws(&card.model).len();
-    let evidence = if native.is_some() {
+    let inherited = matches!(spec.origin, oag_title::Origin::InheritedFrom(_));
+    let evidence = if native.is_some() || inherited {
+        let clock = if native.is_some() {
+            ""
+        } else {
+            ". The clock line above carries HD's timings and evidence, inherited too"
+        };
         format!(
             "inherited from HD's card pass (not re-measured on this title). {parked} draw(s) \
              parked outside the panel and {fx350} bound to slot 7's own fx350_nomip art are not \
-             drawn"
+             drawn{clock}"
         )
     } else if pulse {
         format!(

@@ -332,7 +332,7 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   lap before the last and a chequered flag on the last; ours plays the same
   frames and culls per frame to the panel (`race::gantry::BoardWindow`,
   `PanelCull`; [gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md#the-lap-windows-played-2026-10-04-hd-gantry-laps-lane)).
-- **2048 and Omega play `321Go_2048.vex` as a card; the HD-lineage board is withheld** (2026-11-10,
+- **2048 and Omega play `321Go_2048.vex` as a card, and the HD-lineage board too since `omega-billboards`** ("Omega and 2048: the HD-lineage board counts down", at the end of this page) (2026-11-10,
   [the section below](#omega-and-2048-the-native-board-as-a-card-2026-11-10-omega-gantry)). The clock
   for that board is `Clock::assembled_at_release` over the board's authored `GO` frame, not HD's
   race-manager window. 2048's native files have no texture track, so `go_edge` would report none
@@ -950,7 +950,8 @@ so a pair compares like with like (a pair-script change, plus a way to hand ours
 that, capture the quad's fragment-program constants on Ubermall (`rpcs3_draw_hook.py`, `HOOK_TGT` for the main target) and
 compare with what ours multiplies the card by.
 **Omega/2048: superseded 2026-11-10.** Both titles stand a card for `321Go_2048.vex` (the section "Omega and 2048"
-below); the HD-lineage board's digits are material curves their containers do not give up, so it stays withheld.
+below); the HD-lineage board's digits are UV keys in its `.vex`, read since `omega-billboards`, so it plays too
+("Omega and 2048: the HD-lineage board counts down").
 
 **Closed 2026-10-21 (`hd-emissive-glow`, [hd-glow-mask.md](hd-glow-mask.md)).** Both leads above are answered, and neither was the lighting factor:
 (1) the **phase** is read out of RAM now: the gantry node's `+0xc0` among the circuit's `MeshImporter` nodes (19 sit inside a race-manager window, all at one value),
@@ -2881,6 +2882,7 @@ The claim "per-channel bias under 0.3 on R, G and B" is **false** for the six: a
 circuits' `billboard8` quad, through HD's existing card pass (`oag_raceplay::gantry::place_card`). The HD-lineage board
 (`321Go_StartFinish.vex`) is **withheld, and the loader says why**: its digits are material curves, and the Vita and PS4
 material containers' curves are unread (`omega-status.md`, "Adverts"; the 2026-10-26 attempt drew its static face).
+**Retired the same day by the next section: the curve is in the `.vex`, and the board plays.**
 
 **Census (2026-11-10, `data/extracted/vita/PCSF00007` and `data/extracted/ps4`).**
 
@@ -2938,3 +2940,46 @@ surface). **Omega: ported** (Altima card; Tech De Ra and the default circuit wit
 HD-lineage board on both (PS4 and Vita material curves), `park` on 2048's base package (the patch is not mounted,
 `oag_2048::open`), the Zone and detonator boards, and the digits' phasing (needs a reference that draws the card: Vita3K for
 2048, nothing known for Omega).
+
+## Omega and 2048: the HD-lineage board counts down off its `.vex` UV keys (2026-11-10, `omega-billboards`)
+
+**This retires "withheld" in the section above.** `321Go_StartFinish.vex` now plays on Omega's HD circuits and on 2048's
+HD-ported circuits, through HD's card pass and HD's clock (`gantry::place_card`, `hd_clock`), and a Zone race on either
+title shows `321Go_Zone.vex`.
+
+**Where the curve is (confidence 88).** Not in the `.rcsmodel`: the Vita and PS4 models carry static `uvOffset`/`uvScale`
+and no Edge Animation clip. Each `Mesh` node of the `.vex` carries Pulse's texture-transform keyframe block behind a
+material array at payload `+0x34`, and Omega's `Mesh_Update` (`0x0170c8b0`) samples it with `TexAnim_UpdateTransform`
+(`0x0172ba00`) into a per-mesh instance `Billboard_ConstructResource` points the material's two uniforms at. Layout, the
+instruction-level read and the census (19 `Mesh` nodes, 18 keyed, 800-frame loop):
+[`ps4-omega-eu/billboards.md`](../ghidra/functions/ps4-omega-eu/billboards.md), "The UV keys". The `.vex` is byte-identical
+on Vita and PS4, and both models join their 19 mesh objects to the 19 nodes by the hash at mesh object `+0x04`.
+
+**Wired.** `oag_vex::vex::external_mesh_tex_transforms` reads the block; `oag_mesh::mesh::rcs::psp2::build_billboard`
+(the Vita/PS4 branch of `gantry::build`, so every advert slot, as the engine's constructor does for every slot) gives each
+keyed mesh an `AnimTrack::Psp`, reaching only a material that declares `uvOffset` or `uvScale`. A board
+`Adverts::gantry_boards` does not list then plays HD's clock off its own `GO` edge instead of being withheld.
+
+**The clock.** `go_edge` finds the green step at **asset frame 202** on both titles (HD's own curve gives 203), so frame 0
+is tick 71 and `GO` lights on the release; from there HD's race-manager windows run, **inherited from HD**, not re-read on
+either executable.
+
+**Played as a player would** (Tech De Ra, `--camera-view far`, 1920x1080, Omega and 2048 each at ticks 100, 140, 185, 230
+and 280): a blank red panel, then `3` on the left third, `2` in the middle, `1` on the right (the earlier digits fading to
+a ghost), then a green panel reading `GO`. Reproduce with
+`oag-game <source> --race --track <tech_de_ra track.vex> --no-audio --camera-view far --size 1920x1080 --screenshot out.png --ticks N`.
+Not compared against the original: shadPS4 draws this card blank white, and no Vita frame was taken. On 2048 the panel also
+shows a stippled triangle across one half of the quad, as other 2048 surfaces in the same frame do; not chased here.
+
+**Zone (`321Go_Zone.vex`).** The board is each title's own substitution in a Zone race, read from both executables
+(Omega `TrackStartup_Load` `0x01391130`, confidence 85; 2048 `TrackStartup_Read` `0x8121b688`, confidence 80,
+[`vita-2048-eu-v104/track-startup-sound-bank.md`](../ghidra/functions/vita-2048-eu-v104/track-startup-sound-bank.md)). Its
+`assembly_ticks` (210) are HD's, inherited. Tech De Ra in `--mode zone` at ticks 100, 200 and 280 on both titles: a dark
+panel on which the loop icon's light pieces assemble, as HD's Zone board is described above. Eight of its meshes ride UV keys.
+
+**Per title.** **Omega: ported. 2048: ported**, each on its own `.vex` and `.rcsmodel`
+(`start_gantry_clock_inherit_ground_truth.rs`: the clock line and that `3`, `2`, `1` and `GO` light different vertices, on
+Omega's default circuit and Tech De Ra and on 2048's thirteen HD-ported circuits). **Open:** the Zone Battle, Detonator and
+2048 Combat boards (`321Go_HD_Zone_Battle.vex`, `321go_hd_detonator.vex`, `321Go_2048_Combat.vex`): their files build and
+the substitution is read, but this engine has no mode carrier for them (`ZoneGantry` is Zone only); the digits' phase
+against the original on either title; FINAL LAP and the chequered flag on the node-driven `321Go_2048.vex`.
