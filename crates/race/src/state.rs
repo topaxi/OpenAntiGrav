@@ -488,7 +488,14 @@ impl RaceState {
                 outcome.first_crossing = self.lap_start_tick == 0;
                 self.lap_start_tick = tick;
             }
-            self.lap_gate = LapGate::NeedsNearHalf;
+            // A driven wrap lands a few units past the line. Only a move over the line
+            // ([`Self::jumped`]) lands past half-way, and both halves of the new lap are
+            // then behind the craft.
+            self.lap_gate = if located.progress >= half {
+                LapGate::Ready
+            } else {
+                LapGate::NeedsNearHalf
+            };
         } else if wrapped_backward(delta, half) {
             self.uncomplete_lap();
         }

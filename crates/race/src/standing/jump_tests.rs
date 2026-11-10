@@ -134,3 +134,38 @@ fn a_finish_made_by_a_move_is_timed_on_its_tick() {
     assert_eq!(standing.finish_tick, Some(tick));
     assert!(outcome.finished && race.finished && outcome.lap_completed);
 }
+
+/// A move over the line that lands past half-way: the ground from the line to where it
+/// landed is driven ground too, so the crossing the craft then drives is the next lap, on
+/// the standing and on the person's clock alike.
+#[test]
+fn a_move_over_the_line_into_the_far_half_keeps_the_next_driven_crossing_a_lap() {
+    let course = testing::ring_course();
+    let mut standing = Standing::default();
+    let mut race = RaceState::new(Mode::SingleRace, SpeedClass::VENOM);
+    race.laps_target = Some(5);
+    let mut tick = 0;
+    let mut drive_both = |standing: &mut Standing, race: &mut RaceState, from: f32, ticks: u32| {
+        for d in 0..ticks {
+            let at = on_ring(from + d as f32);
+            standing.update(&course, at, tick, Some(5));
+            race.update(&course, at, tick, 1.0 / 60.0, false);
+            tick += 1;
+        }
+    };
+    // Off the grid, a whole lap, and on to 99 of 120 on lap 2.
+    drive_both(&mut standing, &mut race, 110.0, 230);
+    assert_eq!((standing.lap, race.lap), (2, 2));
+    // Ninety units on: over the line, to 69, past the half-way point at 60.
+    let from = standing.course_index.unwrap() as usize;
+    let to = course.jump(from, 90.0).unwrap();
+    assert!(standing.jumped(&course, to, 230, Some(5)));
+    race.jumped(&course, to);
+    let landed = course.progress_at(to).unwrap();
+    assert!(landed > 60.0, "landed in the far half: {landed}");
+    drive_both(&mut standing, &mut race, landed, 1);
+    assert_eq!((standing.lap, race.lap), (3, 3));
+    // Driven from there over the line: lap 3 is done.
+    drive_both(&mut standing, &mut race, landed + 1.0, 60);
+    assert_eq!((standing.lap, race.lap), (4, 4), "the driven crossing");
+}

@@ -301,7 +301,13 @@ impl Standing {
         }
         // Over the line: the stretch from `from` to the line is the far half's end.
         self.gate = self.gate.advanced(half, half).advanced(to, half);
-        self.crossed_forward(tick, laps_target)
+        let lap = self.crossed_forward(tick, laps_target);
+        // And the stretch from the line to `to` is the next lap's ground: landed past
+        // half-way, both of its halves are behind the craft.
+        if to >= half {
+            self.gate = LapGate::Ready;
+        }
+        lap
     }
 
     /// How far round the race this craft is, for ordering.
