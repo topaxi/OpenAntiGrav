@@ -1036,7 +1036,10 @@ copy; after = composite. Mean of the two rounds.
 | Intel, Pulse default circuit | 346 -> 254 (-27%) | 770 -> 565 (-27%) | 2955 -> 1630 to 2165 (-27 to -45%) |
 
 The saving is the copy (NVIDIA 11 / 25 / 146 us, Intel 79 / 165 / 382 us on HD) plus a smaller
-composite on Intel, which no longer loads the scene. Whole-chain medians: NVIDIA HD 290 -> 264
+composite on Intel (Intel Graphics ARL, integrated), which no longer loads the scene. On NVIDIA the composite itself got slightly
+slower (HD 1080p 103 -> 110 us, 4K 620 -> 634 us in round one: the blend reads the target back), and the copy's removal more than pays for it.
+One row stayed unexplained: the untouched `reconstruct (half)` read 180 -> 196 us on NVIDIA HD 1080p in both rounds, and did not move on Pulse
+or Intel; the chain total still fell. Whole-chain medians: NVIDIA HD 290 -> 264
 (800p), 529 -> 510 (1080p), 2608 -> 2542 (4K) in round one, Intel HD 1309 -> 1190, 2487 -> 2233,
 4008 -> 3609. On the desktop NVIDIA part this is tens of microseconds at 1080p, so below a frame's
 noise; the Deck number is the one that matters (copy 0.14 / 0.48 ms there). **Deck re-measure owed.**
@@ -1046,7 +1049,9 @@ noise; the Deck number is the one that matters (copy 0.14 / 0.48 ms there). **De
 Blur is our own effect, so this changes pixels. Base against candidate, 8-bit screenshots, same
 seed and tick: HD 1080p 1,105,239 of 2,073,600 pixels differ, **every one by 1** (the 4K frame has
 one pixel off by 2); Pulse 1080p 1,078,501 differ, 1,077,619 by 1 and 882 by 2; Pulse 4K 272 pixels
-by 3 of 8.3 million. Alpha is identical in every pixel. The cause is rounding: the blend hardware
+by 3 of 8.3 million; HD 1080p at tick 2500: 1,133,632 differ, all by 1. The screenshots carry no scene alpha (every pixel is 255), so the scene's alpha is
+kept by construction (the blend's alpha factors are `Zero` and `One`), not by a picture. The streaks, the sharp craft and the HUD read the same
+in the candidate frame at full size. The cause is rounding: the blend hardware
 multiplies and adds in its own order and rounds once to the target format, where the shader did it
 in f32. Some of the changed pixels carry a smear below one 8-bit step, which the
 shader's version rounded away. With the blur `off`, HD and Pulse 1080p frames are byte-identical
