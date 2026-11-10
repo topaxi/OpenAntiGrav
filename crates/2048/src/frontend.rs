@@ -445,6 +445,7 @@ pub const TOUCH: &TouchFrontEnd = &TouchFrontEnd {
     // in the base package this session: `cargo run -p oag-assets --example
     // psarc_list -- ... canvasTexture` -> `data/FE/NewImages/canvasTexture.gxt`.
     canvas_texture: r"Data\FE\NewImages\canvasTexture.gxt",
+    map_nodes: crate::campaign::tier::MAP,
 };
 
 /// 2048's front end, as [`oag_title::Title::front_end`] carries it.

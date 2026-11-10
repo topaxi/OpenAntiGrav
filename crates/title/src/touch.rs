@@ -141,6 +141,9 @@ pub struct TouchFrontEnd {
     /// session (`cargo run -p oag-assets --example psarc_list -- ...
     /// canvasTexture` -> `data/FE/NewImages/canvasTexture.gxt`).
     pub canvas_texture: &'static str,
+    /// Where a single-player event sits on that canvas: its map step scaled to
+    /// a lattice cell, with one grid and no offset.
+    pub map_nodes: crate::NodeMap,
 }
 
 #[cfg(test)]
@@ -191,6 +194,11 @@ mod tests {
         team_model_origin: (1400.0, 264.0),
         canvas_screen: "newFEshell",
         canvas_texture: r"Data\FE\NewImages\canvasTexture.gxt",
+        map_nodes: crate::NodeMap {
+            scale: (4, 2),
+            bias: (55, 25),
+            group_offsets: &[(0, 0)],
+        },
     };
 
     /// Every button on `GameModeChoice` shares one icon size, which is what

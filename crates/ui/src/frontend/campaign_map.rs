@@ -119,8 +119,8 @@ pub struct MapEvent {
     pub name: String,
     /// The canvas cell the event's tile starts at, column then row: the first
     /// of the six lattice cells its hexagon covers
-    /// (`oag_2048::campaign::tier::event_cell`, or a downloadable campaign's
-    /// `oag_title::NodeMap::node`).
+    /// (`oag_title::NodeMap::nudged` on the title's map nodes, or a
+    /// downloadable campaign's `oag_title::NodeMap::node`).
     pub x: f32,
     pub y: f32,
     /// What to say about it: the circuit's display name, the kind, the

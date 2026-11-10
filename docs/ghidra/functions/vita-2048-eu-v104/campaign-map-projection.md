@@ -226,7 +226,7 @@ to 85 on the same live evidence; its row stays on that page.
 ## Wired
 
 `oag_ui::frontend::canvas_camera` is the camera and the scroll law, `oag_2048::campaign::tier::MAP`
-and `event_cell` the quad, and `frontend::campaign_map` places every tile through them: the disc's
+the quad (the title's `TouchFrontEnd::map_nodes`, applied by `oag_title::NodeMap::nudged`), and `frontend::campaign_map` places every tile through them: the disc's
 hex art stretched over the prism's top face, the lattice beneath from the picture the title page
 bakes (shifted to the view's phase by whole lattice periods), the map opening where the two-step
 centring comes to rest, and a selection scrolling by the tap's law. The downloadable tiers go

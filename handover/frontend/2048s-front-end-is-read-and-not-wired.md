@@ -118,7 +118,7 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   `row = 25 + 2 M_Y + tweak`) and its screen place is the canvas camera's:
   [campaign-map-projection.md](../../docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md).
   Wired: `oag_ui::frontend::canvas_camera` (camera, scroll-to-pan, the two
-  centring laws), `oag_2048::campaign::tier::event_cell`, tiles placed through
+  centring laws), `oag_2048::campaign::tier::MAP`, tiles placed through
   them, the baked lattice picture under the map at the view's phase, the map
   opening where the original comes to rest. Tile centres against frames `12`
   and `13`: within 1.8 px on the five unoccluded tiles

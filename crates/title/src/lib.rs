@@ -809,6 +809,19 @@ impl NodeMap {
             self.bias.1 + dy + self.scale.1 * cell.1,
         ))
     }
+
+    /// [`Self::node`] for a cell a file authors as signed numbers, moved by a
+    /// signed nudge in canvas units. `None` as [`Self::node`], and for a cell
+    /// or a result below zero.
+    #[must_use]
+    pub fn nudged(&self, group: usize, cell: (i32, i32), nudge: (i32, i32)) -> Option<(u32, u32)> {
+        let cell = (u32::try_from(cell.0).ok()?, u32::try_from(cell.1).ok()?);
+        let (x, y) = self.node(group, cell)?;
+        Some((
+            x.checked_add_signed(nudge.0)?,
+            y.checked_add_signed(nudge.1)?,
+        ))
+    }
 }
 
 /// A serial positively identified as belonging to some other title.

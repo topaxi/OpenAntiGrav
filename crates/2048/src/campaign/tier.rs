@@ -55,28 +55,13 @@ pub const NODES: NodeMap = NodeMap {
 
 /// The single-player map's projection: an event's `M_X`/`M_Y` step is four
 /// columns across and two rows down from the same bias, with no grid offset
-/// (the quad at `0x81880448`, confidence 92).
+/// (the quad at `0x81880448`, confidence 92), and its `M_CANVASTWEAK_X`/`_Y`
+/// is added in canvas units ([`NodeMap::nudged`]).
 pub const MAP: NodeMap = NodeMap {
     scale: (4, 2),
     bias: (55, 25),
     group_offsets: &[(0, 0)],
 };
-
-/// The canvas cell of a single-player event: [`MAP`] applied to its
-/// `M_X`/`M_Y`, then its `M_CANVASTWEAK_X`/`_Y` added, as the executable does.
-/// `None` for a cell that would fall off the canvas's low edge.
-#[must_use]
-pub fn event_cell(position: (i32, i32), tweak: (i32, i32)) -> Option<(u32, u32)> {
-    let cell = (
-        u32::try_from(position.0).ok()?,
-        u32::try_from(position.1).ok()?,
-    );
-    let (col, row) = MAP.node(0, cell)?;
-    Some((
-        col.checked_add_signed(tweak.0)?,
-        row.checked_add_signed(tweak.1)?,
-    ))
-}
 
 #[cfg(test)]
 mod tests {
@@ -85,10 +70,10 @@ mod tests {
     #[test]
     fn an_events_cell_is_the_quad_plus_its_tweak() {
         // `2048 - Event 4` sits at (6, 6); read live as cell (79, 37).
-        assert_eq!(event_cell((6, 6), (0, 0)), Some((79, 37)));
+        assert_eq!(MAP.nudged(0, (6, 6), (0, 0)), Some((79, 37)));
         // An event at (4, 8) nudged by (-1, -1); read live as cell (70, 40).
-        assert_eq!(event_cell((4, 8), (-1, -1)), Some((70, 40)));
-        assert_eq!(event_cell((-1, 3), (0, 0)), None);
+        assert_eq!(MAP.nudged(0, (4, 8), (-1, -1)), Some((70, 40)));
+        assert_eq!(MAP.nudged(0, (-1, 3), (0, 0)), None);
     }
 
     #[test]

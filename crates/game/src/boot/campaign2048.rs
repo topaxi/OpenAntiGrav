@@ -32,6 +32,7 @@ use oag_ui::language::StringTable;
 pub(super) fn map_events(
     archives: &mut oag_assets::Archives,
     strings: &StringTable,
+    nodes: &oag_title::NodeMap,
     report: &mut Vec<String>,
 ) -> Vec<MapEvent> {
     let text = match archives
@@ -130,7 +131,8 @@ pub(super) fn map_events(
                 .and_then(|value| i32::try_from(value).ok())
                 .unwrap_or(0)
         };
-        let Some((col, row)) = oag_2048::campaign::tier::event_cell(
+        let Some((col, row)) = nodes.nudged(
+            0,
             (x, y),
             (tweak("M_CANVASTWEAK_X"), tweak("M_CANVASTWEAK_Y")),
         ) else {
@@ -172,12 +174,17 @@ pub(super) fn touch_menus(
     (archives, strings, report): (&mut oag_assets::Archives, &StringTable, &mut Vec<String>),
     (language, title): (Option<&str>, &oag_title::Title),
 ) -> (Vec<MapEvent>, Vec<ExtraTile>) {
-    if !touch {
+    let Some(nodes) = title
+        .front_end
+        .and_then(|front_end| front_end.touch.as_ref())
+        .filter(|_| touch)
+        .map(|touch| &touch.map_nodes)
+    else {
         return (Vec::new(), Vec::new());
-    }
+    };
     let updated = !archives.patch.is_empty();
     (
-        map_events(archives, strings, report),
+        map_events(archives, strings, nodes, report),
         extra_tiles(language, title, updated),
     )
 }
