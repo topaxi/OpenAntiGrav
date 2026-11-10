@@ -203,8 +203,8 @@ The page's thread runs on the stack the linker lays out at the bottom of the
 module's memory, below its data, with `__stack_pointer` starting at its top. Its
 size is the link argument `-zstack-size`; without one it is 1 MiB, where a
 native main thread on Linux has 8 MiB. `build-web.sh` links **8 MiB**
-(`stack_size`), the native figure. A worker's stack is wasm-bindgen's own and
-was not changed.
+(`stack_size`), the native figure. A worker's stack is set in `web/worker.js`
+(below).
 
 **What happened when it was 1 MiB** (2026-11-10, the nightly of `1aacef762`,
 deployed as `pkg/616e98a94ed1f513`). Every Pulse PSP boot stopped right after
@@ -253,13 +253,13 @@ Playwright's Firefox (build 1572), `dist` build, no page error, and the walk in
 "Verifying it" raced at 60.2 fps in Chromium. **A worker's stack is not
 covered by a guard**: wasm-bindgen allocates it from the heap, so an overflow
 there corrupts memory instead of trapping. Measured with the `worker-stack` fault
-("Troubleshooting", "Reproducing every message") at wasm-bindgen's default 1 MiB:
+("Troubleshooting", "Reproducing every message") at wasm-bindgen's default size:
 64 KiB frames on a worker overran its stack into the audio mixer's worker, which
 then trapped on `memory access out of bounds` inside `Ahead::spawn`, so the page
 reported a trap in a thread that had done nothing wrong. `web/worker.js` now
-passes `thread_stack_size` of 8 MiB (`STACK_BYTES`), the page's own: eight times
-the headroom, not a guard, and no worker's real depth was measured (the same
-hook still overruns 8 MiB at 128 such frames). A canary that detects an overflow
+passes `thread_stack_size` of 8 MiB (`STACK_BYTES`), the page's own: more
+headroom, not a guard, and no worker's real depth was measured (the same hook
+still overruns 8 MiB at 128 such frames). A canary that detects an overflow
 needs a raw pointer write, which this workspace denies (`unsafe_code`); open.
 
 ### Disc keys
@@ -623,6 +623,13 @@ without its query, the browser, whether the page is cross-origin isolated,
 the adapter, the module's memory against its 4 GiB ceiling, the picked
 image's **file name** and the error with its stack; no path, no disc key, no
 storage. The console gets one `oag:` error line with the same text.
+
+A fatal report replaces a dialog that lets the game go on (a validation notice,
+then a lost device); anything else after the first report is hidden. A disc
+failure found before the game starts (the picker's check of the image) offers
+"Back to the picker"; one found after `start` has run the module's GPU set-up
+offers "Choose another image", which reloads the page, because a second `start`
+in one page is not supported ("Quitting").
 
 What makes it one report:
 

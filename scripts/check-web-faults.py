@@ -18,6 +18,7 @@ image. See docs/tools/web.md, "Troubleshooting".
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import tempfile
@@ -39,6 +40,12 @@ NO_COMPILE = (
 )
 
 
+NO_DEVICE = (
+    "if (window.GPUAdapter) GPUAdapter.prototype.requestDevice ="
+    " () => Promise.reject(new Error('requestDevice: the adapter is not able to provide this'));"
+)
+
+
 @dataclass
 class Case:
     name: str
@@ -47,6 +54,7 @@ class Case:
     needs_hook: bool = False
     browsers: tuple[str, ...] = ("chromium", "firefox")
     real: bool = True
+    reports: int = 1
 
 
 def hook(name: str, at: float) -> list[str]:
@@ -69,6 +77,9 @@ def cases(pulse: Path, scratch: Path, boot: float) -> list[Case]:
         Case("gpu-internal", "gpu-internal", hook("gpu-internal", boot), True, real=False),
         Case("gpu-lost-synthetic", "gpu-lost", hook("gpu-lost", boot), True, real=False),
         Case("gpu-lost", "gpu-lost", ["--crash-gpu", f"{boot:g}"], False, ("chromium",)),
+        # A notice on screen must not hide the failure that follows it.
+        Case("validation-then-trap", "trap", hook("gpu-validation", boot) + hook("trap", boot + 2), True, reports=2),
+        Case("device-request", "device-request", ["--init-script", NO_DEVICE], real=False),
         Case("no-adapter", "no-adapter", ["--plain"], False, ("chromium",)),
         Case("no-webgpu", "no-webgpu", ["--plain"], False, ("firefox",)),
         Case("no-isolation", "no-isolation", ["--no-isolation"]),
@@ -97,7 +108,7 @@ def run(case: Case, browser: str, args, pulse: Path, boot: float) -> tuple[str, 
     command = [
         sys.executable, str(SHOT), "--dist", str(args.dist), "--image", str(pulse), "--out", str(out),
         "--at", f"{boot + 3:g}", "--browser", browser, "--expect-fault", case.kind,
-        "--port", str(args.port),
+        "--expect-reports", str(case.reports), "--port", str(args.port),
     ] + case.args
     if "--image" in case.args:
         # The case's own image replaces the default one.
@@ -138,7 +149,12 @@ def main() -> None:
     (scratch / "empty.iso").write_bytes(empty_iso())
     # A real image the case deletes while the game runs: a copy, never the original.
     if not args.only or "disc-lost-mid-run" in args.only:
-        (scratch / "changing.chd").write_bytes(args.pulse.read_bytes())
+        # A hard link, not a copy: deleting it takes the path away from the page and
+        # leaves the original image alone.
+        try:
+            os.link(args.pulse, scratch / "changing.chd")
+        except OSError:  # another filesystem
+            (scratch / "changing.chd").write_bytes(args.pulse.read_bytes())
 
     browsers = ("chromium", "firefox") if args.browser == "both" else (args.browser,)
     results = []

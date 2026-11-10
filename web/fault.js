@@ -8,7 +8,7 @@
 // The Rust side reaches this through `window.oagFatal(kind, detail)` and
 // `window.oagNotice(kind, detail)` (`gpu::web::fatal`, `notice`; the panic
 // hook), and a worker through a message `main.js` forwards. Every `kind` the
-// module can send has a row in KINDS (`crates/game/tests/web_fault_kinds.rs`).
+// module can send has a row in KINDS (`crates/game/src/web_fault/tests.rs`).
 
 // The content hash of the module the page loaded (`pkg/<hash>/`), for a report.
 let buildHash;
@@ -170,6 +170,7 @@ const state = {
   dead: false,
   // The first report is the cause; later ones are usually fallout.
   shown: false,
+  shownFatal: false,
   suppressed: 0,
   adapter: null,
   software: false,
@@ -232,6 +233,17 @@ function memoryMiB() {
   try { return state.memory ? Math.round(state.memory.buffer.byteLength / 1048576) : null; } catch { return null; }
 }
 
+// Whether the module's memory refuses one more page: a browser that gives a
+// tab less than the 4 GiB ceiling (a phone) says so here and nowhere else.
+function cannotGrow() {
+  try {
+    state.memory?.grow(1);
+    return false;
+  } catch (error) {
+    return error instanceof RangeError;
+  }
+}
+
 // The module is gone: nothing enters it again, its threads end and its sound
 // stops.
 function stop() {
@@ -253,7 +265,7 @@ function died(error) {
   const used = memoryMiB();
   const nearCeiling = used !== null && used >= MEMORY_CEILING * 0.9;
   const failedAlloc = /handle_alloc_error|rust_oom/.test(error.stack ?? "");
-  report(nearCeiling || failedAlloc ? "out-of-memory" : "trap", `${error.name}: ${error.message}\n${error.stack ?? ""}`);
+  report(nearCeiling || failedAlloc || cannotGrow() ? "out-of-memory" : "trap", `${error.name}: ${error.message}\n${error.stack ?? ""}`);
 }
 
 const el = (tag, text, className) => {
@@ -330,15 +342,22 @@ function removeOverlay() {
 
 // Shows one report. A second call while one is up keeps the first (and counts
 // the rest), because everything after the first failure is usually fallout.
-function report(kind, detail, fatal) {
-  if (state.shown) {
-    state.suppressed += 1;
-    return;
-  }
+function report(kind, detail, fatal, options = {}) {
   const row = { ...(KINDS[kind] ?? KINDS["startup"]) };
   const id = KINDS[kind] ? kind : "startup";
   if (fatal !== undefined) row.fatal = fatal;
+  if (state.shown) {
+    // A fatal report replaces a dialog that lets the game go on (a validation
+    // notice, then a lost device): the game is not going on any more. Anything
+    // else after the first report is fallout.
+    if (!row.fatal || state.shownFatal) {
+      state.suppressed += 1;
+      return;
+    }
+    removeOverlay();
+  }
   state.shown = true;
+  state.shownFatal = row.fatal;
   installStyle();
   console.error(`oag: ${id}: ${String(detail ?? "").split("\n").slice(0, 12).join("\n")}`);
   const text = detailsText(id, detail);
@@ -372,13 +391,17 @@ function report(kind, detail, fatal) {
   }
 
   const buttons = el("div", undefined, "buttons");
-  const first = el("button", row.fatal ? "Reload the page" : "Back to the picker");
+  // `reload` makes the first button start the page over: a failure after the
+  // module was started cannot be followed by a second start in this page
+  // ("Quitting").
+  const reloads = row.fatal || options.reload;
+  const first = el("button", row.fatal ? "Reload the page" : reloads ? "Choose another image" : "Back to the picker");
   first.type = "button";
-  first.addEventListener("click", () => { if (row.fatal) location.reload(); else dismiss(); });
+  first.addEventListener("click", () => { if (reloads) location.reload(); else dismiss(); });
   const copy = el("button", "Copy details");
   copy.type = "button";
   buttons.append(first, copy);
-  if (!row.fatal && kind === "gpu-validation") first.textContent = "Keep playing";
+  if (!row.fatal && id === "gpu-validation") first.textContent = "Keep playing";
   card.append(buttons);
 
   const more = el("details");
@@ -396,7 +419,7 @@ function report(kind, detail, fatal) {
     area.select();
   });
   card.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !row.fatal) dismiss();
+    if (event.key === "Escape" && !reloads) dismiss();
   });
   root.append(card);
 
@@ -413,7 +436,12 @@ function report(kind, detail, fatal) {
 function dismiss() {
   removeOverlay();
   state.shown = false;
+  state.shownFatal = false;
   window.oagLastFault = undefined;
+  // The button that had focus went with the dialog: give the keys back to the
+  // game's canvas (winit listens on it), or to the picker's own controls.
+  const canvas = document.getElementById("oag-canvas");
+  if (document.getElementById("picker")?.hidden) canvas?.focus();
 }
 
 window.oagDismissFault = dismiss;

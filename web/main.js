@@ -306,8 +306,8 @@ if (blocked) {
 // A failure of the start-up path, shown as the page's one report. The module
 // tags its own refusals (a disc it cannot read); a browser's are told apart by
 // name.
-function fail(error) {
-  window.oagReport(kindOfFailure(error), failureText(error));
+function fail(error, started) {
+  window.oagReport(kindOfFailure(error), failureText(error), undefined, { reload: started });
 }
 
 const KEY_WORDS = {
@@ -382,7 +382,8 @@ async function boot(file, key) {
     booted = false;
     picker.hidden = false;
     say("");
-    fail(error);
+    // `start` has run the module's GPU set-up: the page starts over to try again.
+    fail(error, true);
   }
 }
 

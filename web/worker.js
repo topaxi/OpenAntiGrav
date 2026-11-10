@@ -2,7 +2,7 @@
 // running the closure `id` names (`oag_thread::web`). Started by
 // `oagSpawnWorker` in main.js. See docs/tools/web.md, "Threads".
 // The stack a worker runs on, as large as the page's (`stack_size` in
-// scripts/build-web.sh): wasm-bindgen's own is 1 MiB, and an overflow on a worker
+// scripts/build-web.sh) and not wasm-bindgen's default: an overflow on a worker
 // corrupts memory without trapping. See docs/tools/web.md, "The page's stack".
 const STACK_BYTES = 8 * 1024 * 1024;
 

@@ -203,8 +203,8 @@ def check_fault(page, args, console_errors: list[str], page_errors: list[str]) -
     if kinds != [args.expect_fault]:
         problems.append(f"expected one report of kind {args.expect_fault!r}, found {kinds}")
     ours = [line for line in console_errors if line.startswith("oag:")]
-    if len(ours) != 1:
-        problems.append(f"expected one `oag:` console error, found {len(ours)}")
+    if len(ours) != args.expect_reports:
+        problems.append(f"expected {args.expect_reports} `oag:` console error(s), found {len(ours)}")
     if page_errors:
         problems.append(f"{len(page_errors)} uncaught page error(s): {page_errors[0]}")
     for line in console_errors:
@@ -293,6 +293,11 @@ def main() -> None:
         "the overlay's data-kind), exactly one `oag:` console error and no uncaught page error; "
         "writes <out>/fault.png and <out>/fault-details.txt. Then `uncaught page error` is "
         "the failure, not the expected outcome",
+    )
+    parser.add_argument(
+        "--expect-reports", type=int, default=1,
+        help="with --expect-fault: how many `oag:` console errors (reports) the run may raise; "
+        "2 for a notice followed by the failure that replaces it",
     )
     parser.add_argument(
         "--no-isolation", action="store_true",
@@ -539,7 +544,7 @@ def main() -> None:
     if page_errors:
         sys.exit(f"{len(page_errors)} uncaught page error(s), the first: {page_errors[0]}")
     if args.expect_fault:
-        print(f"fault {args.expect_fault}: one report, no cascade", flush=True)
+        print(f"fault {args.expect_fault}: {args.expect_reports} report(s), no cascade", flush=True)
 
 
 if __name__ == "__main__":
