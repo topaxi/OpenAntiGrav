@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-10
-summary: "CPU-bound devices: GPU-driven draws parked, render bundles measured and dropped; GPU particles and trails left; governor on by default"
+summary: "CPU-bound devices: GPU-driven draws parked, render bundles dropped, probe blend on the GPU; GPU particles and trails left; governor on"
 categories: [rendering, tooling]
 size: XL (35)
 difficulty: medium (30)
@@ -37,8 +37,13 @@ resolution controller (`crates/present/src/drs`), which does nothing while the G
 **Order amended 2026-10-27 (`prepare-view-breakdown`).** On the Deck, `prepare_view` (3.45 ms of 8.2) is
 uniform builds and CPU image blends, not culling: culling, LOD and sorting are under 0.05 ms on Anulpha,
 HD default and Pulse (`docs/rendering/frame-thread-cpu.md`, "What prepare_view spends on the Deck").
-Before lane 1 step 2 (compute culling), do two CPU lanes: the hull environment-probe blend (about
-0.9 ms on Anulpha) and ~~scenery animation sampling~~ (landed 2026-11-10, `scenery-anim`: the node table
+Before lane 1 step 2 (compute culling), do two CPU lanes: ~~the hull environment-probe blend (about
+0.9 ms on Anulpha)~~ (landed 2026-11-10, `probe-blend`: one compute pass blends into the array the hull
+shader samples, `probes::mix`'s arithmetic done on the bits in integers, the array byte-exact on the Deck,
+Intel and NVIDIA; Deck `total` 6.37 to 6.04 ms at 800p, 8.44 to 7.96 at 1080p, 10.22 to 9.37 at 4K, the
+pass 140 us of the Deck's GPU for a full field; the 0.9 ms was already 0.3 at 800p after `prepare-view`;
+pictures identical on the Deck and NVIDIA, Intel inside its own run-to-run noise,
+`docs/rendering/frame-thread-cpu.md`, "The hull probe blend in a compute pass") and ~~scenery animation sampling~~ (landed 2026-11-10, `scenery-anim`: the node table
 uploads only its live head, ascending key times are bisected; 40 us (Pulse) and 98 us (HD) per frame on the
 desktop by perf, `record_us` -3 to -10%, pictures identical; the Deck is not re-measured, and what is left is cache misses on the boxed per-node
 transforms, `docs/rendering/frame-thread-cpu.md`, "Scenery node animation"). Measure with the
@@ -194,3 +199,17 @@ top of `park/indirect-depth-prepass` afterwards.
      '<oag_vex::vex::anim_transform::AnimTransform>::sample'` on a frame-pointer build of a Pulse bench
      race (`just bench-render pulse`, wrapped in `perf record`); a flat layout would change the
      `Motion::Vex` load path of every model.
+4. The hull probe blend (`probe-blend`, 2026-11-10) is a compute pass now; three items stay open:
+   - **Intel's HD hull pixels are not repeatable run to run** (older than the lane): the same binary's
+     `--screenshot` of HD Anulpha differs in 1 to 5 pixels by one level between runs on the Arrow Lake
+     iGPU, on the player's hull. NVIDIA and the Deck are stable, Pulse is stable on Intel. Measure:
+     `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json oag-game hdfury-ps3-eu-dec.iso --race
+     --mode single_race --seed 1 --autopilot --no-audio --size 1280x800 --ticks 600 --track
+     'Data\Environments\15_Anulpha_Pass\track.vex' --screenshot out.png`, three times, `sha256sum`.
+   - **A probe is still decoded on the frame thread when a craft first reaches it** (`probes::decode`,
+     0.3 % of the Deck's samples at 800p, about eight sections a second per craft). The block format
+     could be decoded in the same pass from the raw 12-byte blocks. Measure: a flat `perf record -e
+     cpu-clock:u` of the Deck run, `oag_vex::probes::decode`'s share.
+   - **The pass does all four taps of every texel**, 140 us of the Deck's GPU for a full field. A tap of
+     scale zero could be skipped, and the 2048 and Omega probe layout is not read at all, so those
+     titles blend nothing. Measure: `cargo run --release -p oag-render --example probe_blend_check`.
