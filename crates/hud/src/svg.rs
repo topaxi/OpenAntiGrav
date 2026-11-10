@@ -66,9 +66,15 @@ impl VectorIcon {
     }
 }
 
+/// The longest side an icon is rasterised at, pixels. A drawing with no slot to fit is drawn
+/// at its own size, and a document may claim any size: past this the raster is coarser, at
+/// the same size on screen, never larger.
+const MAX_SIDE: f32 = 1024.0;
+
 /// `base` with every icon of `icons` rasterised for a screen showing `pixels_per_unit`
 /// pixels of every layout unit, and marked with that density
-/// ([`Sheet::texel_density`]) so the draw lays it on whole pixels.
+/// ([`Sheet::texel_density`]) so the draw lays it on whole pixels. An icon past
+/// [`MAX_SIDE`] is rasterised at a lower density and named in `report`.
 ///
 /// An icon whose slot cannot be measured (a layout with no pickup frame) is rasterised at its
 /// own size in layout units, for `hud-icon`.
@@ -92,9 +98,19 @@ pub fn place(
         // Where the HUD has no pickup slot (a mode without one), the drawing's own size in
         // layout units, as a PNG is drawn at its own size.
         let size = mod_icon_size(frame, icon.size()).unwrap_or_else(|| icon.size());
+        let longest = size[0].max(size[1]) * pixels_per_unit;
+        let density = if longest > MAX_SIDE {
+            report.push(format!(
+                "{}: {longest:.0} pixels on its longest side, rasterised at {MAX_SIDE:.0}",
+                icon.src
+            ));
+            pixels_per_unit * (MAX_SIDE / longest)
+        } else {
+            pixels_per_unit
+        };
         let (width, height) = (
-            (size[0] * pixels_per_unit).round().max(1.0) as u32,
-            (size[1] * pixels_per_unit).round().max(1.0) as u32,
+            (size[0] * density).round().max(1.0) as u32,
+            (size[1] * density).round().max(1.0) as u32,
         );
         let Some(rgba) = icon.rasterise(width, height) else {
             report.push(format!(
@@ -113,11 +129,11 @@ pub fn place(
             quad_centre: Some([0.0, 0.0]),
             blend: None,
         });
-        sizes.push(icon.src.clone());
+        sizes.push((icon.src.clone(), density));
     }
     let mut sheet = base.extended_with(&[], images, report);
-    for src in sizes {
-        sheet = sheet.with_texel_density(&src, pixels_per_unit);
+    for (src, density) in sizes {
+        sheet = sheet.with_texel_density(&src, density);
     }
     sheet
 }

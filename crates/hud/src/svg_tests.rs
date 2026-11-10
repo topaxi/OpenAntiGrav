@@ -176,3 +176,28 @@ fn a_layout_without_a_pickup_slot_still_gets_the_icon_at_its_own_size() {
     let at = sheet.get(SRC).expect("drawn for hud-icon");
     assert_eq!((at.width, at.height), (32, 32), "16 units at 2 px/unit");
 }
+
+/// A document may claim any size, and with no slot to fit it is drawn at its own: the
+/// raster stops at 1,024 pixels a side, coarser at the same size on screen, and is named.
+#[test]
+fn a_drawing_that_claims_a_huge_size_is_rasterised_under_the_cap() {
+    let layout = Layout::from_xml("<Screen/>");
+    let huge = BAR.replace(r#"width="16" height="16""#, r#"width="4096" height="2048""#);
+    let icon = VectorIcon::parse(SRC.into(), huge.as_bytes()).unwrap();
+    let mut report = Vec::new();
+    let sheet = svg::place(
+        &crate::sprite::Sheet::default(),
+        &layout,
+        oag_pulse::hud::ART,
+        std::slice::from_ref(&icon),
+        4.0,
+        &mut report,
+    );
+    let at = sheet.get(SRC).expect("still drawn");
+    assert_eq!((at.width, at.height), (1024, 512), "not 16,384 by 8,192");
+    assert_eq!(sheet.texel_density(SRC), Some(0.25), "4,096 units wide");
+    assert!(
+        report.iter().any(|line| line.contains(SRC)),
+        "named: {report:?}"
+    );
+}
