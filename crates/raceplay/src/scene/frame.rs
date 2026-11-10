@@ -662,6 +662,11 @@ impl Scene {
             &prev,
             frustum.as_ref(),
         );
+        // The blend of the hulls' environment probes those uniforms name, ahead of the scene
+        // pass like the shadow maps.
+        if let Some(probes) = &self.env_probes {
+            probes.flush(queue, encoder);
+        }
         let lod_eye = race.lod_eye(aspect, fov);
         self.select_lod(block, race, lod_eye);
         // The flaps move in *model* space, before the ship's own matrix, so

@@ -334,25 +334,51 @@ fn blend(set: &[u8], bytes: usize, size: (usize, usize), taps: &Taps) -> Vec<u8>
 /// keeps decoded probes calls it directly.
 #[must_use]
 pub fn mix(images: &[(&[u8], f32)]) -> Vec<u8> {
+    let (mut acc, mut out) = (Vec::new(), Vec::new());
+    mix_into(images, &mut acc, &mut out);
+    out
+}
+
+/// [`mix`] into `out`, with `acc` as its working memory: a caller that blends every frame
+/// keeps both and allocates nothing.
+pub fn mix_into(images: &[(&[u8], f32)], acc: &mut Vec<f32>, out: &mut Vec<u8>) {
+    out.clear();
     let Some(&(first, _)) = images.first() else {
-        return Vec::new();
+        return;
     };
-    let total: f32 = images.iter().map(|(_, w)| w).sum();
-    let norm = if total > 0.0 { 1.0 / total } else { 0.0 };
+    let norm = norm(images.iter().map(|&(_, weight)| weight));
     // One accumulator over the whole slice, an image at a time: the inner loop is a plain
     // widen-and-add the compiler vectorises, which a per-texel walk over the images is not.
-    let mut acc = vec![0.0f32; first.len()];
+    acc.clear();
+    acc.resize(first.len(), 0.0);
     for &(image, weight) in images {
         let scale = weight * norm;
         for (sum, &byte) in acc.iter_mut().zip(image) {
             *sum += f32::from(byte) * scale;
         }
     }
-    let mut out: Vec<u8> = acc.iter().map(|&v| (v + 0.5) as u8).collect();
+    out.extend(acc.iter().map(|&v| (v + 0.5) as u8));
     for alpha in out.iter_mut().skip(3).step_by(4) {
         *alpha = 255;
     }
-    out
+}
+
+/// One over the sum of `weights`, added in order; zero where they sum to nothing.
+fn norm(weights: impl Iterator<Item = f32>) -> f32 {
+    let total: f32 = weights.sum();
+    if total > 0.0 { 1.0 / total } else { 0.0 }
+}
+
+impl Taps {
+    /// What [`mix`] multiplies each tap's texels by: its weight over the sum of the weights
+    /// above zero, and zero for a tap [`mix`]'s callers leave out. For a blend done
+    /// elsewhere (`oag_render::probe_blend`) that has to land on [`mix`]'s bytes.
+    #[must_use]
+    pub fn scales(&self) -> [f32; 4] {
+        let norm = norm(self.weights.iter().copied().filter(|&weight| weight > 0.0));
+        self.weights
+            .map(|weight| if weight > 0.0 { weight * norm } else { 0.0 })
+    }
 }
 
 #[cfg(test)]
