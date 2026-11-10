@@ -5,7 +5,7 @@
 // .envsettings "HDR and Bloom" block; the inline constants are the
 // executable's verbatim.
 
-import oag_shaders::colour::srgb_encode;
+import oag_shaders::colour::{srgb_decode, srgb_encode};
 import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
 
 struct Constants {
@@ -165,7 +165,7 @@ override scene_encoded: f32 = 0.0;
 // A tap of the scene target, in linear light.
 fn scene_tap(texel: vec4<f32>) -> vec4<f32> {
     let c = surface(texel);
-    return vec4<f32>(mix(c.rgb, pow(c.rgb, vec3<f32>(2.2)), scene_encoded), c.a);
+    return vec4<f32>(mix(c.rgb, srgb_decode(c.rgb), scene_encoded), c.a);
 }
 
 // The luminance reduction's halving step, in two forms.
@@ -327,8 +327,9 @@ fn resolve_scene_tap(uv: vec2<f32>) -> vec3<f32> {
 // float; no circuit file authors the key, default 0) and the persistent
 // `fullscreenTintColour` (an event tint this renderer does not model).
 //
-// The `pow` at the end is the ROP's sRGB encode on write (`SET_SHADER_PACKER`
-// is 1 on the scene and ladder draws), approximated by one `1/2.2` curve; it is
+// The encode at the end is the ROP's sRGB encode on write (`SET_SHADER_PACKER`
+// is 1 on the scene and ladder draws), the same piecewise curve `scene_tap`
+// decodes with, so a scene value no bloom reaches resolves to itself; it is
 // not an exposure stage. The original's resolve itself ends on the ADD_SAT.
 @fragment
 fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {

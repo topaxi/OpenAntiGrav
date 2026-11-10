@@ -517,6 +517,17 @@ fn hd_and_pulse_declare_their_cards_565_each_its_own_way() {
     );
 }
 
+/// The piecewise sRGB decode of one channel: the curve the card is stored with and HD's
+/// track quad decodes it with (`docs/rendering/hd-track-tone.md`, "The texture unit's decode
+/// is the sRGB curve").
+fn srgb_decode(v: f32) -> f32 {
+    if v <= 0.04045 {
+        v / 12.92
+    } else {
+        ((v + 0.055) / 1.055).powf(2.4)
+    }
+}
+
 /// The share of pixels of `rgba` (gamma 8-bit, as the card holds them) whose decoded linear
 /// colour sits on a 5-6-5 level in all three channels, within the 8-bit encode's own error.
 fn on_the_565_grid(rgba: &[u8]) -> f32 {
@@ -526,7 +537,7 @@ fn on_the_565_grid(rgba: &[u8]) -> f32 {
         .iter()
         .filter(|p| {
             (0..3).all(|c| {
-                let level = (f32::from(p[c]) / 255.0).powf(2.2) * levels[c];
+                let level = srgb_decode(f32::from(p[c]) / 255.0) * levels[c];
                 (level - level.round()).abs() <= 0.06
             })
         })
@@ -578,7 +589,7 @@ fn hd_gantry_card_holds_565_levels_of_linear_light() {
     for y in 20..236 {
         for x in 5..70 {
             let red = f32::from(pixels[(y * 512 + x) * 4]) / 255.0;
-            sum += (red.powf(2.2) * 31.0).round();
+            sum += (srgb_decode(red) * 31.0).round();
             count += 1.0;
         }
     }

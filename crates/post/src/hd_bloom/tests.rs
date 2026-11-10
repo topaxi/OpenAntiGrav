@@ -668,6 +668,11 @@ fn a_shorter_reach_spills_less_glow_over_an_edge() {
 /// Resolves a flat scene holding `stored` on every channel, built for `store`,
 /// and returns the centre texel's red byte; `None` with no adapter.
 fn resolve_flat(store: SceneStore, stored: f64) -> Option<u8> {
+    resolve_flat_with(params(), store, stored)
+}
+
+/// [`resolve_flat`] under a tone and bloom block of the caller's.
+fn resolve_flat_with(params: Params, store: SceneStore, stored: f64) -> Option<u8> {
     let instance = wgpu::Instance::default();
     let adapters = oag_gpu::test_adapter::ordered(&instance);
     let adapter = adapters.first()?;
@@ -678,7 +683,7 @@ fn resolve_flat(store: SceneStore, stored: f64) -> Option<u8> {
         &device,
         format,
         canvas,
-        Params { store, ..params() },
+        Params { store, ..params },
         Glow::Drawn,
     )
     .expect("the pipelines build");
@@ -758,7 +763,7 @@ fn resolve_flat(store: SceneStore, stored: f64) -> Option<u8> {
 
 /// A scene stored encoded is decoded where the chain reads it: a flat linear
 /// grey `0.2` resolves to the same byte whether the target holds `0.2` as
-/// computed or its encoding `0.2^(1/2.2)` (HD's `SET_SHADER_PACKER` store,
+/// computed or its sRGB encoding (HD's `SET_SHADER_PACKER` store,
 /// `docs/rendering/hd-track-tone.md`, "HD's blends combine encoded values").
 /// Read without the decode, the encoded scene would resolve far brighter.
 #[test]
@@ -766,7 +771,7 @@ fn an_encoded_scene_resolves_as_the_light_it_encodes() {
     let linear = 0.2f64;
     let (Some(computed), Some(encoded)) = (
         resolve_flat(SceneStore::Computed, linear),
-        resolve_flat(SceneStore::Encoded, linear.powf(1.0 / 2.2)),
+        resolve_flat(SceneStore::Encoded, 1.055 * linear.powf(1.0 / 2.4) - 0.055),
     ) else {
         eprintln!("no GPU adapter: skipping");
         return;
@@ -776,4 +781,31 @@ fn an_encoded_scene_resolves_as_the_light_it_encodes() {
         "computed {computed}, encoded {encoded}"
     );
     assert!(computed > 40, "the grey resolves lit ({computed})");
+}
+
+/// The resolve is an identity on a dark stored value: the original's final
+/// frame equals its scene target below level 128, where no bloom reaches
+/// (`docs/rendering/hd-track-tone.md`, "The texture unit's decode is the sRGB
+/// curve"). The scene's decode and the final encode are one curve; a `2.2`
+/// power decode under the sRGB encode would resolve level 41 as 36. The tone
+/// block is the authored one, whose exposure is 1 at this level, and the
+/// boost fades the frame term out.
+#[test]
+fn a_dark_encoded_scene_value_resolves_to_itself() {
+    let authored = Params {
+        adaption_rate: 1.0,
+        adaption_boost: 20.0,
+        tone_adaption_boost: 20.0,
+        tone_darkening_clamp: 3.0,
+        tone_maximum_brightness: 4.0,
+        ..params()
+    };
+    let Some(resolved) = resolve_flat_with(authored, SceneStore::Encoded, 0.162) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    assert!(
+        resolved.abs_diff(41) <= 1,
+        "stored 0.162 resolved {resolved}"
+    );
 }
