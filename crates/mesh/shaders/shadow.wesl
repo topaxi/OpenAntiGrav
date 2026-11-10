@@ -2,36 +2,12 @@
 
 import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_depth_tex, shadow_exempt, shadow_sampler, shadow_tex, sun_delta, sun_known, sun_occlusion_tex, uniforms};
 
-// **Wipeout HD's engine-flare program**, off by default and on only for a model
-// whose material declares the whole parameter set it reads - see
-// `oag_mesh::mesh::Flame`, which carries the arithmetic and the evidence, and
-// `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`, which carries the
-// disassembly the arithmetic came from.
-//
-// **Every number is the material's, passed in as a pipeline constant**, because
-// they are a property of the *model* exactly as `colour_is_light` is, and a
-// uniform field would have to be mirrored by every pipeline in this crate and
-// by the asset viewer. The defaults are zero rather than the shipped values on
-// purpose: a model that reaches this path without its parameters must draw
-// nothing recognisable, not a flame with numbers this file invented.
 // Which shadow maps this model's surfaces may read: 0 reads none, 1 reads the
 // `mapped` tier's depth map, 2 reads that *and* Wipeout HD's coverage map.
 // Three states because the two tiers have different receivers and the sky is
 // out of both - see `mesh_render::ShadowReceiver`.
 override receives_shadow: f32 = 0.0;
 
-// The GE's fog is a linear ramp between `near` and `far` - `Gu_Fog`
-// (`0x08811748`) sends `far` and `1/(far - near)` and nothing else, so there is
-// no curve to reproduce here. What the original varies is the *parameters*,
-// re-sampled every frame from the camera's position inside the fog volume;
-// that happens on the CPU before this uniform is written. See
-// `docs/ghidra/functions/psp-pulse-usa/fog.md`.
-//
-// **Radial distance from the eye, where the hardware uses view-space depth.**
-// The two differ towards the screen edges, by up to `1 / cos(fov / 2)` - about
-// 15 % at the corners of Pulse's authored field of view. Reproducing view-space
-// z needs the view matrix separately, which this uniform block does not carry;
-// recorded as a known divergence rather than silently accepted.
 // How far, in the craft map's `0..1` depth, a receiver may sit towards the sun
 // of the craft's centre and still be shadowed by it: the fallback box's half
 // thickness, 6 of the box's 140 units (`Shadow_BuildShipShadowMatrices`).

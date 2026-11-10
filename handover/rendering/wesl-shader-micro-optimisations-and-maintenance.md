@@ -205,13 +205,10 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
     by one level, so `srgb_decode` is built from the scalar form. `omega_tonemap` and `occlusion` dropped no guard
     that mattered: their inputs are in `0..1` and the `1e-6` guard only touches the arm `select` discards.
 
-12. **Misplaced and dangling comments.** `shadow.wesl:5` to `:20` documents HD's engine-flare overrides, which
-    live in `flame.wesl` (imported at `shade.wesl:7`); `shadow.wesl:23` to `:33` is the GE fog ramp, which belongs
-    in `fog.wesl`, whose own `:10` points at "`Fog::curve` above" that is not there (nor at `types.wesl:342`);
-    `shade.wesl:135` says "See this file's header" for the stand-in light and the header (line 1) says nothing
-    of it. Move the first two, point the last three at `docs/rendering/` or `uniforms.rs:305`. Gain: a reader of
-    the shadow module is not told about flames. No picture change; `oag-shader-check` and `just check-docs`. 30
-    minutes.
+12. ~~**Misplaced and dangling comments.**~~ **Landed**: HD's engine-flare comment moved from `shadow.wesl` to
+    `flame.wesl`, the GE fog ramp comment to `fog.wesl`, whose pointer now names `Fog::curve` in `types.wesl`
+    (it was there all along, in the `Fog` struct, but "above" was another file); `shade.wesl`'s stand-in light now
+    cites `uniforms/light.rs`'s module doc, which is where the rig is explained.
 
 13. **History in `.wesl` comments, under the ratchet.** `python3 -I scripts/check-comment-history.py --table` counts
     them per crate; `shade.wesl` has six dated lines (`2026-10-05`, `2026-08-20`, `2026-08-24`, `2026-10-21`),

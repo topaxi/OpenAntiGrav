@@ -132,7 +132,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     }
 
     // The stand-in: two invented directions, kept for every title whose own
-    // rig has not been recovered. See this file's header.
+    // rig has not been recovered. See the module doc of
+    // `crates/mesh/src/mesh_render/uniforms/light.rs`.
     let key = max(dot(n, normalize(vec3<f32>(0.4, 0.8, 0.5))), 0.0);
     let fill = max(dot(n, normalize(vec3<f32>(-0.5, 0.2, -0.7))), 0.0);
     let stand_in = vec3<f32>(0.15 + 0.75 * key + 0.25 * fill);
