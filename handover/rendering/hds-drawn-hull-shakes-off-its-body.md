@@ -56,7 +56,7 @@ decoders. All three HD capture scripts run the patch first. See `hull-shake.md`,
 - **Per-boot patch evidence:** `RPCS3.log` is truncated every boot, so the 13 boots' `Applied patch` lines are gone.
   The evidence is the shift collapsing on all 13, and Talon's lane log. `emu-hd-glass-boot.sh` should keep the log
   per pair.
-- **`hd-race/talons-pack`** is a savestate race pair and was not re-captured patched.
+- **`hd-race/talons-pack`**: the stored pair was not captured patched; the re-made captures of 2026-11-10 (`hd-talons-pack-align`) are, and record it (`original.hull_shake`). At speed the drawn node matrix equals the body's position to the digit (`ship+0x40` at 132.6 u/s), so the shake is not the cause of the larger hull there.
 - **Cross-title:** Omega and 2048 inherit HD's law unread, and a constant search found neither. Pulse and Pure are
   not read.
 

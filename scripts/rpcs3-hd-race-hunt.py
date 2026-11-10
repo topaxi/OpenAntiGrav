@@ -38,6 +38,7 @@ _spec = importlib.util.spec_from_file_location("rpcs3_drive", HERE / "rpcs3-driv
 drive = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(drive)
 
+import hd_scene_width  # noqa: E402
 import rpcs3_hd_field  # noqa: E402
 from rpcs3_hd_field import CRAFT_ARRAY, Mem, find_record  # noqa: E402
 
@@ -78,6 +79,10 @@ def main():
     ap.add_argument("--seconds", type=float, default=420.0)
     ap.add_argument("--image", default=str(HERE.parent / "data/images/hdfury-ps3-eu-dec.iso"))
     ap.add_argument("--log", type=Path)
+    ap.add_argument("--pin-scene-width", action="store_true",
+                    help="clear HD's scene-width throttle enable byte (`hd_scene_width.ENABLE`) once the race has loaded and "
+                         "again at the match, so the state saved here draws its scene 1920 px wide "
+                         "(docs/ghidra/functions/ps3-hdfury-eu/scene-width-throttle.md, \"Pinning 1920\")")
     args = ap.parse_args()
     t0 = time.time()
     with drive.Session(args.image, str(Path("/home/topaxi/projects/OpenAntiGrav/data/scratch") / args.lane / "hunt-logs")) as session:
@@ -99,6 +104,9 @@ def main():
         m.wr(slot + 0x200, struct.pack(">I", m.u32(slot + 0x200) | 0x800))
         m.wr(slot + 0x158, struct.pack(">f", 10000.0))
         print("autopilot armed: slot flags %#x timer %.0f" % (m.u32(slot + 0x200), m.f32(slot + 0x158)), flush=True)
+        if args.pin_scene_width:
+            m.wr(hd_scene_width.ENABLE, b"\x00")
+            print("scene width throttle cleared: enable byte now %d" % m.rd(hd_scene_width.ENABLE, 1)[0], flush=True)
         records = find_record(m, m.f32(player["ship"] + 0x5FA0))
         print("records", [hex(r) for r in records], flush=True)
         if len(records) != 1:
@@ -133,6 +141,8 @@ def main():
                 if dist <= args.front_dist and sum(a * b for a, b in zip(d, pfwd)) > 0.6 * dist:
                     front.append(round(dist, 1))
             if len(near) >= args.min_near and len(front) >= args.min_front:
+                if args.pin_scene_width:
+                    m.wr(hd_scene_width.ENABLE, b"\x00")
                 print("MATCH t %.0f lap %d place %d near %s front %s" % (time.time() - t0, lap, place, near, front), flush=True)
                 if args.log:
                     args.log.write_text(json.dumps({"lap": lap, "place": place, "near": near, "front": front}))

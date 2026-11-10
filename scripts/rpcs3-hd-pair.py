@@ -338,6 +338,9 @@ def main():
         if pair.failed():
             pair.finish()
         pair.check("every craft has a team name", all(teams) and bool(player_row["team"]), ", ".join(teams))
+        # The state decides the hull (`<team>` or classic `<team>_c1`); ours is told which with `--team`, and a
+        # sidecar or a copied command line can name the other one.
+        pair.check_equal("the player's craft (RAM) is the craft ours draws", player_row["team"].lower(), args.team.lower())
         field_flags = ["--field-from", out / "field.csv", "--field-warmup", "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f" % (
             hud["place"], hud["lap"], player_row["clock"] - HUD_LAG_TICKS / 60, player_row["clock"] - HUD_LAG_TICKS / 60, hud["speed"],
             100.0 * hud["shield"] / hud["shield_max"])]

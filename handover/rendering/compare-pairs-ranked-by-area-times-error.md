@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd, pulse, pure, 2048]
-updated: 2026-11-09
+updated: 2026-11-10
 summary: "Race pairs by area x error: HD gantry GO boards and the top-right RECORD band lead; 2048 tone runs dark; frame-wide PS2 and Talon's rows unexplained"
 ---
 
@@ -40,10 +40,15 @@ Read px with the title in mind. A Pulse PSP frame is 480x272 and an HD frame
 - The HD RECORD readout is HUD. Its digits differ on `hd-talons` (9.43.9 against
   9.43.8) and match on `hd-talons-assegai-c1` and `hd-anulpha-pass`: a state
   difference where they differ, not a render one.
-- Talon's pack (`hd-race/talons-pack`, rank 1, err 42.6) is not a state mismatch:
-  its pose is documented as matched (`docs/tools/compare-page.md`, around line
-  270). The error is a hue shift (ours greener, red 8 lower) plus spatial error
-  that an affine colour fit leaves (35.7 of 42.5). Unexplained; not a lane yet.
+- Talon's pack (`hd-race/talons-pack`, rank 1, err 42.6) **was** a state mismatch
+  (2026-11-10, `hd-talons-pack-align`): the original's frame was at least 5 to 8
+  ticks older than the RAM it was paired with (its HUD clocks say so), with a
+  weapon effect, pause banner and a classic-hull state RPCS3 can no longer load.
+  Re-made from a regenerated state, the pair's grey difference fell 47.6 to 17
+  and the opponent aligns to 4 px (`docs/tools/compare-page.md`, "A moving HD
+  craft"). Still open there: the player's hull is drawn about 1.3 times larger
+  and lower in the original than the recorded body and camera project it. The
+  hue shift (ours greener) of the old frame was not looked at again.
 - Tight boxes: for 20 of the top 31 regions the pixels above 15 grey levels
   fill the whole region, so the box is the error, not one banner inside it.
   The labels below use the box's visual centre, not a measured sub-rectangle.
