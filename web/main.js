@@ -1,6 +1,8 @@
 // The page around the wasm build: pick a disc image, read it here, hand it to
 // the game. Nothing is sent anywhere. See docs/tools/web.md.
-import init, { inspect, start } from "./pkg/oag_web.js";
+// Reporting every way the game can fail, and stopping the module after a trap
+// (fault.js). First, so its guard is in place before the module loads.
+import { setBuild, watchWorker, kindOfFailure, failureText, preflight } from "./fault.js";
 // Sound: the AudioContext and its worklet (audio.js).
 import "./audio.js";
 // Movies: the WebCodecs decoder the module feeds (movie.js).
@@ -9,6 +11,23 @@ import "./movie.js";
 // The same glue again, for the workers `oagSpawnWorker` starts. build-web.sh
 // rewrites both names to the content-hashed directory.
 const GLUE = new URL("./pkg/oag_web.js", import.meta.url).href;
+setBuild(GLUE);
+
+// The module's glue, imported here and not statically so that a fetch that
+// fails (offline, a deploy half way) is a message and not a picker that does
+// nothing.
+let init, inspect, start;
+try {
+  const glue = await import(GLUE);
+  ({ default: init, inspect, start } = glue);
+  // Only a module built with OAG_WEB_FAULT_TEST=1 has the hook that raises each
+  // failure on demand (scripts/build-web.sh).
+  window.oagFaultTest = glue.fault_test;
+} catch (error) {
+  window.oagReport(kindOfFailure(error), failureText(error));
+  // Nothing after this can run without the module: wait here, quietly.
+  await new Promise(() => {});
+}
 
 const picker = document.getElementById("picker");
 const status = document.getElementById("status");
@@ -42,46 +61,6 @@ async function remembered(handle) {
   });
 }
 
-// A panic or a lost GPU device would otherwise leave a white canvas. The wasm
-// side calls this (`gpu::web::fatal`); the first cause stays, since later ones
-// are usually fallout. Added to the page here so the HTML stays plain.
-let fatalShown = false;
-window.oagFatal = (cause, software) => {
-  if (fatalShown) return;
-  fatalShown = true;
-  const box = document.createElement("div");
-  box.setAttribute("role", "alert");
-  box.style.cssText = "position:fixed;inset:0;z-index:10;overflow:auto;padding:2rem;"
-    + "background:#101418;color:#eee;font:16px/1.5 system-ui,sans-serif;";
-  const add = (tag, text) => {
-    const el = document.createElement(tag);
-    el.textContent = text;
-    box.append(el);
-    return el;
-  };
-  add("h2", "OpenAntiGrav stopped");
-  add("p", "The game hit an error and cannot go on. Reloading the page starts it again.");
-  if (software) {
-    add("p", "Your browser gave WebGPU a software (CPU) adapter, which is slow and fails on "
-      + "things a graphics card does not. On Linux, start Chrome with "
-      + "--enable-unsafe-webgpu --enable-features=Vulkan (or enable those in chrome://flags), "
-      + "and check chrome://gpu for the WebGPU line. Details: docs/tools/web.md, \"Troubleshooting\".");
-  }
-  add("pre", cause.split("\n").slice(0, 3).join("\n").slice(0, 700)).style.cssText = "white-space:pre-wrap;word-break:break-word;background:#1c232b;padding:1rem;";
-  add("p", "The full text is in the browser console (F12).");
-  document.body.append(box);
-};
-// A wasm trap is not a panic, so the panic hook never reports it, and it leaves
-// the module's stack pointer where the trap left it: every later callback then
-// traps too, and the canvas stays on its last frame. A stack overflow traps as
-// "memory access out of bounds" (docs/tools/web.md, "The page's stack"). The
-// first trap is shown; the rest are fallout.
-const shownTrap = (error) => {
-  if (!(error instanceof WebAssembly.RuntimeError)) return;
-  window.oagFatal(`${error.message}\n${error.stack ?? ""}`, false);
-};
-window.addEventListener("error", (event) => shownTrap(event.error));
-window.addEventListener("unhandledrejection", (event) => shownTrap(event.reason));
 // The player quit. winit's web loop cannot be started a second time in one
 // page and wasm memory never shrinks, so the page reloads and shows the picker
 // again; a Chromium remembered handle then offers "Play <name> again". Settings
@@ -136,13 +115,7 @@ let imageFile = null;
 // (`oag_thread::web::spawn`); throws if the browser refuses.
 window.oagSpawnWorker = (module, memory, id) => {
   const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
-  worker.onmessage = ({ data }) => {
-    if (data?.fatal) window.oagFatal(data.fatal, false);
-  };
-  worker.onerror = (event) => {
-    event.preventDefault();
-    window.oagFatal(`a worker stopped: ${event.message}`, false);
-  };
+  watchWorker(worker);
   worker.postMessage({ glue: GLUE, module, memory, id, file: imageFile });
 };
 
@@ -182,6 +155,10 @@ function slicedReader(file) {
         const bytes = new Uint8Array(text.length);
         for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0xff;
         return bytes;
+      } catch (error) {
+        // A read that fails once the game runs leaves it nothing to play from.
+        if (booted) window.oagFatal("disc-unreadable", `read of ${length} bytes at ${offset}: ${error}`);
+        throw error;
       } finally {
         readsInFlight--;
         URL.revokeObjectURL(url);
@@ -284,7 +261,7 @@ async function readKeyFile(file) {
 // A dropped or picked set of files: a small one is a key, a larger one the
 // disc image. Both may arrive together, in either order.
 async function receive(files) {
-  if (booted) return;
+  if (booted || blocked) return;
   let image = null;
   for (const file of files) {
     if (file.size <= KEY_MAX_BYTES || /\.(dkey|key)$/i.test(file.name)) {
@@ -296,6 +273,7 @@ async function receive(files) {
       }
     } else {
       image = file;
+      window.oagImageName(file.name);
     }
   }
   if (image) await stage(image, heldKey);
@@ -315,19 +293,21 @@ async function makeImage(file) {
   return new Uint8Array(await file.arrayBuffer());
 }
 
-function precheck() {
-  if (!navigator.gpu) {
-    say("This browser has no WebGPU, which the game draws with.");
-    return false;
-  }
-  // The module's memory is shared between threads, which a page may only
-  // create when its server sends COOP/COEP (web/_headers).
-  if (!window.crossOriginIsolated) {
-    say("This page was served without cross-origin isolation (COOP/COEP headers), "
-      + "which the game's threads need. See docs/tools/web.md, \"Hosting\".");
-    return false;
-  }
-  return true;
+// Whether this browser can run the game at all, told at once and not after a
+// disc has been picked (WebGPU, and the cross-origin isolation the module's
+// shared memory needs: docs/tools/web.md, "Troubleshooting").
+const blocked = preflight();
+if (blocked) {
+  window.oagReport(blocked, `navigator.gpu: ${navigator.gpu ? "present" : "absent"}\n`
+    + `crossOriginIsolated: ${window.crossOriginIsolated}\n`
+    + `SharedArrayBuffer: ${typeof SharedArrayBuffer}`);
+}
+
+// A failure of the start-up path, shown as the page's one report. The module
+// tags its own refusals (a disc it cannot read); a browser's are told apart by
+// name.
+function fail(error, started) {
+  window.oagReport(kindOfFailure(error), failureText(error), undefined, { reload: started });
 }
 
 const KEY_WORDS = {
@@ -339,7 +319,7 @@ const KEY_WORDS = {
 // Looks at the image, asks the module whether it needs a key and whether
 // `key` is it, and boots or shows what is missing.
 async function stage(file, key, already) {
-  if (booted || !precheck()) return;
+  if (booted || blocked) return;
   try {
     const image = already?.image ?? await makeImage(file);
     await init();
@@ -381,8 +361,7 @@ async function stage(file, key, already) {
     }
     await boot(file, supplied);
   } catch (error) {
-    say(`Could not start: ${error}`);
-    console.error(error);
+    fail(error);
   }
 }
 
@@ -402,8 +381,9 @@ async function boot(file, key) {
   } catch (error) {
     booted = false;
     picker.hidden = false;
-    say(`Could not start: ${error}`);
-    console.error(error);
+    say("");
+    // `start` has run the module's GPU set-up: the page starts over to try again.
+    fail(error, true);
   }
 }
 

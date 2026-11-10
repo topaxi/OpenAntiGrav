@@ -39,7 +39,7 @@ does not, and the page then says so instead of starting. `just web --serve`
 runs `scripts/serve-web.py`, which sends both; `npx wrangler pages dev
 target/web/dist` is the closer copy of the real host (it reads `_headers`).
 
-The published folder is `index.html`, `main.js`, `worker.js`, `style.css`,
+The published folder is `index.html`, `main.js`, `fault.js`, `worker.js`, `style.css`,
 `pkg/<hash>/oag_web.js` (the wasm-bindgen glue, 105 KB),
 `pkg/<hash>/oag_web_bg.wasm` (about 10 MB), the licence files and `_headers`
 (Cloudflare's, see "Hosting"). `<hash>` is the first
@@ -203,8 +203,8 @@ The page's thread runs on the stack the linker lays out at the bottom of the
 module's memory, below its data, with `__stack_pointer` starting at its top. Its
 size is the link argument `-zstack-size`; without one it is 1 MiB, where a
 native main thread on Linux has 8 MiB. `build-web.sh` links **8 MiB**
-(`stack_size`), the native figure. A worker's stack is wasm-bindgen's own and
-was not changed.
+(`stack_size`), the native figure. A worker's stack is set in `web/worker.js`
+(below).
 
 **What happened when it was 1 MiB** (2026-11-10, the nightly of `1aacef762`,
 deployed as `pkg/616e98a94ed1f513`). Every Pulse PSP boot stopped right after
@@ -236,11 +236,14 @@ Three things now stand in its way:
   largest (766 KiB). The old 813 KiB `open_with` frame would pass the frame
   check at this stack size. Neither measures a call chain's depth, so the walk
   below is what proves a boot.
-- **A trap reaches the stopped page.** `web/main.js` shows the first uncaught
-  `WebAssembly.RuntimeError` through `oagFatal` (a page `error` or
-  `unhandledrejection`), with its message and wasm offset, instead of a frozen
-  last frame. Checked by serving the new page over the old module: "OpenAntiGrav
-  stopped", `memory access out of bounds`, the offset.
+- **A trap reaches the stopped page, and nothing enters the module again.**
+  `web/fault.js` wraps the instance's exports (`WebAssembly.instantiate` is
+  patched before the glue calls it), so a trap there stops the module: every
+  later frame, key press, resize or promise returns without running wasm, and
+  its workers and audio context are ended. The first trap is shown through the
+  page's one report ("Troubleshooting"), with its message and wasm offset,
+  instead of a frozen last frame. The old module behind the new page showed
+  "OpenAntiGrav stopped", `memory access out of bounds`, the offset.
 
 `web-screenshot.py` prints each uncaught error's stack (function names survive
 in an `OAG_WEB_NO_OPT=1` build) and **exits non-zero on any**; it used to print
@@ -248,8 +251,16 @@ three traps under a zero exit. After the fix, the Pulse PSP EU boot to Language
 Selection and on to ENTER YOUR NAME ran clean in headless Chromium 154 and
 Playwright's Firefox (build 1572), `dist` build, no page error, and the walk in
 "Verifying it" raced at 60.2 fps in Chromium. **A worker's stack is not
-covered**: wasm-bindgen allocates it from the heap, so an overflow there would
-corrupt memory silently rather than trap; not measured.
+covered by a guard**: wasm-bindgen allocates it from the heap, so an overflow
+there corrupts memory instead of trapping. Measured with the `worker-stack` fault
+("Troubleshooting", "Reproducing every message") at wasm-bindgen's default size:
+64 KiB frames on a worker overran its stack into the audio mixer's worker, which
+then trapped on `memory access out of bounds` inside `Ahead::spawn`, so the page
+reported a trap in a thread that had done nothing wrong. `web/worker.js` now
+passes `thread_stack_size` of 8 MiB (`STACK_BYTES`), the page's own: more
+headroom, not a guard, and no worker's real depth was measured (the same hook
+still overruns 8 MiB at 128 such frames). A canary that detects an overflow
+needs a raw pointer write, which this workspace denies (`unsafe_code`); open.
 
 ### Disc keys
 
@@ -411,9 +422,10 @@ section 9, by `crates/raceplay/tests/web_picker_table.rs`. WebGPU ships in Chrom
 Chromium on Linux still needs `--enable-unsafe-webgpu --enable-features=Vulkan`;
 Firefox on Linux needs `dom.webgpu.enabled` and `gfx.webgpu.ignore-blocklist`
 set in `about:config` (Firefox 155 then hands out a hardware adapter, headless
-included). The page says so when `navigator.gpu` is missing rather than
-failing later, and when the page is not cross-origin isolated (above), which
-every one of these browsers supports.
+included). The page says so, at load and before any disc is picked, when
+`navigator.gpu` is missing or when the page is not cross-origin isolated
+(above), which every one of these browsers supports; "Troubleshooting" lists
+every message.
 
 ## Verifying it
 
@@ -541,7 +553,9 @@ constants are not module text and are not varied.
   four nights running while every other check was green. The dev-dependency is
   now `cfg(not(target_arch = "wasm32"))`. Locally:
   `cargo +nightly-2026-10-08 check --target wasm32-unknown-unknown -p oag-game
-  --no-default-features --example oag_web --features web`.
+  --no-default-features --example oag_web --features web` (and again with
+  `--features web,fault-test`, which the same job runs, so the fault hook of
+  "Reproducing every message" keeps compiling).
 
 `/usr/bin/chromium` (Chromium 153 for the walks above; 154 since 2026-10-12) is the browser it was run with: Playwright's
 own Chromium build has no WebGPU on Linux. Headless Chromium here reports a hardware
@@ -566,11 +580,8 @@ simulation code can observe on one thread.
 
 ## Troubleshooting
 
-**The page shows "OpenAntiGrav stopped".** A wasm trap ("The page's stack"), a Rust panic, a lost GPU device or a
-GPU out-of-memory/internal error lands on the page instead of a white canvas
-(`web/main.js`, `window.oagFatal`, called from `gpu::web::fatal` and the panic
-hook). It prints the cause and, when the adapter is a CPU one, the flags below.
-The full text, with the stack, is in the browser console.
+**The page shows a message** ("OpenAntiGrav stopped", "This browser has no WebGPU",
+and the rest): "What the page says when something fails", below, lists each one.
 
 **The log says `renderer: webgpu:  (cpu)`.** The browser gave WebGPU a software
 adapter (the `web: adapter "" (Cpu)` line says the same); frames then take 40 to
@@ -597,6 +608,104 @@ behind it), which is a reason to use the flags above, not something the game
 can repair. `scripts/web-screenshot.py --software` runs the presenting CPU
 adapter and `--software bare` that mode; `--resize WxH@SECONDS` resizes the
 viewport mid-run.
+
+### What the page says when something fails
+
+Every way the web build can fail ends in one in-page message, never a frozen
+or white canvas and never a cascade of console errors. `web/fault.js` owns it:
+a dialog (`role="alertdialog"`, `#oag-fault`, its kind in `data-kind`) that
+names what happened in a sentence, says what the player can do, and has
+**Copy details** (clipboard, with a selectable text box under "Technical
+details" for a browser that refuses the clipboard) and either **Reload the
+page** (the game has stopped) or a button that dismisses it (the game runs
+on). The details text is the build hash (`pkg/<hash>/`), the page's address
+without its query, the browser, whether the page is cross-origin isolated,
+the adapter, the module's memory against its 4 GiB ceiling, the picked
+image's **file name** and the error with its stack; no path, no disc key, no
+storage. The console gets one `oag:` error line with the same text.
+
+A fatal report replaces a dialog that lets the game go on (a validation notice,
+then a lost device); anything else after the first report is hidden. A disc
+failure found before the game starts (the picker's check of the image) offers
+"Back to the picker"; one found after `start` has run the module's GPU set-up
+offers "Choose another image", which reloads the page, because a second `start`
+in one page is not supported ("Quitting").
+
+What makes it one report:
+
+- **A guard on the module** (above): once the module has trapped, panicked or
+  reported a fatal GPU error, nothing enters it, its workers are ended and the
+  sound stops, so no second trap can follow. Later page errors are hidden (the
+  `error` and `unhandledrejection` handlers cancel them) and counted in the
+  details.
+- **One path in.** Rust reaches the page through `oagFatal(kind, detail)` and
+  `oagNotice(kind, detail)` (`gpu::web::fatal`, `notice`; the panic hook), a
+  worker through a message `main.js` forwards. `oag_game::web_fault::Kind` is
+  the module's side of the vocabulary, with the classification (a wgpu error's
+  variant, a lost device's reason, an `oag-disc` or `oag-assets` error to
+  unreadable or unsupported) under unit tests, and a test fails when
+  `web/fault.js` lacks a row for a kind the module can send or has a row
+  nothing can send.
+
+| Message (title) | Kind | What happened | What to do |
+| --- | --- | --- | --- |
+| OpenAntiGrav stopped | `panic` | a Rust panic, on the page's thread or a worker | reload; report with the details |
+| OpenAntiGrav stopped | `trap` | a WebAssembly trap (`unreachable`, memory out of bounds, the engine's own stack limit) | reload; report |
+| OpenAntiGrav ran out of memory | `out-of-memory` | a trap with the module at 90 % of its 4 GiB, or an allocation failure in the stack | close tabs and programs, reload; a PSP disc needs less than HD |
+| The graphics card ran out of memory | `gpu-out-of-memory` | WebGPU's out-of-memory error | close what uses the card, reload |
+| The browser's graphics layer failed | `gpu-internal` | WebGPU's internal error | reload; update browser and driver |
+| The graphics card connection was lost | `gpu-lost` | the device was lost (not destroyed by the game) | reload; update driver |
+| The graphics card rejected a drawing command | `gpu-validation` | a validation error; **the game keeps running**, the dialog is shown once and dismisses | reload if the picture is wrong |
+| This browser has no WebGPU | `no-webgpu` | no `navigator.gpu` | the browser's own advice (below) |
+| The browser gave the game no graphics card | `no-adapter` | `requestAdapter()` resolved null | the browser's own advice; hardware acceleration on |
+| The graphics card refused the game | `device-request` | `requestDevice` failed | update browser and driver |
+| This page is missing its security headers | `no-isolation` | no COOP/COEP, so no shared memory | use the hosted page or `scripts/serve-web.py`; leave an in-app browser |
+| The game could not be downloaded | `module-load` | the glue or the wasm did not fetch | check the connection, reload |
+| This browser cannot run the game | `wasm-unsupported` | a `CompileError` or `LinkError` | update the browser |
+| The browser would not give the game memory | `wasm-memory` | the shared memory could not be allocated at start | close tabs; use a computer |
+| That file is not a disc image the game can play | `disc-unsupported` | a file that read and holds no game (not a disc, an empty ISO, another title) | pick a supported image |
+| The disc image could not be read | `disc-unreadable` | cut short or damaged, or the browser lost access mid-run (on a read in the game the page stops, so the dialog reloads) | check the file, pick it again |
+| The game could not start | `startup` | anything else before the first frame | reload; report |
+
+The advice for `no-webgpu` and `no-adapter` is the browser's own: Firefox on
+Linux, the two `about:config` prefs ("Browser support"); Chrome and Chromium on
+Linux, the flags in "The log says `renderer: webgpu:  (cpu)`" above; Safari,
+26 or newer. A fatal report while the adapter is a software one adds those flags.
+
+**The page stopped by itself with a blank canvas** is the class this replaces:
+if it still happens, no report was raised, which is a bug in `web/fault.js`'s
+coverage; open the console, whose `oag:` line would be absent.
+
+### Reproducing every message
+
+`OAG_WEB_FAULT_TEST=1 just web --dev` builds a module with the cargo feature
+`fault-test`, which adds `fault_test(what)` (`window.oagFaultTest`): `panic`,
+`trap` (an `unreachable`), `stack` (the page's own stack, 64 KiB frames, the
+boot's real failure: `memory access out of bounds`), `recursion` (the engine's
+stack), `memory` (the 4 GiB reserved, then one allocation more), `worker-panic`,
+`worker-trap`, `worker-stack`, `gpu-validation` (an invalid buffer on the live
+device: real), `gpu-out-of-memory`, `gpu-internal` and `gpu-lost` (the error
+handed to the callback the browser's would reach: synthetic). A build without the
+variable has no such export, and `pages.yml` does not set it.
+
+```sh
+OAG_WEB_FAULT_TEST=1 just web --dev
+uv run --with playwright python3 scripts/check-web-faults.py \
+    --pulse data/images/pulse-psp-eu.chd --out data/web-faults --browser both
+```
+
+`scripts/check-web-faults.py` drives `web-screenshot.py --expect-fault KIND` for
+each case: the run must end with exactly one report of that kind, one `oag:`
+console error and no uncaught page error, and it leaves `fault.png` and
+`fault-details.txt` under `<out>/<browser>-<case>/`. The browser-only classes are
+real where it can: Chromium started with no WebGPU switches (`--plain`) has
+`navigator.gpu` and no adapter, Firefox without its prefs has no `navigator.gpu`,
+`--no-isolation` serves without COOP/COEP (`serve-web.py --no-isolation`),
+`--block` fails the glue or the wasm, `--truncate` hands a cut-short image,
+`--lose-image` deletes the picked file under the page (a real failed read, on the worker's `FileReaderSync` or the page's request), and `--crash-gpu` crashes Chromium's GPU
+process (`Browser.crashGpuProcess`, a real lost device). A wasm out-of-memory at
+start and a compile error are synthetic (`--init-script`). It is not in `just`:
+it wants browsers and a disc image.
 
 ## Hosting
 

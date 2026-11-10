@@ -6,12 +6,24 @@
 <title>OpenAntiGrav</title>
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="data:,">
+<script>
+// If main.js or a file it imports cannot be fetched, none of the page's own
+// code runs (fault.js reports every later failure): say so in the picker's status line.
+window.addEventListener("error", function (event) {
+  var node = event.target;
+  if (node && node.tagName === "SCRIPT" && !window.oagReport) {
+    var status = document.getElementById("status");
+    if (status) status.textContent = "The page's program could not be downloaded. Check your connection and reload the page.";
+  }
+}, true);
+</script>
 <script type="module" src="main.js"></script>
 </head>
 <body>
 <canvas id="oag-canvas" tabindex="0"></canvas>
 <main id="picker">
   <h1>OpenAntiGrav</h1>
+  <noscript><p>This page needs JavaScript, and a browser that runs ES modules and WebAssembly threads.</p></noscript>
   <p>A clean-room reimplementation of the Studio Liverpool anti-gravity racing
   engine. It plays <strong>your own</strong> disc image: pick one below. The
   image is read here, in this browser tab, and is never uploaded anywhere.</p>
