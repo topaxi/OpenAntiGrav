@@ -2307,3 +2307,100 @@ OAG_RENDER_BENCH_RACE=<stem> taskset -c 0-5 oag-game hdfury-ps3-eu-dec.iso --rac
 # pictures: the same race with --size 1280x800 --ticks N --screenshot out.png, and
 # OAG_PROBE_BLEND=cpu for the frame-thread arm
 ```
+
+## HD encode: three exact cuts measured, none kept (2026-11-10, `hd-encode`)
+
+Claim: the HD encode pass (`fs_encode` in `crates/post/shaders/hd_bloom.wesl`) costs measurably
+less GPU time on the Deck at 1080p and 4K, with every HD picture byte-identical. **False: nothing
+was kept.** The pass's cost is the scene decode. Every exact way to do less of it either costs more
+than it saves or saves nothing on the Deck.
+
+**The pass is dearer than the table above says, and why.** That table's 0.75 / 2.60 ms predates
+`79f28d611`, which made the scene decode the piecewise sRGB curve instead of a 2.2 power. Each
+channel now costs a compare, a select, an add and two multiplies on top of the `pow`. The Deck
+measures 989 us at 1080p today. The same binary with the old 2.2-power decode measures 751 us. The
+before numbers below are today's `main`, re-measured.
+
+**Where the time goes (Deck, 1080p / 4K, us, timing-only diags, wrong pictures):**
+
+| Arm | 1080p | 4K |
+| --- | ---: | ---: |
+| base | 990 | 3892 |
+| no decode at all (clamp only) | 492 | 1873 |
+| one decode per pixel instead of four | 599 | 2353 |
+| the 2.2-power decode of `4cd61908c` | 751 | |
+
+Half the pass is the four decodes, and each one costs about 110 to 125 us at 1080p. The bilinear
+read decodes each scene texel four times, once for each pixel whose 2x2 footprint covers it. The
+ISA (RADV `RADV_DEBUG=shaders`) shows 18 `v_log_f32` and 18 `v_exp_f32`, 18 `v_cmp`, 18
+`v_cndmask` and 232 VALU in all.
+
+**Cut 1, a decode table: slower.** The pow branch only ever sees 4,819 distinct f16 inputs
+(`(0.04045, 1]`), so an exact table is possible: generate it on the GPU with the same function, and
+index it by `bitcast<u32>(v) >> 13`. A timing diag with 12 table fetches per pixel measured
+1455 us at 1080p and 5019 us at 4K, against 989 / 3892. The texture unit costs more than the ALU it
+spares. Dropped without building the generator.
+
+**Cut 2, quad sharing through subgroup ops: exact, but slower or flat.** A 2x2 quad needs 9 texels.
+Spread over 4 lanes running in lockstep, that is 3 decodes per lane instead of 4. Each lane decodes
+its own low texel plus two the quad is missing, and the lanes trade results with
+`quadSwapX/Y/Diagonal`. This needs `wgpu::Features::SUBGROUP` (WGSL here takes the builtins without
+an `enable subgroups;`, which naga rejects).
+
+- With a per-quad check that the 3x3 pattern holds (`d_quad`), the quad falls back to four decodes
+  when it does not, for example at the clamped edge, a split view or a fractional origin.
+- Without the check (`d_quadfloor`), the code assumes the whole-picture mapping. It reads `high`
+  for the extra texels, so the clamped right and bottom edges still come out right.
+- The ISA confirms the decode saving: 15 `v_log`/`v_exp` instead of 18. But the per-lane assembly
+  adds about 17 `v_cndmask`, 6 moves and 15 DPP swaps, which eat the saving.
+- A third form traded the selects for swaps of pre-selected values. It is wrong: lane (1,1) takes
+  its right-hand texel from its vertical partner and its lower texel from its horizontal one. No
+  single swap per term serves every lane, so the selects cannot go.
+
+Per pass, median of 60 redraws, us, 2 rounds interleaved (order reversed in round 2), HD Anulpha
+Pass, one view:
+
+| Adapter | Arm | 800p | 1080p | 4K |
+| --- | --- | --- | --- | --- |
+| Deck (`RADV VANGOGH`, load 0.9 to 1.8) | base | 451 / 451 | 989 / 990 | 3891 / 3895 |
+| | `d_quad` | 500 / 499 (+10.7 %) | 1090 / 1092 (+10.3 %) | 4282 / 4285 (+10.0 %) |
+| | `d_quadfloor` | 454 / 453 (+0.5 %) | 995 / 995 (+0.6 %) | 3909 / 3912 (+0.5 %) |
+| NVIDIA RTX PRO 2000 (load 15 to 33) | base | 50 / 48 | 125 / 112 | 659 / 683 |
+| | `d_quad` | 56 / 51 | 128 / 137 | 702 / 708 |
+| | `d_quadfloor` | 52 / 50 | 112 / 109 | 585 / 598 |
+| Intel ARL, Vulkan (load 25 to 64) | base | 309 / 309 | 560 / 667 | 1070 / 1335 |
+| | `d_quad` | 401 / 400 | 771 / 871 | 1239 / 1312 |
+| | `d_quadfloor` | 338 / 338 | 734 / 687 | 1028 / 1032 |
+
+- **On the Deck the checked form costs 10 % more and the unchecked one 0.5 % more** at every size.
+  Both rounds agree within 0.3 %.
+- NVIDIA's unchecked form is about 10 % faster at 4K (about 80 us) and flat below.
+- The checked form is slower on every adapter. Intel's rows swing with the desktop load and are not
+  read as more than "the checked form is slower".
+- Pictures: `cmp` equal to base for `d_quad` on the Deck (1080p and 4K) and on NVIDIA (1080p), and
+  for `d_quadfloor` on the Deck and NVIDIA at 1080p. So the shuffles are exact. The cost is the
+  assembly, not the arithmetic.
+
+Not built: landing either form would need `SUBGROUP` on the device (`oag-mesh`'s
+`optional_features`), a second pipeline for devices without it and for GL, and the per-quad check,
+for a Deck pass that gets slower.
+
+**Cut 3, decode once into an intermediate: not tried.** It is exact only through an `Rgba32Float`
+target, which means writing and reading back 16 bytes per texel. That is about 66 MB of traffic
+at 1080p, roughly 0.75 ms at the Deck's 88 GB/s (an estimate, not measured), more than the 0.5 ms
+of decode it would remove. A compute pass with
+workgroup-shared texels (about 1.1 decodes per pixel) would have to write the caller's canvas as a
+storage texture, which this chain does not own (`Chain::run` draws into `view`).
+
+**Method.** The same `release` `perf-probe` build on every arm (container build, `znver2` for the
+Deck), with a throwaway env override that loaded the chain's WGSL from a file. The override and
+`SUBGROUP` were never committed.
+
+```sh
+# Deck, per run (under the workstation's deck.lock and the Deck's deck-run.sh)
+OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1 ./oag-game hdfury-ps3-eu-dec.iso \
+  --track 'Data\Environments\15_Anulpha_Pass\track.vex' --race --mode single_race --seed 1 \
+  --autopilot --no-audio --size WxH --ticks 2500 --render-scale 100 --motion-blur high \
+  --motion-blur-resolution half --screenshot out.png
+# desktop: the same with --ticks 600; Intel with VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json
+```
