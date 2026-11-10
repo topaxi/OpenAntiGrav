@@ -804,5 +804,8 @@ fn a_dark_encoded_scene_value_resolves_to_itself() {
         eprintln!("no GPU adapter: skipping");
         return;
     };
-    assert!(resolved.abs_diff(41) <= 1, "stored 0.162 resolved {resolved}");
+    assert!(
+        resolved.abs_diff(41) <= 1,
+        "stored 0.162 resolved {resolved}"
+    );
 }
