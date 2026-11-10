@@ -374,16 +374,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
     #[cfg(feature = "view")]
-    let (shield_cockpit, shield_cockpit_alpha) = {
-        let (mut sphere, alpha) =
-            oag_livery::cockpit_shield(craft_of(&mut craft, &mut archives), &mut report);
-        if roster::own_shield(options, craft_title)
-            && let Some(sphere) = &mut sphere
-        {
-            oag_livery::own_shield::cockpit(sphere);
-        }
-        (sphere, alpha)
-    };
+    let (shield_cockpit, shield_cockpit_alpha) =
+        oag_livery::cockpit_shield(craft_of(&mut craft, &mut archives), &mut report);
 
     // Shared with the sky and the pads below: all three are node classes inside
     // the same track file, and a material in any of them names a texture by its
@@ -1145,22 +1137,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             ps2_trail: title.looks.ps2_trail.applies(archives.layout.platform),
             #[cfg(feature = "view")]
-            shield_targets: {
-                let palette = roster::shield_palette(
-                    craft_title,
-                    craft_of(&mut craft, &mut archives).layout.platform,
-                    roster::own_shield(options, craft_title),
-                );
-                liveries
-                    .iter()
-                    .map(|l| roster::shield_target(l.shield_colour, shield_cockpit_alpha, &palette))
-                    .collect()
-            },
-            #[cfg(feature = "view")]
-            shield_palette: roster::shield_palette(
+            shield_targets: roster::shield_targets(
+                options,
                 craft_title,
                 craft_of(&mut craft, &mut archives).layout.platform,
-                roster::own_shield(options, craft_title),
+                (&liveries, shield_cockpit_alpha),
+            ),
+            #[cfg(feature = "view")]
+            shield_palette: roster::shield_palette(
+                options,
+                craft_title,
+                craft_of(&mut craft, &mut archives).layout.platform,
             ),
             #[cfg(feature = "view")]
             hd_plasma_blast: wm.plasma_blast_hd.is_some(),
@@ -1405,7 +1392,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         #[cfg(feature = "view")]
         leach_ball_model,
         #[cfg(feature = "view")]
-        shield_cockpit,
+        shield_cockpit: roster::own_cockpit(shield_cockpit, options, craft_title),
         #[cfg(feature = "view")]
         countdown_model,
         #[cfg(feature = "view")]

@@ -215,16 +215,32 @@ pub(super) fn own_shield(options: &crate::Options, craft_title: &oag_title::Titl
 }
 
 #[cfg(feature = "view")]
+/// The cockpit sphere `oag_livery::cockpit_shield` loaded, under our own shader when this race
+/// draws our own shield.
+pub(super) fn own_cockpit(
+    mut sphere: Option<oag_mesh::mesh::Model>,
+    options: &crate::Options,
+    craft_title: &oag_title::Title,
+) -> Option<oag_mesh::mesh::Model> {
+    if own_shield(options, craft_title)
+        && let Some(sphere) = &mut sphere
+    {
+        oag_livery::own_shield::cockpit(sphere);
+    }
+    sphere
+}
+
+#[cfg(feature = "view")]
 /// The shell tint a craft of `craft_title`, loaded from a disc of `platform`,
 /// takes. The craft's source, not the track's: the shell is loaded from the
 /// craft's archives (`livery::shield::shell`), so a Race Remix with a PSP craft
 /// on a PS2 circuit must still tint.
 pub(super) fn shield_palette(
+    options: &crate::Options,
     craft_title: &oag_title::Title,
     platform: oag_assets::Platform,
-    own_shield: bool,
 ) -> oag_render::shield::Palette {
-    if own_shield {
+    if own_shield(options, craft_title) {
         return oag_render::shield::OWN_PALETTE;
     }
     match craft_title.looks.shield_palette.on(platform) {
@@ -233,6 +249,21 @@ pub(super) fn shield_palette(
         oag_title::ShieldPalette::Ps2Pulse => oag_render::shield::PS2_PULSE_PALETTE,
         oag_title::ShieldPalette::Pulse => oag_render::shield::PULSE_PALETTE,
     }
+}
+
+#[cfg(feature = "view")]
+/// Every slot's [`shield_target`] under the palette this race's craft title takes.
+pub(super) fn shield_targets(
+    options: &crate::Options,
+    craft_title: &oag_title::Title,
+    platform: oag_assets::Platform,
+    (liveries, cockpit_alpha): (&[oag_livery::Livery], f32),
+) -> Vec<Option<[f32; 4]>> {
+    let palette = shield_palette(options, craft_title, platform);
+    liveries
+        .iter()
+        .map(|l| shield_target(l.shield_colour, cockpit_alpha, &palette))
+        .collect()
 }
 
 #[cfg(feature = "view")]
