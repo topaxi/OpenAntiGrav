@@ -41,13 +41,21 @@ file with `[graphics] own_shield = true` for "on".
   capture of a raised shield exists in the repo, so the HD frame is ours rendering HD's data, with the limit stated in
   `crates/livery/src/shield.rs` (it is brighter and flatter than the disc's material).
 - **A hit**: `--force-hit 400:0` flashes the shell amber with the swell, and it settles back to blue.
-- Test: `crates/raceplay/tests/own_shield_ground_truth.rs` (Pulse EU and Pure EU: off keeps the disc's shell, palette
+- Tests: `crates/mesh/tests/own_shield_lit_path.rs` (the flag reaches the pipeline and reads no texture),
+  `crates/raceplay/tests/own_shield_ground_truth.rs` (Pulse PSP and PS2, Pure PSP: off keeps the disc's shell, palette
   and sphere; on swaps all three; HD ignores it) and `menu_definition_settings::the_own_shield_row_is_offered_only_where_the_original_draws_another_look`.
 
 ## Open
 
 - A live hit's colour flash is the palette's; a brighter hit flare in the shader is a possible follow-up.
-- Cockpit sphere under the own shader is judged by one frame only; it was not compared against an HD cockpit frame.
+- **The cockpit sphere was not seen.** In a headless `--camera-view internal` capture the frames with the setting on and
+  off are byte-identical at ticks 345, so neither the disc's sphere nor ours showed anything there; the sphere's
+  appearance from inside the hull is unjudged. From inside, the rim term is near zero by construction.
+- A hull whose meshes do not map back to its file draws no shield with the setting on (reported), never the disc's shell
+  under our palette. Pulse PSP, Pulse PS2 and Pure PSP all build for every grid slot (the test).
+- The shell draws the hull's zero-alpha LOD children too and re-uploads a hull-sized vertex buffer per raised shield each
+  frame; dropping the draws outside the first level of detail in `own_shield::shell` would cut the fragment cost.
+- A frame at speed (364 km/h, ticks 380 and 430): no smear and the airbrake flaps do not poke through.
 - **Cross-title check (CLAUDE.md "2048 and Omega")**: checked, differs. HD, 2048 and Omega draw the HD-style shield
   from their own `shipshield.rcsmodel`, so the setting does nothing there and the row is dropped. Not wired for them
   by design.
