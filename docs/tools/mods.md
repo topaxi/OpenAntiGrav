@@ -101,9 +101,11 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
   names the disc's serial (a PSP disc only: the keys are the PSP's), and the decoders ask it as
   they build a picture (the pack is switched off again when the load ends, so a menu preview draws
   the disc's own): a `.vex` texture (hulls, tracks) by its key, and the whole-image `.mip`
-  textures the load reads for flares, clouds and mist; the PNG is read the first time its
-  texture is decoded, under a 192 MiB cache cap. The HUD sheet, the fonts and every other
-  atlas cut by pixel offset keep the disc's own picture. Off, a frame is byte-identical to
+  textures the load reads for flares, clouds and mist, the race HUD's sprite sheet and the HUD
+  the fonts it draws with, each at the picture's own size (a pack picture is a PNG or a PPSSPP `.zim`);
+  the PNG is read the first time its
+  texture is decoded, under a 192 MiB cache cap. The front end's menus, boot and loading
+  screen keep the disc's own picture. Off, a frame is byte-identical to
   the game without the mod. Rendering only: nothing reaches `World`, a snapshot or the LAN
   content fingerprint.
 - **The load** says `texture pack <name>: N key(s)` in the load report and, when it ends, `N texture(s)
@@ -111,7 +113,8 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
   `[games]` does not name this disc, it is not a PSP disc, its `textures.ini` hashes another
   way, or it will not open).
 - `.zip` and folder alike are read in place; PPSSPP prefers `textures.zip` to a loose tree, so
-  does the search. ZIM images (a later pack's format) are not read yet.
+  does the search. ZIM images (a later pack's format) are read, raw, zlib or zstd, RGBA8888,
+  RGBA4444 and RGB565 (`docs/formats/ppsspp-texture-pack.md`, "ZIM images").
 
 ## Campaigns, pilots and tracks: `campaigns/`, `pilots/`, `tracks/`
 

@@ -261,12 +261,7 @@ fn concentric_draws<'a>(
             continue;
         }
         let rect = [cx_px - w * 0.5, cy_px - h * 0.5, w, h];
-        let uv = [
-            placed.x as f32 + sprite.uv[0],
-            placed.y as f32 + sprite.uv[1],
-            sprite.uv[2],
-            sprite.uv[3],
-        ];
+        let uv = cx.sheet.sheet_rect(&sprite.src, placed, sprite.uv);
         // The layout's own colour, dimmed by the reticle's fade and its blink,
         // unless the runtime writes one (`Image_SetVertexColours`).
         let color = match ring.colour {

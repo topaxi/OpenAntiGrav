@@ -1100,6 +1100,8 @@ mod reticle_tests;
 #[cfg(test)]
 mod shield_tests;
 #[cfg(test)]
+mod sprite_pack_tests;
+#[cfg(test)]
 mod state_2048_tests;
 #[cfg(test)]
 mod sub_weapon_tests;

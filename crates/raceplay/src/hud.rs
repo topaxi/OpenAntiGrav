@@ -671,7 +671,7 @@ fn load_atlases(
     let mut notes = Vec::new();
     let mut extra = vex_model_art(archives, title, layout, report);
     extra.extend(mod_icons.iter().cloned());
-    let sheet = oag_hud::sprite::Sheet::build_with(&blobs, extra, &mut notes);
+    let sheet = oag_hud::sprite::Sheet::build_replaced(&blobs, extra, &mut notes);
     report.extend(notes);
     report.push(format!(
         "HUD {entry}: {} of {} texture(s) in a {}x{} sheet",
@@ -1041,19 +1041,49 @@ pub(super) fn hud_font(
             // author HD's numbers; the front end already lays its text out through
             // this scale (`1.0` on every other source), see
             // `oag_display::space::Space::font_texel_scale`.
-            oag_ui::font::Atlas::from_font(&font)
-                .with_border_extend(oag_ui::language::load::role_border(
-                    languages, preferred, role,
-                ))
-                .with_texel_scale(oag_display::space::Space::font_texel_scale(
-                    archives.layout.platform,
-                ))
+            let border = oag_ui::language::load::role_border(languages, preferred, role);
+            let (atlas, border) = replaced_atlas(archives, &name, &font, border, report)
+                .unwrap_or_else(|| (oag_ui::font::Atlas::from_font(&font), border));
+            atlas.with_border_extend(border).with_texel_scale(
+                oag_display::space::Space::font_texel_scale(archives.layout.platform),
+            )
         }
         Err(why) => {
             report.push(format!(
                 "HUD font {name} (role {role:?}) unavailable ({why}); drawing with 5x7"
             ));
             oag_ui::font::Atlas::build()
+        }
+    }
+}
+
+/// The face's atlas drawn from the active texture pack's picture of it, with the halo `border`
+/// the pack's factor gives (`border` times the factor), or `None` to keep the disc's own.
+///
+/// A face whose atlas the pack does not replace, whose picture is not a whole multiple of it, or
+/// whose `.fnt` keeps its atlas elsewhere (PS2) is the disc's, and a refusal is a line in `report`.
+fn replaced_atlas(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    font: &oag_texture::fnt::Font,
+    border: u32,
+    report: &mut Vec<String>,
+) -> Option<(oag_ui::font::Atlas, u32)> {
+    let picture = oag_texture::replacer::font(&archives.read_name(name).ok()?)?;
+    match oag_ui::font::Atlas::from_replaced_font(font, &picture) {
+        Ok(atlas) => {
+            let factor = picture.width / u32::from(font.width);
+            report.push(format!(
+                "HUD font {name}: {}x{} from the texture pack ({factor}x)",
+                picture.width, picture.height
+            ));
+            Some((atlas, border * factor))
+        }
+        Err(why) => {
+            report.push(format!(
+                "HUD font {name}: texture pack picture not used: {why}"
+            ));
+            None
         }
     }
 }

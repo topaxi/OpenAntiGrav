@@ -31,3 +31,4 @@ pub mod replacer;
 pub mod ship_skin;
 pub mod texture;
 mod xxhash;
+pub mod zim;

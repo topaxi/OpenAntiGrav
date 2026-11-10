@@ -220,6 +220,34 @@ impl Image {
         })
     }
 
+    /// The active texture pack's picture of this `.mip` in its place, with the disc's own
+    /// size, or the image as it is and `None`.
+    ///
+    /// Only a PSP `.mip` has a key (`oag_texture::replacer::mip`); with no pack on this is
+    /// one lock read. A picture too large for a sheet (`MAX_ATLAS_SIDE`) is left to the disc's.
+    fn replaced_by_pack(self, blob: &[u8]) -> (Self, Option<[u32; 2]>) {
+        let Some(picture) = oag_texture::replacer::mip(blob) else {
+            return (self, None);
+        };
+        let (Ok(width), Ok(height)) = (u16::try_from(picture.width), u16::try_from(picture.height))
+        else {
+            return (self, None);
+        };
+        if picture.width.max(picture.height) > oag_texture::replacer::MAX_ATLAS_SIDE {
+            return (self, None);
+        }
+        let logical = [u32::from(self.width), u32::from(self.height)];
+        (
+            Self {
+                width,
+                height,
+                bits_per_pixel: 32,
+                rgba: picture.rgba.clone(),
+            },
+            Some(logical),
+        )
+    }
+
     /// The decoded pixels, consuming the image: the sheet copies them out and
     /// nothing wants them twice.
     fn into_rgba(self) -> Vec<u8> {
@@ -236,6 +264,9 @@ impl Image {
 struct Staged {
     src: String,
     image: Image,
+    /// The disc's own pixel size when `image` is a texture pack's larger picture of it,
+    /// which is what [`Placed::width`] and [`Placed::height`] keep saying.
+    logical: Option<[u32; 2]>,
     quad_extent: Option<[f32; 2]>,
     quad_centre: Option<[f32; 2]>,
     blend: Option<vex::BlendClass>,
@@ -282,6 +313,11 @@ pub struct Sheet {
     /// order keeps the sheet byte-identical from one run to the next, which is
     /// what makes a screenshot comparable.
     placed: Vec<(String, Placed)>,
+    /// Per-axis sheet pixels per logical pixel of the entries a texture pack drew larger
+    /// (`oag_texture::replacer`), by entry name; every other entry is `[1.0, 1.0]`. Kept
+    /// beside [`Self::placed`] so a [`Placed`] stays the disc's own measure: the layout's
+    /// rects are in the original's pixels.
+    scales: Vec<(String, [f32; 2])>,
 }
 
 impl Default for Sheet {
@@ -295,6 +331,7 @@ impl Default for Sheet {
             height: 1,
             rgba: vec![0, 0, 0, 0],
             placed: Vec::new(),
+            scales: Vec::new(),
         }
     }
 }
@@ -357,17 +394,49 @@ impl Sheet {
         extra: Vec<DecodedImage>,
         report: &mut Vec<String>,
     ) -> Self {
+        Self::assemble(blobs, extra, false, report)
+    }
+
+    /// [`Self::build_with`], each `.mip` in `blobs` drawn from the active texture pack's picture
+    /// of it when it has one (`oag_texture::replacer::mip`).
+    ///
+    /// Only for a sheet whose every draw goes through [`Self::sheet_rect`]: a replaced image is
+    /// larger than its [`Placed`] says, and a draw that adds a rect to `placed.x` as it was
+    /// would sample a corner of it. The race HUD is that; the front end's screens are not yet.
+    #[must_use]
+    pub fn build_replaced(
+        blobs: &[(String, Vec<u8>)],
+        extra: Vec<DecodedImage>,
+        report: &mut Vec<String>,
+    ) -> Self {
+        Self::assemble(blobs, extra, true, report)
+    }
+
+    fn assemble(
+        blobs: &[(String, Vec<u8>)],
+        extra: Vec<DecodedImage>,
+        replace: bool,
+        report: &mut Vec<String>,
+    ) -> Self {
         let mut decoded: Vec<Staged> = Vec::new();
 
         for (src, blob) in blobs {
             match Image::decode(blob) {
-                Ok(image) => decoded.push(Staged {
-                    src: src.clone(),
-                    image,
-                    quad_extent: None,
-                    quad_centre: None,
-                    blend: None,
-                }),
+                Ok(image) => {
+                    let (image, logical) = if replace {
+                        image.replaced_by_pack(blob)
+                    } else {
+                        (image, None)
+                    };
+                    decoded.push(Staged {
+                        src: src.clone(),
+                        image,
+                        logical,
+                        quad_extent: None,
+                        quad_centre: None,
+                        blend: None,
+                    });
+                }
                 Err(e) => report.push(format!("image {src}: {e}")),
             }
         }
@@ -386,6 +455,7 @@ impl Sheet {
                 Some(image) => decoded.push(Staged {
                     src,
                     image,
+                    logical: None,
                     quad_extent,
                     quad_centre,
                     blend,
@@ -429,11 +499,13 @@ impl Sheet {
 
         let mut rgba = vec![0u8; (width * height * 4) as usize];
         let mut placed = Vec::with_capacity(decoded.len());
+        let mut scales = Vec::new();
 
         for (
             Staged {
                 src,
                 image: texture,
+                logical,
                 quad_extent,
                 quad_centre,
                 blend,
@@ -454,14 +526,25 @@ impl Sheet {
                     .copy_from_slice(&pixels[from..from + (w * 4) as usize]);
             }
 
-            report.push(format!("image {src}: {w}x{h}, {bits_per_pixel}bpp"));
+            let [logical_w, logical_h] = logical.unwrap_or([w, h]);
+            if logical.is_some() {
+                scales.push((
+                    src.clone(),
+                    [w as f32 / logical_w as f32, h as f32 / logical_h as f32],
+                ));
+                report.push(format!(
+                    "image {src}: {w}x{h} from the texture pack, for the disc's {logical_w}x{logical_h}"
+                ));
+            } else {
+                report.push(format!("image {src}: {w}x{h}, {bits_per_pixel}bpp"));
+            }
             placed.push((
                 src,
                 Placed {
                     x,
                     y,
-                    width: w,
-                    height: h,
+                    width: logical_w,
+                    height: logical_h,
                     quad_extent,
                     quad_centre,
                     blend,
@@ -474,6 +557,7 @@ impl Sheet {
             height,
             rgba,
             placed,
+            scales,
         }
     }
 
@@ -553,11 +637,14 @@ impl Sheet {
             at.y += at_y;
             (src, at)
         }));
+        let mut scales = self.scales.clone();
+        scales.extend(below.scales);
         Self {
             width,
             height,
             rgba,
             placed,
+            scales,
         }
     }
 
@@ -568,6 +655,40 @@ impl Sheet {
             .iter()
             .find(|(name, _)| name == src)
             .map(|(_, placed)| *placed)
+    }
+
+    /// Sheet pixels per pixel of the disc's own picture, on each axis, for `src`: `[1.0, 1.0]`
+    /// unless a texture pack drew it larger. A layout's rects, [`Placed::width`] and
+    /// [`Placed::height`] stay in the disc's pixels; [`Self::sheet_rect`] is the way into the
+    /// sheet's.
+    #[must_use]
+    pub fn scale(&self, src: &str) -> [f32; 2] {
+        self.scales
+            .iter()
+            .find(|(name, _)| name == src)
+            .map_or([1.0, 1.0], |(_, scale)| *scale)
+    }
+
+    /// `rect`, `[x, y, width, height]` in the disc's pixels of the image `src` is placed as,
+    /// as the sheet's pixels: the origin offset by where it sits, everything scaled by
+    /// [`Self::scale`]. A width or height may be negative (a mirrored patch) or zero.
+    #[must_use]
+    pub fn sheet_rect(&self, src: &str, placed: Placed, rect: [f32; 4]) -> [f32; 4] {
+        let [sx, sy] = self.scale(src);
+        [
+            placed.x as f32 + rect[0] * sx,
+            placed.y as f32 + rect[1] * sy,
+            rect[2] * sx,
+            rect[3] * sy,
+        ]
+    }
+
+    /// The per-axis scale of the entry placed at `placed`'s corner.
+    fn scale_at(&self, placed: Placed) -> [f32; 2] {
+        self.placed
+            .iter()
+            .find(|(_, at)| (at.x, at.y) == (placed.x, placed.y))
+            .map_or([1.0, 1.0], |(name, _)| self.scale(name))
     }
 
     /// The alpha of one texel of `placed`, addressed as a fraction of the
@@ -588,8 +709,9 @@ impl Sheet {
         let texel = |fraction: f32, size: u32| -> u32 {
             ((fraction * size as f32).floor().max(0.0) as u32).min(size.saturating_sub(1))
         };
-        let x = placed.x + texel(u, placed.width);
-        let y = placed.y + texel(v, placed.height);
+        let [sx, sy] = self.scale_at(placed);
+        let x = placed.x + texel(u, (placed.width as f32 * sx) as u32);
+        let y = placed.y + texel(v, (placed.height as f32 * sy) as u32);
         if x >= self.width || y >= self.height {
             return None;
         }
@@ -609,16 +731,21 @@ impl Sheet {
     #[must_use]
     pub fn opaque_extent(&self, src: &str) -> Option<[f32; 4]> {
         let placed = self.get(src)?;
+        let [sx, sy] = self.scale(src);
         let [x, y, width, height] = self.ink_within(
-            [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
+            self.sheet_rect(
+                src,
+                placed,
+                [0.0, 0.0, placed.width as f32, placed.height as f32],
+            ),
             |texel| texel[3] >= 128,
         )?;
-        Some([x - placed.x as f32, y - placed.y as f32, width, height])
+        Some([
+            (x - placed.x as f32) / sx,
+            (y - placed.y as f32) / sy,
+            width / sx,
+            height / sy,
+        ])
     }
 
     /// The box of the texels `is_ink` accepts (RGBA8) inside `rect`, `[x, y, width, height]` in
