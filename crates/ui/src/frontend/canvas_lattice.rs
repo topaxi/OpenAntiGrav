@@ -57,6 +57,10 @@ const HEIGHT_RATIO: f32 = 0.555_555_6;
 const COMPOSITE_SAMPLE_OFFSET: f32 = 0.25;
 /// Translation row of the final matrix (`+0x5ec90`), live at the title.
 const TRANSLATION: [f32; 2] = [-9.560_32, 4.651_63];
+/// The view [`TRANSLATION`] is the camera of, as an offset right and down of
+/// the reset camera (`super::canvas_camera::Camera::scrolled`): the title's
+/// scroll position of `(-3000, -1500)`.
+pub const BAKED_VIEW: (f32, f32) = (3000.0, 1500.0);
 
 /// The two outlined triangles in `canvasTexture.gxt`, in atlas pixels: apex
 /// up, then apex down (`DAT_81732ac0..aec` times 2048).

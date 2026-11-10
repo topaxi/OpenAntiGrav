@@ -569,8 +569,9 @@ pub(super) fn three_events() -> Vec<MapEvent> {
     .into_iter()
     .map(|(name, x, y, requires)| MapEvent {
         name: name.to_string(),
-        x,
-        y,
+        // The base map's cell for a step: 55 + 4 x, 25 + 2 y.
+        x: 55.0 + 4.0 * x,
+        y: 25.0 + 2.0 * y,
         detail: "circuit / mode".to_string(),
         requires: requires.map(str::to_string),
         kind: EventIcon::Race,
@@ -594,8 +595,8 @@ fn a_gated_event() -> Vec<MapEvent> {
     vec![
         MapEvent {
             name: "2048 - Event 1".to_string(),
-            x: 1.0,
-            y: 5.0,
+            x: 59.0,
+            y: 35.0,
             detail: "circuit / mode".to_string(),
             requires: None,
             kind: EventIcon::Race,
@@ -605,8 +606,8 @@ fn a_gated_event() -> Vec<MapEvent> {
         },
         MapEvent {
             name: "2048 - Event 2".to_string(),
-            x: 3.0,
-            y: 5.0,
+            x: 67.0,
+            y: 35.0,
             detail: "circuit / mode".to_string(),
             requires: Some("2048 - Event 1".to_string()),
             kind: EventIcon::Race,
@@ -790,14 +791,15 @@ fn a_click_on_an_unselected_marker_selects_and_a_second_click_launches() {
     pass_event_one(&mut frontend);
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
-    // The markers of the first two events are in view: cell (3, 5) is at
-    // 65 + 2 * 146 = 357, 63 + 4 * 111 = 507, before scrolling. The view
-    // follows the selection, so read the marker's rect off the draw list.
+    // The markers of the first two events are in view. The view follows the
+    // selection, so read the marker's rect off the draw list.
     let marker_of = |frontend: &Frontend, at: usize| {
         let list = frontend.draw_list();
         list.iter()
             .filter_map(|draw| match draw {
-                Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(*rect),
+                Draw::Fill { rect, color } if (rect[2] - 119.4).abs() < 0.1 && color[3] == 1.0 => {
+                    Some(*rect)
+                }
                 _ => None,
             })
             .nth(at)
@@ -859,8 +861,8 @@ fn a_gated_event_with_nothing_earned_yet_refuses_a_launch() {
 pub(super) fn a_restricted_event() -> Vec<MapEvent> {
     vec![MapEvent {
         name: "2048 - Event 1".to_string(),
-        x: 1.0,
-        y: 5.0,
+        x: 59.0,
+        y: 35.0,
         detail: "circuit / mode".to_string(),
         requires: None,
         kind: EventIcon::Race,
@@ -878,8 +880,8 @@ pub(super) fn a_restricted_event() -> Vec<MapEvent> {
 pub(super) fn a_forced_event() -> Vec<MapEvent> {
     vec![MapEvent {
         name: "2048 - Event 1".to_string(),
-        x: 1.0,
-        y: 5.0,
+        x: 59.0,
+        y: 35.0,
         detail: "circuit / mode".to_string(),
         requires: None,
         kind: EventIcon::Race,
@@ -982,7 +984,9 @@ fn a_click_on_a_restricted_events_marker_refuses_the_same_way_the_pad_does() {
         let list = frontend.draw_list();
         list.iter()
             .filter_map(|draw| match draw {
-                Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(*rect),
+                Draw::Fill { rect, color } if (rect[2] - 119.4).abs() < 0.1 && color[3] == 1.0 => {
+                    Some(*rect)
+                }
                 _ => None,
             })
             .next()
@@ -1102,37 +1106,50 @@ fn a_drag_or_a_wheel_pans_the_campaign_map_and_selects_nothing() {
             .draw_list()
             .iter()
             .find_map(|draw| match draw {
-                Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(*rect),
+                Draw::Fill { rect, color } if (rect[2] - 119.4).abs() < 0.1 && color[3] == 1.0 => {
+                    Some(*rect)
+                }
                 _ => None,
             })
             .expect("a marker in view")
     };
     let selected = frontend.selected_event().map(|e| e.name.clone());
     let before = first_marker(&frontend);
-    // The canvas follows the finger: up and left reveals what is below and
-    // to the right, so the marker moves up and left by the same distance.
+    // The scroll follows the finger: up and left reveals what is below and
+    // to the right. The picture moves with the canvas camera's shear: 2.7 %
+    // further across than the finger, and 4.7 % of the way down, across.
     let drag = |dx: f32, dy: f32| Pointer {
         drag: (dx, dy),
         ..Pointer::default()
     };
     assert!(frontend.pointer(&drag(-20.0, -30.0)));
     let after = first_marker(&frontend);
-    assert_eq!((after[0] - before[0], after[1] - before[1]), (-20.0, -30.0));
-    // A wheel detent is one marker row down the canvas.
+    let moved = (after[0] - before[0], after[1] - before[1]);
+    assert!((moved.0 + 19.118).abs() < 0.01, "{moved:?}");
+    assert!((moved.1 + 30.0).abs() < 0.01, "{moved:?}");
+    // A wheel detent is one tile row down the canvas.
     let wheel = Pointer {
         scroll: 1,
         ..Pointer::default()
     };
     assert!(frontend.pointer(&wheel));
-    assert_eq!(first_marker(&frontend)[1] - after[1], -111.0);
-    // Dragged back far past the top-left corner it gives only against the
+    let row = first_marker(&frontend)[1] - after[1];
+    assert!((row + 95.45).abs() < 0.05, "{row}");
+    // Dragged back far past the top-left limit it gives only against the
     // rubber band - never more than half a view - and let go, it springs
-    // back onto the corner.
+    // back onto the limit.
     let view = frontend.space().size;
+    let corner = (frontend.campaign.limits(0).0, frontend.campaign.limits(1).0);
     assert!(frontend.pointer(&drag(1e6, 1e6)));
     let banded = frontend.campaign.scroll();
-    assert!(banded.0 < 0.0 && banded.0 > -view.0 * 0.5, "{banded:?}");
-    assert!(banded.1 < 0.0 && banded.1 > -view.1 * 0.5, "{banded:?}");
+    assert!(
+        banded.0 < corner.0 && banded.0 > corner.0 - view.0 * 0.5,
+        "{banded:?}"
+    );
+    assert!(
+        banded.1 < corner.1 && banded.1 > corner.1 - view.1 * 0.5,
+        "{banded:?}"
+    );
     assert_eq!(frontend.selected_event().map(|e| e.name.clone()), selected);
     assert!(frontend.pointer(&Pointer {
         released: true,
@@ -1141,10 +1158,10 @@ fn a_drag_or_a_wheel_pans_the_campaign_map_and_selects_nothing() {
     for _ in 0..120 {
         frontend.update(1.0 / 60.0, &mut input, None);
     }
-    assert_eq!(
-        frontend.campaign.scroll(),
-        (0.0, 0.0),
-        "rests on the corner"
+    let rest = frontend.campaign.scroll();
+    assert!(
+        (rest.0 - corner.0).abs() < 0.01 && (rest.1 - corner.1).abs() < 0.01,
+        "rests on the limit: {rest:?} against {corner:?}"
     );
 }
 
@@ -1159,7 +1176,9 @@ fn a_flick_coasts_the_campaign_map_on_after_the_finger_lifts() {
             .draw_list()
             .iter()
             .find_map(|draw| match draw {
-                Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(rect[0]),
+                Draw::Fill { rect, color } if (rect[2] - 119.4).abs() < 0.1 && color[3] == 1.0 => {
+                    Some(rect[0])
+                }
                 _ => None,
             })
             .expect("a marker in view")
@@ -1176,7 +1195,12 @@ fn a_flick_coasts_the_campaign_map_on_after_the_finger_lifts() {
         drag.pressed = false;
     }
     let lifted = first_x(&frontend);
-    assert_eq!(lifted, start - 40.0, "followed the finger one to one");
+    // 40 px of finger is 40 px of scroll, which the canvas camera's shear
+    // turns into 41.07 px of picture.
+    assert!(
+        (lifted - (start - 41.074)).abs() < 0.01,
+        "followed the finger: {lifted} from {start}"
+    );
     assert!(frontend.pointer(&Pointer {
         released: true,
         ..Pointer::default()

@@ -32,6 +32,7 @@ use oag_ui::language::StringTable;
 pub(super) fn map_events(
     archives: &mut oag_assets::Archives,
     strings: &StringTable,
+    nodes: &oag_title::NodeMap,
     report: &mut Vec<String>,
 ) -> Vec<MapEvent> {
     let text = match archives
@@ -123,18 +124,33 @@ pub(super) fn map_events(
             ),
             None => (None, Vec::new()),
         };
+        let tweak = |tag: &str| {
+            doc.instance(event.instance_id)
+                .and_then(|instance| instance.field(tag))
+                .and_then(oag_tables::mjolnir::Field::int)
+                .and_then(|value| i32::try_from(value).ok())
+                .unwrap_or(0)
+        };
+        let Some((col, row)) = nodes.nudged(
+            0,
+            (x, y),
+            (tweak("M_CANVASTWEAK_X"), tweak("M_CANVASTWEAK_Y")),
+        ) else {
+            without_cell += 1;
+            continue;
+        };
         out.push(MapEvent {
             name: event.name.clone(),
             #[expect(
                 clippy::cast_precision_loss,
-                reason = "a map cell is a small integer in the file"
+                reason = "a canvas cell is under 401 across and 120 down"
             )]
-            x: x as f32,
+            x: col as f32,
             #[expect(
                 clippy::cast_precision_loss,
-                reason = "a map cell is a small integer in the file"
+                reason = "a canvas cell is under 401 across and 120 down"
             )]
-            y: y as f32,
+            y: row as f32,
             detail,
             requires,
             kind,
@@ -158,12 +174,17 @@ pub(super) fn touch_menus(
     (archives, strings, report): (&mut oag_assets::Archives, &StringTable, &mut Vec<String>),
     (language, title): (Option<&str>, &oag_title::Title),
 ) -> (Vec<MapEvent>, Vec<ExtraTile>) {
-    if !touch {
+    let Some(nodes) = title
+        .front_end
+        .and_then(|front_end| front_end.touch.as_ref())
+        .filter(|_| touch)
+        .map(|touch| &touch.map_nodes)
+    else {
         return (Vec::new(), Vec::new());
-    }
+    };
     let updated = !archives.patch.is_empty();
     (
-        map_events(archives, strings, report),
+        map_events(archives, strings, nodes, report),
         extra_tiles(language, title, updated),
     )
 }

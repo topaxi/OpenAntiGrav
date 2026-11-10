@@ -96,6 +96,7 @@ use oag_hd::frontend::states as hd_states;
 /// the map the grids lead to. See each module's own docs.
 mod campaign_map;
 mod campaign_tiers;
+pub mod canvas_camera;
 pub mod canvas_lattice;
 mod event_card;
 mod faces;
@@ -903,7 +904,7 @@ impl Frontend {
         }
 
         self.on_screen_for += dt;
-        self.campaign.tick(dt, self.space.size);
+        self.campaign.tick(dt);
 
         if self.leg_has_no_picture() {
             input.inject_press(Button::Start);

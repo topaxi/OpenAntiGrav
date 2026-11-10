@@ -347,7 +347,11 @@ were read, not executed); the TouchScroll chain 80.
 | `0x813cff48` | `TouchScroll_Create` | 80 |
 | `0x811035a8` | `TouchScroll_ParseValues` | 85 |
 | `0x81103b46` | `TouchScroll_Update` | 70 |
-| `0x811042ae` | `TouchScroll_SetScroll` | 65 |
+| `0x811042ae` | `TouchScroll_SetScroll` | 85 |
+
+`TouchScroll_SetScroll` rose from 65 to 85 on 2026-11-10: its stored difference was read live at the
+campaign map's open ([campaign-map-projection.md](campaign-map-projection.md), "The scroll"), which also pins the
+scroll writers this section and the next left at confidence 55.
 
 Omega: **checked, applies, not wired.** `eboot.bin` carries `TouchScroll_Item.cpp`, `FeShellTouchScroll`,
 `MaxScrollY` and `autoScrollSpeed`: the same scroll item and the same shell parent ship; the GCN draw and

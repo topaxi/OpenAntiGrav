@@ -2,265 +2,76 @@
 //! screen the disc's own `<TouchCampaign>` and `<FE3DCanvas>` live on, each
 //! a tap away from its card (`event_card`), and from `Launch 2048` past that.
 //!
-//! # What is authored, and what is not
+//! # Where a tile sits
 //!
-//! **Authored**: every event and everything said about it - its name, its
-//! circuit, its kind, class and lap count, and its `M_X`/`M_Y` map cell -
-//! comes off `Data\xml\SP.xml` through `oag_2048::campaign`
-//! (`docs/formats/2048-campaign.md`); the screen it sits on, and the
-//! `redirect="Launch 2048"` a tap fires, are `NEWGUI/Definition.xml`'s
-//! (`docs/formats/2048-frontend.md`). The scrollable area is the shell's own
-//! `<TouchScroll>`: a 960x544 view over `MaxScrollX="960"
-//! maxscrolly="544"`, so a canvas twice the screen each way.
+//! The original's map is its `Canvas3D` triangle lattice with cells painted:
+//! an event is the hexagon of six cells at a column and row its `M_X`/`M_Y`
+//! scale to, raised into a prism, and its place on screen is the canvas
+//! camera's (`docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md`,
+//! "The law"). [`MapEvent::x`]/[`MapEvent::y`] carry that cell and
+//! [`super::canvas_camera`] the camera, the way the shell's scroll moves it and
+//! the two centring laws: the view the map opens on
+//! ([`CampaignMap::open`]) and the view a selection scrolls to
+//! ([`CampaignMap::follow`]). The lattice itself is drawn beneath the tiles
+//! from the picture the title page bakes ([`super::canvas_lattice`]), shifted
+//! by whole lattice periods to the view's phase.
 //!
-//! **Chosen, not measured - no confidence score**: how a cell maps to a
-//! pixel. `M_X`/`M_Y` are real `GameModeBase` fields the executable does
-//! deserialise (`docs/ghidra/functions/vita-2048-eu-v104/
-//! frontend-campaign-map.md`'s 2026-09-21 section: struct offsets `0x2c4`/
-//! `0x2c8`, found after an earlier pass the same day missed two
-//! non-auto-stringified `FUN_812dab08` registrations), but they land in a
-//! *different* struct offset from the one the DLC tiers' own hotspot
-//! functions read (`+0x15c`/`+0x160`) - some unfound conversion between the
-//! two is where the real formula lives, not a bare read of `m_x`/`m_y`
-//! itself. A live Vita3K capture the same pass
-//! (`data/reference/2048-frontend/README.md`, frames `12`-`14`) confirms the
-//! real map is not this grid at all: a **hexagonal** tessellation of
-//! icon-on-hexagon markers (chequered flag / stopwatch, coloured by
-//! locked/passed state), with a season title card
-//! (`A·G·R·C 2048`/`2049`/`2050`) drawn inline on the same scrollable canvas
-//! at each season's own cluster - not a `MenuSkin`-style corner widget, and
-//! not any of the `<CanvasLabel>`s `2048-frontend.md` already accounts for.
-//! Neither the exact per-event anchor formula nor the season-card asset was
-//! recovered this pass (`M_BUTTONSHAPE`'s own `CanvasButtonShape` enum is a
-//! plausible icon selector, `M_CANVASTWEAK_X`/`_Y` a plausible small pixel
-//! nudge, neither confirmed - no consuming function found for either), so
-//! this build still lays cells out on an even grid - [`PITCH`] units per
-//! cell from [`ORIGIN`] - and draws each event as a plain [`MARKER`]-sized
-//! square, coloured by its own progress (see this module's "Progression"
-//! section below) rather than a hexagon shape nothing here has a decoded
-//! source for. The city behind the real map does not exist as a 3D backdrop
-//! either way: the Vita3K capture's own tiles sit on a flat light
-//! triangle-outline background, corroborating `2048-frontend.md`'s "not a
-//! real 3D scene" finding from the opposite direction.
+//! What stands in for the original here: a tile is the disc's flat hex art
+//! ([`HEX_FILLED`]) stretched over the prism's top face, with no wall below it
+//! and none of the canvas's own shading; the striped and dotted cells around
+//! and between tiles, the season cards and the ground relief are not drawn;
+//! every event gets a tile in this build's four progress colours, where the
+//! original raises only the passed and the open ones (same page,
+//! "What the canvas draws"). The view's travel limits are **chosen, not
+//! measured**: any event can be centred, with the original's 650 px of margin
+//! past the outermost ones.
 //!
-//! **2026-09-25: [`CANVAS`]/[`PITCH`]/[`ORIGIN`]/[`MARKER`] are now scaled
-//! against a direct pixel measurement of frames `12`/`13`, not the raw
-//! `MaxScrollX="960" maxscrolly="544"` reading.** That reading treats the
-//! `<TouchScroll>`'s declared scroll range as the *whole* canvas
-//! (view + scroll = 1920x1088), which is what the shell's own XML states -
-//! but the two live frames' own scrollbar thumbs measure far smaller than a
-//! 2x-view canvas would draw: the vertical thumb spans `y` 41-143 of a
-//! 544-tall view (103 px, a 5.28x canvas/view ratio) and the horizontal
-//! thumb spans `x` 84-260 in frame `12` versus `142`-`318` in frame `13`
-//! (177 px of a 960-wide view, a 5.42x ratio, and the two frames' thumb
-//! positions moving together with the scroll a tapped event caused is
-//! itself corroboration this is a scrollbar and not another widget). That
-//! puts the *real* canvas at roughly 5207x2873 - 2.71x/2.64x bigger than the
-//! 1920x1088 this build assumed - so [`CANVAS`], [`ORIGIN`] and [`PITCH`]
-//! are scaled up by the same factor, keeping the file's own `x` 1-34/`y`
-//! 1-25 cells filling the corrected canvas the same way the old, smaller
-//! numbers filled the wrong one. [`MARKER`] is not scaled by that same
-//! factor - it is set directly off a second, independent measurement: a
-//! flood-filled bounding box around one clean, unclipped green hex tile in
-//! frame `13` (`x` 352-474, `y` 127-244 - 122x117 px), landing this build's
-//! square between that figure and the canvas-derived scale-up of the old
-//! 36 px marker (36 * 2.71 ≈ 97.6). Both measurements are pixel counts off
-//! the committed reference frames, not a decompile, so this is real
-//! evidence rather than a tuned-to-look-right guess - but the grid itself
-//! is still a square standing in for a hexagon nothing here draws, so the
-//! whole scheme stays **chosen, not measured**, now with a better-fitted
-//! scale rather than a wrong one.
+//! # The card
 //!
-//! # 2026-09-27: the marker itself is the disc's own hex art, not a flat square
-//!
-//! **The grid's own scale and the per-event placement formula are still
-//! exactly as the section above leaves them - chosen, not measured, same
-//! even grid.** What changed is what each cell draws *with*: this pass
-//! decoded every plausible hex/icon filename the 2026-09-25 pass's own
-//! survey had only grepped for **by name against XML text**, never opened as
-//! pixels (`data/FE/Images/hex_{filled,outline,select}.gxt`,
-//! `data/FE/NewImages/callout/{race,speed,zone,combat}_mode.gxt`, all in the
-//! base package, none named by any `NEWGUI/*.xml` widget - the same
-//! "native-code-driven, unlocated in a widget" situation `canvasTexture.gxt`
-//! is already in). All seven decode to real, unambiguous art:
-//! `hex_filled`/`hex_outline`/`hex_select` are a gloss-filled hexagon, a thin
-//! hexagonal outline and a thicker glow ring; `race_mode` is a chequered
-//! flag, `speed_mode` a stopwatch, `zone_mode` a radar/target glyph and
-//! `combat_mode` a crosshair.
-//!
-//! **Confirmed against the same committed frames the grid's own scale was
-//! measured off, not just visually plausible in isolation.** Frames `12`
-//! and `13` (`data/reference/2048-frontend/`) show green hexagon tiles
-//! carrying a chequered-flag glyph and a stopwatch glyph, grey ones carrying
-//! the same two glyphs unlit - exactly `race_mode`'s flag and `speed_mode`'s
-//! stopwatch, on exactly the green/grey split [`ProgressState::Passed`]/
-//! [`ProgressState::Locked`] already draw with `Pass2048`/`Grey2048`. This
-//! is a stronger correction than the 2026-09-25 pass could make with a name
-//! search alone: `hex_filled.gxt`, `hex_outline.gxt` and the four
-//! `*_mode.gxt` icons all decode to pixels a live capture already showed
-//! sitting on the map, not merely names that were never ruled out.
-//!
-//! **Still not the real thing, honestly**: the real tile is lit with a 3D
-//! bevel and drop shadow this build's flat colour-tinted sprite does not
-//! reproduce; the striped/dotted "reachable path" texture connecting a
-//! season's own tiles (visible behind the hexagons in both frames) has no
-//! decoded source and is not drawn; the season title card
-//! (`A·G·R·C 2048`/`2049`/`2050`, frame `12`'s own left edge) and the header
-//! (home button, top-right badge cluster) remain undrawn, same gaps the
-//! 2026-09-25 pass already named. [`EventIcon`] itself is measured at the
-//! same confidence `EventKind` already carries (78-82,
-//! `docs/formats/2048-campaign.md`), since it is a direct re-reading of that
-//! same field - not a new guess.
-//!
-//! Wired through `oag_game::boot::sprites::load`'s own `extra` mechanism
-//! (the same one the menu blocks' nine-patch already used) - see
-//! [`HEX_FILLED`] and [`EventIcon::texture_name`]'s own doc comments. A
-//! sheet with none of these seven (every `oag-ui` unit test in this crate,
-//! which boots with an empty sheet) falls back to the original flat square
-//! and rectangle cursor ring exactly as before - see [`Frontend::placed`]
-//! and [`Frontend::draw_campaign_map`].
-//!
-//! # The bottom panel is gone, and no event-card stand-in replaces it
-//!
-//! **2026-09-25.** Until this pass, tapping (pad or pointer) drew a
-//! full-width bar under the map naming the selected event's name/circuit/
-//! mode/laps/weapons - this build's own invented chrome, already labelled
-//! "chosen" in an earlier revision of this doc comment. It covered roughly
-//! 15% of the screen; the live capture shows nothing of the kind on the base
-//! map. What the real game shows on a tap is a completely different screen
-//! (`data/reference/2048-frontend/14-campaign-map-event-card-unity-square.png`):
-//! a photo backdrop, the event's name and kind, a `PASS`/objective line, a
-//! pair of lap-count arrows, three pagination dots and three bottom buttons -
-//! and per that frame's own caption, it opens for a **locked** node too, not
-//! only an open one, so it is a browsing/preview surface as much as a launch
-//! confirmation.
-//!
-//! That screen was searched for, this pass, as XML the way [`PITCH`] and
-//! [`MARKER`] were measured as pixels - and it is not there. Every lead
-//! traces to a dead end: `Definition.xml`'s own `<TouchCampaign>` carries
-//! exactly one child, `redirect="Launch 2048"`, in both the base package and
-//! the `v1.04` patch (`data/plugins/frontend/NEWGUI/InGame_Definition.xml`'s
-//! `Launch 2048` screen is byte-identical between the two); that screen is
-//! nothing but a `<BackendController task="Launch">` straight through to
-//! `InGame2048`, with no confirm step of any kind in between. The two
-//! screens that share the tick/cross vocabulary a confirm dialog would use -
-//! `StartEventConfirm`/`FriendStartEventConfirm`
-//! (`data/plugins/frontend/NEWGUI/Community_Definition.xml`) - are a small
-//! 660x192 online-only "join this friend's event?" box with two buttons and
-//! one line of text, nothing like frame `14`'s three-button, photo-backed
-//! card; nothing else in any of the 25 `NEWGUI/` documents across the base
-//! package, the patch's two archives or either DLC package names a screen
-//! shaped like it. Reproduced with `cargo run -p oag-tools --example
-//! psarc_grep -- <data.psarc> <needle>` against `TouchCampaign`, `Launch
-//! 2048` and every plausible screen name pulled from the archive's own
-//! `Screen name="..."` list, and confirmed with the added `dump_screen_scratch`
-//! scratch tool (dumps any one named `<Screen>` block, the same crude
-//! nesting-depth walk `dump_newfeshell.rs` already used for `newFEshell`
-//! alone). The strings the card shows (`ER_FINISH_5TH` and its siblings in
-//! `data/plugins/languages/*/entries.xml`) are real and already shared with
-//! `EndRace_Definition.xml`'s own post-race objective screen, so the card's
-//! *text* is authored - but its layout, its per-event photo backdrop and its
-//! button chrome are not, the same "native-code-driven, unlocated in any
-//! XML" conclusion this module's own hex-tile/background/header findings
-//! already reached.
-//!
-//! Per this project's own "never invent" rule, an unlocated screen is not
-//! stood in for - so nothing replaces the removed bar. The gap this leaves:
-//! a player who taps or pads onto an event today sees only its marker
-//! recolour under the cursor ring ([`Frontend::draw_cursor_ring`]) - no
-//! name, no circuit, no objective, nothing that says what pressing confirm
-//! would start. [`Frontend::selected_event`] and [`MapEvent::detail`] still
-//! carry the real, disc-authored text (`crates/game/src/boot/campaign2048.rs`
-//! builds it from `SP.xml`) for whenever the card itself is recovered - nothing
-//! about removing the bar touches how that text is built, only where it was
-//! drawn.
-//!
-//! **2026-09-28: the card's own *code* is located, not its layout.**
-//! `docs/ghidra/functions/vita-2048-eu-v104/campaign-event-card.md` -
-//! `CampaignEventCard_HandleInput`/`Draw` (`0x810f2164`/`0x810f1196`), found
-//! chasing the user's own play observation that 2048 restricts craft choice
-//! on some events. Its own three bottom buttons are Launch (refused when the
-//! current craft fails `GameModeBase_IsShipTypeAllowed`), Back, and Change
-//! Craft (redirected to `Team_Definition.xml`'s `team` screen, unfiltered -
-//! the same screen [`super::team`] already implements). The photo backdrop,
-//! per-event art and pagination dots this doc comment's own paragraphs above
-//! describe are still unlocated - only the button logic was decompiled -
-//! so the "never invent" conclusion for the *layout* is unchanged.
-//! [`Frontend::launch_selected_event`] below now applies the same
-//! craft-restriction gate the original's card does, on this map screen
-//! rather than waiting on the card - see [`MapEvent::refused_craft`] and
-//! `docs/formats/2048-campaign.md`'s "Craft choice" section.
+//! A tap on a tile opens the event's card (`event_card`,
+//! `docs/ghidra/functions/vita-2048-eu-v104/campaign-event-card.md`); the map
+//! launches nothing by itself. [`Frontend::launch_selected_event`] applies the
+//! craft restriction the original's card applies
+//! (`docs/formats/2048-campaign.md`, "Craft choice").
 //!
 //! # Progression: locked, open, passed, elite
 //!
-//! **Resolved 2026-09-21.** [`MapEvent::requires`] is authored data - the
-//! single event `oag_2048::campaign::unlock_gates` names as this one's own
-//! prerequisite, folding its `M_PNEXTEVENT`/`M_PBRANCHEVENT` chain edge and
-//! its `M_PEVENTREQUIRED` field into one name (see that function's own doc
-//! for why one name is enough for every case `SP.xml` authors). What tier a
-//! finished attempt at an event earned is not authored here at all - a
-//! player's own save, read by whatever calls
-//! [`Frontend::refresh_campaign_progress`] once at boot (this crate carries
-//! no persistence of its own, and must not: nothing gameplay- or
-//! session-facing may depend on `oag-ui`, so the medal lookup arrives as a
-//! plain closure rather than a `Store` reference). [`ProgressState`] folds
-//! the two together: an event whose own [`MapEvent::requires`] has not been
-//! passed draws [`ProgressState::Locked`] and refuses a launch
-//! ([`Frontend::launch_selected_event`]); everything open from the start, or
-//! opened by a since-passed prerequisite, draws [`ProgressState::Open`],
-//! [`ProgressState::Passed`] or [`ProgressState::Elite`] off whatever the
-//! closure answers for its own name.
-//!
-//! The four colours this draws with are the disc's own -
-//! `Skin.xml`'s `Grey2048`/`Blue2048`/`Pass2048`/`ElitePass2048` globals,
-//! already reachable through [`Frontend::global_colour`] - never an invented
-//! palette. `HardcorePass2048`, the fifth global that file declares, is not
-//! used: nothing in `SP.xml` authors a third objective tier alongside
-//! `M_PASSOBJECTIVE`/`M_ELITEOBJECTIVE` (measured - see
-//! `oag_2048::campaign::objective_type`'s own doc comment), so that colour
-//! most plausibly belongs to a Hardcore *difficulty* flag this pass found no
-//! authored data for, not a rung this map ever needs to draw.
+//! [`MapEvent::requires`] is authored data: the single event
+//! `oag_2048::campaign::unlock_gates` names as this one's prerequisite. What
+//! tier a finished attempt earned is a player's save, read by whatever calls
+//! [`Frontend::refresh_campaign_progress`] (this crate carries no persistence,
+//! so the medal lookup arrives as a closure). [`ProgressState`] folds the two
+//! together. The four colours are the disc's own `Skin.xml` globals
+//! `Grey2048`/`Blue2048`/`Pass2048`/`ElitePass2048`.
 
 use crate::kinetic::{Bounds, Extent, Kinetic};
 use crate::pointer::{Pointer, contains};
 
+use super::canvas_camera::{self, Camera};
+use super::canvas_lattice;
 use super::touch::{LABEL_SCALE, Launch};
 use super::*;
 use oag_2048::frontend::states as w2048;
 use oag_2048::race::TEAM_VARIANTS;
 
-/// The real scrollable canvas - not the shell's own declared
-/// `MaxScrollX="960" maxscrolly="544"` (view + that = 1920x1088), but that
-/// figure scaled by the two live frames' own scrollbar-thumb measurement
-/// (~5.3x-5.4x the view, not 2x) - see this module's own doc comment for
-/// the pixel ranges.
-const CANVAS: (f32, f32) = (5207.0, 2873.0);
-/// Units per map cell, scaled off [`CANVAS`]'s own correction so the file's
-/// cells still fill the canvas the way the old, smaller numbers did.
-const PITCH: (f32, f32) = (146.0, 111.0);
-/// Where cell `(1, 1)` lands, scaled the same way as [`PITCH`].
-const ORIGIN: (f32, f32) = (65.0, 63.0);
-/// A marker's side - not scaled with the rest, but set directly off a real
-/// hex tile's own measured bounding box in frame `13`. See this module's own
-/// doc comment.
-const MARKER: f32 = 108.0;
+/// How far past the outermost events the view may travel, in viewport pixels:
+/// the margin the original widens its scroll bounds by.
+const TRAVEL_MARGIN: f32 = 650.0;
+/// Where the hexagon sits in the 128 x 128 hex art, as fractions of the
+/// texture: left, top, right, bottom of its opaque texels (2..116 across,
+/// 12..115 down, measured on the decoded `hex_filled.gxt`).
+const HEX_ART: [f32; 4] = [2.0 / 128.0, 12.0 / 128.0, 116.0 / 128.0, 115.0 / 128.0];
+/// The mode glyph's width over the top face's: the original's flag spans 67
+/// of the face's 120 px in the reference frame, and the glyph fills 60 of its
+/// art's 64 texels.
+const ICON_SHARE: f32 = 0.6;
 
-/// The disc's own hex tile art (`data/FE/Images/hex_{filled,outline,select}.gxt`),
-/// decoded and visually confirmed 2026-09-27: a gloss-filled hexagon, a thin
-/// hexagonal outline and a thicker glow ring, all matching the hexagonal
-/// silhouette the live Vita3K capture already showed. **Not named by any
-/// front-end widget**, the same "native-code-driven, no authoring `<Image>`"
-/// situation `canvasTexture.gxt` is already in, so
-/// `oag_game::boot::sprites::load` asks for them by name through its own
-/// `extra` list, the same mechanism the menu-block art already uses. Drawn
-/// in place of the flat colour square whenever the sheet decoded them
-/// (`Frontend::placed` returning `Some`); falls back to the old flat square
-/// otherwise, so a build with no sprite sheet (every `oag-ui` unit test in
-/// this crate) draws exactly what it always did rather than a blank hole.
-/// Confidence 80: the shape and the file names are a direct pixel read, not
-/// a guess, but which exact draw call composites them (still unfound, see
-/// this module's own doc comment above) is not, so the per-event pixel
-/// formula and the hex tessellation itself stay **chosen, not measured**.
+/// The disc's own hex tile art (`data/FE/Images/hex_{filled,outline,select}.gxt`):
+/// a gloss-filled hexagon, a thin hexagonal outline and a thicker glow ring.
+/// No front-end widget names them, so `oag_game::boot::sprites::load` asks for
+/// them through its `extra` list. A sheet without them (every unit test of this
+/// crate) draws a flat square instead. Stretched over the top face of the
+/// original's prism, which the canvas itself draws from painted cells.
 pub const HEX_FILLED: &str = r"Data\FE\Images\hex_filled.gtf";
 /// See [`HEX_FILLED`].
 pub const HEX_OUTLINE: &str = r"Data\FE\Images\hex_outline.gtf";
@@ -269,16 +80,11 @@ pub const HEX_OUTLINE: &str = r"Data\FE\Images\hex_outline.gtf";
 /// decoded.
 pub const HEX_SELECT: &str = r"Data\FE\Images\hex_select.gtf";
 
-/// Which of the disc's own four campaign-event icons an event's own kind
-/// draws, `Data\FE\NewImages\callout\*_mode.gtf` - decoded and visually
-/// confirmed 2026-09-27: `race_mode` is a chequered flag, `speed_mode` a
-/// stopwatch, `zone_mode` a radar/target glyph and `combat_mode` a
-/// crosshair, exactly the "chequered flag / stopwatch" icon this module's
-/// doc comment already speculated existed on the real map. **This crate's
-/// own copy of `oag_2048::campaign::EventKind`** (plus the `laps == 0`
-/// Speed Lap split `oag_2048::campaign::engine_mode` already makes), kept
-/// separate so `oag-ui` never depends on `oag_2048` or `oag_tables` - the
-/// same reason [`EarnedTier`] is its own copy of `oag_2048::campaign::Tier`.
+/// Which of the disc's four campaign-event icons an event's kind draws,
+/// `Data\FE\NewImages\callout\*_mode.gtf`: a chequered flag, a stopwatch, a
+/// radar glyph and a crosshair. This crate's copy of
+/// `oag_2048::campaign::EventKind` (plus the `laps == 0` Speed Lap split), so
+/// `oag-ui` does not depend on the campaign tables.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventIcon {
     /// A lap race with one or more laps.
@@ -311,9 +117,10 @@ impl EventIcon {
 pub struct MapEvent {
     /// The `SP.xml` instance name - what `Launch::Event` carries.
     pub name: String,
-    /// `M_X`/`M_Y`, the file's own cell, in cell steps: whole numbers on the
-    /// single-player map, and a downloadable campaign's nodes land between them
-    /// (`oag_title::NodeMap::step`).
+    /// The canvas cell the event's tile starts at, column then row: the first
+    /// of the six lattice cells its hexagon covers
+    /// (`oag_title::NodeMap::nudged` on the title's map nodes, or a
+    /// downloadable campaign's `oag_title::NodeMap::node`).
     pub x: f32,
     pub y: f32,
     /// What to say about it: the circuit's display name, the kind, the
@@ -415,83 +222,155 @@ pub struct CampaignMap {
 }
 
 impl CampaignMap {
-    fn marker(event: &MapEvent) -> [f32; 4] {
-        [
-            ORIGIN.0 + (event.x - 1.0) * PITCH.0,
-            ORIGIN.1 + (event.y - 1.0) * PITCH.1,
-            MARKER,
-            MARKER,
-        ]
-    }
-
-    /// The view's scroll over the canvas, in grid units.
+    /// How far the view sits right and down of the canvas's reset camera, in
+    /// viewport pixels: the negative of the original's scroll position.
     pub(super) fn scroll(&self) -> (f32, f32) {
         (self.scroll[0].offset(), self.scroll[1].offset())
     }
 
-    /// One axis of the canvas: its range, its marker pitch, and a rubber
-    /// band half the view long past either end. Unsnapped - the map is a
-    /// free canvas with no item to come to rest on.
-    fn extent(axis: usize, view: (f32, f32)) -> Extent {
-        let (canvas, view, pitch) = match axis {
-            0 => (CANVAS.0, view.0, PITCH.0),
-            _ => (CANVAS.1, view.1, PITCH.1),
+    /// The canvas camera of the current view.
+    fn camera(&self) -> Camera {
+        Camera::scrolled(self.scroll())
+    }
+
+    fn cell(event: &MapEvent) -> (f32, f32) {
+        (event.x, event.y)
+    }
+
+    /// The box of an event's top face, in viewport pixels: what a pointer
+    /// hits and what the hex art's hexagon is stretched over.
+    fn face(camera: &Camera, event: &MapEvent) -> [f32; 4] {
+        let centre = camera.project(canvas_camera::tile_top(Self::cell(event)));
+        let (width, height) = canvas_camera::tile_face();
+        [
+            centre.0 - width * 0.5,
+            centre.1 - height * 0.5,
+            width,
+            height,
+        ]
+    }
+
+    /// The rect the hex art is drawn in for its hexagon to cover `face`.
+    fn art(face: [f32; 4]) -> [f32; 4] {
+        let width = face[2] / (HEX_ART[2] - HEX_ART[0]);
+        let height = face[3] / (HEX_ART[3] - HEX_ART[1]);
+        [
+            face[0] - HEX_ART[0] * width,
+            face[1] - HEX_ART[1] * height,
+            width,
+            height,
+        ]
+    }
+
+    /// How far the view may travel along one axis: far enough to centre the
+    /// outermost events, and [`TRAVEL_MARGIN`] past them.
+    pub(super) fn limits(&self, axis: usize) -> (f32, f32) {
+        let reset = Camera::scrolled((0.0, 0.0));
+        let (low, high) = self
+            .events
+            .iter()
+            .map(|event| {
+                let at = reset.project(canvas_camera::cell_ground(Self::cell(event)));
+                match axis {
+                    0 => at.0 - canvas_camera::CENTRE.0,
+                    _ => at.1 - canvas_camera::CENTRE.1,
+                }
+            })
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(low, high), at| {
+                (low.min(at), high.max(at))
+            });
+        if low > high {
+            return (0.0, 0.0);
+        }
+        (low - TRAVEL_MARGIN, high + TRAVEL_MARGIN)
+    }
+
+    /// One axis of the view's travel: its limits, a tile's size as the pitch,
+    /// and a rubber band half the view long past either end. Unsnapped: the
+    /// map is a free canvas with no item to come to rest on.
+    fn extent(&self, axis: usize) -> Extent {
+        let face = canvas_camera::tile_face();
+        let (pitch, view) = match axis {
+            0 => (face.0, canvas_camera::VIEWPORT.0),
+            _ => (face.1, canvas_camera::VIEWPORT.1),
         };
+        let (min, max) = self.limits(axis);
         Extent {
             pitch,
             max_fling: crate::kinetic::MAX_FLING,
             friction: crate::kinetic::FRICTION,
             snap: false,
             bounds: Bounds::Clamp {
-                min: 0.0,
-                max: (canvas - view).max(0.0),
+                min,
+                max,
                 band: view * 0.5,
             },
         }
     }
 
-    /// Scrolls so the selected marker is as close to the middle of the
-    /// view as the canvas allows.
-    pub(super) fn follow(&mut self, view: (f32, f32)) {
+    /// Scrolls the selected event to the middle of the view the way a tap on
+    /// its tile does on the original: one application of the canvas's centring
+    /// law from where the view is (`canvas_camera::centred_on`). The original
+    /// eases there; this arrives at once.
+    pub(super) fn follow(&mut self) {
         let Some(event) = self.events.get(self.selected) else {
             return;
         };
-        let [x, y, w, h] = Self::marker(event);
-        self.scroll[0].set((x + w * 0.5 - view.0 * 0.5).clamp(0.0, (CANVAS.0 - view.0).max(0.0)));
-        self.scroll[1].set((y + h * 0.5 - view.1 * 0.5).clamp(0.0, (CANVAS.1 - view.1).max(0.0)));
+        let to = canvas_camera::centred_on(Self::cell(event), self.scroll());
+        self.scroll[0].set(to.0);
+        self.scroll[1].set(to.1);
+    }
+
+    /// Puts the view where the map opens for the selected event
+    /// (`canvas_camera::opening_offset`).
+    pub(super) fn open(&mut self) {
+        self.scroll = Default::default();
+        let Some(event) = self.events.get(self.selected) else {
+            return;
+        };
+        let to = canvas_camera::opening_offset(Self::cell(event));
+        self.scroll[0].set(to.0);
+        self.scroll[1].set(to.1);
     }
 
     /// Pans the view by a finger (the canvas follows it, coasts after a
     /// flick and bounces off the edges, through [`crate::kinetic`]) or a
-    /// wheel (one marker row per detent), and returns the pointer as the
+    /// wheel (one tile row per detent), and returns the pointer as the
     /// map should read it - without the tap that caught a coasting map.
     ///
-    /// **Chosen, not measured**: the original's `<TouchScroll>` is a Vita
-    /// touch widget whose feel was not measured, and how a mouse wheel
-    /// moves it is ours. The selection stays where it is - a pan reveals
-    /// the map, it does not pick an event, and the next pad move re-centres
-    /// on the selection.
+    /// A drag moves the scroll by the finger's travel, as the original's
+    /// `<TouchScroll>` does, so the picture follows a hair faster than the
+    /// finger across (the camera's shear, `canvas_camera::span`). **Chosen,
+    /// not measured**: the coast and bounce, and how a mouse wheel moves the
+    /// view. The selection stays where it is - a pan reveals the map, it
+    /// does not pick an event.
     fn pan(&mut self, pointer: &Pointer, view: (f32, f32)) -> Pointer {
+        let scale = (
+            canvas_camera::VIEWPORT.0 / view.0,
+            canvas_camera::VIEWPORT.1 / view.1,
+        );
+        let extents = [self.extent(0), self.extent(1)];
         if pointer.scroll != 0 {
-            let y = Self::extent(1, view);
-            let wheel = pointer.scroll as f32 * PITCH.1;
-            let to = (self.scroll[1].offset() + wheel).clamp(0.0, (CANVAS.1 - view.1).max(0.0));
+            let (min, max) = self.limits(1);
+            let wheel = pointer.scroll as f32 * canvas_camera::tile_face().1;
+            let to = (self.scroll[1].offset() + wheel).clamp(min, max);
             self.scroll[1].set(to);
-            self.scroll[1].settle(&y);
+            self.scroll[1].settle(&extents[1]);
         }
-        let seen = self.scroll[0].gesture(pointer, -pointer.drag.0, &Self::extent(0, view));
-        self.scroll[1].gesture(&seen, -pointer.drag.1, &Self::extent(1, view))
+        let seen = self.scroll[0].gesture(pointer, -pointer.drag.0 * scale.0, &extents[0]);
+        self.scroll[1].gesture(&seen, -pointer.drag.1 * scale.1, &extents[1])
     }
 
     /// Advances a coast or a bounce by one tick.
-    pub(super) fn tick(&mut self, dt: f64, view: (f32, f32)) {
+    pub(super) fn tick(&mut self, dt: f64) {
         #[expect(
             clippy::cast_possible_truncation,
             reason = "a tick is milliseconds; f32 holds it exactly"
         )]
         let dt = dt as f32;
-        for (axis, scroll) in self.scroll.iter_mut().enumerate() {
-            scroll.tick(dt, &Self::extent(axis, view));
+        let extents = [self.extent(0), self.extent(1)];
+        for (scroll, extent) in self.scroll.iter_mut().zip(&extents) {
+            scroll.tick(dt, extent);
         }
     }
 
@@ -554,8 +433,7 @@ impl Frontend {
         self.campaign.earned = vec![None; events.len()];
         self.campaign.closed = Vec::new();
         self.campaign.events = events;
-        self.campaign.scroll = Default::default();
-        self.campaign.follow(self.space.size);
+        self.campaign.open();
     }
 
     /// Folds a player's own save into the map: `earned(name)` is asked once
@@ -627,7 +505,7 @@ impl Frontend {
                 input.consume_press(button);
                 if let Some(next) = self.nearest_event(direction) {
                     self.campaign.selected = next;
-                    self.campaign.follow(self.space.size);
+                    self.campaign.follow();
                 }
                 return;
             }
@@ -639,8 +517,9 @@ impl Frontend {
         }
     }
 
-    /// The event nearest the cursor in `direction`, by cell distance,
-    /// among those that lie at least one cell that way.
+    /// The event nearest the cursor in `direction`, by distance on the
+    /// lattice, among those that lie at least one unit that way (neighbouring
+    /// tiles are one and a half to two units apart).
     fn nearest_event(&self, direction: (f32, f32)) -> Option<usize> {
         let from = self.campaign.events.get(self.campaign.selected)?;
         self.campaign
@@ -649,8 +528,8 @@ impl Frontend {
             .enumerate()
             .filter(|(at, _)| *at != self.campaign.selected)
             .filter_map(|(at, event)| {
-                let dx = event.x - from.x;
-                let dy = event.y - from.y;
+                let dx = (event.x - from.x) * canvas_lattice::CELL_DX;
+                let dy = (event.y - from.y) * canvas_lattice::CELL_DY;
                 let along = dx * direction.0 + dy * direction.1;
                 if along < 1.0 {
                     return None;
@@ -736,13 +615,17 @@ impl Frontend {
         let Some(at) = pointer.at else {
             return true;
         };
-        let (sx, sy) = self.campaign.scroll();
-        let at = (at.0 + sx, at.1 + sy);
+        let (width, height) = self.space.size;
+        let at = (
+            at.0 * canvas_camera::VIEWPORT.0 / width,
+            at.1 * canvas_camera::VIEWPORT.1 / height,
+        );
+        let camera = self.campaign.camera();
         let hit = self
             .campaign
             .events
             .iter()
-            .position(|event| contains(CampaignMap::marker(event), at));
+            .position(|event| contains(CampaignMap::face(&camera, event), at));
         // Against the selection *before* this tick's hover moved it: a tap
         // arrives with `moved` and `clicked` set together, and reading the
         // click against the hover it came with would launch on one tap.
@@ -759,7 +642,7 @@ impl Frontend {
                 self.open_event_card();
             } else {
                 self.campaign.selected = hit;
-                self.campaign.follow(self.space.size);
+                self.campaign.follow();
             }
         }
         true
@@ -792,33 +675,97 @@ impl Frontend {
         }
     }
 
-    /// The map: every marker in view, the cursor ring, and the panel.
+    /// The canvas's lattice at the map's view: the picture the title page
+    /// bakes, drawn at the view's phase. The picture is one camera's frame of a
+    /// pattern that repeats by the two lattice vectors, so it is placed by the
+    /// displacement between its camera and this one, reduced to one period,
+    /// and repeated by the whole lattice vectors nearest its own size until
+    /// the screen is covered. Nothing is drawn when the sheet has no picture.
+    fn draw_map_lattice(&self, out: &mut Vec<Draw>) {
+        let Some(picture) = self.placed(canvas_lattice::TILE) else {
+            return;
+        };
+        let (width, height) = self.space.size;
+        let scale = (
+            width / canvas_camera::VIEWPORT.0,
+            height / canvas_camera::VIEWPORT.1,
+        );
+        let (across, down) = Camera::lattice_period();
+        let here = self.campaign.camera().project([0.0; 3]);
+        let baked = Camera::scrolled(canvas_lattice::BAKED_VIEW).project([0.0; 3]);
+        let mut phase = (here.0 - baked.0, here.1 - baked.1);
+        let rows = (phase.1 / down.1).floor();
+        phase = (phase.0 - rows * down.0, phase.1 - rows * down.1);
+        phase.0 -= (phase.0 / across.0).floor() * across.0;
+        let origin = (phase.0 - across.0 - down.0, phase.1 - down.1);
+        // The picture's own repeat: whole lattice vectors just inside its size.
+        let columns = (canvas_camera::VIEWPORT.0 / across.0).floor();
+        let lines = (canvas_camera::VIEWPORT.1 / down.1).floor();
+        let slip = lines * down.0 - (lines * down.0 / across.0).round() * across.0;
+        for line in [0.0, 1.0] {
+            for column in [0.0, 1.0] {
+                let x = (origin.0 + column * columns * across.0 + line * slip).round();
+                let y = (origin.1 + line * lines * down.1).round();
+                // One texel in from the picture's edge, so a filtered draw
+                // never reads the sheet's neighbour along a seam.
+                out.push(Draw::Sprite {
+                    rect: [
+                        (x + 1.0) * scale.0,
+                        (y + 1.0) * scale.1,
+                        width - 2.0 * scale.0,
+                        height - 2.0 * scale.1,
+                    ],
+                    uv: [
+                        picture.x as f32 + 1.0,
+                        picture.y as f32 + 1.0,
+                        picture.width as f32 - 2.0,
+                        picture.height as f32 - 2.0,
+                    ],
+                    color: [1.0; 4],
+                });
+            }
+        }
+    }
+
+    /// The map: the lattice, then every tile in view with its mode glyph, and
+    /// the cursor ring on the selected one.
     ///
-    /// Each marker's own colour is one of the disc's own four -
-    /// [`ProgressState::Locked`] draws `Grey2048`, [`ProgressState::Open`]
-    /// the same `Blue2048` this always drew, [`ProgressState::Passed`]
-    /// `Pass2048` and [`ProgressState::Elite`] `ElitePass2048` - see this
-    /// module's own "Progression" section for why no fifth colour is drawn.
-    ///
-    /// **Each marker is the disc's own hex tile art since 2026-09-27**, when
-    /// the sheet has it - see [`HEX_FILLED`]'s own doc comment - tinted by
-    /// the same four colours a flat square always was, with
-    /// [`EventIcon::texture_name`]'s mode glyph centred on top. A sheet with
-    /// none of it falls back to the original flat square and rectangle
-    /// cursor ring, unchanged.
+    /// A tile is the disc's hex art stretched over the top face of the
+    /// original's prism ([`CampaignMap::face`]), tinted one of the disc's four
+    /// progress colours: [`ProgressState::Locked`] draws `Grey2048`,
+    /// [`ProgressState::Open`] `Blue2048`, [`ProgressState::Passed`]
+    /// `Pass2048` and [`ProgressState::Elite`] `ElitePass2048`. A sheet
+    /// without the art draws a flat rectangle and a rectangle ring.
     pub(super) fn draw_campaign_map(&self, out: &mut Vec<Draw>) {
         let (width, height) = self.space.size;
+        let scale = (
+            width / canvas_camera::VIEWPORT.0,
+            height / canvas_camera::VIEWPORT.1,
+        );
+        let on_screen = |rect: [f32; 4]| {
+            [
+                rect[0] * scale.0,
+                rect[1] * scale.1,
+                rect[2] * scale.0,
+                rect[3] * scale.1,
+            ]
+        };
         let open = self.global_colour("Blue2048");
         let cursor = self.global_colour("Orange2048");
         let white = [1.0, 1.0, 1.0, 1.0];
-        let (sx, sy) = self.campaign.scroll();
         let hex_filled = self.placed(HEX_FILLED);
         let hex_outline = self.placed(HEX_OUTLINE);
         let hex_select = self.placed(HEX_SELECT);
+        self.draw_map_lattice(out);
+        let camera = self.campaign.camera();
         for (at, event) in self.campaign.events.iter().enumerate() {
-            let [x, y, w, h] = CampaignMap::marker(event);
-            let rect = [x - sx, y - sy, w, h];
-            if rect[0] + w < 0.0 || rect[1] + h < 0.0 || rect[0] > width || rect[1] > height {
+            let face = CampaignMap::face(&camera, event);
+            let rect = on_screen(CampaignMap::art(face));
+            if rect[0] + rect[2] < 0.0
+                || rect[1] + rect[3] < 0.0
+                || rect[0] > width
+                || rect[1] > height
+            {
                 continue;
             }
             let color = match self.campaign.state_of(at) {
@@ -834,20 +781,23 @@ impl Frontend {
                         out.push(Self::sprite_at(rect, outline, white));
                     }
                 }
-                None => out.push(Draw::Fill { rect, color }),
+                None => out.push(Draw::Fill {
+                    rect: on_screen(face),
+                    color,
+                }),
             }
             if let Some(icon) = self.placed(event.kind.texture_name()) {
-                // The mode glyph, centred, at a fraction of the marker's own
-                // side - **chosen**, since nothing measured the real map's
-                // own icon-to-hex size ratio.
-                let side = w * 0.42;
+                // The glyph lies on the tilted face, so it is as much shorter
+                // than wide as the face is against a regular hexagon.
+                let side = face[2] * ICON_SHARE;
+                let tall = side * (face[3] / face[2]) / canvas_lattice::CELL_DY;
                 out.push(Self::sprite_at(
-                    [
-                        rect[0] + (w - side) * 0.5,
-                        rect[1] + (h - side) * 0.5,
+                    on_screen([
+                        face[0] + (face[2] - side) * 0.5,
+                        face[1] + (face[3] - tall) * 0.5,
                         side,
-                        side,
-                    ],
+                        tall,
+                    ]),
                     icon,
                     white,
                 ));
@@ -855,7 +805,7 @@ impl Frontend {
             if at == self.campaign.selected {
                 match hex_select {
                     Some(select) => out.push(Self::sprite_at(rect, select, cursor)),
-                    None => self.draw_cursor_ring(rect, cursor, out),
+                    None => self.draw_cursor_ring(on_screen(face), cursor, out),
                 }
             }
         }

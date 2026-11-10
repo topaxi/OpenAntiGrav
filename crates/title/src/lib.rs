@@ -786,8 +786,8 @@ pub struct AddOn {
 }
 
 /// Where a downloadable campaign's cells land on the campaign map: a node's
-/// position in canvas units is the bias, plus the offset of its grid, plus the
-/// cell's own `(x, y)` scaled. The numbers are the title's, read off its
+/// position in canvas units (the column and row of a lattice cell) is the bias,
+/// plus the offset of its grid, plus the cell's own `(x, y)` scaled. The numbers are the title's, read off its
 /// executable; this is the arithmetic alone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodeMap {
@@ -810,19 +810,16 @@ impl NodeMap {
         ))
     }
 
-    /// A node's position in cell steps, with the first row and column at `1`, as
-    /// a single-player event's coordinates are: [`Self::node`] less the bias, over
-    /// the scale, plus one. `None` as [`Self::node`].
+    /// [`Self::node`] for a cell a file authors as signed numbers, moved by a
+    /// signed nudge in canvas units. `None` as [`Self::node`], and for a cell
+    /// or a result below zero.
     #[must_use]
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "canvas units are a few hundred at most"
-    )]
-    pub fn step(&self, group: usize, cell: (u32, u32)) -> Option<(f32, f32)> {
+    pub fn nudged(&self, group: usize, cell: (i32, i32), nudge: (i32, i32)) -> Option<(u32, u32)> {
+        let cell = (u32::try_from(cell.0).ok()?, u32::try_from(cell.1).ok()?);
         let (x, y) = self.node(group, cell)?;
         Some((
-            (x - self.bias.0) as f32 / self.scale.0 as f32 + 1.0,
-            (y - self.bias.1) as f32 / self.scale.1 as f32 + 1.0,
+            x.checked_add_signed(nudge.0)?,
+            y.checked_add_signed(nudge.1)?,
         ))
     }
 }

@@ -16,11 +16,13 @@
 //! `NEWGUI/Definition.xml` authors (`UpliftLabel` at `(57, 27)`, `FrenzyLabel`
 //! at `(99, 29)`, `MeltdownLabel` at `(96, 52)`, ...) each sit within a unit of
 //! the first row of the nodes this places for their grid
-//! (`vita_2048_dlc_menus_ground_truth`). **Chosen, not measured**: what a canvas
-//! unit is on the screen, and that the bias is left off by
-//! [`oag_title::NodeMap::step`] - it puts a grid's first node near the origin of
-//! its own map, since the bias is the same for every node of a campaign and moves
-//! the whole cluster rather than any node against another.
+//! (`vita_2048_dlc_menus_ground_truth`).
+//!
+//! A canvas unit is a cell of the `Canvas3D` triangle lattice: a node is the
+//! column and row of the first of the six cells its hexagon is painted on, and
+//! the single-player events sit on the same canvas through [`MAP`]
+//! (`docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md`,
+//! "The law").
 
 use oag_title::NodeMap;
 
@@ -51,9 +53,28 @@ pub const NODES: NodeMap = NodeMap {
     ],
 };
 
+/// The single-player map's projection: an event's `M_X`/`M_Y` step is four
+/// columns across and two rows down from the same bias, with no grid offset
+/// (the quad at `0x81880448`, confidence 92), and its `M_CANVASTWEAK_X`/`_Y`
+/// is added in canvas units ([`NodeMap::nudged`]).
+pub const MAP: NodeMap = NodeMap {
+    scale: (4, 2),
+    bias: (55, 25),
+    group_offsets: &[(0, 0)],
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_events_cell_is_the_quad_plus_its_tweak() {
+        // `2048 - Event 4` sits at (6, 6); read live as cell (79, 37).
+        assert_eq!(MAP.nudged(0, (6, 6), (0, 0)), Some((79, 37)));
+        // An event at (4, 8) nudged by (-1, -1); read live as cell (70, 40).
+        assert_eq!(MAP.nudged(0, (4, 8), (-1, -1)), Some((70, 40)));
+        assert_eq!(MAP.nudged(0, (-1, 3), (0, 0)), None);
+    }
 
     #[test]
     fn a_node_is_the_bias_plus_the_grid_offset_plus_the_scaled_cell() {
@@ -64,12 +85,5 @@ mod tests {
     #[test]
     fn a_grid_the_executable_has_no_row_for_has_no_node() {
         assert_eq!(NODES.node(16, (1, 1)), None);
-    }
-
-    #[test]
-    fn a_node_in_cell_steps_is_the_offset_over_the_scale_plus_the_cell_from_one() {
-        // `grid10` is offset (42, 0): 14 steps across, none down, then cell
-        // (2, 3) and the origin at 1.
-        assert_eq!(NODES.step(10, (2, 3)), Some((17.0, 4.0)));
     }
 }

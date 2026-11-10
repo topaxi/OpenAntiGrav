@@ -93,7 +93,7 @@ BASELINE: dict[str, int] = {
     "tables": 37,
     "texture": 1,
     "trace": 3,
-    "ui": 55,
+    "ui": 43,
     "ui-screens": 46,
     "vex": 2,
     "view": 2,
