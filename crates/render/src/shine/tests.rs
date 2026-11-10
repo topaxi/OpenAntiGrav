@@ -62,7 +62,7 @@ fn a_normal_along_each_basis_vector_reaches_the_far_end_of_its_axis() {
     model.vertices[0].normal = texgen::ENV_BASIS_0.to_array();
     model.vertices[1].normal = texgen::ENV_BASIS_1.to_array();
     let mut out = Vec::new();
-    write(&model, &mut out, Mat4::IDENTITY, [0.0; 2]);
+    write(&model, &mut out, Mat4::IDENTITY, [0.0; 2], [1.0; 3]);
     assert!((out[0].texcoord[0] - 1.0).abs() < 1.0e-5, "{:?}", out[0]);
     assert!((out[1].texcoord[1] - 1.0).abs() < 1.0e-5, "{:?}", out[1]);
     assert_eq!(out.len(), model.vertices.len());
@@ -74,8 +74,14 @@ fn a_normal_along_each_basis_vector_reaches_the_far_end_of_its_axis() {
 fn turning_the_ship_moves_the_coordinates() {
     let model = build(&hull()).unwrap();
     let (mut still, mut turned) = (Vec::new(), Vec::new());
-    write(&model, &mut still, Mat4::IDENTITY, [0.0; 2]);
-    write(&model, &mut turned, Mat4::from_rotation_x(1.2), [0.0; 2]);
+    write(&model, &mut still, Mat4::IDENTITY, [0.0; 2], [1.0; 3]);
+    write(
+        &model,
+        &mut turned,
+        Mat4::from_rotation_x(1.2),
+        [0.0; 2],
+        [1.0; 3],
+    );
     assert_ne!(still[0].texcoord, turned[0].texcoord);
     // The translation half of the matrix is not a rotation of the normal.
     let mut moved = Vec::new();
@@ -84,6 +90,7 @@ fn turning_the_ship_moves_the_coordinates() {
         &mut moved,
         Mat4::from_translation(Vec3::new(5.0, 6.0, 7.0)),
         [0.0; 2],
+        [1.0; 3],
     );
     assert_eq!(still[0].texcoord, moved[0].texcoord);
 }
@@ -426,8 +433,8 @@ fn the_extra_pass_follows_the_airbrake_flap_the_hull_deflects() {
     let angle = 0.6;
 
     let (mut stowed, mut braked) = (Vec::new(), Vec::new());
-    write(&model, &mut stowed, Mat4::IDENTITY, [0.0; 2]);
-    write(&model, &mut braked, Mat4::IDENTITY, [angle, 0.0]);
+    write(&model, &mut stowed, Mat4::IDENTITY, [0.0; 2], [1.0; 3]);
+    write(&model, &mut braked, Mat4::IDENTITY, [angle, 0.0], [1.0; 3]);
 
     let mut hull_side = Vec::new();
     let span = flap.swung(&model.vertices, angle, &mut hull_side).unwrap();
@@ -455,8 +462,8 @@ fn the_extra_pass_follows_the_airbrake_flap_the_hull_deflects() {
 fn an_angle_for_a_flap_the_model_lacks_changes_nothing() {
     let model = flapped();
     let (mut a, mut b) = (Vec::new(), Vec::new());
-    write(&model, &mut a, Mat4::IDENTITY, [0.0; 2]);
-    write(&model, &mut b, Mat4::IDENTITY, [0.0, 0.9]);
+    write(&model, &mut a, Mat4::IDENTITY, [0.0; 2], [1.0; 3]);
+    write(&model, &mut b, Mat4::IDENTITY, [0.0, 0.9], [1.0; 3]);
     assert_eq!(
         bytemuck::cast_slice::<_, u8>(&a),
         bytemuck::cast_slice::<_, u8>(&b)

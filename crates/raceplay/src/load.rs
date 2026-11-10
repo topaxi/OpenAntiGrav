@@ -1447,7 +1447,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         psp_glow_mask,
         track_shine,
         &track_blob,
-        (&mut archives, &track),
+        (&mut archives, &track, title),
     );
     #[cfg(feature = "view")]
     {

@@ -31,6 +31,14 @@ the pair copies, and the one law that moved it, are in `docs/rendering/start-gan
 - Whether the original's fine hatch on the `GO` letters and on non-gantry advert panels (visible at 3x, absent in ours) is the card's own texel pattern or a
   write-time effect is not read.
 
+- **Not the hull, 2026-11-10 (`pulse-hull-sheen`).** The hull's extra pass was 40 % too strong on
+  Metropia (a law, wired: `mesh-draw.md`, "The extra pass's colour is the light the hull stands
+  in"); fixing it took the whole-frame signed grey from +0.97 to +0.90 on Metropia White and +0.76
+  to +0.67 on Black and moved nothing on the other four best pairs, whose frames are bit-identical.
+  On craft-box pixels the pass does not touch, the original minus ours reads -2.2 to +0.5 levels
+  across the six pairs (five of six negative), about the frame's lift, so the lift is on the
+  hull's base colour too and is not a sheen term.
+
 ## Next Steps
 
 1. Mask the plume box on the six pairs and read its share per channel; compare ours' `engineflare` colour with a GE dump's blend state.

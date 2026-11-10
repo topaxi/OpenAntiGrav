@@ -44,11 +44,15 @@ pub const HULL_POINT_SLOTS: usize = 2;
 pub type HullPoint = [f32; 4];
 
 /// A circuit's point and spot lights and how many hull slots the directionals
-/// leave them.
+/// leave them, and the terms of the colour the same builder returns for the
+/// hull's extra pass.
 #[derive(Debug, Clone, Default)]
 pub struct HullPointLights {
     lights: Vec<PlacedLight>,
     slots: usize,
+    /// The ambient and directional terms of the extra pass's colour
+    /// ([`super::HullPassColour`]), `None` where the pass is drawn white.
+    pub pass: Option<super::HullPassColour>,
 }
 
 impl HullPointLights {
@@ -71,6 +75,7 @@ impl HullPointLights {
         Self {
             lights,
             slots: 4usize.saturating_sub(directionals).min(HULL_POINT_SLOTS),
+            pass: None,
         }
     }
 
@@ -97,10 +102,41 @@ impl HullPointLights {
         [point, spot]: [u8; 2],
     ) -> [HullPoint; HULL_POINT_SLOTS] {
         let mut out = [[0.0; 4]; HULL_POINT_SLOTS];
-        if self.is_empty() {
-            return out;
+        for (slot, (light, s)) in self.chosen(position, seconds).into_iter().enumerate() {
+            let to = [
+                light.position[0] - position[0],
+                light.position[1] - position[1],
+                light.position[2] - position[2],
+            ];
+            let length = (to[0] * to[0] + to[1] * to[1] + to[2] * to[2]).sqrt();
+            if length <= f32::EPSILON {
+                continue;
+            }
+            let scale = u32::from(if light.cone.is_some() { spot } else { point });
+            let byte = |c: f32| (((c * s) as u32).min(255) * scale) >> 8;
+            let packed = byte(light.colour[0])
+                | (byte(light.colour[1]) << 8)
+                | (byte(light.colour[2]) << 16);
+            out[slot] = [
+                to[0] / length,
+                to[1] / length,
+                to[2] / length,
+                packed as f32,
+            ];
         }
+        out
+    }
+}
+
+impl HullPointLights {
+    /// The lights that take the free slots for a craft at `position`, each with
+    /// its strength there times 255: the strongest, in the order the builder
+    /// keeps them (a later light replaces the weakest kept one).
+    fn chosen(&self, position: [f32; 3], seconds: f32) -> Vec<(WorldLight, f32)> {
         let mut chosen: Vec<(WorldLight, f32)> = Vec::new();
+        if self.is_empty() {
+            return chosen;
+        }
         let mut weakest = f32::MAX;
         for placed in &self.lights {
             let light = placed.at(seconds);
@@ -126,29 +162,29 @@ impl HullPointLights {
                 weakest = chosen.iter().fold(f32::MAX, |m, c| m.min(c.1));
             }
         }
-        for (slot, (light, s)) in chosen.into_iter().enumerate() {
-            let to = [
-                light.position[0] - position[0],
-                light.position[1] - position[1],
-                light.position[2] - position[2],
-            ];
-            let length = (to[0] * to[0] + to[1] * to[1] + to[2] * to[2]).sqrt();
-            if length <= f32::EPSILON {
-                continue;
+        chosen
+    }
+
+    /// What the chosen lights add to the colour the builder returns
+    /// ([`super::HullPassColour::at`]'s `points`): each one's colour times its
+    /// strength times 255 times its scale byte, unclamped. The scale is not
+    /// shifted down here as it is for the light's own colour byte, so a light
+    /// that reaches the craft at all saturates the channels it has.
+    #[must_use]
+    pub fn accumulated(
+        &self,
+        position: [f32; 3],
+        seconds: f32,
+        [point, spot]: [u8; 2],
+    ) -> [f32; 3] {
+        let mut sum = [0.0f32; 3];
+        for (light, s) in self.chosen(position, seconds) {
+            let scale = f32::from(if light.cone.is_some() { spot } else { point });
+            for (channel, colour) in sum.iter_mut().zip(light.colour) {
+                *channel += colour * s * scale;
             }
-            let scale = u32::from(if light.cone.is_some() { spot } else { point });
-            let byte = |c: f32| (((c * s) as u32).min(255) * scale) >> 8;
-            let packed = byte(light.colour[0])
-                | (byte(light.colour[1]) << 8)
-                | (byte(light.colour[2]) << 16);
-            out[slot] = [
-                to[0] / length,
-                to[1] / length,
-                to[2] / length,
-                packed as f32,
-            ];
         }
-        out
+        sum
     }
 }
 

@@ -181,6 +181,14 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[Platform::Psp, Platform::Ps2]),
         origin: Origin::Measured,
     },
+    // `SceneLight_Rebuild` writes the colour `SceneLight_BuildLightingList` returns
+    // into the material list the extra pass replays, read and matched to the unit on
+    // a recorded GE list (`mesh-draw.md`, "The extra pass's colour is the light the
+    // hull stands in"). The PS2 inherits the PSP's law, unmeasured there.
+    hull_shine_lit: Rule {
+        on: Platforms::Only(&[Platform::Psp, Platform::Ps2]),
+        origin: Origin::Measured,
+    },
     // Pulse has no sun flare: `lensflare` (`0x3de`) is in its name table, zero nodes
     // and zero strings (`docs/rendering/lens-flare.md`, "Cross-title").
     lens_flare: Rule::UNREAD,
