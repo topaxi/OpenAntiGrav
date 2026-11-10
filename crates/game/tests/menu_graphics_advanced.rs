@@ -68,6 +68,8 @@ fn advanced(pulse_like: bool, weather: bool, trail_hits: bool) -> Vec<&'static s
     }
     if wingtip {
         rows.push("graphics.wingtip_contrails");
+        // OWN SHIELD is on the same pair: the titles whose shield is not HD's.
+        rows.push("graphics.own_shield");
     }
     rows.extend(["graphics.cpu_governor", "graphics.perf_overlay", "back"]);
     rows
@@ -80,6 +82,7 @@ fn the_graphics_page_keeps_the_original_and_performance_rows_and_opens_advanced(
         definition.drop_unavailable_boost_zoom(title);
         definition.drop_unavailable_trail_hits(title);
         definition.drop_unavailable_wingtip_contrails(title);
+        definition.drop_unavailable_own_shield(title);
         definition.drop_unavailable_trail_order(title);
         definition.drop_unavailable_trail_length(title);
         definition.drop_unavailable_weather(title);
@@ -101,6 +104,7 @@ fn advanced_holds_the_look_extras_and_the_mixed_rows_in_order() {
         definition.drop_unavailable_boost_zoom(title);
         definition.drop_unavailable_trail_hits(title);
         definition.drop_unavailable_wingtip_contrails(title);
+        definition.drop_unavailable_own_shield(title);
         definition.drop_unavailable_trail_order(title);
         definition.drop_unavailable_trail_length(title);
         definition.drop_unavailable_weather(title);

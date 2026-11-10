@@ -208,6 +208,13 @@ pub(super) struct Grid {
 }
 
 #[cfg(feature = "view")]
+/// Whether this race draws our own shield: the player's `graphics.own_shield`, on a craft title
+/// that offers it (`oag_title::Looks::own_shield`).
+pub(super) fn own_shield(options: &crate::Options, craft_title: &oag_title::Title) -> bool {
+    options.own_shield && craft_title.looks.own_shield.applies_everywhere()
+}
+
+#[cfg(feature = "view")]
 /// The shell tint a craft of `craft_title`, loaded from a disc of `platform`,
 /// takes. The craft's source, not the track's: the shell is loaded from the
 /// craft's archives (`livery::shield::shell`), so a Race Remix with a PSP craft
@@ -215,7 +222,11 @@ pub(super) struct Grid {
 pub(super) fn shield_palette(
     craft_title: &oag_title::Title,
     platform: oag_assets::Platform,
+    own_shield: bool,
 ) -> oag_render::shield::Palette {
+    if own_shield {
+        return oag_render::shield::OWN_PALETTE;
+    }
     match craft_title.looks.shield_palette.on(platform) {
         oag_title::ShieldPalette::Hd => oag_render::shield::HD_PALETTE,
         oag_title::ShieldPalette::Omega => oag_render::shield::OMEGA_PALETTE,
@@ -360,6 +371,7 @@ pub(super) fn grid(
                     .hull_wreck
                     .applies(archives.layout.platform),
             absorb_shell: craft_title.looks.absorb_shell.applies_everywhere(),
+            own_shield: own_shield(options, craft_title),
             zone_liveries: &zone_liveries,
             forced_skins: &forced_skins,
         },

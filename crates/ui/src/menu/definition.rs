@@ -577,6 +577,18 @@ impl Definition {
         }
     }
 
+    /// Drops the OWN SHIELD row on a title whose original draws the HD-style shield itself
+    /// (`oag_title::Looks::own_shield` unread): HD, 2048 and Omega. Pulse and Pure keep it. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_own_shield(&mut self, title: &oag_title::Title) {
+        if title.looks.own_shield.applies_everywhere() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.own_shield"));
+        }
+    }
+
     /// Drops the HUD STYLE row on a title whose disc authors no `HUD Style` list
     /// (`oag_title::HudLayouts::skins`): Pulse, Pure and 2048. Same once-before-read
     /// timing as [`Self::drop_unavailable_boost_zoom`].

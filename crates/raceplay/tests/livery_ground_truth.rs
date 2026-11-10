@@ -344,6 +344,7 @@ fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
             hull_shine: false,
             hull_wreck: false,
             absorb_shell: false,
+            own_shield: false,
             zone_liveries: &[],
             forced_skins: &[],
         },

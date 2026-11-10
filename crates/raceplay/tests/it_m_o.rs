@@ -38,6 +38,7 @@ mod omega_weapon_bodies_ground_truth;
 mod opponent_autopilot_sweep;
 mod opponent_fire_ground_truth;
 mod opponent_weapons_ground_truth;
+mod own_shield_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

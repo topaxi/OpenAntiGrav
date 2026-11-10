@@ -78,6 +78,8 @@ pub fn finish_definition(
     // And the TRAIL HITS row, where the title authors no such burst: Pulse and Pure.
     definition.drop_unavailable_trail_hits(title);
     definition.drop_unavailable_wingtip_contrails(title);
+    // And the OWN SHIELD row, where the original draws a shield of its own look: HD, 2048, Omega.
+    definition.drop_unavailable_own_shield(title);
     // And the HUD STYLE row, where the disc authors the list: HD and Omega.
     definition.drop_unavailable_hud_style(title);
     // And the DYNAMIC HUD row, where the options list it: Pulse.

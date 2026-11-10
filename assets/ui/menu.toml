@@ -1459,6 +1459,19 @@ values = ["off", "on"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 
 
+# Our own HD/Fury-style shield for Pulse and Pure, in place of the disc's shell. **An enhancement of
+# this project's, off by default**: a procedural shell over the craft's own hull, reading nothing from
+# any other disc. The row is dropped on HD, 2048 and Omega, which draw their own, by
+# `menu::Definition::drop_unavailable_own_shield`. Read when a race loads.
+[[page.entry]]
+kind = "choice"
+label = "OWN SHIELD"
+string_id = "OAG_GRAPHICS_OWN_SHIELD"
+setting = "graphics.own_shield"
+values = ["off", "on"]
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
+
 # `fps` is one line of numbers; `pacing` adds the graph, which is the one that
 # shows uneven frames - an average frame rate is exactly what hides them.
 # `dev` adds a third line of scene counts (draw calls, triangles). Drawn over

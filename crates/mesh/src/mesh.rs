@@ -199,6 +199,11 @@ pub struct Model {
     /// (on an HD model the vertex colour is otherwise a light term the generic
     /// path ignores as a tint).
     pub shield_shell: bool,
+    /// Our own HD/Fury-style shield (`graphics.own_shield`): the model is drawn by
+    /// `own_shield.wesl`, with each vertex pushed this far out along its normal, in world
+    /// units, and the vertex colour carrying the shield's animated colour as `shield_shell`'s
+    /// does. `None` for every model but the one `oag_livery` builds from a hull for it.
+    pub own_shield: Option<f32>,
     /// Levels added to the sampler's own selection for this model's material
     /// textures (negative reads finer), `0.0` for none. A title's own number -
     /// Wipeout HD's is `-1.5` on a circuit's albedo, normal and lightmap units
@@ -330,6 +335,7 @@ impl Model {
             flame: None,
             absorb_shell: false,
             shield_shell: false,
+            own_shield: None,
             material_lod_bias: 0.0,
             material_state: Vec::new(),
             per_batch_cull: false,
@@ -1032,6 +1038,7 @@ fn build_class(
         flame: None,
         absorb_shell: false,
         shield_shell: false,
+        own_shield: None,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
         per_batch_cull: false,

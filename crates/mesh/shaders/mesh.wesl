@@ -8,6 +8,7 @@
 import package::alpha_test::{alpha_test_ref};
 import package::bindings::{anims, emissive_scale, emissive_tint, node_anims, scene, uniforms};
 import package::fog::{fogged};
+import package::own_shield::{own_shield_inflated, own_shield_shading};
 import package::glow::{stamp_discards, stamp_value, stamped_alpha};
 import package::quake::{quake_lifted};
 import package::refraction::{opaque_colour};
@@ -57,6 +58,11 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     let cofactor = mat3x3<f32>(cross(c1, c2), cross(c2, c0), cross(c0, c1));
     let turned = (cofactor * in.normal) * handed;
     out.normal = (uniforms.model * vec4<f32>(turned, 0.0)).xyz;
+    // Our own shield stands clear of the hull it copies.
+    if own_shield_shading != 0.0 {
+        world = vec4<f32>(own_shield_inflated(world.xyz, out.normal), world.w);
+        out.clip = uniforms.view_projection * world;
+    }
     // The authored tangent turned like a direction (the node, then the model);
     // an all-zero tangent stays zero, which is the fragment stage's off switch.
     if dot(in.tangent.xyz, in.tangent.xyz) > 0.0 {

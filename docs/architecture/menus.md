@@ -1741,6 +1741,12 @@ class (`oag_title::Title::wingtip`: HD, 2048, Omega), leaving it on Pulse and Pu
 and the texture off an HD-lineage source (`oag_game::launcher::wingtip_lender`) and lays the ribbon from the
 craft's wing-tip `Ship Collision Fx` locators; with no source, nothing is drawn and the loader report says so.
 
+OWN SHIELD (GRAPHICS ADVANCED, `graphics.own_shield`, `off`/`on`, default `off`, restart required) draws our
+own HD/Fury-style shield shell in place of the disc's ([`own-shield.md`](../rendering/own-shield.md)). It reads
+nothing from another disc, so it has no lender: `menu::Definition::drop_unavailable_own_shield` removes the row
+on a title whose `oag_title::Looks::own_shield` rule is unread (HD, 2048, Omega draw the HD-style shield
+themselves), leaving it on Pulse and Pure.
+
 A row can also be **warned** rather than greyed, which is a different thing and
 the RECONSTRUCTION row is why it exists. A greyed row cannot be changed *now* because
 another row rules it out. A warned row can be changed, is stored, and simply

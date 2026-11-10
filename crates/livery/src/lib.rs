@@ -58,6 +58,7 @@ pub mod engine_light;
 pub mod entry;
 mod flare;
 mod locator_pair;
+pub mod own_shield;
 pub use flare::{Scale, Spike};
 mod shield;
 pub mod ship_skin;
@@ -219,6 +220,10 @@ pub struct LoadContext<'a> {
     pub hull_wreck: bool,
     /// Whether to load HD's absorb shell. See [`absorb::shell`].
     pub absorb_shell: bool,
+    /// Whether the shield shell is our own, built off the hull, instead of the one the disc
+    /// authors (`graphics.own_shield`, on a title whose `Looks::own_shield` offers it). See
+    /// [`own_shield::shell`].
+    pub own_shield: bool,
     /// Each craft's Zone livery name, `(team id, name)`, off the plugin
     /// definition's `PI_TeamModel name="zone"` - empty outside Zone and for a
     /// title that authors none. See `zone_livery`.
@@ -644,9 +649,16 @@ fn one(
         engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
 
     let (boost, boost_uv) = plume(archives, team, ships, ctx.mode, report);
-    let (shield, shield_colour) = match shell(archives, team, ships.dir, team_model, report) {
-        Some((model, colour)) => (Some(model), colour),
-        None => (None, None),
+    let (shield, shield_colour) = match ctx
+        .own_shield
+        .then(|| own_shield::shell(&hull, &blob, report))
+        .flatten()
+    {
+        Some(model) => (Some(model), None),
+        None => match shell(archives, team, ships.dir, team_model, report) {
+            Some((model, colour)) => (Some(model), colour),
+            None => (None, None),
+        },
     };
     // Nothing on a title whose flare is a sprite, which is every source that
     // reaches this branch today - the match is here rather than at the PS3

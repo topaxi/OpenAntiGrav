@@ -114,6 +114,8 @@
   HD scored on the craft box against a no-absorb control, ranked differences per title (Pulse's bar glow, Pure's missing
   hull overlay, HD's shell tint and tail), 2048 and Omega unpaired - see
   [`weapon-absorb-pairs.md`](weapon-absorb-pairs.md)
+- **Our own HD/Fury-style shield for Pulse and Pure** (opt-in `graphics.own_shield`, off by default): a procedural,
+  texture-free shell over the craft's own hull, nothing read from any other disc - see [`own-shield.md`](own-shield.md)
 - Lighting and shadow: five authored light classes plus
   `Dynamic Shadow Occluder` and `lensflare` - none implemented. The prelit path
   exists (`GpuVertex.lit`), so this is about which surfaces are which.

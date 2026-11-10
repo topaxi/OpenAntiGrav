@@ -199,6 +199,11 @@ pub const LOOKS: &Looks = &Looks {
         elsewhere: ShieldPalette::Pulse,
         origin: Origin::Measured,
     },
+    // The opt-in HD-style shield, `graphics.own_shield`: `docs/rendering/own-shield.md`.
+    own_shield: Rule {
+        on: Platforms::Any,
+        origin: Origin::Chosen,
+    },
     // Pulse shows its picker; this build waits at it too.
     skips_language_picker: Rule::UNREAD,
     // Pulse lights on the GE; no fragment-program output scale exists there.

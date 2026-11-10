@@ -100,6 +100,7 @@ fn model(slots: u32, emissive: Vec<Emissive>, normal: [f32; 3]) -> Model {
         flame: None,
         absorb_shell: false,
         shield_shell: false,
+        own_shield: None,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
         per_batch_cull: false,

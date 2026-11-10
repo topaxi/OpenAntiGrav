@@ -734,6 +734,15 @@ impl Session {
                     return;
                 }
             },
+            // Read when a race loads (`race::Options::own_shield`), so the next race.
+            "graphics.own_shield" => match text.as_str() {
+                "on" => self.settings.graphics.own_shield = true,
+                "off" => self.settings.graphics.own_shield = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
             "graphics.cpu_governor" => match text.as_str() {
                 "on" => self.settings.graphics.cpu_governor = true,
                 "off" => {

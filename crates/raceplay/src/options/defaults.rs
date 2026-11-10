@@ -23,6 +23,7 @@ impl Default for Options {
             boost_zoom: None,
             trail_hits: TrailHits::Off,
             wingtip_contrails: WingtipContrails::Off,
+            own_shield: false,
             team: None,
             hull_variant: None,
             skin: None,

@@ -50,6 +50,7 @@ fn every_hd_team_shield_settles_to_its_authored_shield_colour() {
                 hull_shine: false,
                 hull_wreck: false,
                 absorb_shell: false,
+                own_shield: false,
                 zone_liveries: &[],
                 forced_skins: &[],
             },

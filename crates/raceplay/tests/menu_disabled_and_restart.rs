@@ -345,6 +345,8 @@ fn the_renderer_row_says_a_restart_is_needed() {
     //
     // `graphics.wingtip_contrails` is the seventh: the lent config and texture are read when the
     // race loads (`race::Options::wingtip_contrails`).
+    //
+    // `graphics.own_shield` is the eighth, on the same terms (`race::Options::own_shield`).
     let deferred: Vec<&str> = definition
         .pages
         .iter()
@@ -361,7 +363,8 @@ fn the_renderer_row_says_a_restart_is_needed() {
             "graphics.boost_fov_kick",
             "graphics.boost_zoom",
             "graphics.trail_hits",
-            "graphics.wingtip_contrails"
+            "graphics.wingtip_contrails",
+            "graphics.own_shield"
         ]
     );
 }

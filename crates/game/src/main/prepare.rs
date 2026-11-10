@@ -163,6 +163,7 @@ impl Pending {
             wingtip_contrails: oag_game::launcher::wingtip_contrails(
                 self.settings.graphics.wingtip_contrails,
             ),
+            own_shield: self.settings.graphics.own_shield,
             foreign_track: self
                 .foreign_entry
                 .as_ref()

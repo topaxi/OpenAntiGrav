@@ -271,6 +271,11 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[oag_title::Platform::Psp]),
         origin: Origin::Measured,
     },
+    // The opt-in HD-style shield, `graphics.own_shield`: `docs/rendering/own-shield.md`.
+    own_shield: Rule {
+        on: Platforms::Any,
+        origin: Origin::Chosen,
+    },
     ..Looks::unread(ShieldPalettes {
         ps2: ShieldPalette::Ps2Pulse,
         elsewhere: ShieldPalette::Pulse,
