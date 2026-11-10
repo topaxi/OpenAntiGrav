@@ -2030,6 +2030,9 @@ before and after.
 | between passes | 0.75 | 0.71 | 0.61 |
 | pipelined per frame | | 8.0 | 24.8 |
 
+The `hd encode` row predates `79f28d611` (the sRGB-curve scene decode). Today's `main` reads 451 /
+989 / 3891 us at these three sizes: "HD encode: three exact cuts measured, none kept" below.
+
 - The circuit's shading is overdrawn 1.00x (2,068,113 fragment invocations for 2,073,600 pixels
   at 1080p): there is no overdraw left to cut, and it is held exact.
 - The 4K gather reads 5.6 ms in one session and 7.2 to 8.3 ms in another for the same binary (the
@@ -2392,9 +2395,34 @@ of decode it would remove. A compute pass with
 workgroup-shared texels (about 1.1 decodes per pixel) would have to write the caller's canvas as a
 storage texture, which this chain does not own (`Chain::run` draws into `view`).
 
+The `d_quadfloor` arm, replacing the four `scene_tap` lines of `resolve_scene_tap` (which gains a
+`pixel` argument, `in.position.xy` from `fs_encode`; `scene_texel(at)` is
+`scene_tap(textureLoad(source_tex, at, 0)).rgb`):
+
+```wgsl
+let lane = vec2<u32>(pixel) & vec2<u32>(1u);
+let odd = lane == vec2<u32>(1u);
+let s1 = scene_texel(low);
+// (1,0) decodes (high.x, low.y), (0,1) decodes (low.x, high.y), (0,0) and (1,1) decode high.
+let t2 = select(high, select(vec2<i32>(low.x, high.y), vec2<i32>(high.x, low.y), odd.x), odd.x != odd.y);
+let s2 = scene_texel(t2);
+let s3 = scene_texel(high);
+let a = s1;
+let b = select(quadSwapX(s1), select(s2, quadSwapY(s3), odd.y), odd.x);
+let c = select(quadSwapY(s1), select(s2, quadSwapX(s3), odd.x), odd.y);
+let d = select(quadSwapDiagonal(s1), select(s3, s2, odd.x && odd.y), odd.x || odd.y);
+```
+
+`d_quad` decodes the same nine texels (lane (0,0) and (1,1) take `low + 1` as their third) and
+adds the check: each lane's `low - lane` corner must match its X and Y partners' and `high` must be
+`low + 1`, ANDed across the quad with the three swaps; a quad that fails decodes `b`, `c`, `d`
+itself.
+
 **Method.** The same `release` `perf-probe` build on every arm (container build, `znver2` for the
-Deck), with a throwaway env override that loaded the chain's WGSL from a file. The override and
-`SUBGROUP` were never committed.
+Deck), with a throwaway patch: `Chain::new`'s `create_shader_module` read the WGSL from the file
+named by `OAG_DIAG_HD_BLOOM_WGSL` when it was set (each arm is the generated `hd_bloom.wgsl` from
+`OUT_DIR`, hand-edited), and `oag-mesh`'s `optional_features` added `wgpu::Features::SUBGROUP`.
+Neither was committed.
 
 ```sh
 # Deck, per run (under the workstation's deck.lock and the Deck's deck-run.sh)
