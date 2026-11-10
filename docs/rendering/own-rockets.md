@@ -39,8 +39,8 @@ flat puffs for smoke and fire, as its own `.pob` sprites are. Nothing of HD's is
 ## Wiring
 
 - `oag_title::Looks::own_rockets` (a `Rule`, `Origin::Chosen`) is on for Pulse and Pure.
-  `oag_raceplay::Options::own_rockets` is the player's setting; `load::own_rockets::on` is the two together.
-- `load::own_rockets::load` reads the three files and their sprites through the race's archives (so the fallback
+  `oag_raceplay::Options::own_rockets` is the player's setting; `oag_raceplay::own_rockets::on` is the two together.
+- `own_rockets::load` reads the three files and their sprites through the race's archives (so the fallback
   layer answers, and a player's override layer can replace any of them), places them in the race's effect library
   after every title effect (no title sprite moves on the sheet), and `EffectHandles::lending` puts each on its
   trigger. A file that does not load is named in the loader report and its trigger keeps the disc's effect.
@@ -74,7 +74,7 @@ its default circuit, both from the back of the grid, so the volley meets the wal
 - **The first version drew next to nothing**, and passed its tests: the flame and smoke were authored at a hull's
   scale (half-size 0.6) with the round default sprite, and at chase distance they were a few faint pixels. The
   sizes and the puff sprite came from reading captures, not from the numbers.
-- Tests: `load::own_rockets::tests` (off reads nothing; on takes the three triggers on Pulse and Pure alone; the
+- Tests: `own_rockets::tests` (off reads nothing; on takes the three triggers on Pulse and Pure alone; the
   flight effect loops, opens with a one-shot flash and lays puff sprites; a missing file leaves the disc's effect),
   `own_shield_ground_truth` (`rockets_are_the_discs_or_ours` on Pulse PSP, Pulse PS2 and Pure PSP on the loads that
   file already makes: off holds none of ours, on plays ours on each trigger with every sprite placed; HD loads

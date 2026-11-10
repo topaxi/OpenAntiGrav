@@ -14,18 +14,18 @@ use std::sync::Arc;
 use oag_fx::psys::{self, parametric};
 use oag_title::Trigger;
 
-use super::Options;
+use crate::{EffectHandles, Options};
 
 /// Each effect's trigger and its fallback-layer entry, which is also its key in the race's
 /// library.
-pub const EFFECTS: [(Trigger, &str); 3] = [
+const EFFECTS: [(Trigger, &str); 3] = [
     (Trigger::RocketFlare, r"Data\Psys\OAGRocketFlight.toml"),
     (Trigger::TrackBlast, r"Data\Psys\OAGRocketImpactTrack.toml"),
     (Trigger::CraftBlast, r"Data\Psys\OAGRocketImpactCraft.toml"),
 ];
 
 /// Whether this race draws our rocket: the player's setting, on a title that is offered it.
-pub(super) fn on(options: &Options, craft_title: &oag_title::Title) -> bool {
+fn on(options: &Options, craft_title: &oag_title::Title) -> bool {
     options.own_rockets && craft_title.looks.own_rockets.applies_everywhere()
 }
 
@@ -49,38 +49,70 @@ fn effect(
         .map_err(|e| e.to_string())
 }
 
-/// Our effects, placed in `effects` (so their sprites join the shared sheet), each with the
-/// trigger it takes over. Empty when [`on`] says no. An effect that does not load is named in
-/// `report` and its trigger keeps the disc's.
-pub(super) fn load(
+/// What [`load`] read: each effect with the trigger it takes over, and what the loader
+/// report should say of them.
+#[derive(Debug, Default)]
+pub(crate) struct Loaded {
+    effects: Vec<(Trigger, Arc<psys::Effect>)>,
+    notes: Vec<String>,
+}
+
+impl Loaded {
+    /// `handles` with each of our effects on its trigger, the notes added to `report`.
+    pub(crate) fn lend(self, handles: EffectHandles, report: &mut Vec<String>) -> EffectHandles {
+        report.extend(self.notes);
+        self.effects
+            .into_iter()
+            .fold(handles, |handles, (trigger, effect)| {
+                handles.lending(trigger, Some(effect))
+            })
+    }
+}
+
+/// Our effects, read through `archives` (the fallback layer answers) into `effects` after
+/// everything already there, so no sprite on the sheet moves. Nothing when [`on`] says no.
+pub(crate) fn load(
+    options: &Options,
+    craft_title: &oag_title::Title,
+    archives: &mut oag_assets::Archives,
+    effects: &mut psys::Library,
+) -> Loaded {
+    let mut read = |name: &str| archives.read_name(name).ok();
+    load_with(options, craft_title, &mut read, effects)
+}
+
+/// [`load`] over any reader. An effect that does not load is named in the notes and its
+/// trigger keeps the disc's.
+fn load_with(
     options: &Options,
     craft_title: &oag_title::Title,
     read: &mut dyn FnMut(&str) -> Option<Vec<u8>>,
     effects: &mut psys::Library,
-    report: &mut Vec<String>,
-) -> Vec<(Trigger, Arc<psys::Effect>)> {
+) -> Loaded {
+    let mut loaded = Loaded::default();
     if !on(options, craft_title) {
-        return Vec::new();
+        return loaded;
     }
-    let mut loaded = Vec::new();
     for (trigger, name) in EFFECTS {
         match effect(name, read) {
             Ok(parsed) => {
                 effects.insert(name, parsed);
-                report.extend(crate::assets::sheet_note(name, effects));
+                loaded
+                    .notes
+                    .extend(crate::assets::sheet_note(name, effects));
                 if let Some(effect) = effects.get(name).cloned() {
-                    loaded.push((trigger, effect));
+                    loaded.effects.push((trigger, effect));
                 }
             }
-            Err(why) => report.push(format!(
+            Err(why) => loaded.notes.push(format!(
                 "own rockets: {name} left out: {why}; the disc's effect plays there"
             )),
         }
     }
-    report.push(format!(
+    loaded.notes.push(format!(
         "own rockets: {} of {} effects of this project's (ours) play in place of {}'s rocket \
          flare and blasts (graphics.own_rockets)",
-        loaded.len(),
+        loaded.effects.len(),
         EFFECTS.len(),
         craft_title.name
     ));
@@ -110,10 +142,10 @@ mod tests {
     #[test]
     fn off_reads_nothing_and_adds_no_report_line() {
         for title in [oag_pulse::TITLE, oag_pure::TITLE] {
-            let (mut effects, mut report) = (psys::Library::new(), Vec::new());
+            let mut effects = psys::Library::new();
             let mut read = |name: &str| -> Option<Vec<u8>> { panic!("off read {name}") };
-            let loaded = load(&options(false), title, &mut read, &mut effects, &mut report);
-            assert!(loaded.is_empty() && report.is_empty() && effects.is_empty());
+            let loaded = load_with(&options(false), title, &mut read, &mut effects);
+            assert!(loaded.effects.is_empty() && loaded.notes.is_empty() && effects.is_empty());
         }
     }
 
@@ -122,15 +154,10 @@ mod tests {
     #[test]
     fn on_takes_the_three_rocket_triggers_on_pulse_and_pure_alone() {
         for title in [oag_pulse::TITLE, oag_pure::TITLE] {
-            let (mut effects, mut report) = (psys::Library::new(), Vec::new());
-            let loaded = load(
-                &options(true),
-                title,
-                &mut tracked,
-                &mut effects,
-                &mut report,
-            );
-            let triggers: Vec<Trigger> = loaded.iter().map(|(trigger, _)| *trigger).collect();
+            let mut effects = psys::Library::new();
+            let loaded = load_with(&options(true), title, &mut tracked, &mut effects);
+            let report = &loaded.notes;
+            let triggers: Vec<Trigger> = loaded.effects.iter().map(|(t, _)| *t).collect();
             assert_eq!(
                 triggers,
                 [
@@ -141,17 +168,22 @@ mod tests {
                 "{}: {report:?}",
                 title.name
             );
-            assert!(loaded.iter().all(|(_, effect)| !effect.emitters.is_empty()));
+            assert!(
+                loaded
+                    .effects
+                    .iter()
+                    .all(|(_, effect)| !effect.emitters.is_empty())
+            );
             assert!(
                 report.iter().all(|line| !line.contains("left out")),
                 "{report:?}"
             );
         }
         for title in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
-            let (mut effects, mut report) = (psys::Library::new(), Vec::new());
+            let mut effects = psys::Library::new();
             let mut read = |name: &str| -> Option<Vec<u8>> { panic!("{} read {name}", title.name) };
-            let loaded = load(&options(true), title, &mut read, &mut effects, &mut report);
-            assert!(loaded.is_empty() && report.is_empty() && effects.is_empty());
+            let loaded = load_with(&options(true), title, &mut read, &mut effects);
+            assert!(loaded.effects.is_empty() && loaded.notes.is_empty() && effects.is_empty());
         }
     }
 
@@ -160,15 +192,9 @@ mod tests {
     /// puff sprite rather than the soft disc.
     #[test]
     fn the_flight_effect_loops_opens_with_a_one_shot_flash_and_lays_puffs() {
-        let (mut effects, mut report) = (psys::Library::new(), Vec::new());
-        let loaded = load(
-            &options(true),
-            oag_pulse::TITLE,
-            &mut tracked,
-            &mut effects,
-            &mut report,
-        );
-        let flight = &loaded[0].1;
+        let mut effects = psys::Library::new();
+        let loaded = load_with(&options(true), oag_pulse::TITLE, &mut tracked, &mut effects);
+        let flight = &loaded.effects[0].1;
         let emitter = |name: &str| {
             flight
                 .emitters
@@ -184,21 +210,15 @@ mod tests {
     /// A file the layer does not answer leaves that trigger to the disc and says so.
     #[test]
     fn a_missing_file_is_named_and_its_trigger_stays_the_discs() {
-        let (mut effects, mut report) = (psys::Library::new(), Vec::new());
+        let mut effects = psys::Library::new();
         let mut read = |name: &str| (!name.contains("Flight")).then(|| tracked(name)).flatten();
-        let loaded = load(
-            &options(true),
-            oag_pulse::TITLE,
-            &mut read,
-            &mut effects,
-            &mut report,
-        );
-        assert!(
-            loaded
-                .iter()
-                .all(|(trigger, _)| *trigger != Trigger::RocketFlare)
-        );
-        assert_eq!(loaded.len(), 2);
+        let loaded = load_with(&options(true), oag_pulse::TITLE, &mut read, &mut effects);
+        let triggers: Vec<Trigger> = loaded.effects.iter().map(|(t, _)| *t).collect();
+        assert_eq!(triggers, [Trigger::TrackBlast, Trigger::CraftBlast]);
+        let mut report = Vec::new();
+        let handles = loaded.lend(EffectHandles::default(), &mut report);
+        assert!(handles.get(Trigger::RocketFlare).is_none());
+        assert!(handles.get(Trigger::TrackBlast).is_some());
         assert!(
             report
                 .iter()

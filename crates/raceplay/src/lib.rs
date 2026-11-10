@@ -257,6 +257,8 @@ pub mod now_playing;
 mod options;
 mod original_ai;
 mod original_tables;
+#[cfg(feature = "view")]
+mod own_rockets;
 mod pads;
 #[cfg(feature = "view")]
 mod perfect_start;
