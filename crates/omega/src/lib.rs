@@ -293,7 +293,10 @@ pub const TITLE: &Title = &Title {
             entry: "/Data/Billboards/HD_Adverts/321Go/321Go_2048.vex",
             assembly_ticks: 200,
         }]),
-        zone_gantry: None,
+        zone_gantry: Some(oag_title::adverts::ZoneGantry {
+            entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
+            assembly_ticks: 210,
+        }),
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
     }),
 };

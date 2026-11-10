@@ -27,10 +27,11 @@
 //! - **2048 and Omega**: the card pass is HD's, inherited, and plays the boards whose
 //!   countdown is node motion (`321Go_2048.vex`, every native 2048 circuit, on both
 //!   titles). Frame 0 lands `assembly_ticks` before the release, so `GO` slides in on it.
-//!   The HD-lineage boards (`321Go_StartFinish.vex`, on the sixteen HD-ported 2048
-//!   circuits and Omega's HD circuits) count down with material curves the Vita and PS4
-//!   containers do not read, so they are not drawn and the loader says why. Pinned so the
-//!   day the curves are read, the withheld tests fail and the title gets its rule.
+//!   The HD-lineage board (`321Go_StartFinish.vex`, on the HD-ported 2048 circuits and
+//!   Omega's HD circuits) plays on HD's clock: its digits ride the UV keys its `.vex`
+//!   `Mesh` nodes author (`docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV
+//!   keys"), whose `GO` edge is frame 202, so frame 0 is tick 71. Pinned on every such
+//!   circuit: the clock line, and that `3`, `2`, `1` and `GO` light different vertices.
 
 use oag_mesh::mesh;
 use oag_raceplay as race;
@@ -254,20 +255,97 @@ fn no_surface(source: &str, track: Option<&str>) {
     );
 }
 
-/// A circuit whose board counts down with material curves: not drawn, and said.
-fn curve_board_withheld(source: &str, track: Option<&str>) {
-    let report = loaded_report(source, track);
+/// A circuit whose board is the HD-lineage `321Go_StartFinish.vex`: a card on
+/// HD's clock, off the `GO` edge its `.vex` UV keys author, and its digits
+/// change over the countdown.
+fn curve_board_counts_down(source: &str, track: Option<&str>) {
+    let loaded = race::load(&race::Options {
+        source: source.to_string(),
+        track: track.map(str::to_string),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let report = &loaded.report;
     assert!(
         report.iter().any(|l| l.starts_with(
-            "no start gantry: /Data/Billboards/HD_Adverts/321Go/321Go_StartFinish.vex counts down \
-             with material curves"
+            "start gantry /Data/Billboards/HD_Adverts/321Go/321Go_StartFinish.vex: drawn through its own camera"
         )),
-        "the board is drawn or fails another way - the curves may be read now: {report:#?}"
-    );
-    assert!(
-        !report.iter().any(|l| l.starts_with("start gantry clock:")),
         "{report:#?}"
     );
+    let clock = report
+        .iter()
+        .find(|l| l.starts_with("start gantry clock:"))
+        .unwrap_or_else(|| panic!("no gantry clock line: {report:#?}"));
+    assert!(
+        clock.contains("asset frame 202") && clock.contains("frame 0 is tick 71"),
+        "{clock}"
+    );
+
+    let card = loaded
+        .billboards
+        .adverts
+        .iter()
+        .find(|card| card.slot == 8)
+        .expect("the circuit shows a gantry card");
+    let timeline = card.timeline.as_ref().expect("the gantry card is clocked");
+    let (model, clock, cull) = (&card.model, timeline.clock(), timeline.cull());
+    let lit = |tick: u64| {
+        let seconds = clock.seconds(tick);
+        lit_vertices(model, cull.hidden(seconds), seconds)
+    };
+    // The frames a player reads `3`, `2` and `1` on, and the release.
+    let release = oag_race::COUNTDOWN_TICKS + 1;
+    let (three, two, one, go) = (lit(140), lit(185), lit(230), lit(release));
+    assert!(lit(80).is_empty(), "something is lit before the `3`");
+    for (name, digit) in [("3", &three), ("2", &two), ("1", &one), ("GO", &go)] {
+        assert!(!digit.is_empty(), "`{name}` lights nothing");
+    }
+    assert!(
+        three != two && two != one && one != go && three != one,
+        "the board shows the same glyph at two beats of the countdown"
+    );
+}
+
+/// The drawn, texture-animated vertices that sample lit white at `seconds`:
+/// which glyph the board shows. See [`lit_white`].
+fn lit_vertices(model: &mesh::Model, hidden: &[u32], seconds: f32) -> Vec<u32> {
+    let table = oag_mesh::mesh_render::TexAnims::sample(model, seconds);
+    let mut lit = Vec::new();
+    let lists: [&[mesh::DrawCall]; 3] = [
+        &model.draws,
+        &model.alpha_tested_draws,
+        &model.transparent_draws,
+    ];
+    for draw in lists.into_iter().flatten() {
+        if hidden.contains(&oag_render::gantry::panel::key(draw)) {
+            continue;
+        }
+        let Some(texture) = draw.texture.and_then(|t| model.textures.get(t)?.as_ref()) else {
+            continue;
+        };
+        let Some(rgba) = texture.to_rgba() else {
+            continue;
+        };
+        let (w, h) = (texture.width as usize, texture.height as usize);
+        for index in &model.indices[draw.range.start as usize..draw.range.end as usize] {
+            let vertex = &model.vertices[*index as usize];
+            if vertex.anim == 0 {
+                continue;
+            }
+            let [su, sv, ou, ov] = table.transform[vertex.anim as usize];
+            let u = (vertex.texcoord[0] * su + ou).rem_euclid(1.0);
+            let v = (vertex.texcoord[1] * sv + ov).rem_euclid(1.0);
+            let x = ((u * w as f32) as usize).min(w - 1);
+            let y = ((v * h as f32) as usize).min(h - 1);
+            let p = &rgba[(y * w + x) * 4..(y * w + x) * 4 + 4];
+            if p[0] >= 200 && p[1] >= 200 && p[2] >= 200 && p[3] >= 200 {
+                lit.push(*index);
+            }
+        }
+    }
+    lit.sort_unstable();
+    lit.dedup();
+    lit
 }
 
 macro_rules! circuits_2048 {
@@ -305,30 +383,30 @@ circuits_2048! {
 }
 
 circuits_2048! {
-    curve_board_withheld, r"Data\art\published\DLC1\environments\";
-    hd_ported_anulpha_pass_withholds_the_curve_board => "Anulpha_Pass",
-    hd_ported_chenghou_project_withholds_the_curve_board => "Chenghou_Project",
-    hd_ported_moa_therma_withholds_the_curve_board => "Moa_Therma",
-    hd_ported_vineta_k_withholds_the_curve_board => "Vineta_K",
-    hd_ported_metropia_withholds_the_curve_board => "Metropia",
-    hd_ported_sebenco_climb_withholds_the_curve_board => "Sebenco_Climb",
-    hd_ported_sol_2_withholds_the_curve_board => "Sol_2",
-    hd_ported_ubermall_withholds_the_curve_board => "Ubermall",
-    hd_ported_amphiseum_withholds_the_curve_board => "amphiseum",
-    hd_ported_modesto_heights_withholds_the_curve_board => "modesto_heights",
-    hd_ported_talons_junction_withholds_the_curve_board => "talons_junction",
-    hd_ported_tech_de_ra_withholds_the_curve_board => "tech_de_ra",
-    hd_ported_zone_1_withholds_the_curve_board => "zone_1",
+    curve_board_counts_down, r"Data\art\published\DLC1\environments\";
+    hd_ported_anulpha_pass_counts_down_on_the_curve_board => "Anulpha_Pass",
+    hd_ported_chenghou_project_counts_down_on_the_curve_board => "Chenghou_Project",
+    hd_ported_moa_therma_counts_down_on_the_curve_board => "Moa_Therma",
+    hd_ported_vineta_k_counts_down_on_the_curve_board => "Vineta_K",
+    hd_ported_metropia_counts_down_on_the_curve_board => "Metropia",
+    hd_ported_sebenco_climb_counts_down_on_the_curve_board => "Sebenco_Climb",
+    hd_ported_sol_2_counts_down_on_the_curve_board => "Sol_2",
+    hd_ported_ubermall_counts_down_on_the_curve_board => "Ubermall",
+    hd_ported_amphiseum_counts_down_on_the_curve_board => "amphiseum",
+    hd_ported_modesto_heights_counts_down_on_the_curve_board => "modesto_heights",
+    hd_ported_talons_junction_counts_down_on_the_curve_board => "talons_junction",
+    hd_ported_tech_de_ra_counts_down_on_the_curve_board => "tech_de_ra",
+    hd_ported_zone_1_counts_down_on_the_curve_board => "zone_1",
 }
 
 #[test]
 #[ignore = "needs data/extracted/ps4"]
-fn omegas_hd_circuits_withhold_the_curve_board() {
+fn omegas_hd_circuits_count_down_on_the_curve_board() {
     let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
     for track in [None, Some(r"Data\environments\tech_de_ra\track.vex")] {
-        curve_board_withheld(&path.display().to_string(), track);
+        curve_board_counts_down(&path.display().to_string(), track);
     }
 }
 

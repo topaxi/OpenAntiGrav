@@ -111,8 +111,8 @@ fn vineta_k_adverts_load_from_omegas_container() {
     check(CIRCUITS[3]);
 }
 
-/// The Zone board, `321Go_Zone.vex`, builds through the same branch. No circuit
-/// shows it yet (`zone_gantry` is `None` on Omega), so this is a reader check.
+/// The Zone board, `321Go_Zone.vex`, builds through the same branch: the board a
+/// Zone race shows on slot 8 (`oag_omega::TITLE.adverts`, `zone_gantry`).
 #[test]
 #[ignore = "needs data/extracted/ps4"]
 fn the_zone_board_builds_through_the_vita_ps4_branch() {

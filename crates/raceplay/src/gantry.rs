@@ -328,23 +328,14 @@ pub(super) fn place_card(
     clock: ClockRule,
     report: &mut Vec<String>,
 ) -> Option<crate::adverts::Card> {
-    let native = match spec.gantry_boards {
-        Some(boards) => {
-            let Some(board) = boards
-                .iter()
-                .find(|board| board.entry.eq_ignore_ascii_case(name))
-            else {
-                report.push(format!(
-                    "no start gantry: {name} counts down with material curves this title's \
-                     container does not read, so its card would stay on its first frame and is \
-                     not drawn"
-                ));
-                return None;
-            };
-            Some(*board)
-        }
-        None => None,
-    };
+    // A board the title lists counts down by node motion; any other plays HD's
+    // clock off its own `GO` edge.
+    let native = spec.gantry_boards.and_then(|boards| {
+        boards
+            .iter()
+            .find(|board| board.entry.eq_ignore_ascii_case(name))
+            .copied()
+    });
     let Some(mount) = oag_render::gantry::mount(track_model) else {
         report.push(
             "no start gantry: this circuit's track authors no billboard8 surface to show a card on"

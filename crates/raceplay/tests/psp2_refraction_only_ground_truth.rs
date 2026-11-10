@@ -140,6 +140,7 @@ fn assert_target_is_the_left_out_set(
     let zone = drawn_chunks(&loads.zone.track_model);
     // The advert pass draws the circuit's billboard quads in the main view and Zone shares one
     // texture instead (`Adverts::zone_shares_one_texture`), so those quads are not the partition's.
+    // Slot 8's quad shows the gantry card in both, so it is left out of both sides.
     let adverts = advert_quad_chunks(&loads.main.track_model);
     let main: BTreeSet<u32> = drawn_chunks(&loads.main.track_model)
         .difference(&adverts)
@@ -151,7 +152,10 @@ fn assert_target_is_the_left_out_set(
     );
     assert_eq!(
         main,
-        zone.difference(refract).copied().collect::<BTreeSet<_>>(),
+        zone.difference(refract)
+            .filter(|c| !adverts.contains(c))
+            .copied()
+            .collect::<BTreeSet<_>>(),
         "the main view is Zone's draws without the refract meshes"
     );
     let groups = &loads.main.behind_glass.groups;
