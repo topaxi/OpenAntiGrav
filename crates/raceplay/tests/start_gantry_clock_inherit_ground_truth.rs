@@ -24,12 +24,13 @@
 //!   within 2 ticks of the measured +23, +61 and +109. The start tick is
 //!   bounded from below by the same capture (the green step on the release,
 //!   confidence 75), not measured.
-//! - **2048 and Omega**: no circuit that was tried stands a gantry at all
-//!   (`oag_render::gantry::mount` finds no `321backplate`) - 2048's ten native
-//!   circuits, thirteen of its sixteen HD-ported ones (the base package's four
-//!   and nine of the DLC's) and Omega's default, Tech De Ra (HD's circuit) and
-//!   Altima (2048's) - so there is no clock to set. Pinned so the day a mount
-//!   is found, this fails and the title gets its rule.
+//! - **2048 and Omega**: the card pass is HD's, inherited, and plays the boards whose
+//!   countdown is node motion (`321Go_2048.vex`, every native 2048 circuit, on both
+//!   titles). Frame 0 lands `assembly_ticks` before the release, so `GO` slides in on it.
+//!   The HD-lineage boards (`321Go_StartFinish.vex`, on the sixteen HD-ported 2048
+//!   circuits and Omega's HD circuits) count down with material curves the Vita and PS4
+//!   containers do not read, so they are not drawn and the loader says why. Pinned so the
+//!   day the curves are read, the withheld tests fail and the title gets its rule.
 
 use oag_mesh::mesh;
 use oag_raceplay as race;
@@ -212,40 +213,72 @@ fn hds_clock_is_found_on_the_loader_path_a_race_really_takes() {
     assert!(line.contains("frame 0 is tick 70"), "{line}");
 }
 
-fn no_gantry(source: &str, track: Option<&str>) {
-    let loaded = race::load(&race::Options {
+fn loaded_report(source: &str, track: Option<&str>) -> Vec<String> {
+    race::load(&race::Options {
         source: source.to_string(),
         track: track.map(str::to_string),
         ..race::Options::default()
     })
-    .expect("loading the race");
+    .expect("loading the race")
+    .report
+}
+
+/// A circuit whose board is `321Go_2048.vex`: a card, clocked from the release.
+fn native_board(source: &str, track: Option<&str>) {
+    let report = loaded_report(source, track);
     assert!(
-        loaded
-            .report
-            .iter()
-            .any(|l| l.starts_with("no start gantry: this circuit's track authors no")),
-        "a mount was found - this title now needs its clock rule: {:#?}",
-        loaded.report
+        report.iter().any(|l| l.starts_with(
+            "start gantry /Data/Billboards/HD_Adverts/321Go/321Go_2048.vex: drawn through its own camera"
+        )),
+        "{report:#?}"
     );
+    let clock = report
+        .iter()
+        .find(|l| l.starts_with("start gantry clock:"))
+        .unwrap_or_else(|| panic!("no gantry clock line: {report:#?}"));
     assert!(
-        !loaded
-            .report
-            .iter()
-            .any(|l| l.starts_with("start gantry clock:")),
-        "{:#?}",
-        loaded.report
+        clock.contains("frame 0 is tick 73") && clock.contains("(frame 200)"),
+        "{clock}"
     );
 }
 
-macro_rules! native_2048 {
-    ($dir:literal; $($name:ident => $circuit:literal),* $(,)?) => {$(
+/// A circuit whose track authors no `billboard8` surface in the base package: nothing to
+/// show a card on. 2048's `park` is the one (Omega's copy ships `billboard8.gnf`).
+fn no_surface(source: &str, track: Option<&str>) {
+    let report = loaded_report(source, track);
+    assert!(
+        report.iter().any(|l| l.starts_with(
+            "no start gantry: this circuit's track authors no billboard8 surface to show a card on"
+        )),
+        "{report:#?}"
+    );
+}
+
+/// A circuit whose board counts down with material curves: not drawn, and said.
+fn curve_board_withheld(source: &str, track: Option<&str>) {
+    let report = loaded_report(source, track);
+    assert!(
+        report.iter().any(|l| l.starts_with(
+            "no start gantry: /Data/Billboards/HD_Adverts/321Go/321Go_StartFinish.vex counts down \
+             with material curves"
+        )),
+        "the board is drawn or fails another way - the curves may be read now: {report:#?}"
+    );
+    assert!(
+        !report.iter().any(|l| l.starts_with("start gantry clock:")),
+        "{report:#?}"
+    );
+}
+
+macro_rules! circuits_2048 {
+    ($check:ident, $dir:literal; $($name:ident => $circuit:literal),* $(,)?) => {$(
         #[test]
         #[ignore = "needs data/extracted/vita/PCSF00007"]
         fn $name() {
             let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
                 return;
             };
-            no_gantry(
+            $check(
                 &path.display().to_string(),
                 Some(concat!($dir, $circuit, r"\track.vex")),
             );
@@ -253,56 +286,60 @@ macro_rules! native_2048 {
     )*};
 }
 
-native_2048! {
-    r"Data\art\published\environments\";
-    wipeout_2048_altima_stands_no_gantry => "altima",
-    wipeout_2048_arena_stands_no_gantry => "arena",
-    wipeout_2048_bridge_stands_no_gantry => "bridge",
-    wipeout_2048_cathedral_stands_no_gantry => "cathedral",
-    wipeout_2048_mall_stands_no_gantry => "mall",
-    wipeout_2048_park_stands_no_gantry => "park",
-    wipeout_2048_sol_stands_no_gantry => "sol",
-    wipeout_2048_square_stands_no_gantry => "square",
-    wipeout_2048_subway_stands_no_gantry => "subway",
-    wipeout_2048_tower_stands_no_gantry => "tower",
+circuits_2048! {
+    native_board, r"Data\art\published\environments\";
+    wipeout_2048_altima_plays_its_own_board => "altima",
+    wipeout_2048_arena_plays_its_own_board => "arena",
+    wipeout_2048_bridge_plays_its_own_board => "bridge",
+    wipeout_2048_cathedral_plays_its_own_board => "cathedral",
+    wipeout_2048_mall_plays_its_own_board => "mall",
+    wipeout_2048_sol_plays_its_own_board => "sol",
+    wipeout_2048_square_plays_its_own_board => "square",
+    wipeout_2048_subway_plays_its_own_board => "subway",
+    wipeout_2048_tower_plays_its_own_board => "tower",
+}
+
+circuits_2048! {
+    no_surface, r"Data\art\published\environments\";
+    wipeout_2048_park_has_no_billboard8_surface => "park",
+}
+
+circuits_2048! {
+    curve_board_withheld, r"Data\art\published\DLC1\environments\";
+    hd_ported_anulpha_pass_withholds_the_curve_board => "Anulpha_Pass",
+    hd_ported_chenghou_project_withholds_the_curve_board => "Chenghou_Project",
+    hd_ported_moa_therma_withholds_the_curve_board => "Moa_Therma",
+    hd_ported_vineta_k_withholds_the_curve_board => "Vineta_K",
+    hd_ported_metropia_withholds_the_curve_board => "Metropia",
+    hd_ported_sebenco_climb_withholds_the_curve_board => "Sebenco_Climb",
+    hd_ported_sol_2_withholds_the_curve_board => "Sol_2",
+    hd_ported_ubermall_withholds_the_curve_board => "Ubermall",
+    hd_ported_amphiseum_withholds_the_curve_board => "amphiseum",
+    hd_ported_modesto_heights_withholds_the_curve_board => "modesto_heights",
+    hd_ported_talons_junction_withholds_the_curve_board => "talons_junction",
+    hd_ported_tech_de_ra_withholds_the_curve_board => "tech_de_ra",
+    hd_ported_zone_1_withholds_the_curve_board => "zone_1",
 }
 
 #[test]
 #[ignore = "needs data/extracted/ps4"]
-fn omegas_default_circuit_stands_no_gantry() {
+fn omegas_hd_circuits_withhold_the_curve_board() {
     let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    no_gantry(&path.display().to_string(), None);
-}
-
-native_2048! {
-    r"Data\art\published\DLC1\environments\";
-    hd_ported_anulpha_pass_stands_no_gantry => "Anulpha_Pass",
-    hd_ported_chenghou_project_stands_no_gantry => "Chenghou_Project",
-    hd_ported_moa_therma_stands_no_gantry => "Moa_Therma",
-    hd_ported_vineta_k_stands_no_gantry => "Vineta_K",
-    hd_ported_metropia_stands_no_gantry => "Metropia",
-    hd_ported_sebenco_climb_stands_no_gantry => "Sebenco_Climb",
-    hd_ported_sol_2_stands_no_gantry => "Sol_2",
-    hd_ported_ubermall_stands_no_gantry => "Ubermall",
-    hd_ported_amphiseum_stands_no_gantry => "amphiseum",
-    hd_ported_modesto_heights_stands_no_gantry => "modesto_heights",
-    hd_ported_talons_junction_stands_no_gantry => "talons_junction",
-    hd_ported_tech_de_ra_stands_no_gantry => "tech_de_ra",
-    hd_ported_zone_1_stands_no_gantry => "zone_1",
-}
-
-#[test]
-#[ignore = "needs data/extracted/ps4"]
-fn omegas_hd_and_2048_origin_circuits_stand_no_gantry() {
-    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
-        return;
-    };
-    for track in [
-        r"Data\environments\tech_de_ra\track.vex",
-        r"Data\environments2048\altima\track.vex",
-    ] {
-        no_gantry(&path.display().to_string(), Some(track));
+    for track in [None, Some(r"Data\environments\tech_de_ra\track.vex")] {
+        curve_board_withheld(&path.display().to_string(), track);
     }
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn omegas_2048_circuit_plays_its_own_board() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    native_board(
+        &path.display().to_string(),
+        Some(r"Data\environments2048\altima\track.vex"),
+    );
 }

@@ -72,6 +72,14 @@ pub const SLOT8_TEXTURE: &str = "billboard8.tga";
 /// candidate is this one is not a weaker measurement for it.
 pub const HD_SLOT8_TEXTURE: &str = "billboard8.gtf";
 
+/// Slot 8's placeholder in the Vita container (Wipeout 2048, and the circuits it
+/// re-ships from HD): `textures/billboard8.gxt`, 112 bytes, on all ten native
+/// circuits (`docs/rendering/start-gantry.md`, "2048 and Omega").
+pub const VITA_SLOT8_TEXTURE: &str = "billboard8.gxt";
+
+/// Slot 8's placeholder in Omega's PS4 container: `.../texturesps4/billboard8.gnf`.
+pub const PS4_SLOT8_TEXTURE: &str = "billboard8.gnf";
+
 /// The last path component of a texture label, case-preserved.
 ///
 /// **Why this exists at all, and not just `eq_ignore_ascii_case`.** A Pulse
@@ -110,7 +118,7 @@ fn basename(label: &str) -> &str {
 /// sees. HD's own eight are counted on the disc too - `billboard7.gtf` and
 /// `billboard8.gtf` on all 17 environments, the rest on a subset - in the
 /// same source cited above.
-pub const SLOT_PLACEHOLDER_TEXTURES: [&str; 16] = [
+pub const SLOT_PLACEHOLDER_TEXTURES: [&str; 32] = [
     "billboard1.tga",
     "billboard2.tga",
     "billboard3.tga",
@@ -127,6 +135,22 @@ pub const SLOT_PLACEHOLDER_TEXTURES: [&str; 16] = [
     "billboard6.gtf",
     "billboard7.gtf",
     "billboard8.gtf",
+    "billboard1.gxt",
+    "billboard2.gxt",
+    "billboard3.gxt",
+    "billboard4.gxt",
+    "billboard5.gxt",
+    "billboard6.gxt",
+    "billboard7.gxt",
+    "billboard8.gxt",
+    "billboard1.gnf",
+    "billboard2.gnf",
+    "billboard3.gnf",
+    "billboard4.gnf",
+    "billboard5.gnf",
+    "billboard6.gnf",
+    "billboard7.gnf",
+    "billboard8.gnf",
 ];
 
 /// Whether `label` names one of [`SLOT_PLACEHOLDER_TEXTURES`], matched
@@ -338,7 +362,7 @@ pub fn strip_unserved_slot_placeholders(model: &mut Model, served: &[u32]) -> us
     })
 }
 
-/// Slot 7's own placeholder art, `fx350_nomip.gtf` - HD's
+/// Slot 7's own placeholder art, `fx350_nomip` - HD's
 /// `Data\Billboards\HD_Adverts\fx350.vex`, per
 /// `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s "checkered-flag
 /// banner reading 'FX-350 Official A-G Racing League'" - **embedded inside
@@ -358,9 +382,20 @@ pub fn strip_unserved_slot_placeholders(model: &mut Model, served: &[u32]) -> us
 /// report of "a Wipeout symbol drawn in the middle of the track" pixel for
 /// pixel: `data/reference/hd-capture/talons-ships/00.png` shows no such thing
 /// anywhere in frame, at the gate or over the road.
-pub const FX350_TEXTURE: &str = "fx350_nomip.gtf";
+///
+/// Matched as `fx350_nomip` in any container's spelling: HD's `.gtf`, 2048's `.gxt`,
+/// Omega's `.gnf`.
+pub(crate) fn is_fx350_texture(label: &str) -> bool {
+    let name = basename(label);
+    name.rsplit_once('.').is_some_and(|(stem, extension)| {
+        stem.eq_ignore_ascii_case("fx350_nomip")
+            && ["gtf", "gxt", "gnf"]
+                .iter()
+                .any(|e| extension.eq_ignore_ascii_case(e))
+    })
+}
 
-/// Drops every draw in `model` bound to [`FX350_TEXTURE`], and says how many.
+/// Drops every draw in `model` bound to [`is_fx350_texture`], and says how many.
 ///
 /// **By texture, not by node name or position.** The disc itself is the
 /// discriminator - every draw carrying slot 7's own art is one this model's
@@ -369,9 +404,7 @@ pub const FX350_TEXTURE: &str = "fx350_nomip.gtf";
 /// the full accounting of what survives (the two background panels and the
 /// digit board) against what a reference frame shows.
 pub fn strip_fx350_art(model: &mut Model) -> usize {
-    strip_texture(model, |label| {
-        basename(label).eq_ignore_ascii_case(FX350_TEXTURE)
-    })
+    strip_texture(model, is_fx350_texture)
 }
 
 /// Shared retain-by-texture loop [`strip_slot_placeholders`] and
@@ -515,6 +548,8 @@ pub fn mount(model: &Model) -> Option<Mount> {
     surface(model, BACKPLATE_TEXTURE)
         .or_else(|| surface(model, SLOT8_TEXTURE))
         .or_else(|| surface(model, HD_SLOT8_TEXTURE))
+        .or_else(|| surface(model, VITA_SLOT8_TEXTURE))
+        .or_else(|| surface(model, PS4_SLOT8_TEXTURE))
 }
 
 /// The plane of every draw in `model` that binds a texture named `texture`.

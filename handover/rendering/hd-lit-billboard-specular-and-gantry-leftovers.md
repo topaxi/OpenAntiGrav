@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-10-26
-summary: "no-dot-power specular landed 2026-10-26; tv_glow.gtf second texture and the Omega card route are open"
+updated: 2026-11-10
+summary: "no-dot-power specular and the Omega card route landed; tv_glow.gtf second texture is open"
 categories: [rendering]
 difficulty: medium (30)
 ---
@@ -22,8 +22,8 @@ difficulty: medium (30)
   drawn blocks carry an `LG2` is replaced by the dot-product test (the lightmap curve has an `LG2` too).
 - **`tv_glow.gtf` on `02_track`.** `cf_vex_billboard` binds it as a second texture and it does
   not reach the shader (no `ADD_SECOND` bit, slots word `0x18`).
-- **Omega.** `adverts: None`, so no card route; the shared lineage suggests the same quads.
-  Not checkable on a sampler (no PS4 capture path).
+- ~~**Omega.**~~ Landed 2026-11-10 (`omega-gantry`): `adverts` is HD's pass, inherited, and Altima's `321Go_2048.vex` plays as a card
+  (`docs/rendering/start-gantry.md`, "Omega and 2048"). Still open there: the HD-lineage board (PS4 material curves).
 
 ## Next Steps
 

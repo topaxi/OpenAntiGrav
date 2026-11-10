@@ -93,6 +93,13 @@ pub struct Adverts {
     /// What the target the cards are drawn into stores of a card's colour: HD's linear-light
     /// 5-6-5, Pulse's truncated gamma 5-6-5, or the full 8 bits. See [`CardStore`].
     pub card_store: CardStore,
+    /// The slot 8 boards this title's card pass plays, or `None` where every board a
+    /// manifest names is played on HD's clock.
+    ///
+    /// A board whose digits are material curves is left out where the title's material
+    /// container does not read its curves: the card would stay on its first frame, so it
+    /// is not drawn and the loader says why.
+    pub gantry_boards: Option<&'static [GantryBoard]>,
     /// The board slot 8 shows instead of the circuit's own while the race is a
     /// Zone race, or `None` where the title keeps one gantry for every mode.
     pub zone_gantry: Option<ZoneGantry>,
@@ -124,6 +131,17 @@ pub enum CardStore {
     /// a GE dump of the grid shows every prim into the 128 x 128 target at `0x154000`
     /// with `FRAMEBUFPIXFORMAT` 0, and the dither matrix registers all zero.
     R5G6B5Gamma,
+}
+
+/// A start board whose countdown is its nodes' own motion, and where that timeline
+/// stands against the release.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GantryBoard {
+    /// The model's archive path, spelled as a `trackstartup.xml` names one.
+    pub entry: &'static str,
+    /// Asset frames from its start to the one `GO` shows on: frame 0 lands this many
+    /// ticks before the release.
+    pub assembly_ticks: u64,
 }
 
 /// A Zone race's own start board.

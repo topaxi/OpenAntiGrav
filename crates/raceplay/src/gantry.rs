@@ -328,6 +328,23 @@ pub(super) fn place_card(
     clock: ClockRule,
     report: &mut Vec<String>,
 ) -> Option<crate::adverts::Card> {
+    let native = match spec.gantry_boards {
+        Some(boards) => {
+            let Some(board) = boards
+                .iter()
+                .find(|board| board.entry.eq_ignore_ascii_case(name))
+            else {
+                report.push(format!(
+                    "no start gantry: {name} counts down with material curves this title's \
+                     container does not read, so its card would stay on its first frame and is \
+                     not drawn"
+                ));
+                return None;
+            };
+            Some(*board)
+        }
+        None => None,
+    };
     let Some(mount) = oag_render::gantry::mount(track_model) else {
         report.push(
             "no start gantry: this circuit's track authors no billboard8 surface to show a card on"
@@ -352,10 +369,11 @@ pub(super) fn place_card(
         &HD_LAP_WINDOWS
     };
     let (cull, parked) = panel_cull(&model, countdown, &mount, windows);
-    let clock = match (zone_board, pulse) {
-        (Some(zone), _) => zone_clock(zone, name, report),
-        (None, true) => Clock::PULSE,
-        (None, false) => hd_clock(&model, name, report),
+    let clock = match (zone_board, native, pulse) {
+        (Some(zone), _, _) => zone_clock(zone, name, report),
+        (None, Some(board), _) => native_clock(board, name, report),
+        (None, None, true) => Clock::PULSE,
+        (None, None, false) => hd_clock(&model, name, report),
     };
     let mut card = match crate::adverts::card_from(8, model, &blob, spec) {
         Ok(card) => card,
@@ -370,7 +388,13 @@ pub(super) fn place_card(
         unlit(&mut card.model);
     }
     let fx350 = oag_render::gantry::panel::fx350_draws(&card.model).len();
-    let evidence = if pulse {
+    let evidence = if native.is_some() {
+        format!(
+            "inherited from HD's card pass (not re-measured on this title). {parked} draw(s) \
+             parked outside the panel and {fx350} bound to slot 7's own fx350_nomip art are not \
+             drawn"
+        )
+    } else if pulse {
         format!(
             "as the original does (a live PPSSPP GE dump of Talon's Junction, 2026-10-06; the \
              board reads opaque on a PPSSPP software-renderer capture). Before the first line \
@@ -469,6 +493,23 @@ pub(super) enum ClockRule {
 
 /// HD's clock on `model`'s own `GO` edge, or the timeline off the race start
 /// with the reason in the report.
+/// A node-driven board's clock: frame 0 lands [`oag_title::adverts::GantryBoard::assembly_ticks`]
+/// before the release and the timeline then runs on.
+fn native_clock(
+    board: oag_title::adverts::GantryBoard,
+    name: &str,
+    report: &mut Vec<String>,
+) -> Clock {
+    let clock = Clock::assembled_at_release(board.assembly_ticks);
+    report.push(format!(
+        "start gantry clock: {name} counts down by its nodes' own motion, so its frame 0 is \
+         tick {} and `GO` slides in on the release (frame {}); the timeline runs on after it, \
+         and what the board shows then is chosen, not measured",
+        clock.start_tick, board.assembly_ticks,
+    ));
+    clock
+}
+
 /// A Zone board's clock: its assembly ends on the release, per
 /// [`oag_title::adverts::ZoneGantry::assembly_ticks`], and the line says what is
 /// and is not measured.

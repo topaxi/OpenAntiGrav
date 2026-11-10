@@ -103,6 +103,22 @@ fn drawn_chunks(model: &oag_mesh::mesh::Model) -> BTreeSet<u32> {
         .collect()
 }
 
+/// The mesh objects a model draws with a billboard slot's placeholder texture.
+fn advert_quad_chunks(model: &oag_mesh::mesh::Model) -> BTreeSet<u32> {
+    model
+        .draws
+        .iter()
+        .chain(&model.alpha_tested_draws)
+        .chain(&model.transparent_draws)
+        .filter(|d| {
+            d.texture
+                .and_then(|slot| model.textures.get(slot)?.as_ref())
+                .is_some_and(|t| oag_render::gantry::is_slot_placeholder(&t.label))
+        })
+        .filter_map(|d| d.chunk)
+        .collect()
+}
+
 /// What a race loads for the refraction target and the main view, outside Zone and in it.
 struct Loads {
     main: race::Loaded,
@@ -122,7 +138,13 @@ fn assert_target_is_the_left_out_set(
     size: (u32, u32),
 ) {
     let zone = drawn_chunks(&loads.zone.track_model);
-    let main = drawn_chunks(&loads.main.track_model);
+    // The advert pass draws the circuit's billboard quads in the main view and Zone shares one
+    // texture instead (`Adverts::zone_shares_one_texture`), so those quads are not the partition's.
+    let adverts = advert_quad_chunks(&loads.main.track_model);
+    let main: BTreeSet<u32> = drawn_chunks(&loads.main.track_model)
+        .difference(&adverts)
+        .copied()
+        .collect();
     assert!(
         loads.zone.behind_glass.groups.is_empty(),
         "Zone keeps the meshes in the main view and draws no target"

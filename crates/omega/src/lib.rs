@@ -269,15 +269,33 @@ pub const TITLE: &Title = &Title {
     },
     pressings: None,
     pre_race: None,
-    // **Off, and why** (2026-10-26, `docs/rendering/start-gantry.md`, "Omega"):
-    // `gantry::build` now reads Omega's `321Go` files through the Vita/PS4
-    // container, but with the pass on, a start-grid still against the shadPS4
-    // pair does not match. Placement does (same quads, same sizes); the look
-    // does not: the countdown board shows a static red face where the original
-    // shows its blank teal one and then counts down, because the PS4 materials'
-    // texture curves are unread, and the unlit side cards lose their logo. The
-    // fields to set when it does are HD's, inherited, not re-measured on PS4.
-    adverts: None,
+    adverts: Some(&oag_title::adverts::Adverts {
+        // HD's pass, inherited: the same engine draws a slot's model through its own camera
+        // into a target the track's `billboard8` quad samples (`ps4-omega-eu/billboards.md`
+        // for Omega; 2048 ships the same circuits and boards). The target and planes are
+        // HD's RPCS3 reads, not re-measured on this title's own hardware.
+        target: (512, 256),
+        near: 0.5,
+        far: 5500.0,
+        colour_pool: false,
+        flip_v: false,
+        wrap: true,
+        zone_shares_one_texture: true,
+        gantry_card: true,
+        adverts_unlit: true,
+        card_store: oag_title::adverts::CardStore::R5G6B5Linear,
+        card_unlit: true,
+        // `321Go_2048.vex` counts down by moving nodes. The HD-lineage boards
+        // (`321Go_StartFinish.vex` and the rest) drive their digits with material
+        // curves this title's container does not yet give up
+        // (`docs/formats/omega-status.md`, "Adverts").
+        gantry_boards: Some(&[oag_title::adverts::GantryBoard {
+            entry: "/Data/Billboards/HD_Adverts/321Go/321Go_2048.vex",
+            assembly_ticks: 200,
+        }]),
+        zone_gantry: None,
+        origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
+    }),
 };
 
 /// The effects Omega plays: the engine's own names, tried as Pulse's, minus
