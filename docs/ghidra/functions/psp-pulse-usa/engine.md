@@ -1146,8 +1146,10 @@ angularVelocity -= angularVelocity * h * body+0x380;
 at `body+0x378` to `1.0`. Confidence **80** - read off VU-macro output, and the
 `0x388`/`0x394` fields' meanings are not established.
 
-A craft therefore carries a linear velocity damping this crate does not implement.
-It should be, for fidelity, but **it is not the gap**: at `0.01` against an
+A craft therefore carries a linear velocity damping this crate does not fly on Pulse. It
+does on Wipeout HD since 2026-11-10, where the same line was measured live
+(`oag_physics::laws::BodyDamping`, [body-damping.md](../ps3-hdfury-eu/body-damping.md), which
+also lists what turning it on for Pulse moves). **It is not the gap**: at `0.01` against an
 `invMass` of `1.0` it opposes motion with about `0.24` of equivalent force at 24
 units/s, against the ~53 that is missing.
 

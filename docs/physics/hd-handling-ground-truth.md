@@ -12,7 +12,7 @@ the HD functions read here are on
 | Item | Verdict | Numbers (HD against ours) | Confidence |
 | --- | --- | --- | ---: |
 | Thrust from rest | **matches** Pulse's law on HD's table | 50 runs, 3 boots: within 0.7% through 1.4 s (`59.41`-`59.86` against `59.77` units/s at 1.0 s) | 90 |
-| Speed past 2 s | **differs by about 1%**, cause not found | `103.30`-`104.06` against `104.66` at 2.0 s, `119.36`-`119.96` against `120.95` at 3.0 s | 75 that the gap is real |
+| Speed past 2 s | **matches since 2026-11-10** (the body's own `0.01` velocity damping, below) | Feisar, four runs: `100.48` against `100.44` at 2.0 s, `118.04` against `118.02` at 3.0 s, `121.52` against `121.52` at 3.5 s; every frame from 2.0 to 3.5 s within `0.04` (was `+0.61`..`+0.86` fast) | 92 |
 | Steering (full lock) | **matches since 2026-10-09** (HD clamps its ramp, below) | heading at 0.8 s `-46.20`..`-46.25` deg (4 runs, 2 boots) against `-46.28` (was `-48.00`); yaw rate within 1.6% on every frame | 90 |
 | Steering ramp | **differed until 2026-10-09**: same `8.3` a frame up (`<Turning gain="500">`), but HD's stops at 100 where Pulse's overshoots and cycles `83.3/91.7/100` | read live, every steer run; [craft-inertia.md](../ghidra/functions/ps3-hdfury-eu/craft-inertia.md) | 90 |
 | Airbrakes (one side) | **matches since 2026-10-09**: the gap was HD's inertia (mass `1.0`, `I_yy` 24 against 21.6) | right: `-11.22`..`-11.36` deg at 0.5 s against `-11.54` (was `-12.82`); `-32.73`..`-33.07` at 1.0 s against `-33.29` (was `-36.85`); yaw rate `0.99`..`1.00` of ours every frame | 90 |
@@ -110,12 +110,31 @@ every value accounted for).
   each marched down to `-5.25` (`Craft_IntegrateHull`, `0x000ef450`), where this engine
   runs Pulse's two probes at `(0, -1.125, +/-4.5)`. Same fore-aft arm and drop, twice the
   springs: the restoring side of the pitch balance is the first place to read.
-- **The 1% late-speed gap** is unexplained. Pilot Assist's `generalThrustPercentWhenEnabled
-  ="99"` would produce exactly this shape (no effect while `accelcap` limits thrust,
-  1% once `amount` does), but no 0.99 or 99 sits on the craft, and the throttle reads 100.
+- **The late-speed gap was the rigid body's own damping (2026-11-10, hd-late-speed).** HD ran
+  slower than ours, not faster: `Body_Integrate` takes `0.01` per second off the velocity after
+  the forces (`velocity -= velocity * dt * body+0x4bc`, `0x000f6fd8`), Pulse's law, which this
+  engine had read on Pulse and never flown. One step of ours from each of 203 frames of a
+  held-throttle run landed `0.0100 x dt x speed` fast at every speed from 8 to 121 units/s; with
+  the term the median residual is `0.00005` units/s. It is not Pilot Assist (the throttle reads
+  `100` on every row). Read and measured on
+  [body-damping.md](../ghidra/functions/ps3-hdfury-eu/body-damping.md); flown on HD, Omega and 2048 (Pulse and Pure have
+  the same law and do not fly it yet, same page).
 
-None of these is a table the original authors differently. The pitch, inertia and steering-ramp
-laws were read and are flown (above); the late-speed gap is not.
+| t since the first thrust frame (s) | HD (4 runs) | ours before | ours after |
+| ---: | ---: | ---: | ---: |
+| 1.0 | `53.81`..`53.82` | `53.96` | `53.74` |
+| 2.0 | `100.47`..`100.48` | `101.09` | `100.44` |
+| 2.5 | `111.68` | `112.45` | `111.66` |
+| 3.0 | `118.03`..`118.04` | `118.89` | `118.02` |
+| 3.5 | `121.52` | (wall) | `121.52` |
+
+  These runs are Feisar (`accelcap` 18.5, `amount` 412), where the rows above are Feisar
+  concept1; the before column is this engine on the same team one commit earlier. Thrust was
+  held from well after GO: ours, pressed on the first racing tick, takes the start boost, which
+  a craft teleported after the start never has.
+
+None of these is a table the original authors differently. The pitch, inertia, steering-ramp and
+body-damping laws were read and are flown (above).
 
 ## Captures
 
@@ -126,6 +145,6 @@ one batch of wall runs, the matching `oag-game` traces and a class-block dump. S
 Feisar concept1 (`--team feisar_c1 --variant concept1`), teleported to grid slot 0
 `(6.10, -51.91, -195.92)` facing +x after a 60-frame settle.
 
-**Omega**: not checkable live. No PS4 emulator is in this project's toolchain, so there is no
-live craft to trace. Statically, the four-probe march is HD's (checked, applies, not wired; see
+**Omega**: no live craft to trace (shadPS4 gives no memory readout). The body damping is read
+off its executable and flown ([body-damping.md](../ghidra/functions/ps3-hdfury-eu/body-damping.md#the-other-titles)). Statically, the four-probe march is HD's (checked, applies, not wired; see
 [hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#omega-and-2048)).

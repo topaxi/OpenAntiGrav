@@ -1122,6 +1122,20 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
 mod tests {
     use super::*;
 
+    /// HD's rigid body damps both velocities at `0.01` a second, read off `Body_Integrate` and
+    /// `Body_Init` and measured under held throttle.
+    #[test]
+    fn the_body_damping_is_hds_own_measured_law() {
+        assert_eq!(
+            CRAFT_LAWS.body_linear_damping,
+            oag_title::pre_race::Sourced::measured(0.01)
+        );
+        assert_eq!(
+            CRAFT_LAWS.body_angular_damping,
+            oag_title::pre_race::Sourced::measured(0.01)
+        );
+    }
+
     /// HD's engine doubles its output, read off `Craft_UpdateThrottle` and measured under
     /// player input, not inherited from Pulse.
     #[test]

@@ -38,6 +38,7 @@ mod hd_rim_glow_ground_truth;
 mod hd_rocket_smoke_ground_truth;
 mod hd_shield_colour_ground_truth;
 mod hd_sky_tint_ground_truth;
+mod hd_thrust_ground_truth;
 mod hd_tiny_sun_direction_ground_truth;
 mod hd_trackwall_ground_truth;
 mod hd_wingtip_ground_truth;

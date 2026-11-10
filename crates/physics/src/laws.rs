@@ -52,7 +52,7 @@ pub struct Laws {
     /// `cross(r, rate)`; the two agree for a level craft and part with pitch or roll.
     pub wall_point_rate_body_local: bool,
     /// The rigid body's own velocity damping, applied by the integrator
-    /// ([`crate::integrate::integrate`]).
+    /// ([`crate::integrate::integrate`]): Wipeout HD's `0.01` pair.
     pub body_damping: BodyDamping,
 }
 
@@ -60,10 +60,11 @@ pub struct Laws {
 /// `angular_velocity -= angular_velocity * h * angular`, after the forces of each integration
 /// step.
 ///
-/// Wipeout HD's `Body_Integrate` reads the pair at `body+0x4bc` and `body+0x4b8`, and its body
-/// initialiser writes `0.01` to both. The linear term is measured live: with it off, one step of
-/// this crate from each frame of a held-throttle run lands `0.01 * dt * speed` fast at every
-/// speed from 8 to 121 units/s (`docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`).
+/// Pulse's `Body_Integrate` reads the pair at `body+0x384` and `body+0x380`
+/// (`docs/ghidra/functions/psp-pulse-usa/rigid-body.md`), Wipeout HD's at `body+0x4bc` and
+/// `body+0x4b8`. The linear term is measured live on HD: with it off, one step of this crate
+/// from each frame of a held-throttle run lands `0.01 * dt * speed` fast at every speed from 8
+/// to 121 units/s (`docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BodyDamping {
     /// Per second, on the linear velocity.
@@ -73,7 +74,10 @@ pub struct BodyDamping {
 }
 
 impl BodyDamping {
-    /// No damping: the integrator leaves both velocities as the forces put them.
+    /// No damping: the integrator leaves both velocities as the forces put them. What Pulse and
+    /// Pure fly, though both executables write `0.01` to the pair: the term is not flown there
+    /// until their AI gates are re-measured with it
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`, "The other titles").
     pub const NONE: Self = Self {
         linear: 0.0,
         angular: 0.0,
@@ -105,10 +109,7 @@ impl Laws {
         wall_one_sided: false,
         wall_steer_away: false,
         wall_point_rate_body_local: false,
-        body_damping: BodyDamping {
-            linear: 0.01,
-            angular: 0.01,
-        },
+        body_damping: BodyDamping::NONE,
     };
 }
 

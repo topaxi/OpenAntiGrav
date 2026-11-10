@@ -916,3 +916,5 @@
 0x002abfc8	function	VortexLine_Delete	72	wingtip-vortices.md
 0x002a5ce0	function	RibbonEffects_InitConfigColours	80	wingtip-vortices.md
 0x002ec408	function	LineBuilder_Init	60	wingtip-vortices.md
+0x000f5878	function	Body_Init	82	body-damping.md
+0x008a92f4	data	Body_DefaultDamping	90	body-damping.md

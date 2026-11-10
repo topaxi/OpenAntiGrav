@@ -1,13 +1,13 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-10-21
-summary: "HD late speed still differs against RPCS3; the AI field on Talon's Junction runs 808 contact ticks"
+updated: 2026-11-10
+summary: "HD late speed closed (the body's 0.01 velocity damping, flown on HD, Omega and 2048); open: the AI field on Talon's Junction (808 contact ticks), Omega's craft laws, 2048's integrator read"
 size: M (40)
 difficulty: medium (40)
 ---
 
-# HD handling against RPCS3: late speed still differs
+# HD handling against RPCS3: the AI field and Omega's craft laws
 
 2026-10-08, `hd-handling`; 2026-10-09, `hd-pitch-airbrake`, `hd-airbrake`. Results:
 `docs/physics/hd-handling-ground-truth.md`. Tool: `scripts/rpcs3-trace.py`
@@ -48,9 +48,23 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
 - **Omega's craft laws**: not checkable in this pass, not located statically: no `12.0f` immediate near the craft code, no steering
   ramp among the `vminss` users in `0x01310000`-`0x01330000`. Omega keeps Pulse's (`craft_laws:
   None`). 2048 not checked.
-- **Speed past 2 s is about 1% low on HD** (`119.4`-`120.0` against `120.7` at 3 s). Shape fits
-  Pilot Assist's `generalThrustPercentWhenEnabled="99"`, but the flag is cleared and no 0.99
-  sits on the craft.
+- ~~Speed past 2 s is about 1% low on HD~~: closed 2026-11-10 (`hd-late-speed`). HD's
+  `Body_Integrate` takes `0.01` per second off the linear and angular velocity after the forces
+  (`0x000f6fd8`, `0x000f70f8`; `Body_Init` `0x000f5878` writes the pair), Pulse's law, read on
+  Pulse long ago and never flown. Measured: one step of ours from 203 HD frames lands
+  `0.0100 x dt x speed` fast without it and `0.00005` units/s off with it; open loop, ours is
+  within `0.04` of HD on every frame from 2.0 to 3.5 s (was `+0.61`..`+0.86`). Flown on HD,
+  Omega (read off its own executable) and 2048 (inherited) as `oag_physics::laws::BodyDamping`;
+  Pulse and Pure have the law and do not fly it yet (`handover/gameplay/pulse-body-damping.md`).
+  Evidence: `docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`.
+- **2048's integrator is not read for the body damping** (`hd-late-speed`, 2026-11-10): it
+  flies HD's `0.01` by lineage. Omega's was found by the packed `0.01, 0.01` store
+  (`mov rcx, 0x3c23d70a3c23d70a`) into the body and the reader beside the speed store; the same
+  census on `/2048/eboot-vita-2048-eu-v104.elf` is the check.
+- **An idle craft on HD's Talon's Junction grid yaws** (seen 2026-11-10, not pursued): ours'
+  forward `z` drifts from `+0.003` at tick 280 to `-0.023` by tick 700 with nothing held, where
+  HD's craft sat at `-0.003`..`-0.006` through a 10 s run. Enough to put ours into the right
+  wall 3.1 s into a held-throttle run that HD flies clean past 3.5 s.
 - **Omega**: `Craft_UpdateSurfaceProbes` (`0x0131b510`) marches HD's four hull segments; its
   spring share and offsets are unread, so Omega keeps `hover_rig: None`. 2048 not checked.
 - ~~HD's grounded craft carries a vertical residual our hover does not explain~~: closed
@@ -91,6 +105,5 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
    steering ramp and its `Body_SetBoxInertia` call's mass. 1-2 hours.
 3. Read Omega's spring (the reader of `+0x330..+0x450`) to wire its rig, and whether its escapes
    sum as HD's do (`HoverRig::sum_escapes`). 1 hour.
-4. The 1% late-speed gap: find what scales `amount` past `accelcap`. **Not Pilot Assist**
-   (2026-10-10): with the flag clear `PilotAssist_ThrustScale` returns the literal `1.0` and the
-   throttle reads `100` live (`docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`). 1-2 hours.
+4. 2048: read its integrator for the body damping pair (above). 30 minutes.
+5. The idle yaw drift on HD's grid (above): find which hover term turns a resting craft. 1 hour.

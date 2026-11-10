@@ -467,4 +467,76 @@ mod tests {
 
         assert_ne!(one_frame.position, three_frames.position);
     }
+
+    /// The body's damping takes `v * h * c` off both velocities each sub-step, after the
+    /// forces: with no force, three sub-steps leave `v * (1 - h * c)^3`.
+    #[test]
+    fn the_body_damping_takes_its_fraction_off_both_velocities_each_sub_step() {
+        let start = Body {
+            linear_velocity: Vec3::new(120.0, 0.0, 0.0),
+            angular_velocity: Vec3::new(0.0, 1.5, 0.0),
+            ..Body::default()
+        };
+        let damping = BodyDamping {
+            linear: 0.01,
+            angular: 0.02,
+        };
+        let dt = 1.0 / 60.0;
+        let mut body = start;
+        integrate(&mut body, InertiaFrame::World, damping, dt);
+
+        let h = dt / 3.0;
+        let (mut speed, mut rate) = (120.0_f32, 1.5_f32);
+        for _ in 0..3 {
+            speed -= speed * h * 0.01;
+            rate -= rate * h * 0.02;
+        }
+        assert_eq!(body.linear_velocity, Vec3::new(speed, 0.0, 0.0));
+        assert_eq!(body.angular_velocity, Vec3::new(0.0, rate, 0.0));
+        // `0.01` a second at 120 units/s is `0.02` units/s a frame.
+        assert!((120.0 - speed - 0.02).abs() < 1e-4, "{speed}");
+    }
+
+    /// The damping reads the velocity the forces have just updated, not the one the sub-step
+    /// started with.
+    #[test]
+    fn the_body_damping_follows_the_forces_in_each_sub_step() {
+        let mut body = Body {
+            force: Vec3::new(6.0, 0.0, 0.0),
+            ..Body::default()
+        };
+        let damping = BodyDamping {
+            linear: 0.5,
+            angular: 0.0,
+        };
+        integrate(&mut body, InertiaFrame::World, damping, 3.0);
+
+        // Three sub-steps of h = 1 at an acceleration of 6, each halved after the force.
+        let mut speed = 0.0_f32;
+        for _ in 0..3 {
+            speed += 6.0;
+            speed -= speed * 0.5;
+        }
+        assert_eq!(body.linear_velocity, Vec3::new(speed, 0.0, 0.0));
+    }
+
+    /// A zero coefficient leaves the velocities bit for bit.
+    #[test]
+    fn no_body_damping_leaves_the_velocities_untouched() {
+        let start = Body {
+            linear_velocity: Vec3::new(1.5, 3.0, -7.5),
+            angular_velocity: Vec3::new(0.1, 0.25, -0.3),
+            ..Body::default()
+        };
+        let mut body = start;
+        integrate(
+            &mut body,
+            InertiaFrame::World,
+            BodyDamping::NONE,
+            1.0 / 60.0,
+        );
+        let bits = |v: Vec3| [v.x.to_bits(), v.y.to_bits(), v.z.to_bits()];
+        assert_eq!(bits(body.linear_velocity), bits(start.linear_velocity));
+        assert_eq!(bits(body.angular_velocity), bits(start.angular_velocity));
+    }
 }

@@ -111,6 +111,16 @@ against the `~53` that
 This is now confirmed on the PSP side at instruction level and not only inferred
 from the PS2 build.
 
+**Measured live on Wipeout HD, 2026-11-10; not flown on Pulse yet.** HD's `Body_Integrate`
+has the same two lines and its linear term reads `0.0100` off 203 frames
+([body-damping.md](../ps3-hdfury-eu/body-damping.md)); the integrator takes the pair as
+`oag_physics::laws::BodyDamping`, per sub-step in this order. On Pulse itself, replaying
+`talons-junction-standing-start.csv` through this engine with the term switched on, the forward
+speed error over the clean launch decays from `-1.15` at tick 60 to `-0.19` at tick 185, where
+without it it drifts from `-0.91` to `+0.73`, and the replay's largest speed error over the
+capture falls from `3.88` to `1.25` units/s. Pulse's laws keep it off until the tests that ride
+a Pulse trajectory are re-measured with it (the HD page lists them).
+
 Worth recording how the field was found, because the obvious search fails: a
 `search_instructions` scan for the literal displacement `0x384(` finds **stores
 only**. Every VFPU access in this binary goes `addiu aN, base, disp` and then
