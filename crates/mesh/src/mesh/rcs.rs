@@ -208,6 +208,7 @@ mod ice;
 mod probe_lit;
 pub mod psp2;
 mod rim_glow;
+pub mod siblings;
 mod skin;
 mod vertex_scroll;
 mod water;
