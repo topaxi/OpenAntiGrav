@@ -2140,3 +2140,51 @@ python3 scripts/bench-render.py run pulse hd pure --binary /path/run-new.sh  --s
 # call-graph profile: RUSTFLAGS=-Cforce-frame-pointers=yes CARGO_PROFILE_RELEASE_DEBUG=line-tables-only,
 # its own CARGO_TARGET_DIR, perf record ... --user-callchains --call-graph fp
 ```
+
+## Four desktop GPU cuts on the Deck (2026-11-10, `deck-remeasure`)
+
+Claim: the blur composite without its copy, the motion blur tap caps, the present composite's
+dead `pow` and the Zone texture rewrite each have a Deck row at 800p, 1080p and 4K from
+interleaved rounds, and the Zone rewrite has a Deck picture verdict. **True.** Per-item rows and
+verdicts: [motion-blur.md](motion-blur.md) ("The tap caps on the Deck", "The half-size composite
+blends onto the scene", "On the Deck"), [hires-gpu-levers.md](hires-gpu-levers.md) ("The present
+composite's two dead `pow`", "Zone textures, 9 fetches to 3"). One line each, GPU medians of the
+redraws, one view:
+
+| Item | Span | 800p | 1080p | 4K |
+| --- | --- | --- | --- | --- |
+| Tap caps, `high` | `reconstruct (half)` us | 725 to 587 | 1770 to 1399 | 8199 to 6424 |
+| Tap caps, `medium` | `reconstruct (half)` us | 644 to 478 | 1660 to 1158 | 7932 to 5399 |
+| Composite without copy | composite + copy us | 305 to 224 | 673 to 503 | 2587 to 1981 |
+| Present composite skip | `resolve_scene` + `composite` us | 298 to 136 | 610 to 271 | 2371 to 1029 |
+| Zone texture rewrite | `track solid, shaded` us, Zone frame | 2014 to 1864 | 3525 to 3323 | 8187 to 8131 (noise) |
+
+**Method.** `RADV VANGOGH`, on AC, `powersave` governor, Deck load 0.4 to 2.0 (every run records
+`/proc/loadavg` before and after). `dist` `znver2` `perf-probe` builds from the container recipe
+above (`cargo build --profile dist -p oag-game --no-default-features --features
+extensions,dev-cli,perf-probe`), stripped and copied to a scratch directory on the Deck, nothing
+else installed, removed after. The game ran offscreen over ssh with a fresh `XDG_*` profile (MSAA
+off, vsync irrelevant), the disc read from `~/.local/share/oag/images/`, `--no-audio`,
+`--render-scale 100`, `--size WxH`; at 4K the span log shows 8.2 million shaded fragments, so the
+extent is really 3840x2160. Each run was one `ssh` under the workstation's `deck.lock` and the
+Deck's own `deck-run.sh` wrapper (it refuses while a Steam game runs or the Deck is reserved).
+Arms interleaved, the order rotated each round and reversed on even rounds, the size loop inside
+the round:
+
+```sh
+# per run, on the Deck (blur items; ENV is OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1)
+env $ENV ./oag-game hdfury-ps3-eu-dec.iso --track 'Data\Environments\15_Anulpha_Pass\track.vex' \
+  --race --mode single_race --seed 1 --autopilot --no-audio --size WxH --ticks 2500 \
+  --render-scale 100 --motion-blur high|medium --motion-blur-resolution half --screenshot out.png
+# present composite: the throwaway timer (OAG_TS_RESOLVE=100 OAG_TS_COMPOSITE=100), --presented
+#   --ticks 60, the rest as above
+# Zone: OAG_RENDER_GPU_BENCH=100, hdfury iso, --mode zone --zone-spectrum-test
+#   --track /data/environments/talons_junction/track.vex --ticks 1500
+```
+
+Round to round the 800p and 1080p rows agree within 0.1 to 1 %; the 4K blur and present rows
+agree within 1 % across rounds taken minutes apart, but the 4K Zone row swings 10 to 19 % between
+rounds (two clock states, as "The Deck's 4K rows are unstable" in
+[hires-gpu-levers.md](hires-gpu-levers.md) found), so it is read pair by pair. Bases: the blur
+composite `95ca568b1`, the tap caps `b56d129a3` against `59900b483`, the present and Zone items
+`59900b483` with and without the change (the old `upscale.wesl`, the old `zone.wesl`).

@@ -96,12 +96,12 @@ fn zone_set(slots: u32, world: vec3<f32>) -> ZoneSet {
     return scene.zone.scene_outer;
 }
 
-// Samples all four stage textures unconditionally and `select`s between them
-// - never branches to decide *which* texture to sample - the same shape
-// `zone_set` above already reads its four `ZoneSet`s in, and needed here for
-// the same reason: `textureSample` wants uniform control flow, and a `select`
-// on its *result* (or, as below, on which pre-sampled result to keep) satisfies
-// that where an `if` around the call itself would not.
+// One fetch, where sampling every layer of both textures and `select`ing on
+// the results takes four: the layer is a per-fragment `select` on the sphere
+// test, and a branch on the chunk's flat `slots` bit picks the track or the
+// scene texture, so every lane of a 2x2 quad takes the same side. A layer is
+// not a derivative input, so a quad that straddles the sphere keeps its
+// neighbours.
 //
 // Its derivative-uniformity diagnostic is off for the reason `zone_glow`'s is:
 // the early return in `lit_texel` makes the analysis treat everything after it
@@ -109,16 +109,11 @@ fn zone_set(slots: u32, world: vec3<f32>) -> ZoneSet {
 @diagnostic(off, derivative_uniformity)
 fn zone_sample(uv: vec2<f32>, slots: u32, world: vec3<f32>) -> vec3<f32> {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
-    let track = textureSample(zone_tex, zone_sampler, zone_uv, 0).rgb;
-    let track_outer = textureSample(zone_tex, zone_sampler, zone_uv, 1).rgb;
-    let general = textureSample(zone_scene_tex, zone_sampler, zone_uv, 0).rgb;
-    let general_outer = textureSample(zone_scene_tex, zone_sampler, zone_uv, 1).rgb;
-    let inside = zone_inside(world);
-    return select(
-        select(general_outer, track_outer, zone_is_track(slots)),
-        select(general, track, zone_is_track(slots)),
-        inside,
-    );
+    let layer = select(1i, 0i, zone_inside(world));
+    if zone_is_track(slots) {
+        return textureSample(zone_tex, zone_sampler, zone_uv, layer).rgb;
+    }
+    return textureSample(zone_scene_tex, zone_sampler, zone_uv, layer).rgb;
 }
 
 // The two rim-lit summands, `zoneBase.rgb * rim^10 + zoneBaseAlt.rgb * rim^5`.
@@ -195,11 +190,11 @@ fn zone_base_term(rim: f32, colours: ZoneSet) -> vec3<f32> {
 // **Its own derivative-uniformity diagnostic is off**, as `lit_texel`'s is.
 // The attribute on a caller covers only the caller's own body, and Chrome's
 // Tint (154) reports a `textureSample` in a callee against the callee, so the
-// five fetches below were rejected at module creation and every mesh pipeline
+// fetches below were rejected at module creation and every mesh pipeline
 // was invalid in a browser. The argument is `lit_texel`'s: `slots` is a flat
 // varying, every lane of a 2x2 quad takes the same side of the `holo`
-// early-return that makes the analysis give up, and the four band samples and
-// the visualiser lookup keep the neighbours they need.
+// early-return that makes the analysis give up, and the band sample and the
+// visualiser lookup keep the neighbours they need.
 @diagnostic(off, derivative_uniformity)
 fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: vec3<f32>) -> vec3<f32> {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
@@ -207,19 +202,15 @@ fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: 
     // scene set's is alpha 255 everywhere, so a scene chunk indexes the last
     // entry - on whichever side of the sphere this fragment is, and `E.w`
     // from the matching colour group: `band = zoneTex<I|O>Nearest(zoneUV).a`
-    // above already names both sides. Four samples, `select`ed rather than
-    // branched into, for the same uniform-control-flow reason `zone_sample`
-    // is.
-    let track_band = textureSample(zone_tex, zone_nearest_sampler, zone_uv, 0).a;
-    let track_outer_band = textureSample(zone_tex, zone_nearest_sampler, zone_uv, 1).a;
-    let scene_band = textureSample(zone_scene_tex, zone_nearest_sampler, zone_uv, 0).a;
-    let scene_outer_band = textureSample(zone_scene_tex, zone_nearest_sampler, zone_uv, 1).a;
-    let inside = zone_inside(world);
-    let band = select(
-        select(scene_outer_band, track_outer_band, zone_is_track(slots)),
-        select(scene_band, track_band, zone_is_track(slots)),
-        inside,
-    );
+    // above already names both sides. One sample, picked as `zone_sample` picks
+    // its own.
+    let layer = select(1i, 0i, zone_inside(world));
+    var band: f32;
+    if zone_is_track(slots) {
+        band = textureSample(zone_tex, zone_nearest_sampler, zone_uv, layer).a;
+    } else {
+        band = textureSample(zone_scene_tex, zone_nearest_sampler, zone_uv, layer).a;
+    }
     let vis = textureSample(zone_vis_tex, zone_vis_sampler, vec2<f32>(band, 0.5)).rgb;
     let up = clamp(n.y - 0.5, 0.0, 1.0);
     let drive = zone_set(slots, world).effect.w;

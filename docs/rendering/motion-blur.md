@@ -923,9 +923,32 @@ OAG_RENDER_GPU_BENCH=150 OAG_RENDER_PERF=1 oag-game hdfury-ps3-eu-dec.iso \
 - `medium` now costs clearly less than `high`: at 4K the gather is 1.05 against 1.31 ms (NVIDIA)
   and 1.15 against 1.39 ms (Intel), where before it was 1.47 against 1.55 and 1.70 against 1.96.
 - 800p did not regress on either GPU.
-- On the Deck the gather is linear in the taps (the bisect above), so the expected saving at
-  `high` is about a fifth of its 1.78 / 7.15 ms at 1080p / 4K. That is an estimate, not a
-  measurement.
+- On the Deck the gather is linear in the taps (the bisect above), so the saving at `high` was
+  expected to be about a fifth of its 1.78 / 7.15 ms at 1080p / 4K. "The tap caps on the Deck"
+  below measures it.
+
+### The tap caps on the Deck
+
+Steam Deck (`RADV VANGOGH`, AC, `powersave`, load 0.4 to 2.0), HD Anulpha Pass, one view, blur
+`half`, `OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1`, `dist` `znver2` builds of `b56d129a3` (base,
+before the caps) and `59900b483` (main). Arms interleaved, 2 rounds, medians of the 60 redraws;
+the two rounds agree within 0.5 % at every size. Method and command:
+[frame-thread-cpu.md](frame-thread-cpu.md), "Four desktop GPU cuts on the Deck". `reconstruct
+(half)` is the gather, us (the other chain passes read the same within 7 us: prepare, tile-max,
+neighbour-max):
+
+| Tier | 800p | 1080p | 4K |
+| --- | --- | --- | --- |
+| `high` (15 to 11 taps) | 725 to 587 (-19.0 %) | 1770 to 1399 (-21.0 %) | 8199 to 6424 (-21.7 %) |
+| `medium` (15 to 9 taps) | 644 to 478 (-25.8 %) | 1660 to 1158 (-30.3 %) | 7932 to 5399 (-31.9 %) |
+
+The estimate was right: a fifth off `high`'s gather (1.77 to 1.40 ms at 1080p; at 4K 8.2 ms to 6.4 ms, where the
+bisect's session read 7.15 ms for the base), and `medium` is now 0.24 ms (1080p) and
+1.0 ms (4K) cheaper than `high` where before it was 0.11 and 0.27 ms. The gather's whole-chain
+share falls with it: the chain (`motion blur` total) went 1401 to 1160 us at 800p, 3015 to 2470
+at 1080p and 12706 to 10293 at 4K at `high`; that includes the composite change below, which the
+base predates. The Deck's pictures were not compared; the capture diff is the desktop's, "The
+picture" above.
 
 ### Whole race
 
@@ -1042,7 +1065,28 @@ One row stayed unexplained: the untouched `reconstruct (half)` read 180 -> 196 u
 or Intel; the chain total still fell. Whole-chain medians: NVIDIA HD 290 -> 264
 (800p), 529 -> 510 (1080p), 2608 -> 2542 (4K) in round one, Intel HD 1309 -> 1190, 2487 -> 2233,
 4008 -> 3609. On the desktop NVIDIA part this is tens of microseconds at 1080p, so below a frame's
-noise; the Deck number is the one that matters (copy 0.14 / 0.48 ms there). **Deck re-measure owed.**
+noise; the Deck number is the one that matters (copy 0.15 / 0.53 ms there, measured below).
+
+### On the Deck
+
+Steam Deck (`RADV VANGOGH`, AC, `powersave`, load 0.5 to 1.6), HD Anulpha Pass, one view,
+`--motion-blur high --motion-blur-resolution half`, `OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1`,
+`--ticks 2500`, `dist` `znver2` builds of `95ca568b1` (base) and `59900b483` (this change). Arms
+interleaved, 2 rounds, medians of the 60 redraws, us; the rounds agree within 0.5 %. Method:
+[frame-thread-cpu.md](frame-thread-cpu.md), "Four desktop GPU cuts on the Deck".
+
+| Size | composite + copy, before | composite, after | blur chain | `reconstruct (half)` | pipelined frame |
+| --- | --- | --- | --- | --- | --- |
+| 1280x800 | 236 + 68 = 305 | 224 (-26 %) | 1267 to 1176 | 589 to 589 | 5666 to 5554 |
+| 1920x1080 | 528 + 146 = 673 | 503 (-25 %) | 2665 to 2485 | 1408 to 1409 | 8123 to 7947 |
+| 3840x2160 | 2056 + 531 = 2587 | 1981 (-23 %) | 10935 to 10316 | 6446 to 6419 | 24179 to 23712 |
+
+**The Deck agrees with the desktop**: composite plus copy fell 23 to 26 % (the desktop's range was
+15 to 31 %), 0.18 ms of an 8.1 ms pipelined frame at 1080p and 0.47 ms of 24.2 ms at 4K. Unlike
+NVIDIA the Deck's composite did not get slower; it got 4 to 5 % faster as well, so the copy's
+whole 0.15 / 0.53 ms (1080p / 4K) is saved and a little more. The untouched `reconstruct (half)`
+read the same in both arms. The 2026-11-09 session read 0.66 ms at 1080p and 2.37 ms at 4K for
+the pair; this session's base reads 0.67 and 2.59 ms (the 4K rows drift between sessions).
 
 ### The picture
 
