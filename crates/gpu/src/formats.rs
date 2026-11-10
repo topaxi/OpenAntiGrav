@@ -57,4 +57,8 @@ pub enum SceneStore {
     /// (`docs/rendering/start-gantry.md`, "The card is 5-6-5 in linear light"). Drawn
     /// into a gamma target, which keeps the rounded value encoded.
     Packed565,
+    /// A 5-6-5 colour card holding gamma-encoded values, truncated to its bits the way the
+    /// PSP's GE writes a 16-bit target: Wipeout Pulse's 128 x 128 advert and gantry card
+    /// (`docs/rendering/start-gantry.md`, "Pulse's card is 5-6-5, truncated").
+    Packed565Gamma,
 }

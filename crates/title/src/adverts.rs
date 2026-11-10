@@ -90,9 +90,23 @@ pub struct Adverts {
     /// slot 8 and every prim of every run (slot 7 on `16_Track`'s home straight, four
     /// adverts near `01_Track`'s grid) has `LIGHTINGENABLE` 0.
     pub adverts_unlit: bool,
-    /// Whether the target the cards are drawn into is a 5-6-5 colour target holding
-    /// linear light, so a card's colour reaches the track quad rounded to 31, 63 and
-    /// 31 levels.
+    /// What the target the cards are drawn into stores of a card's colour: HD's linear-light
+    /// 5-6-5, Pulse's truncated gamma 5-6-5, or the full 8 bits. See [`CardStore`].
+    pub card_store: CardStore,
+    /// The board slot 8 shows instead of the circuit's own while the race is a
+    /// Zone race, or `None` where the title keeps one gantry for every mode.
+    pub zone_gantry: Option<ZoneGantry>,
+    /// Where the numbers came from.
+    pub origin: crate::Origin,
+}
+
+/// What a card target stores of the colour drawn into it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CardStore {
+    /// The full 8 bits per channel: where the card format is not measured.
+    Rgba8,
+    /// A 5-6-5 target holding linear light, so a card's colour reaches the track quad
+    /// rounded to 31, 63 and 31 levels of linear light.
     ///
     /// HD, measured on RPCS3 (Chenghou Project; `start-gantry.md`, "The card is 5-6-5
     /// in linear light"): the quad draws read the 512 x 256 targets as `R5G6B5`
@@ -102,14 +116,14 @@ pub struct Adverts {
     /// (green 0.98 and blue 0.97 correlated), where ours kept the gamma texel at 8
     /// bits. The panel's red, 25 of 255, is 0.0098 linear, under a third of the first
     /// level, so most of it rounds to 0 and the quad's red reads about 13 lower.
-    /// `false` where the card format is not measured: Pulse's PSP and PS2 cards keep
-    /// the 8-bit colour.
-    pub card_565: bool,
-    /// The board slot 8 shows instead of the circuit's own while the race is a
-    /// Zone race, or `None` where the title keeps one gantry for every mode.
-    pub zone_gantry: Option<ZoneGantry>,
-    /// Where the numbers came from.
-    pub origin: crate::Origin,
+    R5G6B5Linear,
+    /// A 5-6-5 target holding gamma-encoded values, truncated to 5, 6 and 5 bits the way
+    /// the PSP's GE writes a 16-bit target.
+    ///
+    /// Pulse, measured on PPSSPP (`start-gantry.md`, "Pulse's card is 5-6-5, truncated"):
+    /// a GE dump of the grid shows every prim into the 128 x 128 target at `0x154000`
+    /// with `FRAMEBUFPIXFORMAT` 0, and the dither matrix registers all zero.
+    R5G6B5Gamma,
 }
 
 /// A Zone race's own start board.
