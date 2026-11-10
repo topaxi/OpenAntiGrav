@@ -75,8 +75,8 @@ pub struct AnimChannel {
     /// Whether the file stored `f32` keys rather than `s16` ones (the node's
     /// `+0x34` flag).
     pub wide: bool,
-    /// Whether [`times`](Self::times) never decreases, which lets the key search bisect; set
-    /// by [`Self::new`], false on a default channel.
+    /// Whether [`times`](Self::times) holds two or more keys that never decrease, which lets the
+    /// key search bisect; set by [`Self::new`], false on a default channel.
     ascending: bool,
 }
 
@@ -84,7 +84,7 @@ impl AnimChannel {
     /// A channel over these keys.
     #[must_use]
     pub fn new(times: Vec<u16>, values: Vec<[f32; 3]>, w: Vec<f32>, wide: bool) -> Self {
-        let ascending = times.windows(2).all(|pair| pair[0] <= pair[1]);
+        let ascending = times.len() > 1 && times.windows(2).all(|pair| pair[0] <= pair[1]);
         Self {
             times,
             values,
@@ -267,7 +267,7 @@ impl AnimTransform {
         } else {
             DEFAULT_LOOP_SECONDS
         };
-        let t = wrap_clock(seconds, period) / unit;
+        let t = (seconds % period) / unit;
         let step = self.step;
 
         let mut m = super::IDENTITY;
@@ -292,38 +292,6 @@ impl AnimTransform {
         }
         m
     }
-}
-
-/// `seconds % period` to the bit, without the `fmod` libcall (which clears and tests the
-/// floating-point environment) while the quotient is small.
-///
-/// A magnitude below the period wraps to itself. Past it the remainder is taken in `f64`,
-/// where `x - floor(x / p) * p` is exact: `x`, `p` and the integer quotient (under 2^28) fit a
-/// double with room, so only the quotient's rounding can be off by one, which one conditional
-/// add or subtract puts right. The remainder is below `p` on `p`'s own grid, so it converts
-/// back exactly, and takes the sign of `seconds` as `fmod`'s does. NaN, infinity, a zero or
-/// negative or infinite period and a huge quotient take the `fmod`.
-pub(super) fn wrap_clock(seconds: f32, period: f32) -> f32 {
-    const MOST_LOOPS: f64 = 268_435_456.0;
-    let magnitude = seconds.abs();
-    if magnitude < period {
-        return seconds;
-    }
-    if !(period > 0.0 && period.is_finite() && magnitude.is_finite()) {
-        return seconds % period;
-    }
-    let (x, p) = (f64::from(magnitude), f64::from(period));
-    let loops = (x / p).floor();
-    if loops >= MOST_LOOPS {
-        return seconds % period;
-    }
-    let mut rest = x - loops * p;
-    if rest < 0.0 {
-        rest += p;
-    } else if rest >= p {
-        rest -= p;
-    }
-    (rest as f32).copysign(seconds)
 }
 
 /// The slerp's lerp threshold: the original's `vfim` half-float `0x3bfc`.
