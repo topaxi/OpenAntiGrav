@@ -47,8 +47,13 @@ fi
 # Shared, imported memory up to wasm32's whole 4 GiB, and the TLS exports
 # wasm-bindgen sets each thread up with. rustc does not pass these for the
 # atomics feature alone (nightly-2026-10-08 linked an unshared memory).
+# The page's thread runs on the linker's stack, 1 MiB unless told otherwise;
+# this is a native main thread's 8 MiB. The boot's call chain is over 1 MiB in
+# the `dist` build, and an overflow runs below address 0 and traps as "memory
+# access out of bounds" (docs/tools/web.md, "The page's stack").
+stack_size=8388608
 link=""
-for arg in --shared-memory --import-memory --max-memory=4294967296 \
+for arg in --shared-memory --import-memory --max-memory=4294967296 -zstack-size=$stack_size \
   --export=__wasm_init_tls --export=__tls_size --export=__tls_align --export=__tls_base; do
   link+=" -C link-arg=$arg"
 done
@@ -68,6 +73,8 @@ wasm-bindgen --target web --no-typescript --out-dir "$out/pkg" "$wasm"
 # build that lost the atomics flags would boot and then fail on its first
 # worker, so it fails here instead.
 grep -q thread_stack_size "$out/pkg/oag_web.js" || { echo "the module has no shared memory: the threads flags did not apply" >&2; exit 1; }
+# The stack the module was linked with, and no frame a large share of it.
+python3 scripts/check-wasm-stack.py "$out/pkg/oag_web_bg.wasm" --stack "$stack_size"
 # OAG_WEB_NO_OPT=1 skips wasm-opt, so the module keeps its function names for
 # a browser CPU profile (`web-screenshot.py --profile`).
 if [[ $profile != dev && -z ${OAG_WEB_NO_OPT:-} ]]; then

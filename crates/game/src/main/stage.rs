@@ -362,7 +362,14 @@ impl Stage {
     /// the offscreen target rather than the surface. Getting it from the window
     /// is right only at a render scale of 100 % on an unshaped aspect, which is
     /// exactly the case that would let it ship looking correct.
+    ///
+    /// Never inlined: the `RaceStage` it builds (about 350 KiB) and its
+    /// temporaries sit on the stack before they are boxed, and inlined they
+    /// would sit in `App::open_with`'s frame on every leg, the browser's front
+    /// end included, which never takes this one (`docs/tools/web.md`, "The
+    /// page's stack").
     #[allow(clippy::too_many_arguments)]
+    #[inline(never)]
     pub(crate) fn race(
         gpu: &impl GpuContext,
         loaded: race::Loaded,
