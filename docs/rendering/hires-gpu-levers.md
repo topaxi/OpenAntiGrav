@@ -510,19 +510,23 @@ fetch each for the track and scene texture), and that plus a flat branch on `zon
 
 - **Picture.** NVIDIA: byte-identical on five HD frames (four of them Zone) and on a Pulse Zone frame. Intel: **39 to 123 pixels of
   1 to 2 million differ by one or two levels** on all four HD Zone frames (ticks 1260, 1350, 1500;
-  with and without `--zone-spectrum-test`), so the rewrite is not byte-identical there. The driver
-  re-schedules the surrounding lighting arithmetic.
+  with and without `--zone-spectrum-test`), so the rewrite is not byte-identical there. The cause was not
+  determined (a per-lane layer at the sphere boundary, or the driver re-scheduling the lighting
+  arithmetic around the fetches, are both open). The differing pixels sit in one blob mid-frame, e.g.
+  x 531 to 758, y 442 to 684 at tick 1260 (1280x800) and x 739 to 1066, y 493 to 809 at tick 1500
+  (1920x1080); the two rewrites differ from `before` identically.
 - **Time.** An upper bound was built to see whether the fetches matter at all: a binary whose
   `zone_sample` and band fetch return a constant (wrong picture on purpose), HD Talon's Junction, tick
   1500, `OAG_RENDER_GPU_BENCH=100`, `track solid, shaded`, median of process medians, microseconds:
 
-  | | before | rewrite | no Zone fetches (bound) |
+  | | before | rewrite (flat branch, except where stated) | no Zone fetches (bound) |
   |---|---|---|---|
   | NVIDIA 1280x800 | 599 | 605 | 602 |
   | NVIDIA 1920x1080 | 552 | 545 | 543 |
   | NVIDIA 3840x2160 | 2165 | 2061 (-4.8 %) | 1959 (-9.5 %) |
   | Intel 1280x800 | 2504 | 2270 (-9 %) | 2099 (-16 %) |
-  | Intel 1920x1080 | 3045 (5 runs, spread 2443 to 4045) | 3368 (6 runs) | 2824 |
+  | Intel 1920x1080, batch of 8 | 3232 (spread 2911 to 4261) | 2887 (-11 %, layer select only) and 3368 (+4 %, flat branch) | |
+  | Intel 1920x1080, bound batch of 5 | 3045 (spread 2443 to 4045) | | 2824 (-7 %) |
   | Intel 3840x2160 | 4790 (2 runs) | 4944 | 5507 (spread 3772 to 7241) |
 
   Removing every Zone fetch moves NVIDIA by 0 % at 800p and 1080p and 0.2 ms at 4K. The Intel iGPU
@@ -537,7 +541,7 @@ fetch each for the track and scene texture), and that plus a flat branch on `zon
 `ui.wesl`'s `fs_main` fetches the glyph atlas, sprite sheet, face atlas and buttons atlas for every
 fragment. A version that branched on the flat `mode` (with `@diagnostic(off, derivative_uniformity)`)
 compiled and was timed on the real race HUD, presented, tick 200, GPU time of the UI frame pass (the
-sum of its passes), microseconds, median of 3 processes of 55 runs:
+sum of its passes), microseconds, median of 3 processes of 95 timed runs:
 
 | | Pulse 800p | Pulse 1080p | Pulse 4K | HD 800p | HD 1080p | HD 4K |
 |---|---|---|---|---|---|---|
