@@ -298,6 +298,7 @@ pub const TITLE: &Title = &Title {
         adverts_unlit: true,
         card_store: oag_title::adverts::CardStore::R5G6B5Linear,
         card_unlit: true,
+        gantry_boards: None,
         zone_gantry: Some(oag_title::adverts::ZoneGantry {
             entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
             assembly_ticks: 210,
