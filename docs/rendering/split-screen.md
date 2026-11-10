@@ -126,8 +126,8 @@ things make that more than a loop:
    whatever the viewport is. Later views load the colour, the velocity and the
    depth (2026-10-15, rule 3; the depth was cleared each time before, which is
    what kept a later view's blur from seeing an earlier view). Under MSAA the resolve rewrites the whole target
-   (`crates/render/tests/msaa_resolve_viewport.rs`), so the multisampled colour is
-   what is loaded, and `crates/render/tests/msaa_load_keeps_view.rs` pins that a
+   (`crates/mesh/tests/msaa_resolve_viewport.rs`), so the multisampled colour is
+   what is loaded, and `crates/mesh/tests/msaa_load_keeps_view.rs` pins that a
    loading pass keeps an earlier view.
 3. **Motion blur runs once per view, after the last view is drawn** (2026-10-15,
    `split-blur`); **camera jitter and the temporal upscaler per view too** (2026-10-16,

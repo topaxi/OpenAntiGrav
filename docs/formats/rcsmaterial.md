@@ -1544,7 +1544,7 @@ accumulates, the second `.gtf` decoded, and it is not the baked atlas:
 
 On the built model that is **62,904 of Modesto Heights' 1,151,776 vertices**,
 24,296 of Talon's Junction's and 17,448 of Anulpha Pass's -
-`crates/render/tests/hd_emissive_glow_ground_truth.rs`, which also measures the
+`crates/mesh/tests/hd_emissive_glow_ground_truth.rs`, which also measures the
 glow's own pixel contribution by rendering the same model with the bit cleared.
 
 **One approximation is stated rather than hidden**: the program addresses unit
@@ -1639,7 +1639,7 @@ besides the lightmap. **76 materials across 12 circuits** (Tech de Ra 5,
 Amphiseum 15, Modesto Heights 7, Talon's Junction 2, Vineta K 7, `02_track` 1,
 `03_track` 7, Chenghou 2, Ubermall 11, Sebenco 1, Sol 2 1, Anulpha Pass 17; the
 four Zone circuits 0), pinned per circuit by
-`crates/render/tests/hd_vertex_scroll_ground_truth.rs`. They reach the renderer
+`crates/mesh/tests/hd_vertex_scroll_ground_truth.rs`. They reach the renderer
 as `mesh::AnimTrack::Scroll`, the track 2048's plain scroll already is, through
 `mesh::rcs::vertex_scroll`. A rate of zero authors no track.
 
@@ -2248,7 +2248,7 @@ taken on sRGB-decoded samples, the domain the existing glow uses, and encoded fo
 gamma path. `uv` stands for `f[TC3]`/`f[TC5].zw` on the same unproven-equality terms
 `skin::roles` already states.
 
-**Tests.** `crates/render/tests/hd_mag_wave_lit_path.rs` (no disc: the pixel swings
+**Tests.** `crates/mesh/tests/hd_mag_wave_lit_path.rs` (no disc: the pixel swings
 with `scene.time` and repeats at +1 s) and `hd_mag_wave_ground_truth.rs` (Talon's
 builds the bindings and classifies the loop). **Not done:** a reference capture of
 the moving strip from RPCS3 (the stills agree with `03.png` in layout only; the rate
@@ -2634,7 +2634,7 @@ This is the `Pick` collision of the glass-floor case (a), not a UV, decode or co
 
 **Fix.** `skin::lightmapped_albedo`: the first non-lookup entry **among those the resolved variant declares**, the old
 rule where no variant resolves. Before/after at the capture's own camera (`hd-frame-compare`'s comparison setting).
-Pinned by `crates/render/tests/hd_lightmapped_albedo_ground_truth.rs` (fails with the filter removed).
+Pinned by `crates/mesh/tests/hd_lightmapped_albedo_ground_truth.rs` (fails with the filter removed).
 
 **Disc-wide census** (`crates/render/examples/hd_lightmap_albedo_census.rs`, all 28 circuit models, 8,129 lightmapped
 materials with a resolved declaration): the albedo entry changes on **14** slots, three distinct materials:
@@ -2686,7 +2686,7 @@ off like every transparent draw: pass 1 `dst = dst * src` with shader output `f 
 output `C`. `MATERIAL_SHIFT` moves 20 -> 22 for the two new bits. **Chosen, not measured:** the normal map's offset of
 the grab coordinate is not drawn (the grab is read at the pixel's own position); transparent draws never write depth,
 so a blended draw submitted after the glass (the sea foam, slot 770) can land over it - it did not show at
-`vineta-floor/03`. Pinned by `crates/render/tests/hd_vineta_ceiling_ground_truth.rs`
+`vineta-floor/03`. Pinned by `crates/mesh/tests/hd_vineta_ceiling_ground_truth.rs`
 (`the_tunnel_glass_is_two_blended_passes_over_the_screen`, fails with the classifier removed).
 
 ### 2. `Program::accumulates` read a write to `H2.w` as taking `H2.xyz` away (confidence 90)
@@ -2745,7 +2745,7 @@ land colour (`glass_2nduv_reflect_glow` on 02/03/04/Sol 2/Vineta K, `2rocksandbl
 `nr_twinblend`, `nr_facinglcdstrips`). Blended materials are deliberately excluded from the fallback (glass has its own
 rules, not measured here). **Reference check:** Sol 2 pose 00 (the only pose of Sol 2 00/01 and Talon's 00/01 that moves,
 12k px) shows the right-hand building's window rows gaining colour with no visible regression; Talon's 00/01 are bit-identical. The other 66 slots have no reference.
-Pins: `crates/render/tests/hd_lightmapped_albedo_ground_truth.rs` (three new tests, each fails with its rule removed),
+Pins: `crates/mesh/tests/hd_lightmapped_albedo_ground_truth.rs` (three new tests, each fails with its rule removed),
 `a_unit_sampled_one_lane_wide_is_not_a_colour`.
 
 **2048 / Omega:** not checkable (PS3 microcode and sampler hashes; their shader containers are unread). Confidence 90
@@ -3616,7 +3616,7 @@ abs RGB 8.27 to 7.30. Over six offsets of the 0.53 s wipe period (`--world-clock
 0.5) the bias is +0.20 to +2.69 and the error 0.079 to 0.124 M; the original's own two captures
 differ by 0.097 M there. The bars come through at the original's stripe density (5.3 repeats
 of the 32-texel strip over the banner). The other 12 HD pairs render byte-identical.
-Tests: `crates/render/tests/hd_twin_blend_lit_path.rs` (the shader's combine on a fixture),
+Tests: `crates/mesh/tests/hd_twin_blend_lit_path.rs` (the shader's combine on a fixture),
 `hd_twin_blend_ground_truth.rs` (Tech de Ra's slot and Chenghou's two),
 `oag-rcs vertex::tests::the_twinblend_mask_scroll_reads_its_literal_rate`.
 
@@ -3633,7 +3633,7 @@ const (`psp2::TWIN_BLEND_RATE`) pinned against HD's own `clock_rate` reading in
 `hd_twin_blend_ground_truth`; 2048's authored `time` (`19992.0`) is not a rate. The pair attribute
 is read through the record's **own** declaration pointer (`+0x28`: a `u32` on the Vita, 64 bits on
 the PS4): keyed by stride it is found on 1 of 28 Vita twin-blend submeshes, by pointer on all 28 and
-all 20 Omega ones. Census (`crates/render/tests/psp2_twin_blend_ground_truth.rs`, every model built):
+all 20 Omega ones. Census (`crates/mesh/tests/psp2_twin_blend_ground_truth.rs`, every model built):
 2048 `data.psarc` 6 materials (Anulpha Pass 1+1, Chenghou Project 2+2 forward and reversed),
 `dlc1.psarc` 12 (the same plus Metropia 1+1, Sebenco Climb 2+2), `dlc2.psarc` Tech de Ra 1+1; Omega
 Anulpha Pass 1+1, Chenghou Project 2+2, Metropia 1+1, Tech de Ra 1+1, Sebenco Climb 2+2; every one

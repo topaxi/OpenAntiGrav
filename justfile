@@ -192,27 +192,34 @@ test:
 test-data *ARGS:
     python3 scripts/test-data.py "$@"
 
-# A member lane's gate: every check in `check` in full, but only the tests of
-# the packages this branch changed and everything that depends on them.
-# `scripts/affected.py` says what it selected and why; a change to `oag-core`,
-# a simulation crate or a build input (`Cargo.lock`, the toolchain, this file,
-# `.config/`, a `build.rs`) selects the whole workspace, and a docs-only change
-# selects nothing. The lead still runs the full `just` and `just test-data` once
-# per merge batch - see `.claude/skills/oag-drive/member-rules.md`.
+# A member lane's gate: every check in `check` in full, but only the tests the
+# branch's change can reach. `scripts/affected.py` says what it selected and
+# why: the packages that link a changed one, narrowed to the test modules that
+# do; a docs-only or comments-only change selects nothing, and a workspace build
+# input (the root `Cargo.toml`, the toolchain, `.cargo/`) selects everything.
+# The rules, what each could miss and the measurements are in
+# `docs/architecture/affected-gate.md`. The lead still runs the full `just` and
+# `just test-data` once per merge batch - see
+# `.claude/skills/oag-drive/member-rules.md`.
 # `check-status` is left out: a member never commits `status.md`, so a stale table is
 # the lead's to regenerate, and the full `just` checks it.
 [parallel]
 gate-affected: fmt-check lint check-ballisticng check-extensions test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas
 
-# `just test`, narrowed to what `scripts/affected.py` selects.
+# `just test`, narrowed to what `scripts/affected.py` selects. A selection is
+# nextest arguments, one per line; `--no-tests=pass` because a narrowed
+# selection may hold no test of the kind this run takes.
 test-affected:
     #!/usr/bin/env bash
     set -euo pipefail
     selection=$(python3 scripts/affected.py)
     case "$selection" in
-        none) echo "test-affected: no package selected, nothing to run" ;;
+        none) echo "test-affected: nothing selected, nothing to run" ;;
         full) cargo nextest run --workspace --tests --cargo-profile quick ;;
-        *) cargo nextest run $selection --tests --cargo-profile quick ;;
+        *)
+            mapfile -t args <<<"$selection"
+            cargo nextest run "${args[@]}" --tests --cargo-profile quick --no-tests=pass
+            ;;
     esac
 
 # `just test-data`, narrowed the same way. A full selection is `just test-data`
@@ -225,11 +232,12 @@ test-data-affected:
     set -uo pipefail
     selection=$(python3 scripts/affected.py) || exit $?
     case "$selection" in
-        none) echo "test-data-affected: no package selected, nothing to run"; exit 0 ;;
+        none) echo "test-data-affected: nothing selected, nothing to run"; exit 0 ;;
         full) exec just test-data ;;
     esac
+    mapfile -t args <<<"$selection"
     mkdir -p target
-    cargo nextest run $selection --tests --run-ignored only --no-fail-fast 2>&1 \
+    cargo nextest run "${args[@]}" --tests --run-ignored only --no-fail-fast --no-tests=pass 2>&1 \
         | tee target/test-data-affected.log
     tests=${PIPESTATUS[0]}
     budget=0

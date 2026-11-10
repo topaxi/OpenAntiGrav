@@ -934,7 +934,7 @@ more away. The pairing is one to one on all four circuits. It is not one rule of
 either: Talon's Junction's nodes `Shape2`..`Shape19` own chunks `#810`..`#827` in node
 order, but `amphiseum`'s last node owns the first such chunk (`#1100`). Reproduce: `cargo run -p oag-render --example
 hd_speed_pad_owner -- <circuit> [archive] [weapon]`; pinned by
-`crates/render/tests/hd_speed_pad_owner_ground_truth.rs` (a disc-backed ground truth,
+`crates/mesh/tests/hd_speed_pad_owner_ground_truth.rs` (a disc-backed ground truth,
 four tests).
 
 **The engine's own rule stays unrecovered.** The hash is not a name hash

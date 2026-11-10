@@ -3142,7 +3142,7 @@ on the encoded store drew `enc(t / 2)`: the rest flame white and clipped, with a
 bright spike rays, where the original's is a mid blue with pink. `shade.wesl` now decodes the
 colour tap when the scene stores encoded values (`encoded_out`, set only by HD's measured
 `Looks::blends_encoded`); every other target draws the flame as before. Pinned by
-`oag-render::it hd_flame_encoded_tap` (grey 128 stores 0.502, was 0.731).
+`oag-mesh::it hd_flame_encoded_tap` (grey 128 stores 0.502, was 0.731).
 
 **Measured on the compare pairs** (mean grey difference against the cold originals; the nozzle
 box `900,760 120x120`; whole frame by the compare page's metric):

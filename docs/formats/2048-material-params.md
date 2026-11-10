@@ -253,7 +253,7 @@ Anulpha Pass 18 (2048) and 11 (Omega), Ubermall 10 and 11, Amphiseum 6 and 15,
 Modesto Heights 4 and 7, Tech de Ra 3 and 5, Moa Therma 3 and 7-9, Vineta K 2
 and 6, Sol 2 1 and 1, Chenghou 0 and 2; **0 on every 2048 circuit of its own** (and Altima's frames are byte-identical on main and this branch, on 2048 and on Omega),
 which is the guard that nothing switched on beyond the families checked.
-`crates/render/tests/psp2_glow_ground_truth.rs` pins Anulpha Pass on both titles.
+`crates/mesh/tests/psp2_glow_ground_truth.rs` pins Anulpha Pass on both titles.
 
 **Checked, differs:** 2048's `mr_uvanim_em_*`, `cf_chenghou_sign*`, `nr_twinblend`
 and the like declare `time` and author no HD rate hash, so their constants are
@@ -276,7 +276,7 @@ Both flipbook and `TimeScaler`-alone need a decoded instruction stream, which
 reach Omega through the same plan; Omega's `scrollingalpha` `V_Offset` is on no
 circuit material (weapons and muzzle flash only), as on HD.
 
-`crates/render/tests/psp2_glow_ground_truth.rs` holds what the build does with
+`crates/mesh/tests/psp2_glow_ground_truth.rs` holds what the build does with
 `arena`'s three glow layers (rates `0.05`, `1.0`, `3.0`) and two plain scrolls
 (`0.3`), and `altima`'s twelve plain scrolls.
 

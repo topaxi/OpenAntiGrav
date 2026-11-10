@@ -524,7 +524,7 @@ pub use light::Light;
 /// past `1.0` (`Track.Texture Colour` reaches `9.0`), which is a
 /// multiplier's range. Getting
 /// that wrong is invisible whenever `zoneEffect` is exactly `1.0`, which is
-/// why `crates/render/tests/zone_recolour.rs` binds `2.0`.
+/// why `crates/mesh/tests/zone_recolour.rs` binds `2.0`.
 ///
 /// # The stage-transition wavefront
 ///

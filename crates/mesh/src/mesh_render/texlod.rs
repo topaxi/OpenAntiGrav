@@ -115,7 +115,7 @@ impl From<TextureDetail> for String {
 /// for every other.
 ///
 /// Decided from the textures alone so no caller has to say which title it is
-/// drawing; `crates/render/tests/psp_slope_lod.rs` fails if it stops.
+/// drawing; `crates/mesh/tests/psp_slope_lod.rs` fails if it stops.
 pub(super) fn constants(model: &Model, anisotropy: Anisotropy) -> Vec<(&'static str, f64)> {
     let chained = model
         .textures
