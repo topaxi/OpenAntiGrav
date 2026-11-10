@@ -175,8 +175,8 @@ impl HullPointLights {
         let mut sum = [0.0f32; 3];
         for (light, s) in self.chosen(position, seconds) {
             let scale = f32::from(if light.cone.is_some() { spot } else { point });
-            for k in 0..3 {
-                sum[k] += light.colour[k] * s * scale;
+            for (channel, colour) in sum.iter_mut().zip(light.colour) {
+                *channel += colour * s * scale;
             }
         }
         sum

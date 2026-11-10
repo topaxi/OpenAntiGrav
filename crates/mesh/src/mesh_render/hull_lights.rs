@@ -196,8 +196,8 @@ impl HullPassColour {
     pub fn at(&self, [ambient, directional]: [u8; 2], points: [f32; 3]) -> [f32; 3] {
         let mut sum = self.ambient.map(|c| c * f32::from(ambient));
         for light in &self.directional {
-            for k in 0..3 {
-                sum[k] += light[k] * f32::from(directional);
+            for (channel, colour) in sum.iter_mut().zip(light) {
+                *channel += colour * f32::from(directional);
             }
         }
         [0, 1, 2].map(|k| ((sum[k] + points[k]) as u32).min(255) as f32 / 255.0)
