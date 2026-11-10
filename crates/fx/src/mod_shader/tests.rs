@@ -118,3 +118,32 @@ fn a_header_past_the_contract_is_refused_by_name() {
     let why = compile("x.wgsl", &"/".repeat(70_000)).unwrap_err();
     assert!(why.contains("bytes"), "{why}");
 }
+
+/// No loop, and still a billion calls: each helper calls the next one twice. The work is
+/// counted through the calls, so the chain is refused by name where it passes the bound, and
+/// the same helpers called in a row, which is what a loop unrolls to, are not.
+#[test]
+fn helpers_that_multiply_through_their_calls_are_refused() {
+    let fragment =
+        "fn mod_fragment(input: ModInput) -> vec4<f32> { return vec4<f32>(f0(input.uv.x)); }\n";
+    let mut doubling = String::from("fn f30(x: f32) -> f32 { return x * 0.5; }\n");
+    for n in (0..30).rev() {
+        doubling += &format!(
+            "fn f{n}(x: f32) -> f32 {{ return f{next}(x) + f{next}(x + 1.0); }}\n",
+            next = n + 1
+        );
+    }
+    assert!(doubling.len() < 4096, "a small file: {}", doubling.len());
+    let why = compile("x.wgsl", &format!("{doubling}{fragment}")).unwrap_err();
+    assert!(why.contains("operations through the calls"), "{why}");
+
+    let mut flat = String::from("fn f30(x: f32) -> f32 { return x * 0.5; }\n");
+    for n in (0..30).rev() {
+        flat += &format!("fn f{n}(x: f32) -> f32 {{ return f30(x) + f30(x + 1.0); }}\n");
+    }
+    let calls: String = (0..30).map(|n| format!(" + f{n}(input.uv.y)")).collect();
+    let fragment = format!(
+        "fn mod_fragment(input: ModInput) -> vec4<f32> {{ return vec4<f32>(0.0{calls}); }}\n"
+    );
+    compile("x.wgsl", &format!("{flat}{fragment}")).expect("sixty calls in a row are sixty calls");
+}
