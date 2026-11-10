@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-10
-summary: "WESL sweep: present-composite pow, Zone fetches 9 to 3, HUD fetches 4 to 1, bloom blur taps, fog branch (maintenance items 11-14 landed)"
+summary: "WESL sweep: present pow landed, Zone and HUD fetches closed flat; lit_texel guards, fog branch, bloom blur taps open"
 categories: [rendering]
 ---
 
@@ -35,73 +35,30 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 
 ### Worth a lane now
 
-1. **The present composite pays three `pow` it does not need on every output pixel.**
-   `crates/present/shaders/upscale.wesl:65` and `:73` (`fs_main`).
-   - Since item 11 `srgb_decode` lives in `crates/shader-check/shaders/colour.wesl` and is three scalar `pow` branches,
-     not one vector `pow`; `upscale.wesl` calls it as `srgb_decode(clamp(frame_color.rgb, 0, 1))`. Count the ISA on that.
-   - What: `select(frame_color.rgb, srgb_decode(frame_color.rgb), grade.decode > 0.5)` evaluates `srgb_decode`
-     (a `pow(_, 2.4)` on three channels) for every pixel and then discards it, because `select` is not a branch.
-     `decode` is 0 whenever the sampler already decoded (the offscreen sRGB view; `upscale.rs:686` to `:701`).
-     Then `pow(clamp(linear), grade.exponent)` runs on three channels, and the exponent is exactly 1.0 at the
-     default gamma (`Gamma::NEUTRAL` is 100, `exponent()` is `100.0 / 100`, `display.rs:833`). Two uniform
-     `if`s remove both. A neutral grade (exponent 1, brightness 1, decode 0) can return the tap untouched.
-   - How often: per output pixel, every presented frame. 8.3 M pixels at a 4K output, **including the default
-     docked Deck**, which draws 1906x1080 and upscales to 4K.
-   - Picture: unchanged in intent. `pow(x, 1.0)` is `exp2(log2(x))` on a GPU, which is not exactly `x`, so up
-     to 1 level of the 8-bit output could move; `cmp` will say how many pixels.
-   - Win (estimate): 6 to 12 transcendental ops a pixel on 8.3 M pixels; at quarter rate on 512 lanes that is
-     0.2 to 0.5 ms. The measured cost of our own present at a 4K output is +1.7 ms HD, +3.0 ms Pulse
-     (`docs/rendering/hires-gpu-levers.md`, "The presented 4K output on the Deck"), so this is a tenth to a
-     quarter of it.
-   - Measure: `--presented` with `OAG_RESOLVE_BENCH=60` at `--size 3840x2160` (the "present composite" row of
-     the span tables); the number to move is the composite's serialised CPU plus GPU time.
-   - Whether ACO keeps both arms of a uniform-condition `select` is a reading: dump the ISA first
-     (`RADV_DEBUG=shaders`, count `v_log_f32`) and edit only if the `pow` is there.
-   - Risk: none to the simulation. Keep the clamp for a source that holds values above 1 (an extended-range
-     surface) when the grade is not neutral. Effort: 30 minutes.
-   - Deck timestamps (2026-11-09, `deck-gpu`): neither confirmed nor refuted. HD Anulpha at a 4K output,
-     `--presented --reconstruction fxaa`, read 2.6 ms serialised for FXAA plus the composite together;
-     the composite alone was not separated. Caution from the same lane: removing six quarter-rate
-     reciprocals from the motion blur gather (ISA confirmed) saved nothing, because that pass was not
-     ALU-bound. Count the `v_log_f32` and also time it.
+1. ~~**The present composite pays three `pow` it does not need on every output pixel.**~~ **Landed**
+   (`crates/present/shaders/upscale.wesl`, `fs_main`). The decode sits behind `if grade.decode > 0.5` and the
+   `pow` behind an early `if grade.exponent == 1.0 { return ... }`. GPU time of the pass at a 4K output, Intel iGPU
+   (Deck proxy) / NVIDIA: `resolve_scene` 725 to 530 us / 131 to 92 us, `composite` 756 to 528 us / 141 to 90 us;
+   800p and 1080p fall 24 to 38 % too. Both passes run every presented frame. Byte-identical (`cmp`) on both GPUs
+   for Pulse and HD at 800p, 1080p (FXAA, FSR 1) and 4K, and at `brightness 110, gamma 130`. The assignment form of
+   the `pow` skip measured **slower** than no skip on Intel (695 against 645 us), so the early return is the form
+   to keep. Deck not run (desktop numbers). Table, method and the pin test:
+   `docs/rendering/hires-gpu-levers.md`, "The present composite's two dead `pow`".
 
-2. **A Zone race samples nine textures where three are needed.** `crates/mesh/shaders/zone.wesl:110`
-   (`zone_sample`, four colour fetches) and `:206` (`zone_glow`, four band fetches), plus the visualiser lookup.
-   - What: both functions fetch the track and scene textures at both layers and then `select` one, on the
-     comment's argument that a branch would break uniform control flow. Only `zone_is_track(slots)` (a flat
-     varying, so uniform over a 2x2 quad, the argument `lit_texel`'s own attribute makes) and `zone_inside(world)`
-     (per fragment) choose. Branch on the flat bit to pick `zone_tex` or `zone_scene_tex`, and pass the layer as
-     `select(1, 0, inside)`: a per-lane layer index is legal for `textureSample` and does not change the level
-     selection. Four colour fetches become one, four band fetches become one. `zone_inside` is also evaluated
-     three times per fragment (`zone_sample`, `zone_glow`, `zone_set`) and `zone_set` twice; compute them once.
-   - How often: per fragment of every draw in a Zone race while `scene.zone.enabled`; never outside one. The
-     comment above `zone_to_eye` in `shade.wesl:860` already measures the nine fetches at "about a fifth of the
-     race pass on an integrated GPU".
-   - Picture: byte-identical (the same texel is read, only the redundant ones are dropped).
-   - Win (estimate): six of nine fetches gone, so about 13 % of a Zone race's track pass if the nine are "a fifth"
-     of it, on a base that is at least the post-fold 10.5 ms at 4K and 3.46 ms at 1080p: 1 to 2 ms at native 4K
-     on the Deck HD, 0.3 to 0.5 ms at 1080p. The fifth was read on an iGPU before the folds, so the Deck share
-     is unmeasured. Zero in Time Trial, which is what `bench-render` runs.
-   - Measure: the two `--mode zone` races the fold lane used (HD and Pulse, tick 2,400), same span command as
-     above; `RADV_DEBUG=shaderstats` for `image_sample` count and VGPRs; `cmp` against the binary before.
-   - Risk: naga's and Tint's uniformity analysis on the new branch (use the same `@diagnostic(off,
-     derivative_uniformity)` as `zone_glow`); check the web path validates. Effort: 1 to 2 hours.
+2. ~~**A Zone race samples nine textures where three are needed.**~~ **Closed, flat; not landed**
+   (`zone.wesl`, `zone_sample`, `zone_glow`). Built as a per-lane layer `select` (4 fetches to 2) and as that plus a
+   flat branch (to 1). An upper bound with every Zone fetch removed moves `track solid, shaded` by 0 % at 800p and
+   1080p and -9.5 % (0.2 ms) at 4K on NVIDIA, and -16 % at 800p on Intel with 30 % process-to-process swings at 1080p
+   and 4K. The rewrite is **not byte-identical on Intel** (39 to 123 pixels off by 1 to 2 levels on HD Zone frames),
+   so it was dropped. Numbers: `docs/rendering/hires-gpu-levers.md`, "Zone textures, 9 fetches to 3". The Deck might
+   still differ; only a Deck run reopens this.
 
-3. **Every HUD and menu fragment fetches four textures and keeps one.** `crates/game/shaders/ui.wesl:224`,
-   `:234`, `:235`, `:238` (`fs_main`).
-   - What: the glyph atlas, sprite sheet, face atlas and buttons atlas are all sampled for every fragment, then
-     `select`ed by `in.mode`, which is `@interpolate(flat)`. A text quad needs the atlas, a sprite quad the
-     sheet, a face or button quad its own atlas. Branch on `in.mode` (quad-uniform) around each fetch, with
-     `@diagnostic(off, derivative_uniformity)`.
-   - How often: per fragment of the HUD and every menu draw. The HUD is drawn at presentation resolution
-     (ADR-0036), so at a 4K output that is every HUD pixel at 4K, once a frame, one view or split.
-   - Picture: byte-identical.
-   - Win (estimate): three wasted fetches a fragment on a pass with tiny ALU. The textures are small and cached,
-     so the saving is fetch issue and cache traffic: 0.05 to 0.3 ms at 4K with a full HUD. The HUD has no GPU
-     span today, so the estimate has no measurement behind it.
-   - Measure: first add a span (item 4 of render-perf-opportunities-2026-10-19.md), or compare `--presented` runs with and without the
-     HUD; `RADV_DEBUG=shaderstats` on the `fs_main` of `ui.wesl` should drop from four `image_sample` to one to two.
-   - Risk: none to the simulation. Effort: 1 hour.
+3. ~~**Every HUD and menu fragment fetches four textures and keeps one.**~~ **Closed, flat; not landed**
+   (`ui.wesl`, `fs_main`). A flat-`mode` branch (with the derivative diagnostic off) moved the HUD frame pass by
+   -7 to +10 us on the Intel iGPU and by under 1 us on NVIDIA at 800p, 1080p and 4K, Pulse and HD. The whole HUD pass is
+   0.32 to 0.43 ms on Intel at 4K, so there was no room for the estimate. The HUD still has no permanent GPU span:
+   the throwaway timer that measured it (a static `QuerySet` in the passes' `timestamp_writes`) is described in
+   `docs/rendering/hires-gpu-levers.md`, "The present composite's two dead `pow`".
 
 4. **`lit_texel` fetches and computes things the plain track draw may not use; read the ISA first.**
    `crates/mesh/shaders/shade.wesl:503`, `:665` to `:716`, `:828`, `:452`, `:878`, `:904`.
@@ -245,8 +202,9 @@ The picture check is `cmp` of two `--screenshot` runs, as the folds above used.
 
 ## Next Steps
 
-1. Item 1 and item 5 as one 1-hour change in `present` and `mesh`, `cmp` before and after, quote the 4K
-   composite span (`OAG_RESOLVE_BENCH=60 --presented`) on the host and, when the Deck is free, on it.
-2. Item 2 (Zone fetches) with the two Zone races, then item 3 (HUD fetches) after a span for the HUD exists.
+1. Item 5 (fog branch) with item 4. Time the shader on a second vendor: on Intel the shape of a uniform branch
+   changed a pass by 30 % (item 1), which the NVIDIA numbers did not show.
+2. When the Deck is free, run the present composite (item 1) and the Zone rewrite (item 2) on it; items 1 to 3 were
+   measured on a desktop NVIDIA dGPU and an Intel iGPU only.
 3. Item 4: dump the ISA of the HD plain pipeline with `RADV_DEBUG=shaders` first; edit only what it shows.
 4. Item 6 only after the `.envsettings` census shows every authored bloom size is 1.0, and the maintainer agrees.

@@ -51,8 +51,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // it works in that space throughout; the offscreen target arrives through an
     // sRGB view the sampler has already decoded. Everything below wants linear,
     // so the two are brought together here rather than in two shader variants.
-    let decoded = srgb_decode(clamp(frame_color.rgb, vec3<f32>(0.0), vec3<f32>(1.0)));
-    let linear = select(frame_color.rgb, decoded, grade.decode > 0.5);
+    //
+    // A uniform `if`, not a `select`: `select` evaluates both arms for every
+    // pixel and the decode (three `pow` per channel) is dead on every real
+    // call site, where the sampler has already decoded.
+    var linear = frame_color.rgb;
+    if grade.decode > 0.5 {
+        linear = srgb_decode(clamp(linear, vec3<f32>(0.0), vec3<f32>(1.0)));
+    }
     // Gamma first, then brightness. The other order raises the value the curve
     // is applied to, so turning brightness up would also flatten the curve and
     // the two rows would stop being independent.
@@ -60,6 +66,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Clamped before `pow`, which is undefined for a negative base. Nothing
     // this project draws produces one, but an extended-range surface format
     // could, and a NaN here would be a black frame with no message.
-    let graded = pow(clamp(linear, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(grade.exponent));
+    let clamped = clamp(linear, vec3<f32>(0.0), vec3<f32>(1.0));
+    // The neutral gamma (`Gamma::NEUTRAL`, exponent exactly 1.0) skips the `pow`.
+    // An early return rather than an assignment inside an `if`: the two compile
+    // to the same colours, but on Intel's compiler the assignment form measured
+    // slower than leaving the `pow` in (`docs/rendering/hires-gpu-levers.md`,
+    // "The present composite's two dead `pow`").
+    if grade.exponent == 1.0 {
+        return vec4<f32>(clamped * grade.brightness, frame_color.a);
+    }
+    let graded = pow(clamped, vec3<f32>(grade.exponent));
     return vec4<f32>(graded * grade.brightness, frame_color.a);
 }
