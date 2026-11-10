@@ -188,3 +188,27 @@ fn the_active_pack_is_what_find_asks_and_none_asks_nobody() {
     assert!(find(&texture).is_none());
     assert!(active().is_none());
 }
+
+#[test]
+fn a_zim_picture_is_read_like_a_png_and_a_corrupt_one_is_left_alone() {
+    let texture = stored(&PALETTE, &TEXELS);
+    let key = texture.replacement().unwrap().key.unwrap();
+    // 1x2 RGBA8888, raw: opaque red over opaque blue.
+    let mut zim = b"ZIMG".to_vec();
+    for word in [1u32, 2, 0] {
+        zim.extend_from_slice(&word.to_le_bytes());
+    }
+    zim.extend_from_slice(&[255, 0, 0, 255, 0, 0, 255, 255]);
+    let files = || -> Box<dyn Files> {
+        Box::new(Memory(HashMap::from([
+            ("a.zim".to_string(), zim.clone()),
+            ("bad.zim".to_string(), b"ZIMGnope".to_vec()),
+        ])))
+    };
+    let pack = Replacements::new("t", &ini(&[format!("{key} = a.zim")]), files()).unwrap();
+    let image = pack.find(&texture).expect("a.zim decodes");
+    assert_eq!((image.width, image.height), (1, 2));
+    assert_eq!(image.rgba, [255, 0, 0, 255, 0, 0, 255, 255]);
+    let pack = Replacements::new("t", &ini(&[format!("{key} = bad.zim")]), files()).unwrap();
+    assert!(pack.find(&texture).is_none());
+}

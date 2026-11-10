@@ -18,6 +18,7 @@ mod omega_gnf_ground_truth;
 mod ppsspp_pack_ground_truth;
 mod ps2_texture_ground_truth;
 mod ship_skin_ground_truth;
+mod zim_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

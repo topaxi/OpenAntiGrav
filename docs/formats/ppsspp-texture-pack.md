@@ -368,16 +368,45 @@ the active one, and the decoders ask it:
   level from view depth alone, so a 4x picture is sampled at the same level number as the
   disc's: four times the texels at every distance, and the extra levels a replacement chain gains
   are never reached. No shimmer showed in the frames; kept so a rule change cannot starve a deep level.
-- **Not replaced, by choice**: the HUD sprite sheet, fonts and every other atlas cut by pixel
-  offset (`oag_hud::sprite`, `.fnt`), the menu and boot art, the loading screen, particle
-  (`.pob`) textures and ship skins. Their offsets are in the original's pixels, so drawing a
-  4x picture there misplaces glyphs; each is its own lane's check, in a frame.
+- **The race HUD's sheet** (`oag_hud::sprite::Sheet::build_replaced`, which only the race load's
+  `load_atlases` calls): a `.mip` the pack has a picture for is stacked into the sheet at the
+  picture's own size. `Placed.width`/`height` stay the disc's pixels (the layouts' rects, the
+  default sprite size and the mod-icon fit are in them); the per-axis factor, picture over disc,
+  is `Sheet::scale(src)` and `Sheet::sheet_rect` is the one way a layout's `[u, v, w, h]` becomes
+  sheet pixels (`sprite_draw`, the sight rings, the now-playing bar). `alpha_at` and
+  `opaque_extent` follow the factor and answer in the disc's pixels as before. Pulse EU's
+  `PulseHUD.mip` is 256x256 and both packs draw it at 2048x2048 (8x). The front end's sheets
+  (`build_with`, the track panel, the loading screen) never ask the pack: their draws add rects to
+  `placed.x` unscaled.
+- **`.fnt` faces the HUD draws with** (`oag_texture::replacer::font`, `oag_ui::font::Atlas::from_replaced_font`, in
+  `oag_raceplay::hud::hud_font`): the picture is the whole glyph atlas at a factor `f` the same on
+  both axes. Each cell's box moves to the picture's pixels and `Atlas::texel_scale` (Omega's 2x
+  mechanism) reads a texel as `1/f` grid units, so a glyph keeps its size and its pen advance and
+  only gains texels; `borderExtend` is `f` times the authored one. Coverage is the picture's alpha
+  and the body/outline mask its red channel, as the disc's palette is. **A pack's HUD font is one
+  grey**: `x2_hud_1.png` is white with alpha, so the baked outline the disc's six greys carry is
+  not drawn (`is_outlined` is false for it). A picture that is not a whole multiple, differs per
+  axis, or is over 8192 a side (`MAX_ATLAS_SIDE`) leaves the disc's face and says so in the load
+  report. Pulse EU's four HUD faces key and hit in both packs (`PulseHud.fnt` 512x256:
+  4x in the 2026 pack, 16x in the 2020 folder; `small.fnt` 4x and 16x; `Pulse_20.fnt` 4x and 16x;
+  `pulse_text.fnt` 4x and 16x). The `x2_hud_1` and `x2_hud_2` lines are two different fonts, not a
+  split atlas. A 16x face is a 8192x4096 atlas, two planes: about 67 MB per face while it is
+  built.
+- **Not replaced, by choice**: the front end's menu and boot art and its fonts (only a race load
+  installs the pack), the loading screen, particle (`.pob`) textures and ship skins. Each is its
+  own lane's check, in a frame.
 - **Frames** (Pulse EU, the 2020 reTokyo snapshot, `--race --seed 1 --ticks 600 --size 1280x720`):
-  with the pack off the frame is byte-identical to `main`'s; with it on, 453 textures were
+  with the pack off the frame is byte-identical to `main`'s (re-checked after the HUD and font
+  change: ticks 600 and 1500 `cmp` equal to the frames taken before it); with it on, 453 textures were
   replaced, the hull, the track surface and the walls read as the pack's art in the same
-  places, and the HUD is untouched. Test:
-  `crates/raceplay/tests/texture_pack_ground_truth.rs` (slots grow by a multiple, off
-  changes nothing, a pack for another serial is not used and says so).
+  places. Test: `crates/raceplay/tests/texture_pack_ground_truth.rs` (slots grow by a multiple,
+  off changes nothing, a pack for another serial is not used and says so, the HUD sheet's scale and
+  each face's factor and glyph cells match, off is scale 1.0 and texel scale 1.0).
+- **HUD frames** (2026 pack, `--race --seed 1 --size 1920x1080`, ticks 600, and `--autopilot` at
+  1800 and 3600): the lap, best, current and record readouts, the speed line, the shield and
+  speed bars, the pickup hexagon and the clock icon sit where the disc's draw them and read at
+  1080p as the pack's sharp art instead of the PSP's 256-pixel atlas stretched 4x. The shield and
+  speed gauges are `.vex` models and take the pack through the model path.
 - **The 2026 `textures.zip` drawn** (2026-11-10, same race and seed, `--size 1280x720`, packs under
   `OAG_MODS`, the zip extracted alone out of the `GitHub - WipEout Mods` download and read in place):
   7,646 keys against the 2020 folder's 2,392, and 578 textures replaced at load against 455.
@@ -500,9 +529,30 @@ generate mips, `0x40` dithered on save, `0x80` clamp, `0x100` zlib-compressed, `
 after the 16-byte header is **one** stream (the header's comment says each mip is
 compressed separately; the v1.20.4 code decompresses the whole `sum(w*h*bpp)` at once):
 raw, zlib or zstd, of the levels back to back. A wrong decompressed size is logged and
-the image used anyway. Decoding is not in this lane; a reader needs `flate2` (already in
-the workspace) and, for zstd, a decoder. **A player's own copy of the late pack would be
-ZIM**, so the wiring lane reads both.
+the image used anyway.
+
+**Read (`oag_texture::zim`, 2026-11-10).** `Replacements` picks a decoder by what the file starts
+with (`ZIMG` or PNG), so a pack's ini line may name a `.zim` and a corrupt one leaves the texture
+alone. Level 0 only (the reader stops at `w*h*bpp` bytes of the stream, so a chain is never
+expanded past it); a short stream, a size over 16384 a side, a format over 2, or both codec flags
+are refused by name. zlib is `flate2` (already in the workspace); zstd is `ruzstd`, a pure Rust
+decoder with no C toolchain (the `zstd` crate in the tree belongs to the mod loader's `zip` and
+is native-only), `std` feature only so the frame checksum is not verified.
+
+- **Oracle: PPSSPP's own assets.** A PPSSPP install ships three real `.zim` files
+  (`/usr/share/ppsspp/assets/`: `asciifont_atlas.zim` 2048x256, `font_atlas.zim` 2048x2048,
+  both flags `0x1040`: zstd, dithered, RGBA8888; `ppge_atlas.zim` 2048x2048, flags `0x1041`:
+  RGBA4444). All three decode to their declared size and read as the glyph atlases they are
+  (CJK and Latin glyphs, white on clear, checked in a rendering). `zim_ground_truth.rs` runs them
+  (`#[ignore]`d; `OAG_PPSSPP_ASSETS` names another install).
+- **Not verified against a real file**: RGB565 (no shipped file uses it), the `0x100` zlib
+  stream (synthetic only) and the channel order inside RGBA4444 (red in the high nibble, as in
+  `rgba4444`; the one real file holds only white glyphs, so the alpha nibble is proven and the
+  colour order is not). No pack we hold contains a `.zim`: the 2026 `textures.zip` has 4,306
+  PNGs and none, the 2020 folder none, and the `GitHub - WipEout Mods` download none. The forum
+  thread's "1,009 MB ZIM" pack was not obtained, so a pack's own ZIM files, and the hash-named
+  `<key>.zim` files PPSSPP also scans for without an ini line (not read: `Pack::parse` keys on
+  the ini), are untested here. `.dds` and `.ktx2` are not read.
 
 ### 2048 and Omega
 

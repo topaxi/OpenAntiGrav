@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pulse, pure]
-updated: 2026-11-08
-summary: "Pack is an off-by-default mod, Pulse .vex and .mip draw from it; open: pixel-offset atlases (HUD, fonts), ZIM, Pure, 2026 zip frame"
+updated: 2026-11-10
+summary: "Race HUD sheet, HUD fonts and ZIM done; open: Pure, front-end/menu art, loading screen, .pob, ship skins, a real pack ZIM"
 categories: [tooling]
 size: L (60)
 difficulty: medium (60)
@@ -33,13 +33,11 @@ packs; `just push-data` carries them.
 
 ## Open
 
-- **Atlases cut by pixel offset are not replaced**: the HUD sprite sheet (`oag_hud::sprite`, whose
-  `Placed` rects and `alpha_at` work in the original's pixels), `.fnt` fonts, menu and boot art, the
-  loading screen, `.pob` particle textures and ship skins. Each needs its UV or rect scaled by the
-  picture's own factor (1x to 16x, sometimes per axis) and a frame judged at the size a player sees.
+- ~~Atlases cut by pixel offset: the HUD sprite sheet and `.fnt` fonts~~: drawn from the pack at the picture's size (`Sheet::scale`/`sheet_rect`, `Atlas::from_replaced_font`; `docs/formats/ppsspp-texture-pack.md`, "Wired"). **Still the disc's own**: the menu and boot art and fonts (the front end's sheets add rects to `placed.x` unscaled, so `Sheet::build_with` never asks the pack; a front-end lane has to move each draw onto `sheet_rect` first), the loading screen, `.pob` particle textures and ship skins. Each needs a frame at the size a player sees.
+- **No frame of a lock-on sight with a pack on**: its art is `.vex` model art (`vex_model_art`), which the mesh path already replaces and the sheet takes whole (uv is the whole image, so the picture's size does not matter); read, not captured.
+- **A pack's HUD font is one grey** (`x2_hud_1.png` is white with alpha), so the baked outline the disc's greys carry is not drawn. Whether PPSSPP draws a dark outline from the game's own vertex colours was not measured.
 - ~~The 2026 `textures.zip` has not been drawn~~: drawn 2026-11-10 (578 replaced, hull, track and walls read as the pack's art; `docs/formats/ppsspp-texture-pack.md`, "Wired").
-- **ZIM images** (a later pack's format, layout on the doc page) are not read, and **Pure** is not
-  wired (a runtime-palette font must never be replaced by data hash alone).
+- **ZIM** is read (`oag_texture::zim`: raw, zlib, zstd; RGBA8888, RGBA4444, RGB565; level 0), verified on PPSSPP's own three assets (`ppge_atlas.zim` 4444, two 8888), **not on a pack's**: none we hold has one. Unverified: RGB565, zlib, the colour order in 4444, and PPSSPP's hash-named `<key>.zim` files with no ini line. **Pure** is not wired (a runtime-palette font must never be replaced by data hash alone).
 - **One pack at a time**: with two on that name the disc, the first in search order is used and the
   other is reported. Race Remix keys the pack on the track source's serial.
 - **Not on the menus' own textures**: only a race load installs the pack, so menu and boot art draw
@@ -56,7 +54,7 @@ packs; `just push-data` carries them.
 ## Next Steps
 
 1. ~~Unpack the 2026 `textures.zip` and judge a race on it.~~ Done.
-2. Take the HUD sheet: scale each `Placed` rect and `alpha_at` by the replacement's factor, or keep
-   the logical size and upload at the picture's, then judge the HUD and the fonts in a race.
-3. Read ZIM (`flate2` is in the workspace; zstd needs a decoder) and take a Pure oracle dump the
-   way Pulse's was to confirm the 650.
+2. ~~HUD sheet and fonts.~~ Done for the race HUD.
+3. ~~Read ZIM.~~ Done; get a real pack's `.zim` (the forum's late pack) and run `zim_ground_truth`'s decode over it.
+4. Pure: take a Pure oracle dump the way Pulse's was to confirm the 650, then wire it behind the runtime-palette guard.
+5. A front-end lane: move the menu and boot sheets onto `Sheet::sheet_rect`, then call `build_replaced` there.

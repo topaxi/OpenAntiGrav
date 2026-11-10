@@ -741,8 +741,8 @@ impl Atlas {
     ///
     /// # Errors
     ///
-    /// The picture is not a whole multiple of the atlas, or its two axes differ: a face drawn at
-    /// a per-axis factor would need a per-axis texel scale, which no source has measured.
+    /// The picture is not a whole multiple of the atlas, its two axes differ (a face has one
+    /// texel scale), or it is more than a texture holds (`MAX_ATLAS_SIDE`).
     pub fn from_replaced_font(
         font: &fnt::Font,
         picture: &oag_texture::replacer::Image,
@@ -759,6 +759,14 @@ impl Atlas {
                 picture.width, picture.height
             ));
         };
+        if picture.width.max(picture.height + 2) > oag_texture::replacer::MAX_ATLAS_SIDE {
+            return Err(format!(
+                "its {}x{} picture is more than a texture of {} a side holds",
+                picture.width,
+                picture.height,
+                oag_texture::replacer::MAX_ATLAS_SIDE
+            ));
+        }
         if fx != fy {
             return Err(format!(
                 "its picture is {fx}x wide and {fy}x tall, and a face has one texel scale"
@@ -1111,6 +1119,14 @@ mod tests {
                 "{width}x{height} is not one factor on both axes"
             );
         }
+        // The size is read before any pixel is, so a picture too big for a texture is refused
+        // without allocating it.
+        let huge = oag_texture::replacer::Image {
+            width: 16 * 1024,
+            height: 8 * 1024,
+            rgba: Vec::new(),
+        };
+        assert!(Atlas::from_replaced_font(&face, &huge).is_err());
     }
 
     #[test]

@@ -249,6 +249,12 @@ atrac9dec = "0.9"
 # zlib backend feature is on, and `zlib-rs` implies one (`any_zlib`).
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 
+# zstd, for a texture pack's `.zim` pictures (`oag_texture::zim`): PPSSPP's own image format
+# compresses with it. Pure Rust, no C toolchain (the `zstd` crate the mod loader's `zip` pulls in
+# is a C library and native-only, which a texture decoder is not); `std` alone, since the
+# frame checksum is not worth `twox-hash`.
+ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
+
 # LZMA, for the Unity asset bundle container (`oag-unity`): the one compression
 # a track bundle uses that is not a handful of lines to hand-write. The same
 # decoder `chd` already pulls in, pinned so offline resolution cannot drift.

@@ -224,7 +224,7 @@ impl Image {
     /// size, or the image as it is and `None`.
     ///
     /// Only a PSP `.mip` has a key (`oag_texture::replacer::mip`); with no pack on this is
-    /// one lock read. A picture too large for a sheet coordinate is left to the disc's.
+    /// one lock read. A picture too large for a sheet (`MAX_ATLAS_SIDE`) is left to the disc's.
     fn replaced_by_pack(self, blob: &[u8]) -> (Self, Option<[u32; 2]>) {
         let Some(picture) = oag_texture::replacer::mip(blob) else {
             return (self, None);
@@ -233,6 +233,9 @@ impl Image {
         else {
             return (self, None);
         };
+        if picture.width.max(picture.height) > oag_texture::replacer::MAX_ATLAS_SIDE {
+            return (self, None);
+        }
         let logical = [u32::from(self.width), u32::from(self.height)];
         (
             Self {

@@ -1,7 +1,7 @@
 //! A PPSSPP texture pack, indexed and lazily read: what a texture's key finds.
 //!
 //! [`Replacements`] holds a pack's `textures.ini` as a key table and a [`Files`] reader
-//! over the pack's PNGs. A texture is looked up by [`Stored::replacement`]'s key in
+//! over the pack's pictures (PNG, or a `.zim`: [`crate::zim`]). A texture is looked up by [`Stored::replacement`]'s key in
 //! PPSSPP's own order (`(K, H)`, then `(K, 0)`, then `(0, H)`); a hit is decoded the
 //! first time it is asked for and kept under a byte cap. Nothing here reads a pack at
 //! boot and nothing reaches simulation state: it is what a decoder asks while it builds
@@ -62,6 +62,11 @@ impl std::error::Error for Refused {}
 /// hundred replacements, and the 2026 pack's images total 553 MB, which a handheld
 /// cannot hold.
 pub const CACHE_CAP: usize = 192 << 20;
+
+/// The longest side of a replacement picture an atlas takes (the HUD sheet, a font): wgpu's
+/// default `max_texture_dimension_2d`, which every backend we draw on has. A pack's larger
+/// picture leaves the disc's own atlas in place, and a report line says so.
+pub const MAX_ATLAS_SIDE: u32 = 8192;
 
 /// A pack: its key table over [`Files`].
 pub struct Replacements {
@@ -191,7 +196,7 @@ impl Replacements {
         let image = self
             .files
             .read(path)
-            .and_then(|bytes| decode_png(&bytes))
+            .and_then(|bytes| decode_picture(&bytes))
             .map(Arc::new);
         if let Some(image) = &image {
             if cache.bytes + image.rgba.len() > CACHE_CAP {
@@ -202,6 +207,17 @@ impl Replacements {
         }
         cache.images.insert(path.to_string(), image.clone());
         image
+    }
+}
+
+/// A pack's picture as RGBA8888, by what the file starts with: a PPSSPP `.zim` or a PNG. `None`
+/// for anything the decoders refuse. (PPSSPP also takes `.dds` and `.ktx2`; no pack found ships
+/// them.)
+fn decode_picture(bytes: &[u8]) -> Option<Image> {
+    if crate::zim::is_zim(bytes) {
+        crate::zim::decode(bytes).ok()
+    } else {
+        decode_png(bytes)
     }
 }
 
