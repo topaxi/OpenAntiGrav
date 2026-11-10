@@ -28,11 +28,11 @@ pub(super) fn is_pulse_psp(title: &oag_title::Title, archives: &oag_assets::Arch
 /// ripple and hull lights follow their own rules, which the PS2 shares.
 pub(super) fn finish(
     loaded: &mut Loaded,
-    (circuit_fx, road_ripple, hull_lights, hull_shine_lit): (bool, bool, bool, bool),
+    (circuit_fx, road_ripple, hull_lights): (bool, bool, bool),
     psp_glow_mask: bool,
     track_shine: bool,
     track_blob: &[u8],
-    (archives, track): (&mut oag_assets::Archives, &str),
+    (archives, track, title): (&mut oag_assets::Archives, &str, &oag_title::Title),
 ) {
     let nodes = oag_vex::vex::nodes(track_blob).unwrap_or_default();
     if circuit_fx {
@@ -54,7 +54,8 @@ pub(super) fn finish(
     }
     // A foreign track has no blob; its file's own light is `foreign::art`'s.
     if hull_lights && !track_blob.is_empty() {
-        light_hulls(loaded, track_blob, &nodes, hull_shine_lit);
+        let shine_lit = title.looks.hull_shine_lit.applies(archives.layout.platform);
+        light_hulls(loaded, track_blob, &nodes, shine_lit);
     }
     if track_shine {
         loaded
@@ -113,7 +114,8 @@ fn light_hulls(
             ));
             loaded.light.hull = hull;
             if shine_lit {
-                loaded.setup.hull_pass = mesh_render::HullPassColour::from_track(track_blob, nodes);
+                loaded.setup.hull_points.pass =
+                    mesh_render::HullPassColour::from_track(track_blob, nodes);
                 loaded.report.push(
                     "hull shine: drawn in the circuit's accumulated light colour, per craft".into(),
                 );

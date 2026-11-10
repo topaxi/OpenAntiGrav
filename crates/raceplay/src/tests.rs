@@ -365,7 +365,6 @@ fn setup(handling: Handling) -> Setup {
         engine_lights: vec![None; MAX_SHIPS],
         spu_vertex_lights: true,
         hull_points: oag_mesh::mesh_render::HullPointLights::none(),
-        hull_pass: None,
         collision_fx: Vec::new(),
         scenery_fx: Default::default(),
         // No disc, so no `.pob` at all: every effect trigger runs and

@@ -195,7 +195,7 @@ impl Race {
     /// If `slot` is not a ship slot.
     #[must_use]
     pub fn ship_shine_colour(&self, slot: usize, seconds: f32) -> [f32; 3] {
-        let Some(pass) = &self.view.hull_pass else {
+        let Some(pass) = &self.view.hull_points.pass else {
             return [1.0; 3];
         };
         let at = self.ship_model_matrix_of(slot).w_axis;

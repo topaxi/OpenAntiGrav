@@ -44,11 +44,15 @@ pub const HULL_POINT_SLOTS: usize = 2;
 pub type HullPoint = [f32; 4];
 
 /// A circuit's point and spot lights and how many hull slots the directionals
-/// leave them.
+/// leave them, and the terms of the colour the same builder returns for the
+/// hull's extra pass.
 #[derive(Debug, Clone, Default)]
 pub struct HullPointLights {
     lights: Vec<PlacedLight>,
     slots: usize,
+    /// The ambient and directional terms of the extra pass's colour
+    /// ([`super::HullPassColour`]), `None` where the pass is drawn white.
+    pub pass: Option<super::HullPassColour>,
 }
 
 impl HullPointLights {
@@ -71,6 +75,7 @@ impl HullPointLights {
         Self {
             lights,
             slots: 4usize.saturating_sub(directionals).min(HULL_POINT_SLOTS),
+            pass: None,
         }
     }
 

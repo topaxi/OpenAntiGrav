@@ -775,10 +775,6 @@ pub struct Setup {
     /// See [`mesh_render::HullPointLights`] and [`Race::ship_hull_points`].
     #[cfg(feature = "view")]
     pub hull_points: mesh_render::HullPointLights,
-    /// The terms of the colour a Pulse hull's extra pass is drawn in, `None` for
-    /// white. See [`mesh_render::HullPassColour`] and [`Race::ship_shine_colour`].
-    #[cfg(feature = "view")]
-    pub hull_pass: Option<mesh_render::HullPassColour>,
     /// Each slot's `Ship Collision Fx` locators, in that hull's model space.
     ///
     /// The disc's own hull spark anchors - the set the original picks the

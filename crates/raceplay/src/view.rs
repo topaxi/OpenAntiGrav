@@ -257,8 +257,6 @@ pub struct RaceView {
     pub(super) spu_vertex_lights: bool,
     /// Pulse's point and spot lights for a hull, see [`Setup::hull_points`].
     pub(super) hull_points: oag_mesh::mesh_render::HullPointLights,
-    /// The terms of the colour Pulse's hull extra pass is drawn in, see [`Setup::hull_pass`].
-    pub(super) hull_pass: Option<oag_mesh::mesh_render::HullPassColour>,
     /// Whether the weapons add their point lights; see `race::weapon_light`.
     pub(super) hd_weapon_lights: bool,
     /// Each craft's engine-light jitter this tick, and the stream it is
