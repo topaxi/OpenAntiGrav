@@ -928,7 +928,7 @@ OAG_RENDER_GPU_BENCH=150 OAG_RENDER_PERF=1 oag-game hdfury-ps3-eu-dec.iso \
 `just bench-render hd --views 1,2h --size WxH --motion-blur high --motion-blur-resolution half
 --binary <base|cand> --tag <tag>` (the bench's own HD race, not Anulpha), plus
 `just bench-render pulse --size 1920x1080` with the same blur flags for a no-worse check. Arms
-interleaved, 2 rounds, under the gate lock, load 1.6 to 3.8 except one round at 9 to 13 (another
+interleaved, 2 rounds, under the gate lock, load 1.6 to 5.7 except two 800p runs at 9 to 13 (another
 member's build; its numbers sit inside the others'). p50 of every frame, mean of the two rounds,
 ms. `blur` is the chain's GPU timestamps; a split leaves it empty. The final state hash matched
 base on every run.
