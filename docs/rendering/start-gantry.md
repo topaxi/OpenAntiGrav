@@ -2836,8 +2836,14 @@ panel, 4 to 6 % of the frame, which ours drew 4 higher in blue than the original
 - The panel's modal colour in the six best pairs (R, G, B, `theirs.png`, the green panel after the release or the
   red one before): blue **8** in five of six (9 on Metropia), where ours drew **11 or 12** and the 5-bit expansion of the
   truncated level is 8. A rounding quantiser (tried first, `floor(c * 31 + 0.5)`) put the quad's blue at 13: wrong way.
+- Not tested: the track textures' `CLUTFORMAT` (`0xC5`) in the dump, so whether any Pulse texture decode rounds differently is open.
 - Ours after the change draws blue **8** (9 on Metropia) on all six; green still reads 2 higher than the original (77 against 75),
   not explained here (open below).
+
+**Scope: every Pulse card, not only slot 8.** The 2026-10-18 `pulse-mount-11` measurement has the advert passes (slots 1 to 7) run into the
+same 128 x 128 target as slot 8, and the GE dump above shows one target, so every Pulse advert card now goes through the truncation. Read on
+three gantry pairs and on Outpost 7 White and Vertica White, whose frames also carry a non-gantry advert: no banding or colour shift
+visible at 3x between before and after.
 
 **What ours does now.** `oag_title::adverts::CardStore` replaces the `card_565` flag: `Rgba8`, `R5G6B5Linear` (HD) and
 `R5G6B5Gamma` (Pulse). `SceneStore::Packed565Gamma` sets the shader overrides `packed_out` and `packed_gamma`;
@@ -2866,6 +2872,9 @@ The claim "per-channel bias under 0.3 on R, G and B" is **false** for the six: a
   (R +0.73, G +0.75, B +0.73), not a blue lift: the plume and hull glow near the craft (white blob in the difference
   image on four pairs) and structured texture detail carry it. Flat regions agree exactly (63 to 65 % of the pixels flat in both
   frames differ by 0).
+- **Pulse PS2:** `oag_pulse::TITLE` is one definition for both pressings, so PS2 carries the card format **inherited from PSP, not measured**.
+  The one PS2 race pair (`pulse-ps2/moa-therma-white`) moves by 0.00 mean grey (13.12 to 13.12, RMSE 0.1539 both). To opt PS2 out, give it its own
+  `Adverts` value with `card_store: CardStore::Rgba8`.
 - The panel is drawn through the blend pipeline here, so the texel's alpha (about 0.97) scales the stored level; the original's
   panel prims have `ABE` 0. Ours' green reads 2 higher than the original's after the card and the opposite sign to what an
   opaque panel would give: the quad's own lighting or the card sampler is the next thing to read.

@@ -22,8 +22,14 @@ the pair copies, and the one law that moved it, are in `docs/rendering/start-gan
 - The original's panel has a 4 to 5 px pattern ours lacks; the `GO` letters' brightness differs by the captured tick's fade phase.
 - Hypotheses ruled out with numbers: a 16-bit main framebuffer or dither (the main target is 8888, `theirs.png` has 255 or 256 levels per channel,
   the dither matrix registers are zero and the 4x4-phase residual is flat to 0.05); distance fog (turning it off leaves the six pairs'
-  mean blue bias at +0.77 against +0.94 and moves red and green the other way, vertica-white and talons-black have no fog); a global grade
-  (the HUD's flat cyan bar is identical to 0.03).
+  mean blue bias at +0.77 against +0.94 and moves red and green the other way, vertica-white and talons-black have no fog); a whole-frame grade
+  (63 to 65 % of the scene pixels flat in both frames differ by exactly 0).
+
+- `billboards.md` names `FUN_0891fe14` as the 128 x 128 render-target creator, but in the USA `BOOT.BIN` as opened in Ghidra it is `jr ra; nop`:
+  the format was read from the GE state instead; find the real creator and confirm the `FRAMEBUFPIXFORMAT` it sets.
+- Texture decode (`CLUTFORMAT` `0xC5` in the dump) was not tested.
+- Whether the original's fine hatch on the `GO` letters and on non-gantry advert panels (visible at 3x, absent in ours) is the card's own texel pattern or a
+  write-time effect is not read.
 
 ## Next Steps
 
