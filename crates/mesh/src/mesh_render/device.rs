@@ -112,10 +112,25 @@ pub fn device_descriptor<'a>(
 /// adapter allows.
 #[must_use]
 pub fn required_limits(adapter: &wgpu::Adapter) -> wgpu::Limits {
-    super::bindless::with_limits(
+    let mut limits = super::bindless::with_limits(
         wgpu::Limits::default().using_resolution(adapter.limits()),
         adapter,
-    )
+    );
+    if let Some(side) = forced_texture_side() {
+        limits.max_texture_dimension_2d = limits.max_texture_dimension_2d.min(side);
+    }
+    limits
+}
+
+/// `OAG_MAX_TEXTURE_SIDE=<n>`: the device is made with `max_texture_dimension_2d` at most `n`,
+/// so a Steam Deck's 16,384 or a phone's 8,192 can be tried on a desktop adapter that allows
+/// more. Unset, or not a number, changes nothing.
+fn forced_texture_side() -> Option<u32> {
+    std::env::var("OAG_MAX_TEXTURE_SIDE")
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
 }
 
 #[cfg(test)]

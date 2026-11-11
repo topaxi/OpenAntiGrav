@@ -71,10 +71,11 @@ fn face(
     font: &oag_texture::fnt::Font,
     border: u32,
     what: &str,
+    prompts: &oag_title::prompts::Prompts,
     report: &mut Vec<String>,
 ) -> oag_ui::font::Atlas {
     let (atlas, border) =
-        oag_ui::font::Atlas::from_pack(archives, name, font, border, what, report)
+        oag_ui::font::Atlas::from_pack(archives, name, font, border, what, Some(prompts), report)
             .unwrap_or_else(|| (oag_ui::font::Atlas::from_font(font), border));
     atlas.with_border_extend(border)
 }
@@ -105,6 +106,7 @@ pub(super) fn load_font(
     archives: &mut oag_assets::Archives,
     languages: &[Language],
     preferred: Option<&Language>,
+    prompts: &oag_title::prompts::Prompts,
     report: &mut Vec<String>,
 ) -> oag_ui::font::Atlas {
     let role = oag_ui::language::roles::DEFAULT;
@@ -125,6 +127,7 @@ pub(super) fn load_font(
                 &font,
                 role_border(languages, preferred, role),
                 "font",
+                prompts,
                 report,
             );
             report.push(format!(
@@ -162,6 +165,7 @@ pub(super) fn load_menu_font(
     languages: &[Language],
     preferred: Option<&Language>,
     skin: &oag_title::MenuSkin,
+    prompts: &oag_title::prompts::Prompts,
     report: &mut Vec<String>,
 ) -> Option<oag_ui::font::Atlas> {
     let role = skin.menu_font?;
@@ -178,6 +182,7 @@ pub(super) fn load_menu_font(
                 &font,
                 role_border(languages, preferred, role),
                 "menu font",
+                prompts,
                 report,
             ))
         }
@@ -209,12 +214,14 @@ pub(super) fn load_role_fonts(
         atlas.map(|a| a.with_prompts(prompts).with_texel_scale(texel_scale))
     };
     (
-        scaled(load_menu_font(archives, languages, preferred, skin, report)),
+        scaled(load_menu_font(
+            archives, languages, preferred, skin, prompts, report,
+        )),
         scaled(load_title_font(
-            archives, languages, preferred, skin, report,
+            archives, languages, preferred, skin, prompts, report,
         )),
         scaled(load_buttons_font(
-            archives, languages, preferred, skin, report,
+            archives, languages, preferred, skin, prompts, report,
         )),
     )
 }
@@ -241,6 +248,7 @@ pub(super) fn load_title_font(
     languages: &[Language],
     preferred: Option<&Language>,
     skin: &oag_title::MenuSkin,
+    prompts: &oag_title::prompts::Prompts,
     report: &mut Vec<String>,
 ) -> Option<oag_ui::font::Atlas> {
     let role = skin.title_font?;
@@ -257,6 +265,7 @@ pub(super) fn load_title_font(
                 &font,
                 role_border(languages, preferred, role),
                 "title font",
+                prompts,
                 report,
             ))
         }
@@ -396,6 +405,7 @@ pub(super) fn load_buttons_font(
     languages: &[Language],
     preferred: Option<&Language>,
     skin: &oag_title::MenuSkin,
+    prompts: &oag_title::prompts::Prompts,
     report: &mut Vec<String>,
 ) -> Option<oag_ui::font::Atlas> {
     let role = skin.stats_font.unwrap_or(oag_ui::language::roles::BUTTONS);
@@ -414,6 +424,7 @@ pub(super) fn load_buttons_font(
                 &font,
                 role_border(languages, preferred, role),
                 "third-slot font",
+                prompts,
                 report,
             ))
         }

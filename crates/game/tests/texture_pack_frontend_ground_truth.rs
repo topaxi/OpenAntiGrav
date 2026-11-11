@@ -163,6 +163,33 @@ fn every_face_the_pack_names_is_drawn_from_it_and_keeps_its_line_height() {
     );
 }
 
+/// The side every backend we draw on can make a texture (wgpu's default limit, which the web
+/// and most phones are held to), and the Steam Deck's.
+const SIDES: [u32; 2] = [8192, 16_384];
+
+#[test]
+#[ignore = "needs pulse-psp-eu.chd and the Pulse pack"]
+fn no_face_a_pack_draws_is_taller_or_wider_than_a_device_can_make() {
+    let Some(dir) = pack_dir("WipEout-Pulse-Upscale-Version") else {
+        return;
+    };
+    let Some(on) = shell("data/images/pulse-psp-eu.chd", Some(&dir)) else {
+        return;
+    };
+    for face in faces(&on) {
+        eprintln!("face {}x{}", face.width, face.height);
+        for side in SIDES {
+            assert!(
+                face.width <= side && face.height <= side,
+                "a {}x{} face does not fit a device whose textures are {side} a side: {:#?}",
+                face.width,
+                face.height,
+                on.report
+            );
+        }
+    }
+}
+
 #[test]
 #[ignore = "needs pure-psp-eu.chd and the Pure pack"]
 fn pure_keeps_the_discs_faces_with_a_pack_on_because_its_palette_moves() {
