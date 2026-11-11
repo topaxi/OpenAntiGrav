@@ -141,7 +141,7 @@ queues the icon for the viewer's HUD; it is out of `World` and out of the hash. 
 sites: `spend_opponent_pickup`'s common tail (Rocket, Missile, Plasma, Shuriken, Quake,
 Repulser, LeachBeam), `drop_opponent_mines` when a drop starts (Mine, Bomb), and the
 first round of an opponent's Cannon burst. `HudArt::incoming_warnings` switches it on for
-Pulse (PS2 inherited from PSP). Not wired: split-screen and network seats (the law never
+Pulse (PS2 inherited from PSP). Two mappings are **chosen, not measured**: a Mine/Bomb drop announces once when it starts (the original announces on every `Weapon_RequestFire` press, a mid-cluster re-press included, but our driver re-rolls every tick mid-cluster), and an opponent's Cannon announces on the first round of a burst (our AI has no press edge). Not wired: split-screen, local multi-window and network seats (the law never
 raises in multiplayer modes), a person-flown craft's own fire (only reached in those),
 and the autopilot-absorb path. Tests: `crates/hud/src/incoming/tests.rs`,
 `crates/raceplay/src/tests/incoming_warnings.rs`, and the disc-backed

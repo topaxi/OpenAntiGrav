@@ -614,8 +614,9 @@ impl Race {
         #[cfg(feature = "view")]
         let started = !self.sim.world.ships[slot].pickup.is_dropping();
         self.sim.world.ships[slot].pickup.begin_drop(drop.count);
-        // One announcement per drop that starts: not per mine laid, and not for a
-        // request made while a cluster is out (`begin_drop` ignores it).
+        // One announcement per drop that starts: not per mine laid, and not for a re-roll
+        // while a cluster is out. Chosen, not measured: the original announces on every press
+        // (`docs/ghidra/functions/psp-pulse-usa/hud-incoming-warnings.md`, "Wired in the engine").
         #[cfg(feature = "view")]
         if started {
             self.note_incoming_fire(slot, weapon);

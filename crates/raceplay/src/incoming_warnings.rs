@@ -12,7 +12,10 @@ impl Race {
     /// Records that `slot` fired `weapon` this tick: raises the viewer's warning when the
     /// along-track gap `progress(viewer) - progress(slot)` is inside the weapon's window.
     ///
-    /// One call per fire request. Skipped when the firer is the viewer, when the title
+    /// One call per fire request (**chosen, not measured**: the original announces on every
+    /// `Weapon_RequestFire` press, including a re-press mid-cluster, while this engine's driver
+    /// re-rolls its mine drop every tick, so a drop is announced when it starts; the Cannon has no
+    /// press edge here, so the first round of a burst stands in for one). Skipped when the firer is the viewer, when the title
     /// raises none ([`oag_title::HudArt::incoming_warnings`]), outside the modes that raise
     /// them (Arcade, Tournament, Eliminator, Head2Head), and in any race with more than one
     /// person (the original's multiplayer modes never raise; a split-screen or network
@@ -23,6 +26,7 @@ impl Race {
         if slot == viewer
             || !self.view.huds[viewer].incoming_enabled
             || self.viewport_count() > 1
+            || self.people() > 1
             || self.view.seat.is_some()
             || !matches!(
                 self.sim.world.mode(),
