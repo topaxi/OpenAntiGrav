@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [pulse, hd, pure, 2048, omega]
-updated: 2026-11-11
+updated: 2026-11-12
 summary: "Compare page: Pulse PS2 has a race pair for all 16 circuits (adopt pending); Pure, 2048 and Omega pairs partial; publishing unlocked"
 ---
 
@@ -14,6 +14,8 @@ and per-title recipes with their status: [`docs/tools/compare-page.md`](../../do
 Landed 2026-10-20 (`compare-page` lane). Each image carries a credit (game, platform, original or engine) and the page footer carries ADR-0074's rights-holder statement, read from `legal.md` and checked against the ADR by `just check-docs` (`compare-page-credits` lane, 2026-10-20); `--publish` builds strictly and refuses an entry with no `platform`.
 
 ## Open
+
+- **Omega WipEout 2048 mode pairs (`gallery-omega`, 2026-11-12), open.** The port reaches it (RACEBOX GAME MODE, one Right; ten circuits, Feisar2048 first; Sol needs class A) but `scripts/wipeout-pc-omega-pair.py` has no 2048 route: its HUD detector reads the HD HUD, and the original draws 2048's (LAP 1/4, TOTAL/CURRENT, temperature gauge) after an intro fly-over whose START RACE prompt needs a press at the right time. Ours' Omega 2048 race draws HD's HUD, so a pair would also carry that gap. Also open: ours' class for C CLASS (assumed `venom`), the four Zone circuits (Zone race type, a different pair kind; ours decodes `zone_3` to no triangles), and the Sebenco Climb twin boot's grab, which is just past GO (the board check does not catch a post-GO frame).
 
 **Provenance and path hygiene (2026-10-21, `ref-provenance`; [compare-page.md](../../docs/tools/compare-page.md), "Provenance: the trust model").** `scripts/compare_provenance.py` writes `original.provenance` into every pair (capture path, presented lag with its basis, Autopilot arming and timer, state-making RAM writes, emulator settings hash, twin RMSE) and refuses an HD scenery pair from a savestate restore, an armed Autopilot with a non-authored or unrecorded timer, and an unknown lag; `just check-pair-provenance` is in the gate. **Open:** the 42 pairs in `data/reference/compare-page` predate it; backfilled they pass the path rule and 17 break a refusal rule (13 HD grid pairs restored from a savestate, the HD race pair and the Pulse PSP race pair and both zone pairs on a non-authored or unrecorded Autopilot timer). Recapture the HD grid pairs cold (`compare-rerender-all`, `--hd-cold`) and re-make the race pairs with `--autopilot authored` or a `--stint` state, or accept each with `--accept-provenance RULE=REASON`; the PS2 pair has no recorded Autopilot state and passes. The gate's pair scan is red on `data/reference` until the backfilled set is adopted.
 
