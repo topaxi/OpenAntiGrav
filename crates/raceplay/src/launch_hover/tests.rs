@@ -183,7 +183,7 @@ fn the_body_damping_follows_the_title() {
     assert_eq!(physics_laws(None).body_damping, none);
 }
 
-/// HD's measured one-sided contact reaches the physics' laws, inherited by Omega and 2048;
+/// HD's measured one-sided contact reaches the physics' laws, as do Omega's and 2048's own reads;
 /// Pulse (no laws) and Pure keep the two-sided one.
 #[test]
 fn the_one_sided_wall_contact_follows_the_title() {
@@ -194,7 +194,7 @@ fn the_one_sided_wall_contact_follows_the_title() {
     assert!(!physics_laws(None).wall_one_sided);
 }
 
-/// HD's measured steer-away torque reaches the physics' laws, inherited by Omega and 2048;
+/// HD's measured steer-away torque reaches the physics' laws, as do Omega's and 2048's own reads;
 /// Pulse and Pure queue none.
 #[test]
 fn the_wall_steer_away_torque_follows_the_title() {
