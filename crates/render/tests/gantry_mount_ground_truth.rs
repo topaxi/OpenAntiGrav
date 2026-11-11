@@ -29,7 +29,7 @@ use std::path::PathBuf;
 
 use oag_core::math::{Mat4, Vec3};
 use oag_mesh::mesh;
-use oag_render::gantry::{self, BACKPLATE_TEXTURE, SLOT8_TEXTURE};
+use oag_render::gantry::{self, BACKPLATE_STEM, SLOT8_STEM};
 use oag_vex::vex;
 
 /// The gantry model slot 8 names on every circuit that authors a manifest.
@@ -131,8 +131,8 @@ fn every_circuit_authors_the_same_gantry_mount() {
             continue;
         };
         let track = mesh::build_with_textures(&entry, &blob, None).expect("decoding");
-        let backplate = gantry::surface(&track, BACKPLATE_TEXTURE);
-        let stub = gantry::surface(&track, SLOT8_TEXTURE);
+        let backplate = gantry::surface(&track, BACKPLATE_STEM);
+        let stub = gantry::surface(&track, SLOT8_STEM);
         let Some(mount) = backplate.or(stub) else {
             println!("{id}: no backplate and no slot-8 stub - nothing to mount a gantry on");
             continue;
@@ -145,7 +145,7 @@ fn every_circuit_authors_the_same_gantry_mount() {
             .enumerate()
             .filter(|(_, t)| {
                 t.as_ref()
-                    .is_some_and(|t| t.label.to_ascii_lowercase().ends_with(SLOT8_TEXTURE))
+                    .is_some_and(|t| oag_assets::texture_name::has_stem(&t.label, SLOT8_STEM))
             })
             .map(|(slot, _)| slot)
             .collect();

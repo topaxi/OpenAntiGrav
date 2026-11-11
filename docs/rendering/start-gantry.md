@@ -1785,9 +1785,9 @@ argument, passed to `ModelTexture::from_gtf` unchanged):
 `data/environments/talons_junction/textures/dds/billboard8.gtf`, not
 `billboard8.gtf`. Matching the whole label never found an HD surface by name
 at all. `mount` now matches on the label's own file name
-(`oag_render::gantry::basename`) and tries a third candidate,
-[`HD_SLOT8_TEXTURE`](../../crates/render/src/gantry.rs) (`billboard8.gtf`),
-after Pulse's two - HD ships no backplate-shaped second surface next to its
+(`oag_assets::texture_name::stem`: the stem, so `.tga`, `.gtf`, `.gxt` and `.gnf` are one comparison) and tries
+[`SLOT8_STEM`](../../crates/render/src/gantry.rs) (`billboard8`),
+after Pulse's backplate - HD ships no backplate-shaped second surface next to its
 own stub, so there is only one name to try there.
 `oag_render::gantry::strip_slot_placeholders` gained the same eight `.gtf`
 spellings, so HD's own `billboard1-8` stubs are finally suppressed the way
@@ -2894,8 +2894,8 @@ material containers' curves are unread (`omega-status.md`, "Adverts"; the 2026-1
 | slot 7 art | `fx350_nomip.gtf` | `.gxt` | `.gnf` |
 
 The earlier "2048 and Omega place no gantry" was a **spelling miss**, not an absence: `oag_render::gantry` matched `.tga`
-and `.gtf` only. `SLOT_PLACEHOLDER_TEXTURES`, `mount` and the FX-350 match (`is_fx350_texture`) now take `.gxt` and `.gnf`
-too (`gantry/tests.rs`), and `Title::adverts` of both titles is HD's pass, inherited (`CardStore::R5G6B5Linear`, target
+and `.gtf` only. `is_slot_placeholder`, `mount` and the FX-350 match (`is_fx350_texture`) now take `.gxt` and `.gnf`
+too (since then they compare the stem, and no spelling list remains) (`gantry/tests.rs`), and `Title::adverts` of both titles is HD's pass, inherited (`CardStore::R5G6B5Linear`, target
 512x256, planes `0.5`/`5500`), with `gantry_boards` naming the one board each plays and its `assembly_ticks`.
 
 **The card carries Omega's and 2048's slot 1-7 adverts too** (the same pass): on Omega's Vineta K the side cards now show

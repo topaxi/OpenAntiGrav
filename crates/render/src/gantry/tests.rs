@@ -180,7 +180,11 @@ fn every_billboard_slot_name_is_a_placeholder_regardless_of_case() {
         assert!(is_slot_placeholder(&format!("Billboard{n}.TGA")));
         assert!(is_slot_placeholder(&format!("billboard{n}.gtf")));
         assert!(is_slot_placeholder(&format!("Billboard{n}.GTF")));
+        assert!(is_slot_placeholder(&format!("billboard{n}.gxt")));
+        assert!(is_slot_placeholder(&format!("billboard{n}.gnf")));
     }
+    assert!(!is_slot_placeholder("billboard10.tga"));
+    assert!(!is_slot_placeholder("billboard80.gtf"));
     assert!(!is_slot_placeholder("321backplate.tga"));
     assert!(!is_slot_placeholder("billboard9.tga"));
     assert!(!is_slot_placeholder("billboard.tga"));
@@ -320,7 +324,7 @@ fn strip_fx350_art_is_case_insensitive_and_leaves_the_digit_boards_own_texture_a
 #[test]
 fn mount_finds_hds_full_path_billboard8_label() {
     // HD ships no `321backplate`-shaped second surface - see
-    // `HD_SLOT8_TEXTURE`'s own doc comment - so its stub alone has to resolve
+    // `SLOT8_STEM`'s own doc comment - so its stub alone has to resolve
     // a mount, through the full archive path a PS3 material names it by.
     let model = textured_draws("data/environments/talons_junction/textures/dds/billboard8.gtf");
     let mount = mount(&model).expect("the HD spelling resolves a mount");
@@ -349,7 +353,6 @@ fn slot7_fx350_art_is_found_in_every_containers_spelling() {
         let mut model = textured_draws(label);
         assert_eq!(strip_fx350_art(&mut model), 1, "{label}");
     }
-    assert!(!is_fx350_texture("fx350_nomip.png"));
     assert!(!is_fx350_texture("fx350.gnf"));
 }
 

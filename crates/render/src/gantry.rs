@@ -45,61 +45,33 @@ use oag_mesh::mesh::Model;
 
 pub mod panel;
 
-/// The countdown board's backing panel, in the track's own texture set.
+/// The countdown board's backing panel, as a texture stem: `321backplate.tga`
+/// on Pulse, and no other spelling anywhere has been found.
 ///
 /// Present on every Pulse circuit checked, and **not** one of
 /// `321Go_StartFinish.vex`'s own six textures - so it is track geometry
 /// authored for the gantry rather than part of the gantry. **Pulse-only**:
-/// HD's own `billboarddiffuse.rcsmaterial` binds only `billboard7.gtf` and
-/// `billboard8.gtf` - no second, backing surface has been found on that
-/// title, so [`mount`] never reaches this name there.
-pub const BACKPLATE_TEXTURE: &str = "321backplate.tga";
+/// HD's own `billboarddiffuse.rcsmaterial` binds only `billboard7` and
+/// `billboard8` - no second, backing surface has been found on that
+/// title, so [`mount`] finds no surface by this stem there.
+pub const BACKPLATE_STEM: &str = "321backplate";
 
-/// Slot 8's placeholder stub, the Pulse spelling of HD's [`HD_SLOT8_TEXTURE`].
+/// Slot 8's placeholder stub, as a texture stem: `billboard8.tga` on Pulse,
+/// `.gtf` on HD (`billboarddiffuse.rcsmaterial` on all 17 environments,
+/// `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`, confidence 90 for the
+/// disc-wide binding), `textures/billboard8.gxt` on 2048 (112 bytes, all ten
+/// native circuits) and `.../texturesps4/billboard8.gnf` on Omega
+/// (`docs/rendering/start-gantry.md`, "2048 and Omega").
 ///
-/// 8x8 where every sibling is 64x64. Used as the fallback surface for a
-/// circuit that authors the stub without the backplate.
-pub const SLOT8_TEXTURE: &str = "billboard8.tga";
-
-/// HD/Fury's own spelling of slot 8's placeholder, bound through
-/// `billboarddiffuse.rcsmaterial` on all 17 environments
-/// (`docs/ghidra/functions/ps3-hdfury-eu/billboards.md`, confidence 90 for the
-/// disc-wide binding, straight off the disc).
-///
-/// **The only mount surface HD authors for this slot.** Unlike Pulse, no
-/// second, backing texture has been found alongside it - so [`mount`] does
-/// not try a backplate-shaped name here at all, and a circuit whose only
-/// candidate is this one is not a weaker measurement for it.
-pub const HD_SLOT8_TEXTURE: &str = "billboard8.gtf";
-
-/// Slot 8's placeholder in the Vita container (Wipeout 2048, and the circuits it
-/// re-ships from HD): `textures/billboard8.gxt`, 112 bytes, on all ten native
-/// circuits (`docs/rendering/start-gantry.md`, "2048 and Omega").
-pub const VITA_SLOT8_TEXTURE: &str = "billboard8.gxt";
-
-/// Slot 8's placeholder in Omega's PS4 container: `.../texturesps4/billboard8.gnf`.
-pub const PS4_SLOT8_TEXTURE: &str = "billboard8.gnf";
-
-/// The last path component of a texture label, case-preserved.
-///
-/// **Why this exists at all, and not just `eq_ignore_ascii_case`.** A Pulse
-/// `.vex`'s embedded `Texture` node is already reduced to its bare file name
-/// before it reaches [`oag_mesh::mesh::Model::textures`] (`mesh.rs`'s own
-/// `rsplit(['/', '\\'])`), but an HD/Wipeout-2048 `.rcsmodel` material names
-/// its `.gtf` by the **full archive path** the sampler table carries
-/// (`crates/mesh/src/mesh/rcs/skin.rs`'s `path` argument, passed to
-/// `ModelTexture::from_gtf` unchanged) - `.../textures/dds/billboard8.gtf`,
-/// not `billboard8.gtf`. Matching the whole label would silently never find
-/// an HD surface by name; this is what makes "on the file name alone", the
-/// claim [`surface`] and [`is_slot_placeholder`] already documented, actually
-/// true for both shapes of label rather than only Pulse's.
-fn basename(label: &str) -> &str {
-    label.rsplit(['/', '\\']).next().unwrap_or(label)
-}
+/// 8x8 where every sibling is 64x64. The fallback surface for a circuit that
+/// authors the stub without the backplate, and **the only mount surface HD
+/// authors for this slot** - a circuit whose only candidate is this one is not
+/// a weaker measurement for it.
+pub const SLOT8_STEM: &str = "billboard8";
 
 /// The whole billboard-slot placeholder family: `billboard1` through
-/// `billboard8`, in both titles' own spellings - Pulse's `.tga` and HD's
-/// `.gtf`.
+/// `billboard8`, matched by stem so every platform's container extension
+/// (`.tga`, `.gtf`, `.gxt`, `.gnf`) answers to one comparison.
 ///
 /// **A slot, not artwork.** HD's `Billboard_LoadModelAndBind` (`0x003a4da0`,
 /// confidence 84, `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`) reaches
@@ -107,63 +79,20 @@ fn basename(label: &str) -> &str {
 /// rebinds *that* material's texture. `16_Track`'s own art mesh embeds five of
 /// these eight (`billboard1/2/6/7/8.tga`), each an 8x8 icon of its own digit -
 /// the same "here is what a slot looks like before something is bound into
-/// it" shape [`SLOT8_TEXTURE`] alone used to describe. No rebind mechanism has
+/// it" shape [`SLOT8_STEM`] alone used to describe. No rebind mechanism has
 /// been found for Pulse - `docs/rendering/start-gantry.md`'s "Pulse's own
 /// binding path" is still open, and `BOOT.BIN` ships no lowercase `billboard`
 /// base string for a `billboard%d`-shaped build, so the mechanism plainly
 /// differs from HD's even though the placeholder convention is identical -
-/// but "unfound" is not "absent": a draw bound to one of these sixteen names
-/// is never the original's own art on either title, so drawing it raw is
-/// drawing what a slot looks like with nothing bound in, not what a player
-/// sees. HD's own eight are counted on the disc too - `billboard7.gtf` and
-/// `billboard8.gtf` on all 17 environments, the rest on a subset - in the
-/// same source cited above.
-pub const SLOT_PLACEHOLDER_TEXTURES: [&str; 32] = [
-    "billboard1.tga",
-    "billboard2.tga",
-    "billboard3.tga",
-    "billboard4.tga",
-    "billboard5.tga",
-    "billboard6.tga",
-    "billboard7.tga",
-    "billboard8.tga",
-    "billboard1.gtf",
-    "billboard2.gtf",
-    "billboard3.gtf",
-    "billboard4.gtf",
-    "billboard5.gtf",
-    "billboard6.gtf",
-    "billboard7.gtf",
-    "billboard8.gtf",
-    "billboard1.gxt",
-    "billboard2.gxt",
-    "billboard3.gxt",
-    "billboard4.gxt",
-    "billboard5.gxt",
-    "billboard6.gxt",
-    "billboard7.gxt",
-    "billboard8.gxt",
-    "billboard1.gnf",
-    "billboard2.gnf",
-    "billboard3.gnf",
-    "billboard4.gnf",
-    "billboard5.gnf",
-    "billboard6.gnf",
-    "billboard7.gnf",
-    "billboard8.gnf",
-];
-
-/// Whether `label` names one of [`SLOT_PLACEHOLDER_TEXTURES`], matched
-/// case-insensitively on the file name alone - the same match [`surface`]
-/// already uses, since a track's texture labels are file names (Pulse) or
-/// full archive paths ending in one (HD) and neither is consistent in case
-/// across circuits.
+/// but "unfound" is not "absent": a draw bound to one of these names is never
+/// the original's own art on any title, so drawing it raw is drawing what a
+/// slot looks like with nothing bound in, not what a player sees. HD's own
+/// eight are counted on the disc too - `billboard7.gtf` and `billboard8.gtf`
+/// on all 17 environments, the rest on a subset - in the same source cited
+/// above.
 #[must_use]
 pub fn is_slot_placeholder(label: &str) -> bool {
-    let name = basename(label);
-    SLOT_PLACEHOLDER_TEXTURES
-        .iter()
-        .any(|candidate| name.eq_ignore_ascii_case(candidate))
+    slot_number(label).is_some()
 }
 
 /// Drops every draw in `model` bound to a [`is_slot_placeholder`] texture, and
@@ -176,7 +105,7 @@ pub fn is_slot_placeholder(label: &str) -> bool {
 /// it, and the fix should either paint it black or give whatever is drawn
 /// over it a black background. **Both of those invent content the disc does
 /// not author.** What the disc authors is a slot - a placeholder texture no
-/// version of the original ever shows raw, per [`SLOT_PLACEHOLDER_TEXTURES`]'s
+/// version of the original ever shows raw, per [`is_slot_placeholder`]'s
 /// own doc comment - so painting it black or backing an overlay with black is
 /// exactly the "plausible-looking stand-in" `CLAUDE.md` warns against, not a
 /// fix. Suppressing the draw is not that: an unbound slot is honestly absent,
@@ -321,15 +250,21 @@ pub fn exempt_served_placeholders_from_zone(model: &mut Model, served: &[u32]) -
 }
 
 /// The slot number a billboard placeholder texture names: `billboard7.tga` is
-/// 7, on either title's spelling. `None` for any other label.
+/// 7, on any platform's spelling. `None` for any other label, `billboard9` and
+/// `billboard10` included.
 #[must_use]
 pub fn slot_number(label: &str) -> Option<u32> {
-    if !is_slot_placeholder(label) {
+    let stem = oag_assets::texture_name::stem(label);
+    let digits = stem
+        .get(..9)
+        .filter(|head| head.eq_ignore_ascii_case("billboard"))?;
+    let rest = &stem[digits.len()..];
+    let [digit] = rest.as_bytes() else {
         return None;
-    }
-    // `billboard` is nine bytes and the digit follows it.
-    let digit = *basename(label).as_bytes().get(9)?;
-    digit.is_ascii_digit().then(|| u32::from(digit - b'0'))
+    };
+    (b'1'..=b'8')
+        .contains(digit)
+        .then(|| u32::from(digit - b'0'))
 }
 
 /// Every texture slot of `model` that is a billboard placeholder, with the
@@ -386,13 +321,7 @@ pub fn strip_unserved_slot_placeholders(model: &mut Model, served: &[u32]) -> us
 /// Matched as `fx350_nomip` in any container's spelling: HD's `.gtf`, 2048's `.gxt`,
 /// Omega's `.gnf`.
 pub(crate) fn is_fx350_texture(label: &str) -> bool {
-    let name = basename(label);
-    name.rsplit_once('.').is_some_and(|(stem, extension)| {
-        stem.eq_ignore_ascii_case("fx350_nomip")
-            && ["gtf", "gxt", "gnf"]
-                .iter()
-                .any(|e| extension.eq_ignore_ascii_case(e))
-    })
+    oag_assets::texture_name::has_stem(label, "fx350_nomip")
 }
 
 /// Drops every draw in `model` bound to [`is_fx350_texture`], and says how many.
@@ -530,43 +459,39 @@ impl Mount {
     }
 }
 
-/// The mount a track model authors: Pulse's backplate, then Pulse's own
-/// stub spelling, then HD's.
+/// The mount a track model authors: the backing panel when it has one, else
+/// slot 8's stub.
 ///
-/// **Titles are mutually exclusive by spelling, not by trying one first.**
-/// [`BACKPLATE_TEXTURE`] and [`SLOT8_TEXTURE`] are `.tga` names no HD track
-/// ever binds and [`HD_SLOT8_TEXTURE`] is a `.gtf` name no Pulse track ever
-/// binds, so the ordering only matters on Pulse, where the backing panel
-/// (present on eleven of twelve circuits alongside the stub) is the one
-/// `docs/rendering/start-gantry.md`'s `14_Track` case settles on.
+/// **Matched by stem, so one list answers for every title.** [`BACKPLATE_STEM`]
+/// is a Pulse-only texture and [`SLOT8_STEM`] is every title's, so the ordering
+/// only matters on Pulse, where the backing panel (present on eleven of twelve
+/// circuits alongside the stub) is the one `docs/rendering/start-gantry.md`'s
+/// `14_Track` case settles on.
 ///
-/// `None` when nothing binds any of the three - a circuit this project
-/// cannot place a gantry on, which is a thing to report rather than to paper
-/// over with a coordinate from a circuit that does.
+/// `None` when nothing binds either - a circuit this project cannot place a
+/// gantry on, which is a thing to report rather than to paper over with a
+/// coordinate from a circuit that does.
 #[must_use]
 pub fn mount(model: &Model) -> Option<Mount> {
-    surface(model, BACKPLATE_TEXTURE)
-        .or_else(|| surface(model, SLOT8_TEXTURE))
-        .or_else(|| surface(model, HD_SLOT8_TEXTURE))
-        .or_else(|| surface(model, VITA_SLOT8_TEXTURE))
-        .or_else(|| surface(model, PS4_SLOT8_TEXTURE))
+    surface(model, BACKPLATE_STEM).or_else(|| surface(model, SLOT8_STEM))
 }
 
-/// The plane of every draw in `model` that binds a texture named `texture`.
+/// The plane of every draw in `model` that binds a texture whose file stem is
+/// `stem`.
 ///
 /// Matched on the texture's own label, case-insensitively and on the file
-/// name alone - [`basename`] - because a track's texture labels are bare file
-/// names on Pulse and full archive paths on HD, and neither is consistent in
-/// case across circuits.
+/// stem alone, because a track's texture labels are bare file names on Pulse
+/// and full archive paths on HD, and neither is consistent in case across
+/// circuits.
 #[must_use]
-pub fn surface(model: &Model, texture: &str) -> Option<Mount> {
+pub fn surface(model: &Model, stem: &str) -> Option<Mount> {
     let slots: Vec<usize> = model
         .textures
         .iter()
         .enumerate()
         .filter(|(_, t)| {
             t.as_ref()
-                .is_some_and(|t| basename(&t.label).eq_ignore_ascii_case(texture))
+                .is_some_and(|t| oag_assets::texture_name::has_stem(&t.label, stem))
         })
         .map(|(slot, _)| slot)
         .collect();

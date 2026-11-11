@@ -467,10 +467,11 @@ fn decode_material_texture(path: &str, blob: &[u8], report: &mut Report) -> Opti
 /// [`decode_material_texture`]'s decode alone: the texture, and the form a
 /// `.gnf` took for the report's counts.
 fn decode_texture_form(path: &str, blob: &[u8]) -> Option<(ModelTexture, Option<GnfForm>)> {
-    if path.to_ascii_lowercase().ends_with(".gnf") {
-        ModelTexture::from_gnf_form(path, blob).map(|(texture, form)| (texture, Some(form)))
-    } else {
-        decode_gxt_texture(path, blob).map(|texture| (texture, None))
+    match oag_texture::decode::Container::of_name(path) {
+        Some(oag_texture::decode::Container::Gnf) => {
+            ModelTexture::from_gnf_form(path, blob).map(|(texture, form)| (texture, Some(form)))
+        }
+        _ => decode_gxt_texture(path, blob).map(|texture| (texture, None)),
     }
 }
 
