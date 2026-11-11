@@ -22,6 +22,7 @@ mod absorb_ground_truth;
 mod ai_clean_lap_board;
 mod ai_clean_lap_gate;
 mod ai_contact_where;
+mod ai_contact_duration_board;
 mod ai_dekonstruct_black_board;
 mod ai_dekonstruct_black_ground_truth;
 mod ai_dekonstruct_symptoms_ground_truth;

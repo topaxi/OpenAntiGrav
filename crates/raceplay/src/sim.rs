@@ -316,6 +316,10 @@ pub struct RaceSim {
     /// same reason. Counts only what landed: a shielded or wrecked hull adds
     /// nothing.
     pub(super) pair_damage: [f32; oag_gameplay::MAX_SHIPS],
+    /// Ticks each craft spent touching another craft (in at least one
+    /// resolved pair), the counter `docs/gameplay/ai.md` compares against the
+    /// original's contact ring. Outside `state_hash`, like [`Self::pair_damage`].
+    pub(super) pair_contact_ticks: [u32; oag_gameplay::MAX_SHIPS],
     /// How many ticks each opponent was **still racing** - the denominator the
     /// three counters above are measured over.
     ///
