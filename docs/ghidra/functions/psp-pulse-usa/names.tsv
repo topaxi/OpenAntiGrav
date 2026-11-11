@@ -71,7 +71,7 @@
 0x08934a48	function	CollisionNode_ParseChunks	88	collision.md
 0x08818bdc	function	Collision_SegmentTriangle	90	collision.md
 0x08816ac0	function	Collision_RaycastWorld	88	collision.md
-0x0883198c	function	Collision_SweepSegment	85	rocket-visuals.md
+0x0883198c	function	Collision_SweepSegment	92	rocket-visuals.md
 0x0881646c	function	Collision_RaycastMesh	88	collision.md
 0x08817b1c	function	Collision_RaycastBox	85	collision.md
 0x088304d4	function	Sap_QueryAabb	88	collision.md
@@ -1454,3 +1454,6 @@
 0x08ab083d	data	g_multiplayer_tags_on	88	hud-game-options.md
 0x08966848	function	MpTag_GetPlayerName	70	hud-game-options.md
 0x088e35d4	function	PauseMenu_BindRedirectForMode	85	pause-menu.md
+# 2026-11-11 weapon-bank-follow: the sweep's second query is the collision cage (rocket-visuals.md)
+0x08832134	function	Cage_TestSweepEnd	92	rocket-visuals.md
+0x08831948	function	Cage_QuerySweepEnd	90	rocket-visuals.md
