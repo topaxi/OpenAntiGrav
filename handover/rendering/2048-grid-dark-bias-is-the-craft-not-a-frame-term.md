@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [2048, omega]
-updated: 2026-11-09
+updated: 2026-11-11
 summary: "2048 grid pairs: no frame term (fog, bloom, exposure, lighting) owns the dark bias; the bottom third is the craft box (pose, ring, light)"
 difficulty: medium (50)
 ---
@@ -17,8 +17,9 @@ of ours accounts for most of the dark bias on `2048-empire-climb-grid`, `2048-ma
 
 - **The bottom third is the craft's box.** The hull box is 37 % of the band and carries -15.9 of Empire Climb's -16.5 luma
   bias (Queens Mall -9.2 of -8.3, Vineta K -5.0 of -6.9); the band's scenery is -2.0 / +2.4 / -2.0. Three parts, not separated:
-  the original's craft is 1.31 x wider and 1.35 x taller (pose, `pair.json`); a white ring under it that ours does not draw
-  (not the HUD's Pilot Assist bracket, which both sides draw; unidentified); and the light on the paint. Yellow-paint median
+  the pose offset (`pose_delta`); a white ring under the original's craft that ours does not draw (not the HUD's Pilot Assist
+  bracket, which both sides draw; unidentified); and the light on the paint. **The size is not a term**: the recorded 1.31 x 1.35
+  was the yellow mask's box, and landmark boxes agree within 2 % on all three pairs with ours on `OPT_CLOSE` (step 0, struck). Yellow-paint median
   luma at baseline: Queens Mall ours 130.1 against 156.1 (same pixel count, ours 17 % dark: a light term), Empire Climb ours
   152.6 against 143.1 (not darker: the gap is the road glow, ring and pose). Ambient x3 to x4 on every no-lightmap material
   closes 62 / 69 / 46 % of the bottom third and lowers impact 10 / 14 / 9 % (x4: 9 / 18 / 3 %), but overshoots Empire Climb's
@@ -40,12 +41,14 @@ of ours accounts for most of the dark bias on `2048-empire-climb-grid`, `2048-ma
 
 ## Next Steps
 
-0. **First, rule out the chase camera's distance setting** (maintainer, 2026-11-09): the original offers a close and a far
-   chase camera, and ours drawing the craft about 1.3x (2048 grids) to 1.5x (HD absorb pair) larger than the original
-   looks like the two captures used different settings, not a model or lighting gap. Read the setting each capture ran
-   with (the original's options or save, ours' camera flag) and re-pair on the same one before any craft-box number.
+0. ~~Rule out the chase camera's distance setting~~ (settled 2026-11-11, `c2048-chase-camera`, confidence 75): ours flies
+   `OPT_CLOSE` (the default, byte-identical to `--camera-view close`), the original's hull matches it within 2 % on landmark boxes (three pairs)
+   and is 32 % from ours on Far, so the original did too (inferred from the frame; its stored `pair.json` records no setting). The
+   1.31 x 1.35 was the yellow mask. The HD absorb pair's 1.5x is a separate case (its profile's autosave carried `OPT_FAR`, see
+   `rpcs3-capture.md`) and is not read here. Method and numbers: [compare-page.md](../../docs/tools/compare-page.md), "The chase
+   camera and the craft's size". The maintainer can decide the setting outright from the Vita3K save's `CameraP1`.
 
-1. Match the craft's pose on the three pairs (the recorded 1.31 x 1.35 size difference is the first suspect) and identify the
+1. Match the craft's pose on the three pairs (`pose_delta`) and identify the
    white ring under the original's craft; re-measure the hull box's bias and the pair's impact (method in exposure.md).
 2. Then read the 2048 craft's pixel program from Vita3K's SPIR-V by the container's SHA-256 (`scripts/vita-gxp.py`,
    `2048-composite-leftovers.md` has the recipe) and name the term that lights the paint past `ambient + sun * N.L`

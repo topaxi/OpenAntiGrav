@@ -422,13 +422,13 @@ What it says:
 
 - **The bottom third's bias is the craft's box, not the frame.** On Empire Climb the hull box is 37 % of the band at -43.1,
   which is -15.9 of the band's -16.5; Queens Mall's is -9.2 of -8.3; Vineta K's -5.0 of -6.9. The scenery of the band is
-  -2.0 / +2.4 / -2.0. The box holds the craft and the road round it, and the original's frame has more of both: its hull
-  is 1.31 x wider and 1.35 x taller than ours (the pair's recorded pose difference), a white ring under it (not the HUD's
-  Pilot Assist bracket, which both sides draw bottom right; the ring is unidentified and ours draws none) and a glow on the
-  road. Yellow paint inside `(290,240)-(680,470)` (R > G > B, R - B > 60, R > 90), baseline ours against the original:
+  -2.0 / +2.4 / -2.0. The box holds the craft and the road round it, and the original's frame has more of the road: a white ring under the hull
+  (not the HUD's Pilot Assist bracket, which both sides draw bottom right; the ring is unidentified and ours draws none) and a glow on the
+  road. The hull itself is the same size as ours (the recorded 1.31 x 1.35 was the yellow mask's box; landmark boxes agree within 2 % on all
+  three pairs, ours on `OPT_CLOSE`: [compare-page.md](../../../tools/compare-page.md), "The chase camera and the craft's size"). Yellow paint inside `(290,240)-(680,470)` (R > G > B, R - B > 60, R > 90), baseline ours against the original:
   Queens Mall 8,320 px at median luma 130.1 against 8,803 px at 156.1 (**ours' paint 17 % darker, same area**: a light
   term); Empire Climb 10,514 px at 152.6 against 30,354 px at 143.1 (the original's mask also catches its peach road, so
-  the paint is **not** darker there; the box gap is the road's glow, the ring and the larger pose); Vineta K's craft is not
+  the paint is **not** darker there; the box gap is the road's glow, the ring and the pose); Vineta K's craft is not
   yellow and the mask finds none. Ambient x4 lifts Queens Mall's paint to 158.7 (matches), and lifts Empire Climb's to 192.9
   and its near-white pixels from 246 to 5,807 against the original's 1,088 (overshoots). So a craft light term is real on
   Queens Mall and not the story on Empire Climb.
