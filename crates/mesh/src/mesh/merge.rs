@@ -22,56 +22,10 @@ use super::*;
 /// `oag_render::collision`.
 #[must_use]
 pub fn merge(label: &str, models: Vec<Model>) -> Model {
-    let mut out = Model {
-        // `merge` folds several sources into one buffer pair, and a flap's
-        // vertex range (like `node_vertex_ranges`, dropped below for the
-        // same reason) is only meaningful against the source it came from -
-        // the same reason `DrawCall::node` is documented as ambiguous here.
-        airbrakes: [None, None],
-        label: label.to_string(),
-        vertices: Vec::new(),
-        indices: Vec::new(),
-        draws: Vec::new(),
-        alpha_tested_draws: Vec::new(),
-        transparent_draws: Vec::new(),
-        textures: Vec::new(),
-        lightmaps: Vec::new(),
-        pad_masks: Vec::new(),
-        wave_maps: Vec::new(),
-        fifth_maps: Vec::new(),
-        sixth_maps: Vec::new(),
-        material_slots: Vec::new(),
-        material_specular_exponent: Vec::new(),
-        material_glow: Vec::new(),
-        material_colour_factor: Vec::new(),
-        material_quake: Vec::new(),
-        material_tangent: Vec::new(),
-        material_variants: Vec::new(),
-        material_anim: Vec::new(),
-        shine_draws: Vec::new(),
-
-        vertex_colour_is_light: false,
-        stamps_glow: false,
-        glow_by_texel: false,
-        glow_from_program: false,
-
-        flame: None,
-        absorb_shell: false,
-        shield_shell: false,
-        own_shield: false,
-        material_lod_bias: 0.0,
-        material_state: Vec::new(),
-        per_batch_cull: false,
-        alpha_test_ref: None,
-        centre: [0.0; 3],
-        radius: 1.0,
-        mesh_count: 0,
-        anim_tracks: Vec::new(),
-        anim_nodes: Vec::new(),
-        emissive: Vec::new(),
-        node_vertex_ranges: Vec::new(),
-        lod_groups: Default::default(),
-    };
+    // `merge` folds several sources into one buffer pair, so a flap's vertex range (like
+    // `node_vertex_ranges`) is only meaningful against the source it came from, and both
+    // stay empty - the same reason `DrawCall::node` is documented as ambiguous here.
+    let mut out = Model::from_draws(label, Vec::new(), Vec::new(), Vec::new(), [0.0; 3], 1.0, 0);
 
     for model in models {
         if model.vertices.is_empty() || model.indices.is_empty() {

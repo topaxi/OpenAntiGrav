@@ -303,11 +303,31 @@ impl Model {
     /// be constructible by accident, which this must not be.
     #[must_use]
     pub fn none(label: &str) -> Self {
+        Self::from_draws(label, Vec::new(), Vec::new(), Vec::new(), [0.0; 3], 0.0, 0)
+    }
+
+    /// A model of synthetic geometry: `draws` over `vertices` and `indices`, bounded by
+    /// `centre` and `radius`, `mesh_count` meshes. No textures, materials, animation or
+    /// flags: the caller sets the few a synthetic model does want (the sky cube's textures).
+    ///
+    /// The one literal of every field a synthetic model leaves empty, so a field added to
+    /// [`Model`] is a compile error here and nowhere else. A parsed model builds its own
+    /// literal, because it sets most of them.
+    #[must_use]
+    pub fn from_draws(
+        label: &str,
+        vertices: Vec<GpuVertex>,
+        indices: Vec<u32>,
+        draws: Vec<DrawCall>,
+        centre: [f32; 3],
+        radius: f32,
+        mesh_count: usize,
+    ) -> Self {
         Self {
             label: label.to_string(),
-            vertices: Vec::new(),
-            indices: Vec::new(),
-            draws: Vec::new(),
+            vertices,
+            indices,
+            draws,
             alpha_tested_draws: Vec::new(),
             transparent_draws: Vec::new(),
             textures: Vec::new(),
@@ -339,9 +359,9 @@ impl Model {
             material_state: Vec::new(),
             per_batch_cull: false,
             alpha_test_ref: None,
-            centre: [0.0; 3],
-            radius: 0.0,
-            mesh_count: 0,
+            centre,
+            radius,
+            mesh_count,
             airbrakes: [None, None],
             anim_tracks: Vec::new(),
             node_vertex_ranges: Vec::new(),
@@ -1154,3 +1174,88 @@ mod order;
 pub use order::{BlendedOrder, LIST_B_LAYER, flare_key};
 pub mod render_state;
 pub use merge::merge;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn vertex(x: f32) -> GpuVertex {
+        GpuVertex {
+            quake: 0.0,
+            position: [x, 0.0, 0.0],
+            normal: [0.0, 1.0, 0.0],
+            colour: [1.0; 4],
+            texcoord: [0.0; 2],
+            lightmap_texcoord: [0.0; 2],
+            lit: 1.0,
+            anim: 0,
+            xform: 0,
+            sun_mask: 1.0,
+            slots: slots::DEFAULT,
+            specular_exponent: DEFAULT_SPECULAR_EXPONENT,
+            glow: 0.0,
+            texcoord2: [0.0; 2],
+            tangent: 0,
+        }
+    }
+
+    /// Every argument lands in its own field and every other field is the empty model's, so
+    /// a synthetic model built through `from_draws` is the one the literals built.
+    #[test]
+    fn from_draws_places_each_argument_and_leaves_the_rest_empty() {
+        let draw = DrawCall {
+            writes_depth: false,
+            moving: false,
+            blend: None,
+            blend_state: None,
+            depth_point: None,
+            layer: oag_vex::vex::LAYER_DEFAULT,
+            culled: false,
+            range: 0..3,
+            texture: None,
+            bounds: Bounds {
+                centre: [1.0, 2.0, 3.0],
+                radius: 4.0,
+            },
+            node: None,
+            chunk: None,
+            alpha_test_ref: None,
+        };
+        let built = Model::from_draws(
+            "synthetic",
+            vec![vertex(0.0), vertex(1.0), vertex(2.0)],
+            vec![0, 1, 2],
+            vec![draw],
+            [5.0, 6.0, 7.0],
+            8.0,
+            9,
+        );
+        assert_eq!(built.label, "synthetic");
+        assert_eq!(built.vertices.len(), 3);
+        assert_eq!(built.indices, [0, 1, 2]);
+        assert_eq!(built.draws.len(), 1);
+        assert_eq!(built.centre, [5.0, 6.0, 7.0]);
+        assert_eq!(built.radius, 8.0);
+        assert_eq!(built.mesh_count, 9);
+
+        // Everything but those seven fields is the empty model's.
+        let mut expected = Model::none("synthetic");
+        expected.vertices.clone_from(&built.vertices);
+        expected.indices.clone_from(&built.indices);
+        expected.draws.clone_from(&built.draws);
+        expected.centre = built.centre;
+        expected.radius = built.radius;
+        expected.mesh_count = built.mesh_count;
+        assert_eq!(format!("{built:?}"), format!("{expected:?}"));
+    }
+
+    #[test]
+    fn the_empty_model_has_no_geometry_and_no_extent() {
+        let none = Model::none("empty");
+        assert!(none.vertices.is_empty() && none.indices.is_empty() && none.draws.is_empty());
+        assert_eq!(
+            (none.centre, none.radius, none.mesh_count),
+            ([0.0; 3], 0.0, 0)
+        );
+    }
+}
