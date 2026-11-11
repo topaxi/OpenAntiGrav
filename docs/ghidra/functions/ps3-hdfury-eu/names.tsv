@@ -930,11 +930,11 @@
 0x00c81a88	data	g_SceneColourTargets	85	scene-width-throttle.md
 0x000f5878	function	Body_Init	82	body-damping.md
 0x008a92f4	data	Body_DefaultDamping	90	body-damping.md
-0x003d9970	function	Environment_BuildAnisoPalette	90	zone-palette-textures.md
-0x00c81330	data	g_ZoneGradient1Textures	80	zone-palette-textures.md
-0x00c81338	data	g_ZoneGradient2Textures	80	zone-palette-textures.md
-0x00c81340	data	g_ZoneGradient3Textures	80	zone-palette-textures.md
-0x00c81348	data	g_ZoneAnisoPaletteTextures	88	zone-palette-textures.md
-0x00c81350	data	g_ZoneAnisoPaletteOuterTextures	88	zone-palette-textures.md
+0x003d9970	function	Environment_BuildAnisoPalette	92	zone-palette-textures.md
+0x00c81330	data	g_ZoneGradient1Textures	88	zone-palette-textures.md
+0x00c81338	data	g_ZoneGradient2Textures	85	zone-palette-textures.md
+0x00c81340	data	g_ZoneGradient3Textures	85	zone-palette-textures.md
+0x00c81348	data	g_ZoneAnisoPaletteTextures	90	zone-palette-textures.md
+0x00c81350	data	g_ZoneAnisoPaletteOuterTextures	90	zone-palette-textures.md
 0x00c81358	data	g_ZoneTrackAnisoPaletteTextures	85	zone-palette-textures.md
 0x00c81360	data	g_ZoneTrackAnisoPaletteOuterTextures	85	zone-palette-textures.md

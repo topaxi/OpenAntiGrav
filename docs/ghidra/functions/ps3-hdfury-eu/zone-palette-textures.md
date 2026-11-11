@@ -15,10 +15,11 @@ twenty-third and twenty-fourth passes): what fills the two-entry arrays at
 **The answer: no file. The loader creates seven pairs of tiny FP16 textures, and the
 stage blend rewrites their texels from the effectSettings stage table each time a
 stage commits.** The aniso palette is a 17-texel ramp over five authored colours; a
-gradient is three authored colours, one per texel. Confidence 90 on the palette law
-(static read, then 632 live palettes over four stages, every authored control point
-exact and every interpolated texel within one FP16 ulp); 80 on the gradients (static,
-plus a live layout check whose values the circuit's table does not author).
+gradient is three authored colours, one per texel. Confidence 92 on the palette law
+and 90 on the gradients: a static read, then two live captures (a circuit and the
+`Zone_1` arena, 1,248 palettes over stages 1-4): every authored control point exact,
+every interpolated texel within one FP16 ulp, every gradient texel equal to the live
+stage's `Gradient<k>.Colour<j>`.
 
 ## 1. Seven arrays, not five, and who publishes which
 
@@ -205,25 +206,42 @@ boot stall limit); seed it from `~/.cache/rpcs3/cache` first. The Racebox rememb
 the last race type, so the script verifies each RIGHT tap on the race-type box and
 refuses a race whose mode line is not `GetMode()==6`.
 
+### The arena, `Zone_1` (Pro Tozo), the same day
+
+Same script attached to a `serve` walked by hand to Racebox, Zone, Track Select,
+PRO TOZO (`TTY.log`: `Loading World "Data\Environments\Zone_1\track.vex"`,
+`GetMode()==6`), so the table is `zonemodedlc3.effectsettings`, which authors all
+five points, the curve and the power on every stage. 154 samples, stages 1 to 4:
+
+- **616 palettes, all 3,080 control points** (five a ramp, all authored) equal the
+  file's values exactly at FP16; every interior texel within one ulp of the law with
+  the file's own `Aniso Curve` (`0.5`).
+- **Gradients**: at stage 4, `Gradient1` reads `(0.8823, 1.0, 0.0902) (0.7529,
+  0.8628, 0.7529) (2, 2, 2)` against `4 Flash.Scene.Gradient1.Colour0..2` =
+  `0.882353 1 0.090196`, `0.752941 0.862745 0.752941`, `2 2 2`; `Gradient2`/`3` the
+  file's `(1,0,0) (0,1,0) (0,0,1)`.
+
+Frames of the same run (start grid at stage 1, the track at stages 1-4) are the
+original's side of the arena comparison in
+[zone-shader.md](zone-shader.md)'s port notes: grey textured track and white
+scenery kept, the stage's colours only where the albedo is black.
+
 ## 6. What this does not settle
 
 - **Which draws sample `GradientColour*`.** [zone-shader.md](zone-shader.md) has
   `GradientColour1` on unit 0 (the albedo slot) of `zone_2/materials/gradientcolour1`;
   the full census of materials that declare the four gradient samplers is not run.
-- **The arena's own values live.** The capture flew a racing circuit. A `zone_1`
-  capture would check `zonemodedlc3`'s Middle points and gradients against texels; it
-  needs the Racebox's track picker driven to `Zone_1`.
 - **Whether `0x005f7a60` rounds or truncates**; one ulp either way.
 
 ## Names applied
 
 | address | kind | name | confidence |
 | --- | --- | --- | ---: |
-| `0x003d9970` | function | `Environment_BuildAnisoPalette` | 90 |
-| `0x00c81330` | data | `g_ZoneGradient1Textures` | 80 |
-| `0x00c81338` | data | `g_ZoneGradient2Textures` | 80 |
-| `0x00c81340` | data | `g_ZoneGradient3Textures` | 80 |
-| `0x00c81348` | data | `g_ZoneAnisoPaletteTextures` | 88 |
-| `0x00c81350` | data | `g_ZoneAnisoPaletteOuterTextures` | 88 |
+| `0x003d9970` | function | `Environment_BuildAnisoPalette` | 92 |
+| `0x00c81330` | data | `g_ZoneGradient1Textures` | 88 |
+| `0x00c81338` | data | `g_ZoneGradient2Textures` | 85 |
+| `0x00c81340` | data | `g_ZoneGradient3Textures` | 85 |
+| `0x00c81348` | data | `g_ZoneAnisoPaletteTextures` | 90 |
+| `0x00c81350` | data | `g_ZoneAnisoPaletteOuterTextures` | 90 |
 | `0x00c81358` | data | `g_ZoneTrackAnisoPaletteTextures` | 85 |
 | `0x00c81360` | data | `g_ZoneTrackAnisoPaletteOuterTextures` | 85 |
