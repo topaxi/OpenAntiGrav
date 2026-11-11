@@ -1170,6 +1170,8 @@ pub mod groups;
 pub use flame::Flame;
 pub mod glow;
 mod merge;
+mod debug_tint;
+pub use debug_tint::{Unit as DebugTintUnit, requested as debug_tint_requested};
 mod order;
 pub use order::{BlendedOrder, LIST_B_LAYER, flare_key};
 pub mod render_state;

@@ -97,6 +97,12 @@ pub struct BlendedOrder {
 }
 
 impl BlendedOrder {
+    /// The queue key of the entry drawn `at`-th, for the draw dump.
+    #[must_use]
+    pub fn key_at(&self, at: usize) -> u32 {
+        self.keys[at]
+    }
+
     /// How many entries draw before something queued at `key`: its place in [`Self::order`].
     /// An entry with an equal key draws first (the original's `qsort` is not stable, so a tie
     /// is our choice).

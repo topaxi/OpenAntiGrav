@@ -547,7 +547,7 @@ impl Scene {
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        track_model: Model,
+        mut track_model: Model,
         liveries: &[Livery],
         collision_model: Option<Model>,
         sky_model: Option<Model>,
@@ -715,6 +715,10 @@ impl Scene {
             shadow_maps,
         )?;
         crate::stages::checkpoint()?;
+        if let Some(unit) = oag_mesh::mesh::debug_tint_requested() {
+            let colours = track_model.debug_tint_blended(unit);
+            log::debug!("OAG_DEBUG_TINT_BLENDED: {colours} colour(s) over the circuit's blended list");
+        }
         let placeholders = oag_render::gantry::placeholder_texture_slots(&track_model);
         let mut track = Drawable::new_with(
             device,
