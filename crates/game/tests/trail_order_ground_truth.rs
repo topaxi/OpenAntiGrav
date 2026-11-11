@@ -131,7 +131,14 @@ fn a_bush_hides_the_speed_pad_behind_it_under_both_trail_orders() {
         let status = Command::new(env!("CARGO_BIN_EXE_oag-game"))
             .arg(&image)
             .args(["--race", "--no-audio", "--size", "960x544"])
-            .args(["--render-scale", "100", "--msaa", "off", "--motion-blur", "off"])
+            .args([
+                "--render-scale",
+                "100",
+                "--msaa",
+                "off",
+                "--motion-blur",
+                "off",
+            ])
             .args(["--screen-filter", "off", "--anisotropy", "off"])
             .args(["--track", "Data\\Environments\\13_Track\\track.vex"])
             .args(["--ticks", "0", "--pose=226.7,98.0,172.9", "--pose-hold"])
