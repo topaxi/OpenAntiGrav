@@ -623,15 +623,24 @@ frame lines) but the canvas stays black** (2026-11-11, Firefox 159 on a niri
 Wayland session, hybrid Intel Arc 130T/140T plus NVIDIA RTX PRO 2000 laptop, a
 fresh profile with `dom.webgpu.enabled` and `gfx.webgpu.ignore-blocklist` on).
 Firefox's own WebGPU sample (`webgpu.github.io/webgpu-samples`, rotatingCube)
-is black in the same profile too and loses its device, and Firefox prints
-`[GFX1-]: dmabuf image neither requires nor prefers a dedicated allocation` on
-its standard error once a frame. That is Firefox's present path without a
-readback (a DMABuf shared with the compositor), not the game: with
-`dom.webgpu.allow-present-without-readback` set to `false` in `about:config`
-both draw, the game through its boot movie, on either GPU (`VK_DRIVER_FILES`
-naming the Intel or the NVIDIA ICD). The game sees no error and no lost device
-on that path, so the page cannot tell the player. Headless Firefox, Firefox
-under Xvfb and Firefox on a headless sway never take that path and draw.
+is black in the same profile too, and Firefox writes
+`[GFX1-]: dmabuf image neither requires nor prefers a dedicated allocation` to
+its standard error 92 to 531 times in a 4 to 5 s run. That is Firefox's
+present path without a readback (a DMABuf shared with the compositor), not the
+game: with `dom.webgpu.allow-present-without-readback` set to `false` in
+`about:config` both draw, the game through its boot movie to the menus. The
+picker page's note names that pref. Both GPUs were tried through
+`VK_DRIVER_FILES` (the Intel or the NVIDIA ICD); the adapter reports no name,
+so which one served is inferred from the ICD changing the outcome (the cube
+sample lost its device on the NVIDIA ICD and not on the Intel one, black on
+both). The game sees no error and no lost device on that path, so the page
+cannot tell the player. Headless Firefox, Firefox under Xvfb and Firefox on a
+headless sway take the readback path and draw.
+
+A canvas configured `rgba8unorm` instead of Firefox's preferred `bgra8unorm`
+draws on that Wayland session with the pref at its default, but **crashes**
+Firefox 159 headless and under Xvfb (software WebRender), a 40-line page that
+only clears the canvas included; so the game keeps the preferred format.
 
 ### What the page says when something fails
 
