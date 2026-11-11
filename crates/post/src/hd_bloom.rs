@@ -392,7 +392,7 @@ pub struct Chain {
     sampler: wgpu::Sampler,
     sized: Sized,
     /// Each split seat's adaptation, built when a split first draws it. See `lanes.rs`.
-    seats: lanes::SeatLanes,
+    seats: crate::seat_lanes::SeatLanes<Lane>,
     /// What the four uniform buffers last held, so a frame that moved nothing writes nothing.
     written: std::cell::Cell<Option<Placement>>,
     /// The zoom-streak ring, when the title has one, and the pulses it draws
@@ -547,7 +547,7 @@ impl Chain {
             layout,
             sampler,
             sized,
-            seats: lanes::SeatLanes::default(),
+            seats: crate::seat_lanes::SeatLanes::default(),
             written: std::cell::Cell::new(None),
             zoom,
             zoom_frame: std::cell::Cell::new(None),

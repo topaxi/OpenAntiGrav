@@ -47,6 +47,8 @@ use anyhow::Result;
 
 use oag_gpu::formats::SCENE_FORMAT;
 
+use crate::seat_lanes::SeatLanes;
+
 /// The quarter-resolution targets' format: the display surface's, which
 /// `PostFx_CreateTargets` reads with `sceGxmColorSurfaceGetFormat` - the Vita
 /// displays `A8B8G8R8`, so the gate's alpha is byte 3, where the readback
@@ -265,9 +267,7 @@ pub struct Chain {
     /// The window's own picture's exposure.
     window: Seat,
     /// Each split seat's, built when a split first draws it ([`Chain::run_view`]).
-    seats: std::cell::RefCell<Vec<Option<Seat>>>,
-    /// How many seats' exposures have been built, for [`Chain::seat_lane_builds`].
-    seat_builds: std::cell::Cell<u64>,
+    seats: SeatLanes<Seat>,
     state_rw: wgpu::BindGroupLayout,
     state_ro: wgpu::BindGroupLayout,
     sized: Sized,
@@ -450,8 +450,7 @@ impl Chain {
             sampler,
             uniform,
             window,
-            seats: std::cell::RefCell::new(Vec::new()),
-            seat_builds: std::cell::Cell::new(0),
+            seats: SeatLanes::default(),
             state_rw,
             state_ro,
             sized,
@@ -685,22 +684,9 @@ impl Chain {
         run: View,
     ) {
         let seat = run.seat.min(MAX_SEATS - 1);
-        {
-            let mut seats = self.seats.borrow_mut();
-            if seats.len() <= seat {
-                seats.resize_with(seat + 1, || None);
-            }
-            if seats[seat].is_none() {
-                seats[seat] = Some(Seat::new(
-                    device,
-                    &self.state_rw,
-                    &self.state_ro,
-                    self.params.exposure,
-                ));
-                self.seat_builds.set(self.seat_builds.get() + 1);
-            }
-        }
-        let seats = self.seats.borrow();
+        let lane = self.seats.get_or_build(seat, || {
+            Seat::new(device, &self.state_rw, &self.state_ro, self.params.exposure)
+        });
         let (x, y, w, h) = run.rect;
         if run.first {
             // A pass that clears and draws nothing: the composite loads.
@@ -727,7 +713,7 @@ impl Chain {
             queue,
             encoder,
             view,
-            seats[seat].as_ref().expect("built above"),
+            &lane,
             ((x, y), (x as f32, y as f32)),
             (w, h),
         );
@@ -736,26 +722,24 @@ impl Chain {
     /// How many seats hold an exposure of their own right now.
     #[must_use]
     pub fn seat_lanes(&self) -> usize {
-        self.seats.borrow().iter().flatten().count()
+        self.seats.built()
     }
 
     /// Forgets every seat's exposure, for the first whole-picture frame after a split.
     pub fn retire_seats(&self) {
-        self.seats.borrow_mut().clear();
+        self.seats.clear();
     }
 
     /// Forgets one seat's exposure, for a seat that was not drawn as a split view last frame.
     pub fn retire_seat(&self, seat: usize) {
-        if let Some(lane) = self.seats.borrow_mut().get_mut(seat.min(MAX_SEATS - 1)) {
-            lane.take();
-        }
+        self.seats.retire(seat.min(MAX_SEATS - 1));
     }
 
     /// How many seat lanes have been built so far, a lane forgotten and built again counting
     /// twice (`hd_bloom::Chain::seat_lane_builds`).
     #[must_use]
     pub fn seat_lane_builds(&self) -> u64 {
-        self.seat_builds.get()
+        self.seats.builds()
     }
 }
 

@@ -43,6 +43,7 @@ pub mod omega_tonemap;
 pub mod photo_fx;
 pub mod ps2_bloom;
 pub mod screen;
+mod seat_lanes;
 pub mod smaa;
 pub mod wo_composite;
 

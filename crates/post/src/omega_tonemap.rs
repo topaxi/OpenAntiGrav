@@ -66,6 +66,8 @@ use anyhow::Result;
 
 use oag_gpu::formats::{DISTORTION_FORMAT, SCENE_FORMAT};
 
+use crate::seat_lanes::SeatLanes;
+
 /// The luma image's side, the executable's own `0x100` (format `R16F`).
 pub const LADDER_SIZE: u32 = 256;
 
@@ -324,9 +326,7 @@ pub struct Chain {
     /// The window's own picture's adaptation.
     window: Seat,
     /// Each split seat's, built when a split first draws it ([`Chain::run_view`]).
-    seats: std::cell::RefCell<Vec<Option<Seat>>>,
-    /// How many seats' lanes have been built, for [`Chain::seat_lane_builds`].
-    seat_builds: std::cell::Cell<u64>,
+    seats: SeatLanes<Seat>,
     state_rw: wgpu::BindGroupLayout,
     state_ro: wgpu::BindGroupLayout,
     /// The composite's `DistortionTexture` slot, and the zero texture that
@@ -585,8 +585,7 @@ impl Chain {
             halve_groups,
             coefficients_in,
             window,
-            seats: std::cell::RefCell::new(Vec::new()),
-            seat_builds: std::cell::Cell::new(0),
+            seats: SeatLanes::default(),
             state_rw,
             state_ro,
             distortion_layout,
@@ -846,17 +845,9 @@ impl Chain {
         run: View,
     ) {
         let seat = run.seat.min(MAX_SEATS - 1);
-        {
-            let mut seats = self.seats.borrow_mut();
-            if seats.len() <= seat {
-                seats.resize_with(seat + 1, || None);
-            }
-            if seats[seat].is_none() {
-                seats[seat] = Some(Seat::new(device, &self.state_rw, &self.state_ro));
-                self.seat_builds.set(self.seat_builds.get() + 1);
-            }
-        }
-        let seats = self.seats.borrow();
+        let lane = self
+            .seats
+            .get_or_build(seat, || Seat::new(device, &self.state_rw, &self.state_ro));
         let (x, y, w, h) = run.rect;
         let scene = self.sized.size;
         let share = [w as f32 / scene.0 as f32, h as f32 / scene.1 as f32].map(|s| s.min(1.0));
@@ -886,7 +877,7 @@ impl Chain {
             queue,
             encoder,
             view,
-            seats[seat].as_ref().expect("built above"),
+            &lane,
             ((x, y), (x as f32, y as f32)),
             (w, h),
             share,
@@ -897,26 +888,24 @@ impl Chain {
     /// How many seats hold an adaptation of their own right now.
     #[must_use]
     pub fn seat_lanes(&self) -> usize {
-        self.seats.borrow().iter().flatten().count()
+        self.seats.built()
     }
 
     /// Forgets every seat's adaptation, for the first whole-picture frame after a split.
     pub fn retire_seats(&self) {
-        self.seats.borrow_mut().clear();
+        self.seats.clear();
     }
 
     /// Forgets one seat's adaptation, for a seat that was not drawn as a split view last frame.
     pub fn retire_seat(&self, seat: usize) {
-        if let Some(lane) = self.seats.borrow_mut().get_mut(seat.min(MAX_SEATS - 1)) {
-            lane.take();
-        }
+        self.seats.retire(seat.min(MAX_SEATS - 1));
     }
 
     /// How many seat lanes have been built so far, a lane forgotten and built again counting
     /// twice (`hd_bloom::Chain::seat_lane_builds`).
     #[must_use]
     pub fn seat_lane_builds(&self) -> u64 {
-        self.seat_builds.get()
+        self.seats.builds()
     }
 }
 

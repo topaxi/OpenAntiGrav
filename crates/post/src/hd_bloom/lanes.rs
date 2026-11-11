@@ -14,7 +14,7 @@
 //! reduction ladder): a view's chain runs to its end, in its own submission, before the
 //! next view's starts, so nothing in them outlives the view that wrote it.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 
 use super::{Chain, Pass, Target};
 
@@ -153,51 +153,6 @@ impl Lane {
             current: Cell::new(0),
             fresh: Cell::new(true),
         }
-    }
-}
-
-/// The seats' lanes, built when a split first asks for them, and how many builds that took
-/// (a lane forgotten and asked for again is built again, which a live count cannot show).
-#[derive(Debug, Default)]
-pub(super) struct SeatLanes(RefCell<Vec<Option<Lane>>>, Cell<u64>);
-
-impl SeatLanes {
-    pub(super) fn built(&self) -> usize {
-        self.0.borrow().iter().flatten().count()
-    }
-
-    pub(super) fn builds(&self) -> u64 {
-        self.1.get()
-    }
-
-    pub(super) fn clear(&self) {
-        self.0.borrow_mut().clear();
-    }
-
-    pub(super) fn retire(&self, seat: usize) {
-        if let Some(lane) = self.0.borrow_mut().get_mut(seat) {
-            lane.take();
-        }
-    }
-
-    pub(super) fn get_or_build(
-        &self,
-        seat: usize,
-        build: impl FnOnce() -> Lane,
-    ) -> std::cell::Ref<'_, Lane> {
-        {
-            let mut lanes = self.0.borrow_mut();
-            if lanes.len() <= seat {
-                lanes.resize_with(seat + 1, || None);
-            }
-            if lanes[seat].is_none() {
-                lanes[seat] = Some(build());
-                self.1.set(self.1.get() + 1);
-            }
-        }
-        std::cell::Ref::map(self.0.borrow(), |lanes| {
-            lanes[seat].as_ref().expect("built above")
-        })
     }
 }
 
