@@ -52,11 +52,17 @@ sp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(sp)
 
 #: The port's settings the capture sets (gow3.ini); everything else is the port's default. `native` is 1920x1080.
+#: `engine_fps=60` only leaves the frame rate patches out; the port's Omega profile (`scripts/game_profiles.py`) sets `GOW3_ENGINE_FPS=240`
+#: (the engine steps by the time between frames), which the port log reports as "Engine frame rate: 240 FPS" and `pair.json` records.
 GOW3_INI = {"engine_fps": "60", "render_resolution": "native"}
 #: The circuit name's crop on Track Select, 1920x1080 frame (width x height + x + y): the name under the hexagon.
 NAME_CROP = "700x60+70+360"
 #: Largest normalised RMSE between the name crop and its reference for "the same name".
-NAME_RMSE_MAX = 0.03
+NAME_RMSE_MAX = 0.08
+#: How far `board_red` may rise from the first HUD frame to the grab before the countdown board counts as lit.
+BOARD_LIT_RISE = 0.08
+#: How far the lap ring reading rises from the first grid frame (no HUD yet) when the HUD shows.
+HUD_RISE = 0.1
 #: The team logo's crop on Ship Select (the cursor's team, which the model preview beside it does not move).
 SHIP_CROP = "420x140+220+170"
 #: The Xbox-360-shaped pad `uinput-pads.py` makes; a second one on the machine is somebody else's.
@@ -100,6 +106,8 @@ class Rig:
 
     def start_sway(self):
         self.runtime.mkdir(mode=0o700, exist_ok=True)
+        for stale in [*self.runtime.glob("wayland-1*"), *self.runtime.glob("sway-ipc.*")]:  # a killed sway leaves its socket, and "exists" would mean "not yet"
+            stale.unlink()
         conf = self.dir / "sway.conf"
         conf.write_text('output HEADLESS-1 resolution 1920x1080\nfor_window [app_id="gow3"] fullscreen enable\n')
         env = {k: v for k, v in self.env.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
@@ -230,11 +238,16 @@ def capture_original(rig, args, out):
     rig.grab(out / "loading.png")
     time.sleep(args.load_wait2)  # the START RACE prompt waits for the confirm
     rig.press("cross", 0.2)
-    frames, hud_at, t0 = [], None, time.time()
+    frames, hud_at, t0, ring0 = [], None, time.time(), None
     while time.time() - t0 < 20:
         path = rig.grab(out / ("frame%02d.png" % len(frames)))
         frames.append(path)
-        if hud_at is None and sp.hud_up(path):
+        ring = sp.region_mean(path, sp.HUD_REGION, "(mean.r+mean.g)/2-mean.b")
+        ring0 = ring if ring0 is None else ring0
+        # the lap hexagon's yellow ring: over the shipped threshold, or well above the first frame's (a pale scene, Tech De Ra,
+        # keeps the ring under the threshold). A yellow sign in the loading shot's corner can pass it, so the board check and
+        # the eye (`side.png`) decide whether the frame is the grid.
+        if hud_at is None and (ring > 0.03 or ring - ring0 > HUD_RISE):
             hud_at = len(frames) - 1
         if hud_at is not None and len(frames) > hud_at + sp.GRAB_AFTER_HUD + 3:
             break
@@ -289,7 +302,7 @@ def main():
     pair.out = out
     commit = port_commit(args.port)
     pair.rec["original"]["emulator"] = {"name": "wipeout_pc native port", "commit": commit, "resolution": "1920x1080", "upscaler": "none",
-                                        "engine_fps": int(GOW3_INI["engine_fps"]), "capture": "grim on a headless sway, full screen",
+                                        "engine_fps_ini": int(GOW3_INI["engine_fps"]), "capture": "grim on a headless sway, full screen",
                                         "fresh_save": True}
     pair.rec["ours"]["binary"] = ce.binary_record(args.oag_game)
     rig = Rig(args.scratch, args.game, args.port, Path(args.scratch).resolve().parent.name)
@@ -300,6 +313,8 @@ def main():
     shutil.copy(shot, out / "theirs.png")
     pair.stamp("original")
     pair.rec["original"]["grid_capture"] = seen
+    fps = [l for l in (rig.dir / "port.log").read_text(errors="replace").splitlines() if l.startswith("Engine frame rate")]
+    pair.rec["original"]["emulator"]["engine_frame_rate_line"] = fps[-1] if fps else None
     status = rig.dir / "data/out/patch_status.json"
     if status.exists():
         pair.rec["original"]["emulator"]["patch_status"] = json.loads(status.read_text())
@@ -318,12 +333,14 @@ def main():
         pair.check("%s is a full-screen frame (no window title bar)" % f, bool(_no_chrome(out / f)), "frame top rows read as the scene, not the port's bar")
     if args.name_ref:
         d = rmse(args.name_ref, out / "circuit-name.png")
-        pair.check("Track Select names %s" % args.circuit, d < NAME_RMSE_MAX, "name crop RMSE %.4f against the reference (limit %.2f)" % (d, NAME_RMSE_MAX))
+        pair.check("Track Select names %s" % args.circuit, d < NAME_RMSE_MAX, "name crop RMSE %.4f against the reference (limit %.2f; another circuit's name reads 0.15 or more)" % (d, NAME_RMSE_MAX))
     if args.ship_ref:
         d = rmse(args.ship_ref, ship_crop(out / "ship-select.png", out / "ship-logo.png"))
         pair.check("Ship Select is on the Feisar", d < NAME_RMSE_MAX, "team logo crop RMSE %.4f against the reference (limit %.2f)" % (d, NAME_RMSE_MAX))
     red = sp.board_red(out / "theirs.png")
-    pair.check("the countdown board is still blank (before its red 3)", red < -0.1, "board red minus blue %.3f (blank -0.19, a lit digit above 0)" % red)
+    base = seen["board_red"][0]  # the first frame with the HUD up: the board is blank there on every circuit
+    pair.check("the countdown board is still blank (before its red 3)", red - base < BOARD_LIT_RISE,
+               "board red minus blue %.3f at the grab, %.3f at the first HUD frame (a lit digit raises it by 0.2 or more; the value itself depends on the scenery behind the board)" % (red, base))
     profile_dir = Path(os.environ["XDG_CONFIG_HOME"]).parent
     ce.write_ours_settings(plat, profile_dir)
     source = ce.MAIN / "data/extracted/ps4"
