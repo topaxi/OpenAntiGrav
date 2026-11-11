@@ -1437,5 +1437,17 @@ pairs (horizontal and vertical) compose it and no other Omega root does, retro s
 (`omega_hud_ground_truth::the_eliminator_lap_hexagon_is_authored_by_omegas_eliminator_roots_alone`).
 Omega's `always_on` is `oag_hd::hud::ALWAYS_ON` itself, so its Eliminator draws the hexagon
 (`an_omega_eliminator_draws_the_lap_hexagon`; before the share the lap number floated with no
-hexagon behind it). Unmeasured against an Omega frame. **2048: checked, applies, not wired**
-(`oag_2048::hud::ALWAYS_ON` is its own list).
+hexagon behind it). Unmeasured against an Omega frame. **2048: checked, differs** (confidence 90,
+a literal read of the package's own layouts). The skin 2048 plays authors no lap hexagon: both its
+Eliminator roots, `2048_hud\Elimination_HUD.xml` and the campaign's `2048_hud\Elimination_HUD_HD.xml`
+(patch `data2.psarc`), include `2048_hud\HUD_lap_counters.xml`, 507 bytes in the base package,
+which authors neither `LapPanel` nor `LapPanel2`. The HD-lineage `HUD_Elim_lap_counters.xml`
+(1,482 bytes, `LapPanel2` present) and `SplitScreen_elim_lap_counters.xml` ship in `data.psarc`,
+but only the bare-root `Data\XML\Elimination_HUD.xml` includes the former, and that root is the
+attract-mode demo's, never a race a player starts
+(`oag_2048::hud::skins::DEMO`). So `oag_2048::hud::ALWAYS_ON` keeps its own list without
+`LapPanel2`: naming it would draw nothing in any played race, and it is not shared with HD's
+list (ADR-0090 clause 3: only data the descendant's own files confirm). Pinned by
+`vita_2048_hud_ground_truth::the_eliminator_lap_hexagon_is_authored_only_by_the_unplayed_bare_root`;
+no 2048 Eliminator frame was captured, so whether the original's Eliminator shows a lap counter
+at all is read from the layouts alone.
