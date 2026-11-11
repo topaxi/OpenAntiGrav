@@ -199,3 +199,74 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
         assert_eq!(ahead.sim.state_hash(), lazy.sim.state_hash(), "tick {tick}");
     }
 }
+
+/// Whether the ring plan of `track` on `source` verifies clean at `class`:
+/// the majority of the [`perturb::GATE`] builds, as [`slice`] judges a layout.
+fn ring_plan_verifies(source: &std::path::Path, track: &str, class: &str) -> bool {
+    let loaded = race::load(&race::Options {
+        source: source.display().to_string(),
+        class: class.to_string(),
+        mode: oag_race::Mode::SingleRace,
+        track: Some(track.to_string()),
+        ..race::Options::default()
+    })
+    .unwrap_or_else(|error| panic!("loading {track} at {class}: {error}"));
+    let verdicts: Vec<bool> = perturb::GATE
+        .iter()
+        .map(|&eps| {
+            let mut setup = loaded.setup.clone();
+            perturb::apply(&mut setup, eps);
+            let (_, report) = race::Race::start(setup).build_player_speed_plan();
+            println!(
+                "{track} {class} {eps}: failures {}, respawns {}, lap {:?}, unresolved {:?}",
+                report.verify_failures,
+                report.verify_respawns,
+                report.verify_lap_ticks,
+                report.unresolved
+            );
+            report.verify_failures == 0 && report.verify_respawns == 0
+        })
+        .collect();
+    verdicts.iter().filter(|&&clean| clean).count() * 2 > verdicts.len()
+}
+
+/// 2048's `square` has a corner (ring samples 577-641) a craft at full
+/// throttle runs wide of, off the edge and onto a level 20 units under the
+/// line, which it then drives for 900 samples to a wall. The plan counts that
+/// road as a failure and brakes for the corner (`docs/gameplay/ai.md`, "A road
+/// under the line is a failure"). `arena`'s line runs 21 units over its own
+/// road for 250 samples with the craft inside its corridor, which is not one.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_2048_square_ring_plan_brakes_for_the_corner_it_ran_wide_of() {
+    let Some(source) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let track = |name: &str| format!(r"Data\art\published\environments\{name}\track.vex");
+    for class in ["FLASH", "RAPIER", "PHANTOM"] {
+        assert!(
+            ring_plan_verifies(&source, &track("square"), class),
+            "square at {class}"
+        );
+    }
+    assert!(
+        ring_plan_verifies(&source, &track("arena"), "VENOM"),
+        "arena's line is over its own road"
+    );
+}
+
+/// Omega re-ships `square` at the same layout, and its plan fails and
+/// verifies at the same corner.
+#[test]
+#[ignore = "needs the extracted game under data/extracted/ps4/"]
+fn the_omega_square_ring_plan_brakes_for_the_corner_it_ran_wide_of() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    for class in ["RAPIER", "PHANTOM"] {
+        assert!(
+            ring_plan_verifies(&source, r"Data\environments2048\square\track.vex", class),
+            "square at {class}"
+        );
+    }
+}

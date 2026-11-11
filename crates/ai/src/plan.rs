@@ -525,8 +525,8 @@ struct Run {
     /// Consecutive ticks on the ground beneath the line
     /// ([`Course::beneath_the_line`]) after leaving its corridor.
     beneath: u32,
-    /// Whether the craft was outside the line's corridor on the last tick it
-    /// was not beneath the line.
+    /// Whether the craft was outside the line's corridor when it was last on
+    /// the ground and not beneath the line, or at any tick in the air since.
     wide: bool,
 }
 
@@ -628,8 +628,11 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
         }
         let contact = evaluated.wall.contacts > evaluated.wall.floor_contacts;
         let under = self.beneath_the_line(&run.state, index);
-        if !under {
-            run.wide = self.beneath.is_finite() && self.outside_the_corridor(&run.state, index);
+        if !under && self.beneath.is_finite() {
+            // On the road the craft is wide or it is not; in the air it stays
+            // wide if it took off wide, wherever the flight carries it.
+            let outside = self.outside_the_corridor(&run.state, index);
+            run.wide = outside || (run.wide && run.state.time_airborne > 0.0);
         }
         let beneath = under && run.wide;
         run.beneath = if beneath { run.beneath + 1 } else { 0 };
