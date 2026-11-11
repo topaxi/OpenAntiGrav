@@ -3586,6 +3586,11 @@ to see open.
   (parameters 65, 66 and 68-71). Same limitation. Confidence only 60 that they
   hold texture pointers at all - inferred from the `+32` header skip and the
   release path, not from a filling write.
+  **Answered 2026-11-11**: seven two-entry arrays (`0x00c81330`-`0x00c81360`) of
+  runtime FP16 textures, created by `Environment_LoadStageTextures` and rewritten
+  on each stage commit by `Environment_UpdateStageBlend` through
+  `Environment_BuildAnisoPalette` (`0x003d9970`), read live on RPCS3; see
+  [zone-palette-textures.md](zone-palette-textures.md).
 - **What `0x008c1430` (the environment index `e`) means semantically.** Two
   entries in `H` makes `0..1` the plausible range, and the loader's own two
   files are `ZoneMode.effectSettings` and `ZoneModeDLC3.effectSettings`, which
@@ -3936,6 +3941,9 @@ redundant store rather than two arms of a choice. Nothing is built on it.
 - **`zoneAnisoPalette` / `zoneAnisoPaletteOuter`** (`0x00c81330`-`0x00c81350`).
   Unchanged from the twenty-third pass: no filling write located, confidence 60
   that they hold texture pointers at all.
+  **Found 2026-11-11** in this same function's commit path, by indexed stores off
+  `r24 = 0x00c7dfb0 + 4e` that a displacement sweep on `r14` cannot see:
+  [zone-palette-textures.md](zone-palette-textures.md).
 - **`zoneTexVis`'s 256 entries.** Unchanged, and the loop arithmetic does not
   close: nine passes of 64 texels with the source running `0x008c2d78 + 1728`
   down to `+ 192` and the destination advancing 256 bytes a pass is 576 texels
