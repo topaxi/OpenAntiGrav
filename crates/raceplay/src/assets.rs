@@ -339,7 +339,13 @@ pub(super) fn trail_texture(
                 // code reads 2048, whose own executable was not measured for
                 // any of the laws `load` reports under the ribbon.
                 if let oag_title::flare::Flare::PerTeam(a) = title.flare
-                    && (a.sprite.ends_with(".gxt") || a.sprite.ends_with(".gnf"))
+                    && matches!(
+                        oag_texture::decode::Container::of_name(a.sprite),
+                        Some(
+                            oag_texture::decode::Container::Gxt
+                                | oag_texture::decode::Container::Gnf
+                        )
+                    )
                 {
                     report.push(format!(
                         "{} reads its ribbon, flare and boost reveal on HD's laws: \

@@ -41,7 +41,9 @@ fn build_named(
     let mut textures = Vec::new();
     let (model, built) = mesh::rcs::psp2::build_with_vex(entry, geometry, vex, &mut |path| {
         // Materials are asked for too; a draw's texture slot counts the pictures only.
-        if path.ends_with(".gnf") {
+        if oag_texture::decode::Container::of_name(path)
+            == Some(oag_texture::decode::Container::Gnf)
+        {
             textures.push(path.to_string());
         }
         archives.read_name(path).ok()

@@ -602,7 +602,9 @@ fn ps3_model(
     let mut textures = Vec::new();
     let (mut model, report) =
         oag_mesh::mesh::rcs::build_scene(entry, blob, &geometry, &mut |path| {
-            if path.to_ascii_lowercase().ends_with(".gtf") {
+            if oag_texture::decode::Container::of_name(path)
+                == Some(oag_texture::decode::Container::Gtf)
+            {
                 textures.push(path.to_string());
             }
             archives.read_name(path).ok()
