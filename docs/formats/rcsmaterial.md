@@ -3888,7 +3888,7 @@ third, its chunks carrying the tangent).
 | its hot blocks, as the compare list counts them | 219,600 px, err 12.1, 2.65 M | none over 0.26 M |
 | slot 323, the garage bays | 10.8, R +8.7 G +7.6 B +5.8 | 2.0, R -0.3 G -0.4 B -0.7 |
 | slot 233, the floor panels | 6.3 | 1.2 |
-| box `1020,720 660x360` (the list's second Moa region) | 5.0 | 1.31 |
+| box `1020,720 660x360` (the list's second Moa region) | 6.21 | 1.31 |
 | whole frame (raw mean grey) | 3.96 (6.85) | 1.92 (4.44) |
 
 Every other HD pair is unmoved (Metropia's raw mean grey 3.09 to 3.10): their two-lane slots are window panes away
