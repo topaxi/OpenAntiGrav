@@ -29,7 +29,7 @@ mod scene;
 mod text;
 mod video;
 
-use face::{face_atlas_size, face_sampler, upload_face};
+use face::{face_atlas_size, face_sampler, fit_to_device, upload_face};
 use resources::{
     sampler_entry, sampler_kind, texture_entry, ui_bind_group, uniform_entry, upload_rg8,
     upload_rgba,
@@ -283,6 +283,7 @@ impl Renderer {
             ..Default::default()
         });
 
+        let atlas = fit_to_device(device, "glyph atlas", atlas);
         let atlas_texture = upload_rg8(
             device,
             queue,

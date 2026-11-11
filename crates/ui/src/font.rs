@@ -1243,3 +1243,5 @@ mod tests {
 
 #[cfg(test)]
 mod fold_tests;
+#[cfg(test)]
+mod reduce_tests;
