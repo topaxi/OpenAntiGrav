@@ -61,7 +61,7 @@ LISTING_CAP = 40
 # Lines per crate, frozen on the day this landed (counted by
 # `--table`). Each row may shrink, never grow; a row is deleted at zero.
 BASELINE: dict[str, int] = {
-    "2048": 28,
+    "2048": 27,
     "ai": 18,
     "assets": 4,
     "audio": 11,
@@ -71,7 +71,7 @@ BASELINE: dict[str, int] = {
     "formats": 4,
     "fx": 59,
     "gameplay": 24,
-    "hd": 57,
+    "hd": 56,
     "hud": 27,
     "input": 7,
     "log": 1,
