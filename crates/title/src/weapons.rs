@@ -242,6 +242,9 @@ pub struct WeaponModels {
     /// Pure's Disruptor explosion halo, a camera-facing model on an eased scale
     /// beside the `WO_DISRUPTOR_EXPLO` effect. `None` where there is no Disruptor.
     pub disruptor_halo: Option<DisruptorHalo>,
+    /// Pure's on-craft Disruptor effect: a model drawn on the craft a bolt disrupted, for as
+    /// long as the disruption runs. `None` where there is no Disruptor.
+    pub disruptor_craft: Option<DisruptorCraftFx>,
     /// Pulse's Bomb detonation: a hemisphere and a shockwave, each eased by a
     /// per-tick `cur += (target - cur) * rate` scale ramp (`oag_raceplay::bomb_blast`).
     /// `None` on HD (see [`Self::bomb_blast_hd`]) and where the Bomb is unread.
@@ -457,6 +460,7 @@ impl WeaponModels {
         plasma_blast_pulse: None,
         plasma_blast_hd: None,
         disruptor_halo: None,
+        disruptor_craft: None,
         bomb_blast_pulse: None,
         bomb_blast_hd: None,
         missile_blast_hd: None,
@@ -574,6 +578,28 @@ pub struct DisruptorHalo {
     /// The age the object retires at, seconds; its grey tint is `1 - age / life`
     /// before that.
     pub life: f32,
+    /// Where these constants come from.
+    pub origin: crate::Origin,
+}
+
+/// Pure's on-craft Disruptor effect - see [`WeaponModels::disruptor_craft`]
+/// (`DisruptorFx_Construct`, `0x08859b78`, and its update `0x0885a010`).
+///
+/// The object is built when a bolt lands on a craft and eases a scale-and-grey value `cur`
+/// from `0` towards [`Self::target`] by `cur += (target - cur) * rate` every 60 Hz tick; when
+/// the disruption's timer runs out the target drops to `0` and the object is freed once `cur`
+/// is under [`Self::retire_below`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DisruptorCraftFx {
+    /// `Data\Weapons\disruptor_effect.vex`, drawn with the craft's own matrix. The second
+    /// model the object loads, `disruptor_cockpit.vex`, is the cockpit view's and is not read.
+    pub model: &'static str,
+    /// The ease's target while the disruption runs (`+0x1a0`).
+    pub target: f32,
+    /// The ease's rate per tick (`+0x1a8`).
+    pub rate: f32,
+    /// The object is freed once the eased value falls below this after the timer ran out.
+    pub retire_below: f32,
     /// Where these constants come from.
     pub origin: crate::Origin,
 }

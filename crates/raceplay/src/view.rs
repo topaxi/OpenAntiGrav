@@ -171,6 +171,10 @@ pub struct RaceView {
     /// Live Disruptor explosion halos, one per [`blast_models::PLASMA_BLAST_SLOTS`].
     pub(super) disruptor_halos:
         [Option<blast_models::DisruptorHaloBlast>; blast_models::PLASMA_BLAST_SLOTS],
+    /// See `options::Setup::disruptor_craft_law`.
+    pub(super) disruptor_craft_law: Option<oag_title::weapons::DisruptorCraftFx>,
+    /// Each craft's live on-craft Disruptor effect, by slot.
+    pub(super) disruptor_craft: [Option<blast_models::DisruptorCraftBlast>; MAX_SHIPS],
     /// See `options::Setup::pulse_laid_pose`.
     pub(super) pulse_laid_pose: bool,
     /// See `options::Setup::laid_pose_scaled`.

@@ -677,6 +677,7 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     plasma_ball: Some(r"Data\Weapons\HD_plasma_ball.vex"),
     plasma_blast_pulse: None,
     disruptor_halo: None,
+    disruptor_craft: None,
     // `WeaponExplosions_Start` (`0x00127cd0`) loads these three, in this
     // order, into `+0x54`/`+0x58`/`+0x5c` - see plasma.md's own "detonation"
     // section for the ease each one is scrubbed by.

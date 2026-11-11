@@ -189,6 +189,16 @@ pub const TITLE: &Title = &Title {
             life: 1.0,
             origin: oag_title::Origin::Measured,
         }),
+        // `DisruptorFx_Construct` (`0x08859b78`) loads the model; its update (`0x0885a010`) runs
+        // the ease. Both read live on the player's craft
+        // (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor").
+        disruptor_craft: Some(oag_title::weapons::DisruptorCraftFx {
+            model: r"Data\Weapons\disruptor_effect.vex",
+            target: 1.0,
+            rate: 0.1,
+            retire_below: 0.05,
+            origin: oag_title::Origin::Measured,
+        }),
         // Pure's Bomb has no fuse, but it does detonate when a craft enters
         // its `trigger_radius` (`BombPool_Detonate`, `0x0884f214`), which
         // builds this pair (`0x08858710`: the same two models, the same

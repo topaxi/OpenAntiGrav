@@ -33,6 +33,7 @@ mod cues;
 mod damage_fx;
 mod destroy_camera;
 mod destroyed_fire;
+mod disruptor_craft_fx;
 mod disruptor_launch;
 mod distance_reset;
 mod eliminator;
@@ -299,6 +300,7 @@ fn setup(handling: Handling) -> Setup {
         // Pulse's own mechanism, same reasoning as `shield_palette` above.
         hd_plasma_blast: false,
         disruptor_halo_law: None,
+        disruptor_craft_law: None,
         plasma_blast_law: oag_pulse::race::WEAPON_MODELS
             .plasma_blast_pulse
             .map(|blast| blast.law),
