@@ -598,4 +598,185 @@ mod tests {
         let sum: u32 = BLUR_WEIGHTS.iter().map(|&w| u32::from(w)).sum();
         assert_eq!(sum, 224);
     }
+
+    const SCENE: (u32, u32) = (128, 64);
+
+    /// The scene (its right half carries a glow mask) after `glow` has run over the
+    /// right half, as RGBA bytes.
+    fn glowed(
+        glow: impl Fn(
+            &Ps2Bloom,
+            &wgpu::Device,
+            &wgpu::Queue,
+            &mut wgpu::CommandEncoder,
+            Frame<'_>,
+            &wgpu::TextureView,
+        ),
+    ) -> Option<Vec<u8>> {
+        let instance = wgpu::Instance::default();
+        let adapter = oag_gpu::test_adapter::ordered(&instance)
+            .into_iter()
+            .next()?;
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&Default::default())).expect("a device");
+        let format = wgpu::TextureFormat::Rgba8Unorm;
+        let extent = wgpu::Extent3d {
+            width: SCENE.0,
+            height: SCENE.1,
+            depth_or_array_layers: 1,
+        };
+        let scene = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("ps2 bloom test scene"),
+            size: extent,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let texels: Vec<u8> = (0..SCENE.0 * SCENE.1)
+            .flat_map(|i| {
+                [
+                    150,
+                    150,
+                    150,
+                    if i % SCENE.0 >= SCENE.0 / 2 { 0xaf } else { 0 },
+                ]
+            })
+            .collect();
+        queue.write_texture(
+            scene.as_image_copy(),
+            &texels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(SCENE.0 * 4),
+                rows_per_image: Some(SCENE.1),
+            },
+            extent,
+        );
+        let bloom = Ps2Bloom::new(&device, format).expect("the pipelines build");
+        let view = scene.create_view(&wgpu::TextureViewDescriptor::default());
+        let frame = Frame {
+            scene: &view,
+            size: SCENE,
+            origin: (SCENE.0 as f32 / 2.0, 0.0),
+            viewport: (SCENE.0 / 2, SCENE.1),
+        };
+        let mut encoder = device.create_command_encoder(&Default::default());
+        glow(&bloom, &device, &queue, &mut encoder, frame, &view);
+        let readback = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("ps2 bloom test readback"),
+            size: u64::from(SCENE.0 * SCENE.1 * 4),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        encoder.copy_texture_to_buffer(
+            scene.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(SCENE.0 * 4),
+                    rows_per_image: Some(SCENE.1),
+                },
+            },
+            extent,
+        );
+        queue.submit([encoder.finish()]);
+        readback
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, |r| r.expect("map"));
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("poll");
+        let bytes = readback
+            .slice(..)
+            .get_mapped_range()
+            .expect("mapped")
+            .to_vec();
+        Some(bytes)
+    }
+
+    /// The red bytes of the left and the right half.
+    fn halves(bytes: &[u8]) -> [u64; 2] {
+        let mut sums = [0u64; 2];
+        for (i, p) in bytes.as_chunks::<4>().0.iter().enumerate() {
+            sums[usize::from(i as u32 % SCENE.0 >= SCENE.0 / 2)] += u64::from(p[0]);
+        }
+        sums
+    }
+
+    /// **A view's lane draws what the whole-picture lane draws for the same rectangle.**
+    /// The right half glows and the left is outside the composite; the same bytes come out
+    /// of `prepare_view` + `composite_view` as out of `prepare` + `composite`, a view that
+    /// was never prepared draws nothing, and a lane asked for at another extent is rebuilt
+    /// and still draws.
+    #[test]
+    fn a_view_lane_draws_what_the_whole_lane_draws_for_its_rectangle() {
+        let at = (SCENE.0 as f32 / 2.0, 0.0);
+        let half = (SCENE.0 / 2, SCENE.1);
+        let Some(whole) = glowed(|bloom, device, queue, encoder, frame, view| {
+            bloom.prepare(device, queue, encoder, frame);
+            bloom.composite(encoder, view, at, half);
+        }) else {
+            return;
+        };
+        let untouched = glowed(|_, _, _, _, _, _| {}).expect("a device");
+        let through = glowed(|bloom, device, queue, encoder, frame, view| {
+            bloom
+                .prepare_view(
+                    device,
+                    queue,
+                    encoder,
+                    1,
+                    (BLOOM_WIDTH, BLOOM_HEIGHT),
+                    frame,
+                )
+                .expect("the lane builds");
+            bloom.composite_view(encoder, 1, view, at, half);
+        })
+        .expect("a device");
+        assert_eq!(
+            through, whole,
+            "the view lane drew other bytes than the whole lane"
+        );
+        let [left, right] = halves(&whole);
+        let [left_before, right_before] = halves(&untouched);
+        assert_eq!(left, left_before, "the glow reached outside its rectangle");
+        assert!(right > right_before, "the right half did not glow");
+
+        let unprepared = glowed(|bloom, _, _, encoder, _, view| {
+            bloom.composite_view(encoder, 1, view, at, half);
+        })
+        .expect("a device");
+        assert_eq!(unprepared, untouched, "a view never prepared drew");
+
+        let rebuilt = glowed(|bloom, device, queue, encoder, frame, view| {
+            for extent in [
+                (BLOOM_WIDTH, BLOOM_HEIGHT),
+                (BLOOM_WIDTH / 2, BLOOM_HEIGHT / 2),
+            ] {
+                bloom
+                    .prepare_view(device, queue, encoder, 1, extent, frame)
+                    .expect("the lane builds");
+                assert_eq!(
+                    bloom.views.borrow().len(),
+                    2,
+                    "lanes up to the view are built"
+                );
+                assert_eq!(bloom.views.borrow()[1].extent, extent);
+            }
+            bloom.composite_view(encoder, 1, view, at, half);
+        })
+        .expect("a device");
+        let [_, right_rebuilt] = halves(&rebuilt);
+        assert!(
+            right_rebuilt > right_before,
+            "the rebuilt lane drew no glow"
+        );
+    }
 }

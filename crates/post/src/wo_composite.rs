@@ -193,7 +193,10 @@ impl Seat {
 /// One colour texture and its view.
 #[derive(Debug)]
 struct Target {
-    #[expect(dead_code, reason = "held so the view stays valid")]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "held so the view stays valid; the tests read it")
+    )]
     texture: wgpu::Texture,
     view: wgpu::TextureView,
 }
@@ -519,6 +522,12 @@ impl Chain {
     #[must_use]
     pub fn scene_view(&self) -> &wgpu::TextureView {
         &self.sized.scene.view
+    }
+
+    /// The scene target's texture, for a test that writes pixels into it.
+    #[cfg(test)]
+    fn scene_texture(&self) -> &wgpu::Texture {
+        &self.sized.scene.texture
     }
 
     /// The window's exposure state buffer, for a test that reads it back.
