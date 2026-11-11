@@ -4,9 +4,8 @@
 //! through `Environment_BuildAnisoPalette` (`0x003d9970`), into the textures the
 //! shader publishes as `zoneAnisoPalette` and `zoneAnisoPaletteOuter`; the Zone
 //! arenas' materials read them at `pow(rim, zoneAnisoPower)`. Read statically and
-//! then live on RPCS3 (1,248 palettes over two races, every authored point exact
-//! at FP16, every interior texel within one FP16 ulp of [`ramp`]); see
-//! `docs/ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md`.
+//! confirmed live; see `docs/ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md`,
+//! sections 4 and 5.
 
 use super::EffectSettings;
 

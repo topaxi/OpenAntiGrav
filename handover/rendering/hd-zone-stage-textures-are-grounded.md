@@ -429,10 +429,11 @@ unblocks - see Next Steps below for what implementing it needs.
     material naming a gradient (unit 0, the albedo slot). Bind its albedo to a
     3x1 texture of the stage's `Gradient1.Colour0..2` (the live read confirms the
     texels); first read how that material's UV addresses three texels.
-  - **The arena floor at stage 4** reads dark teal with its hex pattern in the
-    original (`drive-0075-stage4` of the RPCS3 run) and purple in ours. Compare at
-    a matched pose (`--pose-from` a trace of the original) before changing
-    anything; the ramp's sampler filter is a chosen value.
+  - **The arena floor's albedo.** The original's `zone_1` floor shows a hex
+    pattern at stage 4, so its albedo is not black; ours binds
+    `tracktexture.gtf` (1x1 black), so the Track ramp lands on it and draws purple.
+    Read which texture `tracktexture_with_normal`'s albedo unit binds on the
+    arenas (RPCS3 draw dump of the floor), then compare at a matched pose.
   - **Omega and 2048** sample `zoneAnisoLookupTex`, not `zoneAnisoPalette`; read
     its writer in each executable (strings at `eboot.bin` file offset `8583116`,
     2048 `eboot.elf` `5284016`). Omega ships `zonemodedlc3` byte-identical but has

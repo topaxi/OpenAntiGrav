@@ -216,6 +216,9 @@ five points, the curve and the power on every stage. 154 samples, stages 1 to 4:
 - **616 palettes, all 3,080 control points** (five a ramp, all authored) equal the
   file's values exactly at FP16; every interior texel within one ulp of the law with
   the file's own `Aniso Curve` (`0.5`).
+- **`zoneAnisoPower`**: the Scene pair at `0x00c81460` and the Track pair at
+  `0x00c814e0` equal `(Aniso Power[n], Aniso Power[max(n-1,0)])` of their group on
+  all 154 samples (stage 4: Scene `(0.8, 0.8)`, Track `(6, 4)`).
 - **Gradients**: at stage 4, `Gradient1` reads `(0.8823, 1.0, 0.0902) (0.7529,
   0.8628, 0.7529) (2, 2, 2)` against `4 Flash.Scene.Gradient1.Colour0..2` =
   `0.882353 1 0.090196`, `0.752941 0.862745 0.752941`, `2 2 2`; `Gradient2`/`3` the
@@ -276,8 +279,12 @@ Wired 2026-11-11 on HD.
   do; stage 4 draws white and lavender scenery, a purple track edge and the lime
   line, as the original's settled stage-4 frame does. Still different: the
   original's stage-4 track floor reads dark teal with its hex pattern where ours
-  is purple, so the floor's own term is not yet right (the original frame is
-  mid-race, ours on the grid, so the view angle differs too).
+  is purple. With the ramp term zeroed our floor draws black, so the purple is the
+  Track ramp at a grazing view (`pow(rim, 6)` lands on `Base Colour Middle`,
+  `0.33 0.01 2.27`), added because our floor's albedo is black: the floor binds
+  `tracktexture.gtf`, a 1x1 black texel. The original's hex pattern means its
+  floor albedo is not black there, so the mismatch is which texture the floor's
+  albedo unit binds, not the ramp.
 
 ### Omega and 2048
 

@@ -13,8 +13,7 @@ throttle, and sample through `/proc/<pid>/mem`, no pause:
 
 Run from the repository root under scripts/emu-run.py with a private env
 (scripts/emu-env.sh). Evidence page:
-docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md, "the palette
-textures are built at runtime".
+docs/ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md, section 5.
 """
 import argparse
 import importlib.util
