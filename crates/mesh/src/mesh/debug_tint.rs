@@ -127,15 +127,19 @@ fn tree_groups(
     let triangles = (draw.range.start..draw.range.end).step_by(3);
     let mut owners = Vec::new();
     for start in triangles.clone() {
+        let keys = [0, 1, 2].map(|corner| weld(indices[(start + corner) as usize]));
+        // A strip's degenerate triangle only bridges one tree to the next; welding across it
+        // would make a whole strip one group.
+        let degenerate = keys[0] == keys[1] || keys[1] == keys[2] || keys[0] == keys[2];
         let mut owner: Option<usize> = None;
-        for corner in 0..3 {
-            let key = weld(indices[(start + corner) as usize]);
+        for key in keys {
             let node = *seen.entry(key).or_insert_with(|| {
                 parent.push(parent.len());
                 parent.len() - 1
             });
             match owner {
                 None => owner = Some(node),
+                Some(_) if degenerate => {}
                 Some(first_node) => {
                     let (a, b) = (find(&mut parent, first_node), find(&mut parent, node));
                     parent[a] = b;
@@ -301,5 +305,35 @@ mod tests {
         model.debug_tint_blended(Unit::Tree);
         let c = colours(&model);
         assert_eq!(c[0], c[1]);
+    }
+
+    /// A strip's degenerate triangle bridges two trees without joining them: two triangles
+    /// far apart, linked only by a triangle that repeats a corner, are two colours.
+    #[test]
+    fn a_degenerate_bridge_does_not_weld_two_trees() {
+        let mut model = Model::none("tint");
+        // Triangle 0: (0,0) (1,0) (0,1). Bridge: (0,1) (0,1) (10,0). Triangle 2: (10,0) (11,0) (10,1).
+        for (x, y) in [
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+            (0.0, 1.0),
+            (0.0, 1.0),
+            (10.0, 0.0),
+            (10.0, 0.0),
+            (11.0, 0.0),
+            (10.0, 1.0),
+        ] {
+            model.vertices.push(vertex(x, y));
+        }
+        model.indices = (0..9).collect();
+        model.transparent_draws = vec![draw(0..9)];
+        model.textures = vec![None];
+        assert_eq!(model.debug_tint_blended(Unit::Tree), 2);
+        let c = colours(&model);
+        assert_ne!(
+            c[0], c[2],
+            "the bridge must not make one group of two trees"
+        );
     }
 }
