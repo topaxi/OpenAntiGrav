@@ -498,7 +498,7 @@ How a `view` row cannot steer the race (`crates/raceplay/src/extensions/view_pas
 - When a device's view picks differ from the defaults (`Picks::differs`) the host makes a **second
   call** with the real picks, on a copy of the blob the first call started from, and keeps only its
   **outputs** (`view_pass::is_output`: `fire-effect`, `fire-mod-effect`, `screen-fill`, `fov-offset`,
-  `draw-beam`, `set-shader-param`, `portal-view` and the `hud-*` and `pickup-look` commands). Its blob,
+  `draw-beam`, `set-shader-param`, `portal-view`, `raise-warning` and the `hud-*` and `pickup-look` commands). Its blob,
   its other commands, its fuel and its faults are dropped: a trap in the view call draws nothing and
   never faults the module. The first call's own outputs are replaced by the view call's.
 - `is_output` is an exhaustive `match`: a new command cannot compile until it is classed. A command is

@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-10
-summary: "slipstream, mod shaders, portal-view, route exits, tunnel flight landed; open: mesh portal, island exit, wall occlusion, loops, a firer on a route."
+updated: 2026-11-12
+summary: "slipstream, shaders, portal-view, route exits, tunnel, raise-warning landed; open: mesh portal, island exit, occlusion, loops, mod warning icon."
 categories: [tooling, frontend]
 size: L (50)
 difficulty: medium (50)
