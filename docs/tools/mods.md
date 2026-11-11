@@ -395,10 +395,10 @@ and may send the same commands as a rules module, including the race-wide `set-w
 
 A mod may ship text and images for its module's HUD: its own `strings/<language>.toml`
 (the same files its menu rows use, English the fallback) and `[icons]` (`name = "path/in/the/mod.png"` or `.svg`). A module's
-`hud_string` and `hud_mod_icon` name them; an icon that is missing or unreadable draws
+`hud_string` and `hud_mod_icon` name them, and `raise_mod_warning` names one to show in the incoming-weapon warning slot (Pulse; it faults the module for a name the mod does not declare); an icon that is missing or unreadable draws
 nothing and the load report names the file and the error. An SVG is rasterised at load, on the
 load thread, and again on a worker when the window size or Safe Area changes, at the
-pixel size the pickup slot is drawn at (`oag_hud::svg`); nothing is drawn as a vector per
+pixel size the pickup slot is drawn at, and the warning slots on a title that draws them (`oag_hud::svg`); nothing is drawn as a vector per
 frame. `<text>` draws nothing (the text stack is not built in; convert it to paths) and an
 `<image>` is never read. Pixel-art icons stay PNGs: a PNG is drawn as authored.
 
