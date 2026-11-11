@@ -97,9 +97,10 @@ mod tests {
         stage
     }
 
-    /// Three sparks in one tick: a spark lives about fourteen, so the stage fills within ten.
+    /// An eighth of the stage in sparks in one tick: a spark lives about fourteen ticks, so the
+    /// stage is full within eight.
     fn spark_burst(stage: &mut Stage, spark: &std::sync::Arc<Effect>) {
-        for _ in 0..3 {
+        for _ in 0..MAX_INSTANCES / 8 {
             stage.play_expendable(spark, Vec3::ZERO, 1.0);
         }
     }
@@ -143,7 +144,7 @@ mod tests {
         // stage is full, so the thinnest instance is the ordinary one.
         for _ in 0..5 {
             stage.advance(DT, &mut rng);
-            for _ in 0..10 {
+            for _ in 0..MAX_INSTANCES {
                 stage.play_expendable(&spark, Vec3::ZERO, 1.0);
             }
         }
