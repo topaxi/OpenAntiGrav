@@ -259,7 +259,7 @@ fn pools_after_a_bump(race: &mut Race) -> ([f32; 2], f32) {
 }
 
 /// `Ship_Damage(0.035 * |p|)` on both hulls of an unshielded pair
-/// (`contact-response.md`, "Measured 2026-11-11: an unshielded craft-to-craft bump charges
+/// (`contact-response.md`, "an unshielded craft-to-craft bump charges
 /// the energy pool"). Goes red if the pair pass stops charging, charges one hull, or charges
 /// only in the drawing build.
 #[test]

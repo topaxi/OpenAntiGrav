@@ -303,7 +303,7 @@ pub fn apply_contact(
 /// halved with weapons off, on each hull of the pair, through the same gate (a shielded or
 /// non-racing hull pays nothing). `impulse` is [`crate::pair::PairContact::impulse`], which
 /// is bit-equal to the original's ring record. Confidence 92, measured live
-/// (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "Measured 2026-11-11: an
+/// (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "an
 /// unshielded craft-to-craft bump charges the energy pool").
 ///
 /// **Does not regenerate**: the pair pass runs after every craft's [`crate::step`], whose

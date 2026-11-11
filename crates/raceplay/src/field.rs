@@ -1296,7 +1296,7 @@ impl Race {
                     // "A craft-to-craft contact bulges a running Shield"). The gate is read
                     // before the charge, so a bump that empties a pool still spoils the lap.
                     // One charge per pair per tick: the original's further records on most
-                    // contact ticks are unread (`contact-response.md`, "Measured 2026-11-11: an
+                    // contact ticks are unread (`contact-response.md`, "an
                     // unshielded craft-to-craft bump charges the energy pool", Result 5).
                     for slot in [a, b] {
                         let ship = &mut self.sim.world.ships[slot];
