@@ -354,7 +354,11 @@ capture exists to recover that camera and model scale. The fourteen PS4 hulls fr
 radius 5.2 to 7.3 against HD's 6.1 to 7.3), and the `SHIP MODEL` frame sits where HD's does, so HD's authored origin `(1220, 412)` and
 `z=-24` frame them (`oag_title::FrontEnd::ship_preview_pose`, `Some` on Omega only; the rotations stay as authored and
 are HD's, `RotX 0.4 RotY -0.5`). The load report says so ("ship preview: pose borrowed from Wipeout HD"). HD's lens, pitch and slide
-are fits to RPCS3 frames and apply here unchanged. The hull overruns the frame by a few tens of pixels to the left at this pose, as HD's does.
+are fits to RPCS3 frames and apply here unchanged. The hull overruns the frame by a few tens of pixels to the left at this pose, as HD's did.
+**HD no longer draws this pose (2026-11-11)**: its screen update writes over the widget and fits the craft's depth to the model's `<FE length>`,
+and HD is drawn that way (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`). **Omega: checked, differs**: its update
+(`FUN_015a3b80`) carries the same fit and constants, then poses the item on other rest angles (`+0.4307`, `-0.4438`), a blended position and a
+scale that are not followed, so the borrowed pose stays; Omega's `<FE length>` (Feisar `3.8`) is read and unused.
 **Not drawn**: `ShipDesc` (the model's description string, authored per model with `teletype`), the `L1/R1` livery hint,
 `PadlockText1/2` (they hold unlock conditions this build keeps no state for).
 
