@@ -59,8 +59,14 @@ fn a_first_launch_writes_every_file_the_index_names_with_its_subfolders() {
             bytes: (MANIFEST.len() + 10 + 4) as u64
         }
     );
-    assert_eq!(std::fs::read(dest.join("slipstream/ext/slipstream.wasm")).unwrap(), b"\0asm");
-    assert_eq!(std::fs::read(dest.join("remix/strings/english.toml")).unwrap(), b"[strings]\n");
+    assert_eq!(
+        std::fs::read(dest.join("slipstream/ext/slipstream.wasm")).unwrap(),
+        b"\0asm"
+    );
+    assert_eq!(
+        std::fs::read(dest.join("remix/strings/english.toml")).unwrap(),
+        b"[strings]\n"
+    );
 }
 
 /// The path `oag_mod::mods_search_path` lists first after the working directory's `data/mods`
@@ -86,14 +92,23 @@ fn a_second_launch_of_the_same_build_leaves_the_folder_alone() {
     let assets = package(&[("a/oag-mod.toml", MANIFEST.as_bytes())]);
     install(&mut reader(&assets), &dest).unwrap();
     std::fs::write(dest.join("a/marker"), b"x").unwrap();
-    assert_eq!(install(&mut reader(&assets), &dest).unwrap(), Installed::Current);
-    assert!(dest.join("a/marker").exists(), "a current folder is not rewritten");
+    assert_eq!(
+        install(&mut reader(&assets), &dest).unwrap(),
+        Installed::Current
+    );
+    assert!(
+        dest.join("a/marker").exists(),
+        "a current folder is not rewritten"
+    );
 }
 
 #[test]
 fn a_newer_build_replaces_the_folder_whole_and_a_dropped_mod_does_not_linger() {
     let dest = scratch("newer").join("official");
-    let old = package(&[("gone/oag-mod.toml", MANIFEST.as_bytes()), ("kept/oag-mod.toml", b"old")]);
+    let old = package(&[
+        ("gone/oag-mod.toml", MANIFEST.as_bytes()),
+        ("kept/oag-mod.toml", b"old"),
+    ]);
     install(&mut reader(&old), &dest).unwrap();
     let new = package(&[("kept/oag-mod.toml", b"newer")]);
     assert!(matches!(
@@ -101,7 +116,10 @@ fn a_newer_build_replaces_the_folder_whole_and_a_dropped_mod_does_not_linger() {
         Installed::Extracted { files: 1, .. }
     ));
     assert!(!dest.join("gone").exists());
-    assert_eq!(std::fs::read(dest.join("kept/oag-mod.toml")).unwrap(), b"newer");
+    assert_eq!(
+        std::fs::read(dest.join("kept/oag-mod.toml")).unwrap(),
+        b"newer"
+    );
     assert!(!dest.with_file_name("official.new").exists());
 }
 
@@ -135,7 +153,10 @@ fn an_index_path_that_climbs_out_of_the_folder_or_is_absolute_is_refused() {
     assert!(parse("not-a-number abc a/b\n").is_err());
     assert_eq!(
         parse(&format!("7 {:064} a/b c.toml\n", 0)).unwrap(),
-        [Entry { size: 7, path: "a/b c.toml" }]
+        [Entry {
+            size: 7,
+            path: "a/b c.toml"
+        }]
     );
 }
 
@@ -143,9 +164,21 @@ fn an_index_path_that_climbs_out_of_the_folder_or_is_absolute_is_refused() {
 #[test]
 fn the_apk_build_stages_the_official_mods_and_writes_the_index_this_module_reads() {
     let script = include_str!("../../../../scripts/build-apk.sh");
-    assert!(script.contains("scripts/stage-official-mods.sh"), "mods are staged");
-    assert!(script.contains(&format!("assets/{ROOT}")), "under the asset root");
-    assert!(script.contains(&format!("assets/{INDEX}")), "with the index");
+    assert!(
+        script.contains("scripts/stage-official-mods.sh"),
+        "mods are staged"
+    );
+    assert!(
+        script.contains(&format!("assets/{ROOT}")),
+        "under the asset root"
+    );
+    assert!(
+        script.contains(&format!("assets/{INDEX}")),
+        "with the index"
+    );
     let ios = include_str!("../../../../scripts/build-ios-app.sh");
-    assert!(ios.contains("scripts/stage-official-mods.sh"), "the iOS bundle carries them too");
+    assert!(
+        ios.contains("scripts/stage-official-mods.sh"),
+        "the iOS bundle carries them too"
+    );
 }

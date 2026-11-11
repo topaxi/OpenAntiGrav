@@ -54,7 +54,9 @@ pub fn prepare(app: AndroidApp) {
 /// # Errors
 ///
 /// [`prepare`] was never called, the APK has no mods, or the disk refused a write.
-pub fn install_official_mods(dest: &std::path::Path) -> std::io::Result<crate::packaged::Installed> {
+pub fn install_official_mods(
+    dest: &std::path::Path,
+) -> std::io::Result<crate::packaged::Installed> {
     use std::io::{Error, ErrorKind, Read};
 
     let app = APP

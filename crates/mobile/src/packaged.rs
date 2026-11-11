@@ -52,7 +52,9 @@ fn parse(index: &str) -> io::Result<Vec<Entry<'_>>> {
         let mut parts = line.splitn(3, ' ');
         let (Some(size), Some(_sha256), Some(path)) = (parts.next(), parts.next(), parts.next())
         else {
-            return Err(invalid(format!("index line {line:?} is not `size sha256 path`")));
+            return Err(invalid(format!(
+                "index line {line:?} is not `size sha256 path`"
+            )));
         };
         let size = size
             .parse()
