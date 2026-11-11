@@ -1224,8 +1224,8 @@ a few high ports the same way; do not change the host's firewall for a test.
 
 ### Measured against a remote host (2026-10-14)
 
-A server on a small Linux host over the internet (Ubuntu 22.04, glibc 2.35, one
-vCPU, release build, no GPU), the client on the shared desktop (debug game
+A server on a remote x86-64 host (1 core, 1 GB) over the internet (release build,
+no GPU), the client on the shared desktop (debug game
 build), Pulse EU, circuit 01, VENOM, seed 1, one person with the AI on the other
 seven, weapons off, three laps. **Round trip** by a 100-packet UDP echo, 50 ms
 apart: minimum 11.4 ms, median 11.9, 95th percentile 14.7, maximum 19.6. No

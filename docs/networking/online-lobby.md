@@ -510,8 +510,7 @@ The host needs the binary and one extraction per title, no disc image (part 6).
 
 ### Measured over the internet (2026-10-16)
 
-The deploy steps above, run for real on a remote host (x86-64 Linux, glibc 2.35, **IPv6 only**, 1 core,
-957 MB RAM, no swap), with the musl build and a lean Pulse (PSP, EU) extraction (257 MB on disk, copied in 4 s).
+The deploy steps above, run for real on a remote x86-64 host (1 core, 1 GB) reached over **IPv6 only**, with the musl build and a lean Pulse (PSP, EU) extraction (257 MB on disk, copied in 4 s).
 From here the round trip is about 10 ms.
 
 - **Ports.** Echo listeners run as an ordinary user on `[::]`: inbound UDP **60000, 60001, 60002 and 60010
