@@ -1303,12 +1303,13 @@ impl Race {
                         let racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
                         let shielded = ship.physics.shield_pickup_timer > 0.0;
                         let dimensions = ship.handling.dimensions;
-                        oag_physics::damage::apply_pair(
+                        let report = oag_physics::damage::apply_pair(
                             &mut ship.physics,
                             &dimensions,
                             contact.impulse,
                             rules,
                         );
+                        self.sim.pair_damage[slot] += report.lost;
                         #[cfg(feature = "view")]
                         {
                             self.view.pair_spoil[slot] |= racing && !shielded;

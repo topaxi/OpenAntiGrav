@@ -309,6 +309,13 @@ pub struct RaceSim {
     /// clean-Ace board's own totals overstate a tuning improvement by five
     /// percentage points.
     pub(super) wall_damage: [f32; oag_gameplay::MAX_SHIPS],
+    /// What craft-to-craft bumps took from each pool, in shield-pool units:
+    /// [`Self::wall_damage`]'s twin for the pair leg
+    /// (`oag_physics::damage::apply_pair`), so a board can tell a rival wrecked
+    /// by the field from one wrecked by the walls. Outside `state_hash` for the
+    /// same reason. Counts only what landed: a shielded or wrecked hull adds
+    /// nothing.
+    pub(super) pair_damage: [f32; oag_gameplay::MAX_SHIPS],
     /// How many ticks each opponent was **still racing** - the denominator the
     /// three counters above are measured over.
     ///
