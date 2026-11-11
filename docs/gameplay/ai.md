@@ -7056,9 +7056,111 @@ then ride side by side pressing for 20 and more ticks at about `0.06` a tick (`|
 tick of a sustained contact is faithful (the wall leg's graze is the same,
 [shield.md](../ghidra/functions/psp-pulse-usa/shield.md)). What the data points at is **how often and how long our
 field stays in contact**: 181,828 charged touches over 64 races is about 400 ticks per craft per race. Whether the
-original's field holds contact that long is not measured; a rival holding its line beside another craft is the
-first thing to compare against a capture. That our resolver's sustained-contact impulse runs high is not
-supported by these numbers.
+original's field holds contact that long was measured afterwards: it does not, and the reason is in
+[the field's contact time against the original's](#the-fields-contact-time-against-the-originals). That our
+resolver's sustained-contact impulse runs high is not supported by these numbers. **The board above flies this
+project's driver** (it never calls `Race::use_original_ai`), not the original driver every race with opponents
+flies by default ([which AI flies](#which-ai-flies-2026-10-13)).
+
+## The field's contact time against the original's
+
+**Measured 2026-11-11 (lane `ai-contact-duration`).** The maintainer's play report: "They clump together, I see
+it while playing often in the beginning of a race." **Our field holds craft-to-craft contact about twice as long
+as the original's, in long side-by-side episodes the original never has, and the original's driver has two
+rules that separate touching craft which ours does not run.** Confidence 85 for the comparison (eight VENOM boots of the
+original on two circuits, six of 30 s and two of 3 min, against six seeds of ours per cell), 92 for the two
+rules (instruction level plus live).
+
+### The two rules (what keeps the original's craft apart)
+
+Both are in the driver, not the resolver. A craft-to-craft contact appends kind-`1` records to each body's ring
+(`Body_RecordPairContact`, [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md)); a wall
+appends kind `0`.
+
+1. **`Ai_PlanLane` pushes the lane away from a touching craft, and only from a craft.** The loop at
+   `0x08855224..0x088552b8` walks `body+0x170` for `body+0x370` records and skips every record whose kind word is
+   not `1` (`lw v1,0x0(a2)`; `bne v1,t3` with `t3 = 1` at `0x08855204`). For each kind-`1` record it adds `0.2`
+   to `driver+0x3b8` when `dot(left, record+0x10 - pos) >= 0`, else subtracts `0.2`; every tick, not only on the
+   round-robin tick. **Wall records never push.** `record+0x10` is the midpoint of the two craft (live: racers 5
+   and 6 at `x = -670.07` and `-660.34`, the record's point at `-665.20`), so the push is away from the rival.
+   Live, the two craft of one contact read push `-0.38`/`+0.38` the next frame (two records each, times the
+   `0.95` decay) and `-0.74`/`+0.74` after the second, then decay: their lane targets fan out by most of the
+   corridor.
+2. **`Ai_SnapToLane` drops the rail on any record, a craft's included** (`body+0x370 != 0`,
+   [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md#ai_snaptolane-0x088542e4-the-rail)). Live,
+   the rail blend (`driver+0x48`) read `0` on 85 to 100 % of each AI's pair-contact frames (seen on the two
+   Talon's runs that read the drivers; `--lean` does not) and climbs back at `0.6`
+   a second, so after a bump the rail is off for over a second while the push moves the lane.
+
+**Ours runs neither for a craft.** `oag_raceplay::original_ai`'s contact summary is built from the step's
+`WallResponse` alone: walls feed the push (which the original never does) and the rail drop, and a resolved
+pair (`Race::resolve_craft_pairs`) feeds nothing. Two of our rivals side by side keep the rail at full blend,
+which pulls each 70 % back onto its own lane every tick, and nothing moves either lane: they press.
+
+### The numbers
+
+The same scenario on both sides: Pulse PSP, Single Race, weapons on (`g_weapons_enabled` `0x08b30fa8` read `1`),
+seven opponents, the player parked on the grid (no input; never the Autopilot), the original at
+`g_skill_level` `0` (the profile's AI difficulty, read live) and ours on the original driver at level `0`
+(`Difficulty::Novice`, skill the load's ambient value; the two skill scales were not compared). A **contact
+tick** is a tick an opponent has at least one craft-to-craft contact: on the original, at least one kind-`1`
+record in its ring at the `AiManager_Update` stop (`0x08834b14`, before any driver reads the ring); in ours, the
+slot in at least one resolved pair (`Race::pair_contact_ticks_of`). The two agree on a separating pair: the
+original's `Body_ResolveContactPair` returns before `Body_RecordPairContact` when the pair separates faster
+than `0.5`, and `oag_physics::pair::resolve` returns `None` at the same gate, so neither counts that tick. Counted from GO (the first frame an opponent
+moves faster than 5 u/s). Per opponent, mean over the field:
+
+| Circuit, class | Original, first 30 s (boots) | Original, 3 min (one boot) | Ours, first 30 s (seeds 1-6) | Ours, 3 min |
+| --- | --- | ---: | ---: | ---: |
+| Talon's Junction White (`16_Track`), VENOM | 36.9, 81.1, 11.1, 14.3 (mean 35.9) | 151.3 | 96.8 | 287.8 |
+| de Konstruct White (`05_Track` reversed), VENOM | 24.0, 72.3, 57.9, 12.3 (mean 41.6) | 120.7 | 60.1 | 242.3 |
+| de Konstruct Black (`05_Track`), VENOM | not captured | - | 52.7 | 262.2 |
+| Talon's Junction White, RAPIER | not captured | - | 92.4 | 413.3 |
+| de Konstruct White, RAPIER | 4.6, 3.7 (class not confirmed by a read, below) | - | 89.8 | 293.6 |
+
+The first 30 s spread widely on both sides (ours per seed on Talon's VENOM: 25 to 177), so the start alone is
+about 1.5 to 2.7 times the original; over three minutes it is twice. **The shape differs more than the total.**
+A contact episode is a run of consecutive contact ticks of one opponent:
+
+| | Longest episode | Episodes of 60 ticks or more |
+| --- | ---: | --- |
+| Original, 30 s runs (6 at VENOM, both circuits) | 69 (one pair, once); else 19 to 48 | 2 craft once, in 6 runs |
+| Original, 3 min, Talon's / de Konstruct White (one boot each) | 40 / 56 | none |
+| Ours, 3 min, Talon's VENOM, seeds 1-6 | 93 to 343 | 4 to 14 per race, holding 440 to 1,652 ticks |
+| Ours, 3 min, de Konstruct White VENOM | 83 to 195 | 2 to 8 per race |
+| Ours, 3 min, de Konstruct Black VENOM | 73 to 254 | 4 to 15 per race |
+
+The original's craft touch and part within a second; ours ride side by side for one to six seconds, several
+times a race. That is the clumping a player sees.
+
+**The rules, tried in ours (an uncommitted experiment, not wired).** Pair contacts fed into the push (side by
+`dot(left, point - pos)`, one or two counts per pair-tick for the original's one or two records) and into the
+rail drop, walls into the rail drop only. Same scenario, seeds 1-6, VENOM, per opponent first 30 s / 3 min:
+Talon's 96.8/287.8 became 60.6/188.6 (one count) and 52.6/160.8 (two); de Konstruct White 60.1/242.3 became
+35.8/142.8 and 33.3/162.9; de Konstruct Black 52.7/262.2 became 35.0/122.5 and 53.0/143.6. The longest episodes
+fell to 40 to 206 ticks with 0 to 8 of 60 or more per race. So the two rules close most of the gap, not all of
+it: ours with them still sits 1.0 to 1.4 times the original's three-minute count and keeps some long episodes.
+At Ace on RAPIER and PHANTOM (16,000 ticks) the count halved too, while craft destroyed stayed within seed noise
+(23 against 25 and 21 over 36 races: at Ace the wrecks are mostly weapons).
+
+**The wrecks the bump charge added were this project's driver.** The 62 -> 121 board above never switches the
+original driver on; with it (Novice, VENOM and RAPIER, 3 min, 36 races, a wreck latched per tick) no opponent was destroyed, and at Ace
+(RAPIER, PHANTOM, 16,000 ticks) 23 in 36 races, most by weapons. This project's driver at Ace in the same harness
+holds contact longer still (Talon's VENOM 109.3 in the first 30 s).
+
+**Not measured.** Lateral spacing as a distance (contact time stands in for it); the original on de Konstruct
+Black and at a confirmed faster class (the RAPIER walk pressed the class row but no read confirmed the class:
+the opponents' mean speed read 107.8 u/s against 99.5 on VENOM); the original at Ace (`g_skill_level` 2); what
+holds ours' remaining long episodes (the pair resolver's separating gate and positional correction are already
+the original's, `oag_physics::pair`; the original's second ring record per pair-tick is unread,
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md), Result 5).
+
+**Reproducing.** The original: `scripts/psp-ai-contact-field.py --restart --lean --frames 2300` on a weapons-on
+Single Race (`psp-drive.py menu --single-race --weapons-on --unlock [--track-down 8]`), then `--summary <log>
+--window 1800` (or `10800`); one stop a frame at `AiManager_Update`, about 19 frames a second with `--lean`. Ours:
+`OAG_SWEEP=1 OAG_SEEDS=6 OAG_CLASSES=venom OAG_TICKS=10800 cargo nextest run -p oag-raceplay --run-ignored all
+--no-capture -E 'test(ai_contact_duration_board)'` (`OAG_AI=ours`, `OAG_DIFFICULTY=ace`, `OAG_LEVEL` as its
+docs say).
 
 ## Tuning sweep tables
 
