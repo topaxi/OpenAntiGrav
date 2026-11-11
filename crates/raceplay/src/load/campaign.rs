@@ -169,7 +169,7 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     // `GameModeBase_Apply` copies the event's level to the global `Ship_SetShield` indexes the
     // three shield slots with, whatever the event's kind
     // (`docs/ghidra/functions/vita-2048-eu-v104/craft-laws.md`, "The shield slot").
-    resolved.skill_level = Some(event_skill_level());
+    resolved.skill_level = Some(oag_tables::mjolnir::campaign::Event::LEVEL);
 
     let restriction = oag_2048::campaign::craft::restriction(instance);
     let restricted: Vec<&str> = ["combat", "agility", "speed", "prototype"]
@@ -273,10 +273,4 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
         ai,
     });
     Ok(loaded)
-}
-
-/// The level a 2048 campaign event races at: the title's `EventAi::level`, which is also the
-/// index into every craft's shield slots.
-fn event_skill_level() -> u8 {
-    u8::try_from(oag_2048::race::EVENT_AI_DEFAULTS.level).unwrap_or(u8::MAX)
 }
