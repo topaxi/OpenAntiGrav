@@ -77,11 +77,13 @@ pub const VIGNETTE_CENTRE_Y: f32 = -0.885;
 /// The radius, in clip units, inside which the vignette is 0, `0x8151c6b8` (1.5).
 pub const VIGNETTE_INNER: f32 = 1.5;
 
-/// The radius at which `w` reaches [`VIGNETTE_STRENGTH`], `0x8151c6bc` (`0x40099a99`, 2.15).
-pub const VIGNETTE_OUTER: f32 = f32::from_bits(0x4009_9a99);
+/// The radius at which `w` reaches [`VIGNETTE_STRENGTH`], `0x8151c6bc` (`0x4009999a`, 2.15).
+pub const VIGNETTE_OUTER: f32 = f32::from_bits(0x4009_999a);
 
 /// `w` on the outer ring, `0x8151c6b0` (1.0); `PostFx_RenderChain` writes 0 there instead
-/// while `FUN_81021ef6` reports a photo capture in progress, which a race here has none of.
+/// while `FUN_81021ef6` reports a photo capture job running (`exposure.md`, "The vignette").
+/// Ours keeps it on in its own photo mode's accumulated shot: a departure, the switch is
+/// read at confidence 60 and not wired.
 pub const VIGNETTE_STRENGTH: f32 = 1.0;
 
 /// The mesh is a fan and a ring of this many sectors, `2 pi / 0.19634952`.

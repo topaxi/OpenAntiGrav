@@ -29,6 +29,9 @@ Omega's four-level bloom (`tonemap.md`, "The bloom chain") is **checked, differs
   (`exposure.md`, "The vignette"). Left: a Vita3K `--ram-read` of its constants (no profile on
   the machine that read it), and the top edge's middle on Queens Mall and Empire Climb, which
   ours draws darker than the original where the original has the sun's flare.
+  **Departure**: ours' photo mode shot keeps the vignette on; the original drops it while its
+  capture job runs (`FUN_81021ef6`, score 60; `exposure.md`, "The vignette"). Read that function's
+  callers before wiring a switch.
 - **The screen tint and `alphaTex`**: the tint's source (`FUN_813b1d28`) and
   what the second texture holds in a race. Ours draws tint 0 and `c = main`.
 - **Which other 2048 programs square their texel**: only the lightmapped track

@@ -130,7 +130,7 @@ not watched at run time: Vita3K was not run, see "Not measured"), **70** that th
   at `a`/`b`; `pos.w` is 0 on `A`, `B`, `C` and `s` on `D`, `E`. The values are the floats
   `g_VignetteStrength` `0x8151c6b0` = 1.0 (`s`, read at `0x8103aea6`), `g_VignetteCentreY`
   `0x8151c6b4` = `0xbf628f5c` = -0.885, `g_VignetteInnerRadius` `0x8151c6b8` = 1.5,
-  `g_VignetteOuterRadius` `0x8151c6bc` = `0x40099a99` = 2.15. Each has one reader and no writer.
+  `g_VignetteOuterRadius` `0x8151c6bc` = `0x4009999a` = 2.15. Each has one reader and no writer.
   So `w` is 0 inside radius 1.5 of `(0, -0.885)` in clip space and ramps linearly over the
   ring's triangles to 1.0 at 2.15; the frame's top corners are at 2.134, its bottom corners at
   1.007 (no vignette), its top edge's middle at 1.885 (`w` 0.59, `v` 0.65). The outer polygon's
@@ -142,7 +142,10 @@ not watched at run time: Vita3K was not run, see "Not measured"), **70** that th
   flag is set and the 64-bit word at `0x81519638` is past `0x81519640`, which
   `FUN_81021992` sets to its start plus the job's length, so it reads as "a photo
   capture job is running past its window" and a race has the vignette on throughout
-  (confidence 60; no name given).
+  (confidence 60; no name given). **Departure: ours' photo mode does not read it.** Its
+  accumulated shot (`oag_raceplay`'s `photo::shot`, frames of a motion blur or a depth of field)
+  draws each frame through this chain with the vignette on, where the original drops it for the
+  capture; wiring that on a score-60 reading is left open.
 - **Precision**: the vertex program's product and the fragment's square are half
   precision (about 3 digits); ours runs `f32`.
 

@@ -25,8 +25,9 @@
 //!
 //! - **The vignette is the original's** (`law::vignette`): the composite is drawn as the
 //!   mesh `PostFx_RenderChain` builds, a fan and a ring round clip-space `(0, -0.885)`
-//!   whose `pos.w` runs 0 to 1, and `v = 1 - (vignetteTint * w)^2`. Ours has no photo
-//!   capture, which the original turns it off for. **The screen tint is left out**: its
+//!   whose `pos.w` runs 0 to 1, and `v = 1 - (vignetteTint * w)^2`. The original turns it
+//!   off while a photo capture job runs (`FUN_81021ef6`, read at confidence 60); ours does not,
+//!   and its photo mode's shot draws through this chain with the vignette on. **The screen tint is left out**: its
 //!   source is unread, so it is 0. A split view draws its own vignette over its own
 //!   rectangle (chosen, not measured: the original has no split screen).
 //! - **`alphaTex` reads as empty**: the original composites a second texture

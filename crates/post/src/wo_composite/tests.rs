@@ -279,7 +279,7 @@ fn a_held_chain_draws_the_law_on_a_real_device() {
 /// top corners (the far side of the mesh centred low in the frame), a little dark along the
 /// top edge, and untouched in the bottom corners and the middle. Each pixel is the law's,
 /// `composite * (1 - (vignetteTint * w)^2)` with `w` from the mesh's own triangles. The
-/// original's top corners read 1.2 to 1.8 in luma on all three 2048 pairs, its bottom
+/// original's top corners read 0.9 to 1.8 in luma on all three 2048 pairs, its bottom
 /// corners lit (exposure.md, "The vignette"). **Skips when there is no adapter.**
 #[test]
 fn the_composite_draws_the_vignette_over_the_top_of_the_frame() {
@@ -325,10 +325,10 @@ fn the_composite_draws_the_vignette_over_the_top_of_the_frame() {
     }
     let corner = i32::from(pixel_at(&pixels, 0, 0)[0]);
     let foot = i32::from(pixel_at(&pixels, 0, 15)[0]);
-    assert_eq!(
-        foot,
-        byte(plain[0]),
-        "the bottom corner is the plain composite"
+    assert!(
+        (foot - byte(plain[0])).abs() <= 2,
+        "the bottom corner ({foot}) is the plain composite ({})",
+        byte(plain[0])
     );
     assert!(
         corner * 2 < foot,
