@@ -429,6 +429,15 @@ every message.
 
 ## Verifying it
 
+`just check-web` (part of `just` and `just gate-affected`) type-checks the
+module with `scripts/build-web.sh --check`: the same nightly, `-Z build-std`,
+target features and link flags as `just web`, for both the `web` and the
+`web,fault-test` features, in `target/web-threads`. About 50 s cold and 10 s
+warm; it needs that nightly with `rust-src` and the wasm32 target, and fails
+with the install command when they are missing. It is a type check only (no
+`wasm-bindgen`, no `wasm-opt`), and it denies no warnings: the module still
+builds with 22.
+
 `scripts/web-screenshot.py` serves a built `dist` folder, opens it in headless
 Chromium with WebGPU on, hands an image to the file input, and writes
 screenshots at given times; it presses, holds and releases keys, clicks, and
@@ -608,6 +617,32 @@ behind it), which is a reason to use the flags above, not something the game
 can repair. `scripts/web-screenshot.py --software` runs the presenting CPU
 adapter and `--software bare` that mode; `--resize WxH@SECONDS` resizes the
 viewport mid-run.
+
+**Firefox on Linux: the game runs (the console logs `renderer: webgpu:` and
+frame lines) but the canvas stays black** (2026-11-11, Firefox 159 on a niri
+Wayland session, hybrid Intel Arc 130T/140T plus NVIDIA RTX PRO 2000 laptop, a
+fresh profile with `dom.webgpu.enabled` and `gfx.webgpu.ignore-blocklist` on).
+Firefox's own WebGPU sample (`webgpu.github.io/webgpu-samples`, rotatingCube)
+is black in the same profile too, and Firefox writes
+`[GFX1-]: dmabuf image neither requires nor prefers a dedicated allocation` to
+its standard error: 92 to 531 times in a 4 to 5 s run of the sample or of a
+page that only clears its canvas, but only 4 times in a 28 s run of the game,
+which is black all the same. That is Firefox's
+present path without a readback (a DMABuf shared with the compositor), not the
+game: with `dom.webgpu.allow-present-without-readback` set to `false` in
+`about:config` both draw, the game through its boot movie to the menus. The
+picker page's note names that pref. Both GPUs were tried through
+`VK_DRIVER_FILES` (the Intel or the NVIDIA ICD); the adapter reports no name,
+so which one served is inferred from the ICD changing the outcome (the cube
+sample lost its device on the NVIDIA ICD and not on the Intel one, black on
+both). The game sees no error and no lost device on that path, so the page
+cannot tell the player. Headless Firefox, Firefox under Xvfb and Firefox on a
+headless sway take the readback path and draw.
+
+A canvas configured `rgba8unorm` instead of Firefox's preferred `bgra8unorm`
+draws on that Wayland session with the pref at its default, but **crashes**
+Firefox 159 headless and under Xvfb (software WebRender), a 40-line page that
+only clears the canvas included; so the game keeps the preferred format.
 
 ### What the page says when something fails
 

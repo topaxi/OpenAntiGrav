@@ -73,7 +73,8 @@ window.addEventListener("error", function (event) {
   </table>
   <p class="small">Needs WebGPU: Chrome or Edge 113+, Safari 26+, Firefox 141+ on
   Windows; Firefox on Linux with <code>dom.webgpu.enabled</code> and
-  <code>gfx.webgpu.ignore-blocklist</code> set in <code>about:config</code>, Chromium on Linux
+  <code>gfx.webgpu.ignore-blocklist</code> set in <code>about:config</code> (and, if the game
+  runs but stays black, <code>dom.webgpu.allow-present-without-readback</code> set to false), Chromium on Linux
   with <code>--enable-unsafe-webgpu --enable-features=Vulkan</code>.
   Keyboard, gamepad and touch. PSP movies play silent; PS2 and HD movies, and Pulse/Pure music, are not in the browser yet.
   <a href="https://github.com/topaxi/OpenAntiGrav">Source</a> ·
