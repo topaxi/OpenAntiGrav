@@ -35,8 +35,9 @@ CAMERA_EYES = (0x850, 0x860)
 #: The craft's cached basis (`+0x180`...) trails the body's by a tick: 2e-4 on a craft left resting for three minutes (a resting
 #: craft keeps turning, `docs/physics/grid-state.md`), under 1e-5 on one saved a few seconds after GO.
 CACHE_TOLERANCE = 5e-3
-#: The race clock is not at one address: `0x70EE9C` in the Moa Therma White state, `0x70DB7C` in a later boot's. It sits 0x12044 to
-#: 0x12084 below the player's craft struct, and 0x100 above it is the clock the HUD prints (the RAM clock less 4.1 to 4.25 s).
+#: The race clock is not at one address: `0x70EE9C` in the Moa Therma White state, `0x70DB7C` in a later boot's. It sits 0x12084 to
+#: 0x120a4 below the player's craft struct on all 16 states of `docs/tools/compare-page.md`, "Pulse PS2: a race pair for every circuit",
+#: and 0x100 above it is the clock the HUD prints (the RAM clock less 4.1 to 4.25 s).
 CLOCK_WINDOW = (0x13000, 0x11000)
 CLOCK_PARTNER = 0x100
 
@@ -116,8 +117,8 @@ FRAME_COUNTER = 0x27A7E8
 def race_clock_between(path_before, path_after):
     """The EE address of the race clock found from two savestates of one running race, or `None` unless exactly one word qualifies: a
     float that rose by `Delta frames * 0.015 .. 0.025` s (the frame counter at `FRAME_COUNTER` says how many frames lay between the
-    states), whose partner `CLOCK_PARTNER` bytes after it is 3.9 to 4.45 s below it in both states and at least a second. Needed
-    where the clock is not below the craft: on six of the circuits it sits `0xF6000` above it, in another heap block."""
+    states), whose partner `CLOCK_PARTNER` bytes after it is 3.9 to 4.45 s below it in both states and at least a second. Needs no
+    craft, so it does not depend on `player_craft` finding the right one."""
     from array import array
     a_ram, b_ram = _ram(path_before), _ram(path_after)
     frames = struct.unpack_from("<I", b_ram, FRAME_COUNTER)[0] - struct.unpack_from("<I", a_ram, FRAME_COUNTER)[0]

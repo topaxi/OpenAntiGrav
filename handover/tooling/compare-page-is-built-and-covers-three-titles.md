@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [pulse, hd, pure, 2048, omega]
-updated: 2026-10-26
-summary: "Compare page: more PS2 states and race shot, Pure, 2048 and Omega pairs partial; publishing unlocked"
+updated: 2026-11-11
+summary: "Compare page: Pulse PS2 has a race pair for all 16 circuits (adopt pending); Pure, 2048 and Omega pairs partial; publishing unlocked"
 ---
 
 # The compare page is built; HD and Pulse PSP give pairs, four titles are partial, publishing is unlocked
@@ -29,7 +29,7 @@ starts 255 ticks after the RAM clock) and a moving PS2 craft would need its pose
 **The fresh set of 2026-10-20 (`compare-parity`).** The old pairs, manifests and page are archived under
 `data/archive/compare-2026-10-20/` and are no reference. Every pair now comes out of `scripts/compare-environment.toml`
 and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md), "Environment parity"): 24 of 25 Pulse PSP
-(480x272), 13 of 13 HD (1920x1080) and one Pulse PS2 (960x720, camera not matched; 1280x720 widescreen with the camera matched since 2026-10-21, below), 37 pairs in
+(480x272), 13 of 13 HD (1920x1080) and one Pulse PS2 (960x720, camera not matched; 1280x720 widescreen with the camera matched since 2026-10-21, below; 16 circuits since 2026-11-11, below), 37 pairs in
 `data/reference/compare-page/{pulse-psp,hd,pulse-ps2}/`, manifest `fresh.toml` from `compare_env.py manifest`.
 `just compare-rerender` re-makes them from the savestates after a renderer change. The overlap score
 (`pair.json` `overlap`, `edge_ncc` 0.07 to 0.44 on PSP, 0.14 to 0.31 on HD) is on the page.
@@ -50,8 +50,9 @@ and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md)
   anamorphic mode) stands. The original's frame is grabbed with the VM running (clock 0.3-1.4 s past the state's).
   The old `data/reference/compare-page/pulse-ps2/moa-therma-white` cannot be re-rendered by the new script (its `argv` carries
   `--allow-own-camera`, its state is `4:3`): replace it with a pair made from the widescreen state.
-- **PS2 clock address `0x70EE9C`** was read on two states of one run before, and on the widescreen state live (25.1 to 26.3 s
-  across three grabs, monotonic) now.
+- **PS2 clock address**: `0x70EE9C` in the Moa Therma White state only; it moves with each boot and sits `0x12084` to `0x120a4`
+  below the player's craft (`pcsx2_state.race_clock_address`, sidecar `race_clock_address`), see the compare-page doc's "Pulse PS2: a race pair for every circuit".
+- **Pulse PS2: a race pair for every circuit (2026-11-11, `gallery-pulse-ps2`).** 15 new grid pairs (16 circuits, forward layout; Vostok Reef and Gemini Dam on their White entry, the reversed layout) plus Moa Therma White made again from a cold profile, all 14 parity checks, each state grabbed twice (`docs/tools/compare-page.md`, table and findings). `scripts/pcsx2-pulse-walk.py` makes the states from Racebox with the dev-unlock word (`definition-unlock.md`). Open: the lead adopts the 15 pair directories and a manifest beside them (copy the directories to `data/reference/compare-page/pulse-ps2/`, build the TOML with `compare_env.py manifest`, then `compare_provenance.py portable`); `data/saves/pulse-ps2/` already holds the states; the second layout of each circuit (16 Track Select entries) is one `--entry` away; ours' differences the pictures show are a rendering lane's: Orcus' neon strips (yellow in the original, magenta in ours), a pink streak beside the hull on Platinum Rush, no `pos 8/8` readout at the top right, the GO board's first state at Talon's Junction and Vostok Reef.
 - **Menu pairs (2026-10-26, `menu-pairs-hd-omega`)**: HD 5 and Omega 4 front-end pairs, ours from the disc's XML, gaps kept as the original's frame; shadPS4's pad input reaches Ship Select on every walk. See `docs/tools/compare-page.md`, "Menu pairs", and the frontend thread `menu-pairs-show-hd-and-omega-front-end-differences`. Open: the lead adopts the pair directories and builds `menus.toml`.
 - **Pure (PSP): four grid pairs since 2026-10-22** (`pure-pairs`, `scripts/psp-pure-pair.py`, `psp-pure-walk.py`; adopt: copy the four pair directories to `data/reference/compare-page/pure-psp/` and build `pure.toml` beside them with `compare_env.py manifest`). **2048 (Vita3K), Omega (shadPS4): not reachable** (Vita3K stops at
   an intro, shadPS4 reaches the main menu only). Their profile rows exist.
