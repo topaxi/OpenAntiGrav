@@ -13,7 +13,7 @@ use oag_core::math::Vec3;
 /// One locator per slot of `slot_teams`, through the hull file the slot's livery is
 /// built from (slot 0's own variant pick, a seated person's own, none under an
 /// Eliminator's forced skin, as `oag_livery::load` resolves them): `None` where the
-/// hull authors none, where the version's class id is unread (Pure), or where the
+/// hull authors none, where the version's class id is unread, or where the
 /// hull cannot be read at all (reported).
 pub(super) fn per_slot(
     archives: &mut oag_assets::Archives,

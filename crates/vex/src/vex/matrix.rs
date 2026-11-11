@@ -32,7 +32,7 @@ pub fn class_world_transforms(data: &[u8], nodes: &[Node], class_id: u32) -> Vec
 
 /// The `Ship Muzzle` locator's position in a hull's own model space: the first
 /// node of the version's class, or `None` where the version's id is unread
-/// (Pure) or the hull authors none (HD). It is the weapon node a charging
+/// or the hull authors none (HD). It is the weapon node a charging
 /// Plasma's head sits on and its bolt is released from, `(0, 0, 5.653)` on
 /// Assegai (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix
 /// and node").

@@ -128,7 +128,7 @@ All names resolve and decode on both Pure pressings (disc test `a_pure_race_load
 | `WO_BOMB_GLOW` | `Trigger::BombGlow`, a riding flare for a laid Bomb (`flare_effect_for`) | measured, Pure only |
 | `WO_DISRUPTOR_HEAD` | `Trigger::DisruptorHead`, a riding flare for the bolt | measured, Pure only |
 | `WO_DISRUPTOR_EXPLO` and `electric_halo2.vex` | `blast_for` arm for `Weapon::Disruptor`; the halo is `DisruptorHalo` (target 16, rate 0.05, grey `1 - age`, 1.0 s), camera-facing at the bolt's end | measured, Pure only |
-| `WO_DISRUPTOR_LAUNCH` | `Trigger::DisruptorLaunch`, played once at the hull's `Ship Muzzle` locator by `Race::fire_disruptor`, only where the hull authors one (see the gate above); Pure's class id `0x394` is now in `vex::classes::V4` | measured, Pure only |
+| `WO_DISRUPTOR_LAUNCH` | `Trigger::DisruptorLaunch`, played once at the hull's `Ship Muzzle` locator by `Race::fire_disruptor`, only where the hull authors one (see the gate above); Pure's class id `0x394` is now in `vex::classes::V4`, which also puts Pure's Plasma bolt on the node (read: [plasma.md](plasma.md), "Plasma_Init", 85; `before`/`after` of `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` both PASS) | measured, Pure only |
 | `disruptor_effect.vex` on a disrupted craft | `WeaponModels::disruptor_craft` (`DisruptorCraftFx`: target `1.0`, rate `0.1`, retire under `0.05`), drawn through the craft's own matrix, grey tint `cur`, for as long as `Ship::disruption` is active plus the fade; render-side state, no simulation change | measured, Pure only |
 | `disruptor_cockpit.vex` | **not wired**: it shows only in the cockpit view, and Pure's own cockpit placement is unread. The player's own craft draws no on-craft effect while the camera is inside the hull | unread |
 
@@ -142,8 +142,11 @@ Not captured headlessly: the laid Bomb's glow (the shot's bomb had not left the 
 
 **Side-by-side, on-craft effect** (Vineta K Time Trial, Feisar, craft at the grid, PPSSPP software renderer against ours at the same pose;
 the effect on the player's own craft in the chase view): the arcs, their colour and their extent along the road agree at 24 and 48 ticks after
-the apply (frames kept in the lane's scratch, not tracked). Not state-matched beyond the pose: the original's is injected by a debugger call,
-ours by the sim's own disruption state.
+the apply (frames kept in the lane's scratch, not tracked). Not state-matched beyond the pose: the original's effect is injected by a debugger call
+(`Ship_BuildDisruptorFx(ship)` at a `Ship_UpdateWeapons` stop, then `+0x138`/`+0x13c`/`+0x134` written), and ours was made with a throwaway local patch
+that set `ships[0].disruption = { DrunkCamera, 3.0 s }` on one tick of a `--time-trial` run (`oag-game <pure.chd> --race --mode time_trial --team Feisar
+--class vector`, grid pose, `--ticks` 170 and 200 against a patch at tick 150); no flag does this. The tint rise differs by a tick or two (ours starts the
+ease the tick the sim says disrupted).
 
 **Launch effect, seen:** the Disruptor's first frames in the original show a bright white-blue burst at the nose and the bolt streaking down
 the road; ours plays the same two (the launch flash is smaller than the original's burst on the frames compared; the head glow is shared).

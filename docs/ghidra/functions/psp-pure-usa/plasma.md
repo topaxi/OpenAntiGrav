@@ -158,3 +158,14 @@ charge"). **Checked, not wired for Pure.** Pure's `WO_PLASMA_HEAD` file carries 
 `Plasma_Init`'s `Psys_Spawn` call (the parent argument that makes the matrix move) is unread, so the
 evidence is below 70 and `Effect::rides_owner_frame` and `System::set_draws_live_severity` stay off for Pure.
 Reading Pure's `Plasma_Init` is the step that would turn both on.
+
+**Read 2026-11-11 (lane `pure-disruptor-finish`): Pure's Plasma charges and releases on the Ship Muzzle node, and its head is parented to it.**
+`Plasma_Init` (`0x0885df98`, `param_4` the craft) loads `node = *(craft+0xe0)` (the `Ship Muzzle` node
+`ShipMuzzle_Importer` builds, [weapon-effects.md](weapon-effects.md), "Disruptor"), copies the node's four matrix rows (`node+0x30`) onto the bolt
+at `+0x70..+0xac`, and spawns the head `WO_PLASMA_HEAD` (`FUN_08871e1c(.., 0x45484c50 'PLHE', 0, flag 0x10, parent = *(craft+0xe0))`): the
+same flag `0x10` and weapon-node parent Pulse's `Plasma_Init` uses. `Plasma_Launch` (`0x0885e1f4`) re-copies the node's matrix onto the bolt,
+clears the charging byte `+0x50` and builds the velocity from the craft. So the Pulse reading (the node `(0, 0, 5.653)` through the craft's rows,
+the head's arcs riding the craft) holds on Pure: confidence **85** for the node and the parent (decompile-level ceiling). **What this changes in
+ours:** Pure's hulls now resolve the locator (`vex::classes::V4.ship_muzzle = 0x394`), so a Pure Plasma bolt is held and released on the node,
+not on the fixed hold point. **Not wired:** `Effect::rides_owner_frame` and `set_draws_live_severity` for Pure's `WO_PLASMA_HEAD`; the evidence
+the earlier paragraph asked for is now in, so they are ready to turn on (and to check against a Pure frame).

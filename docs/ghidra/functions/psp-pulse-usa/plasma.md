@@ -2278,7 +2278,7 @@ the bolt's matrix carries them: `Plasma_Init` seeds it from this node. And the b
 the body on the next frame) is this node one frame earlier: 4.24 minus one craft step of about 2.0 at this speed.
 `MUZZLE_FORWARD` is therefore speed-dependent in the original; ours keeps the constant (sim, not touched here).
 
-Wired: `oag-vex`'s version 6 table names the class (`Classes::ship_muzzle`; Pure's version 4 id is unread),
+Wired: `oag-vex`'s version 6 table names the class (`Classes::ship_muzzle`; Pure's version 4 id, `0x394`, was recovered afterwards),
 `oag-livery` reads the locator beside the engine flare (`Livery::muzzle`), and a charging Plasma's flare anchor is the
 slot's model matrix (0.75 rows, `MODEL_YAW`) times that locator (`Race::muzzle_of`), on the source whose head rides
 its owner's frame (Pulse's PSP file); a hull with none keeps the bolt's hold point. `plasma_ride_scale` is 0.75 for the
@@ -2508,7 +2508,7 @@ pinned it, so it went red on the wired sim and is re-pinned on the draw series.
 - `oag_weapons::projectile::plasma::muzzle` carries it into the body's frame through `LAUNCH_SPEED_SCALE`
   (the craft's 0.75 rows): model `+Z` is the body's forward, model `+X` its left (the hull is drawn half a
   turn about its up axis), model `+Y` its up. Assegai: 4.24 ahead on the axis; Triakis `(0, -0.298, 4.183)`:
-  3.14 ahead, 0.22 below. A hull with no locator (HD's; Pure, whose version-4 class id is unread) keeps
+  3.14 ahead, 0.22 below. A hull with no locator (HD's; Pure's version-4 id, `0x394`, is recovered and its hulls have one) keeps
   `MUZZLE_FORWARD` 2.23, now documented as the hold point of a hull without a node.
 - `oag_vex::vex::ship_muzzle` is the one reader (the livery's private copy went); `oag_title::race::ShipPaths::
   hull_entry_name` names the hull for both halves (moved from `oag_livery::entry::ship_entry_name`, the hull stem
