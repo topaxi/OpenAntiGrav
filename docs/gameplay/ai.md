@@ -7067,8 +7067,9 @@ flies by default ([which AI flies](#which-ai-flies-2026-10-13)).
 **Measured 2026-11-11 (lane `ai-contact-duration`).** The maintainer's play report: "They clump together, I see
 it while playing often in the beginning of a race." **Our field holds craft-to-craft contact about twice as long
 as the original's, in long side-by-side episodes the original never has, and the original's driver has two
-rules that separate touching craft which ours does not run.** Confidence 85 for the comparison (seven runs of the
-original on two circuits, six seeds of ours per cell), 92 for the two rules (instruction level plus live).
+rules that separate touching craft which ours does not run.** Confidence 85 for the comparison (eight VENOM boots of the
+original on two circuits, six of 30 s and two of 3 min, against six seeds of ours per cell), 92 for the two
+rules (instruction level plus live).
 
 ### The two rules (what keeps the original's craft apart)
 
@@ -7087,7 +7088,8 @@ appends kind `0`.
    corridor.
 2. **`Ai_SnapToLane` drops the rail on any record, a craft's included** (`body+0x370 != 0`,
    [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md#ai_snaptolane-0x088542e4-the-rail)). Live,
-   the rail blend (`driver+0x48`) read `0` on 85 to 100 % of each AI's pair-contact frames and climbs back at `0.6`
+   the rail blend (`driver+0x48`) read `0` on 85 to 100 % of each AI's pair-contact frames (seen on the two
+   Talon's runs that read the drivers; `--lean` does not) and climbs back at `0.6`
    a second, so after a bump the rail is off for over a second while the push moves the lane.
 
 **Ours runs neither for a craft.** `oag_raceplay::original_ai`'s contact summary is built from the step's
@@ -7103,10 +7105,12 @@ seven opponents, the player parked on the grid (no input; never the Autopilot), 
 (`Difficulty::Novice`, skill the load's ambient value; the two skill scales were not compared). A **contact
 tick** is a tick an opponent has at least one craft-to-craft contact: on the original, at least one kind-`1`
 record in its ring at the `AiManager_Update` stop (`0x08834b14`, before any driver reads the ring); in ours, the
-slot in at least one resolved pair (`Race::pair_contact_ticks_of`). Counted from GO (the first frame an opponent
+slot in at least one resolved pair (`Race::pair_contact_ticks_of`). The two agree on a separating pair: the
+original's `Body_ResolveContactPair` returns before `Body_RecordPairContact` when the pair separates faster
+than `0.5`, and `oag_physics::pair::resolve` returns `None` at the same gate, so neither counts that tick. Counted from GO (the first frame an opponent
 moves faster than 5 u/s). Per opponent, mean over the field:
 
-| Circuit, class | Original, first 30 s (runs) | Original, 3 min | Ours, first 30 s (seeds 1-6) | Ours, 3 min |
+| Circuit, class | Original, first 30 s (boots) | Original, 3 min (one boot) | Ours, first 30 s (seeds 1-6) | Ours, 3 min |
 | --- | --- | ---: | ---: | ---: |
 | Talon's Junction White (`16_Track`), VENOM | 36.9, 81.1, 11.1, 14.3 (mean 35.9) | 151.3 | 96.8 | 287.8 |
 | de Konstruct White (`05_Track` reversed), VENOM | 24.0, 72.3, 57.9, 12.3 (mean 41.6) | 120.7 | 60.1 | 242.3 |
@@ -7121,7 +7125,7 @@ A contact episode is a run of consecutive contact ticks of one opponent:
 | | Longest episode | Episodes of 60 ticks or more |
 | --- | ---: | --- |
 | Original, 30 s runs (6 at VENOM, both circuits) | 69 (one pair, once); else 19 to 48 | 2 craft once, in 6 runs |
-| Original, 3 min, Talon's / de Konstruct White | 40 / 56 | none |
+| Original, 3 min, Talon's / de Konstruct White (one boot each) | 40 / 56 | none |
 | Ours, 3 min, Talon's VENOM, seeds 1-6 | 93 to 343 | 4 to 14 per race, holding 440 to 1,652 ticks |
 | Ours, 3 min, de Konstruct White VENOM | 83 to 195 | 2 to 8 per race |
 | Ours, 3 min, de Konstruct Black VENOM | 73 to 254 | 4 to 15 per race |
@@ -7140,7 +7144,7 @@ At Ace on RAPIER and PHANTOM (16,000 ticks) the count halved too, while craft de
 (23 against 25 and 21 over 36 races: at Ace the wrecks are mostly weapons).
 
 **The wrecks the bump charge added were this project's driver.** The 62 -> 121 board above never switches the
-original driver on; with it (Novice, VENOM and RAPIER, 3 min, 36 races) no opponent was destroyed, and at Ace
+original driver on; with it (Novice, VENOM and RAPIER, 3 min, 36 races, a wreck latched per tick) no opponent was destroyed, and at Ace
 (RAPIER, PHANTOM, 16,000 ticks) 23 in 36 races, most by weapons. This project's driver at Ace in the same harness
 holds contact longer still (Talon's VENOM 109.3 in the first 30 s).
 

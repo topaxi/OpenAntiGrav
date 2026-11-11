@@ -12,8 +12,8 @@ difficulty: easy (65)
 Measured on Pulse PSP: [ai.md](../../docs/gameplay/ai.md#the-fields-contact-time-against-the-originals) (numbers,
 method, reproducing commands) and [ai-controls.md](../../docs/ghidra/functions/psp-pulse-usa/ai-controls.md#ai_planlane-0x08854e7c-which-lane)
 (the push loop, live). Our opponents (the original driver, the default AI) spend about twice the original's
-contact ticks and ride side by side for 1-6 s several times a race; the original's longest episode in seven runs
-was 69 frames.
+contact ticks and ride side by side for 1-6 s several times a race; the original's longest episode in eight VENOM
+boots was 69 frames.
 
 ## Open
 
