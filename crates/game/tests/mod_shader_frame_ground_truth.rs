@@ -61,21 +61,19 @@ fn run(image: &Path, mods: &Path, scratch: &Path, ticks: u32) -> (Vec<u8>, Strin
         mods,
         scratch,
         ticks,
-        "single_race",
         "oag.tether",
         "",
-        &[],
+        &["--mode", "single_race"],
     )
 }
 
-/// [`run`] in race `mode`, with the mod `enabled`, a `[graphics]` line and arguments of the
-/// caller's.
+/// [`run`] with the mod `enabled`, a `[graphics]` line and arguments of the caller's, which
+/// name the race's `--mode`.
 fn run_with(
     image: &Path,
     mods: &Path,
     scratch: &Path,
     ticks: u32,
-    mode: &str,
     enabled: &str,
     graphics: &str,
     args: &[&str],
@@ -91,7 +89,7 @@ fn run_with(
     .unwrap();
     let run = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args(["--race", "--mode", mode, "--autopilot", "--no-audio"])
+        .args(["--race", "--autopilot", "--no-audio"])
         .args(["--size", &format!("{WIDTH}x{HEIGHT}")])
         .args(["--ticks", &ticks.to_string()])
         .arg("--screenshot")
@@ -349,16 +347,8 @@ fn check_portal(image: &str, mode: &str, ticks: u32, graphics: &str, outside: f3
         dir("flat", Some(FLAT_WINDOW)),
     );
     let frame = |mods: &Path, args: &[&str]| {
-        run_with(
-            &image,
-            mods,
-            &scratch,
-            ticks,
-            mode,
-            "oag.window",
-            graphics,
-            args,
-        )
+        let args = [&["--mode", mode][..], args].concat();
+        run_with(&image, mods, &scratch, ticks, "oag.window", graphics, &args)
     };
 
     let (with, log) = frame(&on, &[]);
