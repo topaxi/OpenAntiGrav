@@ -6,6 +6,8 @@
 #   scripts/build-web.sh --dev      # a debug build, no wasm-opt: quick to iterate
 #   scripts/build-web.sh --serve    # ... then serve dist on 127.0.0.1:8000
 #                                   # with the COOP/COEP headers threads need
+#   scripts/build-web.sh --check    # `cargo check` of the module with the same
+#                                   # flags, nothing written to dist (`just check-web`)
 #
 # The module is threaded (docs/tools/web.md, "Threads"): built with a pinned
 # nightly, `-Z build-std` and the atomics target feature, which the prebuilt
@@ -18,11 +20,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 profile=dist
 serve=
+check=
 port=${OAG_WEB_PORT:-8000}
 for arg in "$@"; do
   case $arg in
     --dev) profile=dev ;;
     --serve) serve=1 ;;
+    --check) check=1 ;;
     *) echo "unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
@@ -33,9 +37,13 @@ toolchain=${OAG_WEB_TOOLCHAIN:-nightly-2026-10-08}
 # sharing `target/` would throw the stable build's artifacts away each time.
 target_dir=${CARGO_TARGET_DIR:-target}/web-threads
 out=target/web/dist
-want=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/"/, "", $3); print $3; exit }' Cargo.lock)
+if [[ -n $check ]]; then
+  want=
+else
+  want=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/"/, "", $3); print $3; exit }' Cargo.lock)
+fi
 have=$(wasm-bindgen --version 2>/dev/null | awk '{ print $2 }')
-if [[ "$have" != "$want" ]]; then
+if [[ -n $want && "$have" != "$want" ]]; then
   echo "wasm-bindgen $want is needed (found: ${have:-none}): cargo install wasm-bindgen-cli --version $want" >&2
   exit 1
 fi
@@ -62,8 +70,19 @@ done
 # Never set in pages.yml: a published module has no such export.
 features=web
 [[ -n ${OAG_WEB_FAULT_TEST:-} ]] && features+=,fault-test
+rustflags="-C target-feature=+atomics,+bulk-memory,+mutable-globals $link"
+if [[ -n $check ]]; then
+  # Both feature sets: the published module and the fault-test one.
+  for features in web web,fault-test; do
+    CARGO_TARGET_DIR=$target_dir RUSTFLAGS=$rustflags \
+      cargo "+$toolchain" check -Z build-std=std,panic_abort \
+      --target wasm32-unknown-unknown -p oag-game --no-default-features \
+      --example oag_web --features "$features"
+  done
+  exit 0
+fi
 CARGO_TARGET_DIR=$target_dir \
-  RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals $link" \
+  RUSTFLAGS=$rustflags \
   cargo "+$toolchain" build -Z build-std=std,panic_abort \
   --target wasm32-unknown-unknown --profile "$profile" \
   -p oag-game --no-default-features --example oag_web --features "$features"
