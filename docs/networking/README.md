@@ -647,6 +647,8 @@ driver) and **62** (4 clients, the hand): resend waits, the 63 of ADR-0071's tab
 again and larger. They are the worst late presentations measured: 3 of the 12 client runs
 at 5 percent loss and 30 ms jitter, none at 0 percent loss (30 once, clean), so ADR-0071's
 "none older than 15 ticks" has a tail that loss and jitter reach; nothing here caps it.
+**Corrected 2026-11-11:** these were not first appearances; the counter misread them
+("A shot's first appearance" below).
 
 **Own craft.** "Own craft moved" counts corrections that moved the player's own craft by
 more than 0.05 units: 1 to 25 of 100 to 180 corrections per client, so about one in ten,
@@ -662,6 +664,149 @@ and the *threshold* policy that the ADR recommends costs 0.4 to 1.8 a second for
 keyboard, 0.9 to 2.5 for the hand and 0.6 to 1.8 for the driver, so the choice of
 policy, not the stream, decides the cost, and any plausible stream lands inside 2.5 a
 second at a 1-unit threshold. A recorded pad stream would pin it.
+
+## A shot's first appearance (2026-11-11)
+
+**The claim.** Under packet loss and jitter, a shot fired by another person first appears on
+a client no later than a stated cap. **True, and it already was: the 62, 137 and 152 tick
+tails were a miscount.** The cap is `oag_net::client::FIRST_SEEN_CAP`, 33 ticks (0.55 s); the
+most measured is 21.
+
+**What the old counter read.** "Largest pop-in age" was `weapon_sync::change`'s
+`oldest_appeared`: the oldest shot in the present after a correction that the present before
+it had no match for. Two things made it wrong.
+
+1. Its age was `Projectile::age`, which only a laid Mine or Bomb raises (seconds it has sat);
+   every flying shot read 0. The 9 to 18 tick figures were Mines.
+2. It matched a shot by weapon and owner alone, and it could not tell a shot shown for the
+   first time from one the prediction had wrongly ended (a Mine tripped or a Rocket landed on
+   the guessed timeline only) and the correction **put back**. A Mine 137 ticks old that the
+   present lost for 6 ticks and got back counted as "first appears 137 ticks into its flight".
+
+Reproduced on this tree before any change (same harness, `sweep_*_lossy`, the old counter):
+236 once with the driver at 4 clients, 59 to 87 on all four clients with the hand, 0 to 14
+elsewhere; the figures of 2026-10-19 differ because the physics has moved since.
+
+**What is measured now** (`Client::note_shown`, `Stats::first_seen_latest`,
+`Stats::restored`, `Stats::restored_gap_max`). A shot is known by weapon, owner and the tick
+its time runs out (`weapon_sync::Shot::expires`: `lifetime` counts down from a fixed start on
+both timelines, so the expiry tick is fixed at the fire and exact for every weapon). The
+client notes the tick the **confirmed** state first holds each shot, which is the tick the
+server fired it. After every step it compares the present, which is what the next frame
+draws, with the shots it has held before: one never held is a first appearance, as old as the
+ticks since the server fired it; one held, missing for more than two ticks and held again is
+a shot put back. A shot the confirmed state has not held yet is this machine's own
+prediction and counts as age 0. (An age derived from the time left was tried first and was
+480 ticks out for the Shuriken, which starts its clock from its table's fuse, not from the
+ten seconds every other flying shot starts from; hence the confirmed timeline.)
+
+**Measured** (`weapons_ground_truth::loss_and_jitter_sweep` and `sweep_*`, `OAG_SWEEP=1`;
+Pulse circuit 01, `Shim` at a 100 ms round trip on a virtual clock, 5,400 ticks, weapons on,
+so every run is the same on any machine; 0 bad hashes in all of them). Per client ranges over
+the driver and the hand:
+
+| Clients | Loss, jitter | Shots first seen | Oldest at first sight (ticks) | Shots put back | Longest a put-back shot was missing (ticks) |
+| --- | --- | --- | --- | --- | --- |
+| 2 | 0, 0 | 35 to 82 | 0 to 9 | 0 to 1 | 10 |
+| 2 | 1 %, 0 | 62 to 65 | 10 | 0 to 1 | 11 |
+| 2 | 5 %, 0 | 79 | 11 to 12 | 0 | - |
+| 2 | 0, 30 ms | 81 to 84 | 13 | 0 | - |
+| 2 | 5 %, 30 ms | 28 to 62 | 14 to 15 | 0 | - |
+| 4 | 0, 0 | 65 to 76 | 9 | 0 to 2 | 10 |
+| 4 | 1 %, 0 | 25 to 28 | 10 | 0 to 1 | 11 |
+| 4 | 5 %, 0 | 121 | 11 to 12 | 0 to 1 | 12 |
+| 4 | 0, 30 ms | 28 to 33 | 12 to 13 | 0 to 1 | 6 |
+| 4 | 5 %, 30 ms | 29 to 31 | 14 to 15 | 0 to 6 | 14 |
+| 4 | 20 %, 60 ms | 28 to 37 | 18 to 21 | 0 to 4 | 17 |
+| 2, Eliminator | 0, 0 | 403 | 9 | 0 to 1 | 6 |
+
+So a shot first shows 9 ticks into its flight on a clean 100 ms link (the prediction window,
+as ADR-0071 said), 15 at 5 percent loss and 30 ms jitter, and 21 at 20 percent and 60 ms,
+which is past what a playable link does. With the position-only trigger (ADR-0071's
+baseline) the same clean 4-client race shows 47 to 52: the weapon trigger is what holds the
+figure, not luck. A shot the prediction wrongly ended is back within 17 ticks.
+
+**The cap, and why it holds** (`FIRST_SEEN_CAP = MAX_WINDOW + 3`). The present never runs
+more than `MAX_WINDOW` (30 ticks) ahead of the confirmed state: past it the client stops
+predicting and waits. Every confirmed batch compares the weapon digest predicted for its
+newest tick with the confirmed one and corrects on any difference, and a correction rebuilds
+the present from the confirmed state, shots included. So a shot the server holds is in the
+present by the end of the step that confirmed a tick holding it: at most the window, the
+tick it was fired in and the two ticks a step may predict after its correction.
+`race_in_mode` asserts it on every client of every weapons test in `just test-data`
+(`four_firing_clients_agree_through_5_percent_loss_and_jitter`, the 100 ms pair, Eliminator)
+and of every sweep cell. The price of the cap is the stall: on a link bad enough to hold the
+window at 30 the game stops for the wait rather than showing a shot later. No run here
+stalled once racing.
+
+**One hole closed on the way, with no measured effect.** The digest knew a shot by weapon,
+owner and target. A present that kept a shot the server had ended, while the server held a
+newer one of the same weapon, owner and target, digested equal, and the newer shot would
+have waited for some other correction. Each shot's `lifetime` bits now enter the digest
+(`weapon_sync::digest`), so the two differ
+(`loopback::the_weapon_digest_knows_a_shot_by_the_tick_it_was_fired_on`). Run with and
+without it, all 20 sweep cells (60 client runs) were identical row for row, corrections
+included: the case did not occur once. It is kept because it is what makes the cap an
+argument and not an observation, and it costs four bytes hashed per shot.
+
+**On a real network** (2026-11-11): the lean `oag-server` on a remote x86-64 host (1 core,
+1 GB), two `oag-game --connect --net-bot` headless clients here (debug build), Pulse EU
+circuit 01, two people with the AI on the other six, weapons on, 5,400 ticks to
+`--max-ticks`; QUIC round trip 9.6 to 16 ms (median 10 to 11), loss 0.0 %. "Before" is the
+same client built with the old digest. Per client:
+
+| Path | Client | Hash ok / bad | Corrections | Ticks replayed | Largest pop | Shots first seen | Oldest at first sight | Put back, longest missing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| IPv6 | before | 5,390 / 0, 5,382 / 0 | 106, 94 | 607, 428 | 2.6, 2.9 | 99, 99 | 7, 0 | 1 for 5, 0 |
+| IPv6 | after | 5,385 / 0, 5,390 / 0 | 108, 110 | 599, 607 | 2.4, 2.6 | 70, 68 | 6, 7 | 1 for 8, 0 |
+| IPv4 only | after | 5,383 / 0, 5,375 / 0 | 108, 91 | 638, 531 | 3.9, 2.3 | 128, 128 | 7, 7 | 0, 0 |
+| IPv6, `--net-shim 100:5` | before | 5,395 / 0, 5,394 / 0 | 128, 138 | 1,555, 1,624 | 10.9, 5.4 | 111, 109 | 14, 14 | 0, 0 |
+| IPv6, `--net-shim 100:5` | after | 5,391 / 0, 5,392 / 0 | 129, 124 | 1,430, 1,461 | 7.3, 9.4 | 55, 55 | 13, 14 | 1 for 8, 2 for 14 |
+
+The runs are wall clock, so two of them are two different races (the shots first seen
+differ); what holds across all ten client runs is 0 bad hashes and a first sight of at most
+7 ticks on the plain link and 14 with 100 ms and 5 percent loss added. **The IPv4-only
+client path works**: the server listens on `[::]` (dual stack) and a client given the host's
+IPv4 address raced the same race, which was untested before. The client's once-a-second line
+now ends `shots first seen N oldest M ticks, put back R after G ticks`.
+
+## A fire seen late (2026-11-11)
+
+What a client shows of another person's fire it learns of late, beyond the cue, the blast
+and the shield bulge of ADR-0071's follow-up. Both are view only; no hash moves.
+
+- **The screen flash is aged.** A blast journalled in a quiet tick and started late
+  (`catch_up::present_late`) started its `ScreenFlash` at the first key, so a detonation
+  nine ticks old washed the screen at full strength nine ticks late.
+  `ScreenFlash::start_aged` joins the kind's own ramp at the blast's age, is measured
+  against the running flash by its colour at that age, and never draws once the age is past
+  the kind's duration (`Race::ignite_blast_aged`).
+  `flash::tests::a_flash_started_late_is_as_old_as_its_detonation` holds it frame for frame
+  against a flash started on time, and
+  `tests::catch_up::a_blast_first_seen_late_starts_its_screen_flash_aged` through the
+  journal; both fail with the age dropped.
+- **The effect a shot rides is aged along its flight.** A shot first drawn mid-flight was
+  given its riding effect (`advance_projectile_flares`: the Rocket's, Missile's, Plasma's,
+  Disruptor's, the Bomb's glow) fresh at where it was, so an effect that opens with a
+  one-shot part replayed it mid-air (our own rocket's `launch-flash` emitter,
+  `docs/rendering/own-rockets.md`) and the trail began at the shot. The effect is now
+  attached where the shot was fired from and walked to where it is over the shot's age
+  (`Stage::pre_age_riding`, at most 40 ticks, straight back along the velocity; both
+  **chosen, not measured**, the flight's curve is not kept): the one-shot part is as spent
+  as the shot is old and the trail lies behind it.
+  `psys::tests::an_effect_attached_late_is_pre_aged_along_its_owners_path` holds the result
+  equal, particle for particle, to an effect that rode the owner on every tick, and
+  `tests::catch_up::a_rocket_first_drawn_mid_flight_gets_its_effect_as_old_as_it_is` holds
+  the wiring (0 particles with it dropped, 69 drawn all along). A shot drawn on the tick it
+  is fired is untouched, so nothing moves off the network.
+- **Not aged, named.** The Shuriken's head and trail start fresh: it does not carry how long
+  it has flown (`Projectile::seconds_since_fired` is `None`; its fuse is its table's). The
+  Cannon's muzzle flash needs nothing: it is drawn from the round's own age. The Plasma, Bomb
+  and Disruptor blast *models* and HD's Missile blast model still start fresh. The Quake's,
+  the Repulser's and a craft's own screen flashes are not journalled, so a late one is
+  dropped, not aged. Every title takes the same path (the triggers are per title, the ageing
+  is not); only Pulse and the own-rocket effect were looked at, and no frame was captured:
+  as on 2026-10-19 the forced scenes put the blast far ahead of the camera.
 
 ## Replay cost on this machine (2026-10-19)
 

@@ -3413,6 +3413,7 @@ dependencies = [
  "oag-race",
  "oag-raceplay",
  "oag-source",
+ "oag-tables",
  "oag-testdata",
  "oag-title",
  "rcgen",

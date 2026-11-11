@@ -178,3 +178,141 @@ fn a_blast_first_seen_in_the_replay_is_started_at_its_age_and_a_played_one_is_no
     let late = race.take_late_report();
     assert_eq!((late.blasts, late.already_presented), (0, 1), "{late:?}");
 }
+
+/// A blast first seen late starts its screen flash where a flash started on time is by now,
+/// not at its first key.
+#[test]
+fn a_blast_first_seen_late_starts_its_screen_flash_aged() {
+    const AGE: usize = 9;
+    let dt = 1.0 / 60.0;
+    let hit = |race: &mut Race, quiet: bool| {
+        race.quiet = quiet;
+        // A Rocket that reached a craft: screen flash kind 0.
+        race.note_blast(
+            oag_tables::weapons::Weapon::Rocket,
+            Vec3::ZERO,
+            Some(1),
+            Quat::IDENTITY,
+        );
+        race.quiet = false;
+    };
+    let frames = |race: &mut Race| -> Vec<Option<[f32; 4]>> {
+        let flash = race.view.screen_flash.as_mut().unwrap();
+        (0..6)
+            .map(|_| {
+                flash.advance(dt, Vec3::ZERO);
+                flash.colour()
+            })
+            .collect()
+    };
+
+    // Seen on time, then `AGE` drawn frames on.
+    let mut on_time = Box::new(armed_pair());
+    on_time.view.screen_flash = Some(oag_fx::flash::ScreenFlash::default());
+    on_time.tick(&PlayerInputs::none());
+    hit(&mut on_time, false);
+    let flash = on_time.view.screen_flash.as_mut().unwrap();
+    for _ in 0..AGE {
+        flash.advance(dt, Vec3::ZERO);
+    }
+    let fresh_first = {
+        let mut fresh = oag_fx::flash::ScreenFlash::default();
+        fresh.start(oag_fx::flash::BLAST, Vec3::ZERO);
+        fresh.advance(dt, Vec3::ZERO);
+        fresh.colour()
+    };
+
+    // First met in a quiet tick, settled `AGE` ticks later.
+    let mut late = Box::new(armed_pair());
+    late.view.screen_flash = Some(oag_fx::flash::ScreenFlash::default());
+    late.tick_sim_only(&PlayerInputs::none());
+    hit(&mut late, true);
+    for _ in 0..AGE {
+        late.tick_sim_only(&PlayerInputs::none());
+    }
+    late.settle_presentation();
+    assert_eq!(late.take_late_report().blasts, 1);
+
+    let (late, on_time) = (frames(&mut late), frames(&mut on_time));
+    assert!(late[0].is_some(), "the late flash never drew");
+    assert_eq!(late, on_time, "the late flash is not where one on time is");
+    assert_ne!(late[0], fresh_first, "the late flash started fresh");
+}
+
+/// A Rocket first drawn mid-flight is given its flight effect as old as the Rocket is: what
+/// the effect put out since the launch is there, as on a client that drew every tick, where a
+/// fresh attach would begin with the launch flash at a rocket long past its launch.
+#[test]
+fn a_rocket_first_drawn_mid_flight_gets_its_effect_as_old_as_it_is() {
+    const AGE: u32 = 12;
+    let dt = 1.0 / 60.0;
+    let velocity = Vec3::new(0.0, 0.0, 300.0);
+    let launch = Vec3::new(0.0, 50.0, 0.0);
+    let flying = |ticks: u32| -> Box<Race> {
+        let mut race = Box::new(armed_pair());
+        let options = Options {
+            own_rockets: true,
+            ..Options::default()
+        };
+        let mut read = |name: &str| {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../assets/fallback")
+                .join(name.replace('\\', "/"));
+            std::fs::read(path).ok()
+        };
+        let mut library = oag_fx::psys::Library::new();
+        let loaded =
+            crate::own_rockets::load_with(&options, oag_pulse::TITLE, &mut read, &mut library);
+        let mut report = Vec::new();
+        race.view.handles = loaded.lend(std::mem::take(&mut race.view.handles), &mut report);
+        assert!(
+            race.view.handles.get(Trigger::RocketFlare).is_some(),
+            "{report:?}"
+        );
+        assert!(race.sim.world.projectiles.spawn_riding(
+            oag_tables::weapons::Weapon::Rocket,
+            launch,
+            velocity,
+            1,
+            Vec3::Y,
+            0.0,
+        ));
+        fly(&mut race, ticks);
+        race
+    };
+    /// Moves the one Rocket `ticks` ticks on, undrawn.
+    fn fly(race: &mut Race, ticks: u32) {
+        let rocket = &mut race.sim.world.projectiles.slots[0];
+        rocket.position += rocket.velocity * (ticks as f32 / 60.0);
+        rocket.lifetime -= ticks as f32 / 60.0;
+    }
+    let alive = |race: &Race| {
+        let effect = race.view.handles.get(Trigger::RocketFlare).unwrap();
+        race.view.stage.alive_of_effect(effect)
+    };
+
+    // Drawn every tick of the flight.
+    let mut ridden = flying(1);
+    ridden.advance_projectile_flares();
+    for _ in 1..AGE {
+        ridden.view.stage.advance(dt, &mut ridden.view.stage_rng);
+        fly(&mut ridden, 1);
+        ridden.advance_projectile_flares();
+    }
+    // First drawn on the tick it is fired: the effect starts with nothing out.
+    let mut fresh = flying(1);
+    fresh.advance_projectile_flares();
+    // First drawn `AGE` ticks into the flight.
+    let mut late = flying(AGE);
+    late.advance_projectile_flares();
+
+    let (ridden, fresh, late) = (alive(&ridden), alive(&fresh), alive(&late));
+    assert!(
+        ridden > fresh + 8,
+        "the flight lays particles: {fresh} then {ridden}"
+    );
+    assert!(
+        late.abs_diff(ridden) <= ridden / 4,
+        "first drawn mid-flight {late}, drawn all along {ridden}, fresh {fresh}"
+    );
+}

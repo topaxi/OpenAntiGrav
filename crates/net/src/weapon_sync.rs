@@ -22,6 +22,12 @@ pub const SHIELD_STEP: f32 = 1.0;
 /// projectiles in the air (kind, owner, target, as a set, so the slot a shot landed in does not
 /// matter), the Quake, the LeachBeam, the Repulsers, which craft hold a lock, each craft's held pickup and its shield in
 /// whole steps of [`SHIELD_STEP`]. Not the hash: a position never enters it.
+///
+/// Each shot carries the time it has left, which counts down from the same start on both
+/// timelines and so names the tick the shot was fired on. Without it a shot the server has
+/// and another the present has (same weapon, owner and target, fired on different ticks) pass
+/// for one, and the server's is not shown until something else corrects the present
+/// (`docs/networking/README.md`, "A shot's first appearance").
 #[must_use]
 pub fn digest(sim: &RaceSim) -> u64 {
     let world = &sim.world;
@@ -31,6 +37,7 @@ pub fn digest(sim: &RaceSim) -> u64 {
         h.write_u8(p.kind.map_or(0, |k| k.index() as u8 + 1));
         h.write_u8(p.owner);
         h.write_u8(p.target.unwrap_or(255));
+        h.write_u32(p.lifetime.to_bits());
         shots = shots.wrapping_add(h.finish());
     }
     let mut h = oag_core::hash::StateHasher::new();
@@ -56,29 +63,43 @@ pub fn digest(sim: &RaceSim) -> u64 {
     h.finish()
 }
 
-/// A shot in the air, as a pop-in measurement sees it: what and whose, and how old.
+/// A shot in the air, as a pop-in measurement sees it: what, whose and which.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Shot {
     /// The weapon, by its index.
     pub kind: u8,
     /// The firing craft's slot.
     pub owner: u8,
-    /// Ticks in the air.
-    pub age_ticks: u32,
+    /// The tick its time runs out on, which is fixed when it is fired and so tells it from
+    /// another shot of the same weapon and craft.
+    pub expires: u32,
 }
 
-/// Every projectile in the air in `sim`.
+impl Shot {
+    /// Whether `other` is this shot (a tick's slack for the rounding).
+    #[must_use]
+    pub fn is(&self, other: &Self) -> bool {
+        self.kind == other.kind
+            && self.owner == other.owner
+            && self.expires.abs_diff(other.expires) <= 1
+    }
+}
+
+/// Every projectile in the air in `sim`. A Plasma still charging is left out: it rides its
+/// craft and its clock has not started.
 #[must_use]
 pub fn shots(sim: &RaceSim) -> Vec<Shot> {
+    let tick = u32::try_from(sim.world.tick).unwrap_or(u32::MAX);
     sim.world
         .projectiles
         .slots
         .iter()
+        .filter(|p| p.charge <= 0.0)
         .filter_map(|p| {
             Some(Shot {
                 kind: p.kind?.index() as u8,
                 owner: p.owner,
-                age_ticks: (p.age * 60.0).round().max(0.0) as u32,
+                expires: tick.saturating_add((p.lifetime * 60.0).round().max(0.0) as u32),
             })
         })
         .collect()
@@ -87,14 +108,11 @@ pub fn shots(sim: &RaceSim) -> Vec<Shot> {
 /// What a correction changed about the weapons, between the present before it and after it.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Change {
-    /// Shots in the present after the correction that were not there before (a missile
-    /// popping into view).
+    /// Shots in the present after the correction that were not there before: one first
+    /// shown, or one the prediction had ended and the server had not.
     pub appeared: u32,
     /// Shots in the present before that are not there after (a missile undone).
     pub vanished: u32,
-    /// The greatest age, in ticks, of a shot that appeared: how far into its flight a missile
-    /// is when the player first sees it.
-    pub oldest_appeared: u32,
     /// Whether the client's own craft lost shield in the correction (a dodge undone).
     pub own_hit_added: bool,
     /// Whether the client's own craft gained shield back (a predicted hit undone).
@@ -111,10 +129,7 @@ pub fn change(before: &RaceSim, after: &RaceSim, seat: usize) -> Change {
         let mut pool: Vec<Shot> = other.to_vec();
         from.iter()
             .filter(|s| {
-                if let Some(i) = pool
-                    .iter()
-                    .position(|o| o.kind == s.kind && o.owner == s.owner)
-                {
+                if let Some(i) = pool.iter().position(|o| o.is(s)) {
                     pool.swap_remove(i);
                     false
                 } else {
@@ -126,7 +141,6 @@ pub fn change(before: &RaceSim, after: &RaceSim, seat: usize) -> Change {
     };
     let appeared = unmatched(&has, &had);
     out.appeared = u32::try_from(appeared.len()).unwrap_or(u32::MAX);
-    out.oldest_appeared = appeared.iter().map(|s| s.age_ticks).max().unwrap_or(0);
     out.vanished = u32::try_from(unmatched(&had, &has).len()).unwrap_or(u32::MAX);
     let drop = before.world.ships[seat].physics.shield - after.world.ships[seat].physics.shield;
     out.own_hit_added = drop >= SHIELD_STEP;

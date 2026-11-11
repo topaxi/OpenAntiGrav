@@ -968,6 +968,11 @@ the code is `oag_net::weapon_sync`, the test `crates/net/tests/weapons_ground_tr
   `--online-no-weapons`. A bot (`--net-bot`) fires what it holds.
 - The room screen has a `Setting::Weapons` row (not in an Eliminator room). Eliminator is no longer
   dimmed on the ONLINE RACE page; Head to Head still is (`OAG_ONLINE_MODE_TWO_ONLY`).
+- How late another person's shot first shows (at most 15 ticks at 5 percent loss and 30 ms
+  jitter, capped at 33) and what a fire seen late looks like are in
+  [the networking page](README.md#a-shots-first-appearance-2026-11-11); the two-person
+  weapons race there also ran against a remote host over IPv4 alone, which the runs above
+  (IPv6 only) had not covered.
 - **Checked against the other titles' rows:** the label id `RB_WEAP` is Omega's and HD's `MP Select`
   (read from `network_definition.xml`); 2048 and Pure/Pulse show this project's own words. The
   weapon rules themselves are each title's (Pulse's law where unmeasured, per the project's rule).

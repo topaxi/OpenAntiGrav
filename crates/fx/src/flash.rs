@@ -254,7 +254,8 @@ pub struct ScreenFlash {
     /// The one kind this flash accepts, or `None` for every kind. Pure's wash
     /// is its Quake's alone: its other detonations' kinds are unread there.
     only: Option<Kind>,
-    pending: Option<(Kind, Vec3)>,
+    /// The flash asked for since the last update, and how many seconds old it already is.
+    pending: Option<(Kind, Vec3, f32)>,
     running: Option<(Kind, Vec3, f32)>,
     /// `+0x190..+0x19c`: the colour last computed, falloff included. Kept
     /// when a flash ends, because the next pending one is measured against it.
@@ -289,16 +290,32 @@ impl ScreenFlash {
         if self.only.is_some_and(|only| only != kind) {
             return;
         }
-        self.pending = Some((kind, at));
+        self.pending = Some((kind, at, 0.0));
+    }
+
+    /// [`Self::start`] for a flash whose detonation was `age` seconds ago: it joins its own
+    /// ramp where a flash started on time would be by now, and one already over never draws.
+    /// A network client learns of a remote hit late (`docs/networking/README.md`, "A fire
+    /// seen late"); the original has no such case.
+    pub fn start_aged(&mut self, kind: Kind, at: Vec3, age: f32) {
+        if self.only.is_some_and(|only| only != kind) || age >= kind.duration {
+            return;
+        }
+        self.pending = Some((kind, at, age.max(0.0)));
     }
 
     /// One `ScreenFlash_Update` of `dt` seconds, seen from `eye`.
     pub fn advance(&mut self, dt: f32, eye: Vec3) {
-        if let Some((kind, at)) = self.pending.take() {
-            let mut first = kind.keys[0].1;
+        if let Some((kind, at, age)) = self.pending.take() {
+            // A flash on time is measured by its first key; an aged one by where it joins.
+            let mut first = if age > 0.0 {
+                kind.colour_at(age / kind.duration)
+            } else {
+                kind.keys[0].1
+            };
             first[3] *= kind.falloff(at, eye);
             if strength(self.colour) < strength(first) {
-                self.running = Some((kind, at, 0.0));
+                self.running = Some((kind, at, age));
             }
         }
         self.visible = false;

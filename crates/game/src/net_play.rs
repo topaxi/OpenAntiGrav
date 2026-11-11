@@ -432,7 +432,7 @@ impl NetPlay {
 
     /// One line a second, so a run can be judged from its log: corrections, the
     /// ticks they replayed, the largest pop, the confirmed state hash agreeing,
-    /// the lead and the prediction window.
+    /// the lead and the prediction window, and how late a shot first showed.
     fn log_second(&self, race: &Race) {
         let stats = self.client.borrow_mut().take_stats();
         let mut log = self.log.borrow_mut();
@@ -453,6 +453,10 @@ impl NetPlay {
         sum.confirm_count += stats.confirm_count;
         sum.jitter_sum_ms += stats.jitter_sum_ms;
         sum.jitter_count += stats.jitter_count;
+        sum.first_seen += stats.first_seen;
+        sum.first_seen_latest = sum.first_seen_latest.max(stats.first_seen_latest);
+        sum.restored += stats.restored;
+        sum.restored_gap_max = sum.restored_gap_max.max(stats.restored_gap_max);
         self.overlay.borrow_mut().0.step(&stats);
         sum.lead = stats.lead;
         sum.window = stats.window;
@@ -477,7 +481,8 @@ impl NetPlay {
             "net: tick {:>6} | predicted {} confirmed {} | hash ok {} bad {} | corrections {} \
              replayed {} largest pop {:.2} largest error {:.2} | lead {} window {} | \
              +{} -{} stalls {} resends {} | quic rtt {} ms confirm {} ms jitter {} ms \
-             rx {:.0} B/s {:.0} d/s tx {:.0} B/s {:.0} d/s loss {}",
+             rx {:.0} B/s {:.0} d/s tx {:.0} B/s {:.0} d/s loss {} | \
+             shots first seen {} oldest {} ticks, put back {} after {} ticks",
             race.sim.world.tick,
             s.predicted,
             s.confirmed,
@@ -502,6 +507,10 @@ impl NetPlay {
             net.tx_datagrams_s,
             net.loss_percent
                 .map_or_else(|| "-".to_string(), |l| format!("{l:.1}%")),
+            s.first_seen,
+            s.first_seen_latest,
+            s.restored,
+            s.restored_gap_max,
         );
     }
 }
