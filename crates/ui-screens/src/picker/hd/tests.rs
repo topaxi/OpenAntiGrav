@@ -190,6 +190,7 @@ fn the_stat_value_prints_three_digits_at_its_split() {
         thrust: 80,
         handling: 100,
         shield: 85,
+        length_milli: None,
     };
     let picker = Picker::new(
         Kind::Ship,
@@ -458,6 +459,7 @@ fn variant_picker(variant: &str) -> Picker {
         thrust: 80,
         handling: 100,
         shield: 80,
+        length_milli: Some(3800),
     };
     Picker::new(
         Kind::Ship,

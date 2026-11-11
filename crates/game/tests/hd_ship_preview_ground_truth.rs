@@ -201,3 +201,107 @@ fn omega_draws_every_teams_ps4_hull_at_the_pose_it_borrows() {
         "three directories, three hulls: {shapes:?}"
     );
 }
+
+/// The craft is framed by the screen's own fit, not the widget's authored pose:
+/// the title names the fit, every model's `<FE>` authors the length it fits to,
+/// and Feisar's hull then lands where an RPCS3 frame of the screen at rest has
+/// it (Safe Area 96, the hull's silhouette 750 to 1637 across and 256 to 639
+/// down a 1920 by 1080 frame). The authored pose put it 946 to 1701 across.
+/// Dropping `ship_preview_fit`, the length off `<FE>`, or the Safe Area scale
+/// each moves the silhouette out of the tolerance.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images"]
+fn the_screens_own_fit_lands_feisar_where_the_original_draws_it() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let options = oag_game::boot::Options {
+        language: None,
+        source: image.display().to_string(),
+        dlc: Vec::new(),
+        leg: oag_ui::frontend::Leg::LogoFmv,
+        movie: None,
+        cache: std::env::temp_dir().join("oag-hd-ship-preview-ground-truth"),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
+        extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
+        no_video: true,
+        refresh_video: false,
+        prefer_av1_cache: false,
+    };
+    let (shell, mut archives, title) = oag_game::boot::load_shell(&options).expect("HD boots");
+    let fit = title
+        .front_end
+        .and_then(|front_end| front_end.ship_preview_fit)
+        .expect("HD names its screen's fit");
+    let widget = shell
+        .ship_select
+        .as_ref()
+        .and_then(|layout| layout.hd.as_deref())
+        .and_then(|screen| screen.ship_model)
+        .expect("the ShipModel widget");
+    assert!(widget.obey_safe_zone, "ObeySafeZone is authored");
+
+    // Every model that authors ratings authors a length, eight values in all.
+    let mut lengths: Vec<u16> = shell
+        .teams
+        .iter()
+        .flat_map(|team| &team.models)
+        .map(|model| {
+            model
+                .length_milli
+                .unwrap_or_else(|| panic!("{} authors no length", model.model_location))
+        })
+        .collect();
+    lengths.sort_unstable();
+    lengths.dedup();
+    assert_eq!(lengths, [3200, 3800, 3900, 4000, 4100, 4200, 4400, 4500]);
+
+    let feisar = shell
+        .teams
+        .iter()
+        .find(|team| team.id == "Feisar")
+        .expect("Feisar");
+    let length = feisar.variant_stats(oag_title::VariantJoin::Suffix, [""])[0]
+        .and_then(|stats| stats.length_milli)
+        .expect("Feisar's classic hull authors a length");
+    assert_eq!(length, 3800);
+    let box_z = oag_game::preview::ship_model::box_z(&fit, false, Some(f32::from(length) / 1000.0))
+        .expect("a box");
+    let space = oag_display::space::Space::HD;
+    let framing = oag_game::preview::ship_model::rest(&fit, space.display_aspect, box_z);
+    assert!((framing.depth - 12.05).abs() < 0.06, "{framing:?}");
+
+    let model = oag_game::preview::model(&mut archives, r"Data\Ships\Feisar\ship.vex")
+        .expect("Feisar's hull");
+    let (view_projection, placed) =
+        oag_game::preview::ship_model::framed(&widget, Some((&fit, box_z)), space, 1.0, 0.96);
+    let matrix = view_projection * placed;
+    let (mut across, mut down): (Vec<f32>, Vec<f32>) = model
+        .vertices
+        .iter()
+        .map(|vertex| {
+            let at = matrix.project_point3(oag_core::math::Vec3::from(vertex.position));
+            ((at.x * 0.5 + 0.5) * 1920.0, (0.5 - at.y * 0.5) * 1080.0)
+        })
+        .unzip();
+    across.sort_by(f32::total_cmp);
+    down.sort_by(f32::total_cmp);
+    // The stray vertex `frame_hull` documents is one of thousands.
+    let edge = |sorted: &[f32], last: bool| {
+        let skip = sorted.len() / 2000;
+        if last {
+            sorted[sorted.len() - 1 - skip]
+        } else {
+            sorted[skip]
+        }
+    };
+    let drawn = [
+        edge(&across, false),
+        edge(&across, true),
+        edge(&down, false),
+        edge(&down, true),
+    ];
+    for (ours, theirs) in drawn.into_iter().zip([750.0, 1637.0, 256.0, 639.0]) {
+        assert!((ours - theirs).abs() < 5.0, "{drawn:?}");
+    }
+}

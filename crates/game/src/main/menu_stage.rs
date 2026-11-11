@@ -584,7 +584,7 @@ impl MenuStage {
                 view,
                 viewport,
                 target_size,
-                self.skin.space(),
+                (self.skin.space(), self.renderer.inset()),
             );
             if let Some(partner) = self.partner.as_mut() {
                 partner.draw_preview(
@@ -593,7 +593,7 @@ impl MenuStage {
                     view,
                     viewport,
                     target_size,
-                    self.skin.space(),
+                    (self.skin.space(), self.renderer.inset()),
                 );
             }
             return Ok(());

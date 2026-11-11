@@ -1214,6 +1214,7 @@ pub fn run(
             race,
             &request,
             options.anisotropy,
+            renderer.inset(),
         );
     }
     if let (Some(race), Some(craft), Some(touch)) = (

@@ -674,7 +674,7 @@ impl PickerStage {
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
-        space: oag_display::space::Space,
+        (space, safe_area): (oag_display::space::Space, f32),
     ) {
         let (orbit, seconds, rect) = (self.orbit(), self.model.seconds(), self.layout.preview);
         let hull_swap = self.previews.ship_hull.is_some()
@@ -695,6 +695,24 @@ impl PickerStage {
             .and_then(|screen| screen.ship_model)
             .filter(|_| self.previews.ship_hull.is_some() && self.model.kind() == picker::Kind::Ship);
         let swap_scale = self.hull_phase().scale;
+        // The screen's own fit of the craft's depth, where the title has one and the
+        // selected model's box is known.
+        let ship_fit = self
+            .previews
+            .front_end
+            .and_then(|front_end| front_end.ship_preview_fit.as_ref())
+            .and_then(|fit| {
+                let zone_hull = matches!(
+                    self.sources.get(self.model.index()),
+                    Some(PreviewSource::Ship {
+                        zone_entry: Some(_),
+                        ..
+                    })
+                );
+                let length = picker::hd::selected_length(&self.model);
+                oag_game::preview::ship_model::box_z(fit, zone_hull, length)
+                    .map(|box_z| (fit, box_z))
+            });
         let Some(preview) = self.preview.as_mut() else {
             return;
         };
@@ -712,7 +730,9 @@ impl PickerStage {
             );
         } else if let Some(widget) = ship_model {
             let (view_projection, model) =
-                oag_game::preview::ship_model::matrices(&widget, space, swap_scale);
+                oag_game::preview::ship_model::framed(
+                &widget, ship_fit, space, swap_scale, safe_area,
+            );
             preview.draw_matrices(
                 &gpu.device,
                 &gpu.queue,
