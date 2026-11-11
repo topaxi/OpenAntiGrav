@@ -72,6 +72,9 @@ struct ModFile {
     /// names each `<mod id>/<id>` (ADR-0082).
     #[serde(default, rename = "page")]
     pages: Vec<raw::Page>,
+    /// The id of the mod's own page that holds its settings: the MODS page's SETTINGS row opens
+    /// it, so it needs no row on the main menu.
+    settings: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -191,6 +194,17 @@ impl Definition {
             };
             let mut local = index.clone();
             tree.add_pages(mod_id, &file.pages, &mut local, strings, english, &mut done)?;
+            if let Some(short) = &file.settings {
+                let full = format!("{mod_id}/{short}");
+                if !done.pages.contains(&full) {
+                    return Err(fault(
+                        mod_id,
+                        "settings",
+                        format!("{short:?} is not a page of this mod"),
+                    ));
+                }
+                tree.mod_settings.insert(mod_id.to_string(), full);
+            }
             for entry in &file.entries {
                 tree.attach(
                     mod_id,

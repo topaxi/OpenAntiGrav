@@ -2,7 +2,8 @@
 # see crates/ui/src/menu/definition/build.rs and docs/tools/mods.md. What cannot be said
 # here and stays the loader's: that `parent` is a top-level row's id or "top", `after`
 # a sibling under it, `target` a page and `action` one of the closed set, `string_id` an id
-# in some strings file, and that `id` is unused. A mod row is a `submenu` or an `action`.
+# in some strings file, `settings` one of this file's pages, and that `id` is unused. A mod row
+# is a `submenu` or an `action`.
 
 [toml-schema]
 version = "1.0.0"
@@ -286,4 +287,10 @@ optional = true
 [elements.page]
 type = "array"
 itemtype = "types.page"
+optional = true
+
+# The id of one of this file's pages that holds the mod's settings: the MODS page's SETTINGS row
+# opens it, so no `entry` needs to reach it.
+[elements.settings]
+type = "string"
 optional = true

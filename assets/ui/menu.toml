@@ -472,6 +472,14 @@ string_id = "OAG_MODS_ENABLED"
 setting = "mods.enabled"
 values_from = "mod_switch"
 
+# The selected mod's own settings page (its `menu.toml`'s `settings`): on the page only while
+# that mod is on and has one.
+[[page.entry]]
+kind = "action"
+label = "SETTINGS"
+string_id = "OAG_MODS_SETTINGS"
+action = "open_mod_settings"
+
 [[page.entry]]
 kind = "back"
 label = "BACK"

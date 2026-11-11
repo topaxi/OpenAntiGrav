@@ -62,6 +62,17 @@ impl Session {
         }
     }
 
+    /// The SETTINGS row: walks into the settings page of the mod the MOD row is on, so BACK
+    /// lands on the MODS page with the same mod.
+    pub(crate) fn open_selected_mod_settings(&mut self) {
+        let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &mut self.stage) else {
+            return;
+        };
+        if let Some(page) = mods::settings_page(&stage.menu, &shell.mods) {
+            stage.menu.push(&page);
+        }
+    }
+
     /// The ENABLED row moved to `on`: turns the selected mod on or off, saves, and
     /// rebuilds the menus with it. The built-in and a mod that never opened do not
     /// switch; their row holds one value.

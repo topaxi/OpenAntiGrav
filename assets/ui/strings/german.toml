@@ -311,6 +311,7 @@ OAG_MODS_NOTHING = { text = "NICHTS", human = false }
 OAG_MODS_TEXTURE_PACK = { text = "TEXTUREN", human = false }
 OAG_MODS_BUILT_IN = { text = "EINGEBAUT", human = false }
 OAG_MODS_ENABLED = { text = "AKTIVIERT", human = false }
+OAG_MODS_SETTINGS = { text = "EINSTELLUNGEN", human = false }
 OAG_MODS_ON = { text = "AN", human = false }
 OAG_MODS_OFF = { text = "AUS", human = false }
 OAG_MODS_TURNED_OFF = { text = "NICHTS, AUSGESCHALTET", human = false }

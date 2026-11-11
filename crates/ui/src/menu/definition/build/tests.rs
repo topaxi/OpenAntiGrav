@@ -535,3 +535,35 @@ fn a_mod_page_query_row_checks_its_of_against_the_mods_own_settings() {
         )
     );
 }
+
+const SETTINGS_ONLY: &str = "settings = \"picker\"
+[[page]]
+id = \"picker\"
+title = \"PICKER\"
+
+[[page.entry]]
+kind = \"toggle\"
+label = \"SPARKS\"
+setting = \"mod.test.mod.bloom\"
+";
+
+#[test]
+fn a_settings_page_needs_no_row_on_the_main_menu() {
+    let (tree, added) = build_with(&with_header(SETTINGS_ONLY)).unwrap();
+    assert_eq!(
+        tree.mod_settings.get("test.mod").map(String::as_str),
+        Some("test.mod/picker")
+    );
+    let test = added.iter().find(|a| a.mod_id == "test.mod").unwrap();
+    assert!(test.rows.is_empty(), "no row: {:?}", test.rows);
+    assert_eq!(test.pages, ["test.mod/picker"]);
+}
+
+#[test]
+fn a_settings_key_naming_no_page_of_the_mod_is_refused() {
+    let text = SETTINGS_ONLY.replace("settings = \"picker\"", "settings = \"options\"");
+    assert_eq!(
+        mod_error(&text),
+        ("test.mod".to_string(), "settings".to_string())
+    );
+}

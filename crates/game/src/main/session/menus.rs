@@ -567,6 +567,10 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::WatchReplay) => self.watch_selected_replay(),
             menu::MenuEvent::Fired(menu::Action::KeepReplay) => self.keep_selected_replay(),
             menu::MenuEvent::Fired(menu::Action::DeleteReplay) => self.delete_selected_replay(),
+            // The MODS page's SETTINGS row (`session::mods_page`).
+            menu::MenuEvent::Fired(menu::Action::OpenModSettings) => {
+                self.open_selected_mod_settings();
+            }
             // The AI PILOTS page's own two actions - see `super::pilot_editor`.
             menu::MenuEvent::Fired(menu::Action::SavePilot) => self.save_pilot(),
             menu::MenuEvent::Fired(menu::Action::NewPilot) => self.new_pilot(),

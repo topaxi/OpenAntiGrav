@@ -101,6 +101,10 @@ pub enum Action {
     KeepReplay,
     /// The REPLAYS page's DELETE row: removes the replay the REPLAY row is on.
     DeleteReplay,
+    /// The MODS page's SETTINGS row: opens the settings page of the mod the MOD row is on
+    /// (its `menu.toml`'s `settings`, [`super::Definition::mod_settings`]). On the page only
+    /// while that mod has one.
+    OpenModSettings,
 }
 
 impl Action {
@@ -131,6 +135,7 @@ impl Action {
             Self::WatchReplay => "watch_replay",
             Self::KeepReplay => "keep_replay",
             Self::DeleteReplay => "delete_replay",
+            Self::OpenModSettings => "open_mod_settings",
         }
     }
 
@@ -172,13 +177,14 @@ impl Action {
             "watch_replay" => Some(Self::WatchReplay),
             "keep_replay" => Some(Self::KeepReplay),
             "delete_replay" => Some(Self::DeleteReplay),
+            "open_mod_settings" => Some(Self::OpenModSettings),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 23] {
+    pub fn all() -> [Self; 24] {
         [
             Self::LaunchRace,
             Self::Quit,
@@ -203,6 +209,7 @@ impl Action {
             Self::WatchReplay,
             Self::KeepReplay,
             Self::DeleteReplay,
+            Self::OpenModSettings,
         ]
     }
 }

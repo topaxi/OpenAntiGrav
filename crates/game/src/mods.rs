@@ -269,6 +269,16 @@ pub fn resupply_switch(model: &mut oag_ui::menu::Menu, listing: &[Listing], stri
     let (choices, value) = switch_for(mod_, strings);
     model.supply(oag_ui::menu::ValueSource::ModSwitch, &choices);
     model.seed(ENABLED, &oag_ui::menu::Value::Text(value.to_string()));
+    let has_settings = settings_page(model, listing).is_some();
+    model.offer(oag_ui::menu::Action::OpenModSettings, has_settings);
+}
+
+/// The settings page (its tree id) of the mod the MOD row is on, when that mod is on and its
+/// `menu.toml` names one: what the SETTINGS row opens. An off mod's pages are not in the tree.
+#[must_use]
+pub fn settings_page(model: &oag_ui::menu::Menu, listing: &[Listing]) -> Option<String> {
+    let mod_ = selected(model, listing)?;
+    model.definition().mod_settings.get(&mod_.id).cloned()
 }
 
 /// Turns `id` on or off in `disabled`. Returns whether anything changed. The built-in is
@@ -792,11 +802,18 @@ impl Mods {
             .filter(|m| !left_out.contains(&m.manifest.id))
             .map(|module| {
                 let enabled = !self.disabled.contains(&module.manifest.id);
-                let rows = added
+                let mut rows = added
                     .iter()
                     .find(|a| a.mod_id == module.manifest.id)
                     .filter(|_| enabled)
                     .map_or_else(Vec::new, |a| a.rows.clone());
+                // A settings page is reached from this page rather than from a row, and is
+                // still something the mod adds.
+                if let Some((_, short)) = (definition.mod_settings.get(&module.manifest.id))
+                    .and_then(|page| page.split_once('/'))
+                {
+                    rows.push(short.to_string());
+                }
                 Listing::loaded(
                     module,
                     rows,

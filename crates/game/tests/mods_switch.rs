@@ -375,3 +375,74 @@ fn a_texture_pack_starts_off_and_its_switch_is_the_enabled_list() {
     assert!(switches.enabled.is_empty() && switches.disabled.is_empty());
     assert!(Mods::load_from(&[dir], &switches).unwrap().is_disabled(id));
 }
+
+const TUNER_MENU: &str = r#"
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod-menu.tosd", version = "1.0.0" }
+
+settings = "tuning"
+
+[[page]]
+id = "tuning"
+title = "TUNING"
+
+[[page.entry]]
+kind = "choice"
+label = "GRIP"
+setting = "mod.test.tuner.grip"
+values = ["low", "high"]
+"#;
+
+/// Whether the MODS page offers the SETTINGS row with `id` on the MOD row.
+fn offers_settings(model: &mut Menu, built: &mods::Built, id: &str) -> bool {
+    let strings = StringTable::default();
+    model.seed(mods::SELECTED, &Value::Text(id.into()));
+    mods::resupply_switch(model, &built.listing, &strings);
+    model.page().entries.iter().any(|entry| {
+        matches!(
+            entry,
+            oag_ui::menu::Entry::Run {
+                action: oag_ui::menu::Action::OpenModSettings,
+                ..
+            }
+        )
+    })
+}
+
+#[test]
+fn the_settings_row_opens_the_selected_mods_own_page_and_only_while_it_has_one() {
+    let dir = base("settings");
+    let tuner = dir.join("tuner");
+    std::fs::create_dir_all(&tuner).unwrap();
+    let manifest = MANIFEST
+        .replace("test.garage", "test.tuner")
+        .replace("Garage", "Tuner");
+    std::fs::write(tuner.join("oag-mod.toml"), manifest).unwrap();
+    std::fs::write(tuner.join("menu.toml"), TUNER_MENU).unwrap();
+
+    let built = build(&load(&dir, &off(&[])));
+    let strings = StringTable::default();
+    let mut model = Menu::new(built.definition.clone());
+    model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
+    assert!(model.open(mods::PAGE));
+    assert!(offers_settings(&mut model, &built, "test.tuner"));
+    assert_eq!(
+        mods::settings_page(&model, &built.listing).as_deref(),
+        Some("test.tuner/tuning")
+    );
+    assert!(model.push("test.tuner/tuning"), "the page is in the tree");
+    assert!(model.open(mods::PAGE));
+    assert!(
+        !offers_settings(&mut model, &built, "test.garage"),
+        "garage names no settings page"
+    );
+    assert!(!offers_settings(&mut model, &built, "oag.extras"));
+
+    let built = build(&load(&dir, &off(&["test.tuner"])));
+    let mut model = Menu::new(built.definition.clone());
+    model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
+    assert!(model.open(mods::PAGE));
+    assert!(
+        !offers_settings(&mut model, &built, "test.tuner"),
+        "an off mod's page is not in the tree"
+    );
+}

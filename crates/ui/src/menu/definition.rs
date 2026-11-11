@@ -27,7 +27,7 @@
 //! at once and neither can a player watching one screen ever tell that a
 //! *different* screen forgot.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::language::StringTable;
 use oag_core::buttons::button_from_name;
@@ -50,6 +50,10 @@ pub struct Definition {
     pub pages: Vec<Page>,
     /// Index of the page the menus open on.
     pub root: usize,
+    /// Each mod's settings page by mod id: the tree id (`<mod id>/<id>`) its `menu.toml`'s
+    /// `settings` names. The MODS page's SETTINGS row opens it
+    /// ([`super::Action::OpenModSettings`]), so it needs no row of its own to be reached.
+    pub mod_settings: BTreeMap<String, String>,
 }
 
 /// What went wrong loading a definition.
@@ -375,7 +379,11 @@ impl Definition {
             });
         }
 
-        let definition = Self { pages, root };
+        let definition = Self {
+            pages,
+            root,
+            mod_settings: BTreeMap::new(),
+        };
         if let Some((page, row, of)) = unknown_query_of(&definition.pages) {
             return Err(Error::BadEntry {
                 context: format!("page {:?} entry {row}", definition.pages[page].id),
@@ -475,6 +483,11 @@ impl Definition {
     fn check_reachable(&self) -> Result<(), Error> {
         let mut seen = BTreeSet::new();
         let mut stack = vec![self.root];
+        // A mod's settings page, which the MODS page's SETTINGS row opens.
+        stack.extend(
+            (self.mod_settings.values())
+                .filter_map(|id| self.pages.iter().position(|page| &page.id == id)),
+        );
         while let Some(page) = stack.pop() {
             if !seen.insert(page) {
                 continue;

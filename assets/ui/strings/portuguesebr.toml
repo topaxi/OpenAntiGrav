@@ -309,6 +309,7 @@ OAG_MODS_NOTHING = { text = "NADA", human = false }
 OAG_MODS_TEXTURE_PACK = { text = "TEXTURAS", human = false }
 OAG_MODS_BUILT_IN = { text = "INTEGRADO", human = false }
 OAG_MODS_ENABLED = { text = "ATIVADO", human = false }
+OAG_MODS_SETTINGS = { text = "CONFIGURAÇÕES", human = false }
 OAG_MODS_ON = { text = "LIGADO", human = false }
 OAG_MODS_OFF = { text = "DESLIGADO", human = false }
 OAG_MODS_TURNED_OFF = { text = "NADA, DESLIGADO", human = false }
