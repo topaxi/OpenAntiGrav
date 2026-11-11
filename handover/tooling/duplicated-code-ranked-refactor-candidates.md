@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-11
-summary: "Seven duplicate-code refactors to wire, four later, ranked from jscpd and read on both sides; title-data policy call open."
+summary: "Six duplicate-code refactors to wire, five later, ranked from jscpd and read on both sides; a title-data policy call is open."
 ---
 
 # Duplicated code: ranked refactor candidates
@@ -16,14 +16,19 @@ Regenerate the raw numbers (about 3 seconds, from the repository root):
 
 ```sh
 npx -y jscpd crates --format rust --ignore '**/tests/**,**/target/**' \
-  --min-lines 10 --reporters json --output data/scratch/jscpd --silent
-jq '[.duplicates[].lines] | add' data/scratch/jscpd/jscpd-report.json
+  --min-lines 10 --reporters json --output target/jscpd --silent
+jq '[.duplicates[].lines] | add' target/jscpd/jscpd-report.json
 ```
 
 Paths in jscpd output are relative to `crates/`. Every path below carries
 the `crates/` prefix. Line counts are jscpd's `lines` field for the clones
 named, unless the text says "read". Confidence on each size estimate is a
 scout estimate (0-100), capped at 60.
+
+**Ranking rule.** No candidate has a measured player-visible win. Each is
+ranked by copies removed times drift risk, divided by effort. Drift is
+real: the HD and Omega `ALWAYS_ON` lists already differ (see the title
+section below).
 
 ## Open
 
@@ -36,10 +41,10 @@ scout estimate (0-100), capped at 60.
    - Both files import `Image`, `Placed` and `argb_to_rgba` from `oag_ui`,
      so the shared home is `oag-ui` (`crates/ui/src/frontend/` next to
      `Placed`, or the `Draw` vocabulary). Legal: ui-screens already depends
-     on oag-ui, and oag-ui depends on nothing of ours that would cycle.
-   - Frequency: called at each draw-list build (15 call sites in
-     ui-screens). Not measured; this is layout code, not the per-frame
-     draw loop.
+     on oag-ui.
+   - Frequency: called at each draw-list build (13 call sites in
+     ui-screens, plus the two definitions). Not measured; this is layout
+     code, not the per-frame draw loop.
    - Size: S, about 20 minutes. Confidence 55.
    - Measure: `just check-size`; `cargo nextest run -p oag-ui-screens`. No
      number should move. Risk: none to the simulation (UI only).
@@ -49,7 +54,7 @@ scout estimate (0-100), capped at 60.
      `crates/game/src/preview.rs:1127-1164` (42 lines) and
      `crates/game/src/hud_countdown.rs:475` against
      `crates/mesh/src/capture.rs:382` (11 lines). Read, the same loop also
-     sits in `crates/view/src/orbit.rs:585-625` and `capture.rs:350-390`.
+     sits in `crates/view/src/orbit.rs:585-625` and `crates/mesh/src/capture.rs:350-390`.
      jscpd misses the last two because a comment or the order differs.
      Real copies: four, about 35 lines each.
    - Each copy walks `model.draws`, then `alpha_tested_draws` through
@@ -63,21 +68,24 @@ scout estimate (0-100), capped at 60.
    - Helper takes the pipeline sets and a `bind` closure, not `&Built`,
      so `raceplay/src/drawable/draw.rs` (its own culled variant, not a
      copy) can stay as it is.
-   - This is per-frame draw code. Order must not change: draws stay in the
-     `draws`, cutout, transparent sequence.
+   - This is per-frame draw code (read: inside `draw`). Order must not
+     change: draws stay in the `draws`, cutout, transparent sequence.
    - Size: M, half a day. Confidence 40.
    - Measure: `oag-game --screenshot` before and after on a race frame,
      with `--no-audio`, under the gate lock: the PNG must be byte-identical.
      Plus `cargo nextest run -p oag-mesh`.
 
-3. **Post seat-lane code is copied between Omega and bloom pairs.**
+3. **Post seat-lane code is copied between the Omega files and the bloom pair.**
    - `crates/post/src/omega_tonemap.rs:909-960` against
-     `crates/post/src/wo_composite.rs:739-790` (52 lines: `retire_seat`,
-     `seat_lane_builds`, `draw`); `omega_tonemap.rs:263` against
-     `wo_composite.rs:196` (33 lines, `prepare_view` and `prepare_in`);
-     `omega_tonemap.rs:458` against `wo_composite.rs:369` (32 lines).
+     `crates/post/src/wo_composite.rs:739-790` (52 lines, read: `retire_seat`,
+     `seat_lane_builds`, `draw`); `omega_tonemap.rs:263-295` against
+     `wo_composite.rs:196-228` (33 lines, read: `impl Target { fn new }`, a
+     texture target that duplicates `bloom::Target::new` at
+     `crates/post/src/bloom.rs:61`); `omega_tonemap.rs:458-489` against
+     `wo_composite.rs:369-400` (32 lines, not read past its first line: a
+     `let render = |label, entry, layout, format| ...` pipeline closure).
    - `crates/post/src/bloom.rs:527-571` against
-     `crates/post/src/ps2_bloom.rs:360-403` (45 lines, `prepare_view`);
+     `crates/post/src/ps2_bloom.rs:360-403` (45 lines, read: `prepare_view`);
      `bloom.rs:264` against `ps2_bloom.rs:154` (24); `bloom.rs:676` against
      `ps2_bloom.rs:519` (23). Total for the six named pairs: 209 lines.
    - `crates/post/src/hd_bloom/lanes.rs:159-295` already has a `SeatLanes`
@@ -86,8 +94,8 @@ scout estimate (0-100), capped at 60.
    - Shared home: `oag-post`, a root module (for example
      `crates/post/src/seat_lanes.rs` holding a generic `SeatLanes`, and
      `crates/post/src/pass.rs` for `draw`). The copies become callers. Legal:
-     post reaches no title package (rule 3); `wo_composite` names none
-     either (checked: no title import in post; one doc-comment mention in a test).
+     post reaches no title package (rule 3). Checked: no title import in
+     `crates/post/src`; one doc-comment mention, in a test.
    - Frequency: per split-screen frame for `prepare_view`; `draw` is a
      per-frame pass. Not measured.
    - Size: M, about a day with the post tests. Confidence 35.
@@ -110,7 +118,7 @@ scout estimate (0-100), capped at 60.
      drops levels above the device limit). The single-level one is the
      candidate's base.
    - Shared home: `oag-gpu` (`crates/gpu/src/`, "shared GPU vocabulary").
-     `rg create_texture crates/gpu/src` finds only tests, so no helper
+     `rg create_texture crates/gpu/src` finds only test code, so no helper
      exists there yet. Legal: fx, post, mesh, render and game all depend on
      oag-gpu.
    - Size: M, about half a day, 15 call sites. Confidence 35.
@@ -118,25 +126,18 @@ scout estimate (0-100), capped at 60.
      textures must be byte-identical (dump one per crate before and after).
      No frame-time number should move.
 
-5. **Shadow occlusion and self-shadow read the same texture back.**
-   - `crates/render/src/shadow/occlusion.rs:261-282` against
-     `crates/render/src/shadow/self_shadow.rs:202-223` (22 lines), and
-     `occlusion.rs:483-506` against `self_shadow.rs:352-375` (24 lines). The
-     only difference is `TextureAspect::All` against `DepthOnly` (read).
-   - Shared home: `oag-render` (`crates/render/src/shadow/` gets a
-     `readback.rs`), taking the aspect as a parameter. Legal.
-   - Size: S, about 2 hours. Confidence 30.
-   - Measure: `cargo nextest run -p oag-render`; both readbacks return the
-     same values.
-
-6. **`Model` is built by hand as a 40-field literal in four places.**
-   - `crates/render/src/collision.rs:206` `build_model` and
-     `crates/render/src/track.rs:50` `build_model` each write a full `Model {
-     ... }` literal with the empty defaults (about 48 lines, jscpd
-     `airbrakes: [None, None]`). `crates/mesh/src/mesh.rs:305` already has
-     `Model::none(label)` and `crates/mesh/src/mesh/merge.rs:31` a third
-     literal. About 25 test files repeat the literal too (31 files in all) (see candidate
-     test-boilerplate below).
+5. **`Model` is built by hand as a literal in several places.**
+   - Full literals, all with empty defaults: `crates/render/src/track.rs:137`
+     (inside `build_model`, `track.rs:50`), `crates/render/src/collision.rs:278`
+     (inside `build_model`, `collision.rs:211`), `crates/mesh/src/mesh/merge.rs:25`
+     (`merge`), `merge.rs:207` (a test helper), `crates/mesh/src/mesh/sky_cube.rs:372`,
+     and `crates/mesh/src/mesh.rs:1005`. `crates/mesh/src/mesh.rs:305` already
+     has `Model::none(label)`. jscpd's `airbrakes: [None, None]` clones: 48
+     lines, one clone. About 25 test files repeat the literal too (see the
+     test-boilerplate section).
+   - `Model` derives `Debug` and `Clone` only, with no `PartialEq`. An
+     equality check in a test must compare `vertices`, `indices` and `draws`
+     by hand.
    - Shared home: `oag-mesh`, a `Model::from_draws(label, vertices,
      indices, draws, centre, radius)` (or the two build functions call
      `Model::none` and set their fields). Legal: render depends on mesh.
@@ -149,9 +150,10 @@ scout estimate (0-100), capped at 60.
      the lead wants the churn.
    - Size: S for the two `build_model` functions, about 1 hour. Confidence 35.
    - Measure: `cargo nextest run -p oag-render -p oag-mesh`; the built models
-     equal the old ones field for field (a test that compares them).
+     match the old ones on `vertices`, `indices` and `draws` (a test that
+     compares them).
 
-7. **Smaller ui-screens copies: endrace, campaign and seat assign.**
+6. **Smaller ui-screens copies: endrace, campaign and seat assign.**
    - `crates/ui-screens/src/endrace/draw.rs:383-412` against
      `endrace/hd.rs:776-805` (30 lines, `endrace_menu_draw_list`); the
      file pair totals 112 lines over 6 clones.
@@ -165,12 +167,11 @@ scout estimate (0-100), capped at 60.
      pointer and body helpers. Legal (ui-screens is the owner).
    - Size: M, about a day for all three. Confidence 25.
    - Measure: `cargo nextest run -p oag-ui-screens`, with the pointer
-     tests the screens already have. Per the pointer rule, behaviour does not
-     change.
+     tests the screens already have. Behaviour must not change.
 
 ### Later (real duplication, smaller win, or a sim crate)
 
-8. **AI driver output tail is copied between two `ai/src/original` files.**
+7. **AI driver output tail is copied between two `ai/src/original` files.**
    - `crates/ai/src/original/field.rs:409-440` against
      `crates/ai/src/original/sibling.rs:313-344` (32 lines, read): the
      `driver.rail.snap`, `steer::pitch` and `Output { controls: ShipControls {
@@ -183,29 +184,46 @@ scout estimate (0-100), capped at 60.
      determinism`; both committed hashes must stay unchanged.
    - Size: S, 1-2 hours. Confidence 30.
 
-9. **Movie decoders copy the same plumbing.**
+8. **Movie decoders copy the same plumbing.**
    - `crates/game/src/movie/bink.rs:126-152` against `movie/mp4.rs:118-144`
      (27 lines: the `movie(...)` tail and the `Conversion`/`transcode` call),
      and `bink.rs:163` against `mp4.rs:147` (12 lines, `ensure_source`).
    - Shared home: `crates/game/src/movie/` as a `common.rs`. Legal.
    - Size: S, 1-2 hours. Confidence 30.
 
-10. **LAN and online menu ticks copy the button and pointer handling.**
-    - `crates/game/src/main/session/lan.rs:342-364` against
-      `session/online.rs:596-618` (23 lines: the fold of presses and the
-      stage borrow), and `lan.rs:366-381` against `online.rs:625-640` (16
-      lines: Start, Circle and pointer events).
-    - Shared home: a helper in `crates/game/src/main/session/` (a menu tick
-      helper) that both call. Legal.
-    - Size: S. Confidence 25. Measure: `cargo nextest run -p oag-game` for
-      the session tests, under the gpu-vram cap if they spawn the game.
+9. **LAN and online menu ticks copy the button and pointer handling.**
+   - `crates/game/src/main/session/lan.rs:342-364` against
+     `session/online.rs:596-618` (23 lines: the fold of presses and the
+     stage borrow), and `lan.rs:366-381` against `online.rs:625-640` (16
+     lines: Start, Circle and pointer events).
+   - Shared home: a helper in `crates/game/src/main/session/` that both call.
+     Legal.
+   - Size: S, 2-3 hours. Confidence 25. Measure: `cargo nextest run -p
+     oag-game` for the session tests, under the gpu-vram cap if they spawn
+     the game.
 
-11. **`race::Loaded` is destructured field by field in two places.**
+10. **`race::Loaded` is destructured field by field in two places.**
     - `crates/game/src/main/stage.rs:465-504` against
       `crates/game/src/race_capture.rs:413-452` (36 lines): a 45-field
       `let race::Loaded { ... } = ...` pattern repeated. Adding a field
       means editing both.
-    - Shared home: pass `Loaded` whole, or group it. Confidence 25. Low win.
+    - Shared home: pass `Loaded` whole, or group it. Legal (game-internal).
+    - Size: S, under an hour. Confidence 25. Low win.
+
+11. **Headless readback copies in the shadow code.**
+    - `crates/render/src/shadow/occlusion.rs:465` `read_back` (`Vec<u8>`) and
+      `crates/render/src/shadow/self_shadow.rs:334` `read_back` (`Vec<f32>`)
+      share their copy and map code (jscpd: 22 and 24 lines). They differ in
+      element type, row stride (`SIZE` against `SIZE * 4`) and aspect (`All`
+      against `DepthOnly`). Not a plain copy; a generic helper would need a
+      texel type parameter.
+    - Both are live but headless-only: their docs say "the frame never
+      calls this". Callers are `crates/raceplay/src/scene/frame/shadow.rs:631-648`
+      (inside `dump_offscreen_if_asked`) and headless checks. This is debug
+      code, not frame code.
+    - Size: S, about 2 hours, low value. Confidence 20.
+    - Measure: `cargo nextest run -p oag-render`; readbacks return the same
+      values.
 
 Also small, same pattern: `word()` helper copies in
 `game/src/main/session/photo.rs:66` and `replays.rs:175` (11 lines each).
@@ -215,7 +233,8 @@ Also small, same pattern: `word()` helper copies in
 These are real copies across title crates. CLAUDE.md says the title crates
 own their tables, but Omega's front end is HD's by lineage, and Omega already
 depends on `oag-hd` (`crates/omega/Cargo.toml` line 23). So referencing HD's
-constants is legal. Decide whether to share or keep copies.
+constants is legal for Omega. Decide whether to share or keep copies.
+Group total: 585 lines over 35 clones between `hd/`, `omega/` and `2048/`.
 
 - `crates/hd/src/frontend.rs:250-296` against `crates/omega/src/frontend.rs:423-469`
   (44 lines): `MENU_BLOCKS` with the same measured values (HD uses `names::`
@@ -228,8 +247,10 @@ constants is legal. Decide whether to share or keep copies.
   comment says "HD's list". Decide if Omega should carry the Eliminator
   widget, and then share.
 - `crates/2048/src/lib.rs:280-307` against `crates/omega/src/lib.rs:268-295`
-  (28 lines): title tables. 2048 inherits HD by lineage too (see
-  `docs/formats/omega-status.md`).
+  (28 lines): title tables. `crates/2048/Cargo.toml` has no `oag-hd` or
+  `oag-omega` edge, so sharing from 2048 needs a new title-to-title
+  dependency. The lineage in `docs/formats/omega-status.md` is the reason
+  to ask; it is not a refactor by itself.
 
 ### Test boilerplate (c): leave unless the lead asks
 
@@ -238,7 +259,7 @@ constants is legal. Decide whether to share or keep copies.
   `smaa/tests.rs` (60 and 54 lines), `post/src/motion_blur/tests.rs` against
   itself, `post/src/hd_bloom/tests.rs`, `sound/src/tests.rs` (402 lines over
   21 clones), `ui-screens/src/campaign/draw/tests.rs`, and about 25 mesh and
-  render tests that repeat the `Model` literal from candidate 6.
+  render tests that repeat the `Model` literal from candidate 5.
 - Test-only cleanup is cheap but a test-file change lands in the affected
   gate; it does not justify a lane by itself.
 
