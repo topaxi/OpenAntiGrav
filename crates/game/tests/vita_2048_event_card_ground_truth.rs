@@ -47,6 +47,7 @@ fn options(source: &Path) -> boot::Options {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     }
 }
 

@@ -1025,8 +1025,10 @@ pub(super) fn hud_font(
             // this scale (`1.0` on every other source), see
             // `oag_display::space::Space::font_texel_scale`.
             let border = oag_ui::language::load::role_border(languages, preferred, role);
-            let (atlas, border) = replaced_atlas(archives, &name, &font, border, report)
-                .unwrap_or_else(|| (oag_ui::font::Atlas::from_font(&font), border));
+            let (atlas, border) = oag_ui::font::Atlas::from_pack(
+                archives, &name, &font, border, "HUD font", report,
+            )
+            .unwrap_or_else(|| (oag_ui::font::Atlas::from_font(&font), border));
             atlas.with_border_extend(border).with_texel_scale(
                 oag_display::space::Space::font_texel_scale(archives.layout.platform),
             )
@@ -1036,37 +1038,6 @@ pub(super) fn hud_font(
                 "HUD font {name} (role {role:?}) unavailable ({why}); drawing with 5x7"
             ));
             oag_ui::font::Atlas::build()
-        }
-    }
-}
-
-/// The face's atlas drawn from the active texture pack's picture of it, with the halo `border`
-/// the pack's factor gives (`border` times the factor), or `None` to keep the disc's own.
-///
-/// A face whose atlas the pack does not replace, whose picture is not a whole multiple of it, or
-/// whose `.fnt` keeps its atlas elsewhere (PS2) is the disc's, and a refusal is a line in `report`.
-fn replaced_atlas(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-    font: &oag_texture::fnt::Font,
-    border: u32,
-    report: &mut Vec<String>,
-) -> Option<(oag_ui::font::Atlas, u32)> {
-    let picture = oag_texture::replacer::font(&archives.read_name(name).ok()?)?;
-    match oag_ui::font::Atlas::from_replaced_font(font, &picture) {
-        Ok(atlas) => {
-            let factor = picture.width / u32::from(font.width);
-            report.push(format!(
-                "HUD font {name}: {}x{} from the texture pack ({factor}x)",
-                picture.width, picture.height
-            ));
-            Some((atlas, border * factor))
-        }
-        Err(why) => {
-            report.push(format!(
-                "HUD font {name}: texture pack picture not used: {why}"
-            ));
-            None
         }
     }
 }

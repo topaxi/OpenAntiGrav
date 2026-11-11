@@ -34,6 +34,7 @@ mod track_panel_ground_truth;
 mod trail_order_ground_truth;
 mod unlock_ground_truth;
 mod variant_unlock_ground_truth;
+mod texture_pack_frontend_ground_truth;
 mod vita_2048_boot_ground_truth;
 mod vita_2048_campaign_progress_ground_truth;
 mod vita_2048_dlc_menus_ground_truth;

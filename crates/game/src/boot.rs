@@ -483,6 +483,14 @@ pub fn load_shell(
     // Omega's faces are HD's at twice the pixel size; see
     // `oag_display::space::Space::font_texel_scale`. `1.0` for every other source.
     let texel_scale = oag_display::space::Space::font_texel_scale(archives.layout.platform);
+    // The pack, if one is on and names this disc, is active for the faces below and nothing
+    // after them: its pictures are read as each face is built, then it is switched off, so
+    // the menus' other art draws the disc's own and a race load chooses afresh.
+    let pack = oag_raceplay::texture_pack::engage(
+        options.find_texture_packs.as_ref(),
+        &archives,
+        &mut report,
+    );
     let font = load_font(&mut archives, &languages, preferred_language, &mut report)
         .with_prompts(title.prompts)
         .with_texel_scale(texel_scale);
@@ -571,6 +579,7 @@ pub fn load_shell(
         title.prompts,
         &mut report,
     );
+    drop(pack);
     // A touch front end's screens author more than one role and this build
     // has one atlas; the ratio each face's line height stands to `Default`
     // is what keeps the others the right size. Not measured for the other

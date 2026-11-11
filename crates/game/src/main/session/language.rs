@@ -84,6 +84,7 @@ impl Session {
             no_video: true,
             refresh_video: false,
             prefer_av1_cache: false,
+            find_texture_packs: Some(oag_game::texture_pack::finder(&self.settings.mods)),
         };
         let (boot_shell, _archives, title) = match boot::load_shell(&options) {
             Ok(loaded) => loaded,

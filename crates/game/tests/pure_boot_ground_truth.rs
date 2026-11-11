@@ -94,6 +94,7 @@ fn load(image: &Path) -> boot::Boot {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     boot::load(&options).expect("loading the boot sequence")
 }
@@ -412,6 +413,7 @@ fn the_reel_flag_opens_the_screen_the_disc_itself_plays_it_on() {
             no_video: true,
             refresh_video: false,
             prefer_av1_cache: false,
+            find_texture_packs: None,
         };
         let loaded = boot::load(&options).expect("Pure's reel state is on its boot path");
         assert_eq!(

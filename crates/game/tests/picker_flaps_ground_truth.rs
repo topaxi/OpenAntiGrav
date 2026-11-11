@@ -62,6 +62,7 @@ fn check(image: &str) {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let teams = oag_game::boot::load_shell(&options)
         .expect("the shell loads")

@@ -58,6 +58,7 @@ fn load_leg(leg: oag_ui::frontend::Leg, movie: &str) -> Option<boot::Boot> {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     Some(boot::load(&options).expect("loading the boot sequence"))
 }

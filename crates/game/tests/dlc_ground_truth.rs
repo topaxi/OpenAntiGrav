@@ -166,6 +166,7 @@ fn a_pack_team_is_named_by_the_disc_and_its_id_is_not_always_that_name() {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     })
     .expect("booting with the packs mounted");
 

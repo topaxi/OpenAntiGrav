@@ -36,6 +36,7 @@ fn assets(source: &std::path::Path) -> std::sync::Arc<MenuBackdrop> {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let (shell, _archives, _title) = boot::load_shell(&options)
         .expect("Omega's front end boots; see docs/formats/omega-status.md");

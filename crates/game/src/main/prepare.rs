@@ -128,6 +128,8 @@ impl Pending {
             no_video: self.cli.no_video,
             refresh_video: self.cli.refresh_video,
             prefer_av1_cache: self.cli.prefer_av1_cache,
+            // The packs on now, for the faces; a MODS page switch is read at the next boot.
+            find_texture_packs: Some(oag_game::texture_pack::finder(&self.settings.mods)),
         }
     }
 

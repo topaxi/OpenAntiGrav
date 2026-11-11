@@ -132,7 +132,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         report.push(format!("craft from {}", craft_title.name));
     }
     report.push(archives.layout.describe());
-    let _pack = crate::texture_pack::engage(options, &archives, &mut report);
+    let _pack = crate::texture_pack::engage(options.find_texture_packs.as_ref(), &archives, &mut report);
     for pack in &archives.packs {
         report.push(format!("dlc: {}", pack.label()));
     }

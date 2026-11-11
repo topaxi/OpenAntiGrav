@@ -166,6 +166,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     })
     .expect("loading the boot sequence");
 
