@@ -39,9 +39,11 @@ const SETTLE: [f32; 13] = [
 /// The size a craft starts its settle at, against its rest size.
 ///
 /// **Chosen, not measured.** The original's start differs per team and was
-/// seen at 0.95 (Feisar), 1.08 and 1.12 (two other teams) of rest width, and
-/// both directions of step produce both signs, so it is a per-team start pose
-/// this build does not recover. 1.06 is a middle of those.
+/// seen at 0.95 (Feisar), 1.08 and 1.12 (two other teams) of rest width. It is
+/// the last model's rest depth, which the screen's depth fit eases away from
+/// (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "What the
+/// update writes over the widget"); that easing is not played here, and 1.06
+/// is a middle of the three.
 pub const SETTLE_START_SCALE: f32 = 1.06;
 
 /// What to draw of the craft this tick.

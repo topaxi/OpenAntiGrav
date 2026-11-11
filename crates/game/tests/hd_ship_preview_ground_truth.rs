@@ -207,8 +207,10 @@ fn omega_draws_every_teams_ps4_hull_at_the_pose_it_borrows() {
 /// and Feisar's hull then lands where an RPCS3 frame of the screen at rest has
 /// it (Safe Area 96, the hull's silhouette 750 to 1637 across and 256 to 639
 /// down a 1920 by 1080 frame). The authored pose put it 946 to 1701 across.
-/// Dropping `ship_preview_fit`, the length off `<FE>`, or the Safe Area scale
-/// each moves the silhouette out of the tolerance.
+/// Four more teams' concept hulls, of four other lengths, land where their own
+/// rest frames have them. Dropping `ship_preview_fit`, the length off `<FE>`
+/// (or holding it at one value), or the Safe Area scale each moves a
+/// silhouette out of the tolerance.
 #[test]
 #[ignore = "needs hdfury-ps3-eu-dec.iso under data/images"]
 fn the_screens_own_fit_lands_feisar_where_the_original_draws_it() {
@@ -271,10 +273,90 @@ fn the_screens_own_fit_lands_feisar_where_the_original_draws_it() {
     let framing = oag_game::preview::ship_model::rest(&fit, space.display_aspect, box_z);
     assert!((framing.depth - 12.05).abs() < 0.06, "{framing:?}");
 
-    let model = oag_game::preview::model(&mut archives, r"Data\Ships\Feisar\ship.vex")
-        .expect("Feisar's hull");
-    let (view_projection, placed) =
-        oag_game::preview::ship_model::framed(&widget, Some((&fit, box_z)), space, 1.0, 0.96);
+    let drawn = silhouette(
+        &mut archives,
+        r"Data\Ships\Feisar\ship.vex",
+        (&widget, &fit, box_z),
+        0.96,
+    );
+    for (ours, theirs) in drawn.into_iter().zip([750.0, 1637.0, 256.0, 639.0]) {
+        assert!((ours - theirs).abs() < 5.0, "{drawn:?}");
+    }
+
+    // The depth follows each model's own length: four more teams' concept hulls,
+    // lengths 4.5, 4.4, 3.9 and 3.2 (the last rests on the floor), against RPCS3
+    // rest frames of each. Those frames are window grabs at another scale, so
+    // the edges are mapped back to the unscaled grid by the screen's two rules,
+    // and only the edges the frame shows against black are held.
+    let concept = |team: &str| {
+        let team = shell
+            .teams
+            .iter()
+            .find(|entry| entry.id == team)
+            .unwrap_or_else(|| panic!("{team}"));
+        let length = team.variant_stats(oag_title::VariantJoin::Suffix, ["_c1"])[0]
+            .and_then(|stats| stats.length_milli)
+            .unwrap_or_else(|| panic!("{}: no length", team.id));
+        f32::from(length) / 1000.0
+    };
+    // (team, directory, left, right, top, bottom).
+    type Edges = [Option<f32>; 4];
+    let frames: [(&str, &str, Edges); 4] = [
+        (
+            "Qirex",
+            "Qirex_c1",
+            [Some(786.0), None, Some(286.0), Some(706.0)],
+        ),
+        (
+            "Assegai",
+            "Assegai_c1",
+            [Some(755.0), Some(1627.0), Some(283.0), None],
+        ),
+        (
+            "Piranha",
+            "piranha_c1",
+            [None, Some(1665.0), Some(268.0), None],
+        ),
+        (
+            "Icaras",
+            "Icaras_c1",
+            [None, Some(1594.0), Some(263.0), None],
+        ),
+    ];
+    for (team, directory, edges) in frames {
+        let box_z =
+            oag_game::preview::ship_model::box_z(&fit, false, Some(concept(team))).expect("a box");
+        let entry = format!(r"Data\Ships\{directory}\ship.vex");
+        let drawn = silhouette(&mut archives, &entry, (&widget, &fit, box_z), 1.0);
+        for (ours, theirs) in drawn.into_iter().zip(edges) {
+            if let Some(theirs) = theirs {
+                assert!((ours - theirs).abs() < 6.0, "{entry}: {drawn:?}");
+            }
+        }
+    }
+}
+
+/// The left, right, top and bottom of a hull's vertices on a 1920 by 1080 grid
+/// as the screen's fit draws it inside `safe_area`.
+fn silhouette(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    (widget, fit, box_z): (
+        &oag_ui_screens::picker::hd::ShipModel,
+        &oag_title::ShipFit,
+        [f32; 2],
+    ),
+    safe_area: f32,
+) -> [f32; 4] {
+    let model =
+        oag_game::preview::model(archives, entry).unwrap_or_else(|e| panic!("{entry}: {e:#}"));
+    let (view_projection, placed) = oag_game::preview::ship_model::framed(
+        widget,
+        Some((fit, box_z)),
+        oag_display::space::Space::HD,
+        1.0,
+        safe_area,
+    );
     let matrix = view_projection * placed;
     let (mut across, mut down): (Vec<f32>, Vec<f32>) = model
         .vertices
@@ -287,21 +369,11 @@ fn the_screens_own_fit_lands_feisar_where_the_original_draws_it() {
     across.sort_by(f32::total_cmp);
     down.sort_by(f32::total_cmp);
     // The stray vertex `frame_hull` documents is one of thousands.
-    let edge = |sorted: &[f32], last: bool| {
-        let skip = sorted.len() / 2000;
-        if last {
-            sorted[sorted.len() - 1 - skip]
-        } else {
-            sorted[skip]
-        }
-    };
-    let drawn = [
-        edge(&across, false),
-        edge(&across, true),
-        edge(&down, false),
-        edge(&down, true),
-    ];
-    for (ours, theirs) in drawn.into_iter().zip([750.0, 1637.0, 256.0, 639.0]) {
-        assert!((ours - theirs).abs() < 5.0, "{drawn:?}");
-    }
+    let skip = across.len() / 2000;
+    [
+        across[skip],
+        across[across.len() - 1 - skip],
+        down[skip],
+        down[down.len() - 1 - skip],
+    ]
 }
