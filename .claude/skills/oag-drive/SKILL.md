@@ -50,15 +50,7 @@ in isolated worktrees.
 
    Substitute the real budget for N.
 
-   **Try a debounce instead first (maintainer, 2026-10-26).** Wanted: a check
-   only after an hour with no member message, not one every hour. Run the
-   `loop` skill with no interval (dynamic mode) and call `ScheduleWakeup`
-   (1800 s, the same prompt) at the end of **every** lead turn, so each member
-   report pushes the wake-up 30 minutes out. Unverified: whether a new
-   `ScheduleWakeup` replaces the pending one or stacks. If wake-ups stack
-   (checks arrive closer than 30 minutes after activity), fall back to the fixed
-   30m cron above. A tick may skip merging and filling when the lead acted in
-   the last 30 minutes, **never the liveness check**.
+   **Try a debounce instead first (maintainer, 2026-10-26)**: a check only after 30 minutes with no member message. Run the `loop` skill with no interval (dynamic mode) and call `ScheduleWakeup` (1800 s, the same prompt) at the end of **every** lead turn. Unverified: whether a new `ScheduleWakeup` replaces the pending one or stacks; if wake-ups stack, fall back to the fixed 30m cron above. A tick may skip merging and filling when the lead acted in the last 30 minutes, **never the liveness check**.
 
 5. **Then start**: check state, draw threads, fill to budget.
 
@@ -90,14 +82,9 @@ in isolated worktrees.
 
 The gate is the most expensive thing this skill does.
 
-- **A member runs the affected gate on its own tree** before reporting:
+- **A member runs the affected gate on its own tree** before reporting (`just gate-affected`, `env OAG_REQUIRE_GAME_DATA=1 just test-data-affected`, each under the lock below).
 
-  ```sh
-  flock -o "$HOME/.cache/oag/gate.lock" just gate-affected
-  flock -o "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data-affected
-  ```
-
-  `scripts/affected.py` selects the tests that link what changed since the merge base with `main` and prints what and why: every package that links a changed one (a dev-dependency ends at the package that has it), narrowed to the test modules whose code names a crate that links the change. Every `check-*`, `fmt-check` and `lint` still run in full. The root `Cargo.toml`, the toolchain and `.cargo/` select the full suite; a change to `oag-core` or a simulation crate (`oag-physics`, `oag-gameplay`, `oag-ai`, `oag-race`, `oag-formats`) selects everything that links it and prints a `core or simulation` notice; a docs-only or comments-only change selects no tests, and the member still gates. What each rule could miss is in `docs/architecture/affected-gate.md`; the batch gate below is what catches it.
+  `scripts/affected.py` selects the tests that link what changed since the merge base with `main` and prints what and why (CLAUDE.md, "Gates by change"). Every `check-*`, `fmt-check` and `lint` still run in full. The root `Cargo.toml`, the toolchain and `.cargo/` select the full suite; a change to `oag-core` or a simulation crate (`oag-physics`, `oag-gameplay`, `oag-ai`, `oag-race`, `oag-formats`) selects everything that links it and prints a `core or simulation` notice; a docs-only or comments-only change selects no tests, and the member still gates. What each rule could miss is in `docs/architecture/affected-gate.md`; the batch gate below catches it.
 - **The lead runs the full gate once per merge batch**, on merged `main`, in the `lead-gate` worktree: `flock -o ... just` and `flock -o ... env OAG_REQUIRE_GAME_DATA=1 just test-data`. It is the only place the whole suite runs with disc images (each member was green only on its selection), so it is not skippable. At once, without waiting for a batch, after merging a branch whose selection was `FULL` or printed the `core or simulation` notice.
 - **A red batch gate is bisected by branch**, not by commit: re-gate `main` at the merge before the newest member's; the failure names its lane. Send it back as a fix lane.
 - **CI** (`.github/workflows/ci.yml`) runs `fmt`, `clippy` and the non-disc `cargo nextest run --workspace`; `nightly.yml` builds binaries and runs no tests. **No CI job can run `test-data`** (no images); the lead's batch gate is the only full run.
@@ -170,13 +157,10 @@ If a new failure mode shows up mid-drive, relay it to running members at once, t
 
 ## Hard rules to put in briefs, as they apply
 
-The rest is in `member-rules.md`. Brief-only items:
+The rest is in `member-rules.md` and CLAUDE.md (golden hashes, `_q` naming, judging as a player). Brief-only items:
 
 - **The regression gate**: `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` stays all-twelve-clean; quote it verbatim before and after. State the current `01_Track` respawn index yourself (it moves with AI tuning).
 - **Report per-lap and end-of-run shield separately, always labelled.**
-- **Committed golden hashes are never edited to make a test pass**; regenerate in a separate commit naming the behaviour change.
-- **Below 70 confidence a Ghidra name gets `_q`; below 50, no rename.** Every name lands in `names.tsv` with its evidence page.
-- **Judge it as a player would** (a countdown once passed every test while a player saw nothing).
 
 ## Judging a report
 
