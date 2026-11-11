@@ -836,7 +836,10 @@ pub(super) fn zone_grade(
             // How a stage step sweeps the world, where the title's own law is read -
             // HD/Fury's sphere out of the craft; `None` on 2048, whose rate is
             // unread. See `oag_title::ZoneTransition`.
-            .map(|grade| grade.with_transition(race.zone_transition));
+            .map(|grade| grade.with_transition(race.zone_transition))
+            .map(|grade| {
+                grade.with_arena(race.zone_palette.is_some_and(|p| p.on_zone_circuit(track)))
+            });
     // The stage a race *starts* on, which is not stage `0`: **`Start` is the
     // pre-race state, not the opening lap's.** Three converging sources, one of
     // them a direct observation of the original:

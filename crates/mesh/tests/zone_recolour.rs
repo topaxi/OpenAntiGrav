@@ -25,7 +25,9 @@
 use std::sync::Arc;
 
 use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
-use oag_mesh::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE, Zone, ZoneSet, zone};
+use oag_mesh::mesh_render::{
+    self, Anisotropy, Scene, UNIFORMS_SIZE, Zone, ZoneRamp, ZoneSet, zone,
+};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -199,6 +201,7 @@ fn scene_zone(set: ZoneSet) -> Zone {
         scene: set,
         track_outer: track,
         scene_outer: set,
+        ..Zone::default()
     }
 }
 
@@ -309,6 +312,78 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
         (off[0], off[1], off[2]),
         (0, 0, 0),
         "no Zone stage must add nothing at all"
+    );
+}
+
+/// **On a Zone arena the zone colour is added, and only where the albedo is
+/// black, with the aniso ramp's head-on texel in it.**
+///
+/// `surface = albedo + (zoneTex * zoneEffect + 2 * zoneAnisoPalette[pow(rim,
+/// power)]) * (1 - blackMask)` (`docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`
+/// and `zone-palette-textures.md`). The eye is dead ahead, so `rim = 0` and the
+/// lookup reads texel 0. Drop the ramp term and red falls from 245 to 175; drop
+/// the black mask and the white albedo saturates instead of drawing as it does
+/// with no Zone at all; keep the circuit shape and the white albedo is replaced.
+#[test]
+fn the_arena_shape_adds_the_zone_colour_and_ramp_only_where_the_albedo_is_black() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    let stage = texture("zone stage", [ZONE_TEXEL, ZONE_TEXEL, ZONE_TEXEL, 255]);
+    let art = scene_art(&stage);
+    let mut ramp = ZoneRamp::default();
+    ramp.texels[0] = [0.125, 0.0, 0.0, 0.0];
+    // A later texel the head-on lookup must not reach.
+    ramp.texels[16] = [0.0, 0.0, 4.0, 0.0];
+    let mut scene = Scene::off();
+    scene.light.enabled = 1.0;
+    scene.fog.camera = [0.0, 0.0, 100.5];
+    scene.zone = Zone {
+        aniso_power: [1.0; 4],
+        shape: [1.0, 0.0, 0.0, 0.0],
+        aniso: [ramp; 4],
+        ..scene_zone(ZoneSet {
+            effect: ZONE_EFFECT,
+            base: [0.0; 4],
+            base_alt: [0.0; 4],
+        })
+    };
+
+    let black = model(texture("black albedo", [0, 0, 0, 255]), 1.0);
+    let painted = draw(&device, &queue, &black, &art, scene, None);
+    let encode = |linear: f32| (linear.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0).round() as u8;
+    let sample = (f32::from(ZONE_TEXEL) / 255.0).powf(2.2);
+    assert_eq!(
+        (painted[0], painted[1], painted[2]),
+        (
+            encode(sample * ZONE_EFFECT[0] + 2.0 * 0.125),
+            expected(ZONE_EFFECT[1]),
+            0
+        ),
+        "a black albedo takes zoneTex * zoneEffect plus twice the ramp's texel 0"
+    );
+
+    let white = model(texture("white albedo", [255, 255, 255, 255]), 1.0);
+    let kept = draw(&device, &queue, &white, &art, scene, None);
+    let mut no_zone = scene;
+    no_zone.zone = Zone::default();
+    let plain = draw(
+        &device,
+        &queue,
+        &white,
+        &zone::StageArt::NONE,
+        no_zone,
+        None,
+    );
+    assert_eq!(
+        kept, plain,
+        "a non-black albedo is left as it draws outside a Zone race"
     );
 }
 
@@ -564,6 +639,7 @@ fn the_track_bit_selects_the_track_texture_and_colours_and_its_absence_the_scene
         scene: scene_set,
         track_outer: track_set,
         scene_outer: scene_set,
+        ..Zone::default()
     };
 
     let track = draw(&device, &queue, &road, &art, scene, None);
@@ -648,6 +724,7 @@ fn the_transition_sphere_selects_the_inner_pair_inside_and_the_outer_outside() {
         },
         scene: inner,
         scene_outer: outer,
+        ..Zone::default()
     };
 
     let frame = draw_frame(&device, &queue, &surface, &scene_art(&stage), scene, None);
@@ -741,6 +818,7 @@ fn the_transition_sphere_samples_the_inner_texture_inside_and_the_outer_outside(
         track_outer: poison,
         scene: white,
         scene_outer: white,
+        ..Zone::default()
     };
 
     let frame = draw_frame(&device, &queue, &surface, &art, scene, None);

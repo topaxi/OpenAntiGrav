@@ -222,9 +222,8 @@ five points, the curve and the power on every stage. 154 samples, stages 1 to 4:
   file's `(1,0,0) (0,1,0) (0,0,1)`.
 
 Frames of the same run (start grid at stage 1, the track at stages 1-4) are the
-original's side of the arena comparison in
-[zone-shader.md](zone-shader.md)'s port notes: grey textured track and white
-scenery kept, the stage's colours only where the albedo is black.
+original's side of the arena comparison in section 7: grey textured track and
+white scenery kept, the stage's colours only where the albedo is black.
 
 ## 6. What this does not settle
 
@@ -232,6 +231,71 @@ scenery kept, the stage's colours only where the albedo is black.
   `GradientColour1` on unit 0 (the albedo slot) of `zone_2/materials/gradientcolour1`;
   the full census of materials that declare the four gradient samplers is not run.
 - **Whether `0x005f7a60` rounds or truncates**; one ulp either way.
+
+## 7. The port
+
+Wired 2026-11-11 on HD.
+
+- **Which races.** The aniso shape is per environment: all 25 materials of
+  `zone_1`..`zone_4` carry `zoneAnisoPalette` (12 or 30 hash occurrences each) and
+  none `zoneBaseInner`; [zone-shader.md](zone-shader.md)'s census puts every racing
+  circuit the other way round. The same four are the circuits
+  `Environment_LoadRaceScene` gives `zonemodedlc3.effectsettings`
+  ([zone-palette-select.md](zone-palette-select.md)), so the flag is
+  `oag_title::ZonePalette::on_zone_circuit` and `ZoneGrade::with_arena`.
+- **The ramps.** `oag_tables::effectsettings::aniso` reads the five points, curve
+  and power per group and stage and applies the law of section 4;
+  `ZoneGrade::zone_uniform` fills `oag_mesh::mesh_render::Zone::aniso` with Scene
+  and Track at stage `n` and `max(n - 1, 0)`, and `aniso_power` with the four
+  powers. A group missing any key carries a zero ramp (adds nothing).
+- **The shader.** `zone_aniso` (`crates/mesh/shaders/zone.wesl`) reads the ramp at
+  `pow(rim, power)` as a linear, clamp-to-edge lookup into 17 texels, from the
+  uniform rather than a texture. `shade.wesl` adds `(zoneTex * zoneEffect + 2 *
+  ramp) * (1 - blackMask)` to the albedo where `shape.x` is set, and keeps the
+  circuit shape (which replaces the albedo) everywhere else, unchanged.
+- **Chosen, not measured**: the lookup's filter (the arena materials' sampler
+  state for this unit is unread) and FP16 storage (the ramp stays `f32`, at most
+  one FP16 ulp from the original's texels).
+- **Not wired**: `GradientColour1..3`. Of the 25 arena materials only
+  `zone_2/gradientcolour1.rcsmaterial` names a gradient (`GradientColour1`, 20
+  occurrences, unit 0 where `Texture1` sits); drawing it needs that one material's
+  albedo bound to a 3x1 texture built from `Gradient1.Colour0..2`, and how the
+  material's UV indexes three texels is unread.
+- **Tests.** `effectsettings::aniso` unit tests (the law, the key order, a
+  missing key); `zone_grade` unit tests (inner `n`, outer `n - 1`, the arena
+  flag); `crates/mesh/tests/zone_recolour.rs`
+  `the_arena_shape_adds_the_zone_colour_and_ramp_only_where_the_albedo_is_black`
+  (red 245 with the ramp, 175 without); `effectsettings_ground_truth.rs`
+  `check_aniso_ramps` (DLC3 authors all 15 stages for both groups, stage 4 Scene
+  texels 4 and 16 as read live; the base table authors none).
+- **Against the original**, `zone_1` from the start grid, `--zone-stage N`
+  1280x720 beside the RPCS3 run of section 5. Before, stage 4 drew the circuit
+  equation over the whole arena: a yellow flood across the scenery and a purple
+  track, nothing of the albedo. After, stage 1 draws the grey track and white
+  scenery with cyan where the albedo is black, as the original's stage-1 frames
+  do; stage 4 draws white and lavender scenery, a purple track edge and the lime
+  line, as the original's settled stage-4 frame does. Still different: the
+  original's stage-4 track floor reads dark teal with its hex pattern where ours
+  is purple, so the floor's own term is not yet right (the original frame is
+  mid-race, ours on the grid, so the view angle differs too).
+
+### Omega and 2048
+
+- **Omega: checked, differs.** It ships HD's table as
+  `Data/zoneenvironmenthdfury/ZoneModeHDFuryDLC3.effectSettings`, byte-identical to
+  `zonemodedlc3.effectsettings`, and `zone_1`..`zone_4` with 174 re-cooked
+  materials. None of them names `zoneAnisoPalette`; they sample
+  `zoneAnisoLookupTex` (1,000 occurrences) instead, and `eboot.bin` carries that
+  name and the `Aniso Power`/`Aniso Curve` schema keys. Whether the lookup holds
+  this ramp is unread, and Omega has no Zone grade wired at all
+  (`oag_omega::race` `zone_palette: None`). Next read: the writer of
+  `zoneAnisoLookupTex` in `eboot.bin` (string at file offset `8583116`).
+- **2048: checked, differs.** Its DLC `zone_1`..`zone_4` materials (27) also sample
+  `zoneAnisoLookupTex` (184) and never `zoneAnisoPalette`; the executable carries
+  the name and the two schema keys (file offset `5284016`). Its own
+  `ZoneMode2048.effectSettings` authors none of the ramp's keys, and the
+  `ZoneModeHDFury[DLC3].effectSettings` its loader reaches for on those circuits
+  does not ship ([effectsettings.md](../../../formats/effectsettings.md)).
 
 ## Names applied
 

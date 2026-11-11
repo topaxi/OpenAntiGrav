@@ -169,6 +169,13 @@ struct Zone {
     // sphere. Equal to the pair above whenever no transition is in flight.
     track_outer: ZoneSet,
     scene_outer: ZoneSet,
+    // `zoneAnisoPower` for `aniso`'s four ramps, in their order.
+    aniso_power: vec4<f32>,
+    // `.x` 1.0 on a Zone arena (the aniso shape), 0.0 on a circuit.
+    shape: vec4<f32>,
+    // Scene inner, Scene outer, Track inner, Track outer: 17 texels each.
+    // See `mesh_render::Zone::aniso` and `zone_aniso` in `zone.wesl`.
+    aniso: array<vec4<f32>, 68>,
 };
 
 // Wipeout HD's SPU vertex lights, in the record layout `SpuLight_AddCandidate`

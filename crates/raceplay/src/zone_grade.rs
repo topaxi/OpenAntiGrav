@@ -211,6 +211,9 @@ pub struct ZoneGrade {
     /// title's own ladder instead of being overwritten by it on the next
     /// frame that steps the zone counter. See [`Self::pin_stage`].
     pinned: bool,
+    /// The race runs on one of the title's Zone arenas, whose materials
+    /// compile the aniso shape. See [`Self::with_arena`].
+    arena: bool,
 }
 
 impl ZoneGrade {
@@ -236,6 +239,7 @@ impl ZoneGrade {
             art,
             scene_art,
             pinned: false,
+            arena: false,
         })
     }
 
@@ -253,6 +257,48 @@ impl ZoneGrade {
         self.transition = transition;
         self.wavefront = Wavefront::settled(self.blend.current, self.settled_radius());
         self
+    }
+
+    /// Marks the race as running on one of the title's Zone arenas.
+    ///
+    /// HD's four `zone_N` circuits are the only environments whose materials
+    /// compile the aniso Zone shader (all 25 of their materials carry
+    /// `zoneAnisoPalette`, none `zoneBaseInner`; every racing circuit's carry the
+    /// reverse), and the same four take `zonemodedlc3.effectsettings`, the table
+    /// that authors the ramps' keys. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md`, "The port".
+    #[must_use]
+    pub fn with_arena(mut self, arena: bool) -> Self {
+        self.arena = arena;
+        self
+    }
+
+    /// The four `zoneAnisoPalette` ramps and their powers at the showing stage:
+    /// Scene and Track at stage `n` (inner) and `max(n - 1, 0)` (outer), as
+    /// `Environment_UpdateStageBlend` builds them on a commit. A group whose
+    /// stage does not author every key carries a zero ramp, which adds nothing.
+    fn aniso(&self) -> ([f32; 4], [mesh_render::ZoneRamp; 4]) {
+        use oag_tables::effectsettings::aniso::Group;
+        let current = self.blend.current;
+        let outer = current.saturating_sub(1);
+        let mut power = [0.0; 4];
+        let mut ramps = [mesh_render::ZoneRamp::default(); 4];
+        let slots = [
+            (Group::Scene, current),
+            (Group::Scene, outer),
+            (Group::Track, current),
+            (Group::Track, outer),
+        ];
+        for (k, (group, stage)) in slots.into_iter().enumerate() {
+            let Some(inputs) = self.table.aniso_group(stage, group) else {
+                continue;
+            };
+            power[k] = inputs.power;
+            for (texel, [r, g, b]) in ramps[k].texels.iter_mut().zip(inputs.ramp()) {
+                *texel = [r, g, b, 0.0];
+            }
+        }
+        (power, ramps)
     }
 
     /// The radius a settled wavefront reports: the law's cap, or zero on a
@@ -820,6 +866,7 @@ impl ZoneGrade {
         let (track, scene) = groups(&palette);
         let (track_outer, scene_outer) = groups(&outer);
         let [x, y, z] = self.wavefront.origin;
+        let (aniso_power, aniso) = self.aniso();
         mesh_render::Zone {
             uv_scale,
             enabled: 1.0,
@@ -829,6 +876,9 @@ impl ZoneGrade {
             scene,
             track_outer,
             scene_outer,
+            aniso_power,
+            shape: [if self.arena { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0],
+            aniso,
         }
     }
 

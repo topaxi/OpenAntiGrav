@@ -543,6 +543,23 @@ pub enum ZonePalette {
 }
 
 impl ZonePalette {
+    /// Whether `track` (the circuit's own `.vex` entry name) is one of
+    /// [`Self::TitleWide`]'s Zone circuits. Always `false` for
+    /// [`Self::BesideCircuit`], which names none.
+    #[must_use]
+    pub fn on_zone_circuit(&self, track: &str) -> bool {
+        let Self::TitleWide { zone_circuits, .. } = self else {
+            return false;
+        };
+        let fold = |name: &str| {
+            name.trim_start_matches(['/', '\\'])
+                .replace('\\', "/")
+                .to_ascii_lowercase()
+        };
+        let track = fold(track);
+        zone_circuits.iter().any(|c| fold(c) == track)
+    }
+
     /// The archive entry this title's table reads from for a race on `track`, the
     /// circuit's own `.vex` entry name.
     ///
@@ -554,25 +571,16 @@ impl ZonePalette {
         match self {
             Self::TitleWide {
                 entry,
-                zone_circuits,
                 zone_circuit_entry,
-            } => {
-                let fold = |name: &str| {
-                    name.trim_start_matches(['/', '\\'])
-                        .replace('\\', "/")
-                        .to_ascii_lowercase()
-                };
-                let track = fold(track);
-                let on_zone_circuit = zone_circuits.iter().any(|c| fold(c) == track);
-                Some(
-                    if on_zone_circuit {
-                        zone_circuit_entry
-                    } else {
-                        entry
-                    }
-                    .to_string(),
-                )
-            }
+                ..
+            } => Some(
+                if self.on_zone_circuit(track) {
+                    zone_circuit_entry
+                } else {
+                    entry
+                }
+                .to_string(),
+            ),
             Self::BesideCircuit(file) => {
                 let at = track.rfind(['/', '\\'])?;
                 Some(format!("{}{}", &track[..=at], file))

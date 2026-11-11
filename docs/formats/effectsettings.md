@@ -216,10 +216,14 @@ Confidence 86. So the texture set and the colour group are a single choice, and
 this engine - which binds the track set, the one carrying real art - takes
 `Track.Texture Colour`. It is not cosmetic: `Start` authors
 `Scene.Texture Colour` pure black and `Track.Texture Colour` at `9.0`, and an
-HD Zone race rests on `Start`. Three terms of the rule
-stay undrawn for want of a source: the rim-lit `zoneAnisoPalette` summand (no
-filling write located, and this file authors no `Scene.Aniso Power` on any of
-its fifteen stages), the visualiser glow (`zoneTexVis` is built from a table
+HD Zone race rests on `Start`. **Corrected 2026-11-11**: the rim-lit
+`zoneAnisoPalette` summand has a filler, a 17-texel ramp built per stage from
+`Near Colour`, `Base Colour`, `Base Colour Middle`, `Base Colour Highlight`,
+`Base Colour Highlight Middle` and `Aniso Curve`
+([zone-palette-textures.md](../ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md)),
+and only the four Zone arenas' materials read it, from
+`zonemodedlc3.effectsettings`, which authors all of them; this file authors none.
+The other terms that stayed undrawn when this was written: the visualiser glow (`zoneTexVis` is built from a table
 inside the executable), and the inner/outer sphere test (`zoneOrigin` has no
 located writer - and it is a no-op in this build, both sides reading the same
 stage). See
