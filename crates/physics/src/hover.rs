@@ -164,13 +164,13 @@ pub const PENETRATION_LIMIT: f32 = 1.0;
 ///   not a typo.** With the acceleration held across the three sub-steps the frame
 ///   `H = 1/60` was 2.22x too large for `k = 400`, `c = 2` ([`crate::passive::ROLL_DAMPING`]):
 ///   roll grew `1.020167` per tick, measured at 1.018 to 1.022. The torque is now divided by
-///   the recovered tensor (`15.6` on roll), which makes the oscillator stable at about 13 %
-///   above the measured stiffness (`hover::tests::the_roll_oscillator_is_stable_by_the_margin_that_was_measured`).
+///   the recovered tensor (`15.6` on roll), which makes the oscillator stable
+///   (`hover::tests::the_roll_oscillator_is_stable_by_the_margin_that_was_measured`).
 /// - **The original never showed that growth.** A 150-tick no-input trace holds its up axis
-///   within 0.000476 rad with no oscillation, and a 0.25 rad roll step response gives a
-///   closed-loop stiffness of about **20.2** (not 400) and damping about 1.6. Confidence
-///   **80** (one ship, one track, hand-fitted). Nothing here is tuned to hide the gap;
-///   changing a magnitude would destroy the measurement.
+///   within 0.000476 rad with no oscillation, and a 0.25 rad roll step response swings with
+///   a half period of `0.6249 s`, this crate's `0.6250 s`: a closed-loop stiffness of
+///   `400 / 15.6` and damping `2.0`. Confidence **92**
+///   (`docs/physics/roll-step-response.md`).
 /// - **The projection is real.** Re-read instruction by instruction at confidence 92:
 ///   `cross(up, avgNormal)` at `0x0884ac44`, `-400.0f` at `0x0884ac5c`, a
 ///   `vdot.t`/`vscl.q`/`vsub.q` triple against `craft+0x170` (the right axis) at
@@ -185,10 +185,9 @@ pub const ALIGNMENT_GAIN: f32 = 400.0;
 // The fitted `ALIGNMENT_INERTIA` (`19.8`) that once divided this gain is gone: the
 // accumulators hold torque, so the divisor is the recovered tensor. Its check stands.
 // The torque acts on roll and yaw (`I_zz = 15.6`, `I_yy = 21.6`) and the fit sat between
-// them. On roll alone the replacement is `400 / 15.6 = 25.6` against the measured
-// closed-loop `20.2`, a natural frequency of `5.06` against `4.49` rad/s. That 13 %
-// discrepancy is left standing, not tuned away; see
-// `docs/physics/angular-velocity-column.md`.
+// them. On roll alone the divisor gives `400 / 15.6 = 25.6`, a natural frequency of
+// `5.06` rad/s, which is what the original's roll step response measures
+// (`docs/physics/roll-step-response.md`).
 
 /// The bank-to-yaw coupling gain, grounded only:
 /// `angularLocal.y += 30 * right.y * (1 - magLockBlend)`.

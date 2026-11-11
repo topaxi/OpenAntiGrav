@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [pulse, pure]
-updated: 2026-11-10
+updated: 2026-11-11
 summary: "Pulse and Pure write 0.01 body damping and do not fly it; turning it on moves 5 hashes and 8 Pulse trajectory tests"
 size: M (45)
 difficulty: medium (45)
@@ -46,6 +46,12 @@ every executable read (Pulse PSP `0x0884e368`/`0x0884e374`, PS2 `0x0015d088`, Pu
     (`oag-game`), `hover_contact_ground_truth::a_reseeded_replay_lifts_off_the_crest_on_time_with_the_cage`
     (`oag-trace`).
   All eight pass with Pulse's damping off. None was diagnosed.
+- **The angular half is measured live on Pulse** (2026-11-11, `roll-stiffness`, confidence 85):
+  four roll step captures in PPSSPP decay by `0.3337`-`0.3346` per period, this engine by
+  `0.3366` with the term off and `0.3345` with `body_damping.angular = 0.01`
+  (`docs/physics/roll-step-response.md`, "The damping"). Still not flown. The same page's "Open"
+  has one unexplained residual: the original leads our step response by a quarter of a frame
+  from the release on (next read named there).
 - **Pure** follows Pulse: its constructor passes `0.01`, `0.01` and its integrator is Pulse's
   loop (`docs/physics/pure-physics.md`), read and not measured live.
 
