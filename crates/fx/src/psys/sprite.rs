@@ -99,13 +99,18 @@ impl Sprite {
     /// `u16` can say.
     #[must_use]
     pub fn from_gxt(blob: &[u8]) -> Option<Self> {
-        let parsed = oag_texture::gxt::Gxt::parse(blob).ok()?;
-        let texture = parsed.only()?;
-        let rgba = texture.to_rgba(blob).ok()?;
+        Self::from_container(oag_texture::decode::Container::Gxt, blob)
+    }
+
+    /// `blob` decoded as `container` by `oag_texture::decode`, base level, rows as
+    /// the file stores them; `None` when it will not decode or is larger than a
+    /// `u16` can say.
+    fn from_container(container: oag_texture::decode::Container, blob: &[u8]) -> Option<Self> {
+        let picture = oag_texture::decode::decode_as(container, blob).ok()?;
         Some(Self {
-            width: texture.width,
-            height: texture.height,
-            rgba: rgba.into_iter().flatten().collect::<Vec<u8>>().into(),
+            width: u16::try_from(picture.width).ok()?,
+            height: u16::try_from(picture.height).ok()?,
+            rgba: picture.rgba.into(),
         })
     }
 
@@ -126,12 +131,7 @@ impl Sprite {
     /// none of. `None` for a blob [`oag_texture::ps2_texture`] does not read.
     #[must_use]
     pub fn from_ps2(blob: &[u8]) -> Option<Self> {
-        let texture = oag_texture::ps2_texture::parse(blob).ok()?;
-        Some(Self {
-            width: texture.width,
-            height: texture.height,
-            rgba: texture.to_rgba().into(),
-        })
+        Self::from_container(oag_texture::decode::Container::Pct, blob)
     }
 
     /// A PS3 `.gtf`'s one texture, level 0 - the sprite Wipeout HD ships as a
@@ -140,15 +140,7 @@ impl Sprite {
     /// decode.
     #[must_use]
     pub fn from_gtf(blob: &[u8]) -> Option<Self> {
-        let parsed = oag_texture::gtf::Gtf::parse(blob).ok()?;
-        let texture = parsed.only()?;
-        let rgba = texture.to_rgba(blob).ok()?;
-        let (width, height) = texture.level_size(0);
-        Some(Self {
-            width: u16::try_from(width).ok()?,
-            height: u16::try_from(height).ok()?,
-            rgba: rgba.into_iter().flatten().collect::<Vec<u8>>().into(),
-        })
+        Self::from_container(oag_texture::decode::Container::Gtf, blob)
     }
 
     /// A PS4 `.gnf`'s base level - the sprite Wipeout: Omega Collection ships
@@ -156,13 +148,7 @@ impl Sprite {
     /// `.gnf` or whose format or tiling [`oag_texture::gnf`] does not decode.
     #[must_use]
     pub fn from_gnf(blob: &[u8]) -> Option<Self> {
-        let parsed = oag_texture::gnf::Texture::parse(blob).ok()?;
-        let rgba = parsed.decode(blob).ok()?;
-        Some(Self {
-            width: u16::try_from(parsed.width).ok()?,
-            height: u16::try_from(parsed.height).ok()?,
-            rgba: rgba.into_iter().flatten().collect::<Vec<u8>>().into(),
-        })
+        Self::from_container(oag_texture::decode::Container::Gnf, blob)
     }
 
     /// `record`'s embedded sprite, else the one `external` makes of its authored
