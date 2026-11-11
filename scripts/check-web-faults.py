@@ -46,6 +46,34 @@ SCREEN_FILTER = (
 )
 
 
+# Language and player tag saved, so two Enters (the boot movies) reach the main menu.
+MENU_READY = (
+    "localStorage.setItem('oag:/config/oag/settings.toml',"
+    " 'language = \"English\"\\n[player]\\nname = \"TEST\"\\ntag = \"TST\"\\n');"
+)
+
+
+def live_settings() -> list[str]:
+    """Changes six settings that rebuild GPU passes from the menus while the page runs.
+
+    The keys follow `assets/ui/menu.toml`'s row order (a disabled row still takes the
+    cursor): OPTIONS > GRAPHICS sets RENDER SCALE, RECONSTRUCTION and MSAA, then
+    ADVANCED sets MOTION BLUR, SHADOWS and SCREEN FILTER. A row moved there moves a
+    press here; `--expect-saved` then fails naming the setting that did not change.
+    """
+    walk = ("Down Down Down Down Enter Down Enter"
+            " Down Right Down Down Down Right Down Down Right Down Down Down Enter"
+            " Right Down Down Right Down Down Down Down Down Down Right")
+    args = ["--init-script", MENU_READY, "--press", "Enter@6", "--press", "Enter@9"]
+    for step, key in enumerate(walk.split()):
+        key = key if key == "Enter" else f"Arrow{key}"
+        args += ["--press", f"{key}@{12 + step}"]
+    for line in ('render_scale = 125', 'reconstruction = "fxaa"', 'msaa = "4x"',
+                 'motion_blur = "low"', 'shadows = "mapped"', 'screen_filter = "psp-3000"'):
+        args += ["--expect-saved", line]
+    return args
+
+
 NO_DEVICE = (
     "if (window.GPUAdapter) GPUAdapter.prototype.requestDevice ="
     " () => Promise.reject(new Error('requestDevice: the adapter is not able to provide this'));"
@@ -61,6 +89,8 @@ class Case:
     browsers: tuple[str, ...] = ("chromium", "firefox")
     real: bool = True
     reports: int = 1
+    # Seconds after the pick for the final check, when not shortly after `boot`.
+    at: float = 0
 
 
 def hook(name: str, at: float) -> list[str]:
@@ -98,6 +128,8 @@ def cases(pulse: Path, scratch: Path, boot: float) -> list[Case]:
         # Saved settings the boot reads, which must still reach the menus with no report: a
         # screen filter once froze Firefox there (docs/tools/web.md, "The page's thread may not wait").
         Case("saved-screen-filter", "clean", ["--init-script", SCREEN_FILTER]),
+        # The same and five more passes rebuilt from the menus while the page draws.
+        Case("live-settings", "clean", live_settings(), at=48),
     ]
     for name, kind, extra in (
         ("disc-garbage", "disc-unsupported", ["--image", str(scratch / "garbage.iso")]),
@@ -118,7 +150,7 @@ def run(case: Case, browser: str, args, pulse: Path, boot: float) -> tuple[str, 
     out = args.out / f"{browser}-{case.name}"
     command = [
         sys.executable, str(SHOT), "--dist", str(args.dist), "--image", str(pulse), "--out", str(out),
-        "--at", f"{boot + 3:g}", "--browser", browser, "--port", str(args.port),
+        "--at", f"{case.at or boot + 3:g}", "--browser", browser, "--port", str(args.port),
     ] + (["--expect-clean"] if case.kind == "clean" else
          ["--expect-fault", case.kind, "--expect-reports", str(case.reports)]) + case.args
     if "--image" in case.args:
