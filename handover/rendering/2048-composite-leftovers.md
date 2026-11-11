@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [2048]
-updated: 2026-11-04
-summary: "2048 composite: vignette, screen tint, alphaTex, other texel programs"
+updated: 2026-11-11
+summary: "2048 composite: screen tint, alphaTex, other texel programs (the vignette is wired)"
 ---
 
 # 2048's race composite: what is still left out
@@ -23,9 +23,12 @@ Omega's four-level bloom (`tonemap.md`, "The bloom chain") is **checked, differs
 
 ## Open
 
-- **The vignette**: `wo_composite_vp`'s third output and the `vignetteTint`
-  values `PostFx_RenderChain` packs (`local_348`/`local_344`); the composite is
-  drawn as a mesh whose `pos.w` carries it. Ours draws `v = 1`.
+- ~~**The vignette**~~: wired 2026-11-11 (`w2048-vignette`). The composite is the original's
+  mesh round clip-space `(0, -0.885)`, `v = 1 - (vignetteTint * w)^2`, tint `(1, 1, 0.97)`;
+  the top corners go black as the original's do, the bottom is untouched
+  (`exposure.md`, "The vignette"). Left: a Vita3K `--ram-read` of its constants (no profile on
+  the machine that read it), and the top edge's middle on Queens Mall and Empire Climb, which
+  ours draws darker than the original where the original has the sun's flare.
 - **The screen tint and `alphaTex`**: the tint's source (`FUN_813b1d28`) and
   what the second texture holds in a race. Ours draws tint 0 and `c = main`.
 - **Which other 2048 programs square their texel**: only the lightmapped track
@@ -60,7 +63,7 @@ Omega's four-level bloom (`tonemap.md`, "The bloom chain") is **checked, differs
 
 ## Next Steps
 
-1. Re-render the DLC pair (Vineta K now lights from the pack's copy).
-2. Read `vignetteTint` and the composite's vertex program; wire `v`.
-3. Adopt the three re-rendered 2048 pairs (the lead's command in the lane
-   report) so the page shows "exposure held at 1.15".
+1. Re-render the three 2048 pairs after the merge (`just compare-rerender-ours --only 2048-vita`):
+   the stored ones (2026-11-09) already carry `--hold-exposure 1.15` and the DLC pack's lighting,
+   and lack the vignette.
+2. The screen tint's source (`FUN_813b1d28`) and `alphaTex`.
