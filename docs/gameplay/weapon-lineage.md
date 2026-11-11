@@ -298,6 +298,13 @@ it fires, not that the rate matches any original's.
 
 ### Visuals
 
+**A network client that learns of a fire late** (C, every title alike, no cell below moves):
+a blast's screen flash joins its ramp at the blast's age, and a shot first drawn mid-flight
+gets the effect it rides attached at its launch point and aged along the flight, so a part
+that plays once at the launch is not replayed mid-air. The Shuriken's effects and the blast
+models still start fresh
+([networking](../networking/README.md#a-fire-seen-late-2026-11-11)).
+
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |
 | Rocket | M: `Rocket.vex`, `WO_ROCKET_FLARE`/`_EXPLO`; C: opt-in `graphics.own_rockets` plays our own flame, smoke trail, launch flash and blast instead ([own-rockets.md](../rendering/own-rockets.md)) | M: `Rocket.vex`, its own spelling; C: the same opt-in `graphics.own_rockets` | M: `hd_Rocket.vex`, ribbon trail | ?: no model named; `WO_ROCKET_FLARE` is looked up as Pulse's; checked, applies, not wired: `Data/Weapons2048/hd_Rocket.vex` ships | I:HD: `Data\Weapons\hd_Rocket.vex`, the root `Rocket_Construct` picks for a mode below `0x17` ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)); same mesh and decals as HD's, unlit by HD's weapon lights, no ribbon trail |
