@@ -309,3 +309,90 @@ fn an_adapting_chain_settles_where_the_law_does() {
         "settled and reset pictures differ"
     );
 }
+
+mod split {
+    use super::*;
+    use crate::split_fixture::{SIZE, device, frame, mean, paint, read_red};
+
+    fn dark_over_bright(_x: u32, y: u32) -> f32 {
+        if y < SIZE.1 / 2 { 0.25 } else { 0.75 }
+    }
+
+    fn held() -> Params {
+        Params {
+            exposure: Exposure::Held(1.0),
+            ..mall()
+        }
+    }
+
+    /// One whole picture of a single brightness, run as a picture of its own.
+    fn alone(device: &wgpu::Device, queue: &wgpu::Queue, level: f32) -> f64 {
+        let chain = Chain::new(device, FORMAT, SIZE, held()).expect("pipelines build");
+        paint(queue, chain.scene_texture(), |_, _| level);
+        let output = frame(device);
+        let target = output.create_view(&Default::default());
+        let mut encoder = device.create_command_encoder(&Default::default());
+        chain.run(queue, &mut encoder, &target, (0.0, 0.0), SIZE);
+        queue.submit(Some(encoder.finish()));
+        mean(&read_red(device, queue, &output), 0..SIZE.1)
+    }
+
+    /// Each view of a split resolves as the same picture would alone, from its own
+    /// rectangle of the scene, and the seats' lanes are built once, kept, retired one at a
+    /// time and all at once.
+    #[test]
+    fn each_view_resolves_as_it_would_alone_and_its_lane_is_kept() {
+        let Some((device, queue)) = device() else {
+            return;
+        };
+        let chain = Chain::new(&device, FORMAT, SIZE, held()).expect("pipelines build");
+        paint(&queue, chain.scene_texture(), dark_over_bright);
+        let output = frame(&device);
+        let target = output.create_view(&Default::default());
+        let half = SIZE.1 / 2;
+        let draw_views = || {
+            for (seat, y) in [(0, 0), (1, half)] {
+                let mut encoder = device.create_command_encoder(&Default::default());
+                chain.run_view(
+                    &device,
+                    &queue,
+                    &mut encoder,
+                    &target,
+                    View {
+                        seat,
+                        rect: (0, y, SIZE.0, half),
+                        first: seat == 0,
+                    },
+                );
+                queue.submit(Some(encoder.finish()));
+            }
+        };
+        draw_views();
+        let red = read_red(&device, &queue, &output);
+        let top = mean(&red, 2..half - 2);
+        let bottom = mean(&red, half + 2..SIZE.1 - 2);
+        let dark = alone(&device, &queue, 0.25);
+        let bright = alone(&device, &queue, 0.75);
+        assert!(
+            (top - dark).abs() < 2.0,
+            "the dark view resolved to {top}, the same picture alone to {dark}"
+        );
+        assert!(
+            (bottom - bright).abs() < 2.0,
+            "the bright view resolved to {bottom}, the same picture alone to {bright}"
+        );
+        assert!(
+            bottom > top + 10.0,
+            "the views differ: {top} against {bottom}"
+        );
+        assert_eq!((chain.seat_lanes(), chain.seat_lane_builds()), (2, 2));
+        draw_views();
+        assert_eq!((chain.seat_lanes(), chain.seat_lane_builds()), (2, 2));
+        chain.retire_seat(1);
+        assert_eq!(chain.seat_lanes(), 1);
+        draw_views();
+        assert_eq!((chain.seat_lanes(), chain.seat_lane_builds()), (2, 3));
+        chain.retire_seats();
+        assert_eq!(chain.seat_lanes(), 0);
+    }
+}

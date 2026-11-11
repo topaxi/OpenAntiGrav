@@ -40,9 +40,11 @@ pub mod hd_zoom;
 pub mod jitter;
 pub mod motion_blur;
 pub mod omega_tonemap;
+mod pass;
 pub mod photo_fx;
 pub mod ps2_bloom;
 pub mod screen;
+mod seat_lanes;
 pub mod smaa;
 pub mod wo_composite;
 

@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-11
-summary: "Six duplicate-code refactors to wire, five later, ranked from jscpd and read on both sides; a title-data policy call is open."
+summary: "Five duplicate-code refactors to wire (post seat lanes landed), five later, ranked from jscpd; a title-data policy call is open."
 ---
 
 # Duplicated code: ranked refactor candidates
@@ -75,33 +75,37 @@ section below).
      with `--no-audio`, under the gate lock: the PNG must be byte-identical.
      Plus `cargo nextest run -p oag-mesh`.
 
-3. **Post seat-lane code is copied between the Omega files and the bloom pair.**
-   - `crates/post/src/omega_tonemap.rs:909-960` against
-     `crates/post/src/wo_composite.rs:739-790` (52 lines, read: `retire_seat`,
-     `seat_lane_builds`, `draw`); `omega_tonemap.rs:263-295` against
-     `wo_composite.rs:196-228` (33 lines, read: `impl Target { fn new }`, a
-     texture target that duplicates `bloom::Target::new` at
-     `crates/post/src/bloom.rs:61`); `omega_tonemap.rs:458-489` against
-     `wo_composite.rs:369-400` (32 lines, not read past its first line: a
-     `let render = |label, entry, layout, format| ...` pipeline closure).
-   - `crates/post/src/bloom.rs:527-571` against
-     `crates/post/src/ps2_bloom.rs:360-403` (45 lines, read: `prepare_view`);
-     `bloom.rs:264` against `ps2_bloom.rs:154` (24); `bloom.rs:676` against
-     `ps2_bloom.rs:519` (23). Total for the six named pairs: 209 lines.
-   - `crates/post/src/hd_bloom/lanes.rs:159-295` already has a `SeatLanes`
-     type. The two Omega files each keep a private `Seat` struct
-     (`omega_tonemap.rs:213`, `wo_composite.rs:138`) and a private `draw`.
-   - Shared home: `oag-post`, a root module (for example
-     `crates/post/src/seat_lanes.rs` holding a generic `SeatLanes`, and
-     `crates/post/src/pass.rs` for `draw`). The copies become callers. Legal:
-     post reaches no title package (rule 3). Checked: no title import in
-     `crates/post/src`; one doc-comment mention, in a test.
-   - Frequency: per split-screen frame for `prepare_view`; `draw` is a
-     per-frame pass. Not measured.
-   - Size: M, about a day with the post tests. Confidence 35.
-   - Measure: `cargo nextest run -p oag-post` (includes `split_tests`,
-     `bloom_tests`, `seat_lane_builds` counters), and a split-screen
-     screenshot before and after under the gate lock.
+3. ~~**Post seat-lane code is copied between the Omega files and the bloom pair.**~~
+   **Landed** (branch `dedupe-post`). What is one definition now, in `oag-post`:
+   - `seat_lanes.rs`: a generic `SeatLanes<L>` (the per-seat lane store and its
+     build counter) behind `hd_bloom`, `omega_tonemap` and `wo_composite`. Their
+     public `seat_lanes`, `retire_seat(s)` and `seat_lane_builds` delegate to it.
+   - `pass.rs`: `fullscreen_pipeline` (the `render` closure of Omega, WO, Omega's
+     bloom levels and the PSP bloom), `draw` and `draw_with` (the loading
+     full-screen pass, and the same with a chosen load op), `clear`, and the
+     `Target` that Omega and WO each carried.
+   - `bloom.rs`: `ensure_view_lane`, `lane_group`, `scene_group`,
+     `scratch_pass` and `Frame::uv`, which `Bloom` and `Ps2Bloom` share for
+     `prepare_view`, their bind groups and their three scratch passes. Both
+     composites go through `pass::draw` with the viewport clamped by the caller.
+   - jscpd on `crates/post`: 182 clones, 3,001 duplicated lines before; 165, 2,642
+     after. Gone: the 52-line `retire_seat`/`draw` pair, the 33-line `Target`
+     pair, the 32-line `render` closure pair, the 24-line bind-group pair.
+   - Tests that pin it: `wo_composite::tests::split::*` and
+     `ps2_bloom::tests::a_view_lane_draws_what_the_whole_lane_draws_for_its_rectangle`
+     (both added first; neither path had a test through its view API), plus the
+     existing `omega_tonemap::split_tests`, `bloom::tests` and `hd_bloom` split tests.
+   - **Left as they were, on purpose.** `bloom::Target` and `motion_blur::Target`
+     differ from `pass::Target` (no `max(1)`, no `COPY_DST`; the first returns a
+     `Result`), so merging them would change texture usage or the zero-size case.
+     `Bloom` and `Ps2Bloom` keep eager `Vec<Lane>` view lanes (a lane below `view`
+     is built too, so `composite_view` finds it), which `SeatLanes` (builds only the
+     asked seat) would change; the PS2 pipeline closure takes shader constants.
+     What jscpd still pairs there is the public method signatures
+     (`prepare_view`, `prepare_in`, `composite_view`, `composite_in`: 31 and 23
+     lines) and `Chain::new`'s bind-group layout entries, `run_placed` skeletons
+     between `omega_tonemap.rs` and `wo_composite.rs` (14-20 lines each).
+     Folding those would take a macro or a trait for no further saving.
 
 4. **The single-level RGBA texture upload and clamp sampler are copied in
    about 15 places across fx, post, render, mesh and game.**
