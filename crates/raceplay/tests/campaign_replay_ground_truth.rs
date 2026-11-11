@@ -16,7 +16,10 @@
 //! Pulse's weapon blasts now post their push through `pending_impulse` from the craft's nose
 //! point (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "Wired: every blast posts
 //! its push"), which the recordings predate, so each leg diverges at the first blast that
-//! reaches a craft; the maintainer accepts that a physics change desyncs old recordings. Each
+//! reaches a craft. A craft-to-craft bump now also charges both unshielded hulls' energy
+//! (`contact-response.md`, "an unshielded craft-to-craft bump charges the energy pool"), so each
+//! leg now diverges earlier, at the field's first bump off the grid (tick 360 or 420). The
+//! maintainer accepts that a physics change desyncs old recordings. Each
 //! leg names its first diverging tick (`Some(tick)` in `deck_tests!`): a leg that stops diverging,
 //! or diverges elsewhere, fails. A re-recorded file takes `None` and must reproduce to its end.
 //!
@@ -141,9 +144,9 @@ macro_rules! deck_tests {
 }
 
 deck_tests! {
-    leg_1_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126092-1.oagr", Some(1260);
-    leg_2_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126226-1.oagr", Some(1320);
-    leg_3_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126364-1.oagr", Some(960);
-    leg_4_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126501-1.oagr", Some(1020);
-    leg_5_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126656-1.oagr", Some(1500);
+    leg_1_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126092-1.oagr", Some(360);
+    leg_2_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126226-1.oagr", Some(420);
+    leg_3_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126364-1.oagr", Some(360);
+    leg_4_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126501-1.oagr", Some(420);
+    leg_5_a_deck_tournament_replay_watches_to_its_end: "oag-wipeout-pulse-1794126656-1.oagr", Some(360);
 }
