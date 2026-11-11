@@ -29,6 +29,7 @@ mod ai_dekonstruct_symptoms_ground_truth;
 mod ai_fork_split_ground_truth;
 mod ai_look_sweep;
 mod ai_loss_attribution_board;
+mod ai_pair_contact_push_ground_truth;
 mod ai_plan_probe;
 mod ai_roll_ground_truth;
 mod ai_span_sweep;
