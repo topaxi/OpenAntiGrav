@@ -346,6 +346,40 @@ texture. It answered "what makes the 2048 lattice about half ink" in one capture
 7. `Vita3K` ignores `SIGTERM` when wedged: `kill -9` by pid. A second launch while one is still
    starting opens a second emulator on the same profile; check `pgrep -a vita3k` before relaunching.
 
+## A fresh profile on a new machine (2026-11-11, `gallery-2048`)
+
+Set up and driven as far as the front end; **taps do not register until the firmware is installed** (below).
+
+- **A persistent pref-path outside Vita3K's default**, `data/saves/2048/vita3k/` (the same shape as the other titles' saves): a copy of
+  Vita3K's default `config.yml` with `pref-path` set there, `show-welcome: false`, `warn-missing-firmware: false`, plus the five
+  overrides above (`log-level`, `discord-rich-presence`, `show-compile-shaders`, `validation-layer`, `check-for-updates-mode`), one
+  copy at `<private HOME>/.config/Vita3K/config.yml` (what `-r` resolves against) and one at `OAG_VITA3K_CONFIG`. Run every
+  Vita3K command with `env -u XDG_CONFIG_HOME -u XDG_DATA_HOME` and a private `HOME`: without it the install went to
+  `~/.local/share/Vita3K` (1.6 GiB moved by hand afterwards). `XDG_CACHE_HOME` decides where the pipeline cache and
+  `vita3k.log` go (`~/.cache/Vita3K` by default; set it under `data/saves/2048/` so the cache is reused).
+- **Installing, with Vita3K's own CLI**: `vita3k -c <config> -w --pkg <file>.pkg --zrif <zRIF>` for the base package, then the
+  patch (`2048-vita-eu-patch.pkg`, the base zRIF), then each DLC (`data/dlc/WipEout 2048 - DLC1 (Europe) (DLC).pkg` and DLC2).
+  **A DLC has a zRIF of its own**: with the base one it stops at `header signature is invalid`. The pair list (`PSV_DLCS.tsv`
+  of the pkgi tool) carries `EP9000-PCSF00007_00-DLC1W2048PACKAGE` and `...DLC2W2048PACKAGE`. Each install takes about 1 s
+  for the patch and DLCs and 10 s for the base; DLCs land in `ux0/addcont/PCSF00007/DLC<n>W2048PACKAGE/`, the patch is merged
+  into `ux0/app/PCSF00007/` (`data1.psarc`, `data2.psarc`).
+- **It boots without the firmware** (the welcome dialog and the "Firmware is not fully installed" dialog are what
+  `show-welcome` and `warn-missing-firmware` switch off; `Launch Anyway` otherwise): title, PSN prompt and the Game Mode grid draw,
+  and keys reach the game.
+- **A tap does not register without the firmware.** Every variant failed the same way on three boots (hold times 0.2 to 0.8 s,
+  moves before and during the press, buttons 1, 2 and 3, `T`, `SDL_MOUSE_TOUCH_EVENTS=1`): XTEST clicks reach the Qt search
+  box, keys reach the game, the Game Mode grid does not move. The log has
+  `Missing file at sys/external/libsystemgesture.suprx` followed by `Unimplemented sceSystemGestureCreateTouchRecognizer`,
+  `...UpdateTouchRecognizer`, `...GetTouchEventsCount`: 2048 reads taps through SceSystemGesture, which is a firmware module
+  (also missing: `libhttp.suprx`, `libscemp4.suprx`). Confidence 70 that the firmware (`PSVUPDAT.PUP`, installed with
+  `vita3k --firmware <file>`, plus the font package) is what is missing, not yet tested: this machine has no `.pup` of the Vita's
+  on disk, and Sony's update server answered a plain request with 403.
+- **Two game windows**: `find_window` takes the first `PCS[AF]000` match, so a Vita3K left running (it ignores `SIGTERM`: `kill -9`
+  by pid and check with `ps`) puts its window first, and `shot`/`key` then read and drive the old instance, which looks like a
+  frozen game.
+- **`DATA.BIN`** (`ux0/user/00/savedata/PCSF00007/-AUTO-/`) has no readable strings (`strings -a` prints noise), so
+  `CameraP1` is not readable off the save; the options screen, or the rig's eye in guest memory, is.
+
 ## What a frame is, legally
 
 A screenshot of the running game is game content, so no frame is committed.
