@@ -611,6 +611,7 @@ impl Race {
             // the whole action.
             return false;
         }
+        #[cfg(feature = "view")]
         let started = !self.sim.world.ships[slot].pickup.is_dropping();
         self.sim.world.ships[slot].pickup.begin_drop(drop.count);
         // One announcement per drop that starts: not per mine laid, and not for a
