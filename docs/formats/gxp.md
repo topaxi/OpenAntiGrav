@@ -638,7 +638,7 @@ To close it: a Vita3K race on a circuit whose start line is reachable at a match
 (Chenghou's `ds_sf_ne`/trench draws are the largest set), then label words 1 and 2 of #1.
 **2026-10-31: the words are labelled by the decoder (below), no race needed for the law.
 The Chenghou `ds_sf_ne`/`ds_sfline_trench_ne` draws are not this family**: their material is
-`diffuse_normal_specular_emmissivenew` (7 of the 41 slots, open on its own). Whether the
+`diffuse_normal_specular_emmissivenew` (7 of the 41 slots; closed 2026-11-11, below). Whether the
 original draws the pipe strip in a race at all is still the Vita3K question above.
 
 ## `m_diffuse_normal_constantspecular` colours by `Texture1`'s alpha (2026-10-31, `2048-normal-maps-re`)
@@ -695,7 +695,7 @@ attributed to materials by the `.rcsmaterial` name ahead of each texture path in
 
 | Title | Slots | `ds_pipe_nc` (this family) | Rest |
 | --- | ---: | ---: | --- |
-| 2048 | 41 | **31** (Vineta K 3 + 4, Moa Therma 4 + 8, Anulpha 4, Chenghou 4 + 4) | 7 `diffuse_normal_specular_emmissivenew` (Chenghou `ds_sf_ne`, `ds_sfline_trench_ne`), Altima water edge 1, `temp_diffuse` 2 |
+| 2048 | 41 | **31** (Vineta K 3 + 4, Moa Therma 4 + 8, Anulpha 4, Chenghou 4 + 4) | 7 `diffuse_normal_specular_emmissivenew` (Chenghou `ds_sf_ne`, `ds_sfline_trench_ne`; closed, 10 to 3), Altima water edge 1, `temp_diffuse` 2 |
 | Omega | 149 | **82** (all twelve HD/Fury circuits Omega ships; 82 of the 87 `ds_pipe_nc` references in the models follow this family's name) | `jd_ubermall_gold_n` 16, `rocks_01_normal_alpha` 12, `amb_glass` 8, 12 other files of 1 to 4 |
 
 `ds_pipe_nc`'s alpha is a real grey, not a constant (decoded `.gxt`, 128x128 on Anulpha,
@@ -721,6 +721,60 @@ constant on 2048) is the renderer's choice: the wire binds unorm bytes like 2048
 constants, **chosen, not measured**; HD's sRGB encode is **checked, applies, not wired**, as on
 `rcsmaterial.md`. On Omega the family sits on all twelve HD/Fury circuits (the 2048 DLC
 four among them), and the same rule covers every one.
+
+## `diffuse_normal_specular_emmissivenew` colours by `Texture1` and adds `Norm`'s alpha (2026-11-11, `w2048-normal-colour`)
+
+**The law: the ambient-only program's colour is `mix(fogColour, constantAmbientColour * T1^2 +
+Constant1 * N.a, v)`, `T1` the `Texture1` texel (the `_cs` colour+spec map) and `N` the `Norm`
+texel (the `_ne` normal+emissive map); `N.rgb` never reaches it. The lit permutations
+add the same `N.a * Constant1` after the light (outside it) and before the specular and the fog.**
+So the family is the plain `diffuse_normal_specular_emmissive` with its samplers renamed
+(`Texture2` is `Norm` here), the colour map `Texture1`, and the material lists the `_ne` map
+**first**, so `Material::diffuse_texture`'s first-listed rule drew the tangent normal as the
+picture: Chenghou's start gantry was violet (7 of the 10 slots left after the pipe strip).
+**Confidence 88**: unambiguous operand listings on two instruction sets (below), agreeing term
+for term and with HD's `_ne.a * C` (`rcsmaterial.md`, "Purple start line"); no live run.
+
+**2048, USSE** (`python3 scripts/vita-usse.py disasm
+"data/extracted/vita/PCSF00007/dlc1/PSP2/dlc1.psarc:Chenghou_Project/materials/diffuse_normal_specular_emmissiveNEW.rcsmaterial" 1`).
+Program #1 declares `Constant1` at `sa0`, `constantAmbientColour` at `sa2`, `fogColour` at `sa4`
+and the samplers `Texture1` (resource 0, texel `pa0`) and `Norm` (resource 1, texel `pa2`):
+
+```text
+ 1  mul.f16 pa2.xyz, sa2.xyz, pa0.xyz            ; ambient * T1
+ 2  mul.f16 pa0.xyz, pa2.xyz, pa0.xyz            ; * T1 again: ambient * T1^2
+ 3  mad.f16 pa0.xyzw, pa2.wwww, sa0.xyzw, pa0    ; + N.a * Constant1  (pa2.w not yet written)
+ 4  add.f16 pa0.xyz, -sa4.xyz, pa0.xyz
+ 5  mad.f16 pa0.xyzw, pa4.xxxx, pa0.xyzw, sa4    ; fog mix by the visibility pa4.x
+```
+
+The lit program #3 (30 words) ends `mul pa0.xyz = pa6^2` (the squared colour texel), `mul = lit *
+that`, `mad pa4 = pa2.wwww * sa0 + that` (word 21: `N.a * Constant1` added after the light),
+then the specular `pow` term and the fog mix; the lightmapped program #12 does the same at
+word 25. `Constant1` is `(1, 0, 0)` on every slot of Chenghou's: a **red** start line, the
+colour Sol 2's start strip has on HD.
+
+**Omega, GCN: checked, applies (a differently named file).** Omega ships no `...new` file: its
+Chenghou models use the plain `Diffuse_Normal_Specular_Emmissive` with `Texture1` = `ds_sf_cs`,
+`Texture2` = `ds_sf_ne` (hashes `3bdc0403`, `a2d555b9`), listing `Texture1` first, so Omega's
+census slice was already 0 (the colour was bound right). Its ambient pixel program
+(`data01.psarc`, `Shdr @0x3244`, 60 instructions, `cargo run -p oag-rcs --example gcn_dump --
+data/extracted/ps4/omega-eu/uroot/data01.psarc
+Data/environments/04_chenghou_project/Materials/Diffuse_Normal_Specular_Emmissive.rcsmaterial
+--at 0x3244`) fetches `Texture2` with `dmask:0x8` (alpha alone) and `Texture1` with `dmask:0x7`
+and computes `v0 * (Constant1 * T2.a + constantAmbientColour * T1.rgb) + fog * (1 - v0)`: the
+same two terms (Omega has no `T1^2`: its colours are linear). The lightmapped lit program `@0xaf44`
+also multiplies `Constant1` by `Texture2`'s alpha register and sums it in before the fog mix
+(`2048-material-params.md`, "Against Omega"; the sampler assignment is a reflection-order inference,
+confidence 80). Wired: `emissive_add` admits Omega's plain member too (HD, 2048 and Omega's ambient
+agree); the 13 Omega circuits that ship the plain file change; Omega's `_emmissive_alpha` stays Vita only (its programs are unread).
+
+**Wired 2026-11-11:** `mesh::rcs::psp2::emissive_add` admits the family (mask `Norm`, colour
+named `Texture1`); the 2048 census moves **10 to 3** (`omega_transparency_ground_truth.rs`),
+Omega unchanged at its slice (its colour was right; its glow was missing). Headless frames at
+the Chenghou start gantry (camera `-288,32,451` looking `-0.74,-0.30,-0.55`): violet before,
+red glow with metal after, on 2048 and on Omega; Omega Vineta K's blue floor panels now glow
+(the same plain family). Not compared against an original frame (no pair exists for Chenghou).
 
 ## The composite family, and the Zone one
 

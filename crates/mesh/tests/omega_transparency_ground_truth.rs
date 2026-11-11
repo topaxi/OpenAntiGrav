@@ -171,7 +171,7 @@ fn omega_altimas_road_binds_its_diffuse_map() {
 /// 2048: Chenghou's `diffuse_normal_specular_emmissivenew` (7), the Altima
 /// water edge and `temp_diffuse` on Square and Subway. The counts may shrink
 /// further and must never grow.
-const VITA_FAULTS: usize = 10;
+const VITA_FAULTS: usize = 3;
 
 /// One Omega circuit directory, both directions, against its known gap.
 fn omega_circuit(dir: &str, known: usize) {
@@ -273,6 +273,33 @@ omega_circuit_test!(omega_arena_binds_no_more_lookups_than_known, "arena", 1);
 omega_circuit_test!(omega_park_binds_no_more_lookups_than_known, "park", 0);
 omega_circuit_test!(omega_square_binds_no_more_lookups_than_known, "square", 1);
 omega_circuit_test!(omega_subway_binds_no_more_lookups_than_known, "subway", 1);
+
+/// Omega's plain `diffuse_normal_specular_emmissive` adds `Texture2`'s alpha times `Constant1`
+/// after the light, as its ambient pixel program does (`docs/formats/gxp.md`,
+/// "`diffuse_normal_specular_emmissivenew`"): Chenghou's start gantry admits its slots.
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn omega_chenghous_start_gantry_adds_its_emissive() {
+    let Some(root) = root() else { return };
+    let mut archives: Vec<_> = ARCHIVES
+        .iter()
+        .filter_map(|a| oag_assets::psarc::Archive::open_file(&root.join(a)).ok())
+        .collect();
+    let path = "Data/environments/04_chenghou_project/track.final.rcsmodel";
+    let blob = archives
+        .iter_mut()
+        .find_map(|a| a.read_path(path).ok())
+        .expect("chenghou's model is in a base archive");
+    let (_, report) = psp2::build("chenghou", &blob, None, &mut |p| {
+        archives.iter_mut().find_map(|a| a.read_path(p).ok())
+    })
+    .expect("builds");
+    assert!(
+        report.emissive_add_materials >= 6 && report.emissive_add_unread == 0,
+        "{}",
+        report.describe()
+    );
+}
 
 /// 2048's circuits, the Vita package.
 #[test]

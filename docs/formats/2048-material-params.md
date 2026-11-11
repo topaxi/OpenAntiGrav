@@ -485,13 +485,23 @@ material-index bits), added to `shade.wesl`'s `pad_glow`. Vita only. `fc06_lambe
 `Tint * D.a` is **not wired** (unchanged: read, open). The add is dimmer than the original's (floor G/B
 31/37 against 38/43) with the rest of the frame, the open darkness item.
 
-**Against Omega: checked, differs, not wired.** Omega's `diffuse_normal_specular_emmissive` pixel programs
-(`data01.psarc`, `0x6bcbd09c`: `Constant1`, `novaScaleBiasPower`, `Texture1Sampler`, `lightmapSampler`,
-`shadowMapSampler`) sample **one** diffuse map and name no `Texture2` (normal) or `Texture2Alpha`
-sampler, so the mask source is not 2048's `Texture2.a`; the GCN body is unread [conf 60]. Not the same
-few lines; left to the generic reading.
+**Against Omega: checked, applies, wired 2026-11-11 (supersedes "differs, not wired").** The earlier
+reading (`0x6bcbd09c`: one diffuse sampler, no `Texture2`) does not match the file's pixel programs as
+listed by `gcn_dump ... Diffuse_Normal_Specular_Emmissive.rcsmaterial --summary` (identical on Vineta K
+and Chenghou): every lit and ambient permutation names `Texture1Sampler` and `Texture2Sampler`, the
+lightmapped ones (`@0xaf44`, `@0xe784`, and `@0x9c64`/`@0xd324` with `shadowMapSampler`) beside
+`lightmapSampler`. In `@0xaf44` the `Texture2` fetch is `dmask:0xf` (its rgb is the normal) and its
+alpha register is multiplied by `Constant1` (`v_mul_f32 s24/s25/s26, v8`, offsets `0x330` to `0x340`)
+and summed into the colour before the fog mix; the ambient program `@0x3244` fetches it with
+`dmask:0x8`. The sampler assignment (`Texture2` = the `_ne` map = the alpha one) is read off the
+reflection's slot order and agrees with 2048's USSE program and HD's block (confidence 80, not 88).
+`mesh::rcs::psp2::emissive_add` admits Omega's plain member (13 circuits ship the file: Vineta K,
+Metropia, Moa Therma, Chenghou, Ubermall, Sebenco, Sol 2, Anulpha, Amphiseum, Modesto, Talons,
+Tech De Ra). Omega's `_emmissive_alpha` stays unread and not wired.
 
 (`diffuse_normal_specular_emmissive`, `fc06_lambert_emmissive_alpha`: 63 and 33 entries per variant over
 its packages), but its GCN programs were not read here, so whether Omega applies the same
-outside-the-light add is open. `diffuse_normal_specular_emmissivenew` (Chenghou, 7 slots) was not
-covered either.
+outside-the-light add is open. `diffuse_normal_specular_emmissivenew` (Chenghou, 7 slots) is the plain member with `Norm` for
+`Texture2` and the colour named `Texture1`: read and wired 2026-11-11 (`gxp.md`,
+"`diffuse_normal_specular_emmissivenew` colours by `Texture1`"). Omega's plain member is wired the
+same way (its ambient GCN program read; **ported**).

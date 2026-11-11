@@ -14,8 +14,14 @@
 //!
 //! The picture rides the third binding ([`crate::mesh::Model::pad_masks`]), the tint is one
 //! glow-table entry of [`PROGRAM_EMISSIVE_ADD`], and `shade.wesl` joins the term to the pad glow
-//! it already adds after the light. **Vita only**: Omega ships the same material names but its
-//! GCN programs are unread, so a PS4 model is left to the generic reading.
+//! it already adds after the light.
+//!
+//! **Chenghou's `diffuse_normal_specular_emmissivenew` is the plain family with the samplers
+//! renamed**: `Norm` is the `_ne` map whose alpha is the mask, `Texture1` the `_cs` colour that is
+//! listed second, so the colour is named rather than the first texture listed (the first is the
+//! normal map; `docs/formats/gxp.md`, "`diffuse_normal_specular_emmissivenew`"). Omega's plain
+//! family has the same shape on its own programs and takes the plain member; its `_emmissive_alpha`
+//! programs are unread, so that member stays Vita only.
 
 use std::sync::Arc;
 
@@ -33,6 +39,9 @@ use crate::mesh::{
 pub(super) struct Add {
     pub slot: u32,
     pub texture: Option<Arc<ModelTexture>>,
+    /// The `.gxt` the colour is drawn from when the material's first listed texture is the mask
+    /// itself ([`Kind::colour`]).
+    pub colour: Option<String>,
 }
 
 /// Per material, the add it draws. [`super::shield_lightning`] fills in the same table: both ride
@@ -58,14 +67,29 @@ impl Plan {
         self.adds.iter().flatten().any(|a| a.texture.is_some())
     }
 
+    /// The path this material's colour is drawn from, when its own program says it is not the
+    /// first texture listed.
+    pub fn colour(&self, material: Option<usize>) -> Option<&str> {
+        self.of(material)?.colour.as_deref()
+    }
+
     /// The mask map this material binds third, when it has one.
     pub fn mask(&self, material: Option<usize>) -> Option<&Arc<ModelTexture>> {
         self.of(material)?.texture.as_ref()
     }
 }
 
-/// The two members of the family: the mask map each reads, and the glow-table mode that says how.
-fn kind_of(material: &Material) -> Option<(&'static str, f32)> {
+/// One member of the family: the sampler whose alpha is the mask, the glow-table mode that says
+/// how, and the sampler that carries the colour when it is not the first texture listed.
+struct Kind {
+    mask: &'static str,
+    program: f32,
+    colour: Option<&'static str>,
+    /// Whether Omega's programs of the same file were read and agree.
+    ps4: bool,
+}
+
+fn kind_of(material: &Material) -> Option<Kind> {
     let stem = material
         .name
         .rsplit(['/', '\\'])
@@ -73,9 +97,27 @@ fn kind_of(material: &Material) -> Option<(&'static str, f32)> {
         .unwrap_or(&material.name);
     let stem = stem.strip_suffix(".rcsmaterial").unwrap_or(stem);
     if stem.eq_ignore_ascii_case("diffuse_normal_specular_emmissive_alpha") {
-        Some(("Texture2Alpha", PROGRAM_EMISSIVE_ADD))
+        Some(Kind {
+            mask: "Texture2Alpha",
+            program: PROGRAM_EMISSIVE_ADD,
+            colour: None,
+            ps4: false,
+        })
     } else if stem.eq_ignore_ascii_case("diffuse_normal_specular_emmissive") {
-        Some(("Texture2", PROGRAM_EMISSIVE_ALPHA_MASK))
+        Some(Kind {
+            mask: "Texture2",
+            program: PROGRAM_EMISSIVE_ALPHA_MASK,
+            colour: None,
+            ps4: true,
+        })
+    } else if stem.eq_ignore_ascii_case("diffuse_normal_specular_emmissivenew") {
+        // Chenghou's: the mask is `Norm`'s alpha and the colour is `Texture1`, listed second.
+        Some(Kind {
+            mask: "Norm",
+            program: PROGRAM_EMISSIVE_ALPHA_MASK,
+            colour: Some("Texture1"),
+            ps4: false,
+        })
     } else {
         None
     }
@@ -95,7 +137,13 @@ pub(super) fn plan(
         std::collections::HashMap::new();
     for material in &decoded.materials {
         out.adds.push(None);
-        let Some((sampler, program)) = kind_of(material).filter(|_| !ps4) else {
+        let Some(Kind {
+            mask: sampler,
+            program,
+            colour,
+            ..
+        }) = kind_of(material).filter(|k| !ps4 || k.ps4)
+        else {
             continue;
         };
         let index = out.adds.len() - 1;
@@ -141,8 +189,57 @@ pub(super) fn plan(
         out.adds[index] = Some(Add {
             slot,
             texture: Some(texture),
+            colour: colour
+                .and_then(|name| material.sampler(name_hash(name)))
+                .filter(|p| !p.is_empty())
+                .map(str::to_string),
         });
         report.emissive_add_materials += 1;
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn named(name: &str) -> Material {
+        Material {
+            name: name.to_string(),
+            technique: None,
+            textures: Vec::new(),
+            lightmap: None,
+            params: Vec::new(),
+            samplers: Vec::new(),
+            state: None,
+        }
+    }
+
+    #[test]
+    fn chenghous_new_family_masks_by_norm_and_colours_by_texture1() {
+        let new = kind_of(&named(
+            "data/art/published/dlc1/environments/chenghou_project/materials/diffuse_normal_specular_emmissivenew.rcsmaterial",
+        ))
+        .expect("admitted");
+        assert_eq!(new.mask, "Norm");
+        assert_eq!(new.colour, Some("Texture1"));
+        assert!(!new.ps4, "Omega ships no `new` file");
+    }
+
+    #[test]
+    fn omega_takes_the_plain_member_only() {
+        let plain = |n: &str| kind_of(&named(n)).map(|k| (k.mask, k.ps4));
+        assert_eq!(
+            plain("x/materials/diffuse_normal_specular_emmissive.rcsmaterial"),
+            Some(("Texture2", true))
+        );
+        assert_eq!(
+            plain("x/materials/diffuse_normal_specular_emmissive_alpha.rcsmaterial"),
+            Some(("Texture2Alpha", false))
+        );
+        assert_eq!(
+            plain("x/materials/diffuse_normal_specular.rcsmaterial"),
+            None
+        );
+    }
 }

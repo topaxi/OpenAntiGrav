@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [2048, omega]
-updated: 2026-10-31
-summary: "pipe strip wired (2048 41 to 10, Omega 149 to 67); left: Chenghou emmissivenew, water edge, temp_diffuse, Omega jd_*_n/rocks/amb_glass"
+updated: 2026-11-11
+summary: "pipe strip and Chenghou emmissivenew wired (2048 41 to 3, Omega 149 to 67); left: water edge, temp_diffuse, Omega jd_*_n/rocks/amb_glass"
 categories: [rendering]
 ---
 
@@ -75,10 +75,20 @@ non-lightmap texture) and so still draw it.
   programs are now listable with `cargo run -p oag-rcs --example gcn_dump`, so a `dmask` read
   per family is the cheap first step.
 
+- **2026-11-11 (`w2048-normal-colour`): Chenghou's `diffuse_normal_specular_emmissivenew` read and
+  wired.** Colour `Texture1` (`_cs`, squared) plus `Norm`'s alpha times `Constant1` after the light;
+  the material lists the `_ne` map first, which is why it was drawn as the picture. 2048 census
+  10 to 3 (the 7 Chenghou slots). Omega ships no `new` file; its plain
+  `diffuse_normal_specular_emmissive` ambient GCN program has the same two terms and `emissive_add`
+  now admits it on Omega too (red gantry on Chenghou, blue panels on Vineta K). Omega's lit programs
+  of the plain family and its `_emmissive_alpha` are unread. Evidence: `docs/formats/gxp.md`,
+  "`diffuse_normal_specular_emmissivenew` colours by `Texture1`...".
+  Left on 2048 (3): the Altima water edge (1), `temp_diffuse` on Square and Subway (2).
+
 ## Next Steps
 
-1. List Chenghou's `diffuse_normal_specular_emmissivenew` ambient program (2048, USSE) and
-   the Omega families above (GCN `dmask` and the colour path), the way
-   `m_diffuse_normal_constantspecular` was read (`docs/formats/gxp.md`).
+1. Omega's `jd_ubermall_gold_n` (16), `rocks_01_normal_alpha` (12), `amb_glass` (8) and the twelve
+   small ones: a `gcn_dump` `dmask` read per family, the way `m_diffuse_normal_constantspecular`
+   was read (`docs/formats/gxp.md`); then 2048's water edge and `temp_diffuse`.
 2. Pose-match an RPCS3 frame on Talon's start line and Modesto's bowl; a Vita3K frame of a
    2048 DLC start line for the dark strip.
