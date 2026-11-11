@@ -988,6 +988,45 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
    setup, and the sim suites pass built with the atomics flags ("Verifying
    it").
 
+### The page's thread may not wait
+
+Every std blocking primitive (a contended `Mutex`, a `OnceLock` or `LazyLock`
+another thread is initialising, a `Condvar`, `thread::park`, `thread::sleep`)
+ends in `memory.atomic.wait32/64`. On the page's thread **Chromium traps** on
+that instruction, but **Firefox 159 blocks**: the page stops drawing, nothing
+reaches the console, and after a while Firefox warns that "a page is slowing
+down Firefox". A Firefox Profiler capture of such a page (the maintainer's
+desktop, 2026-11-11, Pulse PSP EU on oag.topaxi.com) shows the page's main
+thread in `call to native i32.wait` under `pthread_cond_wait` for 18,680 of
+22,508 samples, from 3.84 s to the end, inside winit's animation-frame callback,
+8 unnamed wasm frames below it. The published module has no name section, so
+which lock was not recovered.
+
+So the build guards every wait (`scripts/web-page-wait-guard.py`, run by
+`scripts/build-web.sh` after `wasm-bindgen`): before each `memory.atomic.wait`
+the module checks whether it runs on the page's stack (the bottom
+`-zstack-size` bytes, the module being linked stack-first; a worker's stack is
+allocated above it) and, if so, calls `oag_thread::web::oag_page_would_block`,
+which panics into the page's one report: "the page's thread would wait on a
+lock another thread holds (function N in this build's page-waits.txt)". `N` is
+the waiting function's index in the module before `wasm-opt`;
+`pkg/<hash>/page-waits.txt` beside the module names it. Both browsers then end
+the same way, in a report a player can copy. `wasm-bindgen`'s own per-thread
+start-up and teardown (`__wbindgen_start`, `__wasm_init_memory`,
+`__wbindgen_thread_destroy`) are left alone. A `--dev` build guards two
+functions (`futex_wait`, `thread::sleep`); a `dist` build more, where
+`futex_wait` is inlined.
+
+`scripts/check-web-faults.py`'s `page-wait` case proves it: a worker takes a
+lock and keeps it, then the page's thread takes the same one. Without the
+guard Chromium shows a generic trap and Firefox freezes (the run's screenshot
+times out after 30 s); with it both show the panic above.
+
+What the page's thread shares with a worker it therefore reads with an atomic,
+`oag_thread::lock` (which spins there) or a `try_lock`. A disc read on the page
+that finds the shared `DiscImage` held by a worker opens the image afresh
+instead of waiting (`oag_assets` `blob_source::read_disc`).
+
 ### What is still on the page's thread
 
 - **The scene build's GPU half** no longer holds the page for its uploads

@@ -4,9 +4,11 @@
 //! unsupported even when the module has atomics, so a thread is a Web Worker
 //! that shares the module's memory ([`web`]). The two differ in one more way
 //! that shapes everything here: **the page's thread may not block**. A
-//! contended `std::sync::Mutex` ends in `memory.atomic.wait32`, which traps on
-//! it, so [`lock`] spins there instead, and [`Task`] is polled through an
-//! atomic and taken only once it is done. See docs/tools/web.md, "Threads".
+//! contended `std::sync::Mutex` ends in `memory.atomic.wait32`, which Chromium
+//! traps on there and Firefox blocks on, freezing the page, so [`lock`] spins
+//! there instead, [`may_wait`] tells a caller which side it is on, and [`Task`]
+//! is polled through an atomic and taken only once it is done. See
+//! docs/tools/web.md, "Threads" and "The page's thread may not wait".
 //!
 //! Below every crate that moves work off the frame loop (the race load, the
 //! music fetch, the audio render-ahead loop) and above nothing of this
@@ -17,6 +19,16 @@ use std::sync::{LockResult, Mutex, MutexGuard};
 pub mod gpu_workers;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
+
+/// Whether this thread may wait on a lock: everywhere but the page's thread in
+/// the browser, which may only spin or try ([`lock`]).
+#[must_use]
+pub fn may_wait() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    return web::on_worker();
+    #[cfg(not(target_arch = "wasm32"))]
+    true
+}
 
 /// Locks `mutex`, without ever waiting on the page's thread in the browser.
 ///

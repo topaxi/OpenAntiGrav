@@ -3006,6 +3006,7 @@ dependencies = [
  "oag-tables",
  "oag-testdata",
  "oag-texture",
+ "oag-thread",
  "oag-title",
  "oag-vex",
  "oag-video",

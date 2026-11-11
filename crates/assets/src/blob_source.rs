@@ -65,7 +65,50 @@ pub(crate) enum BlobSource {
         /// them, so it is uncontended in practice.
         disc: Arc<Mutex<DiscImage>>,
         entry: oag_disc::Entry,
+        /// The image `disc` was opened from, for a read on the browser page's
+        /// thread that finds `disc` held by a worker: it opens the image
+        /// afresh rather than wait ([`read_disc`]).
+        image: PathBuf,
     },
+}
+
+/// Reads `entry`'s range from the shared image, or, on the browser page's
+/// thread when a worker holds it, from a private open of the same image: that
+/// thread may not wait on a lock (Firefox freezes the page there, Chromium
+/// traps; docs/tools/web.md, "The page's thread may not wait"). A private open
+/// costs an ISO walk and a cold hunk cache, which only a contended read pays.
+fn read_disc(
+    disc: &Mutex<DiscImage>,
+    image: &Path,
+    entry: &oag_disc::Entry,
+    offset: u64,
+    len: u64,
+) -> Result<Vec<u8>> {
+    read_disc_on(disc, image, entry, offset, len, oag_thread::may_wait())
+}
+
+/// [`read_disc`] on a thread that `may_wait` or may not.
+fn read_disc_on(
+    disc: &Mutex<DiscImage>,
+    image: &Path,
+    entry: &oag_disc::Entry,
+    offset: u64,
+    len: u64,
+    may_wait: bool,
+) -> Result<Vec<u8>> {
+    if may_wait {
+        return Ok(disc
+            .lock()
+            .expect(POISONED)
+            .read_entry_range(entry, offset, len)?);
+    }
+    match disc.try_lock() {
+        Ok(mut shared) => Ok(shared.read_entry_range(entry, offset, len)?),
+        Err(std::sync::TryLockError::Poisoned(_)) => panic!("{POISONED}"),
+        Err(std::sync::TryLockError::WouldBlock) => {
+            Ok(DiscImage::open(image)?.read_entry_range(entry, offset, len)?)
+        }
+    }
 }
 
 impl BlobSource {
@@ -112,10 +155,7 @@ impl BlobSource {
                 file.read_exact(&mut buf)?;
                 Ok(buf)
             }
-            Self::Disc { disc, entry } => Ok(disc
-                .lock()
-                .expect(POISONED)
-                .read_entry_range(entry, offset, len)?),
+            Self::Disc { disc, entry, image } => read_disc(disc, image, entry, offset, len),
         }
     }
 
@@ -161,6 +201,7 @@ impl BlobSource {
         Ok(Self::Disc {
             disc: Arc::clone(disc),
             entry,
+            image: PathBuf::from(image),
         })
     }
 
@@ -182,5 +223,44 @@ impl BlobSource {
             len,
             path: path.to_path_buf(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A read on a thread that may not wait, of an image another holder has
+    /// locked, returns the same bytes through a private open instead of
+    /// waiting (here the holder is this very thread, so a wait would never end).
+    #[test]
+    #[ignore = "needs data/images/pulse-psp-eu.chd"]
+    fn a_read_that_may_not_wait_reads_past_a_held_disc() {
+        let Some(image) = oag_testdata::image("pulse-psp-eu.chd") else {
+            return;
+        };
+        let disc = Arc::new(Mutex::new(
+            DiscImage::open(&image).expect("the image opens"),
+        ));
+        let entry = disc
+            .lock()
+            .expect(POISONED)
+            .entries()
+            .expect("the image lists its files")
+            .iter()
+            .find(|e| !e.is_directory && e.size > 70_000)
+            .cloned()
+            .expect("a file of some size");
+        let want = read_disc_on(&disc, &image, &entry, 65_536, 4_096, true).expect("a shared read");
+        let held = disc.lock().expect(POISONED);
+        let got =
+            read_disc_on(&disc, &image, &entry, 65_536, 4_096, false).expect("a private read");
+        drop(held);
+        assert_eq!(got.len(), 4_096, "{}", entry.path);
+        assert_eq!(
+            got, want,
+            "{}: the private open read other bytes",
+            entry.path
+        );
     }
 }

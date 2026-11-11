@@ -72,6 +72,8 @@ def cases(pulse: Path, scratch: Path, boot: float) -> list[Case]:
         Case("memory", "out-of-memory", hook("memory", boot), True),
         Case("worker-panic", "panic", hook("worker-panic", boot), True),
         Case("worker-trap", "trap", hook("worker-trap", boot), True),
+        # The page's thread taking a lock a worker keeps: a report, not a frozen page.
+        Case("page-wait", "panic", hook("page-wait-hold", boot) + hook("page-wait", boot + 2), True),
         Case("gpu-validation", "gpu-validation", hook("gpu-validation", boot), True),
         Case("gpu-out-of-memory", "gpu-out-of-memory", hook("gpu-out-of-memory", boot), True, real=False),
         Case("gpu-internal", "gpu-internal", hook("gpu-internal", boot), True, real=False),

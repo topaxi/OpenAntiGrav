@@ -99,6 +99,11 @@ wasm-bindgen --target web --no-typescript --out-dir "$out/pkg" "$wasm"
 grep -q thread_stack_size "$out/pkg/oag_web.js" || { echo "the module has no shared memory: the threads flags did not apply" >&2; exit 1; }
 # The stack the module was linked with, and no frame a large share of it.
 python3 scripts/check-wasm-stack.py "$out/pkg/oag_web_bg.wasm" --stack "$stack_size"
+# Every lock wait on the page's thread reports instead of blocking: Firefox
+# lets the page's thread wait on a lock and freezes the tab there, where
+# Chromium traps (docs/tools/web.md, "The page's thread may not wait").
+python3 scripts/web-page-wait-guard.py "$out/pkg/oag_web_bg.wasm" --stack "$stack_size" \
+  --names "$out/pkg/page-waits.txt"
 # OAG_WEB_NO_OPT=1 skips wasm-opt, so the module keeps its function names for
 # a browser CPU profile (`web-screenshot.py --profile`).
 if [[ $profile != dev && -z ${OAG_WEB_NO_OPT:-} ]]; then
