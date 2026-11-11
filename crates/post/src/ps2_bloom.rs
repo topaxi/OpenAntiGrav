@@ -33,7 +33,7 @@
 
 use anyhow::Result;
 
-use super::bloom::{Frame, Target};
+use super::bloom::{Frame, Target, ensure_view_lane, lane_group, scene_group, scratch_pass};
 
 /// Width of the original's bloom buffer, read off the downsample's quad
 /// (`x` 1792..2112 in 1/16 pixels of the GS's primitive space).
@@ -155,24 +155,7 @@ impl Lane {
             wgpu::BufferUsages::UNIFORM,
         );
         let group = |label: &str, view: &wgpu::TextureView, constants: &wgpu::Buffer| {
-            device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(label),
-                layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: constants.as_entire_binding(),
-                    },
-                ],
-            })
+            lane_group(device, layout, sampler, label, view, constants)
         };
         // Down writes A, the horizontal blur reads A and writes B, the
         // vertical reads B and writes A, the composite reads A.
@@ -366,15 +349,14 @@ impl Ps2Bloom {
         extent: (u32, u32),
         frame: Frame<'_>,
     ) -> Result<()> {
-        let mut views = self.views.borrow_mut();
-        let build = || Lane::new(device, self.format, &self.layout, &self.sampler, extent);
-        while views.len() <= view {
-            views.push(build()?);
-        }
-        if views[view].extent != extent {
-            views[view] = build()?;
-        }
-        self.prepare_in(&views[view], device, queue, encoder, frame);
+        ensure_view_lane(
+            &self.views,
+            view,
+            extent,
+            |lane| lane.extent,
+            || Lane::new(device, self.format, &self.layout, &self.sampler, extent),
+        )?;
+        self.prepare_in(&self.views.borrow()[view], device, queue, encoder, frame);
         Ok(())
     }
 
@@ -386,20 +368,8 @@ impl Ps2Bloom {
         encoder: &mut wgpu::CommandEncoder,
         frame: Frame<'_>,
     ) {
-        let Frame {
-            scene,
-            size,
-            origin,
-            viewport,
-        } = frame;
-        let (uv_offset, uv_scale, uv_max) = super::sub_rectangle_at(
-            (
-                origin.0.round().max(0.0) as u32,
-                origin.1.round().max(0.0) as u32,
-            ),
-            viewport,
-            size,
-        );
+        let scene = frame.scene;
+        let (uv_offset, uv_scale, uv_max) = frame.uv();
         let wanted = Constants {
             uv_scale,
             uv_max,
@@ -411,93 +381,23 @@ impl Ps2Bloom {
             queue.write_buffer(&lane.constants_down, 0, bytemuck::bytes_of(&wanted));
             lane.written.set(Some(wanted));
         }
-        let down_group = oag_gpu::perfprobe::bind_group(
+        let down_group = scene_group(
             device,
-            &wgpu::BindGroupDescriptor {
-                label: Some("ps2 bloom down"),
-                layout: &self.layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(scene),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: lane.constants_down.as_entire_binding(),
-                    },
-                ],
-            },
+            &self.layout,
+            &self.sampler,
+            "ps2 bloom down",
+            scene,
+            &lane.constants_down,
         );
         let mut pass = |label: &'static str,
                         pipeline: &wgpu::RenderPipeline,
                         group: &wgpu::BindGroup,
-                        target: &wgpu::TextureView,
-                        load: wgpu::LoadOp<wgpu::Color>,
-                        origin: (f32, f32),
-                        rect: (u32, u32)| {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some(label),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: target,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            oag_gpu::perfprobe::marks::mark(&mut pass, label);
-            pass.set_pipeline(pipeline);
-            pass.set_viewport(
-                origin.0,
-                origin.1,
-                rect.0.max(1) as f32,
-                rect.1.max(1) as f32,
-                0.0,
-                1.0,
-            );
-            pass.set_bind_group(0, group, &[]);
-            pass.draw(0..3, 0..1);
-            oag_gpu::perfprobe::marks::close(&mut pass);
+                        target: &wgpu::TextureView| {
+            scratch_pass(encoder, lane.extent, label, pipeline, group, target);
         };
-        let clear = wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT);
-        let buffer = lane.extent;
-        pass(
-            "ps2 bloom down",
-            &self.down,
-            &down_group,
-            &lane.a.view,
-            clear,
-            (0.0, 0.0),
-            buffer,
-        );
-        pass(
-            "ps2 bloom blur x",
-            &self.blur,
-            &lane.blur_x,
-            &lane.b.view,
-            clear,
-            (0.0, 0.0),
-            buffer,
-        );
-        pass(
-            "ps2 bloom blur y",
-            &self.blur,
-            &lane.blur_y,
-            &lane.a.view,
-            clear,
-            (0.0, 0.0),
-            buffer,
-        );
+        pass("ps2 bloom down", &self.down, &down_group, &lane.a.view);
+        pass("ps2 bloom blur x", &self.blur, &lane.blur_x, &lane.b.view);
+        pass("ps2 bloom blur y", &self.blur, &lane.blur_y, &lane.a.view);
     }
 
     /// Adds the glow [`Ps2Bloom::prepare`] left in buffer A onto `target`,
@@ -537,35 +437,15 @@ impl Ps2Bloom {
         origin: (f32, f32),
         viewport: (u32, u32),
     ) {
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("ps2 bloom composite"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: target,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-        oag_gpu::perfprobe::marks::mark(&mut pass, "ps2 bloom composite");
-        pass.set_pipeline(&self.composite);
-        pass.set_viewport(
-            origin.0,
-            origin.1,
-            viewport.0.max(1) as f32,
-            viewport.1.max(1) as f32,
-            0.0,
-            1.0,
+        crate::pass::draw(
+            encoder,
+            "ps2 bloom composite",
+            &self.composite,
+            &[&lane.composite_group],
+            target,
+            origin,
+            (viewport.0.max(1), viewport.1.max(1)),
         );
-        pass.set_bind_group(0, &lane.composite_group, &[]);
-        pass.draw(0..3, 0..1);
-        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 }
 

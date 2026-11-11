@@ -54,6 +54,30 @@ pub(crate) fn draw(
     origin: (f32, f32),
     rect: (u32, u32),
 ) {
+    draw_with(
+        encoder,
+        label,
+        pipeline,
+        groups,
+        target,
+        wgpu::LoadOp::Load,
+        origin,
+        rect,
+    );
+}
+
+/// [`draw`], with the target's `load` op chosen by the caller.
+#[expect(clippy::too_many_arguments, reason = "one pass's whole description")]
+pub(crate) fn draw_with(
+    encoder: &mut wgpu::CommandEncoder,
+    label: &'static str,
+    pipeline: &wgpu::RenderPipeline,
+    groups: &[&wgpu::BindGroup],
+    target: &wgpu::TextureView,
+    load: wgpu::LoadOp<wgpu::Color>,
+    origin: (f32, f32),
+    rect: (u32, u32),
+) {
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some(label),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -61,7 +85,7 @@ pub(crate) fn draw(
             depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
-                load: wgpu::LoadOp::Load,
+                load,
                 store: wgpu::StoreOp::Store,
             },
         })],
