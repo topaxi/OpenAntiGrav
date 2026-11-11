@@ -11,8 +11,7 @@
 //! three images. When a screen needs enough of them for the waste to show, the
 //! lookup below is already in pixels, so only this file has to change.
 
-use oag_texture::texture::Texture;
-use oag_texture::{gnf, gtf, gxt, ps2_texture};
+use oag_texture::decode::{Container, decode_as, decode_sniffed};
 use oag_vex::vex;
 
 /// One decoded image, from any of the four sources' texture formats.
@@ -33,33 +32,23 @@ struct Image {
 }
 
 impl Image {
-    /// Decodes whichever of the three formats this blob is.
+    /// Decodes whichever format this blob is: this project's own mask, then
+    /// [`oag_texture::decode::decode_sniffed`]'s order (`.mip`, `.pct`, `.gtf`,
+    /// `.gxt`, `.gnf`), whose error is the `.mip` reader's when nothing reads it.
     ///
-    /// The PSP is tried first and its error is the one reported, because a
-    /// `.mip` that will not parse is the far commoner failure and naming
-    /// another parser's complaint about it would send a reader the wrong way.
+    /// A blob reaches a sheet without the name it was resolved under, so the
+    /// container is read off its bytes. `boot::sprites`'s `gnf_sibling` decides
+    /// *whether* to hand a `.gnf` blob over and names the reason when it will not.
     ///
-    /// **The PS3 branch is why the report line used to say `1281x0`.** Wipeout
-    /// HD's front end names three `.gtf` textures, and with only the two PSP-era
-    /// parsers here the `.mip` one got there first, read a `.gtf`'s big-endian
-    /// header as a `.mip`'s little-endian one and came back with a zero-sized
-    /// texture - so all three failed, the sheet came out 1x1, and the error
-    /// blamed a format the file is not. [`oag_texture::gtf`] has decoded these
-    /// since well before the front end asked for one; nothing was missing but
-    /// the branch.
-    ///
-    /// **The Vita branch is [`Self::decode_gxt`]**, tried last for the same
-    /// reason `.gtf` is tried after the two PSP-era formats: 2048 is the one
-    /// title whose textures reach it, and every other title's blob fails it
-    /// immediately on the magic check.
-    ///
-    /// **The PS4 branch is [`Self::decode_gnf`]**, tried last of all - Omega
-    /// is the only title whose front end reaches it, and `boot::sprites`'s
-    /// own `gnf_sibling` already decides *whether* to hand a `.gnf` blob
-    /// here at all, reporting a precise reason (a genuinely tiled surface
-    /// this project has no formula for, or `Error::CorruptBlocks`) rather
-    /// than letting a doomed one fall through to this function's generic
-    /// `.mip`-parser error. See `docs/formats/gnf.md`.
+    /// **A `.gtf`'s rows are flipped here, because they run bottom-up and a
+    /// sheet is top-down.** Measured against a screenshot of the running game:
+    /// `Pilot_Assist_fury.gtf` decoded straight into a sheet draws the craft
+    /// inverted, and reversed it matches the original's own loading screen
+    /// exactly (`docs/formats/hd-loading.md`). Not in `oag_texture::decode`,
+    /// whose other consumers are 3D ones already right for the file's row order:
+    /// the row order is a property of the file, which way up a consumer wants it
+    /// is the consumer's. The Vita's `.gxt` and the PS4's `.gnf` are top-down as
+    /// decoded (`docs/formats/2048-hud.md`, `docs/formats/gnf.md`).
     fn decode(blob: &[u8]) -> Result<Self, String> {
         // This project's own art first: a magic check no game texture passes,
         // and the only branch whose complaint is not a `.mip`'s.
@@ -73,126 +62,33 @@ impl Image {
                 })
                 .map_err(|error| error.to_string());
         }
-        match Texture::parse(blob) {
-            Ok(t) => Ok(Self {
-                width: t.width,
-                height: t.height,
-                bits_per_pixel: t.bits_per_pixel,
-                rgba: t.to_rgba(),
-            }),
-            Err(psp) => match ps2_texture::parse(blob) {
-                Ok(t) => Ok(Self {
-                    width: t.width,
-                    height: t.height,
-                    bits_per_pixel: t.bits_per_pixel,
-                    rgba: t.to_rgba(),
-                }),
-                Err(_) => Self::decode_gtf(blob)
-                    .or_else(|| Self::decode_gxt(blob))
-                    .or_else(|| Self::decode_gnf(blob))
-                    .ok_or_else(|| psp.to_string()),
-            },
-        }
-    }
-
-    /// The PS3 branch, or `None` for a blob that is not a `.gtf` this build
-    /// draws.
-    ///
-    /// `None` rather than an error because the caller reports the *`.mip`*
-    /// parser's complaint for anything none of the three recognise, and a `.gtf`
-    /// error on a file that was never a `.gtf` is the misdirection this whole
-    /// function exists to avoid. A `.gtf` that parses and then will not
-    /// convert - the sky cubemaps [`oag_texture::gtf::Texture::to_rgba`]
-    /// refuses - takes the same route out, which is the honest one: the sheet
-    /// reports the image as undecoded rather than drawing a substitute for it.
-    fn decode_gtf(blob: &[u8]) -> Option<Self> {
-        let gtf = gtf::Gtf::parse(blob).ok()?;
-        let texture = gtf.only()?;
-        let rgba = texture.to_rgba(blob).ok()?;
-        Some(Self {
-            width: texture.width,
-            height: texture.height,
-            // Bits per *texel*, which for a block format means dividing the
-            // block's bytes over the sixteen texels it covers: DXT1 reads 4 and
-            // DXT45 reads 8, against 32 for straight ARGB. Reporting the block
-            // instead would put "128bpp" on the boot line, which is a true
-            // sentence about a unit nobody asked about. A log field; nothing
-            // reads it.
-            bits_per_pixel: {
-                let texels = if texture.format.is_block_compressed() {
-                    16
-                } else {
-                    1
-                };
-                u8::try_from(texture.format.unit_len() * 8 / texels).unwrap_or(u8::MAX)
-            },
-            // **Flipped, because a `.gtf`'s rows run bottom-up and a sheet is
-            // top-down.** Measured against a screenshot of the running game:
-            // `Pilot_Assist_fury.gtf` decoded straight into a sheet draws the
-            // craft inverted, and reversed it matches the original's own
-            // loading screen exactly. See `docs/formats/hd-loading.md`.
-            //
-            // **Here and not in [`oag_texture::gtf`]**, which is the part that
-            // took measuring. Every other consumer of that decoder is a *3D*
-            // one - `mesh::rcs::skin`, `mesh::sky_cube`,
-            // `race::assets`'s trail noise - and those are already right: the
-            // hull lettering on an HD craft reads the correct way up, which is
-            // the check `docs/formats/rcsmodel.md` used to confirm the texture
-            // coordinate in the first place. Their sampling convention and the
-            // file's row order already agree, so flipping the decoder would
-            // invert every one of them to fix one. The row order is a property
-            // of the file; which way up a consumer wants it is the consumer's.
-            rgba: rgba
-                .chunks_exact(usize::from(texture.width).max(1))
+        let picture = decode_sniffed(blob).map_err(|error| match error {
+            oag_texture::decode::Error::Parse(why) => why,
+            other => other.to_string(),
+        })?;
+        let (Ok(width), Ok(height)) = (u16::try_from(picture.width), u16::try_from(picture.height))
+        else {
+            return Err(decode_as(Container::Mip, blob).err().map_or_else(
+                || "a size a sheet cannot hold".to_string(),
+                |e| e.to_string(),
+            ));
+        };
+        let rgba = if picture.bottom_up {
+            picture
+                .rgba
+                .chunks_exact(usize::from(width).max(1) * 4)
                 .rev()
-                .flat_map(|row| row.iter().flatten().copied())
-                .collect(),
-        })
-    }
-
-    /// The Vita branch, or `None` for a blob that is not a `.gxt` this build
-    /// draws.
-    ///
-    /// **Not flipped**, unlike [`Self::decode_gtf`]'s PS3 texel rows: the
-    /// checkerboard-composited renders `gxt_ground_truth.rs` writes to
-    /// `data/shots/` came out the right way up as decoded -
-    /// `missile_reticule.gxt`'s crosshair sits above its dashed arc and
-    /// `hud_2048.gxt`'s warning triangle points up - so the Vita's own GXM
-    /// convention is top-down like a sheet already is, and no consumer here
-    /// has been checked against a running frame to say otherwise. See
-    /// `docs/formats/2048-hud.md`.
-    fn decode_gxt(blob: &[u8]) -> Option<Self> {
-        let parsed = gxt::Gxt::parse(blob).ok()?;
-        let texture = parsed.only()?;
-        let rgba = texture.to_rgba(blob).ok()?;
-        Some(Self {
-            width: texture.width,
-            height: texture.height,
-            // BC2 is 16 bytes per 4x4 block, 8 bits per texel.
-            bits_per_pixel: 8,
-            rgba: rgba.into_iter().flatten().collect(),
-        })
-    }
-
-    /// The PS4 branch, or `None` for a blob that is not a `.gnf` this build
-    /// draws.
-    ///
-    /// **Not flipped.** Checked directly against the boot report and
-    /// against `Data/fe/images/presents_finnish.gnf`, `wipeout_omega_logo.gnf`
-    /// and `hex_select.gnf` decoded to PNG (see `docs/formats/gnf.md`'s
-    /// "Tiling" section) - the wordmark, the localized "esittää" text and
-    /// the hexagon-select icon all read the right way up straight out of
-    /// [`gnf::Texture::decode`], unlike [`Self::decode_gtf`]'s PS3 rows.
-    fn decode_gnf(blob: &[u8]) -> Option<Self> {
-        let texture = gnf::Texture::parse(blob).ok()?;
-        let rgba = texture.decode(blob).ok()?;
-        Some(Self {
-            width: u16::try_from(texture.width).ok()?,
-            height: u16::try_from(texture.height).ok()?,
-            // BC7 is 16 bytes per 4x4 block, 8 bits per texel - the only
-            // surface format this build's `gnf::Texture::decode` reaches.
-            bits_per_pixel: 8,
-            rgba: rgba.into_iter().flatten().collect(),
+                .flatten()
+                .copied()
+                .collect()
+        } else {
+            picture.rgba
+        };
+        Ok(Self {
+            width,
+            height,
+            bits_per_pixel: picture.bits_per_pixel,
+            rgba,
         })
     }
 

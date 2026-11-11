@@ -142,7 +142,7 @@ the engine's own reader: 46,005 entries over the nine archives (`data00` 10,926,
   selects it is not read**, so `Title::hud` stays one set per title (open).
 - **Nine atlases, all `.gnf`, all BC7**, under `Data\HUD\Textures\` (and
   `Data\FE\Images\voiceCom.gnf`). The XML names them `.gtf`/`.mip` (HD's spelling),
-  so `HudArt::texture_extension` is `.gnf` - none resolves under its authored
+  so the PS4 spelling (`oag_assets::texture_name`) is `.gnf` - none resolves under its authored
   name. `fury_hud` is 2048 square on Omega against HD's 1024 and its layout UVs
   reach 2010 against HD's 1005: the XML is authored for the atlas it ships.
   The rest are HD's sizes.
@@ -1967,7 +1967,7 @@ start-grid capture: placement matched (the track's own `billboard7/8` quads), th
 static red face because HD's digits are material curves (`curve_track::material_anim_tracks`) and the PS4 material
 container's curves are unread, and the side cards drew dark teal because `fx350_nomip` is a `.gnf` here. Now:
 
-- `.gxt` and `.gnf` spellings are in `oag_render::gantry` (`SLOT_PLACEHOLDER_TEXTURES`, `mount`, `is_fx350_texture`).
+- `.gxt` and `.gnf` spellings are in `oag_render::gantry` (`is_slot_placeholder`, `mount`, `is_fx350_texture`: by stem).
 - `adverts` is HD's pass, inherited, with `gantry_boards` naming `321Go_2048.vex` (the node-driven board: frame 0 on tick 73, so
   `GO` slides in on the release, chosen). The side cards show their logos on Vineta K.
 - The HD-lineage board `321Go_StartFinish.vex` **plays** (2026-11-10, `omega-billboards`): its digits ride UV keys

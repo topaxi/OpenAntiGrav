@@ -81,24 +81,6 @@ pub const HD_CAMPAIGN: &oag_title::HudLayouts = &oag_title::HudLayouts {
 /// How 2048's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]
 /// carries it.
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
-    // **Measured.** The Vita's texture container is `.gxt`; a layout's `src`
-    // is either already spelled that way (the `2048_hud` skin's own five
-    // references) or carries the HD-inherited `.gtf`/`.mip`/.tga` spelling
-    // the root/`wo3_hud`/`2097_hud` skins still author, unconverted. All
-    // nineteen distinct references across all 26 composed layouts resolve
-    // once this rule is applied -
-    // `crates/hud/tests/vita_2048_hud_ground_truth.rs`. Confidence 90, on the
-    // same terms as [`oag_hd::hud::texture_entry`]'s own row: every reference
-    // this title's HUD carries resolves under it, none needed the literal
-    // spelling.
-    //
-    // Until 2026-08-26 this constant was `"gxt"`, missing the leading dot -
-    // `oag_title::hud::replace_extension` builds `format!("{stem}{extension}")`,
-    // so every 2048 HUD texture lookup silently resolved to a name like
-    // `missile_reticulegxt` and never found the file. Composing was never run
-    // against real data until now, which is how a bug that broke every
-    // texture reference on the title went unnoticed.
-    texture_extension: Some(TEXTURE_EXTENSION),
     always_on: ALWAYS_ON,
     raster: false,
     ink_aligned_text: false,
@@ -266,18 +248,6 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     resume_countdown: oag_title::hud::ResumeCountdown::Text,
     assist: None,
 };
-
-/// What a layout's texture reference becomes on this title.
-///
-/// See [`ART`]; [`oag_title::hud::replace_extension`] is the rule that
-/// applies it.
-#[must_use]
-pub fn texture_entry(reference: &str) -> String {
-    oag_title::hud::replace_extension(reference, TEXTURE_EXTENSION)
-}
-
-/// What [`texture_entry`] replaces a reference's extension with.
-pub const TEXTURE_EXTENSION: &str = ".gxt";
 
 /// The sprite widgets 2048 draws whenever its HUD is up.
 ///
@@ -579,20 +549,5 @@ mod tests {
         seen.dedup();
         assert_eq!(seen.len(), before);
         assert_eq!(before, 25);
-    }
-
-    #[test]
-    fn the_extension_rule_carries_a_leading_dot() {
-        // The bug this test exists for: a bare `"gxt"` builds
-        // `format!("{stem}{extension}")` into `missile_reticulegxt`, silently
-        // dangling every reference. See the doc comment on `ART` above.
-        assert_eq!(
-            texture_entry(r"Data\HUD\Textures\missile_reticule.gtf"),
-            r"Data\HUD\Textures\missile_reticule.gxt"
-        );
-        assert_eq!(
-            texture_entry(r"Data\XML\2048_hud\Texture\missile_reticule.gxt"),
-            r"Data\XML\2048_hud\Texture\missile_reticule.gxt"
-        );
     }
 }

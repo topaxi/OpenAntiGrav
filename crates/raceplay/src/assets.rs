@@ -81,16 +81,7 @@ pub(super) fn leach_beam_texture(
         report.push("the LeachBeam draws this title's own strip (`WeaponModels::leach_strip`): Pulse's ribbon texture is not loaded".into());
         return None;
     }
-    let own = platform_sibling(archives, LEACHBEAM_TEXTURE);
-    let found = match &own {
-        Some(entry) => decode_texture(archives, entry).map(|texture| {
-            (
-                texture,
-                format!("{entry}: the LeachBeam ribbon's own texture"),
-            )
-        }),
-        None => exhaust_texture(archives, LEACHBEAM_TEXTURE),
-    };
+    let found = exhaust_texture(archives, LEACHBEAM_TEXTURE);
     match found {
         Ok((texture, note)) => {
             report.push(note);
@@ -348,7 +339,13 @@ pub(super) fn trail_texture(
                 // code reads 2048, whose own executable was not measured for
                 // any of the laws `load` reports under the ribbon.
                 if let oag_title::flare::Flare::PerTeam(a) = title.flare
-                    && (a.sprite.ends_with(".gxt") || a.sprite.ends_with(".gnf"))
+                    && matches!(
+                        oag_texture::decode::Container::of_name(a.sprite),
+                        Some(
+                            oag_texture::decode::Container::Gxt
+                                | oag_texture::decode::Container::Gnf
+                        )
+                    )
                 {
                     report.push(format!(
                         "{} reads its ribbon, flare and boost reveal on HD's laws: \
@@ -448,11 +445,9 @@ fn authored_ribbon(
     let noise_texture = decode_texture(archives, noise)
         .map_err(|why| format!("{why} (named by {model}'s material)"))?;
     let (width, height) = (noise_texture.width, noise_texture.height);
-    let container = match noise.to_ascii_lowercase() {
-        n if n.ends_with(".gxt") => ".gxt",
-        n if n.ends_with(".gnf") => ".gnf",
-        _ => ".gtf",
-    };
+    let container = oag_texture::decode::Container::of_name(noise)
+        .unwrap_or(oag_texture::decode::Container::Gtf)
+        .extension();
     let blend = mesh::rcs::blend_state(src, dst);
     let mut notes = vec![
         format!(
@@ -479,109 +474,22 @@ fn authored_ribbon(
 }
 
 #[cfg(feature = "view")]
-/// [`decode_gtf`] or [`decode_gxt`], by the name's own extension.
+/// The texture `name` as this source ships it (`Archives::read_texture`: the
+/// name as written, then the platform's spelling), decoded by the container
+/// its resolved name says (`oag_texture::decode`).
 pub(crate) fn decode_texture(
     archives: &mut oag_assets::Archives,
     name: &str,
 ) -> std::result::Result<FlareTexture, String> {
-    let lower = name.to_ascii_lowercase();
-    if lower.ends_with(".gxt") {
-        decode_gxt(archives, name)
-    } else if lower.ends_with(".gnf") {
-        decode_gnf(archives, name)
-    } else {
-        decode_gtf(archives, name)
-    }
-}
-
-#[cfg(feature = "view")]
-/// Pulse's `.mip` (or HD's `.gtf`) entry `name` as this source ships the same texture: the
-/// same directory and stem with the platform's own extension, `.gxt` on the
-/// Vita and `.gnf` on the PS4. `None` on a platform whose textures keep the
-/// name as authored. 2048 and Omega ship `Cannon_bolt`, `cannon_muzzle_flash`
-/// and `pulse_leechbeam1_ADD` under `Data\Weapons\Textures` this way, and
-/// both executables name `Cannon_bolt` and `Cannon_muzzle`.
-pub(crate) fn platform_sibling(archives: &oag_assets::Archives, name: &str) -> Option<String> {
-    let ext = match archives.layout.platform {
-        oag_assets::Platform::Vita => "gxt",
-        oag_assets::Platform::Ps4 => "gnf",
-        _ => return None,
-    };
-    let stem = name
-        .strip_suffix(".mip")
-        .or_else(|| name.strip_suffix(".gtf"))?;
-    Some(format!("{stem}.{ext}"))
-}
-
-#[cfg(feature = "view")]
-/// One PS4 `.gnf` out of the archive set, base level - [`decode_gxt`]'s
-/// Omega counterpart.
-pub(crate) fn decode_gnf(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-) -> std::result::Result<FlareTexture, String> {
-    let blob = archives
-        .read_name(name)
+    let (held, blob) = archives
+        .read_texture(name)
         .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
-    let sprite = psys::sprite::Sprite::from_gnf(&blob)
-        .ok_or_else(|| format!("{name}: {} bytes, does not decode", blob.len()))?;
+    let picture = oag_texture::decode::decode_named(&held, &blob)
+        .map_err(|e| format!("{held}: {} bytes, {e}", blob.len()))?;
     Ok(FlareTexture {
-        width: u32::from(sprite.width),
-        height: u32::from(sprite.height),
-        rgba: sprite.rgba.to_vec(),
-    })
-}
-
-#[cfg(feature = "view")]
-/// One Vita `.gxt` out of the archive set, as pixels the exhaust pipeline can
-/// bind - 2048's counterpart of [`decode_gtf`].
-pub(crate) fn decode_gxt(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-) -> std::result::Result<FlareTexture, String> {
-    let pixels = archives
-        .read_name(name)
-        .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
-    let gxt = oag_texture::gxt::Gxt::parse(&pixels)
-        .map_err(|e| format!("{name}: {} bytes, does not parse ({e})", pixels.len()))?;
-    let texture = gxt
-        .only()
-        .ok_or_else(|| format!("{name}: parses, but is not a single texture"))?;
-    let rgba = texture
-        .to_rgba(&pixels)
-        .map_err(|e| format!("{name}: does not decode ({e})"))?;
-    Ok(FlareTexture {
-        width: u32::from(texture.width),
-        height: u32::from(texture.height),
-        rgba: rgba.into_iter().flatten().collect(),
-    })
-}
-
-#[cfg(feature = "view")]
-/// One `.gtf` out of the archive set, as pixels the exhaust pipeline can bind.
-///
-/// The `.gtf` half of [`authored_ribbon`], lifted out when the ribbon needed a
-/// second texture and both wanted the same reporting.
-pub(crate) fn decode_gtf(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-) -> std::result::Result<FlareTexture, String> {
-    let pixels = archives
-        .read_name(name)
-        .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
-    let gtf = oag_texture::gtf::Gtf::parse(&pixels)
-        .map_err(|e| format!("{name}: {} bytes, does not parse ({e})", pixels.len()))?;
-    let texture = gtf
-        .only()
-        .ok_or_else(|| format!("{name}: parses, but is not a single texture"))?;
-    let rgba = texture
-        .to_rgba(&pixels)
-        .map_err(|e| format!("{name}: does not decode ({e})"))?;
-    let (width, height) = texture.level_size(0);
-    Ok(FlareTexture {
-        width,
-        height,
-        rgba: rgba.into_iter().flatten().collect(),
+        width: picture.width,
+        height: picture.height,
+        rgba: picture.rgba,
     })
 }
 
@@ -655,29 +563,20 @@ pub(super) fn flare_texture(
 }
 
 #[cfg(feature = "view")]
+/// [`decode_texture`] for a texture the active texture pack may replace (a PSP
+/// `.mip`), with the load-report note saying where the pixels came from.
+///
+/// The note names the container, because "64x64" alone does not distinguish a
+/// PSP disc from a PS2 one in the load report, and the two reach this point by
+/// different names.
 pub(super) fn exhaust_texture(
     archives: &mut oag_assets::Archives,
     name: &str,
 ) -> std::result::Result<(FlareTexture, String), String> {
-    let blob = oag_pulse::read_image(archives, name)
+    let (held, blob) = archives
+        .read_texture(name)
         .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
-    decode_either(name, &blob)
-}
-
-#[cfg(feature = "view")]
-/// Decodes whichever of the two texture formats the blob is, with the pixels a
-/// [`FlareTexture`] wants.
-///
-/// The PSP's `.mip` is tried first and **its** error is the one reported, the
-/// same rule `oag_hud::sprite::Image::decode` follows: a `.mip` that will not
-/// parse is far and away the commoner failure, and reporting the PS2 parser's
-/// complaint about a PSP blob sends the reader after the wrong decoder.
-///
-/// The note names the format, because "64x64" alone does not distinguish a PSP
-/// disc from a PS2 one in the load report, and the two reach this point by
-/// different names.
-fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, String), String> {
-    if let Some(image) = oag_texture::replacer::mip(blob) {
+    if let Some(image) = oag_texture::replacer::mip(&blob) {
         return Ok((
             FlareTexture {
                 width: image.width,
@@ -690,36 +589,28 @@ fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, 
             ),
         ));
     }
-    match oag_texture::texture::Texture::parse(blob) {
-        Ok(texture) => Ok((
-            FlareTexture {
-                width: u32::from(texture.width),
-                height: u32::from(texture.height),
-                rgba: texture.to_rgba(),
-            },
-            format!(
-                "{name}: {}x{} .mip, {} mip level(s)",
-                texture.width, texture.height, texture.mip_levels
-            ),
-        )),
-        Err(psp) => match oag_texture::ps2_texture::parse(blob) {
-            Ok(texture) => Ok((
-                FlareTexture {
-                    width: u32::from(texture.width),
-                    height: u32::from(texture.height),
-                    rgba: texture.to_rgba(),
-                },
-                format!(
-                    "{name}: {}x{} .pct, {} bpp",
-                    texture.width, texture.height, texture.bits_per_pixel
-                ),
-            )),
-            Err(_) => Err(format!(
-                "{name}: {} bytes, does not parse ({psp})",
-                blob.len()
-            )),
+    let picture = oag_texture::decode::decode_named(&held, &blob)
+        .map_err(|e| format!("{held}: {} bytes, {e}", blob.len()))?;
+    let read_as = if held == name {
+        String::new()
+    } else {
+        format!(" (read as {held})")
+    };
+    let note = format!(
+        "{name}: {}x{} {}, {} bpp{read_as}",
+        picture.width,
+        picture.height,
+        picture.container.extension(),
+        picture.bits_per_pixel
+    );
+    Ok((
+        FlareTexture {
+            width: picture.width,
+            height: picture.height,
+            rgba: picture.rgba,
         },
-    }
+        note,
+    ))
 }
 
 #[cfg(feature = "view")]

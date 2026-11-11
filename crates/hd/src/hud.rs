@@ -238,9 +238,6 @@ pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 /// All three rows disagree with both PSP titles', which is why
 /// [`oag_title::HudArt`] is an axis rather than a constant in the engine.
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
-    // The layouts name the exporter's input; the disc ships the conversion.
-    // See `texture_entry`, which is this row spelled out with its evidence.
-    texture_extension: Some(TEXTURE_EXTENSION),
     always_on: ALWAYS_ON,
     raster: false,
     ink_aligned_text: true,
@@ -736,73 +733,12 @@ pub const ROOTS: &[&str] = &[
     "/data/xml/2097_hud/zone_hud.xml",
 ];
 
-/// The archive entry a layout's `src=` reference names.
-///
-/// # The layouts name source art, and the disc ships the conversion
-///
-/// A HUD sprite's `src` is the **exporter's input**, not the shipped file:
-/// across the eighteen composed layouts the twelve distinct references spell
-/// themselves `.gtf` ten times, `.mip` once and `.tga` once, and the two odd
-/// ones are the two with the most uses between them. `Data\HUD\Textures\
-/// hdHUD.mip` has **148** references and there is **no `.mip` anywhere on this
-/// disc**; `Data\HUD\Textures\detonator_hud2.tga` has 44 and the disc's only
-/// `.tga` is a smoke ramp in `data/ribboneffects`. Both resolve when the
-/// extension is replaced with `.gtf`: `/data/hud/textures/hdhud.gtf` is in
-/// `DATA02` and `DATA03`, `/data/hud/textures/detonator_hud2.gtf` in `DATA00`.
-///
-/// So the rule is **replace the extension**, and with it all twelve references
-/// resolve to a shipped entry rather than ten of twelve. Read as literal names
-/// they are dangling references and 192 of the HUD's 1,029 sprites have no
-/// texture - which is exactly how it looked before this was measured.
-///
-/// # Confidence 90
-///
-/// Twelve of twelve resolve, and the two that need the rule need it for 192
-/// sprites, so this is not a coincidence of one file. 2026-08-25: widened past
-/// the HUD's own twelve references to **every** `Src`/`ImageSrc`-shaped image
-/// reference across all of HD's XML (133 distinct values, all eighteen HUD
-/// layouts plus front end, ships, skins) - **129 of 133 (97%) resolve under
-/// this exact rule**, `hdHUD.mip` and `detonator_hud2.tga` both among them. The
-/// four that do not (`teaser_firedup.mip`, `teaser_medievil.mip`,
-/// `teaser_wipeout.mip`, `default_texture.mip`) do not exist on the disc under
-/// *any* name or extension - cut content and an unbacked fallback name, not
-/// counter-examples. Not 94 (the arithmetic-invariant ceiling) because those
-/// four are absences rather than confirmations, and because **the literal HUD
-/// code path is still unread** - the ceiling below still applies. What moved
-/// it off 85: a hardcoded instance of the *identical* convention was found in
-/// `EBOOT.elf` while chasing this rule through the executable - a ship-thumbnail
-/// loader builds `%s\fe\miniBW.gtf` from a bare directory, ignoring entirely
-/// that the XML authors the same asset as `Data\Ships\<Ship>\fe\miniBW.tga`.
-/// The engine hardcoding `.gtf` and discarding the source extension, observed
-/// directly in code for one asset kind, is what a blind string-replace with no
-/// fallback attempt looks like from the executable side - not proof this
-/// exact function does it for HUD sprites too, but no longer inferred from the
-/// file set alone either.
-///
-/// A second spelling exists on this disc and is **not** what the HUD uses:
-/// `/data/environments/02_track/hd_textures/and_thinsteps.tga.gtf` *appends*
-/// rather than replaces. Nothing in the HUD reaches a name of that shape.
-///
-/// Separators and case are left alone - [`oag_assets::psarc::Archive::read_path`]
-/// folds both.
-///
-/// The rewriting itself is [`oag_title::hud::replace_extension`] and the
-/// extension is [`ART`]'s own row, so the engine applies this rule to HD
-/// without knowing it is HD. This function is that pair spelled out, and is
-/// where the evidence above lives.
-#[must_use]
-pub fn texture_entry(reference: &str) -> String {
-    oag_title::hud::replace_extension(reference, TEXTURE_EXTENSION)
-}
-
-/// What [`texture_entry`] replaces a reference's extension with.
-pub const TEXTURE_EXTENSION: &str = ".gtf";
-
 /// The twelve textures the eighteen composed layouts sample, as the layouts
 /// spell them.
 ///
 /// Kept as the **reference** spelling rather than the resolved one, because the
-/// reference is what is authored and [`texture_entry`] is the claim about it -
+/// reference is what is authored and [`oag_assets::Archives::read_texture`] resolves it (the layouts name
+/// the exporter's input and the disc ships `.gtf`, `docs/formats/hd-hud.md`) -
 /// storing the resolved name would hide the rule inside a constant. Counts are
 /// sprites across all eighteen layouts, so a texture shared by three skins is
 /// counted three times.
@@ -845,43 +781,6 @@ pub const TEXTURES: &[&str] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn the_two_source_art_references_resolve_to_a_gtf() {
-        assert_eq!(
-            texture_entry(r"Data\HUD\Textures\hdHUD.mip"),
-            r"Data\HUD\Textures\hdHUD.gtf"
-        );
-        assert_eq!(
-            texture_entry(r"Data\HUD\Textures\detonator_hud2.tga"),
-            r"Data\HUD\Textures\detonator_hud2.gtf"
-        );
-    }
-
-    #[test]
-    fn a_reference_that_is_already_a_gtf_is_unchanged() {
-        for reference in TEXTURES.iter().filter(|r| r.ends_with(".gtf")) {
-            assert_eq!(&texture_entry(reference), reference);
-        }
-    }
-
-    /// The **append** spelling exists elsewhere on this disc, so replacing must
-    /// not turn one of those back into its source name.
-    #[test]
-    fn the_appended_spelling_survives_the_rule() {
-        assert_eq!(
-            texture_entry("/data/environments/02_track/hd_textures/and_thinsteps.tga.gtf"),
-            "/data/environments/02_track/hd_textures/and_thinsteps.tga.gtf"
-        );
-    }
-
-    /// A dot in a directory name is not a file extension, and appending `.gtf`
-    /// to the whole path is the only right answer for an extensionless name.
-    #[test]
-    fn a_dot_in_a_directory_is_not_an_extension() {
-        assert_eq!(texture_entry(r"Data\v1.2\atlas"), r"Data\v1.2\atlas.gtf");
-        assert_eq!(texture_entry("data/v1.2/atlas"), "data/v1.2/atlas.gtf");
-    }
 
     #[test]
     fn every_root_is_named_once() {

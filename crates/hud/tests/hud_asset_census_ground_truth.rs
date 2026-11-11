@@ -190,11 +190,7 @@ fn references(bytes: &[u8]) -> Vec<String> {
         .collect()
 }
 
-fn closure(
-    archives: &mut oag_assets::Archives,
-    census: &Census,
-    texture_extension: Option<&str>,
-) -> Closure {
+fn closure(archives: &mut oag_assets::Archives, census: &Census) -> Closure {
     let mut out = Closure::default();
     let xml: Vec<String> = census
         .paths
@@ -227,10 +223,11 @@ fn closure(
         }
         for bytes in seen.borrow().iter() {
             for reference in references(bytes) {
-                let mut candidates = vec![norm(&reference)];
-                if let Some(ext) = texture_extension {
-                    candidates.push(norm(&oag_title::hud::replace_extension(&reference, ext)));
-                }
+                let candidates: Vec<String> =
+                    oag_assets::texture_name::spellings(archives.layout.platform, &reference)
+                        .iter()
+                        .map(|spelling| norm(spelling))
+                        .collect();
                 match candidates.iter().find(|c| census.paths.contains(*c)) {
                     Some(hit) => {
                         out.refs
@@ -263,10 +260,11 @@ fn closure(
                 }
             }
             for reference in references(&bytes) {
-                let mut candidates = vec![norm(&reference)];
-                if let Some(ext) = texture_extension {
-                    candidates.push(norm(&oag_title::hud::replace_extension(&reference, ext)));
-                }
+                let candidates: Vec<String> =
+                    oag_assets::texture_name::spellings(archives.layout.platform, &reference)
+                        .iter()
+                        .map(|spelling| norm(spelling))
+                        .collect();
                 if let Some(hit) = candidates.iter().find(|c| census.paths.contains(*c)) {
                     out.refs
                         .entry(hit.clone())
@@ -891,9 +889,9 @@ fn open_hd() -> Option<oag_assets::Archives> {
     oag_hd::open(&image.display().to_string()).ok()
 }
 
-fn run(name: &str, title: &Title, mut archives: oag_assets::Archives, ext: &str, want: &Expect) {
+fn run(name: &str, title: &Title, mut archives: oag_assets::Archives, want: &Expect) {
     let census = census(&archives);
-    let closure = closure(&mut archives, &census, Some(ext));
+    let closure = closure(&mut archives, &census);
     report(name, title, &census, &closure);
     check(name, &summary(title, &census, &closure), want);
 }
@@ -902,13 +900,7 @@ fn run(name: &str, title: &Title, mut archives: oag_assets::Archives, ext: &str,
 #[ignore = "needs a disc image in data/images/"]
 fn hd_fury_census() {
     let Some(archives) = open_hd() else { return };
-    run(
-        "hd-fury",
-        oag_hd::TITLE,
-        archives,
-        oag_hd::hud::TEXTURE_EXTENSION,
-        &HD_FURY,
-    );
+    run("hd-fury", oag_hd::TITLE, archives, &HD_FURY);
 }
 
 #[test]
@@ -918,13 +910,7 @@ fn hd_psn_census() {
         return;
     };
     let archives = oag_hd::open(&dir.display().to_string()).expect("HD PSN opens");
-    run(
-        "hd-psn",
-        oag_hd::TITLE,
-        archives,
-        oag_hd::hud::TEXTURE_EXTENSION,
-        &HD_PSN,
-    );
+    run("hd-psn", oag_hd::TITLE, archives, &HD_PSN);
 }
 
 #[test]
@@ -934,7 +920,7 @@ fn omega_census() {
         return;
     };
     let archives = oag_omega::open(&pkg.display().to_string()).expect("Omega opens");
-    run("omega", oag_omega::TITLE, archives, ".gnf", &OMEGA);
+    run("omega", oag_omega::TITLE, archives, &OMEGA);
 }
 
 fn census_2048(name: &str, serial: &str, want: &Expect) {
@@ -942,13 +928,7 @@ fn census_2048(name: &str, serial: &str, want: &Expect) {
         return;
     };
     let archives = oag_2048::open(&dir.display().to_string()).expect("2048 opens");
-    run(
-        name,
-        oag_2048::TITLE,
-        archives,
-        oag_2048::hud::TEXTURE_EXTENSION,
-        want,
-    );
+    run(name, oag_2048::TITLE, archives, want);
 }
 
 #[test]

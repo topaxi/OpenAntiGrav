@@ -13,8 +13,8 @@
 //!
 //! What this fails on: pointing `oag_omega::hud` back at the unread placeholder
 //! (the layouts then stop composing to the counts below), dropping
-//! `texture_extension` (the `.gtf`/`.mip` spellings the XML authors never
-//! resolve on this disc), or reversing the rows of a HUD atlas (they are
+//! the platform spelling (`Archives::read_texture`: the `.gtf`/`.mip` spellings
+//! the XML authors never resolve on this disc), or reversing the rows of a HUD atlas (they are
 //! top-down, unlike the front end's eight `bottom_up_gnf` images).
 
 use std::collections::BTreeSet;
@@ -105,9 +105,7 @@ fn stem(reference: &str) -> &str {
 }
 
 fn resolved(archives: &mut oag_assets::Archives, reference: &str) -> Option<Vec<u8>> {
-    let extension = oag_omega::TITLE.hud_art.texture_extension?;
-    let rewritten = oag_title::hud::replace_extension(reference, extension);
-    archives.read_name(&rewritten).ok()
+    archives.read_texture(reference).ok().map(|(_, blob)| blob)
 }
 
 #[test]
@@ -190,8 +188,8 @@ fn hud_atlases_are_hds_picture_in_the_row_order_the_sheet_draws() {
         let blob = resolved(&mut archives, reference).expect("resolves");
         let texture = oag_texture::gnf::Texture::parse(&blob).expect("parses");
         let ours = texture.decode(&blob).expect("decodes");
-        let hd_blob = hd
-            .read_name(&oag_hd::hud::texture_entry(reference))
+        let (_, hd_blob) = hd
+            .read_texture(reference)
             .unwrap_or_else(|e| panic!("HD {reference}: {e}"));
         let gtf = oag_texture::gtf::Gtf::parse(&hd_blob).expect("HD parses");
         let theirs = gtf
@@ -356,11 +354,7 @@ fn the_2048_hud_set_omega_also_ships_composes_whole() {
         assert!(c.missing.is_empty(), "{root}: missing {:?}", c.missing);
         assert!(c.layout.skipped.is_empty(), "{root}: skipped");
         for r in c.layout.textures() {
-            let named = archives.read_name(r).is_ok();
-            let as_gnf = archives
-                .read_name(&oag_title::hud::replace_extension(r, ".gnf"))
-                .is_ok();
-            if !named && !as_gnf {
+            if archives.resolve_texture(r).is_none() {
                 unresolved.insert(r.to_string());
             }
         }

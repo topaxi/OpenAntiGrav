@@ -17,6 +17,7 @@
 //! crates undo.
 
 pub mod bcn;
+pub mod decode;
 pub mod fnt;
 pub mod gnf;
 pub mod gtf;

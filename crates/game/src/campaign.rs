@@ -681,14 +681,15 @@ fn read_hd_texture_text(
 }
 
 /// Omega's reader for the same paths: the literal HD `.gtf` first, then the
-/// `.gnf` beside it (`crate::boot::sprites::gnf_sibling`).
+/// `.gnf` beside it (`oag_assets::Archives::read_texture`), refusing by name a
+/// `.gnf` that will not decode (`crate::boot::sprites::gnf_refusal`).
 fn read_omega_texture(archives: &mut oag_assets::Archives, path: &str) -> Result<Vec<u8>, String> {
-    match archives.read_name(path) {
-        Ok(blob) => Ok(blob),
-        Err(error) => match crate::boot::sprites::gnf_sibling(archives, path) {
-            Some(result) => result,
-            None => Err(format!("{error:#}")),
-        },
+    let (held, blob) = archives
+        .read_texture(path)
+        .map_err(|error| format!("{error:#}"))?;
+    match crate::boot::sprites::gnf_refusal(&held, path, &blob) {
+        Some(reason) => Err(reason),
+        None => Ok(blob),
     }
 }
 
@@ -855,7 +856,7 @@ fn chooser_screens(
 /// carried forward (`docs/formats/omega-frontend.md`), so these are the same
 /// widget/archive-path pairs, not a new measurement. **Every one of them
 /// reads by the literal HD `.gtf` path first and falls back to
-/// [`crate::boot::sprites::gnf_sibling`]** the same way the front end's own
+/// [`read_omega_texture`]** the same way the front end's own
 /// sheet does (`crate::boot::sprites::load`) - the shipped files are `.gnf`
 /// now, not `.gtf`, so the first read always misses on this title and the
 /// fallback is what actually decodes and names them. A texture whose `.gnf`
@@ -939,25 +940,17 @@ fn load_omega(
 
     let mut blobs = Vec::new();
     for (widget_src, archive_path) in oag_hd::campaign::HEX_TEXTURES {
-        match archives.read_name(archive_path) {
+        match read_omega_texture(archives, archive_path) {
             Ok(blob) => blobs.push((widget_src.to_string(), blob)),
-            Err(error) => match crate::boot::sprites::gnf_sibling(archives, archive_path) {
-                Some(Ok(blob)) => blobs.push((widget_src.to_string(), blob)),
-                Some(Err(reason)) => log::warn!("campaign {reason}"),
-                None => {
-                    log::warn!("{archive_path}: {error:#} - the widget it is for draws nothing");
-                }
-            },
+            Err(reason) => {
+                log::warn!("{archive_path}: {reason} - the widget it is for draws nothing");
+            }
         }
     }
     for src in oag_hd::campaign::OTHER_TEXTURES {
-        match archives.read_name(src) {
+        match read_omega_texture(archives, src) {
             Ok(blob) => blobs.push((src.to_string(), blob)),
-            Err(error) => match crate::boot::sprites::gnf_sibling(archives, src) {
-                Some(Ok(blob)) => blobs.push((src.to_string(), blob)),
-                Some(Err(reason)) => log::warn!("campaign {reason}"),
-                None => log::warn!("{src}: {error:#} - the widget it is for draws nothing"),
-            },
+            Err(reason) => log::warn!("{src}: {reason} - the widget it is for draws nothing"),
         }
     }
     // The art `Campaign Selection` names itself (2048's rank shield), beside

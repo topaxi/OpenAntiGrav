@@ -20,7 +20,7 @@
 //! textures and renders them - but composing this title's rectangles against
 //! decoded `.gxt` dimensions is not written here yet. This file stops at
 //! "every reference resolves to a shipped entry", which is as far as
-//! [`oag_2048::hud::texture_entry`]'s own evidence goes.
+//! [`oag_assets::Archives::read_texture`]'s own evidence goes.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -136,10 +136,9 @@ fn every_texture_reference_resolves_once_the_extension_rule_applies() {
     assert_eq!(uses.len(), 19, "distinct texture references: {uses:?}");
 
     for (reference, count) in &uses {
-        let entry = oag_2048::hud::texture_entry(reference);
         assert!(
-            archives.locate(&entry).is_some(),
-            "{reference} ({count} sprites) resolves to {entry}, which is not on the disc"
+            archives.resolve_texture(reference).is_some(),
+            "{reference} ({count} sprites) resolves to no entry on the disc"
         );
     }
 }
