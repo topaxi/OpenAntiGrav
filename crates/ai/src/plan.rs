@@ -96,6 +96,10 @@ pub struct Course<'a, R: Raycaster + ?Sized> {
     pub reset: &'a dyn Fn(&ShipState, &Environment, oag_core::math::Vec3) -> bool,
     /// Seconds without a hover contact after which the race rescues a craft.
     pub max_airborne: f32,
+    /// How far under its line point, on the ground on a supported sample, a
+    /// craft counts as on another road ([`Failure::Beneath`]); infinity for a
+    /// course with no such rule. The race passes its own rescue's distance.
+    pub beneath: f32,
     /// The push direction of the speed pad the craft is inside, given where it
     /// started the previous tick and this one: the race's own pad test, so the
     /// plan is learned with the boosts the race gives.
@@ -531,6 +535,12 @@ pub enum Failure {
     /// Something the race rescues a craft for that is not a wall: a reset
     /// volume touched, or longer in the air than [`Course::max_airborne`].
     Rescued,
+    /// On the ground further under its line point than [`Course::beneath`]:
+    /// on another road. The race rescues it after a dwell; the plan counts
+    /// the first such tick, so the lowering lands on the road the craft left
+    /// and not on the one it found. **Chosen, not measured**
+    /// (`docs/gameplay/ai.md`, "A road under the line is a failure").
+    Beneath,
 }
 
 /// What one tick did.
@@ -618,6 +628,8 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
             // `01_Track` at PHANTOM clean in isolation and was rescued four
             // times in the race, in the air off a crest.
             Some(Failure::Rescued)
+        } else if self.beneath_the_line(&run.state, index) {
+            Some(Failure::Beneath)
         } else if run.tick > STALL_GRACE
             && (run.slow > STALL_TICKS || run.tick - run.best_tick > run.stuck_limit)
         {
@@ -630,6 +642,25 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
             contact,
             steer: controls.steer_x,
         }
+    }
+}
+
+impl<R: Raycaster + ?Sized> Course<'_, R> {
+    /// Whether a craft whose driver stands on line sample `index` is on the
+    /// ground more than [`Self::beneath`] under that line point, along the
+    /// sample's own up: the race's test for a road under the circuit. Never
+    /// in the air, and never where the line has no road under it (it arcs
+    /// over a gap there, and a craft that comes down early is under it on the
+    /// road it was always going to land on).
+    fn beneath_the_line(&self, state: &ShipState, index: usize) -> bool {
+        if state.time_airborne > 0.0 || self.line.is_unsupported(index) || self.samples.is_empty()
+        {
+            return false;
+        }
+        let Some(sample) = self.samples[index % self.samples.len()] else {
+            return false;
+        };
+        (self.line.point(index) - state.body.position).dot(sample.normal()) > self.beneath
     }
 }
 
@@ -980,7 +1011,7 @@ impl SpeedPlan {
             let count = tries.entry(site).or_insert(0);
             *count += 1;
             let exhausted = *count > MAX_TRIES;
-            let cause = Cause::of(failure, run.state.time_airborne, &recent);
+            let cause = Cause::of(failure, run.state.time_airborne, &recent, course.line);
             if exhausted && failure == Failure::Wall {
                 note_unresolved(report, run.driver.index, failure);
                 forgive_until = run.progress + i64::from(SITE) * 2;
@@ -1015,6 +1046,11 @@ impl SpeedPlan {
             let old = self.target.clone();
             report.lowerings += match cause {
                 Cause::ShortOfTheLip(takeoff) => self.hold_run_up(&recent[..takeoff]),
+                Cause::LeftTheRoad(takeoff) => self.lower(
+                    &recent[..takeoff],
+                    tries.get(&site).copied().unwrap_or(1),
+                    lowering,
+                ),
                 _ => self.lower(&recent, tries.get(&site).copied().unwrap_or(1), lowering),
             };
             self.derive_targets();
@@ -1153,12 +1189,19 @@ enum Cause {
     ShortOfTheLip(usize),
     /// Stopped or off the circuit at full throttle all along: no plan helps.
     Underpowered,
+    /// Flew off a road the line stays on and came down on another one; the
+    /// flight began at this index into the trace. Lower the ceilings before
+    /// it: the speed that failed is the one the craft left the road at.
+    LeftTheRoad(usize),
 }
 
 impl Cause {
-    fn of(failure: Failure, airborne: f32, recent: &[Trace]) -> Self {
+    fn of(failure: Failure, airborne: f32, recent: &[Trace], line: &Line) -> Self {
         let from = recent.len().saturating_sub(LOOKBACK_TICKS);
         let window = &recent[from..];
+        if failure == Failure::Beneath {
+            return Self::of_a_lower_road(recent, line);
+        }
         if failure == Failure::Wall && airborne < FELL_SECONDS {
             // A wall on the road or after a short hop is answered with less
             // speed: most are a corner taken too fast. Holding the run-up for
@@ -1186,6 +1229,37 @@ impl Cause {
             return Self::Underpowered;
         }
         Self::TooFast
+    }
+}
+
+impl Cause {
+    /// What put a craft on a road under its line ([`Failure::Beneath`]), by
+    /// the last flight in the trace, however long ago it landed.
+    ///
+    /// Where the line itself crosses a gap in that flight, the craft fell
+    /// short of a jump: the run-up is held if the plan braked on it, and at
+    /// full throttle no plan helps. Anywhere else it flew off a road the line
+    /// stays on, a corner taken too fast.
+    fn of_a_lower_road(recent: &[Trace], line: &Line) -> Self {
+        let Some(last_air) = recent.iter().rposition(|t| t.airborne) else {
+            return Self::TooFast;
+        };
+        let first_air = recent[..last_air]
+            .iter()
+            .rposition(|t| !t.airborne)
+            .map_or(0, |grounded| grounded + 1);
+        let run_up = &recent[first_air.saturating_sub(LOOKBACK_TICKS * 2)..first_air];
+        let over_a_gap = |t: &Trace| {
+            line.is_takeoff(t.index as usize) || line.is_unsupported(t.index as usize)
+        };
+        if !run_up.iter().chain(&recent[first_air..=last_air]).any(over_a_gap) {
+            return Self::LeftTheRoad(first_air);
+        }
+        if run_up.iter().any(|t| !t.full) {
+            Self::ShortOfTheLip(first_air)
+        } else {
+            Self::Underpowered
+        }
     }
 }
 
