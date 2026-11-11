@@ -372,6 +372,7 @@ pub(super) fn scratch_pass(
         wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
         (0.0, 0.0),
         (extent.0.max(1), extent.1.max(1)),
+        3,
     );
 }
 

@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048, omega, hd]
 updated: 2026-11-11
-summary: "Four HD scenery material readings apply to 2048 and Omega, not wired; HD: one specular map unbound, unsaturated N.L per block"
+summary: "Three HD scenery material readings apply to 2048 and Omega, not wired (alpha_emissive wired); HD: one specular map unbound, unsaturated N.L per block"
 difficulty: medium (35)
 ---
 
@@ -18,10 +18,14 @@ against 2048 and Omega as the rule asks; this thread holds what that left.
 **Checked, applies, not wired (2048 and Omega re-ship the material; neither
 title's program was read):**
 
-1. **`alpha_emissive` families** (`picture.a * glowtinrt` added after the
-   light; HD: 6 families, 155 slots, 9 circuits). 2048 `data.psarc` 12 entries,
-   `dlc1.psarc` 7; Omega `data00` to `data08`. Omega's ambient-only pixel
-   program was dumped and is the same combine; the lit one was not read.
+1. ~~**`alpha_emissive` families**~~ **Wired 2026-11-11, `w2048-alpha-emissive`** on 2048 and Omega
+   (`docs/formats/rcsmaterial.md`, "The picture's alpha times a colour": 2048 171 of 171 programs, Omega 249 of 250 plain,
+   `psp2::alpha_emissive`). **Left:** (a) Omega's 14 Metropia `dn_diffuse_specular_emiss` materials draw their
+   `SpecularTexture` as the picture (first sampler listed, programs unread), so the term is skipped there: needs a per-family
+   Omega record answer next to `lighting_only::inherited`; (b) none of the three 2048 grid pairs has these surfaces in frame
+   (on/off pixel-identical), so the 2048 effect has no original to measure against: a 2048 Anulpha Pass or Metropia pair would
+   (ours at the Anulpha grid shows an amber strip light on the stand); (c) Omega Anulpha Pass pair, box `1065,268 100x35`: G 73 to
+   80 against the original's 80.
 2. **`pb_glass_2nduv_reflect_specular1_glow`** (Metropia's tower). Omega
    `data02`, `data05`; 2048 `dlc1.psarc`. Combine not read, no row in the
    `psp2` loader.
@@ -46,11 +50,11 @@ differs** on Omega (a three-lane `.gnf`, already bound) and needs nothing.
 
 ## Next Steps
 
-- For 1 to 4, per title: dump the program (`gcn_dump` for Omega, the GXP
-  reader for 2048), confirm the combine matches HD's, add the family's row to
+- For 1 to 4, per title: dump the program (`gcn_dump` for Omega, `scripts/vita-usse.py
+  disasm` for 2048: it needs no Vita3K shader cache), confirm the combine matches HD's, add the family's row to
   the `psp2` loader, and measure on a pair of that title (Omega in-game shots
   are not trusted: use the `wipeout_pc` port or a material census). Item 1
-  first: it covers the most slots.
+  is done.
 - For 5: bind unit 1 where the program declares it and measure on Metropia
   (17 slots) and Ubermall (2).
 - For 6: list the lightmapped programs with a `DP3` whose result has no

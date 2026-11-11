@@ -3718,12 +3718,60 @@ slots of these families are out of view at the start line or author a black colo
 (`specular * map.rgb`, unit 1): unbound, the specular is drawn unweighted. (2) No live frame: the magnitude rests on
 the pairs above.
 
-**2048 / Omega: checked, applies, not wired.** Both re-ship the families with HD's circuits (2048 `data.psarc` 12
-entries, `dlc1.psarc` 7; Omega `data00` to `data08`, e.g. `02_metropia/Materials/DN_DIFFUSE_SPECULAR_EMISS_2`), and
-their programs declare `alpha_emissive` and `glowtinrt`. Omega's ambient-only pixel program (`gcn_dump --at 0x32c4` of
-that file, 51 instructions) is the same combine: the sample times `constantAmbientColour`, then `v_mad` of the sample's
-alpha and `glowtinrt` onto it, then the fog (confidence 85, one program read). 2048's GXP bytecode is not read. The
-`psp2` loader reads neither name, so both titles draw these surfaces without the term.
+**2048 / Omega: ported (2026-11-11, `w2048-alpha-emissive`).** Both re-ship the families with HD's circuits (2048
+`data.psarc` 12 entries, `dlc1.psarc` 7; Omega `data00` to `data08`, e.g. `02_metropia/Materials/DN_DIFFUSE_SPECULAR_EMISS_2`),
+and their programs declare `alpha_emissive` and `glowtinrt`. Both read off their own pixel programs:
+
+- **2048** (`scripts/vita-usse.py disasm`, no Vita3K involved; confidence 90). Tower's `diffuse_emissive_alpha_glow`, all four lit
+  variants (flat ambient `#1`, ambient plus sun `#3`, vertex-lit `#12`, lightmapped `#14`):
+
+  ```text
+  #3 @6   mad.f16 pa4.xyzw, pa0.xyzw, sa4.xyzw, sa2.xyzw   ; light = max(0, N.L) * liveLighting0diffuse + constantAmbientColour
+  #3 @7   mul.f16 pa0.xyz, pa4.xyz, pa2.xyz                ; light * texel   (pa2 the sample, glowtinrt in sa0)
+  #3 @8   mul.f16 pa0.xyz, pa0.xyz, pa2.xyz                ; * texel again: light * texel^2
+  #3 @9   mad.f16 pa2.xyzw, pa2.wwww, sa0.xyzw, pa0.xyzw   ; + texel.a * glowtinrt
+  #3 @10  add.f16 / @11 mad.f16                            ; the fog mix
+  #3 @12  mul.f16 pa0.xyzw, pa0.xyz0, c15.yyyy             ; * 1.0, no HD /2
+  ```
+
+  `rgb = fog(light * D^2 + D.a * glowtinrt)`: the colour neither lit nor shadowed, the alpha unsquared (the 2048 texel is
+  squared, `2048-material-params.md`, "Vertex-lit and lightmapped combines"). **`scripts/vita-alpha-emissive-sweep.py` over
+  `data.psarc`, `dlc1.psarc` and `dlc2.psarc`: 171 of 171 fragment programs that declare both names carry the `mad`** with
+  `glowtinrt`'s own register: `diffuse_emissive_alpha` 45, `diffuse_emissive_alpha_glow` 99,
+  `mr_diffuse_emissive_alpha_glow_specular` 18, `dn_diffuse_specular_emiss` 9. 29 more programs declare
+  `alpha_emissive` without `glowtinrt` (`dn_diffuse_specular_emiss_glow` 17, `mr_..._specular` 12) and have no such `mad`:
+  Sol 2's `dn_diffuse_specular_emiss_glow` authors no `glowtinrt` either, so it gets no entry.
+- **Omega** (`gcn_dump`; confidence 85). The lit programs of the same families (ambient plus sun `@0x3fc4` of
+  `02_metropia/Materials/diffuse_emissive_alpha_glow`, 76 instructions) end `v_mul_f32 v3, s16, v8` (`glowtinrt.x * sample.w`),
+  `v_mac_f32 v3, v14, v5` (`+ light * sample.x`), then the fog `v_mad`. **250 pixel programs over 25 materials of
+  `data00`, `data01`, `data02` and `data04`: 249 carry the plain `glowtinrt * sample.w` multiply**
+  (`diffuse_emissive_alpha` 70, `diffuse_emissive_alpha_glow` 120, `_glow_v01` 10, `dn_diffuse_specular_emiss` 30,
+  `mr_..._specular` 9, `vertclr_diff_emissive_alpha_glow` 10). The 250th, `01_vineta_k/materials_dlc/mr_..._specular` `@0x8944`,
+  folds the colour into the alpha-weighted specular (`v13 = glowtinrt.x + Specular_Colour * ...`, `v1 += v8 * v13`): the term is
+  there, weighted by the alpha like the specular. Omega's lit programs are not squared (`light * sample`).
+
+**Wired:** `oag_mesh::mesh::rcs::psp2::alpha_emissive` admits a material that binds `alpha_emissive`, authors `glowtinrt` and
+**draws that sampler's texture as its picture** (the mask is the alpha of the texel the draw samples), and writes the same glow-table
+entry as HD's (`PROGRAM_PICTURE_ALPHA_EMISSIVE`, `shade.wesl` mode 12, shared constants `alpha_emissive::PICTURE`/`COLOUR`). It
+rides `emissive_add::Plan` with no third binding. `OAG_ALPHA_EMISSIVE_OFF=1` is the before. Tests
+(`crates/mesh/tests/psp2_alpha_emissive_ground_truth.rs`, red before, green after): Queens Mall's three authored colours and 8
+submesh users, a lightmapped submesh on Metro Park, Sol 2's negative, Omega Metropia (6 entries, 18 materials).
+
+**Open, Omega (checked, differs in how the picture binds).** 14 of Metropia's `dn_diffuse_specular_emiss` materials stay with the
+generic reading: they list `SpecularTexture` first, Omega's programs are not read for sampler use, and the build draws the first
+non-lightmap sampler as the picture, so the texel whose alpha would be the mask is the specular map's. Vita reads its programs
+and refuses the specular map (`psp2_sampler_use_ground_truth`); Omega's `lighting_only::inherited` carries three colourless families
+only. Binding `alpha_emissive` as the picture on those needs a per-family answer for Omega's record, not done here.
+
+**Measured.** None of the three 2048 grid pairs has an `alpha_emissive` surface in frame: `OAG_ONLY_MATERIAL` and a magenta override
+of mode 12 draw nothing on Empire Climb (Tower: 6 materials, 12 submeshes) or Queens Mall (5 materials, 8 submeshes), and Vineta K's
+two submeshes change 0.08 px, so on/off is pixel-identical on all three (`magick compare -metric AE`). Ours at 2048's Anulpha
+Pass grid (`--track ...\DLC1\environments\Anulpha_Pass\track.vex`, 960x544, tick 179) changes 25 px, a strip light on the
+stand, from 12/17/18 to 21/24/19 over the 53x29 box at (531,133): it glows amber where it drew dark (no 2048 original of that
+frame exists). Omega's Anulpha Pass pair (native port original, 1920x1080, tick 100), mean RGB over the box (named by where on/off
+differ), theirs / before / after: orange stand panel `1065,268 100x35` 76/80/58, 78/73/55, 79/80/55 (G 73 to 80 against 80);
+`1015,203 152x42` 39/63/77, 35/58/72, 45/65/75; `1222,159 76x35` 15/82/114, 18/97/134, 18/100/137 (away, +3 on a box
+already 15 too bright).
 
 ### The window with a specular map: `pb_glass_2nduv_reflect_specular1_glow` (confidence 85)
 

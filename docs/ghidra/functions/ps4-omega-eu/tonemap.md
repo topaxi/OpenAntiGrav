@@ -265,9 +265,9 @@ base's order differs only in where a nonzero tint would sit, and no code path dr
 `omega_lightmap_ground_truth` (Tech De Ra's keys reach the composite).
 
 **`Bloom` is drawn since 2026-11-04 (next section); `LowResAdditive` is not.**
-**2048:** checked, differs: its composite is `wo_composite` with its own vignette output and `vignetteTint`
-(`oag_post::wo_composite`), no `Vignette.*` keys were found in the extracted Vita files, and the
-Omega composite is gated to the PS4 geometry. **HD:** checked, differs: `hd_bloom` is its composite; a Fury frame is
+**2048:** checked, differs: its composite is `wo_composite` with its own vignette (a mesh round clip-space `(0, -0.885)` and the
+tint `(1, 1, 0.97)`, constants in code: [exposure.md](../vita-2048-eu-v104/exposure.md), "The vignette"; `oag_post::wo_composite`), no
+`Vignette.*` keys were found in the extracted Vita files, and the Omega composite is gated to the PS4 geometry. **HD:** checked, differs: `hd_bloom` is its composite; a Fury frame is
 byte-identical before and after this change.
 
 ## The bloom chain (2026-11-04, `omega-bloom-read`)

@@ -571,8 +571,8 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
          select mods; press cross; until page=mods; \
          set mods.selected=oag.hillside; set mods.enabled=off; expect page=mods; \
          press circle; until page=main; \
-         select campaign; press cross; until page=campaigns; ticks 5; press circle; \
-         until page=main; \
+         select campaign; press cross; until screen=campaign; ticks 5; press circle; \
+         until screen!=campaign; until page=main; \
          select remix; press cross; until page=oag.remix/remix; ticks 60; press circle; \
          until page=main; \
          select mods; press cross; until page=mods; \
@@ -596,10 +596,24 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
     );
     let listings = campaign_picker_listings(&run);
     let has_night_run = |labels: &Vec<String>| labels.iter().any(|l| l == "NIGHT RUN");
-    assert_eq!(listings.len(), 3, "{listings:?}");
+    // With Hillside off NIGHT RUN is the only mod campaign refused, so there is no picker:
+    // RACE CAMPAIGN opens the disc's campaign in one press, and the picker is back once it is on.
+    let page = |s: &Value| text(s, &["page"]) == Some("campaigns");
+    let picker_visits = run
+        .states
+        .windows(2)
+        .filter(|pair| !page(&pair[0]) && page(&pair[1]))
+        .count();
+    assert_eq!(picker_visits, 2, "{listings:?}");
     assert!(
-        has_night_run(&listings[0]) && !has_night_run(&listings[1]) && has_night_run(&listings[2]),
-        "NIGHT RUN's row goes with Hillside off (its event races Hillside) and comes back: {listings:?}"
+        !listings.is_empty() && listings.iter().all(has_night_run),
+        "NIGHT RUN's row is listed whenever the picker is: {listings:?}"
+    );
+    assert!(
+        run.states
+            .iter()
+            .any(|s| text(s, &["screen", "kind"]) == Some("campaign")),
+        "with Hillside off RACE CAMPAIGN goes straight to the disc's campaign, no picker"
     );
     assert!(
         listings

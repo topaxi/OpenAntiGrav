@@ -23,9 +23,13 @@
 //!
 //! What is **not** the disc's, stated rather than hidden:
 //!
-//! - **The vignette and the screen tint are left out.** The composite's
-//!   `vignetteTint` and the mesh it is drawn as, and the tint's source, are
-//!   unread, so `v = 1` and the tint is 0.
+//! - **The vignette is the original's** (`law::vignette`): the composite is drawn as the
+//!   mesh `PostFx_RenderChain` builds, a fan and a ring round clip-space `(0, -0.885)`
+//!   whose `pos.w` runs 0 to 1, and `v = 1 - (vignetteTint * w)^2`. The original turns it
+//!   off while a photo capture job runs (`FUN_81021ef6`, read at confidence 60); ours does not,
+//!   and its photo mode's shot draws through this chain with the vignette on. **The screen tint is left out**: its
+//!   source is unread, so it is 0. A split view draws its own vignette over its own
+//!   rectangle (chosen, not measured: the original has no split screen).
 //! - **`alphaTex` reads as empty**: the original composites a second texture
 //!   over the scene (`c = alpha.rgb + (1 - alpha.a) * main`); this renderer
 //!   draws everything into the scene, so `c = main`.
@@ -47,7 +51,7 @@ use anyhow::Result;
 
 use oag_gpu::formats::SCENE_FORMAT;
 
-use crate::pass::{self, Target, draw};
+use crate::pass::{self, Target, draw, draw_mesh};
 use crate::seat_lanes::SeatLanes;
 
 /// The quarter-resolution targets' format: the display surface's, which
@@ -124,6 +128,9 @@ impl Uniform {
 fn quarter_of(size: (u32, u32)) -> (u32, u32) {
     ((size.0 >> 2).max(1), (size.1 >> 2).max(1))
 }
+
+/// The vignette mesh's vertex count: [`law::VIGNETTE_SECTORS`] sectors of nine.
+const VIGNETTE_VERTICES: u32 = 9 * law::VIGNETTE_SECTORS;
 
 /// `State` in the shader.
 const STATE_SIZE: u64 = 16;
@@ -365,11 +372,14 @@ impl Chain {
         // The composite's square root is the encode, written as numbers, so it
         // targets the caller's format without the sRGB suffix - the same as
         // `hd_bloom`'s encode and `omega_tonemap`'s apply.
-        let composite = render(
-            "wo composite",
-            "fs_composite",
+        let composite = pass::mesh_pipeline(
+            device,
+            &shader,
             &composed,
-            surface_format.remove_srgb_suffix(),
+            "wo composite",
+            "vs_vignette",
+            "fs_composite",
+            pass::replacing(surface_format.remove_srgb_suffix()),
         );
         let adapt = compute("wo composite adapt", "cs_adapt");
         let prime = compute("wo composite prime", "cs_prime");
@@ -581,7 +591,7 @@ impl Chain {
             (0.0, 0.0),
             quarter,
         );
-        draw(
+        draw_mesh(
             encoder,
             "wo composite",
             &self.composite,
@@ -589,6 +599,7 @@ impl Chain {
             view,
             origin,
             placement.viewport,
+            VIGNETTE_VERTICES,
         );
         if adapting {
             self.step(encoder, &self.adapt, seat);

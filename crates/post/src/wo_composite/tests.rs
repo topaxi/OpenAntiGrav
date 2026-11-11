@@ -117,6 +117,21 @@ const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 /// Clears the chain's scene to `colour`, runs one frame into a fresh
 /// `Rgba8Unorm` target, and returns the centre pixel and the exposure state.
 fn frame(gpu: &Gpu, chain: &Chain, colour: [f32; 3]) -> ([u8; 4], f32) {
+    let (pixels, exposure) = frame_pixels(gpu, chain, colour);
+    (pixel_at(&pixels, SIZE.0 / 2, SIZE.1 / 2), exposure)
+}
+
+/// The pixel at `(x, y)` of a [`frame_pixels`] buffer.
+fn pixel_at(pixels: &[u8], x: u32, y: u32) -> [u8; 4] {
+    let at = (y * ROW + x * 4) as usize;
+    [pixels[at], pixels[at + 1], pixels[at + 2], pixels[at + 3]]
+}
+
+/// Bytes a row of the readback buffer takes.
+const ROW: u32 = 256;
+
+/// [`frame`], returning the whole readback buffer, `ROW` bytes a row.
+fn frame_pixels(gpu: &Gpu, chain: &Chain, colour: [f32; 3]) -> (Vec<u8>, f32) {
     let out = gpu.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("out"),
         size: wgpu::Extent3d {
@@ -155,7 +170,7 @@ fn frame(gpu: &Gpu, chain: &Chain, colour: [f32; 3]) -> ([u8; 4], f32) {
         multiview_mask: None,
     });
     chain.run(&gpu.queue, &mut encoder, &out_view, (0.0, 0.0), SIZE);
-    let row = 256;
+    let row = ROW;
     let pixels = gpu.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("pixels"),
         size: u64::from(row * SIZE.1),
@@ -193,12 +208,8 @@ fn frame(gpu: &Gpu, chain: &Chain, colour: [f32; 3]) -> ([u8; 4], f32) {
         .expect("pixels")
         .to_vec();
     let words = state.slice(..).get_mapped_range().expect("state").to_vec();
-    let at = ((SIZE.1 / 2) * row + (SIZE.0 / 2) * 4) as usize;
     let exposure = f32::from_le_bytes([words[0], words[1], words[2], words[3]]);
-    (
-        [bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]],
-        exposure,
-    )
+    (bytes, exposure)
 }
 
 fn byte(v: f32) -> i32 {
@@ -264,6 +275,105 @@ fn a_held_chain_draws_the_law_on_a_real_device() {
     );
 }
 
+/// The vignette on a real device: a flat grey picture under the gate is darkest in the
+/// top corners (the far side of the mesh centred low in the frame), a little dark along the
+/// top edge, and untouched in the bottom corners and the middle. Each pixel is the law's,
+/// `composite * (1 - (vignetteTint * w)^2)` with `w` from the mesh's own triangles. The
+/// original's top corners read 0.9 to 1.8 in luma on all three 2048 pairs, its bottom
+/// corners lit (exposure.md, "The vignette"). **Skips when there is no adapter.**
+#[test]
+fn the_composite_draws_the_vignette_over_the_top_of_the_frame() {
+    let Some(gpu) = gpu() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let p = Params {
+        exposure: Exposure::Held(law::RESET_EXPOSURE),
+        ..mall()
+    };
+    let chain = Chain::new(&gpu.device, FORMAT, SIZE, p).expect("the chain builds");
+    let grey = [0.15_f32; 3];
+    let (pixels, _) = frame_pixels(&gpu, &chain, grey);
+    let plain = law::composite(grey, [0.0; 3], law::RESET_EXPOSURE, p.bloom_factor);
+    let drawn = |x: u32, y: u32| {
+        let clip = [
+            (x as f32 + 0.5) / SIZE.0 as f32 * 2.0 - 1.0,
+            1.0 - (y as f32 + 0.5) / SIZE.1 as f32 * 2.0,
+        ];
+        let v = law::vignette(law::vignette_w(clip));
+        (pixel_at(&pixels, x, y), v)
+    };
+    for (x, y) in [
+        (0, 0),
+        (15, 0),
+        (8, 0),
+        (3, 1),
+        (0, 15),
+        (15, 15),
+        (8, 15),
+        (8, 8),
+    ] {
+        let (pixel, v) = drawn(x, y);
+        for channel in 0..3 {
+            let want = byte(plain[channel] * v[channel]);
+            let got = i32::from(pixel[channel]);
+            assert!(
+                (got - want).abs() <= 3,
+                "pixel ({x}, {y}) channel {channel}: drew {got}, the law says {want} (v {v:?})"
+            );
+        }
+    }
+    let corner = i32::from(pixel_at(&pixels, 0, 0)[0]);
+    let foot = i32::from(pixel_at(&pixels, 0, 15)[0]);
+    assert!(
+        (foot - byte(plain[0])).abs() <= 2,
+        "the bottom corner ({foot}) is the plain composite ({})",
+        byte(plain[0])
+    );
+    assert!(
+        corner * 2 < foot,
+        "the top corner ({corner}) is under half the bottom corner's ({foot})"
+    );
+}
+
+/// The mesh's `w` and the factor it makes, at the places the pairs measured.
+#[test]
+fn the_vignette_is_dark_at_the_top_corners_and_absent_below_the_centre() {
+    // The frame's top corners, the far edge of a mesh centred at (0, -0.885).
+    for x in [-1.0_f32, 1.0] {
+        let w = law::vignette_w([x, 1.0]);
+        assert!((0.95..=1.0).contains(&w), "w at the top corner is {w}");
+        let v = law::vignette(w);
+        assert!(
+            v[0] < 0.1 && v[1] < 0.1,
+            "red and green at the corner: {v:?}"
+        );
+        assert!(
+            v[2] > v[0],
+            "the 0.97 tint leaves blue a little lighter: {v:?}"
+        );
+    }
+    // The top edge's middle is part of the way out.
+    let top = law::vignette_w([0.0, 1.0]);
+    assert!((0.5..0.7).contains(&top), "w at the top middle is {top}");
+    // Nothing at the bottom, where the mesh is centred, or inside the inner circle.
+    for clip in [
+        [-1.0, -1.0],
+        [1.0, -1.0],
+        [0.0, -1.0],
+        [0.0, 0.0],
+        [0.9, 0.2],
+    ] {
+        assert_eq!(law::vignette_w(clip), 0.0, "w at {clip:?}");
+        assert_eq!(law::vignette(0.0), [1.0; 3]);
+    }
+    // Outward from the inner circle `w` rises monotonically along the centre line.
+    let along: Vec<f32> = (0..=10)
+        .map(|k| law::vignette_w([0.0, law::VIGNETTE_CENTRE_Y + 1.4 + 0.075 * k as f32]))
+        .collect();
+    assert!(along.windows(2).all(|pair| pair[1] >= pair[0]), "{along:?}");
+}
+
 /// An adapting chain starts settled on its first frame - `min(Scale / a, Max)`
 /// for the readback of that frame's gate - and stays there on the next, where
 /// the step's fixed point is the same.
@@ -312,7 +422,23 @@ fn an_adapting_chain_settles_where_the_law_does() {
 
 mod split {
     use super::*;
-    use crate::split_fixture::{SIZE, device, frame, mean, paint, read_red};
+    use crate::split_fixture::{SIZE, device, frame, paint, read_red};
+
+    /// The mean of the middle half of the columns of `rows`. The vignette's top corners and
+    /// edge are left out of a flat picture's mean by taking the rows below the mesh's inner
+    /// circle (`w` is 0 there), which the views and the picture alone reach at different
+    /// rows: a view's top is its own.
+    fn mean(red: &[u8], rows: std::ops::Range<u32>) -> f64 {
+        let mut sum = 0.0;
+        let mut count = 0.0;
+        for y in rows {
+            for x in SIZE.0 / 4..SIZE.0 * 3 / 4 {
+                sum += f64::from(red[(y * SIZE.0 + x) as usize]);
+                count += 1.0;
+            }
+        }
+        sum / count
+    }
 
     fn dark_over_bright(_x: u32, y: u32) -> f32 {
         if y < SIZE.1 / 2 { 0.25 } else { 0.75 }
@@ -334,7 +460,10 @@ mod split {
         let mut encoder = device.create_command_encoder(&Default::default());
         chain.run(queue, &mut encoder, &target, (0.0, 0.0), SIZE);
         queue.submit(Some(encoder.finish()));
-        mean(&read_red(device, queue, &output), 0..SIZE.1)
+        mean(
+            &read_red(device, queue, &output),
+            SIZE.1 / 4 + 2..SIZE.1 - 2,
+        )
     }
 
     /// Each view of a split resolves as the same picture would alone, from its own
@@ -369,8 +498,8 @@ mod split {
         };
         draw_views();
         let red = read_red(&device, &queue, &output);
-        let top = mean(&red, 2..half - 2);
-        let bottom = mean(&red, half + 2..SIZE.1 - 2);
+        let top = mean(&red, half / 4 + 2..half - 2);
+        let bottom = mean(&red, half + half / 4 + 2..SIZE.1 - 2);
         let dark = alone(&device, &queue, 0.25);
         let bright = alone(&device, &queue, 0.75);
         assert!(

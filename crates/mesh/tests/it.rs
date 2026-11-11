@@ -74,6 +74,7 @@ mod omega_shield_lightning_lit_path;
 mod omega_transparency_ground_truth;
 mod own_shield_lit_path;
 mod psp2_airbrake_flaps_ground_truth;
+mod psp2_alpha_emissive_ground_truth;
 mod psp2_backface_cull_ground_truth;
 mod psp2_glow_ground_truth;
 mod psp2_scenery_animation_ground_truth;
