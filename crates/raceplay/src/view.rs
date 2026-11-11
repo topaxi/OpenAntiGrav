@@ -221,6 +221,9 @@ pub struct RaceView {
     pub(super) campaign_event: bool,
     /// Who is inside whose trail, one bit per intruder; level, not edge.
     pub(super) trail_inside: [u8; MAX_SHIPS],
+    /// Per owner, the intruders whose lent burst sits out this tick: see
+    /// [`Race::trail_hit_due`].
+    pub(super) trail_hit_rest: [u8; MAX_SHIPS],
     pub(super) hd_flame: [exhaust::hd::Flame; MAX_SHIPS],
     pub(super) hd_sprite: [exhaust::hd::Sprite; MAX_SHIPS],
     /// Each craft's shield shell animation, when one is up.

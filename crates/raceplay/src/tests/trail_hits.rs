@@ -284,19 +284,49 @@ fn a_pulse_race_with_a_ribbon(burst: bool) -> Race {
 }
 
 /// **The lent burst, red to green.** A Pulse race has no HD tube; with the burst lent, a craft
-/// inside the title's own ribbon raises it, once per tick it stays inside.
+/// inside the title's own ribbon raises it on the tick it enters and then every other tick.
 #[test]
-fn a_lent_burst_plays_for_a_craft_flying_in_a_pulse_ribbon() {
+fn a_lent_burst_plays_for_a_craft_flying_in_a_pulse_ribbon_every_other_tick() {
     let mut race = a_pulse_race_with_a_ribbon(true);
-    place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
-    assert_ne!(race.view.trail_inside[0] & 0b10, 0, "inside the ribbon");
-    assert_eq!(race.view.stage.playing_count(), 1, "the burst played");
-    place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+    let mut played = Vec::new();
+    for _ in 0..5 {
+        place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+        assert_ne!(race.view.trail_inside[0] & 0b10, 0, "inside the ribbon");
+        played.push(race.view.stage.playing_count());
+    }
     assert_eq!(
-        race.view.stage.playing_count(),
-        2,
-        "and again the next tick"
+        played,
+        [1, 1, 2, 2, 3],
+        "one burst, then one every second tick"
     );
+}
+
+/// Leaving the ribbon resets the rhythm: the first tick back inside fires.
+#[test]
+fn a_lent_burst_fires_on_every_entry() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    let inside = Vec3::new(-18.0, 0.0, 0.0);
+    place_and_step(&mut race, inside);
+    place_and_step(&mut race, inside);
+    place_and_step(&mut race, Vec3::new(-18.0, 50.0, 0.0));
+    assert_eq!(race.view.stage.playing_count(), 1);
+    place_and_step(&mut race, inside);
+    assert_eq!(race.view.stage.playing_count(), 2, "re-entry fires at once");
+}
+
+/// A title that plays its own burst keeps the measured every-tick rate: only a lent one is thinned.
+#[test]
+fn a_burst_the_title_authors_fires_every_tick() {
+    let mut race = race_with_a_trail();
+    race.view.handles.insert(
+        Trigger::TrailHitship,
+        a_one_shot_burst(oag_title::engine_effects::TRAIL_HITSHIP_EFFECT),
+    );
+    assert!(!race.view.handles.is_lent(Trigger::TrailHitship));
+    for tick in 1..=4 {
+        place_and_step(&mut race, Vec3::new(-40.0, 0.0, 0.0));
+        assert_eq!(race.view.stage.playing_count(), tick);
+    }
 }
 
 /// **Off is inert.** The same ribbon and the same craft, nothing lent: no latch, no burst.
@@ -365,23 +395,27 @@ fn a_craft_with_a_pulse_ribbon_through_its_middle_is_inside_and_one_beside_it_is
     );
 }
 
-/// Every craft but slot 0 sits in slot 0's ribbon.
-fn all_intruders_in_the_ribbon(race: &mut Race) -> usize {
+/// Every craft lays a ribbon and sits in every other craft's: the most pairs a grid can fire.
+fn all_craft_in_each_others_ribbons(race: &mut Race) {
     let count = race.sim.world.ship_count as usize;
-    for slot in 1..count {
+    for owner in 1..count {
+        for k in 0..oag_fx::exhaust::TRAIL_SAMPLES {
+            race.view.exhaust[owner].push_trail(Vec3::new(k as f32 * -4.0, 0.0, 0.0), Vec3::X);
+        }
+    }
+    for slot in 0..count {
         race.sim.world.ships[slot].physics.body.position = Vec3::new(-18.0, 0.0, 0.0);
     }
-    count - 1
 }
 
-/// **A detonation started while trail hits stream plays to completion.** Every craft but one
-/// flies in the same ribbon, so one burst per intruder per tick fills the stage; the detonation
+/// **A detonation started while trail hits stream plays to completion.** Every craft flies
+/// in every other's ribbon, so the bursts of one grid fill the stage; the detonation
 /// is the thinnest instance on it (a few long-lived particles), which is the one an ordinary
 /// recycle picks. Dropping the expendable play from `advance_trail_hits` evicts it within a tick.
 #[test]
 fn a_detonation_started_while_trail_hits_stream_still_plays_to_completion() {
     let mut race = a_pulse_race_with_a_ribbon(true);
-    let intruders = all_intruders_in_the_ribbon(&mut race);
+    all_craft_in_each_others_ribbons(&mut race);
     let mut detonation = a_one_shot_burst("WO_ROCKET_EXPLO");
     detonation.emitters[0].lifetime_ticks = (40.0, 0.0);
     let detonation = std::sync::Arc::new(detonation);
@@ -392,17 +426,15 @@ fn a_detonation_started_while_trail_hits_stream_still_plays_to_completion() {
         race.view.stage.advance(dt, &mut rng);
     };
 
+    let mut peak = 0;
     for _ in 0..60 {
         step(&mut race);
+        peak = peak.max(race.view.stage.playing_count());
     }
-    assert!(
-        intruders * 14 > oag_fx::psys::MAX_INSTANCES,
-        "the fixture has too few craft to fill the stage: {intruders}"
-    );
     assert_eq!(
-        race.view.stage.playing_count(),
+        peak,
         oag_fx::psys::MAX_INSTANCES,
-        "the trail hits did not fill the stage, so the test proves nothing"
+        "the trail hits never filled the stage, so the test proves nothing"
     );
 
     race.view

@@ -283,6 +283,10 @@ impl Race {
                     self.view.trail_inside[owner] |= bit;
                 } else {
                     self.view.trail_inside[owner] &= !bit;
+                    self.view.trail_hit_rest[owner] &= !bit;
+                    continue;
+                }
+                if !self.trail_hit_due(owner, bit) {
                     continue;
                 }
                 // **The trail's owner picks the colour, measured.** At the call
@@ -328,6 +332,23 @@ impl Race {
                     .play_carried_expendable(&effect, point, 1.0, velocity);
             }
         }
+    }
+
+    /// Whether the burst for the craft `bit` names, inside `owner`'s trail, fires this tick.
+    ///
+    /// Every tick when the title plays its own burst (HD, 2048, Omega). A burst
+    /// lent to a title that authors none (`load::trail_hits`) is an enhancement of this
+    /// project's and fires every other tick, starting with the first tick inside: half HD's
+    /// rate still reads as a stream and keeps the stage's instances for the effects the
+    /// original does draw.
+    fn trail_hit_due(&mut self, owner: usize, bit: u8) -> bool {
+        if !self.view.handles.is_lent(Trigger::TrailHitship) {
+            return true;
+        }
+        let rest = &mut self.view.trail_hit_rest[owner];
+        let due = *rest & bit == 0;
+        *rest ^= bit;
+        due
     }
 
     /// `--trail-sparks`: the burst, every tick, on the player's own ribbon.

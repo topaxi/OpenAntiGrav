@@ -17,6 +17,8 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub struct EffectHandles {
     slots: [Option<Arc<Effect>>; Trigger::COUNT],
+    /// Triggers whose effect was lent: see [`Self::lending`].
+    lent: [bool; Trigger::COUNT],
     quake_look: oag_title::QuakeLook,
     own: crate::extension_effects::ModEffects,
     shaders: crate::extension_shaders::ModShaders,
@@ -26,6 +28,7 @@ impl Default for EffectHandles {
     fn default() -> Self {
         Self {
             slots: std::array::from_fn(|_| None),
+            lent: [false; Trigger::COUNT],
             quake_look: oag_title::QuakeLook::track(oag_title::Origin::Measured),
             own: crate::extension_effects::ModEffects::default(),
             shaders: crate::extension_shaders::ModShaders::default(),
@@ -78,8 +81,16 @@ impl EffectHandles {
     pub fn lending(mut self, trigger: Trigger, effect: Option<Arc<Effect>>) -> Self {
         if effect.is_some() {
             self.slots[trigger.index()] = effect;
+            self.lent[trigger.index()] = true;
         }
         self
+    }
+
+    /// Whether `trigger` plays an effect [`Self::lending`] put there, which its title's own table
+    /// does not name.
+    #[must_use]
+    pub fn is_lent(&self, trigger: Trigger) -> bool {
+        self.lent[trigger.index()]
     }
 
     /// Plays nothing on `trigger`: a title's own trail-hit burst with the player's
@@ -87,6 +98,7 @@ impl EffectHandles {
     #[must_use]
     pub fn without(mut self, trigger: Trigger) -> Self {
         self.slots[trigger.index()] = None;
+        self.lent[trigger.index()] = false;
         self
     }
 

@@ -904,6 +904,7 @@ impl Race {
                 trail_sparks,
                 campaign_event,
                 trail_inside: [0; MAX_SHIPS],
+                trail_hit_rest: [0; MAX_SHIPS],
                 hd_flame: [exhaust::hd::Flame::new(); MAX_SHIPS],
                 hd_sprite: [exhaust::hd::Sprite::new(); MAX_SHIPS],
                 shield: std::array::from_fn(|slot| {
