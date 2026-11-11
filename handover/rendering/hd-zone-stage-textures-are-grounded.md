@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, omega, 2048]
 updated: 2026-11-11
-summary: "HD Zone aniso palette found and drawn on the arenas; open: GradientColour1 on zone_2, the arena floor hue at stage 4, Omega/2048 zoneAnisoLookupTex writer; zoneMode*.gtf are fifteen identical blanks"
+summary: "HD Zone aniso ramps found and drawn on the arenas; open: zone_2 GradientColour1, stage-4 floor hue, Omega/2048 zoneAnisoLookupTex"
 ---
 
 # HD's per-stage Zone textures are grounded now: which file feeds which sampler is read, what the shader does with them is not
