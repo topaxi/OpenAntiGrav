@@ -397,6 +397,30 @@ the active one, and the decoders ask it:
   `pulse_text.fnt` 4x and 16x). The `x2_hud_1` and `x2_hud_2` lines are two different fonts, not a
   split atlas. A 16x face is a 8192x4096 atlas, two planes: about 67 MB per face while it is
   built.
+- **A face is used at most 8x, and always within a texture** (`oag_ui::font::PACK_MAX_FACTOR`,
+  `Atlas::from_pack`, `Atlas::reduced`). The front end's faces carry PromptFont's substitute
+  button glyphs (`Atlas::with_prompts`) beside the disc's, each cell in its disc glyph's box, so at
+  a pack's 16x the three Pulse faces were 4096x6672, 4096x18744 and 4096x12948 (157 Mtexel, 314
+  MB per copy), and a Steam Deck's 16,384-texel textures refused the 18,744: `wgpu error: ...
+  Dimension Y value 18744 exceeds the limit of 16384`, a panic opening the menus. `from_pack` now
+  takes the largest whole fraction of the pack's factor that is at most 8 (the front end lays out
+  in 480x272, so 8 texels per unit covers a 3840-wide screen) and that leaves the atlas **with its
+  button glyphs** at most `MAX_ATLAS_SIDE` (8192) a side, and says which in the load report
+  (`... 2048x1026 from the texture pack (8x of the pack's 16x)`). The 16x Pulse pack's
+  faces come out 2048x3474, 1024x4752 and 2048x6508 (25 Mtexel, 51 MB): `Pulse_20.fnt` (the menu
+  rows) falls to 4x because its button glyphs at 8x would be taller than 8192; 4x is exact for a
+  1080p screen and a little soft at 4K. The reduction averages whole blocks of the pack's texels, so
+  every cell stays on a texel edge. **The renderer guards the device as well**
+  (`render::face::fit_to_device`): an atlas larger than the device's own
+  `max_texture_dimension_2d` (below the loader's 8192 on a web or old phone adapter) is reduced by
+  `Atlas::fitting` with a `warn` line, never a validation panic. **`OAG_MAX_TEXTURE_SIDE=<n>`**
+  makes the device with at most that limit, to try a Deck (16384), a phone (8192) or 2048 on a
+  desktop adapter. Open: the prompt cells are packed at the atlas's own width, so most of a
+  face's rows are button glyphs; packing them as wide as the limit would let the menu face keep 8x.
+  Every picture in both packs is at most 8192 a side (8192x4096: the two `fx400_hud_big` fonts;
+  everything else 4096), so no single replaced texture exceeds a phone's limit; the HUD sprite sheet
+  (`oag_hud::sprite::Sheet`, stacked up to 8192 tall in columns, width the sum of the columns) is
+  not reduced to a device and measured 2048x2194 on Pulse's time trial with the Pulse pack.
 - **The front end's faces** (`oag_game::boot::load_shell`, `boot/fonts.rs`): the boot engages the
   pack (`oag_raceplay::texture_pack::engage`, the race load's own function) after the disc opens and
   switches it off once the faces are built, so nothing after them (the menus' other art, a race's

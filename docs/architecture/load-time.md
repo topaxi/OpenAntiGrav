@@ -284,6 +284,8 @@ build is untouched by the change.
 
 **To get the labels back:** `OAG_WGPU_DEBUG=1` keeps `InstanceFlags::DEBUG` in any build (`oag_game::adapter::DEBUG_LABELS_VAR`), for RenderDoc or a validation message read by label. It costs the load the quarter above and changes no picture.
 
+**To try a smaller device:** `OAG_MAX_TEXTURE_SIDE=<n>` makes the device with `max_texture_dimension_2d` at most `n` (`oag_mesh::mesh_render::required_limits`), so a Steam Deck's 16,384 or a phone's 8,192 is a desktop run away. Unset changes nothing.
+
 ## The player's path, and per-frame CPU
 
 One `--measure-race-load 1` on HD Fury in an Xvfb display with lavapipe
