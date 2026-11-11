@@ -41,6 +41,11 @@ fn entry(reversed: bool) -> Option<String> {
 
 /// How many of the seven craft ended the run in any state but racing.
 fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
+    run(class, seed, reversed).map(|(dead, _)| dead)
+}
+
+/// [`destroyed`], and what craft-to-craft bumps took from the seven pools in all.
+fn run(class: &str, seed: u64, reversed: bool) -> Option<(u32, f32)> {
     let entry = entry(reversed)?;
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
     let loaded = race::load(&race::Options {
@@ -67,7 +72,8 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
             }
         }
     }
-    Some(dead.iter().filter(|flag| **flag).count() as u32)
+    let bumps = (1..count).map(|slot| race.pair_shield_lost_of(slot)).sum();
+    Some((dead.iter().filter(|flag| **flag).count() as u32, bumps))
 }
 
 /// Ceilings on craft destroyed, `(class, seed, forward, reversed)`.
@@ -178,7 +184,13 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
     // 20 15 12 16 18 16 14 16 16 (143), after 16 14 16 11 15 17 14 16 16 (135).
     ("VENOM", 1, 1, 0),
     ("VENOM", 2, 2, 1),
-    ("VENOM", 3, 1, 0),
+    // Reversed 0 -> 1: a craft-to-craft bump charges the pool
+    // (`oag_physics::damage::apply_pair`). Slot 7 dies with walls 5.0, bumps 13.6, the rest
+    // weapons. Over seeds 1-23, every class, both layouts (`ai_dekonstruct_black_board`):
+    // destroyed 62 -> 121 (VENOM 4 -> 6, FLASH 6 -> 9, RAPIER 19 -> 34, PHANTOM 33 -> 72),
+    // systematic rather than seed spread: the field now pays for its contacts
+    // (`docs/gameplay/ai.md`, "Craft-to-craft bumps cost the field energy").
+    ("VENOM", 3, 1, 1),
     ("FLASH", 1, 2, 1),
     ("FLASH", 2, 0, 1),
     // 2026-10-20, forward 1 -> 2 (lane `ai-gate-robustness`): a wreck in state 6 leaves
@@ -288,17 +300,20 @@ fn ai_dekonstruct_black_board() {
         .unwrap_or(8);
     let mut total = 0;
     for class in ["VENOM", "FLASH", "RAPIER", "PHANTOM"] {
-        let (mut forward, mut reversed) = (0, 0);
+        let (mut forward, mut reversed, mut bumps) = (0, 0, 0.0);
         for seed in 1..=seeds {
-            let Some(f) = destroyed(class, seed, false) else {
+            let Some((f, fb)) = run(class, seed, false) else {
                 return;
             };
-            let r = destroyed(class, seed, true).expect("the reversed entry");
-            println!("BOARD {class} seed {seed}: forward {f} reversed {r}");
+            let (r, rb) = run(class, seed, true).expect("the reversed entry");
+            println!(
+                "BOARD {class} seed {seed}: forward {f} reversed {r}, bumps took {fb:.1} + {rb:.1}"
+            );
             forward += f;
             reversed += r;
+            bumps += fb + rb;
         }
-        println!("BOARD {class}: forward {forward} reversed {reversed}");
+        println!("BOARD {class}: forward {forward} reversed {reversed}, bumps took {bumps:.1}");
         total += forward + reversed;
     }
     println!("BOARD total {total}");
