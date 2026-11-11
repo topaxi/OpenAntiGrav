@@ -1158,6 +1158,8 @@ struct Instance {
     held: bool,
     /// Yields its slot to any other effect: see [`Stage::play_expendable`].
     expendable: bool,
+    /// [`Stage::claims`] when the slot was last claimed; the oldest expendable instance goes first.
+    claimed: u64,
     /// Bumped every time the slot is claimed.
     generation: u32,
     /// The emitter frame's `+Y` in world space - see [`Stage::orient`].
@@ -1172,6 +1174,7 @@ impl Instance {
         attached: false,
         held: false,
         expendable: false,
+        claimed: 0,
         generation: 0,
         up: Vec3::Y,
     };
@@ -1202,6 +1205,8 @@ impl Instance {
 #[derive(Debug, Clone)]
 pub struct Stage {
     instances: Box<[Instance]>,
+    /// How many times an instance has been claimed.
+    claims: u64,
 }
 
 impl Default for Stage {
@@ -1219,6 +1224,7 @@ impl Stage {
     pub fn new() -> Self {
         Self {
             instances: vec![Instance::IDLE; MAX_INSTANCES].into_boxed_slice(),
+            claims: 0,
         }
     }
 
@@ -1404,7 +1410,9 @@ impl Stage {
         scale: f32,
         attached: bool,
     ) -> Playing {
+        self.claims += 1;
         let instance = &mut self.instances[index];
+        instance.claimed = self.claims;
         instance.generation = instance.generation.wrapping_add(1);
         instance.effect = Some(effect.clone());
         instance.system = System::new();

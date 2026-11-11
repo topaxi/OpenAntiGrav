@@ -31,8 +31,10 @@ impl Stage {
     }
 
     /// The instance a play recycles when nothing is free: unattached, not a running held
-    /// surface, expendable ones first and then the fewest live particles. With `expendable_only`
-    /// an ordinary instance is never a candidate.
+    /// surface, the oldest expendable one first and then the ordinary one with the fewest live
+    /// particles. With `expendable_only` an ordinary instance is never a candidate. Oldest, not
+    /// thinnest, among expendables: a fresh burst has no particles yet, and a stage refilled
+    /// every tick would otherwise recycle that tick's own plays and pulse.
     pub(super) fn victim(&self, expendable_only: bool) -> Option<usize> {
         self.instances
             .iter()
@@ -42,7 +44,13 @@ impl Stage {
                     && !(instance.held && instance.system.is_running())
                     && (instance.expendable || !expendable_only)
             })
-            .min_by_key(|(_, instance)| (!instance.expendable, instance.system.alive_count()))
+            .min_by_key(|(_, instance)| {
+                if instance.expendable {
+                    (false, instance.claimed)
+                } else {
+                    (true, instance.system.alive_count() as u64)
+                }
+            })
             .map(|(index, _)| index)
     }
 
