@@ -115,27 +115,18 @@ pub fn spellings(platform: Platform, name: &str) -> Vec<String> {
 
 impl Archives {
     /// The spelling of the texture `name` this source holds, `name` itself
-    /// when it is held as written. `None` (and a debug line naming every
-    /// spelling tried) when none is.
+    /// when it is held as written, or `None`. A query: it logs nothing, because
+    /// a caller may be probing for an optional texture
+    /// ([`Self::read_texture`] says when a read finds none).
     ///
     /// The search is [`Self::locate`]'s, so a player's override and this
     /// project's fallback layer answer for a spelling the same way the
     /// archives do.
     #[must_use]
     pub fn resolve_texture(&self, name: &str) -> Option<String> {
-        let tried = spellings(self.layout.platform, name);
-        if let Some(found) = tried
-            .iter()
+        spellings(self.layout.platform, name)
+            .into_iter()
             .find(|candidate| self.locate(candidate).is_some())
-        {
-            return Some(found.clone());
-        }
-        log::debug!(
-            "texture {name}: no spelling is held on {} (tried {})",
-            self.layout.platform,
-            tried.join(", ")
-        );
-        None
     }
 
     /// Reads the texture `name`, as written and then in this platform's
@@ -152,6 +143,11 @@ impl Archives {
     /// name their XML does not contain.
     pub fn read_texture(&mut self, name: &str) -> crate::Result<(String, Vec<u8>)> {
         let Some(held) = self.resolve_texture(name) else {
+            log::debug!(
+                "texture {name}: no spelling is held on {} (tried {})",
+                self.layout.platform,
+                spellings(self.layout.platform, name).join(", ")
+            );
             return self.read_name(name).map(|blob| (name.to_string(), blob));
         };
         match self.read_name(&held) {
