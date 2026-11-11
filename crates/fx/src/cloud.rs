@@ -581,52 +581,12 @@ fn bind_texture(
     layout: &wgpu::BindGroupLayout,
     texture: &FlareTexture,
 ) -> wgpu::BindGroup {
-    let gpu_texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("cloud texture"),
-        size: wgpu::Extent3d {
-            width: texture.width.max(1),
-            height: texture.height.max(1),
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-    queue.write_texture(
-        wgpu::TexelCopyTextureInfo {
-            texture: &gpu_texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        &texture.rgba,
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(texture.width.max(1) * 4),
-            rows_per_image: Some(texture.height.max(1)),
-        },
-        wgpu::Extent3d {
-            width: texture.width.max(1),
-            height: texture.height.max(1),
-            depth_or_array_layers: 1,
-        },
-    );
+    let gpu_texture = texture.upload(device, queue, "cloud texture");
     let view = gpu_texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some("cloud texture"),
-        // The shared texture is sampled `0..1` per sprite corner - see
-        // `quad` - so clamping rather than repeating matches how the flare's
-        // own single-texture sampler is built.
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Linear,
-        ..Default::default()
-    });
+    // The shared texture is sampled `0..1` per sprite corner - see
+    // `quad` - so clamping rather than repeating matches how the flare's
+    // own single-texture sampler is built.
+    let sampler = oag_gpu::texture::clamp_linear_sampler(device, "cloud texture");
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("cloud texture"),
         layout,

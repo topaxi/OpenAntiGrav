@@ -179,31 +179,13 @@ pub fn upload_sky_probe(
     queue: &wgpu::Queue,
     rgba: &[u8],
 ) -> wgpu::TextureView {
-    let (width, height) = crate::mesh::sky_paraboloid::SIZE;
-    let extent = wgpu::Extent3d {
-        width,
-        height,
-        depth_or_array_layers: 1,
-    };
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("sky probe"),
-        size: extent,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: SKY_PROBE_FORMAT,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-    queue.write_texture(
-        texture.as_image_copy(),
+    let texture = oag_gpu::texture::upload_2d(
+        device,
+        queue,
+        "sky probe",
+        SKY_PROBE_FORMAT,
+        crate::mesh::sky_paraboloid::SIZE,
         rgba,
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(width * 4),
-            rows_per_image: Some(height),
-        },
-        extent,
     );
     texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
@@ -253,45 +235,17 @@ pub(super) fn resources(
         env_probes,
         sky_probe,
     } = maps;
-    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some("shadow map"),
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Linear,
-        ..Default::default()
-    });
+    let sampler = oag_gpu::texture::clamp_linear_sampler(device, "shadow map");
     let view = match map {
         Some(view) => view.clone(),
         None => {
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("shadow map placeholder"),
-                size: wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: COVERAGE_FORMAT,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
-            queue.write_texture(
-                texture.as_image_copy(),
+            let texture = oag_gpu::texture::upload_2d(
+                device,
+                queue,
+                "shadow map placeholder",
+                COVERAGE_FORMAT,
+                (1, 1),
                 &[0u8],
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(1),
-                    rows_per_image: Some(1),
-                },
-                wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
             );
             texture.create_view(&wgpu::TextureViewDescriptor::default())
         }
@@ -341,33 +295,13 @@ pub(super) fn resources(
             // Black, one layer: no hull names a layer without a map bound,
             // so this is never sampled; it exists so the layout is one
             // layout.
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("sun occlusion placeholder"),
-                size: wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: OCCLUSION_FORMAT,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
-            queue.write_texture(
-                texture.as_image_copy(),
+            let texture = oag_gpu::texture::upload_2d(
+                device,
+                queue,
+                "sun occlusion placeholder",
+                OCCLUSION_FORMAT,
+                (1, 1),
                 &[0u8],
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(1),
-                    rows_per_image: Some(1),
-                },
-                wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
             );
             texture.create_view(&wgpu::TextureViewDescriptor {
                 dimension: Some(wgpu::TextureViewDimension::D2Array),
@@ -408,33 +342,13 @@ pub(super) fn resources(
     let behind_glass_view = match behind_glass {
         Some(view) => view.clone(),
         None => {
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("behind the glass placeholder"),
-                size: wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: COVERAGE_FORMAT,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
-            queue.write_texture(
-                texture.as_image_copy(),
+            let texture = oag_gpu::texture::upload_2d(
+                device,
+                queue,
+                "behind the glass placeholder",
+                COVERAGE_FORMAT,
+                (1, 1),
                 &[0u8],
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(1),
-                    rows_per_image: Some(1),
-                },
-                wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
             );
             texture.create_view(&wgpu::TextureViewDescriptor::default())
         }
@@ -443,33 +357,13 @@ pub(super) fn resources(
     let env_probe_view = match env_probes {
         Some(view) => view.clone(),
         None => {
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("environment probe placeholder"),
-                size: wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: ENV_PROBE_FORMAT,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
-            queue.write_texture(
-                texture.as_image_copy(),
+            let texture = oag_gpu::texture::upload_2d(
+                device,
+                queue,
+                "environment probe placeholder",
+                ENV_PROBE_FORMAT,
+                (1, 1),
                 &[0u8, 0, 0, 255],
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(4),
-                    rows_per_image: Some(1),
-                },
-                wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
             );
             texture.create_view(&wgpu::TextureViewDescriptor {
                 dimension: Some(wgpu::TextureViewDimension::D2Array),
@@ -481,33 +375,13 @@ pub(super) fn resources(
     let sky_probe_view = match sky_probe {
         Some(view) => view.clone(),
         None => {
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("sky probe placeholder"),
-                size: wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: SKY_PROBE_FORMAT,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
-            queue.write_texture(
-                texture.as_image_copy(),
+            let texture = oag_gpu::texture::upload_2d(
+                device,
+                queue,
+                "sky probe placeholder",
+                SKY_PROBE_FORMAT,
+                (1, 1),
                 &[0u8, 0, 0, 255],
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(4),
-                    rows_per_image: Some(1),
-                },
-                wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
             );
             texture.create_view(&wgpu::TextureViewDescriptor::default())
         }

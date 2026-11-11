@@ -680,39 +680,6 @@ fn upload_view(
     queue: &wgpu::Queue,
     texture: &FlareTexture,
 ) -> wgpu::TextureView {
-    let (width, height) = (texture.width.max(1), texture.height.max(1));
-    let gpu_texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("beam texture"),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-    queue.write_texture(
-        wgpu::TexelCopyTextureInfo {
-            texture: &gpu_texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        &texture.rgba,
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(width * 4),
-            rows_per_image: Some(height),
-        },
-        wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-    );
+    let gpu_texture = texture.upload(device, queue, "beam texture");
     gpu_texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
