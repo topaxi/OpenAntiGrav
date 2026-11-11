@@ -641,10 +641,9 @@ pub fn splice_assist_indicator(
 ///
 /// Keyed by the reference the layout spells, which is what
 /// [`oag_hud::sprite_draw`] looks up. Which entry that reference resolves to
-/// is this function's business: the declared name first, then the title's own
-/// rewrite of it - `oag_title::HudArt::texture_extension`, which is `None` on
-/// both PSP titles and `.gtf` on HD, where a `src` names the exporter's input
-/// rather than the shipped file.
+/// is [`oag_assets::Archives::read_texture`]'s business: the declared name
+/// first, then the platform's own spelling of it, which is `.gtf` on HD, where a
+/// `src` names the exporter's input rather than the shipped file.
 ///
 /// A texture that will not resolve or will not decode costs its own sprites and
 /// nothing else: they are reported here and skipped at draw time rather than
@@ -682,8 +681,8 @@ fn load_atlases(
 
     let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
     for reference in &references {
-        match read_hud_texture(archives, title, reference) {
-            Ok(blob) => blobs.push(((*reference).to_string(), blob)),
+        match archives.read_texture(reference) {
+            Ok((_, blob)) => blobs.push(((*reference).to_string(), blob)),
             Err(why) => report.push(format!("HUD atlas {reference} unavailable ({why})")),
         }
     }
@@ -973,42 +972,6 @@ fn quad_extent(model: &oag_mesh::mesh::Model) -> Option<[f32; 2]> {
         return None;
     }
     Some([max[0] - min[0], max[1] - min[1]])
-}
-
-/// Reads one HUD texture, by the name the layout declares and then by the name
-/// this title rewrites it to.
-///
-/// Two rewrites stack here and they answer different questions.
-/// [`oag_pulse::read_image`] answers "which *pressing* keeps this where" - the
-/// PS2 build's `.pct` - and every source goes through it.
-/// `HudArt::texture_extension` answers "does this title's XML name the shipped
-/// file at all", which is HD's `.gtf`. The declared name is tried first in both,
-/// so a title needing neither takes exactly the path it took before.
-///
-/// # Errors
-///
-/// The error naming the entry the layout asked for, never the rewritten one: a
-/// message about `hdhud.gtf` sends a reader looking for a name their XML does
-/// not contain.
-fn read_hud_texture(
-    archives: &mut oag_assets::Archives,
-    title: &'static oag_title::Title,
-    reference: &str,
-) -> oag_assets::Result<Vec<u8>> {
-    let declared = oag_pulse::read_image(archives, reference);
-    let Some(extension) = title.hud_art.texture_extension else {
-        return declared;
-    };
-    match declared {
-        Ok(blob) => Ok(blob),
-        Err(original) => {
-            let rewritten = oag_title::hud::replace_extension(reference, extension);
-            if rewritten == reference {
-                return Err(original);
-            }
-            oag_pulse::read_image(archives, &rewritten).map_err(|_| original)
-        }
-    }
 }
 
 /// Reads the `.fnt` this source's language plugins fill `role` in with.
