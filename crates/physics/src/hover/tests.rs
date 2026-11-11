@@ -632,18 +632,13 @@ fn two_penetrating_probes_move_the_body_by_their_sum() {
 
 /// The roll oscillator is stable, and the margin is pinned so it cannot drift back.
 ///
-/// Rewritten twice. With the transcribed gain `400` reaching the body as a bare angular
-/// acceleration the oscillator ran at 20 rad/s with `det = 1.0402`, growing roll about 2 % a tick
-/// until the ship inverted. A fitted `ALIGNMENT_INERTIA = 19.8` made it stable at `4.49` rad/s,
-/// the frequency measured off the original's step response.
-///
-/// **The divisor is now the recovered inertia tensor** and the fitted constant is gone: the
+/// With the gain `400` reaching the body as a bare angular acceleration the oscillator would run
+/// at 20 rad/s with `det = 1.0402`, growing roll about 2 % a tick until the ship inverted. The
 /// accumulators hold torque, so [`crate::integrate`] divides this term by
-/// [`crate::forces::ship_inertia`]'s roll entry, `15.6` (`Body_SetBoxInertia`'s literal box).
-/// **The numbers below are the NEW behaviour, not the original's `4.49`**: `400 / 15.6` gives
-/// about `5.06` rad/s, 13 % fast, pinned rather than tuned out. The likeliest explanation is that
-/// the term is spread across roll (`15.6`) and yaw (`21.6`), the fit's `19.8` sitting between;
-/// nothing has measured it.
+/// [`crate::forces::ship_inertia`]'s roll entry, `15.6` (`Body_SetBoxInertia`'s literal box):
+/// `400 / 15.6` gives about `5.06` rad/s, the frequency the original's roll step response
+/// measures (`docs/physics/roll-step-response.md`; the whole-ship twin of this arithmetic is
+/// `ship_dynamics::a_rolled_craft_swings_through_level_at_the_originals_period`).
 ///
 /// The arithmetic is **not** the `h <= c/k` form: the acceleration is computed once from the
 /// frame's starting state and held across all three sub-steps, so the governing step is the frame
@@ -670,18 +665,11 @@ fn the_roll_oscillator_is_stable_by_the_margin_that_was_measured() {
          tensor gives"
     );
 
-    // The frequency the recovered tensor produces, against the original's own
-    // measured 4.49 rad/s. Pinned as what this crate does, with the gap stated.
+    // The frequency the recovered tensor produces, which is the original's.
     let omega = k.sqrt();
     assert!(
         (omega - 5.06).abs() < 0.05,
         "the oscillator runs at {omega} rad/s, not the 5.06 that 400/15.6 gives"
-    );
-    assert!(
-        omega > 4.49,
-        "the recovered tensor is stiffer than the original's measured 4.49 \
-         rad/s, not softer; if this ever flips, the 13 % gap has changed sign \
-         and the explanation in this test's docs is wrong"
     );
 
     // And the stability condition in the form the documentation quotes.

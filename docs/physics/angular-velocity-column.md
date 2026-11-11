@@ -725,7 +725,10 @@ place**, which is the property the geometry was previously thought to break.
 - **Roll is untouched, by construction**: both probes sit on the centreline, so
   the suspension produces no roll torque at all and the `13 %` roll-stiffness gap
   (`5.06` predicted against `4.49` measured) is exactly where it was. It is now
-  the *only* gap of its kind left on the attitude axes.
+  the *only* gap of its kind left on the attitude axes. **Closed 2026-11-11: there
+  was no gap.** The `4.49` was a quarter-period misreading of a damped step
+  response; four new captures put the original at this crate's frequency
+  ([roll-step-response.md](roll-step-response.md)).
 - The seeded whole-lap comparison is unchanged within its own noise (position max
   error `1.172e3 -> 1.169e3`); that run diverges for reasons this term does not
   reach. The open-loop `just scripted-sim` lap moves `659 -> 618` units travelled
