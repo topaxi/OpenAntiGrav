@@ -35,9 +35,11 @@ use crate::{Context, Driver, Line, Tuning};
 mod adapt;
 mod brake;
 mod clearance;
+mod driven;
 mod harden;
 mod lower;
 
+use driven::{Driven, Reader};
 use lower::Lowering;
 
 /// How much faster, as a ratio `(numerator, denominator)` of verification-lap
@@ -101,6 +103,10 @@ pub struct Course<'a, R: Raycaster + ?Sized> {
         Option<oag_core::math::Vec3>,
         oag_core::math::Vec3,
     ) -> Option<oag_core::math::Vec3>,
+    /// Whether every run from the grid is driven in full, with nothing read
+    /// back from the run before it (`driven`). False in a race; a test sets it
+    /// to compare the plans the two ways learn.
+    pub drive_again: bool,
 }
 
 /// The craft the plan is for, and where it starts.
@@ -681,12 +687,18 @@ impl SpeedPlan {
 
     /// One search with one way of lowering: calibration, learning passes and
     /// their verification.
+    ///
+    /// `braking` is the calibration, measured here if no search of this craft
+    /// on this course has yet. `known` is the last run from the grid, in and
+    /// out ([`Driven`]).
     fn search<R: Raycaster + ?Sized>(
         course: &Course<'_, R>,
         craft: &Craft,
         tuning: &Tuning,
         budget: u64,
         lowering: Lowering,
+        braking: &mut Option<brake::Calibration>,
+        known: &mut Driven,
     ) -> (Self, Report) {
         let mut plan = Self::unlimited(course.line);
         let mut report = Report::default();
@@ -694,9 +706,16 @@ impl SpeedPlan {
             return (plan, report);
         }
         let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
-        let (decel, steps) = brake::calibrate(course, craft, tuning, yaw);
-        report.steps += steps;
-        plan.decel = decel;
+        if course.drive_again {
+            *braking = None;
+        }
+        let braking =
+            braking.get_or_insert_with(|| brake::Calibration::measure(course, craft, tuning, yaw));
+        // The run-up is the longest stretch a first pass, on a plan with no
+        // ceilings yet, can read back.
+        known.clone_from(&braking.run_up);
+        report.steps += braking.steps;
+        plan.decel = braking.decel;
         plan.yaw = Some(yaw);
         plan.derive_targets();
 
@@ -714,8 +733,9 @@ impl SpeedPlan {
                     lowering,
                     margin: 1.0,
                 },
+                known,
             );
-            let verify = plan.verify(course, craft, tuning, yaw, &mut report, 1.0);
+            let verify = plan.verify(course, craft, tuning, yaw, &mut report, 1.0, known);
             if verify == 0 || report.steps >= budget {
                 break;
             }
@@ -742,6 +762,10 @@ impl SpeedPlan {
 
     /// Two laps from the grid that follow the plan and change nothing; returns
     /// the failure ticks and fills the verification fields of `report`.
+    ///
+    /// `known` is the last run from the grid: what of it this run would repeat
+    /// is read back, not driven, and it leaves as this run's record.
+    #[allow(clippy::too_many_arguments)]
     fn verify<R: Raycaster + ?Sized>(
         &mut self,
         course: &Course<'_, R>,
@@ -750,8 +774,18 @@ impl SpeedPlan {
         yaw: f32,
         report: &mut Report,
         margin: f32,
+        known: &mut Driven,
     ) -> u32 {
-        self.verify_stuck(course, craft, tuning, yaw, report, margin, NEVER_STUCK)
+        self.verify_stuck(
+            course,
+            craft,
+            tuning,
+            yaw,
+            report,
+            margin,
+            NEVER_STUCK,
+            known,
+        )
     }
 
     /// [`Self::verify`] with its runs stalled after `stuck` ticks without progress.
@@ -765,59 +799,51 @@ impl SpeedPlan {
         report: &mut Report,
         margin: f32,
         stuck: u32,
+        known: &mut Driven,
     ) -> u32 {
         let n = self.len() as i64;
-        let mut run = Self::start_run(craft);
-        run.stuck_limit = stuck;
-        let (mut failures, mut contacts) = (0u32, 0u32);
-        let mut lap_mark: Option<u32> = None;
         report.verify_lap_ticks = None;
         report.verify_respawns = 0;
         report.verify_standing_rescues.clear();
-        let mut pace = vec![f32::INFINITY; self.len()];
-        let mut tight = vec![false; self.len()];
-        let mut respawned_on_flying_lap = false;
+        let mut seen = Verified {
+            failures: 0,
+            contacts: 0,
+            lap_mark: None,
+            pace: vec![f32::INFINITY; self.len()],
+            tight: vec![false; self.len()],
+            respawned_on_flying_lap: false,
+        };
         let limit = (4 * n as u64).max(4_000) as u32 * 2;
+        let kept = known.keep_for(
+            self,
+            course,
+            margin,
+            stuck,
+            u64::from(limit),
+            Reader::Verify,
+        );
+        let mut run = if let Some(run) = kept {
+            for (k, lived) in known.ticks.iter().enumerate() {
+                seen.count(lived, k as u32 + 1, course, craft, report);
+            }
+            run
+        } else {
+            let mut run = Self::start_run(craft);
+            run.stuck_limit = stuck;
+            known.begin(run);
+            run
+        };
         while run.progress < 2 * n && run.tick < limit {
-            let tick = course.tick(&mut run, craft, tuning, yaw, |run, _| {
+            let (_, lived) = course.lived(&mut run, craft, tuning, yaw, |run| {
                 self.follow(run, course.dt, margin)
             });
-            report.steps += 1;
-            contacts += u32::from(tick.contact);
-            if run.progress >= n {
-                pace[run.driver.index as usize] = forward_speed(&run.state);
-            }
-            if !tick.contact
-                && run.state.time_airborne <= 0.0
-                && clearance::too_close(
-                    &run.state,
-                    &craft.handling,
-                    course.env.self_collider,
-                    course.raycaster,
-                )
-            {
-                tight[run.driver.index as usize] = true;
-            }
-            if lap_mark.is_none() && run.progress >= n {
-                lap_mark = Some(run.tick);
-            }
-            let Some(failure) = tick.failure else {
-                continue;
-            };
-            if failure == Failure::Wall {
-                failures += 1;
+            known.push(lived, &run);
+            if !seen.count(&lived, run.tick, course, craft, report) {
                 continue;
             }
             // Put back past the spot, as the race's rescue would: on the
             // standing lap the underpowered case `learn` accepts, on the flying
             // lap a failure of the plan.
-            report.verify_respawns += 1;
-            if run.progress >= n {
-                failures += 1;
-                respawned_on_flying_lap = true;
-            } else {
-                report.verify_standing_rescues.push(run.driver.index);
-            }
             let to = (run.driver.index as usize + RESPAWN_SKIP) % n as usize;
             run = Run {
                 state: (course.respawn)(to),
@@ -833,25 +859,44 @@ impl SpeedPlan {
                 stuck_limit: run.stuck_limit,
                 last_position: None,
             };
+            known.respawn(run);
         }
-        if run.progress >= 2 * n && !respawned_on_flying_lap {
-            report.verify_lap_ticks = lap_mark.map(|mark| run.tick - mark);
+        if run.progress >= 2 * n && !seen.respawned_on_flying_lap {
+            report.verify_lap_ticks = seen.lap_mark.map(|mark| run.tick - mark);
         }
-        self.pace = pace;
-        self.tight = tight;
-        report.verify_failures = failures;
-        report.verify_contacts = contacts;
-        failures
+        self.pace = seen.pace;
+        self.tight = seen.tight;
+        report.verify_failures = seen.failures;
+        report.verify_contacts = seen.contacts;
+        seen.failures
     }
 
     fn follow(&self, run: &Run, dt: f32, margin: f32) -> (f32, f32) {
-        let speed = forward_speed(&run.state);
-        if run.state.time_airborne > 0.0 {
+        self.follow_at(
+            run.driver.index,
+            forward_speed(&run.state),
+            run.state.time_airborne > 0.0,
+            dt,
+            margin,
+        )
+    }
+
+    /// The throttle and brake for a craft whose driver stands on line sample
+    /// `index` at forward speed `speed`, following `margin` of the plan.
+    fn follow_at(
+        &self,
+        index: u32,
+        speed: f32,
+        airborne: bool,
+        dt: f32,
+        margin: f32,
+    ) -> (f32, f32) {
+        if airborne {
             // No grip to brake against in the air; the same rule the driver
             // keeps. See `Driver::drive`.
             return (1.0, 0.0);
         }
-        let target = self.target_ahead(run.driver.index as usize, speed, LEAD_TICKS, dt) * margin;
+        let target = self.target_ahead(index as usize, speed, LEAD_TICKS, dt) * margin;
         longitudinal(speed, target)
     }
 
@@ -867,6 +912,7 @@ impl SpeedPlan {
     /// - **Anything else**: ceilings over the stretch are lowered to [`LOWER`]
     ///   of what the craft did, braking zones re-derived, and the run rewinds
     ///   to before the earliest one that moved.
+    #[allow(clippy::too_many_arguments)]
     fn learn<R: Raycaster + ?Sized>(
         &mut self,
         course: &Course<'_, R>,
@@ -875,6 +921,7 @@ impl SpeedPlan {
         yaw: f32,
         report: &mut Report,
         pass: Pass,
+        known: &mut Driven,
     ) {
         let Pass {
             budget,
@@ -884,11 +931,31 @@ impl SpeedPlan {
         } = pass;
         let n = self.len();
         let goal = 2 * n as i64;
-        let mut run = Self::start_run(craft);
-        run.stuck_limit = stuck;
-        let mut checkpoints: Vec<Run> = vec![run];
         // What each recent tick did, so a failure knows what led to it.
         let mut recent: Vec<Trace> = Vec::new();
+        // The stretch the last run from the grid already drove as this pass
+        // would, up to its first failure, is read back: its marks are this
+        // pass's checkpoints and its ticks the trace, at the steps it cost.
+        let kept = known.keep_for(
+            self,
+            course,
+            margin,
+            stuck,
+            budget.saturating_sub(report.steps),
+            Reader::Learn,
+        );
+        let mut run = if let Some(run) = kept {
+            for (k, lived) in known.ticks.iter().enumerate() {
+                report.steps += 1;
+                push_trace(&mut recent, Trace::of(lived, k as u32 + 1));
+            }
+            run
+        } else {
+            let mut run = Self::start_run(craft);
+            run.stuck_limit = stuck;
+            known.begin(run);
+            run
+        };
         let mut tries: BTreeMap<u32, u32> = BTreeMap::new();
         // Past this much progress, wall contact is forgiven: a site the search
         // gave up on is driven through rather than retried forever.
@@ -897,26 +964,12 @@ impl SpeedPlan {
         while run.progress < goal && report.steps < budget {
             // Read inside the tick, after the driver has located itself, exactly
             // as `verify` does - and kept, so the trace knows what was asked.
-            let asked = std::cell::Cell::new((1.0, 0.0));
-            let tick = course.tick(&mut run, craft, tuning, yaw, |run, _| {
-                asked.set(self.follow(run, course.dt, margin));
-                asked.get()
+            let (tick, lived) = course.lived(&mut run, craft, tuning, yaw, |run| {
+                self.follow(run, course.dt, margin)
             });
-            let (thrust, brake) = asked.get();
             report.steps += 1;
-            recent.push(Trace {
-                tick: run.tick,
-                index: run.driver.index,
-                speed: forward_speed(&run.state),
-                airborne: run.state.time_airborne > 0.0,
-                full: thrust >= 1.0 && brake <= 0.0,
-            });
-            if recent.len() > LOOKBACK_TICKS * 6 {
-                recent.drain(..recent.len() - LOOKBACK_TICKS * 3);
-            }
-            if run.tick.is_multiple_of(CHECK_EVERY) {
-                checkpoints.push(run);
-            }
+            push_trace(&mut recent, Trace::of(&lived, run.tick));
+            known.push(lived, &run);
             let Some(failure) = tick.failure else {
                 continue;
             };
@@ -955,7 +1008,7 @@ impl SpeedPlan {
                     last_position: None,
                 };
                 recent.clear();
-                checkpoints.push(run);
+                known.respawn(run);
                 continue;
             }
 
@@ -970,12 +1023,7 @@ impl SpeedPlan {
             // craft meets the new braking zone from its start.
             let back = earliest_change(&old, &self.target, run.driver.index as usize);
             let resume = run.progress - back as i64 - 8;
-            while checkpoints.len() > 1 && checkpoints.last().is_some_and(|c| c.progress > resume) {
-                checkpoints.pop();
-            }
-            run = *checkpoints
-                .last()
-                .expect("the grid checkpoint is never popped");
+            run = known.rewind(resume);
             // The trace rewinds too, so the next failure still sees the run-up
             // that led to it, not only the ticks spent already too fast since
             // the checkpoint.
@@ -1009,6 +1057,90 @@ struct Trace {
     airborne: bool,
     /// Whether the plan had the craft at full throttle with no brake.
     full: bool,
+}
+
+impl Trace {
+    /// Tick `tick` of a run, as `lived` kept it.
+    fn of(lived: &driven::Lived, tick: u32) -> Self {
+        let (thrust, brake) = lived.asked;
+        Self {
+            tick,
+            index: lived.index,
+            speed: lived.pace,
+            airborne: lived.air > 0.0,
+            full: thrust >= 1.0 && brake <= 0.0,
+        }
+    }
+}
+
+/// Adds a tick to a learning pass's trace, which keeps the last three to six
+/// lookbacks.
+fn push_trace(recent: &mut Vec<Trace>, trace: Trace) {
+    recent.push(trace);
+    if recent.len() > LOOKBACK_TICKS * 6 {
+        recent.drain(..recent.len() - LOOKBACK_TICKS * 3);
+    }
+}
+
+/// What a verification has counted so far.
+struct Verified {
+    failures: u32,
+    contacts: u32,
+    /// The tick the flying lap began on.
+    lap_mark: Option<u32>,
+    pace: Vec<f32>,
+    tight: Vec<bool>,
+    respawned_on_flying_lap: bool,
+}
+
+impl Verified {
+    /// Counts tick `tick` of the run, driven or read back. Returns whether the
+    /// verification puts the craft back on the line after it.
+    fn count<R: Raycaster + ?Sized>(
+        &mut self,
+        lived: &driven::Lived,
+        tick: u32,
+        course: &Course<'_, R>,
+        craft: &Craft,
+        report: &mut Report,
+    ) -> bool {
+        let n = self.pace.len() as i64;
+        let index = lived.index as usize;
+        report.steps += 1;
+        self.contacts += u32::from(lived.contact);
+        if lived.progress >= n {
+            self.pace[index] = lived.pace;
+        }
+        if !lived.contact
+            && lived.air <= 0.0
+            && clearance::too_close(
+                &lived.body,
+                &craft.handling,
+                course.env.self_collider,
+                course.raycaster,
+            )
+        {
+            self.tight[index] = true;
+        }
+        if self.lap_mark.is_none() && lived.progress >= n {
+            self.lap_mark = Some(tick);
+        }
+        let Some(failure) = lived.failure else {
+            return false;
+        };
+        if failure == Failure::Wall {
+            self.failures += 1;
+            return false;
+        }
+        report.verify_respawns += 1;
+        if lived.progress >= n {
+            self.failures += 1;
+            self.respawned_on_flying_lap = true;
+        } else {
+            report.verify_standing_rescues.push(lived.index);
+        }
+        true
+    }
 }
 
 /// What a failure is put down to.

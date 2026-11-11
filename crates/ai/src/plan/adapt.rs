@@ -12,6 +12,7 @@
 
 use oag_physics::Raycaster;
 
+use super::driven::Driven;
 use super::lower::Lowering;
 use super::{Course, Craft, MAX_PASSES, Pass, Report, STUCK_TICKS, SpeedPlan, brake};
 use crate::Tuning;
@@ -40,13 +41,24 @@ impl SpeedPlan {
             return (plan, report);
         }
         let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
-        let (decel, steps) = brake::calibrate(course, craft, tuning, yaw);
+        // The last run from the grid: each run reads back what it would repeat.
+        let mut known = Driven::default();
+        let (decel, steps) = brake::calibrate(course, craft, tuning, yaw, &mut known);
         report.steps += steps;
         plan.decel = decel;
         plan.yaw = Some(yaw);
         plan.derive_targets();
-        let mut failures =
-            plan.verify_stuck(course, craft, tuning, yaw, &mut report, 1.0, STUCK_TICKS);
+        let known = &mut known;
+        let mut failures = plan.verify_stuck(
+            course,
+            craft,
+            tuning,
+            yaw,
+            &mut report,
+            1.0,
+            STUCK_TICKS,
+            known,
+        );
         while failures > 0 && report.passes < MAX_PASSES && report.steps < budget {
             report.passes += 1;
             plan.learn(
@@ -61,8 +73,18 @@ impl SpeedPlan {
                     lowering: Lowering::Window,
                     margin: 1.0,
                 },
+                known,
             );
-            failures = plan.verify_stuck(course, craft, tuning, yaw, &mut report, 1.0, STUCK_TICKS);
+            failures = plan.verify_stuck(
+                course,
+                craft,
+                tuning,
+                yaw,
+                &mut report,
+                1.0,
+                STUCK_TICKS,
+                known,
+            );
         }
         (plan, report)
     }
@@ -99,7 +121,16 @@ impl SpeedPlan {
                 *target *= margin;
             }
         }
-        plan.verify_stuck(course, craft, tuning, yaw, &mut report, 1.0, STUCK_TICKS);
+        plan.verify_stuck(
+            course,
+            craft,
+            tuning,
+            yaw,
+            &mut report,
+            1.0,
+            STUCK_TICKS,
+            &mut Driven::default(),
+        );
         report
     }
 }

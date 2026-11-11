@@ -5,7 +5,7 @@
 
 use oag_gameplay::Controller;
 
-use crate::speed_plan::{LearnedPlans, learn_speed_plans, learn_speed_plans_serially};
+use crate::speed_plan::{DRIVE_AGAIN, LearnedPlans, learn_speed_plans, learn_speed_plans_serially};
 use crate::{Options, Race, load};
 
 /// Pulse Outpost 7 (`07_Track`): one route, which never verifies.
@@ -39,6 +39,15 @@ fn assert_overlapped_is_serial(label: &str, race: &Race) -> LearnedPlans {
     );
     let overlapped = LearnedPlans::of(overlapped);
     assert_eq!(overlapped, LearnedPlans::of(serial));
+    // And the plans, step counts included, that every run from the grid driven
+    // in full learns (`oag_ai::plan::Course::drive_again`).
+    let mut in_full = race.sim.clone();
+    let started = std::time::Instant::now();
+    DRIVE_AGAIN.store(true, std::sync::atomic::Ordering::Relaxed);
+    learn_speed_plans(&mut in_full);
+    DRIVE_AGAIN.store(false, std::sync::atomic::Ordering::Relaxed);
+    println!("{label}: every run driven in full {:?}", started.elapsed());
+    assert_eq!(overlapped, LearnedPlans::of(in_full));
     overlapped
 }
 

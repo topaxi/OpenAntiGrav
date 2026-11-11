@@ -76,6 +76,23 @@ pub struct PlanSteps {
     pub routes_clean: Vec<bool>,
 }
 
+/// Whether the plans are learned with every run from the grid driven in full
+/// (`oag_ai::plan::Course::drive_again`): never in a race.
+#[cfg(not(test))]
+const fn drive_again() -> bool {
+    false
+}
+
+/// What the tests set to learn the plans with every run driven in full.
+#[cfg(test)]
+pub(super) static DRIVE_AGAIN: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(test)]
+fn drive_again() -> bool {
+    DRIVE_AGAIN.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// The plans of the hull `chosen` names in `hull_plans`, if any.
 pub(super) fn hull_of(hull_plans: &[HullPlans], chosen: Option<u8>) -> Option<&HullPlans> {
     chosen.and_then(|k| hull_plans.get(usize::from(k)))
@@ -639,6 +656,7 @@ impl Race {
             reset: &reset,
             max_airborne: oag_race::recovery::AIRBORNE_RESET_SECONDS,
             pad: &pad,
+            drive_again: drive_again(),
         };
         let craft = match start {
             Some(index) => oag_ai::plan::Craft {
