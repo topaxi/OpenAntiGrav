@@ -1256,6 +1256,7 @@ impl Race {
         }
         let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
         let rules = self.sim.damage_rules();
+        let mut touched = [false; oag_gameplay::MAX_SHIPS];
         for a in 0..self.sim.world.ship_count as usize {
             for b in (a + 1)..self.sim.world.ship_count as usize {
                 if !self.sim.world.ships[a].in_world() || !self.sim.world.ships[b].in_world() {
@@ -1275,13 +1276,13 @@ impl Race {
                 let ship_b = &mut second[0];
                 let a_size = ship_a.handling.dimensions;
                 let b_size = ship_b.handling.dimensions;
-                let touched = oag_physics::pair::resolve(
+                let touched_pair = oag_physics::pair::resolve(
                     &mut ship_a.physics,
                     &a_size,
                     &mut ship_b.physics,
                     &b_size,
                 );
-                if let Some(contact) = touched {
+                if let Some(contact) = touched_pair {
                     // Both bodies' rings get the record (`Body_RecordPairContact`), so each
                     // hull throws from its own nearest locator.
                     #[cfg(feature = "view")]
@@ -1298,6 +1299,13 @@ impl Race {
                     // One charge per pair per tick: the original's further records on most
                     // contact ticks are unread (`contact-response.md`, "an
                     // unshielded craft-to-craft bump charges the energy pool", Result 5).
+                    touched[a] = true;
+                    touched[b] = true;
+                    // The original driver reads the record next tick: its lane
+                    // planner pushes away from the rival and its rail lets go.
+                    for slot in [a, b] {
+                        self.original_ai_pair_contact(slot, contact.point);
+                    }
                     for slot in [a, b] {
                         let ship = &mut self.sim.world.ships[slot];
                         let racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
@@ -1327,6 +1335,9 @@ impl Race {
                     }
                 }
             }
+        }
+        for (ticks, on) in self.sim.pair_contact_ticks.iter_mut().zip(touched) {
+            *ticks += u32::from(on);
         }
     }
 }

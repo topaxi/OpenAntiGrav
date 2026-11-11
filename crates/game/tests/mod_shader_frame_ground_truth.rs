@@ -56,10 +56,19 @@ fn copy_dir(from: &Path, to: &Path) {
 /// Runs the title's disc to `ticks` with the mods under `mods`, and gives the frame's RGB and
 /// the run's log.
 fn run(image: &Path, mods: &Path, scratch: &Path, ticks: u32) -> (Vec<u8>, String) {
-    run_with(image, mods, scratch, ticks, "oag.tether", "", &[])
+    run_with(
+        image,
+        mods,
+        scratch,
+        ticks,
+        "oag.tether",
+        "",
+        &["--mode", "single_race"],
+    )
 }
 
-/// [`run`] with the mod `enabled`, a `[graphics]` line and arguments of the caller's.
+/// [`run`] with the mod `enabled`, a `[graphics]` line and arguments of the caller's, which
+/// name the race's `--mode`.
 fn run_with(
     image: &Path,
     mods: &Path,
@@ -80,13 +89,7 @@ fn run_with(
     .unwrap();
     let run = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args([
-            "--race",
-            "--mode",
-            "single_race",
-            "--autopilot",
-            "--no-audio",
-        ])
+        .args(["--race", "--autopilot", "--no-audio"])
         .args(["--size", &format!("{WIDTH}x{HEIGHT}")])
         .args(["--ticks", &ticks.to_string()])
         .arg("--screenshot")
@@ -317,8 +320,8 @@ fn logged_pose(log: &str) -> String {
 }
 
 /// `outside` is the most of the texels away from the surface that may differ from a race with no
-/// mod, which draws no secondary view.
-fn check_portal(image: &str, ticks: u32, graphics: &str, outside: f32) {
+/// mod, which draws no secondary view. `mode` is the race's (`--mode`).
+fn check_portal(image: &str, mode: &str, ticks: u32, graphics: &str, outside: f32) {
     let Some(image) = oag_testdata::image(image) else {
         return;
     };
@@ -344,7 +347,8 @@ fn check_portal(image: &str, ticks: u32, graphics: &str, outside: f32) {
         dir("flat", Some(FLAT_WINDOW)),
     );
     let frame = |mods: &Path, args: &[&str]| {
-        run_with(&image, mods, &scratch, ticks, "oag.window", graphics, args)
+        let args = [&["--mode", mode][..], args].concat();
+        run_with(&image, mods, &scratch, ticks, "oag.window", graphics, &args)
     };
 
     let (with, log) = frame(&on, &[]);
@@ -387,7 +391,13 @@ fn check_portal(image: &str, ticks: u32, graphics: &str, outside: f32) {
 #[test]
 #[ignore = "needs a disc image and the examples submodule"]
 fn pulse_shows_the_road_further_on_through_a_portal() {
-    check_portal("data/images/pulse-psp-eu.chd", 548, "", 0.0005);
+    check_portal(
+        "data/images/pulse-psp-eu.chd",
+        "single_race",
+        548,
+        "",
+        0.0005,
+    );
 }
 
 /// A frame reading the velocity buffer: a view that writes the main view's camera history moves
@@ -398,6 +408,7 @@ fn pulse_shows_the_road_further_on_through_a_portal() {
 fn the_portal_leaves_the_motion_blur_alone() {
     check_portal(
         "data/images/pulse-psp-eu.chd",
+        "single_race",
         548,
         "motion_blur = \"high\"",
         0.006,
@@ -405,8 +416,17 @@ fn the_portal_leaves_the_motion_blur_alone() {
 }
 
 /// HD's float target stores encoded values, and a view read as it stands would be dark.
+///
+/// A Time Trial, with no opponents: an opponent's engine trail in the frame differs with the
+/// secondary view drawn, and the bound here is about the view alone.
 #[test]
 #[ignore = "needs a disc image and the examples submodule"]
 fn hd_shows_the_road_further_on_in_its_float_target() {
-    check_portal("data/images/hdfury-ps3-eu-dec.iso", 1022, "", 0.0005);
+    check_portal(
+        "data/images/hdfury-ps3-eu-dec.iso",
+        "time_trial",
+        1022,
+        "",
+        0.0005,
+    );
 }

@@ -180,7 +180,9 @@ skills empty on 135 events and authors `0` on 5; empty reads the constructor's `
 `Ai_PlanLane` (`0x8119c700`, about 1,260 lines of decompile) keeps HD's skeleton: the
 authority ramp (`driver+0x140`, up `1.5 dt` toward `1`, the same per second as HD's
 `0.025` a 60 Hz tick, and down `0.75 dt`), the contact
-push `+/-0.2` per contact clamped `+/-2` and decaying `0.95`, the nine candidates and
+push `+/-0.2` per contact clamped `+/-2` and decaying `0.95`, kind-`1` records only (`ldr r1,[r7,#0x210]`; `cmp r1,#0x1`;
+`bne` at `0x8119cce8..0x8119ccee`, count body `+0x410`, the point at record `+0x218`; read
+2026-11-11, wired with Pulse's, `docs/gameplay/ai.md`, "The two rules"), the nine candidates and
 the `0.9`/`0.1` smoothing, the inlined bumps (`0.0475`, `3.1667`, `0.3333`), the
 preferred lane on `rand() % 400 == 125`, the authored band through `1/127.5`, and the
 ring fill's `0.9`, `1.1` and `15` steps and `0.5 / rate` brake, **all built from the
