@@ -1,6 +1,7 @@
 //! A race's craft start on the shield slot of the difficulty being raced.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs the HD disc image.
+//! **`#[ignore]`d and never run in CI.** It needs the HD disc image; the Omega, 2048 and Pulse
+//! tests need theirs.
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay shield_difficulty_ground_truth:: --run-ignored all
@@ -148,43 +149,181 @@ fn a_launch_that_names_a_rung_takes_it_over_the_difficulty() {
     assert_eq!(medium, 0);
 }
 
-/// Omega authors the same `easyshield`, but nobody has measured which difficulty its executable
-/// reads, so a Novice field starts where an Elite one does and the loader report says so.
+/// `team`'s `<Misc>` out of `title`'s archives, `None` where it ships no handling file.
+fn try_authored(
+    archives: &mut oag_assets::Archives,
+    title: &oag_title::Title,
+    team: &str,
+) -> Option<handling::Misc> {
+    let name = handling::entry_name_in(title.race.handling_dir_for(team), team);
+    let blob = archives.read_name(&name).ok()?;
+    let stats: Stats = handling::from_blob(&blob).unwrap_or_else(|e| panic!("{name}: {e}"));
+    Some(stats.misc)
+}
+
+/// Every active craft's pool against `expected(its team's <Misc>)`, read from `title`'s own
+/// files, how many differ from plain `shield`, and the loader report.
+fn pools_in(
+    source: &str,
+    title: &oag_title::Title,
+    loaded: race::Loaded,
+    label: &str,
+    expected: impl Fn(&handling::Misc) -> f32,
+) -> (usize, Vec<String>) {
+    let report = loaded.report.clone();
+    let teams = loaded.setup.slot_teams.clone();
+    let race = Race::start(loaded.setup);
+    let mut archives = oag_assets::Archives::open(source, title).expect("opening the archives");
+    let mut moved = 0;
+    for (slot, team) in teams.iter().enumerate() {
+        let ship = &race.sim.world.ships[slot];
+        if !ship.active {
+            continue;
+        }
+        // A slot whose team ships no handling file flies the player's tuning (the loader says so).
+        let misc = [team, &teams[0]]
+            .into_iter()
+            .find_map(|team| try_authored(&mut archives, title, team))
+            .expect("the player's own handling file reads");
+        let want = expected(&misc);
+        assert_eq!(
+            ship.handling.dimensions.shield, want,
+            "{label}: slot {slot} ({team}) pool maximum"
+        );
+        assert_eq!(
+            ship.physics.shield, want,
+            "{label}: slot {slot} ({team}) starts full"
+        );
+        moved += usize::from(want != misc.shield);
+    }
+    (moved, report)
+}
+
+fn no_held_slot_line(report: &[String], label: &str) {
+    assert!(
+        !report.iter().any(|line| line.starts_with("shield: ")),
+        "{label}: the loader report still names a held slot: {report:?}"
+    );
+}
+
+/// Omega's `Ship_SetShield` (`0x012f3360`) clamps to `stats + 0x98 + skill * 4`, the three
+/// `<Misc>` slots (`docs/ghidra/functions/ps4-omega-eu/craft-laws.md`), so its Novice field
+/// starts on `easyshield` and an Elite one on plain `shield`.
 #[test]
 #[ignore = "needs data/images/omega-ps4-eu.pkg"]
-fn omega_keeps_the_medium_slot_until_it_is_measured() {
+fn omegas_novice_field_starts_on_each_teams_easyshield() {
     let Some(image) = oag_testdata::image("data/images/omega-ps4-eu.pkg") else {
         return;
     };
+    let source = image.display().to_string();
     let load = |difficulty| {
-        let loaded = race::load(&race::Options {
-            source: image.display().to_string(),
+        race::load(&race::Options {
+            source: source.clone(),
             mode: oag_race::Mode::SingleRace,
             difficulty,
             ribbon: true,
             ..race::Options::default()
         })
-        .expect("loading the race");
-        let report = loaded.report.clone();
-        let teams = loaded.setup.slot_teams.clone();
-        let race = Race::start(loaded.setup);
-        let pools: Vec<f32> = (0..teams.len())
-            .filter(|&slot| race.sim.world.ships[slot].active)
-            .map(|slot| race.sim.world.ships[slot].handling.dimensions.shield)
-            .collect();
-        (pools, report)
+        .expect("loading the race")
     };
-    let (novice, report) = load(oag_ai::Difficulty::Novice);
-    let (elite, quiet) = load(oag_ai::Difficulty::Elite);
-    assert_eq!(novice, elite, "Omega's Novice field left the Medium slot");
-    assert!(
-        report.iter().any(|line| line.starts_with("shield: ")),
-        "the loader report does not name the held slot: {report:?}"
+    let (moved, report) = pools_in(
+        &source,
+        oag_omega::TITLE,
+        load(oag_ai::Difficulty::Novice),
+        "Omega Novice",
+        |misc| misc.easyshield.expect("Omega authors easyshield"),
     );
     assert!(
-        !quiet.iter().any(|line| line.starts_with("shield: ")),
-        "an Elite race has nothing to report: {quiet:?}"
+        moved > 0,
+        "no Omega craft's easyshield differs from its shield"
     );
+    no_held_slot_line(&report, "Omega Novice");
+    let (moved, report) = pools_in(
+        &source,
+        oag_omega::TITLE,
+        load(oag_ai::Difficulty::Elite),
+        "Omega Elite",
+        |misc| misc.shield_for(1),
+    );
+    assert_eq!(moved, 0, "an Omega Elite craft left plain shield");
+    no_held_slot_line(&report, "Omega Elite");
+}
+
+fn vita_2048_source() -> Option<String> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/extracted/vita/PCSF00007");
+    if path.join("base/PSP2/data.psarc").exists() {
+        return Some(path.display().to_string());
+    }
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+        path.display()
+    );
+    println!("skipping: {} not present", path.display());
+    None
+}
+
+/// 2048's `Ship_SetShield` (`0x811bb524`) makes the same read
+/// (`docs/ghidra/functions/vita-2048-eu-v104/craft-laws.md`): a Novice race box starts on
+/// `easyshield`.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn a_2048_novice_field_starts_on_each_teams_easyshield() {
+    let Some(source) = vita_2048_source() else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: source.clone(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty: oag_ai::Difficulty::Novice,
+        ribbon: true,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let (moved, report) = pools_in(&source, oag_2048::TITLE, loaded, "2048 Novice", |misc| {
+        misc.shield_for(0)
+    });
+    assert!(
+        moved > 0,
+        "no 2048 craft's easyshield differs from its shield"
+    );
+    no_held_slot_line(&report, "2048 Novice");
+}
+
+/// A 2048 campaign event races at its own level, `1`, whatever the race box's difficulty says:
+/// `GameModeBase_Apply` (`0x812b0d52`) copies it to the global the shield read indexes with.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn a_2048_event_starts_on_its_own_level_not_the_difficulty() {
+    let Some(source) = vita_2048_source() else {
+        return;
+    };
+    let options = race::Options {
+        source: source.clone(),
+        difficulty: oag_ai::Difficulty::Novice,
+        seed: Some(1),
+        ..race::Options::default()
+    };
+    let loaded = race::load_event(&options, "2048 - Event 4").expect("the event loads");
+    let easy_differs = std::cell::Cell::new(0);
+    let (_, report) = pools_in(
+        &source,
+        oag_2048::TITLE,
+        loaded,
+        "2048 - Event 4 under Novice",
+        |misc| {
+            easy_differs
+                .set(easy_differs.get() + usize::from(misc.shield_for(0) != misc.shield_for(1)));
+            misc.shield_for(1)
+        },
+    );
+    assert!(
+        easy_differs.get() > 0,
+        "no craft of the event has an easyshield of its own: the check proves nothing"
+    );
+    no_held_slot_line(&report, "2048 - Event 4");
 }
 
 /// Pulse reads the difficulty into the slot too: the same `Ship_SetShield` indexes the same three
