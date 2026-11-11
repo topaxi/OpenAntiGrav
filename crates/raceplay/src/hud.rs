@@ -1025,9 +1025,10 @@ pub(super) fn hud_font(
             // this scale (`1.0` on every other source), see
             // `oag_display::space::Space::font_texel_scale`.
             let border = oag_ui::language::load::role_border(languages, preferred, role);
-            let (atlas, border) =
-                oag_ui::font::Atlas::from_pack(archives, &name, &font, border, "HUD font", report)
-                    .unwrap_or_else(|| (oag_ui::font::Atlas::from_font(&font), border));
+            let (atlas, border) = oag_ui::font::Atlas::from_pack(
+                archives, &name, &font, border, "HUD font", None, report,
+            )
+            .unwrap_or_else(|| (oag_ui::font::Atlas::from_font(&font), border));
             atlas.with_border_extend(border).with_texel_scale(
                 oag_display::space::Space::font_texel_scale(archives.layout.platform),
             )

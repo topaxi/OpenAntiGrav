@@ -65,6 +65,7 @@
 use std::collections::BTreeMap;
 
 use oag_texture::fnt;
+use oag_title::prompts::Prompts;
 
 /// Glyph width in pixels.
 pub const GLYPH_WIDTH: u32 = 5;
@@ -542,6 +543,12 @@ const GLYPHS: &[(char, [&str; 7])] = &[
     ),
 ];
 
+/// The largest texel scale (texels per grid unit) a texture pack's face is used at. **Chosen**:
+/// the front end lays out in 480x272, and eight texels per unit covers a 3840-wide screen, so
+/// a larger picture adds memory (a 16x face is 4096 square, and its button glyphs make it
+/// several times that) and no pixels anyone sees.
+pub const PACK_MAX_FACTOR: u32 = 8;
+
 /// Where a glyph sits in the atlas, and how much room it takes.
 ///
 /// The size and advance travel with the cell because a real font's glyphs are
@@ -826,35 +833,63 @@ impl Atlas {
     /// `border` the pack's factor gives (`border` times the factor), or `None` to keep the
     /// disc's own.
     ///
+    /// The picture is used at the largest whole fraction of its factor that is at most
+    /// [`PACK_MAX_FACTOR`] and leaves the atlas, with the substitute button glyphs `prompts`
+    /// will add ([`Self::with_prompts`], which the caller still calls), within
+    /// [`oag_texture::replacer::MAX_ATLAS_SIDE`] a side. The 16x Pulse pack's menu faces are
+    /// 4096 square, and 64 button glyphs at that scale made them 18744 tall: more than a Steam
+    /// Deck's textures hold.
+    ///
     /// A face whose atlas the pack does not replace, whose picture is not a whole multiple of
-    /// it, or whose `.fnt` keeps its atlas elsewhere (PS2) is the disc's; a refusal is a line in
-    /// `report`, `what` labelling it ("HUD font", "menu font"). The race HUD and the front end
-    /// both build their faces through this.
+    /// it, which no fraction fits, or whose `.fnt` keeps its atlas elsewhere (PS2) is the
+    /// disc's; a refusal is a line in `report`, `what` labelling it ("HUD font", "menu font").
+    /// The race HUD and the front end both build their faces through this.
     pub fn from_pack(
         archives: &mut oag_assets::Archives,
         name: &str,
         font: &fnt::Font,
         border: u32,
         what: &str,
+        prompts: Option<&Prompts>,
         report: &mut Vec<String>,
     ) -> Option<(Self, u32)> {
         let picture = oag_texture::replacer::font(&archives.read_name(name).ok()?)?;
-        match Self::from_replaced_font(font, &picture) {
-            Ok(atlas) => {
-                let factor = picture.width / u32::from(font.width);
-                report.push(format!(
-                    "{what} {name}: {}x{} from the texture pack ({factor}x)",
-                    picture.width, picture.height
-                ));
-                Some((atlas, border * factor))
-            }
+        let full = match Self::from_replaced_font(font, &picture) {
+            Ok(atlas) => atlas,
             Err(why) => {
                 report.push(format!(
                     "{what} {name}: texture pack picture not used: {why}"
                 ));
-                None
+                return None;
             }
+        };
+        let factor = picture.width / u32::from(font.width);
+        let side = oag_texture::replacer::MAX_ATLAS_SIDE;
+        for used in (1..=factor.min(PACK_MAX_FACTOR)).rev() {
+            if !factor.is_multiple_of(used) {
+                continue;
+            }
+            let atlas = full.reduced(factor / used);
+            let grown = prompts.map_or_else(|| atlas.clone(), |p| atlas.clone().with_prompts(p));
+            if grown.width.max(grown.height) > side {
+                continue;
+            }
+            let kept = if used == factor {
+                format!("{factor}x")
+            } else {
+                format!("{used}x of the pack's {factor}x")
+            };
+            report.push(format!(
+                "{what} {name}: {}x{} from the texture pack ({kept})",
+                atlas.width, atlas.height
+            ));
+            return Some((atlas, border * used));
         }
+        report.push(format!(
+            "{what} {name}: texture pack picture not used: no fraction of its {factor}x fits a \
+             {side}-pixel texture with the button glyphs"
+        ));
+        None
     }
 
     /// This atlas with its texels read as `scale` grid units each.
@@ -995,6 +1030,7 @@ fn solid_patch(coverage: &mut [u8], width: u32, x: u32, y: u32) -> Cell {
 }
 
 mod border;
+mod reduce;
 
 #[cfg(test)]
 mod tests {

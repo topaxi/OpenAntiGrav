@@ -487,9 +487,15 @@ pub fn load_shell(
     // after them: its pictures are read as each face is built, then it is switched off, so
     // the menus' other art draws the disc's own and a race load chooses afresh.
     let pack = fonts::engage_pack(front_end, options, &archives, &mut report);
-    let font = load_font(&mut archives, &languages, preferred_language, &mut report)
-        .with_prompts(title.prompts)
-        .with_texel_scale(texel_scale);
+    let font = load_font(
+        &mut archives,
+        &languages,
+        preferred_language,
+        title.prompts,
+        &mut report,
+    )
+    .with_prompts(title.prompts)
+    .with_texel_scale(texel_scale);
     // The picker and the menus' language row draw in `font`, so a language whose
     // name `font` cannot spell is not offered; it still loads for a saved choice.
     let offered = oag_ui::language::load::pickable(&languages, &font, &mut report);
