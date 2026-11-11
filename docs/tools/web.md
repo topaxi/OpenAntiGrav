@@ -625,7 +625,9 @@ fresh profile with `dom.webgpu.enabled` and `gfx.webgpu.ignore-blocklist` on).
 Firefox's own WebGPU sample (`webgpu.github.io/webgpu-samples`, rotatingCube)
 is black in the same profile too, and Firefox writes
 `[GFX1-]: dmabuf image neither requires nor prefers a dedicated allocation` to
-its standard error 92 to 531 times in a 4 to 5 s run. That is Firefox's
+its standard error: 92 to 531 times in a 4 to 5 s run of the sample or of a
+page that only clears its canvas, but only 4 times in a 28 s run of the game,
+which is black all the same. That is Firefox's
 present path without a readback (a DMABuf shared with the compositor), not the
 game: with `dom.webgpu.allow-present-without-readback` set to `false` in
 `about:config` both draw, the game through its boot movie to the menus. The

@@ -45,9 +45,10 @@ Architecture, measurements, hosting and limits:
   DMABuf present, which blacks out its own WebGPU samples too; `dom.webgpu.allow-present-without-readback
   = false` fixes it and the picker note names it. An `rgba8unorm` canvas avoids it but crashes
   Firefox headless and under Xvfb, so it was reverted (docs/tools/web.md, "Troubleshooting").
-  (2) **Open: the maintainer's own Firefox 159 (same machine, a Private Window too) stalls with
-  "a page is slowing down Firefox" after the `mod oag.extras` line and before `renderer:`**, while
-  the cube sample draws there. Not reproduced in nine configurations here (headless, Xvfb, headless
+  (2) **Open: the maintainer's own Firefox 159 (same machine) stalled with "a page is slowing
+  down Firefox" after the `mod oag.extras` line and before `renderer:`**, while the cube sample
+  draws there; a Private Window in it then stayed black after the pick, which looks like (1).
+  Whether the readback pref also clears their stall decides if this is one bug or two. Not reproduced in nine configurations here (headless, Xvfb, headless
   sway, DPR 1.5 and 2, headed niri on either ICD, with and without the readback pref, AudioContext
   running or suspended). Between those two lines run `Prepared`'s loading assets, `spawn_app`, and
   in `resumed` the window, the surface and `get_default_config`. Next: a Firefox Profiler capture
@@ -56,7 +57,8 @@ Architecture, measurements, hosting and limits:
   (`web/main.js`), so a callback into the module there could spin on an `oag_thread::lock` its
   own outer frame holds.
 - **Chromium with a CPU-only WebGPU shows a white page, no report** (maintainer's machine,
-  2026-11-11): headless Chromium's `--software bare` mode reproduces it on oag.topaxi.com (adapter
+  2026-11-11, where the cube sample loses its device): headless Chromium's `--software bare` mode
+  shows the same symptom on oag.topaxi.com, though without a lost device (adapter
   `(Cpu)`, the game runs, the canvas never presents, no device loss and no error), the case
   docs/tools/web.md "Troubleshooting" already names. The page could not tell; a notice on any CPU
   adapter would be a guess, not a fault, and was left out.
