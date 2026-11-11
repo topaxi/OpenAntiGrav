@@ -389,31 +389,18 @@ impl Bloom {
         });
 
         let pipeline = |label: &str, entry: &str, blend: Option<wgpu::BlendState>, mask| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[],
-                    compilation_options: Default::default(),
+            crate::pass::fullscreen_pipeline(
+                device,
+                &shader,
+                &pipeline_layout,
+                label,
+                entry,
+                wgpu::ColorTargetState {
+                    format,
+                    blend,
+                    write_mask: mask,
                 },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some(entry),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend,
-                        write_mask: mask,
-                    })],
-                    compilation_options: Default::default(),
-                }),
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview_mask: None,
-                cache: None,
-            })
+            )
         };
 
         // The bright pass and the blur both replace their whole target: the

@@ -66,6 +66,7 @@ use anyhow::Result;
 
 use oag_gpu::formats::{DISTORTION_FORMAT, SCENE_FORMAT};
 
+use crate::pass::{self, Target, draw};
 use crate::seat_lanes::SeatLanes;
 
 /// The luma image's side, the executable's own `0x100` (format `R16F`).
@@ -256,46 +257,6 @@ impl Seat {
 /// and the share of the frame it is.
 type Drawn = ((u32, u32), (u32, u32), [u32; 2]);
 
-/// One colour texture and its view.
-#[derive(Debug)]
-struct Target {
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "held so the view stays valid; the tests read it")
-    )]
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
-}
-
-impl Target {
-    fn new(
-        device: &wgpu::Device,
-        label: &str,
-        format: wgpu::TextureFormat,
-        (width, height): (u32, u32),
-    ) -> Self {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(label),
-            size: wgpu::Extent3d {
-                width: width.max(1),
-                height: height.max(1),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format,
-            // `COPY_DST` so a test can lay known pixels into the scene.
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        Self { texture, view }
-    }
-}
-
 /// The scene-sized half: the float target and the two groups that read it.
 #[derive(Debug)]
 struct Sized {
@@ -460,31 +421,14 @@ impl Chain {
                       entry: &str,
                       layout: &wgpu::PipelineLayout,
                       format: wgpu::TextureFormat| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[],
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some(entry),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend: None,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                    compilation_options: Default::default(),
-                }),
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview_mask: None,
-                cache: None,
-            })
+            pass::fullscreen_pipeline(
+                device,
+                &shader,
+                layout,
+                label,
+                entry,
+                pass::replacing(format),
+            )
         };
         let luma = render("omega tonemap luma", "fs_luma", &plain, LADDER_FORMAT);
         let halve = render("omega tonemap halve", "fs_halve", &plain, LADDER_FORMAT);
@@ -853,24 +797,7 @@ impl Chain {
         let share = [w as f32 / scene.0 as f32, h as f32 / scene.1 as f32].map(|s| s.min(1.0));
         if run.first {
             // A pass that clears and draws nothing: the apply pass loads.
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("omega tonemap clear"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            oag_gpu::perfprobe::marks::mark(&mut pass, "omega tonemap clear");
-            oag_gpu::perfprobe::marks::close(&mut pass);
+            pass::clear(encoder, "omega tonemap clear", view);
         }
         self.run_placed(
             device,
@@ -907,42 +834,6 @@ impl Chain {
     pub fn seat_lane_builds(&self) -> u64 {
         self.seats.builds()
     }
-}
-
-/// One full-screen pass with no blending, loading what is there.
-fn draw(
-    encoder: &mut wgpu::CommandEncoder,
-    label: &'static str,
-    pipeline: &wgpu::RenderPipeline,
-    groups: &[&wgpu::BindGroup],
-    target: &wgpu::TextureView,
-    origin: (f32, f32),
-    rect: (u32, u32),
-) {
-    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: Some(label),
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: target,
-            depth_slice: None,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Load,
-                store: wgpu::StoreOp::Store,
-            },
-        })],
-        depth_stencil_attachment: None,
-        timestamp_writes: None,
-        occlusion_query_set: None,
-        multiview_mask: None,
-    });
-    oag_gpu::perfprobe::marks::mark(&mut pass, label);
-    pass.set_pipeline(pipeline);
-    pass.set_viewport(origin.0, origin.1, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
-    for (index, group) in groups.iter().enumerate() {
-        pass.set_bind_group(index as u32, *group, &[]);
-    }
-    pass.draw(0..3, 0..1);
-    oag_gpu::perfprobe::marks::close(&mut pass);
 }
 
 #[cfg(test)]

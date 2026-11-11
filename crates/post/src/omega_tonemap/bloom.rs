@@ -44,31 +44,18 @@ impl Pipelines {
             immediate_size: 0,
         });
         let render = |entry: &str, blend: Option<wgpu::BlendState>| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(entry),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[],
-                    compilation_options: Default::default(),
+            crate::pass::fullscreen_pipeline(
+                device,
+                &shader,
+                &pipeline_layout,
+                entry,
+                entry,
+                wgpu::ColorTargetState {
+                    format: LEVEL_FORMAT,
+                    blend,
+                    write_mask: wgpu::ColorWrites::ALL,
                 },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some(entry),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: LEVEL_FORMAT,
-                        blend,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                    compilation_options: Default::default(),
-                }),
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview_mask: None,
-                cache: None,
-            })
+            )
         };
         let one_plus_one = wgpu::BlendComponent {
             src_factor: wgpu::BlendFactor::One,
