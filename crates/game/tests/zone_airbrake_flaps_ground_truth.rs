@@ -80,7 +80,13 @@ fn frame(source: &Path, scratch: &Path, name: &str, mode: &str, hold: &str) -> V
 }
 
 /// The changed pixels' columns: how many on each side of the centre column, and
-/// how many in a narrow band around it.
+/// how many in a narrow band around it, counted in the lower half of the frame
+/// only. The chase camera puts the craft there; the upper half is the sky and the
+/// grandstands, whose aliased texture flips pixels when the held brake nudges the
+/// parked craft - and so the camera - by a fraction of a millimetre (2048's
+/// single race: 12,400 of 14,556 changed pixels, all above row 144 of 408, none
+/// of them a flap). A flap drawn at the model origin is mid-hull, well inside
+/// the lower half.
 fn columns(brake: &[u8], rest: &[u8]) -> (usize, usize, usize) {
     let (mut left, mut right, mut centre) = (0, 0, 0);
     let half = SIZE.0 / 2;
@@ -94,6 +100,9 @@ fn columns(brake: &[u8], rest: &[u8]) -> (usize, usize, usize) {
     {
         let moved = a.iter().zip(b).any(|(x, y)| x.abs_diff(*y) > 12);
         if !moved {
+            continue;
+        }
+        if i / SIZE.0 < SIZE.1 / 2 {
             continue;
         }
         let x = i % SIZE.0;
@@ -130,9 +139,9 @@ fn check(source: &Path, tag: &str, mode: &str) {
     let (left, right, centre) = columns(&brake, &rest);
     println!("{tag} {mode}: left {left}, right {right}, centre band {centre}");
     // Zone's one shared hull is small and white, so its flaps move fewer
-    // pixels than a native craft's: 2048 measures 196 left and 123 right
-    // since `ZoneCraft::OwnShipAt` put it on that hull (it was over 200
-    // each on the player's own craft). A flap off its hinge puts almost
+    // pixels than a native craft's: 2048 measures 94 left and 167 right
+    // in the lower half (it was over 200 each on the player's own craft). 2048's
+    // single race measures 880 left, 1,119 right and 53 in the centre band. A flap off its hinge puts almost
     // nothing on the sides, so 100 still catches the defect; the
     // mid-hull check below is the one that names it. HD's Zone skips the brakes as
     // the original does (`Craft_Update`, `0x000f27c8`), so holding both airbrakes
