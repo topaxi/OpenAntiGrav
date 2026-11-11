@@ -142,6 +142,9 @@ def stage_head_on(dbg, player, speed, gap, log, facing="same"):
     move_breakpoint(dbg, None, SHIP_UPDATE_CRAFT)
     rival = None
     for _ in range(64):
+        # A queued rebroadcast of the previous stop would satisfy the wait while the CPU runs.
+        dbg.call("cpu.status")
+        dbg.pending = []
         dbg.call("cpu.resume")
         dbg.wait_for_break(SHIP_UPDATE_CRAFT, timeout=30.0)
         craft = gpr(dbg)["a0"]
