@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048, omega, hd]
 updated: 2026-11-11
-summary: "Four HD scenery material readings (alpha_emissive, two glass windows, the k-less billboard) apply to 2048 and Omega and are not wired; HD: specular map unbound, unsaturated N.L per block"
+summary: "Four HD scenery material readings apply to 2048 and Omega, not wired; HD: one specular map unbound, unsaturated N.L per block"
 difficulty: medium (35)
 ---
 

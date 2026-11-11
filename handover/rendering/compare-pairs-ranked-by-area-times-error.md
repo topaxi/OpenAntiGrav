@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse, pure, 2048]
 updated: 2026-11-11
-summary: "Race pairs by area x error: HD GO boards and RECORD band lead; 2048 dark; PS2 frame-wide unexplained; Talon's pack tick is a capture skew, pair-script fix ready"
+summary: "Race pairs by area x error: HD GO boards, RECORD band lead; 2048 dark; PS2 frame-wide open; Talon's pack tick is capture skew, script fix ready"
 ---
 
 # Race compare pairs ranked by area x error
