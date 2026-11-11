@@ -42,7 +42,8 @@ GO_TICK = ce.go_tick()
 import pcsx2_pine  # noqa: E402
 import pcsx2_state  # noqa: E402
 
-#: EE address of the race clock (f32 seconds): 23.39 at a state whose HUD read 0:23.2 and 26.97 after about
+#: EE address of the race clock in the Moa Therma White state (f32 seconds; it is not the same in every boot,
+#: `pcsx2_state.race_clock_address` finds it): 23.39 at a state whose HUD read 0:23.2 and 26.97 after about
 #: 3.6 s more of emulation (two states, 2026-10-20). The HUD runs about 0.2 s behind it, so the check is loose.
 CLOCK_ADDRESS = 0x70EE9C
 CLOCK_TOLERANCE_S = 0.1
@@ -77,7 +78,7 @@ def resume(slot):
     drive.set_paused(pine, drive.Keyboard(), False)
 
 
-def grab_with_clock(slot, dest, timeout=30.0):
+def grab_with_clock(slot, dest, clock_address, timeout=30.0):
     """PCSX2's own GS screenshot (the F8 hotkey, as `pcsx2-drive.py shot`) taken in this process, with the race clock
     read over PINE every few milliseconds from the key press until the file appears. Returns `(first, last)`, the clock
     at the key press and at the first look that saw the file: the screenshot is of a frame presented between the two,
@@ -87,7 +88,7 @@ def grab_with_clock(slot, dest, timeout=30.0):
     kb, pine = drive.Keyboard(), drive.Pine(slot=slot)
 
     def clock():
-        return struct.unpack("<f", struct.pack("<I", pine.read32(CLOCK_ADDRESS)))[0]
+        return struct.unpack("<f", struct.pack("<I", pine.read32(clock_address)))[0]
 
     before = drive.newest_snapshot()
     deadline = time.monotonic() + timeout
@@ -155,6 +156,18 @@ def main():
     pair.rec["original"]["state"] = {"file": str(args.state), "sidecar_circuit": sidecar.get("circuit"),
                                      "mode": "single_race", "player_slot": "8 of 8 (sidecar)", "class": "venom (assumed)"}
 
+    found = pcsx2_state.player_craft(args.state)
+    if found is None:
+        pair.check("player craft", False, "no craft with a camera rig in %s" % args.state)
+        pair.finish()
+    craft, body, pos = found
+    # the race clock's address moves with the heap layout of each boot (`pcsx2_state.race_clock_address`)
+    clock_address = pcsx2_state.race_clock_address(args.state, craft)
+    if clock_address is None:
+        pair.check("race clock located", False, "no single word 3.9 to 4.45 s above its HUD partner below craft %#x" % craft)
+        pair.finish()
+    pair.rec["original"]["race_clock_address"] = hex(clock_address)
+
     states = Path(data) / "PCSX2" / "sstates"
     states.mkdir(parents=True, exist_ok=True)
     shutil.copy(args.state, states / ("%s.01.p2s" % args.serial))
@@ -167,7 +180,7 @@ def main():
     # past the state's frame: read the clock before and after it, and let ours run to what the picture shows.
     pine = pcsx2_pine.Pine(slot=args.slot)
     raw = out / "theirs-gs.png"
-    live_before, live_after = grab_with_clock(args.slot, raw)
+    live_before, live_after = grab_with_clock(args.slot, raw, clock_address)
     pair.rec["original"]["gs_screenshot_size"] = ce.image_size(raw)
     w, h = plat["output"]
     run(["magick", raw, "-filter", "Lanczos", "-resize", "%dx%d!" % (w, h), out / "theirs.png"])
@@ -177,7 +190,6 @@ def main():
     pair.check("GS screenshot aspect equals the output aspect", abs(gs_aspect[0] / gs_aspect[1] - w / h) < 0.01,
                "%dx%d against %dx%d" % (gs_aspect[0], gs_aspect[1], w, h))
 
-    craft, body, pos = pcsx2_state.player_craft(args.state)
     ram = zipfile.ZipFile(args.state).read("eeMemory.bin")
     vec = lambda a: struct.unpack_from("<3f", ram, a)
     right, up, fwd = vec(body), vec(body + 0x10), vec(body + 0x20)
@@ -190,9 +202,9 @@ def main():
     wide = 10 / 7 * 4 / 3
     pair.check("the state's game option is Aspect Ratio 16:9 (projection aspect 10/7 * 4/3)", abs(cam["aspect"] - wide) < 0.01,
                "projection aspect %.4f, the 4:3 option reads %.4f, 16:9 reads %.4f" % (cam["aspect"], 10 / 7, wide))
-    clock = struct.unpack_from("<f", ram, CLOCK_ADDRESS)[0]
+    clock = struct.unpack_from("<f", ram, clock_address)[0]
     if not 0.0 <= clock <= 3600.0:
-        pair.check("race clock", False, "%r at %#x is not a clock" % (clock, CLOCK_ADDRESS))
+        pair.check("race clock", False, "%r at %#x is not a clock" % (clock, clock_address))
         pair.finish()
     row = {"dt": 0.02, "grounded": 1, "speed": 0.0}
     for name, v in (("right", right), ("up", up), ("fwd", fwd), ("pos", pos)):

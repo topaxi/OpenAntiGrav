@@ -32,6 +32,13 @@ RAM_LO = 0x100000
 BODY_POINTER = 0x1EC
 CAMERA_BODY = 0x824
 CAMERA_EYES = (0x850, 0x860)
+#: The craft's cached basis (`+0x180`...) trails the body's by a tick: 2e-4 on a craft left resting for three minutes (a resting
+#: craft keeps turning, `docs/physics/grid-state.md`), under 1e-5 on one saved a few seconds after GO.
+CACHE_TOLERANCE = 5e-3
+#: The race clock is not at one address: `0x70EE9C` in the Moa Therma White state, `0x70DB7C` in a later boot's. It sits 0x12044 to
+#: 0x12084 below the player's craft struct, and 0x100 above it is the clock the HUD prints (the RAM clock less 4.1 to 4.25 s).
+CLOCK_WINDOW = (0x13000, 0x11000)
+CLOCK_PARTNER = 0x100
 
 
 def _ram(path):
@@ -65,7 +72,7 @@ def crafts(path):
         if not all(all(math.isfinite(x) for x in v) for v in axes + cached):
             continue
         if all(abs(sum(x * x for x in v) - 1.0) < 1e-3 for v in axes) and all(
-            any(max(abs(a - b) for a, b in zip(c, ax)) < 1e-5 for ax in axes) for c in cached
+            any(max(abs(a - b) for a, b in zip(c, ax)) < CACHE_TOLERANCE for ax in axes) for c in cached
         ):
             found.append((craft, body, pos))
     return found
@@ -84,6 +91,19 @@ def player_craft(path):
         if all(8.0 <= d <= 20.0 for d in dists):
             return candidates[body]
     return None
+
+
+def race_clock_address(path, craft):
+    """The EE address of the race clock (f32 seconds from the start of the countdown), or `None` when it is not the only word in
+    the window below `craft` that is 3.9 to 4.45 s above the word `CLOCK_PARTNER` bytes after it (the HUD's lap clock)."""
+    ram = _ram(path)
+    found = []
+    for a in range(craft - CLOCK_WINDOW[0], craft - CLOCK_WINDOW[1], 4):
+        (v,) = struct.unpack_from("<f", ram, a)
+        (w,) = struct.unpack_from("<f", ram, a + CLOCK_PARTNER)
+        if math.isfinite(v) and math.isfinite(w) and 4.0 <= v < 3600.0 and 3.9 <= v - w <= 4.45:
+            found.append(a)
+    return found[0] if len(found) == 1 else None
 
 
 #: Offsets inside the camera object `Camera_SubmitScene` runs on (measured live, `docs/ghidra/functions/ps2-pulse-eu/camera.md`):
