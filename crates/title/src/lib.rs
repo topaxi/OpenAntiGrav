@@ -518,6 +518,12 @@ pub struct FrontEnd {
     /// stem (`docs/formats/omega-status.md`, "The menu blocks"); a listed image no
     /// HD file matches would be a guess.
     pub bottom_up_gnf: &'static [&'static str],
+    /// Whether this title's front-end faces are drawn through a palette the game rewrites
+    /// at run time (Pure's), so a PPSSPP texture pack's key, made against whatever palette
+    /// PPSSPP held when it dumped the face, is not known to be the picture the original draws.
+    /// A pack is not asked for such a face (`docs/formats/ppsspp-texture-pack.md`, "The front
+    /// end's faces"). `false` where nothing says the palette moves, which is Pulse.
+    pub runtime_palette_faces: bool,
     /// The definition file that authors the race box's own selection screens
     /// (`Track Creation`/`Track Selection`, `Team Selection`), or `None` for a
     /// title whose race box has not been read.

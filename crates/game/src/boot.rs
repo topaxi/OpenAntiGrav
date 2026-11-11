@@ -486,11 +486,7 @@ pub fn load_shell(
     // The pack, if one is on and names this disc, is active for the faces below and nothing
     // after them: its pictures are read as each face is built, then it is switched off, so
     // the menus' other art draws the disc's own and a race load chooses afresh.
-    let pack = oag_raceplay::texture_pack::engage(
-        options.find_texture_packs.as_ref(),
-        &archives,
-        &mut report,
-    );
+    let pack = fonts::engage_pack(front_end, options, &archives, &mut report);
     let font = load_font(&mut archives, &languages, preferred_language, &mut report)
         .with_prompts(title.prompts)
         .with_texel_scale(texel_scale);

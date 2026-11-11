@@ -39,6 +39,29 @@
 use super::*;
 use oag_ui::language::load::{role_border, role_font};
 
+/// Makes the texture pack that is on and names this disc the active one for the faces, unless
+/// this title's faces take a runtime palette ([`oag_title::FrontEnd::runtime_palette_faces`]):
+/// a pack is then not asked, and the report says why.
+pub(super) fn engage_pack(
+    front_end: &oag_title::FrontEnd,
+    options: &super::Options,
+    archives: &oag_assets::Archives,
+    report: &mut Vec<String>,
+) -> oag_raceplay::texture_pack::Engaged {
+    if front_end.runtime_palette_faces {
+        report.push(
+            "front-end faces: the disc's own (this title draws them through a palette it rewrites \
+             at run time, which a texture pack's keys cannot follow)"
+                .to_string(),
+        );
+    }
+    let finder = options
+        .find_texture_packs
+        .as_ref()
+        .filter(|_| !front_end.runtime_palette_faces);
+    oag_raceplay::texture_pack::engage(finder, archives, report)
+}
+
 /// `font`'s atlas as the front end draws it: from the active texture pack's picture of the
 /// face when the pack has one ([`oag_ui::font::Atlas::from_pack`]), else the disc's own, with the
 /// role's halo `border` either way. `what` labels the report line.

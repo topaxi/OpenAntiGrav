@@ -381,6 +381,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `docs/formats/pure-status.md`.
     menu_frame: Some(frontend::states::FE_SCREEN),
     bottom_up_gnf: &[],
+    // The pack's own readme: "Due to dynamic CLUT, the HUD font textures in WipEout Pure are almost
+    // impossible to replace reliably" (`docs/formats/ppsspp-texture-pack.md`, "The 2026 pack").
+    runtime_palette_faces: true,
     // Pure's race box is a chain of screens (`Class Selection`, `League
     // Selection`, `Tournament Selection`, `Track Selection`,
     // `Team Selection`, ...) authored in one file, read 2026-09-10 - see

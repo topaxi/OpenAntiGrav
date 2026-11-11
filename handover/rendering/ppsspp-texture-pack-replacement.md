@@ -42,7 +42,7 @@ packs; `just push-data` carries them.
   other is reported. Race Remix keys the pack on the track source's serial.
 - **Not on the menus' own art**: the boot engages the pack for the faces only and switches it off before the sheet is built, so menu and boot art draw the disc's own even with a pack on.
 - **A MODS toggle of a pack applies at the next launch**: the front end's faces are built at boot. `Session::resupply_language` already re-runs `boot::load_shell` with the pack finder, so `switch_selected_mod` calling it for a pack is the cheap way to make it live; not wired, not driven in a window.
-- **Pure's front end now draws the pack's faces** (`FX300ANG`, `LTe50325` hit by full key in the 2020 Pure folder; solid letters where the disc's are hollow). Not claimed as wired; decide whether the front end keeps the disc's Pure face (needs a `Title` data axis, no title branching).
+- **Pure's front-end faces are held off** (`FrontEnd::runtime_palette_faces`): the 2020 Pure folder's `FX300ANG`/`LTe50325` hit by full key but Pure's palette moves at run time and no oracle dump says what the original draws. Take the dump, then flip the flag; the Pure race HUD still asks the pack.
 - Unresolved misses (unchanged): Pulse ship hull texels rewritten after load (167 ship keys), Pure
   `main_menu/previews`, about 20 effect textures with no source on the disc.
 - **Later version (maintainer):** an in-game download-and-enable button, instead of or beside

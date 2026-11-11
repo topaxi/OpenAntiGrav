@@ -162,3 +162,33 @@ fn every_face_the_pack_names_is_drawn_from_it_and_keeps_its_line_height() {
         "more than one of the front end's faces is the pack's"
     );
 }
+
+#[test]
+#[ignore = "needs pure-psp-eu.chd and the Pure pack"]
+fn pure_keeps_the_discs_faces_with_a_pack_on_because_its_palette_moves() {
+    let Some(dir) = pack_dir("WipEout-Pure-HD-Texture-Pack") else {
+        return;
+    };
+    let (Some(off), Some(on)) = (
+        shell("data/images/pure-psp-eu.chd", None),
+        shell("data/images/pure-psp-eu.chd", Some(&dir)),
+    ) else {
+        return;
+    };
+    assert!(
+        from_pack(&on).is_empty(),
+        "a runtime-palette title's faces are not asked of a pack: {:#?}",
+        on.report
+    );
+    assert!(
+        on.report
+            .iter()
+            .any(|line| line.contains("rewrites at run time")),
+        "and the report says why: {:#?}",
+        on.report
+    );
+    for (disc, pack) in faces(&off).iter().zip(faces(&on)) {
+        assert_eq!(disc.width, pack.width);
+        assert!((pack.texel_scale - 1.0).abs() < f32::EPSILON);
+    }
+}
