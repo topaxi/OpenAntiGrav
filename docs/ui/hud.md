@@ -561,7 +561,7 @@ Three traps, all of which cost time here:
 | What does `ShieldBarText` show? | **`100%`** - a percentage, not the raw `<Misc shield/>` pool. Confirmed from the writer as of 2026-08-10: `Ship_SetShield` (`0x0883e6f4`) calls `Hud_SetEnergyBar((shield / max) * 100, ...)` itself, so the percentage is the original's own arithmetic rather than a reading of a frame. |
 | Does the shield bar move? | **Yes, now.** It read a constant full for as long as nothing depleted the pool; wall contact does as of the shield work, so `ShieldBar` and `ShieldBarText` are live. **In a time trial and a speed lap it will still sit near full**, and that is faithful rather than broken - both modes race with the original's `Damage` option off, which floors the pool at 20 and regenerates it at 4 a second. Zone is the mode where it visibly drains. See [shield](../ghidra/functions/psp-pulse-usa/shield.md). |
 | Where is `SpeedBarMark`? | It **slides**: authored x plus the fill's width minus 6, and so do `SpeedBarText` and the shield's `ShieldBarMark`/`ShieldBarText` (zero offset at standstill, where the fill is 6 px). Read live, 59 of 60 ticks. **Pulse's widget only**: HD authors no `SpeedBarMark`, and HD's speed fill is a `<CurveBar>` - see [hd-hud](../formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). |
-| What is HD's `ThrustBar`? | The craft's throttle after Pilot Assist's scale, `craft+0x30c * 100`, cropped to its width with a truncated `NN%` label and no chase of the HUD's own (99 or 92 with the assist on, 0 with no throttle). `Readout::thrust_percent`, on `oag_hd`'s and `oag_omega`'s `ALWAYS_ON`; see [hd-hud](../formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). Not 2048's `thrust_chase_percent`. |
+| What is HD's `ThrustBar`? | The craft's throttle after Pilot Assist's scale, `craft+0x30c * 100`, cropped to its width with a truncated `NN%` label and no chase of the HUD's own (99 or 92 with the assist on, 0 with no throttle). `Readout::thrust_percent`, on `oag_hd::hud::ALWAYS_ON` (Omega reads the same list); see [hd-hud](../formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). Not 2048's `thrust_chase_percent`. |
 
 ### And one structural finding
 
@@ -1429,5 +1429,13 @@ same line and take the same code path, unchecked). 2048 and Omega: both executab
 and both packages ship the same `Elimination_HUD` / `hud_elim_*` fragments (Omega's
 `hud_elim_lap_counters.xml` is 1,482 bytes, HD's size), so the race line **now draws on an
 Eliminator race of either through the shared path, unmeasured on both** (no 2048 or Omega
-Eliminator frame): **ported, unmeasured**. Their `ALWAYS_ON` lists do not carry `LapPanel2`:
-**checked, applies, not wired**.
+Eliminator frame): **ported, unmeasured**. `LapPanel2` (the lap number's hexagon):
+**Omega: ported** - `HUD_Elim_lap_counters.xml` ships in the base package (`data00.psarc`, no
+patch copy), 1,482 bytes like HD's, with `LapPanel2` at the same screen rectangle as HD's and the
+atlas UVs doubled for `fury_hud`'s 2048 square; the default Eliminator root, both split-screen
+pairs (horizontal and vertical) compose it and no other Omega root does, retro skins included
+(`omega_hud_ground_truth::the_eliminator_lap_hexagon_is_authored_by_omegas_eliminator_roots_alone`).
+Omega's `always_on` is `oag_hd::hud::ALWAYS_ON` itself, so its Eliminator draws the hexagon
+(`an_omega_eliminator_draws_the_lap_hexagon`; before the share the lap number floated with no
+hexagon behind it). Unmeasured against an Omega frame. **2048: checked, applies, not wired**
+(`oag_2048::hud::ALWAYS_ON` is its own list).

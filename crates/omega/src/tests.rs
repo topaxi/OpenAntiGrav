@@ -100,6 +100,14 @@ fn the_two_player_hud_is_the_one_the_disc_authors() {
     assert_eq!(split.arcade.len() + split.elimination.len(), 4);
 }
 
+/// Omega's HUD always-on list is HD's, one definition: Omega's Eliminator authors `LapPanel2` too
+/// (`omega_hud_ground_truth`), so a list of its own would drift again the way a copy did.
+#[test]
+fn omega_draws_hds_always_on_widgets() {
+    assert_eq!(TITLE.hud_art.always_on, oag_hd::TITLE.hud_art.always_on);
+    assert!(TITLE.hud_art.always_on.contains(&"LapPanel2"));
+}
+
 /// Omega carries HD's grid hover, so its craft is held low on the grid and released after GO.
 /// Dropping the `launch_hover` wiring from `race.rs` leaves a craft that floats at its race height.
 #[test]

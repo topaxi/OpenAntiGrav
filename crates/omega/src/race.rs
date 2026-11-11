@@ -141,8 +141,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
 /// `Data\plugins\teams\Definition.xml`'s own `PI_Team` locations are. **Not**
 /// `Tigron` and `Tigron_x`: their `PI_TeamModel`s all name one directory
 /// (`hdships\Tigron_x`, `hdships\Tigron`), and neither ships a `_c1` or `_n1`
-/// beside it. **Duplicated from `oag_hd::race::TEAMS`**, not borrowed (a title
-/// package depends on no other); the ground truth checks every combined id
+/// beside it. **Duplicated from `oag_hd::race::TEAMS`**, not borrowed (a
+/// title reads its lineage parent's data only where its own files confirm it is the same, so
+/// far the HUD's always-on list, ADR-0090); the ground truth checks every combined id
 /// against Omega's own archive.
 pub const HD_ERA_TEAMS: [&str; 12] = [
     "AG_Systems",
