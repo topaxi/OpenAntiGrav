@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-11
-summary: "just check-web gates the wasm build; open: a Firefox 159 stall before the renderer line on the maintainer's profile, worker stack overflow has no detector, Firefox fps"
+summary: "just check-web gates the wasm build; open: a Firefox 159 stall before the renderer line, worker stack overflow undetected, Firefox fps"
 ---
 
 # The web build races in Chromium and Firefox
