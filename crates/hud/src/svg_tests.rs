@@ -201,3 +201,39 @@ fn a_drawing_that_claims_a_huge_size_is_rasterised_under_the_cap() {
         "named: {report:?}"
     );
 }
+
+/// A title that draws incoming-weapon warnings gets each vector icon again at the pixels of
+/// each warning slot, and one that does not gets no extra raster.
+#[test]
+fn a_vector_icon_is_rasterised_again_at_each_warning_slots_pixels() {
+    use crate::incoming::{Side, warning_src};
+    let boxes = r#"<Image name="RearWarningRocketIcon"><Values x="0" y="0" width="20" height="10" U="0" V="0" TxtrWidth="20" TxtrHeight="10" Src="Data\HUD\Textures\PulseHUD.mip"/></Image>
+<Image name="ForwardWarningMineIcon"><Values x="0" y="0" width="30" height="6" U="0" V="0" TxtrWidth="30" TxtrHeight="6" Src="Data\HUD\Textures\PulseHUD.mip"/></Image></Screen>"#;
+    let layout = Layout::from_xml(&LAYOUT.replace("</Screen>", boxes));
+    let icon = VectorIcon::parse(SRC.into(), BAR.as_bytes()).unwrap();
+    let place = |art: &oag_title::HudArt| {
+        svg::place(
+            &base(),
+            &layout,
+            art,
+            std::slice::from_ref(&icon),
+            2.0,
+            &mut Vec::new(),
+        )
+    };
+    let mut art = oag_pulse::hud::ART.clone();
+    art.incoming_warnings = true;
+    let sheet = place(&art);
+    // A square drawing into a 20 x 10 box is 10 units a side, and into a 30 x 6 box 6: at 2
+    // pixels a unit, 20 and 12 texels, each its own raster at its own density.
+    for (side, texels) in [(Side::Rear, 20), (Side::Forward, 12)] {
+        let key = warning_src(SRC, side);
+        let at = sheet.get(&key).unwrap_or_else(|| panic!("{key} placed"));
+        assert_eq!((at.width, at.height), (texels, texels), "{side:?}");
+        assert_eq!(sheet.texel_density(&key), Some(2.0));
+    }
+    assert!(sheet.get(SRC).is_some(), "the pickup's raster stays");
+    art.incoming_warnings = false;
+    let sheet = place(&art);
+    assert!(sheet.get(&warning_src(SRC, Side::Rear)).is_none());
+}
