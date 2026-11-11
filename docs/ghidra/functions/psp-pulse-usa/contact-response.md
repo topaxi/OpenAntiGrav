@@ -424,7 +424,8 @@ correction below the list, which replaces an earlier wrong reading of what
    just before the call) and a literal `1.1` into fields on the shield entity
    - a hit-position-and-duration arm for the separately-scoped, still
    unimplemented "Shield hit response" (`docs/overview/roadmap.md`, M5), not a
-   hull spark. Confidence **75**.
+   hull spark. Confidence **75**. A craft-to-craft record takes this branch too: see
+   [the 2026-11-11 section](#a-craft-to-craft-contact-bulges-a-running-shields-shell-2026-11-11-shield-craft-hit).
 
 Also written on this pass: the same loop arms flag bits `0x20` and
 `0x400020` on `craft + 0x860` right after reaction #2, whenever the damage
@@ -2284,7 +2285,7 @@ the last 0.6 s and tests each call's instance gate (`instance + 100`) against th
   test, `0x08842648`). Static; no live cage spark caught.
 - **Ported:** `oag_raceplay::Race::throw_contact_spark` (the locator nearest the contact, the locator's
   0.8 s gate shared with a weapon hit, severity `intensity * 2 + 0.4`, the `.COLLISIONS` cue inside the
-  gate, nothing for a shielded craft), called for both hulls of every `oag_physics::pair` contact (the
+  gate, nothing for a shielded craft, whose shell bulges instead, below), called for both hulls of every `oag_physics::pair` contact (the
   contact point is the box-centre midpoint, `PairContact::point`) and for every `oag_physics::cage`
   corner (`CageResponse::resolved`, `Trigger::CollisionSparkNoDamage`). Pulse only, where a hull's
   `Ship Collision Fx` locators are read (`hit_sparks::anchors`). Tests: `tests::hit_sparks` (pair, cage,
@@ -2294,6 +2295,72 @@ the last 0.6 s and tests each call's instance gate (`instance + 100`) against th
   and its pair and cage contact paths are unread ([ps3-hdfury-eu/ship-collision-fx.md](../ps3-hdfury-eu/ship-collision-fx.md));
   it runs no cage. Pure: the cage is off by its data and `Ship_Damage` is unread. 2048 and Omega: not
   wired, no locators read and no cage; not checkable from the PSP side.
+
+## A craft-to-craft contact bulges a running Shield's shell (2026-11-11, `shield-craft-hit`)
+
+**Claim tested:** a shielded craft that another craft bumps shows the shell reaction iff the original does.
+**Result: yes. Confidence 80** (static, decompiled twice plus one live leg on the record, below).
+
+`FUN_088418e0`'s contact loop (re-decompiled this pass) tests one record at a time, with no read of the
+kind word `record + 0x170`:
+
+```c
+if (0.0 < record->friction /* +0x1a0 */ && Ship_State(entity) == 1) {
+    if (entity->0x4c == 0 || (entity->0x4c->0x1b8 & 0x10) == 0) {   // no Shield running
+        Ship_Damage(|p| * 0.05 * 0.7, entity, record->kind != 0, 0, 0);
+        entity->0x860 |= 0x400020;
+    } else if (entity->0x8c8->active /* +0x74 */) {
+        ShipShield_Hit(entity->0x8c8);                              // 0x0885eb04
+    }
+}
+```
+
+`ShipShield_Hit` has two callers in the image (`get_xrefs_to`): this loop (`0x088426e0`) and
+`Ship_ApplyPendingWeaponDamage` (`0x0883f204`). So the loop is the only contact path to the shell, and a
+pair record takes it exactly as a wall record does:
+
+- `Body_ResolveContactPair` calls `Body_RecordPairContact` (`0x0884dc60`) for **both** bodies (`0x0884f6c8`,
+  `0x0884f6dc`), appending to the same ring (`body + 0x370`) with the pair contact's friction at `+0x1a0`
+  ([hud-message-triggers.md](hud-message-triggers.md): `0.02` for two racing craft).
+- Live leg: the 2026-11-03 diff below found the struck craft's ring holding a record with `+0x1a0 = 0.02`
+  (`0x3ca3d70a`) one tick after a staged rear-end hit, and the 2026-10-26 call log shows `damaged 1`
+  (`friction > 0`) sparks on both hulls of one pair contact.
+
+So a pair contact on a craft in state 1 with a running Shield **bulges the shell, on each of the two
+craft that run one, every tick the ring holds the record**, and charges nothing (the amount is
+discarded, as for a wall). The cage's record carries friction `0`, so a cage contact never does
+(`Cage` row above). Not read: `ShipShield(entity->0x8c8)->active` is the shell object's own byte; the port's
+`ShipShield::hit` has the same no-op guard.
+
+**Port:** `Race::resolve_craft_pairs` raises `Race::shield_hit` for each hull of a pair contact that is
+racing with `shield_pickup_timer > 0`, the complement of the lap-spoil bit it already sets for an
+unshielded one (`pair_spoil`). `oag_physics` is untouched (the shell is a view-side output), so no state
+hash moves. Tests: `tests::shield_hits` (both shells, one shell, a craft that is not racing). Drawn: a
+headless frame of the bump (a posed rival, `--give shield`) shows the shell turn from violet to bright
+cyan and swell on the next frame, then settle over about ten ticks.
+
+**Absorbed weapon hits.** The weapon leg already raised it: `Race::tick` calls `shield_hit` for every
+`WeaponHit::absorbed` that `oag_weapons::projectile::step` reports (rocket, missile, mine, plasma, bomb,
+the Cannon's direct hit), and `repulser.rs` and the LeachBeam do likewise. `tests::shield_hits::a_rocket_a_shield_swallows_bulges_the_shell`
+fires a real Rocket at a shielded craft through `Race::tick` and goes red if the call is removed. **Two
+weapons never reach it**: a Quake wave and a LeachBeam link skip a running Shield before `Ship_Damage`
+(`quake.rs`, `leach_beam.rs`), so they report nothing absorbed and the shell stays at rest. The original's
+`Ship_ApplyPendingWeaponDamage` calls `ShipShield_Hit` for any pending weapon amount, so this is a
+candidate gap (open; the Quake's own handler is the unread link).
+
+**Open: the unshielded branch charges `Ship_Damage` for a pair record.** The loop above does, and
+[hud-message-triggers.md](hud-message-triggers.md) reads the same; the 2026-11-03 section below says only
+walls and weapons charge the pool, but its diff dumped the craft struct and the body, not the entity at
+`+0x88` where the pool lives, so the pool was never compared. Our simulation charges nothing for a pair
+bump. Settle it with a pool read across a staged unshielded bump; it moves hull energy and is a
+simulation change, not wired here.
+
+**Against the other titles.** Pure: ported by the same wiring; its loop, `ShipShield_Hit` twin and
+pair-record writer are read ([`psp-pure-usa/craft-physics.md`](../psp-pure-usa/craft-physics.md),
+"The contact loop's shield branch"). HD: checked, applies, not wired as a measured law (its pair path is
+unread, [ps3-hdfury-eu/ship-collision-fx.md](../ps3-hdfury-eu/ship-collision-fx.md)); the wiring is
+title-generic and HD inherits Pulse's. 2048 and Omega: no shell is drawn, so nothing is seen; not checkable
+against a drawn original.
 
 ## Measured 2026-11-03: a craft-to-craft hit arms nothing on the craft
 

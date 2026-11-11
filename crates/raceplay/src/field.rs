@@ -1287,12 +1287,19 @@ impl Race {
                     }
                     #[cfg(not(feature = "view"))]
                     let _ = contact;
+                    // The ring loop's friction test passes for a pair record, then splits on the
+                    // craft's running Shield: unshielded spoils the lap, shielded bulges the shell
+                    // instead (`ShipShield_Hit`, `contact-response.md`, "A craft-to-craft contact
+                    // bulges a running Shield").
                     #[cfg(feature = "view")]
                     for slot in [a, b] {
-                        self.view.pair_spoil[slot] |=
-                            self.sim.world.ships[slot].physics.craft_state
-                                == oag_physics::CraftState::Racing
-                                && self.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0;
+                        let physics = &self.sim.world.ships[slot].physics;
+                        let racing = physics.craft_state == oag_physics::CraftState::Racing;
+                        let shielded = physics.shield_pickup_timer > 0.0;
+                        self.view.pair_spoil[slot] |= racing && !shielded;
+                        if racing && shielded {
+                            self.shield_hit(slot);
+                        }
                     }
                     #[cfg(test)]
                     self.pair_contacts.push((a, b));

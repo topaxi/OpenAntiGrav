@@ -300,3 +300,5 @@
 0x08ab3da0	data	g_weapon_ai_rate	85	weapon-ai-fire.md
 0x089322b0	function	WeaponAiStats_Load	80	weapon-ai-fire.md
 0x08932868	function	WeaponAiStats_ParseWeapon	80	weapon-ai-fire.md
+0x08947030	function	ShipShield_Hit	80	craft-physics.md
+0x0893403c	function	Body_RecordPairContact	80	craft-physics.md

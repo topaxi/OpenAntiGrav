@@ -105,6 +105,7 @@ mod seat_view;
 mod second_person;
 mod shared_half;
 mod shield_flash;
+mod shield_hits;
 mod shine_writes;
 mod slot_hud;
 mod spawn;
