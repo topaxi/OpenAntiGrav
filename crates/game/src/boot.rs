@@ -584,16 +584,12 @@ pub fn load_shell(
     // has one atlas; the ratio each face's line height stands to `Default`
     // is what keeps the others the right size. Not measured for the other
     // titles here, whose screens were matched against captures without it.
-    let face_scales = if front_end.touch.is_some() {
-        fonts::face_scales(
-            &mut archives,
-            preferred_language,
-            font.line_height,
-            &mut report,
-        )
-    } else {
-        Vec::new()
-    };
+    let face_scales = fonts::face_scales(
+        &mut archives,
+        preferred_language.filter(|_| front_end.touch.is_some()),
+        font.line_height,
+        &mut report,
+    );
     steps.lap("menu and title fonts");
     let (campaign_events, extra_tiles) = campaign2048::touch_menus(
         front_end.touch.is_some(),
