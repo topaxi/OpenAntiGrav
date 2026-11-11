@@ -57,7 +57,7 @@
 
 use std::borrow::Cow;
 
-use anyhow::{Context, Result, anyhow, bail, ensure};
+use anyhow::{Context, Result, anyhow, ensure};
 use serde::Deserialize;
 
 /// How many tunables a preset may declare: four `vec4<f32>`s of the uniform.
@@ -291,72 +291,77 @@ impl Screen {
         preset.validate()?;
         let source = preset.wgsl();
 
-        let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some(&format!("screen filter {}", preset.id)),
-            source: wgpu::ShaderSource::Wgsl(Cow::Owned(source)),
-        });
+        // Built inside an error scope natively, so a preset the backend refuses
+        // is an error here and not wgpu's panic; on the web the scope's answer
+        // is a promise the page's thread may not wait for (`shader_file::scoped`).
+        let (layout, linear, nearest, pipeline, target_format) =
+            oag_gpu::shader_file::scoped(device, || {
+                let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some(&format!("screen filter {}", preset.id)),
+                    source: wgpu::ShaderSource::Wgsl(Cow::Owned(source)),
+                });
 
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("screen filter"),
-            entries: &[
-                super::texture_entry(0),
-                super::sampler_entry(1),
-                super::uniform_entry(2),
-                super::texture_entry(3),
-                super::sampler_entry(4),
-            ],
-        });
-        let sampler = |label: &str, filter: wgpu::FilterMode| {
-            device.create_sampler(&wgpu::SamplerDescriptor {
-                label: Some(label),
-                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                mag_filter: filter,
-                min_filter: filter,
-                ..Default::default()
+                let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("screen filter"),
+                    entries: &[
+                        super::texture_entry(0),
+                        super::sampler_entry(1),
+                        super::uniform_entry(2),
+                        super::texture_entry(3),
+                        super::sampler_entry(4),
+                    ],
+                });
+                let sampler = |label: &str, filter: wgpu::FilterMode| {
+                    device.create_sampler(&wgpu::SamplerDescriptor {
+                        label: Some(label),
+                        address_mode_u: wgpu::AddressMode::ClampToEdge,
+                        address_mode_v: wgpu::AddressMode::ClampToEdge,
+                        mag_filter: filter,
+                        min_filter: filter,
+                        ..Default::default()
+                    })
+                };
+                let linear = sampler("screen filter linear", wgpu::FilterMode::Linear);
+                let nearest = sampler("screen filter nearest", wgpu::FilterMode::Nearest);
+
+                let pipeline_layout =
+                    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("screen filter"),
+                        bind_group_layouts: &[Some(&layout)],
+                        immediate_size: 0,
+                    });
+                // Non-sRGB, as every pass in this module writes: the value is passed
+                // on to the grade untouched, and since ADR-0020 the presentation
+                // target is non-sRGB at every real call site anyway.
+                let target_format = format.remove_srgb_suffix();
+                let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("screen filter"),
+                    layout: Some(&pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader,
+                        entry_point: Some("vs_main"),
+                        buffers: &[],
+                        compilation_options: Default::default(),
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader,
+                        entry_point: Some("fs_main"),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: target_format,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                        compilation_options: Default::default(),
+                    }),
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview_mask: None,
+                    cache: None,
+                });
+                (layout, linear, nearest, pipeline, target_format)
             })
-        };
-        let linear = sampler("screen filter linear", wgpu::FilterMode::Linear);
-        let nearest = sampler("screen filter nearest", wgpu::FilterMode::Nearest);
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("screen filter"),
-            bind_group_layouts: &[Some(&layout)],
-            immediate_size: 0,
-        });
-        // Non-sRGB, as every pass in this module writes: the value is passed
-        // on to the grade untouched, and since ADR-0020 the presentation
-        // target is non-sRGB at every real call site anyway.
-        let target_format = format.remove_srgb_suffix();
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("screen filter"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: target_format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
-        });
-        if let Some(error) = pollster::block_on(scope.pop()) {
-            bail!("screen filter {:?} did not build: {error}", preset.id);
-        }
+            .map_err(|error| anyhow!("screen filter {:?} did not build: {error}", preset.id))?;
 
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("screen filter uniform"),

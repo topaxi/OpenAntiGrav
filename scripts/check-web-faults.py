@@ -40,6 +40,12 @@ NO_COMPILE = (
 )
 
 
+SCREEN_FILTER = (
+    "localStorage.setItem('oag:/config/oag/settings.toml',"
+    " '[render_profiles.\"Wipeout Pulse (PSP)\"]\\nscreen_filter = \"psp-3000\"\\n');"
+)
+
+
 NO_DEVICE = (
     "if (window.GPUAdapter) GPUAdapter.prototype.requestDevice ="
     " () => Promise.reject(new Error('requestDevice: the adapter is not able to provide this'));"
@@ -72,6 +78,8 @@ def cases(pulse: Path, scratch: Path, boot: float) -> list[Case]:
         Case("memory", "out-of-memory", hook("memory", boot), True),
         Case("worker-panic", "panic", hook("worker-panic", boot), True),
         Case("worker-trap", "trap", hook("worker-trap", boot), True),
+        # The page's thread taking a lock a worker keeps: a report, not a frozen page.
+        Case("page-wait", "panic", hook("page-wait-hold", boot) + hook("page-wait", boot + 2), True),
         Case("gpu-validation", "gpu-validation", hook("gpu-validation", boot), True),
         Case("gpu-out-of-memory", "gpu-out-of-memory", hook("gpu-out-of-memory", boot), True, real=False),
         Case("gpu-internal", "gpu-internal", hook("gpu-internal", boot), True, real=False),
@@ -87,6 +95,9 @@ def cases(pulse: Path, scratch: Path, boot: float) -> list[Case]:
         Case("module-load-glue", "module-load", ["--block", "**/pkg/*/oag_web.js"]),
         Case("wasm-memory", "wasm-memory", ["--init-script", NO_MEMORY], real=False),
         Case("wasm-unsupported", "wasm-unsupported", ["--init-script", NO_COMPILE], real=False),
+        # Saved settings the boot reads, which must still reach the menus with no report: a
+        # screen filter once froze Firefox there (docs/tools/web.md, "The page's thread may not wait").
+        Case("saved-screen-filter", "clean", ["--init-script", SCREEN_FILTER]),
     ]
     for name, kind, extra in (
         ("disc-garbage", "disc-unsupported", ["--image", str(scratch / "garbage.iso")]),
@@ -107,9 +118,9 @@ def run(case: Case, browser: str, args, pulse: Path, boot: float) -> tuple[str, 
     out = args.out / f"{browser}-{case.name}"
     command = [
         sys.executable, str(SHOT), "--dist", str(args.dist), "--image", str(pulse), "--out", str(out),
-        "--at", f"{boot + 3:g}", "--browser", browser, "--expect-fault", case.kind,
-        "--expect-reports", str(case.reports), "--port", str(args.port),
-    ] + case.args
+        "--at", f"{boot + 3:g}", "--browser", browser, "--port", str(args.port),
+    ] + (["--expect-clean"] if case.kind == "clean" else
+         ["--expect-fault", case.kind, "--expect-reports", str(case.reports)]) + case.args
     if "--image" in case.args:
         # The case's own image replaces the default one.
         first = command.index("--image")
@@ -121,7 +132,7 @@ def run(case: Case, browser: str, args, pulse: Path, boot: float) -> tuple[str, 
     out.mkdir(parents=True, exist_ok=True)
     (out / "run.log").write_text(done.stdout + done.stderr)
     tail = (done.stdout + done.stderr).strip().splitlines()
-    note = next((line for line in reversed(tail) if line.startswith(("report:", "fault ", "other console"))), "")
+    note = next((line for line in reversed(tail) if line.startswith(("report:", "fault ", "clean:", "other console"))), "")
     if done.returncode == 0:
         return "PASS", note
     return "FAIL", (tail[-1] if tail else "no output")[:200]

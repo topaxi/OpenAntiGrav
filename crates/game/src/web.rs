@@ -222,7 +222,8 @@ mod web_log {
 /// real overflow of the page's stack), `recursion` (the engine's stack),
 /// `worker-stack` (the overflow on a Web Worker), `memory` (the module's whole 4 GiB
 /// reserved, then one allocation more), `worker-panic` and `worker-trap` (the
-/// same on a Web Worker), `gpu-validation` (an invalid buffer on the live
+/// same on a Web Worker), `page-wait-hold` then `page-wait` (the page's thread
+/// taking a lock a worker keeps), `gpu-validation` (an invalid buffer on the live
 /// device), and `gpu-out-of-memory`, `gpu-internal`, `gpu-lost` (the error
 /// handed to the callbacks the browser's would reach).
 #[cfg(feature = "fault-test")]
@@ -242,6 +243,9 @@ pub fn fault_test(what: &str) {
         std::hint::black_box(&pad);
         recurse::<N>(depth + 1) + u64::from(pad[0])
     }
+
+    /// The lock `page-wait-hold` keeps on a worker.
+    static PAGE_WAIT: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     match what {
         "panic" => panic!("fault test: a deliberate panic"),
@@ -277,6 +281,22 @@ pub fn fault_test(what: &str) {
                 held.push(Vec::<u8>::with_capacity(256 << 20));
                 std::hint::black_box(&held);
             }
+        }
+        // A worker takes a lock and keeps it; `page-wait` then has the page's
+        // thread take the same one, which it may not wait for.
+        "page-wait-hold" => std::mem::forget(oag_thread::Task::spawn("fault-test", || {
+            let _held = PAGE_WAIT
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(3600));
+            }
+        })),
+        "page-wait" => {
+            let held = PAGE_WAIT
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::hint::black_box(&held);
         }
         "worker-panic" => std::mem::forget(oag_thread::Task::spawn("fault-test", || {
             panic!("fault test: a deliberate panic on a worker");

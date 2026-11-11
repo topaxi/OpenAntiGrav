@@ -9,10 +9,12 @@
 //! id the closure waits under. See docs/tools/web.md, "Threads". Most callers
 //! want the crate's cross-target [`crate::Task`] and [`crate::lock`] instead.
 //!
-//! **The page's thread may not block.** `Atomics.wait`, and the
-//! `memory.atomic.wait32` a contended `std::sync::Mutex` ends in, trap on it,
-//! so whatever the main thread shares with a worker it reads with an atomic or
-//! a `try_lock`, never a waiting `lock` ([`on_worker`] tells the two apart).
+//! **The page's thread may not block.** The `memory.atomic.wait32` a
+//! contended `std::sync::Mutex` ends in traps there in Chromium and blocks in
+//! Firefox, which freezes the page; the build makes it call
+//! [`oag_page_would_block`] instead. So whatever the main thread shares with a
+//! worker it reads with an atomic or a `try_lock`, never a waiting `lock`
+//! ([`on_worker`] tells the two apart).
 //! wgpu's web types are not `Send` here, so a worker never touches the GPU.
 
 use std::cell::Cell;
@@ -137,4 +139,19 @@ pub fn oag_worker_entry(id: u32) {
     if let Some(job) = job {
         job();
     }
+}
+
+/// Where the page's thread goes instead of waiting on a lock: the build puts
+/// a call to this before every `memory.atomic.wait32/64` in the module, taken
+/// only on the page's thread (`scripts/web-page-wait-guard.py`). Chromium traps
+/// on such a wait and Firefox blocks on it, freezing the page with nothing
+/// reported; this panics, so both end in the page's one error report.
+/// `function` is the waiting function's index in the module `wasm-bindgen`
+/// wrote, which the build's `page-waits.txt` names.
+#[wasm_bindgen]
+pub fn oag_page_would_block(function: u32) {
+    panic!(
+        "the page's thread would wait on a lock another thread holds (function {function} \
+         in this build's page-waits.txt); see docs/tools/web.md, \"The page's thread may not wait\""
+    );
 }
