@@ -17,14 +17,17 @@ game's own fire path). Nothing in our HUD draws `ForwardWarningIcons` /
 State per local player's HUD: two slots, `forward` and `rear`, each
 `{ timer: f32, idx: Option<u8> }`, both start `0.0` / none.
 
-**Raise** (on the tick a craft's held weapon is fired, i.e. where
-`oag_raceplay`'s `spend_pickup` (`crates/raceplay/src/weapons.rs`) consumes it):
-skip if the firer is the local player, if the weapons-on switch is off, or if the
-race mode is not Arcade/Single race, Eliminator, Tournament or their multiplayer
-forms (Time Trial, Free Play, Zone: never). Let
-`g = progress(player) - progress(firer)`, wrapped into `+/- half` a lap. That is
-`-oag_ai::original::gap_along_track(player, firer, lap)` (that helper returns
-`other - player`; mind the sign). Skip if `|g| > 800`. Then:
+**Raise** (on the tick an opponent fires a held weapon): skip if the firer is the
+local player, if weapons are off, or if the mode is not Arcade/single race,
+Tournament, Eliminator or Head-to-Head (Time Trial, Free Play, Zone: no widgets;
+every **multiplayer** mode: widgets bound but never raised, so never shown). Let
+`g = progress(player) - progress(firer)`, folded into `+/- half` the circuit length.
+The original's quantity is `entity+0x91c`; ours is `Craft::progress()`
+(`crates/weapons/src/craft.rs`) with the fold `wrapped_gap` in
+`crates/weapons/src/projectile/missile.rs` (the documented port of the same
+`FUN_0883dbf4` arithmetic, used by `lock_window`; note it computes
+`there - here`, so pass `player - firer`). `oag_ai::original::gap_along_track` is a
+port of a different function and is not the one to use. Skip if `|g| > 800`. Then:
 
 | Weapon | Window (strict) | Slot | Widget |
 | --- | --- | --- | --- |
@@ -48,8 +51,9 @@ one). Target, lock-on and the projectile's later flight are never read.
 `timer > 0` then `timer = max(timer - dt, 0)` and the slot's background
 (`ForwardWarningBackground` / `RearWarningBackground`) is drawn iff `on`; else the
 background is hidden and `idx = none`. Each icon is drawn iff it is its slot's `idx`
-and that slot's `on`. Result: 4 Hz blink, first 0.125 s off, eight on phases, ends
-off.
+and that slot's `on`. Result: 4 Hz blink; only the raise frame is off, then eight
+on phases (`8t` in `[15,16), [13,14), ... [1,2)`) of 0.125 s each, the last 0.125 s
+off, cleared on the first update after zero.
 
 The HUD is a view: the raise belongs in the per-tick output the race already
 produces (a cue-like event "craft `k` fired weapon `w`" or the slot state itself),
@@ -59,7 +63,13 @@ live), so 120 ticks per warning.
 
 ## Where to wire
 
-- Fire site: `spend_pickup` (`crates/raceplay/src/weapons.rs`), one arm per weapon.
+- Fire sites: opponents fire through `crates/raceplay/src/field/opponent_weapons.rs`
+  (`fire_opponent_missile`, `_rocket`, `_quake`, `_leach_beam`, `_plasma`, ...) and
+  `crates/raceplay/src/weapons/disruptor.rs`; `spend_pickup`
+  (`crates/raceplay/src/weapons.rs`) is only for person-flown slots (the local
+  player, and other humans in split screen, whose fire must warn the *other*
+  seats). Check every weapon in the table has an opponent fire path; a weapon the
+  AI never fires in ours simply never warns.
 - Gap: `oag_ai::original::gap_along_track` (`crates/ai/src/original/cruise.rs`).
 - HUD: the widgets are already in the layout model (`crates/hud`, read from
   `Arcade_HUD.xml` and friends); draw them like `TimeDiffIcon`
@@ -67,7 +77,9 @@ live), so 120 ticks per warning.
 - Tests that fail if the law is dropped: a Rocket fired 399 behind raises the rear
   slot and 401 does not; a Mine 100 ahead raises the forward slot; the player's own
   fire never raises; the blink schedule is off 2 frames, then on 8 / off 7-8, and the
-  slot clears to none after 2.0 s.
+  slot clears to none after 2.0 s. Assert the blink against the formula over an
+`f32`-accumulated timer, not hard-coded frame counts (`8t` hits integers every 15
+ticks at 60 Hz, where rounding decides the frame).
 
 ## Open
 

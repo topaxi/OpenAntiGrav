@@ -72,7 +72,8 @@ along-track positions.
 `lui a2,0x4000` is the 2.0. A second raise in the same slot overwrites the index and
 restarts the timer at 2.0; the two slots are independent, so a rear and a forward
 warning can show together. `Hud_Construct` stores the same four fields at
-`0x08819db0..0x08819dc4` (read live as `0.0`/`13` on an idle HUD).
+`0x08819db0..0x08819dc4` (the stored values are not read; the idle state `0.0`/`13`
+seen live is the update's own, step 2 and 3 below).
 
 ## `Hud_UpdateIncomingWarnings` (`0x0881aa8c`)
 
@@ -90,9 +91,14 @@ the frame time, not a fixed 1/60). Per call:
    (`icon.idx == hud+0x18c` and `pr`).
 
 So the warning blinks at **4 Hz**: 0.125 s on, 0.125 s off, on while
-`floor(8 t)` is odd. From 2.0 the first eighth of a second is off, then eight on
-phases; it ends off (`t < 0.125` is phase 0) and the slot index resets to 13 on the
-first call after `t` reaches 0. The forward branch's missing clear (step 2) is never
+`floor(8 t)` is odd. Only the first update after the raise is off (`8 * 2.0 = 16`,
+even); from the next one `8t` is in `[15, 16)` and the phase is on. The on phases
+are `8t` in `[15,16), [13,14), ... [1,2)`, eight in all, each 7 or 8 frames at the
+live frame time; the last 0.125 s is off (`t < 0.125` is phase 0) and the slot index
+resets to 13 on the first update after `t` reaches 0. At a fixed 60 Hz `8t` lands
+exactly on an integer every 15 ticks, so which frame a phase starts on is decided
+by `f32` rounding of the accumulated `t`: a test should check the formula, not
+hard-coded frame counts. The forward branch's missing clear (step 2) is never
 visible, because the last phase before zero is an off phase; `pf` would only be odd
 at zero if `dt` jumped by more than 0.125 s.
 
@@ -127,17 +133,23 @@ held-weapon id (Mine 8, Bomb 9); the remap is [mine.md](mine.md)'s.
 
 ## Which modes show them
 
-`hud+0x40 & 0x2000` is set by `ArcadeRace_Construct` (`0x0882c2b0`),
+Two gates. **Raise:** `Weapon_AnnounceIncoming` returns for `g_game_mode >= 14`, so
+only modes 0-13 can raise ([state-machine.md](state-machine.md#the-game-mode-enum-g_game_mode-0x08b31048):
+Arcade 3, Tournament 4, Elimination 8, Head2Head 9 and AI Race 12, the last two
+through `ArcadeRace_Construct`). **Draw:** `hud+0x40 & 0x2000` is set by `ArcadeRace_Construct` (`0x0882c2b0`),
 `Elimination_Construct` (`0x0882cb30`), `Tournament_Construct` (`0x0882e6f8`),
 `MPRace_Construct` (`0x0882213c`), `MPElimination_Construct` (`0x088227ec`) and
 `MPTournament_Construct` (`0x08823794`), from a full `ori ..., 0x2000` scan of the
 binary. `TimeTrial`, `FreePlay`, `Zone`, `MPTimeTrial` and `AiBatchTest` do not set
-it, so their HUD never binds or updates the warnings. Measured `hud+0x40`: `0x20df`
+it, so their HUD never binds or updates the warnings. The **multiplayer** modes
+(14-18) bind and update the widgets but never raise them, so they never show
+(`Plasma_SpawnRemote`'s announce call returns at the same mode test). Measured `hud+0x40`: `0x20df`
 in a single race (this page's runs), `0x229f` in Eliminator
 ([hud-kill-column.md](hud-kill-column.md)). A race with **weapons off**
 (`*(0x08b30f90+0x18) == 0`) never reaches `Ship_UpdateWeapons`
 ([autopilot.md](autopilot.md)), so nothing is fired and nothing warns.
-**Confidence 88** for the mode list (static, one mode word per mode live).
+**Confidence 88** for the mode list (static; the raise gate's mode test is read at
+`0x08871df4`, mode `3` live).
 
 ## Live evidence, 2026-11-11
 
@@ -146,9 +158,10 @@ race, Talon's Junction, Venom, `hud+0x40 = 0x20df`), debugger breakpoints only.
 
 **Blink and clear (planted timer).** At the first `Hud_UpdateIncomingWarnings`
 entry, `hud+0x184 = 2.0, hud+0x18c = 1` was written, then 140 consecutive calls
-logged. `RearWarningBackground` and `RearWarningMissileIcon` were off for calls
-0-1, then alternated on 8 / off 7 or 8 calls (on at 2-8, 16-23, 31-38, 46-53, 61-68,
-76-83, 91-98, 106-113; off between), eight on phases in all. `t_r` reached `0.0`
+logged. Each row was read at a call's entry, so it shows the previous call's
+result. `RearWarningBackground` and `RearWarningMissileIcon` were off after the
+raise call only (row 1), then on for 7 or 8 calls and off for 7 or 8 (on in rows
+2-8, 16-23, 31-38, 46-53, 61-68, 76-83, 91-98, 106-113), eight on phases in all. `t_r` reached `0.0`
 at call 120 and `hud+0x18c` read `13` from call 121. No other warning widget was
 ever visible. The same run with `hud+0x180 = 2.0, hud+0x188 = 9` gave the identical
 schedule on `ForwardWarningBackground` and `ForwardWarningMineIcon` and ended off.
@@ -198,11 +211,12 @@ breakpoint on `Weapon_AnnounceIncoming` never stopped.
   with the multiplier `DAT_008a7704` (unread; 8.0 if it matches Pulse). It also
   hides every warning widget while `RaceManager+0xad` is set (unread), and walks only
   ten icon records. HD's raise and window are not read.
-- **2048:** checked, applies, not wired: `eboot.elf` (v1.04) carries the same twelve
-  names plus `WarningIcons`; its update is not located.
+- **2048:** not checkable yet beyond names: `eboot.elf` (v1.04) carries HD's twelve
+  names plus `WarningIcons`; its update is not located, and HD's law already
+  differs from Pulse's, so nothing carries over by name alone.
 - **Omega:** checked, differs: `eboot.bin` (v1.07) carries `ForwardWarningBackground`,
   `RearWarningBackground` and the three group names, but none of the ten icon names,
-  so its icons are not looked up by these names. Not followed further.
+  and no `Warning%s`/`%sIcon` format string (`search_strings`), so its icons are not looked up by these names. Not followed further.
 
 ## Open
 
