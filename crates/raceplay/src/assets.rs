@@ -584,15 +584,20 @@ pub(super) fn exhaust_texture(
                 rgba: image.rgba.clone(),
             },
             format!(
-                "{held}: {}x{} from the texture pack",
+                "{name}: {}x{} from the texture pack",
                 image.width, image.height
             ),
         ));
     }
     let picture = oag_texture::decode::decode_named(&held, &blob)
         .map_err(|e| format!("{held}: {} bytes, {e}", blob.len()))?;
+    let read_as = if held == name {
+        String::new()
+    } else {
+        format!(" (read as {held})")
+    };
     let note = format!(
-        "{held}: {}x{} {}, {} bpp",
+        "{name}: {}x{} {}, {} bpp{read_as}",
         picture.width,
         picture.height,
         picture.container.extension(),
