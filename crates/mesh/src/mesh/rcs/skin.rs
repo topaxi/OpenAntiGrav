@@ -584,9 +584,11 @@ pub(super) fn picks(
             // (`glass_texture_customr`) or its glow mask (`glass_2nduv_reflect_glow`). See
             // `window_glass::picture`.
             if let Some(entry) = super::window_glass::picture(material, &declared) {
+                // Beside it, the map the family's specular is multiplied by, where it has one.
+                let aux = super::window_glass::specular_map(material, &declared).unwrap_or(entry);
                 return Pick {
                     albedo: Some(entry),
-                    aux: Some(entry),
+                    aux: Some(aux),
                 };
             }
             // An entry only counts when it supplies a `.gtf`: an entry the

@@ -228,6 +228,138 @@ fn the_pad_program_reads_its_mask_as_a_normal_and_as_light_bars_and_keeps_the_li
     );
 }
 
+/// `Emissive::program` mode 12 (`mesh::rcs::alpha_emissive`): the picture's own
+/// alpha times the entry's colour, added after the light. No third binding and
+/// no role bit: the entry's mode alone selects it.
+#[test]
+fn a_picture_alpha_emissive_entry_adds_the_pictures_alpha_times_its_colour() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    let mut scene = Scene::off();
+    scene.light.enabled = 1.0;
+    scene.light.direction = [0.8, 0.0, 0.6];
+    scene.light.sun = [0.6, 0.6, 0.6];
+    scene.fog.camera = [0.0, 0.0, 100.5];
+
+    let lit = |alpha: u8, tint: [f32; 3], mode: f32| {
+        let word = slots::DEFAULT | slots::NO_AMBIENT | GLOW_SLOT;
+        let mut model = model(&Pad {
+            lightmap: None,
+            mask: [128, 128, 255, 0],
+            tint,
+            flagged: false,
+        });
+        model.textures = vec![Some(texture("albedo", [128, 128, 128, alpha]))];
+        model.pad_masks = vec![None];
+        model.emissive[0].program = [mode, 0.0];
+        for vertex in &mut model.vertices {
+            vertex.slots = word;
+        }
+        draw(&device, &queue, &model, scene)
+    };
+    let mode = oag_mesh::mesh::PROGRAM_PICTURE_ALPHA_EMISSIVE;
+    let dark = lit(255, [0.0; 3], mode);
+    let red = lit(255, [1.0, 0.0, 0.0], mode);
+    println!("alpha 255: no colour {dark:?}, red {red:?}");
+    assert!(luma(dark) > 5.0, "the surface drew nothing");
+    assert!(
+        i32::from(red[0]) > i32::from(dark[0]) + 60,
+        "the picture's alpha does not glow in the entry's colour: {red:?} against {dark:?}"
+    );
+    assert!(
+        (i32::from(red[1]) - i32::from(dark[1])).abs() <= 2
+            && (i32::from(red[2]) - i32::from(dark[2])).abs() <= 2,
+        "a red emissive colour must add red only: {red:?} against {dark:?}"
+    );
+    // The mask is the picture's alpha: none of it, none of the colour.
+    assert_eq!(
+        lit(0, [1.0, 0.0, 0.0], mode),
+        lit(0, [0.0; 3], mode),
+        "a zero alpha must add nothing"
+    );
+    let half = lit(128, [1.0, 0.0, 0.0], mode);
+    assert!(
+        half[0] > lit(128, [0.0; 3], mode)[0] && half[0] < red[0],
+        "half the alpha must add less than all of it: {half:?} against {red:?}"
+    );
+    // And the term belongs to the mode: the same entry as a plain glow layer
+    // on a slot with no `ADD_SECOND` draws nothing extra.
+    assert_eq!(
+        lit(255, [1.0, 0.0, 0.0], 0.0),
+        dark,
+        "an entry of mode 0 must not take the picture-alpha term"
+    );
+}
+
+/// A sky-reflecting window whose entry carries `program[1]` (`mesh::rcs::window_glass`,
+/// `pb_glass_2nduv_reflect_specular1_glow`): the specular is multiplied by the second
+/// binding's colour, and the picture's alpha no longer weights it.
+#[test]
+fn a_windows_specular_map_tints_its_specular() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    let mut scene = Scene::off();
+    scene.light.enabled = 1.0;
+    // Straight down the view axis: the half vector is the normal.
+    scene.light.direction = [0.0, 0.0, 1.0];
+    scene.light.sun = [0.6, 0.6, 0.6];
+    scene.light.specular_scale = 1.0;
+    scene.fog.camera = [0.0, 0.0, 100.5];
+
+    let lit = |map: [u8; 4], flagged: bool| {
+        let word = slots::DEFAULT | slots::NO_AMBIENT | GLOW_SLOT;
+        let mut model = model(&Pad {
+            lightmap: Some(map),
+            mask: [128, 128, 255, 0],
+            tint: [1.0, 0.0, 1.0],
+            flagged: false,
+        });
+        // A picture with no alpha: the generic gloss-in-alpha mask would kill the specular.
+        model.textures = vec![Some(texture("albedo", [64, 64, 64, 0]))];
+        model.pad_masks = vec![None];
+        model.emissive[0].rate = oag_mesh::mesh::WINDOW_REFLECTION_RATE;
+        model.emissive[0].program = [0.0, f32::from(u8::from(flagged))];
+        for vertex in &mut model.vertices {
+            vertex.slots = word;
+        }
+        draw(&device, &queue, &model, scene)
+    };
+    let white = lit([255, 255, 255, 255], true);
+    let black = lit([0, 0, 0, 255], true);
+    let red = lit([255, 0, 0, 255], true);
+    println!("specular map white {white:?}, black {black:?}, red {red:?}");
+    assert!(
+        luma(white) > luma(black) + 20.0,
+        "a white specular map must leave the highlight, a black one remove it: {white:?} \
+         against {black:?}"
+    );
+    assert!(
+        i32::from(red[0]) > i32::from(black[0]) + 20
+            && (i32::from(red[1]) - i32::from(black[1])).abs() <= 2,
+        "the map's colour tints the highlight: {red:?} against {black:?}"
+    );
+    // Without the flag the second binding is not a specular map.
+    assert_eq!(
+        lit([255, 255, 255, 255], false),
+        lit([0, 0, 0, 255], false),
+        "an unflagged window must not read its second binding into the specular"
+    );
+}
+
 fn base_clone(pad: &Pad) -> Pad {
     Pad {
         lightmap: pad.lightmap,
