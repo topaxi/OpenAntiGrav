@@ -236,6 +236,13 @@ pub struct Report {
     /// parameter the program multiplies the mask's alpha by. Drawn without
     /// the term rather than with an invented colour.
     pub pad_ne_unread: usize,
+    /// HD materials whose picture's alpha times their emissive colour is drawn -
+    /// see `super::alpha_emissive`.
+    pub alpha_emissive_bound: usize,
+    /// HD materials whose program has that term and that draw without it: the
+    /// material authors no colour, the slot holds another family's reading, or
+    /// the glow table is full.
+    pub alpha_emissive_unread: usize,
     /// Magstrip materials whose emissive picture and wave were bound - see
     /// `super::mag_wave`.
     pub mag_wave_bound: usize,
@@ -299,6 +306,9 @@ pub struct Report {
     /// Ship hull materials whose `_n` normal map was bound and whose chunks
     /// carry their tangent - see `super::hull_normal`.
     pub hull_normal_bound: usize,
+    /// Of those, the maps stored two lanes wide (`x` in the alpha, `y` in the
+    /// green) and unpacked at load - see `super::hull_normal`.
+    pub hull_normal_packed: usize,
     /// Hull materials that read a normal map whose picture did not decode.
     pub hull_normal_unread: usize,
     /// Reflective materials left untagged because their glow index was taken or
@@ -474,6 +484,16 @@ impl Report {
             n => format!(
                 ", {n} pad material(s) whose _ne mask or its colour could not be read (drawn without)"
             ),
+        } + &match self.alpha_emissive_bound {
+            0 => String::new(),
+            n => format!(
+                ", {n} material(s) glowing by their picture's alpha times their emissive colour"
+            ),
+        } + &match self.alpha_emissive_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} material(s) whose picture-alpha emissive could not be bound (drawn without)"
+            ),
         } + &match self.mag_wave_bound {
             0 => String::new(),
             n => format!(", {n} magstrip material(s) with their scrolling wave bound"),
@@ -559,9 +579,12 @@ impl Report {
             n => format!(
                 ", {n} scenery glass material(s) NOT tagged (glow index taken, table full or no weight)"
             ),
-        } + &match self.hull_normal_bound {
-            0 => String::new(),
-            n => format!(", {n} hull material(s) sampling their normal map"),
+        } + &match (self.hull_normal_bound, self.hull_normal_packed) {
+            (0, _) => String::new(),
+            (n, 0) => format!(", {n} hull material(s) sampling their normal map"),
+            (n, packed) => format!(
+                ", {n} hull material(s) sampling their normal map ({packed} unpacked from two lanes)"
+            ),
         } + &match self.hull_normal_unread {
             0 => String::new(),
             n => format!(", {n} hull material(s) whose normal map did not decode (drawn without)"),

@@ -35,6 +35,9 @@
 //! - `OAG_WATER_OFF=1` turns the HD water family's own readings off
 //!   (`water`, `ice`), so a frame can be taken before and after them.
 //!
+//! - `OAG_ALPHA_EMISSIVE_OFF=1` turns the emissive-in-alpha families' reading
+//!   off (`alpha_emissive`), for the same before and after.
+//!
 //! Both match the material's own archive path
 //! (`data/environments/talons_junction/materials/clouds.rcsmaterial`) **or
 //! either of the two `.gtf` paths it names**, case-insensitively, so a needle
@@ -167,6 +170,13 @@ fn excludes_paths(slot: u32, translucent: Option<bool>, paths: &[&str]) -> bool 
 pub(super) fn water_off() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("OAG_WATER_OFF").is_some())
+}
+
+/// Whether the emissive-in-alpha families' reading is switched off
+/// (`OAG_ALPHA_EMISSIVE_OFF`): the before half of a before/after pair.
+pub(super) fn alpha_emissive_off() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("OAG_ALPHA_EMISSIVE_OFF").is_some())
 }
 
 /// Whether every material's picture is replaced by a flat colour keyed by its

@@ -83,7 +83,43 @@ fn moas_window_glass_is_tagged_to_read_the_sky() {
         !weights.is_empty() && weights.iter().all(|&w| (w - 0.8).abs() < 1e-6),
         "the glass weight (parameter 0x5e5b1937) is 0.8 on every instance: {weights:?}"
     );
+    moas_two_lane_normal_maps_are_unpacked_and_carry_their_frame(&model, &report);
     trees_draw_among_the_cutouts_and_bit_2_blends_write_depth(model);
+}
+
+/// Moa Therma's `diffuse_normal_specular` and `dc_diffusenormalspecular` (63 slots: the
+/// road's surround, the pit wall, the garages) read their `_n` file two lanes wide, `x` in the
+/// alpha and `y` in the green (`docs/formats/rcsmaterial.md`, "The two-lane normal map"). Each
+/// binds an unpacked copy third and its chunks carry the tangent; without it the garage
+/// bays, whose whole relief is in the map, drew flat and 9 grey levels too bright.
+fn moas_two_lane_normal_maps_are_unpacked_and_carry_their_frame(
+    model: &mesh::Model,
+    report: &mesh::rcs::Report,
+) {
+    assert_eq!(report.hull_normal_packed, 63, "{}", report.describe());
+    assert_eq!(report.hull_normal_unread, 0, "{}", report.describe());
+    let garage = model
+        .pad_masks
+        .iter()
+        .position(|t| {
+            t.as_ref().is_some_and(|t| {
+                t.label.starts_with("unpacked normal ") && t.label.ends_with("/ds_garage_n.gtf")
+            })
+        })
+        .expect("the garage's normal map is bound third, unpacked");
+    assert!(
+        model.material_tangent[garage].carried(),
+        "the garage's chunks carry no tangent"
+    );
+    let bumped = model
+        .vertices
+        .iter()
+        .filter(|v| v.tangent != 0 && v.slots & mesh::slots::SECOND_IS_LIGHTMAP != 0)
+        .count();
+    assert!(
+        bumped > 10_000,
+        "{bumped} lightmapped vertices carry a tangent"
+    );
 }
 
 /// Modesto Heights' `glass_texture_customr` panes (`docs/rendering/hd-track-tone.md`, "The

@@ -153,6 +153,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
     None
 }
 
+mod alpha_emissive;
 mod billboard_glass;
 mod chevron_pulse;
 mod cutout;

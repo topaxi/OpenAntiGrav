@@ -1043,3 +1043,49 @@ fn a_program_with_no_light_patch_reads_as_none() {
 fn a_unit_the_program_never_samples_is_none() {
     assert_eq!(lit_program(true, true).lit_albedo(1), None);
 }
+
+/// Moa Therma's `diffuse_normal_specular` (block #7 `@0x9960`) opens `TEX R0.yw
+/// unit1` then `MAD R3.zw, R0.wywy, {2, -1}.xxxx, {2, -1}.yyyy`: the fetch's
+/// write mask and the decode's read lanes are the two things varied here.
+fn packed_normal_program(fetch_mask: u8, read_lanes: [u8; 4]) -> Program {
+    let mut tex = insn(0x17);
+    tex.dst = 0;
+    tex.unit = 1;
+    tex.mask = fetch_mask;
+
+    let mut decode = insn(0x04);
+    decode.dst = 3;
+    decode.mask = 0b1100;
+    decode.sources = [reg(0, false), Source::Constant, Source::Constant];
+    decode.swizzles = [read_lanes, [0; 4], [1; 4]];
+    decode.constant = Some([2.0, -1.0, 0.0, 0.0]);
+    decode.end = true;
+
+    Program {
+        declared: Declared::default(),
+        parameter_patches: Vec::new(),
+        instructions: vec![tex, decode],
+    }
+}
+
+#[test]
+fn a_green_and_alpha_fetch_decoded_as_two_x_minus_one_is_a_packed_normal() {
+    let program = packed_normal_program(0b1010, [3, 1, 3, 1]);
+    assert!(program.samples_as_packed_normal(1));
+    assert!(
+        !program.samples_as_normal(1),
+        "two lanes are not the three-lane map"
+    );
+    assert!(
+        !program.samples_as_packed_normal(0),
+        "the unit is part of the question"
+    );
+}
+
+/// A three-lane fetch is the other normal map, and `x` from the green with `y`
+/// from the alpha would be another packing than the disc's.
+#[test]
+fn a_three_lane_fetch_or_swapped_lanes_are_not_the_packed_normal() {
+    assert!(!packed_normal_program(0b0111, [3, 1, 3, 1]).samples_as_packed_normal(1));
+    assert!(!packed_normal_program(0b1010, [1, 3, 1, 3]).samples_as_packed_normal(1));
+}

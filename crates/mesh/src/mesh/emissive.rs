@@ -109,6 +109,12 @@ pub const PROGRAM_ICE_GLASS: f32 = 10.0;
 /// `x`, at the second coordinate set. See `psp2::shield_lightning`.
 pub const PROGRAM_SHIELD_LIGHTNING: f32 = 11.0;
 
+/// [`Emissive::program`]'s mode for HD's emissive-in-alpha families (`diffuse_emissive_alpha*`,
+/// `dn_diffuse_specular_emiss`): the **picture's own** alpha times the entry's tint, added
+/// after the light and before the fog, like [`PROGRAM_EMISSIVE_ALPHA_MASK`] with no third
+/// binding. See `super::rcs::alpha_emissive`.
+pub const PROGRAM_PICTURE_ALPHA_EMISSIVE: f32 = 12.0;
+
 /// [`Emissive::program`]'s mode for a PSP hull's alpha-weighted extra pass: the
 /// picture (the environment map) multiplied by the **second** texture's alpha at
 /// the second coordinate set, which carry the batch's own texture and its
