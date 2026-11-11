@@ -4,9 +4,11 @@
 //! unsupported even when the module has atomics, so a thread is a Web Worker
 //! that shares the module's memory ([`web`]). The two differ in one more way
 //! that shapes everything here: **the page's thread may not block**. A
-//! contended `std::sync::Mutex` ends in `memory.atomic.wait32`, which traps on
-//! it, so [`lock`] spins there instead, and [`Task`] is polled through an
-//! atomic and taken only once it is done. See docs/tools/web.md, "Threads".
+//! contended `std::sync::Mutex` ends in `memory.atomic.wait32`, which Chromium
+//! traps on there and Firefox blocks on, freezing the page, so [`lock`] spins
+//! there instead, and [`Task`]
+//! is polled through an atomic and taken only once it is done. See
+//! docs/tools/web.md, "Threads" and "The page's thread may not wait".
 //!
 //! Below every crate that moves work off the frame loop (the race load, the
 //! music fetch, the audio render-ahead loop) and above nothing of this

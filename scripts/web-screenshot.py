@@ -214,6 +214,23 @@ def check_fault(page, args, console_errors: list[str], page_errors: list[str]) -
         sys.exit("; ".join(problems))
 
 
+def check_clean(page, args, console_errors: list[str], page_errors: list[str]) -> None:
+    """Fails unless the page still draws and shows no report: a frozen page's screenshot times out."""
+    page.screenshot(path=str(args.out / "clean.png"), timeout=15000)
+    kinds = page.evaluate("[...document.querySelectorAll('#oag-fault')].map(n => n.dataset.kind)")
+    problems = []
+    if kinds:
+        problems.append(f"expected no report, found {kinds}")
+    ours = [line for line in console_errors if line.startswith("oag:")]
+    if ours:
+        problems.append(f"{len(ours)} `oag:` console error(s): {ours[0][:160]}")
+    if page_errors:
+        problems.append(f"{len(page_errors)} uncaught page error(s): {page_errors[0]}")
+    if problems:
+        sys.exit("; ".join(problems))
+    print("clean: the page draws, no report", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--dist", type=Path, default=Path("target/web/dist"))
@@ -293,6 +310,11 @@ def main() -> None:
         "the overlay's data-kind), exactly one `oag:` console error and no uncaught page error; "
         "writes <out>/fault.png and <out>/fault-details.txt. Then `uncaught page error` is "
         "the failure, not the expected outcome",
+    )
+    parser.add_argument(
+        "--expect-clean", action="store_true",
+        help="the run must end with the page still drawing (a screenshot within 15 s), no report "
+        "on the page, no `oag:` console error and no uncaught page error; writes <out>/clean.png",
     )
     parser.add_argument(
         "--expect-reports", type=int, default=1,
@@ -514,6 +536,8 @@ def main() -> None:
                     print(f"{kind} {key} at {at:g}s", flush=True)
             if args.expect_fault:
                 check_fault(page, args, console_errors, page_errors)
+            if args.expect_clean:
+                check_clean(page, args, console_errors, page_errors)
             if args.fps > 0:
                 frames = page.evaluate(
                     """(ms) => new Promise((done) => {
