@@ -18,21 +18,21 @@ use oag_physics::collide::{Ray, Raycaster, combine_friction};
 use oag_physics::wall::{
     HULL_PROBES, MIN_HULL_EXTENT, SHIP_FRICTION, hull_probes, probe_bounds, reacts,
 };
-use oag_physics::{Handling, ShipState};
+use oag_physics::{Body, Handling};
 
 /// How far outside the hull a wall still counts as too close, in world units.
 /// **Chosen, not measured**: about twice the 0.3-0.6 units an Ace spending its share
 /// of line bias sat wider than the neutral driver at Talon's Junction.
 pub(super) const MARGIN: f32 = 1.0;
 
-/// Whether the hull of a craft in `state` is within [`MARGIN`] of a wall.
+/// Whether the hull of a craft whose body is `body` is within [`MARGIN`] of a wall.
 pub(super) fn too_close<R: Raycaster + ?Sized>(
-    state: &ShipState,
+    body: &Body,
     handling: &Handling,
     self_collider: Option<u32>,
     raycaster: &R,
 ) -> bool {
-    let probes: [_; HULL_PROBES] = hull_probes(&state.body, handling);
+    let probes: [_; HULL_PROBES] = hull_probes(body, handling);
     let region = raycaster.region(&probe_bounds(&probes, MARGIN));
     probes.iter().any(|&(origin, direction, reach)| {
         if reach <= MIN_HULL_EXTENT {

@@ -512,6 +512,7 @@ pub fn speed_plan() -> (u64, crate::plan::Report) {
         reset: &|_, _, _| false,
         max_airborne: f32::INFINITY,
         pad: &|_, _| None,
+        drive_again: false,
     };
     let craft = crate::plan::Craft {
         handling,

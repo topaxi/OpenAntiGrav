@@ -18,6 +18,7 @@
 
 use oag_physics::collide::Raycaster;
 
+use super::driven::Driven;
 use super::{Course, Craft, Lowering, MAX_PASSES, Pass, Report, SpeedPlan, TROUGH_WIN, Tuning};
 
 /// The share of the plan the hardening laps drive: under the 0.964 a balanced
@@ -35,7 +36,19 @@ impl SpeedPlan {
         trough_only: bool,
     ) -> (Self, Report) {
         let clean = |r: &Report| r.verify_failures == 0 && r.verify_respawns == 0;
-        let (window, window_report) = Self::search(course, craft, tuning, budget, Lowering::Window);
+        // Both searches drive the same craft from the same grid: one brake
+        // calibration serves both, and each run reads back what the last one
+        // already drove as it would.
+        let (mut braking, mut known) = (None, Driven::default());
+        let (window, window_report) = Self::search(
+            course,
+            craft,
+            tuning,
+            budget,
+            Lowering::Window,
+            &mut braking,
+            &mut known,
+        );
         // The trough plan only ever replaces a clean whole-window one, so a
         // course that one does not verify on (2048 `sol` and its routes, 30,000
         // to 330,000 steps each) is not searched twice - except, with
@@ -43,8 +56,15 @@ impl SpeedPlan {
         if !clean(&window_report) && (!trough_only || window_report.verify_respawns > 0) {
             return (window, window_report);
         }
-        let (trough, trough_report) =
-            Self::search(course, craft, tuning, budget, Lowering::FromTrough);
+        let (trough, trough_report) = Self::search(
+            course,
+            craft,
+            tuning,
+            budget,
+            Lowering::FromTrough,
+            &mut braking,
+            &mut known,
+        );
         let steps = window_report.steps + trough_report.steps;
         if !clean(&window_report) {
             return Self::harden_or(
@@ -54,6 +74,7 @@ impl SpeedPlan {
                 budget,
                 (window, window_report),
                 (trough, trough_report),
+                &mut known,
             );
         }
         let lap = |r: &Report| u64::from(r.verify_lap_ticks.unwrap_or(u32::MAX));
@@ -83,12 +104,14 @@ impl SpeedPlan {
         budget: u64,
         window: (Self, Report),
         trough: (Self, Report),
+        known: &mut Driven,
     ) -> (Self, Report) {
         let clean = |r: &Report| r.verify_failures == 0 && r.verify_respawns == 0;
         let (window, window_report) = window;
         let (mut hardened, mut report) = trough;
         let total = report.steps + budget;
-        let kept = clean(&report) && hardened.harden(course, craft, tuning, total, &mut report);
+        let kept =
+            clean(&report) && hardened.harden(course, craft, tuning, total, &mut report, known);
         let steps = window_report.steps + report.steps;
         let (plan, mut report) = if kept {
             (hardened, report)
@@ -109,6 +132,7 @@ impl SpeedPlan {
         tuning: &Tuning,
         budget: u64,
         report: &mut Report,
+        known: &mut Driven,
     ) -> bool {
         let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
         let clean = |r: &Report| r.verify_failures == 0 && r.verify_respawns == 0;
@@ -123,20 +147,20 @@ impl SpeedPlan {
                 lowering: Lowering::FromTrough,
                 margin: MARGIN,
             };
-            self.learn(course, craft, tuning, yaw, report, pass);
-            self.verify(course, craft, tuning, yaw, report, MARGIN);
+            self.learn(course, craft, tuning, yaw, report, pass, known);
+            self.verify(course, craft, tuning, yaw, report, MARGIN, known);
             if !clean(report) {
                 continue;
             }
             // Last, so the pace and tight samples the race reads are the
             // full-share lap's, as on every other plan.
-            self.verify(course, craft, tuning, yaw, report, 1.0);
+            self.verify(course, craft, tuning, yaw, report, 1.0, known);
             if clean(report) {
                 return true;
             }
         }
         // Leave the report on a full-share verification of what was learned.
-        self.verify(course, craft, tuning, yaw, report, 1.0);
+        self.verify(course, craft, tuning, yaw, report, 1.0, known);
         false
     }
 }

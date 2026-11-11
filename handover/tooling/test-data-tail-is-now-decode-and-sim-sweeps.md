@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-03
-summary: "test-data suite was 470 s over the 450 s ceiling; wrap independent races in in_parallel, speed plan learning, 2048 sweeps"
+updated: 2026-11-11
+summary: "test-data suite was 470 s over the 450 s ceiling; wrap independent races in in_parallel, 2048 sweeps, fewer speed plan learns"
 difficulty: medium (35)
 ---
 
@@ -30,8 +30,10 @@ The 2026-10-07 gate-speed lane did two things. It removed the HD render tests' p
 
 - **2026-11-03 `test-data-tail-2`.** Done: the Autopilot class/difficulty test, the HD opponent-variant test and (for track art) nothing else load with `ribbon: true` where only a rule or handling is read (47 to 18 s and 35 to 13 s CPU); the Omega extraction tests write under `/var/tmp` (Omega first circuit 12.2 to 9.4 s CPU). Numbers in `workspace-layout.md`. `test-data --full`: 423 s, slowest test 93 s. Still open: the Omega extraction tests keep the view half of their loads (texture decode, `bc7`, `untile_level`) and `sha256` of the extraction (7% of one); a run-time sim-only load switch in `oag-raceplay::load` would take both. Any other test that loads a race to read a rule or a table (`rg 'oag_raceplay::load' crates/*/tests`) is a candidate for `ribbon: true`; measure it alone, twice, before and after.
 
+- **2026-11-11 `speed-plan`.** Done: a speed-plan build reads back the stretch of each run from the grid that the run before it already drove (`crates/ai/src/plan/driven.rs`); Pulse `07_Track` RAPIER 1.07 to 0.91 s CPU per learn, 2048 `altima` 1.18 to 0.97 s, three more fields 23 to 28 % less, plans byte-identical. Measured and not done: the `pad` closure's allocation (0.2 % of the profile) and a cache for the clearance test (the test is 9 to 11 % of what remains).
+
 ## Next Steps
 
 1. Check `ai_fork_split_ground_truth` for independent races. If it has them, wrap them in `in_parallel::map` and diff the output.
-2. Speed plan learning, a sim lane: sample `ensure_speed_plans` on a Pulse and a 2048 field and find what a plan re-learns per hull that the reference plan already knows. The plans are learned in most of `oag-game`'s simulation tests, so a 2x here is roughly a fifth of `test-data`.
+2. ~~Speed plan learning: find what a plan build repeats.~~ Done 2026-11-11 (`speed-plan`): a run from the grid reads back what the run before it drove, 15 to 28 % less CPU per learn with every plan identical (`workspace-layout.md`, "What the second `speed-plan` pass measured"). Not a 2x. What is left is not repeated work, so the next step there is fewer learns, not cheaper ones: a test that loads the same field several times learns the same plans each time (`ai_clean_lap_gate`'s five perturbed runs do so by design, the perturbation reaches the plans; others may not need to). Measure with `cargo nextest run -p oag-raceplay --lib --run-ignored all --no-capture speed_plan_overlap` for one learn, and a family's summed seconds in `target/test-data.log` for a suite effect.
 3. `atrac9dec` at `opt-level = 3` in the test profile, measured on one `omega_wem` shard; a Cargo profile change, so agree it with whoever owns the profiles.

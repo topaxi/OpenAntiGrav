@@ -5545,6 +5545,62 @@ original's own is 85 s, and the gap is still the AI not cheating). No original l
 this tree to compare the solo laps against; the Eliminator's 85 s is the only
 original timing there is.
 
+### What a build does not drive twice (2026-11-11)
+
+A build drives the same craft from the same grid pose many times: the brake
+calibration's run-up, each learning pass, the verification after it, and all
+of that again for the trough search and the hardening. Verification laps
+were half of a build's physics steps (Pulse `07_Track` RAPIER: 166,665 of
+328,295; 2048 `altima`: 121,912 of 218,704).
+
+A tick of any of those runs is a pure function of the run's state and of the
+throttle and brake the plan asks for, and every run starts in the same state.
+So a later run repeats an earlier one tick for tick for as long as its plan
+asks the same at every tick and answers every failure the same way. Each run
+now keeps a record (`crates/ai/src/plan/driven.rs`): per tick what the plan
+was asked with (line index, forward speed, airborne), what it answered, and
+what the tick did; plus the run's state every 15 ticks, the checkpoints a
+learning pass already kept. The next run asks its own plan again at each
+recorded tick, which costs no physics, reads back the stretch that agrees,
+and drives on from the last checkpoint inside it.
+
+- **A verification after a learning pass** reads back the pass's surviving
+  run up to the first tick the finished plan asks differently, usually where
+  a lowering on the second lap moved a target the first lap had read. A
+  failure the pass drove through (a forgiven wall) or answered with a rescue
+  is one a verification answers the same way, so the read-back goes through
+  it.
+- **A learning pass after a failed verification**, and an adaptation's first
+  pass, read back the verification up to its first failure, with its
+  checkpoints and its trace.
+- **The first pass of a search** reads back the calibration's full-throttle
+  run-up, and **the trough search** takes the whole-window search's
+  calibration instead of measuring it again.
+
+The steps a read-back tick would have cost are added to the report as if
+driven, so step budgets fall where they fell and every plan, report and step
+count is unchanged. Three checks hold that:
+
+1. `oag_ai::plan::Course::drive_again` drives every run in full. The plans
+   learned both ways are asserted equal in `oag-ai`
+   (`reading_a_run_back_learns_the_plan_driving_it_again_does`) and, for whole
+   fields, on Pulse `07_Track` and 2048 `altima`
+   (`crates/raceplay/src/tests/speed_plan_overlap.rs`).
+2. A rescued tick on a checkpoint tick leaves two checkpoints, before and
+   after the rescue, and a rewind can land on the first. No field measured
+   does it, so `a_rewind_onto_the_mark_before_a_rescue_is_not_read_back_as_rescued`
+   builds the case by hand.
+3. The whole of what a race learns (every plan, report and step count) printed
+   before and after the change is byte-identical on five fields; numbers in
+   [`workspace-layout.md`](../architecture/workspace-layout.md), "What the
+   second `speed-plan` pass measured".
+
+Physics steps driven fell 23 % on `07_Track` RAPIER and 28 % on `altima`
+RAPIER, process CPU 15 % and 18 %. **2048 and Omega**: the plan is this
+project's own and reads no title data, so there is nothing to port; the
+measurement above covers a 2048 field, and Omega races learn through the same
+code.
+
 ### Plans that do not verify
 
 `crates/raceplay/tests/speed_plan_ground_truth.rs` pins the exact set, at the
