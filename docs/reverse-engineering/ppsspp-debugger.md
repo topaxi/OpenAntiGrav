@@ -675,6 +675,12 @@ the craft at (-542.8, 2.9, -292.9), 5 units from `oag-trace track` row 1163, hea
 dot +0.95 with the spline; the Black entry is `29_Track`, the same circuit reversed, so
 check the heading).
 
+**Pure has the same byte (2026-11-11, `gallery-pure`).** `Definition_IsUnlocked` on the USA disc is `0x088b43d4`
+([campaign.md](../ghidra/functions/psp-pure-usa/campaign.md)); the profile object's pointer is at `0x08b17794` and the
+byte at `+0x381` of it (read `0x08e759a0`). Written `1` after the Main Menu, League Selection goes from ALPHA to ALPHA, BETA,
+CLASSIC (control on one boot: `0` lists ALPHA only), opening Beta's four and the Classic league's four circuits.
+`scripts/psp-pure-walk.py --unlock --league N` writes it. The GPI branch is the same devkit pin.
+
 **Zone was selectable on a used profile (2026-10-02, `zone-bloom`).** On a copy of
 a 70-run PPSSPP profile, `Racebox -> Custom Race -> RACE TYPE`, `right` x5, one
 key at a time with 1 s waits, selects ZONE with the dev byte set or `0`, and

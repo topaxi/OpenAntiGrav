@@ -53,6 +53,14 @@ CLOSE_DISTANCE = 11.643
 PRESENTED_LAG = 1
 
 
+def track_vex(track):
+    """The `track.vex` path ours takes: a bare directory name is a circuit under `Data\\Environments`, a name with a separator
+    (`ClassicsNS/01_Karbonis`, the Classic league's own location) is relative to `Data`."""
+    if "/" in track or "\\" in track:
+        return "Data\\%s\\track.vex" % track.replace("/", "\\")
+    return "Data\\Environments\\%s\\track.vex" % track
+
+
 #: The chase-camera hull's region of the 480x272 frame: x, y, w, h (the craft sits bottom-centre, about 120 px wide).
 CRAFT_REGION = (180, 176, 120, 96)
 #: How far, in px, the best shift is searched.
@@ -190,7 +198,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--port", type=int, default=int(os.environ.get("OAG_PPSSPP_PORT", 47810)))
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--track", required=True, help="circuit directory, e.g. 01_Vineta_K")
+    ap.add_argument("--track", required=True,
+                    help="circuit directory under Data\\Environments, e.g. 01_Vineta_K, or a Data-relative path with a separator, e.g. ClassicsNS/01_Karbonis")
     ap.add_argument("--state", required=True, help="a .ppst to restore into slot 2 first")
     ap.add_argument("--home", default=os.environ.get("PP_HOME"))
     ap.add_argument("--platform", default="pure-psp")
@@ -199,6 +208,8 @@ def main():
     ap.add_argument("--team", help="our --team (the original's craft)")
     ap.add_argument("--ours-ticks", type=int, default=None)
     ap.add_argument("--toast-wait", type=float, default=6.0)
+    ap.add_argument("--hull-differs", default="", metavar="CAVEAT",
+                    help="the original draws another hull than ours here (the Classic league): skip the hull-offset gate and record this text as a caveat")
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
     cp.add_arguments(ap)
     args = ap.parse_args()
@@ -296,7 +307,7 @@ def main():
     pair.rec["ours"]["race_clock_s"] = (ticks - ce.go_tick()) / 60
     pair.check("race clock phase", abs((ticks - ce.go_tick()) / 60 - clock) <= 0.05,
                "original %.2f s, ours %.2f s (ticks %d, GO at tick %d)" % (clock, (ticks - ce.go_tick()) / 60, ticks, ce.go_tick()))
-    base = [args.oag_game, image, "--race", "--track", "Data\\Environments\\%s\\track.vex" % args.track, "--pose-from", csv, "--pose-tick", 0, "--no-camera",
+    base = [args.oag_game, image, "--race", "--track", track_vex(args.track), "--pose-from", csv, "--pose-tick", 0, "--no-camera",
             "--pose-hold", "--camera-fov", "%.4f" % fov, "--camera-view", "close", "--ticks", ticks] + flags
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]]
     pair.rec["ours"].update({"mode": facts.get("mode", "time_trial"), "class": args.klass, "team": args.team or "default",
@@ -328,10 +339,16 @@ def main():
     pair.check_size("ours", out / "ours.png")
     off = craft_offset(out / "theirs.png", out / "ours.png")
     pair.rec["craft_offset_px"] = off
-    pair.check("ours' hull is on the original's (ours' own chase camera is checked here: its trace has no camera columns)",
-               abs(off["dx"]) <= 3 and abs(off["dy"]) <= 3,
-               "best edge correlation %.3f at (%+d, %+d) px, %.3f at (0, 0); a lost shear reads about 24 px in dy"
-               % (off["ncc_at_best"], off["dx"], off["dy"], off["ncc_at_zero"]))
+    if args.hull_differs:
+        # The offset search assumes both sides draw one hull; with a different one it reads noise (Karbonis: +7 px, edge correlation 0.09).
+        # The camera is still held by the eye and fov checks above, and the pair says so.
+        pair.caveat(args.hull_differs)
+        pair.rec["craft_offset_px"]["not_checked"] = "the two hulls differ, so the shift of one against the other is noise"
+    else:
+        pair.check("ours' hull is on the original's (ours' own chase camera is checked here: its trace has no camera columns)",
+                   abs(off["dx"]) <= 3 and abs(off["dy"]) <= 3,
+                   "best edge correlation %.3f at (%+d, %+d) px, %.3f at (0, 0); a lost shear reads about 24 px in dy"
+                   % (off["ncc_at_best"], off["dx"], off["dy"], off["ncc_at_zero"]))
     run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
     if args.meta:
         import json

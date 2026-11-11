@@ -308,3 +308,4 @@
 0x0893403c	function	Body_RecordPairContact	80	craft-physics.md
 0x0885df98	function	Plasma_Init	85	plasma.md
 0x0885e1f4	function	Plasma_Launch	80	plasma.md
+0x088b43d4	function	Definition_IsUnlocked	90	campaign.md
