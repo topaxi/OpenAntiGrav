@@ -476,6 +476,10 @@ fn omegas_chooser_opens_hd_and_fury_and_keeps_2048_on_the_chooser() {
     assert_eq!(got, want);
 }
 
+/// The editor sits over the campaigns page, so `page=campaigns` holds while it is open; the save
+/// is written off the render thread and the editor closes (`screen` reads `page`) only once it has
+/// finished. Scripts wait on both, never on a tick count.
+///
 /// A campaign built in the editor is saved as a folder mod under the user mods directory, is
 /// listed in RACE CAMPAIGN's picker, and its first event launches with the mode and team the editor set.
 /// Drops the editor's wiring (the NEW CAMPAIGN row, the pad, the save, the menu rebuild) and this
@@ -496,7 +500,7 @@ fn a_campaign_made_in_the_editor_is_listed_and_its_event_launches() {
          until page=campaigns; select campaign-editor; press cross; until screen=campaign; \
          ticks 20; press cross; press down; press down; press down; press right; press circle; \
          press right; press down; press cross; press right; press circle; \
-         press start; until page=campaigns within 600; ticks 30; \
+         press start; until page=campaigns screen=page within 600; ticks 30; \
          select \"MY CAMPAIGN\"; press cross; until screen.id=cell; ticks 10; press cross; \
          until stage=race within 6000",
         "editor.jsonl",
@@ -554,9 +558,9 @@ fn a_one_grid_campaign_opens_on_its_cells_and_back_returns_to_the_picker() {
          until page=campaigns; select campaign-editor; press cross; until screen=campaign; \
          ticks 20; press cross; press down; press down; press down; press right; press circle; \
          press right; press down; press cross; press right; press circle; \
-         press start; until page=campaigns within 600; ticks 30; \
+         press start; until page=campaigns screen=page within 600; ticks 30; \
          select \"MY CAMPAIGN\"; press cross; until screen.id=cell; ticks 10; \
-         press circle; until page=campaigns within 600; ticks 10; \
+         press circle; until page=campaigns screen=page within 600; ticks 10; \
          select campaign-original; press cross; until screen.id=grid; ticks 5",
         "single.jsonl",
         &mods,
@@ -625,7 +629,7 @@ fn a_grid_filled_from_a_seed_in_the_editor_is_saved_with_its_setting() {
              until page=campaigns; select campaign-editor; press cross; until screen=campaign; \
              ticks 20; press select; press right; press down; press right; press down; {seed_steps} \
              press down; press right; press down; press left; press triangle; ticks 5; \
-             press start; until page=campaigns within 600; ticks 10"
+             press start; until page=campaigns screen=page within 600; ticks 10"
         )
     };
     profile.drive_with_mods(&image, &script(""), "fill-a.jsonl", &mods);
