@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse, hd, pure, 2048, omega]
 updated: 2026-11-11
-summary: "Pair contacts now push the original driver's lane and drop its rail (wired, field contact time halved); left: the second ring record per pair-tick, ours' remaining long episodes, Omega's kind test"
+summary: "Pair-contact push wired (field contact time halved); left: the second ring record per pair-tick, long episodes, Omega kind test"
 size: S (60)
 difficulty: medium (50)
 ---
