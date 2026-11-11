@@ -773,3 +773,37 @@ fn the_light_classes_are_on_every_pure_circuit() {
         "seven of the sixteen circuits author a lensflare"
     );
 }
+
+/// `ship_muzzle`, structurally recovered: every reachable Pure ship carries exactly one
+/// node of class `0x394`, named `ship_muzzle`, with one child (its `Mesh` shape). It is
+/// the node the live craft's `+0xe0` points at (`ShipMuzzle_Importer`), which
+/// `DisruptorPool_Fire` tests before it spawns `WO_DISRUPTOR_LAUNCH`.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn ship_muzzle_is_on_every_reachable_pure_ship() {
+    let Some(source) = image(PURE) else { return };
+    let mut archives = oag_pure::open(&source).expect("Pure's disc opens as Pure");
+    let muzzle = vex::classes::V4.ship_muzzle.expect("recovered");
+
+    let mut ships_checked = 0;
+    for team in oag_pulse::race::TEAMS {
+        let ship = oag_pulse::race::ships::entry_name(team, "Ship");
+        let Ok(blob) = archives.read_name(&ship) else {
+            continue;
+        };
+        let nodes = vex::nodes(&blob).unwrap_or_else(|e| panic!("{ship}: {e}"));
+        let found: Vec<_> = nodes.iter().filter(|n| n.class_id == muzzle).collect();
+        assert_eq!(found.len(), 1, "{ship}: expected one Ship Muzzle");
+        assert_eq!(found[0].name.as_deref(), Some("ship_muzzle"), "{ship}");
+        assert_eq!(found[0].child_count, 1, "{ship}: one shape under it");
+        assert!(
+            vex::ship_muzzle(&blob).is_some(),
+            "{ship}: the locator resolves to a position"
+        );
+        ships_checked += 1;
+    }
+    assert!(
+        ships_checked >= 6,
+        "expected at least 6 of Pure's ships to be reachable"
+    );
+}

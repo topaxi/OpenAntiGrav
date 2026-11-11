@@ -99,9 +99,8 @@ pub const EFFECTS: &Effects = &{
             EffectSpec::new(engine_effects::PLASMA_BLAST_EFFECT, Origin::Measured),
         )
         // Pure's own: the laid Bomb's glow and the Disruptor's three effects
-        // (`weapon-effects.md`, "Bomb" and "Disruptor"). `WO_DISRUPTOR_LAUNCH` is gated on a field
-        // of the firing craft's weapon record that is not mapped to a table field, so the race
-        // never plays it.
+        // (`weapon-effects.md`, "Bomb" and "Disruptor"). `WO_DISRUPTOR_LAUNCH` is gated on the
+        // firing hull authoring a `Ship Muzzle` node.
         .with(
             Trigger::BombGlow,
             EffectSpec::new(engine_effects::BOMB_GLOW_EFFECT, Origin::Measured),
@@ -113,6 +112,10 @@ pub const EFFECTS: &Effects = &{
         .with(
             Trigger::DisruptorExplo,
             EffectSpec::new(engine_effects::DISRUPTOR_EXPLO_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::DisruptorLaunch,
+            EffectSpec::new(engine_effects::DISRUPTOR_LAUNCH_EFFECT, Origin::Measured),
         )
         // Pure ships no LeachBeam: its `weaponstats.xml` authors none, neither
         // pressing's executable names one and none of Pulse's six LeachBeam

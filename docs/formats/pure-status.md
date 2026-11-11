@@ -112,6 +112,7 @@ from the exporter's own class-name ordering instead - see
 | `Anim Transform` | `0x3c0` | `0x372` | Table index; 332 nodes across all 16 circuits, **332/332** parse under `anim_transform`'s own bounds-checked decoder | 94 |
 | `AmbientLight`, `DirectionalLight` | `0x12c`, `0x131` | `0x125`, `0x12a` | Generic Maya classes, seven below Pulse's as `Mesh` is; 21 and 30 nodes on the 16 circuits, 16-byte payloads named `ambientLightShapeN`/`directionalLightShapeN` ([scene-light.md](../ghidra/functions/psp-pure-usa/scene-light.md)) | 90 |
 | `wospot`, `wopoint` | `0x3ce`, `0x3cf` | `0x380`, `0x381` | Between `Reset Collision` and `Ship Collision Fx` as on Pulse; 23 and 639 nodes, 32-byte payloads named `wospotShapeN`/`wopointShapeN` | 90 |
+| `Ship Muzzle` | `0x3e2` | `0x394` | Structural: every one of 6 reachable ships carries exactly one node of it, named `ship_muzzle`, with one shape child; the live craft's `+0xe0` object is built by `ShipMuzzle_Importer` ([weapon-effects.md](../ghidra/functions/psp-pure-usa/weapon-effects.md), "Disruptor"). Pure's Plasma and Disruptor both read it | 88 |
 
 **The consequence for the code is smaller than it looks.** `CLASS_MESH`,
 `CLASS_TEXTURE`, `CLASS_TRANSFORM` in

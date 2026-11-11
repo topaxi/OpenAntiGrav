@@ -585,6 +585,9 @@ pub struct Setup {
     /// Pure's Disruptor explosion halo, `None` where there is none.
     #[cfg(feature = "view")]
     pub disruptor_halo_law: Option<oag_title::weapons::DisruptorHalo>,
+    /// Pure's on-craft Disruptor effect, `None` where there is none.
+    #[cfg(feature = "view")]
+    pub disruptor_craft_law: Option<oag_title::weapons::DisruptorCraftFx>,
     /// Whether a Bomb detonation plays HD's own blast object rather than Pulse's
     /// two eased models: `bomb_blast_hd.is_some()`. See `bomb_blast::hd`.
     #[cfg(feature = "view")]

@@ -1156,6 +1156,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             disruptor_halo_law: wm.disruptor_halo,
             #[cfg(feature = "view")]
+            disruptor_craft_law: wm.disruptor_craft,
+            #[cfg(feature = "view")]
             hd_bomb_blast: wm.bomb_blast_hd.is_some(),
             #[cfg(feature = "view")]
             bomb_shockwave_fades: wm.bomb_blast_pulse.is_some_and(|b| b.shockwave_fades),
