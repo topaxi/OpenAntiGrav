@@ -201,7 +201,7 @@ transferred to EU, so EU's count includes names that add no page.
 
 | Binary | names.tsv rows | below 70 (`_q`) | Evidence pages | Emulator harness | Newest dated page |
 | --- | ---: | ---: | ---: | --- | --- |
-| [ps2-pulse-eu](../ghidra/functions/ps2-pulse-eu/) | 239 (207 fn, 32 data) | 4 (1%) | 27 | `pcsx2-drive.py`, `pcsx2-gsdump-alpha.py`, `pcsx2-gsdump.py`, `pcsx2-trace.py`, `pcsx2_pine.py`, `pcsx2_trace_fields.py` (+4 measurement scripts) | 2026-11-04, [rumble.md](../ghidra/functions/ps2-pulse-eu/rumble.md) |
+| [ps2-pulse-eu](../ghidra/functions/ps2-pulse-eu/) | 240 (208 fn, 32 data) | 4 (1%) | 28 | `pcsx2-drive.py`, `pcsx2-gsdump-alpha.py`, `pcsx2-gsdump.py`, `pcsx2-trace.py`, `pcsx2_pine.py`, `pcsx2_trace_fields.py` (+5 measurement scripts) | 2026-11-11, [definition-unlock.md](../ghidra/functions/ps2-pulse-eu/definition-unlock.md) |
 | [ps3-hdfury-eu](../ghidra/functions/ps3-hdfury-eu/) | 873 (786 fn, 87 data) | 53 (6%) | 103 | `rpcs3-drive.py`, `rpcs3-spu-job-binary-dump.py`, `rpcs3-spu-light-dump.py`, `rpcs3-trace.py`, `rpcs3-trail-dump.py`, `rpcs3_debugger.py` (+63 measurement scripts) | 2026-11-11, [craft-inertia.md](../ghidra/functions/ps3-hdfury-eu/craft-inertia.md) |
 | [ps4-omega-eu](../ghidra/functions/ps4-omega-eu/) | 194 (178 fn, 16 data) | 13 (6%) | 43 | none | 2026-11-11, [craft-laws.md](../ghidra/functions/ps4-omega-eu/craft-laws.md) |
 | [psp-pulse-eu](../ghidra/functions/psp-pulse-eu/) | 440 (423 fn, 17 data) | 74 (16%) | 6 | `ppsspp_debugger.py`, `psp-autopilot-trace.py`, `psp-drive.py`, `psp-fall-drive.py`, `psp-ge-dump.py`, `psp-glow-mask-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+80 measurement scripts) | 2026-11-06, [photo-mode.md](../ghidra/functions/psp-pulse-eu/photo-mode.md) |
