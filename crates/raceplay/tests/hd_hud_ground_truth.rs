@@ -30,7 +30,7 @@
 //! - [`every_layout_composes_with_nothing_missing_and_nothing_skipped`] - every
 //!   include resolves and every widget element is modelled, on all eighteen.
 //! - [`every_texture_a_layout_names_is_on_the_disc`] - the extension rule
-//!   [`oag_hd::hud::texture_entry`] states, checked against the manifests.
+//!   [`oag_assets::Archives::resolve_texture`] applies, checked against the manifests.
 //!
 //! Both fail loudly the day a reading drifts, and neither can be satisfied by a
 //! parser that quietly drops what it does not understand.
@@ -239,7 +239,9 @@ fn every_texture_a_layout_names_is_on_the_disc_once_the_extension_is_replaced() 
     );
 
     for (reference, count) in &uses {
-        let entry = oag_hd::hud::texture_entry(reference);
+        let entry = archives
+            .resolve_texture(reference)
+            .unwrap_or_else(|| (reference).to_string());
         assert!(
             archives.locate(&entry).is_some(),
             "{reference} ({count} sprites) resolves to {entry}, which is not on the disc"
@@ -352,7 +354,7 @@ fn a_race_hands_the_hud_hds_own_grid_rather_than_the_psps() {
 /// really do fit. 1,029 sprites over 12 textures, and every one lands.
 ///
 /// It is also the check that would catch the extension rule
-/// [`oag_hd::hud::texture_entry`] states being wrong in the one way that would
+/// [`oag_assets::Archives::resolve_texture`] applies being wrong in the one way that would
 /// otherwise be invisible: resolving to *some* texture that happens to exist.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -369,7 +371,9 @@ fn every_sprite_s_source_rectangle_fits_inside_the_texture_it_names() {
             let size = match sizes.get(&sprite.src) {
                 Some(size) => *size,
                 None => {
-                    let entry = oag_hd::hud::texture_entry(&sprite.src);
+                    let entry = archives
+                        .resolve_texture(&sprite.src)
+                        .unwrap_or_else(|| (&sprite.src).to_string());
                     let blob = archives
                         .read_name(&entry)
                         .unwrap_or_else(|e| panic!("{} -> {entry}: {e}", sprite.src));
@@ -454,7 +458,9 @@ fn a_drawn_sprite_lands_inside_the_texture_its_own_layout_names() {
         let blobs: Vec<(String, Vec<u8>)> = references
             .iter()
             .map(|reference| {
-                let entry = oag_hd::hud::texture_entry(reference);
+                let entry = archives
+                    .resolve_texture(reference)
+                    .unwrap_or_else(|| (reference).to_string());
                 let blob = archives
                     .read_name(&entry)
                     .unwrap_or_else(|e| panic!("{root}: {reference} -> {entry}: {e}"));
@@ -728,7 +734,9 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
         .textures()
         .iter()
         .map(|reference| {
-            let entry = oag_hd::hud::texture_entry(reference);
+            let entry = archives
+                .resolve_texture(reference)
+                .unwrap_or_else(|| (reference).to_string());
             (
                 (*reference).to_string(),
                 archives.read_name(&entry).expect("a HUD texture"),
@@ -1113,7 +1121,9 @@ fn a_leaning_hd_frame_is_the_still_frame_slid_along_x() {
         .textures()
         .iter()
         .map(|reference| {
-            let entry = oag_hd::hud::texture_entry(reference);
+            let entry = archives
+                .resolve_texture(reference)
+                .unwrap_or_else(|| (reference).to_string());
             (
                 (*reference).to_string(),
                 archives.read_name(&entry).expect("a HUD texture"),
@@ -1258,7 +1268,9 @@ fn lit_hud_quads_carry_the_captured_alpha_byte_and_the_outline_and_bars_do_not()
         .textures()
         .iter()
         .map(|reference| {
-            let entry = oag_hd::hud::texture_entry(reference);
+            let entry = archives
+                .resolve_texture(reference)
+                .unwrap_or_else(|| (reference).to_string());
             (
                 (*reference).to_string(),
                 archives.read_name(&entry).expect("a HUD texture"),
@@ -1381,7 +1393,9 @@ fn every_lit_text_string_has_a_black_twin_one_unit_up_and_left_drawn_first() {
         .textures()
         .iter()
         .map(|reference| {
-            let entry = oag_hd::hud::texture_entry(reference);
+            let entry = archives
+                .resolve_texture(reference)
+                .unwrap_or_else(|| (reference).to_string());
             (
                 (*reference).to_string(),
                 archives.read_name(&entry).expect("a HUD texture"),

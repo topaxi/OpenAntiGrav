@@ -198,7 +198,6 @@ const TITLE: &Title = &Title {
     eliminator: oag_title::pre_race::Sourced::chosen(oag_title::eliminator::EliminatorRule::Kills),
     eliminator_flip: oag_title::pre_race::Sourced::chosen(None),
     hud_art: &oag_title::HudArt {
-        texture_extension: None,
         always_on: &[],
         raster: false,
         ink_aligned_text: false,

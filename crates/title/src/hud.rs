@@ -156,22 +156,6 @@ pub struct VerticalLayouts {
     pub view_width: u32,
 }
 
-/// `reference` with its file extension replaced by `extension`.
-///
-/// The rule [`HudArt::texture_extension`] names, applied. A reference with no
-/// extension gains one; a dot in a directory name is not an extension
-/// (`Data\v1.2\atlas` does not become `Data\v1`). Separators and case are
-/// untouched, the archive readers fold both.
-#[must_use]
-pub fn replace_extension(reference: &str, extension: &str) -> String {
-    let stem = match reference.rfind('.') {
-        // Only a *file* extension: a dot in a directory name is not one.
-        Some(at) if !reference[at..].contains(['/', '\\']) => &reference[..at],
-        _ => reference,
-    };
-    format!("{stem}{extension}")
-}
-
 /// How a title authors its lock-on reticle.
 ///
 /// **An axis in the [ADR-0022] sense**: the two answers differ in shape, not
@@ -359,7 +343,6 @@ pub struct BarModels {
 ///
 /// | | Pulse / Pure | HD / Fury |
 /// | --- | --- | --- |
-/// | [`Self::texture_extension`] | `None` - the layouts name shipped entries | `.gtf` |
 /// | [`Self::always_on`] | seven names | fifteen names |
 /// | [`Self::pickup_backdrop_colour`] | `HudBGColour` | `None` - drawn as authored |
 /// | [`Self::pickup_colours`] | eleven of thirteen weapons | `None` - unmeasured |
@@ -369,23 +352,6 @@ pub struct BarModels {
 /// | [`Self::bar_models`] | `None` - the bars are `<Image>` sprites | Pure: three `<Mode3D>` models; HD `None` |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HudArt {
-    /// The extension a layout's `src=` reference takes to become an archive
-    /// entry name, when the disc does not ship the declared spelling.
-    ///
-    /// `None` when a reference *is* an entry name (both PSP titles: layouts name
-    /// `.mip` files and the discs carry them). The PS2 pressing's `.pct` rewrite
-    /// is a different question and stays in `oag_pulse::read_image`.
-    ///
-    /// HD needs it: its layouts name the **exporter's input**, not the shipped
-    /// file, so read literally 192 of its 1,029 sprites dangle. See
-    /// `oag_hd::hud::texture_entry` and [`replace_extension`]. Confidence 85.
-    /// The declared name is always tried first.
-    ///
-    /// An extension, not a `fn`, because [`Title`] compares by value and a rule
-    /// spelled as data is one a reader can check against the disc.
-    ///
-    /// [`Title`]: crate::Title
-    pub texture_extension: Option<&'static str>,
     /// The sprite widgets drawn whenever this title's HUD is up.
     ///
     /// **An allow-list, deliberately**, as `oag_hud`'s label list is: a layout

@@ -247,7 +247,7 @@ Ten spell themselves `.gtf`; the two that do not are the two with the most uses
 between them. **There is no `.mip` anywhere on this disc**, and the only `.tga`
 is a smoke ramp under `data/ribboneffects`. Both resolve when the extension is
 replaced with `.gtf`, so the rule is *replace the extension* -
-`oag_hd::hud::texture_entry` - and with it twelve of twelve references resolve
+`oag_assets::texture_name::spellings` (the PS3 row) - and with it twelve of twelve references resolve
 to a shipped entry rather than ten of twelve. Read literally, 192 of the HUD's
 1,029 sprites have no texture, which is exactly how it looked before this was
 measured.
@@ -533,7 +533,6 @@ as a `const` and served it to every title. All three are now
 
 | | Pulse / Pure | HD / Fury |
 | --- | --- | --- |
-| `texture_extension` | `None` - the layouts name shipped entries | `.gtf` |
 | `always_on` | seven widget names | fifteen |
 | `pickup_backdrop_colour` | `HudBGColour` | `None` - drawn as authored (**HD carries Pulse's per-weapon table and fades it in while a weapon is held**, [hd-pickup-table.md](../ghidra/functions/ps3-hdfury-eu/hd-pickup-table.md); **wired 2026-10-30** through `HudArt::pickup_colours` and `pickup_fade`, the held backdrop tinted by the table word) |
 
@@ -554,8 +553,11 @@ falling back to `(0, 0)`.
 sheet. The older check on the authored rectangle passes either way, which is
 exactly how this hid.
 
-**The extension rule reaches the loader.** `oag_hd::hud::texture_entry` was read
-by the ground-truth test and by nothing on the load path, which read the declared
+**The extension rule reaches the loader.** It lives once, in
+`oag_assets::Archives::read_texture` (the name as written, then the platform's
+own spelling: `.gtf` here, `.gxt` on the Vita, `.gnf` on the PS4), and the HUD
+loader, the front end and the weapon art all go through it. It was once a
+`HudArt` row read by the ground-truth test and by nothing on the load path, which read the declared
 name only. `hdHUD.mip` and `detonator_hud2.tga` carry 192 sprites between them
 and are not on the disc under those names.
 

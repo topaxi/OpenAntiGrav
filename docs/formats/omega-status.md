@@ -142,7 +142,7 @@ the engine's own reader: 46,005 entries over the nine archives (`data00` 10,926,
   selects it is not read**, so `Title::hud` stays one set per title (open).
 - **Nine atlases, all `.gnf`, all BC7**, under `Data\HUD\Textures\` (and
   `Data\FE\Images\voiceCom.gnf`). The XML names them `.gtf`/`.mip` (HD's spelling),
-  so `HudArt::texture_extension` is `.gnf` - none resolves under its authored
+  so the PS4 spelling (`oag_assets::texture_name`) is `.gnf` - none resolves under its authored
   name. `fury_hud` is 2048 square on Omega against HD's 1024 and its layout UVs
   reach 2010 against HD's 1005: the XML is authored for the atlas it ships.
   The rest are HD's sizes.

@@ -115,7 +115,6 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Moot on a disc whose layouts name no texture, and `None` on the same
     // terms as Pulse's: this is a PSP disc, and its own XML asks for `.mip`.
-    texture_extension: None,
     always_on: ALWAYS_ON,
     raster: true,
     ink_aligned_text: false,

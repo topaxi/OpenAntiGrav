@@ -234,8 +234,8 @@ pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 
 /// How Omega's HUD sprites reach the screen, [`oag_title::Title::hud_art`].
 ///
-/// **Measured**: `texture_extension` (every atlas of the five roots resolves
-/// as `.gnf`, none under its authored spelling) and the layouts themselves.
+/// **Measured**: the layouts themselves, and that every atlas of the five roots
+/// resolves as `.gnf`, none under its authored spelling (`oag_assets::Archives::read_texture`).
 /// **Chosen, not measured, inherited from HD's frame readings**: `always_on`,
 /// `sights` (the widget names are checked to exist in Omega's layouts),
 /// `runtime` and `shield_percent` - nobody has run Omega. `message_slots` and
@@ -243,7 +243,6 @@ pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 /// `zone_speed_classes` is `None`: Omega's class names are unmeasured, so the
 /// Zone ladder's class text draws nothing rather than HD's list.
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
-    texture_extension: Some(".gnf"),
     always_on: ALWAYS_ON,
     raster: false,
     ink_aligned_text: true,

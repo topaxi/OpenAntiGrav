@@ -191,7 +191,6 @@ const HD_SIGHTS: &str = r#"
 
 /// Wipeout HD's art rows, with only the sight axis filled in for real.
 static HD_ART: oag_title::HudArt = oag_title::HudArt {
-    texture_extension: None,
     always_on: &[],
     raster: false,
     ink_aligned_text: false,
@@ -284,7 +283,6 @@ const HD_LEACH_SIGHTS: &str = r#"
 /// [`HD_ART`] with a `leach` set filled in, the shape `oag_hd::hud::ART` and
 /// `oag_2048::hud::ART` both carry as of 2026-09-15.
 static HD_LEACH_ART: oag_title::HudArt = oag_title::HudArt {
-    texture_extension: None,
     always_on: &[],
     raster: false,
     ink_aligned_text: false,
@@ -1020,7 +1018,6 @@ fn the_concentric_dialect_draws_nothing_for_a_leachbeam_with_no_leach_set() {
 #[test]
 fn an_unread_sight_dialect_draws_nothing() {
     static UNREAD: oag_title::HudArt = oag_title::HudArt {
-        texture_extension: None,
         always_on: &[],
         raster: false,
         ink_aligned_text: false,

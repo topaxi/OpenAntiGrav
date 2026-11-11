@@ -40,7 +40,7 @@
 //!   textures the HUD layouts sample - ten of them `.gtf`. Those are not a list
 //!   this crate composed either: they are read off the eighteen layouts, and all
 //!   twelve resolve to a shipped entry under the extension rule
-//!   [`hud::texture_entry`] states. No texture path outside the HUD's own set is
+//!   [`oag_assets::Archives::read_texture`] applies. No texture path outside the HUD's own set is
 //!   named.
 //!
 //! [`bik.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/bik.md

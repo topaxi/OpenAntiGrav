@@ -29,7 +29,7 @@ pub struct Assets {
     ///
     /// Keyed by the *reference* so [`super::sprite_draw`] can look a sprite's
     /// own `src` up directly. Which entry a reference resolves to is the
-    /// loader's business and `oag_title::HudArt::texture_extension`'s rule.
+    /// loader's business: `oag_assets::Archives::read_texture`.
     pub sheet: crate::sprite::Sheet,
     /// The `HUD` font, or the built-in 5x7 set when the disc's is unreadable.
     pub font: oag_ui::font::Atlas,

@@ -52,7 +52,6 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // The layouts name `.mip` and this disc carries `.mip`. The PS2 pressing's
     // `.pct` rewrite is `crate::read_image`'s job and applies to every source.
-    texture_extension: None,
     always_on: ALWAYS_ON,
     raster: true,
     ink_aligned_text: false,
