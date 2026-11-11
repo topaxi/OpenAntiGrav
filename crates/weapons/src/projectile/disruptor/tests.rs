@@ -85,6 +85,7 @@ fn tick(
     projectiles.advance(
         TICK,
         world,
+        None,
         ships,
         None,
         None,

@@ -28,6 +28,7 @@ fn a_plasma_bolt_is_released_riding_the_craft_up_whatever_the_table() {
         projectiles.advance(
             1.0 / 60.0,
             &empty_world(),
+            None,
             &ships,
             None,
             None,
@@ -101,6 +102,7 @@ fn a_plasma_bolt_over_nothing_falls_along_its_carried_normal() {
         projectiles.advance(
             1.0 / 60.0,
             &empty_world(),
+            None,
             &ships,
             None,
             None,

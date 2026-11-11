@@ -555,6 +555,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
     ships: &mut [S],
     dt: f32,
     raycaster: &R,
+    cage: Option<&dyn oag_physics::cage::Containment>,
     weapons: Option<&oag_tables::weapons::WeaponStats>,
     class: &str,
     push: BlastPush,
@@ -567,6 +568,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
     let impacts = projectiles.advance(
         dt,
         raycaster,
+        cage,
         ships,
         missile_stats.as_ref(),
         plasma_stats.as_ref(),

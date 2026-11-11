@@ -150,6 +150,46 @@ pub struct Located {
     pub sibling: Option<Section>,
 }
 
+impl Located {
+    /// Whether `point` is outside the cage here, and the boundary point and inward normal
+    /// it is pushed along.
+    ///
+    /// Outside the section and, at a fork, outside the sibling's too (inside either is no
+    /// escape); the nearer boundary point when both. The craft's corners and a projectile's
+    /// segment end share this rule.
+    #[must_use]
+    pub fn outside(&self, point: Vec3) -> Option<(Vec3, Vec3)> {
+        let (outside, mut boundary, mut normal) = self.section.test(point);
+        if !outside {
+            return None;
+        }
+        if let Some(sibling) = &self.sibling {
+            let (outside_sibling, other, other_normal) = sibling.test(point);
+            if !outside_sibling {
+                return None;
+            }
+            if (other - point).length_squared() < (boundary - point).length_squared() {
+                boundary = other;
+                normal = other_normal;
+            }
+        }
+        Some((boundary, normal))
+    }
+}
+
+/// A track's collision cage as a flying thing asks it: is this one point outside, and where
+/// is the boundary.
+///
+/// `Cage_TestSweepEnd` (`0x08832134`): locate the point on the track, test it against the
+/// located section and the sibling's, with none of [`resolve`]'s craft limits
+/// ([`MAX_POINT_DISTANCE`], [`MAX_DEPTH`]). `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`,
+/// "Code 4 is the collision cage".
+pub trait Containment {
+    /// The boundary point and inward normal when `point` is outside, else `None` (also
+    /// `None` where the track locates nothing).
+    fn outside(&self, point: Vec3) -> Option<(Vec3, Vec3)>;
+}
+
 /// One corner the cage resolved: where, and how hard, for the contact ring's spark dispatch.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct CageContact {
@@ -232,20 +272,9 @@ pub fn resolve(
         return response;
     }
     for corner in corners(centre, orientation, handling) {
-        let (outside, mut boundary, mut normal) = located.section.test(corner);
-        if !outside {
+        let Some((boundary, normal)) = located.outside(corner) else {
             continue;
-        }
-        if let Some(sibling) = &located.sibling {
-            let (outside_sibling, other, other_normal) = sibling.test(corner);
-            if !outside_sibling {
-                continue;
-            }
-            if (other - corner).length_squared() < (boundary - corner).length_squared() {
-                boundary = other;
-                normal = other_normal;
-            }
-        }
+        };
         let depth = (boundary - corner).length();
         if depth > MAX_DEPTH {
             response.reset = true;

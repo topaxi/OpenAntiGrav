@@ -24,6 +24,7 @@ mod portuguese_br_ground_truth;
 mod pose_track_ground_truth;
 mod posed_visibility_ground_truth;
 mod post_finish_ground_truth;
+mod projectile_cage_ground_truth;
 mod projectile_tilt_ground_truth;
 mod prompt_pilots;
 mod ps2_hud_sights_ground_truth;

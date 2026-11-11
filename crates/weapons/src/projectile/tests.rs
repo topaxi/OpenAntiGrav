@@ -6,6 +6,7 @@ use super::*;
 use oag_physics::params::Dimensions;
 use oag_physics::{CollisionWorld, ShipState, Surface, TriangleSoup};
 
+mod cage;
 mod owner_exempt;
 mod seed;
 
@@ -100,6 +101,7 @@ fn over_empty_space_a_projectile_keeps_its_heading_and_falls() {
         let impacts = projectiles.advance(
             dt,
             &world,
+            None,
             &ships(&[]),
             None,
             None,
@@ -139,6 +141,7 @@ fn a_projectile_over_a_floor_rides_it_rather_than_detonating() {
         let impacts = projectiles.advance(
             dt,
             &world,
+            None,
             &ships(&[]),
             None,
             None,
@@ -183,6 +186,7 @@ fn a_rocket_hits_a_wall_it_would_tunnel_through_in_one_tick() {
         let impacts = projectiles.advance(
             dt,
             &world,
+            None,
             &ships(&[]),
             None,
             None,
@@ -217,6 +221,7 @@ fn a_rocket_strikes_a_craft_that_is_not_its_owner() {
             .advance(
                 1.0 / 60.0,
                 &world,
+                None,
                 &grid,
                 None,
                 None,
@@ -250,6 +255,7 @@ fn an_inactive_slot_is_not_a_target() {
         let impacts = projectiles.advance(
             1.0 / 60.0,
             &world,
+            None,
             &grid,
             None,
             None,
@@ -279,6 +285,7 @@ fn geometry_in_front_of_a_craft_stops_the_rocket_first() {
             .advance(
                 1.0 / 60.0,
                 &world,
+                None,
                 &grid,
                 None,
                 None,
@@ -316,6 +323,7 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
         let impacts = projectiles.advance(
             dt,
             &world,
+            None,
             &ships(&[]),
             None,
             None,
@@ -345,6 +353,7 @@ fn a_cannon_round_that_hits_nothing_is_reaped_at_one_second() {
         let impacts = projectiles.advance(
             dt,
             &world,
+            None,
             &ships(&[]),
             None,
             None,
@@ -381,8 +390,17 @@ fn a_rocket_flying_through_a_laid_mine_sets_it_off_and_is_spent() {
 
     let mut mine_impacts = 0;
     for _ in 0..12 {
-        let impacts =
-            projectiles.advance(dt, &world, &ships(&[]), None, None, None, radii, "VENOM");
+        let impacts = projectiles.advance(
+            dt,
+            &world,
+            None,
+            &ships(&[]),
+            None,
+            None,
+            None,
+            radii,
+            "VENOM",
+        );
         for impact in impacts.iter().flatten() {
             assert_eq!(impact.kind, Weapon::Mine, "only the mine reports an ending");
             assert!(!impact.blast, "a mine a rocket set off must not blast");
@@ -440,6 +458,7 @@ fn a_rocket_fired_at_a_parked_craft_takes_its_energy() {
             &mut world.ships[..world.ship_count as usize],
             1.0 / 60.0,
             &empty,
+            None,
             Some(&stats),
             "VENOM",
             crate::projectile::BlastPush::Posted,
@@ -483,6 +502,7 @@ fn without_rocket_stats_an_impact_only_frees_its_slot() {
             &mut world.ships[..world.ship_count as usize],
             1.0 / 60.0,
             &wall,
+            None,
             None,
             "VENOM",
             crate::projectile::BlastPush::Posted,
@@ -641,6 +661,7 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
         projectiles.advance(
             1.0 / 60.0,
             &world,
+            None,
             &ships,
             Some(&stats),
             None,
@@ -677,6 +698,7 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
         rockets.advance(
             1.0 / 60.0,
             &world,
+            None,
             &ships,
             Some(&stats),
             None,
@@ -741,6 +763,7 @@ fn a_missile_gives_up_after_its_bounce_budget() {
         projectiles.advance(
             1.0 / 60.0,
             &world,
+            None,
             &ships,
             Some(&stats),
             None,
@@ -792,6 +815,7 @@ fn an_unguided_missile_detonates_when_its_three_seconds_are_up() {
         let impacts = projectiles.advance(
             1.0 / 60.0,
             &world,
+            None,
             &ships,
             Some(&stats),
             None,
@@ -883,6 +907,7 @@ fn a_self_detonating_missile_damages_nobody_standing_in_it() {
             &mut world.ships[..world.ship_count as usize],
             1.0 / 60.0,
             &empty,
+            None,
             Some(&table),
             "VENOM",
             crate::projectile::BlastPush::Posted,
@@ -922,6 +947,7 @@ fn a_blade_whose_fuse_runs_out_reports_an_impact_that_spends_no_blast() {
         let impacts = projectiles.advance(
             1.0 / 60.0,
             &geometry,
+            None,
             &ships,
             None,
             None,

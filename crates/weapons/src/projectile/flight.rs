@@ -11,6 +11,7 @@ use super::{
 };
 use crate::Craft;
 use oag_core::math::Vec3;
+use oag_physics::cage::Containment;
 use oag_physics::{Ray, Raycaster, Surface};
 use oag_tables::weapons::Weapon;
 
@@ -24,13 +25,18 @@ impl Projectiles {
     /// through a wall. Wall and hull are both tested and the nearer wins. The
     /// owner's own hull is excluded outright (a straight shot cannot come back),
     /// which removes the launch frame's self-hit without a grace period.
-    // Nine parameters, one table block per weapon that flies at an authored speed;
+    ///
+    /// `cage` is the track's collision cage where the title runs one (`None`
+    /// elsewhere): a probe or a travel sweep that ends outside it is the
+    /// original's collision code `4`, taken before the surface class.
+    // Ten parameters, one table block per weapon that flies at an authored speed;
     // a parameter struct is deferred until a fourth weapon asks for one.
     #[allow(clippy::too_many_arguments)]
     pub fn advance<R: Raycaster + ?Sized, S: Craft>(
         &mut self,
         dt: f32,
         raycaster: &R,
+        cage: Option<&dyn Containment>,
         ships: &[S],
         missile: Option<&oag_tables::weapons::MissileStats>,
         plasma: Option<&oag_tables::weapons::PlasmaStats>,
@@ -206,14 +212,41 @@ impl Projectiles {
                     false,
                 )
             };
+            // `Collision_SweepSegment` (`0x0883198c`) asks the cage about the
+            // probe's end after the mesh: the mesh hit's point when there is one,
+            // else the full segment's end. Outside is code `4`, whatever the mesh
+            // said, so a floor past the tube is a wall to a projectile. The Cannon
+            // has no probe.
+            let probe_escape = cage.filter(|_| kind != Weapon::Cannon).and_then(|cage| {
+                let end = probe.map_or(to - projectile.surface * probe_length, |hit| hit.point);
+                cage.outside(end).map(|(boundary, _)| boundary)
+            });
             // The branch is on the surface class, the original's collision code.
             // `Collision_SweepSegment` (`0x0883198c`) returns `0` wall, `1` floor,
-            // `3` mag floor or `0x7f` nothing. `Rocket_Update` (`0x0885d2a8`):
-            // `0x7f` falls, `0` and `4` detonate, anything else rides.
-            // `Missile_Update` (`0x0885a918`) and `Shuriken_Update` take `0`/`4`
-            // as nothing (no fall, no ride); `Plasma_Update` detonates like the
-            // Rocket. See [`nearest_hit`] for the sweep half.
+            // `3` mag floor, `4` outside the collision cage or `0x7f` nothing.
+            // `Rocket_Update` (`0x0885d2a8`): `0x7f` falls, `0` and `4` detonate,
+            // anything else rides. `Missile_Update` (`0x0885a918`) and
+            // `Shuriken_Update` take `0`/`4` as nothing (no fall, no ride);
+            // `Plasma_Update` detonates like the Rocket. See [`nearest_hit`] for
+            // the sweep half.
             match probe {
+                // Outside the cage: the Rocket and Plasma go off at the boundary
+                // point, spending no blast as on a wall; the Missile and Shuriken
+                // do nothing this tick, neither riding nor falling.
+                _ if probe_escape.is_some() => {
+                    if let (Some(point), Weapon::Rocket | Weapon::Plasma) = (probe_escape, kind) {
+                        impacts[index] = Some(Impact {
+                            point,
+                            kind,
+                            owner: projectile.owner,
+                            struck: None,
+                            blast: false,
+                            effect: None,
+                        });
+                        *projectile = Projectile::default();
+                        continue;
+                    }
+                }
                 // A floor: sit at the ride height, adopt its normal, turn the
                 // velocity parallel without changing speed, so a projectile
                 // follows a rolling track instead of bouncing down it.
@@ -307,8 +340,37 @@ impl Projectiles {
                 None
             };
 
+            // The travel sweep asks the cage the same way: about the geometry hit
+            // when the mesh found one, else about the segment's end. A hull hit
+            // is a different ending and stays one.
+            let sweep_escape = cage
+                .and_then(|cage| match hit {
+                    None => cage.outside(to),
+                    Some(hit) if hit.struck.is_none() => cage.outside(hit.point),
+                    Some(_) => None,
+                })
+                .map(|(boundary, _)| boundary);
             let mut bounced = false;
             match hit {
+                // Outside the cage: every weapon that sweeps ends at the boundary
+                // point as on a wall, with no bounce. The Rocket and Plasma spend no
+                // blast; the Missile's and the Shuriken's `flags |= 0x14` teardown
+                // reaches the explosion and no damage (`missile.md`, "The blast, and
+                // what does not reach it"; `shuriken.md`, "What is not verified"),
+                // so they spend none either (chosen: the Missile's MAX_BOUNCES wall
+                // end below still carries a blast). The Cannon ends as on a wall.
+                _ if let Some(point) = sweep_escape => {
+                    impacts[index] = Some(Impact {
+                        point,
+                        kind,
+                        owner: projectile.owner,
+                        struck: None,
+                        blast: kind == Weapon::Cannon,
+                        effect: None,
+                    });
+                    *projectile = Projectile::default();
+                    continue;
+                }
                 // A floor across the step is ridden, not struck: the original's
                 // travel-segment switch takes a floor code to the same push-out
                 // (`hit + normal * 3.0`) for all four weapons; only a wall or craft

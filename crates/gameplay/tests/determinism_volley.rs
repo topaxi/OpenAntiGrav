@@ -81,6 +81,7 @@ fn run_volley(ticks: u32) -> (u64, u64) {
             &mut world.ships[..world.ship_count as usize],
             TICK,
             &world_geometry,
+            None,
             Some(&weapon_stats()),
             "VENOM",
             oag_weapons::projectile::BlastPush::Posted,

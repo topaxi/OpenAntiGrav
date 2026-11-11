@@ -50,6 +50,7 @@ fn advance(projectiles: &mut Projectiles, world: &CollisionWorld) {
     projectiles.advance(
         DT,
         world,
+        None,
         &ships,
         None,
         None,

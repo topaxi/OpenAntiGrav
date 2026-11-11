@@ -41,6 +41,7 @@ fn tick(projectiles: &mut Projectiles, world: &CollisionWorld) {
     let _ = projectiles.advance(
         DT,
         world,
+        None,
         &[] as &[crate::test_craft::Ship],
         None,
         None,

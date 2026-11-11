@@ -250,6 +250,10 @@ impl Race {
             &mut self.sim.world.ships[..self.sim.world.ship_count as usize],
             self.sim.dt,
             &*self.sim.collision,
+            self.sim
+                .spline
+                .cage()
+                .map(|cage| cage as &dyn oag_physics::cage::Containment),
             self.sim.weapons.as_deref(),
             &self.sim.class,
             match self.sim.blast_push {

@@ -107,6 +107,7 @@ fn a_volley_from_the_originals_pose_is_laid_at_the_craft_and_cruises_at_the_clas
             dt,
             race.collision(),
             None,
+            None,
             &class,
             oag_weapons::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),

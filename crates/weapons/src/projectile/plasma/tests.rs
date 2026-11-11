@@ -69,6 +69,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
         projectiles.advance(
             TICK,
             &geometry,
+            None,
             &ships,
             None,
             None,
@@ -120,6 +121,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
     projectiles.advance(
         TICK,
         &geometry,
+        None,
         &ships,
         None,
         None,
@@ -166,6 +168,7 @@ fn a_plasma_bolt_detonates_when_its_ten_seconds_are_up() {
         let impacts = projectiles.advance(
             TICK,
             &geometry,
+            None,
             &ships,
             None,
             None,
@@ -247,6 +250,7 @@ fn a_timed_out_plasma_bolt_damages_nobody_standing_in_it() {
             &mut world.ships[..world.ship_count as usize],
             TICK,
             &empty,
+            None,
             Some(&table),
             "VENOM",
             crate::projectile::BlastPush::Posted,
@@ -305,6 +309,7 @@ fn a_plasma_bolt_that_strikes_a_craft_reports_it_struck_with_a_blast() {
             .advance(
                 1.0 / 60.0,
                 &geometry,
+                None,
                 &ships,
                 None,
                 None,
@@ -352,6 +357,7 @@ fn a_plasma_bolt_that_strikes_a_craft_credits_it_directly() {
             &mut world.ships[..world.ship_count as usize],
             1.0 / 60.0,
             &empty,
+            None,
             Some(&table),
             "VENOM",
             crate::projectile::BlastPush::Posted,
@@ -401,6 +407,7 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
             &mut world.ships[..world.ship_count as usize],
             1.0 / 60.0,
             &empty,
+            None,
             Some(&table),
             "VENOM",
             crate::projectile::BlastPush::Posted,
@@ -503,6 +510,7 @@ fn the_launch_speed_reads_the_crafts_velocity_at_release_not_at_the_press() {
         projectiles.advance(
             TICK,
             &geometry,
+            None,
             &ships,
             None,
             Some(&stats),
@@ -549,6 +557,7 @@ fn a_flying_plasma_bolts_speed_blends_from_launch_to_class_over_one_second() {
         projectiles.advance(
             TICK,
             &geometry,
+            None,
             ships,
             None,
             Some(&stats),
@@ -629,6 +638,7 @@ fn advance_one(
     projectiles.advance(
         TICK,
         geometry,
+        None,
         ships,
         None,
         Some(stats),
