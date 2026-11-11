@@ -51,7 +51,9 @@
 - [ ] Progression and unlocks
 - [ ] Shield energy, absorb, and the risk/reward loop around holding a weapon
 
-The energy pool is live: wall contact spends it, Zone's perfect-zone recharge
+The energy pool is live: wall contact and craft-to-craft bumps spend it
+(`oag_physics::damage::apply_contact` and `apply_pair`, the same `0.035 * |p|` law,
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#measured-2026-11-11-an-unshielded-craft-to-craft-bump-charges-the-energy-pool)), Zone's perfect-zone recharge
 and absorbing a pickup pay it back, and the HUD's `ShieldBar` follows. What is
 missing from that loop is the *risk* half - no weapon damages anybody yet, so
 holding a pickup rather than absorbing it costs nothing. See

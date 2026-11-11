@@ -10,7 +10,8 @@
 //! FUN_088418e0's contact loop       Ship_Damage(|p| * 0.05 * 0.7, craft, ...)
 //! ```
 //!
-//! The collision leg and the two weapon legs ([`apply_weapon`], [`add`]) are here.
+//! The two collision legs ([`apply_contact`], [`apply_pair`]) and the two weapon legs
+//! ([`apply_weapon`], [`add`]) are here.
 //! Everything that *adds* to the pool goes through `Ship_AddShield` (`0x0883ddc8`), whose
 //! four callers are all read: the pickup absorb, the LeachBeam's repair, Zone's clean-zone
 //! recharge and the Eliminator's per-lap refill, each built in `oag_gameplay` or the
@@ -295,6 +296,27 @@ pub fn apply_contact(
     report
 }
 
+/// Apply one craft-to-craft contact to one of its two hulls, `Ship_Damage` with
+/// `source == 1`.
+///
+/// The contact loop charges a pair record exactly as a wall record: `|p| * 0.05 * 0.7`,
+/// halved with weapons off, on each hull of the pair, through the same gate (a shielded or
+/// non-racing hull pays nothing). `impulse` is [`crate::pair::PairContact::impulse`], which
+/// is bit-equal to the original's ring record. Confidence 92, measured live
+/// (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, "an
+/// unshielded craft-to-craft bump charges the energy pool").
+///
+/// **Does not regenerate**: the pair pass runs after every craft's [`crate::step`], whose
+/// [`apply_contact`] already ran this tick's damage-off regeneration.
+pub fn apply_pair(
+    state: &mut ShipState,
+    dimensions: &Dimensions,
+    impulse: f32,
+    rules: DamageRules,
+) -> Shield {
+    subtract(state, dimensions, contact_damage(impulse, rules))
+}
+
 /// Apply one weapon's damage to the pool, `Ship_Damage` with `source == 2`.
 ///
 /// The same function as [`apply_contact`], differing only in the amount: a contact scales an
@@ -334,7 +356,7 @@ pub fn weapon_damage(amount: f32, rules: DamageRules) -> f32 {
 }
 
 /// `Ship_Damage`'s body: the state gate, clamp, two edges and destroyed transition, given an
-/// already-scaled amount. Shared by [`apply_contact`] and [`apply_weapon`] so the gate, which
+/// already-scaled amount. Shared by [`apply_contact`], [`apply_pair`] and [`apply_weapon`] so the gate, which
 /// makes a shielded or destroyed craft immune to *both*, cannot drift.
 fn subtract(state: &mut ShipState, dimensions: &Dimensions, lost: f32) -> Shield {
     // `Ship_Damage` refuses outside the racing states (the original lists states 4, 5, 6 and

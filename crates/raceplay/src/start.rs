@@ -755,6 +755,7 @@ impl Race {
                 wall_contact_ticks: [0; oag_gameplay::MAX_SHIPS],
                 wall_inbound_ticks: [0; oag_gameplay::MAX_SHIPS],
                 wall_damage: [0.0; oag_gameplay::MAX_SHIPS],
+                pair_damage: [0.0; oag_gameplay::MAX_SHIPS],
                 wall_racing_ticks: [0; oag_gameplay::MAX_SHIPS],
                 beneath_ticks: [0; oag_gameplay::MAX_SHIPS],
                 stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
@@ -1046,6 +1047,8 @@ impl Race {
             last_controls: Default::default(),
             #[cfg(test)]
             pair_contacts: Vec::new(),
+            #[cfg(test)]
+            pair_impulses: Vec::new(),
         };
         // The free Turbo is granted at the release edge, not here - see
         // `Race::tick`'s own `COUNTDOWN_TICKS` check for the mode, full-slot

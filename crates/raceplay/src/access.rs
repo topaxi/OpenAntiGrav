@@ -443,6 +443,12 @@ impl Race {
         self.sim.wall_damage.get(slot).copied().unwrap_or(0.0)
     }
 
+    /// What craft-to-craft bumps took from a craft's pool, in shield-pool units.
+    #[must_use]
+    pub fn pair_shield_lost_of(&self, slot: usize) -> f32 {
+        self.sim.pair_damage.get(slot).copied().unwrap_or(0.0)
+    }
+
     /// How many ticks a craft was still racing - the denominator
     /// [`Self::wall_contact_ticks_of`] and [`Self::wall_shield_charged_of`] are
     /// counted over. A wrecked craft is released and keeps being integrated, so

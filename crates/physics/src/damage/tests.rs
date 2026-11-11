@@ -445,3 +445,19 @@ fn a_hit_reports_what_it_asked_whether_or_not_a_shield_swallowed_it() {
         0.0
     );
 }
+
+/// The pair leg is the wall's law on one impulse, through the same gate.
+#[test]
+fn a_pair_contact_costs_the_wall_law_and_a_shield_refuses_it() {
+    let dims = dimensions(100.0);
+    let mut ship = state(100.0);
+    let report = apply_pair(&mut ship, &dims, 20.0, DamageRules::default());
+    assert_eq!(report.lost, contact_damage(20.0, DamageRules::default()));
+    assert_eq!(ship.shield, 100.0 - 20.0 * CONTACT_DAMAGE_SCALE);
+
+    let mut shielded = state(100.0);
+    shielded.shield_pickup_timer = 1.0;
+    let report = apply_pair(&mut shielded, &dims, 20.0, DamageRules::default());
+    assert!(report.absorbed);
+    assert_eq!(shielded.shield, 100.0);
+}

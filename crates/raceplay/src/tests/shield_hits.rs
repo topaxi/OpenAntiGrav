@@ -235,3 +235,76 @@ fn a_leach_beam_from_a_shielded_owner_leaves_the_targets_shell_at_rest() {
         "the shooter's Shield did not gate the drain: {peak}"
     );
 }
+
+/// [`bump`] with both pools full at 100 and the race's weapons switch at `weapons`.
+fn charged_bump(shielded: [bool; 2], weapons: bool) -> Race {
+    let mut race = bump(shielded);
+    race.sim.weapons_on = weapons;
+    for slot in 0..2 {
+        let ship = &mut race.sim.world.ships[slot];
+        ship.handling.dimensions.shield = 100.0;
+        ship.physics.shield = 100.0;
+    }
+    race
+}
+
+/// The pool each slot holds after one pair pass, and the contact's impulse.
+fn pools_after_a_bump(race: &mut Race) -> ([f32; 2], f32) {
+    race.resolve_craft_pairs();
+    assert_eq!(race.pair_contacts, [(0, 1)], "the craft never touched");
+    let impulse = race.pair_impulses[0];
+    assert!(impulse > 0.0, "a touch with no impulse charges nothing");
+    let pools = [0, 1].map(|slot| race.sim.world.ships[slot].physics.shield);
+    (pools, impulse)
+}
+
+/// `Ship_Damage(0.035 * |p|)` on both hulls of an unshielded pair
+/// (`contact-response.md`, "an unshielded craft-to-craft bump charges
+/// the energy pool"). Goes red if the pair pass stops charging, charges one hull, or charges
+/// only in the drawing build.
+#[test]
+fn an_unshielded_bump_charges_both_pools_the_wall_law_on_the_pair_impulse() {
+    let mut race = charged_bump([false, false], true);
+    let (pools, impulse) = pools_after_a_bump(&mut race);
+    let lost = impulse * oag_physics::damage::CONTACT_DAMAGE_SCALE;
+    for (slot, pool) in pools.into_iter().enumerate() {
+        assert_eq!(pool, 100.0 - lost, "slot {slot}, impulse {impulse}");
+    }
+}
+
+#[test]
+fn an_unshielded_bump_with_weapons_off_charges_half() {
+    let mut race = charged_bump([false, false], false);
+    let (pools, impulse) = pools_after_a_bump(&mut race);
+    let lost = impulse
+        * oag_physics::damage::CONTACT_DAMAGE_SCALE
+        * oag_physics::damage::NO_WEAPONS_DAMAGE_SCALE;
+    for (slot, pool) in pools.into_iter().enumerate() {
+        assert_eq!(pool, 100.0 - lost, "slot {slot}, impulse {impulse}");
+    }
+}
+
+/// A shielded hull takes the shell bulge instead of the charge; its unshielded partner
+/// still pays.
+#[test]
+fn a_shielded_hull_pays_nothing_for_a_bump_and_its_partner_still_does() {
+    let mut race = charged_bump([true, false], true);
+    let (pools, _) = pools_after_a_bump(&mut race);
+    assert_eq!(pools[0], 100.0, "a running Shield let the bump through");
+    assert!(pools[1] < 100.0, "the unshielded partner was not charged");
+
+    let mut race = charged_bump([true, true], true);
+    let (pools, _) = pools_after_a_bump(&mut race);
+    assert_eq!(pools, [100.0, 100.0], "two Shields let the bump through");
+}
+
+/// A hull still exploding is solid to other craft but outside `Ship_Damage`'s racing gate.
+#[test]
+fn a_bump_leaves_the_pool_of_a_hull_that_is_not_racing_alone() {
+    let mut race = charged_bump([false, false], true);
+    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
+    race.sim.world.ships[0].physics.state_timer = oag_physics::damage::DESTROYED_DURATION;
+    let (pools, _) = pools_after_a_bump(&mut race);
+    assert_eq!(pools[0], 100.0, "a destroyed hull was charged");
+    assert!(pools[1] < 100.0, "the racing partner was not charged");
+}
