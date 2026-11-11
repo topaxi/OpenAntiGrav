@@ -162,3 +162,54 @@ fn a_bush_hides_the_speed_pad_behind_it_under_both_trail_orders() {
         "over-floors moves the ribbons only: the pad stays behind the bush"
     );
 }
+
+/// `OAG_DEBUG_TINT_BLENDED` reaches the frame: with a unit named, the circuit's blended list (the
+/// trees on Platinum Rush) draws in flat colours, and with it unset or `0` the frame is the same
+/// bytes as any other. Dropping the hook in `Scene::new` makes the tinted frame equal the plain
+/// one. The camera is the bush's, so a tree is in the picture.
+#[test]
+#[ignore = "needs a Pulse disc image in data/images/ and a GPU adapter"]
+fn the_debug_tint_repaints_the_blended_list_and_off_is_the_plain_frame() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let scratch = scratch();
+    let shot = |tint: Option<&str>| {
+        let out = scratch.join(format!("tint-{}.png", tint.unwrap_or("unset")));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_oag-game"));
+        command
+            .arg(&image)
+            .args(["--race", "--no-audio", "--size", "480x272"])
+            .args([
+                "--render-scale",
+                "100",
+                "--msaa",
+                "off",
+                "--motion-blur",
+                "off",
+            ])
+            .args(["--screen-filter", "off", "--anisotropy", "off"])
+            .args(["--track", "Data\\Environments\\13_Track\\track.vex"])
+            .args(["--ticks", "0", "--pose=226.7,98.0,172.9", "--pose-hold"])
+            .args(["--camera-pose=226.7,102.0,172.9,-0.777,-0.192,0.600,0,1,0"])
+            .arg("--screenshot")
+            .arg(&out)
+            .env("XDG_CONFIG_HOME", scratch.join("config"))
+            .env("XDG_STATE_HOME", scratch.join("state"))
+            .env("XDG_DATA_HOME", scratch.join("data"));
+        match tint {
+            Some(unit) => command.env("OAG_DEBUG_TINT_BLENDED", unit),
+            None => command.env_remove("OAG_DEBUG_TINT_BLENDED"),
+        };
+        assert!(command.status().expect("running oag-game").success());
+        std::fs::read(&out).expect("reading the screenshot")
+    };
+    let plain = shot(None);
+    let zero = shot(Some("0"));
+    let by_tree = shot(Some("tree"));
+    let by_draw = shot(Some("draw"));
+    std::fs::remove_dir_all(&scratch).ok();
+    assert_eq!(plain, zero, "0 is off");
+    assert_ne!(plain, by_tree, "tree paints the blended list");
+    assert_ne!(plain, by_draw, "draw paints the blended list");
+}

@@ -178,3 +178,126 @@ fn whitened_copy(picture: &ModelTexture) -> Option<ModelTexture> {
         mip_count: picture.mip_count,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mesh::{Bounds, DEFAULT_SPECULAR_EXPONENT, slots};
+    use std::sync::Arc;
+
+    fn vertex(x: f32, y: f32) -> GpuVertex {
+        GpuVertex {
+            quake: 0.0,
+            position: [x, y, 0.0],
+            normal: [0.0, 1.0, 0.0],
+            colour: [0.2, 0.4, 0.6, 0.5],
+            texcoord: [0.0; 2],
+            lightmap_texcoord: [0.0; 2],
+            lit: 1.0,
+            anim: 0,
+            xform: 0,
+            sun_mask: 1.0,
+            slots: slots::DEFAULT,
+            specular_exponent: DEFAULT_SPECULAR_EXPONENT,
+            glow: 0.0,
+            texcoord2: [0.0; 2],
+            tangent: 0,
+        }
+    }
+
+    fn draw(range: std::ops::Range<u32>) -> DrawCall {
+        DrawCall {
+            range,
+            texture: Some(0),
+            bounds: Bounds {
+                centre: [0.0; 3],
+                radius: 1.0,
+            },
+            moving: false,
+            culled: false,
+            blend: None,
+            blend_state: None,
+            depth_point: None,
+            layer: 0,
+            alpha_test_ref: None,
+            writes_depth: false,
+            node: None,
+            chunk: None,
+        }
+    }
+
+    /// Three triangles in two draws: the first draw's two are far apart, the second's is one
+    /// of its own. Vertices 0-2, 3-5 and 6-8 are those triangles.
+    fn fixture() -> Model {
+        let mut model = Model::none("tint");
+        let corners = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)];
+        for shift in [0.0, 10.0, 20.0] {
+            for (x, y) in corners {
+                model.vertices.push(vertex(x + shift, y));
+            }
+        }
+        model.indices = (0..9).collect();
+        model.transparent_draws = vec![draw(0..6), draw(6..9)];
+        model.textures = vec![Some(Arc::new(ModelTexture {
+            label: "picture".into(),
+            width: 1,
+            height: 1,
+            texels: Texels::Rgba8(vec![10, 20, 30, 77]),
+            mip_count: None,
+        }))];
+        model
+    }
+
+    fn colours(model: &Model) -> Vec<[f32; 3]> {
+        (0..3)
+            .map(|triangle| {
+                let c = model.vertices[triangle * 3].colour;
+                [c[0], c[1], c[2]]
+            })
+            .collect()
+    }
+
+    /// Each draw is one colour, two draws are two colours, the vertex alpha and the texture's
+    /// alpha survive, the light is off, and the picture is white.
+    #[test]
+    fn a_draw_is_one_flat_colour_and_the_alpha_is_kept() {
+        let mut model = fixture();
+        assert_eq!(model.debug_tint_blended(Unit::Draw), 2);
+        let c = colours(&model);
+        assert_eq!(c[0], c[1], "both triangles of the first draw");
+        assert_ne!(c[0], c[2], "the second draw is another colour");
+        assert!(
+            model
+                .vertices
+                .iter()
+                .all(|v| v.lit == 0.0 && v.colour[3] == 0.5)
+        );
+        let Some(Some(picture)) = model.textures.first() else {
+            panic!("the picture is still there");
+        };
+        let Texels::Rgba8(texels) = &picture.texels else {
+            panic!("still straight RGBA8");
+        };
+        assert_eq!(texels, &[255, 255, 255, 77]);
+    }
+
+    /// `tree` splits a draw by connected triangles: the first draw's two separate triangles are
+    /// two colours, and the colours run on into the next draw.
+    #[test]
+    fn a_tree_is_a_connected_group_of_triangles() {
+        let mut model = fixture();
+        assert_eq!(model.debug_tint_blended(Unit::Tree), 3);
+        let c = colours(&model);
+        assert_ne!(c[0], c[1]);
+        assert_ne!(c[1], c[2]);
+        assert_ne!(c[0], c[2]);
+        // A triangle that shares an edge with the first one joins its group.
+        let mut model = fixture();
+        model.vertices[3] = vertex(1.0, 0.0);
+        model.vertices[4] = vertex(0.0, 1.0);
+        model.vertices[5] = vertex(1.0, 1.0);
+        model.debug_tint_blended(Unit::Tree);
+        let c = colours(&model);
+        assert_eq!(c[0], c[1]);
+    }
+}

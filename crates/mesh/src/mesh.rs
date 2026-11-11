@@ -1168,9 +1168,9 @@ pub use model_texture::{BlockFormat, GnfCounts, GnfForm, ModelTexture, Texels, T
 mod flame;
 pub mod groups;
 pub use flame::Flame;
+mod debug_tint;
 pub mod glow;
 mod merge;
-mod debug_tint;
 pub use debug_tint::{Unit as DebugTintUnit, requested as debug_tint_requested};
 mod order;
 pub use order::{BlendedOrder, LIST_B_LAYER, flare_key};

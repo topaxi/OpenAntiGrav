@@ -717,7 +717,9 @@ impl Scene {
         crate::stages::checkpoint()?;
         if let Some(unit) = oag_mesh::mesh::debug_tint_requested() {
             let colours = track_model.debug_tint_blended(unit);
-            log::debug!("OAG_DEBUG_TINT_BLENDED: {colours} colour(s) over the circuit's blended list");
+            log::debug!(
+                "OAG_DEBUG_TINT_BLENDED: {colours} colour(s) over the circuit's blended list"
+            );
         }
         let placeholders = oag_render::gantry::placeholder_texture_slots(&track_model);
         let mut track = Drawable::new_with(

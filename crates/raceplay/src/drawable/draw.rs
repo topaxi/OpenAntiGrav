@@ -592,7 +592,11 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
-            self.trace_draw("blended", draw, sorted.as_ref().map(|sorted| sorted.key_at(at)));
+            self.trace_draw(
+                "blended",
+                draw,
+                sorted.as_ref().map(|sorted| sorted.key_at(at)),
+            );
             let slot = draw
                 .texture
                 .map_or(0, |t| t + 1)
