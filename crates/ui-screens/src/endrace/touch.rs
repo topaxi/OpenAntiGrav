@@ -46,7 +46,6 @@ use oag_ui::screen::{Image, Screens, Text, argb_to_rgba, parse_argb};
 
 use super::Layout;
 use super::draw::fill_draw;
-use crate::campaign::draw::sprite_draw;
 use crate::picker::FaceScales;
 
 /// The shell screen the pages sit in: the translucent top bar, the panel's
@@ -463,7 +462,7 @@ fn image_draw(
     } else {
         (image.x, image.y)
     };
-    Some(sprite_draw(&image, placed, x, y, image.color))
+    Some(image.sprite_draw(placed, x, y, image.color))
 }
 
 /// The strip: a `Blue2048` box per tile, its icon centred at the texture's own

@@ -302,20 +302,9 @@ impl Choice {
     #[must_use]
     pub fn body(&self, skin: &Skin) -> Vec<Draw> {
         let layout = Layout::new(skin, self.pitch);
-        let text =
-            |x: f32, y: f32, scale: f32, color: [f32; 4], align: Align, text: String| Draw::Text {
-                x,
-                y,
-                scale,
-                color,
-                border: None,
-                align,
-                text,
-                wrap_width: None,
-            };
         let mut out = Vec::new();
         if !self.context.is_empty() {
-            out.push(text(
+            out.push(Draw::plain(
                 layout.text_x,
                 layout.rows_y - layout.line * 0.5,
                 layout.scale * 0.5,
@@ -339,7 +328,7 @@ impl Choice {
             } else {
                 skin.normal()
             };
-            out.push(text(
+            out.push(Draw::plain(
                 layout.text_x,
                 y,
                 layout.scale,
@@ -352,7 +341,7 @@ impl Choice {
                     Status::Medal(medal) => medal_ink(medal),
                     Status::Open => ink,
                 };
-                out.push(text(
+                out.push(Draw::plain(
                     layout.right_x,
                     y,
                     layout.scale,
@@ -377,24 +366,8 @@ pub fn draw_list(
     backdrop: Option<Picture>,
     race_behind: bool,
 ) -> Layers {
-    let (title_x, title_y, title_scale) = skin.title_at();
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        choice.title.clone(),
-    ));
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    layers.push_title(skin, frame, choice.title.clone());
     layers.body = choice.body(skin);
     layers
 }

@@ -27,7 +27,7 @@
 use oag_gameplay::input::Button;
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
-use oag_ui::pointer::{Pointer, contains, row_at};
+use oag_ui::pointer::{Pointer, contains};
 
 use crate::join::row_blocks;
 use crate::window_layout::{
@@ -320,15 +320,7 @@ impl SeatAssign {
         };
         let geometry = Geometry::new(skin);
         let rows = self.rows();
-        let over = row_at(
-            at,
-            0.0,
-            geometry.column,
-            geometry.layout.top,
-            geometry.layout.line,
-            rows.len(),
-        )
-        .map(|index| rows[index]);
+        let over = geometry.row_at(at, rows.len()).map(|index| rows[index]);
         if (pointer.moved || pointer.clicked) && self.hover != over {
             self.hover = over;
             out.push(Event::Moved);
@@ -444,23 +436,12 @@ impl SeatAssign {
     pub fn body(&self, skin: &Skin, frame: &Frame) -> Vec<Draw> {
         let geometry = Geometry::new(skin);
         let layout = &geometry.layout;
-        let text =
-            |x: f32, y: f32, scale: f32, color: [f32; 4], align: Align, text: String| Draw::Text {
-                x,
-                y,
-                scale,
-                color,
-                border: None,
-                align,
-                text,
-                wrap_width: None,
-            };
         let dim = |mut ink: [f32; 4]| {
             ink[3] *= 0.5;
             ink
         };
         let hint_ink = frame.ink.filter(|_| layout.blocks.is_some());
-        let mut out = vec![text(
+        let mut out = vec![Draw::plain(
             layout.text_x,
             geometry.hint_y,
             layout.scale * 0.6,
@@ -494,9 +475,16 @@ impl SeatAssign {
                 }
                 Row::Back => (self.labels.back.clone(), String::new()),
             };
-            out.push(text(layout.text_x, y, layout.scale, ink, Align::Left, left));
+            out.push(Draw::plain(
+                layout.text_x,
+                y,
+                layout.scale,
+                ink,
+                Align::Left,
+                left,
+            ));
             if !right.is_empty() {
-                out.push(text(
+                out.push(Draw::plain(
                     layout.right_x,
                     y,
                     layout.scale,
@@ -571,24 +559,8 @@ pub fn draw_list(
     race_behind: bool,
     cells: &dyn Fn(usize, bool) -> Vec<[f32; 4]>,
 ) -> Layers {
-    let (title_x, title_y, title_scale) = skin.title_at();
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        screen.title().to_string(),
-    ));
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    layers.push_title(skin, frame, screen.title().to_string());
     layers.body = screen.blocks(skin, frame);
     layers.body.extend(screen.body(skin, frame));
     layers.body.extend(screen.preview(skin, frame, cells));

@@ -755,22 +755,8 @@ pub fn draw_list(
     sprites: &dyn Fn(&str) -> Option<Placed>,
     measure: &dyn Fn(&str) -> f32,
 ) -> Layers {
-    let (title_x, title_y, title_scale) = skin.title_at();
-    let picture = backdrop.map(Picture::draw);
-    let mut layers = Layers {
-        backdrop: frame.backdrops(skin.space(), skin.background(), picture, race_behind),
-        ..Layers::default()
-    };
-    // See `oag_ui::menu::draw_list`'s own title push - `Draw::title` is shared
-    // with it for exactly this pair of call sites.
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        layout.title.clone(),
-    ));
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    layers.push_title(skin, frame, layout.title.clone());
     layers.body = match (layout.hd.as_deref(), layout.hd_track.as_deref()) {
         (Some(extra), _) => hd::body(picker, layout, extra, frame, sprites),
         (None, Some(extra)) => hd::track::body(picker, layout, extra, frame, sprites),

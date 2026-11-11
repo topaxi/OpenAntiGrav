@@ -9,8 +9,6 @@ use oag_ui::frontend::{Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::screen::Image;
 
-use super::super::draw::sprite_draw;
-
 /// Where one medal tier's own static icon sits in `Hexmedal_HD.mip`/`.gtf` -
 /// **measured off the disc's own authored crop, not eyeballed**:
 /// `DATA06.PSARC`'s own copy of `CellMode_Definition.xml` (`data/fe/frontend/gui/cellmode_definition.xml`)
@@ -176,7 +174,7 @@ pub(super) fn hd_tinted_medal_draw(
         texture_height: Some(frame_height),
         ..image.clone()
     };
-    sprite_draw(&cropped, placed, image.x, image.y, 0xffff_ffff)
+    cropped.sprite_draw(placed, image.x, image.y, 0xffff_ffff)
 }
 
 /// `Target Title`'s own text - `DATA06`'s single shared header replacing

@@ -185,6 +185,20 @@ impl Draw {
         }
     }
 
+    /// One unbordered line in the plain menu face: [`Self::in_role`] with no
+    /// role.
+    #[must_use]
+    pub fn plain(
+        x: f32,
+        y: f32,
+        scale: f32,
+        color: [f32; 4],
+        align: crate::frontend::Align,
+        text: String,
+    ) -> Self {
+        Self::in_role(None, x, y, scale, color, align, text)
+    }
+
     /// A screen title: [`Self::in_role`] pinned to [`crate::frontend::Align::Left`].
     ///
     /// Shared by `crate::menu::draw_list` and `oag_ui_screens::picker::draw_list`,

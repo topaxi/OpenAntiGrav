@@ -52,7 +52,6 @@
 //! is the composition root's business. Keeping that seam is what lets every test
 //! below run with no config directory, no disc and no window.
 
-use crate::frontend::Draw;
 use oag_core::buttons::{Button, Input};
 
 /// The menu tree this build ships with.
@@ -1264,7 +1263,7 @@ pub const WARNING: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
 
 /// What one page looks like, as plain data.
 ///
-/// The same [`Draw`] vocabulary the language picker emits, so `main.rs`
+/// The same [`Draw`](crate::frontend::Draw) vocabulary the language picker emits, so `main.rs`
 /// rasterises menus with the renderer it already has and there is one text
 /// path rather than two.
 ///
@@ -1309,29 +1308,11 @@ pub fn draw_list(
     race_behind: bool,
 ) -> Layers {
     let page = menu.page();
-    let (title_x, title_y, title_scale) = skin.title_at();
 
     // Frame::backdrops's own clear/picture/marks order - see its doc for why
     // a race behind the menus drops anything covering the whole screen.
-    let picture = backdrop.map(Picture::draw);
-    let backdrops = frame.backdrops(skin.space(), skin.background(), picture, race_behind);
-
-    let mut layers = Layers {
-        backdrop: backdrops,
-        ..Layers::default()
-    };
-    // The disc's own declared colour, the frame's own ink, or this build's
-    // substitute (`Skin::title_color`), in whichever face `skin.title_font()`
-    // names - `None` on both PSP titles today, which is the plain `Draw::Text`
-    // this build has always emitted; see `oag_title::MenuSkin::title_font`.
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        page.title.clone(),
-    ));
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    layers.push_title(skin, frame, page.title.clone());
 
     // Which idiom a page is drawn in is the *title's* answer first and this
     // page's second: a strip needs a disc that authors one, and a page with

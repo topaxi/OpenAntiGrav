@@ -12,7 +12,7 @@ use oag_ui::menu::{Frame, Layers, Picture, Skin};
 use oag_ui::pointer::{Pointer, contains, hex_contains};
 use oag_ui::screen::argb_to_rgba;
 
-use super::draw::{hex_slot_xy, image_draw, push_selector, sprite_draw, text_draw};
+use super::draw::{hex_slot_xy, image_draw, push_selector, text_draw};
 use super::pointer::Extent;
 use super::pulse::SelectorPulse;
 use super::{Layout, hex_rect};
@@ -161,24 +161,8 @@ pub fn draw_list(
     sprites: &dyn Fn(&str) -> Option<Placed>,
     footer_overlay: &[Draw],
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    let (title_x, title_y, title_scale) = skin.title_at();
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        view.title.to_string(),
-    ));
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    layers.push_title(skin, frame, view.title.to_string());
     layers.chrome.extend_from_slice(footer_overlay);
 
     let screen = &layout.screen;
@@ -244,7 +228,7 @@ pub fn draw_list(
                 }
                 out.push(image_draw(image, placed));
             } else {
-                out.push(sprite_draw(image, placed, image.x, image.y, EMPTY_HEX));
+                out.push(image.sprite_draw(placed, image.x, image.y, EMPTY_HEX));
             }
             continue;
         }

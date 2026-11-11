@@ -266,15 +266,7 @@ fn rewards_layers(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let screen = &layout.screen;
     let mut out = Vec::new();
     let panel = |owner: Option<u8>| models.get(usize::from(owner.unwrap_or(0)));
@@ -390,26 +382,9 @@ pub fn endrace_menu_draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let screen = &layout.screen;
-    let mut out = Vec::new();
-    for fill in &screen.fills {
-        out.push(fill_draw(fill));
-    }
-    for image in &screen.images {
-        let Some(placed) = sprites(&image.src) else {
-            continue;
-        };
-        out.push(image_draw(image, placed));
-    }
+    let mut out = screen.plain_draws(sprites);
     if let Some(menu) = &screen.menu {
         let pitch = font_line_height(&menu.font) * face_scale(layout, &menu.font);
         let color = argb_to_rgba(menu.color);
@@ -620,7 +595,7 @@ pub(super) fn fill_draw(fill: &Fill) -> Draw {
 }
 
 pub(super) fn image_draw(image: &Image, placed: Placed) -> Draw {
-    sprite_draw(image, placed, image.x, image.y, image.color)
+    image.sprite_draw(placed, image.x, image.y, image.color)
 }
 
 /// The loyalty total `loyaltybar` is full at (`Loyalty_AccumulateTotal`'s ceiling): the
@@ -636,43 +611,7 @@ fn loyalty_bar_draw(image: &Image, placed: Placed, width: f32) -> Draw {
     let mut cropped = image.clone();
     cropped.width = Some(width.max(0.0));
     cropped.texture_width = Some(width.max(0.0));
-    sprite_draw(&cropped, placed, image.x, image.y, image.color)
-}
-
-fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw {
-    let width = image.width.unwrap_or(placed.width as f32);
-    let height = image.height.unwrap_or(placed.height as f32);
-    let sampled = [
-        image.texture_width.unwrap_or(placed.width as f32),
-        image.texture_height.unwrap_or(placed.height as f32),
-    ];
-    let color = argb_to_rgba(argb);
-    if sampled[0] > placed.width as f32 + 0.5 || sampled[1] > placed.height as f32 + 0.5 {
-        return Draw::TiledSprite {
-            rect: [x, y, width, height],
-            uv: [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
-            repeat: [
-                sampled[0] / placed.width.max(1) as f32,
-                sampled[1] / placed.height.max(1) as f32,
-            ],
-            color,
-        };
-    }
-    Draw::Sprite {
-        rect: [x, y, width, height],
-        uv: [
-            placed.x as f32 + image.u.unwrap_or(0.0),
-            placed.y as f32 + image.v.unwrap_or(0.0),
-            sampled[0],
-            sampled[1],
-        ],
-        color,
-    }
+    cropped.sprite_draw(placed, image.x, image.y, image.color)
 }
 
 pub(super) fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {

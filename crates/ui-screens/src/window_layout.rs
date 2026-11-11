@@ -180,6 +180,18 @@ const BARE_SHRINK: f32 = 0.72;
 const BARE_SPLIT: f32 = 0.56;
 
 impl Geometry {
+    /// The row of `count` rows the pointer at `at` is over.
+    pub(crate) fn row_at(&self, at: (f32, f32), count: usize) -> Option<usize> {
+        row_at(
+            at,
+            0.0,
+            self.column,
+            self.layout.top,
+            self.layout.line,
+            count,
+        )
+    }
+
     pub(crate) fn new(skin: &Skin) -> Self {
         let mut layout = Layout::new(skin);
         let (width, height) = skin.space().size;
@@ -539,14 +551,7 @@ impl Picker {
         };
         let geometry = Geometry::new(skin);
         let rows = self.rows();
-        let over = row_at(
-            at,
-            0.0,
-            geometry.column,
-            geometry.layout.top,
-            geometry.layout.line,
-            rows.len(),
-        );
+        let over = geometry.row_at(at, rows.len());
         if let Some(index) = over {
             if (pointer.moved || pointer.clicked || pointer.scroll != 0) && index != self.cursor {
                 self.cursor = index;
@@ -664,19 +669,8 @@ impl Picker {
     pub fn body(&self, skin: &Skin, frame: &Frame) -> Vec<Draw> {
         let geometry = Geometry::new(skin);
         let layout = &geometry.layout;
-        let text =
-            |x: f32, y: f32, scale: f32, color: [f32; 4], align: Align, text: String| Draw::Text {
-                x,
-                y,
-                scale,
-                color,
-                border: None,
-                align,
-                text,
-                wrap_width: None,
-            };
         let hint_ink = frame.ink.filter(|_| layout.blocks.is_some());
-        let mut out = vec![text(
+        let mut out = vec![Draw::plain(
             layout.text_x,
             geometry.hint_y,
             layout.scale * 0.6,
@@ -698,7 +692,7 @@ impl Picker {
             if self.locked(row) {
                 ink[3] *= 0.5;
             }
-            out.push(text(
+            out.push(Draw::plain(
                 layout.text_x,
                 y,
                 layout.scale,
@@ -708,7 +702,7 @@ impl Picker {
             ));
             let value = self.value(row);
             if !value.is_empty() {
-                out.push(text(
+                out.push(Draw::plain(
                     layout.right_x,
                     y,
                     layout.scale,
@@ -928,24 +922,8 @@ pub fn draw_list(
     race_behind: bool,
     cells: &dyn Fn(usize, bool) -> Vec<[f32; 4]>,
 ) -> Layers {
-    let (title_x, title_y, title_scale) = skin.title_at();
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        picker.labels.title.clone(),
-    ));
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    layers.push_title(skin, frame, picker.labels.title.clone());
     layers.body = picker.blocks(skin, frame);
     layers.body.extend(picker.body(skin, frame));
     layers.body.extend(picker.preview(skin, frame, cells));

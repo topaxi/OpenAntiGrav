@@ -631,17 +631,6 @@ impl Join {
     #[must_use]
     pub fn body(&self, skin: &Skin, frame: &Frame) -> Vec<Draw> {
         let layout = self.layout(skin);
-        let text =
-            |x: f32, y: f32, scale: f32, color: [f32; 4], align: Align, text: String| Draw::Text {
-                x,
-                y,
-                scale,
-                color,
-                border: None,
-                align,
-                text,
-                wrap_width: None,
-            };
         let dim = |mut ink: [f32; 4]| {
             ink[3] *= 0.5;
             ink
@@ -655,7 +644,7 @@ impl Join {
         // The hint is the one line outside a block on a blocked title, so it takes the frame's
         // own ink rather than the rows' white, which is invisible on Omega's light page.
         let hint_ink = frame.ink.filter(|_| layout.blocks.is_some());
-        let mut out = vec![text(
+        let mut out = vec![Draw::plain(
             layout.text_x,
             hint_y,
             layout.scale * 0.6,
@@ -737,9 +726,16 @@ impl Join {
                 }
                 _ => layout.scale,
             };
-            out.push(text(layout.text_x, y, scale, ink, Align::Left, left));
+            out.push(Draw::plain(layout.text_x, y, scale, ink, Align::Left, left));
             if !right.is_empty() {
-                out.push(text(layout.right_x, y, scale, ink, Align::Right, right));
+                out.push(Draw::plain(
+                    layout.right_x,
+                    y,
+                    scale,
+                    ink,
+                    Align::Right,
+                    right,
+                ));
             }
         }
         out
@@ -810,24 +806,8 @@ pub fn draw_list(
     backdrop: Option<Picture>,
     race_behind: bool,
 ) -> Layers {
-    let (title_x, title_y, title_scale) = skin.title_at();
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        join.title().to_string(),
-    ));
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    layers.push_title(skin, frame, join.title().to_string());
     layers.body = join.blocks(skin, frame);
     layers.body.extend(join.body(skin, frame));
     layers

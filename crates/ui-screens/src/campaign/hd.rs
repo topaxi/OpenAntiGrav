@@ -211,24 +211,8 @@ pub fn hd_grid_draw_list(
     sprites: &dyn Fn(&str) -> Option<Placed>,
     footer_overlay: &[Draw],
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    let (title_x, title_y, title_scale) = skin.title_at();
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        strings.get_or_id(TITLE_ID).to_string(),
-    ));
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    layers.push_title(skin, frame, strings.get_or_id(TITLE_ID).to_string());
     layers.chrome.extend_from_slice(footer_overlay);
 
     let screen = &layout.screen;
@@ -419,24 +403,8 @@ pub fn hd_cell_draw_list(
     sprites: &dyn Fn(&str) -> Option<Placed>,
     footer_overlay: &[Draw],
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    let (title_x, title_y, title_scale) = skin.title_at();
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        strings.get_or_id(TITLE_ID).to_string(),
-    ));
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    layers.push_title(skin, frame, strings.get_or_id(TITLE_ID).to_string());
     layers.chrome.extend_from_slice(footer_overlay);
 
     let screen = &layout.screen;
