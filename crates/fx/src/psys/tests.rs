@@ -1122,3 +1122,49 @@ fn a_source_without_pulse_psps_laws_keeps_every_emitter_in_the_additive_layer() 
     flagged.without_pulse_psp_draw();
     assert!(flagged.emitters.iter().all(|e| !e.under_alpha));
 }
+
+/// An effect attached late and pre-aged along its owner's path is the effect that rode the
+/// owner all along: the same particles in the same places, strung out behind it, and a part
+/// that plays once at the start is as spent as it would be.
+#[test]
+fn an_effect_attached_late_is_pre_aged_along_its_owners_path() {
+    const AGE: u32 = 9;
+    let from = Vec3::new(-90.0, 0.0, 0.0);
+    let to = Vec3::ZERO;
+    let positions = |stage: &Stage| -> Vec<[f32; 3]> {
+        let (additive, _) = stage.vertices(Vec3::X, Vec3::Y);
+        additive.iter().map(|vertex| vertex.position).collect()
+    };
+    for (name, looping) in [("trail", true), ("launch flash", false)] {
+        let effect = effect(name, looping, 4.0);
+
+        let mut ridden = Stage::new();
+        let mut rng = Rng::new(7);
+        let rider = ridden.attach(&effect, from, 1.0).expect("attach");
+        for step in 1..=AGE {
+            ridden.follow(rider, from + (to - from) * (step as f32 / AGE as f32));
+            ridden.advance(DT, &mut rng);
+        }
+
+        let mut late = Stage::new();
+        let mut rng = Rng::new(7);
+        let handle = late.attach(&effect, from, 1.0).expect("attach");
+        late.pre_age_riding(handle, AGE, DT, to, &mut rng);
+
+        assert_eq!(positions(&late), positions(&ridden), "{name}");
+        late.advance(DT, &mut rng);
+        let now = positions(&late);
+        if looping {
+            assert!(
+                now.iter().any(|p| p[0] < -30.0),
+                "no trail behind the owner: {now:?}"
+            );
+        } else {
+            // Four ticks of emission, nine ticks ago: nothing is put out at the owner now.
+            assert!(
+                now.iter().all(|p| p[0] < -40.0),
+                "the launch flash started fresh at the owner: {now:?}"
+            );
+        }
+    }
+}

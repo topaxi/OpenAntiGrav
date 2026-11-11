@@ -54,6 +54,7 @@ client = ["oag-raceplay/view"]
 
 [dev-dependencies]
 oag-net = { path = ".", features = ["client"] }
+oag-tables.workspace = true
 oag-testdata.workspace = true
 
 [lints]

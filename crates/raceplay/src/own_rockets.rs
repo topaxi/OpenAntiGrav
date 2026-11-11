@@ -84,7 +84,7 @@ pub(crate) fn load(
 
 /// [`load`] over any reader. An effect that does not load is named in the notes and its
 /// trigger keeps the disc's.
-fn load_with(
+pub(crate) fn load_with(
     options: &Options,
     craft_title: &oag_title::Title,
     read: &mut dyn FnMut(&str) -> Option<Vec<u8>>,

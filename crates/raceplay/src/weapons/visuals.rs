@@ -369,6 +369,20 @@ impl Race {
         struck: Option<usize>,
         orientation: Quat,
     ) -> Option<psys::Playing> {
+        self.ignite_blast_aged(kind, point, struck, orientation, 0)
+    }
+
+    /// [`Self::ignite_blast`] for a detonation `age_ticks` ago, which a network client first
+    /// learns of late (`crate::catch_up`): the screen flash joins its ramp at that age. The
+    /// particle effect is returned fresh for the caller to pre-age.
+    pub(crate) fn ignite_blast_aged(
+        &mut self,
+        kind: oag_tables::weapons::Weapon,
+        point: Vec3,
+        struck: Option<usize>,
+        orientation: Quat,
+        age_ticks: u32,
+    ) -> Option<psys::Playing> {
         let (trigger, at) = self.blast_for(kind, point, struck)?;
         // The Plasma's own three-model detonation - `Trigger::PlasmaBlast`
         // below is `WO_PLASMA_FLASH`, a separate `.pob` particle system; the
@@ -402,7 +416,8 @@ impl Race {
             flash_for(kind, struck.is_some()),
             &mut self.view.screen_flash,
         ) {
-            flash.start(kind, at);
+            #[expect(clippy::cast_precision_loss, reason = "at most a few seconds of ticks")]
+            flash.start_aged(kind, at, age_ticks as f32 * self.sim.dt);
         }
         let effect = self.view.handles.get(trigger).cloned()?;
         // Neutral severity: the field the collision sparks derive from an
@@ -720,11 +735,18 @@ impl Race {
             // because only the player's own camera can be internal at all.
             let cockpit = projectile.owner == 0 && !self.draws_own_ship();
             let scale = plasma_flare_scale(projectile.kind, projectile.charge, cockpit);
+            // A shot first drawn mid-flight (a network client learns of another person's
+            // fire late) is given its effect where it was fired from, and the effect is aged
+            // along the flight below: `docs/networking/README.md`, "A fire seen late".
+            let late = late_attach(projectile, self.sim.dt);
+            let back = late.map_or(Vec3::ZERO, |(_, back)| back);
+            let fresh = self.view.projectile_flare[slot].is_none();
+            let fresh_orbit = self.view.projectile_flare_orbit[slot].is_none();
             advance_one_flare(
                 &mut self.view.stage,
                 &self.view.handles,
                 name,
-                primary,
+                if fresh { primary - back } else { primary },
                 scale,
                 &mut self.view.projectile_flare[slot],
             );
@@ -767,7 +789,7 @@ impl Race {
                 &mut self.view.stage,
                 &self.view.handles,
                 orbiting.and(second),
-                orbiting.unwrap_or(primary),
+                orbiting.unwrap_or(primary) - if fresh_orbit { back } else { Vec3::ZERO },
                 1.0,
                 &mut self.view.projectile_flare_orbit[slot],
             );
@@ -776,6 +798,28 @@ impl Race {
             {
                 let up = projectile.velocity.try_normalize().unwrap_or(Vec3::Y);
                 self.view.stage.orient(instance, up);
+            }
+            if let Some((ticks, _)) = late {
+                let dt = self.sim.dt;
+                let riders = [
+                    (fresh, self.view.projectile_flare[slot], primary),
+                    (
+                        fresh_orbit,
+                        self.view.projectile_flare_orbit[slot],
+                        orbiting.unwrap_or(primary),
+                    ),
+                ];
+                for (fresh, instance, to) in riders {
+                    if let (true, Some(instance)) = (fresh, instance) {
+                        self.view.stage.pre_age_riding(
+                            instance,
+                            ticks,
+                            dt,
+                            to,
+                            &mut self.view.stage_rng,
+                        );
+                    }
+                }
             }
         }
     }

@@ -22,6 +22,12 @@ pub const SHIELD_STEP: f32 = 1.0;
 /// projectiles in the air (kind, owner, target, as a set, so the slot a shot landed in does not
 /// matter), the Quake, the LeachBeam, the Repulsers, which craft hold a lock, each craft's held pickup and its shield in
 /// whole steps of [`SHIELD_STEP`]. Not the hash: a position never enters it.
+///
+/// Each shot carries the time it has left, which counts down from the same start on both
+/// timelines and so names the tick the shot was fired on. Without it a shot the server has
+/// and another the present has (same weapon, owner and target, fired on different ticks) pass
+/// for one, and the server's is not shown until something else corrects the present
+/// (`docs/networking/README.md`, "A shot's first appearance").
 #[must_use]
 pub fn digest(sim: &RaceSim) -> u64 {
     let world = &sim.world;
@@ -31,6 +37,7 @@ pub fn digest(sim: &RaceSim) -> u64 {
         h.write_u8(p.kind.map_or(0, |k| k.index() as u8 + 1));
         h.write_u8(p.owner);
         h.write_u8(p.target.unwrap_or(255));
+        h.write_u32(p.lifetime.to_bits());
         shots = shots.wrapping_add(h.finish());
     }
     let mut h = oag_core::hash::StateHasher::new();
@@ -63,22 +70,35 @@ pub struct Shot {
     pub kind: u8,
     /// The firing craft's slot.
     pub owner: u8,
-    /// Ticks in the air.
+    /// Ticks since it was fired or laid.
     pub age_ticks: u32,
 }
 
-/// Every projectile in the air in `sim`.
+impl Shot {
+    /// Whether `other`, read on the same tick, is this shot: the same weapon of the same
+    /// craft, fired on the same tick (a tick's slack for the rounding of the age).
+    #[must_use]
+    pub fn is(&self, other: &Self) -> bool {
+        self.kind == other.kind
+            && self.owner == other.owner
+            && self.age_ticks.abs_diff(other.age_ticks) <= 1
+    }
+}
+
+/// Every projectile in the air in `sim`. A Plasma still charging is left out: it rides its
+/// craft and its clock has not started.
 #[must_use]
 pub fn shots(sim: &RaceSim) -> Vec<Shot> {
     sim.world
         .projectiles
         .slots
         .iter()
+        .filter(|p| p.charge <= 0.0)
         .filter_map(|p| {
             Some(Shot {
                 kind: p.kind?.index() as u8,
                 owner: p.owner,
-                age_ticks: (p.age * 60.0).round().max(0.0) as u32,
+                age_ticks: (p.seconds_since_fired() * 60.0).round().max(0.0) as u32,
             })
         })
         .collect()
@@ -111,10 +131,7 @@ pub fn change(before: &RaceSim, after: &RaceSim, seat: usize) -> Change {
         let mut pool: Vec<Shot> = other.to_vec();
         from.iter()
             .filter(|s| {
-                if let Some(i) = pool
-                    .iter()
-                    .position(|o| o.kind == s.kind && o.owner == s.owner)
-                {
+                if let Some(i) = pool.iter().position(|o| o.is(s)) {
                     pool.swap_remove(i);
                     false
                 } else {

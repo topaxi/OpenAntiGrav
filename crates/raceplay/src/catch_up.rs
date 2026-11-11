@@ -254,7 +254,8 @@ impl Race {
             } if age <= BLAST_MAX_AGE => {
                 late.blasts += 1;
                 late.oldest_age = late.oldest_age.max(age);
-                if let Some(playing) = self.ignite_blast(kind, point, struck, orientation) {
+                if let Some(playing) = self.ignite_blast_aged(kind, point, struck, orientation, age)
+                {
                     let dt = self.sim.dt;
                     self.view
                         .stage

@@ -99,6 +99,10 @@ pub(crate) fn drive_observed(
             total.shots_appeared += s.shots_appeared;
             total.shots_vanished += s.shots_vanished;
             total.oldest_appeared = total.oldest_appeared.max(s.oldest_appeared);
+            total.first_seen += s.first_seen;
+            total.first_seen_latest = total.first_seen_latest.max(s.first_seen_latest);
+            total.restored += s.restored;
+            total.restored_gap_max = total.restored_gap_max.max(s.restored_gap_max);
             total.own_hit_added += s.own_hit_added;
             total.own_hit_removed += s.own_hit_removed;
             total.confirm_sum_ms += s.confirm_sum_ms;
@@ -372,4 +376,30 @@ fn a_silent_seat_is_dropped_and_told() {
     }
     host.tick();
     assert_eq!(host.history()[1].retired, 0b11);
+}
+
+/// The weapon digest tells two shots of one weapon and owner apart by the tick each was fired
+/// on: a present that kept a shot the server ended, while the server holds a newer one, is
+/// corrected rather than taken to agree.
+#[test]
+fn the_weapon_digest_knows_a_shot_by_the_tick_it_was_fired_on() {
+    let params = params(2);
+    let digest_with_rocket_aged = |ticks: u16| {
+        let mut race = headless(&params);
+        let projectiles = &mut race.sim.world.projectiles;
+        assert!(projectiles.spawn(
+            oag_tables::weapons::Weapon::Rocket,
+            oag_core::math::Vec3::ZERO,
+            oag_core::math::Vec3::X,
+            1,
+        ));
+        projectiles.slots[0].lifetime -= f32::from(ticks) / 60.0;
+        oag_net::weapon_sync::digest(&race.sim)
+    };
+    assert_eq!(digest_with_rocket_aged(3), digest_with_rocket_aged(3));
+    assert_ne!(
+        digest_with_rocket_aged(3),
+        digest_with_rocket_aged(40),
+        "two shots fired 37 ticks apart read as one"
+    );
 }
