@@ -16,11 +16,9 @@ pub fn attach(options: &mut oag_raceplay::Options, switches: &crate::settings::M
 #[must_use]
 pub fn finder(switches: &crate::settings::Mods) -> oag_raceplay::texture_pack::Finder {
     let switches = switches.clone();
-    oag_raceplay::texture_pack::Finder(Arc::new(move || {
-        match crate::mods::Mods::load(&switches) {
-            Ok(mods) => open(mods.player()),
-            Err(why) => vec![Err(format!("{why:#}"))],
-        }
+    oag_raceplay::texture_pack::Finder(Arc::new(move || match crate::mods::Mods::load(&switches) {
+        Ok(mods) => open(mods.player()),
+        Err(why) => vec![Err(format!("{why:#}"))],
     }))
 }
 

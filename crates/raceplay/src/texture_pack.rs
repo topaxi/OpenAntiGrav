@@ -27,11 +27,7 @@ impl std::fmt::Debug for Finder {
 /// A PPSSPP pack is keyed by the PSP's guest memory, so it applies to a PSP disc whose
 /// serial the pack's `[games]` names; a disc of another platform, or of another serial,
 /// draws the disc's own textures. Asked for and not usable is an absence in the report.
-pub fn engage(
-    finder: Option<&Finder>,
-    archives: &Archives,
-    report: &mut Vec<String>,
-) -> Engaged {
+pub fn engage(finder: Option<&Finder>, archives: &Archives, report: &mut Vec<String>) -> Engaged {
     replacer::install(None);
     let Some(finder) = finder else {
         return Engaged;
