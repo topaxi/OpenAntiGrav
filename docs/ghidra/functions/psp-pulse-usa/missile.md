@@ -777,3 +777,40 @@ the original; it was wrong to leave it unwired, since what plays is the disc's
 own data. Wired as `Cue::MissileExpire`; that it is an authors' slip is inference,
 not scored. Both endings are pinned by
 `race::tests::cue_endings`.
+
+## 2026-11-11: the Missile on an 85 degree bank (weapon-bank-follow)
+
+Captured with `scripts/psp-projectile-sweeps.py` on Moa Therma White's banked helix (spline sample
+1416, the original's Autopilot flying the craft at 139 units/s, no target in a Time Trial), 180
+updates to its own fuse; a second shot from a parked craft on Talon's Junction. The account of the
+whole lane is on [rocket-visuals.md](rocket-visuals.md#2026-11-11-code-4-is-the-collision-cage-and-what-a-bank-does-to-every-flyer-weapon-bank-follow).
+
+- **Code `4` is the collision cage, not a craft test.** This page's "the second query's craft
+  reading" (55) is withdrawn: `FUN_08831948` is `Cage_QuerySweepEnd`, the cage test on the segment's
+  end. The Missile's probe treats `4` as it treats `0`: nothing, no ride and no fall (live at
+  updates 122 and 170, each followed by a mesh-wall bounce on the sweep). Its travel sweep takes
+  `4` as the end: `flags |= 0x14` with **no bounce and no count** (`Missile_Update`, the first
+  arm of the sweep's switch), where `0` bounces while `++self+0x6c < 5`. That cell is decompile
+  only, confidence **84**: no capture's sweep returned `4`.
+- **The fall is world `-Y`**: `*(self + 0xb4) -= dt * 50.0`, the velocity's own `y`, read on the
+  probe's `0x7f` arm and seen live: over the first two updates the velocity's `y` goes 1.979,
+  1.13, 0.311 (steps of `50 dt`) with `x` and `z` unchanged. Confidence **92**. It was "not
+  separately read" on `projectile-floor.md`.
+- **Those first two misses are the craft's own box.** Each probe's mesh raycast hit a box
+  (kind `3`, collider 149) 1.3 below its start, which `Collision_SweepSegment` reports as
+  nothing. From the parked craft the first three probes did the same (collider 196), from starts
+  0.71, 1.42 and 2.13 ahead of the body, and the fourth, from 2.84, found the floor.
+- **The probe's floor arm is the Rocket's steer, not a parallel turn.** `surface = normal; next =
+  hit + surface * g_ride_height; velocity = (next - prev) / dt`, normalised, scaled to the ramp
+  speed, `next = prev + velocity * dt`: the same lines as `Rocket_Update`'s. This engine turns a
+  Missile's velocity parallel to the floor and sits it on the ride point. One update of ours from
+  each of the original's states is off by 0.05 to 0.5 unit (mean 0.08 over updates 3 to 60, 0.10
+  over 63 to 179, where the speed is the class's 222.22 on both sides, so it is not only the ramp's
+  one-update age offset); the wall bounce at update 67 agrees to 0.000. Confidence **84** for the
+  read; the error was not split between the arm and the unguided steer.
+- `self+0x50` is the age the ramp reads and `self+0x48` the launch km/h (202.70 on this shot).
+- The carried normal at launch is the track's up at the craft's located point (within 0.04 degrees
+  of the nearest spline sample's `-down`), not the craft's up (0.22 degrees off here, 5.24 on
+  Outpost 7's ramp for the Rocket).
+
+**Cross-title:** as the linked section (Pure and HD run no cage; the Missile's own arms are I:Pulse).

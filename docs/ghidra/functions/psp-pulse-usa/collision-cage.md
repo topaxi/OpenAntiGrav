@@ -298,3 +298,65 @@ Confidence **55**, recorded and not ported.
 | `0x0897e140` | function | `fabsf` | 95 | clears the sign bit of `f12` |
 | `0x08ab0c8c` | data | `g_cage_enabled` | 85 | set at `0x08886ef8`, cleared in `Cage_ResolveCraft`, read at `0x08842370` |
 | `0x08a7abd8` | data | `g_cage_max_depth` | 90 | `0x41700000`, `15.0`, read by `Cage_ResolveCraft` |
+
+## The sweep's fallback is the cage on one point, and it is what ends a projectile (2026-11-11, `weapon-bank-follow`)
+
+`0x08832134`, left undecoded above ("the sweep's fallback"), is **`Cage_TestSweepEnd`**: the craft's
+cage steps 2 to 4 run on a single point, the end of the segment `Collision_SweepSegment` was given
+(the mesh hit's point when the mesh raycast found one). `Cage_QuerySweepEnd` (`0x08831948`) is its
+wrapper on `g_cage_effect`.
+
+```c
+int Cage_TestSweepEnd(cage, from, end, out_point, out_normal, cursor, flags) {
+    if (!g_cage_enabled) return 0;
+    AiTrack_CageEnabled(cage->track);                       // result unused here
+    AiTrack_UpdateCursor(500.0, cage->track, cursor, end, -1, -1, 0, 0);
+    if (cursor->point == 0) return 0;
+    sibling = AiTrack_LocateOnSiblingPath(cage->track, &copy_of_cursor);
+    a = Cage_BuildSection(cage, cursor->point);
+    if (sibling) b = Cage_BuildSection(cage, copy.point);
+    outside = Cage_TestPoint(cage, a, end, &point, &normal);
+    if (outside && sibling) { outside = Cage_TestPoint(cage, b, end, &point_b, &normal_b);
+                              if (outside && nearer(point_b)) point, normal = point_b, normal_b; }
+    if (!outside) return 0;
+    *out_point = point; *out_normal = normal;               // the boundary and its inward normal
+    if (flags == 0) CageEffect_Spawn(cage, &point, &normal, a + 0x60);
+    return 1;                                               // the caller returns code 4
+}
+```
+
+No 200 unit check and no 15 unit depth limit: those belong to `Cage_ResolveCraft`. `cursor` is the
+caller's own AI-track cursor: each projectile carries a copy of its firing craft's
+(`entity+0xad8`) from its init, and the chase camera passes its own.
+
+**Live, PPSSPP v1.20.4, 2026-11-11.** 1,187 `Collision_SweepSegment` calls made by the five
+flying weapons on Moa Therma White and Outpost 7 (`scripts/psp-projectile-sweeps.py` records the
+point handed over, the return code and both outputs): this engine's ported cage
+(`CageTrack::locate`, `Section::test`, the sibling rule) says "outside" on exactly the 17 calls
+that returned `4`, and its boundary point is the original's to 0.000 unit on all 17 (table and
+evidence: [rocket-visuals.md](rocket-visuals.md#2026-11-11-code-4-is-the-collision-cage-and-what-a-bank-does-to-every-flyer-weapon-bank-follow)).
+That is also a second, independent check of `Cage_BuildSection` and `Cage_TestPoint` (88 above):
+1,187 points on two circuits, one of them at a fork-free 85 degree bank, against the eight box
+corners of one tick.
+
+**What it means for the page's open items.**
+
+- "`CageEffect_Spawn` never observed to fire" and "what puts the sphere in the player's frame":
+  every weapon passes `flags == 0`, so a projectile ending on the cage calls `CageEffect_Spawn` at
+  the boundary point. Read, not watched: no breakpoint was put on the spawn in these captures.
+- A projectile never leaves the tube: the Rocket, Plasma and Cannon take `4` as a wall, the
+  Missile's and Shuriken's travel sweeps retire on it, and only their probes ignore it. Per-weapon
+  table on the linked section.
+
+Confidence **92** for `Cage_TestSweepEnd` (decompiled end to end, outputs reproduced live; one
+binary), **90** for the wrapper.
+
+| Address | Kind | Name | Conf | Evidence |
+| --- | --- | --- | ---: | --- |
+| `0x08832134` | function | `Cage_TestSweepEnd` | 92 | this section |
+| `0x08831948` | function | `Cage_QuerySweepEnd` | 90 | `Cage_TestSweepEnd(g_cage_effect, ..)`; one caller |
+
+**Cross-title.** Pure: flag clear on all 16 tracks, so no cage and no code `4` from it
+(**checked, differs**). HD: runs no cage off the track header
+([ps3-hdfury-eu/collision-cage.md](../ps3-hdfury-eu/collision-cage.md)); its projectile switch
+still names `4`, source unread (**not checkable** in this lane). 2048 and Omega follow HD.

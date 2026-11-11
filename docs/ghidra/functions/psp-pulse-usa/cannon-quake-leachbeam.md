@@ -3814,3 +3814,47 @@ same static reading, 65 ([weapon-instance-limits.md](../ps3-hdfury-eu/weapon-ins
 **checked, applies, wired by the title-independent `Held::quake_armed`**. An absorb with the request
 armed is unread on every title (the original probably fires from an empty slot); ours cancels it,
 **chosen, not measured**.
+
+## 2026-11-11: the Cannon checked on a bank: the flight is exact, the speed is not, and the cage ends a round (weapon-bank-follow)
+
+Asked for by the maintainer during the lane ("also double check the cannon"). One round fired
+through bit `0x4000` from the original's Autopilot-flown craft on Moa Therma White's banked helix
+(spline sample 1416, roll 85 degrees, craft at 139.11 units/s), every `Cannon_UpdateRound` logged
+with its sweep by `scripts/psp-projectile-sweeps.py`; 25 updates. The lane's account is on
+[rocket-visuals.md](rocket-visuals.md#2026-11-11-code-4-is-the-collision-cage-and-what-a-bank-does-to-every-flyer-weapon-bank-follow).
+
+| | Original | Ours |
+| --- | --- | --- |
+| one update from each of the original's 24 states | | **0.000 unit, 0.00 units/s on all 24** |
+| straight flight, no probe, no fall | velocity constant between hits; the sweep is the only query | the same |
+| **a floor glance, seen live for the first time** | update 6: the sweep returns `3` (mag floor) at `(318.9, 126.8, -319.8)`, normal `(0.28, 0.11, -0.95)`; velocity `(687.3, 33.1, 299.9)` becomes `(736.7, 51.9, 134.0)`, speed kept, next position the hit plus 3.0 along the normal | the same to 0.000 (`cannon::BOUNCE_PUSH_OFF`, the mirror) |
+| **muzzle speed** | **750.60 units/s** | 278.0 units/s from the same craft speed |
+| the end | update 25, age 0.40 s: the sweep returns **`4`**, the collision cage (boundary `(553.28, 143.17, -280.29)`), `flags \|= 0x14` and the sparks, as a wall | no cage test: flies on to its 1 s reap, 440 units past that point |
+| spawn against the craft body | 5.32 ahead, 0.68 to the side, 0.00 up (this craft, one barrel) | the hull's forward extent, a quarter width to the side (chosen) |
+
+**The speed: the km/h figure is never divided by 3.6.** `Cannon_Init` (`0x088648ec`):
+
+```c
+speed            = speed_kmh + Cannon_BaseSpeedKmh(round);   // f12 + 500.0
+round->speed     = speed;                                     // + 0xdc
+round->velocity  = round->row2 * speed;                       // + 0x90 = (+ 0x70) * speed, vscl.t
+```
+
+and `row2` is the forward row of the muzzle anchor's matrix, copied in with the craft's display
+scale still on it. Read off the round at its first update: `+0xdc` **1000.801** (the craft's
+139.111 units/s times 3.6, plus 500), the three rows each **0.7500** long, `|velocity|`
+**750.601**, which is their product. So a round leaves at `0.75 * (craft km/h + 500)` units/s,
+2.7 times what `cannon::launch` flies (`(craft km/h + 500) / 3.6`), and covers its one second
+of life in 750 units where ours covers 278; from a parked craft 375 against 138.9. Confidence
+**92**: the decompile has no divide, and the stored speed, the row length and the velocity agree to
+four digits on the shot; one shot at one speed (a second speed was not captured). `BASE_SPEED_KMH`'s
+own 90 stands; what was wrong is the unit this engine gave it.
+
+This answers two open items of the Cannon's flight: the round's path on a bank is straight, as
+read (82 becomes **92** for `Cannon_UpdateRound`'s move, sweep and reflect arms, now seen live),
+and code `4` in its wall arm is the cage, not a craft.
+
+**Cross-title.** HD authors a Cannon and runs the shared code: it inherits the flight
+(I:Pulse) and would inherit a speed fix; HD's own `Cannon_Init` is unread, so whether its round
+carries the same undivided figure is **not checkable** here (no HD capture of a round's velocity).
+HD and Omega run no cage off the track header. Pure has no Cannon.

@@ -2582,3 +2582,44 @@ hold point). HD: **checked, differs** (`assegai`'s hull authors no `Ship Muzzle`
 Omega: **checked, not wired** (`.rcsmodel` hulls, no locator reader; both keep the hold point; their own
 `Plasma_Update` is read on `ps4-omega-eu/plasma.md`, the release point is not).
 
+
+## 2026-11-11: on a bank the bolt ends at the cage, and its unridden first updates are a craft's box (weapon-bank-follow)
+
+Maintainer report: on tilted track our Plasma falls off the track where the original's follows it.
+The whole account, the method and the law are on
+[rocket-visuals.md](rocket-visuals.md#2026-11-11-code-4-is-the-collision-cage-and-what-a-bank-does-to-every-flyer-weapon-bank-follow); this is the Plasma's part. Capture: Moa Therma White (`03_Track`), the
+85 degree banked helix, fired from the original's Autopilot-flown craft at spline sample 1330 so
+the release fell at sample 1424, `scripts/psp-projectile-sweeps.py`, PPSSPP v1.20.4 software, two
+loads of one state identical to the last update.
+
+| | Original | Ours, from the original's own states |
+| --- | --- | --- |
+| updates flown | 49 (0.80 s) | still flying at tick 600 |
+| update 1 | **probe returns `3` (mag floor): it rides at once**, speed re-pinned to 195.3 units/s by update 2 | no probe for the first 0.04 s (`plasma::UNPINNED_SECONDS`): 0.82 unit off after one update, 0.13 and 0.09 after the next two |
+| updates 4 to 48 | rides the mag floor, then the kerb's floor class from update 46 | within 0.012 unit and 0.70 units/s of the original's next state on all 45 |
+| update 49, from `(421.300, 153.036, -293.762)` | **probe returns `4`** (the probe's end `(421.33, 149.15, -281.38)` is 4.41 outside the cage), the sweep returns `4` (boundary `(424.66, 153.08, -292.16)`), flags `\|= 4`, detonation | probe miss: falls along its carried normal and leaves the circuit; at tick 600 it is at `(1786, -296, 2275)` |
+
+**The law that differs** is `Collision_SweepSegment`'s second query, the collision cage on the
+segment's end, which `Plasma_Update` takes as a wall (`0` or `4`, both arms, probe and sweep).
+Confidence **94** (1,187 live calls reproduced through this engine's own cage, the linked section).
+
+**Row 3 of the 2026-10-31 table ("the first three updates do not ride ... reads as age") is
+superseded.** The three misses are the firing craft's own box collider: on Outpost 7's ramp the
+bolt's first three probes each returned `0x7f` with the mesh raycast's nearest hit a **box**
+(kind `3`, collider 181, the player's), from starts 4.45, 4.64 and 4.80 units ahead of the body,
+and the fourth, from 4.93, found the floor. On the mag strip above the same bolt rides on its first
+update. So the gate is where the probe starts against the craft's box, not the bolt's age: confidence
+**88** for the Plasma (three records on one shot, plus 25 of the other weapons'); how far the box
+reaches ahead of the body is not one number (the linked section's table).
+
+**Two more reads of `Plasma_Update`'s decompile, neither wired.** Its travel-sweep floor arm only
+moves: `next = hit + normal * g_ride_height`, with no normal adopted and no velocity written
+(the Rocket's and the Shuriken's adopt and write); this engine adopts the normal and turns the
+velocity for the Plasma too. Confidence **84**, decompile only (no capture crossed a floor on the
+travel segment). And the carried normal `Plasma_Launch` stores is the track's own up at the
+craft's located point, not the craft's up (the linked section; 0.29 and 0.86 degrees from the
+nearest resampled spline sample's on the two Plasma captures).
+
+**Cross-title.** HD and Omega run no cage off the track header and Pure's tracks clear the flag
+(the linked section's "Cross-title"): a wire reads the cage off the race's own spline, so only
+Pulse gains it. **Checked, differs** for Pure; **not checkable** here for HD's own code `4`.
