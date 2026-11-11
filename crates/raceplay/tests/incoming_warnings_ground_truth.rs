@@ -116,12 +116,16 @@ fn watch(weapon: Weapon) -> (usize, usize) {
                 "{weapon:?} at tick {tick}: used from a gap of {gap}"
             );
         }
+        // Every use begun this tick is judged together: one inside its window lights the icon
+        // whatever another opponent's use on the same tick was, and an edge case decides nothing.
+        let (mut inside, mut outside, mut unsure) = (None, None, false);
         for (index, slot) in opponents.clone().enumerate() {
             let (was, player, firer) = before[index];
-            if !was.began(Use::of(&race, slot), weapon) || check.is_some() {
+            if !was.began(Use::of(&race, slot), weapon) {
                 continue;
             }
             let (Some(player), Some(firer)) = (player, firer) else {
+                unsure = true;
                 continue;
             };
             let gap = oag_weapons::projectile::missile::wrapped_gap(
@@ -129,13 +133,23 @@ fn watch(weapon: Weapon) -> (usize, usize) {
                 length.unwrap_or(0.0),
             );
             if gap > low + EDGE && gap < high - EDGE {
-                judged_in += 1;
-                check = Some((true, gap));
-                quiet_until = tick + RUN;
-            } else if (gap < low - EDGE || gap > high + EDGE) && tick >= quiet_until {
-                judged_out += 1;
-                check = Some((false, gap));
+                inside = Some(gap);
+            } else if gap < low - EDGE || gap > high + EDGE {
+                outside = Some(gap);
+            } else {
+                unsure = true;
             }
+        }
+        if let Some(gap) = inside {
+            judged_in += 1;
+            check = Some((true, gap));
+            quiet_until = tick + RUN;
+        } else if unsure {
+            // A use the test cannot judge may have lit the icon: no unlit check until it clears.
+            quiet_until = tick + RUN;
+        } else if let Some(gap) = outside.filter(|_| tick >= quiet_until) {
+            judged_out += 1;
+            check = Some((false, gap));
         }
     }
     println!("{weapon:?}: judged {judged_in} inside the window, {judged_out} outside");
