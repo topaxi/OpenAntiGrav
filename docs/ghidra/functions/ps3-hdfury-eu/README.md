@@ -177,6 +177,9 @@ Two structural facts to expect, both different from every other binary here:
   RSX frames with the live inputs read), and `FunkLayerZoom`, the one extra pass, a 24-quad zoom-streak
   ring at the screen edge that a boost pulse (about 1.2 s) or a damage pulse (0.6 s) switches on;
   its geometry, alpha and pulse laws, and what is still unread.
+- [team-selection-model.md](team-selection-model.md) - `TeamSelection_Screen`'s craft: the
+  update that writes over the `ShipModel` widget's authored pose every frame, the depth fit on
+  the model's `<FE Length>`, the `Model_Item` attribute table and lens.
 - [menu-backdrop-scene.md](menu-backdrop-scene.md) - `BackgroundAnim_Item.cpp`, the HD
   style's backdrop and the one Omega's menus draw: the scene `FrontEndScene_HD_ATG.vex` flown
   through its own animated camera into a white target, filtered by `FEBackgroundAnim_fp`'s

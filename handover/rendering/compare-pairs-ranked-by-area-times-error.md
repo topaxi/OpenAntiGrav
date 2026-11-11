@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd, pulse, pure, 2048]
-updated: 2026-11-10
-summary: "Race pairs by area x error: HD GO boards and RECORD band lead; 2048 dark; PS2 frame-wide unexplained; Talon's pack re-made, tick offset open"
+updated: 2026-11-11
+summary: "Race pairs by area x error: HD GO boards, RECORD band lead; 2048 dark; PS2 frame-wide open; Talon's pack tick is capture skew, script fix ready"
 ---
 
 # Race compare pairs ranked by area x error
@@ -46,10 +46,21 @@ Read px with the title in mind. A Pulse PSP frame is 480x272 and an HD frame
   weapon effect, pause banner and a classic-hull state RPCS3 can no longer load.
   Re-made from a regenerated state, the pair's grey difference fell 47.6 to 17
   and the opponent aligns to 4 px (`docs/tools/compare-page.md`, "A moving HD
-  craft"). Still open there: the original's player hull is about 1 tick older
-  than its camera on both re-made samples (a timing offset between the craft
-  rows and the push-buffer camera, not a hull-only view). The hue shift (ours
-  greener) of the old frame was not looked at again.
+  craft"). **Settled 2026-11-11 (`hd-worst-pairs-2`): the hull-behind-camera
+  tick is the pause, not the original.** Eight pauses read with
+  `scripts/hd-frame-skew.py`: the push buffer's hull world matrices and its
+  camera sit the same 1 or 2 whole ticks behind RAM's bodies and rig eye, so
+  the frame is one instant and RAM is newer (confidence 90). The stored pair
+  is one tick out: with every craft moved back a tick the frame reads 18.82 to
+  17.98 and the hull box 17.29 to 13.34. **Ready to wire (tooling):**
+  `rpcs3-hd-pair.py --field` reads the hull matrix from the regions it already
+  dumps, records `original.presented_lag.craft_ticks` and writes the field
+  moved back by it (`docs/tools/compare-page.md`, "The skew is the pause");
+  then re-make `hd-race/talons-pack`. Until then, to adopt one tick on the
+  stored pair from the main checkout: copy its `lag/field0_1.csv` over
+  `field.csv` and `just compare-rerender-ours --only talons-pack`. The hue
+  shift (ours greener) of the old frame was not looked at: after the tick the
+  frame bias is R +0.2, G +2.1, B +2.5.
 - Tight boxes: for 20 of the top 31 regions the pixels above 15 grey levels
   fill the whole region, so the box is the error, not one banner inside it.
   The labels below use the box's visual centre, not a measured sub-rectangle.
@@ -59,15 +70,15 @@ Read px with the title in mind. A Pulse PSP frame is 480x272 and an HD frame
 2. Pulse PS2, `pulse-ps2-moa-therma-white`, 1280x720, px 707200, err 17.4, impact 12.3 M. Layer 3, camera or geometry (luma bias near zero). Low.
 3. 2048, `2048-empire-climb-grid`, 960x544, px 401700, err 24.1, impact 9.67 M. Layer 3, tone: ours darker by 11 to 18 luma. Medium.
 4. 2048, `2048-mall-grid`, 960x544, px 356520, err 20.6, impact 7.33 M. Layer 3, tone: ours darker by 5 to 8 luma. Medium.
-5. HD, `hd-metropia`, box 180,0 1740x480, px 500400, err 13.4, impact 6.70 M. Layer 3, GO gantry board. Medium.
+5. ~~HD, `hd-metropia`, box 180,0 1740x480~~ fixed 2026-11-11 (`hd-worst-pairs`): the box 8.97 to 3.18 on a fresh render (four material readings, `docs/formats/rcsmaterial.md`), the frame 4.35 to 1.97.
 6. 2048, `2048-dlc-vineta-k-grid`, 960x540, px 229500, err 22.7, impact 5.22 M. Layer 3, tone: ours darker by 2 to 10 luma. Medium.
 7. HD, `hd-the-amphiseum`, box 600,0 1080x600, px 277200, err 16.1, impact 4.47 M. Layer 3, GO gantry board. Medium.
 8. HD, `hd-sebenco-climb`, box 0,0 1560x480, px 198000, err 13.8, impact 2.73 M. Layer 3, sky and scenery at the top edge. Low.
 9. HD, `hd-sol-2`, box 840,120 660x300, px 140400, err 17.8, impact 2.50 M. Layer 3, GO gantry board. Medium.
-10. HD, `hd-moa-therma`, box 0,540 840x540, px 216000, err 11.0, impact 2.38 M. Layer 3, wall and track (a lap readout sits in the corner). Low.
+10. ~~HD, `hd-moa-therma`, box 0,540 840x540~~ fixed 2026-11-11 (`hd-worst-pairs`): 7.46 to 1.47, the two-lane normal map of Moa's `diffuse_normal_specular` (`docs/formats/rcsmaterial.md`); the frame 3.96 to 1.92.
 11. HD, `hd-modesto-heights`, box 1320,0 600x360, px 115200, err 14.4, impact 1.66 M. Layer 4, RECORD readout, top-right band. Medium.
 12. HD, `hd-anulpha-pass`, box 0,0 780x300, px 82800, err 12.6, impact 1.04 M. Layer 4, lap badge. Medium.
-13. HD, `hd-moa-therma`, box 1020,720 660x360, px 75600, err 13.0, impact 0.98 M. Layer 4, speed and boost gauge over a track edge. Low.
+13. ~~HD, `hd-moa-therma`, box 1020,720 660x360~~ the same fix as rank 10 (the floor under the gauge); re-measure the gauge alone before taking it up.
 14. HD, `hd-sebenco-climb`, box 1500,0 420x480, px 93600, err 10.0, impact 0.93 M. Layer 4, RECORD readout over sky. Medium.
 15. 2048, `2048-dlc-vineta-k-grid`, box 300,390 390x150, px 42300, err 21.9, impact 0.93 M. Layer 1, craft and the ring under it. Low.
 16. HD, `hd-tech-de-ra`, box 660,720 900x120, px 72000, err 11.8, impact 0.85 M. Layer 1, craft hull, lower centre. Medium.

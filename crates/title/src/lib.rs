@@ -590,6 +590,12 @@ pub struct FrontEnd {
     /// build cannot reproduce. `None` draws the widget as authored (HD). See
     /// [`ShipPose`].
     pub ship_preview_pose: Option<ShipPose>,
+    /// The camera the `Team Selection` screen's own code poses its craft on,
+    /// over whatever the `ShipModel` widget authors: HD's screen update writes
+    /// the widget's rotation, depth, lens and origin every frame and fits the
+    /// depth to the selected model's authored length. `None` where the title's
+    /// screen has no such code or it is unread. See [`ShipFit`].
+    pub ship_preview_fit: Option<ShipFit>,
     /// The model each circuit's selection screen draws in its circuit-model frame,
     /// found by the circuit's environment folder: HD's track-select record names
     /// `<environment>\FE\track0N.vex` per circuit, and the number is not the
@@ -640,6 +646,48 @@ pub struct ShipPose {
     pub z: f32,
     /// Where the pose comes from, for the docs and the load report.
     pub from: &'static str,
+}
+
+/// How a `Team Selection` screen frames its craft, see
+/// [`FrontEnd::ship_preview_fit`]: a fixed rest rotation and lens, and a depth
+/// stepped every frame until a box the size of the selected model just fits a
+/// window on screen. The box is `half_box` across and up and the model's own
+/// authored length (`<FE length>`) fore and aft, turned by `rotation` and seen
+/// through `fit_half_fov`.
+///
+/// **The fit measures in its own unit**: a projected point is its normalised
+/// device coordinate times `unit`, so with `unit` the whole screen size a
+/// window of `window` is half that many pixels each way, and the hull, longer
+/// than its authored length, overhangs the box.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ShipFit {
+    /// The rest rotation about X then Y, radians.
+    pub rotation: [f32; 2],
+    /// The vertical field of view the craft is drawn through, degrees.
+    pub fov_degrees: f32,
+    /// The far plane the craft is drawn through.
+    pub far: f32,
+    /// Where the model's origin lands in the screen's own grid, before the fit
+    /// slides it.
+    pub origin: [f32; 2],
+    /// Half the fit box's width and height, model units.
+    pub half_box: [f32; 2],
+    /// Half the vertical field of view the fit projects its box through, radians.
+    pub fit_half_fov: f32,
+    /// What a normalised device coordinate is multiplied by, across and down.
+    pub unit: [f32; 2],
+    /// The window the projected box is held inside, each way from its own
+    /// centre, in `unit`s.
+    pub window: [f32; 2],
+    /// How far the depth moves in one frame, model units.
+    pub step: f32,
+    /// The depth the screen opens at.
+    pub start: f32,
+    /// The nearest the fit brings the craft.
+    pub floor: f32,
+    /// The box's fore and aft extent in a Zone race, in place of the model's
+    /// length (the Zone hull's model authors none).
+    pub zone_box: [f32; 2],
 }
 
 /// One circuit's front-end model, see [`FrontEnd::circuit_models`].

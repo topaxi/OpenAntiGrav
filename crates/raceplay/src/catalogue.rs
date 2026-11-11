@@ -440,6 +440,10 @@ pub struct TeamModel {
     /// each as three digits (`085`), which is the same number. `None`
     /// unless all four are there.
     pub rating_tenths: Option<Rating>,
+    /// The `<FE>` element's `length`, in thousandths (`length="3.8"` is
+    /// `3800`): what HD's `Team Selection` fits its craft's depth to
+    /// (`oag_title::ShipFit`). `None` where the element authors none.
+    pub length_milli: Option<u16>,
     /// Whether the model carries an `<Unlock>` child at all - a model with
     /// none is available from a fresh profile. What each unlock condition
     /// means is not read here.
@@ -630,10 +634,17 @@ fn read_models(team: &Node) -> Vec<TeamModel> {
                     shield: tenths("shield")?,
                 })
             })();
+            let length_milli = fe.attr("length").and_then(|length| {
+                let milli = (length.trim().parse::<f32>().ok()? * 1000.0).round();
+                (0.0..=f32::from(u16::MAX))
+                    .contains(&milli)
+                    .then_some(milli as u16)
+            });
             Some(TeamModel {
                 name: model.attr("name")?.to_string(),
                 model_location: model.value("modellocation")?.to_string(),
                 rating_tenths,
+                length_milli,
                 has_unlock: model.children_named("Unlock").next().is_some(),
                 livery_number: model
                     .value("LiveryNumber")
@@ -665,14 +676,14 @@ impl Team {
         variant_ids
             .into_iter()
             .map(|suffix| {
-                let rating = self
-                    .model_for_directory(&join.combine(&self.location, suffix))?
-                    .rating_tenths?;
+                let model = self.model_for_directory(&join.combine(&self.location, suffix))?;
+                let rating = model.rating_tenths?;
                 Some(oag_ui_screens::picker::hd::Stats {
                     speed: rating.speed,
                     thrust: rating.thrust,
                     handling: rating.handling,
                     shield: rating.shield,
+                    length_milli: model.length_milli,
                 })
             })
             .collect()

@@ -83,6 +83,11 @@ pub struct Stats {
     pub thrust: u8,
     pub handling: u8,
     pub shield: u8,
+    /// The same `<FE>` element's `length`, in thousandths (`length="3.8"` is
+    /// `3800`): half the model's fore and aft size as the screen's depth fit
+    /// takes it ([`selected_length`]), shown nowhere. `None` where the element
+    /// authors none.
+    pub length_milli: Option<u16>,
 }
 
 impl Stats {
@@ -123,6 +128,9 @@ pub struct ShipModel {
     pub z: f32,
     pub rot_x: f32,
     pub rot_y: f32,
+    /// `ObeySafeZone`: the craft and its origin are drawn inside the title's
+    /// `Safe Area Setting`, as the widgets around it are.
+    pub obey_safe_zone: bool,
 }
 
 /// Everything [`oag_ui::screen::Screens::collect`] does not reach on this
@@ -286,6 +294,7 @@ fn walk(
                     z: number(child, "z").unwrap_or(0.0),
                     rot_x: number(child, "RotX").unwrap_or(0.0),
                     rot_y: number(child, "RotY").unwrap_or(0.0),
+                    obey_safe_zone: child.flag("ObeySafeZone").unwrap_or(false),
                 });
             }
             "hexselection" => {
@@ -513,6 +522,15 @@ fn selected_stats(picker: &Picker) -> Option<Stats> {
         }
         _ => None,
     }
+}
+
+/// The selected livery's authored `<FE length>`, model units, for the depth
+/// fit `oag_game::preview::ship_model` frames the craft with.
+#[must_use]
+pub fn selected_length(picker: &Picker) -> Option<f32> {
+    selected_stats(picker)?
+        .length_milli
+        .map(|milli| f32::from(milli) / 1000.0)
 }
 
 /// The ratings of the team's classic hull - the livery row's empty id, which

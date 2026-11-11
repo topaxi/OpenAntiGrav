@@ -393,6 +393,26 @@ const CIRCUIT_MODELS: [oag_title::CircuitModel; 12] = {
     ]
 };
 
+/// The camera `TeamSelection_Screen`'s update poses the craft on, read off the
+/// executable: the update overwrites the `ShipModel` widget's authored rotation,
+/// depth, lens and origin every frame, and `TeamSelection_FitModelDepth` steps
+/// the depth until the model's box fits. Every number is a constant of those
+/// two functions (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`).
+pub const SHIP_FIT: oag_title::ShipFit = oag_title::ShipFit {
+    rotation: [0.25, -0.6],
+    fov_degrees: 57.3,
+    far: 100.0,
+    origin: [1220.0, 500.0],
+    half_box: [1.125, 0.75],
+    fit_half_fov: 0.5,
+    unit: [1920.0, 1080.0],
+    window: [535.0, 389.0],
+    step: 0.1,
+    start: 13.0,
+    floor: 11.0,
+    zone_box: [-4.2, 4.2],
+};
+
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
@@ -424,6 +444,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     preview_meshes: false,
     ship_preview_hull: Some("ship.vex"),
     ship_preview_pose: None,
+    ship_preview_fit: Some(SHIP_FIT),
     circuit_models: &CIRCUIT_MODELS,
     // `DATA02`'s copy - `oag_assets::Archives::holder_of`'s own mount order
     // (`data` then `fe` then `extra`) reaches it first, the same precedence

@@ -36,6 +36,10 @@ pub(super) struct PreviewRequest {
     /// HD's `ShipModel` widget: frames the race hull on its own authored pose,
     /// see [`crate::preview::ship_model`]. Takes the place of the fixed orbit.
     pub ship_model: Option<oag_ui_screens::picker::hd::ShipModel>,
+    /// The title's own fit of the craft's depth and the selected model's box,
+    /// which frame the hull in place of `ship_model`'s authored pose - see
+    /// [`crate::preview::ship_model::framed`].
+    pub ship_fit: Option<(oag_title::ShipFit, [f32; 2])>,
     /// HD's `TrackModel` widget: places the circuit model on its own camera,
     /// see [`crate::preview::track_model`]. Takes the place of `mode3d` and
     /// the orbit.
@@ -74,6 +78,7 @@ pub(super) fn draw_preview(
     race: &oag_raceplay::Options,
     request: &PreviewRequest,
     anisotropy: Anisotropy,
+    safe_area: f32,
 ) {
     let swap = crate::preview::hull_swap::phase(request.hull_clock.0, request.hull_clock.1);
     if request.hull_only && !swap.visible {
@@ -139,8 +144,9 @@ pub(super) fn draw_preview(
         }
         Ok(mut preview) if request.hull_only && request.ship_model.is_some() => {
             let widget = request.ship_model.as_ref().expect("checked by the guard");
+            let fit = request.ship_fit.as_ref().map(|(fit, box_z)| (fit, *box_z));
             let (view_projection, model) =
-                crate::preview::ship_model::matrices(widget, space, swap.scale);
+                crate::preview::ship_model::framed(widget, fit, space, swap.scale, safe_area);
             preview.draw_matrices(
                 device,
                 queue,

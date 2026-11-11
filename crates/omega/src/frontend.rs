@@ -260,6 +260,11 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         z: -24.0,
         from: "Wipeout HD",
     }),
+    // Omega's own screen update keeps HD's depth fit and poses the craft on other
+    // rest angles and a blended position this build has not followed
+    // (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "Omega"), so
+    // HD's camera is not borrowed and the pose above stays.
+    ship_preview_fit: None,
     circuit_models: &CIRCUIT_MODELS,
     // `EndRace_Definition.xml` is in `data09.psarc` at HD's own path, and
     // dispatching Omega through HD's reader (`oag_game::endrace::load_hd`)

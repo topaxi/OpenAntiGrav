@@ -1040,6 +1040,19 @@ pub(super) fn picker_page(
             mode3d: None,
             hull_only: crate::preview::draws_hull(title, kind),
             ship_model: layout.hd.as_ref().and_then(|screen| screen.ship_model),
+            // The live screen's rule, `PickerStage::draw_preview`.
+            ship_fit: title
+                .front_end
+                .and_then(|front_end| front_end.ship_preview_fit)
+                .filter(|_| kind == Kind::Ship)
+                .and_then(|fit| {
+                    let zone_hull = teams.get(picker.index()).is_some_and(|team| {
+                        crate::preview::zone_race_hull_entry(title, &team.id, mode).is_some()
+                    });
+                    let length = oag_ui_screens::picker::hd::selected_length(&picker);
+                    crate::preview::ship_model::box_z(&fit, zone_hull, length)
+                        .map(|box_z| (fit, box_z))
+                }),
             track_model: layout.hd_track.as_ref().and_then(|screen| screen.model),
             seconds: seconds.unwrap_or(SETTLED_SECONDS),
             hull_clock: {

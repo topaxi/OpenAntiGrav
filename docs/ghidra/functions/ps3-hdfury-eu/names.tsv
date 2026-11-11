@@ -938,3 +938,12 @@
 0x00c81350	data	g_ZoneAnisoPaletteOuterTextures	90	zone-palette-textures.md
 0x00c81358	data	g_ZoneTrackAnisoPaletteTextures	85	zone-palette-textures.md
 0x00c81360	data	g_ZoneTrackAnisoPaletteOuterTextures	85	zone-palette-textures.md
+0x00254348	function	TeamSelectionScreen_Update	85	team-selection-model.md
+0x00250e18	function	TeamSelectionScreen_FitModelDepth	90	team-selection-model.md
+0x00250a30	function	TeamSelectionScreen_ProjectFitCorner	90	team-selection-model.md
+0x00253458	function	TeamSelectionScreen_Init	55	team-selection-model.md
+0x001e7bc8	function	TeamModelItem_ParseElement	88	team-selection-model.md
+0x001d5fa8	function	ModelItem_ParseValues	85	team-selection-model.md
+0x001d3150	function	ModelItem_Construct	78	team-selection-model.md
+0x001d3f08	function	ModelItem_BuildPose	75	team-selection-model.md
+0x003be688	function	FeModel_DrawAtOrigin	65	team-selection-model.md

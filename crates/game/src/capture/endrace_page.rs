@@ -323,6 +323,7 @@ fn endrace_page(
                 .map(|trophy| PreviewRequest {
                     hull_only: false,
                     ship_model: None,
+                    ship_fit: None,
                     entry: trophy.placement.model.src.clone(),
                     fallback: None,
                     race_hull: None,
