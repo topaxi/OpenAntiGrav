@@ -7067,7 +7067,7 @@ flies by default ([which AI flies](#which-ai-flies-2026-10-13)).
 **Measured 2026-11-11 (lane `ai-contact-duration`).** The maintainer's play report: "They clump together, I see
 it while playing often in the beginning of a race." **Our field holds craft-to-craft contact about twice as long
 as the original's, in long side-by-side episodes the original never has, and the original's driver has two
-rules that separate touching craft which ours does not run.** Confidence 85 for the comparison (eight VENOM boots of the
+rules that separate touching craft which ours did not run** (both wired since, [below](#the-two-rules-what-keeps-the-originals-craft-apart)). Confidence 85 for the comparison (eight VENOM boots of the
 original on two circuits, six of 30 s and two of 3 min, against six seeds of ours per cell), 92 for the two
 rules (instruction level plus live).
 
@@ -7092,10 +7092,30 @@ appends kind `0`.
    Talon's runs that read the drivers; `--lean` does not) and climbs back at `0.6`
    a second, so after a bump the rail is off for over a second while the push moves the lane.
 
-**Ours runs neither for a craft.** `oag_raceplay::original_ai`'s contact summary is built from the step's
-`WallResponse` alone: walls feed the push (which the original never does) and the rail drop, and a resolved
-pair (`Race::resolve_craft_pairs`) feeds nothing. Two of our rivals side by side keep the rail at full blend,
-which pulls each 70 % back onto its own lane every tick, and nothing moves either lane: they press.
+**Ours runs both, wired 2026-11-11.** `oag_raceplay::original_ai`'s contact summary takes walls for the rail
+drop only (`touching`), and `Race::resolve_craft_pairs` adds each resolved pair to both slots' summary: side `+1`
+when `dot(left, point - position) >= 0` with `point` the pair's midpoint (`oag_physics::pair::PairContact::point`,
+the record's `+0x10`), else `-1`, and `touching`. The next tick's planner pushes `0.2` per count and the rail
+drops. **One count per pair a tick**: the original appends about `1.96` kind-`1` records per (tick, hull), and what
+makes the second is unread ([contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md), Result 5),
+so the push is about half the original's per contact tick until it is. The player's driver is unchanged (its
+planner zeroes the push, its rail ignores contact). Before this, the summary was built from the step's
+`WallResponse` alone: walls fed the push (which the original never does) and the rail drop, and a resolved pair
+fed nothing, so two rivals side by side kept the rail at full blend and pressed. Pinned by
+`ai_pair_contact_push_ground_truth` (`oag-raceplay`): two opponents forced side by side push their lane targets
+apart, against an undisturbed run of the same seed.
+
+**Other titles.** HD/Fury: the same loop and kind test, read statically (`Ai_PlanLane`, `lwz r0,0x0(r9)`;
+`cmpwi cr7,r0,0x1`; `bne` at `0x00101c64..0x00101c6c`, records at body `+0x220` stride `0x50`, count `+0x4a0`;
+[ps3-hdfury-eu/ai-controls.md](../ghidra/functions/ps3-hdfury-eu/ai-controls.md#the-planner)), so wired.
+2048: the same (`ldr r1,[r7,#0x210]`; `cmp r1,#0x1`; `bne` at `0x8119cce8..0x8119ccee`, count body `+0x410`,
+point at record `+0x218`; [vita-2048-eu-v104/ai-controls.md](../ghidra/functions/vita-2048-eu-v104/ai-controls.md#the-planner)),
+wired. Omega: inherited from 2048 and HD, not read (the loop is inlined in `AI_UpdateCraft`, and the v107
+import's function boundaries do not match the documented `0x012c0480`, so the kind test was not located).
+Pure: no push in its sibling driver; its rail drops on a non-zero count at `*(craft+0x8b4) + 0x3b0`, which is
+the count `Body_RecordPairContact` (`0x0893403c`, kind `1`) and `Body_RecordContact` (`0x08933fb8`, kind `0`)
+both increment, so a pair contact drops Pure's rail too (static, confidence 75;
+[psp-pure-usa/ai-controls.md](../ghidra/functions/psp-pure-usa/ai-controls.md#the-rail-position-only)). Wired the same way.
 
 ### The numbers
 
@@ -7154,6 +7174,24 @@ the opponents' mean speed read 107.8 u/s against 99.5 on VENOM); the original at
 holds ours' remaining long episodes (the pair resolver's separating gate and positional correction are already
 the original's, `oag_physics::pair`; the original's second ring record per pair-tick is unread,
 [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md), Result 5).
+
+**After the wire (one count per pair-tick).** `ai_contact_duration_board`, seeds 1-6, 10,800 ticks after GO,
+original driver at Novice, per opponent first 30 s / 3 min, before -> after:
+
+| Circuit, class | Before | After | Original, 3 min |
+| --- | --- | --- | ---: |
+| Talon's Junction White, VENOM | 96.8 / 287.8 | 60.6 / 188.6 | 151.3 |
+| de Konstruct White, VENOM | 60.1 / 242.3 | 35.8 / 142.8 | 120.7 |
+| de Konstruct Black, VENOM | 52.7 / 262.2 | 35.0 / 122.5 | not captured |
+| Talon's Junction White, RAPIER | 92.4 / 413.3 | 45.5 / 231.3 | not captured |
+| de Konstruct White, RAPIER | 89.8 / 293.6 | 42.3 / 114.5 | not captured |
+| de Konstruct Black, RAPIER | 61.2 / 224.2 | 28.1 / 103.5 | not captured |
+
+The VENOM rows reproduce the experiment above to the digit. The longest episode per race fell from 73-343 to
+44-162 ticks on the VENOM cells, with 0-8 of 60 ticks or more per race (was 2-15); Talon's RAPIER keeps one
+739-tick episode on one seed (2,077 before). No opponent was destroyed on any cell, before or after (original
+driver). This project's driver (`OAG_AI=ours`) is untouched by the wire: its board reproduces to the digit,
+with 16 destroyed on Talon's RAPIER and none elsewhere, before and after.
 
 **Reproducing.** The original: `scripts/psp-ai-contact-field.py --restart --lean --frames 2300` on a weapons-on
 Single Race (`psp-drive.py menu --single-race --weapons-on --unlock [--track-down 8]`), then `--summary <log>
