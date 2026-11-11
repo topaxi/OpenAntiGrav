@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-03
-summary: "Five layout-class plans do not verify; 05_Track 428 pad crest and two rescue cases still touch walls"
+updated: 2026-11-11
+summary: "All 96 Pulse plans verify (2026-11-11); 05_Track 428 pad crest, the Novice run-up rows and 06_Track's gap landing are what is left"
 difficulty: hard (40)
 ---
 
@@ -744,9 +744,17 @@ the plan's own lap, no dead stop and no trough on either layout
 
 ## Open
 
-- **Five layout-class plans do not verify** (`speed_plan_ground_truth.rs`
-  pins the set): `06_Track` VENOM and RAPIER, `14_Track` PHANTOM, `29_Track`
-  RAPIER and PHANTOM. Those rows drive the corner model.
+- ~~**Five layout-class plans do not verify**~~ All 96 verify under every
+  perturbation offset tried (2026-11-11, lane `ace-walls`;
+  [ai.md, "A road under the line is a failure"](../../docs/gameplay/ai.md#a-road-under-the-line-is-a-failure-2026-11-11)).
+  The pin's not-clean and unsettled lists are empty.
+- **`06_Track`'s gap landing is still a coin on single builds**: 6 of 85
+  VENOM builds and 11 of 85 RAPIER builds fail at 1229-1237 (were 56 and 26).
+  The craft lands up to 6 units right of a line that hugs the right wall
+  there. A landing-aware steer is a driver change, not a plan one.
+- **The clean-lap board and the sweep were not re-run** with the five rows on
+  their plans: `ai_speed_plan_sweep.rs` (lone clean 87 of 96 before) and
+  `ai_clean_lap_gate`'s printed baseline will have moved for those rows.
 - **`05_Track` forward's second crest**: a lone Ace at RAPIER takes the 428 pad
   (it pushes left), flies 43 units left at 157 u/s and touches a `Reset` sheet
   at 509-511, three times in 18,000 ticks, all after the flag (finish at tick
@@ -763,9 +771,10 @@ the plan's own lap, no dead stop and no trough on either layout
 
 1. **`05_Track` forward's 428 pad**: a pad whose push points off the road on a
    crest; read whether the plan should steer across it or avoid it.
-2. **The two rescue cases** (`14_Track` PHANTOM at 1247, `29_Track` at
-   2402-2441): the search lowers ceilings and the craft still leaves; read
-   whether a held run-up or a lower one is the answer.
+2. ~~**The two rescue cases**~~ Closed 2026-11-11: a lower run-up, which
+   the lowering could not reach because the trace no longer held the road.
+   Re-run `ai_speed_plan_sweep.rs` (`OAG_SWEEP=1`) for the new lone and field
+   numbers on `06`, `14` and `29`. About 30 minutes.
 3. **Short-horizon rollouts** are the next lane's design question: 6,480 steps
    per full-field replan is about 150-175 ms (`examples/physics_step_cost.rs`).
 4. Do **not** re-tune the wall response, `lateral_accel`, `grip_ground` or

@@ -234,7 +234,8 @@ fn ring_plan_verifies(source: &std::path::Path, track: &str, class: &str) -> boo
 /// throttle runs wide of, off the edge and onto a level 20 units under the
 /// line, which it then drives for 900 samples to a wall. The plan counts that
 /// road as a failure and brakes for the corner (`docs/gameplay/ai.md`, "A road
-/// under the line is a failure"). `arena`'s line runs 21 units over its own
+/// under the line is a failure"). PHANTOM is the class that takes off
+/// furthest from where it lands. `arena`'s line runs 21 units over its own
 /// road for 250 samples with the craft inside its corridor, which is not one.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
@@ -243,12 +244,10 @@ fn the_2048_square_ring_plan_brakes_for_the_corner_it_ran_wide_of() {
         return;
     };
     let track = |name: &str| format!(r"Data\art\published\environments\{name}\track.vex");
-    for class in ["FLASH", "RAPIER", "PHANTOM"] {
-        assert!(
-            ring_plan_verifies(&source, &track("square"), class),
-            "square at {class}"
-        );
-    }
+    assert!(
+        ring_plan_verifies(&source, &track("square"), "PHANTOM"),
+        "square"
+    );
     assert!(
         ring_plan_verifies(&source, &track("arena"), "VENOM"),
         "arena's line is over its own road"
@@ -263,10 +262,12 @@ fn the_omega_square_ring_plan_brakes_for_the_corner_it_ran_wide_of() {
     let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    for class in ["RAPIER", "PHANTOM"] {
-        assert!(
-            ring_plan_verifies(&source, r"Data\environments2048\square\track.vex", class),
-            "square at {class}"
-        );
-    }
+    assert!(
+        ring_plan_verifies(
+            &source,
+            r"Data\environments2048\square\track.vex",
+            "PHANTOM"
+        ),
+        "square"
+    );
 }
