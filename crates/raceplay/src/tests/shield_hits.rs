@@ -157,3 +157,81 @@ fn a_rocket_a_shield_swallows_bulges_the_shell() {
         race.shield_of(1).swell()
     );
 }
+
+/// Slot 0 fires a locked LeachBeam at slot 1, 60 units down its nose, `shielded` slots running a
+/// Shield with every shell up and settled. The beam is returned after the tick it was fired on.
+fn leach_duel(shielded: [bool; 2]) -> Race {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_leach_beam_table());
+    let mut race = Race::start(setup);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ships[1].handling = hulled_handling();
+    race.sim.world.ships[1].handling.dimensions.shield = 100.0;
+    race.sim.world.ships[1].physics.shield = 100.0;
+    for (slot, shielded) in shielded.into_iter().enumerate() {
+        race.sim.world.ships[slot].physics.shield_pickup_timer = if shielded { 20.0 } else { 0.0 };
+        race.view.shield[slot].activate();
+        for _ in 0..60 {
+            race.view.shield[slot].advance(1.0 / 60.0);
+        }
+    }
+    let forward = race.sim.world.ships[0].physics.body.forward();
+    race.sim.world.ships[1].physics.body.position =
+        race.sim.world.ships[0].physics.body.position + forward * 60.0;
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+    race
+}
+
+/// The highest swell slot 1's shell reaches over the first `ticks` ticks of `race`, a LeachBeam
+/// pressed on the second.
+fn peak_swell_under_a_leach_beam(race: &mut Race, ticks: usize) -> f32 {
+    let mut buttons = Buttons::new();
+    let mut peak = 0.0_f32;
+    for tick in 0..ticks {
+        let snapshot = buttons.tick(if tick == 1 { SQUARE } else { 0 });
+        race.tick(&PlayerInputs::single(snapshot));
+        peak = peak.max(race.shield_of(1).swell());
+    }
+    peak
+}
+
+/// `LeachBeam_UpdatePool` marks a link on a Shield-holding target disconnected and still calls
+/// `LeachBeam_Drain` on that tick and through the linger, so the target's pending damage meets
+/// `Ship_ApplyPendingWeaponDamage`'s shield arm, `ShipShield_Hit`. Goes red if the beam stops
+/// reporting `absorbed` on a broken link.
+#[test]
+fn a_leach_beam_on_a_shielded_target_bulges_the_shell_through_its_linger() {
+    let mut race = leach_duel([false, true]);
+    let peak = peak_swell_under_a_leach_beam(&mut race, 20);
+
+    assert!(
+        race.sim.world.leach_beams[0].is_some(),
+        "the beam never fired, so the linger was never reached"
+    );
+    assert!(
+        peak > SWELL_REST + 0.05,
+        "a LeachBeam link on a shielded target left the shell at rest: {peak}"
+    );
+    assert_eq!(
+        race.sim.world.ships[1].physics.shield, 100.0,
+        "the broken link drained a running Shield"
+    );
+}
+
+/// `LeachBeam_Drain` returns on the owner's own Shield, so nothing is posted to the target.
+#[test]
+fn a_leach_beam_from_a_shielded_owner_leaves_the_targets_shell_at_rest() {
+    let mut race = leach_duel([true, true]);
+    let peak = peak_swell_under_a_leach_beam(&mut race, 20);
+
+    assert!(
+        race.sim.world.leach_beams[0].is_some(),
+        "the beam never fired, so the guard asserted nothing"
+    );
+    assert!(
+        (peak - SWELL_REST).abs() < 0.01,
+        "the shooter's Shield did not gate the drain: {peak}"
+    );
+}

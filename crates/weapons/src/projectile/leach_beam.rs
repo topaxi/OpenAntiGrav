@@ -274,12 +274,14 @@ impl Beam {
 
         if let Some(broken_at) = self.disconnected_at {
             report.retired = self.age >= broken_at + DISCONNECT_LINGER_SECONDS;
+            report.absorbed = !report.retired && self.shell_swallows(ships, ship_count);
             return report;
         }
 
         if self.link_broken(ships, ship_count) {
             self.disconnected_at = Some(self.age);
             report.disconnected = true;
+            report.absorbed = self.shell_swallows(ships, ship_count);
             return report;
         }
 
@@ -335,6 +337,33 @@ impl Beam {
         }
         let separation = owner.physics().body.position - target.physics().body.position;
         separation.length() > self.range
+    }
+
+    /// Whether the shell of a target that holds a Shield reacts to a link that is
+    /// broken or lingering. `LeachBeam_UpdatePool` marks a link disconnected
+    /// when the target runs a Shield, then falls through to `LeachBeam_Drain`
+    /// on that tick and on every tick of the linger (`LeachBeam_Drain` gates on
+    /// the owner's Shield only), so the target's pending damage is posted and
+    /// `Ship_ApplyPendingWeaponDamage` answers a running Shield with
+    /// `ShipShield_Hit` (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+    /// "A shielded target's shell under a broken link"). A reaction only: the
+    /// drain itself still stops at the break.
+    ///
+    /// Pulse's every-tick cadence alone; the per-trip beam's linger drain is unread.
+    fn shell_swallows<S: Craft>(&self, ships: &[S; MAX_SHIPS], ship_count: u8) -> bool {
+        if self.trip.is_some() {
+            return false;
+        }
+        let (Some(owner), Some(target)) = (
+            slot(ships, ship_count, self.owner),
+            slot(ships, ship_count, self.target),
+        ) else {
+            return false;
+        };
+        target.active()
+            && target.physics().craft_state == CraftState::Racing
+            && target.physics().shield_pickup_timer > 0.0
+            && owner.physics().shield_pickup_timer <= 0.0
     }
 
     /// One tick of the transfer; returns what `Ship_Damage` did to the victim.

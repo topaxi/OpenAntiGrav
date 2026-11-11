@@ -3858,3 +3858,54 @@ and code `4` in its wall arm is the cage, not a craft.
 (I:Pulse) and would inherit a speed fix; HD's own `Cannon_Init` is unread, so whether its round
 carries the same undivided figure is **not checkable** here (no HD capture of a round's velocity).
 HD and Omega run no cage off the track header. Pure has no Cannon.
+
+## 2026-11-11: a shielded target's shell under a Quake and a LeachBeam (shield-weapon-reactions)
+
+**Claim tested:** a Quake wave or a LeachBeam link reaching a craft with a running Shield raises the shell
+reaction, as the pending-damage drain calls `ShipShield_Hit` (`0x0885eb04`) for any posted amount.
+**Result: false for the Quake, true for the LeachBeam in one window** (the break tick and the 0.5 s linger).
+Static, headless decompile of `FUN_088418e0`, `LeachBeam_UpdatePool`, `LeachBeam_Drain`,
+`Ship_ApplyPendingWeaponDamage`; no live leg. `get_xrefs_to(0x0885eb04)` still returns exactly two callers:
+`Ship_ApplyPendingWeaponDamage` (`0x0883f204`) and the contact loop (`0x088426e0`).
+
+**The Quake never posts to `craft + 0x120`, so it never reaches the shell.** The wave branch of
+`FUN_088418e0` (re-decompiled whole) tests `entity->0x4c->0x1b8 & 0x10` and, with a Shield running, only clears
+the latch (`entity + 0x860 &= ~0x40`): no post, no `Ship_Damage`, no `ShipShield_Hit`. Unshielded it adds
+`slowdown_time` to `+0x130`, writes `+0x13c`/`+0x138 = 5`, calls `Ship_Damage(damage, entity, 2, 5, 0)` directly
+and plays `QUAKEHIT`. The `+0x130` drain skips `Ship_AddSlowdown` on a shielded craft too. Nothing in it
+touches `+0x120`. Confidence **88**. Ours already matches: `Wave::apply_hits` skips a shielded craft and reports
+nothing absorbed (`quake::tests::a_shielded_craft_takes_no_hit_and_absorbed_is_not_set`), so
+`advance_quake`'s `view.shield[slot].hit()` arm is unreachable for the Quake and stays as the generic
+out-parameter reader.
+
+**The LeachBeam does post to a shielded target, after its link has broken.** `LeachBeam_UpdatePool` sets
+`instance + 0x3c |= 0x40` and calls `LeachBeam_MarkDisconnected` when the target runs a Shield
+(`target->0x4c->0x1b8 & 0x10`), but the code after that chain does not read bit `0x40`. Both the break branch
+and the linger branch fall to the common tail (`0x08866d70`), which tests only the retire bit (`& 4`), the kind
+(`+0x54 == 1`) and `LeachBeam_PulseStrength > 0`, then calls `LeachBeam_Drain` (`0x08866ebc`, its only call
+site). `LeachBeam_Drain` gates on the **owner's** Shield only (`owner->0x1b8 & 0x10`), so with a Shield on the
+target alone it adds `LeachBeam_DrainRate` to `target + 0x120` and `Ship_ApplyPendingWeaponDamage`'s
+shield arm (state 1, `entity->0x8c8->active`) calls `ShipShield_Hit`. The 2026-09-08 live table already shows the
+tail's strength write (`0x08866eac`, four instructions before the call) running every frame through the linger.
+Confidence **80** on the window and the call chain. The same reading says the original keeps draining an
+**unshielded** target and crediting the owner's `+0x128` repair through the linger, which ours stops at the
+break; that is a hull-energy change, not wired here.
+
+**Not read: the tick pattern.** The tail drains only while `PulseStrength` (`age - last_pulse`, in `[0, 1]`) is
+positive; `last_pulse` is re-armed by `LeachBeam_Advance`'s pulse block at the ribbon's cursor wrap, so on a
+linger the shell reacts on the ticks inside a pulse's second. Ours has no pulse model (a locked beam drains
+every tick), so the port reports the reaction on every break and linger tick: **inherited from the model's
+own every-tick approximation, not measured**.
+
+**Port:** `Beam::advance` reports `absorbed` on the break tick and each linger tick before retire when the
+target is racing with a Shield, the owner has none and the beam drains per tick (HD's per-trip linger is unread).
+View-only: no drain, repair or shield is touched, so no state hash moves. Test:
+`tests::shield_hits::a_leach_beam_on_a_shielded_target_bulges_the_shell_through_its_linger`
+(red with the report dropped, green with it), guard
+`a_leach_beam_from_a_shielded_owner_leaves_the_targets_shell_at_rest`.
+
+**Against the other titles.** Pulse PS2: inherited from PSP. Pure: checked, differs - ships neither a Quake
+nor a LeachBeam ([weapons.md](../psp-pure-usa/weapons.md#pure-ships-no-leachbeam-checked-2026-10-12-lane-pure-leach-quake-confidence-90)).
+HD, 2048, Omega: not read for this branch. HD's beam drains once per ball trip and its linger drain and
+its Quake's shielded skip are unread (no HD or Omega handler was opened this pass), so the reaction is off
+for per-trip beams (`Beam::per_trip`) and the Quake keeps the generic shielded skip; named open in the thread.

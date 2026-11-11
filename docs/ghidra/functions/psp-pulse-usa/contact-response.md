@@ -2343,10 +2343,10 @@ cyan and swell on the next frame, then settle over about ten ticks.
 `WeaponHit::absorbed` that `oag_weapons::projectile::step` reports (rocket, missile, mine, plasma, bomb,
 the Cannon's direct hit), and `repulser.rs` and the LeachBeam do likewise. `tests::shield_hits::a_rocket_a_shield_swallows_bulges_the_shell`
 fires a real Rocket at a shielded craft through `Race::tick` and goes red if the call is removed. **Two
-weapons never reach it**: a Quake wave and a LeachBeam link skip a running Shield before `Ship_Damage`
-(`quake.rs`, `leach_beam.rs`), so they report nothing absorbed and the shell stays at rest. The original's
-`Ship_ApplyPendingWeaponDamage` calls `ShipShield_Hit` for any pending weapon amount, so this is a
-candidate gap (open; the Quake's own handler is the unread link).
+weapons are the exception, read 2026-11-11** ([cannon-quake-leachbeam.md](cannon-quake-leachbeam.md#2026-11-11-a-shielded-targets-shell-under-a-quake-and-a-leachbeam-shield-weapon-reactions)):
+a Quake wave never posts to `craft + 0x120` and skips a running Shield, so the shell stays at rest (as ours);
+a LeachBeam link on a Shield-holding target posts through its break tick and 0.5 s linger, so the shell
+bulges (wired, view-only).
 
 **Open: the unshielded branch charges `Ship_Damage` for a pair record.** The loop above does, and
 [hud-message-triggers.md](hud-message-triggers.md) reads the same; the 2026-11-03 section below says only

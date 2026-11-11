@@ -1,8 +1,8 @@
 ---
 status: measure
-titles: [pulse, pure]
+titles: [pulse, pure, hd]
 updated: 2026-11-11
-summary: "Pair bump now bulges a running Shield's shell; open: does an unshielded pair bump charge the pool, and a Quake or LeachBeam on a shielded craft"
+summary: "Pair bump and LeachBeam linger bulge a Shield shell; open: unshielded pair-bump charge, LeachBeam linger drain, HD reads"
 ---
 
 # Shield shell: what the craft-to-craft wiring left open
@@ -17,14 +17,19 @@ The shell reaction for a craft-to-craft contact and an absorbed weapon hit is wi
   The 2026-11-03 "arms nothing" diff dumped the craft struct and body, not the entity at `+0x88`. Ours charges
   nothing for a pair bump. Settle with a pool read across a staged unshielded rear-end hit; if it charges,
   it is a simulation change (`oag_physics`, hashes move, `race_ground_truth` quoted before and after).
-- **A Quake wave or LeachBeam link on a shielded craft raises no shell reaction.** Ours skips a running
-  Shield before `Ship_Damage` (`quake.rs:283`, `leach_beam.rs:326`), so nothing reports `absorbed`; the
-  original's pending-damage drain calls `ShipShield_Hit` for any posted amount. The Quake's own damage path
-  (does it post to `craft + 0x120`?) is unread. `advance_quake`'s direct `view.shield[slot].hit()` skips the
-  `note_shield_hit` journal; make it go through `Race::shield_hit` when this is wired.
+- **The LeachBeam's linger drain on HD, 2048 and Omega, and their Quake's shielded skip.** Pulse is read and wired
+  (the shell bulges on the break tick and linger of a link on a Shield-holding target; a Quake never does,
+  [cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md#2026-11-11-a-shielded-targets-shell-under-a-quake-and-a-leachbeam-shield-weapon-reactions)).
+  HD's per-trip beam reports nothing here (`Beam::shell_swallows`); read HD's `UpdatePool` tail for the same
+  fall-through and whether its Quake handler skips a shielded craft.
+- **The linger drain itself (simulation change).** The same fall-through keeps `LeachBeam_Drain` running on an
+  unshielded target and keeps crediting the owner's `+0x128` repair through the 0.5 s linger, gated by
+  `LeachBeam_PulseStrength` (`age - last_pulse` in `[0, 1]`, re-armed at the ribbon cursor wrap); ours stops at
+  the break. Moves hull energy: `race_ground_truth` quoted before and after, and the pulse cadence wants a live
+  `instance + 0x138` log first.
 - **Pure's pair friction value** (collider friction for a racing craft) is unread; Pulse's `0.02` is inherited.
 
 ## Next Steps
 
 1. PPSSPP: stage the 2026-11-03 rear-end hit and read `entity + 0x88` before and after (Pulse).
-2. Read the Quake handler's damage post in Ghidra, then route a shielded Quake hit through `absorbed`.
+2. HD: open its `UpdatePool` equivalent and Quake handler for the two open reads above.
