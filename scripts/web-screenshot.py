@@ -226,6 +226,12 @@ def check_clean(page, args, console_errors: list[str], page_errors: list[str]) -
         problems.append(f"{len(ours)} `oag:` console error(s): {ours[0][:160]}")
     if page_errors:
         problems.append(f"{len(page_errors)} uncaught page error(s): {page_errors[0]}")
+    if args.expect_saved:
+        saved = page.evaluate("localStorage.getItem('oag:/config/oag/settings.toml') ?? ''")
+        lines = {line.strip() for line in saved.splitlines()}
+        missing = [line for line in args.expect_saved if line not in lines]
+        if missing:
+            problems.append(f"the saved settings lack {missing}: a key press missed its row")
     if problems:
         sys.exit("; ".join(problems))
     print("clean: the page draws, no report", flush=True)
@@ -315,6 +321,11 @@ def main() -> None:
         "--expect-clean", action="store_true",
         help="the run must end with the page still drawing (a screenshot within 15 s), no report "
         "on the page, no `oag:` console error and no uncaught page error; writes <out>/clean.png",
+    )
+    parser.add_argument(
+        "--expect-saved", action="append", default=[], metavar="LINE",
+        help="with --expect-clean: a line the saved settings.toml (`localStorage`) must hold at the "
+        "end, such as `screen_filter = \"psp-3000\"`; repeatable. Proves a menu walk landed",
     )
     parser.add_argument(
         "--expect-reports", type=int, default=1,
@@ -531,6 +542,11 @@ def main() -> None:
                     page.wait_for_timeout(300)
                     page.mouse.click(x, y)
                     print(f"clicked {x:g},{y:g} at {at:g}s", flush=True)
+                elif kind == "press":
+                    # Held across a frame: a press and release inside one slow
+                    # frame reach the menus as no press at all.
+                    page.keyboard.press(key, delay=100)
+                    print(f"press {key} at {at:g}s", flush=True)
                 else:
                     getattr(page.keyboard, kind)(key)
                     print(f"{kind} {key} at {at:g}s", flush=True)

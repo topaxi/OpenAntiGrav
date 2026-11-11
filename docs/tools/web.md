@@ -613,6 +613,16 @@ wait of that kind now ends in the page's report instead of a frozen tab. On an
 older deploy, setting SCREEN FILTER to off (or clearing the site's storage)
 boots again.
 
+**A bug that a deploy fixed is still there: hard-reload (Ctrl+Shift+R)**, or a
+browser may still run the previous deploy's module. The page's files revalidate
+on every load (`no-cache` in `_headers`, "Hosting" below), but a deploy from
+before that header could be cached for up to four hours. A live SCREEN FILTER
+change that froze Firefox after the fix above was this.
+`check-web-faults.py`'s `live-settings` case changes RENDER SCALE,
+RECONSTRUCTION, MSAA, MOTION BLUR, SHADOWS and SCREEN FILTER from the menus
+while the page runs, and requires each to reach the saved settings with no
+report.
+
 **The log says `renderer: webgpu:  (cpu)`.** The browser gave WebGPU a software
 adapter (the `web: adapter "" (Cpu)` line says the same); frames then take 40 to
 90 ms. On Linux Chrome and Chromium this is what you get without the Vulkan
@@ -774,9 +784,13 @@ Cloudflare reads `_headers` from the deployed folder: `Cross-Origin-Opener-Polic
 same-origin` and `Cross-Origin-Embedder-Policy: require-corp` on every path, which
 make `crossOriginIsolated` true (what `SharedArrayBuffer` and so the module's
 shared memory need), and `Cache-Control: public, max-age=31536000, immutable`
-on `pkg/*`, whose directory name is the content hash. The page itself keeps
-Cloudflare's default, `public, max-age=0, must-revalidate`, so a deploy is
-seen on the next load. The page loads nothing from another origin, so
+on `pkg/*`, whose directory name is the content hash. The page's own files
+(`main.js`, `worker.js`, `fault.js`, `audio.js`, `audio-worklet.js`, `movie.js`,
+`style.css`) carry `Cache-Control: no-cache`, so a deploy is seen on the next
+load: `main.js` names the `pkg/<hash>/` directory, and without the header
+Cloudflare served it with the zone's browser TTL, `public, max-age=14400,
+must-revalidate` (`curl -sI`, 2026-11-11), so a browser could run the previous
+deploy's module for four hours. `/` itself is served `max-age=0`. The page loads nothing from another origin, so
 `require-corp` blocks nothing it uses; `worker.js` and the module are
 same-origin. No `coi-serviceworker` and no second, single-threaded module.
 
