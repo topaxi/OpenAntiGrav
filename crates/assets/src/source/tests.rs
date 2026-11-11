@@ -227,6 +227,7 @@ const TITLE: &Title = &Title {
         kill_column: false,
         message_slots: false,
         lap_hud: None,
+        incoming_warnings: false,
         runtime: None,
         lap_one_shift: None,
         bar_tip: None,

@@ -55,6 +55,7 @@ mod dialect_2048;
 mod draw;
 pub mod ext_draws;
 mod head_to_head;
+pub mod incoming;
 pub mod kill_tags;
 mod lap_splits;
 pub mod loading_layout;
@@ -826,6 +827,9 @@ pub struct Readout {
     /// The lap-line time gap this frame - `TimeDiffText` and `TimeDiffIcon`.
     /// See [`time_gap`].
     pub time_gap: Option<time_gap::GapLine>,
+    /// The incoming-weapon warnings lit this frame - `ForwardWarningIcons` and
+    /// `RearWarningIcons`. See [`incoming`].
+    pub incoming: incoming::Shown,
     /// The ship's drawn lean, as its follower: `ship+0x6a58` on HD, the number
     /// `oag_physics`'s `steer_lean_follower` runs. A title with a measured
     /// [`oag_title::HudArt::sway`] slides its whole HUD by `x_per_lean` times this

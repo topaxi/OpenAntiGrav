@@ -621,6 +621,12 @@ pub struct HudArt {
     /// lap line and no gap, rather than Pulse's answer borrowed. See
     /// [`crate::lap_hud`].
     pub lap_hud: Option<crate::lap_hud::LapHud>,
+    /// Whether an opponent's fire raises the `ForwardWarningIcons` / `RearWarningIcons`
+    /// widgets by the law `oag_hud::incoming` runs. **Pulse PSP only**, read off its
+    /// executable (`docs/ghidra/functions/psp-pulse-usa/hud-incoming-warnings.md`); PS2 is
+    /// inherited from it. HD, 2048 and Omega author the same widget names with a different
+    /// law, and Pure authors none of them, so those stay off until their own are read.
+    pub incoming_warnings: bool,
     /// What this title's per-tick HUD update writes over its layout: the shield
     /// readout's runtime colours and fill, and which segments of the lap and
     /// place arcs are up. See [`RuntimeHud`].

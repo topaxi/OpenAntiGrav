@@ -706,6 +706,8 @@ impl Race {
         #[cfg(feature = "view")]
         if self.draws() {
             self.advance_slot_huds();
+        } else {
+            self.view.incoming_raises.clear();
         }
 
         // Every person-flown craft's wall-contact cue, in slot order, drawn tick

@@ -1,0 +1,51 @@
+//! The viewer's incoming-weapon warnings: which opponent fire raises one.
+//!
+//! The law is `Weapon_AnnounceIncoming` (`0x08871ddc`) and the HUD half is
+//! `oag_hud::incoming`; `docs/ghidra/functions/psp-pulse-usa/hud-incoming-warnings.md`.
+//! A fire is judged once, at the moment it happens, from the two craft's along-track
+//! progress, and the icon it earns waits in `RaceView::incoming_raises` for the HUD's
+//! next advance. Nothing here touches `World`, so no hash moves.
+
+use super::*;
+
+impl Race {
+    /// Records that `slot` fired `weapon` this tick: raises the viewer's warning when the
+    /// along-track gap `progress(viewer) - progress(slot)` is inside the weapon's window.
+    ///
+    /// One call per fire request. Skipped when the firer is the viewer, when the title
+    /// raises none ([`oag_title::HudArt::incoming_warnings`]), outside the modes that raise
+    /// them (Arcade, Tournament, Eliminator, Head2Head), and in any race with more than one
+    /// person (the original's multiplayer modes never raise; a split-screen or network
+    /// seat's own warnings are not wired). Every racing craft is a valid pair: the
+    /// original's own refusal of a pair (its flag byte) is unread.
+    pub(super) fn note_incoming_fire(&mut self, slot: usize, weapon: oag_tables::weapons::Weapon) {
+        let viewer = self.player_slot();
+        if slot == viewer
+            || !self.view.huds[viewer].incoming_enabled
+            || self.viewport_count() > 1
+            || self.view.seat.is_some()
+            || !matches!(
+                self.sim.world.mode(),
+                oag_race::Mode::SingleRace
+                    | oag_race::Mode::Tournament
+                    | oag_race::Mode::Eliminator
+                    | oag_race::Mode::Head2Head
+            )
+        {
+            return;
+        }
+        let ships = &self.sim.world.ships;
+        let (Some(here), Some(there)) = (
+            ships[viewer].standing.progress,
+            ships[slot].standing.progress,
+        ) else {
+            return;
+        };
+        let length = self.sim.course.as_deref().map(oag_race::Course::length);
+        let gap =
+            oag_weapons::projectile::missile::wrapped_gap(here - there, length.unwrap_or(0.0));
+        if let Some(icon) = oag_hud::incoming::classify(weapon, gap) {
+            self.view.incoming_raises.push(icon);
+        }
+    }
+}

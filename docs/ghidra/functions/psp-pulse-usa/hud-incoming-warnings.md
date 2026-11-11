@@ -131,6 +131,23 @@ live (identical):
 The `idx` column is the **announce index** (file order, Bomb 8 and Mine 9), not the
 held-weapon id (Mine 8, Bomb 9); the remap is [mine.md](mine.md)'s.
 
+## Wired in the engine
+
+`oag_hud::incoming` holds the table and the blink (`Warnings::raise`, the one entry
+point, then `advance` once per drawn tick: the raise frame is unlit, then eight lit
+phases). `oag_raceplay`'s `Race::note_incoming_fire(slot, weapon)` judges a fire once, at
+the moment it happens, from `Craft::progress()` folded by `missile::wrapped_gap`, and
+queues the icon for the viewer's HUD; it is out of `World` and out of the hash. Fire
+sites: `spend_opponent_pickup`'s common tail (Rocket, Missile, Plasma, Shuriken, Quake,
+Repulser, LeachBeam), `drop_opponent_mines` when a drop starts (Mine, Bomb), and the
+first round of an opponent's Cannon burst. `HudArt::incoming_warnings` switches it on for
+Pulse (PS2 inherited from PSP). Not wired: split-screen and network seats (the law never
+raises in multiplayer modes), a person-flown craft's own fire (only reached in those),
+and the autopilot-absorb path. Tests: `crates/hud/src/incoming/tests.rs`,
+`crates/raceplay/src/tests/incoming_warnings.rs`, and the disc-backed
+`crates/raceplay/tests/incoming_warnings_ground_truth.rs` (Quake, Cannon, Mine through the
+real fire path on a Pulse circuit).
+
 ## Which modes show them
 
 Two gates. **Raise:** `Weapon_AnnounceIncoming` returns for `g_game_mode >= 14`, so

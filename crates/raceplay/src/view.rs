@@ -255,6 +255,9 @@ pub struct RaceView {
     pub(super) pair_spoil: [bool; MAX_SHIPS],
     /// The lap-line time gap, on and off with the primary slot's lap watch.
     pub(super) split_gap: Option<super::split_gap::SplitGap>,
+    /// The warnings the tick's opponent fire earned the viewer, waiting for the HUD's
+    /// next advance ([`super::incoming_warnings`]).
+    pub(super) incoming_raises: Vec<oag_hud::incoming::Icon>,
     /// The `engine_flare` locator in model space, when the ship model has one.
     ///
     /// One value for the whole field, because every craft wears the player's hull

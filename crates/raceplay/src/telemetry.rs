@@ -248,6 +248,7 @@ impl Race {
                 0
             },
             messages: hud.messages.lines(),
+            incoming: hud.incoming.shown(),
             time_gap: self
                 .view
                 .split_gap
