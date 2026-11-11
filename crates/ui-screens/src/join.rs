@@ -810,24 +810,8 @@ pub fn draw_list(
     backdrop: Option<Picture>,
     race_behind: bool,
 ) -> Layers {
-    let (title_x, title_y, title_scale) = skin.title_at();
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        join.title().to_string(),
-    ));
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    layers.push_title(skin, frame, join.title().to_string());
     layers.body = join.blocks(skin, frame);
     layers.body.extend(join.body(skin, frame));
     layers

@@ -211,15 +211,7 @@ pub(super) fn table_layers(
     shows: &[(Suffix, Shown)],
     cell: &dyn Fn(&Text) -> Option<String>,
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let screen = &layout.screen;
     let grid = Grid::read(layout);
     let part_shown = |table: usize, part: Part| {

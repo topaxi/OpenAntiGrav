@@ -29,6 +29,7 @@ mod strip;
 
 use super::*;
 use crate::frontend::Align;
+use crate::frontend::Draw;
 
 /// [`draw_list`] flattened, which is what every test below wants: the
 /// layer split exists for the transition, and none of these animate.

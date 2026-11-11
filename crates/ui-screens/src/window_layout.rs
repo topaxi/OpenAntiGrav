@@ -928,24 +928,8 @@ pub fn draw_list(
     race_behind: bool,
     cells: &dyn Fn(usize, bool) -> Vec<[f32; 4]>,
 ) -> Layers {
-    let (title_x, title_y, title_scale) = skin.title_at();
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        picker.labels.title.clone(),
-    ));
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
+    layers.push_title(skin, frame, picker.labels.title.clone());
     layers.body = picker.blocks(skin, frame);
     layers.body.extend(picker.body(skin, frame));
     layers.body.extend(picker.preview(skin, frame, cells));

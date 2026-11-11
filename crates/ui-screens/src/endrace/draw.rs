@@ -266,15 +266,7 @@ fn rewards_layers(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let screen = &layout.screen;
     let mut out = Vec::new();
     let panel = |owner: Option<u8>| models.get(usize::from(owner.unwrap_or(0)));
@@ -390,15 +382,7 @@ pub fn endrace_menu_draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
+    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let screen = &layout.screen;
     let mut out = Vec::new();
     for fill in &screen.fills {

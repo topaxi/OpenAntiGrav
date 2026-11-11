@@ -7,6 +7,7 @@
 //! two types and one helper that [`super::draw_list`] hands back and
 //! `oag_game`'s menu stage animates, touching nothing else here.
 
+use super::{Frame, Picture, Skin};
 use crate::frontend::Draw;
 
 /// One page's draws, split by what a page change is allowed to move.
@@ -30,6 +31,42 @@ pub struct Layers {
 }
 
 impl Layers {
+    /// A page's layers with only its backdrop in place: [`Frame::backdrops`]'s
+    /// clear, picture and marks, in that function's order, or just the marks
+    /// that stay when a parked race shows through (`race_behind`).
+    #[must_use]
+    pub fn behind(
+        skin: &Skin,
+        frame: &Frame,
+        backdrop: Option<Picture>,
+        race_behind: bool,
+    ) -> Self {
+        Self {
+            backdrop: frame.backdrops(
+                skin.space(),
+                skin.background(),
+                backdrop.map(Picture::draw),
+                race_behind,
+            ),
+            ..Self::default()
+        }
+    }
+
+    /// Pushes the screen title onto [`Self::chrome`]: the disc's own declared
+    /// position, scale, colour and face when the skin has them, the frame's
+    /// ink and this build's substitute otherwise.
+    pub fn push_title(&mut self, skin: &Skin, frame: &Frame, title: String) {
+        let (x, y, scale) = skin.title_at();
+        self.chrome.push(Draw::title(
+            skin.title_font(),
+            x,
+            y,
+            scale,
+            skin.title_color(frame.ink),
+            title,
+        ));
+    }
+
     /// Every draw, back to front.
     #[must_use]
     pub fn flatten(self) -> Vec<Draw> {
