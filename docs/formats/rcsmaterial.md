@@ -3836,3 +3836,70 @@ sign's halo (`cf_constantcolourglow` slot 275) +5 to +7. None is read.
 
 **2048 / Omega: checked, applies, not wired.** Omega ships `GLASS_2UV_RGB_REFLECT_GLOW` for Metropia (`data02`,
 `data05`); 2048's `dlc1.psarc` ships it too. Programs not read, no row in the `psp2` loader.
+
+## The two-lane normal map: Moa Therma's floor and garages (2026-11-11, `hd-worst-pairs`)
+
+**Report:** the floor and the left wall of `hd-moa-therma` (compare box `0,540 840x540`, err 7.46 on this method's
+whole box, 12.1 over its hot blocks): ours washed and flat where the original's panels are dark with hard seams.
+**Method:** the family ablation of the section above puts 99.7 % of the box on `diffuse_normal_specular`, and the
+per-slot one on two slots: 323 (`ds_garage_c`, the garage bays, 170,801 px, R +8.7 G +7.6 B +5.8) and 233
+(`ds_pit_cs`, the floor panels, 230,240 px, +3.2). On the bays the error is contrast, not level: where the original
+is under 40 it reads 27 and ours 46, where it is over 80 the two agree.
+
+**The program (confidence 90, block #7 `@0x9960` and its vertex block `@0x9780`).** Moa's compile fetches its `_n`
+file two lanes wide and rebuilds the third component, into the frame the hulls use:
+
+```text
+@0x00  TEX R0.yw, f[TC4] unit1                              ; green and alpha only
+@0x01  MAD R3.zw, R0.wywy, {2, -1}.xxxx, {2, -1}.yyyy       ; x = 2a - 1, y = 2g - 1
+@0x05..0x0d  1 - x^2 - y^2, RSQ                             ; z = sqrt(1 - x^2 - y^2)
+@0x07  MUL R0.xyz, R3.wwww, f[TC0]                          ; y * B
+@0x0a  MAD R1.xyz, f[TC3], R3.zzzz, R0                      ; + x * T
+@0x10  DIV R0.xyz, f[TC2], R3.zzzz                          ; + z * N0, then normalised
+vertex: T = 2 * tangent.xyz - 1, B = cross(N0, T) * tangent.w (raw), N0 = normal
+```
+
+The normalised `N` feeds the sun's `N.L` and the specular's `N.H`. The four original circuits' compile of the same
+family reads three lanes (`Program::samples_as_normal`), which `hull_normal` already bound; the two-lane fetch failed
+that test, so 63 Moa slots (`diffuse_normal_specular` 38, `dc_diffusenormalspecular` 25) drew with the vertex normal.
+`ds_garage_n` is a whole bay baked into one map (12 % of its texels have `z` under 0.7), so the flat normal was wrong
+by the bay's own relief.
+
+**Census** (`hd_material_probe_dump`, column `normal_units`): 130 slots on the disc decode a two-lane normal, 768 a
+three-lane one. Opaque and on unit 1 with no second normal map, the ones the reading takes: Moa Therma 63, Amphiseum
+14 (`dc_windowstest`, `windowsnormaldiffusespecular`), Modesto Heights 14 (the same and `_nonemissive_customr`),
+Metropia 9 and Ubermall 1 (`pb_window`). Every one of their resolved blocks was checked for the same four steps (the
+two-lane fetch, the `2x - 1` on alpha then green, the `RSQ`, the `DIV` of an interpolator by it). The sea planes
+(`reflectplane_dc_seawater`, `water`) decode two maps and are left out; the blended and unit-0 ones (`dc_windows_a`,
+`glassalpha`, `mt_tunnelrefraction`) are other programs.
+
+**Wired:** `Program::samples_as_packed_normal`, and `hull_normal` unpacks such a map once at load into the three-lane
+picture `shade.wesl` already reads (`x` from the alpha, `y` from the green, `z` rebuilt per texel, where the program
+rebuilds it after the filter: the two agree at a texel centre). The loader report counts them. Tests:
+`fragment::tests` (the fetch shape), `hull_normal::tests` (the unpacking) and
+`hd_sky_reflection_ground_truth::moas_window_glass_is_tagged_to_read_the_sky` (63 maps unpacked, the garage's bound
+third, its chunks carrying the tangent).
+
+**Measured** (sigma-7 mean absolute RGB, ours re-rendered from the pair's flags):
+
+| What | Before | After |
+| --- | ---: | ---: |
+| Moa Therma box `0,540 840x540` | 7.46 (impact 3.39 M) | 1.47 (0.67 M) |
+| its hot blocks, as the compare list counts them | 219,600 px, err 12.1, 2.65 M | none over 0.26 M |
+| slot 323, the garage bays | 10.8, R +8.7 G +7.6 B +5.8 | 2.0, R -0.3 G -0.4 B -0.7 |
+| slot 233, the floor panels | 6.3 | 1.2 |
+| box `1020,720 660x360` (the list's second Moa region) | 5.0 | 1.31 |
+| whole frame (raw mean grey) | 3.96 (6.85) | 1.92 (4.44) |
+
+Every other HD pair is unmoved (Metropia's raw mean grey 3.09 to 3.10): their two-lane slots are window panes away
+from the start line.
+
+**Open.** The block multiplies the sun by the **unsaturated** `N.L` (`DP3 R1.w` with no `_SAT`, then `MUL H0.w, H6,
+R1` against the atlas's alpha), where ours clamps at zero. With the map bound, the unsaturated form on every bumped
+lightmapped slot reads 1.60 on the box against 1.47 and moves the whole frame 1.92 to 2.18, so it is not wired:
+which programs leave it unsaturated has to be read per block (the non-normal-mapped lightmapped variants saturate).
+
+**2048 / Omega: checked, differs.** Omega's `03_moa_therma/Materials/Diffuse_Normal_Specular_1` fetches its normal
+map three lanes wide (`image_sample ... dmask:0x7`, `gcn_dump --at 0x4124`): the `.gnf` maps are re-cooked, and the
+`psp2` loader already binds them (`omega_normal_map_ground_truth`). 2048's GXP operands are unread and a Vita build
+binds no normal map at all, so its packing is not checkable.

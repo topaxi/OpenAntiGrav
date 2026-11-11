@@ -142,6 +142,7 @@ fn the_report_names_both_kinds_of_absence() {
         billboard_glass_unbound: 0,
         probe_lit_bound: 0,
         hull_normal_bound: 0,
+        hull_normal_packed: 0,
         hull_normal_unread: 0,
         probe_lit_blocked: 0,
         probe_lit_unread: 0,

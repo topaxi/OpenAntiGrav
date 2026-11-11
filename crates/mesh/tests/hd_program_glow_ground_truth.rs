@@ -19,6 +19,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::archive_cache;
+
 use oag_mesh::mesh;
 
 fn image() -> Option<PathBuf> {
@@ -29,10 +31,10 @@ fn image() -> Option<PathBuf> {
 fn build(image: &Path) -> Option<(mesh::Model, mesh::rcs::Report, oag_rcs::rcsmodel::Model)> {
     let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
     let path = "/data/environments/02_track/track.vex";
-    let data = mesh::read_blob(&spec, path).ok()?;
+    let data = archive_cache::read(&spec, path)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
     let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        mesh::read_blob(&spec, name).ok()
+        archive_cache::read(&spec, name)
     })
     .expect("the scene builds");
     let source = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the model parses");

@@ -306,6 +306,9 @@ pub struct Report {
     /// Ship hull materials whose `_n` normal map was bound and whose chunks
     /// carry their tangent - see `super::hull_normal`.
     pub hull_normal_bound: usize,
+    /// Of those, the maps stored two lanes wide (`x` in the alpha, `y` in the
+    /// green) and unpacked at load - see `super::hull_normal`.
+    pub hull_normal_packed: usize,
     /// Hull materials that read a normal map whose picture did not decode.
     pub hull_normal_unread: usize,
     /// Reflective materials left untagged because their glow index was taken or
@@ -576,9 +579,12 @@ impl Report {
             n => format!(
                 ", {n} scenery glass material(s) NOT tagged (glow index taken, table full or no weight)"
             ),
-        } + &match self.hull_normal_bound {
-            0 => String::new(),
-            n => format!(", {n} hull material(s) sampling their normal map"),
+        } + &match (self.hull_normal_bound, self.hull_normal_packed) {
+            (0, _) => String::new(),
+            (n, 0) => format!(", {n} hull material(s) sampling their normal map"),
+            (n, packed) => format!(
+                ", {n} hull material(s) sampling their normal map ({packed} unpacked from two lanes)"
+            ),
         } + &match self.hull_normal_unread {
             0 => String::new(),
             n => format!(", {n} hull material(s) whose normal map did not decode (drawn without)"),

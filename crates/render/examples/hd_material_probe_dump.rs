@@ -78,7 +78,7 @@ fn main() -> anyhow::Result<()> {
 
     println!(
         "slot\tlist\tmaterial\ttexture\troles\tspecular_exponent\tvariant_resolved\t\
-         fragment_block\tvertex_block\tsamplers\tparameters\talpha_gated"
+         fragment_block\tvertex_block\tsamplers\tparameters\talpha_gated\tnormal_units"
     );
     let mut blobs: std::collections::HashMap<String, Option<Vec<u8>>> = Default::default();
     for (&slot, &list) in &list_of {
@@ -148,6 +148,37 @@ fn main() -> anyhow::Result<()> {
         // Every unit whose sampled alpha gates an added constant in the resolved
         // program (`Program::alpha_gated_parameter`), as `unit:sampler->parameter`:
         // the emissive masks, whichever texture carries them.
+        // Every unit the resolved program decodes as a tangent-space normal: `rgb`
+        // three lanes wide, `ag` the two-lane packing.
+        let normals = material
+            .zip(variant)
+            .and_then(|(m, v)| {
+                let blob = blobs
+                    .entry(m.name.clone())
+                    .or_insert_with(|| mesh::read_blob(&spec, &format!("/{}", m.name)).ok())
+                    .as_ref()?;
+                let program =
+                    oag_rcs::rcsmaterial::fragment::Program::parse(blob, v.fragment.offset)?;
+                Some(
+                    program
+                        .declared
+                        .samplers
+                        .iter()
+                        .filter_map(|&(_, unit)| {
+                            let u = u8::try_from(unit).ok()?;
+                            if program.samples_as_normal(u) {
+                                Some(format!("{unit}:rgb"))
+                            } else if program.samples_as_packed_normal(u) {
+                                Some(format!("{unit}:ag"))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                )
+            })
+            .unwrap_or_default();
         let alpha_gated = material
             .zip(variant)
             .and_then(|(m, v)| {
@@ -172,7 +203,7 @@ fn main() -> anyhow::Result<()> {
             })
             .unwrap_or_default();
         println!(
-            "{slot}\t{list}\t{}\t{}\t{}\t{specular:.1}\t{resolved}\t{}\t{}\t{samplers}\t{parameters}\t{alpha_gated}",
+            "{slot}\t{list}\t{}\t{}\t{}\t{specular:.1}\t{resolved}\t{}\t{}\t{samplers}\t{parameters}\t{alpha_gated}\t{normals}",
             material.map_or("<none>", |m| m.name.as_str()),
             material.map_or("", |m| m.texture.as_str()),
             roles.join("|"),
