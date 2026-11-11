@@ -303,13 +303,13 @@ top of this page):
 | Pulse PS2 | same as PSP | the parser's three slots are PS2-read; the index is inherited from PSP | inherited from PSP | wired, as PSP |
 | HD / Fury | `easyshield` on every team, same margin, no medium or hard slot | **measured live, confidence 85**: the original's HD Eliminator at Novice (RPCS3, Vineta K, Venom; `scripts/rpcs3-hd-eliminator-score.py`, `data/reference/hd-eliminator-score/run2-ai-field.csv`, column `shield`) reads the AI field's shields at an authored `easyshield` and above `shield`, through `*(craft+0x5fac)+0x78`, then `+0x90 + difficulty * 4` (the same `0x84 + skill * 4` index as Pulse, rebased). One run, one difficulty; the medium and hard slots were not read live | **confidence 80**: the person's own craft refilled a lap at 0.2 of an `easyshield` pool (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-score.md`); single run | wired, `CraftLaws::shield_by_skill` measured |
 | Pure | no team authors a slot beyond `shield` | not read; nothing to select | not applicable | held, every rung reads the same pool |
-| 2048 (Vita) | `easyshield` (Omega re-ships 2048's craft with the same margin) | **not read** | not read | held on the medium slot, open |
-| Omega (PS4) | `easyshield` on every team | **not read** (the executable is in Ghidra, nobody has walked its `Ship_SetShield`; shadPS4 has no memory readout) | not read | held on the medium slot, open; the loader report says so on a Novice race |
+| 2048 (Vita) | `easyshield` on every team that ships a handling file | `Ship_SetShield` (`0x811bb524`) clamps to `stats + 0x98 + level * 4`, static, confidence 84 ([craft-laws.md](../ghidra/functions/vita-2048-eu-v104/craft-laws.md)); a campaign event's level is `1` | yes, same global | wired: a Novice race box starts on `easyshield`; a campaign event starts on the medium slot whatever the difficulty |
+| Omega (PS4) | `easyshield` on every team | `Ship_SetShield` (`0x012f3360`) clamps to `stats + 0x98 + skill * 4`, with a skill of `-2` reading the medium slot, static, confidence 84 ([craft-laws.md](../ghidra/functions/ps4-omega-eu/craft-laws.md)) | yes, same global | wired: Novice starts on `easyshield`, the rest on `shield` |
 
 No shipped file authors `mediumshield` or `hardshield` (HD's test asserts it), so Skilled, Elite
-and Ace read plain `shield` on every title today. The 2048 census was not run: the Vita `.pkg`
-is PFS-encrypted and does not load (`docs/formats/vita-package.md`); the Omega row stands in
-for its craft files, which Omega re-ships at the same layout.
+and Ace read plain `shield` on every title today. The 2048 census runs on the extracted
+`PCSF00007` tree (`shield_difficulty_ground_truth::a_2048_novice_field_starts_on_each_teams_easyshield`);
+a slot whose team ships no handling file flies the player's tuning, and the test follows that.
 
 A replay rebuilds with the rung it was recorded at: `[options] skill_level`, written for a
 campaign cell only (`docs/formats/replay-file.md`). A free race derives the rung from

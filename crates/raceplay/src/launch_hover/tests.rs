@@ -139,6 +139,27 @@ fn a_titles_code_pitch_carries_its_grid_damping_into_the_laws() {
     assert_eq!(physics_laws(None).pitch_damping_grid, None);
 }
 
+/// 2048 and Omega build the box with mass `1.0`, read in each executable's ship constructor
+/// (`docs/ghidra/functions/vita-2048-eu-v104/craft-laws.md`), so their tensor is HD's and not
+/// Pulse's `0.9` one.
+#[test]
+fn omega_and_2048_build_hds_tensor_not_pulses() {
+    let hd = craft_inertia(Some(&oag_hd::race::CRAFT_LAWS));
+    for laws in [&oag_omega::race::CRAFT_LAWS, &oag_2048::race::CRAFT_LAWS] {
+        assert_eq!(laws.inertia_mass, Sourced::measured(1.0));
+        assert_eq!(craft_inertia(Some(laws)), hd);
+        assert_ne!(craft_inertia(Some(laws)), craft_inertia(None));
+    }
+}
+
+/// 2048 and Omega read the difficulty into the shield slot, as HD and Pulse do.
+#[test]
+fn omega_and_2048_index_the_shield_slot_by_skill() {
+    for laws in [&oag_omega::race::CRAFT_LAWS, &oag_2048::race::CRAFT_LAWS] {
+        assert_eq!(laws.shield_by_skill, Sourced::measured(true));
+    }
+}
+
 /// HD's measured body damping reaches the physics' laws, with Omega's own and 2048's inherited
 /// pair; Pulse (no laws) and Pure fly none.
 #[test]
@@ -162,7 +183,7 @@ fn the_body_damping_follows_the_title() {
     assert_eq!(physics_laws(None).body_damping, none);
 }
 
-/// HD's measured one-sided contact reaches the physics' laws, inherited by Omega and 2048;
+/// HD's measured one-sided contact reaches the physics' laws, as do Omega's and 2048's own reads;
 /// Pulse (no laws) and Pure keep the two-sided one.
 #[test]
 fn the_one_sided_wall_contact_follows_the_title() {
@@ -173,7 +194,7 @@ fn the_one_sided_wall_contact_follows_the_title() {
     assert!(!physics_laws(None).wall_one_sided);
 }
 
-/// HD's measured steer-away torque reaches the physics' laws, inherited by Omega and 2048;
+/// HD's measured steer-away torque reaches the physics' laws, as do Omega's and 2048's own reads;
 /// Pulse and Pure queue none.
 #[test]
 fn the_wall_steer_away_torque_follows_the_title() {
@@ -184,14 +205,13 @@ fn the_wall_steer_away_torque_follows_the_title() {
     assert!(!physics_laws(None).wall_steer_away);
 }
 
-/// HD's measured body-local point rate reaches the physics' laws, inherited by Omega; 2048
-/// holds it, and Pulse and Pure keep the textbook one.
+/// HD's measured body-local point rate reaches the physics' laws, as do Omega's and 2048's own
+/// reads of it; Pulse and Pure keep the textbook one.
 #[test]
 fn the_wall_point_rate_frame_follows_the_title() {
     assert!(physics_laws(Some(&oag_hd::race::CRAFT_LAWS)).wall_point_rate_body_local);
     assert!(physics_laws(Some(&oag_omega::race::CRAFT_LAWS)).wall_point_rate_body_local);
-    // Held on 2048 (`oag_2048::race::CRAFT_LAWS`'s comment).
-    assert!(!physics_laws(Some(&oag_2048::race::CRAFT_LAWS)).wall_point_rate_body_local);
+    assert!(physics_laws(Some(&oag_2048::race::CRAFT_LAWS)).wall_point_rate_body_local);
     assert!(!physics_laws(Some(&oag_pure::race::CRAFT_LAWS)).wall_point_rate_body_local);
     assert!(!physics_laws(None).wall_point_rate_body_local);
 }

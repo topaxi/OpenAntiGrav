@@ -520,10 +520,12 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     }),
 };
 
-/// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
-/// table existed; the rest is HD's, inherited via Omega.
+/// The craft-body laws. The box mass, the wall point rate and the shield slot are read in this
+/// title's executable (`docs/ghidra/functions/vita-2048-eu-v104/craft-laws.md`); the steering
+/// ramp is Pulse's; the rest is HD's, inherited via Omega.
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
-    inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
+    // Both ship constructors pass `1.0` to the box builder (`0x811b975e`, `0x811c8a7c`).
+    inertia_mass: oag_title::pre_race::Sourced::measured(1.0),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     // HD's in-air `weight_distribution` torque, inherited via Omega: held off until HD's was
     // re-measured under player input (2026-10-20, `docs/physics/airborne-ground-truth.md`), then
@@ -543,24 +545,22 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
     // Zone's hover is not read on this title: Wipeout HD's `30`.
     bank_to_yaw_zone: oag_title::pre_race::Sourced::inherited(30.0, "Wipeout HD"),
-    wall_one_sided: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
-    wall_steer_away: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
-    // HD's measured body-local point rate, held at Pulse's textbook one (chosen) until this
-    // engine's AI flies it on 2048. Failing gates of the HD/2048/Omega AI set (28 tests) under an
-    // airborne pitch perturbation eps = -1e-2 -1e-3 -1e-4 -1e-5 0 1e-2 1e-3 1e-4 1e-5: off
-    // `1 0 1 1 0 0 0 0 0`, on `1 0 1 0 1 0 0 0 0`. Within the bar, but the eps = 0 run puts
-    // `the_field_finishes_tower`'s whole field a lap down at 300 s (292.3 s to finish without it),
-    // and the gate has no row to regenerate; the inherited air bias is held the same way.
-    wall_point_rate_body_local: oag_title::pre_race::Sourced::chosen(false),
+    // `Body_ResolveContact` (`0x811d3eaa`): the separating gate and the `5 * clamp(.., -20, 20)`
+    // yaw torque, as HD's.
+    wall_one_sided: oag_title::pre_race::Sourced::measured(true),
+    wall_steer_away: oag_title::pre_race::Sourced::measured(true),
+    // The wall resolver crosses the lever arm with the stored body-local rate unrotated
+    // (`0x811d3eaa`), where the craft-craft resolver rotates it to world first (`0x811d38f6`).
+    wall_point_rate_body_local: oag_title::pre_race::Sourced::measured(true),
     body_linear_damping: oag_title::pre_race::Sourced::inherited(0.01, "Wipeout HD"),
     body_angular_damping: oag_title::pre_race::Sourced::inherited(0.01, "Wipeout HD"),
     cage_from_track_header: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
     // Not read: the view matrix is Pulse's orthonormal look-at until measured.
     chase_view_sheared: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
-    // The skill-indexed pool read is Wipeout HD's measured Novice field (`easyshield`), and
-    // nothing here has been measured: the Medium slot until it is
-    // (`docs/formats/handling-stats.md`, "Which difficulty picks the shield slot").
-    shield_by_skill: oag_title::pre_race::Sourced::chosen(false),
+    // `Ship_SetShield` (`0x811bb524`) clamps to `stats + 0x98 + level * 4`; a campaign event's
+    // level is `1`, the Medium slot (`docs/formats/handling-stats.md`, "Which difficulty picks
+    // the shield slot").
+    shield_by_skill: oag_title::pre_race::Sourced::measured(true),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,
