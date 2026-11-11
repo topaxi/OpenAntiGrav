@@ -318,6 +318,8 @@ pub struct CaptureOptions {
     pub texture_detail: oag_mesh::mesh_render::TextureDetail,
     /// `[render_profiles.<title>] trail_order`, or `--trail-order`.
     pub trail_order: oag_display::display::TrailOrder,
+    /// `[render_profiles.<title>] scenery_sort`, or `--scenery-sort`.
+    pub scenery_sort: oag_display::display::ScenerySort,
     /// `[render_profiles.<title>] trail_length`, or `--trail-length`.
     pub trail_length: oag_display::display::TrailLength,
     /// `[render_profiles.<title>] weather`, or `--weather`.
@@ -508,6 +510,7 @@ pub fn capture(
     race.set_model_detail(options.model_detail);
     race.set_texture_detail(options.texture_detail);
     race.set_trail_order(options.trail_order);
+    race.set_scenery_sort(options.scenery_sort);
     race.set_trail_length(options.trail_length);
     race.set_weather(options.weather);
     race.set_dynamic_hud(options.dynamic_hud);

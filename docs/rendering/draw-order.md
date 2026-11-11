@@ -373,8 +373,8 @@ The circuit's blended list (list B) writes no depth, so tree against tree is dra
 vertices welded by position) its own flat colour, with the picture's alpha kept (`oag_mesh::mesh::Model::debug_tint_blended`).
 `OAG_DRAW_DUMP` lines now also carry the layer, the node, the depth point, the queue key and the first and last triangle of
 each draw. A circuit tree is **one draw of one triangle strip**: of the 12 blended meshes in a Platinum Rush frame, 8 are
-`newtree2` strips of 46 to 334 vertices (one to several trees each, welded together by position, so `tree` mostly
-shows one colour per strip).
+`newtree2` strips of 46 to 334 vertices (one to several trees each). `tree` welds triangles by position but not across a strip's degenerate bridge
+triangle, so each tree of a strip is its own colour (until `tree-overlap-2` it was one colour per strip).
 
 **Measured against PPSSPP software rendering, same camera** (PPSSPP 1.20.4, Pulse USA, `time-trial-platinum-rush-white-venom-grid`,
 the craft placed by `psp-drive.py place` at spline rows 2340 to 2440 and stopped; ours from `--pose-from` on a
@@ -399,6 +399,45 @@ in any still.** Open, and what a still cannot show: the temporal path (`reconstr
 velocity and no depth, `motion_blur = high`), which the maintainer plays with; a headless `--presented` frame of
 fsr3 against off at fly-by ticks 120 and 480 differs by 0.5 to 0.6 % of the pixels with no tree over a nearer one, but a single
 frame carries no history. A windowed run was not completed (the race opened on the grid, not the fly-by).
+
+**Faithful, maintainer-confirmed; and not the field of view (`tree-overlap-2`, 2026-11-11).** The maintainer
+reproduced the overlap in PPSSPP itself ("painfully obvious while the camera pans"), so the original draws these trees the
+same way; reconstruction, motion blur and the field of view were each turned off or changed and the fault stayed. It is
+a flip, not a wrong still: on Platinum Rush White's fly-by at `fov = 100` on a 3360x1440 window (the maintainer's frame:
+the two strips right of the right tower, in front of the small far dome), ticks 120, 148 and 176 show one strip over
+the other, then the other over the first, then the first again, as the camera pans and the per-mesh keys cross.
+Measured by drawing the list in the opposite order (`OAG_DEBUG_REVERSE_BLENDED=1`, off unless set) with each tree its
+own colour: at the fly-by's tick 148, 42,723 pixels change colour at `original` (332,369 tinted pixels), at 960x544 the
+count is about a tenth of that, and it is the same fraction at `fov = 65` (6 to 26 % of tinted pixels over six ticks at
+each), so the field of view only puts more strips in the picture. The profile's `model_detail = high` and `trail_order =
+over-floors` leave the blended list exactly the default profile's (47 blended draws, same order and keys at tick 150).
+The cross-mesh order matches the original's (above); **inside a strip the planes of a tree are drawn in the order the
+strip authors them**, and a tree is two or three crossed planes, so a far plane can be drawn over a near plane of the
+same tree too.
+
+**The earlier depth experiment was wrong, and its 0.04 to 0.27 % is withdrawn.** It made the blended pipeline write
+depth without discarding fully transparent texels, so a transparent texel of a near plane wrote depth and carved a hole
+in the planes drawn after it. With the alpha test the original has (`alpha_test_reference` 0 on every list-B batch) the
+depth-correct frame differs from the plain one in the strip's overlaps, up to 6 % of a fly-by frame's tinted pixels.
+
+**SCENERY SORT (`scenery_sort`, `--scenery-sort original|depth`).** `original`, the default, is the order above and
+byte-identical to a build without the row (`scenery_sort_ground_truth::original_is_the_default`). `depth` is **chosen,
+not measured**: a circuit's blended alpha-over mesh (a list-B mesh with a depth point, not additive, not one of HD's
+authored factor pairs) is submitted twice, `Foliage::depth` laying the depth of its texels with alpha at least one half
+down for the whole list first (`fs_blend_cutout_depth`), then the usual blend against it with `LessEqual` and no write
+(`oag_mesh::mesh_render::Foliage`, `Drawable::draw_lists_into`). Soft edges keep blending, translucent patches and glass
+fades below half alpha write no depth, additive meshes are untouched, and a flare keeps its queue slot (it tests depth
+against the trees, so a tree in front now hides it exactly). On the fly-by at 3360x1440 the tinted strips are stable
+through ticks 120 to 180 (the per-tree colours interlock in 3D instead of swapping), and reversing the list recolours
+**0 pixels at `depth` against 42,723 at `original`**
+(`scenery_sort_ground_truth::depth_puts_the_nearer_tree_on_top_whichever_order_the_list_draws_in`, which fails if the
+foliage depth pass is dropped). The row sits beside TRAIL ORDER on the graphics Advanced page and is offered on the same
+titles (Pulse, Pure: `Exhaust::is_psp_preset`); HD, Omega and 2048 keep their own order and drop it. **Pulse PS2:**
+checked, differs - its trees are alpha-tested cutout draws that already write depth (Platinum Rush tick 148 is
+byte-identical under both values), so the row changes only its few list-B meshes. **Pure:** the same path, not
+photographed (Vineta K has no list-B foliage in its fly-by). **Not default, and why:** the original draws these trees with
+no depth, and a nearer soft edge now blends over a farther solid one (a dark rim inside a big tree at 3360x1440);
+whether to make `depth` the default is the maintainer's call.
 
 **Lineage.** Pure and the PS2 pressing: checked, applies - the tint hooks `Scene::new`'s track model, which every title's
 circuit passes, and PS2's list B takes the PSP's key by inheritance (below); neither was photographed over a tree and

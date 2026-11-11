@@ -1120,6 +1120,29 @@ fn trail_order_defaults_to_the_original_and_round_trips_its_names() {
     }
 }
 
+/// SCENERY SORT is seeded only where the circuit is the PSP preset's; `original` is what a
+/// profile without the key reads, and the names round-trip.
+#[test]
+fn scenery_sort_is_seeded_on_the_psp_circuit_and_defaults_to_the_original() {
+    let seeded = |title, platform| {
+        menu_seeds(&Settings::default(), Anisotropy::default(), title, platform)
+            .into_iter()
+            .any(|(key, _)| key == "graphics.scenery_sort")
+    };
+    assert!(seeded(oag_pulse::TITLE, oag_disc::Platform::Psp));
+    assert!(seeded(oag_pure::TITLE, oag_disc::Platform::Psp));
+    assert!(!seeded(oag_hd::TITLE, oag_disc::Platform::Ps3));
+    assert_eq!(
+        RenderProfile::default().scenery_sort,
+        oag_display::display::ScenerySort::Original
+    );
+    let profile: RenderProfile = toml::from_str("scenery_sort = \"depth\"").expect("parse");
+    assert_eq!(
+        profile.scenery_sort,
+        oag_display::display::ScenerySort::Depth
+    );
+}
+
 /// WEATHER is seeded only where the weather is played (Pulse); elsewhere its row is
 /// dropped (`Definition::drop_unavailable_weather`).
 #[test]

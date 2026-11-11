@@ -23,7 +23,20 @@ pub(crate) enum Lists<'a> {
         depth_plane: Option<[f32; 4]>,
         /// Draws of another pipeline queued at keys of their own, put among the list's.
         between: Option<Interleave<'a>>,
+        /// Whether the list's foliage lays its own depth down before the list draws
+        /// (`ScenerySort::Depth`): the original writes none.
+        foliage_depth: bool,
     },
+}
+
+/// Whether `OAG_DEBUG_REVERSE_BLENDED` asks for the circuit's blended list in the opposite order:
+/// a diagnostic that shows which pixels of a frame the order decides. Off unless set to a value
+/// other than `0`; a flare placed among the list keeps the place the unreversed order gave it.
+fn reverse_blended() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        std::env::var("OAG_DEBUG_REVERSE_BLENDED").is_ok_and(|v| !matches!(v.trim(), "" | "0"))
+    })
 }
 
 /// Draws that sit among the blended list by queue key: a craft's flare is queued with the
@@ -219,12 +232,13 @@ impl Drawable {
     ) -> SceneStats {
         let solid = !matches!(lists, Lists::Blended { .. });
         let blended = !matches!(lists, Lists::Solid { .. });
-        let (depth_plane, between) = match lists {
+        let (depth_plane, between, foliage_depth) = match lists {
             Lists::Blended {
                 depth_plane,
                 between,
-            } => (depth_plane, between),
-            Lists::All | Lists::Solid { .. } => (None, None),
+                foliage_depth,
+            } => (depth_plane, between, foliage_depth),
+            Lists::All | Lists::Solid { .. } => (None, None, false),
         };
         let order = match lists {
             Lists::Solid { order } => order,
@@ -241,7 +255,7 @@ impl Drawable {
                 set,
                 chunks,
                 frustum,
-                (order, depth_plane, between),
+                (order, depth_plane, between, foliage_depth),
                 (solid, blended),
                 shown,
             )
@@ -258,7 +272,12 @@ impl Drawable {
         set: Option<&VisibleSet>,
         chunks: Option<&ChunkSet>,
         frustum: Option<&Frustum>,
-        (order, depth_plane, between): (SolidOrder<'_>, Option<[f32; 4]>, Option<Interleave<'_>>),
+        (order, depth_plane, between, foliage_depth): (
+            SolidOrder<'_>,
+            Option<[f32; 4]>,
+            Option<Interleave<'_>>,
+            bool,
+        ),
         (solid, blended): (bool, bool),
         shown: &mut Shown,
     ) -> SceneStats {
@@ -528,6 +547,41 @@ impl Drawable {
         if !blended {
             return stats;
         }
+        // `ScenerySort::Depth`: every foliage draw lays its solid texels' depth down before any
+        // of the list is coloured, so the colour pass below shows a texel only where nothing
+        // nearer is solid, whatever order the list draws in.
+        let foliage = self.foliage.as_ref().filter(|_| foliage_depth);
+        if let Some(foliage) = foliage {
+            for (index, draw) in self.model.transparent_draws.iter().enumerate() {
+                if !mesh_render::Foliage::takes_part(draw)
+                    || !shows.draw(draw)
+                    || !visible(
+                        draw,
+                        DrawSections::at(transparent, index),
+                        set,
+                        chunks,
+                        frustum,
+                    )
+                {
+                    continue;
+                }
+                let pipeline = &foliage.depth[usize::from(draw.culled)];
+                if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
+                    oag_gpu::perfprobe::pipeline_set();
+                    pass.set_pipeline(pipeline);
+                    current = Some(pipeline);
+                }
+                let slot = draw
+                    .texture
+                    .map_or(0, |t| t + 1)
+                    .min(self.textures.len() - 1);
+                if self.bindless.is_none() {
+                    binds.record(slot);
+                }
+                self.bind_slot(pass, &mut last_bound, slot);
+                pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            }
+        }
         // The original's order for list B: far to near by the mesh's view depth,
         // which depends on this view - `Model::blended_sorted`.
         let sorted = depth_plane.and_then(|plane| self.model.blended_sorted(plane));
@@ -554,9 +608,15 @@ impl Drawable {
             })
             .unwrap_or_default();
         let mut next_insert = 0;
-        for (at, index) in (0..transparent_count)
-            .map(|at| (at, blend_order.map_or(at, |order| order[at] as usize)))
-        {
+        let reversed = reverse_blended();
+        for (at, index) in (0..transparent_count).map(|at| {
+            let place = if reversed {
+                transparent_count - 1 - at
+            } else {
+                at
+            };
+            (at, blend_order.map_or(place, |order| order[place] as usize))
+        }) {
             while let (Some(between), Some(&(position, i))) = (between, inserts.get(next_insert))
                 && position <= at
             {
@@ -584,7 +644,10 @@ impl Drawable {
                 stats.draws_culled += 1;
                 continue;
             }
-            let pipeline = pipelines.select(draw);
+            let pipeline = match foliage.filter(|_| mesh_render::Foliage::takes_part(draw)) {
+                Some(foliage) => &foliage.colour[usize::from(draw.culled)],
+                None => pipelines.select(draw),
+            };
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
                 oag_gpu::perfprobe::pipeline_set();
                 pass.set_pipeline(pipeline);

@@ -546,6 +546,19 @@ impl Session {
                 }
             },
             // Applied by the next frame the race draws: the session hands the
+            // sort to `Race::set_scenery_sort` every frame.
+            "graphics.scenery_sort" => match text.parse::<oag_display::display::ScenerySort>() {
+                Ok(sort) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.scenery_sort = sort;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
+            // Applied by the next frame the race draws: the session hands the
             // length to `Race::set_trail_length` every frame.
             "graphics.trail_length" => match text.parse::<oag_display::display::TrailLength>() {
                 Ok(length) => {

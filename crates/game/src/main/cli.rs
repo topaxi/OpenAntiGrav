@@ -773,6 +773,12 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) trail_order: Option<oag_display::display::TrailOrder>,
 
+    /// How the circuit's blended list (trees, translucent floor patches, glass) is sorted:
+    /// `original` or `depth`, overriding `[render_profiles.<title>] scenery_sort` for this
+    /// run only. See `oag_display::display::ScenerySort`.
+    #[arg(long)]
+    pub(crate) scenery_sort: Option<oag_display::display::ScenerySort>,
+
     /// How long the PSP engine ribbons are: `original` or `hd`, overriding
     /// `[render_profiles.<title>] trail_length` for this run only. See
     /// `oag_display::display::TrailLength`.
