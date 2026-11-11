@@ -17,7 +17,9 @@ comments said a title package depends on no other.
 
 1. A title package may take a normal dependency on the one title it inherits from by lineage, to
    read that title's data instead of copying it. Omega depends on HD (its front end and HUD are
-   HD's). Today that is the only such edge.
+   HD's). Today that is the only such edge: `crates/omega/Cargo.toml` lists `oag-hd` under
+   `[dependencies]`, first used by `oag_omega::hud::ART`'s `always_on` (`oag_hd::hud::ALWAYS_ON`).
+   Omega's front end is HD's `PI001` plugin.
 2. Never the reverse, and never a cycle. The inherited title knows nothing of its descendant.
 3. Only data the descendant's own files confirm is shared: Omega reads `oag_hd::hud::ALWAYS_ON`
    because its layouts author the same widgets (`omega_hud_ground_truth`). A value the
