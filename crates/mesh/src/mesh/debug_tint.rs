@@ -88,10 +88,10 @@ impl Model {
             }
         }
         for texture in whitened {
-            if let Some(Some(picture)) = self.textures.get(texture) {
-                if let Some(white) = whitened_copy(picture) {
-                    self.textures[texture] = Some(Arc::new(white));
-                }
+            if let Some(Some(picture)) = self.textures.get(texture)
+                && let Some(white) = whitened_copy(picture)
+            {
+                self.textures[texture] = Some(Arc::new(white));
             }
         }
         handed
@@ -161,7 +161,9 @@ fn tree_groups(
 fn whitened_copy(picture: &ModelTexture) -> Option<ModelTexture> {
     fn white(bytes: &[u8]) -> Vec<u8> {
         bytes
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .flat_map(|texel| [255, 255, 255, texel[3]])
             .collect()
     }
