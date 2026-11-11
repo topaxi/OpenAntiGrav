@@ -72,12 +72,13 @@ pub use tracking::{
     COURSE_LENGTH_AT, Course, OPTIONS_AT, OPTIONS_LEN, TITLE_AT, TRACKING_AT, TRACKING_FIXED,
     TRACKING_FLAGS, TRACKING_LEN, TRACKING_PLACE, TRACKING_PROGRESS, Tracking,
 };
+pub use warning::{Warning, WarningSide};
 
 /// The ABI major. A manifest's `[extension] api` names it.
 pub const ABI: u32 = 1;
 /// The layout revision within [`ABI`]: bumped by hand on any edit to the layout. A
 /// module built before revisions existed returns the bare major and is revision 0.
-pub const REVISION: u32 = 3;
+pub const REVISION: u32 = 4;
 const _: () = assert!(REVISION > 0 && REVISION < 256);
 const _: () = assert!(CRAFTS_AT + CRAFT_LEN * MAX_CRAFTS <= IO_LEN);
 const _: () = assert!(MAX_CRAFTS <= MAX_SLOTS as usize);
@@ -327,9 +328,9 @@ coded! {
 }
 
 coded! {
-    /// `raise-warning`'s icons: the title's incoming-weapon warning icons, by the weapon each
-    /// is the warning of. An icon fixes its group: the eight shots warn on the rear slot (a
-    /// threat behind), a mine or bomb on the forward slot (a threat laid ahead).
+    /// `raise-warning`'s title icons: the title's incoming-weapon warning icons, by the weapon
+    /// each is the warning of. An icon fixes its group: the eight shots warn on the rear slot
+    /// (a threat behind), a mine or bomb on the forward slot (a threat laid ahead).
     WarningIcon: u16, first 0 {
         /// Rear slot, `RearWarningRocketIcon`.
         Rocket,
@@ -760,16 +761,16 @@ pub enum Command {
         /// The disc's radius, `(0, MAX_PROBE_RADIUS]`.
         radius: f32,
     },
-    /// Raise the incoming-warning HUD of the slot's person with `icon`, as a weapon fired
-    /// behind (or a mine laid ahead) does: the icon's group lights for 2.0 s, blinking at 4 Hz.
-    /// An output, never hashed. Edge-triggered, not re-sent: a raise restarts the group's
+    /// Raise the incoming-warning HUD of the slot's person with `warning`, as a weapon fired
+    /// behind (or a mine laid ahead) does: the warning's group lights for 2.0 s, blinking at
+    /// 4 Hz. An output, never hashed. Edge-triggered, not re-sent: a raise restarts the group's
     /// timer, and a timer re-armed every tick is never lit. Drawn only where the title draws
     /// the warnings and the slot is the one person's view; anywhere else it is dropped.
     RaiseWarning {
         /// The grid slot whose HUD warns.
         slot: Slot,
-        /// The icon, which fixes the group.
-        icon: WarningIcon,
+        /// The icon: the title's own, which fixes the group, or the mod's, which names it.
+        warning: Warning,
     },
 }
 
@@ -877,7 +878,10 @@ impl Command {
             Self::ScalePad { pad, factor } => (pad, factor.to_bits(), 0),
             Self::ScaleSlotPads { factor, .. } => (0, factor.to_bits(), 0),
             Self::PlayCue { cue, .. } => (cue.code(), 0, 0),
-            Self::RaiseWarning { icon, .. } => (icon.code(), 0, 0),
+            Self::RaiseWarning { warning, .. } => match warning {
+                Warning::Title(icon) => (icon.code(), 0, 0),
+                Warning::Mod { side, .. } => (pool_at | OWN_FLAG, 0, u32::from(side.code())),
+            },
             Self::FireEffect { effect, .. } => (effect.code(), 0, 0),
             Self::FireModEffect { index, .. } => (index | OWN_FLAG, 0, 0),
             Self::HudTint { element, rgba, .. } => (element.code(), 0, rgba.to_u32()),
@@ -1055,9 +1059,26 @@ impl Command {
                 slot,
                 cue: Cue::from_code(arg).ok_or(Malformed::Cue(arg))?,
             },
+            CommandKind::RaiseWarning if arg & OWN_FLAG != 0 => {
+                let at = arg & !OWN_FLAG;
+                Self::RaiseWarning {
+                    slot,
+                    warning: Warning::Mod {
+                        side: u16::try_from(word)
+                            .ok()
+                            .and_then(WarningSide::from_code)
+                            .ok_or(Malformed::WarningSide(word))?,
+                        icon: ModIcon::from_string(
+                            pool_string(pool, at).ok_or(Malformed::Pool(at))?,
+                        ),
+                    },
+                }
+            }
             CommandKind::RaiseWarning => Self::RaiseWarning {
                 slot,
-                icon: WarningIcon::from_code(arg).ok_or(Malformed::WarningIcon(arg))?,
+                warning: Warning::Title(
+                    WarningIcon::from_code(arg).ok_or(Malformed::WarningIcon(arg))?,
+                ),
             },
             CommandKind::FireEffect if arg & OWN_FLAG != 0 => Self::FireModEffect {
                 slot,
@@ -1387,6 +1408,7 @@ mod scene;
 mod sound;
 pub mod track;
 mod tracking;
+mod warning;
 
 #[cfg(test)]
 mod tests;

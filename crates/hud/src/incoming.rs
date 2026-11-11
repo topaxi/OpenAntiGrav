@@ -93,6 +93,59 @@ impl Side {
             Self::Rear => "RearWarningBackground",
         }
     }
+
+    /// The title's icon whose box a mod's own art is fitted to on this slot.
+    #[must_use]
+    pub const fn box_icon(self) -> Icon {
+        match self {
+            Self::Forward => Icon::Mine,
+            Self::Rear => Icon::Rocket,
+        }
+    }
+}
+
+/// What a lit group draws: a weapon's title icon, or a mod's own art.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Look {
+    /// The title's icon for a weapon; it fixes the group.
+    Title(Icon),
+    /// A mod's own PNG or SVG, by its key in the HUD sheet
+    /// (`oag_raceplay::extensions::mod_icon_src`), on the group the mod chose.
+    Mod {
+        /// The group it lights.
+        side: Side,
+        /// The sheet key.
+        src: String,
+    },
+}
+
+impl Look {
+    /// The group this lights.
+    #[must_use]
+    pub const fn side(&self) -> Side {
+        match self {
+            Self::Title(icon) => icon.side(),
+            Self::Mod { side, .. } => *side,
+        }
+    }
+}
+
+/// The HUD sheet key of a vector icon's raster made for the warning slot of `side`: the
+/// slot is not the pickup's size, and a vector icon is rasterised at the exact pixels of the
+/// slot it draws in ([`crate::svg`]).
+#[must_use]
+pub fn warning_src(src: &str, side: Side) -> String {
+    let side = match side {
+        Side::Forward => "forward",
+        Side::Rear => "rear",
+    };
+    format!("{src}@warning-{side}")
+}
+
+impl From<Icon> for Look {
+    fn from(icon: Icon) -> Self {
+        Self::Title(icon)
+    }
 }
 
 /// The window a fired weapon warns inside: `(low, high)` of `low < g < high`, and
@@ -123,11 +176,11 @@ pub fn classify(weapon: Weapon, gap: f32) -> Option<Icon> {
     (gap.abs() <= REACH && low < gap && gap < high).then_some(icon)
 }
 
-/// One group's timer and the icon it carries.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+/// One group's timer and the look it carries.
+#[derive(Debug, Clone, Default, PartialEq)]
 struct Slot {
     timer: f32,
-    icon: Option<Icon>,
+    icon: Option<Look>,
 }
 
 impl Slot {
@@ -146,16 +199,16 @@ impl Slot {
 
 /// What the two groups show this frame: the icon of each group that is in a lit
 /// phase. A lit group draws its background and that icon.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Shown {
     /// The forward group, when lit.
-    pub forward: Option<Icon>,
+    pub forward: Option<Look>,
     /// The rear group, when lit.
-    pub rear: Option<Icon>,
+    pub rear: Option<Look>,
 }
 
 /// The two groups' state, the original's `hud+0x180..0x18c`.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Warnings {
     forward: Slot,
     rear: Slot,
@@ -163,16 +216,17 @@ pub struct Warnings {
 }
 
 impl Warnings {
-    /// Starts `icon`'s group on its 2.0 s timer, overwriting a running one. The one
+    /// Starts `look`'s group on its 2.0 s timer, overwriting a running one. The one
     /// entry point a raise goes through.
-    pub fn raise(&mut self, icon: Icon) {
-        let slot = match icon.side() {
+    pub fn raise(&mut self, look: impl Into<Look>) {
+        let look = look.into();
+        let slot = match look.side() {
             Side::Forward => &mut self.forward,
             Side::Rear => &mut self.rear,
         };
         *slot = Slot {
             timer: SECONDS,
-            icon: Some(icon),
+            icon: Some(look),
         };
     }
 
@@ -190,15 +244,15 @@ impl Warnings {
         // The icon is read after the advance: a group whose timer ran out this call
         // was in an unlit phase, so it shows nothing either way.
         self.shown = Shown {
-            forward: self.forward.icon.filter(|_| forward_on),
-            rear: self.rear.icon.filter(|_| rear_on),
+            forward: self.forward.icon.clone().filter(|_| forward_on),
+            rear: self.rear.icon.clone().filter(|_| rear_on),
         };
     }
 
     /// What to draw this frame.
     #[must_use]
-    pub const fn shown(&self) -> Shown {
-        self.shown
+    pub const fn shown(&self) -> &Shown {
+        &self.shown
     }
 
     /// Whether either group has a timer running.

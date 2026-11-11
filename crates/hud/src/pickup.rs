@@ -468,11 +468,63 @@ pub fn mod_icon_size(cx: IconFrame<'_>, svg: [f32; 2]) -> Option<[f32; 2]> {
 /// `TurboIcon` sprite. A title that draws its icons as models (Pure) takes the backdrop
 /// model's quad as the frame and draws the PNG on it at its own size (the art is the glyph alone).
 pub(super) fn mod_icon_draw(cx: &Context<'_>, src: &str, look: Option<Look>) -> Option<Draw> {
-    let placed = cx.sheet.get(src)?;
-    let slot = slot(&cx.frame())?;
+    let fade = look.map_or(1.0, |look| look.icon);
+    mod_icon_in(cx.sheet, src, &slot(&cx.frame())?, fade)
+}
+
+/// The slot of a title's incoming-warning icon on `side`: the box of the weapon icon the
+/// layout authors there ([`crate::incoming::Side::box_icon`]), which the art fills. **Chosen, not
+/// measured**: the box is one weapon's, as the eight rear icons share one place.
+fn warning_slot(cx: &IconFrame<'_>, side: crate::incoming::Side) -> Option<Slot> {
+    let frame = cx.layout.sprite(side.box_icon().widget())?.rect;
+    Some(Slot {
+        frame,
+        aim: [frame[2], frame[3]],
+        centre: [frame[0] + frame[2] * 0.5, frame[1] + frame[3] * 0.5],
+        fill: true,
+    })
+}
+
+/// The size, in layout units, a vector icon whose drawing is `svg` layout units across is
+/// drawn at in the warning slot of `side`, so a loader can rasterise it at exactly that many
+/// pixels. `None` where the layout has no such slot.
+#[must_use]
+pub fn warning_icon_size(
+    cx: IconFrame<'_>,
+    side: crate::incoming::Side,
+    svg: [f32; 2],
+) -> Option<[f32; 2]> {
+    if svg[0] <= 0.0 || svg[1] <= 0.0 {
+        return None;
+    }
+    let fit = warning_slot(&cx, side)?.fit(svg);
+    Some([svg[0] * fit, svg[1] * fit])
+}
+
+/// A mod's own icon in the incoming-warning slot of `side`, fitted as a pickup's is
+/// ([`mod_icon_in`]). A vector icon is drawn from the raster made for this slot
+/// ([`crate::incoming::warning_src`]) when the sheet has one.
+pub(super) fn warning_icon_draw(
+    cx: &Context<'_>,
+    src: &str,
+    side: crate::incoming::Side,
+) -> Option<Draw> {
+    let slot = warning_slot(&cx.frame(), side)?;
+    let own = crate::incoming::warning_src(src, side);
+    let src = if cx.sheet.get(&own).is_some() {
+        own.as_str()
+    } else {
+        src
+    };
+    mod_icon_in(cx.sheet, src, &slot, 1.0)
+}
+
+/// `src`'s art fitted to `slot` and faded by `fade`.
+fn mod_icon_in(sheet: &crate::sprite::Sheet, src: &str, slot: &Slot, fade: f32) -> Option<Draw> {
+    let placed = sheet.get(src)?;
     // Texels per layout unit: 1 for a PNG, the raster's own for a vector icon, whose
     // quad is then laid on whole screen pixels so each texel lands on one.
-    let rasterised = cx.sheet.texel_density(src);
+    let rasterised = sheet.texel_density(src);
     let density = rasterised.unwrap_or(1.0);
     let canvas = [
         placed.width as f32 / density,
@@ -493,7 +545,6 @@ pub(super) fn mod_icon_draw(cx: &Context<'_>, src: &str, look: Option<Look>) -> 
         }
     };
     let (w, h) = (snap(canvas[0] * fit), snap(canvas[1] * fit));
-    let fade = look.map_or(1.0, |look| look.icon);
     Some(Draw::Sprite {
         rect: [
             snap(slot.centre[0] - offset[0] * fit - w * 0.5),

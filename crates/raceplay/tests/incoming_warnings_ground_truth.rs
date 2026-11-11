@@ -111,7 +111,10 @@ fn watch(weapon: Weapon) -> (usize, usize) {
             .any(|(index, slot)| before[index].0.began(Use::of(&race, slot), weapon));
         if let Some((expected, gap)) = check.take().filter(|_| !restarted) {
             assert_eq!(
-                lit,
+                lit.map(|look| match look {
+                    oag_hud::incoming::Look::Title(icon) => icon,
+                    other => panic!("{other:?}"),
+                }),
                 expected.then_some(icon),
                 "{weapon:?} at tick {tick}: used from a gap of {gap}"
             );

@@ -337,6 +337,9 @@ pub struct Prepared {
     /// Each module's [`Source::options`], in module order.
     #[cfg(feature = "extensions")]
     options: Vec<Picks>,
+    /// The names of each module's mod's `[icons]`, in module order.
+    #[cfg(feature = "extensions")]
+    icons: Vec<Vec<String>>,
     /// Each module whose mod declares `[[pickup.odds]]` (the weapon pads draw its pickup
     /// with them), in module order, with its rows and the race's title.
     #[cfg(feature = "extensions")]
@@ -425,6 +428,7 @@ pub fn prepare(
         let mut drives_ai = Vec::new();
         let mut publishes = Vec::new();
         let mut options = Vec::new();
+        let mut icons = Vec::new();
         let mut odds = Vec::new();
         let mut pickup_mods = 0;
         let mut track_module = false;
@@ -490,6 +494,7 @@ pub fn prepare(
                     drives_ai.push(source.drives_ai_pickup);
                     publishes.push(channel::publishes(&source.channels));
                     options.push(source.options);
+                    icons.push(source.icons.iter().map(|icon| icon.name.clone()).collect());
                 }
                 Err(e) => push(report, format!("{label} left out: {e}")),
             }
@@ -503,6 +508,7 @@ pub fn prepare(
             drives_ai,
             publishes,
             options,
+            icons,
             odds,
             title: oag_ext_abi::channel_key(&title.to_ascii_lowercase()),
             beacons,
@@ -819,7 +825,8 @@ impl Extensions {
                     prepared.odds,
                 )
                 .with_title(prepared.title)
-                .with_options(&prepared.options),
+                .with_options(&prepared.options)
+                .with_icons(prepared.icons),
                 beacons: prepared.beacons,
                 fired: Vec::new(),
             }
@@ -1163,9 +1170,9 @@ impl crate::Race {
     #[cfg(all(feature = "extensions", feature = "view"))]
     fn run_warnings(&mut self) {
         let warnings = std::mem::take(&mut self.sim.extensions.on.warnings);
-        for (module, slot, icon) in warnings {
+        for (module, slot, look) in warnings {
             if !on::faulted(&self.sim, module) {
-                self.raise_mod_warning(slot, icon);
+                self.raise_mod_warning(slot, look);
             }
         }
     }

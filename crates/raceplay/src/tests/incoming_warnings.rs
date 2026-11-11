@@ -79,6 +79,9 @@ fn the_raise_reaches_the_readout_unlit_then_blinks() {
         "the raise frame is unlit"
     );
     race.advance_slot_huds();
-    assert_eq!(race.readout().incoming.rear, Some(Icon::Quake));
+    assert_eq!(
+        race.readout().incoming.rear,
+        Some(oag_hud::incoming::Look::Title(Icon::Quake))
+    );
     assert_eq!(race.readout().incoming.forward, None);
 }

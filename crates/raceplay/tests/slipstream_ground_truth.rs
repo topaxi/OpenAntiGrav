@@ -487,7 +487,10 @@ fn a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and
         }
         race.tick(&throttle());
         let tick = race.sim.world.tick;
-        let lit = race.readout().incoming.rear == Some(oag_hud::incoming::Icon::Repulser);
+        let lit = race.readout().incoming.rear
+            == Some(oag_hud::incoming::Look::Title(
+                oag_hud::incoming::Icon::Repulser,
+            ));
         if lit {
             lit_at.push(tick);
         }
