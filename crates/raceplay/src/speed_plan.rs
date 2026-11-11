@@ -660,6 +660,7 @@ impl Race {
             } else {
                 f32::INFINITY
             },
+            beneath_ticks: sim.reset_triggers.beneath_ticks,
             pad: &pad,
             drive_again: drive_again(),
         };

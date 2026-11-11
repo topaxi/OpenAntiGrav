@@ -97,9 +97,12 @@ pub struct Course<'a, R: Raycaster + ?Sized> {
     /// Seconds without a hover contact after which the race rescues a craft.
     pub max_airborne: f32,
     /// How far under its line point, on the ground on a supported sample, a
-    /// craft counts as on another road ([`Failure::Beneath`]); infinity for a
-    /// course with no such rule. The race passes its own rescue's distance.
+    /// craft that left its corridor counts as on another road, and for how
+    /// many ticks in a row before that is a failure ([`Failure::Beneath`]);
+    /// an infinite distance for a course with no such rule. The race passes
+    /// its own rescue's two.
     pub beneath: f32,
+    pub beneath_ticks: u32,
     /// The push direction of the speed pad the craft is inside, given where it
     /// started the previous tick and this one: the race's own pad test, so the
     /// plan is learned with the boosts the race gives.
@@ -519,6 +522,12 @@ struct Run {
     /// Where the craft started the previous tick, for the pad sweep; `None`
     /// on the grid and after a rescue, as the race's own is.
     last_position: Option<oag_core::math::Vec3>,
+    /// Consecutive ticks on the ground beneath the line
+    /// ([`Course::beneath_the_line`]) after leaving its corridor.
+    beneath: u32,
+    /// Whether the craft was outside the line's corridor on the last tick it
+    /// was not beneath the line.
+    wide: bool,
 }
 
 /// Why a tick counted as a failure.
@@ -535,10 +544,12 @@ pub enum Failure {
     /// Something the race rescues a craft for that is not a wall: a reset
     /// volume touched, or longer in the air than [`Course::max_airborne`].
     Rescued,
-    /// On the ground further under its line point than [`Course::beneath`]:
-    /// on another road. The race rescues it after a dwell; the plan counts
-    /// the first such tick, so the lowering lands on the road the craft left
-    /// and not on the one it found. **Chosen, not measured**
+    /// On the ground further under its line point than [`Course::beneath`]
+    /// for [`Course::beneath_ticks`], having left the line's corridor to get
+    /// there: it ran wide onto another road, which the race rescues a craft
+    /// from. A craft under its line inside its corridor all along is where
+    /// the line's road is, as far as a speed can tell (2048 `arena`'s line
+    /// runs 21 units over its road for 250 samples). **Chosen, not measured**
     /// (`docs/gameplay/ai.md`, "A road under the line is a failure").
     Beneath,
 }
@@ -547,6 +558,9 @@ pub enum Failure {
 struct Tick {
     failure: Option<Failure>,
     contact: bool,
+    /// Whether the craft ended the tick on the ground beneath the line, having
+    /// left its corridor ([`Run::beneath`]).
+    beneath: bool,
     /// The steering the driver asked for, for [`probe`].
     steer: f32,
 }
@@ -613,6 +627,12 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
             run.best_tick = run.tick;
         }
         let contact = evaluated.wall.contacts > evaluated.wall.floor_contacts;
+        let under = self.beneath_the_line(&run.state, index);
+        if !under {
+            run.wide = self.beneath.is_finite() && self.outside_the_corridor(&run.state, index);
+        }
+        let beneath = under && run.wide;
+        run.beneath = if beneath { run.beneath + 1 } else { 0 };
         let away = run.state.body.position.distance(self.line.point(index));
         let failure = if run.state.craft_state != CraftState::Racing {
             Some(Failure::Wrecked)
@@ -628,7 +648,7 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
             // `01_Track` at PHANTOM clean in isolation and was rescued four
             // times in the race, in the air off a crest.
             Some(Failure::Rescued)
-        } else if self.beneath_the_line(&run.state, index) {
+        } else if beneath && run.beneath >= self.beneath_ticks {
             Some(Failure::Beneath)
         } else if run.tick > STALL_GRACE
             && (run.slow > STALL_TICKS || run.tick - run.best_tick > run.stuck_limit)
@@ -640,6 +660,7 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
         Tick {
             failure,
             contact,
+            beneath,
             steer: controls.steer_x,
         }
     }
@@ -653,14 +674,22 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
     /// over a gap there, and a craft that comes down early is under it on the
     /// road it was always going to land on).
     fn beneath_the_line(&self, state: &ShipState, index: usize) -> bool {
-        if state.time_airborne > 0.0 || self.line.is_unsupported(index) || self.samples.is_empty()
-        {
+        if state.time_airborne > 0.0 || self.line.is_unsupported(index) || self.samples.is_empty() {
             return false;
         }
         let Some(sample) = self.samples[index % self.samples.len()] else {
             return false;
         };
         (self.line.point(index) - state.body.position).dot(sample.normal()) > self.beneath
+    }
+
+    /// Whether the craft is further across its line than the corridor there
+    /// reaches; never on a line with no corridor.
+    fn outside_the_corridor(&self, state: &ShipState, index: usize) -> bool {
+        self.line.aim(index, 0.0).corridor.is_some_and(|frame| {
+            let offset = (state.body.position - self.line.point(index)).dot(frame.lateral);
+            offset < frame.left || offset > frame.right
+        })
     }
 }
 
@@ -788,6 +817,8 @@ impl SpeedPlan {
             best_tick: 0,
             stuck_limit: NEVER_STUCK,
             last_position: None,
+            beneath: 0,
+            wide: false,
         }
     }
 
@@ -889,6 +920,8 @@ impl SpeedPlan {
                 best_tick: run.tick,
                 stuck_limit: run.stuck_limit,
                 last_position: None,
+                beneath: 0,
+                wide: false,
             };
             known.respawn(run);
         }
@@ -1037,6 +1070,8 @@ impl SpeedPlan {
                     best_tick: run.tick,
                     stuck_limit: run.stuck_limit,
                     last_position: None,
+                    beneath: 0,
+                    wide: false,
                 };
                 recent.clear();
                 known.respawn(run);
@@ -1091,6 +1126,9 @@ struct Trace {
     index: u32,
     speed: f32,
     airborne: bool,
+    /// On the ground beneath the line, having left its corridor
+    /// ([`Run::beneath`]).
+    beneath: bool,
     /// Whether the plan had the craft at full throttle with no brake.
     full: bool,
 }
@@ -1104,28 +1142,29 @@ impl Trace {
             index: lived.index,
             speed: lived.pace,
             airborne: lived.air > 0.0,
+            beneath: lived.beneath,
             full: thrust >= 1.0 && brake <= 0.0,
         }
     }
 }
 
 /// Adds a tick to a learning pass's trace, which keeps the last three to six
-/// lookbacks, and however long the craft has been in the air since, the last
-/// lookback it spent on the ground: a failure after a long fall (the race's
-/// rescue comes four seconds in) still finds the road the craft left, which
-/// is what its lowering lowers.
+/// lookbacks, and however long the craft has been off its road since (in the
+/// air, or on another road under the line), the last lookback it spent on it:
+/// a failure after a long fall (the race's rescue comes four seconds in)
+/// still finds the road the craft left, which is what its lowering lowers.
 fn push_trace(recent: &mut Vec<Trace>, trace: Trace) {
     recent.push(trace);
     if recent.len() > LOOKBACK_TICKS * 6 {
         let newest = recent.len() - LOOKBACK_TICKS * 3;
-        let grounded = recent
+        let on_the_road = recent
             .iter()
             .enumerate()
             .rev()
-            .filter(|(_, trace)| !trace.airborne)
+            .filter(|(_, trace)| !trace.airborne && !trace.beneath)
             .nth(LOOKBACK_TICKS - 1)
             .map_or(0, |(at, _)| at);
-        recent.drain(..newest.min(grounded));
+        recent.drain(..newest.min(on_the_road));
     }
 }
 
@@ -1200,9 +1239,9 @@ enum Cause {
     ShortOfTheLip(usize),
     /// Stopped or off the circuit at full throttle all along: no plan helps.
     Underpowered,
-    /// Flew off a road the line stays on and came down on another one; the
-    /// flight began at this index into the trace. Lower the ceilings before
-    /// it: the speed that failed is the one the craft left the road at.
+    /// Left a road the line stays on and ended on another one under it; it
+    /// left at this index into the trace. Lower the ceilings before it: the
+    /// speed that failed is the one the craft left the road at.
     LeftTheRoad(usize),
 }
 
@@ -1251,15 +1290,19 @@ impl Cause {
 
 impl Cause {
     /// What put a craft on a road under its line ([`Failure::Beneath`]), by
-    /// the last flight in the trace, however long ago it landed.
+    /// the last flight before it got there.
     ///
     /// Where the line itself crosses a gap in that flight, the craft fell
     /// short of a jump: the run-up is held if the plan braked on it, and at
-    /// full throttle no plan helps. Anywhere else it flew off a road the line
-    /// stays on, a corner taken too fast.
+    /// full throttle no plan helps. Anywhere else it left a road the line
+    /// stays on, a corner taken too fast, by flying off it or by driving down.
     fn of_a_lower_road(recent: &[Trace], line: &Line) -> Self {
-        let Some(last_air) = recent.iter().rposition(|t| t.airborne) else {
-            return Self::TooFast;
+        let beneath_from = recent
+            .iter()
+            .rposition(|t| !t.beneath)
+            .map_or(0, |above| above + 1);
+        let Some(last_air) = recent[..beneath_from].iter().rposition(|t| t.airborne) else {
+            return Self::LeftTheRoad(beneath_from);
         };
         let first_air = recent[..last_air]
             .iter()

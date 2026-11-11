@@ -205,6 +205,7 @@ fn build_on(line: &Line) -> (SpeedPlan, Report) {
         reset: &|_, _, _| false,
         max_airborne: f32::INFINITY,
         beneath: f32::INFINITY,
+        beneath_ticks: 0,
         pad: &|_, _| None,
         drive_again: DRIVE_AGAIN.get(),
     };
@@ -225,6 +226,7 @@ fn verify(line: &Line, plan: &SpeedPlan) -> Report {
         reset: &|_, _, _| false,
         max_airborne: f32::INFINITY,
         beneath: f32::INFINITY,
+        beneath_ticks: 0,
         pad: &|_, _| None,
         drive_again: DRIVE_AGAIN.get(),
     };
@@ -595,6 +597,7 @@ fn on_course<T>(line: &Line, f: impl FnOnce(&Course<'_, Plane>) -> T) -> T {
         reset: &|_, _, _| false,
         max_airborne: f32::INFINITY,
         beneath: f32::INFINITY,
+        beneath_ticks: 0,
         pad: &|_, _| None,
         drive_again: DRIVE_AGAIN.get(),
     };
