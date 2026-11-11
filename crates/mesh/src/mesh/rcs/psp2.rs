@@ -42,6 +42,7 @@ use oag_rcs::gxp::sampler_use;
 use oag_rcs::rcsmaterial::name_hash;
 use oag_rcs::rcsmodel::psp2::lighting_only;
 
+mod alpha_emissive;
 mod alpha_product;
 mod emissive_add;
 mod glow;
@@ -215,6 +216,12 @@ pub struct Report {
     /// Of that family, materials left to the generic reading: no `Texture2Alpha`, no `Constant1`,
     /// or a picture that would not decode.
     pub emissive_add_unread: usize,
+    /// Materials of the `alpha_emissive` families that add the picture's alpha times `glowtinrt`
+    /// after the light (`psp2::alpha_emissive`).
+    pub alpha_emissive_materials: usize,
+    /// Of those, materials left to the generic reading: another reading holds the slot, or the
+    /// drawn picture is not the `alpha_emissive` sampler's.
+    pub alpha_emissive_unread: usize,
     /// `2048_shipshield_old` shells that draw their Lightning layer (`psp2::shield_lightning`).
     pub shield_lightning_materials: usize,
     /// Of that family, shells left to the diffuse alone: no picture, weight or program rates.
@@ -373,6 +380,14 @@ impl Report {
                 self.emissive_add_materials, self.emissive_add_unread
             )
         };
+        let alpha_emissive = if self.alpha_emissive_materials + self.alpha_emissive_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} alpha-emissive material(s) add the picture's alpha * glowtinrt after the light ({} left to the generic reading)",
+                self.alpha_emissive_materials, self.alpha_emissive_unread
+            )
+        };
         let lightning = if self.shield_lightning_materials + self.shield_lightning_unread == 0 {
             String::new()
         } else {
@@ -417,7 +432,7 @@ impl Report {
         };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}{lightning}{refraction}{uv_keys}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}{alpha_emissive}{lightning}{refraction}{uv_keys}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -624,6 +639,8 @@ fn build_planned(
         &mut *textures,
         &mut report,
     );
+    // The `alpha_emissive` families add the picture's alpha times `glowtinrt` after the light.
+    alpha_emissive::plan(&decoded, &mut glow, &mut emissive_add, &mut report);
     // `mt_tunnelrefraction` and `cl_tunnelrefraction` read the refraction target.
     let glass = refraction::plan(&decoded.materials, &mut glow.emissive, &mut report);
     // A PS4 submesh with a tangent reads a normal map, bound third.
@@ -804,7 +821,7 @@ fn build_planned(
             // `2048_shipshield_old` reads both pairs of its packed `Uv1_Uv2`: the first is the
             // diffuse's, the second the Lightning layer's.
             let (texcoord, texcoord2) = match submesh.packed_texcoords.get(i) {
-                Some(&[a, b, c, d]) if emissive_add.of(submesh.material).is_some() => {
+                Some(&[a, b, c, d]) if emissive_add.mask(submesh.material).is_some() => {
                     ([a, b], [c, d])
                 }
                 _ => (texcoord, texcoord2),
@@ -1076,7 +1093,7 @@ fn bind_textures(
                 model.pad_masks.push(
                     twin_here
                         .map(|t| t.wipe.clone())
-                        .or_else(|| emissive_add.of(Some(index)).map(|a| a.texture.clone()))
+                        .or_else(|| emissive_add.mask(Some(index)).cloned())
                         .or_else(|| normals.of(Some(index)).cloned()),
                 );
             }

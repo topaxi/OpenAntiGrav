@@ -28,10 +28,11 @@ use crate::mesh::{
     Emissive, ModelTexture, PROGRAM_EMISSIVE_ADD, PROGRAM_EMISSIVE_ALPHA_MASK, slots,
 };
 
-/// One admitted material: its glow-table slot (entry index plus one) and its mask map.
+/// One admitted material: its glow-table slot (entry index plus one) and its mask map, which a
+/// term read off the picture's own alpha ([`super::alpha_emissive`]) does not have.
 pub(super) struct Add {
     pub slot: u32,
-    pub texture: Arc<ModelTexture>,
+    pub texture: Option<Arc<ModelTexture>>,
 }
 
 /// Per material, the add it draws. [`super::shield_lightning`] fills in the same table: both ride
@@ -52,8 +53,14 @@ impl Plan {
             .map_or(0, |a| a.slot << slots::MATERIAL_SHIFT)
     }
 
+    /// Whether any material rides the third binding.
     pub fn any(&self) -> bool {
-        self.adds.iter().any(Option::is_some)
+        self.adds.iter().flatten().any(|a| a.texture.is_some())
+    }
+
+    /// The mask map this material binds third, when it has one.
+    pub fn mask(&self, material: Option<usize>) -> Option<&Arc<ModelTexture>> {
+        self.of(material)?.texture.as_ref()
     }
 }
 
@@ -131,7 +138,10 @@ pub(super) fn plan(
             report.emissive_add_unread += 1;
             continue;
         };
-        out.adds[index] = Some(Add { slot, texture });
+        out.adds[index] = Some(Add {
+            slot,
+            texture: Some(texture),
+        });
         report.emissive_add_materials += 1;
     }
     out
