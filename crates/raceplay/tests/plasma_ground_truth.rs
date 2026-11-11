@@ -110,7 +110,15 @@ fn bolts(race: &race::Race) -> Vec<oag_weapons::projectile::Projectile> {
 /// A race with the craft already up to speed, and full throttle to keep it
 /// there.
 fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
-    let loaded = single_race()?;
+    moving_with(true)
+}
+
+/// [`moving`], with the track's collision cage dropped when `cage` is false.
+fn moving_with(cage: bool) -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
+    let mut loaded = single_race()?;
+    if !cage {
+        loaded.setup.spline = loaded.setup.spline.with_cage(None);
+    }
     let mut race = race::Race::start(loaded.setup);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
@@ -428,7 +436,10 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_plasma_bolt_that_times_out_far_above_the_track_hurts_nobody_below_it() {
-    let Some((mut race, throttle)) = moving() else {
+    // Without the collision cage: on Pulse a bolt 10,000 units up is outside the tube on its
+    // first tick and ends there (`projectile_cage_ground_truth.rs`), so the timeout is only
+    // reached where no cage runs.
+    let Some((mut race, throttle)) = moving_with(false) else {
         return;
     };
     let plasma = race.plasma_stats().expect("the disc authors a Plasma");
