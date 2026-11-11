@@ -5,7 +5,7 @@ description: Compact the always-loaded and often-loaded agent instructions (CLAU
 
 # Agent janitor
 
-last-run: 2026-10-26
+last-run: 2026-11-11
 
 Run as a sonnet `oag-docs` lane (docs-only). Bump `last-run` above to the run date in the final commit. oag-drive reads it on load and queues this lane first when it is over 14 days old.
 

@@ -60,12 +60,15 @@ Use `--no-audio` on every `oag-game` run, headless or on your own Xvfb display
   <bin>` (without `--user-callchains` the event does not open),
   `perf report --no-children`, `perf stat`. Compare two builds with
   `taskset -c 0-5 perf stat -e cpu_core/cycles/u,cpu_core/instructions/u`.
-  Not installed, so tell the lead rather than assuming: `samply`,
-  `cargo flamegraph`, `hyperfine`, `heaptrack`, `valgrind`, `cargo-llvm-lines`,
-  `cargo-bloat`. Check with `which` before relying on one.
-- **Allocations**: no allocator profiler is installed. A counting
-  `#[global_allocator]` in a throwaway test or example (not committed unless
-  the brief asks) gives allocations and bytes per frame or per load.
+  Also installed on the workstation: `samply`, `cargo flamegraph`,
+  `cargo-llvm-lines`, `cargo-bloat`, `valgrind`. `which` says `hyperfine` is
+  absent; check before relying on any tool, and tell the lead about a gap.
+- **Allocations**: `heaptrack` was not on the workstation's `PATH` when this
+  was checked (`member-rules.md` records members running it); under `valgrind`
+  (massif or dhat) or `heaptrack` always use the memory cap in `member-rules.md`.
+  A counting `#[global_allocator]` in a throwaway test or example (not
+  committed unless the brief asks) gives allocations and bytes per frame or per
+  load.
 - **Compile and binary size**: `cargo build --timings`, and
   `cargo +nightly rustc -p <crate> --lib -- -Zprint-type-sizes` for layout.
 - **Test time**: `target/test-data.log` and the tail-profiling steps in
@@ -74,15 +77,12 @@ Use `--no-audio` on every `oag-game` run, headless or on your own Xvfb display
 
 ## Rules that bind a performance change
 
-- **Simulation crates** (`oag-core`, `oag-physics`, `oag-gameplay`, `oag-ai`,
-  `oag-race`, `oag-formats`) must stay bit-identical. No `mul_add`, no
-  reassociation, no SIMD, no hasher-order iteration, even if faster.
-  `just check-determinism` and the determinism tests must pass untouched, and
-  never update the reference hashes. A change there that alters arithmetic or
-  ordering is not an optimisation.
-- **`oag-render` is exempt** from the float rules (a pixel is not compared
-  across machines), so `mul_add`, SIMD glam and the algebraic float ops are fair
-  game in a proven-hot per-frame loop.
+- **Simulation crates** must stay bit-identical (CLAUDE.md, "Determinism"),
+  even if a change would be faster. `just check-determinism` and the
+  determinism tests must pass untouched, and the reference hashes are never
+  updated. A change there that alters arithmetic or ordering is not an
+  optimisation. `oag-render` is exempt from the float rules (`mul_add`, SIMD
+  glam and the algebraic float ops are fair game in a proven-hot per-frame loop).
 - **Check what is known first**: `docs/rendering/`, `docs/architecture/` and
   `handover/` already hold findings (frame path allocations, per-view CPU
   levers, high-resolution rendering). Cite, do not rediscover.
@@ -91,7 +91,6 @@ Use `--no-audio` on every `oag-game` run, headless or on your own Xvfb display
   same ship and track.
 - Gate with `just gate-affected` (the lead runs the full gate per merge batch).
   Respect `just check-size` and keep `docs/` current.
-- Write plainly: short sentences, no em or en dashes.
 
 ## Report
 
