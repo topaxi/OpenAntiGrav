@@ -22,22 +22,10 @@ impl Race {
     /// seat's own warnings are not wired). Every racing craft is a valid pair: the
     /// original's own refusal of a pair (its flag byte) is unread.
     pub(super) fn note_incoming_fire(&mut self, slot: usize, weapon: oag_tables::weapons::Weapon) {
-        let viewer = self.player_slot();
-        if slot == viewer
-            || !self.view.huds[viewer].incoming_enabled
-            || self.viewport_count() > 1
-            || self.people() > 1
-            || self.view.seat.is_some()
-            || !matches!(
-                self.sim.world.mode(),
-                oag_race::Mode::SingleRace
-                    | oag_race::Mode::Tournament
-                    | oag_race::Mode::Eliminator
-                    | oag_race::Mode::Head2Head
-            )
-        {
+        if slot == self.player_slot() || !self.incoming_warnings_drawn() {
             return;
         }
+        let viewer = self.player_slot();
         let ships = &self.sim.world.ships;
         let (Some(here), Some(there)) = (
             ships[viewer].standing.progress,
@@ -50,6 +38,46 @@ impl Race {
             oag_weapons::projectile::missile::wrapped_gap(here - there, length.unwrap_or(0.0));
         if let Some(icon) = oag_hud::incoming::classify(weapon, gap) {
             self.view.incoming_raises.push(icon);
+        }
+    }
+
+    /// Whether the viewer's warnings are drawn in this race: the title raises them, there is
+    /// one view and one person, and the mode is one of those that raise them. Every raise,
+    /// the original's and a mod's, goes through it.
+    fn incoming_warnings_drawn(&self) -> bool {
+        self.view.huds[self.player_slot()].incoming_enabled
+            && self.viewport_count() <= 1
+            && self.people() <= 1
+            && self.view.seat.is_none()
+            && matches!(
+                self.sim.world.mode(),
+                oag_race::Mode::SingleRace
+                    | oag_race::Mode::Tournament
+                    | oag_race::Mode::Eliminator
+                    | oag_race::Mode::Head2Head
+            )
+    }
+
+    /// A simulation mod's `raise-warning`: lights `icon`'s group on the viewer's HUD for
+    /// `slot`, as a weapon fired at the viewer would. Dropped for a slot that is not the
+    /// viewer and where the warnings are not drawn ([`Self::incoming_warnings_drawn`]).
+    #[cfg(feature = "extensions")]
+    pub(super) fn raise_mod_warning(&mut self, slot: usize, icon: oag_ext_abi::WarningIcon) {
+        use oag_ext_abi::WarningIcon as W;
+        use oag_hud::incoming::Icon;
+        if slot == self.player_slot() && self.incoming_warnings_drawn() {
+            self.view.incoming_raises.push(match icon {
+                W::Rocket => Icon::Rocket,
+                W::Missile => Icon::Missile,
+                W::Quake => Icon::Quake,
+                W::Cannon => Icon::Cannon,
+                W::Plasma => Icon::Plasma,
+                W::LeachBeam => Icon::LeachBeam,
+                W::Repulser => Icon::Repulser,
+                W::Shuriken => Icon::Shuriken,
+                W::Mine => Icon::Mine,
+                W::Bomb => Icon::Bomb,
+            });
         }
     }
 }

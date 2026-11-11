@@ -4,7 +4,7 @@ use oag_ext_abi::{
     Colour, Command, Cue, Distance, Effect, HudElement, HudPlace, HudStr, Icon, MAX_COMMANDS,
     MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_PAD_FACTOR,
     MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_THRUST_FACTOR, MAX_TRANSIT_TICKS, POOL_AT, POOL_LEN,
-    Pickup, REPLY_AT, Rgba, Sections, SoundMode, Weapon, WeatherKind,
+    Pickup, REPLY_AT, Rgba, Sections, SoundMode, WarningIcon, Weapon, WeatherKind,
 };
 
 use crate::Craft;
@@ -668,6 +668,22 @@ impl<'a> Reply<'a> {
         self.push(&Command::PlayCue {
             slot: craft.slot(),
             cue,
+        })
+    }
+
+    /// `raise-warning`: lights `icon`'s group of the incoming-warning HUD of the craft's
+    /// person, as a weapon fired behind (or a mine laid ahead) does, for 2.0 s at a 4 Hz
+    /// blink. Send it once, on the tick the cause happens: a raise restarts the group's
+    /// timer, and one sent every tick keeps it from ever lighting. Drawn only where the title
+    /// draws the warnings and the craft is the one person's; dropped elsewhere. Never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`].
+    pub fn raise_warning(&mut self, craft: &Craft<'_>, icon: WarningIcon) -> Result<(), Refused> {
+        self.push(&Command::RaiseWarning {
+            slot: craft.slot(),
+            icon,
         })
     }
 

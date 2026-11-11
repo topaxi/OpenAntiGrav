@@ -1147,6 +1147,8 @@ impl crate::Race {
         {
             on::tick(&mut self.sim, inputs, transited);
             self.run_motion();
+            #[cfg(feature = "view")]
+            self.run_warnings();
             let gave = self.sim.extensions.take_shield_gives();
             for slot in (0..oag_gameplay::MAX_SHIPS).filter(|slot| gave & (1 << slot) != 0) {
                 self.shield_activate(slot);
@@ -1154,6 +1156,18 @@ impl crate::Race {
         }
         #[cfg(not(feature = "extensions"))]
         let _ = (inputs, transited);
+    }
+
+    /// The call's `raise-warning`s, in module then reply order, onto the viewer's HUD. A
+    /// module that faulted this call raises none.
+    #[cfg(all(feature = "extensions", feature = "view"))]
+    fn run_warnings(&mut self) {
+        let warnings = std::mem::take(&mut self.sim.extensions.on.warnings);
+        for (module, slot, icon) in warnings {
+            if !on::faulted(&self.sim, module) {
+                self.raise_mod_warning(slot, icon);
+            }
+        }
     }
 
     /// The call's `transit` and `probe-clearance` commands, in module then reply order: a

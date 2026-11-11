@@ -327,6 +327,34 @@ coded! {
 }
 
 coded! {
+    /// `raise-warning`'s icons: the title's incoming-weapon warning icons, by the weapon each
+    /// is the warning of. An icon fixes its group: the eight shots warn on the rear slot (a
+    /// threat behind), a mine or bomb on the forward slot (a threat laid ahead).
+    WarningIcon: u16, first 0 {
+        /// Rear slot, `RearWarningRocketIcon`.
+        Rocket,
+        /// Rear slot, `RearWarningMissileIcon`.
+        Missile,
+        /// Rear slot, `RearWarningQuakeIcon`.
+        Quake,
+        /// Rear slot, `RearWarningCannonIcon`.
+        Cannon,
+        /// Rear slot, `RearWarningPlasmaIcon`.
+        Plasma,
+        /// Rear slot, `RearWarningLeachBeamIcon`.
+        LeachBeam,
+        /// Rear slot, `RearWarningRepulserIcon`.
+        Repulser,
+        /// Rear slot, `RearWarningShurikenIcon`.
+        Shuriken,
+        /// Forward slot, `ForwardWarningMineIcon`.
+        Mine,
+        /// Forward slot, `ForwardWarningBombIcon`.
+        Bomb,
+    }
+}
+
+coded! {
     /// `set-weather`'s kinds: the host title's own weather, by kind.
     WeatherKind: u16, first 0 {
         /// The title's authored rain.
@@ -732,6 +760,17 @@ pub enum Command {
         /// The disc's radius, `(0, MAX_PROBE_RADIUS]`.
         radius: f32,
     },
+    /// Raise the incoming-warning HUD of the slot's person with `icon`, as a weapon fired
+    /// behind (or a mine laid ahead) does: the icon's group lights for 2.0 s, blinking at 4 Hz.
+    /// An output, never hashed. Edge-triggered, not re-sent: a raise restarts the group's
+    /// timer, and a timer re-armed every tick is never lit. Drawn only where the title draws
+    /// the warnings and the slot is the one person's view; anywhere else it is dropped.
+    RaiseWarning {
+        /// The grid slot whose HUD warns.
+        slot: Slot,
+        /// The icon, which fixes the group.
+        icon: WarningIcon,
+    },
 }
 
 impl Command {
@@ -747,6 +786,7 @@ impl Command {
             Self::ScalePad { .. } => CommandKind::ScalePad,
             Self::ScaleSlotPads { .. } => CommandKind::ScaleSlotPads,
             Self::PlayCue { .. } => CommandKind::PlayCue,
+            Self::RaiseWarning { .. } => CommandKind::RaiseWarning,
             Self::FireEffect { .. } | Self::FireModEffect { .. } => CommandKind::FireEffect,
             Self::HudTint { .. } => CommandKind::HudTint,
             Self::HudShake { .. } => CommandKind::HudShake,
@@ -785,6 +825,7 @@ impl Command {
             | Self::ClearPickup { slot }
             | Self::ScaleSlotPads { slot, .. }
             | Self::PlayCue { slot, .. }
+            | Self::RaiseWarning { slot, .. }
             | Self::FireEffect { slot, .. }
             | Self::FireModEffect { slot, .. }
             | Self::HudTint { slot, .. }
@@ -836,6 +877,7 @@ impl Command {
             Self::ScalePad { pad, factor } => (pad, factor.to_bits(), 0),
             Self::ScaleSlotPads { factor, .. } => (0, factor.to_bits(), 0),
             Self::PlayCue { cue, .. } => (cue.code(), 0, 0),
+            Self::RaiseWarning { icon, .. } => (icon.code(), 0, 0),
             Self::FireEffect { effect, .. } => (effect.code(), 0, 0),
             Self::FireModEffect { index, .. } => (index | OWN_FLAG, 0, 0),
             Self::HudTint { element, rgba, .. } => (element.code(), 0, rgba.to_u32()),
@@ -1012,6 +1054,10 @@ impl Command {
             CommandKind::PlayCue => Self::PlayCue {
                 slot,
                 cue: Cue::from_code(arg).ok_or(Malformed::Cue(arg))?,
+            },
+            CommandKind::RaiseWarning => Self::RaiseWarning {
+                slot,
+                icon: WarningIcon::from_code(arg).ok_or(Malformed::WarningIcon(arg))?,
             },
             CommandKind::FireEffect if arg & OWN_FLAG != 0 => Self::FireModEffect {
                 slot,

@@ -5,9 +5,11 @@
 use oag_ext_abi::{Command, Distance, Rgba, Slot};
 use oag_gameplay::PlayerInputs;
 
+use crate::Race;
+
 use super::extension_faults::scripted;
 use super::extensions::grid;
-use super::extensions::on::prepared;
+use super::extensions::on::{REPLY, STATE, prepared};
 use super::local_seat_fx::local_people;
 
 fn slot(index: usize) -> Slot {
@@ -233,4 +235,106 @@ fn a_guests_pickup_and_motion_commands_for_a_wrecked_craft_are_ignored() {
     assert!(speed > 1.0, "not scaled to zero: {speed}");
     let (held, _) = run(CraftState::Racing);
     assert_eq!(held, None, "a racing craft's pickup is cleared");
+}
+
+/// A race whose first mod call sends `command` and whose later calls send nothing: a
+/// warning is raised on the tick of its cause, not every tick, and the viewer's slot 0 has
+/// the title's warnings switched on.
+fn warned_by(command: Command, warnings_drawn: bool) -> Race {
+    let once = format!(
+        "(if (i32.load (i32.const {STATE}))
+           (then (i32.store (i32.const {REPLY}) (i32.const 0)) (return (i32.const 0))))
+         (i32.store (i32.const {STATE}) (i32.const 1))"
+    );
+    let mut race = grid(prepared(&[scripted("test.warn", &once, &[command], &[])]));
+    race.view.huds[0].incoming_enabled = warnings_drawn;
+    race
+}
+
+/// The (forward, rear) icons lit at any point of the 2.0 s the warning runs, ticked 150 times.
+fn lit_while_running(
+    mut race: Race,
+) -> (Vec<oag_hud::incoming::Icon>, Vec<oag_hud::incoming::Icon>) {
+    let (mut forward, mut rear) = (Vec::new(), Vec::new());
+    for _ in 0..150 {
+        race.tick(&PlayerInputs::none());
+        let shown = race.readout().incoming;
+        forward.extend(shown.forward);
+        rear.extend(shown.rear);
+    }
+    (forward, rear)
+}
+
+#[test]
+fn a_raised_warning_blinks_in_the_icons_group_on_the_viewers_hud() {
+    use oag_ext_abi::WarningIcon;
+    use oag_hud::incoming::Icon;
+    for (icon, forward, rear) in [
+        (WarningIcon::Mine, Some(Icon::Mine), None),
+        (WarningIcon::Bomb, Some(Icon::Bomb), None),
+        (WarningIcon::Shuriken, None, Some(Icon::Shuriken)),
+        (WarningIcon::Missile, None, Some(Icon::Missile)),
+    ] {
+        let race = warned_by(
+            Command::RaiseWarning {
+                slot: slot(0),
+                icon,
+            },
+            true,
+        );
+        let (lit_forward, lit_rear) = lit_while_running(race);
+        assert_eq!(
+            (lit_forward.first().copied(), lit_rear.first().copied()),
+            (forward, rear),
+            "{icon:?}"
+        );
+        let lit = lit_forward.len() + lit_rear.len();
+        assert!(
+            (50..=62).contains(&lit),
+            "{icon:?}: 4 Hz for 2 s is eight lit phases of 7.5 ticks: {lit}"
+        );
+        assert!(
+            lit_forward
+                .iter()
+                .chain(&lit_rear)
+                .all(|shown| Some(*shown) == forward.or(rear)),
+            "{icon:?}: only its own icon"
+        );
+    }
+}
+
+#[test]
+fn a_warning_for_another_slot_or_where_none_is_drawn_lights_nothing() {
+    use oag_ext_abi::WarningIcon;
+    let rear = |slot_index, drawn| {
+        let race = warned_by(
+            Command::RaiseWarning {
+                slot: slot(slot_index),
+                icon: WarningIcon::Missile,
+            },
+            drawn,
+        );
+        lit_while_running(race)
+    };
+    assert!(rear(0, true).1.len() > 1, "control: it lights");
+    assert_eq!(
+        rear(1, true),
+        (vec![], vec![]),
+        "an opponent's slot has no HUD"
+    );
+    assert_eq!(rear(0, false), (vec![], vec![]), "a title that draws none");
+}
+
+#[test]
+fn a_warning_raised_for_a_person_among_several_is_dropped() {
+    let once = Command::RaiseWarning {
+        slot: slot(0),
+        icon: oag_ext_abi::WarningIcon::Missile,
+    };
+    let mut race = local_people(2, false);
+    race.sim.extensions =
+        crate::extensions::Extensions::new(prepared(&[scripted("test.warn", "", &[once], &[])]));
+    race.view.huds[0].incoming_enabled = true;
+    race.tick(&PlayerInputs::none());
+    assert!(!race.view.huds[0].incoming.active());
 }

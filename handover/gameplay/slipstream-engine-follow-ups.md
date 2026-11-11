@@ -69,6 +69,17 @@ The engine never names the mod.
    covered by the `route_point` check, no transit or portal-view test on them). Open from it,
    small: the entrance is still a ring progress, so a firer already on a route frames its portal
    from the ring; the official `oag.slipstream` exits by progress and does not use the trigger form.
+2b. **Incoming warning for a person the portal passes (lane mod-warnings-api).** Landed: a `raise-warning`
+   command (37, `WarningIcon`, SDK `raise_warning`) raises the viewer's incoming-weapon warning through
+   `Warnings::raise`; `oag.slipstream` raises the rear Repulser icon once, on the transit, for a person it
+   goes in behind and comes out ahead of (proof: `tests::extension_view`, the guest's tests and
+   `slipstream_ground_truth::a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and_no_other_does`).
+   Open, small: (a) a mod's own warning icon (a PNG on the warning widget's rect; the warning is a Copy
+   `Icon` enum of the title's ten widgets, a mod PNG would ride the `ext_draws` mod-icon path); (b) the
+   warnings are drawn on Pulse (PSP, PS2) only, one view, one person, so HD, 2048, Omega, Pure, split screen
+   and network seats drop a mod's raise; HD, 2048 and Omega author the same widget names under a different
+   law (`HudArt::incoming_warnings`), so wiring them is a measurement first; (c) Repulser is a chosen
+   stand-in: the rear group has no icon that is not a weapon.
 3. **Exit with no spline near it (a floating island).** No lap fix, no AI line, and the
    distance reset would fire. Recommended rule for our track format: the author gives the
    island its own spline path that rejoins the circuit, which makes it item 5. An engine

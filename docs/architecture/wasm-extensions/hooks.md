@@ -222,6 +222,7 @@ returns `Err(Refused)` where the host would fault:
 | `set-shader-param{slot, shader, index, value}` (35) | `SetShaderParam` | `set_shader_param(&craft, shader, index, value)` | an `index` from 4 up, a value that is not finite |
 | `portal-view{slot, entrance, exit, radius, update, generation}` (36) | `PortalView` | `portal_view(&craft, (entrance, exit), radius, update, generation)` | a progress not a number or below zero (`portal_view_to_trigger` names the exit by a trigger index instead), a `radius` of 0, an unknown `update` |
 | `play-mod-sound{slot, index, mode}` (33) | `PlayModSound` | `play_mod_sound(&craft, index, mode)` | |
+| `raise-warning{slot, icon}` (37) | `RaiseWarning` | `raise_warning(&craft, icon)` | an icon code past the ten (the host decodes one as malformed); send it once, not every tick |
 | `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | the `Pickup` element (`Refused::PickupTint`; use `pickup_look`); the host decodes one as malformed |
 | `pickup-look{slot, icon, colour}` (22) | `PickupLook` | `pickup_look(&craft, icon, colour)` | |
 | `hud-shake{slot, element, amplitude}` | `HudShake` | `hud_shake(&craft, element, amplitude)` | `amplitude` outside `[0, 16]` or not finite |
