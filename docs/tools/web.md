@@ -592,6 +592,27 @@ simulation code can observe on one thread.
 **The page shows a message** ("OpenAntiGrav stopped", "This browser has no WebGPU",
 and the rest): "What the page says when something fails", below, lists each one.
 
+**Profiling the page, or a report with readable frames: add `?profile=1`** (or
+`?debug=1`) to the address. The page then loads `oag_web_bg.named.wasm`, the
+same build as `oag_web_bg.wasm` but with its function names kept (`wasm-opt -O -g`
+in `scripts/build-web.sh`; 19.4 MB against 18.0 MB, 2026-11-11), and hands that
+module to every worker, so a profiler's wasm frames and a report's stack read as
+Rust paths instead of `wasm-function[N]`. In Firefox: `about:profiling`, preset
+"Graphics" with "JavaScript" on, Start Recording, open the page with
+`?profile=1`, pick the image, reproduce, Capture (Ctrl+Shift+2), then save or
+upload the profile. Measured on a Pulse boot in Firefox 159: without the
+parameter 0 of 574 wasm frame names carry a Rust path; with it 260 of 572 do, on
+the page's thread and on the workers (the audio render loop, the menu music).
+
+**Firefox: the page froze right after the `renderer:` line**, "a page is slowing
+down Firefox", while a Private Window boots: a saved screen filter
+(`[render_profiles."Wipeout Pulse (PSP)"] screen_filter = "psp-3000"`) made the
+first frame wait on a wgpu error scope on the page's thread. Fixed on
+2026-11-11; "The page's thread may not wait" below has the cause, and every
+wait of that kind now ends in the page's report instead of a frozen tab. On an
+older deploy, setting SCREEN FILTER to off (or clearing the site's storage)
+boots again.
+
 **The log says `renderer: webgpu:  (cpu)`.** The browser gave WebGPU a software
 adapter (the `web: adapter "" (Cpu)` line says the same); frames then take 40 to
 90 ms. On Linux Chrome and Chromium this is what you get without the Vulkan
