@@ -491,20 +491,20 @@ fn a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and
         if lit {
             lit_at.push(tick);
         }
-        for slot in 1..count {
+        for (slot, open) in open.iter_mut().enumerate().take(count).skip(1) {
             let ship = &race.sim.world.ships[slot];
-            match (open[slot], ship.transit.is_some()) {
+            match (*open, ship.transit.is_some()) {
                 (None, true) => {
                     let (entry, viewer) = (
                         ship.standing.progress.expect("a fix"),
                         race.sim.world.ships[0].standing.progress.expect("a fix"),
                     );
-                    open[slot] = Some((tick, gap(entry, viewer), entry));
+                    *open = Some((tick, gap(entry, viewer), entry));
                 }
                 (Some((began, past, entry)), false) => {
                     let exit = ship.standing.progress.expect("a fix");
                     judged.push((began, past, gap(entry, exit)));
-                    open[slot] = None;
+                    *open = None;
                 }
                 _ => {}
             }
