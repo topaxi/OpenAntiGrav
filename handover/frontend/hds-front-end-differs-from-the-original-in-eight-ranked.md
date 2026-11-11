@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-05
-summary: "HD front end: hull_orbit pose fitted to the classic Feisar only, no _n1 frame, Safe Area 0.904 scale at default unchecked"
+updated: 2026-11-11
+summary: "HD front end: Ship Select camera read and wired; open: hull lighting, the swap settle (ready), craft turn and zoom, Omega's own pose"
 difficulty: medium (30)
 ---
 
@@ -35,12 +35,37 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   differs, and this build's music pulse sits at 0.23 where RPCS3's reaches 1.2);
   `--team Feisar` does not preselect the Ship Select picker, so captures show
   the default team instead (a CLI bug, found 2026-10-10)
-- Ship Select framing (LANDED 2026-10-10, `hd-ship-framing`): the authored
-  `ShipModel` pose (one for all teams) composed on raw hull coordinates
-  (`oag_game::preview::ship_model`). Open: the lens (0.41 rad), pitch (0.22 vs
-  authored 0.4) and slide are fitted, not authored - find the original's
-  rotation convention to drop the pitch override; `hull_orbit` remains only
-  for Omega's hull and Pulse-shaped fallbacks
+- Ship Select framing (LANDED 2026-11-11, `hd-worst-pairs-2`): the screen's
+  own camera, read off the executable, replaces the authored pose and the
+  fitted lens, pitch and slide. The update writes rest `RotX 0.25`, `RotY -0.6`,
+  fov 57.3, origin `(1220, 500)` over the widget every frame and fits the depth
+  to the model's `<FE length>`; wired as `oag_title::ShipFit` with the widget's
+  `ObeySafeZone` (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`).
+  Five teams' silhouettes are within 4 px of their RPCS3 rest frames; the
+  pair's hull box (sigma 7) went 20.62 to 14.33, the frame 9.35 to 7.35. Open,
+  in the order a player would notice:
+  1. **The hull is darker than the original** in that box (mean bias R -7.6,
+     G -11.7, B -11.1): the front end's hull lighting, not placement. Not
+     read. Medium (40).
+  2. **The swap's settle is recovered and not played**: the depth target is not
+     reset on a step, so the new model starts at the last one's rest depth and
+     eases to its own at 0.125 a frame (the slide at 0.0625).
+     `preview::hull_swap` still plays the measured curve from a chosen 1.06
+     start. Ready to wire: per-frame state on the picker stage (`ship_model::rest`
+     has the per-frame step), and the capture's `hull_clock` needs the previous
+     model's length. Small (60).
+  3. **The player's own turn, pan and zoom of the craft** (right stick, the
+     idle return after 181 frames): read at confidence 65, not exercised, not
+     wired; a new input on a screen needs pointer support in the same change.
+     Medium (40).
+  4. **The Detonator box** (`-2.0..0`) is Title data nobody uses: the preview
+     does not draw the Detonator hull. Small (50).
+  5. **Omega** keeps its borrowed pose and the fitted lens: its own update
+     carries the same fit with other rest angles (`+0.4307`, `-0.4438`), a
+     blended position and a scale, not followed (the page's "Omega" section;
+     `FUN_015a3b80`). Its pair reads 27.11, a far larger craft than the
+     original's. Medium (35); needs Omega's item layout read first.
+  `hull_orbit` remains only for Pulse-shaped fallbacks
 - Ship Select: ~~bracket corners, loyalty value~~ (LANDED 2026-10-27,
   `hd-select-chrome`: corner marks, block arrows, `000`; open: the `middle`
   marks, `UnlockNobble` hearts, the page `Squares`); the hex column draws
@@ -77,7 +102,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   Omega's own table; the moving fly-by picture (Bink)
 - Fury page content (2026-11-05, `fury-menu-content`, `docs/ui/campaign-screens.md`, "Fury page content against the original"):
   landed the Grid Selection counter, arrows, dotted unlock panel and its corner marks, and the Track Select record rows (fill
-  alpha, `TextColor`). Open, each its own RE: Ship Select hull pose convention (lens, pitch, slide fitted), page `Squares`,
+  alpha, `TextColor`). Open, each its own RE: ~~Ship Select hull pose convention~~ (closed 2026-11-11, above), page `Squares`,
   the Track Select thumbnail (Bink `FlyByMovie`), the record fill (38 against 26), the Grid footer spacing, the ship
   column's lock states; the card art and circuit model are loop phase
 - Not reached: a Tournament cell, loading and EndRace pairs, Omega (no capture path)

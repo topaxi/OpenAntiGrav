@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-10
+updated: 2026-11-11
 summary: "HD gaps by tile; 2026-11-05: 16-19% of grid score is the original being softer (unclosable), named closable items under 6 points"
 ---
 
@@ -256,8 +256,7 @@ geometry. **Guess, not measured:** the no-LG2 stand-in specular in
    in linear light"). Panel (teal pixels of the card mask) red bias +11.1 to +6.3 and panel error 7.34 to 6.14 on the 13
    pairs, no pair worse; card-mask error 9.77 to 9.06 (the glyph's phase is the rest). Acceptance **not met**: the panel red
    is not within +2 of the scenery's on any of the four named pairs (Chenghou +7.7, Sebenco +9.4, Vineta K +7.6, Metropia
-   +14.4) and the card-mask error fell 8 to 13 %, not a third. Open: (a) ours' card red level mean 0.294 against the original's 0.267 (cause unread; on Chenghou's strip red is +12.6 before, +6.1 now, +3.0 with the original's own card); (b) **Metropia green +14 and red +14 whatever the card holds**, its `cf_vex_billboard` lit
-   combine; (c) the gantry phase pinning on `modesto-heights`, `sebenco-climb` and `anulpha-pass`, untouched.
+   +14.4) and the card-mask error fell 8 to 13 %, not a third. Open: (a) ours' card red level mean 0.294 against the original's 0.267 (cause unread; on Chenghou's strip red is +12.6 before, +6.1 now, +3.0 with the original's own card); (b) ~~Metropia green +14 and red +14 whatever the card holds~~ closed 2026-11-11 (`hd-worst-pairs`): the `cf_vex_billboard` compile without `k` was refused by the classifier and lit by the sun; cards 14.6-19.4 to 4.7-6.6 (`docs/formats/rcsmaterial.md`); (c) the gantry phase pinning on `modesto-heights`, `sebenco-climb` and `anulpha-pass`, untouched.
 2. **~~`ds_booth_glass`~~ (wired 2026-10-27, `hd-tech-de-ra-2`: modesto-heights booth 34.5 to 4.2, sebenco-climb 31.3 to 6.2, no
    pair worse by more than 0.01 whole; hd-track-tone.md, "`ds_booth_glass` reflects the sky through its normal map's alpha") and
    `glass_reflect`: measure then wire, one family per commit.** Claim: these two
@@ -364,6 +363,8 @@ resolve, or a texture or alpha-edge rule).
 | Amphiseum cone band (+5.7 left) | about 0.6 M | 0.3 | 0.3 |
 | moa-therma pad strip beside the hull (opaque and unlit-independent, marbled texture present in both, patterns differ: a scroll phase) | 1.0 M of its box | 0.5 on Moa only (0.95 for the whole box) | 0 |
 | Opaque scenery elsewhere | 18.8 M | 9.1 | fails the falsifier: many draws |
+
+**2026-11-11 (`hd-worst-pairs`): Moa's floor is fixed, re-measure the row above.** The box `0,540 840x540` went 7.46 to 1.47 once Moa's `diffuse_normal_specular` read its two-lane normal map (`docs/formats/rcsmaterial.md`, "The two-lane normal map"); what the strip still holds was not re-measured.
 
 Ablated for the pad: `OAG_OPAQUE_ONLY=1` moves Moa 9.37 to 16.13 and leaves the strip, so it is opaque geometry;
 the white block under the hull is flat white in ours and striped grey in the original (a reflective or env-mapped
