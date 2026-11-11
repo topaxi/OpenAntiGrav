@@ -1,6 +1,7 @@
 //! The full-screen passes the Omega and WO chains are built from: a render pipeline over
-//! the bufferless triangle, a pass that loads what is there and draws it into a rectangle,
-//! a pass that only clears, and the colour target a pass writes.
+//! the bufferless triangle (or a bufferless mesh a vertex entry generates), a pass that
+//! loads what is there and draws it into a rectangle, a pass that only clears, and the
+//! colour target a pass writes.
 
 /// A render pipeline that draws the full-screen triangle (`vs_main`) and shades it with
 /// `entry` into `target`.
@@ -12,12 +13,26 @@ pub(crate) fn fullscreen_pipeline(
     entry: &str,
     target: wgpu::ColorTargetState,
 ) -> wgpu::RenderPipeline {
+    mesh_pipeline(device, shader, layout, label, "vs_main", entry, target)
+}
+
+/// A render pipeline whose vertices `vertex` generates from the vertex index alone, shaded
+/// with `entry` into `target`.
+pub(crate) fn mesh_pipeline(
+    device: &wgpu::Device,
+    shader: &wgpu::ShaderModule,
+    layout: &wgpu::PipelineLayout,
+    label: &str,
+    vertex: &str,
+    entry: &str,
+    target: wgpu::ColorTargetState,
+) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(label),
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: shader,
-            entry_point: Some("vs_main"),
+            entry_point: Some(vertex),
             buffers: &[],
             compilation_options: Default::default(),
         },
@@ -63,10 +78,36 @@ pub(crate) fn draw(
         wgpu::LoadOp::Load,
         origin,
         rect,
+        3,
     );
 }
 
-/// [`draw`], with the target's `load` op chosen by the caller.
+/// [`draw`] for a [`mesh_pipeline`]'s `vertices` vertices.
+#[expect(clippy::too_many_arguments, reason = "one pass's whole description")]
+pub(crate) fn draw_mesh(
+    encoder: &mut wgpu::CommandEncoder,
+    label: &'static str,
+    pipeline: &wgpu::RenderPipeline,
+    groups: &[&wgpu::BindGroup],
+    target: &wgpu::TextureView,
+    origin: (f32, f32),
+    rect: (u32, u32),
+    vertices: u32,
+) {
+    draw_with(
+        encoder,
+        label,
+        pipeline,
+        groups,
+        target,
+        wgpu::LoadOp::Load,
+        origin,
+        rect,
+        vertices,
+    );
+}
+
+/// [`draw`], with the target's `load` op and the vertex count chosen by the caller.
 #[expect(clippy::too_many_arguments, reason = "one pass's whole description")]
 pub(crate) fn draw_with(
     encoder: &mut wgpu::CommandEncoder,
@@ -77,6 +118,7 @@ pub(crate) fn draw_with(
     load: wgpu::LoadOp<wgpu::Color>,
     origin: (f32, f32),
     rect: (u32, u32),
+    vertices: u32,
 ) {
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some(label),
@@ -100,7 +142,7 @@ pub(crate) fn draw_with(
     for (index, group) in groups.iter().enumerate() {
         pass.set_bind_group(index as u32, *group, &[]);
     }
-    pass.draw(0..3, 0..1);
+    pass.draw(0..vertices, 0..1);
     oag_gpu::perfprobe::marks::close(&mut pass);
 }
 
