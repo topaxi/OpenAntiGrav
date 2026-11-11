@@ -140,8 +140,9 @@ returns; this engine's raycaster has no such code, so the test is geometric."
 The raycaster has always returned `RaycastHit::surface`, and
 `Collision_SweepSegment` (`0x0883198c`) returns exactly that: the struck
 collider's `+0x6c` surface type, `0` wall, `1` floor, `3` mag floor, `0x7f`
-for nothing, `4` for the craft test. `Rocket_Update`'s switch is on that
-number, not on any angle.
+for nothing, `4` for a segment end outside the collision cage (read as a
+craft test until 2026-11-11, see "On a tilted track ours fall off and the
+original's do not: the cage" below). `Rocket_Update`'s switch is on that number, not on any angle.
 
 ## The fix
 
@@ -337,7 +338,7 @@ gravity, instead of following the track as in the originals." Measured on Moa Th
 85 degree banked helix and on Outpost 7's first ramp against PPSSPP; evidence, numbers and the
 recovered law are on
 [rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md#2026-11-11-code-4-is-the-collision-cage-and-what-a-bank-does-to-every-flyer-weapon-bank-follow).
-**Nothing is wired here**; the lane was a measurement.
+**Wired 2026-11-11** (lane `projectile-cage-wire`, Pulse only): see the end of this section.
 
 **The ride laws are not at fault.** From the original's own states, one update of ours lands on
 the original's next position to 0.000 unit for the Rocket (48 updates), the Cannon (24) and the
@@ -373,3 +374,31 @@ Cannon's round flies 2.7 times faster in the original than here
 **Lineage.** Pulse PSP measured; Pulse PS2 inherits it. Pure, HD, 2048 and Omega run no cage off
 the track header, so a wire that reads `Spline::cage()` changes nothing for them: **checked,
 differs** (Pure, by the header census), **not checkable** here for HD's own code `4`.
+
+**Wired (2026-11-11, lane `projectile-cage-wire`), Pulse PSP and PS2 only.** `Projectiles::advance`
+asks the race's cage (`Spline::cage()`, through `oag_physics::cage::Containment` on
+`oag_gameplay::cage::CageTrack`) about the probe's end and the travel sweep's end, after the mesh
+query and before the surface class, with no craft limits (`MAX_POINT_DISTANCE`, `MAX_DEPTH` are
+`Cage_ResolveCraft`'s):
+
+| | Probe's end outside | Travel sweep's end outside |
+| --- | --- | --- |
+| Rocket, Plasma | ends at the boundary point, `blast: false` | the same |
+| Missile, Shuriken | nothing: neither rides nor falls | ends at the boundary, no bounce, `blast: false` (chosen: the `flags \|= 0x14` teardown reaches the explosion and no damage, `missile.md`, `shuriken.md`) |
+| Cannon | no probe | ends at the boundary with its sparks, `blast` as on a wall |
+
+The point tested is the mesh hit's point when there is one (any surface class: a floor past the tube
+is a wall to a projectile), else the segment's end (probe: `to - surface * probe_length`). A hull hit
+stays what it is. The Plasma's first 0.04 s (no probe, `plasma::UNPINNED_SECONDS`) still asks the
+cage about the probe's end. Acceptance
+(`crates/raceplay/tests/projectile_cage_ground_truth.rs`, each red without the cage): Plasma from
+update 45 ends on update 49 within 0.5 unit of the original's boundary point, Shuriken (each update
+from the original's own state, since ours keeps its length where the original's speed changes) on
+update 58, the Cannon round on update 25, the Outpost 7 rocket on update 21, and all 17 recorded
+code-4 queries are outside at the original's boundary point and normal. `rocket_floor_trace` on
+Pulse `07` and `10`: rockets that "expired" at their five seconds went from 14 and 7 to 0, and the
+longest flight from 299 ticks to 107 and 156.
+
+**Still different, not wired here:** the Cannon's muzzle speed, the launch normal, the own-craft
+box, the Shuriken's speed, the floor arms, and the Missile's MAX_BOUNCES wall end (`blast: true`,
+while its cage end spends none).

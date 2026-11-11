@@ -1400,6 +1400,26 @@ Confidence **88**: seven captures, one field; the located point's own record was
 - `plasma::UNPINNED_SECONDS` as an age: the bracket it was chosen inside was measured on one craft
   at one speed. On the mag strip the original's bolt rides on its first update.
 
+### Wired (2026-11-11, `projectile-cage-wire`)
+
+`oag_weapons::projectile` asks the race's cage (`oag_physics::cage::Containment`, implemented by
+`oag_gameplay::cage::CageTrack`; `None` where the title runs no cage) about the probe's end and the
+sweep's end, per the table above: [projectile-floor.md](../../../gameplay/projectile-floor.md)
+lists what each weapon does. The craft's per-corner rule is now `Located::outside`, the same one
+the projectile's one-point query uses. The 17 rows of "The cage test reproduced" and the five
+"States a test can start from" are tests with full-precision values
+(`crates/raceplay/tests/projectile_cage_ground_truth.rs`): all 17 outside at the original's boundary
+point (0.01 unit) and normal (cosine above 0.9999); the Plasma ends on update 49, the Cannon round
+on 25, the Outpost 7 rocket on 21, each on the original's own per-update `dt` (a single listed `dt`
+drifts a whole update by the Rocket's 15th: 0.0171 against a mean of 0.0166). **The Shuriken
+cannot be chained from update 50**: ours keeps the blade's speed where the original's changes
+(item 5 of the thread; 276.9 units/s at update 52, 298.9 at 53), so by update 54 it is 0.3 unit off
+the original's line, meets the kerb's wall at update 58 and bounces instead of ending, and the test re-seeds each update from the original's own state
+instead. `rocket_floor_trace` on `07` and `10`: the rockets that reached their five seconds went
+from 14 and 7 to 0, and 78 and 101 of 174 now end at the cage (0.0 to 4.1 units outside, median
+about 1), the rest on walls and hulls as before. HD and Omega, 2048: `Spline::cage()` is `None`,
+unchanged.
+
 ### Cross-title
 
 - **Pulse PS2**: inherits the PSP law (not read on the PS2 build; **not checkable** cheaply, no PS2

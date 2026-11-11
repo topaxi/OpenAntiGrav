@@ -25,9 +25,10 @@
 //! straight, a volley died in the tick it was fired.
 //!
 //! **Wall versus floor is the surface class of the hit, never its angle.** The
-//! original's query returns `0` wall, `1` floor, `3` mag floor, `4` a craft,
-//! `0x7f` nothing; this raycaster returns the same tag in
-//! `RaycastHit::surface`. See `docs/gameplay/projectile-floor.md`.
+//! original's query returns `0` wall, `1` floor, `3` mag floor, `4` outside
+//! the collision cage, `0x7f` nothing; this raycaster returns the first three in
+//! `RaycastHit::surface`, and `4` comes from the track's
+//! [`oag_physics::cage::Containment`]. See `docs/gameplay/projectile-floor.md`.
 //!
 //! **Ours.**
 //!

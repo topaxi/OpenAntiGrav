@@ -20,11 +20,12 @@ pub(super) struct SweepHit {
     /// The surface normal for geometry; the incoming direction reversed for a
     /// hull, which nothing reads - a hull hit always detonates.
     pub normal: Vec3,
-    /// Which surface class the geometry is, or `None` for a hull.
     /// Which surface class the geometry is, or `None` for a hull: the original's
-    /// collision code. `FUN_0883198c` returns `0x7f` for no hit, the collider's
-    /// `+0x6c` type on a world hit (`0` wall, `1` floor, `3` mag floor) and `4`
-    /// from the craft query, the numbering [`Surface`] carries. See
+    /// collision code. `Collision_SweepSegment` (`0x0883198c`) returns `0x7f` for no
+    /// hit and the collider's `+0x6c` type on a world hit (`0` wall, `1` floor, `3` mag
+    /// floor), the numbering [`Surface`] carries; its `4`, a segment end outside the
+    /// collision cage, is not a surface and is asked of the cage in
+    /// [`super::Projectiles::advance`]. See
     /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
     pub surface: Option<Surface>,
 }

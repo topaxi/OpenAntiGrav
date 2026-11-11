@@ -2,9 +2,9 @@
 status: ready-to-wire
 titles: [pulse]
 updated: 2026-11-11
-summary: "Wire the collision cage into the projectile probe and sweep (code 4); then Cannon speed x2.7, own-craft box, track-up launch normal"
-size: M (60)
-difficulty: medium (60)
+summary: "The cage test is wired (Pulse); next Cannon speed x2.7, track-up launch normal, own-craft box, Shuriken speed, floor arms"
+size: S (50)
+difficulty: medium (55)
 ---
 
 # Projectiles leave the track on a bank or a ramp; the original ends them at the collision cage
@@ -32,13 +32,14 @@ What is settled:
 
 ## Open
 
-Ranked by what a player sees. Items 1 and 2 are ready to wire; 3 to 6 are recovered laws with a
+Ranked by what a player sees. Item 2 is ready to wire; 3 to 6 are recovered laws with a
 smaller effect; 7 is what was not measured.
 
-1. **The cage test in the probe and the travel sweep (the report itself).** Not wired. Ours'
-   Plasma and Shuriken fired at Moa Therma sample 1416 fly ten seconds and two to three kilometres
-   off the circuit, two of three rockets fired up Outpost 7's ramp fly their whole five seconds, a
-   Cannon round 440 units; the original's end at the cage at updates 49, 58, 17 to 22 and 25.
+1. ~~The cage test in the probe and the travel sweep (the report itself).~~ **Wired 2026-11-11**
+   (lane `projectile-cage-wire`, see Done). What stays open from it: the Missile's MAX_BOUNCES
+   wall end carries `blast: true` while its cage end spends none (the `0x14` teardown reaches the
+   explosion and no damage); no capture has produced a Missile's sweep `4`; `CageEffect_Spawn` on a
+   projectile's cage hit is not drawn.
 2. **The Cannon's muzzle speed is 2.7 times too low** (maintainer's "double check the cannon").
    `Cannon_Init` writes `velocity = row2 * (craft km/h + 500)` with the row 0.75 long and **no
    divide by 3.6**: 750.60 units/s measured at a craft speed of 139.111 units/s (stored speed
@@ -76,57 +77,33 @@ smaller effect; 7 is what was not measured.
      (`projectile/disruptor.rs`) was not looked at.
    - What poses the craft's box collider against `body+0x30` when the weapons update (item 3).
 
+## Done
+
+- **The cage test in the probe and the travel sweep** (2026-11-11, `projectile-cage-wire`):
+  `oag_physics::cage::Containment` (one point, the craft's sibling rule as `Located::outside`, none
+  of `Cage_ResolveCraft`'s limits), implemented by `CageTrack`, passed through `projectile::step`
+  and `Projectiles::advance` from `Spline::cage()` (`None` on Pure, HD, 2048, Omega). Rocket and
+  Plasma end at the boundary on a probe `4`; Missile and Shuriken do nothing on one; every weapon
+  ends at the boundary on a sweep `4`, with no bounce. Tests:
+  `crates/raceplay/tests/projectile_cage_ground_truth.rs` (the 17 recorded queries and the four
+  endings, each red without the cage) and `crates/weapons/src/projectile/tests/cage.rs`. The
+  Shuriken test re-seeds each update from the original's state because its speed (item 5) drifts
+  a chain off the kerb. `rocket_floor_trace` Pulse `07`/`10`: "expired" 14 and 7 to 0.
+
 ## Next Steps
 
-1. **Wire item 1.** `oag-weapons` depends on `oag-physics` only, and the track half of the cage is
-   `oag_gameplay::cage::CageTrack`, so the test has to arrive as an argument:
-   - Give `oag_physics::cage` a one-point query (a trait or a function the caller passes) that
-     returns the boundary point and inward normal when a point is outside, with the sibling rule of
-     `cage::resolve` (outside the located section and, at a fork, outside the sibling's; the nearer
-     boundary) and **without** `MAX_POINT_DISTANCE` and `MAX_DEPTH`. Implement it on `CageTrack`
-     (`locate`, then `Section::test`).
-   - Thread it through `projectile::step` and `Projectiles::advance`
-     (`crates/weapons/src/projectile/flight.rs`); the caller is `crates/raceplay/src/tick.rs:248`,
-     which has `Spline::cage()` (`None` on HD, Omega and Pure, so only Pulse changes).
-   - **Probe** (`flight.rs`, the `probe` match): the point to test is the raycast's hit point when
-     there is one (any surface class), else `to - surface * probe_length`. Outside the cage is the
-     original's code `4`, taken before the surface class: Rocket and Plasma end there (as their
-     probe-wall arm does today, `blast: false`, the impact at the boundary point); Missile and
-     Shuriken do nothing this tick, **neither ride nor fall**. A floor hit outside the cage is a
-     `4`, not a ride.
-   - **Travel sweep** (the `hit` match after `nearest_hit`): the point to test is the geometry
-     hit's point, else `to`. Outside: Rocket, Plasma and Cannon end as on a wall (the Cannon with
-     its sparks), the Missile and the Shuriken end **without a bounce** (not `may_bounce`). A hull
-     hit stays what it is today.
-   - Tests: seed a `Projectile` from the table "States a test can start from" on the linked
-     section and step it with the listed `dt`: Plasma from update 45 ends at update 49 with the
-     impact within 0.5 unit of `(421.77, 145.73, -284.12)` or `(424.66, 153.08, -292.16)`;
-     Shuriken from update 50 ends at update 58 near `(495.83, 144.73, -278.27)`; the Cannon round
-     ends at update 25 near `(553.28, 143.17, -280.29)`; the Outpost 7 rocket from update 6 ends at
-     update 21 near `(-1003.03, 27.32, 324.72)`. Each fails today (the projectile is still alive).
-     A cheaper pin: the 17 rows of "The cage test reproduced" through the one-point query.
-     Walk `rocket_floor_trace.rs` afterwards: its "expired" column on Pulse `07` and `10` should
-     reach zero.
-   - Risk: `oag-weapons` is simulation. The slot layout does not change, but every Pulse race
-     where a projectile reached the cage plays differently from that tick, so committed Pulse
-     references and AI boards that count weapon deaths can move (regenerate in a separate commit,
-     naming this law). The gameplay determinism reference flies a rocket over a synthetic floor
-     with no cage and should not move; if it does, find out why first.
-   - Update `docs/gameplay/weapon-lineage.md` (flight cells of Rocket, Missile, Plasma, Shuriken,
-     Cannon: Pulse measured, HD/2048/Omega run no cage) and the stale comments naming `4` a craft
-     hit (`flight.rs` near the probe's `match`, `projectile-floor.md`'s first table).
-2. **Wire item 2**: `cannon::launch` speed `(craft km/h + BASE_SPEED_KMH) * 0.75` units/s (the 0.75
+1. **Wire item 2**: `cannon::launch` speed `(craft km/h + BASE_SPEED_KMH) * 0.75` units/s (the 0.75
    is the craft's display scale, the same source as `rocket::LAUNCH_SPEED_SCALE`). Test: a craft at
    139.111 units/s gives 750.60; parked gives 375.0. It moves every Cannon test and the AI's Cannon
    use; HD shares the code and inherits it (its own `Cannon_Init` is unread). Worth one more
    capture first: `psp-projectile-sweeps.py --player-fire-frame 120 cannon` from a parked craft
    (the Talon's Junction grid state parks against a wall) and read `|velocity|` and `+0xdc`.
-3. Item 4 next (small, one field): the craft's located track sample is already what the mag hold
+2. Item 4 next (small, one field): the craft's located track sample is already what the mag hold
    reads; the launch needs its `down`. Expected: on Outpost 7's ramp (sample 186) the carried
    normal at launch is `(0, 1, 0)` where the craft's up is `(-0.014, 0.996, -0.090)`.
-4. Item 3 needs the box pose read before it is wired: break at a probe's return with the box
+3. Item 3 needs the box pose read before it is wired: break at a probe's return with the box
    collider's own pose beside `body+0x30` (the collider is `world + index * 0xc + 0x2454`, the index
    is in the capture's `mesh_collider`), on a floor at two speeds and on the mag strip. Then a probe
    that meets any craft's box first reports nothing, and `plasma::UNPINNED_SECONDS` goes.
-5. Items 5 and 6 are one change each in `flight.rs`'s floor arms; the Shuriken capture's speed
+4. Items 5 and 6 are one change each in `flight.rs`'s floor arms; the Shuriken capture's speed
    series and the Missile's per-update errors on the linked pages are their tests.
