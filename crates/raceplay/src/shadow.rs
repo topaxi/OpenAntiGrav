@@ -167,7 +167,12 @@ impl Race {
 fn silhouette_entry(archives: &oag_assets::Archives, ship_entry: &str) -> String {
     let dir = ship_entry.rsplit_once('\\').map_or("", |(dir, _)| dir);
     let gtf = format!(r"{dir}\textures\ambient_shadow.gtf");
-    archives.resolve_texture(&gtf).unwrap_or(gtf)
+    archives.resolve_texture(&gtf).unwrap_or_else(|| {
+        // Held nowhere: name the platform's own spelling, which is the file a
+        // reader would look for.
+        let spelled = oag_assets::texture_name::spellings(archives.layout.platform, &gtf);
+        spelled.into_iter().nth(1).unwrap_or(gtf)
+    })
 }
 
 /// One `blob` silhouette per grid slot, in `teams`' own order.

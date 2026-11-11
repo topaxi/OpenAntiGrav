@@ -82,11 +82,44 @@ those flows.
 
 ## Not routed through the resolver yet
 
+The claim "one resolver, one decoder" is **partial**. What is left, and why:
+
+- **Per-title name tables that respell HD's names by hand.** The same stem appears
+  under two extensions in `oag_omega::loading` against `oag_hd::loading` (the loading
+  chrome and the five features: `Title_Arrow_HD`, `Subtitle_Arrow_HD`, `line`,
+  `corner`, `dot`, `square`, `Barrel_Roll`, `Side_Shift_Tap`, `flip`, `pilot_assist`,
+  `absorb`), in `oag_omega::weapons` against `oag_hd::race` (`cannon_bolt`,
+  `cannon_muzzle_flash`, `hd_electric_arc_8x8`, `hd_electricarc_contact`), in
+  `oag_omega::lib`/`oag_2048::lib` against `oag_hd::lib` (`engine_flare_rich`,
+  `smoke_trails_frame1_alpha`) and in `oag_hd::campaign` against `game::campaign` (the
+  `.mip` and `.gtf` hex art). Folding them means the loaders that read those tables go
+  through `read_texture` too, and the loading screen is a flow the picture matrix below
+  does not cover; open.
+- **Six `oag_pulse::read_image` callers** (`livery::absorb`, `game::preview`,
+  `game::endrace`, `game::campaign`, `game::loading::assets`) read a texture by name
+  with the PS2 `.pct` rule only. Moving them to `read_texture` would switch the
+  platform spelling on for HD, 2048 and Omega end-of-race and campaign art that nobody
+  has looked at, so they stay until a lane checks those screens.
 - Particle sprites (`oag_raceplay::assets`, the `Effect::parse_with` callback) build
   their entry from a per-title extension and directory (`/data/psys/tex/`,
-  `Data\...\Tex\`); that is a path rule, not a respelling, and still reads by
-  `read_name`.
+  `Data\...\Tex\`); that is a path rule, not a respelling. They **decode** through
+  `oag_texture::decode` now (`Sprite::from_{gtf,gxt,gnf,ps2}`).
 - Model material textures (`oag_mesh` `textures` callbacks) read the full path the
-  `.rcsmodel` names; Omega's already say `.gnf`.
-- The front end's per-title `.gtf`-spelled tables in `oag_ui` compare the XML's
-  declared name, which is the same on every title.
+  `.rcsmodel` names (Omega's already say `.gnf`), and the GPU builders
+  (`ModelTexture::from_gtf`, `from_gnf_form`) keep the disc's blocks and mip chain;
+  only the container choice is shared (`Container::of_name`).
+
+`oag-ui-screens`' HD front-end names are declared-name keys (the XML spells `.gtf` on
+HD and Omega alike) or reads that now go through `read_front_end_texture`
+(`picker/hd/hex.rs`'s `is_thumb` matches `\fe\thumb` with no extension), so none is a
+silent miss on Omega. `endrace/table.rs` and `campaign/hd.rs` compare a declared `src`
+with `ends_with`, which is the same string on every title.
+
+## What the picture check covers
+
+Pulse (PSP USA), Pure (PSP USA), HD (decrypted PS3), 2048 (Vita EU) and Omega
+(PS4 EU), a race at ticks 20 and 450 with a rocket given, `--screen` for one
+front-end screen and `--menu-page main`: 20 of 20 PNGs byte-identical, plus Pulse PS2
+race ticks 20 and 450. The HD front-end sheet reads `147 of 147 front-end image(s)
+decoded` before and after, Omega `226 of 240`, 2048 `166 of 165`. **Not covered**: the
+loading screen, campaign, selection and end-of-race screens, a Zone race.
