@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [omega]
-updated: 2026-10-09
+updated: 2026-11-11
 summary: "Omega front end: circuit names show ids, load order unresolved, campaign pages open"
 ---
 
@@ -34,6 +34,13 @@ thread opened the front-end files that census only named and diffed their
 content against `hd-frontend.md`.
 
 ## Open
+
+- **Thirteen textures Omega's front-end XML names and the package holds under no
+  spelling** (2026-11-11, now a `debug` line from `Archives::read_texture`; list and
+  census in [`docs/formats/texture-names.md`](../../docs/formats/texture-names.md)):
+  ten `TrackSelectEmblem_Fury` (one per `environments2048` circuit) and the three
+  `Data\FE\NewImages\Demo\` images. They draw nothing; whether the original draws
+  them from a place this reader does not look is unchecked.
 
 - **Omega's Track Select draws its circuit models (`omega-track-model`,
   2026-10-09)**: 26 scenes, a fresnel material read off the PS4 shader, the
