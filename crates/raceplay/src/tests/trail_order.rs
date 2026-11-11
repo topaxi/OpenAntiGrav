@@ -28,6 +28,20 @@ fn hds_tube_ignores_the_trail_order() {
     }
 }
 
+/// Foliage writes no depth of its own by default, and `depth` asks for it; HD's tube keeps its
+/// own order whichever value the profile holds.
+#[test]
+fn the_scenery_sort_setting_asks_for_foliage_depth_on_the_psp_circuit_only() {
+    use oag_display::display::ScenerySort;
+    let mut race = race_with_a_grid();
+    race.view.hd_trail_active = false;
+    assert!(!race.writes_foliage_depth(), "the original writes none");
+    race.set_scenery_sort(ScenerySort::Depth);
+    assert!(race.writes_foliage_depth());
+    race.view.hd_trail_active = true;
+    assert!(!race.writes_foliage_depth());
+}
+
 /// The setting places the ribbons; the circuit's blended list stays after the pads and hulls
 /// under both orders, and only HD's tube keeps the circuit whole.
 #[test]

@@ -177,6 +177,7 @@ impl Drawable {
             unblended_pipeline: self.unblended_pipeline.clone(),
             authored_pipelines: self.authored_pipelines.clone(),
             stamp_pipeline: self.stamp_pipeline.clone(),
+            foliage: self.foliage.clone(),
             prepass: self.prepass.clone(),
             plain_draws: self.plain_draws.clone(),
             hidden: std::sync::Mutex::default(),

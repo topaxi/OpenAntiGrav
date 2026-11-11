@@ -691,6 +691,18 @@ impl Definition {
         }
     }
 
+    /// Drops the SCENERY SORT row on a title whose circuit is not the PSP preset's: HD/Fury
+    /// keeps its own blended order, and Omega and 2048 reuse it. The same titles as
+    /// [`Self::drop_unavailable_trail_order`].
+    pub fn drop_unavailable_scenery_sort(&mut self, title: &oag_title::Title) {
+        if title.exhaust.is_psp_preset() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.scenery_sort"));
+        }
+    }
+
     /// Drops the TRAIL LENGTH row on a title whose engine ribbon is not the PSP preset: HD/Fury
     /// draws its own 54-sample tube, and Omega and 2048 reuse it. The same titles as
     /// [`Self::drop_unavailable_trail_order`].

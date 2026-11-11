@@ -133,6 +133,24 @@ impl Race {
     }
 
     #[cfg(feature = "view")]
+    /// How the circuit's blended list is sorted - `[render_profiles.<title>] scenery_sort`.
+    /// Render-only and idempotent like [`Self::set_trail_order`], so the frame loop sets it
+    /// every frame and the menu row applies live.
+    pub fn set_scenery_sort(&mut self, sort: oag_display::display::ScenerySort) {
+        self.view.scenery_sort = sort;
+    }
+
+    #[cfg(feature = "view")]
+    /// Whether the circuit's blended foliage lays its own depth down before the list draws
+    /// ([`oag_display::display::ScenerySort::Depth`]). Only the PSP preset's list B has a
+    /// per-mesh key to correct; HD's tube and the titles that share it keep their own order,
+    /// and the menu offers no choice there.
+    #[must_use]
+    pub fn writes_foliage_depth(&self) -> bool {
+        !self.hd_trail_active() && self.view.scenery_sort.writes_foliage_depth()
+    }
+
+    #[cfg(feature = "view")]
     /// How long the PSP ribbons are - `[render_profiles.<title>] trail_length`. Render-only
     /// and idempotent: the frame loop sets it every frame, and a change of length restarts
     /// every ring, so the ribbons draw again once they are full. HD's tube has its own length

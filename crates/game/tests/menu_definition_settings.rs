@@ -391,6 +391,32 @@ fn the_trail_order_row_is_offered_only_on_the_psp_ribbon() {
     }
 }
 
+/// The SCENERY SORT row is offered where the circuit is the PSP preset (Pulse, Pure)
+/// and dropped where it is not (HD, Omega, 2048).
+#[test]
+fn the_scenery_sort_row_is_offered_only_on_the_psp_circuit() {
+    let rows = |definition: &Definition| {
+        definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter(|entry| entry.setting() == Some("graphics.scenery_sort"))
+            .count()
+    };
+    for (title, offered) in [
+        (oag_pulse::TITLE, 1),
+        (oag_pure::TITLE, 1),
+        (oag_hd::TITLE, 0),
+        (oag_omega::TITLE, 0),
+        (oag_2048::TITLE, 0),
+    ] {
+        let mut definition = built_in();
+        assert_eq!(rows(&definition), 1, "the definition ships the row");
+        definition.drop_unavailable_scenery_sort(title);
+        assert_eq!(rows(&definition), offered, "{}", title.name);
+    }
+}
+
 /// The TRAIL LENGTH row is offered where the ribbon is the PSP preset (Pulse, Pure)
 /// and dropped where it is not (HD, Omega, 2048).
 #[test]
@@ -935,6 +961,16 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         trail_order,
         oag_display::display::TrailOrder::ALL,
         "the TRAIL ORDER rows and `TrailOrder::ALL` must be one list"
+    );
+
+    let scenery_sort: Vec<oag_display::display::ScenerySort> = values("graphics.scenery_sort")
+        .iter()
+        .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+        .collect();
+    assert_eq!(
+        scenery_sort,
+        oag_display::display::ScenerySort::ALL,
+        "the SCENERY SORT rows and `ScenerySort::ALL` must be one list"
     );
 
     let trail_length: Vec<oag_display::display::TrailLength> = values("graphics.trail_length")

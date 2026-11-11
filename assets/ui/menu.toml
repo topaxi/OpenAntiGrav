@@ -1324,6 +1324,23 @@ string_id = "OAG_GRAPHICS_TRAIL_ORDER"
 setting = "graphics.trail_order"
 values = ["original", "over-floors"]
 
+# How the circuit's blended list (trees, translucent floor patches, glass) decides which
+# tree is in front. `original` is the default and is byte-identical to a build without the
+# row: one queue key per mesh from its box centre, far to near, no depth written
+# (`Mesh_SubmitNode`), so a tree can be drawn over a nearer one, and which one changes as the
+# camera pans. `depth` makes the foliage's solid texels (alpha at least one half) occlude what
+# draws after them, so a nearer tree is over a farther one at any angle: this project's own,
+# chosen rather than measured. Only a title whose circuit is the PSP preset (Pulse, Pure) has
+# a choice; the row is dropped elsewhere (`Definition::drop_unavailable_scenery_sort`). See
+# `docs/rendering/draw-order.md`, "Trees overlapping trees on Platinum Rush White". Applies
+# live: the session hands the sort to the race every frame.
+[[page.entry]]
+kind = "choice"
+label = "SCENERY SORT"
+string_id = "OAG_GRAPHICS_SCENERY_SORT"
+setting = "graphics.scenery_sort"
+values = ["original", "depth"]
+
 # How long a craft's engine ribbon is. `original` is the default: the PSP
 # preset's ten samples, byte-identical to a build without the row. `hd` keeps
 # Wipeout HD's 54 samples (one a frame) on the preset's own head width, fade

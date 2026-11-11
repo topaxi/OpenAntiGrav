@@ -1303,6 +1303,10 @@ pub fn menu_seeds(
             text(&profile.trail_order.to_string()),
         ));
         out.push((
+            "graphics.scenery_sort",
+            text(&profile.scenery_sort.to_string()),
+        ));
+        out.push((
             "graphics.trail_length",
             text(&profile.trail_length.to_string()),
         ));

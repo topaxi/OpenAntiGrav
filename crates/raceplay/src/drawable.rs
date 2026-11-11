@@ -59,6 +59,9 @@ pub(super) struct Drawable {
     /// The alpha-only glow-mask stamp for blended batches - see
     /// `mesh_render::Built::stamp_pipeline` and [`Self::draw_stamps`].
     stamp_pipeline: Option<mesh_render::Stamp>,
+    /// The foliage depth and colour pair, for a circuit with list-B foliage - see
+    /// `mesh_render::Built::foliage`.
+    foliage: Option<mesh_render::Foliage>,
     vertices: wgpu::Buffer,
     /// The coordinates' own buffer, bound to slot 1, for a drawable built
     /// [`mesh_render::Texcoords::Streamed`] - `None` for every other. See
@@ -257,6 +260,7 @@ impl Drawable {
             unblended_pipeline,
             authored_pipelines,
             stamp_pipeline,
+            foliage,
             bind_group: _placeholder,
             vertex_buffer: vertices,
             index_buffer: indices,
@@ -386,6 +390,7 @@ impl Drawable {
             unblended_pipeline,
             authored_pipelines,
             stamp_pipeline,
+            foliage,
             prepass,
             plain_draws,
             hidden: std::sync::Mutex::default(),

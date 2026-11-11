@@ -1,32 +1,30 @@
 ---
 status: measure
-titles: [pulse]
+titles: [pulse, pure]
 updated: 2026-11-11
-summary: "Platinum Rush trees draw in the original's order; the maintainer's overlap report needs their frame, then the fsr3 temporal path"
+summary: "Platinum Rush's tree flip is the original's own order (maintainer-confirmed in PPSSPP); SCENERY SORT depth fixes it as an opt-in; decide the default"
 categories: [rendering]
 ---
 
-# Platinum Rush trees: our order is the original's; the reported overlap is not a draw-order fault in a still
+# Platinum Rush trees flip over each other while the camera pans: the original does the same
 
-Measured and filed in `docs/rendering/draw-order.md`, "Trees overlapping trees on Platinum Rush White". Ours matches the
-PPSSPP software frame in mesh order (7 frames, zero inversions) and in strip order, and pixels agree.
+Measured and filed in `docs/rendering/draw-order.md`, "Trees overlapping trees on Platinum Rush White". Our order matches the
+original's across meshes and inside a strip, and the maintainer saw the same flip in PPSSPP. Field of view, reconstruction and
+motion blur are ruled out. `--scenery-sort depth` (`ScenerySort`, a row beside TRAIL ORDER, `original` the default) draws the
+list's foliage with its own depth and leaves nothing for the order to decide at the fly-by (0 pixels change when the list
+is reversed, against 42,723 at `original`).
 
 ## Open
 
-- **The maintainer's frame.** A tick (fly-by) or a position (race) and a screenshot of a tree drawn over a nearer one. Put the
-  camera there with `--camera-pose` (race) or `--intro-ticks` (fly-by), run with `OAG_DEBUG_TINT_BLENDED=tree`, and compare the
-  original at the same camera (`scripts/psp-flyby.py --frames N --dump-at K`, `psp-trace.py --camera`, `psp-ge-dump.py census`).
-- **The temporal path.** Blended trees write no depth and a masked-empty velocity, so under `reconstruction = fsr3` and
-  `motion_blur = high` a near tree's pixels carry the background's motion and a far tree's history can survive over it. A
-  headless `--presented` frame has no history; a windowed run through the fly-by (the front-end flow, not `--race`, which opens
-  on the grid) with the tint on and `reconstruction` flipped off then `motion_blur` off is the test. Untested.
-- **Wide field of view.** The maintainer plays at `fov = 100`; a key is per mesh from the box centre, so a large strip whose
-  centre lies behind or beside the eye draws first or last. Same rule as the original, more visible at 100 degrees. Untested
-  with the tint.
+- **Should `depth` be the default on Pulse?** The original has no depth here; `depth` keeps soft edges blending, so a nearer
+  tree's dark rim lies over a farther solid one (visible inside a big tree at 3360x1440). The maintainer decides.
+- **Pure** takes the same path and was not photographed over a tree (Vineta K has no list-B foliage in its fly-by); a Pure
+  circuit with trees would confirm. **Pulse PS2** draws its trees as depth-writing cutouts already: the row changes little there.
+- **Glow stamps over foliage.** `draw_stamps` tests `Less` against depth the foliage now writes, so a stamped glow byte on a
+  foliage draw would fail its own depth test under `depth`. No Pulse foliage draw carries glow bits; unchecked on Pure.
 
 ## Next Steps
 
-1. Ask for the frame; run it tinted at the maintainer's profile with `reconstruction` off, then fsr3.
-2. If it only appears with fsr3: the fix is the reactive or transparency mask, or the trees' own velocity, not the order.
-3. If it appears at `reconstruction = off`: a per-tree depth sort or alpha-tested depth write is a deliberate departure from the
-   original (a pixel experiment changed 0.04 to 0.27 % of a frame); offer it as an `original`-default setting.
+1. Ask the maintainer to play with `--scenery-sort depth` on Platinum Rush and say whether the dark rim bothers them.
+2. If the rim does: a soft-edge pass that keeps the colour of texels below half alpha out of nearer solid texels
+   (draw the foliage's colour pass in two alpha bands), or raise the depth cutoff.

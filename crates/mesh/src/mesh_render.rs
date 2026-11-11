@@ -9,6 +9,7 @@ use anyhow::Result;
 use crate::mesh::Model;
 
 mod blend;
+mod foliage;
 mod glow_mask;
 mod hull_lights;
 mod hull_points;
@@ -19,6 +20,7 @@ mod uniforms;
 
 mod texlod;
 pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
+pub use foliage::Foliage;
 pub use glow_mask::GlowMask;
 pub use hull_lights::{
     HULL_LIGHTS, HullLights, HullPassColour, ge_byte, ge_channel, pack_hull_scale,
@@ -180,6 +182,10 @@ pub struct Built {
     /// [`stamp`]. `Some` only for a [`GlowMask::Stamped`] model, and indexed by
     /// `culled as usize` like [`Built::blend_pipeline`], one pair per blend class.
     pub stamp_pipeline: Option<Stamp>,
+    /// The depth and colour pair a circuit's blended foliage draws through under
+    /// `ScenerySort::Depth` - see [`foliage`]. `Some` only for a model with a draw that
+    /// [`Foliage::takes_part`], which is a Pulse or Pure circuit.
+    pub foliage: Option<Foliage>,
     pub bind_group: wgpu::BindGroup,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
@@ -1010,6 +1016,24 @@ pub fn build_with(
         })
     });
 
+    let foliage = (blend_entry == "fs_main_blend"
+        && model.transparent_draws.iter().any(Foliage::takes_part))
+    .then(|| {
+        foliage::pipelines(&foliage::Shared {
+            device,
+            shader,
+            layout: &pipeline_layout,
+            vertex_buffers: &vertex_buffers,
+            constants,
+            format,
+            multisample,
+            blend,
+            write_mask: glow.blend_writes(),
+            velocity_target: velocity_target.clone(),
+            depth_compare,
+        })
+    });
+
     let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("vertices"),
         size: std::mem::size_of_val(&model.vertices[..]) as u64,
@@ -1224,6 +1248,7 @@ pub fn build_with(
         unblended_pipeline,
         authored_pipelines,
         stamp_pipeline,
+        foliage,
         bind_group,
         vertex_buffer,
         index_buffer,

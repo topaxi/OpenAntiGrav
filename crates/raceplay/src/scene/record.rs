@@ -148,6 +148,8 @@ pub(super) struct ViewPass<'a> {
     /// The fourth row of the unjittered view-projection matrix: `clip.w`, the view
     /// depth the blended list's list-B meshes are put in order by.
     pub(super) depth_plane: [f32; 4],
+    /// Whether the circuit's blended foliage lays its own depth down (`ScenerySort::Depth`).
+    pub(super) foliage_depth: bool,
     /// The queue key of each craft's engine flare that is drawn among the circuit's blended
     /// list rather than after it (`flare_key`), in the order of the exhaust pipeline's flare
     /// quads. Empty unless [`Self::ribbon_first`].
@@ -545,6 +547,7 @@ impl<'a> Recorder<'a> {
                                 keys: &pass.flare_keys,
                                 draw: &flare,
                             }),
+                            pass.foliage_depth,
                         ),
                     ));
                 }
@@ -663,10 +666,12 @@ pub(crate) const TRACK_STAGES: [TrackStage; 4] = [
 pub(crate) fn track_blended<'a>(
     depth_plane: [f32; 4],
     between: Option<Interleave<'a>>,
+    foliage_depth: bool,
 ) -> Lists<'a> {
     Lists::Blended {
         depth_plane: Some(depth_plane),
         between,
+        foliage_depth,
     }
 }
 
