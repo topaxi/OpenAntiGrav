@@ -482,3 +482,80 @@ fn a_commit_starts_the_sphere_and_show_whole_settles_it() {
     assert_eq!(grade.wavefront().previous, 0);
     assert_eq!(grade.blend().weight, 1.0);
 }
+
+/// Two stages' five Scene rim colours, curve and power, in `zonemodedlc3`'s
+/// spelling, over [`HD_THREE_STAGES`].
+fn arena_grade(arena: bool) -> ZoneGrade {
+    let mut text = HD_THREE_STAGES.to_string();
+    for (stage, name, k) in [(1, "Sub Venom", 1.0), (2, "Venom", 2.0)] {
+        for (key, value) in [
+            ("Scene.Near Colour", format!("{} 0 0", 0.1 * k)),
+            ("Scene.Base Colour", format!("{} 0 0", 0.2 * k)),
+            ("Scene.Base Colour Middle", format!("{} 0 0", 0.3 * k)),
+            ("Scene.Base Colour Highlight", format!("{} 0 0", 0.4 * k)),
+            (
+                "Scene.Base Colour Highlight Middle",
+                format!("{} 0 0", 0.5 * k),
+            ),
+            ("Scene.Aniso Curve", "0.5".to_string()),
+            ("Scene.Aniso Power", format!("{k}")),
+        ] {
+            text.push_str(&format!("\"{stage} {name}.{key}\"={value}\n"));
+        }
+    }
+    let table = EffectSettings::parse(&text).expect("it parses");
+    let texel = || {
+        Some(Arc::new(ModelTexture {
+            label: "stage".into(),
+            width: 1,
+            height: 1,
+            texels: oag_mesh::mesh::Texels::Rgba8(vec![255, 255, 255, 255]),
+            mip_count: None,
+        }))
+    };
+    ZoneGrade::new(
+        "zonemodedlc3.effectsettings".to_string(),
+        table,
+        None,
+        vec![texel(), texel(), texel()],
+        vec![texel(), texel(), texel()],
+    )
+    .expect("it names stages")
+    .with_arena(arena)
+}
+
+/// **The arena's ramps are stage `n` inside and `max(n - 1, 0)` outside, five
+/// points on every fourth texel**, as `Environment_UpdateStageBlend` builds them
+/// on a commit (`docs/ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md`).
+#[test]
+fn an_arena_grade_publishes_the_inner_and_outer_scene_ramps_and_their_powers() {
+    let mut grade = arena_grade(true);
+    grade.pin_stage(2);
+    let zone = grade.zone_uniform();
+    assert_eq!(zone.shape[0], 1.0, "a Zone arena compiles the aniso shape");
+    let points = |ramp: &mesh_render::ZoneRamp| -> Vec<f32> {
+        (0..5).map(|k| ramp.texels[4 * k][0]).collect()
+    };
+    assert_eq!(
+        points(&zone.aniso[0]),
+        [0.2, 0.4, 0.6, 0.8, 1.0],
+        "Scene inner, stage 2"
+    );
+    assert_eq!(
+        points(&zone.aniso[1]),
+        [0.1, 0.2, 0.3, 0.4, 0.5],
+        "Scene outer, stage 1"
+    );
+    assert_eq!(zone.aniso_power[..2], [2.0, 1.0]);
+    // No Track key is authored here, so its ramps add nothing.
+    assert_eq!(zone.aniso[2], mesh_render::ZoneRamp::default());
+    assert_eq!(zone.aniso_power[2..], [0.0, 0.0]);
+}
+
+/// A racing circuit keeps the rim shape whatever the table authors.
+#[test]
+fn a_circuit_grade_does_not_select_the_arena_shape() {
+    let mut grade = arena_grade(false);
+    grade.pin_stage(2);
+    assert_eq!(grade.zone_uniform().shape[0], 0.0);
+}

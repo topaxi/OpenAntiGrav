@@ -15,7 +15,7 @@ import package::shading_modes::{colour_is_light, light_rig, nova_prelit, zone_ra
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, sample_at_slope_level, texlod_bias, texlod_slope};
 import package::types::{VertexOutput};
-import package::zone::{zone_base_term, zone_glow, zone_sample, zone_set};
+import package::zone::{zone_aniso, zone_base_term, zone_glow, zone_sample, zone_set};
 
 // The largest finite half-precision float. The original's half registers turn the
 // `RCP` of a zero divisor into an infinity; it is held here instead, rather than
@@ -894,13 +894,33 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     var zone_linear = vec3<f32>(0.0);
     var zone_gamma = vec3<f32>(0.0);
     var zone_glow_term = vec3<f32>(0.0);
+    // How much of the albedo the Zone surface replaces: all of it on a circuit,
+    // none of it on an arena, where the zone colour is added instead
+    // (`zone_add_*`). See `mesh_render::Zone::shape`.
+    var zone_replace = 1.0;
+    var zone_add_linear = vec3<f32>(0.0);
+    var zone_add_gamma = vec3<f32>(0.0);
     if zone_on != 0.0 {
         let zone_to_eye = normalize(scene.fog.camera - in.world);
         let zone_colours = zone_set(in.slots, in.world);
-        let zone_base = zone_base_term(1.0 - dot(n, zone_to_eye), zone_colours);
+        let zone_rim = 1.0 - dot(n, zone_to_eye);
         let zone = zone_sample(in.texcoord, in.slots, in.world);
-        zone_linear = decode(zone) * zone_colours.effect.rgb + zone_base;
-        zone_gamma = zone * zone_colours.effect.rgb + zone_base;
+        if scene.zone.shape.x > 0.5 {
+            // The arena shape: `surface = albedo + zoneCol * (1 - blackMask)`,
+            // `zoneCol = zoneTex * zoneEffect + 2 * zoneAnisoPalette[pow(rim,
+            // zoneAnisoPower)]`, `blackMask = saturate((albedo.r + albedo.g +
+            // albedo.b) * 100000)` - the zone colour lands only where the
+            // material's own albedo is black (`zone-shader.md`, 82).
+            let zone_black = 1.0 - clamp((texel.r + texel.g + texel.b) * 100000.0, 0.0, 1.0);
+            let zone_rim_colour = 2.0 * zone_aniso(zone_rim, in.slots, in.world);
+            zone_replace = 0.0;
+            zone_add_linear = (decode(zone) * zone_colours.effect.rgb + zone_rim_colour) * zone_black;
+            zone_add_gamma = (zone * zone_colours.effect.rgb + zone_rim_colour) * zone_black;
+        } else {
+            let zone_base = zone_base_term(zone_rim, zone_colours);
+            zone_linear = decode(zone) * zone_colours.effect.rgb + zone_base;
+            zone_gamma = zone * zone_colours.effect.rgb + zone_base;
+        }
         // The visualiser glow - see `zone_glow`. Gated by `enabled` explicitly
         // rather than trusting `effect.w` to be zero off a Zone race, the same
         // belt-and-braces `surface_linear`/`plain` below already take.
@@ -1057,7 +1077,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // **replaces** the albedo rather than adding to it, so `enabled` is the
         // mix weight: it is 0.0 for every draw that is not a Zone race with all
         // its inputs resolved, and there this is `texel_linear` unchanged.
-        let surface_linear = mix(texel_linear, zone_linear, zone_weight);
+        let surface_linear =
+            mix(texel_linear, zone_linear, zone_weight * zone_replace) + zone_add_linear * zone_weight;
         // `colour = light * surface + glow` - the microcode's own order, and
         // **both glows are on the far side of the multiply because that is where
         // the disc puts them**. Read off `uvanim_diffuse_emissive`'s lit fragment
@@ -1159,7 +1180,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // `zone_gamma` already is on this path - it is a shader parameter and
     // texture-lookup product, not an albedo sample, so it owes no sRGB
     // decode either way.
-    let plain = mix(texel.rgb, zone_gamma, zone_weight) * tint * light
+    let plain = (mix(texel.rgb, zone_gamma, zone_weight * zone_replace) + zone_add_gamma * zone_weight)
+        * tint * light
         + glow + zone_glow_term + pad_glow + mag_glow_gamma;
     let plain_rgb = mix(plain, decode(plain), linear_out);
 

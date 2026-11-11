@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd, omega, 2048]
-updated: 2026-11-09
-summary: "HD Zone palette arrays at 0x00c81330 (zoneAnisoPalette, GradientColour0..3) have no known fill; zoneMode*.gtf are fifteen identical blanks"
+updated: 2026-11-11
+summary: "HD Zone aniso ramps found and drawn on the arenas; open: zone_2 GradientColour1, stage-4 floor hue, Omega/2048 zoneAnisoLookupTex"
 ---
 
 # HD's per-stage Zone textures are grounded now: which file feeds which sampler is read, what the shader does with them is not
@@ -419,9 +419,25 @@ unblocks - see Next Steps below for what implementing it needs.
   at every stage commit and capped at `20000`; `Transition start speed` and
   `Transition acceleration` are those two fields' schema keys, unauthored on
   disc, so the `.data` defaults `0.5f`/`0.1f` shipped. Thirtieth pass, 85.
-- What fills the two-entry palette arrays at `0x00c81330`-`0x00c81350`
-  (`zoneAnisoPalette`, `zoneAnisoPaletteOuter`, `GradientColour0..3`). Same
-  limitation; confidence only 60 that they hold texture pointers at all.
+- ~~What fills the two-entry palette arrays at `0x00c81330`-`0x00c81350`.~~
+  **Found and read live 2026-11-11**: seven arrays of runtime FP16 textures,
+  rebuilt per stage commit by `Environment_BuildAnisoPalette` (`0x003d9970`), and
+  the arena shape is drawn on `zone_1`..`zone_4` - see
+  [zone-palette-textures.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md).
+  What is left of it:
+  - **`GradientColour1` on `zone_2/gradientcolour1.rcsmaterial`**, the one arena
+    material naming a gradient (unit 0, the albedo slot). Bind its albedo to a
+    3x1 texture of the stage's `Gradient1.Colour0..2` (the live read confirms the
+    texels); first read how that material's UV addresses three texels.
+  - **The arena floor's albedo.** The original's `zone_1` floor shows a hex
+    pattern at stage 4, so its albedo is not black; ours binds
+    `tracktexture.gtf` (1x1 black), so the Track ramp lands on it and draws purple.
+    Read which texture `tracktexture_with_normal`'s albedo unit binds on the
+    arenas (RPCS3 draw dump of the floor), then compare at a matched pose.
+  - **Omega and 2048** sample `zoneAnisoLookupTex`, not `zoneAnisoPalette`; read
+    its writer in each executable (strings at `eboot.bin` file offset `8583116`,
+    2048 `eboot.elf` `5284016`). Omega ships `zonemodedlc3` byte-identical but has
+    no Zone grade at all.
 - Whether `zoneMode*.gtf` being fifteen identical blanks is what shipped or an
   authoring leftover. The bytes say identical; nothing says intended. **What
   is measured as of 2026-09-15 is that the blanks are load-bearing**: the

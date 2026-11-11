@@ -23,8 +23,9 @@ import package::types::{ZoneSet};
 // carries the `blackMask` literal at all; and a `zoneAnisoPalette` shape of
 // 130 blocks which always does. All twelve racing circuits are 100% this
 // shape; the other lives only in `zone_1`..`zone_4`, HD's Zone arenas. The
-// `albedo + zoneCol * (1 - blackMask)` rule is the arena shape's and is not
-// applied here.
+// `albedo + zoneCol * (1 - blackMask)` rule is the arena shape's; `shade.wesl`
+// takes it where `scene.zone.shape.x` is set, with `zone_aniso` below as its
+// rim term.
 //
 // The zone texture is sampled at the *mesh's own* UV, not in screen space and
 // not projected through `zoneOrigin` - which is the counter-intuitive half of
@@ -135,6 +136,30 @@ fn zone_sample(uv: vec2<f32>, slots: u32, world: vec3<f32>) -> vec3<f32> {
 fn zone_base_term(rim: f32, colours: ZoneSet) -> vec3<f32> {
     let r = max(rim, 0.0);
     return colours.base.rgb * pow(r, 10.0) + colours.base_alt.rgb * pow(r, 5.0);
+}
+
+// The arena shape's rim term, `zoneAnisoPalette<|Outer>[pow(rim, zoneAnisoPower.<x|y>)]`
+// (`docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`), from the Track or Scene
+// publication by the chunk's own bit and the inner or outer ramp by the sphere, as
+// `zone_set` picks the colours. The ramps are `Environment_BuildAnisoPalette`'s,
+// built per stage on the CPU (`oag_tables::effectsettings::aniso::ramp`).
+//
+// The original samples a 17x1 FP16 texture at `u = pow(rim, power)`; this reads the
+// same 17 texels out of the uniform the way a linear, clamp-to-edge fetch does
+// (texel centres at `(i + 0.5) / 17`). That filter is chosen, not measured: the
+// sampler state the arena materials bind for it is unread.
+//
+// Undecoded on both shading paths: the ramp is built from shader-parameter floats
+// (`Base Colour Highlight Middle` runs to 2.85), not from texels that owe an sRGB
+// decode. `max(rim, 0)` for `zone_base_term`'s reason.
+fn zone_aniso(rim: f32, slots: u32, world: vec3<f32>) -> vec3<f32> {
+    let ramp = select(0u, 2u, zone_is_track(slots)) + select(1u, 0u, zone_inside(world));
+    let u = pow(max(rim, 0.0), scene.zone.aniso_power[ramp]);
+    let x = clamp(u * 17.0 - 0.5, 0.0, 16.0);
+    let i = u32(floor(x));
+    let j = min(i + 1u, 16u);
+    let base = ramp * 17u;
+    return mix(scene.zone.aniso[base + i].rgb, scene.zone.aniso[base + j].rgb, x - f32(i));
 }
 
 // The visualiser glow: `saturate(N.y - 0.5) * (1 - windowDepth) * E.w *
