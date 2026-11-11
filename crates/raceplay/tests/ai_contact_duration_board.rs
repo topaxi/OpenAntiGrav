@@ -39,7 +39,7 @@ fn env_or<T: std::str::FromStr>(name: &str, default: T) -> T {
 
 /// Per opponent: contact ticks in the first 1,800 ticks after GO and over the
 /// whole window.
-fn run(entry: &str, class: &str, seed: u64) -> Option<(Vec<u32>, Vec<u32>)> {
+fn run(entry: &str, class: &str, seed: u64) -> Option<(Vec<u32>, Vec<u32>, u32)> {
     let image = image()?;
     let difficulty = match std::env::var("OAG_DIFFICULTY").as_deref() {
         Ok("ace") => oag_ai::Difficulty::Ace,
@@ -65,8 +65,26 @@ fn run(entry: &str, class: &str, seed: u64) -> Option<(Vec<u32>, Vec<u32>)> {
     let ticks: u64 = env_or("OAG_TICKS", 5400);
     let mut go = None;
     let mut at_30 = vec![0; count];
+    let mut seen = vec![0u32; count];
+    let mut run_len = vec![0u32; count];
+    let mut episodes: Vec<u32> = Vec::new();
+    let mut wrecked = vec![false; count];
     for tick in 0..ticks + 2000 {
         race.tick(&PlayerInputs::none());
+        for s in &opponents {
+            let now = race.pair_contact_ticks_of(*s);
+            if now > seen[*s] {
+                run_len[*s] += 1;
+            } else if run_len[*s] > 0 {
+                if go.is_some() {
+                    episodes.push(run_len[*s]);
+                }
+                run_len[*s] = 0;
+            }
+            seen[*s] = now;
+            wrecked[*s] |=
+                race.sim.world.ships[*s].physics.craft_state == oag_physics::CraftState::Destroyed;
+        }
         if go.is_none()
             && opponents.iter().any(|s| {
                 race.sim.world.ships[*s]
@@ -98,7 +116,19 @@ fn run(entry: &str, class: &str, seed: u64) -> Option<(Vec<u32>, Vec<u32>)> {
         .iter()
         .map(|s| race.pair_contact_ticks_of(*s))
         .collect();
-    Some((first, whole))
+    let destroyed = opponents.iter().filter(|s| wrecked[**s]).count() as u32;
+    episodes.extend(run_len.iter().copied().filter(|r| *r > 0));
+    episodes.sort_unstable();
+    let long = episodes.iter().filter(|e| **e >= 60).count();
+    let over = episodes.iter().filter(|e| **e >= 60).sum::<u32>();
+    println!(
+        "EPISODES {entry} {class} seed {seed}: {} episodes, longest {:?}, >=60 ticks: {long} holding {over} ticks, \
+         median {:?}",
+        episodes.len(),
+        episodes.last(),
+        episodes.get(episodes.len() / 2)
+    );
+    Some((first, whole, destroyed))
 }
 
 #[test]
@@ -118,18 +148,21 @@ fn ai_contact_duration_board() {
             continue;
         };
         for class in classes.split(',') {
-            let (mut sum30, mut sum, mut n) = (0u32, 0u32, 0u32);
+            let (mut sum30, mut sum, mut n, mut wrecked) = (0u32, 0u32, 0u32, 0u32);
             for seed in 1..=seeds {
-                let Some((first, whole)) = run(&entry, class, seed) else {
+                let Some((first, whole, destroyed)) = run(&entry, class, seed) else {
                     continue;
                 };
-                println!("ROW {name} {class} seed {seed} first30 {first:?} whole {whole:?}");
+                println!(
+                    "ROW {name} {class} seed {seed} first30 {first:?} whole {whole:?} destroyed {destroyed}"
+                );
+                wrecked += destroyed;
                 sum30 += first.iter().sum::<u32>();
                 sum += whole.iter().sum::<u32>();
                 n += first.len() as u32;
             }
             println!(
-                "MEAN {name} {class}: per opponent first30 {:.1} whole {:.1} over {n} craft",
+                "MEAN {name} {class}: per opponent first30 {:.1} whole {:.1} over {n} craft, destroyed {wrecked}",
                 sum30 as f32 / n.max(1) as f32,
                 sum as f32 / n.max(1) as f32
             );
