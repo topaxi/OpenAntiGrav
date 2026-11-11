@@ -96,8 +96,8 @@ fn run(entry: &str, class: &str, seed: u64) -> Option<(Vec<u32>, Vec<u32>, u32)>
             })
         {
             go = Some(tick);
-            for s in 0..count {
-                at_30[s] = race.pair_contact_ticks_of(s);
+            for (s, start) in at_30.iter_mut().enumerate() {
+                *start = race.pair_contact_ticks_of(s);
             }
         }
         if let Some(g) = go {
