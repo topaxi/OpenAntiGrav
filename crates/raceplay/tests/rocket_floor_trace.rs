@@ -75,6 +75,8 @@ enum End {
     ProbedWall,
     /// A craft's hull.
     Hull,
+    /// The probe's or the sweep's end is outside the collision cage (the original's code 4).
+    Caged,
     /// Ran out of `rocket::LIFETIME_SECONDS`, the original's own 5.0 s.
     Expired,
     /// Gone for a reason this replica did not predict (a blast, a respawn).
@@ -93,6 +95,8 @@ struct Tick {
     step: f32,
     /// The nearest opponent hull the chord enters, as a distance along it.
     hull: Option<(u8, f32)>,
+    /// How far outside the cage the probe's end, or the sweep's, is.
+    caged: Option<f32>,
 }
 
 fn segment_sphere(p0: Vec3, p1: Vec3, centre: Vec3, radius: f32) -> Option<f32> {
@@ -122,6 +126,7 @@ fn replicate<R: Raycaster + ?Sized>(
     projectile: &oag_weapons::projectile::Projectile,
     dt: f32,
     world: &R,
+    cage: Option<&dyn oag_physics::cage::Containment>,
     ships: &[oag_gameplay::Ship],
 ) -> Tick {
     let from = projectile.position;
@@ -131,6 +136,9 @@ fn replicate<R: Raycaster + ?Sized>(
         None,
         false,
     );
+    let probe_end = probe.map_or(to - projectile.surface * SURFACE_PROBE_LENGTH, |hit| {
+        hit.point
+    });
     let mut rideable = false;
     let mut velocity = projectile.velocity;
     let mut surface = projectile.surface;
@@ -150,14 +158,23 @@ fn replicate<R: Raycaster + ?Sized>(
     let _ = velocity;
     let step = to - from;
     let distance = step.length();
+    let mut sweep_end = to;
     let sweep = if distance > 0.0 {
         let direction = step / distance;
-        world
-            .raycast(Ray::new(from, direction, distance), None, false)
-            .map(|hit| (hit.distance, -hit.normal.dot(direction), hit.surface))
+        let hit = world.raycast(Ray::new(from, direction, distance), None, false);
+        if let Some(hit) = hit {
+            sweep_end = hit.point;
+        }
+        hit.map(|hit| (hit.distance, -hit.normal.dot(direction), hit.surface))
     } else {
         None
     };
+    let caged = cage.and_then(|cage| {
+        [probe_end, sweep_end].into_iter().find_map(|end| {
+            cage.outside(end)
+                .map(|(boundary, _)| (boundary - end).length())
+        })
+    });
     let mut hull = None;
     for (slot, ship) in ships.iter().enumerate() {
         if !ship.active || slot as u8 == projectile.owner {
@@ -186,6 +203,7 @@ fn replicate<R: Raycaster + ?Sized>(
         rideable,
         sweep,
         step: distance,
+        caged,
     }
 }
 
@@ -291,6 +309,9 @@ fn trace_a_rocket_volley_along_the_floor() {
                     p,
                     dt,
                     race.collision(),
+                    race.spline()
+                        .cage()
+                        .map(|c| c as &dyn oag_physics::cage::Containment),
                     &race.sim.world.ships[..count],
                 ));
             }
@@ -314,7 +335,15 @@ fn trace_a_rocket_volley_along_the_floor() {
                     let count = race.sim.world.ship_count as usize;
                     alive[slot] = Some((
                         tick,
-                        replicate(&now, dt, race.collision(), &race.sim.world.ships[..count]),
+                        replicate(
+                            &now,
+                            dt,
+                            race.collision(),
+                            race.spline()
+                                .cage()
+                                .map(|c| c as &dyn oag_physics::cage::Containment),
+                            &race.sim.world.ships[..count],
+                        ),
                     ));
                 }
                 continue;
@@ -352,6 +381,7 @@ fn trace_a_rocket_volley_along_the_floor() {
                     .map(|(d, _, _)| d);
                 let probe_wall = t.probe.is_some_and(|(_, _, s)| !s.is_hoverable());
                 let end = match (geometry, t.hull) {
+                    _ if t.caged.is_some() => End::Caged,
                     _ if probe_wall => End::ProbedWall,
                     (Some(g), Some((_, h))) if h < g => End::Hull,
                     (Some(_), _) => End::SweptIntoGeometry,
@@ -365,7 +395,14 @@ fn trace_a_rocket_volley_along_the_floor() {
                 };
                 *ends.entry(end).or_default() += 1;
                 lifetimes.push(age);
-                writeln!(log, "t={tick} slot={slot} END {end:?} after {age} ticks").unwrap();
+                writeln!(
+                    log,
+                    "t={tick} slot={slot} END {end:?} after {age} ticks{}",
+                    t.caged.map_or(String::new(), |depth| format!(
+                        " ({depth:.2} outside the cage)"
+                    ))
+                )
+                .unwrap();
                 alive[slot] = None;
             }
         }
