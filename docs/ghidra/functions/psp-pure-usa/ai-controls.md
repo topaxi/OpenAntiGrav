@@ -343,6 +343,16 @@ nothing to the body but the three position floats; `Body_SetPosition` (`0x089336
 writes `body+0x30..` alone. **Pure's rail moves the craft's position and never its
 velocity.** Confidence 85, static.
 
+**A craft-to-craft contact drops the rail too** (static, confidence 75, 2026-11-11). The
+count the rail reads, `*(craft+0x8b4) + 0x3b0`, is the one both record writers increment:
+`Body_RecordContact` (`0x08933fb8`, kind word `0` at `+0x1b0`) and `Body_RecordPairContact`
+(`0x0893403c`, kind `1`; [craft-physics.md](craft-physics.md)), the second called twice from
+the pair resolver `FUN_08935c8c` (`0x089364d8`, `0x089364ec`), once per body. `craft+0x8b4`
+is the body `Body_SetPosition` writes at `0x08917f18`. Not checked live: that the resolver's
+two bodies are the craft's `+0x8b4`. Wired: `oag_raceplay::original_ai` feeds a resolved pair
+into `touching` on every title (`docs/gameplay/ai.md`, "The two rules"); Pure's sibling
+driver reads no push.
+
 ## Pitch
 
 `Ai_ComputePitch` (`0x0891892c`) is Pulse's below the `0.9` ground fraction

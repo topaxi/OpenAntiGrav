@@ -240,7 +240,11 @@ for Pulse's two bumps:
 
 The rest, each at Pulse's value: the authority ramp `0.025` toward `1`; the contact push
 `+/-0.2` per kind-`1` contact (body `+0x220`, stride `0x50`, count `+0x4a0`), by the
-sign of `dot(left, contact - pos)`, clamped `+/-2`, decaying `* 0.95`; the nine
+sign of `dot(left, contact - pos)`, clamped `+/-2`, decaying `* 0.95`; the kind test is
+Pulse's, read 2026-11-11 (`lwz r0,0x0(r9)`; `cmpwi cr7,r0,0x1`; `bne` back to the next
+record at `0x00101c64..0x00101c6c`; the point at record `+0x10` against the craft's position,
+`lvx` at `0x00101c70..0x00101c74`), so a wall record never pushes, and wired with Pulse's
+(`docs/gameplay/ai.md`, "The two rules"); the nine
 candidates `i * 0.25 - 1`; the smoothing `0.9 * old + 0.1 * new`; the best of nine with
 lane `0` as the default; the preferred lane on `rand() % 400 == 125`
 (`0x00102198`) as `u = rand() * 2^-29 - 1`, `u >= 0 ? 1 - u^2 : u^2 - 1`; the player's

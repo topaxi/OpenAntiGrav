@@ -190,11 +190,11 @@ const HIT_WINDOW: u64 = 60;
 
 /// The race with the player parked: every opponent finishes inside 300 s
 /// with no respawn, or, where a circuit names its cause, at most
-/// `field_respawns` in the whole field, each within [`HIT_WINDOW`] ticks of a
+/// `field_respawns` in the whole field, each within `hit_window` ticks of a
 /// weapon hit on that craft. The skill is the race's ambient one. Shield is
 /// read at each opponent's lap crossings (per lap) and at the end, reported
 /// apart.
-fn fly(track: &str, class: &str, field_respawns: u32, field_destroyed: u32) {
+fn fly(track: &str, class: &str, field_respawns: u32, field_destroyed: u32, hit_window: u64) {
     let Some(loaded) = loaded(track, class) else {
         return;
     };
@@ -226,7 +226,7 @@ fn fly(track: &str, class: &str, field_respawns: u32, field_destroyed: u32) {
                 respawned[slot] = race.respawns_of(slot);
                 assert!(
                     field_respawns > 0
-                        && last_hit[slot].is_some_and(|hit| tick - hit <= HIT_WINDOW),
+                        && last_hit[slot].is_some_and(|hit| tick - hit <= hit_window),
                     "{track}: slot {slot} respawned at tick {tick}, last weapon hit {:?}",
                     last_hit[slot]
                 );
@@ -281,10 +281,27 @@ macro_rules! circuit {
         circuit!($name, $track, $class, $field_respawns, 0);
     };
     ($name:ident, $track:literal, $class:literal, $field_respawns:literal, $field_destroyed:literal) => {
+        circuit!(
+            $name,
+            $track,
+            $class,
+            $field_respawns,
+            $field_destroyed,
+            HIT_WINDOW
+        );
+    };
+    ($name:ident, $track:literal, $class:literal, $field_respawns:literal, $field_destroyed:literal,
+     $hit_window:expr) => {
         #[test]
         #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
         fn $name() {
-            fly($track, $class, $field_respawns, $field_destroyed);
+            fly(
+                $track,
+                $class,
+                $field_respawns,
+                $field_destroyed,
+                $hit_window,
+            );
         }
     };
 }
@@ -319,9 +336,17 @@ circuit!(
 // 5568 (shield 76 to 61 at speed 232, touching no wall), the wall at tick 5608
 // at speed 24, off; and hit at tick 11163 (69.9 to 54.9 at speed 314), off by
 // tick 11193. Every other circuit stays at none.
+//
+// With the original driver's craft-to-craft lane push (`docs/gameplay/ai.md`, "The two rules")
+// the field's history moved: slot 3 hit at 5459, off at 5497; slot 7 hit at 8477 (shield 68.3
+// to 54.0 at speed 235 on the descent, no craft contact), the wall at 8516 at speed 213, a
+// stall against it at 10-15 u/s, off at 8569: 92 ticks after the hit. The same hit, wall, off
+// chain, with a longer stall, so this circuit's window is 100 ticks.
 circuit!(
     the_field_finishes_amphiseum_reversed,
     r"Data\Environments\amphiseum\track_reversed.vex",
     "Flash",
-    2
+    2,
+    0,
+    100
 );

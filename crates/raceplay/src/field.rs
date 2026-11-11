@@ -1301,6 +1301,11 @@ impl Race {
                     // unshielded craft-to-craft bump charges the energy pool", Result 5).
                     touched[a] = true;
                     touched[b] = true;
+                    // The original driver reads the record next tick: its lane
+                    // planner pushes away from the rival and its rail lets go.
+                    for slot in [a, b] {
+                        self.original_ai_pair_contact(slot, contact.point);
+                    }
                     for slot in [a, b] {
                         let ship = &mut self.sim.world.ships[slot];
                         let racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
