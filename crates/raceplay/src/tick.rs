@@ -146,6 +146,7 @@ impl Race {
         {
             self.last_controls = controls;
             self.pair_contacts.clear();
+            self.pair_impulses.clear();
         }
 
         // **Before every craft is stepped, and over the whole field at once.**

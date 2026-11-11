@@ -1245,12 +1245,17 @@ impl Race {
     /// through each other and only the track stops them. The rule reads the world's own
     /// mode and how many slots a person flies, both hashed, so it is simulation state
     /// without a byte of its own.
+    ///
+    /// **A touch costs both hulls energy**: [`oag_physics::damage::apply_pair`], the
+    /// wall's law on the pair's impulse, for player and opponents alike, so a rival can
+    /// be wrecked by a bump.
     pub(super) fn resolve_craft_pairs(&mut self) {
         let people = self.sim.world.human_slots().count();
         if !self.sim.world.mode().craft_collide(people) {
             return;
         }
         let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
+        let rules = self.sim.damage_rules();
         for a in 0..self.sim.world.ship_count as usize {
             for b in (a + 1)..self.sim.world.ship_count as usize {
                 if !self.sim.world.ships[a].in_world() || !self.sim.world.ships[b].in_world() {
@@ -1285,24 +1290,40 @@ impl Race {
                             self.throw_contact_spark(slot, contact.point, contact.impulse, true);
                         }
                     }
-                    #[cfg(not(feature = "view"))]
-                    let _ = contact;
                     // The ring loop's friction test passes for a pair record, then splits on the
-                    // craft's running Shield: unshielded spoils the lap, shielded bulges the shell
-                    // instead (`ShipShield_Hit`, `contact-response.md`, "A craft-to-craft contact
-                    // bulges a running Shield").
-                    #[cfg(feature = "view")]
+                    // craft's running Shield: unshielded charges the pool and spoils the lap,
+                    // shielded bulges the shell instead (`ShipShield_Hit`, `contact-response.md`,
+                    // "A craft-to-craft contact bulges a running Shield"). The gate is read
+                    // before the charge, so a bump that empties a pool still spoils the lap.
+                    // One charge per pair per tick: the original's further records on most
+                    // contact ticks are unread (`contact-response.md`, "Measured 2026-11-11: an
+                    // unshielded craft-to-craft bump charges the energy pool", Result 5).
                     for slot in [a, b] {
-                        let physics = &self.sim.world.ships[slot].physics;
-                        let racing = physics.craft_state == oag_physics::CraftState::Racing;
-                        let shielded = physics.shield_pickup_timer > 0.0;
-                        self.view.pair_spoil[slot] |= racing && !shielded;
-                        if racing && shielded {
-                            self.shield_hit(slot);
+                        let ship = &mut self.sim.world.ships[slot];
+                        let racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
+                        let shielded = ship.physics.shield_pickup_timer > 0.0;
+                        let dimensions = ship.handling.dimensions;
+                        oag_physics::damage::apply_pair(
+                            &mut ship.physics,
+                            &dimensions,
+                            contact.impulse,
+                            rules,
+                        );
+                        #[cfg(feature = "view")]
+                        {
+                            self.view.pair_spoil[slot] |= racing && !shielded;
+                            if racing && shielded {
+                                self.shield_hit(slot);
+                            }
                         }
+                        #[cfg(not(feature = "view"))]
+                        let _ = (racing, shielded);
                     }
                     #[cfg(test)]
-                    self.pair_contacts.push((a, b));
+                    {
+                        self.pair_contacts.push((a, b));
+                        self.pair_impulses.push(contact.impulse);
+                    }
                 }
             }
         }

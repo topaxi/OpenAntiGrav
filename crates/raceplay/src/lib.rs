@@ -791,6 +791,9 @@ pub struct Race {
     /// The craft pairs that touched on the last tick, for the same test.
     #[cfg(test)]
     pair_contacts: Vec<(usize, usize)>,
+    /// Each of [`Self::pair_contacts`]' contact impulse, in the same order.
+    #[cfg(test)]
+    pair_impulses: Vec<f32>,
 }
 
 /// How fast the kick opens, per second, as an exponential approach.

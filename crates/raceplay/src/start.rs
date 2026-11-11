@@ -1046,6 +1046,8 @@ impl Race {
             last_controls: Default::default(),
             #[cfg(test)]
             pair_contacts: Vec::new(),
+            #[cfg(test)]
+            pair_impulses: Vec::new(),
         };
         // The free Turbo is granted at the release edge, not here - see
         // `Race::tick`'s own `COUNTDOWN_TICKS` check for the mode, full-slot
