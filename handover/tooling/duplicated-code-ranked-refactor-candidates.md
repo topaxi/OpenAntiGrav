@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-11
-summary: "Six duplicate-code refactors to wire, five later, ranked from jscpd and read on both sides; a title-data policy call is open."
+summary: "Duplicate-code refactors ranked from jscpd; candidates 1 and 6 landed, 2-5 to wire, five later; a title-data policy call is open."
 ---
 
 # Duplicated code: ranked refactor candidates
@@ -34,20 +34,16 @@ section below).
 
 ### Worth a lane now (ranked, highest first)
 
-1. **`sprite_draw` is copied byte for byte between two ui-screens files.**
-   - `crates/ui-screens/src/campaign/draw.rs:779-813` and
-     `crates/ui-screens/src/endrace/draw.rs:642-676`: 35 duplicated lines,
-     read on both sides, identical.
-   - Both files import `Image`, `Placed` and `argb_to_rgba` from `oag_ui`,
-     so the shared home is `oag-ui` (`crates/ui/src/frontend/` next to
-     `Placed`, or the `Draw` vocabulary). Legal: ui-screens already depends
-     on oag-ui.
-   - Frequency: called at each draw-list build (13 call sites in
-     ui-screens, plus the two definitions). Not measured; this is layout
-     code, not the per-frame draw loop.
-   - Size: S, about 20 minutes. Confidence 55.
-   - Measure: `just check-size`; `cargo nextest run -p oag-ui-screens`. No
-     number should move. Risk: none to the simulation (UI only).
+1. ~~**`sprite_draw` is copied byte for byte between two ui-screens files.**~~
+   **Landed (dedupe-ui-screens).** One definition, `oag_ui::screen::Image::sprite_draw`
+   (`crates/ui/src/screen/widgets.rs`, next to `Fill::draw`); the campaign and
+   endrace copies are gone and every call site (campaign, endrace, track
+   panel, HD medal crop) calls the method. No re-export. Covered by a new
+   `oag-ui` test (`screen::tests::sprite_draw_samples_a_sub_rect_and_tiles_past_the_placed_rect`)
+   plus the screens' existing tests (campaign draw/HD medal, endrace draw,
+   track panel `TiledSprite`) and the disc-backed `track_panel`,
+   `hd_endrace` and `selection_screens` ground truths. jscpd no longer
+   reports the 35-line pair.
 
 2. **Cutout and transparent draw loop is copied in four places.**
    - jscpd catches `crates/game/src/hud_countdown.rs:447-484` against
@@ -153,21 +149,35 @@ section below).
      match the old ones on `vertices`, `indices` and `draws` (a test that
      compares them).
 
-6. **Smaller ui-screens copies: endrace, campaign and seat assign.**
-   - `crates/ui-screens/src/endrace/draw.rs:383-412` against
-     `endrace/hd.rs:776-805` (30 lines, `endrace_menu_draw_list`); the
-     file pair totals 112 lines over 6 clones.
-   - `crates/ui-screens/src/campaign/draw.rs:34-66` against `:209-241`
-     (33 lines, `grid_draw_list`) and `campaign/hd.rs:203-223` (21 lines).
-   - `crates/ui-screens/src/seat_assign.rs:311-330` against
-     `window_layout.rs:530-549` (20 lines, the pointer handler), and
-     `seat_assign.rs:439-458` against `window_layout.rs:659-678` (20 lines,
-     the hint and rows body); the pair totals 115 lines over 6 clones.
-   - Shared home: `oag-ui-screens`, a module both screens import, for the
-     pointer and body helpers. Legal (ui-screens is the owner).
-   - Size: M, about a day for all three. Confidence 25.
-   - Measure: `cargo nextest run -p oag-ui-screens`, with the pointer
-     tests the screens already have. Behaviour must not change.
+6. ~~**Smaller ui-screens copies: endrace, campaign and seat assign.**~~
+   **Landed (dedupe-ui-screens), with a remainder.** The real clone family
+   was the screen prologue, copied in fourteen draw lists (campaign x6,
+   endrace x5, picker, join, pure_chain, seat_assign, window_layout,
+   `oag_ui::menu::draw_list`), not only the named pairs:
+   - `oag_ui::menu::Layers::behind(skin, frame, backdrop, race_behind)` and
+     `Layers::push_title(skin, frame, title)` (`crates/ui/src/menu/layers.rs`):
+     the backdrop layer and the `Draw::title` push, in the old order
+     (backdrop, title, then the caller's footer overlay).
+   - `Draw::plain` (`Draw::in_role` with no role) replaces the identical
+     `text` closure in join, pure_chain, seat_assign and window_layout.
+   - `Screen::plain_draws(sprites)` replaces the fills-then-images opening of
+     `endrace_menu_draw_list`, `hd_menu_draw_list` and `cell_help_draw`.
+   - `Geometry::row_at` (`window_layout.rs`) replaces the `row_at` call in the
+     seat_assign and window_layout pointer handlers.
+   - Whole-crate jscpd on `crates/ui-screens`: 1,617 duplicated lines
+     (4.52 %) to 1,233 (3.48 %).
+   **Left, differs on purpose:** (a) the nine-argument parameter lists of
+   `grid_draw_list`, `cell_draw_list`, `hd_grid_draw_list`,
+   `endrace_menu_draw_list`, `hd_menu_draw_list` and `rewards_layers` still
+   show as 11-17 line clones: they are the public draw-list signatures
+   `oag-game` calls; folding them into a struct is an API change for a later
+   lane. (b) The seat_assign and window_layout pointer handlers share an
+   idle/back/`at`/rows prologue (13 lines) but push different `Event` enums
+   and track `hover` against `cursor` plus scroll. (c) `text_draw` in
+   campaign (has the `FacedText` role branch) and endrace (plain `Text`)
+   differ; picker's `text_draw` is a third form. (d) The per-screen
+   `fill_draw`/`image_draw` wrappers are one-liners over `Fill::draw` and
+   `Image::sprite_draw`.
 
 ### Later (real duplication, smaller win, or a sim crate)
 
@@ -292,8 +302,7 @@ These are real clones I did not open. Check them before a lane takes them:
 
 ## Next Steps
 
-1. Wire candidate 1 (`sprite_draw` into oag-ui). Smallest, identical copies,
-   easiest to check: `just gate-affected`.
+1. ~~Wire candidate 1 (`sprite_draw` into oag-ui).~~ Landed with candidate 6.
 2. Decide the title-data policy question (HD and Omega front ends, and the
    `ALWAYS_ON` drift) before anyone touches `crates/omega/`.
 3. Then candidate 2 (draw loop into oag-mesh), with a before-and-after
