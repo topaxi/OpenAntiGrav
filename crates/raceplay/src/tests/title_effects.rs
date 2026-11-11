@@ -355,8 +355,9 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
     );
     // 43 since Pure, the last title that named it, dropped `WO_SHIP_ENGINEFLARE`; 44 with
     // `WO_SHIP_COLL_SPARK_NODAMAGE`, the collision cage's contact spark; 47 with Pure's three
-    // big-blast names; 50 with Pure's Bomb glow and Disruptor head and explosion.
-    assert_eq!(crate::RACE_EFFECTS.len(), 50);
+    // big-blast names; 50 with Pure's Bomb glow and Disruptor head and explosion; 51 with its
+    // Disruptor launch.
+    assert_eq!(crate::RACE_EFFECTS.len(), 51);
 }
 
 #[test]
