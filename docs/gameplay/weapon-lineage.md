@@ -127,6 +127,7 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | `effects.bomb_glow` | `none` - unread | `set` - measured | `none` - unread | `none` - unread | `none` - unread |
 | `effects.disruptor_head` | `none` - absent | `set` - measured | `none` - absent | `none` - absent | `none` - absent |
 | `effects.disruptor_explo` | `none` - absent | `set` - measured | `none` - absent | `none` - absent | `none` - absent |
+| `effects.disruptor_launch` | `none` - absent | `set` - measured | `none` - absent | `none` - absent | `none` - absent |
 
 Notes on the cells the code does not explain by itself:
 

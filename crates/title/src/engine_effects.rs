@@ -233,6 +233,12 @@ pub const DISRUPTOR_HEAD_EFFECT: &str = "WO_DISRUPTOR_HEAD";
 /// Pure's alone.
 pub const DISRUPTOR_EXPLO_EFFECT: &str = "WO_DISRUPTOR_EXPLO";
 
+/// A Disruptor leaving the firing craft: `DisruptorPool_Fire` (`0x0884fc14`) spawns it
+/// (fourcc `DILA`, mode 2, no matrix) as a child of the craft's `Ship Muzzle` node, and
+/// only when the hull authors one (`*(craft+0xe0)`, `ShipMuzzle_Importer`'s node).
+/// Pure's alone; `docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor".
+pub const DISRUPTOR_LAUNCH_EFFECT: &str = "WO_DISRUPTOR_LAUNCH";
+
 /// The rays HD's Bomb blast spawns once, half a second after it starts:
 /// `NormalBombBlast_Update` (`0x001503d8`) calls `Psys_Spawn_q` with the string at
 /// `0x007855e8` and tag `'BORS'` at the blast's matrix, the first tick `age > 0.5`

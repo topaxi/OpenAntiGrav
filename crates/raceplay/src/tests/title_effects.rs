@@ -13,10 +13,11 @@ const ALL: [&Title; 5] = [
 ];
 
 /// The triggers a title answers for itself; the rest are the engine's.
-const OWN: [Trigger; 16] = [
+const OWN: [Trigger; 17] = [
     Trigger::BombGlow,
     Trigger::DisruptorHead,
     Trigger::DisruptorExplo,
+    Trigger::DisruptorLaunch,
     Trigger::BombRays,
     Trigger::HitSpark,
     Trigger::LeachHitSpark,
@@ -139,6 +140,7 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
         Trigger::BombGlow,
         Trigger::DisruptorHead,
         Trigger::DisruptorExplo,
+        Trigger::DisruptorLaunch,
     ] {
         assert_eq!(has(own), [false, true, false, false, false], "{own:?}");
     }

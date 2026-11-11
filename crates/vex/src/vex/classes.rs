@@ -293,8 +293,12 @@ pub const V4: Classes = Classes {
     airbrake: Some(0x377),
     engine_flare: Some(0x371),
     ship_collision_fx: Some(0x382),
-    // Pure's `Ship Muzzle` id is not recovered.
-    ship_muzzle: None,
+    // **`Ship Muzzle`**, `0x394`: every reachable Pure ship carries exactly one node of it,
+    // named `ship_muzzle`, with one `Mesh` child, and the live craft's `+0xe0` object is built by
+    // `ShipMuzzle_Importer` (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor").
+    // `crates/pure/tests/class_table_ground_truth.rs` re-derives it. Confidence **88**: exact
+    // name and structure on six of six ships and the live node read, not the registration's id.
+    ship_muzzle: Some(0x394),
     absorb: None,
     quake: None,
     // **`AmbientLight` and `DirectionalLight`**, generic Maya classes outside the

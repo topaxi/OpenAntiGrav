@@ -530,7 +530,11 @@ fn a_pure_race_loads_the_effects_its_weapons_play() {
             ),
             (
                 "Disruptor",
-                &[Trigger::DisruptorHead, Trigger::DisruptorExplo][..],
+                &[
+                    Trigger::DisruptorHead,
+                    Trigger::DisruptorExplo,
+                    Trigger::DisruptorLaunch,
+                ][..],
             ),
         ] {
             for trigger in triggers {

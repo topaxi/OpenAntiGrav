@@ -33,6 +33,7 @@ mod cues;
 mod damage_fx;
 mod destroy_camera;
 mod destroyed_fire;
+mod disruptor_launch;
 mod distance_reset;
 mod eliminator;
 mod energy_bar_delay;
