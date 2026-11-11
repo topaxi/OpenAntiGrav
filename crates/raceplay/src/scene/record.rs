@@ -29,8 +29,8 @@ pub(super) enum Draw<'a> {
     /// The circuit: its solid lists, the sky, its blended list and its shine pass
     /// ([`Recorder::draw_track`]), under the view's sets and frustum.
     Track,
-    /// The circuit's blended list alone, once the hulls and the ribbons are down
-    /// ([`ViewPass::ribbon_first`]).
+    /// The circuit's blended list alone, once the pads and the hulls (and, with
+    /// [`ViewPass::ribbon_first`], the ribbons) are down ([`ViewPass::blended_after_craft`]).
     TrackBlended,
     /// The craft's ribbons alone ([`Recorder::draw_ribbons`]).
     Ribbon,
@@ -84,11 +84,15 @@ impl<'a> DrawList<'a> {
         self.0.push(Draw::Overlay(drawable));
     }
 
-    /// The ribbons, then the circuit's blended list over them, when `ribbon_first`
-    /// ([`ViewPass::ribbon_first`]); nothing otherwise, the circuit having drawn it whole.
-    pub(super) fn ribbons_then_blended(&mut self, ribbon_first: bool) {
+    /// The circuit's blended list after the pads and the hulls, over the ribbons where they draw
+    /// first: the ribbons then the list when `ribbon_first`, the list alone when only
+    /// `blended_after_craft` ([`ViewPass::blended_after_craft`]); nothing otherwise, the circuit
+    /// having drawn it whole.
+    pub(super) fn blended_after_craft(&mut self, ribbon_first: bool, blended_after_craft: bool) {
         if ribbon_first {
             self.0.push(Draw::Ribbon);
+        }
+        if blended_after_craft {
             self.0.push(Draw::TrackBlended);
         }
     }
@@ -160,6 +164,10 @@ pub(super) struct ViewPass<'a> {
     /// list, which then draws over them where it passes its own depth test. Set where the
     /// title's ribbon is the PSP preset's; see [`Recorder::draw_ribbons`].
     pub(super) ribbon_first: bool,
+    /// The circuit's blended list is a draw of its own after the pads and the hulls, not part of
+    /// the circuit's draw: the PSP preset's order whichever way the ribbons go
+    /// ([`Race::blended_after_craft`]).
+    pub(super) blended_after_craft: bool,
     pub(super) shadow_runs: Vec<oag_render::shadow::Run>,
     /// The list the depth prepass's order is sorted into while the view records
     /// ([`opaque_order`]), carried in so a list kept from the last frame is refilled.
@@ -403,7 +411,7 @@ impl<'a> Recorder<'a> {
                 Draw::Track => stats.add(self.draw_track(
                     &mut render,
                     pass,
-                    BlendedList::with_ribbons(pass.ribbon_first),
+                    BlendedList::after_craft(pass.blended_after_craft),
                 )),
                 Draw::TrackBlended => {
                     stats.add(self.draw_track(&mut render, pass, BlendedList::Only));
@@ -622,10 +630,10 @@ pub(crate) enum BlendedList {
 }
 
 impl BlendedList {
-    /// What the circuit's own draw takes: with the ribbons first the blended list is a draw of its
-    /// own, after them.
-    pub(crate) const fn with_ribbons(ribbon_first: bool) -> Self {
-        if ribbon_first {
+    /// What the circuit's own draw takes: where the blended list is a draw of its own, after the
+    /// pads and the hulls, the circuit leaves it out.
+    pub(crate) const fn after_craft(blended_after_craft: bool) -> Self {
+        if blended_after_craft {
             Self::Without
         } else {
             Self::With
@@ -704,21 +712,32 @@ mod tests {
     #[test]
     fn the_ribbons_are_drawn_before_the_blended_list() {
         let mut list = DrawList(Vec::new());
-        list.ribbons_then_blended(true);
+        list.blended_after_craft(true, true);
         assert!(matches!(
             list.0.as_slice(),
             [Draw::Ribbon, Draw::TrackBlended]
         ));
-        assert_eq!(BlendedList::with_ribbons(true), BlendedList::Without);
+        assert_eq!(BlendedList::after_craft(true), BlendedList::Without);
+    }
+
+    /// `trail_order = over-floors` places the ribbons and nothing else: the blended list is
+    /// still a draw of its own after the pads and the hulls (a tree writes no depth, so a pad
+    /// drawn after it would show through), and no ribbon draw is recorded ahead of it.
+    #[test]
+    fn over_floors_keeps_the_blended_list_after_the_craft() {
+        let mut list = DrawList(Vec::new());
+        list.blended_after_craft(false, true);
+        assert!(matches!(list.0.as_slice(), [Draw::TrackBlended]));
+        assert_eq!(BlendedList::after_craft(true), BlendedList::Without);
     }
 
     /// HD's tube keeps the old order, its queue key unread: the circuit draws whole and no extra
     /// draw is pushed.
     #[test]
-    fn without_ribbons_first_the_circuit_draws_whole() {
+    fn without_a_psp_ribbon_the_circuit_draws_whole() {
         let mut list = DrawList(Vec::new());
-        list.ribbons_then_blended(false);
+        list.blended_after_craft(false, false);
         assert!(list.0.is_empty());
-        assert_eq!(BlendedList::with_ribbons(false), BlendedList::With);
+        assert_eq!(BlendedList::after_craft(false), BlendedList::With);
     }
 }

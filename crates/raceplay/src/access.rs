@@ -162,6 +162,19 @@ impl Race {
     }
 
     #[cfg(feature = "view")]
+    /// Whether the circuit's blended list (list B: trees, translucent floor patches, glass)
+    /// draws after the pads and the hulls rather than inside the circuit's own draw. The PSP
+    /// preset's order whichever [`oag_display::display::TrailOrder`] is chosen, since the
+    /// setting places the ribbons and nothing else: a list-B mesh writes no depth, so drawn
+    /// before a pad it is painted over by the pad behind it
+    /// (`docs/rendering/draw-order.md`, "Hull, pads and trees on Platinum Rush White"). HD's
+    /// tube keeps the circuit whole: its queue keys are unread.
+    #[must_use]
+    pub fn blended_after_craft(&self) -> bool {
+        !self.hd_trail_active()
+    }
+
+    #[cfg(feature = "view")]
     /// The lock-on reticle, for whoever draws it.
     ///
     /// Render-only state - see [`RaceView::sight`] - so this returning a borrow

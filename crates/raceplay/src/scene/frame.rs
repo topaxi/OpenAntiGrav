@@ -1016,6 +1016,7 @@ impl Scene {
         // by the depth of the nozzle (`ExhaustFlare_Submit`), and the pass draws them there;
         // otherwise they stay in the sprite buffer and draw after it.
         let ribbon_first = race.ribbons_first();
+        let blended_after_craft = race.blended_after_craft();
         let plane = [
             section_view.x_axis.w,
             section_view.y_axis.w,
@@ -1192,12 +1193,16 @@ impl Scene {
                 draws.flown(race.ship_flown_in_view(index), |draws| draws.mesh(drawable));
             }
         }
-        // The ribbons, then the circuit's blended list over them: the original's queue order
-        // (`Recorder::draw_ribbons`). After the hulls, so their depth is in the buffer for the
+        // The circuit's blended list after the pads and the hulls: a list-B mesh (a tree) writes
+        // no depth, so what is drawn after it lies over it whatever the distance, and the
+        // original draws the pads and hulls first (`docs/rendering/draw-order.md`). With the
+        // ribbons first they go down before it: the original's queue order
+        // (`Recorder::draw_ribbons`), after the hulls so their depth is in the buffer for the
         // ribbon to be occluded by; the weapon bodies, wrecks and flares keep their place after
-        // the blended list, as before. HD's tube keeps the old order: its queue key is unread.
-        // `trail_order = "over-floors"` puts the PSP ribbons back there too (chosen, not measured).
-        draws.ribbons_then_blended(ribbon_first);
+        // the blended list, as before. `trail_order = "over-floors"` moves the ribbons alone, to
+        // the effects after the list (chosen, not measured). HD's tube keeps the circuit whole:
+        // its queue key is unread.
+        draws.blended_after_craft(ribbon_first, blended_after_craft);
         draws.mark("wrecks, weapon bodies");
         self.draw_wrecks(race, &mut draws);
         // Every weapon's own body: opaque painted models, bounded by how many
@@ -1334,6 +1339,7 @@ impl Scene {
             draws,
             effects: self.effects_drawn(),
             ribbon_first,
+            blended_after_craft,
             shadow_runs,
             opaque_order: std::cell::Cell::new(lists.opaque_order),
             ghost: self.ghost_draw(race, lod_eye),
