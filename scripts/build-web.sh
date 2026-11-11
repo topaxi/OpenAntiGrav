@@ -104,22 +104,29 @@ python3 scripts/check-wasm-stack.py "$out/pkg/oag_web_bg.wasm" --stack "$stack_s
 # Chromium traps (docs/tools/web.md, "The page's thread may not wait").
 python3 scripts/web-page-wait-guard.py "$out/pkg/oag_web_bg.wasm" --stack "$stack_size" \
   --names "$out/pkg/page-waits.txt"
-# OAG_WEB_NO_OPT=1 skips wasm-opt, so the module keeps its function names for
-# a browser CPU profile (`web-screenshot.py --profile`).
+# Two modules from the one build: oag_web_bg.wasm, names stripped, the one a
+# page loads; oag_web_bg.named.wasm, the same code with its function names
+# kept, which the page loads for `?profile=1` or `?debug=1` (a profiler's and a
+# report's frames then read as Rust names; docs/tools/web.md, "Troubleshooting").
+# OAG_WEB_NO_OPT=1 (and --dev) skip wasm-opt, so both keep their names.
+named="$out/pkg/oag_web_bg.named.wasm"
 if [[ $profile != dev && -z ${OAG_WEB_NO_OPT:-} ]]; then
   # The `dist` profile's own goal (docs/tools/packaging.md), for the module:
   # wasm-bindgen's output is not size-optimised, and binaryen's -O pass takes a
   # few percent more off after LLVM's. Bulk memory and the other post-MVP
-  # features rustc already emits are enabled so binaryen keeps them.
-  wasm-opt -O --enable-threads --enable-bulk-memory --enable-nontrapping-float-to-int \
-    --enable-sign-ext --enable-mutable-globals --enable-reference-types \
-    --enable-multivalue \
-    -o "$out/pkg/oag_web_bg.wasm" "$out/pkg/oag_web_bg.wasm"
+  # features rustc already emits are enabled so binaryen keeps them. `-g`
+  # keeps the name section, and nothing else differs between the two.
+  binaryen=(--enable-threads --enable-bulk-memory --enable-nontrapping-float-to-int
+    --enable-sign-ext --enable-mutable-globals --enable-reference-types --enable-multivalue)
+  wasm-opt -O -g "${binaryen[@]}" -o "$named" "$out/pkg/oag_web_bg.wasm"
+  wasm-opt -O "${binaryen[@]}" -o "$out/pkg/oag_web_bg.wasm" "$out/pkg/oag_web_bg.wasm"
+else
+  cp "$out/pkg/oag_web_bg.wasm" "$named"
 fi
 # The module and its glue go under a directory named for their content, so a
 # host may cache them forever (`_headers`) and a deploy never pairs new glue
 # with an old module: the page's one import is rewritten to name it.
-hash=$(cat "$out/pkg/oag_web.js" "$out/pkg/oag_web_bg.wasm" | sha256sum | cut -c1-16)
+hash=$(cat "$out/pkg/oag_web.js" "$out/pkg/oag_web_bg.wasm" "$named" | sha256sum | cut -c1-16)
 mv "$out/pkg" "$out/$hash" && mkdir "$out/pkg" && mv "$out/$hash" "$out/pkg/$hash"
 cp web/index.html web/style.css web/worker.js web/fault.js web/audio.js web/audio-worklet.js web/movie.js web/_headers "$out/"
 sed "s#\"./pkg/oag_web.js\"#\"./pkg/$hash/oag_web.js\"#" web/main.js > "$out/main.js"
