@@ -321,13 +321,6 @@ impl Gpu {
                 view_formats: Vec::new(),
             },
         };
-        if let Some(surface) = surface {
-            config.format = canvas_format(
-                config.format,
-                &surface.get_capabilities(&chosen.adapter).formats,
-                cfg!(target_arch = "wasm32"),
-            );
-        }
         config.format = config.format.remove_srgb_suffix();
         config.view_formats = vec![config.format];
         // Kept because the adapter is not: every later change of the vsync row
@@ -1094,25 +1087,6 @@ pub(crate) mod web {
     }
 }
 
-/// The format a window's surface is configured with: the surface's own first
-/// choice, except in a browser, which gets `rgba8unorm` whenever the canvas
-/// offers it. Firefox 159 on Linux prefers `bgra8unorm` and, on a Wayland
-/// session, presents a `bgra8unorm` canvas through a DMABuf that stays black,
-/// while an `rgba8unorm` one draws (docs/tools/web.md, "Troubleshooting").
-/// Every browser accepts both; Chromium on Linux and Android already prefers
-/// `rgba8unorm`.
-fn canvas_format(
-    preferred: wgpu::TextureFormat,
-    offered: &[wgpu::TextureFormat],
-    web: bool,
-) -> wgpu::TextureFormat {
-    if web && offered.contains(&wgpu::TextureFormat::Rgba8Unorm) {
-        wgpu::TextureFormat::Rgba8Unorm
-    } else {
-        preferred
-    }
-}
-
 /// A surface extent held to the device's texture limit, which wgpu panics past (a 6x scaled
 /// 3840x2160 window asked for 23040x12960 on a Steam Deck under gamescope).
 fn clamp_extent(width: u32, height: u32, max: u32) -> (u32, u32) {
@@ -1121,16 +1095,7 @@ fn clamp_extent(width: u32, height: u32, max: u32) -> (u32, u32) {
 
 #[cfg(test)]
 mod clamp_tests {
-    use super::{canvas_format, clamp_extent};
-
-    #[test]
-    fn a_browser_canvas_is_rgba8_when_offered_and_a_desktop_keeps_its_preference() {
-        use wgpu::TextureFormat::{Bgra8Unorm, Bgra8UnormSrgb, Rgba8Unorm, Rgba16Float};
-        let canvas = [Bgra8Unorm, Rgba8Unorm, Rgba16Float];
-        assert_eq!(canvas_format(Bgra8Unorm, &canvas, true), Rgba8Unorm);
-        assert_eq!(canvas_format(Bgra8Unorm, &[Bgra8Unorm], true), Bgra8Unorm);
-        assert_eq!(canvas_format(Bgra8UnormSrgb, &[Bgra8UnormSrgb, Rgba8Unorm], false), Bgra8UnormSrgb);
-    }
+    use super::clamp_extent;
 
     #[test]
     fn an_extent_past_the_device_limit_is_held_to_it() {
