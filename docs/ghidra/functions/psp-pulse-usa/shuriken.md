@@ -376,3 +376,30 @@ Cross-title census (2026-10-06, debug load report of a `--race` on each): HD
 those titles the trail takes Pulse's (unmeasured titles inherit Pulse's rule).
 The blade *model* is `None` on both: no model name recovered. Omega's extracted
 tree was not loadable by `--race` here (no race path to run), so it is **not checkable**.
+
+## 2026-11-11: on a bank the blade's speed drifts, and the cage destroys it (weapon-bank-follow)
+
+Captured with `scripts/psp-projectile-sweeps.py` on Moa Therma White's banked helix (spline sample
+1416, roll 85 degrees), 58 updates; the lane's account is on [rocket-visuals.md](rocket-visuals.md#2026-11-11-code-4-is-the-collision-cage-and-what-a-bank-does-to-every-flyer-weapon-bank-follow).
+
+- **Position: exact.** One update of ours from each of the original's 57 states lands on the
+  original's next position to 0.000 unit, bounce included (update 40: the probe returned `4`,
+  which the Shuriken ignores as it ignores `0`, and the sweep returned `0`, `Shuriken_Bounce`).
+- **The ending differs.** At update 58 the blade had ridden up onto the kerb at the top of the
+  bank; the sweep returned **`4`** (the collision cage, boundary `(495.83, 144.73, -278.27)`) and
+  `Shuriken_Update`'s sweep switch takes `4` first: `flags |= 0x14`, destroyed, no bounce. Ours
+  has no cage test: the same blade leaves over the kerb and is at `(2815, -1062, 1492)` when its
+  10 s cap reaps it.
+- **Its speed is not constant, and ours is.** Both floor arms (the probe's, and the sweep's for
+  `1` or `3`) write `velocity = (hit + normal * g_ride_height - prev) / dt` and stop: no
+  normalise, no rescale (the Rocket, Missile and Plasma rescale on the probe arm). So the speed is
+  whatever the step to the ride point was: 333.6 units/s at the throw, between 268.3 and 337.7 over
+  the next 56 updates on the curving bank, 373.2 on the last. This engine turns the velocity
+  parallel and keeps its length (`flight.rs`, "A Shuriken has `None` here and keeps its velocity
+  length"): flown free from the original's first state ours is 29 units ahead of the original after
+  52 ticks. Confidence **88**: the decompile (no `vdot`/`vrcp` after either write) and the live
+  speed series; the per-update velocity error of ours is up to 211 units/s (the kerb).
+- `self+0x48` is the age; the carried normal at the throw is the track's up at the craft's located
+  point (0.03 degrees from the nearest spline sample's `-down`).
+
+**Cross-title:** Pure has no Shuriken; HD's is I:Pulse and runs no cage (the linked section).

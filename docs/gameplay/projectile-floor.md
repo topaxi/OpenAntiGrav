@@ -329,3 +329,47 @@ off) on update 10, outside the settling window. The test now skips the height fo
 update and the four after it on a Plasma (`PLASMA_REATTACH_RIPPLE_UPDATES`), the five updates
 the ripple takes to decay; HD's worst is then 1.17, at the other dip (-644, -139, 390). The
 angle is still judged on every one of those ticks.
+
+## On a tilted track ours fall off and the original's do not: the cage (2026-11-11, `weapon-bank-follow`)
+
+Maintainer report: "on tilted track our weapons (plasma and others) fall off the track along
+gravity, instead of following the track as in the originals." Measured on Moa Therma White's
+85 degree banked helix and on Outpost 7's first ramp against PPSSPP; evidence, numbers and the
+recovered law are on
+[rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md#2026-11-11-code-4-is-the-collision-cage-and-what-a-bank-does-to-every-flyer-weapon-bank-follow).
+**Nothing is wired here**; the lane was a measurement.
+
+**The ride laws are not at fault.** From the original's own states, one update of ours lands on
+the original's next position to 0.000 unit for the Rocket (48 updates), the Cannon (24) and the
+Shuriken (57), and within 0.012 for the Plasma once it rides.
+
+**What differs is the ending.** Code `4` of the query (the "craft test" of the first table on this
+page) is the **collision cage** tested on the segment's end. On the bank the original's Plasma
+reaches the kerb at the top edge, its probe ends outside the tube, and it detonates there (update
+49); the Shuriken is destroyed the same way (update 58), a Cannon round sparks on it (update 25),
+and three rockets fired up Outpost 7's ramp die 21 to 28 units up within 0.37 s. Ours has no cage
+test for projectiles, so the same shots pass the last floor triangle, take the fall arm and fly
+out their lifetime: the Plasma and the Shuriken ten seconds and two to three kilometres, two of
+the three rockets five seconds, the Cannon round 440 units. "Along gravity" is the `50.0` fall on
+world `-Y` (the Plasma's along its carried normal).
+
+**Corrections to this page.**
+
+- First table, "wall or craft ends the flight": the query has no craft arm. `0` is a wall, `4` is
+  the cage; a craft is met by each pool's own craft sweep.
+- "Jump lips" under "Still open" and "What is left is jumps, and it is the recovered model doing
+  what it says": the recovered model was missing the cage. The original's rockets do not sail.
+- First table, last row: the normal a projectile is born riding is the track's up at the craft's
+  located point (`craft+0xb10` is the located track point's down), not the craft's up. They agree
+  within 0.3 degrees on a craft held to the track and differ by 5.24 on a craft pitching onto a ramp.
+- "The Missile's fall axis is not separately read": read, world `-Y` (`missile.md`).
+
+**Two smaller things the same captures showed**, both on the linked page: the probe misses of a
+projectile's first updates are the firing craft's own box collider (the query answers "nothing"
+when a craft box is nearer than the floor), which replaces the Plasma's 0.04 s age gate; and the
+Cannon's round flies 2.7 times faster in the original than here
+([cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md#2026-11-11-the-cannon-checked-on-a-bank-the-flight-is-exact-the-speed-is-not-and-the-cage-ends-a-round-weapon-bank-follow)).
+
+**Lineage.** Pulse PSP measured; Pulse PS2 inherits it. Pure, HD, 2048 and Omega run no cage off
+the track header, so a wire that reads `Spline::cage()` changes nothing for them: **checked,
+differs** (Pure, by the header census), **not checkable** here for HD's own code `4`.

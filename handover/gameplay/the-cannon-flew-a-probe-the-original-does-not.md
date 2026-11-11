@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [pulse, hd]
-updated: 2026-10-08
-summary: "Capture a Cannon shot on Moa Therma in PPSSPP; read HD's Cannon update; Black rescues a craft ten times a race"
+updated: 2026-11-11
+summary: "Read HD's Cannon update; no banked Cannon frame; Black rescues a craft ten times a race (Moa Therma capture done 2026-11-11)"
 ---
 
 # The Cannon flew a floor probe the original does not, and left its muzzle on a bank
@@ -46,20 +46,21 @@ Banked frames now exist.
   `--give <weapon> --hold cross --press square` fires from there (that is how
   the 2026-10-08 rocket and missile frames were taken); the Cannon needs its
   hold, not captured yet.
-- **The Cannon's flight against a live PPSSPP is unchecked.** The decompile is
-  confidence 82 (VFPU-dense); the reflect arm is read at the shape of its
-  arithmetic only. Nobody has watched a round glance off a floor in the original.
+- ~~The Cannon's flight against a live PPSSPP is unchecked.~~ **Checked 2026-11-11
+  (`weapon-bank-follow`)** on Moa Therma's 85 degree bank: 24 of 24 updates of ours land on the
+  original's to 0.000 unit, a floor glance included (`cannon-quake-leachbeam.md`, 2026-11-11
+  section). Two differences found there, neither wired: the round's speed is 2.7 times ours, and
+  the collision cage ends a round; both are in
+  [projectiles-leave-the-track-the-original-cages-them.md](projectiles-leave-the-track-the-original-cages-them.md).
 - **HD inherits Pulse's Cannon flight** (HD authors a Cannon and runs the
   shared code; no HD `Cannon_UpdateRound` read). **Not checked:** whether
   2048's `weaponstats_Race_2048.xml` or Omega's `WeaponStats_Race.xml` carry a
   Cannon block; if so they inherit the same flight.
-- The Plasma's recovered seed is `-craft->up`; whether `craft+0xb10` is the
-  craft's up or its contact normal was never separated (the Rocket's note says
-  the same), so all four weapons use `body.up()`.
+- ~~Whether `craft+0xb10` is the craft's up or its contact normal was never separated.~~
+  **Separated 2026-11-11:** it is the located track point's down, so the seed is the track's up,
+  not `body.up()` (item 4 of the cage thread above). Not wired.
 
 ## Next Steps
 
-1. Capture a cannon shot on Moa Therma's loop in PPSSPP (software, muted) and
-   compare the round's path with the craft's orientation, to confirm the straight
-   flight at the bend.
+1. ~~Capture a cannon shot on Moa Therma's loop in PPSSPP.~~ Done 2026-11-11 (above).
 2. Read HD's Cannon update and record whether it matches Pulse's.

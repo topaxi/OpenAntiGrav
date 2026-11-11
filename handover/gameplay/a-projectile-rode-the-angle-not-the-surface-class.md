@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-09-25
-summary: "Seed the projectile's born normal from the firing craft's up; needs a hashed-layout signature change and reference regen"
+updated: 2026-11-11
+summary: "Born normal and jump lips answered 2026-11-11 (see the cage thread); left: HD's own projectile update unread, segment-landing speed chosen"
 difficulty: medium (35)
 ---
 
@@ -29,20 +29,18 @@ nothing on the title axis; the gameplay determinism reference did not move.
 
 ## Open
 
-- **The born normal is `Vec3::Y`**, and the original seeds it from the firing
-  craft. Fired down Amphiseum's near-vertical drop the `-Y` probe missed the
-  road for 24 ticks. The spawn call would need the craft's up, which `launch`
-  has and `Projectiles::spawn` does not take - a signature change on the hashed
-  slot layout, so a separate commit with its own reference regeneration.
+- ~~The born normal is `Vec3::Y`.~~ Wired 2026-10-07 as the firing craft's up
+  (`projectile-floor.md`). **2026-11-11:** the original's is the track's up at the craft's located
+  point, not the craft's up (item 4 of
+  [projectiles-leave-the-track-the-original-cages-them.md](projectiles-leave-the-track-the-original-cages-them.md)).
 - **A segment landing keeps its speed here**; `Rocket_Update` writes
   `(next - prev) / dt` and rescales on the next probe. One tick of difference
   in the original, none here, chosen and recorded.
-- **Rockets fired up a ramp that ends in the air still sail off it** - 16 on
-  Sol 2, 6 on Pulse's 07, 2 on 10, out of ~130 a run - leaving the lip with
-  100-190 units/s of climb against the recovered `50.0` fall. That is the
-  Pulse-measured model at the Pulse-measured speed, not retuned to hide a
-  symptom; whether the original's rockets do the same off the same lips is a
-  PPSSPP play-test on 07's ramp, and nobody has run it.
+- ~~Rockets fired up a ramp that ends in the air still sail off it; whether the original's do is
+  a PPSSPP play-test on 07's ramp.~~ **Run 2026-11-11 (`weapon-bank-follow`): the original's do
+  not.** All three rockets of a volley fired up Outpost 7's first ramp ended on the collision cage
+  within 0.37 s; ours fly on. The missing law and its wire are
+  [projectiles-leave-the-track-the-original-cages-them.md](projectiles-leave-the-track-the-original-cages-them.md).
 - **HD's own projectile update is unread.** `ps3-hdfury-eu` is imported; the
   fix is Pulse's model on HD's geometry, which the measurement supports.
 - **The HD autopilot beaches on Sebenco Climb (t=1560), Chenghou Project,

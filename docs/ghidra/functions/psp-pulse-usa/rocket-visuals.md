@@ -219,7 +219,10 @@ with the Reset skip on, and on a mesh hit returns **the struck collider's
 `3` mag floor enum `collision.md` recovered at 92 and `oag_physics::Surface`
 carries. `0x7f` is its no-hit value, and `4` is a second query
 (`FUN_08831948`, the craft test at `self+0x114`) overriding whatever the mesh
-said. So the three arms above are: **no hit → fall; wall or craft → detonate;
+said. **Correction 2026-11-11:** the second query is the collision cage
+on the segment's end, not a craft test, and `self+0x114` is the rocket's
+AI-track cursor; see
+["code `4` is the collision cage"](#2026-11-11-code-4-is-the-collision-cage-and-what-a-bank-does-to-every-flyer-weapon-bank-follow). So the three arms above are: **no hit → fall; wall or craft → detonate;
 floor or mag floor → ride.** The same switch, verified in `Missile_Update`'s
 decompile the same day, reads `0`/`4` on the *probe* as nothing at all - no
 fall, no ride - and on the *travel segment* as bounce/detonate, with a floor
@@ -1167,3 +1170,259 @@ ships (32,352 bytes against Pulse's 18,752, a different file) and `WO_ROCKET_EXP
 differs**; whether Pure's draw law matches is unread. 2048 loads Pulse's `WO_ROCKET_FLARE`/`_EXPLO` from
 `data/particles2048` through the same `psys`: **not checked** against 2048's own draw (no 2048 GE dump). Pulse PS2
 inherits PSP's law and has no pair (**not checkable** without a PCSX2 dump).
+
+## 2026-11-11: code `4` is the collision cage, and what a bank does to every flyer (weapon-bank-follow)
+
+Maintainer report: "on tilted track our weapons (plasma and others) fall off the track along gravity,
+instead of following the track as in the originals." **True, and it is one missing law**: the second
+query inside `Collision_SweepSegment`, the one this page and [missile.md](missile.md) read as a craft
+test, is the **collision cage** ([collision-cage.md](collision-cage.md)). In the original a projectile
+whose probe or travel segment ends outside the cage is destroyed (or, for a Missile's and a Shuriken's
+probe, ignored); ours has no such test, so a projectile that gets past the last floor triangle flies
+its whole lifetime through the void, falling at `50.0`. The flight laws themselves agree: on an
+85 degree bank ours reproduces the original's Rocket, Cannon and Shuriken positions to `0.000` unit per
+update.
+
+### Where and how
+
+**The steepest sustained bank on the disc is Moa Therma White** (`03_Track` forward): path 0 is
+rolled 40 to 86 degrees for 1,682 units of arc (715 to 2,397 from the path's start; `asin(lateral.y)`
+of every `oag-trace track` sample, all 24 layouts censused: next are de Konstruct `05` with 1,393
+units over 40 degrees and Basilico `01` with two 300 unit stretches; every other circuit peaks under
+51 degrees). Shots were fired at **sample 1416** (roll 85 degrees, about 130 units before the helix
+starts to untwist), craft at `(251.4, 124.2, -349.3)` doing 139 units/s, flown there by the original's own
+Autopilot (a ride to the spot, not a physics reference). A Plasma was fired at sample 1330 so that
+its release fell at the same place. Second place: Outpost 7's first ramp (`07_Track`, sample 186).
+Third: player-driven shots 120 frames after GO on Moa Therma's start straight and from a parked
+craft on Talon's Junction. PPSSPP v1.20.4, software renderer, Time Trial, Venom class, USA disc.
+
+`scripts/psp-projectile-sweeps.py` stops at each weapon update's entry and at the return of each of
+its `Collision_SweepSegment` calls (the probe, then the travel sweep), one breakpoint at a time. Per
+update it records the entity before the update, each call's return code with the point and normal it
+wrote, and what is left of `Collision_SweepSegment`'s own frame under the caller's stack pointer:
+the point handed to the second query (`sp - 0x70`), the mesh raycast's hit point (`sp - 0x60`),
+collider index (`sp - 0x40`) and kind (`sp - 0x38`). Two loads of the same state gave the same
+volley to 0.2 unit and the same ending update.
+
+Ours was then run two ways from those records (a scratch harness on `oag_weapons::projectile::step`
+and `Race::collision`, not kept): **one update of ours from each of the original's states** with the
+original's own `dt`, compared with the original's next state, which isolates a law; and a **free
+flight** from the original's first state at `1/60`.
+
+### Result by weapon
+
+| Weapon | Original's updates | One update of ours from each state | The original ends | Ours from the same first state |
+| --- | ---: | --- | --- | --- |
+| Rocket (centre shot) | 49 | **48 of 48 at 0.000 unit, velocity 0.00, normal within 0.03 degrees** | update 49: mesh wall (code `0`) at `(420.0, 148.3, -291.1)` | tick 49, the same wall point |
+| Plasma | 49 | 45 of 48 within 0.012; the first three differ (0.82, 0.13, 0.09), see "the own-craft box" | update 49: **code `4`** on the probe and on the sweep, boundary `(424.66, 153.08, -292.16)` | never: rides the kerb, misses at tick 49, still flying at tick 600 at `(1786, -296, 2275)` |
+| Shuriken | 58 | 57 of 57 at 0.000 unit (the velocity it leaves differs, see [shuriken.md](shuriken.md)) | update 58: **code `4`**, boundary `(495.83, 144.73, -278.27)` | never: tick 600 at `(2815, -1062, 1492)` |
+| Missile | 180 | first two differ by 1.0 (own-craft box); then 0.05 to 0.5 a tick ([missile.md](missile.md)); the wall bounce at update 67 agrees to 0.000 | update 180, its own 3 s fuse | tick 181, about 8 units away |
+| Cannon | 25 | **24 of 24 at 0.000 unit** | update 25 (age 0.40 s): **code `4`**, boundary `(553.28, 143.17, -280.29)` | reaped at tick 61 (its 1 s life), 440 units past the cage |
+| Rocket volley, Outpost 7 ramp | 17, 22, 21 | exact except the own-craft box updates and one update after a ramp-face landing | all three: **code `4`** at `y` 20.0 to 27.3 from a launch at `y` -1.2, 0.27 to 0.37 s after the fire | two of three fly their whole 5 s life over the lip; the third meets a wall at tick 31 |
+
+So the first tick ours diverges *off the track* is the tick the original's query returns `4`:
+update 49 for the Plasma and 58 for the Shuriken on the bank, 25 for a Cannon round, 17 to 22 for
+rockets on the ramp. Before that tick the positions agree; after it ours has a projectile where the
+original has a detonation.
+
+**That also answers this project's oldest open flight question** (`projectile-floor.md`, "jump
+lips": "whether the original's rockets sail off the same lips is a play-test question"): they do
+not. They are destroyed at the cage's ceiling within about a third of a second.
+
+### The law: `Collision_SweepSegment`, complete
+
+```c
+int Collision_SweepSegment(world, from, to, out_point, out_normal, cursor, flags) {
+    code = 0x7f;
+    end  = *to;
+    if (world && Collision_RaycastWorld(world, from, &end, &hit, -1, 0, 0) && hit.kind == 1) {
+        code        = world->colliders[hit.collider]->surface;   // + 0x6c: 0 wall, 1 floor, 3 mag floor
+        *out_point  = hit.point;
+        *out_normal = hit.normal;
+        end         = hit.point;                                 // the cage is asked about the hit
+    }
+    if (Cage_QuerySweepEnd(from, &end, out_point, out_normal, cursor, flags))   // 0x08831948
+        code = 4;
+    return code;
+}
+```
+
+`Cage_QuerySweepEnd` is `Cage_TestSweepEnd(g_cage_effect, ..)` (`0x08832134`), decompiled end to end:
+
+1. `g_cage_enabled` clear: return 0.
+2. `AiTrack_UpdateCursor(500.0, track, cursor, end, ..)`: locate **the segment's end** (the mesh hit
+   when there was one) on the AI track, from the projectile's own cursor (`rocket+0x114`,
+   `plasma+0x130`, `missile+0x170`, `shuriken+0x16c`, `cannon round+0x604`; the argument this page
+   called `bounds`). No located point: return 0.
+3. `AiTrack_LocateOnSiblingPath`, `Cage_BuildSection` for the point and for the sibling at a fork,
+   `Cage_TestPoint` on the end against each: exactly the craft's cage steps 2 to 4
+   ([collision-cage.md](collision-cage.md), "The law"), on one point instead of eight corners.
+4. Inside either section: return 0. Outside both: write the nearer boundary point to `out_point`
+   and its inward normal to `out_normal`, call `CageEffect_Spawn` there when `flags == 0` (every
+   weapon passes 0), return 1.
+
+There is no 200 unit or 15 unit limit here; those are `Cage_ResolveCraft`'s.
+
+**Two consequences that are easy to miss.** A mesh hit whose point is outside the cage returns `4`,
+not its surface class: a floor outside the tube is a wall to a projectile. And a mesh raycast whose
+nearest hit is a **box** collider (`hit.kind == 3`, a craft) leaves `code` at `0x7f` and `end` at
+the full segment: a craft's box makes the query answer "nothing" (below).
+
+What each update does with `4`, read off the five decompiles:
+
+| Weapon | Probe returns `4` | Travel sweep returns `4` |
+| --- | --- | --- |
+| Rocket (`0x0885d2a8`) | flags `\|= 0x14`, `WO_ROCKET_EXPLO_TRACK` at the boundary point (as `0`) | the same |
+| Plasma (`0x0885c6cc`) | flags `\|= 4`, the pool detonates it (as `0`) | the same |
+| Missile (`0x0885a918`) | nothing: no ride, no fall (as `0`) | flags `\|= 0x14`: retired, **no bounce** (a `0` bounces up to its budget) |
+| Shuriken (`0x08877bdc`) | nothing (as `0`) | flags `\|= 0x14`: destroyed, **no bounce** (a `0` is `Shuriken_Bounce`) |
+| Cannon (`0x0886593c`) | no probe | flags `\|= 0x14` and the sparks (as `0`) |
+
+Live for the Rocket, Plasma, Shuriken and Cannon rows (each ended on a `4`), and for the two
+"nothing" cells (a Missile's probe returned `4` at updates 122 and 170 and a Shuriken's at update
+40; each flew on and bounced off the mesh wall its sweep found). The Missile's sweep cell is
+decompile only.
+
+### The cage test reproduced: 1,187 queries, 17 of them `4`
+
+Every recorded call (probe and sweep, five weapons, Moa Therma and Outpost 7) was put to this
+engine's own cage, the one that already holds the craft (`oag_gameplay::cage::CageTrack::locate` on
+the recorded point, then `oag_physics::cage::Section::test`, outside when outside the section and
+its sibling's): **1,187 of 1,187 agree** on whether the original returned `4`, with no false
+positive and no miss, and on the 17 that did the boundary point agrees to **0.000 unit** and the
+normal within 0.03 degrees.
+
+| Circuit | Point handed to the cage | Depth outside | Boundary point the original wrote |
+| --- | --- | ---: | --- |
+| `03` | `(419.2, 147.8, -285.0)` | 0.44 | `(419.28, 147.49, -285.21)` |
+| `03` | `(421.3, 149.1, -281.4)` | 4.41 | `(421.77, 145.73, -284.12)` |
+| `03` | `(424.6, 153.6, -292.0)` | 0.49 | `(424.66, 153.08, -292.16)` |
+| `03` | `(316.0, 156.4, -308.1)` | 8.19 | `(317.47, 149.45, -312.11)` |
+| `03` | `(427.1, 98.7, -294.7)` | 5.35 | `(427.30, 104.01, -295.53)` |
+| `03` | `(493.1, 138.1, -269.2)` | 2.27 | `(493.25, 136.77, -271.07)` |
+| `03` | `(495.8, 146.6, -277.3)` | 2.11 | `(495.83, 144.73, -278.27)` |
+| `03` | `(596.4, 107.8, -261.7)` | 4.24 | `(596.45, 109.34, -265.65)` |
+| `03` | `(770.3, 103.9, -310.8)` | 7.14 | `(767.59, 104.24, -304.19)` |
+| `03` | `(553.3, 143.6, -280.2)` | 0.40 | `(553.28, 143.17, -280.29)` |
+| `03` | `(-399.7, -3.0, -195.9)` | 1.41 | `(-400.73, -2.55, -195.11)` |
+| `03` | `(-403.7, -3.0, -199.8)` | 0.81 | `(-404.26, -2.74, -199.28)` |
+| `03` | `(-408.2, -3.1, -207.3)` | 1.87 | `(-409.45, -2.45, -206.01)` |
+| `03` | `(-414.7, -8.1, -211.1)` | 5.96 | `(-418.06, -5.22, -207.18)` |
+| `07` | `(-1057.8, 26.0, 340.3)` | 2.70 | `(-1057.76, 23.50, 341.19)` |
+| `07` | `(-1003.1, 27.7, 323.5)` | 1.26 | `(-1003.03, 27.32, 324.72)` |
+| `07` | `(-995.4, 20.0, 315.0)` | 0.02 | `(-995.41, 20.03, 314.97)` |
+
+Confidence **94** that code `4` is the cage test on the segment's end and nothing else: decompiled
+end to end, and the live return code and both outputs reproduced on every recorded call. Not 95:
+one binary (the PS2 build was not read).
+
+### States a test can start from
+
+The original's own entity at the entry of the named update, and what followed. Seeding
+`Projectile { position, velocity, surface, lifetime: MAX_FLIGHT_SECONDS - age, .. }` and stepping
+at the `dt` given reproduces the listed next positions today; the endings are what is missing.
+
+| Shot (circuit) | Update | `dt` | Age | Position | Velocity | Carried normal | Then |
+| --- | ---: | --- | --- | --- | --- | --- | --- |
+| Plasma (`03`), launch 700.77 km/h | 45 | 0.01668 | 0.7338 | `(407.899, 148.454, -295.326)` | `(204.506, 60.023, 72.350)` | `(0.261, 0.239, -0.935)` | rides 4 updates (mag floor at 45, the kerb's floor class at 46 to 48), **`4` at update 49** from `(421.300, 153.036, -293.762)`, velocity `(200.454, 31.446, 103.645)`, normal `(0.276, 0.368, -0.888)` |
+| Shuriken (`03`) | 50 | 0.01668 | 0.8177 | `(458.717, 123.838, -291.732)` | `(230.851, 125.619, 91.020)` | `(0.120, 0.428, -0.896)` | **`4` on the sweep at update 58** from `(491.137, 142.501, -277.876)`, velocity `(279.537, 244.619, 35.872)`, normal `(0.223, 0.707, -0.671)` |
+| Cannon (`03`) | 1 | 0.01669 | 0 | `(256.346, 123.760, -347.127)` | `(687.304, 33.099, 299.866)` | none | straight for 24 updates, **`4` at update 25** from `(541.014, 142.697, -282.444)` |
+| Rocket (`03`) | 1 | 0.01669 | 0 | `(251.355, 124.203, -349.262)` | `(152.543, 8.285, 66.631)` | `(0.394, 0.053, -0.917)` | 222.22 units/s from update 2; ends at update 49 (a `4` on the probe and the mesh wall on the sweep in one run, the wall alone in the other) |
+| Rocket (`07`), third of the volley | 6 | 0.01710 | 0.0835 | `(-1050.274, -1.294, 343.232)` | `(164.477, -3.584, -26.922)` | `(0, 1, 0)` | rides the ramp, **`4` at update 21** from `(-1006.012, 26.012, 324.725)`, velocity `(176.258, 103.231, -74.087)` |
+
+### The own-craft box: why the first probes miss
+
+The "first two or three updates are a probe miss, cause unrecovered" of the 2026-10-01 section,
+and the Plasma's unridden first updates ([plasma.md](plasma.md), 2026-10-31 row 3), are the
+**firing craft's own box collider**. `Collision_RaycastWorld` is called with no collider to skip
+(`-1`) and with boxes included (`0`), so a probe that starts inside the craft's box meets its floor
+face first, `hit.kind` is `3`, and `Collision_SweepSegment` returns `0x7f`: the fall arm, at the
+launch speed. Read directly, 28 probe records in 5 captures: mesh hit kind `3`, one collider index
+per race (`149` on Moa Therma, `181` on Outpost 7, `196` on Talon's Junction: the player's box, the
+only craft in a Time Trial), hit `1.30` to `1.39` below the probe's start while the projectile is
+at the craft's height, and the floor (`kind 1`) on the first update whose start is clear.
+
+| Capture | Weapon | Probe start ahead of the craft's body, by update | Box hit |
+| --- | --- | --- | --- |
+| Parked craft, Talon's Junction | Missile | 0.71, 1.42, 2.13, then 2.84 | first three |
+| Parked craft, Talon's Junction | Rocket | 2.84 | none |
+| Player at 100 units/s, Moa Therma start (floor) | Rocket | 2.81, 3.91, then 5.01 | first two |
+| Autopilot at 140 units/s, Outpost 7 (floor) | Rocket | 2.7, 3.2, 3.6, 4.0, then 4.3 | first four |
+| Autopilot at 125 units/s, Outpost 7 ramp (floor) | Plasma | 4.45, 4.64, 4.80, then 4.93 (1.1 below the body by then) | first three |
+| Autopilot at 139 units/s, Moa Therma bank (mag floor) | Rocket | 2.83 | none |
+| Autopilot at 139 units/s, Moa Therma bank (mag floor) | Missile | 0.7, then 0.8 behind, then 2.3 behind | first two |
+
+So it is neither age nor place: it is how long the probe's start takes to clear the box. How far
+ahead of the body's position (`body+0x30` read at the update's entry) the box reaches is **not one
+number**: between 2.13 and 2.84 parked, 3.91 to 5.01 at 100 units/s, 4.80 to 4.93 at 125 units/s,
+4.0 to 4.3 at 140 units/s, and under 2.83 at 139 units/s on the mag strip. A box about 2.6 ahead of
+a centre that leads the body by one tick of travel fits the parked, the 100 and the 125 units/s
+rows; the 140 units/s row is shorter than that and the mag strip row has no lead at all, so the
+box's pose against `body+0x30` at the moment the weapons update is **not understood** (which of
+`Body_Integrate`, the collider sync, the mag hold and the Autopilot's rail has run by then was not
+read). Confidence **90** that a craft box nearer than the floor makes the query return `0x7f`; no
+score for the reach.
+
+One capture shows it is any update, not only the launch: the Outpost 7 centre rocket landed on the
+ramp's face, was pushed back over its own craft, and its probe then met the craft's box on every
+update until the cage ended it.
+
+### The launch normal is the track's, not the craft's
+
+`-(craft+0xb10)`, which `Rocket_Init`, `Missile_Init`, `Shuriken_Init` and `Plasma_Launch` store as
+the carried normal, is **the down axis of the track point the craft is located on**, negated: on
+the Outpost 7 volley the stored normal is `(-0.000, 1.000, 0.000)` where the craft's own up is
+`(-0.014, 0.996, -0.090)`, 5.24 degrees off, and it is within 0.04 degrees of `-down` of the nearest
+spline sample on every Rocket, Missile and Shuriken capture (0.29 to 0.86 for the two Plasmas,
+whose normal is taken at the release, against a resampled spline). `scripts/psp-autopilot-trace.py`
+already reads the same field as "the located sample's down". This engine seeds `body.up()`.
+Confidence **88**: seven captures, one field; the located point's own record was not read beside it.
+
+### By-catch in the flight arms
+
+- **The travel-sweep floor arm can throw a rocket upward.** `Rocket_Update` writes
+  `(hit + 3.0 * normal - prev) / dt` unnormalised there. Fired 14 units short of Outpost 7's ramp
+  face, the centre rocket landed on the face at update 7 and left it at `(-65.0, 155.6, -7.1)`,
+  168.7 units/s, straight up and slightly back; with its probe blocked by its own craft's box it was
+  never rescaled and climbed until the cage ended it ten updates later. Ours turns the velocity
+  parallel and keeps the speed (chosen, on this page since 2026-09-13), so ours rides the ramp.
+  One-update error there: 4.26 units.
+- **The Shuriken's speed is not constant** and **the Missile's floor arm is the Rocket's steer**:
+  [shuriken.md](shuriken.md), [missile.md](missile.md).
+
+### What this retires
+
+- "`4` is a second query, the craft test" (this page, "Flight follows the track"; `missile.md`'s 55).
+  It is the cage. A projectile meets a craft through its pool's own craft sweep
+  (`Rocket_SweepCraftHit` and its siblings), never through this query.
+- "Jump lips" and "a rocket that leaves the circuit flies its whole cap" as the recovered model's
+  own behaviour (`projectile-floor.md`).
+- `plasma::UNPINNED_SECONDS` as an age: the bracket it was chosen inside was measured on one craft
+  at one speed. On the mag strip the original's bolt rides on its first update.
+
+### Cross-title
+
+- **Pulse PS2**: inherits the PSP law (not read on the PS2 build; **not checkable** cheaply, no PS2
+  page names these functions).
+- **Pure**: the cage flag is clear on all 16 Pure tracks ([collision-cage.md](collision-cage.md)), so
+  `g_cage_enabled` is cleared by the first craft pass and the query returns 0: **checked, differs**
+  (no cage; whether Pure's projectiles leave the circuit is unmeasured).
+- **HD/Fury**: the original runs no cage off the track header
+  ([ps3-hdfury-eu/collision-cage.md](../ps3-hdfury-eu/collision-cage.md), 85), and HD's
+  `Plasma_Update` still switches on `0`/`4` ([ps3-hdfury-eu/plasma.md](../ps3-hdfury-eu/plasma.md)).
+  What returns `4` there is unread: **not checkable** in this lane (HD's sweep function is not
+  named; its cage module decodes soft in Ghidra). A wire must take the cage from the race's own
+  `Spline::cage()`, which is `None` on HD, so HD does not gain Pulse's containment by sharing code.
+- **2048, Omega**: follow HD's lineage (no cage off the header): **not checked** against their own
+  executables.
+
+### Names applied (2026-11-11)
+
+| Address | Kind | Name | Conf | Evidence |
+| --- | --- | --- | ---: | --- |
+| `0x08832134` | function | `Cage_TestSweepEnd` | 92 | decompiled end to end; 1,187 live calls reproduced through the ported cage, the 17 boundary points to 0.000 |
+| `0x08831948` | function | `Cage_QuerySweepEnd` | 90 | one call: `Cage_TestSweepEnd(g_cage_effect, ..)`; one caller, `Collision_SweepSegment` |
+| `0x0883198c` | function | `Collision_SweepSegment` | 92 | was 85 for the unread second query; now read, and every return code of 1,187 live calls accounted for |
+
+History: `Collision_SweepSegment` 85 (2026-09-13, mesh path read, second query inherited at 55) to
+92 (2026-11-11, second query decompiled and reproduced live; one binary).
