@@ -185,6 +185,12 @@ pub struct Event {
 }
 
 impl Event {
+    /// The level every event races at: `GameModeBase`'s constructor default of `event+0x1a4`,
+    /// a field no `SP.xml` event authors, which `GameModeBase_Apply` copies to the global the
+    /// shield slot and the pack shuffle index with
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/craft-laws.md`, "The shield slot").
+    pub const LEVEL: u8 = 1;
+
     /// Builds an [`Event`] from one of the four event typedefs; `None` otherwise.
     #[must_use]
     pub fn from_instance(instance: &Instance) -> Option<Self> {

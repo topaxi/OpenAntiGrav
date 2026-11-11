@@ -308,22 +308,21 @@ Everything above is Pulse. Rows are the laws the engine carries per title;
 | In-air pitch bias | `weight_distribution` | none, M 92 (no term in Pure's pitch code) | M | I:HD | I:HD |
 | Pitch damping | XML | `1.5` racing, `0.6` on grid, M 92 | XML | XML | XML |
 | Sideshift force | XML | `200.0`, code, M 92 | XML | XML | XML |
-| Inertia mass | 0.9 | 0.9 (I:Pulse) | 1.0 M | 0.9 I:Pulse (open) | 0.9 I:Pulse (open) |
+| Inertia mass | 0.9 | 0.9 (I:Pulse) | 1.0 M | 1.0 M 84 | 1.0 M 84 |
 | Inertia tensor frame | world axes | world axes, M | rotates with the body, M | rotates, I:HD | rotates, I:HD |
 | Steering ramp | unclamped | I:Pulse | clamped M | I:Pulse | I:Pulse |
 | Gravity class scale on | grounded term | I:Pulse | airborne term M 85 | I:HD | I:HD |
-| Wall contact | two-sided | I:Pulse | one-sided; steers away; restitution from data M | one-sided and steers away I:HD | one-sided and steers away I:HD |
-| Wall point rate | world | I:Pulse | body-local, M 85 | world, **chosen** (a hold for this engine's AI, not a 2048 measurement) | body-local, I:HD |
+| Wall contact | two-sided | I:Pulse | one-sided; steers away; restitution from data M | one-sided and steers away M 84 | one-sided and steers away M 84 |
+| Wall point rate | world | I:Pulse | body-local, M 85 | body-local, M 82 | body-local, M 82 |
 | Launch boost | `<StartBoost>` XML | code law, M 88 | XML (see [launch boost](../physics/launch-boost.md)) | XML law (no code law) | XML law (no code law) |
 
 Pure has no magstrips, no sideshift XML attribute and no `<pitch>` block. Not
 every row above is separately measured on 2048 and Omega: they inherit HD's
-craft laws, and the tables record each inheritance with its source. Two
-rows are not HD's. The inertia mass is Pulse's `0.9` while the tensor frame is
-HD's, which is inconsistent as a lineage and unsettled (HD builds it with
-`1.0`; the constructor literal in 2048 and Omega would settle it). The wall point
-rate differs between the two titles: 2048 holds the world rate, Omega takes HD's
-body-local one, and neither title's contact resolver has been read.
+craft laws, and the tables record each inheritance with its source. The
+inertia mass, the wall contact and the wall point rate are read in both
+executables, statically
+([2048](../ghidra/functions/vita-2048-eu-v104/craft-laws.md),
+[Omega](../ghidra/functions/ps4-omega-eu/craft-laws.md)): each is HD's.
 
 ## Open and unsettled
 

@@ -166,6 +166,11 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     // empty.
     resolved.grid_teams = oag_2048::campaign::craft::grid_craft(&doc, instance);
 
+    // `GameModeBase_Apply` copies the event's level to the global `Ship_SetShield` indexes the
+    // three shield slots with, whatever the event's kind
+    // (`docs/ghidra/functions/vita-2048-eu-v104/craft-laws.md`, "The shield slot").
+    resolved.skill_level = Some(oag_tables::mjolnir::campaign::Event::LEVEL);
+
     let restriction = oag_2048::campaign::craft::restriction(instance);
     let restricted: Vec<&str> = ["combat", "agility", "speed", "prototype"]
         .into_iter()

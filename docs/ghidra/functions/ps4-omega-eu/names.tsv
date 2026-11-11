@@ -209,3 +209,8 @@
 0x0172bb00	function	TexAnim_EvalKeyframes	88	billboards.md
 0x0170c8b0	function	Mesh_Update	72	billboards.md
 0x0170cce0	function	Mesh_Load	72	billboards.md
+0x0131fe60	function	Body_ResolveContact	84	craft-laws.md
+0x012f3360	function	Ship_SetShield	84	craft-laws.md
+0x012fa370	function	Ship_RestoreShield	72	craft-laws.md
+0x0193fc54	data	g_ShipWallCofR	84	craft-laws.md
+0x01f999e0	data	g_skill_level	82	craft-laws.md

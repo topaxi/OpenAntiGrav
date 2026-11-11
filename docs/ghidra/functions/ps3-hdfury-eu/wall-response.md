@@ -225,11 +225,15 @@ alone. **Confidence 90.** The weapons-off halving was not measured on HD.
 
 ## 2048 and Omega
 
-Checked, applies: both executables carry `weaponHitMassFactor`, `shipShipCofR` and
-`shipWallCofR` (2048 `0x814901b0`.., Omega `0x018143e9`..), Pulse's does not, and their
-global `handlingstats.xml` (2048 `data.psarc`, Omega `data00.psarc`) are byte-identical
-(md5 `40719679c4e801d70ee5329067fa1689`) and author the same `<Collision>` element. The
-resolver code itself was not read on either; both inherit HD's laws.
+**Ported, both resolvers read (2026-11-11).** Both executables carry `weaponHitMassFactor`,
+`shipShipCofR` and `shipWallCofR` (2048 `0x814901b0`.., Omega `0x018143e9`..), Pulse's does not,
+and their global `handlingstats.xml` (2048 `data.psarc`, Omega `data00.psarc`) are byte-identical
+(md5 `40719679c4e801d70ee5329067fa1689`) and author the same `<Collision>` element. Each title's
+`Body_ResolveContact` (2048 `0x811d3eaa`, Omega `0x0131fe60`) is this function term for term:
+the separating gate, `-(1 + e)`, the friction, the `5 * clamp(.., -20, 20)` steer-away torque,
+and the unrotated stored rate in the point velocity. Static, confidence 82 to 84:
+[vita-2048-eu-v104/craft-laws.md](../vita-2048-eu-v104/craft-laws.md),
+[ps4-omega-eu/craft-laws.md](../ps4-omega-eu/craft-laws.md).
 
 ## Names
 
@@ -279,7 +283,7 @@ tick) through floor contacts; scoped, it is clean.
 | Law | Where | Title data | Confidence |
 | --- | --- | --- | ---: |
 | Restitution `0.8` | `oag_physics::laws::Laws::wall_restitution`, `restitution_against` | the disc's `<Collision shipWallCofR>` (`oag_tables::handling::Collision`), Pulse's `0.4` where absent | 92 |
-| One-sided normal impulse | `Laws::wall_one_sided` | `CraftLaws::wall_one_sided`: HD measured, Omega and 2048 inherited, Pure Pulse's | 88 |
+| One-sided normal impulse | `Laws::wall_one_sided` | `CraftLaws::wall_one_sided`: HD measured, Omega and 2048 read statically, Pure Pulse's | 88 |
 | Steer-away yaw torque | `oag_physics::wall::steer_away_torque`, `ShipState::wall_torque` | `CraftLaws::wall_steer_away` | 85 |
 | Body-local point rate | `Laws::wall_point_rate_body_local` | `CraftLaws::wall_point_rate_body_local` | 85 |
 
@@ -304,20 +308,18 @@ Totals: wall ticks 17,060 -> 14,815, rescues 2 -> 2, wrecks 2 -> 4, laps within 
 "Shield per lap" is the mean of each lap's end-of-lap shield; "shield end" is the shield at
 the end of the run. The two extra wrecks are open: the sweep does not say what wrecked them.
 
-**Wipeout 2048 holds the body-local point rate.** With it on,
-`vita_2048_original_ai_ground_truth::the_field_finishes_tower` fails: the law-off field
-finishes in 292.3 s, the law-on field is still on lap 3 at 300 s. The noise method over the
-28 HD, 2048 and Omega original-AI tests (nine fixed perturbations of `eps`,
-`-1e-2 -1e-3 -1e-4 -1e-5 0 1e-2 1e-3 1e-4 1e-5`) gives failures `1 0 1 1 0 0 0 0 0` law off
-and `1 0 1 0 1 0 0 0 0` law on: within the bar, but a finish-by-timeout assertion has no
-row to regenerate, so the law is held on 2048 (`Sourced::chosen(false)`) until the 2048
-field is flown against it, the same hold the inherited air bias carries. Omega inherits it from
-HD and passes.
+**Wipeout 2048 held the body-local point rate until 2026-11-11.** With it on, under the
+`0.9` box mass both titles then inherited from Pulse,
+`vita_2048_original_ai_ground_truth::the_field_finishes_tower` failed: the law-off field
+finished in 292.3 s, the law-on field was still on lap 3 at 300 s, so the law was
+`Sourced::chosen(false)` on 2048 while Omega inherited it from HD and passed. That hold was this
+engine's AI, never a statement about 2048.
 
-So the two titles differ on this one law: 2048 `chosen(false)` (a hold, not a measurement of
-2048's resolver), Omega `inherited(true, "Wipeout HD")`. Neither title's `Body_ResolveContact` is
-read, so whether the original 2048 or Omega crosses the lever arm with the body-local rate is
-**open (not yet checked; both executables are in Ghidra, so not uncheckable)**: HD's measurement is the only source and the 2048 hold exists for this
-engine's AI, not because 2048 differs. What would settle it: the point-rate expression in 2048's
-and Omega's contact resolver (the `(R^T omega) x r` term at `0x000f7770` here). Until then a
-2048 result on this law is not evidence about Omega, and the reverse.
+**Both resolvers are now read, and both have the term.** 2048's `Body_ResolveContact`
+(`0x811d3eaa`) and Omega's (`0x0131fe60`) cross the world lever arm with the stored rate
+unrotated, while each title's craft-craft resolver rotates the same field through the basis rows
+first, which is static evidence the field is body-local on both
+([vita-2048-eu-v104/craft-laws.md](../vita-2048-eu-v104/craft-laws.md),
+[ps4-omega-eu/craft-laws.md](../ps4-omega-eu/craft-laws.md), confidence 82 each). Both titles are
+`measured(true)`. With the measured mass `1.0` in place the 2048 field finishes Tower with the
+law on (`2048 - Event 1` in 277.6 s, every opponent on lap 4, no respawns), so nothing is held.

@@ -48,6 +48,10 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
 - **Omega's craft laws**: not checkable in this pass, not located statically: no `12.0f` immediate near the craft code, no steering
   ramp among the `vminss` users in `0x01310000`-`0x01330000`. Omega keeps Pulse's (`craft_laws:
   None`). 2048 not checked.
+  **2026-11-11 (craft-laws):** the inertia half is closed on both: Omega's ship constructors
+  (`FUN_01309e90`, `FUN_0130e540`) store the folded mass-`1.0` tensor and 2048 calls the box
+  builder with `1.0` (`docs/ghidra/functions/ps4-omega-eu/craft-laws.md`); both titles carry
+  `CRAFT_LAWS` now. The steering ramp is still unread on both.
 - ~~Speed past 2 s is about 1% low on HD~~: closed 2026-11-10 (`hd-late-speed`). HD's
   `Body_Integrate` takes `0.01` per second off the linear and angular velocity after the forces
   (`0x000f6fd8`, `0x000f70f8`; `Body_Init` `0x000f5878` writes the pair), Pulse's law, read on
