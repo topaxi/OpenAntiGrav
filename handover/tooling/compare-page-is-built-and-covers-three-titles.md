@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [pulse, hd, pure, 2048, omega]
-updated: 2026-10-26
+updated: 2026-11-11
 summary: "Compare page: more PS2 states and race shot, Pure, 2048 and Omega pairs partial; publishing unlocked"
 ---
 
@@ -53,7 +53,7 @@ and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md)
 - **PS2 clock address `0x70EE9C`** was read on two states of one run before, and on the widescreen state live (25.1 to 26.3 s
   across three grabs, monotonic) now.
 - **Menu pairs (2026-10-26, `menu-pairs-hd-omega`)**: HD 5 and Omega 4 front-end pairs, ours from the disc's XML, gaps kept as the original's frame; shadPS4's pad input reaches Ship Select on every walk. See `docs/tools/compare-page.md`, "Menu pairs", and the frontend thread `menu-pairs-show-hd-and-omega-front-end-differences`. Open: the lead adopts the pair directories and builds `menus.toml`.
-- **Pure (PSP): four grid pairs since 2026-10-22** (`pure-pairs`, `scripts/psp-pure-pair.py`, `psp-pure-walk.py`; adopt: copy the four pair directories to `data/reference/compare-page/pure-psp/` and build `pure.toml` beside them with `compare_env.py manifest`). **2048 (Vita3K), Omega (shadPS4): not reachable** (Vita3K stops at
+- **Pure (PSP): twelve grid pairs** (four since 2026-10-22, eight more 2026-11-11 `gallery-pure` through the dev-unlock byte `*(*0x08b17794 + 0x381)`: Beta's four and Classic's four; `scripts/psp-pure-pair.py`, `psp-pure-walk.py --unlock --league N`; the Classic pairs carry `--hull-differs` because the original draws another hull there). **Open:** the lead adopts the eight pair directories (commands in `docs/tools/compare-page.md`, "Pure: eight more circuits"); the four Zone circuits and Pure's twelve DLC circuits (Delta, Gamma 1, Omega; EU packs, need the EU disc's addresses) are unpaired. **2048 (Vita3K), Omega (shadPS4): not reachable** (Vita3K stops at
   an intro, shadPS4 reaches the main menu only). Their profile rows exist.
 - **Speed class and mode are declared by the state's file name, not read from RAM** (PSP and HD), PS2's class is assumed Venom.
 - **`just compare-rerender` was run once each on PSP, HD and PS2.** HD drifts 10 degrees in the ship's heading and 1.8 units in the

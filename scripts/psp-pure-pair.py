@@ -208,6 +208,8 @@ def main():
     ap.add_argument("--team", help="our --team (the original's craft)")
     ap.add_argument("--ours-ticks", type=int, default=None)
     ap.add_argument("--toast-wait", type=float, default=6.0)
+    ap.add_argument("--hull-differs", default="", metavar="CAVEAT",
+                    help="the original draws another hull than ours here (the Classic league): skip the hull-offset gate and record this text as a caveat")
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
     cp.add_arguments(ap)
     args = ap.parse_args()
@@ -337,10 +339,16 @@ def main():
     pair.check_size("ours", out / "ours.png")
     off = craft_offset(out / "theirs.png", out / "ours.png")
     pair.rec["craft_offset_px"] = off
-    pair.check("ours' hull is on the original's (ours' own chase camera is checked here: its trace has no camera columns)",
-               abs(off["dx"]) <= 3 and abs(off["dy"]) <= 3,
-               "best edge correlation %.3f at (%+d, %+d) px, %.3f at (0, 0); a lost shear reads about 24 px in dy"
-               % (off["ncc_at_best"], off["dx"], off["dy"], off["ncc_at_zero"]))
+    if args.hull_differs:
+        # The offset search assumes both sides draw one hull; with a different one it reads noise (Karbonis: +7 px, edge correlation 0.09).
+        # The camera is still held by the eye and fov checks above, and the pair says so.
+        pair.caveat(args.hull_differs)
+        pair.rec["craft_offset_px"]["not_checked"] = "the two hulls differ, so the shift of one against the other is noise"
+    else:
+        pair.check("ours' hull is on the original's (ours' own chase camera is checked here: its trace has no camera columns)",
+                   abs(off["dx"]) <= 3 and abs(off["dy"]) <= 3,
+                   "best edge correlation %.3f at (%+d, %+d) px, %.3f at (0, 0); a lost shear reads about 24 px in dy"
+                   % (off["ncc_at_best"], off["dx"], off["dy"], off["ncc_at_zero"]))
     run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
     if args.meta:
         import json
