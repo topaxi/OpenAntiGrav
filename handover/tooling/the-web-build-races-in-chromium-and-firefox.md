@@ -45,17 +45,16 @@ Architecture, measurements, hosting and limits:
   DMABuf present, which blacks out its own WebGPU samples too; `dom.webgpu.allow-present-without-readback
   = false` fixes it and the picker note names it. An `rgba8unorm` canvas avoids it but crashes
   Firefox headless and under Xvfb, so it was reverted (docs/tools/web.md, "Troubleshooting").
-  (2) **Open: the maintainer's own Firefox 159 (same machine) stalled with "a page is slowing
-  down Firefox" after the `mod oag.extras` line and before `renderer:`**, while the cube sample
-  draws there; a Private Window in it then stayed black after the pick, which looks like (1).
-  Whether the readback pref also clears their stall decides if this is one bug or two. Not reproduced in nine configurations here (headless, Xvfb, headless
-  sway, DPR 1.5 and 2, headed niri on either ICD, with and without the readback pref, AudioContext
-  running or suspended). Between those two lines run `Prepared`'s loading assets, `spawn_app`, and
-  in `resumed` the window, the surface and `get_default_config`. Next: a Firefox Profiler capture
-  (`about:profiling`, Graphics preset) of the stuck tab from that profile names the loop. Suspect
-  to check first: Firefox runs a nested event loop inside the page's synchronous disc reads
-  (`web/main.js`), so a callback into the module there could spin on an `oag_thread::lock` its
-  own outer frame holds.
+  (2) **The maintainer's desktop Firefox 159 froze the page** after the boot ("a page is
+  slowing down Firefox"; the readback pref does not help there). Their Firefox Profiler capture
+  shows the page's thread blocked in wasm's `memory.atomic.wait` inside winit's animation-frame
+  callback: Firefox lets the page's thread block on a std lock where Chromium traps. Which lock
+  is **open**: the published module has no names. Every page-thread wait now reports instead
+  (`scripts/web-page-wait-guard.py`, docs/tools/web.md "The page's thread may not wait") and
+  names the waiting function via `pkg/<hash>/page-waits.txt`; a contended disc read on the page
+  opens the image afresh. Next: the maintainer retests on that desktop; the report's function
+  number names the wait. Keeping the name section in the published module (2.0 MB raw, about
+  320 KB deflated) would name every frame of every report; the maintainer's call.
 - **Chromium with a CPU-only WebGPU shows a white page, no report** (maintainer's machine,
   2026-11-11, where the cube sample loses its device): headless Chromium's `--software bare` mode
   shows the same symptom on oag.topaxi.com, though without a lost device (adapter
