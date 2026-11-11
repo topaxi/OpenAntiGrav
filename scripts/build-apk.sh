@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the Android APK: oag-game as a NativeActivity cdylib, no Java, no game
-# content. Output: target/apk/OpenAntiGrav-<version>-android-arm64.apk
+# content (the official mods ride along as assets). Output: target/apk/OpenAntiGrav-<version>-android-arm64.apk
 #
 #   scripts/build-apk.sh [--version V] [--debug] [--arm64-only]
 #
@@ -128,13 +128,24 @@ cat > "$stage/AndroidManifest.xml" <<MANIFEST
 </manifest>
 MANIFEST
 
+# The official mods (assets/mods/official, ADR-0083), as assets plus an index of
+# `size sha256 path` lines: the NDK lists an asset folder's files, never its subfolders, so
+# the game copies what the index names to <files dir>/assets/mods/official on the first
+# launch of a build (oag_mobile::packaged). Fails when none is staged, as the other targets do.
+assets="$stage/assets"
+mkdir -p "$assets"
+"$root/scripts/stage-official-mods.sh" "$assets/official-mods"
+(cd "$assets/official-mods" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | while IFS= read -r file; do
+    printf '%s %s %s\n' "$(stat -c %s "$file")" "$(sha256sum "$file" | cut -d' ' -f1)" "$file"
+done) > "$assets/official-mods.index"
+
 base="$out/base.apk"
 flat="$stage/flat"
 mkdir -p "$flat"
 "$build_tools/aapt2" compile --dir "$res" -o "$flat"
 "$build_tools/aapt2" link -I "$android_jar" --manifest "$stage/AndroidManifest.xml" \
     --min-sdk-version "$api" --target-sdk-version 34 -o "$base" --auto-add-overlay "$flat"/*.flat
-(cd "$stage" && zip -q -D "$base" lib/*/liboag_android.so)
+(cd "$stage" && zip -q -r -D "$base" lib/*/liboag_android.so assets)
 
 aligned="$out/aligned.apk"
 rm -f "$aligned"

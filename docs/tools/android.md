@@ -132,6 +132,10 @@ question.
   `main.rs` itself and Cargo warned "found to be present in multiple build targets"
   on every invocation. Moving the `App` into the lib would remove the example
   altogether; that is still open (handover thread).
+- **Official mods.** `build-apk.sh` stages `assets/mods/official` into the APK's `assets/`
+  with an index, and `android_main` unpacks it to `<files dir>/assets/mods/official` on the
+  first launch of a build, where `oag_mod::mods_search_path` already looks
+  ([packaging](packaging.md), "Official mods"). A player's own mods go in `data/mods` there.
 - **NativeActivity rather than GameActivity.** No Java: the APK is a manifest and one
   `.so` (`android:hasCode="false"`), buildable with `aapt2`, `zipalign` and
   `apksigner` alone. GameActivity wants the AndroidX games-activity AAR, Gradle and a
