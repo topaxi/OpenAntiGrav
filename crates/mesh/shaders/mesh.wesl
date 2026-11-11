@@ -150,6 +150,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(target_out(opaque_colour(in, shaded)), stamped_alpha(in, shaded.a));
 }
 
+const FOLIAGE_DEPTH_ALPHA: f32 = 0.5;
+
 // Used only by the blended pipeline - see
 // `oag_mesh::mesh::Model::transparent_draws`. Identical to `fs_main` except
 // it outputs the texture's alpha times the vertex colour's alpha instead of a
@@ -178,6 +180,18 @@ fn fs_main_blend_velocity(in: VertexOutput) -> BlendMrtOutput {
         ),
         vec4<f32>(velocity_of(in), 0.0, shaded.a),
     );
+}
+
+// The depth half of a foliage draw - `mesh_render::FoliageDepth`. Every target's write mask is
+// empty; what it leaves is the depth of the texels whose alpha is at least one half, so a
+// blended mesh's solid body occludes what a farther mesh draws after it while its soft edge
+// still blends. The colour pass is `fs_main_blend` against that depth.
+@fragment
+fn fs_blend_cutout_depth(in: VertexOutput) -> @location(0) vec4<f32> {
+    if lit_texel(in).a < FOLIAGE_DEPTH_ALPHA {
+        discard;
+    }
+    return vec4<f32>(0.0);
 }
 
 // Used only by the cutout pipeline - see

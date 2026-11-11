@@ -12,6 +12,7 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
+mod scenery_sort_ground_truth;
 mod selection_screens_ground_truth;
 mod settings_schema;
 mod sfx_ground_truth;

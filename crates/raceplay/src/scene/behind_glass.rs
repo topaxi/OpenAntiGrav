@@ -385,6 +385,7 @@ impl Target {
                 Lists::Blended {
                     depth_plane: None,
                     between: None,
+                    foliage_depth: false,
                 },
             ));
         }

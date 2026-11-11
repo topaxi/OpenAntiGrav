@@ -301,6 +301,7 @@ impl Session {
             plain_draws: _,
             culled: _,
             unwritten: _,
+            foliage: _,
         } = mesh_render::build(
             &device,
             &queue,

@@ -497,6 +497,9 @@ pub struct RaceView {
     /// Where the PSP ribbons draw against the circuit's blended list.
     /// `[render_profiles.<title>] trail_order`; see [`Race::ribbons_first`].
     pub(super) trail_order: oag_display::display::TrailOrder,
+    /// How the circuit's blended list is sorted.
+    /// `[render_profiles.<title>] scenery_sort`; see [`Race::writes_foliage_depth`].
+    pub(super) scenery_sort: oag_display::display::ScenerySort,
     /// What the weather adds to the original's. `[render_profiles.<title>] weather`;
     /// see [`Race::set_weather`].
     pub(super) weather: oag_display::display::Weather,

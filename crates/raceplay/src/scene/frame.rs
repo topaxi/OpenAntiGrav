@@ -1333,6 +1333,7 @@ impl Scene {
             viewport,
             eye: race.camera_position(),
             depth_plane: plane.map(|row| row * list_b_depth_scale),
+            foliage_depth: race.writes_foliage_depth(),
             flare_keys,
             frustum,
             visible_set,

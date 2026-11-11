@@ -31,10 +31,11 @@ fn the_shine_pass_is_drawn_before_the_blended_list() {
 fn the_circuits_blended_list_is_depth_ordered() {
     let plane = [0.0, 0.0, -1.0, 0.0];
     assert!(matches!(
-        track_blended(plane, None),
+        track_blended(plane, None, false),
         crate::Lists::Blended {
             depth_plane: Some(p),
             between: None,
+            foliage_depth: false,
         } if p == plane
     ));
 }
