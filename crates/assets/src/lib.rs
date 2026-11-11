@@ -39,6 +39,7 @@ pub mod source;
 pub mod sparse;
 #[cfg(test)]
 mod testing;
+pub mod texture_name;
 
 pub use archive::Archive;
 pub use container::Container;
