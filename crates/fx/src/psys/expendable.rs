@@ -5,8 +5,6 @@
 //! they fill the stage and every other effect's recycling pass lands on whatever is thinnest,
 //! which is a detonation or a pickup burst. An expendable instance is the first thing any other
 //! play takes a slot from, and it never takes one from anything else.
-//!
-//! Split out of `psys.rs`, which is at the 1,500-line ceiling.
 
 use oag_core::math::Vec3;
 

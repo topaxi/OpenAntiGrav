@@ -172,16 +172,26 @@ What changed, in `oag-fx` and `oag-raceplay`:
    A burst the title authors (HD, and 2048 and Omega with the setting on) keeps the measured
    every-tick rate.
 3. **`MAX_INSTANCES` is 64**, from a measurement: `oag-game --race --mode single_race --seed
-   N --ticks 12000..20000` on Pulse PSP EU, trail hits on (HD mounted as the lender), the
-   stage temporarily at 256 instances with a peak counter in `Stage::advance`, seeds 1 to 11.
-   Peak instances that are not trail hits: 22, 34, 29, 27, 27, 25, 30, 19, 20, 56, 35 (seed 10
-   is two wrecked craft: 19 attached `WO_SHIP_DEATH_SPARKS` and 19 attached
-   `WO_SHIP_FXNODE_EXPLO`, over a rocket's flare, three detonations, collision sparks and a
-   leech beam). Peak including trail hits at the every-other rate: 41, 53, 49, 50, 46, 71, 93,
-   62, 87, 56, 52. The player's craft held the throttle and did not steer; the opponents flew.
-   Memory, from `size_of`: 26,784 B an instance (1.7 MB for 64, 0.86 MB for 32), and three
-   particle vertex buffers (additive, alpha-over, underlay) of `MAX_INSTANCES * 256 * 6`
-   100-byte vertices: 28.1 MiB for 64, 14.1 MiB for 32.
+   N --ticks 20000` on Pulse PSP EU, trail hits on (HD mounted as the lender), `OAG_MODS` an
+   empty directory, the stage temporarily at 256 instances with a peak counter in
+   `Stage::advance`, seeds 1 to 11. Peak instances that are not trail hits: 20, 27, 29, 23,
+   22, 18, 21, 16, 23, 22, 27 (the worst, 29, is one wrecked craft: 9 attached
+   `WO_SHIP_DEATH_SPARKS` and 9 `WO_SHIP_FXNODE_EXPLO`, over collision sparks, a quake and a
+   bomb ring). Peak including trail hits at the every-other rate: 46, 53, 48, 46, 47, 71, 93,
+   43, 87, 112, 52. A first set of runs with the default mods loaded (`oag.energy-turbo`,
+   `oag.wall-penalty`) peaked at 56 non-trail instances in one seed: two wrecked craft (19
+   attached of each wreck effect) over a rocket's flare, detonations and a leech beam. **The
+   stock figure is 29; 64 is sized for two wrecks plus the six-instance attach reserve
+   (about 55), the modded run's 56 being the observed instance of that.** The player's craft
+   held the throttle and did not steer; the opponents flew. Memory, from `size_of`: 26,784 B
+   an instance (1.7 MB for 64, 0.86 MB for 32), and three particle vertex buffers (additive,
+   alpha-over, underlay) of `MAX_INSTANCES * 256 * 6` 100-byte vertices: 28.1 MiB for 64,
+   14.1 MiB for 32.
+
+Staged look: `--trail-sparks --give rocket --hold cross --press square` at 760 and 820 ticks
+draws the fireball with the lent sparks on the craft at 32 and at 64 instances alike. The
+staged scene holds one craft's burst, about 15 instances, so it does not exercise the
+eviction; the red-to-green test above does.
 
 Not measured: a rocket volley from several craft at once (the `--give rocket` aid fires
 about 127 in flight, which no race reaches), and Pure. Checked against HD, 2048 and Omega:

@@ -359,8 +359,10 @@ impl Race {
     /// "I saw nothing" cannot tell a burst that never played from one that
     /// played and drew nothing.
     ///
-    /// Everything but the *placement* is the real path - the same effect, the
-    /// same rate, the same [`hd_trail_red`](RaceView::hd_trail_red) colour select.
+    /// Everything but the *placement* and the *rate* is the real path - the same
+    /// effect and the same [`hd_trail_red`](RaceView::hd_trail_red) colour select.
+    /// The rate is HD's every tick, also on a title whose lent burst fires every
+    /// other tick for a real hit ([`Race::trail_hit_due`]).
     /// The placement is the one thing chosen rather than derived: two units
     /// above the player's nozzle, which is on screen and clear of the exhaust
     /// plume. Three alternatives were measured and each looks like nothing or

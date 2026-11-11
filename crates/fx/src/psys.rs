@@ -1110,16 +1110,17 @@ impl System {
 /// that never binds, so two explosions sharing a pool would evict each
 /// other's particles rather than queue.
 ///
-/// **Sixty-four, sized by a measured peak.** Eleven headless Pulse races of
-/// eight craft with the lent trail-hit burst on peaked at 19 to 56 instances
-/// that are not trail hits, 56 the most any one run needed: two wrecked craft, each
-/// holding ten attached `WO_SHIP_DEATH_SPARKS` and ten `WO_SHIP_FXNODE_EXPLO`,
-/// over a rocket's flare and detonations, collision sparks and a leech beam.
-/// Trail hits are [`Stage::play_expendable`] and take what is left (93 at
-/// once in the busiest of those runs). The pool is 26,784 bytes an instance,
-/// 1.7 MB in all, and [`pipeline::MAX_VERTICES`] sizes three 100-byte-vertex
-/// buffers at `MAX_INSTANCES * MAX_PARTICLES * 6`, 28.1 MiB on the GPU.
-/// `docs/formats/pulse-absent-effects.md`, "Trail-hit burst budget".
+/// **Sixty-four, sized by a measured peak.** A wrecked craft holds about
+/// twenty instances for as long as it burns, ten attached `WO_SHIP_DEATH_SPARKS`
+/// and ten `WO_SHIP_FXNODE_EXPLO`, and [`Stage::attach`] refuses with fewer than
+/// [`RESERVED_FOR_BURSTS`] left. Eleven headless stock Pulse races of eight
+/// craft peaked at 16 to 29 instances that are not trail hits, with one wreck;
+/// two wrecks and the reserve put the need near 55, and a run with two mods
+/// loaded reached 56. Trail hits are [`Stage::play_expendable`] and take what is
+/// left (up to 112 at once in those runs). The pool is 26,784 bytes an
+/// instance, 1.7 MB in all, and [`pipeline::MAX_VERTICES`] sizes three
+/// 100-byte-vertex buffers at `MAX_INSTANCES * MAX_PARTICLES * 6`, 28.1 MiB on
+/// the GPU. `docs/formats/pulse-absent-effects.md`, "Trail-hit burst budget".
 pub const MAX_INSTANCES: usize = 64;
 
 /// Instances [`Stage::attach`] refuses to take, so a detonation always has
