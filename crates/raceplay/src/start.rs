@@ -1022,6 +1022,7 @@ impl Race {
                 }),
                 pair_spoil: [false; MAX_SHIPS],
                 split_gap: None,
+                incoming_raises: Vec::new(),
                 sight_screens: (sight.view_screen, sight.columns_screen),
                 sight: sight.view_sight(),
                 sight_state: sight::State::Absent,

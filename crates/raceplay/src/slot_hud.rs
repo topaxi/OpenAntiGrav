@@ -78,6 +78,12 @@ pub(super) struct SlotHud {
     /// slots. Set for every slot by `Race::watch_laps`, fed only for the slots a
     /// person on this machine flies.
     pub(super) lap_watch: Option<super::lap_messages::LapWatch>,
+    /// The incoming-weapon warnings ([`oag_hud::incoming`]); only the viewer's own slot is
+    /// ever raised.
+    pub(super) incoming: oag_hud::incoming::Warnings,
+    /// Whether this title raises them ([`oag_title::HudArt::incoming_warnings`]). Set by
+    /// `Race::watch_laps`, which is where a loaded race meets the title's art.
+    pub(super) incoming_enabled: bool,
 }
 
 /// 2048's `EnergyBarDelay` factor, `Hud_UpdateEnergyBar`'s own `0.1`, applied
@@ -208,6 +214,7 @@ impl Race {
     pub(super) fn advance_slot_huds(&mut self) {
         let primary = self.player_slot();
         let viewed = self.viewport_count();
+        let mut raises = std::mem::take(&mut self.view.incoming_raises);
         for slot in 0..MAX_SHIPS {
             if slot != primary && slot >= viewed {
                 continue;
@@ -234,6 +241,12 @@ impl Race {
                 hud.pickup_look = look;
             }
             hud.assist_indicator.advance(shown, acting, dt);
+            if slot == primary {
+                for icon in raises.drain(..) {
+                    hud.incoming.raise(icon);
+                }
+            }
+            hud.incoming.advance(dt);
         }
     }
 }

@@ -51,6 +51,7 @@ mod hud_layout_ground_truth;
 mod hud_style_ground_truth;
 mod hull_gather_ground_truth;
 mod hull_light_scale_ground_truth;
+mod incoming_warnings_ground_truth;
 mod intro_camera_ground_truth;
 mod language_offered_ground_truth;
 mod lap_times_ground_truth;

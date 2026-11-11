@@ -371,6 +371,7 @@ impl Race {
             .map_or(0.0, |fade| f32::from(fade.rate_percent) * 0.01);
         for slot_hud in &mut self.view.huds {
             slot_hud.pickup_fade_rate = fade_rate;
+            slot_hud.incoming_enabled = hud.art.incoming_warnings;
         }
         for hud in &mut self.view.huds {
             hud.lap_watch = None;

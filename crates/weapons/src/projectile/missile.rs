@@ -345,7 +345,7 @@ pub fn lock_window<S: Craft>(
 
 /// A signed along-track difference folded into `-length/2 ..= length/2`, as the
 /// original's helper does.
-fn wrapped_gap(difference: f32, length: f32) -> f32 {
+pub fn wrapped_gap(difference: f32, length: f32) -> f32 {
     if length <= 0.0 || !length.is_finite() {
         return difference;
     }

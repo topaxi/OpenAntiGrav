@@ -72,6 +72,7 @@ mod hd_sprite;
 mod headless;
 mod held_buttons;
 mod hit_sparks;
+mod incoming_warnings;
 mod laid_from_rear;
 mod leach_ball_draw;
 mod leach_beam;
