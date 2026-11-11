@@ -99,6 +99,8 @@ pub fn drive<R: Raycaster + ?Sized>(
                 best_tick: run.tick,
                 stuck_limit: run.stuck_limit,
                 last_position: None,
+                beneath: 0,
+                wide: false,
             };
         }
     }
@@ -205,6 +207,8 @@ pub fn verify<R: Raycaster + ?Sized>(
                 best_tick: run.tick,
                 stuck_limit: run.stuck_limit,
                 last_position: None,
+                beneath: 0,
+                wide: false,
             };
         }
     }

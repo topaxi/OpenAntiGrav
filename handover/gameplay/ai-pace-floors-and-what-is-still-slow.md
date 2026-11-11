@@ -52,7 +52,10 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 - **No rescue for a craft grinding a wall at about 1 unit/s.** On the hardened
   `cathedral` PHANTOM plan the lone Ace sat against the wall at sample 223 for
   about 28 s with 0 respawns until destroyed. Not looked into.
-- **Pulse `06_Track` VENOM**: corner model, crawling at 15-33 u/s over
+- **Pulse `06_Track` VENOM**: its plan verifies since 2026-11-11 (79 of 85
+  builds, every offset's majority; `docs/gameplay/ai.md`, "A road under the
+  line is a failure"), so it no longer drives the corner model; its pace
+  against gold is not re-measured. Before: crawling at 15-33 u/s over
   1100-1200. The gap at 1196 clears at about 60 u/s. From 90 u/s the craft
   lands drifting right into the wall at 1238, and too slow it stalls in the gap
   (`ai_plan_probe::plan_probe` at fixed speeds). A landing-aim lever: steer the

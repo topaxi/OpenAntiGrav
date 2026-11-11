@@ -5603,6 +5603,10 @@ code.
 
 ### Plans that do not verify
 
+**Since 2026-11-11 (lane `ace-walls`) all 96 verify**, each under every
+perturbation offset tried: see [the next section](#a-road-under-the-line-is-a-failure-2026-11-11).
+What follows is the set as it stood before.
+
 `crates/raceplay/tests/speed_plan_ground_truth.rs` pins the exact set, at the
 title-default team: **91 of 96** layout-class plans verify clean (87 until
 `05_Track` forward's four did, [below](#de-konstruct-black-the-first-jump-is-a-magstrip)).
@@ -5615,6 +5619,153 @@ and prints `06_Track` VENOM (clean under 3 of the nine perturbation offsets) and
 9, from 0 of 9 before the hover escape off a wall,
 [airborne-ground-truth.md](../physics/airborne-ground-truth.md#the-1595-crest-residual-is-a-hover-escape-off-a-wall-2026-10-20-pulse-air-pitch))
 and `29_Track` RAPIER (8 of 9) without a verdict.
+
+### A road under the line is a failure (2026-11-11)
+
+Lane `ace-walls`. Three changes to what a learning pass counts and how it
+answers, all in `crates/ai/src/plan.rs`, all **chosen, not measured** (the plan
+is this project's own). They close the five Pulse rows above and 2048's and
+Omega's `square`.
+
+1. **`Failure::Beneath`.** A craft on the ground further under its line point
+   than the race's own beneath rescue (`oag_race::recovery::BENEATH_LINE`, 15
+   units along the sample's up, never on an unsupported sample) for that
+   rescue's dwell (`RESCUE_TICKS`, 90 ticks) fails the plan, **if it left the
+   line's corridor to get there**: it was outside the corridor when it was
+   last on the road, or at any tick of the flight since. The race passes both
+   numbers (`Course::beneath`, `Course::beneath_ticks`).
+2. **`Cause::LeftTheRoad`.** That failure lowers the ceilings over the
+   lookback before the flight that took the craft there, not over the last
+   45 ticks, which it spent on the road it found. Where the line itself
+   crosses a gap in that flight (a takeoff run-up or an unsupported sample)
+   the old jump answers apply: hold the run-up if the plan braked on it, put
+   the craft back if it was at full throttle. And for every failure, a run-up
+   is held only where the line crosses a gap.
+3. **The trace keeps the road a craft left.** A learning pass's trace was the
+   last 135 to 270 ticks. A craft the race rescues four seconds into a fall
+   had no grounded tick left in it, so the lowering found nothing to lower.
+   It now never drops the last 45 ticks the craft spent on its road, however
+   long it has been in the air or under the line since.
+
+#### 2048 and Omega `square`, before and after
+
+Re-measured on main after the craft-law change of 2026-11-11 (inertia mass
+1.0, body-local wall point rate) and before any change here: the picture of
+[2026-10-31](#2048-square-the-ring-plan-never-sees-the-corner-it-runs-wide-at)
+held. 2048, FLASH, the verification's flying lap, reference hull, seed 1
+(`route_verify_probe` with `OAG_ROUTE_PROBE_RING=1`):
+
+| | before | after |
+| --- | --- | --- |
+| speed through ring 577-641 | 153-156 u/s, no ceiling | 137-141 u/s, ceilings 139-150 |
+| offset across the line (right bound 5.7-8.1) | 3.8 growing to 14.9 at sample 639, then off the edge | peaks at 12.8 at sample 637, on the road |
+| flight | from sample 639, lands 20-22 units under the line | none |
+| ticks on the ground 15+ under the line | 594 of the next 597 | 0 |
+| wall-contact ticks at 1592-1671 | 544 | 0 |
+| flying lap | 3,505 ticks | 2,970 ticks |
+
+The craft is still up to 5 units past the corridor's right bound through the
+corner (the driver's steering reaches -0.7 to -0.9 there, not full lock); it
+stays on the road.
+
+Ring plans, both titles, four classes, verification failures (wall ticks,
+plus rescues) and flying lap in ticks:
+
+| | VENOM | FLASH | RAPIER | PHANTOM |
+| --- | --- | --- | --- | --- |
+| 2048 before | 12, 3,687 | 544, 3,505 | 540, 3,212 | 558, 3,002 |
+| 2048 after | 0, 3,707 | 0, 2,970 | 0, 2,648 | 0, 2,427 |
+| Omega before | 4, 3,600 | 4, 3,198 | 342 + 1 rescue, no lap | 353 + 1 rescue, no lap |
+| Omega after | 0, 3,616 | 0, 3,209 | 0, 2,795 | 0, 2,505 |
+
+VENOM's scrape at 3388-3391 went with changes 2 and 3 (it was still there
+with change 1 alone; which of the two is not separated). **2048 and Omega: ported.** One rule, both measured, each
+pinned: `the_2048_square_ring_plan_brakes_for_the_corner_it_ran_wide_of` and
+`the_omega_square_ring_plan_brakes_for_the_corner_it_ran_wide_of`
+(`speed_plan_ground_truth.rs`, PHANTOM, the majority of the five gate scales).
+
+#### The five Pulse rows
+
+`29_Track` PHANTOM was the one row no build verified. Its flying lap takes
+the left-hander at samples 2180-2250 at 200 u/s after a dip, drifts from 8.8
+units left of the line to 16 right of it against a right bound of 11, leaves
+the road at 2252 and falls 530 units; the race's airborne rescue fires 238
+ticks later, at 2433. The trace held 135 to 270 ticks, so by then it often
+held no tick of the road, the lowering moved nothing and the site ran out of
+tries (change 3). `14_Track` PHANTOM
+(1327) and `29_Track` RAPIER (2405) are the same rescue, reached on fewer
+builds.
+
+Each row built 85 times: the five gate scales under each of the nine
+`perturb::BOUND_OFFSETS` and the eight `perturb::HELD_OUT` (`OAG_PERTURB`).
+Builds that verified clean, and offsets whose majority did:
+
+| row | before, builds | before, offsets | after, builds | after, offsets |
+| --- | --- | --- | --- | --- |
+| `06_Track` VENOM | 29 of 85 | 3 of 17 | 79 of 85 | 17 of 17 |
+| `06_Track` RAPIER | 59 | 15 | 74 | 17 |
+| `14_Track` PHANTOM | 73 | 17 | 85 | 17 |
+| `29_Track` RAPIER | 61 | 15 | 85 | 17 |
+| `29_Track` PHANTOM | 0 | 0 | 85 | 17 |
+
+The other 91 rows print the same steps, lap and tight samples as before, and
+no row's majority is unclean under any of the 17 offsets. So the pin's
+`NOT_CLEAN` is empty and its unsettled list is gone. `06_Track`'s gap landing
+(1229-1237) is still what its 6 and 11 unclean builds fail on.
+
+```sh
+for o in 0 2e-3 -2e-5 3e-6 -5e-4 5e-5 -3e-6 7e-4 -7e-6 \
+         1.5e-3 -1.5e-5 2.5e-6 -3.5e-4 4.5e-5 -4.5e-6 9e-4 -9e-6; do
+  OAG_PERTURB=$o OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay \
+    --run-ignored all --success-output final --no-fail-fast \
+    -E 'test(speed_plan_ground_truth::speed_plan_)'
+done
+```
+
+#### What was tried and not kept
+
+- **Change 1 with no dwell and no corridor test** (fail on the first tick
+  under the line). `square` verified, and 2048's `arena` (all four classes, at
+  4555) and `sol` (three classes, at 4422) stopped verifying. `sol`'s line
+  crosses a dip a craft climbs out of in under 90 ticks. `arena`'s line runs
+  21 units over a flat road from sample 4550 to 4800, the craft centred in a
+  corridor 12 units either side, and the road comes back up to the line by
+  itself.
+- **The dwell alone.** `sol` verified again, `arena` did not: 250 samples is
+  longer than 90 ticks at any speed a plan drives.
+- **The corridor test on the last tick before the craft is under the line.**
+  At PHANTOM the flight off `square`'s corner carries the craft over samples
+  whose corridor it is inside: 2048's player hull verified on 3 of 5 scales
+  and Omega's on 1 of 5. Kept through the flight, 5 of 5 on both.
+- **A longer trace for everything** (360 to 720 ticks). `29_Track` and
+  `14_Track` came out as above, and `06_Track` VENOM fell from 29 to 17 clean
+  builds of 85 (RAPIER 59 to 55). A hypothesis for why, not checked: a longer
+  trace also completes the run-up a hold is judged on, and a held run-up is
+  the wrong answer to `06_Track`'s gap, which clears at about 60 u/s and
+  lands in the wall at 1238 from 90.
+- **The gap rule of change 2 alone** moved no Pulse row.
+
+#### No layout got worse
+
+`route_verify_probe`, seed 1, four classes, before and after:
+
+| census | rows | clean before | clean after | got worse |
+| --- | --- | --- | --- | --- |
+| ring plans (every Pulse layout, Omega's and 2048's circuits) | 172 | 162 | 171 | 0 |
+| route plans (every forked circuit) | 184 | 142 | 159 | 0 |
+
+The ring row still unclean is 2048 `sol` FLASH, unchanged
+([the gap at 3553-3620](#floors-in-the-speed-plan-2026-10-11)). Of the ring
+rows, 157 are identical; besides `square` and the five Pulse rows, 2048
+`cathedral` PHANTOM learns a different clean plan (flying lap 2,435 to 2,398
+ticks). `OAG_ROUTE_PROBE_RING` now also probes every Pulse layout by catalogue
+id (`OAG_ROUTE_BOARD_ONLY=pulse-id/29_Track`).
+
+**The race's own beneath rescue fires on 2048 `arena`**, found on the way and
+not changed here: a lone opponent is put back once in three laps at sample
+4679 (VENOM) or 4699 (RAPIER), under the line on the road every craft drives.
+The plan's corridor test is why that does not fail `arena`'s plan; the race
+has no such test. Omega's `arena` was not raced.
 
 ### What it costs
 
@@ -5632,7 +5783,8 @@ to ten ticks' worth.
 
 ### Still open
 
-- The five unverified plans.
+- ~~The five unverified plans.~~ All 96 verify
+  ([2026-11-11](#a-road-under-the-line-is-a-failure-2026-11-11)).
 - A reset-volume respawn loop seen once in the field: `29_Track` VENOM, one
   craft put back at sample 45 every 46 ticks, 61 times - the rescue pose
   lands in a reset volume. Race rules, not the plan.
@@ -6223,6 +6375,10 @@ all on the ring:
   ceilings there, 1,092 to 1,660 times, to the 16 u/s floor, and cannot help.
 - **VENOM**: 5 wall ticks over the two laps at 3392-3405, 148-162 u/s, left
   unresolved after 14 lowerings.
+
+**Closed 2026-11-11**: the plan counts that lower level as a failure and both
+sites verify at every class, on both titles
+([above](#a-road-under-the-line-is-a-failure-2026-11-11)).
 
 `route=0`'s lead-in shares the first site. These are on the reference hull
 (`RaceSim::plan_reference`, `Race::probe_ring_plan`). **Omega**: checked, applies.

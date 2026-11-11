@@ -511,6 +511,8 @@ pub fn speed_plan() -> (u64, crate::plan::Report) {
         respawn: &placed,
         reset: &|_, _, _| false,
         max_airborne: f32::INFINITY,
+        beneath: f32::INFINITY,
+        beneath_ticks: 0,
         pad: &|_, _| None,
         drive_again: false,
     };

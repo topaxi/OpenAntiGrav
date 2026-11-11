@@ -204,6 +204,8 @@ fn build_on(line: &Line) -> (SpeedPlan, Report) {
         respawn: &respawn,
         reset: &|_, _, _| false,
         max_airborne: f32::INFINITY,
+        beneath: f32::INFINITY,
+        beneath_ticks: 0,
         pad: &|_, _| None,
         drive_again: DRIVE_AGAIN.get(),
     };
@@ -223,6 +225,8 @@ fn verify(line: &Line, plan: &SpeedPlan) -> Report {
         respawn: &respawn,
         reset: &|_, _, _| false,
         max_airborne: f32::INFINITY,
+        beneath: f32::INFINITY,
+        beneath_ticks: 0,
         pad: &|_, _| None,
         drive_again: DRIVE_AGAIN.get(),
     };
@@ -592,6 +596,8 @@ fn on_course<T>(line: &Line, f: impl FnOnce(&Course<'_, Plane>) -> T) -> T {
         respawn: &respawn,
         reset: &|_, _, _| false,
         max_airborne: f32::INFINITY,
+        beneath: f32::INFINITY,
+        beneath_ticks: 0,
         pad: &|_, _| None,
         drive_again: DRIVE_AGAIN.get(),
     };
@@ -678,5 +684,131 @@ fn a_plan_followed_at_a_lower_share_multiplies_the_yaw_ratio() {
         plan.share_for(Some(learned * 0.5)),
         0.5,
         "the original is untouched"
+    );
+}
+
+fn trace(index: u32, airborne: bool, beneath: bool, full: bool) -> Trace {
+    Trace {
+        tick: 0,
+        index,
+        speed: 100.0,
+        airborne,
+        beneath,
+        full,
+    }
+}
+
+#[test]
+fn the_trace_keeps_the_road_a_craft_left_through_a_long_fall() {
+    let mut recent = Vec::new();
+    for index in 0..400 {
+        push_trace(&mut recent, trace(index, false, false, true));
+    }
+    assert!(
+        recent.len() <= LOOKBACK_TICKS * 6,
+        "on the road it is bounded"
+    );
+    // Four seconds in the air, then a road under the line: neither is the
+    // road the craft left.
+    for _ in 0..240 {
+        push_trace(&mut recent, trace(400, true, false, true));
+    }
+    for _ in 0..400 {
+        push_trace(&mut recent, trace(400, false, true, true));
+    }
+    let on_the_road = recent.iter().filter(|t| !t.airborne && !t.beneath).count();
+    assert!(
+        on_the_road >= LOOKBACK_TICKS,
+        "{on_the_road} ticks of the road it left are still in the trace"
+    );
+}
+
+#[test]
+fn a_craft_on_a_road_under_its_line_left_the_road_where_it_took_off() {
+    let line = stadium(30.0, 200.0);
+    let mut recent: Vec<Trace> = (0..60).map(|i| trace(i, false, false, i < 30)).collect();
+    recent.extend((0..10).map(|_| trace(60, true, false, true)));
+    recent.extend((0..90).map(|_| trace(61, false, true, true)));
+    // The plan braked on the way there and the line crosses no gap: it ran
+    // wide, and holding the run-up would lift what the failure should lower.
+    assert_eq!(
+        Cause::of(Failure::Beneath, 0.0, &recent, &line),
+        Cause::LeftTheRoad(60)
+    );
+    // Where the line itself leaves the road in that flight, it fell short of
+    // a jump: hold the run-up the plan braked on.
+    let mut unsupported = vec![false; line.len()];
+    unsupported[60] = true;
+    let gapped = stadium(30.0, 200.0).with_unsupported(unsupported);
+    assert_eq!(
+        Cause::of(Failure::Beneath, 0.0, &recent, &gapped),
+        Cause::ShortOfTheLip(60)
+    );
+    // With no flight in the trace it drove down: lower what led there.
+    let driven: Vec<Trace> = recent.iter().filter(|t| !t.airborne).copied().collect();
+    assert_eq!(
+        Cause::of(Failure::Beneath, 0.0, &driven, &line),
+        Cause::LeftTheRoad(60)
+    );
+}
+
+/// Ticks a craft on the floor 30 units under a straight line with a corridor
+/// 5 units either side, after one tick up at the line's level `offset` units
+/// across it, and returns the first failure in 30 ticks.
+fn under_the_line_from(offset: f32) -> Option<Failure> {
+    let points: Vec<Vec3> = (0..200)
+        .map(|i| Vec3::new(0.0, 30.0, -(i as f32) * 2.0))
+        .collect();
+    let frames = vec![
+        crate::Frame {
+            lateral: Vec3::X,
+            left: -5.0,
+            right: 5.0,
+        };
+        points.len()
+    ];
+    let line = Line::with_corridor(points, frames);
+    let samples = vec![
+        Some(oag_physics::TrackSample {
+            position: Vec3::ZERO,
+            down: Vec3::NEG_Y,
+        });
+        line.len()
+    ];
+    let respawn = |index: usize| placed(&line, index);
+    let course = Course {
+        line: &line,
+        samples: &samples,
+        raycaster: &Plane,
+        env: Environment::default(),
+        dt: 1.0 / 60.0,
+        off_line: 1_000.0,
+        respawn: &respawn,
+        reset: &|_, _, _| false,
+        max_airborne: f32::INFINITY,
+        beneath: 15.0,
+        beneath_ticks: 10,
+        pad: &|_, _| None,
+        drive_again: false,
+    };
+    let craft = craft(&line);
+    let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
+    let mut run = SpeedPlan::start_run(&craft);
+    run.state.body.position = line.point(0) + Vec3::X * offset;
+    let coast = |_: &Run, _: &ShipControls| (0.0, 0.0);
+    let first = course.tick(&mut run, &craft, &tuning(), yaw, coast);
+    assert_eq!(first.failure, None, "in the air at the line's level");
+    run.state.body.position.y = craft.handling.antigrav.ride_height * 0.5;
+    run.state.body.linear_velocity = Vec3::ZERO;
+    (0..30).find_map(|_| course.tick(&mut run, &craft, &tuning(), yaw, coast).failure)
+}
+
+#[test]
+fn a_road_under_the_line_is_a_failure_for_a_craft_that_left_its_corridor() {
+    assert_eq!(under_the_line_from(12.0), Some(Failure::Beneath));
+    assert_eq!(
+        under_the_line_from(2.0),
+        None,
+        "inside its corridor the craft is where the line's road is"
     );
 }

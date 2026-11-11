@@ -142,6 +142,28 @@ fn pulse_circuits() -> Vec<Circuit> {
         .collect()
 }
 
+/// Every Pulse layout by its catalogue id (`pulse-id/29_Track`), forked or
+/// not, for a probe of the ring's own plan.
+fn pulse_layouts() -> Vec<Circuit> {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return Vec::new();
+    };
+    let source = image.display().to_string();
+    let mut archives = oag_pulse::open(&source).expect("mounting the disc");
+    let blob = archives
+        .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .expect("the game plugin definition");
+    let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
+    catalogue::tracks(&definition)
+        .into_iter()
+        .map(|t| Circuit {
+            label: format!("pulse-id/{}", t.id),
+            source: source.clone(),
+            track: t.entry_name(),
+        })
+        .collect()
+}
+
 const NAMES_2048: [&str; 10] = [
     "square",
     "park",
@@ -457,7 +479,8 @@ fn route_plan_board() {
 /// `OAG_ROUTE_PROBE_STUCK=<ticks>` counts that long without progress as a
 /// stall and puts the craft back on, to find every place it parks;
 /// `OAG_ROUTE_PROBE_RING` alone probes the ring's own plan instead (printed as
-/// `route=18446744073709551615`, every index a ring sample).
+/// `route=18446744073709551615`, every index a ring sample), and adds every
+/// Pulse layout by catalogue id (`pulse-id/29_Track`).
 ///
 /// ```sh
 /// OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_ONLY=pulse/07_Track \
@@ -883,6 +906,9 @@ fn route_original_probe() {
 /// only (the board's own list, and so its run time, is unchanged).
 fn probe_circuits() -> Vec<Circuit> {
     let mut circuits = pulse_circuits();
+    if std::env::var_os("OAG_ROUTE_PROBE_RING").is_some() {
+        circuits.extend(pulse_layouts());
+    }
     circuits.extend(circuits_omega());
     if let Some(source) = oag_testdata::exact("data/extracted/ps4") {
         for name in ["cathedral", "square"] {

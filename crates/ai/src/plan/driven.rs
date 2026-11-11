@@ -31,6 +31,7 @@ pub(super) struct Lived {
     /// The throttle and brake it answered.
     pub(super) asked: (f32, f32),
     pub(super) contact: bool,
+    pub(super) beneath: bool,
     pub(super) failure: Option<Failure>,
     /// Whether the run was put back on the line after this tick.
     pub(super) respawned: bool,
@@ -203,6 +204,7 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
             airborne,
             asked,
             contact: tick.contact,
+            beneath: tick.beneath,
             failure: tick.failure,
             respawned: false,
             progress: run.progress,

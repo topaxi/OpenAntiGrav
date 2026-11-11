@@ -655,6 +655,12 @@ impl Race {
             respawn: &respawn,
             reset: &reset,
             max_airborne: oag_race::recovery::AIRBORNE_RESET_SECONDS,
+            beneath: if sim.reset_triggers.beneath.enabled {
+                sim.reset_triggers.beneath_line
+            } else {
+                f32::INFINITY
+            },
+            beneath_ticks: sim.reset_triggers.beneath_ticks,
             pad: &pad,
             drive_again: drive_again(),
         };

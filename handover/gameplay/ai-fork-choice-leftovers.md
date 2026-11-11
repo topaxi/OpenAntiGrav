@@ -16,7 +16,8 @@ route. Evidence: `docs/ghidra/functions/psp-pulse-usa/ai-branch-choice.md`,
 
 - **Routes our craft cannot drive** are located (2026-10-31, `docs/gameplay/ai.md`, "Where each undriven
   route fails its verification") and have threads of their own: `outpost-7s-route-runs-into-the-ring-bridge.md`,
-  `cathedrals-routes-fail-only-their-standing-start.md`, `squares-ring-plan-misses-the-corner-it-runs-wide-at.md`.
+  `cathedrals-routes-fail-only-their-standing-start.md`. `square`'s is closed (2026-11-11: its ring plan and
+  every route verify, ai.md, "A road under the line is a failure").
   `sol` is not done.
 - **2048's per-circuit override.** `Ai_ChooseBranch` (`0x8119ae90`) can force a
   side after the coin from the circuit record's `+0x150`/`+0x154`/`+0x158`
