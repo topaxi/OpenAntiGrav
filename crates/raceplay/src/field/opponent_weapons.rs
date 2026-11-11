@@ -528,6 +528,10 @@ impl Race {
             self.absorb_opponent_pickup(slot, absorb);
             return;
         }
+        // The fire request the original announces (`Weapon_AnnounceIncoming`): one per
+        // spent pickup. Turbo, Autopilot, the Disruptor and a mod's own earn no warning.
+        #[cfg(feature = "view")]
+        self.note_incoming_fire(slot, weapon);
         // `Held::take` for the same reason `Race::spend_pickup` uses it: the
         // Mine/Bomb arm above always returns before here, so this is
         // defensive rather than reachable today, but a direct field write
@@ -607,7 +611,16 @@ impl Race {
             // the whole action.
             return false;
         }
+        #[cfg(feature = "view")]
+        let started = !self.sim.world.ships[slot].pickup.is_dropping();
         self.sim.world.ships[slot].pickup.begin_drop(drop.count);
+        // One announcement per drop that starts: not per mine laid, and not for a re-roll
+        // while a cluster is out. Chosen, not measured: the original announces on every press
+        // (`docs/ghidra/functions/psp-pulse-usa/hud-incoming-warnings.md`, "Wired in the engine").
+        #[cfg(feature = "view")]
+        if started {
+            self.note_incoming_fire(slot, weapon);
+        }
         true
     }
 }

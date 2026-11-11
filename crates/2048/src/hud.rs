@@ -225,6 +225,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             table_crossings: 100,
         },
     }),
+    incoming_warnings: false,
     runtime: None,
     lap_one_shift: None,
     bar_tip: None,

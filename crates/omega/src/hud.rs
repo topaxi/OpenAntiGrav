@@ -106,6 +106,7 @@ pub const SKINS: &[oag_title::HudSkin] = &[
 /// skin's runtime shield and lap-arc readings, which the retro layouts do not author
 /// (`oag_title::HudSkin::art`).
 const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
+    incoming_warnings: false,
     runtime: None,
     lap_one_shift: None,
     lit_alpha: None,
@@ -324,6 +325,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             table_crossings: 100,
         },
     }),
+    incoming_warnings: false,
     runtime: Some(RUNTIME),
     lap_one_shift: None,
     bar_tip: None,

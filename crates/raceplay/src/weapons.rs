@@ -847,12 +847,13 @@ impl Race {
         {
             return;
         }
+        // Saturating: a disc that ever authored more than 255 rounds
+        // would clamp here rather than panic, and none measured does.
+        let rounds = cannon.rounds.max(0.0).round() as u8;
         let Some(remaining) = self.sim.world.ships[slot].pickup.advance_cannon_reload(
             self.sim.dt,
             cannon.rate,
-            // Saturating: a disc that ever authored more than 255 rounds
-            // would clamp here rather than panic, and none measured does.
-            cannon.rounds.max(0.0).round() as u8,
+            rounds,
         ) else {
             // The countdown moved but has not reached zero yet.
             return;
@@ -896,6 +897,14 @@ impl Race {
                 oag_gameplay::cue::Cue::Cannon,
                 slot,
             ));
+            // The press that starts a burst announces once; the rounds that follow
+            // while fire is held do not (`Weapon_RequestFire` runs on the press, the
+            // rounds come from `Cannon_UpdateReload`), or the warning's 2.0 s timer
+            // would restart on every round and never reach a lit phase.
+            #[cfg(feature = "view")]
+            if remaining + 1 == rounds {
+                self.note_incoming_fire(slot, oag_tables::weapons::Weapon::Cannon);
+            }
         }
     }
 

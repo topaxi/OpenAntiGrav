@@ -146,6 +146,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             table_crossings: 21,
         },
     }),
+    incoming_warnings: true,
     runtime: None,
     lap_one_shift: Some(oag_title::hud::LapOneShift {
         widgets: &["LapOf", "Lap Outof"],

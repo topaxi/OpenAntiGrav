@@ -238,6 +238,8 @@ pub mod hull_gather;
 #[cfg(feature = "view")]
 mod hull_shake;
 #[cfg(feature = "view")]
+mod incoming_warnings;
+#[cfg(feature = "view")]
 pub mod intro_camera;
 pub mod lap_messages;
 pub mod launch_hover;

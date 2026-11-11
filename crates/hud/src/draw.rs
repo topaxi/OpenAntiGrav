@@ -1121,6 +1121,8 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
         frame.sprites.extend(sprite_draw(&tinted, cx.sheet));
     }
 
+    frame.sprites.extend(incoming_warning_sprites(cx, readout));
+
     // What a message line and the time gap are drawn over, where the layout authors it.
     frame.sprites.extend(super::messages::backing(cx, readout));
 
@@ -1393,4 +1395,19 @@ pub(super) fn sprite_draw_from(
         color: sprite.color,
         rotation: sprite.rotation,
     })
+}
+
+/// The lit incoming-weapon warning groups: each one's background and the icon of the weapon that
+/// raised it, drawn as the layout authors them (`crate::incoming`).
+fn incoming_warning_sprites(cx: &Context, readout: &Readout) -> Vec<Draw> {
+    let lit = [
+        (super::incoming::Side::Forward, readout.incoming.forward),
+        (super::incoming::Side::Rear, readout.incoming.rear),
+    ];
+    lit.into_iter()
+        .filter_map(|(side, icon)| icon.map(|icon| (side, icon)))
+        .flat_map(|(side, icon)| [side.background(), icon.widget()])
+        .filter_map(|name| cx.layout.sprite(name))
+        .filter_map(|sprite| sprite_draw(sprite, cx.sheet))
+        .collect()
 }
