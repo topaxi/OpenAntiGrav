@@ -2364,9 +2364,10 @@ against a drawn original.
 **Claim tested** (lane `pair-bump-damage`): an unshielded craft-to-craft bump does or does not charge the energy
 pool (`entity + 0x88`), and by how much per contact. **Result: it does, `Ship_Damage(0.035 * |p|)` per ring record on
 each of the two hulls, with `source = 1`; `Ship_Damage` then halves it when weapons are off.** Confidence **92**:
-a live breakpoint on every call, 1,021 contact-loop calls over 12 runs on one state (662 distinct `|p|` values), the
+a live breakpoint on every call, 1,358 contact-loop pair-record calls over 14 runs (two bit-identical replays of one window dropped; 661 distinct `|p|` values), the
 static read in the section above, and the same code path as the wall leg's `25 of 25` ([shield.md](shield.md),
-"Contact damage is `|p| * 0.035`"). Not 95: one circuit and one pair of craft, PSP USA only, no second binary
+"Contact damage is `|p| * 0.035`"). Not 95: **one PPSSPP boot, one state, one circuit** (the repeats of the 40
+units/s run replay the same state bit-identically, so they are not independent runs), PSP USA only, no second binary
 read (Pure's twin is read statically, below).
 
 **Method.** PPSSPP v1.20.4, `pulse-psp-usa.chd` (the grid saves and every address on this page are USA builds),
@@ -2374,8 +2375,7 @@ software renderer, `data/saves/pulse-psp/race-talons-venom-alongside.ppst` (Talo
 **weapons off, damage on**: `g_weapons_enabled = 0`, `g_damage_enabled = 1`, read at `0x08b30fa8`/`0x08b30fa9`).
 `scripts/psp-pair-bump-damage.py` restores the state, stops at the first `Ship_UpdateCraft`, and places the player's
 craft 20 units ahead of the first rival `Ship_UpdateCraft` visits (slot 6), facing as it does, at 0, 30, 40 or 50
-units/s (`psp-pair-capture.py`'s `stage_head_on`; the rival does 105 along its forward, so the rival rear-ends the
-player). It then breaks on `Ship_Damage` (`0x088439ac`) with the condition `ra == 0x088426b4` (the contact loop's
+units/s (`psp-pair-capture.py`'s `stage_head_on`; the rival does 105 along its forward, and the pair closes and meets 2 to 3 s later; which hull struck which was not read). It then breaks on `Ship_Damage` (`0x088439ac`) with the condition `ra == 0x088426b4` (the contact loop's
 call at `0x088426ac`, plus its delay slot), so no weapon or other caller stops it, and reads at each stop `a0` (the
 entity), `a1` (source), `f12` (the amount), and the ring record the loop is on (`s0`: kind `+0x00`, point `+0x10`,
 impulse `+0x20`, friction `+0x30`). It swaps the breakpoint to the call's return address and reads the pool again,
@@ -2401,16 +2401,16 @@ record and `-j*n` to B's):
 `scripts/psp-pair-capture.py` does; the placed speed is only how the staging got there, the craft having been
 driven on for 2 to 3 s before they met.) Four closing speeds, `j` from 6.6 to 37.
 
-**Result 2: the amount is `0.035 * |p|`, on every call.** `f12 / |p|` over the 662 distinct pair-record
-values (`kind = 1`, `source = 1`, friction `0.02` = `0x3ca3d70a` on all 1,021 calls) ranges `0.03499999` to
+**Result 2: the amount is `0.035 * |p|`, on every call.** `f12 / |p|` over the 661 distinct pair-record
+values (`kind = 1`, `source = 1`, friction `0.02` = `0x3ca3d70a` on all 1,358 calls) ranges `0.03499999` to
 `0.03500000`, the float32 rounding of `0.05 * 0.7`. `|p|` itself ranged `5e-05` to `36.95` (median `0.23`). A wall
 record (`kind = 0`, `source = 0`, friction `0.035`; six seen when a placed craft met the wall first) gives the
 same ratio. Amount and `|p|` are therefore one law for walls and pairs: the contact loop does not read the kind
 word for the amount (only for the `source` argument and `ShipCollisionFx_Trigger`'s `kind`).
 
-**Result 3: the pool falls by the amount, halved with weapons off.** Over the 19 calls with an amount above
-`0.05` and weapons off, `(pool_entry - pool_return) / f12` is `0.49998` to `0.50005`; with `g_weapons_enabled`
-written to `1` before the stage (one run, 2 such calls) it is `0.99999` to `1.00000`, with `f12` unchanged at
+**Result 3: the pool falls by the amount, halved with weapons off.** Over the 36 calls with an amount above
+`0.05` and weapons off, `(pool_entry - pool_return) / f12` is `0.49992` to `0.50010`; with `g_weapons_enabled`
+written to `1` before the stage (one run, 3 such calls) it is `0.99999` to `1.00000`, with `f12` unchanged at
 `0.035 * |p|`. So `Ship_Damage`'s `if (!g_weapons_enabled) amount *= 0.5` applies to a pair bump as to a wall
 (shield.md, "`Ship_Damage` is the single subtraction"), and the loop passes the same `f12` either way. Weapons
 on, a pair contact of `|p| = 33.13` cost `1.1595` energy per hull; weapons off, `|p| = 36.95` cost `0.6467`.
@@ -2422,13 +2422,15 @@ every run, and the struck rival's pool (slot 6) equals the sum of its logged ent
 (`-0.7559` over 26 calls, `-0.9854` over 106), so nothing but the logged calls moves it (damage is on, so there is
 no regeneration).
 
-**Result 5: more than one record per tick.** On 689 of the 751 (run, tick, hull) groups there are two records
-(`|p|` of the second is 2 to 47 % of the first: `1.2374` then `0.5783` on a first-contact tick, `0.3461` then
-`0.0274` in a graze); 11 groups have three and 2 have four. Each is its own `Ship_Damage` call. Summed over
-all groups the energy is `1.054` times the first record's alone. The extra records are a second contact of the box
-pair's manifold (the same point, a parallel impulse), not a second resolver pass: the resolver's own stop shows
-one impulse for the pair that tick. Not read: how the manifold yields the second contact and whether `oag_physics::pair` has
-an equivalent.
+**Result 5: more than one record per tick; origin unread.** On 637 of the 693 (run, tick, hull) groups there are
+two records, 11 have three and 2 have four. Each is its own `Ship_Damage` call. The second record's `|p|` is not a
+fixed share of the first (`1.2374` then `0.5783` on a first-contact tick, `0.3461` then `0.0274` in a graze; over
+all groups from `0.015 %` to `214 %` of the first). Summed over all groups the energy is `1.061` times the first
+record's alone, so one charge per pair per tick undercounts by about 6 % over these ticks. **What makes the
+extra records is not read**: a second contact of the box pair's manifold, or a second pass of the resolver (or a
+physics substep) on the same pair, both fit (same point, parallel impulse). The resolver probe took only the first
+`0x0884f630` hit for the pair and stopped, so it counted nothing per tick. Recipe: count `0x0884f630` hits for
+one pair between two consecutive `Ship_UpdateCraft` stops of one craft.
 
 **Control.** A run with nothing staged over the same window: slots 0, 1, 4, 5 and 6 make no contact-loop call
 and keep their pool to the last bit; slots 2, 3 and the player have natural pair contacts in this state (129, 51
@@ -2456,9 +2458,9 @@ through `oag_physics::damage::apply_contact` from `integrate.rs`, with `CONTACT_
 Shield, subtract `damage::contact_damage(contact.impulse, rules)` through the shared `subtract` path, once per ring
 record. `ShipState::shield` is part of the state hash, so every race with a craft-to-craft bump moves its hash
 and `race_ground_truth` moves with it: the wire lane quotes it before and after and regenerates references in a
-separate commit. Charging `contact.impulse` once per pair per tick undercounts the original by about 5 %
-(Result 5) until the second contact of the manifold is modelled; that residual is the open item, small beside the
-bump's own 100 %. The AI hulls pay too, so a rival can be wrecked by a bump; the lead-in is the same shared path.
+separate commit. Charging `contact.impulse` once per pair per tick undercounts the original by about 6 %
+(Result 5) until the origin of the extra records is read; that residual is the open item, small beside the bump's own
+cost. The AI hulls pay too, so a rival can be wrecked by a bump; the lead-in is the same shared path.
 
 **Against the other titles.** Pure: the loop's twin `FUN_08926ae4` calls `Ship_Damage`'s twin `FUN_08928274` with
 `|p| * 0.05 * 0.7` for a record of positive friction on an unshielded craft ([`psp-pure-usa/craft-physics.md`](../psp-pure-usa/craft-physics.md),

@@ -30,12 +30,14 @@ state gate (1 and 3), clamp, 20 % edge and the destroyed transition.
   regeneration call: the damage-off regeneration already ran for the tick) or give `subtract` a public pair entry.
   `apply_weapon` is wrong for this: it is the weapon branch (`source == 2`) and would also pass its sparks.
 - **Determinism and the hash.** `ShipState::shield` is hashed. Every race with a craft-to-craft bump moves its
-  hash, so `race_ground_truth` and the `oag-physics` determinism references move. Quote them before and after,
-  and regenerate in a separate commit naming this behaviour change (never edit a golden to pass).
-- **The second record.** The original appends two or more ring records per hull on most contact ticks (the second
-  is 2 to 47 % of the first, from the box pair's manifold); one charge per pair per tick undercounts the energy by
-  about 5 % over the logged ticks (the ratio of all records to first records was 1.054). Model it only when the
-  manifold's second contact is read; the first record alone is the wire.
+  hash, so `race_ground_truth` (and any race-level reference) moves: quote it before and after, and regenerate in
+  a separate commit naming this behaviour change (never edit a golden to pass). The wire lands in
+  `oag_raceplay`, and `oag-physics`' own determinism test does not call `pair::resolve`, so its reference should
+  not move; if it does, that is a bug to find, not a reference to regenerate.
+- **The extra records.** The original appends two or more ring records per hull on most contact ticks (the second
+  is a variable share of the first, up to over 200 %); one charge per pair per tick undercounts the energy by
+  about 6 % over the logged ticks (all records over first records, 1.061). Their origin is unread (a second manifold
+  contact or a second resolver pass; the recipe is on the doc page). The first record alone is the wire.
 - **AI hulls pay too.** A rival can be wrecked by a bump. That follows from the shared path and needs no flag;
   check the AI lane's expectations (`an-ace-craft-should-lap-every-circuit-without-touching-a-wall.md`) before
   the references are regenerated.

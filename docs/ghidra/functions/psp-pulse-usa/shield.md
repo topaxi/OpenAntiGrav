@@ -188,7 +188,7 @@ The `0.05`/`0.7` pair is the same one
 which is why that page calls this the gameplay-facing twin.
 
 **The wall leg is measured (25 of 25 calls, below), and so is the pair leg (2026-11-11):** a craft-to-craft
-record goes through the same call with `source = 1`, `f12 = 0.035 * |p|` on 1,021 of 1,021 calls and a pool fall of
+record goes through the same call with `source = 1`, `f12 = 0.035 * |p|` on 1,358 of 1,358 calls and a pool fall of
 `f12` (weapons on) or `f12 * 0.5` (weapons off)
 ([contact-response.md](contact-response.md#measured-2026-11-11-an-unshielded-craft-to-craft-bump-charges-the-energy-pool)).
 
