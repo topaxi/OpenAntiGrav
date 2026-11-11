@@ -14,7 +14,7 @@ what the fix was. Implemented in
 | Piece | Status | Confidence |
 | --- | --- | --- |
 | Probe `6.0` (Rocket) / `12.0` (Missile, Plasma, Shuriken) along the ridden normal, ride `3.0` above a hit, fall `50.0` units/s^2 on a miss | **recovered** | 82-92 |
-| **The branch is on the surface class of the hit**: wall or craft ends the flight, floor or mag floor is ridden, nothing means fall | **recovered 2026-09-13**, `Collision_SweepSegment` (`0x0883198c`) read at decompiler level | 85 |
+| **The branch is on the surface class of the hit**: wall (`0`) or outside the collision cage (`4`, wired 2026-11-11, "Wired" at the end of the cage section; not a craft) ends the flight, floor or mag floor is ridden, nothing means fall | **recovered 2026-09-13**, `Collision_SweepSegment` (`0x0883198c`) read at decompiler level | 85 |
 | A floor met across the travel segment is *landed on* (`hit + normal * 3.0`), for all four weapons | **recovered 2026-09-13**, `Rocket_Update` and `Missile_Update` decompiles | 85 |
 | On that landing the Missile moves and nothing else - no normal adopted, no velocity written - where the Rocket and Shuriken adopt the normal and recompute velocity | **recovered 2026-09-13**, the same two decompiles | 85 |
 | A wall found by the *probe* detonates a Rocket or a Plasma and does nothing to a Missile or a Shuriken | **recovered 2026-09-13** | 80 |
@@ -375,7 +375,7 @@ Cannon's round flies 2.7 times faster in the original than here
 the track header, so a wire that reads `Spline::cage()` changes nothing for them: **checked,
 differs** (Pure, by the header census), **not checkable** here for HD's own code `4`.
 
-**Wired (2026-11-11, lane `projectile-cage-wire`), Pulse PSP and PS2 only.** `Projectiles::advance`
+**Wired (2026-11-11, lane `projectile-cage-wire`), Pulse PSP and PS2 only** (the loader reports `collision cage: on, 862 control point(s)` on both images' default circuit). `Projectiles::advance`
 asks the race's cage (`Spline::cage()`, through `oag_physics::cage::Containment` on
 `oag_gameplay::cage::CageTrack`) about the probe's end and the travel sweep's end, after the mesh
 query and before the surface class, with no craft limits (`MAX_POINT_DISTANCE`, `MAX_DEPTH` are

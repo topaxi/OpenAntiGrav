@@ -373,8 +373,9 @@ impl Projectiles {
                 }
                 // A floor across the step is ridden, not struck: the original's
                 // travel-segment switch takes a floor code to the same push-out
-                // (`hit + normal * 3.0`) for all four weapons; only a wall or craft
-                // ends a flight. It carries a projectile over a crest into the dip.
+                // (`hit + normal * 3.0`) for all four weapons; only a wall (`0`) or the
+                // cage (`4`, above) ends a flight. It carries a projectile over a crest
+                // into the dip.
                 //
                 // The Missile only moves: `Missile_Update`'s floor arm writes no
                 // normal or velocity (its guidance rewrites it). `Rocket_Update`
