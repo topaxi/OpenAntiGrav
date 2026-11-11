@@ -14,7 +14,7 @@
 //! lit exactly when the gap `progress(player) - progress(firer)` was inside the window.
 
 use oag_gameplay::PlayerInputs;
-use oag_hud::incoming::{Icon, Side};
+use oag_hud::incoming::Side;
 use oag_tables::weapons::Weapon;
 
 /// Ticks one warning runs for, with a margin: 2.0 s at 60 Hz.
