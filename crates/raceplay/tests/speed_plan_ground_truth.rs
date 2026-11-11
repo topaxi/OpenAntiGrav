@@ -30,7 +30,7 @@ use crate::perturb;
 /// `(layout, class)` pairs whose plan does not verify clean, and why each is
 /// believed to be so. Every one is named on `docs/gameplay/ai.md`'s speed-plan
 /// section.
-const NOT_CLEAN: &[(&str, &str)] = &[("29_Track", "PHANTOM")];
+const NOT_CLEAN: &[(&str, &str)] = &[];
 
 /// `(layout, class)` pairs whose majority flips between offsets of
 /// `perturb::BOUND_OFFSETS`, so neither verdict is asserted; each with the

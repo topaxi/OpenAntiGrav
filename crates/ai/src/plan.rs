@@ -1109,12 +1109,13 @@ impl Trace {
     }
 }
 
-/// Adds a tick to a learning pass's trace, which keeps the last three to six
-/// lookbacks.
+/// Adds a tick to a learning pass's trace, which keeps the last eight to
+/// sixteen lookbacks: a craft the race rescues after four seconds in the air
+/// still has its takeoff and the run-up to it in the trace.
 fn push_trace(recent: &mut Vec<Trace>, trace: Trace) {
     recent.push(trace);
-    if recent.len() > LOOKBACK_TICKS * 6 {
-        recent.drain(..recent.len() - LOOKBACK_TICKS * 3);
+    if recent.len() > LOOKBACK_TICKS * 16 {
+        recent.drain(..recent.len() - LOOKBACK_TICKS * 8);
     }
 }
 
@@ -1217,8 +1218,14 @@ impl Cause {
                 .iter()
                 .rposition(|t| !t.airborne)
                 .map_or(0, |grounded| grounded + 1);
-            let run_up_from = first_air.saturating_sub(LOOKBACK_TICKS * 2);
-            if recent[run_up_from..first_air].iter().any(|t| !t.full) {
+            let run_up = &recent[first_air.saturating_sub(LOOKBACK_TICKS * 2)..first_air];
+            // Only where the line itself crosses a gap: a craft that flew
+            // off a road the line stays on ran wide, and holding that run-up
+            // lifted the ceilings the failure before had lowered
+            // (`29_Track` PHANTOM, the corner exit at 2180-2250).
+            if run_up.iter().any(|t| !t.full)
+                && over_a_gap(run_up.iter().chain(&recent[first_air..=last_air]), line)
+            {
                 return Self::ShortOfTheLip(first_air);
             }
         }
@@ -1249,10 +1256,7 @@ impl Cause {
             .rposition(|t| !t.airborne)
             .map_or(0, |grounded| grounded + 1);
         let run_up = &recent[first_air.saturating_sub(LOOKBACK_TICKS * 2)..first_air];
-        let over_a_gap = |t: &Trace| {
-            line.is_takeoff(t.index as usize) || line.is_unsupported(t.index as usize)
-        };
-        if !run_up.iter().chain(&recent[first_air..=last_air]).any(over_a_gap) {
+        if !over_a_gap(run_up.iter().chain(&recent[first_air..=last_air]), line) {
             return Self::LeftTheRoad(first_air);
         }
         if run_up.iter().any(|t| !t.full) {
@@ -1261,6 +1265,12 @@ impl Cause {
             Self::Underpowered
         }
     }
+}
+
+/// Whether the line leaves the road anywhere on `flown`: a takeoff run-up or
+/// a sample with nothing under it.
+fn over_a_gap<'a>(mut flown: impl Iterator<Item = &'a Trace>, line: &Line) -> bool {
+    flown.any(|t| line.is_takeoff(t.index as usize) || line.is_unsupported(t.index as usize))
 }
 
 fn note_unresolved(report: &mut Report, index: u32, failure: Failure) {
