@@ -71,11 +71,10 @@ impl Profile {
     }
 }
 
-/// RACE CAMPAIGN is open, on `Grid Selection`. On Pulse the row opens the campaign picker (its
-/// NEW CAMPAIGN row, and any mod campaign), whose first row is the disc's own.
-const OPEN: &str = "boot; until stage=menu within 3000; select campaign; press cross; \
-                    until page=campaigns; select campaign-original; press cross; \
-                    until screen=campaign";
+/// RACE CAMPAIGN is open, on `Grid Selection`. With no mod campaign Pulse has no picker: the
+/// row opens the disc's campaign, and Square on it the editor.
+const OPEN: &str =
+    "boot; until stage=menu within 3000; select campaign; press cross; until screen=campaign";
 
 /// The level and the name under the cursor in the last state a run reported.
 fn last_campaign(states: &[Value]) -> (String, String) {
@@ -93,7 +92,7 @@ fn last_campaign(states: &[Value]) -> (String, String) {
     )
 }
 
-/// RACE CAMPAIGN is open on a title that has no campaign picker (no mod campaign, no editor).
+/// RACE CAMPAIGN is open on a title that has no campaign picker (no mod campaign).
 const OPEN_DIRECT: &str =
     "boot; until stage=menu within 3000; select campaign; press cross; until screen=campaign";
 
@@ -114,7 +113,7 @@ fn grid_selection_opens_on_the_last_grid_and_survives_a_relaunch() {
         &format!(
             "{OPEN}; expect screen.id=grid; expect focus=grid0; press right; press right; \
              expect focus=grid2; press circle; until screen!=campaign; \
-             select campaign-original; press cross; until screen=campaign; ticks 10"
+             select campaign; press cross; until screen=campaign; ticks 10"
         ),
         "a.jsonl",
     );
@@ -374,7 +373,7 @@ fn the_selector_pulse_resumes_where_the_screen_was_left() {
              press cross; until screen.id=cell; ticks 5; \
              press circle; until screen.id=grid; ticks 5; \
              press circle; until screen!=campaign; ticks 120; \
-             select campaign-original; press cross; until screen=campaign; ticks 5"
+             select campaign; press cross; until screen=campaign; ticks 5"
         ),
         "a.jsonl",
     );
@@ -478,7 +477,7 @@ fn omegas_chooser_opens_hd_and_fury_and_keeps_2048_on_the_chooser() {
 
 /// A campaign built in the editor is saved as a folder mod under the user mods directory, is
 /// listed in RACE CAMPAIGN's picker, and its first event launches with the mode and team the editor set.
-/// Drops the editor's wiring (the NEW CAMPAIGN row, the pad, the save, the menu rebuild) and this
+/// Drops the editor's wiring (Square on RACE CAMPAIGN, the pad, the save, the menu rebuild) and this
 /// fails.
 #[test]
 #[ignore = "needs data/images/pulse-psp-eu.chd"]
@@ -492,8 +491,7 @@ fn a_campaign_made_in_the_editor_is_listed_and_its_event_launches() {
     std::fs::create_dir_all(&mods).expect("a mods directory");
     let states = profile.drive_with_mods(
         &image,
-        "boot; until stage=menu within 3000; select campaign; press cross; \
-         until page=campaigns; select campaign-editor; press cross; until screen=campaign; \
+        "boot; until stage=menu within 3000; select campaign; press square; until screen=campaign; \
          ticks 20; press cross; press down; press down; press down; press right; press circle; \
          press right; press down; press cross; press right; press circle; \
          press start; until page=campaigns within 600; ticks 30; \
@@ -550,8 +548,7 @@ fn a_one_grid_campaign_opens_on_its_cells_and_back_returns_to_the_picker() {
     std::fs::create_dir_all(&mods).expect("a mods directory");
     let states = profile.drive_with_mods(
         &image,
-        "boot; until stage=menu within 3000; select campaign; press cross; \
-         until page=campaigns; select campaign-editor; press cross; until screen=campaign; \
+        "boot; until stage=menu within 3000; select campaign; press square; until screen=campaign; \
          ticks 20; press cross; press down; press down; press down; press right; press circle; \
          press right; press down; press cross; press right; press circle; \
          press start; until page=campaigns within 600; ticks 30; \
@@ -619,18 +616,27 @@ fn a_grid_filled_from_a_seed_in_the_editor_is_saved_with_its_setting() {
     let mods = profile.0.join("data").join("oag").join("mods");
     std::fs::create_dir_all(&mods).expect("a mods directory");
     // Hard, a ramp, the seed as it is (or one on), classes Flash to Rapier.
-    let script = |seed_steps: &str| {
+    // The first run has no mod campaign, so Square on RACE CAMPAIGN opens the editor; its save
+    // makes the picker, and the later runs reach NEW CAMPAIGN there.
+    const FIRST: &str = "select campaign; press square;";
+    const LATER: &str =
+        "select campaign; press cross; until page=campaigns; select campaign-editor; press cross;";
+    let script = |open: &str, seed_steps: &str| {
         format!(
-            "boot; until stage=menu within 3000; select campaign; press cross; \
-             until page=campaigns; select campaign-editor; press cross; until screen=campaign; \
+            "boot; until stage=menu within 3000; {open} until screen=campaign; \
              ticks 20; press select; press right; press down; press right; press down; {seed_steps} \
              press down; press right; press down; press left; press triangle; ticks 5; \
              press start; until page=campaigns within 600; ticks 10"
         )
     };
-    profile.drive_with_mods(&image, &script(""), "fill-a.jsonl", &mods);
-    profile.drive_with_mods(&image, &script(""), "fill-b.jsonl", &mods);
-    profile.drive_with_mods(&image, &script("press right;"), "fill-c.jsonl", &mods);
+    profile.drive_with_mods(&image, &script(FIRST, ""), "fill-a.jsonl", &mods);
+    profile.drive_with_mods(&image, &script(LATER, ""), "fill-b.jsonl", &mods);
+    profile.drive_with_mods(
+        &image,
+        &script(LATER, "press right;"),
+        "fill-c.jsonl",
+        &mods,
+    );
     let read = |folder: &str| {
         oag_mod::campaign::CampaignDef::parse(
             &std::fs::read_to_string(mods.join(folder).join("campaigns/my-campaign.toml"))

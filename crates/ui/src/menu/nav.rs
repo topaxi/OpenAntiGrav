@@ -7,7 +7,7 @@
 //! bank carries. The four cues and when Pulse plays them are in
 //! `docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`.
 
-use super::{Entry, Menu, MenuEvent, Value};
+use super::{Action, Entry, Menu, MenuEvent, Value};
 
 /// The way a cursor moved or a value stepped.
 ///
@@ -162,7 +162,35 @@ impl Menu {
     /// default and a label was supplied.
     #[must_use]
     pub fn reset_offered(&self) -> Option<&str> {
-        (!self.reset_label.is_empty() && self.can_reset()).then_some(self.reset_label.as_str())
+        if !self.reset_label.is_empty() && self.can_reset() {
+            return Some(self.reset_label.as_str());
+        }
+        self.square_action().map(|(_, words)| words)
+    }
+
+    /// Makes Square on a row that fires `on` fire `fires` instead of resetting, with `words`
+    /// in the footer's Square prompt while that row is selected (Pulse's RACE CAMPAIGN opens
+    /// the campaign editor this way). Empty `words` takes it away again.
+    pub fn set_square_action(&mut self, on: Action, fires: Action, words: &str) {
+        self.square_actions.retain(|(row, _, _)| *row != on);
+        if !words.is_empty() {
+            self.square_actions.push((on, fires, words.to_string()));
+        }
+    }
+
+    /// The selected row's Square action and its words, when it has one and is not disabled.
+    fn square_action(&self) -> Option<(Action, &str)> {
+        if self.selected_is_disabled() {
+            return None;
+        }
+        let Entry::Run { action, .. } = self.page().entries.get(self.cursor[self.current()])?
+        else {
+            return None;
+        };
+        self.square_actions
+            .iter()
+            .find(|(row, _, _)| row == action)
+            .map(|(_, fires, words)| (*fires, words.as_str()))
     }
 
     /// Where the footer drew the reset prompt, `[x, y, width, height]` in the page's grid, so a
@@ -210,7 +238,11 @@ impl Menu {
     /// owner applies and persists it the same way. Nothing on a row that holds no value,
     /// is disabled, or is already there.
     pub(super) fn reset(&mut self) -> Option<MenuEvent> {
-        let target = self.reset_target()?;
+        let Some(target) = self.reset_target() else {
+            let (fires, _) = self.square_action()?;
+            self.nav.push(Nav::Accept);
+            return Some(MenuEvent::Fired(fires));
+        };
         let page = self.current();
         let row = self.cursor[page];
         let entry = self.definition.pages[page].entries.get_mut(row)?;

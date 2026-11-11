@@ -1,9 +1,9 @@
 //! Opens and drives the campaign editor over the Race Campaign's screens
 //! (`oag_game::campaign::editor`, `docs/formats/custom-campaign.md`).
 //!
-//! It is entered from the campaign picker's NEW CAMPAIGN row
-//! ([`oag_ui::menu::Action::OpenCampaignEditor`]), and takes the screen, the pad and the
-//! pointer while it is open: the pad moves the cursor over the title's hex slots, CROSS
+//! It is entered from the campaign picker's NEW CAMPAIGN row, or Square on RACE CAMPAIGN
+//! while there is no picker ([`oag_ui::menu::Action::OpenCampaignEditor`]), and takes the
+//! screen, the pad and the pointer while it is open: the pad moves the cursor over the title's hex slots, CROSS
 //! places an event and opens its fields, LEFT and RIGHT step a field's value, TRIANGLE
 //! clears a slot, SQUARE names the campaign and START saves it; the pointer hovers and
 //! clicks the same hexes and rows. A save is written off the render thread as a fresh
@@ -363,6 +363,13 @@ impl Session {
                 info!("campaign saved to {}", folder.display());
                 stage.campaign = None;
                 self.apply_rebuilt(built, None);
+                // Opened from the campaign row's Square there was no picker to return to;
+                // the first saved campaign has made one.
+                if let Stage::Menu(stage) = &mut self.stage
+                    && stage.menu.page().id != oag_ui::menu::CAMPAIGN_PICKER_PAGE
+                {
+                    stage.menu.push(oag_ui::menu::CAMPAIGN_PICKER_PAGE);
+                }
             }
             Some(Ok(Err(why))) => {
                 error!("cannot save the campaign: {why}");

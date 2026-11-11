@@ -629,6 +629,9 @@ pub struct Menu {
     reset_rect: Option<[f32; 4]>,
     /// The title's stand-in codepoint for the reset button. See [`Self::set_reset_glyph`].
     reset_glyph: Option<char>,
+    /// Rows whose Square fires a second action, by the action the row fires: `(row's action,
+    /// Square's action, the prompt's words)`. See [`Self::set_square_action`].
+    square_actions: Vec<(Action, Action, String)>,
     /// Whether this tree is a title's pause screen over a parked race. See
     /// [`Self::set_pause_screen`].
     pause_screen: bool,
@@ -681,6 +684,7 @@ impl Menu {
             reset_label: String::new(),
             reset_rect: None,
             reset_glyph: None,
+            square_actions: Vec::new(),
             pause_screen: false,
         };
         // A row that is on a page only while the host offers it starts off the page.

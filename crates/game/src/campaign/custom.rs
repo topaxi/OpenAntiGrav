@@ -395,8 +395,11 @@ pub fn add_picker(
     let (row_id, row_english) = crate::mods::words::CAMPAIGN_EDITOR;
     let (sub_id, sub_english) = crate::mods::words::CAMPAIGN_EDITOR_SUBTITLE;
     let say = |id: &str, english: &'static str| strings.get(id).unwrap_or(english).to_string();
-    let editor =
-        editor_offered(title).then(|| (say(row_id, row_english), say(sub_id, sub_english)));
+    // With no mod campaign the picker would hold the disc's campaign and the editor alone;
+    // the campaign row stays one press and Square on it opens the editor instead
+    // (`editor_on_square`).
+    let editor = (editor_offered(title) && !rows.is_empty())
+        .then(|| (say(row_id, row_english), say(sub_id, sub_english)));
     definition.add_campaign_picker(
         strings.get(id).unwrap_or(english),
         &rows,
@@ -404,6 +407,28 @@ pub fn add_picker(
             .as_ref()
             .map(|(row, sub)| (row.as_str(), sub.as_str())),
     );
+}
+
+/// Square on the campaign row opens the campaign editor, with NEW CAMPAIGN in the footer's
+/// Square prompt, where the editor is offered and there is no campaign picker to hold it (no
+/// mod campaign). Set where the reset prompt is (`settings::supply_reset`).
+pub fn editor_on_square(
+    model: &mut oag_ui::menu::Menu,
+    title: &oag_title::Title,
+    strings: &oag_ui::language::StringTable,
+) {
+    use oag_ui::menu::Action;
+    let (row_id, row_english) = crate::mods::words::CAMPAIGN_EDITOR;
+    let on = editor_offered(title)
+        && (model.definition())
+            .page(oag_ui::menu::CAMPAIGN_PICKER_PAGE)
+            .is_none();
+    let words = if on {
+        strings.get_or_fallback(row_id, row_english)
+    } else {
+        ""
+    };
+    model.set_square_action(Action::OpenCampaign, Action::OpenCampaignEditor, words);
 }
 
 /// Whether the campaign editor is offered on `title`: where mod campaigns draw on the
