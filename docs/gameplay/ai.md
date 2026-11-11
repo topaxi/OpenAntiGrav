@@ -7046,14 +7046,19 @@ bound 0 -> 1: slot 7 dies with walls 5.0, bumps 13.6, the rest weapons). The lon
 
 **Where the energy goes.** Over seeds 1-8 the field lost 6,681 pool units to bumps in 181,828 charged
 (slot, tick) touches, about **15 per craft per five-minute race** against a pool of about 100. Mean `|p|` per
-touch: VENOM 0.66, FLASH 0.97, RAPIER 1.21, PHANTOM 1.44. The original's one natural-contact control (one state,
-Talon's Junction, weapons off) averaged about 0.5 per record. A per-tick log on 05_Track at VENOM, seed 3, shows
-the shape: two craft meet at tick 347 (`|p|` 6.3, 0.22 each), then ride side by side pressing for 20 and more
-ticks at about `0.06` a tick (`|p|` about 1.7). Charging every tick of a sustained contact is faithful (the wall
-leg's graze is the same, [shield.md](../ghidra/functions/psp-pulse-usa/shield.md)); our field holding that contact
-is not known to be. Two follow-ups, neither measured: our AI may press against a neighbour where the original's
-separates, or our resolver's per-tick impulse in a sustained contact may run above the original's. A rival
-holding its line beside another craft is the first thing to compare against a capture.
+touch (one charge per pair per tick): VENOM 0.66, FLASH 0.97, RAPIER 1.21, PHANTOM 1.44. The original's one
+natural-contact control (one state, Talon's Junction, Venom, weapons off) averaged about 0.5 per **ring record**;
+with about 1.96 records per (tick, hull) and the first carrying 1/1.061 of the energy (Result 5's staged runs),
+that is about **0.9 per tick's first record**, the figure comparable to ours. So per touch our VENOM field is at or
+below the original, not above it (a different circuit, and the 1.96 is pooled over all runs, not per slot). A
+per-tick log on 05_Track at VENOM, seed 3, shows the shape: two craft meet at tick 347 (`|p|` 6.3, 0.22 each),
+then ride side by side pressing for 20 and more ticks at about `0.06` a tick (`|p|` about 1.7). Charging every
+tick of a sustained contact is faithful (the wall leg's graze is the same,
+[shield.md](../ghidra/functions/psp-pulse-usa/shield.md)). What the data points at is **how often and how long our
+field stays in contact**: 181,828 charged touches over 64 races is about 400 ticks per craft per race. Whether the
+original's field holds contact that long is not measured; a rival holding its line beside another craft is the
+first thing to compare against a capture. That our resolver's sustained-contact impulse runs high is not
+supported by these numbers.
 
 ## Tuning sweep tables
 

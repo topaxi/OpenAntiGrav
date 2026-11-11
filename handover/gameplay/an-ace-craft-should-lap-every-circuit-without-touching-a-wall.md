@@ -746,10 +746,11 @@ the plan's own lap, no dead stop and no trough on either layout
 
 - **Bumps now cost the field energy, and the field bumps a lot.** Since the pair charge was wired
   (`oag_physics::damage::apply_pair`), the de Konstruct board over seeds 1-23 went 62 -> 121 craft destroyed
-  (PHANTOM 33 -> 72, RAPIER 19 -> 34): about 15 pool per craft per race, much of it two craft riding side by
-  side pressing at `|p|` about 1.7 a tick. Mean `|p|` per touch 0.66 (VENOM) to 1.44 (PHANTOM) against about 0.5
-  in the original's one control. Open: does the original's field hold such contacts (an AI that separates), or is
-  our sustained-contact impulse high? Compare a rival beside another craft against a capture first. Numbers:
+  (PHANTOM 33 -> 72, RAPIER 19 -> 34): about 15 pool per craft per race, about 400 contact ticks per craft per
+  race, much of it two craft riding side by side pressing at `|p|` about 1.7 a tick. Per touch our VENOM field
+  (0.66) is at or below the original's (about 0.9 per tick's first record, Talon's Junction, Venom), so the open
+  question is **how often and how long our field stays in contact**, not the resolver. Compare a rival holding its
+  line beside another craft against a capture first. Numbers:
   [ai.md](../../docs/gameplay/ai.md#craft-to-craft-bumps-cost-the-field-energy).
 
 - ~~**Five layout-class plans do not verify**~~ All 96 verify under every
