@@ -190,6 +190,7 @@ pub(crate) fn read(
             | Command::PlayCue { .. }
             | Command::PlayModSound { .. }
             | Command::HudTint { .. }
+            | Command::RaiseWarning { .. }
             | Command::PickupLook { .. }
             | Command::HudShake { .. }
             | Command::HudBarExtra { .. }

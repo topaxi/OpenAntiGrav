@@ -99,6 +99,9 @@ pub(super) struct On {
     /// Outputs, never hashed: this tick's `hud-*` commands, and the
     /// `fire-effect`s the view has still to draw.
     pub(super) hud: Vec<(usize, Command)>,
+    /// This tick's `raise-warning`s as (module, slot, icon), in module then reply order: the
+    /// race raises them on the viewer's HUD after the call.
+    pub(super) warnings: Vec<(usize, usize, oag_ext_abi::WarningIcon)>,
     /// Each module's own text, in the race's language.
     strings: Vec<super::Strings>,
     /// Each module's `[pickup]`, in module order.
@@ -356,6 +359,7 @@ impl On {
             reported: [0; oag_gameplay::MAX_SHIPS],
             prefer: super::route::Preferred::default(),
             hud: Vec::new(),
+            warnings: Vec::new(),
             strings,
             pickups,
             effects: Vec::new(),
@@ -1001,6 +1005,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     on.reported = on.inside;
     on.prefer = super::route::Preferred::default();
     on.hud.clear();
+    on.warnings.clear();
     on.sky = super::Sky::default();
     // This tick's alone: a tick that draws nothing (a replayed one, a server's) drops
     // them rather than piling them up.
@@ -1241,6 +1246,9 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
                 -oag_ext_abi::MAX_FOV_OFFSET_DEG,
                 oag_ext_abi::MAX_FOV_OFFSET_DEG,
             );
+        }
+        Command::RaiseWarning { slot, icon } => {
+            sim.extensions.on.warnings.push((index, slot.index(), icon));
         }
         Command::PickupLook { .. }
         | Command::HudTint { .. }

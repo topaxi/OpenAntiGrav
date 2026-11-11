@@ -5,7 +5,7 @@ use core::fmt;
 use crate::{
     Cue, Effect, HudElement, MAX_COMMANDS, MAX_FOV_OFFSET_DEG, MAX_HUD_EXTRA, MAX_HUD_SHAKE,
     MAX_HUD_TEXT, MAX_PAD_FACTOR, MAX_PROBE_RADIUS, MAX_ROLL_EVERY, MAX_SPEED_FACTOR,
-    MAX_THRUST_FACTOR, MAX_TRANSIT_TICKS, Slot, Weapon, WeatherKind,
+    MAX_THRUST_FACTOR, MAX_TRANSIT_TICKS, Slot, WarningIcon, Weapon, WeatherKind,
 };
 
 /// A reply record that breaks a rule of its own. The host faults the module; it never
@@ -53,6 +53,8 @@ pub enum Malformed {
     },
     /// A `play-cue` code outside [`Cue::ALL`].
     Cue(u16),
+    /// A `raise-warning` code outside [`WarningIcon::ALL`].
+    WarningIcon(u16),
     /// A `fire-effect` code outside [`Effect::ALL`].
     Effect(u16),
     /// A `pickup-roll` with a slot other than 0, an unknown weapon, or a period
@@ -160,6 +162,11 @@ impl fmt::Display for Malformed {
                 write!(f, "shield-delta {amount} for slot {} is not finite", slot.0)
             }
             Self::Cue(code) => write!(f, "play-cue code {code} is not one of {}", Cue::ALL.len()),
+            Self::WarningIcon(code) => write!(
+                f,
+                "raise-warning icon {code} is not one of {}",
+                WarningIcon::ALL.len()
+            ),
             Self::Effect(code) => write!(
                 f,
                 "fire-effect code {code} is not one of {}",

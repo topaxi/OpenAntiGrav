@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 35] {
+fn every_command() -> [Command; 36] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -182,6 +182,10 @@ fn every_command() -> [Command; 35] {
             radius: 8,
             update: crate::ViewUpdate::Continuous,
             generation: 0,
+        },
+        Command::RaiseWarning {
+            slot: slot(0),
+            icon: WarningIcon::Bomb,
         },
     ]
 }
@@ -406,6 +410,7 @@ fn layout_fold() -> u64 {
     )
     .chain([Effect::CollisionSpark, Effect::HitSpark].map(|effect| u32::from(effect.code())))
     .chain([WeatherKind::Rain].map(|kind| u32::from(kind.code())))
+    .chain(WarningIcon::ALL.iter().map(|icon| u32::from(icon.code())))
     .chain(HudElement::ALL.iter().map(|e| u32::from(e.code())))
     .chain(Anchor::ALL.iter().map(|a| u32::from(a.code())))
     .chain(SoundMode::ALL.iter().map(|m| m.code()));
@@ -426,7 +431,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0xd7fd_0d49_79a2_62b6);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0xcaf0_696b_14b7_c96b);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -549,6 +554,13 @@ fn a_record_breaking_its_own_rules_is_malformed() {
     .encode();
     cue[COMMAND_ARG] = 6;
     assert_eq!(Command::decode(&cue), Err(Malformed::Cue(6)));
+    let mut warning = Command::RaiseWarning {
+        slot: slot(0),
+        icon: WarningIcon::Mine,
+    }
+    .encode();
+    warning[COMMAND_ARG] = 10;
+    assert_eq!(Command::decode(&warning), Err(Malformed::WarningIcon(10)));
     let mut roll = Command::PickupRoll {
         weapon: Weapon::Turbo,
         every: 2,
@@ -1045,6 +1057,18 @@ fn the_own_flag_rides_bit_15_of_the_argument() {
     };
     assert_eq!(hex(&effect.encode()), "060305800000000000000000");
     assert_eq!(Command::decode(&effect.encode()), Ok(effect));
+}
+
+/// `raise-warning` is kind 37 with the icon's code as the argument; the icon fixes the group.
+#[test]
+fn a_raise_warning_is_kind_37_with_the_icon_code() {
+    let bomb = Command::RaiseWarning {
+        slot: slot(0),
+        icon: WarningIcon::Bomb,
+    };
+    assert_eq!(hex(&bomb.encode()), "250009000000000000000000");
+    assert_eq!(Command::decode(&bomb.encode()), Ok(bomb));
+    assert_eq!(WarningIcon::ALL.len(), 10);
 }
 
 #[test]

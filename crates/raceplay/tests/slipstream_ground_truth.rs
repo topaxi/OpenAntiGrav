@@ -109,6 +109,15 @@ pub(crate) fn source_of(dir: &str) -> Option<race::extensions::Source> {
 
 /// A Single Race on `16_Track` with the mod on; `field` fills the grid with opponents.
 fn race_on(source: &race::extensions::Source, field: bool) -> Option<race::Race> {
+    race_with_hud(source, field).map(|(race, _)| race)
+}
+
+/// [`race_on`] and the title's HUD assets, which switch the viewer's warnings on
+/// (`Race::watch_laps`).
+fn race_with_hud(
+    source: &race::extensions::Source,
+    field: bool,
+) -> Option<(race::Race, oag_hud::Assets)> {
     let image = oag_testdata::image("data/images/pulse-psp-eu.chd")?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
@@ -122,7 +131,7 @@ fn race_on(source: &race::extensions::Source, field: bool) -> Option<race::Race>
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
     race.set_autopilot(true);
-    Some(race)
+    Some((race, loaded.hud))
 }
 
 fn held(buttons: &[Button], pressed: &[Button]) -> PlayerInputs {
@@ -439,4 +448,96 @@ fn its_share_of_the_pad_draws_is_a_fraction_of_a_turbo_on_every_titles_real_tabl
             assert!(ai_share < turbo.ai / (ai + row.ai), "less than a Turbo");
         }
     }
+}
+
+/// The craft behind the viewer that the portal brings out ahead of it warns the viewer, and
+/// no other transit does: every transit the field's AI starts in 3,600 ticks is judged by where
+/// the viewer (slot 0) sits between its entrance and its exit on that tick, and the viewer's
+/// rear warning lights within a few ticks of exactly those the geometry puts it inside.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd, the official mods and --features extensions"]
+fn a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and_no_other_does() {
+    let Some(source) = slipstream() else { return };
+    let Some((mut race, hud)) = race_with_hud(&source, true) else {
+        return;
+    };
+    race.watch_laps(&hud, None);
+    let length = race.course().expect("a course").length();
+    let count = usize::from(race.sim.world.ship_count);
+    let gap = |from: f32, to: f32| {
+        let delta = to - from;
+        delta - (delta / length + if delta < 0.0 { -0.5 } else { 0.5 }).trunc() * length
+    };
+    // (tick of the entrance, viewer's gap past the entrance, units to the exit)
+    let mut open: Vec<Option<(u64, f32, f32)>> = vec![None; count];
+    let mut judged = Vec::new();
+    let mut lit_at: Vec<u64> = Vec::new();
+    for _ in 0..3600 {
+        // The pad draws are not what is under test: a craft trailing the viewer by 60 units or
+        // more is handed the pickup, so the field's jumps come from behind as well as ahead.
+        let viewer = race.sim.world.ships[0].standing.progress;
+        for slot in 1..count {
+            let ship = &race.sim.world.ships[slot];
+            let behind = viewer
+                .zip(ship.standing.progress)
+                .is_some_and(|(viewer, at)| gap(at, viewer) > 60.0);
+            if behind && ship.pickup.weapon.is_none() && ship.transit.is_none() {
+                give(&mut race, slot);
+            }
+        }
+        race.tick(&throttle());
+        let tick = race.sim.world.tick;
+        let lit = race.readout().incoming.rear == Some(oag_hud::incoming::Icon::Repulser);
+        if lit {
+            lit_at.push(tick);
+        }
+        for (slot, open) in open.iter_mut().enumerate().take(count).skip(1) {
+            let ship = &race.sim.world.ships[slot];
+            match (*open, ship.transit.is_some()) {
+                (None, true) => {
+                    let (entry, viewer) = (
+                        ship.standing.progress.expect("a fix"),
+                        race.sim.world.ships[0].standing.progress.expect("a fix"),
+                    );
+                    *open = Some((tick, gap(entry, viewer), entry));
+                }
+                (Some((began, past, entry)), false) => {
+                    let exit = ship.standing.progress.expect("a fix");
+                    judged.push((began, past, gap(entry, exit)));
+                    *open = None;
+                }
+                _ => {}
+            }
+        }
+    }
+    println!("transits (tick, viewer past entrance, units to exit): {judged:?}");
+    println!("rear warning lit on {} ticks", lit_at.len());
+    assert!(no_fault(&race), "no fault");
+    // A margin either side of an edge: the guest reads the tick's observation and this reads
+    // the world after the tick.
+    const MARGIN: f32 = 40.0;
+    let mut inside = 0;
+    for &(began, past, units) in &judged {
+        if past > MARGIN && past < units - MARGIN {
+            inside += 1;
+            assert!(
+                lit_at.iter().any(|&t| (began..=began + 12).contains(&t)),
+                "viewer {past:.0} into a {units:.0} jump at {began} was not warned"
+            );
+        }
+    }
+    // Each blink on the rear slot belongs to a raise: a transit that could have warned (the
+    // viewer inside its span, or within the margin of an edge) began at most 2.0 s before it.
+    for &lit in &lit_at {
+        assert!(
+            judged.iter().any(|&(began, past, units)| {
+                (began..=began + 125).contains(&lit) && past > -MARGIN && past < units + MARGIN
+            }),
+            "a warning lit at {lit} with no jump to blame"
+        );
+    }
+    assert!(
+        inside > 0,
+        "the field brought a craft past the viewer: {judged:?}"
+    );
 }
