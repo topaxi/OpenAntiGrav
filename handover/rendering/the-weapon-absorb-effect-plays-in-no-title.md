@@ -60,7 +60,7 @@ Re-paired on a second machine on 2026-11-09 (`absorb-fx-wire`); numbers and comm
 
 0. **First, rule out the chase camera's distance setting** (maintainer, 2026-11-09): the original offers a close and a far
    chase camera, and ours drawing the craft about 1.3x (2048 grids) to 1.5x (HD absorb pair) larger than the original
-   looks like the two captures used different settings, not a model or lighting gap. Read the setting each capture ran
+   looks like the two captures used different settings, not a model or lighting gap (the 2048 half is settled: ours and the original both flew `OPT_CLOSE`, and the 1.3x was a yellow-mask artefact, `docs/tools/compare-page.md`, "The chase camera and the craft's size"; the HD half is open). Read the setting each capture ran
    with (the original's options or save, ours' camera flag) and re-pair on the same one before any craft-box number.
 
 1. ~~Pulse bar: let the stamp pass read the HUD target's colour under the mask~~ (landed, `pulse-stamp-scene`; off half 223 to 226 -> 239 to 244).

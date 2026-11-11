@@ -435,6 +435,47 @@ screen, which is light (mean luma 0.9), is waited out until a dark frame; the sh
 Event 1: Empire Climb `(190, 25)`, Queens Mall `(270, 68)`); another save needs its own `--node`. **Metro Park's Time Trial hangs Vita3K at 56 % on the loading bar**
 (three boots, two configs, a bar that sat at 56 % for 3 to 5 minutes each time); the two races above load in 20 to 30 s.
 
+### The chase camera and the craft's size (2026-11-11, `c2048-chase-camera`)
+
+**Question:** is the original's craft drawn 1.3 times larger than ours on the three 2048 grid pairs because the two sides flew different chase views
+(`OPT_CLOSE` or `OPT_FAR`)? **No: the sizes agree on the nearer view, and the recorded 1.31 x 1.35 was the yellow mask.** Confidence 80 for "the
+original is on `OPT_CLOSE`, as inferred from the frame"; the original's stored `pair.json` records no camera setting, and each original is one capture.
+
+- **Ours' setting.** `CameraView::default()` is `Close`: `crates/raceplay/src/start.rs` builds a race with it, `chase_block_for` picks the
+  `<ExternalCameraClose>` block, `[graphics] camera_view` defaults to it (`crates/game/src/settings.rs`), and the compare profile and the pair flags
+  pin nothing. A render with no flag and one with `--camera-view close` are byte-identical on all three pairs. Load report on the 2048 Feisar:
+  Close eye 2.775 up and 8.25 back, Far 3 up and 11.25 back (both fov 60). So ours is the nearer of the two views the original offers, and moving
+  it to Far can only make the craft smaller.
+- **The original's setting is not recorded.** `original` in the three `pair.json` carries the emulator, the shake patch, the grab timing and the pose
+  read, no camera view; the Vita3K save that held `CameraP1` is not stored (the grid pairs read no camera, "What is not measured" above). Its authored
+  default is `OPT_CLOSE` (`CameraP1 default="OPT_CLOSE"`, `docs/ui/menus-original.md`), which is what a fresh profile starts on. A profile that
+  has cycled to `OPT_FAR` is the HD trap ([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md), "the shared profile flies the Far camera").
+  So the setting is **inferred from the frame**, below.
+- **Landmark boxes** (source px at 960x544, read by eye on 2x and 5x crops with a 10 and 50 px grid, +-4 px; the nose tip, and the outermost left and
+  right wing tips; the same landmarks on every frame; the 5x re-read of Empire Climb's tips moved no edge by more than 3 px). Ours at the pair's own
+  flags, ticks and profile, 2026-11-11 build `c1b14f0d4`:
+
+  | Pair | Original (nose tip, wing tip to wing tip) | Ours on Close (the default) | Ours on Far | Original over Close |
+  | --- | --- | --- | --- | --- |
+  | Empire Climb | (477, 262), x 304 to 647 = 343 wide | (477, 264), x 305 to 650 = 345 | (477, 307), x 362 to 597 = 235 | 0.99 wide, nose 2 px up |
+  | Queens Mall | (477, 262), 341 wide | (477, 264), 342 wide | not read | 1.00 wide, nose 2 px up |
+  | Vineta K (DLC) | (477, 257), x 297 to 665 = 368 | (477, 257), x 297 to 665 = 368 | not read | 1.00 wide, nose level |
+
+  Ours on Far is 0.68 times Close's width on Empire Climb (the eye 11.25 back against 8.25), a 32 % gap, where the recorded difference was 31 %
+  the other way. The original's hull matches Close within 2 % and sits 32 % from Far, so it flew `OPT_CLOSE`.
+- **Why the recorded 1.31 x 1.35 and 1.27 x 1.01 were wrong.** `craft_offset`'s bounding box is that of the livery-yellow pixels in the lower
+  60 % of the frame. In the original's Empire Climb frame that box runs to row 541 (the road's glow and the ring, not hull), and on Queens Mall
+  the same rig's `ours.png` and `ours-original-pose.png` read 420 and 319 px wide. It measures paint, not the hull (the Queens Mall paragraph
+  below already said so for the centroid; the box has the same fault, and Vineta K's Feisar has no yellow at all).
+  `scripts/vita-2048-pair.py` still writes the ratio into each caveat; open, not changed here.
+- **What is left.** Not the camera setting. The pose offset (`pose_delta`), the white ring under the original's craft and the light on the
+  paint stay open, in that order, as the thread's steps 1 and 2.
+- **To decide the original's setting outright:** read `CameraP1` from the Vita3K save of the profile the pairs were taken on. In its pref-path:
+  `strings -a ux0/user/00/savedata/PCSF00007/* | rg -A1 CameraP1` (the value reads `OPT_CLOSE`, `OPT_FAR` or `OPT_INT`). Run it on the machine that
+  holds that profile; this one has none.
+- **Omega:** not checkable from this read: only the three Vita pairs were measured, and no Omega pair's `pair.json` records a camera setting
+  either. The same landmark read applies to an Omega pair; a recorded setting is the first thing to look for.
+
 ### The DLC pair (2026-10-26, `2048-dlc-pair`)
 
 The maintainer asked for a 2048 pair on a circuit of the DLC ("basically the HD assets of 2048"). **Claim: the page carries a third 2048 pair, on a DLC circuit,
