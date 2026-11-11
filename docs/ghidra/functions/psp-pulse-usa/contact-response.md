@@ -2448,13 +2448,21 @@ artefacts of moving the craft by writing its body, and are why the figures above
 entry and return reads and never a before/after pair on the player. Recipe if wanted: a write watchpoint on
 `entity + 0x88` from the placement.
 
-**What ours does today.** Nothing: `oag_raceplay::Race::resolve_craft_pairs` (`crates/raceplay/src/field.rs`) calls
-`oag_physics::pair::resolve`, applies the equal and opposite impulse, and uses the returned `PairContact`
-(`impulse` is this `j`) for the lap spoil, the spark and the shell bulge; no pool is touched. A wall contact charges
+**What ours does (wired 2026-11-11).** `oag_raceplay::Race::resolve_craft_pairs` (`crates/raceplay/src/field.rs`)
+calls `oag_physics::damage::apply_pair` on both hulls of every touching pair with the returned
+`PairContact::impulse` (this `j`): `contact_damage(impulse, rules)` through the shared `subtract`, so the racing gate,
+the Shield refusal, the weapons-off halving, the clamp, the 20 % edge and the destroyed transition are the wall's.
+Once per pair per tick (Result 5's extra records stay open). The gate is read before the charge, so a bump that
+empties a pool still spoils the lap. It runs outside the drawing feature, so `oag-server` charges too. Pinned by
+`oag_raceplay`'s `tests::shield_hits` (unshielded both pay `0.035 * impulse` bit-exact, half with weapons off, a
+shielded hull and a destroyed hull pay nothing while the partner pays; red with the call removed) and
+`oag_physics`' `damage::tests::a_pair_contact_costs_the_wall_law_and_a_shield_refuses_it`. Not title-gated: Pure
+and HD inherit as below, 2048 and Omega inherit from HD by lineage (not checkable here). What it did to our AI
+field is on [ai.md](../../../gameplay/ai.md#craft-to-craft-bumps-cost-the-field-energy). A wall contact charges
 through `oag_physics::damage::apply_contact` from `integrate.rs`, with `CONTACT_DAMAGE_SCALE = 0.05 * 0.7` and
 `NO_WEAPONS_DAMAGE_SCALE = 0.5`, which are exactly the two constants measured here.
 
-**What a wire changes (not done here).** For each hull of a touched pair that is racing (state 1) and not holding a
+**What the wire changed.** For each hull of a touched pair that is racing (state 1) and not holding a
 Shield, subtract `damage::contact_damage(contact.impulse, rules)` through the shared `subtract` path, once per ring
 record. `ShipState::shield` is part of the state hash, so every race with a craft-to-craft bump moves its hash
 and `race_ground_truth` moves with it: the wire lane quotes it before and after and regenerates references in a

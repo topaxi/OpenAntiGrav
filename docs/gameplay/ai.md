@@ -7020,6 +7020,41 @@ puts it back before that jump at about 86 u/s.
 Whether the original's relaunched craft clears this jump is not measured.
 
 
+## Craft-to-craft bumps cost the field energy
+
+**Since 2026-11-11 a bump charges both unshielded racing hulls `0.035 * |p|`** (halved with weapons off), the
+original's law measured live on Pulse PSP
+([contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#measured-2026-11-11-an-unshielded-craft-to-craft-bump-charges-the-energy-pool),
+confidence 92), through `oag_physics::damage::apply_pair`. The AI pays it as the player does; nothing exempts a
+rival. `Race::pair_shield_lost_of` counts what bumps took per slot, beside `wall_shield_charged_of`.
+
+**What it did to the de Konstruct board** (`ai_dekonstruct_black_ground_truth.rs`, `ai_dekonstruct_black_board`,
+`OAG_SWEEP=1 OAG_SEEDS=23`, seven Aces, the player parked, 18,000 ticks, weapons on; the charge switched off
+against on, same tree). Craft destroyed over seeds 1-23, forward plus reversed:
+
+| class | no charge | charge | forward | reversed |
+| --- | ---: | ---: | --- | --- |
+| VENOM | 4 | 6 | 3 -> 2 | 1 -> 4 |
+| FLASH | 6 | 9 | 2 -> 2 | 4 -> 7 |
+| RAPIER | 19 | 34 | 8 -> 14 | 11 -> 20 |
+| PHANTOM | 33 | 72 | 13 -> 33 | 20 -> 39 |
+| total | 62 | 121 | | |
+
+That is systematic, not seed spread: the faster classes double. One frozen cell moved (VENOM seed 3 reversed,
+bound 0 -> 1: slot 7 dies with walls 5.0, bumps 13.6, the rest weapons). The lone-Ace gate
+(`race_ground_truth`) races one craft and cannot see it.
+
+**Where the energy goes.** Over seeds 1-8 the field lost 6,681 pool units to bumps in 181,828 charged
+(slot, tick) touches, about **15 per craft per five-minute race** against a pool of about 100. Mean `|p|` per
+touch: VENOM 0.66, FLASH 0.97, RAPIER 1.21, PHANTOM 1.44. The original's one natural-contact control (one state,
+Talon's Junction, weapons off) averaged about 0.5 per record. A per-tick log on 05_Track at VENOM, seed 3, shows
+the shape: two craft meet at tick 347 (`|p|` 6.3, 0.22 each), then ride side by side pressing for 20 and more
+ticks at about `0.06` a tick (`|p|` about 1.7). Charging every tick of a sustained contact is faithful (the wall
+leg's graze is the same, [shield.md](../ghidra/functions/psp-pulse-usa/shield.md)); our field holding that contact
+is not known to be. Two follow-ups, neither measured: our AI may press against a neighbour where the original's
+separates, or our resolver's per-tick impulse in a sustained contact may run above the original's. A rival
+holding its line beside another craft is the first thing to compare against a capture.
+
 ## Tuning sweep tables
 
 The evidence behind `oag_ai::Tuning`'s swept constants, moved here from the
