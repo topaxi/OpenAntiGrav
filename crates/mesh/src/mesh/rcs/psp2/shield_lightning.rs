@@ -86,6 +86,7 @@ pub(super) fn plan(
         plan.adds[index] = Some(Add {
             slot,
             texture: Some(texture),
+            colour: None,
         });
         report.shield_lightning_materials += 1;
     }

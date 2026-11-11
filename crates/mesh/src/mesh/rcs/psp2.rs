@@ -1013,7 +1013,9 @@ fn bind_textures(
                 _ if twin_here.is_some() => twin_here.map(|t| t.first.as_str()),
                 _ if refraction::is_pictureless(material) => None,
                 Some(layer) => Some(layer.diffuse.as_str()),
-                None => material.diffuse_texture_without(&refused),
+                None => emissive_add
+                    .colour(Some(index))
+                    .or_else(|| material.diffuse_texture_without(&refused)),
             };
             let refused_here = layer.is_none()
                 && material

@@ -72,6 +72,7 @@ pub(super) fn plan(
         plan.adds[index] = Some(Add {
             slot,
             texture: None,
+            colour: None,
         });
         report.alpha_emissive_materials += 1;
     }

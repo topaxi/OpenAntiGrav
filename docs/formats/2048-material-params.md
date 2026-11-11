@@ -493,5 +493,7 @@ few lines; left to the generic reading.
 
 (`diffuse_normal_specular_emmissive`, `fc06_lambert_emmissive_alpha`: 63 and 33 entries per variant over
 its packages), but its GCN programs were not read here, so whether Omega applies the same
-outside-the-light add is open. `diffuse_normal_specular_emmissivenew` (Chenghou, 7 slots) was not
-covered either.
+outside-the-light add is open. `diffuse_normal_specular_emmissivenew` (Chenghou, 7 slots) is the plain member with `Norm` for
+`Texture2` and the colour named `Texture1`: read and wired 2026-11-11 (`gxp.md`,
+"`diffuse_normal_specular_emmissivenew` colours by `Texture1`"). Omega's plain member is wired the
+same way (its ambient GCN program read; **ported**).
