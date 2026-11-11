@@ -12,13 +12,13 @@
 //! it is a regression. Split by class and direction so nextest runs eight
 //! slices side by side.
 //!
-//! **A layout's verdict is the majority of five builds** (2026-10-20, lane
-//! `ai-gate-robustness`), one per scale of `perturb::GATE`
-//! (`tests/perturb/mod.rs`: every craft's airborne gravity times `1 + eps`).
-//! A single build is a coin on the circuits whose verification turns on a
-//! landing: over the nine scales of `perturb::SCALES`, `06_Track` VENOM and
-//! RAPIER failed under 5 and 6 of the 8 non-zero scales while clean at `0`, and
-//! `14_Track` PHANTOM verified clean under 7 of 8 while not clean at `0`.
+//! **A layout's verdict is the majority of five builds**, one per scale of
+//! `perturb::GATE` (`tests/perturb/mod.rs`: every craft's airborne gravity
+//! times `1 + eps`). A single build is a coin on the circuits whose
+//! verification turns on a landing (`06_Track`'s gap at 1196-1200).
+//!
+//! All 96 verify, each under every offset of `perturb::BOUND_OFFSETS` and
+//! `perturb::HELD_OUT` (`docs/gameplay/ai.md`, "Plans that do not verify").
 
 use std::path::PathBuf;
 
@@ -28,25 +28,9 @@ use oag_raceplay::catalogue;
 use crate::perturb;
 
 /// `(layout, class)` pairs whose plan does not verify clean, and why each is
-/// believed to be so. Every one is named on `docs/gameplay/ai.md`'s speed-plan
-/// section.
+/// believed to be so: none. A row that joins it is named on
+/// `docs/gameplay/ai.md`'s speed-plan section.
 const NOT_CLEAN: &[(&str, &str)] = &[];
-
-/// `(layout, class)` pairs whose majority flips between offsets of
-/// `perturb::BOUND_OFFSETS`, so neither verdict is asserted; each with the
-/// share of offsets whose majority verified clean (2026-10-20). Printed, so a
-/// change that settles one is visible. `14_Track` PHANTOM, on [`NOT_CLEAN`]
-/// before 2026-10-20 on its single build, is clean under all nine.
-const UNSETTLED: &[(&str, &str)] = &[
-    // 3 of 9: the gap landing at 1233-1241 (walls at 1233-1239).
-    ("06_Track", "VENOM"),
-    // 8 of 9 (2026-10-20, lane `pulse-air-pitch`; 0 of 9 before, on `NOT_CLEAN`): the same
-    // gap landing, settled by the hover escape off a wall under a probe
-    // (the wall escape, `oag_physics::hover::Rig::mag_floor_escape`). Only offset `5e-5` failed its majority.
-    ("06_Track", "RAPIER"),
-    // 8 of 9: a rescue at 2402-2405.
-    ("29_Track", "RAPIER"),
-];
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
@@ -109,9 +93,7 @@ fn slice(class: &str, reversed: bool) {
             plan.tight_samples(),
             plan.len()
         );
-        if UNSETTLED.contains(&(id.as_str(), class)) {
-            println!("{id} {class}: unsettled, not asserted");
-        } else if clean != expected {
+        if clean != expected {
             wrong.push(format!(
                 "{id} {class}: {} (builds clean {verdicts:?}; unperturbed: verify failures {}, \
                  respawns {}, unresolved {:?})",

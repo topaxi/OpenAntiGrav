@@ -1109,13 +1109,23 @@ impl Trace {
     }
 }
 
-/// Adds a tick to a learning pass's trace, which keeps the last eight to
-/// sixteen lookbacks: a craft the race rescues after four seconds in the air
-/// still has its takeoff and the run-up to it in the trace.
+/// Adds a tick to a learning pass's trace, which keeps the last three to six
+/// lookbacks, and however long the craft has been in the air since, the last
+/// lookback it spent on the ground: a failure after a long fall (the race's
+/// rescue comes four seconds in) still finds the road the craft left, which
+/// is what its lowering lowers.
 fn push_trace(recent: &mut Vec<Trace>, trace: Trace) {
     recent.push(trace);
-    if recent.len() > LOOKBACK_TICKS * 16 {
-        recent.drain(..recent.len() - LOOKBACK_TICKS * 8);
+    if recent.len() > LOOKBACK_TICKS * 6 {
+        let newest = recent.len() - LOOKBACK_TICKS * 3;
+        let grounded = recent
+            .iter()
+            .enumerate()
+            .rev()
+            .filter(|(_, trace)| !trace.airborne)
+            .nth(LOOKBACK_TICKS - 1)
+            .map_or(0, |(at, _)| at);
+        recent.drain(..newest.min(grounded));
     }
 }
 
