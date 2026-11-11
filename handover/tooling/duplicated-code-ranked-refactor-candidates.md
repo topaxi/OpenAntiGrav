@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-11
-summary: "Duplicate-code refactors ranked from jscpd; candidates 1, 3 and 6 landed, 2, 4 and 5 to wire, five later; Omega takes HD's ALWAYS_ON (lane running)."
+summary: "Duplicate-code refactors ranked from jscpd; candidates 1 to 6 landed (4, 5 with a remainder), five later; Omega takes HD's ALWAYS_ON (lane running)."
 ---
 
 # Duplicated code: ranked refactor candidates
@@ -45,31 +45,27 @@ section below).
    `hd_endrace` and `selection_screens` ground truths. jscpd no longer
    reports the 35-line pair.
 
-2. **Cutout and transparent draw loop is copied in four places.**
-   - jscpd catches `crates/game/src/hud_countdown.rs:447-484` against
-     `crates/game/src/preview.rs:1127-1164` (42 lines) and
-     `crates/game/src/hud_countdown.rs:475` against
-     `crates/mesh/src/capture.rs:382` (11 lines). Read, the same loop also
-     sits in `crates/view/src/orbit.rs:585-625` and `crates/mesh/src/capture.rs:350-390`.
-     jscpd misses the last two because a comment or the order differs.
-     Real copies: four, about 35 lines each.
-   - Each copy walks `model.draws`, then `alpha_tested_draws` through
-     `CutoutPipelines::select`, then `transparent_draws` through
-     `TransparentPipelines::select`, switching `set_pipeline` only when the
-     pipeline changes. `Built` is `oag_mesh::mesh_render::Built` in both
-     game files, so the shape is the same.
-   - Shared home: `oag-mesh`, `crates/mesh/src/mesh_render/` next to
-     `cutout.rs` and `blend.rs`, which define both pipeline sets. Legal:
-     game, view and mesh all depend on oag-mesh.
-   - Helper takes the pipeline sets and a `bind` closure, not `&Built`,
-     so `raceplay/src/drawable/draw.rs` (its own culled variant, not a
-     copy) can stay as it is.
-   - This is per-frame draw code (read: inside `draw`). Order must not
-     change: draws stay in the `draws`, cutout, transparent sequence.
-   - Size: M, half a day. Confidence 40.
-   - Measure: `oag-game --screenshot` before and after on a race frame,
-     with `--no-audio`, under the gate lock: the PNG must be byte-identical.
-     Plus `cargo nextest run -p oag-mesh`.
+2. ~~**Cutout and transparent draw loop is copied in four places.**~~
+   **Landed** (branch `dedupe-gpu-mesh`). One definition,
+   `oag_mesh::mesh_render::draw_cutout_then_transparent`
+   (`crates/mesh/src/mesh_render/draw_groups.rs`): takes the pass, the model,
+   a `CutoutPipelines`, a `TransparentPipelines` and a `bind` closure, so each
+   caller keeps its own out-of-range texture-slot rule (`capture.rs` and the two
+   game files fall back to slot 0, `orbit.rs` clamps to the last bind). `Built::cutout_set`
+   and `Built::transparent_set` build the two tables for the game callers. The
+   four copies are gone from `crates/mesh/src/capture.rs`, `crates/view/src/orbit.rs`,
+   `crates/game/src/hud_countdown.rs` and `crates/game/src/preview.rs`; the
+   opaque `Model::draws` loop stays at each caller, which sets the opaque
+   pipeline first.
+   - Pinned by a new `oag-mesh` test, `cutout_then_transparent::each_of_the_cutout_and_transparent_lists_paints_its_own_half_of_the_frame`
+     (a quad in each list through `capture_pixels_from`; it fails if either
+     loop is dropped), and a before/after `oag-game --race` capture of Pulse's
+     countdown at four ticks, byte-identical (the `hud_countdown` path).
+     `orbit.rs` is windowed-only with no test and was not measured.
+   - jscpd: the 42-line `hud_countdown`/`preview` pair and the 11-line
+     `hud_countdown`/`capture.rs` pair are gone. What it still pairs between
+     those four files (9 pairs, 11 to 21 lines) is the surrounding setup:
+     pass state, the `bind` closure and the opaque loop. Not folded.
 
 3. ~~**Post seat-lane code is copied between the Omega files and the bloom pair.**~~
    **Landed** (branch `dedupe-post`). What is one definition now, in `oag-post`:
@@ -103,55 +99,59 @@ section below).
      between `omega_tonemap.rs` and `wo_composite.rs` (14-20 lines each).
      Folding those would take a macro or a trait for no further saving.
 
-4. **The single-level RGBA texture upload and clamp sampler are copied in
-   about 15 places across fx, post, render, mesh and game.**
-   - jscpd clones whose text contains `write_texture`: 266 lines over 15
-     pairs. Largest: `crates/fx/src/exhaust/texture.rs:73-106` against
-     `:158-191` (34 lines, one file), `crates/fx/src/weapon_quads.rs:93-116`
-     against `crates/render/src/shadow.rs:656-679` (24 lines, the same
-     clamp sampler plus bind group).
-   - `crates/mesh/src/mesh_render/shadow_map.rs:269-298` against `:412-441`
-     (30 lines): a 1x1 placeholder texture, written by hand.
-   - Two helpers already exist and must stay: `crates/game/src/render/resources.rs:175`
-     `upload_rgba` (single level, takes a format) and
-     `crates/mesh/src/mesh_render/texture.rs:70` `upload_rgba` (mip chain,
-     drops levels above the device limit). The single-level one is the
-     candidate's base.
-   - Shared home: `oag-gpu` (`crates/gpu/src/`, "shared GPU vocabulary").
-     `rg create_texture crates/gpu/src` finds only test code, so no helper
-     exists there yet. Legal: fx, post, mesh, render and game all depend on
-     oag-gpu.
-   - Size: M, about half a day, 15 call sites. Confidence 35.
-   - Measure: `cargo nextest run -p oag-fx -p oag-render -p oag-mesh`; the
-     textures must be byte-identical (dump one per crate before and after).
-     No frame-time number should move.
+4. ~~**The single-level RGBA texture upload and clamp sampler are copied in
+   about 15 places across fx, post, render, mesh and game.**~~
+   **Landed, with a remainder** (branch `dedupe-gpu-mesh`). New in `oag-gpu`
+   (`crates/gpu/src/texture.rs`): `upload_2d` (any uncompressed colour format,
+   `TEXTURE_BINDING | COPY_DST`, one mip, a zero extent becomes one texel in the
+   texture, the write and the row stride), `upload_rgba8` (`Rgba8Unorm`) and
+   `clamp_linear_sampler` (clamp on every axis, `Linear` mag and min).
+   `FlareTexture::upload` (`oag-fx`, now `pub`) is the one call every fx and render
+   consumer of a `FlareTexture` makes. Callers moved: `exhaust::FlareTexture`
+   (both copies in one file), cloud, beam, mist, weapon quads, ghost static,
+   the loading glow strip, the render shadow blob, and `mesh_render::shadow_map`
+   (the sky probe upload and four 1x1 placeholders). The clamp sampler replaces the
+   identical one in cloud, weapon quads, loading, the shadow blob and `shadow_map`.
+   - Pinned by `oag-gpu` `texture::tests` (a 3x5 image read back row for row by
+     a compute shader, the descriptor's size, format, usage, mips, samples and
+     dimension, 0x0 to 1x1, a one-channel format's stride) and a before/after
+     `oag-game` capture: Pulse race at three ticks, the Pulse and HD loading
+     screens, all byte-identical.
+   - **Left, differs:** `crates/game/src/render/resources.rs` `upload_rgba` creates
+     the texture clamped but writes the unclamped extent (a 0-wide image is a
+     zero-extent write there, an error here); `crates/fx/src/mod_shader/pipeline.rs`
+     `texture` has no clamp and `rows_per_image: None`; `crates/mesh/src/mesh_render/texture.rs`
+     `upload_rgba` is the mip chain. The depth placeholders in `shadow_map`
+     (`RENDER_ATTACHMENT`, nothing written) are not uploads.
+   - **Left, `crates/post` was out of the lane:** `smaa::upload` (it also
+     returns a view) and six identical clamp-linear samplers (`bloom`,
+     `hd_bloom`, `hd_zoom`, `omega_tonemap`, `ps2_bloom`, `wo_composite`), plus
+     `fxaa`, `motion_blur` and `smaa`'s. They can call `oag_gpu::texture` now.
+     The samplers in `fx::psys`, `game` (render, face, backdrop, scene, video)
+     and `present::upscale` set clamp and `Linear` through `..Default::default()`
+     (clamp is the default) and are the same state; they are under jscpd's ten
+     lines and were not touched.
+   - jscpd: 15 non-test `write_texture` clones to 2, both against the new helper
+     (`resources.rs` and `smaa.rs`, the two left above).
 
-5. **`Model` is built by hand as a literal in several places.**
-   - Full literals, all with empty defaults: `crates/render/src/track.rs:137`
-     (inside `build_model`, `track.rs:50`), `crates/render/src/collision.rs:278`
-     (inside `build_model`, `collision.rs:211`), `crates/mesh/src/mesh/merge.rs:25`
-     (`merge`), `merge.rs:207` (a test helper), `crates/mesh/src/mesh/sky_cube.rs:372`,
-     and `crates/mesh/src/mesh.rs:1005`. `crates/mesh/src/mesh.rs:305` already
-     has `Model::none(label)`. jscpd's `airbrakes: [None, None]` clones: 48
-     lines, one clone. About 25 test files repeat the literal too (see the
-     test-boilerplate section).
-   - `Model` derives `Debug` and `Clone` only, with no `PartialEq`. An
-     equality check in a test must compare `vertices`, `indices` and `draws`
-     by hand.
-   - Shared home: `oag-mesh`, a `Model::from_draws(label, vertices,
-     indices, draws, centre, radius)` (or the two build functions call
-     `Model::none` and set their fields). Legal: render depends on mesh.
-   - Risk, read it before wiring: a full literal fails to compile when someone
-     adds a field. That is currently a feature: `Model::none`'s doc says a
-     `Default` would be "constructible by accident, which this must not be".
-     A constructor with explicit arguments keeps that; a struct-update
-     `..Model::none(label)` in tests would silently inherit a new field's
-     default. Choose the constructor, and leave test literals alone unless
-     the lead wants the churn.
-   - Size: S for the two `build_model` functions, about 1 hour. Confidence 35.
-   - Measure: `cargo nextest run -p oag-render -p oag-mesh`; the built models
-     match the old ones on `vertices`, `indices` and `draws` (a test that
-     compares them).
+5. ~~**`Model` is built by hand as a literal in several places.**~~
+   **Landed, with a remainder** (branch `dedupe-gpu-mesh`).
+   `Model::from_draws(label, vertices, indices, draws, centre, radius, mesh_count)`
+   (`crates/mesh/src/mesh.rs`) is the one literal of a synthetic model; `Model::none`
+   is `from_draws` with nothing, and `render::track::build_model`,
+   `render::collision::build_model`, `mesh::merge` and `mesh::sky_cube::build`
+   call it (the sky cube then sets `textures`, `lightmaps` and `glow_from_program`).
+   It is a full literal, not a struct update over `none`, so a field added to
+   `Model` is a compile error in exactly one place for these. Checked field by
+   field that each old literal equalled `none`'s defaults apart from the
+   arguments (`merge` has `radius` 1.0).
+   - Pinned by `mesh::tests::from_draws_places_each_argument_and_leaves_the_rest_empty`
+     (every argument in its own field, the rest equal to `none`'s) and the existing
+     `track`, `collision`, `merge` and `sky_cube` tests.
+   - **Left on purpose:** the parsed model's literal in `mesh::build` (`mesh.rs`,
+     it sets most fields from the file, so it is the other place a new field must
+     be chosen), the `merge_tests` helper and the roughly 25 test literals. jscpd
+     still pairs `from_draws` with that parsed literal (19 lines).
 
 6. ~~**Smaller ui-screens copies: endrace, campaign and seat assign.**~~
    **Landed (dedupe-ui-screens), with a remainder.** The real clone family
@@ -309,5 +309,6 @@ These are real clones I did not open. Check them before a lane takes them:
 1. ~~Wire candidate 1 (`sprite_draw` into oag-ui).~~ Landed with candidate 6.
 2. Decide the title-data policy question (HD and Omega front ends, and the
    `ALWAYS_ON` drift) before anyone touches `crates/omega/`.
-3. Then candidate 2 (draw loop into oag-mesh), with a before-and-after
-   screenshot under the gate lock.
+3. Candidates 2, 4 and 5 landed. Left from 4: `oag-post` can call
+   `oag_gpu::texture` (`smaa::upload` and its clamp-linear samplers), once its
+   lane is free.
