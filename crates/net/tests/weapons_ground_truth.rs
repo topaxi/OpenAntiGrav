@@ -138,7 +138,7 @@ fn race_in_mode(
     println!(
         "TABLE hand={hand} people={people} loss={} jitter_ms={} rtt_ms={}: \
          corrections {:?}, replayed {:?}, wrong-weapon-state ticks {:?}, \
-         oldest shot a correction added {:?}, shots first seen {:?}, first seen latest {:?}, restored {:?}, restored gap max {:?}, bad hashes {:?}, late cues {:?}, late blasts {:?}, late oldest {:?}, \
+         shots first seen {:?}, first seen latest {:?}, restored {:?}, restored gap max {:?}, bad hashes {:?}, late cues {:?}, late blasts {:?}, late oldest {:?}, \
          mean error {:?}, largest error {:?}, largest pop {:?}, own craft moved {:?}, own pop max {:?}, own hit added {:?}, own hit removed {:?}",
         conditions.loss,
         conditions.jitter.as_millis(),
@@ -146,7 +146,6 @@ fn race_in_mode(
         per(|t| t.corrections),
         per(|t| t.replayed),
         per(|t| t.weapon_mismatches),
-        per(|t| t.oldest_appeared),
         per(|t| t.first_seen),
         per(|t| t.first_seen_latest),
         per(|t| t.restored),

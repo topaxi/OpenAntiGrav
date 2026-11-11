@@ -98,7 +98,6 @@ pub(crate) fn drive_observed(
             total.late_oldest = total.late_oldest.max(s.late_oldest);
             total.shots_appeared += s.shots_appeared;
             total.shots_vanished += s.shots_vanished;
-            total.oldest_appeared = total.oldest_appeared.max(s.oldest_appeared);
             total.first_seen += s.first_seen;
             total.first_seen_latest = total.first_seen_latest.max(s.first_seen_latest);
             total.restored += s.restored;

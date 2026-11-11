@@ -43,12 +43,13 @@ pub(crate) const LATE_ATTACH_MAX_TICKS: u32 = 40;
 /// For a shot that has been in the air two ticks or more: how many ticks to age the effect
 /// it is about to be given, and how far behind it the effect starts (straight back along its
 /// velocity, the flight's curve not kept). `None` for a shot on the tick it was fired, the
-/// only case with every tick drawn.
+/// only case with every tick drawn, and for one that does not say how long it has flown
+/// (`Projectile::seconds_since_fired`: the Shuriken), whose effect starts fresh.
 pub(crate) fn late_attach(
     projectile: &oag_weapons::projectile::Projectile,
     dt: f32,
 ) -> Option<(u32, Vec3)> {
-    let ticks = (projectile.seconds_since_fired() / dt).round();
+    let ticks = (projectile.seconds_since_fired()? / dt).round();
     if ticks < 2.0 {
         return None;
     }

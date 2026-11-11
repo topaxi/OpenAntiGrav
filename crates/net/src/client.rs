@@ -166,8 +166,6 @@ pub struct Stats {
     pub shots_appeared: u32,
     /// Shots a correction took out of the present: a missile undone.
     pub shots_vanished: u32,
-    /// The greatest age in ticks of a shot a correction put into the present.
-    pub oldest_appeared: u32,
     /// Shots the present held for the first time at the end of a step, whoever fired them.
     pub first_seen: u32,
     /// The greatest age in ticks of a shot when the present first held it: how far into its
@@ -228,9 +226,12 @@ pub struct Client {
     bot_held_for: u32,
     /// The hand the bot's stick goes through (`--net-bot-hand`), when it has one.
     bot_hand: Option<oag_raceplay::hand::Hand>,
-    /// The shots the present has held, newest last: what [`Stats::first_seen_latest`] and
+    /// The shots the present has held: what [`Stats::first_seen_latest`] and
     /// [`Stats::restored`] are measured against.
-    shown: VecDeque<Shown>,
+    shown: Vec<Sighted>,
+    /// The shots the confirmed state has held: where a shot's age at first sight is read,
+    /// the tick the server fired it on.
+    fired: Vec<Sighted>,
 }
 
 /// The most ticks into its flight a shot can be when the present first holds it: the widest
@@ -239,19 +240,19 @@ pub struct Client {
 /// (`docs/networking/README.md`, "A shot's first appearance").
 pub const FIRST_SEEN_CAP: u32 = MAX_WINDOW + 3;
 
-/// A shot the present has held.
+/// A shot one of the two timelines has held.
 #[derive(Debug, Clone, Copy)]
-struct Shown {
-    kind: u8,
-    owner: u8,
-    /// The tick it was fired on.
-    fired: u32,
-    /// The present tick it was last held at.
+struct Sighted {
+    shot: weapon_sync::Shot,
+    /// The tick the timeline first held it at.
+    first: u32,
+    /// The tick the timeline last held it at.
     last: u32,
 }
 
-/// Shots remembered as shown. More than a race keeps in the air at once.
-const SHOWN_KEPT: usize = 128;
+/// Ticks a shot a timeline no longer holds is remembered: longer than any correction leaves
+/// one missing, so a shot put back is never counted as first seen.
+const HELD_KEPT_TICKS: u32 = 600;
 
 /// Ticks a bot holds a pickup before it fires it. Chosen, not measured.
 const BOT_FIRE_AFTER: u32 = 20;
@@ -313,7 +314,8 @@ impl Client {
             weapon_trigger: true,
             bot_held_for: 0,
             bot_hand: None,
-            shown: VecDeque::new(),
+            shown: Vec::new(),
+            fired: Vec::new(),
         }
     }
 
@@ -517,38 +519,51 @@ impl Client {
         ticks
     }
 
-    /// Counts the shots the present holds now that it never held before, and how old the
-    /// oldest of them is: the present after a step is what the next frame draws.
+    /// Counts the shots the present holds now that it never held before, and how long ago
+    /// the server fired the oldest of them: the present after a step is what the next frame
+    /// draws. A shot the confirmed state has not held yet is this machine's own prediction,
+    /// shown at once.
     fn note_shown(&mut self, race: &Race) {
         let tick = u32::try_from(race.sim.world.tick).unwrap_or(u32::MAX);
+        self.shown
+            .retain(|held| held.last.saturating_add(HELD_KEPT_TICKS) >= tick);
         for shot in weapon_sync::shots(&race.sim) {
-            let fired = tick.saturating_sub(shot.age_ticks);
-            let known = self.shown.iter_mut().find(|seen| {
-                seen.kind == shot.kind
-                    && seen.owner == shot.owner
-                    && seen.fired.abs_diff(fired) <= 1
-            });
-            if let Some(seen) = known {
+            if let Some(held) = self.shown.iter_mut().find(|held| held.shot.is(&shot)) {
                 // A step predicts at most two ticks, so a longer absence is a shot put back.
-                let gap = tick.saturating_sub(seen.last);
+                let gap = tick.saturating_sub(held.last);
                 if gap > 2 {
                     self.stats.restored += 1;
                     self.stats.restored_gap_max = self.stats.restored_gap_max.max(gap);
                 }
-                seen.last = tick;
+                held.last = tick;
                 continue;
             }
+            let fired = self.fired.iter().find(|held| held.shot.is(&shot));
+            let age = fired.map_or(0, |held| tick.saturating_sub(held.first));
             self.stats.first_seen += 1;
-            self.stats.first_seen_latest = self.stats.first_seen_latest.max(shot.age_ticks);
-            if self.shown.len() >= SHOWN_KEPT {
-                self.shown.pop_front();
-            }
-            self.shown.push_back(Shown {
-                kind: shot.kind,
-                owner: shot.owner,
-                fired,
+            self.stats.first_seen_latest = self.stats.first_seen_latest.max(age);
+            self.shown.push(Sighted {
+                shot,
+                first: tick,
                 last: tick,
             });
+        }
+    }
+
+    /// Notes the shots the confirmed state holds after one of its ticks.
+    fn note_fired(&mut self, confirmed: &RaceSim) {
+        let tick = u32::try_from(confirmed.world.tick).unwrap_or(u32::MAX);
+        self.fired
+            .retain(|held| held.last.saturating_add(HELD_KEPT_TICKS) >= tick);
+        for shot in weapon_sync::shots(confirmed) {
+            match self.fired.iter_mut().find(|held| held.shot.is(&shot)) {
+                Some(held) => held.last = tick,
+                None => self.fired.push(Sighted {
+                    shot,
+                    first: tick,
+                    last: tick,
+                }),
+            }
         }
     }
 
@@ -628,6 +643,7 @@ impl Client {
                 );
             }
             self.note_confirmed(self.confirmed_tick);
+            self.note_fired(&race.sim);
             self.confirmed_tick += 1;
             self.stats.confirmed += 1;
         }
@@ -732,7 +748,6 @@ impl Client {
         let change = weapon_sync::change(&before, &race.sim, seat);
         self.stats.shots_appeared += change.appeared;
         self.stats.shots_vanished += change.vanished;
-        self.stats.oldest_appeared = self.stats.oldest_appeared.max(change.oldest_appeared);
         self.stats.own_hit_added += u32::from(change.own_hit_added);
         self.stats.own_hit_removed += u32::from(change.own_hit_removed);
         self.predicted = replayed;

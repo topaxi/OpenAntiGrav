@@ -63,25 +63,25 @@ pub fn digest(sim: &RaceSim) -> u64 {
     h.finish()
 }
 
-/// A shot in the air, as a pop-in measurement sees it: what and whose, and how old.
+/// A shot in the air, as a pop-in measurement sees it: what, whose and which.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Shot {
     /// The weapon, by its index.
     pub kind: u8,
     /// The firing craft's slot.
     pub owner: u8,
-    /// Ticks since it was fired or laid.
-    pub age_ticks: u32,
+    /// The tick its time runs out on, which is fixed when it is fired and so tells it from
+    /// another shot of the same weapon and craft.
+    pub expires: u32,
 }
 
 impl Shot {
-    /// Whether `other`, read on the same tick, is this shot: the same weapon of the same
-    /// craft, fired on the same tick (a tick's slack for the rounding of the age).
+    /// Whether `other` is this shot (a tick's slack for the rounding).
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
         self.kind == other.kind
             && self.owner == other.owner
-            && self.age_ticks.abs_diff(other.age_ticks) <= 1
+            && self.expires.abs_diff(other.expires) <= 1
     }
 }
 
@@ -89,6 +89,7 @@ impl Shot {
 /// craft and its clock has not started.
 #[must_use]
 pub fn shots(sim: &RaceSim) -> Vec<Shot> {
+    let tick = u32::try_from(sim.world.tick).unwrap_or(u32::MAX);
     sim.world
         .projectiles
         .slots
@@ -98,7 +99,7 @@ pub fn shots(sim: &RaceSim) -> Vec<Shot> {
             Some(Shot {
                 kind: p.kind?.index() as u8,
                 owner: p.owner,
-                age_ticks: (p.seconds_since_fired() * 60.0).round().max(0.0) as u32,
+                expires: tick.saturating_add((p.lifetime * 60.0).round().max(0.0) as u32),
             })
         })
         .collect()
@@ -107,14 +108,11 @@ pub fn shots(sim: &RaceSim) -> Vec<Shot> {
 /// What a correction changed about the weapons, between the present before it and after it.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Change {
-    /// Shots in the present after the correction that were not there before (a missile
-    /// popping into view).
+    /// Shots in the present after the correction that were not there before: one first
+    /// shown, or one the prediction had ended and the server had not.
     pub appeared: u32,
     /// Shots in the present before that are not there after (a missile undone).
     pub vanished: u32,
-    /// The greatest age, in ticks, of a shot that appeared: how far into its flight a missile
-    /// is when the player first sees it.
-    pub oldest_appeared: u32,
     /// Whether the client's own craft lost shield in the correction (a dodge undone).
     pub own_hit_added: bool,
     /// Whether the client's own craft gained shield back (a predicted hit undone).
@@ -143,7 +141,6 @@ pub fn change(before: &RaceSim, after: &RaceSim, seat: usize) -> Change {
     };
     let appeared = unmatched(&has, &had);
     out.appeared = u32::try_from(appeared.len()).unwrap_or(u32::MAX);
-    out.oldest_appeared = appeared.iter().map(|s| s.age_ticks).max().unwrap_or(0);
     out.vanished = u32::try_from(unmatched(&had, &has).len()).unwrap_or(u32::MAX);
     let drop = before.world.ships[seat].physics.shield - after.world.ships[seat].physics.shield;
     out.own_hit_added = drop >= SHIELD_STEP;
