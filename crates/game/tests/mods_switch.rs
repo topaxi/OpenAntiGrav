@@ -446,3 +446,26 @@ fn the_settings_row_opens_the_selected_mods_own_page_and_only_while_it_has_one()
         "an off mod's page is not in the tree"
     );
 }
+
+#[test]
+fn a_submodule_at_another_commit_than_the_build_pins_is_named() {
+    let pins = "assets/mods/examples=b71dfaf;assets/mods/official=0d2c1da";
+    let lines = mods::stale_submodules(pins, |path| {
+        Some(
+            if path.ends_with("official") {
+                "c6cd38a"
+            } else {
+                "b71dfaf"
+            }
+            .to_string(),
+        )
+    });
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(lines[0].starts_with("assets/mods/official is at c6cd38a"));
+    assert!(lines[0].contains("pins 0d2c1da"));
+    assert!(mods::stale_submodules("", |_| Some("x".into())).is_empty());
+    assert!(
+        mods::stale_submodules(pins, |_| None).is_empty(),
+        "not a checkout"
+    );
+}

@@ -267,6 +267,21 @@ track = "Vostok"
   `crates/game/tests/query_resolve_ground_truth.rs`). A row with an empty list keeps its saved
   value. So what a launch reads is what the page shows.
 
+## Which files a checkout loads
+
+A checkout's mods are read from disk at launch (`assets/mods/official`, `assets/mods/examples`,
+both submodules), not built in, so a menu or manifest change needs no rebuild; only
+`oag-extras` is compiled in. `git pull` moves no submodule: after a pull the game loads the old
+mod files until `git submodule update`. Two lines make that visible:
+
+- Each mod's load-report line names the commit of the checkout its folder is in,
+  `oag.slipstream 1.0.0 (assets/mods/official/slipstream, git 0d2c1da)`
+  (`oag_mod::checkout_head`, read from git's files, no `git` binary).
+- At the first mod load the game warns for each submodule that is at another commit than the
+  build's own commit pins (`oag_net::SUBMODULE_PINS`, from `git ls-tree` at build time; empty
+  when the build was given its hash, an AppImage or `just test-data`):
+  `assets/mods/official is at c6cd38a, this build's commit pins 0d2c1da: ...`.
+
 ## The MODS page
 
 Every title's main menu has a **MODS** row under OPTIONS (added by `oag-extras` like any mod row,

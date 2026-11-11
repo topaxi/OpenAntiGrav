@@ -33,6 +33,15 @@ fn main() {
         .or_else(git_hash)
         .unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=OAG_GIT_HASH={hash}");
+    // The submodule commits this commit pins, for the game to compare against the files it
+    // loads. Only beside `git`'s own hash: a hash passed in (an AppImage, `just test-data`)
+    // builds from no checkout the game will run in, and must not rebuild on a commit.
+    let pins = if std::env::var("OAG_GIT_HASH").is_ok_and(|hash| !hash.is_empty()) {
+        String::new()
+    } else {
+        submodule_pins().unwrap_or_default()
+    };
+    println!("cargo:rustc-env=OAG_SUBMODULE_PINS={pins}");
     println!("cargo:rerun-if-env-changed=OAG_BUILD_DATE");
     println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
     let date = build_date().unwrap_or_default();
@@ -67,6 +76,33 @@ fn build_date() -> Option<String> {
     let date = String::from_utf8(output.stdout).ok()?;
     let date = date.trim();
     (!date.is_empty()).then(|| date.to_string())
+}
+
+/// `path=hash;path=hash` for every submodule `HEAD` pins (`git ls-tree`'s gitlinks, short),
+/// or `None` without `git`. Reruns with the hash ([`track_head`]): a pin changes only with a
+/// commit.
+fn submodule_pins() -> Option<String> {
+    let manifest_dir = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR")?);
+    let output = Command::new("git")
+        .args(["ls-tree", "-r", "HEAD"])
+        .current_dir(manifest_dir.join("../.."))
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8(output.stdout).ok()?;
+    let pins: Vec<String> = text
+        .lines()
+        .filter_map(|line| {
+            let (meta, path) = line.split_once('\t')?;
+            let mut parts = meta.split_whitespace();
+            let (_, kind, hash) = (parts.next()?, parts.next()?, parts.next()?);
+            let short = hash.get(..7)?;
+            (kind == "commit").then(|| format!("{path}={short}"))
+        })
+        .collect();
+    Some(pins.join(";"))
 }
 
 /// `YYYY-MM-DD` (UTC) of a Unix timestamp, by the civil-from-days algorithm.

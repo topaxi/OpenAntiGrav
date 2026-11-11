@@ -21,6 +21,7 @@ pub mod extras;
 mod manifest;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod pack;
+mod revision;
 pub mod rumble;
 pub mod texture_pack;
 
@@ -33,6 +34,7 @@ pub use manifest::{
     Channels, Error as ManifestError, Extension, License, MANIFEST, MAX_CHANNELS, Manifest, Rules,
     SCHEMA_KIND, SCHEMA_MAJOR, TexturePack, Track,
 };
+pub use revision::checkout_head;
 
 /// Why a mod could not be opened or read.
 #[derive(Debug, thiserror::Error)]
@@ -221,8 +223,13 @@ impl Mod {
     #[must_use]
     pub fn describe(&self) -> String {
         let m = &self.manifest;
+        // A folder in a git checkout names its commit: a submodule `git pull` left behind
+        // loads its old files with nothing else to tell.
+        let git = (self.local_path(""))
+            .and_then(|dir| checkout_head(&dir))
+            .map_or_else(String::new, |hash| format!(", git {hash}"));
         format!(
-            "{} {} ({}) license: {}",
+            "{} {} ({}{git}) license: {}",
             m.id,
             m.version,
             self.label(),

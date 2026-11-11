@@ -489,6 +489,17 @@ impl Mods {
     ///
     /// The built-in extras will not open, which is a build defect.
     pub fn load(switches: &crate::settings::Mods) -> Result<Self> {
+        static CHECKED: std::sync::Once = std::sync::Once::new();
+        CHECKED.call_once(|| {
+            for line in stale_submodules(oag_net::SUBMODULE_PINS, |path| {
+                path.join(".git")
+                    .exists()
+                    .then(|| oag_mod::checkout_head(path))
+                    .flatten()
+            }) {
+                log::warn!("{line}");
+            }
+        });
         Self::load_from(&oag_mod::mods_search_path(), switches)
     }
 
@@ -893,4 +904,26 @@ impl Mods {
         lines.extend(self.failed.iter().map(|p| format!("mod problem: {p}")));
         lines
     }
+}
+
+/// A line for each submodule of `pins` (`oag_net::SUBMODULE_PINS`, paths relative to the working
+/// directory) that is checked out at another commit than the build's own pins: `git pull` moves
+/// no submodule, and the game then loads the old mod files with nothing else to say so.
+#[must_use]
+pub fn stale_submodules(
+    pins: &str,
+    head: impl Fn(&std::path::Path) -> Option<String>,
+) -> Vec<String> {
+    (pins.split(';'))
+        .filter_map(|pin| pin.split_once('='))
+        .filter_map(|(path, pinned)| {
+            let at = head(std::path::Path::new(path))?;
+            (at != pinned).then(|| {
+                format!(
+                    "{path} is at {at}, this build's commit pins {pinned}: its mods are the old files \
+                     until `git submodule update`"
+                )
+            })
+        })
+        .collect()
 }

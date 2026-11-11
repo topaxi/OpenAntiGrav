@@ -52,6 +52,11 @@ pub const GIT_HASH: &str = env!("OAG_GIT_HASH");
 /// compared by a handshake or stored in a header.
 pub const BUILD_DATE: &str = env!("OAG_BUILD_DATE");
 
+/// The submodules this build's commit pins, `path=short hash` joined by `;` (`assets/mods/official`
+/// and the like), or empty when the build had no `git` or was given its hash (see `build.rs`).
+/// `oag-game` warns when a checkout's submodule is at another commit.
+pub const SUBMODULE_PINS: &str = env!("OAG_SUBMODULE_PINS");
+
 /// The version suffix the build was given (`OAG_VERSION_SUFFIX`), empty for a release.
 pub const VERSION_SUFFIX: &str = env!("OAG_VERSION_SUFFIX");
 
