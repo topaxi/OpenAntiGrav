@@ -259,7 +259,7 @@ impl Race {
     /// `+0x11f0`; its `+0xe4` is the player's craft in the breakpoint run),
     /// while the variant byte is read off the craft at `+0x1204`, the ribbon's
     /// owner. So the burst plays on the intruder in the *owner's* colours, and
-    /// carries the intruder's velocity (see the `play_carried` call below).
+    /// carries the intruder's velocity (see the `play_carried_expendable` call below).
     ///
     /// A craft is never tested against its own trail: its nozzle *is* the head
     /// sample, so it would be permanently inside it.
@@ -318,10 +318,14 @@ impl Race {
                 // instance `+0x40`/`+0x4c`, whose HD consumer is unread, so it
                 // is not applied here. The craft's own velocity is: its
                 // particles inherit it times the record's `+0x4d0`
-                // ([`psys::Stage::play_carried`]), so the burst keeps up with the
-                // hull instead of piling up behind it.
+                // ([`psys::Stage::play_carried_expendable`]), so the burst keeps up with the
+                // hull instead of piling up behind it. Expendable: a craft in a
+                // trail holds about thirty instances at the every-tick rate, and
+                // a detonation or pickup burst must not lose its slot to them.
                 let velocity = self.sim.world.ships[intruder].physics.body.linear_velocity;
-                self.view.stage.play_carried(&effect, point, 1.0, velocity);
+                self.view
+                    .stage
+                    .play_carried_expendable(&effect, point, 1.0, velocity);
             }
         }
     }
@@ -376,7 +380,7 @@ impl Race {
         };
         self.view
             .stage
-            .play_carried(&effect, probe, 1.0, body.linear_velocity);
+            .play_carried_expendable(&effect, probe, 1.0, body.linear_velocity);
     }
 
     /// Whether any of the craft's own authored hull points is inside the

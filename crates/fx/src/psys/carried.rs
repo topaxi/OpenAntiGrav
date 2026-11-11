@@ -43,10 +43,27 @@ impl Stage {
         velocity: Vec3,
     ) -> Option<Playing> {
         let playing = self.play(effect, point, scale)?;
+        self.carry(playing, effect, velocity);
+        Some(playing)
+    }
+
+    /// [`Self::play_carried`] through [`Self::play_expendable`].
+    pub fn play_carried_expendable(
+        &mut self,
+        effect: &std::sync::Arc<Effect>,
+        point: Vec3,
+        scale: f32,
+        velocity: Vec3,
+    ) -> Option<Playing> {
+        let playing = self.play_expendable(effect, point, scale)?;
+        self.carry(playing, effect, velocity);
+        Some(playing)
+    }
+
+    fn carry(&mut self, playing: Playing, effect: &Effect, velocity: Vec3) {
         if let Some(instance) = self.instances.get_mut(usize::from(playing.index)) {
             instance.system.carry(effect, velocity);
         }
-        Some(playing)
     }
 }
 

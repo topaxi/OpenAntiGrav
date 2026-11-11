@@ -215,7 +215,7 @@ fn the_trail_hit_burst_inherits_half_the_intruders_velocity() {
     // Out of the ribbon, so nothing re-fires while the first burst is watched.
     place_and_step(&mut race, Vec3::new(-40.0, 50.0, 0.0));
     let mut rng = oag_core::Rng::new(5);
-    let dt = 1.0 / 60.0;
+    let dt = 1.0 / oag_fx::psys::TICK_HZ;
     race.view.stage.advance(dt, &mut rng);
     let start = particles_mean_x(&race).expect("the burst spawned");
     for _ in 0..6 {
@@ -363,4 +363,58 @@ fn a_craft_with_a_pulse_ribbon_through_its_middle_is_inside_and_one_beside_it_is
         0,
         "the line is clear of the hull"
     );
+}
+
+/// Every craft but slot 0 sits in slot 0's ribbon.
+fn all_intruders_in_the_ribbon(race: &mut Race) -> usize {
+    let count = race.sim.world.ship_count as usize;
+    for slot in 1..count {
+        race.sim.world.ships[slot].physics.body.position = Vec3::new(-18.0, 0.0, 0.0);
+    }
+    count - 1
+}
+
+/// **A detonation started while trail hits stream plays to completion.** Every craft but one
+/// flies in the same ribbon, so one burst per intruder per tick fills the stage; the detonation
+/// is the thinnest instance on it (a few long-lived particles), which is the one an ordinary
+/// recycle picks. Dropping the expendable play from `advance_trail_hits` evicts it within a tick.
+#[test]
+fn a_detonation_started_while_trail_hits_stream_still_plays_to_completion() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    let intruders = all_intruders_in_the_ribbon(&mut race);
+    let mut detonation = a_one_shot_burst("WO_ROCKET_EXPLO");
+    detonation.emitters[0].lifetime_ticks = (40.0, 0.0);
+    let detonation = std::sync::Arc::new(detonation);
+    let mut rng = oag_core::Rng::new(3);
+    let dt = 1.0 / oag_fx::psys::TICK_HZ;
+    let mut step = |race: &mut Race| {
+        race.advance_trail_hits();
+        race.view.stage.advance(dt, &mut rng);
+    };
+
+    for _ in 0..60 {
+        step(&mut race);
+    }
+    assert!(
+        intruders * 14 > oag_fx::psys::MAX_INSTANCES,
+        "the fixture has too few craft to fill the stage: {intruders}"
+    );
+    assert_eq!(
+        race.view.stage.playing_count(),
+        oag_fx::psys::MAX_INSTANCES,
+        "the trail hits did not fill the stage, so the test proves nothing"
+    );
+
+    race.view
+        .stage
+        .play(&detonation, Vec3::new(-18.0, 5.0, 0.0), 1.0)
+        .expect("a detonation finds a slot on a stage full of trail hits");
+    for tick in 0..30 {
+        step(&mut race);
+        assert!(
+            race.view.stage.alive_count_of(&detonation) > 0 || tick == 0,
+            "the detonation was cut short at tick {tick}"
+        );
+    }
+    assert!(race.view.stage.alive_count_of(&detonation) > 0);
 }

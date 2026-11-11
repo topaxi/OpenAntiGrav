@@ -1156,6 +1156,8 @@ struct Instance {
     attached: bool,
     /// Not recycled by a burst while it runs: see [`Stage::play_held`].
     held: bool,
+    /// Yields its slot to any other effect: see [`Stage::play_expendable`].
+    expendable: bool,
     /// Bumped every time the slot is claimed.
     generation: u32,
     /// The emitter frame's `+Y` in world space - see [`Stage::orient`].
@@ -1169,6 +1171,7 @@ impl Instance {
         anchor: Vec3::ZERO,
         attached: false,
         held: false,
+        expendable: false,
         generation: 0,
         up: Vec3::Y,
     };
@@ -1226,24 +1229,16 @@ impl Stage {
     /// [`RESERVED_FOR_BURSTS`] is there to prevent.
     ///
     /// Recycles the *unattached* instance with the fewest live particles
-    /// when nothing is free: a burst that has thinned out is the least
-    /// visible thing to cut short.
+    /// when nothing is free, an [`Self::play_expendable`] one before any
+    /// other: a burst that has thinned out is the least visible thing to cut
+    /// short.
     pub fn play(
         &mut self,
         effect: &std::sync::Arc<Effect>,
         point: Vec3,
         scale: f32,
     ) -> Option<Playing> {
-        let index = self.free_slot().or_else(|| {
-            self.instances
-                .iter()
-                .enumerate()
-                .filter(|(_, instance)| {
-                    !instance.attached && !(instance.held && instance.system.is_running())
-                })
-                .min_by_key(|(_, instance)| instance.system.alive_count())
-                .map(|(index, _)| index)
-        })?;
+        let index = self.free_slot().or_else(|| self.victim(false))?;
         Some(self.claim(index, effect, point, scale, false))
     }
 
@@ -1276,18 +1271,19 @@ impl Stage {
     /// long as the stage lives.
     ///
     /// Returns `None` when fewer than [`RESERVED_FOR_BURSTS`] instances
-    /// would be left free. A caller that gets `None` draws nothing rather
-    /// than something invented.
+    /// would be left free, an [`Self::play_expendable`] one counting as free.
+    /// A caller that gets `None` draws nothing rather than something
+    /// invented.
     pub fn attach(
         &mut self,
         effect: &std::sync::Arc<Effect>,
         point: Vec3,
         scale: f32,
     ) -> Option<Playing> {
-        if self.free_count() <= RESERVED_FOR_BURSTS {
+        if self.free_count() + self.expendable_count() <= RESERVED_FOR_BURSTS {
             return None;
         }
-        let index = self.free_slot()?;
+        let index = self.free_slot().or_else(|| self.victim(true))?;
         Some(self.claim(index, effect, point, scale, true))
     }
 
@@ -1415,6 +1411,7 @@ impl Stage {
         instance.anchor = point;
         instance.attached = attached;
         instance.held = false;
+        instance.expendable = false;
         instance.up = Vec3::Y;
         instance.system.ignite(effect, point, scale);
         Playing {
@@ -1437,6 +1434,7 @@ impl Stage {
 }
 
 mod direction;
+mod expendable;
 mod sample;
 use direction::{direction_for, signed_unit};
 use sample::{channel_sample, random_range};
