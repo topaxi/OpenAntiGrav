@@ -34,6 +34,7 @@ use endrace_flow::{Flow, Which};
 #[path = "endrace_voice.rs"]
 mod endrace_voice;
 #[cfg(test)]
+#[path = "speaker_tests.rs"]
 mod speaker_tests;
 pub(crate) use endrace_voice::voice_for;
 
