@@ -1108,17 +1108,20 @@ impl System {
 /// [`System`], not a bigger one: `WO_ROCKET_EXPLO` alone schedules about 150
 /// concurrent particles and four of its seven emitters author a `2000` cap
 /// that never binds, so two explosions sharing a pool would evict each
-/// other's particles rather than queue. Twenty-four covered what a race
-/// actually puts on screen - one engine flare per craft on a source that
-/// authors one (eight), a handful of rockets in flight each carrying a
-/// flare, plus their detonations - at about 500 KB of pool.
+/// other's particles rather than queue.
 ///
-/// **Thirty-two since the absorb burst landed, chosen, not measured.** One
-/// absorb alone starts up to ten instances on Pulse (one per `Ship Collision
-/// Fx` node, `oag_raceplay::absorb`), each alive about a second, which
-/// against twenty-four would have recycled the detonations the old count was
-/// sized for. About 670 KB of pool.
-pub const MAX_INSTANCES: usize = 32;
+/// **Sixty-four, sized by a measured peak.** A wrecked craft holds about
+/// twenty instances for as long as it burns, ten attached `WO_SHIP_DEATH_SPARKS`
+/// and ten `WO_SHIP_FXNODE_EXPLO`, and [`Stage::attach`] refuses with fewer than
+/// [`RESERVED_FOR_BURSTS`] left. Eleven headless stock Pulse races of eight
+/// craft peaked at 16 to 29 instances that are not trail hits, with one wreck;
+/// two wrecks and the reserve put the need near 55, and a run with two mods
+/// loaded reached 56. Trail hits are [`Stage::play_expendable`] and take what is
+/// left (up to 112 at once in those runs). The pool is 26,784 bytes an
+/// instance, 1.7 MB in all, and [`pipeline::MAX_VERTICES`] sizes three
+/// 100-byte-vertex buffers at `MAX_INSTANCES * MAX_PARTICLES * 6`, 28.1 MiB on
+/// the GPU. `docs/formats/pulse-absent-effects.md`, "Trail-hit burst budget".
+pub const MAX_INSTANCES: usize = 64;
 
 /// Instances [`Stage::attach`] refuses to take, so a detonation always has
 /// somewhere to play.
@@ -1156,6 +1159,10 @@ struct Instance {
     attached: bool,
     /// Not recycled by a burst while it runs: see [`Stage::play_held`].
     held: bool,
+    /// Yields its slot to any other effect: see [`Stage::play_expendable`].
+    expendable: bool,
+    /// [`Stage::claims`] when the slot was last claimed; the oldest expendable instance goes first.
+    claimed: u64,
     /// Bumped every time the slot is claimed.
     generation: u32,
     /// The emitter frame's `+Y` in world space - see [`Stage::orient`].
@@ -1169,6 +1176,8 @@ impl Instance {
         anchor: Vec3::ZERO,
         attached: false,
         held: false,
+        expendable: false,
+        claimed: 0,
         generation: 0,
         up: Vec3::Y,
     };
@@ -1199,6 +1208,8 @@ impl Instance {
 #[derive(Debug, Clone)]
 pub struct Stage {
     instances: Box<[Instance]>,
+    /// How many times an instance has been claimed.
+    claims: u64,
 }
 
 impl Default for Stage {
@@ -1216,6 +1227,7 @@ impl Stage {
     pub fn new() -> Self {
         Self {
             instances: vec![Instance::IDLE; MAX_INSTANCES].into_boxed_slice(),
+            claims: 0,
         }
     }
 
@@ -1226,24 +1238,16 @@ impl Stage {
     /// [`RESERVED_FOR_BURSTS`] is there to prevent.
     ///
     /// Recycles the *unattached* instance with the fewest live particles
-    /// when nothing is free: a burst that has thinned out is the least
-    /// visible thing to cut short.
+    /// when nothing is free, an [`Self::play_expendable`] one before any
+    /// other: a burst that has thinned out is the least visible thing to cut
+    /// short.
     pub fn play(
         &mut self,
         effect: &std::sync::Arc<Effect>,
         point: Vec3,
         scale: f32,
     ) -> Option<Playing> {
-        let index = self.free_slot().or_else(|| {
-            self.instances
-                .iter()
-                .enumerate()
-                .filter(|(_, instance)| {
-                    !instance.attached && !(instance.held && instance.system.is_running())
-                })
-                .min_by_key(|(_, instance)| instance.system.alive_count())
-                .map(|(index, _)| index)
-        })?;
+        let index = self.free_slot().or_else(|| self.victim(false))?;
         Some(self.claim(index, effect, point, scale, false))
     }
 
@@ -1276,18 +1280,19 @@ impl Stage {
     /// long as the stage lives.
     ///
     /// Returns `None` when fewer than [`RESERVED_FOR_BURSTS`] instances
-    /// would be left free. A caller that gets `None` draws nothing rather
-    /// than something invented.
+    /// would be left free, an [`Self::play_expendable`] one counting as free.
+    /// A caller that gets `None` draws nothing rather than something
+    /// invented.
     pub fn attach(
         &mut self,
         effect: &std::sync::Arc<Effect>,
         point: Vec3,
         scale: f32,
     ) -> Option<Playing> {
-        if self.free_count() <= RESERVED_FOR_BURSTS {
+        if self.free_count() + self.expendable_count() <= RESERVED_FOR_BURSTS {
             return None;
         }
-        let index = self.free_slot()?;
+        let index = self.free_slot().or_else(|| self.victim(true))?;
         Some(self.claim(index, effect, point, scale, true))
     }
 
@@ -1408,13 +1413,16 @@ impl Stage {
         scale: f32,
         attached: bool,
     ) -> Playing {
+        self.claims += 1;
         let instance = &mut self.instances[index];
+        instance.claimed = self.claims;
         instance.generation = instance.generation.wrapping_add(1);
         instance.effect = Some(effect.clone());
         instance.system = System::new();
         instance.anchor = point;
         instance.attached = attached;
         instance.held = false;
+        instance.expendable = false;
         instance.up = Vec3::Y;
         instance.system.ignite(effect, point, scale);
         Playing {
@@ -1437,6 +1445,7 @@ impl Stage {
 }
 
 mod direction;
+mod expendable;
 mod sample;
 use direction::{direction_for, signed_unit};
 use sample::{channel_sample, random_range};

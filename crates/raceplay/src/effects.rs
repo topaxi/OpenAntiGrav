@@ -259,7 +259,7 @@ impl Race {
     /// `+0x11f0`; its `+0xe4` is the player's craft in the breakpoint run),
     /// while the variant byte is read off the craft at `+0x1204`, the ribbon's
     /// owner. So the burst plays on the intruder in the *owner's* colours, and
-    /// carries the intruder's velocity (see the `play_carried` call below).
+    /// carries the intruder's velocity (see the `play_carried_expendable` call below).
     ///
     /// A craft is never tested against its own trail: its nozzle *is* the head
     /// sample, so it would be permanently inside it.
@@ -283,6 +283,10 @@ impl Race {
                     self.view.trail_inside[owner] |= bit;
                 } else {
                     self.view.trail_inside[owner] &= !bit;
+                    self.view.trail_hit_rest[owner] &= !bit;
+                    continue;
+                }
+                if !self.trail_hit_due(owner, bit) {
                     continue;
                 }
                 // **The trail's owner picks the colour, measured.** At the call
@@ -318,12 +322,33 @@ impl Race {
                 // instance `+0x40`/`+0x4c`, whose HD consumer is unread, so it
                 // is not applied here. The craft's own velocity is: its
                 // particles inherit it times the record's `+0x4d0`
-                // ([`psys::Stage::play_carried`]), so the burst keeps up with the
-                // hull instead of piling up behind it.
+                // ([`psys::Stage::play_carried_expendable`]), so the burst keeps up with the
+                // hull instead of piling up behind it. Expendable: a craft in a
+                // trail holds about thirty instances at the every-tick rate, and
+                // a detonation or pickup burst must not lose its slot to them.
                 let velocity = self.sim.world.ships[intruder].physics.body.linear_velocity;
-                self.view.stage.play_carried(&effect, point, 1.0, velocity);
+                self.view
+                    .stage
+                    .play_carried_expendable(&effect, point, 1.0, velocity);
             }
         }
+    }
+
+    /// Whether the burst for the craft `bit` names, inside `owner`'s trail, fires this tick.
+    ///
+    /// Every tick when the title plays its own burst (HD, 2048, Omega). A burst
+    /// lent to a title that authors none (`load::trail_hits`) is an enhancement of this
+    /// project's and fires every other tick, starting with the first tick inside: half HD's
+    /// rate still reads as a stream and keeps the stage's instances for the effects the
+    /// original does draw.
+    fn trail_hit_due(&mut self, owner: usize, bit: u8) -> bool {
+        if !self.view.handles.is_lent(Trigger::TrailHitship) {
+            return true;
+        }
+        let rest = &mut self.view.trail_hit_rest[owner];
+        let due = *rest & bit == 0;
+        *rest ^= bit;
+        due
     }
 
     /// `--trail-sparks`: the burst, every tick, on the player's own ribbon.
@@ -334,8 +359,10 @@ impl Race {
     /// "I saw nothing" cannot tell a burst that never played from one that
     /// played and drew nothing.
     ///
-    /// Everything but the *placement* is the real path - the same effect, the
-    /// same rate, the same [`hd_trail_red`](RaceView::hd_trail_red) colour select.
+    /// Everything but the *placement* and the *rate* is the real path - the same
+    /// effect and the same [`hd_trail_red`](RaceView::hd_trail_red) colour select.
+    /// The rate is HD's every tick, also on a title whose lent burst fires every
+    /// other tick for a real hit ([`Race::trail_hit_due`]).
     /// The placement is the one thing chosen rather than derived: two units
     /// above the player's nozzle, which is on screen and clear of the exhaust
     /// plume. Three alternatives were measured and each looks like nothing or
@@ -376,7 +403,7 @@ impl Race {
         };
         self.view
             .stage
-            .play_carried(&effect, probe, 1.0, body.linear_velocity);
+            .play_carried_expendable(&effect, probe, 1.0, body.linear_velocity);
     }
 
     /// Whether any of the craft's own authored hull points is inside the
