@@ -55,6 +55,9 @@ def _plausible_body(ram, body):
     pos = _vec(ram, body + 0x30)
     if not all(math.isfinite(x) and abs(x) < 1e5 for x in pos):
         return None
+    # a table row that happens to hold a body-shaped pointer and a position like (16.6, 0, 0) is not a craft on a circuit
+    if sum(1 for x in pos if x == 0.0) >= 2:
+        return None
     return pos
 
 
@@ -95,15 +98,62 @@ def player_craft(path):
 
 def race_clock_address(path, craft):
     """The EE address of the race clock (f32 seconds from the start of the countdown), or `None` when it is not the only word in
-    the window below `craft` that is 3.9 to 4.45 s above the word `CLOCK_PARTNER` bytes after it (the HUD's lap clock)."""
+    the window below `craft` that is 3.9 to 4.45 s above the word `CLOCK_PARTNER` bytes after it (the HUD's lap clock), the HUD clock
+    being at least a second (before GO it reads 0, and the countdown's own timers sit 4 s above a zero)."""
     ram = _ram(path)
     found = []
     for a in range(craft - CLOCK_WINDOW[0], craft - CLOCK_WINDOW[1], 4):
         (v,) = struct.unpack_from("<f", ram, a)
         (w,) = struct.unpack_from("<f", ram, a + CLOCK_PARTNER)
-        if math.isfinite(v) and math.isfinite(w) and 4.0 <= v < 3600.0 and 3.9 <= v - w <= 4.45:
+        if math.isfinite(v) and math.isfinite(w) and 1.0 <= w and v < 3600.0 and 3.9 <= v - w <= 4.45:
             found.append(a)
     return found[0] if len(found) == 1 else None
+
+
+FRAME_COUNTER = 0x27A7E8
+
+
+def race_clock_between(path_before, path_after):
+    """The EE address of the race clock found from two savestates of one running race, or `None` unless exactly one word qualifies: a
+    float that rose by `Delta frames * 0.015 .. 0.025` s (the frame counter at `FRAME_COUNTER` says how many frames lay between the
+    states), whose partner `CLOCK_PARTNER` bytes after it is 3.9 to 4.45 s below it in both states and at least a second. Needed
+    where the clock is not below the craft: on six of the circuits it sits `0xF6000` above it, in another heap block."""
+    from array import array
+    a_ram, b_ram = _ram(path_before), _ram(path_after)
+    frames = struct.unpack_from("<I", b_ram, FRAME_COUNTER)[0] - struct.unpack_from("<I", a_ram, FRAME_COUNTER)[0]
+    if frames <= 0:
+        return None
+    fa, fb = array("f"), array("f")
+    fa.frombytes(a_ram[: len(a_ram) // 4 * 4])
+    fb.frombytes(b_ram[: len(b_ram) // 4 * 4])
+    step = CLOCK_PARTNER // 4
+    lo, hi = frames * 0.015, frames * 0.025
+    found = []
+    for i in range(RAM_LO // 4, len(fa) - step):
+        v = fa[i]
+        if not 4.0 < v < 3600.0:
+            continue
+        d = fb[i] - v
+        if not lo < d < hi:
+            continue
+        wa, wb = fa[i + step], fb[i + step]
+        if wa >= 1.0 and 3.9 <= v - wa <= 4.45 and 3.9 <= fb[i] - wb <= 4.45:
+            found.append(i * 4)
+    return found[0] if len(found) == 1 else None
+
+
+def sidecar_race_clock(path, craft):
+    """The race clock's address for a state: the one its sidecar recorded when it still reads as the clock in the state itself (a float
+    in 1..3600 with a partner 3.9 to 4.45 s below it), else the window search below the craft."""
+    side = read_sidecar(path)
+    if side and side.get("race_clock_address"):
+        address = int(side["race_clock_address"], 0)
+        ram = _ram(path)
+        v = struct.unpack_from("<f", ram, address)[0]
+        w = struct.unpack_from("<f", ram, address + CLOCK_PARTNER)[0]
+        if 4.0 < v < 3600.0 and w >= 1.0 and 3.9 <= v - w <= 4.45:
+            return address
+    return race_clock_address(path, craft)
 
 
 #: Offsets inside the camera object `Camera_SubmitScene` runs on (measured live, `docs/ghidra/functions/ps2-pulse-eu/camera.md`):

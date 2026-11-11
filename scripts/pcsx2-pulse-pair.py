@@ -127,6 +127,9 @@ def main():
     ap.add_argument("--oag-game", default=str(ROOT / "target/debug/oag-game"))
     ap.add_argument("--serial", default="SCES-54748 (F8AE6FF2)",
                     help="the state file name's game part in PCSX2's sstates directory")
+    ap.add_argument("--layout-tolerance-deg", type=float, default=5.0,
+                    help="how far the state's heading may be from the layout file's own start (the player sits in grid slot 8 "
+                         "and a grid that bends puts slot 8 off the first slot's heading); the other layout must still be worse")
     ap.add_argument("--meta", default="")
     cp.add_arguments(ap)
     args = ap.parse_args()
@@ -162,9 +165,9 @@ def main():
         pair.finish()
     craft, body, pos = found
     # the race clock's address moves with the heap layout of each boot (`pcsx2_state.race_clock_address`)
-    clock_address = pcsx2_state.race_clock_address(args.state, craft)
+    clock_address = pcsx2_state.sidecar_race_clock(args.state, craft)
     if clock_address is None:
-        pair.check("race clock located", False, "no single word 3.9 to 4.45 s above its HUD partner below craft %#x" % craft)
+        pair.check("race clock located", False, "neither the sidecar's address nor a single word 3.9 to 4.45 s above its HUD partner below craft %#x" % craft)
         pair.finish()
     pair.rec["original"]["race_clock_address"] = hex(clock_address)
 
@@ -267,8 +270,9 @@ def main():
         probe[layout] = {"heading_deg": ce.vec_angle(ours_start["fwd"], list(fwd)),
                          "start_distance": math.dist(ours_start["pos"], list(pos))}
     pair.rec["ours"]["layout_probe"] = probe
+    pair.rec["ours"]["layout_tolerance_deg"] = args.layout_tolerance_deg
     best = min(probe, key=lambda k: probe[k]["heading_deg"])
-    pair.check("layout file by start heading", best == pair.rec["ours"]["layout"] and probe[best]["heading_deg"] <= 5,
+    pair.check("layout file by start heading", best == pair.rec["ours"]["layout"] and probe[best]["heading_deg"] <= args.layout_tolerance_deg,
                "heading to the grid: %s (the player's slot differs from ours, so the distance is not used)" % ", ".join(
                    "%s %.1f deg, %.1f units" % (k, v["heading_deg"], v["start_distance"]) for k, v in probe.items()))
     if pair.failed():

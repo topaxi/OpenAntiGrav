@@ -277,3 +277,4 @@
 0x00156ec8	function	Ship_Destroy	65	rumble.md
 0x001545c8	function	Ship_Damage	80	rumble.md
 0x0018a080	function	Options_ReadVibration	68	rumble.md
+0x0017fa68	function	Definition_IsUnlocked	85	definition-unlock.md

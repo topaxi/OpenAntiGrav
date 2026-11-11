@@ -133,25 +133,48 @@ def cmd_titles(args, drive, pine, kb):
     print("wrote", out / "montage.png")
 
 
-def press(kb, name):
-    """A key press with the focus set first: a long load can drop it, and a press without it goes to the root window."""
+def press(kb, name, hold=0.35):
+    """A key press with the focus set first: a long load can drop it, and a press without it goes to the root window.
+    A 0.35 s hold survives a loaded machine, where the VM runs slow and a short press falls between two frames, but on an idle one it
+    auto-repeats into two steps: a menu step that must land takes `hold=0.08`."""
     kb.focus()
-    kb.press_button(name, hold=0.35, after=0.6)
+    kb.press_button(name, hold=hold, after=0.6)
 
 
 def hud_visible(png):
     """True when the race HUD's mint clock hexagon is drawn (bottom left, 118,216,176 on a race frame)."""
     out = subprocess.run(["magick", str(png), "-crop", "40x40+100+950", "+repage", "-resize", "1x1", "-format",
                           "%[fx:int(255*r)],%[fx:int(255*g)],%[fx:int(255*b)]", "info:"], capture_output=True, text=True).stdout
-    r, g, b = (int(x) for x in out.split(","))
+    try:
+        r, g, b = (int(x) for x in out.split(","))
+    except ValueError:
+        return False, None
     return 90 <= r <= 150 and 190 <= g <= 240 and 150 <= b <= 200, (r, g, b)
+
+
+def wait_written(path, timeout=60.0):
+    """Wait for a savestate file PINE is writing: it appears, grows, and is a readable zip when it is whole."""
+    import zipfile
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        time.sleep(1.5)
+        try:
+            if path.exists() and "eeMemory.bin" in zipfile.ZipFile(path).namelist():
+                return
+        except (zipfile.BadZipFile, OSError):
+            pass
+    sys.exit("savestate %s never became a complete zip" % path)
 
 
 def cmd_race(args, drive, pine, kb):
     state_dir = Path(drive.STATE_DIR)
     serial = args.serial
+    if not drive.set_paused(pine, kb, False):
+        sys.exit("could not run the VM before the load")
     pine.loadstate(args.menu_slot)
     time.sleep(3.0)
+    if not drive.set_paused(pine, kb, False):
+        sys.exit("could not run the VM after the load (the previous walk leaves it paused after `frames`)")
     work = Path(args.work)
     work.mkdir(parents=True, exist_ok=True)
     target = args.entry - 1
@@ -159,8 +182,9 @@ def cmd_race(args, drive, pine, kb):
         have = pine.read32(TRACK_SELECT_CURSOR)
         if have == target:
             break
-        press(kb, "down")
+        press(kb, "down", hold=0.08 if (target - have) % 32 == 1 else 0.35)
         time.sleep(1.0)
+        print("  cursor %d, wanted %d, vm %s" % (have, target, pine.status()), flush=True)
     else:
         sys.exit("Track Select cursor %d, wanted %d" % (pine.read32(TRACK_SELECT_CURSOR), target))
     time.sleep(1.5)
@@ -173,6 +197,7 @@ def cmd_race(args, drive, pine, kb):
     live = None
     while time.monotonic() - started < args.load_timeout:
         time.sleep(4.0)
+        (work / "poll.png").unlink(missing_ok=True)
         drive.gs_screenshot(kb, str(work / "poll.png"))
         ok, rgb = hud_visible(work / "poll.png")
         print("  %3.0f s: hud hexagon %s %s" % (time.monotonic() - started, "VISIBLE" if ok else "no", rgb), flush=True)
@@ -185,20 +210,37 @@ def cmd_race(args, drive, pine, kb):
     if live is None:
         sys.exit("the race HUD never appeared within %.0f s" % args.load_timeout)
     print("race HUD up after %.0f s real time" % live, flush=True)
-    time.sleep(8.0)
-    probe_slot = 5
-    # the scan for the craft takes tens of seconds: stand the VM still so the race clock does not run on meanwhile
-    if not drive.set_paused(pine, kb, True):
-        sys.exit("could not pause the VM")
-    pine.savestate(probe_slot)
-    time.sleep(3.0)
+    probe_slot, probe_slot_b = 5, 4
     probe = state_dir / ("%s.%02d.p2s" % (serial, probe_slot))
-    found = pcsx2_state.player_craft(probe)
-    if found is None:
-        sys.exit("no player craft with a camera rig in the probe state %s" % probe)
-    clock_address = pcsx2_state.race_clock_address(probe, found[0])
+    probe_b = state_dir / ("%s.%02d.p2s" % (serial, probe_slot_b))
+    clock_address = None
+    for attempt in range(5):
+        # two savestates a few seconds apart, the clock being the float that ran on between them (`race_clock_between`): the HUD is up
+        # from the start of the countdown and some circuits count down for a while, so the search is repeated until it finds one
+        time.sleep(14.0)
+        saved = []
+        for slot, path in ((probe_slot, probe), (probe_slot_b, probe_b)):
+            if slot == probe_slot_b:
+                if not drive.set_paused(pine, kb, False):
+                    sys.exit("could not resume the VM")
+                time.sleep(3.0)
+            if not drive.set_paused(pine, kb, True):
+                sys.exit("could not pause the VM")
+            path.unlink(missing_ok=True)
+            pine.savestate(slot)
+            wait_written(path)
+        clock_address = pcsx2_state.race_clock_between(probe, probe_b)
+        found = pcsx2_state.player_craft(probe_b)
+        if found is None:
+            sys.exit("no player craft with a camera rig in the probe state %s" % probe_b)
+        if clock_address is not None:
+            break
+        shutil.copy(probe, work / ("probe-no-clock-%d.p2s" % attempt))
+        print("  probe %d: no single rising race clock yet, running on" % attempt, flush=True)
+        if not drive.set_paused(pine, kb, False):
+            sys.exit("could not resume the VM")
     if clock_address is None:
-        sys.exit("the race clock is not the one word below craft %#x that sits 4 s above its HUD partner" % found[0])
+        sys.exit("no single word ran on as a race clock (4 s above its HUD partner) between two states")
     print("craft %#x, race clock at %#x" % (found[0], clock_address), flush=True)
     if not drive.set_paused(pine, kb, False):
         sys.exit("could not resume the VM")
@@ -212,9 +254,10 @@ def cmd_race(args, drive, pine, kb):
     pine.write32(WIDESCREEN_OPTION, 1)
     subprocess.run(["uv", "run", "--with", "python-xlib", "python3", str(HERE / "pcsx2-drive.py"), "--slot", str(args.slot),
                     "frames", "4", "--window", "none"], check=True)
-    pine.savestate(args.save_slot)
-    time.sleep(3.0)
     src = state_dir / ("%s.%02d.p2s" % (serial, args.save_slot))
+    src.unlink(missing_ok=True)
+    pine.savestate(args.save_slot)
+    wait_written(src)
     dest = Path(args.saves) / (args.name + ".p2s")
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(src, dest)
