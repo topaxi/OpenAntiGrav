@@ -435,6 +435,36 @@ screen, which is light (mean luma 0.9), is waited out until a dark frame; the sh
 Event 1: Empire Climb `(190, 25)`, Queens Mall `(270, 68)`); another save needs its own `--node`. **Metro Park's Time Trial hangs Vita3K at 56 % on the loading bar**
 (three boots, two configs, a bar that sat at 56 % for 3 to 5 minutes each time); the two races above load in 20 to 30 s.
 
+### A fresh Vita3K profile and the circuits a fresh save reaches (2026-11-11, `gallery-2048`)
+
+**Claim: the page carries a 2048 pair for every circuit ours can race (about 14, up from 3). Not met: no pair was added.** The profile is
+installed, the game boots, and the walk stops at the Game Mode grid because a tap does not register without the Vita firmware
+([vita3k-capture.md](../reverse-engineering/vita3k-capture.md), "A fresh profile on a new machine"; confidence 70 for the cause).
+
+- **Pref-path (persistent, reused by later lanes):** `data/saves/2048/vita3k/` (`ux0/app/PCSF00007` base 1.04 with the patch merged,
+  `ux0/addcont/PCSF00007/DLC1W2048PACKAGE` and `DLC2W2048PACKAGE`; 2.3 GiB). Installed with `vita3k -c <config> -w --pkg <pkg> --zrif <zRIF>`
+  under a private `HOME` and `env -u XDG_CONFIG_HOME -u XDG_DATA_HOME`: `data/images/2048-vita-eu.pkg`, `2048-vita-eu-patch.pkg`, then
+  `data/dlc/WipEout 2048 - DLC1 (Europe) (DLC).pkg` and `DLC2`. **The DLCs need their own zRIF** (the base one gives `header signature is
+  invalid`; `data/keys/vita-zrif.tsv` carries only the base row); it comes from the pkgi pair list's rows `EP9000-PCSF00007_00-DLC1W2048PACKAGE`
+  and `DLC2W2048PACKAGE`. Config keys that keep the boot unattended: `show-welcome: false`, `warn-missing-firmware: false`.
+- **What a fresh save opens** (read off `data.psarc`'s `data/plugins/grids/grid_00..15.xml`, `PI_Grid`/`PI_Cell`): the base campaign opens
+  `2048 - Event 1` and 15 side events with no gate (`2048-campaign.md`); the HD Campaign opens `grid0` (Uplift) and the Fury Campaign `grid8`
+  (Blitzed, `Unlock Grid="None"`), and in each grid only the two cells that author `Locked="false"` (HD: `grid0_3_1` Vineta K Race and
+  `grid0_3_2` Anulpha Pass Speed Lap; Fury: `grid8_3_1` `17_Track` Race and `grid8_3_2` `19_Track` Elimination). Every other grid needs the
+  previous grid's earned points (`RequiredPoints` 10, 13, 16, 19, 22, 25, 30, 40 for HD) and every other cell its neighbours' medals.
+  The track keys map `01..08_Track` to Vineta K, Metropia (`02`), Moa Therma (`03`), Chenghou Project (`04`), Ubermall (`05`), Sebenco Climb
+  (`06`), Sol 2 (`07`), Anulpha Pass (`08`) (the `FEModelLocation` `track0N` in `dlc1.psarc`'s `plugins/tracks/Definition.xml`);
+  Fury's `17..20` are Talons Junction, Amphiseum, Modesto Heights and Tech De Ra, `21..24` their reverses, `25..28` `Zone_1..4`.
+  Metropia first appears in `grid2` (needs `grid1`'s 13 points), so **an unlock route is needed for Metropia and for most circuits**.
+- **Unlock route, a hypothesis not yet tried (the emulator was not reachable past the Game Mode grid):** the grid record parsed by
+  `FUN_810bd2a4` (EU v1.04) keeps `Locked` as a byte at `+0xac`, `RequiredPoints` at `+0xb0`, `FlyerName` inline at `+0xcc`; the cell record
+  parsed by `FUN_810bbfce` keeps `Locked` at `+0xe9` and the track name inline at `+0xea` (0x18 bytes, `01_Track`). A scan of the
+  guest's heap for those inline strings, then writing the two flag bytes through `/proc/<pid>/mem` (the channel the hull-shake patch
+  uses), may open the map. Confidence 40: the map colours off the progress word `event+0x2d8` and the vtable's lock query
+  (`campaign-map-projection.md`), which may not read these bytes.
+- **`CameraP1`:** not readable off the save. `DATA.BIN` has no readable strings, so the `strings -a` route returns nothing; the options
+  screen is the way, and was not reached.
+
 ### The chase camera and the craft's size (2026-11-11, `c2048-chase-camera`)
 
 **Question:** is the original's craft drawn 1.3 times larger than ours on the three 2048 grid pairs because the two sides flew different chase views
