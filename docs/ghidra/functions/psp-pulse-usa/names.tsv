@@ -1457,3 +1457,6 @@
 # 2026-11-11 weapon-bank-follow: the sweep's second query is the collision cage (rocket-visuals.md)
 0x08832134	function	Cage_TestSweepEnd	92	rocket-visuals.md
 0x08831948	function	Cage_QuerySweepEnd	90	rocket-visuals.md
+0x0881a364	function	Hud_RaiseIncomingWarning	95	hud-incoming-warnings.md
+0x0881aa8c	function	Hud_UpdateIncomingWarnings	95	hud-incoming-warnings.md
+0x08ab0994	data	g_hud_incoming_warning_widgets	92	hud-incoming-warnings.md
