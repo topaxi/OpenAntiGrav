@@ -37,12 +37,19 @@ Why a split cannot cut the first and third rows: cargo has no early cutoff, so a
 in a crate rebuilds every crate above it, and with `incremental = false` each is a full
 recompile. After a split an edit in `load` rebuilds the new crate, then all of raceplay,
 then all of game: the same work plus a crate boundary. A split only saves the moved
-code's compile time for an edit *outside* it. By non-test code lines, `load` is 12.8 %
-of raceplay (about 2.5 s of a 43 s rebuild, 6 %); boot, movie and loading together are
-17.5 % of the game lib, the profile set (records, unlock, ghosts, campaign, settings,
-profile) 13 %, together 30 % (about 5 s of 34 s, 15 % best case, about 10 % weighted
-by where edits land). The game binary unit (`main/`, 12-18 s, a third of the wall) does
-not move. Line share is the only proxy (`cargo llvm-lines` is not installed here).
+code's compile time for an edit *outside* it. By non-test code lines, `load` is 12.2 %
+of raceplay's 51k (about 2 s of a 44 s rebuild, 5 %). The game lib is 38k lines and the
+binary (`main/`, `main_body.rs`) 27k: boot, movie and loading are 21 % of the lib (about
+3.4 s of 34 s, 10 %), the profile set (records, unlock, ghosts, campaign, settings,
+profile) 16 % (7.5 %), all of them 37 % (about 6 s, 17 % best case, about 11 % weighted
+by where edits land). The binary unit (12-18 s, half the wall) does not move. Line share
+is the only proxy (`cargo llvm-lines` is not installed here), and the best case needs all
+three cuts and an edit outside them.
+
+To re-measure: edit one non-generic function body with a fresh `black_box(N)` literal each
+run (a repeated edit hits kache), do one discarded rebuild of the unedited file first, then
+three runs of `cargo build --timings -p oag-game` under `flock -o ~/.cache/oag/gate.lock`;
+read the wall time and the unit rows of `target/cargo-timings/cargo-timing.html`.
 
 Coupling, which is the other reason to stop: `load` is `use super::*` over lib.rs,
 reaches about 30 sibling raceplay modules (`foreign`, `stages`, `gantry`, `zone_grade`,
@@ -89,7 +96,5 @@ crate for persistence).
 
 1. `just docs 2>&1 | rg -c warning` on `main` for a baseline, then fix the broken
    cross-crate links in the new crates (about an hour).
-2. Measure the `load`/`scene` coupling: `rg -c 'race\.|&Race|&mut Race'
-   crates/raceplay/src/load crates/raceplay/src/scene` decides the first split.
-3. Draw the profile crate as one member lane (an afternoon), brief: no re-exports,
-   host trait only where `main/` needs it.
+2. The `load`/`scene` coupling is measured (above): leave `oag-raceplay` whole.
+3. A profile crate only for a reason other than build time (modern-saves persistence).
