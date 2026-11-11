@@ -763,9 +763,11 @@ data/extracted/ps4/omega-eu/uroot/data01.psarc
 Data/environments/04_chenghou_project/Materials/Diffuse_Normal_Specular_Emmissive.rcsmaterial
 --at 0x3244`) fetches `Texture2` with `dmask:0x8` (alpha alone) and `Texture1` with `dmask:0x7`
 and computes `v0 * (Constant1 * T2.a + constantAmbientColour * T1.rgb) + fog * (1 - v0)`: the
-same two terms (Omega has no `T1^2`: its colours are linear). Its lit programs were not taken
-apart. Wired: `emissive_add` admits Omega's plain member too (HD, 2048 and Omega's ambient
-agree); Omega's `_emmissive_alpha` stays Vita only (its programs are unread).
+same two terms (Omega has no `T1^2`: its colours are linear). The lightmapped lit program `@0xaf44`
+also multiplies `Constant1` by `Texture2`'s alpha register and sums it in before the fog mix
+(`2048-material-params.md`, "Against Omega"; the sampler assignment is a reflection-order inference,
+confidence 80). Wired: `emissive_add` admits Omega's plain member too (HD, 2048 and Omega's ambient
+agree); the 13 Omega circuits that ship the plain file change; Omega's `_emmissive_alpha` stays Vita only (its programs are unread).
 
 **Wired 2026-11-11:** `mesh::rcs::psp2::emissive_add` admits the family (mask `Norm`, colour
 named `Texture1`); the 2048 census moves **10 to 3** (`omega_transparency_ground_truth.rs`),
