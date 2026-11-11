@@ -17,9 +17,17 @@ setBuild(GLUE);
 // fails (offline, a deploy half way) is a message and not a picker that does
 // nothing.
 let init, inspect, start;
+// `?profile=1` or `?debug=1`: the same build with its function names kept
+// (oag_web_bg.named.wasm, scripts/build-web.sh), so a profiler's wasm frames and
+// a report's stack read as Rust names. Every worker gets this same module
+// object (`oagSpawnWorker`), which the threaded build needs.
+const query = new URLSearchParams(location.search);
+const NAMED = ["profile", "debug"].some((key) => query.has(key) && query.get(key) !== "0");
 try {
   const glue = await import(GLUE);
-  ({ default: init, inspect, start } = glue);
+  ({ inspect, start } = glue);
+  init = () => glue.default(NAMED ? { module_or_path: new URL("oag_web_bg.named.wasm", GLUE) } : undefined);
+  if (NAMED) console.log("module: oag_web_bg.named.wasm (function names kept)");
   // Only a module built with OAG_WEB_FAULT_TEST=1 has the hook that raises each
   // failure on demand (scripts/build-web.sh).
   window.oagFaultTest = glue.fault_test;
