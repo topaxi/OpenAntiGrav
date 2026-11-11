@@ -332,3 +332,8 @@
 0x811c4296	function	Ship_RestoreShield	70	craft-laws.md
 0x8151fc34	data	g_ShipWallCofR	84	craft-laws.md
 0x8153fd20	data	g_skill_level	84	craft-laws.md
+0x816aef08	data	g_VignetteTint	80	exposure.md
+0x8151c6b0	data	g_VignetteStrength	75	exposure.md
+0x8151c6b4	data	g_VignetteCentreY	80	exposure.md
+0x8151c6b8	data	g_VignetteInnerRadius	80	exposure.md
+0x8151c6bc	data	g_VignetteOuterRadius	80	exposure.md

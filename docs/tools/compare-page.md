@@ -575,7 +575,7 @@ such pair, read from the flags the pair recorded. No other profile holds anythin
 | Vineta K | 48.1 | 80.1 | 36.7 | 80.3 | 41.4 / 23.4 |
 
 Held, ours is now a little darker than the original: Empire Climb's track and walls still draw in flat colours, and Vineta K's sky is darker than
-the original's. The vignette, the screen tint and `alphaTex` are unread and left out.
+the original's. **The vignette is drawn since 2026-11-11 (`w2048-vignette`)**: the composite is the original's fan-and-ring mesh round clip-space `(0, -0.885)`, so the top corners go black and the bottom corners are untouched, as in the original (outermost 8x8 luma at the top corners 0.9 to 1.8 original, ours 7 to 67 before and 0.4 to 4.8 after; exposure.md, "The vignette"). The screen tint and `alphaTex` are unread and left out.
 
 Three flags of `scripts/vita-2048-pair.py` read and write the guest's memory through the countdown burst, with `--walk` only (Vita3K must be the
 script's own child; Yama's `ptrace_scope` 1 refuses `/proc/<pid>/mem` to anything else):
