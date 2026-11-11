@@ -28,16 +28,14 @@ the main checkout and follow it. Then read `CLAUDE.md`, `docs/README.md` and
 - ADRs are immutable. A changed decision gets a new ADR that supersedes the
   old one.
 - Handover hygiene: one thread per file under `handover/<category>/`, each
-  with `## Open` and `## Next Steps`. When a thread's work has fully landed,
-  delete the file (the index is its frontmatter, `just threads`); a new thread needs `status`, `titles`, `updated`, `summary`. Nothing outside
+  with `## Open`, `## Next Steps` and `status`, `titles`, `updated`, `summary`
+  frontmatter; delete the file when its work has fully landed. Nothing outside
   `handover/` and `HANDOVER.md` links into `handover/`; cite the `docs/`
   page, test or address instead.
 - `HANDOVER.md` stays under 256 KiB (`just check-handover`).
-  `docs/overview/status.md`'s RE-coverage table is generated
-  (`just gen-status`), so never hand-edit it, and never commit it: the lead
-  regenerates it per merge.
+  `docs/overview/status.md`'s RE-coverage table is generated: never hand-edit
+  or commit it.
 - A docs-only change runs `just check-docs`, plus `check-names`,
-  `check-handover` as they apply. If you find you need to
-  touch a `.rs` file beyond a doc comment, stop and tell the lead: that is a
-  different lane.
+  `check-handover` as they apply. If you need to touch a `.rs` file beyond a
+  doc comment, stop and tell the lead: that is a different lane.
 - Write plainly: short sentences, and no em or en dashes.
