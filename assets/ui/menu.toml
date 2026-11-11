@@ -1311,8 +1311,8 @@ values = ["original", "high", "maximum"]
 # `original` is the measured order and the default: the original queues every
 # `Trail` at the constant key 0x4d000000, ahead of the circuit's blended list,
 # so a translucent floor patch paints over the ribbon (it writes no depth).
-# `over-floors` draws the ribbons after that list, the order this project drew
-# before the original's was measured: a brighter trail, chosen, not measured.
+# `over-floors` draws the ribbons after that list: a brighter trail, chosen, not
+# measured. It moves the ribbons only; the circuit's own order is unchanged.
 # Only a title whose ribbon is the PSP preset (Pulse, Pure) has a choice; the
 # row is dropped elsewhere (`Definition::drop_unavailable_trail_order`).
 # See `docs/ghidra/functions/psp-pulse-usa/exhaust.md`, "The ribbon is queued

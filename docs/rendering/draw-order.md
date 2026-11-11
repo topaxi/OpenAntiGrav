@@ -201,14 +201,31 @@ synthetic pose on this circuit with the camera put by hand beside a tree (the cr
 by 98 of 130,560 pixels, all on the craft, between `--trail-order original` and `over-floors`, and at `original` the
 foliage lies over the craft's wing.
 
-**The hull-and-pad half of the symptom is the other order.** With `ribbons_first()` false the circuit draws whole inside
-`Draw::Track`, so the blended list (no depth write) goes down before the pads and the hulls, and a hull or pad drawn later
-overwrites a nearer tree. That is `trail_order = over-floors` and the HD tube path (`hd_trail_active`: HD, Omega, 2048). It
-did **not** reproduce on Pulse PSP at the default: three matched poses of ours against the original (the start grid, the
-approach to speed pad 2, spline row 2430 beside trees 755 and 756) show trees where the original shows them, and no pose a
-hovering craft can reach put a tree between the chase camera and the craft or a pad. Platinum Rush Black was not reached:
-two Track Select presses (`--track-down 18` and `19`) came up on the same start frame, so which of White and Black each is
-stayed unread.
+**The hull-and-pad half of the symptom was `trail_order = over-floors`, fixed.** With `ribbons_first()` false the
+circuit used to draw whole inside `Draw::Track`, so the blended list (no depth write) went down before the pads and the
+hulls, and a pad or hull drawn later overwrote a nearer tree. `over-floors` is the maintainer's own Pulse PSP setting
+(introduced with the ribbon order, `f24bc0e20`, which tied the blended list's place to the ribbons'). Reproduced on
+Platinum Rush White, a camera aimed from the hillside at speed pad 2 (centre `(90.8, 68.4, 277.8)`, 174 units from the
+craft at `(226.7, 98.0, 172.9)`) with a bush in front: at `over-floors` the pad's chevrons show through the bush (a
+27 x 3 pixel strip at 960x544), at `original` they do not; the PPSSPP software renderer, the same craft pose placed on a
+Platinum Rush White grid state and walked there in 40-unit hops along the spline, shows no chevrons over the bush. The
+setting now places the ribbons alone (`Race::blended_after_craft`, true for the PSP preset under both orders): the blended
+list is its own draw after the pads and the hulls either way, and `over-floors` draws the ribbons later, with the flares.
+`original` is byte-identical before and after (three frames); `over-floors` after equals `original` on that frame.
+Held by `trail_order_ground_truth::a_bush_hides_the_speed_pad_behind_it_under_both_trail_orders` and
+`scene::record::tests::over_floors_keeps_the_blended_list_after_the_craft`. HD, Omega and 2048 (`hd_trail_active`)
+keep the circuit whole: their queue keys are unread, so a translucent circuit mesh there still goes down before the craft
+and the pads (open; the same bush-and-pad frame was not taken on them).
+
+**Pure and the PS2 pressing: checked, applies.** Both use the PSP ribbon preset (`hd_trail_active` is false), so the fix
+reaches them through the same path; Pure's key is the same shape (above) and PS2 inherits what PSP measured. Neither was
+captured.
+
+**The pre-race fly-by trees: not reproduced.** Fourteen fly-by frames of Platinum Rush White (2 s apart, 960x544, the
+maintainer's whole Pulse PSP profile: `over-floors`, FOV 100, high model detail, mapped shadows) are byte-identical
+before and after this change, and `original` against `over-floors` is identical on all of them, so the report is not
+this ordering. Trees inside one list-B mesh keep the mesh's own triangle order in the original too (the key is per
+mesh). Still wanted: the maintainer's frame (tick and camera of the wrong pair) to set against the original's.
 
 Confidence: the pad layers and order against list B, **85** (a runtime trace of one frame of one circuit, two boots, the
 bump reproducing); the depth states, **85** (the GE command words of the same frame); the hull's layer, **70** (the

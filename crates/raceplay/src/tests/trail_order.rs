@@ -27,3 +27,17 @@ fn hds_tube_ignores_the_trail_order() {
         assert!(!race.ribbons_first(), "{order}");
     }
 }
+
+/// The setting places the ribbons; the circuit's blended list stays after the pads and hulls
+/// under both orders, and only HD's tube keeps the circuit whole.
+#[test]
+fn the_blended_list_is_after_the_craft_whichever_order_the_ribbons_take() {
+    let mut race = race_with_a_grid();
+    race.view.hd_trail_active = false;
+    for order in TrailOrder::ALL {
+        race.set_trail_order(order);
+        assert!(race.blended_after_craft(), "{order}");
+    }
+    race.view.hd_trail_active = true;
+    assert!(!race.blended_after_craft());
+}

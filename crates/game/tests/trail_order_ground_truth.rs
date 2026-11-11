@@ -20,6 +20,10 @@
 //! the frame) makes them byte-identical.
 //!
 //! `original` is also the default: a run with no flag is byte-identical to it.
+//!
+//! The setting places the ribbons and nothing else: the circuit's blended list (trees) is drawn
+//! after the pads under both orders, so a pad behind a tree stays hidden
+//! (`docs/rendering/draw-order.md`, "Hull, pads and trees on Platinum Rush White").
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -108,4 +112,46 @@ fn the_hd_trail_length_draws_a_longer_ribbon() {
 
     assert_eq!(default, original, "original is the default length");
     assert_ne!(original, hd, "hd must draw the longer ribbon");
+}
+
+/// Platinum Rush White, a camera aimed from the hillside at speed pad 2 across the valley: a
+/// bush stands in front of it. The pad draws before the circuit's blended list under both
+/// orders, so the bush hides it; with the list drawn inside the circuit (the ribbons moved
+/// together with it) the pad's chevrons show through the bush. The craft is behind the camera,
+/// so no ribbon is in view and the two frames must be the same bytes.
+#[test]
+#[ignore = "needs a Pulse disc image in data/images/ and a GPU adapter"]
+fn a_bush_hides_the_speed_pad_behind_it_under_both_trail_orders() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let scratch = scratch();
+    let shot = |order: &str| {
+        let out = scratch.join(format!("pad-{order}.png"));
+        let status = Command::new(env!("CARGO_BIN_EXE_oag-game"))
+            .arg(&image)
+            .args(["--race", "--no-audio", "--size", "960x544"])
+            .args(["--render-scale", "100", "--msaa", "off", "--motion-blur", "off"])
+            .args(["--screen-filter", "off", "--anisotropy", "off"])
+            .args(["--track", "Data\\Environments\\13_Track\\track.vex"])
+            .args(["--ticks", "0", "--pose=226.7,98.0,172.9", "--pose-hold"])
+            .args(["--camera-pose=226.7,102.0,172.9,-0.777,-0.192,0.600,0,1,0"])
+            .args(["--trail-order", order])
+            .arg("--screenshot")
+            .arg(&out)
+            .env("XDG_CONFIG_HOME", scratch.join("config"))
+            .env("XDG_STATE_HOME", scratch.join("state"))
+            .env("XDG_DATA_HOME", scratch.join("data"))
+            .status()
+            .expect("running oag-game");
+        assert!(status.success(), "oag-game {order}");
+        std::fs::read(&out).expect("reading the screenshot")
+    };
+    let original = shot("original");
+    let over_floors = shot("over-floors");
+    std::fs::remove_dir_all(&scratch).ok();
+    assert_eq!(
+        original, over_floors,
+        "over-floors moves the ribbons only: the pad stays behind the bush"
+    );
 }
