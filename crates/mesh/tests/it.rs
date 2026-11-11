@@ -14,6 +14,7 @@ mod hd_sky_reflection_ground_truth;
 mod track_albedo;
 
 mod alpha_test_cutout;
+mod cutout_then_transparent;
 mod hd_absorb_shell_output_scale;
 mod hd_airbrake_flaps_ground_truth;
 mod hd_ambient_role_census_ground_truth;

@@ -578,56 +578,27 @@ impl Session {
                     pass.draw_indexed(draw.range.clone(), 0, 0..1);
                 }
 
-                // Second pipeline group, same pass: alpha-tested batches,
-                // cutout. One pipeline per reference the batches themselves
-                // ask for, switched only when it changes - see
-                // `mesh_render::cutout`.
-                let cutouts = mesh_render::CutoutPipelines {
-                    default: &self.alpha_test_pipeline,
-                    by_reference: &self.cutout_pipelines,
-                };
-                let mut cutout_set: Option<&wgpu::RenderPipeline> = None;
-                for draw in &self.model.alpha_tested_draws {
-                    let cutout = cutouts.select(draw);
-                    if !cutout_set.is_some_and(|set| std::ptr::eq(set, cutout)) {
-                        pass.set_pipeline(cutout);
-                        cutout_set = Some(cutout);
-                    }
-                    let slot = draw.texture.map_or(0, |t| t + 1);
-                    pass.set_bind_group(
-                        1,
-                        &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
-                        &[],
-                    );
-                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
-                }
-
-                // Third pipeline group, same pass: transparent batches,
-                // blended, with the equation the batch's own `pass_mask` asks
-                // for - see `oag_vex::vex::Batch::blend_class`. The viewer
-                // selects per draw call exactly as the game does, because it
-                // is only useful as a reference if it renders the same way.
-                let pipelines = mesh_render::TransparentPipelines {
-                    alpha_over: &self.blend_pipeline,
-                    additive: &self.additive_pipeline,
-                    unblended: &self.unblended_pipeline,
-                    authored: &self.authored_pipelines,
-                };
-                let mut current: Option<&wgpu::RenderPipeline> = None;
-                for draw in &self.model.transparent_draws {
-                    let pipeline = pipelines.select(draw);
-                    if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                        pass.set_pipeline(pipeline);
-                        current = Some(pipeline);
-                    }
-                    let slot = draw.texture.map_or(0, |t| t + 1);
-                    pass.set_bind_group(
-                        1,
-                        &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
-                        &[],
-                    );
-                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
-                }
+                // Cutout then transparent batches, selected per draw call
+                // exactly as the game does: the viewer is only useful as a
+                // reference if it renders the same way.
+                mesh_render::draw_cutout_then_transparent(
+                    &mut pass,
+                    &self.model,
+                    mesh_render::CutoutPipelines {
+                        default: &self.alpha_test_pipeline,
+                        by_reference: &self.cutout_pipelines,
+                    },
+                    mesh_render::TransparentPipelines {
+                        alpha_over: &self.blend_pipeline,
+                        additive: &self.additive_pipeline,
+                        unblended: &self.unblended_pipeline,
+                        authored: &self.authored_pipelines,
+                    },
+                    |draw| {
+                        let slot = draw.texture.map_or(0, |t| t + 1);
+                        &self.texture_binds[slot.min(self.texture_binds.len() - 1)]
+                    },
+                );
             }
         }
         self.queue.submit(Some(encoder.finish()));

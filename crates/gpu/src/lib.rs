@@ -13,6 +13,8 @@
 //!   writes over frames instead of freezing the page for all of them.
 //! - [`init_buffer`] is a small constant buffer created holding its contents,
 //!   by mapping on native and through the queue in a browser.
+//! - [`texture`] is a single-level texture born holding its pixels, and the clamped
+//!   bilinear sampler a sprite is read through.
 //! - [`timing`] is whether the GPU can be asked how long it took.
 //! - [`writes`] is where a frame's writes go: the queue, or a log of them a split
 //!   screen replays before each view's submission.
@@ -30,5 +32,6 @@ pub mod shader_file;
 pub mod split_finish;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod test_adapter;
+pub mod texture;
 pub mod timing;
 pub mod writes;

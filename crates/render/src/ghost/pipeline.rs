@@ -261,37 +261,7 @@ fn bind_static(
     layout: &wgpu::BindGroupLayout,
     texture: &FlareTexture,
 ) -> wgpu::BindGroup {
-    let (width, height) = (texture.width.max(1), texture.height.max(1));
-    let size = wgpu::Extent3d {
-        width,
-        height,
-        depth_or_array_layers: 1,
-    };
-    let gpu = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("ghost static"),
-        size,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-    queue.write_texture(
-        wgpu::TexelCopyTextureInfo {
-            texture: &gpu,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        &texture.rgba,
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(width * 4),
-            rows_per_image: Some(height),
-        },
-        size,
-    );
+    let gpu = texture.upload(device, queue, "ghost static");
     let view = gpu.create_view(&wgpu::TextureViewDescriptor::default());
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("ghost static"),

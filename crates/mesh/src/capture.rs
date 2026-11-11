@@ -337,57 +337,25 @@ pub fn capture_pixels_from(
                 pass.draw_indexed(draw.range.clone(), 0, 0..1);
             }
 
-            // Second pipeline group, same pass: `Model::alpha_tested_draws`
-            // wants a cutout, not a hardcoded alpha of 1.0 - see
-            // `fs_main_alpha_test`.
-            //
-            // **One `set_pipeline` per distinct reference, because the batch's
-            // own flag bits pick it** - a `.vex` batch authors `0x10` or
-            // `0x7f` and a circuit mixes them, exactly as the transparent
-            // classes below do. Switched only when it changes, so a model with
-            // one reference (or none, which is every PS3 model) pays for a
-            // single call as before. See `mesh_render::cutout`.
-            let cutouts = crate::mesh_render::CutoutPipelines {
-                default: &alpha_test_pipeline,
-                by_reference: &cutout_pipelines,
-            };
-            let mut current: Option<&wgpu::RenderPipeline> = None;
-            for draw in &model.alpha_tested_draws {
-                let pipeline = cutouts.select(draw);
-                if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                    pass.set_pipeline(pipeline);
-                    current = Some(pipeline);
-                }
-                pass.set_bind_group(1, bind(draw), &[]);
-                pass.draw_indexed(draw.range.clone(), 0, 0..1);
-            }
-
-            // Third pipeline group, same pass: `Model::transparent_draws`,
-            // blended rather than replaced and drawn last so opaque and cutout
-            // depth is already resolved. See `crate::exhaust::Pipeline` for the
-            // precedent of pairing an opaque and a blended pipeline this way.
-            //
-            // **One `set_pipeline` per draw call, because the batch's own
-            // `pass_mask` picks its blend equation** - the `0x0700` class
-            // splits three ways and a single model mixes them. Grouping the
-            // draws by class first would reorder them, and transparent draws
-            // are order-dependent by definition.
-            let pipelines = crate::mesh_render::TransparentPipelines {
-                alpha_over: &blend_pipeline,
-                additive: &additive_pipeline,
-                unblended: &unblended_pipeline,
-                authored: &authored_pipelines,
-            };
-            let mut current: Option<&wgpu::RenderPipeline> = None;
-            for draw in &model.transparent_draws {
-                let pipeline = pipelines.select(draw);
-                if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                    pass.set_pipeline(pipeline);
-                    current = Some(pipeline);
-                }
-                pass.set_bind_group(1, bind(draw), &[]);
-                pass.draw_indexed(draw.range.clone(), 0, 0..1);
-            }
+            // Cutout draws want `fs_main_alpha_test`, not a hardcoded alpha of
+            // 1.0; transparent draws are blended and last so opaque and cutout
+            // depth is already resolved (`crate::exhaust::Pipeline` pairs an
+            // opaque and a blended pipeline the same way).
+            crate::mesh_render::draw_cutout_then_transparent(
+                &mut pass,
+                model,
+                crate::mesh_render::CutoutPipelines {
+                    default: &alpha_test_pipeline,
+                    by_reference: &cutout_pipelines,
+                },
+                crate::mesh_render::TransparentPipelines {
+                    alpha_over: &blend_pipeline,
+                    additive: &additive_pipeline,
+                    unblended: &unblended_pipeline,
+                    authored: &authored_pipelines,
+                },
+                bind,
+            );
         }
     }
     encoder.copy_texture_to_buffer(

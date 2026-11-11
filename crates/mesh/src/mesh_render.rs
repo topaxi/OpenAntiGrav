@@ -51,6 +51,8 @@ pub use crate::capture::{capture_from, capture_pixels_from};
 pub mod cutout;
 pub mod deferred;
 pub use cutout::CutoutPipelines;
+mod draw_groups;
+pub use draw_groups::draw_cutout_then_transparent;
 
 mod target;
 pub use target::{fragment_options, is_linear_target, linear_constants};
