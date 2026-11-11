@@ -83,7 +83,10 @@ pub(super) fn plan(
             report.shield_lightning_unread += 1;
             continue;
         };
-        plan.adds[index] = Some(Add { slot, texture });
+        plan.adds[index] = Some(Add {
+            slot,
+            texture: Some(texture),
+        });
         report.shield_lightning_materials += 1;
     }
 }
