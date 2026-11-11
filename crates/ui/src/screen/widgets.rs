@@ -56,6 +56,23 @@ impl Fill {
     }
 }
 
+impl super::Screen {
+    /// Every fill, then every image the sheet places, as ordinary draws: the
+    /// opening of each screen whose fills and images are all drawn as
+    /// authored. A screen that filters or interleaves them walks
+    /// [`Self::fills`] and [`Self::images`] itself.
+    #[must_use]
+    pub fn plain_draws(&self, sprites: &dyn Fn(&str) -> Option<Placed>) -> Vec<Draw> {
+        let mut out: Vec<Draw> = self.fills.iter().map(Fill::draw).collect();
+        for image in &self.images {
+            if let Some(placed) = sprites(&image.src) {
+                out.push(image.sprite_draw(placed, image.x, image.y, image.color));
+            }
+        }
+        out
+    }
+}
+
 impl Image {
     /// This image as a [`Draw::Sprite`], or a [`Draw::TiledSprite`] when the
     /// sampled rect is larger than the sheet's placed rect, with the position

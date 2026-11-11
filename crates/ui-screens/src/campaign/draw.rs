@@ -754,16 +754,7 @@ const ARROW_DISABLED_TINT: u32 = 0xff50_5050;
 #[must_use]
 pub fn cell_help_draw(layout: &Layout, sprites: &dyn Fn(&str) -> Option<Placed>) -> Vec<Draw> {
     let screen = &layout.screen;
-    let mut out = Vec::new();
-    for fill in &screen.fills {
-        out.push(fill_draw(fill));
-    }
-    for image in &screen.images {
-        let Some(placed) = sprites(&image.src) else {
-            continue;
-        };
-        out.push(image_draw(image, placed));
-    }
+    let mut out = screen.plain_draws(sprites);
     for text in &screen.texts {
         let Some(content) = text.string.as_deref() else {
             continue;

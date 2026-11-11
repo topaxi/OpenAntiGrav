@@ -769,16 +769,7 @@ pub fn hd_menu_draw_list(
 ) -> Layers {
     let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let screen = &layout.screen;
-    let mut out = Vec::new();
-    for fill in &screen.fills {
-        out.push(fill_draw(fill));
-    }
-    for image in &screen.images {
-        let Some(placed) = sprites(&image.src) else {
-            continue;
-        };
-        out.push(image_draw(image, placed));
-    }
+    let mut out = screen.plain_draws(sprites);
     for text in &screen.texts {
         let name = text.name.as_deref().unwrap_or("");
         // The icon glyph draws nothing - see `hd_results_draw_list`'s

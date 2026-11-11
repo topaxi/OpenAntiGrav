@@ -384,16 +384,7 @@ pub fn endrace_menu_draw_list(
 ) -> Layers {
     let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let screen = &layout.screen;
-    let mut out = Vec::new();
-    for fill in &screen.fills {
-        out.push(fill_draw(fill));
-    }
-    for image in &screen.images {
-        let Some(placed) = sprites(&image.src) else {
-            continue;
-        };
-        out.push(image_draw(image, placed));
-    }
+    let mut out = screen.plain_draws(sprites);
     if let Some(menu) = &screen.menu {
         let pitch = font_line_height(&menu.font) * face_scale(layout, &menu.font);
         let color = argb_to_rgba(menu.color);
