@@ -642,3 +642,68 @@ fn the_booth_glass_reflects_the_sky_by_its_alpha_not_its_complement() {
         64.0 / 191.0
     );
 }
+
+/// `glass_2uv_rgb_reflect_glow` (`docs/formats/rcsmaterial.md`, "The window whose mask's red gates
+/// the reflection"): its window-glass entry carries `tint.z` 3 and the shader weights the sky
+/// reflection by one minus the red of the glow mask, the third binding. On a black, fully opaque
+/// picture, where `tint.z` 1 reflects nothing, a mask with no red must reflect the sky and a
+/// mask of full red must not. Dropping the `tint.z` 3 branch in `shade.wesl` reads the gate as
+/// `1 - a` and the first case goes black.
+#[test]
+fn the_rgb_window_reflects_the_sky_by_one_minus_its_masks_red() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let (width, height) = oag_mesh::mesh::sky_paraboloid::SIZE;
+    let grey = vec![160u8; (width * height * 4) as usize];
+    let sky = mesh_render::upload_sky_probe(&device, &queue, &grey);
+    let glass = |gate: f32, mask_red: u8| {
+        let mut model = model(slots::DEFAULT | (1 << slots::MATERIAL_SHIFT));
+        model.textures = vec![Some(texture("black, opaque", [0, 0, 0, 255]))];
+        // Alpha 255: the mask adds no glow, whatever the entry's `offset`.
+        model.pad_masks = vec![Some(texture("glow mask", [mask_red, 0, 0, 255]))];
+        model.emissive = vec![oag_mesh::mesh::Emissive {
+            tint: [1.0, 0.0, gate],
+            offset: 0.0,
+            scale: 1.0,
+            rate: oag_mesh::mesh::WINDOW_REFLECTION_RATE,
+            program: [0.0; 2],
+        }];
+        model
+    };
+    let lit = |gate: f32, mask_red: u8| {
+        draw_with_sky(
+            &device,
+            &queue,
+            &glass(gate, mask_red),
+            rig(SUN),
+            None,
+            Some(&sky),
+        )
+    };
+    let clear = lit(3.0, 0);
+    let covered = lit(3.0, 255);
+    let half = lit(3.0, 128);
+    assert!(
+        clear[1] > 40,
+        "a mask with no red must reflect the sky: {clear:?}"
+    );
+    assert!(
+        covered[1] <= 2,
+        "a mask of full red must reflect nothing: {covered:?}"
+    );
+    assert!(
+        half[1] > covered[1] && half[1] < clear[1],
+        "half red reflects part of it: {half:?} between {covered:?} and {clear:?}"
+    );
+    // The picture's own alpha is no part of this gate: `tint.z` 1 on the same picture is black.
+    assert!(
+        lit(1.0, 0)[1] <= 2,
+        "an opaque picture reflects nothing under `1 - a`"
+    );
+}

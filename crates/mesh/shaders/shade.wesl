@@ -1054,7 +1054,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // `One`/`OneMinusSrcAlpha`, so the clear part of the pane shows what is behind it.
         // `tint.z` 1 weights the reflection by `1 - a` (the pane, and
         // `glass_2nduv_reflect_glow`'s opaque windows), `tint.z` 2 by `a` (`ds_booth_glass`, whose
-        // picture is its constant with the normal map's alpha).
+        // picture is its constant with the normal map's alpha), `tint.z` 3 by one minus the glow
+        // mask's red.
         var sky_reflection = vec3<f32>(0.0);
         var pane_cover = 1.0;
         var pane_clear = 1.0;
@@ -1067,14 +1068,21 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
                 pane_clear = 1.0 - texel.a;
             }
             let gate = row_tint.z;
-            let reflect_clear = select(select(1.0, 1.0 - texel.a, gate > 0.5), texel.a, gate > 1.5);
+            // The glow mask, bound third at the second coordinate set: its alpha gates the glow
+            // (`offset` 1) and, where `tint.z` is 3, its red the reflection
+            // (`glass_2uv_rgb_reflect_glow`).
+            var glow_mask = vec4<f32>(1.0);
+            if row_tint.w > 0.5 || gate > 2.5 {
+                glow_mask = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.zw);
+            }
+            var reflect_clear = select(select(1.0, 1.0 - texel.a, gate > 0.5), texel.a, gate > 1.5);
+            reflect_clear = select(reflect_clear, 1.0 - decode(glow_mask.rgb).r, gate > 2.5);
             sky_reflection = probe_tint(sky) * (row_tint.x * reflect_clear);
             // `offset` 1: the program also adds `colour * (1 - mask.a)`, the colour in the next
-            // entry's tint and the mask bound third at the second coordinate set
-            // (`glass_2nduv_reflect_glow`). The colour is added raw, as the program adds it.
+            // entry's tint (`glass_2nduv_reflect_glow`). The colour is added raw, as the program
+            // adds it.
             if row_tint.w > 0.5 {
-                let mask = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.zw).a;
-                sky_reflection += emissive_tint(sky_entry + 1u).xyz * (1.0 - mask);
+                sky_reflection += emissive_tint(sky_entry + 1u).xyz * (1.0 - glow_mask.a);
             }
         }
 

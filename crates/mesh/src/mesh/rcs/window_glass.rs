@@ -36,6 +36,12 @@
 //! variant has no atlas, and the entry's `program[1]` says so; its gamma nibble was not read
 //! live, so it is decoded like every other colour unit (**chosen, not measured**).
 //!
+//! **`glass_2uv_rgb_reflect_glow` gates the reflection by the mask's red** (Metropia's cream and
+//! green towers, blocks #5 `@0x2f70` and its lightmapped `@0xaf10`): the same picture, mask and
+//! glow, `rgb = fog(light * T.rgb + glow * (1 - G.a) + (1 - G.r) * reflection) / 2`, the picture
+//! fetched three lanes wide (`TEX H4.xyz`) and the mask two (`TEX H5.xw`). The red lane's gamma
+//! nibble was not read live: decoded like every other colour lane (**chosen, not measured**).
+//!
 //! **`ds_booth_glass` is an opaque mirror over a constant** (block #7, `@0x5f80` on Tech de Ra and
 //! `@0x5ca0` on Sebenco Climb, the lightmapped variant both circuits' slots resolve to):
 //! `rgb = fog(light * C + Texture1.a * sky) / 2`, alpha 0, drawn opaque, with `C` the constant
@@ -86,18 +92,22 @@ enum Mode {
     Reflective,
     /// `ds_booth_glass`: opaque, the reflection times `a` added to the lit picture.
     Gated,
+    /// `glass_2uv_rgb_reflect_glow`: opaque, the reflection times one minus the glow mask's
+    /// red added to the lit picture.
+    ReflectiveByMask,
 }
 
 impl Mode {
     /// `tint.y` and `tint.z` of the entry: whether the lit picture is weighted by the coverage
     /// (and the specular by its complement), and what weights the reflection: `0` nothing, `1`
-    /// `1 - a`, `2` `a`.
+    /// `1 - a`, `2` `a`, `3` one minus the glow mask's red.
     fn flags(self) -> [f32; 2] {
         match self {
             Self::Window => [0.0, 0.0],
             Self::Pane => [1.0, 1.0],
             Self::Reflective => [0.0, 1.0],
             Self::Gated => [0.0, 2.0],
+            Self::ReflectiveByMask => [0.0, 3.0],
         }
     }
 }
@@ -148,6 +158,14 @@ const FAMILIES: &[Row] = &[
         weight: None,
         picture: Some(GLOW_WINDOW_PICTURE),
         mode: Mode::Reflective,
+        glow: Some((GLOW_MASK, GLOW_COLOUR)),
+        specular: None,
+    },
+    Row {
+        family: "glass_2uv_rgb_reflect_glow",
+        weight: None,
+        picture: Some(GLOW_WINDOW_PICTURE),
+        mode: Mode::ReflectiveByMask,
         glow: Some((GLOW_MASK, GLOW_COLOUR)),
         specular: None,
     },

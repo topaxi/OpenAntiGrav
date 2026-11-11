@@ -159,6 +159,87 @@ fn the_tower_binds_its_picture_its_glow_mask_and_its_specular_map(
     }
 }
 
+/// The start gantry's boards: Metropia's two `cf_vex_billboard` slots resolve to
+/// the compile with no `k` (`@0x1360`), `picture * (glow.a + glow.rgb * light)`
+/// all the same (`mesh::rcs::billboard_glass`). Unclassified, they drew the card
+/// lit by the sun.
+fn the_gantry_boards_multiply_their_card_by_the_glow(
+    model: &mesh::Model,
+    report: &mesh::rcs::Report,
+    source: &oag_rcs::rcsmodel::Model,
+) {
+    use mesh::slots;
+    let boards: Vec<usize> = source
+        .materials
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| m.name.ends_with("/cf_vex_billboard.rcsmaterial"))
+        .map(|(slot, _)| slot)
+        .collect();
+    assert_eq!(boards.len(), 2, "the board slots: {boards:?}");
+    for &slot in &boards {
+        let word = model.material_slots[slot];
+        assert_ne!(
+            word & slots::ADD_SECOND,
+            0,
+            "board slot {slot} does not fetch its glow"
+        );
+        let index = slots::material_index(word) as usize;
+        let entry = index
+            .checked_sub(1)
+            .and_then(|i| model.emissive.get(i))
+            .unwrap_or_else(|| panic!("board slot {slot} names no glow entry"));
+        // `k` 1 on every lane, the glow tap's `v` and `u` scales as authored (1 and 1).
+        assert_eq!(entry.tint, [1.0; 3], "slot {slot}");
+        assert_eq!(entry.scale, 1.0, "slot {slot}");
+        assert_eq!(entry.program, [mesh::PROGRAM_BILLBOARD, 1.0], "slot {slot}");
+    }
+    assert_eq!(report.billboard_multiplied, 2);
+}
+
+/// The cream and green towers: `glass_2uv_rgb_reflect_glow`, 13 slots, the
+/// reflective window whose reflection is gated by the glow mask's red
+/// (`mesh::rcs::window_glass`). The mask sits at entry 0, so the generic reading
+/// painted it as the facade.
+fn the_rgb_windows_bind_their_picture_and_gate_the_sky_by_their_mask(
+    model: &mesh::Model,
+    source: &oag_rcs::rcsmodel::Model,
+) {
+    use mesh::slots;
+    let windows: Vec<(usize, &oag_rcs::rcsmodel::Material)> = source
+        .materials
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| m.name.ends_with("/glass_2uv_rgb_reflect_glow.rcsmaterial"))
+        .collect();
+    assert_eq!(windows.len(), 13);
+    for (slot, material) in windows {
+        let path_of = |hash: u32| {
+            material
+                .samplers
+                .iter()
+                .find(|(h, p)| *h == hash && p.is_some())
+                .and_then(|(_, p)| p.clone())
+                .unwrap_or_default()
+        };
+        let label = |table: &mesh::TextureSlots| {
+            table[slot]
+                .as_ref()
+                .map(|t| t.label.clone())
+                .unwrap_or_default()
+        };
+        // `texture1_alpha_for_reflect` is the picture, `Texture2_alpha_for_glow` the mask.
+        assert_eq!(label(&model.textures), path_of(0xc29b_64e4), "slot {slot}");
+        assert_eq!(label(&model.pad_masks), path_of(0x290a_5adb), "slot {slot}");
+        let index = slots::material_index(model.material_slots[slot]) as usize;
+        assert!(index > 0, "window slot {slot} names no entry");
+        let window = &model.emissive[index - 1];
+        assert_eq!(window.rate, mesh::WINDOW_REFLECTION_RATE, "slot {slot}");
+        assert_eq!(window.tint, [1.0, 0.0, 3.0], "slot {slot}");
+        assert_eq!(window.offset, 1.0, "slot {slot}");
+    }
+}
+
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn metropia_carries_its_programs_glow_masks() {
@@ -170,6 +251,8 @@ fn metropia_carries_its_programs_glow_masks() {
     };
     the_neon_rings_glow_by_their_pictures_alpha(&model, &report, &source);
     the_tower_binds_its_picture_its_glow_mask_and_its_specular_map(&model, &source);
+    the_gantry_boards_multiply_their_card_by_the_glow(&model, &report, &source);
+    the_rgb_windows_bind_their_picture_and_gate_the_sky_by_their_mask(&model, &source);
     assert!(
         model.glow_from_program,
         "HD's scene writes its mask by program"

@@ -3758,13 +3758,81 @@ by the picture's alpha, 1 on the wall where the map is about a quarter), with th
 and the compare list's hot region there (blocks of 6 or more, merged) 6.58 M to 2.36 M of impact. No other pair
 moves (the family has one slot).
 
-**What is left in that box** (per slot, after both): the three gantry cards R +15 to +22 G +18 to +24 B +8 to +11 over
-about 115,000 px (`cf_vex_billboard`, `docs/rendering/start-gantry.md`); the GO glyph R +32 G +29 B +15 (its pulse
-phase); `glass_2uv_rgb_reflect_glow` slot 31 (`ad_cream_win_alpha4`, the cream tower right of frame) R -9.5 G -9.9
-B -9.9 over 78,406 px; `pb_window` slot 450 R -17 G -10 B -2; the neon sign's halo (`cf_constantcolourglow` slot 275)
-+5 to +6.
+**What was left in that box** after both: the three gantry cards R +15 to +22 G +18 to +24 B +8 to +11 over about
+115,000 px and the GO glyph R +32 G +29 B +15 (next section); `glass_2uv_rgb_reflect_glow` slot 31, the cream tower
+right of frame, R -9.5 G -9.9 B -9.9 over 78,406 px (the section after).
 
 **2048 / Omega: checked, applies, not wired.** Omega ships the material for Metropia (`data02`, `data05`) with the
 names above; 2048's `dlc1.psarc` copy declares `texture1_alpha_for_reflect`, `Texture2_alpha_for_glow`,
 `TextureSpecular` and `Glow_colour_strength2` in its GXP. Neither program's combine was read, and the `psp2` loader
 has no row for it.
+
+### The gantry boards on Metropia: `cf_vex_billboard` compiled without `k` (confidence 90)
+
+Metropia's two board slots (270, 281) and Chenghou Project's five resolve to block #3 `@0x1360` of their own copy of
+`cf_vex_billboard`, an older compile than Vineta K's `@0x1b40` ("Not drawn, named", above): the same two taps, the
+same `light = constantAmbientColour + sat(N.L) * sun`, and
+
+```text
+@0x17  MUL H2.xyz, H1, H5              ; picture * light
+@0x19  MUL H4.xyz, H4, H2              ; glow.rgb * picture * light
+@0x1c  MAD H1.xyz, H1, H4.wwww, H4     ; picture * glow.a + that
+@0x1d  MOV H0.w, {1}
+```
+
+`out = picture * (glow.a + glow.rgb * light)` with no `k` (`0x21db4cba` is not declared, and nothing multiplies the
+glow). Anulpha Pass's `cf_vex_billoard_glow` (sic, block #3 `@0x2230`, two slots) is the same program with the alpha
+`glow.a`. It is the combine RPCS3 showed on Metropia's draws 96, 101 and 106
+([hd-glow-mask.md](../rendering/hd-glow-mask.md), "The GO board"). `billboard_glass::classify` asked for `k` among the
+declared parameters, and the generic pass does not flag this compile's last `MAD` (its addend is not its destination),
+so all nine slots drew their card lit by the sun and nothing else: on Metropia the card read R +15 to +22, G +18 to
++24, bright enough for the bloom to close the `G` of the glyph. **Wired:** `k = 1` where the program declares none,
+and the slot takes `ADD_SECOND` there. Tests: `billboard_glass::tests` and `hd_program_glow_ground_truth` (both board
+slots carry the billboard entry).
+
+**Measured:** the cards' masks err 14.6, 19.4 and 9.0 to 6.6, 4.7 and 5.6; the glyph's 25.1 to 5.1 (it reads `GO`);
+Metropia box `180,0 1740x480` 5.32 to 4.19, whole frame 2.84 to 2.38. Anulpha Pass's side board (box `660,170
+140x110`) 23.6 to 20.5 and its frame 2.66 to 2.63: the board is brighter, as the original's, and still shows the
+placeholder where the original shows an advert. Chenghou's frame does not move (its boards are out of view).
+**Three more preimages**, off Omega's GCN copies: `aspect_ratio_U` (`0xb17204e5`) and `aspect_ratio_V` (`0x287b555f`),
+the glow tap's two scales, and `texture2overlaystrength` (`0x21db4cba`), the `k` above.
+
+**2048 / Omega: checked, applies, not wired.** Both re-ship the material per circuit (Omega `data02` 6 entries,
+`data05` 30; 2048 `dlc1.psarc` 4, `data.psarc` 3), and Omega keeps the split: its Metropia pixel programs declare
+`aspect_ratio_U`, `aspect_ratio_V` and `constantAmbientColour` and no `texture2overlaystrength`, its Vineta K ones
+declare all four (`gcn_dump --summary`). The combine was not read on either title, and their gantry boards are the
+native `321Go_2048` ones ([start-gantry.md](../rendering/start-gantry.md), "Omega and 2048"), so which quads still
+draw this material there is open.
+
+### The window whose mask's red gates the reflection: `glass_2uv_rgb_reflect_glow` (confidence 85)
+
+Thirteen slots, all on Metropia (the cream and green towers). Blocks #5 `@0x2f70` and the lightmapped `@0xaf10` are
+`glass_2nduv_reflect_glow`'s with the gate moved: the mask is fetched two lanes wide (`TEX H5.xw`), the picture three
+(`TEX H4.xyz`), and
+
+```text
+rgb = fog(light * T.rgb + glow * (1 - G.a) + (1 - G.r) * reflection) / 2
+@0x28  MAD H3.xyz, -H5.wwww, {Glow_colour_strength2}, {Glow_colour_strength2}
+@0x35  MAD H0.xyz, -H5.xxxx, H0, H0     ; H0 the tinted reflection
+```
+
+The family had no row in `window_glass`, so the mask drew as the facade with no glow and no sky: slot 31 R -9.5 G -9.9
+B -9.9 over 78,406 px. **Wired:** a row with a fourth reflection gate (`Mode::ReflectiveByMask`, `tint.z` 3). The red
+lane's gamma nibble was not read live: decoded like every colour lane read so far, **chosen, not measured**. Tests:
+`hd_shadowed_track_redraw::the_rgb_window_reflects_the_sky_by_one_minus_its_masks_red` and
+`hd_program_glow_ground_truth` (13 slots, picture and mask by sampler).
+
+**Measured:** slot 31 err 11.6 to 1.9, slots 76 and 30 5.6 and 4.0 to 0.8 and 1.1; Metropia box 4.19 to 3.18, whole
+frame 2.38 to 1.97. **From the start of these four readings: box `180,0 1740x480` 8.97 to 3.18 (impact 7.49 M to
+2.66 M), whole frame 4.35 to 1.97 (raw mean grey 5.65 to 3.09), and the compare list's hot region there 6.58 M of
+impact to pieces of 0.70 M and under.** Every other HD pair but Anulpha Pass (2.86 to 2.63) is unmoved or moves 0.01.
+`glass_2uv_rgb_reflect_normal_glow` (four slots: Metropia 2, Vineta K, Amphiseum) declares a normal map as well and is
+not read.
+
+**What is left in Metropia's box:** the cards' glyph pulse and the side cards' advert state (the largest hot region,
+61,200 px, 0.70 M); `dn_diffuse_specular` slot 78 (`j_concrete_wall2`) R +10 G +10 B +18 over 22,648 px; `pb_window`
+slot 450 R -17 G -10 B -2; `glass_reflect_normal` slot 80 (`ad_blue2`) R +15 G +16 B +34 over 9,300 px; the neon
+sign's halo (`cf_constantcolourglow` slot 275) +5 to +7. None is read.
+
+**2048 / Omega: checked, applies, not wired.** Omega ships `GLASS_2UV_RGB_REFLECT_GLOW` for Metropia (`data02`,
+`data05`); 2048's `dlc1.psarc` ships it too. Programs not read, no row in the `psp2` loader.

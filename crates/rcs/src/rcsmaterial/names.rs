@@ -234,6 +234,9 @@ pub const KNOWN_PARAMETER_NAMES: &[&str] = &[
     "Glow_colour_strength",
     "Glow_colour_strength1",
     "Glow_colour_strength2",
+    "aspect_ratio_U",
+    "aspect_ratio_V",
+    "texture2overlaystrength",
 ];
 
 /// The uniform names Wipeout 2048's Vita material records author, recovered by
