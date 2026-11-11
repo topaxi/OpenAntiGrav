@@ -256,6 +256,23 @@ pub struct Impact {
     pub effect: Option<oag_tables::weapons::DisruptorEffectKind>,
 }
 
+impl Projectile {
+    /// Seconds since this one was fired or laid, where the shot itself says: what a laid
+    /// Mine or Bomb has sat ([`Self::age`]), and for a shot that starts with
+    /// [`MAX_FLIGHT_SECONDS`] what it has used of them. `None` for the Shuriken, which starts
+    /// with its table's fuse and does not carry it, and for a Plasma still charging, whose
+    /// clock has not started.
+    #[must_use]
+    pub fn seconds_since_fired(&self) -> Option<f32> {
+        match self.kind? {
+            Weapon::Mine | Weapon::Bomb => Some(self.age),
+            Weapon::Shuriken => None,
+            _ if self.charge > 0.0 => None,
+            _ => Some(MAX_FLIGHT_SECONDS - self.lifetime),
+        }
+    }
+}
+
 /// Everything in the air, in one fixed-size array.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Projectiles {

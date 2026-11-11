@@ -224,9 +224,10 @@ F      = up * spring * (1 + rebound * damp) * (1 - mag_lock)      at the probe p
   travel. Measured 1.237 against 1.2390 predicted (0.16 %).
 - **Alignment torque** (84): while grounded,
   `400 * cross(up, avg_normal)` with the component along `right` removed, so it
-  levels roll and yaw but not pitch. Stiffness measured on the original is
-  about `20.2` per unit inertia where `400 / 15.6 = 25.6`; the 13 % gap is left
-  standing (80).
+  levels roll and yaw but not pitch. On roll the stiffness per unit inertia is
+  `400 / 15.6 = 25.6`, measured on the original by a roll step response: half
+  period `0.6249 s` against `0.6250 s` here (92,
+  [roll-step-response.md](../physics/roll-step-response.md)).
 - **Bank-to-yaw** (grounded): `yaw += 30 * right.y * (1 - mag_lock)`; 50 in
   Zone's four-corner hover.
 - **Magstrip hold** (maglock): over a magstrip the suspension fades out as the
@@ -328,8 +329,7 @@ body-local one, and neither title's contact resolver has been read.
 
 - The rebound blend (above) is discontinuous as transcribed; a factor may have
   been lost. Kept literal and unscored; a capture across a landing would settle it.
-- The weathervane **magnitude** and the alignment stiffness gap (13 %) are
-  unverified against play.
+- The weathervane **magnitude** is unverified against play.
 - The `craft+0x2a4` mode enum (mode 0 changes damping and drag by roughly 180x
   and reads as a front-end state) is not interpreted.
 - The brake force may have its world-y lane zeroed (VFPU prefix, 55); not

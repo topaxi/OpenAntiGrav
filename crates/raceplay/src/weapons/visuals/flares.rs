@@ -35,6 +35,30 @@ pub(crate) fn flare_effect_for(kind: Option<oag_tables::weapons::Weapon>) -> Opt
     }
 }
 
+/// The most ticks a riding effect attached late is aged by: past it the rest of the trail
+/// is left out. Chosen, not measured; a network client's shot first shows at most
+/// `oag_net::client::FIRST_SEEN_CAP` ticks old.
+pub(crate) const LATE_ATTACH_MAX_TICKS: u32 = 40;
+
+/// For a shot that has been in the air two ticks or more: how many ticks to age the effect
+/// it is about to be given, and how far behind it the effect starts (straight back along its
+/// velocity, the flight's curve not kept). `None` for a shot on the tick it was fired, the
+/// only case with every tick drawn, and for one that does not say how long it has flown
+/// (`Projectile::seconds_since_fired`: the Shuriken), whose effect starts fresh.
+pub(crate) fn late_attach(
+    projectile: &oag_weapons::projectile::Projectile,
+    dt: f32,
+) -> Option<(u32, Vec3)> {
+    let ticks = (projectile.seconds_since_fired()? / dt).round();
+    if ticks < 2.0 {
+        return None;
+    }
+    let ticks = (ticks as u32).min(LATE_ATTACH_MAX_TICKS);
+    #[expect(clippy::cast_precision_loss, reason = "at most forty")]
+    let back = projectile.velocity * (ticks as f32 * dt);
+    Some((ticks, back))
+}
+
 /// One riding flare instance's whole state machine for one tick: attach,
 /// follow, or detach, by name and position - shared by
 /// [`Race::advance_projectile_flares`]'s primary anchor (every rider) and

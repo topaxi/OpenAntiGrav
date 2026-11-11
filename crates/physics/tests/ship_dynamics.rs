@@ -606,19 +606,15 @@ fn a_level_ship_over_a_level_floor_never_rolls() {
 /// `oag_physics::hover`'s
 /// `the_alignment_torque_points_from_the_ships_up_axis_toward_the_surface_normal`.
 ///
-/// Long-run convergence now holds, by measurement and not by tuning. This test once argued roll
-/// could not converge: with the transcribed gain `400` against `Ship_ApplyAngularDamping`'s
-/// `-2.0`, explicit Euler is outside its stability limit and the oscillation grows. Two
-/// corrections retired that: the bound is not `h <= c / k` on the sub-step but
-/// `c >= (2/3) * k * H` on the frame (acceleration computed once per frame), a 2.22-fold
-/// shortfall, not 11 %; and the gain is not 400 but about **20.2**, measured by rolling the
-/// original `0.25 rad` through PPSSPP's debugger (a damped cosine crossing zero at frame 21,
-/// `omega = 4.49 rad/s`; damping near 1.6). Trace, caveats and the unresolved gain-or-inertia
-/// question: `oag_physics::hover::ALIGNMENT_GAIN` and `docs/physics/README.md`, "Alignment gain:
-/// the measurements behind the numbers".
+/// Long-run convergence holds, by measurement and not by tuning. As a bare angular acceleration
+/// the gain `400` against `Ship_ApplyAngularDamping`'s `-2.0` is outside the frame's stability
+/// limit (`c >= (2/3) * k * H`, acceleration computed once per frame) and the oscillation grows;
+/// divided by the roll inertia `15.6` it is the damped cosine the original shows when rolled
+/// `0.25 rad` through PPSSPP's debugger, crossing zero near frame 21
+/// (`docs/physics/roll-step-response.md`).
 ///
-/// So this asserts what the original does: a monotone, non-oscillatory return toward level on
-/// the measured timescale.
+/// So this asserts what the original does: a monotone return toward level over the first
+/// quarter swing.
 #[test]
 fn a_ship_rolled_off_level_is_pulled_back_toward_level() {
     let handling = fixture();
@@ -653,10 +649,9 @@ fn a_ship_rolled_off_level_is_pulled_back_toward_level() {
         roll = next;
     }
 
-    // The measured cosine reaches 0.5 at `omega * t = pi / 3`, about 14 ticks at 4.49 rad/s. This
-    // fixture's own suspension adds stiffness the perturbed original lacked, so it lands a little
-    // above; the bound pins the *shape* (a substantial monotone decay over a quarter period)
-    // without pretending to reproduce the trace.
+    // The original's step response is at 0.47 of the step after 14 frames. The bound pins the
+    // *shape* (a substantial monotone decay over a quarter swing); the period itself is pinned by
+    // `a_rolled_craft_swings_through_level_at_the_originals_period`.
     assert!(
         roll < initial_roll * 0.65,
         "roll only came down from {initial_roll} to {roll} in 14 ticks"
@@ -1307,4 +1302,67 @@ fn a_room_with_barrel_rolls_off_never_arms_one() {
     let (off, kept) = run(false);
     assert!(!off);
     assert_eq!(kept, handling.dimensions.shield, "and nothing was charged");
+}
+
+/// A grounded craft rolled `0.25 rad` about its nose and let go swings through level at the
+/// original's own period.
+///
+/// The numbers are the original's, measured by writing the roll into the rigid body through
+/// PPSSPP's debugger and reading the basis back every frame, four runs
+/// (`docs/physics/roll-step-response.md`): a half period of `0.6249 s` (run-to-run spread
+/// `0.0005 s`) and a first crossing `0.347 s` after the release. Together they pin the alignment
+/// gain over the roll inertia (`400 / 15.6`, [`oag_physics::hover::ALIGNMENT_GAIN`]) and the
+/// roll damping: an oscillator 13 % softer has a half period of `0.71 s`.
+///
+/// The first crossing is not a quarter of the undamped period: a damped oscillator released from
+/// rest crosses zero at `(pi / 2 + atan(c / (2 * omega_d))) / omega_d`, which is why reading the
+/// crossing as a quarter period once put the original at `4.49 rad/s`.
+#[test]
+fn a_rolled_craft_swings_through_level_at_the_originals_period() {
+    const MEASURED_HALF_PERIOD: f32 = 0.6249;
+    const MEASURED_FIRST_CROSSING: f32 = 0.347;
+
+    let handling = fixture();
+    let world = flat_floor(Surface::Floor);
+    let mut state = ship_at(15.0 - 1.25 + 1.125, &handling);
+    state.body.orientation = oag_core::math::Quat::from_rotation_z(0.25);
+
+    let roll_of = |state: &ShipState| {
+        let up = state.body.up();
+        Vec3::Y
+            .cross(up)
+            .dot(state.body.forward())
+            .atan2(Vec3::Y.dot(up))
+    };
+    let mut previous = roll_of(&state);
+    let mut crossings = Vec::new();
+    for frame in 0..230 {
+        step(
+            &mut state,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            TICK,
+        );
+        let roll = roll_of(&state);
+        if roll * previous < 0.0 {
+            crossings.push((frame as f32 + previous / (previous - roll)) * TICK);
+        }
+        previous = roll;
+    }
+
+    assert_eq!(crossings.len(), 6, "{crossings:?}");
+    let half_period = (crossings[5] - crossings[0]) / 5.0;
+    assert!(
+        (half_period - MEASURED_HALF_PERIOD).abs() < 0.002,
+        "the roll half period is {half_period} s, the original's {MEASURED_HALF_PERIOD}"
+    );
+    // The original leads by about a quarter of a frame from the release on, unexplained
+    // (`docs/physics/roll-step-response.md`, "Open"); the bound leaves room for it and no more.
+    assert!(
+        (crossings[0] - MEASURED_FIRST_CROSSING).abs() < 0.008,
+        "level first crossed at {} s, the original at {MEASURED_FIRST_CROSSING}",
+        crossings[0]
+    );
 }

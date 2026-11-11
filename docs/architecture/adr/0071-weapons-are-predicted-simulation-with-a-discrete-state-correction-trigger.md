@@ -133,6 +133,22 @@ read that column as "ticks compared", not as an improvement. Late presentations 
 is `weapons_ground_truth::loss_and_jitter_sweep` (`OAG_SWEEP=1`); `four_firing_clients_agree_through_5_percent_loss_and_jitter`
 runs in `just test-data`.
 
+## Follow-up (2026-11-11, still Proposed)
+
+**The pop-in tail was a miscount, and a shot's first appearance has a cap.** "Largest pop-in"
+above read a laid Mine's or Bomb's sit time (every flying shot read 0) and could not tell a
+shot first shown from one a correction put back after the prediction had wrongly ended it, so
+the 63 here and the 62, 137 and 152 of the analog-stick table were Mines put back, not late
+first appearances. Counted per shot against the tick the server fired it, a shot first shows
+at most 9 ticks into its flight on a clean 100 ms link, 15 at 5 percent loss and 30 ms
+jitter, 21 at 20 percent and 60 ms, and by construction never past
+`oag_net::client::FIRST_SEEN_CAP` (33 ticks: the 30-tick prediction window plus three), which
+the weapons tests assert. The digest of decision 2 also carries each shot's remaining time,
+so two shots of one weapon, owner and target no longer pass for one (no measured effect in 60
+client runs). A blast's screen flash and a shot's riding effect are now started at their age.
+Tables, the real-network run and what is still fresh:
+`docs/networking/README.md`, "A shot's first appearance" and "A fire seen late".
+
 ## Consequences
 
 - A network race's weapons are the room's setting (Omega's `Weapons` row, `RB_WEAP`, default on;

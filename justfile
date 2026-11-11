@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas
+check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -152,6 +152,14 @@ check-extensions:
     cargo clippy -p oag-modhost -p oag-raceplay -p oag-game --features oag-game/extensions,oag-raceplay/extensions --all-targets -- -D warnings
     cargo nextest run -p oag-modhost -p oag-raceplay --features oag-raceplay/extensions --lib --cargo-profile quick
 
+# The browser module (`just web`'s `oag_web` example for wasm32-unknown-unknown)
+# type-checked with `scripts/build-web.sh`'s own flags, so a change that breaks
+# the web build fails here and not on the next deploy. Needs the nightly that
+# script names, with `rust-src` and the wasm32 target; its own target directory
+# (`target/web-threads`). See docs/tools/web.md, "Verifying it".
+check-web:
+    ./scripts/build-web.sh --check
+
 # `--tests` builds what has tests to run - libraries, binaries, integration tests.
 #
 # `--cargo-profile quick` builds the workspace at opt-level 0 (Cargo.toml's
@@ -204,7 +212,7 @@ test-data *ARGS:
 # `check-status` is left out: a member never commits `status.md`, so a stale table is
 # the lead's to regenerate, and the full `just` checks it.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas
+gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas
 
 # `just test`, narrowed to what `scripts/affected.py` selects. A selection is
 # nextest arguments, one per line; `--no-tests=pass` because a narrowed
