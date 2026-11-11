@@ -27,7 +27,7 @@ scout estimate (0-100), capped at 60.
 
 **Ranking rule.** No candidate has a measured player-visible win. Each is
 ranked by copies removed times drift risk, divided by effort. Drift is
-real: the HD and Omega `ALWAYS_ON` lists already differ (see the title
+real: the HD and Omega `ALWAYS_ON` lists drifted (fixed, see the title
 section below).
 
 ## Open
@@ -235,8 +235,9 @@ Also small, same pattern: `word()` helper copies in
 ### Title data (not dedupe candidates, a policy call for the lead)
 
 These are real copies across title crates. CLAUDE.md says the title crates
-own their tables, but Omega's front end is HD's by lineage, and Omega already
-depends on `oag-hd` (`crates/omega/Cargo.toml` line 23). So referencing HD's
+own their tables, but Omega's front end is HD's by lineage, and Omega only
+dev-depends on `oag-hd` (`crates/omega/Cargo.toml`; the `ALWAYS_ON` share made it a normal
+edge). So referencing HD's
 constants is legal for Omega. Decide whether to share or keep copies.
 Group total: 585 lines over 35 clones between `hd/`, `omega/` and `2048/`.
 
@@ -245,11 +246,13 @@ Group total: 585 lines over 35 clones between `hd/`, `omega/` and `2048/`.
   constants, Omega literal paths).
 - `crates/hd/src/pause_menu.rs:108-150` against `omega/src/pause_menu.rs:101-143`
   (43 lines).
-- `crates/hd/src/hud.rs:565-605` against `omega/src/hud.rs:392-432`
-  (41 lines, the `ALWAYS_ON` list). **Drift already**: HD's list has
-  `"LapPanel2"` with an Eliminator comment and Omega's does not. Omega's
-  comment says "HD's list". Decide if Omega should carry the Eliminator
-  widget, and then share.
+- ~~`crates/hd/src/hud.rs:565-605` against `omega/src/hud.rs:392-432` (41 lines, the
+  `ALWAYS_ON` list)~~ **Landed (`omega-always-on`)**: Omega's `ART.always_on` is
+  `oag_hd::hud::ALWAYS_ON`, one definition. Omega authors `LapPanel2` itself (base `data00`,
+  same rectangle as HD, UVs doubled), so its Eliminator now draws the lap hexagon
+  (`omega_hud_ground_truth`, `omega/src/tests.rs::omega_draws_hds_always_on_widgets`). The
+  note above was wrong that Omega already depended on `oag-hd`: it was a dev-dependency; it
+  is now a normal one, the first title-to-title edge.
 - `crates/2048/src/lib.rs:280-307` against `crates/omega/src/lib.rs:268-295`
   (28 lines): title tables. `crates/2048/Cargo.toml` has no `oag-hd` or
   `oag-omega` edge, so sharing from 2048 needs a new title-to-title
@@ -298,7 +301,7 @@ These are real clones I did not open. Check them before a lane takes them:
 
 1. Wire candidate 1 (`sprite_draw` into oag-ui). Smallest, identical copies,
    easiest to check: `just gate-affected`.
-2. Decide the title-data policy question (HD and Omega front ends, and the
-   `ALWAYS_ON` drift) before anyone touches `crates/omega/`.
+2. Decide the title-data policy question (HD and Omega front ends; the
+   `ALWAYS_ON` drift is ~~closed~~ landed) before anyone else touches `crates/omega/`.
 3. Then candidate 2 (draw loop into oag-mesh), with a before-and-after
    screenshot under the gate lock.

@@ -16,11 +16,11 @@ autotests = false
 # front end open and the menus walkable.
 [dependencies]
 oag-assets.workspace = true
+oag-hd.workspace = true
 oag-title.workspace = true
 
 [dev-dependencies]
 oag-testdata.workspace = true
-oag-hd.workspace = true
 oag-2048.workspace = true
 
 [lints]

@@ -478,3 +478,122 @@ fn the_patch_and_base_copies_of_each_atlas_agree_at_the_base_level() {
         .expect("patch copy");
     assert_eq!(served, patched);
 }
+
+/// **Omega authors HD's Eliminator lap hexagon, so sharing `oag_hd::hud::ALWAYS_ON` (which
+/// carries `LapPanel2`) draws it.** `HUD_Elim_lap_counters.xml` ships in the base package
+/// (`data00.psarc`, not the patch), the same size as HD's file with the same place on screen and
+/// the atlas UVs doubled for `fury_hud`'s 2048 square, and `LapPanel2` is composed by the
+/// default Eliminator root, its two split-screen pairs and by no other root, retro skins
+/// included - so the shared list moves no other mode's frame, as on HD.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn the_eliminator_lap_hexagon_is_authored_by_omegas_eliminator_roots_alone() {
+    let Some(mut archives) = open() else { return };
+    let source = omega().expect("opened above");
+    let path = "Data/XML/HUD_Elim_lap_counters.xml";
+    let mut serving = Vec::new();
+    let mut bytes = Vec::new();
+    for dir in ["omega-eu", "omega-eu-patch"] {
+        for n in 0..16 {
+            let file = source.join(dir).join(format!("uroot/data{n:02}.psarc"));
+            let Ok(mut archive) = oag_assets::psarc::Archive::open_file(&file) else {
+                continue;
+            };
+            if let Ok(blob) = archive.read_path(path) {
+                serving.push(format!("{dir}/data{n:02}"));
+                bytes = blob;
+            }
+        }
+    }
+    assert_eq!(
+        serving,
+        ["omega-eu/data00"],
+        "the base package serves it alone"
+    );
+    assert_eq!(bytes.len(), 1482);
+    if let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") {
+        let mut hd = oag_hd::open(&image.display().to_string()).expect("opening the HD disc");
+        let mut read = |path: &str| hd.read_name(path).ok();
+        let hd_root = oag_hd::TITLE.hud.elimination;
+        let hd_layout = oag_hud::compose(hd_root, &mut read)
+            .expect("HD's Eliminator composes")
+            .layout;
+        let theirs = hd_layout.sprite("LapPanel2").expect("HD authors it");
+        let ours = composed(&mut archives, oag_omega::TITLE.hud.elimination).layout;
+        let ours = ours.sprite("LapPanel2").expect("Omega authors it");
+        assert_eq!(ours.rect, theirs.rect, "the same place and size on screen");
+        assert_eq!(
+            ours.uv.map(|v| v / 2.0),
+            theirs.uv,
+            "the same patch of an atlas twice the size"
+        );
+    }
+
+    let split = oag_omega::hud::SPLIT;
+    let vertical = split.vertical.expect("Omega ships the vertical cut");
+    let skinned = oag_omega::TITLE.hud.skins.iter().flat_map(|skin| {
+        let h = skin.layouts;
+        [h.arcade, h.elimination, h.time_trial, h.speed_lap, h.zone]
+    });
+    let roots: Vec<&str> = modes()
+        .into_iter()
+        .chain(skinned)
+        .chain(split.arcade)
+        .chain(split.elimination)
+        .chain(vertical.arcade)
+        .chain(vertical.elimination)
+        .collect();
+    let authors: BTreeSet<&str> = roots
+        .into_iter()
+        .filter(|root| {
+            composed(&mut archives, root)
+                .layout
+                .sprite("LapPanel2")
+                .is_some()
+        })
+        .collect();
+    let expected: BTreeSet<&str> = std::iter::once(oag_omega::TITLE.hud.elimination)
+        .chain(split.elimination)
+        .chain(vertical.elimination)
+        .collect();
+    assert_eq!(authors, expected);
+}
+
+/// An Omega Eliminator draws the lap hexagon: the shared always-on list reaches the draw list, so
+/// an art without `LapPanel2` draws one sprite fewer. Dropping `LapPanel2` from
+/// `oag_hd::hud::ALWAYS_ON`, or Omega's `always_on` going back to its own copy, fails this.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn an_omega_eliminator_draws_the_lap_hexagon() {
+    let Some(source) = omega() else { return };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: source.display().to_string(),
+        mode: oag_race::Mode::Eliminator,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("an Omega Eliminator loads");
+    let context = loaded.hud.context().expect("the layout parses");
+    let readout = oag_raceplay::Race::start(loaded.setup).readout();
+    let with = oag_hud::draw_list(&context, &readout);
+    let others: &'static [&'static str] = Box::leak(
+        context
+            .art
+            .always_on
+            .iter()
+            .copied()
+            .filter(|name| *name != "LapPanel2")
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    );
+    let art: &'static oag_title::HudArt = Box::leak(Box::new(oag_title::HudArt {
+        always_on: others,
+        ..*context.art
+    }));
+    let hexagonless = oag_hud::draw_list(&oag_hud::Context { art, ..context }, &readout);
+    assert_eq!(
+        with.sprites.len() - hexagonless.sprites.len(),
+        1,
+        "`LapPanel2`, the hexagon round the lap number"
+    );
+}

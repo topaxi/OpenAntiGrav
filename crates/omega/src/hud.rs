@@ -243,7 +243,7 @@ pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 /// `zone_speed_classes` is `None`: Omega's class names are unmeasured, so the
 /// Zone ladder's class text draws nothing rather than HD's list.
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
-    always_on: ALWAYS_ON,
+    always_on: oag_hd::hud::ALWAYS_ON,
     raster: false,
     ink_aligned_text: true,
     half_unit_glyph_quads: true,
@@ -385,48 +385,3 @@ const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
         argb: 0x5aff_ffff,
     }),
 };
-
-/// Widgets drawn in every frame whatever the race state, HD's list. **Chosen,
-/// not measured**; see [`ART`].
-const ALWAYS_ON: &[&str] = &[
-    "LapPanel",
-    "PositionPanel",
-    "TotalTimeBG",
-    "PickupFarBackground",
-    "PickupAbsorbBG",
-    "PickupDamageBG",
-    "DamageBarBg",
-    "PickupBackground",
-    "TimeIcon",
-    "TimeIconVertBar",
-    "ClockIcon",
-    "BestLapImage",
-    "SpeedBarBG",
-    "ThrustBarBG",
-    "SpeedBar",
-    "ThrustBar",
-    "SpeedBarOverlay",
-    // The retro `HUD Style` skins' bars and their frames (`2097_hud`, `wo3_hud`); a name a
-    // layout does not author is simply not found, so the default skin is unchanged.
-    "speedbarbg",
-    "topdots",
-    "bottomdots",
-    "nrgbg",
-    "SpeedBarWo3",
-    "ThrustBarWo3",
-    "nrgBarWo3",
-    // Zone's ladder. Authored by the Zone roots alone; see the section above.
-    "ZoneBG",
-    "CurrentZonePanel",
-    "ZonePlusLight0",
-    "ZonePlusLight1",
-    "ZonePlusLight2",
-    "ZonePlusLight3",
-    "ZonePlusLight4",
-    "ZonePlusLight5",
-    "ZonePlusLight6",
-    "ZonePlusLight7",
-    "ZonePlusLight8",
-    "ZonePlusLight9",
-    "ZonePlusLight10",
-];
