@@ -237,6 +237,9 @@ mod tests {
             plain("x/materials/diffuse_normal_specular_emmissive_alpha.rcsmaterial"),
             Some(("Texture2Alpha", false))
         );
-        assert_eq!(plain("x/materials/diffuse_normal_specular.rcsmaterial"), None);
+        assert_eq!(
+            plain("x/materials/diffuse_normal_specular.rcsmaterial"),
+            None
+        );
     }
 }
