@@ -137,6 +137,27 @@ fn a_pack_that_is_on_draws_the_hud_sheet_and_fonts_at_its_own_size_and_off_chang
     let (Some(off), Some(on)) = (load(&dir, false, None), load(&dir, true, None)) else {
         return;
     };
+    // `pulse_text.fnt`, the flyby text and the Eliminator kill column: white ink whose upscaled
+    // edge rounds to 254, over white under zero alpha. Read as outlined, its body pass drew
+    // every glyph box solid.
+    let panel = on
+        .track_panel
+        .as_ref()
+        .expect("the default circuit has a flyby panel");
+    for (name, face) in [
+        ("panel menu", &panel.menu_font),
+        ("panel default", &panel.default_font),
+    ] {
+        assert!(face.texel_scale < 1.0, "{name} is the pack's picture");
+        assert!(!face.is_outlined(), "{name}: a pack face is one grey");
+        assert!(
+            face.coverage
+                .iter()
+                .zip(&face.luma)
+                .all(|(&coverage, &luma)| coverage > 0 || luma == 0),
+            "{name}: no body under zero coverage"
+        );
+    }
     let (off, on) = (&off.hud, &on.hud);
 
     assert_eq!(off.sheet.scale(HUD_SHEET), [1.0, 1.0]);

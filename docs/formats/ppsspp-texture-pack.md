@@ -385,7 +385,12 @@ the active one, and the decoders ask it:
   only gains texels; `borderExtend` is `f` times the authored one. Coverage is the picture's alpha
   and the body/outline mask its red channel, as the disc's palette is. **A pack's HUD font is one
   grey**: `x2_hud_1.png` is white with alpha, so the baked outline the disc's six greys carry is
-  not drawn (`is_outlined` is false for it). A picture that is not a whole multiple, differs per
+  not drawn (`is_outlined` is false for it). Two traps, both in `pulse_text.fnt` (the `Default`
+  face: flyby text and the Eliminator kill column), which drew every glyph box as a white block:
+  its upscaled edge has red 254 under alpha 254, which is rounding, not a second grey, so greys
+  are compared under fully opaque ink only; and the PNG is white under zero alpha, so the body
+  plane is 0 wherever coverage is (the disc's transparent palette entry carries none either).
+  Checked in frames of the Pulse 2020 folder, flyby and Eliminator. A picture that is not a whole multiple, differs per
   axis, or is over 8192 a side (`MAX_ATLAS_SIDE`) leaves the disc's face and says so in the load
   report. Pulse EU's four HUD faces key and hit in both packs (`PulseHud.fnt` 512x256:
   4x in the 2026 pack, 16x in the 2020 folder; `small.fnt` 4x and 16x; `Pulse_20.fnt` 4x and 16x;

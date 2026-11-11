@@ -789,8 +789,14 @@ impl Atlas {
             .enumerate()
         {
             coverage[at] = texel[3];
-            luma[at] = texel[0];
-            if texel[3] > 0 {
+            // A transparent texel carries no colour, as the disc's transparent palette entry
+            // carries none: a pack's PNG is white there, and an outlined face's body pass would
+            // fill the whole glyph box with it.
+            luma[at] = if texel[3] == 0 { 0 } else { texel[0] };
+            // Greys are compared under fully opaque ink only: an upscaled picture's edge texels
+            // round both channels (`pulse_text.fnt` in the Pulse pack has red 254 under alpha
+            // 254), which is not a second grey.
+            if texel[3] == u8::MAX {
                 match first_ink {
                     None => first_ink = Some(texel[0]),
                     Some(first) => outlined |= first != texel[0],
@@ -1116,6 +1122,25 @@ mod tests {
         let atlas = Atlas::from_replaced_font(&face(), &picture).unwrap();
         assert!(atlas.is_outlined());
         assert_eq!(atlas.luma[5 * 32 + 8], 40);
+    }
+
+    #[test]
+    fn a_rounded_edge_grey_is_not_an_outline_and_transparent_texels_carry_no_body() {
+        let mut picture = picture(32, 16, |_, _| 255);
+        let edge = (5 * 32 + 8) * 4;
+        picture.rgba[edge] = 254;
+        picture.rgba[edge + 3] = 254;
+        let atlas = Atlas::from_replaced_font(&face(), &picture).unwrap();
+        assert!(
+            !atlas.is_outlined(),
+            "red 254 under alpha 254 is the upscaler's rounding, not a second grey"
+        );
+        assert_eq!(atlas.luma[5 * 32 + 8], 254);
+        assert_eq!(atlas.luma[5 * 32 + 9], 255, "opaque ink keeps its grey");
+        assert_eq!(
+            atlas.luma[0], 0,
+            "a white texel under zero alpha is no body"
+        );
     }
 
     #[test]
