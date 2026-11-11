@@ -951,6 +951,7 @@ pub fn supply_reset(
             .map(|&(stand_in, _)| stand_in),
     );
     model.set_reset_label(strings.get_or_fallback("OAG_MENU_RESET_TO_DEFAULT", "RESET TO DEFAULT"));
+    crate::campaign::custom::editor_on_square(model, title, strings);
 }
 
 /// Loads settings from [`path`], creating the file - or filling in whatever

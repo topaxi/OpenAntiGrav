@@ -10,9 +10,10 @@ locks). Worked example: `example-campaign/` in [`mod-examples`](https://github.c
 A mod carries any number of campaign files under `campaigns/`, pilot files under
 `pilots/`, and track files of this project's own format under `tracks/`. An event may
 also race a track another installed mod carries. An installed campaign is listed by name on the page RACE CAMPAIGN opens
-once at least one is installed, and on Pulse always, for its NEW CAMPAIGN row (the editor,
-below). The page's first row is the disc's own campaign. With none installed, a title that
-has no editor keeps RACE CAMPAIGN as it was.
+once at least one is installed; on Pulse that page ends with a NEW CAMPAIGN row (the editor,
+below). The page's first row is the disc's own campaign. With none installed RACE CAMPAIGN
+stays as it was, one press into the disc's campaign; on Pulse its SQUARE opens the editor
+instead, named in the footer's Square prompt (NEW CAMPAIGN) while the row is selected.
 
 ## A file
 
@@ -115,7 +116,8 @@ says so, and no other team or pilot is substituted.
 draw flyer cards and per-rung targets; `oag_game::campaign::custom::editor_offered` is the
 switch). The originals have no editor, and HD's `Racebox` is custom races, not this.
 
-RACE CAMPAIGN, then NEW CAMPAIGN (the picker's last row), opens the title's own `Cell
+RACE CAMPAIGN, then NEW CAMPAIGN (the picker's last row), or SQUARE on RACE CAMPAIGN while no
+campaign is installed, opens the title's own `Cell
 Selection` with **every hex slot** drawn: a placed event filled, an empty slot dimmed. The
 pad moves the cursor (CROSS places an event and opens its fields; LEFT and RIGHT or CROSS step
 the selected field; UP and DOWN pick the field; TRIANGLE clears the slot; SQUARE names the
@@ -156,7 +158,7 @@ back equal) as a **fresh folder mod** `<data dir>/oag/mods/<campaign id>[-n]/` w
 generated `oag-mod.toml` (id `player.<campaign id>`, `titles` this title, no licence) and
 `campaigns/<campaign id>.toml`, on a worker thread. An existing folder is never touched: a
 second save of the same name takes the next `-n`. The menus are then rebuilt the way a MODS
-page switch rebuilds them, so the campaign is in the picker at once. One tier `grid0`; every
+page switch rebuilds them, and the menus open on the picker, which lists the campaign at once. One tier `grid0`; every
 event is `unlock = { open = true }`. Medals: the disc's own cell for the same mode, circuit
 and class when it has one (seconds on a timed mode); for a finishing place (race, head to
 head) 1, 2, 3 when it has none; none for a timed event with no cell of its own (its screen
