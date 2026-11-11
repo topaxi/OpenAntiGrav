@@ -7193,6 +7193,12 @@ The VENOM rows reproduce the experiment above to the digit. The longest episode 
 driver). This project's driver (`OAG_AI=ours`) is untouched by the wire: its board reproduces to the digit,
 with 16 destroyed on Talon's RAPIER and none elsewhere, before and after.
 
+On Omega's Amphiseum reversed (Flash, `omega_original_ai_ground_truth`) the push moved the field's history: two
+respawns, both after a weapon hit (slot 3 hit at tick 5459, off at 5497; slot 7 hit at 8477 on the descent with
+no craft contact, the wall at 8516 at 213 u/s, a stall against it, off at 8569). The second is 92 ticks after its
+hit, past the test's 60, so that circuit's window is 100. Taking walls out of the push alone leaves one respawn
+(slot 3, 38 ticks after a hit).
+
 **Reproducing.** The original: `scripts/psp-ai-contact-field.py --restart --lean --frames 2300` on a weapons-on
 Single Race (`psp-drive.py menu --single-race --weapons-on --unlock [--track-down 8]`), then `--summary <log>
 --window 1800` (or `10800`); one stop a frame at `AiManager_Update`, about 19 frames a second with `--lean`. Ours:
