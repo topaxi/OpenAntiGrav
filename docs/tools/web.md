@@ -1023,9 +1023,17 @@ guard Chromium shows a generic trap and Firefox freezes (the run's screenshot
 times out after 30 s); with it both show the panic above.
 
 What the page's thread shares with a worker it therefore reads with an atomic,
-`oag_thread::lock` (which spins there) or a `try_lock`. A disc read on the page
-that finds the shared `DiscImage` held by a worker opens the image afresh
-instead of waiting (`oag_assets` `blob_source::read_disc`).
+`oag_thread::lock` (which spins there) or a `try_lock`, and it never
+`block_on`s a future: a wgpu error scope's answer is a browser promise the
+blocked page itself would have to resolve. That was the freeze the profile
+caught: a saved screen filter (`[render_profiles."Wipeout Pulse (PSP)"]
+screen_filter = "psp-3000"`) made the first frame build the filter inside an
+error scope and `pollster::block_on` its pop, so the page froze right after the
+`renderer:` line in Firefox (a Private Window, with no saved settings, booted).
+The filter is built through `oag_gpu::shader_file::scoped` now, which takes no
+scope on the web, and the FSR3 format probe returns its baseline there.
+`check-web-faults.py`'s `saved-screen-filter` case boots with that setting and
+requires the menus with no report.
 
 ### What is still on the page's thread
 

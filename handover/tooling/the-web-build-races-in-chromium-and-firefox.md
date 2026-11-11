@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-11
-summary: "just check-web gates the wasm build; open: a Firefox 159 stall before the renderer line, worker stack overflow undetected, Firefox fps"
+summary: "just check-web gates the wasm build; page-thread waits report; open: worker stack overflow undetected, Firefox fps"
 ---
 
 # The web build races in Chromium and Firefox
@@ -45,16 +45,12 @@ Architecture, measurements, hosting and limits:
   DMABuf present, which blacks out its own WebGPU samples too; `dom.webgpu.allow-present-without-readback
   = false` fixes it and the picker note names it. An `rgba8unorm` canvas avoids it but crashes
   Firefox headless and under Xvfb, so it was reverted (docs/tools/web.md, "Troubleshooting").
-  (2) **The maintainer's desktop Firefox 159 froze the page** after the boot ("a page is
-  slowing down Firefox"; the readback pref does not help there). Their Firefox Profiler capture
-  shows the page's thread blocked in wasm's `memory.atomic.wait` inside winit's animation-frame
-  callback: Firefox lets the page's thread block on a std lock where Chromium traps. Which lock
-  is **open**: the published module has no names. Every page-thread wait now reports instead
-  (`scripts/web-page-wait-guard.py`, docs/tools/web.md "The page's thread may not wait") and
-  names the waiting function via `pkg/<hash>/page-waits.txt`; a contended disc read on the page
-  opens the image afresh. Next: the maintainer retests on that desktop; the report's function
-  number names the wait. Keeping the name section in the published module (2.0 MB raw, about
-  320 KB deflated) would name every frame of every report; the maintainer's call.
+  ~~(2) The maintainer's desktop Firefox 159 froze the page~~ (2026-11-11): a saved screen
+  filter made the first frame `block_on` a wgpu error-scope promise on the page's thread
+  (docs/tools/web.md, "The page's thread may not wait"); fixed, `check-web-faults.py`'s
+  `saved-screen-filter` case boots with it. Every page-thread wait now reports instead of
+  freezing. Open: keeping the name section in the published module (2.0 MB raw, about 320 KB
+  deflated) would name every frame of a report; the maintainer's call.
 - **Chromium with a CPU-only WebGPU shows a white page, no report** (maintainer's machine,
   2026-11-11, where the cube sample loses its device): headless Chromium's `--software bare` mode
   shows the same symptom on oag.topaxi.com, though without a lost device (adapter
