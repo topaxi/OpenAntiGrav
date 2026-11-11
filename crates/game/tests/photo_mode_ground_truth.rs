@@ -760,6 +760,7 @@ fn every_disc_word_a_title_maps_is_in_its_string_table() {
             no_video: true,
             refresh_video: false,
             prefer_av1_cache: false,
+            find_texture_packs: None,
         };
         let (shell, _archives, title) =
             oag_game::boot::load_shell(&options).unwrap_or_else(|e| panic!("{name}: {e:#}"));

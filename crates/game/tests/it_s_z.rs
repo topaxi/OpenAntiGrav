@@ -27,6 +27,7 @@ mod split_hud_ground_truth;
 mod split_recording_ground_truth;
 mod split_screen_ground_truth;
 mod texture_detail_ground_truth;
+mod texture_pack_frontend_ground_truth;
 mod title_behaviour_data;
 mod track_audio_2048_ground_truth;
 mod track_audio_ground_truth;

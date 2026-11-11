@@ -154,7 +154,6 @@ fn the_front_end_hands_off_into_a_driveable_race() {
     // The same load the binary does, without the transcode: what is under test is
     // the sequencing and the handoff, not the picture.
     let boot = boot::load(&boot::Options {
-        // No saved language: these boot a fresh install every time.
         language: None,
         source: image.display().to_string(),
         dlc: Vec::new(),
@@ -166,6 +165,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     })
     .expect("loading the boot sequence");
 

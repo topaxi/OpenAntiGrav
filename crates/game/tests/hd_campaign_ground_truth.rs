@@ -42,6 +42,7 @@ fn open() -> Option<Hd> {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let (shell, mut archives, title) = oag_game::boot::load_shell(&options).expect("HD boots");
     let entry = oag_hd::campaign::DEFINITION_ENTRY;

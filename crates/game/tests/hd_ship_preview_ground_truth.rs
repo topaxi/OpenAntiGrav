@@ -25,6 +25,7 @@ fn the_race_hull_frames_to_a_hull_sized_sphere() {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let (_, mut archives, title) = oag_game::boot::load_shell(&options).expect("HD boots");
     assert_eq!(
@@ -70,6 +71,7 @@ fn each_variant_directory_has_a_hull_of_its_own() {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let (_, mut archives, title) = oag_game::boot::load_shell(&options).expect("HD boots");
     let join = title.race.team_variants_for("Feisar").map(|v| v.join);
@@ -119,6 +121,7 @@ fn omega_draws_every_teams_ps4_hull_at_the_pose_it_borrows() {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let (shell, mut archives, title) = oag_game::boot::load_shell(&options).expect("Omega boots");
     let front_end = title.front_end.expect("a front end");
@@ -229,6 +232,7 @@ fn the_screens_own_fit_lands_feisar_where_the_original_draws_it() {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let (shell, mut archives, title) = oag_game::boot::load_shell(&options).expect("HD boots");
     let fit = title

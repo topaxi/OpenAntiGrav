@@ -39,6 +39,46 @@
 use super::*;
 use oag_ui::language::load::{role_border, role_font};
 
+/// Makes the texture pack that is on and names this disc the active one for the faces, unless
+/// this title's faces take a runtime palette ([`oag_title::FrontEnd::runtime_palette_faces`]):
+/// a pack is then not asked, and the report says why.
+pub(super) fn engage_pack(
+    front_end: &oag_title::FrontEnd,
+    options: &super::Options,
+    archives: &oag_assets::Archives,
+    report: &mut Vec<String>,
+) -> oag_raceplay::texture_pack::Engaged {
+    if front_end.runtime_palette_faces {
+        report.push(
+            "front-end faces: the disc's own (this title draws them through a palette it rewrites \
+             at run time, which a texture pack's keys cannot follow)"
+                .to_string(),
+        );
+    }
+    let finder = options
+        .find_texture_packs
+        .as_ref()
+        .filter(|_| !front_end.runtime_palette_faces);
+    oag_raceplay::texture_pack::engage(finder, archives, report)
+}
+
+/// `font`'s atlas as the front end draws it: from the active texture pack's picture of the
+/// face when the pack has one ([`oag_ui::font::Atlas::from_pack`]), else the disc's own, with the
+/// role's halo `border` either way. `what` labels the report line.
+fn face(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    font: &oag_texture::fnt::Font,
+    border: u32,
+    what: &str,
+    report: &mut Vec<String>,
+) -> oag_ui::font::Atlas {
+    let (atlas, border) =
+        oag_ui::font::Atlas::from_pack(archives, name, font, border, what, report)
+            .unwrap_or_else(|| (oag_ui::font::Atlas::from_font(font), border));
+    atlas.with_border_extend(border)
+}
+
 /// Reads the front end's own font, falling back to the built-in glyphs.
 ///
 /// A missing or undecodable font is not fatal: the menu still draws, in the 5x7
@@ -79,8 +119,14 @@ pub(super) fn load_font(
     };
     match archives.read_font(&name).map_err(|e| e.to_string()) {
         Ok(font) => {
-            let atlas = oag_ui::font::Atlas::from_font(&font)
-                .with_border_extend(role_border(languages, preferred, role));
+            let atlas = face(
+                archives,
+                &name,
+                &font,
+                role_border(languages, preferred, role),
+                "font",
+                report,
+            );
             report.push(format!(
                 "font {name} (role {role:?}): {}x{} atlas, {} glyphs, line height {}",
                 font.width,
@@ -126,10 +172,14 @@ pub(super) fn load_menu_font(
                 "menu font {name} (role {role:?}): line height {}",
                 font.line_height
             ));
-            Some(
-                oag_ui::font::Atlas::from_font(&font)
-                    .with_border_extend(role_border(languages, preferred, role)),
-            )
+            Some(face(
+                archives,
+                &name,
+                &font,
+                role_border(languages, preferred, role),
+                "menu font",
+                report,
+            ))
         }
         Err(why) => {
             report.push(format!(
@@ -201,10 +251,14 @@ pub(super) fn load_title_font(
                 "title font {name} (role {role:?}): line height {}",
                 font.line_height
             ));
-            Some(
-                oag_ui::font::Atlas::from_font(&font)
-                    .with_border_extend(role_border(languages, preferred, role)),
-            )
+            Some(face(
+                archives,
+                &name,
+                &font,
+                role_border(languages, preferred, role),
+                "title font",
+                report,
+            ))
         }
         Err(why) => {
             report.push(format!(
@@ -354,10 +408,14 @@ pub(super) fn load_buttons_font(
                 font.height,
                 font.glyphs.len()
             ));
-            Some(
-                oag_ui::font::Atlas::from_font(&font)
-                    .with_border_extend(role_border(languages, preferred, role)),
-            )
+            Some(face(
+                archives,
+                &name,
+                &font,
+                role_border(languages, preferred, role),
+                "third-slot font",
+                report,
+            ))
         }
         Err(why) => {
             report.push(format!(

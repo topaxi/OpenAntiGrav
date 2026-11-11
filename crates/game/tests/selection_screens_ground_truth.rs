@@ -38,6 +38,7 @@ fn shell(path: &std::path::Path) -> boot::Shell {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     boot::load_shell(&options).expect("the shell loads").0
 }

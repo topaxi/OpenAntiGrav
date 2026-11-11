@@ -376,8 +376,8 @@ the active one, and the decoders ask it:
   sheet pixels (`sprite_draw`, the sight rings, the now-playing bar). `alpha_at` and
   `opaque_extent` follow the factor and answer in the disc's pixels as before. Pulse EU's
   `PulseHUD.mip` is 256x256 and both packs draw it at 2048x2048 (8x). The front end's sheets
-  (`build_with`, the track panel, the loading screen) never ask the pack: their draws add rects to
-  `placed.x` unscaled.
+  (`build_with`, the track panel) never ask the pack: their draws add rects to
+  `placed.x` unscaled (the front end's faces do, "The front end's faces" below).
 - **`.fnt` faces the HUD draws with** (`oag_texture::replacer::font`, `oag_ui::font::Atlas::from_replaced_font`, in
   `oag_raceplay::hud::hud_font`): the picture is the whole glyph atlas at a factor `f` the same on
   both axes. Each cell's box moves to the picture's pixels and `Atlas::texel_scale` (Omega's 2x
@@ -397,9 +397,41 @@ the active one, and the decoders ask it:
   `pulse_text.fnt` 4x and 16x). The `x2_hud_1` and `x2_hud_2` lines are two different fonts, not a
   split atlas. A 16x face is a 8192x4096 atlas, two planes: about 67 MB per face while it is
   built.
-- **Not replaced, by choice**: the front end's menu and boot art and its fonts (only a race load
-  installs the pack), the loading screen, particle (`.pob`) textures and ship skins. Each is its
-  own lane's check, in a frame.
+- **The front end's faces** (`oag_game::boot::load_shell`, `boot/fonts.rs`): the boot engages the
+  pack (`oag_raceplay::texture_pack::engage`, the race load's own function) after the disc opens and
+  switches it off once the faces are built, so nothing after them (the menus' other art, a race's
+  preview) sees it. The switch is process-wide: a race load runs only in the Loading stage, never beside
+  the boot or a language reload on the menus, so none overlaps it (checked by reading, not a race test). Each of the four faces the front end builds (`Default`, the menu face, the
+  title face and the third slot) goes through `oag_ui::font::Atlas::from_pack`, the function the race HUD's
+  `hud_font` calls (it moved there from `oag_raceplay::hud`), so a face keeps its size and pen
+  advance and only gains texels exactly as in the race. The menu rows, the footer ticker,
+  the nav legend and **the loading screen's text** (it draws in the boot's `Default` face) are the
+  pack's. A language reload (`Session::resupply_language`) passes the same finder, so a language
+  switch keeps the pack's faces. **A MODS page switch of a pack is read at the next boot**: the
+  faces are built at boot, and the language reload would be the cheap way to rebuild them live (one
+  call from `switch_selected_mod`), not wired. Cost: a 16x face is a 4096 a side atlas, about 0.3 s each
+  to build in a debug build (the 2020 folder's three Pulse faces took 0.8 s more on the boot's first
+  half), the 2026 zip's 4x faces under 0.1 s. Checked in frames at 1440x816 (Pulse EU, `--menu-page
+  main` and `options`, `--loading-screen 0/1 --loading-step race`), the 2020 folder and the 2026 zip:
+  rows, ticker and the loading line are crisp at the disc's size, no white block; the 2026 zip's
+  hand-remade title face draws a `U`-like `V` (the pack's art). Test:
+  `crates/game/tests/texture_pack_frontend_ground_truth.rs` (the default face is the picture's
+  size with a texel scale under 1 and keeps its line height; off is the disc's face and says nothing; the
+  pack is off again when the boot returns).
+- **Pure's front-end faces are held off** (`oag_title::FrontEnd::runtime_palette_faces`, true for Pure
+  only; `boot::fonts::engage_pack` does not engage the pack and says so in the report). Measured
+  2026-11-11 on the 2020 Pure folder: `FX300ANG.fnt` and `LTe50325.fnt` hit tier `(K, H)`, the full key
+  and not the data hash alone, at 16x, and drew as the pack's solid letters where the disc's are hollow
+  outlines. The pack's readme says Pure's fonts take a dynamic CLUT ("almost impossible to replace
+  reliably") and nothing here measured the palette the original draws them with, so Pure is left on the
+  disc's faces until a lane takes a Pure oracle dump. Pure's race HUD still asks the same function (not
+  changed here). Test: `pure_keeps_the_discs_faces_with_a_pack_on_because_its_palette_moves`.
+- **Not replaced**: the front end's menu and boot **art** (the sheet draws add rects to `placed.x`
+  unscaled, so `Sheet::build_with` does not ask the pack; each draw moves onto `Sheet::sheet_rect`
+  first, about 130 sites in `oag-ui`, `oag-ui-screens` and `oag-game`), particle (`.pob`) textures and
+  ship skins. Each is its own lane's check, in a frame. Pulse's loading screen (checked at
+  1440x816 with `--track 16_Track`, pack on and off) draws the tip, the circuit name and the generated
+  wave and no sheet picture, so its picture is the face.
 - **Frames** (Pulse EU, the 2020 reTokyo snapshot, `--race --seed 1 --ticks 600 --size 1280x720`):
   with the pack off the frame is byte-identical to `main`'s (re-checked after the HUD and font
   change: ticks 600 and 1500 `cmp` equal to the frames taken before it); with it on, 453 textures were

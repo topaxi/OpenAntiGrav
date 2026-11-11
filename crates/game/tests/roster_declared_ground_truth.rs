@@ -86,6 +86,7 @@ fn shell(label: &str, image: &Path) -> boot::Shell {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     boot::load_shell(&options)
         .unwrap_or_else(|e| panic!("{label}: booting the shell: {e:#}"))

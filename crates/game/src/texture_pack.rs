@@ -8,14 +8,18 @@ use std::sync::Arc;
 /// (`oag_raceplay::texture_pack`). Nothing is read here; a pack's ini is read on the load
 /// thread and its pictures as textures are decoded.
 pub fn attach(options: &mut oag_raceplay::Options, switches: &crate::settings::Mods) {
+    options.find_texture_packs = Some(finder(switches));
+}
+
+/// The [`oag_raceplay::texture_pack::Finder`] for the packs `switches` leave on: a race's load
+/// and the front end's boot (`crate::boot::Options::find_texture_packs`) open them the same way.
+#[must_use]
+pub fn finder(switches: &crate::settings::Mods) -> oag_raceplay::texture_pack::Finder {
     let switches = switches.clone();
-    options.find_texture_packs =
-        Some(oag_raceplay::texture_pack::Finder(Arc::new(
-            move || match crate::mods::Mods::load(&switches) {
-                Ok(mods) => open(mods.player()),
-                Err(why) => vec![Err(format!("{why:#}"))],
-            },
-        )));
+    oag_raceplay::texture_pack::Finder(Arc::new(move || match crate::mods::Mods::load(&switches) {
+        Ok(mods) => open(mods.player()),
+        Err(why) => vec![Err(format!("{why:#}"))],
+    }))
 }
 
 /// The pack each of `mods` is, those that are not packs left out. Each is opened again from

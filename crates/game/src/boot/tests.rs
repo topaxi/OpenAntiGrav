@@ -27,6 +27,7 @@ fn the_picture_flags_reach_the_movie_loaders_independently() {
         no_video: false,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     assert_eq!(
         base.decode(),
@@ -50,6 +51,7 @@ fn the_picture_flags_reach_the_movie_loaders_independently() {
 
     let cached = super::Options {
         prefer_av1_cache: true,
+        find_texture_packs: None,
         ..base.clone()
     };
     assert_eq!(

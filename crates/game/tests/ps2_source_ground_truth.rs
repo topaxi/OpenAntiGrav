@@ -466,6 +466,7 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
 
     match oag_game::boot::load(&options) {

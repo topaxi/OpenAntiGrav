@@ -483,6 +483,10 @@ pub fn load_shell(
     // Omega's faces are HD's at twice the pixel size; see
     // `oag_display::space::Space::font_texel_scale`. `1.0` for every other source.
     let texel_scale = oag_display::space::Space::font_texel_scale(archives.layout.platform);
+    // The pack, if one is on and names this disc, is active for the faces below and nothing
+    // after them: its pictures are read as each face is built, then it is switched off, so
+    // the menus' other art draws the disc's own and a race load chooses afresh.
+    let pack = fonts::engage_pack(front_end, options, &archives, &mut report);
     let font = load_font(&mut archives, &languages, preferred_language, &mut report)
         .with_prompts(title.prompts)
         .with_texel_scale(texel_scale);
@@ -571,20 +575,17 @@ pub fn load_shell(
         title.prompts,
         &mut report,
     );
+    drop(pack);
     // A touch front end's screens author more than one role and this build
     // has one atlas; the ratio each face's line height stands to `Default`
     // is what keeps the others the right size. Not measured for the other
     // titles here, whose screens were matched against captures without it.
-    let face_scales = if front_end.touch.is_some() {
-        fonts::face_scales(
-            &mut archives,
-            preferred_language,
-            font.line_height,
-            &mut report,
-        )
-    } else {
-        Vec::new()
-    };
+    let face_scales = fonts::face_scales(
+        &mut archives,
+        preferred_language.filter(|_| front_end.touch.is_some()),
+        font.line_height,
+        &mut report,
+    );
     steps.lap("menu and title fonts");
     let (campaign_events, extra_tiles) = campaign2048::touch_menus(
         front_end.touch.is_some(),

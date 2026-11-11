@@ -1,4 +1,4 @@
-//! The texture pack a race draws with, chosen once by the load.
+//! The texture pack a race or the front end draws with, chosen once by the load.
 //!
 //! The composition root hands the load a [`Finder`] for the packs the player has on; the
 //! load, which is the one place that knows the disc's serial, makes the first pack that
@@ -27,9 +27,9 @@ impl std::fmt::Debug for Finder {
 /// A PPSSPP pack is keyed by the PSP's guest memory, so it applies to a PSP disc whose
 /// serial the pack's `[games]` names; a disc of another platform, or of another serial,
 /// draws the disc's own textures. Asked for and not usable is an absence in the report.
-pub fn engage(options: &crate::Options, archives: &Archives, report: &mut Vec<String>) -> Engaged {
+pub fn engage(finder: Option<&Finder>, archives: &Archives, report: &mut Vec<String>) -> Engaged {
     replacer::install(None);
-    let Some(finder) = options.find_texture_packs.as_ref() else {
+    let Some(finder) = finder else {
         return Engaged;
     };
     let mut packs = Vec::new();

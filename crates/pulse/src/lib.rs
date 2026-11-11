@@ -280,6 +280,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // picture this build already draws.
     menu_frame: Some(frontend::states::FE_SCREEN),
     bottom_up_gnf: &[],
+    runtime_palette_faces: false,
     race_box: Some(names::RACE_BOX_DEFINITION),
     team_select: None,
     track_select: None,

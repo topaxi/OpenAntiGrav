@@ -235,6 +235,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         "line",
         "unlocked_corner",
     ],
+    runtime_palette_faces: false,
     // See this module's own "What is not here" section.
     race_box: None,
     // Omega's own `Team Selection`, `Team Selection Player 1` and `Player 2` (`data09`), HD's

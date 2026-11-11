@@ -60,6 +60,7 @@ fn shell(image: &Path) -> (boot::Shell, oag_assets::Archives) {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let (shell, archives, _title) =
         boot::load_shell(&options).expect("HD's front end is wired; see ADR-0025");

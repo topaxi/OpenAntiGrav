@@ -63,6 +63,7 @@ fn shell_for(image: &std::path::Path, language: &str) -> boot::Shell {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let (shell, _archives, _title) =
         boot::load_shell(&options).unwrap_or_else(|e| panic!("{}: {e:#}", image.display()));
@@ -98,6 +99,7 @@ fn the_chain_default_on_pulse_psp_eu_is_english() {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let (shell, _archives, _title) = boot::load_shell(&options).expect("opening the EU pressing");
     assert_eq!(

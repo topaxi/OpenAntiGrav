@@ -822,6 +822,41 @@ impl Atlas {
         Ok(atlas)
     }
 
+    /// The face `name`'s atlas drawn from the active texture pack's picture of it, with the halo
+    /// `border` the pack's factor gives (`border` times the factor), or `None` to keep the
+    /// disc's own.
+    ///
+    /// A face whose atlas the pack does not replace, whose picture is not a whole multiple of
+    /// it, or whose `.fnt` keeps its atlas elsewhere (PS2) is the disc's; a refusal is a line in
+    /// `report`, `what` labelling it ("HUD font", "menu font"). The race HUD and the front end
+    /// both build their faces through this.
+    pub fn from_pack(
+        archives: &mut oag_assets::Archives,
+        name: &str,
+        font: &fnt::Font,
+        border: u32,
+        what: &str,
+        report: &mut Vec<String>,
+    ) -> Option<(Self, u32)> {
+        let picture = oag_texture::replacer::font(&archives.read_name(name).ok()?)?;
+        match Self::from_replaced_font(font, &picture) {
+            Ok(atlas) => {
+                let factor = picture.width / u32::from(font.width);
+                report.push(format!(
+                    "{what} {name}: {}x{} from the texture pack ({factor}x)",
+                    picture.width, picture.height
+                ));
+                Some((atlas, border * factor))
+            }
+            Err(why) => {
+                report.push(format!(
+                    "{what} {name}: texture pack picture not used: {why}"
+                ));
+                None
+            }
+        }
+    }
+
     /// This atlas with its texels read as `scale` grid units each.
     ///
     /// Omega's faces are the same as HD's at twice the pixel size (every glyph

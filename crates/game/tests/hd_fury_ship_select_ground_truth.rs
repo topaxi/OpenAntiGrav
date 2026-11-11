@@ -35,6 +35,7 @@ fn fury(image: &Path) -> std::sync::Arc<boot::fury::FuryAssets> {
         no_video: true,
         refresh_video: false,
         prefer_av1_cache: false,
+        find_texture_packs: None,
     };
     let (shell, _archives, _title) =
         boot::load_shell(&options).expect("HD's front end is wired; see ADR-0025");

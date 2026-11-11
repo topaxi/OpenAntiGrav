@@ -427,6 +427,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     boot: BOOT,
     menu_frame: Some(states::FE_SCREEN),
     bottom_up_gnf: &[],
+    runtime_palette_faces: false,
     // HD authors its track and ship screens in two files of their own, in
     // its own dialect - see `track_select` and `team_select`.
     race_box: None,
