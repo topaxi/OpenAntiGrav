@@ -3643,3 +3643,128 @@ with grey striped logo HD's matched original shows. No shadPS4 frame of Tech de 
 walk stayed on the main menu twice); the reference is HD's original crop, so the comparison is of
 character, not pixels. 2048's Vita DLC models are covered by the census only, no frame.
 
+
+## The picture's alpha times a colour: the `alpha_emissive` families (2026-11-11, `hd-worst-pairs`)
+
+**Report:** the buildings behind Metropia's start line (`hd-metropia`, compare box `180,0 1740x480`): the stadium's neon
+rings draw a dim cyan where the original's are near white with a halo. **Method:** one `OAG_SKIP_SLOT` render per
+material slot of the box's leading families (the mask is where the frame moves by more than 3 of 255 after a sigma-7
+blur, the error under it the same blurred mean absolute RGB difference against `theirs.png`), then the slot's resolved
+block read with `scripts/ps3-microcode.py fp-file`. `hd_material_probe_dump` prints the block, the samplers, the
+parameters and every alpha-gated constant per slot.
+
+**The law (confidence 90: thirteen resolved blocks read over six families and eight circuits, no live frame of the
+constants).** Every lit variant multiplies the picture by its light and then runs one instruction before the fog and the
+closing `/2`:
+
+```text
+dn_diffuse_specular_emiss, Metropia, lightmapped block #21 @0xbb60
+@0x2b  TEX H1, R2.zwzz unit0                       ; the picture, sampler alpha_emissive
+@0x2c  MUL H1.xyz, H1, H2                          ; times the light (atlas, sun, vertex term)
+@0x31  MAD H1.xyz, H1.wwww, {glowtinrt}, H1        ; + picture.a * colour
+@0x33  TEX H4.xyz, R2.zwzz unit1                   ; SpecularTexture
+@0x3b  MAD H1.xyz, H5, H4, H1                      ; + specular * map
+@0x3c  MAD /2 H0.xyz, R0.xxxx, H1, R1 END          ; fog, /2
+```
+
+`rgb = fog(light * picture.rgb + picture.a * glowtinrt [+ specular * map]) / 2`. The colour is neither lit nor
+shadowed. The picture's sampler is `alpha_emissive` (`0x6f9e6faf`) and the colour `glowtinrt` (`0x8f3d0540`, the disc's
+spelling). **Both names are preimages**: 2048's GXP copy of `dn_diffuse_specular_emiss` and Omega's GCN copy declare
+them in the clear, and `~crc32` of each is the HD hash (`names::KNOWN_PARAMETER_NAMES`, checked against the disc by
+`rcsmaterial_ground_truth`). Metropia's rings paint `mar_col_rim3.gtf`, a metal rim whose alpha is the neon strip, with
+`glowtinrt = (0.821, 0.856, 0.993)`.
+
+**Census** (`hd_material_probe_dump` over the 16 circuits; slots whose resolved block has the instruction):
+
+| Family | Slots |
+| --- | --- |
+| `diffuse_emissive_alpha_glow` | Vineta K 36, Ubermall 15, Metropia 13, Amphiseum 6, Moa Therma 2, Anulpha Pass 1 |
+| `diffuse_emissive_alpha` | Moa Therma 24, Anulpha Pass 20, Vineta K 6, Sebenco Climb 2 |
+| `dn_diffuse_specular_emiss` | Metropia 17, Ubermall 2 |
+| `diffuse_emissive_alpha_glow_v01` | Talon's Junction 9 |
+| `mr_diffuse_emissive_alpha_glow_specular`, `vertclr_diff_emissive_alpha_glow` | Vineta K 1 each |
+
+Nothing read the parameter before: 155 slots drew their picture lit and no more. **The `ZoneMode` and `ZoneTrans`
+variants do not declare `glowtinrt`** (`diffuse_emissive_alpha_glow` blocks `@0x4150`, `@0xaef0`, `@0x5e00`), so a Zone
+race draws none of it. Other programs gate other constants by a unit-0 alpha (`diffusetextureemissivealphascalar`,
+`diffuse_emissive`, `animhexlights`, `tracktexture_with_normal`); they are different blocks, not read, and not wired.
+
+**`Program::accumulates(1)` misread `dn_diffuse_specular_emiss`.** Its unit 1 is the specular map and `@0x3b` is the
+specular's own tint, but the shape matches the additive glow, so the vertex-lit slots (10 on the disc) added the
+specular map, gated by the picture's alpha, as a white layer. The new reading takes those slots and clears
+`ADD_SECOND`. The specular map itself stays unbound (open below).
+
+**Wired:** `oag_mesh::mesh::rcs::alpha_emissive` admits a slot whose bound picture is `alpha_emissive` and whose
+resolved program gates `glowtinrt` by that unit's alpha (`Program::alpha_gated_parameter`), and writes the colour as a
+glow-table entry of `PROGRAM_PICTURE_ALPHA_EMISSIVE`; `shade.wesl` adds `first.a * colour` where the pads' light bars
+are added, off in a Zone race. `OAG_ALPHA_EMISSIVE_OFF=1` draws the frame before. Tests:
+`hd_pad_ne_lit_path::a_picture_alpha_emissive_entry_adds_the_pictures_alpha_times_its_colour` (no disc) and
+`hd_program_glow_ground_truth` (Metropia's nine ring slots carry the mode and the authored colour, 30 materials bound).
+
+**Measured** (sigma-7 mean absolute RGB against the stored originals, ours re-rendered from each pair's flags):
+
+| What | Before | After |
+| --- | ---: | ---: |
+| Metropia ring slots 93, 129, 116, 54 (err; bias of slot 93) | 15.4, 16.6, 10.2, 12.8; R -17 G -13 B -15 | 2.0, 2.7, 2.2, 1.4; R -2 G -1 B -1 |
+| Metropia box `180,0 1740x480` (this reading alone) | 8.97 | 7.03 |
+| Metropia whole frame (this reading alone) | 4.35 | 3.54 |
+| Anulpha Pass box `700,0 800x420` (ceiling light panels, dark green to the original's cyan) | 4.34 | 3.13 |
+| Anulpha Pass whole frame | 2.86 | 2.66 |
+
+The other eleven race pairs move by 0.01 or less (Vineta K 2.37 to 2.38 low-frequency, 2.81 to 2.80 raw): their
+slots of these families are out of view at the start line or author a black colour.
+
+**Open.** (1) The specular map of `dn_diffuse_specular_emiss` and `mr_diffuse_emissive_alpha_glow_specular`
+(`specular * map.rgb`, unit 1): unbound, the specular is drawn unweighted. (2) No live frame: the magnitude rests on
+the pairs above.
+
+**2048 / Omega: checked, applies, not wired.** Both re-ship the families with HD's circuits (2048 `data.psarc` 12
+entries, `dlc1.psarc` 7; Omega `data00` to `data08`, e.g. `02_metropia/Materials/DN_DIFFUSE_SPECULAR_EMISS_2`), and
+their programs declare `alpha_emissive` and `glowtinrt`. Omega's ambient-only pixel program (`gcn_dump --at 0x32c4` of
+that file, 51 instructions) is the same combine: the sample times `constantAmbientColour`, then `v_mad` of the sample's
+alpha and `glowtinrt` onto it, then the fog (confidence 85, one program read). 2048's GXP bytecode is not read. The
+`psp2` loader reads neither name, so both titles draw these surfaces without the term.
+
+### The window with a specular map: `pb_glass_2nduv_reflect_specular1_glow` (confidence 85)
+
+The tower behind the same start line is the disc's one slot of this family (Metropia slot 146), and it was the
+box's largest single error: ours R +18 G +20 B +22 over 84,670 px. Its vertex-lit block (`#5 @0x2c00`) is
+`glass_2nduv_reflect_glow`'s ([hd-track-tone.md](../rendering/hd-track-tone.md), "Chenghou's background windows")
+with two more instructions:
+
+```text
+rgb = fog(light * T.rgb + glow * (1 - G) + specular * S.rgb + (1 - T.a) * reflection) / 2
+T = texture1_alpha_for_reflect (0xc29b64e4, unit 1)   wes_windows_d: beige wall, dark panes, alpha 1 on the wall
+G = Texture2_alpha_for_glow (0x290a5adb, unit 0).a    wes_windows_d_strip at the second coordinate set: a few lit panes
+S = TextureSpecular (0xe69a79f6, unit 2)              pb_wes_windows_d_s
+glow = Glow_colour_strength2 (0xfc21467a)             (0.918, 0.921, 0.849)
+```
+
+The four names are preimages too, off Omega's GCN copy (`Texture2_alpha_for_glowSampler`,
+`texture1_alpha_for_reflectSampler`, `TextureSpecularSampler`, `Glow_colour_strength2`); they say what each binding
+is for. `Glow_colour_strength` (`0x98ce0669`, `glass_glow`) and `Glow_colour_strength1` (`0x652817c0`,
+`glass_2nduvfor_glow`) land the same way. The family had no row in `window_glass`, so the generic reading bound the
+white strip (entry 0) as the facade and added the specular map as a glow.
+
+**Wired:** a `window_glass` row (reflective, with the glow pair), and the specular map bound second where the variant
+has no atlas (`window_glass::specular_map`, the entry's `program[1]`), multiplying the specular in `shade.wesl`. The
+map's gamma nibble was not read live: decoded like every other colour unit, **chosen, not measured**. Tests:
+`hd_pad_ne_lit_path::a_windows_specular_map_tints_its_specular` and `hd_program_glow_ground_truth` (picture, mask, map
+and glow colour of the slot).
+
+**Measured:** slot 146 err 20.2 to 3.5 (bias R +2.8 G +3.1 B +3.5); with the row and no map 7.2 (the specular weighted
+by the picture's alpha, 1 on the wall where the map is about a quarter), with the specular removed 4.4. Metropia box
+`180,0 1740x480` 7.03 to 5.32, whole frame 3.54 to 2.84; from the start of this section 8.97 to 5.32 and 4.35 to 2.84,
+and the compare list's hot region there (blocks of 6 or more, merged) 6.58 M to 2.36 M of impact. No other pair
+moves (the family has one slot).
+
+**What is left in that box** (per slot, after both): the three gantry cards R +15 to +22 G +18 to +24 B +8 to +11 over
+about 115,000 px (`cf_vex_billboard`, `docs/rendering/start-gantry.md`); the GO glyph R +32 G +29 B +15 (its pulse
+phase); `glass_2uv_rgb_reflect_glow` slot 31 (`ad_cream_win_alpha4`, the cream tower right of frame) R -9.5 G -9.9
+B -9.9 over 78,406 px; `pb_window` slot 450 R -17 G -10 B -2; the neon sign's halo (`cf_constantcolourglow` slot 275)
++5 to +6.
+
+**2048 / Omega: checked, applies, not wired.** Omega ships the material for Metropia (`data02`, `data05`) with the
+names above; 2048's `dlc1.psarc` copy declares `texture1_alpha_for_reflect`, `Texture2_alpha_for_glow`,
+`TextureSpecular` and `Glow_colour_strength2` in its GXP. Neither program's combine was read, and the `psp2` loader
+has no row for it.

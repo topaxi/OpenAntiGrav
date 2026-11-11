@@ -134,6 +134,17 @@ pub(super) fn material_setup(
     // After the glow table, because it clears a slot's `ADD_SECOND` and
     // writes its own entry into the same table.
     let mut emissive = emissive;
+    // The emissive-in-alpha families take their slot before any other program
+    // reading looks at the table: none of those reads the same sampler.
+    super::alpha_emissive::alpha_emissive(
+        model,
+        &material_variants,
+        &picks,
+        textures,
+        &mut material_slots,
+        &mut emissive,
+        report,
+    );
     // The billboard and the stand glass keep `ADD_SECOND` and swap the shared
     // additive entry for their program's own.
     super::billboard_glass::billboard_glass(

@@ -236,6 +236,13 @@ pub struct Report {
     /// parameter the program multiplies the mask's alpha by. Drawn without
     /// the term rather than with an invented colour.
     pub pad_ne_unread: usize,
+    /// HD materials whose picture's alpha times their emissive colour is drawn -
+    /// see `super::alpha_emissive`.
+    pub alpha_emissive_bound: usize,
+    /// HD materials whose program has that term and that draw without it: the
+    /// material authors no colour, the slot holds another family's reading, or
+    /// the glow table is full.
+    pub alpha_emissive_unread: usize,
     /// Magstrip materials whose emissive picture and wave were bound - see
     /// `super::mag_wave`.
     pub mag_wave_bound: usize,
@@ -473,6 +480,16 @@ impl Report {
             0 => String::new(),
             n => format!(
                 ", {n} pad material(s) whose _ne mask or its colour could not be read (drawn without)"
+            ),
+        } + &match self.alpha_emissive_bound {
+            0 => String::new(),
+            n => format!(
+                ", {n} material(s) glowing by their picture's alpha times their emissive colour"
+            ),
+        } + &match self.alpha_emissive_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} material(s) whose picture-alpha emissive could not be bound (drawn without)"
             ),
         } + &match self.mag_wave_bound {
             0 => String::new(),

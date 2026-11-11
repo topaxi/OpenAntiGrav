@@ -76,7 +76,11 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    println!("slot\tlist\tmaterial\ttexture\troles\tspecular_exponent\tvariant_resolved");
+    println!(
+        "slot\tlist\tmaterial\ttexture\troles\tspecular_exponent\tvariant_resolved\t\
+         fragment_block\tvertex_block\tsamplers\tparameters\talpha_gated"
+    );
+    let mut blobs: std::collections::HashMap<String, Option<Vec<u8>>> = Default::default();
     for (&slot, &list) in &list_of {
         let material = source.materials.get(slot);
         let packed = model
@@ -118,15 +122,62 @@ fn main() -> anyhow::Result<()> {
             .get(slot)
             .copied()
             .unwrap_or(mesh::DEFAULT_SPECULAR_EXPONENT);
-        let resolved = model
-            .material_variants
-            .get(slot)
-            .is_some_and(Option::is_some);
+        let variant = model.material_variants.get(slot).copied().flatten();
+        let resolved = variant.is_some();
+        // The block offsets are what `scripts/ps3-microcode.py fp-file` prints
+        // as `@0x...`, so a slot's row names the program to disassemble; the
+        // samplers and parameters are the instance's own, in file order.
+        let block = |offset: Option<usize>| offset.map_or("-".into(), |o| format!("{o:#x}"));
+        let samplers = material.map_or(String::new(), |m| {
+            m.samplers
+                .iter()
+                .map(|(hash, path)| format!("{hash:08x}={}", path.as_deref().unwrap_or("-")))
+                .collect::<Vec<_>>()
+                .join(" ")
+        });
+        let parameters = material.map_or(String::new(), |m| {
+            m.parameters
+                .iter()
+                .map(|p| {
+                    let [x, y, z, w] = p.value;
+                    format!("{:08x}=({x},{y},{z},{w})", p.hash)
+                })
+                .collect::<Vec<_>>()
+                .join(" ")
+        });
+        // Every unit whose sampled alpha gates an added constant in the resolved
+        // program (`Program::alpha_gated_parameter`), as `unit:sampler->parameter`:
+        // the emissive masks, whichever texture carries them.
+        let alpha_gated = material
+            .zip(variant)
+            .and_then(|(m, v)| {
+                let blob = blobs
+                    .entry(m.name.clone())
+                    .or_insert_with(|| mesh::read_blob(&spec, &format!("/{}", m.name)).ok())
+                    .as_ref()?;
+                let program =
+                    oag_rcs::rcsmaterial::fragment::Program::parse(blob, v.fragment.offset)?;
+                Some(
+                    program
+                        .declared
+                        .samplers
+                        .iter()
+                        .filter_map(|&(hash, unit)| {
+                            let gated = program.alpha_gated_parameter(u8::try_from(unit).ok()?)?;
+                            Some(format!("{unit}:{hash:08x}->{gated:08x}"))
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                )
+            })
+            .unwrap_or_default();
         println!(
-            "{slot}\t{list}\t{}\t{}\t{}\t{specular:.1}\t{resolved}",
+            "{slot}\t{list}\t{}\t{}\t{}\t{specular:.1}\t{resolved}\t{}\t{}\t{samplers}\t{parameters}\t{alpha_gated}",
             material.map_or("<none>", |m| m.name.as_str()),
             material.map_or("", |m| m.texture.as_str()),
             roles.join("|"),
+            block(variant.map(|v| v.fragment.offset)),
+            block(variant.map(|v| v.vertex.offset)),
         );
     }
     if mixed > 0 {

@@ -29,6 +29,13 @@
 //! and `glow` the colour `0xfc21467a`. The reflection carries no weight parameter. The mask sits
 //! at entry 0, so the generic reading bound it as the picture.
 //!
+//! **`pb_glass_2nduv_reflect_specular1_glow` is that window with a specular** (block #5 `@0x2c00`,
+//! Metropia's one slot, the tower behind the start line): the same picture, mask, glow colour and
+//! `(1 - T.a) * reflection` (the sky at unit 3), plus `specular * S.rgb` with `S` the map at unit 2
+//! (`0xe69a79f6`), read at the picture's coordinate. The map binds second, where the vertex-lit
+//! variant has no atlas, and the entry's `program[1]` says so; its gamma nibble was not read
+//! live, so it is decoded like every other colour unit (**chosen, not measured**).
+//!
 //! **`ds_booth_glass` is an opaque mirror over a constant** (block #7, `@0x5f80` on Tech de Ra and
 //! `@0x5ca0` on Sebenco Climb, the lightmapped variant both circuits' slots resolve to):
 //! `rgb = fog(light * C + Texture1.a * sky) / 2`, alpha 0, drawn opaque, with `C` the constant
@@ -55,12 +62,17 @@ use crate::mesh::{Emissive, ModelTexture, TextureSlots};
 const REFLECTION_SAMPLER: u32 = 0x9edd_3243;
 /// `Texture1`, the pane's picture and coverage.
 const TEXTURE1: u32 = 0x3bdc_0403;
-/// `glass_2nduv_reflect_glow`'s window picture, unit 1 of both its race blocks.
+/// `texture1_alpha_for_reflect`: `glass_2nduv_reflect_glow`'s window picture, unit 1 of both
+/// its race blocks.
 const GLOW_WINDOW_PICTURE: u32 = 0xc29b_64e4;
-/// `glass_2nduv_reflect_glow`'s glow mask, unit 0, its alpha read at the second coordinate set.
+/// `Texture2_alpha_for_glow`: `glass_2nduv_reflect_glow`'s glow mask, unit 0, its alpha read at
+/// the second coordinate set.
 const GLOW_MASK: u32 = 0x290a_5adb;
-/// `glass_2nduv_reflect_glow`'s glow colour, added times `1 - mask.a`.
+/// `Glow_colour_strength2`: `glass_2nduv_reflect_glow`'s glow colour, added times `1 - mask.a`.
 const GLOW_COLOUR: u32 = 0xfc21_467a;
+/// `TextureSpecular`: `pb_glass_2nduv_reflect_specular1_glow`'s specular map, unit 2 of its
+/// vertex-lit block.
+const SPECULAR_MAP: u32 = 0xe69a_79f6;
 
 /// How a family's program combines the reflection with the rest of its sum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,6 +113,8 @@ struct Row {
     /// The mask sampler and colour parameter of a glow the program adds as
     /// `colour * (1 - mask.a)`, the mask at the second coordinate set.
     glow: Option<(u32, u32)>,
+    /// The sampler of a map whose RGB the program multiplies its specular by.
+    specular: Option<u32>,
 }
 
 /// The families whose lit blocks are traced above.
@@ -111,6 +125,7 @@ const FAMILIES: &[Row] = &[
         picture: None,
         mode: Mode::Window,
         glow: None,
+        specular: None,
     },
     Row {
         family: "mt_windows_a",
@@ -118,6 +133,7 @@ const FAMILIES: &[Row] = &[
         picture: None,
         mode: Mode::Window,
         glow: None,
+        specular: None,
     },
     Row {
         family: "glass_texture_customr",
@@ -125,6 +141,7 @@ const FAMILIES: &[Row] = &[
         picture: Some(TEXTURE1),
         mode: Mode::Pane,
         glow: None,
+        specular: None,
     },
     Row {
         family: "glass_2nduv_reflect_glow",
@@ -132,6 +149,15 @@ const FAMILIES: &[Row] = &[
         picture: Some(GLOW_WINDOW_PICTURE),
         mode: Mode::Reflective,
         glow: Some((GLOW_MASK, GLOW_COLOUR)),
+        specular: None,
+    },
+    Row {
+        family: "pb_glass_2nduv_reflect_specular1_glow",
+        weight: None,
+        picture: Some(GLOW_WINDOW_PICTURE),
+        mode: Mode::Reflective,
+        glow: Some((GLOW_MASK, GLOW_COLOUR)),
+        specular: Some(SPECULAR_MAP),
     },
     Row {
         family: "ds_booth_glass",
@@ -139,6 +165,7 @@ const FAMILIES: &[Row] = &[
         picture: None,
         mode: Mode::Gated,
         glow: None,
+        specular: None,
     },
 ];
 
@@ -162,6 +189,23 @@ pub(super) fn picture(
     declared: &rcsmaterial::Declared,
 ) -> Option<usize> {
     let hash = row(material)?.picture?;
+    if !declared.samplers.iter().any(|(h, _)| *h == hash) {
+        return None;
+    }
+    material
+        .samplers
+        .iter()
+        .position(|(h, path)| *h == hash && path.is_some())
+}
+
+/// The entry of the map a family's program multiplies its specular by, when its row names
+/// one, the resolved variant declares it and the material names a `.gtf` there. It binds
+/// second ([`super::skin::picks`]).
+pub(super) fn specular_map(
+    material: &rcsmodel::Material,
+    declared: &rcsmaterial::Declared,
+) -> Option<usize> {
+    let hash = row(material)?.specular?;
     if !declared.samplers.iter().any(|(h, _)| *h == hash) {
         return None;
     }
@@ -248,12 +292,15 @@ pub(super) fn window_glass(
             report.window_glass_unread += 1;
             continue;
         }
+        // The specular map is the second binding only where no atlas took it.
+        let specular_bound =
+            *word & slots::SECOND_IS_LIGHTMAP == 0 && specular_map(material, &declared).is_some();
         let layer = Emissive {
             tint: [weight, row.mode.flags()[0], row.mode.flags()[1]],
             offset: f32::from(u8::from(glow.is_some())),
             scale: 1.0,
             rate: WINDOW_REFLECTION_RATE,
-            program: [0.0; 2],
+            program: [0.0, f32::from(u8::from(specular_bound))],
         };
         let index = match &glow {
             // Two entries, consecutive; a pair another slot already laid is shared.

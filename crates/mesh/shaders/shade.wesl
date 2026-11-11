@@ -806,6 +806,13 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let mask = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         emissive_add = select(vec3<f32>(mask.a), decode(mask.rgb), glow_program < 8.5) * glow_tint_offset.rgb;
     }
+    // **HD's emissive-in-alpha families** (`Emissive::program` mode 12, `mesh::rcs::alpha_emissive`):
+    // `MAD H.xyz, T.wwww, C, lit`, `T` the picture's own fetch and `C` the material's emissive
+    // colour in the entry's tint. No third binding: the mask is the unit-0 alpha. The Zone
+    // variants of these programs do not declare the colour, so a Zone race adds nothing.
+    if glow_program > 11.5 && glow_program < 12.5 {
+        emissive_add = first.a * glow_tint_offset.rgb * (1.0 - zone_on);
+    }
     let pad_glow = pad_ne_texel.a * glow_tint_offset.rgb * select(0.0, 1.0, pad_ne) + emissive_add;
 
     // **HD's magstrip wave** (`slots::MAG_WAVE`, `oag_mesh::mesh::rcs::mag_wave`):
@@ -996,6 +1003,17 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             && row_tint.y > 0.5
         {
             specular_mask = 1.0;
+        }
+        // **A window whose specular is multiplied by a map** (the entry's `program[1]`,
+        // `pb_glass_2nduv_reflect_specular1_glow`): `specular * S.rgb`, `S` the second binding at
+        // the picture's coordinate. The picture's alpha gates the reflection there, not the gloss.
+        if pane_entry != 0u
+            && row_scale.y > 8.5
+            && row_scale.y < 9.5
+            && row_scale.w > 0.5
+        {
+            specular_mask = 1.0;
+            specular_tint = decode(second.rgb);
         }
         let specular = scene.light.sun
             * (pow(ndh, specular_exponent) * ndl_spec * mask * specular_mask * scene.light.specular_scale
