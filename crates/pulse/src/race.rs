@@ -423,6 +423,7 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     }),
     plasma_blast_hd: None,
     disruptor_halo: None,
+    disruptor_craft: None,
     // `BombBlast_Construct`'s own load order - see
     // `docs/ghidra/functions/psp-pulse-usa/mine.md`.
     bomb_blast_pulse: Some(oag_title::weapons::PulseBombBlast {

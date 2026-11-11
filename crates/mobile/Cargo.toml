@@ -15,5 +15,8 @@ log.workspace = true
 [target.'cfg(target_os = "android")'.dependencies]
 winit = { workspace = true, features = ["android-native-activity"] }
 
+[dev-dependencies]
+oag-mod.workspace = true
+
 [lints]
 workspace = true

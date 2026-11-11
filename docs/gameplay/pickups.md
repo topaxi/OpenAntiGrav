@@ -352,9 +352,11 @@ already-disrupted craft is immune. Bolt and effects are read off
 `oag_weapons::projectile::disruptor` and `oag_weapons::disruption`. Two
 recorded deviations: the effect is rolled at the press rather than at the pad,
 and the homing lock is the Missile's test run at the press rather than a
-reticle's hold. Nothing of it is drawn yet beyond the generic projectile
-sprite - `WO_DISRUPTOR_HEAD`, `~DISRUPTORTVL`, `DISRUPTOREXPWAL`/`SHP` and
-`disruptor_effect.vex` are named on the evidence page and unwired.
+reticle's hold. Drawn: `WO_DISRUPTOR_HEAD` on the bolt, `WO_DISRUPTOR_LAUNCH` at the
+hull's `Ship Muzzle` node, `WO_DISRUPTOR_EXPLO` with `electric_halo2.vex` at its end, and
+`disruptor_effect.vex` on a disrupted craft for the effect's time
+(`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`); `disruptor_cockpit.vex`
+(the cockpit view's) is named there and unwired.
 
 **This corrects a claim made and merged the same day**: `oag_pure::hud::ART`
 briefly stated Pure "has no per-weapon icon widget of any kind to colour",

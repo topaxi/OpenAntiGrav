@@ -197,6 +197,8 @@ jobs:
       OAG_APK_KEYSTORE_PASS: ${{ secrets.OAG_APK_KEYSTORE_PASS }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: true
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
           targets: aarch64-linux-android
@@ -315,6 +317,8 @@ jobs:
       IPHONEOS_DEPLOYMENT_TARGET: "16.0"
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: true
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
           targets: aarch64-apple-ios

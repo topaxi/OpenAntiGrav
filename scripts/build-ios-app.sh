@@ -48,6 +48,9 @@ mkdir -p "$app" "$(dirname "$out")"
 
 install -m 755 "$binary" "$app/oag-game"
 cp LICENSE-MIT LICENSE-APACHE "$app/"
+# The official mods, in `mods` beside the executable: oag_mod's search path reads
+# `<current_exe dir>/mods`, and on iOS that is the bundle (docs/tools/packaging.md).
+"$root/scripts/stage-official-mods.sh" "$app/mods"
 cp -r licences "$app/licences"
 
 # Home screen icons: the engine's own rasteriser, the same one the window icon

@@ -490,6 +490,7 @@ fn a_pure_race_loads_its_own_plasma_blast_trio() {
             ("plasma_hemisphere_noglow", &blast.hemisphere2),
             ("plasma_hemisphere", &blast.hemisphere1),
             ("electric_halo2", &blast.disruptor_halo),
+            ("disruptor_effect", &blast.disruptor_craft),
         ] {
             assert!(
                 model.is_some(),
@@ -497,6 +498,10 @@ fn a_pure_race_loads_its_own_plasma_blast_trio() {
                 loaded.report
             );
         }
+        assert!(
+            loaded.setup.disruptor_craft_law.is_some(),
+            "{label}: the on-craft Disruptor law is Pure's"
+        );
         let law = loaded.setup.plasma_blast_law.expect("Pure's blast law");
         assert_eq!(law.life, 2.0, "{label}");
         assert_eq!(law.hemisphere_drop, 3.5, "{label}");
@@ -530,7 +535,11 @@ fn a_pure_race_loads_the_effects_its_weapons_play() {
             ),
             (
                 "Disruptor",
-                &[Trigger::DisruptorHead, Trigger::DisruptorExplo][..],
+                &[
+                    Trigger::DisruptorHead,
+                    Trigger::DisruptorExplo,
+                    Trigger::DisruptorLaunch,
+                ][..],
             ),
         ] {
             for trigger in triggers {

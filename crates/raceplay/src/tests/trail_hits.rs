@@ -257,7 +257,7 @@ fn a_field_warm_up_leaves_a_live_burst_on_a_craft_tucked_in_a_ribbon() {
 }
 
 /// The burst `WO_TRAIL_HITSHIP` is, reduced to a one-shot emitter with the record's `+0x4d0`.
-fn a_one_shot_burst(name: &str) -> oag_fx::psys::Effect {
+pub(super) fn a_one_shot_burst(name: &str) -> oag_fx::psys::Effect {
     let mut blob = super::respawn::one_emitter_pob(name, 0);
     let record = blob.len() - oag_pob::EMITTER_LEN;
     blob[record + 0x24..record + 0x28].copy_from_slice(&1.0f32.to_bits().to_le_bytes());

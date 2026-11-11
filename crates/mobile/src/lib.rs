@@ -21,6 +21,7 @@
 pub mod android;
 #[cfg(target_os = "ios")]
 pub mod ios;
+pub mod packaged;
 
 /// Whether this build targets a phone or tablet: the touch overlay is on by
 /// default and a way to quit is not offered (the OS owns the app's lifetime).

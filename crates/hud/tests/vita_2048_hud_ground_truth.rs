@@ -391,3 +391,43 @@ fn only_the_unplayed_bare_root_authors_curve_bars() {
         }
     }
 }
+
+/// **2048's played Eliminator draws no lap hexagon, so `LapPanel2` is not on
+/// `oag_2048::hud::ALWAYS_ON`** (HD's and Omega's lists carry it). The skin 2048 plays
+/// (`2048_hud`, native and the campaign `_HD` root alike) includes its own 507-byte
+/// `HUD_lap_counters.xml`, which authors neither `LapPanel` nor `LapPanel2`; the HD-lineage
+/// `HUD_Elim_lap_counters.xml` that does author `LapPanel2` ships in the package but only the
+/// bare-root `Data\XML\Elimination_HUD.xml` includes it, and that root is the attract-mode
+/// demo's (`oag_2048::hud::skins::DEMO`), never a race a player starts. Listing the name would
+/// draw nothing in any played race, so it is left off until a layout a race reads authors it.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_eliminator_lap_hexagon_is_authored_only_by_the_unplayed_bare_root() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let mut authors: Vec<&str> = Vec::new();
+    for &root in oag_2048::hud::ROOTS {
+        if composed(&mut archives, root)
+            .layout
+            .sprite("LapPanel2")
+            .is_some()
+        {
+            authors.push(root);
+        }
+    }
+    assert_eq!(authors, [r"Data\XML\Elimination_HUD.xml"]);
+
+    let played = archives
+        .read_name(r"Data\XML\2048_hud\HUD_lap_counters.xml")
+        .expect("the played skin's own lap counters ship");
+    let played = String::from_utf8_lossy(&played);
+    assert!(
+        !played.contains("LapPanel"),
+        "the played skin authors no lap panel"
+    );
+    assert!(
+        !oag_2048::hud::ALWAYS_ON.contains(&"LapPanel2"),
+        "a name no played layout authors draws nothing"
+    );
+}

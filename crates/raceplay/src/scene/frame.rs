@@ -809,6 +809,8 @@ impl Scene {
             self.write_plasma_blasts(race, queue, view_projection, &weapon_scene);
         let disruptor_halo_active =
             self.write_disruptor_halos(race, queue, view_projection, &weapon_scene);
+        let disruptor_craft_active =
+            self.write_disruptor_craft_fx(race, queue, view_projection, seconds, &weapon_scene);
         let blasts_active =
             self.write_bomb_blasts(race, queue, view_projection, seconds, &weapon_scene);
         let leach_balls = self.write_leach_ball(race, queue, view_projection, &weapon_scene);
@@ -1226,6 +1228,7 @@ impl Scene {
         self.draw_missile_heads(race.missile_head_model_matrices().len(), &mut draws);
         self.draw_plasma_blasts(&plasma_blast_active, &mut draws);
         self.draw_disruptor_halos(&disruptor_halo_active, &mut draws);
+        self.draw_disruptor_craft_fx(&disruptor_craft_active, &mut draws);
         self.draw_bomb_blasts(&blasts_active, &mut draws);
         self.draw_leach_balls(leach_balls, &mut draws);
         // After the ships, so the hulls' depth is already in the buffer: a

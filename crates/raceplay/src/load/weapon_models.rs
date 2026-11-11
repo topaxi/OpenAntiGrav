@@ -353,6 +353,7 @@ pub(super) fn load_bodies(
             shuriken: None,
             missile_head: None,
             disruptor_halo: None,
+            disruptor_craft: None,
         }
     } else if let Some(pulse) = models.plasma_blast_pulse {
         blast_models::PlasmaBlastModels {
@@ -363,6 +364,7 @@ pub(super) fn load_bodies(
             shuriken: None,
             missile_head: None,
             disruptor_halo: None,
+            disruptor_craft: None,
         }
     } else {
         blast_models::PlasmaBlastModels::default()
@@ -438,6 +440,11 @@ pub(super) fn load_bodies(
             disruptor_halo: one(
                 models.disruptor_halo.map(|halo| halo.model),
                 "a disruptor explosion halo",
+                false,
+            ),
+            disruptor_craft: one(
+                models.disruptor_craft.map(|fx| fx.model),
+                "a disruptor craft effect",
                 false,
             ),
             ..plasma_blast

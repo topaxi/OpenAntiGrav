@@ -66,6 +66,8 @@ set. The not-found screen names the Files path. See `oag_mobile::ios::prepare`.
   one iOS letterboxes the app), `UIRequiredDeviceCapabilities` arm64 and metal,
   `MinimumOSVersion` 16.0. It runs `check-leakage.py --dir`, ad-hoc signs when
   `codesign` exists, and zips `Payload/OpenAntiGrav.app` as the `.ipa`.
+- **Official mods** are staged into `OpenAntiGrav.app/mods` (`stage-official-mods.sh`), the
+  folder beside the executable that `oag_mod::mods_search_path` reads. Never run on a Mac.
 - **Phone behaviour shared with Android** is `oag_mobile::MOBILE`: the touch
   overlay on by default, pilot assist at Extreme, no QUIT row (iOS has no quit).
   The iOS back gesture and a Bluetooth gamepad are not wired; a pad that iOS

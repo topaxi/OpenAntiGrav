@@ -183,6 +183,8 @@ pub struct PlasmaBlastModels {
     pub missile_head: Option<Model>,
     /// Pure's Disruptor explosion halo, which rides here for the same reason.
     pub disruptor_halo: Option<Model>,
+    /// Pure's on-craft Disruptor effect, which rides here for the same reason.
+    pub disruptor_craft: Option<Model>,
 }
 
 /// The drawable pools [`Scene`] builds from a [`PlasmaBlastModels`] -
@@ -201,6 +203,8 @@ pub(crate) struct PlasmaBlastDrawables {
     pub(crate) missile_head: Vec<Drawable>,
     /// The Disruptor's explosion halo, one per [`PLASMA_BLAST_SLOTS`] slot.
     pub(crate) disruptor_halo: Vec<Drawable>,
+    /// The on-craft Disruptor effect, one per ship slot.
+    pub(crate) disruptor_craft: Vec<Drawable>,
 }
 
 impl PlasmaBlastDrawables {
@@ -220,6 +224,7 @@ impl PlasmaBlastDrawables {
             shuriken: build_one(models.shuriken)?,
             missile_head: build_one(models.missile_head)?,
             disruptor_halo: build_one(models.disruptor_halo)?,
+            disruptor_craft: build_one(models.disruptor_craft)?,
         })
     }
 }
@@ -257,6 +262,16 @@ pub(super) struct DisruptorHaloBlast {
     pub(super) position: Vec3,
     pub(super) age: f32,
     pub(super) ease: f32,
+}
+
+/// One craft's live on-craft Disruptor effect: the eased value `DisruptorFx`'s update keeps at
+/// `+0x1a4` and the target it eases towards (`+0x1a0`).
+///
+/// **View state, not `World` state**, like [`PlasmaBlast`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct DisruptorCraftBlast {
+    pub(super) cur: f32,
+    pub(super) target: f32,
 }
 
 /// One blast's own transforms, tints and animation clock, for one frame.
@@ -342,6 +357,51 @@ impl Race {
         }
     }
 
+    /// Runs the on-craft Disruptor effect's lifecycle one tick: built (`cur` `0`, target `target`)
+    /// when a craft becomes disrupted, eased towards its target every tick, its target dropped
+    /// to `0` when the disruption ends and freed once `cur` is under the law's floor
+    /// (`Disruptor_ApplyEffect` builds it, `Ship_UpdateWeapons` ends it, `0x0885a010` eases
+    /// it; `docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor").
+    pub(crate) fn advance_disruptor_craft_fx(&mut self) {
+        let Some(law) = self.view.disruptor_craft_law else {
+            return;
+        };
+        for slot in 0..MAX_SHIPS {
+            let disrupted = self.sim.world.ships[slot].disruption.active();
+            let fx = &mut self.view.disruptor_craft[slot];
+            if disrupted && fx.is_none() {
+                *fx = Some(DisruptorCraftBlast {
+                    cur: 0.0,
+                    target: law.target,
+                });
+            }
+            let Some(live) = fx else { continue };
+            if !disrupted {
+                live.target = 0.0;
+            }
+            live.cur += (live.target - live.cur) * law.rate;
+            if !disrupted && live.cur < law.retire_below {
+                *fx = None;
+            }
+        }
+    }
+
+    /// Each live on-craft Disruptor effect's matrix (the craft's own drawn matrix) and the grey
+    /// tint the eased value gives, by ship slot.
+    ///
+    /// The player's own craft draws none while its camera is inside the hull: the original
+    /// shows `disruptor_cockpit.vex` there (`*(craft+0xe5)`), which is not read.
+    #[must_use]
+    pub(crate) fn disruptor_craft_draws(&self) -> [Option<(Mat4, f32)>; MAX_SHIPS] {
+        std::array::from_fn(|slot| {
+            let live = self.view.disruptor_craft[slot]?;
+            if slot == 0 && !self.draws_own_ship() {
+                return None;
+            }
+            Some((self.ship_model_matrix_of(slot), live.cur.clamp(0.0, 1.0)))
+        })
+    }
+
     /// Each live Disruptor halo's matrix (the camera-facing frame the Plasma
     /// halo takes, at the bolt's end, scaled by the ease) and grey tint
     /// `1 - age / life`, and the age its textures play at, in slot order.
@@ -400,6 +460,7 @@ impl Race {
     /// freshly-placed flare in.
     pub(crate) fn advance_plasma_blast_models(&mut self, dt: f32) {
         self.advance_disruptor_halos(dt);
+        self.advance_disruptor_craft_fx();
         let hd = self.view.hd_plasma_blast;
         // Looked up once, before the loop borrows `plasma_blasts` mutably -
         // `self.view.stage.play` needs `&mut self.view` too, and nothing

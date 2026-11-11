@@ -383,6 +383,46 @@ impl super::Scene {
         active
     }
 
+    /// Writes this tick's matrix and grey tint onto every disrupted craft's on-craft effect and
+    /// hands back which ship slots are live.
+    pub(super) fn write_disruptor_craft_fx(
+        &self,
+        race: &Race,
+        queue: &Uploads<'_>,
+        view_projection: Mat4,
+        seconds: f32,
+        weapon_scene: &mesh_render::Scene,
+    ) -> [bool; oag_gameplay::MAX_SHIPS] {
+        let mut active = [false; oag_gameplay::MAX_SHIPS];
+        for (slot, draw) in race.disruptor_craft_draws().into_iter().enumerate() {
+            let (Some((matrix, tint)), Some(drawable)) =
+                (draw, self.plasma_blast.disruptor_craft.get(slot))
+            else {
+                continue;
+            };
+            active[slot] = true;
+            write_fog(drawable, queue, weapon_scene);
+            drawable.write(queue, view_projection, matrix, view_projection * matrix);
+            drawable.write_node_anims(queue, seconds);
+            drawable.write_anims(queue, seconds);
+            drawable.tint(queue, [tint, tint, tint, 1.0], &mut Vec::new());
+        }
+        active
+    }
+
+    /// Draws the on-craft effects [`Self::write_disruptor_craft_fx`] wrote.
+    pub(super) fn draw_disruptor_craft_fx<'a>(
+        &'a self,
+        active: &[bool; oag_gameplay::MAX_SHIPS],
+        list: &mut super::record::DrawList<'a>,
+    ) {
+        for (slot, _) in active.iter().enumerate().filter(|(_, live)| **live) {
+            if let Some(drawable) = self.plasma_blast.disruptor_craft.get(slot) {
+                list.mesh(drawable);
+            }
+        }
+    }
+
     /// Draws the live Disruptor halos [`Self::write_disruptor_halos`] wrote.
     pub(super) fn draw_disruptor_halos<'a>(
         &'a self,

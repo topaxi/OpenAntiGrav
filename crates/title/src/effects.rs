@@ -113,6 +113,8 @@ pub enum Trigger {
     DisruptorHead,
     /// A Disruptor bolt ending (Pure).
     DisruptorExplo,
+    /// A Disruptor leaving the firing craft's `Ship Muzzle` node (Pure).
+    DisruptorLaunch,
     /// HD's Bomb detonation, 0.5 s in: the rays `0x001503d8` spawns once.
     BombRays,
     /// A Cannon bolt's impact.
@@ -170,7 +172,7 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 47] = [
+    pub const ALL: [Self; 48] = [
         Self::CollisionSpark,
         Self::CollisionSparkNoDamage,
         Self::HitSpark,
@@ -193,6 +195,7 @@ impl Trigger {
         Self::BombGlow,
         Self::DisruptorHead,
         Self::DisruptorExplo,
+        Self::DisruptorLaunch,
         Self::BombRays,
         Self::CannonSparks,
         Self::EngineFlare,

@@ -292,7 +292,11 @@
 0x088513cc	function	Mines_Update	72	weapon-effects.md
 0x0885a2c8	function	DisruptorExplo_Construct	78	weapon-effects.md
 0x0885a5bc	function	DisruptorExplo_Update	80	weapon-effects.md
-0x08859b78	function	DisruptorFx_Construct	55	weapon-effects.md
+0x08859b78	function	DisruptorFx_Construct	85	weapon-effects.md
+0x08924428	function	Ship_BuildDisruptorFx	85	weapon-effects.md
+0x08924570	function	Ship_ReleaseDisruptorFx	85	weapon-effects.md
+0x0885a24c	function	DisruptorFx_Release	85	weapon-effects.md
+0x0885a010	function	DisruptorFx_Update	85	weapon-effects.md
 0x08858710	function	BombBlast_Construct	75	weapon-effects.md
 0x08858ad0	function	BombBlast_Update	75	weapon-effects.md
 0x089316ac	function	WeaponAi_Update	80	weapon-ai-fire.md
@@ -302,3 +306,5 @@
 0x08932868	function	WeaponAiStats_ParseWeapon	80	weapon-ai-fire.md
 0x08947030	function	ShipShield_Hit	80	craft-physics.md
 0x0893403c	function	Body_RecordPairContact	80	craft-physics.md
+0x0885df98	function	Plasma_Init	85	plasma.md
+0x0885e1f4	function	Plasma_Launch	80	plasma.md

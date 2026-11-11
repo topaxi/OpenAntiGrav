@@ -219,6 +219,10 @@ fn main() -> Result<()> {
 fn android_main(app: winit::platform::android::activity::AndroidApp) {
     oag_mobile::android::prepare(app);
     init_logging();
+    match oag_mobile::android::install_official_mods(std::path::Path::new(oag_mod::OFFICIAL)) {
+        Ok(done) => log::debug!("official mods in {}: {done:?}", oag_mod::OFFICIAL),
+        Err(why) => log::warn!("official mods not installed: {why}"),
+    }
     let args = oag_mobile::android::take_launch_args();
     if !args.is_empty() {
         log::info!("launch arguments from {}: {args:?}", oag_mobile::android::LAUNCH_ARGS_FILE);

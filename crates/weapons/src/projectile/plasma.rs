@@ -107,7 +107,7 @@ pub fn muzzle<C: Craft>(craft: &C) -> (Vec3, Vec3) {
 pub const CHARGE_SECONDS: f32 = 1.0;
 
 /// How far ahead of the craft's body a bolt is held and released on a hull with
-/// no `Ship Muzzle` locator (HD's hulls; Pure, whose locator class id is unread).
+/// no `Ship Muzzle` locator (HD's hulls).
 ///
 /// **Measured 2026-10-31, confidence 75, Assegai Venom only, at one hook.**
 /// `--probe plasma_fly` records the firing craft beside the bolt at the entry of

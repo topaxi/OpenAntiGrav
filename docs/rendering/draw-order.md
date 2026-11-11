@@ -221,6 +221,9 @@ and the pads (open; the same bush-and-pad frame was not taken on them).
 reaches them through the same path; Pure's key is the same shape (above) and PS2 inherits what PSP measured. Neither was
 captured.
 
+**The pre-race fly-by trees: measured against the original in "Trees overlapping trees" below (same order);**
+the paragraph that follows is what the first lane saw untinted.
+
 **The pre-race fly-by trees: not reproduced.** Fourteen fly-by frames of Platinum Rush White (2 s apart, 960x544, the
 maintainer's whole Pulse PSP profile: `over-floors`, FOV 100, high model detail, mapped shadows) are byte-identical
 before and after this change, and `original` against `over-floors` is identical on all of them, so the report is not
@@ -358,6 +361,49 @@ Four ways this is not the original, all of them ours:
    (list A) has no depth term, which is right.
 4. **No `0x40000000` set and no reflection layers.** Neither is built, so
    neither is ordered.
+
+## Trees overlapping trees on Platinum Rush White (2026-11-11, `tree-overlap`)
+
+The maintainer's play report: on `13_Track` a tree behind another is drawn over it, in the fly-by and in a race.
+The circuit's blended list (list B) writes no depth, so tree against tree is draw order alone.
+
+**The instrument.** `OAG_DEBUG_TINT_BLENDED=draw|tree` (off and byte-identical unset or `0`, held by
+`trail_order_ground_truth::the_debug_tint_repaints_the_blended_list_and_off_is_the_plain_frame`) paints each blended draw
+(`draw`: one batch of one mesh, the unit the queue key orders) or each connected group of triangles in a draw (`tree`:
+vertices welded by position) its own flat colour, with the picture's alpha kept (`oag_mesh::mesh::Model::debug_tint_blended`).
+`OAG_DRAW_DUMP` lines now also carry the layer, the node, the depth point, the queue key and the first and last triangle of
+each draw. A circuit tree is **one draw of one triangle strip**: of the 12 blended meshes in a Platinum Rush frame, 8 are
+`newtree2` strips of 46 to 334 vertices (one to several trees each, welded together by position, so `tree` mostly
+shows one colour per strip).
+
+**Measured against PPSSPP software rendering, same camera** (PPSSPP 1.20.4, Pulse USA, `time-trial-platinum-rush-white-venom-grid`,
+the craft placed by `psp-drive.py place` at spline rows 2340 to 2440 and stopped; ours from `--pose-from` on a
+`psp-trace.py --camera` row; the fly-by camera from `psp-flyby.py --frames`, the tripod pose with its Z row negated):
+
+- **Order across meshes: identical.** The GE list (`psp-ge-dump.py census`) of each frame, the prims with `zmask` 1, `ztest` 6,
+  blend on, in the main target, against our blended draws matched by box centre: 6 in-race frames (rows 2340, 2360,
+  2380, 2400, 2420, 2440; 13 to 16 matched meshes each) and one fly-by frame (hit 150, 13 meshes) give the same
+  sequence, **zero inversions** (the one inversion in the sweep at row 2400 is the two `spanel` panels 1,400 units away,
+  0.66 units of key apart, a craft's drift between the dump and the trace). Our extra draws are meshes the original culls.
+  The key's rank of a mesh behind the eye is zero in both (the fly-by's first prim is a tree 7 units behind the eye).
+- **Order inside a mesh: identical.** Prims 412, 416 and 417 of the row 2400 frame (46, 131, 131 vertices, prim type 4,
+  triangle strip): our first and last triangle are the strip's first and last three vertices, to three decimals.
+- **Pixels: the same.** Rows 2380 and 2400 side by side (PPSSPP, ours, ours tinted): the same trees over the same trees.
+- **Depth against order.** A frame with the blended pipeline forced to write depth (an experiment, not kept) differs
+  from the plain one by 229 to 1,385 pixels of 522,240 (0.04 to 0.27 %) on four fly-by ticks of the maintainer's profile, so the
+  per-mesh key puts almost every tree over its farther neighbour already.
+
+So ours draws trees in the original's order, and an overlap that looks wrong in a still is the original's own rule (one key
+per mesh from the box centre, one authored strip order inside it, no depth write). **Not reproduced as a draw-order fault
+in any still.** Open, and what a still cannot show: the temporal path (`reconstruction = fsr3` with the blended pass's masked-empty
+velocity and no depth, `motion_blur = high`), which the maintainer plays with; a headless `--presented` frame of
+fsr3 against off at fly-by ticks 120 and 480 differs by 0.5 to 0.6 % of the pixels with no tree over a nearer one, but a single
+frame carries no history. A windowed run was not completed (the race opened on the grid, not the fly-by).
+
+**Lineage.** Pure and the PS2 pressing: checked, applies - the tint hooks `Scene::new`'s track model, which every title's
+circuit passes, and PS2's list B takes the PSP's key by inheritance (below); neither was photographed over a tree and
+PS2's own order was not captured, so both are the same claim as PSP's, unmeasured. HD, Omega and 2048 draw their circuit's blended
+list through the same hook; their trees' queue keys are unread (above).
 
 ## PS2: list B takes the PSP's depth key (inherited, 2026-10-31)
 

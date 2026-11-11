@@ -131,7 +131,7 @@ impl Drawable {
         }
     }
 
-    fn trace_draw(&self, list: &str, draw: &DrawCall) {
+    fn trace_draw(&self, list: &str, draw: &DrawCall, queue_key: Option<u32>) {
         use std::io::Write;
         static PATH: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
         let Some(path) = PATH.get_or_init(|| std::env::var_os("OAG_DRAW_DUMP").map(Into::into))
@@ -151,13 +151,32 @@ impl Drawable {
         {
             let _ = writeln!(
                 file,
-                "{list}\t{label}\t{}\t{:.1}\t{:.1}\t{:.1}\t{:.0}\t{}",
+                "{list}\t{label}\t{}\t{:.1}\t{:.1}\t{:.1}\t{:.0}\t{}\t{:#010x}\t{}\t{:?}\t{}",
                 draw.range.end - draw.range.start,
                 c[0],
                 c[1],
                 c[2],
                 draw.bounds.radius,
-                draw.chunk.map_or(-1, i64::from)
+                draw.chunk.map_or(-1, i64::from),
+                draw.layer,
+                draw.node.map_or(-1, i64::from),
+                draw.depth_point,
+                queue_key.map_or_else(|| "-".to_string(), |key| format!("{key:#010x}"))
+            );
+            let corner = |at: u32| {
+                let index = self.model.indices[at as usize];
+                self.model.vertices[index as usize].position
+            };
+            let last = draw.range.end.saturating_sub(3);
+            let _ = writeln!(
+                file,
+                "#tri\tfirst {:?} {:?} {:?}\tlast {:?} {:?} {:?}",
+                corner(draw.range.start),
+                corner(draw.range.start + 1),
+                corner(draw.range.start + 2),
+                corner(last),
+                corner(last + 1),
+                corner(last + 2),
             );
         }
     }
@@ -284,7 +303,7 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
-            self.trace_draw("opaque", draw);
+            self.trace_draw("opaque", draw, None);
             shown.push(index as u32);
         }
         // The prepass's own order: `order` where given, filtered to what is
@@ -460,7 +479,7 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
-            self.trace_draw("cutout", draw);
+            self.trace_draw("cutout", draw, None);
             // Switched only when the reference changes, so a model naming one
             // (or none) still pays for a single `set_pipeline`.
             let cutout = if self.wants_cull(draw) {
@@ -573,7 +592,11 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
-            self.trace_draw("blended", draw);
+            self.trace_draw(
+                "blended",
+                draw,
+                sorted.as_ref().map(|sorted| sorted.key_at(at)),
+            );
             let slot = draw
                 .texture
                 .map_or(0, |t| t + 1)

@@ -732,6 +732,8 @@ result in a `mods` folder that `oag_mod::mods_search_path` reaches by
 | Linux tarball | `mods/remix` beside `oag-game` | `release.yml`, "Cut the tarball" |
 | Windows zip | `mods/remix` beside `oag-game.exe` | `release.yml`, "Stage the zip" |
 | macOS app | `Contents/MacOS/mods/remix`, beside the bundle's executable | `build-mac-app.sh` |
+| iOS app | `OpenAntiGrav.app/mods/remix`, beside the bundle's executable | `build-ios-app.sh` |
+| Android APK | `assets/official-mods/` plus `assets/official-mods.index`, unpacked on first launch to `<files dir>/assets/mods/official` | `build-apk.sh` |
 
 **AppImage: inside the image, with a second search entry, not an archive beside
 the file.** A player downloads one file and runs it; a `mods/` folder beside it
@@ -746,8 +748,32 @@ detached worktree first.
 `release.yml` checks out with `submodules: true` for the Linux, Windows and
 macOS jobs (the checkout action cannot pick one submodule, so `assets/mods/examples`
 comes with it and is not packaged). `nightly.yml` calls `release.yml`, so it needs
-no change. Not covered, named open in the Remix handover thread: the AUR
-PKGBUILDs, Android and iOS, and the web build.
+no change; the `android:` and `ios:` jobs check out with `submodules: true` too
+(the stage script fails without them). Not covered, named open in the Remix handover
+thread: the AUR PKGBUILDs and the web build.
+
+**Phones.** iOS needs nothing new: the bundle's executable sits in
+`OpenAntiGrav.app/`, so `packaged_mods` already searches `OpenAntiGrav.app/mods`, and the
+build script stages there like the macOS one (not run on a Mac: the recipe is the
+macOS one, read only). Android has no folder beside an executable and the mod loader
+(`Mod::open`, the wasm host, the shader and fx loaders) reads file paths, so reading
+through the NDK `AssetManager` would be a second `Container` backend. Instead
+`build-apk.sh` writes the staged mods into the APK's `assets/` and an index of
+`size sha256 path` lines beside them (the NDK lists an asset folder's files, never
+its subfolders, so the app cannot walk the tree). `android_main` calls
+`oag_mobile::android::install_official_mods(oag_mod::OFFICIAL)`: the working
+directory is already the app's files directory (`oag_mobile::android::prepare`), so
+`assets/mods/official` there is the path `mods_search_path` lists for a checkout's
+submodule, and nothing in `oag-mod` changed. The index is the stamp: a copy sits in
+the unpacked folder, equal bytes mean current, and any difference writes the new tree
+beside it and swaps it in whole (a mod a newer build dropped does not linger; an
+interrupted copy leaves `official.new`, cleared next launch). It runs on the activity's
+thread before the event loop and the window exist, so no frame waits on it; the 53
+files (3.5 MB) took 3 ms to write on a desktop disk. A failure is a `warn`, the
+game starts without the mods; success is a `debug` line. The logic is
+`oag_mobile::packaged` (host-tested, including that `oag_mod::search` opens what it
+wrote); `scripts/stage-official-mods.sh` is shared, so no mods staged is still a
+build error. The mods' screenshots ride along (the AppImage ships them too).
 
 ## AUR packages
 

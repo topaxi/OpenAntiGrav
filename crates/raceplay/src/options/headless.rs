@@ -95,6 +95,8 @@ impl Setup {
             #[cfg(feature = "view")]
             disruptor_halo_law: None,
             #[cfg(feature = "view")]
+            disruptor_craft_law: None,
+            #[cfg(feature = "view")]
             hd_bomb_blast: false,
             #[cfg(feature = "view")]
             bomb_shockwave_fades: false,
