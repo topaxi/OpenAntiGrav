@@ -135,13 +135,7 @@ pub fn grid_draw_list(
             .as_deref()
             .is_some_and(|n| n.starts_with("Outline_"))
         {
-            out.push(sprite_draw(
-                image,
-                placed,
-                image.x,
-                image.y,
-                TIER_OUTLINE_TINT,
-            ));
+            out.push(image.sprite_draw(placed, image.x, image.y, TIER_OUTLINE_TINT));
             continue;
         }
         if image.name.as_deref() == Some("up arrow") {
@@ -150,7 +144,7 @@ pub fn grid_draw_list(
             } else {
                 0xffff_ffff
             };
-            out.push(sprite_draw(image, placed, image.x, image.y, argb));
+            out.push(image.sprite_draw(placed, image.x, image.y, argb));
             continue;
         }
         if image.name.as_deref() == Some("down arrow") {
@@ -160,7 +154,7 @@ pub fn grid_draw_list(
             } else {
                 0xffff_ffff
             };
-            out.push(sprite_draw(image, placed, image.x, image.y, argb));
+            out.push(image.sprite_draw(placed, image.x, image.y, argb));
             continue;
         }
         out.push(image_draw(image, placed));
@@ -635,7 +629,7 @@ pub(crate) fn fill_draw(fill: &Fill) -> Draw {
 
 /// An ordinary image widget, at its own authored position.
 pub(crate) fn image_draw(image: &Image, placed: Placed) -> Draw {
-    sprite_draw(image, placed, image.x, image.y, image.color)
+    image.sprite_draw(placed, image.x, image.y, image.color)
 }
 
 /// The medal-colour swatch's own ARGB: gold, silver, bronze. Both
@@ -671,7 +665,7 @@ pub(super) fn tinted_medal_draw(
     argb: u32,
 ) -> Draw {
     let [x, y] = hex.map_or([image.x, image.y], |h| [h[0], h[1]]);
-    sprite_draw(image, placed, x, y, argb)
+    image.sprite_draw(placed, x, y, argb)
 }
 
 /// `Selector`'s own draw, centred on `hex` - the selected hex's own rect
@@ -687,7 +681,7 @@ pub(super) fn centred_selector_draw(image: &Image, placed: Placed, hex: [f32; 4]
     let height = image.height.unwrap_or(placed.height as f32);
     let x = hex[0] + (hex[2] - width) * 0.5;
     let y = hex[1] + (hex[3] - height) * 0.5;
-    sprite_draw(image, placed, x, y, image.color)
+    image.sprite_draw(placed, x, y, image.color)
 }
 
 /// [`centred_selector_draw`], but with the tint overridden rather than taken
@@ -705,7 +699,7 @@ pub(super) fn selector_tinted_draw(
     origin: Option<(f32, f32)>,
 ) -> Draw {
     let [dx, dy] = origin.map_or(SELECTOR_ORIGIN, |(x, y)| [x, y]);
-    sprite_draw(image, placed, hex[0] + dx, hex[1] + dy, argb)
+    image.sprite_draw(placed, hex[0] + dx, hex[1] + dy, argb)
 }
 
 /// `text`'s draw and, after it, what `Text_Draw` stamps into the glow mask for it
@@ -773,44 +767,6 @@ const TIER_OUTLINE_TINT: u32 = 0x7f34_acc2;
 /// when the current page is already the first (`up arrow`) or the last
 /// (`down arrow`), full white otherwise. Measured, confidence 85.
 const ARROW_DISABLED_TINT: u32 = 0xff50_5050;
-
-/// An image widget's draw, with its position and colour overridden - what
-/// [`centred_selector_draw`]/[`tinted_medal_draw`] feed.
-pub(crate) fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw {
-    let width = image.width.unwrap_or(placed.width as f32);
-    let height = image.height.unwrap_or(placed.height as f32);
-    let sampled = [
-        image.texture_width.unwrap_or(placed.width as f32),
-        image.texture_height.unwrap_or(placed.height as f32),
-    ];
-    let color = argb_to_rgba(argb);
-    if sampled[0] > placed.width as f32 + 0.5 || sampled[1] > placed.height as f32 + 0.5 {
-        return Draw::TiledSprite {
-            rect: [x, y, width, height],
-            uv: [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
-            repeat: [
-                sampled[0] / placed.width.max(1) as f32,
-                sampled[1] / placed.height.max(1) as f32,
-            ],
-            color,
-        };
-    }
-    Draw::Sprite {
-        rect: [x, y, width, height],
-        uv: [
-            placed.x as f32 + image.u.unwrap_or(0.0),
-            placed.y as f32 + image.v.unwrap_or(0.0),
-            sampled[0],
-            sampled[1],
-        ],
-        color,
-    }
-}
 
 /// `Cell Help`'s own overlay, drawn as a **static** panel - every widget on
 /// that screen at its own authored position, with no animation at all. The

@@ -8,7 +8,7 @@ use super::{
     Bracket, DisplayType, Fill, Image, Menu, Node, Redirect, Screens, Slot, Text, argb_to_rgba,
     parse_argb,
 };
-use crate::frontend::Draw;
+use crate::frontend::{Draw, Placed};
 use oag_core::buttons::button_from_name;
 
 impl Fill {
@@ -53,6 +53,52 @@ impl Fill {
             ],
             value: self.real_glow,
         })
+    }
+}
+
+impl Image {
+    /// This image as a [`Draw::Sprite`], or a [`Draw::TiledSprite`] when the
+    /// sampled rect is larger than the sheet's placed rect, with the position
+    /// and the modulating ARGB passed in instead of read off the widget.
+    ///
+    /// The one conversion every front-end screen that draws an image shares:
+    /// an ordinary image passes its own `x`, `y` and `color`; a selector, a
+    /// medal or a cropped bar overrides some of them.
+    #[must_use]
+    pub fn sprite_draw(&self, placed: Placed, x: f32, y: f32, argb: u32) -> Draw {
+        let width = self.width.unwrap_or(placed.width as f32);
+        let height = self.height.unwrap_or(placed.height as f32);
+        let sampled = [
+            self.texture_width.unwrap_or(placed.width as f32),
+            self.texture_height.unwrap_or(placed.height as f32),
+        ];
+        let color = argb_to_rgba(argb);
+        if sampled[0] > placed.width as f32 + 0.5 || sampled[1] > placed.height as f32 + 0.5 {
+            return Draw::TiledSprite {
+                rect: [x, y, width, height],
+                uv: [
+                    placed.x as f32,
+                    placed.y as f32,
+                    placed.width as f32,
+                    placed.height as f32,
+                ],
+                repeat: [
+                    sampled[0] / placed.width.max(1) as f32,
+                    sampled[1] / placed.height.max(1) as f32,
+                ],
+                color,
+            };
+        }
+        Draw::Sprite {
+            rect: [x, y, width, height],
+            uv: [
+                placed.x as f32 + self.u.unwrap_or(0.0),
+                placed.y as f32 + self.v.unwrap_or(0.0),
+                sampled[0],
+                sampled[1],
+            ],
+            color,
+        }
     }
 }
 

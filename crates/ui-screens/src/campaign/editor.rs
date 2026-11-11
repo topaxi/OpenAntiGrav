@@ -12,7 +12,7 @@ use oag_ui::menu::{Frame, Layers, Picture, Skin};
 use oag_ui::pointer::{Pointer, contains, hex_contains};
 use oag_ui::screen::argb_to_rgba;
 
-use super::draw::{hex_slot_xy, image_draw, push_selector, sprite_draw, text_draw};
+use super::draw::{hex_slot_xy, image_draw, push_selector, text_draw};
 use super::pointer::Extent;
 use super::pulse::SelectorPulse;
 use super::{Layout, hex_rect};
@@ -244,7 +244,7 @@ pub fn draw_list(
                 }
                 out.push(image_draw(image, placed));
             } else {
-                out.push(sprite_draw(image, placed, image.x, image.y, EMPTY_HEX));
+                out.push(image.sprite_draw(placed, image.x, image.y, EMPTY_HEX));
             }
             continue;
         }
