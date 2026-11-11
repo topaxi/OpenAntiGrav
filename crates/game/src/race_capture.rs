@@ -299,20 +299,17 @@ pub struct CaptureOptions {
     pub hud_safe_area: Option<u8>,
     /// `[display] dynamic_hud`, which only a title with a `Dynamic HUD` option obeys.
     pub dynamic_hud: oag_display::display::DynamicHud,
-    /// `[display] ghost_ship_visible`, resolved for the title
-    /// ([`crate::settings::Display::ghost_ship_shown`]).
+    /// `[display] ghost_ship_visible`, resolved by [`crate::settings::Display::ghost_ship_shown`].
     pub ghost_visible: bool,
     /// Whether the other people's multiplayer tags are drawn
     /// ([`crate::settings::Display::multiplayer_tags_shown`]).
     pub player_tags: bool,
     /// The stored player name, which names seat 1 ([`crate::split_screen::name_first_seat`]).
     pub player: crate::settings::Player,
-    /// What casts a shadow in the captured frame: `--shadows`. Two captures differing only by
-    /// this flag compare the tier against itself off; unlike [`Self::motion_blur`] it needs no
-    /// primer frame, a blob being placed from the tick's own pose.
+    /// What casts a shadow in the captured frame: `--shadows`. Unlike [`Self::motion_blur`] it needs
+    /// no primer frame, a blob being placed from the tick's own pose.
     pub shadows: oag_display::display::Shadows,
-    /// How far out authored `LodGroup`s switch in the captured frame -
-    /// `[render_profiles.<title>] model_detail`, or `--lod`'s preset.
+    /// How far authored `LodGroup`s switch out: `[render_profiles.<title>] model_detail`, or `--lod`.
     pub model_detail: oag_mesh::mesh::ModelDetail,
     /// `[render_profiles.<title>] texture_detail`, or `--texture-detail`.
     pub texture_detail: oag_mesh::mesh_render::TextureDetail,

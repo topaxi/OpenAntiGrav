@@ -121,9 +121,11 @@ fn tint_hue(pixel: &[u8]) -> Option<f32> {
 
 /// How many pixels are one tree's colour in one frame and another tree's in the other.
 fn recoloured(a: &[u8], b: &[u8]) -> usize {
-    a.chunks_exact(4)
-        .zip(b.chunks_exact(4))
-        .filter(|(a, b)| match (tint_hue(a), tint_hue(b)) {
+    a.as_chunks::<4>()
+        .0
+        .iter()
+        .zip(b.as_chunks::<4>().0)
+        .filter(|(a, b)| match (tint_hue(*a), tint_hue(*b)) {
             (Some(x), Some(y)) => {
                 let d = (x - y).abs();
                 d.min(360.0 - d) > 40.0
