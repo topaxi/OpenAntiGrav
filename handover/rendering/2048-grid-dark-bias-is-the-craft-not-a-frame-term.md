@@ -41,8 +41,8 @@ of ours accounts for most of the dark bias on `2048-empire-climb-grid`, `2048-ma
 
 ## Next Steps
 
-0. ~~Rule out the chase camera's distance setting~~ (settled 2026-11-11, `c2048-chase-camera`, confidence 80): ours flies
-   `OPT_CLOSE` (the default, byte-identical to `--camera-view close`), the original's hull matches it within 2 % on landmark boxes
+0. ~~Rule out the chase camera's distance setting~~ (settled 2026-11-11, `c2048-chase-camera`, confidence 75): ours flies
+   `OPT_CLOSE` (the default, byte-identical to `--camera-view close`), the original's hull matches it within 2 % on landmark boxes (three pairs)
    and is 32 % from ours on Far, so the original did too (inferred from the frame; its stored `pair.json` records no setting). The
    1.31 x 1.35 was the yellow mask. The HD absorb pair's 1.5x is a separate case (its profile's autosave carried `OPT_FAR`, see
    `rpcs3-capture.md`) and is not read here. Method and numbers: [compare-page.md](../../docs/tools/compare-page.md), "The chase
