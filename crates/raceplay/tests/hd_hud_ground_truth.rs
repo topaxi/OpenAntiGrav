@@ -373,7 +373,7 @@ fn every_sprite_s_source_rectangle_fits_inside_the_texture_it_names() {
                 None => {
                     let entry = archives
                         .resolve_texture(&sprite.src)
-                        .unwrap_or_else(|| (&sprite.src).to_string());
+                        .unwrap_or_else(|| sprite.src.to_string());
                     let blob = archives
                         .read_name(&entry)
                         .unwrap_or_else(|e| panic!("{} -> {entry}: {e}", sprite.src));
