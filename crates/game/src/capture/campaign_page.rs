@@ -453,7 +453,7 @@ pub(super) fn campaign_page(
             }
             CampaignKind::Grid { tier, .. } => {
                 let mut model = oag_ui_screens::campaign::GridSelection::new(
-                    hd_grids.iter().map(|grid| summarise(grid)).collect(),
+                    hd_grids.iter().map(&summarise).collect(),
                 );
                 model.set_index(tier);
                 flyer_name = model.selected().and_then(|grid| grid.flyer_name.clone());
@@ -529,7 +529,7 @@ pub(super) fn campaign_page(
             }
             CampaignKind::Grid { .. } => {
                 let model = oag_ui_screens::campaign::GridSelection::new(
-                    campaign.grids.iter().map(|grid| summarise(grid)).collect(),
+                    campaign.grids.iter().map(&summarise).collect(),
                 )
                 .with_medal_art(medal_art.clone())
                 .with_tiers(tiers.clone());
