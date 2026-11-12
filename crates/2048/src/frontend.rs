@@ -448,6 +448,158 @@ pub const TOUCH: &TouchFrontEnd = &TouchFrontEnd {
     map_nodes: crate::campaign::tier::MAP,
 };
 
+/// The key an event card titles each HD-lineage circuit by: rows 0 to 27 of
+/// the executable's `g_track_alias_table` (`0x814b1578` in the v1.04 `eboot.elf`),
+/// the circuits DLC1 and DLC2 ship, one row per direction. Not derived from
+/// `soundregister` (DLC2 breaks that). The table's remaining rows (2048's own
+/// ten and the `WV_` scenes) are not listed: 2048's own events title
+/// themselves from `m_displayName`
+/// (`docs/ghidra/functions/vita-2048-eu-v104/circuit-name-key.md`, "The card's
+/// key: the track alias table", confidence 85; read statically, no live run
+/// watched the lookup).
+pub const CARD_TRACK_ALIASES: &[oag_title::TrackAlias] = &[
+    oag_title::TrackAlias {
+        name: "Vineta_K",
+        reversed: false,
+        key: "01_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Anulpha_Pass",
+        reversed: false,
+        key: "08_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Moa_Therma",
+        reversed: false,
+        key: "03_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Chenghou_Project",
+        reversed: false,
+        key: "04_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Metropia",
+        reversed: false,
+        key: "02_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Sebenco_Climb",
+        reversed: false,
+        key: "06_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Ubermall",
+        reversed: false,
+        key: "05_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Sol_2",
+        reversed: false,
+        key: "07_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Vineta_K_R",
+        reversed: true,
+        key: "09_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Anulpha_Pass_R",
+        reversed: true,
+        key: "16_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Moa_Therma_R",
+        reversed: true,
+        key: "11_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Chenghou_Project_R",
+        reversed: true,
+        key: "12_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Metropia_R",
+        reversed: true,
+        key: "10_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Sebenco_Climb_R",
+        reversed: true,
+        key: "14_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Ubermall_R",
+        reversed: true,
+        key: "13_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Sol_2_R",
+        reversed: true,
+        key: "15_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Talons_Junction",
+        reversed: false,
+        key: "17_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Talons_Junction_R",
+        reversed: true,
+        key: "18_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Amphiseum",
+        reversed: false,
+        key: "19_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Amphiseum_R",
+        reversed: true,
+        key: "20_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Modesto_Heights",
+        reversed: false,
+        key: "21_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Modesto_Heights_R",
+        reversed: true,
+        key: "22_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Tech_De_Ra",
+        reversed: false,
+        key: "23_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Tech_De_Ra_R",
+        reversed: true,
+        key: "24_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Zone_1",
+        reversed: false,
+        key: "25_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Zone_2",
+        reversed: false,
+        key: "26_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Zone_3",
+        reversed: false,
+        key: "27_Track",
+    },
+    oag_title::TrackAlias {
+        name: "Zone_4",
+        reversed: false,
+        key: "28_Track",
+    },
+];
+
 /// 2048's front end, as [`oag_title::Title::front_end`] carries it.
 ///
 /// **`menu: None`, `touch: Some(TOUCH)` - the one title in the corpus that
@@ -479,6 +631,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     track_select: None,
     race_setup: None,
     track_label_overrides: &[],
+    card_track_aliases: CARD_TRACK_ALIASES,
     track_record_empty: "-",
     track_distance_authored: false,
     // Inert either way: `race_box` is `None`, so no picker opens to read

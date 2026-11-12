@@ -67,6 +67,7 @@ pub mod shadow;
 pub mod speed;
 pub mod team;
 pub mod touch;
+pub mod track_alias;
 pub mod weapon_pad;
 pub mod weapons;
 pub mod weather;
@@ -102,6 +103,7 @@ pub use race::{
     ZoneStageTextures, ZoneStages, ZoneTeamStep, ZoneTransition,
 };
 pub use touch::{TouchButton, TouchFrontEnd};
+pub use track_alias::TrackAlias;
 pub use zoom::ZoomRing;
 
 /// One title's release-level facts.
@@ -558,6 +560,12 @@ pub struct FrontEnd {
     /// `MSC_DISTANCE` (`Distance(m)`) where `Track Creation` authors
     /// `IG_HUD_DISTANCE` (`Distance`).
     pub track_label_overrides: &'static [(&'static str, &'static str)],
+    /// The key an event card titles a circuit by, per circuit and direction,
+    /// where the executable keeps a table for it ([`TrackAlias`]). A circuit the
+    /// table has no row for keeps its ordinary name; empty where the title has
+    /// no such table or this build has not read it. 2048's
+    /// `g_track_alias_table` (`0x814b1578`).
+    pub card_track_aliases: &'static [TrackAlias],
     /// What the track screen's lap and race record rows read before a time is set.
     /// Pulse's `0x088edd60` draws `-.--.--` for a record of `0` or `0xffff`; the
     /// other titles keep the single dash (unmeasured).

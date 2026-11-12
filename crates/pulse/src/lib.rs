@@ -289,6 +289,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `TrackSelection_ApplySelection` hands `MSC_DISTANCE` to `Info1 Title` through
     // `0x088ede50` (`0x088cd0f4` sets the label); the XML's `IG_HUD_DISTANCE` is never shown.
     track_label_overrides: &[("Info1 Title", "MSC_DISTANCE")],
+    card_track_aliases: &[],
     // The literal at `0x08a84914`, drawn by `0x088edd60` for an unset record.
     track_record_empty: "-.--.--",
     // `<Physical Length>` of the circuit's `stats.xml`, printed `%d` (`0x088ede50`).

@@ -20,6 +20,7 @@
 
 use oag_raceplay::catalogue::Track;
 use oag_tables::race_campaign::{Cell, Grid, Medal, Mode};
+use oag_title::TrackAlias;
 use oag_ui::frontend::{EventCard, EventIcon, MapEvent, Tier};
 use oag_ui::language::{CircuitNames, StringTable};
 
@@ -74,10 +75,11 @@ pub(super) fn load(
     archives: &mut oag_assets::Archives,
     tracks: &[Track],
     names: &CircuitNames,
+    aliases: &[TrackAlias],
     strings: &StringTable,
     report: &mut Vec<String>,
 ) -> Vec<Tier> {
-    tiers(&read(archives, report), tracks, names, strings)
+    tiers(&read(archives, report), tracks, names, aliases, strings)
 }
 
 /// The cell called `name`, with the campaign and grid it is in.
@@ -109,6 +111,7 @@ pub fn tiers(
     grids: &[TierGrids],
     tracks: &[Track],
     names: &CircuitNames,
+    aliases: &[TrackAlias],
     strings: &StringTable,
 ) -> Vec<Tier> {
     grids
@@ -125,7 +128,15 @@ pub fn tiers(
                         .filter_map(move |cell| Some((index?, cell)))
                 })
                 .filter_map(|(index, cell)| {
-                    node(&tier.add_on.nodes, index, cell, tracks, names, strings)
+                    node(
+                        &tier.add_on.nodes,
+                        index,
+                        cell,
+                        tracks,
+                        names,
+                        aliases,
+                        strings,
+                    )
                 })
                 .collect(),
         })
@@ -138,6 +149,7 @@ fn node(
     cell: &Cell,
     tracks: &[Track],
     names: &CircuitNames,
+    aliases: &[TrackAlias],
     strings: &StringTable,
 ) -> Option<MapEvent> {
     let (x, y) = nodes.node(grid, cell.grid_coords()?)?;
@@ -173,8 +185,42 @@ fn node(
         kind,
         forced_craft: None,
         refused_craft: Vec::new(),
-        card: card(cell, track, &circuit, kind, strings),
+        card: card(
+            cell,
+            track,
+            &card_title(cell, &circuit, aliases, strings),
+            kind,
+            strings,
+        ),
     })
+}
+
+/// The title of a cell's event card: where the title keeps an alias table and it
+/// has a row for the cell's circuit, the string table entry of that row's key,
+/// else the key itself; every other circuit (2048's own ten, a title with no
+/// table) keeps `circuit`, the name its other screens use. Not
+/// [`oag_raceplay::catalogue::label`]: the original draws a reverse's own entry
+/// without the `FE_REVERSE` word that label appends
+/// (`docs/ghidra/functions/vita-2048-eu-v104/circuit-name-key.md`, "The card's
+/// key: the track alias table").
+pub fn card_title(
+    cell: &Cell,
+    circuit: &str,
+    aliases: &[TrackAlias],
+    strings: &StringTable,
+) -> String {
+    let Some(key) = cell
+        .track
+        .as_deref()
+        .and_then(|id| oag_title::track_alias::key_for(aliases, id))
+    else {
+        return circuit.to_string();
+    };
+    strings
+        .get(key)
+        .or_else(|| strings.find_ignoring_case(key))
+        .unwrap_or(key)
+        .to_string()
 }
 
 /// The icon a cell's mode draws. **Chosen, not measured**: the four icons are
