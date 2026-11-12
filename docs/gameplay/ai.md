@@ -5605,6 +5605,8 @@ code.
 
 **Since 2026-11-11 (lane `ace-walls`) all 96 verify**, each under every
 perturbation offset tried: see [the next section](#a-road-under-the-line-is-a-failure-2026-11-11).
+With the body damping (2026-11-12) one row fails one offset of the 17, `01_Track` PHANTOM at
+`-3.5e-4`, measured on the tree before and after the long-landing answer below alike.
 What follows is the set as it stood before.
 
 `crates/raceplay/tests/speed_plan_ground_truth.rs` pins the exact set, at the
@@ -5665,17 +5667,21 @@ to 30 in one failure, so the standing lap fell short (2 of 17 builds until that 
 | `06_Track` RAPIER, damped | before | after |
 | --- | --- | --- |
 | offsets clean, one build each (unperturbed scale) | 11 of 17 | **17 of 17** |
-| offsets clean, majority of the five gate scales | 11 of 17 | **17 of 17** |
-| builds clean, 17 offsets x 5 gate scales | | 85 of 85 |
+| offsets clean, majority of the five gate scales | 12 of 17 | **17 of 17** |
+| builds clean, 17 offsets x 5 gate scales | 54 of 85 | **85 of 85** |
 | unperturbed build: verify failures, unresolved | 22, `[(1234, Wall), (1232, Wall)]` | 0, `[(1241, Wall), (1242, Wall)]` |
 | unperturbed build: flying lap, ticks | 1,705 | 1,703 |
 
 The learning pass still gives up on a wall at 1233-1245 in 7 of the 17 unperturbed builds (it
 spends the site's tries on the post-landing lowerings first, then on the run-up), and their
-verification is clean anyway: the forgiven site is listed, the plan verifies. The new cause fired
-on `06_Track` FLASH and RAPIER only, at 1231-1249, in all eight slices; FLASH verifies 85 of 85
-builds after. The other 94 plans are bit for bit what they were (the raise reaches only ceilings
-the new cause lowered), the AI determinism references did not move,
+verification is clean anyway: the forgiven site is listed, the plan verifies. All eight slices
+run under each of the 17 offsets on main and after (`OAG_PERTURB`, the loop under "The five Pulse rows" below, all eight slices): only
+`06_Track` RAPIER, FLASH and VENOM print a different first build at any offset, and every other
+row prints the same steps, lap, unresolved list and tight count at every offset. FLASH went from
+83 to 85 of 85 builds clean, VENOM stayed 85 of 85. One row is unclean at one offset both before
+and after: `01_Track` PHANTOM at `-3.5e-4` (builds `[true, true, false, false, false]`, the same
+plan both ways), so the pin's "every offset" holds for 95 rows. The AI determinism references did
+not move,
 `ai_dekonstruct_symptoms_ground_truth` printed the same lines, and the lone-craft gate stayed
 all twelve clean (`06_Track` 35.3 s to 35.0 s). **2048 and Omega**: the plan is this project's
 own and reads no title data, so the change runs on every title's plans. Where it fires there

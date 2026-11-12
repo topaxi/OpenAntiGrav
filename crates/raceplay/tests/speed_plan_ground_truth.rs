@@ -18,7 +18,8 @@
 //! verification turns on a landing (`06_Track`'s gap at 1196-1200).
 //!
 //! All 96 verify, each under every offset of `perturb::BOUND_OFFSETS` and
-//! `perturb::HELD_OUT` (`docs/gameplay/ai.md`, "Plans that do not verify").
+//! `perturb::HELD_OUT` but `01_Track` PHANTOM at `-3.5e-4` (`docs/gameplay/ai.md`,
+//! "Plans that do not verify" and "06_Track RAPIER with the body damping").
 
 use std::path::PathBuf;
 
