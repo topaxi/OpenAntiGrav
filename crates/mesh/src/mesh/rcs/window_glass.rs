@@ -50,6 +50,11 @@
 //! the window's. The light term and the gate both ride the picture `skin` builds for the family
 //! (the constant, with the map's alpha), so the reflection is weighted by `a`.
 //!
+//! **`mesh_colour_constant` is the same program** (Metropia's lattice floor, block #7 `@0x5c80`):
+//! instruction for instruction the booth's, with its own constant `0x02ab9f07` (black), the map
+//! under `Normal`, and the map's alpha written as the output alpha, so the wires are the sky
+//! through `a` over a blended sheet (`docs/formats/rcsmaterial.md`, "Metropia: the lattice floor").
+//!
 //! **Left out, named**: the program perturbs `N` with a tangent-space normal map (`Texture` at
 //! unit 0) before the reflection and the specular, which a track vertex carries no frame for in
 //! this renderer, so the reflection reads the vertex normal. A slot that already holds a glow
@@ -179,6 +184,14 @@ const FAMILIES: &[Row] = &[
     },
     Row {
         family: "ds_booth_glass",
+        weight: None,
+        picture: None,
+        mode: Mode::Gated,
+        glow: None,
+        specular: None,
+    },
+    Row {
+        family: "mesh_colour_constant",
         weight: None,
         picture: None,
         mode: Mode::Gated,

@@ -23,6 +23,7 @@ read-only.
 ```sh
 just play           # intro, menu, then a race
 just play --race    # the race on its own
+just play --interpreter --race   # simulation mods on wasmtime's Pulley interpreter, not Cranelift
 ```
 
 `just play --race --players 4` splits the window into one view per local player

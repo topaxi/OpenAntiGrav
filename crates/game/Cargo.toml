@@ -168,8 +168,8 @@ android = []
 ballisticng = ["oag-raceplay/ballisticng"]
 # Simulation mods (WebAssembly, wasmtime with Cranelift): `oag_raceplay::extensions`.
 # On by default on Linux, Windows, macOS and Android. The web build (`just web`) and iOS
-# (`just ios-app`) pass `--no-default-features`: the browser's own engine and wasmtime's
-# Pulley interpreter are not built, and `oag-modhost` refuses to compile for either.
+# (`just ios-app`) pass `--no-default-features`: the browser's own engine and a Pulley
+# build for iOS are not built, and `oag-modhost` refuses to compile for either.
 # Off, a mod's module is named in the load report as left out and nothing of wasmtime
 # is linked. docs/architecture/wasm-extensions/.
 default = ["extensions", "dev-cli"]
@@ -179,6 +179,9 @@ default = ["extensions", "dev-cli"]
 # `--no-default-features --features extensions` (docs/tools/packaging.md).
 dev-cli = []
 extensions = ["oag-raceplay/extensions"]
+# Run the mods on wasmtime's Pulley interpreter instead of Cranelift, to compare the two
+# (`just play --interpreter`). Implies `extensions`; off in every shipped build.
+wasm-interpreter = ["extensions", "oag-raceplay/wasm-interpreter"]
 native-video = ["dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
 # See `oag-render`'s feature of the same name. Off by default.
 perf-probe = ["oag-render/perf-probe", "oag-raceplay/perf-probe"]

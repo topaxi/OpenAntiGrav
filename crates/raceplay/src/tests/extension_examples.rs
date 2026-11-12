@@ -37,8 +37,8 @@ fn example(dir: &str) -> Option<Module> {
 
 /// Fuel per tick on a full grid: eight racing crafts carrying the mod pickup, slot 0 a
 /// person holding fire, every craft hitting a wall, firing and crossing a pad on the
-/// first tick, then two quiet ticks.
-fn full_grid_fuel(module: &Module) -> Vec<u64> {
+/// first tick, then `ticks - 1` quiet ticks.
+fn full_grid_fuel(module: &Module, ticks: u64) -> Vec<u64> {
     let crafts: Vec<Craft> = (0..8)
         .map(|slot| Craft {
             pickup: Pickup::Ours,
@@ -94,7 +94,7 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
     .expect("within the caps");
     let mut state = vec![0; module.limits().state_bytes as usize];
     let mut commands = Vec::new();
-    (0..3_u64)
+    (0..ticks)
         .map(|tick| {
             let events: &[Event] = if tick == 0 { &loud } else { &[] };
             let observation = Observation {
@@ -127,8 +127,32 @@ fn the_committed_examples_load_and_run_a_full_grid_in_budget() {
             eprintln!("{dir}: the mod-examples submodule is not checked out; skipped");
             continue;
         };
-        let fuel = full_grid_fuel(&module);
+        let fuel = full_grid_fuel(&module, 3);
         eprintln!("{dir}: fuel per tick on a full grid {fuel:?}");
         assert!(fuel.iter().all(|f| *f < oag_modhost::FUEL_PER_TICK));
+    }
+}
+
+/// The wall time of a full-grid tick of each example on the engine this build runs
+/// (`oag_modhost::engine_name`), printed for a person comparing a build with
+/// `wasm-interpreter` against one without (`--no-capture`); nothing is asserted.
+#[test]
+fn per_tick_wall_time_of_the_examples_on_this_engine() {
+    const TICKS: u64 = 2_000;
+    for dir in [
+        "wall-penalty",
+        "energy-turbo",
+        "hillside",
+        "checkpoint-circuit",
+    ] {
+        let Some(module) = example(dir) else { continue };
+        let start = std::time::Instant::now();
+        let fuel = full_grid_fuel(&module, TICKS);
+        eprintln!(
+            "{dir} on {}: {:.1} us per tick, {} fuel a quiet tick",
+            oag_modhost::engine_name().unwrap_or("?"),
+            start.elapsed().as_secs_f64() * 1e6 / TICKS as f64,
+            fuel[TICKS as usize - 1]
+        );
     }
 }

@@ -26,7 +26,7 @@ compiled and a race offered a module names it as left out in its load report.
 
 | Piece | Where | What it is |
 | --- | --- | --- |
-| The host | `crates/modhost` | Section 4.1's configuration minus Pulley and the load-time rewrite (desktop Cranelift only); one process-wide `Engine`, built at the first compile and counted (`engines_created`); a fresh pooled instance per tick; fuel per tick `FUEL_PER_TICK` = 200,000, **chosen**; a trap or a refused reply is a `Fault` |
+| The host | `crates/modhost` | Section 4.1's configuration minus the load-time rewrite (desktop; Cranelift, or Pulley behind the `pulley` feature, section 5); one process-wide `Engine`, built at the first compile and counted (`engines_created`); a fresh pooled instance per tick; fuel per tick `FUEL_PER_TICK` = 200,000, **chosen**; a trap or a refused reply is a `Fault` |
 | The ABI | `crates/ext-abi` (`oag_ext_abi`) | Core wasm: exports `memory`, `oag_abi` (the major and the layout revision, below), `oag_io` (a 4,096-byte buffer), `tick`, optionally `oag_state_len` and `oag_track` (the [track region](#and-track-properties-2026-10-30)); **no imports at all** (the `oag` namespace is empty in ABI 1, so `rng-next` and `log` are not offered yet). The buffer's fixed little-endian layout is on that crate's page, the one definition the host and the guest SDK both compile against (it moved out of `oag-modhost` with the SDK, below); it carries the README's records only as far as the examples need: the tick, the active-slot mask, the events, the blob, the reply, the craft records |
 | Event | `wall-contact{slot}` | Raised in `Race::count_wall_contact` for a person's craft and an AI craft alike, **on every tick the craft touches a wall** (`contacts > floor_contacts`, the test `wall_contact_ticks` counts), at most once per craft per tick; delivered the next tick (the one-tick latency) |
 | Command | `scale-thrust{slot, factor}` | No `ticks` field and no host timer: the guest re-sends it each tick it wants it. `factor` finite and in `[0, 2]` (`MAX_THRUST_FACTOR`); anything else, a slot with no craft, or two for one slot is a fault, never a clamp. Below 1.0 **multiplied** into `Ship::pending_thrust_scale`, so a Leach Beam drain armed the tick before is kept |
@@ -1365,7 +1365,8 @@ with wasmtime's own switches left on as a second line
 | NaN canonicalisation | `cranelift_nan_canonicalization(true)`, plus the rewrite inserting the same canonicalisation after every float op | measured: on, every arithmetic NaN read `7fc00000` on both engines; off, `ffc00000` with a payload |
 | Relaxed SIMD, threads, shared memory, memory64, SIMD | off / refused at load | the deterministic subset; `simd128` only after the conformance test passes with it |
 | Memory | the manifest's `memory_pages`, the same `StoreLimits` on every engine, ceiling 256 pages (16 MiB, proposed) | `memory.grow` fails at the same size everywhere |
-| Call depth | the rewrite's counter, trapping at a fixed depth well below any engine's native stack | a native stack overflow traps at different depths on Cranelift and Pulley; open risk until the pass exists |
+| Engine | wasmtime's Cranelift, native code, by default; with `oag-modhost`'s `pulley` feature, `Config::target("pulley64")`: the same Cranelift front end emitting Pulley bytecode, run by the interpreter (section 5). Every other row of this table is set the same on both | the interpreter is a local measuring build; players get no switch |
+| Call depth | the rewrite's counter, trapping at a fixed depth well below any engine's native stack | a native stack overflow traps at different depths on Cranelift and Pulley; open risk until the pass exists. Not exercised by the `pulley` comparison below |
 | Instance | one pooled instance per module per tick (copy-on-write reset) | rollback safety; 11.4 us (Cranelift) / 27.3 us (Pulley) a tick for 20 calls against a 60 us race tick; one call per tick here |
 | State blob | `state_bytes` from the manifest, capped by the host (a few hundred bytes per slot plus a global part covers every example here; the cap is set with the first sim hook) | a fixed-size field in the race state, no allocation |
 | Module size | at most 4 MiB on disk (proposed) | a mod is small; a bigger module is a mistake |
@@ -1479,7 +1480,7 @@ registered? **No.**
   build never links it (section 5): nothing to run. Since 2026-10-30 the feature is
   `oag-game`'s default on Linux, Windows, macOS and Android; the web build and iOS
   build with `--no-default-features`, and `oag-modhost` refuses to compile for either
-  (Cranelift only until the browser path and Pulley are built).
+  (Cranelift only until the browser path and a Pulley build for iOS exist; desktop can opt into Pulley, section 5).
 - **With the feature on and no module loaded**, no wasmtime `Engine`, `Store` or
   instance exists. The host is built **lazily**, at the first load of a module by a
   race (a sim or HUD module of a mod that is on for it) or by a screen (the first
@@ -1507,6 +1508,30 @@ registered? **No.**
 | Android | wasmtime, Cranelift (aarch64) | same | same host code; the mobile glue is `oag-mobile` ([ADR-0065](../adr/0065-one-mobile-crate-for-every-phone-os.md)). **Owed**: the measurements on an AArch64 machine, where the default NaN differs; the x86 run says nothing about it |
 | iOS | wasmtime, Cranelift compiling to **Pulley** bytecode on the device (no native code), +11.4 MB; the runtime-and-Pulley-only build (+0.8 MB) needs precompiled `.cwasm` per wasmtime build, brittle | same | **not checked on iOS**: `cargo check --target aarch64-apple-ios` of wasmtime 50 stops in a build script needing Apple's `xcrun`, the macOS-only toolchain `just ios-app` needs; whether `signals_based_traps` must be off there is owed to a macOS machine ([determinism-and-state.md](determinism-and-state.md#web-and-ios)) |
 | Web | the browser's own `WebAssembly`, through `js-sys`; **the web build never links wasmtime** | compiled asynchronously at race load, never per tick (browsers limit synchronous compiles on the main thread); the race load already runs on a Web Worker (`docs/tools/web.md`, "Threads"); per-tick calls copy the observation into the module's memory as on native | needs the load-time rewrite (fuel, NaN canonicalisation, call depth) before it can match; not run yet |
+
+**Pulley on desktop is a build feature** (2026-11-12, maintainer's request: measure the
+interpreter against Cranelift locally). `oag-modhost`'s `pulley` feature turns on
+wasmtime's `pulley` and builds the engine with `target("pulley64")`; it is forwarded as
+`wasm-interpreter` on `oag-raceplay` and `oag-game` and implies `extensions`. Off by
+default and in every shipped build, so `oag-server` is unchanged (`just check-deps`,
+rule 6). `just play --interpreter ...` builds with it (and adds to `OAG_PLAY_FEATURES`);
+a mod's load logs `runs on the Pulley engine` (or `Cranelift`) at `debug`
+(`RUST_LOG=warn,oag=debug`). Measured on x86-64, one host:
+
+- `oag-modhost`'s `engines` tests build a native and a Pulley engine in one process and
+  run the same guests for 200 ticks: state blob, commands and fuel are equal, and
+  every arithmetic NaN (`0/0`, `sqrt(-1)`, `inf - inf`, a payload NaN plus one) reads
+  `7fc00000` on both.
+- A 900-tick Time Trial with Wall Penalty on Pulse PSP EU (Venom, Track 16) has the same
+  `state_hash` at every hundredth tick on both builds
+  (`wall_penalty_ground_truth::a_modded_race_hashes_the_same_on_either_engine`, run once
+  per build with `OAG_ENGINE_HASHES`).
+- Per full-grid tick of the committed examples (debug profile, which optimises
+  dependencies): wall-penalty 18.7 us Cranelift / 22.4 us Pulley, energy-turbo
+  22.8 / 78.4, hillside 19.5 / 24.4, checkpoint-circuit 26.5 / 118.0, with fuel equal on
+  both. About 18 us of each is the fresh pooled instance, which is why the small mods
+  barely move. `extension_examples::per_tick_wall_time_of_the_examples_on_this_engine`
+  prints it for the build it runs in.
 
 **Same bits everywhere means the guest's results, not the host's speed.** The
 engines agree because the module is the same bytes after the rewrite, the imports

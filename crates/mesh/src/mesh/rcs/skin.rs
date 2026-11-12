@@ -195,9 +195,9 @@ const DIFFUSE: u32 = 0x515e_298e;
 /// constant is black on Sebenco Climb and Tech de Ra, so the glass is its
 /// reflection alone (`mesh::rcs::window_glass`), weighted by the normal map's
 /// alpha, which rides this constant's picture ([`AlphaUse::Gate`]). The pipe family reads it times a
-/// map's alpha instead ([`ALPHA_DIFFUSE`]); `metallic`, `dc_metallic` and
-/// `mesh_colour_constant` end `MAD H0.xyz, light, C, specular` with their own
-/// `C`, and `dc_constantglow`/`cf_constantcolourglow` are fog over a constant
+/// map's alpha instead ([`ALPHA_DIFFUSE`]); `metallic` and `dc_metallic` end
+/// `MAD H0.xyz, light, C, specular` with their own `C`, `mesh_colour_constant` is
+/// `ds_booth_glass`'s program with its own `C` (`mesh::rcs::window_glass`), and `dc_constantglow`/`cf_constantcolourglow` are fog over a constant
 /// and nothing else. Other families that carry `0x7611a2d8` use it in other
 /// places (the pads) and are left out until read.
 const DIFFUSE_PARAMETER: &[(&str, u32)] = &[

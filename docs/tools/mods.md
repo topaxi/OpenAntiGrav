@@ -524,8 +524,10 @@ picks the way. See
 The game runs modules through its `extensions` feature, on by default on Linux,
 Windows, macOS and Android (`cargo run --release -p oag-game`, `just play`, `just apk`).
 `OAG_NO_EXTENSIONS=1 just play` or `--no-default-features` builds without it; the web
-build and iOS always do (the browser's own engine and wasmtime's Pulley interpreter
-are not built yet). A build without it runs no module, and its boot log says so for
+build and iOS always do (the browser's own engine and a Pulley build for iOS are not
+built yet). `just play --interpreter` (or `OAG_PLAY_FEATURES=wasm-interpreter`) runs the
+mods on wasmtime's Pulley interpreter instead of Cranelift, to compare the two; it
+implies `extensions`, and the load logs the engine at `debug`. A build without it runs no module, and its boot log says so for
 each mod that ships one.
 The manifest is read with the others; the `.wasm` is opened only by the race that
 runs it. No module runs in an original campaign or a network race. A race running a

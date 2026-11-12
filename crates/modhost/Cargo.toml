@@ -9,12 +9,17 @@ rust-version.workspace = true
 publish = false
 
 # Desktop only for now (docs/architecture/wasm-extensions/README.md, section 5):
-# Cranelift, no Pulley, no WASI, no component model, no threads, no cache, no
-# parallel compilation.
+# Cranelift by default, Pulley behind the `pulley` feature, no WASI, no component
+# model, no threads, no cache, no parallel compilation.
 [dependencies]
 # The layout, defined once for the host and the guest SDK.
 oag-ext-abi.workspace = true
 wasmtime = { version = "=50.0.1", default-features = false, features = ["runtime", "cranelift", "std", "pooling-allocator"] }
+
+[features]
+# Run modules on wasmtime's Pulley interpreter instead of native Cranelift code, to
+# measure and compare the two. Off by default and enabled by no shipped build.
+pulley = ["wasmtime/pulley"]
 
 [dev-dependencies]
 # The tests' guests are written in the text format.
