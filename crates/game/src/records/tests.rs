@@ -1067,3 +1067,27 @@ fn an_old_campaign_row_reads_as_its_medal_word() {
         "a better result replaces it"
     );
 }
+
+/// The XP total accumulates, round-trips, and a file written before it existed reads `0`.
+#[test]
+fn xp_accumulates_round_trips_and_an_old_file_reads_zero() {
+    let (old, _) = parse("[[records]]\ntitle = \"pulse\"\n").expect("old file parses");
+    assert_eq!(old.xp(), 0);
+
+    let mut store = Store::default();
+    assert_eq!(store.bank_xp(10_000), 10_000);
+    assert_eq!(store.bank_xp(55), 10_055);
+    store.record_loyalty(oag_pulse::TITLE, "qirex", 3);
+    let text = toml::to_string_pretty(&store).expect("serialises");
+    let (parsed, notes) = parse(&text).expect("parses back");
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(parsed.xp(), 10_055);
+    assert_eq!(
+        parsed.loyalty_total(oag_pulse::TITLE, "qirex"),
+        3,
+        "the tables survive the scalar"
+    );
+
+    let (clamped, _) = parse("xp = -5\n").expect("parses");
+    assert_eq!(clamped.xp(), 0);
+}

@@ -80,9 +80,16 @@ lives in the event objects, not in `Unlocks_Definition.xml`, which is why the XM
 
 ## Cross-check
 
-- **Omega**: XP - checked, applies, not wired; ranks - checked, differs. Omega's `eboot.bin` carries the same
+- **Omega**: XP - checked, applies, not wired for events (`oag_tables::xp` parses Omega's `XPAwards.xml` and `XPRanks.xml`, ground truth in `crates/omega/tests/omega_title_ground_truth.rs`; the profile total is shared, Omega's event launch does not bank yet); ranks - checked, differs. Omega's `eboot.bin` carries the same
   loader (`FrontendRoot_Construct` references `Data\XML\XPAwards.xml` at `0x0182eb7a`) and
   its `data00.psarc` ships a **byte-identical** `Data/xml/XPAwards.xml` (9177 bytes) and a
   different `XPRanks.xml` (same 50 ranks, thresholds exactly **half** of 2048's: 15000,
   30000, 50000, ...). See `ps4-omega-eu/xp-and-loyalty.md`.
 - **HD**: checked, differs (no XP; loyalty only). Wiring left open in a handover thread.
+
+## Wired (2026-11-12)
+
+`oag_tables::xp` reads both files; `Store::bank_event_xp` banks a finished 2048 event's
+`Event complete` (Pass or Elite) plus `Finished Nth`. **Chosen, not measured**: pays on every
+finish; Elite instead of Pass; column by event kind. The profile total is one number shared with
+Omega. The thread is `handover/frontend/2048-profile-xp-and-rank.md`.

@@ -22,6 +22,7 @@ oag-title.workspace = true
 [dev-dependencies]
 oag-testdata.workspace = true
 oag-2048.workspace = true
+oag-tables.workspace = true
 
 [lints]
 workspace = true

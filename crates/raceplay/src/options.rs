@@ -1323,6 +1323,12 @@ pub struct Campaign2048Progress {
     pub objectives: Option<oag_2048::campaign::EventObjectives>,
     /// The event's opponent AI over the title's defaults; `None` keeps this project's driver.
     pub ai: Option<oag_title::original_driver::EventAi>,
+    /// The disc's `XPAwards.xml`, read where `SP.xml` is; `None` when the package lacks it.
+    pub xp_awards: Option<oag_tables::xp::Awards>,
+    /// Which `XPAwards.xml` column this event's kind pays: race and Speed Lap events the `race`
+    /// column, Elimination `elim`, Zone `zone`. **Chosen, not measured**: the original's mode to
+    /// column map is unread.
+    pub xp_column: oag_tables::xp::Column,
 }
 
 /// [`Setup::headless`]: the disc-free minimum, for the headless-sim binary.

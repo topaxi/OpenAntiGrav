@@ -46,3 +46,4 @@ pub mod rumble;
 pub mod track_stats;
 pub mod trackstartup;
 pub mod weapons;
+pub mod xp;

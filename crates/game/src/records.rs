@@ -119,7 +119,10 @@ use serde::{Deserialize, Serialize};
 mod cursor;
 mod difficulty;
 mod loyalty;
+
 mod medal;
+/// The profile's XP total - see `xp.rs`.
+mod xp;
 pub use cursor::CampaignCursor;
 pub use medal::{Difficulty, Medal};
 
@@ -572,6 +575,10 @@ pub struct CampaignCursorRecord {
 /// the identical rule through [`Store::record_campaign`].
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Store {
+    /// The profile's experience total, one for the player across Wipeout 2048 and Omega's 2048
+    /// mode (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`). A scalar, so it is written
+    /// before the tables; a file without it reads `0`. See [`Store::xp`].
+    xp: u32,
     records: Vec<Record>,
     /// One row per campaign cell ever raced - see [`CampaignRecord`]'s own
     /// doc for why this is a sibling table rather than a fourth part of
@@ -961,8 +968,14 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
     }
     campaign_cursor.sort_by(|a, b| a.title.cmp(&b.title));
 
+    let xp = table
+        .get("xp")
+        .and_then(toml::Value::as_integer)
+        .map_or(0, |v| u32::try_from(v.max(0)).unwrap_or(u32::MAX));
+
     Ok((
         Store {
+            xp,
             records,
             campaign,
             loyalty,

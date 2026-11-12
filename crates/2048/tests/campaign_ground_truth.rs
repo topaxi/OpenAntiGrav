@@ -363,3 +363,44 @@ fn the_chain_walk_finds_24_chain_36_branch_and_40_speed_lap_events() {
         assert_eq!(of_class, 10, "ten circuits of {class}: {laps:?}");
     }
 }
+
+/// `XPAwards.xml` and `XPRanks.xml` parse off the disc: 78 award rows whose indices are 0-77, the
+/// completion and finishing rows this crate pays carry the names they are read for, and the 50
+/// rank thresholds ascend through the ranks the campaign map gates on.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn xp_tables_parse_off_the_disc() {
+    use oag_tables::xp::{Column, award};
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let (awards, ranks) = oag_2048::campaign::xp_tables(&mut archives).expect("both XP tables");
+
+    assert_eq!(awards.awards.len(), 78);
+    assert!(
+        awards
+            .awards
+            .iter()
+            .enumerate()
+            .all(|(i, a)| a.index as usize == i)
+    );
+    assert_eq!(awards.class_multipliers, [1.0; 5]);
+    assert_eq!(awards.skill_multipliers, [1.0; 3]);
+    let name = |index| awards.get(index).map(|a| a.name.as_str());
+    assert_eq!(name(award::EVENT_PASS), Some("Event complete- PASS"));
+    assert_eq!(name(award::EVENT_ELITE), Some("Event complete- ELITE"));
+    assert_eq!(name(award::FINISHED_1ST), Some("Finished 1st!"));
+    assert_eq!(name(award::FINISHED_8TH), Some("Finished 8th!"));
+    assert_eq!(awards.xp(award::EVENT_PASS, Column::Race), 10_000);
+    assert_eq!(awards.xp(award::FINISHED_1ST, Column::Race), 50);
+
+    assert_eq!(ranks.maximum, 50);
+    assert_eq!(ranks.thresholds.len(), 50);
+    assert!(ranks.thresholds.windows(2).all(|w| w[0] < w[1]));
+    assert_eq!(ranks.threshold_xp(10, 0), 420_000);
+    assert_eq!(ranks.threshold_xp(20, 0), 1_020_000);
+    assert_eq!(ranks.threshold_xp(30, 0), 1_720_000);
+    assert_eq!(ranks.threshold_xp(50, 0), 3_580_000);
+    assert_eq!(ranks.rank(419_999), 9);
+    assert_eq!(ranks.rank(420_000), 10);
+}
