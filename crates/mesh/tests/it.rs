@@ -57,6 +57,8 @@ mod hd_static_hologram_lit_path;
 mod hd_track_surface_ground_truth;
 mod hd_twin_blend_ground_truth;
 mod hd_twin_blend_lit_path;
+mod hd_uv_overlay_ground_truth;
+mod hd_uv_overlay_lit_path;
 mod hd_vertex_scroll_ground_truth;
 mod hd_vineta_ceiling_ground_truth;
 mod hd_water_ground_truth;

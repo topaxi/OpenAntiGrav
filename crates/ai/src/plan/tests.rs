@@ -732,7 +732,7 @@ fn a_craft_on_a_road_under_its_line_left_the_road_where_it_took_off() {
     // The plan braked on the way there and the line crosses no gap: it ran
     // wide, and holding the run-up would lift what the failure should lower.
     assert_eq!(
-        Cause::of(Failure::Beneath, 0.0, &recent, &line),
+        Cause::of(Failure::Beneath, 0.0, &recent, &line, &[]),
         Cause::LeftTheRoad(60)
     );
     // Where the line itself leaves the road in that flight, it fell short of
@@ -741,13 +741,13 @@ fn a_craft_on_a_road_under_its_line_left_the_road_where_it_took_off() {
     unsupported[60] = true;
     let gapped = stadium(30.0, 200.0).with_unsupported(unsupported);
     assert_eq!(
-        Cause::of(Failure::Beneath, 0.0, &recent, &gapped),
+        Cause::of(Failure::Beneath, 0.0, &recent, &gapped, &[]),
         Cause::ShortOfTheLip(60)
     );
     // With no flight in the trace it drove down: lower what led there.
     let driven: Vec<Trace> = recent.iter().filter(|t| !t.airborne).copied().collect();
     assert_eq!(
-        Cause::of(Failure::Beneath, 0.0, &driven, &line),
+        Cause::of(Failure::Beneath, 0.0, &driven, &line, &[]),
         Cause::LeftTheRoad(60)
     );
 }
@@ -811,4 +811,55 @@ fn a_road_under_the_line_is_a_failure_for_a_craft_that_left_its_corridor() {
         None,
         "inside its corridor the craft is where the line's road is"
     );
+}
+
+#[test]
+fn a_wall_after_landing_from_a_held_run_up_over_a_gap_landed_long() {
+    let line = stadium(30.0, 200.0);
+    let mut unsupported = vec![false; line.len()];
+    unsupported[60] = true;
+    let gapped = stadium(30.0, 200.0).with_unsupported(unsupported);
+    let mut recent: Vec<Trace> = (0..60).map(|i| trace(i, false, false, true)).collect();
+    recent.extend((0..10).map(|_| trace(60, true, false, true)));
+    recent.extend((61..75).map(|i| trace(i, false, false, true)));
+    let mut hold = vec![false; line.len()];
+    for held in &mut hold[30..60] {
+        *held = true;
+    }
+    assert_eq!(
+        Cause::of(Failure::Wall, 0.0, &recent, &gapped, &hold),
+        Cause::LandedLong(60)
+    );
+    // A run-up the plan never held, or a flight over no gap, is a corner
+    // taken too fast as before.
+    assert_eq!(
+        Cause::of(Failure::Wall, 0.0, &recent, &gapped, &[]),
+        Cause::TooFast
+    );
+    assert_eq!(
+        Cause::of(Failure::Wall, 0.0, &recent, &line, &hold),
+        Cause::TooFast
+    );
+}
+
+#[test]
+fn a_long_landing_lowers_the_lip_one_step_and_a_short_one_raises_it_back() {
+    let line = stadium(30.0, 200.0);
+    let mut plan = SpeedPlan::unlimited(&line);
+    plan.hold[50] = true;
+    // The lip: the craft sits on one sample for many ticks.
+    let run_up: Vec<Trace> = (0..20)
+        .map(|_| Trace {
+            speed: 50.0,
+            ..trace(50, false, false, true)
+        })
+        .collect();
+    assert_eq!(plan.slow_held_run_up(&run_up), 1);
+    assert_eq!(plan.ceiling(50), 50.0 * 0.96, "one step, not one per tick");
+    assert!(
+        plan.holds(50),
+        "a corner past the landing still does not brake through it"
+    );
+    assert_eq!(plan.hold_run_up(&run_up), 1);
+    assert_eq!(plan.ceiling(50), 50.0 * 0.96 / 0.96);
 }

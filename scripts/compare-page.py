@@ -37,8 +37,10 @@ import compare_env  # noqa: E402  (the metric explanations live beside the metri
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = ROOT / "data" / "compare"
-# The maintainer's curated publishing set: `just publish-compare` with no argument publishes it.
-CURATED = ROOT / "data" / "compare-curated"
+# The maintainer's curated publishing set: `just publish-compare` with no argument publishes it. Its
+# manifests live in the private repository beside the pairs they pick, and name their images through
+# `[page] images` (ADR-0085).
+CURATED = ROOT / "data" / "reference" / "curated"
 
 # The screenshot-policy ADR that allows publishing curated screenshots, and the
 # Pages project it may go to. The number is filled in once the ADR exists; until
@@ -130,6 +132,11 @@ def statement_html() -> str:
     return f"<strong>{lead}</strong> {esc}"
 
 
+def image_root(path: Path, page: dict) -> Path:
+    """The directory a manifest's image paths are relative to: its own, or `[page] images` from it."""
+    return path.parent / page.get("images", ".")
+
+
 def load_all(paths: list[Path], strict: bool = False) -> dict:
     """The first manifest's [page]; every file's entries, each remembering its own directory."""
     merged = None
@@ -140,7 +147,7 @@ def load_all(paths: list[Path], strict: bool = False) -> dict:
             if e["id"] in ids:
                 refuse(f"{path}: entry id {e['id']!r} already used by an earlier manifest")
             ids.add(e["id"])
-            e["_base"] = path.parent
+            e["_base"] = image_root(path, doc["page"])
         if merged is None:
             merged = doc
         else:
@@ -177,7 +184,7 @@ def load_manifest(path: Path, strict: bool = False) -> dict:
         if len(have) < 2:
             refuse(f"{where}: needs at least two of original/before/ours; has {have or 'none'}")
         for s in have:
-            p = path.parent / e[s]
+            p = image_root(path, page) / e[s]
             if not p.is_file():
                 refuse(f"{where}: `{s}` image {p} does not exist")
         if "environment" in e and not isinstance(e["environment"], dict):
@@ -400,6 +407,7 @@ def refresh_curated(curated: Path, reference: Path = REFERENCE) -> None:
             if (eid := block_field(block, "id")):
                 fresh[eid] = (block, reference)
     for m in sorted(curated.glob("*.toml")):
+        images = image_root(m, tomllib.loads(m.read_text()).get("page", {}))
         blocks = entry_blocks(m.read_text())
         changed = False
         for i, block in enumerate(blocks[1:], 1):
@@ -413,7 +421,7 @@ def refresh_curated(curated: Path, reference: Path = REFERENCE) -> None:
             original, ref_original = block_field(block, "original"), block_field(ref_block, "original")
             if not ours or ours != ref_ours or original != ref_original:
                 continue
-            if (curated / original).read_bytes() != (ref_root / ref_original).read_bytes():
+            if (images / original).read_bytes() != (ref_root / ref_original).read_bytes():
                 print(f"publish-compare: {eid}: original differs from the re-render's, kept as curated")
                 continue
             for key in RERENDER_FIELDS:
@@ -422,9 +430,9 @@ def refresh_curated(curated: Path, reference: Path = REFERENCE) -> None:
                     block = re.sub(rf'(?m)^{key} = ".*"$', f'{key} = "{value}"', block)
             pair_dir = Path(ours).parent
             for name in RERENDER_FILES:
-                src = ref_root / pair_dir / name
-                if src.is_file():
-                    shutil.copy2(src, curated / pair_dir / name)
+                src, dst = ref_root / pair_dir / name, images / pair_dir / name
+                if src.is_file() and src.resolve() != dst.resolve():
+                    shutil.copy2(src, dst)
             blocks[i] = block
             changed = True
             print(f"publish-compare: {eid}: re-render of {block_field(ref_block, 'rendered_at')} taken")
@@ -479,7 +487,7 @@ def main():
         if a.publish:
             if not CURATED.is_dir():
                 ap.error(f"--publish with no manifest publishes {CURATED}, which does not exist; "
-                         "copy the frames to publish there (the seed set is not a publishing set)")
+                         "pull data/reference (the seed set is not a publishing set)")
             refresh_curated(CURATED)
             a.manifest = [str(CURATED)]
         else:

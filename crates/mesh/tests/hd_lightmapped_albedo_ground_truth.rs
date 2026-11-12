@@ -487,3 +487,79 @@ fn constant_colour_families_bind_their_authored_constant() {
     }
     assert!(checked >= 2, "both families are present, saw {checked}");
 }
+
+/// Metropia's wire-mesh floor: `mesh_colour_constant` writes its map's alpha as
+/// the output alpha (`MOV H0.w, R0`, `@0x3e`) and gates the reflection by it,
+/// and the map (`ds_mesh_n`, sampler `0xd9d6922d`) carries the wires as a binary
+/// alpha mask. The picture is the constant (black) with the map's own alpha, so
+/// the blend leaves the holes clear; bound as the bare constant the floor
+/// painted an opaque black sheet over the city. Dropping the family from
+/// `skin::ALPHA_DIFFUSE` fails this.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn metropias_lattice_floor_keeps_its_maps_alpha_over_its_constant() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let path = "/data/environments/02_track/track.vex";
+    let Some((spec, data)) = (0..4).find_map(|n| {
+        let spec = format!("{}:PS3_GAME/USRDIR/DATA0{n}.PSARC", image.display());
+        archive_cache::read(&spec, path).map(|data| (spec, data))
+    }) else {
+        panic!("{path} is on no archive");
+    };
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Metropia builds");
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material.name.ends_with("/mesh_colour_constant.rcsmaterial") {
+            continue;
+        }
+        let Some(map_path) = material
+            .samplers
+            .iter()
+            .find(|(hash, _)| *hash == 0xd9d6_922d)
+            .and_then(|(_, path)| path.as_deref())
+        else {
+            continue;
+        };
+        let constant = material
+            .parameters
+            .iter()
+            .find(|p| p.hash == 0x02ab_9f07)
+            .expect("the material authors 0x02ab9f07")
+            .value;
+        let texture = model.textures[slot].as_ref().expect("the picture is bound");
+        assert!(
+            texture.label.starts_with("alpha diffuse"),
+            "slot {slot} binds {}",
+            texture.label
+        );
+        let blob = archive_cache::read(&spec, &format!("/{map_path}")).expect("the map reads");
+        let map = mesh::ModelTexture::from_gtf(map_path, &blob).expect("the map decodes");
+        let (map, got) = (
+            map.to_rgba().expect("decoded texels"),
+            texture.to_rgba().expect("one-texel-per-texel picture"),
+        );
+        assert_eq!(map.len(), got.len(), "slot {slot}: same size as its map");
+        let (mut clear, mut solid) = (0, 0);
+        for (m, g) in map.as_chunks::<4>().0.iter().zip(got.as_chunks::<4>().0) {
+            let want = (0..3)
+                .map(|lane| (constant[lane].clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0).round() as u8);
+            assert!(g[..3].iter().copied().eq(want), "slot {slot}: the constant");
+            assert_eq!(g[3], m[3], "slot {slot}: the map's alpha rides the picture");
+            clear += usize::from(m[3] < 32);
+            solid += usize::from(m[3] > 224);
+        }
+        assert!(
+            clear > 0 && solid > 0,
+            "slot {slot}: the wire mask has holes and wires (clear {clear}, solid {solid})"
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "Metropia carries mesh_colour_constant slots");
+}

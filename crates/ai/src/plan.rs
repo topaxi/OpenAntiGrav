@@ -28,7 +28,7 @@
 
 use oag_physics::{CraftState, Environment, Handling, Raycaster, ShipControls, ShipState};
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{Context, Driver, Line, Tuning};
 
@@ -37,6 +37,7 @@ mod brake;
 mod clearance;
 mod driven;
 mod harden;
+mod landing;
 mod lower;
 
 use driven::{Driven, Reader};
@@ -1047,7 +1048,13 @@ impl SpeedPlan {
             let count = tries.entry(site).or_insert(0);
             *count += 1;
             let exhausted = *count > MAX_TRIES;
-            let cause = Cause::of(failure, run.state.time_airborne, &recent, course.line);
+            let cause = Cause::of(
+                failure,
+                run.state.time_airborne,
+                &recent,
+                course.line,
+                &self.hold,
+            );
             if exhausted && failure == Failure::Wall {
                 note_unresolved(report, run.driver.index, failure);
                 forgive_until = run.progress + i64::from(SITE) * 2;
@@ -1084,6 +1091,7 @@ impl SpeedPlan {
             let old = self.target.clone();
             report.lowerings += match cause {
                 Cause::ShortOfTheLip(takeoff) => self.hold_run_up(&recent[..takeoff]),
+                Cause::LandedLong(takeoff) => self.slow_held_run_up(&recent[..takeoff]),
                 Cause::LeftTheRoad(takeoff) => self.lower(
                     &recent[..takeoff],
                     tries.get(&site).copied().unwrap_or(1),
@@ -1107,14 +1115,22 @@ impl SpeedPlan {
 
     /// Marks the run-up to a takeoff as a stretch nothing brakes through, and
     /// lifts its ceilings. `run_up` ends at the last grounded tick before it.
+    /// A sample already held whose ceiling a long landing brought down
+    /// ([`Self::slow_held_run_up`]) is raised one step instead.
     fn hold_run_up(&mut self, run_up: &[Trace]) -> u32 {
         let from = run_up.len().saturating_sub(LOOKBACK_TICKS * 2);
+        let held: BTreeSet<usize> = run_up[from..]
+            .iter()
+            .map(|trace| trace.index as usize)
+            .collect();
         let mut moved = 0;
-        for trace in &run_up[from..] {
-            let i = trace.index as usize;
+        for i in held {
             if !self.hold[i] {
                 self.hold[i] = true;
                 self.ceiling[i] = f32::INFINITY;
+                moved += 1;
+            } else if self.ceiling[i].is_finite() {
+                self.ceiling[i] = landing::raised(self.ceiling[i]);
                 moved += 1;
             }
         }
@@ -1246,16 +1262,23 @@ enum Cause {
     /// left at this index into the trace. Lower the ceilings before it: the
     /// speed that failed is the one the craft left the road at.
     LeftTheRoad(usize),
+    /// Hit a wall soon after landing from a flight over a gap whose run-up,
+    /// ending at this index into the trace, is held: the hold carried it too
+    /// far. Bring the held run-up's ceilings down. See [`landing`].
+    LandedLong(usize),
 }
 
 impl Cause {
-    fn of(failure: Failure, airborne: f32, recent: &[Trace], line: &Line) -> Self {
+    fn of(failure: Failure, airborne: f32, recent: &[Trace], line: &Line, hold: &[bool]) -> Self {
         let from = recent.len().saturating_sub(LOOKBACK_TICKS);
         let window = &recent[from..];
         if failure == Failure::Beneath {
             return Self::of_a_lower_road(recent, line);
         }
         if failure == Failure::Wall && airborne < FELL_SECONDS {
+            if let Some(takeoff) = landing::long_landing(recent, line, hold) {
+                return Self::LandedLong(takeoff);
+            }
             // A wall on the road or after a short hop is answered with less
             // speed: most are a corner taken too fast. Holding the run-up for
             // every airborne wall cost ten clean verifications across the 96

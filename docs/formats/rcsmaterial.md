@@ -1660,7 +1660,7 @@ as `mesh::AnimTrack::Scroll`, the track 2048's plain scroll already is, through
   by the vertex block but never added to a coordinate by a multiply-add this
   sweep matched (colour or intensity drive).
 - Fragment-only `time`: `nr_crowd_bustle` (33), `nr_billboardholographicscanlines`
-  (35; read and wired for Amphiseum's inline-literal shape, renderer.md "Amphiseum's holographic billboards are drawn by their own combine"), `scanlinebillboard*`, `uvdistortion_*`, `water`, `pipefx_v2`, the
+  (35; read and wired for Amphiseum's inline-literal shape, renderer.md "Amphiseum's holographic billboards are drawn by their own combine"), `scanlinebillboard*`, `uvdistortion_diff_vertexcol` (the `plusoverlay*` copies are read and wired, "Two surfaces the maintainer saw wrong"), `water`, `pipefx_v2`, the
   holograms: unread laws.
 - `weapon_pads` `W_Cycle` (231) is the pads' own thing; `scrollingalpha`
   `V_Offset` is on no circuit material (weapons and muzzle flash only).
@@ -4067,6 +4067,32 @@ three pushbuffer reads and is not used).
   fix shape is `("mesh_colour_constant", 0x02ab_9f07, AlphaUse::Gate)`, which keeps the map's alpha as the texel's own;
   whether the lit specular term (`H4`) also reads the lightmap through that alpha is part of the wiring, not read here.
   Not tried (no renderer change in this lane), so the 75 is the program read plus the alpha census, not a before and after.
+- **Wired (`hd-metropia-lattice`, 2026-11-12): the pair closes, cause now confidence 90.** The row is
+  `("mesh_colour_constant", 0x02ab_9f07, NORMAL_SAMPLER, AlphaUse::Gate)` in `skin::ALPHA_DIFFUSE`. One correction to the
+  fix shape above: the family names its map under sampler **`0xd9d6922d` (`Normal`)**, not `Texture1` (`0x3bdc0403`), the
+  hash the table's two older rows read, so the table gained a sampler column (a first build with only the row was
+  byte-identical to before: `alpha_diffuse` found no map). The blend then reads the map's alpha as coverage with no other
+  change. Same ship, track and camera as the pair (`oag-game ... --pose=-354.28,110.69,-53.17 --camera-pose=... --camera-fov
+  60.48 --ticks 30`); all numbers below are mean grey / share of pixels under grey 12, measured on the pair's stored frames
+  with the same script for every column:
+
+  | box (frame fractions) | original | ours before | ours after | ours slot 510 skipped |
+  | --- | --- | --- | --- | --- |
+  | x .04-.22, y .58-.76 | 100.0 / 7 % | 88.5 / 28 % | 94.1 / 13 % | 95.4 / 10 % |
+  | x .70-.88, y .52-.69 | 78.6 / 2 % | 80.2 / 7 % | 80.7 / 5 % | 80.8 / 5 % |
+  | x .04-.22, y .78-.96 | 104.3 / 2 % | 19.7 / 77 % | 80.7 / 10 % | 96.2 / 3 % |
+  | x .70-.88, y .78-.96 | 72.4 / 8 % | 23.8 / 78 % | 73.0 / 18 % | 86.7 / 7 % |
+  | lower 65 % under grey 12 | 3.2 % | 37.1 % | 7.7 % | 4.4 % |
+
+  **The "ours 1.5 and 17.9" above does not reproduce from the stored `ours.png`** with the boxes as written (the first two
+  rows give 88.5 and 80.2: those boxes fall on the rail wall and kerb, where the floor is not). The lattice sits lower in the
+  frame, so the last two rows are the boxes that see it; the original reads 100.0 and 78.6 in the first two, a little under
+  the 102.6 and 81.3 written above (boot 1 against the stored `theirs.png`). Read off the picture, the city, the lit towers
+  and the lights now show through the holes as in the original. **What is left:** the wires are darker than the original's
+  grey (the constant is black, so ours has only the reflection and specular on them; left box 94 against 100, 13 % under
+  grey 12 against 7 %): the lit specular term (`H4`) and whether it reads the lightmap through the alpha is still unread.
+  Test: `hd_lightmapped_albedo_ground_truth::metropias_lattice_floor_keeps_its_maps_alpha_over_its_constant` (red before:
+  "slot 508 binds constant diffuse 02ab9f07"; green after).
 - **Other circuits (census, `psarc.py list` over the seven `DATA0n.PSARC`).** `mesh_colour_constant.rcsmaterial` exists
   only under `02_track/materials/` and `02_track/materials_dlc/`: the one circuit, so a wired `ALPHA_DIFFUSE` entry moves
   Metropia's slots and no other circuit's.
@@ -4075,7 +4101,11 @@ three pushbuffer reads and is not used).
   `DLC1/environments/Metropia/materials/mesh_colour_constant.rcsmaterial`: the same family, so the same lattice is authored
   there. Their programs are PS4 GNM and Vita GXP, which `ps3-microcode.py` does not read, and ours was not rendered on either
   title at the spot (the existing 2048 Metropia pair is a grid frame with no lattice in view; Omega's shadPS4 race shots are not
-  a reference). Whether their reading draws the lattice is open.
+  a reference). Whether their reading draws the lattice is open. **Not covered by the HD row:** the Vita and PS4 builds go through
+  `mesh::rcs::psp2`, which has no `mesh_colour_constant` reading (the family draws as the generic path there), so
+  `skin::ALPHA_DIFFUSE` does not reach them; the same fix there is a `psp2` family module like `alpha_product.rs`, after the
+  program's alpha use is read from the GXP and GCN compiles. Checked, applies, not wired (named in the
+  `omega-and-2048-draw-normal-maps-as-colour` thread).
 
 ### Modesto Heights: the banner band is drawn white (slot 550 reversed, 551 forward)
 
@@ -4095,19 +4125,68 @@ three pushbuffer reads and is not used).
   grey over 150): original boot 1 **0.1 % / 0.0 %**, boot 3 (pose 731.4, 56.9, -112.7) **0.3 % / 0.5 %**; ours **8.5 % / 5.2 %**;
   ours with slot 550 skipped **0.3 % / 0.9 %**. Mean grey 70.4 and 64.6 against ours 81.7 (61.4 skipped). Within a
   matched pose, not a matched camera (both camera reads were null on this stationary craft).
-- **Cause, confidence 70.** Block `0x2ad0` (read with `ps3-microcode.py fp-file`): the output is
-  `vertex_colour x tunnelscreens.rgb x light + overlay(teal x clouds x screens.alpha, ossego)` with the overlay written as
-  `2 x a x b` when `a` is under 0.5 and `1 - 2(1-a)(1-b)` otherwise, `a` being the dark teal cloud term, so the white
-  Ossego picture enters only through the overlay and the frame stays dark. Ours binds `and_ossego` as the diffuse picture
-  (`roles no_ambient|add_second`) and adds the second one on top, which is white where the logo's background is. The family
-  is in the "unread" list (`uvdistortion_*`, "Materials read" above). Not tried; the 70 is the program read plus the skip
-  attribution. The unread values to pin before wiring: unit 0's UV distortion (`d0989794`, `c0594d0e`, `fe619466`,
-  `96e30da5` scroll rates) and the overlay colour `961662ae = (0.144, 0.525, 0.808)`.
+- **Cause, confidence 85 (was 70; the before and after below closed it).** Block `0x2ad0` (read with
+  `ps3-microcode.py fp-file`; its vertex block `@0x2880` with `vp-file`): the output is
+  `VertexColour1 x tunnelscreens.rgb x light + over` with, per instruction (`t` the engine clock `906b67ba`, `uv` the diffuse
+  pair `v[2].xy`, `D`, `A`, `S`, `B`, `R` the record's parameters):
+
+  ```text
+  warp = clouds(uv).a                                       @0x12 TEX R0.w, unit0
+  c    = clouds((uv + A t + D warp) S)                      @0x09, @0x13, @0x16, @0x19
+  a    = VertexColour1 x teal x c x tunnelscreens.a         @0x1a, @0x1d, @0x1f
+  b    = ossego((uv + B t) R)                               @0x0b, @0x0e, @0x24
+  over = 2ab (a < 0.5), 1 - 2(1-a)(1-b) (else)              @0x20 SLT, @0x22..@0x29 [NE]
+  ```
+
+  The white Ossego picture enters only through the overlay, so the frame stays dark. The parameters' roles, which this page
+  had partly wrong: `c0594d0e` (`A`) is **unit 0's scroll rate** and `2bdce348` (`S`) its coordinate scale, `d0989794` (`D`)
+  the distortion amount (times the cloud map's own alpha, tapped at the undistorted pair), while `fe619466` (`B`) and
+  `96e30da5` (`R`) are the **Ossego's** scroll rate and scale, not unit 0's; `VertexColour1` multiplies the teal too. Ours had
+  bound `and_ossego` as the diffuse picture (`roles no_ambient|add_second`) and added the second one on top, white where the
+  logo's ground is.
+- **Values read, from the model's own material record (`hd_material_probe_dump`, confidence 95 for the numbers, 85 for the
+  roles above).** Slot 550 (reversed) and 551 (forward): `D = 0.14348`, `A = 7.174`, `S = -0.05`, `B = 1`, `R = -0.25`,
+  `teal = (0.1438845, 0.52450675, 0.80834)`. Slot 96 (`...plusoverlaybloom`, `and_tunnelscreens`, `mr_blueglass_a`,
+  `and_ossego_alpha`): `D = 0.79324`, `A = 1.0936`, `S = 3.3002`, `B = 1`, `R = -0.9145`, `teal = (0.892, 0.950338, 1)`.
+  Nothing is typed: `mesh::rcs::uv_overlay` reads them, with the three sampler hashes `030fd39b` (clouds, unit 0), `515e298e`
+  (the grille, unit 1) and `fb3f2dac` (the logo, unit 2).
+- **Wired (2026-11-12, `hd-modesto-banner`).** `mesh::rcs::uv_overlay` binds the grille as the albedo (lit as every
+  `VertexColour1`-factor surface is), the clouds second and the logo third, writes the two values entries (mode 13,
+  `PROGRAM_UV_OVERLAY`) and clears the generic additive second texture; `shade.wesl` adds `over` after the light and before
+  the fog through `mag_glow`. Matched by the material's name prefix (`uvdistortion_diff_vertexcolplusoverlay`) and its program's shape (exactly the three samplers and an `SLT`): the
+  `uvdistortion_diff_vertexcol` family has no logo unit and keeps the generic reading (Modesto's 464, 467, 472, 486, 527, 538
+  carry no entry of the mode). Tests: `hd_uv_overlay_ground_truth` (slots 550 and 551 bind the grille, clouds and logo and carry
+  these values; red when the binding is dropped, as on main) and `hd_uv_overlay_lit_path` (the shader's `2ab` and screen
+  branches; red without the `mag_glow` term).
+- **After (same boxes, y .03-.32 x .15-.85, over grey 200 / blue-white).** Ours at the matched pose `729.72,58.95,-119.54`:
+  **0.26 % / 0.78 %** (was 8.5 % / 5.2 %; original 0.1 % / 0.0 % and 0.3 % / 0.5 %). At boot 3's pose `731.4,56.9,-112.7`:
+  0.25 % / 0.65 %; at the maintainer's spot `741.7,61.9,-120.9`: 0.27 % / 0.81 %. Mean grey 59.6, 60.3, 56.9 against the
+  original's 70.4 and 64.6 (ours 81.7 before, 61.4 with the slot skipped): the band is now dark where the original's is, a
+  little darker than it. Read as pictures: the grille with a dark-teal mottle, the original's teal blocks brighter and larger.
+  The forward circuit's slot 551 draws the same dark grille (skipping it removes it).
+- **Open: the units' gamma nibbles.** The three colour taps are decoded like every colour tap on this path (**chosen, not
+  measured**, the choice `nr_twinblend` and `dc_hologramwithstatic` make). Reading them raw instead lifts the band's mean grey
+  by about 2 and changes nothing else measurable; only a live `SET_TEXTURE_ADDRESS` read on this draw decides it. The bloom
+  copy also writes the logo's alpha as its output alpha (`@0x26 MOV H0.w, H0`), which is not wired.
 - **Omega / 2048: checked, applies, not wired.** Omega's `data02.psarc` ships `Data/environments/modesto_heights/materials/
-  uvdistortion_diff_vertexcolplusoverlay.rcsmaterial` (and `...Bloom_1`, `uvdistortion_diff_vertexcol{,_2}`, Amphiseum's
-  `..._1`); 2048's `dlc2.psarc` ships only `...plusoverlaybloom` for Modesto. Programs unread (GNM, GXP), no render of ours on
-  either title at the spot: open.
+  uvdistortion_diff_vertexcolplusoverlay.rcsmaterial` (and `_1`, `_2`, `...Bloom{,_1,_2}`, `uvdistortion_diff_vertexcol{,_1,_2}`;
+  Amphiseum's `..._1`): the base file declares all three sampler hashes and all six parameter hashes (and `time`) ten times
+  each, one per program variant, so the same inputs feed the same law; its programs are GNM and 2048's are GXP, neither read,
+  and no render of ours exists on either title at the spot. 2048's `dlc2.psarc` ships only `...plusoverlaybloom` for Modesto
+  (the slot-96 shape). Open.
+- **Amphiseum: wired by the same reading, seen, not compared.** Its `...plusoverlay` (19,168 bytes, a different binary) resolves
+  to block `@0x1720`, which is Modesto's block #3 instruction for instruction (`fp-file`: the same five parameter roles, `@0x24`
+  logo tap, `@0x25` `SLT`, `@0x30` `2ab`), with `TC0 = v[3]` and the pair in `TC3.w`, `TC4` (`vp-file` `@0x1580`). Slots 355 and
+  445 forward, 357 and 447 reversed (teal `(0, 1, 1)` and `(0.126, 0.148, 0.194)`, grilles `mar_cellular_lamps_blue` and
+  `dc_gradient`, logos `feisar_square01` and `mr_line_rgb_clouds_alpha`). Rendered at `--pose=-524,46,-379` (inside the tower;
+  a bare `--camera-pose` ring around the draw bounds' centre showed no pixel of either slot, possibly because the craft stayed at the start): before, the
+  window panes carry big white Feisar logos on sky blue; after, a cyan cellular screen with no logo (the logo enters only
+  through `2ab`, weighted by the grille's alpha), and the ceiling's dot lamps glow cyan instead of dark. Reading the three taps
+  raw changes neither. No capture of the original at this spot exists, so whether the logos should be there is **unmeasured**.
+  Elsewhere the table and the report differ only by the new entries (`emissive` 54 to 58 on Modesto, 23 to 27 on Amphiseum,
+  both directions; the limit is 64) and the `uv_overlay_*` counters.
 
 **Falsifier.** Had RPCS3 drawn an opaque dark floor on Metropia, or a white Ossego band on
 Modesto, ours would have matched and the threads closed; the original draws neither. The 75 and 70 stay below 80 until a
-wired build shows the pair closing: the check is the same boxes after the fix.
+wired build shows the pair closing: the check is the same boxes after the fix. **Modesto's closed (0.26 % against 0.1 to
+0.3 %, "After" above); Metropia's is still open.**
