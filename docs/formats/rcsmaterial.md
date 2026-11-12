@@ -4067,6 +4067,32 @@ three pushbuffer reads and is not used).
   fix shape is `("mesh_colour_constant", 0x02ab_9f07, AlphaUse::Gate)`, which keeps the map's alpha as the texel's own;
   whether the lit specular term (`H4`) also reads the lightmap through that alpha is part of the wiring, not read here.
   Not tried (no renderer change in this lane), so the 75 is the program read plus the alpha census, not a before and after.
+- **Wired (`hd-metropia-lattice`, 2026-11-12): the pair closes, cause now confidence 90.** The row is
+  `("mesh_colour_constant", 0x02ab_9f07, NORMAL_SAMPLER, AlphaUse::Gate)` in `skin::ALPHA_DIFFUSE`. One correction to the
+  fix shape above: the family names its map under sampler **`0xd9d6922d` (`Normal`)**, not `Texture1` (`0x3bdc0403`), the
+  hash the table's two older rows read, so the table gained a sampler column (a first build with only the row was
+  byte-identical to before: `alpha_diffuse` found no map). The blend then reads the map's alpha as coverage with no other
+  change. Same ship, track and camera as the pair (`oag-game ... --pose=-354.28,110.69,-53.17 --camera-pose=... --camera-fov
+  60.48 --ticks 30`); all numbers below are mean grey / share of pixels under grey 12, measured on the pair's stored frames
+  with the same script for every column:
+
+  | box (frame fractions) | original | ours before | ours after | ours slot 510 skipped |
+  | --- | --- | --- | --- | --- |
+  | x .04-.22, y .58-.76 | 100.0 / 7 % | 88.5 / 28 % | 94.1 / 13 % | 95.4 / 10 % |
+  | x .70-.88, y .52-.69 | 78.6 / 2 % | 80.2 / 7 % | 80.7 / 5 % | 80.8 / 5 % |
+  | x .04-.22, y .78-.96 | 104.3 / 2 % | 19.7 / 77 % | 80.7 / 10 % | 96.2 / 3 % |
+  | x .70-.88, y .78-.96 | 72.4 / 8 % | 23.8 / 78 % | 73.0 / 18 % | 86.7 / 7 % |
+  | lower 65 % under grey 12 | 3.2 % | 37.1 % | 7.7 % | 4.4 % |
+
+  **The "ours 1.5 and 17.9" above does not reproduce from the stored `ours.png`** with the boxes as written (the first two
+  rows give 88.5 and 80.2: those boxes fall on the rail wall and kerb, where the floor is not). The lattice sits lower in the
+  frame, so the last two rows are the boxes that see it; the original reads 100.0 and 78.6 in the first two, a little under
+  the 102.6 and 81.3 written above (boot 1 against the stored `theirs.png`). Read off the picture, the city, the lit towers
+  and the lights now show through the holes as in the original. **What is left:** the wires are darker than the original's
+  grey (the constant is black, so ours has only the reflection and specular on them; left box 94 against 100, 13 % under
+  grey 12 against 7 %): the lit specular term (`H4`) and whether it reads the lightmap through the alpha is still unread.
+  Test: `hd_lightmapped_albedo_ground_truth::metropias_lattice_floor_keeps_its_maps_alpha_over_its_constant` (red before:
+  "slot 508 binds constant diffuse 02ab9f07"; green after).
 - **Other circuits (census, `psarc.py list` over the seven `DATA0n.PSARC`).** `mesh_colour_constant.rcsmaterial` exists
   only under `02_track/materials/` and `02_track/materials_dlc/`: the one circuit, so a wired `ALPHA_DIFFUSE` entry moves
   Metropia's slots and no other circuit's.
@@ -4075,7 +4101,11 @@ three pushbuffer reads and is not used).
   `DLC1/environments/Metropia/materials/mesh_colour_constant.rcsmaterial`: the same family, so the same lattice is authored
   there. Their programs are PS4 GNM and Vita GXP, which `ps3-microcode.py` does not read, and ours was not rendered on either
   title at the spot (the existing 2048 Metropia pair is a grid frame with no lattice in view; Omega's shadPS4 race shots are not
-  a reference). Whether their reading draws the lattice is open.
+  a reference). Whether their reading draws the lattice is open. **Not covered by the HD row:** the Vita and PS4 builds go through
+  `mesh::rcs::psp2`, which has no `mesh_colour_constant` reading (the family draws as the generic path there), so
+  `skin::ALPHA_DIFFUSE` does not reach them; the same fix there is a `psp2` family module like `alpha_product.rs`, after the
+  program's alpha use is read from the GXP and GCN compiles. Checked, applies, not wired (named in the
+  `omega-and-2048-draw-normal-maps-as-colour` thread).
 
 ### Modesto Heights: the banner band is drawn white (slot 550 reversed, 551 forward)
 

@@ -275,14 +275,31 @@ const TEXTURE1: u32 = 0x3bdc_0403;
 /// over), and lights the constant alone. So its picture is the constant with
 /// the map's alpha as coverage, which `mesh::rcs::window_glass` weights the
 /// reflection by.
-const ALPHA_DIFFUSE: &[(&str, u32, AlphaUse)] = &[
+///
+/// `mesh_colour_constant` (Metropia's wire-mesh floor) names its map `Normal`
+/// (`0xd9d6922d`), not `Texture1`: its lit block writes the unit-0 texel's alpha
+/// as the output alpha (`MOV H0.w, R0`, `@0x3e`) and gates the reflection by it,
+/// so the wires are the map's alpha over the constant (`docs/formats/rcsmaterial.md`,
+/// "Metropia: the lattice floor").
+const ALPHA_DIFFUSE: &[(&str, u32, u32, AlphaUse)] = &[
     (
         "m_diffuse_normal_constantspecular",
         0x7611_a2d8,
+        TEXTURE1,
         AlphaUse::Product,
     ),
-    ("ds_booth_glass", 0x7611_a2d8, AlphaUse::Gate),
+    ("ds_booth_glass", 0x7611_a2d8, TEXTURE1, AlphaUse::Gate),
+    (
+        "mesh_colour_constant",
+        0x02ab_9f07,
+        NORMAL_SAMPLER,
+        AlphaUse::Gate,
+    ),
 ];
+
+/// The sampler name hash a `mesh_colour_constant` material's alpha map is bound under
+/// (`Normal`, `docs/formats/2048-material-params.md`).
+const NORMAL_SAMPLER: u32 = 0xd9d6_922d;
 
 /// What a family's program does with `Texture1`'s alpha beside its constant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -299,14 +316,17 @@ enum AlphaUse {
 /// names both.
 fn alpha_diffuse(material: &rcsmodel::Material) -> Option<(&str, [f32; 4], AlphaUse)> {
     let family = super::emissive::family(material);
-    let (hash, usage) = ALPHA_DIFFUSE
-        .iter()
-        .find_map(|&(name, hash, usage)| (name == family).then_some((hash, usage)))?;
+    let (hash, sampler, usage) =
+        ALPHA_DIFFUSE
+            .iter()
+            .find_map(|&(name, hash, sampler, usage)| {
+                (name == family).then_some((hash, sampler, usage))
+            })?;
     let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
     let path = material
         .samplers
         .iter()
-        .find(|(h, _)| *h == TEXTURE1)?
+        .find(|(h, _)| *h == sampler)?
         .1
         .as_deref()?;
     Some((path, value, usage))
