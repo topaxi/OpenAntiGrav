@@ -119,7 +119,7 @@ fn model(mode: f32, markings: &[[u8; 4]], dirt: &[[u8; 4]], markings_u: f32, dir
         anim_tracks: Vec::new(),
         anim_nodes: Vec::new(),
         emissive: vec![Emissive {
-            tint: [0.0; 3],
+            tint: [0.0, 1.0, 0.0],
             offset: 0.0,
             scale: 0.0,
             rate: 0.0,
@@ -182,10 +182,21 @@ fn dirt_then_markings_are_laid_over_the_diffuse_by_their_own_alpha() {
         markings_second[1] > 24 && markings_second[0] < 8,
         "markings read the second texel at texcoord2.x = 0.75: {markings_second:?}"
     );
+    // The entry's tint `y` is the dirt switch: at 0 the dirt is not drawn, the markings still are.
+    let mut no_dirt = model(PROGRAM_TARMAC, &[clear], &[red], 0.5, 0.5);
+    no_dirt.emissive[0].tint = [0.0; 3];
+    assert_eq!(at(&no_dirt), asphalt, "a dirt weight of 0 draws no dirt");
+    let mut marks_only = model(PROGRAM_TARMAC, &[blue], &[red], 0.5, 0.5);
+    marks_only.emissive[0].tint = [0.0; 3];
+    let kept = at(&marks_only);
+    assert!(
+        kept[2] > 24 && kept[0] < 8,
+        "the markings stay on: {kept:?}"
+    );
     // The fourth binding is the road's `EmissiveTexture`, added after the light.
     let mut glowing = model(PROGRAM_TARMAC, &[clear], &[clear], 0.5, 0.5);
     glowing.wave_maps = vec![texture("emissive", &[blue])];
-    glowing.emissive[0].tint = [1.0, 0.0, 0.0];
+    glowing.emissive[0].tint = [1.0, 1.0, 0.0];
     let glow = at(&glowing);
     assert!(
         glow[2] > asphalt[2] + 24 && glow[0] <= asphalt[0] + 2,

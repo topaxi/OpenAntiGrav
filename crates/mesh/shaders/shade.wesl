@@ -586,7 +586,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     if tarmac {
         let dirt = material_sample(MATERIAL_SIXTH_MAP, in.colour.xy);
         let markings = material_sample(MATERIAL_FIFTH_MAP, in.lightmap_texcoord.zw);
-        let laid = mix(mix(picture.rgb, dirt.rgb, dirt.a), markings.rgb, markings.a);
+        let laid = mix(mix(picture.rgb, dirt.rgb, dirt.a * row_tint.y), markings.rgb, markings.a);
         picture = vec4<f32>(laid, picture.a);
     }
     // **HD's `uvdistortion_*plusoverlay*` banner** (`Emissive::program` mode 13,
@@ -847,7 +847,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // entry's. `decode` is the square on 2048.
     var emissive_add = vec3<f32>(0.0);
     // **The tarmac roads' `EmissiveTexture`** (mode 14): the fourth binding's rgb at the diffuse
-    // coordinate, weighted by the entry's tint `x` (1 when the material has one, else 0), added
+    // coordinate, weighted by the entry's tint `x` (1 when the material has one, else 0), the dirt weighted by
+    // tint `y` (`DIRT_SWITCH`), added
     // after the light like the mode 8 term, as the pixel programs add it
     // (`out = emissive + ambient * c`).
     if tarmac {

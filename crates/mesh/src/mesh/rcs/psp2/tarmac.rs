@@ -34,6 +34,10 @@ use crate::mesh::{Emissive, ModelTexture, PROGRAM_TARMAC, slots};
 const MARKINGS: u32 = 0x4a5b_d928;
 /// The `Dirt` sampler's hash: `~crc32("Dirt")`.
 const DIRT: u32 = 0xc7aa_b177;
+/// Set (to anything) to draw the dirt layer. **Off by default**: with it on, Rockway Stadium's road
+/// reads darker than the original in two of three boxes, and the cause is unread
+/// (`docs/formats/omega-status.md`, "The `tarmac_*` pixel programs combine four pictures").
+pub const DIRT_SWITCH: &str = "OAG_TARMAC_DIRT";
 /// The `EmissiveTexture` sampler's hash: `~crc32("EmissiveTexture")`.
 const EMISSIVE: u32 = 0xb1f2_a176;
 
@@ -92,6 +96,11 @@ pub(super) fn plan(
     report: &mut Report,
 ) -> Plan {
     let mut out = Plan::default();
+    let dirt_weight = if std::env::var_os(DIRT_SWITCH).is_some() {
+        1.0
+    } else {
+        0.0
+    };
     let mut cache: std::collections::HashMap<String, Option<Arc<ModelTexture>>> =
         std::collections::HashMap::new();
     for (index, material) in decoded.materials.iter().enumerate() {
@@ -131,7 +140,7 @@ pub(super) fn plan(
         };
         let has_emissive = matches!(emissive_picture, Some(Some(_)));
         let entry = Emissive {
-            tint: [if has_emissive { 1.0 } else { 0.0 }, 0.0, 0.0],
+            tint: [if has_emissive { 1.0 } else { 0.0 }, dirt_weight, 0.0],
             offset: 0.0,
             scale: 0.0,
             rate: 0.0,

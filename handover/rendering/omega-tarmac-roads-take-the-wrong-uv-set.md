@@ -2,7 +2,7 @@
 status: measure
 titles: [omega]
 updated: 2026-11-12
-summary: "Omega tarmac_* road layers wired but arena reads darker than the original; isolate dirt vs markings, then tarmac_dirt"
+summary: "Omega tarmac markings on, dirt off by default (OAG_TARMAC_DIRT=1): read the .gnf sRGB decode before the lerp"
 ---
 
 # Omega's `tarmac_*` roads (diffuse fixed; dirt, markings and emissive wired, not yet matching)
@@ -11,6 +11,8 @@ Evidence and numbers: [`omega-status.md`](../../docs/formats/omega-status.md), "
 families draw the wrong coordinate set" and "The `tarmac_*` pixel programs combine four pictures".
 
 ## Next Steps
+
+0. State: markings and emissive on; the dirt layer is off by default (`OAG_TARMAC_DIRT=1` draws it). Turn it on by default once step 1 explains the darkness.
 
 1. Isolated: dirt alone causes the darkening, markings change nothing in the boxes, the linear domain closes about a third of it, the program squares nothing. Still open: why `arena-2048` reads darker than the original after the layers (right box 131,138,128
    theirs, 117,125,118 ours; ahead 124,132,123 against 83,114,107). Candidates: the dirt's weight

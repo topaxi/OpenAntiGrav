@@ -1616,7 +1616,15 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   taps**: the unlit combine is plain `v_sub`/`v_mac` lerps on the sampled rgb (read in full, see
   above), so a gamma-domain blend is not what the program asks; whether the hardware decodes the
   `.gnf` as sRGB before the lerp is not read. The box 720,330 was already 29 red under before the
-  layers, so part of the gap is not the layers. The painted symbols (`KEEP CLEAR`,
+  layers, so part of the gap is not the layers.
+  **Shipped state:** the markings layer and the emissive are on (neutral where there is no decal);
+  the **dirt layer is off by default**, switched on with `OAG_TARMAC_DIRT=1`
+  (`psp2::tarmac::DIRT_SWITCH`, the entry's tint `y` read by `shade.wesl`). **Open, precisely:** with
+  dirt on, arena's right and ahead boxes read darker than the original even with a linear-domain
+  mix. Next read: whether the hardware decodes the `.gnf` dirt and diffuse textures as sRGB before
+  the lerp (the T# format's number type, the sampler state), then the ahead box's pre-existing
+  29-red gap (box 720,330 reads (95,129,120) before any layer against the original's
+  (124,132,123)). The painted symbols (`KEEP CLEAR`,
   arrows, dashes, in the atlas) are not seen in this frame. Confidence in the combine 85; in the
   rendered match, none: not isolated further.
 - **Unity Square's road is not black; what it lacks is the panel emissive and the displacement**
