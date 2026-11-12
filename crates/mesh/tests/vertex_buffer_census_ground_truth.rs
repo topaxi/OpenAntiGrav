@@ -146,6 +146,7 @@ fn omega_arena_and_square_are_the_circuits_that_outgrow_a_default_device() {
         rows.extend(psp2_rows(&mut archive, is_circuit));
     }
     let rows = report("Wipeout Omega Collection", rows);
+    assert!(rows.len() >= 26, "{} circuits", rows.len());
     let cut: Vec<&str> = rows
         .iter()
         .filter(|r| r.chunks > 1)
@@ -172,6 +173,7 @@ fn every_wipeout_2048_circuit_is_one_buffer() {
     let Some(path) = needs(&path) else { return };
     let mut archive = oag_assets::psarc::Archive::open_file(&path).expect("opens");
     let rows = report("Wipeout 2048", psp2_rows(&mut archive, is_circuit));
+    assert!(rows.len() >= 14, "{} circuits", rows.len());
     assert!(rows.iter().all(|r| r.chunks == 1));
 }
 
@@ -204,6 +206,7 @@ fn every_wipeout_hd_circuit_is_one_buffer() {
         }
     }
     let rows = report("Wipeout HD Fury", rows);
+    assert!(rows.len() >= 16, "{} circuits", rows.len());
     assert!(rows.iter().all(|r| r.chunks == 1));
 }
 
@@ -259,15 +262,17 @@ fn psp_rows(image: &str, title: &str) -> Vec<Row> {
 
 #[test]
 #[ignore = "needs data/images/pulse-psp-eu.chd"]
-fn every_pulse_circuit_is_one_buffer() {
+fn the_pulse_circuits_found_by_name_are_one_buffer() {
     let rows = report("Wipeout Pulse", psp_rows("pulse-psp-eu.chd", "Pulse"));
+    assert!(rows.len() >= 12, "{} circuits", rows.len());
     assert!(rows.iter().all(|r| r.chunks == 1));
 }
 
 #[test]
 #[ignore = "needs data/images/pure-psp-eu.chd"]
-fn every_pure_circuit_is_one_buffer() {
+fn the_pure_circuits_found_by_name_are_one_buffer() {
     let rows = report("Wipeout Pure", psp_rows("pure-psp-eu.chd", "Pure"));
+    assert!(rows.len() >= 5, "{} circuits", rows.len());
     assert!(rows.iter().all(|r| r.chunks == 1));
 }
 

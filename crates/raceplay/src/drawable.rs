@@ -501,6 +501,12 @@ impl Drawable {
         *last_bound = Some(slot);
     }
 
+    /// The bytes of vertex data this drawable's model holds.
+    #[cfg(test)]
+    pub(super) fn model_vertex_bytes(&self) -> usize {
+        std::mem::size_of_val(&self.model.vertices[..])
+    }
+
     /// How many buffers the vertex data is cut into: one unless the model outgrew the
     /// device's `max_buffer_size`.
     #[cfg(test)]

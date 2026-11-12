@@ -11,7 +11,7 @@ use std::ops::Range;
 
 use oag_gpu::writes::Writes;
 
-use super::chunks::{Unsplittable, VERTEX_BYTES, VertexChunks};
+use super::chunks::{VERTEX_BYTES, VertexChunks};
 use crate::mesh::{GpuVertex, Model};
 
 /// Bytes of one streamed texture coordinate.
@@ -35,13 +35,22 @@ impl Geometry {
     ///
     /// # Errors
     ///
-    /// [`Unsplittable`] when draws straddle every cut that would fit.
+    /// [`Unsplittable`] when draws straddle every cut that would fit, and an error naming the
+    /// model when it needs a cut on an adapter that cannot draw with a base vertex.
     pub fn new(
         device: &wgpu::Device,
         model: &Model,
         max_buffer_bytes: u64,
-    ) -> Result<Self, Unsplittable> {
+    ) -> anyhow::Result<Self> {
         let chunks = VertexChunks::plan(model, max_buffer_bytes)?;
+        anyhow::ensure!(
+            chunks.is_whole() || !super::device::base_vertex_missing(),
+            "{}: {} vertices do not fit one {} byte buffer, and this adapter cannot draw a cut model \
+             (no base vertex)",
+            model.label,
+            model.vertices.len(),
+            max_buffer_bytes
+        );
         let vertices = chunks
             .ranges()
             .iter()

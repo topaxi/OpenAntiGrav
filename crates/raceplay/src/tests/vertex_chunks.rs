@@ -154,3 +154,35 @@ fn a_draw_wider_than_the_ceiling_is_a_load_error() {
     let error = built.expect("an error, not a panic").expect_err("refused");
     assert!(error.to_string().contains("straddle"), "{error}");
 }
+
+/// **The browser's load path fills every buffer.** With a deferral scope open the build parks
+/// its geometry instead of writing it (`Geometry::defer`), and the frame loop drains it a
+/// slice at a time. A cut model that parked only its first buffer would draw the rest as
+/// zeroes: the same pixels as one buffer once drained, and none of the strips elsewhere before.
+#[test]
+fn a_cut_model_built_under_a_deferral_scope_draws_the_same_pixels_once_drained() {
+    let Some(((whole_device, whole_queue), (cut_device, cut_queue))) = pair() else {
+        return;
+    };
+    let expected = pixels(
+        &whole_device,
+        &whole_queue,
+        &[0, 1].map(|half| spread_drawable(&whole_device, &whole_queue, half)),
+    );
+    let scope = oag_gpu::deferred_upload::Scope::open(&cut_queue);
+    let cut = [0, 1].map(|half| spread_drawable(&cut_device, &cut_queue, half));
+    let parked = oag_gpu::deferred_upload::pending_bytes();
+    let vertex_bytes: u64 = cut
+        .iter()
+        .map(|drawable| drawable.model_vertex_bytes() as u64)
+        .sum();
+    assert!(
+        parked >= vertex_bytes,
+        "{parked} bytes parked against {vertex_bytes} of vertices"
+    );
+    while oag_gpu::deferred_upload::drain(|| false) > 0 {}
+    assert_eq!(oag_gpu::deferred_upload::pending_bytes(), 0);
+    drop(scope);
+    let got = pixels(&cut_device, &cut_queue, &cut);
+    assert!(got == expected, "every pixel as one buffer draws it");
+}
