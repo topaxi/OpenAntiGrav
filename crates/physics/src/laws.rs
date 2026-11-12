@@ -115,8 +115,7 @@ impl Laws {
         wall_one_sided: false,
         wall_steer_away: false,
         wall_point_rate_body_local: false,
-        // Measured as `BodyDamping::PULSE` and not flown yet: with it de Konstruct Black's first
-        // jump falls short (`docs/physics/body-damping.md`, "Why Pulse does not fly it yet").
+        // `Body_Integrate`'s `0.01` pair, measured per frame (`docs/physics/body-damping.md`).
         body_damping: BodyDamping::PULSE,
     };
 }
