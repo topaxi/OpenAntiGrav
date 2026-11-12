@@ -157,6 +157,43 @@ def sidecar_race_clock(path, craft):
     return race_clock_address(path, craft)
 
 
+#: `g_ingame` (`docs/ghidra/functions/ps2-pulse-eu/anim-transform.md`): a pointer to the session object, whose `+0x40` is the one clock every
+#: `Anim Transform` node and the world meshes' texture animation (the neon strips) run on. Static data, the same address in every state.
+G_INGAME = 0x27DDBC
+INGAME_CLOCK = 0x40
+
+
+def world_clock(path):
+    """The world animation clock (f32 seconds, `*(g_ingame + 0x40)`) in a state, or `None` when `g_ingame` is not a pointer into RAM."""
+    ram = _ram(path)
+    (session,) = struct.unpack_from("<I", ram, G_INGAME)
+    if not RAM_LO <= session < len(ram) - 0x80:
+        return None
+    (seconds,) = struct.unpack_from("<f", ram, session + INGAME_CLOCK)
+    return seconds if math.isfinite(seconds) and 0.0 <= seconds < 36000.0 else None
+
+
+def ours_world_clock_offset(world_s, state_clock_s, grab_clock_s, ticks):
+    """The `--world-clock-offset` that puts ours' mesh clock (`ticks / 60` plus the offset) on the original's at the grab: the world clock of the
+    state, run on by the race clock's advance from the state to the grab (the two run at one rate), less ours' own `ticks / 60`."""
+    return world_s + (grab_clock_s - state_clock_s) - ticks / 60
+
+
+def record_world_clock_offset(rec, root):
+    """The `--world-clock-offset` a Pulse PS2 grid pair's record implies, from its state file (under `root`) and the grab bracket it kept,
+    or `None` when the record names no readable state or no bracket (a pair made before the pair script recorded the world clock)."""
+    orig = rec.get("original") or {}
+    live = orig.get("race_clock_live_s") or {}
+    state = (orig.get("state") or {}).get("file")
+    ticks = (rec.get("ours") or {}).get("ticks")
+    if not state or ticks is None or not {"before_grab", "after_grab", "state_file"} <= live.keys() or not (Path(root) / state).is_file():
+        return None
+    world = world_clock(Path(root) / state)
+    if world is None:
+        return None
+    return ours_world_clock_offset(world, live["state_file"], (live["before_grab"] + live["after_grab"]) / 2, ticks)
+
+
 #: Offsets inside the camera object `Camera_SubmitScene` runs on (measured live, `docs/ghidra/functions/ps2-pulse-eu/camera.md`):
 #: the camera's world matrix (rows right, up, backward, then the eye) at `+0x40`, its twin at `+0x90`, the perspective
 #: matrix at `+0xd0` and the vertical field in degrees at `+0x110`.

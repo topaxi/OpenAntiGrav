@@ -253,6 +253,16 @@ def main():
     scratch = Path(os.environ["XDG_CONFIG_HOME"]).parent
     ce.write_ours_settings(plat, scratch)
     flags = ce.ours_flags(plat) + ["--mode", "single_race", "--class", "venom"]
+    world = pcsx2_state.world_clock(args.state)
+    pair.check("the world meshes' animation clock (g_ingame + 0x40) was read", world is not None, "%s" % (world,))
+    if world is not None:
+        world_offset = pcsx2_state.ours_world_clock_offset(world, clock, grab_clock, ticks)
+        pair.rec["original"]["world_clock_s"] = world
+        pair.rec["original"]["world_clock_offset_s"] = world - clock
+        pair.rec["original"]["world_clock_note"] = ("`*(g_ingame + 0x40)` in the state file, the clock the neon strips' texture animation runs on, "
+                                                    "less the RAM race clock; ours' clock is its ticks over 60 plus the flag")
+        pair.rec["ours"]["world_clock_offset_s"] = world_offset
+        flags += ["--world-clock-offset", "%.3f" % world_offset]
     if args.team:
         flags += ["--team", args.team]
     entry = "Data\\Environments\\%s\\track%s.vex" % (args.track, "_reversed" if args.reversed else "")
