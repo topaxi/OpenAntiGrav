@@ -33,6 +33,29 @@ pub const XP_AWARDS_XML: &str = r"Data\xml\XPAwards.xml";
 /// The XP rank thresholds.
 pub const XP_RANKS_XML: &str = r"Data\xml\XPRanks.xml";
 
+/// What a finished `event` is graded and paid by: its pass/elite bars, the package's
+/// `XPAwards.xml`, and the award column its kind pays. The column is **chosen, not measured**: the
+/// original's mode to column map is unread.
+#[must_use]
+pub fn event_progress(
+    archives: &mut oag_assets::Archives,
+    doc: &Document,
+    event: &Event,
+) -> (
+    Option<EventObjectives>,
+    Option<oag_tables::xp::Awards>,
+    oag_tables::xp::Column,
+) {
+    use oag_tables::xp::Column;
+    let column = match event.kind {
+        EventKind::Race => Column::Race,
+        EventKind::Elimination => Column::Elim,
+        EventKind::Zone => Column::Zone,
+    };
+    let awards = xp_tables(archives).map(|(awards, _)| awards);
+    (event_objectives(doc, event), awards, column)
+}
+
 /// Both XP tables from the package, or `None` when either is absent or unreadable.
 #[must_use]
 pub fn xp_tables(
