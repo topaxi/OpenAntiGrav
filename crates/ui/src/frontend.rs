@@ -102,6 +102,7 @@ pub mod canvas_lattice;
 pub mod canvas_prism;
 mod event_card;
 mod faces;
+mod map_cursor;
 mod mode_grid;
 mod options2048;
 mod team;
@@ -904,6 +905,7 @@ impl Frontend {
 
         self.on_screen_for += dt;
         self.campaign.tick(dt);
+        self.step_map_cursor(dt);
 
         if self.leg_has_no_picture() {
             input.inject_press(Button::Start);

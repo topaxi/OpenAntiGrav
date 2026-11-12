@@ -76,6 +76,11 @@ pub(crate) struct Window {
     /// Wheel detents since the last take, with the fractional remainder of
     /// a smooth scroll carried forward so it is not thrown away.
     scroll: f64,
+    /// A held left button pans the screen rather than clicking at once: the
+    /// screen on show asked for it ([`Self::set_mouse_pans`]).
+    mouse_pans: bool,
+    /// Where the mouse was when the held button last moved.
+    touch_last_mouse: (f32, f32),
     /// The finger being followed, if one is down.
     finger: Option<u64>,
     /// Where the followed finger landed.
@@ -108,10 +113,34 @@ pub(crate) struct Window {
     touch_spoke_last: bool,
 }
 
+/// The id the held left mouse button is followed under, beside real fingers.
+const MOUSE_FINGER: u64 = u64::MAX;
+
 impl Window {
+    /// Whether the screen on show pans with a held left button (the 2048
+    /// campaign map). A press then waits for the release to be a click, as a
+    /// finger's tap does, and a drag past [`DRAG_THRESHOLD`] is a pan.
+    /// **Chosen, not measured.** Off, every other screen clicks on the press
+    /// as before; turning it off lets go of a button held across the change.
+    pub(crate) fn set_mouse_pans(&mut self, on: bool) {
+        if !on && self.finger == Some(MOUSE_FINGER) {
+            self.finger = None;
+            self.dragging = false;
+            self.released = true;
+        }
+        self.mouse_pans = on;
+    }
+
     pub(crate) fn cursor_moved(&mut self, x: f64, y: f64) {
         self.touch_spoke_last = false;
         self.mouse_spoke_last = true;
+        if self.finger == Some(MOUSE_FINGER) {
+            // Held: the travel is a pan, and the position stays where it
+            // went down so nothing under the drag is hovered.
+            self.touch_last_mouse = (x as f32, y as f32);
+            self.finger_event(MOUSE_FINGER, TouchPhase::Moved, (x as f32, y as f32));
+            return;
+        }
         self.place((x as f32, y as f32));
     }
 
@@ -125,6 +154,24 @@ impl Window {
     pub(crate) fn button(&mut self, button: MouseButton, state: ElementState) {
         self.touch_spoke_last = false;
         self.mouse_spoke_last = true;
+        if button == MouseButton::Left && self.mouse_pans {
+            match (state, self.at) {
+                (ElementState::Pressed, Some(at)) if self.finger.is_none() => {
+                    self.touch_last_mouse = at;
+                    self.finger_event(MOUSE_FINGER, TouchPhase::Started, at);
+                    return;
+                }
+                (ElementState::Released, _) if self.finger == Some(MOUSE_FINGER) => {
+                    let at = self.touch_last_mouse;
+                    self.finger_event(MOUSE_FINGER, TouchPhase::Ended, at);
+                    self.at = Some(at);
+                    // A mouse is still over the spot it clicked.
+                    self.lifted = false;
+                    return;
+                }
+                _ => {}
+            }
+        }
         if state != ElementState::Pressed {
             return;
         }
@@ -156,20 +203,29 @@ impl Window {
         }
         self.mouse_spoke_last = false;
         self.touch_spoke_last = true;
-        let at = (touch.location.x as f32, touch.location.y as f32);
-        match touch.phase {
+        self.finger_event(
+            touch.id,
+            touch.phase,
+            (touch.location.x as f32, touch.location.y as f32),
+        );
+    }
+
+    /// One phase of the followed finger, which a held mouse button also is
+    /// while the screen pans with it ([`Self::set_mouse_pans`]).
+    fn finger_event(&mut self, id: u64, phase: TouchPhase, at: (f32, f32)) {
+        match phase {
             TouchPhase::Started => {
                 if self.finger.is_some() {
                     return;
                 }
-                self.finger = Some(touch.id);
+                self.finger = Some(id);
                 self.touch_origin = at;
                 self.touch_last = at;
                 self.dragging = false;
                 self.pressed = true;
             }
             TouchPhase::Moved => {
-                if self.finger != Some(touch.id) {
+                if self.finger != Some(id) {
                     return;
                 }
                 let (dx, dy) = (at.0 - self.touch_origin.0, at.1 - self.touch_origin.1);
@@ -181,7 +237,7 @@ impl Window {
                 }
             }
             TouchPhase::Ended => {
-                if self.finger == Some(touch.id) {
+                if self.finger == Some(id) {
                     self.finger = None;
                     self.released = true;
                     if self.dragging {
@@ -198,7 +254,7 @@ impl Window {
                 }
             }
             TouchPhase::Cancelled => {
-                if self.finger == Some(touch.id) {
+                if self.finger == Some(id) {
                     self.finger = None;
                     self.dragging = false;
                     self.released = true;

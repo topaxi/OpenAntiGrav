@@ -29,6 +29,14 @@
 //! travel limits are **chosen, not measured**: any event can be centred, with the
 //! original's 650 px of margin past the outermost ones.
 //!
+//! # The pad's cursor and the mouse
+//!
+//! The right stick moves an arrow over the map and pushing it past the view's
+//! edge pans, so a pad reaches every event, including ones the d-pad's steps
+//! skip ([`super::map_cursor`]). A held left mouse button drags the view
+//! (`oag_game`'s pointer window turns it into a finger's drag while this map is
+//! up) and the wheel pans a row a detent ([`CampaignMap::pan`]).
+//!
 //! # The card
 //!
 //! A tap on a tile opens the event's card (`event_card`,
@@ -245,6 +253,8 @@ pub struct CampaignMap {
     pub(super) craft_seed: Option<String>,
     /// The per-event card, when one is open over the map.
     pub(super) card: Option<super::event_card::CardState>,
+    /// The pad's pointer on the map. See [`super::map_cursor`].
+    pub(super) cursor: super::map_cursor::MapCursor,
 }
 
 impl CampaignMap {
@@ -314,7 +324,7 @@ impl CampaignMap {
     /// One axis of the view's travel: its limits, a tile's size as the pitch,
     /// and a rubber band half the view long past either end. Unsnapped: the
     /// map is a free canvas with no item to come to rest on.
-    fn extent(&self, axis: usize) -> Extent {
+    pub(super) fn extent(&self, axis: usize) -> Extent {
         let face = canvas_camera::tile_face();
         let (pitch, view) = match axis {
             0 => (face.0, canvas_camera::VIEWPORT.0),
@@ -385,6 +395,20 @@ impl CampaignMap {
         }
         let seen = self.scroll[0].gesture(pointer, -pointer.drag.0 * scale.0, &extents[0]);
         self.scroll[1].gesture(&seen, -pointer.drag.1 * scale.1, &extents[1])
+    }
+
+    /// The box of event `index`'s top face where the view is now.
+    pub(super) fn face_of(&self, index: usize) -> Option<[f32; 4]> {
+        Some(Self::face(&self.camera(), self.events.get(index)?))
+    }
+
+    /// The event whose top face holds `at` (the canvas viewport's coordinates),
+    /// never one the map hides.
+    pub(super) fn hit_at(&self, at: (f32, f32)) -> Option<usize> {
+        let camera = self.camera();
+        (0..self.events.len()).find(|&index| {
+            !self.hidden(index) && contains(Self::face(&camera, &self.events[index]), at)
+        })
     }
 
     /// Advances a coast or a bounce by one tick.
@@ -525,6 +549,11 @@ impl Frontend {
         Some(self.campaign.state_of(index))
     }
 
+    /// Whether the campaign map is the screen and no event card is over it.
+    pub(super) fn on_open_map(&self) -> bool {
+        self.machine.is(w2048::NEW_FE_SHELL) && self.campaign.card.is_none()
+    }
+
     /// The pad on the map: the d-pad moves to the nearest event that way,
     /// cross or start opens the card of the one under the cursor.
     pub(super) fn update_campaign_map(&mut self, input: &mut Input) {
@@ -539,6 +568,7 @@ impl Frontend {
         ] {
             if input.is_pressed(button) {
                 input.consume_press(button);
+                self.campaign.cursor.hide();
                 if let Some(next) = self.nearest_event(direction) {
                     self.campaign.selected = next;
                     self.campaign.follow();
@@ -549,6 +579,15 @@ impl Frontend {
         if input.is_pressed(Button::Cross) || input.is_pressed(Button::Start) {
             input.consume_press(Button::Cross);
             input.consume_press(Button::Start);
+            // With the cursor up, Confirm opens what it points at, which the
+            // view is not moved for (the cursor would leave the tile).
+            if let Some(at) = self.campaign.cursor.at {
+                if let Some(hit) = self.campaign.hit_at(at) {
+                    self.campaign.selected = hit;
+                    self.open_event_card();
+                }
+                return;
+            }
             self.open_event_card();
         }
     }
@@ -656,11 +695,7 @@ impl Frontend {
             at.0 * canvas_camera::VIEWPORT.0 / width,
             at.1 * canvas_camera::VIEWPORT.1 / height,
         );
-        let camera = self.campaign.camera();
-        let hit = (0..self.campaign.events.len()).find(|&index| {
-            !self.campaign.hidden(index)
-                && contains(CampaignMap::face(&camera, &self.campaign.events[index]), at)
-        });
+        let hit = self.campaign.hit_at(at);
         // Against the selection *before* this tick's hover moved it: a tap
         // arrives with `moved` and `clicked` set together, and reading the
         // click against the hover it came with would launch on one tap.

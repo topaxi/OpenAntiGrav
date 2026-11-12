@@ -1192,6 +1192,19 @@ pub fn to_grid(space: Space, viewport: (f32, f32, f32, f32), window: (f32, f32))
     (normalised_x * space.size.0, normalised_y * space.size.1)
 }
 
+/// A point of `space`'s grid as the window pixel it is drawn at: [`to_grid`] run the other way.
+#[must_use]
+pub fn from_grid(space: Space, viewport: (f32, f32, f32, f32), grid: (f32, f32)) -> (f32, f32) {
+    let (left, top, width, height) = viewport;
+    let [scale_x, scale_y] = letterbox_in((width as u32, height as u32), space.display_aspect);
+    let clip_x = (grid.0 / space.size.0 * 2.0 - 1.0) * scale_x;
+    let clip_y = (1.0 - grid.1 / space.size.1 * 2.0) * scale_y;
+    (
+        left + (clip_x + 1.0) * 0.5 * width,
+        top + (1.0 - clip_y) * 0.5 * height,
+    )
+}
+
 #[cfg(test)]
 mod atlas_limit_tests;
 #[cfg(test)]
