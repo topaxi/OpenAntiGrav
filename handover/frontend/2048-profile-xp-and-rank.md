@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-11-12
-summary: "2048 profile XP total is kept and a finished event banks its race-end awards; the hidden-event reveal reads the rank; Omega events and the ~30 in-race awards are open"
+summary: "2048 XP total kept, race-end awards banked, rank gates the hidden-event reveal; Omega events and ~30 in-race awards open"
 ---
 
 # 2048 profile XP and rank
