@@ -2,7 +2,7 @@
 status: measure
 titles: [2048, omega, pure]
 updated: 2026-11-12
-summary: "Compare pairs ranked by payoff for effort: 11 of 14 2048 race pairs compare an HD craft (capture fix first), Omega card art (done), Pure pairs not viewable"
+summary: "Compare pairs ranked by payoff for effort: 11 of 14 2048 race pairs compare an HD craft (capture first), Omega card art done, Pure pairs not viewable"
 size: S (30)
 difficulty: medium (30)
 ---
