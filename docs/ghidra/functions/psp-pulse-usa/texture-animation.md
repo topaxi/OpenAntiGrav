@@ -477,6 +477,42 @@ path rather than `FUN_089307b4`'s. So a surface can receive an animated
 `TEXOFFSET` through either path, and a search that finds only `FUN_089271cc`
 has seen half the mechanism.
 
+## The updater's output measured per frame on Gemini Dam (`12_Track`, DLC)
+
+**2026-11-12, `gemini-dam-flicker`, confidence 85 (two state loads, 599 frames each on the first, same on a 1,200-hit repeat).**
+PPSSPP v1.20.4, Pulse USA (`UCUS98712`), Gemini Dam Black (forward `12_Track`, from Harimau's `PACK3.edat`; the
+circuit is DLC, not on the disc: [dlc-pack.md](../../../formats/dlc-pack.md), "Running a pack in the original"). A conditional
+breakpoint on `TexAnim_UpdateTransform` (`0x08927204`, `a0` = block, `f12` = seconds) logged, for every hit, the block's key
+times and values, its loop word (`+0x2c`) and the offset the **previous** update left at `+0x20/+0x24`; the next hit's
+"previous" is therefore this hit's output (`scripts/psp-texanim-trace.py`).
+
+| Block (the arch ceiling lights: `screen1_GLOW` and `screen3` under `under_arch2`/`arch_rim`) | Keys (frames) | Loop | Original's output against `TexTransform::sample` |
+| --- | --- | ---: | --- |
+| `screen1_GLOW`, `v` 0, 64, 64, 128, 128, 192, 192, 256 (1/256 units) | 11, 12, 24, 25, 37, 38, 49, 50 | 50 frames | **lerp: max error 0.0003** over 599 frames; step mode misses by up to 0.21 |
+| `screen3`, `(u, v)` (128,0), (0,0), (0,0), (128,128) | 29, 30, 59, 60 | 60 frames | **lerp: max error 0.0000**; step mode misses by up to 0.42 |
+
+- **The original lerps; the step bit (`+0x2c` bit 0) is clear on every block hit** (44 distinct blocks seen over the grid and the long tunnel, every loop word even).
+  `sample_with(.., step: true)` is not exercised by any `12_Track` block, so its 60-confidence snap direction is untouched by this.
+- **One frame in 12.5 shows a part-way offset**: the key pairs are one frame apart, so on a 60 Hz clock the ramp between two
+  cells is sampled at fractional key time on about 48 of every 600 frames (`v` 0.07, 0.33, 0.58, 0.82 etc.), not only at the
+  four cell values. A hard on/off cell change that reads as a flicker is authored, and so is the odd in-between frame.
+- **The world clock steps by the real frame time, not exactly 1/60**: `47.2211, 47.2378, 47.2544 ...`; over 600 frames
+  the mean step is 16.684 ms (the 59.94 Hz vblank, against 16.667 ms) with single steps from 16.27 to 17.10 ms. A fixed
+  1/60 sample phase therefore drifts against the original by 0.06 frame per second, and a fractional-key frame lands
+  on a slightly different phase each loop.
+- **Which blocks tick differs by place** (inferred, not traced): on the grid about thirty blocks were hit per frame, in the
+  long tunnel at spline row 1205 sixteen, and the arch light block `0x930d480` was not hit there at all. Each block was
+  hit twice per clock value at the tunnel (two passes at the same `f12`). Whether that is culling or a distance gate is
+  not read.
+
+A second set of frames at the tunnel: the original's frame series at spline row 1205 (craft rebuilt each frame at the
+lifted sample, 150 frames, the world clock logged per frame) against ours rendered at each logged clock
+(`--anim-seconds`, same pose): the ceiling band's mean luma follows one 60-frame sawtooth in both (a slow fall over 30
+frames, a rise over 2 to 3 frames, then steady; ours leads by 1 to 2 frames), and no frame-to-frame change above 3.5 grey
+levels in either. At a **fixed camera** neither changes with time faster than that sawtooth; the flicker the maintainer
+saw at this tunnel is not the texture path but ours' strip z-fighting the ceiling under camera motion (the unapplied
+`Batch::depth_bias`, [mesh-draw.md](mesh-draw.md), "The per-batch depth bias is file data").
+
 ## Open
 
 - **The global V-scroll clock has not been found.** `vex.md` establishes the

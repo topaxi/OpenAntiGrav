@@ -377,7 +377,7 @@ script then checks the layout by heading (`--layout-tolerance-deg`, default 5 de
 `ours.layout_tolerance_deg`, the other layout being 150 degrees or more worse). The Track Select order is Talon's Junction (`16`),
 Moa Therma (`03`), Metropia (`02`), Arc Prime (`10`), **Orcus (`15`)**, de Konstruct (`05`), Tech de Ra (`04`), **Vostok Reef (`08`)**,
 The Amphiseum (`09`), Fort Gale (`14`), Basilico (`01`), **Edgewinter (`11`)**, Platinum Rush (`13`), Vertica (`06`),
-**Gemini Dam (`12`)**, Outpost 7 (`07`), each a White then a Black entry; the four in bold are not on the PSP. The forward entry is the
+**Gemini Dam (`12`)**, Outpost 7 (`07`), each a White then a Black entry; the four in bold are not on the PSP disc (the four DLC packs ship them: [dlc-pack.md](../formats/dlc-pack.md)). The forward entry is the
 White one on Talon's Junction, Moa Therma, Arc Prime, Tech de Ra, Platinum Rush, Vertica and Outpost 7 and the Black one on
 Metropia, de Konstruct, The Amphiseum, Fort Gale and Basilico, as on the PSP ([track.md](../formats/track.md#white-and-black)); on the
 new four, Orcus White and Edgewinter White are forward, and **Vostok Reef White and Gemini Dam White are the reversed layouts** (ours
