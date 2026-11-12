@@ -80,6 +80,13 @@ fn force_side_by_side(race: &mut race::Race, a: usize, b: usize) -> f32 {
     side
 }
 
+/// `+1.0` when `b` is on `a`'s left.
+fn side_of(race: &race::Race, a: usize, b: usize) -> f32 {
+    let body = race.sim.world.ships[a].physics.body;
+    let across = (-body.right()).dot(race.sim.world.ships[b].physics.body.position - body.position);
+    if across >= 0.0 { 1.0 } else { -1.0 }
+}
+
 #[test]
 #[ignore = "needs a Pulse PSP disc image under data/images/"]
 fn two_opponents_forced_side_by_side_push_their_lanes_apart() {
@@ -92,11 +99,18 @@ fn two_opponents_forced_side_by_side_push_their_lanes_apart() {
     assert_eq!(before, targets(&control, a, b), "the two runs diverged");
     let contacts_before = forced.pair_contact_ticks_of(a);
 
-    let side = force_side_by_side(&mut forced, a, b);
+    let placed = force_side_by_side(&mut forced, a, b);
+    // The side the push reads is the rival's at the contact, not at the placement: closing
+    // at `CLOSING`, the moved craft can be past the other's centre line when they first touch.
+    let mut side = None;
     for _ in 0..WATCH {
         forced.tick(&PlayerInputs::none());
         control.tick(&PlayerInputs::none());
+        if side.is_none() && forced.pair_contact_ticks_of(a) > contacts_before {
+            side = Some(side_of(&forced, a, b));
+        }
     }
+    let side = side.unwrap_or(placed);
     let contact_ticks = forced.pair_contact_ticks_of(a) - contacts_before;
     assert!(
         contact_ticks > 0,
@@ -109,8 +123,9 @@ fn two_opponents_forced_side_by_side_push_their_lanes_apart() {
     let a_away = side * ((fa - before.0) - (ca - before.0));
     let b_away = -side * ((fb - before.1) - (cb - before.1));
     println!(
-        "rival on a's {}: a {a} target {:.3} -> {fa:.3} (control {ca:.3}), b {b} {:.3} -> {fb:.3} \
+        "placed on a's {}, touching on a's {}: a {a} target {:.3} -> {fa:.3} (control {ca:.3}), b {b} {:.3} -> {fb:.3} \
          (control {cb:.3}), {contact_ticks} contact ticks",
+        if placed > 0.0 { "left" } else { "right" },
         if side > 0.0 { "left" } else { "right" },
         before.0,
         before.1,

@@ -161,7 +161,7 @@ fn omega_and_2048_index_the_shield_slot_by_skill() {
 }
 
 /// HD's measured body damping reaches the physics' laws, with Omega's own and 2048's inherited
-/// pair, and Pure's own read; Pulse (no laws) flies none.
+/// pair, and Pure's own read; Pulse (no laws) flies `Laws::PULSE`'s.
 #[test]
 fn the_body_damping_follows_the_title() {
     let damped = oag_physics::laws::BodyDamping {
@@ -178,7 +178,7 @@ fn the_body_damping_follows_the_title() {
     }
     assert_eq!(
         physics_laws(None).body_damping,
-        oag_physics::laws::BodyDamping::NONE
+        oag_physics::laws::BodyDamping::PULSE
     );
 }
 

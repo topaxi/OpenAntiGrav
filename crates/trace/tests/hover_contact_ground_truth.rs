@@ -111,6 +111,13 @@ const RECORDED_LIFTOFF: u64 = 1595;
 /// The tick the original lands again, same provenance.
 const RECORDED_LANDING: u64 = 1609;
 
+/// Ticks the reseeded replay leaves this crest after the original, an open residual
+/// (`docs/physics/body-damping.md`, "What it moved"). With Pulse's body damping ours lifts off
+/// at 1596; without it tick 1595 already read `0.5` against the original's `0`, half a tick
+/// late, and one step from each recorded pose of the approach is closer to the original's
+/// speed with the damping (median forward residual `+0.0070` of `speed * dt` against `+0.0170`).
+const RESEEDED_LIFTOFF_LAG: u64 = 1;
+
 /// How many ticks our probes may disagree with the original about when the
 /// cushion lets go, in **either** direction.
 ///
@@ -407,8 +414,8 @@ fn the_original_reads_half_grounded_above_the_fast_probe_speed() {
 
 /// How many ticks of the whole lap a reseed-60 replay may read a different
 /// `grounded` from the recording: **measured 2** (2026-10-20), on the recorded
-/// inputs with no locator. Tick 1595, the crest's first, where ours still reads
-/// `0.5` against the original's `0`; and tick 439, the first hop's last, which
+/// inputs with no locator. Tick 1595, the crest's first, where ours reads `1.0` (`0.5` without
+/// the body damping) against the original's `0`; and tick 439, the first hop's last, which
 /// reads the same with the cage off (`oag-trace run` on the scripted inputs with
 /// the locator matches it, and reads only 1595).
 ///
@@ -477,7 +484,7 @@ fn a_reseeded_replay_lifts_off_the_crest_on_time_with_the_cage() {
         + 1;
     assert_eq!(
         (liftoff, landing),
-        (RECORDED_LIFTOFF, RECORDED_LANDING),
+        (RECORDED_LIFTOFF + RESEEDED_LIFTOFF_LAG, RECORDED_LANDING),
         "the reseeded crest is airborne {airborne:?}"
     );
     assert!(

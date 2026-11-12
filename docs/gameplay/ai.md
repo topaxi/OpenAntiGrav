@@ -5620,6 +5620,17 @@ and prints `06_Track` VENOM (clean under 3 of the nine perturbation offsets) and
 [airborne-ground-truth.md](../physics/airborne-ground-truth.md#the-1595-crest-residual-is-a-hover-escape-off-a-wall-2026-10-20-pulse-air-pitch))
 and `29_Track` RAPIER (8 of 9) without a verdict.
 
+#### 06_Track RAPIER with the body damping (2026-11-12)
+
+When Pulse began to fly its body damping ([body-damping.md](../physics/body-damping.md)),
+`06_Track` RAPIER left the clean set: its plan verified on 2 of the 5 gate builds. Across all 17
+scales of `perturb::BOUND_OFFSETS` and `perturb::HELD_OUT`, **15 of 17 clean undamped against 11
+of 17 damped**. Each failing verification meets the walls at samples 1232-1242, after the gap at
+1196-1200, and those walls stay in the plan's `unresolved` list in clean builds both ways
+(undamped, scales `2e-3`, `1.5e-3`, `-1.5e-5` clean with walls at 1233-1238 unresolved). So the
+landing after the gap was already a coin; the damping makes it come up wrong more often. The
+row sits in `NOT_CLEAN` until the planner resolves those walls.
+
 ### A road under the line is a failure (2026-11-11)
 
 Lane `ace-walls`. Three changes to what a learning pass counts and how it
