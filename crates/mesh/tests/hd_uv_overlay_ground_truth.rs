@@ -60,6 +60,11 @@ fn bound(model: &mesh::Model) -> Vec<Bound> {
                 0,
                 "slot {slot}: the generic additive second texture is cleared"
             );
+            assert_eq!(
+                model.material_colour_factor.get(slot),
+                Some(&true),
+                "slot {slot}: VertexColour1 multiplies the light, as the program's @0x35 does"
+            );
             out.push((
                 slot,
                 [
