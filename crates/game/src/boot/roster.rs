@@ -249,8 +249,38 @@ pub(crate) fn load_circuit_names(
     names
 }
 
-/// Which copy of the table names them all, and what it says.
+/// Every circuit's name: the copy of the table that names them all, then the
+/// campaign file's own names for what that left, then a loader line for what is
+/// still an id.
 fn choose_circuit_names(
+    archives: &mut oag_assets::Archives,
+    language: Option<&oag_ui::language::Language>,
+    tracks: &[oag_raceplay::catalogue::Track],
+    report: &mut Vec<String>,
+) -> oag_ui::language::CircuitNames {
+    let mut names = names_from_a_copy(archives, language, tracks, report);
+    if tracks.is_empty() || names.len() == tracks.len() {
+        return names;
+    }
+    super::campaign2048::name_circuits(archives, tracks, &mut names);
+    let unnamed: Vec<&str> = tracks
+        .iter()
+        .filter(|track| names.get(&track.id).is_none())
+        .map(|track| track.id.as_str())
+        .collect();
+    if !unnamed.is_empty() {
+        report.push(format!(
+            "{} of {} circuit(s) are named by no table or campaign file and show their id: {}",
+            unnamed.len(),
+            tracks.len(),
+            unnamed.join(", ")
+        ));
+    }
+    names
+}
+
+/// Which copy of the table names them all, and what it says.
+fn names_from_a_copy(
     archives: &mut oag_assets::Archives,
     language: Option<&oag_ui::language::Language>,
     tracks: &[oag_raceplay::catalogue::Track],

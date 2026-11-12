@@ -2,7 +2,7 @@
 status: re-first
 titles: [omega, 2048]
 updated: 2026-11-12
-summary: "Omega front end: load order unresolved, campaign pages open, 2048 emblem and Team Select undrawn (circuit names closed 2026-11-05)"
+summary: "Omega front end: load order unresolved, campaign pages open, 2048 emblem and Team Select undrawn; 2048 Vita circuit names 10 of 26"
 ---
 
 # Omega's front end is HD's `PI001` plugin, carried forward - and load order is unresolved
@@ -53,7 +53,7 @@ content against `hd-frontend.md`.
   are **chosen, not measured**, the page's white backdrop hides the rim, and
   Team Select (`team_select: None`) is still undrawn.
 
-- **2048's circuits show ids (open, ready to scout, 2026-11-12)**: on 2048 Vita `CircuitNames::choose` finds no copy of `entries.xml` naming all 26 raceable circuits, and every one of them reads as its id (`square`, `Vineta_K_R`). Next: census the three `american/entries.xml` copies' keys against the 26 ids and 2048's `Definition.xml` for a name key (a `StringTableId`-style field); if some copy names some circuits, a per-circuit fallback in `choose` is the fix, with HD's 28 asserted unchanged (`hd_boot_ground_truth`). Evidence: `docs/formats/omega-status.md`, "Omega's Track Select names all 38 circuits".
+- **2048's circuits: ten named, sixteen show ids (2026-11-12, `vita-2048-circuit-names`)**: no copy of `entries.xml` names any of the 26 by id and no `PI_Track` authors a key, so a per-circuit fallback names none; the ten of 2048's own are named off `SP.xml`'s `TrackDefinition` (`M_DISPLAYNAME`, `vita_2048_dlc_menus_ground_truth::the_ten_circuits_of_2048_show_their_names_and_the_rest_keep_their_ids`). **Open**: the sixteen HD-lineage circuits (`Vineta_K` ... `Sol_2_R`) are named by `01_TRACK`..`08_TRACK` and their `soundregister`/`fe\trackNN` agree 8 of 8, but the link is inferred; read in Ghidra which value feeds the executable's `%02d_Track` before keying them. Evidence: `docs/formats/omega-status.md`, "2048 Vita's circuit names".
 
 - **Maintainer observation, 2026-10-06 (authoritative): the Omega front end
   is in a state HD/Fury's was in earlier** ("the menu items do not render

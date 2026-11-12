@@ -226,6 +226,64 @@ fn the_usa_package_ships_the_hd_pack_alone_so_only_its_tile_opens() {
     assert_eq!(frontend.chosen_mode(), Some("FE_MP_CAMPAIGN"));
 }
 
+/// The circuits a menu lists on the USA package read their names where the
+/// disc authors one: the ten of 2048's own off the campaign file's
+/// `TrackDefinition` (`M_TRACKNAME` is the `PI_Track` id, `M_DISPLAYNAME` the
+/// name), and the sixteen HD-lineage ones, which no authored link reaches a key
+/// of the string table by, keep their ids. No copy of `entries.xml` names any
+/// of the 26 by its bare id (`docs/formats/omega-status.md`, "2048 Vita's
+/// circuit names").
+#[test]
+#[ignore = "needs data/extracted/vita/PCSA00015"]
+fn the_ten_circuits_of_2048_show_their_names_and_the_rest_keep_their_ids() {
+    let Some(usa) = package("PCSA00015") else {
+        return;
+    };
+    let (shell, ..) = boot::load_shell(&options(&usa)).expect("the shell");
+    assert_eq!(shell.tracks.len(), 26, "ten of 2048 and sixteen of HD");
+    let label = |id: &str| {
+        let track = shell
+            .tracks
+            .iter()
+            .find(|track| track.id == id)
+            .unwrap_or_else(|| panic!("{id} is not offered"));
+        oag_raceplay::catalogue::label(track, &shell.circuit_names, &shell.strings, &shell.tracks)
+    };
+    for (id, name) in [
+        ("square", "UNITY SQUARE"),
+        ("mall", "QUEENS MALL"),
+        ("park", "METRO PARK"),
+        ("bridge", "CAPITAL REACH"),
+        ("tower", "EMPIRE CLIMB"),
+        ("arena", "ROCKWAY STADIUM"),
+        ("subway", "SUBWAY"),
+        ("cathedral", "DOWNTOWN"),
+        ("sol", "SOL"),
+        ("altima", "ALTIMA"),
+    ] {
+        assert_eq!(label(id), name, "{id}");
+    }
+    assert_eq!(shell.circuit_names.len(), 10, "only the ten are named");
+    for track in shell.tracks.iter().skip(10) {
+        assert_eq!(
+            label(&track.id),
+            track.id,
+            "no table links {} to a name",
+            track.id
+        );
+    }
+    println!(
+        "ids kept: {}",
+        shell
+            .tracks
+            .iter()
+            .skip(10)
+            .map(|t| t.id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+}
+
 /// Without either package the original hides both campaign tiles and the
 /// grid is one row of four: the pad's second stop is the multiplayer tile.
 #[test]
