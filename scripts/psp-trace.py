@@ -64,6 +64,8 @@ from psp_trace_fields import (
 # function and writes the same columns, and two copies of an offset table drift.
 CRAFT_REGISTER = "a0"
 CRAFT_BYTES = 0x400
+# `Ship_UpdateMagLock`'s blend, `--mag-lock`'s column.
+MAG_LOCK = 0x280
 BODY_POINTER = 0x1CC
 SPLINE_DOWN = 0xB10
 SPLINE_DOWN_FIELDS = ["spline_down_x", "spline_down_y", "spline_down_z"]
@@ -256,6 +258,14 @@ def main():
         "position like pos_*. See docs/ghidra/functions/psp-pulse-usa/camera.md.",
     )
     parser.add_argument(
+        "--mag-lock",
+        action="store_true",
+        help="also record the magnet-lock blend `craft+0x280` per tick, as the "
+        "mag_lock column (0 off a magstrip, ramping to 1 on one; "
+        "docs/physics/force-balance-ground-truth.md, Ship_UpdateMagLock). "
+        "oag-trace reads past it.",
+    )
+    parser.add_argument(
         "--flare",
         action="store_true",
         help="also record the craft's Engine Flare node per tick, as the "
@@ -413,6 +423,8 @@ def main():
             names += [name for name, _ in CAMERA_FIELDS]
         if args.flare:
             names += [name for name, _ in FLARE_FIELDS]
+        if args.mag_lock:
+            names.append("mag_lock")
         print("tick," + ",".join(names), file=out)
 
         # Resolved once, on the first recorded tick, and reused: both hops are
@@ -592,6 +604,8 @@ def main():
                 values += [
                     struct.unpack("<f", blob[at : at + 4])[0] for _, at in FLARE_FIELDS
                 ]
+            if args.mag_lock:
+                values.append(struct.unpack("<f", craft_blob[MAG_LOCK : MAG_LOCK + 4])[0])
             print("%d,%s" % (tick, ",".join("%.7g" % v for v in values)), file=out)
 
             if args.edram_every is not None and tick % args.edram_every == 0:

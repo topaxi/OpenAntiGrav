@@ -1,38 +1,31 @@
 ---
-status: measure
+status: ready-to-wire
 titles: [hd]
 updated: 2026-11-12
-summary: "Maintainer saw probably wrong textures on HD/Fury Modesto Heights reversed at tick 1020, [741.7, 61.9, -120.9]; not yet paired against RPCS3"
+summary: "Modesto Heights banner band (uvdistortion_diff_vertexcolplusoverlay) draws white; the original draws it dark with teal. Wire the family."
 size: S (30)
-difficulty: medium (30)
+difficulty: medium (40)
 ---
 
-# HD Modesto Heights reversed shows probably wrong textures at one spot
+# HD Modesto Heights: the banner band is drawn white
 
-2026-11-12, maintainer, from play (a reliable oracle; turn it into a measurement, do not tune
-to a memory). Wipeout HD Fury EU (`hdfury-ps3-eu-dec.iso`, two update archives mounted),
-`Data\Environments\Modesto_Heights\track_reversed.vex`. The debug readout at the spot:
-
-```
-tick 1020  speed 138.35  grounded 1.0  spline 14.71  height 3.69  at [741.7, 61.9, -120.9]
-```
-
-The race's loader lines (`~/.local/state/oag/logs/oag-game.log`, 08:23:35):
-- `track_reversed.vex`: 326 of 334 mesh nodes drawn from the `.rcsmodel` (900,963 triangles),
-  **8 addressed no chunk**;
-- 875 material slots; 277 albedo + 122 lightmap textures, 394 block-compressed.
+Measured 2026-11-12 on a pair (ours against RPCS3 at the maintainer's spot, two boots), written up in
+`docs/formats/rcsmaterial.md`, "Two surfaces the maintainer saw wrong". Not reversed-only: forward `track.vex` carries the same
+family as slot 551, and the 8 chunk-less nodes and 21 unresolved materials are the same on both directions.
 
 ## Open
 
-- Which surface is wrong at that position, and how (wrong texture, wrong UV set, wrong
-  lightmap, missing node), is not known. No RPCS3 pair of the spot exists.
+- Surface: reversed slot 550, `materials_reversed/uvdistortion_diff_vertexcolplusoverlay.rcsmaterial`, pictures
+  `and_ossego` (unit 2), `and_tunnelscreens_small` (unit 1), `and_line_rgb_clouds_alpha` (unit 0). Top band over grey 200:
+  original 0.1 to 0.3 %, ours 8.5 % (0.3 % with the slot skipped). Cause, confidence 70: ours binds the white Ossego logo as the
+  diffuse; the program (`fp` block `0x2ad0`) uses it only inside an overlay of a dark teal cloud term.
+- The unread values: unit 0's UV distortion (parameters `d0989794`, `c0594d0e`, `fe619466`, `96e30da5`, `2bdce348`) and
+  the overlay colour `961662ae`.
 
 ## Next Steps
 
-1. Pair the spot: our frame at tick 1020 on Modesto reversed (same craft and team as the
-   capture, headless `--screenshot`) against RPCS3 at the same place (`Write Color Buffers: true`
-   in both configs). Name the surface and its material/texture entry.
-2. Check whether the eight nodes that address no chunk are at that spot, and whether the same
-   surface is right on Modesto forward (`track.vex`): a reversed-only fault points at the
-   reversed scene's own node or material table.
-3. Cross-check Omega and 2048, which re-ship Modesto (CLAUDE.md lineage rule).
+1. Give the `uvdistortion_*` family (8 slots per direction on Modesto; Amphiseum carries `...plusoverlay` too) its own reading in `mesh::rcs::skin`: output =
+   `vertex colour x tunnelscreens.rgb x light + overlay(teal x clouds x screens.alpha, ossego)`.
+2. Re-render the pair at `--pose=729.72,58.95,-119.54` and compare the top-band boxes (target: original 0.1 to 0.3 % over
+   grey 200). Check the forward circuit's slot 551 and `uvdistortion_diff_vertexcol` slots (464, 467, 472, 486, 527, 539) do not move.
+3. Omega (`data02.psarc`, Modesto `uvdistortion_*`) and 2048 (`dlc2.psarc`, the `...bloom` variant) ship the family: checked, applies, not wired; render ours on each at the spot.

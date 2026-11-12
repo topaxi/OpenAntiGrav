@@ -89,8 +89,8 @@ without it `0.5788, 0.3356, 0.1948, 0.1131, 0.0657`. So Pulse's `Body_Integrate`
 [rigid-body.md](../ghidra/functions/psp-pulse-usa/rigid-body.md)) is live in the original at
 about `0.01` (confidence **85**: the difference is five times the spread of the two clean runs,
 and the two noisier runs sit on the same side). It lowers the damped frequency by `0.01 %`, so
-it is no part of the old frequency gap. Pulse still flies `BodyDamping::NONE`, for the reason
-[body-damping.md](body-damping.md) gives ("Why Pulse does not fly it yet").
+it is no part of the old frequency gap. `Laws::PULSE` flies it
+([body-damping.md](body-damping.md)).
 
 ## Open
 

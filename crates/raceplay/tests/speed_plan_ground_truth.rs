@@ -17,7 +17,7 @@
 //! times `1 + eps`). A single build is a coin on the circuits whose
 //! verification turns on a landing (`06_Track`'s gap at 1196-1200).
 //!
-//! All 96 verify, each under every offset of `perturb::BOUND_OFFSETS` and
+//! All 96 but `06_Track` RAPIER ([`NOT_CLEAN`]) verify, each under every offset of `perturb::BOUND_OFFSETS` and
 //! `perturb::HELD_OUT` (`docs/gameplay/ai.md`, "Plans that do not verify").
 
 use std::path::PathBuf;
@@ -28,9 +28,15 @@ use oag_raceplay::catalogue;
 use crate::perturb;
 
 /// `(layout, class)` pairs whose plan does not verify clean, and why each is
-/// believed to be so: none. A row that joins it is named on
+/// believed to be so. A row that joins it is named on
 /// `docs/gameplay/ai.md`'s speed-plan section.
-const NOT_CLEAN: &[(&str, &str)] = &[];
+const NOT_CLEAN: &[(&str, &str)] = &[
+    // The damped landing coin after 06's gap at 1196-1200: with Pulse's body damping the
+    // verification meets the walls at 1232-1242 on 6 of 17 offsets (2 of 17 undamped), which
+    // stay unresolved in clean builds either way (`docs/gameplay/ai.md`, "06_Track RAPIER with
+    // the body damping").
+    ("06_Track", "RAPIER"),
+];
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")

@@ -46,8 +46,9 @@ fn fold(hashes: &[u64]) -> u64 {
 }
 
 /// The fixture race's 600 tick hashes, folded. Recorded from the build **without**
-/// the `extensions` feature on 2026-10-29; the build with it must reproduce it.
-const VANILLA_FOLD: u64 = 0x3ba5_d33c_20ee_ca59;
+/// the `extensions` feature; the build with it must reproduce it. Moved with Pulse's body
+/// damping (`docs/physics/body-damping.md`).
+const VANILLA_FOLD: u64 = 0x15a1_181e_789d_b931;
 
 #[test]
 fn a_vanilla_race_hashes_the_same_with_the_feature_on_or_off_and_builds_no_engine() {

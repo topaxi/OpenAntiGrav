@@ -30,6 +30,13 @@
 !/data/traces/talons-junction-time-trial-lap-omega.csv
 !/data/traces/talons-junction-clean-lap.csv
 !/data/traces/venom-straight.csv
+!/data/traces/dekonstruct-takeoff-line-130.csv
+!/data/traces/dekonstruct-takeoff-line-143.csv
+!/data/traces/dekonstruct-takeoff-line-144.csv
+!/data/traces/dekonstruct-takeoff-line-145.csv
+!/data/traces/dekonstruct-takeoff-line-146.csv
+!/data/traces/dekonstruct-takeoff-right6-130.csv
+!/data/traces/dekonstruct-takeoff-port-2652.csv
 
 # Belt-and-braces: even outside /data/, no game content may ever be committed.
 # These patterns exist so a stray copy in the wrong directory still gets caught.
