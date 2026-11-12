@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pulse]
-updated: 2026-11-11
-summary: "The cage test is wired (Pulse); next Cannon speed x2.7, track-up launch normal, own-craft box, Shuriken speed, floor arms"
+updated: 2026-11-12
+summary: "The cage test and the Cannon's muzzle speed are wired; next track-up launch normal, own-craft box, Shuriken speed, floor arms"
 size: S (50)
 difficulty: medium (55)
 ---
@@ -32,7 +32,7 @@ What is settled:
 
 ## Open
 
-Ranked by what a player sees. Item 2 is ready to wire; 3 to 6 are recovered laws with a
+Ranked by what a player sees. Item 4 is ready to wire; 3 to 6 are recovered laws with a
 smaller effect; 7 is what was not measured.
 
 1. ~~The cage test in the probe and the travel sweep (the report itself).~~ **Wired 2026-11-11**
@@ -40,11 +40,6 @@ smaller effect; 7 is what was not measured.
    wall end carries `blast: true` while its cage end spends none (the `0x14` teardown reaches the
    explosion and no damage); no capture has produced a Missile's sweep `4`; `CageEffect_Spawn` on a
    projectile's cage hit is not drawn.
-2. **The Cannon's muzzle speed is 2.7 times too low** (maintainer's "double check the cannon").
-   `Cannon_Init` writes `velocity = row2 * (craft km/h + 500)` with the row 0.75 long and **no
-   divide by 3.6**: 750.60 units/s measured at a craft speed of 139.111 units/s (stored speed
-   1000.801, rows 0.7500); `cannon::launch` flies `(craft km/h + 500) / 3.6` = 278.0. Confidence 92,
-   one shot at one speed.
 3. **The first probes of a projectile miss on the firing craft's own box collider**, not on an age.
    The query answers `0x7f` when the mesh raycast's nearest hit is a craft box (kind `3`, no
    collider skipped). 28 live probe records. `plasma::UNPINNED_SECONDS` (0.04 s, chosen) stands in
@@ -90,20 +85,27 @@ smaller effect; 7 is what was not measured.
   Shuriken test re-seeds each update from the original's state because its speed (item 5) drifts
   a chain off the kerb. `rocket_floor_trace` Pulse `07`/`10`: "expired" 14 and 7 to 0.
 
+- **The Cannon's muzzle speed** (2026-11-12, `projectile-cage`): `cannon::launch` flies
+  `(craft km/h + 500) * 0.75` units/s (`TARGET_GLOBAL_SCALE`), 750.60 at 139.111 units/s and 375.0
+  parked; HD, 2048 and Omega share it (I:Pulse). `cannon_tilt_ground_truth` skips a round whose
+  first sweep already glanced the track (a step is now 6 to 13 units; 12 of 237 on Pulse, 0 on HD, and
+  the test fails past a tenth). `vita_2048_original_ai_ground_truth::the_field_finishes_tower` took the
+  field's rounds harder: 9 of 45 runs (nine offsets by five scales) miss the 300 s limit with this speed
+  against 6 of 45 with the old one, always slots 1 and 2 on lap 3 behind a slowed field, so its bar is two
+  of five scales (a 20 % miss rate fails that under 1 % of the time). A craft ending at 0.0 shield is a
+  destroyed one and passes. The draw (`cannon_quad_vertices`) streaks the round between its previous
+  and new position, as `Cannon_BuildBoltList` does, so the bolt is 2.7 times longer. Still open: a second speed
+  from the original (`psp-projectile-sweeps.py --player-fire-frame 120 cannon` from a parked
+  craft; the law predicts 375.0).
+
 ## Next Steps
 
-1. **Wire item 2**: `cannon::launch` speed `(craft km/h + BASE_SPEED_KMH) * 0.75` units/s (the 0.75
-   is the craft's display scale, the same source as `rocket::LAUNCH_SPEED_SCALE`). Test: a craft at
-   139.111 units/s gives 750.60; parked gives 375.0. It moves every Cannon test and the AI's Cannon
-   use; HD shares the code and inherits it (its own `Cannon_Init` is unread). Worth one more
-   capture first: `psp-projectile-sweeps.py --player-fire-frame 120 cannon` from a parked craft
-   (the Talon's Junction grid state parks against a wall) and read `|velocity|` and `+0xdc`.
-2. Item 4 next (small, one field): the craft's located track sample is already what the mag hold
+1. Item 4 next (small, one field): the craft's located track sample is already what the mag hold
    reads; the launch needs its `down`. Expected: on Outpost 7's ramp (sample 186) the carried
    normal at launch is `(0, 1, 0)` where the craft's up is `(-0.014, 0.996, -0.090)`.
-3. Item 3 needs the box pose read before it is wired: break at a probe's return with the box
+2. Item 3 needs the box pose read before it is wired: break at a probe's return with the box
    collider's own pose beside `body+0x30` (the collider is `world + index * 0xc + 0x2454`, the index
    is in the capture's `mesh_collider`), on a floor at two speeds and on the mag strip. Then a probe
    that meets any craft's box first reports nothing, and `plasma::UNPINNED_SECONDS` goes.
-4. Items 5 and 6 are one change each in `flight.rs`'s floor arms; the Shuriken capture's speed
+3. Items 5 and 6 are one change each in `flight.rs`'s floor arms; the Shuriken capture's speed
    series and the Missile's per-update errors on the linked pages are their tests.

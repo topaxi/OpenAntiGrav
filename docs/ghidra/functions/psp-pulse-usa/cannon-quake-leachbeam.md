@@ -3844,7 +3844,7 @@ and `row2` is the forward row of the muzzle anchor's matrix, copied in with the 
 scale still on it. Read off the round at its first update: `+0xdc` **1000.801** (the craft's
 139.111 units/s times 3.6, plus 500), the three rows each **0.7500** long, `|velocity|`
 **750.601**, which is their product. So a round leaves at `0.75 * (craft km/h + 500)` units/s,
-2.7 times what `cannon::launch` flies (`(craft km/h + 500) / 3.6`), and covers its one second
+2.7 times what `cannon::launch` then flew (`(craft km/h + 500) / 3.6`), and covers its one second
 of life in 750 units where ours covers 278; from a parked craft 375 against 138.9. Confidence
 **92**: the decompile has no divide, and the stored speed, the row length and the velocity agree to
 four digits on the shot; one shot at one speed (a second speed was not captured). `BASE_SPEED_KMH`'s
@@ -3854,8 +3854,12 @@ This answers two open items of the Cannon's flight: the round's path on a bank i
 read (82 becomes **92** for `Cannon_UpdateRound`'s move, sweep and reflect arms, now seen live),
 and code `4` in its wall arm is the cage, not a craft.
 
+**Wired** (`cannon::launch`: `(craft km/h + 500) * TARGET_GLOBAL_SCALE`; test
+`a_round_leaves_at_the_displayed_scale_times_craft_kmh_plus_the_base`, 750.60 at 139.111 units/s
+and 375.0 parked). The parked figure is a prediction of the law, not a capture: it stays open.
+
 **Cross-title.** HD authors a Cannon and runs the shared code: it inherits the flight
-(I:Pulse) and would inherit a speed fix; HD's own `Cannon_Init` is unread, so whether its round
+(I:Pulse) and the speed fix; HD's own `Cannon_Init` is unread, so whether its round
 carries the same undivided figure is **not checkable** here (no HD capture of a round's velocity).
 HD and Omega run no cage off the track header. Pure has no Cannon.
 
