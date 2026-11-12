@@ -100,4 +100,4 @@ gate. It is stored as the top-level `xp` key of the profile-wide `records.toml` 
 in a title-keyed row, so no cross-title store needed building. Awards come from 2048's
 `XPAwards.xml`, which Omega ships byte-identical. The rank tables are **not** identical: Omega's
 `XPRanks.xml` has half the thresholds, so each title ranks the shared total by its own table (the
-same total is a higher Omega rank). Whether the maintainer wants one rank table for both is open.
+same total is a higher Omega rank). Decided (maintainer, 2026-11-12): each title ranks by its own table.

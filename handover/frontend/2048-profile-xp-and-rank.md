@@ -15,9 +15,16 @@ it reads 0). `Store::bank_event_xp` is called at the 2048 finish site in `Sessio
 the completion award plus `Finished Nth`, in the event kind's column. `Store::rank_reveals` is
 the query the campaign map calls.
 
+## Decided
+
+- **Rank under a shared total**: each title ranks the shared XP total by its own `XPRanks.xml` (Omega's is half 2048's), so the same total is a higher rank in Omega (maintainer, 2026-11-12; built that way).
+
 ## Open
 
-- **Rank table under a shared total**: the total is shared (maintainer rule); Omega's `XPRanks.xml` is half 2048's, so the same total ranks higher in Omega. One table for both would be a maintainer call.
+- **Omega's dispatch** between its loyalty block and its XP block on `EndRace Results` is not traced (50): `FUN_0153ebf0` builds the loyalty ticker, `FUN_0149f910` the XP blocks; no caller found for either (`docs/ghidra/functions/ps4-omega-eu/xp-and-loyalty.md`).
+- The rank bar and `RaceXP` / `TotalXP` widgets are not drawn on 2048 or Omega.
+- The two rank trophies (rank 25 and 50, fired from `Profile_BankRaceXP`) are not awarded.
+- 2048 still pays inherited HD loyalty and Omega loyalty only; neither is replaced by XP.
 
 - **Reveal wiring**: `oag_ui::frontend::campaign_map` does not call `Store::rank_reveals` yet
   (owned by the lattice-wave lane). It needs `Ranks` from `oag_2048::campaign::xp_tables` and
@@ -41,4 +48,4 @@ the query the campaign map calls.
 
 1. Map: `Store::rank_reveals(&ranks, event.rank_required)` for the hidden spots' tap reveal.
 2. In-race awards: add trigger sites in the tally, summed into `bank_event_xp`'s award.
-3. Omega: carry `xp_awards` / `xp_column` in its event launch.
+3. Omega: find the end-of-race function that banks the XP total (xref the rank-table global the loader fills) and diff its caller against `Race_ComputeLoyaltyAward`'s callers; then carry `xp_awards` / `xp_column` in its event launch.
