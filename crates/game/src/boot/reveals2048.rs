@@ -28,7 +28,7 @@ pub fn refresh(
         return;
     };
     let mut archives = opened.archives;
-    let ranks = oag_2048::campaign::xp_tables(&mut archives).map(|(_, ranks)| ranks);
+    let ranks = super::campaign2048::xp_ranks(&mut archives);
     frontend.refresh_campaign_reveals(|event| {
         if records.campaign_found(campaign_title, &event.name) {
             Reveal::Found
