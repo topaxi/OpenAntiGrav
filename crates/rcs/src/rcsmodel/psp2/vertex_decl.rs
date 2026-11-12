@@ -88,6 +88,9 @@ pub const VERTEX_COLOUR1_HASH: u32 = 0x7493_d450;
 /// `~crc32("uv1_uvDirt")`: four halves, the tiling pair in `.xy` and the dirt pair in `.zw`. The
 /// vertex input of Omega's `tarmac_*` road programs, which name no `Uv1`.
 pub const UV1_UVDIRT_HASH: u32 = 0x273a_b13e;
+/// `~crc32("uvMarkings")`: two halves, the road's decal atlas pair, a unique unwrap over the
+/// whole road. The second vertex input of Omega's `tarmac_*` road programs.
+pub const UV_MARKINGS_HASH: u32 = 0x5f2a_9ab4;
 /// `~crc32("lightmapUV")`.
 pub const LIGHTMAP_HASH: u32 = 0x26a7_b665;
 /// `~crc32("NOVAColor")`: the baked per-vertex light of a Vita circuit's vertex-lit surfaces, four
@@ -208,11 +211,19 @@ impl VertexDecl {
     /// The tiling pair of a road declaration that carries [`UV1_UVDIRT_HASH`] (four halves of
     /// the container's half type): its `.xy`, which is what the first two components at the
     /// attribute's own offset are. Not the declaration's lower-case `uv1` entry, which sits at
-    /// the dirt pair's offset.
+    /// the dirt pair's offset. The dirt pair is the same attribute's `.zw`, four bytes on.
     #[must_use]
     pub fn uv_dirt_tiling(&self, half: u8) -> Option<&Attribute> {
         self.attribute(UV1_UVDIRT_HASH)
             .filter(|a| a.components == 4 && a.gxm_type == half)
+    }
+
+    /// `uvMarkings`, a half pair. Only sound on a declaration reached through the record's own
+    /// pointer.
+    #[must_use]
+    pub fn markings_texcoord(&self, half: u8) -> Option<&Attribute> {
+        self.attribute(UV_MARKINGS_HASH)
+            .filter(|a| a.components == 2 && a.gxm_type == half)
     }
 
     /// The diffuse coordinate of a declaration known to be **this submesh's
@@ -361,6 +372,25 @@ mod tests {
     #[test]
     fn the_uv1_uvdirt_constant_is_the_hash_of_its_name() {
         assert_eq!(UV1_UVDIRT_HASH, crate::rcsmaterial::name_hash("uv1_uvDirt"));
+    }
+
+    #[test]
+    fn the_uv_markings_constant_is_the_hash_of_its_name() {
+        assert_eq!(
+            UV_MARKINGS_HASH,
+            crate::rcsmaterial::name_hash("uvMarkings")
+        );
+    }
+
+    #[test]
+    fn a_road_declaration_names_its_markings_pair_at_20_and_its_dirt_pair_at_32() {
+        let decl = arena_road();
+        assert_eq!(decl.markings_texcoord(PS4_HALF2).unwrap().offset, 20);
+        let dirt = decl.uv_dirt_tiling(PS4_HALF2).unwrap();
+        assert_eq!(dirt.offset + 4, 32, "the dirt pair is the second half pair");
+        let mut other = arena_road();
+        other.attributes[2] = attr(UV_MARKINGS_HASH, 2, PS4_FLOAT2, 20);
+        assert!(other.markings_texcoord(PS4_HALF2).is_none());
     }
 
     #[test]

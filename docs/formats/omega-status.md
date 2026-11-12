@@ -1543,9 +1543,8 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   park, cathedral, subway, arena, bridge; not altima, not sol) name `uv1_uvDirt` and no `Uv1`
   (`crates/rcs/examples/psp2_uv_census.rs`); Omega's HD-era circuits do not. Subway's frame moves
   with the probe (RMSE 0.073 between the two renders) toward the original's reddish rails;
-  Mall's barely (0.013), Square's not at all (its road is another family, below). Which pair the
-  diffuse, dirt and markings samplers take is read off the pixel programs' names only
-  (`DiffuseAlphaMapSampler`, `DirtSampler`, `MarkingsSampler`), not off a decoded program.
+  Mall's barely (0.013), Square's not at all (its road is another family, below). The pixel
+  program's combine is read in "The `tarmac_*` combine" below.
   2048: **checked, differs** - none of 2048's arena, square, altima or mall materials is a
   `tarmac_*` family; its roads name `Uv1`, which is why 2048's own arena draws a normal road.
   **Wired** (2026-11-12, `omega-tarmac-uv`): `VertexDecl::own_diffuse_texcoord` takes
@@ -1567,12 +1566,68 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   0.216; mean RGB of three road boxes (1920 x 1080 pixels; left of the craft 280,500 340x180,
   right 1350,560 400x200, ahead 720,330 400x160): original (86,122,114) (131,138,128)
   (124,132,123), before (29,44,39) (163,172,166) (66,85,77), after (74,115,108) (139,147,137)
-  (95,129,120). The road is grey asphalt with the kerb line and dashes. Still open: the markings
-  and dirt sets (`uvMarkings`, `uv1_uvDirt.zw`) are not wired, so the decals and dirt splat are
-  not drawn.
+  (95,129,120). The road is grey asphalt with the kerb line and dashes. The markings and dirt
+  layers are wired by `omega-road-markings` (next entry).
   2048: **checked, differs, and the ground truth is unchanged**: the same census finds 0
   `uv1_uvDirt` submeshes on every Vita archive (base, dlc1, dlc2, both patch archives) and every
   Vita pin, `empire_climb_is_pinned`'s `own_fallback` 4,761 included, passes unchanged.
+- **The `tarmac_*` pixel programs combine four pictures: diffuse, then dirt, then markings, plus an
+  emissive** (`omega-road-markings`, 2026-11-12, confidence 85). Read from decoded GCN
+  (`gcn_dump <data00.psarc | data05.psarc> data/environments2048/shared/objectlibrary/materials/tarmac_markings_dirt_markingsnormal_emis.rcsmaterial --at 0x2e44`,
+  which now also prints `sample @<offset> reads API slot <n>` from `Program::sampled_slots`, the
+  usage-record placement `signed_textures` uses). Vertex program `@0x29c4` (60 instructions) writes
+  `param2 = uvMarkings`, `param3 = uv1_uvDirt.xy`, `param4 = uv1_uvDirt.zw`; the pixel program's
+  `attr1`, `attr2`, `attr3` are those three. The unlit program `@0x2e44` (86 instructions in `data00`,
+  94 in the patch `data05`; the combine is identical, the patch adds a `max(w, 0.5)` clamp on the
+  fade divide) samples API slot 0 (`DiffuseAlphaMap`) on `attr2.xy`, slot 2 (`Dirt`) on `attr3.xy`,
+  slot 1 (`Markings`) on `attr1.xy`, slot 3 (`EmissiveTexture`) on `attr2.xy`, and computes
+  `c = diffuse.rgb; c += dirt.a * (dirt.rgb - c); c += markings.a * (markings.rgb - c);
+  out = fog(emissive.rgb + constantAmbientColour * c)`. The lit programs (`@0x3f44`, 200
+  instructions in `data00`) take the same three coordinate sets for their sample (`attr2` normal and
+  diffuse and emissive, `attr1` markings and `MarkingsNormal`, `attr3` dirt), run the same two lerps
+  over the diffuse rgb in the same order (dirt first, markings on top, each weighted by its own
+  alpha), and use the diffuse alpha and the layers' alphas only to weight specular
+  (`MarkingsSpec`), which this reader does not draw. Sibling `tarmac_markings_dirt_markingsnormal`
+  (unlit 83 instructions) samples the same three slots without the emissive; `tarmac_dirt` samples
+  slots 0 and 1 (`Dirt`) only; `tarmac_dirt_emissive` adds the emissive. Their combines were read
+  by sample order and slot only, not instruction by instruction.
+  **Wired** (`omega-road-markings`, 2026-11-12): `oag_mesh::mesh::rcs::psp2::tarmac` admits
+  `tarmac_markings_dirt_markingsnormal` and `_emis` by name and by both samplers (`Markings`
+  `0x4a5bd928`, `Dirt` `0xc7aab177`); `SubMesh::markings_texcoords` / `dirt_texcoords` read
+  `uvMarkings` (offset 20) and `uv1_uvDirt.zw` (offset 32 on arena) from the record's own
+  declaration (census: all 661 submeshes agree with a fresh decode). The pictures ride the fifth
+  (markings) and sixth (dirt) bindings, the `EmissiveTexture` the fourth (added after the light at
+  the tiling pair, weighted by the glow entry's tint `x`), a glow-table entry of mode
+  `PROGRAM_TARMAC` (14) selects the combine in `shade.wesl`; the markings pair rides `texcoord2`
+  and the dirt pair `colour.xy` (`colour.zw` = 1, tint forced white on the mode) because the
+  vertex has no fourth pair. **Not wired:** `tarmac_dirt` and `tarmac_dirt_emissive`, the specular
+  weighting by `MarkingsSpec`, the roads' normal-map blend with `MarkingsNormal`.
+  **Result on `arena-2048`** (private copy of the pair, recorded flags, 1920 x 1080; mean RGB of
+  the three boxes): original (86,122,114) (131,138,128) (124,132,123); before this change
+  (74,115,108) (139,147,137) (95,129,120); after (72,111,105) (117,125,118) (83,114,107). The
+  dirt splat adds the crack and stain structure the original shows, but the road is **darker than
+  the original** in the right and ahead boxes (right was 8 over, is now 13 under; ahead was 29 under, is 41
+  under) and whole-frame RMSE moves 0.216 to 0.218: either the dirt's weight is too strong in our
+  domain (the splat is grey 33 to 132 with alpha mean 96/255, mixed here on gamma values) or the
+  original's diffuse is brighter than ours before the layers. **Isolated** (a temporary per-layer
+  weight and a linear-domain switch, not kept): dirt alone gives the whole move (boxes (72,111,105)
+  (117,125,118) (83,114,107)); markings alone change nothing in these three boxes (no painted symbol
+  there); dirt mixed in the linear domain gives (73,113,106) (122,130,121) (85,116,109), still under
+  the original's (86,122,114) (131,138,128) (124,132,123). **The programs do not square or root the
+  taps**: the unlit combine is plain `v_sub`/`v_mac` lerps on the sampled rgb (read in full, see
+  above), so a gamma-domain blend is not what the program asks; whether the hardware decodes the
+  `.gnf` as sRGB before the lerp is not read. The box 720,330 was already 29 red under before the
+  layers, so part of the gap is not the layers.
+  **Shipped state:** the markings layer and the emissive are on (neutral where there is no decal);
+  the **dirt layer is off by default**, switched on with `OAG_TARMAC_DIRT=1`
+  (`psp2::tarmac::DIRT_SWITCH`, the entry's tint `y` read by `shade.wesl`). **Open, precisely:** with
+  dirt on, arena's right and ahead boxes read darker than the original even with a linear-domain
+  mix. Next read: whether the hardware decodes the `.gnf` dirt and diffuse textures as sRGB before
+  the lerp (the T# format's number type, the sampler state), then the ahead box's pre-existing
+  29-red gap (box 720,330 reads (95,129,120) before any layer against the original's
+  (124,132,123)). The painted symbols (`KEEP CLEAR`,
+  arrows, dashes, in the atlas) are not seen in this frame. Confidence in the combine 85; in the
+  rendered match, none: not isolated further.
 - **Unity Square's road is not black; what it lacks is the panel emissive and the displacement**
   (`omega-arena-square`, 2026-11-12, confidence 55). Square's road is
   `road_alphaspec_normal_emissive_panelmap1` (and `_mask`), the family of Altima's road above; its
