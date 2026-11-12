@@ -757,8 +757,14 @@ fn moving_a_ribbon_rigidly_turns_its_samples_about_the_pivot() {
     e.move_rigidly(turn, Vec3::new(10.0, 0.0, 0.0), Vec3::new(0.0, 5.0, 0.0));
     let (head, back) = e.newest_trail_sample().expect("a head");
     let at = e.trail_samples_kept() as f32;
-    assert!((head - Vec3::new(0.0, 5.0, -at)).length() < 1e-4, "{head:?}");
+    assert!(
+        (head - Vec3::new(0.0, 5.0, -at)).length() < 1e-4,
+        "{head:?}"
+    );
     assert!((back - turn * Vec3::X).length() < 1e-5, "{back:?}");
     let (tail, _) = e.trail_dropped.expect("the tail a full ring dropped");
-    assert!((tail - Vec3::new(0.0, 5.0, 0.0)).length() < 1e-4, "{tail:?}");
+    assert!(
+        (tail - Vec3::new(0.0, 5.0, 0.0)).length() < 1e-4,
+        "{tail:?}"
+    );
 }
