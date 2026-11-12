@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [2048, omega]
-updated: 2026-11-11
+updated: 2026-11-12
 summary: "2048 grid pairs: no frame term (fog, bloom, exposure, lighting) owns the dark bias; the bottom third is the craft box (pose, ring, light)"
 difficulty: medium (50)
 ---
@@ -24,6 +24,13 @@ of ours accounts for most of the dark bias on `2048-empire-climb-grid`, `2048-ma
   152.6 against 143.1 (not darker: the gap is the road glow, ring and pose). Ambient x3 to x4 on every no-lightmap material
   closes 62 / 69 / 46 % of the bottom third and lowers impact 10 / 14 / 9 % (x4: 9 / 18 / 3 %), but overshoots Empire Climb's
   paint (192.9) and white panels and lifts Vineta K's top third by 9.7: a **probe, not a law**.
+- **Checked 2026-11-12 against the substituted-pair finding (`vita-2048-race-pairs`): holds, with one correction to what "the craft" means.** `2048-dlc-vineta-k-grid` is
+  the authored HD Campaign node (`grid0_3_1`), never substituted, and a second grab of it is 0.063 RMSE from the stored one, so its numbers stand. What the three pairs
+  are not is one craft: Empire Climb and Queens Mall fly 2048's own `feisar2048` (yellow), Vineta K the HD-derived Feisar HD, so the three hull-box figures above
+  (-15.9, -9.2, -5.0) are two crafts' paint and light and are not pooled into one term. Five authored pairs on other circuits (Talons Junction, Modesto Heights, Anulpha Pass, Tech
+  De Ra, Amphiseum) are now clean Feisar HD frames, and the substituted ones render the same as the authored ones (RMSE 0.055 to 0.065 between originals), so
+  the Feisar HD hull's luma gap can be read per circuit off them. The scout's sign flip between circuits fits one craft under each circuit's lighting, not a
+  second craft (ours draws the same `hdships` hull on all of them; the hull boxes were not measured here).
 - **The top and middle thirds' scenery is 10 to 15 luma dark** on Empire Climb and Vineta K, and no frame term closes it:
   lightmap scale x1.5 closes the middle and overshoots the bottom scenery by 15; the sun's lens flare and the haze round
   it are in the original's top third and absent in ours ([lens-flare.md](../../docs/rendering/lens-flare.md), 2048 not wired).
