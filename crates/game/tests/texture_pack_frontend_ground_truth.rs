@@ -336,7 +336,8 @@ fn report_with_a_mod_pack(image: &str) -> Option<Vec<String>> {
         enabled: ["ppsspp.pulse-pack".to_string()].into(),
         ..Default::default()
     };
-    let mods = Arc::new(oag_game::mods::Mods::load_from(&[base.clone()], &switches).unwrap());
+    let mods =
+        Arc::new(oag_game::mods::Mods::load_from(std::slice::from_ref(&base), &switches).unwrap());
     let options = boot::Options {
         source: image.display().to_string(),
         dlc: Vec::new(),

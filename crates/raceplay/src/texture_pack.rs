@@ -15,11 +15,14 @@ use oag_title::Title;
 /// What a [`Finder`] returns: each pack that is on, or why it would not open.
 pub type Packs = Vec<Result<Arc<Replacements>, String>>;
 
+/// The closure behind a [`Finder`].
+pub type FindPacks = dyn Fn(&Title, Platform) -> Packs + Send + Sync;
+
 /// Opens the packs that are on and made for `title` on `platform`, on the load thread: the pack
 /// list reads each pack's `textures.ini`, which a front end has no reason to do before a race is
 /// asked for. A PPSSPP pack is the PSP's, so on any other platform the answer is empty.
 #[derive(Clone)]
-pub struct Finder(pub Arc<dyn Fn(&Title, Platform) -> Packs + Send + Sync>);
+pub struct Finder(pub Arc<FindPacks>);
 
 impl std::fmt::Debug for Finder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
