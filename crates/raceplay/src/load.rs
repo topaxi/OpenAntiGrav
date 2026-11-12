@@ -1003,10 +1003,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.language.as_deref(),
         options,
         &track,
-        crate::hud::SplitViews {
-            count: options.views,
-            people: usize::from(options.people_flying()),
-        },
+        crate::hud::SplitViews::of(options),
         &mod_icons,
         &mut report,
     );
@@ -1202,7 +1199,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(not(feature = "view"))]
             sight: super::Sighting::without_view(
                 craft_of(&mut craft, &mut archives).layout.platform,
-                craft_title.hud_art,
+                craft_title,
+                &track,
             ),
             #[cfg(feature = "view")]
             magstrip_wake: magstrip_wake.anchors,

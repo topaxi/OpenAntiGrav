@@ -141,6 +141,16 @@ pub(super) struct SplitViews {
     pub(super) people: usize,
 }
 
+impl SplitViews {
+    /// The views and people a launch asks for.
+    pub(super) fn of(options: &Options) -> Self {
+        Self {
+            count: options.views,
+            people: usize::from(options.people_flying()),
+        }
+    }
+}
+
 /// Reads the HUD's layout, atlas, fonts and strings.
 ///
 /// Every piece degrades on its own and says so. The report matters more here than

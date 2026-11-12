@@ -511,10 +511,7 @@ impl Session {
                 }
             }
         };
-        let laps = {
-            let pending = self.pending_race();
-            catalogue::race_laps(pending.mode, pending.class.trim())
-        };
+        let pending = self.pending_race();
         let base = self
             .shell
             .as_ref()
@@ -543,7 +540,17 @@ impl Session {
             previews,
             opening,
         );
-        picker.laps = laps;
+        if let Some(shell) = &self.shell {
+            picker.laps = picker
+                .model
+                .entries()
+                .iter()
+                .map(|entry| {
+                    let class = pending.class.trim();
+                    catalogue::race_laps_on(shell.title, &entry.id, pending.mode, class)
+                })
+                .collect();
+        }
         picker.seat = seat;
         picker.refresh_preview(&self.gpu);
         picker.refresh_info();

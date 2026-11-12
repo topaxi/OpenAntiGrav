@@ -637,11 +637,19 @@ fn a_2048_era_circuit_draws_2048s_hud_and_an_hd_era_one_keeps_hds() {
         "the set is authored for 960x544"
     );
     assert!(lineage.hud.art.total_time_hundredths && lineage.hud.art.shield_percent);
+    // The build without a view (`oag-server`) must lock on in the grid the client does.
+    let without_view = |track: &str| {
+        oag_raceplay::Sighting::without_view(oag_disc::Platform::Ps4, oag_omega::TITLE, track)
+    };
+    assert_eq!(lineage.setup.sight, without_view(ALTIMA_2048));
+    assert_eq!(lineage.setup.sight.lock_screen, [960.0, 544.0]);
 
     let hd = load_on(TECH_DE_RA, "venom");
     let layout = hd.hud.layout.as_ref().expect("the layout composes");
     assert!(layout.label("RaceXPTxt").is_none());
     assert_eq!(hd.hud.art, oag_omega::TITLE.hud_art);
+    assert_eq!(hd.setup.sight, without_view(TECH_DE_RA));
+    assert_eq!(hd.setup.sight.lock_screen, [1920.0, 1080.0]);
     assert_eq!(
         hd.hud.space,
         oag_display::space::Space::of(oag_disc::Platform::Ps4)

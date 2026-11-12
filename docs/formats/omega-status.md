@@ -208,6 +208,8 @@ with the same count.
   The table is `[4, 4, 5, 5]`, A+ **chosen** equal to A. Single race only; the Time Trial and Speed Lap
   counts of 2048 mode are not measured. The class mapping C, B, A, A+ to the ladder's venom, flash, rapier,
   phantom is the ladder's order, assumed.
+- **Sway.** `ART_2048` inherits Omega's `sway` (`x_per_lean: -15`, itself HD's literal), which now acts on the 960-wide grid, so the slide on screen is twice HD's; 2048's own art records the same caveat. Unread.
+- **Sight.** The lock-on grid is simulation state: a 2048-era circuit locks in the Vita's 960x544 (the HUD's authored grid), in the view build and in `Sighting::without_view` (the `oag-server` build) alike, asserted in the ground-truth test.
 - **Not carried over from 2048's art**: `pickup_icon_uv` (the rectangles are in the Vita atlas's pixels and
   Omega's `.gnf` is repainted) and the Pilot Assist icon, so a held weapon's icon and the assist plate draw
   nothing in 2048 mode yet. The Zone and Time Trial roots are wired by name, not looked at.

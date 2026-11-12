@@ -417,10 +417,11 @@ pub(crate) struct PickerStage {
     /// anything - and whether the renderer has been handed it yet.
     sheet: Option<Sheet>,
     sheet_uploaded: bool,
-    /// The race's lap count, for HD's `RACE DISTANCE` row - the length
-    /// times this. Set by the caller after [`Self::new`]; `None` when the
-    /// race has no lap target, which is the row's `Infinity` glyph.
-    pub(crate) laps: Option<u32>,
+    /// The race's lap count on each circuit, in entry order, for HD's `RACE
+    /// DISTANCE` row - the length times this. Set by the caller after
+    /// [`Self::new`]; `None` when the race has no lap target, which is the
+    /// row's `Infinity` glyph.
+    pub(crate) laps: Vec<Option<u32>>,
     /// `(seat, seated)` when this is one seat's Ship Select on a split-screen
     /// race box, which reads that seat's device alone - see
     /// `crate::session::picker`'s `seat` module. `None` is every ordinary screen.
@@ -465,7 +466,7 @@ impl PickerStage {
             base,
             sheet: None,
             sheet_uploaded: false,
-            laps: None,
+            laps: Vec::new(),
             seat: None,
         }
     }
@@ -656,7 +657,7 @@ impl PickerStage {
         drop(measured);
         for (index, length) in known {
             if self.layout.hd_track.is_some() {
-                let [track, race] = picker::hd::track::length_rows(length, self.laps);
+                let [track, race] = picker::hd::track::length_rows(length, self.laps.get(index).copied().flatten());
                 self.model.set_track_info(index, 0, track);
                 self.model.set_track_info(index, 1, race);
             } else {
