@@ -90,6 +90,12 @@ def serve(args):
                         rw.seek(addr + HOST_OFFSET)
                         rw.write(data)
                     conn.sendall(b"OK\n")
+                elif op == "F":
+                    conn.sendall(("OK " + " ".join("%x" % a for a in find_guest(pid, bytes.fromhex(line[1]), int(line[2]))) + "\n").encode())
+                elif op == "K":
+                    conn.sendall(("OK " + json.dumps(unlock_cells(pid, line[1].split(","), line[2] == "1")) + "\n").encode())
+                elif op == "N":
+                    conn.sendall(("OK " + json.dumps(rename_cells(pid, line[1], line[2])) + "\n").encode())
                 elif op == "STOP":
                     os.kill(pid, signal.SIGSTOP)
                     conn.sendall(b"OK\n")
@@ -115,6 +121,86 @@ def serve(args):
             except OSError as error:
                 mem = None
                 conn.sendall(("ERR %s\n" % error).encode())
+
+
+def find_guest(pid, pattern, limit):
+    """Guest addresses where `pattern` occurs in the readable, writable mappings of the guest's 4 GiB window (at most `limit`)."""
+    found = []
+    with open("/proc/%d/mem" % pid, "rb", buffering=0) as mem:
+        for line in open("/proc/%d/maps" % pid):
+            span, perms = line.split()[:2]
+            lo, hi = (int(x, 16) for x in span.split("-"))
+            if perms[:2] != "rw" or lo < HOST_OFFSET or lo >= HOST_OFFSET + 0x100000000:
+                continue
+            try:
+                mem.seek(lo)
+                data = mem.read(hi - lo)
+            except OSError:
+                continue
+            at = data.find(pattern)
+            while at >= 0 and len(found) < limit:
+                found.append(lo + at - HOST_OFFSET)
+                at = data.find(pattern, at + 1)
+    return found
+
+
+def unlock_cells(pid, tracks, write):
+    """The 2048 grid cell records (`FUN_810bbfce`, EU v1.04: `Locked` byte at +0xe9, the track name NUL-padded in the 0x18 bytes at +0xea,
+    another NUL-padded string at +0x102) whose track is one of `tracks`. With `write`, a set `Locked` byte is cleared. Returns
+    `{track: [[guest address of the Locked byte, byte before the write]]}`."""
+    found = {t: [] for t in tracks}
+    with open("/proc/%d/mem" % pid, "r+b", buffering=0) as mem:
+        for line in open("/proc/%d/maps" % pid):
+            span, perms = line.split()[:2]
+            lo, hi = (int(x, 16) for x in span.split("-"))
+            if perms[:2] != "rw" or lo < HOST_OFFSET or lo >= HOST_OFFSET + 0x100000000:
+                continue
+            try:
+                mem.seek(lo)
+                data = mem.read(hi - lo)
+            except OSError:
+                continue
+            for t in tracks:
+                pat = t.encode() + b"\0"
+                at = data.find(pat)
+                while at > 0:
+                    field = data[at:at + 0x18]
+                    if len(field) == 0x18 and not any(field[len(t):]) and data[at - 1] in (0, 1):
+                        found[t].append([lo + at - 1 - HOST_OFFSET, data[at - 1]])
+                        if write and data[at - 1] == 1:
+                            mem.seek(lo + at - 1)
+                            mem.write(b"\0")
+                    at = data.find(pat, at + 1)
+    return found
+
+
+def rename_cells(pid, old, new):
+    """Rewrite the track name of every grid cell record (see `unlock_cells`) racing `old` to `new` (NUL padded to the record's 0x18 bytes),
+    so the cell, tapped on the map, races another circuit. Returns the guest addresses of the name fields written."""
+    if len(new) >= 0x18:
+        raise ValueError("track name longer than the record's field")
+    done = []
+    with open("/proc/%d/mem" % pid, "r+b", buffering=0) as mem:
+        for line in open("/proc/%d/maps" % pid):
+            span, perms = line.split()[:2]
+            lo, hi = (int(x, 16) for x in span.split("-"))
+            if perms[:2] != "rw" or lo < HOST_OFFSET or lo >= HOST_OFFSET + 0x100000000:
+                continue
+            try:
+                mem.seek(lo)
+                data = mem.read(hi - lo)
+            except OSError:
+                continue
+            pat = old.encode() + b"\0"
+            at = data.find(pat)
+            while at > 0:
+                field = data[at:at + 0x18]
+                if len(field) == 0x18 and not any(field[len(old):]) and data[at - 1] in (0, 1):
+                    mem.seek(lo + at)
+                    mem.write(new.encode().ljust(0x18, b"\0"))
+                    done.append(lo + at - HOST_OFFSET)
+                at = data.find(pat, at + 1)
+    return done
 
 
 def call(line):
@@ -334,6 +420,16 @@ def main():
     p = sub.add_parser("read")
     p.add_argument("addr")
     p.add_argument("length")
+    p = sub.add_parser("find", help="guest addresses of a byte pattern (hex, or text with --text) in writable memory")
+    p.add_argument("pattern")
+    p.add_argument("--text", action="store_true")
+    p.add_argument("--limit", type=int, default=100)
+    p = sub.add_parser("unlock", help="2048: list (or with --write clear) the Locked byte of the grid cell records racing these tracks")
+    p.add_argument("tracks", help="comma-separated names as the grids write them, e.g. Metropia,Anulpha_Pass,17_Track")
+    p.add_argument("--write", action="store_true")
+    p = sub.add_parser("rename-track", help="2048: make every grid cell record racing OLD race NEW (a map node then loads that circuit)")
+    p.add_argument("old")
+    p.add_argument("new")
     p = sub.add_parser("u32")
     p.add_argument("addr")
     p = sub.add_parser("write-f32", help="write one float, e.g. a 2048 event's m_skillScale")
@@ -358,6 +454,13 @@ def main():
         sys.exit(predict(args.log, args.skill))
     elif args.command == "read":
         print(read(int(args.addr, 0), int(args.length, 0)).hex())
+    elif args.command == "find":
+        pat = args.pattern.encode().hex() if args.text else args.pattern
+        print(call("F %s %d" % (pat, args.limit)))
+    elif args.command == "unlock":
+        print(call("K %s %d" % (args.tracks, int(args.write))))
+    elif args.command == "rename-track":
+        print(call("N %s %s" % (args.old, args.new)))
     elif args.command == "u32":
         print("0x%08x" % u32(int(args.addr, 0)))
     elif args.command == "write-f32":

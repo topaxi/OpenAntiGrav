@@ -376,7 +376,11 @@ def tap(display_num, x, y, hold_seconds=0.3):
     sits at the display's own origin.
     """
     env = {**os.environ, "DISPLAY": ":%d" % display_num}
-    subprocess.run(["xdotool", "mousemove", str(x), str(y), "mousedown", "1"], env=env, check=True)
+    # The pointer must already be at the spot when the button goes down: a `mousemove x y mousedown 1` in one command lands on
+    # the old position under load (measured 2026-11-12, `gallery-2048b`: the Game Mode tile ignored it, a move, 0.3 s, then the press opened it).
+    subprocess.run(["xdotool", "mousemove", str(x), str(y)], env=env, check=True)
+    time.sleep(0.3)
+    subprocess.run(["xdotool", "mousedown", "1"], env=env, check=True)
     time.sleep(hold_seconds)
     subprocess.run(["xdotool", "mouseup", "1"], env=env, check=True)
 

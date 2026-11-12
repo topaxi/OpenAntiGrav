@@ -348,7 +348,7 @@ texture. It answered "what makes the 2048 lattice about half ink" in one capture
 
 ## A fresh profile on a new machine (2026-11-11, `gallery-2048`)
 
-Set up and driven as far as the front end; **taps do not register until the firmware is installed** (below).
+Set up and driven as far as the front end; **taps do not register until the firmware's `vs0/` is in place** (below; resolved 2026-11-12, "Firmware that works").
 
 - **A persistent pref-path outside Vita3K's default**, `data/saves/2048/vita3k/` (the same shape as the other titles' saves): a copy of
   Vita3K's default `config.yml` with `pref-path` set there, `show-welcome: false`, `warn-missing-firmware: false`, plus the five
@@ -374,11 +374,28 @@ Set up and driven as far as the front end; **taps do not register until the firm
   (also missing: `libhttp.suprx`, `libscemp4.suprx`). Confidence 70 that the firmware (`PSVUPDAT.PUP`, installed with
   `vita3k --firmware <file>`, plus the font package) is what is missing, not yet tested: this machine has no `.pup` of the Vita's
   on disk, and Sony's update server answered a plain request with 403.
+- **Firmware that works (2026-11-12, `gallery-2048b`; this replaces the confidence-70 hypothesis above, now measured).** `vita3k --firmware
+  PSP2UPDAT-firmware.PUP` (the 128 MB file, firmware 0x3740000, build 571880, 22 entries) **installs nothing**: it logs "progress 100 %" in 0.9 s, creates no
+  `vs0/` or `os0/` file and no error line, at `log-level: 0` too. `--firmware PSP2UPDAT-fonts.PUP` (57 MB) does install (`sa0/data/font`, `libhwr`,
+  `pd0/`). The tree that works was copied from another machine's working Vita3K: `vs0/` (159 MB, with `vs0/sys/external/libsystemgesture.suprx` and
+  `libfiber.suprx`) and `os0/` (13 MB) into the pref-path. Then the log reads `Loading module "vs0:sys/external/libsystemgesture.suprx"` ... `module_start returned 0x0`,
+  and taps register: the Game Mode grid, the HD map, Home and Options open.
+- **A tap needs the pointer at the spot before the press.** `xdotool mousemove x y mousedown 1` in one command was ignored (three boots); `mousemove`, 0.3 s,
+  `mousedown`, the hold, `mouseup` works (`vita3k-drive.py tap`). The Game Mode tile's first tap selects it (orange), the second opens it.
+- **The guest hangs on about every second boot** (a frame frozen on "Sony Computer Entertainment presents" with the process at 60 % CPU, or on the Game Mode
+  grid at 0 %; no log line; the last error is `sceKernelTryLockLwMutex ... FAILED_TO_OWN`), also on an idle machine. `kill -9` by pid and boot again; a boot
+  that does not hang reaches the Game Mode grid in about 40 s. `scripts/vita-2048-pair.py --walk` stops with `STALLED` after `--boot-timeout`, and a
+  wrapper that runs it again is the way to batch (eleven pairs: five needed a second attempt, one five).
+- **`CameraP1` is on the options screen**: Home (top left `(38, 38)`), Options `(642, 260)`, the Camera page is the first; this profile reads **CLOSE**
+  (three pages, by the dots). Not changed.
+- **Guest memory, with `scripts/vita3k-mem.py`**: `find --text S` (guest addresses of a string in writable memory), `unlock TRACKS [--write]` and
+  `rename-track OLD NEW` over the 2048 grid cell records (`docs/tools/compare-page.md`, "Eleven pairs through a renamed grid cell"). One scan of the 330 MiB
+  guest takes under a second; the daemon (`serve`) must be Vita3K's parent.
 - **Two game windows**: `find_window` takes the first `PCS[AF]000` match, so a Vita3K left running (it ignores `SIGTERM`: `kill -9`
   by pid and check with `ps`) puts its window first, and `shot`/`key` then read and drive the old instance, which looks like a
   frozen game.
 - **`DATA.BIN`** (`ux0/user/00/savedata/PCSF00007/-AUTO-/`) has no readable strings (`strings -a` prints noise), so
-  `CameraP1` is not readable off the save; the options screen, or the rig's eye in guest memory, is.
+  `CameraP1` is not readable off the save; the options screen is (above).
 
 ## What a frame is, legally
 
