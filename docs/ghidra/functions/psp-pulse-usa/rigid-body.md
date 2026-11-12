@@ -111,7 +111,8 @@ against the `~53` that
 This is now confirmed on the PSP side at instruction level and not only inferred
 from the PS2 build.
 
-**Measured live on Wipeout HD, 2026-11-10; not flown on Pulse yet.** HD's `Body_Integrate`
+**Measured live on Wipeout HD, 2026-11-10; flown on Pulse since 2026-11-12
+([body-damping.md](../../../physics/body-damping.md)).** HD's `Body_Integrate`
 has the same two lines and its linear term reads `0.0100` off 203 frames
 ([body-damping.md](../ps3-hdfury-eu/body-damping.md)); the integrator takes the pair as
 `oag_physics::laws::BodyDamping`, per sub-step in this order. On Pulse itself, replaying

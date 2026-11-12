@@ -114,9 +114,9 @@ between the two runs' first thrust step.
   speed error over the capture falls from `3.88` to `1.25` units/s. So Pulse has it live as well
   as on paper. Since measured per frame on that capture as HD's was (`+0.00961` of `speed * dt`
   off, `-0.00043` on, confidence 90), with each moved test diagnosed, in
-  [body-damping.md](../../../physics/body-damping.md). It is not flown there yet: with it on,
-  de Konstruct Black's first jump falls short (same page, "Why Pulse does not fly it yet"), so
-  `oag_physics::laws::Laws::PULSE` carries `BodyDamping::NONE`.
+  [body-damping.md](../../../physics/body-damping.md). Flown since 2026-11-12
+  (`oag_physics::laws::Laws::PULSE`), after a player-input capture of de Konstruct Black's first
+  jump showed the original falls short where the damped craft does (same page).
 - **Pure: checked, applies, not wired.** Its constructor passes `0.01`, `0.01` and its
   `Body_Integrate` (`0x089345e8`) is Pulse's loop instruction for instruction
   ([pure-physics.md](../../../physics/pure-physics.md)); read, not measured live. Flown since
