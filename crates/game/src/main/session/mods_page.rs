@@ -76,12 +76,16 @@ impl Session {
     /// The ENABLED row moved to `on`: turns the selected mod on or off, saves, and
     /// rebuilds the menus with it. The built-in and a mod that never opened do not
     /// switch; their row holds one value.
+    ///
+    /// A texture pack adds no rows but changes the front end's faces, which are built with
+    /// the shell, so its switch reloads the shell ([`Session::resupply_language`], which
+    /// also builds the tree again) instead of only the menus.
     pub(crate) fn switch_selected_mod(&mut self, on: bool) {
         let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &self.stage) else {
             return;
         };
-        let Some((id, default_enabled)) = mods::selected(&stage.menu, &shell.mods)
-            .map(|mod_| (mod_.id.clone(), mod_.default_enabled))
+        let Some((id, default_enabled, texture_pack)) = mods::selected(&stage.menu, &shell.mods)
+            .map(|mod_| (mod_.id.clone(), mod_.default_enabled, mod_.texture_pack))
         else {
             return;
         };
@@ -93,7 +97,22 @@ impl Session {
         if let Err(e) = oag_game::settings::save(&self.settings) {
             error!("could not save settings: {e:#}");
         }
-        self.rebuild_menus(Some(&id));
+        if texture_pack {
+            self.resupply_language();
+            self.reselect_mod(&id);
+        } else {
+            self.rebuild_menus(Some(&id));
+        }
+    }
+
+    /// Puts the MOD row back on `id` after the menus were built again.
+    fn reselect_mod(&mut self, id: &str) {
+        let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &mut self.stage) else {
+            return;
+        };
+        stage.menu.seed(mods::SELECTED, &menu::Value::Text(id.to_string()));
+        mods::resupply_switch(&mut stage.menu, &shell.mods, &shell.strings);
+        stage.menu.settle();
     }
 
     /// Builds the tree, listing, campaigns and tracks again for the switches in

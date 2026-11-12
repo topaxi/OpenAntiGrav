@@ -19,7 +19,9 @@ impl Session {
     /// Reloads every disc-derived, language-scoped piece of the front end
     /// after a LANGUAGE row pick, instead of leaving the switch to sit until
     /// the next boot - see `main::session::apply::Session::apply_setting`'s
-    /// `"language"` arm, which is this function's one caller.
+    /// `"language"` arm. The MODS page calls it too when a texture pack is switched
+    /// ([`Session::switch_selected_mod`]): the faces are built with the shell, from the
+    /// packs the settings leave on.
     ///
     /// **Re-runs `boot::load_shell`, the exact call a fresh boot makes**,
     /// rather than re-deriving which fields the new language touches by
