@@ -483,8 +483,8 @@ pub fn load_shell(
     // Omega's faces are HD's at twice the pixel size; see
     // `oag_display::space::Space::font_texel_scale`. `1.0` for every other source.
     let texel_scale = oag_display::space::Space::font_texel_scale(archives.layout.platform);
-    // The pack that is on and names this disc is active for the faces below and nothing after
-    // them: it is switched off once they are built, so other art draws the disc's own.
+    // The pack that is on and names this disc is active for the faces and the sprite sheet
+    // below and nothing after them: it is switched off once they are built.
     let pack = fonts::engage_pack(front_end, options, &archives, &mut report);
     let font = load_font(
         &mut archives,
@@ -580,7 +580,6 @@ pub fn load_shell(
         title.prompts,
         &mut report,
     );
-    drop(pack);
     // A touch front end's screens author more than one role and this build
     // has one atlas; the ratio each face's line height stands to `Default`
     // is what keeps the others the right size. Not measured for the other
@@ -681,6 +680,7 @@ pub fn load_shell(
         front_end,
         &mut report,
     );
+    drop(pack);
     steps.lap("sprites");
     report.extend(archives.take_layer_report());
     // Which step the boot opens on, from this title's own chain. `--reel`

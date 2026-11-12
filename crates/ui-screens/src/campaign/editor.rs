@@ -217,12 +217,12 @@ pub fn draw_list(
                 if let Some(fill) = fill_sprite {
                     out.push(Draw::Sprite {
                         rect: [image.x, image.y, fill.1, fill.2],
-                        uv: [
-                            fill.0.x as f32,
-                            fill.0.y as f32,
+                        uv: fill.0.sheet_rect([
+                            0.0,
+                            0.0,
                             fill.0.width as f32,
                             fill.0.height as f32,
-                        ],
+                        ]),
                         color: argb_to_rgba(PLACED_HEX),
                     });
                 }

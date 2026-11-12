@@ -252,12 +252,7 @@ fn underline(
             numbers.underline_size.0 * sx,
             numbers.underline_size.1 * sy,
         ],
-        uv: [
-            cursor.x as f32,
-            cursor.y as f32,
-            cursor.width as f32,
-            cursor.height as f32,
-        ],
+        uv: cursor.sheet_rect([0.0, 0.0, cursor.width as f32, cursor.height as f32]),
         color: skin.normal(),
     });
 }

@@ -190,6 +190,65 @@ fn no_face_a_pack_draws_is_taller_or_wider_than_a_device_can_make() {
     }
 }
 
+const ASSETS: &str = r"Data\FE\Images\pulse_assets.mip";
+
+#[test]
+#[ignore = "needs pulse-psp-eu.chd and the Pulse pack"]
+fn a_pack_that_is_on_draws_the_front_ends_sheet_art_and_asks_for_the_larger_picture() {
+    let Some(dir) = pack_dir("WipEout-Pulse-Upscale-Version") else {
+        return;
+    };
+    let (Some(off), Some(on)) = (
+        shell("data/images/pulse-psp-eu.chd", None),
+        shell("data/images/pulse-psp-eu.chd", Some(&dir)),
+    ) else {
+        return;
+    };
+    assert_eq!(off.sprites.scale(ASSETS), [1.0, 1.0], "off: the disc's art");
+    let [sx, sy] = on.sprites.scale(ASSETS);
+    assert!(
+        sx > 1.0 && sy > 1.0,
+        "on: the pack's picture of {ASSETS} ({sx}x{sy}): {:#?}",
+        on.report
+    );
+    // The layout's own pixels stay put: the placement keeps the disc's size.
+    assert_eq!(
+        on.sprites.get(ASSETS).unwrap().width,
+        off.sprites.get(ASSETS).unwrap().width
+    );
+    // A frame mark cut off that picture is drawn where it was and samples the larger one.
+    let marks = |shell: &boot::Shell| -> Vec<([f32; 4], [f32; 4])> {
+        shell
+            .frame
+            .marks
+            .iter()
+            .filter_map(|draw| match draw {
+                oag_ui::frontend::Draw::Sprite { rect, uv, .. } => Some((*rect, *uv)),
+                _ => None,
+            })
+            .collect()
+    };
+    let (disc, pack) = (marks(&off), marks(&on));
+    assert!(
+        !disc.is_empty() && disc.len() == pack.len(),
+        "{disc:?} against {pack:?}"
+    );
+    assert!(
+        disc.iter().zip(&pack).any(|(disc, pack)| {
+            disc.0 == pack.0 && (pack.1[2] - disc.1[2] * sx).abs() < 0.01 && pack.1[2] > disc.1[2]
+        }),
+        "a mark samples {sx}x the texels it did and draws the same rect: {disc:?} against {pack:?}"
+    );
+    for side in SIDES {
+        assert!(
+            on.sprites.width <= side && on.sprites.height <= side,
+            "a {}x{} sheet does not fit a device whose textures are {side} a side",
+            on.sprites.width,
+            on.sprites.height
+        );
+    }
+}
+
 #[test]
 #[ignore = "needs pure-psp-eu.chd and the Pure pack"]
 fn pure_keeps_the_discs_faces_with_a_pack_on_because_its_palette_moves() {
@@ -218,4 +277,9 @@ fn pure_keeps_the_discs_faces_with_a_pack_on_because_its_palette_moves() {
         assert_eq!(disc.width, pack.width);
         assert!((pack.texel_scale - 1.0).abs() < f32::EPSILON);
     }
+    assert_eq!(
+        (on.sprites.width, on.sprites.height),
+        (off.sprites.width, off.sprites.height),
+        "nor is its sprite sheet"
+    );
 }

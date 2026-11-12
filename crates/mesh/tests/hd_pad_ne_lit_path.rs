@@ -298,6 +298,69 @@ fn a_picture_alpha_emissive_entry_adds_the_pictures_alpha_times_its_colour() {
     );
 }
 
+/// A mode 12 entry whose second lane is `ALPHA_EMISSIVE_SPECULAR_MAP` (`dn_diffuse_specular_emiss`,
+/// `mesh::rcs::psp2::alpha_emissive`): the specular is multiplied by the third binding's colour
+/// and the picture's alpha, which is the glow mask there, no longer weights it.
+#[test]
+fn an_alpha_emissive_entry_with_a_specular_map_weights_the_specular_by_its_colour() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    let mut scene = Scene::off();
+    scene.light.enabled = 1.0;
+    // Straight down the view axis: the half vector is the normal.
+    scene.light.direction = [0.0, 0.0, 1.0];
+    scene.light.sun = [0.6, 0.6, 0.6];
+    scene.light.specular_scale = 1.0;
+    scene.fog.camera = [0.0, 0.0, 100.5];
+
+    let lit = |map: [u8; 4], flag: f32| {
+        let word = slots::DEFAULT | slots::NO_AMBIENT | GLOW_SLOT;
+        let mut model = model(&Pad {
+            lightmap: None,
+            mask: [128, 128, 255, 0],
+            tint: [0.0; 3],
+            flagged: false,
+        });
+        // A picture with no alpha: the generic gloss-in-alpha mask would kill the specular.
+        model.textures = vec![Some(texture("albedo", [64, 64, 64, 0]))];
+        model.pad_masks = vec![Some(texture("specular", map))];
+        model.emissive[0].program = [oag_mesh::mesh::PROGRAM_PICTURE_ALPHA_EMISSIVE, flag];
+        for vertex in &mut model.vertices {
+            vertex.slots = word;
+        }
+        draw(&device, &queue, &model, scene)
+    };
+    let flag = oag_mesh::mesh::ALPHA_EMISSIVE_SPECULAR_MAP;
+    let white = lit([255, 255, 255, 255], flag);
+    let black = lit([0, 0, 0, 255], flag);
+    let red = lit([255, 0, 0, 255], flag);
+    println!("specular map white {white:?}, black {black:?}, red {red:?}");
+    assert!(
+        luma(white) > luma(black) + 20.0,
+        "a white specular map must leave the highlight, a black one remove it: {white:?} \
+         against {black:?}"
+    );
+    assert!(
+        i32::from(red[0]) > i32::from(black[0]) + 20
+            && (i32::from(red[1]) - i32::from(black[1])).abs() <= 2,
+        "the map's colour tints the highlight: {red:?} against {black:?}"
+    );
+    // Without the flag the third binding is not a specular map, and the picture's alpha
+    // (zero here) weights the specular as it does everywhere else.
+    assert_eq!(
+        lit([255, 255, 255, 255], 0.0),
+        lit([0, 0, 0, 255], 0.0),
+        "an unflagged entry must not read its third binding into the specular"
+    );
+}
+
 /// A sky-reflecting window whose entry carries `program[1]` (`mesh::rcs::window_glass`,
 /// `pb_glass_2nduv_reflect_specular1_glow`): the specular is multiplied by the second
 /// binding's colour, and the picture's alpha no longer weights it.

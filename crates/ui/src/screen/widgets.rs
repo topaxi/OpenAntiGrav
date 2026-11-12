@@ -93,12 +93,7 @@ impl Image {
         if sampled[0] > placed.width as f32 + 0.5 || sampled[1] > placed.height as f32 + 0.5 {
             return Draw::TiledSprite {
                 rect: [x, y, width, height],
-                uv: [
-                    placed.x as f32,
-                    placed.y as f32,
-                    placed.width as f32,
-                    placed.height as f32,
-                ],
+                uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
                 repeat: [
                     sampled[0] / placed.width.max(1) as f32,
                     sampled[1] / placed.height.max(1) as f32,
@@ -108,12 +103,12 @@ impl Image {
         }
         Draw::Sprite {
             rect: [x, y, width, height],
-            uv: [
-                placed.x as f32 + self.u.unwrap_or(0.0),
-                placed.y as f32 + self.v.unwrap_or(0.0),
+            uv: placed.sheet_rect([
+                self.u.unwrap_or(0.0),
+                self.v.unwrap_or(0.0),
                 sampled[0],
                 sampled[1],
-            ],
+            ]),
             color,
         }
     }

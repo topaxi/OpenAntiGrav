@@ -123,12 +123,7 @@ pub(super) fn body(
         if sampled[0] > placed.width as f32 + 0.5 || sampled[1] > placed.height as f32 + 0.5 {
             out.push(Draw::TiledSprite {
                 rect: [image.x, image.y, width * fraction, height],
-                uv: [
-                    placed.x as f32,
-                    placed.y as f32,
-                    placed.width as f32,
-                    placed.height as f32,
-                ],
+                uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
                 repeat: [
                     sampled[0] * fraction / placed.width.max(1) as f32,
                     sampled[1] / placed.height.max(1) as f32,
@@ -139,12 +134,12 @@ pub(super) fn body(
         }
         out.push(Draw::Sprite {
             rect: [image.x, image.y, width * fraction, height],
-            uv: [
-                placed.x as f32 + image.u.unwrap_or(0.0),
-                placed.y as f32 + image.v.unwrap_or(0.0),
+            uv: placed.sheet_rect([
+                image.u.unwrap_or(0.0),
+                image.v.unwrap_or(0.0),
                 sampled[0] * fraction,
                 sampled[1],
-            ],
+            ]),
             color,
         });
     }

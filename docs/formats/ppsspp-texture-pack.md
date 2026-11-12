@@ -372,12 +372,24 @@ the active one, and the decoders ask it:
   `load_atlases` calls): a `.mip` the pack has a picture for is stacked into the sheet at the
   picture's own size. `Placed.width`/`height` stay the disc's pixels (the layouts' rects, the
   default sprite size and the mod-icon fit are in them); the per-axis factor, picture over disc,
-  is `Sheet::scale(src)` and `Sheet::sheet_rect` is the one way a layout's `[u, v, w, h]` becomes
-  sheet pixels (`sprite_draw`, the sight rings, the now-playing bar). `alpha_at` and
+  rides on the placement itself, `Placed::scale` (`Sheet::scale(src)` reads it), and
+  `Placed::sheet_rect` is the one way a layout's `[u, v, w, h]` becomes sheet pixels
+  (`sprite_draw`, the sight rings, the now-playing bar, and every front-end draw). It is on
+  `Placed` rather than the `Sheet` because `oag-ui`'s draws hold only a lookup returning a `Placed`
+  (`oag-hud` depends on `oag-ui`, so they cannot reach a `Sheet`). `alpha_at` and
   `opaque_extent` follow the factor and answer in the disc's pixels as before. Pulse EU's
-  `PulseHUD.mip` is 256x256 and both packs draw it at 2048x2048 (8x). The front end's sheets
-  (`build_with`, the track panel) never ask the pack: their draws add rects to
-  `placed.x` unscaled (the front end's faces do, "The front end's faces" below).
+  `PulseHUD.mip` is 256x256 and both packs draw it at 2048x2048 (8x). A draw scales the sampled
+  rect and never the drawn one (a rect derived from a uv's width is the mistake: the stepping
+  arrows' glow was a screen-sized block until it took its size from the spec).
+- **The front end's sheet** (`oag_game::boot::sprites::load`, `Sheet::build_replaced`): the boot
+  keeps the pack engaged through the sheet build as it does for the faces, so the menus' frame,
+  the footer capsules, the stepping arrows and the title logo draw the pack's picture at the disc's
+  rects (Pulse EU: `pulse_assets.mip` 4096x1024 for the disc's 512x128, `pulse_logo.mip` the same,
+  `hex_bg.mip` 128x64 for 32x16; the whole sheet 4096x2372 with the 2020 folder). Pure is held off
+  with its faces. The loading screen builds a sheet of its own, not replaced (Pulse's draws no
+  sheet picture). Off, the main, race, display and `Show Logo` captures are byte-identical to
+  the build before; on, the header bar, footer capsules, arrows and logo are crisper at the same
+  size (1440x816, no white block).
 - **`.fnt` faces the HUD draws with** (`oag_texture::replacer::font`, `oag_ui::font::Atlas::from_replaced_font`, in
   `oag_raceplay::hud::hud_font`): the picture is the whole glyph atlas at a factor `f` the same on
   both axes. Each cell's box moves to the picture's pixels and `Atlas::texel_scale` (Omega's 2x
@@ -420,7 +432,8 @@ the active one, and the decoders ask it:
   Every picture in both packs is at most 8192 a side (8192x4096: the two `fx400_hud_big` fonts;
   everything else 4096), so no single replaced texture exceeds a phone's limit; the HUD sprite sheet
   (`oag_hud::sprite::Sheet`, stacked up to 8192 tall in columns, width the sum of the columns) is
-  not reduced to a device and measured 2048x2194 on Pulse's time trial with the Pulse pack.
+  not reduced to a device and measured 2048x2194 on Pulse's time trial with the Pulse pack; the
+  front end's sheet measures 4096x2372 (above 2048, so a device with 2048-texel textures refuses it).
 - **The front end's faces** (`oag_game::boot::load_shell`, `boot/fonts.rs`): the boot engages the
   pack (`oag_raceplay::texture_pack::engage`, the race load's own function) after the disc opens and
   switches it off once the faces are built, so nothing after them (the menus' other art, a race's
@@ -431,9 +444,12 @@ the active one, and the decoders ask it:
   advance and only gains texels exactly as in the race. The menu rows, the footer ticker,
   the nav legend and **the loading screen's text** (it draws in the boot's `Default` face) are the
   pack's. A language reload (`Session::resupply_language`) passes the same finder, so a language
-  switch keeps the pack's faces. **A MODS page switch of a pack is read at the next boot**: the
-  faces are built at boot, and the language reload would be the cheap way to rebuild them live (one
-  call from `switch_selected_mod`), not wired. Cost: a 16x face is a 4096 a side atlas, about 0.3 s each
+  switch keeps the pack's faces. **A MODS page switch of a pack is live**: `switch_selected_mod` reloads the
+  shell (`Session::resupply_language`, which also builds the menu tree again and gives the renderer
+  the new sheet) instead of only rebuilding the menus, then puts the MOD row back on the pack; a
+  switch is a second or so on the UI thread in a debug build. Test:
+  `drive_ground_truth::the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow_live`
+  (the faces and the sheet are the pack's after the switch on, the disc's after it off). Cost: a 16x face is a 4096 a side atlas, about 0.3 s each
   to build in a debug build (the 2020 folder's three Pulse faces took 0.8 s more on the boot's first
   half), the 2026 zip's 4x faces under 0.1 s. Checked in frames at 1440x816 (Pulse EU, `--menu-page
   main` and `options`, `--loading-screen 0/1 --loading-step race`), the 2020 folder and the 2026 zip:
@@ -450,12 +466,13 @@ the active one, and the decoders ask it:
   reliably") and nothing here measured the palette the original draws them with, so Pure is left on the
   disc's faces until a lane takes a Pure oracle dump. Pure's race HUD still asks the same function (not
   changed here). Test: `pure_keeps_the_discs_faces_with_a_pack_on_because_its_palette_moves`.
-- **Not replaced**: the front end's menu and boot **art** (the sheet draws add rects to `placed.x`
-  unscaled, so `Sheet::build_with` does not ask the pack; each draw moves onto `Sheet::sheet_rect`
-  first, about 130 sites in `oag-ui`, `oag-ui-screens` and `oag-game`), particle (`.pob`) textures and
-  ship skins. Each is its own lane's check, in a frame. Pulse's loading screen (checked at
-  1440x816 with `--track 16_Track`, pack on and off) draws the tip, the circuit name and the generated
-  wave and no sheet picture, so its picture is the face.
+- **Not replaced**: particle (`.pob`) textures and ship skins. Each is its own lane's check, in a
+  frame. Pulse's loading screen (checked at 1440x816 with `--track 16_Track`, pack on and off) draws
+  the tip, the circuit name and the generated wave and no sheet picture, so its picture is the face.
+  Track Select and Ship Select (reached after a live MODS toggle on and off, 1440x816) draw the
+  pack's hex panel, arrows and stat bars and the disc's after it is off, matching a boot with the
+  pack on. The end-of-race screens, the campaign, the pause menu and the track panel draw through
+  the same `Placed::sheet_rect` but were not captured with a pack on.
 - **Frames** (Pulse EU, the 2020 reTokyo snapshot, `--race --seed 1 --ticks 600 --size 1280x720`):
   with the pack off the frame is byte-identical to `main`'s (re-checked after the HUD and font
   change: ticks 600 and 1500 `cmp` equal to the frames taken before it); with it on, 453 textures were

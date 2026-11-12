@@ -38,6 +38,9 @@
 //! - `OAG_ALPHA_EMISSIVE_OFF=1` turns the emissive-in-alpha families' reading
 //!   off (`alpha_emissive`), for the same before and after.
 //!
+//! - `OAG_SPECULAR_PICTURE_OFF=1` leaves `dn_diffuse_specular_emiss` to the sampler order (the
+//!   specular map as the picture, no map weighting the specular).
+//!
 //! Both match the material's own archive path
 //! (`data/environments/talons_junction/materials/clouds.rcsmaterial`) **or
 //! either of the two `.gtf` paths it names**, case-insensitively, so a needle
@@ -177,6 +180,13 @@ pub(super) fn water_off() -> bool {
 pub(super) fn alpha_emissive_off() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("OAG_ALPHA_EMISSIVE_OFF").is_some())
+}
+
+/// Whether `dn_diffuse_specular_emiss`'s picture and specular map are left to the sampler
+/// order (`OAG_SPECULAR_PICTURE_OFF`): the before half of a before/after pair.
+pub(super) fn specular_picture_off() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("OAG_SPECULAR_PICTURE_OFF").is_some())
 }
 
 /// Whether every material's picture is replaced by a flat colour keyed by its

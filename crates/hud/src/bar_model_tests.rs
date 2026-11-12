@@ -25,6 +25,7 @@ fn placed(x: u32, width: u32, extent: [f32; 2], centre: [f32; 2]) -> crate::spri
         quad_extent: Some(extent),
         quad_centre: Some(centre),
         blend: None,
+        scale: [1.0, 1.0],
     }
 }
 

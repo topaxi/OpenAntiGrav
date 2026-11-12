@@ -222,6 +222,9 @@ pub struct Report {
     /// Of those, materials left to the generic reading: another reading holds the slot, or the
     /// drawn picture is not the `alpha_emissive` sampler's.
     pub alpha_emissive_unread: usize,
+    /// Of those and the glow-less twin, the materials whose specular term is weighted by their
+    /// `SpecularTexture` (bound third) and whose picture is `alpha_emissive`.
+    pub alpha_emissive_specular_maps: usize,
     /// `2048_shipshield_old` shells that draw their Lightning layer (`psp2::shield_lightning`).
     pub shield_lightning_materials: usize,
     /// Of that family, shells left to the diffuse alone: no picture, weight or program rates.
@@ -384,8 +387,10 @@ impl Report {
             String::new()
         } else {
             format!(
-                "; {} alpha-emissive material(s) add the picture's alpha * glowtinrt after the light ({} left to the generic reading)",
-                self.alpha_emissive_materials, self.alpha_emissive_unread
+                "; {} alpha-emissive material(s) add the picture's alpha * glowtinrt after the light ({} left to the generic reading, {} weight their specular by a map)",
+                self.alpha_emissive_materials,
+                self.alpha_emissive_unread,
+                self.alpha_emissive_specular_maps
             )
         };
         let lightning = if self.shield_lightning_materials + self.shield_lightning_unread == 0 {
@@ -640,7 +645,13 @@ fn build_planned(
         &mut report,
     );
     // The `alpha_emissive` families add the picture's alpha times `glowtinrt` after the light.
-    alpha_emissive::plan(&decoded, &mut glow, &mut emissive_add, &mut report);
+    alpha_emissive::plan(
+        &decoded,
+        &mut glow,
+        &mut emissive_add,
+        &mut *textures,
+        &mut report,
+    );
     // `mt_tunnelrefraction` and `cl_tunnelrefraction` read the refraction target.
     let glass = refraction::plan(&decoded.materials, &mut glow.emissive, &mut report);
     // A PS4 submesh with a tangent reads a normal map, bound third.
@@ -1015,6 +1026,7 @@ fn bind_textures(
                 Some(layer) => Some(layer.diffuse.as_str()),
                 None => emissive_add
                     .colour(Some(index))
+                    .or_else(|| alpha_emissive::specular_picture(material).map(|s| s.picture))
                     .or_else(|| material.diffuse_texture_without(&refused)),
             };
             let refused_here = layer.is_none()

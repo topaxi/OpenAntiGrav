@@ -789,3 +789,81 @@ fn the_music_page_saves_its_switches() {
         "the booted disc's switch is saved off: {saved}"
     );
 }
+
+/// A texture pack switched on the MODS page changes the front end's faces at once, and
+/// switched off puts the disc's back: the faces are built with the shell, so the switch
+/// reloads it. The loader report names every face drawn from the pack.
+#[test]
+#[ignore = "needs a disc image in data/images/ and the Pulse pack (just fetch-texture-packs)"]
+fn the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow_live() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let id = "ppsspp.wipeout-pulse-upscale-version";
+    let pack = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/texture-packs/WipEout-Pulse-Upscale-Version/textures.ini");
+    if !pack.is_file() {
+        eprintln!(
+            "skipped: {} is absent (just fetch-texture-packs)",
+            pack.display()
+        );
+        return;
+    }
+    let run = drive_with(
+        &image,
+        "mods-texture-pack",
+        &format!(
+            "boot; ticks 5; select mods; press cross; until page=mods; \
+             set mods.selected={id}; set mods.enabled=on; ticks 5; expect page=mods; \
+             set mods.enabled=off; ticks 5; expect page=mods; press circle; until page=main"
+        ),
+        None,
+        &[("RUST_LOG", "warn,oag_game=info,oag_raceplay=debug")],
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let stderr = run.stderr();
+    let turned_on = stderr
+        .find(&format!("mod {id}: turned on"))
+        .unwrap_or_else(|| panic!("the pack was never turned on:\n{stderr}"));
+    let turned_off = stderr
+        .find(&format!("mod {id}: turned off"))
+        .unwrap_or_else(|| panic!("the pack was never turned off:\n{stderr}"));
+    let from_pack = |text: &str| {
+        text.lines()
+            .filter(|line| line.contains(".fnt") && line.contains("from the texture pack"))
+            .count()
+    };
+    let art_from_pack = |text: &str| {
+        text.lines()
+            .filter(|line| line.contains(".mip") && line.contains("from the texture pack, for"))
+            .count()
+    };
+    assert_eq!(
+        from_pack(&stderr[..turned_on]),
+        0,
+        "the boot is the disc's own:\n{stderr}"
+    );
+    assert!(
+        from_pack(&stderr[turned_on..turned_off]) >= 1,
+        "turning the pack on redraws the faces from it:\n{stderr}"
+    );
+    assert_eq!(
+        from_pack(&stderr[turned_off..]),
+        0,
+        "turning it off builds the disc's faces again:\n{stderr}"
+    );
+    assert_eq!(
+        art_from_pack(&stderr[..turned_on]),
+        0,
+        "the boot's sheet is the disc's:\n{stderr}"
+    );
+    assert!(
+        art_from_pack(&stderr[turned_on..turned_off]) >= 1,
+        "turning the pack on rebuilds the sprite sheet from it:\n{stderr}"
+    );
+    assert_eq!(
+        art_from_pack(&stderr[turned_off..]),
+        0,
+        "turning it off builds the disc's sheet again:\n{stderr}"
+    );
+}

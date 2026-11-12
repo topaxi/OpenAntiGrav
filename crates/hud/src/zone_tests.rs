@@ -53,6 +53,7 @@ fn a_rotation_is_read_in_either_spelling_and_reaches_the_draw() {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         },
     )]);
     // A widget with no angle stays an unrotated quad; one with an angle does not.

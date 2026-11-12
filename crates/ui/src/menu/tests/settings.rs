@@ -43,6 +43,7 @@ fn layout() -> Layout {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         },
     );
     Layout::read(SCREEN, &Default::default(), spec(), &[sheet]).expect("the fixture reads")

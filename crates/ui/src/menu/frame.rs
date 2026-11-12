@@ -363,12 +363,12 @@ pub fn read(
         // patches of one shared `pulse_assets.mip`. Without it every mark
         // would draw that sheet's own top-left corner instead of its own
         // patch, same failure `frontend::draw` had before it read these.
-        let uv = [
-            placed.x as f32 + image.u.unwrap_or(0.0),
-            placed.y as f32 + image.v.unwrap_or(0.0),
+        let uv = placed.sheet_rect([
+            image.u.unwrap_or(0.0),
+            image.v.unwrap_or(0.0),
             image.texture_width.unwrap_or(placed.width as f32),
             image.texture_height.unwrap_or(placed.height as f32),
-        ];
+        ]);
         marks.push(Draw::Sprite {
             rect: [x, image.y, width, height],
             uv,

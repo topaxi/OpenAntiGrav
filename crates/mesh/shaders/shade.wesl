@@ -1015,6 +1015,13 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             specular_mask = 1.0;
             specular_tint = decode(second.rgb);
         }
+        // **A specular multiplied by a map** (`Emissive::program[1]` on a mode 12 entry,
+        // `dn_diffuse_specular_emiss`): `spec * S.rgb`, `S` the third binding at the picture's
+        // coordinate. No alpha gates it: the picture's alpha is the glow mask, not a gloss.
+        if glow_program > 11.5 && glow_program < 12.5 && row_scale.w > 0.5 {
+            specular_mask = 1.0;
+            specular_tint = decode(material_sample(MATERIAL_PAD_MASK, in.texcoord).rgb);
+        }
         let specular = scene.light.sun
             * (pow(ndh, specular_exponent) * ndl_spec * mask * specular_mask * scene.light.specular_scale
                 * rig_on * in.lit * select(1.0, 0.0, emissive))

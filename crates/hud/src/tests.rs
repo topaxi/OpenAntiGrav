@@ -997,6 +997,7 @@ fn a_sprite_is_offset_by_its_own_texture() {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     let sheet =
         crate::sprite::Sheet::placed_at(&[("first.mip", placed(0)), ("second.mip", placed(200))]);
@@ -1069,6 +1070,7 @@ static SAMPLE_SHEET: std::sync::LazyLock<crate::sprite::Sheet> = std::sync::Lazy
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         },
     )])
 });
@@ -1109,6 +1111,7 @@ fn a_sprite_with_no_texture_size_samples_its_whole_texture() {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     let sheet = crate::sprite::Sheet::placed_at(&[("a.mip", placed)]);
     let uv_of = |name: &str| {
@@ -1177,6 +1180,7 @@ fn a_bar_cropped_without_its_strings_draws_the_same() {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     let sheet = crate::sprite::Sheet::placed_at(&[("bar.mip", placed)]);
     let bar = Sprite {

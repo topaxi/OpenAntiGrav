@@ -273,6 +273,7 @@ fn placed32() -> Option<oag_ui::frontend::Placed> {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     })
 }
 
@@ -689,6 +690,7 @@ fn race_draws_no_target_swatch_even_though_the_sprite_resolves() {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     let layers = cell_draw_list(
         &race,

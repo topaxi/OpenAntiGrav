@@ -1373,7 +1373,7 @@ pub(super) fn sprite_draw_from(
     } else {
         (sprite.uv[2], sprite.uv[3])
     };
-    let uv = sheet.sheet_rect(src, placed, [sprite.uv[0], sprite.uv[1], width, height]);
+    let uv = placed.sheet_rect([sprite.uv[0], sprite.uv[1], width, height]);
     if let Some([left, right]) = sprite.gradient {
         return Some(Draw::GradientSprite {
             rect: sprite.rect,
