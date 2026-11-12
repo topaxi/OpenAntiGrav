@@ -147,6 +147,19 @@ def check_ps2_world_clock(root):
     got = pcsx2_state.record_world_clock_offset(rec, root)
     assert got is not None and abs(got - want) < 1e-4, (got, want)
     assert abs(want - 7.2) < 0.01, want
+    # the rerender puts it on a pulse-ps2 record that has none, leaves a record that has one, and gives a menu pair (no bracket) nothing
+    spec = importlib.util.spec_from_file_location("compare_rerender_ours", HERE / "compare-rerender-ours.py")
+    rro = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rro)
+    rro.ROOT = root
+    rec["profile"] = "pulse-ps2"
+    added = rro.ps2_world_clock_flags(rec, ["--race"])
+    assert added[:1] == ["--race"] and added[1] == "--world-clock-offset" and abs(float(added[2]) - want) < 1e-3, added
+    assert rec["ours"]["world_clock_offset_s"] == got
+    assert rro.ps2_world_clock_flags(rec, ["--world-clock-offset", "1.0"]) == ["--world-clock-offset", "1.0"]
+    assert rro.ps2_world_clock_flags({"profile": "pulse-ps2", "ours": {}, "original": {}}, ["--race"]) == ["--race"]
+    rec["profile"] = "pulse-psp"
+    assert rro.ps2_world_clock_flags(rec, ["--race"]) == ["--race"]
     del rec["original"]["race_clock_live_s"]
     assert pcsx2_state.record_world_clock_offset(rec, root) is None
     struct.pack_into("<I", ram, pcsx2_state.G_INGAME, 0)
