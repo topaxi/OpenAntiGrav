@@ -3951,3 +3951,74 @@ which programs leave it unsaturated has to be read per block (the non-normal-map
 map three lanes wide (`image_sample ... dmask:0x7`, `gcn_dump --at 0x4124`): the `.gnf` maps are re-cooked, and the
 `psp2` loader already binds them (`omega_normal_map_ground_truth`). 2048's GXP operands are unread and a Vita build
 binds no normal map at all, so its packing is not checkable.
+
+## Two surfaces the maintainer saw wrong: Modesto Heights reversed's banner band and Metropia's lattice floor (2026-11-12, `hd-modesto-textures`)
+
+**Report (maintainer, from play):** Modesto Heights reversed at `[741.7, 61.9, -120.9]` (tick 1020, spline 14.71) and Metropia
+at `[-311.2, 101.1, -13.8]` (tick 900, spline 8.28) "probably wrong textures", Metropia's "floor". **Claim:** the two
+surfaces are named (slot, material, pictures) and each is measured against the original on a pair. **Came out true for
+both; neither is a fidelity match, and neither needs a new reverse-engineering step.**
+
+**Method.** The original: `scripts/rpcs3-drive.py place --pose X,Y,Z --speed S --settle T --camera-shots 3` on the EU
+disc (Racebox, Feisar concept hull because this profile's save has Assegai padlocked; the track is read off `TTY.log`'s
+`Loading World` line, not the press count: reverse is `down` on Track Select's `CIRCUIT DIRECTION` row after the circuit's
+`right`s). World coordinates are ours unchanged (`rpcs3-capture.md`, "Teleporting the craft in HD"). Ours: the `place`
+`render_with` line (the settled pose and `--ticks 30`), then `OAG_TINT_MATERIALS=1` for hue to slot ordinal,
+`OAG_SKIP_SLOT=<n>` to confirm by watching the surface vanish, `hd_material_probe_dump` for the slot's material and
+pictures, `scripts/ps3-microcode.py fp-file` for the program. Frames are 1760x990 (original, trimmed) against 1440x816
+(ours), so boxes are fractions of the frame. Two RPCS3 boots at each spot (a third Modesto boot, speed 40, flew 225 units on during its
+three pushbuffer reads and is not used).
+
+### Metropia: the lattice floor is an opaque black sheet (slot 510)
+
+- **Surface.** Slot **510**, `mesh_colour_constant.rcsmaterial`, picture `hd_textures/dds2/ds_mesh_n.gtf` (DXT5, 512x256, a
+  normal map), lightmap `lmaps/ile_mesh_combine6-lmap.gtf`, constant `0x02ab9f07` = `(0, 0, 0)`, list **blended**. Tint
+  decodes the black pixels on both sides of the central beam to hue 0.197, slots 133 or 510; `OAG_SKIP_SLOT=510` removes the
+  black and shows the city below, `=133` changes nothing.
+- **What the original draws there.** A hex wire lattice (grey wires, lit) with the city and its lights seen through the holes.
+- **Number** (frame fractions, `floor-left` x .04-.22 y .58-.76, `floor-right` x .70-.88 y .52-.69, mean grey 0-255 /
+  pixels under grey 12): original boot 1 **102.6 / 7 %** and **81.3 / 2 %**, boot 2 **103.2 / 7 %** and **82.0 / 2 %**
+  (second placement **103.5 / 82.4**); ours **1.5 / 98 %** and **17.9 / 80 %**; ours with slot 510 skipped 87.6 / 4 % and
+  63.1 / 21 %. Whole lower 65 % of the frame, pixels under grey 12: original **2.8 %** (three frames), ours **41.2 %**,
+  ours skipped 5.2 %. With the original's own camera (boot 2, `--camera-pose`): ours 31.9 % black, skipped 3.9 %, original 2.8 %.
+- **Cause, confidence 75.** The block ours resolves (`0x5c80`, lit lightmap variant) writes **`MOV H0.w, R0`** (`@0x3e`):
+  the output alpha is the unit-0 texel's alpha, and the reflection term is multiplied by it too (`MUL H0.xyz, R0.www, H0`,
+  `@0x48`). `ds_mesh_n`'s alpha is a binary mask (decoded: 78 % of texels under 32, 22 % over 224), i.e. the wires.
+  `mesh_colour_constant` is in `skin::DIFFUSE_PARAMETER` (the picture becomes the black constant) and **not** in
+  `skin::ALPHA_DIFFUSE`, so the picture carries no alpha, the blend sees coverage 1 and the sheet paints solid black. The
+  fix shape is `("mesh_colour_constant", 0x02ab_9f07, AlphaUse::Gate)`, which keeps the map's alpha as the texel's own;
+  whether the lit specular term (`H4`) also reads the lightmap through that alpha is part of the wiring, not read here.
+  Not tried (no renderer change in this lane), so the 75 is the program read plus the alpha census, not a before and after.
+- **Other circuits.** Only Metropia names this family (`rcsmaterial.md` table above); no other circuit's black floor is
+  implied. **Omega / 2048: not checkable by name**: neither extracted tree holds a `mesh_colour_constant` or `uvdistortion*`
+  file (their material names differ, "2048 differs" above), so whether their Metropia floor draws is a render question for
+  their own pair.
+
+### Modesto Heights: the banner band is drawn white (slot 550 reversed, 551 forward)
+
+- **Surface.** Reversed slot **550**, `materials_reversed/uvdistortion_diff_vertexcolplusoverlay.rcsmaterial`, pictures
+  `and_ossego.gtf` (unit 2, DXT1, the Ossego logo on white), `and_tunnelscreens_small.gtf` (unit 1, a dark grille with
+  alpha) and `and_line_rgb_clouds_alpha.gtf` (unit 0, a cloud map whose alpha distorts its own UVs); four draws of 476 to
+  1,800 triangles tiled 29 to 143 times along the band (centres `(531, 45, -79)`, `(509, 40, -10)`, `(302, 19, 102)`,
+  `(284, 17, 165)`). Found by skipping slot groups until the band left the frame (group 6 of 16, then one slot);
+  `OAG_SKIP_SLOT=550` removes the white band and nothing else. Forward `track.vex` carries the same family as slot **551**
+  with the same pictures from `materials/`: **not a reversed-only fault**, nor one of the 8 chunk-less nodes (forward has the
+  same 8 and the same 21 unresolved materials, `396 of 404` against `326 of 334`).
+- **What the original draws.** The band dark navy with a teal screen pattern; in ours it is white with blue logos.
+- **Number** (top band of the frame, y .03-.32 and x .15-.85): pixels over grey 200 and blue-white pixels (b over r by 25,
+  grey over 150): original boot 1 **0.1 % / 0.0 %**, boot 3 (pose 731.4, 56.9, -112.7) **0.3 % / 0.5 %**; ours **8.5 % / 5.2 %**;
+  ours with slot 550 skipped **0.3 % / 0.9 %**. Mean grey 70.4 and 64.6 against ours 81.7 (61.4 skipped). Within a
+  matched pose, not a matched camera (both camera reads were null on this stationary craft).
+- **Cause, confidence 70.** Block `0x2ad0` (read with `ps3-microcode.py fp-file`): the output is
+  `vertex_colour x tunnelscreens.rgb x light + overlay(teal x clouds x screens.alpha, ossego)` with the overlay written as
+  `2 x a x b` when `a` is under 0.5 and `1 - 2(1-a)(1-b)` otherwise, `a` being the dark teal cloud term, so the white
+  Ossego picture enters only through the overlay and the frame stays dark. Ours binds `and_ossego` as the diffuse picture
+  (`roles no_ambient|add_second`) and adds the second one on top, which is white where the logo's background is. The family
+  is in the "unread" list (`uvdistortion_*`, "Materials read" above). Not tried; the 70 is the program read plus the skip
+  attribution. The unread values to pin before wiring: unit 0's UV distortion (`d0989794`, `c0594d0e`, `fe619466`,
+  `96e30da5` scroll rates) and the overlay colour `961662ae = (0.144, 0.525, 0.808)`.
+- **Omega / 2048: not checkable by name** (no file of this name in either tree), same as above.
+
+**Falsifier written before the captures.** Had RPCS3 drawn an opaque dark floor on Metropia, or a white Ossego band on
+Modesto, ours would have matched and the threads closed; the original draws neither. The 75 and 70 stay below 80 until a
+wired build shows the pair closing: the check is the same boxes after the fix.
